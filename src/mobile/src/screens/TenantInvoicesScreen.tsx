@@ -3,14 +3,19 @@ import { View } from 'react-native';
 import { router, useFocusEffect, useLocalSearchParams } from 'expo-router';
 import { Button, Icon, IconButton, Text, TouchableRipple } from 'react-native-paper';
 import {
+  businessToday,
   displayContractDate,
   formatContractMoney,
 } from '../../../../packages/client-core/src/contracts';
 import type { Invoice, Page } from '../../../../packages/client-core/src/invoices';
+import {
+  formatBillingDecimal,
+  hasSettlementUsageCoverage,
+} from '../../../../packages/client-core/src/invoices';
 import { Box, Heading, Pill, ui } from '../components/WorkspaceKit';
 import { TenantBillingTabs } from '../components/TenantBillingTabs';
 import { colors } from '../theme/theme';
-import { tenantPaymentLabel } from '../features/tenant/paymentPresentation';
+import { positiveAmount, tenantPaymentLabel } from '../features/tenant/paymentPresentation';
 import { InvoiceFeedback, InvoicePager, invoiceUi } from '../components/InvoiceDetailUi';
 import { useWorkspaceHeaderRefresh } from '../components/WorkspaceHeaderContext';
 import {
@@ -61,12 +66,23 @@ function TenantInvoiceList({ intent }: { intent?: 'adjustment' }) {
   const { go } = useWorkspace();
   const { session } = useSession();
   const allowed = session?.roles.includes('Tenant');
+  const thisMonth = businessToday().slice(0, 7);
   const [page, setPage] = useState(1),
     [selected, setSelected] = useState(invoiceId ?? ''),
-    [statusFilter, setStatusFilter] = useState<'all' | 'unpaid' | 'paid'>('all');
+    [statusFilter, setStatusFilter] = useState<'all' | 'unpaid' | 'paid'>('all'),
+    [historyOpen, setHistoryOpen] = useState(false),
+    [settlementOpen, setSettlementOpen] = useState(false);
   const visited = useRef(false);
+  // Request the exact Vietnamese billing period, not merely the latest 20 invoices.
+  // Old or unpaid invoices from other months must not masquerade as this month's bill.
+  const monthList = useWorkspaceQuery<Page<Invoice>>(
+    allowed && !selected
+      ? `/api/v1/invoices?page=1&pageSize=20&billingPeriod=${thisMonth}-01`
+      : null,
+    { load: loadInvoiceList, notifyError: false },
+  );
   const list = useWorkspaceQuery<Page<Invoice>>(
-    allowed && !selected ? `/api/v1/invoices?page=${page}&pageSize=20` : null,
+    allowed && !selected && historyOpen ? `/api/v1/invoices?page=${page}&pageSize=20` : null,
     { load: loadInvoiceList, notifyError: false },
   );
   const detail = useWorkspaceQuery<Invoice>(
@@ -80,12 +96,19 @@ function TenantInvoiceList({ intent }: { intent?: 'adjustment' }) {
       ? selected
       : null,
   );
-  const finalIds =
-    (!selected ? list.data?.items : undefined)
-      ?.filter((i) => i.status === 'Final')
-      .map((i) => 'invoiceIds=' + encodeURIComponent(i.id)) ?? [];
+  const finalIds = !selected
+    ? [
+        ...new Set(
+          [...(monthList.data?.items ?? []), ...(list.data?.items ?? [])]
+            .filter((i) => i.status === 'Final')
+            .map((i) => i.id),
+        ),
+      ].map((id) => 'invoiceIds=' + encodeURIComponent(id))
+    : [];
   const states = useWorkspaceQuery<Page<DebtInvoice>>(
-    finalIds.length ? '/api/v1/payment-invoices?pageSize=100&' + finalIds.join('&') : null,
+    allowed && finalIds.length
+      ? '/api/v1/payment-invoices?pageSize=100&' + finalIds.join('&')
+      : null,
     { load: loadInvoicePaymentStates, notifyError: false },
   );
   const backToList = useCallback(() => {
@@ -104,11 +127,13 @@ function TenantInvoiceList({ intent }: { intent?: 'adjustment' }) {
     } else setSelected('');
   }, [paymentView, adjustmentView, selected, returnTo, historyTab, invoiceId, go]);
   const reloadList = list.reload,
+    reloadMonth = monthList.reload,
     reloadStates = states.reload;
   const refreshList = useCallback(() => {
     reloadList();
+    reloadMonth();
     reloadStates();
-  }, [reloadList, reloadStates]);
+  }, [reloadList, reloadMonth, reloadStates]);
   const reloadDetail = detail.reload,
     reloadPayment = payment.reload;
   const refreshDetail = useCallback(() => {
@@ -122,16 +147,20 @@ function TenantInvoiceList({ intent }: { intent?: 'adjustment' }) {
       visited.current = true;
     }, [refresh]),
   );
-  const header = useWorkspaceHeaderRefresh(refresh, selected ? detail.loading : list.loading, {
-    title: selected
-      ? paymentView
-        ? 'Thanh toán hóa đơn'
-        : adjustmentView
-          ? 'Điều chỉnh hóa đơn'
-          : 'Chi tiết hóa đơn'
-      : 'Hóa đơn & thanh toán',
-    onBack: selected ? backToList : undefined,
-  });
+  const header = useWorkspaceHeaderRefresh(
+    refresh,
+    selected ? detail.loading : monthList.loading || (historyOpen && list.loading),
+    {
+      title: selected
+        ? paymentView
+          ? 'Thanh toán hóa đơn'
+          : adjustmentView
+            ? 'Điều chỉnh hóa đơn'
+            : 'Chi tiết hóa đơn'
+        : 'Hóa đơn & thanh toán',
+      onBack: selected ? backToList : undefined,
+    },
+  );
   if (!allowed)
     return (
       <Box>
@@ -214,28 +243,25 @@ function TenantInvoiceList({ intent }: { intent?: 'adjustment' }) {
       </>
     );
   const items = list.data?.items ?? [];
+  const monthItems = monthList.data?.items ?? [];
   const paymentByInvoiceId = new Map(
     (states.data?.items ?? []).map((item) => [item.invoiceId, item]),
   );
-  const filteredItems = items.filter((invoice) => {
+  const currentInvoices = monthItems.filter(
+    (invoice) => invoice.billingPeriod.slice(0, 7) === thisMonth,
+  );
+  const olderInvoices = items.filter((invoice) => invoice.billingPeriod.slice(0, 7) !== thisMonth);
+  const historyItems = olderInvoices.filter((invoice) => {
     if (statusFilter === 'all') return true;
     const payment = paymentByInvoiceId.get(invoice.id);
-    const isPaid = invoice.status === 'Final' && payment?.paymentStatus === 'Paid';
-    return statusFilter === 'paid' ? isPaid : !isPaid;
+    if (invoice.status !== 'Final' || !payment) return false;
+    return statusFilter === 'paid'
+      ? payment.paymentStatus === 'Paid'
+      : payment.paymentStatus === 'Unpaid';
   });
-  const canSummarizeUnpaid =
-    !!list.data &&
-    list.data.items.length > 1 &&
-    list.data.totalCount <= list.data.pageSize &&
-    !states.error &&
-    (finalIds.length === 0 || !!states.data);
-  const unpaidFinalItems = canSummarizeUnpaid
-    ? (states.data?.items ?? []).filter((item) => item.paymentStatus !== 'Paid')
-    : [];
-  const totalOutstanding = unpaidFinalItems.reduce(
-    (sum, item) => sum + BigInt(item.outstandingAmount),
-    0n,
-  );
+  const unpaidCount = (states.data?.items ?? []).filter(
+    (item) => item.paymentStatus === 'Unpaid' && positiveAmount(item.outstandingAmount),
+  ).length;
   return (
     <>
       {!header && (
@@ -250,42 +276,6 @@ function TenantInvoiceList({ intent }: { intent?: 'adjustment' }) {
         </View>
       )}
       <TenantBillingTabs active="invoices" />
-      {purpose !== 'adjustment' && <TenantSettlementReceivables />}
-      <Text style={invoiceUi.secondary}>
-        Theo dõi hóa đơn và thanh toán · Hóa đơn chung của phòng trong những kỳ bạn đã ở.
-      </Text>
-      {canSummarizeUnpaid && unpaidFinalItems.length > 0 && (
-        <Box>
-          <Text style={invoiceUi.title}>
-            {unpaidFinalItems.length} hóa đơn cần thanh toán ·{' '}
-            {formatContractMoney(String(totalOutstanding))}
-          </Text>
-        </Box>
-      )}
-      {items.length > 1 && !states.error && (
-        <View style={invoiceUi.tabBar}>
-          {(
-            [
-              ['all', 'Tất cả'],
-              ['unpaid', 'Chưa thanh toán'],
-              ['paid', 'Đã thanh toán'],
-            ] as const
-          ).map(([key, label]) => (
-            <Button
-              key={key}
-              compact
-              mode={statusFilter === key ? 'contained-tonal' : 'outlined'}
-              style={invoiceUi.tab}
-              accessibilityRole="tab"
-              accessibilityLabel={`Lọc hóa đơn: ${label}`}
-              accessibilityState={{ selected: statusFilter === key }}
-              onPress={() => setStatusFilter(key)}
-            >
-              {label}
-            </Button>
-          ))}
-        </View>
-      )}
       {purpose === 'adjustment' && (
         <Box>
           <Text>
@@ -301,33 +291,122 @@ function TenantInvoiceList({ intent }: { intent?: 'adjustment' }) {
           </Text>
         </Box>
       )}
-      <InvoiceFeedback {...list} reload={refreshList} />
+      <InvoiceFeedback {...monthList} reload={refreshList} />
       {!!states.error && <InvoiceFeedback {...states} />}
-      {list.data?.items.length === 0 && (
+      {monthList.data && !currentInvoices.length && (
         <Box>
-          <Text>Bạn chưa có hóa đơn.</Text>
+          <Heading title="Tháng này chưa có hóa đơn" />
+          <Text style={invoiceUi.secondary}>
+            Chưa có hóa đơn cho kỳ tháng này. Bạn có thể xem những kỳ trước trong lịch sử bên dưới.
+          </Text>
         </Box>
       )}
-      {items.length > 0 && filteredItems.length === 0 && (
-        <Box>
-          <Text>Không có hóa đơn phù hợp với bộ lọc đã chọn.</Text>
-        </Box>
+      {!!currentInvoices.length && (
+        <View style={invoiceUi.stack}>
+          <Text style={invoiceUi.heading}>Hóa đơn tháng này</Text>
+          {currentInvoices.map((invoice) => (
+            <InvoiceSummaryCard
+              key={invoice.id}
+              invoice={invoice}
+              payment={paymentByInvoiceId.get(invoice.id)}
+              featured
+              open={() => go('invoice', { invoiceId: invoice.id })}
+            />
+          ))}
+        </View>
       )}
-      {filteredItems.map((invoice) => (
-        <InvoiceSummaryCard
-          key={invoice.id}
-          invoice={invoice}
-          payment={paymentByInvoiceId.get(invoice.id)}
-          open={() => go('invoice', { invoiceId: invoice.id })}
-        />
-      ))}
-      {list.data && (
-        <InvoicePager
-          page={page}
-          total={list.data.totalCount}
-          loading={list.loading}
-          onChange={setPage}
-        />
+      {!!states.data && unpaidCount > 0 && (
+        <Text style={invoiceUi.secondary}>
+          {unpaidCount} hóa đơn còn số dư phải thanh toán trong danh sách đã tải. Mỗi hóa đơn có số
+          tiền đối soát riêng.
+        </Text>
+      )}
+      <View style={invoiceUi.card}>
+        <TouchableRipple
+          accessibilityRole="button"
+          accessibilityLabel="Hóa đơn các kỳ trước"
+          accessibilityState={{ expanded: historyOpen }}
+          onPress={() => setHistoryOpen((open) => !open)}
+        >
+          <View style={invoiceUi.row}>
+            <Text style={invoiceUi.heading}>Hóa đơn các kỳ trước</Text>
+            <Icon
+              source={historyOpen ? 'chevron-up' : 'chevron-down'}
+              size={20}
+              color={colors.muted}
+            />
+          </View>
+        </TouchableRipple>
+        {historyOpen && (
+          <View style={invoiceUi.stack}>
+            <Text style={invoiceUi.secondary}>
+              Xem từng hóa đơn các kỳ trước và trạng thái thanh toán.
+            </Text>
+            <InvoiceFeedback {...list} />
+            {items.length > 1 && !states.error && (
+              <View style={[invoiceUi.row, { gap: 4 }]}>
+                {(
+                  [
+                    ['all', 'Các kỳ trước'],
+                    ['unpaid', 'Còn nợ'],
+                    ['paid', 'Đã trả'],
+                  ] as const
+                ).map(([key, label]) => (
+                  <Button
+                    key={key}
+                    compact
+                    mode={statusFilter === key ? 'contained-tonal' : 'outlined'}
+                    accessibilityRole="tab"
+                    accessibilityLabel={`Lọc hóa đơn: ${key === 'all' ? 'Tất cả' : key === 'unpaid' ? 'Chưa thanh toán' : 'Đã thanh toán'}`}
+                    accessibilityState={{ selected: statusFilter === key }}
+                    onPress={() => setStatusFilter(key)}
+                  >
+                    {label}
+                  </Button>
+                ))}
+              </View>
+            )}
+            {historyItems.length === 0 && (
+              <Text style={invoiceUi.secondary}>Chưa có hóa đơn phù hợp.</Text>
+            )}
+            {historyItems.map((invoice) => (
+              <InvoiceSummaryCard
+                key={invoice.id}
+                invoice={invoice}
+                payment={paymentByInvoiceId.get(invoice.id)}
+                open={() => go('invoice', { invoiceId: invoice.id })}
+              />
+            ))}
+            {list.data && (
+              <InvoicePager
+                page={page}
+                total={list.data.totalCount}
+                loading={list.loading}
+                onChange={setPage}
+              />
+            )}
+          </View>
+        )}
+      </View>
+      {purpose !== 'adjustment' && (
+        <View style={invoiceUi.card}>
+          <TouchableRipple
+            accessibilityRole="button"
+            accessibilityLabel="Khoản phải thu khi trả phòng"
+            accessibilityState={{ expanded: settlementOpen }}
+            onPress={() => setSettlementOpen((open) => !open)}
+          >
+            <View style={invoiceUi.row}>
+              <Text style={invoiceUi.heading}>Khoản phải thu khi trả phòng</Text>
+              <Icon
+                source={settlementOpen ? 'chevron-up' : 'chevron-down'}
+                size={20}
+                color={colors.muted}
+              />
+            </View>
+          </TouchableRipple>
+          {settlementOpen && <TenantSettlementReceivables />}
+        </View>
       )}
     </>
   );
@@ -335,10 +414,12 @@ function TenantInvoiceList({ intent }: { intent?: 'adjustment' }) {
 function InvoiceSummaryCard({
   invoice,
   payment,
+  featured = false,
   open,
 }: {
   invoice: Invoice;
   payment?: DebtInvoice;
+  featured?: boolean;
   open: () => void;
 }) {
   const label =
@@ -349,7 +430,16 @@ function InvoiceSummaryCard({
           ? paymentText(payment.paymentStatus)
           : tenantPaymentLabel({ ...payment, paidAmount: payment.paidAmount })
         : 'Đã phát hành';
-  const overdue = payment && payment.paymentStatus !== 'Paid' && payment.overdueDays > 0;
+  const overdue =
+    payment &&
+    payment.paymentStatus !== 'Paid' &&
+    payment.overdueDays > 0 &&
+    positiveAmount(payment.outstandingAmount);
+  const details = featured
+    ? (invoice.lines ?? []).filter((line) =>
+        ['Electricity', 'Water', 'ServiceFee'].includes(line.category),
+      )
+    : [];
   return (
     <TouchableRipple
       style={invoiceUi.listCard}
@@ -382,9 +472,58 @@ function InvoiceSummaryCard({
                 Tổng hóa đơn: {formatContractMoney(invoice.total)}
               </Text>
             )}
+            {featured && payment?.paidAmount != null && (
+              <Text style={invoiceUi.secondary}>
+                Đã thanh toán: {formatContractMoney(payment.paidAmount)}
+              </Text>
+            )}
+            {featured && invoice.status === 'Final' && !payment && (
+              <Text style={invoiceUi.secondary}>
+                Đang kiểm tra trạng thái thanh toán từ máy chủ.
+              </Text>
+            )}
           </View>
           <Icon source="chevron-right" size={20} color={colors.muted} />
         </View>
+        {featured && (
+          <View style={invoiceUi.divider}>
+            <Text style={invoiceUi.secondary}>Điện, nước và phí dịch vụ</Text>
+            {details.length === 0 ? (
+              <Text style={invoiceUi.secondary}>
+                Mở chi tiết để xem các khoản thu của tháng này.
+              </Text>
+            ) : (
+              details.slice(0, 4).map((line) => (
+                <View key={line.id} style={invoiceUi.row}>
+                  <View style={{ flex: 1, minWidth: 0 }}>
+                    <Text style={invoiceUi.title}>
+                      {line.category === 'Electricity'
+                        ? 'Điện'
+                        : line.category === 'Water'
+                          ? 'Nước'
+                          : line.name}
+                    </Text>
+                    {(line.category === 'Electricity' || line.category === 'Water') && (
+                      <Text style={invoiceUi.secondary}>
+                        {hasSettlementUsageCoverage(line)
+                          ? 'Đã tính trong quyết toán trả phòng'
+                          : line.quantity == null
+                            ? 'Chưa có tiêu thụ'
+                            : `${formatBillingDecimal(line.quantity)} ${line.category === 'Electricity' ? 'kWh' : 'm³'}`}
+                      </Text>
+                    )}
+                  </View>
+                  <Text style={invoiceUi.chargeAmount}>{formatContractMoney(line.amount)}</Text>
+                </View>
+              ))
+            )}
+            {details.length > 4 && (
+              <Text style={invoiceUi.secondary}>
+                Còn {details.length - 4} khoản. Xem chi tiết hóa đơn.
+              </Text>
+            )}
+          </View>
+        )}
         {!!invoice.dueDate && (
           <Text style={invoiceUi.secondary}>
             Hạn thanh toán: {displayContractDate(invoice.dueDate)}

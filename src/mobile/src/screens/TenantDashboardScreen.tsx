@@ -10,6 +10,9 @@ import type {
 import type { Invoice, Page } from '../../../../packages/client-core/src/invoices';
 import type { InvoicePayment, DebtInvoice } from '../../../../packages/client-core/src/payments';
 import type { NotificationItem } from '../../../../packages/client-core/src/notifications';
+import { businessToday } from '../../../../packages/client-core/src/contracts';
+import type { TenantMeterReadingPage } from '../../../../packages/client-core/src/tenantReadings';
+import { loadTenantReadings } from '../features/workspace/tenantFinancialLoads';
 import { TenantDashboard } from './TenantDashboard';
 
 // Presentation reads only: reuse the same Tenant endpoints as the existing detail screens.
@@ -20,25 +23,38 @@ export function TenantDashboardScreen() {
     allowed ? '/api/v1/contracts?page=1&pageSize=20&status=Active' : null,
     { cache: queryPolicies.contracts },
   );
-  const month = new Date()
-    .toLocaleDateString('en-CA', { timeZone: 'Asia/Ho_Chi_Minh' })
-    .slice(0, 7);
+  const month = businessToday().slice(0, 7);
+  const currentContract = contracts.data?.items.find(
+    (contract) => contract.status === 'Active' && contract.kind !== 'Holding',
+  );
+  const roomId = currentContract?.roomId;
+  // Resolve the Tenant's active room once before choosing a scoped invoice or
+  // the authenticated all-own-records fallback for a completed move-out.
+  // Otherwise the initial render sends an unnecessary unscoped request and
+  // immediately replaces it with a second room-specific request.
+  const contractScopeReady = allowed && (!contracts.loading || !!contracts.data);
   const debts = useWorkspaceQuery<Page<DebtInvoice>>(
     allowed ? '/api/v1/debts?page=1&pageSize=1' : null,
     { cache: queryPolicies.debts },
   );
   const debt = debts.data?.items[0];
   const invoices = useWorkspaceQuery<Page<Invoice>>(
-    allowed && !debts.loading && !debt ? '/api/v1/invoices?page=1&pageSize=20' : null,
+    contractScopeReady
+      ? `/api/v1/invoices?page=1&pageSize=20&billingPeriod=${month}-01${roomId ? '&roomId=' + encodeURIComponent(roomId) : ''}`
+      : null,
     { cache: queryPolicies.invoices },
   );
-  const debtInvoice = useWorkspaceQuery<Invoice>(
-    allowed && debt ? `/api/v1/invoices/${encodeURIComponent(debt.invoiceId)}` : null,
-    { cache: queryPolicies.invoices },
+  // Debts concern older periods, not necessarily this month's bill. Never
+  // replace the current period with the first overdue invoice in the header.
+  const invoice = invoices.data?.items.find(
+    (item) => item.billingPeriod.slice(0, 7) === month && (!roomId || item.roomId === roomId),
   );
-  const invoice = debt
-    ? (debtInvoice.data ?? undefined)
-    : invoices.data?.items.find((item) => item.billingPeriod.slice(0, 7) === month);
+  const readings = useWorkspaceQuery<TenantMeterReadingPage>(
+    contractScopeReady
+      ? `/api/v1/tenant/meter-readings?page=1&pageSize=20${roomId ? '&roomId=' + encodeURIComponent(roomId) : ''}`
+      : null,
+    { load: loadTenantReadings, cache: queryPolicies.meters },
+  );
   const notices = useWorkspaceQuery<Page<NotificationItem>>(
     allowed ? '/api/v1/notifications?page=1&pageSize=3&unread=true' : null,
     { cache: queryPolicies.notifications },
@@ -56,7 +72,7 @@ export function TenantDashboardScreen() {
   const reloadContracts = contracts.reload,
     reloadInvoices = invoices.reload,
     reloadDebts = debts.reload,
-    reloadDebtInvoice = debtInvoice.reload,
+    reloadReadings = readings.reload,
     reloadNotices = notices.reload,
     reloadExpiry = expiry.reload,
     reloadPayment = payment.reload;
@@ -64,7 +80,7 @@ export function TenantDashboardScreen() {
     reloadContracts();
     reloadInvoices();
     reloadDebts();
-    reloadDebtInvoice();
+    reloadReadings();
     reloadNotices();
     reloadExpiry();
     reloadPayment();
@@ -72,24 +88,27 @@ export function TenantDashboardScreen() {
     reloadContracts,
     reloadInvoices,
     reloadDebts,
-    reloadDebtInvoice,
+    reloadReadings,
     reloadNotices,
     reloadExpiry,
     reloadPayment,
   ]);
   useWorkspaceHeaderRefresh(
     reload,
-    [contracts, invoices, debts, debtInvoice, notices, expiry, payment].some(
+    [contracts, invoices, debts, readings, notices, expiry, payment].some(
       (query) => query.fetching,
     ),
   );
   return (
     <TenantDashboard
       contracts={contracts.data?.items}
+      month={month}
       invoice={invoice}
+      meterReadings={readings.data?.items}
+      meterState={readings}
       payment={payment.data ?? undefined}
       contractState={contracts}
-      invoiceState={debt ? debtInvoice : invoices}
+      invoiceState={invoices}
       paymentState={payment}
       debt={debt}
       notices={notices.data?.items}

@@ -499,6 +499,36 @@ describe('Tenant Invoice, VietQR Payment & Notification Flow', () => {
     );
   });
 
+  it('opens invoice meter evidence only on demand from authenticated Tenant reading endpoint', async () => {
+    mocks.invoiceId = invoiceId;
+    const fetcher = vi.fn<Transport>().mockImplementation(async (url) => {
+      const path = String(url);
+      if (path.endsWith(`/invoices/${invoiceId}`)) return json(baseInvoice);
+      if (path.endsWith(`/tenant/meter-readings/${readingId}/evidence`))
+        return new Response(new Uint8Array([137, 80, 78, 71, 13, 10, 26, 10]), {
+          status: 200,
+          headers: { 'Content-Type': 'image/png' },
+        });
+      throw new Error(`Unexpected endpoint ${path}`);
+    });
+    setApi(fetcher);
+    render(<TenantInvoicesScreen />);
+
+    await screen.findByText('Bản nháp');
+    expect(
+      fetcher.mock.calls.some(([url]) => String(url).includes('/tenant/meter-readings/')),
+    ).toBe(false);
+    fireEvent.click(screen.getByRole('button', { name: 'Tiền điện sinh hoạt, xem chi tiết' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Xem ảnh công tơ đã xác nhận' }));
+    expect(await screen.findByAltText('Ảnh công tơ đã xác nhận')).toBeTruthy();
+    expect(
+      fetcher.mock.calls.filter(([url]) => String(url).includes('/tenant/meter-readings/')).length,
+    ).toBe(1);
+    expect(fetcher.mock.calls.some(([url]) => String(url).includes('/capture/readings/'))).toBe(
+      false,
+    );
+  });
+
   it('Test 4: renders Final Invoice with payable/paid/outstanding amounts, real VietQR image, and bank transfer copy actions', async () => {
     mocks.invoiceId = invoiceId;
     const finalInvoice = {
@@ -763,18 +793,51 @@ describe('Tenant Invoice, VietQR Payment & Notification Flow', () => {
     setApi(fetcher);
     render(<TenantInvoicesScreen />);
 
-    await screen.findByText('1 hóa đơn cần thanh toán · 1.290.000 ₫');
+    await screen.findByText('Hóa đơn tháng này');
+    expect(screen.getByText('120 kWh')).toBeTruthy();
+    expect(screen.getByText('8 m³')).toBeTruthy();
+    expect(screen.getByText('Phí Internet & vệ sinh')).toBeTruthy();
+    expect(await screen.findByText(/1 hóa đơn còn số dư phải thanh toán/)).toBeTruthy();
     expect(screen.getByText('Tổng hóa đơn: 4.290.000 ₫')).toBeTruthy();
+    expect(screen.queryByText('Kỳ 10/2026')).toBeNull();
+    fireEvent.click(screen.getByRole('button', { name: 'Hóa đơn các kỳ trước' }));
 
     // Filter by Paid
-    fireEvent.click(screen.getByRole('tab', { name: 'Lọc hóa đơn: Đã thanh toán' }));
-    expect(screen.getByText('Kỳ 10/2026')).toBeTruthy();
-    expect(screen.queryByText('Kỳ 11/2026')).toBeNull();
+    fireEvent.click(await screen.findByRole('tab', { name: 'Lọc hóa đơn: Đã thanh toán' }));
+    expect(await screen.findByText('Kỳ 10/2026')).toBeTruthy();
+    // The featured current-month bill stays in place; filters apply to history only.
+    expect(screen.getAllByText('Kỳ 11/2026')).toHaveLength(1);
 
     // Filter by Unpaid
     fireEvent.click(screen.getByRole('tab', { name: 'Lọc hóa đơn: Chưa thanh toán' }));
-    expect(screen.getByText('Kỳ 11/2026')).toBeTruthy();
+    expect(screen.getAllByText('Kỳ 11/2026')).toHaveLength(1);
     expect(screen.queryByText('Kỳ 10/2026')).toBeNull();
+    expect(screen.getByText('Chưa có hóa đơn phù hợp.')).toBeTruthy();
+  });
+
+  it("does not mistake last month's invoice for a new bill, but keeps history accessible", async () => {
+    const oldInvoice = {
+      ...baseInvoice,
+      status: 'Final' as const,
+      billingPeriod: '2026-10-01',
+      id: secondInvoiceId,
+    };
+    const fetcher = vi.fn<Transport>().mockImplementation(async (url) => {
+      const path = String(url);
+      if (path.includes('billingPeriod=')) return json(page([]));
+      if (path.includes('/payment-invoices?')) return json(page([]));
+      return json(page([oldInvoice]));
+    });
+    setApi(fetcher);
+    render(<TenantInvoicesScreen />);
+
+    expect(await screen.findByText('Tháng này chưa có hóa đơn')).toBeTruthy();
+    expect(screen.queryByText('Kỳ 10/2026')).toBeNull();
+    fireEvent.click(screen.getByRole('button', { name: 'Hóa đơn các kỳ trước' }));
+    expect(await screen.findByText('Kỳ 10/2026')).toBeTruthy();
+    expect(
+      fetcher.mock.calls.some(([url]) => String(url).includes('billingPeriod=2026-11-01')),
+    ).toBe(true);
   });
 
   it('Test 7: enforces Tenant access control on 403/404 without leaking unauthorized invoice data', async () => {
