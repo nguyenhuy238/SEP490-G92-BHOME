@@ -93,6 +93,21 @@ Nếu đang dùng PostgreSQL native, không khởi động thêm service `postgr
 Vào `http://localhost:9001`, dùng credential **của chính máy**, tạo bucket private `bhome-private`.
 Không dùng `docker compose down -v`, không chạy script seed/reset trong quá trình onboarding cấu hình.
 
+Nếu API vẫn chạy nhưng tải ảnh báo dịch vụ gián đoạn, kiểm tra Docker Desktop và MinIO.
+Khôi phục riêng MinIO local đã được thiết lập (giữ volume, không khởi động PostgreSQL):
+
+```powershell
+npm.cmd run storage:dev
+powershell -NoProfile -ExecutionPolicy Bypass -File scripts/Start-LocalStorage.ps1 -CheckOnly
+```
+
+Lệnh dùng profile `.env` Development, chỉ chấp nhận MinIO HTTP loopback đúng cổng
+Compose; không quản lý storage remote. Máy mới chưa có image vẫn cần bước build
+ở trên và tạo bucket private. `-CheckOnly` chỉ xác nhận HTTP health, không xác nhận
+credential, bucket hoặc khả năng lưu ảnh. Nếu API dùng user-secrets/process để ghi
+đè storage, cần kiểm tra cấu hình hiệu lực theo thứ tự ưu tiên ở mục 6.
+Xem [kiểm chứng lỗi ảnh FE-09](FE09_PHOTO_STORAGE_FIX_2026-11-23.md).
+
 ## 6. Chạy Backend
 
 ```powershell
@@ -173,14 +188,14 @@ Các luồng mời Staff/Tenant, xác nhận email, reset và thư ký vẫn dù
 `NotificationChannels__Enabled=true` và `AutomationEnabled=true` cho phép worker xử lý thư.
 Thực hiện luồng trên giao diện bằng tài khoản tổng hợp local rồi kiểm tra action link trong Mailpit.
 
-Development cho phép mọi địa chỉ email hợp lệ, không yêu cầu `AllowedRecipients`,
+Mọi môi trường cho phép địa chỉ email hợp lệ, không yêu cầu `AllowedRecipients`,
 `AllowAnyRecipientInDevelopment` hay người nhận trùng `TestRecipient`. Allowlist cũ trong
-User Secrets được giữ nguyên nhưng không giới hạn người nhận Development. Chính sách nằm
+User Secrets được giữ nguyên nhưng không giới hạn người nhận ở bất kỳ môi trường nào. Chính sách nằm
 trong source được Git quản lý: sau khi tích hợp/pull thay đổi, rebuild và restart Backend.
 Không cần lệnh mở khóa hoặc migration cấu hình trên từng máy.
 
-Staging/Testing vẫn yêu cầu allowlist khi dùng SMTP; người nhận ngoài danh sách bị từ chối
-trước kết nối SMTP. Production giữ chính sách hiện có. Không chuyển hướng thư chứa token
+Staging/Testing cũng bỏ qua danh sách cũ khi dùng SMTP; người nhận chỉ cần email hợp lệ
+trước kết nối SMTP. Production cũng không áp dụng danh sách giới hạn. Không chuyển hướng thư chứa token
 của người khác sang mailbox test. `Email__TestRecipient` chỉ chọn hộp thư của endpoint thử email.
 
 **Máy Development muốn gửi Gmail thật (tùy chọn):** chạy:
@@ -325,7 +340,7 @@ Danh sách thiết kế ban đầu cần người vận hành review khi dựng 
 
 1. Thêm các khóa `Deployment__*` vào cấu hình riêng theo đúng project; giữ nguyên credential/DB.
 2. Production: `SePay__Enabled=false`, `SePay__Mode=Live`; không bật Live.
-3. Staging: chuyển host environment sang `Staging`, giữ SePay Sandbox và thêm allowlist email.
+3. Staging: chuyển host environment sang `Staging`, giữ SePay Sandbox và cấu hình SMTP riêng; không cần danh sách người nhận.
 4. Bổ sung Owner frontend Staging. Caddy trên hostname staging chuyển `/api/*`, `/open/*`
    sang API Staging, các page route sang frontend Staging; API webhook không đổi đường dẫn/đích.
 5. Tham khảo `deploy/vps/Caddyfile.example`; các alias `bhome-stage-api`,
@@ -380,17 +395,17 @@ không chỉ đổi link email của backend local sang hostname VPS.
 
 ## 15. Lỗi thường gặp và chuyển từ Cloudflare/ngrok
 
-| Hiện tượng                      | Cách xử lý                                                                                      |
-| ------------------------------- | ----------------------------------------------------------------------------------------------- |
-| Docker/API chưa chạy            | Chạy dịch vụ theo mục 5/6, chạy doctor lại. Không xóa volume                                    |
-| HTTPS proxy báo certificate     | `dotnet dev-certs https --trust`, chạy onboarding để export cert; không tắt TLS verification    |
-| Cert dev đã đổi nhưng PEM cũ    | Đổi tên hai file trong `.tools/team-tls` để giữ bản cũ, chạy onboarding export lại              |
-| Cổng 5173/5176/7240 bị chiếm    | Dùng `Get-NetTCPConnection -State Listen`; dừng đúng tiến trình hoặc đồng bộ URL/cổng           |
-| SMTP local không nhận           | Kiểm tra Mailpit 1025/8025, DeliveryMode=Capture và notification worker                         |
-| Staging email không gửi         | Thêm chính mailbox tổng hợp vào `Email__AllowedRecipients__N`, kiểm tra App Password/STARTTLS   |
-| Token invalid/not found         | Xác nhận trang Web/app gọi đúng API và database đã phát hành; tạo lời mời mới đúng môi trường   |
-| Startup báo Deployment mismatch | Kiểm tra Deployment origins, host environment, URL override cũ, Compose và user-secrets         |
-| Build còn chọn API local        | Set VITE_API_BASE_URL bằng origin deploy ở terminal build; không dùng chung terminal có biến cũ |
+| Hiện tượng                      | Cách xử lý                                                                                                |
+| ------------------------------- | --------------------------------------------------------------------------------------------------------- |
+| Docker/API chưa chạy            | Chạy dịch vụ theo mục 5/6, chạy doctor lại. Không xóa volume                                              |
+| HTTPS proxy báo certificate     | `dotnet dev-certs https --trust`, chạy onboarding để export cert; không tắt TLS verification              |
+| Cert dev đã đổi nhưng PEM cũ    | Đổi tên hai file trong `.tools/team-tls` để giữ bản cũ, chạy onboarding export lại                        |
+| Cổng 5173/5176/7240 bị chiếm    | Dùng `Get-NetTCPConnection -State Listen`; dừng đúng tiến trình hoặc đồng bộ URL/cổng                     |
+| SMTP local không nhận           | Kiểm tra Mailpit 1025/8025, DeliveryMode=Capture và notification worker                                   |
+| Staging email không gửi         | Kiểm tra phiên bản API, Email/NotificationChannels enabled và App Password/STARTTLS; không thêm allowlist |
+| Token invalid/not found         | Xác nhận trang Web/app gọi đúng API và database đã phát hành; tạo lời mời mới đúng môi trường             |
+| Startup báo Deployment mismatch | Kiểm tra Deployment origins, host environment, URL override cũ, Compose và user-secrets                   |
+| Build còn chọn API local        | Set VITE_API_BASE_URL bằng origin deploy ở terminal build; không dùng chung terminal có biến cũ           |
 
 Chuyển cấu hình cũ: dừng tunnel của chính mình khi không còn dùng; giữ nguyên file private;
 chạy preview rồi áp dụng migration URL có kiểm soát:

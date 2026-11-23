@@ -152,13 +152,9 @@ public static class DependencyInjection
                 }
             })
             .Validate<IHostEnvironment>((o, env) => o.Valid(env.EnvironmentName),
-                "Email configuration invalid: check Email:Host/Port/FromEmail, Email:AppPassword and STARTTLS for SMTP, or the syntax of Email:AllowedRecipients.")
+                "Email configuration invalid: check Email:Host/Port/FromEmail, Email:AppPassword and STARTTLS for SMTP.")
             .Validate<IHostEnvironment>((o, env) => o.CaptureAllowed(env.EnvironmentName),
                 "Email:DeliveryMode=Capture requires a loopback Email:Host and Development/Testing; deployed SMTP must use STARTTLS.")
-            .Validate<IHostEnvironment>((o, env) => o.AnyRecipientOverrideAllowed(env.EnvironmentName),
-                "Email:AllowAnyRecipientInDevelopment is a legacy Development-only setting; remove it from other environments.")
-            .Validate<IHostEnvironment>((o, env) => o.RecipientsConfigured(env.EnvironmentName),
-                "SMTP requires Email:AllowedRecipients:0 (and optional :1, :2, ...) in Testing/Staging. Development accepts all valid recipients without an allowlist or opt-in. Email:TestRecipient only selects the diagnostic endpoint mailbox.")
             .ValidateOnStart();
         services.AddScoped<BHome.Infrastructure.Modules.Notifications.MailKitEmailSender>();
         services.AddOptions<BHome.Infrastructure.Modules.Notifications.ExpoPushOptions>()

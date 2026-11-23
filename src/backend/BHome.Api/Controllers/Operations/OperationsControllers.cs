@@ -107,6 +107,12 @@ public sealed class PublicContentAdministrationController(OperationsService serv
     { await service.RemovePublicPhotoAsync("location", id, index, t); return NoContent(); }
 
     [HttpGet("rooms/{id:guid}")] public Task<RoomPublicContent> Room(Guid id, CancellationToken t) => service.RoomContentAsync(id, t);
+    [HttpGet("locations/{id:guid}/rooms")]
+    public Task<IReadOnlyList<RoomPublicContent>> ManagedRooms(Guid id, CancellationToken t) => service.ManagedRoomsAsync(id, t);
+    [HttpPost("locations/{id:guid}/rooms/bulk/preview")]
+    public Task<PublicRoomBulkPreview> PreviewRooms(Guid id, PublicRoomBulkRequest input, CancellationToken t) => service.PreviewPublicRoomBulkAsync(id, input, t);
+    [HttpPost("locations/{id:guid}/rooms/bulk/apply")]
+    public Task<PublicRoomBulkResult> ApplyRooms(Guid id, PublicRoomBulkRequest input, CancellationToken t) => service.ApplyPublicRoomBulkAsync(id, input, t);
     [HttpPut("rooms/{id:guid}")] public Task<RoomPublicContent> UpdateRoom(Guid id, RoomPublicContentWrite input, CancellationToken t) => service.UpdateRoomContentAsync(id, input, t);
     [HttpPost("rooms/{id:guid}/publish")] public Task<RoomPublicContent> PublishRoom(Guid id, CancellationToken t) => service.PublishRoomAsync(id, true, t);
     [HttpPost("rooms/{id:guid}/unpublish")] public Task<RoomPublicContent> UnpublishRoom(Guid id, CancellationToken t) => service.PublishRoomAsync(id, false, t);
@@ -118,7 +124,7 @@ public sealed class PublicContentAdministrationController(OperationsService serv
 }
 
 [ApiController, Route("api/v1/public"), AllowAnonymous]
-[ResponseCache(Duration = 60, Location = ResponseCacheLocation.Any)]
+[ResponseCache(NoStore = true, Location = ResponseCacheLocation.None)]
 public sealed class PublicInformationController(OperationsService service) : ControllerBase
 {
     [HttpGet("locations")] public Task<IReadOnlyList<LocationPublicContent>> Locations(CancellationToken t) => service.PublishedLocationsAsync(t);

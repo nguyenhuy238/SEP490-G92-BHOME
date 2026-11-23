@@ -2,6 +2,7 @@
 """Read-only effective SMTP preflight. Never prints credentials or sends mail."""
 import argparse
 import json
+import re
 import smtplib
 import ssl
 import subprocess
@@ -26,20 +27,16 @@ def validate(settings, target, recipient=None):
     for key in ('Email__Host', 'Email__Username', 'Email__FromEmail', 'Email__AppPassword'):
         if not str(settings.get(key, '')).strip():
             raise EmailPreflightError('email_required_setting_missing: ' + key)
-    if str(settings.get('Email__AllowAnyRecipientInDevelopment', '')).lower() == 'true':
-        raise EmailPreflightError('email_development_override_in_deployment')
     try:
         valid_port = 1 <= int(settings.get('Email__Port', '587')) <= 65535
     except (ValueError, TypeError):
         valid_port = False
     if not valid_port:
         raise EmailPreflightError('email_port_invalid')
-    recipients = [str(value).casefold() for key, value in settings.items()
-                  if key.startswith('Email__AllowedRecipients__')]
-    if target == 'staging' and not any(recipients):
-        raise EmailPreflightError('email_staging_allowlist_missing')
-    if recipient and recipients and recipient.casefold() not in recipients:
-        raise EmailPreflightError('email_recipient_not_allowed')
+    # Recipient restrictions in old private profiles are deliberately ignored.
+    # This CLI performs a basic single-mailbox check; Backend owns full validation.
+    if recipient is not None and not re.fullmatch(r'[^\s<>@,;]+@[^\s<>@,;]+\.[^\s<>@,;]+', recipient):
+        raise EmailPreflightError('email_recipient_invalid')
 
 
 def effective_settings(container):
@@ -61,7 +58,7 @@ def effective_settings(container):
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('target', choices=CONTAINERS)
-    parser.add_argument('--recipient', help='Check permission without sending; avoid private addresses in shared logs.')
+    parser.add_argument('--recipient', help='Check basic single-mailbox syntax without sending; values are not printed.')
     parser.add_argument('--smtp', action='store_true', help='Verify STARTTLS certificate and SMTP login; no message submitted.')
     args = parser.parse_args()
     settings = effective_settings(CONTAINERS[args.target])

@@ -3,6 +3,11 @@ import { describe, expect, it, vi } from 'vitest';
 const { supportedNode, selectRuntime, checkExpoOnline, main } = createRequire(import.meta.url)(
   '../../../scripts/Start-ExpoMobile.cjs',
 );
+const supportedRuntime = {
+  nodeVersion: '22.23.4',
+  nodeExecutable: 'supported-node22',
+  nodeCandidates: [],
+};
 
 describe('Expo startup runtime and online checks', () => {
   it.each([
@@ -16,7 +21,9 @@ describe('Expo startup runtime and online checks', () => {
     'starts the API/HTTPS supervisor for a normal Windows npm start (%j)',
     async (...args: string[]) => {
       const runCommand = vi.fn().mockResolvedValue(0);
-      await expect(main(args, { platform: 'win32', runCommand })).resolves.toBe(0);
+      await expect(
+        main(args, { ...supportedRuntime, platform: 'win32', runCommand }),
+      ).resolves.toBe(0);
       expect(runCommand).toHaveBeenCalledExactlyOnceWith(
         'powershell.exe',
         expect.arrayContaining([
@@ -39,21 +46,23 @@ describe('Expo startup runtime and online checks', () => {
     'rejects unsupported supervisor arguments without launching a process (%j)',
     async (...args: string[]) => {
       const runCommand = vi.fn();
-      await expect(main(args, { platform: 'win32', runCommand })).rejects.toThrow();
+      await expect(
+        main(args, { ...supportedRuntime, platform: 'win32', runCommand }),
+      ).rejects.toThrow();
       expect(runCommand).not.toHaveBeenCalled();
     },
   );
   it('preserves the supervisor exit status instead of reporting a failed API startup as success', async () => {
     const runCommand = vi.fn().mockResolvedValue(1);
-    await expect(main([], { platform: 'win32', runCommand })).resolves.toBe(1);
+    await expect(main([], { ...supportedRuntime, platform: 'win32', runCommand })).resolves.toBe(1);
     expect(runCommand).toHaveBeenCalledOnce();
   });
   it('does not recurse into the supervisor or send the internal flag to Expo', async () => {
     const runCommand = vi.fn().mockResolvedValue(0);
-    await expect(main(['--metro-only', '--help'], { platform: 'win32', runCommand })).resolves.toBe(
-      0,
-    );
-    expect(runCommand).toHaveBeenCalledExactlyOnceWith(process.execPath, [
+    await expect(
+      main(['--metro-only', '--help'], { ...supportedRuntime, platform: 'win32', runCommand }),
+    ).resolves.toBe(0);
+    expect(runCommand).toHaveBeenCalledExactlyOnceWith(supportedRuntime.nodeExecutable, [
       expect.stringMatching(/expo[/\\]bin[/\\]cli$/),
       'start',
       '--help',
@@ -72,6 +81,55 @@ describe('Expo startup runtime and online checks', () => {
     expect(() =>
       selectRuntime('24.22.1', 'node24', [{ version: '22.23.4', executable: 'node24' }]),
     ).toThrow();
+  });
+  it('restarts with local Node 22 before supervisor dispatch and forwards all startup flags', async () => {
+    const runCommand = vi.fn().mockResolvedValue(3);
+    await expect(
+      main(['--clear', '--lan', '--port', '8082'], {
+        platform: 'win32',
+        runCommand,
+        nodeVersion: '24.22.1',
+        nodeExecutable: 'global-node24',
+        nodeCandidates: [{ version: '22.23.4', executable: 'local-node22' }],
+      }),
+    ).resolves.toBe(3);
+    expect(runCommand).toHaveBeenCalledExactlyOnceWith('local-node22', [
+      expect.stringMatching(/scripts[/\\]Start-ExpoMobile\.cjs$/),
+      '--clear',
+      '--lan',
+      '--port',
+      '8082',
+    ]);
+  });
+  it('preserves the internal --metro-only flag during the Node 22 restart', async () => {
+    const runCommand = vi.fn().mockResolvedValue(0);
+    await expect(
+      main(['--metro-only', '--help'], {
+        platform: 'win32',
+        runCommand,
+        nodeVersion: '24.22.1',
+        nodeExecutable: 'global-node24',
+        nodeCandidates: [{ version: '22.23.4', executable: 'local-node22' }],
+      }),
+    ).resolves.toBe(0);
+    expect(runCommand).toHaveBeenCalledExactlyOnceWith('local-node22', [
+      expect.stringMatching(/scripts[/\\]Start-ExpoMobile\.cjs$/),
+      '--metro-only',
+      '--help',
+    ]);
+  });
+  it('rejects Node 24 when no compatible local runtime is available', async () => {
+    const runCommand = vi.fn();
+    await expect(
+      main(['--metro-only', '--help'], {
+        platform: 'win32',
+        runCommand,
+        nodeVersion: '24.22.1',
+        nodeExecutable: 'global-node24',
+        nodeCandidates: [],
+      }),
+    ).rejects.toThrow('Node >=22.13');
+    expect(runCommand).not.toHaveBeenCalled();
   });
   const success = () => ({
     sdkVersion: '58.0.0',

@@ -12,7 +12,8 @@ const queryClient = new QueryClient({
       // Public reads can recover from transport/server outages; permanent refusals need no replay.
       retry: (attempt, error) =>
         attempt < 1 && !(error instanceof ApiError && error.status >= 400 && error.status < 500),
-      refetchOnWindowFocus: false,
+      refetchOnWindowFocus: true,
+      gcTime: 0,
     },
   },
 });
