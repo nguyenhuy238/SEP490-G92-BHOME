@@ -391,6 +391,7 @@ function EvidencePhotos({
         {ids.map((evidenceId, position) => (
           <PrivateEvidenceViewer
             key={evidenceId}
+            cacheKey={`moveout:${contractId}:${opening ? (fromDraft ? 'draft' : 'handover') : 'final'}:${evidenceId}`}
             label={`${opening ? 'Ảnh bàn giao' : 'Ảnh trả phòng'} · ${label} · ${position + 1}`}
             filename={`${opening ? 'ban-giao' : 'tra-phong'}-${position + 1}.jpg`}
             fetchBlob={(signal) =>
@@ -475,6 +476,7 @@ function MeterResults({ api, inspection }: { api: ContractClient; inspection: Fi
                   <PrivateEvidenceViewer
                     label={`Ảnh chốt công tơ ${meterLabel}`}
                     filename={name === 'electricity' ? 'cong-to-dien.jpg' : 'cong-to-nuoc.jpg'}
+                    cacheKey={`final-meter-reading:${reading.id}`}
                     fetchBlob={(signal) => api.readingEvidence(reading.id, signal)}
                     errorMessage={contractError}
                     previewButtonLabel="Xem ảnh"

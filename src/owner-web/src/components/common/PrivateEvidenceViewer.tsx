@@ -84,6 +84,8 @@ export interface PrivateEvidenceViewerProps {
   filename: string;
   /** Fetch through the caller's authenticated, authorized API; never pass a public URL. */
   fetchBlob: (signal: AbortSignal) => Promise<Blob>;
+  /** Immutable, scoped evidence identity. Enables in-memory reuse while this viewer remains mounted. */
+  cacheKey?: string;
   /** Optional server-side metadata. A conflicting MIME must never enable inline rendering. */
   contentType?: string;
   /** Optional trusted recorded byte count, when the API exposes it. */
@@ -161,6 +163,7 @@ export function PrivateEvidenceViewer({
   label,
   filename,
   fetchBlob,
+  cacheKey,
   contentType,
   expectedSize,
   errorMessage,
@@ -183,6 +186,11 @@ export function PrivateEvidenceViewer({
   const previewUrl = useRef<string | null>(null);
   const temporaryUrls = useRef(new Set<string>());
   const timeouts = useRef(new Set<number>());
+  // Files are private and never enter browser disk cache or public URLs.
+  // Keep only one verified, bounded blob per viewer for repeat preview/download.
+  // A different evidence ID never inherits another tenant/contract's blob.
+  const cached = useRef<{ key: string; file: SafeFile } | null>(null);
+  const previousCacheKey = useRef(cacheKey);
 
   const revokePreview = () => {
     if (previewUrl.current) URL.revokeObjectURL(previewUrl.current);
@@ -198,11 +206,30 @@ export function PrivateEvidenceViewer({
   };
 
   useEffect(() => {
+    if (previousCacheKey.current === cacheKey) return;
+    previousCacheKey.current = cacheKey;
+    // When the same React slot is reused for another evidence/contract,
+    // discard both the private bytes and any preview before showing it.
+    cached.current = null;
+    requestId.current += 1;
+    activeRequest.current?.abort();
+    activeRequest.current = null;
+    busyRef.current = false;
+    revokePreview();
+    revokeDownloads();
+    setOpen(false);
+    setBusy(null);
+    setUnsupported(false);
+    setError('');
+  }, [cacheKey]);
+
+  useEffect(() => {
     const pendingTimeouts = timeouts.current;
     const pendingTemporaryUrls = temporaryUrls.current;
     mounted.current = true;
     return () => {
       mounted.current = false;
+      cached.current = null;
       requestId.current += 1;
       activeRequest.current?.abort();
       activeRequest.current = null;
@@ -243,17 +270,33 @@ export function PrivateEvidenceViewer({
       revokePreview();
     }
     try {
-      const blob = await fetchBlob(controller.signal);
-      if (controller.signal.aborted || id !== requestId.current || !mounted.current) return;
-      if (expectedSize !== undefined && blob.size !== expectedSize) {
-        throw new Error('Kích thước chứng từ không khớp dữ liệu đã lưu.');
+      const verifiedCacheKey = cacheKey
+        ? `${cacheKey}:${contentType ?? ''}:${expectedSize ?? ''}`
+        : null;
+      let file: SafeFile;
+      if (verifiedCacheKey && cached.current?.key === verifiedCacheKey) {
+        file = cached.current.file;
+      } else {
+        cached.current = null;
+        const blob = await fetchBlob(controller.signal);
+        if (controller.signal.aborted || id !== requestId.current || !mounted.current) return;
+        if (expectedSize !== undefined && blob.size !== expectedSize) {
+          throw new Error('Kích thước chứng từ không khớp dữ liệu đã lưu.');
+        }
+        file = await classify(blob, contentType);
+        // A bounded, verified in-memory cache eliminates repeated private GETs
+        // when switching between the same evidence's dialog and download.
+        if (verifiedCacheKey && file.type && blob.size <= 8 * 1024 * 1024 &&
+            !controller.signal.aborted && id === requestId.current && mounted.current) {
+          cached.current = { key: verifiedCacheKey, file };
+        }
       }
-      const file = await classify(blob, contentType);
       if (controller.signal.aborted || id !== requestId.current || !mounted.current) return;
       if (action === 'preview') {
         if (file.type) {
           // Give the browser a canonical MIME only after MIME AND magic-byte verification.
-          const url = URL.createObjectURL(new Blob([file.blob], { type: file.type }));
+          const url = URL.createObjectURL(file.blob.type === file.type
+            ? file.blob : new Blob([file.blob], { type: file.type }));
           previewUrl.current = url;
           setPreview({ url, type: file.type });
         } else {
@@ -261,9 +304,9 @@ export function PrivateEvidenceViewer({
         }
       } else {
         // Unsupported/ambiguous content is always forced to a passive binary download.
-        const blobToSave = new Blob([file.blob], {
-          type: file.type ?? 'application/octet-stream',
-        });
+        const safeType = file.type ?? 'application/octet-stream';
+        const blobToSave = file.blob.type === safeType
+          ? file.blob : new Blob([file.blob], { type: safeType });
         const url = URL.createObjectURL(blobToSave);
         temporaryUrls.current.add(url);
         const anchor = document.createElement('a');

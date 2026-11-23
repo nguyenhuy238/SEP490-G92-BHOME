@@ -36,6 +36,10 @@ public sealed partial class ContractService(IContractRepository repository, ICur
     private void Role(params string[] roles) { _ = Actor; if (!roles.Any(user.IsInRole)) throw new ContractException(403, "contract_role_forbidden"); }
     private static string Hash<T>(T value) => Convert.ToHexString(SHA256.HashData(JsonSerializer.SerializeToUtf8Bytes(value)));
     private static string FileHash(byte[] value) => Convert.ToHexString(SHA256.HashData(value));
+    // MemoryStream owns its buffer; hash the occupied portion without a second
+    // full-size allocation for every private image or PDF download.
+    private static string FileHash(MemoryStream value) => Convert.ToHexString(
+        SHA256.HashData(value.GetBuffer().AsSpan(0, checked((int)value.Length))));
     private static void Validate(object value)
     {
         if (!Validator.TryValidateObject(value, new ValidationContext(value), [], true)) throw ContractException.Invalid("invalid_contract_input");
@@ -1141,7 +1145,7 @@ public sealed partial class ContractService(IContractRepository repository, ICur
                 r.EvidenceId == expected.EvidenceId && r.EvidenceHash == expected.EvidenceHash)
                 ?? throw ContractException.Conflict("confirmed_final_readings_required");
             using var bytes = new MemoryStream(); await storage.CopyToAsync(reading.EvidenceObjectKey, bytes, t);
-            if (FileHash(bytes.ToArray()) != reading.EvidenceHash) throw ContractException.Conflict("inspection_evidence_integrity_failed");
+            if (FileHash(bytes) != reading.EvidenceHash) throw ContractException.Conflict("inspection_evidence_integrity_failed");
         }
         c.Status = ContractStatus.Terminated; c.ActualEndDate = x.ActualEndDate;
         var otherActive = await repository.HasOtherActiveContractsAsync(c.RoomId, c.Id, t);
@@ -1192,7 +1196,7 @@ public sealed partial class ContractService(IContractRepository repository, ICur
         using var bytes = new MemoryStream(); await storage.CopyToAsync(evidence.ObjectKey, bytes, t);
         var recorded = (await repository.FinalInspectionsAsync(id, t)).Select(i => JsonSerializer.Deserialize<HandoverSnapshot>(i.ObservedSnapshot))
             .FirstOrDefault(s => s?.EvidenceHashes?.ContainsKey(evidenceId) == true);
-        if (recorded?.EvidenceHashes is { } hashes && FileHash(bytes.ToArray()) != hashes[evidenceId]) throw ContractException.Conflict("inspection_evidence_integrity_failed");
+        if (recorded?.EvidenceHashes is { } hashes && FileHash(bytes) != hashes[evidenceId]) throw ContractException.Conflict("inspection_evidence_integrity_failed");
         bytes.Position = 0; await bytes.CopyToAsync(output, t);
     }
 }

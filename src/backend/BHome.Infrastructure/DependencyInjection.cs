@@ -464,7 +464,7 @@ public static class DependencyInjection
         services.AddSingleton<IIdentityProtection, IdentityProtection>();
         services.AddScoped<IHouseholdProfiles, HouseholdProfiles>();
         services.AddOptions<ObjectStorageOptions>().Bind(configuration.GetSection(ObjectStorageOptions.Section));
-        services.AddScoped<IObjectStorage, MinioObjectStorage>();
+        services.AddSingleton<IObjectStorage, MinioObjectStorage>();
         services.AddOptions<JobWorkerOptions>().Bind(configuration.GetSection("Jobs"))
             .Validate(o => o.PollSeconds is >= 1 and <= 300, "Job polling must be 1-300 seconds.").ValidateOnStart();
         services.AddScoped<CompactJobPersistence>();

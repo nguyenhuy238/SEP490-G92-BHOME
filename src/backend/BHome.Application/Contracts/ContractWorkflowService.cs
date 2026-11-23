@@ -140,7 +140,7 @@ public sealed partial class ContractService
     {
         using var buffer = new MemoryStream();
         await storage.CopyToAsync(file.ObjectKey, buffer, t);
-        if (buffer.Length != file.Length || FileHash(buffer.ToArray()) != file.FileHash)
+        if (buffer.Length != file.Length || FileHash(buffer) != file.FileHash)
             throw ContractException.Conflict("contract_document_integrity_failed");
         buffer.Position = 0; await buffer.CopyToAsync(output, t);
     }

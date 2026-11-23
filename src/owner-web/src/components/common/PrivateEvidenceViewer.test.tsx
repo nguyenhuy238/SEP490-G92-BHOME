@@ -45,6 +45,36 @@ it('loads only after explicit action, previews verified PNG and revokes it on cl
   expect(revoke).toHaveBeenCalledWith('blob:private-1');
 });
 
+it('reuses verified private photo bytes on reopen and download, without repeating authenticated GET', async () => {
+  const fetchBlob = vi.fn(async () => makeBlob(png, 'image/png'));
+  render(<PrivateEvidenceViewer label="ảnh kiểm kê" filename="check.png" cacheKey="contract-1:photo-1" fetchBlob={fetchBlob} />);
+  fireEvent.click(screen.getByRole('button', { name: 'Xem ảnh kiểm kê' }));
+  expect(await screen.findByRole('img', { name: 'ảnh kiểm kê' })).toBeInTheDocument();
+  fireEvent.click(within(screen.getByRole('dialog')).getByRole('button', { name: 'Đóng' }));
+  await waitFor(() => expect(screen.queryByRole('dialog')).not.toBeInTheDocument());
+  fireEvent.click(screen.getByRole('button', { name: 'Xem ảnh kiểm kê' }));
+  expect(await screen.findByRole('img', { name: 'ảnh kiểm kê' })).toBeInTheDocument();
+  fireEvent.click(within(screen.getByRole('dialog')).getByRole('button', { name: 'Đóng' }));
+  await waitFor(() => expect(screen.queryByRole('dialog')).not.toBeInTheDocument());
+  fireEvent.click(screen.getByRole('button', { name: 'Tải xuống ảnh kiểm kê' }));
+  await waitFor(() => expect(clicked).toHaveLength(1));
+  expect(fetchBlob).toHaveBeenCalledTimes(1);
+  expect(create).toHaveBeenCalledTimes(3);
+});
+
+it('discards cached private photo immediately when its scoped evidence identity changes', async () => {
+  const fetchBlob = vi.fn(async () => makeBlob(png, 'image/png'));
+  const result = render(<PrivateEvidenceViewer label="ảnh" filename="proof.jpg" cacheKey="contract-1:proof-a" fetchBlob={fetchBlob} />);
+  fireEvent.click(screen.getByRole('button', { name: 'Xem ảnh' }));
+  expect(await screen.findByRole('img', { name: 'ảnh' })).toBeInTheDocument();
+  result.rerender(<PrivateEvidenceViewer label="ảnh" filename="proof.jpg" cacheKey="contract-2:proof-b" fetchBlob={fetchBlob} />);
+  await waitFor(() => expect(screen.queryByRole('dialog')).not.toBeInTheDocument());
+  expect(revoke).toHaveBeenCalledWith('blob:private-1');
+  fireEvent.click(screen.getByRole('button', { name: 'Xem ảnh' }));
+  expect(await screen.findByRole('img', { name: 'ảnh' })).toBeInTheDocument();
+  expect(fetchBlob).toHaveBeenCalledTimes(2);
+});
+
 it('previews a verified private PDF without blocking the Chrome viewer, supports download fallback and revokes URLs', async () => {
   const fetchBlob = vi.fn(async () => makeBlob(pdf, 'application/octet-stream'));
   render(<PrivateEvidenceViewer label="biên bản" filename="bien-ban.pdf" fetchBlob={fetchBlob} />);
