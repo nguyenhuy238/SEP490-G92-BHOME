@@ -20,9 +20,13 @@ public sealed class HoldingDepositTemplateTests
     {
         var contract = new Contract
         {
-            Kind = ContractKind.Holding, StartDate = new(2026, 11, 22), EndDate = new(2027, 1, 22),
-            HoldingExpiryAt = new DateTimeOffset(2026, 11, 24, 17, 0, 0, TimeSpan.Zero), MonthlyRent = 2300000,
-            RequiredDeposit = 2300000, Terms = "Điều khoản bổ sung kiểm thử.",
+            Kind = ContractKind.Holding,
+            StartDate = new(2026, 11, 22),
+            EndDate = new(2027, 1, 22),
+            HoldingExpiryAt = new DateTimeOffset(2026, 11, 24, 17, 0, 0, TimeSpan.Zero),
+            MonthlyRent = 2300000,
+            RequiredDeposit = 2300000,
+            Terms = "Điều khoản bổ sung kiểm thử.",
             Room = new Room
             {
                 RoomNumber = "P.102",

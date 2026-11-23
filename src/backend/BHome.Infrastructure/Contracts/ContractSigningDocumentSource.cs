@@ -95,10 +95,16 @@ internal sealed class ContractSigningDocumentSource(BHomePersistenceContext db, 
         var pdf = await holdingRenderer.PdfAsync(contract, settings.Owner, tenant, phone, t);
         var file = new ContractDocumentFile
         {
-            ContractId = contract.Id, Kind = ContractFileKind.Preview, SnapshotHash = document.SnapshotHash,
-            TemplateId = HoldingDepositRenderer.TemplateId, TemplateVersion = 1,
-            ContentType = "application/pdf", FileHash = Convert.ToHexString(SHA256.HashData(pdf)), Length = pdf.Length,
-            RecordedAt = clock.GetUtcNow(), RecordedByUserId = actor
+            ContractId = contract.Id,
+            Kind = ContractFileKind.Preview,
+            SnapshotHash = document.SnapshotHash,
+            TemplateId = HoldingDepositRenderer.TemplateId,
+            TemplateVersion = 1,
+            ContentType = "application/pdf",
+            FileHash = Convert.ToHexString(SHA256.HashData(pdf)),
+            Length = pdf.Length,
+            RecordedAt = clock.GetUtcNow(),
+            RecordedByUserId = actor
         };
         file.ObjectKey = $"contracts/{contract.Id:N}/preview/{file.Id:N}.pdf";
         await fileStore.PutAsync(contract.RoomId, file.ObjectKey, pdf, file.ContentType, t);

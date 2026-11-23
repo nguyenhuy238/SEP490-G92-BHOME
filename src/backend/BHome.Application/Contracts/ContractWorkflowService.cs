@@ -85,9 +85,14 @@ public sealed partial class ContractService
                 if (c.Kind == ContractKind.Main) throw ContractException.Conflict("signing_source_document_required");
                 var legacy = new ContractDocumentFile
                 {
-                    ContractId = id, Kind = ContractFileKind.Preview, SnapshotHash = c.SnapshotHash,
-                    FileHash = hash, ContentType = "application/pdf", Length = canonical.Length,
-                    RecordedByUserId = Actor, RecordedAt = clock.GetUtcNow()
+                    ContractId = id,
+                    Kind = ContractFileKind.Preview,
+                    SnapshotHash = c.SnapshotHash,
+                    FileHash = hash,
+                    ContentType = "application/pdf",
+                    Length = canonical.Length,
+                    RecordedByUserId = Actor,
+                    RecordedAt = clock.GetUtcNow()
                 };
                 legacy.ObjectKey = $"contracts/{id:N}/preview/{legacy.Id:N}.pdf";
                 await files.PutAsync(c.RoomId, legacy.ObjectKey, canonical, legacy.ContentType, t);
