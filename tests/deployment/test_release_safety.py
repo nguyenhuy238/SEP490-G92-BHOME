@@ -1,5 +1,6 @@
 import importlib.util
 import json
+import tempfile
 import unittest
 from pathlib import Path
 from unittest.mock import patch
@@ -41,9 +42,63 @@ class ReleaseSafetyTests(unittest.TestCase):
             'Deployment__PublicOrigin': 'https://public-staging.103.146.23.157.sslip.io' if stage else 'https://www.103.146.23.157.sslip.io',
         }
 
-    def check(self, stage, prod):
+    def check(self, stage, prod, target='staging'):
         with patch.object(safety, 'env', side_effect=[stage, prod]):
-            return safety.check_environment('staging')
+            return safety.check_environment(target)
+
+    def pdf_tools(self):
+        return {'MainDraft__LibreOfficePath': '/usr/bin/libreoffice', 'MainDraft__PdfToPpmPath': '/usr/bin/pdftoppm'}
+
+    def test_release_image_pdf_defaults_do_not_change_private_configuration_fingerprint(self):
+        for target in ('staging', 'production'):
+            with self.subTest(target=target):
+                stage, prod = self.configuration('staging'), self.configuration('production')
+                before = self.check(stage, prod, target)
+                (stage if target == 'staging' else prod).update(self.pdf_tools())
+                self.assertEqual(before, self.check(stage, prod, target))
+
+    def test_pdf_tool_override_is_rejected_without_exposing_its_value(self):
+        for target in ('staging', 'production'):
+            for key in self.pdf_tools():
+                stage, prod = self.configuration('staging'), self.configuration('production')
+                (stage if target == 'staging' else prod)[key] = '/tmp/synthetic-private-executable'
+                with self.subTest(target=target, key=key):
+                    with self.assertRaises(ValueError) as error:
+                        self.check(stage, prod, target)
+                    self.assertIn(key, str(error.exception))
+                    self.assertNotIn('synthetic-private', str(error.exception))
+
+    def test_other_draft_options_and_credentials_still_change_fingerprint(self):
+        for key, value in [('MainDraft__LibreOfficeContainerImage', 'synthetic-converter'),
+                           ('Jwt__SigningKey', 'synthetic-rotated-private-key')]:
+            stage, prod = self.configuration('staging'), self.configuration('production')
+            before = self.check(stage, prod)
+            stage.update(self.pdf_tools())
+            stage[key] = value
+            with self.subTest(key=key):
+                self.assertNotEqual(before, self.check(stage, prod))
+
+    def test_snapshot_accepts_pdf_defaults_but_rejects_protected_container_changes(self):
+        containers = [{'Id': 'synthetic-id', 'Image': 'synthetic-image', 'Mounts': [], 'started': 'synthetic-start'}]
+        stage, prod = self.configuration('staging'), self.configuration('production')
+        with tempfile.TemporaryDirectory() as directory:
+            path = str(Path(directory) / 'protected.json')
+            with patch.object(safety, 'protected', return_value=containers), \
+                    patch.object(safety, 'env', side_effect=[stage.copy(), prod.copy()]), \
+                    patch.object(safety.sys, 'argv', ['release-safety.py', 'snapshot', 'staging', path]):
+                safety.main()
+            stage.update(self.pdf_tools())
+            with patch.object(safety, 'protected', return_value=containers), \
+                    patch.object(safety, 'env', side_effect=[stage.copy(), prod.copy()]), \
+                    patch.object(safety.sys, 'argv', ['release-safety.py', 'unchanged', 'staging', path]):
+                safety.main()
+            for key, value in [('Id', 'recreated'), ('Image', 'changed'), ('Mounts', [{'Source': '/other'}]), ('started', 'restarted')]:
+                changed = [containers[0] | {key: value}]
+                with self.subTest(key=key), patch.object(safety, 'protected', return_value=changed), \
+                        patch.object(safety, 'env', side_effect=[stage.copy(), prod.copy()]), \
+                        patch.object(safety.sys, 'argv', ['release-safety.py', 'unchanged', 'staging', path]), \
+                        self.assertRaisesRegex(ValueError, 'Protected containers'):
+                    safety.main()
 
     def test_isolated_databases_keys_and_storage(self):
         self.assertRegex(self.check(self.configuration('staging'), self.configuration('production')), r'^[a-f0-9]{64}$')

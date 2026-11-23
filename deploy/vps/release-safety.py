@@ -13,6 +13,10 @@ CONTAINERS = {
     'staging': ['bhome-sepay-api-stage', 'bhome-sepay-owner-web-stage', 'bhome-sepay-stage-public'],
     'production': ['bhome-vps-api-1', 'bhome-vps-owner-web-1', 'bhome-vps-public-web-1'],
 }
+RELEASE_PDF_TOOLS = {
+    'MainDraft__LibreOfficePath': '/usr/bin/libreoffice',
+    'MainDraft__PdfToPpmPath': '/usr/bin/pdftoppm',
+}
 
 
 def docker(*args):
@@ -90,7 +94,14 @@ def check_environment(target):
             raise ValueError('Missing or shared environment identity: ' + key)
     if stage.get('ObjectStorage__Bucket') == prod.get('ObjectStorage__Bucket'):
         raise ValueError('Storage bucket must be environment-specific')
-    managed = {k: v for k, v in current.items() if ('__' in k and not k.startswith('Deployment__')) or k in ('ASPNETCORE_ENVIRONMENT', 'DOTNET_ENVIRONMENT', 'AllowedHosts')}
+    # Api.Release.Dockerfile adds these reviewed tool paths when an older image
+    # is upgraded. They belong to the immutable image, not private operator config.
+    # Normalize only absent/canonical paths; arbitrary executables still fail closed.
+    for key, expected_path in RELEASE_PDF_TOOLS.items():
+        if key in current and current[key] != expected_path:
+            raise ValueError('Unapproved contract PDF tool path: ' + key)
+    managed = {k: v for k, v in current.items() if k not in RELEASE_PDF_TOOLS and
+               (('__' in k and not k.startswith('Deployment__')) or k in ('ASPNETCORE_ENVIRONMENT', 'DOTNET_ENVIRONMENT', 'AllowedHosts'))}
     return hashlib.sha256(json.dumps(managed, sort_keys=True).encode()).hexdigest()
 
 
