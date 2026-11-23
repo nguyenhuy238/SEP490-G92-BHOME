@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useMemo, useState } from 'react';
+import React, { useCallback, useEffect, useState } from 'react';
 import { EquipmentInspectionPanel } from '../features/workspace/EquipmentInspectionPanel';
 import {
   AppState,
@@ -99,7 +99,7 @@ export function StaffTaskDetailScreen({ id }: { id: string }) {
       return () => clearInterval(timer);
     }, [refresh]),
   );
-  const footer = useMemo(() => {
+  const footer = (() => {
     if (!task || !inSelectedLocation) return null;
     let action: (typeof model.allowed)[number] | 'choose' | null = null;
     if (model.pendingAction) action = model.pendingAction.action;
@@ -140,19 +140,7 @@ export function StaffTaskDetailScreen({ id }: { id: string }) {
         </Button>
       </View>
     );
-  }, [
-    task,
-    inSelectedLocation,
-    allowed.length,
-    busy,
-    model.syncedVersion,
-    model.uploadPending,
-    model.pendingAction,
-    model.notes.submit,
-    model.setNote,
-    setSheet,
-    inventoryReady,
-  ]);
+  })();
   const inShell = useWorkspaceHeaderRefresh(refresh, !!busy || detail.fetching, {
     title: 'Chi tiết công việc',
     footer,

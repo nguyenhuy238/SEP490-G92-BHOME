@@ -257,9 +257,14 @@ public sealed partial class Compact24OwnerSetupTests
         {
             Data = JsonSerializer.SerializeToElement(new
             {
-                category = "ServiceFee", chargeCode = "DV_MISSING", method = "FixedPerRoomPerMonth",
-                referenceRate = "1000", unit = "VND/month", scope = "Location",
-                effectiveFrom = Today.ToString("yyyy-MM-dd"), effectiveTo = (string?)null
+                category = "ServiceFee",
+                chargeCode = "DV_MISSING",
+                method = "FixedPerRoomPerMonth",
+                referenceRate = "1000",
+                unit = "VND/month",
+                scope = "Location",
+                effectiveFrom = Today.ToString("yyyy-MM-dd"),
+                effectiveTo = (string?)null
             })
         };
         Assert.Equal(HttpStatusCode.BadRequest, (await owner.PostAsJsonAsync(route, missingServiceName)).StatusCode);
@@ -269,9 +274,15 @@ public sealed partial class Compact24OwnerSetupTests
                 Name = templateName,
                 Data = JsonSerializer.SerializeToElement(new
                 {
-                    category = "ServiceFee", chargeCode, serviceName,
-                    method = "FixedPerRoomPerMonth", referenceRate = "1000", unit = "VND/month",
-                    scope = "Location", effectiveFrom = Today.ToString("yyyy-MM-dd"), effectiveTo = (string?)null
+                    category = "ServiceFee",
+                    chargeCode,
+                    serviceName,
+                    method = "FixedPerRoomPerMonth",
+                    referenceRate = "1000",
+                    unit = "VND/month",
+                    scope = "Location",
+                    effectiveFrom = Today.ToString("yyyy-MM-dd"),
+                    effectiveTo = (string?)null
                 })
             };
 

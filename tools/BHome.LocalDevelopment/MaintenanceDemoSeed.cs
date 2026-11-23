@@ -98,8 +98,11 @@ public static class MaintenanceDemoSeed
             if (p101Resident is null)
                 Add(db, 41, new Resident
                 {
-                    RoomId = Id(22), OwnerUserId = User(1), TenantUserId = User(3),
-                    DisplayLabel = "Khách thuê P.101 BF07", ResidentType = ResidentType.Representative,
+                    RoomId = Id(22),
+                    OwnerUserId = User(1),
+                    TenantUserId = User(3),
+                    DisplayLabel = "Khách thuê P.101 BF07",
+                    ResidentType = ResidentType.Representative,
                     VerificationStatus = IdentityVerificationStatus.Verified
                 });
             else if (p101Resident.RoomId != Id(22) || p101Resident.OwnerUserId != User(1) || p101Resident.TenantUserId != User(3))
@@ -109,10 +112,18 @@ public static class MaintenanceDemoSeed
             if (p101Contract is null)
                 Add(db, 51, new Contract
                 {
-                    RoomId = Id(22), TenantUserId = User(3), OwnerSignerId = User(1),
-                    RepresentativeResidentId = Id(41), Kind = ContractKind.Main, Status = ContractStatus.Active,
-                    StartDate = today.AddMonths(-1), EndDate = today.AddYears(1), MonthlyRent = 1000000,
-                    RequiredDeposit = 1000000, ActivatedByUserId = User(1), ActivatedAt = DateTimeOffset.UtcNow,
+                    RoomId = Id(22),
+                    TenantUserId = User(3),
+                    OwnerSignerId = User(1),
+                    RepresentativeResidentId = Id(41),
+                    Kind = ContractKind.Main,
+                    Status = ContractStatus.Active,
+                    StartDate = today.AddMonths(-1),
+                    EndDate = today.AddYears(1),
+                    MonthlyRent = 1000000,
+                    RequiredDeposit = 1000000,
+                    ActivatedByUserId = User(1),
+                    ActivatedAt = DateTimeOffset.UtcNow,
                     IsDevelopmentDemo = true,
                     Terms = "[DEMO BF07] Synthetic active P.101 tenancy fixture, no provider signing claim",
                     Residents = [new ContractResident { ResidentId = Id(41), Role = ResidentType.Representative, ResidenceFrom = today.AddMonths(-1) }]
@@ -125,8 +136,12 @@ public static class MaintenanceDemoSeed
             if (airConditioner is null)
                 Add(db, 32, new Asset
                 {
-                    LocationId = Id(10), RoomId = Id(22), Name = "Điều hòa 1.5 HP", Category = "Điện lạnh",
-                    Condition = "Không làm lạnh", Status = AssetStatus.NeedsRepair
+                    LocationId = Id(10),
+                    RoomId = Id(22),
+                    Name = "Điều hòa 1.5 HP",
+                    Category = "Điện lạnh",
+                    Condition = "Không làm lạnh",
+                    Status = AssetStatus.NeedsRepair
                 });
             else if (airConditioner.LocationId != Id(10) ||
                 airConditioner.RoomId.HasValue && airConditioner.RoomId != Id(20) && airConditioner.RoomId != Id(22) ||

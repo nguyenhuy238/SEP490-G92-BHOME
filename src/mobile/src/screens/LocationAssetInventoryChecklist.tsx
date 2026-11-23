@@ -101,9 +101,11 @@ export function LocationAssetInventoryChecklist({
   const [error, setError] = useState('');
   const reload = query.reload;
   useEffect(() => onReadinessChange(inventoryReady(data)), [data, onReadinessChange]);
+  const hasData = data !== undefined && data !== null;
+  const dataStatus = data?.status;
   useEffect(() => {
-    if (data && data.status !== taskStatus) reload();
-  }, [data?.status, reload, taskStatus]);
+    if (hasData && dataStatus !== taskStatus) reload();
+  }, [hasData, dataStatus, reload, taskStatus]);
 
   const save = useCallback(
     async (item: LocationAssetInventoryItem, checked: boolean, condition: string) => {

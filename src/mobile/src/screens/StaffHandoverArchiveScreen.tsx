@@ -88,10 +88,12 @@ export function StaffHandoverArchiveScreen() {
     ? archivePath + '/' + selected.taskId + '/revisions/' + selected.revision
     : null;
   const detail = useWorkspaceQuery<LocationAssetHandoverArchiveReport>(detailPath, { notifyError: false });
+  const reloadList = list.reload;
+  const reloadDetail = detail.reload;
   const refresh = useCallback(() => {
-    list.reload();
-    if (selected) detail.reload();
-  }, [list.reload, detail.reload, selected]);
+    reloadList();
+    if (selected) reloadDetail();
+  }, [reloadList, reloadDetail, selected]);
   const inHeader = useWorkspaceHeaderRefresh(refresh, list.loading || detail.loading);
   const report = detail.data?.report;
 

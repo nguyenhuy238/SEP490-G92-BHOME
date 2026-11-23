@@ -58,8 +58,10 @@ public sealed class IncidentServiceTests
         repository.ActiveRoleAsync(user.UserId!.Value, Roles.Tenant, default).Returns(true);
         var report = new IncidentReport
         {
-            ReporterId = user.UserId.Value, ReporterRole = Roles.Tenant,
-            Status = IncidentStatus.InProgress, LocationId = Guid.NewGuid()
+            ReporterId = user.UserId.Value,
+            ReporterRole = Roles.Tenant,
+            Status = IncidentStatus.InProgress,
+            LocationId = Guid.NewGuid()
         };
         repository.IncidentAsync(report.Id, default).Returns(report);
         repository.HistoryAsync(report.Id, Arg.Any<IncidentScope>(), 1, 100, default).Returns(

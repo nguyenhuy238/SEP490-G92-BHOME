@@ -394,7 +394,8 @@ public sealed class LocationAssetHandoverSigningTests(Compact24Fixture fixture) 
         {
             revision = formerReport.Revision,
             snapshotSha256 = formerReport.SnapshotSha256,
-            confirmed = true, ink = Ink
+            confirmed = true,
+            ink = Ink
         })).StatusCode);
 
         // Owner acceptance and its preview PDF do not qualify for the former Staff archive.
@@ -407,7 +408,8 @@ public sealed class LocationAssetHandoverSigningTests(Compact24Fixture fixture) 
         {
             revision = formerReport.Revision,
             snapshotSha256 = formerReport.SnapshotSha256,
-            confirmed = true, ink = Ink
+            confirmed = true,
+            ink = Ink
         });
         Assert.Equal(HttpStatusCode.OK, formerSigned.StatusCode);
         Assert.Equal("Completed", (await formerSigned.Content.ReadFromJsonAsync<LocationAssetHandoverReportView>())!.Status);
@@ -484,13 +486,15 @@ public sealed class LocationAssetHandoverSigningTests(Compact24Fixture fixture) 
         {
             revision = successorReport.Revision,
             snapshotSha256 = successorReport.SnapshotSha256,
-            confirmed = true, ink = Ink
+            confirmed = true,
+            ink = Ink
         })).StatusCode);
         Assert.Equal(HttpStatusCode.OK, (await successorClient.PostAsJsonAsync(successorHandover + "/sign", new
         {
             revision = successorReport.Revision,
             snapshotSha256 = successorReport.SnapshotSha256,
-            confirmed = true, ink = Ink
+            confirmed = true,
+            ink = Ink
         })).StatusCode);
 
         // Staff A's archive remains pinned to A's signed report after B has completed.
@@ -531,7 +535,8 @@ public sealed class LocationAssetHandoverSigningTests(Compact24Fixture fixture) 
         {
             revision = successorReport.Revision,
             snapshotSha256 = successorReport.SnapshotSha256,
-            confirmed = true, ink = Ink
+            confirmed = true,
+            ink = Ink
         })).StatusCode);
 
         Assert.Empty((await outsiderClient.GetFromJsonAsync<LocationAssetHandoverArchiveListItem[]>(archive)) ?? []);
@@ -734,7 +739,8 @@ public sealed class LocationAssetHandoverSigningTests(Compact24Fixture fixture) 
         {
             revision = report.Revision,
             snapshotSha256 = report.SnapshotSha256,
-            confirmed = true, ink = Ink
+            confirmed = true,
+            ink = Ink
         });
         Assert.Equal(HttpStatusCode.OK, ownerSigned.StatusCode);
 
@@ -754,7 +760,8 @@ public sealed class LocationAssetHandoverSigningTests(Compact24Fixture fixture) 
         {
             revision = report.Revision,
             snapshotSha256 = report.SnapshotSha256,
-            confirmed = true, ink = Ink
+            confirmed = true,
+            ink = Ink
         })).StatusCode);
         Assert.Equal(HttpStatusCode.OK, (await ownerClient.GetAsync(handover)).StatusCode);
         Assert.Equal(HttpStatusCode.OK, (await ownerClient.GetAsync(handover + "/document")).StatusCode);
@@ -771,7 +778,8 @@ public sealed class LocationAssetHandoverSigningTests(Compact24Fixture fixture) 
         {
             revision = report.Revision,
             snapshotSha256 = report.SnapshotSha256,
-            confirmed = true, ink = Ink
+            confirmed = true,
+            ink = Ink
         });
         Assert.Equal(HttpStatusCode.OK, staffSigned.StatusCode);
         Assert.Equal("Completed", (await staffSigned.Content.ReadFromJsonAsync<LocationAssetHandoverReportView>())!.Status);
@@ -801,7 +809,8 @@ public sealed class LocationAssetHandoverSigningTests(Compact24Fixture fixture) 
         {
             revision = report.Revision,
             snapshotSha256 = report.SnapshotSha256,
-            confirmed = true, ink = Ink
+            confirmed = true,
+            ink = Ink
         })).StatusCode);
         Assert.Equal(HttpStatusCode.OK, (await ownerClient.GetAsync(handover)).StatusCode);
         Assert.Equal(HttpStatusCode.OK, (await ownerClient.GetAsync(handover + "/document")).StatusCode);
@@ -977,7 +986,8 @@ public sealed class LocationAssetHandoverSigningTests(Compact24Fixture fixture) 
         {
             revision = predecessorReport.Revision,
             snapshotSha256 = predecessorReport.SnapshotSha256,
-            confirmed = true, ink = Ink
+            confirmed = true,
+            ink = Ink
         });
         Assert.Equal(HttpStatusCode.OK, predecessorOwnerSign.StatusCode);
         Assert.Equal("PendingStaffSignature",
@@ -1002,7 +1012,8 @@ public sealed class LocationAssetHandoverSigningTests(Compact24Fixture fixture) 
         {
             revision = predecessorReport.Revision,
             snapshotSha256 = predecessorReport.SnapshotSha256,
-            confirmed = true, ink = Ink
+            confirmed = true,
+            ink = Ink
         })).StatusCode);
         Assert.Equal(HttpStatusCode.OK, (await ownerClient.GetAsync(route)).StatusCode);
         Assert.Equal(HttpStatusCode.OK, (await ownerClient.GetAsync(route + "/location-asset-inventory")).StatusCode);
@@ -1051,7 +1062,8 @@ public sealed class LocationAssetHandoverSigningTests(Compact24Fixture fixture) 
         {
             revision = predecessorReport.Revision,
             snapshotSha256 = predecessorReport.SnapshotSha256,
-            confirmed = true, ink = Ink
+            confirmed = true,
+            ink = Ink
         })).StatusCode);
         var supersededReport = (await ownerClient.GetFromJsonAsync<LocationAssetHandoverReportView>(handover))!;
         Assert.Equal("Superseded", supersededReport.Status);
@@ -1121,20 +1133,23 @@ public sealed class LocationAssetHandoverSigningTests(Compact24Fixture fixture) 
         {
             revision = report.Revision,
             snapshotSha256 = report.SnapshotSha256,
-            confirmed = true, ink = Ink
+            confirmed = true,
+            ink = Ink
         })).StatusCode);
         Assert.Equal(HttpStatusCode.OK, (await ownerClient.GetAsync(handover)).StatusCode);
         Assert.Equal(HttpStatusCode.OK, (await ownerClient.PostAsJsonAsync(handover + "/sign", new
         {
             revision = report.Revision,
             snapshotSha256 = report.SnapshotSha256,
-            confirmed = true, ink = Ink
+            confirmed = true,
+            ink = Ink
         })).StatusCode);
         var successorSigned = await successorClient.PostAsJsonAsync(handover + "/sign", new
         {
             revision = report.Revision,
             snapshotSha256 = report.SnapshotSha256,
-            confirmed = true, ink = Ink
+            confirmed = true,
+            ink = Ink
         });
         Assert.Equal(HttpStatusCode.OK, successorSigned.StatusCode);
         Assert.Equal("Completed", (await successorSigned.Content.ReadFromJsonAsync<LocationAssetHandoverReportView>())!.Status);

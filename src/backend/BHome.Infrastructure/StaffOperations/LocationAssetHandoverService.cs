@@ -1,3 +1,4 @@
+using System.Data;
 using System.Globalization;
 using System.Security.Cryptography;
 using System.Text;
@@ -217,7 +218,7 @@ public sealed class LocationAssetHandoverService(
     private async Task<IReadOnlyList<LocationHistory>> ArchiveHistoriesAsync(
         Guid? taskId, int? revision, CancellationToken token)
     {
-        await db.Database.OpenConnectionAsync(token);
+        await EnsureConnectionOpenAsync(token);
         var sql = new StringBuilder("""
             SELECT l.id,COALESCE((
                 SELECT jsonb_agg(history_entry.value ORDER BY history_entry.ordinality)
@@ -337,10 +338,17 @@ public sealed class LocationAssetHandoverService(
     private async Task RequireRoleAsync(string role, CancellationToken token)
     {
         if (!currentUser.IsInRole(role)) throw new OperationalTaskException(403, "location_handover_permission_denied");
+        await EnsureConnectionOpenAsync(token);
         await using var command = Command("SELECT EXISTS(SELECT 1 FROM users WHERE id=@actor AND is_active AND @role=ANY(roles))",
             ("actor", Actor), ("role", role));
         if (await command.ExecuteScalarAsync(token) is not true)
             throw new OperationalTaskException(403, "location_handover_permission_denied");
+    }
+
+    private async Task EnsureConnectionOpenAsync(CancellationToken token)
+    {
+        if (db.Database.GetDbConnection().State != ConnectionState.Open)
+            await db.Database.OpenConnectionAsync(token);
     }
 
     private async Task<bool> StaffAssignedAsync(TaskState task, Guid staff, CancellationToken token)
@@ -971,9 +979,14 @@ public sealed class LocationAssetHandoverService(
                 "Owner đã ký xác nhận biên bản kiểm kê tài sản cơ sở. Hãy xem đúng phiên bản trước khi ký.",
                 "OperationalTask", taskId, token, channels: ["IN_APP", "EMAIL"]);
             await transaction.CommitAsync(token);
-            return View(task, state with { OwnerSignature = signature,
-                OwnerInkObjectKey = inkKey, OwnerInkSha256 = inkHash,
-                OwnerPdfObjectKey = ownerPdfKey, OwnerPdfSha256 = ownerPdfHash });
+            return View(task, state with
+            {
+                OwnerSignature = signature,
+                OwnerInkObjectKey = inkKey,
+                OwnerInkSha256 = inkHash,
+                OwnerPdfObjectKey = ownerPdfKey,
+                OwnerPdfSha256 = ownerPdfHash
+            });
         }
         if (state.OwnerInkObjectKey is null || state.OwnerInkSha256 is null ||
             state.OwnerPdfObjectKey is null || state.OwnerPdfSha256 is null)

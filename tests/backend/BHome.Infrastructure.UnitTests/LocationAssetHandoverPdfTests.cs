@@ -48,8 +48,10 @@ public sealed class LocationAssetHandoverPdfTests
             [[[15d, 25d], [45d, 60d], [72d, 40d], [94d, 76d], [125d, 48d]]]));
         var signed = report with
         {
-            OwnerSignature = owner, StaffSignature = staff,
-            OwnerInkPng = ink, StaffInkPng = ink
+            OwnerSignature = owner,
+            StaffSignature = staff,
+            OwnerInkPng = ink,
+            StaffInkPng = ink
         };
         var bytes = LocationAssetHandoverPdfRenderer.Render(signed, CancellationToken.None);
 
