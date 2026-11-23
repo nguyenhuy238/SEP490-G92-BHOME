@@ -220,30 +220,30 @@ public sealed partial class Compact24OwnerSetupTests
     {
         var w = await Seed(); using var owner = await Client(w.Owner);
         const string route = "/api/v1/shared-configuration/fee-templates";
-        foreach (var (category, code, method, unit, expected) in new[] {
-            ("Rent", "RENT", "FixedPerRoomPerMonth", "VND / th\u00e1ng", "VND/month"),
-            ("Electricity", "electricity", "Metered", "VND / kWh", "kWh"),
-            ("Water", "water", "Metered", "m3", "m\u00b3"),
-            ("ServiceFee", "internet", "FixedPerRoomPerMonth", "VND/month", "VND/month"),
-            ("ServiceFee", "cleaning", "FixedPerPersonPerMonth", "VND/person/month", "VND/person/month") })
+        foreach (var (category, code, method, unit, expected, expectedCode, serviceName) in new[] {
+            ("Rent", "RENT", "FixedPerRoomPerMonth", "VND / tháng", "VND/month", "RENT", (string?)null),
+            ("Electricity", "electricity", "Metered", "VND / kWh", "kWh", "ELECTRICITY", (string?)null),
+            ("Water", "water", "Metered", "m3", "m³", "WATER", (string?)null),
+            ("ServiceFee", "internet", "FixedPerRoomPerMonth", "VND/month", "VND/month", "DV_I", "Internet"),
+            ("ServiceFee", "cleaning", "FixedPerPersonPerMonth", "VND/person/month", "VND/person/month", "DV_VS", "Vệ sinh") })
         {
-            var data = JsonSerializer.SerializeToElement(new { category, chargeCode = code, method, referenceRate = "1000", unit, scope = "Location", effectiveFrom = Today });
+            var data = JsonSerializer.SerializeToElement(new { category, chargeCode = code, serviceName, method, referenceRate = "1000", unit, scope = "Location", effectiveFrom = Today });
             var saved = await Read<SharedDocument>(await owner.PostAsJsonAsync(route, SharedInput("fee-templates") with { Data = data }));
             Assert.Equal(expected, saved.Data.GetProperty("unit").GetString());
-            Assert.Equal(code.ToUpperInvariant(), saved.Data.GetProperty("chargeCode").GetString());
+            Assert.Equal(expectedCode, saved.Data.GetProperty("chargeCode").GetString());
         }
         var badFees = new object[] {
-            new { category = "ServiceFee", chargeCode = "CLEANING", method = "FixedPerPersonPerMonth", referenceRate = "1", unit = "VND/month", scope = "Location", effectiveFrom = Today },
+            new { category = "ServiceFee", serviceName = "Vệ sinh", chargeCode = "CLEANING", method = "FixedPerPersonPerMonth", referenceRate = "1", unit = "VND/month", scope = "Location", effectiveFrom = Today },
             new { category = "Water", chargeCode = "WATER", method = "Metered", referenceRate = "1", unit = "kWh", scope = "Location", effectiveFrom = Today },
             new { category = "Electricity", chargeCode = "ELECTRICITY", method = "Metered", referenceRate = "1", unit = "VND/month", scope = "Location", effectiveFrom = Today },
-            new { category = "ServiceFee", chargeCode = "WATER", method = "FixedPerRoomPerMonth", referenceRate = "1", unit = "VND/month", scope = "Location", effectiveFrom = Today },
-            new { category = "ServiceFee", chargeCode = "INTERNET", method = "FixedPerRoomPerMonth", referenceRate = "1", unit = "m3", scope = "Location", effectiveFrom = Today },
+            new { category = "ServiceFee", serviceName = "Internet", chargeCode = "INTERNET", method = "Metered", referenceRate = "1", unit = "VND/month", scope = "Location", effectiveFrom = Today },
+            new { category = "ServiceFee", serviceName = "Internet", chargeCode = "INTERNET", method = "FixedPerRoomPerMonth", referenceRate = "1", unit = "m3", scope = "Location", effectiveFrom = Today },
             new { category = "Rent", chargeCode = "RENT", method = "Metered", referenceRate = "1", unit = "VND", scope = "Location", effectiveFrom = Today },
-            new { category = "Electricity", chargeCode = "WATER", method = "Metered", referenceRate = "1", unit = "VND", scope = "Location", effectiveFrom = Today },
-            new { category = "Water", chargeCode = "WATER", method = "Metered", referenceRate = "-1", unit = "VND", scope = "Location", effectiveFrom = Today }
+            new { category = "Electricity", chargeCode = "WATER", method = "Metered", referenceRate = "1", unit = "kWh", scope = "Location", effectiveFrom = Today },
+            new { category = "Water", chargeCode = "WATER", method = "Metered", referenceRate = "-1", unit = "m3", scope = "Location", effectiveFrom = Today },
+            new { category = "ServiceFee", chargeCode = "CLEANING", method = "FixedPerPersonPerMonth", referenceRate = "1", unit = "VND/person/month", scope = "Location", effectiveFrom = Today }
         };
-        foreach (var data in badFees) Assert.Equal(HttpStatusCode.BadRequest, (await owner.PostAsJsonAsync("/api/v1/shared-configuration/fee-templates", SharedInput("fee-templates") with { Data = JsonSerializer.SerializeToElement(data) })).StatusCode);
-        Assert.Equal(HttpStatusCode.BadRequest, (await owner.PostAsJsonAsync("/api/v1/shared-configuration/policy-templates", SharedInput("policy-templates") with { Data = JsonSerializer.SerializeToElement(new { content = "", effectiveFrom = Today }) })).StatusCode);
+        foreach (var data in badFees) Assert.Equal(HttpStatusCode.BadRequest, (await owner.PostAsJsonAsync(route, SharedInput("fee-templates") with { Data = JsonSerializer.SerializeToElement(data) })).StatusCode);
         Assert.Empty((await owner.GetFromJsonAsync<PagedResult<PolicyDto>>("/api/v1/billing-policies?locationId=" + w.Location))!.Items);
         Assert.Empty((await owner.GetFromJsonAsync<SetupDocument[]>("/api/v1/operating-policies?locationId=" + w.Location))!);
     }

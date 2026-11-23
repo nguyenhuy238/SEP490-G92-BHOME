@@ -312,6 +312,11 @@ function respond(path: string, init?: RequestInit): unknown {
   if (path.startsWith('/api/v1/staff-location-assignments'))
     return [{ id, staffUserId: actor, startDate: '2020-01-01', endDate: '2099-01-01' }];
   if (path === '/api/v1/capture/staff') return [{ id: actor, label: 'Nhân viên thử nghiệm' }];
+  if (path.endsWith('/progress'))
+    return {
+      currentStep: 'Đang xử lý',
+      events: [{ message: 'Báo cáo đã được tiếp nhận và đang xử lý.', occurredAt: '2026-11-06T01:30:00Z' }],
+    };
   if (path.includes('/history?'))
     return page([
       {
@@ -413,8 +418,31 @@ afterEach(() => {
   cleanup();
   api.queryCache.dispose();
 });
-const choose = (label: string, value: string) =>
+const actionLabels: Record<string, string> = {
+  proposal: 'Gửi phương án sửa chữa',
+  submit: 'Gửi kết quả nghiệm thu',
+  progress: 'Cập nhật tiến độ',
+  blocker: 'Báo vướng mắc',
+  'plan-decision': 'Quyết định phương án',
+  start: 'Bắt đầu sửa chữa',
+  'emergency-actions': 'Ghi hành động khẩn cấp',
+  acknowledge: 'Tiếp nhận khẩn cấp',
+};
+const choose = (label: string, value: string) => {
+  if (label === 'Chọn thao tác') {
+    const actionLabel = actionLabels[value];
+    if (!actionLabel) throw new Error(`Unknown incident action: ${value}`);
+    let actionButton = screen.queryByRole('button', { name: actionLabel });
+    if (!actionButton) {
+      const moreButton = screen.queryByRole('button', { name: 'Thao tác khác' });
+      if (moreButton) fireEvent.click(moreButton);
+      actionButton = screen.getByRole('button', { name: actionLabel });
+    }
+    fireEvent.click(actionButton);
+    return;
+  }
   fireEvent.change(screen.getByLabelText(label), { target: { value } });
+};
 const confirm = () => fireEvent.click(screen.getByRole('checkbox'));
 const mutations = () =>
   s.request.mock.calls.filter(([, init]) => init?.method === 'POST' || init?.method === 'PUT');
@@ -551,12 +579,14 @@ it('locks double submit and reuses the same idempotency key after ambiguous fail
   await waitFor(() => expect(mutations()).toHaveLength(2));
   expect(mutations()[1][1].headers['Idempotency-Key']).toBe(key);
 });
-it('Tenant detail shows history but never requests or exposes WorkOrder finances and actors', async () => {
+it('Tenant detail shows tenant-safe progress without requesting internal WorkOrder history', async () => {
   s.role = 'Tenant';
   s.params = { incidentId: id };
   render(<IncidentDetailScreen />);
-  await screen.findByText('Đã kiểm tra thực tế');
-  expect(screen.queryByText(/PRIVATE-VENDOR|PRIVATE-ACTOR|999999/)).toBeNull();
+  await screen.findByText('Báo cáo đã được tiếp nhận và đang xử lý.');
+  expect(screen.queryByText(/PRIVATE-VENDOR|PRIVATE-ACTOR|999999|Đã kiểm tra thực tế/)).toBeNull();
+  expect(s.request.mock.calls.some(([path]) => path === `/api/v1/incidents/${id}/progress`)).toBe(true);
+  expect(s.request.mock.calls.some(([path]) => path.includes('/history'))).toBe(false);
   expect(
     s.request.mock.calls.some(
       ([path]) =>
@@ -571,7 +601,7 @@ it.each(['Owner', 'Staff', 'Tenant'])(
   async (role) => {
     s.role = role;
     render(<IncidentListScreen />);
-    await screen.findByText('INC-SYNTHETIC');
+    await screen.findByText('Ống nước bị vỡ trong phòng');
     fireEvent.click(screen.getByText('Thông báo sự cố và bảo trì'));
     expect(s.go).toHaveBeenCalledWith('incident-inbox');
     expect(s.request.mock.calls.some(([path]) => path.startsWith('/api/v1/notifications'))).toBe(
@@ -582,7 +612,7 @@ it.each(['Owner', 'Staff', 'Tenant'])(
 it('filters real report list by backend status and retains existing invoice adjustment navigation', async () => {
   s.role = 'Tenant';
   render(<IncidentListScreen />);
-  await screen.findByText('INC-SYNTHETIC');
+  await screen.findByText('Ống nước bị vỡ trong phòng');
   choose('Trạng thái báo cáo', 'Resolved');
   await waitFor(() =>
     expect(s.request.mock.calls.some(([path]) => path.includes('status=Resolved'))).toBe(true),
@@ -676,14 +706,11 @@ it.each(['PendingApproval', 'PendingVerification'] as const)(
     s.role = 'Owner';
     work.status = status;
     render(<IncidentActionPanel report={report} work={work} role="Owner" />);
-    expect(screen.getByLabelText('Chọn thao tác')).toBeTruthy();
-    expect(screen.queryByRole('option', { name: 'Đổi nhân viên' })).toBeNull();
-    expect(screen.queryByRole('option', { name: 'Bắt đầu sửa chữa' })).toBeNull();
-    expect(
-      screen.getByRole('option', {
-        name: status === 'PendingApproval' ? 'Quyết định phương án' : 'Nghiệm thu hoàn thành',
-      }),
-    ).toBeTruthy();
+    const expectedAction =
+      status === 'PendingApproval' ? 'Quyết định phương án' : 'Nghiệm thu hoàn thành';
+    expect(screen.getByRole('button', { name: expectedAction })).toBeTruthy();
+    expect(screen.queryByRole('button', { name: 'Đổi nhân viên' })).toBeNull();
+    expect(screen.queryByRole('button', { name: 'Bắt đầu sửa chữa' })).toBeNull();
     expect(mutations()).toHaveLength(0);
   },
 );

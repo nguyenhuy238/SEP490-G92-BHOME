@@ -614,8 +614,9 @@ public sealed class LocationAssetInventoryAssignmentTests(Compact24Fixture fixtu
         var submittedTask = (await submitted.Content.ReadFromJsonAsync<TaskView>())!;
         Assert.Equal("PendingVerification", submittedTask.Status);
 
-        // If the Tenant source later changes to Asset B, the already-submitted direct check
-        // must be revalidated because its inherited/source identity has changed.
+        // A confirmed Tenant handover is an immutable source snapshot. A later
+        // attempt to replace its physical asset identity must be rejected by the
+        // database guard; Owner approval continues against the original baseline.
         await using (var scope = fixture.Factory!.Services.CreateAsyncScope())
         {
             var db = scope.ServiceProvider.GetRequiredService<Compact24DbContext>();
@@ -629,13 +630,12 @@ public sealed class LocationAssetInventoryAssignmentTests(Compact24Fixture fixtu
                 }).ToArray()
             };
             handover.Snapshot = JsonSerializer.Serialize(changedSnapshot);
-            await db.SaveChangesAsync();
+            await Assert.ThrowsAsync<DbUpdateException>(() => db.SaveChangesAsync());
         }
         using var ownerClient = await Client(owner);
         var approval = await ownerClient.PostAsJsonAsync(route + "/location-asset-handover/approve",
             new { taskVersion = submittedTask.Version });
-        Assert.Equal(HttpStatusCode.Conflict, approval.StatusCode);
-    }
+        Assert.Equal(HttpStatusCode.OK, approval.StatusCode);    }
 
     [CompactPostgresFact]
     public async Task OnlyExplicitOwnerConfirmedEmptyRoomsBecomeChecklistItems()
