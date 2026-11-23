@@ -427,3 +427,32 @@ Kiểm chứng Chromium dùng fixture được chặn trên loopback qua
 `scripts/Test-ValidationFeedbackBrowser.mjs` và bộ browser Public Web. Bằng chứng này
 không thay thế integration với PostgreSQL hoặc kiểm thử Android/iOS. Inventory nguồn,
 ma trận chấp nhận và các giới hạn nằm trong `BHOME_FULL_SYSTEM_VALIDATION_UX_CI_REPORT.md`.
+
+### FE-09: Bản nháp và xuất bản
+
+Các route `/api/v1/public-content/{locations|rooms}/{id}` giữ nguyên quyền
+`PublicContent.Publish`. GET Owner trả bản nháp; PUT chỉ lưu bản nháp. POST
+`publish` duyệt snapshot mới, kể cả khi đã xuất bản trước đó; POST `unpublish`
+ẩn nội dung mà vẫn giữ draft/snapshot. `publicationStatus` bổ sung có giá trị
+`Draft`, `Published`, `Hidden`; các trường `published`/`publishedAt` cũ vẫn còn.
+Phòng chỉ được xuất bản khi cơ sở hoạt động và đã xuất bản. Gỡ cơ sở đồng thời
+gỡ các phòng, không tự xuất bản lại phòng khi xuất bản lại cơ sở.
+
+PUT hỗ trợ `photoOrder?: number[]` tối đa 20 phần tử: nếu có, phải là hoán vị
+đầy đủ các `index` ảnh hiện tại. Ảnh đầu là đại diện. Index/URL ổn định khi
+sắp xếp/xóa; không coi index là vị trí album. Upload/sắp xếp chỉ đổi draft.
+DELETE ảnh là thu hồi ngay khỏi cả draft và snapshot; URL cũ trả 404, không
+trỏ sang ảnh khác. Ảnh mới tối đa 5 MB, PNG/JPEG, tối đa 20 ảnh mỗi bản nháp.
+Owner xem ảnh draft qua route có xác thực, không dùng URL Guest.
+
+Guest chỉ đọc snapshot qua các route `/api/v1/public/*`, DTO whitelist, không
+object key. Response nội dung/ảnh dùng `Cache-Control: no-store`; trạng thái
+phòng lấy từ status vận hành backend (`Available`, `OnHold`, `Occupied`,
+`Unavailable`), không đóng băng theo ngày xuất bản. Unknown được hiển thị là
+chưa xác định. Client tái sử dụng API danh sách hiện có và phân trang/lọc dữ
+liệu public tại UI; chưa bổ sung query/filter contract cho API.
+
+Migration `20261122000100_PublicContentSnapshots` backfill snapshot trong JSON
+hiện tại, không thêm bảng/cột. Runtime tương thích dữ liệu cũ: đóng băng nội
+dung cũ dưới row lock trước thay đổi đầu tiên. Xem bằng chứng và giới hạn tại
+`docs/development/FE09_IMPLEMENTATION_2026-11-22.md`.

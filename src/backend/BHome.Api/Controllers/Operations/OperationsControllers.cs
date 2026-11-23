@@ -118,7 +118,7 @@ public sealed class PublicContentAdministrationController(OperationsService serv
 }
 
 [ApiController, Route("api/v1/public"), AllowAnonymous]
-[ResponseCache(Duration = 60, Location = ResponseCacheLocation.Any)]
+[ResponseCache(NoStore = true, Location = ResponseCacheLocation.None)]
 public sealed class PublicInformationController(OperationsService service) : ControllerBase
 {
     [HttpGet("locations")] public Task<IReadOnlyList<LocationPublicContent>> Locations(CancellationToken t) => service.PublishedLocationsAsync(t);

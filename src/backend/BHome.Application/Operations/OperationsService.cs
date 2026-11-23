@@ -378,7 +378,7 @@ public sealed class OperationsService(IOperationsRepository repository, IOperati
         .Where(x => x.Length > 0).Distinct(StringComparer.OrdinalIgnoreCase).Order(StringComparer.OrdinalIgnoreCase).ToArray();
     private static void ValidateAmenities(string[]? values)
     {
-        if (values is null || values.Length > 50 || values.Any(x => x.Length > 100))
+        if (values is null || values.Length > 50 || values.Any(x => x is null || x.Length > 100))
             throw OperationsException.Invalid("invalid_public_amenities");
     }
     private static async Task<byte[]> ReadImageAsync(Stream input, CancellationToken t)

@@ -93,6 +93,21 @@ Nếu đang dùng PostgreSQL native, không khởi động thêm service `postgr
 Vào `http://localhost:9001`, dùng credential **của chính máy**, tạo bucket private `bhome-private`.
 Không dùng `docker compose down -v`, không chạy script seed/reset trong quá trình onboarding cấu hình.
 
+Nếu API vẫn chạy nhưng tải ảnh báo dịch vụ gián đoạn, kiểm tra Docker Desktop và MinIO.
+Khôi phục riêng MinIO local đã được thiết lập (giữ volume, không khởi động PostgreSQL):
+
+```powershell
+npm.cmd run storage:dev
+powershell -NoProfile -ExecutionPolicy Bypass -File scripts/Start-LocalStorage.ps1 -CheckOnly
+```
+
+Lệnh dùng profile `.env` Development, chỉ chấp nhận MinIO HTTP loopback đúng cổng
+Compose; không quản lý storage remote. Máy mới chưa có image vẫn cần bước build
+ở trên và tạo bucket private. `-CheckOnly` chỉ xác nhận HTTP health, không xác nhận
+credential, bucket hoặc khả năng lưu ảnh. Nếu API dùng user-secrets/process để ghi
+đè storage, cần kiểm tra cấu hình hiệu lực theo thứ tự ưu tiên ở mục 6.
+Xem [kiểm chứng lỗi ảnh FE-09](FE09_PHOTO_STORAGE_FIX_2026-11-23.md).
+
 ## 6. Chạy Backend
 
 ```powershell

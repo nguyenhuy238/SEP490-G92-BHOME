@@ -141,23 +141,27 @@ public sealed class OccupancyQuery
 public sealed record PublicPhotoView(int Index, string ContentType, long Length, string Url);
 public sealed record LocationPublicContent(Guid LocationId, string Name, string Address, string Summary,
     IReadOnlyList<string> Amenities, string? ContactPhone, string? ContactEmail,
-    IReadOnlyList<PublicPhotoView> Photos, bool Published, DateTimeOffset? PublishedAt);
+    IReadOnlyList<PublicPhotoView> Photos, bool Published, DateTimeOffset? PublishedAt,
+    string PublicationStatus = "Draft");
 public sealed record RoomPublicContent(Guid RoomId, Guid LocationId, string RoomNumber, string? Floor,
     int Capacity, string Description, IReadOnlyList<string> Amenities, decimal? IndicativePrice,
-    string Vacancy, IReadOnlyList<PublicPhotoView> Photos, bool Published, DateTimeOffset? PublishedAt);
+    string Vacancy, IReadOnlyList<PublicPhotoView> Photos, bool Published, DateTimeOffset? PublishedAt,
+    string PublicationStatus = "Draft");
 
 [JsonUnmappedMemberHandling(JsonUnmappedMemberHandling.Disallow)]
 public sealed record LocationPublicContentWrite(
-    [StringLength(2000)] string Summary,
+    [Required(AllowEmptyStrings = true), StringLength(2000)] string Summary,
     [MaxLength(50)] string[] Amenities,
     [Phone, StringLength(30)] string? ContactPhone,
-    [EmailAddress, StringLength(256)] string? ContactEmail);
+    [EmailAddress, StringLength(256)] string? ContactEmail,
+    [MaxLength(20)] int[]? PhotoOrder = null);
 
 [JsonUnmappedMemberHandling(JsonUnmappedMemberHandling.Disallow)]
 public sealed record RoomPublicContentWrite(
-    [StringLength(2000)] string Description,
+    [Required(AllowEmptyStrings = true), StringLength(2000)] string Description,
     [MaxLength(50)] string[] Amenities,
-    [Range(typeof(decimal), "0", "999999999999999999")] decimal? IndicativePrice);
+    [Range(typeof(decimal), "0", "999999999999999999")] decimal? IndicativePrice,
+    [MaxLength(20)] int[]? PhotoOrder = null);
 
 public sealed record RecurringTaskTemplateView(Guid Id, Guid LocationId, string Title, string Requirements,
     string Priority, bool EvidenceRequired, int IntervalDays, DateTimeOffset NextRunAt,
