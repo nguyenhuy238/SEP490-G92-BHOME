@@ -12,6 +12,7 @@ import {
   internalSigningClient,
   signingInvitationLabel,
   signingMessage,
+  invitationPreDeliveryError,
   type InternalSigningStatus,
 } from '../../../../../packages/client-core/src/internalSigning';
 import { signingClient, signingMethodLabel } from '../../../../../packages/client-core/src/signing';
@@ -229,7 +230,9 @@ export function ContractSigningStep({
     } catch (e) {
       const responseStatus = (e as { status?: number })?.status;
       const unknown =
-        dispatched && (!responseStatus || responseStatus >= 500 || responseStatus === 408);
+        dispatched &&
+        !invitationPreDeliveryError(e) &&
+        (!responseStatus || responseStatus >= 500 || responseStatus === 408);
       setUncertainInvitation(unknown);
       if (!unknown) {
         setInvitationFailure({ contractId: c.id, message: signingMessage(e) });

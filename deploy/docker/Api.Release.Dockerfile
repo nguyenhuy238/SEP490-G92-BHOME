@@ -48,6 +48,8 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 WORKDIR /app
 
 ENV ASPNETCORE_HTTP_PORTS=8080
+ENV MainDraft__LibreOfficePath=/usr/bin/libreoffice
+ENV MainDraft__PdfToPpmPath=/usr/bin/pdftoppm
 ENV HOME=/home/app
 
 USER $APP_UID
