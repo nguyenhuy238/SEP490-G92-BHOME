@@ -1415,7 +1415,8 @@ function ReceivingAccountForm() {
   const [lastSaved, setLastSaved] = useState<number | null>(null);
   const account = useQuery({
     queryKey: ['receiving-account', actor, 'owner'],
-    queryFn: ({ signal }) => api.request<BankAccount | null>(ownerReceivingAccountRoute, { signal }),
+    queryFn: ({ signal }) =>
+      api.request<BankAccount | null>(ownerReceivingAccountRoute, { signal }),
   });
   return (
     <>
@@ -1521,12 +1522,12 @@ function AccountEditor({
         <Box>
           <Typography variant="h6">Tài khoản nhận tiền chung cho tất cả cơ sở</Typography>
           <Typography variant="body2" color="text.secondary" sx={{ mt: 0.5 }}>
-            Cấu hình một lần cho tất cả cơ sở thuộc Owner đang đăng nhập. Các phiên bản tài
-            khoản theo từng cơ sở trước đây được giữ lại để đối chiếu.
+            Cấu hình một lần cho tất cả cơ sở thuộc Owner đang đăng nhập. Các phiên bản tài khoản
+            theo từng cơ sở trước đây được giữ lại để đối chiếu.
           </Typography>
           <Typography variant="body2" color="text.secondary" sx={{ mt: 0.5 }}>
-            Bật hướng dẫn nhận tiền không tự kích hoạt SePay. QR có mã đối soát chỉ xuất hiện
-            khi tài khoản này được liên kết chính xác với SePay ở môi trường tương ứng.
+            Bật hướng dẫn nhận tiền không tự kích hoạt SePay. QR có mã đối soát chỉ xuất hiện khi
+            tài khoản này được liên kết chính xác với SePay ở môi trường tương ứng.
           </Typography>
           {current && (
             <Typography variant="body2" color="text.secondary" sx={{ mt: 0.5 }}>

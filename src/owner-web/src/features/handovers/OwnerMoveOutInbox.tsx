@@ -136,9 +136,10 @@ export function OwnerMoveOutInbox() {
   // existing authenticated proposal endpoint only for those legacy rows, with
   // bounded concurrency. Once the new API is deployed this makes zero calls.
   const legacyIds = visible
-    .filter((item) =>
-      (item.status === 'Inspected' || item.status === 'PendingSettlement') &&
-      item.proposalStatus === undefined,
+    .filter(
+      (item) =>
+        (item.status === 'Inspected' || item.status === 'PendingSettlement') &&
+        item.proposalStatus === undefined,
     )
     .map((item) => item.contractId);
   const legacyProgress = useQuery({
@@ -146,7 +147,10 @@ export function OwnerMoveOutInbox() {
     enabled: legacyIds.length > 0,
     retry: false,
     queryFn: async ({ signal }) => {
-      const results: Record<string, Pick<MoveOutInboxItem, 'proposalStatus' | 'proposalSettlementStatus'>> = {};
+      const results: Record<
+        string,
+        Pick<MoveOutInboxItem, 'proposalStatus' | 'proposalSettlementStatus'>
+      > = {};
       let next = 0;
       await Promise.all(
         Array.from({ length: Math.min(4, legacyIds.length) }, async () => {
@@ -157,11 +161,16 @@ export function OwnerMoveOutInbox() {
                 `/api/v1/contracts/${encodeURIComponent(contractId)}/move-out/receivables/proposal`,
                 { signal },
               );
-              if (!['None', 'PendingTenant', 'Accepted', 'Disputed', 'Outdated'].includes(proposal.status))
+              if (
+                !['None', 'PendingTenant', 'Accepted', 'Disputed', 'Outdated'].includes(
+                  proposal.status,
+                )
+              )
                 continue;
               results[contractId] = {
                 proposalStatus: proposal.status === 'None' ? null : proposal.status,
-                proposalSettlementStatus: proposal.latestProposal?.tenantFeedback?.settlement?.status ?? null,
+                proposalSettlementStatus:
+                  proposal.latestProposal?.tenantFeedback?.settlement?.status ?? null,
               };
             } catch (cause) {
               if (signal.aborted) throw cause;

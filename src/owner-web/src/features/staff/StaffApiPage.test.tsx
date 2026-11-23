@@ -225,12 +225,12 @@ it('requests a 12-character password email without a reset link, preserving erro
   mocks.request.mockImplementation(async (path: string, init?: RequestInit) => {
     if (path.endsWith('/issue-password') && init?.method === 'POST' && failPasswordIssue) {
       failPasswordIssue = false;
-      throw new ApiError(503, { code: 'email_recipient_not_allowed' });
+      throw new ApiError(400, { code: 'email_recipient_invalid' });
     }
     return original(path, init);
   });
   fireEvent.click(confirm);
-  expect(await screen.findByRole('alert')).toHaveTextContent('Địa chỉ nhận chưa được cho phép');
+  expect(await screen.findByRole('alert')).toHaveTextContent('Địa chỉ email nhận không hợp lệ');
   await waitFor(() => expect(confirm).toBeEnabled());
   fireEvent.click(confirm);
   // Wait for the captured dialog's exit transition without repeatedly scanning

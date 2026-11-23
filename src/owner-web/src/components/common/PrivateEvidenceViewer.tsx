@@ -135,8 +135,12 @@ async function withInlineImageSlot<T>(signal: AbortSignal, action: () => Promise
       signal.addEventListener('abort', cancel, { once: true });
     }
   });
-  try { return await action(); }
-  finally { runningInlineImageFetches--; nextInlineImageFetch(); }
+  try {
+    return await action();
+  } finally {
+    runningInlineImageFetches--;
+    nextInlineImageFetch();
+  }
 }
 
 function classify(blob: Blob, declaredType?: string): Promise<SafeFile> {
@@ -234,9 +238,18 @@ export function PrivateEvidenceViewer({
   const inlineImageUrl = useRef<string | null>(null);
   const inlineTarget = useRef<HTMLButtonElement | null>(null);
   const [thumbnailVisible, setThumbnailVisible] = useState(false);
-  const [thumbnailUrl, setThumbnailUrl] = useState('');
-  const [thumbnailError, setThumbnailError] = useState('');
+  const [thumbnailResult, setThumbnailResult] = useState<{
+    identity: string;
+    url: string;
+    error: string;
+  } | null>(null);
   const [thumbnailRetry, setThumbnailRetry] = useState(0);
+  // Hide the previous tenant/contract's thumbnail on the very first render
+  // with a different evidence identity, without resetting state in an effect.
+  const thumbnailIdentity = JSON.stringify([cacheKey, contentType, expectedSize, thumbnailRetry]);
+  const thumbnailUrl = thumbnailResult?.identity === thumbnailIdentity ? thumbnailResult.url : '';
+  const thumbnailError =
+    thumbnailResult?.identity === thumbnailIdentity ? thumbnailResult.error : '';
 
   useEffect(() => {
     if (!inlineThumbnail) return;
@@ -245,12 +258,15 @@ export function PrivateEvidenceViewer({
       setThumbnailVisible(true);
       return;
     }
-    const observer = new IntersectionObserver((entries) => {
-      if (entries.some((entry) => entry.isIntersecting)) {
-        setThumbnailVisible(true);
-        observer.disconnect();
-      }
-    }, { rootMargin: '240px' });
+    const observer = new IntersectionObserver(
+      (entries) => {
+        if (entries.some((entry) => entry.isIntersecting)) {
+          setThumbnailVisible(true);
+          observer.disconnect();
+        }
+      },
+      { rootMargin: '240px' },
+    );
     observer.observe(element);
     return () => observer.disconnect();
   }, [inlineThumbnail, cacheKey]);
@@ -291,8 +307,6 @@ export function PrivateEvidenceViewer({
     if (!inlineThumbnail || !thumbnailVisible || !cacheKey) return;
     const controller = new AbortController();
     let imageUrl: string | null = null;
-    setThumbnailError('');
-    setThumbnailUrl('');
     void withInlineImageSlot(controller.signal, async () => {
       const blob = await fetchBlob(controller.signal);
       if (expectedSize !== undefined && blob.size !== expectedSize)
@@ -300,17 +314,26 @@ export function PrivateEvidenceViewer({
       const file = await classify(blob, contentType);
       if (!file.type?.startsWith('image/')) throw new Error('Ảnh không phải PNG/JPEG hợp lệ.');
       return file;
-    }).then((file) => {
-      if (controller.signal.aborted) return;
-      const verifiedKey = `${cacheKey}:${contentType ?? ''}:${expectedSize ?? ''}`;
-      if (file.blob.size <= 8 * 1024 * 1024) cached.current = { key: verifiedKey, file };
-      imageUrl = URL.createObjectURL(file.blob.type === file.type
-        ? file.blob : new Blob([file.blob], { type: file.type! }));
-      inlineImageUrl.current = imageUrl;
-      setThumbnailUrl(imageUrl);
-    }, (cause: unknown) => {
-      if (!controller.signal.aborted) setThumbnailError(evidenceError(cause, errorMessage));
-    });
+    }).then(
+      (file) => {
+        if (controller.signal.aborted) return;
+        const verifiedKey = `${cacheKey}:${contentType ?? ''}:${expectedSize ?? ''}`;
+        if (file.blob.size <= 8 * 1024 * 1024) cached.current = { key: verifiedKey, file };
+        imageUrl = URL.createObjectURL(
+          file.blob.type === file.type ? file.blob : new Blob([file.blob], { type: file.type! }),
+        );
+        inlineImageUrl.current = imageUrl;
+        setThumbnailResult({ identity: thumbnailIdentity, url: imageUrl, error: '' });
+      },
+      (cause: unknown) => {
+        if (!controller.signal.aborted)
+          setThumbnailResult({
+            identity: thumbnailIdentity,
+            url: '',
+            error: evidenceError(cause, errorMessage),
+          });
+      },
+    );
     return () => {
       controller.abort();
       if (imageUrl) URL.revokeObjectURL(imageUrl);
@@ -319,7 +342,7 @@ export function PrivateEvidenceViewer({
     // fetchBlob is a new closure on every render. cacheKey is the immutable
     // private evidence identity and intentionally controls refetching.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [inlineThumbnail, thumbnailVisible, cacheKey, contentType, expectedSize, thumbnailRetry]);
+  }, [inlineThumbnail, thumbnailVisible, cacheKey, contentType, expectedSize, thumbnailIdentity]);
 
   useEffect(() => {
     const pendingTimeouts = timeouts.current;
@@ -386,8 +409,14 @@ export function PrivateEvidenceViewer({
         file = await classify(blob, contentType);
         // A bounded, verified in-memory cache eliminates repeated private GETs
         // when switching between the same evidence's dialog and download.
-        if (verifiedCacheKey && file.type && blob.size <= 8 * 1024 * 1024 &&
-            !controller.signal.aborted && id === requestId.current && mounted.current) {
+        if (
+          verifiedCacheKey &&
+          file.type &&
+          blob.size <= 8 * 1024 * 1024 &&
+          !controller.signal.aborted &&
+          id === requestId.current &&
+          mounted.current
+        ) {
           cached.current = { key: verifiedCacheKey, file };
         }
       }
@@ -395,8 +424,9 @@ export function PrivateEvidenceViewer({
       if (action === 'preview') {
         if (file.type) {
           // Give the browser a canonical MIME only after MIME AND magic-byte verification.
-          const url = URL.createObjectURL(file.blob.type === file.type
-            ? file.blob : new Blob([file.blob], { type: file.type }));
+          const url = URL.createObjectURL(
+            file.blob.type === file.type ? file.blob : new Blob([file.blob], { type: file.type }),
+          );
           previewUrl.current = url;
           setPreview({ url, type: file.type });
         } else {
@@ -405,8 +435,8 @@ export function PrivateEvidenceViewer({
       } else {
         // Unsupported/ambiguous content is always forced to a passive binary download.
         const safeType = file.type ?? 'application/octet-stream';
-        const blobToSave = file.blob.type === safeType
-          ? file.blob : new Blob([file.blob], { type: safeType });
+        const blobToSave =
+          file.blob.type === safeType ? file.blob : new Blob([file.blob], { type: safeType });
         const url = URL.createObjectURL(blobToSave);
         temporaryUrls.current.add(url);
         const anchor = document.createElement('a');
@@ -451,11 +481,29 @@ export function PrivateEvidenceViewer({
             size="small"
             disabled={disabled || !!busy || !thumbnailUrl}
             onClick={() => void fetchFile('preview')}
-            sx={{ display: 'block', p: 0.5, minWidth: 0, width: '100%', height: 94, overflow: 'hidden' }}
+            sx={{
+              display: 'block',
+              p: 0.5,
+              minWidth: 0,
+              width: '100%',
+              height: 94,
+              overflow: 'hidden',
+            }}
           >
             {thumbnailUrl ? (
-              <Box component="img" src={thumbnailUrl} alt={label} loading="lazy"
-                sx={{ display: 'block', height: '100%', width: '100%', objectFit: 'cover', borderRadius: 0.5 }} />
+              <Box
+                component="img"
+                src={thumbnailUrl}
+                alt={label}
+                loading="lazy"
+                sx={{
+                  display: 'block',
+                  height: '100%',
+                  width: '100%',
+                  objectFit: 'cover',
+                  borderRadius: 0.5,
+                }}
+              />
             ) : (
               <Typography variant="caption" sx={{ px: 0.5, color: 'text.secondary' }}>
                 {thumbnailError ? 'Không tải được ảnh' : 'Đang tải ảnh…'}
@@ -468,28 +516,30 @@ export function PrivateEvidenceViewer({
             </Button>
           )}
         </Box>
-      ) : <Stack direction="row" useFlexGap sx={{ gap: 1, flexWrap: 'wrap', alignItems: 'center' }}>
-        <Button
-          size="small"
-          type="button"
-          variant="outlined"
-          disabled={disabled || !!busy}
-          onClick={() => void fetchFile('preview')}
-        >
-          {previewButtonLabel ?? (compactActions ? 'Xem PDF' : `Xem ${label}`)}
-        </Button>
-        {showDownload !== false && (
+      ) : (
+        <Stack direction="row" useFlexGap sx={{ gap: 1, flexWrap: 'wrap', alignItems: 'center' }}>
           <Button
             size="small"
             type="button"
-            startIcon={compactActions ? <Download size={16} aria-hidden="true" /> : undefined}
+            variant="outlined"
             disabled={disabled || !!busy}
-            onClick={() => void fetchFile('download')}
+            onClick={() => void fetchFile('preview')}
           >
-            {compactActions ? 'Tải xuống' : `Tải xuống ${label}`}
+            {previewButtonLabel ?? (compactActions ? 'Xem PDF' : `Xem ${label}`)}
           </Button>
-        )}
-      </Stack>}
+          {showDownload !== false && (
+            <Button
+              size="small"
+              type="button"
+              startIcon={compactActions ? <Download size={16} aria-hidden="true" /> : undefined}
+              disabled={disabled || !!busy}
+              onClick={() => void fetchFile('download')}
+            >
+              {compactActions ? 'Tải xuống' : `Tải xuống ${label}`}
+            </Button>
+          )}
+        </Stack>
+      )}
       {error && !open && (
         <Alert
           severity="error"

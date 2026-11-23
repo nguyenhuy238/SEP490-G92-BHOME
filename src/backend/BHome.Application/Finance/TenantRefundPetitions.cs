@@ -195,8 +195,12 @@ public sealed class TenantRefundPetitionService(
                 Reason = x.Reason,
                 CreatedAt = now,
                 OperationKey = key,
-                State = new() { SourcePaymentId = x.SourcePaymentId, SourceContractId = x.SourceContractId,
-                    MoveOutProposalId = x.MoveOutProposalId }
+                State = new()
+                {
+                    SourcePaymentId = x.SourcePaymentId,
+                    SourceContractId = x.SourceContractId,
+                    MoveOutProposalId = x.MoveOutProposalId
+                }
             };
             row.State.Events.Add(new("Requested", actor, now, x.Reason, row.Version, key, fingerprint));
             await repository.SaveAsync(row, true, actor, "TenantRefundPetitionRequested", now, token);

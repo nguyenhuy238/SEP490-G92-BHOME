@@ -102,8 +102,14 @@ public sealed partial class SettlementReceivablesService
                 charge.Id, null, amount, "Cấn trừ cọc theo đề xuất Owner và xác nhận Tenant", proposal.OwnerUserId,
                 at, Guid.NewGuid(), SettlementFinancialCloseRules.ChildKey(proposal.OperationKey, charge.Id, "deposit-offset"),
                 ProposalFingerprint(id, new { ChargeId = charge.Id, amount, ProposalId = proposal.Id }), current.View.Reference,
-                JsonSerializer.Serialize(new { ProposalId = proposal.Id, proposal.SourceReference, ChargeId = charge.Id, Amount = amount,
-                    AvailableBefore = current.View.AvailableDeposit }), context.IsDevelopmentDemo);
+                JsonSerializer.Serialize(new
+                {
+                    ProposalId = proposal.Id,
+                    proposal.SourceReference,
+                    ChargeId = charge.Id,
+                    Amount = amount,
+                    AvailableBefore = current.View.AvailableDeposit
+                }), context.IsDevelopmentDemo);
             await repository.SaveOffsetAsync(offset, token);
             offsets.Add(offset.Id);
         }

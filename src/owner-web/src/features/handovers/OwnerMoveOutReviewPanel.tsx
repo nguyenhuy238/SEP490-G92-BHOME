@@ -128,7 +128,11 @@ const statusLabels: Record<ProposalPreview['status'], string> = {
 
 // Show the furthest verified step, not the old Staff handoff after the fee
 // proposal has already advanced to Tenant confirmation or settlement.
-function moveOutProgress(inspectionReady: boolean, proposal?: ProposalPreview, moveOutStatus?: string) {
+function moveOutProgress(
+  inspectionReady: boolean,
+  proposal?: ProposalPreview,
+  moveOutStatus?: string,
+) {
   if (moveOutStatus === 'Completed')
     return { label: 'Trả phòng thành công', color: 'success' as const };
   if (!inspectionReady) return { label: 'Staff đang kiểm tra', color: 'warning' as const };
@@ -658,7 +662,9 @@ export function OwnerMoveOutReviewPanel({
     availableDeposit === null || existingOutstanding === null
       ? null
       : availableDeposit - amountTotal - existingOutstanding;
-  const locked = completed || data?.status === 'PendingTenant' ||
+  const locked =
+    completed ||
+    data?.status === 'PendingTenant' ||
     data?.latestProposal?.tenantFeedback?.confirmed === true;
   const shownTotal = locked ? vndInteger(data?.latestProposal?.totalCharges) : amountTotal;
   const shownNet = locked
@@ -738,8 +744,8 @@ export function OwnerMoveOutReviewPanel({
       {notice && <Alert severity="success">{notice}</Alert>}
       {completed && (
         <Alert severity="success">
-          Trả phòng thành công. Máy chủ đã xác minh đủ khoản thanh toán, kết thúc hợp đồng và cập nhật
-          trạng thái phòng. Phòng không còn hợp đồng thuê khác sẽ chuyển sang Trống.
+          Trả phòng thành công. Máy chủ đã xác minh đủ khoản thanh toán, kết thúc hợp đồng và cập
+          nhật trạng thái phòng. Phòng không còn hợp đồng thuê khác sẽ chuyển sang Trống.
         </Alert>
       )}
       {data?.status === 'Disputed' && (
@@ -753,19 +759,24 @@ export function OwnerMoveOutReviewPanel({
           )}
         </Alert>
       )}
-      {!completed && data?.status === 'Accepted' && data.latestProposal?.tenantFeedback?.settlement?.status === 'Payable' && (
-        <Alert severity="info">
-          Đã cấn trừ tiền cọc theo khoản phí hợp lệ. Tenant được cấp thông tin thanh toán cho số
-          còn phải trả {formatContractMoney(data.latestProposal.tenantFeedback.settlement.payableAmount)}.
-          Chỉ chuyển sang đã thanh toán sau khi SePay xác minh giao dịch.
-        </Alert>
-      )}
-      {data?.status === 'Accepted' && data.latestProposal?.tenantFeedback?.settlement?.status === 'RefundEligible' && (
-        <Alert severity="info">
-          Tenant đã đồng ý và có thể gửi yêu cầu hoàn cọc {formatContractMoney(data.latestProposal.tenantFeedback.settlement.refundAmount)}.
-          Owner duyệt đơn và thực hiện hoàn từ sổ hoàn cọc đã đối chiếu, không chuyển khoản trùng.
-        </Alert>
-      )}
+      {!completed &&
+        data?.status === 'Accepted' &&
+        data.latestProposal?.tenantFeedback?.settlement?.status === 'Payable' && (
+          <Alert severity="info">
+            Đã cấn trừ tiền cọc theo khoản phí hợp lệ. Tenant được cấp thông tin thanh toán cho số
+            còn phải trả{' '}
+            {formatContractMoney(data.latestProposal.tenantFeedback.settlement.payableAmount)}. Chỉ
+            chuyển sang đã thanh toán sau khi SePay xác minh giao dịch.
+          </Alert>
+        )}
+      {data?.status === 'Accepted' &&
+        data.latestProposal?.tenantFeedback?.settlement?.status === 'RefundEligible' && (
+          <Alert severity="info">
+            Tenant đã đồng ý và có thể gửi yêu cầu hoàn cọc{' '}
+            {formatContractMoney(data.latestProposal.tenantFeedback.settlement.refundAmount)}. Owner
+            duyệt đơn và thực hiện hoàn từ sổ hoàn cọc đã đối chiếu, không chuyển khoản trùng.
+          </Alert>
+        )}
       {!latest && !inspection.isPending && !inspection.error && (
         <Alert severity="info">
           Staff chưa gửi kết quả kiểm kê. Yêu cầu trả phòng hiện tại:{' '}
@@ -781,11 +792,7 @@ export function OwnerMoveOutReviewPanel({
             sx={{ alignItems: 'center', flexWrap: 'wrap' }}
           >
             <Chip size="small" label={'Kiểm kê lần ' + latest.version} />
-            <Chip
-              size="small"
-              color={progress.color}
-              label={progress.label}
-            />
+            <Chip size="small" color={progress.color} label={progress.label} />
           </Stack>
           <MeterResults api={api} inspection={latest} />
           {!!(
@@ -910,7 +917,11 @@ export function OwnerMoveOutReviewPanel({
                                   <Chip size="small" color="warning" label="Có vấn đề" />
                                 )}
                                 {disputedReason && (
-                                  <Chip size="small" color="error" label="Tenant không đồng ý phí" />
+                                  <Chip
+                                    size="small"
+                                    color="error"
+                                    label="Tenant không đồng ý phí"
+                                  />
                                 )}
                               </Stack>
                               {disputedReason && (
@@ -1027,7 +1038,9 @@ export function OwnerMoveOutReviewPanel({
                     </Stack>
                     <Stack direction="row" spacing={1} sx={{ justifyContent: 'space-between' }}>
                       <Typography color="text.secondary">
-                        {completed ? 'Các khoản thu khác còn phải thanh toán' : 'Các khoản thu đã ghi nhận còn phải thanh toán'}
+                        {completed
+                          ? 'Các khoản thu khác còn phải thanh toán'
+                          : 'Các khoản thu đã ghi nhận còn phải thanh toán'}
                       </Typography>
                       <Typography sx={{ fontWeight: 700 }}>
                         {existingOutstanding === null
@@ -1052,11 +1065,13 @@ export function OwnerMoveOutReviewPanel({
                         {completed ? formatContractMoney('0') : signedMoney(shownNet)}
                       </Typography>
                     </Stack>
-                    {!completed && <Typography variant="caption" color="text.secondary">
-                      Dương: dự kiến còn tiền cọc hoàn lại. Âm: dự kiến Tenant cần trả thêm. Đã trừ
-                      các khoản thu hiện có trong sổ; nợ hóa đơn khác được đối chiếu riêng. Chưa
-                      phải giao dịch thanh toán hay quyết toán chính thức.
-                    </Typography>}
+                    {!completed && (
+                      <Typography variant="caption" color="text.secondary">
+                        Dương: dự kiến còn tiền cọc hoàn lại. Âm: dự kiến Tenant cần trả thêm. Đã
+                        trừ các khoản thu hiện có trong sổ; nợ hóa đơn khác được đối chiếu riêng.
+                        Chưa phải giao dịch thanh toán hay quyết toán chính thức.
+                      </Typography>
+                    )}
                     {data.latestProposal?.tenantFeedback && (
                       <Alert
                         severity={

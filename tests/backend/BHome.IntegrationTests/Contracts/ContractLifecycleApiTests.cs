@@ -1070,91 +1070,91 @@ public sealed partial class ContractLifecycleApiTests(ContractFixture fixture) :
         }
         async Task VerifyOwnerApprovedProposalFlow()
         {
-        if (await UsesCompact24())
-        {
-            var preview = await Success<MoveOutChargeProposalPreview>(await w.Owner.Client.GetAsync(proposalPath));
-            Assert.Contains(preview.Items, item => item.Kind == "RoomCheck" &&
-                item.RoomCheckCode == "cleanliness" && item.Chargeable);
-            Assert.Contains(preview.Items, item => item.Kind == "Access" && item.AccessType == "RoomKey");
-            var proposed = new MoveOutChargeProposalInput(preview.Reference, preview.InspectionId,
-                preview.InspectionVersion,
-                [new MoveOutProposedCharge("RoomCheck", null, "cleanliness", null, 125000, "Synthetic cleaning cost")],
-                "Synthetic proposal only; no ledger action");
-            var proposalKey = Guid.NewGuid();
-            var sent = await Success<MoveOutChargeProposal>(await Post(w.Owner, proposalPath, proposed, proposalKey));
-            Assert.Equal(sent.Id, (await Success<MoveOutChargeProposal>(
-                await Post(w.Owner, proposalPath, proposed, proposalKey))).Id);
-            Assert.Equal(HttpStatusCode.Conflict, (await Post(w.Owner, proposalPath,
-                proposed with { Note = "Different payload" }, proposalKey)).StatusCode);
-            var tenantPreview = await Success<MoveOutChargeProposalPreview>(await w.Tenant.Client.GetAsync(proposalPath));
-            Assert.Equal("PendingTenant", tenantPreview.Status);
-            Assert.Equal(sent.Id, tenantPreview.LatestProposal?.Id);
-            Assert.Equal(Guid.Empty, tenantPreview.LatestProposal!.OwnerUserId);
-            Assert.Equal(Guid.Empty, tenantPreview.LatestProposal.OperationKey);
-            var answer = new MoveOutChargeProposalFeedbackInput(sent.Id, preview.Reference,
-                false, "Synthetic disagreement",
-                [new MoveOutChargeProposalDisputedItem("RoomCheck", null, "cleanliness", null,
-                    "Synthetic disputed cleaning charge")]);
-            var answerKey = Guid.NewGuid();
-            Assert.Equal(HttpStatusCode.BadRequest, (await Post(w.Tenant,
-                proposalPath + "/tenant-feedback", answer with
-                {
-                    DisputedItems = [new("RoomCheck", null, "nonexistent", null, "Invalid item")]
-                })).StatusCode);
-            Assert.Equal(HttpStatusCode.BadRequest, (await Post(w.Tenant,
-                proposalPath + "/tenant-feedback", answer with
-                {
-                    DisputedItems = [answer.DisputedItems![0], answer.DisputedItems![0]]
-                })).StatusCode);
-            var feedback = await Success<MoveOutChargeProposalFeedback>(await Post(w.Tenant,
-                proposalPath + "/tenant-feedback", answer, answerKey));
-            Assert.False(feedback.Confirmed);
-            Assert.Equal("Synthetic disputed cleaning charge", Assert.Single(feedback.DisputedItems!).Reason);
-            Assert.Equal(feedback.Id, (await Success<MoveOutChargeProposalFeedback>(await Post(w.Tenant,
-                proposalPath + "/tenant-feedback", answer, answerKey))).Id);
-            Assert.Equal("Disputed", (await Success<MoveOutChargeProposalPreview>(
-                await w.Owner.Client.GetAsync(proposalPath))).Status);
-            Assert.Equal("cleanliness", Assert.Single((await Success<MoveOutChargeProposalPreview>(
-                await w.Owner.Client.GetAsync(proposalPath))).LatestProposal!.TenantFeedback!.DisputedItems!).RoomCheckCode);
-            var revisedProposal = proposed with
+            if (await UsesCompact24())
             {
-                Items = [new MoveOutProposedCharge("RoomCheck", null, "cleanliness", null, 90000,
+                var preview = await Success<MoveOutChargeProposalPreview>(await w.Owner.Client.GetAsync(proposalPath));
+                Assert.Contains(preview.Items, item => item.Kind == "RoomCheck" &&
+                    item.RoomCheckCode == "cleanliness" && item.Chargeable);
+                Assert.Contains(preview.Items, item => item.Kind == "Access" && item.AccessType == "RoomKey");
+                var proposed = new MoveOutChargeProposalInput(preview.Reference, preview.InspectionId,
+                    preview.InspectionVersion,
+                    [new MoveOutProposedCharge("RoomCheck", null, "cleanliness", null, 125000, "Synthetic cleaning cost")],
+                    "Synthetic proposal only; no ledger action");
+                var proposalKey = Guid.NewGuid();
+                var sent = await Success<MoveOutChargeProposal>(await Post(w.Owner, proposalPath, proposed, proposalKey));
+                Assert.Equal(sent.Id, (await Success<MoveOutChargeProposal>(
+                    await Post(w.Owner, proposalPath, proposed, proposalKey))).Id);
+                Assert.Equal(HttpStatusCode.Conflict, (await Post(w.Owner, proposalPath,
+                    proposed with { Note = "Different payload" }, proposalKey)).StatusCode);
+                var tenantPreview = await Success<MoveOutChargeProposalPreview>(await w.Tenant.Client.GetAsync(proposalPath));
+                Assert.Equal("PendingTenant", tenantPreview.Status);
+                Assert.Equal(sent.Id, tenantPreview.LatestProposal?.Id);
+                Assert.Equal(Guid.Empty, tenantPreview.LatestProposal!.OwnerUserId);
+                Assert.Equal(Guid.Empty, tenantPreview.LatestProposal.OperationKey);
+                var answer = new MoveOutChargeProposalFeedbackInput(sent.Id, preview.Reference,
+                    false, "Synthetic disagreement",
+                    [new MoveOutChargeProposalDisputedItem("RoomCheck", null, "cleanliness", null,
+                    "Synthetic disputed cleaning charge")]);
+                var answerKey = Guid.NewGuid();
+                Assert.Equal(HttpStatusCode.BadRequest, (await Post(w.Tenant,
+                    proposalPath + "/tenant-feedback", answer with
+                    {
+                        DisputedItems = [new("RoomCheck", null, "nonexistent", null, "Invalid item")]
+                    })).StatusCode);
+                Assert.Equal(HttpStatusCode.BadRequest, (await Post(w.Tenant,
+                    proposalPath + "/tenant-feedback", answer with
+                    {
+                        DisputedItems = [answer.DisputedItems![0], answer.DisputedItems![0]]
+                    })).StatusCode);
+                var feedback = await Success<MoveOutChargeProposalFeedback>(await Post(w.Tenant,
+                    proposalPath + "/tenant-feedback", answer, answerKey));
+                Assert.False(feedback.Confirmed);
+                Assert.Equal("Synthetic disputed cleaning charge", Assert.Single(feedback.DisputedItems!).Reason);
+                Assert.Equal(feedback.Id, (await Success<MoveOutChargeProposalFeedback>(await Post(w.Tenant,
+                    proposalPath + "/tenant-feedback", answer, answerKey))).Id);
+                Assert.Equal("Disputed", (await Success<MoveOutChargeProposalPreview>(
+                    await w.Owner.Client.GetAsync(proposalPath))).Status);
+                Assert.Equal("cleanliness", Assert.Single((await Success<MoveOutChargeProposalPreview>(
+                    await w.Owner.Client.GetAsync(proposalPath))).LatestProposal!.TenantFeedback!.DisputedItems!).RoomCheckCode);
+                var revisedProposal = proposed with
+                {
+                    Items = [new MoveOutProposedCharge("RoomCheck", null, "cleanliness", null, 90000,
                 "Synthetic revised cleaning cost")],
-                Note = "Synthetic revised proposal"
-            };
-            var revision = await Success<MoveOutChargeProposal>(await Post(w.Owner, proposalPath, revisedProposal));
-            Assert.NotEqual(sent.Id, revision.Id);
-            var revisedPreview = await Success<MoveOutChargeProposalPreview>(
-                await w.Tenant.Client.GetAsync(proposalPath));
-            Assert.Equal(revision.Id, revisedPreview.LatestProposal?.Id);
-            Assert.Equal("PendingTenant", revisedPreview.Status);
-            Assert.Equal(feedback.Id, (await Success<MoveOutChargeProposalFeedback>(await Post(w.Tenant,
-                proposalPath + "/tenant-feedback", answer, answerKey))).Id);
-            Assert.Equal(HttpStatusCode.Conflict, (await Post(w.Tenant, proposalPath + "/tenant-feedback",
-                answer)).StatusCode);
-            Assert.Empty((await Success<SettlementReceivablesView>(await w.Owner.Client.GetAsync(
-                Path(id, "move-out/receivables")))).Receivables);
-            // The Owner's priced proposal is the financial approval. However,
-            // a specific item with no linked Final photo cannot be posted to
-            // the settlement ledger using an unrelated general room photo.
-            var accepted = await Success<MoveOutChargeProposalFeedback>(await Post(w.Tenant,
-                proposalPath + "/tenant-feedback", new MoveOutChargeProposalFeedbackInput(
-                    revision.Id, revisedPreview.Reference, true), Guid.NewGuid()));
-            Assert.True(accepted.Confirmed);
-            Assert.Equal("PendingOwnerReview", accepted.Settlement?.Status);
-            Assert.Equal("verified_item_evidence_required", accepted.Settlement?.Reason);
-            Assert.Null(accepted.Settlement?.PayableReceivableId);
-            Assert.Equal("Accepted", (await Success<MoveOutChargeProposalPreview>(
-                await w.Tenant.Client.GetAsync(proposalPath))).Status);
-            Assert.Empty((await Success<SettlementReceivablesView>(await w.Owner.Client.GetAsync(
-                Path(id, "move-out/receivables")))).Receivables);
-        }
-        else
-        {
-            // Receivable proposals are Compact24-only. The legacy persistence
-            // scenario still verifies the entire physical move-out lifecycle.
-            Assert.Equal(HttpStatusCode.ServiceUnavailable, (await w.Owner.Client.GetAsync(proposalPath)).StatusCode);
-        }
+                    Note = "Synthetic revised proposal"
+                };
+                var revision = await Success<MoveOutChargeProposal>(await Post(w.Owner, proposalPath, revisedProposal));
+                Assert.NotEqual(sent.Id, revision.Id);
+                var revisedPreview = await Success<MoveOutChargeProposalPreview>(
+                    await w.Tenant.Client.GetAsync(proposalPath));
+                Assert.Equal(revision.Id, revisedPreview.LatestProposal?.Id);
+                Assert.Equal("PendingTenant", revisedPreview.Status);
+                Assert.Equal(feedback.Id, (await Success<MoveOutChargeProposalFeedback>(await Post(w.Tenant,
+                    proposalPath + "/tenant-feedback", answer, answerKey))).Id);
+                Assert.Equal(HttpStatusCode.Conflict, (await Post(w.Tenant, proposalPath + "/tenant-feedback",
+                    answer)).StatusCode);
+                Assert.Empty((await Success<SettlementReceivablesView>(await w.Owner.Client.GetAsync(
+                    Path(id, "move-out/receivables")))).Receivables);
+                // The Owner's priced proposal is the financial approval. However,
+                // a specific item with no linked Final photo cannot be posted to
+                // the settlement ledger using an unrelated general room photo.
+                var accepted = await Success<MoveOutChargeProposalFeedback>(await Post(w.Tenant,
+                    proposalPath + "/tenant-feedback", new MoveOutChargeProposalFeedbackInput(
+                        revision.Id, revisedPreview.Reference, true), Guid.NewGuid()));
+                Assert.True(accepted.Confirmed);
+                Assert.Equal("PendingOwnerReview", accepted.Settlement?.Status);
+                Assert.Equal("verified_item_evidence_required", accepted.Settlement?.Reason);
+                Assert.Null(accepted.Settlement?.PayableReceivableId);
+                Assert.Equal("Accepted", (await Success<MoveOutChargeProposalPreview>(
+                    await w.Tenant.Client.GetAsync(proposalPath))).Status);
+                Assert.Empty((await Success<SettlementReceivablesView>(await w.Owner.Client.GetAsync(
+                    Path(id, "move-out/receivables")))).Receivables);
+            }
+            else
+            {
+                // Receivable proposals are Compact24-only. The legacy persistence
+                // scenario still verifies the entire physical move-out lifecycle.
+                Assert.Equal(HttpStatusCode.ServiceUnavailable, (await w.Owner.Client.GetAsync(proposalPath)).StatusCode);
+            }
         }
         if (moveOutTask is not null)
         {

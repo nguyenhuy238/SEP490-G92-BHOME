@@ -91,7 +91,8 @@ beforeEach(() => {
   vi.mocked(api.handoverEvidence).mockReset();
   vi.mocked(api.evidence).mockReset();
   vi.mocked(api.readingEvidence).mockReset();
-  const photo = () => new Blob([new Uint8Array([255, 216, 255, 224, 0, 16, 74, 70])], { type: 'image/jpeg' });
+  const photo = () =>
+    new Blob([new Uint8Array([255, 216, 255, 224, 0, 16, 74, 70])], { type: 'image/jpeg' });
   vi.mocked(api.handoverEvidence).mockImplementation(async () => photo());
   vi.mocked(api.evidence).mockImplementation(async () => photo());
   vi.mocked(api.readingEvidence).mockImplementation(async () => photo());
@@ -106,7 +107,9 @@ it('shows a completed move-out instead of the stale negative provisional balance
   expect(await screen.findByText('Số còn cần thu hoặc hoàn')).toBeInTheDocument();
   expect(screen.getByText('Phí trả phòng đã chốt')).toBeInTheDocument();
   expect(screen.queryByText('Chênh lệch dự kiến')).not.toBeInTheDocument();
-  expect(screen.queryByText(/Dữ liệu tài chính hoặc kết quả kiểm tra đã thay đổi/)).not.toBeInTheDocument();
+  expect(
+    screen.queryByText(/Dữ liệu tài chính hoặc kết quả kiểm tra đã thay đổi/),
+  ).not.toBeInTheDocument();
 });
 
 it('shows whole-number meter readings, Vietnamese item details and private opening/return photos without downloads', async () => {
@@ -183,17 +186,19 @@ it('shows whole-number meter readings, Vietnamese item details and private openi
 it('uses the same stored handover draft photos as the Bàn giao tab even when final snapshot has no photo IDs', async () => {
   vi.mocked(api.transport).mockImplementation(async (path) =>
     path.includes('/handover/draft/evidence/')
-      ? (new Blob([new Uint8Array([255, 216, 255, 224, 0, 16, 74, 70])], { type: 'image/jpeg' }) as never)
+      ? (new Blob([new Uint8Array([255, 216, 255, 224, 0, 16, 74, 70])], {
+          type: 'image/jpeg',
+        }) as never)
       : path.endsWith('/handover/draft')
-      ? ({
-          status: 'Confirmed',
-          contractId: 'contract-1',
-          evidenceIds: ['general-draft'],
-          roomChecks: [{ code: 'cleanliness', evidenceIds: ['room-draft-photo'] }],
-          assets: [],
-          keyEvidenceIds: [],
-        } as never)
-      : (review as never),
+        ? ({
+            status: 'Confirmed',
+            contractId: 'contract-1',
+            evidenceIds: ['general-draft'],
+            roomChecks: [{ code: 'cleanliness', evidenceIds: ['room-draft-photo'] }],
+            assets: [],
+            keyEvidenceIds: [],
+          } as never)
+        : (review as never),
   );
   mount();
   await screen.findByText('Ảnh bàn giao chung');
@@ -215,7 +220,9 @@ it('allows pricing Staff-inspected items and sending fees without a second Owner
   expect(screen.getByText(/100\.000/)).toBeInTheDocument();
   expect(screen.queryByText('Xác minh kết quả Staff')).not.toBeInTheDocument();
   expect(screen.queryByText('Chờ Owner xác nhận kiểm kê')).not.toBeInTheDocument();
-  expect(screen.queryByRole('button', { name: 'Xác nhận kết quả kiểm kê' })).not.toBeInTheDocument();
+  expect(
+    screen.queryByRole('button', { name: 'Xác nhận kết quả kiểm kê' }),
+  ).not.toBeInTheDocument();
   const firstItem = await screen.findByRole('button', {
     name: 'Nhập phí · Vệ sinh và hiện trạng phòng',
   });
@@ -301,7 +308,9 @@ it('shows the Tenant objection on the exact charge and lets Owner revise and res
   } as never);
   mount();
   expect(await screen.findByText(/Tenant không đồng ý với đề xuất trước/)).toBeInTheDocument();
-  expect(screen.getByText('Lý do Tenant yêu cầu xem lại: Đã dọn sạch trước khi trả phòng')).toBeInTheDocument();
+  expect(
+    screen.getByText('Lý do Tenant yêu cầu xem lại: Đã dọn sạch trước khi trả phòng'),
+  ).toBeInTheDocument();
   expect(screen.getByText('Phản hồi chung: Mong Owner kiểm tra lại ảnh')).toBeInTheDocument();
   expect(screen.getAllByText('Tenant không đồng ý phí')).toHaveLength(1);
   fireEvent.click(screen.getByRole('button', { name: 'Sửa phí · Vệ sinh và hiện trạng phòng' }));
@@ -338,8 +347,12 @@ it('shows Staff final status and enables sending a proposal without redundant Ow
   expect(await screen.findByRole('button', { name: 'Gửi Tenant duyệt' })).toBeEnabled();
   expect(screen.getByText('Chờ Owner gửi phí')).toBeInTheDocument();
   expect(screen.queryByText('Chờ Owner xác nhận kiểm kê')).not.toBeInTheDocument();
-  expect(screen.queryByText(/Đã nhận kết quả Staff nhưng Owner chưa xác nhận kiểm kê thực tế/)).not.toBeInTheDocument();
-  expect(screen.queryByRole('button', { name: 'Xác nhận kết quả kiểm kê' })).not.toBeInTheDocument();
+  expect(
+    screen.queryByText(/Đã nhận kết quả Staff nhưng Owner chưa xác nhận kiểm kê thực tế/),
+  ).not.toBeInTheDocument();
+  expect(
+    screen.queryByRole('button', { name: 'Xác nhận kết quả kiểm kê' }),
+  ).not.toBeInTheDocument();
   fireEvent.click(screen.getByRole('button', { name: 'Gửi Tenant duyệt' }));
   fireEvent.click(screen.getByRole('button', { name: 'Xác nhận thực hiện' }));
   await waitFor(() =>
@@ -359,7 +372,9 @@ it('does not redirect a Tenant-accepted fee back to redundant Owner inspection r
     latestProposal: {
       id: 'old-proposal',
       sourceReference: review.reference,
-      items: [{ kind: 'RoomCheck', roomCheckCode: 'cleanliness', amount: '20000', reason: 'Hỏng tường' }],
+      items: [
+        { kind: 'RoomCheck', roomCheckCode: 'cleanliness', amount: '20000', reason: 'Hỏng tường' },
+      ],
       totalCharges: '20000',
       signedBalance: '-20000',
       availableDeposit: '0',
@@ -381,9 +396,15 @@ it('does not redirect a Tenant-accepted fee back to redundant Owner inspection r
   expect(await screen.findByText('Tenant đã đồng ý đề xuất.')).toBeInTheDocument();
   expect(screen.getByText('Tenant đã đồng ý · Đang đối chiếu')).toBeInTheDocument();
   expect(screen.queryByText('Đã nhận kết quả Staff')).not.toBeInTheDocument();
-  expect(screen.queryByText(/Owner chưa xác nhận kết quả kiểm kê thực tế của Staff/)).not.toBeInTheDocument();
-  expect(screen.queryByText(/Tenant đã đồng ý nhưng khoản phí chưa đủ điều kiện/)).not.toBeInTheDocument();
-  expect(screen.queryByRole('button', { name: 'Xác nhận kết quả kiểm kê' })).not.toBeInTheDocument();
+  expect(
+    screen.queryByText(/Owner chưa xác nhận kết quả kiểm kê thực tế của Staff/),
+  ).not.toBeInTheDocument();
+  expect(
+    screen.queryByText(/Tenant đã đồng ý nhưng khoản phí chưa đủ điều kiện/),
+  ).not.toBeInTheDocument();
+  expect(
+    screen.queryByRole('button', { name: 'Xác nhận kết quả kiểm kê' }),
+  ).not.toBeInTheDocument();
   expect(screen.queryByRole('button', { name: 'Gửi Tenant duyệt' })).not.toBeInTheDocument();
 });
 
@@ -394,32 +415,35 @@ it.each([
   ['Accepted', 'RefundEligible', 'Tenant đã đồng ý · Có tiền cọc cần hoàn'],
   ['Accepted', 'Settled', 'Đã quyết toán phí trả phòng'],
   ['Outdated', null, 'Tenant đã đồng ý · Cần đối chiếu dữ liệu'],
-] as const)('shows the actual move-out progress for %s / %s', async (status, settlement, expected) => {
-  vi.mocked(api.transport).mockResolvedValue({
-    ...review,
-    status,
-    latestProposal: {
-      id: 'proposal-1',
-      sourceReference: review.reference,
-      items: [],
-      totalCharges: '20000',
-      signedBalance: '-20000',
-      availableDeposit: '0',
-      verifiedDeposit: '0',
-      sentAt: '2026-11-22T10:00:00Z',
-      tenantFeedback:
-        status === 'Accepted' || status === 'Outdated'
-          ? {
-              confirmed: true,
-              reason: '',
-              settlement: settlement
-                ? { status: settlement, payableAmount: '20000', refundAmount: '0' }
-                : null,
-            }
-          : null,
-    },
-  } as never);
-  mount();
-  expect(await screen.findByText(expected)).toBeInTheDocument();
-  expect(screen.queryByText('Đã nhận kết quả Staff')).not.toBeInTheDocument();
-});
+] as const)(
+  'shows the actual move-out progress for %s / %s',
+  async (status, settlement, expected) => {
+    vi.mocked(api.transport).mockResolvedValue({
+      ...review,
+      status,
+      latestProposal: {
+        id: 'proposal-1',
+        sourceReference: review.reference,
+        items: [],
+        totalCharges: '20000',
+        signedBalance: '-20000',
+        availableDeposit: '0',
+        verifiedDeposit: '0',
+        sentAt: '2026-11-22T10:00:00Z',
+        tenantFeedback:
+          status === 'Accepted' || status === 'Outdated'
+            ? {
+                confirmed: true,
+                reason: '',
+                settlement: settlement
+                  ? { status: settlement, payableAmount: '20000', refundAmount: '0' }
+                  : null,
+              }
+            : null,
+      },
+    } as never);
+    mount();
+    expect(await screen.findByText(expected)).toBeInTheDocument();
+    expect(screen.queryByText('Đã nhận kết quả Staff')).not.toBeInTheDocument();
+  },
+);

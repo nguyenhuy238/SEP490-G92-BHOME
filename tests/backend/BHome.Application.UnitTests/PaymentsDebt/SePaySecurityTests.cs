@@ -63,7 +63,8 @@ public sealed class SePaySecurityTests
         var locationA = Guid.NewGuid(); var locationB = Guid.NewGuid();
         var options = new SePayOptions
         {
-            Enabled = true, WebhookSecret = Secret,
+            Enabled = true,
+            WebhookSecret = Secret,
             ReceivingAccounts = [new()
             {
                 OwnerUserId = owner, BankIdentifier = "970416", Gateway = "ACB", AccountNumber = "0000001234"
@@ -71,7 +72,9 @@ public sealed class SePaySecurityTests
         };
         var bank = new ReceivingBankAccount
         {
-            OwnerUserId = owner, BankIdentifier = "970416", AccountNumber = "0000001234"
+            OwnerUserId = owner,
+            BankIdentifier = "970416",
+            AccountNumber = "0000001234"
         };
         Assert.True(options.Valid("Testing"));
         Assert.True(options.Matches(locationA, bank));
@@ -79,11 +82,16 @@ public sealed class SePaySecurityTests
         Assert.False(options.Matches(locationA, WithOwner(Guid.NewGuid())));
         Assert.False(options.Matches(locationA, new ReceivingBankAccount
         {
-            OwnerUserId = owner, BankIdentifier = bank.BankIdentifier, AccountNumber = "0000009876"
+            OwnerUserId = owner,
+            BankIdentifier = bank.BankIdentifier,
+            AccountNumber = "0000009876"
         }));
         options.ReceivingAccounts.Add(new SePayReceivingAccount
         {
-            OwnerUserId = owner, BankIdentifier = "970416", Gateway = "ACB", AccountNumber = "0000001234"
+            OwnerUserId = owner,
+            BankIdentifier = "970416",
+            Gateway = "ACB",
+            AccountNumber = "0000001234"
         });
         Assert.False(options.Valid("Testing"));
 

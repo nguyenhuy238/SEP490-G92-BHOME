@@ -277,7 +277,7 @@ it.each([
     expect(screen.queryByRole('alert')).toBeNull();
   },
 );
-it.each(['sent', 'timeout', 'rejected'] as const)(
+it.each(['sent', 'timeout', 'rejected', 'missing-pdf'] as const)(
   'Holding email %s: distinguishes sending, delivery confirmation and actual failure',
   async (outcome) => {
     const c = { ...contract('Holding', true), representativeResidentId: tenant };
@@ -346,8 +346,14 @@ it.each(['sent', 'timeout', 'rejected'] as const)(
           .disabled,
       ).toBe(true);
     } else {
-      fail({ status: 400, code: 'signing_contacts_required' });
+      fail(
+        outcome === 'missing-pdf'
+          ? { status: 503, code: 'contract_template_not_configured' }
+          : { status: 400, code: 'signing_contacts_required' },
+      );
       await screen.findByRole('alert');
+      if (outcome === 'missing-pdf')
+        expect(screen.getAllByText(/chưa có mẫu PDF/i).length).toBeGreaterThan(0);
       expect(screen.queryByText(/Chưa xác định/)).toBeNull();
       expect(
         (screen.getByRole('button', { name: 'Gửi lời mời ký qua email' }) as HTMLButtonElement)

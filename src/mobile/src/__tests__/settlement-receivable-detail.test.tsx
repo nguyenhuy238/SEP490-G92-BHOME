@@ -65,7 +65,9 @@ afterEach(() => {
 
 it('polls only verified receivable balance, retains cached detail and stops on Paid', () => {
   vi.useFakeTimers();
-  const view = render(<TenantSettlementReceivableDetail contractId={contractId} chargeId={chargeId} />);
+  const view = render(
+    <TenantSettlementReceivableDetail contractId={contractId} chargeId={chargeId} />,
+  );
   expect(mock.options).toMatchObject({ cache: { tags: ['payments', 'contracts'] } });
   expect(screen.getByTestId('payment-qr')).toBeTruthy();
   act(() => vi.advanceTimersByTime(5000));

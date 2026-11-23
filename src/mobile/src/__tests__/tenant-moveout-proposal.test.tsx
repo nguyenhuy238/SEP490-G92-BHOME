@@ -145,11 +145,12 @@ it('switches the accepted 20k proposal to completed when the verified server mov
   const changed = vi.fn();
   const request = vi.fn<ContractRequest>(async <T,>(path: string): Promise<T> => {
     if (path === proposalPath) return proposal('Accepted') as T;
-    if (path === `/api/v1/contracts/${contractId}/move-out`)
-      return { status: 'Completed' } as T;
+    if (path === `/api/v1/contracts/${contractId}/move-out`) return { status: 'Completed' } as T;
     throw new Error(`Unexpected API: ${path}`);
   });
-  const api = contractClient(<T,>(path: string, init?: RequestInit) => request(path, init) as Promise<T>);
+  const api = contractClient(
+    <T,>(path: string, init?: RequestInit) => request(path, init) as Promise<T>,
+  );
   render(<TenantMoveOutProposalPanel api={api} contractId={contractId} onChanged={changed} />);
   expect((await screen.findAllByText('Trả phòng thành công')).length).toBeGreaterThanOrEqual(2);
   expect(screen.getByText('Không còn phải thanh toán')).toBeTruthy();

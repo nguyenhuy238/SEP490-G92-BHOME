@@ -41,9 +41,15 @@ public sealed partial class ContractLifecycleApiTests
             contract.IsDevelopmentDemo = true;
             db.Add(new ReceivingBankAccount
             {
-                LocationId = w.Location, BankIdentifier = "970416", AccountNumber = account,
-                AccountHolder = "SYNTHETIC BHOME ACCOUNT", Enabled = true, IsDevelopmentDemo = true,
-                Version = 1, ConfirmedByUserId = w.Owner.Id, ConfirmedAt = DateTimeOffset.UtcNow
+                LocationId = w.Location,
+                BankIdentifier = "970416",
+                AccountNumber = account,
+                AccountHolder = "SYNTHETIC BHOME ACCOUNT",
+                Enabled = true,
+                IsDevelopmentDemo = true,
+                Version = 1,
+                ConfirmedByUserId = w.Owner.Id,
+                ConfirmedAt = DateTimeOffset.UtcNow
             });
             await db.SaveChangesAsync();
         }
@@ -92,9 +98,11 @@ public sealed partial class ContractLifecycleApiTests
             Path(contractId, "move-out/inspection-draft")));
         using (var request = new HttpRequestMessage(HttpMethod.Patch,
                    Path(contractId, "move-out/inspection-draft"))
-               { Content = JsonContent.Create(new MoveOutInspectionDraftWrite(draft.Version,
+        {
+            Content = JsonContent.Create(new MoveOutInspectionDraftWrite(draft.Version,
                    RoomCondition: inspection.RoomCondition, EvidenceIds: [proof],
-                   ElectricityReadingId: electricity, WaterReadingId: water)) })
+                   ElectricityReadingId: electricity, WaterReadingId: water))
+        })
         {
             request.Headers.Add("Idempotency-Key", Guid.NewGuid().ToString());
             await Success<MoveOutInspectionDraftView>(await w.Staff.Client.SendAsync(request));
@@ -124,8 +132,10 @@ public sealed partial class ContractLifecycleApiTests
             var db = scope.ServiceProvider.GetRequiredService<BHomePersistenceContext>();
             var json = JsonSerializer.Serialize(new
             {
-                schemaVersion = 1, recordType = "MoveOutChargeProposalV1",
-                recordKey = proposal.Id, state = proposal
+                schemaVersion = 1,
+                recordType = "MoveOutChargeProposalV1",
+                recordKey = proposal.Id,
+                state = proposal
             }, new JsonSerializerOptions(JsonSerializerDefaults.Web));
             await db.Database.ExecuteSqlInterpolatedAsync($"""
                 UPDATE contracts SET history=history||jsonb_build_array(CAST({json} AS jsonb))
@@ -151,8 +161,10 @@ public sealed partial class ContractLifecycleApiTests
                 var db = scope.ServiceProvider.GetRequiredService<BHomePersistenceContext>();
                 var record = JsonSerializer.Serialize(new
                 {
-                    schemaVersion = 1, recordType = "MoveOutChargeProposalFeedbackV1",
-                    recordKey = prior.Id, state = prior
+                    schemaVersion = 1,
+                    recordType = "MoveOutChargeProposalFeedbackV1",
+                    recordKey = prior.Id,
+                    state = prior
                 }, new JsonSerializerOptions(JsonSerializerDefaults.Web));
                 await db.Database.ExecuteSqlInterpolatedAsync($"""
                     UPDATE contracts SET history=history||jsonb_build_array(CAST({record} AS jsonb))
@@ -238,7 +250,9 @@ public sealed partial class ContractLifecycleApiTests
         await using var sepayHost = fixture.Factory.WithWebHostBuilder(builder => builder.ConfigureAppConfiguration((_, config) =>
             config.AddInMemoryCollection(new Dictionary<string, string?>
             {
-                ["SePay:Enabled"] = "true", ["SePay:Mode"] = "Test", ["SePay:WebhookSecret"] = secret,
+                ["SePay:Enabled"] = "true",
+                ["SePay:Mode"] = "Test",
+                ["SePay:WebhookSecret"] = secret,
                 ["SePay:ReceivingAccounts:0:LocationId"] = w.Location.ToString(),
                 ["SePay:ReceivingAccounts:0:BankIdentifier"] = "970416",
                 ["SePay:ReceivingAccounts:0:Gateway"] = "ACB",
@@ -255,12 +269,19 @@ public sealed partial class ContractLifecycleApiTests
         var receiptRef = "SYN-" + Guid.NewGuid();
         var content = JsonSerializer.Serialize(new
         {
-            id = Guid.NewGuid().ToString(), gateway = "ACB",
+            id = Guid.NewGuid().ToString(),
+            gateway = "ACB",
             transactionDate = DateTimeOffset.UtcNow.AddSeconds(-5).ToOffset(TimeSpan.FromHours(7))
-                .ToString("yyyy-MM-dd HH:mm:ss"), accountNumber = account, subAccount = "",
-            code = instructions.TransferReference, content = "Synthetic " + instructions.TransferReference,
-            transferType = "in", transferAmount = expectedAmount, referenceCode = receiptRef,
-            description = "Synthetic settlement bank transfer", accumulated = expectedAmount
+                .ToString("yyyy-MM-dd HH:mm:ss"),
+            accountNumber = account,
+            subAccount = "",
+            code = instructions.TransferReference,
+            content = "Synthetic " + instructions.TransferReference,
+            transferType = "in",
+            transferAmount = expectedAmount,
+            referenceCode = receiptRef,
+            description = "Synthetic settlement bank transfer",
+            accumulated = expectedAmount
         });
         using var unsigned = sepayHost.CreateClient();
         async Task<HttpResponseMessage> SendWebhook()

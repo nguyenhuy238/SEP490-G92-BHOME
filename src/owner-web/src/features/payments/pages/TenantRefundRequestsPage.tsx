@@ -481,9 +481,9 @@ function TenantRefundRequestDetails({
         <Divider />
         {row.moveOutProposalId && (
           <Alert severity="info">
-            Đây là yêu cầu hoàn tiền cọc từ đề xuất quyết toán trả phòng đã được Tenant chấp
-            thuận. Owner có thể duyệt hoặc từ chối tại đây, nhưng việc chuyển khoản hoàn cọc và
-            lưu chứng từ phải được xử lý trong luồng hoàn cọc của hợp đồng để tránh trả trùng.
+            Đây là yêu cầu hoàn tiền cọc từ đề xuất quyết toán trả phòng đã được Tenant chấp thuận.
+            Owner có thể duyệt hoặc từ chối tại đây, nhưng việc chuyển khoản hoàn cọc và lưu chứng
+            từ phải được xử lý trong luồng hoàn cọc của hợp đồng để tránh trả trùng.
             {state === 'APPROVED' && ' Đơn đã duyệt; vui lòng mở hợp đồng để xử lý hoàn cọc.'}
           </Alert>
         )}

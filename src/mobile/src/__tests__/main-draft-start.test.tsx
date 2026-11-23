@@ -3,9 +3,24 @@ import React from 'react';
 import { afterEach, beforeEach, expect, it, vi } from 'vitest';
 import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import type { ContractClient } from '../../../../packages/client-core/src/contracts';
-const state = vi.hoisted(() => ({ prepare: vi.fn(), opened: vi.fn() }));
+const state = vi.hoisted(() => ({ prepare: vi.fn(), rooms: vi.fn(), opened: vi.fn() }));
 vi.mock('expo-router', () => ({ router: { setParams: vi.fn() } }));
 vi.mock('react-native-paper', () => ({
+  TextInput: ({
+    accessibilityLabel,
+    value,
+    onChangeText,
+  }: {
+    accessibilityLabel: string;
+    value: string;
+    onChangeText: (value: string) => void;
+  }) => (
+    <input
+      aria-label={accessibilityLabel}
+      value={value}
+      onChange={(event) => onChangeText(event.target.value)}
+    />
+  ),
   Text: ({ children }: { children: React.ReactNode }) => <span>{children}</span>,
   Button: ({
     children,
@@ -82,6 +97,10 @@ import { MainDraftStart } from '../features/contracts/MainDraftStart';
 import { router } from 'expo-router';
 beforeEach(() => {
   vi.clearAllMocks();
+  state.rooms.mockResolvedValue([
+    { id: 'room', capacity: 2 },
+    { id: 'room-2', capacity: 4 },
+  ]);
   state.prepare.mockResolvedValue({
     locations: [{ id: 'location', label: 'Cơ sở' }],
     rooms: [
@@ -105,7 +124,7 @@ afterEach(cleanup);
 async function setup() {
   render(
     <MainDraftStart
-      api={{ preparation: state.prepare } as unknown as ContractClient}
+      api={{ preparation: state.prepare, rooms: state.rooms } as unknown as ContractClient}
       onCancel={vi.fn()}
       onList={vi.fn()}
     />,
@@ -143,6 +162,48 @@ it('clears the old representative and members when changing rooms', async () => 
       .disabled,
   ).toBe(true);
   expect(state.opened).not.toHaveBeenCalled();
+});
+
+it('shows only rooms that can fit the entered number of people', async () => {
+  await setup();
+  await screen.findByText('101 · 2 người');
+  fireEvent.change(screen.getByLabelText('Sức chứa tối thiểu'), { target: { value: '3' } });
+  expect(screen.queryByText('101 · 2 người')).toBeNull();
+  expect(screen.getByText('102 · 4 người')).toBeTruthy();
+  expect((screen.getByLabelText('Phòng') as HTMLSelectElement).value).toBe('');
+});
+
+it('fetches each assigned location independently when staff changes location', async () => {
+  state.prepare.mockImplementation(async (location: string) => ({
+    locations: [
+      { id: 'location-a', label: 'Cơ sở A' },
+      { id: 'location-b', label: 'Cơ sở B' },
+    ],
+    rooms: location ? [{ id: location, label: location === 'location-a' ? 'P101' : 'P201' }] : [],
+    residents: [],
+    ownerSigners: [],
+  }));
+  state.rooms.mockImplementation(async (location: string) => [
+    { id: location, capacity: location === 'location-a' ? 2 : 4 },
+  ]);
+  render(
+    <MainDraftStart
+      api={{ preparation: state.prepare, rooms: state.rooms } as unknown as ContractClient}
+      onCancel={vi.fn()}
+      onList={vi.fn()}
+    />,
+  );
+  await screen.findByText('Cơ sở A');
+  fireEvent.change(screen.getByLabelText('Cơ sở được phân công'), {
+    target: { value: 'location-a' },
+  });
+  await screen.findByText('P101 · 2 người');
+  fireEvent.change(screen.getByLabelText('Cơ sở được phân công'), {
+    target: { value: 'location-b' },
+  });
+  await screen.findByText('P201 · 4 người');
+  expect(screen.queryByText(/P101/)).toBeNull();
+  expect(state.rooms).toHaveBeenCalledWith('location-b', expect.any(AbortSignal));
 });
 it('reopens the saved draft instead of creating another one after closing the standalone form', async () => {
   await setup();
@@ -192,7 +253,7 @@ it('keeps independent representatives separate, includes only explicitly selecte
     <MainDraftStart
       owner
       onSaved={saved}
-      api={{ preparation: state.prepare } as unknown as ContractClient}
+      api={{ preparation: state.prepare, rooms: state.rooms } as unknown as ContractClient}
       onCancel={vi.fn()}
       onList={vi.fn()}
     />,

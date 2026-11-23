@@ -94,8 +94,13 @@ public sealed class TenantRefundPetitionTests
                 contractId, proposalId, 200000));
         Assert.Throws<FinanceException>(() =>
             TenantRefundPetitionService.ValidateMoveOutRefund(preview with
-            { LatestProposal = proposal with { TenantFeedback = feedback with
-                { Settlement = new("Payable", 200000, 0, Guid.NewGuid(), [], []) } } },
+            {
+                LatestProposal = proposal with
+                {
+                    TenantFeedback = feedback with
+                    { Settlement = new("Payable", 200000, 0, Guid.NewGuid(), [], []) }
+                }
+            },
                 contractId, proposalId, 200000));
         Assert.Throws<FinanceException>(() =>
             TenantRefundPetitionService.ValidateMoveOutRefund(preview, Guid.NewGuid(), proposalId, 200000));

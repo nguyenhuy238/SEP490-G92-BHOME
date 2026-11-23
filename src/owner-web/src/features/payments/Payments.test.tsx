@@ -821,7 +821,8 @@ async function openReceivingAccountSettings() {
       if (init?.method === 'PUT') return mocks.api.saveAccount(JSON.parse(String(init.body)));
       return mocks.api.account();
     }
-    if (url === '/api/v1/capture/locations') return [{ id: testReceivingLocationId, label: 'Cơ sở Hòa Lạc' }];
+    if (url === '/api/v1/capture/locations')
+      return [{ id: testReceivingLocationId, label: 'Cơ sở Hòa Lạc' }];
     return [];
   });
   mount(<PaymentManagementPage />, '/payments?setupAccount=1');

@@ -18,15 +18,15 @@ public sealed partial class ContractService
     }, t);
     private void MoveOutEvent(ContractMoveOut m, string action, string? rejectionReason = null,
         Guid? authorizedOwner = null) => repository.Add(new ContractMoveOutHistory
-    {
-        ContractId = m.ContractId,
-        Version = m.Version,
-        Action = action,
-        Snapshot = rejectionReason is null ? System.Text.Json.JsonSerializer.Serialize(View(m))
+        {
+            ContractId = m.ContractId,
+            Version = m.Version,
+            Action = action,
+            Snapshot = rejectionReason is null ? System.Text.Json.JsonSerializer.Serialize(View(m))
             : System.Text.Json.JsonSerializer.Serialize(new RejectedMoveOutSnapshot(View(m), rejectionReason)),
-        ActorId = authorizedOwner ?? Actor,
-        OccurredAt = clock.GetUtcNow()
-    });
+            ActorId = authorizedOwner ?? Actor,
+            OccurredAt = clock.GetUtcNow()
+        });
     public async Task<IReadOnlyList<MoveOutHistoryView>> MoveOutHistoryAsync(Guid id, CancellationToken t)
     {
         await Load(id, [Roles.Owner, Roles.Staff, Roles.Tenant], t);

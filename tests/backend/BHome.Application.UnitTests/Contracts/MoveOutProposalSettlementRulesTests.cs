@@ -66,8 +66,14 @@ public sealed class MoveOutProposalSettlementRulesTests
         Assert.False(MoveOutProposalSettlementRules.MatchesCurrentRefundBalance(
             context with { HasLegacyDeductions = true }, 200_000));
         Assert.False(MoveOutProposalSettlementRules.MatchesCurrentRefundBalance(
-            context with { View = view with { Invoices =
-                [new SettlementOffsetInvoice(Guid.NewGuid(), new DateOnly(2026, 11, 1), 100_000, 0, 100_000)] } },
+            context with
+            {
+                View = view with
+                {
+                    Invoices =
+                [new SettlementOffsetInvoice(Guid.NewGuid(), new DateOnly(2026, 11, 1), 100_000, 0, 100_000)]
+                }
+            },
             200_000));
     }
 }

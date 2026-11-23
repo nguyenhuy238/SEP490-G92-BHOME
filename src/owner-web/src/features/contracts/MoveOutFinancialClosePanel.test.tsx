@@ -34,8 +34,12 @@ function setup(
     path.endsWith('/move-out/receivables/proposal')
       ? {
           latestProposal: tenantProposalStatus
-            ? { id: 'proposal-1', tenantFeedback: { settlement: tenantSettlementStatus
-              ? { status: tenantSettlementStatus } : null } }
+            ? {
+                id: 'proposal-1',
+                tenantFeedback: {
+                  settlement: tenantSettlementStatus ? { status: tenantSettlementStatus } : null,
+                },
+              }
             : null,
           status: tenantProposalStatus ?? 'None',
         }
@@ -198,19 +202,27 @@ it.each(['PendingTenant', 'Disputed'] as const)(
   'blocks Owner financial closure while Tenant proposal is %s',
   async (status) => {
     const { mutate } = setup(true, false, {}, status);
-    expect(await screen.findByText(/Tenant chưa đồng ý với đề xuất phí trả phòng hiện tại/)).toBeInTheDocument();
+    expect(
+      await screen.findByText(/Tenant chưa đồng ý với đề xuất phí trả phòng hiện tại/),
+    ).toBeInTheDocument();
     fireEvent.change(screen.getByLabelText('Lý do chốt quyết toán / căn cứ miễn thu'), {
       target: { value: 'Đã đối chiếu các khoản thu.' },
     });
     fireEvent.click(screen.getByRole('checkbox', { name: /xác nhận đầy đủ mức bồi thường/ }));
-    expect(screen.getByRole('button', { name: 'Chốt quyết toán và xử lý tiền cọc' })).toBeDisabled();
+    expect(
+      screen.getByRole('button', { name: 'Chốt quyết toán và xử lý tiền cọc' }),
+    ).toBeDisabled();
     expect(mutate).not.toHaveBeenCalled();
   },
 );
 
 it('blocks financial close even after Tenant accepts if materialization needs Owner review', async () => {
   const { mutate } = setup(true, false, {}, 'Accepted', 'PendingOwnerReview');
-  expect(await screen.findByText(/Tenant đã đồng ý nhưng các khoản thu và cấn cọc chưa được máy chủ xác minh/)).toBeInTheDocument();
+  expect(
+    await screen.findByText(
+      /Tenant đã đồng ý nhưng các khoản thu và cấn cọc chưa được máy chủ xác minh/,
+    ),
+  ).toBeInTheDocument();
   fireEvent.change(screen.getByLabelText('Lý do chốt quyết toán / căn cứ miễn thu'), {
     target: { value: 'Chốt khi tài chính hoàn tất.' },
   });

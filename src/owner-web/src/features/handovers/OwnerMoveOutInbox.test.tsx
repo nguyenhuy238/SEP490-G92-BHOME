@@ -80,16 +80,18 @@ it.each([
   'shows the actual Tenant financial step in the inbox for %s / %s',
   async (proposalStatus, proposalSettlementStatus, label) => {
     mocks.transport.mockResolvedValue({
-      items: [{
-        contractId: 'contract-1',
-        roomNumber: 'TEST-9A0205575A',
-        locationId: 'location-1',
-        locationName: 'Cơ sở Test',
-        proposedDate: '2026-11-22',
-        status: 'Inspected',
-        proposalStatus,
-        proposalSettlementStatus,
-      }],
+      items: [
+        {
+          contractId: 'contract-1',
+          roomNumber: 'TEST-9A0205575A',
+          locationId: 'location-1',
+          locationName: 'Cơ sở Test',
+          proposedDate: '2026-11-22',
+          status: 'Inspected',
+          proposalStatus,
+          proposalSettlementStatus,
+        },
+      ],
       page: 1,
       pageSize: 20,
       totalCount: 1,
@@ -102,14 +104,16 @@ it.each([
 
 it('recovers the accepted fee status from the existing proposal API while the inbox API is still old', async () => {
   const oldInbox = {
-    items: [{
-      contractId: 'contract-1',
-      roomNumber: 'TEST-9A0205575A',
-      locationId: 'location-1',
-      locationName: 'Cơ sở Test',
-      proposedDate: '2026-11-22',
-      status: 'Inspected',
-    }],
+    items: [
+      {
+        contractId: 'contract-1',
+        roomNumber: 'TEST-9A0205575A',
+        locationId: 'location-1',
+        locationName: 'Cơ sở Test',
+        proposedDate: '2026-11-22',
+        status: 'Inspected',
+      },
+    ],
     page: 1,
     pageSize: 20,
     totalCount: 1,
@@ -128,8 +132,9 @@ it('recovers the accepted fee status from the existing proposal API while the in
       : oldInbox,
   );
   mount();
-  expect((await screen.findAllByText('Tenant đã đồng ý · Đã tạo khoản phải thu')).length)
-    .toBeGreaterThan(0);
+  expect(
+    (await screen.findAllByText('Tenant đã đồng ý · Đã tạo khoản phải thu')).length,
+  ).toBeGreaterThan(0);
   expect(mocks.transport).toHaveBeenCalledWith(
     '/api/v1/contracts/contract-1/move-out/receivables/proposal',
     { signal: expect.any(AbortSignal) },

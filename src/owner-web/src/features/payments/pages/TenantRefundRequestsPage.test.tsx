@@ -190,11 +190,18 @@ it('allows approving a move-out refund petition but prevents double payout outsi
   mocks.ownerList.mockResolvedValue(page([row]));
   mount();
   fireEvent.click((await screen.findAllByRole('button', { name: 'Xem và xử lý' }))[0]!);
-  expect(screen.getByText(/việc chuyển khoản hoàn cọc và lưu chứng từ phải được xử lý trong luồng hoàn cọc của hợp đồng/)).toBeInTheDocument();
+  expect(
+    screen.getByText(
+      /việc chuyển khoản hoàn cọc và lưu chứng từ phải được xử lý trong luồng hoàn cọc của hợp đồng/,
+    ),
+  ).toBeInTheDocument();
   expect(screen.getByRole('link', { name: 'Xem hợp đồng liên quan' })).toHaveAttribute(
-    'href', '/contracts?contractId=contract-moveout',
+    'href',
+    '/contracts?contractId=contract-moveout',
   );
-  expect(screen.queryByRole('button', { name: 'Xác nhận đã chuyển khoản và lưu chứng từ' })).not.toBeInTheDocument();
+  expect(
+    screen.queryByRole('button', { name: 'Xác nhận đã chuyển khoản và lưu chứng từ' }),
+  ).not.toBeInTheDocument();
   expect(mocks.execute).not.toHaveBeenCalled();
 });
 

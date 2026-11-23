@@ -52,12 +52,15 @@ public sealed class TransferInstructionsService(IPaymentRepository repository, P
             if ((previous?.Version ?? 0) != x.ExpectedVersion) throw new PaymentException(409, "receiving_account_version_changed");
             var account = new ReceivingBankAccount
             {
-                OwnerUserId = Actor, LocationId = Guid.Empty,
+                OwnerUserId = Actor,
+                LocationId = Guid.Empty,
                 BankIdentifier = x.BankIdentifier,
                 AccountNumber = x.AccountNumber,
                 AccountHolder = x.AccountHolder.Trim(),
-                Enabled = x.Enabled, IsDevelopmentDemo = x.IsDevelopmentDemo,
-                Version = x.ExpectedVersion + 1, ConfirmedByUserId = Actor,
+                Enabled = x.Enabled,
+                IsDevelopmentDemo = x.IsDevelopmentDemo,
+                Version = x.ExpectedVersion + 1,
+                ConfirmedByUserId = Actor,
                 ConfirmedAt = PaymentRules.Timestamp(clock.GetUtcNow())
             };
             await repository.SaveOwnerReceivingAccountAsync(Actor, account, x.ExpectedVersion, t);

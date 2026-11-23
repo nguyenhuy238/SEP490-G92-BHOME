@@ -151,14 +151,10 @@ public static class DependencyInjection
                     o.FromEmail = legacy.FromAddress ?? ""; o.UseStartTls = legacy.SmtpUseTls;
                 }
             })
-            .Validate(o => o.Valid(),
-                "Email configuration invalid: check Email:Host/Port/FromEmail, Email:AppPassword and STARTTLS for SMTP, or the syntax of Email:AllowedRecipients.")
+            .Validate<IHostEnvironment>((o, env) => o.Valid(env.EnvironmentName),
+                "Email configuration invalid: check Email:Host/Port/FromEmail, Email:AppPassword and STARTTLS for SMTP.")
             .Validate<IHostEnvironment>((o, env) => o.CaptureAllowed(env.EnvironmentName),
                 "Email:DeliveryMode=Capture requires a loopback Email:Host and Development/Testing; deployed SMTP must use STARTTLS.")
-            .Validate<IHostEnvironment>((o, env) => o.AnyRecipientOverrideAllowed(env.EnvironmentName),
-                "Email:AllowAnyRecipientInDevelopment can only be enabled with SMTP in Development.")
-            .Validate<IHostEnvironment>((o, env) => o.RecipientsConfigured(env.EnvironmentName),
-                "SMTP requires Email:AllowedRecipients:0 (and optional :1, :2, ...) in Development/Testing/Staging. Development can explicitly opt in with Email:AllowAnyRecipientInDevelopment=true. For an existing local test mailbox, run scripts/Initialize-LocalEmail.ps1 -UseConfiguredTestRecipient, then restart the API. Email:TestRecipient alone is not an allowlist.")
             .ValidateOnStart();
         services.AddScoped<BHome.Infrastructure.Modules.Notifications.MailKitEmailSender>();
         services.AddOptions<BHome.Infrastructure.Modules.Notifications.ExpoPushOptions>()
@@ -344,6 +340,7 @@ public static class DependencyInjection
         services.AddSingleton<BHome.Application.Contracts.IContractWorkflowMode, BHome.Infrastructure.Contracts.ContractWorkflowMode>();
         services.AddScoped<BHome.Infrastructure.Contracts.ViettelMySignContractAdapter>();
         services.AddScoped<BHome.Application.Contracts.IContractSigningDocumentSource, BHome.Infrastructure.Contracts.ContractSigningDocumentSource>();
+        services.AddScoped<BHome.Infrastructure.Contracts.HoldingDepositRenderer>();
         services.AddScoped<BHome.Infrastructure.Contracts.DevelopmentContractSigningAdapter>();
         // Signing methods (OTP email / Viettel MySign / Development simulation) are chosen per signature by the router.
         services.AddOptions<BHome.Application.Contracts.ContractSigningOptions>().Bind(configuration.GetSection(BHome.Application.Contracts.ContractSigningOptions.Section))

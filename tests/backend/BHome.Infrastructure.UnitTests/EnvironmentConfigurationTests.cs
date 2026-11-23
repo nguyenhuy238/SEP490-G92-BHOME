@@ -212,44 +212,77 @@ public sealed class EnvironmentConfigurationTests
     }
 
     [Fact]
-    public void EmailCaptureCannotEscapeLoopbackOrRunOnDeploymentAndSmtpStagingNeedsAllowlist()
+    public void EmailCaptureCannotEscapeLoopbackOrRunOnDeploymentAndSmtpNeedsTls()
     {
         var o = new EmailOptions { Enabled = true, DeliveryMode = "Capture", Host = "localhost", Port = 1025, FromEmail = "sender@example.invalid" };
         Assert.True(o.ValidForEnvironment("Development")); Assert.True(o.ValidForEnvironment("Testing"));
         Assert.False(o.ValidForEnvironment("Production")); Assert.False(o.ValidForEnvironment("Staging"));
         o.Host = "smtp.gmail.com"; Assert.False(o.ValidForEnvironment("Development"));
         o.DeliveryMode = "Smtp"; o.Username = o.FromEmail; o.AppPassword = "synthetic";
-        Assert.False(o.ValidForEnvironment("Staging"));
+        Assert.True(o.ValidForEnvironment("Staging"));
         o.AllowedRecipients = ["recipient@example.invalid"]; Assert.True(o.ValidForEnvironment("Staging"));
-        Assert.True(o.RecipientAllowed("RECIPIENT@example.invalid")); Assert.False(o.RecipientAllowed("other@example.invalid"));
+        Assert.True(o.RecipientAllowed("RECIPIENT@example.invalid")); Assert.True(o.RecipientAllowed("other@example.invalid"));
         o.UseStartTls = false; Assert.False(o.ValidForEnvironment("Staging"));
     }
 
-    [Fact]
-    public void AnyRecipientOptInWorksOnlyForDevelopmentSmtp()
+    [Theory]
+    [InlineData("Testing", false)]
+    [InlineData("Testing", true)]
+    [InlineData("Staging", false)]
+    [InlineData("Staging", true)]
+    [InlineData("Production", false)]
+    [InlineData("Production", true)]
+    [InlineData("Development", false)]
+    [InlineData("Development", true)]
+    public void EveryEnvironmentIgnoresLegacyRecipientRestrictionsWithoutOptIn(string environment, bool legacyOverride)
     {
         var o = new EmailOptions
         {
             Enabled = true,
-            DeliveryMode = "Smtp",
-            Host = "smtp.gmail.com",
             Username = "sender@example.invalid",
             FromEmail = "sender@example.invalid",
             AppPassword = "synthetic",
-            AllowedRecipients = ["test@example.invalid"]
+            AllowAnyRecipientInDevelopment = legacyOverride,
+            TestEnabled = true,
+            TestRecipient = "diagnostic@example.invalid"
         };
-        Assert.False(o.RecipientAllowed("staff@example.invalid", "Development"));
-        o.AllowAnyRecipientInDevelopment = true;
-        Assert.True(o.ValidForEnvironment("Development"));
-        Assert.True(o.RecipientAllowed("staff@example.invalid", "Development"));
-        Assert.False(o.RecipientAllowed("staff@example.invalid", "Staging"));
-        Assert.False(o.ValidForEnvironment("Staging"));
-        Assert.False(o.ValidForEnvironment("Testing"));
-        Assert.False(o.ValidForEnvironment("Production"));
-        o.AllowedRecipients = [];
-        Assert.True(o.ValidForEnvironment("Development"));
-        Assert.False(o.ValidForEnvironment("Staging"));
+        foreach (var recipients in new string[][] { [], ["old@example.invalid"], ["stale-invalid-entry"] })
+        {
+            o.AllowedRecipients = recipients;
+            Assert.True(o.ValidForEnvironment(environment));
+            Assert.True(o.RecipientAllowed("outside@example.invalid", environment));
+            Assert.False(o.RecipientAllowed("invalid", environment));
+        }
         o.DeliveryMode = "Capture"; o.Host = "localhost"; o.Port = 1025;
+        Assert.True(o.ValidForEnvironment("Development"));
+        o.Host = "smtp.gmail.com";
         Assert.False(o.ValidForEnvironment("Development"));
+    }
+
+    [Theory]
+    [InlineData("Testing", true)]
+    [InlineData("Staging", true)]
+    [InlineData("Production", true)]
+    public void LegacyConfigurationCannotRestrictDeployedRecipients(string environment, bool emptyListValid)
+    {
+        var o = new EmailOptions
+        {
+            Enabled = true,
+            Username = "sender@example.invalid",
+            FromEmail = "sender@example.invalid",
+            AppPassword = "synthetic"
+        };
+        Assert.Equal(emptyListValid, o.ValidForEnvironment(environment));
+        Assert.True(o.RecipientAllowed("outside@example.invalid", environment));
+        o.AllowedRecipients = ["approved@example.invalid"];
+        Assert.True(o.ValidForEnvironment(environment));
+        Assert.True(o.RecipientAllowed("APPROVED@example.invalid", environment));
+        Assert.True(o.RecipientAllowed("outside@example.invalid", environment));
+        o.AllowedRecipients = ["invalid"];
+        Assert.True(o.ValidForEnvironment(environment));
+        o.AllowedRecipients = ["approved@example.invalid"];
+        o.AllowAnyRecipientInDevelopment = true;
+        Assert.True(o.ValidForEnvironment(environment));
+        Assert.True(o.RecipientAllowed("outside@example.invalid", environment));
     }
 }

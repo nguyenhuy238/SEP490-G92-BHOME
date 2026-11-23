@@ -49,15 +49,23 @@ public sealed class SePayIntegrationTests(Compact24Fixture fixture) : IClassFixt
         var secondRoom = new Room { LocationId = otherLocation.Id, RoomNumber = "A01", Status = RoomStatus.Available };
         var secondResident = new Resident
         {
-            RoomId = secondRoom.Id, OwnerUserId = scenario.Owner,
-            TenantUserId = scenario.Tenants[0], DisplayLabel = "SYNTHETIC SECOND", VerificationStatus = IdentityVerificationStatus.Verified
+            RoomId = secondRoom.Id,
+            OwnerUserId = scenario.Owner,
+            TenantUserId = scenario.Tenants[0],
+            DisplayLabel = "SYNTHETIC SECOND",
+            VerificationStatus = IdentityVerificationStatus.Verified
         };
         var secondContract = new Contract
         {
-            RoomId = secondRoom.Id, OwnerSignerId = scenario.Owner,
-            RepresentativeResidentId = secondResident.Id, TenantUserId = scenario.Tenants[0],
-            Kind = ContractKind.Holding, StartDate = new DateOnly(2026, 11, 1),
-            EndDate = new DateOnly(2027, 11, 1), Terms = "SYNTHETIC", MonthlyRent = 100000,
+            RoomId = secondRoom.Id,
+            OwnerSignerId = scenario.Owner,
+            RepresentativeResidentId = secondResident.Id,
+            TenantUserId = scenario.Tenants[0],
+            Kind = ContractKind.Holding,
+            StartDate = new DateOnly(2026, 11, 1),
+            EndDate = new DateOnly(2027, 11, 1),
+            Terms = "SYNTHETIC",
+            MonthlyRent = 100000,
             Residents = [new ContractResident { ResidentId = secondResident.Id, Role = ResidentType.Representative, ResidenceFrom = new DateOnly(2026, 11, 1) }]
         };
         db.AddRange(otherLocation, secondRoom, secondResident, secondContract);
@@ -73,8 +81,10 @@ public sealed class SePayIntegrationTests(Compact24Fixture fixture) : IClassFixt
         var options = scope.ServiceProvider.GetRequiredService<SePayOptions>();
         options.ReceivingAccounts.Add(new SePayReceivingAccount
         {
-            OwnerUserId = scenario.Owner, BankIdentifier = first.BankIdentifier,
-            AccountNumber = first.AccountNumber, Gateway = "ACB"
+            OwnerUserId = scenario.Owner,
+            BankIdentifier = first.BankIdentifier,
+            AccountNumber = first.AccountNumber,
+            Gateway = "ACB"
         });
         Assert.True(options.Matches(scenario.Location, first));
         Assert.True(options.Matches(otherLocation.Id, second));

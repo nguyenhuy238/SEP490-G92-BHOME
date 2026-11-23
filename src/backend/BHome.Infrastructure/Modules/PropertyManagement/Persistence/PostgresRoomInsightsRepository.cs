@@ -27,6 +27,12 @@ internal sealed class PostgresRoomInsightsRepository(BHomePersistenceContext db)
             x.LocationId == room.LocationId && x.Category == ChargeCategory.Rent && x.ChargeCode == "RENT" &&
             (x.RoomId == roomId || x.RoomId == null && x.RoomTypeId == null) && x.EffectiveFrom <= effectiveOn &&
             (x.EffectiveTo == null || x.EffectiveTo >= effectiveOn), token);
+        var blockingAsset = await db.Set<Asset>().AsNoTracking().AnyAsync(x => x.RoomId == roomId &&
+            (x.Status == AssetStatus.NeedsRepair || x.Status == AssetStatus.UnderRepair), token);
+        if (contractId is null)
+            return new(room.LocationActive, room.Status, room.Capacity, obligations, hasRent,
+                0, false, false, false, false, blockingAsset, null);
+
         var meters = await db.Set<Meter>().AsNoTracking().Where(x => x.RoomId == roomId && x.IsActive)
             .Select(x => new { x.Id, x.UtilityType }).ToArrayAsync(token);
         var ids = meters.Select(x => x.Id).ToArray();
@@ -40,9 +46,6 @@ internal sealed class PostgresRoomInsightsRepository(BHomePersistenceContext db)
                                       where c.RoomId == roomId && c.Kind != ContractKind.Holding && c.Status == ContractStatus.Active && cr.ResidenceFrom <= effectiveOn &&
                                             (cr.ResidenceTo == null || cr.ResidenceTo >= effectiveOn)
                                       select cr.ResidentId).Distinct().CountAsync(token);
-        var blockingAsset = await db.Set<Asset>().AsNoTracking().AnyAsync(x => x.RoomId == roomId &&
-            (x.Status == AssetStatus.NeedsRepair || x.Status == AssetStatus.UnderRepair), token);
-
         MoveInContractEvidence? contract = null;
         if (contractId.HasValue)
         {

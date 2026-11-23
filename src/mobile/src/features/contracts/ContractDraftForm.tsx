@@ -26,6 +26,7 @@ import { HoldingProgress } from './HoldingProgress';
 import { staffColors } from '../../theme/theme';
 import { HoldingSectionCard, HoldingStatusBadge } from './HoldingUi';
 import { ContractLoading } from './ContractLoading';
+import { HoldingRoomPicker } from './HoldingRoomPicker';
 
 export function ContractDraftForm({
   api,
@@ -54,10 +55,7 @@ export function ContractDraftForm({
   const lock = useRef(false),
     [keys] = useState(() => mutationKeys(randomUUID));
   const query = useHoldingPreparation(api, values.roomId);
-  const room = query.data?.rooms.find(
-    (item) =>
-      item.id === values.roomId && (role !== 'Staff' || item.locationId === staffLocationId),
-  );
+  const room = query.data?.rooms.find((item) => item.id === values.roomId);
   const p = room ? query.data?.byLocation[room.locationId] : undefined;
   const eligible = (p?.residents ?? []).filter(
     (r) => r.roomId === room?.id && r.verified && r.residentType !== 'CoOccupant',
@@ -83,20 +81,17 @@ export function ContractDraftForm({
     owners.length > 1
       ? 'Chưa xác định được Owner ký hợp đồng: cơ sở có nhiều Owner hợp lệ. Vui lòng liên hệ quản trị viên.'
       : 'Chưa xác định được Owner ký hợp đồng cho cơ sở này. Vui lòng liên hệ quản trị viên.';
-  const locations = (query.data?.locations ?? []).filter(
-    (item) => role !== 'Staff' || item.id === staffLocationId,
-  );
+  const locations = query.data?.locations ?? [];
   const selectedLocationId =
-    role === 'Staff'
-      ? (staffLocationId ?? '')
-      : values.locationId || room?.locationId || (locations.length === 1 ? locations[0].id : '');
-  const roomOptions = (query.data?.rooms ?? [])
-    .filter((item) => item.locationId === selectedLocationId)
-    .map((item) => ({
-      id: item.id,
-      label: `${item.label} · ${locations.find((location) => location.id === item.locationId)?.label ?? ''}${typeof item.capacity === 'number' ? ` · ${item.capacity} người` : ''}`,
-    }));
+    values.locationId ||
+    room?.locationId ||
+    (locations.some((item) => item.id === staffLocationId) ? staffLocationId : '') ||
+    (locations.length === 1 ? locations[0].id : '');
+  const roomOptions = (query.data?.rooms ?? []).filter(
+    (item) => item.locationId === selectedLocationId,
+  );
   const roomValid = !!room && !!p && !query.loading && !query.error;
+  const stepLoading = step === 0 ? query.checkingRoom : query.loading;
   const preparationAvailable = typeof api.holdingPreparation === 'function';
   const defaultsKey = `${values.roomId}:${defaultsRevision}`;
   useEffect(() => {
@@ -138,8 +133,6 @@ export function ContractDraftForm({
     if (!representative)
       throw new UserFeedbackError('Nhập và xác minh thông tin người giữ chỗ trước khi tiếp tục.');
     if (!owner) throw new UserFeedbackError(ownerError);
-    if (!query.data?.configuration.template.available)
-      throw new UserFeedbackError('Mẫu hợp đồng chưa sẵn sàng. Vui lòng thử lại sau.');
   }
   async function save() {
     if (lock.current) return;
@@ -210,7 +203,8 @@ export function ContractDraftForm({
   }
   function next() {
     try {
-      if (!roomValid) throw new UserFeedbackError('Chọn phòng giữ chỗ hợp lệ.');
+      if (!(step === 0 ? query.roomReady : roomValid))
+        throw new UserFeedbackError('Chọn phòng giữ chỗ hợp lệ.');
       if (step === 2) {
         validateSelection();
       }
@@ -264,13 +258,10 @@ export function ContractDraftForm({
                 }}
               />
             )}
-            <ChoiceField
-              label="Phòng giữ chỗ *"
-              placeholder="Chọn phòng còn trống"
-              icon="door-open"
-              searchable
+            <HoldingRoomPicker
+              key={selectedLocationId}
               value={values.roomId ?? ''}
-              options={roomOptions}
+              rooms={roomOptions}
               disabled={
                 busy ||
                 query.catalogLoading ||
@@ -305,18 +296,18 @@ export function ContractDraftForm({
                 </View>
                 <HoldingStatusBadge
                   label={
-                    query.loading
+                    query.checkingRoom
                       ? 'Đang kiểm tra'
-                      : roomValid
+                      : query.roomReady
                         ? 'Đủ điều kiện'
                         : query.selectionBlocked
                           ? 'Không đủ điều kiện'
                           : 'Chưa xác nhận'
                   }
                   tone={
-                    query.loading
+                    query.checkingRoom
                       ? 'neutral'
-                      : roomValid
+                      : query.roomReady
                         ? 'success'
                         : query.selectionBlocked
                           ? 'error'
@@ -325,7 +316,7 @@ export function ContractDraftForm({
                 />
               </View>
             )}
-            {query.loading && (
+            {query.checkingRoom && (
               <View style={styles.refreshStatus}>
                 <ActivityIndicator size="small" accessibilityLabel="Đang kiểm tra phòng giữ chỗ" />
                 <Text style={styles.description}>
@@ -457,11 +448,11 @@ export function ContractDraftForm({
               buttonColor={staffColors.navy}
               style={styles.footerPrimary}
               contentStyle={styles.footerPrimaryContent}
-              disabled={busy || !roomValid || (step === 2 && !owner)}
-              loading={busy || query.loading}
+              disabled={busy || !(step === 0 ? query.roomReady : roomValid && !!owner)}
+              loading={busy || stepLoading}
               onPress={next}
             >
-              {query.loading ? 'Đang cập nhật…' : 'Tiếp tục'}
+              {stepLoading ? 'Đang cập nhật…' : 'Tiếp tục'}
             </Button>
             {step > 0 && (
               <Button disabled={busy} onPress={back} mode="text" contentStyle={styles.footerButton}>

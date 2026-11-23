@@ -97,3 +97,18 @@ it('does not offer stale values after a failed reload or report a failed save as
   await waitFor(() => expect(screen.getByRole('button', { name: 'Lưu cấu hình' })).toBeDisabled());
   expect(screen.queryByDisplayValue('3.000.000')).not.toBeInTheDocument();
 });
+it('keeps edited fields when the user cancels closing and discards them only after confirmation', async () => {
+  await open();
+  await screen.findByDisplayValue('3.000.000');
+  fireEvent.change(screen.getByLabelText(/Điều khoản bổ sung/), {
+    target: { value: 'Điều khoản đang chỉnh sửa' },
+  });
+  fireEvent.click(screen.getByRole('button', { name: 'Đóng cấu hình' }));
+  expect(screen.getByRole('dialog', { name: 'Bỏ thay đổi chưa lưu?' })).toBeVisible();
+  fireEvent.click(screen.getByRole('button', { name: 'Tiếp tục chỉnh sửa' }));
+  expect(screen.getByLabelText(/Điều khoản bổ sung/)).toHaveValue('Điều khoản đang chỉnh sửa');
+  fireEvent.click(await screen.findByRole('button', { name: 'Hủy' }));
+  fireEvent.click(screen.getByRole('button', { name: 'Bỏ thay đổi' }));
+  await waitFor(() => expect(screen.queryByRole('dialog')).not.toBeInTheDocument());
+  expect(mocks.setSettings).not.toHaveBeenCalled();
+});

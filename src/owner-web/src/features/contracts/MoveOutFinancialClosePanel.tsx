@@ -81,15 +81,15 @@ export function MoveOutFinancialClosePanel({
         status: string;
         latestProposal: {
           id: string;
-          tenantFeedback?: { settlement?: { status: string; reason?: string | null } | null } | null;
+          tenantFeedback?: {
+            settlement?: { status: string; reason?: string | null } | null;
+          } | null;
         } | null;
-      }>(
-        `/api/v1/contracts/${encodeURIComponent(id)}/move-out/receivables/proposal`,
-        { signal },
-      ),
+      }>(`/api/v1/contracts/${encodeURIComponent(id)}/move-out/receivables/proposal`, { signal }),
     retry: false,
   });
-  const tenantProposalUnresolved = !!tenantProposal.data?.latestProposal &&
+  const tenantProposalUnresolved =
+    !!tenantProposal.data?.latestProposal &&
     (tenantProposal.data.status !== 'Accepted' ||
       !['Payable', 'RefundEligible', 'Settled'].includes(
         tenantProposal.data.latestProposal.tenantFeedback?.settlement?.status ?? '',
