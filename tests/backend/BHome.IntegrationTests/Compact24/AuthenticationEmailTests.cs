@@ -194,13 +194,23 @@ public sealed partial class Compact24NotificationMvpTests
         await using var scope = host.Services.CreateAsyncScope();
         var db = scope.ServiceProvider.GetRequiredService<Compact24DbContext>();
         var originalHash = await db.Users.Where(u => u.Id == w.Staff.Id).Select(u => u.PasswordHash).SingleAsync();
+        var originalEmail = await db.Users.AsNoTracking().Where(u => u.Id == w.Staff.Id).Select(u => u.Email).SingleAsync();
         await db.Database.ExecuteSqlInterpolatedAsync($"UPDATE users SET email={"invalid-address"} WHERE id={w.Staff.Id}");
-        var response = await owner.PostAsync($"/api/v1/staff/{w.Staff.Id}/issue-password", null);
-        Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
-        Assert.Contains("email_recipient_invalid", await response.Content.ReadAsStringAsync());
-        Assert.Equal(originalHash, await db.Users.AsNoTracking().Where(u => u.Id == w.Staff.Id).Select(u => u.PasswordHash).SingleAsync());
-        Assert.False(await db.Database.SqlQuery<bool>($"SELECT EXISTS(SELECT 1 FROM notifications WHERE event_data ? 'protectedAuthenticationEmail' AND event_data->>'recipient'={w.Staff.Id.ToString()}) AS \"Value\"").SingleAsync());
-        Assert.Empty(probe.Messages);
+        try
+        {
+            var response = await owner.PostAsync($"/api/v1/staff/{w.Staff.Id}/issue-password", null);
+            Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
+            Assert.Contains("email_recipient_invalid", await response.Content.ReadAsStringAsync());
+            Assert.Equal(originalHash, await db.Users.AsNoTracking().Where(u => u.Id == w.Staff.Id).Select(u => u.PasswordHash).SingleAsync());
+            Assert.False(await db.Database.SqlQuery<bool>($"SELECT EXISTS(SELECT 1 FROM notifications WHERE event_data ? 'protectedAuthenticationEmail' AND event_data->>'recipient'={w.Staff.Id.ToString()}) AS \"Value\"").SingleAsync());
+            Assert.Empty(probe.Messages);
+        }
+        finally
+        {
+            // This class shares a disposable PostgreSQL fixture across tests. Restore the
+            // deliberately malformed address so it cannot poison subsequent Mock SMS tests.
+            await db.Database.ExecuteSqlInterpolatedAsync($"UPDATE users SET email={originalEmail} WHERE id={w.Staff.Id}");
+        }
     }
 
     private WebApplicationFactory<Program> AuthenticationHost(SmtpProbe probe, string environment = "Testing") => EmailHost(probe, environment).WithWebHostBuilder(b => b.ConfigureAppConfiguration((_, c) =>

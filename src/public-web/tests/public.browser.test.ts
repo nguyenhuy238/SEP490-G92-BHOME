@@ -210,20 +210,29 @@ for (const width of [1440, 768, 390])
         await page.getByText(/Không có cơ sở phù hợp/).waitFor();
         await page.getByLabel('Tìm tên cơ sở hoặc địa chỉ').fill('tổng hợp');
         await page.getByRole('link', { name: 'Xem cơ sở và phòng' }).click();
-        await page.getByRole('link', { name: 'Phòng B2', exact: true }).waitFor();
+        const occupiedRoom = page.getByRole('link', { name: 'Phòng B2', exact: true });
+        const availableRoom = page.getByRole('link', { name: 'Phòng A1', exact: true });
+        await occupiedRoom.waitFor();
+        await availableRoom.waitFor();
         await page.getByRole('button', { name: 'Chỉ xem phòng còn trống' }).click();
-        expect(await page.getByRole('link', { name: 'Phòng B2', exact: true }).count()).toBe(0);
+        await occupiedRoom.waitFor({ state: 'detached' });
         await page.getByLabel('Giá tối đa mỗi tháng').fill('1000000');
         await page.getByText('Không có phòng phù hợp với bộ lọc.').waitFor();
         await page.getByRole('button', { name: 'Xóa bộ lọc' }).click();
+        await availableRoom.waitFor();
+        await occupiedRoom.waitFor();
         await page.getByRole('button', { name: 'Bộ lọc thêm' }).click();
         await page.getByLabel('Số người ở').click();
         await page.getByRole('option', { name: '4 người', exact: true }).click();
-        expect(await page.getByRole('link', { name: 'Phòng A1', exact: true }).count()).toBe(0);
+        await availableRoom.waitFor({ state: 'detached' });
+        await occupiedRoom.waitFor();
         await page.getByRole('button', { name: 'Xóa bộ lọc' }).click();
+        await availableRoom.waitFor();
+        await occupiedRoom.waitFor();
         await page.getByLabel('Tiện nghi').click();
         await page.getByRole('option', { name: 'Wifi', exact: true }).click();
-        expect(await page.getByRole('link', { name: 'Phòng B2', exact: true }).count()).toBe(0);
+        await occupiedRoom.waitFor({ state: 'detached' });
+        await availableRoom.waitFor();
         expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(
           true,
         );
