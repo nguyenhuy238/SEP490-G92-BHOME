@@ -344,6 +344,7 @@ public static class DependencyInjection
         services.AddSingleton<BHome.Application.Contracts.IContractWorkflowMode, BHome.Infrastructure.Contracts.ContractWorkflowMode>();
         services.AddScoped<BHome.Infrastructure.Contracts.ViettelMySignContractAdapter>();
         services.AddScoped<BHome.Application.Contracts.IContractSigningDocumentSource, BHome.Infrastructure.Contracts.ContractSigningDocumentSource>();
+        services.AddScoped<BHome.Infrastructure.Contracts.HoldingDepositRenderer>();
         services.AddScoped<BHome.Infrastructure.Contracts.DevelopmentContractSigningAdapter>();
         // Signing methods (OTP email / Viettel MySign / Development simulation) are chosen per signature by the router.
         services.AddOptions<BHome.Application.Contracts.ContractSigningOptions>().Bind(configuration.GetSection(BHome.Application.Contracts.ContractSigningOptions.Section))

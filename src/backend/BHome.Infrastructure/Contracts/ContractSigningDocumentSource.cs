@@ -14,13 +14,15 @@ namespace BHome.Infrastructure.Contracts;
 // Retrieves an immutable, reviewed PDF. The pure template renderer remains independent of persistence.
 internal sealed class ContractSigningDocumentSource(BHomePersistenceContext db, IObjectStorage storage, IHostEnvironment environment,
     IMainDraftData? mainData = null, IMainDraftRenderer? mainRenderer = null, ICurrentUser? user = null, TimeProvider? clock = null,
-    IContractFileStore? fileStore = null) : IContractSigningDocumentSource
+    IContractFileStore? fileStore = null, HoldingDepositRenderer? holdingRenderer = null) : IContractSigningDocumentSource
 {
     public async Task<byte[]?> ReadAsync(ContractDocument document, CancellationToken t)
     {
         var contract = await db.Set<Contract>().AsNoTracking().Include(c => c.Room).ThenInclude(r => r.Location).Include(c => c.Signatures)
             .SingleOrDefaultAsync(c => c.Id == document.ContractId, t);
         if (contract is null) return null;
+        if (contract.Kind == ContractKind.Holding)
+            return await ReadHoldingAsync(contract, document, t);
         if (contract.DraftMetadata == "{}")
         {
             if (contract.Kind != ContractKind.Main) return null;
@@ -44,6 +46,70 @@ internal sealed class ContractSigningDocumentSource(BHomePersistenceContext db, 
             ?? throw ContractException.Conflict("signing_source_document_required");
         if (file.DevelopmentOnly && !(environment.IsDevelopment() || environment.IsEnvironment("Testing")))
             throw new ContractException(503, "main_draft_signing_template_not_approved");
+        return await ReadFileAsync(file, t);
+    }
+
+    private async Task<byte[]?> ReadHoldingAsync(Contract contract, ContractDocument document, CancellationToken t)
+    {
+        if (contract.SnapshotHash != document.SnapshotHash || ContractDocumentSnapshot.Hash(document) != document.SnapshotHash)
+            throw ContractException.Conflict("signed_terms_changed");
+        var files = db.Set<ContractDocumentFile>();
+        var candidates = files.AsNoTracking().Where(f => f.ContractId == contract.Id && f.Kind == ContractFileKind.Preview &&
+            f.SnapshotHash == document.SnapshotHash && f.TemplateId == HoldingDepositRenderer.TemplateId);
+        var existing = await candidates.SingleOrDefaultAsync(t);
+        if (existing is not null) return await ReadFileAsync(existing, t);
+
+        await using var transaction = db.Database.CurrentTransaction is null ? await db.Database.BeginTransactionAsync(t) : null;
+        await db.Database.ExecuteSqlInterpolatedAsync($"SELECT pg_advisory_xact_lock(hashtextextended({"holding-docx-source:" + contract.Id},0))", t);
+        existing = await candidates.SingleOrDefaultAsync(t);
+        if (existing is not null)
+        {
+            if (transaction is not null) await transaction.CommitAsync(t);
+            return await ReadFileAsync(existing, t);
+        }
+
+        // Keep previously reviewed bytes and the existing signing evidence across a template rollout.
+        var invitation = await db.Set<ContractSigningInvitation>().AsNoTracking()
+            .Where(i => i.ContractId == contract.Id && i.SnapshotHash == document.SnapshotHash && i.RevokedAt == null)
+            .OrderByDescending(i => i.Id).FirstOrDefaultAsync(t);
+        if (invitation is not null)
+        {
+            using var buffer = new MemoryStream();
+            await storage.CopyToAsync(invitation.DocumentObjectKey, buffer, t);
+            var bytes = buffer.ToArray();
+            if (!ValidPdf(bytes, bytes.Length, invitation.DocumentHash))
+                throw ContractException.Conflict("contract_document_integrity_failed");
+            if (transaction is not null) await transaction.CommitAsync(t);
+            return bytes;
+        }
+        if (contract.Signatures.Any(s => s.Status != SignatureStatus.Failed) || contract.InternalAcceptance != "{}")
+            return null;
+        if (mainData is null || fileStore is null || holdingRenderer is null || clock is null)
+            throw new ContractException(503, "holding_contract_document_source_unavailable");
+        if (user?.UserId is not { } actor) throw new ContractException(403, "contract_role_forbidden");
+        var settings = await mainData.SettingsAsync(contract.Room.LocationId, contract.StartDate, t);
+        if (settings is null || settings.OwnerSignerId != contract.OwnerSignerId)
+            throw ContractException.Conflict("owner_contract_settings_required");
+        var tenant = await mainData.IdentityAsync(contract.RoomId, contract.RepresentativeResidentId, t);
+        var phone = await mainData.PhoneAsync(contract.RoomId, contract.RepresentativeResidentId, t);
+        var pdf = await holdingRenderer.PdfAsync(contract, settings.Owner, tenant, phone, t);
+        var file = new ContractDocumentFile
+        {
+            ContractId = contract.Id, Kind = ContractFileKind.Preview, SnapshotHash = document.SnapshotHash,
+            TemplateId = HoldingDepositRenderer.TemplateId, TemplateVersion = 1,
+            ContentType = "application/pdf", FileHash = Convert.ToHexString(SHA256.HashData(pdf)), Length = pdf.Length,
+            RecordedAt = clock.GetUtcNow(), RecordedByUserId = actor
+        };
+        file.ObjectKey = $"contracts/{contract.Id:N}/preview/{file.Id:N}.pdf";
+        await fileStore.PutAsync(contract.RoomId, file.ObjectKey, pdf, file.ContentType, t);
+        files.Add(file);
+        await db.SaveChangesAsync(t);
+        if (transaction is not null) await transaction.CommitAsync(t);
+        return pdf;
+    }
+
+    private async Task<byte[]> ReadFileAsync(ContractDocumentFile file, CancellationToken t)
+    {
         byte[] bytes;
         try
         {
@@ -54,7 +120,7 @@ internal sealed class ContractSigningDocumentSource(BHomePersistenceContext db, 
             // Invitations preserve copies of the reviewed bytes. Never render a replacement
             // or accept a different document under the original consent hash.
             var copies = await db.Set<ContractSigningInvitation>().AsNoTracking()
-                .Where(i => i.ContractId == contract.Id && i.SnapshotHash == document.SnapshotHash && i.DocumentHash == file.FileHash)
+                .Where(i => i.ContractId == file.ContractId && i.SnapshotHash == file.SnapshotHash && i.DocumentHash == file.FileHash)
                 .Select(i => i.DocumentObjectKey).Distinct().ToArrayAsync(t);
             byte[]? recovered = null;
             foreach (var key in copies)
@@ -70,10 +136,14 @@ internal sealed class ContractSigningDocumentSource(BHomePersistenceContext db, 
             }
             bytes = recovered ?? throw ContractException.Conflict("signing_source_document_required");
         }
-        if (bytes.Length != file.Length || bytes.Length < 5 || bytes.Length > 10 * 1024 * 1024 || !bytes.AsSpan(0, 5).SequenceEqual("%PDF-"u8) || Convert.ToHexString(SHA256.HashData(bytes)) != file.FileHash)
+        if (!ValidPdf(bytes, file.Length, file.FileHash))
             throw ContractException.Conflict("contract_document_integrity_failed");
         return bytes;
     }
+
+    private static bool ValidPdf(byte[] bytes, long length, string hash) => bytes.Length == length &&
+        bytes.Length is >= 5 and <= 10 * 1024 * 1024 && bytes.AsSpan(0, 5).SequenceEqual("%PDF-"u8) &&
+        Convert.ToHexString(SHA256.HashData(bytes)) == hash;
 
     private async Task CreateMainSourceAsync(Contract c, ContractDocument document, CancellationToken t)
     {

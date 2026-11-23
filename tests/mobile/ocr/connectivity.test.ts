@@ -320,6 +320,19 @@ it('requires a healthy HTTPS API for connection checks, without sending credenti
     code: 'invalid_response',
   });
 });
+it('checks the public API when the gateway hides readiness', async () => {
+  const fetcher = vi.fn<typeof fetch>()
+    .mockResolvedValueOnce(new Response(null, { status: 404 }))
+    .mockResolvedValueOnce(new Response('[]'));
+  await checkApiConnection('https://api.test', fetcher);
+  expect(fetcher.mock.calls.map(([url]) => url)).toEqual([
+    'https://api.test/health/ready',
+    'https://api.test/api/v1/public/locations',
+  ]);
+  fetcher.mockResolvedValueOnce(new Response(null, { status: 503 }));
+  await expect(checkApiConnection('https://api.test', fetcher)).rejects.toMatchObject({ status: 503 });
+  expect(fetcher).toHaveBeenCalledTimes(3);
+});
 it('distinguishes empty, populated, failed and malformed contract list responses', async () => {
   const page = { items: [], page: 1, pageSize: 20, totalCount: 0 };
   const fetcher = vi

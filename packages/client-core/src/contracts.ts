@@ -1052,7 +1052,10 @@ export function contractClient(request: ContractRequest) {
     locations: (signal?: AbortSignal) =>
       request<NamedOption[]>('/api/v1/capture/locations', { signal }),
     rooms: (locationId: string, signal?: AbortSignal) =>
-      request<NamedOption[]>(`/api/v1/capture/locations/${locationId}/rooms`, { signal }),
+      request<(NamedOption & { capacity?: number | null })[]>(
+        `/api/v1/capture/locations/${locationId}/rooms`,
+        { signal },
+      ),
     residents: (locationId: string, signal?: AbortSignal) =>
       request<ResidentOption[]>(`/api/v1/capture/locations/${locationId}/residents`, { signal }),
     meters: (locationId: string, signal?: AbortSignal) =>
@@ -1265,6 +1268,10 @@ export const labels: Record<string, string> = {
   signed_terms_changed: 'Nội dung hợp đồng không khớp bản đã đưa đi ký.',
   contract_template_not_configured:
     'Chưa có mẫu PDF hợp đồng được phê duyệt. Liên hệ Owner để hoàn tất cấu hình trước khi ký.',
+  contract_template_not_approved: 'Mẫu PDF hợp đồng chưa được phê duyệt cho môi trường này.',
+  contract_pdf_converter_unavailable: 'Máy chủ chưa cấu hình bộ chuyển hợp đồng sang PDF.',
+  holding_contract_document_source_unavailable: 'Máy chủ chưa có nguồn PDF hợp đồng giữ chỗ.',
+  owner_contract_settings_required: 'Cơ sở chưa có thông tin bên cho thuê có hiệu lực cho hợp đồng này.',
   signing_certificate_not_valid:
     'Chứng thư đã bị khóa hoặc không còn hiệu lực. Tải lại chứng thư trước khi ký.',
   signing_certificate_no_longer_available:

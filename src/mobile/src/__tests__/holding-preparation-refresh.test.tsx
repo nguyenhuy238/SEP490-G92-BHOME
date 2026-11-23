@@ -130,6 +130,7 @@ it('shows 100 available rooms without waiting for a single readiness request', a
 });
 
 it('explains a protected pending contract and finishes checking only the selected room', async () => {
+  vi.mocked(api.preparation).mockImplementationOnce(() => new Promise(() => {}));
   vi.mocked(api.holdingRoomReadiness).mockResolvedValueOnce({
     roomId: 'room',
     purpose: 'Holding',
@@ -144,6 +145,26 @@ it('explains a protected pending contract and finishes checking only the selecte
   expect(screen.queryByText('Loading')).toBeNull();
   expect(api.holdingRoomReadiness).toHaveBeenCalledWith('room', expect.any(AbortSignal));
   expect(api.holdingRoomReadiness).toHaveBeenCalledOnce();
+});
+
+it.each([
+  ['ACTIVE_OR_PENDING_CONTRACTS', /hợp đồng đang chờ ký, chờ kích hoạt hoặc đang hiệu lực/],
+  ['UNRESOLVED_EMERGENCY', /sự cố khẩn cấp chưa được xử lý/],
+])('explains the selected room blocker %s in Vietnamese', async (code, message) => {
+  vi.mocked(api.holdingRoomReadiness).mockResolvedValueOnce({
+    roomId: 'room',
+    purpose: 'Holding',
+    status: 'Blocked',
+    isReady: false,
+    blockers: [
+      { code, message: 'An unresolved operational restriction prevents use of this Room.' },
+    ],
+    unverifiedConditions: [],
+  });
+  render(<Harness selectedRoom="room" />);
+  await screen.findByText(message);
+  expect(screen.getByText('Selected room blocked')).toBeTruthy();
+  expect(screen.queryByText(/Owner cần kiểm tra điều kiện sử dụng phòng/)).toBeNull();
 });
 
 it('keeps the catalog usable while the selected room is being checked', async () => {

@@ -18,7 +18,7 @@ internal sealed class MainDraftRenderer(IConfiguration configuration, TimeProvid
     private static readonly XNamespace W = "http://schemas.openxmlformats.org/wordprocessingml/2006/main";
     private static string Date(DateOnly d) => d.ToString("dd/MM/yyyy", CultureInfo.InvariantCulture);
     private static string Money(decimal value) => value.ToString("#,0.####", CultureInfo.GetCultureInfo("vi-VN"));
-    private static void Text(XElement p, string value)
+    internal static void Text(XElement p, string value)
     {
         var properties = p.Element(W + "pPr"); var runProperties = p.Elements(W + "r").Select(r => r.Element(W + "rPr")).FirstOrDefault(r => r is not null);
         p.Elements().Where(e => e != properties).Remove();
@@ -107,11 +107,14 @@ internal sealed class MainDraftRenderer(IConfiguration configuration, TimeProvid
         return Task.FromResult(output.ToArray());
     }
     public async Task<byte[]> PdfAsync(byte[] docx, CancellationToken t)
+        => MainTemplateSignatureSlots.Add(await ConvertPdfAsync(configuration, docx, t));
+
+    internal static async Task<byte[]> ConvertPdfAsync(IConfiguration configuration, byte[] docx, CancellationToken t)
     {
         var bytes = await PrivateContractConversion.RunAsync(configuration, docx, "draft.docx", "draft.pdf",
             configuration["MainDraft:LibreOfficePath"], null,
             ["-env:UserInstallation={profile}", "--headless", "--convert-to", "pdf", "--outdir", "{work}", "{work}/draft.docx"], t);
         if (!bytes.AsSpan(0, 5).SequenceEqual("%PDF-"u8)) throw new ContractException(503, "contract_pdf_conversion_failed");
-        return MainTemplateSignatureSlots.Add(bytes);
+        return bytes;
     }
 }

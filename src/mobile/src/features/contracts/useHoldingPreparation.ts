@@ -11,7 +11,7 @@ import {
 interface HoldingRooms {
   configuration: ContractConfiguration;
   locations: Preparation['locations'];
-  rooms: (Preparation['rooms'][number] & { capacity?: number })[];
+  rooms: (Preparation['rooms'][number] & { capacity?: number; floor?: string | null })[];
   blockedRooms: { id: string; label: string; codes: string[] }[];
 }
 
@@ -20,6 +20,10 @@ const holdingRoomBlockers: Record<string, string> = {
   PROTECTED_PENDING_CONTRACT:
     'Phòng đã có hợp đồng đang xử lý có chữ ký hoặc tiền cọc. Hãy mở hợp đồng đó để tiếp tục.',
   ACTIVE_TENANCY_CONFLICT: 'Phòng đã có hợp đồng đang hiệu lực hoặc đang được giữ chỗ.',
+  ACTIVE_OR_PENDING_CONTRACTS:
+    'Phòng đã có hợp đồng đang chờ ký, chờ kích hoạt hoặc đang hiệu lực. Hãy chọn phòng khác hoặc nhờ Chủ nhà kiểm tra hợp đồng hiện có.',
+  UNRESOLVED_EMERGENCY:
+    'Phòng hoặc cơ sở có sự cố khẩn cấp chưa được xử lý. Hãy chọn phòng khác hoặc báo Chủ nhà kiểm tra.',
   RESIDENT_OBLIGATION: 'Phòng đang có người ở. Chưa thể tạo giữ chỗ mới.',
   ASSET_MAINTENANCE_REQUIRED:
     'Phòng có tài sản cần sửa chữa. Owner cần kiểm tra trước khi giữ chỗ.',
@@ -42,6 +46,7 @@ export function useHoldingPreparation(api: ContractClient, selectedRoomId = '') 
     preparation?: Preparation;
     error?: string;
     loading: boolean;
+    roomReady?: boolean;
     codes?: string[];
     revision?: number;
     selectionRevision?: number;
@@ -85,6 +90,7 @@ export function useHoldingPreparation(api: ContractClient, selectedRoomId = '') 
                 label: room.roomNumber,
                 status: 'Available',
                 capacity: room.capacity,
+                floor: room.floor,
               })),
           );
           loaded += result.items.length;
@@ -125,63 +131,95 @@ export function useHoldingPreparation(api: ContractClient, selectedRoomId = '') 
     if (!selectedRoomId || !locationId || loading) return;
     const controller = new AbortController();
     let active = true;
-    void Promise.all([
-      api.preparation(locationId, controller.signal),
+    const key = { roomId: selectedRoomId, revision, selectionRevision };
+    const readiness = (
       api.holdingRoomReadiness
         ? api.holdingRoomReadiness(selectedRoomId, controller.signal)
-        : api.holdingRoomReady(selectedRoomId, controller.signal),
-    ])
-      .then(([preparation, ready]) => {
+        : api.holdingRoomReady(selectedRoomId, controller.signal)
+    ).then((ready) => {
+      if (!active) return false;
+      const eligible =
+        typeof ready === 'boolean'
+          ? ready
+          : ready.roomId === selectedRoomId &&
+            ready.purpose === 'Holding' &&
+            ready.status === 'Ready' &&
+            ready.isReady === true &&
+            Array.isArray(ready.blockers) &&
+            !ready.blockers.length &&
+            Array.isArray(ready.unverifiedConditions) &&
+            !ready.unverifiedConditions.length;
+      const codes =
+        typeof ready === 'boolean'
+          ? []
+          : [...(ready.blockers ?? []), ...(ready.unverifiedConditions ?? [])].map(
+              (finding) => finding.code,
+            );
+      setSelection(
+        eligible
+          ? { ...key, roomReady: true, loading: true }
+          : {
+              ...key,
+              error:
+                codes
+                  .filter(
+                    (code) =>
+                      code !== 'ACTIVE_OR_PENDING_CONTRACTS' ||
+                      !codes.some(
+                        (reason) =>
+                          reason === 'ACTIVE_TENANCY_CONFLICT' ||
+                          reason === 'PROTECTED_PENDING_CONTRACT',
+                      ),
+                  )
+                  .map((code) => holdingRoomBlockers[code])
+                  .filter(Boolean)
+                  .join('\n') ||
+                'Phòng không còn đủ điều kiện giữ chỗ. Owner cần kiểm tra điều kiện sử dụng phòng.',
+              codes,
+              loading: false,
+            },
+      );
+      return eligible;
+    });
+    const preparation: Promise<{ details?: Preparation; error?: string }> = api
+      .preparation(locationId, controller.signal)
+      .then(
+        (details) => ({ details }),
+        (e: unknown) => ({ error: contractError(e) }),
+      );
+    void readiness
+      .then(async (eligible) => {
+        if (!eligible) {
+          controller.abort();
+          return;
+        }
+        // Only room readiness gates the first step; the next step needs the full preparation.
+        const result = await preparation;
         if (!active) return;
-        const eligible =
-          typeof ready === 'boolean'
-            ? ready
-            : ready.roomId === selectedRoomId &&
-              ready.purpose === 'Holding' &&
-              ready.status === 'Ready' &&
-              ready.isReady === true &&
-              Array.isArray(ready.blockers) &&
-              !ready.blockers.length &&
-              Array.isArray(ready.unverifiedConditions) &&
-              !ready.unverifiedConditions.length;
-        const codes =
-          typeof ready === 'boolean'
-            ? []
-            : [...(ready.blockers ?? []), ...(ready.unverifiedConditions ?? [])].map(
-                (finding) => finding.code,
-              );
-        const validRoom = preparation.rooms.some(
+        const validRoom = result.details?.rooms.some(
           (item) =>
             item.id === selectedRoomId &&
             item.locationId === locationId &&
             item.status === 'Available',
         );
         setSelection(
-          eligible && validRoom
-            ? { roomId: selectedRoomId, preparation, loading: false, revision, selectionRevision }
+          validRoom
+            ? { ...key, roomReady: true, preparation: result.details, loading: false }
             : {
-                roomId: selectedRoomId,
-                error:
-                  codes
-                    .map((code) => holdingRoomBlockers[code])
-                    .filter(Boolean)
-                    .join('\n') ||
-                  'Phòng không còn đủ điều kiện giữ chỗ. Owner cần kiểm tra điều kiện sử dụng phòng.',
-                codes,
+                ...key,
                 loading: false,
-                revision,
-                selectionRevision,
+                error: result.error ?? 'Phòng không còn khả dụng tại cơ sở đã chọn.',
+                codes: result.error ? undefined : [],
               },
         );
       })
       .catch((e) => {
+        controller.abort();
         if (active)
           setSelection({
-            roomId: selectedRoomId,
+            ...key,
             error: contractError(e),
             loading: false,
-            revision,
-            selectionRevision,
           });
       });
     return () => {
@@ -209,6 +247,8 @@ export function useHoldingPreparation(api: ContractClient, selectedRoomId = '') 
         }
       : null,
     catalogLoading: loading,
+    checkingRoom: loading || (!!room && !current),
+    roomReady: !!room && !loading && !error && current?.roomReady === true,
     selectionBlocked: !!current?.error && current.codes !== undefined,
     loading: loading || (!!room && (!current || current.loading)),
     error: error || (room ? (current?.error ?? '') : ''),
