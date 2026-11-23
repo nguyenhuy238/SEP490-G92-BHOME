@@ -16,7 +16,7 @@ using NpgsqlTypes;
 
 namespace BHome.Infrastructure.Modules.Operations;
 
-internal sealed class CompactOperationsRepository(Compact24DbContext db, UserManager<ApplicationUser> users,
+internal sealed partial class CompactOperationsRepository(Compact24DbContext db, UserManager<ApplicationUser> users,
     SignInManager<ApplicationUser> signIn)
     : IOperationsRepository
 {
@@ -457,14 +457,14 @@ internal sealed class CompactOperationsRepository(Compact24DbContext db, UserMan
     public async Task<IReadOnlyList<RoomPublicContent>> PublishedRoomsAsync(Guid locationId, CancellationToken t)
     {
         await Open(t); await using var command = Command("""
-            SELECT r.id,r.location_id,r.room_number,r.floor,r.capacity,r.status,COALESCE(r.public_profile->'published',r.public_profile)::text,r.published_at,r.public_profile ? 'published'
+            SELECT r.id,r.location_id,r.room_number,r.floor,r.capacity,r.status,COALESCE(r.public_profile->'published',r.public_profile)::text,r.published_at,r.public_profile ? 'published',r.version
             FROM rooms r JOIN locations l ON l.id=r.location_id
             WHERE r.location_id=@location AND l.is_active AND l.published_at IS NOT NULL AND r.published_at IS NOT NULL
             ORDER BY r.room_number,r.id
             """);
         command.Parameters.AddWithValue("location", locationId); var result = new List<RoomPublicContent>();
         await using var reader = await command.ExecuteReaderAsync(t);
-        while (await reader.ReadAsync(t)) result.Add(RoomContent(reader)); return result;
+        while (await reader.ReadAsync(t)) result.Add(RoomContent(reader) with { Version = 0 }); return result;
     }
 
     public Task<LocationPublicContent> UpdateLocationContentAsync(Guid actorId, Guid locationId,
@@ -706,11 +706,14 @@ internal sealed class CompactOperationsRepository(Compact24DbContext db, UserMan
     private async Task<RoomPublicContent?> RoomContent(Guid id, bool publishedOnly, CancellationToken t)
     {
         await Open(t); await using var command = Command("""
-            SELECT r.id,r.location_id,r.room_number,r.floor,r.capacity,r.status,(CASE WHEN @published THEN COALESCE(r.public_profile->'published',r.public_profile) ELSE r.public_profile END)::text,r.published_at,r.public_profile ? 'published'
+            SELECT r.id,r.location_id,r.room_number,r.floor,r.capacity,r.status,(CASE WHEN @published THEN COALESCE(r.public_profile->'published',r.public_profile) ELSE r.public_profile END)::text,r.published_at,r.public_profile ? 'published',r.version
             FROM rooms r JOIN locations l ON l.id=r.location_id WHERE r.id=@id
               AND (NOT @published OR (l.is_active AND l.published_at IS NOT NULL AND r.published_at IS NOT NULL))
             """); command.Parameters.AddWithValue("id", id); command.Parameters.AddWithValue("published", publishedOnly);
-        await using var reader = await command.ExecuteReaderAsync(t); return await reader.ReadAsync(t) ? RoomContent(reader) : null;
+        await using var reader = await command.ExecuteReaderAsync(t);
+        if (!await reader.ReadAsync(t)) return null;
+        var room = RoomContent(reader);
+        return publishedOnly ? room with { Version = 0 } : room;
     }
 
     private static LocationPublicContent LocationContent(NpgsqlDataReader reader)
@@ -726,7 +729,7 @@ internal sealed class CompactOperationsRepository(Compact24DbContext db, UserMan
         var profile = JsonSerializer.Deserialize<RoomProfile>(reader.IsDBNull(6) ? "{}" : reader.GetString(6), Json) ?? new();
         return new(reader.GetGuid(0), reader.GetGuid(1), reader.GetString(2), reader.IsDBNull(3) ? null : reader.GetString(3),
             reader.GetInt16(4), profile.Description, profile.Amenities ?? [], profile.IndicativePrice, Vacancy(reader.GetInt16(5)),
-            Photos("room", reader.GetGuid(0), profile.Photos), !reader.IsDBNull(7), reader.IsDBNull(7) ? null : reader.GetFieldValue<DateTimeOffset>(7), !reader.IsDBNull(7) ? "Published" : reader.GetBoolean(8) ? "Hidden" : "Draft");
+            Photos("room", reader.GetGuid(0), profile.Photos), !reader.IsDBNull(7), reader.IsDBNull(7) ? null : reader.GetFieldValue<DateTimeOffset>(7), !reader.IsDBNull(7) ? "Published" : reader.GetBoolean(8) ? "Hidden" : "Draft", reader.GetInt32(9));
     }
 
     private static IReadOnlyList<StoredPhoto> StablePhotos(IReadOnlyList<StoredPhoto>? photos) =>

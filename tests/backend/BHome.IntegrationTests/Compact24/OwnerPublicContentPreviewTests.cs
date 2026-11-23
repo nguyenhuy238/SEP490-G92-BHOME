@@ -3,6 +3,8 @@ using System.Net.Http.Headers;
 using System.Net.Http.Json;
 using BHome.Application.IdentityAccess;
 using BHome.Application.Operations;
+using BHome.Application.PropertyManagement;
+using BHome.Domain.PropertyManagement;
 using BHome.LocalDevelopment;
 using OpenCvSharp;
 using Npgsql;
@@ -39,6 +41,194 @@ public sealed class OwnerPublicContentPreviewTests(Compact24WorkflowFixture fixt
     {
         await using var connection = new NpgsqlConnection(fixture.Connection); await connection.OpenAsync();
         await using var command = new NpgsqlCommand(sql, connection); command.Parameters.AddWithValue("id", id); await command.ExecuteNonQueryAsync();
+    }
+
+    [CompactPostgresFact]
+    public async Task RoomBulkPreservesExistingDraftAndReportsEachTargetWithoutPublishing()
+    {
+        using var owner = await Setup();
+        using var staff = await Login("staff.sample@example.invalid");
+        using var guest = fixture.Capture.Factory.CreateClient();
+        var endpoint = LocationRoot + "/rooms/bulk";
+        var original = (await owner.GetFromJsonAsync<RoomPublicContent>(RoomRoot))!;
+        var missing = Guid.NewGuid();
+        var selected = new[]
+        {
+            new PublicRoomBulkTarget(RoomId, original.Version),
+            new PublicRoomBulkTarget(missing, 1)
+        };
+        var fill = new PublicRoomBulkRequest(selected, "Manual", null, null,
+            ["description", "amenities"], true, "Shared approved description", ["Parking"]);
+        Assert.Equal(HttpStatusCode.Forbidden,
+            (await staff.PostAsJsonAsync(endpoint + "/preview", fill)).StatusCode);
+        Assert.Equal(HttpStatusCode.Unauthorized,
+            (await guest.PostAsJsonAsync(endpoint + "/apply", fill)).StatusCode);
+        var preserve = (await (await owner.PostAsJsonAsync(endpoint + "/preview", fill))
+            .Content.ReadFromJsonAsync<PublicRoomBulkPreview>())!;
+        Assert.Equal("Skipped", preserve.Rooms[0].Status);
+        Assert.Equal("Conflict", preserve.Rooms[1].Status);
+        Assert.Equal("Approved room", (await owner.GetFromJsonAsync<RoomPublicContent>(RoomRoot))!.Description);
+
+        var overwrite = fill with { FillEmptyOnly = false };
+        var preview = (await (await owner.PostAsJsonAsync(endpoint + "/preview", overwrite))
+            .Content.ReadFromJsonAsync<PublicRoomBulkPreview>())!;
+        Assert.Equal("Ready", preview.Rooms[0].Status);
+        Assert.Equal("Conflict", preview.Rooms[1].Status);
+        Assert.Contains(preview.Rooms[0].Changes, x => x.Field == "description" &&
+            x.OldValue == "Approved room" && x.NewValue == "Shared approved description" && x.Conflict);
+        var result = (await (await owner.PostAsJsonAsync(endpoint + "/apply", overwrite with
+        {
+            PreviewHash = preview.PreviewHash
+        })).Content.ReadFromJsonAsync<PublicRoomBulkResult>())!;
+        Assert.Equal("Applied", result.Rooms[0].Status);
+        Assert.Equal("Conflict", result.Rooms[1].Status);
+        Assert.Equal("Shared approved description", (await owner.GetFromJsonAsync<RoomPublicContent>(RoomRoot))!.Description);
+        Assert.Equal(HttpStatusCode.NotFound, (await guest.GetAsync(GuestRoom)).StatusCode);
+        var repeated = (await (await owner.PostAsJsonAsync(endpoint + "/apply", overwrite with
+        {
+            PreviewHash = preview.PreviewHash
+        })).Content.ReadFromJsonAsync<PublicRoomBulkResult>())!;
+        Assert.Equal("Conflict", repeated.Rooms[0].Status);
+        Assert.Equal("stale_version", repeated.Rooms[0].Issue);
+        Assert.Equal("Shared approved description", (await owner.GetFromJsonAsync<RoomPublicContent>(RoomRoot))!.Description);
+    }
+
+    [CompactPostgresFact]
+    public async Task RoomBulkSourceVersionPreventsCopyingStaleRoomData()
+    {
+        using var owner = await Setup();
+        var rooms = (await owner.GetFromJsonAsync<RoomPublicContent[]>(LocationRoot + "/rooms"))!;
+        var source = Assert.Single(rooms, x => x.RoomId == RoomId);
+        var target = rooms.First(x => x.RoomId != RoomId);
+        var input = new PublicRoomBulkRequest([new(target.RoomId, target.Version)], "Room",
+            source.RoomId, source.Version, ["description", "amenities"], false);
+        var endpoint = LocationRoot + "/rooms/bulk";
+        var preview = (await (await owner.PostAsJsonAsync(endpoint + "/preview", input))
+            .Content.ReadFromJsonAsync<PublicRoomBulkPreview>())!;
+        Assert.Equal("Ready", Assert.Single(preview.Rooms).Status);
+        var applied = (await (await owner.PostAsJsonAsync(endpoint + "/apply",
+            input with { PreviewHash = preview.PreviewHash })).Content.ReadFromJsonAsync<PublicRoomBulkResult>())!;
+        Assert.Equal("Applied", Assert.Single(applied.Rooms).Status);
+        Assert.Equal("Approved room", (await owner.GetFromJsonAsync<RoomPublicContent>(
+            $"/api/v1/public-content/rooms/{target.RoomId}"))!.Description);
+
+        (await owner.PutAsJsonAsync(RoomRoot, new RoomPublicContentWrite("New source", ["Parking"], 2000000)))
+            .EnsureSuccessStatusCode();
+        var currentTarget = (await owner.GetFromJsonAsync<RoomPublicContent>(
+            $"/api/v1/public-content/rooms/{target.RoomId}"))!;
+        var staleRequest = input with { Targets = [new(target.RoomId, currentTarget.Version)] };
+        var stale = (await (await owner.PostAsJsonAsync(endpoint + "/preview", staleRequest))
+            .Content.ReadFromJsonAsync<PublicRoomBulkPreview>())!;
+        Assert.Equal("Conflict", Assert.Single(stale.Rooms).Status);
+        Assert.Equal("stale_source_version", Assert.Single(stale.Rooms).Issue);
+        Assert.Equal("Approved room", (await owner.GetFromJsonAsync<RoomPublicContent>(
+            $"/api/v1/public-content/rooms/{target.RoomId}"))!.Description);
+    }
+
+    [CompactPostgresFact]
+    public async Task BulkPublicationRequiresParentAndExplicitApprovalAndCanHideRoom()
+    {
+        using var owner = await Setup();
+        using var guest = fixture.Capture.Factory.CreateClient();
+        var endpoint = LocationRoot + "/rooms/bulk";
+        var room = (await owner.GetFromJsonAsync<RoomPublicContent>(RoomRoot))!;
+        var publish = new PublicRoomBulkRequest([new(RoomId, room.Version)], "Publish",
+            null, null, [], true);
+        var blocked = (await (await owner.PostAsJsonAsync(endpoint + "/preview", publish))
+            .Content.ReadFromJsonAsync<PublicRoomBulkPreview>())!;
+        Assert.Equal("public_location_not_published", Assert.Single(blocked.Rooms).Issue);
+        Assert.Equal(HttpStatusCode.NotFound, (await guest.GetAsync(GuestRoom)).StatusCode);
+
+        (await owner.PostAsync(LocationRoot + "/publish", null)).EnsureSuccessStatusCode();
+        var approval = (await (await owner.PostAsJsonAsync(endpoint + "/preview", publish))
+            .Content.ReadFromJsonAsync<PublicRoomBulkPreview>())!;
+        Assert.Equal("Ready", Assert.Single(approval.Rooms).Status);
+        Assert.Equal(HttpStatusCode.NotFound, (await guest.GetAsync(GuestRoom)).StatusCode);
+        var publishing = await owner.PostAsJsonAsync(endpoint + "/apply",
+            publish with { PreviewHash = approval.PreviewHash });
+        var published = (await publishing.Content.ReadFromJsonAsync<PublicRoomBulkResult>())!;
+        Assert.Equal("Applied", Assert.Single(published.Rooms).Status);
+        Assert.Equal(HttpStatusCode.OK, (await guest.GetAsync(GuestRoom)).StatusCode);
+
+        (await owner.PutAsJsonAsync(RoomRoot, new RoomPublicContentWrite(
+            "Nội dung mới sau khi đã đăng", ["Wifi"], 2200000))).EnsureSuccessStatusCode();
+        var oldPublic = (await guest.GetFromJsonAsync<RoomPublicContent>(GuestRoom))!;
+        Assert.Equal("Approved room", oldPublic.Description);
+        room = (await owner.GetFromJsonAsync<RoomPublicContent>(RoomRoot))!;
+        var republish = publish with { Targets = [new(RoomId, room.Version)] };
+        var updatePreview = (await (await owner.PostAsJsonAsync(endpoint + "/preview", republish))
+            .Content.ReadFromJsonAsync<PublicRoomBulkPreview>())!;
+        Assert.Equal("Ready", Assert.Single(updatePreview.Rooms).Status);
+        var refresh = await owner.PostAsJsonAsync(endpoint + "/apply",
+            republish with { PreviewHash = updatePreview.PreviewHash });
+        refresh.EnsureSuccessStatusCode();
+        Assert.Equal("Nội dung mới sau khi đã đăng",
+            (await guest.GetFromJsonAsync<RoomPublicContent>(GuestRoom))!.Description);
+
+        room = (await owner.GetFromJsonAsync<RoomPublicContent>(RoomRoot))!;
+        var unpublish = new PublicRoomBulkRequest([new(RoomId, room.Version)], "Unpublish",
+            null, null, [], true);
+        var removal = (await (await owner.PostAsJsonAsync(endpoint + "/preview", unpublish))
+            .Content.ReadFromJsonAsync<PublicRoomBulkPreview>())!;
+        Assert.Equal("Ready", Assert.Single(removal.Rooms).Status);
+        var hiding = await owner.PostAsJsonAsync(endpoint + "/apply",
+            unpublish with { PreviewHash = removal.PreviewHash });
+        var hidden = (await hiding.Content.ReadFromJsonAsync<PublicRoomBulkResult>())!;
+        Assert.Equal("Applied", Assert.Single(hidden.Rooms).Status);
+        Assert.Equal(HttpStatusCode.NotFound, (await guest.GetAsync(GuestRoom)).StatusCode);
+    }
+
+    [CompactPostgresFact]
+    public async Task RoomDefaultsBulkAppliesOnlyToMatchingRoomsAndIsIdempotent()
+    {
+        using var owner = await Setup();
+        var defaultsResponse = await owner.PostAsJsonAsync(
+            $"/api/v1/locations/{LocationId}/room-defaults",
+            new LocalRoomDefaultsWrite("FE09 Studio", "Gợi ý studio", new SharedRoomDefaults(
+                2, 20m, ["Wifi", "Máy lạnh"], 2300000m), null));
+        defaultsResponse.EnsureSuccessStatusCode();
+        var defaults = (await defaultsResponse.Content.ReadFromJsonAsync<SetupDocument>())!;
+
+        var roomResponse = await owner.PostAsJsonAsync("/api/v1/rooms", new RoomWrite(
+            LocationId, "FE09-ROOM", null, 2, RoomStatus.Available, Reason: "FE09 test"));
+        roomResponse.EnsureSuccessStatusCode();
+        var physical = (await roomResponse.Content.ReadFromJsonAsync<RoomDto>())!;
+
+        var configure = await owner.PutAsJsonAsync(
+            $"/api/v1/locations/{LocationId}/rooms/{physical.Id}/configuration",
+            new RoomConfigurationEdit(physical.RoomNumber, physical.Floor, physical.Capacity,
+                RoomStatus.Available, physical.Version, 0, "Associate FE09 studio",
+                defaults.Id, defaults.Version));
+        configure.EnsureSuccessStatusCode();
+
+        var page = $"/api/v1/public-content/rooms/{physical.Id}";
+        var room = (await owner.GetFromJsonAsync<RoomPublicContent>(page))!;
+        var request = new PublicRoomBulkRequest([new(physical.Id, room.Version)], "RoomDefaults",
+            defaults.Id, defaults.Version, ["description", "amenities", "indicativePrice"], true);
+        var endpoint = LocationRoot + "/rooms/bulk";
+        var previewResponse = await owner.PostAsJsonAsync(endpoint + "/preview", request);
+        Assert.True(previewResponse.IsSuccessStatusCode,
+            $"Preview returned {previewResponse.StatusCode}: {await previewResponse.Content.ReadAsStringAsync()}");
+        var preview = (await previewResponse.Content.ReadFromJsonAsync<PublicRoomBulkPreview>())!;
+        Assert.Equal("Ready", Assert.Single(preview.Rooms).Status);
+        Assert.Equal(3, Assert.Single(preview.Rooms).Changes.Count);
+
+        var result = (await (await owner.PostAsJsonAsync(endpoint + "/apply", request with
+        {
+            PreviewHash = preview.PreviewHash
+        })).Content.ReadFromJsonAsync<PublicRoomBulkResult>())!;
+        Assert.Equal("Applied", Assert.Single(result.Rooms).Status);
+        var updated = (await owner.GetFromJsonAsync<RoomPublicContent>(page))!;
+        Assert.Equal("Gợi ý studio", updated.Description);
+        Assert.Equal(["Wifi", "Máy lạnh"], updated.Amenities);
+        Assert.Equal(2300000m, updated.IndicativePrice);
+        Assert.False(updated.Published);
+
+        var repeat = request with { Targets = [new(physical.Id, updated.Version)] };
+        var secondPreview = (await (await owner.PostAsJsonAsync(endpoint + "/preview", repeat))
+            .Content.ReadFromJsonAsync<PublicRoomBulkPreview>())!;
+        Assert.Equal("Skipped", Assert.Single(secondPreview.Rooms).Status);
+        Assert.Equal(updated.Version, (await owner.GetFromJsonAsync<RoomPublicContent>(page))!.Version);
     }
 
     [CompactPostgresFact]

@@ -7,18 +7,19 @@ import {
   normalizeContactPhone,
 } from '../../../../../packages/client-core/src/contactPhone';
 import { useEffect, useRef, useState } from 'react';
-import { Alert, Box, Button, Paper, Stack, Typography } from '@mui/material';
+import { Alert, Box, Button, Paper, Stack, Tab, Tabs, Typography } from '@mui/material';
 import {
   PageHeader,
   ConfirmDialog,
   StatusChip,
   FilterToolbar,
 } from '../../components/common/PortalUI';
-import { OwnerLocationPicker, OwnerRoomPicker } from '../../components/common/OwnerSelectors';
+import { OwnerLocationPicker } from '../../components/common/OwnerSelectors';
 import { OwnerFeedback } from '../../components/common/OwnerWorkspace';
 import { useOwnerAction, useOwnerQuery } from '../../hooks/useOwnerWorkspace';
 import { vnd } from '../../../../../packages/client-core/src/contracts';
 import { formatInstant } from '../../../../../packages/client-core/src/localization';
+import { PublicRoomsWorkspace } from './PublicRoomsWorkspace';
 interface Draft {
   description: string;
   amenities: string;
@@ -56,11 +57,12 @@ interface PublicContent {
 export function PublicContentApiPage() {
   const [location, setLocation] = useState(''),
     [room, setRoom] = useState('');
+  const [tab, setTab] = useState(0);
   const [drafts] = useState(() => new Map<string, Draft>());
   const [busy, setBusy] = useState(false);
   return (
     <Stack spacing={2}>
-      <PageHeader title="Nội dung website công khai" />
+      <PageHeader title="Quản lý nội dung website" />
       <FilterToolbar>
         <OwnerLocationPicker
           value={location}
@@ -71,26 +73,50 @@ export function PublicContentApiPage() {
           }}
           required
         />
-        <OwnerRoomPicker
-          key={location}
-          location={location}
-          value={room}
-          change={(id) => {
-            if (!busy) setRoom(id);
-          }}
-        />
       </FilterToolbar>
       {!location && (
-        <Alert severity="info">Chọn cơ sở để quản lý nội dung; chọn thêm phòng nếu cần.</Alert>
+        <Alert severity="info">
+          Chọn một cơ sở để quản lý thông tin công khai và danh sách phòng trên website.
+        </Alert>
       )}
       {location && (
+        <Tabs
+          value={tab}
+          onChange={(_, value: number) => {
+            setTab(value);
+            setRoom('');
+          }}
+          aria-label="Phạm vi nội dung website"
+        >
+          <Tab label="Theo cơ sở" />
+          <Tab label="Theo phòng" />
+        </Tabs>
+      )}
+      {location && tab === 0 && (
         <ContentRecord
-          key={`content-${room || location}`}
-          target={room ? 'rooms' : 'locations'}
-          id={room || location}
+          key={`content-${location}`}
+          target="locations"
+          id={location}
           drafts={drafts}
           onBusy={setBusy}
         />
+      )}
+      {location && tab === 1 && (
+        <>
+          <PublicRoomsWorkspace key={location} location={location} onEdit={setRoom} />
+          {!!room && (
+            <Stack spacing={1}>
+              <Button onClick={() => setRoom('')}>Đóng chỉnh sửa phòng</Button>
+              <ContentRecord
+                key={`content-${room}`}
+                target="rooms"
+                id={room}
+                drafts={drafts}
+                onBusy={setBusy}
+              />
+            </Stack>
+          )}
+        </>
       )}
     </Stack>
   );
@@ -275,7 +301,7 @@ function ContentEditor({
           <Typography>Xuất bản lúc: {formatInstant(data.publishedAt)}</Typography>
         )}
         <TextField
-          label="Giới thiệu công khai"
+          label={room ? 'Mô tả phòng' : 'Mô tả cơ sở'}
           multiline
           minRows={3}
           value={description}
@@ -285,7 +311,7 @@ function ContentEditor({
         />
         <TextField
           helperText="Tối đa 50 tiện ích, mỗi mục không quá 100 ký tự."
-          label="Tiện ích (mỗi dòng một mục)"
+          label="Tiện nghi (mỗi dòng một mục)"
           multiline
           minRows={2}
           value={amenities}
@@ -302,7 +328,7 @@ function ContentEditor({
         ) : (
           <>
             <TextField
-              label="Số điện thoại liên hệ tĩnh"
+              label="Số điện thoại liên hệ"
               type="tel"
               value={phone}
               error={!!phoneError}
@@ -313,7 +339,7 @@ function ContentEditor({
             <TextField
               error={!!emailError}
               helperText={emailError}
-              label="Email liên hệ tĩnh"
+              label="Email liên hệ"
               type="email"
               value={email}
               onChange={(e) => setEmail(e.target.value)}
@@ -343,10 +369,10 @@ function ContentEditor({
             }
             onClick={() => setConfirm('publish')}
           >
-            Xuất bản nội dung đã lưu
+            Đăng lên website
           </Button>
           <Button disabled={action.busy || !data.published} onClick={() => setConfirm('unpublish')}>
-            Gỡ xuất bản
+            Ẩn khỏi website
           </Button>
         </Stack>
         {dirty && (
@@ -411,7 +437,7 @@ function ContentEditor({
             )}
           </Paper>
         )}
-        <Typography variant="h6">Hình ảnh bản nháp</Typography>
+        <Typography variant="h6">{room ? 'Ảnh phòng' : 'Ảnh cơ sở'}</Typography>
         {photoOrder.map((index, position) => {
           const photo = data.photos.find((p) => p.index === index);
           return photo ? (

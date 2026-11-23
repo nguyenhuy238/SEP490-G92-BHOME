@@ -211,19 +211,22 @@ for (const width of [1440, 768, 390])
         await page.getByLabel('Tìm tên cơ sở hoặc địa chỉ').fill('tổng hợp');
         await page.getByRole('link', { name: 'Xem cơ sở và phòng' }).click();
         await page.getByRole('link', { name: 'Phòng B2', exact: true }).waitFor();
-        await page.getByLabel('Tình trạng phòng').click();
-        await page.getByRole('option', { name: 'Còn trống', exact: true }).click();
+        await page.getByRole('button', { name: 'Chỉ xem phòng còn trống' }).click();
         expect(await page.getByRole('link', { name: 'Phòng B2', exact: true }).count()).toBe(0);
-        await page.getByLabel('Giá tối đa (VND)').fill('1000000');
+        await page.getByLabel('Giá tối đa mỗi tháng').fill('1000000');
         await page.getByText('Không có phòng phù hợp với bộ lọc.').waitFor();
-        await page.getByRole('button', { name: 'Xóa bộ lọc phòng' }).click();
-        await page.getByLabel('Sức chứa tối thiểu').click();
+        await page.getByRole('button', { name: 'Xóa bộ lọc' }).click();
+        await page.getByRole('button', { name: 'Bộ lọc thêm' }).click();
+        await page.getByLabel('Số người ở').click();
         await page.getByRole('option', { name: '4 người', exact: true }).click();
         expect(await page.getByRole('link', { name: 'Phòng A1', exact: true }).count()).toBe(0);
-        await page.getByRole('button', { name: 'Xóa bộ lọc phòng' }).click();
-        await page.getByLabel('Tiện ích phòng').click();
+        await page.getByRole('button', { name: 'Xóa bộ lọc' }).click();
+        await page.getByLabel('Tiện nghi').click();
         await page.getByRole('option', { name: 'Wifi', exact: true }).click();
         expect(await page.getByRole('link', { name: 'Phòng B2', exact: true }).count()).toBe(0);
+        expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(
+          true,
+        );
         await page.getByRole('link', { name: 'Phòng A1', exact: true }).click();
         await page.getByRole('link', { name: location.contactEmail }).waitFor();
         expect(await page.title()).toBe('Phòng A1 | BHOME');

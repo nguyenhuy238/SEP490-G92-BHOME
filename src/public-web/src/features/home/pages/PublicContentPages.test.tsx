@@ -1,7 +1,7 @@
 import { vacancyLabel } from './publicPresentation';
 import { act, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
-import { MemoryRouter, Route, Routes } from 'react-router';
+import { MemoryRouter, Route, Routes, useLocation } from 'react-router';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { LocationPage, LocationsPage, RoomPage } from './PublicContentPages';
 
@@ -43,6 +43,7 @@ function show(path = '/locations') {
   render(
     <QueryClientProvider client={client}>
       <MemoryRouter initialEntries={[path]}>
+        <QueryProbe />
         <Routes>
           <Route path="/locations" element={<LocationsPage />} />
           <Route path="/locations/:id" element={<LocationPage />} />
@@ -52,6 +53,10 @@ function show(path = '/locations') {
     </QueryClientProvider>,
   );
   return client;
+}
+function QueryProbe() {
+  const route = useLocation();
+  return <span data-testid="query-url">{route.search}</span>;
 }
 afterEach(() => vi.unstubAllGlobals());
 
@@ -124,13 +129,65 @@ describe('Guest public feedback', () => {
     );
     show(`/locations/${id}`);
     await screen.findByRole('link', { name: 'Phòng B2' });
-    fireEvent.change(screen.getByLabelText('Giá tối đa (VND)'), { target: { value: '3000000' } });
+    fireEvent.change(screen.getByLabelText('Giá tối đa mỗi tháng'), {
+      target: { value: '3000000' },
+    });
     expect(screen.queryByRole('link', { name: 'Phòng A1' })).not.toBeInTheDocument();
     expect(screen.getByRole('link', { name: 'Phòng B2' })).toBeVisible();
-    fireEvent.change(screen.getByLabelText('Giá tối đa (VND)'), { target: { value: '1000000' } });
+    fireEvent.change(screen.getByLabelText('Giá tối đa mỗi tháng'), {
+      target: { value: '1000000' },
+    });
     expect(screen.getByText(/Không có phòng phù hợp/)).toBeVisible();
-    fireEvent.click(screen.getByRole('button', { name: 'Xóa bộ lọc phòng' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Xóa bộ lọc' }));
     expect(screen.getByRole('link', { name: 'Phòng A1' })).toBeVisible();
+  });
+
+  it('restores URL filters, shows only available rooms and resets without losing unrelated queries', async () => {
+    const published = [
+      {
+        ...room,
+        roomId: 'vacant',
+        roomNumber: 'A2',
+        description: 'Mô tả dài dành cho trang chi tiết',
+        vacancy: 'Available',
+        amenities: ['Wifi', 'Máy lạnh', 'Ban công', 'Thang máy'],
+        indicativePrice: 2000000,
+      },
+      {
+        ...room,
+        roomId: 'occupied',
+        roomNumber: 'B3',
+        vacancy: 'Occupied',
+        indicativePrice: 2500000,
+      },
+    ];
+    vi.stubGlobal(
+      'fetch',
+      vi
+        .fn()
+        .mockImplementation((path: string) =>
+          Promise.resolve(json(path.endsWith('/rooms') ? published : location)),
+        ),
+    );
+    show(`/locations/${id}?ref=example&vacant=1&price=2200000`);
+    expect(await screen.findByRole('link', { name: 'Phòng A2' })).toBeVisible();
+    expect(screen.queryByRole('link', { name: 'Phòng B3' })).not.toBeInTheDocument();
+    expect(screen.queryByText('Mô tả dài dành cho trang chi tiết')).not.toBeInTheDocument();
+    expect(screen.getByText('Tìm thấy 1 phòng')).toBeVisible();
+    expect(screen.getByText('Wifi')).toBeVisible();
+    expect(screen.queryByText('Thang máy')).not.toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Chỉ xem phòng còn trống' })).toHaveAttribute(
+      'aria-pressed',
+      'true',
+    );
+    fireEvent.click(screen.getByRole('button', { name: 'Bộ lọc thêm' }));
+    expect(screen.getByLabelText('Số người ở')).toBeVisible();
+    expect(screen.getByLabelText('Tiện nghi')).toBeVisible();
+    fireEvent.click(screen.getByRole('button', { name: 'Xóa bộ lọc' }));
+    expect(screen.getByRole('link', { name: 'Phòng B3' })).toBeVisible();
+    expect(screen.getByTestId('query-url')).toHaveTextContent('ref=example');
+    expect(screen.getByTestId('query-url')).not.toHaveTextContent('vacant=');
+    expect(screen.getByTestId('query-url')).not.toHaveTextContent('price=');
   });
 
   it('uses four backend status labels and never treats unknown as available', () => {
@@ -231,7 +288,11 @@ describe('Guest public feedback', () => {
     );
     show();
     fireEvent.error(await screen.findByRole('img', { name: `${location.name} — ảnh 1` }));
-    expect(screen.getByRole('status')).toHaveTextContent('Chưa thể tải ảnh 1');
+    expect(
+      screen
+        .getAllByRole('status')
+        .some((item) => item.textContent?.includes('Chưa thể tải ảnh 1')),
+    ).toBe(true);
     fireEvent.click(screen.getByRole('button', { name: 'Thử tải lại ảnh 1' }));
     expect(screen.getByRole('img', { name: `${location.name} — ảnh 1` })).toBeVisible();
     expect(document.querySelector('img[src*="private.example.invalid"]')).toBeNull();

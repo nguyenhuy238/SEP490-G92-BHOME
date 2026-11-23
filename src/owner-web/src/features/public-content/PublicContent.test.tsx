@@ -37,7 +37,7 @@ function editor() {
 it('allows republishing a saved published draft and marks preview as private', async () => {
   mocks.request.mockResolvedValue(baseContent);
   editor();
-  expect(await screen.findByRole('button', { name: 'Xuất bản nội dung đã lưu' })).toBeEnabled();
+  expect(await screen.findByRole('button', { name: 'Đăng lên website' })).toBeEnabled();
   fireEvent.click(screen.getByRole('button', { name: 'Xem trước nội dung' }));
   expect(screen.getByText('Bản xem trước — Chưa công khai')).toBeVisible();
   expect(
@@ -46,10 +46,10 @@ it('allows republishing a saved published draft and marks preview as private', a
   expect(
     mocks.request.mock.calls.every(([path]) => path.startsWith('/api/v1/public-content/')),
   ).toBe(true);
-  fireEvent.change(screen.getByLabelText('Giới thiệu công khai'), {
+  fireEvent.change(screen.getByLabelText('Mô tả cơ sở'), {
     target: { value: 'Unsaved draft' },
   });
-  expect(screen.getByRole('button', { name: 'Xuất bản nội dung đã lưu' })).toBeDisabled();
+  expect(screen.getByRole('button', { name: 'Đăng lên website' })).toBeDisabled();
 });
 
 it('validates contact email and retains text after a failed save for retry', async () => {
@@ -58,14 +58,14 @@ it('validates contact email and retains text after a failed save for retry', asy
     return baseContent;
   });
   editor();
-  fireEvent.change(await screen.findByLabelText('Email liên hệ tĩnh'), {
+  fireEvent.change(await screen.findByLabelText('Email liên hệ'), {
     target: { value: 'invalid' },
   });
   expect(screen.getByRole('button', { name: 'Lưu bản nháp' })).toBeDisabled();
-  fireEvent.change(screen.getByLabelText('Email liên hệ tĩnh'), {
+  fireEvent.change(screen.getByLabelText('Email liên hệ'), {
     target: { value: 'next@example.invalid' },
   });
-  fireEvent.change(screen.getByLabelText('Giới thiệu công khai'), {
+  fireEvent.change(screen.getByLabelText('Mô tả cơ sở'), {
     target: { value: 'Retained draft' },
   });
   fireEvent.click(screen.getByRole('button', { name: 'Lưu bản nháp' }));
@@ -73,7 +73,7 @@ it('validates contact email and retains text after a failed save for retry', asy
   await waitFor(() =>
     expect(mocks.request.mock.calls.some(([, init]) => init?.method === 'PUT')).toBe(true),
   );
-  expect(screen.getByLabelText('Giới thiệu công khai')).toHaveValue('Retained draft');
+  expect(screen.getByLabelText('Mô tả cơ sở')).toHaveValue('Retained draft');
   expect(screen.getByRole('dialog')).toBeVisible();
 });
 
@@ -91,13 +91,13 @@ it('preserves unsaved drafts when selecting another record and returning', async
     </QueryClientProvider>
   );
   const rendered = render(view('location'));
-  fireEvent.change(await screen.findByLabelText('Giới thiệu công khai'), {
+  fireEvent.change(await screen.findByLabelText('Mô tả cơ sở'), {
     target: { value: 'Keep my draft' },
   });
   rendered.rerender(view('other'));
   await screen.findByText('Other location');
   rendered.rerender(view('location'));
-  expect(await screen.findByLabelText('Giới thiệu công khai')).toHaveValue('Keep my draft');
+  expect(await screen.findByLabelText('Mô tả cơ sở')).toHaveValue('Keep my draft');
 });
 
 it('uploads only validated images and confirms deletion using stable server indices', async () => {
@@ -126,7 +126,7 @@ it('uploads only validated images and confirms deletion using stable server indi
     return content;
   });
   editor();
-  await screen.findByLabelText('Giới thiệu công khai');
+  await screen.findByLabelText('Mô tả cơ sở');
   fireEvent.change(screen.getByLabelText('Ảnh công khai mới'), {
     target: { files: [new File(['test'], 'photo.png', { type: 'image/png' })] },
   });
@@ -177,7 +177,7 @@ it('recovers an uncertain upload by reloading the album without replaying the up
       <ContentRecord target="locations" id="location" drafts={new Map()} />
     </QueryClientProvider>,
   );
-  await screen.findByLabelText('Giới thiệu công khai');
+  await screen.findByLabelText('Mô tả cơ sở');
   fireEvent.change(screen.getByLabelText('Ảnh công khai mới'), {
     target: { files: [new File(['test'], 'photo.png', { type: 'image/png' })] },
   });
@@ -213,10 +213,10 @@ it('saves only the public whitelist and requires saving edits before publishing'
       <ContentRecord target="locations" id="location" />
     </QueryClientProvider>,
   );
-  fireEvent.change(await screen.findByLabelText('Giới thiệu công khai'), {
+  fireEvent.change(await screen.findByLabelText('Mô tả cơ sở'), {
     target: { value: 'Approved public summary' },
   });
-  expect(screen.getByRole('button', { name: 'Xuất bản nội dung đã lưu' })).toBeDisabled();
+  expect(screen.getByRole('button', { name: 'Đăng lên website' })).toBeDisabled();
   fireEvent.click(screen.getByRole('button', { name: 'Lưu bản nháp' }));
   fireEvent.click(within(screen.getByRole('dialog')).getByRole('button', { name: 'Xác nhận' }));
   await waitFor(() =>
@@ -250,7 +250,7 @@ it('retries failed content loading without showing a stale editor', async () => 
     </QueryClientProvider>,
   );
   fireEvent.click(await screen.findByRole('button', { name: 'Thử tải lại nội dung' }));
-  await screen.findByLabelText('Giới thiệu công khai');
+  await screen.findByLabelText('Mô tả cơ sở');
   expect(screen.getByText('Chưa xuất bản')).toBeInTheDocument();
 });
 it('requires confirmation and refreshes the server publication state after publishing and removal', async () => {
@@ -280,11 +280,11 @@ it('requires confirmation and refreshes the server publication state after publi
       <ContentRecord target="locations" id="location" />
     </QueryClientProvider>,
   );
-  fireEvent.click(await screen.findByRole('button', { name: 'Xuất bản nội dung đã lưu' }));
+  fireEvent.click(await screen.findByRole('button', { name: 'Đăng lên website' }));
   expect(mocks.request.mock.calls.some(([, init]) => init?.method === 'POST')).toBe(false);
   fireEvent.click(within(screen.getByRole('dialog')).getByRole('button', { name: 'Xác nhận' }));
   await screen.findByText('Đã xuất bản');
-  fireEvent.click(screen.getByRole('button', { name: 'Gỡ xuất bản' }));
+  fireEvent.click(screen.getByRole('button', { name: 'Ẩn khỏi website' }));
   fireEvent.click(within(screen.getByRole('dialog')).getByRole('button', { name: 'Xác nhận' }));
   await screen.findByText('Chưa xuất bản');
   expect(

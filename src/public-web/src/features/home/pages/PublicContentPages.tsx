@@ -168,8 +168,19 @@ function RoomSummary({ room, detail = false }: { room: PublicRoom; detail?: bool
       <Typography>
         {room.capacity} người · {vacancyLabel(room.vacancy)}
       </Typography>
-      <Typography sx={{ mt: 1, whiteSpace: 'pre-wrap' }}>{room.description}</Typography>
-      <Amenities items={room.amenities} />
+      {detail ? (
+        <>
+          <Typography sx={{ mt: 1, whiteSpace: 'pre-wrap' }}>{room.description}</Typography>
+          <Amenities items={room.amenities} />
+        </>
+      ) : (
+        <>
+          <Amenities items={room.amenities.slice(0, 3)} />
+          <Button component={Link} to={`/rooms/${room.roomId}`} variant="outlined">
+            Xem chi tiết
+          </Button>
+        </>
+      )}
     </Box>
   );
 }
@@ -359,16 +370,26 @@ export function LocationsPage({ home = false }: { home?: boolean }) {
   );
 }
 function RoomList({ rooms }: { rooms: PublicRoom[] }) {
-  const [filters, setFilters] = useState({
-    search: '',
-    status: '',
-    price: '',
-    capacity: '',
-    amenity: '',
-  });
+  const [params, setParams] = useSearchParams();
+  const [more, setMore] = useState(() => !!(params.get('capacity') || params.get('amenity')));
+  const filters = {
+    search: params.get('room') ?? '',
+    vacant: params.get('vacant') === '1',
+    price: params.get('price') ?? '',
+    capacity: params.get('capacity') ?? '',
+    amenity: params.get('amenity') ?? '',
+  };
   const [page, setPage] = useState(1);
-  const change = (key: keyof typeof filters, value: string) => {
-    setFilters({ ...filters, [key]: value });
+  const change = (key: string, value: string) => {
+    setParams(
+      (previous) => {
+        const next = new URLSearchParams(previous);
+        if (value) next.set(key, value);
+        else next.delete(key);
+        return next;
+      },
+      { replace: true },
+    );
     setPage(1);
   };
   const filtered = rooms.filter(
@@ -377,9 +398,11 @@ function RoomList({ rooms }: { rooms: PublicRoom[] }) {
         `${r.roomNumber} ${r.description}`
           .toLocaleLowerCase('vi')
           .includes(filters.search.toLocaleLowerCase('vi'))) &&
-      (!filters.status || r.vacancy === filters.status) &&
+      (!filters.vacant || r.vacancy === 'Available') &&
       (!filters.price ||
-        (r.indicativePrice != null && r.indicativePrice <= Number(filters.price))) &&
+        (Number(filters.price) >= 0 &&
+          r.indicativePrice != null &&
+          r.indicativePrice <= Number(filters.price))) &&
       (!filters.capacity || r.capacity >= Number(filters.capacity)) &&
       (!filters.amenity || r.amenities.includes(filters.amenity)),
   );
@@ -402,63 +425,74 @@ function RoomList({ rooms }: { rooms: PublicRoom[] }) {
           type="search"
           label="Tìm phòng"
           value={filters.search}
-          onChange={(e) => change('search', e.target.value)}
+          onChange={(e) => change('room', e.target.value)}
         />
         <TextField
-          select
-          label="Tình trạng phòng"
-          value={filters.status}
-          onChange={(e) => change('status', e.target.value)}
-        >
-          <MenuItem value="">Tất cả tình trạng</MenuItem>
-          {['Available', 'OnHold', 'Occupied', 'Unavailable'].map((s) => (
-            <MenuItem key={s} value={s}>
-              {vacancyLabel(s)}
-            </MenuItem>
-          ))}
-        </TextField>
-        <TextField
           type="number"
-          label="Giá tối đa (VND)"
+          label="Giá tối đa mỗi tháng"
           value={filters.price}
           onChange={(e) => change('price', e.target.value)}
           slotProps={{ htmlInput: { min: 0, step: 1 } }}
         />
-        <TextField
-          select
-          label="Sức chứa tối thiểu"
-          value={filters.capacity}
-          onChange={(e) => change('capacity', e.target.value)}
-        >
-          <MenuItem value="">Mọi sức chứa</MenuItem>
-          {[...new Set(rooms.map((r) => r.capacity))]
-            .sort((a, b) => a - b)
-            .map((c) => (
-              <MenuItem key={c} value={String(c)}>
-                {c} người
-              </MenuItem>
-            ))}
-        </TextField>
-        <TextField
-          select
-          label="Tiện ích phòng"
-          value={filters.amenity}
-          onChange={(e) => change('amenity', e.target.value)}
-        >
-          <MenuItem value="">Tất cả tiện ích</MenuItem>
-          {[...new Set(rooms.flatMap((r) => r.amenities))].sort().map((a) => (
-            <MenuItem key={a} value={a}>
-              {a}
-            </MenuItem>
-          ))}
-        </TextField>
+        <Box sx={{ display: 'flex', flexWrap: 'wrap', alignItems: 'center', gap: 1 }}>
+          <Button
+            variant={filters.vacant ? 'contained' : 'outlined'}
+            aria-pressed={filters.vacant}
+            onClick={() => change('vacant', filters.vacant ? '' : '1')}
+          >
+            Chỉ xem phòng còn trống
+          </Button>
+          <Button aria-expanded={more} onClick={() => setMore((value) => !value)}>
+            Bộ lọc thêm
+          </Button>
+        </Box>
+        {more && (
+          <>
+            <TextField
+              select
+              label="Số người ở"
+              value={filters.capacity}
+              onChange={(e) => change('capacity', e.target.value)}
+            >
+              <MenuItem value="">Mọi sức chứa</MenuItem>
+              {[...new Set(rooms.map((r) => r.capacity))]
+                .sort((a, b) => a - b)
+                .map((c) => (
+                  <MenuItem key={c} value={String(c)}>
+                    {c} người
+                  </MenuItem>
+                ))}
+            </TextField>
+            <TextField
+              select
+              label="Tiện nghi"
+              value={filters.amenity}
+              onChange={(e) => change('amenity', e.target.value)}
+            >
+              <MenuItem value="">Tất cả tiện ích</MenuItem>
+              {[...new Set(rooms.flatMap((r) => r.amenities))].sort().map((a) => (
+                <MenuItem key={a} value={a}>
+                  {a}
+                </MenuItem>
+              ))}
+            </TextField>
+          </>
+        )}
         <Button
           onClick={() => {
-            setFilters({ search: '', status: '', price: '', capacity: '', amenity: '' });
+            setParams(
+              (previous) => {
+                const next = new URLSearchParams(previous);
+                for (const key of ['room', 'vacant', 'price', 'capacity', 'amenity'])
+                  next.delete(key);
+                return next;
+              },
+              { replace: true },
+            );
             setPage(1);
           }}
         >
-          Xóa bộ lọc phòng
+          Xóa bộ lọc
         </Button>
       </Box>
       {!rooms.length ? (
@@ -466,7 +500,7 @@ function RoomList({ rooms }: { rooms: PublicRoom[] }) {
       ) : !filtered.length ? (
         <Alert severity="info">Không có phòng phù hợp với bộ lọc.</Alert>
       ) : (
-        <Typography color="text.secondary">{filtered.length} phòng phù hợp</Typography>
+        <Typography color="text.secondary">Tìm thấy {filtered.length} phòng</Typography>
       )}
       <Box
         sx={{
@@ -548,7 +582,7 @@ export function LocationPage() {
           )}
           <Divider sx={{ my: 4 }} />
           <Typography variant="h5" component="h2">
-            Phòng được công bố
+            Các phòng cho thuê
           </Typography>
           <Status
             loading={rooms.isPending}

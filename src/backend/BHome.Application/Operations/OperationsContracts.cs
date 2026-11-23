@@ -146,7 +146,25 @@ public sealed record LocationPublicContent(Guid LocationId, string Name, string 
 public sealed record RoomPublicContent(Guid RoomId, Guid LocationId, string RoomNumber, string? Floor,
     int Capacity, string Description, IReadOnlyList<string> Amenities, decimal? IndicativePrice,
     string Vacancy, IReadOnlyList<PublicPhotoView> Photos, bool Published, DateTimeOffset? PublishedAt,
-    string PublicationStatus = "Draft");
+    string PublicationStatus = "Draft",
+    [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingDefault)] int Version = 0);
+
+public sealed record PublicRoomBulkTarget(Guid RoomId, [Range(1, int.MaxValue)] int ExpectedVersion);
+[JsonUnmappedMemberHandling(JsonUnmappedMemberHandling.Disallow)]
+public sealed record PublicRoomBulkRequest(
+    [MinLength(1), MaxLength(100)] PublicRoomBulkTarget[] Targets,
+    [Required, RegularExpression("^(RoomDefaults|Room|Manual|Publish|Unpublish)$")] string Mode,
+    Guid? SourceId, int? SourceVersion,
+    [MaxLength(3)] string[] Fields, bool FillEmptyOnly = true,
+    [StringLength(2000)] string? Description = null,
+    [MaxLength(50)] string[]? Amenities = null,
+    [Range(typeof(decimal), "0", "999999999999999999")] decimal? IndicativePrice = null,
+    string? PreviewHash = null);
+public sealed record PublicRoomFieldChange(string Field, string OldValue, string NewValue, bool Conflict);
+public sealed record PublicRoomBulkRow(Guid RoomId, string RoomNumber, int CurrentVersion,
+    string Status, IReadOnlyList<PublicRoomFieldChange> Changes, string? Issue = null);
+public sealed record PublicRoomBulkPreview(string PreviewHash, IReadOnlyList<PublicRoomBulkRow> Rooms);
+public sealed record PublicRoomBulkResult(IReadOnlyList<PublicRoomBulkRow> Rooms);
 
 [JsonUnmappedMemberHandling(JsonUnmappedMemberHandling.Disallow)]
 public sealed record LocationPublicContentWrite(
@@ -214,6 +232,10 @@ public interface IOperationsRepository
     Task<RoomOccupancyHistory?> OccupancyHistoryAsync(Guid roomId, Guid? staffUserId, DateOnly today, CancellationToken t);
     Task<LocationPublicContent?> LocationContentAsync(Guid locationId, bool publishedOnly, CancellationToken t);
     Task<RoomPublicContent?> RoomContentAsync(Guid roomId, bool publishedOnly, CancellationToken t);
+    Task<IReadOnlyList<RoomPublicContent>> ManagedRoomsAsync(Guid locationId, CancellationToken t);
+    Task<PublicRoomBulkPreview> PreviewPublicRoomBulkAsync(Guid locationId, PublicRoomBulkRequest input, CancellationToken t);
+    Task<PublicRoomBulkResult> ApplyPublicRoomBulkAsync(Guid actorId, Guid locationId, PublicRoomBulkRequest input,
+        DateTimeOffset now, CancellationToken t);
     Task<IReadOnlyList<LocationPublicContent>> PublishedLocationsAsync(CancellationToken t);
     Task<IReadOnlyList<RoomPublicContent>> PublishedRoomsAsync(Guid locationId, CancellationToken t);
     Task<LocationPublicContent> UpdateLocationContentAsync(Guid actorId, Guid locationId,
