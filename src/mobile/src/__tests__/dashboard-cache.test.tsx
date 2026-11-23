@@ -309,7 +309,7 @@ it('does not mistake a previous debt for this month’s invoice on Tenant Home',
     false,
   );
 });
-it('still loads this month’s Tenant-owned invoice after a completed move-out has no Active contract', async () => {
+it('does not load Tenant financial features after a completed move-out has no Active contract', async () => {
   const transport = tenantTransport();
   transport.mockImplementation(async (url) => {
     const path = String(url);
@@ -334,24 +334,16 @@ it('still loads this month’s Tenant-owned invoice after a completed move-out h
   });
   client(transport);
   render(<TenantDashboardScreen />);
-  await waitFor(() =>
-    expect(screen.getByRole('status').textContent).toContain('"post-moveout-bill"'),
-  );
+  await waitFor(() => expect(screen.getByRole('status').textContent).toContain('"contracts":[]'));
   const props = JSON.parse(screen.getByRole('status').textContent!);
   expect(props.contracts).toEqual([]);
-  expect(props.invoice.id).toBe('post-moveout-bill');
-  expect(props.payment.paymentStatus).toBe('Paid');
+  expect(props.invoice).toBeUndefined();
+  expect(props.payment).toBeUndefined();
   expect(
-    transport.mock.calls.some(
-      ([url]) => /\/invoices\?/.test(String(url)) && !String(url).includes('&roomId='),
+    transport.mock.calls.some(([url]) =>
+      /\/invoices\?|\/debts\?|\/tenant\/meter-readings\?|\/notifications\?/.test(String(url)),
     ),
-  ).toBe(true);
-  expect(
-    transport.mock.calls.some(
-      ([url]) =>
-        /\/tenant\/meter-readings\?/.test(String(url)) && !String(url).includes('&roomId='),
-    ),
-  ).toBe(true);
+  ).toBe(false);
 });
 function RetryProbe() {
   const query = useWorkspaceQuery<{ label: string }>('/api/v1/capture/locations', {

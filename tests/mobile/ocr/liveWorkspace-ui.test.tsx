@@ -1564,7 +1564,7 @@ it('renders Tenant contracts from the scoped endpoint without fetching Owner or 
               roomNumber: 'T.101',
               locationName: 'Cơ sở kiểm thử',
               status: 'Active',
-              kind: 'MainTenancy',
+              kind: 'Main',
               startDate: '2026-11-01',
               endDate: '2027-10-31',
               monthlyRent: '3000000',
@@ -1580,12 +1580,14 @@ it('renders Tenant contracts from the scoped endpoint without fetching Owner or 
   expect(screen.getByText('Cơ sở kiểm thử')).toBeTruthy();
   fireEvent.click(screen.getByRole('button', { name: 'Xem phòng và hợp đồng' }));
   expect(mocks.go).toHaveBeenCalledWith('tenant-room');
-  expect(fetcher.mock.calls.map(([url]) => url)).toEqual(
-    expect.arrayContaining([
-      'https://api.example.invalid/api/v1/contracts?page=1&pageSize=20&status=Active',
-      `https://api.example.invalid/api/v1/invoices?page=1&pageSize=20&billingPeriod=${businessToday().slice(0, 7)}-01&roomId=${id}`,
-      `https://api.example.invalid/api/v1/tenant/meter-readings?page=1&pageSize=20&roomId=${id}`,
-    ]),
+  await waitFor(() =>
+    expect(fetcher.mock.calls.map(([url]) => url)).toEqual(
+      expect.arrayContaining([
+        'https://api.example.invalid/api/v1/contracts?page=1&pageSize=100&status=Active',
+        `https://api.example.invalid/api/v1/invoices?page=1&pageSize=20&billingPeriod=${businessToday().slice(0, 7)}-01&roomId=${id}`,
+        `https://api.example.invalid/api/v1/tenant/meter-readings?page=1&pageSize=20&roomId=${id}`,
+      ]),
+    ),
   );
   expect(
     fetcher.mock.calls.every(
@@ -1645,6 +1647,22 @@ it('shows current invoice, backend payment status and confirmed utility quantiti
       return json(
         page([
           { id, title: 'Thông báo kiểm thử', summary: 'Không đưa nội dung dài lên dashboard' },
+        ]),
+      );
+    if (path.includes('/contracts?'))
+      return json(
+        page([
+          {
+            id,
+            roomId: id,
+            roomNumber: 'T.101',
+            locationName: 'Cơ sở kiểm thử',
+            status: 'Active',
+            kind: 'Main',
+            startDate: '2026-11-01',
+            endDate: '2027-10-31',
+            monthlyRent: '3000000',
+          },
         ]),
       );
     return json(page([]));
@@ -3339,7 +3357,7 @@ it('retains Draft and error states without fabricating payment or reintroducing 
   expect(reload).toHaveBeenCalledOnce();
   expect(screen.queryByText('Làm mới tổng quan')).toBeNull();
 });
-it('mounts Tenant Home without redundant initial focus requests', async () => {
+it('does not fetch financial features when Tenant Home cannot find an active room rental', async () => {
   mocks.role = 'Tenant';
   const fetcher = vi
     .fn<typeof fetch>()
@@ -3349,14 +3367,14 @@ it('mounts Tenant Home without redundant initial focus requests', async () => {
   setApi(fetcher);
   render(<TenantHomeScreen />);
   await screen.findByText('Chưa có hóa đơn');
-  // A former tenant may still have current-period invoices and readings: query
-  // those authorized endpoints even when no Active contract, but invent nothing.
-  expect(fetcher).toHaveBeenCalledTimes(6);
+  // Even a direct Home mount must not request invoices, readings, debts or alerts
+  // without an eligible rental; the root navigation gate prevents the mount itself.
+  expect(fetcher).toHaveBeenCalledTimes(1);
   expect(fetcher.mock.calls.filter(([url]) => String(url).includes('/contracts?'))).toHaveLength(1);
-  expect(fetcher.mock.calls.filter(([url]) => String(url).includes('/invoices?'))).toHaveLength(1);
+  expect(fetcher.mock.calls.filter(([url]) => String(url).includes('/invoices?'))).toHaveLength(0);
   expect(
     fetcher.mock.calls.filter(([url]) => String(url).includes('/tenant/meter-readings?')),
-  ).toHaveLength(1);
+  ).toHaveLength(0);
   fireEvent.click(screen.getByRole('button', { name: 'Tất cả tiện ích' }));
-  expect(fetcher).toHaveBeenCalledTimes(6);
+  expect(fetcher).toHaveBeenCalledTimes(1);
 });
