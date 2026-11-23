@@ -30,6 +30,62 @@ namespace BHome.IntegrationTests.Compact24;
 
 public sealed class SePayIntegrationTests(Compact24Fixture fixture) : IClassFixture<Compact24Fixture>
 {
+    [CompactPostgresFact]
+    public async Task OwnerReceivingAccountIsVersionedSharedAcrossLocationsAndIsolatedFromOtherOwners()
+    {
+        await using var scenario = await Create();
+        using var owner = await scenario.Client(scenario.Owner);
+        var route = "/api/v1/receiving-bank-accounts/owner";
+        Assert.Null(await owner.GetFromJsonAsync<ReceivingBankAccount>(route));
+        var input = new OwnerReceivingAccountInput("970416", Account, "SYNTHETIC OWNER", true, true, true, 0);
+        using var saved = await owner.PutAsJsonAsync(route, input);
+        Assert.True(saved.IsSuccessStatusCode, await saved.Content.ReadAsStringAsync());
+        Assert.Equal(1, (await owner.GetFromJsonAsync<ReceivingBankAccount>(route))!.Version);
+        Assert.Equal(HttpStatusCode.Conflict, (await owner.PutAsJsonAsync(route, input)).StatusCode);
+
+        await using var scope = scenario.Host.Services.CreateAsyncScope();
+        var db = scope.ServiceProvider.GetRequiredService<Compact24DbContext>();
+        var otherLocation = new Location("SYNTHETIC SECOND LOCATION") { Address = "SYNTHETIC" };
+        var secondRoom = new Room { LocationId = otherLocation.Id, RoomNumber = "A01", Status = RoomStatus.Available };
+        var secondResident = new Resident
+        {
+            RoomId = secondRoom.Id, OwnerUserId = scenario.Owner,
+            TenantUserId = scenario.Tenants[0], DisplayLabel = "SYNTHETIC SECOND", VerificationStatus = IdentityVerificationStatus.Verified
+        };
+        var secondContract = new Contract
+        {
+            RoomId = secondRoom.Id, OwnerSignerId = scenario.Owner,
+            RepresentativeResidentId = secondResident.Id, TenantUserId = scenario.Tenants[0],
+            Kind = ContractKind.Holding, StartDate = new DateOnly(2026, 11, 1),
+            EndDate = new DateOnly(2027, 11, 1), Terms = "SYNTHETIC", MonthlyRent = 100000,
+            Residents = [new ContractResident { ResidentId = secondResident.Id, Role = ResidentType.Representative, ResidenceFrom = new DateOnly(2026, 11, 1) }]
+        };
+        db.AddRange(otherLocation, secondRoom, secondResident, secondContract);
+        await db.SaveChangesAsync();
+        var payments = scope.ServiceProvider.GetRequiredService<IPaymentRepository>();
+        var first = await payments.ReceivingAccountAsync(scenario.Location, default);
+        var second = await payments.ReceivingAccountAsync(otherLocation.Id, default);
+        Assert.NotNull(first); Assert.NotNull(second);
+        Assert.Equal(scenario.Owner, first.OwnerUserId); Assert.Equal(scenario.Owner, second.OwnerUserId);
+        Assert.Equal(first.AccountNumber, second.AccountNumber);
+        // The historical Location-scoped version remains unchanged and reviewable.
+        Assert.Equal(1, (await db.Set<ReceivingBankAccount>().Where(a => a.LocationId == scenario.Location).SingleAsync()).Version);
+        var options = scope.ServiceProvider.GetRequiredService<SePayOptions>();
+        options.ReceivingAccounts.Add(new SePayReceivingAccount
+        {
+            OwnerUserId = scenario.Owner, BankIdentifier = first.BankIdentifier,
+            AccountNumber = first.AccountNumber, Gateway = "ACB"
+        });
+        Assert.True(options.Matches(scenario.Location, first));
+        Assert.True(options.Matches(otherLocation.Id, second));
+
+        // Compact24's identity fixture deliberately reuses its sole Owner.
+        // Owner configuration lookup is by the exact identity, not a globally
+        // selected account; an unknown/different owner receives no bank data.
+        Assert.Null(await payments.OwnerReceivingAccountAsync(Guid.NewGuid(), default));
+        using var tenant = await scenario.Client(scenario.Tenants[0]);
+        Assert.Equal(HttpStatusCode.Forbidden, (await tenant.GetAsync(route)).StatusCode);
+    }
     private sealed class InitialDiagnostic : Microsoft.AspNetCore.Diagnostics.IExceptionHandler
     {
         internal static string Last = "";

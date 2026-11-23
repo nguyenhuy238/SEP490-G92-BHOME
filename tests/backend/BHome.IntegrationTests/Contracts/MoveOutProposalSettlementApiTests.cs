@@ -9,6 +9,7 @@ using BHome.Application.PaymentsDebt.SePay;
 using BHome.Application.Storage;
 using BHome.Domain.Billing;
 using BHome.Domain.PaymentsDebt;
+using BHome.Domain.PropertyManagement;
 using BHome.Domain.TenantContracts;
 using BHome.Infrastructure.Persistence;
 using Microsoft.EntityFrameworkCore;
@@ -189,6 +190,11 @@ public sealed partial class ContractLifecycleApiTests
             Assert.Equal(accepted.Id, replay.Id);
         }
         Assert.Equal(expectedStatus, accepted.Settlement?.Status);
+        // Agreement is not proof of payment. Never vacate the room while any
+        // accepted settlement still requires a real verified transfer.
+        var beforePayment = await Success<ContractView>(await w.Tenant.Client.GetAsync(
+            Path(contractId, "")));
+        Assert.Equal("Active", beforePayment.Status);
         Assert.Equal(expectedStatus == "RefundEligible" ? expectedAmount : 0, accepted.Settlement!.RefundAmount);
         Assert.Equal(expectedStatus == "Payable" ? expectedAmount : 0, accepted.Settlement.PayableAmount);
         Assert.Equal("Accepted", (await Success<MoveOutChargeProposalPreview>(
@@ -281,5 +287,15 @@ public sealed partial class ContractLifecycleApiTests
             Path(contractId, $"move-out/receivables/{charge.Charge.Id}/transfer-instructions")));
         Assert.Equal("Settled", afterPayment.Availability);
         Assert.Null(afterPayment.QrImageDataUri);
+        var completed = await Success<ContractView>(await tenant.GetAsync(Path(contractId, "")));
+        Assert.Equal("Terminated", completed.Status);
+        Assert.Equal(Today, completed.ActualEndDate);
+        var move = await Success<MoveOutView>(await tenant.GetAsync(Path(contractId, "move-out")));
+        Assert.Equal("Completed", move.Status);
+        dbVerified.ChangeTracker.Clear();
+        var closedRoom = await dbVerified.Set<Room>().AsNoTracking().SingleAsync(r => r.Id == completed.RoomId);
+        Assert.Equal(RoomStatus.Available, closedRoom.Status);
+        Assert.Single(await dbVerified.Set<ContractMoveOutHistory>().AsNoTracking().Where(h =>
+            h.ContractId == contractId && h.Action == "Completed").ToArrayAsync());
     }
 }

@@ -148,7 +148,7 @@ export function PaymentManagementPage({ debtOnly = false }: { debtOnly?: boolean
     queryFn: ({ signal }) => api.history(historyFilter, signal),
     enabled: debtOnly || section === 2,
   });
-  const showFilters = debtOnly || section !== 4;
+  const showFilters = debtOnly || (section !== 3 && section !== 4);
   const showInvoiceFilters = debtOnly || section === 0;
   const hasCustomFilters = Boolean(
     location ||
@@ -940,13 +940,7 @@ export function PaymentManagementPage({ debtOnly = false }: { debtOnly?: boolean
             </Drawer>
           </>
         )}
-        {!debtOnly &&
-          section === 3 &&
-          (location ? (
-            <ReceivingAccountForm locationId={location} />
-          ) : (
-            <Alert severity="info">Chọn cơ sở để cấu hình tài khoản nhận tiền.</Alert>
-          ))}
+        {!debtOnly && section === 3 && <ReceivingAccountForm />}
         {!debtOnly && section === 1 && (
           <Box
             component="section"
@@ -1411,15 +1405,17 @@ function TransferListItem({
   );
 }
 
-function ReceivingAccountForm({ locationId }: { locationId: string }) {
+const ownerReceivingAccountRoute = '/api/v1/receiving-bank-accounts/owner';
+
+function ReceivingAccountForm() {
   const api = usePaymentApi();
   const { session } = useAuth();
   const actor = session?.userId ?? '';
   const cache = useQueryClient();
-  const [lastSaved, setLastSaved] = useState<{ locationId: string; version: number } | null>(null);
+  const [lastSaved, setLastSaved] = useState<number | null>(null);
   const account = useQuery({
-    queryKey: ['receiving-account', actor, locationId],
-    queryFn: ({ signal }) => api.account(locationId, signal),
+    queryKey: ['receiving-account', actor, 'owner'],
+    queryFn: ({ signal }) => api.request<BankAccount | null>(ownerReceivingAccountRoute, { signal }),
   });
   return (
     <>
@@ -1434,19 +1430,18 @@ function ReceivingAccountForm({ locationId }: { locationId: string }) {
       )}
       {account.isSuccess && (
         <>
-          {lastSaved?.locationId === locationId && lastSaved.version === account.data?.version && (
+          {lastSaved === account.data?.version && (
             <Alert severity="success" role="status">
-              Đã lưu tài khoản nhận tiền thành công (phiên bản {lastSaved.version}).
+              Đã lưu tài khoản nhận tiền thành công (phiên bản {lastSaved}).
             </Alert>
           )}
           <AccountEditor
-            key={locationId + ':' + (account.data?.version ?? 0)}
+            key={actor + ':' + (account.data?.version ?? 0)}
             current={account.data}
-            locationId={locationId}
             edited={() => setLastSaved(null)}
             saved={(value) => {
-              setLastSaved({ locationId, version: value.version });
-              cache.setQueryData(['receiving-account', actor, locationId], value);
+              setLastSaved(value.version);
+              cache.setQueryData(['receiving-account', actor, 'owner'], value);
               void account.refetch();
             }}
           />
@@ -1457,12 +1452,10 @@ function ReceivingAccountForm({ locationId }: { locationId: string }) {
 }
 function AccountEditor({
   current,
-  locationId,
   edited,
   saved,
 }: {
   current: BankAccount | null;
-  locationId: string;
   edited: () => void;
   saved: (value: BankAccount) => void;
 }) {
@@ -1502,14 +1495,17 @@ function AccountEditor({
           setBusy(true);
           setError('');
           void api
-            .saveAccount({
-              locationId,
-              bankIdentifier: bank,
-              accountNumber: number,
-              accountHolder: holder,
-              enabled,
-              isDevelopmentDemo: demo,
-              version: current?.version ?? 0,
+            .request<BankAccount>(ownerReceivingAccountRoute, {
+              method: 'PUT',
+              body: JSON.stringify({
+                bankIdentifier: bank,
+                accountNumber: number,
+                accountHolder: holder,
+                enabled,
+                isDevelopmentDemo: demo,
+                humanVerified: true,
+                expectedVersion: current?.version ?? 0,
+              }),
             })
             .then((value) => {
               void cache.invalidateQueries({ queryKey: ['transfer-instructions'] });
@@ -1523,10 +1519,14 @@ function AccountEditor({
         }}
       >
         <Box>
-          <Typography variant="h6">Tài khoản nhận tiền của cơ sở</Typography>
+          <Typography variant="h6">Tài khoản nhận tiền chung cho tất cả cơ sở</Typography>
           <Typography variant="body2" color="text.secondary" sx={{ mt: 0.5 }}>
-            Kiểm tra thông tin ngân hàng trước khi lưu để hướng dẫn chuyển khoản của cơ sở chính
-            xác.
+            Cấu hình một lần cho tất cả cơ sở thuộc Owner đang đăng nhập. Các phiên bản tài
+            khoản theo từng cơ sở trước đây được giữ lại để đối chiếu.
+          </Typography>
+          <Typography variant="body2" color="text.secondary" sx={{ mt: 0.5 }}>
+            Bật hướng dẫn nhận tiền không tự kích hoạt SePay. QR có mã đối soát chỉ xuất hiện
+            khi tài khoản này được liên kết chính xác với SePay ở môi trường tương ứng.
           </Typography>
           {current && (
             <Typography variant="body2" color="text.secondary" sx={{ mt: 0.5 }}>

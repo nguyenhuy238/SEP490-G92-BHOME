@@ -327,11 +327,17 @@ export function TenantMoveOutProposalPanel({
   const [error, setError] = useState('');
   const [submitting, setSubmitting] = useState(false);
   const [reconcileState, setReconcileState] = useState<ReconcileState | null>(null);
+  const [moveOutProgress, setMoveOutProgress] = useState<{
+    api: ContractClient;
+    contractId: string;
+    status: string;
+  } | null>(null);
   const lock = useRef(false);
   const keys = useRef(mutationKeys(randomUUID));
   const reconcileAttempts = useRef({ api, contractId, proposalIds: new Set<string>() });
   const isMounted = useRef(false);
   const onChangedRef = useRef(onChanged);
+  const completedRef = useRef<string | null>(null);
   const { width } = useWindowDimensions();
   const phone = width < 540;
   const { go } = useWorkspace();
@@ -367,6 +373,31 @@ export function TenantMoveOutProposalPanel({
   const viewStatus = current?.view?.status;
   const feedbackConfirmed = proposal?.tenantFeedback?.confirmed;
   const settlementStatus = proposal?.tenantFeedback?.settlement?.status;
+  const completed = moveOutProgress?.api === api && moveOutProgress.contractId === contractId &&
+    moveOutProgress.status === 'Completed';
+  useEffect(() => {
+    if (!completed || completedRef.current === contractId) return;
+    completedRef.current = contractId;
+    onChangedRef.current();
+  }, [completed, contractId]);
+  // The original proposal is an immutable quote. After payment, read the
+  // authoritative move-out status rather than continuing to display its
+  // negative "expected balance" as though the Tenant still owes money.
+  useEffect(() => {
+    if (feedbackConfirmed !== true || settlementStatus !== 'Payable' || completed) return;
+    const controller = new AbortController();
+    const refresh = () => {
+      void api.moveOut(contractId, controller.signal).then(
+        (result) => {
+          if (!controller.signal.aborted) setMoveOutProgress({ api, contractId, status: result.status });
+        },
+        () => { /* The old quote remains read-only if status cannot be fetched. */ },
+      );
+    };
+    refresh();
+    const timer = setInterval(refresh, 5000);
+    return () => { controller.abort(); clearInterval(timer); };
+  }, [api, contractId, feedbackConfirmed, settlementStatus, completed]);
   const settlementReason = proposal?.tenantFeedback?.settlement?.reason;
   const legacyReconcileEligible =
     !!proposalId &&
@@ -508,14 +539,16 @@ export function TenantMoveOutProposalPanel({
         <View style={styles.statusRow}>
           <Pill
             tone={
-              current?.view?.status === 'Accepted'
+              completed || current?.view?.status === 'Accepted'
                 ? 'green'
                 : current?.view?.status === 'PendingTenant'
                   ? 'amber'
                   : 'neutral'
             }
           >
-            {!current
+              {completed
+                ? 'Trả phòng thành công'
+                : !current
               ? 'Đang tải'
               : !proposal
                 ? 'Chưa có đề xuất'
@@ -533,10 +566,20 @@ export function TenantMoveOutProposalPanel({
         {current?.view && !proposal && (
           <Text style={styles.subtle}>Owner chưa gửi đề xuất quyết toán.</Text>
         )}
-        {current?.view?.status === 'Outdated' && !legacyReconcileEligible && (
+        {!completed && current?.view?.status === 'Outdated' && !legacyReconcileEligible && (
           <Text style={styles.error}>Đề xuất cũ đã thay đổi. Vui lòng chờ Owner gửi bản mới.</Text>
         )}
       </View>
+
+      {completed && (
+        <View style={styles.statusCard}>
+          <Text style={[styles.title, { color: colors.green }]}>Trả phòng thành công</Text>
+          <Text style={styles.note}>
+            Khoản phải thu đã được máy chủ xác minh thanh toán đủ. Hợp đồng đã kết thúc;
+            phòng không có hợp đồng thuê khác được chuyển về trạng thái Trống.
+          </Text>
+        </View>
+      )}
 
       {proposal && current?.view && (
         <>
@@ -574,11 +617,14 @@ export function TenantMoveOutProposalPanel({
             <Text style={styles.sectionTitle}>Tiền cọc và chênh lệch</Text>
             <View style={styles.summary}>
               <MoneyLine label="Cọc còn khả dụng" amount={proposal.availableDeposit} />
-              <MoneyLine label="Khoản thu đề xuất" amount={proposal.totalCharges} />
-              <MoneyLine label="Khoản phải thu còn nợ" amount={proposal.existingOutstanding} />
+              <MoneyLine label={completed ? 'Phí trả phòng đã chốt' : 'Khoản thu đề xuất'} amount={proposal.totalCharges} />
+              <MoneyLine label={completed ? 'Khoản phải thu khác lúc đề xuất' : 'Khoản phải thu còn nợ'} amount={proposal.existingOutstanding} />
+              {completed && <MoneyLine label="Khoản đã xác minh thanh toán" amount={proposal.tenantFeedback?.settlement?.payableAmount ?? '0'} />}
               <View style={styles.balance}>
                 <Text style={styles.balanceLabel}>
-                  {negative
+                  {completed
+                    ? 'Không còn phải thanh toán'
+                    : negative
                     ? 'Dự kiến cần thanh toán thêm'
                     : positive
                       ? 'Dự kiến được hoàn'
@@ -594,16 +640,16 @@ export function TenantMoveOutProposalPanel({
                   adjustsFontSizeToFit
                   minimumFontScale={0.65}
                 >
-                  {signedMoney(proposal.signedBalance)}
+                  {completed ? formatContractMoney('0') : signedMoney(proposal.signedBalance)}
                 </Text>
                 <Text style={styles.subtle}>
                   Cọc đã xác minh: {formatContractMoney(proposal.verifiedDeposit)}
                 </Text>
               </View>
             </View>
-            <Text style={styles.subtle}>
+            {!completed && <Text style={styles.subtle}>
               Số tiền dự kiến; Owner sẽ đối chiếu thanh toán và hoàn cọc riêng.
-            </Text>
+            </Text>}
           </View>
 
           {proposal.tenantFeedback && (
@@ -656,7 +702,7 @@ export function TenantMoveOutProposalPanel({
               </View>
             )}
 
-          {current.view.status === 'Accepted' &&
+          {!completed && current.view.status === 'Accepted' &&
             proposal.tenantFeedback?.settlement?.status === 'Payable' &&
             proposal.tenantFeedback.settlement.payableReceivableId &&
             /^[1-9]\d*(?:\.0+)?$/.test(proposal.tenantFeedback.settlement.payableAmount) && (
@@ -664,10 +710,6 @@ export function TenantMoveOutProposalPanel({
                 contractId={contractId}
                 chargeId={proposal.tenantFeedback.settlement.payableReceivableId}
                 payableAmount={proposal.tenantFeedback.settlement.payableAmount}
-                onChanged={() => {
-                  setRevision((value) => value + 1);
-                  onChanged();
-                }}
               />
             )}
           {current.view.status === 'Accepted' &&

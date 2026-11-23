@@ -54,6 +54,10 @@ public interface IHandoverInventory
     Task<HandoverInventory> PrepareForContractAsync(Guid roomId, Guid? tenantUserId, CancellationToken t);
     Task MarkForReviewAsync(Guid roomId, Guid contractId, int version, Guid actor, CancellationToken t);
     Task SynchronizeAsync(Guid roomId, Guid contractId, int version, HandoverSnapshot snapshot, Guid actor, CancellationToken t);
+    // Only for the internal SePay-verified, Owner-approved and Tenant-accepted
+    // move-out completion path. Never expose these as a public Owner bypass.
+    Task MarkForReviewAfterVerifiedSettlementAsync(Guid roomId, Guid contractId, int version, Guid actor, CancellationToken t);
+    Task SynchronizeAfterVerifiedSettlementAsync(Guid roomId, Guid contractId, int version, HandoverSnapshot snapshot, Guid actor, CancellationToken t);
 }
 
 public interface IContractHandoverRepository

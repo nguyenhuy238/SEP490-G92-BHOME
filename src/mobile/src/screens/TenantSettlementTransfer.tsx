@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useState } from 'react';
 import { Image } from 'react-native';
 import { Text } from 'react-native-paper';
 import {
@@ -6,6 +6,7 @@ import {
   type SettlementTransferInstructions,
 } from '../../../../packages/client-core/src/contracts';
 import { Action, Box, ui } from '../components/WorkspaceKit';
+import { sameAmount } from '../features/tenant/paymentPresentation';
 import { useWorkspaceQuery } from '../features/workspace/useWorkspaceQuery';
 
 export function TenantSettlementTransfer({
@@ -13,11 +14,14 @@ export function TenantSettlementTransfer({
   chargeId,
   changed,
   autoOpen = false,
+  expectedOutstanding,
 }: {
   contractId: string;
   chargeId: string;
   changed: () => void;
   autoOpen?: boolean;
+  /** Verified balance from this receivable's authenticated detail, not a quote. */
+  expectedOutstanding?: string;
 }) {
   const [open, setOpen] = useState(autoOpen);
   const query = useWorkspaceQuery<SettlementTransferInstructions>(
@@ -26,17 +30,8 @@ export function TenantSettlementTransfer({
       : null,
     { notifyError: false },
   );
-  const availability = query.data?.availability;
-  const reload = query.reload;
-  // SePay verifies bank transfers asynchronously. Follow the existing Tenant
-  // payment UX: refresh the server-issued obligation while its QR is visible,
-  // then stop once the verified outstanding becomes zero. Never infer paid
-  // from QR visibility or a client-side action.
-  useEffect(() => {
-    if (!open || !['Available', 'InstructionsOnly'].includes(availability ?? '')) return;
-    const timer = setInterval(reload, 5000);
-    return () => clearInterval(timer);
-  }, [open, availability, reload]);
+  // The parent detail polls the verified receivable balance. Do not also poll
+  // transfer instructions: reloading these clears the QR and doubles requests.
   if (!open)
     return (
       <Action secondary onPress={() => setOpen(true)}>
@@ -44,6 +39,9 @@ export function TenantSettlementTransfer({
       </Action>
     );
   const data = query.data;
+  const transferMatchesBalance =
+    !!data &&
+    (expectedOutstanding === undefined || sameAmount(expectedOutstanding, data.outstandingAmount));
   return (
     <Box>
       {query.loading && <Text>Đang tải thông tin chuyển khoản…</Text>}
@@ -78,31 +76,41 @@ export function TenantSettlementTransfer({
           khoản; hệ thống chưa cấp QR thanh toán cho khoản này.
         </Text>
       )}
-      {data && ['Available', 'InstructionsOnly'].includes(data.availability) && (
-        <>
-          {data.isDevelopmentDemo && (
-            <Text style={ui.red}>Dữ liệu thử nghiệm; không chuyển tiền thật.</Text>
-          )}
-          <Text>Số còn phải trả: {formatContractMoney(data.outstandingAmount)}</Text>
-          <Text selectable>Ngân hàng: {data.bankIdentifier}</Text>
-          <Text selectable>
-            Tài khoản: {data.accountNumber} · {data.accountHolder}
-          </Text>
-          <Text selectable>Nội dung chuyển khoản: {data.transferReference}</Text>
-          {data.qrImageDataUri?.startsWith('data:image/png;base64,') && (
-            <Image
-              accessibilityLabel="Mã chuyển khoản khoản phải thu"
-              source={{ uri: data.qrImageDataUri }}
-              style={{ width: 220, height: 220 }}
-            />
-          )}
+      {data &&
+        ['Available', 'InstructionsOnly'].includes(data.availability) &&
+        !transferMatchesBalance && (
           <Text>
-            Chuyển khoản đúng nội dung. Thanh toán chỉ được ghi nhận sau khi máy chủ xác minh giao
-            dịch; ảnh chụp hoặc mở mã QR chưa xác nhận thanh toán.
+            Số dư khoản phải thu vừa thay đổi. Hãy cập nhật trước khi chuyển khoản để tránh thanh
+            toán sai số tiền.
           </Text>
-          <Text>Trạng thái thanh toán được tự động kiểm tra lại trong lúc hiển thị mã QR.</Text>
-        </>
-      )}
+        )}
+      {data &&
+        transferMatchesBalance &&
+        ['Available', 'InstructionsOnly'].includes(data.availability) && (
+          <>
+            {data.isDevelopmentDemo && (
+              <Text style={ui.red}>Dữ liệu thử nghiệm; không chuyển tiền thật.</Text>
+            )}
+            <Text>Số còn phải trả: {formatContractMoney(data.outstandingAmount)}</Text>
+            <Text selectable>Ngân hàng: {data.bankIdentifier}</Text>
+            <Text selectable>
+              Tài khoản: {data.accountNumber} · {data.accountHolder}
+            </Text>
+            <Text selectable>Nội dung chuyển khoản: {data.transferReference}</Text>
+            {data.qrImageDataUri?.startsWith('data:image/png;base64,') && (
+              <Image
+                accessibilityLabel="Mã chuyển khoản khoản phải thu"
+                source={{ uri: data.qrImageDataUri }}
+                style={{ width: 220, height: 220 }}
+              />
+            )}
+            <Text>
+              Chuyển khoản đúng nội dung. Thanh toán chỉ được ghi nhận sau khi máy chủ xác minh giao
+              dịch; ảnh chụp hoặc mở mã QR chưa xác nhận thanh toán.
+            </Text>
+            <Text>Trạng thái thanh toán được tự động kiểm tra trong lúc hiển thị mã QR.</Text>
+          </>
+        )}
       <Action
         secondary
         disabled={query.loading}

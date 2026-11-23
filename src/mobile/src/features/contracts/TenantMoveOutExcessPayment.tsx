@@ -2,7 +2,8 @@ import React from 'react';
 import { View } from 'react-native';
 import { Text } from 'react-native-paper';
 import { formatContractMoney } from '../../../../../packages/client-core/src/contracts';
-import { TenantSettlementTransfer } from '../../screens/TenantSettlementTransfer';
+import { Action } from '../../components/WorkspaceKit';
+import { useWorkspace } from '../workspace/WorkspaceProvider';
 import { colors } from '../../theme/theme';
 
 /** A server-issued SePay obligation, created only after accepted charges and deposit offsets. */
@@ -10,13 +11,12 @@ export function TenantMoveOutExcessPayment({
   contractId,
   chargeId,
   payableAmount,
-  onChanged,
 }: {
   contractId: string;
   chargeId: string;
   payableAmount: string;
-  onChanged: () => void;
 }) {
+  const { go } = useWorkspace();
   return (
     <View
       style={{
@@ -30,15 +30,20 @@ export function TenantMoveOutExcessPayment({
     >
       <Text style={{ fontWeight: '700', color: colors.navy }}>Thanh toán phần vượt cọc</Text>
       <Text>
-        Khoản cần thanh toán thêm sau khi đã cấn trừ cọc: {formatContractMoney(payableAmount)}.
-        Thông tin chuyển khoản bên dưới do máy chủ cấp cho khoản phải thu đã xác minh.
+        Khoản phải thu sau khi cấn trừ cọc: {formatContractMoney(payableAmount)}. Xem trạng thái
+        thanh toán và thông tin chuyển khoản tại chi tiết khoản phải thu.
       </Text>
-      <TenantSettlementTransfer
-        contractId={contractId}
-        chargeId={chargeId}
-        autoOpen
-        changed={onChanged}
-      />
+      <Action
+        onPress={() =>
+          go('invoice', {
+            view: 'settlement',
+            settlementContractId: contractId,
+            settlementChargeId: chargeId,
+          })
+        }
+      >
+        Xem khoản phải thu trả phòng
+      </Action>
     </View>
   );
 }

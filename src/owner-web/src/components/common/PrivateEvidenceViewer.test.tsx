@@ -62,6 +62,50 @@ it('reuses verified private photo bytes on reopen and download, without repeatin
   expect(create).toHaveBeenCalledTimes(3);
 });
 
+it('shows a private photo inline on the review page and expands it without downloading again', async () => {
+  const fetchBlob = vi.fn(async () => makeBlob(jpeg, 'image/jpeg'));
+  const result = render(
+    <PrivateEvidenceViewer label="Ảnh trả phòng 1" filename="evidence.jpg"
+      cacheKey="contract-1:final:photo-1" inlineThumbnail showDownload={false}
+      fetchBlob={fetchBlob} />,
+  );
+  const image = await screen.findByRole('img', { name: 'Ảnh trả phòng 1' });
+  expect(image).toHaveAttribute('src', 'blob:private-1');
+  expect(fetchBlob).toHaveBeenCalledOnce();
+  fireEvent.click(screen.getByRole('button', { name: 'Xem Ảnh trả phòng 1' }));
+  expect(await within(screen.getByRole('dialog')).findByRole('img', { name: 'Ảnh trả phòng 1' }))
+    .toBeInTheDocument();
+  expect(fetchBlob).toHaveBeenCalledOnce();
+  result.unmount();
+  expect(revoke).toHaveBeenCalledWith('blob:private-1');
+});
+
+it('never embeds an unverified private file in the inline image gallery', async () => {
+  const fetchBlob = vi.fn(async () => new Blob(['<svg onload="bad()"/>'], { type: 'image/svg+xml' }));
+  render(<PrivateEvidenceViewer label="Ảnh trả phòng" filename="fake.svg"
+    cacheKey="contract-1:final:untrusted" inlineThumbnail fetchBlob={fetchBlob} />);
+  expect(await screen.findByText('Không tải được ảnh')).toBeInTheDocument();
+  expect(screen.queryByRole('img')).not.toBeInTheDocument();
+  expect(create).not.toHaveBeenCalled();
+});
+
+it('limits simultaneous private gallery downloads to four while preserving later photos', async () => {
+  const pending: Array<(image: Blob) => void> = [];
+  const fetchBlob = vi.fn(() => new Promise<Blob>((resolve) => pending.push(resolve)));
+  render(<>
+    {Array.from({ length: 5 }, (_, index) => (
+      <PrivateEvidenceViewer key={index} label={`Ảnh ${index + 1}`}
+        filename={`image-${index + 1}.jpg`} cacheKey={`contract-a:photo-${index}`}
+        inlineThumbnail showDownload={false} fetchBlob={fetchBlob} />
+    ))}
+  </>);
+  await waitFor(() => expect(fetchBlob).toHaveBeenCalledTimes(4));
+  await act(async () => pending[0]?.(makeBlob(jpeg, 'image/jpeg')));
+  await waitFor(() => expect(fetchBlob).toHaveBeenCalledTimes(5));
+  await act(async () => { pending.forEach((done) => done(makeBlob(jpeg, 'image/jpeg'))); });
+  expect(await screen.findByRole('img', { name: 'Ảnh 5' })).toBeInTheDocument();
+});
+
 it('discards cached private photo immediately when its scoped evidence identity changes', async () => {
   const fetchBlob = vi.fn(async () => makeBlob(png, 'image/png'));
   const result = render(<PrivateEvidenceViewer label="ảnh" filename="proof.jpg" cacheKey="contract-1:proof-a" fetchBlob={fetchBlob} />);

@@ -70,14 +70,29 @@ it('automatically loads payment instructions when linked to an approved obligati
   expect(screen.getByText('Nội dung chuyển khoản: SERVER-REFERENCE')).toBeTruthy();
 });
 
-it('polls the verified server payment status while the SePay QR is visible', () => {
+it('hides stale QR transfer information when server instructions differ from verified receivable balance', () => {
+  state.availability = 'Available';
+  render(
+    <TenantSettlementTransfer
+      contractId="contract"
+      chargeId="charge"
+      changed={vi.fn()}
+      autoOpen
+      expectedOutstanding="250000"
+    />,
+  );
+  expect(screen.getByText(/Số dư khoản phải thu vừa thay đổi/)).toBeTruthy();
+  expect(screen.queryByText(/Nội dung chuyển khoản:/)).toBeNull();
+});
+
+it('keeps transfer instructions stable instead of polling and flashing the QR', () => {
   vi.useFakeTimers();
   state.availability = 'Available';
   render(
     <TenantSettlementTransfer contractId="contract" chargeId="charge" changed={vi.fn()} autoOpen />,
   );
   act(() => vi.advanceTimersByTime(5100));
-  expect(state.reload).toHaveBeenCalledTimes(1);
+  expect(state.reload).not.toHaveBeenCalled();
 });
 
 it('never exposes transfer details while the Owner final-close is pending', () => {

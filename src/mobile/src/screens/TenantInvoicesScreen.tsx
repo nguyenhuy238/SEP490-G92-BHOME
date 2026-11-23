@@ -26,11 +26,25 @@ import { TenantPaymentPanel, TenantPaymentDetails } from './TenantPaymentPanel';
 import { useTenantInvoicePayment } from '../features/tenant/useTenantInvoicePayment';
 import { TenantAdjustmentPanel } from './TenantAdjustmentPanel';
 import { TenantSettlementReceivables } from './TenantSettlementReceivables';
+import { TenantSettlementReceivableDetail } from './TenantSettlementReceivableDetail';
 import { paymentText, type DebtInvoice } from '../../../../packages/client-core/src/payments';
 
 export function TenantInvoicesScreen({ intent }: { intent?: 'adjustment' } = {}) {
   const { session } = useSession();
-  const { invoiceId } = useLocalSearchParams<{ invoiceId?: string }>();
+  const { invoiceId, view, settlementContractId, settlementChargeId } = useLocalSearchParams<{
+    invoiceId?: string;
+    view?: string;
+    settlementContractId?: string;
+    settlementChargeId?: string;
+  }>();
+  if (view === 'settlement')
+    return (
+      <TenantSettlementReceivableDetail
+        key={`${session?.userId}:${settlementContractId ?? ''}:${settlementChargeId ?? ''}`}
+        contractId={settlementContractId ?? ''}
+        chargeId={settlementChargeId ?? ''}
+      />
+    );
   // Remount account-specific selection when the principal changes.
   return <TenantInvoiceList key={`${session?.userId}:${invoiceId ?? ''}`} intent={intent} />;
 }

@@ -91,7 +91,22 @@ beforeEach(() => {
   vi.mocked(api.handoverEvidence).mockReset();
   vi.mocked(api.evidence).mockReset();
   vi.mocked(api.readingEvidence).mockReset();
+  const photo = () => new Blob([new Uint8Array([255, 216, 255, 224, 0, 16, 74, 70])], { type: 'image/jpeg' });
+  vi.mocked(api.handoverEvidence).mockImplementation(async () => photo());
+  vi.mocked(api.evidence).mockImplementation(async () => photo());
+  vi.mocked(api.readingEvidence).mockImplementation(async () => photo());
   mutation.mockReset().mockResolvedValue({ id: 'proposal-1' });
+});
+
+it('shows a completed move-out instead of the stale negative provisional balance', async () => {
+  vi.mocked(api.moveOut).mockResolvedValue({ status: 'Completed' } as never);
+  vi.mocked(api.transport).mockResolvedValue({ ...review, status: 'Outdated' } as never);
+  mount();
+  expect(await screen.findByText(/Máy chủ đã xác minh đủ khoản thanh toán/)).toBeInTheDocument();
+  expect(await screen.findByText('Số còn cần thu hoặc hoàn')).toBeInTheDocument();
+  expect(screen.getByText('Phí trả phòng đã chốt')).toBeInTheDocument();
+  expect(screen.queryByText('Chênh lệch dự kiến')).not.toBeInTheDocument();
+  expect(screen.queryByText(/Dữ liệu tài chính hoặc kết quả kiểm tra đã thay đổi/)).not.toBeInTheDocument();
 });
 
 it('shows whole-number meter readings, Vietnamese item details and private opening/return photos without downloads', async () => {
@@ -152,6 +167,9 @@ it('shows whole-number meter readings, Vietnamese item details and private openi
   expect(screen.queryByRole('button', { name: /Tải xuống/ })).not.toBeInTheDocument();
   await waitFor(() => expect(screen.getAllByRole('button', { name: 'Xem ảnh' })).toHaveLength(2));
   const previews = screen.getAllByRole('button', { name: 'Xem ảnh' });
+  await waitFor(() => expect(previews[0]).toBeEnabled());
+  expect(screen.getByRole('img', { name: /Ảnh bàn giao/ })).toBeInTheDocument();
+  expect(screen.getByRole('img', { name: /Ảnh trả phòng/ })).toBeInTheDocument();
   fireEvent.click(previews[0]);
   await waitFor(() =>
     expect(api.handoverEvidence).toHaveBeenCalledWith(
@@ -164,7 +182,9 @@ it('shows whole-number meter readings, Vietnamese item details and private openi
 
 it('uses the same stored handover draft photos as the Bàn giao tab even when final snapshot has no photo IDs', async () => {
   vi.mocked(api.transport).mockImplementation(async (path) =>
-    path.endsWith('/handover/draft')
+    path.includes('/handover/draft/evidence/')
+      ? (new Blob([new Uint8Array([255, 216, 255, 224, 0, 16, 74, 70])], { type: 'image/jpeg' }) as never)
+      : path.endsWith('/handover/draft')
       ? ({
           status: 'Confirmed',
           contractId: 'contract-1',
@@ -178,6 +198,7 @@ it('uses the same stored handover draft photos as the Bàn giao tab even when fi
   mount();
   await screen.findByText('Ảnh bàn giao chung');
   await waitFor(() => expect(screen.getAllByRole('button', { name: 'Xem ảnh' })).toHaveLength(2));
+  await waitFor(() => expect(screen.getAllByRole('button', { name: 'Xem ảnh' })[1]).toBeEnabled());
   fireEvent.click(screen.getAllByRole('button', { name: 'Xem ảnh' })[1]);
   await waitFor(() =>
     expect(api.transport).toHaveBeenCalledWith(

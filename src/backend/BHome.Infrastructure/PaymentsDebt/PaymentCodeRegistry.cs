@@ -25,7 +25,7 @@ internal sealed class PaymentCodeRegistry(BHomePersistenceContext db, IPaymentRe
         {
             var account = await payments.ReceivingAccountAsync(locationId, token);
             if (account is null || !account.Enabled || account.IsDevelopmentDemo != (options.Mode == "Test") ||
-                !options.ReceivingAccounts.Any(a => a.LocationId == locationId && a.BankIdentifier == account.BankIdentifier && a.AccountNumber == account.AccountNumber)) return null;
+                !options.Matches(locationId, account)) return null;
             // Even an existing code is not payable while the receiving account no
             // longer matches SePay. Retain the registry mapping for later recovery.
             if (await GetAsync(kind, id, token) is { } existing) return existing;

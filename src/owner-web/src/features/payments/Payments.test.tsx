@@ -816,15 +816,17 @@ const configuredReceivingAccount = {
   version: 15,
 };
 async function openReceivingAccountSettings() {
-  mocks.api.request.mockImplementation(async (url: string) =>
-    url === '/api/v1/capture/locations'
-      ? [{ id: testReceivingLocationId, label: 'Cơ sở Hòa Lạc' }]
-      : [],
-  );
+  mocks.api.request.mockImplementation(async (url: string, init?: RequestInit) => {
+    if (url === '/api/v1/receiving-bank-accounts/owner') {
+      if (init?.method === 'PUT') return mocks.api.saveAccount(JSON.parse(String(init.body)));
+      return mocks.api.account();
+    }
+    if (url === '/api/v1/capture/locations') return [{ id: testReceivingLocationId, label: 'Cơ sở Hòa Lạc' }];
+    return [];
+  });
   mount(<PaymentManagementPage />, '/payments?setupAccount=1');
-  fireEvent.mouseDown(await screen.findByRole('combobox', { name: 'Cơ sở' }));
-  fireEvent.click(await screen.findByRole('option', { name: 'Cơ sở Hòa Lạc' }));
-  return screen.findByText('Tài khoản nhận tiền của cơ sở');
+  expect(screen.queryByRole('combobox', { name: 'Cơ sở' })).not.toBeInTheDocument();
+  return screen.findByText('Tài khoản nhận tiền chung cho tất cả cơ sở');
 }
 it('shows an already confirmed receiving account as saved and prevents an unchanged resubmission', async () => {
   mocks.api.account.mockResolvedValue(configuredReceivingAccount);
@@ -881,12 +883,16 @@ it('preserves confirmation and gives explicit success feedback after a receiving
   expect(mocks.api.saveAccount).toHaveBeenCalledTimes(1);
   expect(mocks.api.saveAccount).toHaveBeenCalledWith(
     expect.objectContaining({
-      locationId: testReceivingLocationId,
       bankIdentifier: '970422',
-      version: 0,
+      expectedVersion: 0,
+      humanVerified: true,
       enabled: true,
       isDevelopmentDemo: true,
     }),
+  );
+  expect(mocks.api.request).toHaveBeenCalledWith(
+    '/api/v1/receiving-bank-accounts/owner',
+    expect.objectContaining({ method: 'PUT' }),
   );
   fireEvent.change(screen.getByRole('textbox', { name: 'Số tài khoản nhận tiền' }), {
     target: { value: '0000000002' },

@@ -18,6 +18,25 @@ public sealed class SePayService(ISePayRepository repository, IPaymentRepository
         transaction.Validate(clock.GetUtcNow());
         var id = await repository.ReceiveAsync(transaction, token);
         await ReconcileAsync(id, token);
+        // A completed, signed provider event may be replayed (including after a
+        // process upgrade). Completing the physical move-out is independently
+        // idempotent and must never happen for a pending/reviewed payment.
+        var received = await repository.EventAsync(id, token);
+        if (received.Status == "Completed" && received.Reason == "verified_full_payment" &&
+            received.TransferId is not null && ResolveCode(transaction) is { } reference &&
+            await repository.ResolveAsync(reference, token) is { Kind: "Settlement" } target &&
+            await repository.SettlementAsync(target.ObligationId, token) is { } settlement)
+            await contracts.TryCompleteAfterVerifiedSettlementAsync(settlement.ContractId,
+                target.ObligationId, token);
+    }
+    public async Task<int> RecoverPreviouslyVerifiedMoveOutsAsync(CancellationToken token)
+    {
+        if (!options.Enabled) return 0;
+        var completed = 0;
+        foreach (var candidate in await repository.VerifiedMoveOutCandidatesAsync(token))
+            if (await contracts.TryCompleteAfterVerifiedSettlementAsync(candidate.ContractId,
+                candidate.ReceivableId, token)) completed++;
+        return completed;
     }
     public Task ReconcileAsync(Guid id, CancellationToken token) => repository.TransactionAsync(async () =>
     {
@@ -79,9 +98,8 @@ public sealed class SePayService(ISePayRepository repository, IPaymentRepository
         }
         if (target is null) return await Review("unknown_or_ambiguous_payment_code");
         await repository.LockTargetAsync(target, token);
-        var binding = bindings.SingleOrDefault(a => a.LocationId == target.LocationId);
         var account = await payments.ReceivingAccountAsync(target.LocationId, token);
-        if (binding is null || account is null || !account.Enabled || account.BankIdentifier != binding.BankIdentifier ||
+        if (account is null || !options.Matches(target.LocationId, account, tx.Gateway) || !account.Enabled ||
             account.AccountNumber != tx.AccountNumber || account.IsDevelopmentDemo != receipt.IsDevelopmentDemo ||
             !await payments.ActiveLocationAsync(target.LocationId, token)) return await Review("receiving_account_mismatch");
         if (target.Kind == "MainInitial")

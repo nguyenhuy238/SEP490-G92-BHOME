@@ -6,6 +6,7 @@ using BHome.Application.Contracts;
 using BHome.Application.PropertyManagement;
 using BHome.Domain.Billing;
 using BHome.Domain.PaymentsDebt;
+using BHome.Domain.TenantContracts;
 using BHome.Infrastructure.Persistence.Compact24;
 using BHome.Infrastructure.Persistence;
 using Microsoft.EntityFrameworkCore;
@@ -179,5 +180,32 @@ internal sealed class SePayRepository(BHomePersistenceContext db, IPaymentReposi
             WHERE e.task_data->>'recordType'='SePayEventV1' ORDER BY e.assigned_at DESC,e.id LIMIT {pageSize} OFFSET {(page - 1) * pageSize}
             """).ToArrayAsync(token);
         return new(values, page, pageSize, count);
+    }
+    public async Task<IReadOnlyList<SePayVerifiedMoveOutCandidate>> VerifiedMoveOutCandidatesAsync(CancellationToken token)
+    {
+        if (db is not Compact24DbContext || !options.Enabled) return [];
+        // Recovery is strictly local ledger bookkeeping for *previously verified*
+        // signed SePay callbacks. Never request provider transactions, infer Paid
+        // from QR codes, or alter any staging/live payment environment.
+        var mode = "SEPAY:" + options.Mode.ToUpperInvariant();
+        var rows = await db.Database.SqlQuery<SePayVerifiedMoveOutCandidate>($"""
+            SELECT DISTINCT a.target_settlement_contract_id AS "ContractId",
+              a.settlement_receivable_id AS "ReceivableId"
+            FROM payment_allocations a
+            JOIN payments p ON p.id=a.source_payment_id
+            JOIN contracts c ON c.id=a.target_settlement_contract_id
+            WHERE a.target_settlement_contract_id IS NOT NULL AND a.settlement_receivable_id IS NOT NULL
+              AND p.provider_code={mode} AND p.status='VERIFIED' AND p.verification_method='AUTO'
+              AND c.status={(short)ContractStatus.Active}
+              AND c.move_out->'current'->>'status'={((int)MoveOutStatus.Inspected).ToString()}
+              AND EXISTS(SELECT 1 FROM operational_tasks e WHERE e.task_type='COMMAND'
+                AND e.task_data->>'recordType'='SePayEventV1'
+                AND e.task_data->>'transferId'=p.id::text
+                AND e.task_data->>'mode'={options.Mode}
+                AND e.status='Completed'
+                AND e.task_data->>'reason'='verified_full_payment')
+            LIMIT 100
+            """).ToArrayAsync(token);
+        return rows;
     }
 }

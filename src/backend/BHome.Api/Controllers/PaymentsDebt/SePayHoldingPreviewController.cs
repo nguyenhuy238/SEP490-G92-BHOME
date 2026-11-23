@@ -37,7 +37,7 @@ public sealed class SePayHoldingPreviewController(IPaymentRepository repository,
         if (c is null || c.Kind != ContractKind.Holding || !c.IsDevelopmentDemo && !allowRealQrPreview) throw new PaymentException(404, "contract_not_found");
         var target = new NpgsqlConnectionStringBuilder(configuration.GetConnectionString("Database") ?? "");
         if (target.Host is not ("localhost" or "127.0.0.1" or "::1") && testScope?.Allows(c.Room.LocationId) != true &&
-            !(allowRealQrPreview && options.ReceivingAccounts.Any(a => a.LocationId == c.Room.LocationId)))
+            !(allowRealQrPreview && options.Bound(c.Room.LocationId, c.OwnerSignerId)))
             throw new PaymentException(404, "contract_not_found");
         return c;
     }
@@ -167,10 +167,9 @@ public sealed class SePayHoldingPreviewController(IPaymentRepository repository,
             throw new PaymentException(409, "holding_not_payable");
         if (contract.IsDevelopmentDemo && actor.IsInRole(Roles.Staff) && !(await State(contract, token)).CanShowQr)
             throw new PaymentException(409, "sandbox_simulated_signatures_required");
-        var binding = options.ReceivingAccounts.SingleOrDefault(x => x.LocationId == contract.Room.LocationId);
         var account = await repository.ReceivingAccountAsync(contract.Room.LocationId, token);
-        if (binding is null || account is null || !account.Enabled || !account.IsDevelopmentDemo ||
-            account.BankIdentifier != binding.BankIdentifier || account.AccountNumber != binding.AccountNumber)
+        if (account is null || !options.Matches(contract.Room.LocationId, account) ||
+            !account.Enabled || !account.IsDevelopmentDemo)
             throw new PaymentException(409, "sandbox_receiving_account_unavailable");
         var received = await contractRepository.DepositTotalAsync(id, token);
         var code = await codes.IssueAsync("Deposit", id, contract.Room.LocationId, token);

@@ -16,6 +16,7 @@ public interface IPaymentCodeRegistry
 }
 public sealed record SePayEvent(Guid Id, string Mode, SePayTransaction Transaction, string Status, string? Reason, Guid? TransferId);
 public sealed record SePayEventView(Guid Id, string Mode, string Status, string? Reason, Guid? TransferId, DateTimeOffset ReceivedAt);
+public sealed record SePayVerifiedMoveOutCandidate(Guid ContractId, Guid ReceivableId);
 public interface ISePayRepository
 {
     Task<Guid> ReceiveAsync(SePayTransaction transaction, CancellationToken token);
@@ -29,4 +30,5 @@ public interface ISePayRepository
     Task AddReceiptAsync(SePayEvent received, PaymentTransfer receipt, CancellationToken token);
     Task FinishAsync(SePayEvent received, string status, string reason, Guid? receipt, CancellationToken token);
     Task<PagedResult<SePayEventView>> EventsAsync(int page, int pageSize, CancellationToken token);
+    Task<IReadOnlyList<SePayVerifiedMoveOutCandidate>> VerifiedMoveOutCandidatesAsync(CancellationToken token);
 }

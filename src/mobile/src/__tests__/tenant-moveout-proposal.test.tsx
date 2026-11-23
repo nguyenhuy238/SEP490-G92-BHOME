@@ -141,6 +141,24 @@ const contractId = '7a6c4943-5c80-4757-bc6e-e75dd0d615d8';
 const proposalId = '8e00921b-cc9f-4d46-9192-4fecc963bdf3';
 const proposalPath = `/api/v1/contracts/${contractId}/move-out/receivables/proposal`;
 
+it('switches the accepted 20k proposal to completed when the verified server move-out closes', async () => {
+  const changed = vi.fn();
+  const request = vi.fn<ContractRequest>(async <T,>(path: string): Promise<T> => {
+    if (path === proposalPath) return proposal('Accepted') as T;
+    if (path === `/api/v1/contracts/${contractId}/move-out`)
+      return { status: 'Completed' } as T;
+    throw new Error(`Unexpected API: ${path}`);
+  });
+  const api = contractClient(<T,>(path: string, init?: RequestInit) => request(path, init) as Promise<T>);
+  render(<TenantMoveOutProposalPanel api={api} contractId={contractId} onChanged={changed} />);
+  expect((await screen.findAllByText('Trả phòng thành công')).length).toBeGreaterThanOrEqual(2);
+  expect(screen.getByText('Không còn phải thanh toán')).toBeTruthy();
+  expect(screen.getByText('Phí trả phòng đã chốt')).toBeTruthy();
+  expect(screen.queryByTestId('excess-payment')).toBeNull();
+  expect(screen.queryByText(/Dự kiến cần thanh toán thêm/)).toBeNull();
+  expect(changed).toHaveBeenCalledOnce();
+});
+
 function proposal(
   status: 'PendingTenant' | 'Accepted' | 'Disputed' | 'Outdated' = 'PendingTenant',
 ) {

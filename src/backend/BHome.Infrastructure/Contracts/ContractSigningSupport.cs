@@ -206,25 +206,11 @@ public sealed class SignaturePictureGenerator : IHandoverSignatureInkRenderer
 {
     public byte[] Render(HandoverInkInput drawing)
     {
-        var png = FromStrokes(new DrawnSignatureInput(drawing.Width, drawing.Height, drawing.Strokes));
-        using var original = SKBitmap.Decode(png);
-        if (original is null) throw ContractException.Invalid("handover_owner_ink_invalid");
-        // The A4 Owner signing slot is wide and 135pt high. Keep the real ink
-        // unchanged, but add transparent side margins when the drawing is very
-        // tall/narrow so it fits the box without being cropped or stretched.
-        var minimumWidth = (int)Math.Ceiling(original.Height / 0.4);
-        if (original.Width >= minimumWidth) return png;
-        using var padded = new SKBitmap(new SKImageInfo(minimumWidth, original.Height,
-            SKColorType.Rgba8888, SKAlphaType.Premul));
-        using (var canvas = new SKCanvas(padded))
-        {
-            canvas.Clear(SKColors.Transparent);
-            canvas.DrawBitmap(original, (minimumWidth - original.Width) / 2f, 0,
-                new SKSamplingOptions(SKFilterMode.Linear));
-        }
-        using var image = SKImage.FromBitmap(padded);
-        using var encoded = image.Encode(SKEncodedImageFormat.Png, 100);
-        return encoded.ToArray();
+        // Render straight into the final handover-signing box. Previously this
+        // generated a PNG, decoded it, padded the bitmap, then encoded it AGAIN
+        // for tall/narrow ink. Avoid both codec passes and a second bitmap.
+        return FromStrokesCore(new DrawnSignatureInput(drawing.Width, drawing.Height, drawing.Strokes),
+            padForHandover: true);
     }
     private static readonly Lazy<byte[]> FontBytes = new(() =>
     {
@@ -260,7 +246,9 @@ public sealed class SignaturePictureGenerator : IHandoverSignatureInkRenderer
 
     // A signature drawn with a finger: strokes of [x, y] points on a Width × Height pad. Cropped to the ink, scaled to
     // 200 px high and drawn in the same ink on a transparent background, so it can be saved as the signer's picture.
-    public byte[] FromStrokes(DrawnSignatureInput drawing)
+    public byte[] FromStrokes(DrawnSignatureInput drawing) => FromStrokesCore(drawing, padForHandover: false);
+
+    private static byte[] FromStrokesCore(DrawnSignatureInput drawing, bool padForHandover)
     {
         if (drawing.Width is < 100 or > 4000 || drawing.Height is < 60 or > 4000 || drawing.Strokes is null ||
             drawing.Strokes.Length is 0 or > 80 || drawing.Strokes.Sum(s => s?.Length ?? 0) > 8000)
@@ -290,8 +278,12 @@ public sealed class SignaturePictureGenerator : IHandoverSignatureInkRenderer
         var scale = Math.Min(4f, Math.Min(
             (target - 2 * pad) / Math.Max(inkHeight, 1f),
             (4000 - 2 * pad) / Math.Max(inkWidth, 1f)));
-        var width = (int)Math.Ceiling(Math.Max(inkWidth * scale + 2 * pad, 80));
+        var originalWidth = (int)Math.Ceiling(Math.Max(inkWidth * scale + 2 * pad, 80));
         var height = (int)target;
+        // Owner handover's wide signature slot requires a minimum 2.5:1
+        // aspect ratio; offset the ink on the same transparent canvas.
+        var width = padForHandover ? Math.Max(originalWidth, (int)Math.Ceiling(height / 0.4)) : originalWidth;
+        var horizontalOffset = (width - originalWidth) / 2f;
         using var bitmap = new SKBitmap(new SKImageInfo(width, height, SKColorType.Rgba8888, SKAlphaType.Premul));
         using (var canvas = new SKCanvas(bitmap))
         {
@@ -306,7 +298,8 @@ public sealed class SignaturePictureGenerator : IHandoverSignatureInkRenderer
                 StrokeJoin = SKStrokeJoin.Round
             };
             var top0 = (height - inkHeight * scale) / 2;
-            SKPoint Map(SKPoint p) => new(pad + (p.X - left) * scale, top0 + (p.Y - top) * scale);
+            SKPoint Map(SKPoint p) => new(horizontalOffset + pad + (p.X - left) * scale,
+                top0 + (p.Y - top) * scale);
             foreach (var line in points)
             {
                 // Round-capped segments join smoothly; a single point becomes a dot.

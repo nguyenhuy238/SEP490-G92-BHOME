@@ -98,6 +98,45 @@ export interface PrivateEvidenceViewerProps {
   previewButtonLabel?: string;
   /** Hide download controls on read-only inspection photo surfaces. Default preserves existing viewers. */
   showDownload?: boolean;
+  /** Render an authenticated, verified image directly instead of a text-only preview action. */
+  inlineThumbnail?: boolean;
+}
+
+// Avoid starting dozens of private MinIO downloads when an inspection contains
+// many photos. This scheduler only holds a slot for the request, not its bytes.
+const maxInlineImageFetches = 4;
+let runningInlineImageFetches = 0;
+const pendingInlineImageFetches: Array<() => void> = [];
+function nextInlineImageFetch() {
+  while (runningInlineImageFetches < maxInlineImageFetches && pendingInlineImageFetches.length) {
+    pendingInlineImageFetches.shift()?.();
+  }
+}
+async function withInlineImageSlot<T>(signal: AbortSignal, action: () => Promise<T>): Promise<T> {
+  if (signal.aborted) throw new DOMException('Cancelled', 'AbortError');
+  await new Promise<void>((resolve, reject) => {
+    const start = () => {
+      signal.removeEventListener('abort', cancel);
+      if (signal.aborted) {
+        reject(new DOMException('Cancelled', 'AbortError'));
+        return;
+      }
+      runningInlineImageFetches++;
+      resolve();
+    };
+    const cancel = () => {
+      const position = pendingInlineImageFetches.indexOf(start);
+      if (position >= 0) pendingInlineImageFetches.splice(position, 1);
+      reject(new DOMException('Cancelled', 'AbortError'));
+    };
+    if (runningInlineImageFetches < maxInlineImageFetches) start();
+    else {
+      pendingInlineImageFetches.push(start);
+      signal.addEventListener('abort', cancel, { once: true });
+    }
+  });
+  try { return await action(); }
+  finally { runningInlineImageFetches--; nextInlineImageFetch(); }
 }
 
 function classify(blob: Blob, declaredType?: string): Promise<SafeFile> {
@@ -171,6 +210,7 @@ export function PrivateEvidenceViewer({
   compactActions = false,
   previewButtonLabel,
   showDownload = true,
+  inlineThumbnail = false,
 }: PrivateEvidenceViewerProps) {
   const dialogTitleId = useId();
   const [open, setOpen] = useState(false);
@@ -191,6 +231,29 @@ export function PrivateEvidenceViewer({
   // A different evidence ID never inherits another tenant/contract's blob.
   const cached = useRef<{ key: string; file: SafeFile } | null>(null);
   const previousCacheKey = useRef(cacheKey);
+  const inlineImageUrl = useRef<string | null>(null);
+  const inlineTarget = useRef<HTMLButtonElement | null>(null);
+  const [thumbnailVisible, setThumbnailVisible] = useState(false);
+  const [thumbnailUrl, setThumbnailUrl] = useState('');
+  const [thumbnailError, setThumbnailError] = useState('');
+  const [thumbnailRetry, setThumbnailRetry] = useState(0);
+
+  useEffect(() => {
+    if (!inlineThumbnail) return;
+    const element = inlineTarget.current;
+    if (!element || typeof IntersectionObserver === 'undefined') {
+      setThumbnailVisible(true);
+      return;
+    }
+    const observer = new IntersectionObserver((entries) => {
+      if (entries.some((entry) => entry.isIntersecting)) {
+        setThumbnailVisible(true);
+        observer.disconnect();
+      }
+    }, { rootMargin: '240px' });
+    observer.observe(element);
+    return () => observer.disconnect();
+  }, [inlineThumbnail, cacheKey]);
 
   const revokePreview = () => {
     if (previewUrl.current) URL.revokeObjectURL(previewUrl.current);
@@ -211,6 +274,7 @@ export function PrivateEvidenceViewer({
     // When the same React slot is reused for another evidence/contract,
     // discard both the private bytes and any preview before showing it.
     cached.current = null;
+    setThumbnailVisible(inlineThumbnail && typeof IntersectionObserver === 'undefined');
     requestId.current += 1;
     activeRequest.current?.abort();
     activeRequest.current = null;
@@ -221,7 +285,41 @@ export function PrivateEvidenceViewer({
     setBusy(null);
     setUnsupported(false);
     setError('');
-  }, [cacheKey]);
+  }, [cacheKey, inlineThumbnail]);
+
+  useEffect(() => {
+    if (!inlineThumbnail || !thumbnailVisible || !cacheKey) return;
+    const controller = new AbortController();
+    let imageUrl: string | null = null;
+    setThumbnailError('');
+    setThumbnailUrl('');
+    void withInlineImageSlot(controller.signal, async () => {
+      const blob = await fetchBlob(controller.signal);
+      if (expectedSize !== undefined && blob.size !== expectedSize)
+        throw new Error('Kích thước ảnh không khớp dữ liệu đã lưu.');
+      const file = await classify(blob, contentType);
+      if (!file.type?.startsWith('image/')) throw new Error('Ảnh không phải PNG/JPEG hợp lệ.');
+      return file;
+    }).then((file) => {
+      if (controller.signal.aborted) return;
+      const verifiedKey = `${cacheKey}:${contentType ?? ''}:${expectedSize ?? ''}`;
+      if (file.blob.size <= 8 * 1024 * 1024) cached.current = { key: verifiedKey, file };
+      imageUrl = URL.createObjectURL(file.blob.type === file.type
+        ? file.blob : new Blob([file.blob], { type: file.type! }));
+      inlineImageUrl.current = imageUrl;
+      setThumbnailUrl(imageUrl);
+    }, (cause: unknown) => {
+      if (!controller.signal.aborted) setThumbnailError(evidenceError(cause, errorMessage));
+    });
+    return () => {
+      controller.abort();
+      if (imageUrl) URL.revokeObjectURL(imageUrl);
+      if (inlineImageUrl.current === imageUrl) inlineImageUrl.current = null;
+    };
+    // fetchBlob is a new closure on every render. cacheKey is the immutable
+    // private evidence identity and intentionally controls refetching.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [inlineThumbnail, thumbnailVisible, cacheKey, contentType, expectedSize, thumbnailRetry]);
 
   useEffect(() => {
     const pendingTimeouts = timeouts.current;
@@ -230,6 +328,8 @@ export function PrivateEvidenceViewer({
     return () => {
       mounted.current = false;
       cached.current = null;
+      if (inlineImageUrl.current) URL.revokeObjectURL(inlineImageUrl.current);
+      inlineImageUrl.current = null;
       requestId.current += 1;
       activeRequest.current?.abort();
       activeRequest.current = null;
@@ -342,7 +442,33 @@ export function PrivateEvidenceViewer({
 
   return (
     <>
-      <Stack direction="row" useFlexGap sx={{ gap: 1, flexWrap: 'wrap', alignItems: 'center' }}>
+      {inlineThumbnail ? (
+        <Box sx={{ width: 116, maxWidth: '100%' }}>
+          <Button
+            ref={inlineTarget}
+            aria-label={previewButtonLabel ?? `Xem ${label}`}
+            variant="outlined"
+            size="small"
+            disabled={disabled || !!busy || !thumbnailUrl}
+            onClick={() => void fetchFile('preview')}
+            sx={{ display: 'block', p: 0.5, minWidth: 0, width: '100%', height: 94, overflow: 'hidden' }}
+          >
+            {thumbnailUrl ? (
+              <Box component="img" src={thumbnailUrl} alt={label} loading="lazy"
+                sx={{ display: 'block', height: '100%', width: '100%', objectFit: 'cover', borderRadius: 0.5 }} />
+            ) : (
+              <Typography variant="caption" sx={{ px: 0.5, color: 'text.secondary' }}>
+                {thumbnailError ? 'Không tải được ảnh' : 'Đang tải ảnh…'}
+              </Typography>
+            )}
+          </Button>
+          {thumbnailError && (
+            <Button size="small" onClick={() => setThumbnailRetry((value) => value + 1)}>
+              Tải lại ảnh
+            </Button>
+          )}
+        </Box>
+      ) : <Stack direction="row" useFlexGap sx={{ gap: 1, flexWrap: 'wrap', alignItems: 'center' }}>
         <Button
           size="small"
           type="button"
@@ -363,7 +489,7 @@ export function PrivateEvidenceViewer({
             {compactActions ? 'Tải xuống' : `Tải xuống ${label}`}
           </Button>
         )}
-      </Stack>
+      </Stack>}
       {error && !open && (
         <Alert
           severity="error"

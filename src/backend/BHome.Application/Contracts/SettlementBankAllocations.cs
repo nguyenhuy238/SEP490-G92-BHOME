@@ -59,8 +59,7 @@ public sealed partial class SettlementReceivablesService
         if (sepay?.Enabled == true && paymentCodes is not null)
         {
             if (sepay.Mode != (balance.Charge.IsDevelopmentDemo ? "Test" : "Live") ||
-                !sepay.ReceivingAccounts.Any(a => a.LocationId == locationId &&
-                    a.BankIdentifier == account!.BankIdentifier && a.AccountNumber == account.AccountNumber))
+                !sepay.Matches(locationId, account!))
                 return new(id, chargeId, "ReceivingAccountUnavailable", null, null, null,
                     balance.Outstanding, "", null, balance.Charge.IsDevelopmentDemo);
             reference = await paymentCodes.IssueAsync("Settlement", chargeId, locationId, token)
