@@ -103,6 +103,9 @@ docker build -t bhome/contract-converter:local -f deploy/docker/ContractConverte
 # Xóa/để trống LibreOfficeContainerImage nếu chọn executable.
 ```
 
+Image API release cấu hình sẵn `/usr/bin/libreoffice` để tạo PDF và `/usr/bin/pdftoppm`
+để hiển thị từng trang. Cấu hình hai công cụ này không phê duyệt mẫu để ký.
+
 Converter container chạy không mạng, filesystem chỉ đọc, giới hạn CPU/RAM/PID;
 Windows dùng user 10001 của image; Linux dùng UID/GID của process API để ghi vào workspace riêng quyền 0700.
 Chỉ mount thư mục tạm của một request. Timeout/cancel dọn container và thư mục tạm.

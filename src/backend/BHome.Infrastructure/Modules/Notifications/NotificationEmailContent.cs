@@ -201,6 +201,15 @@ internal sealed class NotificationEmailContent(Compact24DbContext db,
     }
     internal async Task<(string Title, string Body)> BuildAsync(NotificationView notice, CancellationToken t)
     {
+        if (notice.EventType == "HOLDING_OWNER_SIGNING_REQUIRED" && notice.RelatedObjectType == "Contract")
+        {
+            var portal = authentication.Value.WebInvitationUrl;
+            var instruction = "Đăng nhập BHOME bằng tài khoản Chủ nhà để xem và ký hợp đồng giữ chỗ.";
+            if (authentication.Value.Trusted(portal, environment.IsDevelopment()) &&
+                Uri.TryCreate(portal, UriKind.Absolute, out var url) && url.Scheme is "https" or "http")
+                instruction += $"\n\n{url.GetLeftPart(UriPartial.Authority)}/contracts?contractId={notice.RelatedObjectId:D}";
+            return (notice.Title, notice.Summary + "\n\n" + instruction);
+        }
         if (notice.EventType == "CONTRACT_ACTIVATED" && notice.RelatedObjectType == "Contract" &&
             await MainConfirmationAsync(notice.RelatedObjectId, null, t) is { } main)
             return main;

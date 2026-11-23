@@ -246,6 +246,45 @@ public sealed class OperationsService(IOperationsRepository repository, IOperati
         return await repository.RoomContentAsync(id, false, t) ?? throw OperationsException.Missing();
     }
 
+    public async Task<IReadOnlyList<RoomPublicContent>> ManagedRoomsAsync(Guid locationId, CancellationToken t)
+    {
+        Require(Permissions.PublicContent.Publish);
+        if (locationId == Guid.Empty) throw OperationsException.Missing();
+        return await repository.ManagedRoomsAsync(locationId, t);
+    }
+
+    private static void ValidateBulkPublicRooms(PublicRoomBulkRequest input)
+    {
+        Validate(input);
+        if (input.Targets is null || input.Targets.Length is < 1 or > 100 ||
+            input.Targets.Any(x => x.RoomId == Guid.Empty || x.ExpectedVersion <= 0) ||
+            input.Targets.Select(x => x.RoomId).Distinct().Count() != input.Targets.Length ||
+            input.Fields is null || input.Fields.Distinct().Count() != input.Fields.Length ||
+            input.Fields.Any(x => x is not ("description" or "amenities" or "indicativePrice")) ||
+            input.Mode is not ("Room" or "RoomDefaults" or "Manual" or "Publish" or "Unpublish") ||
+            (input.Mode is "Room" or "RoomDefaults" && (!input.SourceId.HasValue || input.SourceId.Value == Guid.Empty || input.SourceVersion < 1)) ||
+            (input.Mode is "Manual" && input.SourceId is not null) ||
+            (input.Mode is "Publish" or "Unpublish" && (input.Fields.Length != 0 || input.SourceId is not null)) ||
+            (input.Mode is "Room" or "RoomDefaults" or "Manual" && input.Fields.Length == 0))
+            throw OperationsException.Invalid("invalid_public_room_bulk");
+        if (input.Amenities is { } amenities) ValidateAmenities(amenities);
+    }
+
+    public async Task<PublicRoomBulkPreview> PreviewPublicRoomBulkAsync(Guid locationId, PublicRoomBulkRequest input, CancellationToken t)
+    {
+        Require(Permissions.PublicContent.Publish);
+        ValidateBulkPublicRooms(input);
+        return await repository.PreviewPublicRoomBulkAsync(locationId, input, t);
+    }
+
+    public async Task<PublicRoomBulkResult> ApplyPublicRoomBulkAsync(Guid locationId, PublicRoomBulkRequest input, CancellationToken t)
+    {
+        Require(Permissions.PublicContent.Publish);
+        ValidateBulkPublicRooms(input);
+        if (string.IsNullOrWhiteSpace(input.PreviewHash)) throw OperationsException.Invalid("public_bulk_preview_required");
+        return await repository.ApplyPublicRoomBulkAsync(Actor, locationId, input, Now, t);
+    }
+
     public async Task<LocationPublicContent> UpdateLocationContentAsync(Guid id, LocationPublicContentWrite input, CancellationToken t)
     {
         Require(Permissions.PublicContent.Publish); Validate(input); ValidateAmenities(input.Amenities);
@@ -410,7 +449,7 @@ public sealed class OperationsService(IOperationsRepository repository, IOperati
         .Where(x => x.Length > 0).Distinct(StringComparer.OrdinalIgnoreCase).Order(StringComparer.OrdinalIgnoreCase).ToArray();
     private static void ValidateAmenities(string[]? values)
     {
-        if (values is null || values.Length > 50 || values.Any(x => x.Length > 100))
+        if (values is null || values.Length > 50 || values.Any(x => x is null || x.Length > 100))
             throw OperationsException.Invalid("invalid_public_amenities");
     }
     private static async Task<byte[]> ReadImageAsync(Stream input, CancellationToken t)

@@ -10,7 +10,11 @@ export default function PublicLayout() {
             BHOME
           </Typography>
 
-          <Box component="nav" aria-label="Điều hướng chính" sx={{ display: 'flex', gap: 3 }}>
+          <Box
+            component="nav"
+            aria-label="Điều hướng chính"
+            sx={{ display: 'flex', gap: 3, '& a:focus-visible': { outlineColor: '#fff' } }}
+          >
             <Link to="/" style={{ color: 'white' }}>
               Trang chủ
             </Link>
@@ -30,7 +34,8 @@ export default function PublicLayout() {
       </Container>
 
       <Box component="footer" sx={{ py: 3, textAlign: 'center' }}>
-        <Typography variant="body2">© BHOME - Smart Boarding House Management</Typography>
+        <Typography variant="body2">© BHOME · Thông tin cơ sở và phòng trọ</Typography>
+        <Link to="/locations">Xem cơ sở và thông tin liên hệ</Link>
       </Box>
     </>
   );

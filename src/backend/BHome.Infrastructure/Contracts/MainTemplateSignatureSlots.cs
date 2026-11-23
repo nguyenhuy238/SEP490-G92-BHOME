@@ -26,7 +26,8 @@ internal static class MainTemplateSignatureSlots
         }
         public ICollection<EventType> GetSupportedEvents() => new HashSet<EventType> { EventType.RENDER_TEXT };
     }
-    internal static byte[] Add(byte[] source)
+    internal static byte[] Add(byte[] source, string templateId = TemplateId, bool ownerOnLeft = false,
+        string ownerHeading = "ĐẠI DIỆN BÊN A", string tenantHeading = "ĐẠI DIỆN BÊN B")
     {
         using var output = new MemoryStream();
         using (var pdf = new PdfDocument(new PdfReader(new MemoryStream(source)), new PdfWriter(output)))
@@ -38,9 +39,10 @@ internal static class MainTemplateSignatureSlots
                 new PdfCanvasProcessor(listener).ProcessPageContent(pdf.GetPage(page));
                 foreach (var (owner, key) in new[] { (true, ContractSignatureSlots.Owner), (false, ContractSignatureSlots.Tenant) })
                 {
-                    var lines = listener.Text.Where(f => owner ? f.X >= size.GetWidth() / 2 : f.X < size.GetWidth() / 2)
+                    var lines = listener.Text.Where(f => (owner == ownerOnLeft) == (f.X < size.GetWidth() / 2))
                         .GroupBy(f => Math.Round(f.Y)).Select(g => new { Text = string.Concat(g.OrderBy(f => f.X).Select(f => f.Text)).Normalize(NormalizationForm.FormC).Replace(" ", ""), Parts = g.ToArray() });
-                    var title = lines.FirstOrDefault(l => l.Text.Contains(owner ? "ĐẠIDIỆNBÊNA" : "ĐẠIDIỆNBÊNB"));
+                    var heading = (owner ? ownerHeading : tenantHeading).Replace(" ", "");
+                    var title = lines.FirstOrDefault(l => l.Text.Contains(heading, StringComparison.Ordinal));
                     if (title is null) continue;
                     var center = (title.Parts.Min(f => f.X) + title.Parts.Max(f => f.Right)) / 2;
                     var width = size.GetWidth() * .32f;
@@ -50,7 +52,7 @@ internal static class MainTemplateSignatureSlots
                 }
             }
             if (found.Count != 2) throw new BHome.Application.Contracts.ContractException(503, "contract_template_slots_changed");
-            pdf.GetDocumentInfo().SetMoreInfo(SourceTemplate, TemplateId);
+            pdf.GetDocumentInfo().SetMoreInfo(SourceTemplate, templateId);
         }
         return output.ToArray();
     }

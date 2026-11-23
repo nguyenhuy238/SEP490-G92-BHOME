@@ -39,8 +39,8 @@ export function ownerError(error: unknown) {
   if (infrastructure) return infrastructure;
   if (error instanceof ApiError) {
     const codes: Record<string, string> = {
-      email_recipient_not_allowed:
-        'Địa chỉ nhận chưa được cho phép trong môi trường thử nghiệm. Liên hệ người quản trị môi trường trước khi gửi lại.',
+      email_recipient_invalid:
+        'Địa chỉ email nhận không hợp lệ. Kiểm tra email của nhân viên trước khi gửi lại.',
       staff_account_requires_invitation:
         'Phiên bản Backend cũ yêu cầu kích hoạt tài khoản. Hãy cập nhật Backend rồi thử gửi lại thông tin đăng nhập.',
       staff_password_update_failed:
@@ -100,6 +100,9 @@ export function ownerError(error: unknown) {
         'Cần giới thiệu cơ sở và ít nhất một số điện thoại hoặc email liên hệ.',
       public_room_incomplete: 'Cần mô tả phòng trước khi xuất bản.',
       public_location_not_published: 'Cần xuất bản cơ sở trước khi xuất bản phòng.',
+      public_location_inactive: 'Cơ sở đã ngừng hoạt động. Chỉ xuất bản cơ sở đang hoạt động.',
+      invalid_public_photo_order:
+        'Danh sách ảnh đã thay đổi. Tải lại danh sách ảnh rồi sắp xếp lại.',
       announcement_idempotency_conflict:
         'Mã tạo nháp đã dùng cho nội dung khác. Mở lại nháp đã lưu để kiểm tra.',
     };
