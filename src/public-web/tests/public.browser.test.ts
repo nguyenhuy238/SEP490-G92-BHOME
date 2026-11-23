@@ -237,8 +237,9 @@ for (const width of [1440, 768, 390])
           true,
         );
         await page.getByRole('link', { name: 'Phòng A1', exact: true }).click();
+        await page.getByRole('heading', { name: 'Phòng A1', level: 1, exact: true }).waitFor();
         await page.getByRole('link', { name: location.contactEmail }).waitFor();
-        expect(await page.title()).toBe('Phòng A1 | BHOME');
+        await expect.poll(() => page.title()).toBe('Phòng A1 | BHOME');
         expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(
           true,
         );
