@@ -188,11 +188,13 @@ it('uses the same stored handover draft photos as the Bàn giao tab even when fi
   );
 });
 
-it('allows pricing each Staff-inspected item without Owner review, then sends a described proposal to Tenant', async () => {
+it('allows pricing Staff-inspected items and sending fees without a second Owner inspection approval', async () => {
   mount();
   expect(await screen.findByText(/1\.200\.000/)).toBeInTheDocument();
   expect(screen.getByText(/100\.000/)).toBeInTheDocument();
   expect(screen.queryByText('Xác minh kết quả Staff')).not.toBeInTheDocument();
+  expect(screen.queryByText('Chờ Owner xác nhận kiểm kê')).not.toBeInTheDocument();
+  expect(screen.queryByRole('button', { name: 'Xác nhận kết quả kiểm kê' })).not.toBeInTheDocument();
   const firstItem = await screen.findByRole('button', {
     name: 'Nhập phí · Vệ sinh và hiện trạng phòng',
   });
@@ -241,4 +243,162 @@ it('allows pricing each Staff-inspected item without Owner review, then sends a 
     }),
     expect.any(String),
   );
+});
+
+it('shows the Tenant objection on the exact charge and lets Owner revise and resend it', async () => {
+  vi.mocked(api.transport).mockResolvedValue({
+    ...review,
+    status: 'Disputed',
+    latestProposal: {
+      id: 'proposal-1',
+      sourceReference: review.reference,
+      items: [
+        {
+          kind: 'RoomCheck',
+          roomCheckCode: 'cleanliness',
+          amount: '250000',
+          reason: 'Phí vệ sinh',
+        },
+      ],
+      totalCharges: '250000',
+      signedBalance: '650000',
+      availableDeposit: '1000000',
+      verifiedDeposit: '1200000',
+      sentAt: '2026-11-22T10:00:00Z',
+      tenantFeedback: {
+        confirmed: false,
+        reason: 'Mong Owner kiểm tra lại ảnh',
+        disputedItems: [
+          {
+            kind: 'RoomCheck',
+            roomCheckCode: 'cleanliness',
+            reason: 'Đã dọn sạch trước khi trả phòng',
+          },
+        ],
+      },
+    },
+  } as never);
+  mount();
+  expect(await screen.findByText(/Tenant không đồng ý với đề xuất trước/)).toBeInTheDocument();
+  expect(screen.getByText('Lý do Tenant yêu cầu xem lại: Đã dọn sạch trước khi trả phòng')).toBeInTheDocument();
+  expect(screen.getByText('Phản hồi chung: Mong Owner kiểm tra lại ảnh')).toBeInTheDocument();
+  expect(screen.getAllByText('Tenant không đồng ý phí')).toHaveLength(1);
+  fireEvent.click(screen.getByRole('button', { name: 'Sửa phí · Vệ sinh và hiện trạng phòng' }));
+  fireEvent.change(screen.getByRole('textbox', { name: 'Số tiền cần thu (₫)' }), {
+    target: { value: '80000' },
+  });
+  fireEvent.change(screen.getByRole('textbox', { name: 'Lý do thu' }), {
+    target: { value: 'Giảm phí sau khi xem bằng chứng Tenant' },
+  });
+  fireEvent.click(screen.getByRole('button', { name: 'Xong' }));
+  fireEvent.click(await screen.findByRole('button', { name: 'Gửi lại Tenant duyệt' }));
+  fireEvent.click(await screen.findByRole('button', { name: 'Xác nhận thực hiện' }));
+  await waitFor(() =>
+    expect(mutation).toHaveBeenCalledWith(
+      'contract-1',
+      'move-out/receivables/proposal',
+      expect.objectContaining({
+        items: [
+          {
+            kind: 'RoomCheck',
+            roomCheckCode: 'cleanliness',
+            amount: '80000',
+            reason: 'Giảm phí sau khi xem bằng chứng Tenant',
+          },
+        ],
+      }),
+      expect.any(String),
+    ),
+  );
+});
+
+it('shows Staff final status and enables sending a proposal without redundant Owner confirmation', async () => {
+  mount();
+  expect(await screen.findByRole('button', { name: 'Gửi Tenant duyệt' })).toBeEnabled();
+  expect(screen.getByText('Chờ Owner gửi phí')).toBeInTheDocument();
+  expect(screen.queryByText('Chờ Owner xác nhận kiểm kê')).not.toBeInTheDocument();
+  expect(screen.queryByText(/Đã nhận kết quả Staff nhưng Owner chưa xác nhận kiểm kê thực tế/)).not.toBeInTheDocument();
+  expect(screen.queryByRole('button', { name: 'Xác nhận kết quả kiểm kê' })).not.toBeInTheDocument();
+  fireEvent.click(screen.getByRole('button', { name: 'Gửi Tenant duyệt' }));
+  fireEvent.click(screen.getByRole('button', { name: 'Xác nhận thực hiện' }));
+  await waitFor(() =>
+    expect(mutation).toHaveBeenCalledWith(
+      'contract-1',
+      'move-out/receivables/proposal',
+      expect.objectContaining({ inspectionId: 'inspection-1', items: [] }),
+      expect.any(String),
+    ),
+  );
+});
+
+it('does not redirect a Tenant-accepted fee back to redundant Owner inspection review', async () => {
+  vi.mocked(api.transport).mockResolvedValue({
+    ...review,
+    status: 'Accepted',
+    latestProposal: {
+      id: 'old-proposal',
+      sourceReference: review.reference,
+      items: [{ kind: 'RoomCheck', roomCheckCode: 'cleanliness', amount: '20000', reason: 'Hỏng tường' }],
+      totalCharges: '20000',
+      signedBalance: '-20000',
+      availableDeposit: '0',
+      verifiedDeposit: '0',
+      sentAt: '2026-11-22T10:00:00Z',
+      tenantFeedback: {
+        confirmed: true,
+        reason: '',
+        settlement: {
+          status: 'PendingOwnerReview',
+          payableAmount: '0',
+          refundAmount: '0',
+          reason: 'owner_confirmed_inspection_required',
+        },
+      },
+    },
+  } as never);
+  mount();
+  expect(await screen.findByText('Tenant đã đồng ý đề xuất.')).toBeInTheDocument();
+  expect(screen.getByText('Tenant đã đồng ý · Đang đối chiếu')).toBeInTheDocument();
+  expect(screen.queryByText('Đã nhận kết quả Staff')).not.toBeInTheDocument();
+  expect(screen.queryByText(/Owner chưa xác nhận kết quả kiểm kê thực tế của Staff/)).not.toBeInTheDocument();
+  expect(screen.queryByText(/Tenant đã đồng ý nhưng khoản phí chưa đủ điều kiện/)).not.toBeInTheDocument();
+  expect(screen.queryByRole('button', { name: 'Xác nhận kết quả kiểm kê' })).not.toBeInTheDocument();
+  expect(screen.queryByRole('button', { name: 'Gửi Tenant duyệt' })).not.toBeInTheDocument();
+});
+
+it.each([
+  ['PendingTenant', null, 'Chờ Tenant xác nhận phí'],
+  ['Disputed', null, 'Tenant yêu cầu điều chỉnh phí'],
+  ['Accepted', 'Payable', 'Tenant đã đồng ý · Đã tạo khoản phải thu'],
+  ['Accepted', 'RefundEligible', 'Tenant đã đồng ý · Có tiền cọc cần hoàn'],
+  ['Accepted', 'Settled', 'Đã quyết toán phí trả phòng'],
+  ['Outdated', null, 'Tenant đã đồng ý · Cần đối chiếu dữ liệu'],
+] as const)('shows the actual move-out progress for %s / %s', async (status, settlement, expected) => {
+  vi.mocked(api.transport).mockResolvedValue({
+    ...review,
+    status,
+    latestProposal: {
+      id: 'proposal-1',
+      sourceReference: review.reference,
+      items: [],
+      totalCharges: '20000',
+      signedBalance: '-20000',
+      availableDeposit: '0',
+      verifiedDeposit: '0',
+      sentAt: '2026-11-22T10:00:00Z',
+      tenantFeedback:
+        status === 'Accepted' || status === 'Outdated'
+          ? {
+              confirmed: true,
+              reason: '',
+              settlement: settlement
+                ? { status: settlement, payableAmount: '20000', refundAmount: '0' }
+                : null,
+            }
+          : null,
+    },
+  } as never);
+  mount();
+  expect(await screen.findByText(expected)).toBeInTheDocument();
+  expect(screen.queryByText('Đã nhận kết quả Staff')).not.toBeInTheDocument();
 });

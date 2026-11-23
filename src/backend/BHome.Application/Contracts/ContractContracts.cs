@@ -143,7 +143,8 @@ public sealed record MoveOutView(Guid Id, string Status, DateOnly ProposedDate, 
 public sealed record MoveOutHistoryView(int Version, string Action, Guid ActorId, DateTimeOffset OccurredAt, string Snapshot);
 public sealed record MoveOutAssignment(Guid ContractId, Guid RoomId, string RoomNumber, string LocationName, string Status, DateOnly ProposedDate, DateTimeOffset? ScheduledAt, int Version);
 public sealed record OwnerMoveOutInboxItem(Guid ContractId, string RoomNumber, Guid LocationId, string LocationName,
-    string Status, DateOnly ProposedDate, DateTimeOffset? InspectedAt, bool OwnerConfirmedInspection);
+    string Status, DateOnly ProposedDate, DateTimeOffset? InspectedAt, bool OwnerConfirmedInspection,
+    string? ProposalStatus = null, string? ProposalSettlementStatus = null);
 public sealed record OwnerMoveOutInboxPage(IReadOnlyList<OwnerMoveOutInboxItem> Items, int Page, int PageSize, int TotalCount);
 public sealed record SettlementReviewView(Guid Id, string Decision, bool Settled, Guid ReviewedByUserId, DateTimeOffset ReviewedAt, string FinancialSnapshot = "{}");
 

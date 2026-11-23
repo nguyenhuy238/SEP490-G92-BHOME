@@ -88,6 +88,7 @@ export interface TenantRefundPetition {
   status: 'REQUESTED' | 'APPROVED' | 'REJECTED' | 'COMPLETED';
   sourcePaymentId: string | null;
   sourceContractId: string | null;
+  moveOutProposalId?: string | null;
   createdAt: string;
   decidedAt: string | null;
   decisionReason: string | null;
@@ -111,6 +112,8 @@ export interface TenantRefundPetitionInput {
   reason: string;
   sourcePaymentId?: string | null;
   sourceContractId?: string | null;
+  /** Server validates that this is the latest accepted move-out proposal and the amount matches. */
+  moveOutProposalId?: string | null;
 }
 export interface TenantRefundPetitionSources {
   payments: { id: string; label: string }[];
@@ -240,6 +243,14 @@ export function refundError(error: unknown): string {
     refund_evidence_integrity_failed:
       'Chứng từ không khớp nội dung đã ghi nhận. Cần Owner kiểm tra.',
     refund_idempotency_conflict: 'Mã thao tác đã dùng với nội dung khác. Hãy tải lại để kiểm tra.',
+    move_out_refund_proposal_changed:
+      'Đề xuất hoàn cọc trả phòng đã thay đổi hoặc không còn số dư như trước. Vui lòng tải lại kết quả trả phòng.',
+    move_out_refund_already_requested:
+      'Đã có yêu cầu hoàn cọc cho đề xuất trả phòng này. Vui lòng kiểm tra danh sách yêu cầu.',
+    move_out_refund_use_deposit_ledger:
+      'Khoản hoàn cọc trả phòng phải được thực hiện qua sổ hoàn cọc của hợp đồng để tránh hoàn trùng.',
+    move_out_refund_validation_unavailable:
+      'Chưa thể xác minh số tiền hoàn cọc trả phòng. Vui lòng thử lại sau.',
   };
   return (
     messages[e.code ?? e.problem?.code ?? ''] ??

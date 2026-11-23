@@ -74,6 +74,26 @@ export function MoveOutFinancialClosePanel({
     queryFn: ({ signal }) => api.settlementChargeReview(id, signal),
     retry: false,
   });
+  const tenantProposal = useQuery({
+    queryKey: ['move-out-financial-close-tenant-proposal', id, data.reference],
+    queryFn: ({ signal }) =>
+      api.transport<{
+        status: string;
+        latestProposal: {
+          id: string;
+          tenantFeedback?: { settlement?: { status: string; reason?: string | null } | null } | null;
+        } | null;
+      }>(
+        `/api/v1/contracts/${encodeURIComponent(id)}/move-out/receivables/proposal`,
+        { signal },
+      ),
+    retry: false,
+  });
+  const tenantProposalUnresolved = !!tenantProposal.data?.latestProposal &&
+    (tenantProposal.data.status !== 'Accepted' ||
+      !['Payable', 'RefundEligible', 'Settled'].includes(
+        tenantProposal.data.latestProposal.tenantFeedback?.settlement?.status ?? '',
+      ));
   const beneficiaries = Array.isArray(source.data?.beneficiaries) ? source.data.beneficiaries : [];
   const validReview =
     chargeReview.data && Array.isArray(chargeReview.data.missingInputs)
@@ -135,8 +155,11 @@ export function MoveOutFinancialClosePanel({
     !busy &&
     !source.isFetching &&
     !chargeReview.isFetching &&
+    !tenantProposal.isFetching &&
     !source.error &&
     !chargeReview.error &&
+    !tenantProposal.error &&
+    !tenantProposalUnresolved &&
     unresolvedBlockers.length === 0 &&
     !existingRefundRequest &&
     !hasLegacyDeductionPlan &&
@@ -207,8 +230,20 @@ export function MoveOutFinancialClosePanel({
             Cần xác nhận danh sách khoản thu cuối kỳ ở phía trên trước khi chốt tài chính.
           </Alert>
         )}
+        {tenantProposalUnresolved && (
+          <Alert severity="warning">
+            {tenantProposal.data?.status === 'Accepted'
+              ? 'Tenant đã đồng ý nhưng các khoản thu và cấn cọc chưa được máy chủ xác minh đủ điều kiện. Owner cần kiểm tra bằng chứng, xác nhận kiểm kê hoặc giải quyết khoản nợ trước khi chốt tài chính.'
+              : 'Tenant chưa đồng ý với đề xuất phí trả phòng hiện tại. Hãy xem phản hồi của Tenant, chỉnh lại khoản thu bị phản đối và gửi lại đề xuất trước khi chốt quyết toán.'}
+          </Alert>
+        )}
         {source.error && <Alert severity="error">{contractError(source.error)}</Alert>}
         {chargeReview.error && <Alert severity="error">{contractError(chargeReview.error)}</Alert>}
+        {tenantProposal.error && (
+          <Alert severity="error">
+            Không kiểm tra được xác nhận phí của Tenant: {contractError(tenantProposal.error)}
+          </Alert>
+        )}
         {(unresolvedBlockers.length > 0 || hasLegacyDeductionPlan) && (
           <Alert severity="warning">
             Nguồn tiền cọc còn điều kiện chưa xử lý. Hãy hoàn tất đối soát các nghĩa vụ và khấu trừ

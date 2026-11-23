@@ -32,6 +32,11 @@ public sealed class PropertyContractDockerFixture : IAsyncLifetime
         using var reader = new StreamReader(schema);
         await using var command = new NpgsqlCommand(await reader.ReadToEndAsync(), connection);
         await command.ExecuteNonQueryAsync();
+        await using var paymentCodeUpgrade = typeof(Compact24DbContext).Assembly
+            .GetManifestResourceStream("BHome.Compact24.SettlementSePayCodes.sql")!;
+        using var paymentCodeReader = new StreamReader(paymentCodeUpgrade);
+        await using var paymentCodeCommand = new NpgsqlCommand(await paymentCodeReader.ReadToEndAsync(), connection);
+        await paymentCodeCommand.ExecuteNonQueryAsync();
         var encryptionKey = Convert.ToBase64String(RandomNumberGenerator.GetBytes(32));
         var hmacKey = Convert.ToBase64String(RandomNumberGenerator.GetBytes(32));
         var storage = new Compact24WorkflowFixture.TestObjectStorage();
@@ -100,4 +105,15 @@ public sealed class PropertyContractDockerTests(PropertyContractDockerFixture fi
     [Fact] public Task AuditRollback() => new PropertyApiTests(fixture.Properties).DuplicateRoomAndPolicyRacesHaveOneWinnerAndNoOrphanAudit();
     [Fact] public Task InvoiceSnapshot() => new Billing.InvoiceApiTests(fixture.Capture).SharedRoomDraftIsPersistedIdempotentScopedAndExplicitlyMissingReadings();
     [Fact] public Task RoomInsights() => new PropertyApiTests(fixture.Properties).RoomInsightsAreReadOnlyScopedAndUseCompact24AuditDates();
+    [Theory]
+    [InlineData(3500000, "Payable", 500000)]
+    [InlineData(2800000, "RefundEligible", 200000)]
+    [InlineData(3000000, "Settled", 0)]
+    public Task MoveOutProposalNetDepositSePay(int proposedFee, string expectedStatus, int expectedAmount) =>
+        new ContractLifecycleApiTests(fixture.Contracts).TenantAcceptedVerifiedMoveOutQuotePostsOnlyNetMoneyAndSePaySettlesOnce(
+            proposedFee, expectedStatus, expectedAmount);
+    [Fact]
+    public Task MoveOutAlreadyAcceptedReconcilesWithoutSecondConsent() =>
+        new ContractLifecycleApiTests(fixture.Contracts).TenantAcceptedVerifiedMoveOutQuotePostsOnlyNetMoneyAndSePaySettlesOnce(
+            3500000, "Payable", 500000, recoverPreviousConsent: true);
 }

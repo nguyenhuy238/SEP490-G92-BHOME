@@ -27,15 +27,27 @@ function setup(
   noAdditionalCharges = false,
   overage = false,
   refundOverrides: Record<string, unknown> = {},
+  tenantProposalStatus: 'PendingTenant' | 'Disputed' | 'Accepted' | null = null,
+  tenantSettlementStatus: string | null = null,
 ) {
-  const transport = vi.fn().mockResolvedValue({
-    financialReference: 'DEPOSIT-123',
-    availableAmount: '100000',
-    blockers: [],
-    beneficiaries: [{ id: 'resident-1', label: 'Người thuê được xác minh' }],
-    requests: [],
-    ...refundOverrides,
-  });
+  const transport = vi.fn().mockImplementation(async (path: string) =>
+    path.endsWith('/move-out/receivables/proposal')
+      ? {
+          latestProposal: tenantProposalStatus
+            ? { id: 'proposal-1', tenantFeedback: { settlement: tenantSettlementStatus
+              ? { status: tenantSettlementStatus } : null } }
+            : null,
+          status: tenantProposalStatus ?? 'None',
+        }
+      : {
+          financialReference: 'DEPOSIT-123',
+          availableAmount: '100000',
+          blockers: [],
+          beneficiaries: [{ id: 'resident-1', label: 'Người thuê được xác minh' }],
+          requests: [],
+          ...refundOverrides,
+        },
+  );
   const settlementChargeReview = vi.fn().mockResolvedValue({
     reference: 'CHARGES-123',
     isCurrent: !noAdditionalCharges,
@@ -178,6 +190,31 @@ it('blocks closing when the refund source reports unresolved obligations, even i
 it('prevents a duplicate refund request from being created after an existing request', async () => {
   const { mutate } = setup(true, false, { requests: [{ status: 'REQUESTED' }] });
   expect(await screen.findByText(/Đã có yêu cầu hoàn cọc đang chờ xử lý/)).toBeInTheDocument();
+  expect(screen.getByRole('button', { name: 'Chốt quyết toán và xử lý tiền cọc' })).toBeDisabled();
+  expect(mutate).not.toHaveBeenCalled();
+});
+
+it.each(['PendingTenant', 'Disputed'] as const)(
+  'blocks Owner financial closure while Tenant proposal is %s',
+  async (status) => {
+    const { mutate } = setup(true, false, {}, status);
+    expect(await screen.findByText(/Tenant chưa đồng ý với đề xuất phí trả phòng hiện tại/)).toBeInTheDocument();
+    fireEvent.change(screen.getByLabelText('Lý do chốt quyết toán / căn cứ miễn thu'), {
+      target: { value: 'Đã đối chiếu các khoản thu.' },
+    });
+    fireEvent.click(screen.getByRole('checkbox', { name: /xác nhận đầy đủ mức bồi thường/ }));
+    expect(screen.getByRole('button', { name: 'Chốt quyết toán và xử lý tiền cọc' })).toBeDisabled();
+    expect(mutate).not.toHaveBeenCalled();
+  },
+);
+
+it('blocks financial close even after Tenant accepts if materialization needs Owner review', async () => {
+  const { mutate } = setup(true, false, {}, 'Accepted', 'PendingOwnerReview');
+  expect(await screen.findByText(/Tenant đã đồng ý nhưng các khoản thu và cấn cọc chưa được máy chủ xác minh/)).toBeInTheDocument();
+  fireEvent.change(screen.getByLabelText('Lý do chốt quyết toán / căn cứ miễn thu'), {
+    target: { value: 'Chốt khi tài chính hoàn tất.' },
+  });
+  fireEvent.click(screen.getByRole('checkbox', { name: /xác nhận đầy đủ mức bồi thường/ }));
   expect(screen.getByRole('button', { name: 'Chốt quyết toán và xử lý tiền cọc' })).toBeDisabled();
   expect(mutate).not.toHaveBeenCalled();
 });

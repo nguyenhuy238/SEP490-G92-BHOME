@@ -1,6 +1,6 @@
 import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { Image, View } from 'react-native';
-import { useFocusEffect } from 'expo-router';
+import { useFocusEffect, useLocalSearchParams } from 'expo-router';
 import { Button, Checkbox, Text, TextInput } from 'react-native-paper';
 import { formatContractMoney } from '../../../../packages/client-core/src/contracts';
 import { formatInstant } from '../../../../packages/client-core/src/localization';
@@ -42,10 +42,17 @@ export function TenantRefundRequestsScreen() {
 
 function TenantRefundRequests() {
   const { api } = useSession();
+  const route = useLocalSearchParams<{
+    sourceContractId?: string;
+    amount?: string;
+    reason?: string;
+    moveOutProposalId?: string;
+  }>();
   const [page, setPage] = useState(1);
   const [formOpen, setFormOpen] = useState(false);
   const [paymentId, setPaymentId] = useState('');
   const [contractId, setContractId] = useState('');
+  const [moveOutProposalId, setMoveOutProposalId] = useState('');
   const [amount, setAmount] = useState('');
   const [reason, setReason] = useState('');
   const [confirmed, setConfirmed] = useState(false);
@@ -54,6 +61,36 @@ function TenantRefundRequests() {
   const [success, setSuccess] = useState('');
   const inFlight = useRef(false);
   const key = useRef(randomUUID());
+  const loadedPrefill = useRef('');
+  useEffect(() => {
+    const marker = route.moveOutProposalId;
+    const nextContractId = route.sourceContractId;
+    const nextAmount = route.amount;
+    if (
+      !marker ||
+      !nextContractId ||
+      !nextAmount ||
+      !/^[a-f0-9]{8}-(?:[a-f0-9]{4}-){3}[a-f0-9]{12}$/i.test(marker) ||
+      !/^[a-f0-9]{8}-(?:[a-f0-9]{4}-){3}[a-f0-9]{12}$/i.test(nextContractId) ||
+      !/^[1-9]\d*$/.test(nextAmount) ||
+      loadedPrefill.current === marker
+    )
+      return;
+    loadedPrefill.current = marker;
+    setFormOpen(true);
+    setContractId(nextContractId);
+    setMoveOutProposalId(marker);
+    setAmount(nextAmount);
+    setPaymentId('');
+    setReason(
+      route.reason?.trim().slice(0, 2000) ||
+        'Đề nghị hoàn cọc sau khi xác nhận quyết toán trả phòng.',
+    );
+    setConfirmed(false);
+    setError('');
+    setSuccess('');
+    key.current = randomUUID();
+  }, [route.amount, route.moveOutProposalId, route.reason, route.sourceContractId]);
   const requests = useWorkspaceQuery<Page<TenantRefundRequest>>(tenantRefundRequestPath(page), {
     load: loadTenantRefundRequests,
     notifyError: false,
@@ -100,6 +137,7 @@ function TenantRefundRequests() {
       reason,
       sourcePaymentId: paymentId || null,
       sourceContractId: contractId || null,
+      ...(moveOutProposalId ? { moveOutProposalId } : {}),
     };
     const validation = refundRequestFormError(input);
     if (validation) {
@@ -119,6 +157,7 @@ function TenantRefundRequests() {
       setReason('');
       setPaymentId('');
       setContractId('');
+      setMoveOutProposalId('');
       setConfirmed(false);
       key.current = randomUUID();
       setPage(1);
@@ -168,7 +207,7 @@ function TenantRefundRequests() {
             label="Số tiền yêu cầu hoàn (VND) *"
             accessibilityLabel="Số tiền yêu cầu hoàn (VND)"
             value={amount}
-            disabled={busy}
+            disabled={busy || !!moveOutProposalId}
             onChangeText={(value) => {
               setAmount(value);
               update();
@@ -191,6 +230,12 @@ function TenantRefundRequests() {
           <Text style={ui.muted}>
             Hai liên kết dưới đây đều không bắt buộc. Bạn có thể chọn cả hai hoặc để trống.
           </Text>
+          {!!moveOutProposalId && (
+            <Text style={ui.muted}>
+              Thông tin được điền từ đề xuất quyết toán trả phòng. Vui lòng kiểm tra và gửi Owner
+              xác nhận hoàn tiền.
+            </Text>
+          )}
           <QueryState {...sources} />
           <ChoiceField
             label="Giao dịch liên quan (tùy chọn)"
@@ -200,7 +245,7 @@ function TenantRefundRequests() {
               ...(sources.data?.payments ?? []),
             ]}
             searchable
-            disabled={busy || sources.loading}
+            disabled={busy || sources.loading || !!moveOutProposalId}
             onChange={(value) => {
               setPaymentId(value);
               update();
@@ -214,7 +259,7 @@ function TenantRefundRequests() {
               ...(sources.data?.contracts ?? []),
             ]}
             searchable
-            disabled={busy || sources.loading}
+            disabled={busy || sources.loading || !!moveOutProposalId}
             onChange={(value) => {
               setContractId(value);
               update();
@@ -244,7 +289,9 @@ function TenantRefundRequests() {
             Gửi yêu cầu đến Owner
           </Button>
           <Text style={ui.muted}>
-            Owner có thể chấp thuận và gửi chứng từ chuyển khoản, hoặc từ chối kèm lý do.
+            {moveOutProposalId
+              ? 'Owner sẽ xét duyệt yêu cầu. Tiền hoàn cọc được chi trả và xác minh qua quyết toán cọc của hợp đồng.'
+              : 'Owner có thể chấp thuận và gửi chứng từ chuyển khoản, hoặc từ chối kèm lý do.'}
           </Text>
         </Box>
       )}
@@ -297,6 +344,15 @@ function RefundRequestCard({ request }: { request: TenantRefundRequest }) {
       </Row>
       <Text>{request.reason}</Text>
       <Text style={ui.muted}>Gửi lúc {formatInstant(request.createdAt)}</Text>
+      {!!request.moveOutProposalId && (
+        <View style={{ gap: 5 }}>
+          <Pill tone="neutral">Liên kết đề xuất trả phòng</Pill>
+          <Text style={ui.muted}>
+            Trạng thái yêu cầu phản ánh việc Owner xem xét. Tiền hoàn thực tế sẽ được đối chiếu qua
+            quyết toán cọc.
+          </Text>
+        </View>
+      )}
       {request.sourcePaymentId || request.sourceContractId ? (
         <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 6 }}>
           {request.sourcePaymentId && <Pill tone="neutral">Có liên kết giao dịch</Pill>}

@@ -36,6 +36,7 @@ type TestRow = {
   hasEvidence: boolean;
   version: number;
   tenantLabel: string;
+  moveOutProposalId?: string | null;
 };
 
 const baseRow: TestRow = {
@@ -175,6 +176,25 @@ it('rejects with a written reason and does not offer payment execution', async (
       expect.any(String),
     ),
   );
+  expect(mocks.execute).not.toHaveBeenCalled();
+});
+
+it('allows approving a move-out refund petition but prevents double payout outside the deposit ledger', async () => {
+  const row = {
+    ...baseRow,
+    status: 'APPROVED',
+    version: 2,
+    sourceContractId: 'contract-moveout',
+    moveOutProposalId: 'proposal-moveout',
+  };
+  mocks.ownerList.mockResolvedValue(page([row]));
+  mount();
+  fireEvent.click((await screen.findAllByRole('button', { name: 'Xem và xử lý' }))[0]!);
+  expect(screen.getByText(/việc chuyển khoản hoàn cọc và lưu chứng từ phải được xử lý trong luồng hoàn cọc của hợp đồng/)).toBeInTheDocument();
+  expect(screen.getByRole('link', { name: 'Xem hợp đồng liên quan' })).toHaveAttribute(
+    'href', '/contracts?contractId=contract-moveout',
+  );
+  expect(screen.queryByRole('button', { name: 'Xác nhận đã chuyển khoản và lưu chứng từ' })).not.toBeInTheDocument();
   expect(mocks.execute).not.toHaveBeenCalled();
 });
 

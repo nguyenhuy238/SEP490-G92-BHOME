@@ -90,6 +90,23 @@ internal sealed partial class SettlementReceivablesRepository
                     ? openingPhotos.KeyEvidenceIds ?? [] : []));
         }
 
+        var physical = new
+        {
+            inspection?.Id,
+            inspection?.Version,
+            inspection?.OwnerDecision,
+            inspection?.NoAdditionalCharges,
+            move?.Status,
+            move?.InspectedAt,
+            move?.InspectedByUserId,
+            OpeningHandoverVersion = openingHandover?.Version,
+            OpeningHandoverSnapshot = openingHandover?.Snapshot,
+            inspection?.BaselineSnapshot,
+            inspection?.ObservedSnapshot
+        };
+        var physicalReference = "PHYSICAL-" + Convert.ToHexString(SHA256.HashData(JsonSerializer.SerializeToUtf8Bytes(physical)));
+        // Keep the historical proposal reference stable for offers already sent
+        // before an automated settlement was introduced.
         var hash = SHA256.HashData(JsonSerializer.SerializeToUtf8Bytes(new
         {
             context.View.Reference,
@@ -106,7 +123,7 @@ internal sealed partial class SettlementReceivablesRepository
             inspection?.ObservedSnapshot
         }));
         return new(context, items.ToArray(), "PROPOSAL-" + Convert.ToHexString(hash),
-            staffInspectionReady, openingPhotos is null ? null : openingHandover!.ContractId);
+            staffInspectionReady, openingPhotos is null ? null : openingHandover!.ContractId, physicalReference);
     }
 
     private static string DescribeAsset(HandoverAsset asset) =>
@@ -121,9 +138,13 @@ internal sealed partial class SettlementReceivablesRepository
     public Task<MoveOutChargeProposal?> ProposalOperationAsync(Guid actor, Guid key, CancellationToken token) =>
         ProposalOperationByActorAsync<MoveOutChargeProposal>(actor, key, SettlementChargeRecords.ProposalKind, "ownerUserId", token);
 
-    public Task<MoveOutChargeProposalFeedback?> ProposalFeedbackOperationAsync(Guid actor, Guid key, CancellationToken token) =>
-        ProposalOperationByActorAsync<MoveOutChargeProposalFeedback>(actor, key,
+    public async Task<MoveOutChargeProposalFeedback?> ProposalFeedbackOperationAsync(Guid actor, Guid key, CancellationToken token)
+    {
+        var original = await ProposalOperationByActorAsync<MoveOutChargeProposalFeedback>(actor, key,
             SettlementChargeRecords.ProposalFeedbackKind, "tenantUserId", token);
+        return original is null ? null :
+            await OverlayProposalSettlementAsync(original, token);
+    }
 
     private async Task<T?> ProposalOperationByActorAsync<T>(Guid actor, Guid key, string kind,
         string actorField, CancellationToken token)
@@ -158,7 +179,33 @@ internal sealed partial class SettlementReceivablesRepository
         var responses = (await SettlementChargeRecords.ReadAsync<MoveOutChargeProposalFeedback>(db, id,
             SettlementChargeRecords.ProposalFeedbackKind, token)).Where(reply => reply.ProposalId == proposalId).ToArray();
         if (responses.Length > 1) throw ContractException.Conflict("move_out_proposal_feedback_integrity_failed");
-        return responses.SingleOrDefault();
+        var original = responses.SingleOrDefault();
+        return original is null ? null : await OverlayProposalSettlementAsync(original, token);
+    }
+
+    private async Task<MoveOutChargeProposalFeedback> OverlayProposalSettlementAsync(
+        MoveOutChargeProposalFeedback original, CancellationToken token)
+    {
+        var reconciliations = (await SettlementChargeRecords.ReadAsync<MoveOutChargeProposalSettlementResolution>(
+            db, original.ContractId, SettlementChargeRecords.ProposalSettlementKind, token))
+            .Where(x => x.FeedbackId == original.Id && x.ProposalId == original.ProposalId).ToArray();
+        if (reconciliations.Length > 1)
+            throw ContractException.Conflict("move_out_proposal_reconciliation_integrity_failed");
+        return reconciliations.Length == 0 ? original : original with
+        {
+            Settlement = reconciliations[0].Settlement,
+            VerifiedPhysicalReference = reconciliations[0].PhysicalReference
+        };
+    }
+
+    public async Task SaveProposalSettlementResolutionAsync(MoveOutChargeProposalSettlementResolution reconciliation,
+        CancellationToken token)
+    {
+        await AppendAsync(reconciliation.ContractId, reconciliation.Id,
+            SettlementChargeRecords.ProposalSettlementKind, reconciliation,
+            reconciliation.TenantUserId, reconciliation.ReconciledAt, token,
+            "MoveOutChargeProposalSettlementReconciled");
+        await db.SaveChangesAsync(token);
     }
 
     public async Task SaveProposalAsync(MoveOutChargeProposal proposal, CancellationToken token)

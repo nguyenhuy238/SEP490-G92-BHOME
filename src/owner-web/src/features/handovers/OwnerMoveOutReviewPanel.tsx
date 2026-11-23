@@ -48,6 +48,13 @@ interface ProposalSource {
   evidenceIds: string[];
   baselineEvidenceIds?: string[];
 }
+interface ProposalDisputedItem {
+  kind: ItemKind;
+  assetId?: string | null;
+  roomCheckCode?: string | null;
+  accessType?: string | null;
+  reason: string;
+}
 interface FinancialProposal {
   id: string;
   sourceReference: string;
@@ -59,7 +66,19 @@ interface FinancialProposal {
   verifiedDeposit: string;
   sentAt: string;
   note?: string | null;
-  tenantFeedback?: { confirmed: boolean; reason: string; at?: string } | null;
+  tenantFeedback?: {
+    confirmed: boolean;
+    reason: string;
+    disputedItems?: ProposalDisputedItem[] | null;
+    settlement?: {
+      status: 'Payable' | 'RefundEligible' | 'Settled' | 'PendingOwnerReview';
+      payableAmount: string;
+      refundAmount: string;
+      payableReceivableId?: string | null;
+      reason?: string | null;
+    } | null;
+    at?: string;
+  } | null;
 }
 interface ProposalPreview {
   contractId: string;
@@ -106,6 +125,36 @@ const statusLabels: Record<ProposalPreview['status'], string> = {
   Disputed: 'Tenant yêu cầu xem xét lại',
   Outdated: 'Dữ liệu đã thay đổi',
 };
+
+// Show the furthest verified step, not the old Staff handoff after the fee
+// proposal has already advanced to Tenant confirmation or settlement.
+function moveOutProgress(inspectionReady: boolean, proposal?: ProposalPreview) {
+  if (!inspectionReady) return { label: 'Staff đang kiểm tra', color: 'warning' as const };
+  if (!proposal) return { label: 'Đã kiểm kê · Đang tải phí', color: 'default' as const };
+
+  switch (proposal.status) {
+    case 'None':
+      return { label: 'Chờ Owner gửi phí', color: 'info' as const };
+    case 'PendingTenant':
+      return { label: 'Chờ Tenant xác nhận phí', color: 'info' as const };
+    case 'Disputed':
+      return { label: 'Tenant yêu cầu điều chỉnh phí', color: 'warning' as const };
+    case 'Outdated':
+      if (proposal.latestProposal?.tenantFeedback?.confirmed)
+        return { label: 'Tenant đã đồng ý · Cần đối chiếu dữ liệu', color: 'warning' as const };
+      return { label: 'Cần đối chiếu dữ liệu phí', color: 'warning' as const };
+    case 'Accepted': {
+      const settlement = proposal.latestProposal?.tenantFeedback?.settlement?.status;
+      if (settlement === 'Payable')
+        return { label: 'Tenant đã đồng ý · Đã tạo khoản phải thu', color: 'success' as const };
+      if (settlement === 'RefundEligible')
+        return { label: 'Tenant đã đồng ý · Có tiền cọc cần hoàn', color: 'success' as const };
+      if (settlement === 'Settled')
+        return { label: 'Đã quyết toán phí trả phòng', color: 'success' as const };
+      return { label: 'Tenant đã đồng ý · Đang đối chiếu', color: 'info' as const };
+    }
+  }
+}
 const groupIcons = { RoomCheck: ClipboardList, Asset: Package, Access: KeyRound };
 
 function sourceKey(
@@ -459,8 +508,8 @@ export function OwnerMoveOutReviewPanel({
     queryFn: ({ signal }) => api.inspections(id, signal),
   });
   const latest = inspection.data?.[0];
-  // Staff's final submitted inspection is the source for the fee proposal.
-  // Owner review of the physical inspection is NOT a prerequisite.
+  // Staff Final is the physical source. Sending a priced proposal is Owner's
+  // financial approval; no second physical-inspection approval is required.
   const inspectionReady =
     !!latest &&
     latest.ownerDecision !== 'Reinspection' &&
@@ -477,6 +526,10 @@ export function OwnerMoveOutReviewPanel({
       ),
   });
   const data = preview.data;
+  const progress = moveOutProgress(inspectionReady, data);
+  const disputedItems =
+    data?.status === 'Disputed' ? (data.latestProposal?.tenantFeedback?.disputedItems ?? []) : [];
+  const disputedByKey = new Map(disputedItems.map((item) => [sourceKey(item), item.reason]));
   // The adjacent Bàn giao tab is explicitly scoped to the selected contract.
   // Keep its draft-photo source on that same ID even if the verified comparison
   // baseline belongs to a prior contract in the room's chain.
@@ -673,6 +726,30 @@ export function OwnerMoveOutReviewPanel({
       )}
       {error && <Alert severity="error">{error}</Alert>}
       {notice && <Alert severity="success">{notice}</Alert>}
+      {data?.status === 'Disputed' && (
+        <Alert severity="warning">
+          Tenant không đồng ý với đề xuất trước. Xem từng khoản có phản hồi bên dưới, kiểm tra lại
+          bằng chứng, sửa số tiền hoặc lý do thu rồi gửi một đề xuất mới để Tenant xác nhận.
+          {!!data.latestProposal?.tenantFeedback?.reason && (
+            <Typography variant="body2" sx={{ mt: 0.5, whiteSpace: 'pre-wrap' }}>
+              Phản hồi chung: {data.latestProposal.tenantFeedback.reason}
+            </Typography>
+          )}
+        </Alert>
+      )}
+      {data?.status === 'Accepted' && data.latestProposal?.tenantFeedback?.settlement?.status === 'Payable' && (
+        <Alert severity="info">
+          Đã cấn trừ tiền cọc theo khoản phí hợp lệ. Tenant được cấp thông tin thanh toán cho số
+          còn phải trả {formatContractMoney(data.latestProposal.tenantFeedback.settlement.payableAmount)}.
+          Chỉ chuyển sang đã thanh toán sau khi SePay xác minh giao dịch.
+        </Alert>
+      )}
+      {data?.status === 'Accepted' && data.latestProposal?.tenantFeedback?.settlement?.status === 'RefundEligible' && (
+        <Alert severity="info">
+          Tenant đã đồng ý và có thể gửi yêu cầu hoàn cọc {formatContractMoney(data.latestProposal.tenantFeedback.settlement.refundAmount)}.
+          Owner duyệt đơn và thực hiện hoàn từ sổ hoàn cọc đã đối chiếu, không chuyển khoản trùng.
+        </Alert>
+      )}
       {!latest && !inspection.isPending && !inspection.error && (
         <Alert severity="info">
           Staff chưa gửi kết quả kiểm kê. Yêu cầu trả phòng hiện tại:{' '}
@@ -690,8 +767,8 @@ export function OwnerMoveOutReviewPanel({
             <Chip size="small" label={'Kiểm kê lần ' + latest.version} />
             <Chip
               size="small"
-              color={inspectionReady ? 'success' : 'warning'}
-              label={inspectionReady ? 'Đã nhận kết quả Staff' : 'Staff đang kiểm tra'}
+              color={progress.color}
+              label={progress.label}
             />
           </Stack>
           <MeterResults api={api} inspection={latest} />
@@ -776,6 +853,7 @@ export function OwnerMoveOutReviewPanel({
                       </Typography>
                     )}
                     {items.map((item, index) => {
+                      const disputedReason = disputedByKey.get(sourceKey(item));
                       const recordedIssue = hasInspectionIssue(item, latest);
                       const comparison = comparisonDetails(item, latest);
                       const draftPhotoIds = openingPhotosFromDraft(item, openingDraftPhotoSource);
@@ -815,7 +893,15 @@ export function OwnerMoveOutReviewPanel({
                                 {recordedIssue && (
                                   <Chip size="small" color="warning" label="Có vấn đề" />
                                 )}
+                                {disputedReason && (
+                                  <Chip size="small" color="error" label="Tenant không đồng ý phí" />
+                                )}
                               </Stack>
+                              {disputedReason && (
+                                <Alert severity="warning" sx={{ mt: 1 }}>
+                                  Lý do Tenant yêu cầu xem lại: {disputedReason}
+                                </Alert>
+                              )}
                               <Stack
                                 direction={{ xs: 'column', md: 'row' }}
                                 spacing={1.5}
@@ -988,14 +1074,14 @@ export function OwnerMoveOutReviewPanel({
                         <ConfirmActionButton
                           variant="contained"
                           title="Gửi đề xuất cho Tenant"
-                          description="Tenant sẽ xem từng khoản thu và lý do, tiền cọc cùng chênh lệch có dấu để đồng ý hoặc yêu cầu xem xét lại. Hệ thống chưa tự thu tiền, trừ cọc hay hoàn tiền."
+                          description="Tenant sẽ xem từng khoản thu, lý do và chênh lệch sau khi Owner rà soát. Khi Tenant đã phản đối, đề xuất mới thay thế bản cũ để Tenant phản hồi lại. Việc gửi không xác nhận tiền đã thanh toán hoặc hoàn tiền."
                           confirmationKey={
                             data.reference + ':' + JSON.stringify(entries) + ':' + note
                           }
                           disabled={!canSend}
                           onConfirm={send}
                         >
-                          Gửi Tenant duyệt
+                          {data.status === 'Disputed' ? 'Gửi lại Tenant duyệt' : 'Gửi Tenant duyệt'}
                         </ConfirmActionButton>
                       </>
                     )}

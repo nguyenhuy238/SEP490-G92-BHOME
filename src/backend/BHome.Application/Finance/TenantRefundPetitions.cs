@@ -14,7 +14,7 @@ namespace BHome.Application.Finance;
 public sealed record TenantRefundPetitionInput(
     [property: JsonNumberHandling(JsonNumberHandling.AllowReadingFromString | JsonNumberHandling.WriteAsString)] decimal Amount,
     string Reason, Guid? SourcePaymentId = null,
-    Guid? SourceContractId = null);
+    Guid? SourceContractId = null, Guid? MoveOutProposalId = null);
 public sealed record TenantRefundPetitionDecision(int ExpectedVersion, bool Approve, string Reason, bool HumanConfirmed);
 public sealed record TenantRefundPetitionExecution(int ExpectedVersion, DateTimeOffset ExecutedAt,
     string ExternalReference, string Reason, bool HumanConfirmed);
@@ -25,13 +25,15 @@ public sealed record TenantRefundPetitionView(Guid Id,
     [property: JsonNumberHandling(JsonNumberHandling.AllowReadingFromString | JsonNumberHandling.WriteAsString)] decimal Amount,
     string Reason, string Status, Guid? SourcePaymentId, Guid? SourceContractId, DateTimeOffset CreatedAt,
     DateTimeOffset? DecidedAt, string? DecisionReason, DateTimeOffset? ExecutedAt, string? ExternalReference,
-    bool HasEvidence, int Version, string? TenantLabel = null, RefundUploadView? ExecutionIntent = null);
+    bool HasEvidence, int Version, string? TenantLabel = null, RefundUploadView? ExecutionIntent = null,
+    Guid? MoveOutProposalId = null);
 
 public sealed class TenantRefundPetitionState
 {
     public string Classification { get; set; } = "TenantRefundPetitionV1";
     public Guid? SourcePaymentId { get; set; }
     public Guid? SourceContractId { get; set; }
+    public Guid? MoveOutProposalId { get; set; }
     public List<RefundEvent> Events { get; set; } = [];
     public RefundUpload? Upload { get; set; }
 }
@@ -65,6 +67,7 @@ public interface ITenantRefundPetitionRepository
     Task<TenantRefundPetitionRecord?> ByOperationAsync(Guid key, CancellationToken token);
     Task<Guid?> ResidentIdAsync(Guid tenantId, CancellationToken token);
     Task<TenantRefundPetitionSources> SourcesAsync(Guid tenantId, CancellationToken token);
+    Task<bool> ActiveMoveOutPetitionAsync(Guid proposalId, CancellationToken token);
     Task<bool> ReferenceUsedAsync(string reference, Guid exceptId, CancellationToken token);
     Task SaveAsync(TenantRefundPetitionRecord row, bool create, Guid actor, string action, DateTimeOffset now,
         CancellationToken token);
@@ -72,7 +75,7 @@ public interface ITenantRefundPetitionRepository
 
 public sealed class TenantRefundPetitionService(
     ITenantRefundPetitionRepository repository, IObjectStorage storage, IContractImageValidator images,
-    ICurrentUser user, TimeProvider clock)
+    ICurrentUser user, TimeProvider clock, SettlementReceivablesService? settlements = null)
 {
     private Guid Actor(string role)
     {
@@ -107,7 +110,22 @@ public sealed class TenantRefundPetitionService(
             row.Version, owner ? row.TenantLabel : null,
             owner && row.Status == "APPROVED" && row.State.Upload is { } intent
                 ? new(intent.Key, intent.ContentType, intent.Length, intent.Sha256, intent.ExecutedAt,
-                    intent.ExternalReference, intent.Reason) : null);
+                    intent.ExternalReference, intent.Reason) : null,
+            row.State.MoveOutProposalId);
+    /// <summary>Validated move-out petitions are requests only; the classified deposit refund
+    /// ledger is the sole authority allowed to execute money. Never trust prefilled form values.</summary>
+    public static void ValidateMoveOutRefund(MoveOutChargeProposalPreview preview, Guid contractId,
+        Guid proposalId, decimal amount)
+    {
+        var offered = preview.LatestProposal;
+        var settlement = offered?.TenantFeedback?.Settlement;
+        if (preview.ContractId != contractId || offered?.Id != proposalId ||
+            preview.Status != "Accepted" || offered.TenantFeedback?.Confirmed != true ||
+            settlement?.Status != "RefundEligible" || settlement.RefundAmount <= 0 ||
+            decimal.Truncate(settlement.RefundAmount) != settlement.RefundAmount ||
+            amount != settlement.RefundAmount)
+            throw new FinanceException(409, "move_out_refund_proposal_changed");
+    }
     private static bool Replayed(TenantRefundPetitionRecord row, Guid actor, Guid key, string fingerprint)
     {
         var eventRow = row.State.Events.SingleOrDefault(e => e.Key == key);
@@ -136,7 +154,9 @@ public sealed class TenantRefundPetitionService(
         var actor = Actor(Roles.Tenant); Key(key);
         var x = input with { Reason = Reason(input.Reason) };
         if (x.Amount <= 0 || x.Amount >= 1_000_000_000_000_000_000m || decimal.Truncate(x.Amount) != x.Amount ||
-            x.SourcePaymentId == Guid.Empty || x.SourceContractId == Guid.Empty)
+            x.SourcePaymentId == Guid.Empty || x.SourceContractId == Guid.Empty ||
+            x.MoveOutProposalId == Guid.Empty || x.MoveOutProposalId is not null &&
+            (x.SourceContractId is null || x.SourcePaymentId is not null))
             throw new FinanceException(400, "invalid_refund_request");
         var fingerprint = Fingerprint(x);
         return repository.TransactionAsync(async () =>
@@ -153,6 +173,18 @@ public sealed class TenantRefundPetitionService(
             if (x.SourcePaymentId is { } payment && !sources.Payments.Any(p => p.Id == payment) ||
                 x.SourceContractId is { } contract && !sources.Contracts.Any(c => c.Id == contract))
                 throw new FinanceException(404, "refund_source_not_found");
+            if (x.MoveOutProposalId is { } moveOutProposal)
+            {
+                if (settlements is null)
+                    throw new FinanceException(503, "move_out_refund_validation_unavailable");
+                var preview = await settlements.GetProposalAsync(x.SourceContractId!.Value, token);
+                ValidateMoveOutRefund(preview, x.SourceContractId.Value, moveOutProposal, x.Amount);
+                if (!await settlements.HasCurrentMoveOutRefundBalanceAsync(x.SourceContractId.Value,
+                    x.Amount, token))
+                    throw new FinanceException(409, "move_out_refund_proposal_changed");
+                if (await repository.ActiveMoveOutPetitionAsync(moveOutProposal, token))
+                    throw new FinanceException(409, "move_out_refund_already_requested");
+            }
             var now = Now;
             var row = new TenantRefundPetitionRecord
             {
@@ -163,7 +195,8 @@ public sealed class TenantRefundPetitionService(
                 Reason = x.Reason,
                 CreatedAt = now,
                 OperationKey = key,
-                State = new() { SourcePaymentId = x.SourcePaymentId, SourceContractId = x.SourceContractId }
+                State = new() { SourcePaymentId = x.SourcePaymentId, SourceContractId = x.SourceContractId,
+                    MoveOutProposalId = x.MoveOutProposalId }
             };
             row.State.Events.Add(new("Requested", actor, now, x.Reason, row.Version, key, fingerprint));
             await repository.SaveAsync(row, true, actor, "TenantRefundPetitionRequested", now, token);
@@ -184,6 +217,16 @@ public sealed class TenantRefundPetitionService(
             if (Replayed(row, actor, key, fingerprint)) return View(row, true);
             if (row.Status != "REQUESTED" || row.Version != x.ExpectedVersion)
                 throw new FinanceException(409, "refund_changed");
+            if (x.Approve && row.State.MoveOutProposalId is { } proposalId)
+            {
+                if (settlements is null || row.State.SourceContractId is not { } contractId)
+                    throw new FinanceException(503, "move_out_refund_validation_unavailable");
+                ValidateMoveOutRefund(await settlements.GetProposalAsync(contractId, token),
+                    contractId, proposalId, row.Amount);
+                if (!await settlements.HasCurrentMoveOutRefundBalanceAsync(contractId,
+                    row.Amount, token))
+                    throw new FinanceException(409, "move_out_refund_proposal_changed");
+            }
             row.Status = x.Approve ? "APPROVED" : "REJECTED";
             row.Version++; row.DecidedBy = actor; row.DecidedAt = Now; row.DecisionReason = x.Reason;
             row.State.Events.Add(new(row.Status, actor, row.DecidedAt.Value, x.Reason, row.Version, key, fingerprint));
@@ -205,6 +248,11 @@ public sealed class TenantRefundPetitionService(
             x.ExternalReference.Length is < 1 or > 200 ||
             x.ExternalReference.Any(c => !char.IsAsciiLetterOrDigit(c) && c is not ('-' or '_' or ':' or '.' or '/')))
             throw new FinanceException(400, "invalid_refund_execution");
+        // A contextual petition is NOT an executable deposit refund. For a
+        // move-out-linked petition the Owner must pay from the classified,
+        // source-backed deposit refund ledger, never a second independent payout.
+        if ((await repository.GetAsync(id, token)).State.MoveOutProposalId is not null)
+            throw new FinanceException(409, "move_out_refund_use_deposit_ledger");
         await using var buffer = new MemoryStream();
         var block = new byte[81920];
         while (true)

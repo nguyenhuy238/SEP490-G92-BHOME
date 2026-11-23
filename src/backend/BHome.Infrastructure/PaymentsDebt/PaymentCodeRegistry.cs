@@ -20,7 +20,7 @@ internal sealed class PaymentCodeRegistry(BHomePersistenceContext db, IPaymentRe
     {
         if (db is not Compact24DbContext) return null;
         if (!options.Enabled) return await GetAsync(kind, id, token);
-        if (kind is not ("Invoice" or "Deposit" or "MainInitial") || id == Guid.Empty) throw new PaymentException(400, "invalid_payment_obligation");
+        if (kind is not ("Invoice" or "Deposit" or "MainInitial" or "Settlement") || id == Guid.Empty) throw new PaymentException(400, "invalid_payment_obligation");
         async Task<string?> Issue()
         {
             var account = await payments.ReceivingAccountAsync(locationId, token);

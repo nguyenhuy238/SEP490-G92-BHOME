@@ -39,6 +39,8 @@ interface MoveOutInboxItem {
   locationName: string;
   status: string;
   proposedDate: string;
+  proposalStatus?: 'PendingTenant' | 'Accepted' | 'Disputed' | 'Outdated' | null;
+  proposalSettlementStatus?: 'Payable' | 'RefundEligible' | 'Settled' | 'PendingOwnerReview' | null;
 }
 
 interface MoveOutInboxPage {
@@ -46,6 +48,16 @@ interface MoveOutInboxPage {
   page: number;
   pageSize: number;
   totalCount: number;
+}
+
+interface MoveOutProposalProgress {
+  status: 'None' | 'PendingTenant' | 'Accepted' | 'Disputed' | 'Outdated';
+  latestProposal?: {
+    tenantFeedback?: {
+      confirmed: boolean;
+      settlement?: { status: MoveOutInboxItem['proposalSettlementStatus'] } | null;
+    } | null;
+  } | null;
 }
 
 const moveOutStates = [
@@ -59,6 +71,25 @@ const moveOutStates = [
 
 function labelFor(status: string) {
   return moveOutStates.find((item) => item.value === status)?.label ?? status;
+}
+
+function progressFor(item: MoveOutInboxItem) {
+  // Contract move-out and Tenant's fee decision advance independently. Show
+  // the latest verified financial step instead of the earlier Staff handoff.
+  if (item.status === 'Completed' || item.status === 'Settled') return labelFor(item.status);
+  if (item.status === 'Requested' || item.status === 'Approved') return labelFor(item.status);
+  if (item.proposalStatus === 'Accepted') {
+    if (item.proposalSettlementStatus === 'Payable')
+      return 'Tenant đã đồng ý · Đã tạo khoản phải thu';
+    if (item.proposalSettlementStatus === 'RefundEligible')
+      return 'Tenant đã đồng ý · Có tiền cọc cần hoàn';
+    if (item.proposalSettlementStatus === 'Settled') return 'Đã quyết toán phí trả phòng';
+    return 'Tenant đã đồng ý · Đang đối chiếu';
+  }
+  if (item.proposalStatus === 'Disputed') return 'Tenant yêu cầu điều chỉnh phí';
+  if (item.proposalStatus === 'PendingTenant') return 'Chờ Tenant xác nhận phí';
+  if (item.proposalStatus === 'Outdated') return 'Cần đối chiếu dữ liệu phí';
+  return item.status === 'Inspected' ? 'Chờ Owner gửi phí' : labelFor(item.status);
 }
 
 export function OwnerMoveOutInbox() {
@@ -101,6 +132,54 @@ export function OwnerMoveOutInbox() {
       ),
   });
   const visible = inbox.data?.items ?? [];
+  // A running older API may not yet include the new summary fields. Fetch the
+  // existing authenticated proposal endpoint only for those legacy rows, with
+  // bounded concurrency. Once the new API is deployed this makes zero calls.
+  const legacyIds = visible
+    .filter((item) =>
+      (item.status === 'Inspected' || item.status === 'PendingSettlement') &&
+      item.proposalStatus === undefined,
+    )
+    .map((item) => item.contractId);
+  const legacyProgress = useQuery({
+    queryKey: ['move-out-inbox-legacy-proposals', session?.userId, legacyIds.join(',')],
+    enabled: legacyIds.length > 0,
+    retry: false,
+    queryFn: async ({ signal }) => {
+      const results: Record<string, Pick<MoveOutInboxItem, 'proposalStatus' | 'proposalSettlementStatus'>> = {};
+      let next = 0;
+      await Promise.all(
+        Array.from({ length: Math.min(4, legacyIds.length) }, async () => {
+          while (next < legacyIds.length && !signal.aborted) {
+            const contractId = legacyIds[next++];
+            try {
+              const proposal = await api.transport<MoveOutProposalProgress>(
+                `/api/v1/contracts/${encodeURIComponent(contractId)}/move-out/receivables/proposal`,
+                { signal },
+              );
+              if (!['None', 'PendingTenant', 'Accepted', 'Disputed', 'Outdated'].includes(proposal.status))
+                continue;
+              results[contractId] = {
+                proposalStatus: proposal.status === 'None' ? null : proposal.status,
+                proposalSettlementStatus: proposal.latestProposal?.tenantFeedback?.settlement?.status ?? null,
+              };
+            } catch (cause) {
+              if (signal.aborted) throw cause;
+              // A failed legacy lookup does not hide the existing move-out row.
+            }
+          }
+        }),
+      );
+      return results;
+    },
+  });
+  const progressLabel = (item: MoveOutInboxItem) => {
+    const fallback = legacyProgress.data?.[item.contractId];
+    if (fallback) return progressFor({ ...item, ...fallback });
+    if (legacyIds.includes(item.contractId))
+      return legacyProgress.isPending ? 'Đang tải tiến độ phí' : 'Chưa xác minh tiến độ phí';
+    return progressFor(item);
+  };
   const selectedItem = visible.find((item) => item.contractId === selected);
   const setSelected = (contractId: string) =>
     setParams((previous) => {
@@ -120,7 +199,10 @@ export function OwnerMoveOutInbox() {
         <Button
           startIcon={<RefreshCw size={16} />}
           disabled={inbox.isFetching}
-          onClick={() => void inbox.refetch()}
+          onClick={() => {
+            void inbox.refetch();
+            if (legacyIds.length) void legacyProgress.refetch();
+          }}
         >
           Tải lại
         </Button>
@@ -241,7 +323,7 @@ export function OwnerMoveOutInbox() {
                         </TableCell>
                         <TableCell>{displayContractDate(item.proposedDate)}</TableCell>
                         <TableCell>
-                          <StatusChip label={labelFor(item.status)} />
+                          <StatusChip label={progressLabel(item)} />
                         </TableCell>
                         <TableCell align="right">
                           <Button size="small" onClick={() => setSelected(item.contractId)}>
@@ -267,7 +349,7 @@ export function OwnerMoveOutInbox() {
                           {item.locationName} · {displayContractDate(item.proposedDate)}
                         </Typography>
                       </Box>
-                      <StatusChip label={labelFor(item.status)} />
+                      <StatusChip label={progressLabel(item)} />
                     </Stack>
                     <Button
                       sx={{ mt: 1, minHeight: 44 }}
@@ -302,6 +384,7 @@ export function OwnerMoveOutInbox() {
         onClose={() => {
           setSelected('');
           void inbox.refetch();
+          if (legacyIds.length) void legacyProgress.refetch();
         }}
         slotProps={{
           paper: {
@@ -337,6 +420,7 @@ export function OwnerMoveOutInbox() {
                 onClick={() => {
                   setSelected('');
                   void inbox.refetch();
+                  if (legacyIds.length) void legacyProgress.refetch();
                 }}
               >
                 <X size={20} />
@@ -358,7 +442,10 @@ export function OwnerMoveOutInbox() {
                   key={selected}
                   api={api}
                   id={selected}
-                  onChanged={() => void inbox.refetch()}
+                  onChanged={() => {
+                    void inbox.refetch();
+                    if (legacyIds.length) void legacyProgress.refetch();
+                  }}
                 />
               </Stack>
             )}
