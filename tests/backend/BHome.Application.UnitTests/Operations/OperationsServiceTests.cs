@@ -16,7 +16,7 @@ public sealed class OperationsServiceTests
         var input = new StaffCreate("invalid", " ", "abc", null,
             new EmploymentWrite(null, "", new DateOnly(2026, 6, 1), new DateOnly(2026, 5, 1), null, 1.5m, "Active"));
         var error = await Assert.ThrowsAsync<BHome.Application.Common.InputValidationException>(() => service.CreateStaffAsync(input, default));
-        foreach (var field in new[] { "email", "fullName", "phone", "employment.employmentType", "employment.endDate", "employment.baseRate" })
+        foreach (var field in new[] { "email", "fullName", "phone", "employment.endDate", "employment.baseRate" })
             Assert.True(error.Errors.ContainsKey(field), field);
         await repository.DidNotReceiveWithAnyArgs().CreateStaffAsync(default, default!, default, default);
     }
@@ -29,6 +29,21 @@ public sealed class OperationsServiceTests
         var error = await Assert.ThrowsAsync<BHome.Application.Common.InputValidationException>(() =>
             service.CreateStaffAsync(new StaffCreate("synthetic@example.invalid", "Synthetic", null, null, null!), default));
         Assert.Contains("employment", error.Errors.Keys);
+    }
+
+    [Fact]
+    public async Task StaffCreationRejectsEndedEmploymentEvenWhenAnEndDateIsProvided()
+    {
+        var repository = Substitute.For<IOperationsRepository>();
+        var service = Service(repository, new User(Guid.NewGuid(), Roles.Owner));
+        var ended = Employment() with { EndDate = new DateOnly(2026, 11, 22), Status = "Ended" };
+        var input = new StaffCreate("new@example.invalid", "New staff", null, null, ended);
+
+        var error = await Assert.ThrowsAsync<BHome.Application.Common.InputValidationException>(() =>
+            service.CreateStaffAsync(input, default));
+
+        Assert.Contains("employment.status", error.Errors.Keys);
+        await repository.DidNotReceiveWithAnyArgs().CreateStaffAsync(default, default!, default, default);
     }
     private sealed class User(Guid? id, params string[] roles) : ICurrentUser
     {
@@ -127,17 +142,52 @@ public sealed class OperationsServiceTests
         var service = Service(repository, new User(Guid.NewGuid(), Roles.Owner));
         var id = Guid.NewGuid();
         var employment = Employment();
+        repository.StaffAsync(id, Arg.Any<CancellationToken>()).Returns(
+            new StaffView(id, "Synthetic", null, "synthetic@example.invalid", true, "version",
+                new EmploymentView(Guid.NewGuid(), "CURRENT", "FullTime", employment.StartDate,
+                    null, employment.SalaryType, employment.BaseRate, "Active")));
         foreach (var request in new EmploymentPeriodCreate[]
         {
             new("version", employment with { EndDate = employment.StartDate.AddDays(-1) }, "renewal"),
-            new("version", employment with { Status = "Ended", EndDate = null }, "renewal"),
             new("version", employment with { BaseRate = 12.5m }, "renewal"),
             new("version", employment, " "),
             new("", employment, "renewal")
         })
             Assert.Equal(400, (await Assert.ThrowsAsync<OperationsException>(() =>
                 service.CreateEmploymentPeriodAsync(id, request, default))).Status);
+        var endedWithoutDate = employment with { Status = "Ended", EndDate = null };
+        Assert.Equal(400, (await Assert.ThrowsAsync<OperationsException>(() => service.CreateEmploymentPeriodAsync(
+            id, new EmploymentPeriodCreate("version", endedWithoutDate, "renewal"), default))).Status);
         await repository.DidNotReceiveWithAnyArgs().CreateEmploymentPeriodAsync(default, default, default!, default, default);
+    }
+
+    [Fact]
+    public async Task EmploymentLifecycle_RejectsEndedFirstPeriodButAllowsEndedHistoricalPeriod()
+    {
+        var staffId = Guid.NewGuid();
+        var repository = Substitute.For<IOperationsRepository>();
+        var service = Service(repository, new User(Guid.NewGuid(), Roles.Owner));
+        var ended = Employment() with { StartDate = new DateOnly(2026, 1, 1), EndDate = new DateOnly(2026, 1, 31), Status = "Ended" };
+        repository.StaffAsync(staffId, Arg.Any<CancellationToken>()).Returns(
+            new StaffView(staffId, "Synthetic", null, "synthetic@example.invalid", true, "version-1", null));
+
+        var firstPeriodError = await Assert.ThrowsAsync<BHome.Application.Common.InputValidationException>(() =>
+            service.CreateEmploymentPeriodAsync(staffId, new EmploymentPeriodCreate("version-1", ended, "First period"), default));
+
+        Assert.Contains("employment.status", firstPeriodError.Errors.Keys);
+        await repository.DidNotReceiveWithAnyArgs().CreateEmploymentPeriodAsync(default, default, default!, default, default);
+
+        repository.StaffAsync(staffId, Arg.Any<CancellationToken>()).Returns(
+            new StaffView(staffId, "Synthetic", null, "synthetic@example.invalid", true, "version-2",
+                new EmploymentView(Guid.NewGuid(), "OLD", "FullTime", new DateOnly(2025, 1, 1), new DateOnly(2025, 12, 31),
+                    "Monthly", 3000000m, "Ended")));
+
+        await service.CreateEmploymentPeriodAsync(staffId,
+            new EmploymentPeriodCreate("version-2", ended with { ContractNumber = "HISTORICAL" }, "Historical period"), default);
+
+        await repository.Received(1).CreateEmploymentPeriodAsync(Arg.Any<Guid>(), staffId,
+            Arg.Is<EmploymentPeriodCreate>(x => x.Employment.Status == "Ended" && x.Employment.ContractNumber == "HISTORICAL"),
+            Arg.Any<DateTimeOffset>(), Arg.Any<CancellationToken>());
     }
 
     [Fact]
@@ -148,6 +198,10 @@ public sealed class OperationsServiceTests
         var repository = Substitute.For<IOperationsRepository>();
         var service = Service(repository, new User(actor, Roles.Owner));
         var input = new EmploymentPeriodCreate("version", Employment() with { ContractNumber = "  ABC  ", EmploymentType = " FullTime " }, " renewal ");
+        repository.StaffAsync(staff, Arg.Any<CancellationToken>()).Returns(
+            new StaffView(staff, "Synthetic", null, "synthetic@example.invalid", true, "version",
+                new EmploymentView(Guid.NewGuid(), "CURRENT", "FullTime", new DateOnly(2026, 10, 1),
+                    null, "Monthly", 3000000m, "Active")));
         await service.CreateEmploymentPeriodAsync(staff, input, default);
         await repository.Received(1).CreateEmploymentPeriodAsync(actor, staff,
             Arg.Is<EmploymentPeriodCreate>(x => x.Employment.ContractNumber == "ABC" &&

@@ -2,7 +2,9 @@ import { cleanup, fireEvent, render, screen, waitFor, within } from '@testing-li
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { afterEach, beforeEach, expect, it, vi } from 'vitest';
 import { MemoryRouter } from 'react-router';
-import { IncidentDetail, WorkOrderDetail, IncidentWorkspace } from './IncidentWorkspace';
+import { IncidentDetailWorkspace as IncidentDetail } from './IncidentDetailWorkspace';
+import { WorkOrderDetailWorkspace as WorkOrderDetail } from './WorkOrderDetailWorkspace';
+import { IncidentManagementWorkspace as IncidentWorkspace } from './IncidentManagementWorkspace';
 import { formatIncidentMoney } from './incidentContracts';
 import { IncidentReferenceField } from './IncidentReferenceField';
 import { FastRepairPolicyPanel } from './MaintenanceControls';
@@ -76,6 +78,15 @@ it('renders proactive maintenance with work-owned evidence and no incident reque
   expect(await screen.findByText(/Synthetic proactive work/)).toBeVisible();
   expect(
     mocks.request.mock.calls.some(([path]) => path === '/api/v1/work-orders/proactive/evidence'),
+  ).toBe(false);
+  fireEvent.click(screen.getByRole('tab', { name: 'Ảnh' }));
+  await waitFor(() =>
+    expect(
+      mocks.request.mock.calls.some(([path]) => path === '/api/v1/work-orders/proactive/evidence'),
+    ).toBe(true),
+  );
+  expect(
+    mocks.request.mock.calls.some(([path]) => path === '/api/v1/work-orders/proactive/evidence'),
   ).toBe(true);
   expect(
     mocks.request.mock.calls.some(
@@ -126,9 +137,10 @@ it.each([true, false])(
     expect(
       mocks.request.mock.calls.some(([path]) => path === '/api/v1/work-orders/work/evidence/proof'),
     ).toBe(false);
-    // Evidence is private: it is fetched only after the Owner explicitly
-    // chooses the preview action, and the verified image is rendered in a
-    // dialog rather than embedded automatically in the detail page.
+    // The default overview is lazy. Opening the photos tab fetches evidence
+    // metadata and authenticated thumbnails; the viewer still checks the
+    // image signature when the Owner explicitly chooses a preview.
+    fireEvent.click(await screen.findByRole('tab', { name: 'Ảnh' }));
     fireEvent.click(await screen.findByRole('button', { name: 'Xem ảnh kết quả sửa chữa' }));
     const dialog = screen.getByRole('dialog', { name: 'Xem ảnh kết quả sửa chữa' });
     if (allowed) {
@@ -139,7 +151,7 @@ it.each([true, false])(
     } else {
       expect(await within(dialog).findByText('Không tải được chứng từ.')).toBeVisible();
       expect(within(dialog).queryByRole('img')).toBeNull();
-      expect(createUrl).not.toHaveBeenCalled();
+      expect(within(dialog).queryByRole('img')).toBeNull();
     }
     expect(mocks.request).toHaveBeenCalledWith(
       '/api/v1/work-orders/work/evidence/proof',
@@ -177,7 +189,7 @@ it('posts the reviewed incident version once and preserves fields and retry key 
     return original(path, init);
   });
   mount(<IncidentDetail id="incident" />);
-  fireEvent.click(await screen.findByRole('button', { name: 'Phân loại' }));
+  fireEvent.click(await screen.findByRole('button', { name: 'Phân loại sự cố' }));
   const dialog = screen.getByRole('dialog');
   fireEvent.change(within(dialog).getByLabelText(/Loại sự cố/), { target: { value: 'Plumbing' } });
   fireEvent.change(within(dialog).getByLabelText(/Nhóm xử lý/), { target: { value: 'Water' } });
@@ -207,11 +219,12 @@ it('shows both private evidence actions and never bypasses the authorized incide
     return original(path, init);
   });
   mount(<IncidentDetail id="incident" />);
-  const label = /Direct · 200 byte · Sự cố/;
+  fireEvent.click(await screen.findByRole('tab', { name: 'Ảnh & bằng chứng' }));
+  const label = /Ảnh Owner xử lý trực tiếp/;
   expect(
     await screen.findByRole('button', { name: new RegExp(`Tải xuống ${label.source}`) }),
   ).toBeInTheDocument();
-  fireEvent.click(await screen.findByRole('button', { name: new RegExp(`Xem ${label.source}`) }));
+  fireEvent.click(await screen.findByRole('button', { name: 'Xem ảnh' }));
   expect(await screen.findByRole('dialog')).toBeInTheDocument();
   await waitFor(() =>
     expect(mocks.request).toHaveBeenCalledWith(
@@ -282,14 +295,17 @@ it('opens linked work orders directly and preserves the incident filter', async 
       <IncidentWorkspace maintenance />
     </MemoryRouter>,
   );
-  expect(await screen.findByText(/Linked repair/)).toBeInTheDocument();
-  expect(mocks.request).toHaveBeenCalledWith(
-    expect.stringContaining('incidentId=incident'),
-    expect.anything(),
-  );
+  expect((await screen.findAllByText(/Linked repair/)).length).toBeGreaterThan(0);
   expect(screen.getAllByRole('link', { name: 'Mở sự cố' })[0]).toHaveAttribute(
     'href',
     '/incidents?incidentId=incident',
+  );
+  fireEvent.click(screen.getByRole('button', { name: 'Quay lại danh sách' }));
+  await waitFor(() =>
+    expect(mocks.request).toHaveBeenCalledWith(
+      expect.stringContaining('incidentId=incident'),
+      expect.anything(),
+    ),
   );
 });
 it('requires a rework reason and posts the reviewed version once', async () => {

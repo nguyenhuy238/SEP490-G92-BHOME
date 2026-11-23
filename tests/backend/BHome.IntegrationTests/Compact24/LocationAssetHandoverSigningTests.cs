@@ -5,6 +5,7 @@ using System.Net.Http.Json;
 using System.Security.Cryptography;
 using System.Text;
 using BHome.Application.IdentityAccess;
+using BHome.Application.Contracts;
 using BHome.Application.IncidentMaintenance;
 using BHome.Application.Locations;
 using BHome.Application.PropertyManagement;
@@ -29,6 +30,8 @@ namespace BHome.IntegrationTests.Compact24;
 public sealed class LocationAssetHandoverSigningTests(Compact24Fixture fixture) : IClassFixture<Compact24Fixture>
 {
     private const string Password = "Synthetic!Handover-492";
+    private static readonly HandoverInkInput Ink = new(320, 160,
+        [[[15d, 25d], [45d, 60d], [72d, 40d], [94d, 76d], [125d, 48d]]]);
     private static DateOnly Today => DateOnly.FromDateTime(
         TimeZoneInfo.ConvertTimeBySystemTimeZoneId(DateTimeOffset.UtcNow, "Asia/Ho_Chi_Minh").DateTime);
 
@@ -200,13 +203,13 @@ public sealed class LocationAssetHandoverSigningTests(Compact24Fixture fixture) 
 
         // A wrong or stale fingerprint cannot be accepted; only Owner signs first.
         Assert.Equal(HttpStatusCode.NotFound, (await outsiderClient.PostAsJsonAsync(handover + "/sign",
-            new { revision = report.Revision, snapshotSha256 = new string('F', 64), confirmed = true })).StatusCode);
+            new { revision = report.Revision, snapshotSha256 = new string('F', 64), confirmed = true, ink = Ink })).StatusCode);
         Assert.Equal(HttpStatusCode.Conflict, (await ownerClient.PostAsJsonAsync(handover + "/sign",
-            new { revision = report.Revision, snapshotSha256 = new string('F', 64), confirmed = true })).StatusCode);
+            new { revision = report.Revision, snapshotSha256 = new string('F', 64), confirmed = true, ink = Ink })).StatusCode);
         Assert.Equal(HttpStatusCode.Forbidden, (await staffClient.PostAsJsonAsync(handover + "/sign",
-            new { revision = report.Revision, snapshotSha256 = report.SnapshotSha256, confirmed = true })).StatusCode);
+            new { revision = report.Revision, snapshotSha256 = report.SnapshotSha256, confirmed = true, ink = Ink })).StatusCode);
         var signedOwner = await ownerClient.PostAsJsonAsync(handover + "/sign",
-            new { revision = report.Revision, snapshotSha256 = report.SnapshotSha256, confirmed = true });
+            new { revision = report.Revision, snapshotSha256 = report.SnapshotSha256, confirmed = true, ink = Ink });
         Assert.Equal(HttpStatusCode.OK, signedOwner.StatusCode);
         Assert.Equal("PendingStaffSignature",
             (await signedOwner.Content.ReadFromJsonAsync<LocationAssetHandoverReportView>())!.Status);
@@ -227,7 +230,7 @@ public sealed class LocationAssetHandoverSigningTests(Compact24Fixture fixture) 
         Assert.Equal("Superseded",
             (await ownerClient.GetFromJsonAsync<LocationAssetHandoverReportView>(handover))!.Status);
         Assert.Equal(HttpStatusCode.Conflict, (await staffClient.PostAsJsonAsync(handover + "/sign",
-            new { revision = report.Revision, snapshotSha256 = report.SnapshotSha256, confirmed = true })).StatusCode);
+            new { revision = report.Revision, snapshotSha256 = report.SnapshotSha256, confirmed = true, ink = Ink })).StatusCode);
         using (var change = new HttpRequestMessage(HttpMethod.Put,
             route + "/location-asset-inventory/items/" + checkedItem.Id)
         { Content = JsonContent.Create(new { version = secondReview.Version, @checked = true, note = "Đã đối chiếu lại biên bản" }) })
@@ -247,12 +250,12 @@ public sealed class LocationAssetHandoverSigningTests(Compact24Fixture fixture) 
         Assert.Null(newReport.OwnerSignature);
         Assert.NotEqual(report.SnapshotSha256, newReport.SnapshotSha256);
         Assert.Equal(HttpStatusCode.Conflict, (await staffClient.PostAsJsonAsync(handover + "/sign",
-            new { revision = report.Revision, snapshotSha256 = report.SnapshotSha256, confirmed = true })).StatusCode);
+            new { revision = report.Revision, snapshotSha256 = report.SnapshotSha256, confirmed = true, ink = Ink })).StatusCode);
         Assert.Equal(HttpStatusCode.OK, (await ownerClient.PostAsJsonAsync(handover + "/sign",
-            new { revision = newReport.Revision, snapshotSha256 = newReport.SnapshotSha256, confirmed = true })).StatusCode);
+            new { revision = newReport.Revision, snapshotSha256 = newReport.SnapshotSha256, confirmed = true, ink = Ink })).StatusCode);
 
         var signedStaff = await staffClient.PostAsJsonAsync(handover + "/sign",
-            new { revision = newReport.Revision, snapshotSha256 = newReport.SnapshotSha256, confirmed = true });
+            new { revision = newReport.Revision, snapshotSha256 = newReport.SnapshotSha256, confirmed = true, ink = Ink });
         Assert.Equal(HttpStatusCode.OK, signedStaff.StatusCode);
         var completed = (await signedStaff.Content.ReadFromJsonAsync<LocationAssetHandoverReportView>())!;
         Assert.Equal("Completed", completed.Status);
@@ -265,7 +268,290 @@ public sealed class LocationAssetHandoverSigningTests(Compact24Fixture fixture) 
         Assert.StartsWith("%PDF-", System.Text.Encoding.ASCII.GetString(
             (await signedPdf.Content.ReadAsByteArrayAsync())[..5]));
         Assert.Equal(HttpStatusCode.OK, (await staffClient.PostAsJsonAsync(handover + "/sign",
-            new { revision = newReport.Revision, snapshotSha256 = newReport.SnapshotSha256, confirmed = true })).StatusCode);
+            new { revision = newReport.Revision, snapshotSha256 = newReport.SnapshotSha256, confirmed = true, ink = Ink })).StatusCode);
+    }
+
+    [CompactPostgresFact]
+    public async Task FormerStaffArchiveContainsOnlyOwnFullySignedRevisionAfterSuccessorCompletesNewTask()
+    {
+        var blobs = new InMemoryHandoverDocuments();
+        using var host = fixture.Factory!.WithWebHostBuilder(builder => builder.ConfigureServices(services =>
+        {
+            services.RemoveAll<IObjectStorage>();
+            services.AddSingleton<IObjectStorage>(blobs);
+        }));
+        var owner = await Seed(host.Services, "Owner");
+        var formerStaff = await Seed(host.Services, "Staff");
+        var successor = await Seed(host.Services, "Staff");
+        var outsider = await Seed(host.Services, "Staff");
+        var locationId = Guid.NewGuid();
+        await using (var scope = host.Services.CreateAsyncScope())
+        {
+            var db = scope.ServiceProvider.GetRequiredService<Compact24DbContext>();
+            await db.Database.ExecuteSqlInterpolatedAsync(
+                $"INSERT INTO locations(id,name,address) VALUES ({locationId},'Synthetic archive Location', 'Synthetic archive address')");
+            var room = new Room { LocationId = locationId, RoomNumber = "S-301" };
+            db.Add(room);
+            await db.SaveChangesAsync();
+            var asset = new Asset
+            {
+                LocationId = locationId,
+                RoomId = room.Id,
+                Name = "Synthetic archive chair",
+                Category = "Furniture",
+                Status = AssetStatus.Active
+            };
+            db.Add(asset);
+            await db.SaveChangesAsync();
+            var item = new AssetTemplateItem(Guid.NewGuid(), "Synthetic archive chair", "Furniture", "BulkQuantity", 1);
+            var templateId = Guid.NewGuid();
+            var workspace = scope.ServiceProvider.GetRequiredService<ISetupWorkspaceStore>();
+            await SaveRoomTemplateAsync(workspace, locationId, room.Id, owner.Id, templateId, [item]);
+            var desired = await workspace.SaveAsync(Guid.NewGuid(), locationId, "DesiredAssets", "Verified",
+                new DesiredAssets(templateId, 1, room.Id, [item], "Verified"), 0, owner.Id, default);
+            await workspace.SaveAsync(Guid.NewGuid(), locationId, "AssetVerification", "Verified", new
+            {
+                roomId = room.Id,
+                templateId,
+                itemId = item.Id,
+                assetId = asset.Id,
+                quantity = 1,
+                source = "OwnerAttestation"
+            }, 0, owner.Id, default);
+            await workspace.SaveAsync(Guid.NewGuid(), locationId, "RoomInventoryChecklistReview", "Matched", new
+            {
+                roomId = room.Id,
+                desiredId = desired.Id,
+                desiredVersion = desired.Version,
+                baseline = "synthetic-archive-owner-baseline",
+                state = "Matched",
+                requestId = Guid.NewGuid(),
+                items = new[] { new { itemId = item.Id, @checked = true, evidenceIds = Array.Empty<Guid>() } },
+                unlinkedAssetIds = Array.Empty<Guid>()
+            }, 0, owner.Id, default);
+            await db.Database.ExecuteSqlInterpolatedAsync($"""
+                INSERT INTO staff_employments(id,staff_user_id,start_date,end_date,status,history)
+                VALUES ({Guid.NewGuid()},{formerStaff.Id},{Today},NULL,'Active','[]'::jsonb),
+                    ({Guid.NewGuid()},{successor.Id},{Today},NULL,'Active','[]'::jsonb),
+                    ({Guid.NewGuid()},{outsider.Id},{Today},NULL,'Active','[]'::jsonb)
+                """);
+            var assignments = scope.ServiceProvider.GetRequiredService<ILocationAssignments>();
+            Assert.Equal(CreateAssignmentStatus.Created, (await assignments.CreateAssignmentAsync(
+                owner.Id, locationId, formerStaff.Id, Today, Today.AddDays(14), default)).Status);
+        }
+
+        Guid formerTaskId;
+        await using (var scope = host.Services.CreateAsyncScope())
+        {
+            var db = scope.ServiceProvider.GetRequiredService<Compact24DbContext>();
+            formerTaskId = await db.Set<OperationalTask>().AsNoTracking()
+                .Where(task => task.LocationId == locationId && task.Kind == OperationalTaskKind.LocationAssetHandover)
+                .Select(task => task.Id).SingleAsync();
+        }
+        using var ownerClient = await Login(host.CreateClient(), owner);
+        using var formerClient = await Login(host.CreateClient(), formerStaff);
+        using var successorClient = await Login(host.CreateClient(), successor);
+        using var outsiderClient = await Login(host.CreateClient(), outsider);
+        const string archive = "/api/v1/location-asset-handovers/archive";
+        var formerRoute = $"/api/v1/operational-tasks/{formerTaskId}";
+        var formerHandover = formerRoute + "/location-asset-handover";
+        var inventory = (await formerClient.GetFromJsonAsync<LocationAssetInventoryView>(
+            formerRoute + "/location-asset-inventory"))!;
+        Assert.Empty((await formerClient.GetFromJsonAsync<LocationAssetHandoverArchiveListItem[]>(archive)) ?? []);
+        var started = await Post(formerClient, formerRoute + "/start", new { version = inventory.Version });
+        Assert.Equal(HttpStatusCode.OK, started.StatusCode);
+        var task = (await started.Content.ReadFromJsonAsync<TaskView>())!;
+        foreach (var checklistItem in inventory.Items)
+        {
+            using var change = new HttpRequestMessage(HttpMethod.Put,
+                formerRoute + "/location-asset-inventory/items/" + checklistItem.Id)
+            {
+                Content = JsonContent.Create(new { version = task.Version, @checked = true, note = "Staff A đã kiểm tra tài sản." })
+            };
+            change.Headers.Add("Idempotency-Key", Guid.NewGuid().ToString());
+            Assert.Equal(HttpStatusCode.OK, (await formerClient.SendAsync(change)).StatusCode);
+            task = (await formerClient.GetFromJsonAsync<TaskView>(formerRoute))!;
+        }
+        using var formerEvidenceContent = new ByteArrayContent(EvidenceImage());
+        formerEvidenceContent.Headers.ContentType = new("image/png");
+        using var formerEvidenceRequest = new HttpRequestMessage(HttpMethod.Put, formerRoute + "/evidence")
+        {
+            Content = formerEvidenceContent
+        };
+        formerEvidenceRequest.Headers.Add("Idempotency-Key", Guid.NewGuid().ToString());
+        using var formerEvidenceResponse = await formerClient.SendAsync(formerEvidenceRequest);
+        Assert.Equal(HttpStatusCode.OK, formerEvidenceResponse.StatusCode);
+        var formerEvidence = (await formerEvidenceResponse.Content.ReadFromJsonAsync<TaskEvidenceView>())!;
+        task = (await formerClient.GetFromJsonAsync<TaskView>(formerRoute))!;
+        Assert.Equal(HttpStatusCode.OK, (await Post(formerClient, formerRoute + "/submit",
+            new { version = task.Version, note = "Staff A hoàn tất kiểm kê." })).StatusCode);
+        task = (await ownerClient.GetFromJsonAsync<TaskView>(formerRoute))!;
+        var approved = await ownerClient.PostAsJsonAsync(formerHandover + "/approve", new { taskVersion = task.Version });
+        Assert.Equal(HttpStatusCode.OK, approved.StatusCode);
+        var formerReport = (await approved.Content.ReadFromJsonAsync<LocationAssetHandoverReportView>())!;
+        Assert.Equal(1, formerReport.Revision);
+        Assert.Equal(HttpStatusCode.OK, (await ownerClient.PostAsJsonAsync(formerHandover + "/sign", new
+        {
+            revision = formerReport.Revision,
+            snapshotSha256 = formerReport.SnapshotSha256,
+            confirmed = true, ink = Ink
+        })).StatusCode);
+
+        // Owner acceptance and its preview PDF do not qualify for the former Staff archive.
+        Assert.Empty((await formerClient.GetFromJsonAsync<LocationAssetHandoverArchiveListItem[]>(archive)) ?? []);
+        var unsignedRevision = $"{archive}/{formerTaskId}/revisions/{formerReport.Revision}";
+        Assert.Equal(HttpStatusCode.NotFound, (await formerClient.GetAsync(unsignedRevision)).StatusCode);
+        Assert.Equal(HttpStatusCode.NotFound, (await formerClient.GetAsync(unsignedRevision + "/document")).StatusCode);
+
+        var formerSigned = await formerClient.PostAsJsonAsync(formerHandover + "/sign", new
+        {
+            revision = formerReport.Revision,
+            snapshotSha256 = formerReport.SnapshotSha256,
+            confirmed = true, ink = Ink
+        });
+        Assert.Equal(HttpStatusCode.OK, formerSigned.StatusCode);
+        Assert.Equal("Completed", (await formerSigned.Content.ReadFromJsonAsync<LocationAssetHandoverReportView>())!.Status);
+        var signedArchive = await formerClient.GetFromJsonAsync<LocationAssetHandoverArchiveListItem[]>(archive);
+        var formerEntry = Assert.Single(signedArchive!);
+        Assert.Equal(formerTaskId, formerEntry.TaskId);
+        Assert.Equal(formerStaff.Id, formerEntry.StaffId);
+        Assert.Equal(formerStaff.Id, formerEntry.StaffSignature.ActorId);
+        Assert.Equal(owner.Id, formerEntry.OwnerSignature.ActorId);
+        Assert.Equal(1, formerEntry.Revision);
+
+        // A completed task is closed. The successor gets a new Location-owned task;
+        // immutable archive identity is the (TaskId, Revision) pair.
+        Guid successorTaskId;
+        await using (var scope = host.Services.CreateAsyncScope())
+        {
+            var db = scope.ServiceProvider.GetRequiredService<Compact24DbContext>();
+            var locationVersion = await db.Locations.Where(location => location.Id == locationId)
+                .Select(location => location.Version).SingleAsync();
+            var replaced = await scope.ServiceProvider.GetRequiredService<ILocationAssignments>()
+                .ReplaceAssignmentAsync(owner.Id, locationId, successor.Id, Today, locationVersion,
+                    "Synthetic archive successor", default);
+            Assert.Equal(ChangeAssignmentStatus.Changed, replaced.Status);
+            await db.Database.ExecuteSqlInterpolatedAsync($"""
+                UPDATE staff_employments SET start_date={Today.AddDays(-2)},end_date={Today.AddDays(-1)},status='Ended'
+                WHERE staff_user_id={formerStaff.Id}
+                """);
+            successorTaskId = await db.Set<OperationalTask>().AsNoTracking()
+                .Where(task => task.LocationId == locationId && task.Kind == OperationalTaskKind.LocationAssetHandover &&
+                    task.AssignedStaffUserId == successor.Id)
+                .Select(task => task.Id).SingleAsync();
+        }
+        Assert.NotEqual(formerTaskId, successorTaskId);
+        var successorRoute = $"/api/v1/operational-tasks/{successorTaskId}";
+        var successorHandover = successorRoute + "/location-asset-handover";
+        var successorInventory = (await successorClient.GetFromJsonAsync<LocationAssetInventoryView>(
+            successorRoute + "/location-asset-inventory"))!;
+        var successorStarted = await Post(successorClient, successorRoute + "/start",
+            new { version = successorInventory.Version });
+        Assert.Equal(HttpStatusCode.OK, successorStarted.StatusCode);
+        var successorTask = (await successorStarted.Content.ReadFromJsonAsync<TaskView>())!;
+        foreach (var checklistItem in successorInventory.Items)
+        {
+            using var change = new HttpRequestMessage(HttpMethod.Put,
+                successorRoute + "/location-asset-inventory/items/" + checklistItem.Id)
+            {
+                Content = JsonContent.Create(new { version = successorTask.Version, @checked = true, note = "Staff B đã kiểm tra lại tài sản." })
+            };
+            change.Headers.Add("Idempotency-Key", Guid.NewGuid().ToString());
+            Assert.Equal(HttpStatusCode.OK, (await successorClient.SendAsync(change)).StatusCode);
+            successorTask = (await successorClient.GetFromJsonAsync<TaskView>(successorRoute))!;
+        }
+        using var successorEvidenceContent = new ByteArrayContent(EvidenceImage());
+        successorEvidenceContent.Headers.ContentType = new("image/png");
+        using var successorEvidenceRequest = new HttpRequestMessage(HttpMethod.Put, successorRoute + "/evidence")
+        {
+            Content = successorEvidenceContent
+        };
+        successorEvidenceRequest.Headers.Add("Idempotency-Key", Guid.NewGuid().ToString());
+        using var successorEvidenceResponse = await successorClient.SendAsync(successorEvidenceRequest);
+        Assert.Equal(HttpStatusCode.OK, successorEvidenceResponse.StatusCode);
+        var successorEvidence = (await successorEvidenceResponse.Content.ReadFromJsonAsync<TaskEvidenceView>())!;
+        successorTask = (await successorClient.GetFromJsonAsync<TaskView>(successorRoute))!;
+        Assert.Equal(HttpStatusCode.OK, (await Post(successorClient, successorRoute + "/submit",
+            new { version = successorTask.Version, note = "Staff B hoàn tất kiểm kê." })).StatusCode);
+        successorTask = (await ownerClient.GetFromJsonAsync<TaskView>(successorRoute))!;
+        var successorApproved = await ownerClient.PostAsJsonAsync(successorHandover + "/approve",
+            new { taskVersion = successorTask.Version });
+        Assert.Equal(HttpStatusCode.OK, successorApproved.StatusCode);
+        var successorReport = (await successorApproved.Content.ReadFromJsonAsync<LocationAssetHandoverReportView>())!;
+        Assert.Equal(1, successorReport.Revision);
+        Assert.NotEqual(formerTaskId, successorReport.TaskId);
+        Assert.Equal(HttpStatusCode.OK, (await ownerClient.PostAsJsonAsync(successorHandover + "/sign", new
+        {
+            revision = successorReport.Revision,
+            snapshotSha256 = successorReport.SnapshotSha256,
+            confirmed = true, ink = Ink
+        })).StatusCode);
+        Assert.Equal(HttpStatusCode.OK, (await successorClient.PostAsJsonAsync(successorHandover + "/sign", new
+        {
+            revision = successorReport.Revision,
+            snapshotSha256 = successorReport.SnapshotSha256,
+            confirmed = true, ink = Ink
+        })).StatusCode);
+
+        // Staff A's archive remains pinned to A's signed report after B has completed.
+        signedArchive = await formerClient.GetFromJsonAsync<LocationAssetHandoverArchiveListItem[]>(archive);
+        formerEntry = Assert.Single(signedArchive!);
+        Assert.Equal(formerTaskId, formerEntry.TaskId);
+        Assert.Equal(formerStaff.Id, formerEntry.StaffId);
+        var spoofedArchive = await formerClient.GetFromJsonAsync<LocationAssetHandoverArchiveListItem[]>(
+            archive + "?staffId=" + successor.Id);
+        Assert.Equal(formerStaff.Id, Assert.Single(spoofedArchive!).StaffId);
+        var revisionRoute = $"{archive}/{formerTaskId}/revisions/{formerReport.Revision}";
+        var detail = (await formerClient.GetFromJsonAsync<LocationAssetHandoverArchiveReportView>(revisionRoute))!;
+        Assert.Equal(formerTaskId, detail.Report.TaskId);
+        Assert.Equal(formerReport.Revision, detail.Report.Revision);
+        Assert.Single(detail.Items);
+        var document = await formerClient.GetAsync(revisionRoute + "/document");
+        Assert.Equal(HttpStatusCode.OK, document.StatusCode);
+        var documentBytes = await document.Content.ReadAsByteArrayAsync();
+        Assert.StartsWith("%PDF-", Encoding.ASCII.GetString(documentBytes[..5]));
+        Assert.Equal(formerEntry.PdfSha256, Convert.ToHexString(SHA256.HashData(documentBytes)));
+
+        // Former Staff cannot access the successor revision or any current task surface.
+        var successorRevision = $"{archive}/{successorTaskId}/revisions/{successorReport.Revision}";
+        Assert.Equal(HttpStatusCode.NotFound, (await formerClient.GetAsync(successorRevision)).StatusCode);
+        Assert.Equal(HttpStatusCode.NotFound, (await formerClient.GetAsync(successorRevision + "/document")).StatusCode);
+        foreach (var path in new[]
+        {
+            formerRoute, formerRoute + "/location-asset-inventory", formerRoute + "/history",
+            formerRoute + "/actors", formerRoute + "/evidence", formerRoute + "/evidence/" + formerEvidence.Id,
+            successorRoute,
+            successorRoute + "/location-asset-inventory", successorRoute + "/history",
+            successorRoute + "/actors", successorRoute + "/evidence",
+            successorRoute + "/evidence/" + successorEvidence.Id, successorHandover,
+            successorHandover + "/document"
+        })
+            Assert.Equal(HttpStatusCode.NotFound, (await formerClient.GetAsync(path)).StatusCode);
+        Assert.Equal(HttpStatusCode.NotFound, (await formerClient.PostAsJsonAsync(successorHandover + "/sign", new
+        {
+            revision = successorReport.Revision,
+            snapshotSha256 = successorReport.SnapshotSha256,
+            confirmed = true, ink = Ink
+        })).StatusCode);
+
+        Assert.Empty((await outsiderClient.GetFromJsonAsync<LocationAssetHandoverArchiveListItem[]>(archive)) ?? []);
+        Assert.Equal(HttpStatusCode.NotFound, (await outsiderClient.GetAsync(revisionRoute)).StatusCode);
+        Assert.Equal(HttpStatusCode.NotFound, (await outsiderClient.GetAsync(revisionRoute + "/document")).StatusCode);
+        Assert.Equal(HttpStatusCode.NotFound, (await outsiderClient.GetAsync(successorRevision)).StatusCode);
+        Assert.Equal(HttpStatusCode.NotFound, (await outsiderClient.GetAsync(successorRevision + "/document")).StatusCode);
+
+        // Owner's existing task and report access remains intact for both completed tasks.
+        Assert.Equal(HttpStatusCode.OK, (await ownerClient.GetAsync(formerRoute)).StatusCode);
+        Assert.Equal(HttpStatusCode.OK, (await ownerClient.GetAsync(formerHandover)).StatusCode);
+        Assert.Equal(HttpStatusCode.OK, (await ownerClient.GetAsync(formerHandover + "/document")).StatusCode);
+        Assert.Equal(HttpStatusCode.OK, (await ownerClient.GetAsync(successorRoute)).StatusCode);
+        Assert.Equal(HttpStatusCode.OK, (await ownerClient.GetAsync(successorRoute + "/location-asset-inventory")).StatusCode);
+        Assert.Equal(HttpStatusCode.OK, (await ownerClient.GetAsync(successorHandover)).StatusCode);
+        Assert.Equal(HttpStatusCode.OK, (await ownerClient.GetAsync(successorHandover + "/document")).StatusCode);
+        var successorArchive = await successorClient.GetFromJsonAsync<LocationAssetHandoverArchiveListItem[]>(archive);
+        var successorEntry = Assert.Single(successorArchive!);
+        Assert.Equal(successorTaskId, successorEntry.TaskId);
+        Assert.Equal(successor.Id, successorEntry.StaffId);
     }
 
     [CompactPostgresFact]
@@ -448,7 +734,7 @@ public sealed class LocationAssetHandoverSigningTests(Compact24Fixture fixture) 
         {
             revision = report.Revision,
             snapshotSha256 = report.SnapshotSha256,
-            confirmed = true
+            confirmed = true, ink = Ink
         });
         Assert.Equal(HttpStatusCode.OK, ownerSigned.StatusCode);
 
@@ -468,7 +754,7 @@ public sealed class LocationAssetHandoverSigningTests(Compact24Fixture fixture) 
         {
             revision = report.Revision,
             snapshotSha256 = report.SnapshotSha256,
-            confirmed = true
+            confirmed = true, ink = Ink
         })).StatusCode);
         Assert.Equal(HttpStatusCode.OK, (await ownerClient.GetAsync(handover)).StatusCode);
         Assert.Equal(HttpStatusCode.OK, (await ownerClient.GetAsync(handover + "/document")).StatusCode);
@@ -485,7 +771,7 @@ public sealed class LocationAssetHandoverSigningTests(Compact24Fixture fixture) 
         {
             revision = report.Revision,
             snapshotSha256 = report.SnapshotSha256,
-            confirmed = true
+            confirmed = true, ink = Ink
         });
         Assert.Equal(HttpStatusCode.OK, staffSigned.StatusCode);
         Assert.Equal("Completed", (await staffSigned.Content.ReadFromJsonAsync<LocationAssetHandoverReportView>())!.Status);
@@ -515,7 +801,7 @@ public sealed class LocationAssetHandoverSigningTests(Compact24Fixture fixture) 
         {
             revision = report.Revision,
             snapshotSha256 = report.SnapshotSha256,
-            confirmed = true
+            confirmed = true, ink = Ink
         })).StatusCode);
         Assert.Equal(HttpStatusCode.OK, (await ownerClient.GetAsync(handover)).StatusCode);
         Assert.Equal(HttpStatusCode.OK, (await ownerClient.GetAsync(handover + "/document")).StatusCode);
@@ -691,7 +977,7 @@ public sealed class LocationAssetHandoverSigningTests(Compact24Fixture fixture) 
         {
             revision = predecessorReport.Revision,
             snapshotSha256 = predecessorReport.SnapshotSha256,
-            confirmed = true
+            confirmed = true, ink = Ink
         });
         Assert.Equal(HttpStatusCode.OK, predecessorOwnerSign.StatusCode);
         Assert.Equal("PendingStaffSignature",
@@ -716,7 +1002,7 @@ public sealed class LocationAssetHandoverSigningTests(Compact24Fixture fixture) 
         {
             revision = predecessorReport.Revision,
             snapshotSha256 = predecessorReport.SnapshotSha256,
-            confirmed = true
+            confirmed = true, ink = Ink
         })).StatusCode);
         Assert.Equal(HttpStatusCode.OK, (await ownerClient.GetAsync(route)).StatusCode);
         Assert.Equal(HttpStatusCode.OK, (await ownerClient.GetAsync(route + "/location-asset-inventory")).StatusCode);
@@ -765,7 +1051,7 @@ public sealed class LocationAssetHandoverSigningTests(Compact24Fixture fixture) 
         {
             revision = predecessorReport.Revision,
             snapshotSha256 = predecessorReport.SnapshotSha256,
-            confirmed = true
+            confirmed = true, ink = Ink
         })).StatusCode);
         var supersededReport = (await ownerClient.GetFromJsonAsync<LocationAssetHandoverReportView>(handover))!;
         Assert.Equal("Superseded", supersededReport.Status);
@@ -835,20 +1121,20 @@ public sealed class LocationAssetHandoverSigningTests(Compact24Fixture fixture) 
         {
             revision = report.Revision,
             snapshotSha256 = report.SnapshotSha256,
-            confirmed = true
+            confirmed = true, ink = Ink
         })).StatusCode);
         Assert.Equal(HttpStatusCode.OK, (await ownerClient.GetAsync(handover)).StatusCode);
         Assert.Equal(HttpStatusCode.OK, (await ownerClient.PostAsJsonAsync(handover + "/sign", new
         {
             revision = report.Revision,
             snapshotSha256 = report.SnapshotSha256,
-            confirmed = true
+            confirmed = true, ink = Ink
         })).StatusCode);
         var successorSigned = await successorClient.PostAsJsonAsync(handover + "/sign", new
         {
             revision = report.Revision,
             snapshotSha256 = report.SnapshotSha256,
-            confirmed = true
+            confirmed = true, ink = Ink
         });
         Assert.Equal(HttpStatusCode.OK, successorSigned.StatusCode);
         Assert.Equal("Completed", (await successorSigned.Content.ReadFromJsonAsync<LocationAssetHandoverReportView>())!.Status);

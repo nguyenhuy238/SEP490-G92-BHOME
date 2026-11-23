@@ -90,7 +90,7 @@ internal sealed class CompactOperationsRepository(Compact24DbContext db, UserMan
         await using var command = Command("""
             SELECT u.id,COALESCE(u.full_name,''),u.phone,u.email,u.is_active,u.concurrency_stamp,
                    e.id,e.contract_number,e.start_date,e.end_date,e.salary_type,e.base_rate,e.status,
-                   COALESCE(e.reward_penalty_policy->>'employmentType','')
+                   NULLIF(e.reward_penalty_policy->>'employmentType','')
             FROM users u LEFT JOIN LATERAL (
                 SELECT * FROM staff_employments x WHERE x.staff_user_id=u.id ORDER BY x.start_date DESC,x.id LIMIT 1
             ) e ON TRUE WHERE 
@@ -106,7 +106,7 @@ internal sealed class CompactOperationsRepository(Compact24DbContext db, UserMan
         await Open(t); await using var command = Command("""
             SELECT u.id,COALESCE(u.full_name,''),u.phone,u.email,u.is_active,u.concurrency_stamp,
                    e.id,e.contract_number,e.start_date,e.end_date,e.salary_type,e.base_rate,e.status,
-                   COALESCE(e.reward_penalty_policy->>'employmentType','')
+                   NULLIF(e.reward_penalty_policy->>'employmentType','')
             FROM users u LEFT JOIN LATERAL (
                 SELECT * FROM staff_employments x WHERE x.staff_user_id=u.id ORDER BY x.start_date DESC,x.id LIMIT 1
             ) e ON TRUE WHERE u.id=@id AND 'Staff'=ANY(u.roles)
@@ -116,6 +116,8 @@ internal sealed class CompactOperationsRepository(Compact24DbContext db, UserMan
 
     public async Task<StaffView> CreateStaffAsync(Guid actorId, StaffCreate input, DateTimeOffset now, CancellationToken t)
     {
+        if (input.Employment.Status != "Active")
+            throw OperationsException.Invalid("new_employment_must_be_active");
         await using var tx = await db.Database.BeginTransactionAsync(t);
         await Open(t); await EnsurePhoneAvailable(Guid.Empty, input.Phone, t);
         var user = new ApplicationUser
@@ -183,6 +185,8 @@ internal sealed class CompactOperationsRepository(Compact24DbContext db, UserMan
         }
         Guid? employmentId; await using (var select = Command("SELECT id FROM staff_employments WHERE staff_user_id=@id ORDER BY start_date DESC,id LIMIT 1"))
         { select.Parameters.AddWithValue("id", userId); var value = await select.ExecuteScalarAsync(t); employmentId = value is Guid id ? id : null; }
+        if (employmentId is null && input.Employment.Status != "Active")
+            throw OperationsException.Invalid("new_employment_must_be_active");
         await EnsureEmploymentPeriodAvailable(userId, employmentId, input.Employment.StartDate, t);
         await SaveEmployment(userId, employmentId, input.Employment, actorId, now, input.Reason, t);
         await Audit(actorId, "StaffUpdated", "User", userId, now, t); await tx.CommitAsync(t);
@@ -194,7 +198,7 @@ internal sealed class CompactOperationsRepository(Compact24DbContext db, UserMan
         await Open(t);
         await EnsureStaffExists(userId, t);
         await using var command = Command("""
-            SELECT id,contract_number,COALESCE(reward_penalty_policy->>'employmentType',''),
+            SELECT id,contract_number,NULLIF(reward_penalty_policy->>'employmentType',''),
                    start_date,end_date,salary_type,base_rate,status,history::text
             FROM staff_employments WHERE staff_user_id=@staff ORDER BY start_date DESC,id
             """);
@@ -204,7 +208,7 @@ internal sealed class CompactOperationsRepository(Compact24DbContext db, UserMan
         while (await reader.ReadAsync(t))
         {
             result.Add(new(reader.GetGuid(0), reader.IsDBNull(1) ? null : reader.GetString(1),
-                reader.GetString(2), reader.GetFieldValue<DateOnly>(3),
+                reader.IsDBNull(2) ? null : reader.GetString(2), reader.GetFieldValue<DateOnly>(3),
                 reader.IsDBNull(4) ? null : reader.GetFieldValue<DateOnly>(4),
                 reader.IsDBNull(5) ? null : reader.GetString(5), reader.IsDBNull(6) ? null : reader.GetDecimal(6),
                 reader.GetString(7), JsonSerializer.Deserialize<List<EmploymentHistoryEntry>>(reader.GetString(8), Json) ?? []));
@@ -223,6 +227,13 @@ internal sealed class CompactOperationsRepository(Compact24DbContext db, UserMan
             var version = await locked.ExecuteScalarAsync(t);
             if (version is null) throw OperationsException.Missing();
             if (!Equals(version, input.AccountVersion)) throw OperationsException.Conflict("stale_staff_version");
+        }
+        await using (var existingEmployment = Command("SELECT EXISTS(SELECT 1 FROM staff_employments WHERE staff_user_id=@id)"))
+        {
+            existingEmployment.Parameters.AddWithValue("id", userId);
+            var hasHistory = (bool)(await existingEmployment.ExecuteScalarAsync(t))!;
+            if (!hasHistory && input.Employment.Status != "Active")
+                throw OperationsException.Invalid("new_employment_must_be_active");
         }
         await EnsureEmploymentPeriodAvailable(userId, null, input.Employment.StartDate, t);
         await SaveEmployment(userId, null, input.Employment, actorId, now, input.Reason, t);
@@ -827,7 +838,9 @@ internal sealed class CompactOperationsRepository(Compact24DbContext db, UserMan
     private async Task SaveEmployment(Guid staffId, Guid? employmentId, EmploymentWrite input, Guid actor,
         DateTimeOffset now, string? reason, CancellationToken t)
     {
-        var metadata = JsonSerializer.Serialize(new { employmentType = input.EmploymentType }, Json);
+        var metadata = input.EmploymentType is null
+            ? "{}"
+            : JsonSerializer.Serialize(new { employmentType = input.EmploymentType }, Json);
         var snapshot = JsonSerializer.Serialize(input, Json);
         if (employmentId is null)
         {
@@ -919,7 +932,7 @@ internal sealed class CompactOperationsRepository(Compact24DbContext db, UserMan
         r.IsDBNull(3) ? null : r.GetString(3), r.GetFieldValue<string[]>(4), r.GetBoolean(5), r.GetString(6));
     private static StaffView Staff(NpgsqlDataReader r) => new(r.GetGuid(0), r.GetString(1), r.IsDBNull(2) ? null : r.GetString(2),
         r.IsDBNull(3) ? "" : r.GetString(3), r.GetBoolean(4), r.GetString(5), r.IsDBNull(6) ? null : new(r.GetGuid(6),
-            r.IsDBNull(7) ? null : r.GetString(7), r.GetString(13), r.GetFieldValue<DateOnly>(8), r.IsDBNull(9) ? null : r.GetFieldValue<DateOnly>(9),
+            r.IsDBNull(7) ? null : r.GetString(7), r.IsDBNull(13) ? null : r.GetString(13), r.GetFieldValue<DateOnly>(8), r.IsDBNull(9) ? null : r.GetFieldValue<DateOnly>(9),
             r.IsDBNull(10) ? null : r.GetString(10), r.IsDBNull(11) ? null : r.GetDecimal(11), r.GetString(12)));
 
     private static ResidenceTaskView Residence(NpgsqlDataReader r) => new(r.GetGuid(0), r.GetGuid(1), r.GetGuid(2), r.GetGuid(3),

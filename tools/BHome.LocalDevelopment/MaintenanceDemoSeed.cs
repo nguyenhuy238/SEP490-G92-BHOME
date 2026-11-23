@@ -70,11 +70,99 @@ public static class MaintenanceDemoSeed
             }
             else if (!await db.Locations.AnyAsync(l => l.Id == Id(10) && l.Name == "[DEMO BF07] Cơ sở bảo trì tổng hợp"))
                 throw new LocalTestAccountException("Maintenance fixture ID collision.");
+
+            // Keep the original BF07-101 fixture identity (Room ID 20) intact.
+            // P.101 is a separate, occupied room with its own active tenancy.
+            var originalRoom = await db.Set<Room>().SingleOrDefaultAsync(r => r.Id == Id(20));
+            if (originalRoom is null || originalRoom.LocationId != Id(10))
+                throw new LocalTestAccountException("BF07-101 maintenance fixture ID collision.");
+            if (originalRoom.RoomNumber == "P.101") originalRoom.RoomNumber = "BF07-101"; // Repair the earlier incorrect demo seed.
+            else if (originalRoom.RoomNumber != "BF07-101")
+                throw new LocalTestAccountException("BF07-101 maintenance fixture room number changed unexpectedly.");
+
+            var p101Room = await db.Set<Room>().SingleOrDefaultAsync(r => r.Id == Id(22));
+            if (p101Room is null)
+            {
+                if (await db.Set<Room>().AnyAsync(r => r.LocationId == Id(10) && r.RoomNumber == "P.101"))
+                    throw new LocalTestAccountException("P.101 maintenance fixture room number collision.");
+                p101Room = new Room { LocationId = Id(10), RoomNumber = "P.101", Status = RoomStatus.Occupied, Capacity = 3 };
+                Add(db, 22, p101Room);
+            }
+            else if (p101Room.LocationId != Id(10) || p101Room.RoomNumber != "P.101")
+                throw new LocalTestAccountException("P.101 maintenance fixture ID collision.");
+            else if (await db.Set<Room>().AnyAsync(r => r.LocationId == Id(10) && r.Id != Id(22) && r.RoomNumber == "P.101"))
+                throw new LocalTestAccountException("P.101 maintenance fixture room number collision.");
+            p101Room.Status = RoomStatus.Occupied;
+
+            var p101Resident = await db.Set<Resident>().SingleOrDefaultAsync(r => r.Id == Id(41));
+            if (p101Resident is null)
+                Add(db, 41, new Resident
+                {
+                    RoomId = Id(22), OwnerUserId = User(1), TenantUserId = User(3),
+                    DisplayLabel = "Khách thuê P.101 BF07", ResidentType = ResidentType.Representative,
+                    VerificationStatus = IdentityVerificationStatus.Verified
+                });
+            else if (p101Resident.RoomId != Id(22) || p101Resident.OwnerUserId != User(1) || p101Resident.TenantUserId != User(3))
+                throw new LocalTestAccountException("P.101 maintenance fixture resident ID collision.");
+
+            var p101Contract = await db.Set<Contract>().SingleOrDefaultAsync(c => c.Id == Id(51));
+            if (p101Contract is null)
+                Add(db, 51, new Contract
+                {
+                    RoomId = Id(22), TenantUserId = User(3), OwnerSignerId = User(1),
+                    RepresentativeResidentId = Id(41), Kind = ContractKind.Main, Status = ContractStatus.Active,
+                    StartDate = today.AddMonths(-1), EndDate = today.AddYears(1), MonthlyRent = 1000000,
+                    RequiredDeposit = 1000000, ActivatedByUserId = User(1), ActivatedAt = DateTimeOffset.UtcNow,
+                    IsDevelopmentDemo = true,
+                    Terms = "[DEMO BF07] Synthetic active P.101 tenancy fixture, no provider signing claim",
+                    Residents = [new ContractResident { ResidentId = Id(41), Role = ResidentType.Representative, ResidenceFrom = today.AddMonths(-1) }]
+                });
+            else if (p101Contract.RoomId != Id(22) || p101Contract.TenantUserId != User(3) ||
+                p101Contract.RepresentativeResidentId != Id(41) || p101Contract.Status != ContractStatus.Active)
+                throw new LocalTestAccountException("P.101 maintenance fixture contract ID collision.");
+
+            var airConditioner = await db.Set<Asset>().SingleOrDefaultAsync(a => a.Id == Id(32));
+            if (airConditioner is null)
+                Add(db, 32, new Asset
+                {
+                    LocationId = Id(10), RoomId = Id(22), Name = "Điều hòa 1.5 HP", Category = "Điện lạnh",
+                    Condition = "Không làm lạnh", Status = AssetStatus.NeedsRepair
+                });
+            else if (airConditioner.LocationId != Id(10) ||
+                airConditioner.RoomId.HasValue && airConditioner.RoomId != Id(20) && airConditioner.RoomId != Id(22) ||
+                airConditioner.Name != "Điều hòa 1.5 HP" || airConditioner.Category != "Điện lạnh")
+                throw new LocalTestAccountException("P.101 air-conditioner fixture ID collision.");
+            else airConditioner.RoomId = Id(22); // Move the earlier incorrect P.101 seed asset to its corrected room.
+            await db.SaveChangesAsync();
             await transaction.CommitAsync();
         }
         var actor = services.GetRequiredService<LifecycleSeedActor>();
         var incidents = services.GetRequiredService<IncidentService>();
         actor.UserId = User(3); actor.Role = Roles.Tenant;
+        var p101IncidentDescription = "Điều hòa phòng P.101 không làm lạnh";
+        var p101Incident = await db.Set<IncidentReport>().SingleOrDefaultAsync(r => r.Description == p101IncidentDescription);
+        if (p101Incident is null)
+        {
+            using var reportImage = new Mat(80, 480, MatType.CV_8UC3, Scalar.White);
+            Cv2.PutText(reportImage, "SYNTHETIC P.101 AIR CONDITIONER", new Point(8, 46),
+                HersheyFonts.HersheySimplex, .65, Scalar.Black);
+            Cv2.ImEncode(".png", reportImage, out var reportImageBytes);
+            await incidents.SubmitAsync(new(Id(10), Id(22), null, Id(32), IncidentSeverity.Normal, p101IncidentDescription),
+                [new IncidentImage(reportImageBytes)], Id(116), default);
+        }
+        else
+        {
+            if (p101Incident.LocationId != Id(10) || p101Incident.ReporterId != User(3) ||
+                p101Incident.ReporterRole != Roles.Tenant || p101Incident.Severity != IncidentSeverity.Normal ||
+                p101Incident.Status != IncidentStatus.Submitted ||
+                await db.Set<MaintenanceWorkOrder>().AnyAsync(w => w.IncidentId == p101Incident.Id))
+                throw new LocalTestAccountException("P.101 maintenance incident fixture is no longer an untouched Tenant report.");
+            p101Incident.RoomId = Id(22);
+            p101Incident.CommonArea = null;
+            p101Incident.AssetId = Id(32);
+            p101Incident.ContractId = Id(51);
+            await db.SaveChangesAsync();
+        }
         foreach (var (number, label, severity) in new[]
         {
             (100, "[DEMO BF07 A] Thiết bị trong phòng hỏng, chưa xác định tài sản", IncidentSeverity.Normal),

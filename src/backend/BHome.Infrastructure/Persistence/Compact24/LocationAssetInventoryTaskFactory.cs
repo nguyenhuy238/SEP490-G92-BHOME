@@ -25,6 +25,38 @@ internal static class LocationAssetInventoryTaskFactory
     private static Guid SetupKey(string value) =>
         new(SHA256.HashData(Encoding.UTF8.GetBytes(value)).AsSpan(0, 16));
 
+    internal static bool TenantHandoverConfirmsAsset(
+        HandoverSnapshot snapshot, Guid configurationItemId, Guid assetId, int quantity)
+    {
+        if (quantity <= 0 || snapshot.Assets is not { } groups) return false;
+        var matches = groups.Where(group => group.Checked &&
+            (group.ConfigurationItemId is { } configuredId
+                ? configuredId == configurationItemId
+                : group.Id == configurationItemId || group.Id == assetId) &&
+            (group.HandedOverQuantity ?? group.ConfiguredQuantity ?? quantity) >= quantity &&
+            HasExactPhysicalAsset(group, assetId, quantity)).Take(2).ToArray();
+        return matches.Length == 1;
+    }
+
+    internal static bool TenantHandoverConfirmsPhysicalAsset(HandoverSnapshot snapshot, Guid assetId, int quantity)
+    {
+        if (quantity <= 0 || snapshot.Assets is not { } groups) return false;
+        var matches = groups.Where(group => group.Checked &&
+            (group.HandedOverQuantity ?? group.ConfiguredQuantity ?? quantity) >= quantity &&
+            HasExactPhysicalAsset(group, assetId, quantity)).Take(2).ToArray();
+        return matches.Length == 1;
+    }
+
+    private static bool HasExactPhysicalAsset(HandoverAsset group, Guid assetId, int quantity)
+    {
+        var physicalAssets = group.PhysicalAssets ?? [];
+        if (physicalAssets.Length == 0)
+            return group.ConfigurationItemId is null && group.Id == assetId; // Legacy snapshots used the physical Asset ID as the group ID.
+
+        var matches = physicalAssets.Where(asset => asset.Id == assetId).ToArray();
+        return matches.Length == 1 && matches[0].Quantity >= quantity;
+    }
+
     private static int? Quantity(string? metadata)
     {
         if (string.IsNullOrWhiteSpace(metadata)) return 1;
@@ -125,6 +157,7 @@ internal static class LocationAssetInventoryTaskFactory
             Kind = OperationalTaskKind.LocationAssetHandover,
             LocationId = locationId,
             Title = "Kiểm tra tài sản toàn cơ sở",
+            TargetLabel = "Toàn bộ cơ sở · phòng và khu vực chung",
             Requirements = "Kiểm tra tài sản đã được Owner kiểm kê và xác nhận tại các phòng/khu vực chung. Phòng có bàn giao Tenant hợp lệ được kế thừa. Ghi tiến độ và vướng mắc trước khi trình Owner ký biên bản bàn giao.",
             AssignedStaffUserId = staffId,
             AssignmentId = assignmentId,
@@ -389,10 +422,8 @@ internal static class LocationAssetInventoryTaskFactory
                     string.Equals(asset.Name, requirement.Name, StringComparison.OrdinalIgnoreCase) &&
                     string.Equals(asset.Category, requirement.Category, StringComparison.OrdinalIgnoreCase));
                 if (matched is null) continue;
-                var checkedByTenant = hasBaseline && source.Snapshot.Assets.Any(group => group.Checked &&
-                    (group.Id == requirement.Id || group.ConfigurationItemId == requirement.Id ||
-                     matched is not null && (group.Id == matched.Id || group.PhysicalAssets?.Any(p => p.Id == matched.Id) == true)) &&
-                    (group.HandedOverQuantity ?? group.ConfiguredQuantity ?? requirement.Quantity) >= requirement.Quantity);
+                var checkedByTenant = hasBaseline && TenantHandoverConfirmsAsset(
+                    source.Snapshot, requirement.Id, matched.Id, requirement.Quantity);
                 items.Add(new(ItemId(assignmentId, room.Id, requirement.Id), room.Id, room.RoomNumber,
                     matched.Id, requirement.Name, requirement.Quantity, null,
                     checkedByTenant, checkedByTenant, checkedByTenant ? source.ContractId : null));

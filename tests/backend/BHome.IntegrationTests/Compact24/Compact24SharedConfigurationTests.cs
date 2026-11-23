@@ -249,6 +249,68 @@ public sealed partial class Compact24OwnerSetupTests
     }
 
     [CompactPostgresFact]
+    public async Task ServiceTypesGenerateUniqueInitialCodesAndReuseSavedNames()
+    {
+        var w = await Seed(); using var owner = await Client(w.Owner);
+        const string route = "/api/v1/shared-configuration/fee-templates";
+        var missingServiceName = SharedInput("fee-templates") with
+        {
+            Data = JsonSerializer.SerializeToElement(new
+            {
+                category = "ServiceFee", chargeCode = "DV_MISSING", method = "FixedPerRoomPerMonth",
+                referenceRate = "1000", unit = "VND/month", scope = "Location",
+                effectiveFrom = Today.ToString("yyyy-MM-dd"), effectiveTo = (string?)null
+            })
+        };
+        Assert.Equal(HttpStatusCode.BadRequest, (await owner.PostAsJsonAsync(route, missingServiceName)).StatusCode);
+        SharedWrite Service(string templateName, string serviceName, string chargeCode) =>
+            SharedInput("fee-templates") with
+            {
+                Name = templateName,
+                Data = JsonSerializer.SerializeToElement(new
+                {
+                    category = "ServiceFee", chargeCode, serviceName,
+                    method = "FixedPerRoomPerMonth", referenceRate = "1000", unit = "VND/month",
+                    scope = "Location", effectiveFrom = Today.ToString("yyyy-MM-dd"), effectiveTo = (string?)null
+                })
+            };
+
+        var first = await Read<SharedDocument>(await owner.PostAsJsonAsync(
+            route, Service("Synthetic laundry template", "Giặt sấy", "")));
+        Assert.Equal("DV_GS", first.Data.GetProperty("chargeCode").GetString());
+        Assert.Equal("Giặt sấy", first.Data.GetProperty("serviceName").GetString());
+
+        var reused = await Read<SharedDocument>(await owner.PostAsJsonAsync(
+            route, Service("Synthetic second laundry template", "Giặt sấy", "")));
+        Assert.Equal("DV_GS", reused.Data.GetProperty("chargeCode").GetString());
+
+        first = await Read<SharedDocument>(await owner.PutAsJsonAsync(
+            $"{route}/{first.Id}", Service("Synthetic laundry template", "Dịch vụ giặt", "") with { ExpectedVersion = first.Version }));
+        Assert.Equal("DV_GS", first.Data.GetProperty("chargeCode").GetString());
+        Assert.Equal("Dịch vụ giặt", first.Data.GetProperty("serviceName").GetString());
+
+        var collision = await Read<SharedDocument>(await owner.PostAsJsonAsync(
+            route, Service("Synthetic grooming template", "Gội sấy", "DV_GS")));
+        Assert.Equal("DV_GS_02", collision.Data.GetProperty("chargeCode").GetString());
+
+        var reusedAgain = await Read<SharedDocument>(await owner.PostAsJsonAsync(
+            route, Service("Synthetic third laundry template", "Giặt sấy", "")));
+        Assert.Equal("DV_GS", reusedAgain.Data.GetProperty("chargeCode").GetString());
+        Assert.Equal("Giặt sấy", reusedAgain.Data.GetProperty("serviceName").GetString());
+
+        var punctuation = await Read<SharedDocument>(await owner.PostAsJsonAsync(
+            route, Service("Synthetic hyphenated laundry template", "Giặt-sấy", "")));
+        Assert.Equal("DV_GS_03", punctuation.Data.GetProperty("chargeCode").GetString());
+
+        var wifi = await Read<SharedDocument>(await owner.PostAsJsonAsync(
+            route, Service("Synthetic wifi template", "Wifi", "")));
+        Assert.Equal("DV_W", wifi.Data.GetProperty("chargeCode").GetString());
+        var wifiReuse = await Read<SharedDocument>(await owner.PostAsJsonAsync(
+            route, Service("Synthetic second wifi template", "Wifi", "")));
+        Assert.Equal("DV_W", wifiReuse.Data.GetProperty("chargeCode").GetString());
+    }
+
+    [CompactPostgresFact]
     public async Task FeeTemplateOverlapIsCheckedWhenPublishingAndOnlyAgainstOtherPublishedFamilies()
     {
         var w = await Seed(); using var owner = await Client(w.Owner);

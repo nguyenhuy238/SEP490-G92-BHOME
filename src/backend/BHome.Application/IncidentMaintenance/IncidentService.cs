@@ -95,13 +95,105 @@ public sealed partial class IncidentService(IIncidentRepository repository, ICur
         var report = await repository.IncidentAsync(id, t) ?? throw IncidentException.Missing();
         var scope = await AccessAsync(report, t);
         var available = await repository.StaffAvailableAsync(report.LocationId, Today, t);
-        return IncidentProjection.Report(report, scope.Owner || scope.Staff ? available : null);
+        return IncidentProjection.Report(report, scope.Owner || scope.Staff ? available : null,
+            scope.Tenant && !scope.Owner && !scope.Staff) with
+        {
+            LocationName = await repository.LocationNameAsync(report.LocationId, t),
+            RoomNumber = report.RoomId is { } room ? await repository.RoomNumberAsync(room, t) : null,
+            AssetName = report.AssetId is { } asset ? await repository.AssetNameAsync(asset, t) : null
+        };
     }
     public async Task<IncidentPage<IncidentActivityView>> HistoryAsync(Guid id, int page, int size, CancellationToken t)
     {
         await PermitAsync(Permissions.Incidents.View, t); Page(page, size);
         var scope = await AccessAsync(await repository.IncidentAsync(id, t) ?? throw IncidentException.Missing(), t);
         return await repository.HistoryAsync(id, scope, page, size, t);
+    }
+    public async Task<TenantIncidentProgressView> TenantProgressAsync(Guid id, CancellationToken t)
+    {
+        await PermitAsync(Permissions.Incidents.View, t);
+        var report = await repository.IncidentAsync(id, t) ?? throw IncidentException.Missing();
+        var scope = await AccessAsync(report, t);
+        if (!scope.Tenant || scope.Owner || scope.Staff) throw IncidentException.Missing();
+
+        var events = new List<TenantIncidentProgressEvent>();
+        for (var page = 1; ; page++)
+        {
+            var reportHistory = await repository.HistoryAsync(id, scope, page, 100, t);
+            foreach (var item in reportHistory.Items)
+            {
+                var message = item.Action switch
+                {
+                    "submitted" => "Đã gửi báo cáo sự cố",
+                    "reviewed" => "Owner đã tiếp nhận và phân loại sự cố",
+                    "assigned" => "Đã giao nhân viên kiểm tra và xử lý",
+                    "acknowledged" => "Nhân viên đã xác nhận tiếp nhận sự cố khẩn cấp",
+                    "direct_completed" => "Owner đã hoàn tất xử lý trực tiếp",
+                    "resolved" => "Sự cố đã được xác nhận giải quyết",
+                    "reject" => "Báo cáo đã được xem xét và từ chối",
+                    "duplicate" => "Báo cáo đã được xác định là trùng",
+                    "cancel" => "Quy trình xử lý sự cố đã được đóng",
+                    _ => null
+                };
+                if (message is not null) events.Add(new(message, item.OccurredAt));
+            }
+            if (reportHistory.Items.Count == 0 || page * 100 >= reportHistory.TotalCount) break;
+        }
+
+        var orders = await repository.WorkOrdersAsync(id, t);
+        foreach (var order in orders)
+        {
+            for (var page = 1; ; page++)
+            {
+                var history = await repository.WorkHistoryAsync(order.Id, scope, page, 100, t);
+                foreach (var item in history.Items)
+                {
+                    // Only approved public milestones are projected. Never forward the internal note,
+                    // actor, IDs, DataJson, cost, vendor, or evidence from a Work Order event.
+                    var message = item.Action switch
+                    {
+                        "proposal_submitted" => "Nhân viên đã kiểm tra thực tế và gửi phương án sửa chữa",
+                        "plan_approved" => "Phương án sửa chữa đã được Owner phê duyệt",
+                        "plan_rejected" => "Phương án đang được điều chỉnh trước khi sửa chữa",
+                        "start" => "Nhân viên đã bắt đầu sửa chữa",
+                        "fast_repair_started" => "Nhân viên đã bắt đầu sửa chữa nhanh",
+                        "fast_repair_blocked" => "Công việc cần chuyển sang phương án sửa chữa phù hợp hơn",
+                        "progress" => "Nhân viên đang thực hiện công việc",
+                        "blocker" => "Công việc cần thêm thời gian xử lý",
+                        "submit" => "Nhân viên đã hoàn thành sửa chữa và gửi chờ xác nhận",
+                        "verified" => "Kết quả sửa chữa đã được Owner xác nhận",
+                        "rework" => "Nhân viên đang tiếp tục hoàn thiện công việc",
+                        "work_order_cancelled" => "Lệnh sửa chữa đã dừng, Owner đang cập nhật hướng xử lý",
+                        _ => null
+                    };
+                    if (message is not null) events.Add(new(message, item.OccurredAt));
+                }
+                if (history.Items.Count == 0 || page * 100 >= history.TotalCount) break;
+            }
+        }
+
+        var latest = orders.Where(order => order.IsOpen).OrderByDescending(order => order.CreatedAt).FirstOrDefault()
+            ?? orders.OrderByDescending(order => order.CreatedAt).FirstOrDefault();
+        var current = report.Status switch
+        {
+            IncidentStatus.Resolved => "Đã giải quyết",
+            IncidentStatus.Rejected => "Báo cáo đã được từ chối",
+            IncidentStatus.Duplicate => "Báo cáo đã được xác định là trùng",
+            IncidentStatus.Cancelled => "Quy trình xử lý đã đóng",
+            _ when latest is null && report.Status == IncidentStatus.Submitted => "Đã gửi báo cáo, chờ Owner tiếp nhận",
+            _ when latest is null => "Owner đã tiếp nhận, đang sắp xếp xử lý",
+            _ => latest.Status switch
+            {
+                WorkOrderStatus.Assigned => "Đã giao nhân viên, chờ kiểm tra thực tế",
+                WorkOrderStatus.PendingApproval => "Nhân viên đã gửi phương án, chờ Owner phê duyệt",
+                WorkOrderStatus.InProgress => "Nhân viên đang sửa chữa",
+                WorkOrderStatus.PendingVerification => "Đã sửa xong, chờ Owner xác nhận kết quả",
+                WorkOrderStatus.Verified => "Công việc đã được xác nhận hoàn thành",
+                WorkOrderStatus.Cancelled => "Lệnh sửa chữa đã dừng, Owner đang cập nhật hướng xử lý",
+                _ => "Đang xử lý"
+            }
+        };
+        return new(current, events.OrderBy(item => item.OccurredAt).ToArray());
     }
     public async Task<IncidentPage<WorkOrderView>> WorkOrdersAsync(IncidentQuery query, CancellationToken t)
     { await PermitAsync(Permissions.WorkOrders.View, t); Query(query); return await repository.ListWorkOrdersAsync((await ScopeAsync(t)) with { Tenant = false }, query, Now, t); }
@@ -112,7 +204,15 @@ public sealed partial class IncidentService(IIncidentRepository repository, ICur
         var report = await ContextAsync(work, t);
         var scope = await WorkAccessAsync(report, t);
         if (!scope.Owner && !scope.Staff) throw IncidentException.Missing();
-        return IncidentProjection.Work(work, Now, scope.Owner || work.AssignedStaffId == Actor);
+        return IncidentProjection.Work(work, Now, scope.Owner || work.AssignedStaffId == Actor) with
+        {
+            LocationName = await repository.LocationNameAsync(work.LocationId, t),
+            RoomNumber = work.RoomId is { } room ? await repository.RoomNumberAsync(room, t) : null,
+            AssetName = work.AssetId is { } asset ? await repository.AssetNameAsync(asset, t) : null,
+            AssignedStaffName = scope.Owner || work.AssignedStaffId == Actor
+                ? await repository.StaffNameAsync(work.AssignedStaffId, t)
+                : null
+        };
     }
     public async Task<IncidentPage<MaintenanceHistoryView>> MaintenanceAsync(IncidentQuery query, CancellationToken t)
     { await PermitAsync(Permissions.WorkOrders.View, t); Query(query); return await repository.MaintenanceAsync((await ScopeAsync(t)) with { Tenant = false }, query, t); }
@@ -771,9 +871,10 @@ public sealed partial class IncidentService(IIncidentRepository repository, ICur
 
 public static class IncidentProjection
 {
-    public static IncidentView Report(IncidentReport r, bool? available) => new(r.Id, "INC-" + r.Id.ToString("N"), r.LocationId,
-        r.RoomId, r.CommonArea, r.AssetId, r.Description, r.Severity.ToString(), r.Status.ToString(), r.Type, r.Category,
-        r.AcknowledgedAt, r.ResolutionNote, r.Version, r.CreatedAt, available);
+    public static IncidentView Report(IncidentReport r, bool? available, bool tenant = false) => new(r.Id, "INC-" + r.Id.ToString("N"), r.LocationId,
+        r.RoomId, r.CommonArea, r.AssetId, r.Description, r.Severity.ToString(), r.Status.ToString(),
+        tenant ? null : r.Type, tenant ? null : r.Category, r.AcknowledgedAt,
+        !tenant || r.Status == IncidentStatus.Resolved ? r.ResolutionNote : null, r.Version, r.CreatedAt, available);
     public static WorkOrderView Work(MaintenanceWorkOrder w, DateTimeOffset now, bool financial) => new(w.Id, w.IncidentId,
         w.LocationId, w.RoomId, w.AssetId, w.AssignedStaffId, w.ExpectedOutcome, w.TargetCompletionAt, w.IsOpen && w.TargetCompletionAt < now,
         w.Status.ToString(), w.InspectionResult, w.ProposedSolution, w.EstimatedMinutes, financial ? w.EstimatedCost : null,

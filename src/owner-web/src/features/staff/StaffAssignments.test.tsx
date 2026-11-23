@@ -328,7 +328,6 @@ it('warns that an expired employment cannot own Location work while keeping repl
     employment: {
       id: 'employment-ended',
       contractNumber: 'ENDED-01',
-      employmentType: 'FullTime',
       startDate: '2026-01-01',
       endDate: '2026-11-11',
       salaryType: 'Monthly',

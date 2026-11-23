@@ -25,6 +25,9 @@ import { OwnerFeedback } from '../../../components/common/OwnerWorkspace';
 import { useOwnerAction, useOwnerQuery } from '../../../hooks/useOwnerWorkspace';
 import {
   todayVietnam,
+  salaryRateUnit,
+  salaryTypeOptions,
+  salaryTypeLabel,
   type Employment,
   type Staff,
   type StaffResponsibilities,
@@ -59,7 +62,6 @@ export function StaffEditor({
       ? {
           ...staff?.employment,
           contractNumber: null,
-          employmentType: staff?.employment?.employmentType ?? '',
           startDate: nextStart,
           endDate: null,
           salaryType: staff?.employment?.salaryType ?? null,
@@ -68,7 +70,6 @@ export function StaffEditor({
         }
       : (staff?.employment ?? {
           contractNumber: null,
-          employmentType: '',
           startDate: todayVietnam(),
           endDate: null,
           salaryType: null,
@@ -120,6 +121,7 @@ export function StaffEditor({
     setFieldErrors({});
     const work = {
       ...employment,
+      status: staff?.employment && !renewal ? employment.status : 'Active',
       // ASP.NET's web JSON options accept decimal strings. Preserve large VND inputs
       // exactly while retaining the existing numeric payload for ordinary salaries.
       baseRate: baseRate === '' ? null : baseRate.length <= 14 ? Number(baseRate) : baseRate,
@@ -233,9 +235,7 @@ export function StaffEditor({
                       {latest.fullName} · {latest.email}
                     </Typography>
                     <Typography variant="body2">
-                      {latest.employment?.contractNumber ||
-                        latest.employment?.employmentType ||
-                        'Chưa có hợp đồng'}{' '}
+                      {latest.employment?.contractNumber || 'Chưa có hợp đồng'}{' '}
                       · {latest.employment?.startDate} –{' '}
                       {latest.employment?.endDate ?? 'Không xác định thời hạn'}
                     </Typography>
@@ -343,13 +343,6 @@ export function StaffEditor({
               />
               <TextField
                 required
-                label="Loại công việc"
-                {...fieldError('employmenttype')}
-                value={employment.employmentType}
-                onChange={(e) => set('employmentType', e.target.value)}
-              />
-              <TextField
-                required
                 type="date"
                 label="Ngày bắt đầu"
                 {...fieldError('startdate')}
@@ -387,28 +380,48 @@ export function StaffEditor({
                 onChange={(e) => set('endDate', e.target.value || null)}
               />
               <TextField
+                select
                 label="Hình thức lương"
                 {...fieldError('salarytype')}
                 value={employment.salaryType ?? ''}
                 onChange={(e) => set('salaryType', e.target.value || null)}
-              />
+              >
+                <MenuItem value="">Chưa thiết lập</MenuItem>
+                {salaryTypeOptions.map((option) => (
+                  <MenuItem key={option.value} value={option.value}>
+                    {option.label}
+                  </MenuItem>
+                ))}
+                {employment.salaryType &&
+                  !salaryTypeOptions.some((option) => option.value === employment.salaryType) && (
+                    <MenuItem value={employment.salaryType} disabled>
+                      {salaryTypeLabel(employment.salaryType)} (giá trị cũ)
+                    </MenuItem>
+                  )}
+              </TextField>
               <MoneyField
-                label="Mức lương thỏa thuận (VND)"
+                label={`Mức lương thỏa thuận (${salaryRateUnit(employment.salaryType)})`}
                 {...fieldError('baserate')}
                 value={baseRate}
                 maxRawLength={18}
                 onValueChange={setBaseRate}
               />
-              <TextField
-                select
-                label="Trạng thái công việc"
-                {...fieldError('status')}
-                value={employment.status}
-                onChange={(e) => set('status', e.target.value)}
-              >
-                <MenuItem value="Active">Đang làm việc</MenuItem>
-                <MenuItem value="Ended">Đã kết thúc</MenuItem>
-              </TextField>
+              {staff?.employment && !renewal ? (
+                <TextField
+                  select
+                  label="Trạng thái hợp đồng"
+                  {...fieldError('status')}
+                  value={employment.status}
+                  onChange={(e) => set('status', e.target.value)}
+                >
+                  <MenuItem value="Active">Đang làm việc</MenuItem>
+                  <MenuItem value="Ended">Đã kết thúc</MenuItem>
+                </TextField>
+              ) : (
+                <Typography variant="body2" color="text.secondary" sx={{ alignSelf: 'center' }}>
+                  Trạng thái hợp đồng ban đầu: <strong>Đang làm việc</strong>
+                </Typography>
+              )}
             </Box>
             {staff && (
               <>

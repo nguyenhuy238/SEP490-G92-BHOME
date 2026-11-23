@@ -224,8 +224,15 @@ public sealed class LocationAssetInventoryAssignmentTests(Compact24Fixture fixtu
                 await db.SaveChangesAsync();
                 readings.Add(utility, reading);
             }
+            var roomRequirementId = Guid.NewGuid();
             var snapshot = new BHome.Application.Contracts.HandoverSnapshot(Today.AddDays(-3), "Synthetic-101",
-                "Tốt", "Đã bàn giao", "", [new(assetId, "Synthetic bed", "Tốt", "Tốt", Checked: true)],
+                "Tốt", "Đã bàn giao", "", [new BHome.Application.Contracts.HandoverAsset(
+                    roomRequirementId, "Synthetic bed", "Tốt", "Tốt",
+                    ConfigurationItemId: roomRequirementId, ConfiguredQuantity: 1, TrackingMode: "BulkQuantity",
+                    PhysicalAssets: [new BHome.Application.Contracts.HandoverPhysicalAsset(
+                        assetId, asset.Version, 1, asset.Condition.ToString(), asset.Status.ToString())],
+                    OwnerChecked: true, ObservedQuantity: 1, HandedOverQuantity: 1,
+                    GoodQuantity: 1, WornQuantity: 0, DamagedQuantity: 0, MissingQuantity: 0, Checked: true)],
                 null!, null!, [], NoAssetsConfirmed: false);
             db.Add(new ContractHandover
             {
@@ -245,7 +252,7 @@ public sealed class LocationAssetInventoryAssignmentTests(Compact24Fixture fixtu
             var store = scope.ServiceProvider.GetRequiredService<ISetupWorkspaceStore>();
             var roomExpected = new[]
             {
-                new AssetTemplateItem(Guid.NewGuid(), "Synthetic bed", "Furniture", "BulkQuantity", 1),
+                new AssetTemplateItem(roomRequirementId, "Synthetic bed", "Furniture", "BulkQuantity", 1),
                 new AssetTemplateItem(Guid.NewGuid(), "Missing synthetic desk", "Furniture", "BulkQuantity", 1)
             };
             var templateId = Guid.NewGuid();
@@ -392,6 +399,242 @@ public sealed class LocationAssetInventoryAssignmentTests(Compact24Fixture fixtu
         using var blocked = await Action(staffClient, route + "/submit", new { version = checkedView.Version, note = "Đã hoàn thành kiểm kê" });
         Assert.Equal(HttpStatusCode.Conflict, blocked.StatusCode);
         Assert.Equal("InProgress", (await ownerClient.GetFromJsonAsync<TaskView>(route))!.Status);
+    }
+
+    [CompactPostgresFact]
+    public async Task TenantHandoverDoesNotInheritReplacementAssetWithSameRequirementAndQuantity()
+    {
+        var owner = await User("Owner");
+        var staff = await User("Staff");
+        var tenant = await User("Tenant");
+        var location = await Location();
+        Guid roomId, requirementId, previousAssetId, currentAssetId, contractId;
+        int currentAssetVersion;
+        BHome.Application.Contracts.HandoverSnapshot tenantSnapshot;
+        await using (var scope = fixture.Factory!.Services.CreateAsyncScope())
+        {
+            var db = scope.ServiceProvider.GetRequiredService<Compact24DbContext>();
+            var room = new Room { LocationId = location, RoomNumber = "Synthetic-102", Status = RoomStatus.Occupied };
+            db.Add(room);
+            await db.SaveChangesAsync();
+            roomId = room.Id;
+
+            var previousAsset = new Asset
+            {
+                LocationId = location,
+                RoomId = roomId,
+                Name = "Synthetic bed",
+                Category = "Furniture",
+                Status = AssetStatus.Retired
+            };
+            var currentAsset = new Asset
+            {
+                LocationId = location,
+                RoomId = roomId,
+                Name = "Synthetic bed",
+                Category = "Furniture",
+                Status = AssetStatus.Active
+            };
+            db.AddRange(previousAsset, currentAsset);
+            await db.SaveChangesAsync();
+            previousAssetId = previousAsset.Id;
+            currentAssetId = currentAsset.Id;
+            currentAssetVersion = currentAsset.Version;
+
+            var resident = new Resident
+            {
+                RoomId = roomId,
+                OwnerUserId = owner.Id,
+                TenantUserId = tenant.Id,
+                DisplayLabel = "Synthetic Resident",
+                VerificationStatus = IdentityVerificationStatus.Verified
+            };
+            db.Add(resident);
+            await db.SaveChangesAsync();
+            var contract = new Contract
+            {
+                RoomId = roomId,
+                OwnerSignerId = owner.Id,
+                TenantUserId = tenant.Id,
+                RepresentativeResidentId = resident.Id,
+                Kind = ContractKind.Main,
+                Status = ContractStatus.Active,
+                StartDate = Today.AddDays(-3),
+                EndDate = Today.AddMonths(3),
+                Terms = "Synthetic terms",
+                ActivatedAt = DateTimeOffset.UtcNow,
+                ActivatedByUserId = owner.Id
+            };
+            db.Add(contract);
+            await db.SaveChangesAsync();
+            contractId = contract.Id;
+
+            var readings = new Dictionary<UtilityType, MeterReading>();
+            foreach (var utility in new[] { UtilityType.Electricity, UtilityType.Water })
+            {
+                var meter = new Meter
+                {
+                    RoomId = roomId,
+                    Code = $"SYNRPL-{Guid.NewGuid():N}-{utility}",
+                    UtilityType = utility,
+                    InstalledOn = Today.AddDays(-10)
+                };
+                db.Add(meter);
+                await db.SaveChangesAsync();
+                var capture = new OperationalTask
+                {
+                    LocationId = location,
+                    MeterId = meter.Id,
+                    Kind = OperationalTaskKind.MeterReading,
+                    ReadingDate = Today.AddDays(-3),
+                    Purpose = ReadingPurpose.Initial,
+                    Status = MeterTaskStatus.Completed,
+                    CompletedAt = DateTimeOffset.UtcNow
+                };
+                db.Add(capture);
+                await db.SaveChangesAsync();
+                var image = new byte[] { 137, 80, 78, 71, 13, 10, 26, 10, 0, 0, 0, 0 };
+                var evidence = new MeterEvidence
+                {
+                    TaskId = capture.Id,
+                    UploadedByUserId = staff.Id,
+                    ContentType = "image/png",
+                    Length = image.Length,
+                    ObjectKey = $"synthetic/{Guid.NewGuid():N}.png",
+                    ImageHash = Convert.ToHexString(SHA256.HashData(image)),
+                    IsUploaded = true,
+                    IsLinked = true
+                };
+                db.Add(evidence);
+                await db.SaveChangesAsync();
+                var reading = new MeterReading
+                {
+                    MeterId = meter.Id,
+                    TaskId = capture.Id,
+                    EvidenceId = evidence.Id,
+                    ConfirmedByUserId = staff.Id,
+                    ConfirmedAt = DateTimeOffset.UtcNow,
+                    ConfirmedValue = 100
+                };
+                db.Add(reading);
+                await db.SaveChangesAsync();
+                readings.Add(utility, reading);
+            }
+
+            requirementId = Guid.NewGuid();
+            tenantSnapshot = new BHome.Application.Contracts.HandoverSnapshot(
+                Today.AddDays(-3), room.RoomNumber, "Tốt", "Đã bàn giao", "",
+                [new BHome.Application.Contracts.HandoverAsset(requirementId, "Synthetic bed", "Tốt", "Tốt",
+                    ConfigurationItemId: requirementId, ConfiguredQuantity: 1, TrackingMode: "BulkQuantity",
+                    PhysicalAssets: [new BHome.Application.Contracts.HandoverPhysicalAsset(
+                        previousAssetId, previousAsset.Version, 1, "Tốt", "Active")],
+                    OwnerChecked: true, ObservedQuantity: 1, HandedOverQuantity: 1,
+                    GoodQuantity: 1, WornQuantity: 0, DamagedQuantity: 0, MissingQuantity: 0, Checked: true)],
+                null!, null!, [], NoAssetsConfirmed: false);
+            db.Add(new ContractHandover
+            {
+                ContractId = contract.Id,
+                Status = ContractHandoverStatus.Confirmed,
+                Version = 2,
+                TenantConfirmedVersion = 2,
+                ElectricityReadingId = readings[UtilityType.Electricity].Id,
+                WaterReadingId = readings[UtilityType.Water].Id,
+                TenantConfirmedBy = tenant.Id,
+                StaffConfirmedBy = staff.Id,
+                TenantConfirmedAt = DateTimeOffset.UtcNow,
+                StaffConfirmedAt = DateTimeOffset.UtcNow,
+                Snapshot = JsonSerializer.Serialize(tenantSnapshot)
+            });
+            await db.SaveChangesAsync();
+
+            var store = scope.ServiceProvider.GetRequiredService<ISetupWorkspaceStore>();
+            var roomItems = new[]
+            {
+                new AssetTemplateItem(requirementId, "Synthetic bed", "Furniture", "BulkQuantity", 1)
+            };
+            var templateId = Guid.NewGuid();
+            await SaveRoomTemplateAsync(store, location, roomId, owner.Id, templateId, roomItems);
+            var desired = await store.SaveAsync(Guid.NewGuid(), location, "DesiredAssets", "PendingVerification",
+                new DesiredAssets(templateId, 1, roomId, roomItems, "PendingVerification"), 0, owner.Id, default);
+            await store.SaveAsync(Guid.NewGuid(), location, "AssetVerification", "Verified", new
+            {
+                roomId,
+                templateId,
+                itemId = requirementId,
+                assetId = currentAssetId,
+                quantity = 1,
+                source = "OwnerAttestation"
+            }, 0, owner.Id, default);
+            await store.SaveAsync(Guid.NewGuid(), location, "RoomInventoryChecklistReview", "Matched", new
+            {
+                roomId,
+                desiredId = desired.Id,
+                desiredVersion = desired.Version,
+                baseline = "synthetic-replacement-owner-baseline",
+                state = "Matched",
+                requestId = Guid.NewGuid(),
+                items = new[] { new { itemId = requirementId, @checked = true, evidenceIds = Array.Empty<Guid>() } },
+                unlinkedAssetIds = Array.Empty<Guid>()
+            }, 0, owner.Id, default);
+
+            var assignments = scope.ServiceProvider.GetRequiredService<ILocationAssignments>();
+            Assert.Equal(CreateAssignmentStatus.Created, (await assignments.CreateAssignmentAsync(
+                owner.Id, location, staff.Id, Today, Today.AddDays(15), default)).Status);
+        }
+
+        Guid taskId;
+        await using (var scope = fixture.Factory!.Services.CreateAsyncScope())
+        {
+            var db = scope.ServiceProvider.GetRequiredService<Compact24DbContext>();
+            taskId = await db.Set<OperationalTask>().AsNoTracking()
+                .Where(task => task.LocationId == location && task.Kind == OperationalTaskKind.LocationAssetHandover)
+                .Select(task => task.Id).SingleAsync();
+        }
+        using var staffClient = await Client(staff);
+        var route = $"/api/v1/operational-tasks/{taskId}";
+        var inventory = (await staffClient.GetFromJsonAsync<LocationAssetInventoryView>(
+            route + "/location-asset-inventory"))!;
+        var replacement = Assert.Single(inventory.Items);
+        Assert.Equal(currentAssetId, replacement.AssetId);
+        Assert.NotEqual(previousAssetId, replacement.AssetId);
+        Assert.False(replacement.Checked);
+        Assert.False(replacement.Inherited);
+        Assert.Null(replacement.SourceHandoverContractId);
+
+        var started = await Action(staffClient, route + "/start", new { version = inventory.Version });
+        Assert.Equal(HttpStatusCode.OK, started.StatusCode);
+        var task = (await started.Content.ReadFromJsonAsync<TaskView>())!;
+        var checkedInventory = await Check(staffClient, route, replacement.Id, task.Version);
+        var submitted = await Action(staffClient, route + "/submit", new
+        {
+            version = checkedInventory.Version,
+            note = "Staff đã trực tiếp kiểm tra tài sản thay thế."
+        });
+        Assert.Equal(HttpStatusCode.OK, submitted.StatusCode);
+        var submittedTask = (await submitted.Content.ReadFromJsonAsync<TaskView>())!;
+        Assert.Equal("PendingVerification", submittedTask.Status);
+
+        // If the Tenant source later changes to Asset B, the already-submitted direct check
+        // must be revalidated because its inherited/source identity has changed.
+        await using (var scope = fixture.Factory!.Services.CreateAsyncScope())
+        {
+            var db = scope.ServiceProvider.GetRequiredService<Compact24DbContext>();
+            var handover = await db.Set<ContractHandover>().SingleAsync(item => item.ContractId == contractId);
+            var changedSnapshot = tenantSnapshot with
+            {
+                Assets = tenantSnapshot.Assets.Select(group => group with
+                {
+                    PhysicalAssets = [new BHome.Application.Contracts.HandoverPhysicalAsset(
+                        currentAssetId, currentAssetVersion, 1, "Tốt", "Active")]
+                }).ToArray()
+            };
+            handover.Snapshot = JsonSerializer.Serialize(changedSnapshot);
+            await db.SaveChangesAsync();
+        }
+        using var ownerClient = await Client(owner);
+        var approval = await ownerClient.PostAsJsonAsync(route + "/location-asset-handover/approve",
+            new { taskVersion = submittedTask.Version });
+        Assert.Equal(HttpStatusCode.Conflict, approval.StatusCode);
     }
 
     [CompactPostgresFact]

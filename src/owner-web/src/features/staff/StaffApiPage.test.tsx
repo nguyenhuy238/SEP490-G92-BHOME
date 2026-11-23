@@ -24,7 +24,6 @@ const staff = {
   accountVersion: 'v7',
   employment: {
     id: 'work',
-    employmentType: 'FullTime',
     startDate: '2026-01-01',
     endDate: null,
     contractNumber: null,
@@ -62,7 +61,14 @@ it('creates Staff without asking for or transmitting an initial password', async
   fireEvent.change(screen.getByLabelText(/^Email/), {
     target: { value: 'new-staff@example.invalid' },
   });
-  fireEvent.change(screen.getByLabelText(/Loại công việc/), { target: { value: 'PartTime' } });
+  fireEvent.mouseDown(screen.getByRole('combobox', { name: 'Hình thức lương' }));
+  fireEvent.click(screen.getByRole('option', { name: 'Theo tháng' }));
+  expect(screen.getByLabelText(/Mức lương thỏa thuận \(VND\/tháng\)/)).toBeInTheDocument();
+  expect(screen.queryByLabelText(/Loại công việc/)).not.toBeInTheDocument();
+  expect(screen.queryByLabelText('Trạng thái công việc')).not.toBeInTheDocument();
+  expect(
+    screen.getByText((_, element) => element?.textContent === 'Trạng thái hợp đồng ban đầu: Đang làm việc'),
+  ).toBeInTheDocument();
   const salary = screen.getByLabelText(/Mức lương thỏa thuận/);
   fireEvent.change(salary, { target: { value: '3000000' } });
   expect(salary).toHaveValue('3.000.000');
@@ -82,6 +88,8 @@ it('creates Staff without asking for or transmitting an initial password', async
   )!;
   expect(JSON.parse(call[1].body)).not.toHaveProperty('initialPassword');
   expect(JSON.parse(call[1].body).employment.baseRate).toBe('9007199254740993');
+  expect(JSON.parse(call[1].body).employment.status).toBe('Active');
+  expect(JSON.parse(call[1].body).employment.salaryType).toBe('Monthly');
 });
 it('opens newly created active Staff so Owner can send credentials immediately', async () => {
   const created = {
@@ -101,7 +109,6 @@ it('opens newly created active Staff so Owner can send credentials immediately',
   fireEvent.click(screen.getByRole('button', { name: 'Thêm nhân viên' }));
   fireEvent.change(screen.getByLabelText(/Họ tên/), { target: { value: created.fullName } });
   fireEvent.change(screen.getByLabelText(/^Email/), { target: { value: created.email } });
-  fireEvent.change(screen.getByLabelText(/Loại công việc/), { target: { value: 'PartTime' } });
   fireEvent.submit(document.getElementById('staff-editor')!);
   fireEvent.click(await screen.findByRole('button', { name: 'Xác nhận' }));
   expect(
@@ -144,7 +151,7 @@ it('preserves account version and employment contract, and reports server respon
     accountVersion: 'v7',
     isActive: false,
     reason: 'Synthetic change',
-    employment: { employmentType: 'FullTime' },
+    employment: { status: 'Active' },
   });
   expect(JSON.parse(call[1].body).employment).not.toHaveProperty('id');
   expect(staff.employment.id).toBe('work');
@@ -283,7 +290,6 @@ it('creates with the existing DTO, retains input on validation errors, and close
   fireEvent.click(screen.getByRole('button', { name: 'Thêm nhân viên' }));
   fireEvent.change(screen.getByLabelText(/Họ tên/), { target: { value: 'New synthetic' } });
   fireEvent.change(screen.getByLabelText(/Email/), { target: { value: 'new@example.invalid' } });
-  fireEvent.change(screen.getByLabelText(/Loại công việc/), { target: { value: 'Task' } });
   mocks.request.mockImplementation(async (_path: string, init?: RequestInit) => {
     if (init?.method === 'POST')
       throw new ApiError(400, { errors: { Email: ['Email thử nghiệm không hợp lệ.'] } });
@@ -309,8 +315,9 @@ it('creates with the existing DTO, retains input on validation errors, and close
   )!;
   expect(JSON.parse(init.body)).toMatchObject({
     fullName: 'New synthetic',
-    employment: { employmentType: 'Task' },
+    employment: { status: 'Active' },
   });
+  expect(JSON.parse(init.body).employment).not.toHaveProperty('employmentType');
   expect(JSON.parse(init.body)).not.toHaveProperty('initialPassword');
   expect(JSON.parse(init.body)).not.toHaveProperty('accountVersion');
 });
@@ -333,7 +340,6 @@ it('renders multiple structured field errors and focuses the first invalid field
   fireEvent.change(screen.getByLabelText(/^Email/), {
     target: { value: 'synthetic@example.invalid' },
   });
-  fireEvent.change(screen.getByLabelText(/Loại công việc/), { target: { value: 'Task' } });
   const original = mocks.request.getMockImplementation()!;
   mocks.request.mockImplementation(async (path: string, init?: RequestInit) => {
     if (path === '/api/v1/staff' && init?.method === 'POST')

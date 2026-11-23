@@ -22,6 +22,7 @@ interface Compensation {
   contractId: string;
   collectionMethod: 'Invoice' | 'Deposit';
   status: string;
+  actualRepairCost: string;
   amount: string;
   reason: string;
   invoiceId: string | null;
@@ -107,10 +108,13 @@ export function CompensationPanel({
       {row ? (
         <>
           <Typography>
-            {statuses[row.status] ?? row.status} · {formatContractMoney(row.amount)}
+            {statuses[row.status] ?? row.status} · Mức bồi thường {formatContractMoney(row.amount)}
+          </Typography>
+          <Typography variant="body2" color="text.secondary">
+            Chi phí sửa chữa thực tế: {formatContractMoney(row.actualRepairCost)}
           </Typography>
           <Typography>
-            Hợp đồng {row.contractId} · {formatInstant(row.decidedAt)}
+            Hợp đồng chịu trách nhiệm · {formatInstant(row.decidedAt)}
           </Typography>
           <Typography>{row.reason}</Typography>
           <details>
@@ -134,8 +138,8 @@ export function CompensationPanel({
           {row.status === 'DepositPending' && (
             <>
               <Alert severity="info">
-                Máy chủ kiểm tra trả phòng, xác nhận kiểm tra và số cọc còn lại trước khi khấu trừ
-                toàn bộ nghĩa vụ.
+                Chỉ khấu trừ sau khi trả phòng được duyệt và còn đủ tiền cọc. Máy chủ sẽ kiểm tra lại
+                số dư và hồ sơ trả phòng ngay tại thời điểm thực hiện.
               </Alert>
               <TextField
                 label="Lý do quyết toán hoặc hủy quyết định"
@@ -173,8 +177,8 @@ export function CompensationPanel({
         !query.error && (
           <>
             <Alert severity="info">
-              Owner xác nhận trách nhiệm theo bằng chứng. Mỗi nghĩa vụ có một phương thức thu. Số
-              tiền tối đa bằng chi phí sửa chữa thực tế.
+              Owner xác nhận trách nhiệm theo bằng chứng. Mỗi nghĩa vụ có một phương thức thu. Mức
+              bồi thường không được vượt chi phí sửa chữa thực tế ({formatContractMoney(String(work.actualCost ?? 0))}).
             </Alert>
             <TextField
               select
@@ -185,8 +189,8 @@ export function CompensationPanel({
             >
               {(contracts.data ?? []).map((c) => (
                 <MenuItem key={c.id} value={c.id}>
-                  {c.startDate.split('-').reverse().join('/')} –{' '}
-                  {c.endDate.split('-').reverse().join('/')} · {c.id}
+                  {c.startDate.split('-').reverse().join('/')} – {c.endDate.split('-').reverse().join('/')} ·{' '}
+                  {c.status === 'Active' ? 'Đang hiệu lực' : c.status === 'Terminated' ? 'Đã kết thúc' : 'Đã thay thế'}
                 </MenuItem>
               ))}
             </TextField>
@@ -205,6 +209,11 @@ export function CompensationPanel({
               <MenuItem value="Invoice">Hóa đơn bồi thường riêng</MenuItem>
               <MenuItem value="Deposit">Khấu trừ cọc khi trả phòng</MenuItem>
             </TextField>
+            {method === 'Deposit' ? (
+              <Alert severity="info">Khấu trừ cọc chỉ được thực hiện sau khi Owner duyệt hồ sơ trả phòng và hệ thống xác nhận số dư còn đủ.</Alert>
+            ) : (
+              <Alert severity="info">Hóa đơn bồi thường sẽ được tạo riêng để Tenant thanh toán bằng QR như hóa đơn thông thường.</Alert>
+            )}
             {method === 'Invoice' && (
               <TextField
                 required

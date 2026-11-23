@@ -11,7 +11,6 @@ export interface RoomTemplate {
   rate: number;
   description: string;
   facilities: string[];
-  assetTemplateId?: string;
   locationsUsing: number;
 }
 
@@ -23,15 +22,6 @@ export interface AssetCatalogEntry {
   referencePrice: number;
   unit: string;
   status: 'Active' | 'Draft';
-}
-
-export interface AssetTemplate {
-  id: string;
-  name: string;
-  roomType: string;
-  description: string;
-  items: { assetId: string; quantity: number; required: boolean }[];
-  locationsUsing: number;
 }
 
 export interface FeeTemplate {
@@ -63,7 +53,6 @@ export interface PolicyTemplate {
 
 export interface AppliedConfiguration {
   roomTemplateIds: string[];
-  assetTemplateIds: string[];
   feeTemplateIds: string[];
   policyTemplateIds: string[];
   source: ConfigurationSource;
@@ -75,13 +64,11 @@ export interface AppliedConfiguration {
 interface SharedConfigurationValue {
   roomTemplates: RoomTemplate[];
   assetCatalog: AssetCatalogEntry[];
-  assetTemplates: AssetTemplate[];
   feeTemplates: FeeTemplate[];
   policyTemplates: PolicyTemplate[];
   appliedByLocation: Record<string, AppliedConfiguration>;
   addRoomTemplate: (value: Omit<RoomTemplate, 'id' | 'locationsUsing'>) => void;
   addAsset: (value: Omit<AssetCatalogEntry, 'id'>) => void;
-  addAssetTemplate: (value: Omit<AssetTemplate, 'id' | 'locationsUsing'>) => void;
   addFeeTemplate: (
     value: Omit<FeeTemplate, 'id' | 'locationsUsing' | 'version' | 'status'>,
   ) => void;
@@ -90,12 +77,12 @@ interface SharedConfigurationValue {
   ) => void;
   duplicateTemplate: (kind: 'room' | 'fee' | 'policy', id: string) => void;
   updateTemplate: (
-    kind: 'room' | 'asset' | 'assetTemplate' | 'fee' | 'policy',
+    kind: 'room' | 'asset' | 'fee' | 'policy',
     id: string,
     changes: Record<string, unknown>,
   ) => void;
   applyTemplate: (
-    kind: 'room' | 'asset' | 'fee' | 'policy',
+    kind: 'room' | 'fee' | 'policy',
     templateId: string,
     locationId: string,
   ) => void;
@@ -120,7 +107,6 @@ const initialRooms: RoomTemplate[] = [
     rate: 5_500_000,
     description: 'Thiết kế studio tối ưu với phòng tắm riêng và khu bếp nhỏ.',
     facilities: ['Phòng tắm riêng', 'Khu bếp nhỏ', 'Máy lạnh'],
-    assetTemplateId: 'at-studio',
     locationsUsing: 3,
   },
   {
@@ -131,7 +117,6 @@ const initialRooms: RoomTemplate[] = [
     rate: 6_200_000,
     description: 'Phòng studio có ban công riêng và thông gió tự nhiên.',
     facilities: ['Ban công', 'Phòng tắm riêng', 'Khu bếp nhỏ'],
-    assetTemplateId: 'at-studio',
     locationsUsing: 2,
   },
   {
@@ -176,36 +161,6 @@ const initialAssets: AssetCatalogEntry[] = [
   unit: String(unit),
   status: 'Active' as const,
 }));
-
-const initialAssetTemplates: AssetTemplate[] = [
-  {
-    id: 'at-studio',
-    name: 'Tài sản studio tiêu chuẩn',
-    roomType: 'Studio tiêu chuẩn',
-    description: 'Gói trang thiết bị bàn giao tiêu chuẩn cho phòng studio.',
-    locationsUsing: 3,
-    items: [
-      { assetId: 'asset-ac', quantity: 1, required: true },
-      { assetId: 'asset-fridge', quantity: 1, required: true },
-      { assetId: 'asset-bed', quantity: 1, required: true },
-      { assetId: 'asset-heater', quantity: 1, required: true },
-      { assetId: 'asset-wardrobe', quantity: 1, required: false },
-    ],
-  },
-  {
-    id: 'at-double',
-    name: 'Trang bị thiết yếu phòng đôi',
-    roomType: 'Phòng đôi',
-    description: 'Gói trang thiết bị phù hợp cho phòng đôi.',
-    locationsUsing: 1,
-    items: [
-      { assetId: 'asset-ac', quantity: 2, required: true },
-      { assetId: 'asset-bed', quantity: 2, required: true },
-      { assetId: 'asset-wardrobe', quantity: 2, required: true },
-      { assetId: 'asset-heater', quantity: 1, required: true },
-    ],
-  },
-];
 
 const initialFees: FeeTemplate[] = [
   [
@@ -315,7 +270,6 @@ const initialPolicies: PolicyTemplate[] = [
 
 const emptyApplied = (): AppliedConfiguration => ({
   roomTemplateIds: [],
-  assetTemplateIds: [],
   feeTemplateIds: [],
   policyTemplateIds: [],
   source: 'Custom Configuration',
@@ -328,13 +282,11 @@ const id = (prefix: string) => `${prefix}-${Date.now()}-${Math.random().toString
 export function SharedConfigurationProvider({ children }: { children: ReactNode }) {
   const [roomTemplates, setRoomTemplates] = useState(initialRooms);
   const [assetCatalog, setAssetCatalog] = useState(initialAssets);
-  const [assetTemplates, setAssetTemplates] = useState(initialAssetTemplates);
   const [feeTemplates, setFeeTemplates] = useState(initialFees);
   const [policyTemplates, setPolicyTemplates] = useState(initialPolicies);
   const [appliedByLocation, setAppliedByLocation] = useState<Record<string, AppliedConfiguration>>({
     'loc-1': {
       roomTemplateIds: ['rt-studio', 'rt-balcony'],
-      assetTemplateIds: ['at-studio'],
       feeTemplateIds: ['fee-electricity', 'fee-water', 'fee-internet'],
       policyTemplateIds: ['policy-access', 'policy-visitor', 'policy-fire'],
       source: 'Shared Template',
@@ -347,7 +299,6 @@ export function SharedConfigurationProvider({ children }: { children: ReactNode 
     },
     'loc-2': {
       roomTemplateIds: ['rt-single'],
-      assetTemplateIds: [],
       feeTemplateIds: ['fee-electricity'],
       policyTemplateIds: ['policy-access'],
       source: 'Copied from Location',
@@ -361,15 +312,12 @@ export function SharedConfigurationProvider({ children }: { children: ReactNode 
     () => ({
       roomTemplates,
       assetCatalog,
-      assetTemplates,
       feeTemplates,
       policyTemplates,
       appliedByLocation,
       addRoomTemplate: (value) =>
         setRoomTemplates((items) => [...items, { ...value, id: id('rt'), locationsUsing: 0 }]),
       addAsset: (value) => setAssetCatalog((items) => [...items, { ...value, id: id('asset') }]),
-      addAssetTemplate: (value) =>
-        setAssetTemplates((items) => [...items, { ...value, id: id('at'), locationsUsing: 0 }]),
       addFeeTemplate: (value) =>
         setFeeTemplates((items) => [
           ...items,
@@ -437,12 +385,6 @@ export function SharedConfigurationProvider({ children }: { children: ReactNode 
               item.id === templateId ? ({ ...item, ...changes } as AssetCatalogEntry) : item,
             ),
           );
-        if (kind === 'assetTemplate')
-          setAssetTemplates((items) =>
-            items.map((item) =>
-              item.id === templateId ? ({ ...item, ...changes } as AssetTemplate) : item,
-            ),
-          );
         if (kind === 'fee')
           setFeeTemplates((items) =>
             items.map((item) =>
@@ -462,14 +404,7 @@ export function SharedConfigurationProvider({ children }: { children: ReactNode 
             ...(current[locationId] ?? emptyApplied()),
             source: 'Shared Template' as const,
           };
-          const key =
-            kind === 'room'
-              ? 'roomTemplateIds'
-              : kind === 'asset'
-                ? 'assetTemplateIds'
-                : kind === 'fee'
-                  ? 'feeTemplateIds'
-                  : 'policyTemplateIds';
+          const key = kind === 'room' ? 'roomTemplateIds' : kind === 'fee' ? 'feeTemplateIds' : 'policyTemplateIds';
           next[key] = Array.from(new Set([...next[key], templateId]));
           return { ...current, [locationId]: next };
         }),
@@ -486,9 +421,6 @@ export function SharedConfigurationProvider({ children }: { children: ReactNode 
               roomTemplateIds: groups.includes('Room Types')
                 ? [...source.roomTemplateIds]
                 : destination.roomTemplateIds,
-              assetTemplateIds: groups.includes('Asset Templates')
-                ? [...source.assetTemplateIds]
-                : destination.assetTemplateIds,
               feeTemplateIds:
                 groups.includes('Fee Policies') || groups.includes('Rental Rates')
                   ? [...source.feeTemplateIds]
@@ -529,15 +461,16 @@ export function SharedConfigurationProvider({ children }: { children: ReactNode 
             },
           ]);
         if (kind === 'asset')
-          setAssetTemplates((items) => [
+          setAssetCatalog((items) => [
             ...items,
             {
-              id: id('at'),
+              id: id('asset'),
               name,
-              roomType: 'Cấu hình tại cơ sở',
+              category: 'Khác',
               description,
-              items: [],
-              locationsUsing: 0,
+              referencePrice: 0,
+              unit: 'cái',
+              status: 'Active',
             },
           ]);
         if (kind === 'fee')
@@ -598,7 +531,7 @@ export function SharedConfigurationProvider({ children }: { children: ReactNode 
           ),
         ),
     }),
-    [roomTemplates, assetCatalog, assetTemplates, feeTemplates, policyTemplates, appliedByLocation],
+    [roomTemplates, assetCatalog, feeTemplates, policyTemplates, appliedByLocation],
   );
 
   return (

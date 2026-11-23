@@ -73,11 +73,6 @@ function reads(path: string) {
       ],
       total: 1,
     };
-  if (path.includes('asset-templates?'))
-    return {
-      items: [{ ...doc, resource: 'asset-templates', data: { items: [] } }],
-      total: 1,
-    };
   if (path.includes('fee-templates?'))
     return {
       items: [
@@ -287,6 +282,7 @@ it('creates exact room defaults through the real client and refreshes persisted 
       area: '25.0001',
       amenities: ['Balcony', 'Wi-Fi'],
       referenceRent: '12345678901234.0001',
+      assetItems: [],
     },
   });
   expect(
@@ -457,6 +453,7 @@ it('preserves configured room-type assets in writes and displays the saved asset
   mount();
   await chooseRowAction('Sửa');
   expect(screen.getByText('Giường đơn')).toBeVisible();
+  expect(screen.getByRole('spinbutton', { name: /Số lượng/ })).toHaveValue(2);
   fireEvent.click(screen.getByRole('button', { name: 'Lưu mẫu' }));
   await screen.findByText('Đã lưu mẫu. Có thể sử dụng ngay.');
   const save = state.request.mock.calls.find(
@@ -470,8 +467,51 @@ it('preserves configured room-type assets in writes and displays the saved asset
   const table = await within(dialog).findByRole('table', { name: 'Tài sản trong mẫu' });
   expect(within(table).getByText('Giường đơn')).toBeVisible();
   expect(within(table).getByText('2 cái')).toBeVisible();
-  expect(within(table).getByText('Bắt buộc')).toBeVisible();
+  expect(within(table).queryByText('Bắt buộc')).not.toBeInTheDocument();
+  expect(within(table).queryByText('Tùy chọn')).not.toBeInTheDocument();
   expect(within(dialog).queryByText(/Phiên bản 3/)).toBeNull();
+});
+it('persists an empty assetItems list when every configured room asset is removed', async () => {
+  const roomWithAssets: SharedDocument = {
+    ...doc,
+    data: {
+      ...doc.data,
+      assetItems: [
+        {
+          catalogId: 'catalog',
+          catalogVersion: 7,
+          quantity: 2,
+          required: true,
+          trackingMode: 'BulkQuantity',
+          catalog: {
+            familyId: 'catalog-family',
+            edition: 3,
+            name: 'Giường đơn',
+            category: 'Nội thất',
+            unit: 'cái',
+            referencePrice: '3000000',
+            scope: 'Room',
+          },
+        },
+      ],
+    },
+  };
+  state.request.mockImplementation(async (path: string, init?: RequestInit) => {
+    if (init?.method) return roomWithAssets;
+    if (path.startsWith(base + '?'))
+      return { items: [roomWithAssets], total: 1, page: 1, pageSize: 20 };
+    if (path === `${base}/${doc.id}`) return roomWithAssets;
+    return reads(path);
+  });
+  mount();
+  await chooseRowAction('Sửa');
+  fireEvent.click(await screen.findByRole('button', { name: 'Xóa mục 1' }));
+  fireEvent.click(screen.getByRole('button', { name: 'Lưu mẫu' }));
+  await screen.findByText('Đã lưu mẫu. Có thể sử dụng ngay.');
+  const save = state.request.mock.calls.find(
+    ([path, init]) => path === `${base}/${doc.id}` && init?.method === 'PUT',
+  );
+  expect(JSON.parse(save![1].body).data.assetItems).toEqual([]);
 });
 it('does not load the library for Staff', async () => {
   state.roles = ['Staff'];
@@ -558,7 +598,6 @@ it('shows room comparison columns, exact reference rent and status-specific acti
 it.each([
   { kind: 'room', resource: 'room-type-templates', tableName: 'Loại phòng mẫu' },
   { kind: 'asset', resource: 'asset-catalog', tableName: 'Tài sản mẫu' },
-  { kind: 'asset', resource: 'asset-templates', tableName: 'Gói tài sản theo phòng' },
   { kind: 'fee', resource: 'fee-templates', tableName: 'Mẫu giá & biểu phí' },
   { kind: 'policy', resource: 'policy-templates', tableName: 'Nội quy & chính sách' },
 ] as const)(
@@ -573,9 +612,6 @@ it.each([
       return init?.method ? template : reads(path);
     });
     mount(<ApiConfigurationLibraryPage kind={kind} />);
-    if (resource === 'asset-templates') {
-      fireEvent.click(screen.getByRole('tab', { name: 'Gói tài sản theo phòng' }));
-    }
     const table = await screen.findByRole('table', { name: tableName });
     const row = within(table).getByRole('row', { name: /Synthetic room defaults/ });
     expect(within(row).queryByRole('button', { name: 'Áp dụng' })).toBeNull();
@@ -733,7 +769,7 @@ it('keeps each resource summary and its allowed actions visible on a 390px viewp
   setViewport(390);
   const fee = mount(<ApiConfigurationLibraryPage kind="fee" />);
   const feeTable = await screen.findByRole('table', { name: 'Mẫu giá & biểu phí' });
-  expect(within(feeTable).getByText('Dịch vụ · Phạm vi: Cơ sở')).toBeVisible();
+  expect(within(feeTable).getByText('Dịch vụ · Vệ sinh · Phạm vi: Cơ sở')).toBeVisible();
   expect(within(feeTable).getByText('Cách tính: Người/tháng')).toBeVisible();
   expect(within(feeTable).getByText('Mức phí tham khảo: 3.000.000 đ/người/tháng')).toBeVisible();
   expect(within(feeTable).queryByRole('button', { name: 'Áp dụng' })).toBeNull();
@@ -744,48 +780,41 @@ it('keeps each resource summary and its allowed actions visible on a 390px viewp
   expect(within(catalog).getByText('Giá tham khảo: 123,0001 đ/item')).toBeVisible();
   expect(within(catalog).queryByRole('button', { name: 'Áp dụng' })).toBeNull();
   expect(within(catalog).getByRole('button', { name: `Thao tác cho ${doc.name}` })).toBeVisible();
-  fireEvent.click(screen.getByRole('tab', { name: 'Gói tài sản theo phòng' }));
-  const packages = await screen.findByRole('table', { name: 'Gói tài sản theo phòng' });
-  expect(within(packages).getByText('0 loại tài sản')).toBeVisible();
-  expect(within(packages).queryByRole('button', { name: 'Áp dụng' })).toBeNull();
+  expect(screen.queryByRole('tab', { name: 'Gói tài sản theo phòng' })).not.toBeInTheDocument();
+  expect(screen.queryByText(/gói tài sản/i)).not.toBeInTheDocument();
+  expect(state.request.mock.calls.some(([path]) => path.includes('/asset-templates'))).toBe(false);
   assets.unmount();
   mount(<ApiConfigurationLibraryPage kind="policy" />);
   const policy = await screen.findByRole('table', { name: 'Nội quy & chính sách' });
   expect(within(policy).getByText('Hiệu lực từ: 01/12/2026')).toBeVisible();
   expect(within(policy).queryByRole('button', { name: 'Áp dụng' })).toBeNull();
 });
-it('selects real catalog versions and submits optional flags with internal tracking', async () => {
-  mount(<ApiConfigurationLibraryPage kind="asset" />);
-  fireEvent.click(screen.getByRole('tab', { name: 'Gói tài sản theo phòng' }));
+it('uses a room-asset checklist and persists the selected catalog version and per-item quantity', async () => {
+  mount(<ApiConfigurationLibraryPage kind="room" />);
   fireEvent.click(screen.getByRole('button', { name: 'Tạo mẫu' }));
-  fill('Tên mẫu', 'New package');
-  await waitFor(() =>
-    expect(screen.getByLabelText('Tài sản trong danh mục')).not.toHaveAttribute(
-      'aria-disabled',
-      'true',
-    ),
-  );
-  await select('Tài sản trong danh mục', doc.name);
-  fireEvent.click(screen.getByRole('button', { name: 'Thêm vào mẫu' }));
-  fill('Số lượng mục 1', '3');
-  fireEvent.click(screen.getByLabelText('Bắt buộc'));
-  expect(screen.queryByLabelText('Theo dõi mục 1')).not.toBeInTheDocument();
+  fill('Tên mẫu', 'Room with selected assets');
+  fill('Sức chứa', '2');
+  fill('Diện tích', '24');
+  await screen.findByRole('group', { name: 'Danh mục tài sản theo phòng' });
+  fireEvent.click(await screen.findByRole('checkbox', { name: new RegExp(doc.name) }));
+  fill(`Số lượng ${doc.name}`, '3');
+  expect(screen.queryByLabelText('Bắt buộc')).not.toBeInTheDocument();
   fireEvent.click(screen.getByRole('button', { name: 'Lưu mẫu' }));
   await waitFor(() =>
     expect(
       state.request.mock.calls.some(
-        ([path, init]) => path.endsWith('/asset-templates') && init?.method === 'POST',
+        ([path, init]) => path.endsWith('/room-type-templates') && init?.method === 'POST',
       ),
     ).toBe(true),
   );
   const call = state.request.mock.calls.find(
-    ([path, init]) => path.endsWith('/asset-templates') && init?.method === 'POST',
+    ([path, init]) => path.endsWith('/room-type-templates') && init?.method === 'POST',
   );
-  expect(JSON.parse(call![1].body).data.items[0]).toMatchObject({
+  expect(JSON.parse(call![1].body).data.assetItems[0]).toMatchObject({
     catalogId: 'catalog',
     catalogVersion: 7,
     quantity: 3,
-    required: false,
+    required: true,
     trackingMode: 'BulkQuantity',
   });
 });
@@ -809,6 +838,8 @@ it('copies only after confirmed server preview and displays conflicts without ex
   );
   mount(<ApiConfigurationCopy />);
   fireEvent.click(screen.getByRole('button', { name: 'Sao chép cấu hình cơ sở' }));
+  expect(screen.getByLabelText('Định mức tài sản theo loại phòng')).toBeVisible();
+  expect(screen.queryByLabelText(/gói tài sản/i)).not.toBeInTheDocument();
   await select('Cơ sở nguồn', 'Source Location');
   await select('Cơ sở đích', 'Target Location');
   fireEvent.click(screen.getByLabelText('Nội quy (bản nháp)'));
@@ -869,24 +900,15 @@ it('resets fee identity and rate on category changes and saves water with its ca
     referenceRate: '15000',
   });
 });
-it('selects a service code and rejects reserved codes before submitting', async () => {
+it('selects a suggested service and persists its reusable service name', async () => {
   mount(<ApiConfigurationLibraryPage kind="fee" />);
   fireEvent.click(screen.getByRole('button', { name: 'Tạo mẫu' }));
   fill('Tên mẫu', 'Internet fee');
   await select('Nhóm phí', 'Dịch vụ');
   await select('Loại dịch vụ gợi ý', 'Internet');
-  expect(screen.getByLabelText(/Mã khoản thu/)).toHaveValue('INTERNET');
+  expect(screen.getByLabelText(/Mã khoản thu \(tự sinh\)/)).toHaveValue('DV_I');
   fill('Đơn giá tham khảo', '100000');
   fill('Hiệu lực từ', '2026-12-01');
-  fill('Mã khoản thu', 'RENT');
-  fireEvent.click(screen.getByRole('button', { name: 'Lưu mẫu' }));
-  await screen.findByText('Mã khoản thu hoặc cách tính không phù hợp với nhóm phí.');
-  expect(
-    state.request.mock.calls.some(
-      ([path, init]) => path.endsWith('/fee-templates') && init?.method === 'POST',
-    ),
-  ).toBe(false);
-  fill('Mã khoản thu', 'internet');
   fireEvent.click(screen.getByRole('button', { name: 'Lưu mẫu' }));
   await screen.findByText('Đã lưu mẫu. Có thể sử dụng ngay.');
   const call = state.request.mock.calls.find(
@@ -894,10 +916,154 @@ it('selects a service code and rejects reserved codes before submitting', async 
   );
   expect(JSON.parse(call![1].body).data).toMatchObject({
     category: 'ServiceFee',
-    chargeCode: 'INTERNET',
+    chargeCode: 'DV_I',
+    serviceName: 'Internet',
     method: 'FixedPerRoomPerMonth',
     unit: 'VND/month',
   });
+});
+it('generates the DV_W service code for Wifi', async () => {
+  mount(<ApiConfigurationLibraryPage kind="fee" />);
+  fireEvent.click(screen.getByRole('button', { name: 'Tạo mẫu' }));
+  fill('Tên mẫu', 'Phí Wifi');
+  await select('Nhóm phí', 'Dịch vụ');
+  await select('Loại dịch vụ gợi ý', 'Wifi');
+  expect(screen.getByLabelText(/Mã khoản thu \(tự sinh\)/)).toHaveValue('DV_W');
+  fill('Đơn giá tham khảo', '100000');
+  fill('Hiệu lực từ', '2026-12-01');
+  fireEvent.click(screen.getByRole('button', { name: 'Lưu mẫu' }));
+  await screen.findByText('Đã lưu mẫu. Có thể sử dụng ngay.');
+  const call = state.request.mock.calls.find(
+    ([path, init]) => path.endsWith('/fee-templates') && init?.method === 'POST',
+  );
+  expect(JSON.parse(call![1].body).data).toMatchObject({
+    category: 'ServiceFee',
+    chargeCode: 'DV_W',
+    serviceName: 'Wifi',
+  });
+});
+it('creates a new service type from Other and generates its charge code from initials', async () => {
+  mount(<ApiConfigurationLibraryPage kind="fee" />);
+  fireEvent.click(screen.getByRole('button', { name: 'Tạo mẫu' }));
+  fill('Tên mẫu', 'Phí giặt sấy');
+  await select('Nhóm phí', 'Dịch vụ');
+  await select('Loại dịch vụ gợi ý', 'Khác – thêm loại dịch vụ mới');
+  fill('Tên dịch vụ mới', 'Giặt sấy');
+  expect(screen.getByLabelText(/Mã khoản thu \(tự sinh\)/)).toHaveValue('DV_GS');
+  fill('Đơn giá tham khảo', '85000');
+  fill('Hiệu lực từ', '2026-12-01');
+  fireEvent.click(screen.getByRole('button', { name: 'Lưu mẫu' }));
+  await screen.findByText('Đã lưu mẫu. Có thể sử dụng ngay.');
+  const call = state.request.mock.calls.find(
+    ([path, init]) => path.endsWith('/fee-templates') && init?.method === 'POST',
+  );
+  expect(JSON.parse(call![1].body).data).toMatchObject({
+    category: 'ServiceFee',
+    serviceName: 'Giặt sấy',
+    chargeCode: 'DV_GS',
+    method: 'FixedPerRoomPerMonth',
+    referenceRate: '85000',
+  });
+});
+it('shows the saved custom service name in fee-library rows and details', async () => {
+  const customService: SharedDocument = {
+    ...doc,
+    id: 'custom-service',
+    resource: 'fee-templates',
+    name: 'Phí giặt sấy',
+    data: {
+      category: 'ServiceFee',
+      serviceName: 'Giặt sấy',
+      chargeCode: 'DV_GS',
+      method: 'FixedPerRoomPerMonth',
+      referenceRate: '85000',
+      unit: 'VND/month',
+      scope: 'Location',
+      effectiveFrom: '2026-12-01',
+      effectiveTo: null,
+    },
+  };
+  state.request.mockImplementation(async (path: string, init?: RequestInit) => {
+    if (path === `/api/v1/shared-configuration/fee-templates/${customService.id}`)
+      return customService;
+    if (path.includes('fee-templates?'))
+      return { items: [customService], total: 1, page: 1, pageSize: 20 };
+    return init?.method ? customService : reads(path);
+  });
+  mount(<ApiConfigurationLibraryPage kind="fee" />);
+  const table = await screen.findByRole('table', { name: 'Mẫu giá & biểu phí' });
+  const row = within(table).getByRole('row', { name: /Phí giặt sấy/ });
+  expect(within(row).getByText('Dịch vụ · Giặt sấy')).toBeVisible();
+  expect(within(row).getByText('Cơ sở')).toBeVisible();
+  fireEvent.click(within(row).getByRole('button', { name: customService.name }));
+  const details = await screen.findByRole('dialog', { name: customService.name });
+  expect(within(details).getByText('Loại dịch vụ')).toBeVisible();
+  expect(within(details).getByText('Giặt sấy')).toBeVisible();
+  expect(within(details).getByText('DV_GS')).toBeVisible();
+});
+it('keeps legacy service fees readable when the saved serviceName field is absent', async () => {
+  const legacyService: SharedDocument = {
+    ...doc,
+    id: 'legacy-internet-service',
+    resource: 'fee-templates',
+    name: 'Phí Internet',
+    data: {
+      category: 'ServiceFee',
+      chargeCode: 'INTERNET',
+      method: 'FixedPerRoomPerMonth',
+      referenceRate: '85000',
+      unit: 'VND/month',
+      scope: 'Location',
+      effectiveFrom: '2026-12-01',
+      effectiveTo: null,
+    },
+  };
+  state.request.mockImplementation(async (path: string, init?: RequestInit) => {
+    if (path === `/api/v1/shared-configuration/fee-templates/${legacyService.id}`)
+      return legacyService;
+    if (path.includes('fee-templates?'))
+      return { items: [legacyService], total: 1, page: 1, pageSize: 20 };
+    return init?.method ? legacyService : reads(path);
+  });
+  mount(<ApiConfigurationLibraryPage kind="fee" />);
+  const table = await screen.findByRole('table', { name: 'Mẫu giá & biểu phí' });
+  const row = within(table).getByRole('row', { name: /Phí Internet/ });
+  expect(within(row).getByText('Dịch vụ · Internet')).toBeVisible();
+  fireEvent.click(within(row).getByRole('button', { name: legacyService.name }));
+  const details = await screen.findByRole('dialog', { name: legacyService.name });
+  expect(within(details).getByText('Loại dịch vụ')).toBeVisible();
+  expect(within(details).getByText('Internet')).toBeVisible();
+});
+it('resolves the legacy DV_W code to Wifi when serviceName is absent', async () => {
+  const legacyWifi: SharedDocument = {
+    ...doc,
+    id: 'legacy-wifi-service',
+    resource: 'fee-templates',
+    name: 'Phí Wifi',
+    data: {
+      category: 'ServiceFee',
+      chargeCode: 'DV_W',
+      method: 'FixedPerRoomPerMonth',
+      referenceRate: '85000',
+      unit: 'VND/month',
+      scope: 'Location',
+      effectiveFrom: '2026-12-01',
+      effectiveTo: null,
+    },
+  };
+  state.request.mockImplementation(async (path: string, init?: RequestInit) => {
+    if (path === `/api/v1/shared-configuration/fee-templates/${legacyWifi.id}`) return legacyWifi;
+    if (path.includes('fee-templates?'))
+      return { items: [legacyWifi], total: 1, page: 1, pageSize: 20 };
+    return init?.method ? legacyWifi : reads(path);
+  });
+  mount(<ApiConfigurationLibraryPage kind="fee" />);
+  const table = await screen.findByRole('table', { name: 'Mẫu giá & biểu phí' });
+  const row = within(table).getByRole('row', { name: /Phí Wifi/ });
+  expect(within(row).getByText('Dịch vụ · Wifi')).toBeVisible();
+  fireEvent.click(within(row).getByRole('button', { name: legacyWifi.name }));
+  const details = await screen.findByRole('dialog', { name: legacyWifi.name });
+  expect(within(details).getByText('Wifi')).toBeVisible();
 });
 it('creates a per-person monthly service fee with live grouping and canonical payload', async () => {
   mount(<ApiConfigurationLibraryPage kind="fee" />);

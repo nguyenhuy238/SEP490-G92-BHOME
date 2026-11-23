@@ -478,6 +478,52 @@ it('links a newly created incident back to the exact damaged Location inventory 
   });
   expect(new Headers(link![1].headers).get('Idempotency-Key')).toMatch(/^[a-f\d-]{36}$/i);
 });
+it('links an Incident to an inherited item without changing its Tenant/Owner baseline', async () => {
+  s.params = {
+    inventoryTaskId,
+    locationAssetInventoryItemId: inventoryItemId,
+    locationId: lid,
+    roomId: rid,
+    assetId: eid,
+    inventoryCondition: 'Missing',
+    description: 'Inventory check: ceiling fan is missing from room A101.',
+  };
+  const inventoryPath = `/api/v1/operational-tasks/${inventoryTaskId}/location-asset-inventory`;
+  s.request.mockImplementation(async (path, init) => {
+    if (path === inventoryPath && !init?.method)
+      return {
+        taskId: inventoryTaskId,
+        locationId: lid,
+        assignmentId: wid,
+        status: 'InProgress',
+        version: 5,
+        totalCount: 1,
+        checkedCount: 1,
+        items: [{
+          id: inventoryItemId, roomId: rid, roomNumber: 'A101', assetId: eid,
+          name: 'Qu?t tr?n', quantity: 1, commonArea: null, checked: true,
+          inherited: true, sourceHandoverContractId: wid, condition: 'Intact',
+          note: null, incidentId: null,
+        }],
+      };
+    return respond(path, init);
+  });
+  render(<IncidentReportForm />);
+  await waitFor(() => expect((screen.getAllByRole('combobox')[0] as HTMLSelectElement).value).toBe(rid));
+  await waitFor(() => expect((screen.getAllByRole('combobox')[2] as HTMLSelectElement).value).toBe(eid));
+  await screen.findByRole('button', { name: /G.*b.*c.*s.*c/ });
+  fireEvent.click(screen.getByRole('button', { name: /G.*b.*c.*s.*c/ }));
+
+  await waitFor(() => expect(s.go).toHaveBeenCalledWith('task-detail', { taskId: inventoryTaskId }));
+  const link = s.request.mock.calls.find(([path, init]) =>
+    path === `${inventoryPath}/items/${inventoryItemId}` && init?.method === 'PUT',
+  );
+  expect(link).toBeTruthy();
+  expect(JSON.parse(link![1].body)).toEqual({
+    version: 5, checked: true, condition: 'Intact', note: null, incidentId: id,
+  });
+});
+
 it('locks double submit and reuses the same idempotency key after ambiguous failure, without false success', async () => {
   let reject!: (e: Error) => void;
   s.request.mockImplementation(async (path, init) =>

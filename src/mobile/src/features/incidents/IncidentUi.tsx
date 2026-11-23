@@ -4,14 +4,7 @@ import { Button, Text } from 'react-native-paper';
 import { Action, Box, Heading, ui } from '../../components/WorkspaceKit';
 import { incidentPhotoUri } from '../../components/IncidentEvidencePicker';
 import { useSession } from '../../lib/SessionProvider';
-import { useIncidentQuery } from './useIncidentData';
-import {
-  incidentRoot,
-  type Incident,
-  type IncidentPage,
-  type ReportingRoom,
-  type ReportingAsset,
-} from '../../services/incidents';
+import type { Incident } from '../../services/incidents';
 import {
   incidentClient,
   incidentError,
@@ -60,61 +53,14 @@ export function incidentMoney(value: number | null) {
     : 'Số tiền vượt giới hạn hiển thị chính xác; cần đối chiếu lại.';
 }
 
-// The incident DTO carries IDs, not display names. Resolve names only via authorized
-// endpoints; historical Tenant reports remain readable even when lookups return no rows.
-export function IncidentPlace({ report, role }: { report: Incident; role: string }) {
-  const internal = role === 'Owner' || role === 'Staff';
-  const location = useIncidentQuery<{ name: string }>(
-    internal ? `/api/v1/locations/${report.locationId}` : null,
-  );
-  const room = useIncidentQuery<{ roomNumber: string }>(
-    internal && report.roomId ? `/api/v1/rooms/${report.roomId}` : null,
-  );
-  const asset = useIncidentQuery<{ name: string; code: string | null }>(
-    internal && report.assetId ? `/api/v1/assets/${report.assetId}` : null,
-  );
-  const tenantRooms = useIncidentQuery<IncidentPage<ReportingRoom>>(
-    role === 'Tenant'
-      ? `${incidentRoot}/reporting-rooms?locationId=${report.locationId}${report.roomId ? '&roomId=' + report.roomId : ''}&page=1&pageSize=1`
-      : null,
-  );
-  const tenantAssets = useIncidentQuery<IncidentPage<ReportingAsset>>(
-    role === 'Tenant' && report.assetId
-      ? `${incidentRoot}/reporting-assets?locationId=${report.locationId}${report.roomId ? '&roomId=' + report.roomId : ''}&page=1&pageSize=100`
-      : null,
-  );
-  const tenantRoom = tenantRooms.data?.items.find(
-    (item) =>
-      item.locationId === report.locationId && (!report.roomId || item.roomId === report.roomId),
-  );
-  const tenantAsset = tenantAssets.data?.items.find((item) => item.assetId === report.assetId);
+export function IncidentPlace({ report }: { report: Incident }) {
   return (
     <Box>
       <Heading title="Vị trí và tài sản" />
-      <IncidentInfo label="Cơ sở" value={location.data?.name ?? tenantRoom?.locationName} />
-      <IncidentInfo
-        label="Phòng"
-        value={room.data?.roomNumber ?? (report.roomId ? tenantRoom?.roomNumber : null)}
-      />
+      <IncidentInfo label="Cơ sở" value={report.locationName} />
+      <IncidentInfo label="Phòng" value={report.roomNumber} />
       <IncidentInfo label="Khu vực chung" value={report.commonArea} />
-      <IncidentInfo label="Tài sản" value={asset.data?.name ?? tenantAsset?.name} />
-      <IncidentInfo label="Mã thiết bị" value={asset.data?.code} />
-      {!!(
-        location.error ||
-        room.error ||
-        asset.error ||
-        tenantRooms.error ||
-        tenantAssets.error
-      ) && (
-        <Text style={ui.muted}>
-          Chưa tải được một số tên hiển thị. Mã tham chiếu vẫn có trong chi tiết báo cáo.
-        </Text>
-      )}
-      <Details>
-        <IncidentInfo label="Mã cơ sở" value={report.locationId} />
-        <IncidentInfo label="Mã phòng" value={report.roomId} />
-        <IncidentInfo label="Mã tài sản" value={report.assetId} />
-      </Details>
+      <IncidentInfo label="Tài sản" value={report.assetName} />
     </Box>
   );
 }
@@ -162,11 +108,6 @@ export function EvidenceImage({
         {incidentText(evidence.kind)} · {evidence.contentType} ·{' '}
         {evidence.length.toLocaleString('vi-VN')} byte
       </Text>
-      <Details>
-        <IncidentInfo label="Mã ảnh" value={evidence.id} />
-        <IncidentInfo label="Mã lệnh sửa chữa" value={evidence.workOrderId} />
-        <IncidentInfo label="Mã hoạt động" value={evidence.activityId} />
-      </Details>
       {uri && (
         <>
           <Image
@@ -219,11 +160,8 @@ const eventFields: Record<string, string> = {
   Type: 'Loại sự cố',
   Category: 'Nhóm sự cố',
   Severity: 'Mức độ',
-  AssignedStaffId: 'Nhân viên',
-  Previous: 'Nhân viên trước',
   ExpectedOutcome: 'Kết quả yêu cầu',
   TargetCompletionAt: 'Hạn hoàn thành',
-  AcknowledgedById: 'Người tiếp nhận',
   InspectionResult: 'Kết quả kiểm tra',
   Solution: 'Phương án',
   EstimatedMinutes: 'Thời gian dự kiến (phút)',
@@ -236,15 +174,10 @@ const eventFields: Record<string, string> = {
   AssetStatus: 'Trạng thái tài sản',
   AssetCondition: 'Hiện trạng tài sản',
   RequestedCost: 'Chi phí đề nghị',
-  EvidenceIds: 'Mã ảnh',
-  DuplicateOfId: 'Báo cáo gốc',
-  CauseActivityId: 'Hoạt động liên quan',
-  EvidenceId: 'Mã ảnh',
   Result: 'Kết quả',
   Note: 'Ghi chú',
   Status: 'Trạng thái',
   Version: 'Phiên bản',
-  Id: 'Mã tham chiếu',
 };
 export function eventFacts(value: string | null): { label: string; value: string }[] {
   if (!value) return [];
@@ -301,11 +234,9 @@ export function eventFacts(value: string | null): { label: string; value: string
 export function IncidentTimeline({
   items,
   owner,
-  tenant,
 }: {
   items: IncidentActivity[];
   owner: boolean;
-  tenant: boolean;
 }) {
   return (
     <>
@@ -313,22 +244,9 @@ export function IncidentTimeline({
         <Box key={item.id}>
           <Heading title={incidentText(item.action)} detail={incidentDate(item.occurredAt)} />
           {!!item.note && <Text>{item.note}</Text>}
-          <Details title="Tham chiếu hoạt động">
-            <IncidentInfo label="Mã hoạt động" value={item.id} />
-            {!tenant && (
-              <>
-                <IncidentInfo label="Người thực hiện" value={item.actorId} />
-                <IncidentInfo label="Lệnh sửa chữa" value={item.workOrderId} />
-              </>
-            )}
-          </Details>
-          {owner && eventFacts(item.dataJson).length > 0 && (
-            <Details title="Chi tiết quyết định">
-              {eventFacts(item.dataJson).map((fact, i) => (
-                <IncidentInfo key={i} label={fact.label} value={fact.value} />
-              ))}
-            </Details>
-          )}
+          {owner && eventFacts(item.dataJson).map((fact, i) => (
+            <IncidentInfo key={i} label={fact.label} value={fact.value} />
+          ))}
         </Box>
       ))}
     </>

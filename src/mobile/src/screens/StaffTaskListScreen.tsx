@@ -93,6 +93,14 @@ export function StaffTaskListScreen() {
           Chưa có cơ sở được phân công để xem công việc.
         </Text>
       )}
+      <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 8 }}>
+        <Button icon="wrench-clock" mode="contained-tonal" onPress={() => go('staff-maintenance')}>
+          Lệnh sửa chữa / Bảo trì
+        </Button>
+        <Button icon="file-document-check-outline" mode="outlined" onPress={() => go('staff-handover-archive')}>
+          Biên bản đã ký
+        </Button>
+      </View>
       <Button icon="calendar-month-outline" onPress={() => go('shifts')}>
         Lịch làm việc
       </Button>
@@ -315,6 +323,11 @@ export function TaskCard({
             Cơ sở: {locationName?.trim() || 'Chưa xác định tên cơ sở'}
           </Text>
         </View>
+        {!!task.target?.label && (
+          <Text variant="bodySmall" style={styles.preview}>
+            Vị trí / thiết bị: {task.target.label}
+          </Text>
+        )}
         <View style={styles.dueRow}>
           <Icon
             source={task.isOverdue ? 'clock-alert-outline' : 'clock-outline'}
