@@ -2,6 +2,7 @@ using BHome.Application.Contracts;
 using iText.IO.Image;
 using iText.Kernel.Geom;
 using iText.Kernel.Pdf;
+using iText.Kernel.Pdf.Canvas;
 using iText.Layout;
 using iText.Layout.Element;
 using SkiaSharp;
@@ -39,16 +40,23 @@ internal sealed class InternalAcceptanceRenderer : IInternalAcceptanceRenderer
             preserveSignatures ? new StampingProperties().UseAppendMode() : new StampingProperties()))
         {
             var placed = false;
-            if (image is not null &&
-                pdf.GetDocumentInfo().GetMoreInfo(MainTemplateSignatureSlots.SourceTemplate) == MainTemplateSignatureSlots.TemplateId &&
-                ContractSignatureSlots.Read(pdf, owner: false) is { } slot)
+            if (image is not null && ContractSignatureSlots.Read(pdf, owner: false) is { } slot)
             {
-                var target = pdf.GetPage(slot.Page); var size = target.GetPageSize();
-                var width = (float)(slot.Width * size.GetWidth()); var data = ImageDataFactory.Create(image);
-                var height = Math.Min(width * data.GetHeight() / data.GetWidth(), 105);
-                var bottom = (float)(size.GetHeight() * (1 - slot.Y) - height);
-                using var signature = new Canvas(target, new Rectangle((float)(slot.X * size.GetWidth()), bottom, width, height));
-                signature.Add(new Image(data).ScaleToFit(width, height)); placed = true;
+                var target = pdf.GetPage(slot.Page);
+                var size = target.GetPageSize();
+                var data = ImageDataFactory.Create(image);
+                var top = (float)((1 - slot.Y) * size.GetHeight());
+                var height = Math.Min(top, Math.Min((float)slot.Width * size.GetWidth() * data.GetHeight() / data.GetWidth(), 105));
+                if (target.GetRotation() == 0 && height > 0)
+                {
+                    var width = height * data.GetWidth() / data.GetHeight();
+                    var box = new Rectangle(size.GetLeft() + (float)slot.X * size.GetWidth(),
+                        size.GetBottom() + top - height, width, height);
+                    var signature = new PdfCanvas(target.NewContentStreamAfter(), target.GetResources(), pdf);
+                    signature.SaveState().AddImageFittedIntoRectangle(data, box, false);
+                    signature.RestoreState();
+                    placed = true;
+                }
             }
             var page = pdf.AddNewPage(PageSize.A4);
             using var canvas = new Canvas(page, new Rectangle(40, 40, 515, 750));
@@ -57,7 +65,7 @@ internal sealed class InternalAcceptanceRenderer : IInternalAcceptanceRenderer
             canvas.Add(new Paragraph(party));
             canvas.Add(new Paragraph($"Accepted (UTC): {at:O}"));
             canvas.Add(new Paragraph($"Reviewed source SHA-256: {hash}").SetFontSize(9));
-            canvas.Add(new Paragraph("Consent: internal-acceptance-v1. Original reviewed pages are retained unchanged."));
+            canvas.Add(new Paragraph("Consent: internal-acceptance-v1. The reviewed contract terms are preserved."));
             if (image is not null && !placed) canvas.Add(new Image(ImageDataFactory.Create(image)).ScaleToFit(460, 160));
         }
         return output.ToArray();

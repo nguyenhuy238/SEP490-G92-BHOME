@@ -14,6 +14,9 @@ using BHome.Domain.TenantContracts;
 using BHome.Infrastructure.Persistence.Compact24;
 using BHome.Infrastructure.Contracts;
 using iText.Kernel.Pdf;
+using iText.Kernel.Pdf.Canvas.Parser;
+using iText.Kernel.Pdf.Canvas.Parser.Data;
+using iText.Kernel.Pdf.Canvas.Parser.Listener;
 using iText.Signatures;
 using BHome.LocalDevelopment;
 using Microsoft.AspNetCore.Hosting;
@@ -505,7 +508,15 @@ public sealed class AnonymousSigningTests(Compact24Fixture fixture) : IClassFixt
         await new AnonymousSigningTests(isolated).AnonymousHoldingWorkflow(ownerSession: true, deferredContacts: true, qrPreview: true);
     }
 
-    internal async Task AnonymousHoldingWorkflow(HoldingCancellationCause? cancellationCause = null, bool externalOwner = false, bool ownerSession = false, bool deferredContacts = false, bool qrPreview = false)
+    [CompactPostgresFact]
+    public async Task HoldingAndConvertedMainKeepBothSignaturesWhenOwnerSignsFirst()
+    {
+        await using var isolated = new Compact24Fixture();
+        await isolated.InitializeAsync();
+        await new AnonymousSigningTests(isolated).AnonymousHoldingWorkflow(ownerSession: true, ownerFirst: true);
+    }
+
+    internal async Task AnonymousHoldingWorkflow(HoldingCancellationCause? cancellationCause = null, bool externalOwner = false, bool ownerSession = false, bool deferredContacts = false, bool qrPreview = false, bool ownerFirst = false)
     {
         var delivery = new Delivery();
         const string sandboxSecret = "SYNTHETIC-SANDBOX-WEBHOOK-SECRET-ONLY-123456";
@@ -663,6 +674,10 @@ public sealed class AnonymousSigningTests(Compact24Fixture fixture) : IClassFixt
         (await Post(owner, root + "/holding-approval", new HoldingDecisionInput("Synthetic Owner review"))).EnsureSuccessStatusCode();
         async Task Sign(string path)
         {
+            if (!externalOwner)
+                (await owner.PostAsJsonAsync("/api/v1/digital-signing/signature-image/drawn",
+                    new BHome.Infrastructure.Contracts.DrawnSignatureInput(300, 100, [[[10, 70], [80, 20], [145, 65], [220, 50], [270, 30]]])))
+                    .EnsureSuccessStatusCode();
             var view = await owner.GetFromJsonAsync<ContractView>(path);
             var invitationInput = new SigningInvitationInput(DateTimeOffset.UtcNow.AddHours(1), view!.SnapshotHash, deferredContacts ? deliveryEmail : null);
             var invite = await Result<SigningInvitationResult>(await Post(owner, path + "/signing-invitations", invitationInput));
@@ -683,8 +698,17 @@ public sealed class AnonymousSigningTests(Compact24Fixture fixture) : IClassFixt
             Assert.Contains("Mã OTP của bạn:", delivery.Messages.Last().Body);
             var otp = Regex.Match(delivery.Messages.Last().Body, @"\b[0-9]{6}\b").Value;
             var access = await Result<AnonymousSigningAccess>(await Post(guest, "/api/v1/contract-signing/verify", new AnonymousOtpInput(inviteToken, otp)));
-            if (path != root)
             {
+                if (ownerFirst && path == root)
+                {
+                    // Older invitations can have a reviewed PDF without a matching preview row.
+                    await using var legacyScope = host.Services.CreateAsyncScope();
+                    var legacyDb = legacyScope.ServiceProvider.GetRequiredService<Compact24DbContext>();
+                    var stored = await legacyDb.Set<ContractDocumentFile>().SingleAsync(f => f.ContractId == holding.Id &&
+                        f.Kind == ContractFileKind.Preview && f.TemplateId == HoldingDepositRenderer.TemplateId);
+                    legacyDb.Remove(stored);
+                    await legacyDb.SaveChangesAsync();
+                }
                 var preview = await Result<ContractDocumentView>(await Post(owner, path + "/previews", new { }));
                 var ownerPdf = await owner.GetByteArrayAsync(path + $"/previews/{preview.Id}");
                 var tenantDocument = await Post(guest, "/api/v1/contract-signing/document", new AnonymousSigningSession(inviteToken, access.Session));
@@ -692,7 +716,8 @@ public sealed class AnonymousSigningTests(Compact24Fixture fixture) : IClassFixt
                 Assert.Equal(ownerPdf, await tenantDocument.Content.ReadAsByteArrayAsync());
                 Assert.Equal(access.DocumentHash, Convert.ToHexString(SHA256.HashData(ownerPdf)));
                 using var pdf = new PdfDocument(new PdfReader(new MemoryStream(ownerPdf)));
-                Assert.Equal("main-tenancy-docx-v1", pdf.GetDocumentInfo().GetMoreInfo("BHomeSourceTemplate"));
+                Assert.Equal(path == root ? HoldingDepositRenderer.TemplateId : "main-tenancy-docx-v1",
+                    pdf.GetDocumentInfo().GetMoreInfo("BHomeSourceTemplate"));
             }
             if (path == root)
             {
@@ -700,8 +725,23 @@ public sealed class AnonymousSigningTests(Compact24Fixture fixture) : IClassFixt
                 Assert.Null(otpOnly!.TenantAcceptedAt); Assert.False(otpOnly.CanContinue);
                 Assert.Equal(HttpStatusCode.Forbidden, (await Post(assignedStaff, path + "/internal-signing/owner-confirmation", new InternalOwnerAcceptance(access.DocumentHash, access.ConsentVersion, true))).StatusCode);
             }
+            byte[]? ownerPdfBeforeTenant = null;
+            if (ownerFirst)
+            {
+                var signed = await Result<SignatureView>(await Post(owner, path + "/signing",
+                    new SigningInput(Guid.Empty, Method: SigningMethods.OwnerSession, Consent: true)));
+                Assert.Equal("Signed", signed.Status);
+                Assert.Equal("PendingSigning", (await owner.GetFromJsonAsync<ContractView>(path))!.Status);
+                ownerPdfBeforeTenant = await owner.GetByteArrayAsync(path + "/document");
+            }
             (await Post(guest, "/api/v1/contract-signing/accept", new AnonymousAcceptanceInput(inviteToken, access.Session, access.DocumentHash, access.ConsentVersion, true, [[new(.1, .2), new(.7, .6)]]))).EnsureSuccessStatusCode();
-            await SignOwnerWithOtp(owner, assignedStaff, path, delivery, externalOwner ? host.Services : null, ownerSession);
+            if (!ownerFirst)
+                await SignOwnerWithOtp(owner, assignedStaff, path, delivery, externalOwner ? host.Services : null, ownerSession);
+
+            var finalPdf = await owner.GetByteArrayAsync(path + "/document");
+            if (ownerPdfBeforeTenant is not null)
+                Assert.True(finalPdf.AsSpan().StartsWith(ownerPdfBeforeTenant));
+            AssertBothSignatures(finalPdf, path == root ? HoldingDepositRenderer.TemplateId : MainTemplateSignatureSlots.TemplateId, externalOwner, ownerFirst);
         }
         // Payment before signing must not mark the room held or create a login.
         const decimal holdingDeposit = 3000000;
@@ -743,6 +783,11 @@ public sealed class AnonymousSigningTests(Compact24Fixture fixture) : IClassFixt
                 (await db.Set<BHome.Domain.PropertyManagement.Room>().SingleAsync(r => r.Id == Compact24SampleSeed.Id(40))).Status);
             Assert.Equal(usersBefore, await db.Users.CountAsync());
             Assert.Null((await db.Set<Resident>().SingleAsync(r => r.Id == residentId)).TenantUserId);
+            var mailContent = scope.ServiceProvider.GetRequiredService<BHome.Infrastructure.Modules.Notifications.NotificationEmailContent>();
+            var confirmation = await mailContent.HoldingConfirmationAsync(holding.Id, Compact24SampleSeed.Id(1), default);
+            Assert.NotNull(confirmation);
+            var attachment = Assert.Single(confirmation.Value.Attachments, a => a.FileName.StartsWith("Hop-dong-", StringComparison.Ordinal));
+            Assert.Equal(await owner.GetByteArrayAsync(root + "/document"), attachment.Content);
             if (deferredContacts) Assert.Equal(deliveryEmail, (await db.Set<Resident>().SingleAsync(r => r.Id == residentId)).ContactEmail);
         }
         if (cancellationCause is { } cause)
@@ -876,6 +921,8 @@ public sealed class AnonymousSigningTests(Compact24Fixture fixture) : IClassFixt
             var confirmation = Assert.Single(delivery.Messages, m => m.EventType == "MAIN_CONFIRMED");
             Assert.Equal(deliveryEmail, confirmation.Destination);
             Assert.Equal(2, confirmation.Attachments!.Count);
+            Assert.Equal(await owner.GetByteArrayAsync(mainRoot + "/document"),
+                Assert.Single(confirmation.Attachments, a => a.FileName.StartsWith("Hop-dong-", StringComparison.Ordinal)).Content);
             await worker.DeliverAsync(emailDelivery, default);
             Assert.Single(delivery.Messages, m => m.EventType == "MAIN_CONFIRMED");
             return;
@@ -894,5 +941,46 @@ public sealed class AnonymousSigningTests(Compact24Fixture fixture) : IClassFixt
         Assert.Equal(1, await context.Set<BHome.Domain.PaymentsDebt.PaymentAllocation>().CountAsync(a => a.SourceDepositContractId == holding.Id));
         Assert.Equal(ContractStatus.Converted, (await context.Set<Contract>().SingleAsync(c => c.Id == holding.Id)).Status);
         Assert.Equal(BHome.Domain.PropertyManagement.RoomStatus.Occupied, (await context.Set<BHome.Domain.PropertyManagement.Room>().SingleAsync(r => r.Id == active.RoomId)).Status);
+    }
+
+    private static void AssertBothSignatures(byte[] bytes, string template, bool externalOwner, bool ownerFirst)
+    {
+        using var document = new PdfDocument(new PdfReader(new MemoryStream(bytes)));
+        Assert.Equal(template, document.GetDocumentInfo().GetMoreInfo(MainTemplateSignatureSlots.SourceTemplate));
+        var tenant = Assert.IsType<SignaturePlacementInput>(ContractSignatureSlots.Read(document, owner: false));
+        var page = document.GetPage(tenant.Page);
+        var ink = new TenantInkListener();
+        new PdfCanvasProcessor(ink).ProcessPageContent(page);
+        var size = page.GetPageSize();
+        Assert.Contains(ink.Images, image =>
+            Math.Abs(image.Get(iText.Kernel.Geom.Matrix.I31) - (size.GetLeft() + tenant.X * size.GetWidth())) < 1 &&
+            Math.Abs(image.Get(iText.Kernel.Geom.Matrix.I32) + image.Get(iText.Kernel.Geom.Matrix.I22) -
+                (size.GetTop() - tenant.Y * size.GetHeight())) < 1);
+        var signatures = new SignatureUtil(document);
+        var field = Assert.Single(signatures.GetSignatureNames());
+        Assert.True(signatures.ReadSignatureData(field).VerifySignatureIntegrityAndAuthenticity());
+        Assert.Equal(!ownerFirst, signatures.SignatureCoversWholeDocument(field));
+        if (!externalOwner)
+        {
+            var owner = Assert.IsType<SignaturePlacementInput>(ContractSignatureSlots.Read(document, owner: true));
+            var widget = Assert.Single(iText.Forms.PdfAcroForm.GetAcroForm(document, false).GetField(field).GetWidgets());
+            Assert.Contains(document.GetPage(owner.Page).GetAnnotations(), a => a.GetPdfObject().Equals(widget.GetPdfObject()));
+            Assert.True(widget.GetRectangle().ToRectangle().GetWidth() > 0);
+            Assert.NotNull(widget.GetNormalAppearanceObject());
+        }
+        var qa = Environment.GetEnvironmentVariable("BHOME_CONTRACT_QA_DIR");
+        if (!string.IsNullOrWhiteSpace(qa) && !externalOwner)
+        {
+            Directory.CreateDirectory(qa);
+            File.WriteAllBytes(Path.Combine(qa, $"{template}-{(ownerFirst ? "owner-first" : "tenant-first")}.png"),
+                new ContractSigningPages().RenderPage(bytes, tenant.Page, 1400));
+        }
+    }
+
+    private sealed class TenantInkListener : IEventListener
+    {
+        public List<iText.Kernel.Geom.Matrix> Images { get; } = [];
+        public void EventOccurred(IEventData data, EventType type) => Images.Add(((ImageRenderInfo)data).GetImageCtm());
+        public ICollection<EventType> GetSupportedEvents() => [EventType.RENDER_IMAGE];
     }
 }

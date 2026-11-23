@@ -100,20 +100,47 @@ vi.mock('react-native', () => ({
   },
   StyleSheet: { create: (styles: unknown) => styles },
   View: ({ children }: { children: React.ReactNode }) => <div>{children}</div>,
+  ScrollView: ({ children }: { children: React.ReactNode }) => <div>{children}</div>,
 }));
 vi.mock('react-native-paper', () => ({
+  Portal: ({ children }: React.PropsWithChildren) => children,
+  Dialog: Object.assign(
+    ({ children }: React.PropsWithChildren) => <div role="dialog">{children}</div>,
+    {
+      Title: ({ children }: React.PropsWithChildren) => <h2>{children}</h2>,
+      ScrollArea: ({ children }: React.PropsWithChildren) => <div>{children}</div>,
+      Actions: ({ children }: React.PropsWithChildren) => <div>{children}</div>,
+    },
+  ),
+  TextInput: ({
+    accessibilityLabel,
+    value,
+    onChangeText,
+  }: {
+    accessibilityLabel: string;
+    value: string;
+    onChangeText: (value: string) => void;
+  }) => (
+    <input
+      aria-label={accessibilityLabel}
+      value={value}
+      onChange={(event) => onChangeText(event.target.value)}
+    />
+  ),
   Icon: () => null,
   ActivityIndicator: () => <span>Đang tải</span>,
   Button: ({
     children,
     onPress,
     disabled,
+    accessibilityLabel,
   }: {
     children: React.ReactNode;
     onPress: () => void;
     disabled?: boolean;
+    accessibilityLabel?: string;
   }) => (
-    <button disabled={disabled} onClick={onPress}>
+    <button aria-label={accessibilityLabel} disabled={disabled} onClick={onPress}>
       {children}
     </button>
   ),
@@ -221,7 +248,7 @@ function makeApi(mutate = vi.fn().mockResolvedValue({ id: ids[0] })) {
     tenantAccounts: vi.fn(),
     linkTenant: vi.fn(),
     configuration: vi.fn().mockResolvedValue({
-      template: { available: true, title: 'Mẫu kỹ thuật không hiển thị', fields: [] },
+      template: { available: false, title: 'Mẫu kỹ thuật không hiển thị', fields: [] },
     }),
     preparation: vi.fn().mockImplementation(async () => ({
       locations: [{ id: ids[0], label: 'Cơ sở A' }],
@@ -271,9 +298,17 @@ function mount(
   return { api, created, prepare };
 }
 const continueButton = () => screen.getByRole('button', { name: 'Tiếp tục' });
+async function roomPickerButton() {
+  return waitFor(() => {
+    const button = screen.getByRole<HTMLButtonElement>('button', { name: 'Phòng giữ chỗ *' });
+    expect(button.disabled).toBe(false);
+    return button;
+  });
+}
 async function chooseRoom() {
-  await screen.findByText('P101 · Cơ sở A');
-  fireEvent.change(screen.getByLabelText('Phòng giữ chỗ *'), { target: { value: ids[1] } });
+  fireEvent.click(await roomPickerButton());
+  fireEvent.click(screen.getByRole('button', { name: 'Chưa phân tầng · 1 phòng' }));
+  fireEvent.click(screen.getByRole('button', { name: 'P101' }));
   await waitFor(() => expect((continueButton() as HTMLButtonElement).disabled).toBe(false));
   fireEvent.click(continueButton());
   expect(screen.getByText(/2\/7/)).toBeTruthy();
@@ -290,14 +325,14 @@ async function confirmApplicant() {
 const submit = () => screen.getByRole('button', { name: 'Tạo bản nháp và tiếp tục' });
 it('starts at room selection without a duplicate header, refresh icon or location selector', async () => {
   const { api } = mount();
-  await screen.findByText('P101 · Cơ sở A');
+  await roomPickerButton();
   expect(screen.getByText(/1\/7/)).toBeTruthy();
   expect(screen.queryByRole('button', { name: 'Quay lại' })).toBeNull();
   expect(screen.queryByRole('button', { name: 'Tải lại lựa chọn' })).toBeNull();
   expect(screen.queryByLabelText('Cơ sở')).toBeNull();
   expect(api.preparation).not.toHaveBeenCalled();
 });
-it('filters available rooms by assigned location and shows their capacity', async () => {
+it('switches between assigned locations and filters rooms by minimum capacity', async () => {
   const api = makeApi();
   vi.mocked(api.locations).mockResolvedValue([
     { id: ids[0], label: 'Cơ sở A' },
@@ -311,7 +346,7 @@ it('filters available rooms by assigned location and shows their capacity', asyn
         roomNumber: 'P101',
         status: 0,
         capacity: 2,
-        floor: null,
+        floor: '1',
         version: 1,
       },
       {
@@ -320,20 +355,57 @@ it('filters available rooms by assigned location and shows their capacity', asyn
         roomNumber: 'P201',
         status: 0,
         capacity: 4,
+        floor: '2',
+        version: 1,
+      },
+      {
+        id: 'room-a2',
+        locationId: ids[0],
+        roomNumber: 'P202',
+        status: 0,
+        capacity: 4,
+        floor: '2',
+        version: 1,
+      },
+      {
+        id: ids[4],
+        locationId: 'unassigned',
+        roomNumber: 'P301',
+        status: 0,
+        capacity: 5,
         floor: null,
         version: 1,
       },
     ],
-    totalCount: 2,
+    totalCount: 4,
     page: 1,
     pageSize: 100,
   });
   mount(api);
-  expect(await screen.findByText('P101 · Cơ sở A · 2 người')).toBeTruthy();
-  expect(screen.queryByText('P201 · Cơ sở B · 4 người')).toBeNull();
-  expect(screen.queryByLabelText('Cơ sở được phân công *')).toBeNull();
-  fireEvent.change(screen.getByLabelText('Phòng giữ chỗ *'), { target: { value: ids[1] } });
-  expect(await screen.findByText('Sức chứa: 2 người')).toBeTruthy();
+  expect(screen.queryByLabelText('Sức chứa tối thiểu')).toBeNull();
+  fireEvent.click(await roomPickerButton());
+  expect(screen.getByRole('button', { name: 'Tầng 1 · 1 phòng' })).toBeTruthy();
+  expect(screen.getByRole('button', { name: 'Tầng 2 · 1 phòng' })).toBeTruthy();
+  expect(screen.queryByText('P101 · 2 người')).toBeNull();
+  fireEvent.click(screen.getByRole('button', { name: 'Tầng 1 · 1 phòng' }));
+  expect(screen.getByText('P101 · 2 người')).toBeTruthy();
+  fireEvent.change(screen.getByLabelText('Sức chứa tối thiểu'), { target: { value: '3' } });
+  expect(screen.queryByRole('button', { name: 'Tầng 1 · 1 phòng' })).toBeNull();
+  fireEvent.click(screen.getByRole('button', { name: 'Tầng 2 · 1 phòng' }));
+  expect(screen.getByText('P202 · 4 người')).toBeTruthy();
+  expect(screen.queryByText('P201 · 4 người')).toBeNull();
+  fireEvent.change(screen.getByLabelText('Sức chứa tối thiểu'), { target: { value: '9' } });
+  expect(screen.getByText('Không có phòng phù hợp bộ lọc.')).toBeTruthy();
+  fireEvent.click(screen.getByRole('button', { name: 'Đóng' }));
+  fireEvent.change(screen.getByLabelText('Cơ sở được phân công *'), { target: { value: ids[3] } });
+  fireEvent.click(await roomPickerButton());
+  fireEvent.click(screen.getByRole('button', { name: 'Tầng 2 · 1 phòng' }));
+  expect(screen.queryByText(/P301/)).toBeNull();
+  fireEvent.click(screen.getByRole('button', { name: 'P201 · 4 người' }));
+  expect(await screen.findByText('Sức chứa: 4 người')).toBeTruthy();
+  await waitFor(() =>
+    expect(api.preparation).toHaveBeenCalledWith(ids[3], expect.any(AbortSignal)),
+  );
 });
 it('loads preparation and readiness for the selected room/location, without any Tenant selection', async () => {
   const { api } = mount();
@@ -394,6 +466,17 @@ it('keeps identity actions available while the selected profile is refreshing', 
   expect(api.holdingRooms).toHaveBeenCalledOnce();
   resolvePreparation(await loadPreparation(ids[0]));
   await waitFor(() => expect(continueButton()).toHaveProperty('disabled', false));
+});
+
+it('opens the identity step after readiness even while location preparation is pending', async () => {
+  const api = makeApi();
+  vi.mocked(api.preparation).mockImplementationOnce(() => new Promise(() => {}));
+  mount(api);
+  await chooseRoom();
+  expect(screen.getByText('CCCD của người giữ chỗ')).toBeTruthy();
+  expect(screen.getByText('Open identity')).toBeTruthy();
+  expect(screen.getByRole('button', { name: 'Đang cập nhật…' })).toHaveProperty('disabled', true);
+  expect(api.preparation).toHaveBeenCalledOnce();
 });
 it('reviews verified applicant data and keeps confirmation entirely read-only', async () => {
   const { api, prepare } = mount();
@@ -528,7 +611,7 @@ it('recovers a room query error using an inline retry rather than a header refre
   mount(api);
   await screen.findByRole('button', { name: 'Thử lại' });
   fireEvent.click(screen.getByRole('button', { name: 'Thử lại' }));
-  await screen.findByText('P101 · Cơ sở A');
+  await roomPickerButton();
 });
 it('permits null Tenant only for Holding while preserving existing Main draft validation', () => {
   const input = {

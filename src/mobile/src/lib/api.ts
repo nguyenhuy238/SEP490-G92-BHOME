@@ -126,10 +126,21 @@ export async function mobileResponse<T>(
 }
 
 export async function checkApiConnection(input: string, transport: typeof fetch = fetch) {
-  return mobileResponse(apiBaseUrl(input), '/health/ready', {}, transport, async (response) => {
-    if ((await response.text()).trim() !== 'Healthy')
-      throw new MobileApiError(502, 'invalid_response', '/health/ready');
-  });
+  const base = apiBaseUrl(input);
+  try {
+    await mobileResponse(base, '/health/ready', {}, transport, async (response) => {
+      if ((await response.text()).trim() !== 'Healthy')
+        throw new MobileApiError(502, 'invalid_response', '/health/ready');
+    });
+  } catch (error) {
+    if (!(error instanceof MobileApiError) || error.status !== 404) throw error;
+    // Deployed gateways deliberately keep readiness private. Use the anonymous API there.
+    const path = '/api/v1/public/locations';
+    await mobileResponse(base, path, {}, transport, async (response) => {
+      const locations: unknown = await response.json().catch(() => null);
+      if (!Array.isArray(locations)) throw new MobileApiError(502, 'invalid_response', path);
+    });
+  }
 }
 export function apiBaseUrl(input: string): string {
   let url: URL;
