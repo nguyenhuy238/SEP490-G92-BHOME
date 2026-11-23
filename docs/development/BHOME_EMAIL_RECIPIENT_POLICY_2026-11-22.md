@@ -1,5 +1,8 @@
 # Audit và bỏ Email Recipient Allowlist trong Development — 22/11/2026
 
+> Tài liệu lịch sử: từ 23/11/2026 đã bỏ giới hạn người nhận ở **mọi môi trường**, gồm
+> Staging/Testing/Production và các cấu hình cũ. Xem [bản sửa hiện hành](BHOME_EMAIL_NO_ALLOWLIST_2026-11-23.md).
+
 ## A. Audit ban đầu
 
 Audit trên repository hiện tại, nhánh `member/QHuy`, baseline `2f3119d7`.

@@ -39,8 +39,8 @@ export function ownerError(error: unknown) {
   if (infrastructure) return infrastructure;
   if (error instanceof ApiError) {
     const codes: Record<string, string> = {
-      email_recipient_not_allowed:
-        'Địa chỉ nhận chưa được cho phép trong môi trường thử nghiệm. Liên hệ người quản trị môi trường trước khi gửi lại.',
+      email_recipient_invalid:
+        'Địa chỉ email nhận không hợp lệ. Kiểm tra email của nhân viên trước khi gửi lại.',
       staff_account_requires_invitation:
         'Phiên bản Backend cũ yêu cầu kích hoạt tài khoản. Hãy cập nhật Backend rồi thử gửi lại thông tin đăng nhập.',
       staff_password_update_failed:

@@ -113,6 +113,7 @@ jobs:
         run: |
           for file in deploy/vps/*.sh; do bash -n "$file"; done
           python3 -m unittest discover -s tests/deployment -p 'test_*.py' -v
+          python3 -m unittest discover -s tests/scripts -p 'test_email_preflight.py' -v
           node --test tests/deployment/*.test.cjs
   release:
     if: github.event_name == 'push' && (github.ref == 'refs/heads/develop' || github.ref == 'refs/heads/main')

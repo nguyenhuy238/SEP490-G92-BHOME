@@ -69,8 +69,11 @@ public sealed class EmailCaptureTests
         Assert.Contains("recipient@example.invalid", mime.To.ToString());
     }
 
-    [Fact]
-    public async Task StagingRecipientOutsideAllowlistIsRejectedBeforeNetwork()
+    [Theory]
+    [InlineData("Staging")]
+    [InlineData("Production")]
+    [InlineData("Testing")]
+    public async Task InvalidRecipientIsRejectedBeforeNetworkRegardlessOfLegacyAllowlist(string environment)
     {
         var options = new EmailOptions
         {
@@ -83,17 +86,21 @@ public sealed class EmailCaptureTests
             AllowAnyDevelopmentSigningRecipient = true
         };
         var sender = new MailKitEmailSender(Options.Create(options), NullLogger<MailKitEmailSender>.Instance,
-            new HostingEnvironment { EnvironmentName = "Staging" });
+            new HostingEnvironment { EnvironmentName = environment });
         var error = await Assert.ThrowsAsync<ChannelDeliveryException>(() => sender.SendAsync(
-            new("synthetic", "EMAIL", "blocked@example.invalid", "HOLDING_CONFIRMED", "Test", "Test"), default));
-        Assert.Equal("email_recipient_not_allowed", error.Code);
+            new("synthetic", "EMAIL", "invalid\r\nBcc: attacker@example.invalid", "HOLDING_CONFIRMED", "Test", "Test"), default));
+        Assert.Equal("email_recipient_invalid", error.Code);
     }
     [Theory]
     [InlineData("Development", "outside@example.invalid", "email_connection_failed")]
     [InlineData("Development", "invalid", "email_recipient_invalid")]
-    [InlineData("Staging", "outside@example.invalid", "email_recipient_not_allowed")]
+    [InlineData("Testing", "outside@example.invalid", "email_connection_failed")]
+    [InlineData("Testing", "invalid", "email_recipient_invalid")]
+    [InlineData("Staging", "outside@example.invalid", "email_connection_failed")]
+    [InlineData("Staging", "invalid", "email_recipient_invalid")]
     [InlineData("Staging", "allowed@example.invalid", "email_connection_failed")]
-    [InlineData("Production", "outside@example.invalid", "email_recipient_not_allowed")]
+    [InlineData("Production", "outside@example.invalid", "email_connection_failed")]
+    [InlineData("Production", "invalid", "email_recipient_invalid")]
     [InlineData("Production", "allowed@example.invalid", "email_connection_failed")]
     public async Task DirectSmtpUsesSharedPolicyBeforeOpeningConnection(string environment, string destination, string expected)
     {

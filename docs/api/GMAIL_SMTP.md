@@ -8,19 +8,19 @@ Lỗi gửi tài khoản Staff trên cả ba môi trường ngày 21/11/2026 là
 localhost có allowlist cũ; Staging/Production tắt `Email.Enabled` và
 `NotificationChannels.Enabled`. Xem [nguyên nhân, cấu hình đã áp dụng và kiểm thử](../development/BHOME_EMAIL_REPAIR_2026-11-21.md).
 
-## Chính sách người nhận theo môi trường (22/11/2026)
+## Chính sách người nhận cho mọi môi trường (23/11/2026)
 
-Development mặc định cho phép mọi email hợp lệ khi đã chọn SMTP và cấu hình credential
-hợp lệ. Không cần `AllowedRecipients`, `AllowAnyRecipientInDevelopment` hoặc người nhận
-trùng `TestRecipient`; các khóa allowlist cũ trong User Secrets không giới hạn Development.
-Capture vẫn chỉ kết nối loopback, không gửi Gmail. Testing/Staging giữ allowlist bắt buộc
-cho SMTP. Production giữ nguyên: danh sách trống không giới hạn, danh sách có phần tử
-chỉ cho các địa chỉ trong đó; không thay cấu hình triển khai trong bản sửa này.
+Development, Testing, Staging và Production đều cho phép mọi địa chỉ email hợp lệ khi
+SMTP và credential đã cấu hình. Không cần `AllowedRecipients`,
+`AllowAnyRecipientInDevelopment` hoặc người nhận trùng `TestRecipient`.
+Các khóa danh sách/cờ cũ được bỏ qua hoàn toàn, kể cả danh sách chứa giá trị lỗi thời;
+thành viên không cần xóa User Secrets hay `.env` cũ sau khi pull.
+Capture vẫn chỉ kết nối loopback trong Development/Testing, không forward ra Gmail.
 
 Mọi lời mời, credential, reset/confirmation, OTP/ký và notification qua sender chung
 dùng chính sách này. `TestRecipient` chỉ phục vụ endpoint thử email. Sau khi tích hợp/pull
 commit, rebuild/restart Backend; từng máy vẫn cần credential riêng nếu muốn SMTP thật.
-Xem [audit, phạm vi và kết quả kiểm thử](../development/BHOME_EMAIL_RECIPIENT_POLICY_2026-11-22.md).
+Xem [quyết định và kết quả sửa Staging](../development/BHOME_EMAIL_NO_ALLOWLIST_2026-11-23.md).
 
 ## Cấu hình
 
@@ -94,7 +94,8 @@ python3 deploy/vps/check-email.py production --smtp
 ```
 
 `--smtp` kiểm tra certificate STARTTLS và đăng nhập SMTP, không gửi thư. Có thể thêm
-`--recipient` để kiểm tra allowlist; tránh đưa email cá nhân vào command/log dùng chung.
+`--recipient` để kiểm tra cú pháp một mailbox; không dùng danh sách giới hạn người nhận.
+Tránh đưa email cá nhân vào command/log dùng chung.
 Công cụ chỉ hỗ trợ hai container VPS hiện có và không thay thế validation của Backend.
 Nếu dùng bản cài tại VPS hiện tại, đường dẫn là `/opt/bhome-config/check-email.py`.
 Không in `docker inspect` đầy đủ hoặc `docker compose config` vì chúng có thể chứa secrets.
