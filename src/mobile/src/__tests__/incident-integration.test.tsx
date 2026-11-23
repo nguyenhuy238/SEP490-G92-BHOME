@@ -670,7 +670,7 @@ it('requires completion evidence before making any mutation', async () => {
   work.status = 'InProgress';
   render(<IncidentActionPanel report={report} work={work} role="Staff" />);
   choose('Chọn thao tác', 'submit');
-  choose('Nội dung / kết quả thực hiện', 'Đã sửa và kiểm tra');
+  choose('Kết quả sửa chữa', 'Đã sửa và kiểm tra');
   confirm();
   fireEvent.click(screen.getByRole('button', { name: 'Gửi kết quả nghiệm thu' }));
   await screen.findByText(/Cần ít nhất một ảnh kết quả/);
@@ -682,7 +682,7 @@ it.each(['progress', 'blocker', 'submit'])(
     work.status = 'InProgress';
     render(<IncidentActionPanel report={report} work={work} role="Staff" />);
     choose('Chọn thao tác', action);
-    choose('Nội dung / kết quả thực hiện', 'Đã kiểm tra đường ống');
+    choose(action === 'submit' ? 'Kết quả sửa chữa' : 'Nội dung cập nhật', 'Đã kiểm tra đường ống');
     await photo();
     confirm();
     fireEvent.click(
@@ -772,7 +772,15 @@ it.each(['Assigned', 'InProgress', 'Verified', 'Cancelled'] as const)(
     s.role = 'Owner';
     work.status = status;
     render(<IncidentActionPanel report={report} work={work} role="Owner" />);
-    expect(screen.queryByLabelText('Chọn thao tác')).toBeNull();
+    for (const label of [
+      'Quyết định phương án',
+      'Nghiệm thu hoàn thành',
+      'Yêu cầu làm lại',
+      'Xác nhận tài sản liên quan',
+    ]) {
+      expect(screen.queryByRole('button', { name: label })).toBeNull();
+    }
+    expect(screen.queryByRole('button', { name: 'Thao tác khác' })).toBeNull();
     expect(mutations()).toHaveLength(0);
   },
 );
@@ -787,7 +795,7 @@ it('refreshes the Incident version after uploading Emergency evidence before sen
   );
   render(<IncidentActionPanel report={report} role="Staff" />);
   choose('Chọn thao tác', 'emergency-actions');
-  choose('Nội dung / kết quả thực hiện', 'Đã khóa van và cô lập khu vực');
+  choose('Biện pháp an toàn đã thực hiện và khó khăn còn gặp phải', 'Đã khóa van và cô lập khu vực');
   choose('Chi phí đề nghị (VND, tùy chọn)', '50000');
   await photo();
   confirm();
@@ -812,13 +820,13 @@ it('retains input and shows backend concurrency diagnostics without reporting su
   );
   render(<IncidentActionPanel report={report} role="Staff" />);
   choose('Chọn thao tác', 'emergency-actions');
-  choose('Nội dung / kết quả thực hiện', 'Đã khóa van');
+  choose('Biện pháp an toàn đã thực hiện và khó khăn còn gặp phải', 'Đã khóa van');
 
   confirm();
   fireEvent.click(screen.getByRole('button', { name: 'Ghi hành động khẩn cấp' }));
   await screen.findByText(/Dữ liệu đã thay đổi.*aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa/);
   expect(s.success).not.toHaveBeenCalled();
-  expect(screen.getByLabelText('Nội dung / kết quả thực hiện')).toHaveProperty(
+  expect(screen.getByLabelText('Biện pháp an toàn đã thực hiện và khó khăn còn gặp phải')).toHaveProperty(
     'value',
     'Đã khóa van',
   );
@@ -889,7 +897,9 @@ it('does not offer execution controls for a WorkOrder assigned to another Staff 
   work.assignedStaffId = 'other-staff';
   render(<MaintenanceDetailScreen />);
   await screen.findByText(/Khắc phục rò nước/);
-  expect(screen.queryByLabelText('Chọn thao tác')).toBeNull();
+  expect(screen.queryByRole('button', { name: 'Bắt đầu sửa chữa' })).toBeNull();
+  expect(screen.queryByRole('button', { name: 'Gửi phương án sửa chữa' })).toBeNull();
+  expect(screen.queryByRole('button', { name: 'Gửi kết quả nghiệm thu' })).toBeNull();
 });
 it('maps known owner event fields and guards emergency acknowledgements against state/role', () => {
   expect(
@@ -917,17 +927,17 @@ it('re-fetches WorkOrder detail after start instead of applying a local completi
     return respond(path, init);
   });
   render(<MaintenanceDetailScreen />);
-  await screen.findByLabelText('Chọn thao tác');
+  await screen.findByRole('button', { name: 'Bắt đầu sửa chữa' });
   choose('Chọn thao tác', 'start');
   confirm();
   fireEvent.click(screen.getByRole('button', { name: 'Bắt đầu sửa chữa' }));
-  await waitFor(() =>
-    expect(screen.getByRole('option', { name: 'Cập nhật tiến độ' })).toBeTruthy(),
-  );
+  await screen.findByRole('button', { name: 'Gửi kết quả nghiệm thu' });
+  fireEvent.click(screen.getByRole('button', { name: 'Thao tác khác' }));
+  expect(screen.getByRole('button', { name: 'Cập nhật tiến độ' })).toBeTruthy();
   expect(
     s.request.mock.calls.filter(([path]) => path === `/api/v1/work-orders/${wid}`).length,
   ).toBeGreaterThanOrEqual(2);
-  expect(screen.queryByRole('option', { name: 'Bắt đầu sửa chữa' })).toBeNull();
+  expect(screen.queryByRole('button', { name: 'Bắt đầu sửa chữa' })).toBeNull();
 });
 
 it.each(['Submitted', 'InProgress'] as const)(
@@ -944,9 +954,9 @@ it.each(['Submitted', 'InProgress'] as const)(
       />,
     );
     expect(screen.getByText('Thực hiện trên Owner Web')).toBeTruthy();
-    expect(screen.queryByLabelText('Chọn thao tác')).toBeNull();
-    expect(screen.queryByRole('option', { name: 'Phân loại sự cố' })).toBeNull();
-    expect(screen.queryByRole('option', { name: 'Quyết định chi phí khẩn cấp' })).toBeNull();
+    expect(screen.queryByRole('button', { name: 'Phân loại sự cố' })).toBeNull();
+    expect(screen.queryByRole('button', { name: 'Quyết định chi phí khẩn cấp' })).toBeNull();
+    expect(screen.queryByRole('button', { name: 'Thao tác khác' })).toBeNull();
     expect(mutations()).toHaveLength(0);
     expect(s.success).not.toHaveBeenCalled();
   },
@@ -955,7 +965,9 @@ it('does not offer Owner mutations after an Incident is resolved', () => {
   s.role = 'Owner';
   report.status = 'Resolved';
   render(<IncidentActionPanel report={report} role="Owner" />);
-  expect(screen.queryByLabelText('Chọn thao tác')).toBeNull();
+  expect(screen.queryByRole('button', { name: 'Phân loại sự cố' })).toBeNull();
+  expect(screen.queryByRole('button', { name: 'Giao lệnh sửa chữa' })).toBeNull();
+  expect(screen.queryByRole('button', { name: 'Quyết định chi phí khẩn cấp' })).toBeNull();
   expect(mutations()).toHaveLength(0);
 });
 it('Staff emergency acknowledgement uses its authorized endpoint and current report version', async () => {

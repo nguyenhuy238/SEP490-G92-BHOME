@@ -838,7 +838,7 @@ it('copies only after confirmed server preview and displays conflicts without ex
   );
   mount(<ApiConfigurationCopy />);
   fireEvent.click(screen.getByRole('button', { name: 'Sao chép cấu hình cơ sở' }));
-  expect(await screen.findByLabelText('Định mức tài sản theo loại phòng')).toBeVisible();
+  expect(await screen.findByText('Định mức tài sản theo loại phòng')).toBeVisible();
   expect(screen.queryByLabelText(/gói tài sản/i)).not.toBeInTheDocument();
   await select('Cơ sở nguồn', 'Source Location');
   await select('Cơ sở đích', 'Target Location');
