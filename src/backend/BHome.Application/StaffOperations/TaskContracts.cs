@@ -93,6 +93,9 @@ public interface IOperationalTaskRepository
     Task<bool> IncidentsResolvedAsync(Guid[] incidentIds, CancellationToken t);
     Task NotifyMoveInInventoryCompletedAsync(OperationalTask task, Guid actor, CancellationToken t);
     Task<TaskResponsibility?> ResponsibilityAsync(Guid locationId, DateOnly date, CancellationToken t);
+    Task<TaskResponsibility?> StaffAtLocationAsync(Guid locationId, Guid staffId, DateOnly date, CancellationToken t);
+    Task<Guid?> MoveOutInspectionStaffAsync(Guid contractId, CancellationToken t);
+    Task<Guid[]> EnsureMoveOutFinalMeterTasksAsync(OperationalTask inspectionTask, Guid staffId, DateOnly date, CancellationToken t);
     Task<TaskPage<TaskView>> ListAsync(TaskQuery query, Guid? staffId, DateOnly date, DateTimeOffset now, CancellationToken t);
     Task<TaskPage<TaskHistoryView>> HistoryAsync(Guid taskId, int page, int size, CancellationToken t);
     Task<IReadOnlyList<TaskActorView>> ActorsAsync(Guid taskId, CancellationToken t);

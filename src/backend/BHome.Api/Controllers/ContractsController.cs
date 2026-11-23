@@ -24,6 +24,12 @@ public sealed class ContractsController(ContractService service, ContractExpiryS
         [FromQuery] string? status = null, [FromQuery] string? room = null)
         => service.ListHandoverInboxAsync(page, pageSize, locationId, status, room, t);
 
+    [HttpGet("move-out-inbox"), Authorize(Roles = Roles.Owner)]
+    public Task<OwnerMoveOutInboxPage> MoveOutInbox(CancellationToken t, [FromQuery] int page = 1,
+        [FromQuery] int pageSize = 20, [FromQuery] Guid? locationId = null,
+        [FromQuery] string? status = null, [FromQuery] string? room = null) =>
+        service.OwnerMoveOutInboxAsync(page, pageSize, locationId, status, room, t);
+
     [HttpGet("configuration")]
     public Task<ContractWorkflowConfiguration> Configuration(CancellationToken t) => service.ConfigurationAsync(t);
     [HttpGet("holding-settings/{locationId:guid}"), Authorize(Roles = Roles.Owner)]
@@ -255,6 +261,14 @@ public sealed class ContractsController(ContractService service, ContractExpiryS
     public Task<MoveOutView> RejectTermination(Guid id, TerminationRejection input, CancellationToken t) => service.RejectTerminationAsync(id, input, Key(), t);
     [HttpPost("{id:guid}/move-out/schedule"), Authorize(Roles = Roles.Owner + "," + Roles.Staff)]
     public Task<MoveOutView> Schedule(Guid id, InspectionScheduleInput x, CancellationToken t) => service.ScheduleInspectionAsync(id, x, Key(), t);
+    [HttpGet("{id:guid}/move-out/inspection-draft"), Authorize(Roles = Roles.Staff)]
+    public Task<MoveOutInspectionDraftView> GetMoveOutInspectionDraft(Guid id, CancellationToken t) =>
+        service.GetMoveOutInspectionDraftAsync(id, t);
+    [HttpPatch("{id:guid}/move-out/inspection-draft"), HttpPut("{id:guid}/move-out/inspection-draft"),
+     Authorize(Roles = Roles.Staff)]
+    public Task<MoveOutInspectionDraftView> SaveMoveOutInspectionDraft(Guid id,
+        MoveOutInspectionDraftWrite x, CancellationToken t) =>
+        service.SaveMoveOutInspectionDraftAsync(id, x, Key(), t);
     [HttpPost("{id:guid}/move-out/inspection"), Authorize(Roles = Roles.Staff)]
     public Task<MoveOutView> Inspect(Guid id, InspectionInput x, CancellationToken t) => service.InspectAsync(id, x, Key(), t);
     [HttpPost("{id:guid}/move-out/evidence"), Authorize(Roles = Roles.Staff), Consumes("image/png", "image/jpeg"), RequestSizeLimit(5 * 1024 * 1024)]
@@ -262,6 +276,17 @@ public sealed class ContractsController(ContractService service, ContractExpiryS
     [HttpGet("{id:guid}/move-out/evidence/{evidenceId:guid}")]
     public async Task<IActionResult> Evidence(Guid id, Guid evidenceId, CancellationToken t)
     { var buffer = new MemoryStream(); await service.CopyInspectionEvidenceAsync(id, evidenceId, buffer, t); buffer.Position = 0; return File(buffer, "application/octet-stream", "bang-chung-kiem-tra"); }
+    // Tenant cannot use /capture/readings/{id}/evidence: it is Owner/Staff-only.
+    // This private route checks both the contract entitlement and the exact
+    // submitted Final inspection before reading any object from storage.
+    [HttpGet("{id:guid}/move-out/meter-evidence/{readingId:guid}")]
+    public async Task<IActionResult> MoveOutMeterEvidence(Guid id, Guid readingId, CancellationToken t)
+    {
+        var buffer = new MemoryStream();
+        await service.CopyMoveOutFinalMeterEvidenceAsync(id, readingId, buffer, t);
+        buffer.Position = 0;
+        return File(buffer, "application/octet-stream");
+    }
     [HttpPost("{id:guid}/move-out/settlement"), Authorize(Roles = Roles.Owner)]
     public Task<MoveOutView> Settle(Guid id, SettlementInput x, CancellationToken t) => service.SettleAsync(id, x, Key(), t);
     [HttpGet("{id:guid}/move-out/settlement-history"), Authorize(Roles = Roles.Owner + "," + Roles.Tenant)]

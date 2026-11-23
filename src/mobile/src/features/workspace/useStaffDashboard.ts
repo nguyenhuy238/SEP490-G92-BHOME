@@ -13,7 +13,8 @@ export interface MoveOutAssignment {
   roomId: string;
   roomNumber: string;
   locationName: string;
-  scheduledAt: string;
+  proposedDate?: string;
+  scheduledAt: string | null;
   status: string;
 }
 

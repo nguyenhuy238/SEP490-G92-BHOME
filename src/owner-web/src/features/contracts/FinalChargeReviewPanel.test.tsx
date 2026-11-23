@@ -37,7 +37,9 @@ it('requires source review and a reason and preserves the operation key for a re
     target: { value: 'Checked signed terms, final readings and damage report' },
   });
   fireEvent.click(
-    screen.getByLabelText('Tôi đã đối chiếu biên bản và xác nhận danh sách khoản thu đầy đủ'),
+    screen.getByLabelText(
+      'Tôi đã đối chiếu kết quả kiểm tra và xác nhận danh sách khoản thu đầy đủ',
+    ),
   );
   fireEvent.click(button);
   await confirmPendingAction();
@@ -58,7 +60,9 @@ it('does not accept an incomplete set of mandatory utility charges', async () =>
   mount(['final_utility_charge_review_required:Water']);
   await screen.findByText('Cần ghi nhận khoản chốt điện/nước, kể cả khi đã tính đủ trên hóa đơn.');
   expect(
-    screen.getByLabelText('Tôi đã đối chiếu biên bản và xác nhận danh sách khoản thu đầy đủ'),
+    screen.getByLabelText(
+      'Tôi đã đối chiếu kết quả kiểm tra và xác nhận danh sách khoản thu đầy đủ',
+    ),
   ).toBeDisabled();
   expect(screen.getByRole('button', { name: 'Xác nhận đủ khoản thu' })).toBeDisabled();
 });

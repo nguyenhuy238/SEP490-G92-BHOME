@@ -247,7 +247,6 @@ export function HoldingContractFlow({
           action={action}
           contract={c}
           keys={keys}
-          evidenceIds={[]}
           onCancel={() => setOperation('')}
           onSuccess={() => {
             setOperation('');

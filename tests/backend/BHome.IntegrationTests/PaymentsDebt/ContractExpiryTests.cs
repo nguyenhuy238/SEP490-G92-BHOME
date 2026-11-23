@@ -90,7 +90,7 @@ public sealed partial class PaymentLedgerTests
             Assert.Null(expiryMoveOut.ApprovedByUserId); // Trigger is system-origin, not signed Owner consent.
             Assert.Null(expiryMoveOut.InspectionStaffId);
             Assert.Null(expiryMoveOut.InspectionScheduledAt);
-            Assert.Equal("inspection_staff_assignment_required", expiryMoveOut.PendingReason);
+            Assert.Equal("inspection_and_financial_dependencies", expiryMoveOut.PendingReason);
             Assert.Equal(1, await db.Set<ContractMoveOutHistory>().CountAsync(h =>
                 h.ContractId == expired && h.Action == "ExpiryInspectionOpenedBySystem"));
             Assert.False(await db.Set<ContractMoveOut>().AnyAsync(m => m.ContractId == future));

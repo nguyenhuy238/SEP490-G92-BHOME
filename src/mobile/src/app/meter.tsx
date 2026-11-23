@@ -387,7 +387,9 @@ export function MeterTaskScreen({
             )}
           </Box>
         ))}
-      {saved ? (
+      {saved && embedded ? (
+        <Text variant="titleMedium">Đã chốt: {formatMeterReading(saved.confirmedValue, unit)}</Text>
+      ) : saved ? (
         <Box style={{ padding: 14, gap: 10 }}>
           <Pill tone="green">Đã lưu chỉ số</Pill>
           {isInitial && <Pill tone="blue">Đã lưu chỉ số ban đầu</Pill>}

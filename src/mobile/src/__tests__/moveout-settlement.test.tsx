@@ -1,24 +1,61 @@
 // @vitest-environment jsdom
 import React from 'react';
 import { afterEach, expect, it, vi } from 'vitest';
-import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { cleanup, render, screen, waitFor } from '@testing-library/react';
 import {
   contractClient,
   type ContractRequest,
   type MoveOut,
   type SettlementSummary,
 } from '../../../../packages/client-core/src/contracts';
+vi.mock('react-native', () => ({
+  View: ({ children }: { children: React.ReactNode }) => <div>{children}</div>,
+}));
+vi.mock('../theme/theme', () => ({
+  colors: {
+    navy: '#001637',
+    blue: '#1052cf',
+    muted: '#64748b',
+    border: '#e2e8f0',
+    green: '#168565',
+    amber: '#a86108',
+  },
+}));
 vi.mock('react-native-paper', () => ({
   Text: ({ children }: { children: React.ReactNode }) => <div>{children}</div>,
+  Icon: () => null,
+  TouchableRipple: ({
+    children,
+    accessibilityLabel,
+    onPress,
+  }: {
+    children: React.ReactNode;
+    accessibilityLabel?: string;
+    onPress: () => void;
+  }) => (
+    <button aria-label={accessibilityLabel} onClick={onPress}>
+      {children}
+    </button>
+  ),
   Checkbox: {
     Item: ({ label, status, onPress }: { label: string; status: string; onPress: () => void }) => (
       <input aria-label={label} type="checkbox" checked={status === 'checked'} onChange={onPress} />
     ),
   },
 }));
+vi.mock('../features/contracts/TenantMoveOutInspectionSummary', () => ({
+  TenantMoveOutInspectionSummary: ({ inspection }: { inspection: { version: number } }) => (
+    <div>Kết quả kiểm tra lần {inspection.version}</div>
+  ),
+}));
+vi.mock('../features/contracts/TenantMoveOutProposalPanel', () => ({
+  TenantMoveOutProposalPanel: () => <div>Owner chưa gửi đề xuất quyết toán cho hợp đồng này.</div>,
+}));
 vi.mock('../components/WorkspaceKit', () => ({
   Box: ({ children }: { children: React.ReactNode }) => <section>{children}</section>,
-  Heading: ({ children }: { children: React.ReactNode }) => <h2>{children}</h2>,
+  Heading: ({ children, title }: { children?: React.ReactNode; title?: string }) => (
+    <h2>{title ?? children}</h2>
+  ),
   Action: ({
     children,
     onPress,
@@ -52,8 +89,8 @@ vi.mock('../lib/SessionProvider', () => ({
   useSession: () => ({ session: { roles: ['Owner'] } }),
 }));
 afterEach(cleanup);
-it('Tenant confirms the observed inspection version through the UI without approving compensation', async () => {
-  let version = 4;
+it('Tenant reads inspection results without any MoveOut report, signing or consent action', async () => {
+  const version = 4;
   const observed = {
     date: '2026-11-16',
     roomCondition: 'Đã kiểm tra',
@@ -78,9 +115,17 @@ it('Tenant confirms the observed inspection version through the UI without appro
               ownerDecision: null,
             },
           ]
-        : path.endsWith('/settlement-summary')
-          ? data
-          : []) as T,
+        : path.endsWith('/receivables/proposal')
+          ? {
+              contractId: 'tenant-contract',
+              reference: 'r1',
+              items: [],
+              latestProposal: null,
+              status: 'None',
+            }
+          : path.endsWith('/settlement-summary')
+            ? data
+            : []) as T,
   );
   const api = contractClient(
     <T,>(path: string, init?: RequestInit) => request(path, init) as Promise<T>,
@@ -91,47 +136,20 @@ it('Tenant confirms the observed inspection version through the UI without appro
       id="tenant-contract"
       role="Tenant"
       moveOut={{ status: 'Inspected' } as MoveOut}
-      evidenceIds={[]}
       onChanged={vi.fn()}
     />,
   );
-  const confirm = await screen.findByRole('button', { name: 'Xác nhận hiện trạng trả phòng' });
-  expect((confirm as HTMLButtonElement).disabled).toBe(true);
-  fireEvent.change(screen.getByLabelText('Nội dung phản hồi biên bản trả phòng'), {
-    target: { value: 'Tôi xác nhận hiện trạng thực tế' },
-  });
-  fireEvent.click(screen.getByLabelText('Tôi đã xem biên bản trả phòng phiên bản 4'));
-  version = 5;
-  fireEvent.click(screen.getByRole('button', { name: 'Tải lại biên bản & quyết toán' }));
-  const currentConsent = await screen.findByLabelText('Tôi đã xem biên bản trả phòng phiên bản 5');
-  expect((currentConsent as HTMLInputElement).checked).toBe(false);
+  expect(await screen.findByText('Kết quả kiểm tra lần 4')).toBeTruthy();
+  expect(screen.queryByText(/biên bản/i)).toBeNull();
+  expect(screen.queryByRole('button', { name: 'Xác nhận hiện trạng trả phòng' })).toBeNull();
+  expect(screen.queryByLabelText(/Tôi đã xem/)).toBeNull();
+  expect(await screen.findByText(/Owner chưa gửi đề xuất quyết toán/)).toBeTruthy();
+  // The proposal's own focused tests cover its GET and POST interactions.
+  expect(screen.queryByRole('button', { name: 'Cập nhật kết quả' })).toBeNull();
   expect(
-    (screen.getByRole('button', { name: 'Xác nhận hiện trạng trả phòng' }) as HTMLButtonElement)
-      .disabled,
-  ).toBe(true);
-  expect(
-    (screen.getByLabelText('Nội dung phản hồi biên bản trả phòng') as HTMLInputElement).value,
-  ).toBe('');
-  fireEvent.change(screen.getByLabelText('Nội dung phản hồi biên bản trả phòng'), {
-    target: { value: 'Tôi xác nhận hiện trạng thực tế' },
-  });
-  fireEvent.click(currentConsent);
-  fireEvent.click(screen.getByRole('button', { name: 'Xác nhận hiện trạng trả phòng' }));
-  await waitFor(() =>
-    expect(
-      request.mock.calls.some(
-        ([path, init]) => path.endsWith('/move-out/tenant-feedback') && init?.method === 'POST',
-      ),
-    ).toBe(true),
-  );
-  const call = request.mock.calls.find(
-    ([path, init]) => path.endsWith('/move-out/tenant-feedback') && init?.method === 'POST',
-  )!;
-  expect(JSON.parse(call[1]!.body as string)).toEqual({
-    version: 5,
-    confirmed: true,
-    reason: 'Tôi xác nhận hiện trạng thực tế',
-  });
+    screen.queryByRole('button', { name: 'Xem tình trạng tiền cọc và quyết toán' }),
+  ).toBeNull();
+  expect(request.mock.calls.every(([, init]) => !init?.method || init.method === 'GET')).toBe(true);
 });
 const id = '00000000-0000-0000-0000-000000000001';
 const data: SettlementSummary = {
@@ -187,17 +205,19 @@ function setup(summary = data, fail = false) {
         id={id}
         role={role}
         moveOut={{ status: 'PendingSettlement', version: 4 } as MoveOut}
-        evidenceIds={[]}
         onChanged={vi.fn()}
       />
     ),
   };
 }
-it('Tenant reads server deposit reservation without Owner refund/approval actions or a false completion', async () => {
+it('Tenant does not show the separate deposit card or financial actions', async () => {
   const { request, panel } = setup();
   render(panel('Tenant'));
-  expect(await screen.findByText(/Cọc giữ chỗ hoàn: 400.000/)).toBeTruthy();
-  expect(screen.getByText(/Cọc đang được đối chiếu hoặc chờ giao dịch hoàn/)).toBeTruthy();
+  await waitFor(() => expect(request.mock.calls.length).toBeGreaterThan(1));
+  expect(
+    screen.queryByRole('button', { name: 'Xem tình trạng tiền cọc và quyết toán' }),
+  ).toBeNull();
+  expect(screen.queryByText(/Cọc giữ chỗ hoàn:/)).toBeNull();
   expect(screen.queryByText('Lưu xem xét quyết toán')).toBeNull();
   expect(screen.queryByText('Xác nhận kiểm tra')).toBeNull();
   expect(screen.queryByText(/đủ điều kiện xem xét hoàn tất/)).toBeNull();
@@ -217,7 +237,7 @@ it('Owner can review settlement while complex financial execution stays on Owner
   expect(screen.getByLabelText('Căn cứ quyết định')).toBeTruthy();
   expect(request.mock.calls.every(([, init]) => !init?.method || init.method === 'GET')).toBe(true);
 });
-it('shows verified manual return only from the server and retains unknown amounts as unknown', async () => {
+it('Tenant hides redundant deposit status even when server confirms a manual refund', async () => {
   const { panel } = setup({
     ...data,
     transferVerificationStatus: 'VerifiedManual',
@@ -230,9 +250,9 @@ it('shows verified manual return only from the server and retains unknown amount
     },
   });
   render(panel('Tenant'));
-  expect(await screen.findByText(/Đã hoàn cọc: 400.000/)).toBeTruthy();
-  expect(screen.getByText(/Cọc khả dụng: Chờ xác minh/)).toBeTruthy();
-  expect(screen.getByText(/Hoàn cọc đã được Owner xác minh thủ công/)).toBeTruthy();
+  await waitFor(() => expect(screen.queryByText(/Đang tải kết quả trả phòng/)).toBeNull());
+  expect(screen.queryByText(/Đã hoàn cọc: 400.000/)).toBeNull();
+  expect(screen.queryByText(/Cọc khả dụng:/)).toBeNull();
 });
 it('Staff does not request or display financial settlement data', async () => {
   const { request, panel } = setup();
@@ -241,7 +261,7 @@ it('Staff does not request or display financial settlement data', async () => {
   expect(request.mock.calls.some(([path]) => path.endsWith('/settlement-summary'))).toBe(false);
   expect(screen.queryByText(/Cọc giữ chỗ hoàn:/)).toBeNull();
 });
-it('Staff inspection consent remains separate from Owner settlement and resets when observed data changes', async () => {
+it('Staff cannot create a duplicate inspection report or bypass the started 4-step task', async () => {
   const reading = {
     id: 'reading',
     meterCode: 'Synthetic',
@@ -288,25 +308,13 @@ it('Staff inspection consent remains separate from Owner settlement and resets w
       moveOut={
         { status: 'Approved', version: 3, inspectionScheduledAt: '2026-11-06T00:00:00Z' } as MoveOut
       }
-      evidenceIds={['new-evidence']}
       onChanged={vi.fn()}
     />,
   );
-  const confirmation = await screen.findByLabelText(
-    'Tôi xác nhận hiện trạng và chỉ số đã đối chiếu thực tế',
-  );
-  fireEvent.click(screen.getByLabelText('Ảnh hiện trạng 1'));
-  fireEvent.click(confirmation);
-  expect(
-    (screen.getByRole('button', { name: 'Lưu biên bản đối chiếu' }) as HTMLButtonElement).disabled,
-  ).toBe(false);
-  fireEvent.change(screen.getByLabelText('Hiện trạng phòng khi trả'), {
-    target: { value: 'Changed condition' },
-  });
-  expect((confirmation as HTMLInputElement).checked).toBe(false);
-  expect(
-    (screen.getByRole('button', { name: 'Lưu biên bản đối chiếu' }) as HTMLButtonElement).disabled,
-  ).toBe(true);
+  expect(await screen.findByText('Kết quả kiểm tra trả phòng')).toBeTruthy();
+  expect(screen.queryByText('Lập biên bản kiểm tra cuối kỳ')).toBeNull();
+  expect(screen.queryByRole('button', { name: /Lưu biên bản đối chiếu/ })).toBeNull();
+  expect(request.mock.calls.every(([, init]) => !init?.method || init.method === 'GET')).toBe(true);
   expect(request.mock.calls.some(([path]) => path.endsWith('/settlement-summary'))).toBe(false);
 });
 it('denied lookups show an error without displaying a previous Tenant balance', async () => {

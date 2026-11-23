@@ -171,7 +171,8 @@ beforeEach(() => {
       contractId: 'contract-8',
       roomNumber: 'CT208',
       locationName: 'BHOME TEST',
-      scheduledAt: '2026-11-07T03:00:00Z',
+      scheduledAt: null,
+      proposedDate: '2026-11-23',
       status: 'Approved',
     },
   ]);
@@ -327,10 +328,11 @@ it('opens the selected detail without exposing the removed creation action', asy
   expect(screen.queryByText('Tạo mới')).toBeNull();
   expect(state.create).not.toHaveBeenCalled();
 });
-it('keeps inspection details collapsed and opens the existing assigned contract when expanded', async () => {
+it('shows an instantly opened Location move-out task with no scheduled time', async () => {
   await openList();
   expect(screen.queryByRole('button', { name: 'Mở kiểm tra phòng CT208' })).toBeNull();
-  fireEvent.click(screen.getByRole('button', { name: 'Lịch kiểm tra trả phòng, 1 lịch' }));
+  fireEvent.click(screen.getByRole('button', { name: 'Nhiệm vụ trả phòng, 1 nhiệm vụ' }));
+  expect(screen.getByText('Ngày trả dự kiến: 23/11/2026')).toBeTruthy();
   fireEvent.click(screen.getByRole('button', { name: 'Mở kiểm tra phòng CT208' }));
   expect(state.inspect).toHaveBeenCalledWith('contract-8');
 });
@@ -356,8 +358,8 @@ it('does not turn a failed request into an empty result and retries through the 
 it('keeps contracts usable when only the inspection schedule fails', async () => {
   state.schedules.mockRejectedValue(Error('offline'));
   await openList();
-  fireEvent.click(screen.getByRole('button', { name: 'Lịch kiểm tra trả phòng, chưa tải được' }));
-  expect(screen.getByRole('button', { name: 'Thử lại lịch kiểm tra' })).toBeTruthy();
+  fireEvent.click(screen.getByRole('button', { name: 'Nhiệm vụ trả phòng, chưa tải được' }));
+  expect(screen.getByRole('button', { name: 'Thử lại nhiệm vụ trả phòng' })).toBeTruthy();
   expect(screen.getAllByTestId('staff-contract-card')).toHaveLength(5);
 });
 it('clamps the page after refreshing a smaller backend result', async () => {

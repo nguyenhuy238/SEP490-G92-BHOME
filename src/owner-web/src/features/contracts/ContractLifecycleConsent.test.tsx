@@ -46,7 +46,8 @@ vi.mock('../../../../../packages/client-core/src/useContractLifecycle', async (o
   };
 });
 
-it('requires a new Owner Tenant-exception consent when the inspection version changes', async () => {
+it('allows Owner to verify the current inspection without Tenant sign-off or a PDF', async () => {
+  state.version = 1;
   const api = {
     mutate: vi.fn().mockResolvedValue({}),
     inspectionStaff: vi.fn().mockResolvedValue([]),
@@ -71,19 +72,12 @@ it('requires a new Owner Tenant-exception consent when the inspection version ch
   fireEvent.change(screen.getByLabelText('Lý do / căn cứ của Owner'), {
     target: { value: 'Chỉ xác nhận hiện trạng' },
   });
-  fireEvent.change(screen.getByLabelText('Căn cứ xử lý ngoại lệ phản hồi Tenant'), {
-    target: { value: 'Tenant chưa phản hồi' },
-  });
-  const label = 'Owner xử lý ngoại lệ Tenant chưa phản hồi hoặc không đồng ý';
-  fireEvent.click(screen.getByRole('checkbox', { name: label }));
-  expect(screen.getByRole('button', { name: 'Xác nhận biên bản kiểm tra' })).toBeEnabled();
+  expect(screen.queryByLabelText('Căn cứ xử lý ngoại lệ phản hồi Tenant')).not.toBeInTheDocument();
+  expect(screen.getByRole('button', { name: 'Xác nhận kết quả kiểm tra' })).toBeEnabled();
   state.version = 2;
   rerender(view());
-  expect(screen.getByRole('checkbox', { name: label })).not.toBeChecked();
-  expect(screen.getByRole('button', { name: 'Xác nhận biên bản kiểm tra' })).toBeDisabled();
   expect(api.mutate).not.toHaveBeenCalled();
-  fireEvent.click(screen.getByRole('checkbox', { name: label }));
-  fireEvent.click(screen.getByRole('button', { name: 'Xác nhận biên bản kiểm tra' }));
+  fireEvent.click(screen.getByRole('button', { name: 'Xác nhận kết quả kiểm tra' }));
   fireEvent.click(await screen.findByRole('button', { name: 'Xác nhận thực hiện' }));
   await waitFor(() =>
     expect(api.mutate).toHaveBeenCalledWith(
@@ -94,8 +88,6 @@ it('requires a new Owner Tenant-exception consent when the inspection version ch
         confirmed: true,
         reason: 'Chỉ xác nhận hiện trạng',
         noAdditionalCharges: false,
-        tenantException: true,
-        tenantExceptionReason: 'Tenant chưa phản hồi',
       },
       expect.any(String),
     ),

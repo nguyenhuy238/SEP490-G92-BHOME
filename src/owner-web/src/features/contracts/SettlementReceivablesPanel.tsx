@@ -51,9 +51,11 @@ function assetHasDamage(
   // damage at move-in is not a new financial liability for this Tenant.
   return (
     !!asset.checked &&
-    !!prior &&
-    ((asset.missingQuantity ?? 0) > (prior.missingQuantity ?? 0) ||
-      (asset.damagedQuantity ?? 0) > (prior.damagedQuantity ?? 0) ||
+    prior?.handedOverQuantity != null &&
+    ((asset.missingQuantity != null && asset.missingQuantity > (prior.missingQuantity ?? 0)) ||
+      (asset.damagedQuantity != null &&
+        prior.damagedQuantity != null &&
+        asset.damagedQuantity > prior.damagedQuantity) ||
       (asset.handedOverQuantity != null &&
         prior.handedOverQuantity != null &&
         asset.handedOverQuantity < prior.handedOverQuantity))

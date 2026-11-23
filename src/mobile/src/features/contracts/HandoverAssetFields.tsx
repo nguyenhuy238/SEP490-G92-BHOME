@@ -16,6 +16,8 @@ export function HandoverAssetFields({
   compact = false,
   embedded = false,
   hideEvidenceChoices = false,
+  moveOutBaseline,
+  moveOut = false,
 }: {
   asset: HandoverAsset;
   values: Record<string, string>;
@@ -27,6 +29,9 @@ export function HandoverAssetFields({
   compact?: boolean;
   embedded?: boolean;
   hideEvidenceChoices?: boolean;
+  /** Move-out comparison uses only a verified Move-In asset, never today's inventory as history. */
+  moveOutBaseline?: HandoverAsset | null;
+  moveOut?: boolean;
 }) {
   const a = asset;
   const [expanded, setExpanded] = useState(embedded);
@@ -42,7 +47,9 @@ export function HandoverAssetFields({
           ? 'match'
           : 'difference'
         : '';
-  const expected = a.configuredQuantity ?? a.handedOverQuantity;
+  const expected = moveOut
+    ? (moveOutBaseline?.handedOverQuantity ?? null)
+    : (a.configuredQuantity ?? a.handedOverQuantity);
   const observed = values[`${a.id}.observedQuantity`];
   const condition = values[`asset-${a.id}`] ?? '';
   function setSimpleQuantities(mode: 'match' | 'difference', nextCondition = condition) {
@@ -72,13 +79,21 @@ export function HandoverAssetFields({
   return (
     <>
       <Text variant="titleSmall">
-        {a.name} · {a.unit ?? 'đơn vị'} · Yêu cầu / baseline:{' '}
-        {a.configuredQuantity ?? a.handedOverQuantity ?? 'chưa rõ'}
+        {a.name} · {a.unit ?? 'đơn vị'}
+        {!moveOut && ` · Yêu cầu / baseline: ${expected ?? 'chưa rõ'}`}
       </Text>
-      <Text>
-        Kiểm kê: {a.inventoryCondition || 'Chưa có'} ·{' '}
-        {a.ownerChecked ? 'Owner đã kiểm tra' : 'Chưa được Owner kiểm tra đủ'}
-      </Text>
+      {moveOut ? (
+        <Text variant="bodySmall">
+          Lúc bàn giao:{' '}
+          {expected == null ? 'Chưa có số lượng xác thực' : `${expected} ${a.unit ?? 'đơn vị'}`} ·
+          Tình trạng: {moveOutBaseline?.observedCondition?.trim() || 'Chưa có dữ liệu'}
+        </Text>
+      ) : (
+        <Text>
+          Kiểm kê: {a.inventoryCondition || 'Chưa có'} ·{' '}
+          {a.ownerChecked ? 'Owner đã kiểm tra' : 'Chưa được Owner kiểm tra đủ'}
+        </Text>
+      )}
       {!embedded && (
         <Action secondary disabled={disabled} onPress={() => setExpanded(!expanded)}>
           {expanded
@@ -98,13 +113,17 @@ export function HandoverAssetFields({
                 buttons={[
                   {
                     value: 'match',
-                    label: 'Đúng số lượng',
+                    label: moveOut ? 'Đủ như lúc bàn giao' : 'Đúng số lượng',
                     disabled: disabled || expected == null,
                   },
-                  { value: 'difference', label: 'Có chênh lệch', disabled },
+                  {
+                    value: 'difference',
+                    label: moveOut && expected == null ? 'Ghi thực tế' : 'Có chênh lệch',
+                    disabled,
+                  },
                 ]}
               />
-              <Text>Tình trạng quan sát</Text>
+              <Text>{moveOut ? 'Tình trạng lúc trả phòng' : 'Tình trạng quan sát'}</Text>
               <SegmentedButtons
                 value={condition}
                 onValueChange={(value) => {
@@ -148,7 +167,7 @@ export function HandoverAssetFields({
                 quantityFields.map(([key, label]) => (
                   <Input
                     key={key}
-                    label={`${a.name} · ${label}`}
+                    label={`${a.name} · ${moveOut && key === 'handedOverQuantity' ? 'Số lượng thu hồi' : label}`}
                     value={values[`${a.id}.${key}`] ?? ''}
                     onChange={(v) => set(`${a.id}.${key}`, v)}
                     disabled={disabled}
@@ -164,7 +183,8 @@ export function HandoverAssetFields({
                   ; hư hỏng được ghi riêng. Không tự quy trách nhiệm bồi thường.
                 </Text>
               )}
-              {(a.physicalAssets?.length ?? 0) > 1 &&
+              {!moveOut &&
+                (a.physicalAssets?.length ?? 0) > 1 &&
                 a.physicalAssets!.map((p, index) => (
                   <React.Fragment key={p.id}>
                     <Input
@@ -190,7 +210,7 @@ export function HandoverAssetFields({
                   </React.Fragment>
                 ))}
               <Input
-                label={`${a.name} · Ghi chú / lý do không bàn giao`}
+                label={`${a.name} · ${moveOut ? 'Ghi chú chênh lệch / tình trạng hiện tại' : 'Ghi chú / lý do không bàn giao'}`}
                 value={values[`${a.id}.notes`] ?? ''}
                 onChange={(v) => set(`${a.id}.notes`, v)}
                 disabled={disabled}

@@ -248,7 +248,7 @@ it('keeps financial review available after physical move-out completion', async 
       />
     </QueryClientProvider>,
   );
-  expect(await screen.findByText(/Đã hoàn tất bàn giao vật lý/)).toBeVisible();
+  expect(await screen.findByText(/Đã hoàn tất kiểm tra và trả phòng/)).toBeVisible();
   fireEvent.change(await screen.findByLabelText('Lý do / căn cứ của Owner'), {
     target: { value: 'Tiếp tục đối chiếu khoản nợ sau bàn giao' },
   });
@@ -383,7 +383,7 @@ it('shows all four structured Staff move-out modules and the exact failed room-c
   expect(screen.getByRole('button', { name: 'Xem ảnh chìa khóa trả phòng 1' })).toBeInTheDocument();
 });
 
-it('requires Owner to assign a Staff member and schedule before an expiry inspection reaches Mobile', async () => {
+it('explains that an approved move-out task reaches Location Staff without assigning a person or time', async () => {
   const { api } = setup();
   vi.spyOn(api, 'inspectionStaff').mockResolvedValue([{ id: 'staff-1', label: 'Nhân viên A' }]);
   render(
@@ -404,9 +404,12 @@ it('requires Owner to assign a Staff member and schedule before an expiry inspec
     </QueryClientProvider>,
   );
   expect(
-    await screen.findByText(/Owner cần chọn Staff phụ trách và lịch kiểm tra/),
+    await screen.findByText(/Nhiệm vụ kiểm tra trả phòng đã mở cho Staff thuộc cơ sở/),
   ).toBeInTheDocument();
-  const assign = screen.getByRole('button', { name: 'Lưu lịch & phân công' });
+  expect(
+    screen.getByText(/Chưa đặt lịch riêng; Staff tại cơ sở đã thấy nhiệm vụ/),
+  ).toBeInTheDocument();
+  const assign = screen.getByRole('button', { name: 'Lưu lịch & phân công tùy chọn' });
   expect(assign).toBeDisabled();
   fireEvent.change(screen.getByLabelText('Lịch kiểm tra (giờ Việt Nam)'), {
     target: { value: '2026-12-01T09:00' },

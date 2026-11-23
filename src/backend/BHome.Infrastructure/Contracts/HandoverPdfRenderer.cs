@@ -264,7 +264,11 @@ internal sealed class HandoverPdfRenderer : IHandoverDocumentRenderer, IHandover
     public Task<byte[]> RenderAsync(HandoverDocumentReport r, CancellationToken t)
     {
         t.ThrowIfCancellationRequested();
-        var title = r.Type switch { "MoveIn" => "BIÊN BẢN BÀN GIAO PHÒNG Ở", "MoveOut" => "BIÊN BẢN KIỂM TRA TRẢ PHÒNG", _ => "BIÊN BẢN BÀN GIAO THAY ĐỔI TÀI SẢN" };
+        // Archived Move-Out PDFs remain downloadable as stored objects, but
+        // no caller may create a new Move-Out PDF or implied signing document.
+        if (r.Type == "MoveOut")
+            throw ContractException.Conflict("move_out_pdf_not_supported");
+        var title = r.Type switch { "MoveIn" => "BIÊN BẢN BÀN GIAO PHÒNG Ở", _ => "BIÊN BẢN BÀN GIAO THAY ĐỔI TÀI SẢN" };
         using var output = new MemoryStream();
         using (var pdf = new PdfDocument(new PdfWriter(output)))
         using (var doc = new Document(pdf, PageSize.A4))

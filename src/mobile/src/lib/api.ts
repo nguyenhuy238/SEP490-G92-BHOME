@@ -239,13 +239,18 @@ export function errorMessage(error: unknown): string {
   );
 }
 // DOCX→PDF and PDF→PNG each have a 45-second server conversion deadline.
-// Ordinary requests keep their short timeout; mutations are never automatically replayed.
+// Final Move-Out inspection verifies private evidence files and can require
+// more time than an ordinary read. Mutations are never automatically replayed.
 function contractDocumentTimeout(path: string): number {
   return /^\/api\/v1\/contracts\/main-drafts\/[a-f0-9-]{36}\/(?:signing-review|documents(?:\/[a-f0-9-]{36}\/pages\/[1-9][0-9]*)?)$/i.test(
     path,
   )
     ? 60000
     : 15000;
+}
+function requestTimeout(path: string): number {
+  if (/^\/api\/v1\/contracts\/[a-f0-9-]{36}\/move-out\/inspection$/i.test(path)) return 60000;
+  return contractDocumentTimeout(path);
 }
 export class MobileApi {
   readonly queryCache = new QueryCache();
@@ -315,7 +320,7 @@ export class MobileApi {
             ? (response.blob() as Promise<T>)
             : (response.json() as Promise<T>);
         },
-        contractDocumentTimeout(path),
+        requestTimeout(path),
       );
     const send = async () => {
       try {

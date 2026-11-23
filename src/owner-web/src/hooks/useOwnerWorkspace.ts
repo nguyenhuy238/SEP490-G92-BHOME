@@ -83,7 +83,7 @@ export function ownerError(error: unknown) {
       compensation_deposit_insufficient:
         'Cọc còn lại không đủ toàn bộ mức bồi thường hoặc đã được sử dụng. Chưa thể chọn hoặc thực hiện khấu trừ.',
       compensation_move_out_required:
-        'Chỉ khấu trừ sau khi Owner duyệt trả phòng và xác nhận biên bản kiểm tra.',
+        'Chỉ khấu trừ sau khi Owner xem xét và xác nhận kết quả kiểm tra trả phòng.',
       compensation_collected_or_invoice_adjustment_required:
         'Quyết định đã phát hành hóa đơn hoặc đã khấu trừ. Quy trình sửa hoặc đảo khoản đã thu chưa được phê duyệt. Lịch sử giao dịch được giữ nguyên.',
       invalid_compensation_amount:

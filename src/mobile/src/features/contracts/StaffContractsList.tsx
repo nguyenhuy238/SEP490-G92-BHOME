@@ -39,7 +39,9 @@ import {
   type StaffContractListView,
 } from './staffContractList';
 
-type Schedule = Awaited<ReturnType<ContractClient['moveOutAssignments']>>[number];
+type Schedule = Awaited<ReturnType<ContractClient['moveOutAssignments']>>[number] & {
+  proposedDate?: string;
+};
 type Snapshot = {
   api: ContractClient;
   revision: number;
@@ -107,7 +109,7 @@ export function StaffContractsList({
         error: contracts.status === 'rejected' ? contractError(contracts.reason) : '',
         scheduleError:
           contracts.status === 'rejected'
-            ? 'Chưa xác định được cơ sở của lịch kiểm tra. Hãy tải lại danh sách hợp đồng.'
+            ? 'Chưa xác định được cơ sở của nhiệm vụ trả phòng. Hãy tải lại danh sách hợp đồng.'
             : schedules.status === 'rejected'
               ? contractError(schedules.reason)
               : '',
@@ -207,16 +209,16 @@ export function StaffContractsList({
       )}
       <TouchableRipple
         accessibilityRole="button"
-        accessibilityLabel={`Lịch kiểm tra trả phòng, ${loading || scheduleError ? 'chưa tải được' : schedules.length + ' lịch'}`}
+        accessibilityLabel={`Nhiệm vụ trả phòng, ${loading || scheduleError ? 'chưa tải được' : schedules.length + ' nhiệm vụ'}`}
         accessibilityState={{ expanded: scheduleOpen }}
         disabled={loading}
         onPress={() => setScheduleOpen((value) => !value)}
         style={styles.schedule}
       >
         <View style={styles.scheduleRow}>
-          <Icon source="calendar-check-outline" size={22} color={c.primary} />
+          <Icon source="clipboard-check-outline" size={22} color={c.primary} />
           <Text variant="labelLarge" style={ui.grow}>
-            Lịch kiểm tra trả phòng
+            Nhiệm vụ trả phòng
           </Text>
           <Pill tone="blue">{loading || scheduleError ? '—' : schedules.length}</Pill>
           <Icon source={scheduleOpen ? 'chevron-up' : 'chevron-right'} size={20} color={c.muted} />
@@ -227,11 +229,11 @@ export function StaffContractsList({
           {!!scheduleError && (
             <>
               <ContractNotice message={scheduleError} />
-              <Button onPress={refresh}>Thử lại lịch kiểm tra</Button>
+              <Button onPress={refresh}>Thử lại nhiệm vụ trả phòng</Button>
             </>
           )}
           {!scheduleError && !schedules.length && (
-            <Text style={ui.muted}>Chưa có lịch kiểm tra được giao.</Text>
+            <Text style={ui.muted}>Chưa có nhiệm vụ trả phòng tại cơ sở này.</Text>
           )}
           {schedules.map((schedule) => (
             <TouchableRipple
@@ -245,7 +247,11 @@ export function StaffContractsList({
                 <View style={ui.grow}>
                   <Text variant="titleSmall">Phòng {schedule.roomNumber}</Text>
                   <Text variant="bodySmall" style={ui.muted}>
-                    {formatInstant(schedule.scheduledAt)}
+                    {schedule.proposedDate
+                      ? `Ngày trả dự kiến: ${displayContractDate(schedule.proposedDate)}`
+                      : schedule.scheduledAt
+                        ? `Lịch kiểm tra: ${formatInstant(schedule.scheduledAt)}`
+                        : 'Nhiệm vụ đã mở'}
                   </Text>
                   <Text variant="bodySmall" style={ui.muted} numberOfLines={1}>
                     {schedule.locationName}

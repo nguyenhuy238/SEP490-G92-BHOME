@@ -269,6 +269,15 @@ export interface HandoverSnapshot {
     | null;
   accessItems?: { type: string; quantity: number; notes: string }[] | null;
   keyEvidenceIds?: string[] | null;
+  /** Item-specific private evidence for Move-Out observations (not used in signed Move-In). */
+  physicalItemEvidence?:
+    | {
+        assetId: string;
+        physicalAssetId: string;
+        notes: string | null;
+        evidenceIds: string[];
+      }[]
+    | null;
   inventoryToken?: string | null;
   inventoryState?: string | null;
   noAssetsConfirmed?: boolean;
@@ -848,10 +857,13 @@ export function contractClient(request: ContractRequest) {
       request<
         {
           contractId: string;
+          roomId: string;
           roomNumber: string;
           locationName: string;
-          scheduledAt: string;
+          proposedDate: string;
+          scheduledAt: string | null;
           status: string;
+          version: number;
         }[]
       >(`${root}/move-out-assignments`, { signal }),
     inspectionStaff: async (locationId: string, signal?: AbortSignal) => {
@@ -956,6 +968,19 @@ export function contractClient(request: ContractRequest) {
       request<Uint8Array>(root + '/' + id + '/handover/evidence/' + fileId, { signal }, 'bytes'),
     handoverMeterEvidence: (id: string, readingId: string, signal?: AbortSignal) =>
       request<Blob>(root + '/' + id + '/handover/meter-evidence/' + readingId, { signal }, 'blob'),
+    /** Final reading evidence is authorized against this contract, including Tenant access. */
+    moveOutMeterEvidence: (id: string, readingId: string, signal?: AbortSignal) =>
+      request<Blob>(
+        `${root}/${encodeURIComponent(id)}/move-out/meter-evidence/${encodeURIComponent(readingId)}`,
+        { signal },
+        'blob',
+      ),
+    moveOutMeterEvidenceBytes: (id: string, readingId: string, signal?: AbortSignal) =>
+      request<Uint8Array>(
+        `${root}/${encodeURIComponent(id)}/move-out/meter-evidence/${encodeURIComponent(readingId)}`,
+        { signal },
+        'bytes',
+      ),
     readingEvidence: (readingId: string, signal?: AbortSignal) =>
       request<Blob>(
         `/api/v1/capture/readings/${encodeURIComponent(readingId)}/evidence`,
@@ -1151,9 +1176,10 @@ export const labels: Record<string, string> = {
   ContractSigningFailed: 'Nhà cung cấp báo ký thất bại',
   ContractSigningReferenceRecovered: 'Khôi phục tham chiếu yêu cầu ký',
   ContractMoveOutRequested: 'Gửi yêu cầu trả phòng',
+  ContractOwnerMoveOutOpened: 'Owner mở nhiệm vụ trả phòng',
   ContractMoveOutApproved: 'Owner duyệt yêu cầu trả phòng',
   ContractInspectionScheduled: 'Đặt lịch kiểm tra trả phòng',
-  ContractMoveOutInspected: 'Lưu biên bản kiểm tra trả phòng',
+  ContractMoveOutInspected: 'Lưu kết quả kiểm tra trả phòng',
   ContractSettlementReviewed: 'Owner ghi nhận xem xét quyết toán',
   ContractTerminationCompleted: 'Hoàn tất chấm dứt hợp đồng',
   ContractInspectionEvidenceAdded: 'Tải ảnh kiểm tra trả phòng',
@@ -1164,7 +1190,7 @@ export const labels: Record<string, string> = {
   ContractHandoverEvidenceAdded: 'Tải ảnh nhận phòng',
   MoveInReport: 'Biên bản nhận phòng',
   AssetChangeReport: 'Biên bản thay đổi tài sản',
-  MoveOutReport: 'Biên bản trả phòng',
+  MoveOutReport: 'Tài liệu trả phòng lưu trữ (cũ)',
   NotChecked: 'Chưa kiểm kê',
   PartiallyChecked: 'Kiểm kê chưa đủ',
   Matched: 'Đã kiểm kê đủ',
@@ -1297,7 +1323,7 @@ export const labels: Record<string, string> = {
   confirmed_final_readings_required:
     'Cần chỉ số điện và nước chốt đã xác nhận, đúng hợp đồng và ngày kiểm tra.',
   move_out_not_ready_for_inspection:
-    'Cần duyệt yêu cầu, đặt lịch và đến ngày trả phòng trước khi lập biên bản.',
+    'Cần có yêu cầu trả phòng đã duyệt, đến ngày trả dự kiến và nhiệm vụ Staff đang thực hiện để lưu kết quả kiểm tra.',
   settlement_unresolved: 'Nghĩa vụ quyết toán chưa hoàn tất hoặc đã thay đổi.',
   deposit_deduction_review_changed:
     'Số liệu hoặc phiên bản quyết định đã đổi. Tải lại và xem xét trước khi duyệt.',
@@ -1309,7 +1335,7 @@ export const labels: Record<string, string> = {
   deposit_deduction_exceeds_available:
     'Tổng khấu trừ vượt cọc còn khả dụng. Cần xử lý phần nghĩa vụ còn thiếu.',
   invalid_deposit_deduction_item:
-    'Kiểm tra loại thiệt hại, số tiền nguyên và ảnh đúng biên bản/phạm vi.',
+    'Kiểm tra loại thiệt hại, số tiền nguyên và ảnh đúng hạng mục kiểm tra.',
   duplicate_deposit_deduction: 'Mỗi phòng hoặc tài sản chỉ được ghi một khoản trong quyết định.',
   deposit_deduction_idempotency_conflict:
     'Mã quyết định đã dùng với nội dung khác. Hãy tải lại để kiểm tra.',
@@ -1324,7 +1350,7 @@ export const labels: Record<string, string> = {
   settlement_idempotency_conflict:
     'Mã thao tác đã được dùng với nội dung khác. Kiểm tra kết quả trước khi tạo quyết định mới.',
   settlement_charge_not_ready:
-    'Cần biên bản đã được Owner duyệt và nhóm người thuê đủ điều kiện trước khi ghi nhận khoản phải thu.',
+    'Cần kết quả kiểm tra đã được xác minh và nhóm người thuê đủ điều kiện trước khi ghi nhận khoản phải thu.',
   settlement_evidence_integrity_failed:
     'Ảnh nguồn không còn khớp với bản đã duyệt. Cần đối chiếu lại trước khi ghi giảm nợ.',
   deposit_offset_not_available:
@@ -1333,11 +1359,11 @@ export const labels: Record<string, string> = {
     'Khoản đích hoặc số tiền cấn trừ không còn hợp lệ. Tải lại số dư nghĩa vụ.',
   payer_not_settlement_recipient:
     'Tài khoản người trả chưa thuộc nhóm người thuê của khoản phải thu. Kiểm tra lại người thực chuyển tiền.',
-  move_out_version_changed: 'Lịch / biên bản đã thay đổi. Tải lại trước khi thực hiện.',
+  move_out_version_changed: 'Lịch hoặc kết quả kiểm tra đã thay đổi. Tải lại trước khi thực hiện.',
   inspection_changed_or_reviewed:
-    'Biên bản đã thay đổi hoặc đã được xem xét. Tải lại phiên bản hiện tại.',
-  move_out_not_settled: 'Chưa thể đóng hợp đồng: kiểm tra quyết toán và ngày biên bản.',
-  move_out_handover_required: 'Cần biên bản đã kiểm tra và ngày bàn giao thực tế hợp lệ.',
+    'Kết quả kiểm tra đã thay đổi hoặc đã được xem xét. Tải lại phiên bản hiện tại.',
+  move_out_not_settled: 'Chưa thể đóng hợp đồng: kiểm tra quyết toán và ngày kết thúc thực tế.',
+  move_out_handover_required: 'Cần kết quả kiểm tra trả phòng và ngày kết thúc thực tế hợp lệ.',
   move_out_financial_close_confirmation_required:
     'Cần Owner xác nhận danh sách hạng mục, miễn thu, người nhận hoàn và lý do chốt quyết toán.',
   settlement_financial_close_not_ready:
@@ -1359,11 +1385,12 @@ export const labels: Record<string, string> = {
   settlement_deposit_allocation_incomplete:
     'Cọc khả dụng chưa được cấn trừ hết cho khoản bồi thường đủ điều kiện. Hãy tải lại số dư.',
   owner_confirmed_inspection_required:
-    'Owner cần duyệt biên bản kiểm tra và chỉ số chốt trước khi bàn giao.',
-  inspection_snapshot_invalid: 'Biên bản hoặc chỉ số chốt đã thay đổi; cần kiểm tra lại.',
+    'Owner cần xác minh kết quả kiểm tra và chỉ số chốt trước khi hoàn tất trả phòng.',
+  inspection_snapshot_invalid: 'Kết quả kiểm tra hoặc chỉ số chốt đã thay đổi; cần kiểm tra lại.',
   signer_already_requested: 'Đã có yêu cầu ký. Hãy kiểm tra trạng thái trước khi thử lại.',
   previous_signature_pending: 'Bên ký trước chưa hoàn tất. Hãy chờ xác minh.',
-  inspection_evidence_not_available: 'Ảnh không thuộc người lập biên bản hoặc đã được sử dụng.',
+  inspection_evidence_not_available:
+    'Ảnh không thuộc người ghi nhận kết quả kiểm tra hoặc đã được sử dụng.',
   inspection_upload_not_allowed: 'Chưa được tải ảnh hoặc đã đủ 5 ảnh.',
   invalid_contract_period_or_residents: 'Kiểm tra kỳ thuê, người đại diện và danh sách người ở.',
   contract_price_snapshot_missing:
@@ -1652,7 +1679,7 @@ export function contractActions(
         'Hủy bản gia hạn đang chờ; giữ nguyên hợp đồng gốc và lịch sử.',
       ),
     );
-  if (active && !m && tenant)
+  if (active && (!m || m.status === 'Rejected') && tenant)
     result.push(
       action(
         'termination-requests',
@@ -1661,10 +1688,17 @@ export function contractActions(
         'Owner cần duyệt yêu cầu. Gửi yêu cầu chưa kết thúc hợp đồng hoặc giải phóng phòng.',
       ),
     );
-  if (active && !m && owner && c.kind !== 'Holding')
-    result.push(action('expiry-move-out', 'Lập yêu cầu trả phòng khi hết hạn', proposedFields));
+  if (active && (!m || m.status === 'Rejected') && owner && c.kind !== 'Holding')
+    result.push(
+      action(
+        'expiry-move-out',
+        'Lập yêu cầu trả phòng',
+        proposedFields,
+        'Owner mở hồ sơ và giao công việc kiểm tra trả phòng cho Staff của cơ sở ngay khi xác nhận. Có thể chọn ngày trước hoặc sau ngày hết hạn hợp đồng. Chỉ hoàn tất bàn giao khi đã đủ điều kiện kiểm tra thực tế.',
+      ),
+    );
   if (owner && m?.status === 'Requested') {
-    result.push(action('move-out/approve', 'Chấp nhận yêu cầu'));
+    result.push(action('move-out/approve', 'Duyệt yêu cầu trả phòng'));
     result.push(
       action(
         'move-out/reject',
@@ -1680,24 +1714,10 @@ export function contractActions(
         { name: 'scheduledAt', label: 'Lịch kiểm tra (giờ Việt Nam)', type: 'schedule' },
       ]),
     );
-  if (staff && m?.status === 'Approved' && m.inspectionScheduledAt)
-    result.push(
-      action(
-        'move-out/inspection',
-        'Lưu biên bản trả phòng',
-        [
-          { name: 'electricityReadingId', label: 'Mã chỉ số điện chốt đã xác nhận' },
-          { name: 'waterReadingId', label: 'Mã chỉ số nước chốt đã xác nhận' },
-          {
-            name: 'notes',
-            label: 'Hiện trạng phòng, tài sản, chìa khóa',
-            type: 'multiline',
-            max: 4000,
-          },
-        ],
-        'Cần đến ngày trả phòng, đủ ảnh hiện trạng và chỉ số chốt đúng hợp đồng/ngày kiểm tra.',
-      ),
-    );
+  // Staff records move-out observations through its started /work-orders task:
+  // four independently persisted sections, private images, confirmed Final
+  // meter readings and explicit submission. Do not offer the obsolete generic
+  // contract form that bypasses the optimized checklist.
   if (owner && m && ['Inspected', 'PendingSettlement', 'Settled', 'Completed'].includes(m.status))
     result.push(
       action(
@@ -1726,7 +1746,7 @@ export function contractActions(
         'move-out/complete',
         'Hoàn tất trả phòng',
         [{ name: 'actualEndDate', label: 'Ngày kết thúc thực tế', type: 'date' }],
-        'Xác nhận hoàn tất bàn giao vật lý theo biên bản Owner đã duyệt. Nợ, cọc và hoàn tiền tiếp tục được theo dõi riêng. Ngày phải trùng ngày lập biên bản.',
+        'Hoàn tất trả phòng dựa trên kết quả kiểm tra thực tế đã xác minh. Nợ, cọc và hoàn tiền tiếp tục được theo dõi riêng. Ngày kết thúc phải trùng ngày kiểm tra.',
       ),
     );
   return result;
@@ -1749,7 +1769,6 @@ export function actionPayload(
   a: ContractAction,
   values: Record<string, string>,
   c: ContractView,
-  evidenceIds: string[] = [],
 ): Record<string, unknown> | undefined {
   if (a.operation === 'signing' && c.isDevelopmentDemo)
     return { certificateId: '00000000-0000-0000-0000-000000000000' };
@@ -1783,13 +1802,6 @@ export function actionPayload(
   if (a.operation === 'expiry-move-out') {
     if (String(body.proposedDate) < businessToday())
       throw new UserFeedbackError('Ngày trả phòng không được trong quá khứ.');
-    if (String(body.proposedDate) < c.endDate)
-      throw new UserFeedbackError('Trả phòng hết hạn cần ngày từ ngày hết hạn trở đi.');
-  }
-  if (a.operation === 'move-out/inspection') {
-    if (!evidenceIds.length || evidenceIds.length > 5)
-      throw new UserFeedbackError('Cần từ 1 đến 5 ảnh hiện trạng đã tải lên.');
-    body.evidenceIds = evidenceIds.map(guid);
   }
   return body;
 }

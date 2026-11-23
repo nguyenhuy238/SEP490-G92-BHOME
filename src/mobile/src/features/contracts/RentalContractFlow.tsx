@@ -466,7 +466,6 @@ export function RentalContractFlow({
               action={action}
               contract={contract}
               keys={keys}
-              evidenceIds={[]}
               onCancel={() => {
                 setSelected('');
               }}

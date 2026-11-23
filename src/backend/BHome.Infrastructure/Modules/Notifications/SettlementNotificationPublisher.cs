@@ -14,9 +14,9 @@ internal sealed partial class NotificationEventPublisher
         ["Approved"] = "Yêu cầu trả phòng đã được duyệt",
         ["Rejected"] = "Yêu cầu trả phòng đã bị từ chối",
         ["Scheduled"] = "Lịch kiểm tra trả phòng đã được cập nhật",
-        ["Inspected"] = "Biên bản trả phòng đã được gửi",
-        ["InspectionConfirmed"] = "Biên bản trả phòng đã được Owner xác nhận",
-        ["ReinspectionRequired"] = "Cần kiểm tra lại biên bản trả phòng",
+        ["Inspected"] = "Kết quả kiểm tra trả phòng đã được gửi",
+        ["InspectionConfirmed"] = "Owner đã xác nhận kết quả kiểm tra trả phòng",
+        ["ReinspectionRequired"] = "Cần kiểm tra lại hiện trạng trả phòng",
         ["PendingSettlement"] = "Quyết toán trả phòng còn chờ xử lý",
         ["Settled"] = "Owner đã xác nhận quyết toán trả phòng",
         ["Completed"] = "Hợp đồng đã hoàn tất trả phòng"

@@ -856,6 +856,51 @@ public sealed class ContractServiceTests
         await r.Service.ApproveTerminationAsync(c.Id, Guid.NewGuid(), default); Assert.Equal(MoveOutStatus.Approved, r.Moves.Single().Status);
     }
     [Theory]
+    [InlineData(0)]
+    [InlineData(30)]
+    [InlineData(45)]
+    public async Task OwnerCreatesApprovedMoveOutWithUnscheduledLocationWorkAtAnyLeaseDate(int daysFromToday)
+    {
+        var r = new Rig(); var c = await r.Ready(); c.Status = ContractStatus.Active;
+        var date = Today.AddDays(daysFromToday); var input = new TerminationInput(date, "Synthetic owner move-out");
+        var key = Guid.NewGuid();
+        var opened = await r.Service.RequestTerminationAsync(c.Id, input, key, true, default);
+        Assert.Equal("Approved", opened.Status);
+        Assert.Null(opened.InspectionScheduledAt);
+        Assert.Null(opened.InspectionStaffId);
+        Assert.Equal(MoveOutStatus.Approved, Assert.Single(r.Moves).Status);
+        Assert.Equal(c.OwnerSignerId, r.Moves.Single().ApprovedByUserId);
+        Assert.Equal(daysFromToday >= 30, r.Moves.Single().IsExpiry);
+        Assert.Equal(ContractStatus.Active, c.Status);
+        Assert.Equal(opened.Id, (await r.Service.RequestTerminationAsync(c.Id, input, key, true, default)).Id);
+        var duplicate = await Assert.ThrowsAsync<ContractException>(() => r.Service.RequestTerminationAsync(c.Id, input, Guid.NewGuid(), true, default));
+        Assert.Equal("move_out_already_requested", duplicate.Code);
+        Assert.Single(r.Moves);
+    }
+    [Fact]
+    public async Task OwnerCanReopenRejectedTenantRequestWithoutLosingImmediateStaffTask()
+    {
+        var r = new Rig(); var c = await r.Ready(); c.Status = ContractStatus.Active;
+        r.User.Role = Roles.Tenant; r.User.UserId = c.TenantUserId;
+        await r.Service.RequestTerminationAsync(c.Id, new(Today.AddDays(1), "Synthetic tenant request"), Guid.NewGuid(), false, default);
+        r.User.Role = Roles.Owner; r.User.UserId = c.OwnerSignerId;
+        await r.Service.RejectTerminationAsync(c.Id, new("Synthetic rejection"), Guid.NewGuid(), default);
+        var rejected = Assert.Single(r.Moves);
+        var rejectedVersion = rejected.Version;
+        Assert.Equal(MoveOutStatus.Rejected, rejected.Status);
+
+        var opened = await r.Service.RequestTerminationAsync(c.Id,
+            new(Today.AddDays(2), "Synthetic owner reopening"), Guid.NewGuid(), true, default);
+        Assert.Equal("Approved", opened.Status);
+        Assert.Equal(rejectedVersion + 1, rejected.Version);
+        Assert.Same(rejected, Assert.Single(r.Moves));
+        Assert.Equal(c.OwnerSignerId, rejected.ApprovedByUserId);
+        Assert.Null(rejected.InspectionStaffId);
+        Assert.Null(rejected.InspectionScheduledAt);
+        await r.Handovers.Received(1).EnsureMoveOutTaskAsync(c, rejected, c.OwnerSignerId,
+            Arg.Any<DateTimeOffset>(), Arg.Any<CancellationToken>());
+    }
+    [Theory]
     [InlineData(false)]
     [InlineData(true)]
     public async Task RejectedMoveOutCanBeResubmittedByTenantOrReplacedByOwnerExpiryWithoutLosingVersion(bool expiry)
@@ -878,11 +923,12 @@ public sealed class ContractServiceTests
 
         Assert.Single(r.Moves);
         Assert.Equal(move.Id, updated.Id);
-        Assert.Equal("Requested", updated.Status);
+        Assert.Equal(expiry ? "Approved" : "Requested", updated.Status);
         Assert.Equal(3, updated.Version);
         Assert.Equal("Revised request", move.Reason);
         Assert.Equal("inspection_and_financial_dependencies", move.PendingReason);
         Assert.Equal(expiry, move.IsExpiry);
+        Assert.Equal(expiry ? c.OwnerSignerId : null, move.ApprovedByUserId);
         Assert.Equal(ContractStatus.Active, c.Status);
         var error = await Assert.ThrowsAsync<ContractException>(() =>
             r.Service.RequestTerminationAsync(c.Id, new(date, "Duplicate request"), Guid.NewGuid(), expiry, default));

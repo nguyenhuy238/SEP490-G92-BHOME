@@ -127,10 +127,12 @@ public sealed partial class Compact24NotificationMvpTests
         Assert.Equal("Suppressed", await db.Database.SqlQuery<string>($"SELECT delivery_status AS \"Value\" FROM notifications WHERE id={oldDelivery}").SingleAsync());
     }
 
-    [CompactPostgresFact]
-    public async Task OwnerInvitationRejectsBlockedRecipientBeforeChangingGrantOrQueueAndAllowsApprovedRetry()
+    [CompactPostgresTheory]
+    [InlineData("Testing")]
+    [InlineData("Development")]
+    public async Task OwnerInvitationUsesEnvironmentPolicyBeforeChangingGrantOrQueue(string environment)
     {
-        var w = await Seed(); var probe = new SmtpProbe(); using var host = AuthenticationHost(probe);
+        var w = await Seed(); var probe = new SmtpProbe(); using var host = AuthenticationHost(probe, environment);
         using var owner = await Client(w.Owner, host);
         var email = $"blocked-{Guid.NewGuid():N}@example.invalid";
         var created = await owner.PostAsJsonAsync("/api/v1/staff", new BHome.Application.Operations.StaffCreate(email,
@@ -143,6 +145,13 @@ public sealed partial class Compact24NotificationMvpTests
         using var anonymous = host.CreateClient();
         Assert.Equal(HttpStatusCode.Unauthorized, (await anonymous.PostAsync(path, null)).StatusCode);
         var blocked = await owner.PostAsync(path, null);
+        if (environment == "Development")
+        {
+            blocked.EnsureSuccessStatusCode();
+            await SendEmail(host, await AuthenticationDelivery(host, staff.UserId));
+            Assert.Equal(email, Assert.Single(probe.Messages).Destination);
+            return;
+        }
         Assert.Equal(HttpStatusCode.ServiceUnavailable, blocked.StatusCode);
         Assert.Equal("email_recipient_not_allowed", System.Text.Json.JsonDocument.Parse(await blocked.Content.ReadAsStringAsync()).RootElement.GetProperty("code").GetString());
         Assert.Equal(before, await db.Database.SqlQuery<string>($"SELECT reset_token_hash AS \"Value\" FROM users WHERE id={staff.UserId}").SingleAsync());
@@ -154,7 +163,7 @@ public sealed partial class Compact24NotificationMvpTests
         Assert.Equal(email, Assert.Single(probe.Messages).Destination);
     }
 
-    private WebApplicationFactory<Program> AuthenticationHost(SmtpProbe probe) => EmailHost(probe).WithWebHostBuilder(b => b.ConfigureAppConfiguration((_, c) =>
+    private WebApplicationFactory<Program> AuthenticationHost(SmtpProbe probe, string environment = "Testing") => EmailHost(probe, environment).WithWebHostBuilder(b => b.ConfigureAppConfiguration((_, c) =>
         c.AddInMemoryCollection(new Dictionary<string, string?>
         {
             ["AuthenticationEmail:WebResetUrl"] = "https://owner.example.invalid/reset-password",
@@ -176,10 +185,12 @@ public sealed partial class Compact24NotificationMvpTests
         return await db.Database.SqlQuery<Guid>($"SELECT id AS \"Value\" FROM notifications WHERE record_kind='OUTBOX' AND event_data->>'protectedAuthenticationEmail' IS NOT NULL AND event_data->>'recipient'={user.ToString()} ORDER BY event_at DESC LIMIT 1").SingleAsync();
     }
 
-    [CompactPostgresFact]
-    public async Task AuthenticationResetByEmailIsGenericDeduplicatedEncryptedAndRevokesSessionsAfterOneUse()
+    [CompactPostgresTheory]
+    [InlineData("Testing")]
+    [InlineData("Development")]
+    public async Task AuthenticationResetByEmailIsGenericDeduplicatedEncryptedAndRevokesSessionsAfterOneUse(string environment)
     {
-        var w = await Seed(); var probe = new SmtpProbe(); using var host = AuthenticationHost(probe);
+        var w = await Seed(); var probe = new SmtpProbe(); using var host = AuthenticationHost(probe, environment);
         using var oldSession = await Client(w.Tenants[0], host); using var anonymous = host.CreateClient();
         var responses = await Task.WhenAll(Enumerable.Range(0, 3).Select(_ => anonymous.PostAsJsonAsync("/api/v1/auth/forgot-password", new { userName = w.Tenants[0].Email })));
         Assert.All(responses, r => Assert.Equal(HttpStatusCode.Accepted, r.StatusCode));
@@ -440,12 +451,14 @@ public sealed partial class Compact24NotificationMvpTests
         await SendEmail(host, delivery); Assert.Single(probe.Messages);
     }
 
-    [CompactPostgresFact]
-    public async Task AuthenticationTenantInvitationTokenAloneSetsPasswordAndPreservesTenantRole()
+    [CompactPostgresTheory]
+    [InlineData("Testing")]
+    [InlineData("Development")]
+    public async Task AuthenticationTenantInvitationTokenAloneSetsPasswordAndPreservesTenantRole(string environment)
     {
-        var w = await Seed(); var probe = new SmtpProbe(); using var host = AuthenticationHost(probe);
+        var w = await Seed(); var probe = new SmtpProbe(); using var host = AuthenticationHost(probe, environment);
         var email = "invited-" + Guid.NewGuid().ToString("N") + "@example.invalid";
-        host.Services.GetRequiredService<IOptions<EmailOptions>>().Value.AllowedRecipients = [email];
+        if (environment != "Development") host.Services.GetRequiredService<IOptions<EmailOptions>>().Value.AllowedRecipients = [email];
         await using var scope = host.Services.CreateAsyncScope();
         var db = scope.ServiceProvider.GetRequiredService<Compact24DbContext>();
         await db.Database.ExecuteSqlInterpolatedAsync($"UPDATE residents SET user_id=NULL,contact_email={email} WHERE id={w.Residents[0]}");

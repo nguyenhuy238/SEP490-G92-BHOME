@@ -1,5 +1,11 @@
 # Khắc phục gửi email tài khoản ngày 21/11/2026
 
+> Cập nhật 22/11/2026: các hướng dẫn cũ yêu cầu allowlist hoặc cờ mở riêng trong
+> Development dưới đây chỉ là lịch sử. Chính sách mới nằm trong source, cho phép
+> mọi địa chỉ hợp lệ mà không cần thay User Secrets. Xem [audit và nghiệm thu mới](BHOME_EMAIL_RECIPIENT_POLICY_2026-11-22.md)
+> và [hướng dẫn nhóm hiện hành](BHOME_TEAM_ENVIRONMENT_SETUP.md).
+> Staging/Production giữ nguyên chính sách; các số kiểm thử bên dưới thuộc phiên lịch sử.
+
 ## Phạm vi và truy vết
 
 Yêu cầu sửa gửi email trên localhost, Staging, Production → BF-02 / UC-08

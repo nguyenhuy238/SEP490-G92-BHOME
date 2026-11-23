@@ -57,12 +57,33 @@ public static class HandoverChecklist
     // Financial liability must be demonstrably new relative to the signed
     // move-in baseline. A pre-existing damaged or missing unit is not a new
     // tenant charge, and missing baselines cannot be silently inferred.
+    private static bool VerifiedGoodCondition(string? value) =>
+        value?.Trim() is "Tốt" or "Good" or "Passed";
+
+    private static bool NewPhysicalIssueAgainstBaseline(HandoverAsset observed, HandoverAsset baseline) =>
+        (observed.PhysicalObservations ?? []).Any(item =>
+        {
+            var opening = baseline.PhysicalObservations?.FirstOrDefault(p => p.Id == item.Id)?.Condition
+                ?? baseline.PhysicalAssets?.FirstOrDefault(p => p.Id == item.Id)?.Condition;
+            return VerifiedGoodCondition(opening) &&
+                !string.IsNullOrWhiteSpace(item.Condition) && !VerifiedGoodCondition(item.Condition);
+        });
+
     public static bool NewDamageAgainstBaseline(HandoverAsset observed, HandoverAsset? baseline) =>
-        observed.Checked && baseline is not null &&
-        (observed.MissingQuantity.GetValueOrDefault() > baseline.MissingQuantity.GetValueOrDefault() ||
-         observed.DamagedQuantity.GetValueOrDefault() > baseline.DamagedQuantity.GetValueOrDefault() ||
+        // Inspection without a confirmed opening quantity is still valid, but
+        // it cannot be proof of NEW tenant-caused loss/damage for settlement.
+        observed.Checked && baseline is { HandedOverQuantity: not null } &&
+        (observed.MissingQuantity is { } missing && missing > baseline.MissingQuantity.GetValueOrDefault() ||
+         observed.DamagedQuantity is { } damaged && baseline.DamagedQuantity is { } initiallyDamaged && damaged > initiallyDamaged ||
          observed.HandedOverQuantity is { } returned &&
-         baseline.HandedOverQuantity is { } given && returned < given);
+         baseline.HandedOverQuantity is { } given && returned < given ||
+         // Move-Out now records the observed condition without fabricating a
+         // good/worn/damaged quantity split. A change from verified "Good" to
+         // "Issue" must remain reviewable, including per-physical-item changes.
+         VerifiedGoodCondition(baseline.ObservedCondition) &&
+         !string.IsNullOrWhiteSpace(observed.ObservedCondition) &&
+         !VerifiedGoodCondition(observed.ObservedCondition) ||
+         NewPhysicalIssueAgainstBaseline(observed, baseline));
     public static bool RequiresOwner(HandoverSnapshot s) => !s.NoAssetsConfirmed && (s.Assets.Length == 0 ||
         s.Assets.Any(a => !a.OwnerChecked || Problem(a)));
 

@@ -3,8 +3,10 @@ import {
   isEmbeddedInitialMeterTask,
   isEmbeddedMoveInInventory,
   isMainMoveInWork,
+  isMainMoveOutWork,
   type OperationalTask,
 } from '../services/operationalTasks';
+import { activeWorkspaceTab } from '../features/workspace/navigation';
 
 const base: OperationalTask = {
   id: '10000000-0000-4000-8000-000000000000',
@@ -77,5 +79,14 @@ describe('Staff move-in work card grouping', () => {
     expect(isEmbeddedInitialMeterTask(routineMeter)).toBe(false);
     expect(isMainMoveInWork(ordinary)).toBe(false);
     expect(isEmbeddedMoveInInventory(otherInventory)).toBe(false);
+  });
+
+  it('identifies an assigned contract move-out as one Staff work card without confusing move-in', () => {
+    const moveOut = { ...base, title: 'Kiểm tra trả phòng TEST-101', status: 'Assigned' as const };
+    expect(isMainMoveOutWork(moveOut)).toBe(true);
+    expect(isMainMoveInWork(moveOut)).toBe(false);
+    expect(isMainMoveOutWork({ ...moveOut, target: null })).toBe(false);
+    expect(isMainMoveOutWork({ ...moveOut, kind: 'MeterReading' })).toBe(false);
+    expect(activeWorkspaceTab('Staff', 'move-out')).toBe('work-orders');
   });
 });

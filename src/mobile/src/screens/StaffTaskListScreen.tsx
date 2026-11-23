@@ -17,6 +17,7 @@ import {
   isEmbeddedInitialMeterTask,
   isEmbeddedMoveInInventory,
   isMainMoveInWork,
+  isMainMoveOutWork,
   taskStatusLabels,
   type OperationalTask,
   type TaskPage,
@@ -157,11 +158,16 @@ export function StaffTaskListScreen() {
           onPress={() =>
             isMainMoveInWork(task)
               ? go('move-in', { contractId: task.target!.contractId!, section: 'handover' })
-              : task.kind === 'MeterReading'
-                ? go('meter-reading')
-                : task.kind === 'MoveInInventory'
-                  ? go('move-in-inventory', { taskId: task.id })
-                  : go('task-detail', { taskId: task.id })
+              : isMainMoveOutWork(task)
+                ? go('move-out', {
+                    contractId: task.target!.contractId!,
+                    taskId: task.id,
+                  })
+                : task.kind === 'MeterReading'
+                  ? go('meter-reading')
+                  : task.kind === 'MoveInInventory'
+                    ? go('move-in-inventory', { taskId: task.id })
+                    : go('task-detail', { taskId: task.id })
           }
         />
       ))}

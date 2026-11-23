@@ -1,14 +1,9 @@
+import { View } from 'react-native';
+import { Text } from 'react-native-paper';
 import { ContractNotice } from './ContractNotice';
-import { useFeedbackState } from '../../lib/useFeedbackState';
-import React, { useRef, useState } from 'react';
-import { Checkbox, Text } from 'react-native-paper';
-import { randomUUID } from '../../lib/randomUUID';
 import {
-  contractError,
   displayContractDate,
   formatContractMoney,
-  mutationKeys,
-  required,
   type ContractClient,
   type MoveOut,
 } from '../../../../../packages/client-core/src/contracts';
@@ -20,109 +15,84 @@ import {
 import { formatInstant } from '../../../../../packages/client-core/src/localization';
 import { signedVnd } from '../../../../../packages/client-core/src/adjustments';
 import { Action, Box, Heading, ui } from '../../components/WorkspaceKit';
-import { ChoiceField, Input } from '../../components/WorkflowControls';
 import { OwnerWebNotice } from '../../components/OwnerWebNotice';
 import { OwnerMoveOutDecisions } from '../owner/OwnerMoveOutDecisions';
-import { HandoverAssetFields } from './HandoverAssetFields';
-import {
-  assetInspectionInput,
-  handoverAssetSummary,
-} from '../../../../../packages/client-core/src/handoverForm';
+import { handoverAssetSummary } from '../../../../../packages/client-core/src/handoverForm';
 import { ContractEvidence } from './ContractEvidence';
+import { TenantMoveOutProposalPanel } from './TenantMoveOutProposalPanel';
+import { TenantMoveOutInspectionSummary } from './TenantMoveOutInspectionSummary';
 
 export function ContractLifecyclePanel({
   api,
   id,
   role,
   moveOut,
-  evidenceIds,
   onChanged,
 }: {
   api: ContractClient;
   id: string;
   role: string;
   moveOut: MoveOut;
-  evidenceIds: string[];
   onChanged: () => void;
 }) {
   const q = useContractLifecycle(api, id, role);
-  const [values, setValues] = useState<Record<string, string>>({}),
-    [selected, setSelected] = useState<string[]>([]);
-  const [busy, setBusy] = useState(false),
-    [confirmedInspectionInput, setConfirmedInspectionInput] = useState<string | null>(null);
-  const [error, setError] = useFeedbackState('warning', false),
-    [notice, setNotice] = useFeedbackState('success');
-  const [keys] = useState(() => mutationKeys(randomUUID));
-  const lock = useRef(false);
-  const set = (name: string, value: string) => {
-    setValues((v) => ({ ...v, [name]: value }));
-    if (value === 'true')
-      setSelected((ids) => ids.filter((id) => !name.endsWith(`.evidence.${id}`)));
-  };
-  async function save(operation: string, body: Record<string, unknown>) {
-    if (role === 'Owner' || lock.current) return;
-    lock.current = true;
-    setBusy(true);
-    setError('');
-    setNotice('');
-    try {
-      await api.mutate(id, operation, body, keys.get(operation, body));
-      keys.confirmed(operation, body);
-      setConfirmedInspectionInput(null);
-      setSelected([]);
-      setValues({});
-      setNotice('Máy chủ đã lưu.');
-      q.reload();
-      onChanged();
-    } catch (e) {
-      setError(contractError(e));
-    } finally {
-      lock.current = false;
-      setBusy(false);
-    }
-  }
-  const baseline = q.preparation?.baseline?.snapshot,
-    summary = q.summary;
-  const inspectionGroups = q.preparation?.inspectionGroups ?? baseline?.assets ?? [];
-  const canInspect =
-    (!!baseline && !q.preparation?.legacyExceptionRequired) ||
-    !!q.preparation?.legacyExceptionReason;
-  const inspectionInput = JSON.stringify([
-    id,
-    moveOut.version,
-    q.preparation?.baselineContractId,
-    q.preparation?.baseline?.version,
-    q.preparation?.inventory?.stateToken,
-    q.preparation?.finalReadings,
-    values,
-    selected,
-  ]);
-  const inspectionChecked = canInspect && confirmedInspectionInput === inspectionInput;
+  const summary = q.summary;
   const money = (v: string | null) => (v === null ? 'Chờ xác minh' : formatContractMoney(v));
-  const usedEvidence = new Set(
-    q.inspections.flatMap((i) => [
-      ...i.observed.evidenceIds,
-      ...i.observed.assets.flatMap((a) => a.evidenceIds ?? []),
-    ]),
-  );
-  const unusedEvidence = evidenceIds.filter((e) => !usedEvidence.has(e));
-  const feedbackKey = `${id}:${q.inspections[0]?.id ?? ''}:${q.inspections[0]?.version ?? ''}`;
+
+  if (role === 'Tenant') {
+    const latest = q.inspections[0];
+    return (
+      <View style={{ gap: 14, minWidth: 0 }}>
+        {q.loading && (
+          <Box>
+            <Text style={ui.muted}>Đang tải kết quả trả phòng…</Text>
+          </Box>
+        )}
+        {!!q.error && (
+          <Box>
+            <Text style={ui.red}>{q.error}</Text>
+          </Box>
+        )}
+        {!!latest && (
+          <Box>
+            <TenantMoveOutInspectionSummary api={api} contractId={id} inspection={latest} />
+          </Box>
+        )}
+        {!q.loading && !q.error && !latest && (
+          <Box>
+            <Heading title="Kiểm tra trả phòng" />
+            <Text style={ui.muted}>Staff chưa gửi kết quả kiểm kê cho hợp đồng này.</Text>
+          </Box>
+        )}
+        {!!latest && (
+          <TenantMoveOutProposalPanel
+            api={api}
+            contractId={id}
+            onChanged={() => {
+              q.reload();
+              onChanged();
+            }}
+          />
+        )}
+      </View>
+    );
+  }
+
   return (
     <Box>
-      <Heading title="Đối chiếu trả phòng" />
-      <Action secondary disabled={busy || q.loading} onPress={q.reload}>
-        Tải lại biên bản & quyết toán
+      <Heading title="Kết quả kiểm tra trả phòng" />
+      <Action secondary disabled={q.loading} onPress={q.reload}>
+        Tải lại kết quả và quyết toán
       </Action>
       {q.loading && <Text>Đang đối chiếu dữ liệu…</Text>}
-      {!!(error || q.error) && <ContractNotice message={error || q.error} />}
-      {!!notice && <Text style={ui.blue}>{notice}</Text>}
+      {!!q.error && <ContractNotice message={q.error} />}
       {q.inspections.map((i) => (
         <Box key={i.id}>
           <Heading
-            title={`Biên bản phiên bản ${i.version}`}
+            title={`Kết quả kiểm tra lần ${i.version}`}
             detail={formatInstant(i.inspectedAt)}
           />
-          <Text>Bàn giao nhận phòng phiên bản {i.baselineVersion}</Text>
+          {i.baseline && <Text>Dữ liệu lúc bàn giao: phiên bản {i.baselineVersion}</Text>}
           <Text>
             Phòng: {i.baseline?.roomCondition ?? 'Chưa có dữ liệu ban đầu'} →{' '}
             {i.observed.roomCondition}
@@ -153,12 +123,6 @@ export function ContractLifecyclePanel({
               Đề xuất của Staff, chưa phải khoản phải thu: {i.observed.proposedCompensation}
             </Text>
           )}
-          <Text>
-            Tenant:{' '}
-            {i.observed.tenantFeedback
-              ? `${i.observed.tenantFeedback.confirmed ? 'Xác nhận hiện trạng' : 'Không đồng ý'} · ${i.observed.tenantFeedback.reason}`
-              : 'Chưa phản hồi'}
-          </Text>
           {i.observed.evidenceIds.map((evidenceId, n) => (
             <ContractEvidence
               key={evidenceId}
@@ -179,209 +143,25 @@ export function ContractLifecyclePanel({
               />
             )),
           )}
-          {role === 'Tenant' &&
-            !i.ownerDecision &&
-            !i.observed.tenantFeedback &&
-            i.id === q.inspections[0]?.id && (
-              <>
-                <Input
-                  label="Nội dung phản hồi biên bản trả phòng"
-                  value={values[`feedback.${feedbackKey}`] ?? ''}
-                  onChange={(v) => set(`feedback.${feedbackKey}`, v)}
-                  disabled={busy}
-                  multiline
-                />
-                <Checkbox.Item
-                  label={`Tôi đã xem biên bản trả phòng phiên bản ${i.version}`}
-                  status={
-                    values[`feedbackChecked.${feedbackKey}`] === 'true' ? 'checked' : 'unchecked'
-                  }
-                  onPress={() =>
-                    set(
-                      `feedbackChecked.${feedbackKey}`,
-                      values[`feedbackChecked.${feedbackKey}`] === 'true' ? 'false' : 'true',
-                    )
-                  }
-                  disabled={busy}
-                />
-                <Text>Xác nhận hiện trạng không đồng nghĩa chấp nhận số tiền bồi thường.</Text>
-                <Action
-                  disabled={busy || values[`feedbackChecked.${feedbackKey}`] !== 'true'}
-                  onPress={() =>
-                    void save('move-out/tenant-feedback', {
-                      version: i.version,
-                      confirmed: true,
-                      reason: values[`feedback.${feedbackKey}`] ?? '',
-                    })
-                  }
-                >
-                  Xác nhận hiện trạng trả phòng
-                </Action>
-                <Action
-                  secondary
-                  disabled={
-                    busy ||
-                    values[`feedbackChecked.${feedbackKey}`] !== 'true' ||
-                    !values[`feedback.${feedbackKey}`]?.trim()
-                  }
-                  onPress={() =>
-                    void save('move-out/tenant-feedback', {
-                      version: i.version,
-                      confirmed: false,
-                      reason: values[`feedback.${feedbackKey}`],
-                    })
-                  }
-                >
-                  Không đồng ý biên bản trả phòng
-                </Action>
-              </>
-            )}
+          {(i.observed.physicalItemEvidence ?? []).flatMap((item) =>
+            item.evidenceIds.map((evidenceId, n) => (
+              <ContractEvidence
+                key={`${item.assetId}-${item.physicalAssetId}-${evidenceId}`}
+                api={api}
+                contractId={id}
+                evidenceId={evidenceId}
+                label={`Tài sản ${item.physicalAssetId.slice(0, 8)} · Ảnh riêng ${n + 1}`}
+              />
+            )),
+          )}
           <Text>
-            {i.ownerDecision === 'Confirmed'
-              ? 'Owner đã xác nhận'
-              : i.ownerDecision === 'Reinspection'
-                ? 'Yêu cầu kiểm tra lại'
-                : 'Chờ Owner xác nhận'}{' '}
-            · {i.ownerReason}
+            {i.ownerDecision === 'Reinspection'
+              ? 'Staff đang kiểm tra lại'
+              : 'Staff đã gửi kết quả kiểm kê'}
+            {i.ownerReason ? ` · ${i.ownerReason}` : ''}
           </Text>
         </Box>
       ))}
-      {role === 'Staff' &&
-        moveOut.status === 'Approved' &&
-        moveOut.inspectionScheduledAt &&
-        !q.loading &&
-        !q.error && (
-          <>
-            <Heading title="Lập biên bản kiểm tra cuối kỳ" />
-            {!canInspect && (
-              <Text style={ui.red}>
-                Thiếu biên bản nhận phòng đã xác nhận. Cần Owner xử lý trước khi lập đối chiếu.
-              </Text>
-            )}
-            {canInspect && (
-              <>
-                <Text>
-                  Hiện trạng khi nhận:{' '}
-                  {baseline?.roomCondition ?? 'Không có baseline; Owner đã duyệt ngoại lệ'} · Chìa
-                  khóa: {baseline?.keysAndAccess ?? 'Chưa rõ'}
-                </Text>
-                {q.preparation?.otherTenantsRemain && (
-                  <Text>
-                    Phòng còn người thuê khác. Chỉ ghi nhận hiện trạng; giữ nguyên đồng hồ và tài
-                    sản dùng chung.
-                  </Text>
-                )}
-                {[
-                  ['roomCondition', 'Hiện trạng phòng khi trả'],
-                  ['keysAndAccess', 'Chìa khóa / quyền truy cập khi trả'],
-                  ['notes', 'Ghi chú kiểm tra'],
-                ].map(([name, label]) => (
-                  <Input
-                    key={name}
-                    label={label}
-                    value={values[name] ?? ''}
-                    onChange={(v) => set(name, v)}
-                    multiline
-                    disabled={busy}
-                  />
-                ))}
-                {inspectionGroups.map((a) => (
-                  <HandoverAssetFields
-                    key={a.id}
-                    asset={a}
-                    values={values}
-                    set={set}
-                    evidenceIds={unusedEvidence}
-                    disabled={busy}
-                    quantities={!!q.preparation?.inventory}
-                  />
-                ))}
-                <Input
-                  label="Đề xuất xử lý / bồi thường của Staff (chờ Owner quyết định)"
-                  value={values.proposedCompensation ?? ''}
-                  onChange={(v) => set('proposedCompensation', v)}
-                  disabled={busy}
-                  multiline
-                />
-                {[
-                  { name: 'electricityReadingId', type: 0, label: 'Chỉ số điện chốt đã xác nhận' },
-                  { name: 'waterReadingId', type: 1, label: 'Chỉ số nước chốt đã xác nhận' },
-                ].map((f) => (
-                  <ChoiceField
-                    key={f.name}
-                    label={f.label}
-                    value={values[f.name] ?? ''}
-                    options={(q.preparation?.finalReadings ?? [])
-                      .filter((r) => r.utilityType === f.type)
-                      .map((r) => ({
-                        id: r.id,
-                        label: `${r.meterCode} · ${r.value} · ${displayContractDate(r.date)}`,
-                      }))}
-                    onChange={(v) => set(f.name, v)}
-                    disabled={busy}
-                  />
-                ))}
-                <Text>
-                  Chọn 1–10 ảnh toàn cảnh đã tải lên cho biên bản này; ảnh riêng nhóm tài sản chọn ở
-                  từng nhóm:
-                </Text>
-                {unusedEvidence.map((e, n) => (
-                  <Checkbox.Item
-                    key={e}
-                    label={`Ảnh hiện trạng ${n + 1}`}
-                    status={selected.includes(e) ? 'checked' : 'unchecked'}
-                    disabled={
-                      busy ||
-                      inspectionGroups.some((a) => values[`${a.id}.evidence.${e}`] === 'true')
-                    }
-                    onPress={() =>
-                      setSelected((v) => (v.includes(e) ? v.filter((x) => x !== e) : [...v, e]))
-                    }
-                  />
-                ))}
-                <Checkbox.Item
-                  label="Tôi xác nhận hiện trạng và chỉ số đã đối chiếu thực tế"
-                  status={inspectionChecked ? 'checked' : 'unchecked'}
-                  onPress={() =>
-                    setConfirmedInspectionInput(inspectionChecked ? null : inspectionInput)
-                  }
-                />
-                <Action
-                  disabled={busy || !inspectionChecked || !selected.length || selected.length > 10}
-                  onPress={() => {
-                    try {
-                      const body = {
-                        electricityReadingId: required(values.electricityReadingId ?? '', 100),
-                        waterReadingId: required(values.waterReadingId ?? '', 100),
-                        roomCondition: required(values.roomCondition ?? '', 2000),
-                        keysAndAccess: required(values.keysAndAccess ?? '', 2000),
-                        notes: required(values.notes ?? '', 4000),
-                        assets: inspectionGroups.map((a) =>
-                          assetInspectionInput(
-                            a,
-                            values,
-                            unusedEvidence,
-                            !!q.preparation?.inventory,
-                            !q.preparation?.legacyExceptionRequired,
-                          ),
-                        ),
-                        inventoryToken: q.preparation?.inventory?.stateToken,
-                        proposedCompensation: values.proposedCompensation ?? '',
-                        evidenceIds: selected,
-                        expectedVersion: moveOut.version,
-                      };
-                      void save('move-out/inspection', body);
-                    } catch (e) {
-                      setError((e as Error).message);
-                    }
-                  }}
-                >
-                  Lưu biên bản đối chiếu
-                </Action>
-              </>
-            )}
-          </>
-        )}
       {summary && (
         <>
           <Heading title="Quyết toán từ máy chủ" />

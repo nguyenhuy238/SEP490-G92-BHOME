@@ -31,6 +31,49 @@ public sealed class HandoverBaselineTests
         Assert.True(HandoverChecklist.NewDamageAgainstBaseline(
             baseline with { HandedOverQuantity = 3 }, baseline));
     }
+    [Fact]
+    public void SimplifiedMoveOutConditionRemainsReviewableWithoutInventingDamageQuantities()
+    {
+        var baseline = new HandoverAsset(Group, "Synthetic chair", "Good", "Good",
+            HandedOverQuantity: 2, ObservedQuantity: 2, Checked: true);
+        var observed = baseline with
+        {
+            ObservedCondition = "Có vấn đề",
+            HandedOverQuantity = null,
+            ObservedQuantity = 2,
+            GoodQuantity = null,
+            WornQuantity = null,
+            DamagedQuantity = null,
+            MissingQuantity = 0
+        };
+        Assert.True(HandoverChecklist.NewDamageAgainstBaseline(observed, baseline));
+        Assert.False(HandoverChecklist.NewDamageAgainstBaseline(observed, null));
+        Assert.False(HandoverChecklist.NewDamageAgainstBaseline(observed,
+            baseline with { HandedOverQuantity = null }));
+        Assert.False(HandoverChecklist.NewDamageAgainstBaseline(observed,
+            baseline with { ObservedCondition = "Có vấn đề" }));
+        Assert.False(HandoverChecklist.NewDamageAgainstBaseline(observed with { Checked = false }, baseline));
+    }
+    [Fact]
+    public void PhysicalItemNewIssueIsReviewableWithoutChangingGroupStatus()
+    {
+        var physicalId = Guid.NewGuid();
+        var baseline = new HandoverAsset(Group, "Synthetic chairs", "Good", "Good",
+            HandedOverQuantity: 2, ObservedQuantity: 2, Checked: true,
+            PhysicalAssets: [new(physicalId, 1, 2, "Good", "Active")]);
+        var observed = baseline with
+        {
+            PhysicalObservations = [new(physicalId, 2, "Có vấn đề")],
+            HandedOverQuantity = null,
+            DamagedQuantity = null,
+            GoodQuantity = null
+        };
+        Assert.True(HandoverChecklist.NewDamageAgainstBaseline(observed, baseline));
+        Assert.False(HandoverChecklist.NewDamageAgainstBaseline(observed,
+            baseline with { PhysicalAssets = [new(physicalId, 1, 2, "Damaged", "Active")] }));
+        Assert.False(HandoverChecklist.NewDamageAgainstBaseline(observed,
+            baseline with { HandedOverQuantity = null }));
+    }
     private static AssetChangeView Change(string kind, int added, int withdrawn, Guid? old, Guid? next) => new(Guid.NewGuid(), 1, "Confirmed",
         new(Guid.NewGuid(), Guid.NewGuid(), kind, new(2026, 11, 16), "Synthetic approved operation", Guid.NewGuid(),
             [new(Group, old, next, added, withdrawn, "Tốt", [])], [Original().Assets[0] with { PhysicalAssets = [new(next ?? Old, 2, 4, "Tốt", "Active")] }],

@@ -117,7 +117,6 @@ function form(action: ContractAction, errors: Record<string, string[]>) {
       api={{ mutate, transport: vi.fn() } as unknown as ContractClient}
       action={action}
       contract={contract}
-      evidenceIds={[]}
       keys={mutationKeys(() => 'test-key')}
       onSuccess={vi.fn()}
     />,
