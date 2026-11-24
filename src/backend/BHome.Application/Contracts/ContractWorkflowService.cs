@@ -6,8 +6,8 @@ namespace BHome.Application.Contracts;
 public sealed partial class ContractService
 {
     private bool DemoEnabled => workflowMode?.SimulatedSigningEnabled == true;
-    private string? ConfiguredPaymentMode(Guid locationId) => paymentOptions?.Enabled == true &&
-        paymentOptions.ReceivingAccounts.Any(a => a.LocationId == locationId) &&
+    private string? ConfiguredPaymentMode(Guid locationId, Guid ownerId) => paymentOptions?.Enabled == true &&
+        paymentOptions.Bound(locationId, ownerId) &&
         (paymentOptions.Mode == "Live" || holdingTestScope?.Allows(locationId) == true || holdingTestScope?.AllowsExternalDatabase == true)
         ? paymentOptions.Mode : null;
     private IContractWorkflowRepository Workflow => workflowRepository ?? throw new ContractException(503, "contract_workflow_unavailable");
@@ -63,19 +63,43 @@ public sealed partial class ContractService
             if (!Intact(c)) throw ContractException.Conflict("signed_terms_changed");
             if (await Replay(key, "preview", id, t) is { } prior)
                 return DocumentView(await Workflow.FileAsync(id, prior, t) ?? throw ContractException.Missing());
-            if (c.DraftMetadata != "{}")
+            if (c.Kind == ContractKind.Main && c.DraftMetadata != "{}")
             {
                 var reviewed = (await Workflow.FilesAsync(id, ContractFileKind.Preview, t)).SingleOrDefault(f => f.SnapshotHash == c.SnapshotHash && f.TemplateId == "main-tenancy-docx-v1")
                     ?? throw ContractException.Conflict("signing_source_document_required");
                 await CopyVerifiedFile(reviewed, Stream.Null, t);
                 Remember(key, "preview", id, reviewed.Id); return DocumentView(reviewed);
             }
-            if (c.Kind == ContractKind.Main && signingDocuments is not null && await signingDocuments.ReadAsync(Document(c), t) is { } canonical)
+            if (c.Kind is ContractKind.Main or ContractKind.Holding && signingDocuments is not null &&
+                await signingDocuments.ReadAsync(Document(c), t) is { } canonical)
             {
                 var hash = FileHash(canonical);
                 var sourceFile = (await Workflow.FilesAsync(id, ContractFileKind.Preview, t)).FirstOrDefault(f => f.SnapshotHash == c.SnapshotHash &&
-                    f.TemplateId == "main-tenancy-docx-v1" && f.FileHash == hash) ?? throw ContractException.Conflict("signing_source_document_required");
-                Remember(key, "preview", id, sourceFile.Id); return DocumentView(sourceFile);
+                    f.FileHash == hash);
+                if (sourceFile is not null)
+                {
+                    Remember(key, "preview", id, sourceFile.Id); return DocumentView(sourceFile);
+                }
+                // Legacy Holding invitations may have the only copy of the reviewed PDF.
+                // Do not render a new preview from the snapshot once consent is tied to a file hash.
+                if (c.Kind == ContractKind.Main) throw ContractException.Conflict("signing_source_document_required");
+                var legacy = new ContractDocumentFile
+                {
+                    ContractId = id,
+                    Kind = ContractFileKind.Preview,
+                    SnapshotHash = c.SnapshotHash,
+                    FileHash = hash,
+                    ContentType = "application/pdf",
+                    Length = canonical.Length,
+                    RecordedByUserId = Actor,
+                    RecordedAt = clock.GetUtcNow()
+                };
+                legacy.ObjectKey = $"contracts/{id:N}/preview/{legacy.Id:N}.pdf";
+                await files.PutAsync(c.RoomId, legacy.ObjectKey, canonical, legacy.ContentType, t);
+                repository.Add(legacy);
+                Remember(key, "preview", id, legacy.Id);
+                Audit("ContractPreviewGenerated", id);
+                return DocumentView(legacy);
             }
             var template = await Renderer.ConfigurationAsync(t);
             await Renderer.ValidateAsync(Document(c), t);
@@ -140,7 +164,7 @@ public sealed partial class ContractService
     {
         using var buffer = new MemoryStream();
         await storage.CopyToAsync(file.ObjectKey, buffer, t);
-        if (buffer.Length != file.Length || FileHash(buffer.ToArray()) != file.FileHash)
+        if (buffer.Length != file.Length || FileHash(buffer) != file.FileHash)
             throw ContractException.Conflict("contract_document_integrity_failed");
         buffer.Position = 0; await buffer.CopyToAsync(output, t);
     }

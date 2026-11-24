@@ -89,19 +89,39 @@ public sealed partial class RoomInventoryReviewService : IHandoverInventory
         }, t);
     }
 
-    public async Task MarkForReviewAsync(Guid roomId, Guid contractId, int version, Guid actor, CancellationToken t)
+    public Task MarkForReviewAsync(Guid roomId, Guid contractId, int version, Guid actor, CancellationToken t) =>
+        MarkForReviewCoreAsync(roomId, contractId, version, actor, false, t);
+
+    public Task MarkForReviewAfterVerifiedSettlementAsync(Guid roomId, Guid contractId, int version, Guid actor, CancellationToken t) =>
+        MarkForReviewCoreAsync(roomId, contractId, version, actor, true, t);
+
+    private async Task MarkForReviewCoreAsync(Guid roomId, Guid contractId, int version, Guid actor, bool verifiedSettlement, CancellationToken t)
     {
-        var location = await RoomScope(roomId, false, t);
+        var location = verifiedSettlement
+            ? await Store.RoomLocationAsync(roomId, t) ?? throw new PropertyException(404, "resource_not_found")
+            : await RoomScope(roomId, false, t);
         var key = Key($"handover-inventory-discrepancy:{roomId:N}:{contractId:N}:{version}");
         if (await Store.GetAsync(key, "HandoverInventoryDiscrepancy", t) is null)
             await Store.SaveAsync(key, location, "HandoverInventoryDiscrepancy", "NeedsReview", new { roomId, contractId, version }, 0, actor, t);
     }
 
-    public async Task SynchronizeAsync(Guid roomId, Guid contractId, int version, HandoverSnapshot snapshot, Guid actor, CancellationToken t)
+    public Task SynchronizeAsync(Guid roomId, Guid contractId, int version, HandoverSnapshot snapshot, Guid actor, CancellationToken t) =>
+        SynchronizeCoreAsync(roomId, contractId, version, snapshot, actor, false, t);
+
+    public Task SynchronizeAfterVerifiedSettlementAsync(Guid roomId, Guid contractId, int version, HandoverSnapshot snapshot, Guid actor, CancellationToken t) =>
+        SynchronizeCoreAsync(roomId, contractId, version, snapshot, actor, true, t);
+
+    private async Task SynchronizeCoreAsync(Guid roomId, Guid contractId, int version, HandoverSnapshot snapshot,
+        Guid actor, bool verifiedSettlement, CancellationToken t)
     {
-        // Called only by the Owner review mutation, inside the existing Location/Room transaction.
-        Owner();
-        var current = await PrepareAsync(roomId, t);
+        // Caller either passed normal Owner authorization, or is the internal
+        // verified SePay completion path, which already checked the exact
+        // immutable Staff snapshot, Owner's priced consent and Tenant acceptance.
+        // In both cases the same inventory-token and per-asset validation applies.
+        if (!verifiedSettlement) Owner();
+        var current = verifiedSettlement
+            ? await PrepareForMoveInTaskAsync(roomId, t)
+            : await PrepareAsync(roomId, t);
         if (snapshot.InventoryToken is null || snapshot.InventoryToken != current.StateToken)
             throw ContractException.Conflict("handover_asset_inventory_changed");
         var seen = new HashSet<Guid>();

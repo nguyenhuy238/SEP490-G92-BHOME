@@ -125,7 +125,7 @@ internal sealed partial class CompactNotificationEvents(Compact24DbContext db, C
                         holding.Kind == ContractKind.Holding ? "HOLDING_OWNER_SIGNING_REQUIRED" : "MAIN_OWNER_SIGNING_REQUIRED", "Contract",
                         holding.Kind == ContractKind.Holding ? "Hợp đồng giữ chỗ cần ký" : "Hợp đồng thuê cần ký",
                         $"Bạn có hợp đồng {(holding.Kind == ContractKind.Holding ? "giữ chỗ" : "thuê")} phòng {holding.Room.RoomNumber} tại {holding.Room.Location.Name} đang chờ ký.",
-                        "Contract", holding.Id, t, channels: ["IN_APP"]);
+                        "Contract", holding.Id, t, channels: holding.Kind == ContractKind.Holding ? ["IN_APP", "EMAIL"] : ["IN_APP"]);
                 else if (holding is not null && !holding.IsDevelopmentDemo && holding.Status == ContractStatus.Active && holding.Room.Status == BHome.Domain.PropertyManagement.RoomStatus.OnHold)
                 {
                     count += await sql.Emit(holding.OwnerSignerId, "Owner", holding.Room.LocationId,

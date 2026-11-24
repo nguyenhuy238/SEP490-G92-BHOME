@@ -1,5 +1,6 @@
 using System.ComponentModel.DataAnnotations;
 using System.Reflection;
+using BHome.Application.Common;
 using BHome.Application.IdentityAccess;
 using BHome.Domain.IdentityAccess;
 
@@ -75,6 +76,8 @@ public sealed class OperationsService(IOperationsRepository repository, IOperati
     public async Task<StaffView> CreateStaffAsync(StaffCreate input, CancellationToken t)
     {
         Require(Permissions.StaffAccounts.Manage); StaffInputValidation.Validate(input, input.Employment, input.Phone);
+        RequireActiveNewEmployment(input.Employment);
+        ValidateSalaryType(input.Employment);
         return await repository.CreateStaffAsync(Actor, input with
         {
             Email = input.Email.Trim(),
@@ -87,6 +90,9 @@ public sealed class OperationsService(IOperationsRepository repository, IOperati
     public async Task<StaffView> UpdateStaffAsync(Guid id, StaffUpdate input, CancellationToken t)
     {
         Require(Permissions.StaffAccounts.Manage); StaffInputValidation.Validate(input, input.Employment, input.Phone);
+        var current = await repository.StaffAsync(id, t) ?? throw OperationsException.Missing();
+        if (current.Employment is null) RequireActiveNewEmployment(input.Employment);
+        ValidateSalaryType(input.Employment, current.Employment?.SalaryType);
         if (string.IsNullOrWhiteSpace(input.Reason)) throw OperationsException.Invalid("reason_required");
         Validate(input); Validate(input.Employment);
         ValidateEmployment(input.Employment);
@@ -95,7 +101,12 @@ public sealed class OperationsService(IOperationsRepository repository, IOperati
             Email = input.Email.Trim(),
             FullName = input.FullName.Trim(),
             Phone = Phone(input.Phone),
-            Employment = Normalize(input.Employment),
+            // Older employment rows may still carry this metadata. Preserve it on an
+            // ordinary edit without exposing it as a new Staff input field.
+            Employment = Normalize(input.Employment with
+            {
+                EmploymentType = Clean(input.Employment.EmploymentType) ?? current.Employment?.EmploymentType
+            }),
             Reason = input.Reason.Trim()
         }, Now, t);
     }
@@ -111,8 +122,11 @@ public sealed class OperationsService(IOperationsRepository repository, IOperati
         Require(Permissions.StaffAccounts.Manage); Validate(input);
         if (input.Employment is null) throw OperationsException.Invalid("invalid_employment");
         Validate(input.Employment);
-        ValidateEmployment(input.Employment);
         if (string.IsNullOrWhiteSpace(input.Reason)) throw OperationsException.Invalid("reason_required");
+        var current = await repository.StaffAsync(id, t) ?? throw OperationsException.Missing();
+        if (current.Employment is null) RequireActiveNewEmployment(input.Employment);
+        ValidateSalaryType(input.Employment);
+        ValidateEmployment(input.Employment);
         return await repository.CreateEmploymentPeriodAsync(Actor, id, input with
         {
             Employment = Normalize(input.Employment),
@@ -394,6 +408,24 @@ public sealed class OperationsService(IOperationsRepository repository, IOperati
     }
 
     private static string? Clean(string? value) => string.IsNullOrWhiteSpace(value) ? null : value.Trim();
+    private static void RequireActiveNewEmployment(EmploymentWrite input)
+    {
+        if (input.Status != "Active")
+            throw new InputValidationException(new Dictionary<string, string[]>
+            {
+                ["employment.status"] = ["Hợp đồng mới phải có trạng thái Đang làm việc."]
+            });
+    }
+    private static void ValidateSalaryType(EmploymentWrite input, string? preservedLegacyType = null)
+    {
+        var salaryType = Clean(input.SalaryType);
+        if (salaryType is not null && salaryType != "Monthly" &&
+            !string.Equals(salaryType, Clean(preservedLegacyType), StringComparison.Ordinal))
+            throw new InputValidationException(new Dictionary<string, string[]>
+            {
+                ["employment.salaryType"] = ["Chỉ hỗ trợ hình thức lương theo tháng."]
+            });
+    }
     private static string? Phone(string? value)
     {
         if (string.IsNullOrWhiteSpace(value)) return null;
@@ -402,13 +434,13 @@ public sealed class OperationsService(IOperationsRepository repository, IOperati
     private static EmploymentWrite Normalize(EmploymentWrite input) => input with
     {
         ContractNumber = Clean(input.ContractNumber),
-        EmploymentType = input.EmploymentType.Trim(),
+        EmploymentType = Clean(input.EmploymentType),
         SalaryType = Clean(input.SalaryType),
         Status = input.Status.Trim()
     };
     private static void ValidateEmployment(EmploymentWrite input)
     {
-        if (input.StartDate == default || input.EndDate < input.StartDate || string.IsNullOrWhiteSpace(input.EmploymentType) ||
+        if (input.StartDate == default || input.EndDate < input.StartDate ||
             input.Status == "Ended" && input.EndDate is null ||
             input.BaseRate is { } rate && decimal.Truncate(rate) != rate)
             throw OperationsException.Invalid("invalid_employment");

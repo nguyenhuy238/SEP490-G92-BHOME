@@ -49,6 +49,7 @@ function ReportForm() {
     inventoryItemId?: string;
     locationAssetInventoryItemId?: string;
     inventoryEvidenceIds?: string;
+    inventoryCondition?: string;
     commonArea?: string;
   }>();
   const fromInventory =
@@ -95,6 +96,7 @@ function ReportForm() {
     fromInventory && params.inventoryEvidenceIds ? 'Đang nạp ảnh từ mục kiểm kê…' : '',
   );
   const [pendingIncidentId, setPendingIncidentId] = useState('');
+  const inventoryLinkKey = useRef<{ incidentId: string; key: string } | null>(null);
   const [linking, setLinking] = useState(false);
   const [linkError, setLinkError] = useState('');
   const changedScope = useRef(false);
@@ -185,6 +187,11 @@ function ReportForm() {
     description.trim().length <= 8000;
   async function linkInventoryIncident(incidentId: string) {
     if (!api || !fromAnyInventory || linking) return;
+    const idempotencyKey =
+      inventoryLinkKey.current?.incidentId === incidentId
+        ? inventoryLinkKey.current.key
+        : randomUUID();
+    inventoryLinkKey.current = { incidentId, key: idempotencyKey };
     setLinking(true);
     setLinkError('');
     try {
@@ -202,24 +209,49 @@ function ReportForm() {
           throw new UserFeedbackError(
             'Phạm vi sự cố khác mục kiểm kê. Kiểm tra lại trước khi liên kết.',
           );
-        if (item.inherited)
-          throw new UserFeedbackError('Không thể sửa mục kiểm kê kế thừa Tenant.');
         if (item.incidentId && item.incidentId !== incidentId)
           throw new UserFeedbackError('Mục này đã liên kết với báo cáo sự cố khác.');
         if (!item.incidentId) {
-          await client.updateItem(
-            params.inventoryTaskId!,
-            item.id,
-            {
-              version: view.version,
-              checked: item.checked,
-              condition: item.condition ?? (item.checked ? 'Intact' : 'Unassessed'),
-              note: (item.note?.trim() || description.trim()).slice(0, 2000),
-              incidentId,
-            },
-            randomUUID(),
-          );
+          if (item.inherited) {
+            // Keep the Tenant/Owner-confirmed physical baseline immutable. The Incident
+            // describes the later discrepancy; only its reference is attached here.
+            await client.updateItem(
+              params.inventoryTaskId!,
+              item.id,
+              {
+                version: view.version,
+                checked: item.checked,
+                condition: item.condition ?? 'Unassessed',
+                note: item.note,
+                incidentId,
+              },
+              idempotencyKey,
+            );
+          } else {
+            const requestedCondition =
+              params.inventoryCondition === 'Missing' || params.inventoryCondition === 'Damaged'
+                ? params.inventoryCondition
+                : null;
+            const condition =
+              requestedCondition ?? item.condition ?? (item.checked ? 'Intact' : 'Unassessed');
+            const note = (
+              requestedCondition ? description.trim() : item.note?.trim() || description.trim()
+            ).slice(0, 2000);
+            await client.updateItem(
+              params.inventoryTaskId!,
+              item.id,
+              {
+                version: view.version,
+                checked: requestedCondition ? true : item.checked,
+                condition,
+                note: note || null,
+                incidentId,
+              },
+              idempotencyKey,
+            );
+          }
         }
+        inventoryLinkKey.current = null;
         go('task-detail', { taskId: params.inventoryTaskId! });
         return;
       }
@@ -251,9 +283,10 @@ function ReportForm() {
             evidenceIds: item.evidenceIds ?? [],
             incidentId,
           },
-          randomUUID(),
+          idempotencyKey,
         );
       }
+      inventoryLinkKey.current = null;
       go('move-in-inventory', { taskId: params.inventoryTaskId! });
     } catch (failure) {
       setLinkError(errorMessage(failure));
@@ -290,12 +323,19 @@ function ReportForm() {
   }
   return (
     <>
-      <Heading title="Báo cáo sự cố" detail="Phòng, thiết bị hoặc khu vực chung" />
+      <Heading
+        title={fromLocationInventory ? 'Báo vấn đề khi kiểm kê' : 'Báo cáo sự cố'}
+        detail={
+          fromLocationInventory
+            ? 'Thông tin tài sản đã được điền sẵn'
+            : 'Phòng, thiết bị hoặc khu vực chung'
+        }
+      />
       {fromAnyInventory && (
         <Box>
           <Text>
-            Thông tin cơ sở, phòng, tài sản và tình trạng đã lấy từ mục kiểm kê. Kiểm tra lại trước
-            khi gửi báo cáo BF-07.
+            Cơ sở, phòng và tài sản đã được điền sẵn. Sau khi gửi, báo cáo sẽ tự liên kết với đúng
+            mục kiểm kê để bạn không phải nhập lại thông tin.
           </Text>
           {!!prefillMessage && <Text style={ui.muted}>{prefillMessage}</Text>}
         </Box>

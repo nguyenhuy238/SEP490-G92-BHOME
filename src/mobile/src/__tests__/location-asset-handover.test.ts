@@ -105,7 +105,7 @@ it('sends an item update with the server version, linked incident and idempotenc
   );
 });
 
-it('signs only the backend report revision and exact snapshot digest', async () => {
+it('signs the exact report revision with a drawn signature and confirmation', async () => {
   const request = vi.fn().mockResolvedValue(undefined);
   const api = { request } as unknown as MobileApi;
   const report = {
@@ -113,7 +113,20 @@ it('signs only the backend report revision and exact snapshot digest', async () 
     snapshotSha256: 'A'.repeat(64),
     status: 'PendingStaffSignature',
   } as LocationAssetHandoverReport;
-  await locationAssetHandoverClient(api).sign(taskId, report);
+  const ink = {
+    width: 320,
+    height: 200,
+    strokes: [
+      [
+        [12, 8],
+        [45, 31],
+        [58, 55],
+        [70, 80],
+        [90, 92],
+      ],
+    ] as [number, number][][],
+  };
+  await locationAssetHandoverClient(api).sign(taskId, report, ink);
   expect(request).toHaveBeenCalledWith(
     `/api/v1/operational-tasks/${taskId}/location-asset-handover/sign`,
     {
@@ -122,7 +135,28 @@ it('signs only the backend report revision and exact snapshot digest', async () 
         revision: 4,
         snapshotSha256: 'A'.repeat(64),
         confirmed: true,
+        ink,
       }),
     },
+  );
+});
+
+it('loads the private PDF preview and page image through authenticated requests', async () => {
+  const request = vi.fn().mockResolvedValue(undefined);
+  const api = { request } as unknown as MobileApi;
+  const client = locationAssetHandoverClient(api);
+  const controller = new AbortController();
+  await client.documentPreview(taskId, controller.signal);
+  await client.documentPage(taskId, 2, controller.signal);
+  expect(request).toHaveBeenNthCalledWith(
+    1,
+    `/api/v1/operational-tasks/${taskId}/location-asset-handover/document/preview`,
+    { signal: controller.signal },
+  );
+  expect(request).toHaveBeenNthCalledWith(
+    2,
+    `/api/v1/operational-tasks/${taskId}/location-asset-handover/document/pages/2`,
+    { signal: controller.signal },
+    'bytes',
   );
 });

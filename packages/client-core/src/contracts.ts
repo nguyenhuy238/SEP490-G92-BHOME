@@ -595,6 +595,78 @@ export interface SettlementTransferInstructions {
   qrImageDataUri: string | null;
   isDevelopmentDemo: boolean;
 }
+
+export interface MoveOutProposalCharge {
+  kind: 'Asset' | 'RoomCheck' | 'Access';
+  assetId?: string | null;
+  roomCheckCode?: string | null;
+  accessType?: string | null;
+  label?: string | null;
+  amount: string;
+  reason: string;
+}
+export interface MoveOutProposalDisputedItem {
+  kind: MoveOutProposalCharge['kind'];
+  assetId: string | null;
+  roomCheckCode: string | null;
+  accessType: string | null;
+  reason: string;
+}
+export interface MoveOutProposalFeedbackInput {
+  proposalId: string;
+  expectedReference: string;
+  confirmed: boolean;
+  reason: string;
+  disputedItems?: MoveOutProposalDisputedItem[];
+}
+export interface MoveOutProposalReconcileInput {
+  proposalId: string;
+}
+export interface MoveOutProposalSettlement {
+  status: 'Payable' | 'RefundEligible' | 'Settled' | 'PendingOwnerReview';
+  payableAmount: string;
+  refundAmount: string;
+  payableReceivableId: string | null;
+  createdReceivableIds: string[];
+  depositOffsetIds: string[];
+  reason?: string | null;
+}
+export interface MoveOutProposalFeedback {
+  proposalId: string;
+  confirmed: boolean;
+  reason: string;
+  disputedItems?: MoveOutProposalDisputedItem[] | null;
+  settlement?: MoveOutProposalSettlement | null;
+}
+export interface MoveOutProposalPreview {
+  contractId: string;
+  reference: string;
+  verifiedDeposit: string;
+  availableDeposit: string;
+  existingOutstanding: string;
+  status: 'None' | 'PendingTenant' | 'Accepted' | 'Disputed' | 'Outdated';
+  latestProposal: {
+    id: string;
+    items: MoveOutProposalCharge[];
+    verifiedDeposit: string;
+    availableDeposit: string;
+    existingOutstanding: string;
+    totalCharges: string;
+    signedBalance: string;
+    note: string | null;
+    tenantFeedback?: MoveOutProposalFeedback | null;
+  } | null;
+  items: {
+    kind: string;
+    assetId?: string | null;
+    roomCheckCode?: string | null;
+    accessType?: string | null;
+    label: string;
+    baseline?: string | null;
+    observed?: string | null;
+    evidenceIds?: string[];
+  }[];
+}
 export interface BillableMeterPoint {
   readingId: string;
   evidenceId: string;
@@ -745,6 +817,22 @@ export function contractClient(request: ContractRequest) {
       request<SettlementSummary>(`${root}/${id}/move-out/settlement-summary`, { signal }),
     settlementReceivables: (id: string, signal?: AbortSignal) =>
       request<SettlementReceivables>(`${root}/${id}/move-out/receivables`, { signal }),
+    moveOutProposal: (id: string, signal?: AbortSignal) =>
+      request<MoveOutProposalPreview>(`${root}/${id}/move-out/receivables/proposal`, { signal }),
+    respondMoveOutProposal: (id: string, body: MoveOutProposalFeedbackInput, key: string) =>
+      request<MoveOutProposalFeedback>(
+        `${root}/${id}/move-out/receivables/proposal/tenant-feedback`,
+        {
+          method: 'POST',
+          headers: { 'Idempotency-Key': key },
+          body: JSON.stringify(body),
+        },
+      ),
+    reconcileMoveOutProposal: (id: string, body: MoveOutProposalReconcileInput) =>
+      request<MoveOutProposalFeedback>(`${root}/${id}/move-out/receivables/proposal/reconcile`, {
+        method: 'POST',
+        body: JSON.stringify(body),
+      }),
     settlementChargeReview: (id: string, signal?: AbortSignal) =>
       request<SettlementChargeReviewPreview>(`${root}/${id}/move-out/receivables/charge-review`, {
         signal,
@@ -1052,7 +1140,10 @@ export function contractClient(request: ContractRequest) {
     locations: (signal?: AbortSignal) =>
       request<NamedOption[]>('/api/v1/capture/locations', { signal }),
     rooms: (locationId: string, signal?: AbortSignal) =>
-      request<NamedOption[]>(`/api/v1/capture/locations/${locationId}/rooms`, { signal }),
+      request<(NamedOption & { capacity?: number | null })[]>(
+        `/api/v1/capture/locations/${locationId}/rooms`,
+        { signal },
+      ),
     residents: (locationId: string, signal?: AbortSignal) =>
       request<ResidentOption[]>(`/api/v1/capture/locations/${locationId}/residents`, { signal }),
     meters: (locationId: string, signal?: AbortSignal) =>
@@ -1265,6 +1356,11 @@ export const labels: Record<string, string> = {
   signed_terms_changed: 'Nội dung hợp đồng không khớp bản đã đưa đi ký.',
   contract_template_not_configured:
     'Chưa có mẫu PDF hợp đồng được phê duyệt. Liên hệ Owner để hoàn tất cấu hình trước khi ký.',
+  contract_template_not_approved: 'Mẫu PDF hợp đồng chưa được phê duyệt cho môi trường này.',
+  contract_pdf_converter_unavailable: 'Máy chủ chưa cấu hình bộ chuyển hợp đồng sang PDF.',
+  holding_contract_document_source_unavailable: 'Máy chủ chưa có nguồn PDF hợp đồng giữ chỗ.',
+  owner_contract_settings_required:
+    'Cơ sở chưa có thông tin bên cho thuê có hiệu lực cho hợp đồng này.',
   signing_certificate_not_valid:
     'Chứng thư đã bị khóa hoặc không còn hiệu lực. Tải lại chứng thư trước khi ký.',
   signing_certificate_no_longer_available:

@@ -78,12 +78,16 @@ it('requires explicit Owner confirmation before replacing an old 42-item task wi
       <LocationAssetInventoryReport taskId={state.preview.taskId} />
     </MemoryRouter>,
   );
-  expect(screen.getByText(/Checklist hiện tại: 42 mục/)).toBeTruthy();
-  expect(screen.getByText(/Đã được Owner kiểm kê: 12 mục/)).toBeTruthy();
-  expect(screen.getByText(/Còn 2 phòng/)).toBeTruthy();
+  expect(screen.getByText('Checklist hiện tại')).toBeTruthy();
+  expect(screen.getByText('42', { exact: true })).toBeTruthy();
+  expect(screen.getByText('Owner đã xác nhận')).toBeTruthy();
+  expect(screen.getByText('12', { exact: true })).toBeTruthy();
+  expect(screen.getByText(/Cần Owner xác nhận 2 phòng/)).toBeTruthy();
+  fireEvent.click(screen.getByRole('button', { name: 'Đối chiếu / đồng bộ' }));
+  expect(screen.getByText(/30 mục chưa được Owner xác nhận/)).toBeTruthy();
   const action = screen.getByRole('button', { name: 'Đồng bộ checklist đã xác nhận' });
   expect(action).toBeDisabled();
-  fireEvent.click(screen.getByLabelText(/Tôi đã đối chiếu và đồng ý cập nhật danh sách/));
+  fireEvent.click(screen.getByLabelText(/Tôi đã đối chiếu và đồng ý cập nhật checklist/));
   expect(action).toBeEnabled();
   fireEvent.click(action);
   await waitFor(() =>
@@ -100,7 +104,12 @@ it('requires explicit Owner confirmation before replacing an old 42-item task wi
 it('never applies an Owner baseline replacement that would discard checked Staff evidence', () => {
   state.preview.canApply = false;
   state.preview.blockedReason = 'location_asset_inventory_staff_work_conflict';
-  render(<LocationAssetInventoryReport taskId={state.preview.taskId} />);
+  render(
+    <MemoryRouter>
+      <LocationAssetInventoryReport taskId={state.preview.taskId} />
+    </MemoryRouter>,
+  );
+  fireEvent.click(screen.getByRole('button', { name: 'Đối chiếu / đồng bộ' }));
   expect(screen.getByText(/Cần đối soát thủ công để tránh mất dữ liệu/)).toBeTruthy();
   expect(screen.queryByRole('button', { name: 'Đồng bộ checklist đã xác nhận' })).toBeNull();
   expect(state.command).not.toHaveBeenCalled();

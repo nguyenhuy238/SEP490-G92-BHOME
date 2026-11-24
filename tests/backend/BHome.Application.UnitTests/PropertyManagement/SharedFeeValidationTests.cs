@@ -25,6 +25,28 @@ public sealed class SharedFeeValidationTests
         Assert.Equal(code.ToUpperInvariant(), result.GetProperty("chargeCode").GetString());
     }
 
+    [Fact]
+    public async Task PreservesOptionalReusableServiceNameAndLegacyTemplatesWithoutOne()
+    {
+        var custom = JsonSerializer.SerializeToElement(new
+        {
+            category = "ServiceFee",
+            chargeCode = "DV_GS",
+            serviceName = "  Giặt sấy  ",
+            method = "FixedPerRoomPerMonth",
+            referenceRate = 1000,
+            unit = "VND/month",
+            scope = "Location",
+            effectiveFrom = "2026-12-01"
+        });
+        var validated = await validator.ValidateAsync("fee-templates", custom, default);
+        Assert.Equal("Giặt sấy", validated.GetProperty("serviceName").GetString());
+
+        var legacy = await validator.ValidateAsync(
+            "fee-templates", Fee("ServiceFee", "CLEANING", "FixedPerPersonPerMonth", "VND/person/month"), default);
+        Assert.False(legacy.TryGetProperty("serviceName", out _));
+    }
+
     [Theory]
     [InlineData("Water", "WATER", "Metered", "kWh")]
     [InlineData("Electricity", "ELECTRICITY", "Metered", "VND/month")]

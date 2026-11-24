@@ -35,7 +35,7 @@ public sealed class ContractDepositInstructionsService(ContractService contracts
             throw new PaymentException(409, "holding_expired");
         var account = await payments.ReceivingAccountAsync(c.Room.LocationId, t);
         if (account is null || !account.Enabled || account.IsDevelopmentDemo != (mode == "Test") ||
-            !options.ReceivingAccounts.Any(a => a.LocationId == c.Room.LocationId && a.BankIdentifier == account.BankIdentifier && a.AccountNumber == account.AccountNumber))
+            !options.Matches(c.Room.LocationId, account))
             throw new PaymentException(409, "receiving_account_unavailable");
         var code = remaining > 0 ? await codes.IssueAsync("Deposit", id, c.Room.LocationId, t) : await codes.GetAsync("Deposit", id, t);
         if (remaining > 0 && code is null) throw new PaymentException(503, "payment_code_generation_unavailable");

@@ -62,6 +62,7 @@ public sealed class DrawnSignatureTests
         Assert.False(a.SequenceEqual(b)); // The strokes, not a saved typed name, determine the PNG.
         using var png = SKBitmap.Decode(a);
         Assert.Equal(200, png.Height);
+        Assert.True(png.Width >= 500, "Handover ink must retain the wide signing slot without re-encoding");
         Assert.Equal(0, png.GetPixel(0, 0).Alpha);
         var invalid = Assert.Throws<ContractException>(() => renderer.Render(
             new HandoverInkInput(360, 150, [[[20, 20]]])));

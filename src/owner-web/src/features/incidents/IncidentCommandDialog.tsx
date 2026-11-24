@@ -10,8 +10,9 @@ import { IncidentReferenceField, type IncidentReferenceScope } from './IncidentR
 export interface CommandField {
   name: string;
   label: string;
-  type?: 'text' | 'money' | 'guid' | 'instant' | 'asset' | 'incident';
+  type?: 'text' | 'money' | 'guid' | 'instant' | 'asset' | 'incident' | 'staff';
   incidentScope?: IncidentReferenceScope;
+  options?: Array<{ id: string; label: string }>;
   optional?: boolean;
 }
 export interface IncidentCommand {
@@ -20,6 +21,7 @@ export interface IncidentCommand {
   version: number;
   fields: CommandField[];
   extra?: Record<string, unknown>;
+  initialValues?: Record<string, string>;
 }
 export function IncidentCommandDialog({
   command: c,
@@ -28,7 +30,10 @@ export function IncidentCommandDialog({
   command: IncidentCommand;
   close: () => void;
 }) {
-  const [values, setValues] = useState<Record<string, string>>({ assetStatus: '0' });
+  const [values, setValues] = useState<Record<string, string>>(() => ({
+    assetStatus: '0',
+    ...(c.initialValues ?? {}),
+  }));
   const [validation, setValidation] = useState('');
   const action = useOwnerAction();
   async function save() {
@@ -39,7 +44,7 @@ export function IncidentCommandDialog({
         if (!value && !f.optional) throw new Error(`Nhập ${f.label.toLocaleLowerCase('vi-VN')}.`);
         body[f.name] = !value
           ? null
-          : f.type === 'guid' || f.type === 'incident'
+          : f.type === 'guid' || f.type === 'incident' || f.type === 'staff'
             ? guid(value)
             : f.type === 'money'
               ? vnd(value)
@@ -94,7 +99,7 @@ export function IncidentCommandDialog({
               label={f.label}
               value={values[f.name] ?? ''}
               disabled={action.busy}
-              select={f.type === 'asset'}
+              select={f.type === 'asset' || f.type === 'staff'}
               type={f.type === 'instant' ? 'datetime-local' : 'text'}
               slotProps={{
                 inputLabel: { shrink: true },
@@ -113,6 +118,12 @@ export function IncidentCommandDialog({
                   Ngừng sử dụng
                 </MenuItem>,
               ]}
+              {f.type === 'staff' &&
+                (f.options ?? []).map((option) => (
+                  <MenuItem key={option.id} value={option.id}>
+                    {option.label}
+                  </MenuItem>
+                ))}
             </TextField>
           ),
         )}

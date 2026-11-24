@@ -1,5 +1,6 @@
 using System.ComponentModel.DataAnnotations;
 using System.Text.Json.Serialization;
+using BHome.Application.Contracts;
 
 namespace BHome.Application.StaffOperations;
 
@@ -14,6 +15,24 @@ public sealed record LocationAssetHandoverReportView(
     string SnapshotSha256, string PdfSha256, DateTimeOffset ApprovedAt, Guid ApprovedBy,
     string? ExceptionDecision, LocationAssetHandoverAcceptance? OwnerSignature,
     LocationAssetHandoverAcceptance? StaffSignature, bool CanDownloadFinal);
+
+// Former Staff can discover only revisions they personally signed after Owner acceptance.
+// TaskId + Revision is the immutable report identity; a successor may own a different task.
+public sealed record LocationAssetHandoverArchiveListItem(
+    Guid TaskId, Guid LocationId, Guid AssignmentId, Guid StaffId, Guid OwnerId,
+    int Revision, string LocationName, string Address, int TotalItems, int DirectItems,
+    int InheritedItems, string SnapshotSha256, string PdfSha256, DateTimeOffset ApprovedAt,
+    string? ExceptionDecision, LocationAssetHandoverAcceptance OwnerSignature,
+    LocationAssetHandoverAcceptance StaffSignature);
+
+public sealed record LocationAssetHandoverArchiveAssetView(
+    Guid Id, string Scope, string Name, int Quantity, string Condition, bool Inherited,
+    Guid? SourceHandoverContractId, Guid? IncidentId, string? Note,
+    Guid? PriorStaffTaskId, Guid? PriorStaffUserId);
+
+public sealed record LocationAssetHandoverArchiveReportView(
+    LocationAssetHandoverArchiveListItem Report,
+    IReadOnlyList<LocationAssetHandoverArchiveAssetView> Items);
 
 [JsonUnmappedMemberHandling(JsonUnmappedMemberHandling.Disallow)]
 public sealed record LocationAssetHandoverApprove(
@@ -30,4 +49,7 @@ public sealed record LocationAssetHandoverRework(
 public sealed record LocationAssetHandoverSign(
     [Range(1, int.MaxValue)] int Revision,
     [Required, RegularExpression("^[0-9A-Fa-f]{64}$")] string SnapshotSha256,
-    bool Confirmed);
+    bool Confirmed,
+    HandoverInkInput? Ink = null);
+
+public sealed record LocationAssetHandoverDocumentPreview(int PageCount, string DocumentSha256);

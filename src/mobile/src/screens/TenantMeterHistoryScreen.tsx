@@ -1,74 +1,154 @@
-import React, { useCallback, useEffect, useRef, useState } from 'react';
-import { Image } from 'react-native';
+import React, { useCallback, useState } from 'react';
+import { StyleSheet, View } from 'react-native';
 import { useFocusEffect, useLocalSearchParams } from 'expo-router';
 import { Text } from 'react-native-paper';
-import type { TenantMeterReadingPage } from '../../../../packages/client-core/src/tenantReadings';
+import type {
+  TenantMeterReading,
+  TenantMeterReadingPage,
+} from '../../../../packages/client-core/src/tenantReadings';
 import { formatBillingDecimal } from '../../../../packages/client-core/src/invoices';
 import { formatInstant } from '../../../../packages/client-core/src/localization';
 import { Action, Box, Heading } from '../components/WorkspaceKit';
 import { Pagination, QueryState } from '../components/WorkspaceQueryState';
+import { TenantMeterReadingEvidence } from '../components/TenantMeterReadingEvidence';
 import { useWorkspaceQuery } from '../features/workspace/useWorkspaceQuery';
 import { useWorkspace } from '../features/workspace/WorkspaceProvider';
 import { useSession } from '../lib/SessionProvider';
-import { ocrPreview } from '../lib/automaticOcr';
-import { errorMessage } from '../lib/api';
 import { loadTenantReadings } from '../features/workspace/tenantFinancialLoads';
+import { colors as c } from '../theme/theme';
 
-function ReadingEvidence({ id }: { id: string }) {
-  const { api } = useSession();
-  const [uri, setUri] = useState(''),
-    [error, setError] = useState(''),
-    [busy, setBusy] = useState(false);
-  const pending = useRef<AbortController | null>(null);
-  useEffect(() => () => pending.current?.abort(), []);
-  async function load() {
-    if (!api || pending.current) return;
-    const controller = new AbortController();
-    pending.current = controller;
-    setBusy(true);
-    setError('');
-    try {
-      const bytes = await api.request<Uint8Array>(
-        '/api/v1/tenant/meter-readings/' + id + '/evidence',
-        { signal: controller.signal },
-        'bytes',
-      );
-      try {
-        if (
-          bytes.length > 5 * 1024 * 1024 ||
-          bytes.length < 3 ||
-          !(bytes[0] === 137 || (bytes[0] === 255 && bytes[1] === 216))
-        )
-          throw new Error('Ảnh bằng chứng không hợp lệ.');
-        if (!controller.signal.aborted) setUri(ocrPreview(bytes));
-      } finally {
-        bytes.fill(0);
-      }
-    } catch (e) {
-      if (!controller.signal.aborted) setError(errorMessage(e));
-    } finally {
-      pending.current = null;
-      if (!controller.signal.aborted) setBusy(false);
-    }
+const guidPattern = /^[\da-f]{8}-(?:[\da-f]{4}-){3}[\da-f]{12}$/i;
+
+function monthKey(reading: TenantMeterReading) {
+  // Initial/Final readings may have no billing period. Display them in the
+  // month of the actual reading without inventing a billing period.
+  return (reading.billingPeriod ?? reading.readingDate).slice(0, 7);
+}
+
+function monthLabel(key: string) {
+  const [year, month] = key.split('-');
+  return `Tháng ${month}/${year}`;
+}
+
+function groupedByMonth(readings: TenantMeterReading[]) {
+  const months = new Map<string, TenantMeterReading[]>();
+  for (const reading of readings) {
+    const key = monthKey(reading);
+    const rows = months.get(key) ?? [];
+    rows.push(reading);
+    months.set(key, rows);
   }
+  return [...months]
+    .sort(([a], [b]) => b.localeCompare(a))
+    .map(([key, rows]) => ({
+      key,
+      readings: rows.sort(
+        (a, b) =>
+          b.readingDate.localeCompare(a.readingDate) ||
+          b.confirmedAt.localeCompare(a.confirmedAt) ||
+          a.id.localeCompare(b.id),
+      ),
+    }));
+}
+
+function displayDate(date: string) {
+  return date.split('-').reverse().join('/');
+}
+
+function UtilityReading({ reading }: { reading: TenantMeterReading }) {
+  const electric = reading.utilityType === 'Electricity';
+  const label = electric ? 'Điện' : 'Nước';
+  const unit = electric ? 'kWh' : 'm³';
+  const isBaseline = reading.purpose === 'Initial';
+  const hasConsumption = reading.consumption !== null;
+
   return (
-    <>
-      <Action secondary disabled={busy} onPress={() => (uri ? setUri('') : void load())}>
-        {busy ? 'Đang tải ảnh…' : uri ? 'Ẩn ảnh bằng chứng' : 'Xem ảnh bằng chứng'}
-      </Action>
-      {!!error && <Text accessibilityRole="alert">{error}</Text>}
-      {!!uri && (
-        <Image
-          source={{ uri }}
-          style={{ width: '100%', height: 260 }}
-          resizeMode="contain"
-          accessibilityLabel="Ảnh đồng hồ đã xác nhận"
-        />
-      )}
-    </>
+    <View style={styles.reading} accessibilityLabel={`${label} phòng ${reading.roomNumber}`}>
+      <View style={styles.readingTitle}>
+        <Text variant="titleMedium" style={styles.utilityName}>
+          {label} · Phòng {reading.roomNumber}
+        </Text>
+        <Text variant="labelSmall" style={styles.unit}>
+          {unit}
+        </Text>
+      </View>
+
+      <View style={styles.usageArea}>
+        <Text variant="titleLarge" style={[styles.usage, !hasConsumption && styles.unknownUsage]}>
+          Tiêu thụ:{' '}
+          {reading.consumption !== null
+            ? `${formatBillingDecimal(reading.consumption)} ${unit}`
+            : isBaseline
+              ? 'Chỉ số mốc'
+              : 'Chưa có chỉ số'}
+        </Text>
+        {!hasConsumption && (
+          <Text variant="bodySmall" style={styles.explain}>
+            {isBaseline
+              ? 'Đây là chỉ số ban đầu, chưa có lượng tiêu thụ.'
+              : 'Chưa có lượng tiêu thụ được xác nhận cho lần ghi này.'}
+          </Text>
+        )}
+      </View>
+
+      <View style={styles.readingValues}>
+        <View style={styles.valueCell}>
+          <Text variant="labelSmall" style={styles.muted}>
+            Đầu kỳ
+          </Text>
+          <Text variant="bodyMedium" style={styles.readingValue}>
+            Chỉ số trước:{' '}
+            {reading.previousValue === null
+              ? 'Chưa có'
+              : formatBillingDecimal(reading.previousValue)}
+          </Text>
+        </View>
+        <View style={styles.valueCell}>
+          <Text variant="labelSmall" style={styles.muted}>
+            Cuối kỳ
+          </Text>
+          <Text variant="bodyMedium" style={styles.readingValue}>
+            Đã xác nhận: {formatBillingDecimal(reading.confirmedValue)}
+          </Text>
+        </View>
+      </View>
+
+      <View style={styles.details}>
+        <Text variant="bodySmall" style={styles.muted}>
+          Ngày đo: {displayDate(reading.readingDate)}
+          {reading.billingPeriod ? ' · Kỳ ' + reading.billingPeriod.slice(0, 7) : ''}
+        </Text>
+        <Text variant="bodySmall" style={styles.muted}>
+          Đồng hồ: {reading.meterCode}
+        </Text>
+        <Text variant="bodySmall" style={styles.muted}>
+          Xác nhận lúc: {formatInstant(reading.confirmedAt)}
+          {reading.status === 'Corrected' ? ' · Đã hiệu chỉnh' : ''}
+        </Text>
+        <Text variant="bodySmall" style={styles.muted}>
+          {reading.locationName}
+        </Text>
+      </View>
+      <TenantMeterReadingEvidence id={reading.id} label="Ảnh bằng chứng" />
+    </View>
   );
 }
-const guidPattern = /^[\da-f]{8}-(?:[\da-f]{4}-){3}[\da-f]{12}$/i;
+
+function MissingUtility({ type }: { type: 'Electricity' | 'Water' }) {
+  return (
+    <View style={styles.missingUtility}>
+      <Text variant="titleSmall" style={styles.muted}>
+        {type === 'Electricity' ? 'Điện' : 'Nước'}
+      </Text>
+      <Text variant="bodyMedium" style={styles.missingText}>
+        Chưa có chỉ số
+      </Text>
+      <Text variant="bodySmall" style={styles.muted}>
+        Chưa có lần ghi đã xác nhận trong tháng này.
+      </Text>
+    </View>
+  );
+}
 
 export function TenantMeterHistoryScreen() {
   const [page, setPage] = useState(1);
@@ -91,64 +171,58 @@ export function TenantMeterHistoryScreen() {
       reload();
     }, [reload]),
   );
+  const groups = groupedByMonth(query.data?.items ?? []);
+
   return (
     <>
       <Heading
-        title="Điện nước theo kỳ"
-        detail="Chỉ số Staff đã xác nhận, xem được trước khi lập hóa đơn nháp"
+        title="Điện nước theo tháng"
+        detail="Số liệu đồng hồ đã được xác nhận trong thời gian thuê của bạn"
       />
-      <Box>
-        <Text>
-          Kết quả OCR chưa xác nhận không được hiển thị. Lịch sử được giới hạn theo thời gian ở và
-          quyền hóa đơn của bạn.
+      <View style={styles.introduction}>
+        <Text variant="bodySmall" style={styles.explain}>
+          Lượng điện (kWh) và nước (m³) được lấy từ chỉ số đã xác nhận. Số 0 nghĩa là đã ghi nhận
+          không phát sinh; “Chưa có chỉ số” nghĩa là chưa có dữ liệu.
         </Text>
-      </Box>
+      </View>
       <QueryState {...query} />
-      {query.data?.items.length === 0 && (
-        <Box>
-          <Text>Chưa có chỉ số đã xác nhận trong thời gian ở của bạn.</Text>
+      {!query.loading && !query.error && query.data?.items.length === 0 && (
+        <Box style={styles.empty}>
+          <Text variant="titleMedium" style={styles.utilityName}>
+            Chưa có chỉ số đã xác nhận trong thời gian ở của bạn.
+          </Text>
+          <Text variant="bodySmall" style={styles.muted}>
+            Khi nhân viên xác nhận số điện, nước, lịch sử sẽ xuất hiện tại đây.
+          </Text>
         </Box>
       )}
-      {query.data?.items.map((reading) => (
-        <Box key={reading.id}>
-          <Heading
-            title={
-              (reading.utilityType === 'Electricity' ? 'Điện' : 'Nước') +
-              ' · Phòng ' +
-              reading.roomNumber
-            }
-            detail={reading.locationName}
-          />
-          <Text>
-            Ngày đo: {reading.readingDate.split('-').reverse().join('/')}
-            {reading.billingPeriod ? ' · Kỳ ' + reading.billingPeriod.slice(0, 7) : ''}
+      {groups.map((group) => (
+        <View key={group.key} style={styles.month}>
+          <Text variant="titleMedium" style={styles.monthHeading}>
+            {monthLabel(group.key)}
           </Text>
-          <Text>Đồng hồ: {reading.meterCode}</Text>
-          <Text>
-            Chỉ số trước:{' '}
-            {reading.previousValue === null
-              ? 'Chưa có'
-              : formatBillingDecimal(reading.previousValue)}
-          </Text>
-          <Text>Đã xác nhận: {formatBillingDecimal(reading.confirmedValue)}</Text>
-          <Text>
-            Tiêu thụ:{' '}
-            {reading.consumption === null
-              ? 'Chỉ số mốc'
-              : formatBillingDecimal(reading.consumption) +
-                (reading.utilityType === 'Electricity' ? ' kWh' : ' m³')}
-          </Text>
-          <Text>
-            Xác nhận lúc: {formatInstant(reading.confirmedAt)}
-            {reading.status === 'Corrected' ? ' · Đã hiệu chỉnh' : ''}
-          </Text>
-          <ReadingEvidence id={reading.id} />
-        </Box>
+          <Box style={styles.monthCard}>
+            {(['Electricity', 'Water'] as const).map((type, index) => {
+              const entries = group.readings.filter((reading) => reading.utilityType === type);
+              return (
+                <View key={type} style={styles.utilityGroup}>
+                  {index > 0 && <View style={styles.divider} />}
+                  {entries.length === 0 ? (
+                    <MissingUtility type={type} />
+                  ) : (
+                    entries.map((reading) => <UtilityReading key={reading.id} reading={reading} />)
+                  )}
+                </View>
+              );
+            })}
+          </Box>
+        </View>
       ))}
-      {query.data && (
+      {query.data && query.data.totalCount > query.data.pageSize && (
         <Pagination
           page={page}
           total={query.data.totalCount}
+          pageSize={query.data.pageSize}
           loading={query.loading}
           onChange={setPage}
         />
@@ -159,3 +233,41 @@ export function TenantMeterHistoryScreen() {
     </>
   );
 }
+
+const styles = StyleSheet.create({
+  introduction: { paddingHorizontal: 4 },
+  explain: { color: c.muted, lineHeight: 19 },
+  muted: { color: c.muted },
+  month: { gap: 10 },
+  monthHeading: { color: c.navy, paddingHorizontal: 4 },
+  monthCard: { padding: 16, gap: 16, borderColor: c.border },
+  utilityGroup: { gap: 16 },
+  divider: { height: 1, backgroundColor: c.border },
+  reading: { gap: 12 },
+  readingTitle: {
+    flexDirection: 'row',
+    gap: 8,
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    flexWrap: 'wrap',
+  },
+  utilityName: { color: c.navy, flexShrink: 1 },
+  unit: {
+    color: c.blue,
+    backgroundColor: c.tint,
+    overflow: 'hidden',
+    borderRadius: 8,
+    paddingHorizontal: 10,
+    paddingVertical: 5,
+  },
+  usageArea: { gap: 3 },
+  usage: { color: c.navy, fontVariant: ['tabular-nums'], flexShrink: 1 },
+  unknownUsage: { color: c.muted },
+  readingValues: { flexDirection: 'row', flexWrap: 'wrap', gap: 12 },
+  valueCell: { flexGrow: 1, flexBasis: '45%', minWidth: 116, gap: 4 },
+  readingValue: { color: c.ink, fontVariant: ['tabular-nums'] },
+  details: { gap: 4 },
+  missingUtility: { paddingVertical: 8, gap: 5 },
+  missingText: { color: c.ink },
+  empty: { gap: 8, borderColor: c.border },
+});

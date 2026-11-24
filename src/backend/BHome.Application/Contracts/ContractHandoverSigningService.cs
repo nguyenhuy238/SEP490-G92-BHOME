@@ -96,17 +96,28 @@ public sealed partial class ContractService
     private async Task VerifyHandoverSigningEvidenceAsync(Contract contract,
         HandoverDraftView view, CancellationToken token)
     {
-        foreach (var fileId in view.EvidenceIds.Concat(view.Assets.SelectMany(asset => asset.EvidenceIds ?? []))
-                     .Concat((view.RoomChecks ?? []).SelectMany(check => check.EvidenceIds))
-                     .Concat(view.KeyEvidenceIds ?? []).Distinct())
+        // Resolve ALL metadata sequentially before parallel file downloads:
+        // Workflow/Handovers use the same EF DbContext and are not thread-safe.
+        // The prior implementation made a full MinIO round trip for every photo
+        // serially, so signing a room with many inventory photos could appear
+        // stuck despite a valid submission.
+        var fileIds = view.EvidenceIds.Concat(view.Assets.SelectMany(asset => asset.EvidenceIds ?? []))
+            .Concat((view.RoomChecks ?? []).SelectMany(check => check.EvidenceIds))
+            .Concat(view.KeyEvidenceIds ?? []).Distinct().ToArray();
+        var available = (await Workflow.FilesAsync(contract.Id, ContractFileKind.HandoverEvidence, token))
+            .ToDictionary(file => file.Id);
+        var checks = new List<Func<Task>>(fileIds.Length + 2);
+        foreach (var fileId in fileIds)
         {
-            var file = await Workflow.FileAsync(contract.Id, fileId, token)
-                ?? throw ContractException.Invalid("invalid_handover_evidence");
+            var file = available.TryGetValue(fileId, out var found)
+                ? found
+                : await Workflow.FileAsync(contract.Id, fileId, token)
+                    ?? throw ContractException.Invalid("invalid_handover_evidence");
             if (file.Kind != ContractFileKind.HandoverEvidence)
                 throw ContractException.Invalid("invalid_handover_evidence");
             if (file.Length > 5 * 1024 * 1024)
                 throw ContractException.Invalid("inspection_image_too_large");
-            await CopyVerifiedFile(file, Stream.Null, token);
+            checks.Add(() => CopyVerifiedFile(file, Stream.Null, token));
         }
         var recorded = await Handovers.ReadingsAsync(contract.Id, contract.RoomId, contract.StartDate, token);
         foreach (var reading in new[] { view.Electricity, view.Water })
@@ -115,11 +126,26 @@ public sealed partial class ContractService
             var stored = recorded.SingleOrDefault(x => x.Id == reading.Id &&
                 x.EvidenceHash == reading.EvidenceHash && x.Date == reading.Date)
                 ?? throw ContractException.Conflict("confirmed_handover_readings_required");
-            using var bytes = new MemoryStream();
-            await storage.CopyToAsync(stored.EvidenceObjectKey, bytes, token);
-            if (bytes.Length > 5 * 1024 * 1024 || FileHash(bytes.ToArray()) != reading.EvidenceHash)
-                throw ContractException.Conflict("handover_evidence_integrity_failed");
+            var key = stored.EvidenceObjectKey;
+            var hash = reading.EvidenceHash;
+            checks.Add(async () =>
+            {
+                using var bytes = new MemoryStream();
+                await storage.CopyToAsync(key, bytes, token);
+                if (bytes.Length > 5 * 1024 * 1024 || FileHash(bytes) != hash)
+                    throw ContractException.Conflict("handover_evidence_integrity_failed");
+            });
         }
+        // Four concurrent private MinIO reads cut N serial network waits while
+        // limiting memory and connections; every hash must still pass before
+        // the signature PDF is prepared or stored.
+        using var slots = new SemaphoreSlim(4);
+        await Task.WhenAll(checks.Select(async verify =>
+        {
+            await slots.WaitAsync(token);
+            try { await verify(); }
+            finally { slots.Release(); }
+        }));
     }
 
     public async Task<byte[]> HandoverOwnerSignedPdfAsync(Guid id, CancellationToken token)

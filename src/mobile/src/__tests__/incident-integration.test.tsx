@@ -324,6 +324,11 @@ function respond(path: string, init?: RequestInit): unknown {
         dataJson: '{"Vendor":"PRIVATE-VENDOR","ActualCost":999999}',
       },
     ]);
+  if (path === `/api/v1/incidents/${id}/progress`)
+    return {
+      currentStep: 'Đang xử lý',
+      events: [{ message: 'Đã kiểm tra thực tế', occurredAt: '2026-11-06T01:00:00Z' }],
+    };
   if (
     path.endsWith('/evidence') ||
     path.endsWith('/expenses') ||
@@ -413,8 +418,32 @@ afterEach(() => {
   cleanup();
   api.queryCache.dispose();
 });
-const choose = (label: string, value: string) =>
+const actionLabels: Record<string, string> = {
+  proposal: 'Gửi phương án sửa chữa',
+  submit: 'Gửi kết quả nghiệm thu',
+  progress: 'Cập nhật tiến độ',
+  blocker: 'Báo vướng mắc',
+  'plan-decision': 'Quyết định phương án',
+  'emergency-actions': 'Ghi hành động khẩn cấp',
+  start: 'Bắt đầu sửa chữa',
+  acknowledge: 'Tiếp nhận khẩn cấp',
+};
+const choose = (label: string, value: string) => {
+  if (label === 'Chọn thao tác') {
+    const actionLabel = actionLabels[value];
+    if (!actionLabel) throw new Error(`Missing action label for ${value}`);
+    const primary = screen.queryByRole('button', { name: actionLabel });
+    if (primary) {
+      fireEvent.click(primary);
+      return;
+    }
+    const more = screen.queryByRole('button', { name: 'Thao tác khác' });
+    if (more) fireEvent.click(more);
+    fireEvent.click(screen.getByRole('button', { name: actionLabel }));
+    return;
+  }
   fireEvent.change(screen.getByLabelText(label), { target: { value } });
+};
 const confirm = () => fireEvent.click(screen.getByRole('checkbox'));
 const mutations = () =>
   s.request.mock.calls.filter(([, init]) => init?.method === 'POST' || init?.method === 'PUT');
@@ -478,6 +507,74 @@ it('links a newly created incident back to the exact damaged Location inventory 
   });
   expect(new Headers(link![1].headers).get('Idempotency-Key')).toMatch(/^[a-f\d-]{36}$/i);
 });
+it('links an Incident to an inherited item without changing its Tenant/Owner baseline', async () => {
+  s.params = {
+    inventoryTaskId,
+    locationAssetInventoryItemId: inventoryItemId,
+    locationId: lid,
+    roomId: rid,
+    assetId: eid,
+    inventoryCondition: 'Missing',
+    description: 'Inventory check: ceiling fan is missing from room A101.',
+  };
+  const inventoryPath = `/api/v1/operational-tasks/${inventoryTaskId}/location-asset-inventory`;
+  s.request.mockImplementation(async (path, init) => {
+    if (path === inventoryPath && !init?.method)
+      return {
+        taskId: inventoryTaskId,
+        locationId: lid,
+        assignmentId: wid,
+        status: 'InProgress',
+        version: 5,
+        totalCount: 1,
+        checkedCount: 1,
+        items: [
+          {
+            id: inventoryItemId,
+            roomId: rid,
+            roomNumber: 'A101',
+            assetId: eid,
+            name: 'Qu?t tr?n',
+            quantity: 1,
+            commonArea: null,
+            checked: true,
+            inherited: true,
+            sourceHandoverContractId: wid,
+            condition: 'Intact',
+            note: null,
+            incidentId: null,
+          },
+        ],
+      };
+    return respond(path, init);
+  });
+  render(<IncidentReportForm />);
+  await waitFor(() =>
+    expect((screen.getAllByRole('combobox')[0] as HTMLSelectElement).value).toBe(rid),
+  );
+  await waitFor(() =>
+    expect((screen.getAllByRole('combobox')[2] as HTMLSelectElement).value).toBe(eid),
+  );
+  await screen.findByRole('button', { name: /G.*b.*c.*s.*c/ });
+  fireEvent.click(screen.getByRole('button', { name: /G.*b.*c.*s.*c/ }));
+
+  await waitFor(() =>
+    expect(s.go).toHaveBeenCalledWith('task-detail', { taskId: inventoryTaskId }),
+  );
+  const link = s.request.mock.calls.find(
+    ([path, init]) =>
+      path === `${inventoryPath}/items/${inventoryItemId}` && init?.method === 'PUT',
+  );
+  expect(link).toBeTruthy();
+  expect(JSON.parse(link![1].body)).toEqual({
+    version: 5,
+    checked: true,
+    condition: 'Intact',
+    note: null,
+    incidentId: id,
+  });
+});
+
 it('locks double submit and reuses the same idempotency key after ambiguous failure, without false success', async () => {
   let reject!: (e: Error) => void;
   s.request.mockImplementation(async (path, init) =>
@@ -505,7 +602,7 @@ it('locks double submit and reuses the same idempotency key after ambiguous fail
   await waitFor(() => expect(mutations()).toHaveLength(2));
   expect(mutations()[1][1].headers['Idempotency-Key']).toBe(key);
 });
-it('Tenant detail shows history but never requests or exposes WorkOrder finances and actors', async () => {
+it('Tenant detail shows sanitized progress but never requests or exposes WorkOrder finances and actors', async () => {
   s.role = 'Tenant';
   s.params = { incidentId: id };
   render(<IncidentDetailScreen />);
@@ -516,7 +613,8 @@ it('Tenant detail shows history but never requests or exposes WorkOrder finances
       ([path]) =>
         path.includes('/work-orders') ||
         path.endsWith('/expenses') ||
-        path.endsWith('/emergency-actions'),
+        path.endsWith('/emergency-actions') ||
+        path.includes('/history?'),
     ),
   ).toBe(false);
 });
@@ -525,8 +623,8 @@ it.each(['Owner', 'Staff', 'Tenant'])(
   async (role) => {
     s.role = role;
     render(<IncidentListScreen />);
-    await screen.findByText('INC-SYNTHETIC');
-    fireEvent.click(screen.getByText('Thông báo sự cố và bảo trì'));
+    await screen.findByText('Ống nước bị vỡ trong phòng');
+    fireEvent.click(screen.getByRole('button', { name: 'Thông báo sự cố và bảo trì' }));
     expect(s.go).toHaveBeenCalledWith('incident-inbox');
     expect(s.request.mock.calls.some(([path]) => path.startsWith('/api/v1/notifications'))).toBe(
       false,
@@ -536,7 +634,7 @@ it.each(['Owner', 'Staff', 'Tenant'])(
 it('filters real report list by backend status and retains existing invoice adjustment navigation', async () => {
   s.role = 'Tenant';
   render(<IncidentListScreen />);
-  await screen.findByText('INC-SYNTHETIC');
+  await screen.findByText('Ống nước bị vỡ trong phòng');
   choose('Trạng thái báo cáo', 'Resolved');
   await waitFor(() =>
     expect(s.request.mock.calls.some(([path]) => path.includes('status=Resolved'))).toBe(true),
@@ -594,7 +692,7 @@ it('requires completion evidence before making any mutation', async () => {
   work.status = 'InProgress';
   render(<IncidentActionPanel report={report} work={work} role="Staff" />);
   choose('Chọn thao tác', 'submit');
-  choose('Nội dung / kết quả thực hiện', 'Đã sửa và kiểm tra');
+  choose('Kết quả sửa chữa', 'Đã sửa và kiểm tra');
   confirm();
   fireEvent.click(screen.getByRole('button', { name: 'Gửi kết quả nghiệm thu' }));
   await screen.findByText(/Cần ít nhất một ảnh kết quả/);
@@ -606,7 +704,7 @@ it.each(['progress', 'blocker', 'submit'])(
     work.status = 'InProgress';
     render(<IncidentActionPanel report={report} work={work} role="Staff" />);
     choose('Chọn thao tác', action);
-    choose('Nội dung / kết quả thực hiện', 'Đã kiểm tra đường ống');
+    choose(action === 'submit' ? 'Kết quả sửa chữa' : 'Nội dung cập nhật', 'Đã kiểm tra đường ống');
     await photo();
     confirm();
     fireEvent.click(
@@ -630,14 +728,13 @@ it.each(['PendingApproval', 'PendingVerification'] as const)(
     s.role = 'Owner';
     work.status = status;
     render(<IncidentActionPanel report={report} work={work} role="Owner" />);
-    expect(screen.getByLabelText('Chọn thao tác')).toBeTruthy();
-    expect(screen.queryByRole('option', { name: 'Đổi nhân viên' })).toBeNull();
-    expect(screen.queryByRole('option', { name: 'Bắt đầu sửa chữa' })).toBeNull();
     expect(
-      screen.getByRole('option', {
+      screen.getByRole('button', {
         name: status === 'PendingApproval' ? 'Quyết định phương án' : 'Nghiệm thu hoàn thành',
       }),
     ).toBeTruthy();
+    expect(screen.queryByRole('button', { name: 'Đổi nhân viên' })).toBeNull();
+    expect(screen.queryByRole('button', { name: 'Bắt đầu sửa chữa' })).toBeNull();
     expect(mutations()).toHaveLength(0);
   },
 );
@@ -699,7 +796,8 @@ it.each(['Assigned', 'InProgress', 'Verified', 'Cancelled'] as const)(
     s.role = 'Owner';
     work.status = status;
     render(<IncidentActionPanel report={report} work={work} role="Owner" />);
-    expect(screen.queryByLabelText('Chọn thao tác')).toBeNull();
+    expect(screen.queryByRole('button', { name: 'Quyết định phương án' })).toBeNull();
+    expect(screen.queryByRole('button', { name: 'Nghiệm thu hoàn thành' })).toBeNull();
     expect(mutations()).toHaveLength(0);
   },
 );
@@ -714,7 +812,10 @@ it('refreshes the Incident version after uploading Emergency evidence before sen
   );
   render(<IncidentActionPanel report={report} role="Staff" />);
   choose('Chọn thao tác', 'emergency-actions');
-  choose('Nội dung / kết quả thực hiện', 'Đã khóa van và cô lập khu vực');
+  choose(
+    'Biện pháp an toàn đã thực hiện và khó khăn còn gặp phải',
+    'Đã khóa van và cô lập khu vực',
+  );
   choose('Chi phí đề nghị (VND, tùy chọn)', '50000');
   await photo();
   confirm();
@@ -731,24 +832,25 @@ it('retains input and shows backend concurrency diagnostics without reporting su
   report.severity = 'Emergency';
   report.acknowledgedAt = '2026-11-11T00:00:00Z';
   s.request.mockImplementation(async (path, init) =>
-    init?.method === 'POST'
-      ? Promise.reject(
-          new MobileApiError(409, 'stale_version', path, 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa'),
-        )
-      : respond(path, init),
+    path.includes('/evidence?') && init?.method === 'POST'
+      ? respond(path, init)
+      : init?.method === 'POST'
+        ? Promise.reject(
+            new MobileApiError(409, 'stale_version', path, 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa'),
+          )
+        : respond(path, init),
   );
   render(<IncidentActionPanel report={report} role="Staff" />);
   choose('Chọn thao tác', 'emergency-actions');
-  choose('Nội dung / kết quả thực hiện', 'Đã khóa van');
-
+  choose('Biện pháp an toàn đã thực hiện và khó khăn còn gặp phải', 'Đã khóa van');
+  await photo();
   confirm();
   fireEvent.click(screen.getByRole('button', { name: 'Ghi hành động khẩn cấp' }));
   await screen.findByText(/Dữ liệu đã thay đổi.*aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa/);
   expect(s.success).not.toHaveBeenCalled();
-  expect(screen.getByLabelText('Nội dung / kết quả thực hiện')).toHaveProperty(
-    'value',
-    'Đã khóa van',
-  );
+  expect(
+    screen.getByLabelText('Biện pháp an toàn đã thực hiện và khó khăn còn gặp phải'),
+  ).toHaveProperty('value', 'Đã khóa van');
 });
 it('loads authorized evidence automatically, retries on demand and supports fullscreen preview', async () => {
   s.request.mockResolvedValue(new Uint8Array([137, 80, 78, 71, 13, 10, 26, 10]));
@@ -816,7 +918,8 @@ it('does not offer execution controls for a WorkOrder assigned to another Staff 
   work.assignedStaffId = 'other-staff';
   render(<MaintenanceDetailScreen />);
   await screen.findByText(/Khắc phục rò nước/);
-  expect(screen.queryByLabelText('Chọn thao tác')).toBeNull();
+  expect(screen.queryByRole('button', { name: 'Gửi phương án sửa chữa' })).toBeNull();
+  expect(screen.queryByRole('button', { name: 'Bắt đầu sửa chữa' })).toBeNull();
 });
 it('maps known owner event fields and guards emergency acknowledgements against state/role', () => {
   expect(
@@ -844,17 +947,15 @@ it('re-fetches WorkOrder detail after start instead of applying a local completi
     return respond(path, init);
   });
   render(<MaintenanceDetailScreen />);
-  await screen.findByLabelText('Chọn thao tác');
+  await screen.findByRole('button', { name: 'Thao tác khác' });
   choose('Chọn thao tác', 'start');
   confirm();
   fireEvent.click(screen.getByRole('button', { name: 'Bắt đầu sửa chữa' }));
-  await waitFor(() =>
-    expect(screen.getByRole('option', { name: 'Cập nhật tiến độ' })).toBeTruthy(),
-  );
+  await screen.findByRole('button', { name: 'Gửi kết quả nghiệm thu' });
   expect(
     s.request.mock.calls.filter(([path]) => path === `/api/v1/work-orders/${wid}`).length,
   ).toBeGreaterThanOrEqual(2);
-  expect(screen.queryByRole('option', { name: 'Bắt đầu sửa chữa' })).toBeNull();
+  expect(screen.queryByRole('button', { name: 'Bắt đầu sửa chữa' })).toBeNull();
 });
 
 it.each(['Submitted', 'InProgress'] as const)(
@@ -871,9 +972,8 @@ it.each(['Submitted', 'InProgress'] as const)(
       />,
     );
     expect(screen.getByText('Thực hiện trên Owner Web')).toBeTruthy();
-    expect(screen.queryByLabelText('Chọn thao tác')).toBeNull();
-    expect(screen.queryByRole('option', { name: 'Phân loại sự cố' })).toBeNull();
-    expect(screen.queryByRole('option', { name: 'Quyết định chi phí khẩn cấp' })).toBeNull();
+    expect(screen.queryByRole('button', { name: 'Phân loại sự cố' })).toBeNull();
+    expect(screen.queryByRole('button', { name: 'Quyết định chi phí khẩn cấp' })).toBeNull();
     expect(mutations()).toHaveLength(0);
     expect(s.success).not.toHaveBeenCalled();
   },
@@ -882,7 +982,8 @@ it('does not offer Owner mutations after an Incident is resolved', () => {
   s.role = 'Owner';
   report.status = 'Resolved';
   render(<IncidentActionPanel report={report} role="Owner" />);
-  expect(screen.queryByLabelText('Chọn thao tác')).toBeNull();
+  expect(screen.queryByRole('button', { name: 'Quyết định phương án' })).toBeNull();
+  expect(screen.queryByRole('button', { name: 'Nghiệm thu hoàn thành' })).toBeNull();
   expect(mutations()).toHaveLength(0);
 });
 it('Staff emergency acknowledgement uses its authorized endpoint and current report version', async () => {

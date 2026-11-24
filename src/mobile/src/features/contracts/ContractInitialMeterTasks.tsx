@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useState } from 'react';
+import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { router, useFocusEffect } from 'expo-router';
 import { Text } from 'react-native-paper';
 import {
@@ -11,6 +11,7 @@ import { useWorkspace } from '../workspace/WorkspaceProvider';
 import { useSession } from '../../lib/SessionProvider';
 import { conciseMessage } from '../../lib/toast';
 import { errorMessage } from '../../lib/api';
+import { randomUUID } from '../../lib/randomUUID';
 
 type TaskResult = { key: string; tasks: MeterTask[]; error: string };
 
@@ -21,6 +22,8 @@ export function ContractInitialMeterTasks({
   onOpenTask,
   refreshRevision = 0,
   purpose = 0,
+  moveInTaskId,
+  moveInStarted = false,
 }: {
   contract: ContractView;
   integrated?: boolean;
@@ -29,11 +32,20 @@ export function ContractInitialMeterTasks({
   refreshRevision?: number;
   /** Use the exact same meter capture UX for today's confirmed move-out Final readings. */
   purpose?: 0 | 2;
+  /** Parent handover task, not an independent meter work item. */
+  moveInTaskId?: string;
+  /** Staff must start the canonical move-in handover before repairing its checkpoints. */
+  moveInStarted?: boolean;
 }) {
   const { api, session } = useSession();
   const { staffLocationId } = useWorkspace();
   const [revision, setRevision] = useState(0);
   const [result, setResult] = useState<TaskResult | null>(null);
+  const [ensuring, setEnsuring] = useState(false);
+  const [ensureError, setEnsureError] = useState('');
+  // Reuse the same key when the network outcome is ambiguous. A verified
+  // success clears it so newly installed meters can be checked on a later tap.
+  const pendingKeys = useRef(new Map<string, string>());
   const allowed =
     !!api &&
     session?.roles.includes('Staff') &&
@@ -101,15 +113,49 @@ export function ContractInitialMeterTasks({
   ]);
 
   const current = allowed && result?.key === key ? result : null;
+  const missingBaseline =
+    purpose === 0 &&
+    integrated &&
+    current &&
+    !current.error &&
+    ([0, 1] as const).some((type) => !current.tasks.some((task) => task.utilityType === type));
+  async function prepareMoveInBaselines() {
+    if (!allowed || !api || !moveInTaskId || !moveInStarted || ensuring || !missingBaseline) return;
+    const identity = `${contract.id}:${moveInTaskId}`;
+    let idempotencyKey = pendingKeys.current.get(identity);
+    if (!idempotencyKey) {
+      idempotencyKey = randomUUID();
+      pendingKeys.current.set(identity, idempotencyKey);
+    }
+    setEnsuring(true);
+    setEnsureError('');
+    try {
+      const ids = await api.request<string[]>(
+        `/api/v1/operational-tasks/${encodeURIComponent(moveInTaskId)}/initial-meter-baselines/ensure`,
+        { method: 'POST', headers: { 'Idempotency-Key': idempotencyKey } },
+      );
+      if (!Array.isArray(ids)) throw new Error('Danh sách chỉ số đầu kỳ không hợp lệ.');
+      pendingKeys.current.delete(identity);
+      if (ids.length < 2)
+        setEnsureError(
+          'Phòng chưa có đủ công tơ điện và nước đang hoạt động. Cần Owner kiểm tra cấu hình công tơ; không tạo công tơ mới ở bước bàn giao.',
+        );
+      setRevision((value) => value + 1);
+    } catch (failure) {
+      setEnsureError(conciseMessage(errorMessage(failure)));
+    } finally {
+      setEnsuring(false);
+    }
+  }
   const content = (
     <>
       {!integrated && (
         <Heading
-          title={purpose === 2 ? 'Chụp chỉ số chốt trả phòng' : 'Chụp chỉ số khởi tạo hợp đồng'}
+          title={purpose === 2 ? 'Chụp chỉ số chốt trả phòng' : 'Xác nhận chỉ số điện nước đầu kỳ'}
           detail={
             purpose === 2
               ? 'Chụp ảnh và xác nhận chỉ số Final của hôm nay. Số cũ hoặc chỉ số chưa xác nhận không được dùng thay thế.'
-              : 'Chụp ảnh thực tế và xác nhận lại cả công tơ đang dùng tiếp. Ảnh và chỉ số của hợp đồng cũ không được dùng thay thế.'
+              : 'Chụp và xác nhận chỉ số đầu kỳ trên công tơ đang dùng của phòng. Không dùng ảnh hoặc chỉ số của hợp đồng trước.'
           }
         />
       )}
@@ -135,7 +181,7 @@ export function ContractInitialMeterTasks({
                   </Pill>
                 </Row>
               ) : (
-                <Text>{`Chỉ số ${purpose === 2 ? 'chốt trả phòng' : 'khởi tạo'} ${label.toLowerCase()}`}</Text>
+                <Text>{`Chỉ số ${purpose === 2 ? 'chốt trả phòng' : 'đầu kỳ'} ${label.toLowerCase()}`}</Text>
               )}
               {matches.length > 1 && (
                 <Text style={ui.red}>Có nhiều nhiệm vụ cho cùng hợp đồng. Cần Owner kiểm tra.</Text>
@@ -144,7 +190,7 @@ export function ContractInitialMeterTasks({
                 <Text>
                   {purpose === 2
                     ? `Chưa có công tơ ${label.toLowerCase()} đang hoạt động hoặc nhiệm vụ Final hôm nay. Owner cần kiểm tra cấu hình công tơ nếu vẫn thiếu sau khi tải lại.`
-                    : 'Chưa được giao nhiệm vụ khởi tạo cho hợp đồng này.'}
+                    : 'Chưa có bước xác nhận chỉ số đầu kỳ cho hợp đồng này.'}
                 </Text>
               )}
               {task && (
@@ -177,6 +223,17 @@ export function ContractInitialMeterTasks({
             </React.Fragment>
           );
         })}
+      {!!missingBaseline && moveInStarted && !!moveInTaskId && (
+        <>
+          <Action disabled={ensuring} onPress={() => void prepareMoveInBaselines()}>
+            {ensuring ? 'Đang kiểm tra công tơ…' : 'Chuẩn bị chỉ số đầu kỳ điện và nước'}
+          </Action>
+          <Text style={ui.muted}>
+            Sử dụng công tơ đang hoạt động trong phòng, không lắp hay tạo công tơ mới.
+          </Text>
+        </>
+      )}
+      {!!ensureError && <Text style={ui.red}>{ensureError}</Text>}
     </>
   );
   return integrated ? content : <Box>{content}</Box>;

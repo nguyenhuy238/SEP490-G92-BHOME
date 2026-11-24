@@ -35,6 +35,8 @@ const mocks = vi.hoisted(() => ({
   returnTo: undefined as string | undefined,
   focus: undefined as string | undefined,
   view: undefined as string | undefined,
+  settlementContractId: undefined as string | undefined,
+  settlementChargeId: undefined as string | undefined,
   newRequest: undefined as string | undefined,
 }));
 
@@ -72,6 +74,8 @@ vi.mock('expo-router', () => ({
     returnTo: mocks.returnTo,
     focus: mocks.focus,
     view: mocks.view,
+    settlementContractId: mocks.settlementContractId,
+    settlementChargeId: mocks.settlementChargeId,
     newRequest: mocks.newRequest,
   }),
 }));
@@ -382,6 +386,8 @@ beforeEach(() => {
   mocks.returnTo = undefined;
   mocks.focus = undefined;
   mocks.view = undefined;
+  mocks.settlementContractId = undefined;
+  mocks.settlementChargeId = undefined;
   mocks.newRequest = undefined;
 });
 
@@ -493,6 +499,36 @@ describe('Tenant Invoice, VietQR Payment & Notification Flow', () => {
     );
   });
 
+  it('opens invoice meter evidence only on demand from authenticated Tenant reading endpoint', async () => {
+    mocks.invoiceId = invoiceId;
+    const fetcher = vi.fn<Transport>().mockImplementation(async (url) => {
+      const path = String(url);
+      if (path.endsWith(`/invoices/${invoiceId}`)) return json(baseInvoice);
+      if (path.endsWith(`/tenant/meter-readings/${readingId}/evidence`))
+        return new Response(new Uint8Array([137, 80, 78, 71, 13, 10, 26, 10]), {
+          status: 200,
+          headers: { 'Content-Type': 'image/png' },
+        });
+      throw new Error(`Unexpected endpoint ${path}`);
+    });
+    setApi(fetcher);
+    render(<TenantInvoicesScreen />);
+
+    await screen.findByText('Bản nháp');
+    expect(
+      fetcher.mock.calls.some(([url]) => String(url).includes('/tenant/meter-readings/')),
+    ).toBe(false);
+    fireEvent.click(screen.getByRole('button', { name: 'Tiền điện sinh hoạt, xem chi tiết' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Xem ảnh công tơ đã xác nhận' }));
+    expect(await screen.findByAltText('Ảnh công tơ đã xác nhận')).toBeTruthy();
+    expect(
+      fetcher.mock.calls.filter(([url]) => String(url).includes('/tenant/meter-readings/')).length,
+    ).toBe(1);
+    expect(fetcher.mock.calls.some(([url]) => String(url).includes('/capture/readings/'))).toBe(
+      false,
+    );
+  });
+
   it('Test 4: renders Final Invoice with payable/paid/outstanding amounts, real VietQR image, and bank transfer copy actions', async () => {
     mocks.invoiceId = invoiceId;
     const finalInvoice = {
@@ -560,6 +596,99 @@ describe('Tenant Invoice, VietQR Payment & Notification Flow', () => {
 
     fireEvent.click(screen.getByLabelText('Sao chép nội dung chuyển khoản'));
     await waitFor(() => expect(mocks.copy).toHaveBeenCalledWith('BHOME P202 T11'));
+  });
+
+  it('opens the real move-out receivable detail, shows QR only while unpaid and removes it after verified webhook payment', async () => {
+    const contractId = '77777777-7777-4777-8777-777777777777';
+    const chargeId = '88888888-8888-4888-8888-888888888888';
+    mocks.view = 'settlement';
+    mocks.settlementContractId = contractId;
+    mocks.settlementChargeId = chargeId;
+    let bankPaid = false;
+    const qr =
+      'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg==';
+    const fetcher = vi.fn<Transport>().mockImplementation(async (url) => {
+      const path = String(url);
+      if (path.endsWith(`/contracts/${contractId}/move-out/receivables`))
+        return json({
+          contractId,
+          roomId,
+          roomNumber: 'P202',
+          reference: 'server-snapshot',
+          availableDeposit: '0',
+          receivables: [
+            {
+              charge: {
+                id: chargeId,
+                contractId,
+                roomId,
+                kind: 'TenantDamage',
+                assetId: null,
+                description: 'Bồi thường tường sau kiểm tra trả phòng',
+                amount: '720000',
+              },
+              allocated: bankPaid ? '720000' : '600000',
+              outstanding: bankPaid ? '0' : '120000',
+              status: bankPaid ? 'Paid' : 'PartiallyPaid',
+            },
+          ],
+          offsets: [
+            {
+              id: 'offset-1',
+              receivableId: chargeId,
+              amount: '600000',
+              reason: 'Cấn trừ cọc đã duyệt',
+            },
+          ],
+        });
+      if (
+        path.endsWith(
+          `/contracts/${contractId}/move-out/receivables/${chargeId}/transfer-instructions`,
+        )
+      )
+        return json({
+          availability: bankPaid ? 'Settled' : 'Available',
+          outstandingAmount: bankPaid ? '0' : '120000',
+          bankIdentifier: 'TEST-BANK',
+          accountNumber: '000111222',
+          accountHolder: 'BHOME TEST',
+          transferReference: 'BH12345678',
+          qrImageDataUri: bankPaid ? null : qr,
+          isDevelopmentDemo: false,
+        });
+      throw new Error(`Unexpected invoice request: ${path}`);
+    });
+    setApi(fetcher);
+    render(<TenantInvoicesScreen />);
+
+    expect(await screen.findByText('Bồi thường tường sau kiểm tra trả phòng')).toBeTruthy();
+    expect(await screen.findByAltText('Mã chuyển khoản khoản phải thu')).toHaveProperty('src', qr);
+    expect(screen.getByText(/không phải hóa đơn điện nước hoặc tiền phòng định kỳ/)).toBeTruthy();
+    expect(screen.getByText(/Còn phải thanh toán: 120.000/)).toBeTruthy();
+    expect(fetcher.mock.calls.some(([url]) => String(url).includes('/api/v1/invoices/'))).toBe(
+      false,
+    );
+
+    // The bank webhook updates the authoritative receivable balance on the server.
+    bankPaid = true;
+    fireEvent.click(screen.getByRole('button', { name: 'Cập nhật trạng thái thanh toán' }));
+    expect(
+      await screen.findByText('Máy chủ đã xác nhận thanh toán đủ. Không còn mã QR cần thanh toán.'),
+    ).toBeTruthy();
+    expect(screen.getByText('Đã thanh toán')).toBeTruthy();
+    expect(screen.queryByAltText('Mã chuyển khoản khoản phải thu')).toBeNull();
+  });
+
+  it('rejects an invalid move-out receivable deep link before requesting payment instructions', async () => {
+    mocks.view = 'settlement';
+    mocks.settlementContractId = 'forged-contract';
+    mocks.settlementChargeId = 'forged-receivable';
+    const fetcher = vi.fn<Transport>().mockResolvedValue(json({}));
+    setApi(fetcher);
+    render(<TenantInvoicesScreen />);
+    expect(screen.getByText('Liên kết khoản phải thu không hợp lệ.')).toBeTruthy();
+    expect(fetcher).not.toHaveBeenCalled();
+    expect(screen.queryByAltText('Mã chuyển khoản khoản phải thu')).toBeNull();
   });
 
   it('Test 5: handles Tenant invoice & meter notifications (INVOICE_FINALIZED & METER_READING_CONFIRMED), marks read, and navigates via authorized target', async () => {
@@ -664,18 +793,51 @@ describe('Tenant Invoice, VietQR Payment & Notification Flow', () => {
     setApi(fetcher);
     render(<TenantInvoicesScreen />);
 
-    await screen.findByText('1 hóa đơn cần thanh toán · 1.290.000 ₫');
+    await screen.findByText('Hóa đơn tháng này');
+    expect(screen.getByText('120 kWh')).toBeTruthy();
+    expect(screen.getByText('8 m³')).toBeTruthy();
+    expect(screen.getByText('Phí Internet & vệ sinh')).toBeTruthy();
+    expect(await screen.findByText(/1 hóa đơn còn số dư phải thanh toán/)).toBeTruthy();
     expect(screen.getByText('Tổng hóa đơn: 4.290.000 ₫')).toBeTruthy();
+    expect(screen.queryByText('Kỳ 10/2026')).toBeNull();
+    fireEvent.click(screen.getByRole('button', { name: 'Hóa đơn các kỳ trước' }));
 
     // Filter by Paid
-    fireEvent.click(screen.getByRole('tab', { name: 'Lọc hóa đơn: Đã thanh toán' }));
-    expect(screen.getByText('Kỳ 10/2026')).toBeTruthy();
-    expect(screen.queryByText('Kỳ 11/2026')).toBeNull();
+    fireEvent.click(await screen.findByRole('tab', { name: 'Lọc hóa đơn: Đã thanh toán' }));
+    expect(await screen.findByText('Kỳ 10/2026')).toBeTruthy();
+    // The featured current-month bill stays in place; filters apply to history only.
+    expect(screen.getAllByText('Kỳ 11/2026')).toHaveLength(1);
 
     // Filter by Unpaid
     fireEvent.click(screen.getByRole('tab', { name: 'Lọc hóa đơn: Chưa thanh toán' }));
-    expect(screen.getByText('Kỳ 11/2026')).toBeTruthy();
+    expect(screen.getAllByText('Kỳ 11/2026')).toHaveLength(1);
     expect(screen.queryByText('Kỳ 10/2026')).toBeNull();
+    expect(screen.getByText('Chưa có hóa đơn phù hợp.')).toBeTruthy();
+  });
+
+  it("does not mistake last month's invoice for a new bill, but keeps history accessible", async () => {
+    const oldInvoice = {
+      ...baseInvoice,
+      status: 'Final' as const,
+      billingPeriod: '2026-10-01',
+      id: secondInvoiceId,
+    };
+    const fetcher = vi.fn<Transport>().mockImplementation(async (url) => {
+      const path = String(url);
+      if (path.includes('billingPeriod=')) return json(page([]));
+      if (path.includes('/payment-invoices?')) return json(page([]));
+      return json(page([oldInvoice]));
+    });
+    setApi(fetcher);
+    render(<TenantInvoicesScreen />);
+
+    expect(await screen.findByText('Tháng này chưa có hóa đơn')).toBeTruthy();
+    expect(screen.queryByText('Kỳ 10/2026')).toBeNull();
+    fireEvent.click(screen.getByRole('button', { name: 'Hóa đơn các kỳ trước' }));
+    expect(await screen.findByText('Kỳ 10/2026')).toBeTruthy();
+    expect(
+      fetcher.mock.calls.some(([url]) => String(url).includes('billingPeriod=2026-11-01')),
+    ).toBe(true);
   });
 
   it('Test 7: enforces Tenant access control on 403/404 without leaking unauthorized invoice data', async () => {

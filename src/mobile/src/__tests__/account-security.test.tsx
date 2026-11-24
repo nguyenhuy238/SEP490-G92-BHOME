@@ -114,7 +114,7 @@ it('maps backend password validation inline, focuses it and preserves the draft 
   render(<AccountSecurityScreen />);
   fill('Synthetic!Current-725', 'Synthetic!Next-725');
   expect((await screen.findByRole('alert')).textContent).toContain('Mật khẩu mới chưa đáp ứng');
-  expect(document.activeElement).toBe(screen.getByLabelText('Mật khẩu mới'));
+  await waitFor(() => expect(document.activeElement).toBe(screen.getByLabelText('Mật khẩu mới')));
   expect(screen.getByLabelText('Mật khẩu mới')).toHaveProperty('value', 'Synthetic!Next-725');
   fireEvent.change(screen.getByLabelText('Mật khẩu mới'), {
     target: { value: 'Synthetic!Corrected-725' },

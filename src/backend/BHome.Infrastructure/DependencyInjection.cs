@@ -340,6 +340,7 @@ public static class DependencyInjection
         services.AddSingleton<BHome.Application.Contracts.IContractWorkflowMode, BHome.Infrastructure.Contracts.ContractWorkflowMode>();
         services.AddScoped<BHome.Infrastructure.Contracts.ViettelMySignContractAdapter>();
         services.AddScoped<BHome.Application.Contracts.IContractSigningDocumentSource, BHome.Infrastructure.Contracts.ContractSigningDocumentSource>();
+        services.AddScoped<BHome.Infrastructure.Contracts.HoldingDepositRenderer>();
         services.AddScoped<BHome.Infrastructure.Contracts.DevelopmentContractSigningAdapter>();
         // Signing methods (OTP email / Viettel MySign / Development simulation) are chosen per signature by the router.
         services.AddOptions<BHome.Application.Contracts.ContractSigningOptions>().Bind(configuration.GetSection(BHome.Application.Contracts.ContractSigningOptions.Section))
@@ -460,7 +461,7 @@ public static class DependencyInjection
         services.AddSingleton<IIdentityProtection, IdentityProtection>();
         services.AddScoped<IHouseholdProfiles, HouseholdProfiles>();
         services.AddOptions<ObjectStorageOptions>().Bind(configuration.GetSection(ObjectStorageOptions.Section));
-        services.AddScoped<IObjectStorage, MinioObjectStorage>();
+        services.AddSingleton<IObjectStorage, MinioObjectStorage>();
         services.AddOptions<JobWorkerOptions>().Bind(configuration.GetSection("Jobs"))
             .Validate(o => o.PollSeconds is >= 1 and <= 300, "Job polling must be 1-300 seconds.").ValidateOnStart();
         services.AddScoped<CompactJobPersistence>();

@@ -72,6 +72,90 @@ public sealed class TenantRefundPetitionTests
     }
 
     [Fact]
+    public void MoveOutRefundMustMatchTheCurrentTenantAcceptedProposalExactly()
+    {
+        var contractId = Guid.NewGuid();
+        var proposalId = Guid.NewGuid();
+        var inspectionId = Guid.NewGuid();
+        var feedback = new MoveOutChargeProposalFeedback(Guid.NewGuid(), contractId, proposalId,
+            true, "", TenantId, Today, Guid.NewGuid(), "accepted", Settlement:
+            new("RefundEligible", 0, 200000, null, [], []));
+        var proposal = new MoveOutChargeProposal(proposalId, contractId, "source", inspectionId,
+            1, [], 1000000, 1000000, 800000, 200000, null, OwnerId, Today,
+            [TenantId], Guid.NewGuid(), "proposal", TenantFeedback: feedback);
+        var preview = new MoveOutChargeProposalPreview(contractId, "source", inspectionId, 1,
+            1000000, 1000000, [], proposal, "Accepted");
+        TenantRefundPetitionService.ValidateMoveOutRefund(preview, contractId, proposalId, 200000);
+        var wrongAmount = Assert.Throws<FinanceException>(() =>
+            TenantRefundPetitionService.ValidateMoveOutRefund(preview, contractId, proposalId, 250000));
+        Assert.Equal("move_out_refund_proposal_changed", wrongAmount.Code);
+        Assert.Throws<FinanceException>(() =>
+            TenantRefundPetitionService.ValidateMoveOutRefund(preview with { Status = "Outdated" },
+                contractId, proposalId, 200000));
+        Assert.Throws<FinanceException>(() =>
+            TenantRefundPetitionService.ValidateMoveOutRefund(preview with
+            {
+                LatestProposal = proposal with
+                {
+                    TenantFeedback = feedback with
+                    { Settlement = new("Payable", 200000, 0, Guid.NewGuid(), [], []) }
+                }
+            },
+                contractId, proposalId, 200000));
+        Assert.Throws<FinanceException>(() =>
+            TenantRefundPetitionService.ValidateMoveOutRefund(preview, Guid.NewGuid(), proposalId, 200000));
+        Assert.Throws<FinanceException>(() =>
+            TenantRefundPetitionService.ValidateMoveOutRefund(preview, contractId, Guid.NewGuid(), 200000));
+    }
+
+    [Fact]
+    public async Task MoveOutLinkedPetitionMustHaveAuthoritativeSettlementValidation()
+    {
+        var repository = new InMemoryRepository();
+        var contractId = repository.Sources.Contracts[0].Id;
+        var tenant = Create(repository, TenantId, "Tenant");
+        var error = await Assert.ThrowsAsync<FinanceException>(() =>
+            tenant.CreateAsync(new(200000, "Hoàn cọc sau trả phòng", null, contractId,
+                Guid.NewGuid()), Guid.NewGuid(), default));
+        Assert.Equal("move_out_refund_validation_unavailable", error.Code);
+        Assert.Empty((await tenant.TenantListAsync(1, 10, default)).Items);
+        var malformed = await Assert.ThrowsAsync<FinanceException>(() =>
+            tenant.CreateAsync(new(200000, "Sai nguồn", null, null,
+                Guid.NewGuid()), Guid.NewGuid(), default));
+        Assert.Equal("invalid_refund_request", malformed.Code);
+    }
+
+    [Fact]
+    public async Task OwnerCannotExecuteMoveOutPetitionAsASecondIndependentDepositRefund()
+    {
+        var repository = new InMemoryRepository();
+        var evidence = new InMemoryStorage();
+        var petitionId = Guid.NewGuid();
+        repository.Preload(new TenantRefundPetitionRecord
+        {
+            Id = petitionId,
+            TenantUserId = TenantId,
+            BeneficiaryResidentId = Guid.NewGuid(),
+            Amount = 200000,
+            Status = "APPROVED",
+            Version = 2,
+            DecidedAt = Today.AddMinutes(-10),
+            State = new TenantRefundPetitionState
+            {
+                SourceContractId = repository.Sources.Contracts[0].Id,
+                MoveOutProposalId = Guid.NewGuid()
+            }
+        });
+        var owner = Create(repository, OwnerId, "Owner", evidence);
+        var blocked = await Assert.ThrowsAsync<FinanceException>(() => owner.ExecuteAsync(
+            petitionId, new(2, Today, "EXTERNAL-BANK-REF", "Move-out deposit", true),
+            Guid.NewGuid(), new MemoryStream([1, 2, 3]), default));
+        Assert.Equal(409, blocked.Status);
+        Assert.Equal("move_out_refund_use_deposit_ledger", blocked.Code);
+        Assert.Equal(0, evidence.Puts);
+    }
+
+    [Fact]
     public async Task CompletedTransferProofIsVisibleOnlyToBeneficiaryAndRequiresOwnerConfirmation()
     {
         var repository = new InMemoryRepository();
@@ -161,6 +245,7 @@ public sealed class TenantRefundPetitionTests
     private sealed class InMemoryRepository : ITenantRefundPetitionRepository
     {
         private TenantRefundPetitionRecord? record;
+        public void Preload(TenantRefundPetitionRecord petition) => record = petition;
         public int ListCalls { get; private set; }
         public TenantRefundPetitionSources Sources { get; } = new(
             [new(Guid.NewGuid(), "Chuyển khoản của tôi")],
@@ -183,6 +268,9 @@ public sealed class TenantRefundPetitionTests
             Task.FromResult<Guid?>(tenantId == TenantId ? Guid.NewGuid() : null);
         public Task<TenantRefundPetitionSources> SourcesAsync(Guid tenantId, CancellationToken token) =>
             Task.FromResult(Sources);
+        public Task<bool> ActiveMoveOutPetitionAsync(Guid proposalId, CancellationToken token) =>
+            Task.FromResult(record?.State.MoveOutProposalId == proposalId &&
+                record.Status is "REQUESTED" or "APPROVED" or "COMPLETED");
         public Task<bool> ReferenceUsedAsync(string reference, Guid exceptId, CancellationToken token) =>
             Task.FromResult(false);
         public Task SaveAsync(TenantRefundPetitionRecord row, bool create, Guid actor, string action,
