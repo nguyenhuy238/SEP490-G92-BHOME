@@ -410,15 +410,19 @@ function LiveContractDetail({
   onBack: () => void;
   initialSection?: ContractSection;
 }) {
-  const detail = useContractDetail(api, id, role, 5000);
+  const [section, setSection] = useState<ContractSection>(initialSection);
+  // Move-in inspection does not depend on a move-out request. A contract
+  // without one correctly returns 404, so do not fetch it for this section.
+  const detail = useContractDetail(api, id, role, 5000, section !== 'handover');
   useWorkspaceHeaderRefresh(detail.reload, detail.loading, {
     onBack,
     title: detail.data?.contract.kind === 'Holding' ? 'Hợp đồng giữ chỗ' : 'Hợp đồng',
   });
-  const signingMethods = useSigningMethods(api);
+  // Staff can prepare contracts but the signing-methods endpoint is scoped to
+  // Owner/Tenant. Do not call it from Staff's handover or contract screens.
+  const signingMethods = useSigningMethods(api, role === 'Owner' || role === 'Tenant');
   const [selectedAction, setSelectedAction] = useState('');
   const [terminationRequested, setTerminationRequested] = useState(false);
-  const [section, setSection] = useState<ContractSection>(initialSection);
   const [keys] = useState(() => mutationKeys(randomUUID));
   const [evidence, setEvidence] = useState<string[]>([]);
   const [evidenceText, setEvidenceText] = useState(''),

@@ -22,6 +22,7 @@ const state = vi.hoisted(() => ({
   back: vi.fn(),
   headerBack: undefined as (() => void) | undefined,
   viewedId: '',
+  includeMoveOut: true,
   params: null as Record<string, string | undefined> | null,
 }));
 const id = 'bc050000-0000-4000-8000-000000004003';
@@ -56,8 +57,15 @@ vi.mock('../lib/randomUUID', () => ({ randomUUID: () => '00000000-0000-4000-8000
 vi.mock('../lib/useFeedbackState', () => ({ useFeedbackState: () => useState('') }));
 vi.mock('../lib/toast', () => ({ conciseMessage: (s: string) => s, showError: vi.fn() }));
 vi.mock('../../../../packages/client-core/src/useContractDetail', () => ({
-  useContractDetail: (_client: unknown, contractId: string) => {
+  useContractDetail: (
+    _client: unknown,
+    contractId: string,
+    _role: string,
+    _interval: number,
+    includeMoveOut: boolean,
+  ) => {
     state.viewedId = contractId;
+    state.includeMoveOut = includeMoveOut;
     return {
       loading: false,
       error: '',
@@ -429,6 +437,14 @@ it('opens the handover section directly for the selected Tenant contract', () =>
   render(<ContractScreen />);
   expect(screen.getByText('Handover draft panel')).toBeTruthy();
   expect(screen.queryByText('Điều khoản đưa đi ký')).toBeNull();
+});
+it('does not load signing methods or move-out on a Staff handover deep link', () => {
+  state.role = 'Staff';
+  state.section = 'handover';
+  render(<ContractScreen />);
+  expect(screen.getByText('Handover draft panel')).toBeTruthy();
+  expect(state.includeMoveOut).toBe(false);
+  expect(state.request.mock.calls.some(([path]) => path.endsWith('/signing-methods'))).toBe(false);
 });
 it('ignores an invalid initial contract section', () => {
   state.role = 'Tenant';

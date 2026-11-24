@@ -1,5 +1,5 @@
 import React, { useCallback, useEffect, useRef, useState } from 'react';
-import { AppState, BackHandler, View } from 'react-native';
+import { AppState, BackHandler, Platform, View } from 'react-native';
 import { Redirect, router, useFocusEffect, useLocalSearchParams } from 'expo-router';
 import { ActivityIndicator, Button, Checkbox, Text } from 'react-native-paper';
 import { CameraCapture } from '../components/CameraCapture';
@@ -224,6 +224,9 @@ export function MeterTaskScreen({
   useFocusEffect(useCallback(() => () => abort.current?.abort(), []));
   useFocusEffect(
     useCallback(() => {
+      // React Native Web has no hardware back button, and calling BackHandler
+      // there shows a red runtime error. Browser history stays with Expo Router.
+      if (Platform.OS === 'web') return undefined;
       const listener = BackHandler.addEventListener('hardwareBackPress', () => {
         if (!lock.current) onReturn();
         return true;

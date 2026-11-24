@@ -85,7 +85,9 @@ export function WorkspaceShell({
   const narrowStaff = role === 'Staff' && width <= 360;
   const insideTabs = useContext(WorkspaceTabsContext);
   const navigation = useNavigation();
-  const [focused, setFocused] = useState(() => navigation.isFocused());
+  // Navigation focus is mutable external state. React warns when read during
+  // render; useFocusEffect synchronizes it after the screen becomes active.
+  const [focused, setFocused] = useState(false);
   useFocusEffect(
     useCallback(() => {
       setFocused(true);

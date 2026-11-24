@@ -62,3 +62,19 @@ it('keeps Main draft preparation separate from released Main signing/handover', 
   expect(api.moveOut).not.toHaveBeenCalled();
   expect(api.readiness).not.toHaveBeenCalled();
 });
+
+it('skips the non-existent move-out resource while showing Staff move-in handover', async () => {
+  const api = {
+    get: vi.fn().mockResolvedValue({ kind: 'Main', status: 'Active' }),
+    moveOut: vi.fn(),
+    readiness: vi.fn(),
+    history: vi.fn(),
+  };
+  const view = renderHook(() =>
+    useContractDetail(api as unknown as ContractClient, 'main', 'Staff', 0, false),
+  );
+  await waitFor(() => expect(view.result.current.loading).toBe(false));
+  expect(view.result.current.data?.moveOut).toBeNull();
+  expect(api.moveOut).not.toHaveBeenCalled();
+  expect(api.get).toHaveBeenCalledOnce();
+});
