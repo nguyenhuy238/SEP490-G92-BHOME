@@ -599,7 +599,7 @@ export function MeterTasksScreen() {
                   {allCompleted && (
                     <Text variant="labelSmall" style={styles.completedRoomNote}>
                       {primaryTask.purpose === 0
-                        ? 'Đã lưu chỉ số ban đầu (mốc khởi tạo, không tính tiêu thụ tháng)'
+                        ? 'Đã lưu chỉ số đầu kỳ (không tính tiêu thụ tháng)'
                         : 'Đã lưu chỉ số kỳ này để hệ thống tổng hợp hóa đơn theo lịch'}
                     </Text>
                   )}

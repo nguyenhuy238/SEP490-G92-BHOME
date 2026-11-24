@@ -12,6 +12,7 @@ import { useSession } from '../lib/SessionProvider';
 import { errorMessage, MobileApiError } from '../lib/api';
 import { randomUUID } from '../lib/randomUUID';
 import { showSuccess } from '../lib/toast';
+import { uploadPhotosBounded } from '../lib/uploadPhotosBounded';
 import { operationalTasks } from '../services/operationalTasks';
 import {
   inventoryStatusLabels,
@@ -252,8 +253,7 @@ function InventoryDetail({
       throw new UserFeedbackError(
         'Công việc đã được cập nhật từ thiết bị khác. Hãy tải lại và kiểm tra trước khi lưu.',
       );
-    const uploaded: { photo: IncidentPhoto; id: string }[] = [];
-    for (const photo of photosToUpload) {
+    const uploaded = await uploadPhotosBounded(photosToUpload, async (photo) => {
       const scope = `inventory-photo:${item.id}:${photo.id}`;
       const result = await task.upload(
         taskId,
@@ -261,8 +261,8 @@ function InventoryDetail({
         keys.get(scope, photo.id),
         photo.contentType,
       );
-      uploaded.push({ photo, id: result.id });
-    }
+      return { photo, id: result.id };
+    });
     // Uploading task evidence can update the task version. Read it again before
     // writing the item's condition and its newly uploaded evidence references.
     const latest = photosToUpload.length ? await client.get(taskId) : before;

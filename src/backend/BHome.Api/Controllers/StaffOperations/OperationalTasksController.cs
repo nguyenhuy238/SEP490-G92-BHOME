@@ -53,6 +53,9 @@ public sealed class OperationalTasksController(OperationalTaskService service) :
     public Task<TaskView> Assign(Guid id, TaskAction input, CancellationToken t) => service.ActAsync(id, "assign", input, Key(), t);
     [HttpPost("{id:guid}/start"), Authorize(Policy = Permissions.OperationalTasks.Execute)]
     public Task<TaskView> Start(Guid id, TaskAction input, CancellationToken t) => service.ActAsync(id, "start", input, Key(), t);
+    [HttpPost("{id:guid}/initial-meter-baselines/ensure"), Authorize(Policy = Permissions.OperationalTasks.Execute)]
+    public Task<Guid[]> EnsureMoveInInitialMeterTasks(Guid id, CancellationToken t) =>
+        service.EnsureMoveInInitialMeterTasksAsync(id, Key(), t);
     [HttpPost("{id:guid}/final-meter-tasks/ensure"), Authorize(Policy = Permissions.OperationalTasks.Execute)]
     public Task<Guid[]> EnsureMoveOutFinalMeterTasks(Guid id, CancellationToken t) =>
         service.EnsureMoveOutFinalMeterTasksAsync(id, Key(), t);

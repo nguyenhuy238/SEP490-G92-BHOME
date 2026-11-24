@@ -24,7 +24,7 @@ import type { PublicLocation, PublicPhoto, PublicRoom } from '../../../services/
 
 function usePublicMeta(title: string, description: string) {
   useEffect(() => {
-    document.title = `${title} | BHOME`;
+    document.title = `${title} | BHome`;
     let meta = document.querySelector<HTMLMetaElement>('meta[name="description"]');
     if (!meta) {
       meta = document.createElement('meta');
@@ -32,6 +32,12 @@ function usePublicMeta(title: string, description: string) {
       document.head.append(meta);
     }
     meta.content = description.slice(0, 160);
+    const socialTitle = document.querySelector<HTMLMetaElement>('meta[property="og:title"]');
+    const socialDescription = document.querySelector<HTMLMetaElement>(
+      'meta[property="og:description"]',
+    );
+    if (socialTitle) socialTitle.content = document.title;
+    if (socialDescription) socialDescription.content = meta.content;
   }, [title, description]);
 }
 export function Status({
@@ -217,7 +223,7 @@ export function LocationsPage({ home = false }: { home?: boolean }) {
   const [page, setPage] = useState(1);
   usePublicMeta(
     home ? 'Tìm nơi ở phù hợp' : 'Khám phá cơ sở',
-    'Khám phá cơ sở, tiện ích và phòng trọ được chủ cơ sở công bố trên BHOME.',
+    'Khám phá cơ sở, tiện ích và phòng trọ được chủ cơ sở công bố trên BHome.',
   );
   const filter = (key: string, value: string) => {
     const next = new URLSearchParams(params);
@@ -539,7 +545,7 @@ export function LocationPage() {
   const location = query.data;
   usePublicMeta(
     location?.name ?? 'Thông tin cơ sở',
-    location?.summary ?? 'Thông tin cơ sở được công bố trên BHOME.',
+    location?.summary ?? 'Thông tin cơ sở được công bố trên BHome.',
   );
   return (
     <>
@@ -610,7 +616,7 @@ export function RoomPage() {
   });
   usePublicMeta(
     room ? `Phòng ${room.roomNumber}` : 'Thông tin phòng',
-    room?.description ?? 'Thông tin phòng được công bố trên BHOME.',
+    room?.description ?? 'Thông tin phòng được công bố trên BHome.',
   );
   return (
     <>
@@ -656,7 +662,7 @@ export function RoomPage() {
   );
 }
 export function NotFoundPage() {
-  usePublicMeta('Không tìm thấy trang', 'Trang bạn yêu cầu không tồn tại trên BHOME.');
+  usePublicMeta('Không tìm thấy trang', 'Trang bạn yêu cầu không tồn tại trên BHome.');
   return (
     <>
       <Typography variant="h4" component="h1" sx={{ mb: 2 }}>

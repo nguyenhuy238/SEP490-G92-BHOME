@@ -90,7 +90,7 @@ const staffSteps = [
   },
   {
     title: 'Kiểm tra hiện trạng phòng',
-    detail: 'Chọn kết quả thực tế cho 7 khu vực. Có vấn đề thì ghi chú và chụp ảnh.',
+    detail: 'Chọn kết quả thực tế cho 7 khu vực.',
   },
   {
     title: 'Kiểm kê tài sản',
@@ -202,9 +202,7 @@ function hasCompleteRoomInspection(value: MoveInDraft): boolean {
       if (matches.length !== 1) return false;
       const check = matches[0]!;
       return (
-        check.status === 'Passed' ||
-        (check.status === 'NotApplicable' && !!check.notes?.trim()) ||
-        (check.status === 'Issue' && !!check.notes?.trim() && (check.evidenceIds ?? []).length > 0)
+        check.status === 'Passed' || check.status === 'NotApplicable' || check.status === 'Issue'
       );
     })
   );
@@ -311,10 +309,8 @@ export function MoveInDraftHandoverPanel({
   const [selectedKeyEvidence, setSelectedKeyEvidence] = useState<string[]>([]);
   const [photoPreviewUris, setPhotoPreviewUris] = useState<Record<string, string>>({});
   const previewFiles = useRef(new Map<string, { uri: string; dispose: () => void }>());
-  const [roomChecksTouched, setRoomChecksTouched] = useState<string[]>([]);
   const [keyQuantity, setKeyQuantity] = useState('');
   const [keyNotes, setKeyNotes] = useState('');
-  const [keysTouched, setKeysTouched] = useState(false);
   const [feedback, setFeedback] = useState({ version: -1, acknowledged: false });
   const [correctionOpen, setCorrectionOpen] = useState(false);
   const [correctionReason, setCorrectionReason] = useState('');
@@ -402,9 +398,7 @@ export function MoveInDraftHandoverPanel({
     setValues((previous) => ({
       ...previous,
       [`roomCheck.${code}.${field}`]: value,
-      ...(field === 'status' && value === 'Passed' ? { [`roomCheck.${code}.notes`]: '' } : {}),
     }));
-    setRoomChecksTouched((previous) => (previous.includes(code) ? previous : [...previous, code]));
   };
 
   useEffect(() => {
@@ -586,19 +580,15 @@ export function MoveInDraftHandoverPanel({
         ...(draft.roomChecks ?? []).flatMap((check) => check.evidenceIds ?? []),
       ]),
     ]);
-    setRoomChecksTouched([]);
     const recordedKeys = (draft.accessItems ?? []).find((item) => item.type === 'RoomKey');
     setKeyQuantity(recordedKeys ? String(recordedKeys.quantity) : '');
     setKeyNotes(recordedKeys?.notes ?? '');
-    setKeysTouched(false);
     setEditing(true);
   }
 
   async function saveDraft() {
     if (!draft || !canStaffEditMoveIn(draft)) return;
-    const touchedChecks = roomHandoverChecks.filter((check) =>
-      roomChecksTouched.includes(check.code),
-    );
+    const touchedChecks = roomHandoverChecks.filter((check) => activeItem === `room:${check.code}`);
     const roomChecks: NonNullable<MoveInDraftInput['roomChecks']> = touchedChecks.map(
       ({ code, label }) => {
         const status = values[`roomCheck.${code}.status`] as MoveInRoomCheckStatus | undefined;
@@ -607,22 +597,14 @@ export function MoveInDraftHandoverPanel({
           (id) => values[`roomCheck.${code}.evidence.${id}`] === 'true',
         );
         if (!status) throw new UserFeedbackError(`Hãy chọn kết quả kiểm tra: ${label}.`);
-        if (status !== 'Passed' && !notes) {
-          throw new UserFeedbackError(`Hãy ghi lý do cho mục "${label}".`);
-        }
-        if (status === 'Issue' && !evidenceIds.length) {
-          throw new UserFeedbackError(
-            `Mục "${label}" có vấn đề cần gắn ít nhất một ảnh bằng chứng riêng.`,
-          );
-        }
         if (evidenceIds.length > 5) {
           throw new UserFeedbackError(`Mục "${label}" chỉ được gắn tối đa 5 ảnh.`);
         }
-        return { code, status, notes: status === 'Passed' ? null : notes, evidenceIds };
+        return { code, status, notes: notes || null, evidenceIds };
       },
     );
     let validatedAccessItems: MoveInAccessItem[] | undefined;
-    if (keysTouched) {
+    if (activeItem === 'keys') {
       const quantity = Number(keyQuantity);
       if (!keyQuantity.trim() || !Number.isInteger(quantity) || quantity < 0 || quantity > 100)
         throw new UserFeedbackError('Số lượng chìa khóa bàn giao phải là số nguyên từ 0 đến 100.');
@@ -631,11 +613,13 @@ export function MoveInDraftHandoverPanel({
       validatedAccessItems = [{ type: 'RoomKey', quantity, notes: keyNotes.trim() }];
     }
     // Unchecked groups remain untouched. Each checked group can be saved separately.
-    const checkedAssets = draft.assets.filter((asset) => values[`${asset.id}.checked`] === 'true');
+    const checkedAssets = draft.assets.filter((asset) => activeItem === `asset:${asset.id}`);
+    if (checkedAssets.some((asset) => values[`${asset.id}.checked`] !== 'true')) {
+      throw new UserFeedbackError('Hãy xác nhận đã kiểm tra tài sản.');
+    }
     const input: MoveInDraftInput = {
       version: draft.version,
-      roomCondition: values.roomCondition?.trim(),
-      notes: values.notes?.trim(),
+      ...(activeItem === 'room-summary' ? { roomCondition: values.roomCondition?.trim() } : {}),
       ...(touchedChecks.length ? { roomChecks } : {}),
       ...(validatedAccessItems ? { accessItems: validatedAccessItems } : {}),
       ...(checkedAssets.length
@@ -652,7 +636,7 @@ export function MoveInDraftHandoverPanel({
           }
         : {}),
       evidenceIds: selectedEvidence,
-      keyEvidenceIds: selectedKeyEvidence,
+      ...(activeItem === 'keys' ? { keyEvidenceIds: selectedKeyEvidence } : {}),
     };
     const key = keys.get('draft', input);
     await client.save(contract.id, input, key);
@@ -1202,9 +1186,13 @@ export function MoveInDraftHandoverPanel({
                 <View style={wizardStyles.section}>
                   {wizardStep === 0 && (
                     <>
+                      <Text>Điện: {draft.electricity?.value ?? 'Chưa ghi'} kWh</Text>
+                      <Text>Nước: {draft.water?.value ?? 'Chưa ghi'} m³</Text>
                       <ContractInitialMeterTasks
                         contract={contract}
                         integrated
+                        moveInTaskId={draft.moveInTask?.id}
+                        moveInStarted={started}
                         refreshRevision={revision}
                         onOpenTask={(id, label) => {
                           setMeterTask({ id, label });
@@ -1232,7 +1220,7 @@ export function MoveInDraftHandoverPanel({
                         return workEntry(
                           code,
                           label,
-                          check?.notes || 'Kiểm tra thực tế và chụp ảnh nếu có vấn đề',
+                          check?.notes || 'Kiểm tra thực tế',
                           check ? roomStatusLabels[check.status] : 'Chưa kiểm tra',
                           () => setActiveItem(`room:${code}`),
                           !!check,
@@ -1494,7 +1482,7 @@ export function MoveInDraftHandoverPanel({
                 {selectedRoomCode && selectedRoomCheck && (
                   <View style={wizardStyles.section}>
                     <Text variant="bodySmall" style={ui.muted}>
-                      Chọn kết quả kiểm tra tại phòng, ghi chú khi có vấn đề hoặc không áp dụng.
+                      Chọn Không áp dụng nếu hạng mục không có tại phòng.
                     </Text>
                     {compactPhone ? (
                       <View style={wizardStyles.conditionOptions}>
@@ -1538,7 +1526,7 @@ export function MoveInDraftHandoverPanel({
                         ]}
                       />
                     )}
-                    {values['roomCheck.' + selectedRoomCode + '.status'] !== 'Passed' && (
+                    {!!values['roomCheck.' + selectedRoomCode + '.status'] && (
                       <Input
                         label={'Ghi chú · ' + selectedRoomCheck.label}
                         value={values['roomCheck.' + selectedRoomCode + '.notes'] ?? ''}
@@ -1547,10 +1535,10 @@ export function MoveInDraftHandoverPanel({
                         onChange={(value) => setRoomCheck(selectedRoomCode, 'notes', value)}
                       />
                     )}
-                    {values['roomCheck.' + selectedRoomCode + '.status'] === 'Issue' && (
+                    {!!values['roomCheck.' + selectedRoomCode + '.status'] && (
                       <>
                         <Text variant="bodySmall" style={ui.muted}>
-                          Gắn riêng ít nhất một ảnh minh chứng cho khu vực này.
+                          Ảnh minh chứng (không bắt buộc).
                         </Text>
                         {photoCapture('room', selectedRoomCode)}
                       </>
@@ -1583,7 +1571,6 @@ export function MoveInDraftHandoverPanel({
                       disabled={busy}
                       onChange={(value) => {
                         setKeyQuantity(value);
-                        setKeysTouched(true);
                       }}
                     />
                     <Input
@@ -1593,7 +1580,6 @@ export function MoveInDraftHandoverPanel({
                       disabled={busy}
                       onChange={(value) => {
                         setKeyNotes(value);
-                        setKeysTouched(true);
                       }}
                     />
                     {photoCapture('keys')}
@@ -1648,7 +1634,7 @@ export function MoveInDraftHandoverPanel({
                   <Text variant="titleSmall">Chữ ký của Tenant</Text>
                   <SignaturePad disabled={busy} onChange={setTenantDrawing} />
                   <Checkbox.Item
-                    label="Tôi đã kiểm tra nội dung biên bản"
+                    label="Tôi đã xem biên bản và đồng ý nhận phòng theo hiện trạng ghi nhận, kể cả các mục có vấn đề"
                     status={acknowledged ? 'checked' : 'unchecked'}
                     disabled={busy}
                     onPress={() => setAcknowledged(!acknowledged)}

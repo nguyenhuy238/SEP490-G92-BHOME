@@ -448,8 +448,14 @@ public static class DependencyInjection
         services.AddScoped<IJobScheduleContributor>(p => p.GetRequiredService<BHome.Application.Notifications.NotificationDeliveryService>());
         services.AddScoped<BHome.Application.PaymentsDebt.IPaymentRepository, BHome.Infrastructure.PaymentsDebt.PaymentRepository>();
         services.AddScoped<BHome.Application.PaymentsDebt.PaymentService>();
-        services.AddSingleton(provider => new BHome.Application.PaymentsDebt.PaymentRuntimeMode(
-            provider.GetRequiredService<Microsoft.Extensions.Hosting.IHostEnvironment>().EnvironmentName is "Development" or "Testing"));
+        services.AddSingleton(provider =>
+        {
+            var environment = provider.GetRequiredService<IHostEnvironment>().EnvironmentName;
+            var sepay = provider.GetRequiredService<BHome.Application.PaymentsDebt.SePay.SePayOptions>();
+            return new BHome.Application.PaymentsDebt.PaymentRuntimeMode(
+                environment is "Development" or "Testing",
+                environment == "Staging" && sepay.TestingAvailable(environment));
+        });
         services.AddSingleton<BHome.Application.PaymentsDebt.ITransferQrGenerator, BHome.Infrastructure.PaymentsDebt.VietQrGenerator>();
         services.AddScoped<BHome.Application.PaymentsDebt.TransferInstructionsService>();
         services.AddScoped<BHome.Application.PaymentsDebt.IMainInitialPaymentLedger, BHome.Infrastructure.PaymentsDebt.MainInitialPaymentLedger>();
@@ -463,7 +469,7 @@ public static class DependencyInjection
         services.AddSingleton<IIdentityProtection, IdentityProtection>();
         services.AddScoped<IHouseholdProfiles, HouseholdProfiles>();
         services.AddOptions<ObjectStorageOptions>().Bind(configuration.GetSection(ObjectStorageOptions.Section));
-        services.AddScoped<IObjectStorage, MinioObjectStorage>();
+        services.AddSingleton<IObjectStorage, MinioObjectStorage>();
         services.AddOptions<JobWorkerOptions>().Bind(configuration.GetSection("Jobs"))
             .Validate(o => o.PollSeconds is >= 1 and <= 300, "Job polling must be 1-300 seconds.").ValidateOnStart();
         services.AddScoped<CompactJobPersistence>();

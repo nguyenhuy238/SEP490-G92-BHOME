@@ -388,7 +388,8 @@ function NewResidentOnboarding() {
                 <Text variant="titleMedium">Tạo nhanh dữ liệu kiểm thử</Text>
                 <Text style={ui.muted}>
                   Tạo phòng mới, tài khoản Tenant mẫu và hợp đồng đang hiệu lực tại cơ sở này. Hệ
-                  thống sẽ giao nhiệm vụ ghi chỉ số điện/nước ban đầu cho Staff.
+                  thống chuẩn bị một công việc bàn giao phòng; Staff bắt đầu bàn giao rồi chụp và
+                  xác nhận chỉ số đầu kỳ điện, nước ngay trong công việc đó.
                 </Text>
                 <Button
                   mode="outlined"
@@ -415,8 +416,8 @@ function NewResidentOnboarding() {
                     <Text selectable>Tài khoản Tenant: {seedResult.tenantEmail}</Text>
                     <Text selectable>Mật khẩu Tenant test: {seedResult.tenantPassword}</Text>
                     <Text>
-                      {seedResult.initialMeterTasks} nhiệm vụ khởi tạo điện/nước đang chờ Staff thực
-                      hiện.
+                      Đã chuẩn bị một công việc bàn giao phòng, gồm kiểm tra phòng, tài sản, chìa
+                      khóa và xác nhận chỉ số điện nước đầu kỳ.
                     </Text>
                     <Text style={ui.muted}>
                       Chỉ dùng dữ liệu giả lập trên DB Development local. Không có chữ ký hoặc thanh
@@ -424,15 +425,6 @@ function NewResidentOnboarding() {
                     </Text>
                     <Button
                       mode="contained"
-                      onPress={() => {
-                        dirtyRef.current = false;
-                        setFinished(true);
-                        go('meter-reading');
-                      }}
-                    >
-                      Mở nhiệm vụ ghi chỉ số
-                    </Button>
-                    <Button
                       onPress={() => {
                         dirtyRef.current = false;
                         setFinished(true);

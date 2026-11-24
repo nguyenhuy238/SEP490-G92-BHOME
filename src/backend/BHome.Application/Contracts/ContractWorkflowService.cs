@@ -6,8 +6,8 @@ namespace BHome.Application.Contracts;
 public sealed partial class ContractService
 {
     private bool DemoEnabled => workflowMode?.SimulatedSigningEnabled == true;
-    private string? ConfiguredPaymentMode(Guid locationId) => paymentOptions?.Enabled == true &&
-        paymentOptions.ReceivingAccounts.Any(a => a.LocationId == locationId) &&
+    private string? ConfiguredPaymentMode(Guid locationId, Guid ownerId) => paymentOptions?.Enabled == true &&
+        paymentOptions.Bound(locationId, ownerId) &&
         (paymentOptions.Mode == "Live" || holdingTestScope?.Allows(locationId) == true || holdingTestScope?.AllowsExternalDatabase == true)
         ? paymentOptions.Mode : null;
     private IContractWorkflowRepository Workflow => workflowRepository ?? throw new ContractException(503, "contract_workflow_unavailable");
@@ -164,7 +164,7 @@ public sealed partial class ContractService
     {
         using var buffer = new MemoryStream();
         await storage.CopyToAsync(file.ObjectKey, buffer, t);
-        if (buffer.Length != file.Length || FileHash(buffer.ToArray()) != file.FileHash)
+        if (buffer.Length != file.Length || FileHash(buffer) != file.FileHash)
             throw ContractException.Conflict("contract_document_integrity_failed");
         buffer.Position = 0; await buffer.CopyToAsync(output, t);
     }

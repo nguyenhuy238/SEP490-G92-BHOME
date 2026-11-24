@@ -42,6 +42,7 @@ import { CameraCapture } from '../components/CameraCapture';
 import { Input } from '../components/WorkflowControls';
 import { canUseLocalMeterDemo, meterDemoJpegBytes } from '../lib/meterDemoCapture';
 import { ContractInitialMeterTasks } from '../features/contracts/ContractInitialMeterTasks';
+import { ContractEvidence } from '../features/contracts/ContractEvidence';
 import { MeterTaskScreen } from '../app/meter';
 import { roomHandoverChecks, type MoveInRoomCheckStatus } from '../services/moveInHandover';
 import { useWorkspace } from '../features/workspace/WorkspaceProvider';
@@ -197,90 +198,6 @@ function draftToLocal(draft: InspectionDraft): LocalInspection {
     values.keyNotes = keys.notes ?? '';
   }
   return { values, photos };
-}
-
-function PhotoStoredPreview({
-  client,
-  contractId,
-  id,
-  index,
-}: {
-  client: NonNullable<ReturnType<typeof contractClient>>;
-  contractId: string;
-  id: string;
-  index: number;
-}) {
-  const [uri, setUri] = useState('');
-  const [failed, setFailed] = useState(false);
-  useEffect(() => {
-    const controller = new AbortController();
-    let release: (() => void) | null = null;
-    void (async () => {
-      try {
-        const signatureValid = (signature: Uint8Array) => {
-          const png = [137, 80, 78, 71, 13, 10, 26, 10].every((v, i) => signature[i] === v);
-          const jpeg = signature[0] === 255 && signature[1] === 216 && signature[2] === 255;
-          if (!png && !jpeg) throw new Error('Ảnh bằng chứng không hợp lệ.');
-          return png ? 'png' : 'jpg';
-        };
-        if (Platform.OS === 'web') {
-          const blob = await client.evidence(contractId, id, controller.signal);
-          if (controller.signal.aborted) return;
-          if (blob.size > 5 * 1024 * 1024) throw new Error('Ảnh vượt quá 5 MB.');
-          const format = signatureValid(new Uint8Array(await blob.slice(0, 8).arrayBuffer()));
-          if (controller.signal.aborted) return;
-          const preview = URL.createObjectURL(
-            new Blob([blob], { type: `image/${format === 'png' ? 'png' : 'jpeg'}` }),
-          );
-          release = () => URL.revokeObjectURL(preview);
-          setUri(preview);
-        } else {
-          const bytes = await client.evidenceBytes(contractId, id, controller.signal);
-          if (controller.signal.aborted) return;
-          if (bytes.byteLength > 5 * 1024 * 1024) throw new Error('Ảnh vượt quá 5 MB.');
-          const format = signatureValid(bytes);
-          const folder = new Directory(Paths.cache, 'bhome-move-out-photo-previews');
-          folder.create({ idempotent: true, intermediates: true });
-          const cached = new File(folder, `${randomUUID()}.${format}`);
-          cached.create();
-          try {
-            await cached.write(bytes);
-            if (controller.signal.aborted) {
-              if (cached.exists) cached.delete();
-              return;
-            }
-            release = () => {
-              if (cached.exists) cached.delete();
-            };
-            setUri(cached.uri);
-          } catch (cause) {
-            if (cached.exists) cached.delete();
-            throw cause;
-          }
-        }
-      } catch {
-        if (!controller.signal.aborted) setFailed(true);
-      }
-    })();
-    return () => {
-      controller.abort();
-      release?.();
-    };
-  }, [client, contractId, id]);
-  if (uri)
-    return (
-      <Image
-        source={{ uri }}
-        accessibilityLabel={`Ảnh minh chứng ${index + 1}`}
-        style={{ width: '100%', height: 108, borderRadius: 8 }}
-        resizeMode="cover"
-      />
-    );
-  return (
-    <Text variant="bodySmall" style={ui.muted}>
-      {failed ? 'Không xem được ảnh riêng tư' : 'Đang tải ảnh riêng tư…'}
-    </Text>
-  );
 }
 
 const wizardStyles = StyleSheet.create({
@@ -1005,11 +922,13 @@ function InspectionForm({
                     resizeMode="cover"
                   />
                 ) : (
-                  <PhotoStoredPreview
-                    client={client}
+                  <ContractEvidence
+                    api={client}
                     contractId={contract.id}
-                    id={id}
-                    index={index}
+                    evidenceId={id}
+                    thumbnail
+                    thumbnailHeight={108}
+                    label={`Ảnh minh chứng ${index + 1}`}
                   />
                 )}
                 <IconButton

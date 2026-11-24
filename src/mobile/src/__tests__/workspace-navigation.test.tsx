@@ -94,6 +94,7 @@ vi.mock('react-native', () => {
   );
   return {
     View,
+    Image: () => <img alt="" />,
     Platform: { OS: 'android' },
     useWindowDimensions: () => ({ width: state.viewportWidth, height: 730 }),
     StyleSheet: { create: (s: unknown) => s },
@@ -335,13 +336,13 @@ it('keeps a compact Staff header and scrollable move-in content at 320px', () =>
       </WorkspaceShell>
     </WorkspaceProvider>,
   );
-  expect(screen.getByText('BHOME Nhân viên')).toBeTruthy();
+  expect(screen.getByText('BHome Nhân viên')).toBeTruthy();
   expect(screen.getByText('Đối chiếu kiểm kê đầu vào')).toBeTruthy();
   expect(screen.getByTestId('shell-scroll')).toBeTruthy();
   expect(screen.getAllByRole('tab')).toHaveLength(4);
   expect(view.container.querySelector('main')?.getAttribute('data-edges')).toBe('top,left,right');
   expect(
-    screen.getByText('BHOME Nhân viên').parentElement?.parentElement?.parentElement?.style.width,
+    screen.getByText('BHome Nhân viên').parentElement?.parentElement?.parentElement?.style.width,
   ).not.toBe('0px');
 });
 function ProfileEditFooterProbe() {
@@ -529,7 +530,7 @@ it('lets meter steps use the Staff shell back action without navigating home', (
       </WorkspaceShell>
     </WorkspaceProvider>,
   );
-  expect(screen.getByText('BHOME Nhân viên')).toBeTruthy();
+  expect(screen.getByText('BHome Nhân viên')).toBeTruthy();
   expect(screen.getAllByRole('tab')).toHaveLength(4);
   fireEvent.click(screen.getByRole('button', { name: 'Quay lại' }));
   expect(back).toHaveBeenCalledOnce();

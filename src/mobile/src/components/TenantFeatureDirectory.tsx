@@ -5,7 +5,6 @@ import { useWorkspace } from '../features/workspace/WorkspaceProvider';
 import type { WorkspaceScreen } from '../features/workspace/navigation';
 import { colors as c, staffColors as s } from '../theme/theme';
 import { typography } from '../theme/typography';
-import { featureCardLayout } from './FeatureCardLayout';
 export const tenantFeatureGroups: {
   title: string;
   items: {
@@ -36,6 +35,13 @@ export const tenantFeatureGroups: {
         detail: 'Biên bản & xác nhận',
         icon: 'key-outline',
         screen: 'checklist',
+      },
+      {
+        title: 'Kết thúc hợp đồng sớm',
+        detail: 'Gửi yêu cầu chấm dứt trước hạn',
+        icon: 'file-document-remove-outline',
+        screen: 'contract',
+        params: { section: 'lifecycle' },
       },
       {
         title: 'Tạm trú VNeID',
@@ -120,12 +126,7 @@ export function TenantFeatureDirectory({
             tenantFeatureGroups[0].items[2],
             tenantFeatureGroups[1].items[0],
             tenantFeatureGroups[2].items[0],
-            {
-              title: 'Kết thúc hợp đồng sớm',
-              icon: 'file-document-remove-outline',
-              screen: 'contract' as const,
-              params: { section: 'lifecycle' },
-            },
+            tenantFeatureGroups[0].items[3],
             tenantFeatureGroups[2].items[2],
           ],
         },
@@ -139,39 +140,42 @@ export function TenantFeatureDirectory({
               ? group.title.charAt(0) + group.title.slice(1).toLocaleLowerCase('vi-VN')
               : group.title}
           </Text>
-          {Array.from({ length: Math.ceil(group.items.length / 2) }, (_, row) => (
-            <View key={row} style={styles.row}>
-              {group.items.slice(row * 2, row * 2 + 2).map((item) => (
-                <View key={item.title} style={styles.tile}>
-                  <TouchableRipple
-                    style={featureCardLayout.ripple}
-                    accessibilityRole="button"
-                    accessibilityLabel={item.title}
-                    onPress={() => {
-                      const params =
-                        contractId && ['contract', 'checklist'].includes(item.screen)
-                          ? { ...item.params, contractId }
-                          : item.params;
-                      if (params) go(item.screen, params);
-                      else go(item.screen);
-                    }}
-                  >
-                    <View style={styles.tileContent}>
-                      <View style={styles.iconBox}>
-                        <Icon source={item.icon} size={22} color={s.blue} />
-                      </View>
-                      <Text style={styles.title} numberOfLines={2}>
-                        {item.title}
+          <View style={styles.list}>
+            {group.items.map((item, index) => (
+              <TouchableRipple
+                key={item.title}
+                style={[styles.item, index < group.items.length - 1 && styles.itemDivider]}
+                accessibilityRole="button"
+                accessibilityLabel={item.title}
+                accessibilityHint={item.detail}
+                onPress={() => {
+                  const params =
+                    contractId && ['contract', 'checklist'].includes(item.screen)
+                      ? { ...item.params, contractId }
+                      : item.params;
+                  if (params) go(item.screen, params);
+                  else go(item.screen);
+                }}
+              >
+                <View style={styles.itemContent}>
+                  <View style={styles.iconBox}>
+                    <Icon source={item.icon} size={20} color={s.blue} />
+                  </View>
+                  <View style={styles.itemText}>
+                    <Text style={styles.title} numberOfLines={2}>
+                      {item.title}
+                    </Text>
+                    {!!item.detail && (
+                      <Text style={styles.detail} numberOfLines={2}>
+                        {item.detail}
                       </Text>
-                    </View>
-                  </TouchableRipple>
+                    )}
+                  </View>
+                  <Icon source="chevron-right" size={19} color={c.muted} />
                 </View>
-              ))}
-              {group.items.length % 2 === 1 && row === Math.floor(group.items.length / 2) && (
-                <View style={styles.spacer} />
-              )}
-            </View>
-          ))}
+              </TouchableRipple>
+            ))}
+          </View>
         </View>
       ))}
       {!all && (
@@ -184,7 +188,7 @@ export function TenantFeatureDirectory({
           }
         >
           <View style={styles.linkRow}>
-            <Icon source="view-grid-outline" size={18} color={s.blue} />
+            <Icon source="format-list-bulleted" size={18} color={s.blue} />
             <Text style={styles.linkText}>Xem tất cả chức năng</Text>
             <Icon source="chevron-right" size={18} color={c.muted} />
           </View>
@@ -194,38 +198,45 @@ export function TenantFeatureDirectory({
   );
 }
 const styles = StyleSheet.create({
-  directory: { gap: 12 },
-  section: { gap: 12 },
-  heading: { ...typography.sectionHeading, color: s.navy },
-  row: { flexDirection: 'row', gap: 12, alignItems: 'stretch' },
-  tile: {
-    ...featureCardLayout.surface,
-    minWidth: 0,
-    height: 112,
+  directory: { gap: 20 },
+  section: { gap: 10 },
+  heading: { ...typography.sectionHeading, color: s.navy, paddingHorizontal: 2 },
+  list: {
+    borderRadius: 14,
+    overflow: 'hidden',
     backgroundColor: c.white,
+    borderWidth: 1,
+    borderColor: c.border,
   },
-  tileContent: {
-    ...featureCardLayout.content,
-    ...featureCardLayout.compact,
-    flex: 1,
-    justifyContent: 'center',
+  item: { minHeight: 64, justifyContent: 'center' },
+  itemDivider: { borderBottomWidth: 1, borderBottomColor: c.border },
+  itemContent: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+    paddingHorizontal: 14,
+    paddingVertical: 11,
   },
   iconBox: {
-    ...featureCardLayout.icon,
-    ...featureCardLayout.compactIcon,
+    width: 34,
+    height: 34,
+    borderRadius: 10,
+    alignItems: 'center',
+    justifyContent: 'center',
     backgroundColor: s.blueSoft,
   },
+  itemText: { flex: 1, minWidth: 0, gap: 3 },
   title: {
     ...typography.cardTitle,
-    textAlign: 'center',
+    textAlign: 'left',
     color: s.navy,
     flexShrink: 1,
   },
-  spacer: { flex: 1, minWidth: 0 },
+  detail: { ...typography.secondary, color: c.muted, flexShrink: 1 },
   allLink: { borderRadius: 12 },
   linkRow: {
-    minHeight: 48,
-    paddingHorizontal: 8,
+    minHeight: 52,
+    paddingHorizontal: 12,
     flexDirection: 'row',
     alignItems: 'center',
     gap: 8,

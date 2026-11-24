@@ -89,7 +89,9 @@ public sealed record HandoverDraftView(
     HandoverInspectedAsset[]? InspectedAssets = null,
     // Explicit capability negotiation. Older backend versions omit this
     // property, so clients must not sign until the backend can bind real ink.
-    bool OwnerInkSigningSupported = false);
+    bool OwnerInkSigningSupported = false,
+    [property: System.Text.Json.Serialization.JsonIgnore] string? OwnerName = null,
+    [property: System.Text.Json.Serialization.JsonIgnore] string? TenantName = null);
 
 // Owner inbox: one row per persisted move-in preparation, not a list of every
 // contract. Detail/evidence remain available only through the existing

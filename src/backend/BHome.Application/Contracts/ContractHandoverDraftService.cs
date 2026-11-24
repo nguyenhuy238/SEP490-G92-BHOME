@@ -121,7 +121,8 @@ public sealed partial class ContractService
         if (water is null) missing.Add("water");
         if (electricity is not null && water is not null && electricity.Date != water.Date)
             missing.Add("meter_readings_same_day");
-        if (string.IsNullOrWhiteSpace(state.RoomCondition)) missing.Add("room_condition");
+        // The seven structured room checks are the factual inspection.
+        // A separate general room summary is an optional note.
         // Older approved drafts can contain multiple access types, so preserve
         // their confirmed behavior without blocking Tenant acknowledgment.
         var legacyApproved = state.KeyEvidenceIds is null && state.Status is ("Ready" or "Confirmed");
@@ -163,19 +164,9 @@ public sealed partial class ContractService
         if (state.Status == "Draft" && state.StaffPreparedBy is null && moveInTask?.CanInspect != true &&
             user.IsInRole(Roles.Staff)) missing.Add("move_in_task_not_started");
         if (state.ContractSnapshotHash != contract.SnapshotHash) missing.Add("contract_changed");
-        // Staff may submit physical defects for Owner reinspection. These are
-        // signing blockers only, and never rewrite historic signed records.
+        // Recorded defects are disclosed in the signed report, not missing data.
         if (state.Status is "Draft" or "PendingOwnerReview" or "ReinspectionRequested")
         {
-            if ((state.RoomChecks ?? []).Any(check => check.Status != "Passed"))
-                missing.Add("room_check_failed");
-            if (state.AccessItems is { Length: 1 } access && access[0].Quantity <= 0)
-                missing.Add("access_not_ready");
-            if (canonical?.Items.Any(asset =>
-                    asset.Condition != "Good" || asset.ActualQuantity != asset.ExpectedQuantity) == true)
-                missing.Add("inventory_issue");
-            if (!canonicalTask && assets.Any(asset => asset.Checked && !LegacyAssetPassed(asset)))
-                missing.Add("asset_not_passed");
         }
         var selectedReinspection = state.ReinspectionItems ?? [];
         var latestRequestAt = state.ReinspectionHistory?.LastOrDefault()?.RequestedAt;
@@ -388,7 +379,7 @@ public sealed partial class ContractService
         var missing = new List<string>();
         if (view.Electricity is null) missing.Add("electricity");
         if (view.Water is null) missing.Add("water");
-        if (string.IsNullOrWhiteSpace(prior.RoomCondition)) missing.Add("room_condition");
+        // The general room summary is optional once each room check has been saved.
         try
         {
             var checks = HandoverRoomChecklist.Merge(null, prior.RoomChecks);
@@ -555,11 +546,8 @@ public sealed partial class ContractService
         var inspected = ReadyAssets(view, prior.Assets, handoverInventory is not null);
         HandoverChecklist.RequireSeparateEvidence(view.EvidenceIds, inspected);
         var snapshot = DraftSnapshot(contract, view, inspected, null);
-        // Owner cannot accept actual Issue/Missing/Damaged/NotApplicable via
-        // a reason or plan. Staff must first complete factual reinspection.
-        if ((view.RoomChecks ?? []).Any(check => check.Status != "Passed") ||
-            view.AccessItems is not { Length: 1 } access || access[0].Quantity <= 0)
-            throw ContractException.Conflict("handover_items_not_passed");
+        if (view.AccessItems is not { Length: 1 })
+            throw ContractException.Conflict("handover_access_inventory_required");
         var reason = DraftText(input.Reason ?? "", 2000);
         var handlingPlan = DraftText(input.HandlingPlan ?? "", 2000);
         await ValidateHandoverEvidence(contract, snapshot, token);
@@ -596,23 +584,19 @@ public sealed partial class ContractService
         var source = view.Assets.ToDictionary(asset => asset.Id);
         return canonical.Select(observation =>
         {
-            if (observation.Condition != "Good" ||
-                observation.ActualQuantity != observation.ExpectedQuantity ||
-                !source.TryGetValue(observation.Id, out var asset) ||
+            if (!source.TryGetValue(observation.Id, out var asset) ||
                 (asset.ConfiguredQuantity is { } expected && expected != observation.ExpectedQuantity))
                 throw ContractException.Conflict("handover_inventory_not_passed");
-            // The quantities become the accepted baseline only after all
-            // canonical observations pass AND Owner explicitly signs Ready.
-            // An unresolved quantity is never silently declared handed over.
+            // Preserve observed defects and actual handed-over quantities.
             return asset with
             {
-                ObservedCondition = "Tốt",
+                ObservedCondition = observation.Condition,
                 ObservedQuantity = observation.ActualQuantity,
                 HandedOverQuantity = observation.ActualQuantity,
-                GoodQuantity = observation.ActualQuantity,
+                GoodQuantity = observation.Condition == "Good" ? observation.ActualQuantity : 0,
                 WornQuantity = 0,
-                DamagedQuantity = 0,
-                MissingQuantity = 0,
+                DamagedQuantity = observation.Condition == "Damaged" ? observation.ActualQuantity : 0,
+                MissingQuantity = Math.Max(0, observation.ExpectedQuantity - observation.ActualQuantity),
                 Checked = true,
                 OwnerChecked = true,
                 Notes = observation.Notes,
@@ -793,8 +777,24 @@ public sealed partial class ContractService
             throw ContractException.Missing();
         if (view.Status is "Ready" or "Confirmed" or "ChangesRequested" && view.OwnerDocumentId is not null)
             return await HandoverOwnerSignedPdfAsync(id, token);
+        var contract = await Load(id, [Roles.Owner, Roles.Staff, Roles.Tenant], token);
         return await (handoverDraftPdf ?? throw new ContractException(503, "handover_draft_template_unavailable"))
-            .RenderDraftAsync(view, token);
+            .RenderDraftAsync(await HandoverViewWithPartiesAsync(contract, view, token), token);
+    }
+
+    private async Task<HandoverDraftView> HandoverViewWithPartiesAsync(
+        Contract contract, HandoverDraftView view, CancellationToken token)
+    {
+        if (handoverPartyData is null)
+            throw new ContractException(503, "handover_party_data_unavailable");
+        var settings = await handoverPartyData.SettingsAsync(contract.Room.LocationId, contract.StartDate, token);
+        if (settings is null || settings.OwnerSignerId != contract.OwnerSignerId ||
+            string.IsNullOrWhiteSpace(settings.Owner.FullName))
+            throw ContractException.Conflict("handover_owner_identity_unavailable");
+        var tenant = await handoverPartyData.IdentityAsync(contract.RoomId, contract.RepresentativeResidentId, token);
+        if (!tenant.HumanConfirmed || string.IsNullOrWhiteSpace(tenant.FullName))
+            throw ContractException.Conflict("handover_tenant_identity_unavailable");
+        return view with { OwnerName = settings.Owner.FullName.Trim(), TenantName = tenant.FullName.Trim() };
     }
 
     public async Task CopyHandoverDraftEvidenceAsync(Guid id, Guid fileId,

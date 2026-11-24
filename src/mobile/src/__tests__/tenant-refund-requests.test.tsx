@@ -25,6 +25,7 @@ const row = {
   status: 'REJECTED',
   sourcePaymentId: null,
   sourceContractId: null,
+  moveOutProposalId: null,
   createdAt: '2026-11-15T03:00:00Z',
   decidedAt: '2026-11-15T04:00:00Z',
   decisionReason: 'Cần bổ sung chứng cứ',
@@ -34,12 +35,14 @@ const row = {
   version: 1,
 };
 const state = vi.hoisted(() => ({
+  route: {} as Record<string, string>,
   role: 'Tenant',
   error: '',
   empty: false,
   proof: false,
   status: 'REJECTED',
   linked: false,
+  moveOutLinked: false,
   waiting: false,
   requests: vi.fn(),
   reload: vi.fn(),
@@ -54,7 +57,10 @@ vi.mock('../lib/SessionProvider', () => ({
   }),
 }));
 vi.mock('../lib/randomUUID', () => ({ randomUUID: () => 'dddd0000-0000-4000-8000-000000000004' }));
-vi.mock('expo-router', () => ({ useFocusEffect: () => undefined }));
+vi.mock('expo-router', () => ({
+  useFocusEffect: () => undefined,
+  useLocalSearchParams: () => state.route,
+}));
 vi.mock('../components/WorkspaceHeaderContext', () => ({
   useWorkspaceHeaderRefresh: () => false,
 }));
@@ -84,6 +90,9 @@ vi.mock('../features/workspace/useWorkspaceQuery', () => ({
                       status: state.status,
                       sourcePaymentId: state.linked ? paymentId : null,
                       sourceContractId: state.linked ? contractId : null,
+                      moveOutProposalId: state.moveOutLinked
+                        ? '22220000-0000-4000-8000-000000000009'
+                        : null,
                     },
               ],
               page: 1,
@@ -210,6 +219,7 @@ import { TenantRefundRequestsScreen } from '../screens/TenantRefundRequestsScree
 
 beforeEach(() => {
   vi.clearAllMocks();
+  state.route = {};
   Object.assign(state, {
     role: 'Tenant',
     error: '',
@@ -217,6 +227,7 @@ beforeEach(() => {
     proof: false,
     status: 'REJECTED',
     linked: false,
+    moveOutLinked: false,
     waiting: false,
   });
   state.send.mockResolvedValue(row);
@@ -252,6 +263,14 @@ it('validates money, reason, IDs and allows two optional source associations', (
       sourceContractId: contractId,
     }),
   ).toBe('');
+  expect(
+    refundRequestFormError({
+      amount: '120000',
+      reason: 'Hoàn cọc trả phòng',
+      moveOutProposalId: 'not-a-guid',
+      sourceContractId: contractId,
+    }),
+  ).toMatch(/đề xuất/);
 });
 
 it('MoneyTextInput normalizes displayed VND grouping into accepted integer digits', () => {
@@ -276,6 +295,14 @@ it('displays payment and contract associations together when both exist', () => 
   expect(screen.getByText('Có liên kết giao dịch')).toBeTruthy();
   expect(screen.getByText('Có liên kết hợp đồng')).toBeTruthy();
   expect(screen.queryByText('Yêu cầu độc lập')).toBeNull();
+});
+
+it('identifies an Owner-reviewed move-out refund request separately from verified money transfer', () => {
+  state.linked = true;
+  state.moveOutLinked = true;
+  render(<TenantRefundRequestsScreen />);
+  expect(screen.getByText('Liên kết đề xuất trả phòng')).toBeTruthy();
+  expect(screen.getByText(/Tiền hoàn thực tế sẽ được đối chiếu qua quyết toán cọc/)).toBeTruthy();
 });
 
 it('shows an independent request label when neither source exists', () => {
@@ -366,6 +393,33 @@ it('shows rejection reason and opens form for an independent request', async () 
   const body = JSON.parse(state.send.mock.calls[0][1].body);
   expect(body).toMatchObject({ amount: '70000', sourcePaymentId: null, sourceContractId: null });
   expect(screen.getByText(/Đã gửi yêu cầu/)).toBeTruthy();
+});
+
+it('opens a prefilled move-out refund request and links it to the Tenant contract', async () => {
+  state.route = {
+    moveOutProposalId: '22220000-0000-4000-8000-000000000009',
+    sourceContractId: contractId,
+    amount: '120000',
+    reason: 'Hoàn cọc sau xác nhận trả phòng.',
+  };
+  render(<TenantRefundRequestsScreen />);
+  expect(await screen.findByDisplayValue('120000')).toBeTruthy();
+  expect(screen.getByDisplayValue('Hoàn cọc sau xác nhận trả phòng.')).toBeTruthy();
+  expect(
+    (screen.getByRole('combobox', { name: 'Hợp đồng liên quan (tùy chọn)' }) as HTMLSelectElement)
+      .value,
+  ).toBe(contractId);
+  fireEvent.click(screen.getByRole('button', { name: /Tôi xác nhận số tiền/ }));
+  fireEvent.click(screen.getByRole('button', { name: 'Gửi yêu cầu đến Owner' }));
+  await waitFor(() => expect(state.send).toHaveBeenCalledOnce());
+  const body = JSON.parse(state.send.mock.calls[0][1].body);
+  expect(body).toMatchObject({
+    amount: '120000',
+    reason: 'Hoàn cọc sau xác nhận trả phòng.',
+    sourceContractId: contractId,
+    sourcePaymentId: null,
+    moveOutProposalId: '22220000-0000-4000-8000-000000000009',
+  });
 });
 
 it('links payment and contract from Tenant-authorized choices', async () => {

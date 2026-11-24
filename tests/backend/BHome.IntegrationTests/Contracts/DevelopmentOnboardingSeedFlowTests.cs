@@ -4,6 +4,7 @@ using BHome.Application.Contracts;
 using BHome.Application.PropertyManagement;
 using BHome.Application.StaffOperations;
 using BHome.Domain.PropertyManagement;
+using BHome.Domain.Billing;
 using BHome.Infrastructure.Development;
 using BHome.Infrastructure.Persistence.Compact24;
 using Microsoft.AspNetCore.Hosting;
@@ -60,9 +61,21 @@ public sealed partial class Compact24OwnerSetupTests
 
         var created = await Read<DevelopmentOnboardingSeedResult>(await Send(staff, w.Location, key));
         Assert.True(created.DevelopmentOnly);
-        Assert.Equal(2, created.InitialMeterTasks);
         Assert.StartsWith("TEST-", created.RoomNumber);
         Assert.Equal(created.ContractId, (await Read<DevelopmentOnboardingSeedResult>(await Send(staff, w.Location, key))).ContractId);
+        // Quick-create must behave like one handover, NOT two independent
+        // staff meter jobs. Both physical meters exist, but their per-contract
+        // baseline capture records are provisioned by starting that handover.
+        await using (var beforeScope = host.Services.CreateAsyncScope())
+        {
+            var seeded = beforeScope.ServiceProvider.GetRequiredService<Compact24DbContext>();
+            var installed = await seeded.Set<Meter>().Where(m => m.RoomId == created.RoomId && m.IsActive)
+                .Select(m => m.UtilityType).ToArrayAsync();
+            Assert.Equal(new[] { UtilityType.Electricity, UtilityType.Water }, installed.Order().ToArray());
+            Assert.Empty(await seeded.Set<OperationalTask>().Where(task =>
+                task.ContractId == created.ContractId &&
+                task.Kind == BHome.Domain.StaffOperations.OperationalTaskKind.MeterReading).ToArrayAsync());
+        }
 
         var draft = await staff.GetFromJsonAsync<HandoverDraftView>(
             $"/api/v1/contracts/{created.ContractId}/handover/draft");
@@ -93,6 +106,24 @@ public sealed partial class Compact24OwnerSetupTests
             Assert.Equal(HttpStatusCode.Conflict, refused.StatusCode);
         using (var started = await StartWork(draft.MoveInTask.Id, draft.MoveInTask.Version))
             Assert.Equal(HttpStatusCode.OK, started.StatusCode);
+        await using (var baselineScope = host.Services.CreateAsyncScope())
+        {
+            var seeded = baselineScope.ServiceProvider.GetRequiredService<Compact24DbContext>();
+            var baselines = await seeded.Set<OperationalTask>().Where(task =>
+                task.ContractId == created.ContractId &&
+                task.Kind == BHome.Domain.StaffOperations.OperationalTaskKind.MeterReading).ToArrayAsync();
+            Assert.Equal(2, baselines.Length);
+            Assert.All(baselines, task =>
+            {
+                Assert.Equal(ReadingPurpose.Initial, task.Purpose);
+                Assert.Equal(MeterTaskStatus.Assigned, task.Status);
+                Assert.True(task.EvidenceRequired);
+            });
+            var baselineMeterIds = baselines.Select(task => task.MeterId).ToArray();
+            Assert.Equal(new[] { UtilityType.Electricity, UtilityType.Water },
+                (await seeded.Set<Meter>().Where(m => baselineMeterIds.Contains(m.Id))
+                    .Select(m => m.UtilityType).ToArrayAsync()).Order().ToArray());
+        }
         using (var inventoryStarted = await StartWork(draft.MoveInTask.InventoryTaskId!.Value, 1))
             Assert.Equal(HttpStatusCode.OK, inventoryStarted.StatusCode);
         Assert.Equal(DevelopmentOnboardingSeedService.SampleInventory.Length, draft.Assets.Length);

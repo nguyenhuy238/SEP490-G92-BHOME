@@ -47,12 +47,18 @@ vi.mock('react-native-paper', async () => {
       children,
       accessibilityLabel,
       onPress,
+      style,
     }: {
       children?: React.ReactNode;
       accessibilityLabel: string;
       onPress: () => void;
+      style?: unknown;
     }) => (
-      <button aria-label={accessibilityLabel} onClick={onPress}>
+      <button
+        aria-label={accessibilityLabel}
+        data-rn-style={JSON.stringify(flatten(style))}
+        onClick={onPress}
+      >
         {children}
       </button>
     ),
@@ -62,7 +68,6 @@ const { go } = vi.hoisted(() => ({ go: vi.fn() }));
 vi.mock('../features/workspace/WorkspaceProvider', () => ({ useWorkspace: () => ({ go }) }));
 import { theme } from '../theme/theme';
 import { typography, fontFaces } from '../theme/typography';
-import { StaffFeatureCard } from '../components/StaffFeatureCard';
 import { TenantFeatureDirectory, tenantFeatureGroups } from '../components/TenantFeatureDirectory';
 afterEach(cleanup);
 const styleOf = (node: Element | null) => JSON.parse(node?.getAttribute('data-rn-style') ?? '{}');
@@ -75,6 +80,25 @@ it('opens early termination from the Tenant dashboard for the current contract',
     contractId: 'current-contract',
   });
 });
+it('keeps every compact directory workflow and scopes contract-specific links to the selected contract', () => {
+  go.mockClear();
+  render(<TenantFeatureDirectory all contractId="selected-contract" />);
+  fireEvent.click(screen.getByRole('button', { name: 'Hợp đồng' }));
+  expect(go).toHaveBeenLastCalledWith('contract', { contractId: 'selected-contract' });
+  fireEvent.click(screen.getByRole('button', { name: 'Bàn giao / Trả phòng' }));
+  expect(go).toHaveBeenLastCalledWith('checklist', { contractId: 'selected-contract' });
+  fireEvent.click(screen.getByRole('button', { name: 'Kết thúc hợp đồng sớm' }));
+  expect(go).toHaveBeenLastCalledWith('contract', {
+    contractId: 'selected-contract',
+    section: 'lifecycle',
+  });
+  fireEvent.click(screen.getByRole('button', { name: 'Thanh toán' }));
+  expect(go).toHaveBeenLastCalledWith('invoice', { focus: 'payment' });
+  fireEvent.click(screen.getByRole('button', { name: 'Hoàn tiền' }));
+  expect(go).toHaveBeenLastCalledWith('refund-requests');
+  fireEvent.click(screen.getByRole('button', { name: 'Báo sự cố' }));
+  expect(go).toHaveBeenLastCalledWith('incidents');
+});
 it('uses loaded static Inter faces for every Paper slot, including unvarianted text', () => {
   for (const font of Object.values(theme.fonts)) {
     expect(Object.values(fontFaces)).toContain(font.fontFamily);
@@ -85,53 +109,26 @@ it('uses loaded static Inter faces for every Paper slot, including unvarianted t
   expect(typography.screenTitle.fontFamily).toBe(fontFaces.bold);
   expect(typography.money.fontSize).toBeGreaterThan(typography.cardTitle.fontSize);
 });
-it('centers the whole Tenant tile group and matches the Staff compact icon/title conventions', () => {
-  render(
-    <>
-      <StaffFeatureCard
-        compact
-        title="Staff reference"
-        description="Mô tả tham chiếu"
-        icon="home-outline"
-        color="#2563EB"
-        background="#E8F0FE"
-        onPress={() => {}}
-      />
-      <TenantFeatureDirectory all />
-    </>,
-  );
-  const reference = screen.getByRole('button', { name: 'Staff reference' });
-  const staffIcon = reference.querySelector('i')!;
-  const staffIconStyle = styleOf(staffIcon.parentElement);
-  const staffTitle = styleOf(screen.getByText('Staff reference'));
-  const tenantButtons = screen.getAllByRole('button').filter((button) => button !== reference);
+it('uses compact, full-width readable Tenant rows instead of large square icon tiles', () => {
+  render(<TenantFeatureDirectory all />);
+  const tenantButtons = screen.getAllByRole('button');
   expect(tenantButtons).toHaveLength(
     tenantFeatureGroups.reduce((total, group) => total + group.items.length, 0),
   );
   for (const button of tenantButtons) {
     const icon = button.querySelector('i')!;
     const iconStyle = styleOf(icon.parentElement);
-    const groupStyle = styleOf(icon.parentElement?.parentElement ?? null);
-    expect(groupStyle.alignItems).toBe('center');
-    expect(groupStyle.justifyContent).toBe('center');
-    expect(iconStyle).toMatchObject({
-      width: staffIconStyle.width,
-      height: staffIconStyle.height,
-      borderRadius: staffIconStyle.borderRadius,
-      alignItems: 'center',
-      justifyContent: 'center',
-    });
-    expect(icon.getAttribute('data-size')).toBe(staffIcon.getAttribute('data-size'));
-    const titleStyle = styleOf(button.querySelector('span'));
-    expect(titleStyle).toMatchObject({
-      fontFamily: staffTitle.fontFamily,
-      fontSize: staffTitle.fontSize,
-      fontWeight: staffTitle.fontWeight,
-      lineHeight: staffTitle.lineHeight,
-      letterSpacing: staffTitle.letterSpacing,
-      textAlign: 'center',
-    });
+    const row = styleOf(button.firstElementChild);
+    expect(styleOf(button).minHeight).toBeGreaterThanOrEqual(48);
+    expect(styleOf(button).height).toBeUndefined();
+    expect(row.flexDirection).toBe('row');
+    expect(row.alignItems).toBe('center');
+    expect(iconStyle.width).toBeLessThanOrEqual(36);
+    expect(iconStyle.height).toBeLessThanOrEqual(36);
+    expect(styleOf(button.querySelector('span')).textAlign).toBe('left');
   }
+  fireEvent.click(screen.getByRole('button', { name: 'Điều chỉnh hóa đơn' }));
+  expect(go).toHaveBeenCalledWith('invoice', { focus: 'adjustment' });
 });
 
 // Check the actual bundled TTFs, not a mocked claim of Vietnamese support.

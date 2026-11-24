@@ -8,7 +8,6 @@ export interface DevelopmentOnboardingSeedResult {
   tenantEmail: string;
   tenantPassword: string;
   tenantName: string;
-  initialMeterTasks: number;
   developmentOnly: boolean;
 }
 

@@ -11,6 +11,7 @@ const state = vi.hoisted(() => ({
   replace: vi.fn(),
   back: vi.fn(),
   hardwareBack: null as (() => boolean) | null,
+  platform: 'android' as 'android' | 'web',
 }));
 const api = { request: state.request, image: state.image, json: state.json };
 vi.mock('../lib/SessionProvider', () => ({
@@ -26,6 +27,11 @@ vi.mock('expo-router', () => ({
   router: { replace: state.replace, back: state.back, canGoBack: () => true },
 }));
 vi.mock('react-native', () => ({
+  Platform: {
+    get OS() {
+      return state.platform;
+    },
+  },
   View: ({ children, style }: { children?: React.ReactNode; style?: React.CSSProperties }) => (
     <div style={style}>{children}</div>
   ),
@@ -233,6 +239,8 @@ beforeEach(() => {
   vi.clearAllMocks();
   state.role = 'Staff';
   state.taskId = 'task-a';
+  state.platform = 'android';
+  state.hardwareBack = null;
   serverTasks = [{ ...electric }, { ...water }];
   serverReadings = {};
   state.request.mockImplementation(async (path: string) => {
@@ -442,6 +450,13 @@ it('returns to overview on Android back without capturing or confirming the othe
     expect(state.hardwareBack?.()).toBe(true);
   });
   await screen.findByText('0/2 đồng hồ đã ghi');
+  expect(state.json).not.toHaveBeenCalled();
+});
+it('does not register an unsupported hardware BackHandler on Web', async () => {
+  state.platform = 'web';
+  await overview();
+  await capture();
+  expect(state.hardwareBack).toBeNull();
   expect(state.json).not.toHaveBeenCalled();
 });
 it('shows persisted completed details as read-only and returns to the same overview', async () => {

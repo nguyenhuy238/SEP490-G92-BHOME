@@ -63,11 +63,9 @@ public sealed partial class OperationalTaskService
         if (itemId == Guid.Empty || input.ActualQuantity < 0 ||
             input.Condition is not ("Good" or "Missing" or "Damaged") ||
             input.EvidenceIds is null || input.EvidenceIds.Length > 5 ||
-            ((input.Condition is "Missing" or "Damaged") && input.EvidenceIds.Length == 0) ||
             input.EvidenceIds.Any(x => x == Guid.Empty) ||
             input.EvidenceIds.Distinct().Count() != input.EvidenceIds.Length ||
-            input.IncidentId == Guid.Empty || input.Notes?.Length > 2000 ||
-            input.Condition is "Missing" or "Damaged" && string.IsNullOrWhiteSpace(input.Notes))
+            input.IncidentId == Guid.Empty || input.Notes?.Length > 2000)
             throw OperationalTaskException.Invalid("invalid_move_in_inventory_item");
         var initial = await repository.FindAsync(taskId, t) ?? throw OperationalTaskException.Missing();
         await AccessAsync(initial, t, true);
@@ -149,16 +147,14 @@ public sealed partial class OperationalTaskService
                 if (snapshot.Items.Length == 0 && !input.ConfirmNoAssets)
                     throw OperationalTaskException.Conflict("move_in_inventory_no_assets_confirmation_required");
                 if (snapshot.Items.Any(i => i.Condition is null || i.ActualQuantity is null ||
-                    i.EvidenceIds is null ||
-                    ((i.Condition is "Missing" or "Damaged") &&
-                        (i.EvidenceIds.Length == 0 || string.IsNullOrWhiteSpace(i.Notes)))))
+                    i.EvidenceIds is null))
                     throw OperationalTaskException.Conflict("move_in_inventory_checklist_incomplete");
                 var evidence = (await repository.EvidenceAsync(taskId, t)).ToArray();
                 if (snapshot.Items.SelectMany(i => i.EvidenceIds ?? []).Any(id => !evidence.Any(e => e.Id == id)))
                     throw OperationalTaskException.Conflict("move_in_inventory_evidence_missing");
                 // A reinspection cannot be completed by toggling an old
-                // Missing/Damaged result to Good or recycling its old photo.
-                // Only requested items may change, and each needs fresh proof.
+                // Missing/Damaged result to Good without the requested recheck.
+                // Optional new photos are still bound to the specific task.
                 if (snapshot.ReinspectionItemIds is { Length: > 0 } selected)
                 {
                     foreach (var selectedId in selected)
@@ -166,9 +162,6 @@ public sealed partial class OperationalTaskService
                         var item = snapshot.Items.Single(i => i.Id == selectedId);
                         if (item.Condition != "Good" || item.ActualQuantity != item.ExpectedQuantity)
                             throw OperationalTaskException.Conflict("move_in_inventory_reinspection_not_passed");
-                        if (!(item.EvidenceIds ?? []).Any(id => evidence.Any(file =>
-                            file.Id == id && file.CreatedAt > snapshot.ReinspectionRequestedAt)))
-                            throw OperationalTaskException.Conflict("move_in_inventory_reinspection_new_evidence_required");
                     }
                 }
                 // Staff records facts and evidence only. Owner chooses the

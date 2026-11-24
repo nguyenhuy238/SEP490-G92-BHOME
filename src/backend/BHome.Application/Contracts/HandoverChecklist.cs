@@ -20,8 +20,6 @@ public static class HandoverChecklist
                 i.GoodQuantity + i.WornQuantity + i.DamagedQuantity != i.ObservedQuantity || i.HandedOverQuantity > i.ObservedQuantity ||
                 i.MissingQuantity != (baselineKnown ? Math.Max(0, (s.ConfiguredQuantity ?? s.HandedOverQuantity ?? s.PhysicalAssets?.Sum(p => p.Quantity) ?? 0) - i.ObservedQuantity!.Value) : 0)))
                 throw ContractException.Invalid("invalid_handover_quantities");
-            if (hasQuantities && i.HandedOverQuantity < i.ObservedQuantity && string.IsNullOrWhiteSpace(i.Notes))
-                throw ContractException.Invalid("withheld_asset_reason_required");
             var observed = s with
             {
                 ObservedCondition = i.Condition.Trim(),
@@ -36,7 +34,8 @@ public static class HandoverChecklist
                 EvidenceIds = i.EvidenceIds ?? [],
                 PhysicalObservations = i.PhysicalObservations
             };
-            if (Problem(observed) && observed.EvidenceIds.Length == 0) throw ContractException.Invalid("asset_group_evidence_required");
+            // Evidence and observations are optional even for a recorded
+            // defect. An absent photo is never treated as proof of Tenant damage.
             if (i.PhysicalObservations is { } physical)
             {
                 var expected = s.PhysicalAssets ?? [];

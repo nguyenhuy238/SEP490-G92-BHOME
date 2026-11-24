@@ -15,7 +15,8 @@ namespace BHome.Infrastructure.Contracts;
 internal static class SettlementChargeRecords
 {
     internal const string ChargeKind = "SettlementReceivableV1", OffsetKind = "DepositOffsetApprovalV1", BankKind = "SettlementBankAllocationV1", ReviewKind = "SettlementChargeReviewV1", FinancialCloseKind = "SettlementFinancialCloseV1",
-        ProposalKind = "MoveOutChargeProposalV1", ProposalFeedbackKind = "MoveOutChargeProposalFeedbackV1";
+        ProposalKind = "MoveOutChargeProposalV1", ProposalFeedbackKind = "MoveOutChargeProposalFeedbackV1",
+        ProposalSettlementKind = "MoveOutChargeProposalSettlementV1";
     internal static readonly JsonSerializerOptions Json = new(JsonSerializerDefaults.Web);
     internal static async Task<T[]> ReadAsync<T>(BHomePersistenceContext db, Guid contractId, string kind, CancellationToken token)
     {

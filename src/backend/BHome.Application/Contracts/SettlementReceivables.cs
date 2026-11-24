@@ -3,6 +3,7 @@ using System.Text.Json;
 using System.Text.Json.Serialization;
 using BHome.Application.IdentityAccess;
 using BHome.Application.PaymentsDebt;
+using BHome.Application.PaymentsDebt.SePay;
 using BHome.Application.PropertyManagement;
 using BHome.Domain.IdentityAccess;
 using BHome.Domain.PaymentsDebt;
@@ -69,6 +70,7 @@ public interface ISettlementReceivablesRepository
     Task<MoveOutChargeProposalFeedback?> ProposalFeedbackOperationAsync(Guid actor, Guid key, CancellationToken token);
     Task<MoveOutChargeProposal?> LatestProposalAsync(Guid contractId, CancellationToken token);
     Task<MoveOutChargeProposalFeedback?> ProposalFeedbackAsync(Guid contractId, Guid proposalId, CancellationToken token);
+    Task SaveProposalSettlementResolutionAsync(MoveOutChargeProposalSettlementResolution resolution, CancellationToken token);
     Task SaveProposalAsync(MoveOutChargeProposal proposal, CancellationToken token);
     Task SaveProposalFeedbackAsync(MoveOutChargeProposalFeedback feedback, CancellationToken token);
 }
@@ -77,7 +79,8 @@ public sealed partial class SettlementReceivablesService(ISettlementReceivablesR
     IDepositDeductionEvidence evidence, ICurrentUser user, TimeProvider clock, PaymentRuntimeMode? mode = null, IPaymentRepository? payments = null,
     ITransferQrGenerator? qr = null, ISettlementChargeEvidence? chargeEvidence = null,
     BHome.Application.Billing.IFixedChargeCoverage? fixedCoverage = null,
-    BHome.Application.Finance.RefundService? refunds = null)
+    BHome.Application.Finance.RefundService? refunds = null,
+    IPaymentCodeRegistry? paymentCodes = null, SePayOptions? sepay = null)
 {
     private Guid Actor => user.UserId is { } id && id != Guid.Empty ? id : throw new ContractException(401, "authentication_required");
     private async Task AuthorizeAsync(Guid id, bool write, CancellationToken token)

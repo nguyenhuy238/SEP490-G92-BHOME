@@ -3,11 +3,42 @@ import { describe, expect, it, vi } from 'vitest';
 const { supportedNode, selectRuntime, checkExpoOnline, main } = createRequire(import.meta.url)(
   '../../../scripts/Start-ExpoMobile.cjs',
 );
+const { STAGING_API_URL, startStagingMobile } = createRequire(import.meta.url)(
+  '../../../scripts/Start-StagingMobile.cjs',
+);
 const supportedRuntime = {
   nodeVersion: '22.23.4',
   nodeExecutable: 'supported-node22',
   nodeCandidates: [],
 };
+
+describe('Staging mobile launch', () => {
+  it('uses the staging HTTPS API, ignores local API settings and bypasses the local supervisor', async () => {
+    vi.stubEnv('EXPO_PUBLIC_API_BASE_URL', 'https://localhost:7240');
+    vi.stubEnv('EXPO_PUBLIC_DEV_API_BASE_URL', 'https://192.168.2.102:7240');
+    vi.stubEnv('EXPO_PUBLIC_STAGING_WEB_PROXY', undefined);
+    vi.stubEnv('EXPO_NO_DOTENV', undefined);
+    vi.stubEnv('EXPO_PUBLIC_DEV_SERVER_ID', 'old-local-server');
+    try {
+      const launch = vi.fn().mockResolvedValue(0);
+      await expect(startStagingMobile(['--port', '8082'], launch)).resolves.toBe(0);
+      expect(process.env.EXPO_PUBLIC_API_BASE_URL).toBe(STAGING_API_URL);
+      expect(process.env.EXPO_PUBLIC_DEV_API_BASE_URL).toBeUndefined();
+      expect(process.env.EXPO_PUBLIC_DEV_SERVER_ID).toBeUndefined();
+      expect(process.env.EXPO_PUBLIC_STAGING_WEB_PROXY).toBe('1');
+      expect(process.env.EXPO_NO_DOTENV).toBe('1');
+      expect(launch).toHaveBeenCalledExactlyOnceWith([
+        '--metro-only',
+        '--lan',
+        '--clear',
+        '--port',
+        '8082',
+      ]);
+    } finally {
+      vi.unstubAllEnvs();
+    }
+  });
+});
 
 describe('Expo startup runtime and online checks', () => {
   it.each([

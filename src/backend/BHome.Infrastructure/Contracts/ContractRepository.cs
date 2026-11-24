@@ -111,9 +111,65 @@ internal sealed class ContractRepository(BHomePersistenceContext db, ILogger<Con
         var total = await query.CountAsync(t);
         var rows = await query.OrderByDescending(m => m.ProposedDate).ThenBy(m => m.ContractId)
             .Skip((page - 1) * pageSize).Take(pageSize).ToArrayAsync(t);
+        // MoveOut.Status tracks the physical Staff workflow, while tenant fee
+        // agreement and automatic settlement are immutable events in contract
+        // history. Fetch those events for this page in ONE scoped query so the
+        // inbox never regresses to "Staff result received" after Tenant accepts.
+        var proposalProgress = new Dictionary<Guid, (string? ProposalStatus, string? SettlementStatus)>();
+        if (db is Compact24DbContext && rows.Length > 0)
+        {
+            var contractIds = rows.Select(row => row.ContractId).ToArray();
+            var snapshots = await db.Database.SqlQuery<string>($"""
+                SELECT jsonb_build_object(
+                    'contractId', c.id,
+                    'proposalId', proposal.value->'state'->>'id',
+                    'confirmed', feedback.value->'state'->>'confirmed',
+                    'settlementStatus', COALESCE(
+                        resolution.value->'state'->'settlement'->>'status',
+                        feedback.value->'state'->'settlement'->>'status'
+                    )
+                )::text AS "Value"
+                FROM contracts c
+                LEFT JOIN LATERAL (
+                    SELECT entry.value FROM jsonb_array_elements(c.history) WITH ORDINALITY entry(value, position)
+                    WHERE entry.value->>'recordType'='MoveOutChargeProposalV1'
+                    ORDER BY entry.position DESC LIMIT 1
+                ) proposal ON true
+                LEFT JOIN LATERAL (
+                    SELECT entry.value FROM jsonb_array_elements(c.history) WITH ORDINALITY entry(value, position)
+                    WHERE entry.value->>'recordType'='MoveOutChargeProposalFeedbackV1'
+                      AND entry.value->'state'->>'proposalId'=proposal.value->'state'->>'id'
+                    ORDER BY entry.position DESC LIMIT 1
+                ) feedback ON true
+                LEFT JOIN LATERAL (
+                    SELECT entry.value FROM jsonb_array_elements(c.history) WITH ORDINALITY entry(value, position)
+                    WHERE entry.value->>'recordType'='MoveOutChargeProposalSettlementV1'
+                      AND entry.value->'state'->>'proposalId'=proposal.value->'state'->>'id'
+                      AND entry.value->'state'->>'feedbackId'=feedback.value->'state'->>'id'
+                    ORDER BY entry.position DESC LIMIT 1
+                ) resolution ON true
+                WHERE c.id=ANY({contractIds})
+                """).ToArrayAsync(t);
+            foreach (var json in snapshots)
+            {
+                using var document = JsonDocument.Parse(json);
+                var row = document.RootElement;
+                var contractId = row.GetProperty("contractId").GetGuid();
+                var proposalId = row.GetProperty("proposalId");
+                if (proposalId.ValueKind == JsonValueKind.Null) continue;
+                var confirmed = row.GetProperty("confirmed");
+                var proposalStatus = confirmed.ValueKind == JsonValueKind.Null ? "PendingTenant" :
+                    confirmed.GetString() == "true" ? "Accepted" : "Disputed";
+                var settlement = row.GetProperty("settlementStatus");
+                proposalProgress[contractId] = (proposalStatus,
+                    settlement.ValueKind == JsonValueKind.String ? settlement.GetString() : null);
+            }
+        }
         return new(rows.Select(row => new OwnerMoveOutInboxItem(row.ContractId, row.RoomNumber,
             row.LocationId, row.LocationName, row.Status.ToString(), row.ProposedDate, row.InspectedAt,
-            row.OwnerDecision == "Confirmed")).ToArray(), page, pageSize, total);
+            row.OwnerDecision == "Confirmed",
+            proposalProgress.GetValueOrDefault(row.ContractId).ProposalStatus,
+            proposalProgress.GetValueOrDefault(row.ContractId).SettlementStatus)).ToArray(), page, pageSize, total);
     }
     public async Task<T> InTransactionAsync<T>(Guid roomId, Func<Task<T>> work, CancellationToken t)
     {

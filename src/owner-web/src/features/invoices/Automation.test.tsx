@@ -32,11 +32,7 @@ function mount(page: React.ReactNode = <LiveAutomationPage />) {
 it('renders the actual live automation route when API mode is enabled', async () => {
   respond(false);
   mount(<AutomationPage />);
-  expect(
-    screen.getByText(
-      'Chọn cơ sở để cấu hình lịch. Kỳ kiểm thử dùng riêng cho các thao tác thủ công.',
-    ),
-  ).toBeInTheDocument();
+  expect(screen.getByText('Chọn cơ sở để xem và sửa lịch.')).toBeInTheDocument();
   await choose();
   expect(await screen.findByText('missing_water_meter')).toBeInTheDocument();
   expect(mocks.request).toHaveBeenCalledWith(
