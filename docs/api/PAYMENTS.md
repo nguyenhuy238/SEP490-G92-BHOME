@@ -15,7 +15,21 @@ Cập nhật **06/11/2026**, contract runtime Compact24. [Trạng thái toàn AP
 GET/PUT `/api/v1/receiving-bank-accounts/{locationId}` / `/api/v1/receiving-bank-accounts`:
 Owner tạo phiên bản cấu hình với expectedVersion, humanVerified, bankIdentifier BIN 6 số,
 accountNumber 6–19 số, accountHolder ASCII hoa, enabled, isDevelopmentDemo.
-Mỗi version bất biến; bản mới nhất disabled ngừng cấp instructions. Demo chỉ cho Development/Testing.
+Mỗi version bất biến; bản mới nhất disabled ngừng cấp instructions.
+Quyết định ngày 24/11/2026: cho phép cấu hình tài khoản thử nghiệm trên Staging để kiểm thử,
+phù hợp [ma trận môi trường SePay Test](../development/BHOME_TEAM_ENVIRONMENT_SETUP.md).
+`PUT /api/v1/receiving-bank-accounts/owner` và route theo Location cho phép tài khoản tổng hợp
+(`isDevelopmentDemo=true`) trong Development/Testing, hoặc Staging khi `SePay:Enabled=true`, `Mode=Test`.
+Production, Staging tắt SePay hoặc Mode=Live trả 400 `development_receiving_account_unavailable`,
+không ghi version/audit. Luôn giữ cờ demo, xác nhận Owner và version/audit hiện hữu.
+Lỗi định dạng hoặc thiếu xác nhận vẫn trả `invalid_receiving_bank_account`. Frontend giữ dữ liệu,
+hiển thị đúng lỗi môi trường và không tự đổi tài khoản tổng hợp thành tài khoản thật.
+Truy vết BF-06, UC-22, GBR-10/13 và BH-25: chỉ mở cấu hình tài khoản Sandbox;
+không mở quyền đối soát thủ công demo, không tự bật SePay, cấp QR hoặc xác nhận thanh toán.
+Các luồng thanh toán vẫn kiểm tra môi trường, nghĩa vụ Test/Live và binding của provider riêng.
+Hồi quy: `ReceivingAccountValidationTests` kiểm tra Owner/Location, demo bị chặn, tài khoản được phép,
+validation và Owner-only; `PaymentRuntimeModeTests` kiểm tra ma trận môi trường qua DI;
+`Payments.test.tsx` kiểm tra lưu demo, lỗi môi trường, giữ form và xác nhận lại khi sửa.
 GET `/api/v1/invoices/{id}/transfer-instructions`: Owner hoặc Tenant có InvoiceRecipients.
 Số dư = server ledger. Draft/Settled/missing configuration không trả QR hoặc tài khoản giả.
 QR dựng local với QRCoder 1.8.1 (MIT, PNG không cần System.Drawing), không gọi dịch vụ ngoài.

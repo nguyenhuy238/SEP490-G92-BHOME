@@ -2,6 +2,7 @@ import { KeyboardFormScrollView } from './KeyboardFormScrollView';
 import React, { useCallback, useContext, useEffect, useRef, useState } from 'react';
 import {
   KeyboardAvoidingView,
+  Image,
   Platform,
   RefreshControl,
   ScrollView,
@@ -9,7 +10,7 @@ import {
   useWindowDimensions,
   View,
 } from 'react-native';
-import { Badge, Button, Icon, IconButton, Text, TouchableRipple } from 'react-native-paper';
+import { Badge, Button, IconButton, Text, TouchableRipple } from 'react-native-paper';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { StatusBar } from 'expo-status-bar';
 import { router, useFocusEffect, useNavigation } from 'expo-router';
@@ -32,6 +33,10 @@ import { useWorkspaceQuery } from '../features/workspace/useWorkspaceQuery';
 import { queryPolicies } from '../lib/queryPolicies';
 import { WorkspaceHeaderContext, type WorkspaceHeaderAction } from './WorkspaceHeaderContext';
 import { WorkspaceFooterContext } from './WorkspaceFooter';
+
+// Metro requires a literal path for native image bundling.
+// eslint-disable-next-line @typescript-eslint/no-require-imports
+const brandMark = require('../../assets/bhome-mark.png');
 
 function StaffLocationSubtitle() {
   const { staffLocationId, staffLocations, staffLocationsLoading, staffLocationsError } =
@@ -206,10 +211,14 @@ export function WorkspaceShell({
                 narrowStaff && styles.narrowLogo,
               ]}
             >
-              <Icon
-                source="home-roof"
-                size={tenantHomeLayout ? 24 : narrowStaff ? 26 : 32}
-                color={s.blue}
+              <Image
+                source={brandMark}
+                resizeMode="contain"
+                accessible={false}
+                style={{
+                  width: tenantHomeLayout || narrowStaff ? 26 : 30,
+                  height: tenantHomeLayout || narrowStaff ? 26 : 30,
+                }}
               />
             </View>
             <View style={ui.grow}>
@@ -219,8 +228,8 @@ export function WorkspaceShell({
                 style={ui.white}
               >
                 {tenantHomeLayout
-                  ? 'BHOME'
-                  : `BHOME ${staff ? 'Nhân viên' : role === 'Tenant' ? 'Khách thuê' : 'Chủ cơ sở'}`}
+                  ? 'BHome'
+                  : `BHome ${staff ? 'Nhân viên' : role === 'Tenant' ? 'Khách thuê' : 'Chủ cơ sở'}`}
               </Text>
               {tenantHomeLayout ? (
                 <Text variant="labelSmall" style={styles.staffSubtitle}>

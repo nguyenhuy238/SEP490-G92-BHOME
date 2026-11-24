@@ -5,6 +5,7 @@ import { Link, useLocation, useNavigate } from 'react-router';
 import { useAuth } from '../../../../../../packages/client-core/src/auth';
 import { ApiError } from '../../../../../../packages/client-core/src/api';
 import { readAuthenticationFragment } from '../../../../../../packages/client-core/src/authLinks';
+import { AuthBrand } from '../components/AuthBrand';
 
 export default function ConfirmEmailPage() {
   const { client } = useAuth();
@@ -62,8 +63,9 @@ export default function ConfirmEmailPage() {
             void submit(!!token);
           }}
         >
+          <AuthBrand compact />
           <Typography component="h1" variant="h5">
-            Xác nhận email BHOME
+            Xác nhận email
           </Typography>
           {done ? (
             <Alert severity="success">

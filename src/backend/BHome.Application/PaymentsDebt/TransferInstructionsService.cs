@@ -8,7 +8,7 @@ using BHome.Domain.PaymentsDebt;
 
 namespace BHome.Application.PaymentsDebt;
 
-public sealed record PaymentRuntimeMode(bool AllowDevelopmentDemo);
+public sealed record PaymentRuntimeMode(bool AllowDevelopmentDemo, bool AllowSandboxReceivingAccounts = false);
 public sealed record ReceivingAccountInput(Guid LocationId, [Required] string BankIdentifier, [Required] string AccountNumber,
     [Required] string AccountHolder, [property: JsonRequired] bool Enabled, [property: JsonRequired] bool IsDevelopmentDemo,
     [property: JsonRequired] bool HumanVerified, int ExpectedVersion);
@@ -38,9 +38,10 @@ public sealed class TransferInstructionsService(IPaymentRepository repository, P
     {
         if (version < 0 || !humanVerified ||
             !Regex.IsMatch(bank ?? "", "^[0-9]{6}$") || !Regex.IsMatch(number ?? "", "^[0-9]{6,19}$") ||
-            !Regex.IsMatch(holder ?? "", "^[A-Z0-9 ]{5,50}$") || string.IsNullOrWhiteSpace(holder) ||
-            developmentDemo && !mode.AllowDevelopmentDemo)
+            !Regex.IsMatch(holder ?? "", "^[A-Z0-9 ]{5,50}$") || string.IsNullOrWhiteSpace(holder))
             throw new PaymentException(400, "invalid_receiving_bank_account");
+        if (developmentDemo && !mode.AllowDevelopmentDemo && !mode.AllowSandboxReceivingAccounts)
+            throw new PaymentException(400, "development_receiving_account_unavailable");
     }
     public Task<ReceivingBankAccount> SaveOwnerAccountAsync(OwnerReceivingAccountInput x, CancellationToken t)
     {

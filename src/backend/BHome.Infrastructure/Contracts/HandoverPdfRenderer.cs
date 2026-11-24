@@ -390,7 +390,7 @@ internal sealed class HandoverPdfRenderer : IHandoverDocumentRenderer, IHandover
             {
                 var canvas = new iText.Kernel.Pdf.Canvas.PdfCanvas(pdf.GetPage(page));
                 using var footer = new Canvas(canvas, pdf.GetPage(page).GetPageSize());
-                footer.SetFont(font).SetFontSize(8).ShowTextAligned(new Paragraph($"BHOME · {r.Type} · v{r.Version} · Trang {page}/{pdf.GetNumberOfPages()}"), 32, 20, TextAlignment.LEFT);
+                footer.SetFont(font).SetFontSize(8).ShowTextAligned(new Paragraph($"BHome · {r.Type} · v{r.Version} · Trang {page}/{pdf.GetNumberOfPages()}"), 32, 20, TextAlignment.LEFT);
             }
         }
         var bytes = final.ToArray();
