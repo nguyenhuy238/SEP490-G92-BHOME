@@ -44,7 +44,7 @@ internal sealed class ContractSigningDocumentSource(BHomePersistenceContext db, 
         var file = await db.Set<ContractDocumentFile>().AsNoTracking().SingleOrDefaultAsync(f => f.ContractId == contract.Id &&
             f.Kind == ContractFileKind.Preview && f.SnapshotHash == document.SnapshotHash && f.TemplateId == "main-tenancy-docx-v1", t)
             ?? throw ContractException.Conflict("signing_source_document_required");
-        if (file.DevelopmentOnly && !(environment.IsDevelopment() || environment.IsEnvironment("Testing")))
+        if (file.DevelopmentOnly && !CanUseTestTemplate(contract))
             throw new ContractException(503, "main_draft_signing_template_not_approved");
         return await ReadFileAsync(file, t);
     }
@@ -151,10 +151,14 @@ internal sealed class ContractSigningDocumentSource(BHomePersistenceContext db, 
         bytes.Length is >= 5 and <= 10 * 1024 * 1024 && bytes.AsSpan(0, 5).SequenceEqual("%PDF-"u8) &&
         Convert.ToHexString(SHA256.HashData(bytes)) == hash;
 
+    private bool CanUseTestTemplate(Contract contract) => environment.IsDevelopment() || environment.IsEnvironment("Testing") ||
+        environment.IsStaging() && mainRenderer?.CanUseSigningReview(contract) == true;
+
     private async Task CreateMainSourceAsync(Contract c, ContractDocument document, CancellationToken t)
     {
         if (mainData is null || mainRenderer is null || fileStore is null) throw new ContractException(503, "main_contract_document_source_unavailable");
-        if (!(environment.IsDevelopment() || environment.IsEnvironment("Testing"))) throw new ContractException(503, "main_draft_signing_template_not_approved");
+        var productionTemplate = mainRenderer.IsProductionSigningTemplate(c);
+        if (!productionTemplate && !CanUseTestTemplate(c)) throw new ContractException(503, "main_draft_signing_template_not_approved");
         if (user?.UserId is not { } actor) throw new ContractException(403, "contract_role_forbidden");
         if (c.SnapshotHash != document.SnapshotHash || ContractDocumentSnapshot.Hash(document) != c.SnapshotHash)
             throw ContractException.Conflict("signed_terms_changed");
@@ -184,7 +188,7 @@ internal sealed class ContractSigningDocumentSource(BHomePersistenceContext db, 
                 SnapshotHash = c.SnapshotHash,
                 TemplateId = "main-tenancy-docx-v1",
                 TemplateVersion = 1,
-                DevelopmentOnly = true,
+                DevelopmentOnly = !productionTemplate,
                 ContentType = "application/pdf",
                 FileHash = Convert.ToHexString(SHA256.HashData(bytes)),
                 Length = bytes.Length,

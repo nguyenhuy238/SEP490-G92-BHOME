@@ -1,0 +1,15 @@
+# Merge into the private API overlay for the target environment.
+services:
+  api:
+    environment:
+      AnonymousSigning__OtpHmacKey: '${BHOME_ANON_HMAC_BASE64:?Set the contract signing OTP key}'
+      AnonymousSigning__PublicSigningUrl: '${BHOME_SIGNING_PUBLIC_URL:?Set the public contract signing URL}'
+      ContractSigning__Seal__PfxPath: /run/bhome-signing/seal.pfx
+      ContractSigning__Seal__PfxPassword: '${BHOME_SIGNING_SEAL_PFX_PASSWORD:?Set the signing seal password}'
+    volumes:
+      - type: bind
+        source: '${BHOME_SIGNING_SEAL_PFX_FILE:?Set the signing seal file path}'
+        target: /run/bhome-signing/seal.pfx
+        read_only: true
+        bind:
+          create_host_path: false

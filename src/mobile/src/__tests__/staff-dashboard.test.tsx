@@ -11,7 +11,13 @@ const state = vi.hoisted(() => ({
   selectedId: 'loc',
   locations: [{ id: 'loc', label: 'Cơ sở kiểm thử' }],
   tasks: null as null | { totalCount: number },
-  overdue: [] as { id: string; title: string; locationId: string; status: string; kind?: string }[],
+  priorities: [] as {
+    id: string;
+    title: string;
+    locationId: string;
+    status: string;
+    kind?: string;
+  }[],
   failed: false,
 }));
 vi.mock('expo-router', () => ({ router: { push: state.push } }));
@@ -31,9 +37,8 @@ vi.mock('../features/workspace/useStaffDashboard', () => ({
   useStaffDashboard: () => ({
     locations: { data: [{ id: 'loc', label: 'Cơ sở kiểm thử' }], loading: false, error: '' },
     tasks: { data: state.tasks, error: state.failed ? 'Lỗi tải' : '' },
-    overdue: { data: { items: state.overdue }, error: state.failed ? 'Lỗi tải' : '' },
+    priorities: { data: { items: state.priorities }, error: state.failed ? 'Lỗi tải' : '' },
     inspections: { data: [], error: '' },
-    meters: { data: [], error: '' },
     reload: state.reload,
   }),
 }));
@@ -100,7 +105,7 @@ beforeEach(() => {
   vi.clearAllMocks();
   state.preview = false;
   state.tasks = null;
-  state.overdue = [];
+  state.priorities = [];
   state.failed = false;
   state.selectedId = 'loc';
   state.locations = [{ id: 'loc', label: 'Cơ sở kiểm thử' }];
@@ -133,9 +138,11 @@ it('distinguishes a real zero from unavailable counts', () => {
   expect(screen.getAllByText('0')).toHaveLength(2);
   expect(screen.getAllByText('—')).toHaveLength(1);
 });
-it('opens the actual overdue task and offers retry on partial failure', () => {
+it('opens the actual priority task and offers retry on partial failure', () => {
   state.failed = true;
-  state.overdue = [{ id: 'task-id', title: 'Kiểm tra bơm', locationId: 'loc', status: 'Assigned' }];
+  state.priorities = [
+    { id: 'task-id', title: 'Kiểm tra bơm', locationId: 'loc', status: 'Assigned' },
+  ];
   render(<StaffDashboard />);
   expect(screen.getByText('Cần xử lý')).toBeTruthy();
   fireEvent.click(screen.getByRole('button', { name: 'Kiểm tra bơm, Cơ sở kiểm thử' }));
@@ -143,8 +150,23 @@ it('opens the actual overdue task and offers retry on partial failure', () => {
   fireEvent.click(screen.getByText('Chưa tải đủ tác vụ ưu tiên · Thử lại'));
   expect(state.reload).toHaveBeenCalledOnce();
 });
+it('shows at most two priority tasks and opens a task only after a tap', () => {
+  state.priorities = ['Newest', 'Next', 'Older'].map((title) => ({
+    id: title,
+    title,
+    locationId: 'loc',
+    status: 'Assigned',
+  }));
+  render(<StaffDashboard />);
+  expect(screen.getByText('Newest')).toBeTruthy();
+  expect(screen.getByText('Next')).toBeTruthy();
+  expect(screen.queryByText('Older')).toBeNull();
+  expect(state.go).not.toHaveBeenCalled();
+  fireEvent.click(screen.getByRole('button', { name: /^Next,/ }));
+  expect(state.go).toHaveBeenCalledExactlyOnceWith('task-detail', { taskId: 'Next' });
+});
 it('opens an assigned move-in inventory task from priorities', () => {
-  state.overdue = [
+  state.priorities = [
     {
       id: 'inventory-task',
       title: 'Kiểm kê trước nhận phòng',

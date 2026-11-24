@@ -41,6 +41,18 @@ public sealed class AnonymousContractSigningService(IContractRepository contract
     private bool TestHolding(Contract c) => c.Kind == ContractKind.Holding && c.IsDevelopmentDemo && testScope?.Allows(c.Room.LocationId) == true;
     private bool TestMain(Contract c) => c.Kind == ContractKind.Main && c.SigningMode == ContractSigningModes.Internal && c.TenantUserId is null &&
         testScope?.Allows(c.Room.LocationId) == true;
+    private async Task<string?> AcceptedHoldingEmailAsync(Contract c, CancellationToken t)
+    {
+        if (c.Kind != ContractKind.Main || c.HoldingContractId is not { } sourceId ||
+            await contracts.FindAsync(sourceId, t) is not { Kind: ContractKind.Holding } holding ||
+            holding.RoomId != c.RoomId || holding.OwnerSignerId != c.OwnerSignerId ||
+            holding.RepresentativeResidentId != c.RepresentativeResidentId || Evidence(holding) is not { } signed ||
+            await invitations.FindAsync(signed.InvitationId, t) is not { } invitation ||
+            invitation.ContractId != holding.Id || invitation.ResidentId != c.RepresentativeResidentId ||
+            invitation.SnapshotHash != holding.SnapshotHash || invitation.RevokedAt != null || invitation.AcceptedAt == null)
+            return null;
+        return invitation.RecipientEmail;
+    }
     private async Task<Contract> SigningOperator(Guid id, CancellationToken t)
     {
         if (actor.IsInRole(Roles.Owner)) return await OwnerContract(id, t);
@@ -69,6 +81,7 @@ public sealed class AnonymousContractSigningService(IContractRepository contract
         var email = rows.FirstOrDefault()?.RecipientEmail;
         if (email is null)
             email = (await contracts.ResidentsAsync(c.RoomId, [c.RepresentativeResidentId], t)).FirstOrDefault()?.ContactEmail;
+        if (string.IsNullOrWhiteSpace(email)) email = await AcceptedHoldingEmailAsync(c, t);
         var masked = email is { Length: > 0 } && email.Contains('@') ? email[..1] + "***" + email[email.IndexOf('@')..] : null;
         return new(c.SigningMode, ownerAt is not null ? "OwnerConfirmed" : evidence is not null ? "TenantAccepted" : "AwaitingAcceptance",
             actor.IsInRole(Roles.Owner) ? evidence?.SourceHash ?? (c.Kind == ContractKind.Holding || simulation is not null || sandboxAvailable ? c.SnapshotHash : null) : null,
@@ -116,10 +129,12 @@ public sealed class AnonymousContractSigningService(IContractRepository contract
             var heldInvitation = AllowsEitherSigningOrder(c) ? (await invitations.ListAsync(id, t))
                 .FirstOrDefault(i => i.RevokedAt is null && i.AcceptedAt is null && i.ExpiresAt > Now) : null;
             var heldContacts = SigningContacts.Read(heldInvitation);
+            var savedEmail = people.Single(r => r.Id == c.RepresentativeResidentId).ContactEmail;
+            if (string.IsNullOrWhiteSpace(savedEmail)) savedEmail = await AcceptedHoldingEmailAsync(c, t);
             var contacts = people.Where(r => r.Id == c.RepresentativeResidentId).ToDictionary(r => r.Id, r =>
                 (r.Id == c.RepresentativeResidentId ? input.RecipientEmail : null)?.Trim().ToLowerInvariant() ??
                 input.Contacts?.SingleOrDefault(p => p.ResidentId == r.Id)?.Email?.Trim().ToLowerInvariant() ??
-                (heldContacts.TryGetValue(r.Id, out var heldEmail) ? heldEmail : null) ?? r.ContactEmail?.Trim().ToLowerInvariant() ?? "");
+                (heldContacts.TryGetValue(r.Id, out var heldEmail) ? heldEmail : null) ?? savedEmail?.Trim().ToLowerInvariant() ?? "");
             if (contacts.Values.Any(email => email.Length > 256 || !MailAddress.TryCreate(email, out _)) ||
                 contacts.Values.Distinct().Count() != contacts.Count)
                 throw ContractException.Invalid("signing_contacts_required");

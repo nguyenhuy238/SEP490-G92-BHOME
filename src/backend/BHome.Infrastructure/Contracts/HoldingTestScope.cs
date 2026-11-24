@@ -27,6 +27,12 @@ internal sealed class HoldingTestScope(IConfiguration configuration, IHostEnviro
         if (AllowsExternalDatabase && Locations.Contains(locationId)) return true;
         if (!options.TestingAvailable(environment.EnvironmentName) || !options.Valid(environment.EnvironmentName)) return false;
         var target = new NpgsqlConnectionStringBuilder(configuration.GetConnectionString("Database") ?? "");
+        if (environment.IsStaging())
+            return configuration.GetValue<bool>("HoldingTesting:Enabled") && Locations.Contains(locationId) &&
+                options.ReceivingAccounts.Any(account => account.LocationId == locationId) &&
+                !string.IsNullOrWhiteSpace(target.Host) && !string.IsNullOrWhiteSpace(target.Database) &&
+                target.Host == configuration["HoldingTesting:DatabaseHost"] &&
+                target.Database == configuration["HoldingTesting:DatabaseName"];
         var pattern = environment.IsEnvironment("Testing") ? "^bhome_compact24_(?:dev_)?[a-f0-9]{32}$" : "^bhome_compact24_dev_[a-f0-9]{32}$";
         return target.Host is "localhost" or "127.0.0.1" or "::1" && System.Text.RegularExpressions.Regex.IsMatch(target.Database ?? "", pattern);
     }

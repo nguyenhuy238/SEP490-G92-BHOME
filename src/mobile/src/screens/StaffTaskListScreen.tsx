@@ -79,7 +79,7 @@ export function StaffTaskListScreen() {
             Công việc vận hành
           </Text>
           <IconButton
-            icon="refresh"
+            icon={query.fetching && data ? () => <ActivityIndicator size="small" /> : 'refresh'}
             accessibilityLabel="Tải lại công việc"
             disabled={query.fetching}
             onPress={query.reload}
@@ -119,15 +119,15 @@ export function StaffTaskListScreen() {
       {data && (
         <TaskSummaryBar totalCount={data.totalCount} visibleItems={items} filtered={!!status} />
       )}
-      {query.fetching && (
+      {query.fetching && !data && (
         <View
           style={styles.loading}
           accessibilityRole="progressbar"
-          accessibilityLabel={data ? 'Đang cập nhật công việc' : 'Đang tải công việc'}
+          accessibilityLabel="Đang tải công việc"
         >
           <ActivityIndicator size="small" color={c.primary} />
           <Text variant="bodySmall" style={styles.muted}>
-            {data ? 'Đang cập nhật…' : 'Đang tải công việc…'}
+            Đang tải công việc…
           </Text>
         </View>
       )}

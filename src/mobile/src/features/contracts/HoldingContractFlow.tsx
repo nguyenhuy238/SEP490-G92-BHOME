@@ -23,7 +23,6 @@ import {
   paymentClient,
   type ContractDepositInstructions,
 } from '../../../../../packages/client-core/src/payments';
-import { holdingSandboxClient } from '../../../../../packages/client-core/src/holdingSandbox';
 import { formatInstant } from '../../../../../packages/client-core/src/localization';
 import { Action, Heading, ui } from '../../components/WorkspaceKit';
 import { randomUUID } from '../../lib/randomUUID';
@@ -630,33 +629,25 @@ function HoldingPayment({
   const [reference, setReference] = useState<string | null>(null);
   const [qr, setQr] = useState<ContractDepositInstructions | null>(null);
   const [qrError, setQrError] = useState('');
-  const [qrErrorCode, setQrErrorCode] = useState('');
-  const [previewContractId, setPreviewContractId] = useState<string | null>(null);
   const [qrRevision, setQrRevision] = useState(0);
-  const previewRequested = previewContractId === c.id;
   useEffect(() => {
     const controller = new AbortController();
     if (c.status !== 'Active')
-      void (
-        previewRequested
-          ? holdingSandboxClient(api.transport, c.id).qr(controller.signal)
-          : paymentClient(api.transport).depositInstructions(c.id, controller.signal)
-      )
+      void paymentClient(api.transport)
+        .depositInstructions(c.id, controller.signal)
         .then((result) => {
           if (!controller.signal.aborted) {
             setQr(result);
             setQrError('');
-            setQrErrorCode('');
           }
         })
         .catch((e) => {
           if (!controller.signal.aborted) {
             const problem = e as { status?: number; code?: string; problem?: { code?: string } };
             const code = problem.code ?? problem.problem?.code ?? '';
-            setQrErrorCode(code);
             setQrError(
-              !previewRequested && code === 'sepay_environment_mismatch'
-                ? 'Chế độ thanh toán của hợp đồng không khớp cấu hình SePay trên máy chủ. Tải lại QR không thay đổi chế độ thanh toán.'
+              code === 'sepay_environment_mismatch'
+                ? 'Cấu hình SePay hiện tại chưa hỗ trợ thanh toán cho hợp đồng này. Liên hệ chủ nhà để kiểm tra.'
                 : problem.status === 404
                   ? 'QR chưa khả dụng cho cơ sở này. Owner kiểm tra cấu hình tài khoản nhận tiền.'
                   : contractError(e),
@@ -664,7 +655,7 @@ function HoldingPayment({
           }
         });
     return () => controller.abort();
-  }, [api, c.id, c.status, previewRequested, qrRevision]);
+  }, [api, c.id, c.status, qrRevision]);
   const [error, setError] = useState('');
   const refreshedPayment = useRef('');
   useEffect(() => {
@@ -723,11 +714,6 @@ function HoldingPayment({
   }, [api, c.id, c.roomId, c.status, owner, onChanged, onDepositVerified]);
   const success = c.status === 'Active' && data?.room === 1;
   const testPayment = (qr?.mode ?? c.paymentMode) === 'Test';
-  const canPreview =
-    !previewRequested &&
-    qrErrorCode === 'sepay_environment_mismatch' &&
-    (c.paymentMode ?? (c.isDevelopmentDemo ? 'Test' : 'Live')) === 'Live' &&
-    ['Owner', 'Staff'].includes(role);
   return (
     <>
       <HoldingSectionCard title={success ? 'Giữ chỗ thành công' : 'Tiền giữ chỗ'}>
@@ -745,8 +731,7 @@ function HoldingPayment({
           !success &&
           data.deposit.status !== 'Verified' &&
           !data.deposit.requiresManualReview &&
-          qr?.transferReference &&
-          !previewRequested && <PaymentStatusCountdown checkedAt={checkedAt} />}
+          qr?.transferReference && <PaymentStatusCountdown checkedAt={checkedAt} />}
         {!data && !error && (
           <Text style={ui.muted}>Đang kiểm tra thanh toán và trạng thái phòng…</Text>
         )}
@@ -802,11 +787,9 @@ function HoldingPayment({
                 </Text>
               </View>
               <Text style={holdingPaymentStyles.paymentNote}>
-                {qr.previewOnly
-                  ? 'QR dùng thử sandbox. Giao dịch Test không được tính thành tiền cọc thật và không kích hoạt hợp đồng này.'
-                  : qr.mode === 'Test'
-                    ? 'SePay Sandbox · Giao dịch Test được đối soát qua cùng luồng thanh toán. Không chuyển tiền thật vào tài khoản Test.'
-                    : 'Chuyển đúng số tiền và nội dung bên trên để hệ thống tự đối soát.'}
+                {qr.mode === 'Test'
+                  ? 'SePay Sandbox · Giao dịch Test được đối soát qua cùng luồng thanh toán. Không chuyển tiền thật vào tài khoản Test.'
+                  : 'Chuyển đúng số tiền và nội dung bên trên để hệ thống tự đối soát.'}
               </Text>
               {!qr.qrImageDataUri && (
                 <Text style={ui.muted}>
@@ -816,26 +799,6 @@ function HoldingPayment({
             </>
           )}
           {!!qrError && <ContractNotice message={qrError} />}
-          {canPreview && (
-            <>
-              <Text style={ui.muted}>
-                Có thể xem QR thử nghiệm nếu máy chủ đã cấu hình sandbox. Giao dịch Test không thanh
-                toán hoặc kích hoạt hợp đồng Live này.
-              </Text>
-              <Button
-                mode="outlined"
-                contentStyle={{ minHeight: 44 }}
-                onPress={() => {
-                  setQr(null);
-                  setQrError('');
-                  setQrErrorCode('');
-                  setPreviewContractId(c.id);
-                }}
-              >
-                Xem QR thử nghiệm
-              </Button>
-            </>
-          )}
           <Button
             mode="outlined"
             contentStyle={{ minHeight: 44 }}
@@ -859,11 +822,9 @@ function HoldingPayment({
         )}
       {!success && role === 'Staff' && (
         <Text style={ui.muted}>
-          {qr?.previewOnly
-            ? 'Đây là bản xem thử QR sandbox. Hợp đồng Live vẫn cần thanh toán đúng môi trường trước khi kích hoạt.'
-            : data?.deposit.status === 'Verified'
-              ? 'Đã xác minh đủ tiền cọc. Hệ thống đang tự động kích hoạt và cập nhật trạng thái phòng.'
-              : 'Hệ thống tự động kích hoạt khi đủ chữ ký, thanh toán và các điều kiện hợp đồng.'}
+          {data?.deposit.status === 'Verified'
+            ? 'Đã xác minh đủ tiền cọc. Hệ thống đang tự động kích hoạt và cập nhật trạng thái phòng.'
+            : 'Hệ thống tự động kích hoạt khi đủ chữ ký, thanh toán và các điều kiện hợp đồng.'}
         </Text>
       )}
       {owner && readiness && !success && (

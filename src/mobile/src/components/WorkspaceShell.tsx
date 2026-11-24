@@ -9,7 +9,14 @@ import {
   useWindowDimensions,
   View,
 } from 'react-native';
-import { Badge, Button, Icon, IconButton, Text, TouchableRipple } from 'react-native-paper';
+import {
+  ActivityIndicator,
+  Badge,
+  Icon,
+  IconButton,
+  Text,
+  TouchableRipple,
+} from 'react-native-paper';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { StatusBar } from 'expo-status-bar';
 import { router, useFocusEffect, useNavigation } from 'expo-router';
@@ -397,7 +404,11 @@ export function WorkspaceShell({
                     headerAction && (
                       <>
                         <IconButton
-                          icon="refresh"
+                          icon={
+                            compactTasks && headerAction.disabled
+                              ? () => <ActivityIndicator size="small" />
+                              : 'refresh'
+                          }
                           accessibilityLabel={
                             tenantResidence
                               ? 'Tải lại hồ sơ tạm trú'
@@ -416,15 +427,6 @@ export function WorkspaceShell({
                     )}
                 </View>
               )}
-            {__DEV__ && !preview && staff && screen === homeScreen[role] && (
-              <Button
-                mode="contained-tonal"
-                icon="test-tube"
-                onPress={() => requestNavigation(() => router.push('/ocr-test'))}
-              >
-                Test OCR
-              </Button>
-            )}
             <WorkspaceHeaderContext.Provider
               value={
                 dashboard ||

@@ -62,7 +62,11 @@ function Pager({
 }
 function QueryState(props: React.ComponentProps<typeof SharedQueryState>) {
   const { role } = useWorkspace();
-  return role === 'Owner' ? <OwnerDataState {...props} /> : <SharedQueryState {...props} />;
+  return role === 'Owner' && !props.loadingLabel ? (
+    <OwnerDataState {...props} />
+  ) : (
+    <SharedQueryState {...props} />
+  );
 }
 
 export function IncidentListScreen({ emergency = false }: { emergency?: boolean }) {
@@ -278,7 +282,7 @@ function IncidentDetail({ id }: { id: string }) {
       >
         Về danh sách báo cáo
       </Action>
-      <QueryState {...query} />
+      <QueryState {...query} loadingLabel="Đang tải chi tiết sự cố…" />
       {query.data && !inSelectedLocation && (
         <Text accessibilityRole="alert">
           Báo cáo này không thuộc cơ sở đang làm việc. Hãy chọn đúng cơ sở trên trang chủ.

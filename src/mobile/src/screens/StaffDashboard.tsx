@@ -1,14 +1,12 @@
 import React, { useState } from 'react';
 import { ScrollView, StyleSheet, View } from 'react-native';
 import { Button, Dialog, Portal, Text, TouchableRipple } from 'react-native-paper';
-import { router } from 'expo-router';
 import { DashboardHeading, dashboardStyles } from '../components/DashboardKit';
 import { StaffFeatureDirectory } from '../components/StaffFeatureDirectory';
 import { StaffFeatureCard } from '../components/StaffFeatureCard';
 import { useWorkspace } from '../features/workspace/WorkspaceProvider';
 import { useStaffDashboard } from '../features/workspace/useStaffDashboard';
 import { type WorkspaceScreen } from '../features/workspace/navigation';
-import { businessToday, displayContractDate } from '../../../../packages/client-core/src/contracts';
 import { colors as c, staffColors as s } from '../theme/theme';
 import { typography } from '../theme/typography';
 import {
@@ -51,62 +49,37 @@ export function StaffDashboard() {
           open: () => go('meter-reading'),
         },
       ]
-    : [
-        ...(data.overdue.data?.items ?? [])
-          .filter(
-            (task) =>
-              ['Assigned', 'InProgress'].includes(task.status) &&
-              !isEmbeddedMoveInInventory(task) &&
-              !isEmbeddedInitialMeterTask(task) &&
-              !!scopedLocationId &&
-              task.locationId === scopedLocationId,
-          )
-          .map((task) => ({
-            id: task.id,
-            title: task.title,
-            detail:
-              data.locations.data?.find((location) => location.id === task.locationId)?.label ??
-              'Cơ sở được phân công',
-            status: 'Quá hạn',
-            open: () =>
-              isMainMoveInWork(task)
-                ? go('move-in', { contractId: task.target!.contractId!, section: 'handover' })
-                : isMainMoveOutWork(task)
-                  ? go('move-out', { contractId: task.target!.contractId!, taskId: task.id })
-                  : go(task.kind === 'MoveInInventory' ? 'move-in-inventory' : 'task-detail', {
-                      taskId: task.id,
-                    }),
-          })),
-        ...selectedInspections
-          .filter((item) => item.status === 'Approved')
-          .slice(0, 2)
-          .map((item) => ({
-            id: item.contractId,
-            title: 'Kiểm tra trả phòng',
-            detail: `Phòng ${item.roomNumber} · ${item.locationName}${item.proposedDate ? ` · Ngày trả ${displayContractDate(item.proposedDate)}` : ''}`,
-            status:
-              item.proposedDate && item.proposedDate > businessToday()
-                ? 'Chờ ngày trả'
-                : 'Cần kiểm tra',
-            open: () => go('work-orders'),
-          })),
-        ...(data.meters.data ?? [])
-          .filter(
-            (item) =>
-              item.status === 0 && !!scopedLocationId && item.locationId === scopedLocationId,
-          )
-          .slice(0, 2)
-          .map((item) => ({
-            id: item.id,
-            title: `Ghi chỉ số ${item.utilityType === 0 ? 'điện' : 'nước'}`,
-            detail: `Phòng ${item.room} · ${item.location}`,
-            status: 'Cần ghi số',
-            open: () => router.push({ pathname: '/meter', params: { taskId: item.id } }),
-          })),
-      ];
-  const priorityError = [data.overdue, data.inspections, data.meters].some(
-    (query) => !!query.error,
-  );
+    : (data.priorities.data?.items ?? [])
+        .filter(
+          (task) =>
+            ['Assigned', 'InProgress'].includes(task.status) &&
+            !isEmbeddedMoveInInventory(task) &&
+            !isEmbeddedInitialMeterTask(task) &&
+            !!scopedLocationId &&
+            task.locationId === scopedLocationId,
+        )
+        .slice(0, 2)
+        .map((task) => ({
+          id: task.id,
+          title: task.title,
+          detail:
+            data.locations.data?.find((location) => location.id === task.locationId)?.label ??
+            'Cơ sở được phân công',
+          status: task.isOverdue
+            ? 'Quá hạn'
+            : task.status === 'InProgress'
+              ? 'Đang xử lý'
+              : 'Cần làm',
+          open: () =>
+            isMainMoveInWork(task)
+              ? go('move-in', { contractId: task.target!.contractId!, section: 'handover' })
+              : isMainMoveOutWork(task)
+                ? go('move-out', { contractId: task.target!.contractId!, taskId: task.id })
+                : go(task.kind === 'MoveInInventory' ? 'move-in-inventory' : 'task-detail', {
+                    taskId: task.id,
+                  }),
+        }));
+  const priorityError = !!data.priorities.error;
   const locationLabel = preview
     ? 'BHOME Đống Đa - Tòa B · Mẫu'
     : (staffLocationsLoading ?? data.locations.loading)
@@ -207,23 +180,11 @@ export function StaffDashboard() {
           </Text>
         )}
       </View>
-      <StaffFeatureDirectory onOpen={open} />
-      <View style={styles.section}>
-        <StaffFeatureCard
-          title="Hợp đồng"
-          description="Tạo và theo dõi hợp đồng"
-          icon="file-document-outline"
-          color={s.blue}
-          background={s.blueSoft}
-          onPress={() => setContracts(true)}
-          compact
-        />
-      </View>
       {priorities.length > 0 && (
         <View style={styles.section}>
           <DashboardHeading title="Cần xử lý" detail="Các tác vụ ưu tiên trong phạm vi được giao" />
           <View style={styles.priorityList}>
-            {priorities.slice(0, 5).map((item) => (
+            {priorities.map((item) => (
               <TouchableRipple
                 key={item.id}
                 onPress={item.open}
@@ -252,15 +213,25 @@ export function StaffDashboard() {
         <View style={styles.section}>
           <DashboardHeading title="Cần xử lý" />
           <Text style={styles.muted}>
-            {data.overdue.loading || data.inspections.loading || data.meters.loading
-              ? 'Đang tải việc ưu tiên…'
-              : 'Chưa có việc ưu tiên cần xử lý.'}
+            {data.priorities.loading ? 'Đang tải việc ưu tiên…' : 'Chưa có việc ưu tiên cần xử lý.'}
           </Text>
         </View>
       )}
       {!preview && priorityError && (
         <Button onPress={data.reload}>Chưa tải đủ tác vụ ưu tiên · Thử lại</Button>
       )}
+      <StaffFeatureDirectory onOpen={open} />
+      <View style={styles.section}>
+        <StaffFeatureCard
+          title="Hợp đồng"
+          description="Tạo và theo dõi hợp đồng"
+          icon="file-document-outline"
+          color={s.blue}
+          background={s.blueSoft}
+          onPress={() => setContracts(true)}
+          compact
+        />
+      </View>
       <Portal>
         <Dialog visible={contracts} onDismiss={() => setContracts(false)}>
           <Dialog.Title>Hợp đồng</Dialog.Title>

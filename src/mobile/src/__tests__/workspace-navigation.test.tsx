@@ -252,39 +252,25 @@ it('restricts the feature catalog to Tenant and returns to Home through normal b
   expect(state.replace).not.toHaveBeenCalled();
 });
 afterEach(cleanup);
-it.each(['Staff'])('opens the OCR test directly from the %s development home', (role) => {
-  state.roles = [role];
-  render(
-    <WorkspaceProvider>
-      <WorkspaceShell screen={role === 'Owner' ? 'owner-home' : 'staff-home'}>
-        <span>Nội dung</span>
-      </WorkspaceShell>
-    </WorkspaceProvider>,
-  );
-  fireEvent.click(screen.getByRole('button', { name: 'Test OCR' }));
-  expect(state.push).toHaveBeenCalledWith('/ocr-test');
-});
 it.each([
+  { development: true, role: 'Staff', home: 'staff-home' as const },
   { development: false, role: 'Staff', home: 'staff-home' as const },
   { development: false, role: 'Owner', home: 'owner-home' as const },
   { development: true, role: 'Owner', home: 'owner-home' as const },
   { development: true, role: 'Tenant', home: 'tenant-home' as const },
   { development: true, role: 'Staff', home: 'notifications' as const },
-])(
-  'hides the OCR test outside an authorized development home: %o',
-  ({ development, role, home }) => {
-    vi.stubGlobal('__DEV__', development);
-    state.roles = [role];
-    render(
-      <WorkspaceProvider>
-        <WorkspaceShell screen={home}>
-          <span>Nội dung</span>
-        </WorkspaceShell>
-      </WorkspaceProvider>,
-    );
-    expect(screen.queryByRole('button', { name: 'Test OCR' })).toBeNull();
-  },
-);
+])('omits the OCR test shortcut from the workspace: %o', ({ development, role, home }) => {
+  vi.stubGlobal('__DEV__', development);
+  state.roles = [role];
+  render(
+    <WorkspaceProvider>
+      <WorkspaceShell screen={home}>
+        <span>Nội dung</span>
+      </WorkspaceShell>
+    </WorkspaceProvider>,
+  );
+  expect(screen.queryByRole('button', { name: 'Test OCR' })).toBeNull();
+});
 it('does not offer a real OCR action in role preview without a session', () => {
   state.signedIn = false;
   function Preview() {
@@ -534,20 +520,6 @@ it('lets meter steps use the Staff shell back action without navigating home', (
   fireEvent.click(screen.getByRole('button', { name: 'Quay lại' }));
   expect(back).toHaveBeenCalledOnce();
   expect(state.push).not.toHaveBeenCalled();
-});
-it('keeps the draft exit guard when opening the OCR test', () => {
-  render(
-    <WorkspaceProvider>
-      <WorkspaceShell screen="staff-home">
-        <Draft />
-      </WorkspaceShell>
-    </WorkspaceProvider>,
-  );
-  fireEvent.click(screen.getByRole('button', { name: 'Test OCR' }));
-  expect(state.push).not.toHaveBeenCalled();
-  fireEvent.click(screen.getByRole('button', { name: 'Rời quy trình' }));
-  expect(state.leave).toHaveBeenCalledOnce();
-  expect(state.push).toHaveBeenCalledWith('/ocr-test');
 });
 it('asks before leaving a draft and navigates only after explicit confirmation', () => {
   render(

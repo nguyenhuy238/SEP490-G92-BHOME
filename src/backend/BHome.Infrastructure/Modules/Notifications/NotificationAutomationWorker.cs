@@ -45,7 +45,8 @@ internal sealed class NotificationAutomationWorker(IServiceScopeFactory scopes, 
         // await. Resolving notification/job persistence can block startup for minutes;
         // allow Kestrel to start independently of the notification delivery loop.
         await Task.Yield();
-        var authenticationOnly = !options.Value.AutomationEnabled;
+        var businessEmailOnly = !options.Value.AutomationEnabled && options.Value.ContractAndInvoiceEmailEnabled;
+        var authenticationOnly = !options.Value.AutomationEnabled && !businessEmailOnly;
         if (jobs.Value.Enabled || authenticationOnly && !authentication.Value.AnyConfigured(environment.IsDevelopment()) && !recovery.Value.Enabled) return;
         while (!stoppingToken.IsCancellationRequested)
         {
@@ -58,7 +59,8 @@ internal sealed class NotificationAutomationWorker(IServiceScopeFactory scopes, 
                     .ProcessAllowedAsync(stoppingToken, [AccountInvitationJob.JobName, SmsPasswordRecovery.JobName]);
                 if (!authenticationOnly) await scope.ServiceProvider.GetRequiredService<INotificationEventPublisher>().PublishPendingAsync(stoppingToken);
                 else await scope.ServiceProvider.GetRequiredService<CompactNotificationEvents>().PublishAuthenticationAsync(stoppingToken);
-                if (!authenticationOnly) await scope.ServiceProvider.GetRequiredService<NotificationChannelWorker>().ProcessPendingAsync(stoppingToken);
+                if (!authenticationOnly) await scope.ServiceProvider.GetRequiredService<NotificationChannelWorker>()
+                    .ProcessPendingAsync(stoppingToken, businessEmailOnly: businessEmailOnly);
             }
             catch (OperationCanceledException) when (stoppingToken.IsCancellationRequested) { break; }
             catch (Exception e) { logger.LogWarning("Notification automation deferred with {ErrorCode}", e.GetType().Name); }

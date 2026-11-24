@@ -155,7 +155,7 @@ function StaffProbe() {
   const locations = useWorkspaceQuery('/api/v1/capture/locations', { cache: queryPolicies.rooms });
   return <output>{JSON.stringify({ data, locations })}</output>;
 }
-it('measures Staff Home plus header as nine scoped reads and reuses them on remount', async () => {
+it('measures Staff Home plus header as seven scoped reads and reuses them on remount', async () => {
   state.role = 'Staff';
   const transport = vi
     .fn<typeof fetch>()
@@ -169,9 +169,9 @@ it('measures Staff Home plus header as nine scoped reads and reuses them on remo
   client(transport);
   const view = render(<StaffProbe />);
   await waitFor(() =>
-    expect(JSON.parse(screen.getByRole('status').textContent!).data.meters.loading).toBe(false),
+    expect(JSON.parse(screen.getByRole('status').textContent!).data.priorities.loading).toBe(false),
   );
-  expect(transport).toHaveBeenCalledTimes(9);
+  expect(transport).toHaveBeenCalledTimes(7);
   expect(
     transport.mock.calls.filter(([url]) => String(url).endsWith('/capture/locations')),
   ).toHaveLength(1);
@@ -181,7 +181,7 @@ it('measures Staff Home plus header as nine scoped reads and reuses them on remo
   view.unmount();
   render(<StaffProbe />);
   await act(async () => {});
-  expect(transport).toHaveBeenCalledTimes(9);
+  expect(transport).toHaveBeenCalledTimes(7);
 });
 it('keeps Tenant Home visible on stale background refetch and refreshes only expired resources', async () => {
   let now = Date.now();

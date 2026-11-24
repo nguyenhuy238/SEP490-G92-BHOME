@@ -1,6 +1,6 @@
 # Local Staff onboarding fixture
 
-The **Sinh hợp đồng mẫu** button on `http://localhost:8081/workspace/onboarding` appears in a development build after a Staff user has selected an assigned Location. It does not replace the real onboarding/signing/payment flow.
+The mobile Staff onboarding screen has no fixture generator. This document describes the guarded local backend endpoint for development fixtures.
 
 ## Server guard and configuration
 
@@ -13,7 +13,7 @@ The authenticated endpoint `POST /api/v1/development/onboarding-seed` requires t
 
 After changing the local environment, restart `scripts/Start-Api.ps1` (restarting only Expo does not restart the backend).
 
-## What one click creates
+## What one successful request creates
 
 - A new uniquely named `TEST-*` Room inside the selected Location, without altering an existing Room.
 - A separate active test Tenant account with a hashed password, plus a synthetic encrypted and verified Resident identity (not a real CCCD).
@@ -24,7 +24,7 @@ After changing the local environment, restart `scripts/Start-Api.ps1` (restartin
 
 The synthetic contract **does not carry real signed PDF evidence or verified payments**. It is intentionally inserted directly at the post-activation testing checkpoint; it is not evidence of successful signing or financial settlement. Automated jobs and external payment actions are not enabled by this feature.
 
-The result displays the synthetic Tenant login and the password from local configuration so it can be copied into a test session. The password is only stored as an Identity hash in PostgreSQL. A stable `Idempotency-Key` prevents duplicate creation when retrying an uncertain HTTP response.
+The response includes the synthetic Tenant login and the password from local configuration for use in a test session. The password is only stored as an Identity hash in PostgreSQL. A stable `Idempotency-Key` prevents duplicate creation when retrying an uncertain HTTP response.
 
 All room, asset, template, verification, tenancy, and task writes share the same transaction; the seed will not leave a partial room/inventory on failure. The HTTP controller is intentionally thin and delegates persistence to the infrastructure development-seed service.
 
