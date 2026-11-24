@@ -38,7 +38,7 @@ import {
 
 const groups: { id: CopyGroup; label: string }[] = [
   { id: 'RoomDefaults', label: 'Giá trị gợi ý khi tạo phòng' },
-  { id: 'AssetTemplates', label: 'Gói tài sản (bản nháp)' },
+  { id: 'AssetTemplates', label: 'Định mức tài sản theo loại phòng' },
   { id: 'FeePolicies', label: 'Biểu phí có hiệu lực tại ngày đã chọn' },
   { id: 'OperatingPolicies', label: 'Nội quy (bản nháp)' },
   { id: 'AssetLifecyclePolicies', label: 'Chính sách vòng đời thiết bị (bản nháp)' },

@@ -42,7 +42,7 @@ public sealed class LocationConfigurationCopyService(ISharedConfigurationStore s
         input.Groups.Contains("AssetLifecyclePolicies") ? (await local.ListAsync(location, "AssetLifecyclePolicy", t)).Where(d => location != input.SourceLocationId || d.Status == "Published").ToArray() : []);
     }
     private static string Name(SetupDocument document) => document.Data.TryGetProperty("name", out var name) ? name.GetString() ?? "" : document.Data.GetProperty("title").GetString() ?? "";
-    private static string Label(string group) => group switch { "RoomDefaults" => "Gợi ý tạo phòng", "AssetTemplates" => "Gói tài sản", "OperatingPolicies" => "Nội quy", "AssetLifecyclePolicies" => "Chính sách vòng đời thiết bị", _ => "Biểu phí" };
+    private static string Label(string group) => group switch { "RoomDefaults" => "Gợi ý tạo phòng", "AssetTemplates" => "Định mức tài sản theo loại phòng", "OperatingPolicies" => "Nội quy", "AssetLifecyclePolicies" => "Chính sách vòng đời thiết bị", _ => "Biểu phí" };
     private static IReadOnlyList<PolicyDto> EffectiveFees(ConfigurationState state, ConfigurationCopy input) => state.Fees.Where(p => p.EffectiveFrom <= input.EffectiveFrom && (p.EffectiveTo is null || p.EffectiveTo >= input.EffectiveFrom)).ToArray();
     private static ConfigurationCopyPlan Plan(ConfigurationCopy input, ConfigurationState source, ConfigurationState target)
     {

@@ -127,9 +127,9 @@ export function IncidentActionPanel({
         : sourceReport
           ? incidentActions(sourceReport, role)
           : [];
-  const actions: string[] = allowed;
   const [action, setAction] = useState(''),
     [values, setValues] = useState<Record<string, string>>({});
+  const [showMore, setShowMore] = useState(false);
   const [photos, setPhotos] = useState<IncidentPhoto[]>([]),
     [confirmed, setConfirmed] = useState(false);
   const [confirmDecision, setConfirmDecision] = useState(false);
@@ -137,7 +137,15 @@ export function IncidentActionPanel({
   const [assetLabel, setAssetLabel] = useState('');
   const mutation = useIncidentMutation();
   const policy = useIncidentQuery<{ version: number; activeCategories: string[] }>(
-    action === 'fast-repair-start' ? '/api/v1/work-orders/fast-repair-policy' : null,
+    action === 'fast-repair-start' || (role === 'Staff' && !!work && work.status === 'Assigned')
+      ? '/api/v1/work-orders/fast-repair-policy'
+      : null,
+  );
+  const actions: string[] = allowed.filter(
+    (id) =>
+      id !== 'fast-repair-start' ||
+      (policy.data?.activeCategories.length ?? 0) > 0 ||
+      action === id,
   );
   const [originalPage, setOriginalPage] = useState(1);
   // Snapshot a report version after this form's own uploads, then retain it on ambiguous retries.
@@ -339,9 +347,9 @@ export function IncidentActionPanel({
           };
           break;
         case 'emergency-actions': {
+          if (!photos.length)
+            throw new UserFeedbackError('Cần ít nhất một ảnh ghi nhận tình huống khẩn cấp.');
           const cost = integer(values.cost ?? '', 'Chi phí đề nghị', false);
-          if (cost !== null && cost > 0 && !photos.length)
-            throw new UserFeedbackError('Chi phí khẩn cấp cần ảnh minh chứng.');
           input = {
             version,
             note: required('note', 'Hành động đã thực hiện'),
@@ -440,22 +448,83 @@ export function IncidentActionPanel({
   if (role === 'Owner' && !work)
     return <OwnerWebNotice task="Phân loại sự cố, giao việc và quản lý chi phí khẩn cấp" />;
   if (!actions.length) return null;
+  const primaryAction =
+    role === 'Owner'
+      ? actions.includes('asset-decision')
+        ? 'asset-decision'
+        : actions.includes('plan-decision')
+          ? 'plan-decision'
+          : actions.includes('verify')
+            ? 'verify'
+            : actions.includes('reassign')
+              ? 'reassign'
+              : actions[0]
+      : work
+        ? work.status === 'Assigned' && actions.includes('fast-repair-start')
+          ? 'fast-repair-start'
+          : work.status === 'InProgress' && actions.includes('submit')
+            ? 'submit'
+            : actions.includes('proposal')
+              ? 'proposal'
+              : actions[0]
+        : role === 'Tenant' && actions.includes('report-photo')
+          ? 'report-photo'
+          : actions[0];
+  const selectAction = (id: string) => {
+    setAction(id);
+    setOriginalPage(1);
+    setValues({});
+    setPhotos([]);
+    setConfirmed(false);
+    setShowMore(false);
+    setAssetPicker(false);
+    setAssetLabel('');
+  };
   return (
     <Box>
       <Heading title={role === 'Owner' ? 'Xem xét kết quả' : 'Cập nhật xử lý'} />
-      <ChoiceField
-        label="Chọn thao tác"
-        value={action}
-        disabled={mutation.busy}
-        options={actions.map((id) => ({ id, label: names[id] }))}
-        onChange={(id) => {
-          setAction(id);
-          setOriginalPage(1);
-          setValues({});
-          setPhotos([]);
-          setConfirmed(false);
-        }}
-      />
+      {role === 'Staff' && work?.status === 'Assigned' && policy.loading && (
+        <Text>Đang kiểm tra nhóm sửa chữa nhanh được Owner kích hoạt…</Text>
+      )}
+      {role === 'Staff' && work?.status === 'Assigned' && policy.error && (
+        <Text style={ui.red}>
+          Không tải được chính sách sửa nhanh. Bạn vẫn có thể gửi phương án sửa chữa thông thường.
+        </Text>
+      )}
+      {!action ? (
+        <>
+          <Action disabled={mutation.busy} onPress={() => selectAction(primaryAction)}>
+            {names[primaryAction]}
+          </Action>
+          {actions.length > 1 && (
+            <>
+              <Button compact mode="text" onPress={() => setShowMore((value) => !value)}>
+                {showMore ? 'Ẩn thao tác khác' : 'Thao tác khác'}
+              </Button>
+              {showMore &&
+                actions
+                  .filter((id) => id !== primaryAction)
+                  .map((id) => (
+                    <Action
+                      key={id}
+                      secondary
+                      disabled={mutation.busy}
+                      onPress={() => selectAction(id)}
+                    >
+                      {names[id]}
+                    </Action>
+                  ))}
+            </>
+          )}
+        </>
+      ) : (
+        <>
+          <Text>{names[action]}</Text>
+          <Button compact mode="text" disabled={mutation.busy} onPress={() => selectAction('')}>
+            Quay lại chọn thao tác
+          </Button>
+        </>
+      )}
       {action === 'review' && (
         <>
           {field('type', 'Loại sự cố')}
@@ -626,8 +695,8 @@ export function IncidentActionPanel({
       {action === 'asset-decision' && (
         <>
           <Text>
-            {work?.proposedAssetName || work?.proposedAssetId} · {work?.proposedAssetCategory} ·{' '}
-            {work?.proposedAssetCondition}
+            {work?.proposedAssetName || 'Tài sản mới được đề xuất'} · {work?.proposedAssetCategory}{' '}
+            · {work?.proposedAssetCondition}
           </Text>
           <ChoiceField
             label="Quyết định tài sản"
@@ -663,13 +732,22 @@ export function IncidentActionPanel({
             .filter((e) => e.requestedCost !== null && e.costApproved === null)
             .map((e) => ({
               id: e.id,
-              label: `${e.requestedCost?.toLocaleString('vi-VN')} đ · ${e.id}`,
+              label: `${e.requestedCost?.toLocaleString('vi-VN')} đ · Chờ quyết định`,
             }))}
           onChange={(id) => set('entryId', id)}
         />
       )}
       {['progress', 'blocker', 'submit', 'rework', 'emergency-actions'].includes(action) &&
-        field('note', 'Nội dung / kết quả thực hiện', false, true)}
+        field(
+          'note',
+          action === 'emergency-actions'
+            ? 'Biện pháp an toàn đã thực hiện và khó khăn còn gặp phải'
+            : action === 'submit'
+              ? 'Kết quả sửa chữa'
+              : 'Nội dung cập nhật',
+          false,
+          true,
+        )}
       {['verify', 'direct-completion', 'emergency-actions'].includes(action) && (
         <>
           {field(

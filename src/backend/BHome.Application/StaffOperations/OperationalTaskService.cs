@@ -93,8 +93,11 @@ public sealed partial class OperationalTaskService(IOperationalTaskRepository re
         task.AssignedStaffUserId, responsible is not null,
         task.Result, task.Version, task.VerifiedByUserId, task.VerifiedAt, task.CreatedAt, task.UpdatedAt,
         TargetView(task));
-    public static TaskTargetView? TargetView(OperationalTask task) => task.TargetLabel is null ? null :
-        new(task.TargetRoomId, task.TargetAssetId, task.TargetCommonArea, task.TargetLabel, task.ContractId);
+    public static TaskTargetView? TargetView(OperationalTask task) => task.TargetLabel is null
+        ? task.Kind == OperationalTaskKind.LocationAssetHandover
+            ? new(null, null, null, "Toàn bộ cơ sở · phòng và khu vực chung", task.ContractId)
+            : null
+        : new(task.TargetRoomId, task.TargetAssetId, task.TargetCommonArea, task.TargetLabel, task.ContractId);
     private TaskView CurrentView(OperationalTask task, TaskResponsibility? responsible) => View(task, responsible) with { IsOverdue = task.IsOverdue(Now) };
 
     public async Task<TaskPage<TaskView>> ListAsync(TaskQuery query, CancellationToken t)

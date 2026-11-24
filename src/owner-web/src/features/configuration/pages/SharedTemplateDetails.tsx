@@ -6,13 +6,11 @@ import {
   Alert,
   Box,
   Button,
-  Checkbox,
   Chip,
   Dialog,
   DialogActions,
   DialogContent,
   DialogTitle,
-  FormControlLabel,
   MenuItem,
   Stack,
   Table,
@@ -33,6 +31,7 @@ import type {
   SharedDocument,
   SharedResource,
 } from '../../../../../../packages/client-core/src/sharedConfiguration';
+import { sharedFeeServiceName } from '../../../../../../packages/client-core/src/sharedConfiguration';
 import { ErrorState, LoadingState } from '../../../components/common/PortalUI';
 import { SetupActionFeedback } from '../../property/UtilityFormTools';
 import { usePropertySetupApi } from '../../property/usePropertySetupApi';
@@ -51,7 +50,7 @@ export function SharedTemplateDetails({
   id,
   close,
 }: {
-  resource: SharedResource;
+  resource: Exclude<SharedResource, 'asset-templates'>;
   id: string;
   close: () => void;
 }) {
@@ -62,7 +61,6 @@ export function SharedTemplateDetails({
   const titleId = useId();
   const [location, setLocation] = useState('');
   const [room, setRoom] = useState('');
-  const [includeOptional, setIncludeOptional] = useState(true);
   const [usagePage, setUsagePage] = useState(0);
   const [plan, setPlan] = useState<{
     response: ConfigurationPlan;
@@ -109,7 +107,7 @@ export function SharedTemplateDetails({
       conflictStrategy: 'Reject',
       targetState: '',
       roomId: roomScope ? room : null,
-      includeOptionalItems: includeOptional,
+      includeOptionalItems: true,
     };
     action.run(async () => {
       const response = await api.preview(resource, id, input);
@@ -238,21 +236,6 @@ export function SharedTemplateDetails({
               {roomScope && rooms.isError && (
                 <ErrorState error={rooms.error} retry={() => void rooms.refetch()} />
               )}
-              {resource === 'asset-templates' && (
-                <FormControlLabel
-                  label="Bao gồm các mục tùy chọn"
-                  control={
-                    <Checkbox
-                      disabled={action.busy}
-                      checked={includeOptional}
-                      onChange={(e) => {
-                        setIncludeOptional(e.target.checked);
-                        setPlan(null);
-                      }}
-                    />
-                  }
-                />
-              )}
               {plan && (
                 <ConfigurationChanges plan={plan.response}>
                   <Typography variant="body2">
@@ -266,10 +249,6 @@ export function SharedTemplateDetails({
                   </Typography>
                   <Typography variant="caption" color="text.secondary">
                     Nguồn: {plan.sourceName}
-                    {resource === 'asset-templates' &&
-                      (plan.input.includeOptionalItems
-                        ? ' · Có mục tùy chọn'
-                        : ' · Chỉ mục bắt buộc')}
                   </Typography>
                   {resource === 'fee-templates' && (
                     <Typography variant="body2" color="text.secondary">
@@ -477,7 +456,6 @@ function AssetItemsSummary({ items }: { items: SharedAssetItem[] }) {
               <TableRow>
                 <TableCell>Tài sản mẫu</TableCell>
                 <TableCell align="right">Số lượng</TableCell>
-                <TableCell>Yêu cầu</TableCell>
               </TableRow>
             </TableHead>
             <TableBody>
@@ -487,7 +465,6 @@ function AssetItemsSummary({ items }: { items: SharedAssetItem[] }) {
                   <TableCell align="right">
                     {item.quantity} {item.catalog?.unit ?? ''}
                   </TableCell>
-                  <TableCell>{item.required ? 'Bắt buộc' : 'Tùy chọn'}</TableCell>
                 </TableRow>
               ))}
             </TableBody>
@@ -559,6 +536,9 @@ function SharedDataSummary({ document }: { document: SharedDocument }) {
       <SummaryFields
         fields={[
           { label: 'Loại phí', value: categories[data.category] ?? data.category },
+          ...(data.category === 'ServiceFee'
+            ? [{ label: 'Loại dịch vụ', value: sharedFeeServiceName(data, document.name) }]
+            : []),
           { label: 'Mã khoản thu', value: data.chargeCode },
           {
             label: 'Mức phí tham khảo',

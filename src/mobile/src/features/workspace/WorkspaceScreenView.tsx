@@ -35,6 +35,7 @@ import { StaffNotificationScreen } from '../../screens/StaffNotificationScreen';
 import { StaffScheduleScreen } from '../../screens/StaffScheduleScreen';
 import { StaffMoveInInventoryScreen } from '../../screens/StaffMoveInInventoryScreen';
 import { StaffMoveOutInspectionScreen } from '../../screens/StaffMoveOutInspectionScreen';
+import { StaffHandoverArchiveScreen } from '../../screens/StaffHandoverArchiveScreen';
 import {
   StaffIncidentReportScreen,
   StaffMaintenanceScreen,
@@ -123,6 +124,7 @@ const screens = {
   'tenant-meters': TenantMeterHistoryScreen,
   'staff-assets': StaffAssets,
   'staff-maintenance': StaffMaintenanceScreen,
+  'staff-handover-archive': StaffHandoverArchiveScreen,
   'staff-emergencies': StaffEmergencyScreen,
   'staff-invoices': StaffInvoices,
   onboarding: OnboardingScreen,
@@ -311,6 +313,7 @@ export function WorkspaceScreenView({ screen }: { screen: string }) {
         case 'report-incident':
         case 'move-in-inventory':
         case 'staff-maintenance':
+        case 'staff-handover-archive':
         case 'staff-emergencies':
         case 'rooms':
         case 'send-notification':
