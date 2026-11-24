@@ -1,3 +1,4 @@
+using BHome.Application.Common;
 using BHome.Application.Contracts;
 using BHome.Application.PropertyManagement;
 using BHome.Domain.Billing;
@@ -14,7 +15,7 @@ using System.Text.Json;
 namespace BHome.Infrastructure.Contracts;
 
 internal sealed class ContractRepository(BHomePersistenceContext db, ILogger<ContractRepository> logger,
-    ISetupWorkspaceStore? setup = null, IContractHandoverRepository? handoverTasks = null) : IContractRepository
+    ISetupWorkspaceStore? setup = null, IContractHandoverRepository? handoverTasks = null, TimeProvider? clock = null) : IContractRepository
 {
     // Sidecar Draft initialization is deliberately attached to persistence, not to
     // any particular contract-creation API (direct draft, Holding conversion, etc.).
@@ -192,7 +193,7 @@ internal sealed class ContractRepository(BHomePersistenceContext db, ILogger<Con
             if (db is BHome.Infrastructure.Persistence.Compact24.Compact24DbContext)
                 foreach (var c in handoverDraftCandidates.Values)
                 {
-                    var json = JsonSerializer.Serialize(HandoverDraftState.Create(c, DateTimeOffset.UtcNow),
+                    var json = JsonSerializer.Serialize(HandoverDraftState.Create(c, (clock ?? TimeProvider.System).BusinessUtcNow()),
                         new JsonSerializerOptions(JsonSerializerDefaults.Web));
                     // Never replace the immutable confirmed `current` baseline or an
                     // existing draft when a caller retries a contract creation.
@@ -209,7 +210,7 @@ internal sealed class ContractRepository(BHomePersistenceContext db, ILogger<Con
                     {
                         var loaded = await FindAsync(c.Id, t) ?? throw ContractException.Missing();
                         await handoverTasks.EnsureMoveInTaskAsync(loaded, c.OwnerSignerId,
-                            DateTimeOffset.UtcNow, t);
+                            (clock ?? TimeProvider.System).BusinessUtcNow(), t);
                     }
                 }
             if (handoverDraftCandidates.Count != 0) await db.SaveChangesAsync(t);

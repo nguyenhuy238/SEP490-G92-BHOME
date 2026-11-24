@@ -7,6 +7,7 @@ import {
   catalogError,
 } from './api';
 import { groupVietnameseIntegerDigits } from './localization';
+import { demoBusinessDate, demoBusinessNow } from './demoClock';
 import type { RoomConfiguration } from './propertySetup';
 import type { Page } from './invoices';
 import type { HoldingPreparation } from './holdingSettings';
@@ -1564,6 +1565,8 @@ export function dateOnly(value: string): string {
 }
 export const displayContractDate = (value: string) => value.split('-').reverse().join('/');
 export function businessToday() {
+  const simulated = demoBusinessDate();
+  if (simulated) return simulated;
   const parts = new Intl.DateTimeFormat('en', {
     timeZone: 'Asia/Ho_Chi_Minh',
     year: 'numeric',
@@ -1581,7 +1584,7 @@ export function localSchedule(value: string) {
   if (Number(value.slice(11, 13)) > 23 || Number(value.slice(14)) > 59)
     throw new UserFeedbackError('Giờ không hợp lệ.');
   const instant = new Date(value + ':00+07:00');
-  if (instant.getTime() < Date.now())
+  if (instant.getTime() < demoBusinessNow())
     throw new UserFeedbackError('Lịch kiểm tra không được trong quá khứ.');
   return instant.toISOString();
 }
@@ -1723,7 +1726,7 @@ export function contractActions(
       ),
     );
   if (c.kind === 'Holding') {
-    const expired = !!c.holdingExpiresAt && Date.parse(c.holdingExpiresAt) <= Date.now();
+    const expired = !!c.holdingExpiresAt && Date.parse(c.holdingExpiresAt) <= demoBusinessNow();
     if (owner && c.status === 'Draft' && !c.approvedAt && !expired)
       result.push(
         action(

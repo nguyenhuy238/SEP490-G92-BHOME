@@ -68,4 +68,22 @@ public sealed class HostFilteringTests
         }
         finally { File.Delete(file); }
     }
+
+    [Fact]
+    public void DevelopmentFileLoadsDemoClockAndBusinessJobGuards()
+    {
+        var file = Path.GetTempFileName();
+        try
+        {
+            File.WriteAllText(file, "DemoClock__Enabled=true\nDemoClock__AllowLocalDevelopment=true\nDemoClock__DevelopmentDatabaseName=bhome_neon_local_20261115\nStaffAssignments__AutoReconcileEnabled=false\nBillingAutomation__AutomaticJobsEnabled=false");
+            var configuration = new ConfigurationManager();
+            DevelopmentEnvironmentFile.AddFile(configuration, file);
+            Assert.Equal("true", configuration["DemoClock:Enabled"]);
+            Assert.Equal("true", configuration["DemoClock:AllowLocalDevelopment"]);
+            Assert.Equal("bhome_neon_local_20261115", configuration["DemoClock:DevelopmentDatabaseName"]);
+            Assert.Equal("false", configuration["StaffAssignments:AutoReconcileEnabled"]);
+            Assert.Equal("false", configuration["BillingAutomation:AutomaticJobsEnabled"]);
+        }
+        finally { File.Delete(file); }
+    }
 }

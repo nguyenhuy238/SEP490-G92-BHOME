@@ -1,3 +1,4 @@
+using BHome.Application.Common;
 using System.ComponentModel.DataAnnotations;
 using System.Globalization;
 using System.Security.Cryptography;
@@ -20,7 +21,7 @@ public sealed partial class PaymentService(IPaymentRepository repository, ICurre
 {
     private Guid Actor => user.UserId is { } id && id != Guid.Empty ? id : throw new PaymentException(401, "authentication_required");
     private DateTimeOffset Now => PaymentRules.Timestamp(clock.GetUtcNow());
-    private DateOnly Today => DateOnly.FromDateTime(TimeZoneInfo.ConvertTimeBySystemTimeZoneId(Now, "Asia/Ho_Chi_Minh").DateTime);
+    private DateOnly Today => clock.BusinessToday();
     private PaymentScope Scope => new(Actor, user.IsInRole(Roles.Owner), user.IsInRole(Roles.Tenant), user.IsInRole(Roles.Staff), Today);
     private void Owner() { _ = Actor; if (!user.IsInRole(Roles.Owner)) throw new PaymentException(403, "payment_owner_required"); }
     private static void Validate(object? value)

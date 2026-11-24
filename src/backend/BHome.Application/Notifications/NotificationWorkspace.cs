@@ -1,3 +1,4 @@
+using BHome.Application.Common;
 using System.ComponentModel.DataAnnotations;
 using BHome.Application.Billing;
 using BHome.Application.IdentityAccess;
@@ -42,7 +43,7 @@ public interface INotificationWorkspace
 public sealed class NotificationWorkspaceService(INotificationWorkspace repository, ICurrentUser user, TimeProvider clock)
 {
     private Guid Actor => user.UserId is { } id && id != Guid.Empty ? id : throw new NotificationException(401, "authentication_required");
-    private NotificationScope Scope => new(Actor, user.IsInRole(Roles.Owner), user.IsInRole(Roles.Staff), user.IsInRole(Roles.Tenant), BillingAutomationDates.BusinessDate(clock.GetUtcNow()));
+    private NotificationScope Scope => new(Actor, user.IsInRole(Roles.Owner), user.IsInRole(Roles.Staff), user.IsInRole(Roles.Tenant), clock.BusinessToday());
     private NotificationScope Sender() { var s = Scope; if (!s.Owner && !s.Staff) throw new NotificationException(403, "announcement_forbidden"); return s; }
     private Guid Owner() { var id = Actor; if (!user.IsInRole(Roles.Owner)) throw new NotificationException(403, "notification_owner_required"); return id; }
     public Task<RecipientPreview> PreviewAsync(NotificationAudience input, CancellationToken t) => repository.PreviewAsync(Sender(), input, t);

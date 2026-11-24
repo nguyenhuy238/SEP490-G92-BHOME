@@ -1,3 +1,4 @@
+using BHome.Application.Common;
 using System.ComponentModel.DataAnnotations;
 using System.Security.Cryptography;
 using System.Text;
@@ -16,7 +17,7 @@ public sealed partial class OperationalTaskService(IOperationalTaskRepository re
     IContractHandoverRepository? handovers = null)
 {
     private Guid Actor => user.UserId is { } id && id != Guid.Empty ? id : throw new OperationalTaskException(401, "authentication_required");
-    private DateTimeOffset Now => clock.GetUtcNow();
+    private DateTimeOffset Now => clock.BusinessUtcNow();
     private DateOnly Today => DateOnly.FromDateTime(TimeZoneInfo.ConvertTime(Now, TimeZoneInfo.FindSystemTimeZoneById("Asia/Ho_Chi_Minh")).DateTime);
     private bool Owner => user.IsInRole(Roles.Owner);
     private Guid? StaffFilter => Owner ? null : Actor;

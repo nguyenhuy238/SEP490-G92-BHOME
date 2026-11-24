@@ -97,4 +97,28 @@ public sealed partial class PaymentLedgerTests
         Assert.Contains(tasks, t => t.Id == firstId && t.Purpose == ReadingPurpose.Initial && t.ReadingDate == CurrentPeriod() && t.BillingPeriod == null);
         Assert.Contains(tasks, t => t.Id == periodicId && t.Purpose == ReadingPurpose.Periodic && t.ReadingDate == CurrentPeriod() && t.BillingPeriod == CurrentPeriod());
     }
+
+    [Fact]
+    public async Task MeterOptionsExposeInstallationDateAndManualScheduleCannotBackdateReading()
+    {
+        var (w, _, meters) = await MeterWorkspace(water: false);
+        var installed = CurrentPeriod().AddDays(1);
+        await using (var scope = fixture.Factory.Services.CreateAsyncScope())
+        {
+            var db = scope.ServiceProvider.GetRequiredService<BHomePersistenceContext>();
+            (await db.Set<Meter>().SingleAsync(m => m.Id == meters[0])).InstalledOn = installed;
+            await db.SaveChangesAsync();
+        }
+        using var owner = await Client(w.Owner);
+        var options = (await owner.GetFromJsonAsync<NamedResource[]>($"/api/v1/capture/locations/{w.Location}/meters"))!;
+        var meter = Assert.Single(options, item => item.Id == meters[0]);
+        Assert.Equal(installed, meter.InstalledOn);
+        Assert.True(meter.IsActive);
+        var response = await owner.PostAsJsonAsync("/api/v1/billing-automation/manual-meter-tasks",
+            new BillingManualMeterTaskInput(meters[0], ReadingPurpose.Periodic, CurrentPeriod()));
+        Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
+        Assert.Contains("reading_before_installation", await response.Content.ReadAsStringAsync());
+        var tasks = (await owner.GetFromJsonAsync<MeterTaskSummary[]>($"/api/v1/capture/meter-tasks?roomId={w.Room}"))!;
+        Assert.DoesNotContain(tasks, task => task.MeterId == meters[0] && task.Purpose == ReadingPurpose.Periodic);
+    }
 }

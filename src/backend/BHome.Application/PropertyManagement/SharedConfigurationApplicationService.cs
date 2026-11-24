@@ -1,3 +1,4 @@
+using BHome.Application.Common;
 using System.Security.Cryptography;
 using System.Text.Json;
 using BHome.Application.IdentityAccess;
@@ -36,7 +37,7 @@ public sealed class SharedConfigurationApplicationService(ISharedConfigurationSt
             var fee = Data<SharedFeeData>(source);
             if ((fee.Scope == "Room") != input.RoomId.HasValue) conflicts.Add("Chọn phòng đích cho biểu phí theo phòng; biểu phí theo cơ sở không chọn phòng.");
             if (input.RoomId.HasValue && await local.RoomLocationAsync(input.RoomId.Value, t) != input.LocationId) conflicts.Add("Phòng đích không thuộc cơ sở đã chọn.");
-            if (fee.EffectiveFrom < BHome.Application.Billing.BillingAutomationDates.BusinessDate(clock.GetUtcNow())) conflicts.Add("Ngày hiệu lực đã qua. Tạo phiên bản mới với ngày hiệu lực phù hợp trước khi áp dụng.");
+            if (fee.EffectiveFrom < clock.BusinessToday()) conflicts.Add("Ngày hiệu lực đã qua. Tạo phiên bản mới với ngày hiệu lực phù hợp trước khi áp dụng.");
             if ((await shared.PoliciesAsync(input.LocationId, t)).Any(p => p.RoomId == input.RoomId && p.ChargeCode == fee.ChargeCode && p.EffectiveFrom <= (fee.EffectiveTo ?? DateOnly.MaxValue) && (p.EffectiveTo ?? DateOnly.MaxValue) >= fee.EffectiveFrom)) conflicts.Add("Cơ sở đích đã có khoản thu trùng thời gian hiệu lực.");
         }
         else

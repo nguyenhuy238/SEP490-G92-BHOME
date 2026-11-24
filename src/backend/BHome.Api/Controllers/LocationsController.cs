@@ -1,3 +1,4 @@
+using BHome.Application.Common;
 using System.ComponentModel.DataAnnotations;
 using BHome.Application.IdentityAccess;
 using BHome.Application.Locations;
@@ -50,9 +51,7 @@ public sealed class LocationsController(ICurrentUser currentUser, ILocationAssig
 
     private Guid UserId => currentUser.UserId ?? throw new InvalidOperationException("Authenticated user is unavailable.");
 
-    private DateOnly VietnamToday() => DateOnly.FromDateTime(
-        TimeZoneInfo.ConvertTime(clock.GetUtcNow(),
-            TimeZoneInfo.FindSystemTimeZoneById("Asia/Ho_Chi_Minh")).DateTime);
+    private DateOnly VietnamToday() => clock.BusinessToday();
 }
 
 [ApiController]

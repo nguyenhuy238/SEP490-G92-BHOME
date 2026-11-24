@@ -34,7 +34,7 @@ public sealed partial class ContractService(IContractRepository repository, ICur
     IMainDraftData? handoverPartyData = null) : IAdministrativeContractReadiness
 {
     private Guid Actor => user.UserId is { } id && id != Guid.Empty ? id : throw new ContractException(401, "authentication_required");
-    private DateOnly Today => DateOnly.FromDateTime(TimeZoneInfo.ConvertTimeBySystemTimeZoneId(clock.GetUtcNow(), "Asia/Ho_Chi_Minh").DateTime);
+    private DateOnly Today => clock.BusinessToday();
     private void Role(params string[] roles) { _ = Actor; if (!roles.Any(user.IsInRole)) throw new ContractException(403, "contract_role_forbidden"); }
     private static string Hash<T>(T value) => Convert.ToHexString(SHA256.HashData(JsonSerializer.SerializeToUtf8Bytes(value)));
     private static string FileHash(byte[] value) => Convert.ToHexString(SHA256.HashData(value));
@@ -291,7 +291,7 @@ public sealed partial class ContractService(IContractRepository repository, ICur
             if (c.PreviousContractId is not null || c.Kind is not (ContractKind.Main or ContractKind.Holding) ||
                 c.Status is ContractStatus.Terminated or ContractStatus.Superseded or ContractStatus.Converted or ContractStatus.Cancelled or ContractStatus.Expired or ContractStatus.Applied)
                 throw ContractException.Conflict("deposit_not_payable");
-            if (c.Kind == ContractKind.Holding && (c.ApprovedAt is null && !AnonymousContractSigningService.HoldingOwnerHasSigned(c) || c.Status is ContractStatus.Expired or ContractStatus.Cancelled || c.HoldingExpiryAt <= clock.GetUtcNow()))
+            if (c.Kind == ContractKind.Holding && (c.ApprovedAt is null && !AnonymousContractSigningService.HoldingOwnerHasSigned(c) || c.Status is ContractStatus.Expired or ContractStatus.Cancelled || c.HoldingExpiryAt <= clock.BusinessUtcNow()))
                 throw ContractException.Conflict("holding_deposit_requires_manual_review");
             var reference = x.BankTransactionReference.Trim();
             var existing = await repository.BankReferenceAsync(reference, t);
@@ -367,7 +367,7 @@ public sealed partial class ContractService(IContractRepository repository, ICur
         {
             var holding = await repository.FindAsync(holdingId, t);
             if (holding is null || holding.Kind != ContractKind.Holding || holding.Status != ContractStatus.Active ||
-                holding.HoldingExpiryAt <= clock.GetUtcNow() || holding.RoomId != c.RoomId || holding.TenantUserId != c.TenantUserId ||
+                holding.HoldingExpiryAt <= clock.BusinessUtcNow() || holding.RoomId != c.RoomId || holding.TenantUserId != c.TenantUserId ||
                 holding.ConvertedMainContractId is not null || holding.AgreedPriceSnapshot == "{}" || holding.MonthlyRent != c.MonthlyRent ||
                 holding.StartDate != c.StartDate || holding.EndDate != c.EndDate || holding.Terms != c.Terms ||
                 !ContractChargeSnapshot.SameChargeTerms(holding, c))
@@ -481,7 +481,7 @@ public sealed partial class ContractService(IContractRepository repository, ICur
         if (c.Kind == ContractKind.Addendum)
         {
             await (operatingPolicies ?? throw ContractException.Conflict("operating_policy_workflow_unavailable")).ApplyAmendmentAsync(c, t);
-            c.Status = ContractStatus.Applied; c.ActivatedAt = clock.GetUtcNow(); c.ActivatedByUserId = approvedOwner;
+            c.Status = ContractStatus.Applied; c.ActivatedAt = clock.BusinessUtcNow(); c.ActivatedByUserId = approvedOwner;
             Audit("OperatingPolicyAmendmentApplied", id); if (key is { } amendmentKey) Remember(amendmentKey, "activate", id, id); return View(c);
         }
         if (c.PreviousContractId is { } previous)
@@ -497,17 +497,17 @@ public sealed partial class ContractService(IContractRepository repository, ICur
         {
             var holding = await repository.FindAsync(holdingId, t) ?? throw ContractException.Missing();
             if (holding.Kind != ContractKind.Holding || holding.Status != ContractStatus.Active || holding.ConvertedMainContractId is not null ||
-                holding.HoldingExpiryAt <= clock.GetUtcNow()) throw ContractException.Conflict("source_holding_not_convertible");
+                holding.HoldingExpiryAt <= clock.BusinessUtcNow()) throw ContractException.Conflict("source_holding_not_convertible");
             holding.Status = ContractStatus.Converted; holding.ConvertedMainContractId = c.Id; holding.ActualEndDate = Today;
             holding.LifecycleActorId = approvedOwner; holding.LifecycleAt = clock.GetUtcNow(); holding.LifecycleReason = "MainContractActivated";
             Audit("HoldingConverted", holding.Id);
         }
         ChangeRoomStatus(c, RoomStatus.Occupied, RoomTransitionSource.ContractActivation, approvedOwner: automatic ? approvedOwner : null);
         ContractChargeSnapshot.MarkMainBound(c, clock.GetUtcNow());
-        c.Status = ContractStatus.Active; c.ActivatedByUserId = approvedOwner; c.ActivatedAt = clock.GetUtcNow();
+        c.Status = ContractStatus.Active; c.ActivatedByUserId = approvedOwner; c.ActivatedAt = clock.BusinessUtcNow();
         if (provisioning is not null) await provisioning.ProvisionAsync(c, approvedOwner, t);
         if (handoverRepository is not null && c.PreviousContractId is null)
-            await handoverRepository.EnsureMoveInTaskAsync(c, approvedOwner, clock.GetUtcNow(), t);
+            await handoverRepository.EnsureMoveInTaskAsync(c, approvedOwner, clock.BusinessUtcNow(), t);
         if (c.HoldingContractId is { } acceptedHolding && c.SigningMode == ContractSigningModes.Internal)
         {
             var linked = await repository.FindAsync(acceptedHolding, t) ?? throw ContractException.Missing();
@@ -1010,7 +1010,7 @@ public sealed partial class ContractService(IContractRepository repository, ICur
             if (previous is null) repository.Add(m);
             else m.Version++;
             if (expiry && handoverRepository is not null)
-                await handoverRepository.EnsureMoveOutTaskAsync(c, m, Actor, clock.GetUtcNow(), t);
+                await handoverRepository.EnsureMoveOutTaskAsync(c, m, Actor, clock.BusinessUtcNow(), t);
             MoveOutEvent(m, expiry ? "OwnerMoveOutOpened" : "Requested");
             Audit(expiry ? "ContractOwnerMoveOutOpened" : "ContractMoveOutRequested", id);
             Remember(key, expiry ? "expiry" : "terminate-request", new { id, x }, m.Id);
@@ -1039,14 +1039,14 @@ public sealed partial class ContractService(IContractRepository repository, ICur
             expectedVersion is { } version && m.Version != version) throw ContractException.Conflict("move_out_not_pending_approval");
         m.Status = MoveOutStatus.Approved; m.ApprovedByUserId = Actor; m.ApprovedAt = clock.GetUtcNow(); m.Version++; MoveOutEvent(m, "Approved");
         if (handoverRepository is not null)
-            await handoverRepository.EnsureMoveOutTaskAsync(c, m, Actor, clock.GetUtcNow(), t);
+            await handoverRepository.EnsureMoveOutTaskAsync(c, m, Actor, clock.BusinessUtcNow(), t);
         Audit("ContractMoveOutApproved", id); Remember(key, "terminate-approve", fingerprint, m.Id); return View(m);
     }, t);
     public Task<MoveOutView> ScheduleInspectionAsync(Guid id, InspectionScheduleInput x, Guid key, CancellationToken t) => Mutate(id, [Roles.Owner, Roles.Staff], async c =>
     {
         var m = await repository.MoveOutAsync(id, t) ?? throw ContractException.Missing();
         if (await Replay(key, "inspection-schedule", new { id, x }, t) is not null) return View(m);
-        if (m.Status != MoveOutStatus.Approved || x.ScheduledAt < clock.GetUtcNow() || x.ScheduledAt.Offset != TimeSpan.Zero) throw ContractException.Invalid("invalid_inspection_schedule");
+        if (m.Status != MoveOutStatus.Approved || x.ScheduledAt < clock.BusinessUtcNow() || x.ScheduledAt.Offset != TimeSpan.Zero) throw ContractException.Invalid("invalid_inspection_schedule");
         if (x.ExpectedVersion is { } version && version != m.Version) throw ContractException.Conflict("move_out_version_changed");
         var staff = x.StaffUserId ?? (user.IsInRole(Roles.Staff) ? Actor : (Guid?)null);
         if (staff == Guid.Empty || staff is { } assignee && (!await repository.ActiveUserInRoleAsync(assignee, Roles.Staff, t) || !await repository.StaffAssignedAsync(assignee, c.Room.LocationId, Today, t))) throw ContractException.Invalid("inspection_staff_not_assigned");
@@ -1079,7 +1079,7 @@ public sealed partial class ContractService(IContractRepository repository, ICur
             // photo together with its exact checklist category. Linking here
             // would make that later ownership/integrity check reject it.
             m.ElectricityReadingId = x.ElectricityReadingId; m.WaterReadingId = x.WaterReadingId; m.InspectionNotes = x.Notes?.Trim() ?? "";
-            m.InspectedByUserId = Actor; m.InspectedAt = clock.GetUtcNow(); m.Status = MoveOutStatus.Inspected;
+            m.InspectedByUserId = Actor; m.InspectedAt = clock.BusinessUtcNow(); m.Status = MoveOutStatus.Inspected;
             await RecordFinalInspection(c, x, t); m.Version++; MoveOutEvent(m, "Inspected");
             if (handoverRepository is not null)
                 await handoverRepository.SubmitMoveOutTaskAsync(id, Actor, clock.GetUtcNow(), t);

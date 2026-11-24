@@ -228,6 +228,16 @@ const messages: Record<string, string> = {
     'Ngày Nháp phải trước hoặc bằng ngày Phát hành, ngày Hạn trả phải sau hoặc bằng ngày Phát hành.',
   invalid_billing_schedule: 'Chọn đầy đủ quy tắc, ngày 1–31 và tháng cộng thêm 0–2.',
   draft_date_not_reached: 'Chưa đến ngày lập nháp đã cấu hình.',
+  reading_before_installation:
+    'Ngày ghi chỉ số theo lịch trước ngày lắp đồng hồ. Kiểm tra ngày lắp và chọn kỳ/lịch ghi số phù hợp.',
+  meter_assignment_date_not_reached: 'Chưa đến ngày giao nhiệm vụ ghi số theo lịch đã cấu hình.',
+  meter_reading_date_not_reached:
+    'Chưa đến ngày ghi chỉ số; không thể tạo nhiệm vụ trước ngày này.',
+  periodic_reading_date_must_match_schedule: 'Ngày ghi số vận hành phải khớp lịch áp dụng của kỳ.',
+  initial_reading_after_periodic_date:
+    'Ngày ghi chỉ số ban đầu không được sau ngày ghi số định kỳ đã cấu hình.',
+  invalid_reading_period: 'Ngày ghi chỉ số không thuộc kỳ vận hành đã chọn.',
+  meter_not_found: 'Đồng hồ không còn hoạt động hoặc không thuộc phạm vi được quản lý.',
   finalization_date_not_reached: 'Chưa đến ngày phát hành đã cấu hình.',
   invoice_adjustment_pending:
     'Hóa đơn đang có yêu cầu điều chỉnh chờ Owner xác nhận. Hãy duyệt hoặc từ chối yêu cầu trước khi phát hành.',

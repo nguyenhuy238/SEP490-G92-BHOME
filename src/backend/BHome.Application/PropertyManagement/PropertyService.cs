@@ -1,3 +1,4 @@
+using BHome.Application.Common;
 using System.ComponentModel.DataAnnotations;
 using System.Linq.Expressions;
 using System.Reflection;
@@ -17,8 +18,7 @@ public sealed class PropertyService(IPropertyRepository repository, ICurrentUser
     IAdministrativeContractReadiness? contractReadiness = null, IPropertyLifecycleChecks? lifecycle = null,
     ISetupWorkspaceStore? setup = null)
 {
-    private DateOnly Today => DateOnly.FromDateTime(TimeZoneInfo.ConvertTimeBySystemTimeZoneId(
-        clock.GetUtcNow(), "Asia/Ho_Chi_Minh").DateTime);
+    private DateOnly Today => clock.BusinessToday();
     private Guid Actor => user.UserId ?? throw Error(403, "permission_denied");
     private static PropertyException Error(int status, string code) => new(status, code);
     private void Require(string permission)

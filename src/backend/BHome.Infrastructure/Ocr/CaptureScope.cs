@@ -1,3 +1,4 @@
+using BHome.Application.Common;
 using BHome.Application.IdentityAccess;
 using BHome.Domain.Billing;
 using BHome.Domain.IdentityAccess;
@@ -12,7 +13,7 @@ namespace BHome.Infrastructure.Ocr;
 internal sealed class CaptureScope(BHomePersistenceContext db, ICurrentUser user, TimeProvider clock)
 {
     public Guid UserId => user.UserId ?? Guid.Empty;
-    public DateOnly Today => DateOnly.FromDateTime(TimeZoneInfo.ConvertTime(clock.GetUtcNow(), TimeZoneInfo.FindSystemTimeZoneById("Asia/Ho_Chi_Minh")).DateTime);
+    public DateOnly Today => clock.BusinessToday();
     private IQueryable<Guid> EligibleStaff => db is Compact24DbContext compact
         ? StaffEmploymentEligibility.EligibleIds(compact, Today)
         : db.Users.Where(u => u.IsActive).Select(u => u.Id);

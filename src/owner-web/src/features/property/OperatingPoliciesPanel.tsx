@@ -1,3 +1,4 @@
+import { businessToday } from '../../../../../packages/client-core/src/contracts';
 import { TextField, ValidatedForm } from '../../components/common/ValidatedForm';
 import { useState } from 'react';
 import {
@@ -271,11 +272,7 @@ function PolicyEditor({
   const source = document?.data;
   const [title, setTitle] = useState(source?.title ?? '');
   const [content, setContent] = useState(source?.content ?? '');
-  const [date, setDate] = useState(
-    () =>
-      source?.effectiveFrom ??
-      new Intl.DateTimeFormat('en-CA', { timeZone: 'Asia/Ho_Chi_Minh' }).format(new Date()),
-  );
+  const [date, setDate] = useState(() => source?.effectiveFrom ?? businessToday());
   const [version, setVersion] = useState(document?.version ?? 0);
   return (
     <Paper sx={{ p: 2 }}>
