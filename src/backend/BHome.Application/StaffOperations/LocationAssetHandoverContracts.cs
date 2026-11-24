@@ -28,7 +28,10 @@ public sealed record LocationAssetHandoverArchiveListItem(
 public sealed record LocationAssetHandoverArchiveAssetView(
     Guid Id, string Scope, string Name, int Quantity, string Condition, bool Inherited,
     Guid? SourceHandoverContractId, Guid? IncidentId, string? Note,
-    Guid? PriorStaffTaskId, Guid? PriorStaffUserId);
+    Guid? PriorStaffTaskId, Guid? PriorStaffUserId)
+{
+    public string? Unit { get; init; }
+}
 
 public sealed record LocationAssetHandoverArchiveReportView(
     LocationAssetHandoverArchiveListItem Report,

@@ -119,12 +119,17 @@ public sealed class LocationAssetHandoverService(
                     throw OperationalTaskException.Conflict("location_inventory_checklist_incomplete");
                 var room = ReadString(item, "roomNumber");
                 var common = ReadString(item, "commonArea");
+                var hasRoomId = Guid.TryParse(ReadString(item, "roomId"), out var roomId) && roomId != Guid.Empty;
+                var isCommonArea = !hasRoomId && string.IsNullOrWhiteSpace(room);
                 var scope = !string.IsNullOrWhiteSpace(room) ? "Phòng " + room :
-                    !string.IsNullOrWhiteSpace(common) ? common : "Khu vực chung";
+                    isCommonArea ? (!string.IsNullOrWhiteSpace(common) ? common : "Khu vực chung") :
+                    "Phòng (chưa có số phòng)";
                 result.Add(new(id, scope, name, quantity, inherited, source, incident,
                     ReadString(item, "note"), priorTask, priorStaff)
                 {
-                    Condition = ReadString(item, "condition") ?? "Unassessed"
+                    Condition = ReadString(item, "condition") ?? "Unassessed",
+                    Unit = ReadString(item, "unit"),
+                    IsCommonArea = isCommonArea
                 });
             }
             return result;
@@ -300,7 +305,10 @@ public sealed class LocationAssetHandoverService(
         var items = ParseItems(Encoding.UTF8.GetString(snapshot)).Select(item =>
             new LocationAssetHandoverArchiveAssetView(item.Id, item.Scope, item.Name, item.Quantity,
                 item.Condition, item.Inherited, item.SourceHandoverContractId, item.IncidentId,
-                item.Note, item.PriorStaffTaskId, item.PriorStaffUserId)).ToArray();
+                item.Note, item.PriorStaffTaskId, item.PriorStaffUserId)
+            {
+                Unit = item.Unit
+            }).ToArray();
         return new(ArchiveListItem(state), items);
     }
 
@@ -555,13 +563,15 @@ public sealed class LocationAssetHandoverService(
         CancellationToken token)
     {
         await using var command = Command(
-            "SELECT id, COALESCE(NULLIF(trim(full_name),''),NULLIF(trim(email),''),id::text) FROM users WHERE id=ANY(@ids)",
+            "SELECT id, COALESCE(NULLIF(trim(full_name),''),NULLIF(trim(email),'')) FROM users WHERE id=ANY(@ids)",
             ("ids", new[] { ownerId, staffId }));
         var found = new Dictionary<Guid, string>();
         await using var reader = await command.ExecuteReaderAsync(token);
-        while (await reader.ReadAsync(token)) found[reader.GetGuid(0)] = reader.GetString(1);
-        return (found.GetValueOrDefault(ownerId, ownerId.ToString("D")),
-            found.GetValueOrDefault(staffId, staffId.ToString("D")));
+        while (await reader.ReadAsync(token))
+            if (!reader.IsDBNull(1) && !string.IsNullOrWhiteSpace(reader.GetString(1)))
+                found[reader.GetGuid(0)] = reader.GetString(1).Trim();
+        return (found.GetValueOrDefault(ownerId, "Chủ sở hữu (chưa cập nhật họ tên)"),
+            found.GetValueOrDefault(staffId, "Nhân viên (chưa cập nhật họ tên)"));
     }
 
     // A Tenant handover is only a *source* of evidence while the same active

@@ -10,6 +10,7 @@ import { QueryCache } from './queryCache';
 import { mutationTags } from './queryPolicies';
 import type { TokenSession } from '../../../../packages/client-core/src/jwtSession';
 import { mobileRequestUrl } from './mobileRequestUrl';
+export { mobileRequestUrl };
 
 export interface Session extends TokenSession {
   refreshToken: string;
@@ -58,21 +59,6 @@ export class MobileApiError extends Error {
 }
 
 const stagingOrigin = 'https://api-staging.103.146.23.157.sslip.io';
-
-// Metro's fixed-target loopback proxy is opt-in and never used by release builds
-// or Expo Go. The stored API origin remains HTTPS and bound to the Staging server.
-export function mobileRequestUrl(base: string, path: string): string {
-  if (
-    typeof __DEV__ !== 'undefined' &&
-    __DEV__ &&
-    process.env.EXPO_PUBLIC_STAGING_WEB_PROXY === '1' &&
-    base === stagingOrigin &&
-    path.startsWith('/api/v1/') &&
-    ['localhost', '127.0.0.1', '[::1]'].includes(globalThis.location?.hostname ?? '')
-  )
-    return `${globalThis.location.origin}/__bhome_staging${path}`;
-  return base + path;
-}
 
 export async function mobileResponse<T>(
   base: string,

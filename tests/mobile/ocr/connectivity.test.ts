@@ -350,6 +350,8 @@ it('uses the opt-in Staging proxy only for loopback development requests', () =>
   const path = '/api/v1/auth/login';
   vi.stubGlobal('__DEV__', true);
   vi.stubEnv('EXPO_PUBLIC_STAGING_WEB_PROXY', '1');
+  vi.stubEnv('EXPO_PUBLIC_API_BASE_URL', base);
+  vi.stubGlobal('document', {});
   vi.stubGlobal('location', { hostname: 'localhost', origin: 'http://localhost:8081' });
   try {
     expect(mobileRequestUrl(base, path)).toBe(`http://localhost:8081/__bhome_staging${path}`);

@@ -1,5 +1,3 @@
-/* global require, module, __dirname, process */
-/* eslint-disable @typescript-eslint/no-require-imports */
 const { getDefaultConfig } = require('expo/metro-config');
 const config = getDefaultConfig(__dirname);
 

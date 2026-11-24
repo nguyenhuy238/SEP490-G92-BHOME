@@ -13,6 +13,12 @@ public sealed record LocationAssetInventoryItem(Guid Id, Guid? RoomId, string? R
     // Condition is a Staff observation, not an Owner asset-status mutation. The default keeps
     // snapshots created before this field existed readable without inventing an observation.
     public string Condition { get; init; } = "Unassessed";
+    // Unit comes from the Owner-confirmed room/common-area configuration. Old snapshots
+    // without a unit remain readable and render as an explicit dash in the PDF.
+    public string? Unit { get; init; }
+    // Distinguishes an intentionally empty unit from a pre-unit legacy snapshot so
+    // an existing Staff checklist can be safely enriched once from Owner data.
+    public bool UnitCaptured { get; init; }
     // Audit provenance when a successor continues matching checks from a superseded task.
     // This does not make a prior Staff's signature the successor's signature.
     public Guid? PriorStaffTaskId { get; init; }

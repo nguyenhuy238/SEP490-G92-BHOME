@@ -142,6 +142,8 @@ internal static class LocationAssetInventoryTaskFactory
                         !unique.TryGetValue((item.RoomId, item.AssetId), out var old) ||
                         old.Quantity != item.Quantity || old.Name != item.Name ||
                         old.CommonArea != item.CommonArea || old.RoomNumber != item.RoomNumber ||
+                        old.UnitCaptured && item.UnitCaptured &&
+                            !string.Equals(old.Unit?.Trim() ?? "", item.Unit?.Trim() ?? "", StringComparison.OrdinalIgnoreCase) ||
                         old.Inherited != item.Inherited || old.SourceHandoverContractId != item.SourceHandoverContractId ||
                         !(item.AssetId.HasValue || item.RoomId.HasValue && item.Quantity == 0) ||
                         (!old.Checked && old.IncidentId is null && string.IsNullOrWhiteSpace(old.Note))) return item;
@@ -151,6 +153,9 @@ internal static class LocationAssetInventoryTaskFactory
                         Checked = item.Checked || old.Checked,
                         Note = old.Note,
                         IncidentId = old.IncidentId,
+                        Condition = old.Condition,
+                        Unit = old.UnitCaptured && !item.UnitCaptured ? old.Unit : item.Unit,
+                        UnitCaptured = old.UnitCaptured || item.UnitCaptured,
                         // A second replacement keeps the original checker, not the
                         // intermediate successor who merely inherited the prior check.
                         PriorStaffTaskId = old.PriorStaffTaskId ?? prior.Id,
@@ -274,14 +279,24 @@ internal static class LocationAssetInventoryTaskFactory
         {
             var history = new OperationalTaskHistory
             {
-                TaskId = task.Id, ActorId = actor, ResponsibleStaffUserId = staff,
-                Action = "location_asset_inventory_owner_reconciled", Note = "Đồng bộ phạm vi Owner đã xác nhận",
-                OccurredAt = now, TaskVersion = task.Version, WasOverdue = task.IsOverdue(now),
+                TaskId = task.Id,
+                ActorId = actor,
+                ResponsibleStaffUserId = staff,
+                Action = "location_asset_inventory_owner_reconciled",
+                Note = "Đồng bộ phạm vi Owner đã xác nhận",
+                OccurredAt = now,
+                TaskVersion = task.Version,
+                WasOverdue = task.IsOverdue(now),
                 ChangesJson = JsonSerializer.Serialize(new { previousCount = current.Items.Length, ownerConfirmedCount = merged.Items.Length, Automatic = true })
             };
             db.Add(history);
-            db.Add(new OperationalTaskNotification { TaskId = task.Id, RecipientUserId = staff,
-                EventId = history.Id, Event = history.Action });
+            db.Add(new OperationalTaskNotification
+            {
+                TaskId = task.Id,
+                RecipientUserId = staff,
+                EventId = history.Id,
+                Event = history.Action
+            });
         }
         if (ready)
         {
@@ -289,16 +304,27 @@ internal static class LocationAssetInventoryTaskFactory
             task.ApplyAction("submit", now, actor);
             var history = new OperationalTaskHistory
             {
-                TaskId = task.Id, ActorId = actor, ResponsibleStaffUserId = staff,
-                Action = "submit", Note = task.Result, OccurredAt = now, TaskVersion = task.Version,
-                WasOverdue = task.IsOverdue(now), ChangesJson = JsonSerializer.Serialize(new { task.Status, Automatic = true })
+                TaskId = task.Id,
+                ActorId = actor,
+                ResponsibleStaffUserId = staff,
+                Action = "submit",
+                Note = task.Result,
+                OccurredAt = now,
+                TaskVersion = task.Version,
+                WasOverdue = task.IsOverdue(now),
+                ChangesJson = JsonSerializer.Serialize(new { task.Status, Automatic = true })
             };
             db.Add(history);
             var owners = await db.Users.AsNoTracking().Where(u => u.IsActive &&
                 EF.Property<string[]>(u, "roles").Contains("Owner")).Select(u => u.Id).ToArrayAsync(token);
             foreach (var owner in owners.Where(id => id != actor))
-                db.Add(new OperationalTaskNotification { TaskId = task.Id, RecipientUserId = owner,
-                    EventId = history.Id, Event = history.Action });
+                db.Add(new OperationalTaskNotification
+                {
+                    TaskId = task.Id,
+                    RecipientUserId = owner,
+                    EventId = history.Id,
+                    Event = history.Action
+                });
         }
         await db.SaveChangesAsync(token);
     }
@@ -508,7 +534,11 @@ internal static class LocationAssetInventoryTaskFactory
                     source.Snapshot, requirement.Id, matched.Id, requirement.Quantity);
                 items.Add(new(ItemId(assignmentId, room.Id, requirement.Id), room.Id, room.RoomNumber,
                     matched.Id, requirement.Name, requirement.Quantity, null,
-                    checkedByTenant, checkedByTenant, checkedByTenant ? source.ContractId : null));
+                    checkedByTenant, checkedByTenant, checkedByTenant ? source.ContractId : null)
+                {
+                    Unit = requirement.Unit,
+                    UnitCaptured = true
+                });
             }
             if (roomAssets.Length == 0 && configured.Length == 0 && !invalidConfiguration)
             {
@@ -556,7 +586,11 @@ internal static class LocationAssetInventoryTaskFactory
             if (matched is null) continue;
             confirmedCommonCount++;
             items.Add(new(ItemId(assignmentId, locationId, item.Id), null, null, matched?.Id,
-                item.Name, item.Quantity, item.CommonArea));
+                item.Name, item.Quantity, item.CommonArea)
+            {
+                Unit = item.Unit,
+                UnitCaptured = true
+            });
         }
         return new LocationAssetInventorySnapshot(assignmentId, effectiveFrom, items.ToArray())
         {

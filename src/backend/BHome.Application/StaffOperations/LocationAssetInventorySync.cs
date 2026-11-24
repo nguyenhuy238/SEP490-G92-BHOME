@@ -11,6 +11,8 @@ public static class LocationAssetInventorySync
         left.Id == right.Id && left.RoomId == right.RoomId && left.RoomNumber == right.RoomNumber &&
         left.AssetId == right.AssetId && left.Name == right.Name && left.Quantity == right.Quantity &&
         left.CommonArea == right.CommonArea &&
+        (!left.UnitCaptured || !right.UnitCaptured ||
+         string.Equals(left.Unit?.Trim() ?? "", right.Unit?.Trim() ?? "", StringComparison.OrdinalIgnoreCase)) &&
         ((left.Inherited == right.Inherited && left.SourceHandoverContractId == right.SourceHandoverContractId) ||
          (!left.Inherited && left.SourceHandoverContractId is null && right.Inherited &&
           left.RecheckOfHandoverContractId is { } challenged && challenged == right.SourceHandoverContractId));
@@ -43,6 +45,8 @@ public static class LocationAssetInventorySync
                     Condition = previous.Condition,
                     Note = previous.Note,
                     IncidentId = previous.IncidentId,
+                    Unit = previous.UnitCaptured && !i.UnitCaptured ? previous.Unit : i.Unit,
+                    UnitCaptured = previous.UnitCaptured || i.UnitCaptured,
                     PriorStaffTaskId = previous.PriorStaffTaskId,
                     PriorStaffUserId = previous.PriorStaffUserId,
                     RecheckOfHandoverContractId = previous.RecheckOfHandoverContractId
