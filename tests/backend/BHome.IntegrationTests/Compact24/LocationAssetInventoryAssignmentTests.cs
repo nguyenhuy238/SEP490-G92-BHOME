@@ -725,7 +725,9 @@ public sealed class LocationAssetInventoryAssignmentTests(Compact24Fixture fixtu
             var room = new Room { LocationId = location, RoomNumber = "LEGACY-COMPLETE" };
             var baseline = Convert.ToHexString(SHA256.HashData(JsonSerializer.SerializeToUtf8Bytes(new
             {
-                Id = room.Id, assignment = (object?)null, desired = (object?)null
+                Id = room.Id,
+                assignment = (object?)null,
+                desired = (object?)null
             }, Json)));
             var emptyKey = SetupKey($"room-no-assets:{room.Id:N}");
             Guid taskId;

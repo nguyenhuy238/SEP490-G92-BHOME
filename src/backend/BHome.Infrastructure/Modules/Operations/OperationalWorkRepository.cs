@@ -47,7 +47,7 @@ internal sealed class OperationalWorkRepository(Compact24DbContext db) : IOperat
         };
     }
 
-    private static State TaskState(OperationalTask task, Guid? responsible, ILookup<Guid,HandoverEvent> events,
+    private static State TaskState(OperationalTask task, Guid? responsible, ILookup<Guid, HandoverEvent> events,
         MoveInPreparation? moveIn)
     {
         if (task.Status == MeterTaskStatus.Completed) return new("Đã hoàn thành", Closed, "Xem kết quả");
@@ -164,15 +164,15 @@ internal sealed class OperationalWorkRepository(Compact24DbContext db) : IOperat
         var signatures = history.Select(x => JsonSerializer.Deserialize<HandoverEvent>(x, Json))
             .OfType<HandoverEvent>().Where(x => handoverIds.Contains(x.TaskId)).ToLookup(x => x.TaskId);
         var contractIds = tasks.Select(x => x.ContractId).OfType<Guid>().Distinct().ToArray();
-        var moveIn = contractIds.Length == 0 ? new Dictionary<Guid,MoveInPreparation>() :
+        var moveIn = contractIds.Length == 0 ? new Dictionary<Guid, MoveInPreparation>() :
             await db.Database.SqlQuery<MoveInPreparation>($"""
                 SELECT id AS "ContractId",handover->'preparation'->>'status' AS "Status",
                     COALESCE(jsonb_typeof(handover->'preparation'->'ownerSignature')='object',false) AS "OwnerSigned"
                 FROM contracts WHERE id=ANY({contractIds})
-                """).ToDictionaryAsync(x => x.ContractId,token);
+                """).ToDictionaryAsync(x => x.ContractId, token);
         var moveOutStaff = await db.Set<ContractMoveOut>().AsNoTracking()
             .Where(x => contractIds.Contains(x.ContractId) && x.InspectionStaffId != null)
-            .Select(x => new { x.ContractId, x.InspectionStaffId }).ToDictionaryAsync(x => x.ContractId,x => x.InspectionStaffId,token);
+            .Select(x => new { x.ContractId, x.InspectionStaffId }).ToDictionaryAsync(x => x.ContractId, x => x.InspectionStaffId, token);
 
         var locationsIds = tasks.Select(x => x.LocationId).Concat(incidents.Select(x => x.LocationId))
             .Concat(orders.Select(x => x.LocationId)).Distinct().ToArray();
@@ -201,7 +201,7 @@ internal sealed class OperationalWorkRepository(Compact24DbContext db) : IOperat
         var assets = await db.Set<Asset>().AsNoTracking().Where(x => assetIds.Contains(x.Id))
             .Select(x => new { x.Id, x.Name }).ToDictionaryAsync(x => x.Id, x => x.Name, token);
 
-        string? Name(Dictionary<Guid,string?> names, Guid? id) => id is { } key ? names.GetValueOrDefault(key) : null;
+        string? Name(Dictionary<Guid, string?> names, Guid? id) => id is { } key ? names.GetValueOrDefault(key) : null;
         string? RoomName(Guid? id) => id is { } key ? rooms.GetValueOrDefault(key) : null;
         string? AssetName(Guid? id) => id is { } key ? assets.GetValueOrDefault(key) : null;
         var rows = new List<Row>(tasks.Length + incidents.Length + orders.Length);
@@ -219,11 +219,11 @@ internal sealed class OperationalWorkRepository(Compact24DbContext db) : IOperat
             var source = recurring.Contains(task.Id) ? "Recurring" :
                 task.Kind is OperationalTaskKind.LocationAssetHandover or OperationalTaskKind.MoveInInventory ? "Inventory" :
                 task.ContractId is not null ? "System" : "Owner";
-            rows.Add(new(new(task.Id,"task",task.Title,source,task.Kind.ToString(),task.LocationId,
-                locations.GetValueOrDefault(task.LocationId)?.Name,task.TargetRoomId,RoomName(task.TargetRoomId),
-                task.TargetCommonArea,AssetName(task.TargetAssetId),task.Priority.ToString(),state.Status,state.Phase,
-                state.Action,Name(staff, assigned),task.DueAt,task.CreatedAt,task.IsOverdue(now),null,0),
-                task.Status.ToString(),task.TargetAssetId,[],state.Verification,task.TargetLabel,responsible,task.AssignedStaffUserId));
+            rows.Add(new(new(task.Id, "task", task.Title, source, task.Kind.ToString(), task.LocationId,
+                locations.GetValueOrDefault(task.LocationId)?.Name, task.TargetRoomId, RoomName(task.TargetRoomId),
+                task.TargetCommonArea, AssetName(task.TargetAssetId), task.Priority.ToString(), state.Status, state.Phase,
+                state.Action, Name(staff, assigned), task.DueAt, task.CreatedAt, task.IsOverdue(now), null, 0),
+                task.Status.ToString(), task.TargetAssetId, [], state.Verification, task.TargetLabel, responsible, task.AssignedStaffUserId));
         }
         foreach (var report in incidents.Where(_ => !workOnly))
         {
@@ -231,7 +231,7 @@ internal sealed class OperationalWorkRepository(Compact24DbContext db) : IOperat
             var open = related.Where(x => x.IsOpen).OrderBy(x => WorkState(x).Phase == Owner ? 0 : 1)
                 .ThenBy(x => x.TargetCompletionAt).ThenBy(x => x.Id).ToArray();
             var active = report.IsOpen ? open.FirstOrDefault() : null;
-            var state = IncidentState(report,active,pendingEmergency.Contains(report.Id));
+            var state = IncidentState(report, active, pendingEmergency.Contains(report.Id));
             if (reportsOnly && report.IsOpen && active is null && report.OwnerDecisionAt is not null &&
                 !pendingEmergency.Contains(report.Id))
                 state = new("Chờ xử lý", Owner, "Phân công sửa chữa hoặc giải quyết sự cố");
@@ -240,15 +240,15 @@ internal sealed class OperationalWorkRepository(Compact24DbContext db) : IOperat
             var source = ReportSource(report);
             var reportStatus = ReportStatus(report);
             var targetAsset = report.AssetId ?? active?.AssetId;
-            rows.Add(new(new(report.Id,"incident",report.Description,source,"Incident",report.LocationId,
-                locations.GetValueOrDefault(report.LocationId)?.Name,report.RoomId,RoomName(report.RoomId),report.CommonArea,
-                AssetName(targetAsset),report.Severity.ToString(),reportsOnly ? reportStatus : state.Status,state.Phase,state.Action,
-                Name(staff,active?.AssignedStaffId ?? report.AcknowledgedById),due,report.CreatedAt,
-                report.IsOpen && due < now,active?.Id,related.Length,report.Id,reportStatus,report.Description,
-                representative is null ? null : WorkState(representative).Status,open.Length,related.Count(x => x.Status == WorkOrderStatus.Verified)),
-                report.Status.ToString(),targetAsset,related,state.Verification,
-                string.Join(" ",related.Select(x => x.Id + " " + x.Description + " " + AssetName(x.AssetId) + " " + RoomName(x.RoomId) + " " + Name(staff,x.AssignedStaffId))),
-                responsibleByLocation.TryGetValue(report.LocationId,out var current) ? current : null,
+            rows.Add(new(new(report.Id, "incident", report.Description, source, "Incident", report.LocationId,
+                locations.GetValueOrDefault(report.LocationId)?.Name, report.RoomId, RoomName(report.RoomId), report.CommonArea,
+                AssetName(targetAsset), report.Severity.ToString(), reportsOnly ? reportStatus : state.Status, state.Phase, state.Action,
+                Name(staff, active?.AssignedStaffId ?? report.AcknowledgedById), due, report.CreatedAt,
+                report.IsOpen && due < now, active?.Id, related.Length, report.Id, reportStatus, report.Description,
+                representative is null ? null : WorkState(representative).Status, open.Length, related.Count(x => x.Status == WorkOrderStatus.Verified)),
+                report.Status.ToString(), targetAsset, related, state.Verification,
+                string.Join(" ", related.Select(x => x.Id + " " + x.Description + " " + AssetName(x.AssetId) + " " + RoomName(x.RoomId) + " " + Name(staff, x.AssignedStaffId))),
+                responsibleByLocation.TryGetValue(report.LocationId, out var current) ? current : null,
                 active?.AssignedStaffId ?? report.AcknowledgedById));
         }
         foreach (var order in orders.Where(x => !reportsOnly && (workOnly || x.IncidentId is null)))
@@ -258,32 +258,32 @@ internal sealed class OperationalWorkRepository(Compact24DbContext db) : IOperat
             var counts = order.IncidentId is { } parentId
                 ? childCounts[parentId] : (Total: 1, Open: order.IsOpen ? 1 : 0, Verified: order.Status == WorkOrderStatus.Verified ? 1 : 0);
             var title = string.IsNullOrWhiteSpace(order.Description) ? report?.Description ?? order.ExpectedOutcome : order.Description;
-            rows.Add(new(new(order.Id,"workOrder",title,
+            rows.Add(new(new(order.Id, "workOrder", title,
                 report is null ? (order.IncidentId is null ? "Proactive" : "System") : ReportSource(report),
-                order.IncidentId is null ? "Proactive" : "Incident",order.LocationId,
-                locations.GetValueOrDefault(order.LocationId)?.Name,order.RoomId,RoomName(order.RoomId),order.CommonArea,
-                AssetName(order.AssetId),report?.Severity.ToString() ?? "Normal",state.Status,state.Phase,state.Action,Name(staff,order.AssignedStaffId),
-                order.TargetCompletionAt,order.CreatedAt,order.IsOpen && order.TargetCompletionAt < now,
-                order.IsOpen ? order.Id : null,counts.Total,order.IncidentId,report is null ? null : ReportStatus(report),
-                report?.Description,state.Status,counts.Open,counts.Verified),
-                order.Status.ToString(),order.AssetId,[],state.Verification,
+                order.IncidentId is null ? "Proactive" : "Incident", order.LocationId,
+                locations.GetValueOrDefault(order.LocationId)?.Name, order.RoomId, RoomName(order.RoomId), order.CommonArea,
+                AssetName(order.AssetId), report?.Severity.ToString() ?? "Normal", state.Status, state.Phase, state.Action, Name(staff, order.AssignedStaffId),
+                order.TargetCompletionAt, order.CreatedAt, order.IsOpen && order.TargetCompletionAt < now,
+                order.IsOpen ? order.Id : null, counts.Total, order.IncidentId, report is null ? null : ReportStatus(report),
+                report?.Description, state.Status, counts.Open, counts.Verified),
+                order.Status.ToString(), order.AssetId, [], state.Verification,
                 SearchDetails: report is null ? null : report.Id + " " + report.Description,
-                ResponsibleId: responsibleByLocation.TryGetValue(order.LocationId,out var current) && current == order.AssignedStaffId ? current : null,
+                ResponsibleId: responsibleByLocation.TryGetValue(order.LocationId, out var current) && current == order.AssignedStaffId ? current : null,
                 RecordedStaffId: order.AssignedStaffId, ProposedAssetId: order.ProposedAssetId));
         }
-        return Filter(rows,query);
+        return Filter(rows, query);
     }
 
     private static OperationalWorkPage Filter(IEnumerable<Row> rows, OperationalWorkQuery query)
     {
         static bool Match(string? filter, string value) => string.IsNullOrWhiteSpace(filter) ||
-            string.Equals(filter.Trim(),value,StringComparison.OrdinalIgnoreCase);
+            string.Equals(filter.Trim(), value, StringComparison.OrdinalIgnoreCase);
         var search = query.Search?.Trim();
         var filtered = rows.Where(r =>
-            Match(query.Kind,r.Item.Kind) && Match(query.Source,r.Item.Source) &&
-            Match(query.WorkType,r.Item.WorkType) && Match(query.Priority,r.Item.Priority) &&
-            (Match(query.Status,r.Item.Status) || Match(query.Status,r.RawStatus) ||
-                (query.View != "reports" && r.Children.Any(x => Match(query.Status,x.Status.ToString())))) &&
+            Match(query.Kind, r.Item.Kind) && Match(query.Source, r.Item.Source) &&
+            Match(query.WorkType, r.Item.WorkType) && Match(query.Priority, r.Item.Priority) &&
+            (Match(query.Status, r.Item.Status) || Match(query.Status, r.RawStatus) ||
+                (query.View != "reports" && r.Children.Any(x => Match(query.Status, x.Status.ToString())))) &&
             (query.RoomId is null || r.Item.RoomId == query.RoomId || r.Children.Any(x => x.RoomId == query.RoomId)) &&
             (query.AssetId is null || r.AssetId == query.AssetId || r.ProposedAssetId == query.AssetId || r.Children.Any(x => x.AssetId == query.AssetId || x.ProposedAssetId == query.AssetId)) &&
             (query.IncidentId is null || r.Item.IncidentId == query.IncidentId) &&
@@ -296,17 +296,17 @@ internal sealed class OperationalWorkRepository(Compact24DbContext db) : IOperat
             (query.DueTo is null || r.Item.DueAt <= query.DueTo) &&
             (query.Maintenance is null || (r.Item.Kind == "workOrder" || r.Children.Length > 0) == query.Maintenance) &&
             (string.IsNullOrWhiteSpace(search) || new[] { r.Item.Title,r.Item.LocationName,r.Item.RoomNumber,r.Item.AssetName,
-                r.Item.CommonArea,r.Item.StaffName,r.Item.Id.ToString(),r.SearchDetails }.Any(x => x?.Contains(search,StringComparison.OrdinalIgnoreCase) == true)))
+                r.Item.CommonArea,r.Item.StaffName,r.Item.Id.ToString(),r.SearchDetails }.Any(x => x?.Contains(search, StringComparison.OrdinalIgnoreCase) == true)))
             .ToArray();
-        var counts = new OperationalWorkCounts(filtered.Length,filtered.Count(x => x.Item.Phase == Owner),
-            filtered.Count(x => x.Item.Phase == Active),filtered.Count(x => x.Item.Phase == Closed),
-            filtered.Count(x => x.Item.IsOverdue),filtered.Count(x => x.Verification));
-        var selected = filtered.Where(x => Match(query.Phase,x.Item.Phase) &&
+        var counts = new OperationalWorkCounts(filtered.Length, filtered.Count(x => x.Item.Phase == Owner),
+            filtered.Count(x => x.Item.Phase == Active), filtered.Count(x => x.Item.Phase == Closed),
+            filtered.Count(x => x.Item.IsOverdue), filtered.Count(x => x.Verification));
+        var selected = filtered.Where(x => Match(query.Phase, x.Item.Phase) &&
             (query.Verification is null || x.Verification == query.Verification)).Select(x => x.Item).ToArray();
         var items = selected.OrderBy(x => x.Phase == Owner ? 0 : x.Phase == Active ? 1 : 2)
             .ThenByDescending(x => x.IsOverdue).ThenBy(x => x.DueAt ?? DateTimeOffset.MaxValue)
             .ThenByDescending(x => x.CreatedAt).ThenBy(x => x.Kind).ThenBy(x => x.Id)
             .Skip((query.Page - 1) * query.PageSize).Take(query.PageSize).ToArray();
-        return new(items,query.Page,query.PageSize,selected.Length,counts);
+        return new(items, query.Page, query.PageSize, selected.Length, counts);
     }
 }

@@ -24,15 +24,25 @@ public sealed partial class Compact24NotificationMvpTests
         var now = DateTimeOffset.UtcNow;
         var report = new IncidentReport
         {
-            LocationId = w.Location, RoomId = w.Room, ReporterId = w.Tenants[0].Id, ReporterRole = "Tenant",
-            Description = "Unified synthetic incident", Status = IncidentStatus.InProgress, Severity = IncidentSeverity.Emergency
+            LocationId = w.Location,
+            RoomId = w.Room,
+            ReporterId = w.Tenants[0].Id,
+            ReporterRole = "Tenant",
+            Description = "Unified synthetic incident",
+            Status = IncidentStatus.InProgress,
+            Severity = IncidentSeverity.Emergency
         };
         MaintenanceWorkOrder Order(Guid? incidentId, WorkOrderStatus status, int days) => new()
         {
-            IncidentId = incidentId, Source = incidentId.HasValue ? "Incident" : "Proactive",
-            Description = "Unified synthetic repair", LocationId = w.Location, RoomId = w.Room,
-            AssignedStaffId = w.Staff.Id, ExpectedOutcome = "Synthetic repair",
-            TargetCompletionAt = now.AddDays(days), Status = status
+            IncidentId = incidentId,
+            Source = incidentId.HasValue ? "Incident" : "Proactive",
+            Description = "Unified synthetic repair",
+            LocationId = w.Location,
+            RoomId = w.Room,
+            AssignedStaffId = w.Staff.Id,
+            ExpectedOutcome = "Synthetic repair",
+            TargetCompletionAt = now.AddDays(days),
+            Status = status
         };
         var approved = Order(report.Id, WorkOrderStatus.PendingApproval, 1);
         approved.ProposalVersion = 1;
@@ -48,9 +58,14 @@ public sealed partial class Compact24NotificationMvpTests
         proactive.ApprovedAt = now;
         var task = new OperationalTask
         {
-            Kind = OperationalTaskKind.AdHoc, LocationId = w.Location, Title = "Unified synthetic task",
-            Requirements = "Synthetic work", Priority = OperationalTaskPriority.High,
-            DueAt = now.AddDays(-1), Status = MeterTaskStatus.Assigned, AssignedStaffUserId = w.Staff.Id
+            Kind = OperationalTaskKind.AdHoc,
+            LocationId = w.Location,
+            Title = "Unified synthetic task",
+            Requirements = "Synthetic work",
+            Priority = OperationalTaskPriority.High,
+            DueAt = now.AddDays(-1),
+            Status = MeterTaskStatus.Assigned,
+            AssignedStaffUserId = w.Staff.Id
         };
         db.AddRange(report, approved, pending, proactive, task);
         await db.SaveChangesAsync();
@@ -96,22 +111,35 @@ public sealed partial class Compact24NotificationMvpTests
         var now = DateTimeOffset.UtcNow;
         var handover = new OperationalTask
         {
-            Kind = OperationalTaskKind.LocationAssetHandover, LocationId = w.Location,
-            Title = "Unified signing inventory", Status = MeterTaskStatus.PendingVerification,
-            AssignedStaffUserId = w.Staff.Id, AssignmentId = assignment.Id, DueAt = now.AddDays(1)
+            Kind = OperationalTaskKind.LocationAssetHandover,
+            LocationId = w.Location,
+            Title = "Unified signing inventory",
+            Status = MeterTaskStatus.PendingVerification,
+            AssignedStaffUserId = w.Staff.Id,
+            AssignmentId = assignment.Id,
+            DueAt = now.AddDays(1)
         };
         var moveIn = new OperationalTask
         {
-            Kind = OperationalTaskKind.AdHoc, LocationId = w.Location, ContractId = w.Contracts[0],
-            TargetRoomId = w.Room, Title = "Bàn giao vào phòng Unified signing",
-            Status = MeterTaskStatus.PendingVerification, AssignedStaffUserId = w.Staff.Id,
-            AssignmentId = assignment.Id, DueAt = now.AddDays(2)
+            Kind = OperationalTaskKind.AdHoc,
+            LocationId = w.Location,
+            ContractId = w.Contracts[0],
+            TargetRoomId = w.Room,
+            Title = "Bàn giao vào phòng Unified signing",
+            Status = MeterTaskStatus.PendingVerification,
+            AssignedStaffUserId = w.Staff.Id,
+            AssignmentId = assignment.Id,
+            DueAt = now.AddDays(2)
         };
         var review = new OperationalTask
         {
-            Kind = OperationalTaskKind.AdHoc, LocationId = w.Location, Title = "Unified signing review",
-            Status = MeterTaskStatus.PendingVerification, AssignedStaffUserId = w.Staff.Id,
-            AssignmentId = assignment.Id, DueAt = now.AddDays(1)
+            Kind = OperationalTaskKind.AdHoc,
+            LocationId = w.Location,
+            Title = "Unified signing review",
+            Status = MeterTaskStatus.PendingVerification,
+            AssignedStaffUserId = w.Staff.Id,
+            AssignmentId = assignment.Id,
+            DueAt = now.AddDays(1)
         };
         db.AddRange(handover, moveIn, review);
         await db.SaveChangesAsync();
@@ -165,20 +193,28 @@ public sealed partial class Compact24NotificationMvpTests
         var now = DateTimeOffset.UtcNow;
         IncidentReport Report(string title, IncidentStatus status, string reporterRole) => new()
         {
-            LocationId = w.Location, RoomId = w.Room,
+            LocationId = w.Location,
+            RoomId = w.Room,
             ReporterId = reporterRole == "Staff" ? w.Staff.Id : w.Tenants[0].Id,
-            ReporterRole = reporterRole, Description = title,
-            Severity = IncidentSeverity.Emergency, Status = status
+            ReporterRole = reporterRole,
+            Description = title,
+            Severity = IncidentSeverity.Emergency,
+            Status = status
         };
         var parent = Report("Split synthetic parent report", IncidentStatus.InProgress, "Tenant");
         var unassigned = Report("Split synthetic unassigned report", IncidentStatus.Submitted, "Staff");
         var closed = Report("Split synthetic closed report", IncidentStatus.Rejected, "Tenant");
         MaintenanceWorkOrder Order(Guid? incidentId, WorkOrderStatus status, int days) => new()
         {
-            IncidentId = incidentId, Source = incidentId.HasValue ? "Incident" : "Proactive",
-            Description = $"Split synthetic work {days}", LocationId = w.Location, RoomId = w.Room,
-            AssignedStaffId = w.Staff.Id, ExpectedOutcome = "Synthetic repair",
-            TargetCompletionAt = now.AddDays(days), Status = status
+            IncidentId = incidentId,
+            Source = incidentId.HasValue ? "Incident" : "Proactive",
+            Description = $"Split synthetic work {days}",
+            LocationId = w.Location,
+            RoomId = w.Room,
+            AssignedStaffId = w.Staff.Id,
+            ExpectedOutcome = "Synthetic repair",
+            TargetCompletionAt = now.AddDays(days),
+            Status = status
         };
         var pending = Order(parent.Id, WorkOrderStatus.PendingApproval, 1);
         pending.ProposalVersion = 1;
@@ -194,8 +230,12 @@ public sealed partial class Compact24NotificationMvpTests
         var proactive = Order(null, WorkOrderStatus.Assigned, 2);
         var task = new OperationalTask
         {
-            Kind = OperationalTaskKind.AdHoc, LocationId = w.Location, Title = "Split synthetic task",
-            Status = MeterTaskStatus.Assigned, AssignedStaffUserId = w.Staff.Id, DueAt = now.AddDays(3)
+            Kind = OperationalTaskKind.AdHoc,
+            LocationId = w.Location,
+            Title = "Split synthetic task",
+            Status = MeterTaskStatus.Assigned,
+            AssignedStaffUserId = w.Staff.Id,
+            DueAt = now.AddDays(3)
         };
         db.AddRange(parent, unassigned, closed, pending, verified, proactive, task);
         await db.SaveChangesAsync();
