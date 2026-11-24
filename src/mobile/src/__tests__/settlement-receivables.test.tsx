@@ -3,6 +3,10 @@ import React from 'react';
 import { fireEvent, render, screen } from '@testing-library/react';
 import { expect, it, vi } from 'vitest';
 const reload = vi.hoisted(() => vi.fn());
+const navigation = vi.hoisted(() => ({ go: vi.fn() }));
+vi.mock('../features/workspace/WorkspaceProvider', () => ({
+  useWorkspace: () => navigation,
+}));
 vi.mock('react-native', () => ({ Image: () => null }));
 vi.mock('react-native-paper', () => ({
   Text: ({ children }: { children: React.ReactNode }) => <div>{children}</div>,
@@ -68,4 +72,11 @@ it('shows historical Room debt and verified offsets without treating physical de
   expect(screen.getByText(/chưa phải số tiền hoàn/)).toBeTruthy();
   fireEvent.click(screen.getByRole('button', { name: 'Tải lại khoản phải thu' }));
   expect(reload).toHaveBeenCalledOnce();
+  expect(screen.queryByText(/Nội dung chuyển khoản/)).toBeNull();
+  fireEvent.click(screen.getByRole('button', { name: 'Xem chi tiết khoản phải thu' }));
+  expect(navigation.go).toHaveBeenCalledWith('invoice', {
+    view: 'settlement',
+    settlementContractId: 'historical',
+    settlementChargeId: 'charge',
+  });
 });

@@ -277,7 +277,7 @@ export function ContractHandoverPanel({
             />
           ))}
           <Text>
-            Chọn nhiệm vụ khởi tạo điện và nước của hợp đồng ở trên để chụp và xác nhận chỉ số.
+            Chụp và xác nhận chỉ số điện, nước đầu kỳ của hợp đồng ngay trong bước bàn giao ở trên.
           </Text>
           <Text>
             Ảnh toàn cảnh phòng; tối đa 10 ảnh được chọn, mỗi ảnh tối đa 5 MB. Ảnh riêng của nhóm

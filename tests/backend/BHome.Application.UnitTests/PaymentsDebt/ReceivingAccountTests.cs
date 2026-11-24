@@ -26,6 +26,7 @@ public sealed class ReceivingAccountTests
         scope.Allows(location).Returns(allowed);
         var repository = Substitute.For<IPaymentRepository>();
         repository.ActiveLocationAsync(location, default).Returns(true);
+        repository.ReceivingOwnerAsync(location, default).Returns((Guid?)actor);
         repository.TransactionAsync(null, null, Arg.Any<Func<Task<ReceivingBankAccount>>>(), default)
             .Returns(call => call.Arg<Func<Task<ReceivingBankAccount>>>()());
         var options = new SePayOptions

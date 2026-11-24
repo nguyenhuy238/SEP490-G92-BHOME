@@ -151,7 +151,7 @@ public sealed class MainDraftService(IContractRepository repository, IMainDraftD
                     Status = ContractStatus.Draft,
                     InitialPaymentRequired = true,
                     IsDevelopmentDemo = workflowMode?.SimulatedSigningEnabled == true,
-                    PaymentMode = paymentOptions?.Enabled == true && paymentOptions.ReceivingAccounts.Any(a => a.LocationId == room.LocationId) &&
+                    PaymentMode = paymentOptions?.Enabled == true && paymentOptions.Bound(room.LocationId, settings.OwnerSignerId) &&
                         (paymentOptions.Mode == "Live" || paymentScope?.Allows(room.LocationId) == true || paymentScope?.AllowsExternalDatabase == true) ? paymentOptions.Mode : null
                 };
                 var representative = (await repository.ResidentsAsync(x.RoomId, [x.RepresentativeResidentId], t)).Single();

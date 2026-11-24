@@ -23,7 +23,7 @@ namespace BHome.Infrastructure.Development;
 public sealed record DevelopmentOnboardingSeedInput(Guid LocationId);
 public sealed record DevelopmentOnboardingSeedResult(Guid ContractId, Guid RoomId, string RoomNumber,
     string LocationName, string TenantEmail, string TenantPassword, string TenantName,
-    int InitialMeterTasks, bool DevelopmentOnly = true);
+    bool DevelopmentOnly = true);
 
 // Only called through the Development-only, Staff-scoped controller. No regular
 // contract activation or production tenancy workflow uses this service.
@@ -142,11 +142,9 @@ public sealed class DevelopmentOnboardingSeedService(
             var email = await db.Users.Where(u => u.Id == existing.TenantUserId).Select(u => u.Email).SingleAsync(t);
             var name = await db.Set<Resident>().Where(r => r.Id == existing.RepresentativeResidentId)
                 .Select(r => r.DisplayLabel).SingleAsync(t);
-            var count = await db.Set<OperationalTask>().CountAsync(o => o.ContractId == existing.Id &&
-                o.Kind == BHome.Domain.StaffOperations.OperationalTaskKind.MeterReading && o.Purpose == ReadingPurpose.Initial, t);
             await tx.CommitAsync(t);
             return new(existing.Id, existing.RoomId, existing.Room.RoomNumber, existing.Room.Location.Name,
-                email!, tenantPassword, name, count);
+                email!, tenantPassword, name);
         }
 
         var ownerId = await (from u in db.Users.AsNoTracking()
@@ -265,7 +263,7 @@ public sealed class DevelopmentOnboardingSeedService(
             DecimalPlaces = 0
         }).ToArray();
 
-        db.Add(room); db.Add(resident); db.AddRange(prices); db.AddRange(meters); db.Add(contract);
+        db.Add(room); db.Add(resident); db.AddRange(prices); db.Add(contract);
         db.Add(new ContractOperation
         {
             ActorId = staffId.Value,
@@ -286,11 +284,18 @@ public sealed class DevelopmentOnboardingSeedService(
         });
         await db.SaveChangesAsync(t);
         await SeedRoomAssetsAsync(room, ownerId, suffix, t);
-        // This is the same task factory used by real Owner activation, after the fixture is stored.
+        // Set up the canonical move-in task and inventory checkpoint first,
+        // exactly as the regular contract handover. The synthetic physical
+        // meters are persisted afterward so no standalone initial meter
+        // capture tasks are queued by quick-create. When Staff starts this
+        // handover, the shared move-in workflow creates its two contract-scoped
+        // electricity/water baseline checkpoints (even for reused meters).
         await handover.EnsureMoveInTaskAsync(contract, ownerId, now, t);
+        await db.SaveChangesAsync(t);
+        db.AddRange(meters);
         await db.SaveChangesAsync(t);
         await tx.CommitAsync(t);
         return new(contract.Id, room.Id, room.RoomNumber, selected.Name, emailAddress, tenantPassword,
-            nameLabel, meters.Length);
+            nameLabel);
     }
 }

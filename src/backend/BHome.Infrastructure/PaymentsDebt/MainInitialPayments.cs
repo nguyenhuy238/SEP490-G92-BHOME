@@ -150,7 +150,7 @@ internal sealed class MainInitialPayments(BHomePersistenceContext db, ContractSe
             var account = await payments.ReceivingAccountAsync(order.LocationId, token);
             var payableMode = invoicePayable || pendingShared is not null ? roomScopeMode : ContractPaymentModes.Of(c);
             var bound = account is not null && account.Enabled && account.IsDevelopmentDemo == (payableMode == "Test") &&
-                payableMode == sepay.Mode && sepay.ReceivingAccounts.Any(a => a.LocationId == order.LocationId && a.BankIdentifier == account.BankIdentifier && a.AccountNumber == account.AccountNumber);
+                payableMode == sepay.Mode && sepay.Matches(order.LocationId, account);
             // IssueAsync joins this transaction; it must not clear tracked state or create nested transactions.
             var paymentKind = invoicePayable ? "Invoice" : "MainInitial";
             var paymentId = invoicePayable ? order.SharedInvoiceId!.Value : payable.ContractId;

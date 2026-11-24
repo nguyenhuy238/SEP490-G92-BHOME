@@ -112,7 +112,7 @@ public sealed partial class ContractService
                 RequiredDeposit = decimal.Truncate(rent.Rate),
                 Terms = input.Terms.Trim(),
                 IsDevelopmentDemo = DemoEnabled,
-                PaymentMode = ConfiguredPaymentMode(room.LocationId)
+                PaymentMode = ConfiguredPaymentMode(room.LocationId, input.OwnerSignerId)
             };
             c.Residents = residents.Select(r => new ContractResident
             {

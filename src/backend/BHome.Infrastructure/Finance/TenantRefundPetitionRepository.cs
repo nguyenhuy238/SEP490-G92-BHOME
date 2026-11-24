@@ -94,6 +94,19 @@ internal sealed class TenantRefundPetitionRepository(BHomePersistenceContext db)
             """).OrderBy(c => c.Label).Take(100).ToArrayAsync(token);
         return new(payments, contracts);
     }
+    public Task<bool> ActiveMoveOutPetitionAsync(Guid proposalId, CancellationToken token) =>
+        db.Database.SqlQuery<bool>($"""
+            SELECT EXISTS(
+                SELECT 1 FROM refund_requests r
+                WHERE r.status IN ('REQUESTED','APPROVED','COMPLETED')
+                  AND r.history @> jsonb_build_array(jsonb_build_object('recordType','TenantRefundPetitionV1'))
+                  AND EXISTS (
+                      SELECT 1 FROM jsonb_array_elements(r.history) h
+                      WHERE h->>'recordType'='TenantRefundPetitionV1'
+                        AND h->'state'->>'moveOutProposalId'={proposalId.ToString()}
+                  )
+            ) AS "Value"
+            """).SingleAsync(token);
     public Task<bool> ReferenceUsedAsync(string reference, Guid exceptId, CancellationToken token) =>
         db.Database.SqlQuery<bool>($"""
             SELECT EXISTS(SELECT 1 FROM refund_requests r WHERE r.id<>{exceptId}

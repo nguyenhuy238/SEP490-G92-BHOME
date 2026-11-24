@@ -56,14 +56,15 @@ public static class PrivateImageEvidence
     {
         using var buffer = new MemoryStream();
         await storage.CopyToAsync(objectKey, buffer, token);
-        var content = buffer.ToArray();
         try
         {
-            if (content.LongLength != length ||
-                !string.Equals(Convert.ToHexString(SHA256.HashData(content)), sha256, StringComparison.OrdinalIgnoreCase))
+            if (buffer.Length != length ||
+                !string.Equals(Convert.ToHexString(SHA256.HashData(
+                    buffer.GetBuffer().AsSpan(0, checked((int)buffer.Length)))), sha256, StringComparison.OrdinalIgnoreCase))
                 throw new PrivateImageIntegrityException();
-            await output.WriteAsync(content, token);
+            buffer.Position = 0;
+            await buffer.CopyToAsync(output, token);
         }
-        finally { CryptographicOperations.ZeroMemory(content); }
+        finally { CryptographicOperations.ZeroMemory(buffer.GetBuffer().AsSpan(0, checked((int)buffer.Length))); }
     }
 }

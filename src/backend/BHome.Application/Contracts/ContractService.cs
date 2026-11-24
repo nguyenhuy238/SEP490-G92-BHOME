@@ -29,13 +29,18 @@ public sealed partial class ContractService(IContractRepository repository, ICur
     ISetupWorkspaceStore? contractSetup = null,
     IHandoverDraftRepository? handoverDrafts = null, IHandoverDraftPdfRenderer? handoverDraftPdf = null,
     IInternalAcceptanceRenderer? acceptanceRenderer = null,
-    IHandoverSignatureInkRenderer? handoverInkRenderer = null) : IAdministrativeContractReadiness
+    IHandoverSignatureInkRenderer? handoverInkRenderer = null,
+    ISettlementReceivablesRepository? settlementRecords = null) : IAdministrativeContractReadiness
 {
     private Guid Actor => user.UserId is { } id && id != Guid.Empty ? id : throw new ContractException(401, "authentication_required");
     private DateOnly Today => DateOnly.FromDateTime(TimeZoneInfo.ConvertTimeBySystemTimeZoneId(clock.GetUtcNow(), "Asia/Ho_Chi_Minh").DateTime);
     private void Role(params string[] roles) { _ = Actor; if (!roles.Any(user.IsInRole)) throw new ContractException(403, "contract_role_forbidden"); }
     private static string Hash<T>(T value) => Convert.ToHexString(SHA256.HashData(JsonSerializer.SerializeToUtf8Bytes(value)));
     private static string FileHash(byte[] value) => Convert.ToHexString(SHA256.HashData(value));
+    // MemoryStream owns its buffer; hash the occupied portion without a second
+    // full-size allocation for every private image or PDF download.
+    private static string FileHash(MemoryStream value) => Convert.ToHexString(
+        SHA256.HashData(value.GetBuffer().AsSpan(0, checked((int)value.Length))));
     private static void Validate(object value)
     {
         if (!Validator.TryValidateObject(value, new ValidationContext(value), [], true)) throw ContractException.Invalid("invalid_contract_input");
@@ -75,7 +80,8 @@ public sealed partial class ContractService(IContractRepository repository, ICur
     private void Remember(Guid key, string operation, object input, Guid result)
         => repository.Add(new ContractOperation { ActorId = Actor, Key = key, Operation = operation, Fingerprint = Hash(input), ResultId = result, CreatedAt = clock.GetUtcNow() });
     private void Audit(string action, Guid id) => repository.Audit(Actor, action, id, clock.GetUtcNow());
-    private void ChangeRoomStatus(Contract contract, RoomStatus requested, RoomTransitionSource source, bool otherActive = false, Guid? approvedOwner = null)
+    private void ChangeRoomStatus(Contract contract, RoomStatus requested, RoomTransitionSource source, bool otherActive = false,
+        Guid? approvedOwner = null, string? automaticReason = null)
     {
         var room = contract.Room;
         if (!PropertyRules.CanChangeRoomStatus(room.Status, requested, source, hasOtherActiveContracts: otherActive))
@@ -91,7 +97,7 @@ public sealed partial class ContractService(IContractRepository repository, ICur
             TargetId = room.Id,
             TargetType = nameof(Room),
             Action = source.ToString(),
-            Reason = approvedOwner is null ? source.ToString() : "AutomaticMainActivationAfterVerifiedPayment",
+            Reason = automaticReason ?? (approvedOwner is null ? source.ToString() : "AutomaticMainActivationAfterVerifiedPayment"),
             Before = before,
             After = JsonSerializer.Serialize(new { room.Status, room.Version, ContractId = contract.Id }),
             OccurredAt = clock.GetUtcNow()
@@ -222,7 +228,7 @@ public sealed partial class ContractService(IContractRepository repository, ICur
                 MonthlyRent = x.MonthlyRent,
                 RequiredDeposit = x.MonthlyRent,
                 IsDevelopmentDemo = DemoEnabled,
-                PaymentMode = ConfiguredPaymentMode((await repository.RoomAsync(x.RoomId, t))!.LocationId),
+                PaymentMode = ConfiguredPaymentMode((await repository.RoomAsync(x.RoomId, t))!.LocationId, x.OwnerSignerId),
                 Terms = x.Terms.Trim()
             };
             c.Residents = residents.Select(r => new ContractResident
@@ -1134,15 +1140,7 @@ public sealed partial class ContractService(IContractRepository repository, ICur
         var observed = JsonSerializer.Deserialize<HandoverSnapshot>(inspection.ObservedSnapshot) ?? throw ContractException.Conflict("inspection_snapshot_invalid");
         if (observed.Date != x.ActualEndDate || observed.Electricity.Id != m.ElectricityReadingId || observed.Water.Id != m.WaterReadingId)
             throw ContractException.Conflict("inspection_snapshot_invalid");
-        var readings = await repository.FinalReadingsAsync(id, c.RoomId, x.ActualEndDate, t);
-        foreach (var expected in new[] { observed.Electricity, observed.Water })
-        {
-            var reading = readings.SingleOrDefault(r => r.Id == expected.Id && r.UtilityType == expected.UtilityType && r.Value == expected.Value &&
-                r.EvidenceId == expected.EvidenceId && r.EvidenceHash == expected.EvidenceHash)
-                ?? throw ContractException.Conflict("confirmed_final_readings_required");
-            using var bytes = new MemoryStream(); await storage.CopyToAsync(reading.EvidenceObjectKey, bytes, t);
-            if (FileHash(bytes.ToArray()) != reading.EvidenceHash) throw ContractException.Conflict("inspection_evidence_integrity_failed");
-        }
+        await VerifyFinalMoveOutReadingsAsync(c, observed, x.ActualEndDate, t);
         c.Status = ContractStatus.Terminated; c.ActualEndDate = x.ActualEndDate;
         var otherActive = await repository.HasOtherActiveContractsAsync(c.RoomId, c.Id, t);
         if (!otherActive && handoverInventory is not null && x.RoomDisposition is not ("Available" or "Unavailable"))
@@ -1192,7 +1190,7 @@ public sealed partial class ContractService(IContractRepository repository, ICur
         using var bytes = new MemoryStream(); await storage.CopyToAsync(evidence.ObjectKey, bytes, t);
         var recorded = (await repository.FinalInspectionsAsync(id, t)).Select(i => JsonSerializer.Deserialize<HandoverSnapshot>(i.ObservedSnapshot))
             .FirstOrDefault(s => s?.EvidenceHashes?.ContainsKey(evidenceId) == true);
-        if (recorded?.EvidenceHashes is { } hashes && FileHash(bytes.ToArray()) != hashes[evidenceId]) throw ContractException.Conflict("inspection_evidence_integrity_failed");
+        if (recorded?.EvidenceHashes is { } hashes && FileHash(bytes) != hashes[evidenceId]) throw ContractException.Conflict("inspection_evidence_integrity_failed");
         bytes.Position = 0; await bytes.CopyToAsync(output, t);
     }
 }

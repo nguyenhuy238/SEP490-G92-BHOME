@@ -114,6 +114,21 @@ public sealed partial class SettlementReceivablesService
                 throw ContractException.Conflict("settlement_financial_already_closed");
 
             await AuthorizeAsync(id, true, token);
+            // Once the Owner has sent a charge proposal, a pending or disputed
+            // proposal must be resolved with the Tenant before money is closed.
+            var latestProposal = await repository.LatestProposalAsync(id, token);
+            if (latestProposal is not null)
+            {
+                var answer = await repository.ProposalFeedbackAsync(id, latestProposal.Id, token);
+                var currentProposalSource = await repository.ProposalSourceAsync(id, token);
+                var materializedCurrentQuote = answer?.Settlement is { Status: "Payable" or "RefundEligible" or "Settled" } &&
+                    MatchesAcceptedPhysical(latestProposal, answer, currentProposalSource);
+                if (answer?.Confirmed != true)
+                    throw ContractException.Conflict("move_out_proposal_tenant_confirmation_required");
+                if (!materializedCurrentQuote ||
+                    answer.Settlement is { Status: "PendingOwnerReview" })
+                    throw ContractException.Conflict("move_out_proposal_settlement_pending_owner_review");
+            }
             var review = await ChargeReviewPreviewAsync(id, token);
             var context = (await repository.ChargeReviewAsync(id, token)).Context;
             if (context.IsDevelopmentDemo && mode?.AllowDevelopmentDemo != true)
