@@ -2,6 +2,7 @@
 import '@testing-library/jest-dom/vitest';
 import { cleanup, fireEvent, render, screen, within } from '@testing-library/react';
 import { afterEach, expect, it, vi } from 'vitest';
+import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import type { OwnerTask, TaskHistory } from '../taskContracts';
 import { TaskDetailDrawer } from './TaskDetailDrawer';
 
@@ -164,14 +165,18 @@ afterEach(() => {
 
 function openDrawer() {
   render(
-    <TaskDetailDrawer
-      id="task-1"
-      staff={[]}
-      locationName={() => 'Cơ sở thử nghiệm'}
-      close={vi.fn()}
-      edit={vi.fn()}
-      notify={vi.fn()}
-    />,
+    <QueryClientProvider
+      client={new QueryClient({ defaultOptions: { queries: { retry: false } } })}
+    >
+      <TaskDetailDrawer
+        id="task-1"
+        staff={[]}
+        locationName={() => 'Cơ sở thử nghiệm'}
+        close={vi.fn()}
+        edit={vi.fn()}
+        notify={vi.fn()}
+      />
+    </QueryClientProvider>,
   );
   return screen.getByRole('dialog', { name: 'Chi tiết công việc' });
 }
@@ -185,8 +190,8 @@ it('opens the signing tab for a completed handover and keeps the inventory out o
   expect(within(dialog).getByRole('tabpanel', { name: 'Biên bản & ký' })).toBeVisible();
   expect(within(dialog).getByText('Phần ký biên bản')).toBeVisible();
   expect(within(dialog).getByText('Danh sách phòng kiểm kê')).not.toBeVisible();
-  expect(within(dialog).getByText('Cơ sở thử nghiệm')).toBeVisible();
-  expect(within(dialog).getByText('Phạm vi kiểm kê')).toBeVisible();
+  expect(within(dialog).getByText('Cơ sở thử nghiệm · Toàn cơ sở')).toBeVisible();
+  expect(within(dialog).getByText('Vị trí')).toBeVisible();
   expect(within(dialog).queryByText('Bạn cần làm gì tiếp theo')).not.toBeInTheDocument();
   fireEvent.click(within(dialog).getByRole('tab', { name: 'Tổng quan' }));
   expect(within(dialog).getByText('Quy trình bàn giao')).toBeVisible();
@@ -268,15 +273,15 @@ it('shows only overview and history tabs for ordinary tasks', () => {
   expect(within(dialog).queryByRole('tab', { name: 'Kiểm kê tài sản' })).not.toBeInTheDocument();
   expect(within(dialog).queryByRole('tab', { name: 'Biên bản & ký' })).not.toBeInTheDocument();
   expect(within(dialog).getByText('Quy trình công việc')).toBeVisible();
-  expect(within(dialog).getByText('Đã giao việc · Chờ Staff bắt đầu')).toBeVisible();
+  expect(within(dialog).queryByText('Đã giao việc · Chờ Staff bắt đầu')).not.toBeInTheDocument();
   expect(within(dialog).getByTestId('operational-step-1')).toHaveAttribute('data-state', 'done');
   expect(within(dialog).getByTestId('operational-step-2')).toHaveAttribute('data-state', 'current');
   expect(within(dialog).getByText('Kiểm tra bóng đèn còn sáng không')).toBeVisible();
-  expect(within(dialog).getByText('Nhân viên chưa gửi nội dung kết quả hoàn thành.')).toBeVisible();
+  expect(within(dialog).getByText('Chưa có kết quả từ nhân viên.')).toBeVisible();
   expect(within(dialog).queryByText('Đánh giá kiểm tra kỹ thuật')).not.toBeInTheDocument();
   expect(within(dialog).queryByText('Bằng chứng của công việc')).not.toBeInTheDocument();
   expect(within(dialog).queryByText('Biên bản & ký')).not.toBeInTheDocument();
-  fireEvent.click(within(dialog).getByRole('button', { name: 'Xem lịch sử' }));
+  fireEvent.click(within(dialog).getByRole('tab', { name: 'Lịch sử' }));
   expect(within(dialog).getByRole('tab', { name: 'Lịch sử' })).toHaveAttribute(
     'aria-selected',
     'true',
@@ -293,12 +298,12 @@ it('shows owner verification only after a regular Staff submission and keeps the
     result: 'Đã thay bóng đèn và thử bật sáng',
   };
   const dialog = openDrawer();
-  expect(within(dialog).getByText('Owner cần kiểm tra và nghiệm thu')).toBeVisible();
+  expect(within(dialog).queryByText('Owner cần kiểm tra và nghiệm thu')).not.toBeInTheDocument();
   expect(within(dialog).getByTestId('operational-step-3')).toHaveAttribute('data-state', 'done');
   expect(within(dialog).getByTestId('operational-step-4')).toHaveAttribute('data-state', 'current');
   expect(within(dialog).getByText('Đã thay bóng đèn và thử bật sáng')).toBeVisible();
-  expect(within(dialog).getByText('Nghiệm thu kết quả')).toBeVisible();
-  fireEvent.click(within(dialog).getByRole('button', { name: 'Nghiệm thu kết quả' }));
+  expect(within(dialog).getAllByRole('button', { name: 'Nghiệm thu' })).toHaveLength(1);
+  fireEvent.click(within(dialog).getByRole('button', { name: 'Nghiệm thu' }));
   expect(await screen.findByRole('dialog', { name: 'Nghiệm thu' })).toBeVisible();
 });
 
@@ -311,21 +316,22 @@ it('shows the regular task as completed without a signing or inventory workflow'
     verifiedAt: '2026-11-23T08:05:00Z',
   };
   const dialog = openDrawer();
-  expect(within(dialog).getByText('Công việc đã hoàn thành và nghiệm thu')).toBeVisible();
+  expect(
+    within(dialog).queryByText('Công việc đã hoàn thành và nghiệm thu'),
+  ).not.toBeInTheDocument();
   expect(within(dialog).getByText('Bóng đèn đã sáng bình thường')).toBeVisible();
   expect(within(dialog).getByTestId('operational-step-4')).toHaveAttribute('data-state', 'done');
   expect(within(dialog).getByText(/Owner nghiệm thu:/)).toBeVisible();
   expect(within(dialog).queryByRole('tab', { name: 'Biên bản & ký' })).not.toBeInTheDocument();
-  expect(
-    within(dialog).queryByRole('button', { name: 'Nghiệm thu kết quả' }),
-  ).not.toBeInTheDocument();
+  expect(within(dialog).queryByRole('button', { name: 'Nghiệm thu' })).not.toBeInTheDocument();
 });
 
 it('shows evidence only when available or required for regular operational tasks', () => {
   task = { ...completedTask, kind: 'AdHoc', status: 'InProgress', evidenceRequired: true };
   const dialog = openDrawer();
-  expect(within(dialog).getByText('Bằng chứng công việc')).toBeVisible();
-  expect(within(dialog).getByText('Công việc yêu cầu bằng chứng khi hoàn thành.')).toBeVisible();
+  expect(within(dialog).queryByText('Bằng chứng của công việc')).not.toBeInTheDocument();
+  fireEvent.click(within(dialog).getByRole('tab', { name: 'Bằng chứng' }));
+  expect(within(dialog).getByText('Bắt buộc bằng chứng hoàn thành.')).toBeVisible();
   expect(within(dialog).getByText('Bằng chứng của công việc')).toBeVisible();
 });
 

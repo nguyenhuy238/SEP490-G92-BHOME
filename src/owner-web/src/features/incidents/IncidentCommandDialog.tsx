@@ -1,6 +1,6 @@
 import { TextField } from '../../components/common/ValidatedForm';
-import { useState } from 'react';
-import { Alert, MenuItem, Stack } from '@mui/material';
+import { useState, type ReactNode } from 'react';
+import { MenuItem, Stack } from '@mui/material';
 import { ConfirmDialog } from '../../components/common/PortalUI';
 import { MoneyField } from '../../components/common/MoneyField';
 import { useOwnerAction } from '../../hooks/useOwnerWorkspace';
@@ -22,6 +22,8 @@ export interface IncidentCommand {
   fields: CommandField[];
   extra?: Record<string, unknown>;
   initialValues?: Record<string, string>;
+  source?: ReactNode;
+  onSaved?: () => void;
 }
 export function IncidentCommandDialog({
   command: c,
@@ -55,7 +57,10 @@ export function IncidentCommandDialog({
                   : value;
       }
       setValidation('');
-      if (await action.run(() => action.command(c.path, 'POST', body))) close();
+      if (await action.run(() => action.command(c.path, 'POST', body))) {
+        close();
+        c.onSaved?.();
+      }
     } catch (e) {
       setValidation((e as Error).message);
     }
@@ -69,11 +74,8 @@ export function IncidentCommandDialog({
       onClose={close}
       onConfirm={() => void save()}
     >
-      <Stack spacing={2} sx={{ pt: 1 }}>
-        <Alert severity="info">
-          Quyết định trên phiên bản {c.version}. Máy chủ kiểm tra quyền, bằng chứng, chi phí và
-          trạng thái trước khi lưu.
-        </Alert>
+      <Stack spacing={1.5} sx={{ pt: 1 }}>
+        {c.source}
         {c.fields.map((f) =>
           f.type === 'incident' && f.incidentScope ? (
             <IncidentReferenceField

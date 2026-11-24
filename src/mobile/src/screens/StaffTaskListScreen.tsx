@@ -13,8 +13,20 @@ import {
 } from 'react-native-paper';
 import { formatInstant } from '../../../../packages/client-core/src/localization';
 import { useWorkspaceHeaderRefresh } from '../components/WorkspaceHeaderContext';
+import { StaffWorkflowTabs } from '../components/StaffWorkflowTabs';
 import { useWorkspace } from '../features/workspace/WorkspaceProvider';
 import { useWorkspaceQuery } from '../features/workspace/useWorkspaceQuery';
+
+const LazyIncidentListScreen = React.lazy(() =>
+  import('../features/incidents/IncidentScreens').then((module) => ({
+    default: module.IncidentListScreen,
+  })),
+);
+const LazyMaintenanceListScreen = React.lazy(() =>
+  import('../features/incidents/IncidentScreens').then((module) => ({
+    default: module.MaintenanceListScreen,
+  })),
+);
 import { queryPolicies } from '../lib/queryPolicies';
 import type { MobileApi, Named } from '../lib/api';
 import {
@@ -83,6 +95,34 @@ export function StaffHandoverListScreen() {
 }
 
 export function StaffTaskListScreen({
+  handovers = false,
+  initialCategory = 'MoveIn',
+}: { handovers?: boolean; initialCategory?: 'MoveIn' | 'MoveOut' } = {}) {
+  const [tab, setTab] = useState('work');
+  if (handovers) return <StaffTaskListContent handovers initialCategory={initialCategory} />;
+  return (
+    <>
+      <StaffWorkflowTabs
+        accessibilityLabel="Nội dung công việc Staff"
+        selected={tab}
+        onChange={setTab}
+        tabs={[
+          { id: 'work', label: 'Công việc' },
+          { id: 'reports', label: 'Báo cáo sự cố' },
+        ]}
+      />
+      {tab === 'reports' ? (
+        <React.Suspense fallback={<Text variant="bodySmall">Đang tải báo cáo sự cố…</Text>}>
+          <LazyIncidentListScreen embedded />
+        </React.Suspense>
+      ) : (
+        <StaffTaskListContent />
+      )}
+    </>
+  );
+}
+
+function StaffTaskListContent({
   handovers = false,
   initialCategory = 'MoveIn',
 }: { handovers?: boolean; initialCategory?: 'MoveIn' | 'MoveOut' } = {}) {
@@ -255,15 +295,15 @@ export function StaffTaskListScreen({
       ) : (
         <>
           <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 8 }}>
-            <Button
-              icon="wrench-clock"
-              mode="contained-tonal"
-              onPress={() => go('staff-maintenance')}
-            >
-              Lệnh sửa chữa / Bảo trì
-            </Button>
             <Button icon="key-outline" mode="outlined" onPress={() => go('staff-handovers')}>
               Bàn giao / Trả phòng
+            </Button>
+            <Button
+              icon="file-document-check-outline"
+              mode="outlined"
+              onPress={() => go('staff-handover-archive')}
+            >
+              Biên bản đã ký
             </Button>
           </View>
           <Button icon="calendar-month-outline" onPress={() => go('shifts')}>
@@ -434,6 +474,11 @@ export function StaffTaskListScreen({
             onPress={() => setPage(page + 1)}
           />
         </View>
+      )}
+      {!handovers && (
+        <React.Suspense fallback={<Text variant="bodySmall">Đang tải lệnh sửa chữa…</Text>}>
+          <LazyMaintenanceListScreen embedded />
+        </React.Suspense>
       )}
     </>
   );

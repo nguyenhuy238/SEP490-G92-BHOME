@@ -241,6 +241,8 @@ public static class DependencyInjection
         services.AddScoped<BHome.Application.Operations.PersonalDataRequestService>();
         services.AddScoped<BHome.Application.Operations.ILifecycleAttentionRepository, BHome.Infrastructure.Modules.Operations.LifecycleAttentionRepository>();
         services.AddScoped<BHome.Application.Operations.LifecycleAttentionService>();
+        services.AddScoped<BHome.Application.Operations.IOperationalWorkRepository, BHome.Infrastructure.Modules.Operations.OperationalWorkRepository>();
+        services.AddScoped<BHome.Application.Operations.OperationalWorkService>();
         services.AddScoped<BHome.Infrastructure.Modules.PropertyManagement.EquipmentInspectionJob>();
         services.AddScoped<IBackgroundJobHandler>(p => p.GetRequiredService<BHome.Infrastructure.Modules.PropertyManagement.EquipmentInspectionJob>());
         services.AddScoped<IJobScheduleContributor>(p => p.GetRequiredService<BHome.Infrastructure.Modules.PropertyManagement.EquipmentInspectionJob>());

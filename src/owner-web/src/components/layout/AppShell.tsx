@@ -112,6 +112,7 @@ const navGroups = [
   ['Thông báo', ['notifications']],
   ['Hệ thống', ['public-content']],
 ] as const;
+const visibleNavGroups = navGroups.filter(([group]) => isMockMode || group !== 'Sự cố & Bảo trì');
 const navLabels: Record<string, string> = {
   dashboard: 'Tổng quan',
   account: 'Tài khoản',
@@ -220,7 +221,7 @@ export function AppShell() {
         aria-label="Điều hướng chính"
         sx={{ overflowY: 'auto', overflowX: 'hidden', minHeight: 0, flex: 1, py: 1 }}
       >
-        {navGroups.map(([group, items]) => (
+        {visibleNavGroups.map(([group, items]) => (
           <Box key={group} sx={{ mb: compact ? 0.5 : 0.75 }}>
             {compact ? (
               <Divider sx={{ mx: 2, my: 1 }} />

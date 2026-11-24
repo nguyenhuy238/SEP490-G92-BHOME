@@ -243,7 +243,9 @@ public sealed partial class OperationalTaskService(IOperationalTaskRepository re
                 if (inspection is not null && inspection.Status != expected) throw OperationalTaskException.Conflict("equipment_inspection_workflow_required");
             }
             if (task.Kind == OperationalTaskKind.LocationAssetHandover && action == "submit")
+            {
                 await ValidateLocationAssetInventorySubmissionAsync(task, t);
+            }
             if (IsMoveOutTask(task) && action is not ("start" or "progress" or "blockers" or "coordinate") ||
                 task.ContractId is not null && action is "submit" or "verify" or "cancel")
                 throw OperationalTaskException.Conflict("contract_handover_workflow_required");
@@ -341,10 +343,35 @@ public sealed partial class OperationalTaskService(IOperationalTaskRepository re
             if (task.Kind is not (OperationalTaskKind.AdHoc or OperationalTaskKind.MoveInInventory or OperationalTaskKind.LocationAssetHandover))
                 throw OperationalTaskException.Conflict("meter_workflow_required");
             if (task.Version != version) throw OperationalTaskException.Conflict("stale_version");
+            if (task.Kind == OperationalTaskKind.LocationAssetHandover && action == "submit" &&
+                task.Status == MeterTaskStatus.PendingVerification && task.Result == LocationAssetInventorySync.Result)
+            {
+                await ValidateLocationAssetInventorySubmissionAsync(task, t);
+                if (input is TaskAction legacy && legacy.EvidenceIds is { Length: > 0 } ids)
+                {
+                    if (await repository.HasLocationHandoverApprovalAsync(task.Id, task.Version, t))
+                        throw OperationalTaskException.Conflict("location_handover_already_approved");
+                    var evidence = await repository.EvidenceAsync(id, t);
+                    if (ids.Distinct().Count() != ids.Length || ids.Any(e => evidence.All(x => x.Id != e)))
+                        throw OperationalTaskException.Invalid("invalid_task_evidence");
+                    foreach (var image in evidence.Where(x => ids.Contains(x.Id)))
+                    {
+                        await files.CopyAsync(image.ObjectKey, Stream.Null, t);
+                        image.SubmissionId = key;
+                    }
+                    repository.Track(task);
+                    await RecordAsync(task, "location_asset_inventory_evidence_selected", legacy.Note!.Trim(),
+                        new { EvidenceIds = ids }, [], t);
+                    task.Version++;
+                }
+                return CurrentView(task, responsible);
+            }
             repository.Track(task);
             var routingChanged = IsMoveOutTask(task) && action != "start"
                 ? false : await SynchronizeResponsibilityAsync(task, responsible, t);
             await change(task, responsible);
+            if (task.Kind == OperationalTaskKind.LocationAssetHandover && action == "start")
+                await SynchronizeLocationInventoryAsync(task, t);
             if (action == "start" && IsMoveInTask(task))
                 await (handovers ?? throw OperationalTaskException.Conflict("handover_service_unavailable"))
                     .EnsureMoveInMeterBaselinesAsync(task.ContractId!.Value, Actor, Now, t);
@@ -440,7 +467,11 @@ public sealed partial class OperationalTaskService(IOperationalTaskRepository re
                     var responsible = await AccessAsync(task, t, true);
                     if (task.Kind is not (OperationalTaskKind.AdHoc or OperationalTaskKind.MoveInInventory or OperationalTaskKind.LocationAssetHandover))
                         throw OperationalTaskException.Conflict("meter_workflow_required");
-                    if (task.Status != MeterTaskStatus.InProgress) throw OperationalTaskException.Conflict("task_not_in_progress");
+                    var autoSubmittedDraft = task.Kind == OperationalTaskKind.LocationAssetHandover &&
+                        task.Status == MeterTaskStatus.PendingVerification && task.Result == LocationAssetInventorySync.Result &&
+                        !await repository.HasLocationHandoverApprovalAsync(task.Id, task.Version, t);
+                    if (task.Status != MeterTaskStatus.InProgress && !autoSubmittedDraft)
+                        throw OperationalTaskException.Conflict("task_not_in_progress");
                     // Every inventory group may attach up to five photos. The general
                     // task limit (often 10) is too small for rooms with many assets.
                     var inventoryLimit = task.Kind switch

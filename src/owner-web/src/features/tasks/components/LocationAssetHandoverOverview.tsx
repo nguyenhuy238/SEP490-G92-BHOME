@@ -2,7 +2,7 @@ import { useQuery } from '@tanstack/react-query';
 import { Box, Button, Stack, Typography } from '@mui/material';
 import { alpha } from '@mui/material/styles';
 import { Link } from 'react-router';
-import { AlertTriangle, Check, CheckCircle2, ShieldAlert } from 'lucide-react';
+import { Check, CheckCircle2 } from 'lucide-react';
 import { ApiError } from '../../../../../../packages/client-core/src/api';
 import { useAuth } from '../../../../../../packages/client-core/src/auth';
 import { formatInstant } from '../../../../../../packages/client-core/src/localization';
@@ -34,107 +34,16 @@ interface ReconciliationSnapshot {
   ownerConfirmedCount: number;
   addedCount: number;
   removedCount: number;
+  blockedReason?: string | null;
 }
 
 const milestones = [
-  { title: 'Owner xác nhận', caption: 'Phạm vi tài sản' },
-  { title: 'Staff kiểm kê', caption: 'Kiểm tra và nộp' },
-  { title: 'Owner duyệt', caption: 'Đối soát kết quả' },
-  { title: 'Owner ký', caption: 'Ký trên Web' },
-  { title: 'Staff ký', caption: 'Ký trên Mobile' },
+  { title: 'Owner xác nhận' },
+  { title: 'Staff kiểm kê' },
+  { title: 'Owner duyệt' },
+  { title: 'Owner ký' },
+  { title: 'Staff ký' },
 ];
-
-function Kpi({
-  id,
-  value,
-  label,
-  detail,
-  tone = 'default',
-}: {
-  id: string;
-  value: string;
-  label: string;
-  detail: string;
-  tone?: 'default' | 'success' | 'warning';
-}) {
-  return (
-    <Box
-      data-testid={`handover-kpi-${id}`}
-      data-tone={tone}
-      sx={{
-        border: 1,
-        borderColor: tone === 'default' ? 'divider' : `${tone}.main`,
-        bgcolor: (theme) =>
-          tone === 'default' ? 'background.paper' : alpha(theme.palette[tone].main, 0.07),
-        borderRadius: 1.5,
-        p: 1.75,
-        minWidth: 0,
-      }}
-    >
-      <Typography
-        sx={{
-          fontSize: { xs: 22, md: 26 },
-          fontWeight: 750,
-          lineHeight: 1.3,
-          color: tone === 'default' ? 'text.primary' : `${tone}.dark`,
-        }}
-      >
-        {value}
-      </Typography>
-      <Typography variant="body2" sx={{ fontWeight: 600, mt: 0.5 }}>
-        {label}
-      </Typography>
-      <Typography variant="caption" color="text.secondary">
-        {detail}
-      </Typography>
-    </Box>
-  );
-}
-
-function AttentionItem({
-  id,
-  count,
-  label,
-  detail,
-  severity,
-}: {
-  id: string;
-  count: number | string;
-  label: string;
-  detail: string;
-  severity: 'warning' | 'error';
-}) {
-  return (
-    <Box
-      data-testid={`handover-attention-${id}`}
-      data-severity={severity}
-      sx={{
-        display: 'flex',
-        gap: 1.25,
-        alignItems: 'flex-start',
-        flex: 1,
-        minWidth: 210,
-        border: 1,
-        borderColor: `${severity}.main`,
-        bgcolor: (theme) => alpha(theme.palette[severity].main, 0.07),
-        borderRadius: 1.5,
-        p: 1.5,
-      }}
-    >
-      <Box sx={{ display: 'flex', color: `${severity}.dark`, pt: 0.25 }}>
-        {severity === 'error' ? <ShieldAlert size={20} /> : <AlertTriangle size={20} />}
-      </Box>
-      <Box sx={{ minWidth: 0 }}>
-        <Typography sx={{ fontSize: 14, color: `${severity}.dark`, fontWeight: 700 }}>
-          {count} {label}
-        </Typography>
-        <Typography variant="caption" sx={{ color: 'text.secondary' }}>
-          {detail}
-        </Typography>
-      </Box>
-    </Box>
-  );
-}
 
 export function LocationAssetHandoverOverview({
   task,
@@ -175,23 +84,38 @@ export function LocationAssetHandoverOverview({
   const scopePreview = reconciliation.data;
   const report = handover.data;
   const isArchive = task.status === 'Cancelled';
-  const scopePending =
-    !!checklist && (!!checklist.pendingOwnerRooms?.length || !!checklist.pendingOwnerCommonAssets);
   const activeReport = !!report && report.status !== 'Superseded';
+  const scopePending =
+    !activeReport &&
+    !!checklist &&
+    (!!checklist.pendingOwnerRooms?.length || !!checklist.pendingOwnerCommonAssets);
+  const staffConflict =
+    !activeReport && scopePreview?.blockedReason === 'location_asset_inventory_staff_work_conflict';
   const scopeMismatch =
     !activeReport &&
     !!scopePreview &&
     (scopePreview.ownerConfirmedCount !== scopePreview.currentCount ||
+      (!!checklist && scopePreview.currentCount !== checklist.totalCount) ||
       scopePreview.addedCount !== 0 ||
       scopePreview.removedCount !== 0);
-  const signedCount = Number(!!report?.ownerSignature) + Number(!!report?.staffSignature);
+  const ownerConfirmationRequired =
+    scopePending ||
+    (!activeReport &&
+      scopePreview?.blockedReason === 'location_asset_inventory_owner_confirmation_required');
+  const confirmedScope =
+    activeReport ||
+    (!!checklist &&
+      !!scopePreview &&
+      checklist.totalCount > 0 &&
+      !ownerConfirmationRequired &&
+      !scopeMismatch &&
+      !staffConflict);
   const fullySigned =
     report?.status === 'Completed' && !!report.ownerSignature && !!report.staffSignature;
   const completed = task.status === 'Completed' && fullySigned;
   const signatureMismatch =
     (!handover.isPending && task.status === 'Completed' && !fullySigned) ||
     (fullySigned && task.status !== 'Completed' && !isArchive);
-  const notes = checklist?.items.filter((item) => !!item.note?.trim()).length ?? 0;
   const exceptions =
     checklist?.items.filter(
       (item) =>
@@ -202,18 +126,15 @@ export function LocationAssetHandoverOverview({
     ).length ?? 0;
   const incidents = checklist?.items.filter((item) => !!item.incidentId).length ?? 0;
   const pendingOwnerCount = checklist?.pendingOwnerRooms?.length ?? 0;
-  const issueCount =
-    notes +
-    exceptions +
-    incidents +
-    pendingOwnerCount +
-    Number(!!checklist?.pendingOwnerCommonAssets) +
-    Number(scopeMismatch);
 
   const phase =
     isArchive || completed || signatureMismatch
       ? -1
-      : (scopePending || scopeMismatch) && !activeReport
+      : !confirmedScope &&
+          (ownerConfirmationRequired ||
+            scopeMismatch ||
+            staffConflict ||
+            (task.status === 'Completed' && fullySigned))
         ? 0
         : report?.status === 'PendingStaffSignature'
           ? 4
@@ -224,24 +145,21 @@ export function LocationAssetHandoverOverview({
               : checklist
                 ? 1
                 : -1;
-  const confirmedScope =
-    activeReport ||
-    (!!checklist && !!scopePreview && checklist.totalCount > 0 && !scopePending && !scopeMismatch);
   const isSubmitted =
     task.status === 'PendingVerification' || (!!report && report.status !== 'Superseded');
   const approved = !!report && report.status !== 'Superseded';
   const stageDone = [
     confirmedScope,
-    isSubmitted,
-    approved,
-    !!report?.ownerSignature,
-    !!report?.staffSignature,
+    confirmedScope && isSubmitted,
+    confirmedScope && approved,
+    confirmedScope && !!report?.ownerSignature,
+    confirmedScope && !!report?.staffSignature,
   ];
 
   const milestoneState = (index: number): MilestoneState => {
     if (completed) return 'done';
     if (stageDone[index]) return 'done';
-    if (index === 0 && !activeReport && !scopePending && !scopePreview) return 'unknown';
+    if (index === 0 && !ownerConfirmationRequired && !scopePreview) return 'unknown';
     if (phase === index) return 'current';
     if (phase === -1 && !completed && !isArchive) return 'unknown';
     return 'pending';
@@ -269,16 +187,35 @@ export function LocationAssetHandoverOverview({
       'Trạng thái công việc chưa khớp với hai chữ ký trên biên bản, hoặc dữ liệu biên bản chưa được xác minh. Không coi hồ sơ là đã ký đủ cho đến khi đối chiếu.';
     action = 'handover';
     actionLabel = 'Kiểm tra biên bản';
-  } else if (scopePending && !activeReport) {
+  } else if (ownerConfirmationRequired) {
     heading = 'Owner cần xác nhận phạm vi tài sản';
-    guidance = `Còn ${pendingOwnerCount} phòng${checklist?.pendingOwnerCommonAssets ? ' và tài sản khu vực chung' : ''} chưa xác nhận. Hoàn tất kiểm kê của Owner trước khi bàn giao tiếp.`;
+    guidance = scopePending
+      ? `Còn ${[
+          pendingOwnerCount > 0 ? `${pendingOwnerCount} phòng` : null,
+          checklist?.pendingOwnerCommonAssets ? 'tài sản khu vực chung' : null,
+        ]
+          .filter(Boolean)
+          .join(' và ')} chưa xác nhận. Hoàn tất kiểm kê của Owner trước khi bàn giao tiếp.`
+      : 'Owner chưa xác nhận phạm vi tài sản. Cần hoàn tất kiểm kê ban đầu trước khi bàn giao tiếp.';
     action = 'scope';
     actionLabel = 'Mở kiểm kê của Owner';
-  } else if (scopeMismatch) {
-    heading = 'Owner cần đối chiếu và đồng bộ checklist';
-    guidance = `Checklist đang có ${scopePreview!.currentCount} mục, trong khi Owner xác nhận ${scopePreview!.ownerConfirmedCount} mục. Xem phần Đối chiếu / đồng bộ trước khi tiếp tục bàn giao.`;
+  } else if (staffConflict) {
+    heading = 'Phạm vi Owner xung đột với kết quả Staff';
+    guidance =
+      'Một số tài sản Owner thay đổi đã có kết quả Staff kiểm tra hoặc ghi chú. Các ghi nhận Staff được giữ lại; cần kiểm tra sai lệch trước khi bàn giao.';
     action = 'inventory';
-    actionLabel = 'Đối chiếu checklist';
+    actionLabel = 'Xem kết quả kiểm kê';
+  } else if (scopeMismatch) {
+    heading = 'Phạm vi Owner và checklist chưa khớp';
+    guidance = `Checklist hiện có ${scopePreview!.currentCount} mục, Owner xác nhận ${scopePreview!.ownerConfirmedCount} mục. Kiểm tra phạm vi và kết quả Staff; hệ thống chỉ tự đồng bộ khi đủ điều kiện để bảo toàn dữ liệu.`;
+    action = 'inventory';
+    actionLabel = 'Xem kiểm kê tài sản';
+  } else if (task.status === 'Completed' && fullySigned && !confirmedScope) {
+    heading = 'Biên bản đã ký, cần xác minh phạm vi hiện tại';
+    guidance =
+      'Biên bản có đủ hai chữ ký, nhưng thông tin xác nhận phạm vi hiện tại chưa được xác minh. Xem lại kiểm kê trước khi coi toàn bộ quy trình đã hoàn tất.';
+    action = 'inventory';
+    actionLabel = 'Xem kiểm kê tài sản';
   } else if (report?.status === 'PendingOwnerSignature') {
     heading = 'Owner cần xem và ký biên bản';
     guidance =
@@ -294,12 +231,14 @@ export function LocationAssetHandoverOverview({
   } else if (task.status === 'PendingVerification') {
     heading = 'Owner cần đối soát kết quả Staff';
     guidance =
-      'Staff đã nộp kiểm kê. Xem hiện trạng và ghi chú, chọn mục cần kiểm tra lại nếu có; sau đó duyệt hoặc yêu cầu làm lại trong Biên bản & ký.';
+      exceptions || incidents
+        ? `Có ${exceptions} mục hiện trạng bất thường và ${incidents} mục liên quan sự cố. Xem chi tiết trước khi duyệt.`
+        : 'Staff đã nộp kiểm kê. Xem kết quả để duyệt hoặc chọn mục cần kiểm tra lại.';
     action = 'inventory';
     actionLabel = 'Đối soát kiểm kê';
   } else if (checklist) {
     heading = 'Staff đang thực hiện kiểm kê';
-    guidance = `Staff đã kiểm tra ${checklist.checkedCount}/${checklist.totalCount} mục. Owner theo dõi tiến độ; chưa thể ký trước khi Staff nộp và Owner duyệt.`;
+    guidance = 'Theo dõi tiến độ trong tab Kiểm kê tài sản.';
     action = 'inventory';
     actionLabel = 'Xem tiến độ kiểm kê';
   }
@@ -401,9 +340,6 @@ export function LocationAssetHandoverOverview({
                 >
                   {step.title}
                 </Typography>
-                <Typography variant="caption" color="text.secondary">
-                  {step.caption}
-                </Typography>
               </Box>
             );
           })}
@@ -433,11 +369,6 @@ export function LocationAssetHandoverOverview({
           sx={{ alignItems: { sm: 'center' }, justifyContent: 'space-between' }}
         >
           <Box sx={{ flex: 1, minWidth: 0 }}>
-            {!completed && !isArchive && (
-              <Typography variant="caption" color="text.secondary" sx={{ fontWeight: 600 }}>
-                {phase >= 0 ? 'Việc cần xử lý · bước ' + (phase + 1) : 'Trạng thái cần đối chiếu'}
-              </Typography>
-            )}
             <Stack direction="row" spacing={1} sx={{ alignItems: 'center' }}>
               {completed && (
                 <Box sx={{ display: 'inline-flex', color: 'success.main', flexShrink: 0 }}>
@@ -454,9 +385,11 @@ export function LocationAssetHandoverOverview({
                 {heading}
               </Typography>
             </Stack>
-            <Typography variant="body2" color="text.secondary" sx={{ mt: 0.5 }}>
-              {guidance}
-            </Typography>
+            {guidance && (
+              <Typography variant="body2" color="text.secondary" sx={{ mt: 0.5 }}>
+                {guidance}
+              </Typography>
+            )}
           </Box>
           {action === 'scope' && checklist ? (
             <Button
@@ -478,124 +411,6 @@ export function LocationAssetHandoverOverview({
           )}
         </Stack>
       </Box>
-
-      <Box component="section">
-        <Typography sx={{ fontWeight: 700, fontSize: 17, mb: 1.25 }}>Kết quả bàn giao</Typography>
-        <Box
-          sx={{
-            display: 'grid',
-            gridTemplateColumns: {
-              xs: 'minmax(0, 1fr)',
-              sm: 'repeat(3, minmax(0, 1fr))',
-            },
-            gap: 1,
-          }}
-        >
-          <Kpi
-            id="assets"
-            value={checklist ? `${checklist.checkedCount}/${checklist.totalCount}` : '—'}
-            label="Tài sản đã kiểm tra"
-            detail={checklist ? 'Theo checklist của Staff' : 'Chưa tải kiểm kê'}
-            tone={
-              checklist?.totalCount && checklist.checkedCount === checklist.totalCount
-                ? 'success'
-                : checklist?.checkedCount
-                  ? 'warning'
-                  : 'default'
-            }
-          />
-          <Kpi
-            id="notes"
-            value={checklist ? String(notes) : '—'}
-            label="Mục có ghi chú"
-            detail={notes > 0 ? 'Cần mở để đọc và đối chiếu' : 'Không có ghi chú cần đọc'}
-            tone={notes > 0 ? 'warning' : checklist ? 'success' : 'default'}
-          />
-          <Kpi
-            id="signatures"
-            value={report ? `${signedCount}/2` : '—'}
-            label="Chữ ký hoàn tất"
-            detail="Owner và Staff"
-            tone={fullySigned ? 'success' : signedCount > 0 ? 'warning' : 'default'}
-          />
-        </Box>
-      </Box>
-
-      {checklist && issueCount > 0 && (
-        <Box
-          component="section"
-          sx={{ border: 1, borderColor: 'divider', borderRadius: 1.5, p: 2 }}
-        >
-          <Stack
-            direction={{ xs: 'column', sm: 'row' }}
-            spacing={1}
-            sx={{ alignItems: { sm: 'center' }, justifyContent: 'space-between' }}
-          >
-            <Box>
-              <Typography sx={{ fontSize: 15, fontWeight: 700, mb: 1 }}>
-                Thông tin cần chú ý
-              </Typography>
-              <Stack direction="row" spacing={1} useFlexGap sx={{ flexWrap: 'wrap' }}>
-                {notes > 0 && (
-                  <AttentionItem
-                    id="notes"
-                    severity="warning"
-                    count={notes}
-                    label="mục có ghi chú"
-                    detail="Cần đọc và đối chiếu hiện trạng, không mặc định là tài sản thiếu hoặc hỏng."
-                  />
-                )}
-                {incidents > 0 && (
-                  <AttentionItem
-                    id="incidents"
-                    severity="error"
-                    count={incidents}
-                    label="mục liên quan sự cố"
-                    detail="Mở kiểm kê để xem tài sản và báo cáo sự cố liên quan."
-                  />
-                )}
-                {exceptions > 0 && (
-                  <AttentionItem
-                    id="exceptions"
-                    severity="error"
-                    count={exceptions}
-                    label="mục thiếu, hỏng hoặc không thể kiểm tra"
-                    detail="Cần đối chiếu hiện trạng đã được Staff ghi nhận."
-                  />
-                )}
-                {(scopePending || scopeMismatch) && (
-                  <AttentionItem
-                    id="scope"
-                    severity="warning"
-                    count={
-                      scopePending
-                        ? pendingOwnerCount > 0
-                          ? pendingOwnerCount
-                          : 'Tài sản'
-                        : 'Checklist'
-                    }
-                    label={
-                      scopePending
-                        ? pendingOwnerCount > 0
-                          ? 'phòng chưa xác nhận'
-                          : 'khu vực chung chưa xác nhận'
-                        : 'cần đối chiếu phạm vi Owner'
-                    }
-                    detail={
-                      checklist.pendingOwnerCommonAssets
-                        ? 'Bao gồm tài sản khu vực chung.'
-                        : 'Xem lại phạm vi kiểm kê của Owner.'
-                    }
-                  />
-                )}
-              </Stack>
-            </Box>
-            <Button variant="text" onClick={() => onOpenTab('inventory')} sx={{ flexShrink: 0 }}>
-              Xem chi tiết kiểm kê
-            </Button>
-          </Stack>
-        </Box>
-      )}
 
       {(inventory.error || handover.error) && (
         <Stack

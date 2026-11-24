@@ -422,7 +422,7 @@ export function WorkspaceShell({
                             tenantResidence
                               ? 'Tải lại hồ sơ tạm trú'
                               : compactTasks
-                                ? 'Tải lại công việc'
+                                ? `Tải lại ${headerAction?.title ?? 'công việc'}`
                                 : tenantLedger
                                   ? 'Tải lại giao dịch'
                                   : tenantInvoice

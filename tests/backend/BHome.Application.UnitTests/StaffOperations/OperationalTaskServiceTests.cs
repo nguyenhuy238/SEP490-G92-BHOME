@@ -50,6 +50,39 @@ public sealed class OperationalTaskServiceTests
         public async Task<TaskView> Create() => await Service.CreateAsync(new(Location, Work), Guid.NewGuid(), default);
         public void AsStaff() { User.Role = Roles.Staff; User.UserId = Staff; }
     }
+
+    [Fact]
+    public void OwnerConfirmedAssetUnitIsPartOfTheImmutableBaseline()
+    {
+        var item = new LocationAssetInventoryItem(Guid.NewGuid(), Guid.NewGuid(), "P.101",
+            Guid.NewGuid(), "Giường đơn", 2, null)
+        { Unit = "chiếc", UnitCaptured = true };
+
+        Assert.True(LocationAssetInventorySync.SameOwnerItem(item, item with { Unit = " CHIẾC " }));
+        Assert.False(LocationAssetInventorySync.SameOwnerItem(item, item with { Unit = "bộ" }));
+        Assert.True(LocationAssetInventorySync.SameOwnerItem(item with { Unit = null }, item with { Unit = " " }));
+        Assert.True(LocationAssetInventorySync.SameOwnerItem(
+            item with { Unit = null, UnitCaptured = false }, item));
+
+        var assignment = Guid.NewGuid();
+        var legacy = item with
+        {
+            Unit = null,
+            UnitCaptured = false,
+            Checked = true,
+            Condition = "Intact",
+            Note = "Đã kiểm tra trực tiếp"
+        };
+        var current = new LocationAssetInventorySnapshot(assignment, new DateOnly(2026, 11, 1), [legacy]);
+        var confirmed = new LocationAssetInventorySnapshot(assignment, new DateOnly(2026, 11, 1), [item]);
+        Assert.True(LocationAssetInventorySync.TryMerge(current, confirmed, out var merged));
+        Assert.Equal("chiếc", merged.Items.Single().Unit);
+        Assert.True(merged.Items.Single().UnitCaptured);
+        Assert.True(merged.Items.Single().Checked);
+        Assert.Equal("Intact", merged.Items.Single().Condition);
+        Assert.Equal("Đã kiểm tra trực tiếp", merged.Items.Single().Note);
+    }
+
     [Fact]
     public async Task CreateRoutesFromTrustedResponsibilityAndReplayHasNoDuplicateEffect()
     {
@@ -309,6 +342,7 @@ public sealed class OperationalTaskServiceTests
                 new(begun.Version, false), Guid.NewGuid(), default))).Code);
         var checkedView = await rig.Service.UpdateLocationAssetInventoryItemAsync(task.Id, common.Id,
             new(begun.Version, true, "Đã kiểm tra thực tế"), Guid.NewGuid(), default);
+        Assert.Equal("PendingVerification", checkedView.Status);
         Assert.Equal(checkedView.TotalCount, checkedView.CheckedCount);
         Assert.Equal(sourceContract, Assert.Single(checkedView.Items, item => item.Inherited).SourceHandoverContractId);
         var submitted = await rig.Service.ActAsync(task.Id, "submit",
@@ -318,6 +352,46 @@ public sealed class OperationalTaskServiceTests
         rig.User.UserId = Guid.NewGuid();
         Assert.Equal("location_asset_handover_workflow_required", (await Assert.ThrowsAsync<OperationalTaskException>(
             () => rig.Service.ActAsync(task.Id, "verify", new(submitted.Version), Guid.NewGuid(), default))).Code);
+    }
+
+    [Fact]
+    public async Task ChallengedTenantBaselineIsNotSilentlyInheritedAgainDuringReconciliation()
+    {
+        var rig = new Rig();
+        var assignment = rig.Responsibility!.AssignmentId;
+        var source = Guid.NewGuid();
+        var inherited = new LocationAssetInventoryItem(Guid.NewGuid(), Guid.NewGuid(), "P.101",
+            Guid.NewGuid(), "Tài sản đã bàn giao Tenant", 1, null, true, true, source);
+        var challenged = inherited with
+        {
+            Checked = false,
+            Inherited = false,
+            SourceHandoverContractId = null,
+            RecheckOfHandoverContractId = source
+        };
+        var authoritative = new LocationAssetInventorySnapshot(assignment, new DateOnly(2026, 10, 31), [inherited]);
+        var task = new OperationalTask
+        {
+            Kind = OperationalTaskKind.LocationAssetHandover,
+            Status = MeterTaskStatus.InProgress,
+            LocationId = rig.Location,
+            AssignmentId = assignment,
+            AssignedStaffUserId = rig.Staff,
+            LocationAssetInventoryJson = JsonSerializer.Serialize(authoritative with { Items = [challenged] })
+        };
+        rig.Added.Add(task);
+        rig.Repo.OwnerConfirmedInventoryAsync(task, default).Returns(Task.FromResult(authoritative));
+        var reconciled = await rig.Service.ReconcileLocationAssetInventoryAsync(task.Id,
+            new(task.Version, true), Guid.NewGuid(), default);
+        Assert.Equal("InProgress", reconciled.Status);
+        Assert.False(Assert.Single(reconciled.Items).Checked);
+        Assert.False(Assert.Single(reconciled.Items).Inherited);
+        rig.AsStaff();
+        var checkedView = await rig.Service.UpdateLocationAssetInventoryItemAsync(task.Id, challenged.Id,
+            new(reconciled.Version, true, "Đã kiểm tra trực tiếp"), Guid.NewGuid(), default);
+        Assert.Equal("PendingVerification", checkedView.Status);
+        Assert.False(Assert.Single(checkedView.Items).Inherited);
+        Assert.Equal(source, Assert.Single(checkedView.Items).RecheckOfHandoverContractId);
     }
 
     [Fact]
