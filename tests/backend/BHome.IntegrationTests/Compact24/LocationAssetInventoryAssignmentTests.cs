@@ -402,14 +402,13 @@ public sealed class LocationAssetInventoryAssignmentTests(Compact24Fixture fixtu
     }
 
     [CompactPostgresFact]
-    public async Task TenantHandoverDoesNotInheritReplacementAssetWithSameRequirementAndQuantity()
+    public async Task ConfirmedTenantHandoverBaselineCannotBeRewrittenAfterReplacementAssetInventoryIsSubmitted()
     {
         var owner = await User("Owner");
         var staff = await User("Staff");
         var tenant = await User("Tenant");
         var location = await Location();
         Guid roomId, requirementId, previousAssetId, currentAssetId, contractId;
-        int currentAssetVersion;
         BHome.Application.Contracts.HandoverSnapshot tenantSnapshot;
         await using (var scope = fixture.Factory!.Services.CreateAsyncScope())
         {
@@ -439,7 +438,6 @@ public sealed class LocationAssetInventoryAssignmentTests(Compact24Fixture fixtu
             await db.SaveChangesAsync();
             previousAssetId = previousAsset.Id;
             currentAssetId = currentAsset.Id;
-            currentAssetVersion = currentAsset.Version;
 
             var resident = new Resident
             {
@@ -611,11 +609,11 @@ public sealed class LocationAssetInventoryAssignmentTests(Compact24Fixture fixtu
             note = "Staff đã trực tiếp kiểm tra tài sản thay thế."
         });
         Assert.Equal(HttpStatusCode.OK, submitted.StatusCode);
-        var submittedTask = (await submitted.Content.ReadFromJsonAsync<TaskView>())!;
-        Assert.Equal("PendingVerification", submittedTask.Status);
+        Assert.Equal("PendingVerification", (await submitted.Content.ReadFromJsonAsync<TaskView>())!.Status);
 
-        // If the Tenant source later changes to Asset B, the already-submitted direct check
-        // must be revalidated because its inherited/source identity has changed.
+        // A confirmed Tenant handover is an immutable historical baseline. A later
+        // replacement asset must be recorded as a separate asset-change event, not by
+        // rewriting the original signed snapshot after the Staff checklist is submitted.
         await using (var scope = fixture.Factory!.Services.CreateAsyncScope())
         {
             var db = scope.ServiceProvider.GetRequiredService<Compact24DbContext>();
@@ -625,16 +623,15 @@ public sealed class LocationAssetInventoryAssignmentTests(Compact24Fixture fixtu
                 Assets = tenantSnapshot.Assets.Select(group => group with
                 {
                     PhysicalAssets = [new BHome.Application.Contracts.HandoverPhysicalAsset(
-                        currentAssetId, currentAssetVersion, 1, "Tốt", "Active")]
+                        currentAssetId, 1, 1, "Tốt", "Active")]
                 }).ToArray()
             };
             handover.Snapshot = JsonSerializer.Serialize(changedSnapshot);
-            await db.SaveChangesAsync();
+            await Assert.ThrowsAsync<DbUpdateException>(() => db.SaveChangesAsync());
+            await db.Entry(handover).ReloadAsync();
+            var persisted = JsonSerializer.Deserialize<BHome.Application.Contracts.HandoverSnapshot>(handover.Snapshot)!;
+            Assert.Equal(previousAssetId, Assert.Single(persisted.Assets).PhysicalAssets!.Single().Id);
         }
-        using var ownerClient = await Client(owner);
-        var approval = await ownerClient.PostAsJsonAsync(route + "/location-asset-handover/approve",
-            new { taskVersion = submittedTask.Version });
-        Assert.Equal(HttpStatusCode.Conflict, approval.StatusCode);
     }
 
     [CompactPostgresFact]

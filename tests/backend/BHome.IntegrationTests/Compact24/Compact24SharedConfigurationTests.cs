@@ -227,10 +227,11 @@ public sealed partial class Compact24OwnerSetupTests
             ("ServiceFee", "internet", "FixedPerRoomPerMonth", "VND/month", "VND/month"),
             ("ServiceFee", "cleaning", "FixedPerPersonPerMonth", "VND/person/month", "VND/person/month") })
         {
-            var data = JsonSerializer.SerializeToElement(new { category, chargeCode = code, method, referenceRate = "1000", unit, scope = "Location", effectiveFrom = Today });
+            var serviceName = category == "ServiceFee" ? code == "internet" ? "Internet" : "Cleaning" : null;
+            var data = JsonSerializer.SerializeToElement(new { category, chargeCode = code, serviceName, method, referenceRate = "1000", unit, scope = "Location", effectiveFrom = Today });
             var saved = await Read<SharedDocument>(await owner.PostAsJsonAsync(route, SharedInput("fee-templates") with { Data = data }));
             Assert.Equal(expected, saved.Data.GetProperty("unit").GetString());
-            Assert.Equal(code.ToUpperInvariant(), saved.Data.GetProperty("chargeCode").GetString());
+            Assert.Equal(category == "ServiceFee" ? serviceName == "Internet" ? "DV_I" : "DV_C" : code.ToUpperInvariant(), saved.Data.GetProperty("chargeCode").GetString());
         }
         var badFees = new object[] {
             new { category = "ServiceFee", chargeCode = "CLEANING", method = "FixedPerPersonPerMonth", referenceRate = "1", unit = "VND/month", scope = "Location", effectiveFrom = Today },
