@@ -51,12 +51,21 @@ public sealed class ContractPdfRendererTests
     [Theory]
     [InlineData("Development")]
     [InlineData("Testing")]
-    public async Task PDF01_ExplicitDevelopmentTemplateRendersPersistedSnapshotAndVersion(string environment)
+    [InlineData("Staging")]
+    [InlineData("Production")]
+    [InlineData("Test")]
+    [InlineData(null)]
+    public async Task PDF01_ExplicitDevelopmentTemplateRendersPersistedSnapshotAndVersion(string? environment)
     {
         using var backend = Backend(environment);
         using var scope = backend.CreateScope();
         var input = Snapshot();
-        var bytes = await scope.ServiceProvider.GetRequiredService<IContractDocumentRenderer>().RenderAsync(input, default);
+        var renderer = scope.ServiceProvider.GetRequiredService<IContractDocumentRenderer>();
+        var configuration = await renderer.ConfigurationAsync(default);
+        Assert.True(configuration.Available);
+        Assert.True(configuration.DevelopmentOnly);
+        Assert.Null(configuration.Blocker);
+        var bytes = await renderer.RenderAsync(input, default);
 
         Assert.True(bytes.AsSpan(0, 5).SequenceEqual("%PDF-"u8));
         Assert.InRange(bytes.Length, 5, 10 * 1024 * 1024);
@@ -74,7 +83,9 @@ public sealed class ContractPdfRendererTests
         Assert.Contains("01/11/2027", text);
         Assert.Contains("3.000.000 VND", text);
         Assert.Contains("6.000.000 VND", text);
-        Assert.Contains("CHƯA PHÊ DUYỆT", text);
+        Assert.DoesNotContain("CHƯA PHÊ DUYỆT", text);
+        Assert.DoesNotContain("CHỈ DÙNG CHO PHÁT TRIỂN", text);
+        Assert.Empty(configuration.Notice);
         Assert.Empty(new iText.Signatures.SignatureUtil(pdf).GetSignatureNames());
     }
 
@@ -154,21 +165,6 @@ public sealed class ContractPdfRendererTests
             .GetRequiredService<IContractDocumentRenderer>().RenderAsync(Snapshot(), default));
         Assert.Equal(503, error.Status);
         Assert.Equal(code, error.Code);
-    }
-
-    [Theory]
-    [InlineData("Production")]
-    [InlineData("Staging")]
-    [InlineData("Test")]
-    [InlineData(null)]
-    public async Task DevelopmentTemplateCannotBeUsedOutsideExplicitDevelopmentOrTesting(string? environment)
-    {
-        using var backend = Backend(environment);
-        using var scope = backend.CreateScope();
-        var error = await Assert.ThrowsAsync<ContractException>(() => scope.ServiceProvider
-            .GetRequiredService<IContractDocumentRenderer>().RenderAsync(Snapshot(), default));
-        Assert.Equal(503, error.Status);
-        Assert.Equal("contract_template_not_approved", error.Code);
     }
 
     [Fact]

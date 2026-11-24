@@ -163,9 +163,6 @@ export function HoldingSandboxFlow({
           >
             Bỏ qua ký: xem QR kiểm thử
           </Button>
-          <Text style={ui.muted}>
-            Chỉ Sandbox: xem thử QR, không ghi nhận chữ ký, phê duyệt hay kích hoạt thật.
-          </Text>
           <Button
             mode="outlined"
             contentStyle={{ minHeight: 44 }}
@@ -268,7 +265,6 @@ export function HoldingSandboxFlow({
           />
           <HoldingChecklistRow label="Phòng OnHold (Sandbox)" complete={state.onHold} />
           <HoldingChecklistRow label="Đủ tiền cọc đã xác minh" complete={state.depositVerified} />
-          <Text style={ui.muted}>Chỉ là dữ liệu thử nghiệm, không có chữ ký pháp lý.</Text>
           <Button mode="contained" contentStyle={{ minHeight: 44 }} onPress={onList}>
             Hoàn tất
           </Button>

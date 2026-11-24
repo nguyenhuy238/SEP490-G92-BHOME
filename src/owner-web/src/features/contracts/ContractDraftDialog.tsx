@@ -140,14 +140,11 @@ export function ContractDraftDialog({
                   {template.title} · v{template.version}
                 </MenuItem>
               </TextField>
-              <Alert severity={template.developmentOnly ? 'warning' : 'info'}>
-                {template.notice}
-              </Alert>
               <Typography>Trường ánh xạ: {template.fields.join(', ')}</Typography>
               <Typography>
                 Ký:{' '}
                 {query.data?.configuration.signingMode === 'Simulated'
-                  ? 'SIMULATED SIGNING — không có giá trị pháp lý'
+                  ? 'Ký mô phỏng'
                   : 'Nhà cung cấp điện tử'}
               </Typography>
               {!template.available && (

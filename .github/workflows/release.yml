@@ -56,6 +56,7 @@ jobs:
           labels: |
             org.opencontainers.image.revision=${{ github.sha }}
             org.opencontainers.image.source=https://github.com/${{ github.repository }}
+            io.bhome.staging-regressions=v1
           cache-from: type=gha,scope=release-api
           cache-to: type=gha,mode=max,scope=release-api
       - name: Build the environment-specific Owner Web
