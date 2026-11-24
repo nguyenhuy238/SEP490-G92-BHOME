@@ -1,3 +1,4 @@
+using BHome.Application.Common;
 using System.ComponentModel.DataAnnotations;
 using System.Security.Cryptography;
 using System.Text;
@@ -50,7 +51,7 @@ internal sealed class CaptureRepository(BHomePersistenceContext db, CaptureScope
         var rooms = await scope.VisibleRooms.AsNoTracking().Where(r => r.LocationId == id).OrderBy(r => r.RoomNumber).Take(100).ToArrayAsync(t);
         var ids = rooms.Select(r => r.Id).ToArray();
         var waitingForOwner = await contracts.RoomsAwaitingMainOwnerSignatureAsync(ids, Guid.Empty, t);
-        var today = DateOnly.FromDateTime(TimeZoneInfo.ConvertTimeBySystemTimeZoneId(DateTimeOffset.UtcNow, "Asia/Ho_Chi_Minh").DateTime);
+        var today = scope.Today;
         var occupants = await db.Set<Contract>().AsNoTracking().Where(c => ids.Contains(c.RoomId) &&
             c.Kind != ContractKind.Holding && c.Status == ContractStatus.Active && c.StartDate <= today && c.EndDate >= today)
             .SelectMany(c => c.Residents.Select(person => new { c.RoomId, person.ResidentId })).Distinct().ToArrayAsync(t);
@@ -232,7 +233,8 @@ internal sealed class CaptureRepository(BHomePersistenceContext db, CaptureScope
     {
         if (!await scope.VisibleLocations.AnyAsync(l => l.Id == id, t)) throw new OcrAccessException();
         return await db.Set<Meter>().AsNoTracking().Where(m => m.Room.LocationId == id && scope.VisibleRooms.Any(r => r.Id == m.RoomId))
-            .OrderBy(m => m.Room.RoomNumber).Take(100).Select(m => new NamedResource(m.Id, m.Room.RoomNumber + " · " + m.Code, m.RoomId, null, null, null)).ToListAsync(t);
+            .OrderBy(m => m.Room.RoomNumber).Take(100).Select(m => new NamedResource(m.Id, m.Room.RoomNumber + " · " + m.Code, m.RoomId, null, null, null)
+            { InstalledOn = m.InstalledOn, IsActive = m.IsActive }).ToListAsync(t);
     }
     public async Task<IdResult> CreateTaskAsync(MeterTaskInput x, CancellationToken t)
     {

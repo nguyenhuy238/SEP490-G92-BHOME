@@ -185,6 +185,16 @@ public sealed partial class Compact24OwnerSetupTests
         }
         var working = await StartRealMoveInTask(staff, host.Services, contract.Id, w.Staff.Id);
         Assert.Equal(read.Version, working.Version);
+        foreach (var input in new[]
+        {
+            new HandoverDraftWrite(read.Version, RoomCondition: "Thiếu ảnh tổng quan"),
+            new HandoverDraftWrite(read.Version, RoomCondition: ""),
+            new HandoverDraftWrite(read.Version, RoomChecks: [new HandoverRoomCheck(
+                HandoverRoomChecklist.RequiredCodes[0], "Passed", null, [])]),
+            new HandoverDraftWrite(read.Version, AccessItems: [new HandoverAccessItem("RoomKey", 2, "")])
+        })
+            Assert.Equal(HttpStatusCode.BadRequest, (await HandoverPost(staff, contract.Id,
+                "handover/draft", input)).StatusCode);
         using (var photo = new ByteArrayContent(ReviewEvidenceImage()))
         {
             photo.Headers.ContentType = new("image/png");
@@ -192,8 +202,15 @@ public sealed partial class Compact24OwnerSetupTests
                 $"/api/v1/contracts/{contract.Id}/handover/draft/evidence", photo));
             var prepared = await Read<HandoverDraftView>(await HandoverPost(staff, contract.Id,
                 "handover/draft", new HandoverDraftWrite(read.Version,
-                    RoomCondition: "Đã kiểm tra mặt sàn", EvidenceIds: [uploaded.Id])));
+                    RoomCondition: "", EvidenceIds: [uploaded.Id])));
             Assert.Contains(uploaded.Id, prepared.EvidenceIds);
+            Assert.Equal("", prepared.RoomCondition);
+            Assert.DoesNotContain("room_summary_evidence", prepared.Missing);
+            var notApplicable = await Read<HandoverDraftView>(await HandoverPost(staff, contract.Id,
+                "handover/draft", new HandoverDraftWrite(prepared.Version,
+                    RoomChecks: [new HandoverRoomCheck(HandoverRoomChecklist.RequiredCodes[0], "NotApplicable", null, [])])));
+            Assert.Contains(notApplicable.RoomChecks!, check => check.Status == "NotApplicable" && check.EvidenceIds.Length == 0);
+            Assert.DoesNotContain("room_check_evidence", notApplicable.Missing);
             var authorized = await owner.GetByteArrayAsync(
                 $"/api/v1/contracts/{contract.Id}/handover/draft/evidence/{uploaded.Id}");
             Assert.Equal(ReviewEvidenceImage(), authorized);

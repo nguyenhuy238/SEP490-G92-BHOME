@@ -1,3 +1,4 @@
+using BHome.Application.Common;
 using System.Text.Json;
 using BHome.Domain.IdentityAccess;
 using BHome.Domain.TenantContracts;
@@ -368,7 +369,7 @@ public sealed partial class ContractService
             BaselineSnapshot = JsonSerializer.Serialize(baseline),
             ObservedSnapshot = JsonSerializer.Serialize(observed),
             StaffId = Actor,
-            InspectedAt = clock.GetUtcNow()
+            InspectedAt = clock.BusinessUtcNow()
         });
     }
     public async Task<IReadOnlyList<FinalInspectionView>> FinalInspectionsAsync(Guid id, CancellationToken t)

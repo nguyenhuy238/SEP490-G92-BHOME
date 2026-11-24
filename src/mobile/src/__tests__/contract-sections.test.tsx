@@ -20,6 +20,7 @@ const state = vi.hoisted(() => ({
   readiness: null as Readiness | null,
   moveOut: null as MoveOut | null,
   back: vi.fn(),
+  go: vi.fn(),
   headerBack: undefined as (() => void) | undefined,
   viewedId: '',
   includeMoveOut: true,
@@ -51,7 +52,7 @@ vi.mock('../lib/SessionProvider', () => ({
   }),
 }));
 vi.mock('../features/workspace/WorkspaceProvider', () => ({
-  useWorkspace: () => ({ role: state.role }),
+  useWorkspace: () => ({ role: state.role, go: state.go }),
 }));
 vi.mock('../lib/randomUUID', () => ({ randomUUID: () => '00000000-0000-4000-8000-000000000001' }));
 vi.mock('../lib/useFeedbackState', () => ({ useFeedbackState: () => useState('') }));
@@ -276,7 +277,7 @@ it('shows the early termination form directly in the Tenant lifecycle section', 
   expect(screen.queryByRole('button', { name: 'Yêu cầu chấm dứt trước hạn' })).toBeNull();
 
   fireEvent.click(screen.getByRole('button', { name: 'Gửi yêu cầu' }));
-  expect(screen.getByText('Yêu cầu đang chờ Owner duyệt.')).toBeTruthy();
+  expect(screen.getByText('Yêu cầu đang chờ chủ trọ duyệt.')).toBeTruthy();
   expect(screen.queryByRole('button', { name: 'Gửi yêu cầu' })).toBeNull();
 });
 
@@ -445,6 +446,25 @@ it('does not load signing methods or move-out on a Staff handover deep link', ()
   expect(screen.getByText('Handover draft panel')).toBeTruthy();
   expect(state.includeMoveOut).toBe(false);
   expect(state.request.mock.calls.some(([path]) => path.endsWith('/signing-methods'))).toBe(false);
+});
+it('renders only the inspection workspace when Staff opens a handover task and returns to the task list', () => {
+  state.params = { contractId: id, section: 'handover', origin: 'staff-handovers' };
+  render(<ContractScreen />);
+  expect(screen.getByText('Handover draft panel')).toBeTruthy();
+  for (const label of [
+    'Tổng quan',
+    'Ký & kích hoạt',
+    'Bàn giao',
+    'Gia hạn & trả phòng',
+    'Lịch sử',
+  ]) {
+    expect(screen.queryByRole('button', { name: label })).toBeNull();
+  }
+  expect(screen.queryByText('Đang hiệu lực')).toBeNull();
+  expect(state.includeMoveOut).toBe(false);
+  expect(state.headerBack).toBeTypeOf('function');
+  state.headerBack?.();
+  expect(state.go).toHaveBeenCalledWith('staff-handovers', { tab: 'MoveIn' });
 });
 it('ignores an invalid initial contract section', () => {
   state.role = 'Tenant';

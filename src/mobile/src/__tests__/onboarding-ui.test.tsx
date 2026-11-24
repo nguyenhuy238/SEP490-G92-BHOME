@@ -387,60 +387,10 @@ function selectRoom() {
   });
   fireEvent.click(screen.getByRole('button', { name: 'Tiếp tục' }));
 }
-it('creates a synthetic contract for the assigned location and opens only the unified handover', async () => {
-  state.request.mockResolvedValueOnce({
-    contractId: 'dev-contract',
-    roomId: 'dev-room',
-    roomNumber: 'TEST-001',
-    locationName: 'Cơ sở mẫu',
-    tenantName: 'Khách thuê TEST',
-    tenantEmail: 'demo@example.invalid',
-    tenantPassword: 'synthetic-only',
-    developmentOnly: true,
-  });
+it('does not expose the Owner demo contract generator to Staff', () => {
   render(<OnboardingScreen />);
-  fireEvent.click(screen.getByRole('button', { name: 'Sinh hợp đồng mẫu' }));
-  await screen.findByText('Đã tạo hợp đồng mẫu thành công');
-  expect(state.request).toHaveBeenCalledWith(
-    '/api/v1/development/onboarding-seed',
-    expect.objectContaining({
-      method: 'POST',
-      headers: { 'Idempotency-Key': expect.any(String) },
-      body: JSON.stringify({ locationId: 'location' }),
-    }),
-  );
-  expect(screen.getByText('Tài khoản Tenant: demo@example.invalid')).toBeTruthy();
-  expect(screen.getByText('Mật khẩu Tenant test: synthetic-only')).toBeTruthy();
-  expect(screen.getByText(/Đã chuẩn bị một công việc bàn giao phòng/)).toBeTruthy();
-  expect(screen.queryByRole('button', { name: 'Mở nhiệm vụ ghi chỉ số' })).toBeNull();
-  fireEvent.click(screen.getByRole('button', { name: 'Mở nhiệm vụ bàn giao phòng' }));
-  expect(state.go).toHaveBeenCalledWith('move-in', {
-    contractId: 'dev-contract',
-    section: 'handover',
-  });
-});
-
-it('does not generate a second contract when retrying an uncertain seed response', async () => {
-  state.request.mockRejectedValueOnce(new MobileApiError(0, 'request_timeout'));
-  state.request.mockResolvedValueOnce({
-    contractId: 'dev-contract',
-    roomId: 'dev-room',
-    roomNumber: 'TEST-002',
-    locationName: 'Cơ sở mẫu',
-    tenantName: 'Khách thuê TEST',
-    tenantEmail: 'retry@example.invalid',
-    tenantPassword: 'synthetic-only',
-    developmentOnly: true,
-  });
-  render(<OnboardingScreen />);
-  fireEvent.click(screen.getByRole('button', { name: 'Sinh hợp đồng mẫu' }));
-  await screen.findByRole('alert');
-  fireEvent.click(screen.getByRole('button', { name: 'Sinh hợp đồng mẫu' }));
-  await screen.findByText('Đã tạo hợp đồng mẫu thành công');
-  expect(state.request).toHaveBeenCalledTimes(2);
-  expect(state.request.mock.calls[0][1].headers['Idempotency-Key']).toEqual(
-    state.request.mock.calls[1][1].headers['Idempotency-Key'],
-  );
+  expect(screen.queryByRole('button', { name: 'Sinh hợp đồng mẫu' })).toBeNull();
+  expect(screen.queryByText('Tạo nhanh dữ liệu kiểm thử')).toBeNull();
 });
 function addFamilyMember() {
   fireEvent.change(screen.getByRole('combobox', { name: 'Hình thức thuê' }), {

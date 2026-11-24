@@ -1,3 +1,4 @@
+using BHome.Application.Common;
 using System.Text.Json;
 using BHome.Application.Contracts;
 using BHome.Application.IdentityAccess;
@@ -51,7 +52,7 @@ public sealed class OperatingPolicyService(ISetupWorkspaceStore store, ICurrentU
                 if (before.Status == "Published")
                 {
                     if (old.Title == input.Title && old.Content == input.Content && old.EffectiveFrom == input.EffectiveFrom) return before;
-                    var today = DateOnly.FromDateTime(TimeZoneInfo.ConvertTimeBySystemTimeZoneId(clock.GetUtcNow(), "Asia/Ho_Chi_Minh").DateTime);
+                    var today = clock.BusinessToday();
                     if (input.EffectiveFrom < today || input.EffectiveFrom <= old.EffectiveFrom)
                         throw new PropertyException(409, "policy_successor_date_invalid");
                     previous = before.Id; nextId = Guid.NewGuid(); edition++; expected = 0;
@@ -130,7 +131,7 @@ public sealed class OperatingPolicyService(ISetupWorkspaceStore store, ICurrentU
     {
         var c = await ContractScope(contractId, t);
         var accepted = (await Store.ListAsync(c.Room.LocationId, "PolicyAcceptance", t)).Where(d => d.Data.GetProperty("contractId").GetGuid() == contractId &&
-            d.Data.GetProperty("effectiveFrom").Deserialize<DateOnly>() <= DateOnly.FromDateTime(TimeZoneInfo.ConvertTimeBySystemTimeZoneId(clock.GetUtcNow(), "Asia/Ho_Chi_Minh").DateTime))
+            d.Data.GetProperty("effectiveFrom").Deserialize<DateOnly>() <= clock.BusinessToday())
             .OrderByDescending(d => d.Data.GetProperty("effectiveFrom").Deserialize<DateOnly>()).FirstOrDefault();
         if (accepted is not null) return new(contractId, "Accepted", accepted.Data.GetProperty("policy").Deserialize<OperatingPolicyBinding>(Json), accepted.Data.GetProperty("amendmentId").GetGuid());
         if (c.OperatingPolicySnapshot.Length == 0) return new(contractId, "NotRecorded", null, null);
@@ -197,7 +198,7 @@ public sealed class OperatingPolicyService(ISetupWorkspaceStore store, ICurrentU
     public async Task ApplyAmendmentAsync(Contract amendment, CancellationToken t)
     {
         Owner(); var parent = await ContractScope(amendment.ParentContractId ?? throw new PropertyException(409, "amendment_parent_required"), t);
-        var today = DateOnly.FromDateTime(TimeZoneInfo.ConvertTimeBySystemTimeZoneId(clock.GetUtcNow(), "Asia/Ho_Chi_Minh").DateTime);
+        var today = clock.BusinessToday();
         if (parent.Status != ContractStatus.Active || parent.RoomId != amendment.RoomId || parent.TenantUserId != amendment.TenantUserId ||
             today < amendment.StartDate || today > amendment.EndDate || amendment.OperatingPolicySnapshot.Length == 0) throw new PropertyException(409, "amendment_not_effective");
         var id = Key($"policy-acceptance:{amendment.Id}");

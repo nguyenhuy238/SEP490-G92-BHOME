@@ -1,3 +1,4 @@
+param([switch]$DemoClock)
 . (Join-Path $PSScriptRoot 'Use-LocalTools.ps1')
 . (Join-Path $PSScriptRoot 'ContractDemoEnvironment.ps1')
 if (-not (Test-Path -LiteralPath $contractDemoSettings)) {
@@ -45,7 +46,8 @@ try {
     if ($LASTEXITCODE -ne 0) { throw 'Could not start isolated contract demo services.' }
     dotnet build tools/BHome.LocalDevelopment --no-incremental --no-restore --verbosity quiet
     if ($LASTEXITCODE -ne 0) { throw 'Seed build failed. Stop the demo API before rebuilding shared assemblies.' }
-    dotnet run --project tools/BHome.LocalDevelopment --no-build -- seed-contract-demo
+    $seedCommand = if ($DemoClock) { 'seed-contract-demo-clock' } else { 'seed-contract-demo' }
+    dotnet run --project tools/BHome.LocalDevelopment --no-build -- $seedCommand
     if ($LASTEXITCODE -ne 0) { throw 'Contract demo seed failed; no data reset was attempted.' }
     Write-Host 'Demo infrastructure seeded. Local credentials are in .tools/contract-demo/runtime.json (BHOME_DEV_TEST_PASSWORD). Do not commit or share that file.'
 } finally { Pop-Location }

@@ -1,3 +1,4 @@
+using BHome.Application.Common;
 using BHome.Application.Billing;
 using BHome.Application.IdentityAccess;
 using BHome.Application.PropertyManagement;
@@ -40,7 +41,7 @@ public sealed class NotificationService(INotificationRepository repository, ICur
         {
             if (user.UserId is not { } actor) throw new NotificationException(401, "authentication_required");
             if (!permission.HasPermission(Permissions.Notifications.ReadOwn)) throw new NotificationException(403, "notification_forbidden");
-            return new(actor, user.IsInRole(Roles.Owner), user.IsInRole(Roles.Staff), user.IsInRole(Roles.Tenant), BillingAutomationDates.BusinessDate(clock.GetUtcNow()));
+            return new(actor, user.IsInRole(Roles.Owner), user.IsInRole(Roles.Staff), user.IsInRole(Roles.Tenant), clock.BusinessToday());
         }
     }
     public Task<PagedResult<NotificationView>> ListAsync(NotificationQuery q, CancellationToken t)

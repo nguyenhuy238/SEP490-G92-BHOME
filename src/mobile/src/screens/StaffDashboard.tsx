@@ -30,7 +30,6 @@ export function StaffDashboard() {
     reloadStaffLocations,
   } = useWorkspace();
   const data = useStaffDashboard();
-  const [handover, setHandover] = useState(false);
   const [contracts, setContracts] = useState(false);
   const [locationPickerOpen, setLocationPickerOpen] = useState(false);
   const availableLocations = staffLocations ?? data.locations.data ?? [];
@@ -70,7 +69,11 @@ export function StaffDashboard() {
             status: 'Quá hạn',
             open: () =>
               isMainMoveInWork(task)
-                ? go('move-in', { contractId: task.target!.contractId!, section: 'handover' })
+                ? go('move-in', {
+                    contractId: task.target!.contractId!,
+                    section: 'handover',
+                    origin: 'staff-handovers',
+                  })
                 : isMainMoveOutWork(task)
                   ? go('move-out', { contractId: task.target!.contractId!, taskId: task.id })
                   : go(task.kind === 'MoveInInventory' ? 'move-in-inventory' : 'task-detail', {
@@ -88,7 +91,7 @@ export function StaffDashboard() {
               item.proposedDate && item.proposedDate > businessToday()
                 ? 'Chờ ngày trả'
                 : 'Cần kiểm tra',
-            open: () => go('work-orders'),
+            open: () => go('staff-handovers', { tab: 'MoveOut' }),
           })),
         ...(data.meters.data ?? [])
           .filter(
@@ -122,8 +125,7 @@ export function StaffDashboard() {
     ? selectedInspections.filter((item) => item.status === 'Approved')
     : null;
   function open(screen: WorkspaceScreen, params?: Record<string, string>) {
-    if (screen === 'move-in') setHandover(true);
-    else if (params) go(screen, params);
+    if (params) go(screen, params);
     else go(screen);
   }
   return (
@@ -179,13 +181,17 @@ export function StaffDashboard() {
                 : pendingInspections
                   ? `${data.inspections.data!.length >= 100 ? '≥' : ''}${pendingInspections.length}`
                   : '—',
-              screen: 'work-orders' as const,
+              screen: 'staff-handovers' as const,
             },
           ].map((metric, index) => (
             <TouchableRipple
               key={metric.label}
               style={[styles.metric, index > 0 && styles.divider]}
-              onPress={() => go(metric.screen)}
+              onPress={() =>
+                metric.screen === 'staff-handovers'
+                  ? go(metric.screen, { tab: 'MoveOut' })
+                  : go(metric.screen)
+              }
               accessibilityRole="button"
               accessibilityLabel={metric.label}
             >
@@ -312,39 +318,6 @@ export function StaffDashboard() {
           </Dialog.ScrollArea>
           <Dialog.Actions>
             <Button onPress={() => setLocationPickerOpen(false)}>Đóng</Button>
-          </Dialog.Actions>
-        </Dialog>
-        <Dialog visible={handover} onDismiss={() => setHandover(false)}>
-          <Dialog.Title>Bàn giao / Trả phòng</Dialog.Title>
-          <Dialog.Content>
-            <Text style={typography.body}>Chọn nghiệp vụ cần thực hiện theo hồ sơ hợp đồng.</Text>
-          </Dialog.Content>
-          <Dialog.Actions style={styles.dialogActions}>
-            <Button
-              onPress={() => {
-                setHandover(false);
-                go('move-in-inventory');
-              }}
-            >
-              Kiểm kê trước nhận phòng
-            </Button>
-            <Button
-              onPress={() => {
-                setHandover(false);
-                go('move-in');
-              }}
-            >
-              Bàn giao nhận phòng
-            </Button>
-            <Button
-              onPress={() => {
-                setHandover(false);
-                go('move-out');
-              }}
-            >
-              Kiểm tra trả phòng
-            </Button>
-            <Button onPress={() => setHandover(false)}>Đóng</Button>
           </Dialog.Actions>
         </Dialog>
       </Portal>

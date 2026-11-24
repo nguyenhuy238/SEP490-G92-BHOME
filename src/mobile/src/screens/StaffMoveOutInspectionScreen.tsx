@@ -39,6 +39,7 @@ import type { MeterTask } from '../../../../packages/client-core/src/meter';
 import { formatInstant } from '../../../../packages/client-core/src/localization';
 import { Action, Box, Heading, Pill, Row, ui } from '../components/WorkspaceKit';
 import { CameraCapture } from '../components/CameraCapture';
+import { FloatingDemoPhotoButton } from '../components/FloatingDemoPhotoButton';
 import { Input } from '../components/WorkflowControls';
 import { canUseLocalMeterDemo, meterDemoJpegBytes } from '../lib/meterDemoCapture';
 import { ContractInitialMeterTasks } from '../features/contracts/ContractInitialMeterTasks';
@@ -437,7 +438,7 @@ export function StaffMoveOutInspectionScreen() {
     })();
     return () => controller.abort();
   }, [assigned?.roomId, assignmentReady, client, key, selectedId, staffLocationId]);
-  if (!allowed) return <Text>Chỉ Staff có quyền tại cơ sở mới được kiểm tra trả phòng.</Text>;
+  if (!allowed) return <Text>Chỉ nhân viên có quyền tại cơ sở mới được kiểm tra trả phòng.</Text>;
   if (!staffLocationId) return <Text>Chọn cơ sở được phân công để xem kiểm tra trả phòng.</Text>;
   if (contractId && !selectedId) return <Text>Mã hợp đồng trả phòng không hợp lệ.</Text>;
   if (taskId && !selectedTaskId) return <Text>Mã nhiệm vụ kiểm tra trả phòng không hợp lệ.</Text>;
@@ -457,9 +458,11 @@ export function StaffMoveOutInspectionScreen() {
       <Box>
         <Heading
           title="Kiểm tra trả phòng"
-          detail="Mở nhiệm vụ kiểm tra trả phòng trong mục Công việc để bắt đầu"
+          detail="Mở nhiệm vụ trong mục Bàn giao / Trả phòng để bắt đầu"
         />
-        <Action onPress={() => go('work-orders')}>Xem công việc tại cơ sở</Action>
+        <Action onPress={() => go('staff-handovers', { tab: 'MoveOut' })}>
+          Xem nhiệm vụ trả phòng
+        </Action>
       </Box>
     );
   if (!assigned)
@@ -468,7 +471,7 @@ export function StaffMoveOutInspectionScreen() {
         <Text style={ui.red}>
           Hợp đồng này hiện không nằm trong danh sách nhiệm vụ của cơ sở đang chọn.
         </Text>
-        <Action secondary onPress={() => go('move-out')}>
+        <Action secondary onPress={() => go('staff-handovers', { tab: 'MoveOut' })}>
           Về công việc tại cơ sở
         </Action>
       </Box>
@@ -476,8 +479,12 @@ export function StaffMoveOutInspectionScreen() {
   if (!selectedTaskId)
     return (
       <Box>
-        <Text>Hãy mở nhiệm vụ kiểm tra trả phòng từ mục Công việc để xác nhận bắt đầu.</Text>
-        <Action onPress={() => go('work-orders')}>Đến danh sách công việc</Action>
+        <Text>
+          Hãy mở nhiệm vụ kiểm tra trả phòng từ mục Bàn giao / Trả phòng để xác nhận bắt đầu.
+        </Text>
+        <Action onPress={() => go('staff-handovers', { tab: 'MoveOut' })}>
+          Đến danh sách trả phòng
+        </Action>
       </Box>
     );
   if (task.error)
@@ -501,7 +508,7 @@ export function StaffMoveOutInspectionScreen() {
           Nhân viên khác đang xử lý nhiệm vụ này. Chỉ người đã bắt đầu mới có thể cập nhật kết quả
           kiểm tra.
         </Text>
-        <Action secondary onPress={() => go('work-orders')}>
+        <Action secondary onPress={() => go('staff-handovers', { tab: 'MoveOut' })}>
           Về danh sách công việc
         </Action>
       </Box>
@@ -509,10 +516,7 @@ export function StaffMoveOutInspectionScreen() {
   if (workOrder.status !== 'InProgress')
     return (
       <Box>
-        <Heading
-          title="Kiểm tra trả phòng"
-          detail={`Phòng ${assigned.roomNumber} · ${assigned.locationName}`}
-        />
+        <Heading title="Kiểm tra trả phòng" detail={`Phòng ${assigned.roomNumber}`} />
         <Pill tone={workOrder.status === 'Assigned' ? 'amber' : 'neutral'}>
           {workOrder.status === 'Assigned'
             ? 'Cần làm'
@@ -524,7 +528,7 @@ export function StaffMoveOutInspectionScreen() {
           {workOrder.status === 'Assigned'
             ? 'Hãy bấm Bắt đầu công việc trong nhiệm vụ để mở 4 phần kiểm tra.'
             : workOrder.status === 'PendingVerification'
-              ? 'Đã gửi kết quả kiểm tra cho Owner xem xét. Bạn sẽ được thông báo nếu cần bổ sung.'
+              ? 'Đã gửi kết quả kiểm tra cho chủ trọ xem xét. Bạn sẽ được thông báo nếu cần bổ sung.'
               : 'Nhiệm vụ đã kết thúc. Không thể cập nhật kết quả kiểm tra.'}
         </Text>
         {!!startError && (
@@ -690,7 +694,7 @@ function InspectionForm({
       keys.confirmed(scope, identity);
       if (ids.length === 0)
         throw new Error(
-          'Phòng chưa có công tơ điện/nước đang hoạt động. Owner cần cấu hình công tơ trước khi chốt chỉ số.',
+          'Phòng chưa có công tơ điện/nước đang hoạt động. chủ trọ cần cấu hình công tơ trước khi chốt chỉ số.',
         );
       setMeterRevision((value) => value + 1);
       setMeterReady(true);
@@ -869,14 +873,14 @@ function InspectionForm({
       setBusy(false);
     }
   }
+  const canUseSample = canUseLocalMeterDemo(
+    typeof __DEV__ !== 'undefined' && __DEV__,
+    Platform.OS,
+    globalThis.location?.hostname,
+    globalThis.location?.port,
+  );
   function photoSection(bucket: string, label: string) {
     const count = getPhotos(bucket).length;
-    const canUseSample = canUseLocalMeterDemo(
-      typeof __DEV__ !== 'undefined' && __DEV__,
-      Platform.OS,
-      globalThis.location?.hostname,
-      globalThis.location?.port,
-    );
     return (
       <View style={wizardStyles.section}>
         <Text variant="labelMedium">
@@ -891,25 +895,6 @@ function InspectionForm({
           disabled={busy || !editable || count >= 5}
           onCapture={(bytes) => upload(bytes, bucket)}
         />
-        {canUseSample && (
-          <Button
-            mode="outlined"
-            icon="flask-outline"
-            disabled={busy || !editable || count >= 5}
-            onPress={() => {
-              try {
-                const bytes = moveOutDemoJpeg();
-                void upload(bytes, bucket)
-                  .catch(() => undefined)
-                  .finally(() => bytes.fill(0));
-              } catch {
-                setError('Không tạo được ảnh mẫu DEV. Hãy thử lại trên web local.');
-              }
-            }}
-          >
-            Chọn ảnh mẫu (test)
-          </Button>
-        )}
         {count > 0 && (
           <View style={wizardStyles.photoGrid}>
             {getPhotos(bucket).map((id, index) => (
@@ -964,7 +949,7 @@ function InspectionForm({
     );
     const water = finalReadings.find((item) => item.id === readingId(1) && item.utilityType === 1);
     if (!electricity || !water)
-      throw new Error('Cần chọn đủ chỉ số điện và nước chốt đã được Staff xác nhận.');
+      throw new Error('Cần chọn đủ chỉ số điện và nước chốt đã được nhân viên xác nhận.');
     const roomChecks = roomHandoverChecks.map(({ code, label }) => {
       const status = values[`room.${code}.status`] as MoveInRoomCheckStatus | undefined;
       const notes = values[`room.${code}.notes`]?.trim() ?? '';
@@ -1383,11 +1368,8 @@ function InspectionForm({
         )}
         <View style={wizardStyles.compactSummary}>
           <Pill tone={isSubmitted ? 'green' : 'blue'}>
-            {moveOut.status === 'Inspected' ? 'Đã gửi Owner duyệt' : 'Đang kiểm tra'}
+            {moveOut.status === 'Inspected' ? 'Đã gửi chủ trọ duyệt' : 'Đang kiểm tra'}
           </Pill>
-          <Text variant="bodySmall" style={ui.muted}>
-            {contract.locationName}
-          </Text>
         </View>
         <Text variant="bodySmall" style={ui.muted}>
           Ngày trả dự kiến: {displayContractDate(moveOut.proposedDate)}
@@ -1543,7 +1525,7 @@ function InspectionForm({
                     <Text style={ui.muted}>
                       {noAssetsConfirmed
                         ? 'Không có tài sản cần kiểm kê.'
-                        : 'Không có danh sách tài sản để đối chiếu, không có nghĩa là phòng không có tài sản. Cần Owner xác nhận trước khi hoàn tất.'}
+                        : 'Không có danh sách tài sản để đối chiếu, không có nghĩa là phòng không có tài sản. Cần chủ trọ xác nhận trước khi hoàn tất.'}
                     </Text>
                   )}
                   {groups.map((asset) => {
@@ -1615,150 +1597,169 @@ function InspectionForm({
                 </Button>
               </Row>
             </View>
-            <ScrollView
-              style={{ flexShrink: 1 }}
-              contentContainerStyle={[
-                wizardStyles.modalBody,
-                compactPhone && wizardStyles.phoneModalBody,
-              ]}
-              keyboardShouldPersistTaps="handled"
-            >
-              {activeItem === 'meter' && meterTask && (
-                <MeterTaskScreen
-                  embedded
-                  key={meterTask.id}
-                  taskId={meterTask.id}
-                  onReturn={() => void finishMeterTask(meterTask)}
-                />
-              )}
-              {selectedRoomCheck && (
-                <>
-                  <Text variant="bodySmall" style={ui.muted}>
-                    Khi bàn giao:{' '}
-                    {openingRoomCheck?.status
-                      ? openingRoomCheck.status === 'NotApplicable'
-                        ? 'Không áp dụng'
-                        : (statuses.find((status) => status.id === openingRoomCheck.status)
-                            ?.label ?? openingRoomCheck.status)
-                      : 'Chưa có ghi nhận'}
-                    {openingRoomCheck?.notes ? ` · ${openingRoomCheck.notes}` : ''}
-                  </Text>
-                  <Text variant="labelMedium">Tình trạng · {selectedRoomCheck.label}</Text>
-                  {compactPhone ? (
-                    <View style={wizardStyles.section}>
-                      {statuses.map((status) => (
-                        <RadioButton.Item
-                          key={status.id}
-                          label={status.label}
-                          value={status.id}
-                          status={
-                            values[`room.${selectedRoomCode}.status`] === status.id
-                              ? 'checked'
-                              : 'unchecked'
-                          }
-                          onPress={() => set(`room.${selectedRoomCode}.status`, status.id)}
-                          disabled={busy || !editable}
-                          mode="android"
-                          color={colors.blue}
-                        />
-                      ))}
-                    </View>
-                  ) : (
-                    <SegmentedButtons
-                      value={values[`room.${selectedRoomCode}.status`] ?? ''}
-                      onValueChange={(status) => set(`room.${selectedRoomCode}.status`, status)}
-                      density="small"
-                      buttons={statuses.map((status) => ({
-                        value: status.id,
-                        label: status.label,
-                        disabled: busy || !editable,
-                      }))}
-                    />
-                  )}
-                  {values[`room.${selectedRoomCode}.status`] === 'Issue' && (
-                    <Input
-                      label="Lý do có vấn đề"
-                      value={values[`room.${selectedRoomCode}.notes`] ?? ''}
-                      onChange={(value) => set(`room.${selectedRoomCode}.notes`, value)}
-                      disabled={busy || !editable}
-                      multiline
-                    />
-                  )}
-                  {photoSection(`room:${selectedRoomCode}`, 'Ảnh kiểm tra khu vực (tùy chọn)')}
-                </>
-              )}
-              {selectedAsset && (
-                <>
-                  {(openingAsset(selectedAsset.id)?.handedOverQuantity != null ||
-                    selectedAsset.configuredQuantity != null ||
-                    selectedAsset.handedOverQuantity != null ||
-                    !!selectedAsset.physicalAssets?.length) && (
-                    <>
-                      <Text style={ui.muted}>
-                        Số lượng lúc nhận:{' '}
-                        {openingAsset(selectedAsset.id)?.handedOverQuantity ?? 'Chưa có dữ liệu'}
-                      </Text>
+            <View style={{ flexShrink: 1, minHeight: 0 }}>
+              <ScrollView
+                style={{ flexShrink: 1 }}
+                contentContainerStyle={[
+                  wizardStyles.modalBody,
+                  compactPhone && wizardStyles.phoneModalBody,
+                ]}
+                keyboardShouldPersistTaps="handled"
+              >
+                {activeItem === 'meter' && meterTask && (
+                  <MeterTaskScreen
+                    embedded
+                    key={meterTask.id}
+                    taskId={meterTask.id}
+                    onReturn={() => void finishMeterTask(meterTask)}
+                  />
+                )}
+                {selectedRoomCheck && (
+                  <>
+                    <Text variant="bodySmall" style={ui.muted}>
+                      Khi bàn giao:{' '}
+                      {openingRoomCheck?.status
+                        ? openingRoomCheck.status === 'NotApplicable'
+                          ? 'Không áp dụng'
+                          : (statuses.find((status) => status.id === openingRoomCheck.status)
+                              ?.label ?? openingRoomCheck.status)
+                        : 'Chưa có ghi nhận'}
+                      {openingRoomCheck?.notes ? ` · ${openingRoomCheck.notes}` : ''}
+                    </Text>
+                    <Text variant="labelMedium">Tình trạng · {selectedRoomCheck.label}</Text>
+                    {compactPhone ? (
+                      <View style={wizardStyles.section}>
+                        {statuses.map((status) => (
+                          <RadioButton.Item
+                            key={status.id}
+                            label={status.label}
+                            value={status.id}
+                            status={
+                              values[`room.${selectedRoomCode}.status`] === status.id
+                                ? 'checked'
+                                : 'unchecked'
+                            }
+                            onPress={() => set(`room.${selectedRoomCode}.status`, status.id)}
+                            disabled={busy || !editable}
+                            mode="android"
+                            color={colors.blue}
+                          />
+                        ))}
+                      </View>
+                    ) : (
+                      <SegmentedButtons
+                        value={values[`room.${selectedRoomCode}.status`] ?? ''}
+                        onValueChange={(status) => set(`room.${selectedRoomCode}.status`, status)}
+                        density="small"
+                        buttons={statuses.map((status) => ({
+                          value: status.id,
+                          label: status.label,
+                          disabled: busy || !editable,
+                        }))}
+                      />
+                    )}
+                    {values[`room.${selectedRoomCode}.status`] === 'Issue' && (
                       <Input
-                        label="Số lượng lúc trả"
-                        value={values[`${selectedAsset.id}.observedQuantity`] ?? ''}
-                        onChange={(value) => set(`${selectedAsset.id}.observedQuantity`, value)}
-                        numeric
+                        label="Lý do có vấn đề"
+                        value={values[`room.${selectedRoomCode}.notes`] ?? ''}
+                        onChange={(value) => set(`room.${selectedRoomCode}.notes`, value)}
+                        disabled={busy || !editable}
+                        multiline
+                      />
+                    )}
+                    {photoSection(`room:${selectedRoomCode}`, 'Ảnh kiểm tra khu vực (tùy chọn)')}
+                  </>
+                )}
+                {selectedAsset && (
+                  <>
+                    {(openingAsset(selectedAsset.id)?.handedOverQuantity != null ||
+                      selectedAsset.configuredQuantity != null ||
+                      selectedAsset.handedOverQuantity != null ||
+                      !!selectedAsset.physicalAssets?.length) && (
+                      <>
+                        <Text style={ui.muted}>
+                          Số lượng lúc nhận:{' '}
+                          {openingAsset(selectedAsset.id)?.handedOverQuantity ?? 'Chưa có dữ liệu'}
+                        </Text>
+                        <Input
+                          label="Số lượng lúc trả"
+                          value={values[`${selectedAsset.id}.observedQuantity`] ?? ''}
+                          onChange={(value) => set(`${selectedAsset.id}.observedQuantity`, value)}
+                          numeric
+                          disabled={busy || !editable}
+                        />
+                      </>
+                    )}
+                    <Text variant="labelMedium">Tình trạng hiện tại</Text>
+                    <SegmentedButtons
+                      density="small"
+                      value={values[`asset-${selectedAsset.id}`] ?? ''}
+                      onValueChange={(value) => set(`asset-${selectedAsset.id}`, value)}
+                      buttons={[
+                        { value: 'Tốt', label: 'Tốt', disabled: busy || !editable },
+                        { value: 'Có vấn đề', label: 'Có vấn đề', disabled: busy || !editable },
+                      ]}
+                    />
+                    {(values[`asset-${selectedAsset.id}`] === 'Có vấn đề' ||
+                      (openingAsset(selectedAsset.id)?.handedOverQuantity != null &&
+                        /^\d+$/.test(values[`${selectedAsset.id}.observedQuantity`] ?? '') &&
+                        Number(values[`${selectedAsset.id}.observedQuantity`]) !==
+                          openingAsset(selectedAsset.id)?.handedOverQuantity)) && (
+                      <Input
+                        label="Nội dung vấn đề"
+                        value={values[`${selectedAsset.id}.notes`] ?? ''}
+                        onChange={(value) => set(`${selectedAsset.id}.notes`, value)}
+                        multiline
                         disabled={busy || !editable}
                       />
-                    </>
-                  )}
-                  <Text variant="labelMedium">Tình trạng hiện tại</Text>
-                  <SegmentedButtons
-                    density="small"
-                    value={values[`asset-${selectedAsset.id}`] ?? ''}
-                    onValueChange={(value) => set(`asset-${selectedAsset.id}`, value)}
-                    buttons={[
-                      { value: 'Tốt', label: 'Tốt', disabled: busy || !editable },
-                      { value: 'Có vấn đề', label: 'Có vấn đề', disabled: busy || !editable },
-                    ]}
-                  />
-                  {(values[`asset-${selectedAsset.id}`] === 'Có vấn đề' ||
-                    (openingAsset(selectedAsset.id)?.handedOverQuantity != null &&
-                      /^\d+$/.test(values[`${selectedAsset.id}.observedQuantity`] ?? '') &&
-                      Number(values[`${selectedAsset.id}.observedQuantity`]) !==
-                        openingAsset(selectedAsset.id)?.handedOverQuantity)) && (
+                    )}
+                    {photoSection(`asset:${selectedAsset.id}`, 'Ảnh tài sản')}
+                  </>
+                )}
+                {activeItem === 'keys' && (
+                  <>
+                    <Text style={ui.muted}>
+                      Số chìa khóa lúc nhận: {openingKeyQuantity ?? 'Chưa có dữ liệu'}
+                    </Text>
                     <Input
-                      label="Nội dung vấn đề"
-                      value={values[`${selectedAsset.id}.notes`] ?? ''}
-                      onChange={(value) => set(`${selectedAsset.id}.notes`, value)}
-                      multiline
+                      label="Số chìa khóa lúc trả"
+                      value={keyCount}
+                      onChange={(value) => set('keyQuantity', value)}
+                      numeric
                       disabled={busy || !editable}
                     />
-                  )}
-                  {photoSection(`asset:${selectedAsset.id}`, 'Ảnh tài sản')}
-                </>
-              )}
-              {activeItem === 'keys' && (
-                <>
-                  <Text style={ui.muted}>
-                    Số chìa khóa lúc nhận: {openingKeyQuantity ?? 'Chưa có dữ liệu'}
+                    {photoSection('keys', 'Ảnh chìa khóa thu lại')}
+                  </>
+                )}
+                {!!error && (
+                  <Text accessibilityRole="alert" style={ui.red}>
+                    {error}
                   </Text>
-                  <Input
-                    label="Số chìa khóa lúc trả"
-                    value={keyCount}
-                    onChange={(value) => set('keyQuantity', value)}
-                    numeric
-                    disabled={busy || !editable}
-                  />
-                  {photoSection('keys', 'Ảnh chìa khóa thu lại')}
-                </>
+                )}
+                {!!notice && (
+                  <Text accessibilityRole="status" style={ui.green}>
+                    {notice}
+                  </Text>
+                )}
+              </ScrollView>
+              {canUseSample && activeItem && activeItem !== 'meter' && (
+                <FloatingDemoPhotoButton
+                  disabled={busy || !editable || getPhotos(activeItem).length >= 5}
+                  onPress={() => {
+                    if (!canUseSample || busy || !editable || getPhotos(activeItem).length >= 5)
+                      return;
+                    try {
+                      const bytes = moveOutDemoJpeg();
+                      void upload(bytes, activeItem)
+                        .catch(() => undefined)
+                        .finally(() => bytes.fill(0));
+                    } catch {
+                      setError('Không tạo được ảnh mẫu DEV. Hãy thử lại trên web local.');
+                    }
+                  }}
+                />
               )}
-              {!!error && (
-                <Text accessibilityRole="alert" style={ui.red}>
-                  {error}
-                </Text>
-              )}
-              {!!notice && (
-                <Text accessibilityRole="status" style={ui.green}>
-                  {notice}
-                </Text>
-              )}
-            </ScrollView>
+            </View>
             {activeItem !== 'meter' && (
               <View
                 style={[wizardStyles.modalFooter, compactPhone && wizardStyles.phoneModalFooter]}

@@ -10,10 +10,6 @@ import { MainDraftScreen } from '../features/contracts/MainDraftScreen';
 import { useWorkspace } from '../features/workspace/WorkspaceProvider';
 import { useSession } from '../lib/SessionProvider';
 import { captureService } from '../services/captureService';
-import {
-  seedDevelopmentContract,
-  type DevelopmentOnboardingSeedResult,
-} from '../services/developmentSeedService';
 import { errorMessage, MobileApiError } from '../lib/api';
 import { useCaptureScope } from '../features/onboarding/useCaptureScope';
 import { IdentityPersonCard } from '../features/onboarding/IdentityPersonCard';
@@ -58,7 +54,7 @@ export function OnboardingScreen() {
 }
 function NewResidentOnboarding() {
   const { locationId, roomId } = useLocalSearchParams<{ locationId?: string; roomId?: string }>();
-  const { preview, role, go, resetScroll, registerExitGuard, requestNavigation } = useWorkspace();
+  const { preview, go, resetScroll, registerExitGuard, requestNavigation } = useWorkspace();
   const { api } = useSession();
   const contracts = useMemo(
     () => (api ? contractClient((path, init, type) => api.request(path, init, type)) : null),
@@ -111,11 +107,6 @@ function NewResidentOnboarding() {
   const [identityOpen, setIdentityOpen] = useState(false);
   const [identityMode, setIdentityMode] = useState<'capture' | 'verify'>('capture');
   const [busy, setBusy] = useState(false);
-  const [seedBusy, setSeedBusy] = useState(false);
-  const [seedError, setSeedError] = useState('');
-  const [seedResult, setSeedResult] = useState<DevelopmentOnboardingSeedResult | null>(null);
-  const seedKey = useRef(randomUUID());
-  const seedLocation = useRef('');
   const [emailConflict, setEmailConflict] = useState<{
     personKey: string;
     locationId: string;
@@ -244,30 +235,6 @@ function NewResidentOnboarding() {
       if (alive.current) setBusy(false);
     }
   };
-  const createSyntheticContract = async () => {
-    if (!__DEV__ || preview || role !== 'Staff' || !api || !scope.location || seedBusy) return;
-    if (seedLocation.current !== scope.location) {
-      seedKey.current = randomUUID();
-      seedLocation.current = scope.location;
-    }
-    setSeedBusy(true);
-    setSeedError('');
-    setSeedResult(null);
-    try {
-      const result = await seedDevelopmentContract(api, scope.location, seedKey.current);
-      if (alive.current) {
-        setSeedResult(result);
-        // A successful result starts a new logical operation. Retrying after a failure
-        // deliberately keeps the same key to avoid duplicate contracts.
-        seedKey.current = randomUUID();
-        scope.reload();
-      }
-    } catch (e) {
-      if (alive.current) setSeedError(errorMessage(e));
-    } finally {
-      if (alive.current) setSeedBusy(false);
-    }
-  };
   const openIdentity = async (
     person: OnboardingPerson,
     entryMode: 'capture' | 'verify' = person.status === 'pending' ? 'verify' : 'capture',
@@ -382,60 +349,6 @@ function NewResidentOnboarding() {
                 disabled={created || scope.loading}
                 onChange={scope.selectLocation}
               />
-            )}
-            {__DEV__ && role === 'Staff' && !preview && !!scope.location && (
-              <View style={styles.seedPanel}>
-                <Text variant="titleMedium">Tạo nhanh dữ liệu kiểm thử</Text>
-                <Text style={ui.muted}>
-                  Tạo phòng mới, tài khoản Tenant mẫu và hợp đồng đang hiệu lực tại cơ sở này. Hệ
-                  thống chuẩn bị một công việc bàn giao phòng; Staff bắt đầu bàn giao rồi chụp và
-                  xác nhận chỉ số đầu kỳ điện, nước ngay trong công việc đó.
-                </Text>
-                <Button
-                  mode="outlined"
-                  icon="auto-fix"
-                  loading={seedBusy}
-                  disabled={
-                    seedBusy || busy || !scope.location || scope.loading || !!scope.error || created
-                  }
-                  onPress={() => void createSyntheticContract()}
-                >
-                  Sinh hợp đồng mẫu
-                </Button>
-                {!!seedError && (
-                  <Text accessibilityRole="alert" style={ui.red}>
-                    {seedError}
-                  </Text>
-                )}
-                {seedResult && (
-                  <View style={styles.seedResult}>
-                    <Text variant="titleMedium">Đã tạo hợp đồng mẫu thành công</Text>
-                    <Text>Cơ sở: {seedResult.locationName}</Text>
-                    <Text>Phòng: {seedResult.roomNumber}</Text>
-                    <Text>Khách thuê: {seedResult.tenantName}</Text>
-                    <Text selectable>Tài khoản Tenant: {seedResult.tenantEmail}</Text>
-                    <Text selectable>Mật khẩu Tenant test: {seedResult.tenantPassword}</Text>
-                    <Text>
-                      Đã chuẩn bị một công việc bàn giao phòng, gồm kiểm tra phòng, tài sản, chìa
-                      khóa và xác nhận chỉ số điện nước đầu kỳ.
-                    </Text>
-                    <Text style={ui.muted}>
-                      Chỉ dùng dữ liệu giả lập trên DB Development local. Không có chữ ký hoặc thanh
-                      toán thật.
-                    </Text>
-                    <Button
-                      mode="contained"
-                      onPress={() => {
-                        dirtyRef.current = false;
-                        setFinished(true);
-                        go('move-in', { contractId: seedResult.contractId, section: 'handover' });
-                      }}
-                    >
-                      Mở nhiệm vụ bàn giao phòng
-                    </Button>
-                  </View>
-                )}
-              </View>
             )}
             <ChoiceField
               label="Phòng *"
@@ -810,8 +723,6 @@ function NewResidentOnboarding() {
 }
 const styles = StyleSheet.create({
   panel: { borderRadius: 16, padding: 16, gap: 16 },
-  seedPanel: { padding: 12, borderRadius: 12, gap: 10, backgroundColor: s.blueSoft },
-  seedResult: { padding: 12, borderRadius: 12, gap: 8, backgroundColor: '#FFFFFF' },
   summary: { padding: 12, borderRadius: 12, backgroundColor: s.blueSoft, gap: 4 },
   empty: { alignItems: 'center', gap: 12, paddingVertical: 24 },
   identity: { gap: 16 },

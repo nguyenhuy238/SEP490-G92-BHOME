@@ -1,3 +1,4 @@
+import { businessToday } from '../../../../../../packages/client-core/src/contracts';
 import { getUserFriendlyMessage } from '../../../../../../packages/client-core/src/api';
 import { TextField } from '../../../components/common/ValidatedForm';
 import { MoneyField } from '../../../components/common/MoneyField';
@@ -1749,7 +1750,7 @@ export function InitialLocationSetupWizard({
                     unitPrice: 0,
                     unit: 'VND/tháng',
                     applicationScope: 'LOCATION_WIDE',
-                    effectiveDate: new Date().toISOString().slice(0, 10),
+                    effectiveDate: businessToday(),
                     description: '',
                   })
                 }
@@ -1993,7 +1994,7 @@ export function InitialLocationSetupWizard({
                       name: '',
                       category: 'OTHER_OPERATIONS',
                       content: '',
-                      effectiveDate: new Date().toISOString().slice(0, 10),
+                      effectiveDate: businessToday(),
                       status: 'DRAFT',
                       version: 'V1',
                       isAppliedToContracts: false,

@@ -225,7 +225,7 @@ function setup(c = draft, ready = false, m: MoveOut | null = null) {
       ].some((s) => path.endsWith(s))
     )
       result = [];
-    else if (path.endsWith('/handover')) throw { status: 404 };
+    else if (path.endsWith('/handover') || path.endsWith('/handover/draft')) throw { status: 404 };
     else if (path.endsWith('/inspection-preparation'))
       result = { baseline: null, finalReadings: [], otherTenantsRemain: false };
     else if (path.endsWith('/settlement-summary'))

@@ -1,3 +1,4 @@
+using BHome.Application.Common;
 using BHome.Application.IdentityAccess;
 using BHome.Domain.PropertyManagement;
 
@@ -72,7 +73,7 @@ public sealed class AssetLifecycleService(ISetupWorkspaceStore store, ICurrentUs
             policyPage = await Store.PageAsync(asset.LocationId, "AssetLifecyclePolicy", null, page++, 100, t);
             policyDocuments.AddRange(policyPage.Items);
         } while (policyDocuments.Count < policyPage.TotalCount);
-        var today = BHome.Application.Billing.BillingAutomationDates.BusinessDate(clock.GetUtcNow());
+        var today = clock.BusinessToday();
         var effective = policyDocuments.Where(d => d.Status == "Published")
             .Select(d => (Document: d, Data: Read<AssetLifecyclePolicyWrite>(d)))
             .Where(p => p.Data.Category == asset.Category && p.Data.EffectiveFrom <= today).ToArray();
