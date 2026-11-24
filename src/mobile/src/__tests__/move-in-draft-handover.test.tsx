@@ -558,7 +558,7 @@ it('keeps the existing segmented room choices at desktop widths', async () => {
   openWork('Tường, trần và sàn');
   expect(screen.queryByRole('radio')).toBeNull();
   fireEvent.click(screen.getByRole('button', { name: 'Đạt' }));
-  expect(screen.queryByLabelText('Ghi chú · Tường, trần và sàn')).toBeNull();
+  expect(screen.getByLabelText('Ghi chú · Tường, trần và sàn')).toBeTruthy();
 });
 
 it('allows Tenant to view Draft but hides both actions until Owner marks Ready', async () => {
@@ -669,7 +669,7 @@ it('Tenant directly signs the Owner-reviewed PDF in their account without OTP', 
     />,
   );
   const acknowledge = await screen.findByRole('button', {
-    name: 'Tôi đã kiểm tra nội dung biên bản',
+    name: 'Tôi đã xem biên bản và đồng ý nhận phòng theo hiện trạng ghi nhận, kể cả các mục có vấn đề',
   });
   const drawing = screen.getByRole('button', { name: 'Vẽ chữ ký Tenant' });
   expect(
@@ -746,7 +746,11 @@ it('verifies a committed Tenant signature by GET when the POST response times ou
     />,
   );
   fireEvent.click(await screen.findByRole('button', { name: 'Vẽ chữ ký Tenant' }));
-  fireEvent.click(screen.getByRole('button', { name: 'Tôi đã kiểm tra nội dung biên bản' }));
+  fireEvent.click(
+    screen.getByRole('button', {
+      name: 'Tôi đã xem biên bản và đồng ý nhận phòng theo hiện trạng ghi nhận, kể cả các mục có vấn đề',
+    }),
+  );
   fireEvent.click(screen.getByRole('button', { name: 'Ký và hoàn tất bàn giao' }));
   expect(await screen.findByText('Đã xác nhận')).toBeTruthy();
   expect(sessionSignPosts).toBe(1);
@@ -770,7 +774,11 @@ it('does not claim signed or auto-retry when a timed-out Tenant signature is sti
     />,
   );
   fireEvent.click(await screen.findByRole('button', { name: 'Vẽ chữ ký Tenant' }));
-  fireEvent.click(screen.getByRole('button', { name: 'Tôi đã kiểm tra nội dung biên bản' }));
+  fireEvent.click(
+    screen.getByRole('button', {
+      name: 'Tôi đã xem biên bản và đồng ý nhận phòng theo hiện trạng ghi nhận, kể cả các mục có vấn đề',
+    }),
+  );
   fireEvent.click(screen.getByRole('button', { name: 'Ký và hoàn tất bàn giao' }));
   expect(await screen.findByText(/Máy chủ không phản hồi trong 15 giây/)).toBeTruthy();
   expect(screen.queryByText('Đã xác nhận')).toBeNull();
@@ -845,7 +853,11 @@ it('Tenant may request correction while activation is pending but cannot confirm
   state.draft = draft('Ready');
   render(<MoveInDraftHandoverPanel api={api} contract={contract} role="Tenant" />);
   expect(await screen.findByRole('button', { name: 'Gửi yêu cầu chỉnh sửa' })).toBeTruthy();
-  expect(screen.queryByRole('button', { name: 'Tôi đã kiểm tra nội dung biên bản' })).toBeNull();
+  expect(
+    screen.queryByRole('button', {
+      name: 'Tôi đã xem biên bản và đồng ý nhận phòng theo hiện trạng ghi nhận, kể cả các mục có vấn đề',
+    }),
+  ).toBeNull();
   expect(screen.queryByRole('button', { name: 'Gửi mã OTP để ký biên bản' })).toBeNull();
   expect(screen.getByText(/Chờ hợp đồng được kích hoạt để ký nhận bàn giao/)).toBeTruthy();
 });
@@ -1463,7 +1475,7 @@ it('does not count the key section complete before the key quantity is saved', a
   expect(screen.getByText('Chưa ghi chiếc · 0 ảnh chìa khóa (tùy chọn)')).toBeTruthy();
 });
 
-it('does not call a room issue finished when its required inspection photo is missing', async () => {
+it('counts a saved room issue without optional evidence as inspected', async () => {
   state.draft.electricity = {
     id: 'reading-e',
     meterCode: 'ELEC-01',
@@ -1490,7 +1502,7 @@ it('does not call a room issue finished when its required inspection photo is mi
   }));
   render(<MoveInDraftHandoverPanel api={api} contract={contract} role="Staff" />);
   expect(await screen.findByRole('button', { name: '2. Kiểm tra hiện trạng phòng' })).toBeTruthy();
-  expect(screen.getByText(/Gợi ý tiếp theo: Kiểm tra hiện trạng phòng/)).toBeTruthy();
+  expect(screen.getByText(/Gợi ý tiếp theo: Kiểm kê tài sản/)).toBeTruthy();
   openSection(2);
   expect(screen.getByText('Có vấn đề')).toBeTruthy();
   expect(screen.queryByText('Chụp điện nước trong công việc')).toBeNull();
@@ -1707,7 +1719,7 @@ it('stays in the seven-room-check list after each successful save and uses the r
   expect(screen.getByRole('button', { name: '2. Kiểm tra hiện trạng phòng' })).toBeTruthy();
 });
 
-it('saves only the room checks edited during this visit and requires a reason when not applicable', async () => {
+it('saves only the open room check, with optional notes and evidence for NotApplicable', async () => {
   render(<MoveInDraftHandoverPanel api={api} contract={contract} role="Staff" />);
   await screen.findByRole('button', { name: '2. Kiểm tra hiện trạng phòng' });
   openSection(2);
@@ -1716,16 +1728,6 @@ it('saves only the room checks edited during this visit and requires a reason wh
   closeWork();
   openWork('Cửa, cửa sổ và ổ khóa');
   fireEvent.click(screen.getByRole('radio', { name: 'Không áp dụng' }));
-  saveWork();
-  expect(await screen.findByText(/Hãy ghi lý do cho mục "Cửa, cửa sổ và ổ khóa"/)).toBeTruthy();
-  expect(
-    state.transport.mock.calls.filter(
-      ([path, options]) => path.endsWith('/handover/draft') && options?.method === 'POST',
-    ),
-  ).toHaveLength(0);
-  fireEvent.change(screen.getByLabelText('Ghi chú · Cửa, cửa sổ và ổ khóa'), {
-    target: { value: 'Không có cửa sổ ở phòng này' },
-  });
   saveWork();
   await waitFor(() =>
     expect(
@@ -1739,11 +1741,10 @@ it('saves only the room checks edited during this visit and requires a reason wh
   );
   const body = JSON.parse(mutation![1].body);
   expect(body.roomChecks).toEqual([
-    { code: 'walls_ceiling_floor', status: 'Passed', notes: null, evidenceIds: [] },
     {
       code: 'doors_windows_locks',
       status: 'NotApplicable',
-      notes: 'Không có cửa sổ ở phòng này',
+      notes: null,
       evidenceIds: [],
     },
   ]);
@@ -1751,7 +1752,7 @@ it('saves only the room checks edited during this visit and requires a reason wh
   expect(body).not.toHaveProperty('outstandingIssues');
 });
 
-it('sends the seven exact server-required room checklist codes without replacing existing asset inspections', async () => {
+it('saves the active room code without resending earlier unsaved checks or existing assets', async () => {
   state.draft.assets[0]!.checked = true;
   render(<MoveInDraftHandoverPanel api={api} contract={contract} role="Staff" />);
   await screen.findByRole('button', { name: '2. Kiểm tra hiện trạng phòng' });
@@ -1773,13 +1774,13 @@ it('sends the seven exact server-required room checklist codes without replacing
     ([path, options]) => path.endsWith('/handover/draft') && options?.method === 'POST',
   );
   const body = JSON.parse(mutation![1].body);
-  expect(body.roomChecks.map((check: { code: string }) => check.code)).toEqual(
-    roomHandoverChecks.map((check) => check.code),
-  );
+  expect(body.roomChecks.map((check: { code: string }) => check.code)).toEqual([
+    roomHandoverChecks[roomHandoverChecks.length - 1]!.code,
+  ]);
   expect(body.roomChecks.every((check: { status: string }) => check.status === 'Passed')).toBe(
     true,
   );
-  expect(body.assets[0].id).toBe(state.draft.assets[0]!.id);
+  expect(body).not.toHaveProperty('assets');
 });
 
 it('Tenant can review seven room inspections, attached Issue image, access items and outstanding work', async () => {
@@ -1833,8 +1834,6 @@ it('saves a room problem as a factual inspection with notes and photo, without a
   fireEvent.change(screen.getByLabelText('Ghi chú · Hệ thống điện, đèn và ổ cắm'), {
     target: { value: 'Ổ cắm bên trái không có điện' },
   });
-  saveWork();
-  expect(await screen.findByText(/cần gắn ít nhất một ảnh bằng chứng riêng/)).toBeTruthy();
   expect(screen.queryByRole('button', { name: /Ảnh không có giấy tờ cá nhân/ })).toBeNull();
   expect(screen.getByText('Ảnh minh chứng:')).toBeTruthy();
   const camera = screen.getByRole('button', { name: 'Chụp ảnh' });
@@ -2048,7 +2047,7 @@ it('shows existing photos only inside their assigned room check and X unlinks th
   saveWork();
   await waitFor(() => expect(saves).toHaveLength(1));
   expect(saves[0].roomChecks).toEqual([
-    { code: 'doors_windows_locks', status: 'Passed', notes: null, evidenceIds: [] },
+    { code: 'doors_windows_locks', status: 'Passed', notes: 'Cửa kẹt', evidenceIds: [] },
   ]);
   expect(saves[0].evidenceIds).not.toContain(photoId);
 });

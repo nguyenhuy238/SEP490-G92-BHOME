@@ -395,9 +395,7 @@ internal sealed class ContractHandoverRepository(BHomePersistenceContext db, IOp
             i.ActualQuantity is null || i.EvidenceIds is null ||
             i.Condition == "Good" && i.ActualQuantity != i.ExpectedQuantity ||
             i.Condition == "Missing" && i.ActualQuantity >= i.ExpectedQuantity ||
-            i.ActualQuantity > i.ExpectedQuantity ||
-            (i.Condition is "Missing" or "Damaged") &&
-                (i.EvidenceIds.Length == 0 || string.IsNullOrWhiteSpace(i.Notes)));
+            i.ActualQuantity > i.ExpectedQuantity);
 
     public async Task<HandoverCompletedInventory?> CompletedInventoryAsync(Guid contractId, CancellationToken t)
     {

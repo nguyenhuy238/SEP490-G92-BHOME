@@ -39,8 +39,8 @@ public sealed class HandoverChecklistTests
         Assert.Throws<ContractException>(() => HandoverChecklist.Inspect([Source, Source], [Valid, Valid], true));
     }
     [Fact]
-    public void ProblemRequiresItsOwnEvidence() => Assert.Equal("asset_group_evidence_required",
-        Assert.Throws<ContractException>(() => HandoverChecklist.Inspect([Source], [Valid with { EvidenceIds = [] }], true)).Code);
+    public void ProblemCanBeRecordedWithoutOptionalEvidence() =>
+        Assert.Empty(Assert.Single(HandoverChecklist.Inspect([Source], [Valid with { EvidenceIds = [] }], true)).EvidenceIds ?? []);
     [Fact]
     public void ProblemEvidenceCannotReuseTheOverallRoomPhotograph()
     {
@@ -49,8 +49,8 @@ public sealed class HandoverChecklistTests
         HandoverChecklist.RequireSeparateEvidence([Guid.NewGuid()], [asset]);
     }
     [Fact]
-    public void WithheldQuantityRequiresReason() => Assert.Equal("withheld_asset_reason_required",
-        Assert.Throws<ContractException>(() => HandoverChecklist.Inspect([Source], [Valid with { HandedOverQuantity = 2, Notes = "" }], true)).Code);
+    public void WithheldQuantityAllowsOptionalNotes() => Assert.Equal(2,
+        Assert.Single(HandoverChecklist.Inspect([Source], [Valid with { HandedOverQuantity = 2, Notes = "" }], true)).HandedOverQuantity);
     [Fact]
     public void LegacyConditionHasNoInventedQuantities()
     {

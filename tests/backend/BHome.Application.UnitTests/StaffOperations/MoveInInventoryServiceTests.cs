@@ -132,25 +132,21 @@ public sealed class MoveInInventoryServiceTests
     [Theory]
     [InlineData("Missing", 1)]
     [InlineData("Damaged", 2)]
-    public async Task MissingOrDamagedStillRequirePhotosAndReason(string condition, int actualQuantity)
+    public async Task MissingOrDamagedAcceptOptionalPhotosAndNotes(string condition, int actualQuantity)
     {
         var r = new Rig();
         var item = r.Items.Single();
-        var withoutPhoto = await Assert.ThrowsAsync<OperationalTaskException>(() =>
-            r.Service.UpdateInventoryItemAsync(r.Task.Id, item.Id,
-                new(r.Task.Version, actualQuantity, condition, "Hiện trạng bất thường", [], null),
-                Guid.NewGuid(), default));
-        Assert.Equal("invalid_move_in_inventory_item", withoutPhoto.Code);
-
-        var withoutReason = await Assert.ThrowsAsync<OperationalTaskException>(() =>
-            r.Service.UpdateInventoryItemAsync(r.Task.Id, item.Id,
-                new(r.Task.Version, actualQuantity, condition, "", [r.Evidence()], null),
-                Guid.NewGuid(), default));
-        Assert.Equal("invalid_move_in_inventory_item", withoutReason.Code);
+        var saved = await r.Service.UpdateInventoryItemAsync(r.Task.Id, item.Id,
+            new(r.Task.Version, actualQuantity, condition, null, [], null), Guid.NewGuid(), default);
+        Assert.Equal(condition, Assert.Single(saved.Items).Condition);
+        Assert.Empty(Assert.Single(saved.Items).EvidenceIds!);
+        var completed = await r.Service.CompleteMoveInInventoryAsync(r.Task.Id,
+            new(r.Task.Version), Guid.NewGuid(), default);
+        Assert.Equal("Completed", completed.Status);
     }
 
     [Fact]
-    public async Task CannotCompleteUncheckedOrIssueWithoutDescriptionAndPhoto()
+    public async Task CannotCompleteUncheckedButIssueCanHaveOptionalDescriptionAndPhoto()
     {
         var r = new Rig();
         var incomplete = await Assert.ThrowsAsync<OperationalTaskException>(() =>
@@ -160,10 +156,9 @@ public sealed class MoveInInventoryServiceTests
         var snapshot = JsonSerializer.Deserialize<MoveInInventorySnapshot>(r.Task.MoveInInventoryJson)!;
         snapshot.Items[0] = snapshot.Items[0] with { ActualQuantity = 1, Condition = "Missing", Notes = "Thiếu giường", EvidenceIds = [] };
         r.Task.MoveInInventoryJson = JsonSerializer.Serialize(snapshot);
-        var missing = await Assert.ThrowsAsync<OperationalTaskException>(() =>
-            r.Service.CompleteMoveInInventoryAsync(r.Task.Id, new(r.Task.Version), Guid.NewGuid(), default));
-        Assert.Equal("move_in_inventory_checklist_incomplete", missing.Code);
-        Assert.Equal(MeterTaskStatus.InProgress, r.Task.Status);
+        var completed = await r.Service.CompleteMoveInInventoryAsync(r.Task.Id,
+            new(r.Task.Version), Guid.NewGuid(), default);
+        Assert.Equal("Completed", completed.Status);
     }
 
     [Theory]
