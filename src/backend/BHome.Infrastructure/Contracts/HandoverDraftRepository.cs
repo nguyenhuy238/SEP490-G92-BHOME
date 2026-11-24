@@ -21,16 +21,19 @@ internal sealed class HandoverDraftRepository(BHomePersistenceContext db) : IHan
             SELECT COUNT(*)::integer AS "Value"
             FROM contracts c JOIN rooms r ON r.id = c.room_id
             WHERE c.contract_type = 'MAIN'
-              AND c.handover->'preparation'->>'status' IS NOT NULL
+              AND (c.handover->'preparation'->>'status' IS NOT NULL OR EXISTS (
+                  SELECT 1 FROM operational_tasks task
+                  WHERE task.contract_id = c.id AND task.task_type = 'GENERAL'
+                    AND task.title = 'Bàn giao vào phòng ' || r.room_number))
               AND ({locationId}::uuid IS NULL OR r.location_id = {locationId}::uuid)
-              AND ({status}::text IS NULL OR c.handover->'preparation'->>'status' = {status}::text)
+              AND ({status}::text IS NULL OR COALESCE(c.handover->'preparation'->>'status','Draft') = {status}::text)
               AND ({roomSearch}::text = '' OR r.room_number ILIKE '%' || {roomSearch}::text || '%')
             """).SingleAsync(token);
         var offset = (page - 1) * pageSize;
         var items = await db.Database.SqlQuery<HandoverInboxItem>($"""
             SELECT c.id AS "ContractId", r.location_id AS "LocationId",
                    l.name AS "LocationName", r.room_number AS "RoomNumber",
-                   c.handover->'preparation'->>'status' AS "Status",
+                   COALESCE(c.handover->'preparation'->>'status','Draft') AS "Status",
                    c.start_date AS "StartDate",
                    (c.handover->'preparation'->>'staffSubmittedAt')::timestamptz AS "StaffSubmittedAt",
                    (c.handover->'preparation'->>'ownerReadyAt')::timestamptz AS "OwnerReadyAt",
@@ -38,11 +41,14 @@ internal sealed class HandoverDraftRepository(BHomePersistenceContext db) : IHan
             FROM contracts c JOIN rooms r ON r.id = c.room_id
                              JOIN locations l ON l.id = r.location_id
             WHERE c.contract_type = 'MAIN'
-              AND c.handover->'preparation'->>'status' IS NOT NULL
+              AND (c.handover->'preparation'->>'status' IS NOT NULL OR EXISTS (
+                  SELECT 1 FROM operational_tasks task
+                  WHERE task.contract_id = c.id AND task.task_type = 'GENERAL'
+                    AND task.title = 'Bàn giao vào phòng ' || r.room_number))
               AND ({locationId}::uuid IS NULL OR r.location_id = {locationId}::uuid)
-              AND ({status}::text IS NULL OR c.handover->'preparation'->>'status' = {status}::text)
+              AND ({status}::text IS NULL OR COALESCE(c.handover->'preparation'->>'status','Draft') = {status}::text)
               AND ({roomSearch}::text = '' OR r.room_number ILIKE '%' || {roomSearch}::text || '%')
-            ORDER BY CASE c.handover->'preparation'->>'status'
+            ORDER BY CASE COALESCE(c.handover->'preparation'->>'status','Draft')
                        WHEN 'PendingOwnerReview' THEN 0
                        WHEN 'ChangesRequested' THEN 1
                        WHEN 'ReinspectionRequested' THEN 2

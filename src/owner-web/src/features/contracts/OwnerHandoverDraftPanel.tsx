@@ -283,7 +283,7 @@ function StaffReviewSummary({ draft }: { draft: OwnerHandoverDraft }) {
           <Chip
             size="small"
             variant="outlined"
-            label={`Điện ${displayMeterInteger(draft.electricity?.value)} · Nước ${displayMeterInteger(draft.water?.value)}`}
+            label={`Điện ${displayMeterInteger(draft.electricity?.value)} kWh · Nước ${displayMeterInteger(draft.water?.value)} m³`}
           />
         </Stack>
         {draft.staffPreparedAt && (
@@ -486,7 +486,10 @@ function StaffWorkModules({
             >
               <Box sx={{ minWidth: 150, flex: '1 1 180px' }}>
                 <Typography variant="body2" sx={{ fontWeight: 650 }}>
-                  {label}: {reading ? displayMeterInteger(reading.value) : 'Chưa xác nhận'}
+                  {label}:{' '}
+                  {reading
+                    ? `${displayMeterInteger(reading.value)} ${kind === 'electricity' ? 'kWh' : 'm³'}`
+                    : 'Chưa xác nhận'}
                 </Typography>
                 <Typography variant="caption" color="text.secondary">
                   {reading
@@ -1219,11 +1222,12 @@ function DraftDocument({ draft, api }: { draft: OwnerHandoverDraft; api: Contrac
           <Typography variant="body2">
             Điện:{' '}
             {draft.electricity
-              ? displayMeterInteger(draft.electricity.value)
+              ? `${displayMeterInteger(draft.electricity.value)} kWh`
               : 'Chờ Staff xác nhận'}
           </Typography>
           <Typography variant="body2">
-            Nước: {draft.water ? displayMeterInteger(draft.water.value) : 'Chờ Staff xác nhận'}
+            Nước:{' '}
+            {draft.water ? `${displayMeterInteger(draft.water.value)} m³` : 'Chờ Staff xác nhận'}
           </Typography>
         </Stack>
         <Divider />
@@ -1521,8 +1525,7 @@ export function OwnerHandoverDraftPanel({
     draft.status === 'PendingOwnerReview' &&
     !missing.length &&
     !pending.length &&
-    !readyBlockedByContract &&
-    allPassed;
+    !readyBlockedByContract;
   const staleInventoryMissing =
     compact &&
     inventoryData?.status === 'Completed' &&
@@ -1943,8 +1946,8 @@ export function OwnerHandoverDraftPanel({
                     ))}
                   </Box>
                 </Alert>
-              ) : !missing.length && allPassed ? (
-                <Alert severity="success">Đã hoàn thành kiểm kê</Alert>
+              ) : !missing.length ? (
+                <Alert severity="success">Đã kiểm tra đủ nội dung bàn giao</Alert>
               ) : null}
               {staleInventoryMissing && (
                 <Alert severity="warning">
@@ -1952,18 +1955,16 @@ export function OwnerHandoverDraftPanel({
                   bản chưa hợp lệ. Chưa thể ký cho đến khi máy chủ đồng bộ và xác nhận đủ điều kiện.
                 </Alert>
               )}
-              {draft.status === 'PendingOwnerReview' &&
-                allPassed &&
-                draft.ownerInkSigningSupported !== true && (
-                  <Alert severity="warning">
-                    Máy chủ đang sử dụng phiên bản chưa hỗ trợ ký tay trực tiếp trên biên bản. Cần
-                    cập nhật Backend trước khi Owner ký để chữ ký thực sự được đưa vào PDF.
-                  </Alert>
-                )}
-              {!allPassed && draft.status === 'PendingOwnerReview' && (
+              {draft.status === 'PendingOwnerReview' && draft.ownerInkSigningSupported !== true && (
                 <Alert severity="warning">
-                  Chỉ có thể ký và duyệt khi tất cả hạng mục phòng đều Đạt, tài sản đạt theo phiếu
-                  kiểm kê Staff, chìa khóa và chỉ số điện/nước đã xác nhận.
+                  Máy chủ đang sử dụng phiên bản chưa hỗ trợ ký tay trực tiếp trên biên bản. Cần cập
+                  nhật Backend trước khi Owner ký để chữ ký thực sự được đưa vào PDF.
+                </Alert>
+              )}
+              {!allPassed && draft.status === 'PendingOwnerReview' && (
+                <Alert severity="info">
+                  Một số hạng mục có vấn đề. Owner có thể ký sau khi kiểm tra và ghi nhận đúng hiện
+                  trạng; Tenant sẽ xem và quyết định chấp nhận khi ký.
                 </Alert>
               )}
               {readyBlockedByContract && draft.status !== 'Confirmed' && (
@@ -2011,9 +2012,9 @@ export function OwnerHandoverDraftPanel({
               {draft.status === 'PendingOwnerReview' && (
                 <>
                   {!compact && hasAssetException && (
-                    <Alert severity="warning">
-                      Có hạng mục chưa đạt. Owner cần yêu cầu Staff kiểm tra lại và xác minh kết quả
-                      trước khi ký; không thể chấp thuận ngoại lệ bằng lý do hoặc phương án xử lý.
+                    <Alert severity="info">
+                      Hạng mục có vấn đề sẽ được giữ nguyên trong biên bản cho Tenant xem và xác
+                      nhận.
                     </Alert>
                   )}
                   <Stack spacing={0.75}>
@@ -2034,7 +2035,7 @@ export function OwnerHandoverDraftPanel({
                     />
                   </Stack>
                   <FormControlLabel
-                    label="Tôi đã kiểm tra nội dung PDF, bằng chứng và đồng ý ký biên bản bàn giao"
+                    label="Tôi đã kiểm tra PDF và đồng ý ký với hiện trạng ghi nhận, kể cả các mục có vấn đề"
                     control={
                       <Checkbox
                         checked={reviewedVersion === draft.version}

@@ -109,6 +109,21 @@ it('loads move-in handover list immediately, opens a compact right Drawer, and k
   expect(screen.queryByText('Biên bản chi tiết contract-1 dạng gọn')).not.toBeInTheDocument();
 });
 
+it('shows a handover task to Owner before Staff has completed any draft', async () => {
+  mocks.transport.mockResolvedValue({
+    items: [{ ...entries[0], status: 'Draft', staffSubmittedAt: null }],
+    page: 1,
+    pageSize: 20,
+    totalCount: 1,
+  });
+  mount();
+  expect(await screen.findByText('1 biên bản phù hợp')).toBeInTheDocument();
+  expect(screen.getAllByText('Đang kiểm tra bàn giao').length).toBeGreaterThan(0);
+  expect(screen.getAllByText('Chờ Staff hoàn thành').length).toBeGreaterThan(0);
+  fireEvent.click(screen.getAllByRole('button', { name: 'Xem chi tiết' })[0]);
+  expect(await screen.findByText('Biên bản chi tiết contract-1 dạng gọn')).toBeInTheDocument();
+});
+
 it('separates Bàn giao and Trả phòng without navigating away from /handovers', async () => {
   mount();
   await screen.findByText('2 biên bản phù hợp');

@@ -62,7 +62,7 @@ const handoverStates = [
   { value: 'ReinspectionRequested', label: 'Chờ Staff kiểm tra lại' },
   { value: 'Ready', label: 'Chờ Tenant ký' },
   { value: 'Confirmed', label: 'Hoàn tất' },
-  { value: 'Draft', label: 'Đang lập biên bản' },
+  { value: 'Draft', label: 'Đang kiểm tra bàn giao' },
   { value: 'ChangesRequested', label: 'Tenant đề nghị chỉnh sửa' },
 ] as const;
 
@@ -79,7 +79,7 @@ function handoverActivity(item: HandoverInboxItem) {
       : item.staffSubmittedAt
         ? 'Staff gửi'
         : '';
-  return date ? `${label} · ${formatInstant(date)}` : 'Chưa ghi nhận mốc xác nhận';
+  return date ? `${label} · ${formatInstant(date)}` : 'Chờ Staff hoàn thành';
 }
 
 export default function HandoversPage() {
@@ -247,18 +247,11 @@ function LiveHandoversPage() {
               <Button onClick={() => void locations.refetch()}>Thử lại</Button>
             </Alert>
           )}
-          <Stack
-            direction={{ xs: 'column', sm: 'row' }}
-            spacing={0.5}
-            sx={{ justifyContent: 'space-between' }}
-          >
+          <Stack direction={{ xs: 'column', sm: 'row' }} spacing={0.5}>
             <Typography variant="body2" color="text.secondary">
               {inbox.data
                 ? `${inbox.data.totalCount} biên bản phù hợp`
                 : 'Danh sách biên bản bàn giao'}
-            </Typography>
-            <Typography variant="caption" color="text.secondary">
-              Danh sách từ hệ thống · {inbox.data?.items.length ?? 0} biên bản trên trang này
             </Typography>
           </Stack>
           {inbox.isFetching && <LinearProgress aria-label="Đang tải danh sách biên bản" />}

@@ -30,7 +30,8 @@ public sealed partial class ContractService(IContractRepository repository, ICur
     IHandoverDraftRepository? handoverDrafts = null, IHandoverDraftPdfRenderer? handoverDraftPdf = null,
     IInternalAcceptanceRenderer? acceptanceRenderer = null,
     IHandoverSignatureInkRenderer? handoverInkRenderer = null,
-    ISettlementReceivablesRepository? settlementRecords = null) : IAdministrativeContractReadiness
+    ISettlementReceivablesRepository? settlementRecords = null,
+    IMainDraftData? handoverPartyData = null) : IAdministrativeContractReadiness
 {
     private Guid Actor => user.UserId is { } id && id != Guid.Empty ? id : throw new ContractException(401, "authentication_required");
     private DateOnly Today => DateOnly.FromDateTime(TimeZoneInfo.ConvertTimeBySystemTimeZoneId(clock.GetUtcNow(), "Asia/Ho_Chi_Minh").DateTime);

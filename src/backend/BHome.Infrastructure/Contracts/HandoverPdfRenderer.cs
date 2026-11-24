@@ -75,12 +75,8 @@ internal sealed class HandoverPdfRenderer : IHandoverDocumentRenderer, IHandover
 
     private static string StatusAndNotes(string status, string? reason)
     {
-        // A passed inspection is self-contained in the issued document. Preserve
-        // Legacy signed snapshots can contain notes from a prior failed check.
-        // Do not print them beside an item whose final status is passed.
-        // Real deficiencies must still show their reason verbatim.
-        if (status is "Đạt" or "Đã kiểm kê") return "Trạng thái: " + status;
-        var detailLabel = status is "Cần xử lý" or "Không áp dụng" ? "Lý do" : "Ghi chú";
+        // Preserve optional observations for both passing and problematic items.
+        var detailLabel = status is "Cần xử lý" or "Không có trong phòng" ? "Lý do / ghi chú" : "Ghi chú";
         return "Trạng thái: " + status + (string.IsNullOrWhiteSpace(reason)
             ? "" : "\n" + detailLabel + ": " + reason.Trim());
     }
@@ -175,8 +171,8 @@ internal sealed class HandoverPdfRenderer : IHandoverDocumentRenderer, IHandover
                 doc.Add(new Paragraph("BẢN NHÁP - CHƯA KÝ")
                     .SetTextAlignment(TextAlignment.CENTER).SetFontSize(9).SetFontColor(Subtle));
             Section(doc, "1. THÔNG TIN CÁC BÊN VÀ PHÒNG BÀN GIAO");
-            Line(doc, "Bên giao", "Chủ nhà (theo hợp đồng thuê phòng nêu trên)");
-            Line(doc, "Bên nhận", "Người thuê (theo hợp đồng thuê phòng nêu trên)");
+            Line(doc, "Bên giao (Chủ nhà)", r.OwnerName ?? "Theo hợp đồng thuê phòng");
+            Line(doc, "Bên nhận (Người thuê)", r.TenantName ?? "Theo hợp đồng thuê phòng");
             Line(doc, "Cơ sở", r.LocationName);
             Line(doc, "Phòng", r.RoomNumber);
             Line(doc, "Địa chỉ", r.LocationAddress);
@@ -406,7 +402,7 @@ internal sealed class HandoverPdfRenderer : IHandoverDocumentRenderer, IHandover
     {
         "Passed" => "Đạt",
         "Issue" => "Cần xử lý",
-        "NotApplicable" => "Không áp dụng",
+        "NotApplicable" => "Không có trong phòng",
         _ => status
     };
 

@@ -690,7 +690,7 @@ export function LiveAutomationPage() {
     <>
       <PageHeader
         title="Cấu hình lịch & chạy thử hóa đơn"
-        subtitle="Lưu lịch áp dụng từ kỳ bạn chọn, sau đó chạy thử từng nghiệp vụ thủ công theo phòng và kỳ hóa đơn."
+        subtitle="Cài lịch cho cơ sở và kiểm tra hóa đơn theo tháng."
         actions={
           <Button
             component={Link}
@@ -735,8 +735,8 @@ export function LiveAutomationPage() {
         {(!location || !/^\d{4}-\d{2}$/.test(period)) && !locations.error && (
           <Alert severity="info">
             {!location
-              ? 'Chọn cơ sở để cấu hình lịch. Kỳ kiểm thử dùng riêng cho các thao tác thủ công.'
-              : 'Chọn kỳ kiểm thử để thao tác thủ công theo phòng; kỳ này không làm thay đổi thời điểm áp dụng cấu hình.'}
+              ? 'Chọn cơ sở để xem và sửa lịch.'
+              : 'Chọn tháng nếu muốn chạy thử thủ công.'}
           </Alert>
         )}
         {location && /^\d{4}-\d{2}$/.test(period) && (
@@ -782,9 +782,6 @@ function ScheduleConfiguration({ location }: { location: string }) {
           <Box>
             <Typography component="h2" variant="h6" sx={{ fontWeight: 750 }}>
               Cấu hình lịch
-            </Typography>
-            <Typography variant="body2" color="text.secondary">
-              Lịch lưu theo kỳ hiệu lực, độc lập với kỳ chạy thử bên dưới.
             </Typography>
           </Box>
           <Button
@@ -2195,10 +2192,9 @@ function AutomationForm({
             });
         }}
       >
-        <Typography variant="body2" color="text.secondary">
-          Phiên bản đã lưu: {current?.version ?? 'Chưa có'} · Lịch thanh toán hiện tại:{' '}
-          {calendar?.version ?? 'Chưa có'}. Mọi lần lưu ở đây đều đặt cả hai cờ tự động thành tắt.
-        </Typography>
+        <Alert severity="info">
+          Lưu lịch không bật chạy tự động. Có thể chọn tháng áp dụng bên dưới.
+        </Alert>
         <Box
           sx={{
             display: 'grid',
@@ -2213,9 +2209,28 @@ function AutomationForm({
             value={effective}
             onChange={(e) => setEffective(e.target.value)}
             slotProps={{ inputLabel: { shrink: true } }}
-            helperText="Độc lập với kỳ kiểm thử bên dưới"
           />
-          <TextField disabled value="Tắt — chạy thủ công từng bước" label="Trạng thái tự động" />
+          <Stack direction="row" spacing={1} sx={{ alignItems: 'center', flexWrap: 'wrap' }}>
+            <Button
+              size="small"
+              variant="outlined"
+              onClick={() => setEffective(businessToday().slice(0, 7))}
+            >
+              Tháng này
+            </Button>
+            <Button
+              size="small"
+              variant="outlined"
+              onClick={() => {
+                const [year, month] = businessToday().slice(0, 7).split('-').map(Number);
+                setEffective(
+                  `${month === 12 ? year + 1 : year}-${String((month % 12) + 1).padStart(2, '0')}`,
+                );
+              }}
+            >
+              Tháng sau
+            </Button>
+          </Stack>
           <TextField
             required
             type="number"
@@ -2268,11 +2283,6 @@ function AutomationForm({
             <Box>
               <Typography variant="subtitle2" sx={{ fontWeight: 750 }}>
                 Quy tắc tính tiền cho cơ sở
-              </Typography>
-              <Typography variant="body2" color="text.secondary">
-                {calendar
-                  ? 'Có thể chỉnh sửa cách tính tiền ngay tại đây. Thay đổi chỉ áp dụng cho lịch mới, không sửa hóa đơn đã phát hành.'
-                  : 'Chọn quy tắc và hạn thanh toán tại đây; hệ thống sẽ tạo lịch nền cùng lịch giao việc trong một lần lưu. Giá thuê lấy theo hợp đồng.'}
               </Typography>
             </Box>
             <Box
@@ -2384,11 +2394,6 @@ function AutomationForm({
             </Typography>
           )}
         </Box>
-        {!calendar && (
-          <Alert severity="info">
-            Chưa có lịch nền. Lần lưu đầu tiên sẽ tạo cả quy tắc tính tiền và lịch xử lý tại đây.
-          </Alert>
-        )}
         {!valid && (
           <Typography variant="caption" color="error">
             Kiểm tra kỳ, các ngày 1–31 và thứ tự giao việc/hạn ghi số/nháp/phát hành/hạn thanh toán.
