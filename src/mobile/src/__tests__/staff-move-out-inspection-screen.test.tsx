@@ -156,6 +156,12 @@ vi.mock('expo-file-system', () => ({
   File: class {},
   Paths: { cache: '/private-move-out-cache' },
 }));
+// The inspection exercises authenticated preview bytes, not the native share
+// sheet. Expo Sharing must not initialize an unavailable native module in jsdom.
+vi.mock('expo-sharing', () => ({
+  isAvailableAsync: vi.fn(async () => false),
+  shareAsync: vi.fn(),
+}));
 vi.mock('../theme/theme', () => ({
   colors: {
     blue: '#236abc',

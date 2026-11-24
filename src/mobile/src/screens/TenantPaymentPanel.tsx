@@ -1,4 +1,4 @@
-import React, { useCallback, useState } from 'react';
+import React, { useCallback, useEffect, useState } from 'react';
 import { Image, StyleSheet, View } from 'react-native';
 import { Button, Icon, IconButton, Text, TouchableRipple } from 'react-native-paper';
 import * as Clipboard from 'expo-clipboard';
@@ -134,13 +134,28 @@ export function TenantPaymentPanel({ invoiceId }: { invoiceId: string }) {
     !unregisteredDemoMemo &&
     ['Available', 'InstructionsOnly'].includes(transfer.availability) &&
     transfer.accountNumber;
+  // Check an open payment screen periodically, not all invoice list cards.
+  // Payment status is always authoritative from backend reconciliation/webhook.
+  useEffect(() => {
+    if (!usable || !transfer?.qrImageDataUri) return;
+    const interval = setInterval(reloadPayment, 8000);
+    return () => clearInterval(interval);
+  }, [usable, transfer?.qrImageDataUri, reloadPayment]);
   return (
     <View style={invoiceUi.card}>
+      <Text style={invoiceUi.heading}>Thanh toán hóa đơn</Text>
       <InvoiceFeedback {...payment} />
       {state && (
-        <Pill tone={state.paymentStatus === 'Paid' ? 'green' : 'blue'}>
-          {tenantPaymentLabel(state)}
-        </Pill>
+        <>
+          <Pill tone={state.paymentStatus === 'Paid' ? 'green' : 'blue'}>
+            {tenantPaymentLabel(state)}
+          </Pill>
+          <Text style={invoiceUi.secondary}>Số còn phải thanh toán</Text>
+          <Text style={invoiceUi.hero}>{formatContractMoney(state.outstandingAmount)}</Text>
+          <Text style={invoiceUi.secondary}>
+            Đã thanh toán: {formatContractMoney(state.paidAmount)}
+          </Text>
+        </>
       )}
       {state && !canRequestTransfer && (
         <Text style={invoiceUi.secondary}>

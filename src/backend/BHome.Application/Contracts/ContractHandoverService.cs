@@ -73,7 +73,7 @@ public sealed partial class ContractService
             {
                 using var image = new MemoryStream();
                 await storage.CopyToAsync(key, image, t);
-                if (FileHash(image.ToArray()) != hash)
+                if (FileHash(image) != hash)
                     throw ContractException.Conflict("handover_evidence_integrity_failed");
             });
         }
@@ -272,7 +272,7 @@ public sealed partial class ContractService
             current.Date != recorded.Date || current.UtilityType != recorded.UtilityType)
             throw ContractException.Conflict("handover_evidence_integrity_failed");
         using var buffer = new MemoryStream(); await storage.CopyToAsync(current.EvidenceObjectKey, buffer, t);
-        if (FileHash(buffer.ToArray()) != recorded.EvidenceHash) throw ContractException.Conflict("handover_evidence_integrity_failed");
+        if (FileHash(buffer) != recorded.EvidenceHash) throw ContractException.Conflict("handover_evidence_integrity_failed");
         buffer.Position = 0; await buffer.CopyToAsync(output, t);
     }
 }

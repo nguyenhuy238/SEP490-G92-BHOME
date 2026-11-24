@@ -6,12 +6,14 @@ using BHome.Application.IdentityAccess;
 using BHome.Domain.Billing;
 using BHome.Domain.IdentityAccess;
 using BHome.Domain.StaffOperations;
+using BHome.Application.Contracts;
 
 namespace BHome.Application.StaffOperations;
 
 public sealed partial class OperationalTaskService(IOperationalTaskRepository repository, ICurrentUser user,
     PermissionAccess permissions, ITaskEvidenceFiles files, TaskEvidenceLimits limits, TimeProvider clock,
-    BHome.Application.PropertyManagement.ISetupWorkspaceStore? inspectionRecords = null)
+    BHome.Application.PropertyManagement.ISetupWorkspaceStore? inspectionRecords = null,
+    IContractHandoverRepository? handovers = null)
 {
     private Guid Actor => user.UserId is { } id && id != Guid.Empty ? id : throw new OperationalTaskException(401, "authentication_required");
     private DateTimeOffset Now => clock.GetUtcNow();
@@ -21,6 +23,9 @@ public sealed partial class OperationalTaskService(IOperationalTaskRepository re
     private static bool IsMoveOutTask(OperationalTask task) =>
         task.Kind == OperationalTaskKind.AdHoc && task.ContractId is { } contract &&
         task.Id == new Guid(SHA256.HashData(Encoding.UTF8.GetBytes($"contract-move-out:{contract:N}")).AsSpan(0, 16));
+    private static bool IsMoveInTask(OperationalTask task) =>
+        task.Kind == OperationalTaskKind.AdHoc && task.ContractId is { } contract &&
+        task.Id == new Guid(SHA256.HashData(Encoding.UTF8.GetBytes($"contract-move-in:{contract:N}")).AsSpan(0, 16));
     private void Permit(string permission)
     {
         _ = Actor;
@@ -297,6 +302,23 @@ public sealed partial class OperationalTaskService(IOperationalTaskRepository re
                 return await repository.EnsureMoveOutFinalMeterTasksAsync(task, Actor, Today, t);
             }, ids => taskId, t);
     }
+    public async Task<Guid[]> EnsureMoveInInitialMeterTasksAsync(Guid taskId, Guid key, CancellationToken t)
+    {
+        Permit(Permissions.OperationalTasks.Execute);
+        var initial = await repository.FindAsync(taskId, t) ?? throw OperationalTaskException.Missing();
+        if (!IsMoveInTask(initial)) throw OperationalTaskException.Missing();
+        await AccessAsync(initial, t, true);
+        return await CommandAsync(initial.LocationId, key, "move-in-initial-meter-tasks:" + taskId,
+            new { taskId }, async () =>
+            {
+                var task = await repository.FindAsync(taskId, t) ?? throw OperationalTaskException.Missing();
+                await AccessAsync(task, t, true);
+                if (!IsMoveInTask(task) || task.Status != MeterTaskStatus.InProgress)
+                    throw OperationalTaskException.Conflict("move_in_task_not_started");
+                return await (handovers ?? throw OperationalTaskException.Conflict("handover_service_unavailable"))
+                    .EnsureMoveInMeterBaselinesAsync(task.ContractId!.Value, Actor, Now, t);
+            }, _ => taskId, t);
+    }
     private static Guid[] Recipients(TaskResponsibility? responsible) => responsible is null ? [] : [responsible.StaffUserId];
     private async Task<TaskView> MutateAsync(Guid id, int version, Guid key, string action, object input,
         Func<OperationalTask, TaskResponsibility?, Task> change, CancellationToken t)
@@ -321,6 +343,9 @@ public sealed partial class OperationalTaskService(IOperationalTaskRepository re
             var routingChanged = IsMoveOutTask(task) && action != "start"
                 ? false : await SynchronizeResponsibilityAsync(task, responsible, t);
             await change(task, responsible);
+            if (action == "start" && IsMoveInTask(task))
+                await (handovers ?? throw OperationalTaskException.Conflict("handover_service_unavailable"))
+                    .EnsureMoveInMeterBaselinesAsync(task.ContractId!.Value, Actor, Now, t);
             if (action != "assign" || routingChanged) task.Version++;
             await repository.FlushAsync(t);
             return CurrentView(task, responsible);

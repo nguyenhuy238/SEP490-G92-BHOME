@@ -109,6 +109,10 @@ public interface IPaymentRepository
     Task<PagedResult<TransferView>> TransfersAsync(PaymentQuery query, CancellationToken t);
     Task<PagedResult<ReconciliationView>> ReviewsAsync(Guid transferId, int page, int pageSize, CancellationToken t);
     Task<ReceivingBankAccount?> ReceivingAccountAsync(Guid locationId, CancellationToken t);
+    Task<ReceivingBankAccount?> OwnerReceivingAccountAsync(Guid ownerId, CancellationToken t) => Task.FromResult<ReceivingBankAccount?>(null);
+    Task<Guid?> ReceivingOwnerAsync(Guid locationId, CancellationToken t) => Task.FromResult<Guid?>(null);
+    Task SaveOwnerReceivingAccountAsync(Guid ownerId, ReceivingBankAccount account, int expectedVersion, CancellationToken t) =>
+        throw new PaymentException(503, "owner_receiving_account_unavailable");
     Task<bool> ActiveLocationAsync(Guid locationId, CancellationToken t);
     Task<IReadOnlyList<PayerChoice>> PayersAsync(Guid invoiceId, CancellationToken t);
     Task<PagedResult<DebtInvoiceView>> DebtAsync(PaymentScope scope, PaymentQuery query, CancellationToken t);

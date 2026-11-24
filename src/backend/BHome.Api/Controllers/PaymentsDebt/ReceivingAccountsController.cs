@@ -10,6 +10,8 @@ namespace BHome.Api.Controllers.PaymentsDebt;
 [ResponseCache(NoStore = true, Location = ResponseCacheLocation.None), RequestSizeLimit(8192)]
 public sealed class ReceivingAccountsController(TransferInstructionsService service) : ControllerBase
 {
+    [HttpGet("owner")] public async Task<IActionResult> Owner(CancellationToken t) => new JsonResult(await service.GetOwnerAccountAsync(t));
+    [HttpPut("owner")] public Task<ReceivingBankAccount> SaveOwner(OwnerReceivingAccountInput input, CancellationToken t) => service.SaveOwnerAccountAsync(input, t);
     [HttpGet("{locationId:guid}")] public Task<ReceivingBankAccount?> Get(Guid locationId, CancellationToken t) => service.GetAccountAsync(locationId, t);
     [HttpPut] public Task<ReceivingBankAccount> Save(ReceivingAccountInput input, CancellationToken t) => service.SaveAccountAsync(input, t);
 }

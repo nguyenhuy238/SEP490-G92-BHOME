@@ -20,12 +20,12 @@ internal sealed class PaymentCodeRegistry(BHomePersistenceContext db, IPaymentRe
     {
         if (db is not Compact24DbContext) return null;
         if (!options.Enabled) return await GetAsync(kind, id, token);
-        if (kind is not ("Invoice" or "Deposit" or "MainInitial") || id == Guid.Empty) throw new PaymentException(400, "invalid_payment_obligation");
+        if (kind is not ("Invoice" or "Deposit" or "MainInitial" or "Settlement") || id == Guid.Empty) throw new PaymentException(400, "invalid_payment_obligation");
         async Task<string?> Issue()
         {
             var account = await payments.ReceivingAccountAsync(locationId, token);
             if (account is null || !account.Enabled || account.IsDevelopmentDemo != (options.Mode == "Test") ||
-                !options.ReceivingAccounts.Any(a => a.LocationId == locationId && a.BankIdentifier == account.BankIdentifier && a.AccountNumber == account.AccountNumber)) return null;
+                !options.Matches(locationId, account)) return null;
             // Even an existing code is not payable while the receiving account no
             // longer matches SePay. Retain the registry mapping for later recovery.
             if (await GetAsync(kind, id, token) is { } existing) return existing;

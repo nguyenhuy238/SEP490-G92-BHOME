@@ -1205,6 +1205,8 @@ export function MoveInDraftHandoverPanel({
                       <ContractInitialMeterTasks
                         contract={contract}
                         integrated
+                        moveInTaskId={draft.moveInTask?.id}
+                        moveInStarted={started}
                         refreshRevision={revision}
                         onOpenTask={(id, label) => {
                           setMeterTask({ id, label });

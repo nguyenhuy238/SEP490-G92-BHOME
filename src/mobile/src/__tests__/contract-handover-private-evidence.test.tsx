@@ -183,6 +183,99 @@ it('shows a real private photo thumbnail without public URLs and cleans the brow
   expect(URL.revokeObjectURL).toHaveBeenCalledWith('blob:private-test');
 });
 
+it('shares one authenticated fetch and one object URL across duplicate mounted photo thumbnails', async () => {
+  const left = render(
+    <ContractEvidence
+      api={finalApi}
+      contractId={contractId}
+      evidenceId={evidenceId}
+      thumbnail
+      label="Bản sao một"
+    />,
+  );
+  const right = render(
+    <ContractEvidence
+      api={finalApi}
+      contractId={contractId}
+      evidenceId={evidenceId}
+      thumbnail
+      label="Bản sao hai"
+    />,
+  );
+  expect(await screen.findByRole('img', { name: 'Bản sao một' })).toBeTruthy();
+  expect(await screen.findByRole('img', { name: 'Bản sao hai' })).toBeTruthy();
+  expect(state.transport).toHaveBeenCalledExactlyOnceWith(
+    `/api/v1/contracts/${contractId}/move-out/evidence/${evidenceId}`,
+    { signal: expect.any(AbortSignal), headers: { Accept: 'application/octet-stream' } },
+    'blob',
+  );
+  expect(URL.createObjectURL).toHaveBeenCalledOnce();
+  left.unmount();
+  expect(URL.revokeObjectURL).not.toHaveBeenCalled();
+  right.unmount();
+  expect(URL.revokeObjectURL).toHaveBeenCalledExactlyOnceWith('blob:private-test');
+});
+
+it('does not reuse private images across different authenticated client instances', async () => {
+  const anotherClient = contractClient(
+    <T,>(path: string, init?: RequestInit, responseType?: 'json' | 'blob' | 'bytes') =>
+      state.transport(path, init, responseType) as Promise<T>,
+  );
+  render(
+    <ContractEvidence
+      api={finalApi}
+      contractId={contractId}
+      evidenceId={evidenceId}
+      thumbnail
+      label="Phiên A"
+    />,
+  );
+  render(
+    <ContractEvidence
+      api={anotherClient}
+      contractId={contractId}
+      evidenceId={evidenceId}
+      thumbnail
+      label="Phiên B"
+    />,
+  );
+  expect(await screen.findByRole('img', { name: 'Phiên A' })).toBeTruthy();
+  expect(await screen.findByRole('img', { name: 'Phiên B' })).toBeTruthy();
+  expect(state.transport).toHaveBeenCalledTimes(2);
+  expect(URL.createObjectURL).toHaveBeenCalledTimes(2);
+});
+
+it('limits concurrent authenticated thumbnail downloads to four', async () => {
+  const pending: Array<(blob: Blob) => void> = [];
+  state.transport.mockImplementation(
+    () =>
+      new Promise<Blob>((resolve) => {
+        pending.push(resolve);
+      }),
+  );
+  const ids = [1, 2, 3, 4, 5].map((n) => `30000000-0000-4000-8000-00000000000${n}`);
+  render(
+    <>
+      {ids.map((id) => (
+        <ContractEvidence
+          key={id}
+          api={finalApi}
+          contractId={contractId}
+          evidenceId={id}
+          thumbnail
+          label={id}
+        />
+      ))}
+    </>,
+  );
+  await waitFor(() => expect(pending).toHaveLength(4));
+  const image = () => browserBlob(new Uint8Array([137, 80, 78, 71, 13, 10, 26, 10]), 'image/png');
+  pending[0](image());
+  await waitFor(() => expect(pending).toHaveLength(5));
+  pending.slice(1).forEach((resolve) => resolve(image()));
+  for (const id of ids) expect(await screen.findByRole('img', { name: id })).toBeTruthy();
+});
+
 it('previews confirmed initial meter photo in the handover detail without offering download', async () => {
   const meter = vi
     .fn()

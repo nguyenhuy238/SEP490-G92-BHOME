@@ -10,45 +10,68 @@ import type {
 import type { Invoice, Page } from '../../../../packages/client-core/src/invoices';
 import type { InvoicePayment, DebtInvoice } from '../../../../packages/client-core/src/payments';
 import type { NotificationItem } from '../../../../packages/client-core/src/notifications';
+import { businessToday } from '../../../../packages/client-core/src/contracts';
+import { isActiveRoomRental } from '../features/tenant/tenantContractEligibility';
+import { useTenantCurrentRental } from '../features/tenant/TenantCurrentRentalContext';
+import type { TenantMeterReadingPage } from '../../../../packages/client-core/src/tenantReadings';
+import { loadTenantReadings } from '../features/workspace/tenantFinancialLoads';
 import { TenantDashboard } from './TenantDashboard';
 
 // Presentation reads only: reuse the same Tenant endpoints as the existing detail screens.
 export function TenantDashboardScreen() {
+  const verifiedRental = useTenantCurrentRental();
   const { session } = useSession();
   const allowed = session?.roles.includes('Tenant');
   const contracts = useWorkspaceQuery<ContractPage>(
-    allowed ? '/api/v1/contracts?page=1&pageSize=20&status=Active' : null,
+    allowed ? '/api/v1/contracts?page=1&pageSize=100&status=Active' : null,
     { cache: queryPolicies.contracts },
   );
-  const month = new Date()
-    .toLocaleDateString('en-CA', { timeZone: 'Asia/Ho_Chi_Minh' })
-    .slice(0, 7);
+  const month = businessToday().slice(0, 7);
+  const currentContract = verifiedRental ?? contracts.data?.items.find(isActiveRoomRental);
+  // The root gate checks every Active page. A valid room on page 2+ must not
+  // disappear from Home merely because this screen's first 100 rows omit it.
+  const visibleContracts = currentContract
+    ? [
+        currentContract,
+        ...(contracts.data?.items.filter((item) => item.id !== currentContract.id) ?? []),
+      ]
+    : contracts.data?.items;
+  const roomId = currentContract?.roomId;
+  // A completed move-out must not fall back to unscoped finance endpoints.
+  // Global navigation restricts this state too; this protects direct mounts.
+  const contractScopeReady = allowed && !!roomId && !contracts.error;
   const debts = useWorkspaceQuery<Page<DebtInvoice>>(
-    allowed ? '/api/v1/debts?page=1&pageSize=1' : null,
+    contractScopeReady ? '/api/v1/debts?page=1&pageSize=1' : null,
     { cache: queryPolicies.debts },
   );
   const debt = debts.data?.items[0];
   const invoices = useWorkspaceQuery<Page<Invoice>>(
-    allowed && !debts.loading && !debt ? '/api/v1/invoices?page=1&pageSize=20' : null,
+    contractScopeReady
+      ? `/api/v1/invoices?page=1&pageSize=20&billingPeriod=${month}-01&roomId=${encodeURIComponent(roomId)}`
+      : null,
     { cache: queryPolicies.invoices },
   );
-  const debtInvoice = useWorkspaceQuery<Invoice>(
-    allowed && debt ? `/api/v1/invoices/${encodeURIComponent(debt.invoiceId)}` : null,
-    { cache: queryPolicies.invoices },
+  // Debts concern older periods, not necessarily this month's bill. Never
+  // replace the current period with the first overdue invoice in the header.
+  const invoice = invoices.data?.items.find(
+    (item) => item.billingPeriod.slice(0, 7) === month && item.roomId === roomId,
   );
-  const invoice = debt
-    ? (debtInvoice.data ?? undefined)
-    : invoices.data?.items.find((item) => item.billingPeriod.slice(0, 7) === month);
+  const readings = useWorkspaceQuery<TenantMeterReadingPage>(
+    contractScopeReady
+      ? `/api/v1/tenant/meter-readings?page=1&pageSize=20&roomId=${encodeURIComponent(roomId)}`
+      : null,
+    { load: loadTenantReadings, cache: queryPolicies.meters },
+  );
   const notices = useWorkspaceQuery<Page<NotificationItem>>(
-    allowed ? '/api/v1/notifications?page=1&pageSize=3&unread=true' : null,
+    contractScopeReady ? '/api/v1/notifications?page=1&pageSize=3&unread=true' : null,
     { cache: queryPolicies.notifications },
   );
   const expiry = useWorkspaceQuery<ContractExpiryNotice[]>(
-    allowed ? '/api/v1/contracts/expiry-reminders' : null,
+    contractScopeReady ? '/api/v1/contracts/expiry-reminders' : null,
     { cache: queryPolicies.contracts },
   );
   const payment = useWorkspaceQuery<InvoicePayment>(
-    allowed && invoice?.status === 'Final'
+    contractScopeReady && invoice?.status === 'Final'
       ? `/api/v1/invoices/${encodeURIComponent(invoice.id)}/payment`
       : null,
     { cache: queryPolicies.payments },
@@ -56,7 +79,7 @@ export function TenantDashboardScreen() {
   const reloadContracts = contracts.reload,
     reloadInvoices = invoices.reload,
     reloadDebts = debts.reload,
-    reloadDebtInvoice = debtInvoice.reload,
+    reloadReadings = readings.reload,
     reloadNotices = notices.reload,
     reloadExpiry = expiry.reload,
     reloadPayment = payment.reload;
@@ -64,7 +87,7 @@ export function TenantDashboardScreen() {
     reloadContracts();
     reloadInvoices();
     reloadDebts();
-    reloadDebtInvoice();
+    reloadReadings();
     reloadNotices();
     reloadExpiry();
     reloadPayment();
@@ -72,24 +95,27 @@ export function TenantDashboardScreen() {
     reloadContracts,
     reloadInvoices,
     reloadDebts,
-    reloadDebtInvoice,
+    reloadReadings,
     reloadNotices,
     reloadExpiry,
     reloadPayment,
   ]);
   useWorkspaceHeaderRefresh(
     reload,
-    [contracts, invoices, debts, debtInvoice, notices, expiry, payment].some(
+    [contracts, invoices, debts, readings, notices, expiry, payment].some(
       (query) => query.fetching,
     ),
   );
   return (
     <TenantDashboard
-      contracts={contracts.data?.items}
+      contracts={visibleContracts}
+      month={month}
       invoice={invoice}
+      meterReadings={readings.data?.items}
+      meterState={readings}
       payment={payment.data ?? undefined}
       contractState={contracts}
-      invoiceState={debt ? debtInvoice : invoices}
+      invoiceState={invoices}
       paymentState={payment}
       debt={debt}
       notices={notices.data?.items}

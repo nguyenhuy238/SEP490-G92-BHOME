@@ -20,6 +20,7 @@ import { InvoiceDetailRow, InvoiceMoneyRow, invoiceUi } from '../components/Invo
 import { positiveAmount, tenantPaymentLabel } from '../features/tenant/paymentPresentation';
 import type { InvoicePayment } from '../../../../packages/client-core/src/payments';
 import { colors } from '../theme/theme';
+import { TenantMeterReadingEvidence } from '../components/TenantMeterReadingEvidence';
 
 export function TenantInvoiceSummary({
   invoice,
@@ -44,9 +45,9 @@ export function TenantInvoiceSummary({
   const canPay = state?.paymentStatus === 'Unpaid' && positiveAmount(state.outstandingAmount);
   return (
     <View style={invoiceUi.card}>
-      <Text style={invoiceUi.heading}>Phòng {invoice.roomNumber}</Text>
+      <Text style={invoiceUi.heading}>Hóa đơn tháng {period}</Text>
       <Text style={invoiceUi.secondary}>
-        Tháng {period} · {invoice.locationName}
+        Phòng {invoice.roomNumber} · {invoice.locationName}
       </Text>
       <View style={invoiceUi.row}>
         <Pill tone="neutral">{invoice.status === 'Final' ? 'Đã phát hành' : 'Bản nháp'}</Pill>
@@ -68,6 +69,16 @@ export function TenantInvoiceSummary({
           {formatContractMoney(state?.outstandingAmount ?? invoice.total)}
         </Text>
       </View>
+      {state && (
+        <View style={invoiceUi.row}>
+          <Text style={invoiceUi.secondary}>
+            Đã thanh toán: {formatContractMoney(state.paidAmount)}
+          </Text>
+          <Text style={invoiceUi.secondary}>
+            Tổng phải thu: {formatContractMoney(state.payableAmount)}
+          </Text>
+        </View>
+      )}
       <Text style={invoiceUi.secondary}>
         Hạn thanh toán: {displayContractDate(state?.dueDate ?? invoice.dueDate)}
       </Text>
@@ -81,6 +92,11 @@ export function TenantInvoiceSummary({
         <Button mode="contained" icon="qrcode" contentStyle={{ minHeight: 44 }} onPress={onPay}>
           Xem mã QR thanh toán
         </Button>
+      )}
+      {state?.paymentStatus === 'Paid' && (
+        <Text style={invoiceUi.secondary}>
+          Đã thanh toán đủ theo hệ thống. Không cần chuyển khoản thêm.
+        </Text>
       )}
       {invoice.status === 'Draft' && (
         <Text style={invoiceUi.secondary}>
@@ -115,6 +131,7 @@ const categoryLabel: Record<string, string> = {
 export function InvoiceChargeRow({ line, first }: { line: InvoiceLine; first: boolean }) {
   const [expanded, setExpanded] = useState(false);
   const utility = line.category === 'Electricity' || line.category === 'Water';
+  const covered = utility && hasSettlementUsageCoverage(line);
   const name = line.name || categoryLabel[line.category];
   return (
     <View style={!first && invoiceUi.chargeBorder}>
@@ -136,6 +153,15 @@ export function InvoiceChargeRow({ line, first }: { line: InvoiceLine; first: bo
             <Text style={invoiceUi.title} numberOfLines={1}>
               {name}
             </Text>
+            {utility && (
+              <Text style={invoiceUi.secondary}>
+                {covered
+                  ? 'Đã tính trong quyết toán trả phòng'
+                  : line.quantity == null
+                    ? 'Chưa có số tiêu thụ'
+                    : `Đã dùng ${formatBillingDecimal(line.quantity)} ${line.category === 'Electricity' ? 'kWh' : 'm³'}`}
+              </Text>
+            )}
           </View>
           <Text style={invoiceUi.chargeAmount}>{formatContractMoney(line.amount)}</Text>
           <Icon source={expanded ? 'chevron-up' : 'chevron-right'} size={16} color={colors.muted} />
@@ -180,6 +206,9 @@ function InvoiceChargeDetails({ line }: { line: InvoiceLine }) {
                 : `${formatBillingDecimal(line.quantity)} ${unit}`
             }
           />
+          {!!line.meterReadingId && (
+            <TenantMeterReadingEvidence id={line.meterReadingId} label="Ảnh công tơ đã xác nhận" />
+          )}
         </>
       ) : line.category === 'Rent' ? (
         <InvoiceDetailRow
@@ -230,13 +259,34 @@ function InvoiceChargeDetails({ line }: { line: InvoiceLine }) {
 }
 export function TenantInvoiceCharges({ invoice }: { invoice: Invoice }) {
   const [info, setInfo] = useState(false);
+  const utilityLines = invoice.lines.filter(
+    (line) => line.category === 'Electricity' || line.category === 'Water',
+  );
+  const otherLines = invoice.lines.filter(
+    (line) => line.category !== 'Electricity' && line.category !== 'Water',
+  );
   return (
     <View style={invoiceUi.card}>
-      <Text style={invoiceUi.heading}>Các khoản thu</Text>
+      <Text style={invoiceUi.heading}>Điện, nước và các khoản phí</Text>
       <View>
-        {invoice.lines.map((line, index) => (
-          <InvoiceChargeRow key={line.id} line={line} first={index === 0} />
-        ))}
+        {!!utilityLines.length && (
+          <>
+            <Text style={invoiceUi.secondary}>Điện nước tháng này</Text>
+            {utilityLines.map((line, index) => (
+              <InvoiceChargeRow key={line.id} line={line} first={index === 0} />
+            ))}
+          </>
+        )}
+        {!!otherLines.length && (
+          <>
+            <Text style={[invoiceUi.secondary, { marginTop: utilityLines.length ? 14 : 0 }]}>
+              Tiền phòng, dịch vụ và khoản khác
+            </Text>
+            {otherLines.map((line, index) => (
+              <InvoiceChargeRow key={line.id} line={line} first={index === 0} />
+            ))}
+          </>
+        )}
         {!invoice.lines.length && <Text style={invoiceUi.secondary}>Chưa có khoản thu.</Text>}
         <View style={invoiceUi.total}>
           <Text style={[invoiceUi.title, { flex: 1 }]}>

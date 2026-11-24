@@ -9,7 +9,8 @@ using BHome.Domain.TenantContracts;
 namespace BHome.Application.PaymentsDebt.SePay;
 
 public sealed class SePayService(ISePayRepository repository, IPaymentRepository payments, SePayOptions options,
-    ContractService contracts, TimeProvider clock, IMainInitialPaymentLedger? initialPayments = null)
+    ContractService contracts, TimeProvider clock, IMainInitialPaymentLedger? initialPayments = null,
+    ISettlementChargeEvidence? settlementEvidence = null)
 {
     public async Task ReceiveAsync(SePayTransaction transaction, CancellationToken token)
     {
@@ -17,6 +18,25 @@ public sealed class SePayService(ISePayRepository repository, IPaymentRepository
         transaction.Validate(clock.GetUtcNow());
         var id = await repository.ReceiveAsync(transaction, token);
         await ReconcileAsync(id, token);
+        // A completed, signed provider event may be replayed (including after a
+        // process upgrade). Completing the physical move-out is independently
+        // idempotent and must never happen for a pending/reviewed payment.
+        var received = await repository.EventAsync(id, token);
+        if (received.Status == "Completed" && received.Reason == "verified_full_payment" &&
+            received.TransferId is not null && ResolveCode(transaction) is { } reference &&
+            await repository.ResolveAsync(reference, token) is { Kind: "Settlement" } target &&
+            await repository.SettlementAsync(target.ObligationId, token) is { } settlement)
+            await contracts.TryCompleteAfterVerifiedSettlementAsync(settlement.ContractId,
+                target.ObligationId, token);
+    }
+    public async Task<int> RecoverPreviouslyVerifiedMoveOutsAsync(CancellationToken token)
+    {
+        if (!options.Enabled) return 0;
+        var completed = 0;
+        foreach (var candidate in await repository.VerifiedMoveOutCandidatesAsync(token))
+            if (await contracts.TryCompleteAfterVerifiedSettlementAsync(candidate.ContractId,
+                candidate.ReceivableId, token)) completed++;
+        return completed;
     }
     public Task ReconcileAsync(Guid id, CancellationToken token) => repository.TransactionAsync(async () =>
     {
@@ -78,9 +98,8 @@ public sealed class SePayService(ISePayRepository repository, IPaymentRepository
         }
         if (target is null) return await Review("unknown_or_ambiguous_payment_code");
         await repository.LockTargetAsync(target, token);
-        var binding = bindings.SingleOrDefault(a => a.LocationId == target.LocationId);
         var account = await payments.ReceivingAccountAsync(target.LocationId, token);
-        if (binding is null || account is null || !account.Enabled || account.BankIdentifier != binding.BankIdentifier ||
+        if (account is null || !options.Matches(target.LocationId, account, tx.Gateway) || !account.Enabled ||
             account.AccountNumber != tx.AccountNumber || account.IsDevelopmentDemo != receipt.IsDevelopmentDemo ||
             !await payments.ActiveLocationAsync(target.LocationId, token)) return await Review("receiving_account_mismatch");
         if (target.Kind == "MainInitial")
@@ -93,6 +112,7 @@ public sealed class SePayService(ISePayRepository repository, IPaymentRepository
         }
         decimal outstanding;
         Invoice? invoice = null;
+        SePaySettlementTarget? settlement = null;
         if (target.Kind == "Invoice")
         {
             invoice = await repository.InvoiceAsync(target.ObligationId, token);
@@ -100,7 +120,22 @@ public sealed class SePayService(ISePayRepository repository, IPaymentRepository
             if (await repository.DemoInvoiceAsync(invoice.Id, token) != receipt.IsDevelopmentDemo) return await Review("sepay_environment_mismatch");
             outstanding = (await payments.FinancialsAsync(invoice.Id, token)).OutstandingAmount;
         }
-        else
+        else if (target.Kind == "Settlement")
+        {
+            settlement = await repository.SettlementAsync(target.ObligationId, token);
+            if (settlement is null || settlement.LocationId != target.LocationId ||
+                settlement.Charge.RecipientUserIds.Length == 0)
+                return await Review("settlement_receivable_not_found");
+            if (!settlement.MayAllocate) return await Review(settlement.Blocker ?? "settlement_not_payable");
+            if (settlement.Charge.IsDevelopmentDemo != receipt.IsDevelopmentDemo)
+                return await Review("sepay_environment_mismatch");
+            if (settlementEvidence is null) return await Review("settlement_evidence_unavailable");
+            try { await settlementEvidence.VerifyAsync(settlement.Charge, token); }
+            catch (ContractException e) when (e.Status is 400 or 404 or 409)
+            { return await Review(e.Code); }
+            outstanding = settlement.OutstandingAmount;
+        }
+        else if (target.Kind == "Deposit")
         {
             var contract = await payments.HoldingAsync(target.ObligationId, token);
             if (contract is null || contract.Kind is not (ContractKind.Main or ContractKind.Holding) || contract.PreviousContractId is not null ||
@@ -123,14 +158,21 @@ public sealed class SePayService(ISePayRepository repository, IPaymentRepository
                 { return await Review(error.Code); }
             }
         }
-        if (outstanding <= 0) return await Review(target.Kind == "Invoice" ? "invoice_already_settled" : "deposit_already_satisfied");
+        else
+        {
+            return await Review("invalid_payment_obligation");
+        }
+        if (outstanding <= 0) return await Review(target.Kind == "Invoice" ? "invoice_already_settled" :
+            target.Kind == "Settlement" ? "settlement_already_paid" : "deposit_already_satisfied");
         if (receipt.Amount != outstanding) return await Review("payment_amount_requires_review");
         if (await payments.ReferenceClaimedAsync(reference, token)) return await Review("bank_reference_already_credited");
         var allocation = new PaymentAllocation
         {
             TransferId = receipt.Id,
             InvoiceId = invoice?.Id,
-            TargetDepositContractId = invoice is null ? target.ObligationId : null,
+            TargetDepositContractId = invoice is null && settlement is null ? target.ObligationId : null,
+            TargetSettlementContractId = settlement?.ContractId,
+            SettlementReceivableId = settlement?.Charge.Id,
             Amount = outstanding,
             AllocatedAt = receipt.VerifiedAt
         };

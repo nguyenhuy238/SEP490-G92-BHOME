@@ -2,6 +2,7 @@ using System.Security.Cryptography;
 using System.Text;
 using BHome.Application.PaymentsDebt;
 using BHome.Application.PaymentsDebt.SePay;
+using BHome.Domain.PaymentsDebt;
 
 namespace BHome.Application.UnitTests.PaymentsDebt;
 
@@ -53,6 +54,48 @@ public sealed class SePaySecurityTests
         options.Mode = "Live";
         Assert.False(options.Valid("Staging")); Assert.True(options.Valid("Production"));
         options.Enabled = false; Assert.True(options.Valid("Production"));
+    }
+
+    [Fact]
+    public void OwnerReceivingBindingCoversAllLocationsForOneOwnerButNeverAnotherOwner()
+    {
+        var owner = Guid.NewGuid();
+        var locationA = Guid.NewGuid(); var locationB = Guid.NewGuid();
+        var options = new SePayOptions
+        {
+            Enabled = true,
+            WebhookSecret = Secret,
+            ReceivingAccounts = [new()
+            {
+                OwnerUserId = owner, BankIdentifier = "970416", Gateway = "ACB", AccountNumber = "0000001234"
+            }]
+        };
+        var bank = new ReceivingBankAccount
+        {
+            OwnerUserId = owner,
+            BankIdentifier = "970416",
+            AccountNumber = "0000001234"
+        };
+        Assert.True(options.Valid("Testing"));
+        Assert.True(options.Matches(locationA, bank));
+        Assert.True(options.Matches(locationB, bank));
+        Assert.False(options.Matches(locationA, WithOwner(Guid.NewGuid())));
+        Assert.False(options.Matches(locationA, new ReceivingBankAccount
+        {
+            OwnerUserId = owner,
+            BankIdentifier = bank.BankIdentifier,
+            AccountNumber = "0000009876"
+        }));
+        options.ReceivingAccounts.Add(new SePayReceivingAccount
+        {
+            OwnerUserId = owner,
+            BankIdentifier = "970416",
+            Gateway = "ACB",
+            AccountNumber = "0000001234"
+        });
+        Assert.False(options.Valid("Testing"));
+
+        ReceivingBankAccount WithOwner(Guid id) => new() { OwnerUserId = id, BankIdentifier = bank.BankIdentifier, AccountNumber = bank.AccountNumber };
     }
 
     [Theory]

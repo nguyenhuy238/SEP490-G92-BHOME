@@ -387,7 +387,7 @@ function selectRoom() {
   });
   fireEvent.click(screen.getByRole('button', { name: 'Tiếp tục' }));
 }
-it('creates a synthetic contract for the assigned location and exposes Staff initial-reading navigation', async () => {
+it('creates a synthetic contract for the assigned location and opens only the unified handover', async () => {
   state.request.mockResolvedValueOnce({
     contractId: 'dev-contract',
     roomId: 'dev-room',
@@ -396,7 +396,6 @@ it('creates a synthetic contract for the assigned location and exposes Staff ini
     tenantName: 'Khách thuê TEST',
     tenantEmail: 'demo@example.invalid',
     tenantPassword: 'synthetic-only',
-    initialMeterTasks: 2,
     developmentOnly: true,
   });
   render(<OnboardingScreen />);
@@ -412,8 +411,13 @@ it('creates a synthetic contract for the assigned location and exposes Staff ini
   );
   expect(screen.getByText('Tài khoản Tenant: demo@example.invalid')).toBeTruthy();
   expect(screen.getByText('Mật khẩu Tenant test: synthetic-only')).toBeTruthy();
-  fireEvent.click(screen.getByRole('button', { name: 'Mở nhiệm vụ ghi chỉ số' }));
-  expect(state.go).toHaveBeenCalledWith('meter-reading');
+  expect(screen.getByText(/Đã chuẩn bị một công việc bàn giao phòng/)).toBeTruthy();
+  expect(screen.queryByRole('button', { name: 'Mở nhiệm vụ ghi chỉ số' })).toBeNull();
+  fireEvent.click(screen.getByRole('button', { name: 'Mở nhiệm vụ bàn giao phòng' }));
+  expect(state.go).toHaveBeenCalledWith('move-in', {
+    contractId: 'dev-contract',
+    section: 'handover',
+  });
 });
 
 it('does not generate a second contract when retrying an uncertain seed response', async () => {
@@ -426,7 +430,6 @@ it('does not generate a second contract when retrying an uncertain seed response
     tenantName: 'Khách thuê TEST',
     tenantEmail: 'retry@example.invalid',
     tenantPassword: 'synthetic-only',
-    initialMeterTasks: 2,
     developmentOnly: true,
   });
   render(<OnboardingScreen />);
