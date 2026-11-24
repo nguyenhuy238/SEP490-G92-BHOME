@@ -231,7 +231,12 @@ public sealed partial class Compact24OwnerSetupTests
         Assert.Equal("InProgress", inspection.MoveInTask.InventoryStatus);
         Assert.Equal(HttpStatusCode.Conflict, (await HandoverPost(staff, contractId,
             "handover/draft/resubmit", new HandoverDraftSubmit(inspection.Version))).StatusCode);
-        var newRoomPhoto = await HandoverPhoto(staff, contractId);
+        // Reinspection belongs to the persisted Draft workflow; the legacy
+        // evidence route must remain blocked once that workflow exists.
+        using var roomPhotoUpload = new ByteArrayContent(ReviewEvidenceImage());
+        roomPhotoUpload.Headers.ContentType = new("image/png");
+        var newRoomPhoto = (await Read<ContractId>(await staff.PostAsync(
+            $"/api/v1/contracts/{contractId}/handover/draft/evidence", roomPhotoUpload))).Id;
         var updatedRoom = await Read<HandoverDraftView>(await HandoverPost(staff, contractId,
             "handover/draft", new HandoverDraftWrite(inspection.Version,
                 RoomChecks: [new HandoverRoomCheck("doors_windows_locks", "Passed",
