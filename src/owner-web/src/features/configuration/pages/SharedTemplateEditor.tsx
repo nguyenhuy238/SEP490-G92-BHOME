@@ -252,8 +252,7 @@ export function SharedTemplateEditor({
     if (!checked) {
       setItems((old) =>
         old.filter(
-          (item) =>
-            item.catalogId !== selected.id && item.catalog?.familyId !== selected.familyId,
+          (item) => item.catalogId !== selected.id && item.catalog?.familyId !== selected.familyId,
         ),
       );
       return;
@@ -261,8 +260,7 @@ export function SharedTemplateEditor({
     setItems((old) => {
       if (
         old.some(
-          (item) =>
-            item.catalogId === selected.id || item.catalog?.familyId === selected.familyId,
+          (item) => item.catalogId === selected.id || item.catalog?.familyId === selected.familyId,
         )
       )
         return old;
@@ -428,17 +426,19 @@ export function SharedTemplateEditor({
             }
           : resource === 'fee-templates'
             ? {
-                  category: values.category,
-                  chargeCode: values.chargeCode.trim().toUpperCase(),
-                  ...(values.category === 'ServiceFee' ? { serviceName: values.serviceName.trim() } : {}),
-                  method: values.method,
-                  referenceRate: values.referenceRate ?? '',
-                  unit: feeUnit(values.category, values.method),
-                  scope: values.scope as 'Location' | 'Room',
-                  effectiveFrom: values.effectiveFrom ?? '',
-                  effectiveTo: values.effectiveTo || null,
-                }
-              : { content: values.content ?? '', effectiveFrom: values.effectiveFrom ?? '' };
+                category: values.category,
+                chargeCode: values.chargeCode.trim().toUpperCase(),
+                ...(values.category === 'ServiceFee'
+                  ? { serviceName: values.serviceName.trim() }
+                  : {}),
+                method: values.method,
+                referenceRate: values.referenceRate ?? '',
+                unit: feeUnit(values.category, values.method),
+                scope: values.scope as 'Location' | 'Room',
+                effectiveFrom: values.effectiveFrom ?? '',
+                effectiveTo: values.effectiveTo || null,
+              }
+            : { content: values.content ?? '', effectiveFrom: values.effectiveFrom ?? '' };
     setSubmittedName(normalizedName);
     save({ name: normalizedName, description, data, expectedVersion: document?.version ?? 0 });
   }
@@ -545,8 +545,7 @@ export function SharedTemplateEditor({
                         gridColumn:
                           ['referenceRent', 'referencePrice', 'referenceRate'].includes(
                             field.name,
-                          ) ||
-                          field.name === 'chargeCode'
+                          ) || field.name === 'chargeCode'
                             ? '1 / -1'
                             : undefined,
                       }}
@@ -599,7 +598,8 @@ export function SharedTemplateEditor({
                               onChange={(event) => {
                                 const enteredName = event.target.value;
                                 const existing = serviceTypeOptions.find(
-                                  (option) => serviceNameKey(option.name) === serviceNameKey(enteredName),
+                                  (option) =>
+                                    serviceNameKey(option.name) === serviceNameKey(enteredName),
                                 );
                                 updateFields((old) => ({
                                   ...old,
@@ -623,11 +623,14 @@ export function SharedTemplateEditor({
                           />
                           {savedServiceTypes.isError && (
                             <Alert severity="warning">
-                              Chưa tải được các loại dịch vụ đã lưu. Bạn vẫn có thể chọn loại gợi ý có sẵn.
+                              Chưa tải được các loại dịch vụ đã lưu. Bạn vẫn có thể chọn loại gợi ý
+                              có sẵn.
                             </Alert>
                           )}
                         </Stack>
-                      ) : ['referenceRent', 'referencePrice', 'referenceRate'].includes(field.name) ? (
+                      ) : ['referenceRent', 'referencePrice', 'referenceRate'].includes(
+                          field.name,
+                        ) ? (
                         <MoneyField
                           label={field.label}
                           disabled={busy}
@@ -714,11 +717,14 @@ export function SharedTemplateEditor({
                   }}
                 >
                   {filteredRoomCatalogItems.length ? (
-                    <Stack divider={<Box sx={{ borderBottom: '1px solid', borderColor: 'divider' }} />}>
+                    <Stack
+                      divider={<Box sx={{ borderBottom: '1px solid', borderColor: 'divider' }} />}
+                    >
                       {filteredRoomCatalogItems.map((item) => {
                         const selected = items.some(
                           (value) =>
-                            value.catalogId === item.id || value.catalog?.familyId === item.familyId,
+                            value.catalogId === item.id ||
+                            value.catalog?.familyId === item.familyId,
                         );
                         const data = item.data as AssetCatalogData;
                         return (
@@ -738,7 +744,10 @@ export function SharedTemplateEditor({
                                   {item.name}
                                 </Typography>
                                 <Typography variant="caption" color="text.secondary">
-                                  {data.unit} · {data.referencePrice ? `${data.referencePrice} đ/${data.unit}` : 'Chưa có giá tham khảo'}
+                                  {data.unit} ·{' '}
+                                  {data.referencePrice
+                                    ? `${data.referencePrice} đ/${data.unit}`
+                                    : 'Chưa có giá tham khảo'}
                                 </Typography>
                               </Box>
                             }
@@ -810,11 +819,7 @@ export function SharedTemplateEditor({
           <Button disabled={busy} onClick={close}>
             Hủy
           </Button>
-          <Button
-            disabled={busy}
-            type="submit"
-            variant="contained"
-          >
+          <Button disabled={busy} type="submit" variant="contained">
             Lưu mẫu
           </Button>
         </DialogActions>

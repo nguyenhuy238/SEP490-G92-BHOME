@@ -227,9 +227,7 @@ it('renders all 42 server items into named room and common-area sections, not ju
   // Search and filters must be siblings of the clipped 6px progress track.
   expect(progress.querySelector('textarea')).toBeNull();
   expect(progress.parentElement?.querySelector('textarea')).not.toBeNull();
-  expect(
-    screen.getByText(/nh.m t.i s.n/),
-  ).toBeTruthy();
+  expect(screen.getByText(/nh.m t.i s.n/)).toBeTruthy();
   expect(screen.getAllByRole('button', { name: /^Xem kiểm kê/ })).toHaveLength(13);
   expect(
     screen.getByRole('button', { name: 'Xem kiểm kê Phòng 101' }).getAttribute('aria-expanded'),
@@ -280,14 +278,17 @@ it('reports a discrepancy on a Tenant-inherited asset without exposing baseline 
   expect(screen.getByRole('button', { name: /B.o h.ng/ })).toBeTruthy();
   expect(screen.queryByRole('button', { name: /X.c nh.n .?/ })).toBeNull();
   fireEvent.click(screen.getByRole('button', { name: /B.o thi.u/ }));
-  expect(state.go).toHaveBeenCalledWith('report-incident', expect.objectContaining({
-    inventoryTaskId: taskId,
-    locationAssetInventoryItemId: inherited.id,
-    locationId,
-    roomId: roomIds[0],
-    inventoryCondition: 'Missing',
-    description: expect.stringContaining(items[0]!.name),
-  }));
+  expect(state.go).toHaveBeenCalledWith(
+    'report-incident',
+    expect.objectContaining({
+      inventoryTaskId: taskId,
+      locationAssetInventoryItemId: inherited.id,
+      locationId,
+      roomId: roomIds[0],
+      inventoryCondition: 'Missing',
+      description: expect.stringContaining(items[0]!.name),
+    }),
+  );
 });
 
 it('identifies prior Staff checks as inherited provenance without signing for the successor', async () => {
@@ -311,7 +312,9 @@ it('identifies prior Staff checks as inherited provenance without signing for th
       onReadinessChange={onReady}
     />,
   );
-  await waitFor(() => expect(screen.getByText('Gi\u1eef k\u1ebft qu\u1ea3 Staff tr\u01b0\u1edbc')).toBeTruthy());
+  await waitFor(() =>
+    expect(screen.getByText('Gi\u1eef k\u1ebft qu\u1ea3 Staff tr\u01b0\u1edbc')).toBeTruthy(),
+  );
   fireEvent.click(screen.getByRole('button', { name: 'Chi tiết kiểm kê: Bóng đèn' }));
   expect(
     screen.getByText(/Thông tin được tiếp nhận từ đợt kiểm kê của nhân viên trước/),
@@ -355,9 +358,7 @@ it('separates Owner-unconfirmed rooms from Staff checklist and prevents an empty
       onReadinessChange={onReady}
     />,
   );
-  await waitFor(() =>
-    expect(screen.getByRole('alert').textContent).toMatch(/Owner/),
-  );
+  await waitFor(() => expect(screen.getByRole('alert').textContent).toMatch(/Owner/));
   expect(screen.getByText('Chờ Owner hoàn tất kiểm kê ban đầu')).toBeTruthy();
   expect(screen.getByText('Phòng 102 · Chưa được Owner xác nhận')).toBeTruthy();
   expect(screen.getByText('Phòng 103 · Chưa được Owner xác nhận')).toBeTruthy();
@@ -417,28 +418,41 @@ it('renders only 12 Owner-confirmed assets in three rooms while listing nine roo
   expect(onReady).toHaveBeenLastCalledWith(false);
 });
 
-
 it('confirms an intact asset with one versioned write and one post-save refresh', async () => {
   const inventoryPath = '/api/v1/operational-tasks/' + taskId + '/location-asset-inventory';
   const item = items[0]!;
   const writePath = inventoryPath + '/items/' + item.id;
   let current = completeResponse;
-  state.request.mockImplementation(async (path: string, options?: { method?: string; body?: string }) => {
-    if (path === inventoryPath && !options?.method) return current;
-    if (path === writePath && options?.method === 'PUT') {
-      const input = JSON.parse(options.body ?? '{}') as { checked: boolean; condition: string; note: string | null; incidentId: string | null; version: number };
-      current = {
-        ...current,
-        version: current.version + 1,
-        checkedCount: current.checkedCount + 1,
-        items: current.items.map((entry) => entry.id === item.id
-          ? { ...entry, checked: input.checked, condition: input.condition as LocationAssetInventoryItem['condition'] }
-          : entry),
-      };
-      return current;
-    }
-    throw new Error('Unexpected API request: ' + path);
-  });
+  state.request.mockImplementation(
+    async (path: string, options?: { method?: string; body?: string }) => {
+      if (path === inventoryPath && !options?.method) return current;
+      if (path === writePath && options?.method === 'PUT') {
+        const input = JSON.parse(options.body ?? '{}') as {
+          checked: boolean;
+          condition: string;
+          note: string | null;
+          incidentId: string | null;
+          version: number;
+        };
+        current = {
+          ...current,
+          version: current.version + 1,
+          checkedCount: current.checkedCount + 1,
+          items: current.items.map((entry) =>
+            entry.id === item.id
+              ? {
+                  ...entry,
+                  checked: input.checked,
+                  condition: input.condition as LocationAssetInventoryItem['condition'],
+                }
+              : entry,
+          ),
+        };
+        return current;
+      }
+      throw new Error('Unexpected API request: ' + path);
+    },
+  );
 
   render(
     <LocationAssetInventoryChecklist
@@ -453,9 +467,23 @@ it('confirms an intact asset with one versioned write and one post-save refresh'
   fireEvent.click(screen.getAllByRole('button', { name: /Chi ti.t ki.m k./ })[0]!);
   fireEvent.click(screen.getByRole('button', { name: /X.c nh.n .?/ }));
 
-  await waitFor(() => expect(state.request).toHaveBeenCalledWith(writePath, expect.objectContaining({ method: 'PUT' })));
-  const calls = state.request.mock.calls as unknown as [string, { method?: string; body?: string; headers?: Record<string, string> } | undefined][];
-  await waitFor(() => expect(state.request.mock.calls.filter(([path, options]) => path === inventoryPath && !options?.method)).toHaveLength(2));
+  await waitFor(() =>
+    expect(state.request).toHaveBeenCalledWith(
+      writePath,
+      expect.objectContaining({ method: 'PUT' }),
+    ),
+  );
+  const calls = state.request.mock.calls as unknown as [
+    string,
+    { method?: string; body?: string; headers?: Record<string, string> } | undefined,
+  ][];
+  await waitFor(() =>
+    expect(
+      state.request.mock.calls.filter(
+        ([path, options]) => path === inventoryPath && !options?.method,
+      ),
+    ).toHaveLength(2),
+  );
   const gets = calls.filter(([path, options]) => path === inventoryPath && !options?.method);
   const put = calls.find(([path, options]) => path === writePath && options?.method === 'PUT');
   expect(gets).toHaveLength(2);
@@ -471,54 +499,76 @@ it('confirms an intact asset with one versioned write and one post-save refresh'
   expect(onRefresh).toHaveBeenCalledOnce();
 });
 
-it.each(['Missing', 'Damaged'] as const)('opens the Incident form for a %s inventory issue', async (condition) => {
-  render(
-    <LocationAssetInventoryChecklist
-      taskId={taskId}
-      taskStatus="InProgress"
-      editable={true}
-      onTaskRefresh={onRefresh}
-      onReadinessChange={onReady}
-    />,
-  );
-  await screen.findByRole('progressbar');
-  fireEvent.click(screen.getAllByRole('button', { name: /Chi ti.t ki.m k./ })[0]!);
-  fireEvent.click(screen.getByRole('button', { name: /B.o v.n ?./ }));
-  fireEvent.change(screen.getByRole('combobox'), { target: { value: condition } });
-  fireEvent.change(screen.getAllByRole('textbox')[1]!, { target: { value: 'Khong tim thay ban hoc trong phong.' } });
-  fireEvent.click(screen.getByRole('button', { name: /T.o b.o c.o s. c./ }));
+it.each(['Missing', 'Damaged'] as const)(
+  'opens the Incident form for a %s inventory issue',
+  async (condition) => {
+    render(
+      <LocationAssetInventoryChecklist
+        taskId={taskId}
+        taskStatus="InProgress"
+        editable={true}
+        onTaskRefresh={onRefresh}
+        onReadinessChange={onReady}
+      />,
+    );
+    await screen.findByRole('progressbar');
+    fireEvent.click(screen.getAllByRole('button', { name: /Chi ti.t ki.m k./ })[0]!);
+    fireEvent.click(screen.getByRole('button', { name: /B.o v.n ?./ }));
+    fireEvent.change(screen.getByRole('combobox'), { target: { value: condition } });
+    fireEvent.change(screen.getAllByRole('textbox')[1]!, {
+      target: { value: 'Khong tim thay ban hoc trong phong.' },
+    });
+    fireEvent.click(screen.getByRole('button', { name: /T.o b.o c.o s. c./ }));
 
-  expect(state.go).toHaveBeenCalledWith('report-incident', expect.objectContaining({
-    inventoryTaskId: taskId,
-    locationAssetInventoryItemId: items[0]!.id,
-    locationId,
-    roomId: roomIds[0],
-    inventoryCondition: condition,
-    description: expect.stringContaining('Khong tim thay ban hoc'),
-  }));
-});
+    expect(state.go).toHaveBeenCalledWith(
+      'report-incident',
+      expect.objectContaining({
+        inventoryTaskId: taskId,
+        locationAssetInventoryItemId: items[0]!.id,
+        locationId,
+        roomId: roomIds[0],
+        inventoryCondition: condition,
+        description: expect.stringContaining('Khong tim thay ban hoc'),
+      }),
+    );
+  },
+);
 
 it('saves NotAccessible as a blocker instead of creating an Incident', async () => {
   const inventoryPath = '/api/v1/operational-tasks/' + taskId + '/location-asset-inventory';
   const item = items[0]!;
   const writePath = inventoryPath + '/items/' + item.id;
   let current = completeResponse;
-  state.request.mockImplementation(async (path: string, options?: { method?: string; body?: string }) => {
-    if (path === inventoryPath && !options?.method) return current;
-    if (path === writePath && options?.method === 'PUT') {
-      const input = JSON.parse(options.body ?? '{}') as { checked: boolean; condition: string; note: string | null; incidentId: string | null };
-      current = {
-        ...current,
-        version: current.version + 1,
-        checkedCount: current.checkedCount + 1,
-        items: current.items.map((entry) => entry.id === item.id
-          ? { ...entry, checked: input.checked, condition: input.condition as LocationAssetInventoryItem['condition'], note: input.note }
-          : entry),
-      };
-      return current;
-    }
-    throw new Error('Unexpected API request: ' + path);
-  });
+  state.request.mockImplementation(
+    async (path: string, options?: { method?: string; body?: string }) => {
+      if (path === inventoryPath && !options?.method) return current;
+      if (path === writePath && options?.method === 'PUT') {
+        const input = JSON.parse(options.body ?? '{}') as {
+          checked: boolean;
+          condition: string;
+          note: string | null;
+          incidentId: string | null;
+        };
+        current = {
+          ...current,
+          version: current.version + 1,
+          checkedCount: current.checkedCount + 1,
+          items: current.items.map((entry) =>
+            entry.id === item.id
+              ? {
+                  ...entry,
+                  checked: input.checked,
+                  condition: input.condition as LocationAssetInventoryItem['condition'],
+                  note: input.note,
+                }
+              : entry,
+          ),
+        };
+        return current;
+      }
+      throw new Error('Unexpected API request: ' + path);
+    },
+  );
 
   render(
     <LocationAssetInventoryChecklist
@@ -533,11 +583,20 @@ it('saves NotAccessible as a blocker instead of creating an Incident', async () 
   fireEvent.click(screen.getAllByRole('button', { name: /Chi ti.t ki.m k./ })[0]!);
   fireEvent.click(screen.getByRole('button', { name: /B.o v.n ?./ }));
   fireEvent.change(screen.getByRole('combobox'), { target: { value: 'NotAccessible' } });
-  fireEvent.change(screen.getAllByRole('textbox')[1]!, { target: { value: 'Khong the vao phong de kiem tra.' } });
+  fireEvent.change(screen.getAllByRole('textbox')[1]!, {
+    target: { value: 'Khong the vao phong de kiem tra.' },
+  });
   fireEvent.click(screen.getByRole('button', { name: /L.u v..ng m.c/ }));
 
-  await waitFor(() => expect(state.request).toHaveBeenCalledWith(writePath, expect.objectContaining({ method: 'PUT' })));
-  const put = state.request.mock.calls.find(([path, options]) => path === writePath && options?.method === 'PUT');
+  await waitFor(() =>
+    expect(state.request).toHaveBeenCalledWith(
+      writePath,
+      expect.objectContaining({ method: 'PUT' }),
+    ),
+  );
+  const put = state.request.mock.calls.find(
+    ([path, options]) => path === writePath && options?.method === 'PUT',
+  );
   expect(JSON.parse(String(put?.[1]?.body ?? '{}'))).toMatchObject({
     checked: true,
     condition: 'NotAccessible',
@@ -561,7 +620,11 @@ it('hides all checklist mutations when the current Staff is read-only', async ()
   fireEvent.click(screen.getAllByRole('button', { name: /Chi ti.t ki.m k./ })[0]!);
   expect(screen.queryByRole('button', { name: /X.c nh.n .?/ })).toBeNull();
   expect(screen.queryByRole('button', { name: /B.o v.n ?./ })).toBeNull();
-  expect(state.request.mock.calls.some(([, options]) => (options as { method?: string } | undefined)?.method === 'PUT')).toBe(false);
+  expect(
+    state.request.mock.calls.some(
+      ([, options]) => (options as { method?: string } | undefined)?.method === 'PUT',
+    ),
+  ).toBe(false);
 });
 
 it('shows the assigned Location name directly on a Staff task card', () => {

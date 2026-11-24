@@ -34,7 +34,9 @@ function HandoverInlinePdfPreview({ api, taskId }: { api: MobileApi; taskId: str
     error: string;
   } | null>(null);
   const [page, setPage] = useState(1);
-  const [pageResult, setPageResult] = useState<{ key: string; uri: string; error: string } | null>(null);
+  const [pageResult, setPageResult] = useState<{ key: string; uri: string; error: string } | null>(
+    null,
+  );
   const [reload, setReload] = useState(0);
   const [zoom, setZoom] = useState(1);
   const currentInfo = infoResult?.request === reload ? infoResult : null;
@@ -102,22 +104,34 @@ function HandoverInlinePdfPreview({ api, taskId }: { api: MobileApi; taskId: str
       {loadingInfo && <ActivityIndicator accessibilityLabel="Đang tải thông tin bản PDF" />}
       {!!error && (
         <View style={{ gap: 6 }}>
-          <Text accessibilityRole="alert" style={ui.red}>{error}</Text>
+          <Text accessibilityRole="alert" style={ui.red}>
+            {error}
+          </Text>
           <Button onPress={retry}>Tải lại bản xem trước</Button>
         </View>
       )}
       {info && (
         <>
-          <Text style={ui.muted}>Trang {page}/{info.pageCount}</Text>
-          {loadingPage && <ActivityIndicator accessibilityLabel={`Đang tải trang ${page} của PDF`} />}
+          <Text style={ui.muted}>
+            Trang {page}/{info.pageCount}
+          </Text>
+          {loadingPage && (
+            <ActivityIndicator accessibilityLabel={`Đang tải trang ${page} của PDF`} />
+          )}
           {!!pageError && (
             <View style={{ gap: 6 }}>
-              <Text accessibilityRole="alert" style={ui.red}>{pageError}</Text>
+              <Text accessibilityRole="alert" style={ui.red}>
+                {pageError}
+              </Text>
               <Button onPress={retry}>Tải lại trang PDF</Button>
             </View>
           )}
           {!!uri && (
-            <ScrollView horizontal nestedScrollEnabled contentContainerStyle={{ paddingVertical: 4 }}>
+            <ScrollView
+              horizontal
+              nestedScrollEnabled
+              contentContainerStyle={{ paddingVertical: 4 }}
+            >
               <Image
                 source={{ uri }}
                 accessibilityLabel={`Trang ${page} của biên bản bàn giao tài sản`}
@@ -134,13 +148,27 @@ function HandoverInlinePdfPreview({ api, taskId }: { api: MobileApi; taskId: str
             </ScrollView>
           )}
           <View style={{ flexDirection: 'row', justifyContent: 'space-between', flexWrap: 'wrap' }}>
-            <Button disabled={page <= 1} onPress={() => setPage((value) => value - 1)}>Trang trước</Button>
-            <Button disabled={page >= info.pageCount} onPress={() => setPage((value) => value + 1)}>Trang tiếp</Button>
+            <Button disabled={page <= 1} onPress={() => setPage((value) => value - 1)}>
+              Trang trước
+            </Button>
+            <Button disabled={page >= info.pageCount} onPress={() => setPage((value) => value + 1)}>
+              Trang tiếp
+            </Button>
           </View>
           <View style={{ flexDirection: 'row', justifyContent: 'flex-end', alignItems: 'center' }}>
-            <Button disabled={zoom <= 1} onPress={() => setZoom((value) => Math.max(1, value - 0.5))}>Thu nhỏ</Button>
+            <Button
+              disabled={zoom <= 1}
+              onPress={() => setZoom((value) => Math.max(1, value - 0.5))}
+            >
+              Thu nhỏ
+            </Button>
             <Text style={ui.muted}>{Math.round(zoom * 100)}%</Text>
-            <Button disabled={zoom >= 2} onPress={() => setZoom((value) => Math.min(2, value + 0.5))}>Phóng to</Button>
+            <Button
+              disabled={zoom >= 2}
+              onPress={() => setZoom((value) => Math.min(2, value + 0.5))}
+            >
+              Phóng to
+            </Button>
           </View>
         </>
       )}
@@ -164,7 +192,9 @@ export function LocationAssetHandoverSigning({
   );
   const data = query.data;
   const [confirmedKey, setConfirmedKey] = useState<string | null>(null);
-  const [inkState, setInkState] = useState<{ key: string; value: DrawnSignature | null } | null>(null);
+  const [inkState, setInkState] = useState<{ key: string; value: DrawnSignature | null } | null>(
+    null,
+  );
   const [busy, setBusy] = useState(false);
   const [downloadBusy, setDownloadBusy] = useState(false);
   const [error, setError] = useState('');
@@ -294,14 +324,14 @@ export function LocationAssetHandoverSigning({
         </Text>
       )}
       {!query.loading && !query.error && !data && (
-        <Text style={ui.muted}>
-          Đã gửi kiểm kê. Đang chờ Owner đối soát và lập biên bản.
-        </Text>
+        <Text style={ui.muted}>Đã gửi kiểm kê. Đang chờ Owner đối soát và lập biên bản.</Text>
       )}
       {data && (
         <View style={{ gap: 10 }}>
           <View style={{ gap: 3 }}>
-            <Text>Phiên bản {data.revision} · {data.totalItems} mục tài sản</Text>
+            <Text>
+              Phiên bản {data.revision} · {data.totalItems} mục tài sản
+            </Text>
             <Text style={ui.muted}>
               {data.directItems} Staff kiểm tra · {data.inheritedItems} kế thừa Tenant
             </Text>

@@ -107,18 +107,17 @@ export function IncidentCommandDialog({
               }}
               onChange={(e) => setValues((v) => ({ ...v, [f.name]: e.target.value }))}
             >
-              {f.type === 'asset' &&
-                [
-                  <MenuItem key="0" value="0">
-                    Hoạt động
-                  </MenuItem>,
-                  <MenuItem key="1" value="1">
-                    Cần sửa
-                  </MenuItem>,
-                  <MenuItem key="3" value="3">
-                    Ngừng sử dụng
-                  </MenuItem>,
-                ]}
+              {f.type === 'asset' && [
+                <MenuItem key="0" value="0">
+                  Hoạt động
+                </MenuItem>,
+                <MenuItem key="1" value="1">
+                  Cần sửa
+                </MenuItem>,
+                <MenuItem key="3" value="3">
+                  Ngừng sử dụng
+                </MenuItem>,
+              ]}
               {f.type === 'staff' &&
                 (f.options ?? []).map((option) => (
                   <MenuItem key={option.id} value={option.id}>

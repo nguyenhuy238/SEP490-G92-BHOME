@@ -537,7 +537,9 @@ it('keeps the handover workflow ordered, refreshes checklist after start, and co
   await screen.findByRole('progressbar', { name: /0\/1/ });
   expect(screen.queryByText(/Ki.m tra thi.t b./)).toBeNull();
   expect(s.equipmentReads()).toBe(0);
-  expect(s.requestEvents().some((event) => event.path.includes('/equipment-inspection'))).toBe(false);
+  expect(s.requestEvents().some((event) => event.path.includes('/equipment-inspection'))).toBe(
+    false,
+  );
 
   // Handover history is collapsed initially and does not compete with the checklist.
   expect(screen.queryByText(/T.o c.ng vi.c/)).toBeNull();
@@ -554,14 +556,20 @@ it('keeps the handover workflow ordered, refreshes checklist after start, and co
   fireEvent.click(startButtons[startButtons.length - 1]!);
   await waitFor(() => expect(s.inventoryReads()).toBeGreaterThan(beforeStartReads));
   await screen.findByText(/ang ki.m k./);
-  const startEventIndex = s.requestEvents().findIndex(
-    (event) => event.path.endsWith('/operational-tasks/' + taskId + '/start') && event.method === 'POST',
-  );
-  const inventoryRefetchIndex = s.requestEvents().findIndex(
-    (event, index) => index > startEventIndex &&
-      event.path.endsWith('/operational-tasks/' + taskId + '/location-asset-inventory') &&
-      event.method === 'GET',
-  );
+  const startEventIndex = s
+    .requestEvents()
+    .findIndex(
+      (event) =>
+        event.path.endsWith('/operational-tasks/' + taskId + '/start') && event.method === 'POST',
+    );
+  const inventoryRefetchIndex = s
+    .requestEvents()
+    .findIndex(
+      (event, index) =>
+        index > startEventIndex &&
+        event.path.endsWith('/operational-tasks/' + taskId + '/location-asset-inventory') &&
+        event.method === 'GET',
+    );
   expect(startEventIndex).toBeGreaterThanOrEqual(0);
   expect(inventoryRefetchIndex).toBeGreaterThan(startEventIndex);
   expect(screen.queryByRole('button', { name: /B.t.*ki.m k./ })).toBeNull();
@@ -570,24 +578,38 @@ it('keeps the handover workflow ordered, refreshes checklist after start, and co
   // InProgress -> confirm the physical asset -> submit the complete checklist.
   fireEvent.click(screen.getAllByRole('button', { name: /Chi ti.t ki.m k./ })[0]!);
   fireEvent.click(screen.getByRole('button', { name: /X.c nh.n/ }));
-  await waitFor(() => expect(s.inventoryUpdate()).toMatchObject({
-    checked: true,
-    condition: 'Intact',
-    note: null,
-    incidentId: null,
-  }));
+  await waitFor(() =>
+    expect(s.inventoryUpdate()).toMatchObject({
+      checked: true,
+      condition: 'Intact',
+      note: null,
+      incidentId: null,
+    }),
+  );
   await screen.findByRole('button', { name: /G.i ki.m k. cho Owner/ });
   fireEvent.click(screen.getByRole('button', { name: /G.i ki.m k. cho Owner/ }));
   const submitButtons = screen.getAllByRole('button', { name: /G.i ki.m k. cho Owner/ });
   fireEvent.click(submitButtons[submitButtons.length - 1]!);
 
-  await waitFor(() => expect(s.requestEvents().some(
-    (event) => event.path.endsWith('/operational-tasks/' + taskId + '/submit') && event.method === 'POST',
-  )).toBe(true));
-  await waitFor(() => expect(screen.queryByRole('button', { name: /G.i ki.m k. cho Owner/ })).toBeNull());
+  await waitFor(() =>
+    expect(
+      s
+        .requestEvents()
+        .some(
+          (event) =>
+            event.path.endsWith('/operational-tasks/' + taskId + '/submit') &&
+            event.method === 'POST',
+        ),
+    ).toBe(true),
+  );
+  await waitFor(() =>
+    expect(screen.queryByRole('button', { name: /G.i ki.m k. cho Owner/ })).toBeNull(),
+  );
   expect(screen.queryByText(/K.t qu./)).toBeNull();
   expect(s.equipmentReads()).toBe(0);
-  expect(s.requestEvents().some((event) => event.path.includes('/equipment-inspection'))).toBe(false);
+  expect(s.requestEvents().some((event) => event.path.includes('/equipment-inspection'))).toBe(
+    false,
+  );
 });
 
 it('keeps the AdHoc equipment inspection panel functional and saves a versioned answer batch', async () => {

@@ -131,7 +131,11 @@ export function IncidentListScreen({ emergency = false }: { emergency?: boolean 
           {query.data?.items.map((report) => (
             <Box key={report.id}>
               <Heading
-                title={report.roomNumber ? `Phòng ${report.roomNumber}` : report.commonArea || 'Báo cáo sự cố'}
+                title={
+                  report.roomNumber
+                    ? `Phòng ${report.roomNumber}`
+                    : report.commonArea || 'Báo cáo sự cố'
+                }
                 detail={incidentDate(report.createdAt)}
               />
               <Pill tone={report.severity === 'Emergency' ? 'red' : 'blue'}>
@@ -198,7 +202,9 @@ function IncidentDetail({ id }: { id: string }) {
     [workPage, setWorkPage] = useState(1);
   const loaded = enabled && !!query.data && inSelectedLocation;
   const history = useIncidentQuery<IncidentPage<IncidentActivity>>(
-    loaded && role !== 'Tenant' ? `${incidentRoot}/${id}/history?page=${historyPage}&pageSize=20` : null,
+    loaded && role !== 'Tenant'
+      ? `${incidentRoot}/${id}/history?page=${historyPage}&pageSize=20`
+      : null,
   );
   const progress = useIncidentQuery<TenantIncidentProgress>(
     loaded && role === 'Tenant' ? `${incidentRoot}/${id}/progress` : null,
@@ -237,7 +243,15 @@ function IncidentDetail({ id }: { id: string }) {
     reloadEmergency();
     reloadExpenses();
     reloadProgress();
-  }, [reloadReport, reloadHistory, reloadEvidence, reloadWork, reloadEmergency, reloadExpenses, reloadProgress]);
+  }, [
+    reloadReport,
+    reloadHistory,
+    reloadEvidence,
+    reloadWork,
+    reloadEmergency,
+    reloadExpenses,
+    reloadProgress,
+  ]);
   useWorkspaceHeaderRefresh(
     refresh,
     query.fetching ||
@@ -298,7 +312,10 @@ function IncidentDetail({ id }: { id: string }) {
           <IncidentPlace report={query.data} />
           {role === 'Tenant' && (
             <Box>
-              <Heading title="Tiến độ xử lý" detail={progress.data?.currentStep ?? 'Đang tải tiến độ'} />
+              <Heading
+                title="Tiến độ xử lý"
+                detail={progress.data?.currentStep ?? 'Đang tải tiến độ'}
+              />
               <QueryState {...progress} />
               {progress.data?.events.map((event, index) => (
                 <Box key={`${event.occurredAt}:${index}`}>
@@ -383,7 +400,9 @@ function IncidentDetail({ id }: { id: string }) {
             <>
               <Heading title="Lịch sử xử lý" />
               <QueryState {...history} />
-              {history.data && <IncidentTimeline items={history.data.items} owner={role === 'Owner'} />}
+              {history.data && (
+                <IncidentTimeline items={history.data.items} owner={role === 'Owner'} />
+              )}
               <Pager query={history} page={historyPage} setPage={setHistoryPage} />
             </>
           )}
@@ -399,9 +418,15 @@ function WorkCard({ work }: { work: WorkOrder }) {
     <Box>
       <Heading title={work.description || 'Lệnh sửa chữa'} detail={incidentText(work.status)} />
       <Info label="Cơ sở" value={work.locationName} />
-      <Info label="Vị trí" value={work.roomNumber ? `Phòng ${work.roomNumber}` : work.commonArea || 'Khu vực chung'} />
+      <Info
+        label="Vị trí"
+        value={work.roomNumber ? `Phòng ${work.roomNumber}` : work.commonArea || 'Khu vực chung'}
+      />
       <Info label="Tài sản" value={work.assetName} />
-      <Info label="Nhân viên phụ trách" value={work.assignedStaffName || 'Nhân viên được phân công'} />
+      <Info
+        label="Nhân viên phụ trách"
+        value={work.assignedStaffName || 'Nhân viên được phân công'}
+      />
       <Text>{work.expectedOutcome}</Text>
       <Text>
         Hạn: {incidentDate(work.targetCompletionAt)}
@@ -642,9 +667,7 @@ function WorkDetail({ id }: { id: string }) {
             ))}
           <Heading title="Lịch sử hoạt động của lệnh sửa chữa" />
           <QueryState {...history} />
-          {history.data && (
-            <IncidentTimeline items={history.data.items} owner={role === 'Owner'} />
-          )}
+          {history.data && <IncidentTimeline items={history.data.items} owner={role === 'Owner'} />}
           <Pager query={history} page={historyPage} setPage={setHistoryPage} />
           <Heading title="Lịch sử bảo trì và hiện trạng tài sản" />
           <QueryState {...maintenance} />
@@ -711,7 +734,8 @@ export function IncidentInbox() {
                   });
                   if (!result) return;
                 }
-                if (role !== 'Tenant' && item.workOrderId) go('maintenance-detail', { workOrderId: item.workOrderId });
+                if (role !== 'Tenant' && item.workOrderId)
+                  go('maintenance-detail', { workOrderId: item.workOrderId });
                 else if (item.incidentId) go('incident-detail', { incidentId: item.incidentId });
               })();
             }}

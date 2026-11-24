@@ -67,7 +67,9 @@ it('creates Staff without asking for or transmitting an initial password', async
   expect(screen.queryByLabelText(/Loại công việc/)).not.toBeInTheDocument();
   expect(screen.queryByLabelText('Trạng thái công việc')).not.toBeInTheDocument();
   expect(
-    screen.getByText((_, element) => element?.textContent === 'Trạng thái hợp đồng ban đầu: Đang làm việc'),
+    screen.getByText(
+      (_, element) => element?.textContent === 'Trạng thái hợp đồng ban đầu: Đang làm việc',
+    ),
   ).toBeInTheDocument();
   const salary = screen.getByLabelText(/Mức lương thỏa thuận/);
   fireEvent.change(salary, { target: { value: '3000000' } });

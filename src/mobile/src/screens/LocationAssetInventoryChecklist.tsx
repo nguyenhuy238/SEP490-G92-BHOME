@@ -109,7 +109,14 @@ export function LocationAssetInventoryChecklist({
 
   const save = useCallback(
     async (item: LocationAssetInventoryItem, checked: boolean, condition: string) => {
-      if (!api || !editable || !data || data.status !== 'InProgress' || item.inherited || pending.current)
+      if (
+        !api ||
+        !editable ||
+        !data ||
+        data.status !== 'InProgress' ||
+        item.inherited ||
+        pending.current
+      )
         return;
       pending.current = true;
       setBusy(true);
@@ -156,11 +163,11 @@ export function LocationAssetInventoryChecklist({
           delete next[item.id];
           return next;
         });
-      setIssueModes((previous) => {
-        const next = { ...previous };
-        delete next[item.id];
-        return next;
-      });
+        setIssueModes((previous) => {
+          const next = { ...previous };
+          delete next[item.id];
+          return next;
+        });
         reload();
         onTaskRefresh();
         showSuccess('Đã lưu xác nhận kiểm kê.');
@@ -216,9 +223,7 @@ export function LocationAssetInventoryChecklist({
             : 'Đã đóng';
   const unlinkedIssueCount = loadedItems.filter(
     (item) =>
-      item.checked &&
-      ['Missing', 'Damaged'].includes(item.condition ?? '') &&
-      !item.incidentId,
+      item.checked && ['Missing', 'Damaged'].includes(item.condition ?? '') && !item.incidentId,
   ).length;
 
   return (
@@ -247,13 +252,15 @@ export function LocationAssetInventoryChecklist({
           <Row spread>
             <View style={{ flex: 1, gap: 3 }}>
               <Text style={styles.title} variant="labelLarge">
-            Đã kiểm tra {data.checkedCount}/{data.totalCount} mục tài sản
+                Đã kiểm tra {data.checkedCount}/{data.totalCount} mục tài sản
               </Text>
               <Text variant="bodySmall" style={ui.muted}>
                 {directCount} Staff tự kiểm tra · {inheritedCount} kế thừa từ Tenant
               </Text>
             </View>
-            <Pill tone={data.status === 'Completed' ? 'green' : inventoryReady(data) ? 'green' : 'blue'}>
+            <Pill
+              tone={data.status === 'Completed' ? 'green' : inventoryReady(data) ? 'green' : 'blue'}
+            >
               {statusLabel}
             </Pill>
           </Row>
@@ -332,7 +339,9 @@ export function LocationAssetInventoryChecklist({
             </View>
           )}
           {data.status === 'Assigned' && (
-            <Text style={ui.muted}>Nhấn “Bắt đầu kiểm kê” để mở thao tác xác nhận từng tài sản.</Text>
+            <Text style={ui.muted}>
+              Nhấn “Bắt đầu kiểm kê” để mở thao tác xác nhận từng tài sản.
+            </Text>
           )}
           {data.totalCount === 0 && (
             <View style={styles.notice}>
@@ -394,7 +403,9 @@ export function LocationAssetInventoryChecklist({
                               {item.name}
                             </Text>
                             <Text variant="bodySmall" style={ui.muted}>
-                              {item.quantity > 0 ? `Số lượng: ${item.quantity}` : 'Owner đã xác nhận không có tài sản'}
+                              {item.quantity > 0
+                                ? `Số lượng: ${item.quantity}`
+                                : 'Owner đã xác nhận không có tài sản'}
                             </Text>
                           </View>
                           <Pill tone={item.checked ? 'green' : 'neutral'}>
@@ -425,12 +436,17 @@ export function LocationAssetInventoryChecklist({
                           {item.inherited ? (
                             <>
                               <Text style={ui.muted}>
-                                Đã đối chiếu đúng tài sản trong biên bản bàn giao Tenant còn hiệu lực.
-                                Mục này giữ nguyên thông tin và xác nhận gốc. Nếu phát hiện thiếu hoặc hỏng,
-                                hãy tạo báo cáo sự cố riêng.
+                                Đã đối chiếu đúng tài sản trong biên bản bàn giao Tenant còn hiệu
+                                lực. Mục này giữ nguyên thông tin và xác nhận gốc. Nếu phát hiện
+                                thiếu hoặc hỏng, hãy tạo báo cáo sự cố riêng.
                               </Text>
                               {item.incidentId ? (
-                                <Button compact onPress={() => go('incident-detail', { incidentId: item.incidentId! })}>
+                                <Button
+                                  compact
+                                  onPress={() =>
+                                    go('incident-detail', { incidentId: item.incidentId! })
+                                  }
+                                >
                                   Xem báo cáo sự cố đã liên kết
                                 </Button>
                               ) : editable && data.status === 'InProgress' ? (
@@ -438,14 +454,28 @@ export function LocationAssetInventoryChecklist({
                                   <Button
                                     mode="outlined"
                                     disabled={busy}
-                                    onPress={() => reportIssue(item, group.title, 'Missing', 'Phát hiện thiếu tài sản trong lần kiểm tra hiện tại.')}
+                                    onPress={() =>
+                                      reportIssue(
+                                        item,
+                                        group.title,
+                                        'Missing',
+                                        'Phát hiện thiếu tài sản trong lần kiểm tra hiện tại.',
+                                      )
+                                    }
                                   >
                                     Báo thiếu
                                   </Button>
                                   <Button
                                     mode="outlined"
                                     disabled={busy}
-                                    onPress={() => reportIssue(item, group.title, 'Damaged', 'Phát hiện tài sản hư hỏng trong lần kiểm tra hiện tại.')}
+                                    onPress={() =>
+                                      reportIssue(
+                                        item,
+                                        group.title,
+                                        'Damaged',
+                                        'Phát hiện tài sản hư hỏng trong lần kiểm tra hiện tại.',
+                                      )
+                                    }
                                   >
                                     Báo hỏng
                                   </Button>
@@ -486,10 +516,17 @@ export function LocationAssetInventoryChecklist({
                                       mode="outlined"
                                       disabled={busy}
                                       onPress={() => {
-                                        setIssueModes((previous) => ({ ...previous, [item.id]: true }));
+                                        setIssueModes((previous) => ({
+                                          ...previous,
+                                          [item.id]: true,
+                                        }));
                                         setConditions((previous) => ({
                                           ...previous,
-                                          [item.id]: ['Missing', 'Damaged', 'NotAccessible'].includes(itemCondition)
+                                          [item.id]: [
+                                            'Missing',
+                                            'Damaged',
+                                            'NotAccessible',
+                                          ].includes(itemCondition)
                                             ? itemCondition
                                             : '',
                                         }));
@@ -498,15 +535,17 @@ export function LocationAssetInventoryChecklist({
                                       Báo vấn đề
                                     </Button>
                                   )}
-                                  {item.checked && (item.priorStaffTaskId || itemCondition === 'NotAccessible') && (
-                                    <Button
-                                      compact
-                                      disabled={busy}
-                                      onPress={() => void save(item, false, 'Unassessed')}
-                                    >
-                                      Kiểm tra lại
-                                    </Button>
-                                  )}
+                                  {item.checked &&
+                                    (item.priorStaffTaskId ||
+                                      itemCondition === 'NotAccessible') && (
+                                      <Button
+                                        compact
+                                        disabled={busy}
+                                        onPress={() => void save(item, false, 'Unassessed')}
+                                      >
+                                        Kiểm tra lại
+                                      </Button>
+                                    )}
                                 </View>
                               )}
                               {issueMode && editable && data.status === 'InProgress' && (
@@ -517,7 +556,10 @@ export function LocationAssetInventoryChecklist({
                                     options={issueOptions}
                                     disabled={busy}
                                     onChange={(value) =>
-                                      setConditions((previous) => ({ ...previous, [item.id]: value }))
+                                      setConditions((previous) => ({
+                                        ...previous,
+                                        [item.id]: value,
+                                      }))
                                     }
                                   />
                                   <TextInput
@@ -533,17 +575,13 @@ export function LocationAssetInventoryChecklist({
                                     disabled={busy}
                                   />
                                   <View style={styles.itemActions}>
-                                    {dirtyCondition === 'Missing' || dirtyCondition === 'Damaged' ? (
+                                    {dirtyCondition === 'Missing' ||
+                                    dirtyCondition === 'Damaged' ? (
                                       <Button
                                         mode="contained"
                                         disabled={busy || !dirtyNote.trim()}
                                         onPress={() =>
-                                          reportIssue(
-                                            item,
-                                            group.title,
-                                            dirtyCondition,
-                                            dirtyNote,
-                                          )
+                                          reportIssue(item, group.title, dirtyCondition, dirtyNote)
                                         }
                                       >
                                         Tạo báo cáo sự cố
@@ -566,7 +604,10 @@ export function LocationAssetInventoryChecklist({
                                       compact
                                       disabled={busy}
                                       onPress={() =>
-                                        setIssueModes((previous) => ({ ...previous, [item.id]: false }))
+                                        setIssueModes((previous) => ({
+                                          ...previous,
+                                          [item.id]: false,
+                                        }))
                                       }
                                     >
                                       Hủy
@@ -576,7 +617,8 @@ export function LocationAssetInventoryChecklist({
                               )}
                               {item.checked &&
                                 ['Missing', 'Damaged'].includes(itemCondition) &&
-                                !item.incidentId && !issueMode && (
+                                !item.incidentId &&
+                                !issueMode && (
                                   <View style={styles.notice}>
                                     <Text variant="bodySmall" style={styles.issueNotice}>
                                       Cần có báo cáo sự cố liên kết trước khi gửi kiểm kê.
@@ -640,7 +682,8 @@ export function LocationAssetInventoryChecklist({
           )}
           {loadedItems.length > 0 && (
             <Text variant="bodySmall" style={ui.muted}>
-              Chỉ kiểm tra tài sản Owner đã xác nhận. Mục khớp biên bản Tenant được tự xác nhận, không tạo tài sản mới.
+              Chỉ kiểm tra tài sản Owner đã xác nhận. Mục khớp biên bản Tenant được tự xác nhận,
+              không tạo tài sản mới.
             </Text>
           )}
           {inventoryReady(data) && (

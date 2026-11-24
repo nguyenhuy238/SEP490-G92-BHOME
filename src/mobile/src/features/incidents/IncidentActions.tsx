@@ -142,7 +142,10 @@ export function IncidentActionPanel({
       : null,
   );
   const actions: string[] = allowed.filter(
-    (id) => id !== 'fast-repair-start' || (policy.data?.activeCategories.length ?? 0) > 0 || action === id,
+    (id) =>
+      id !== 'fast-repair-start' ||
+      (policy.data?.activeCategories.length ?? 0) > 0 ||
+      action === id,
   );
   const [originalPage, setOriginalPage] = useState(1);
   // Snapshot a report version after this form's own uploads, then retain it on ambiguous retries.
@@ -445,23 +448,28 @@ export function IncidentActionPanel({
   if (role === 'Owner' && !work)
     return <OwnerWebNotice task="Phân loại sự cố, giao việc và quản lý chi phí khẩn cấp" />;
   if (!actions.length) return null;
-  const primaryAction = role === 'Owner'
-    ? actions.includes('asset-decision')
-      ? 'asset-decision'
-      : actions.includes('plan-decision')
-        ? 'plan-decision'
-        : actions.includes('verify')
-          ? 'verify'
-          : actions.includes('reassign') ? 'reassign' : actions[0]
-    : work
-      ? work.status === 'Assigned' && actions.includes('fast-repair-start')
-        ? 'fast-repair-start'
-        : work.status === 'InProgress' && actions.includes('submit')
-          ? 'submit'
-          : actions.includes('proposal') ? 'proposal' : actions[0]
-      : role === 'Tenant' && actions.includes('report-photo')
-        ? 'report-photo'
-        : actions[0];
+  const primaryAction =
+    role === 'Owner'
+      ? actions.includes('asset-decision')
+        ? 'asset-decision'
+        : actions.includes('plan-decision')
+          ? 'plan-decision'
+          : actions.includes('verify')
+            ? 'verify'
+            : actions.includes('reassign')
+              ? 'reassign'
+              : actions[0]
+      : work
+        ? work.status === 'Assigned' && actions.includes('fast-repair-start')
+          ? 'fast-repair-start'
+          : work.status === 'InProgress' && actions.includes('submit')
+            ? 'submit'
+            : actions.includes('proposal')
+              ? 'proposal'
+              : actions[0]
+        : role === 'Tenant' && actions.includes('report-photo')
+          ? 'report-photo'
+          : actions[0];
   const selectAction = (id: string) => {
     setAction(id);
     setOriginalPage(1);
@@ -479,7 +487,9 @@ export function IncidentActionPanel({
         <Text>Đang kiểm tra nhóm sửa chữa nhanh được Owner kích hoạt…</Text>
       )}
       {role === 'Staff' && work?.status === 'Assigned' && policy.error && (
-        <Text style={ui.red}>Không tải được chính sách sửa nhanh. Bạn vẫn có thể gửi phương án sửa chữa thông thường.</Text>
+        <Text style={ui.red}>
+          Không tải được chính sách sửa nhanh. Bạn vẫn có thể gửi phương án sửa chữa thông thường.
+        </Text>
       )}
       {!action ? (
         <>
@@ -491,11 +501,19 @@ export function IncidentActionPanel({
               <Button compact mode="text" onPress={() => setShowMore((value) => !value)}>
                 {showMore ? 'Ẩn thao tác khác' : 'Thao tác khác'}
               </Button>
-              {showMore && actions.filter((id) => id !== primaryAction).map((id) => (
-                <Action key={id} secondary disabled={mutation.busy} onPress={() => selectAction(id)}>
-                  {names[id]}
-                </Action>
-              ))}
+              {showMore &&
+                actions
+                  .filter((id) => id !== primaryAction)
+                  .map((id) => (
+                    <Action
+                      key={id}
+                      secondary
+                      disabled={mutation.busy}
+                      onPress={() => selectAction(id)}
+                    >
+                      {names[id]}
+                    </Action>
+                  ))}
             </>
           )}
         </>
@@ -677,8 +695,8 @@ export function IncidentActionPanel({
       {action === 'asset-decision' && (
         <>
           <Text>
-            {work?.proposedAssetName || 'Tài sản mới được đề xuất'} · {work?.proposedAssetCategory} ·{' '}
-            {work?.proposedAssetCondition}
+            {work?.proposedAssetName || 'Tài sản mới được đề xuất'} · {work?.proposedAssetCategory}{' '}
+            · {work?.proposedAssetCondition}
           </Text>
           <ChoiceField
             label="Quyết định tài sản"
@@ -720,9 +738,16 @@ export function IncidentActionPanel({
         />
       )}
       {['progress', 'blocker', 'submit', 'rework', 'emergency-actions'].includes(action) &&
-        field('note', action === 'emergency-actions'
-          ? 'Biện pháp an toàn đã thực hiện và khó khăn còn gặp phải'
-          : action === 'submit' ? 'Kết quả sửa chữa' : 'Nội dung cập nhật', false, true)}
+        field(
+          'note',
+          action === 'emergency-actions'
+            ? 'Biện pháp an toàn đã thực hiện và khó khăn còn gặp phải'
+            : action === 'submit'
+              ? 'Kết quả sửa chữa'
+              : 'Nội dung cập nhật',
+          false,
+          true,
+        )}
       {['verify', 'direct-completion', 'emergency-actions'].includes(action) && (
         <>
           {field(

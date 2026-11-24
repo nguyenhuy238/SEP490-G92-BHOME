@@ -42,20 +42,20 @@ Checklist Staff chỉ có các nhóm tài sản vật lý mà Owner đã kiểm 
 
 ## 5. API
 
-| API | Quyền / tác dụng |
-|---|---|
-| `GET /api/v1/operational-tasks/{taskId}/location-asset-inventory` | Owner hoặc Staff có responsibility hiện hành; xem snapshot và blockers |
-| `PUT /api/v1/operational-tasks/{taskId}/location-asset-inventory/items/{itemId}` | Staff hiện hành, task `InProgress`; update item theo version + idempotency |
-| `GET /api/v1/operational-tasks/{taskId}/location-asset-inventory/reconcile-preview` | Owner; preview chênh lệch, không ghi dữ liệu |
-| `POST /api/v1/operational-tasks/{taskId}/location-asset-inventory/reconcile` | Owner; reconcile baseline trong transaction/Location lock, chỉ `Assigned`/`InProgress`, không phá item Staff đã ghi nhận |
-| `GET /api/v1/operational-tasks/{taskId}/location-asset-handover` | Owner/current Staff; former Staff không dùng route task hiện hành |
-| `POST /api/v1/operational-tasks/{taskId}/location-asset-handover/approve` | Owner; đối soát snapshot và lập revision/PDF preview |
-| `POST /api/v1/operational-tasks/{taskId}/location-asset-handover/rework` | Owner; chọn item reset, tăng version và trả task về `InProgress` |
-| `POST /api/v1/operational-tasks/{taskId}/location-asset-handover/sign` | Owner ký trước; sau đó đúng Staff hiện hành ký cùng revision/hash |
-| `GET /api/v1/operational-tasks/{taskId}/location-asset-handover/document` | Owner/current Staff; former Staff không dùng route task hiện hành |
-| `GET /api/v1/location-asset-handovers/archive` | Staff chỉ nhận report revision đã có Owner signature + chính Staff đã ký |
-| `GET /api/v1/location-asset-handovers/archive/{taskId}/revisions/{revision}` | Chỉ snapshot của revision đã ký của chính Staff |
-| `GET /api/v1/location-asset-handovers/archive/{taskId}/revisions/{revision}/document` | Chỉ final signed PDF; không có preview/fallback |
+| API                                                                                   | Quyền / tác dụng                                                                                                         |
+| ------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------ |
+| `GET /api/v1/operational-tasks/{taskId}/location-asset-inventory`                     | Owner hoặc Staff có responsibility hiện hành; xem snapshot và blockers                                                   |
+| `PUT /api/v1/operational-tasks/{taskId}/location-asset-inventory/items/{itemId}`      | Staff hiện hành, task `InProgress`; update item theo version + idempotency                                               |
+| `GET /api/v1/operational-tasks/{taskId}/location-asset-inventory/reconcile-preview`   | Owner; preview chênh lệch, không ghi dữ liệu                                                                             |
+| `POST /api/v1/operational-tasks/{taskId}/location-asset-inventory/reconcile`          | Owner; reconcile baseline trong transaction/Location lock, chỉ `Assigned`/`InProgress`, không phá item Staff đã ghi nhận |
+| `GET /api/v1/operational-tasks/{taskId}/location-asset-handover`                      | Owner/current Staff; former Staff không dùng route task hiện hành                                                        |
+| `POST /api/v1/operational-tasks/{taskId}/location-asset-handover/approve`             | Owner; đối soát snapshot và lập revision/PDF preview                                                                     |
+| `POST /api/v1/operational-tasks/{taskId}/location-asset-handover/rework`              | Owner; chọn item reset, tăng version và trả task về `InProgress`                                                         |
+| `POST /api/v1/operational-tasks/{taskId}/location-asset-handover/sign`                | Owner ký trước; sau đó đúng Staff hiện hành ký cùng revision/hash                                                        |
+| `GET /api/v1/operational-tasks/{taskId}/location-asset-handover/document`             | Owner/current Staff; former Staff không dùng route task hiện hành                                                        |
+| `GET /api/v1/location-asset-handovers/archive`                                        | Staff chỉ nhận report revision đã có Owner signature + chính Staff đã ký                                                 |
+| `GET /api/v1/location-asset-handovers/archive/{taskId}/revisions/{revision}`          | Chỉ snapshot của revision đã ký của chính Staff                                                                          |
+| `GET /api/v1/location-asset-handovers/archive/{taskId}/revisions/{revision}/document` | Chỉ final signed PDF; không có preview/fallback                                                                          |
 
 Các endpoint task detail/history/evidence cũng phải kiểm tra responsibility hiện hành. UI ẩn nút không thay thế Backend authorization. Khi quyền không còn, Mobile không nên mount checklist/report/evidence reads.
 

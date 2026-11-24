@@ -81,11 +81,7 @@ interface SharedConfigurationValue {
     id: string,
     changes: Record<string, unknown>,
   ) => void;
-  applyTemplate: (
-    kind: 'room' | 'fee' | 'policy',
-    templateId: string,
-    locationId: string,
-  ) => void;
+  applyTemplate: (kind: 'room' | 'fee' | 'policy', templateId: string, locationId: string) => void;
   setAppliedConfiguration: (locationId: string, value: AppliedConfiguration) => void;
   copyConfiguration: (sourceId: string, destinationId: string, groups: string[]) => void;
   setOverride: (locationId: string, key: string, value: number | string) => void;
@@ -404,7 +400,12 @@ export function SharedConfigurationProvider({ children }: { children: ReactNode 
             ...(current[locationId] ?? emptyApplied()),
             source: 'Shared Template' as const,
           };
-          const key = kind === 'room' ? 'roomTemplateIds' : kind === 'fee' ? 'feeTemplateIds' : 'policyTemplateIds';
+          const key =
+            kind === 'room'
+              ? 'roomTemplateIds'
+              : kind === 'fee'
+                ? 'feeTemplateIds'
+                : 'policyTemplateIds';
           next[key] = Array.from(new Set([...next[key], templateId]));
           return { ...current, [locationId]: next };
         }),

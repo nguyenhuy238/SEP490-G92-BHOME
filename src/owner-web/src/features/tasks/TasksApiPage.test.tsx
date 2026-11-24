@@ -268,7 +268,7 @@ it('shows Staff-completed move-in inventory and linked BF-07 incident with no Ow
   const drawer = await screen.findByRole('dialog', { name: 'Chi tiết công việc' });
   expect(await within(drawer).findByText('Báo cáo kiểm kê trước bàn giao')).toBeInTheDocument();
   expect(within(drawer).getByText(/2\/2 loại đã kiểm tra/)).toBeInTheDocument();
-  expect(within(drawer).getByText(/Loại:\s*Kiểm kê tài sản trước bàn giao/)).toBeInTheDocument();
+  expect(within(drawer).getByText(/Loại:\s*Kiểm kê trước bàn giao/)).toBeInTheDocument();
   expect(within(drawer).queryByRole('button', { name: 'Nghiệm thu' })).not.toBeInTheDocument();
   fireEvent.click(within(drawer).getByText('Bàn học'));
   const incident = await within(drawer).findByRole('link', { name: 'Xem báo cáo sự cố BF-07' });

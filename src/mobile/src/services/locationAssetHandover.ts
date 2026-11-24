@@ -116,7 +116,11 @@ export function locationAssetHandoverArchiveClient(api: MobileApi) {
     revision: (taskId: string, revision: number, signal?: AbortSignal) =>
       api.request<LocationAssetHandoverArchiveReport>(revisionPath(taskId, revision), { signal }),
     documentBytes: (taskId: string, revision: number) =>
-      api.request<Uint8Array<ArrayBuffer>>(`${revisionPath(taskId, revision)}/document`, {}, 'bytes'),
+      api.request<Uint8Array<ArrayBuffer>>(
+        `${revisionPath(taskId, revision)}/document`,
+        {},
+        'bytes',
+      ),
     documentBlob: (taskId: string, revision: number) =>
       api.request<Blob>(`${revisionPath(taskId, revision)}/document`, {}, 'blob'),
   };

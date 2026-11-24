@@ -231,22 +231,17 @@ export function eventFacts(value: string | null): { label: string; value: string
     return [];
   }
 }
-export function IncidentTimeline({
-  items,
-  owner,
-}: {
-  items: IncidentActivity[];
-  owner: boolean;
-}) {
+export function IncidentTimeline({ items, owner }: { items: IncidentActivity[]; owner: boolean }) {
   return (
     <>
       {items.map((item) => (
         <Box key={item.id}>
           <Heading title={incidentText(item.action)} detail={incidentDate(item.occurredAt)} />
           {!!item.note && <Text>{item.note}</Text>}
-          {owner && eventFacts(item.dataJson).map((fact, i) => (
-            <IncidentInfo key={i} label={fact.label} value={fact.value} />
-          ))}
+          {owner &&
+            eventFacts(item.dataJson).map((fact, i) => (
+              <IncidentInfo key={i} label={fact.label} value={fact.value} />
+            ))}
         </Box>
       ))}
     </>

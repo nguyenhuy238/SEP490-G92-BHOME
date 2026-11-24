@@ -8,13 +8,13 @@
 
 Không gộp các đối tượng sau thành một vòng đời:
 
-| Đối tượng | Vai trò | Có phải sự cố BF-07 không? |
-|---|---|---|
-| `LocationAssetHandover` Operational Task | Staff kiểm tra tài sản đã được Owner xác nhận và tiếp nhận trách nhiệm quản lý tài sản cơ sở | Không |
-| `IncidentReport` | Báo cáo một vấn đề bất thường tại Location/Room/Asset | Có |
-| `MaintenanceWorkOrder` | Công việc sửa chữa/bảo trì được giao cho Staff | Là hồ sơ xử lý liên quan, không phải Incident |
-| Proactive Maintenance Work Order | Công việc bảo trì do Owner chủ động tạo | Không; `IncidentId = null` |
-| `MaintenanceCompensation` / Invoice / Deposit settlement | Quyết định và thu khoản bồi thường sau xử lý | Không; là nghiệp vụ tài chính phát sinh có điều kiện |
+| Đối tượng                                                | Vai trò                                                                                      | Có phải sự cố BF-07 không?                           |
+| -------------------------------------------------------- | -------------------------------------------------------------------------------------------- | ---------------------------------------------------- |
+| `LocationAssetHandover` Operational Task                 | Staff kiểm tra tài sản đã được Owner xác nhận và tiếp nhận trách nhiệm quản lý tài sản cơ sở | Không                                                |
+| `IncidentReport`                                         | Báo cáo một vấn đề bất thường tại Location/Room/Asset                                        | Có                                                   |
+| `MaintenanceWorkOrder`                                   | Công việc sửa chữa/bảo trì được giao cho Staff                                               | Là hồ sơ xử lý liên quan, không phải Incident        |
+| Proactive Maintenance Work Order                         | Công việc bảo trì do Owner chủ động tạo                                                      | Không; `IncidentId = null`                           |
+| `MaintenanceCompensation` / Invoice / Deposit settlement | Quyết định và thu khoản bồi thường sau xử lý                                                 | Không; là nghiệp vụ tài chính phát sinh có điều kiện |
 
 Một báo cáo thiếu/hỏng phát hiện trong checklist có thể tạo Incident và liên kết `IncidentId` vào đúng item kiểm kê. Liên kết này không biến checklist thành Work Order và không tự tạo Work Order. Owner vẫn phải tiếp nhận, phân loại và giao Work Order theo quy trình BF-07.
 
@@ -49,13 +49,13 @@ stateDiagram-v2
   Completed --> [*]
 ```
 
-| Trạng thái task | Ý nghĩa | Hành động chính của Staff |
-|---|---|---|
-| `Assigned` | Công việc được giao cho Staff hiện hành | Bắt đầu kiểm kê |
-| `InProgress` | Đang kiểm tra các item Owner-confirmed và ghi nhận vấn đề | Xác nhận đủ/nguyên vẹn; ghi nhận thiếu/hỏng/không thể kiểm tra; gửi checklist khi hợp lệ |
-| `PendingVerification` | Checklist đã gửi; chờ Owner đối soát/ra quyết định | Chờ Owner; nếu Owner ký biên bản thì đọc PDF và ký nhận |
-| `Completed` | Owner và Staff đã ký cùng một revision/snapshot | Chỉ xem/lưu hồ sơ lịch sử |
-| `Cancelled` | Trạng thái đóng theo các quy tắc task hiện có; không dùng thay cho rework | Không thao tác |
+| Trạng thái task       | Ý nghĩa                                                                   | Hành động chính của Staff                                                                |
+| --------------------- | ------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------- |
+| `Assigned`            | Công việc được giao cho Staff hiện hành                                   | Bắt đầu kiểm kê                                                                          |
+| `InProgress`          | Đang kiểm tra các item Owner-confirmed và ghi nhận vấn đề                 | Xác nhận đủ/nguyên vẹn; ghi nhận thiếu/hỏng/không thể kiểm tra; gửi checklist khi hợp lệ |
+| `PendingVerification` | Checklist đã gửi; chờ Owner đối soát/ra quyết định                        | Chờ Owner; nếu Owner ký biên bản thì đọc PDF và ký nhận                                  |
+| `Completed`           | Owner và Staff đã ký cùng một revision/snapshot                           | Chỉ xem/lưu hồ sơ lịch sử                                                                |
+| `Cancelled`           | Trạng thái đóng theo các quy tắc task hiện có; không dùng thay cho rework | Không thao tác                                                                           |
 
 `progress`/`blockers` là event lịch sử của Operational Task, không phải bước ký biên bản. Với LocationAssetHandover, tiến độ chính được thể hiện bằng checklist; vấn đề thiếu/hỏng cần liên kết Incident cụ thể.
 
@@ -84,13 +84,13 @@ stateDiagram-v2
   Completed --> [*]
 ```
 
-| Trạng thái report | Ý nghĩa | Người cần hành động |
-|---|---|---|
-| Chưa có report | Staff chưa gửi hoặc Owner chưa lập biên bản | Staff gửi checklist hoặc Owner đối soát |
-| `PendingOwnerSignature` | Owner đã đối soát/lập snapshot, chưa có Owner signature | Owner |
-| `PendingStaffSignature` | Owner đã ký; chờ đúng Staff của report đọc PDF và ký nhận | Staff có `StaffId` khớp và còn trách nhiệm hiện hành |
-| `Completed` | Cả hai bên ký cùng revision/hash; task hoàn tất | Không còn hành động ký |
-| `Superseded` | Task version/assignment/responsible Staff thay đổi trước Staff ký | Không được ký bản cũ; tiếp tục task hiện hành |
+| Trạng thái report       | Ý nghĩa                                                           | Người cần hành động                                  |
+| ----------------------- | ----------------------------------------------------------------- | ---------------------------------------------------- |
+| Chưa có report          | Staff chưa gửi hoặc Owner chưa lập biên bản                       | Staff gửi checklist hoặc Owner đối soát              |
+| `PendingOwnerSignature` | Owner đã đối soát/lập snapshot, chưa có Owner signature           | Owner                                                |
+| `PendingStaffSignature` | Owner đã ký; chờ đúng Staff của report đọc PDF và ký nhận         | Staff có `StaffId` khớp và còn trách nhiệm hiện hành |
+| `Completed`             | Cả hai bên ký cùng revision/hash; task hoàn tất                   | Không còn hành động ký                               |
+| `Superseded`            | Task version/assignment/responsible Staff thay đổi trước Staff ký | Không được ký bản cũ; tiếp tục task hiện hành        |
 
 **Không đồng nhất trạng thái task với trạng thái report.** Trong lúc `task.Status=PendingVerification`:
 
@@ -184,20 +184,20 @@ stateDiagram-v2
 
 ## 4. Ma trận quyền
 
-| Tác vụ | Owner | Staff hiện được giao / đang có trách nhiệm | Staff cũ | Tenant |
-|---|---|---|---|---|
-| Tạo Incident | Theo quyền quản trị hiện có | Có, trong Location được phân công | Không còn quyền theo Location cũ | Có, trong phạm vi Room/Contract của mình |
-| Xem Incident | Quản lý trong phạm vi Owner | Theo Location và permission hiện hành | Không được đọc dữ liệu Location đã hết trách nhiệm trừ hồ sơ được phép lưu lịch sử riêng | Chỉ Incident của mình và activity Tenant-visible |
-| Phân loại / assign / reject / duplicate / resolve | Có | Không | Không | Không |
-| Emergency acknowledge / action | Xem và quyết định | Staff đủ điều kiện tại Location; action sau acknowledge (trừ người Staff tạo report đã auto-ack) | Không | Không |
-| Work Order plan approve / verify / rework / cancel | Có | Không | Không | Không |
-| Work Order inspect / propose / start / progress / blocker / submit | Có thể xem/điều phối | Chỉ Staff được giao đúng Work Order và còn quyền Location | Không | Không |
-| Propose Asset link | Xem/ra quyết định | Staff được giao Work Order | Không | Không |
-| Compensation / Invoice / Deposit decision | Owner-only | Không | Không | Thanh toán hóa đơn hoặc xem kết quả của mình theo quyền Tenant |
-| Xem checklist / sửa item / upload evidence / submit handover | Có, bao gồm reconcile/rework | Chỉ Staff phụ trách hiện tại, assignment hiệu lực và employment active | Không đọc/ghi checklist hoặc report chưa ký/current | Không |
-| Owner ký biên bản | Có | Không | Không | Không |
-| Staff ký biên bản | Không ký thay Staff | Chỉ StaffId trên report, đang phụ trách hiện tại, đúng revision/hash | Không được ký lại | Không |
-| Đọc report/PDF đã hoàn tất | Có | Staff signer/current Staff theo quyền | Chỉ report/PDF đã ký bởi chính mình, read-only | Không |
+| Tác vụ                                                             | Owner                        | Staff hiện được giao / đang có trách nhiệm                                                       | Staff cũ                                                                                 | Tenant                                                         |
+| ------------------------------------------------------------------ | ---------------------------- | ------------------------------------------------------------------------------------------------ | ---------------------------------------------------------------------------------------- | -------------------------------------------------------------- |
+| Tạo Incident                                                       | Theo quyền quản trị hiện có  | Có, trong Location được phân công                                                                | Không còn quyền theo Location cũ                                                         | Có, trong phạm vi Room/Contract của mình                       |
+| Xem Incident                                                       | Quản lý trong phạm vi Owner  | Theo Location và permission hiện hành                                                            | Không được đọc dữ liệu Location đã hết trách nhiệm trừ hồ sơ được phép lưu lịch sử riêng | Chỉ Incident của mình và activity Tenant-visible               |
+| Phân loại / assign / reject / duplicate / resolve                  | Có                           | Không                                                                                            | Không                                                                                    | Không                                                          |
+| Emergency acknowledge / action                                     | Xem và quyết định            | Staff đủ điều kiện tại Location; action sau acknowledge (trừ người Staff tạo report đã auto-ack) | Không                                                                                    | Không                                                          |
+| Work Order plan approve / verify / rework / cancel                 | Có                           | Không                                                                                            | Không                                                                                    | Không                                                          |
+| Work Order inspect / propose / start / progress / blocker / submit | Có thể xem/điều phối         | Chỉ Staff được giao đúng Work Order và còn quyền Location                                        | Không                                                                                    | Không                                                          |
+| Propose Asset link                                                 | Xem/ra quyết định            | Staff được giao Work Order                                                                       | Không                                                                                    | Không                                                          |
+| Compensation / Invoice / Deposit decision                          | Owner-only                   | Không                                                                                            | Không                                                                                    | Thanh toán hóa đơn hoặc xem kết quả của mình theo quyền Tenant |
+| Xem checklist / sửa item / upload evidence / submit handover       | Có, bao gồm reconcile/rework | Chỉ Staff phụ trách hiện tại, assignment hiệu lực và employment active                           | Không đọc/ghi checklist hoặc report chưa ký/current                                      | Không                                                          |
+| Owner ký biên bản                                                  | Có                           | Không                                                                                            | Không                                                                                    | Không                                                          |
+| Staff ký biên bản                                                  | Không ký thay Staff          | Chỉ StaffId trên report, đang phụ trách hiện tại, đúng revision/hash                             | Không được ký lại                                                                        | Không                                                          |
+| Đọc report/PDF đã hoàn tất                                         | Có                           | Staff signer/current Staff theo quyền                                                            | Chỉ report/PDF đã ký bởi chính mình, read-only                                           | Không                                                          |
 
 **Backend bắt buộc kiểm tra quyền cho mọi read/write:** task detail, checklist GET/PUT, task history, evidence metadata/upload/download, report GET, PDF GET, sign, incident/work-order detail/history/evidence và mọi thao tác theo ID. UI ẩn nút không thay thế server authorization. Khi không đủ quyền, dùng 403/404 theo policy hiện có và không tiết lộ dữ liệu khác Location.
 
@@ -213,15 +213,15 @@ stateDiagram-v2
 
 ## 6. Traceability và kiểm thử nghiệm thu
 
-| Phạm vi | Source / code | Acceptance tối thiểu |
-|---|---|---|
-| Location task, Owner-confirmed baseline, Tenant inheritance, successor | `docs/development/location-asset-inventory-task.md`; `LocationAssetInventoryTaskFactory`; `CompactLocationAssignments`; `LocationAssetInventoryService`; `LocationAssetHandoverService` | Chỉ item Owner-confirmed; inherited chỉ khớp baseline; một open task/Location; successor giữ task/progress/evidence/history; former Staff bị từ chối |
-| Task/report signature states | `OperationalTaskService`; `LocationAssetHandoverService`; `LocationAssetHandoverSigningTests` | Owner approve -> Owner sign -> Staff sign đúng revision/hash; rework/successor làm report cũ Superseded; không ký bản cũ |
-| Former Staff signed-report archive | `LocationAssetHandoverArchiveController`; `LocationAssetHandoverService.ArchiveAsync/ArchiveRevisionAsync/ArchiveDocumentAsync`; `LocationAssetHandoverSigningTests` | Actor l?y t? session; ch? list/detail/final PDF revision ?? c? Owner + ch?nh Staff k?; kh?ng truy c?p task/checklist/evidence/current report/successor |
-| Former Staff signed-report archive | `LocationAssetHandoverArchiveController`; `LocationAssetHandoverService.ArchiveAsync/ArchiveRevisionAsync/ArchiveDocumentAsync`; `LocationAssetHandoverSigningTests` | Actor l?y t? session; ch? list/detail/final PDF revision ?? c? Owner + ch?nh Staff k?; kh?ng truy c?p task/checklist/evidence/current report/successor |
-| BF-07 Incident / Work Order | `AGENTS.md` §BF-07; `docs/api/INCIDENT_MAINTENANCE.md`; `IncidentService`; `IncidentRecords` | Normal report -> classify/assign -> propose/approve -> execute/evidence -> verify/rework -> resolve; duplicate/reject/cancel giữ lý do |
-| Emergency / Fast Repair / Asset link / Vendor | `IncidentService`; `FastRepairAndAssets`; `IncidentActions` | Emergency ack/action/cost decision; Fast Repair 0 VND/no materials/fallback; Asset proposal Owner decision; Vendor không tạo lifecycle riêng |
-| Proactive / compensation | `CompensationService`; `MaintenanceWorkOrder`; Owner maintenance APIs | Proactive `IncidentId=null`; compensation chỉ sau Verified; Invoice vs Deposit; Deposit chỉ deduct khi MoveOutReady và đủ số dư; idempotent |
+| Phạm vi                                                                | Source / code                                                                                                                                                                           | Acceptance tối thiểu                                                                                                                                   |
+| ---------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| Location task, Owner-confirmed baseline, Tenant inheritance, successor | `docs/development/location-asset-inventory-task.md`; `LocationAssetInventoryTaskFactory`; `CompactLocationAssignments`; `LocationAssetInventoryService`; `LocationAssetHandoverService` | Chỉ item Owner-confirmed; inherited chỉ khớp baseline; một open task/Location; successor giữ task/progress/evidence/history; former Staff bị từ chối   |
+| Task/report signature states                                           | `OperationalTaskService`; `LocationAssetHandoverService`; `LocationAssetHandoverSigningTests`                                                                                           | Owner approve -> Owner sign -> Staff sign đúng revision/hash; rework/successor làm report cũ Superseded; không ký bản cũ                               |
+| Former Staff signed-report archive                                     | `LocationAssetHandoverArchiveController`; `LocationAssetHandoverService.ArchiveAsync/ArchiveRevisionAsync/ArchiveDocumentAsync`; `LocationAssetHandoverSigningTests`                    | Actor l?y t? session; ch? list/detail/final PDF revision ?? c? Owner + ch?nh Staff k?; kh?ng truy c?p task/checklist/evidence/current report/successor |
+| Former Staff signed-report archive                                     | `LocationAssetHandoverArchiveController`; `LocationAssetHandoverService.ArchiveAsync/ArchiveRevisionAsync/ArchiveDocumentAsync`; `LocationAssetHandoverSigningTests`                    | Actor l?y t? session; ch? list/detail/final PDF revision ?? c? Owner + ch?nh Staff k?; kh?ng truy c?p task/checklist/evidence/current report/successor |
+| BF-07 Incident / Work Order                                            | `AGENTS.md` §BF-07; `docs/api/INCIDENT_MAINTENANCE.md`; `IncidentService`; `IncidentRecords`                                                                                            | Normal report -> classify/assign -> propose/approve -> execute/evidence -> verify/rework -> resolve; duplicate/reject/cancel giữ lý do                 |
+| Emergency / Fast Repair / Asset link / Vendor                          | `IncidentService`; `FastRepairAndAssets`; `IncidentActions`                                                                                                                             | Emergency ack/action/cost decision; Fast Repair 0 VND/no materials/fallback; Asset proposal Owner decision; Vendor không tạo lifecycle riêng           |
+| Proactive / compensation                                               | `CompensationService`; `MaintenanceWorkOrder`; Owner maintenance APIs                                                                                                                   | Proactive `IncidentId=null`; compensation chỉ sau Verified; Invoice vs Deposit; Deposit chỉ deduct khi MoveOutReady và đủ số dư; idempotent            |
 
 ### Regression tests nên có
 

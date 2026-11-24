@@ -150,7 +150,7 @@ function documentValues(document: SharedDocument): string[] {
     return [
       data.category === 'ServiceFee'
         ? `${feeCategoryLabels[data.category] ?? data.category} · ${sharedFeeServiceName(data, '')}`
-        : feeCategoryLabels[data.category] ?? data.category,
+        : (feeCategoryLabels[data.category] ?? data.category),
       data.scope === 'Room' ? 'Phòng' : 'Cơ sở',
       feeMethodLabels[data.method] ?? data.method,
       `${formatBillingDecimal(data.referenceRate)} đ/${unit}`,
@@ -188,12 +188,7 @@ export function ApiConfigurationLibraryPage({ kind }: { kind: LibraryKind }) {
         : kind === 'fee'
           ? 'fee-templates'
           : 'policy-templates';
-  return (
-    <SharedLibrary
-      key={resource}
-      resource={resource}
-    />
-  );
+  return <SharedLibrary key={resource} resource={resource} />;
 }
 
 function SharedLibrary({ resource }: { resource: Exclude<SharedResource, 'asset-templates'> }) {

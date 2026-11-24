@@ -98,7 +98,11 @@ export function StaffTaskListScreen() {
         <Button icon="wrench-clock" mode="contained-tonal" onPress={() => go('staff-maintenance')}>
           Lệnh sửa chữa / Bảo trì
         </Button>
-        <Button icon="file-document-check-outline" mode="outlined" onPress={() => go('staff-handover-archive')}>
+        <Button
+          icon="file-document-check-outline"
+          mode="outlined"
+          onPress={() => go('staff-handover-archive')}
+        >
           Biên bản đã ký
         </Button>
       </View>

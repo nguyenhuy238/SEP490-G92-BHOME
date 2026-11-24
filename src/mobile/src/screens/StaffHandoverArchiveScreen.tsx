@@ -60,18 +60,28 @@ function ArchiveCard({
     <Box>
       <View style={{ gap: 5 }}>
         <View style={{ flexDirection: 'row', justifyContent: 'space-between', gap: 8 }}>
-          <Text variant="titleMedium" style={{ flex: 1 }}>{report.locationName}</Text>
+          <Text variant="titleMedium" style={{ flex: 1 }}>
+            {report.locationName}
+          </Text>
           <Pill tone="green">Đã ký đầy đủ</Pill>
         </View>
-        {!!report.address && <Text variant="bodySmall" style={ui.muted}>{report.address}</Text>}
+        {!!report.address && (
+          <Text variant="bodySmall" style={ui.muted}>
+            {report.address}
+          </Text>
+        )}
         <Text variant="bodySmall" style={ui.muted}>
           Phiên bản {report.revision} · {report.totalItems} nhóm tài sản
         </Text>
         <Text variant="bodySmall" style={ui.muted}>
-          {formatInstant(report.approvedAt)} · {report.directItems} mục Staff kiểm tra · {report.inheritedItems} mục kế thừa từ Tenant
+          {formatInstant(report.approvedAt)} · {report.directItems} mục Staff kiểm tra ·{' '}
+          {report.inheritedItems} mục kế thừa từ Tenant
         </Text>
       </View>
-      <Button mode="contained-tonal" onPress={() => onOpen({ taskId: report.taskId, revision: report.revision })}>
+      <Button
+        mode="contained-tonal"
+        onPress={() => onOpen({ taskId: report.taskId, revision: report.revision })}
+      >
         Xem biên bản
       </Button>
     </Box>
@@ -83,11 +93,15 @@ export function StaffHandoverArchiveScreen() {
   const [selected, setSelected] = useState<SelectedReport | null>(null);
   const [downloadBusy, setDownloadBusy] = useState(false);
   const [actionError, setActionError] = useState('');
-  const list = useWorkspaceQuery<LocationAssetHandoverArchiveListItem[]>(archivePath, { notifyError: false });
+  const list = useWorkspaceQuery<LocationAssetHandoverArchiveListItem[]>(archivePath, {
+    notifyError: false,
+  });
   const detailPath = selected
     ? archivePath + '/' + selected.taskId + '/revisions/' + selected.revision
     : null;
-  const detail = useWorkspaceQuery<LocationAssetHandoverArchiveReport>(detailPath, { notifyError: false });
+  const detail = useWorkspaceQuery<LocationAssetHandoverArchiveReport>(detailPath, {
+    notifyError: false,
+  });
   const reloadList = list.reload;
   const reloadDetail = detail.reload;
   const refresh = useCallback(() => {
@@ -128,39 +142,89 @@ export function StaffHandoverArchiveScreen() {
       )}
       {selected ? (
         <>
-          <Button icon="arrow-left" mode="text" onPress={() => { setSelected(null); setActionError(''); }}>
+          <Button
+            icon="arrow-left"
+            mode="text"
+            onPress={() => {
+              setSelected(null);
+              setActionError('');
+            }}
+          >
             Quay lại danh sách
           </Button>
           {detail.loading && <ActivityIndicator accessibilityLabel="Đang tải biên bản đã ký" />}
           {!!detail.error && (
             <Box>
-              <Text accessibilityRole="alert" style={ui.red}>{detail.error}</Text>
+              <Text accessibilityRole="alert" style={ui.red}>
+                {detail.error}
+              </Text>
               <Button onPress={detail.reload}>Thử tải lại</Button>
             </Box>
           )}
           {report && (
             <>
               <Box>
-                <Heading title={report.locationName} detail={report.address || 'Biên bản bàn giao tài sản cơ sở'} />
+                <Heading
+                  title={report.locationName}
+                  detail={report.address || 'Biên bản bàn giao tài sản cơ sở'}
+                />
                 <Pill tone="green">Đã ký đầy đủ</Pill>
-                <Text>Phiên bản {report.revision} · {report.totalItems} nhóm tài sản</Text>
-                <Text style={ui.muted}>Owner ký: {formatInstant(report.ownerSignature.signedAt)}</Text>
-                <Text style={ui.muted}>Bạn ký nhận: {formatInstant(report.staffSignature.signedAt)}</Text>
-                {!!report.exceptionDecision && <Text>Ghi chú quyết định của Owner: {report.exceptionDecision}</Text>}
-                <Button mode="contained" icon="file-pdf-box" loading={downloadBusy} disabled={downloadBusy} onPress={() => void download()}>
+                <Text>
+                  Phiên bản {report.revision} · {report.totalItems} nhóm tài sản
+                </Text>
+                <Text style={ui.muted}>
+                  Owner ký: {formatInstant(report.ownerSignature.signedAt)}
+                </Text>
+                <Text style={ui.muted}>
+                  Bạn ký nhận: {formatInstant(report.staffSignature.signedAt)}
+                </Text>
+                {!!report.exceptionDecision && (
+                  <Text>Ghi chú quyết định của Owner: {report.exceptionDecision}</Text>
+                )}
+                <Button
+                  mode="contained"
+                  icon="file-pdf-box"
+                  loading={downloadBusy}
+                  disabled={downloadBusy}
+                  onPress={() => void download()}
+                >
                   Mở hoặc lưu PDF đã ký
                 </Button>
-                {!!actionError && <Text accessibilityRole="alert" style={ui.red}>{actionError}</Text>}
+                {!!actionError && (
+                  <Text accessibilityRole="alert" style={ui.red}>
+                    {actionError}
+                  </Text>
+                )}
               </Box>
-              <Heading title="Tài sản trong biên bản" detail={detail.data!.items.length + ' nhóm tài sản đã ghi nhận'} />
+              <Heading
+                title="Tài sản trong biên bản"
+                detail={detail.data!.items.length + ' nhóm tài sản đã ghi nhận'}
+              />
               {detail.data!.items.map((item) => (
                 <Box key={item.id}>
                   <View style={{ flexDirection: 'row', justifyContent: 'space-between', gap: 8 }}>
-                    <Text variant="titleSmall" style={{ flex: 1 }}>{item.name}</Text>
-                    <Pill tone={item.inherited ? 'neutral' : 'blue'}>{item.inherited ? 'Kế thừa từ Tenant' : 'Staff kiểm tra'}</Pill>
+                    <Text variant="titleSmall" style={{ flex: 1 }}>
+                      {item.name}
+                    </Text>
+                    <Pill tone={item.inherited ? 'neutral' : 'blue'}>
+                      {item.inherited ? 'Kế thừa từ Tenant' : 'Staff kiểm tra'}
+                    </Pill>
                   </View>
-                  <Text style={ui.muted}>{item.scope} · Số lượng: {item.quantity}</Text>
-                  <Text>Hiện trạng: {item.condition === 'Intact' ? 'Đủ, còn tốt' : item.condition === 'Missing' ? 'Thiếu' : item.condition === 'Damaged' ? 'Hư hỏng' : item.condition === 'NotAccessible' ? 'Không thể tiếp cận' : 'Chưa đánh giá'}</Text>
+                  <Text style={ui.muted}>
+                    {item.scope} · Số lượng: {item.quantity}
+                  </Text>
+                  <Text>
+                    Hiện trạng:{' '}
+                    {item.condition === 'Intact'
+                      ? 'Đủ, còn tốt'
+                      : item.condition === 'Missing'
+                        ? 'Thiếu'
+                        : item.condition === 'Damaged'
+                          ? 'Hư hỏng'
+                          : item.condition === 'NotAccessible'
+                            ? 'Không thể tiếp cận'
+                            : 'Chưa đánh giá'}
+                  </Text>
                   {!!item.note && <Text style={ui.muted}>{item.note}</Text>}
                 </Box>
               ))}
@@ -172,17 +236,26 @@ export function StaffHandoverArchiveScreen() {
           {list.loading && <ActivityIndicator accessibilityLabel="Đang tải danh sách biên bản" />}
           {!!list.error && (
             <Box>
-              <Text accessibilityRole="alert" style={ui.red}>{list.error}</Text>
+              <Text accessibilityRole="alert" style={ui.red}>
+                {list.error}
+              </Text>
               <Button onPress={list.reload}>Thử tải lại</Button>
             </Box>
           )}
-          {!!list.data?.length && list.data.map((item) => (
-            <ArchiveCard key={item.taskId + ':' + item.revision} report={item} onOpen={setSelected} />
-          ))}
+          {!!list.data?.length &&
+            list.data.map((item) => (
+              <ArchiveCard
+                key={item.taskId + ':' + item.revision}
+                report={item}
+                onOpen={setSelected}
+              />
+            ))}
           {!list.loading && !list.error && !list.data?.length && (
             <Box>
               <Text variant="titleMedium">Chưa có biên bản đã ký</Text>
-              <Text style={ui.muted}>Biên bản sẽ xuất hiện ở đây sau khi Owner và bạn cùng ký một phiên bản.</Text>
+              <Text style={ui.muted}>
+                Biên bản sẽ xuất hiện ở đây sau khi Owner và bạn cùng ký một phiên bản.
+              </Text>
             </Box>
           )}
         </>

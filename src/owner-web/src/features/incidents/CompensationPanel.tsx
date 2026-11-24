@@ -113,9 +113,7 @@ export function CompensationPanel({
           <Typography variant="body2" color="text.secondary">
             Chi phí sửa chữa thực tế: {formatContractMoney(row.actualRepairCost)}
           </Typography>
-          <Typography>
-            Hợp đồng chịu trách nhiệm · {formatInstant(row.decidedAt)}
-          </Typography>
+          <Typography>Hợp đồng chịu trách nhiệm · {formatInstant(row.decidedAt)}</Typography>
           <Typography>{row.reason}</Typography>
           <details>
             <summary>Lịch sử quyết định bồi thường</summary>
@@ -138,8 +136,8 @@ export function CompensationPanel({
           {row.status === 'DepositPending' && (
             <>
               <Alert severity="info">
-                Chỉ khấu trừ sau khi trả phòng được duyệt và còn đủ tiền cọc. Máy chủ sẽ kiểm tra lại
-                số dư và hồ sơ trả phòng ngay tại thời điểm thực hiện.
+                Chỉ khấu trừ sau khi trả phòng được duyệt và còn đủ tiền cọc. Máy chủ sẽ kiểm tra
+                lại số dư và hồ sơ trả phòng ngay tại thời điểm thực hiện.
               </Alert>
               <TextField
                 label="Lý do quyết toán hoặc hủy quyết định"
@@ -178,7 +176,8 @@ export function CompensationPanel({
           <>
             <Alert severity="info">
               Owner xác nhận trách nhiệm theo bằng chứng. Mỗi nghĩa vụ có một phương thức thu. Mức
-              bồi thường không được vượt chi phí sửa chữa thực tế ({formatContractMoney(String(work.actualCost ?? 0))}).
+              bồi thường không được vượt chi phí sửa chữa thực tế (
+              {formatContractMoney(String(work.actualCost ?? 0))}).
             </Alert>
             <TextField
               select
@@ -189,8 +188,13 @@ export function CompensationPanel({
             >
               {(contracts.data ?? []).map((c) => (
                 <MenuItem key={c.id} value={c.id}>
-                  {c.startDate.split('-').reverse().join('/')} – {c.endDate.split('-').reverse().join('/')} ·{' '}
-                  {c.status === 'Active' ? 'Đang hiệu lực' : c.status === 'Terminated' ? 'Đã kết thúc' : 'Đã thay thế'}
+                  {c.startDate.split('-').reverse().join('/')} –{' '}
+                  {c.endDate.split('-').reverse().join('/')} ·{' '}
+                  {c.status === 'Active'
+                    ? 'Đang hiệu lực'
+                    : c.status === 'Terminated'
+                      ? 'Đã kết thúc'
+                      : 'Đã thay thế'}
                 </MenuItem>
               ))}
             </TextField>
@@ -210,9 +214,15 @@ export function CompensationPanel({
               <MenuItem value="Deposit">Khấu trừ cọc khi trả phòng</MenuItem>
             </TextField>
             {method === 'Deposit' ? (
-              <Alert severity="info">Khấu trừ cọc chỉ được thực hiện sau khi Owner duyệt hồ sơ trả phòng và hệ thống xác nhận số dư còn đủ.</Alert>
+              <Alert severity="info">
+                Khấu trừ cọc chỉ được thực hiện sau khi Owner duyệt hồ sơ trả phòng và hệ thống xác
+                nhận số dư còn đủ.
+              </Alert>
             ) : (
-              <Alert severity="info">Hóa đơn bồi thường sẽ được tạo riêng để Tenant thanh toán bằng QR như hóa đơn thông thường.</Alert>
+              <Alert severity="info">
+                Hóa đơn bồi thường sẽ được tạo riêng để Tenant thanh toán bằng QR như hóa đơn thông
+                thường.
+              </Alert>
             )}
             {method === 'Invoice' && (
               <TextField

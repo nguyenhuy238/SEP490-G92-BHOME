@@ -117,7 +117,11 @@ export function StaffTaskDetailScreen({ id }: { id: string }) {
           mode="contained"
           disabled={!!busy || !model.syncedVersion || model.uploadPending}
           onPress={() => {
-            if (task.kind === 'LocationAssetHandover' && action === 'submit' && !model.notes.submit.trim())
+            if (
+              task.kind === 'LocationAssetHandover' &&
+              action === 'submit' &&
+              !model.notes.submit.trim()
+            )
               model.setNote(
                 'submit',
                 'Đã hoàn tất checklist kiểm kê tài sản cơ sở. Vui lòng đối soát và lập biên bản bàn giao.',
@@ -403,71 +407,80 @@ export function StaffTaskDetailScreen({ id }: { id: string }) {
         </View>
       )}
       {(!isHandover || entries.length > 0 || model.history.loading || !!model.history.rawError) && (
-      <View style={styles.section}>
-        <Text variant="titleMedium" style={styles.title}>
-          Lịch sử hoạt động
-        </Text>
-        {model.history.loading && <ActivityIndicator size="small" />}
-        {!!model.history.rawError && (
-          <ReadFailure error={model.history.rawError} retry={model.history.reload} />
-        )}
-        {model.history.data?.items.length === 0 && (
-          <Text variant="bodySmall" style={styles.muted}>
-            Chưa có hoạt động.
+        <View style={styles.section}>
+          <Text variant="titleMedium" style={styles.title}>
+            Lịch sử hoạt động
           </Text>
-        )}
-        {(isHandover ? (historyExpanded ? entries : []) : historyExpanded ? entries : entries.slice(0, 3)).map((entry) => (
-          <View key={entry.id} style={styles.timelineRow}>
-            <View style={styles.timelineDot} />
-            <View style={{ flex: 1, gap: 4 }}>
-              <Text variant="labelLarge" style={styles.title}>
-                {taskActionLabels[entry.action] ?? 'Hoạt động công việc'}
-              </Text>
-              <Text variant="labelSmall" style={styles.muted}>
-                {formatInstant(entry.occurredAt)}
-              </Text>
-              {!!entry.note && <HistoryNote note={entry.note} />}
-            </View>
-          </View>
-        ))}
-        {((isHandover && entries.length > 0) || (!isHandover && entries.length > 3)) && (
-          <Button compact onPress={() => setHistoryExpanded(!historyExpanded)}>
-            {historyExpanded
-              ? 'Thu gọn lịch sử'
-              : isHandover
-                ? `Xem lịch sử (${entries.length})`
-                : 'Xem thêm hoạt động'}
-          </Button>
-        )}
-        {(!isHandover || historyExpanded) && model.history.data && model.history.data.totalCount > model.history.data.pageSize && (
-          <View style={styles.between}>
-            <IconButton
-              icon="chevron-left"
-              accessibilityLabel="Trang lịch sử trước"
-              disabled={model.history.fetching || model.historyPage === 1}
-              onPress={() => {
-                model.setHistoryPage(model.historyPage - 1);
-                setHistoryExpanded(true);
-              }}
-            />
+          {model.history.loading && <ActivityIndicator size="small" />}
+          {!!model.history.rawError && (
+            <ReadFailure error={model.history.rawError} retry={model.history.reload} />
+          )}
+          {model.history.data?.items.length === 0 && (
             <Text variant="bodySmall" style={styles.muted}>
-              Trang {model.historyPage}
+              Chưa có hoạt động.
             </Text>
-            <IconButton
-              icon="chevron-right"
-              accessibilityLabel="Trang lịch sử sau"
-              disabled={
-                model.history.fetching ||
-                model.historyPage * model.history.data.pageSize >= model.history.data.totalCount
-              }
-              onPress={() => {
-                model.setHistoryPage(model.historyPage + 1);
-                setHistoryExpanded(true);
-              }}
-            />
-          </View>
-        )}
-      </View>
+          )}
+          {(isHandover
+            ? historyExpanded
+              ? entries
+              : []
+            : historyExpanded
+              ? entries
+              : entries.slice(0, 3)
+          ).map((entry) => (
+            <View key={entry.id} style={styles.timelineRow}>
+              <View style={styles.timelineDot} />
+              <View style={{ flex: 1, gap: 4 }}>
+                <Text variant="labelLarge" style={styles.title}>
+                  {taskActionLabels[entry.action] ?? 'Hoạt động công việc'}
+                </Text>
+                <Text variant="labelSmall" style={styles.muted}>
+                  {formatInstant(entry.occurredAt)}
+                </Text>
+                {!!entry.note && <HistoryNote note={entry.note} />}
+              </View>
+            </View>
+          ))}
+          {((isHandover && entries.length > 0) || (!isHandover && entries.length > 3)) && (
+            <Button compact onPress={() => setHistoryExpanded(!historyExpanded)}>
+              {historyExpanded
+                ? 'Thu gọn lịch sử'
+                : isHandover
+                  ? `Xem lịch sử (${entries.length})`
+                  : 'Xem thêm hoạt động'}
+            </Button>
+          )}
+          {(!isHandover || historyExpanded) &&
+            model.history.data &&
+            model.history.data.totalCount > model.history.data.pageSize && (
+              <View style={styles.between}>
+                <IconButton
+                  icon="chevron-left"
+                  accessibilityLabel="Trang lịch sử trước"
+                  disabled={model.history.fetching || model.historyPage === 1}
+                  onPress={() => {
+                    model.setHistoryPage(model.historyPage - 1);
+                    setHistoryExpanded(true);
+                  }}
+                />
+                <Text variant="bodySmall" style={styles.muted}>
+                  Trang {model.historyPage}
+                </Text>
+                <IconButton
+                  icon="chevron-right"
+                  accessibilityLabel="Trang lịch sử sau"
+                  disabled={
+                    model.history.fetching ||
+                    model.historyPage * model.history.data.pageSize >= model.history.data.totalCount
+                  }
+                  onPress={() => {
+                    model.setHistoryPage(model.historyPage + 1);
+                    setHistoryExpanded(true);
+                  }}
+                />
+              </View>
+            )}
+        </View>
       )}
       {!inShell && footer}
       <TaskActionSheet model={model} inventoryReady={inventoryReady} />
@@ -618,7 +631,8 @@ function TaskActionSheet({
                 )}
                 {handoverSubmit && (
                   <Text variant="bodyMedium" style={styles.body}>
-                    Checklist đã đủ điều kiện. Gửi kết quả để Owner đối soát và lập biên bản bàn giao.
+                    Checklist đã đủ điều kiện. Gửi kết quả để Owner đối soát và lập biên bản bàn
+                    giao.
                   </Text>
                 )}
                 {!handoverStart && !handoverSubmit && (

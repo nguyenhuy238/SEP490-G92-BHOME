@@ -187,9 +187,19 @@ export function LocationAssetInventoryReport({
               <Typography variant="caption" color="text.secondary">
                 Checklist hiện tại
               </Typography>
-              <Typography sx={{ fontSize: 22, fontWeight: 750, lineHeight: 1.3, fontVariantNumeric: 'tabular-nums' }}>
+              <Typography
+                sx={{
+                  fontSize: 22,
+                  fontWeight: 750,
+                  lineHeight: 1.3,
+                  fontVariantNumeric: 'tabular-nums',
+                }}
+              >
                 {preview.currentCount}{' '}
-                <Box component="span" sx={{ fontSize: 13, fontWeight: 500, color: 'text.secondary' }}>
+                <Box
+                  component="span"
+                  sx={{ fontSize: 13, fontWeight: 500, color: 'text.secondary' }}
+                >
                   mục
                 </Box>
               </Typography>
@@ -219,7 +229,12 @@ export function LocationAssetInventoryReport({
               </Typography>
             </Box>
             {(preview.addedCount > 0 || preview.removedCount > 0) && (
-              <Chip size="small" color="warning" variant="outlined" label="Có thay đổi cần đối chiếu" />
+              <Chip
+                size="small"
+                color="warning"
+                variant="outlined"
+                label="Có thay đổi cần đối chiếu"
+              />
             )}
           </Stack>
           {scopeExpanded && (

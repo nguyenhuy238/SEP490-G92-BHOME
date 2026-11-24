@@ -325,7 +325,11 @@ function ReportForm() {
     <>
       <Heading
         title={fromLocationInventory ? 'Báo vấn đề khi kiểm kê' : 'Báo cáo sự cố'}
-        detail={fromLocationInventory ? 'Thông tin tài sản đã được điền sẵn' : 'Phòng, thiết bị hoặc khu vực chung'}
+        detail={
+          fromLocationInventory
+            ? 'Thông tin tài sản đã được điền sẵn'
+            : 'Phòng, thiết bị hoặc khu vực chung'
+        }
       />
       {fromAnyInventory && (
         <Box>

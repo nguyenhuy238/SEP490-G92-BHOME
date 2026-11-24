@@ -235,8 +235,8 @@ export function StaffEditor({
                       {latest.fullName} · {latest.email}
                     </Typography>
                     <Typography variant="body2">
-                      {latest.employment?.contractNumber || 'Chưa có hợp đồng'}{' '}
-                      · {latest.employment?.startDate} –{' '}
+                      {latest.employment?.contractNumber || 'Chưa có hợp đồng'} ·{' '}
+                      {latest.employment?.startDate} –{' '}
                       {latest.employment?.endDate ?? 'Không xác định thời hạn'}
                     </Typography>
                     {!renewal && latest.employment?.id !== baseline?.employment?.id ? (

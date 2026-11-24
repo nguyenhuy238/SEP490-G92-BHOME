@@ -752,7 +752,10 @@ export function LocationSetupWizard({
     (library.data?.items[doc.resource] ?? []).some(
       (item) => item.id === id && item.familyId === doc.familyId,
     );
-  const librarySection: { resource: Exclude<SharedResource, 'asset-templates'>; label: string } | null =
+  const librarySection: {
+    resource: Exclude<SharedResource, 'asset-templates'>;
+    label: string;
+  } | null =
     draft.step === 1
       ? { resource: 'room-type-templates', label: 'Thêm loại phòng mẫu' }
       : draft.step === 3
@@ -762,7 +765,10 @@ export function LocationSetupWizard({
           : draft.step === 5
             ? { resource: 'policy-templates', label: 'Thêm mẫu nội quy' }
             : null;
-  const openLibraryEditor = (resource: Exclude<SharedResource, 'asset-templates'>, document: SharedDocument | null = null) => {
+  const openLibraryEditor = (
+    resource: Exclude<SharedResource, 'asset-templates'>,
+    document: SharedDocument | null = null,
+  ) => {
     setLibraryError('');
     setLibraryEditor({ resource, document });
   };
@@ -829,8 +835,10 @@ export function LocationSetupWizard({
       {!library.isFetching &&
         latestDocuments(library.data?.items[librarySection.resource] ?? [], 'Draft')
           .filter(
-          (doc): doc is SharedDocument & { resource: Exclude<SharedResource, 'asset-templates'> } =>
-            doc.resource !== 'asset-templates' &&
+            (
+              doc,
+            ): doc is SharedDocument & { resource: Exclude<SharedResource, 'asset-templates'> } =>
+              doc.resource !== 'asset-templates' &&
               doc.status === 'Draft' &&
               (doc.resource !== 'asset-catalog' ||
                 assetCatalogSupportsScope(doc.data as AssetCatalogData, assetScope)) &&

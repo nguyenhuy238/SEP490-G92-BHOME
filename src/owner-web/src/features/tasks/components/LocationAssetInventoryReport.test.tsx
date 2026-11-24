@@ -78,7 +78,10 @@ it('requires explicit Owner confirmation before replacing an old 42-item task wi
       <LocationAssetInventoryReport taskId={state.preview.taskId} />
     </MemoryRouter>,
   );
-  expect(screen.getByText(/Checklist 42 mục · Owner đã xác nhận 12 mục/)).toBeTruthy();
+  expect(screen.getByText('Checklist hiện tại')).toBeTruthy();
+  expect(screen.getByText('42', { exact: true })).toBeTruthy();
+  expect(screen.getByText('Owner đã xác nhận')).toBeTruthy();
+  expect(screen.getByText('12', { exact: true })).toBeTruthy();
   expect(screen.getByText(/Cần Owner xác nhận 2 phòng/)).toBeTruthy();
   fireEvent.click(screen.getByRole('button', { name: 'Đối chiếu / đồng bộ' }));
   expect(screen.getByText(/30 mục chưa được Owner xác nhận/)).toBeTruthy();
