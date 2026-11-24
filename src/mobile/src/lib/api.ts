@@ -9,6 +9,7 @@ import { invalidCredentialsMessage } from '../../../../packages/client-core/src/
 import { QueryCache } from './queryCache';
 import { mutationTags } from './queryPolicies';
 import type { TokenSession } from '../../../../packages/client-core/src/jwtSession';
+import { mobileRequestUrl } from './mobileRequestUrl';
 
 export interface Session extends TokenSession {
   refreshToken: string;
@@ -75,7 +76,7 @@ export async function mobileResponse<T>(
     controller.abort();
   }, timeoutMilliseconds);
   try {
-    const response = await transport(base + path, {
+    const response = await transport(mobileRequestUrl(base, path), {
       ...init,
       signal: controller.signal,
       credentials: 'omit',
