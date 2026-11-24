@@ -114,10 +114,18 @@ vi.mock('react-native-paper', () => ({
   IconButton: ({
     onPress,
     accessibilityLabel,
+    disabled,
+    icon,
   }: {
     onPress: () => void;
     accessibilityLabel: string;
-  }) => <button onClick={onPress} aria-label={accessibilityLabel} />,
+    disabled?: boolean;
+    icon?: string | (() => React.ReactNode);
+  }) => (
+    <button onClick={onPress} aria-label={accessibilityLabel} disabled={disabled}>
+      {typeof icon === 'function' ? icon() : null}
+    </button>
+  ),
   ProgressBar: () => null,
   Menu: Object.assign(
     ({ anchor, visible, children }: Children & { anchor: React.ReactNode; visible: boolean }) => (
@@ -1119,7 +1127,9 @@ it('keeps loaded tasks during refresh, reports a transient failure and permits r
   await screen.findByText(task.title);
   fireEvent.click(screen.getByRole('button', { name: 'Tải lại công việc' }));
   expect(screen.getByText(task.title)).toBeTruthy();
-  expect(screen.getByText('Đang cập nhật…')).toBeTruthy();
+  const refresh = screen.getByRole('button', { name: 'Tải lại công việc' });
+  expect(refresh).toHaveProperty('disabled', true);
+  expect(within(refresh).getByText('Đang tải dữ liệu')).toBeTruthy();
   await waitFor(() => expect(finish).toBeTypeOf('function'));
   finish(json({}, 503));
   await screen.findByText('Chưa cập nhật được danh sách');
