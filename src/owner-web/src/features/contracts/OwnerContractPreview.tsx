@@ -9,6 +9,8 @@ import {
 } from '../../../../../packages/client-core/src/contracts';
 import { mainDraftMessages } from '../../../../../packages/client-core/src/mainDrafts';
 import { useObjectUrl } from './useObjectUrl';
+import { ContractDocumentViewer } from './ContractDocumentViewer';
+import { contractPdfName } from '../../../../../packages/client-core/src/contractPdfName';
 
 export function OwnerContractPreview({
   api,
@@ -61,10 +63,10 @@ export function OwnerContractPreview({
       {query.isFetching && <LinearProgress aria-label="Đang tải PDF hợp đồng" />}
       {!!message && <Alert severity="error">{message}</Alert>}
       {url && (
-        <iframe
+        <ContractDocumentViewer
           title="PDF hợp đồng Owner xem trước"
-          src={url}
-          style={{ width: '100%', height: 640, border: 0 }}
+          url={url}
+          filename={contractPdfName(contract.kind, contract.id)}
         />
       )}
     </Stack>

@@ -11,6 +11,7 @@ namespace BHome.Infrastructure.Contracts;
 internal sealed class HoldingDepositRenderer(IConfiguration configuration)
 {
     internal const string TemplateId = "holding-deposit-v1";
+    internal const int DocumentVersion = 2;
     private const string OwnerHeading = "BÊN NHẬN TIỀN ĐẶT CỌC (BÊN A)";
     private const string TenantHeading = "BÊN GIAO TIỀN ĐẶT CỌC (BÊN B)";
     private static readonly XNamespace W = "http://schemas.openxmlformats.org/wordprocessingml/2006/main";
@@ -81,7 +82,8 @@ internal sealed class HoldingDepositRenderer(IConfiguration configuration)
                 MainDraftRenderer.Text(additional, "Thỏa thuận bổ sung: " + contract.Terms);
                 paragraphs[54].AddAfterSelf(additional);
             }
-            paragraphs[57].ReplaceWith(SignatureTable());
+            paragraphs[57].ReplaceWith(ContractDocxLayout.SignatureTable(OwnerHeading, TenantHeading));
+            ContractDocxLayout.Apply(xml);
             using var destination = entry.Open();
             destination.SetLength(0);
             xml.Save(destination);
@@ -91,17 +93,4 @@ internal sealed class HoldingDepositRenderer(IConfiguration configuration)
 
     private static string ParagraphText(XElement paragraph) => string.Concat(paragraph.Descendants(W + "t").Select(t => t.Value));
 
-    private static XElement SignatureTable()
-    {
-        XElement Cell(string title) => new(W + "tc", new XElement(W + "tcPr",
-                new XElement(W + "tcW", new XAttribute(W + "w", "2500"), new XAttribute(W + "type", "pct"))),
-            new XElement(W + "p", new XElement(W + "pPr", new XElement(W + "keepNext"), new XElement(W + "jc", new XAttribute(W + "val", "center"))),
-                new XElement(W + "r", new XElement(W + "rPr", new XElement(W + "b"),
-                    new XElement(W + "sz", new XAttribute(W + "val", "20"))), new XElement(W + "t", title))));
-        return new XElement(W + "tbl",
-            new XElement(W + "tblPr", new XElement(W + "tblW", new XAttribute(W + "w", "5000"), new XAttribute(W + "type", "pct"))),
-            new XElement(W + "tr", new XElement(W + "trPr", new XElement(W + "cantSplit")), Cell(OwnerHeading), Cell(TenantHeading)),
-            new XElement(W + "tr", new XElement(W + "trPr", new XElement(W + "cantSplit"),
-                new XElement(W + "trHeight", new XAttribute(W + "val", "2800"), new XAttribute(W + "hRule", "atLeast"))), Cell(""), Cell("")));
-    }
 }

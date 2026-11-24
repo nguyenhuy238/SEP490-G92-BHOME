@@ -150,7 +150,8 @@ jobs:
           push: false
           tags: ghcr.io/${{ github.repository_owner }}/bhome-api:sha-${{ github.sha }}
           cache-from: type=gha,scope=staging-api
-          cache-to: type=gha,mode=max,scope=staging-api
+          # Cache export is optional; image build failures still fail this job.
+          cache-to: type=gha,mode=max,scope=staging-api,ignore-error=true
       - name: Validate Owner Web image
         uses: docker/build-push-action@v6
         with:
@@ -164,7 +165,7 @@ jobs:
             BHOME_REVISION=${{ github.sha }}
           tags: ghcr.io/${{ github.repository_owner }}/bhome-owner-web:sha-${{ github.sha }}
           cache-from: type=gha,scope=staging-owner-web
-          cache-to: type=gha,mode=max,scope=staging-owner-web
+          cache-to: type=gha,mode=max,scope=staging-owner-web,ignore-error=true
       - name: Validate Public Web image
         uses: docker/build-push-action@v6
         with:
@@ -178,4 +179,4 @@ jobs:
             BHOME_REVISION=${{ github.sha }}
           tags: ghcr.io/${{ github.repository_owner }}/bhome-public-web:sha-${{ github.sha }}
           cache-from: type=gha,scope=staging-public-web
-          cache-to: type=gha,mode=max,scope=staging-public-web
+          cache-to: type=gha,mode=max,scope=staging-public-web,ignore-error=true

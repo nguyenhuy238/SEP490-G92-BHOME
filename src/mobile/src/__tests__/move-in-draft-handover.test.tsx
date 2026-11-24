@@ -2276,12 +2276,22 @@ it('places validation next to the incomplete field, scrolls there, and clears er
   const photoField = screen.getByTestId('inspection-photo-field');
   expect(await within(statusField).findByText(/Hãy chọn kết quả kiểm tra/)).toBeTruthy();
   expect(within(photoField).queryByText(/Hãy chọn kết quả kiểm tra/)).toBeNull();
-  expect(state.modalScrollTo).toHaveBeenLastCalledWith({ y: 0, animated: true });
+  // Rendering the inline message can precede the passive effect that scrolls to it.
+  await waitFor(() =>
+    expect(state.modalScrollTo).toHaveBeenLastCalledWith({ y: 0, animated: true }),
+  );
   fireEvent.click(screen.getByRole('radio', { name: 'Đạt' }));
   expect(screen.queryByText(/Hãy chọn kết quả kiểm tra/)).toBeNull();
   saveWork();
   expect(await within(photoField).findByText(/Chụp ít nhất một ảnh/)).toBeTruthy();
-  expect(state.modalScrollTo).toHaveBeenLastCalledWith({ y: 352, animated: true });
+  await waitFor(() =>
+    expect(state.modalScrollTo).toHaveBeenLastCalledWith({ y: 352, animated: true }),
+  );
+  expect(
+    state.transport.mock.calls.some(
+      ([path, init]) => path.endsWith('/handover/draft') && init?.method === 'POST',
+    ),
+  ).toBe(false);
   closeWork();
   expect(screen.queryByText(/Chụp ít nhất một ảnh/)).toBeNull();
   openWork('Cửa, cửa sổ và ổ khóa');

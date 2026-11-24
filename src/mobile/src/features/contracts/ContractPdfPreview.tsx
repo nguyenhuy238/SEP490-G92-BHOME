@@ -414,7 +414,18 @@ export function ContractPdfPreview({
                   disabled={zoom >= 3}
                   onPress={() => setZoom((value) => Math.min(3, value + 0.5))}
                 />
+                <IconButton
+                  icon="fit-to-page-outline"
+                  accessibilityLabel="Vừa chiều rộng trang"
+                  disabled={zoom === 1}
+                  onPress={() => setZoom(1)}
+                />
               </View>
+              {onDownloadPdf && (
+                <Button icon="download" disabled={busy} onPress={onDownloadPdf}>
+                  Tải PDF
+                </Button>
+              )}
               <FlatList
                 style={styles.grow}
                 data={info.pages}

@@ -3,6 +3,9 @@ using iText.Kernel.Pdf.Canvas.Parser;
 using iText.Kernel.Pdf.Canvas.Parser.Data;
 using iText.Kernel.Pdf.Canvas.Parser.Listener;
 using iText.Kernel.Geom;
+using iText.Kernel.Pdf.Canvas;
+using iText.Kernel.Font;
+using iText.IO.Font.Constants;
 using System.Text;
 
 namespace BHome.Infrastructure.Contracts;
@@ -33,6 +36,7 @@ internal static class MainTemplateSignatureSlots
         using (var pdf = new PdfDocument(new PdfReader(new MemoryStream(source)), new PdfWriter(output)))
         {
             var found = new HashSet<string>();
+            var pageNumberFont = PdfFontFactory.CreateFont(StandardFonts.TIMES_ROMAN);
             for (var page = 1; page <= pdf.GetNumberOfPages(); page++)
             {
                 var size = pdf.GetPage(page).GetPageSize(); var listener = new Listener();
@@ -50,6 +54,11 @@ internal static class MainTemplateSignatureSlots
                     var slot = new ContractSignatureSlot(page, x / size.GetWidth(), (size.GetHeight() - title.Parts.Average(f => f.Y) + 14) / size.GetHeight(), width / size.GetWidth());
                     pdf.GetDocumentInfo().SetMoreInfo(key, slot.Format()); found.Add(key);
                 }
+                var number = page.ToString(System.Globalization.CultureInfo.InvariantCulture);
+                var canvas = new PdfCanvas(pdf.GetPage(page));
+                canvas.BeginText().SetFontAndSize(pageNumberFont, 10)
+                    .MoveText((size.GetWidth() - pageNumberFont.GetWidth(number, 10)) / 2, 28)
+                    .ShowText(number).EndText();
             }
             if (found.Count != 2) throw new BHome.Application.Contracts.ContractException(503, "contract_template_slots_changed");
             pdf.GetDocumentInfo().SetMoreInfo(SourceTemplate, templateId);

@@ -33,9 +33,9 @@ public sealed class EmailTemplateTests
         Assert.True(visible.IndexOf("Xin chào", StringComparison.Ordinal) < visible.IndexOf("liên kết dự phòng", StringComparison.Ordinal));
         Assert.DoesNotContain("<script", html, StringComparison.OrdinalIgnoreCase);
         Assert.DoesNotContain("<link", html, StringComparison.OrdinalIgnoreCase);
-        Assert.Contains("max-width:580px", html);
+        Assert.Contains("max-width:600px", html);
         Assert.Contains(">BHome</p>", html);
-        Assert.Contains("BHome — Hệ thống quản lý và vận hành nhà trọ.", mime.TextBody);
+        Assert.Contains("Đây là email được gửi tự động từ hệ thống BHome.", mime.TextBody);
         Assert.Single(Regex.Matches(html, "<img", RegexOptions.IgnoreCase));
         Assert.Contains("src=\"cid:" + EmailTemplate.BrandContentId + "\"", html);
         using var wire = new MemoryStream();
@@ -176,5 +176,41 @@ public sealed class EmailTemplateTests
         using var mime = new MimeMessage { Body = MailKitEmailSender.BuildBody(Invitation with { ActionUrl = url }) };
         Assert.Contains("href=\"" + WebUtility.HtmlEncode(url) + "\"", mime.HtmlBody);
         Assert.Contains(url, mime.TextBody);
+    }
+
+    [Theory]
+    [InlineData("Mã OTP của bạn: 123456. Mã có hiệu lực 7 phút. Không chia sẻ mã này.")]
+    [InlineData("Mã xác nhận của bạn: 987654. Mã có hiệu lực 5 phút. Không chia sẻ mã này.")]
+    public void SigningOtpUsesSuppliedValidityAndNeverIncludesTheCodeInPreheader(string content)
+    {
+        var message = Invitation with { EventType = "CONTRACT_SIGNING_INVITATION", Body = content };
+        using var mime = new MimeMessage { Body = MailKitEmailSender.BuildBody(message) };
+        var code = Regex.Match(content, "[0-9]{6}").Value;
+        var html = Assert.IsType<string>(mime.HtmlBody);
+        Assert.Contains("font-size:32px", html);
+        Assert.Single(Regex.Matches(html, code));
+        Assert.DoesNotContain(code, Regex.Match(html, "<div[^>]+mso-hide:all[^>]*>.*?</div>").Value);
+        Assert.Contains(content[(content.IndexOf("Mã có hiệu lực", StringComparison.Ordinal))..], mime.TextBody);
+        Assert.Contains(WebUtility.HtmlEncode(content[(content.IndexOf("Mã có hiệu lực", StringComparison.Ordinal))..]), html);
+        Assert.Contains(message.ActionUrl!, mime.TextBody);
+    }
+
+    [Fact]
+    public void FinancialAndContractDetailsUseEncodedRowsWithoutChangingContentOrAttachments()
+    {
+        var message = Invitation with
+        {
+            EventType = "HOLDING_CONFIRMED",
+            Body = "Xin chào bạn,\n\nThông tin:\n- Cơ sở: <Cơ sở giả lập>\n- Phòng: P.101\n- Số tiền giữ chỗ: 3.000.000 VND\n- Trạng thái: Đã giữ chỗ thành công",
+            Attachments = [new("invoice-test.pdf", "application/pdf", "%PDF-synthetic invoice"u8.ToArray())]
+        };
+        using var mime = new MimeMessage { Body = MailKitEmailSender.BuildBody(message) };
+        Assert.Contains("scope=\"row\"", mime.HtmlBody);
+        Assert.Contains("&lt;", mime.HtmlBody);
+        Assert.DoesNotContain("<Cơ sở giả lập>", mime.HtmlBody);
+        Assert.Contains("3.000.000 VND", mime.HtmlBody);
+        Assert.Contains("#16753b", mime.HtmlBody);
+        Assert.Contains(message.Body, mime.TextBody!.Replace("\r\n", "\n"));
+        Assert.Equal("invoice-test.pdf", Assert.IsType<MimePart>(Assert.Single(mime.Attachments)).FileName);
     }
 }

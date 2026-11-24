@@ -758,7 +758,7 @@ function LiveContractDetail({
           ))}
           {['Owner', 'Tenant'].includes(role) &&
             c.signatures.some((s) => ['Signed', 'Simulated'].includes(s.status)) && (
-              <ContractEvidence api={api} contractId={id} pdf />
+              <ContractEvidence api={api} contractId={id} contractKind={c.kind} pdf />
             )}
           {signer &&
             !c.isDevelopmentDemo &&

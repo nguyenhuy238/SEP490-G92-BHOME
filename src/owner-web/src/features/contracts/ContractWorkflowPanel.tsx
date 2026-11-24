@@ -11,6 +11,8 @@ import {
 } from '../../../../../packages/client-core/src/contracts';
 import { formatInstant } from '../../../../../packages/client-core/src/localization';
 import { ChartCard } from '../../components/common/PortalUI';
+import { ContractDocumentViewer } from './ContractDocumentViewer';
+import { contractPdfName } from '../../../../../packages/client-core/src/contractPdfName';
 
 export function ContractConfigurationPanel({ api }: { api: ContractClient }) {
   const query = useQuery({
@@ -215,7 +217,7 @@ export function ContractWorkflowPanel({
                     const source = URL.createObjectURL(await api.preview(id, f.id));
                     const a = document.createElement('a');
                     a.href = source;
-                    a.download = `hop-dong-xem-truoc-v${f.templateVersion}.pdf`;
+                    a.download = contractPdfName(contract.kind, `${id}-v${f.templateVersion}`);
                     a.click();
                     setTimeout(() => URL.revokeObjectURL(source), 1000);
                   })
@@ -226,10 +228,10 @@ export function ContractWorkflowPanel({
             </Stack>
           ))}
           {url && (
-            <iframe
+            <ContractDocumentViewer
               title="Bản PDF hợp đồng từ máy chủ"
-              src={url}
-              style={{ width: '100%', height: 600, border: 0 }}
+              url={url}
+              filename={contractPdfName(contract.kind, id)}
             />
           )}
         </Stack>

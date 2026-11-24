@@ -75,7 +75,8 @@ public sealed class MainDocxTemplateTests
             await File.WriteAllBytesAsync(Path.Combine(qa, "main-template.docx"), docx);
             await File.WriteAllBytesAsync(Path.Combine(qa, "main-template.pdf"), bytes);
             var pages = new ContractSigningPages();
-            await File.WriteAllBytesAsync(Path.Combine(qa, "main-template-page-1.png"), pages.RenderPage(bytes, 1, 1100));
+            for (var page = 1; page <= pdf.GetNumberOfPages(); page++)
+                await File.WriteAllBytesAsync(Path.Combine(qa, $"main-template-page-{page}.png"), pages.RenderPage(bytes, page, 1100));
             await File.WriteAllBytesAsync(Path.Combine(qa, "main-template-signatures.png"), pages.RenderPage(accepted.Pdf, owner.Page, 1100));
         }
     }

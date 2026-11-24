@@ -12,6 +12,7 @@ import {
 } from '@mui/material';
 import { createApiClient } from '../../../../../../packages/client-core/src/api';
 import { apiBaseUrl } from '../../../services/config';
+import { ContractDocumentViewer } from '../ContractDocumentViewer';
 import {
   internalSigningClient,
   signingMessage,
@@ -152,11 +153,7 @@ export default function AnonymousSigningPage() {
                 </>
               ) : (
                 <>
-                  <iframe
-                    title="PDF hợp đồng cần chấp thuận"
-                    src={url}
-                    style={{ width: '100%', height: 620, border: 0 }}
-                  />
+                  <ContractDocumentViewer title="PDF hợp đồng cần chấp thuận" url={url} />
                   <Typography variant="caption" sx={{ overflowWrap: 'anywhere' }}>
                     Mã tài liệu: {access.documentHash}
                   </Typography>
