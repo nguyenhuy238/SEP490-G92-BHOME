@@ -119,4 +119,10 @@ Receipt nhận sau khi hóa đơn/khoản phải thu đã thanh toán đủ ho�
 
 ## Xác minh cọc trực tiếp — giới hạn số tiền (11/11/2026)
 
+Khắc phục 24/11/2026: hướng dẫn chuyển khoản hóa đơn chấp nhận tài khoản Owner
+được đánh dấu Test khi runtime cho phép tài khoản SePay Sandbox trên Staging.
+Không yêu cầu bật chế độ thanh toán demo thủ công. Production vẫn từ chối tài khoản
+Test; tài khoản phải đang bật và khớp binding SePay để cấp QR/mã BH. Đọc hướng dẫn
+không ghi nhận thanh toán, thay đổi số tiền hoặc bỏ qua đối soát.
+
 POST contracts/{id}/deposit-verifications giữ DTO/key cũ. Main tính remaining = RequiredDeposit - AppliedHoldingDeposit - tổng receipt cọc đã xác minh; số tiền vượt remaining trả 409 main_deposit_excess_requires_manual_review. Holding giữ lỗi holding_deposit_excess_requires_manual_review. Không nhận mới trên hợp đồng đóng hoặc phiên bản renewal/addendum (deposit_not_payable); exact-key replay vẫn hợp lệ. Không sửa số tiền sao kê để làm vừa remaining. Receipt vượt cọc cần nguồn receipt đầy đủ, phân bổ cọc và hoàn phần dư riêng; đường xác minh trực tiếp không thực hiện thay luồng này. Lịch sử đã có không bị viết lại.

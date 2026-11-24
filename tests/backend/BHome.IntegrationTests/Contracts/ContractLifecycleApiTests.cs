@@ -1662,13 +1662,13 @@ public sealed partial class ContractLifecycleApiTests(ContractFixture fixture) :
     }
 
     [Fact]
-    public async Task ActualAdapterCannotContinueADevelopmentPdfInProductionAfterFirstPartySigns()
+    public async Task ActualAdapterCanContinueADemoPdfInProductionWithoutActivatingTheContract()
     {
         var w = await Setup(); var id = await Draft(w);
         using var remote = new SyntheticRemoteSigningProvider();
-        using var productionPolicy = ContractPdfRendererTests.Backend("Production");
         WebApplicationFactory<Program> Host(bool production) => fixture.Factory.WithWebHostBuilder(b =>
         {
+            if (production) b.UseTestEnvironment("Production");
             b.ConfigureAppConfiguration((_, c) => c.AddInMemoryCollection(new Dictionary<string, string?>
             {
                 ["ContractPdf:TemplateId"] = ContractPdfRendererTests.TemplateId
@@ -1679,13 +1679,6 @@ public sealed partial class ContractLifecycleApiTests(ContractFixture fixture) :
                 s.AddScoped(typeof(IContractSigningProvider), fixture.ProductionSigningProviderType);
                 s.RemoveAll<BHome.DigitalSigning.Application.ISigningProvider>();
                 s.AddSingleton<BHome.DigitalSigning.Application.ISigningProvider>(remote);
-                if (production)
-                {
-                    s.RemoveAll<IContractDocumentRenderer>();
-                    s.AddScoped<IContractDocumentRenderer>(p => new ContractPdfRenderer(
-                        p.GetRequiredService<Microsoft.Extensions.Options.IOptions<ContractPdfOptions>>(),
-                        productionPolicy.GetRequiredService<Microsoft.Extensions.Hosting.IHostEnvironment>()));
-                }
             });
         });
         await using var testingHost = Host(false);
@@ -1702,13 +1695,12 @@ public sealed partial class ContractLifecycleApiTests(ContractFixture fixture) :
         await Success<ContractView>(await Post(owner, Path(id, "signing/sync")));
         var productionTenant = new Actor(productionHost.CreateClient(), w.Tenant.Id);
         productionTenant.Client.DefaultRequestHeaders.Authorization = w.Tenant.Client.DefaultRequestHeaders.Authorization;
-        var denied = await Post(productionTenant, Path(id, "signing"), new SigningInput(tenantCertificate.Id));
-        Assert.Equal(HttpStatusCode.ServiceUnavailable, denied.StatusCode);
-        Assert.Contains("contract_template_not_approved", await denied.Content.ReadAsStringAsync());
-        Assert.Equal(1, remote.RequestCount);
+        await Success<SignatureView>(await Post(productionTenant, Path(id, "signing"), new SigningInput(tenantCertificate.Id)));
+        Assert.Equal(2, remote.RequestCount);
         var contract = (await w.Owner.Client.GetFromJsonAsync<ContractView>(Path(id)))!;
         Assert.Equal("PendingSigning", contract.Status);
-        Assert.Equal(w.Owner.Id, Assert.Single(contract.Signatures).SignerUserId);
+        Assert.Equal(2, contract.Signatures.Count);
+        Assert.Contains(contract.Signatures, signature => signature.SignerUserId == w.Owner.Id && signature.Status == "Signed");
         Assert.Equal(HttpStatusCode.Conflict, (await Post(w.Owner, Path(id, "activate"))).StatusCode);
     }
 

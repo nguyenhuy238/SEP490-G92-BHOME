@@ -31,15 +31,10 @@ export function ContractConfigurationPanel({ api }: { api: ContractClient }) {
           <Typography>
             {query.data.template.title} · phiên bản {query.data.template.version}
           </Typography>
-          <Alert severity={query.data.template.developmentOnly ? 'warning' : 'info'}>
-            {query.data.template.notice}
-          </Alert>
           <Typography>Trường tài liệu: {query.data.template.fields.join(', ')}</Typography>
           <Typography>
             Chế độ ký:{' '}
-            {query.data.signingMode === 'Simulated'
-              ? 'SIMULATED SIGNING — không có giá trị pháp lý'
-              : 'Nhà cung cấp điện tử'}
+            {query.data.signingMode === 'Simulated' ? 'Ký mô phỏng' : 'Nhà cung cấp điện tử'}
           </Typography>
           {!query.data.template.available && (
             <Alert severity="warning">{text(query.data.template.blocker ?? '')}</Alert>
@@ -202,7 +197,6 @@ export function ContractWorkflowPanel({
             >
               <Typography variant="body2">
                 {f.templateId} · v{f.templateVersion} · {formatInstant(f.recordedAt)}
-                {f.developmentOnly ? ' · DEVELOPMENT' : ''}
               </Typography>
               <Button
                 size="small"

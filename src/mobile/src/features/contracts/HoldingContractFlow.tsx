@@ -323,9 +323,6 @@ function HoldingDraftDocument({
           )}
           {current?.map((p) => (
             <React.Fragment key={p.id}>
-              {p.developmentOnly && (
-                <Text style={ui.muted}>Tài liệu Development · Chưa duyệt cho production</Text>
-              )}
               <ContractEvidence
                 api={api}
                 contractId={c.id}

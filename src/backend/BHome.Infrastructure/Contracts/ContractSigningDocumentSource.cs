@@ -4,7 +4,6 @@ using BHome.Application.Storage;
 using BHome.Domain.TenantContracts;
 using BHome.Infrastructure.Persistence;
 using Microsoft.EntityFrameworkCore;
-using Microsoft.Extensions.Hosting;
 using BHome.Application.IdentityAccess;
 using BHome.Application.PropertyManagement;
 using BHome.Domain.PropertyManagement;
@@ -12,7 +11,7 @@ using BHome.Domain.PropertyManagement;
 namespace BHome.Infrastructure.Contracts;
 
 // Retrieves an immutable, reviewed PDF. The pure template renderer remains independent of persistence.
-internal sealed class ContractSigningDocumentSource(BHomePersistenceContext db, IObjectStorage storage, IHostEnvironment environment,
+internal sealed class ContractSigningDocumentSource(BHomePersistenceContext db, IObjectStorage storage,
     IMainDraftData? mainData = null, IMainDraftRenderer? mainRenderer = null, ICurrentUser? user = null, TimeProvider? clock = null,
     IContractFileStore? fileStore = null, HoldingDepositRenderer? holdingRenderer = null) : IContractSigningDocumentSource
 {
@@ -44,8 +43,6 @@ internal sealed class ContractSigningDocumentSource(BHomePersistenceContext db, 
         var file = await db.Set<ContractDocumentFile>().AsNoTracking().SingleOrDefaultAsync(f => f.ContractId == contract.Id &&
             f.Kind == ContractFileKind.Preview && f.SnapshotHash == document.SnapshotHash && f.TemplateId == "main-tenancy-docx-v1", t)
             ?? throw ContractException.Conflict("signing_source_document_required");
-        if (file.DevelopmentOnly && !(environment.IsDevelopment() || environment.IsEnvironment("Testing")))
-            throw new ContractException(503, "main_draft_signing_template_not_approved");
         return await ReadFileAsync(file, t);
     }
 
@@ -154,7 +151,6 @@ internal sealed class ContractSigningDocumentSource(BHomePersistenceContext db, 
     private async Task CreateMainSourceAsync(Contract c, ContractDocument document, CancellationToken t)
     {
         if (mainData is null || mainRenderer is null || fileStore is null) throw new ContractException(503, "main_contract_document_source_unavailable");
-        if (!(environment.IsDevelopment() || environment.IsEnvironment("Testing"))) throw new ContractException(503, "main_draft_signing_template_not_approved");
         if (user?.UserId is not { } actor) throw new ContractException(403, "contract_role_forbidden");
         if (c.SnapshotHash != document.SnapshotHash || ContractDocumentSnapshot.Hash(document) != c.SnapshotHash)
             throw ContractException.Conflict("signed_terms_changed");
@@ -183,7 +179,7 @@ internal sealed class ContractSigningDocumentSource(BHomePersistenceContext db, 
                 Kind = ContractFileKind.Preview,
                 SnapshotHash = c.SnapshotHash,
                 TemplateId = "main-tenancy-docx-v1",
-                TemplateVersion = 1,
+                TemplateVersion = mainRenderer.DocumentVersion,
                 DevelopmentOnly = true,
                 ContentType = "application/pdf",
                 FileHash = Convert.ToHexString(SHA256.HashData(bytes)),

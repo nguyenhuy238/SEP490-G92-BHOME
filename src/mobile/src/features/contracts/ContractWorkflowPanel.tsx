@@ -17,7 +17,7 @@ import {
   type HoldingDepositStatus,
 } from '../../../../../packages/client-core/src/contracts';
 import { formatInstant } from '../../../../../packages/client-core/src/localization';
-import { Action, Box, Heading, ui } from '../../components/WorkspaceKit';
+import { Action, Box, Heading } from '../../components/WorkspaceKit';
 import { ContractEvidence } from './ContractEvidence';
 import { useWorkspaceQuery } from '../workspace/useWorkspaceQuery';
 import { OwnerWebNotice } from '../../components/OwnerWebNotice';
@@ -248,11 +248,6 @@ export function ContractWorkflowPanel({
           {data?.previews.map((f) => (
             <Box key={f.id}>
               <Text>Bản xem trước · {formatInstant(f.recordedAt)}</Text>
-              {f.developmentOnly && (
-                <Text variant="bodySmall" style={ui.muted}>
-                  Tài liệu Development · Chưa duyệt cho production
-                </Text>
-              )}
               <ContractEvidence api={api} contractId={contract.id} previewId={f.id} pdf />
             </Box>
           ))}

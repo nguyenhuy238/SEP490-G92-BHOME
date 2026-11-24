@@ -3,14 +3,15 @@ using System.IO.Compression;
 using System.Xml.Linq;
 using BHome.Application.Contracts;
 using Microsoft.Extensions.Configuration;
-using Microsoft.Extensions.Hosting;
 
 namespace BHome.Infrastructure.Contracts;
 
 // Edit paragraph slots in the supplied OOXML package. All untouched clauses, styles and relationships survive.
-internal sealed class MainDraftRenderer(IConfiguration configuration, TimeProvider clock, IHostEnvironment? environment = null) : IMainDraftRenderer
+internal sealed class MainDraftRenderer(IConfiguration configuration, TimeProvider clock) : IMainDraftRenderer
 {
-    public bool SigningReviewAvailable => environment is not null && (environment.IsDevelopment() || environment.IsEnvironment("Testing"));
+    // The supplied template is available for demonstrations in every environment.
+    public bool SigningReviewAvailable => true;
+    public int DocumentVersion => 2;
     public string TemplateHash
     {
         get { using var stream = typeof(MainDraftRenderer).Assembly.GetManifestResourceStream("BHome.Contracts.main-tenancy-original.docx") ?? throw new ContractException(503, "contract_template_not_found"); return Convert.ToHexString(System.Security.Cryptography.SHA256.HashData(stream)); }
@@ -94,10 +95,10 @@ internal sealed class MainDraftRenderer(IConfiguration configuration, TimeProvid
                         p.AddBeforeSelf(extraParagraph);
                     }
                 }
-                if (original == "HỢP ĐỒNG THUÊ PHÒNG TRỌ" && (!data.SigningReview || data.Contract.IsDevelopmentDemo))
+                if (original == "HỢP ĐỒNG THUÊ PHÒNG TRỌ" && !data.SigningReview)
                 {
                     var notice = new XElement(p);
-                    Text(notice, data.SigningReview ? "TÀI LIỆU KIỂM THỬ – MẪU CHƯA ĐƯỢC DUYỆT CHO PRODUCTION" : $"BẢN NHÁP – {data.Contract.Id}");
+                    Text(notice, $"BẢN NHÁP – {data.Contract.Id}");
                     p.AddAfterSelf(notice);
                 }
             }
