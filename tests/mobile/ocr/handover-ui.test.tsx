@@ -8,6 +8,10 @@ import {
   type HandoverView,
 } from '../../../packages/client-core/src/contracts';
 vi.mock('expo-router', () => ({ router: { push: vi.fn() } }));
+vi.mock('react-native', () => ({
+  View: ({ children }: { children: React.ReactNode }) => <div>{children}</div>,
+}));
+vi.mock('../../../src/mobile/src/theme/theme', () => ({ colors: { red: '#b91c1c' } }));
 vi.mock('react-native-paper', () => ({
   Text: ({ children }: { children: React.ReactNode }) => <span>{children}</span>,
   Checkbox: {

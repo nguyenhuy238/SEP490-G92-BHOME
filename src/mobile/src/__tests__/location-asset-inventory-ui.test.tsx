@@ -9,6 +9,7 @@ import type {
 import type { OperationalTask } from '../services/operationalTasks';
 
 const state = vi.hoisted(() => ({ request: vi.fn(), go: vi.fn() }));
+vi.mock('expo-router', () => ({ useLocalSearchParams: () => ({}) }));
 vi.mock('react-native', async () => {
   // Use RN-Web's compiled View and StyleSheet, not native Flow syntax.
   // @ts-expect-error react-native-web does not ship declarations for this direct entry.

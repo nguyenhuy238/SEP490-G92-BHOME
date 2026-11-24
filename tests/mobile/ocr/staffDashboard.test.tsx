@@ -1,7 +1,7 @@
 // @vitest-environment jsdom
 import React from 'react';
 import { afterEach, beforeEach, expect, it, vi } from 'vitest';
-import { cleanup, fireEvent, render, screen, within } from '@testing-library/react';
+import { cleanup, fireEvent, render, screen } from '@testing-library/react';
 const state = vi.hoisted(() => ({
   preview: false,
   go: vi.fn(),
@@ -94,15 +94,11 @@ it.each([
   fireEvent.click(screen.getAllByRole('button', { name: label }).at(-1)!);
   expect(state.go).toHaveBeenCalledWith(destination);
 });
-it.each([
-  ['Bàn giao nhận phòng', 'move-in'],
-  ['Kiểm tra trả phòng', 'move-out'],
-])('lets Staff choose %s', (label, destination) => {
+it('opens the dedicated handover and move-out task workspace directly', () => {
   render(<StaffDashboard />);
   expect(screen.queryByRole('dialog')).toBeNull();
   fireEvent.click(screen.getByRole('button', { name: 'Bàn giao / Trả phòng' }));
-  fireEvent.click(within(screen.getByRole('dialog')).getByRole('button', { name: label }));
-  expect(state.go).toHaveBeenCalledWith(destination);
+  expect(state.go).toHaveBeenCalledWith('staff-handovers');
   expect(screen.queryByRole('dialog')).toBeNull();
 });
 it('does not present sample identity, shift or counts to a signed-in account', () => {
@@ -129,7 +125,7 @@ it('shows location move-out work on the dashboard even without a schedule, while
   expect(screen.getByText('Chờ ngày trả ›')).toBeTruthy();
   expect(screen.getByText(/Phòng R\.101 · Cơ sở A · Ngày trả 18\/11\/2099/)).toBeTruthy();
   fireEvent.click(screen.getByRole('button', { name: /Kiểm tra trả phòng, Phòng R\.101/ }));
-  expect(state.go).toHaveBeenCalledWith('work-orders');
+  expect(state.go).toHaveBeenCalledWith('staff-handovers', { tab: 'MoveOut' });
 });
 
 it('shows four quick actions and hides management shortcuts', () => {
@@ -139,12 +135,11 @@ it('shows four quick actions and hides management shortcuts', () => {
   for (const title of ['Hóa đơn', 'Công nợ', 'Gửi thông báo'])
     expect(screen.queryByRole('button', { name: title })).toBeNull();
 });
-it('allows closing handover selection without navigating', () => {
+it('opens the move-out queue directly from the dashboard metric', () => {
   render(<StaffDashboard />);
-  fireEvent.click(screen.getByRole('button', { name: 'Bàn giao / Trả phòng' }));
-  fireEvent.click(screen.getByRole('button', { name: 'Đóng' }));
+  fireEvent.click(screen.getByRole('button', { name: 'Kiểm tra trả phòng' }));
   expect(screen.queryByRole('dialog')).toBeNull();
-  expect(state.go).not.toHaveBeenCalled();
+  expect(state.go).toHaveBeenCalledWith('staff-handovers', { tab: 'MoveOut' });
 });
 
 it('states that sending is unavailable and only offers the existing inbox', () => {

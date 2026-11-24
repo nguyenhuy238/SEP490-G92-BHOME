@@ -218,7 +218,7 @@ function reinspectionOptions(draft: OwnerHandoverDraft): ReinspectionOption[] {
     {
       key: 'Room',
       label: 'Hiện trạng chung và ảnh phòng',
-      issue: draft.missing.includes('room_summary_evidence'),
+      issue: draft.missing?.includes('room_summary_evidence') ?? !draft.evidenceIds?.length,
       item: { kind: 'Room' },
     },
     ...checks,
@@ -522,7 +522,7 @@ function StaffWorkModules({
         warning={
           problemChecks > 0 ||
           recordedChecks < checks.length ||
-          draft.missing.includes('room_summary_evidence')
+          (draft.missing?.includes('room_summary_evidence') ?? !draft.evidenceIds?.length)
         }
       >
         <Stack
@@ -1492,7 +1492,9 @@ export function OwnerHandoverDraftPanel({
       draft.inspectedAssets?.every(
         (asset) => asset.condition === 'Good' && asset.actualQuantity === asset.expectedQuantity,
       ) === true) &&
-    !draft.missing?.includes('room_summary_evidence') &&
+    (draft.missing
+      ? !draft.missing.includes('room_summary_evidence')
+      : !!draft.evidenceIds?.length) &&
     !!draft.electricity?.id &&
     !!draft.water?.id &&
     (draft.roomChecks ?? []).length === Object.keys(roomCheckLabels).length &&

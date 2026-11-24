@@ -478,6 +478,11 @@ export function MeterTaskScreen({
                 {!!proposal?.warnings.length && !proposal.isFallback && (
                   <Text style={ui.muted}>{meterOcrFeedback(proposal)}</Text>
                 )}
+                {proposal?.isFallback && proposal.warnings.includes('meter_type_mismatch') && (
+                  <Text style={ui.red}>
+                    Loại đồng hồ hoặc đơn vị trong ảnh không khớp tác vụ. Hãy kiểm tra lại đồng hồ.
+                  </Text>
+                )}
                 <Field
                   label={`Chỉ số xác nhận (${unit})`}
                   value={reading}
