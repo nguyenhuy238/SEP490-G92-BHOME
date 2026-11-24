@@ -264,6 +264,20 @@ internal sealed class ContractHandoverRepository(BHomePersistenceContext db, IOp
         var ids = new List<Guid>(meters.Length);
         foreach (var meter in meters)
         {
+            // Manual capture and historical imports may use a different task ID.
+            // Reuse the same business key enforced by ux_task_source, including
+            // completed checkpoints whose confirmed readings must be retained.
+            var existing = db.Set<OperationalTask>().Local.SingleOrDefault(x =>
+                x.Kind == OperationalTaskKind.MeterReading && x.MeterId == meter.Id &&
+                x.ContractId == c.Id && x.Purpose == ReadingPurpose.Initial && x.Status != MeterTaskStatus.Cancelled)
+                ?? await db.Set<OperationalTask>().SingleOrDefaultAsync(x =>
+                    x.Kind == OperationalTaskKind.MeterReading && x.MeterId == meter.Id &&
+                    x.ContractId == c.Id && x.Purpose == ReadingPurpose.Initial && x.Status != MeterTaskStatus.Cancelled, t);
+            if (existing is not null)
+            {
+                ids.Add(existing.Id);
+                continue;
+            }
             var meterTaskId = Key($"contract-meter-initial:{c.Id:N}:{meter.Id:N}");
             ids.Add(meterTaskId);
             if (db.Set<OperationalTask>().Local.Any(x => x.Id == meterTaskId) ||

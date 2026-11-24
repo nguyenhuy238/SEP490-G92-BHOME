@@ -87,9 +87,11 @@ public sealed class PropertyContractDockerTests(PropertyContractDockerFixture fi
     [Fact]
     public Task ManualMoveInRepairsMissingElectricityWaterBaselines() =>
         new ContractLifecycleApiTests(fixture.Contracts).StartedManualMoveInCanRepairMissingMeterBaselinesWithoutCreatingAnotherStaffJob();
-    [Fact]
-    public Task ManualMoveInStartPreparesExistingElectricityWaterMeters() =>
-        new ContractLifecycleApiTests(fixture.Contracts).StartingManualMoveInCreatesBaselineCheckpointsForExistingPhysicalMeters();
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public Task ManualMoveInStartPreparesExistingElectricityWaterMeters(bool existingBaselines) =>
+        new ContractLifecycleApiTests(fixture.Contracts).StartingManualMoveInCreatesBaselineCheckpointsForExistingPhysicalMeters(existingBaselines);
     [Fact]
     public Task QuickCreateHandoverWithoutSeparateMeterJobs() =>
         new ContractLifecycleApiTests(fixture.Contracts).QuickCreateUsesUnifiedMoveInWithoutImmediateMeterJobs();

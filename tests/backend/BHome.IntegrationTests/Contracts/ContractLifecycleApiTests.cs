@@ -542,7 +542,7 @@ public sealed partial class ContractLifecycleApiTests(ContractFixture fixture) :
         Assert.Equal(HttpStatusCode.Forbidden, (await Post(w.Tenant, endpoint)).StatusCode);
     }
 
-    internal async Task StartingManualMoveInCreatesBaselineCheckpointsForExistingPhysicalMeters()
+    internal async Task StartingManualMoveInCreatesBaselineCheckpointsForExistingPhysicalMeters(bool existingBaselines = false)
     {
         if (!await UsesCompact24()) return;
         var w = await Setup();
@@ -550,6 +550,15 @@ public sealed partial class ContractLifecycleApiTests(ContractFixture fixture) :
         // room. Staff should not need to create any separate capture work item.
         var contractId = await Active(w);
         var meters = await InstallHandoverMeters(w);
+        var existingIds = new List<Guid>();
+        ConfirmedReading? confirmed = null;
+        if (existingBaselines)
+        {
+            foreach (var meter in meters)
+                existingIds.Add((await Success<IdResult>(await w.Owner.Client.PostAsJsonAsync(
+                    "/api/v1/capture/meter-tasks", new MeterTaskInput(meter.Id, ReadingPurpose.Initial, Today, null, contractId)))).Id);
+            confirmed = await ConfirmInitialTask(w, existingIds[0], 100);
+        }
         var tasks = await Success<TaskPage<TaskView>>(await w.Staff.Client.GetAsync(
             $"/api/v1/operational-tasks?locationId={w.Location}&pageSize=100"));
         var moveIn = Assert.Single(tasks.Items, item => item.Target?.ContractId == contractId &&
@@ -563,7 +572,18 @@ public sealed partial class ContractLifecycleApiTests(ContractFixture fixture) :
         Assert.Equal(2, baselines.Length);
         Assert.Equal(meters.Select(meter => meter.Id).Order().ToArray(),
             baselines.Select(task => task.MeterId).Order().ToArray());
-        Assert.All(baselines, task => Assert.Equal(MeterTaskStatus.Assigned, task.Status));
+        if (existingBaselines)
+        {
+            Assert.Equal(existingIds.Order().ToArray(), baselines.Select(task => task.Id).Order().ToArray());
+            Assert.Equal(MeterTaskStatus.Completed, baselines.Single(task => task.Id == existingIds[0]).Status);
+            Assert.Equal(MeterTaskStatus.Assigned, baselines.Single(task => task.Id == existingIds[1]).Status);
+            await using var scope = fixture.Factory.Services.CreateAsyncScope();
+            var db = scope.ServiceProvider.GetRequiredService<BHomePersistenceContext>();
+            var reading = await db.Set<MeterReading>().SingleAsync(r => r.TaskId == existingIds[0]);
+            Assert.Equal(confirmed!.Id, reading.Id);
+            Assert.Equal(100m, reading.ConfirmedValue);
+        }
+        else Assert.All(baselines, task => Assert.Equal(MeterTaskStatus.Assigned, task.Status));
         var sameIds = await Success<Guid[]>(await Post(w.Staff,
             $"/api/v1/operational-tasks/{moveIn.Id}/initial-meter-baselines/ensure"));
         Assert.Equal(baselines.Select(task => task.Id).Order().ToArray(), sameIds.Order().ToArray());
