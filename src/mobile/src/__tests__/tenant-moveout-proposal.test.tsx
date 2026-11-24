@@ -157,7 +157,9 @@ it('switches the accepted 20k proposal to completed when the verified server mov
   expect(screen.getByText('Phí trả phòng đã chốt')).toBeTruthy();
   expect(screen.queryByTestId('excess-payment')).toBeNull();
   expect(screen.queryByText(/Dự kiến cần thanh toán thêm/)).toBeNull();
-  expect(changed).toHaveBeenCalledOnce();
+  // The completion callback runs in a passive effect after the verified
+  // completion UI has rendered; wait for that effect rather than racing it.
+  await waitFor(() => expect(changed).toHaveBeenCalledOnce());
 });
 
 function proposal(

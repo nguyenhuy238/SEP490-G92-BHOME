@@ -16,9 +16,11 @@ using BHome.Domain.PropertyManagement;
 using BHome.Domain.TenantContracts;
 using BHome.Infrastructure.Persistence;
 using BHome.Infrastructure.Contracts;
+using BHome.Infrastructure.Development;
 using BHome.Application.Storage;
 using BHome.IntegrationTests.Ocr;
 using Microsoft.AspNetCore.Identity;
+using Microsoft.AspNetCore.Hosting;
 using Microsoft.Extensions.Configuration;
 using Microsoft.AspNetCore.Mvc.Testing;
 using Microsoft.AspNetCore.TestHost;
@@ -489,6 +491,149 @@ public sealed partial class ContractLifecycleApiTests(ContractFixture fixture) :
         var recorded = await Success<HandoverDraftView>(await w.Staff.Client.GetAsync(Path(secondId, "handover/draft")));
         Assert.Equal(secondReadings[0].Id, recorded.Electricity!.Id);
         Assert.Equal(secondReadings[1].Id, recorded.Water!.Id);
+    }
+
+    internal async Task StartedManualMoveInCanRepairMissingMeterBaselinesWithoutCreatingAnotherStaffJob()
+    {
+        if (!await UsesCompact24()) return;
+        var w = await Setup();
+        // A manually created Main can reach the handover before its physical meters
+        // have been assigned. Installing existing meters later must not require a
+        // new handover or stand-alone Staff work order.
+        var contractId = await Active(w);
+        var before = await Success<MeterTaskSummary[]>(await w.Staff.Client.GetAsync(
+            $"/api/v1/capture/meter-tasks?locationId={w.Location}&roomId={w.Room}"));
+        Assert.DoesNotContain(before, task => task.ContractId == contractId && task.Purpose == ReadingPurpose.Initial);
+
+        var jobs = await Success<TaskPage<TaskView>>(await w.Staff.Client.GetAsync(
+            $"/api/v1/operational-tasks?locationId={w.Location}&pageSize=100"));
+        var moveIn = Assert.Single(jobs.Items, job => job.Target?.ContractId == contractId &&
+            job.Title.StartsWith("Bàn giao vào phòng", StringComparison.Ordinal));
+        var started = await Success<TaskView>(await Post(w.Staff,
+            $"/api/v1/operational-tasks/{moveIn.Id}/start", new TaskAction(moveIn.Version)));
+        Assert.Equal("InProgress", started.Status);
+
+        var meters = await InstallHandoverMeters(w);
+        var key = Guid.NewGuid();
+        var endpoint = $"/api/v1/operational-tasks/{moveIn.Id}/initial-meter-baselines/ensure";
+        var ids = await Success<Guid[]>(await Post(w.Staff, endpoint, key: key));
+        Assert.Equal(2, ids.Length);
+        Assert.Equal(ids, await Success<Guid[]>(await Post(w.Staff, endpoint, key: key)));
+        Assert.Equal(ids, await Success<Guid[]>(await Post(w.Staff, endpoint)));
+
+        var tasks = (await Success<MeterTaskSummary[]>(await w.Staff.Client.GetAsync(
+            $"/api/v1/capture/meter-tasks?locationId={w.Location}&roomId={w.Room}")))
+            .Where(task => task.ContractId == contractId && task.Purpose == ReadingPurpose.Initial)
+            .OrderBy(task => task.UtilityType).ToArray();
+        Assert.Equal(2, tasks.Length);
+        Assert.Equal(ids.Order().ToArray(), tasks.Select(task => task.Id).Order().ToArray());
+        Assert.Equal(meters.Select(meter => meter.Id).Order().ToArray(), tasks.Select(task => task.MeterId).Order().ToArray());
+        Assert.All(tasks, task => Assert.Equal(MeterTaskStatus.Assigned, task.Status));
+        var readings = await Task.WhenAll(tasks.Select((task, index) =>
+            ConfirmInitialTask(w, task.Id, index == 0 ? 100 : 50)));
+        Assert.Equal(2, readings.Length);
+        Assert.All(readings, reading => Assert.Null(reading.Consumption));
+
+        var afterJobs = await Success<TaskPage<TaskView>>(await w.Staff.Client.GetAsync(
+            $"/api/v1/operational-tasks?locationId={w.Location}&pageSize=100"));
+        Assert.Single(afterJobs.Items, job => job.Target?.ContractId == contractId &&
+            job.Title.StartsWith("Bàn giao vào phòng", StringComparison.Ordinal));
+        Assert.DoesNotContain(afterJobs.Items, job => job.Kind == "MeterReading");
+        Assert.Equal(HttpStatusCode.Forbidden, (await Post(w.Tenant, endpoint)).StatusCode);
+    }
+
+    internal async Task StartingManualMoveInCreatesBaselineCheckpointsForExistingPhysicalMeters()
+    {
+        if (!await UsesCompact24()) return;
+        var w = await Setup();
+        // Manual contract was activated before meters were connected to the
+        // room. Staff should not need to create any separate capture work item.
+        var contractId = await Active(w);
+        var meters = await InstallHandoverMeters(w);
+        var tasks = await Success<TaskPage<TaskView>>(await w.Staff.Client.GetAsync(
+            $"/api/v1/operational-tasks?locationId={w.Location}&pageSize=100"));
+        var moveIn = Assert.Single(tasks.Items, item => item.Target?.ContractId == contractId &&
+            item.Title.StartsWith("Bàn giao vào phòng", StringComparison.Ordinal));
+        await Success<TaskView>(await Post(w.Staff,
+            $"/api/v1/operational-tasks/{moveIn.Id}/start", new TaskAction(moveIn.Version)));
+        var baselines = (await Success<MeterTaskSummary[]>(await w.Staff.Client.GetAsync(
+            $"/api/v1/capture/meter-tasks?locationId={w.Location}&roomId={w.Room}")))
+            .Where(task => task.ContractId == contractId && task.Purpose == ReadingPurpose.Initial)
+            .OrderBy(task => task.UtilityType).ToArray();
+        Assert.Equal(2, baselines.Length);
+        Assert.Equal(meters.Select(meter => meter.Id).Order().ToArray(),
+            baselines.Select(task => task.MeterId).Order().ToArray());
+        Assert.All(baselines, task => Assert.Equal(MeterTaskStatus.Assigned, task.Status));
+        var sameIds = await Success<Guid[]>(await Post(w.Staff,
+            $"/api/v1/operational-tasks/{moveIn.Id}/initial-meter-baselines/ensure"));
+        Assert.Equal(baselines.Select(task => task.Id).Order().ToArray(), sameIds.Order().ToArray());
+        var reread = (await Success<MeterTaskSummary[]>(await w.Staff.Client.GetAsync(
+            $"/api/v1/capture/meter-tasks?locationId={w.Location}&roomId={w.Room}")))
+            .Where(task => task.ContractId == contractId && task.Purpose == ReadingPurpose.Initial);
+        Assert.Equal(2, reread.Count());
+    }
+
+    internal async Task QuickCreateUsesUnifiedMoveInWithoutImmediateMeterJobs()
+    {
+        if (!await UsesCompact24()) return;
+        var w = await Setup();
+        using var development = fixture.Factory.WithWebHostBuilder(builder =>
+        {
+            builder.UseEnvironment("Development");
+            builder.ConfigureAppConfiguration((_, config) =>
+                config.AddInMemoryCollection(new Dictionary<string, string?>
+                {
+                    ["DevelopmentContractSeed:Enabled"] = "true",
+                    ["DevelopmentContractSeed:TenantPassword"] = "Synthetic!DevSeed-493"
+                }));
+        });
+        using var client = development.CreateClient();
+        // The Development host has its own session issuer/configuration, so
+        // authenticate against it rather than replaying the Testing-host JWT.
+        var login = await Success<LoginResult>(await client.PostAsJsonAsync("/api/v1/auth/login", new
+        {
+            email = w.Staff.Id.ToString("N") + "@example.invalid",
+            password = BHome.IntegrationTests.Compact24.WorkflowTestUsers.Password
+        }));
+        client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", login.AccessToken);
+        var staff = new Actor(client, w.Staff.Id);
+        var key = Guid.NewGuid();
+        var created = await Success<DevelopmentOnboardingSeedResult>(await Post(staff,
+            "/api/v1/development/onboarding-seed", new DevelopmentOnboardingSeedInput(w.Location), key));
+        Assert.Equal(created.ContractId, (await Success<DevelopmentOnboardingSeedResult>(await Post(staff,
+            "/api/v1/development/onboarding-seed", new DevelopmentOnboardingSeedInput(w.Location), key))).ContractId);
+        await using (var before = development.Services.CreateAsyncScope())
+        {
+            var store = before.ServiceProvider.GetRequiredService<BHomePersistenceContext>();
+            Assert.Equal(2, await store.Set<Meter>().CountAsync(m => m.RoomId == created.RoomId && m.IsActive));
+            Assert.Empty(await store.Set<OperationalTask>().Where(task =>
+                task.ContractId == created.ContractId &&
+                task.Kind == BHome.Domain.StaffOperations.OperationalTaskKind.MeterReading).ToArrayAsync());
+        }
+        var handover = await Success<HandoverDraftView>(await client.GetAsync(
+            Path(created.ContractId, "handover/draft")));
+        Assert.NotNull(handover.MoveInTask);
+        var work = await Success<TaskPage<TaskView>>(await client.GetAsync(
+            $"/api/v1/operational-tasks?locationId={w.Location}&pageSize=100"));
+        Assert.Single(work.Items, task => task.Target?.ContractId == created.ContractId &&
+            task.Title.StartsWith("Bàn giao vào phòng", StringComparison.Ordinal));
+        Assert.DoesNotContain(work.Items, task =>
+            task.Target?.ContractId == created.ContractId && task.Kind == "MeterReading");
+
+        await Success<TaskView>(await Post(staff,
+            $"/api/v1/operational-tasks/{handover.MoveInTask!.Id}/start",
+            new TaskAction(handover.MoveInTask.Version)));
+        var baselines = (await Success<MeterTaskSummary[]>(await client.GetAsync(
+            $"/api/v1/capture/meter-tasks?locationId={w.Location}&roomId={created.RoomId}")))
+            .Where(task => task.ContractId == created.ContractId && task.Purpose == ReadingPurpose.Initial)
+            .OrderBy(task => task.UtilityType).ToArray();
+        Assert.Equal(2, baselines.Length);
+        Assert.Equal(new[] { UtilityType.Electricity, UtilityType.Water },
+            baselines.Select(task => (UtilityType)task.UtilityType).ToArray());
+        Assert.All(baselines, task => Assert.Equal(MeterTaskStatus.Assigned, task.Status));
+        var after = await Success<TaskPage<TaskView>>(await client.GetAsync(
+            $"/api/v1/operational-tasks?locationId={w.Location}&pageSize=100"));
+        Assert.Single(after.Items, task => task.Target?.ContractId == created.ContractId);
     }
 
     [Fact]

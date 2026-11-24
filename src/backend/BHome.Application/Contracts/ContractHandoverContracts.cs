@@ -70,6 +70,7 @@ public interface IContractHandoverRepository
     Task<bool> HistoryContainsEvidenceAsync(Guid contractId, Guid evidenceId, CancellationToken t);
     Task<string?> HistoryForReadingAsync(Guid contractId, Guid readingId, CancellationToken t);
     Task EnsureMoveInTaskAsync(Contract contract, Guid actor, DateTimeOffset now, CancellationToken t);
+    Task<Guid[]> EnsureMoveInMeterBaselinesAsync(Guid contractId, Guid actor, DateTimeOffset now, CancellationToken t);
     Task EnsureMoveOutTaskAsync(Contract contract, ContractMoveOut moveOut, Guid actor, DateTimeOffset now, CancellationToken t);
     Task RequireMoveOutTaskStartedAsync(Guid contractId, Guid staffId, CancellationToken t);
     Task EnsureMoveOutTaskAssigneeAsync(Guid contractId, Guid? staffId, CancellationToken t);

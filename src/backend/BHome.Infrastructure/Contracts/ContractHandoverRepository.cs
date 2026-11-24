@@ -186,34 +186,7 @@ internal sealed class ContractHandoverRepository(BHomePersistenceContext db, IOp
         var id = Key($"contract-move-in:{c.Id:N}");
         var date = DateOnly.FromDateTime(TimeZoneInfo.ConvertTimeBySystemTimeZoneId(now, "Asia/Ho_Chi_Minh").DateTime);
         var responsible = await tasks.ResponsibilityAsync(c.Room.LocationId, date, t);
-        // Every tenancy starts with its own photographed electricity/water baseline.
-        // A physical meter may have confirmed readings from previous occupants, so
-        // these tasks are keyed by Contract + Meter instead of Meter alone.
-        var meters = await db.Set<Meter>().AsNoTracking().Where(m => m.RoomId == c.RoomId && m.IsActive)
-            .OrderBy(m => m.UtilityType).ThenBy(m => m.Id).ToArrayAsync(t);
-        foreach (var meter in meters)
-        {
-            var meterTaskId = Key($"contract-meter-initial:{c.Id:N}:{meter.Id:N}");
-            if (await db.Set<OperationalTask>().AnyAsync(x => x.Id == meterTaskId, t)) continue;
-            var meterTask = new OperationalTask
-            {
-                Kind = OperationalTaskKind.MeterReading,
-                LocationId = c.Room.LocationId,
-                MeterId = meter.Id,
-                ContractId = c.Id,
-                Title = $"Chụp chỉ số {(meter.UtilityType == UtilityType.Electricity ? "điện" : "nước")} khi nhận phòng {c.Room.RoomNumber}",
-                Requirements = "Chụp ảnh công tơ thực tế và xác nhận chỉ số khởi tạo cho hợp đồng này, kể cả khi công tơ đã được dùng trước đó.",
-                Purpose = ReadingPurpose.Initial,
-                ReadingDate = new[] { c.StartDate, date, meter.InstalledOn }.Max(),
-                AssignedStaffUserId = responsible?.StaffUserId,
-                AssignmentId = responsible?.AssignmentId,
-                AssignedAt = responsible is null ? null : now,
-                EvidenceRequired = true,
-                Status = MeterTaskStatus.Assigned
-            };
-            db.Entry(meterTask).Property(x => x.Id).CurrentValue = meterTaskId;
-            db.Add(meterTask);
-        }
+        await EnsureMeterBaselinesAsync(c, now, responsible, t);
         if (await db.Set<OperationalTask>().AnyAsync(x => x.Id == id, t)) return;
         var task = new OperationalTask
         {
@@ -223,7 +196,7 @@ internal sealed class ContractHandoverRepository(BHomePersistenceContext db, IOp
             TargetRoomId = c.RoomId,
             TargetLabel = c.Room.RoomNumber,
             Title = $"Bàn giao vào phòng {c.Room.RoomNumber}",
-            Requirements = "Kiểm tra hiện trạng phòng, tài sản và chụp xác nhận chỉ số điện nước. Staff gửi biên bản để Owner duyệt và ký; Tenant ký sau cùng.",
+            Requirements = "Kiểm tra hiện trạng phòng, tài sản và chụp xác nhận chỉ số điện nước đầu kỳ. Staff gửi biên bản để Owner duyệt và ký; Tenant ký sau cùng.",
             AssignedStaffUserId = responsible?.StaffUserId,
             AssignmentId = responsible?.AssignmentId,
             AssignedAt = responsible is null ? null : now,
@@ -258,6 +231,63 @@ internal sealed class ContractHandoverRepository(BHomePersistenceContext db, IOp
                         ? "Hợp đồng đã kích hoạt. Theo dõi kiểm tra và xác nhận bàn giao trong hợp đồng."
                         : "Biên bản bàn giao nháp đã được tạo. Có thể chuẩn bị kiểm kê và chụp chỉ số điện nước ban đầu; việc vào ở chính thức vẫn phụ thuộc các bước duyệt hợp đồng.",
                     "Contract", c.Id, t);
+    }
+
+    // Repair missing capture checkpoints on older manually activated Main contracts
+    // without creating a second Staff job, replacing physical meters, or reusing an
+    // earlier Tenant's confirmed opening value. Called only by an authorized
+    // in-progress MoveIn handover, under the same Location transaction lock.
+    public async Task<Guid[]> EnsureMoveInMeterBaselinesAsync(Guid contractId, Guid actor, DateTimeOffset now, CancellationToken t)
+    {
+        if (db is not BHome.Infrastructure.Persistence.Compact24.Compact24DbContext)
+            throw ContractException.Conflict("move_in_baselines_unavailable");
+        var contract = await db.Set<Contract>().Include(c => c.Room).ThenInclude(r => r.Location)
+            .SingleOrDefaultAsync(c => c.Id == contractId && c.Kind == ContractKind.Main &&
+                c.PreviousContractId == null && c.Status != ContractStatus.Cancelled &&
+                c.Status != ContractStatus.Terminated && c.Status != ContractStatus.Expired &&
+                c.Status != ContractStatus.Superseded, t)
+            ?? throw ContractException.Conflict("main_move_in_handover_required");
+        var date = DateOnly.FromDateTime(TimeZoneInfo.ConvertTimeBySystemTimeZoneId(now, "Asia/Ho_Chi_Minh").DateTime);
+        var responsible = await tasks.ResponsibilityAsync(contract.Room.LocationId, date, t);
+        return await EnsureMeterBaselinesAsync(contract, now, responsible, t);
+    }
+
+    private async Task<Guid[]> EnsureMeterBaselinesAsync(Contract c, DateTimeOffset now,
+        TaskResponsibility? responsible, CancellationToken t)
+    {
+        var date = DateOnly.FromDateTime(TimeZoneInfo.ConvertTimeBySystemTimeZoneId(now, "Asia/Ho_Chi_Minh").DateTime);
+        // Every tenancy starts with its own photographed electricity/water baseline.
+        // A physical meter may have confirmed readings from previous occupants, so
+        // these tasks are keyed by Contract + Meter instead of Meter alone.
+        var meters = await db.Set<Meter>().AsNoTracking().Where(m => m.RoomId == c.RoomId && m.IsActive)
+            .OrderBy(m => m.UtilityType).ThenBy(m => m.Id).ToArrayAsync(t);
+        var ids = new List<Guid>(meters.Length);
+        foreach (var meter in meters)
+        {
+            var meterTaskId = Key($"contract-meter-initial:{c.Id:N}:{meter.Id:N}");
+            ids.Add(meterTaskId);
+            if (db.Set<OperationalTask>().Local.Any(x => x.Id == meterTaskId) ||
+                await db.Set<OperationalTask>().AnyAsync(x => x.Id == meterTaskId, t)) continue;
+            var meterTask = new OperationalTask
+            {
+                Kind = OperationalTaskKind.MeterReading,
+                LocationId = c.Room.LocationId,
+                MeterId = meter.Id,
+                ContractId = c.Id,
+                Title = $"Chụp chỉ số {(meter.UtilityType == UtilityType.Electricity ? "điện" : "nước")} khi nhận phòng {c.Room.RoomNumber}",
+                Requirements = "Chụp ảnh thực tế, đối chiếu và xác nhận chỉ số đầu kỳ cho hợp đồng nhận phòng này. Tiếp tục sử dụng công tơ hiện có, không tạo công tơ mới hay kế thừa chỉ số/ảnh của người thuê trước.",
+                Purpose = ReadingPurpose.Initial,
+                ReadingDate = new[] { c.StartDate, date, meter.InstalledOn }.Max(),
+                AssignedStaffUserId = responsible?.StaffUserId,
+                AssignmentId = responsible?.AssignmentId,
+                AssignedAt = responsible is null ? null : now,
+                EvidenceRequired = true,
+                Status = MeterTaskStatus.Assigned
+            };
+            db.Entry(meterTask).Property(x => x.Id).CurrentValue = meterTaskId;
+            db.Add(meterTask);
+        }
+        return ids.ToArray();
     }
 
     private async Task EnsureInventoryTaskAsync(Contract c, Guid actor, DateTimeOffset now, CancellationToken t)

@@ -17,7 +17,11 @@ namespace BHome.IntegrationTests.Compact24;
 // Always a disposable PostgreSQL 16 container; never reads a developer database connection.
 public sealed class PropertyContractDockerFixture : IAsyncLifetime
 {
-    private readonly PostgreSqlContainer database = new PostgreSqlBuilder("postgres:16-alpine").Build();
+    // The Development quick-create feature is intentionally restricted to
+    // loopback databases named bhome_*. This Docker-only database exercises
+    // that guard without weakening it or touching a real environment.
+    private readonly PostgreSqlContainer database = new PostgreSqlBuilder("postgres:16-alpine")
+        .WithDatabase("bhome_compact24_test").Build();
     private ApiFactory api = null!;
     private WebApplicationFactory<Program> host = null!;
     internal ContractFixture Contracts { get; private set; } = null!;
@@ -80,6 +84,15 @@ public sealed class PropertyContractDockerTests(PropertyContractDockerFixture fi
     [Fact]
     public Task ReusedMeterMoveInRequiresCurrentContractBaseline() =>
         new ContractLifecycleApiTests(fixture.Contracts).ReusedMetersRequireFreshContractInitialReadingsBeforeMoveInHandover();
+    [Fact]
+    public Task ManualMoveInRepairsMissingElectricityWaterBaselines() =>
+        new ContractLifecycleApiTests(fixture.Contracts).StartedManualMoveInCanRepairMissingMeterBaselinesWithoutCreatingAnotherStaffJob();
+    [Fact]
+    public Task ManualMoveInStartPreparesExistingElectricityWaterMeters() =>
+        new ContractLifecycleApiTests(fixture.Contracts).StartingManualMoveInCreatesBaselineCheckpointsForExistingPhysicalMeters();
+    [Fact]
+    public Task QuickCreateHandoverWithoutSeparateMeterJobs() =>
+        new ContractLifecycleApiTests(fixture.Contracts).QuickCreateUsesUnifiedMoveInWithoutImmediateMeterJobs();
     [Fact] public Task MixedStaffContractList() => new ContractLifecycleApiTests(fixture.Contracts).StaffListIncludesHoldingAndMainWithTypeSpecificFieldsAndPreservesLocationScope();
     [Fact] public Task HoldingLocationConfiguration() => new ContractLifecycleApiTests(fixture.Contracts).HoldingSettingsAreLocationScopedVersionedAndDoNotRewriteCreatedContracts();
     [Fact] public Task AssetConfigurationHistory() => new PropertyApiTests(fixture.Properties).FullConfigurationUpdatesRequireVersionsAndRetainActorAndSnapshots();
