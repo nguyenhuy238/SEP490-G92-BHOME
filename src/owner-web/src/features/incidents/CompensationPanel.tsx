@@ -55,6 +55,7 @@ export function CompensationPanel({
   const [reason, setReason] = useState('');
   const [images, setImages] = useState<string[]>([]);
   const [validation, setValidation] = useState('');
+  const [showForm, setShowForm] = useState(false);
   const action = useOwnerAction();
   const row = query.data;
   const history = useOwnerQuery<Compensation[]>(
@@ -88,8 +89,10 @@ export function CompensationPanel({
     );
   }
   return (
-    <Stack spacing={2}>
-      <Typography variant="h6">Bồi thường thiệt hại phòng</Typography>
+    <Stack spacing={1.5}>
+      <Typography variant="subtitle1" sx={{ fontWeight: 700 }}>
+        Bồi thường thiệt hại phòng
+      </Typography>
       <OwnerFeedback
         busy={query.isFetching || action.busy}
         error={validation || query.error || contracts.error || action.error}
@@ -107,13 +110,15 @@ export function CompensationPanel({
       )}
       {row ? (
         <>
-          <Typography>
+          <Typography variant="body2" sx={{ fontWeight: 650 }}>
             {statuses[row.status] ?? row.status} · Mức bồi thường {formatContractMoney(row.amount)}
           </Typography>
           <Typography variant="body2" color="text.secondary">
             Chi phí sửa chữa thực tế: {formatContractMoney(row.actualRepairCost)}
           </Typography>
-          <Typography>Hợp đồng chịu trách nhiệm · {formatInstant(row.decidedAt)}</Typography>
+          <Typography variant="body2">
+            Hợp đồng chịu trách nhiệm · {formatInstant(row.decidedAt)}
+          </Typography>
           <Typography>{row.reason}</Typography>
           <details>
             <summary>Lịch sử quyết định bồi thường</summary>
@@ -145,7 +150,7 @@ export function CompensationPanel({
                 onChange={(e) => setReason(e.target.value)}
                 disabled={action.busy}
               />
-              <Stack direction="row" spacing={1}>
+              <Stack direction="row" spacing={1} useFlexGap sx={{ flexWrap: 'wrap' }}>
                 <Button
                   disabled={action.busy || !reason.trim()}
                   onClick={() =>
@@ -174,101 +179,118 @@ export function CompensationPanel({
         !query.isFetching &&
         !query.error && (
           <>
-            <Alert severity="info">
-              Owner xác nhận trách nhiệm theo bằng chứng. Mỗi nghĩa vụ có một phương thức thu. Mức
-              bồi thường không được vượt chi phí sửa chữa thực tế (
-              {formatContractMoney(String(work.actualCost ?? 0))}).
-            </Alert>
-            <TextField
-              select
-              label="Hợp đồng chịu trách nhiệm"
-              required
-              value={contract}
-              onChange={(e) => setContract(e.target.value)}
+            <Stack
+              direction={{ xs: 'column', sm: 'row' }}
+              spacing={1}
+              sx={{ alignItems: { sm: 'center' }, justifyContent: 'space-between' }}
             >
-              {(contracts.data ?? []).map((c) => (
-                <MenuItem key={c.id} value={c.id}>
-                  {c.startDate.split('-').reverse().join('/')} –{' '}
-                  {c.endDate.split('-').reverse().join('/')} ·{' '}
-                  {c.status === 'Active'
-                    ? 'Đang hiệu lực'
-                    : c.status === 'Terminated'
-                      ? 'Đã kết thúc'
-                      : 'Đã thay thế'}
-                </MenuItem>
-              ))}
-            </TextField>
-            <MoneyField
-              label="Mức bồi thường (VND)"
-              required
-              value={amount}
-              onValueChange={setAmount}
-            />
-            <TextField
-              select
-              label="Phương thức thu"
-              value={method}
-              onChange={(e) => setMethod(e.target.value)}
-            >
-              <MenuItem value="Invoice">Hóa đơn bồi thường riêng</MenuItem>
-              <MenuItem value="Deposit">Khấu trừ cọc khi trả phòng</MenuItem>
-            </TextField>
-            {method === 'Deposit' ? (
-              <Alert severity="info">
-                Khấu trừ cọc chỉ được thực hiện sau khi Owner duyệt hồ sơ trả phòng và hệ thống xác
-                nhận số dư còn đủ.
-              </Alert>
-            ) : (
-              <Alert severity="info">
-                Hóa đơn bồi thường sẽ được tạo riêng để Tenant thanh toán bằng QR như hóa đơn thông
-                thường.
-              </Alert>
-            )}
-            {method === 'Invoice' && (
-              <TextField
-                required
-                type="date"
-                label="Ngày đến hạn"
-                slotProps={{ inputLabel: { shrink: true } }}
-                value={due}
-                onChange={(e) => setDue(e.target.value)}
-              />
-            )}
-            <TextField
-              label="Lý do và căn cứ trách nhiệm"
-              required
-              multiline
-              minRows={2}
-              value={reason}
-              onChange={(e) => setReason(e.target.value)}
-            />
-            <Typography>Chọn bằng chứng đã ghi nhận</Typography>
-            {evidence
-              .filter((e) => e.activityId)
-              .map((e, index) => (
-                <FormControlLabel
-                  key={e.id}
-                  label={`Ảnh ${index + 1} · ${e.kind === 'Completion' ? 'Kết quả sửa chữa' : 'Kiểm tra'}`}
-                  control={
-                    <Checkbox
-                      checked={images.includes(e.id)}
-                      disabled={action.busy || (!images.includes(e.id) && images.length >= 5)}
-                      onChange={(_, checked) =>
-                        setImages((value) =>
-                          checked ? [...value, e.id] : value.filter((id) => id !== e.id),
-                        )
+              <Typography variant="body2" color="text.secondary">
+                Chưa lập quyết định · Tối đa {formatContractMoney(String(work.actualCost ?? 0))}
+              </Typography>
+              <Button
+                variant={showForm ? 'text' : 'outlined'}
+                size="small"
+                aria-expanded={showForm}
+                disabled={action.busy}
+                onClick={() => setShowForm((value) => !value)}
+              >
+                {showForm ? 'Thu gọn' : 'Lập quyết định bồi thường'}
+              </Button>
+            </Stack>
+            {showForm && (
+              <>
+                <TextField
+                  select
+                  label="Hợp đồng chịu trách nhiệm"
+                  required
+                  value={contract}
+                  onChange={(e) => setContract(e.target.value)}
+                >
+                  {(contracts.data ?? []).map((c) => (
+                    <MenuItem key={c.id} value={c.id}>
+                      {c.startDate.split('-').reverse().join('/')} –{' '}
+                      {c.endDate.split('-').reverse().join('/')} ·{' '}
+                      {c.status === 'Active'
+                        ? 'Đang hiệu lực'
+                        : c.status === 'Terminated'
+                          ? 'Đã kết thúc'
+                          : 'Đã thay thế'}
+                    </MenuItem>
+                  ))}
+                </TextField>
+                <MoneyField
+                  label="Mức bồi thường (VND)"
+                  required
+                  value={amount}
+                  onValueChange={setAmount}
+                />
+                <TextField
+                  select
+                  label="Phương thức thu"
+                  value={method}
+                  onChange={(e) => setMethod(e.target.value)}
+                >
+                  <MenuItem value="Invoice">Hóa đơn bồi thường riêng</MenuItem>
+                  <MenuItem value="Deposit">Khấu trừ cọc khi trả phòng</MenuItem>
+                </TextField>
+                {method === 'Deposit' ? (
+                  <Typography variant="body2" color="text.secondary">
+                    Khấu trừ cọc chỉ được thực hiện sau khi Owner duyệt hồ sơ trả phòng và hệ thống
+                    xác nhận số dư còn đủ.
+                  </Typography>
+                ) : (
+                  <Typography variant="body2" color="text.secondary">
+                    Hóa đơn bồi thường sẽ được tạo riêng để Tenant thanh toán bằng QR như hóa đơn
+                    thông thường.
+                  </Typography>
+                )}
+                {method === 'Invoice' && (
+                  <TextField
+                    required
+                    type="date"
+                    label="Ngày đến hạn"
+                    slotProps={{ inputLabel: { shrink: true } }}
+                    value={due}
+                    onChange={(e) => setDue(e.target.value)}
+                  />
+                )}
+                <TextField
+                  label="Lý do và căn cứ trách nhiệm"
+                  required
+                  multiline
+                  minRows={2}
+                  value={reason}
+                  onChange={(e) => setReason(e.target.value)}
+                />
+                <Typography>Chọn bằng chứng đã ghi nhận</Typography>
+                {evidence
+                  .filter((e) => e.activityId)
+                  .map((e, index) => (
+                    <FormControlLabel
+                      key={e.id}
+                      label={`Ảnh ${index + 1} · ${e.kind === 'Completion' ? 'Kết quả sửa chữa' : 'Kiểm tra'}`}
+                      control={
+                        <Checkbox
+                          checked={images.includes(e.id)}
+                          disabled={action.busy || (!images.includes(e.id) && images.length >= 5)}
+                          onChange={(_, checked) =>
+                            setImages((value) =>
+                              checked ? [...value, e.id] : value.filter((id) => id !== e.id),
+                            )
+                          }
+                        />
                       }
                     />
-                  }
-                />
-              ))}
-            <Button
-              variant="contained"
-              disabled={action.busy || !!contracts.error || images.length === 0}
-              onClick={() => void create()}
-            >
-              Xác nhận trách nhiệm và phương thức thu
-            </Button>
+                  ))}
+                <Button
+                  variant="contained"
+                  disabled={action.busy || !!contracts.error || images.length === 0}
+                  onClick={() => void create()}
+                >
+                  Xác nhận trách nhiệm và phương thức thu
+                </Button>
+              </>
+            )}
           </>
         )
       )}

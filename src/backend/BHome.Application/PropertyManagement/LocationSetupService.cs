@@ -1,3 +1,4 @@
+using BHome.Application.Common;
 using System.ComponentModel.DataAnnotations;
 using System.Globalization;
 using System.Security.Cryptography;
@@ -90,7 +91,7 @@ public sealed class LocationSetupService(ISharedConfigurationStore shared, ISetu
     AssetInventoryService assets, OperatingPolicyService policies, ICurrentUser user, TimeProvider clock)
 {
     private static readonly JsonSerializerOptions Json = SharedDataValidator.Json;
-    private DateOnly Today => BHome.Application.Billing.BillingAutomationDates.BusinessDate(clock.GetUtcNow());
+    private DateOnly Today => clock.BusinessToday();
     private Guid Owner()
     {
         var actor = user.UserId ?? throw new PropertyException(401, "authentication_required");

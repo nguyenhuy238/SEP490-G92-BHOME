@@ -42,6 +42,10 @@ public sealed record NamedResource(Guid Id, string Label, Guid? ParentId = null,
 {
     public IReadOnlyList<string>? CurrentTenantLabels { get; init; }
     public bool? WaitingForOwnerSignature { get; init; }
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public DateOnly? InstalledOn { get; init; }
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public bool? IsActive { get; init; }
 }
 public sealed record ResidentSummary(Guid Id, Guid RoomId, string DisplayLabel, ResidentType ResidentType,
     IdentityVerificationStatus VerificationStatus, DateTimeOffset? ConfirmedAt, string? Email = null);

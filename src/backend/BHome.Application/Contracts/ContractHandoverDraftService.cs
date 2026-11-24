@@ -121,15 +121,13 @@ public sealed partial class ContractService
         if (water is null) missing.Add("water");
         if (electricity is not null && water is not null && electricity.Date != water.Date)
             missing.Add("meter_readings_same_day");
-        // The seven structured room checks are the factual inspection.
-        // A separate general room summary is an optional note.
         // Older approved drafts can contain multiple access types, so preserve
         // their confirmed behavior without blocking Tenant acknowledgment.
         var legacyApproved = state.KeyEvidenceIds is null && state.Status is ("Ready" or "Confirmed");
-        // Key photos are optional. When provided, they remain a separate private
-        // evidence collection and never become general room/asset evidence.
         missing.AddRange(HandoverRoomChecklist.Missing(state.RoomChecks, state.AccessItems, state.OutstandingIssues)
             .Where(reason => !legacyApproved || reason != "access_inventory"));
+        if (state.Status is "Draft" or "ReinspectionRequested")
+            AddDraftEvidenceRequirements(state, missing);
         if (canonicalTask)
         {
             // Completed MoveInInventory is the factual Staff inspection. An
@@ -165,9 +163,6 @@ public sealed partial class ContractService
             user.IsInRole(Roles.Staff)) missing.Add("move_in_task_not_started");
         if (state.ContractSnapshotHash != contract.SnapshotHash) missing.Add("contract_changed");
         // Recorded defects are disclosed in the signed report, not missing data.
-        if (state.Status is "Draft" or "PendingOwnerReview" or "ReinspectionRequested")
-        {
-        }
         var selectedReinspection = state.ReinspectionItems ?? [];
         var latestRequestAt = state.ReinspectionHistory?.LastOrDefault()?.RequestedAt;
         if (latestRequestAt is not null && canonical is not null &&
@@ -253,6 +248,12 @@ public sealed partial class ContractService
         var roomChecks = HandoverRoomChecklist.Merge(prior.RoomChecks, input.RoomChecks);
         var accessItems = input.AccessItems is null
             ? prior.AccessItems ?? [] : HandoverRoomChecklist.NormalizeAccess(input.AccessItems);
+        if (input.RoomCondition is not null && (input.EvidenceIds ?? prior.EvidenceIds).Length == 0)
+            throw ContractException.Invalid("room_summary_evidence_required");
+        if (input.RoomChecks?.Any(check => check.Status != "NotApplicable" && check.EvidenceIds.Length == 0) == true)
+            throw ContractException.Invalid("room_check_evidence_required");
+        if (input.AccessItems is not null && (input.KeyEvidenceIds ?? prior.KeyEvidenceIds) is not { Length: > 0 })
+            throw ContractException.Invalid("key_evidence_required");
         // Staff records factual defects in roomChecks, not repair actions.
         // Drop stale mutable proposal data from older drafts; immutable
         // already-confirmed historical documents remain untouched.
@@ -279,6 +280,8 @@ public sealed partial class ContractService
                     asset.EvidenceIds is { Length: > 5 } || asset.Checked && string.IsNullOrWhiteSpace(asset.Condition) ||
                     asset.EvidenceIds?.Distinct().Count() != (asset.EvidenceIds?.Length ?? 0))
                     throw ContractException.Invalid("invalid_handover_draft_assets");
+                else if (asset.Checked && asset.EvidenceIds is not { Length: > 0 })
+                    throw ContractException.Invalid("asset_evidence_required");
             // Saving one completed inspection must not erase other asset groups.
             // Staff may return multiple times and each checked group fills the
             // corresponding section of the same evolving draft.
@@ -289,6 +292,15 @@ public sealed partial class ContractService
         }
         HandoverRoomChecklist.RequireSeparateKeyEvidence(input.KeyEvidenceIds ?? prior.KeyEvidenceIds,
             input.EvidenceIds ?? prior.EvidenceIds, roomChecks, assets);
+        foreach (var evidenceId in (input.EvidenceIds ?? [])
+                     .Concat(input.KeyEvidenceIds ?? [])
+                     .Concat((input.RoomChecks ?? []).SelectMany(check => check.EvidenceIds))
+                     .Concat((input.Assets ?? []).SelectMany(asset => asset.EvidenceIds ?? [])).Distinct())
+        {
+            var file = await Workflow.FileAsync(id, evidenceId, token);
+            if (file?.Kind != ContractFileKind.HandoverEvidence)
+                throw ContractException.Invalid("invalid_handover_evidence");
+        }
         var canonicalInventoryTaskExists = (await Handovers.MoveInTaskAsync(
             contract.Id, contract.RoomId, Actor, false, token))?.InventoryTaskId is not null;
         var reinspection = (prior.ReinspectionItems ?? []).Select(item => item with
@@ -364,6 +376,16 @@ public sealed partial class ContractService
         return await DraftView(contract, (await Drafts.GetAsync(id, token))!, token);
     }, token);
 
+    private static void AddDraftEvidenceRequirements(HandoverDraftState state, List<string> missing)
+    {
+        if (state.EvidenceIds.Length == 0)
+            missing.Add("room_summary_evidence");
+        if ((state.RoomChecks ?? []).Any(check => check.Status != "NotApplicable" && check.EvidenceIds.Length == 0))
+            missing.Add("room_check_evidence");
+        if (state.KeyEvidenceIds is not { Length: > 0 })
+            missing.Add("key_evidence");
+    }
+
     private async Task SubmitInspectedDraft(Contract contract, HandoverDraftState prior,
         Guid key, HandoverDraftSubmit input, CancellationToken token, bool reinspection = false)
     {
@@ -379,7 +401,7 @@ public sealed partial class ContractService
         var missing = new List<string>();
         if (view.Electricity is null) missing.Add("electricity");
         if (view.Water is null) missing.Add("water");
-        // The general room summary is optional once each room check has been saved.
+        AddDraftEvidenceRequirements(prior, missing);
         try
         {
             var checks = HandoverRoomChecklist.Merge(null, prior.RoomChecks);
@@ -402,7 +424,8 @@ public sealed partial class ContractService
             // Preserve their original Staff asset-inspection requirements;
             // only a completed canonical task replaces draft.assets as source.
             if (!view.NoAssetsConfirmed &&
-                (view.Assets.Length == 0 || view.Assets.Any(asset => !asset.Checked)))
+                (view.Assets.Length == 0 || view.Assets.Any(asset => !asset.Checked ||
+                    asset.EvidenceIds is not { Length: > 0 })))
                 missing.Add("assets");
             else
             {

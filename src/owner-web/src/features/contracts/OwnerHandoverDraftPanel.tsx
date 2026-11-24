@@ -178,11 +178,11 @@ const ownerSessionSignature = {
 };
 
 const statusLabel: Record<OwnerHandoverDraft['status'], string> = {
-  Draft: 'Đang lập biên bản',
-  PendingOwnerReview: 'Chờ Owner duyệt biên bản',
-  ReinspectionRequested: 'Đang chờ Staff kiểm tra lại',
-  Ready: 'Chờ Tenant ký biên bản',
-  ChangesRequested: 'Tenant yêu cầu chỉnh sửa',
+  Draft: 'Đang kiểm tra bàn giao',
+  PendingOwnerReview: 'Chờ chủ trọ duyệt biên bản',
+  ReinspectionRequested: 'Đang chờ nhân viên kiểm tra lại',
+  Ready: 'Chờ khách thuê ký biên bản',
+  ChangesRequested: 'Khách thuê yêu cầu chỉnh sửa',
   Confirmed: 'Đã xác nhận bàn giao',
 };
 
@@ -218,7 +218,7 @@ function reinspectionOptions(draft: OwnerHandoverDraft): ReinspectionOption[] {
     {
       key: 'Room',
       label: 'Hiện trạng chung và ảnh phòng',
-      issue: !draft.roomCondition?.trim(),
+      issue: draft.missing?.includes('room_summary_evidence') ?? !draft.evidenceIds?.length,
       item: { kind: 'Room' },
     },
     ...checks,
@@ -263,14 +263,14 @@ function StaffReviewSummary({ draft }: { draft: OwnerHandoverDraft }) {
     : assetCount > 0
       ? `${assetCount} nhóm tài sản`
       : draft.moveInTask?.inventoryTaskId
-        ? 'Có phiếu kiểm kê từ Staff'
+        ? 'Có phiếu kiểm kê từ nhân viên'
         : 'Chờ kiểm kê tài sản';
   const taskStatus = draft.moveInTask?.status;
   return (
     <Paper variant="outlined" sx={{ p: 2 }}>
       <Stack spacing={1.5}>
         <Typography variant="subtitle1" sx={{ fontWeight: 700 }}>
-          Kết quả Staff kiểm tra
+          Kết quả nhân viên kiểm tra
         </Typography>
         <Stack direction="row" spacing={1} useFlexGap sx={{ flexWrap: 'wrap' }}>
           <Chip size="small" variant="outlined" label={`Hiện trạng phòng ${inspected}/7 mục`} />
@@ -288,19 +288,19 @@ function StaffReviewSummary({ draft }: { draft: OwnerHandoverDraft }) {
         </Stack>
         {draft.staffPreparedAt && (
           <Typography variant="body2" color="text.secondary">
-            Staff lưu kiểm tra gần nhất: {formatInstant(draft.staffPreparedAt)}
+            Nhân viên lưu kiểm tra gần nhất: {formatInstant(draft.staffPreparedAt)}
           </Typography>
         )}
         {draft.staffSubmittedAt && (
           <Alert severity={draft.status === 'PendingOwnerReview' ? 'info' : 'success'}>
-            Staff đã gửi biên bản để Owner duyệt lúc {formatInstant(draft.staffSubmittedAt)}.
+            Nhân viên đã gửi biên bản để chủ trọ duyệt lúc {formatInstant(draft.staffSubmittedAt)}.
             {draft.staffSubmittedBy && (
               <Typography
                 component="span"
                 variant="body2"
                 sx={{ display: 'block', overflowWrap: 'anywhere' }}
               >
-                Tài khoản Staff xác nhận: {draft.staffSubmittedBy}
+                Tài khoản nhân viên xác nhận: {draft.staffSubmittedBy}
               </Typography>
             )}
           </Alert>
@@ -443,9 +443,10 @@ function StaffWorkModules({
       check: draft.roomChecks?.find((item) => item.code === code),
     }))
     .sort((a, b) => Number(b.check?.status !== 'Passed') - Number(a.check?.status !== 'Passed'));
-  const problemChecks = checks.filter((item) => item.check?.status !== 'Passed').length;
+  const problemChecks = checks.filter((item) => item.check?.status === 'Issue').length;
+  const recordedChecks = checks.filter((item) => item.check).length;
   const roomKey = draft.accessItems?.find((item) => item.type === 'RoomKey');
-  const keyOk = roomKey?.quantity != null && roomKey.quantity > 0;
+  const keyOk = roomKey?.quantity != null && roomKey.quantity >= 0;
   const actual = inventory?.data ?? null;
   const inventoryProblems =
     actual?.items.filter(
@@ -507,25 +508,22 @@ function StaffWorkModules({
             </Stack>
           );
         })}
-        <Typography variant="caption" color="text.secondary">
-          Chỉ số điện/nước đã xác nhận không thể yêu cầu kiểm tra lại qua bước này; kiểm tra qua quy
-          trình công tơ riêng.
-        </Typography>
-        <Button
-          component="a"
-          href="/meters"
-          variant="text"
-          size="small"
-          sx={{ alignSelf: 'flex-start' }}
-        >
-          Quản lý công tơ
-        </Button>
       </WorkSection>
 
       <WorkSection
         title="Hiện trạng phòng và 7 hạng mục"
-        status={problemChecks ? `${problemChecks} mục cần kiểm tra lại` : '7/7 mục đạt'}
-        warning={problemChecks > 0 || !draft.roomCondition?.trim()}
+        status={
+          recordedChecks < checks.length
+            ? `${recordedChecks}/${checks.length} đã kiểm tra`
+            : problemChecks
+              ? `${problemChecks} mục có vấn đề`
+              : `${recordedChecks}/${checks.length} đã kiểm tra`
+        }
+        warning={
+          problemChecks > 0 ||
+          recordedChecks < checks.length ||
+          (draft.missing?.includes('room_summary_evidence') ?? !draft.evidenceIds?.length)
+        }
       >
         <Stack
           direction="row"
@@ -541,7 +539,7 @@ function StaffWorkModules({
         >
           <Box sx={{ flex: '1 1 240px', minWidth: 0 }}>
             <Typography variant="body2" sx={{ fontWeight: 650 }}>
-              Hiện trạng chung: {maybe(draft.roomCondition)}
+              Ghi chú hiện trạng: {draft.roomCondition?.trim() || 'Không có ghi chú'}
             </Typography>
             {!!draft.notes?.trim() && (
               <Typography variant="body2" color="text.secondary">
@@ -623,9 +621,9 @@ function StaffWorkModules({
         title="Kiểm kê tài sản"
         status={
           actual
-            ? `Staff đã kiểm kê ${actual.items.filter((item) => item.condition !== null).length}/${actual.items.length}`
+            ? `Nhân viên đã kiểm kê ${actual.items.filter((item) => item.condition !== null).length}/${actual.items.length}`
             : draft.moveInTask?.inventoryTaskId
-              ? 'Đang tải kết quả Staff'
+              ? 'Đang tải kết quả nhân viên'
               : 'Kiểm kê theo biên bản'
         }
         warning={
@@ -634,17 +632,11 @@ function StaffWorkModules({
       >
         {inventory?.error && (
           <Alert severity="warning">
-            Không đồng bộ được phiếu kiểm kê Staff: {inventory.error}
+            Không đồng bộ được phiếu kiểm kê nhân viên: {inventory.error}
           </Alert>
         )}
         {draft.moveInTask?.inventoryTaskId && !actual && !inventory?.error && (
-          <LinearProgress aria-label="Đang tải kiểm kê tài sản từ Staff" />
-        )}
-        {actual && (
-          <Typography variant="caption" color="text.secondary">
-            {actual.status === 'Completed' ? 'Staff đã hoàn tất' : 'Staff đang thực hiện'} · Phiếu
-            kiểm kê gốc, không lấy trạng thái từ bản nháp cũ.
-          </Typography>
+          <LinearProgress aria-label="Đang tải kiểm kê tài sản từ nhân viên" />
         )}
         {actual?.items.map((item) => {
           const bad = item.condition !== 'Good' || item.actualQuantity !== item.expectedQuantity;
@@ -685,7 +677,7 @@ function StaffWorkModules({
                 {updated && (
                   <Box sx={{ mt: 0.5 }}>
                     <Typography variant="caption" sx={{ fontWeight: 650 }}>
-                      Staff cập nhật biên bản sau kiểm tra lại
+                      Nhân viên cập nhật biên bản sau kiểm tra lại
                     </Typography>
                     <Typography variant="body2">{handoverAssetSummary(updated)}</Typography>
                     {!!updated.notes && <Typography variant="body2">{updated.notes}</Typography>}
@@ -814,25 +806,28 @@ function StaffWorkModules({
 
 const missingLabel: Record<string, string> = {
   contract_active: 'Hợp đồng chưa được kích hoạt',
-  tenant_account: 'Chưa có tài khoản Tenant hợp lệ để xác nhận',
+  tenant_account: 'Chưa có tài khoản khách thuê hợp lệ để xác nhận',
   electricity: 'Chưa có chỉ số điện ban đầu được xác nhận, kèm ảnh',
   water: 'Chưa có chỉ số nước ban đầu được xác nhận, kèm ảnh',
   meter_readings_same_day: 'Chỉ số điện và nước cần được ghi nhận cùng ngày',
-  room_condition: 'Staff chưa ghi nhận hiện trạng phòng',
+  room_condition: 'Nhân viên chưa ghi nhận hiện trạng phòng',
   keys_and_access: 'Chưa ghi nhận số lượng chìa khóa bàn giao',
   room_evidence: 'Chưa có ảnh chứng minh tình trạng phòng',
-  room_checklist: 'Staff chưa hoàn tất 7 hạng mục kiểm tra hiện trạng phòng',
+  room_summary_evidence: 'Thiếu ảnh hiện trạng chung',
+  room_check_evidence: 'Thiếu ảnh hạng mục hiện trạng',
+  key_evidence: 'Thiếu ảnh chìa khóa',
+  room_checklist: 'Nhân viên chưa hoàn tất 7 hạng mục kiểm tra hiện trạng phòng',
   room_issue_evidence: 'Hạng mục hiện trạng có vấn đề nhưng thiếu ảnh bằng chứng riêng',
   access_inventory: 'Chưa ghi nhận số lượng chìa khóa bàn giao',
   assets: 'Kiểm kê tài sản chưa hoàn tất',
-  move_in_inventory: 'Staff chưa lưu/hoàn thành phiếu đối chiếu kiểm kê đầu vào',
+  move_in_inventory: 'Nhân viên chưa lưu/hoàn thành phiếu đối chiếu kiểm kê đầu vào',
   asset_quantities_or_evidence:
-    'Số lượng, đối chiếu tài sản hoặc ảnh bằng chứng kiểm kê chưa hợp lệ; Staff cần kiểm tra và bổ sung',
-  inventory_changed: 'Danh sách tài sản đã thay đổi, cần Staff kiểm kê lại',
-  inventory_issue: 'Phiếu kiểm kê Staff còn tài sản thiếu, hỏng hoặc số lượng không khớp',
+    'Số lượng, đối chiếu tài sản hoặc ảnh bằng chứng kiểm kê chưa hợp lệ; nhân viên cần kiểm tra và bổ sung',
+  inventory_changed: 'Danh sách tài sản đã thay đổi, cần nhân viên kiểm kê lại',
+  inventory_issue: 'Phiếu kiểm kê nhân viên còn tài sản thiếu, hỏng hoặc số lượng không khớp',
   room_check_failed: 'Có hạng mục hiện trạng phòng chưa đạt, không áp dụng hoặc chưa được kiểm tra',
   access_not_ready: 'Chưa có số lượng chìa khóa hợp lệ để bàn giao',
-  staff_inspection: 'Staff chưa hoàn tất các nội dung kiểm tra bàn giao',
+  staff_inspection: 'Nhân viên chưa hoàn tất các nội dung kiểm tra bàn giao',
   contract_changed: 'Dữ liệu hợp đồng đã thay đổi, cần cập nhật lại bản nháp',
 };
 
@@ -948,7 +943,7 @@ function OwnerInventoryResults({
 }) {
   const fetched = useActualInventory(api, snapshot === undefined ? taskId : null, polling);
   const current = snapshot === undefined ? fetched : snapshot;
-  if (!current) return <LinearProgress aria-label="Đang tải kiểm kê thực tế từ Staff" />;
+  if (!current) return <LinearProgress aria-label="Đang tải kiểm kê thực tế từ nhân viên" />;
   if (current.error && !current.data)
     return <Alert severity="warning">Chưa tải được kết quả kiểm kê thực tế: {current.error}</Alert>;
   const inventory = current.data;
@@ -968,7 +963,9 @@ function OwnerInventoryResults({
         <Chip
           size="small"
           color={inventory.status === 'Completed' ? 'success' : 'default'}
-          label={inventory.status === 'Completed' ? 'Staff đã hoàn tất' : 'Staff đang thực hiện'}
+          label={
+            inventory.status === 'Completed' ? 'Nhân viên đã hoàn tất' : 'Nhân viên đang thực hiện'
+          }
         />
       </Stack>
       {inventory.items.length === 0 && (
@@ -1036,7 +1033,7 @@ function UpdatedHandoverAssets({ draft, api }: { draft: OwnerHandoverDraft; api:
     <Stack spacing={1.5}>
       <Typography variant="subtitle2">Kết quả cập nhật biên bản</Typography>
       <Alert severity="info" variant="outlined">
-        Đây là số lượng và tình trạng tài sản mới nhất Staff ghi nhận trong biên bản sau yêu cầu
+        Đây là số lượng và tình trạng tài sản mới nhất nhân viên ghi nhận trong biên bản sau yêu cầu
         kiểm tra lại. Đối chiếu phần Kiểm kê gốc bên dưới để thấy các thay đổi trước khi ký.
       </Alert>
       {!draft.assets?.length && (
@@ -1187,8 +1184,8 @@ function DraftDocument({ draft, api }: { draft: OwnerHandoverDraft; api: Contrac
             {draft.status === 'Confirmed'
               ? 'Bản đã xác nhận'
               : draft.status === 'Ready'
-                ? 'Bản tóm tắt sau khi Owner ký'
-                : 'Bản nháp tự động cập nhật theo nhiệm vụ của Staff'}
+                ? 'Bản tóm tắt sau khi chủ trọ ký'
+                : 'Bản nháp tự động cập nhật theo nhiệm vụ của nhân viên'}
             {' · '}Phiên bản {draft.version}
           </Typography>
         </Box>
@@ -1223,11 +1220,13 @@ function DraftDocument({ draft, api }: { draft: OwnerHandoverDraft; api: Contrac
             Điện:{' '}
             {draft.electricity
               ? `${displayMeterInteger(draft.electricity.value)} kWh`
-              : 'Chờ Staff xác nhận'}
+              : 'Chờ nhân viên xác nhận'}
           </Typography>
           <Typography variant="body2">
             Nước:{' '}
-            {draft.water ? `${displayMeterInteger(draft.water.value)} m³` : 'Chờ Staff xác nhận'}
+            {draft.water
+              ? `${displayMeterInteger(draft.water.value)} m³`
+              : 'Chờ nhân viên xác nhận'}
           </Typography>
         </Stack>
         <Divider />
@@ -1235,8 +1234,9 @@ function DraftDocument({ draft, api }: { draft: OwnerHandoverDraft; api: Contrac
           <Typography variant="subtitle2">IV. Kiểm kê tài sản</Typography>
           {draft.inventoryHasIssues && (
             <Alert severity="warning" variant="outlined">
-              Staff ghi nhận tài sản thiếu hoặc hư hỏng trong phiếu kiểm kê. Owner cần đối chiếu ảnh
-              và ghi chú trước khi quyết định lý do chấp thuận và phương án xử lý bàn giao.
+              Nhân viên ghi nhận tài sản thiếu hoặc hư hỏng trong phiếu kiểm kê. chủ trọ cần đối
+              chiếu ảnh và ghi chú trước khi quyết định lý do chấp thuận và phương án xử lý bàn
+              giao.
             </Alert>
           )}
           {hasAssetReinspection && <UpdatedHandoverAssets draft={draft} api={api} />}
@@ -1250,7 +1250,9 @@ function DraftDocument({ draft, api }: { draft: OwnerHandoverDraft; api: Contrac
           {draft.status !== 'Confirmed' && draft.moveInTask?.inventoryTaskId ? (
             <OwnerInventoryResults api={api} taskId={draft.moveInTask.inventoryTaskId} polling />
           ) : hasAssetReinspection ? null : draft.noAssetsConfirmed ? (
-            <Typography variant="body2">Owner xác nhận phòng không có tài sản bàn giao.</Typography>
+            <Typography variant="body2">
+              Chủ trọ xác nhận phòng không có tài sản bàn giao.
+            </Typography>
           ) : draft.assets?.length ? (
             draft.assets.map((asset) => (
               <Typography key={asset.id} variant="body2" sx={{ overflowWrap: 'anywhere' }}>
@@ -1260,7 +1262,7 @@ function DraftDocument({ draft, api }: { draft: OwnerHandoverDraft; api: Contrac
             ))
           ) : (
             <Typography variant="body2" color="text.secondary">
-              Chờ Staff kiểm kê.
+              Chờ nhân viên kiểm kê.
             </Typography>
           )}
         </Stack>
@@ -1310,16 +1312,16 @@ function DraftDocument({ draft, api }: { draft: OwnerHandoverDraft; api: Contrac
         </Stack>
         <Divider />
         <Stack spacing={0.5}>
-          <Typography variant="subtitle2">VII. Nội dung Owner cần xem xét</Typography>
+          <Typography variant="subtitle2">VII. Nội dung chủ trọ cần xem xét</Typography>
           {draft.roomChecks?.some((check) => check.status === 'Issue') ? (
             <Typography variant="body2">
-              Staff đã ghi nhận hiện trạng có vấn đề tại{' '}
-              {draft.roomChecks.filter((check) => check.status === 'Issue').length} mục. Owner quyết
-              định chấp thuận tình trạng thực tế hoặc phương án xử lý khi duyệt biên bản.
+              Nhân viên đã ghi nhận hiện trạng có vấn đề tại{' '}
+              {draft.roomChecks.filter((check) => check.status === 'Issue').length} mục. Chủ trọ
+              quyết định chấp thuận tình trạng thực tế hoặc phương án xử lý khi duyệt biên bản.
             </Typography>
           ) : (
             <Typography variant="body2" color="text.secondary">
-              Không có vấn đề hiện trạng được Staff ghi nhận trong checklist.
+              Không có vấn đề hiện trạng được nhân viên ghi nhận trong checklist.
             </Typography>
           )}
           {!!draft.outstandingIssues?.length && (
@@ -1343,7 +1345,7 @@ function DraftDocument({ draft, api }: { draft: OwnerHandoverDraft; api: Contrac
             {draft.status === 'Confirmed'
               ? 'Đây là phần tóm tắt dữ liệu. Đối chiếu bản chính thức đã lưu để xem đầy đủ nội dung xác nhận.'
               : draft.ownerSignedAt
-                ? 'Owner đã ký biên bản. Tenant cần xem PDF có chữ ký Owner và ký xác nhận.'
+                ? 'Chủ trọ đã ký biên bản. khách thuê cần xem PDF có chữ ký chủ trọ và ký xác nhận.'
                 : 'Biên bản đang chờ ký. Các thông tin kiểm tra được cập nhật từ máy chủ.'}
           </Typography>
         </Stack>
@@ -1490,7 +1492,9 @@ export function OwnerHandoverDraftPanel({
       draft.inspectedAssets?.every(
         (asset) => asset.condition === 'Good' && asset.actualQuantity === asset.expectedQuantity,
       ) === true) &&
-    !!draft.roomCondition?.trim() &&
+    (draft.missing
+      ? !draft.missing.includes('room_summary_evidence')
+      : !!draft.evidenceIds?.length) &&
     !!draft.electricity?.id &&
     !!draft.water?.id &&
     (draft.roomChecks ?? []).length === Object.keys(roomCheckLabels).length &&
@@ -1627,7 +1631,7 @@ export function OwnerHandoverDraftPanel({
             <PrivateEvidenceViewer
               label={
                 draft.ownerDocumentId && draft.ownerSignedAt
-                  ? 'PDF bàn giao Owner đã ký'
+                  ? 'PDF bàn giao chủ trọ đã ký'
                   : 'PDF bản nháp bàn giao (chưa xác nhận)'
               }
               filename={
@@ -1649,8 +1653,8 @@ export function OwnerHandoverDraftPanel({
           )}
           {draft.status === 'Ready' && !draft.ownerDocumentId && (
             <Alert severity="warning">
-              Máy chủ chưa trả về mã PDF Owner đã ký. Vui lòng tải lại biên bản trước khi đối chiếu
-              tài liệu ký.
+              Máy chủ chưa trả về mã PDF chủ trọ đã ký. Vui lòng tải lại biên bản trước khi đối
+              chiếu tài liệu ký.
             </Alert>
           )}
           {!compact && (
@@ -1774,43 +1778,27 @@ export function OwnerHandoverDraftPanel({
             >
               <AccordionSummary expandIcon={<ChevronDown size={18} />}>
                 <Typography variant="body2" sx={{ fontWeight: 700 }}>
-                  Yêu cầu Staff kiểm tra lại (tùy chọn)
+                  Yêu cầu nhân viên kiểm tra lại (tùy chọn)
                 </Typography>
               </AccordionSummary>
               <AccordionDetails sx={{ px: 1.5, pb: 1.5 }}>
                 <Paper variant="outlined" sx={{ p: 2 }}>
                   <Stack spacing={1.5}>
                     <Typography variant="subtitle1" sx={{ fontWeight: 700 }}>
-                      Yêu cầu Staff kiểm tra lại từng hạng mục
+                      Yêu cầu nhân viên kiểm tra lại từng hạng mục
                     </Typography>
                     <Typography variant="body2" color="text.secondary">
-                      Chọn chính xác các mục thiếu, sai lệch hoặc hư hỏng cần Staff xác nhận lại.
-                      Các mục còn lại vẫn giữ kết quả kiểm tra và bằng chứng đã lưu.
+                      Chọn chính xác các mục thiếu, sai lệch hoặc hư hỏng cần nhân viên xác nhận
+                      lại. Các mục còn lại vẫn giữ kết quả kiểm tra và bằng chứng đã lưu.
                     </Typography>
-                    <Alert severity="info">
-                      <Stack spacing={1}>
-                        <Typography variant="body2">
-                          Chỉ số điện/nước đã xác nhận không thể yêu cầu kiểm tra lại qua bước này;
-                          kiểm tra qua quy trình công tơ riêng.
-                        </Typography>
-                        <Button
-                          component="a"
-                          href="/meters"
-                          size="small"
-                          sx={{ alignSelf: 'flex-start' }}
-                        >
-                          Xem quản lý công tơ
-                        </Button>
-                      </Stack>
-                    </Alert>
                     {hasAssetException && (
                       <Alert severity="info">
                         <Stack spacing={1}>
                           <Typography variant="body2">
-                            Nếu hạng mục cần sửa chữa hoặc bổ sung vật dụng, Owner có thể lập và
+                            Nếu hạng mục cần sửa chữa hoặc bổ sung vật dụng, chủ trọ có thể lập và
                             theo dõi công việc tại Quản lý bảo trì. Sau khi xử lý xong, chọn hạng
-                            mục bên dưới để Staff kiểm tra lại và ghi nhận bằng chứng mới trước khi
-                            Owner ký.
+                            mục bên dưới để nhân viên kiểm tra lại và ghi nhận bằng chứng mới trước
+                            khi chủ trọ ký.
                           </Typography>
                           <Button
                             component="a"
@@ -1875,7 +1863,7 @@ export function OwnerHandoverDraftPanel({
                         ))}
                     </Box>
                     <TextField
-                      label="Nội dung Staff cần kiểm tra lại"
+                      label="Nội dung nhân viên cần kiểm tra lại"
                       placeholder="Ví dụ: Kiểm tra lại khóa cửa và chụp đủ ảnh vị trí bị hỏng"
                       fullWidth
                       multiline
@@ -1903,7 +1891,7 @@ export function OwnerHandoverDraftPanel({
                         )
                       }
                     >
-                      Gửi yêu cầu Staff kiểm tra lại ({selectedReinspectionItems.length})
+                      Gửi yêu cầu nhân viên kiểm tra lại ({selectedReinspectionItems.length})
                     </Button>
                   </Stack>
                 </Paper>
@@ -1912,7 +1900,7 @@ export function OwnerHandoverDraftPanel({
           )}
           {draft.status === 'ReinspectionRequested' && (
             <Alert severity="warning">
-              <Typography sx={{ fontWeight: 700 }}>Đã yêu cầu Staff kiểm tra lại</Typography>
+              <Typography sx={{ fontWeight: 700 }}>Đã yêu cầu nhân viên kiểm tra lại</Typography>
               {!!draft.reinspectionHistory?.length && (
                 <Typography>
                   {draft.reinspectionHistory.at(-1)!.reason} · Gửi lúc{' '}
@@ -1924,12 +1912,12 @@ export function OwnerHandoverDraftPanel({
                   {draft.reinspectionItems.map((item, index) => (
                     <li key={`${item.kind}-${item.code ?? item.assetId ?? index}`}>
                       {reinspectionLabel(item, draft)}{' '}
-                      {item.rechecked ? '· Đã kiểm tra lại' : '· Chờ Staff'}
+                      {item.rechecked ? '· Đã kiểm tra lại' : '· Chờ nhân viên'}
                     </li>
                   ))}
                 </Box>
               )}
-              Sau khi Staff hoàn tất và gửi lại, Owner sẽ xem phiên bản mới trước khi ký.
+              Sau khi nhân viên hoàn tất và gửi lại, chủ trọ sẽ xem phiên bản mới trước khi ký.
             </Alert>
           )}
           <Paper variant="outlined" sx={{ p: 2 }}>
@@ -1937,7 +1925,7 @@ export function OwnerHandoverDraftPanel({
               <Typography variant="subtitle1" sx={{ fontWeight: 700 }}>
                 Kiểm tra trước khi bàn giao
               </Typography>
-              {displayedMissing.length ? (
+              {displayedMissing.length && draft.status !== 'Confirmed' ? (
                 <Alert severity="warning">
                   Còn {displayedMissing.length} mục chưa đủ điều kiện theo máy chủ:
                   <Box component="ul" sx={{ my: 1, pl: 3 }}>
@@ -1946,61 +1934,54 @@ export function OwnerHandoverDraftPanel({
                     ))}
                   </Box>
                 </Alert>
-              ) : !missing.length ? (
-                <Alert severity="success">Đã kiểm tra đủ nội dung bàn giao</Alert>
               ) : null}
               {staleInventoryMissing && (
                 <Alert severity="warning">
-                  Staff đã hoàn tất phiếu kiểm kê nhưng máy chủ vẫn báo điều kiện kiểm kê trong biên
-                  bản chưa hợp lệ. Chưa thể ký cho đến khi máy chủ đồng bộ và xác nhận đủ điều kiện.
+                  Nhân viên đã hoàn tất phiếu kiểm kê nhưng máy chủ vẫn báo điều kiện kiểm kê trong
+                  biên bản chưa hợp lệ. Chưa thể ký cho đến khi máy chủ đồng bộ và xác nhận đủ điều
+                  kiện.
                 </Alert>
               )}
               {draft.status === 'PendingOwnerReview' && draft.ownerInkSigningSupported !== true && (
                 <Alert severity="warning">
                   Máy chủ đang sử dụng phiên bản chưa hỗ trợ ký tay trực tiếp trên biên bản. Cần cập
-                  nhật Backend trước khi Owner ký để chữ ký thực sự được đưa vào PDF.
+                  nhật Backend trước khi chủ trọ ký để chữ ký thực sự được đưa vào PDF.
                 </Alert>
               )}
               {!allPassed && draft.status === 'PendingOwnerReview' && (
                 <Alert severity="info">
-                  Một số hạng mục có vấn đề. Owner có thể ký sau khi kiểm tra và ghi nhận đúng hiện
-                  trạng; Tenant sẽ xem và quyết định chấp nhận khi ký.
+                  Một số hạng mục có vấn đề. chủ trọ có thể ký sau khi kiểm tra và ghi nhận đúng
+                  hiện trạng; khách thuê sẽ xem và quyết định chấp nhận khi ký.
                 </Alert>
               )}
               {readyBlockedByContract && draft.status !== 'Confirmed' && (
                 <Alert severity="info">
-                  Hợp đồng cần Active trước khi Owner xác nhận sẵn sàng bàn giao.
+                  Hợp đồng cần Active trước khi chủ trọ xác nhận sẵn sàng bàn giao.
                 </Alert>
               )}
               {pending.length > 0 && (
-                <Alert severity="warning">Đang có yêu cầu chỉnh sửa của Tenant cần xử lý.</Alert>
+                <Alert severity="warning">
+                  Đang có yêu cầu chỉnh sửa của khách thuê cần xử lý.
+                </Alert>
               )}
               {draft.status === 'Ready' && (
                 <Alert severity="info">
-                  Owner đã ký và duyệt biên bản. Đang chờ Tenant xem PDF và ký xác nhận.
+                  Chủ trọ đã ký và duyệt biên bản. Đang chờ khách thuê xem PDF và ký xác nhận.
                 </Alert>
-              )}
-              {draft.status === 'Draft' && (
-                <Alert severity="info">
-                  Đang chờ Staff hoàn thành kiểm tra và gửi biên bản cho Owner duyệt.
-                </Alert>
-              )}
-              {draft.status === 'Confirmed' && (
-                <Alert severity="success">Biên bản đã hoàn tất và được lưu lại trên máy chủ.</Alert>
               )}
               {draft.ownerReadyAt && (
                 <Typography variant="body2">
-                  Owner duyệt sẵn sàng: {formatInstant(draft.ownerReadyAt)}
+                  Chủ trọ duyệt sẵn sàng: {formatInstant(draft.ownerReadyAt)}
                 </Typography>
               )}
               {draft.ownerSignedAt && (
                 <Typography variant="body2">
-                  Owner ký biên bản: {formatInstant(draft.ownerSignedAt)}
+                  Chủ trọ ký biên bản: {formatInstant(draft.ownerSignedAt)}
                 </Typography>
               )}
               {draft.tenantSignedAt && (
                 <Typography variant="body2">
-                  Tenant ký biên bản: {formatInstant(draft.tenantSignedAt)}
+                  Khách thuê ký biên bản: {formatInstant(draft.tenantSignedAt)}
                 </Typography>
               )}
               {draft.status === 'Ready' && draft.ownerReadyReason && (
@@ -2013,13 +1994,13 @@ export function OwnerHandoverDraftPanel({
                 <>
                   {!compact && hasAssetException && (
                     <Alert severity="info">
-                      Hạng mục có vấn đề sẽ được giữ nguyên trong biên bản cho Tenant xem và xác
+                      Hạng mục có vấn đề sẽ được giữ nguyên trong biên bản cho khách thuê xem và xác
                       nhận.
                     </Alert>
                   )}
                   <Stack spacing={0.75}>
                     <Typography variant="subtitle2" sx={{ fontWeight: 700 }}>
-                      Chữ ký tay của Owner
+                      Chữ ký tay của chủ trọ
                     </Typography>
                     <Typography variant="body2" color="text.secondary">
                       Vẽ chữ ký trong khung bên dưới bằng chuột hoặc cảm ứng. Chữ ký này sẽ được gắn
@@ -2047,8 +2028,8 @@ export function OwnerHandoverDraftPanel({
                     }
                   />
                   <Typography variant="caption" color="text.secondary">
-                    Chữ ký tay đi cùng xác thực phiên đăng nhập Owner. Biên bản chỉ chuyển sang chờ
-                    Tenant ký sau khi máy chủ lưu thành công PDF đã ký.
+                    Chữ ký tay đi cùng xác thực phiên đăng nhập chủ trọ. Biên bản chỉ chuyển sang
+                    chờ khách thuê ký sau khi máy chủ lưu thành công PDF đã ký.
                   </Typography>
                   <Button
                     variant="contained"
@@ -2081,14 +2062,15 @@ export function OwnerHandoverDraftPanel({
           >
             <AccordionSummary expandIcon={<ChevronDown size={18} />}>
               <Typography variant="body2" sx={{ fontWeight: 700 }}>
-                Yêu cầu chỉnh sửa của Tenant{pending.length ? ` · ${pending.length} đang chờ` : ''}
+                Yêu cầu chỉnh sửa của khách thuê
+                {pending.length ? ` · ${pending.length} đang chờ` : ''}
               </Typography>
             </AccordionSummary>
             <AccordionDetails sx={{ px: 1.5, pb: 1.5 }}>
               <Paper variant="outlined" sx={{ p: 2 }}>
                 <Stack spacing={1.5}>
                   <Typography variant="subtitle1" sx={{ fontWeight: 700 }}>
-                    Yêu cầu chỉnh sửa của Tenant
+                    Yêu cầu chỉnh sửa của khách thuê
                   </Typography>
                   {!draft.requests?.length && (
                     <Typography variant="body2" color="text.secondary">
@@ -2107,7 +2089,7 @@ export function OwnerHandoverDraftPanel({
                           variant="outlined"
                           label={
                             request.status === 'Pending'
-                              ? 'Chờ Owner duyệt'
+                              ? 'Chờ chủ trọ duyệt'
                               : request.status === 'Approved'
                                 ? 'Đã chấp thuận'
                                 : 'Đã từ chối'
@@ -2125,7 +2107,7 @@ export function OwnerHandoverDraftPanel({
                       </Typography>
                       {request.decisionReason && (
                         <Typography variant="body2">
-                          Phản hồi Owner: {request.decisionReason}
+                          Phản hồi chủ trọ: {request.decisionReason}
                         </Typography>
                       )}
                       {request.status === 'Pending' && (
@@ -2198,12 +2180,13 @@ export function OwnerHandoverDraftPanel({
                 maxWidth="sm"
                 fullWidth
               >
-                <DialogTitle>Xác nhận yêu cầu Staff kiểm tra lại</DialogTitle>
+                <DialogTitle>Xác nhận yêu cầu nhân viên kiểm tra lại</DialogTitle>
                 <DialogContent dividers>
                   <Stack spacing={1.5}>
                     <Typography variant="body2">
-                      {selectedReinspectionItems.length} mục được chọn. Staff chỉ kiểm tra và cập
-                      nhật bằng chứng cho các mục này; hệ thống không tự giao công việc sửa chữa.
+                      {selectedReinspectionItems.length} mục được chọn. nhân viên chỉ kiểm tra và
+                      cập nhật bằng chứng cho các mục này; hệ thống không tự giao công việc sửa
+                      chữa.
                     </Typography>
                     <Box component="ul" sx={{ my: 0, pl: 3 }}>
                       {selectedReinspectionItems.map((item, index) => (
@@ -2213,7 +2196,7 @@ export function OwnerHandoverDraftPanel({
                       ))}
                     </Box>
                     <TextField
-                      label="Nội dung Staff cần kiểm tra lại"
+                      label="Nội dung nhân viên cần kiểm tra lại"
                       placeholder="Mô tả rõ vấn đề và bằng chứng cần chụp"
                       fullWidth
                       multiline

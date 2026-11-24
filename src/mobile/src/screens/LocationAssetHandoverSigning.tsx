@@ -8,6 +8,7 @@ import { SignaturePad } from '../features/contracts/SignaturePad';
 import { previewPngUri } from '../features/contracts/pdfPreview';
 import { useWorkspaceQuery } from '../features/workspace/useWorkspaceQuery';
 import { errorMessage, MobileApiError, type MobileApi } from '../lib/api';
+import { queryPolicies } from '../lib/queryPolicies';
 import { randomUUID } from '../lib/randomUUID';
 import { useSession } from '../lib/SessionProvider';
 import { showSuccess } from '../lib/toast';
@@ -188,9 +189,9 @@ export function LocationAssetHandoverSigning({
   const { api, session } = useSession();
   const query = useWorkspaceQuery<LocationAssetHandoverReport | null>(
     `/api/v1/operational-tasks/${taskId}/location-asset-handover`,
-    { load: loadReport, notifyError: false },
+    { load: loadReport, cache: queryPolicies.tasks, notifyError: false },
   );
-  const data = query.data;
+  const data = query.error ? null : query.data;
   const [confirmedKey, setConfirmedKey] = useState<string | null>(null);
   const [inkState, setInkState] = useState<{ key: string; value: DrawnSignature | null } | null>(
     null,
@@ -220,6 +221,8 @@ export function LocationAssetHandoverSigning({
       !confirmed ||
       !ink ||
       lock.current ||
+      query.fetching ||
+      taskStatus !== 'PendingVerification' ||
       data.status !== 'PendingStaffSignature' ||
       !session?.roles.includes('Staff') ||
       data.staffId !== session?.userId
@@ -242,7 +245,19 @@ export function LocationAssetHandoverSigning({
       lock.current = false;
       setBusy(false);
     }
-  }, [api, data, confirmed, ink, taskId, session?.userId, session?.roles, reload, onTaskRefresh]);
+  }, [
+    api,
+    data,
+    confirmed,
+    ink,
+    taskId,
+    taskStatus,
+    query.fetching,
+    session?.userId,
+    session?.roles,
+    reload,
+    onTaskRefresh,
+  ]);
 
   const download = useCallback(async () => {
     if (!api || !data || downloadBusy) return;
@@ -291,6 +306,7 @@ export function LocationAssetHandoverSigning({
 
   const canSign =
     !!data &&
+    taskStatus === 'PendingVerification' &&
     data.status === 'PendingStaffSignature' &&
     !!session?.roles.includes('Staff') &&
     data.staffId === session.userId;
@@ -303,7 +319,7 @@ export function LocationAssetHandoverSigning({
     <Box>
       <Text variant="titleMedium">Biên bản bàn giao</Text>
       {(data || taskStatus === 'PendingVerification' || query.error) && (
-        <Button mode="text" icon="refresh" onPress={reload} disabled={query.loading || busy}>
+        <Button mode="text" icon="refresh" onPress={reload} disabled={query.fetching || busy}>
           Tải lại
         </Button>
       )}
@@ -400,7 +416,7 @@ export function LocationAssetHandoverSigning({
                   />
                   <Button
                     mode="contained"
-                    disabled={!confirmed || !ink || busy}
+                    disabled={!confirmed || !ink || busy || query.fetching}
                     loading={busy}
                     onPress={() => void sign()}
                   >

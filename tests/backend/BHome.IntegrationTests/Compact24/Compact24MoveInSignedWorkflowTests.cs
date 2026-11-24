@@ -114,13 +114,14 @@ public sealed partial class Compact24OwnerSetupTests
         }
 
         var roomPhoto = await HandoverPhoto(staff, contractId);
+        var keyPhoto = await HandoverPhoto(staff, contractId);
         var incompleteChecks = HandoverRoomChecklist.RequiredCodes.Take(6).Select(code =>
             new HandoverRoomCheck(code, code == "doors_windows_locks" ? "Issue" : "Passed",
                 code == "doors_windows_locks" ? "Khóa bị hỏng, đã chụp ảnh" : "",
-                code == "doors_windows_locks" ? [roomPhoto] : [])).ToArray();
+                [roomPhoto])).ToArray();
         var partial = await Read<HandoverDraftView>(await HandoverPost(staff, contractId,
             "handover/draft", new HandoverDraftWrite(draft.Version,
-                RoomCondition: "Có hư hỏng ở khóa cửa", RoomChecks: incompleteChecks)));
+                RoomCondition: "Có hư hỏng ở khóa cửa", EvidenceIds: [roomPhoto], RoomChecks: incompleteChecks)));
         var prematurelySubmitted = await HandoverPost(staff, contractId, "handover/draft/submit",
             new HandoverDraftSubmit(partial.Version));
         Assert.Equal(HttpStatusCode.Conflict, prematurelySubmitted.StatusCode);
@@ -128,8 +129,8 @@ public sealed partial class Compact24OwnerSetupTests
 
         var completedChecks = await Read<HandoverDraftView>(await HandoverPost(staff, contractId,
             "handover/draft", new HandoverDraftWrite(partial.Version,
-                RoomChecks: [new HandoverRoomCheck("safety_equipment", "Passed", "", [])],
-                AccessItems: [new HandoverAccessItem("RoomKey", 2, "Đã kiểm đếm")])));
+                RoomChecks: [new HandoverRoomCheck("safety_equipment", "Passed", "", [roomPhoto])],
+                AccessItems: [new HandoverAccessItem("RoomKey", 2, "Đã kiểm đếm")], KeyEvidenceIds: [keyPhoto])));
         var beforeInventory = await HandoverPost(staff, contractId, "handover/draft/submit",
             new HandoverDraftSubmit(completedChecks.Version));
         Assert.Equal(HttpStatusCode.Conflict, beforeInventory.StatusCode);
@@ -230,10 +231,16 @@ public sealed partial class Compact24OwnerSetupTests
         Assert.Equal("InProgress", inspection.MoveInTask.InventoryStatus);
         Assert.Equal(HttpStatusCode.Conflict, (await HandoverPost(staff, contractId,
             "handover/draft/resubmit", new HandoverDraftSubmit(inspection.Version))).StatusCode);
+        // Reinspection belongs to the persisted Draft workflow; the legacy
+        // evidence route must remain blocked once that workflow exists.
+        using var roomPhotoUpload = new ByteArrayContent(ReviewEvidenceImage());
+        roomPhotoUpload.Headers.ContentType = new("image/png");
+        var newRoomPhoto = (await Read<ContractId>(await staff.PostAsync(
+            $"/api/v1/contracts/{contractId}/handover/draft/evidence", roomPhotoUpload))).Id;
         var updatedRoom = await Read<HandoverDraftView>(await HandoverPost(staff, contractId,
             "handover/draft", new HandoverDraftWrite(inspection.Version,
                 RoomChecks: [new HandoverRoomCheck("doors_windows_locks", "Passed",
-                    "Đã xử lý và kiểm tra khóa", [])])));
+                    "Đã xử lý và kiểm tra khóa", [newRoomPhoto])])));
         Assert.False(updatedRoom.ReinspectionItems!.Single(item => item.Kind == "Asset").Rechecked);
 
         var oldEvidenceVersion = (await staff.GetFromJsonAsync<MoveInInventoryView>(
@@ -337,6 +344,7 @@ public sealed partial class Compact24OwnerSetupTests
         var group = Assert.Single(choices.Assets);
         var overviewPhoto = await HandoverPhoto(staff, id);
         var missingPhoto = await HandoverPhoto(staff, id);
+        var keyPhoto = await HandoverPhoto(staff, id);
         Assert.NotEqual(overviewPhoto, missingPhoto);
 
         var draft = await Read<HandoverDraftView>(await HandoverPost(staff, id, "handover/draft",
@@ -346,8 +354,8 @@ public sealed partial class Compact24OwnerSetupTests
                     true, "Đã kiểm kê và chụp riêng ghế bị thiếu", [missingPhoto])],
                 [overviewPhoto], choices.InventoryToken,
                 RoomChecks: HandoverRoomChecklist.RequiredCodes.Select(code =>
-                    new HandoverRoomCheck(code, "Passed", "", [])).ToArray(),
-                AccessItems: [new HandoverAccessItem("RoomKey", 2, "Đã đối chiếu")])));
+                    new HandoverRoomCheck(code, "Passed", "", [overviewPhoto])).ToArray(),
+                AccessItems: [new HandoverAccessItem("RoomKey", 2, "Đã đối chiếu")], KeyEvidenceIds: [keyPhoto])));
         Assert.Empty(draft.Missing);
         Assert.Equal(1, Assert.Single(draft.Assets).MissingQuantity);
         var submitted = await Read<HandoverDraftView>(await HandoverPost(staff, id,
@@ -403,14 +411,16 @@ public sealed partial class Compact24OwnerSetupTests
             $"/api/v1/contracts/{id}/handover/choices"))!;
         var asset = Assert.Single(choices.Assets);
         var photo = await HandoverPhoto(staff, id);
+        var keyPhoto = await HandoverPhoto(staff, id);
+        var assetPhoto = await HandoverPhoto(staff, id);
         var draft = await Read<HandoverDraftView>(await HandoverPost(staff, id,
             "handover/draft", new HandoverDraftWrite(initial.Version,
                 "Phòng tốt", "Hai chìa", "Đã kiểm kê",
                 [new HandoverAssetInput(asset.Id, "Tốt", 4, 4, 4, 0, 0, 0,
-                    true, "Đủ tài sản", [])], [photo], choices.InventoryToken,
+                    true, "Đủ tài sản", [assetPhoto])], [photo], choices.InventoryToken,
                 RoomChecks: HandoverRoomChecklist.RequiredCodes.Select(code =>
-                    new HandoverRoomCheck(code, "Passed", null, [])).ToArray(),
-                AccessItems: [new HandoverAccessItem("RoomKey", 2, "Hai chìa")])));
+                    new HandoverRoomCheck(code, "Passed", null, [photo])).ToArray(),
+                AccessItems: [new HandoverAccessItem("RoomKey", 2, "Hai chìa")], KeyEvidenceIds: [keyPhoto])));
         Assert.Empty(draft.Missing);
         var submitted = await Read<HandoverDraftView>(await HandoverPost(staff, id,
             "handover/draft/submit", new HandoverDraftSubmit(draft.Version)));
@@ -492,13 +502,15 @@ public sealed partial class Compact24OwnerSetupTests
         var choices = (await staff.GetFromJsonAsync<HandoverChoices>($"/api/v1/contracts/{id}/handover/choices"))!;
         var asset = Assert.Single(choices.Assets);
         var photo = await HandoverPhoto(staff, id);
+        var keyPhoto = await HandoverPhoto(staff, id);
+        var assetPhoto = await HandoverPhoto(staff, id);
         var draft = await Read<HandoverDraftView>(await HandoverPost(staff, id, "handover/draft",
             new HandoverDraftWrite(initial.Version, "Tường sàn tốt", "Hai chìa", "Đã kiểm kê",
                 [new HandoverAssetInput(asset.Id, "Tốt", 4, 4, 4, 0, 0, 0,
-                    true, "Đủ tài sản", [])], [photo], choices.InventoryToken,
+                    true, "Đủ tài sản", [assetPhoto])], [photo], choices.InventoryToken,
                 RoomChecks: HandoverRoomChecklist.RequiredCodes.Select(code =>
-                    new HandoverRoomCheck(code, "Passed", "", [])).ToArray(),
-                AccessItems: [new HandoverAccessItem("RoomKey", 2, "Hai chìa")])));
+                    new HandoverRoomCheck(code, "Passed", "", [photo])).ToArray(),
+                AccessItems: [new HandoverAccessItem("RoomKey", 2, "Hai chìa")], KeyEvidenceIds: [keyPhoto])));
         Assert.Empty(draft.Missing);
         Assert.Equal(HttpStatusCode.Conflict,
             (await HandoverPost(owner, id, "handover/draft/ready", OwnerSignature(draft.Version))).StatusCode);
@@ -637,15 +649,17 @@ public sealed partial class Compact24OwnerSetupTests
         var group = Assert.Single((await staff.GetFromJsonAsync<HandoverChoices>(
             $"/api/v1/contracts/{id}/handover/choices"))!.Assets);
         var photo = await HandoverPhoto(staff, id);
+        var keyPhoto = await HandoverPhoto(staff, id);
+        var assetPhoto = await HandoverPhoto(staff, id);
         var saved = await Read<HandoverDraftView>(await HandoverPost(staff, id,
             "handover/draft", new HandoverDraftWrite(initial.Version,
                 "Phòng đủ", "2 chìa", "Lần đầu",
                 [new HandoverAssetInput(group.Id, "Tốt", 4, 4, 4, 0, 0, 0, true,
-                    "Đủ tài sản", [])],
+                    "Đủ tài sản", [assetPhoto])],
                 [photo], initial.InventoryToken,
                 RoomChecks: HandoverRoomChecklist.RequiredCodes.Select(code =>
-                    new HandoverRoomCheck(code, "Passed", "", [])).ToArray(),
-                AccessItems: [new HandoverAccessItem("RoomKey", 2, "")])));
+                    new HandoverRoomCheck(code, "Passed", "", [photo])).ToArray(),
+                AccessItems: [new HandoverAccessItem("RoomKey", 2, "")], KeyEvidenceIds: [keyPhoto])));
         var submitted = await Read<HandoverDraftView>(await HandoverPost(staff, id,
             "handover/draft/submit", new HandoverDraftSubmit(saved.Version)));
         var selection = new HandoverReinspectionItem("RoomCheck", "doors_windows_locks");

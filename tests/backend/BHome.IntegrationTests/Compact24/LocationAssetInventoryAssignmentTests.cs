@@ -259,7 +259,7 @@ public sealed class LocationAssetInventoryAssignmentTests(Compact24Fixture fixtu
             await SaveRoomTemplateAsync(store, location, roomId, owner.Id, templateId, roomExpected);
             var desiredDocument = await store.SaveAsync(Guid.NewGuid(), location, "DesiredAssets", "PendingVerification",
                 new DesiredAssets(templateId, 1, roomId, roomExpected, "PendingVerification"), 0, owner.Id, default);
-            await store.SaveAsync(Guid.NewGuid(), location, "AssetVerification", "Verified",
+            await store.SaveAsync(SetupKey($"owner-attestation:{roomId:N}:{templateId:N}:{roomExpected[0].Id:N}:{assetId:N}"), location, "AssetVerification", "Verified",
                 new
                 {
                     roomId,
@@ -269,7 +269,7 @@ public sealed class LocationAssetInventoryAssignmentTests(Compact24Fixture fixtu
                     quantity = 1,
                     source = "OwnerAttestation"
                 }, 0, owner.Id, default);
-            await store.SaveAsync(Guid.NewGuid(), location, "RoomInventoryChecklistReview", "PartiallyChecked",
+            await store.SaveAsync(SetupKey($"room-inventory-checklist:{roomId:N}"), location, "RoomInventoryChecklistReview", "PartiallyChecked",
                 new
                 {
                     roomId,
@@ -399,6 +399,35 @@ public sealed class LocationAssetInventoryAssignmentTests(Compact24Fixture fixtu
         using var blocked = await Action(staffClient, route + "/submit", new { version = checkedView.Version, note = "Đã hoàn thành kiểm kê" });
         Assert.Equal(HttpStatusCode.Conflict, blocked.StatusCode);
         Assert.Equal("InProgress", (await ownerClient.GetFromJsonAsync<TaskView>(route))!.Status);
+
+        // Owner confirms the remaining configured group after Staff has already checked
+        // every available item. The live task must receive it in the same transaction.
+        var reviewRoute = $"/api/v1/locations/{location}/room-inventory-review";
+        var ownerReview = (await ownerClient.GetFromJsonAsync<RoomInventoryReviewView>(reviewRoute))!;
+        var roomReview = Assert.Single(ownerReview.Rooms);
+        var confirmation = new RoomInventoryReviewConfirm(Guid.NewGuid(),
+            [new RoomInventoryReviewInputRoom(roomId, roomReview.DesiredId, roomReview.DesiredVersion,
+                roomReview.StateToken, roomReview.Items.Select(item =>
+                    new RoomInventoryReviewInputItem(item.Id, true, [])).ToArray())], true);
+        using var confirmedResponse = await ownerClient.PostAsJsonAsync(reviewRoute + "/confirm", confirmation);
+        Assert.True(confirmedResponse.IsSuccessStatusCode, await confirmedResponse.Content.ReadAsStringAsync());
+        var confirmedRoom = Assert.Single((await confirmedResponse.Content.ReadFromJsonAsync<RoomInventoryReviewView>())!.Rooms);
+        Assert.Equal("Matched", confirmedRoom.State);
+        Assert.Equal(2, confirmedRoom.CheckedCount);
+        var synced = (await staffClient.GetFromJsonAsync<LocationAssetInventoryView>(route + "/location-asset-inventory"))!;
+        Assert.Equal("InProgress", synced.Status);
+        Assert.Equal(3, synced.TotalCount);
+        Assert.Equal(2, synced.CheckedCount);
+        Assert.Empty(synced.PendingOwnerRooms!);
+        Assert.True(synced.Version > checkedView.Version);
+        Assert.Equal(HttpStatusCode.OK, (await ownerClient.PostAsJsonAsync(reviewRoute + "/confirm", confirmation)).StatusCode);
+        Assert.Equal(synced.Version,
+            (await staffClient.GetFromJsonAsync<LocationAssetInventoryView>(route + "/location-asset-inventory"))!.Version);
+        var desk = Assert.Single(synced.Items, item => !item.Checked);
+        Assert.Equal("Missing synthetic desk", desk.Name);
+        var completed = await Check(staffClient, route, desk.Id, synced.Version);
+        Assert.Equal("PendingVerification", completed.Status);
+        Assert.Equal(completed.TotalCount, completed.CheckedCount);
     }
 
     [CompactPostgresFact]
@@ -603,6 +632,7 @@ public sealed class LocationAssetInventoryAssignmentTests(Compact24Fixture fixtu
         Assert.Equal(HttpStatusCode.OK, started.StatusCode);
         var task = (await started.Content.ReadFromJsonAsync<TaskView>())!;
         var checkedInventory = await Check(staffClient, route, replacement.Id, task.Version);
+        Assert.Equal("PendingVerification", checkedInventory.Status);
         var submitted = await Action(staffClient, route + "/submit", new
         {
             version = checkedInventory.Version,
@@ -610,6 +640,7 @@ public sealed class LocationAssetInventoryAssignmentTests(Compact24Fixture fixtu
         });
         Assert.Equal(HttpStatusCode.OK, submitted.StatusCode);
         Assert.Equal("PendingVerification", (await submitted.Content.ReadFromJsonAsync<TaskView>())!.Status);
+        Assert.Equal(checkedInventory.Version, (await staffClient.GetFromJsonAsync<TaskView>(route))!.Version);
 
         // A confirmed Tenant handover is an immutable historical baseline. A later
         // replacement asset must be recorded as a separate asset-change event, not by
@@ -679,6 +710,106 @@ public sealed class LocationAssetInventoryAssignmentTests(Compact24Fixture fixtu
         Assert.Contains("Not-owner-reviewed", view.PendingOwnerRooms!);
         Assert.DoesNotContain("Empty-confirmed", view.PendingOwnerRooms!);
         Assert.False(view.PendingOwnerCommonAssets);
+    }
+
+    [CompactPostgresFact]
+    public async Task LegacyCompleteInventoryRecoversOnOwnerConfirmationOrAssignmentReconciliationWithoutManualSync()
+    {
+        var owner = await User("Owner");
+        var staff = await User("Staff");
+        using var ownerClient = await Client(owner);
+        using var staffClient = await Client(staff);
+        foreach (var confirmThroughOwner in new[] { true, false })
+        {
+            var location = await Location();
+            var room = new Room { LocationId = location, RoomNumber = "LEGACY-COMPLETE" };
+            var baseline = Convert.ToHexString(SHA256.HashData(JsonSerializer.SerializeToUtf8Bytes(new
+            {
+                Id = room.Id,
+                assignment = (object?)null,
+                desired = (object?)null
+            }, Json)));
+            var emptyKey = SetupKey($"room-no-assets:{room.Id:N}");
+            Guid taskId;
+            int version;
+            await using (var scope = fixture.Factory!.Services.CreateAsyncScope())
+            {
+                var db = scope.ServiceProvider.GetRequiredService<Compact24DbContext>();
+                db.Add(room);
+                await db.SaveChangesAsync();
+                var store = scope.ServiceProvider.GetRequiredService<ISetupWorkspaceStore>();
+                await store.SaveAsync(emptyKey, location, "RoomNoAssets", "Confirmed",
+                    new { roomId = room.Id, baseline, reason = "Owner xác nhận không có tài sản" },
+                    0, owner.Id, default);
+                var created = await scope.ServiceProvider.GetRequiredService<ILocationAssignments>()
+                    .CreateAssignmentAsync(owner.Id, location, staff.Id, Today, Today.AddDays(7), default);
+                Assert.Equal(CreateAssignmentStatus.Created, created.Status);
+                taskId = LocationAssetInventoryTaskFactory.TaskId(created.Assignment!.Id);
+            }
+            await using (var scope = fixture.Factory!.Services.CreateAsyncScope())
+            {
+                var db = scope.ServiceProvider.GetRequiredService<Compact24DbContext>();
+                var task = await db.Set<OperationalTask>().SingleAsync(x => x.Id == taskId);
+                var snapshot = JsonSerializer.Deserialize<LocationAssetInventorySnapshot>(task.LocationAssetInventoryJson)!;
+                // Persist a synthetic pre-release task that Staff already checked, but
+                // whose Owner scope flag was never refreshed and still waits for submit.
+                task.Status = MeterTaskStatus.InProgress;
+                task.LocationAssetInventoryJson = JsonSerializer.Serialize(snapshot with
+                {
+                    Items = snapshot.Items.Select(item => item with { Checked = true, Condition = "Intact" }).ToArray(),
+                    PendingOwnerRooms = [room.RoomNumber]
+                });
+                task.Version++;
+                version = task.Version;
+                await db.SaveChangesAsync();
+                // An invalidated authoritative row must not disappear or auto-submit.
+                var store = scope.ServiceProvider.GetRequiredService<ISetupWorkspaceStore>();
+                await store.SaveAsync(emptyKey, location, "RoomNoAssets", "Confirmed",
+                    new { roomId = room.Id, baseline = "invalidated", reason = "Synthetic stale source" },
+                    1, owner.Id, default);
+            }
+            var route = $"/api/v1/operational-tasks/{taskId}";
+            await using (var scope = fixture.Factory!.Services.CreateAsyncScope())
+                await scope.ServiceProvider.GetRequiredService<AssignmentReconciliationJob>()
+                    .ExecuteAsync(new(Guid.NewGuid(), "legacy-conflict", "{}"), default);
+            var conflict = (await staffClient.GetFromJsonAsync<LocationAssetInventoryView>(route + "/location-asset-inventory"))!;
+            Assert.Equal("InProgress", conflict.Status);
+            Assert.Equal(version, conflict.Version);
+            Assert.True(Assert.Single(conflict.Items).Checked);
+            if (confirmThroughOwner)
+            {
+                var preparationRoute = $"/api/v1/locations/{location}/room-inventory-review/{room.Id}";
+                var preparation = (await ownerClient.GetFromJsonAsync<BHome.Application.Contracts.HandoverInventory>(
+                    preparationRoute + "/handover-preparation"))!;
+                using var response = await ownerClient.PostAsJsonAsync(preparationRoute + "/no-assets",
+                    new RoomNoAssetsConfirmation(preparation.StateToken, "Owner xác nhận lại phòng không có tài sản"));
+                Assert.True(response.IsSuccessStatusCode, await response.Content.ReadAsStringAsync());
+            }
+            else
+            {
+                await using var scope = fixture.Factory!.Services.CreateAsyncScope();
+                var store = scope.ServiceProvider.GetRequiredService<ISetupWorkspaceStore>();
+                await store.SaveAsync(emptyKey, location, "RoomNoAssets", "Confirmed",
+                    new { roomId = room.Id, baseline, reason = "Synthetic previously persisted Owner confirmation" },
+                    2, owner.Id, default);
+                await scope.ServiceProvider.GetRequiredService<AssignmentReconciliationJob>()
+                    .ExecuteAsync(new(Guid.NewGuid(), "legacy-recovery", "{}"), default);
+            }
+            var completed = (await staffClient.GetFromJsonAsync<LocationAssetInventoryView>(route + "/location-asset-inventory"))!;
+            Assert.Equal("PendingVerification", completed.Status);
+            Assert.Empty(completed.PendingOwnerRooms!);
+            Assert.Equal(version + 1, completed.Version);
+            Assert.True(Assert.Single(completed.Items).Checked);
+            using var legacySubmit = await Action(staffClient, route + "/submit",
+                new { version = completed.Version, note = "Legacy submit retry" });
+            Assert.Equal(HttpStatusCode.OK, legacySubmit.StatusCode);
+            Assert.Equal(completed.Version, (await legacySubmit.Content.ReadFromJsonAsync<TaskView>())!.Version);
+            await using (var scope = fixture.Factory!.Services.CreateAsyncScope())
+            {
+                var db = scope.ServiceProvider.GetRequiredService<Compact24DbContext>();
+                Assert.Equal(1, await db.Set<OperationalTaskHistory>().CountAsync(h => h.TaskId == taskId && h.Action == "submit"));
+            }
+        }
     }
 
     [CompactPostgresFact]

@@ -16,6 +16,7 @@ var app = builder.Build();
 if (app.Environment.IsDevelopment() && app.Configuration.GetValue("Api:ReadDevelopmentEnvironmentFile", true))
     DevelopmentEnvironmentFile.Load(builder.Configuration, app.Environment.ContentRootPath);
 EnvironmentConfiguration.ApplyDeploymentDefaults(builder.Configuration);
+_ = BHome.Infrastructure.Development.DemoClockGuard.Enabled(app.Configuration, app.Environment.EnvironmentName);
 var environmentErrors = EnvironmentConfiguration.Errors(app.Configuration, app.Environment.EnvironmentName);
 if (environmentErrors.Count > 0)
     throw new Microsoft.Extensions.Options.OptionsValidationException("Environment", typeof(EnvironmentConfiguration), environmentErrors);

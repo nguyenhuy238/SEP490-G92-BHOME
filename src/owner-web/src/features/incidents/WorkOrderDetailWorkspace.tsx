@@ -1,5 +1,6 @@
 import { useState, type ReactNode } from 'react';
 import { Link, useInRouterContext } from 'react-router';
+import { Building2, CalendarDays, Check, MapPinned, UserRound } from 'lucide-react';
 import {
   Alert,
   Box,
@@ -20,6 +21,7 @@ import { todayVietnam, type Staff, type StaffAssignment } from '../staff/staffCo
 import { CompensationPanel } from './CompensationPanel';
 import { IncidentCommandDialog, type IncidentCommand } from './IncidentCommandDialog';
 import { IncidentEvidencePreview } from './IncidentEvidencePreview';
+import { operationalTabs } from '../tasks/components/operationalDetailLayout';
 import {
   formatIncidentMoney,
   statusText,
@@ -35,6 +37,7 @@ const assetFields: IncidentCommand['fields'] = [
 ];
 
 type DetailTab = 'overview' | 'plan' | 'photos' | 'costs' | 'history';
+type EmbeddedSection = 'repair' | 'photos' | 'costs' | 'history';
 type Activity = {
   id: string;
   action: string;
@@ -96,6 +99,12 @@ function nextAction(work: WorkOrder) {
       description: 'Kiểm tra kết quả khảo sát, phương án và dự toán nhân viên đã gửi.',
     };
   }
+  if (work.status === 'PendingApproval' && work.planApproved) {
+    return {
+      title: 'Chờ nhân viên bắt đầu sửa chữa',
+      description: 'Owner đã duyệt phương án. Nhân viên có thể bắt đầu thực hiện.',
+    };
+  }
   if (work.status === 'PendingVerification') {
     return {
       title: 'Nghiệm thu kết quả sửa chữa',
@@ -137,6 +146,106 @@ function workStatusColor(status: string): 'success' | 'warning' | 'info' | 'defa
   if (status === 'PendingApproval' || status === 'PendingVerification') return 'warning';
   if (status === 'InProgress') return 'info';
   return 'default';
+}
+
+function WorkOrderProgress({ work }: { work: WorkOrder }) {
+  const fast = (work.fastRepairPolicyVersion ?? 0) > 0;
+  const steps = [
+    'Giao công việc',
+    'Staff khảo sát',
+    fast ? 'Áp dụng sửa nhanh' : 'Owner duyệt phương án',
+    'Staff thực hiện',
+    'Owner nghiệm thu',
+  ];
+  const reached =
+    work.status === 'Assigned'
+      ? 1
+      : work.status === 'PendingApproval'
+        ? work.planApproved
+          ? 3
+          : 2
+        : work.status === 'InProgress'
+          ? 3
+          : work.status === 'PendingVerification'
+            ? 4
+            : work.status === 'Verified'
+              ? steps.length
+              : 0;
+  if (work.status === 'Cancelled') {
+    return (
+      <Alert severity="info" variant="outlined">
+        Công việc đã hủy. Xem lịch sử để biết các bước đã thực hiện.
+      </Alert>
+    );
+  }
+  return (
+    <Stack spacing={1}>
+      <Typography variant="subtitle2" sx={{ fontWeight: 700 }}>
+        Quy trình xử lý
+      </Typography>
+      <Box
+        aria-label="Tiến trình công việc"
+        sx={{
+          display: 'grid',
+          gridTemplateColumns: { xs: 'repeat(2,minmax(0,1fr))', sm: 'repeat(5,minmax(0,1fr))' },
+          gap: 0.75,
+        }}
+      >
+        {steps.map((label, index) => {
+          const done = index < reached;
+          const current = index === reached;
+          return (
+            <Stack
+              key={label}
+              direction="row"
+              spacing={0.75}
+              aria-current={current ? 'step' : undefined}
+              data-step-state={done ? 'completed' : current ? 'current' : 'pending'}
+              sx={{
+                alignItems: 'center',
+                p: 0.75,
+                minWidth: 0,
+                border: '1px solid',
+                borderRadius: 1.25,
+                borderColor: current ? 'success.main' : done ? 'success.light' : 'divider',
+                bgcolor: 'background.paper',
+              }}
+            >
+              <Box
+                sx={{
+                  width: 20,
+                  height: 20,
+                  flexShrink: 0,
+                  display: 'grid',
+                  placeItems: 'center',
+                  borderRadius: '50%',
+                  bgcolor: 'background.paper',
+                  color: done ? 'success.main' : 'text.secondary',
+                  border: '1px solid',
+                  borderColor: done || current ? 'success.main' : 'divider',
+                  fontSize: 11,
+                  fontWeight: 700,
+                }}
+              >
+                {done ? <Check size={15} aria-label="Đã hoàn thành" /> : index + 1}
+              </Box>
+              <Stack spacing={0.1} sx={{ minWidth: 0 }}>
+                <Typography
+                  variant="body2"
+                  sx={{ fontWeight: current || done ? 650 : 500, lineHeight: 1.2 }}
+                >
+                  {label}
+                </Typography>
+                <Typography variant="caption" color="text.secondary" sx={{ fontSize: 11 }}>
+                  {done ? 'Hoàn thành' : current ? 'Hiện tại' : 'Chưa đến bước'}
+                </Typography>
+              </Stack>
+            </Stack>
+          );
+        })}
+      </Box>
+    </Stack>
+  );
 }
 
 function Field({ label, children }: { label: string; children: ReactNode }) {
@@ -185,17 +294,37 @@ export function WorkOrderDetailWorkspace({
   id,
   onBack,
   showIncident = false,
+  embedded,
+  onOpenIncident,
+  inDialog = false,
 }: {
   id: string;
   onBack?: () => void;
   showIncident?: boolean;
+  onOpenIncident?: (id: string) => void;
+  inDialog?: boolean;
+  embedded?: {
+    incidentId: string;
+    section: EmbeddedSection;
+    onSectionChange: (section: EmbeddedSection) => void;
+  };
 }) {
-  const [tab, setTab] = useState<DetailTab>('overview');
+  const [standaloneTab, setStandaloneTab] = useState<DetailTab>('overview');
+  const tab = embedded?.section === 'repair' ? 'plan' : (embedded?.section ?? standaloneTab);
+  const showRepair = embedded ? embedded.section === 'repair' : tab === 'overview';
+  function setTab(next: DetailTab) {
+    if (embedded) {
+      embedded.onSectionChange(next === 'overview' || next === 'plan' ? 'repair' : next);
+    } else {
+      setStandaloneTab(next);
+    }
+  }
   const [page, setPage] = useState(1);
   const [command, setCommand] = useState<IncidentCommand | null>(null);
   const workPath = workRoot + '/' + id;
   const q = useOwnerQuery<WorkOrder>(['work-order', id], workPath, !!id);
-  const w = q.data;
+  const mismatchedIncident = !!embedded && !!q.data && q.data.incidentId !== embedded.incidentId;
+  const w = mismatchedIncident ? undefined : q.data;
   const active = !!w && !['Verified', 'Cancelled'].includes(w.status);
   const canAct = !!w && !q.isFetching && !q.error;
   const compensationEligible =
@@ -223,32 +352,32 @@ export function WorkOrderDetailWorkspace({
   const assignments = useOwnerQuery<StaffAssignment[]>(
     ['incident-responsibility', w?.locationId],
     '/api/v1/staff-location-assignments?locationId=' + (w?.locationId ?? ''),
-    active,
+    active && showRepair,
   );
   const staffDirectory = useOwnerQuery<OwnerPage<Staff>>(
     ['work-order-staff-directory'],
     '/api/v1/staff?page=1&pageSize=100',
-    active,
+    active && showRepair,
   );
   const location = useOwnerQuery<{ name: string }>(
     ['incident-location-name', w?.locationId],
     '/api/v1/locations/' + (w?.locationId ?? ''),
-    !!w && !w.locationName,
+    !!w && showRepair && !w.locationName,
   );
   const room = useOwnerQuery<{ roomNumber: string }>(
     ['incident-room-name', w?.roomId],
     '/api/v1/rooms/' + (w?.roomId ?? ''),
-    !!w?.roomId && !w.roomNumber,
+    !!w?.roomId && showRepair && !w.roomNumber,
   );
   const asset = useOwnerQuery<{ name: string }>(
     ['incident-asset-name', w?.assetId],
     '/api/v1/assets/' + (w?.assetId ?? ''),
-    !!w?.assetId && !w.assetName,
+    !!w?.assetId && showRepair && !w.assetName,
   );
   const staff = useOwnerQuery<Staff>(
     ['staff-detail', w?.assignedStaffId],
     '/api/v1/staff/' + (w?.assignedStaffId ?? ''),
-    !!w?.assignedStaffId && !w.assignedStaffName,
+    !!w?.assignedStaffId && showRepair && !w.assignedStaffName,
   );
   const action = useOwnerAction();
   const routed = useInRouterContext();
@@ -284,6 +413,18 @@ export function WorkOrderDetailWorkspace({
       fields,
       extra,
       initialValues,
+      source:
+        operation === 'plan-decision' || operation === 'verify' ? (
+          <Stack spacing={1} sx={{ borderBottom: 1, borderColor: 'divider', pb: 1.5 }}>
+            <Field label="Dự toán">{formatIncidentMoney(w.estimatedCost)}</Field>
+            <Field label="Đơn vị thực hiện đã ghi nhận">{w.vendor || 'Chưa có'}</Field>
+            {operation === 'plan-decision' ? (
+              <Field label="Phương án đề xuất">{w.proposedSolution || 'Chưa có phương án'}</Field>
+            ) : (
+              <Field label="Kết quả thực hiện">{w.result || 'Chưa có kết quả'}</Field>
+            )}
+          </Stack>
+        ) : undefined,
     });
   }
 
@@ -326,233 +467,346 @@ export function WorkOrderDetailWorkspace({
     <Stack
       spacing={2.25}
       sx={{
-        border: 1,
+        border: embedded || inDialog ? 0 : 1,
         borderColor: 'divider',
         borderRadius: 2,
         bgcolor: 'background.paper',
-        p: { xs: 1.75, sm: 2.5 },
+        p: embedded || inDialog ? 0 : { xs: 1.75, sm: 2.5 },
         minWidth: 0,
       }}
     >
-      <Stack
-        direction={{ xs: 'column', sm: 'row' }}
-        spacing={1.5}
-        sx={{ alignItems: { sm: 'flex-start' }, justifyContent: 'space-between' }}
-      >
-        <Stack spacing={1} sx={{ minWidth: 0, flex: 1 }}>
-          {onBack && (
-            <Button size="small" sx={{ alignSelf: 'flex-start', px: 0 }} onClick={onBack}>
-              Quay lại danh sách
-            </Button>
-          )}
-          <Typography
-            variant="h6"
-            component="h2"
-            sx={{ fontWeight: 750, overflowWrap: 'anywhere' }}
-          >
-            {w?.description || w?.expectedOutcome || 'Chi tiết lệnh sửa chữa'}
-          </Typography>
-          {w && (
-            <Stack
-              direction="row"
-              useFlexGap
-              spacing={1}
-              sx={{ flexWrap: 'wrap', alignItems: 'center' }}
-            >
-              <Chip size="small" color={workStatusColor(w.status)} label={statusText(w.status)} />
-              <Chip
-                size="small"
-                variant="outlined"
-                label={w.source === 'Proactive' ? 'Bảo trì chủ động' : 'Từ báo cáo sự cố'}
-              />
-              {w.fastRepairPolicyVersion != null && (
-                <Chip size="small" variant="outlined" label="Sửa nhanh" />
-              )}
-              {w.isOverdue && w.status !== 'Verified' && w.status !== 'Cancelled' && (
-                <Chip size="small" color="warning" label="Quá hạn" />
-              )}
-            </Stack>
-          )}
-        </Stack>
-        <Button
-          size="small"
-          variant="outlined"
-          disabled={q.isFetching}
-          onClick={() => void q.refetch()}
+      {!embedded && (
+        <Stack
+          direction={{ xs: 'column', sm: 'row' }}
+          spacing={1.5}
+          sx={{
+            alignItems: { sm: 'flex-start' },
+            justifyContent: 'space-between',
+            pr: inDialog ? 5 : 0,
+          }}
         >
-          Tải lại lệnh
-        </Button>
-      </Stack>
+          <Stack spacing={1} sx={{ minWidth: 0, flex: 1 }}>
+            {onBack && (
+              <Button size="small" sx={{ alignSelf: 'flex-start', px: 0 }} onClick={onBack}>
+                Quay lại danh sách
+              </Button>
+            )}
+            <Typography
+              variant={inDialog ? 'h5' : 'h6'}
+              component="h2"
+              sx={{ fontWeight: 750, overflowWrap: 'anywhere' }}
+            >
+              {w?.description || w?.expectedOutcome || 'Chi tiết lệnh sửa chữa'}
+            </Typography>
+            {w && (
+              <Stack
+                direction="row"
+                useFlexGap
+                spacing={1}
+                sx={{ flexWrap: 'wrap', alignItems: 'center' }}
+              >
+                <Chip
+                  size="small"
+                  color={
+                    w.status === 'Assigned' || (w.status === 'PendingApproval' && w.planApproved)
+                      ? 'info'
+                      : workStatusColor(w.status)
+                  }
+                  label={
+                    w.status === 'PendingApproval' && w.planApproved
+                      ? 'Đã duyệt, chờ bắt đầu'
+                      : w.status === 'Assigned' && inDialog
+                        ? 'Chờ khảo sát'
+                        : statusText(w.status)
+                  }
+                />
+                <Chip
+                  size="small"
+                  variant="outlined"
+                  label={w.source === 'Proactive' ? 'Bảo trì chủ động' : 'Từ báo cáo sự cố'}
+                />
+                {w.fastRepairPolicyVersion != null && (
+                  <Chip size="small" variant="outlined" label="Sửa nhanh" />
+                )}
+                {w.isOverdue && w.status !== 'Verified' && w.status !== 'Cancelled' && (
+                  <Chip size="small" color="warning" label="Quá hạn" />
+                )}
+                {w.incidentId && onOpenIncident && (
+                  <Button size="small" onClick={() => onOpenIncident(w.incidentId!)}>
+                    Xem báo cáo sự cố gốc
+                  </Button>
+                )}
+                {w.incidentId && !onOpenIncident && routed && (
+                  <Button
+                    size="small"
+                    component={Link}
+                    to={'/incidents?incidentId=' + encodeURIComponent(w.incidentId)}
+                  >
+                    Mở sự cố
+                  </Button>
+                )}
+              </Stack>
+            )}
+          </Stack>
+          <Button
+            size="small"
+            variant="outlined"
+            disabled={q.isFetching}
+            onClick={() => void q.refetch()}
+          >
+            Tải lại lệnh
+          </Button>
+        </Stack>
+      )}
 
       <OwnerFeedback busy={q.isFetching} error={q.error} notice={action.notice} />
-      {!w && !q.isFetching && !q.error && (
+      {mismatchedIncident && (
+        <Alert severity="error">Lệnh sửa chữa không thuộc hồ sơ sự cố này.</Alert>
+      )}
+      {!w && !mismatchedIncident && !q.isFetching && !q.error && (
         <Alert severity="info">Chưa có dữ liệu lệnh sửa chữa. Hãy tải lại để kiểm tra.</Alert>
+      )}
+      {embedded && (q.error || !w) && !mismatchedIncident && (
+        <Button size="small" sx={{ alignSelf: 'flex-start' }} onClick={() => void q.refetch()}>
+          Tải lại lệnh
+        </Button>
       )}
       {w && next && (
         <>
-          <Paper
-            variant="outlined"
-            sx={{
-              px: { xs: 1.5, sm: 2 },
-              py: 1.75,
-              bgcolor: 'action.hover',
-              borderColor: 'divider',
-            }}
-          >
-            <Stack spacing={1.25}>
-              <Stack
-                direction={{ xs: 'column', sm: 'row' }}
-                spacing={1}
-                sx={{ justifyContent: 'space-between' }}
+          {inDialog && !embedded && (
+            <>
+              <Box
+                sx={{
+                  display: 'grid',
+                  gridTemplateColumns: {
+                    xs: 'repeat(2,minmax(0,1fr))',
+                    lg: 'repeat(4,minmax(0,1fr))',
+                  },
+                  gap: 1.5,
+                  px: 1.5,
+                  py: 1,
+                  borderBottom: 1,
+                  borderColor: 'divider',
+                }}
               >
-                <Stack spacing={0.4}>
-                  <Typography variant="subtitle1" sx={{ fontWeight: 750 }}>
-                    {next.title}
-                  </Typography>
-                  <Typography variant="body2" color="text.secondary">
-                    {next.description}
-                  </Typography>
-                </Stack>
-                <Typography
-                  variant="body2"
-                  color={w.isOverdue && active ? 'error.main' : 'text.secondary'}
-                >
-                  Hạn hoàn thành: {formatInstant(w.targetCompletionAt)}
-                </Typography>
-              </Stack>
-              {w.assetProposalPending && (
-                <Stack spacing={0.75}>
-                  <Typography variant="body2">
-                    Tài sản được đề xuất: <strong>{w.proposedAssetName || 'Tài sản mới'}</strong>
-                  </Typography>
-                  <Typography variant="body2" color="text.secondary">
-                    {w.proposedAssetCategory || 'Chưa phân loại'} ·{' '}
-                    {w.proposedAssetCondition || 'Chưa ghi nhận tình trạng'}
-                  </Typography>
-                  {!!assetProposalReason && (
-                    <Typography variant="body2">Lý do: {assetProposalReason}</Typography>
-                  )}
-                  <OwnerFeedback error={activityHistory.error} />
-                  {activityHistory.error && (
-                    <Button
-                      size="small"
-                      onClick={() => void activityHistory.refetch()}
-                      sx={{ alignSelf: 'flex-start' }}
-                    >
-                      Tải lại lý do đề xuất
-                    </Button>
-                  )}
-                </Stack>
-              )}
-              {w.status === 'PendingVerification' && w.assetProposalPending && (
-                <Alert severity="warning">
-                  Cần quyết định liên kết tài sản trước khi nghiệm thu.
-                </Alert>
-              )}
-              {canAct && (planPending || !!w.assetProposalPending || verifyPending) && (
-                <Stack direction="row" useFlexGap spacing={1} sx={{ flexWrap: 'wrap' }}>
-                  {planPending && (
-                    <>
-                      <Button variant="contained" onClick={approvePlan}>
-                        Duyệt phương án
-                      </Button>
-                      <Button variant="outlined" onClick={rejectPlan}>
-                        Từ chối phương án
-                      </Button>
-                    </>
-                  )}
-                  {w.assetProposalPending && (
-                    <>
-                      <Button variant="contained" onClick={() => decideAsset(true)}>
-                        Xác nhận tài sản
-                      </Button>
-                      <Button variant="outlined" onClick={() => decideAsset(false)}>
-                        Từ chối tài sản
-                      </Button>
-                    </>
-                  )}
-                  {verifyPending && (
-                    <>
-                      <Button variant="contained" onClick={verify}>
-                        Xác minh hoàn tất
-                      </Button>
-                      <Button variant="outlined" onClick={requestRework}>
-                        Yêu cầu làm lại
-                      </Button>
-                      <Button variant="text" onClick={() => setTab('photos')}>
-                        Xem ảnh kết quả
-                      </Button>
-                    </>
-                  )}
-                </Stack>
-              )}
-            </Stack>
-          </Paper>
-
-          <Box sx={{ borderBottom: 1, borderColor: 'divider' }}>
-            <Tabs
-              value={tab}
-              onChange={(_, value: DetailTab) => setTab(value)}
-              variant="scrollable"
-              scrollButtons="auto"
-              allowScrollButtonsMobile
-              aria-label="Các phần của lệnh sửa chữa"
+                {[
+                  {
+                    label: 'Cơ sở',
+                    value: w.locationName || location.data?.name || 'Cơ sở liên quan',
+                    icon: Building2,
+                  },
+                  {
+                    label: 'Vị trí',
+                    value: w.roomId
+                      ? 'Phòng ' + (w.roomNumber || room.data?.roomNumber || 'liên quan')
+                      : w.commonArea || 'Khu vực chung',
+                    icon: MapPinned,
+                  },
+                  {
+                    label: 'Người phụ trách',
+                    value: w.assignedStaffName || staff.data?.fullName || 'Chưa rõ nhân viên',
+                    icon: UserRound,
+                  },
+                  {
+                    label: 'Thời hạn',
+                    value: w.targetCompletionAt
+                      ? formatInstant(w.targetCompletionAt)
+                      : 'Chưa có hạn',
+                    icon: CalendarDays,
+                  },
+                ].map(({ label, value, icon: Icon }) => (
+                  <Stack key={label} direction="row" spacing={1} sx={{ minWidth: 0 }}>
+                    <Box sx={{ color: 'text.secondary', flexShrink: 0, pt: 0.25 }}>
+                      <Icon size={18} />
+                    </Box>
+                    <Box sx={{ minWidth: 0 }}>
+                      <Typography variant="caption" color="text.secondary">
+                        {label}
+                      </Typography>
+                      <Typography
+                        variant="body2"
+                        sx={{
+                          fontWeight: 650,
+                          overflowWrap: 'anywhere',
+                          color:
+                            label === 'Thời hạn' && w.isOverdue && active
+                              ? 'error.main'
+                              : 'text.primary',
+                        }}
+                      >
+                        {value}
+                      </Typography>
+                    </Box>
+                  </Stack>
+                ))}
+              </Box>
+            </>
+          )}
+          {!embedded && (
+            <Box
               sx={{
-                minHeight: 42,
-                '& .MuiTab-root': { minHeight: 42, textTransform: 'none', fontWeight: 600 },
+                borderBottom: 1,
+                borderColor: 'divider',
+                ...(inDialog
+                  ? { position: 'sticky', top: 0, zIndex: 2, bgcolor: 'background.paper' }
+                  : {}),
               }}
             >
-              <Tab value="overview" label="Tổng quan" />
-              <Tab value="plan" label="Phương án & sửa chữa" />
-              <Tab value="photos" label="Ảnh" />
-              <Tab value="costs" label="Chi phí" />
-              <Tab value="history" label="Lịch sử" />
-            </Tabs>
-          </Box>
+              <Tabs
+                value={tab}
+                onChange={(_, value: DetailTab) => setTab(value)}
+                variant="scrollable"
+                scrollButtons="auto"
+                allowScrollButtonsMobile
+                aria-label="Các phần của lệnh sửa chữa"
+                sx={operationalTabs}
+              >
+                <Tab value="overview" label="Tổng quan" />
+                <Tab value="plan" label="Phương án & sửa chữa" />
+                <Tab value="photos" label="Ảnh" />
+                <Tab value="costs" label="Chi phí" />
+                <Tab value="history" label="Lịch sử" />
+              </Tabs>
+            </Box>
+          )}
 
-          {tab === 'overview' && (
+          {!embedded && tab === 'overview' && <WorkOrderProgress work={w} />}
+          {showRepair && (
+            <Paper
+              variant="outlined"
+              sx={{
+                px: { xs: 1.5, sm: 2 },
+                py: 1.75,
+                borderColor: 'divider',
+              }}
+            >
+              <Stack spacing={1.25}>
+                <Stack
+                  direction={{ xs: 'column', sm: 'row' }}
+                  spacing={1}
+                  sx={{ justifyContent: 'space-between' }}
+                >
+                  <Stack spacing={0.4}>
+                    <Typography variant="subtitle1" sx={{ fontWeight: 750 }}>
+                      {next.title}
+                    </Typography>
+                    <Typography variant="body2" color="text.secondary">
+                      {next.description}
+                    </Typography>
+                  </Stack>
+                </Stack>
+                {w.assetProposalPending && (
+                  <Stack spacing={0.75}>
+                    <Typography variant="body2">
+                      Tài sản được đề xuất: <strong>{w.proposedAssetName || 'Tài sản mới'}</strong>
+                    </Typography>
+                    <Typography variant="body2" color="text.secondary">
+                      {w.proposedAssetCategory || 'Chưa phân loại'} ·{' '}
+                      {w.proposedAssetCondition || 'Chưa ghi nhận tình trạng'}
+                    </Typography>
+                    {!!assetProposalReason && (
+                      <Typography variant="body2">Lý do: {assetProposalReason}</Typography>
+                    )}
+                    <OwnerFeedback error={activityHistory.error} />
+                    {activityHistory.error && (
+                      <Button
+                        size="small"
+                        onClick={() => void activityHistory.refetch()}
+                        sx={{ alignSelf: 'flex-start' }}
+                      >
+                        Tải lại lý do đề xuất
+                      </Button>
+                    )}
+                  </Stack>
+                )}
+                {w.status === 'PendingVerification' && w.assetProposalPending && (
+                  <Alert severity="warning">
+                    Cần quyết định liên kết tài sản trước khi nghiệm thu.
+                  </Alert>
+                )}
+                {canAct && (planPending || !!w.assetProposalPending || verifyPending) && (
+                  <Stack direction="row" useFlexGap spacing={1} sx={{ flexWrap: 'wrap' }}>
+                    {planPending && (
+                      <>
+                        <Button variant="contained" onClick={approvePlan}>
+                          Duyệt phương án
+                        </Button>
+                        <Button variant="outlined" onClick={rejectPlan}>
+                          Từ chối phương án
+                        </Button>
+                      </>
+                    )}
+                    {w.assetProposalPending && (
+                      <>
+                        <Button variant="contained" onClick={() => decideAsset(true)}>
+                          Xác nhận tài sản
+                        </Button>
+                        <Button variant="outlined" onClick={() => decideAsset(false)}>
+                          Từ chối tài sản
+                        </Button>
+                      </>
+                    )}
+                    {verifyPending && (
+                      <>
+                        <Button variant="contained" onClick={verify}>
+                          Xác minh hoàn tất
+                        </Button>
+                        <Button variant="outlined" onClick={requestRework}>
+                          Yêu cầu làm lại
+                        </Button>
+                        <Button variant="text" onClick={() => setTab('photos')}>
+                          Xem ảnh kết quả
+                        </Button>
+                      </>
+                    )}
+                  </Stack>
+                )}
+              </Stack>
+            </Paper>
+          )}
+
+          {(tab === 'overview' || embedded?.section === 'repair') && (
             <Stack spacing={3}>
-              <Section title="Thông tin công việc">
+              <Section title={inDialog ? 'Yêu cầu xử lý' : 'Thông tin công việc'}>
                 <Fields>
-                  <Field label="Cơ sở">
-                    {w.locationName || location.data?.name || 'Cơ sở liên quan'}
-                  </Field>
-                  <Field label="Vị trí">
-                    {w.roomId
-                      ? 'Phòng ' + (w.roomNumber || room.data?.roomNumber || 'liên quan')
-                      : w.commonArea || 'Khu vực chung'}
-                  </Field>
+                  {!inDialog && (
+                    <Field label="Cơ sở">
+                      {w.locationName || location.data?.name || 'Cơ sở liên quan'}
+                    </Field>
+                  )}
+                  {!inDialog && (
+                    <Field label="Vị trí">
+                      {w.roomId
+                        ? 'Phòng ' + (w.roomNumber || room.data?.roomNumber || 'liên quan')
+                        : w.commonArea || 'Khu vực chung'}
+                    </Field>
+                  )}
                   <Field label="Tài sản">
                     {w.assetId
                       ? w.assetName || asset.data?.name || 'Tài sản liên quan'
                       : 'Chưa gắn tài sản'}
                   </Field>
-                  <Field label="Nhân viên phụ trách">
-                    {w.assignedStaffName || staff.data?.fullName || 'Chưa rõ nhân viên'}
-                  </Field>
+                  {!inDialog && (
+                    <Field label="Nhân viên phụ trách">
+                      {w.assignedStaffName || staff.data?.fullName || 'Chưa rõ nhân viên'}
+                    </Field>
+                  )}
                   <Field label="Kết quả cần đạt">{w.expectedOutcome || 'Chưa có'}</Field>
-                  <Field label="Thời hạn">{formatInstant(w.targetCompletionAt)}</Field>
+                  {!inDialog && (
+                    <Field label="Thời hạn">{formatInstant(w.targetCompletionAt)}</Field>
+                  )}
                 </Fields>
                 <OwnerFeedback error={location.error || room.error || asset.error || staff.error} />
                 {routed && (
                   <Stack direction="row" spacing={1} useFlexGap sx={{ flexWrap: 'wrap' }}>
-                    {w.incidentId && (
-                      <>
-                        <Button
-                          size="small"
-                          component={Link}
-                          to={'/incidents?incidentId=' + encodeURIComponent(w.incidentId)}
-                        >
-                          Mở sự cố
-                        </Button>
-                        <Button
-                          size="small"
-                          component={Link}
-                          to={'/maintenance?incidentId=' + encodeURIComponent(w.incidentId)}
-                        >
-                          Các lệnh của sự cố
-                        </Button>
-                      </>
+                    {w.incidentId && !embedded && !onOpenIncident && (
+                      <Button
+                        size="small"
+                        component={Link}
+                        to={'/maintenance?incidentId=' + encodeURIComponent(w.incidentId)}
+                      >
+                        Các lệnh của sự cố
+                      </Button>
                     )}
                     {w.roomId && (
                       <Button
@@ -659,8 +913,6 @@ export function WorkOrderDetailWorkspace({
                   <Field label="Thời lượng dự kiến">
                     {w.estimatedMinutes == null ? 'Chưa có' : w.estimatedMinutes + ' phút'}
                   </Field>
-                  <Field label="Đơn vị thực hiện">{w.vendor || 'Chưa có'}</Field>
-                  <Field label="Dự toán">{formatIncidentMoney(w.estimatedCost)}</Field>
                   <Field label="Phê duyệt phương án">
                     {w.planApproved ? 'Đã duyệt' : 'Chưa duyệt'}
                   </Field>
@@ -685,13 +937,17 @@ export function WorkOrderDetailWorkspace({
               <Section title="Kết quả thực hiện">
                 <Fields>
                   <Field label="Kết quả sửa chữa">{w.result || 'Chưa có kết quả'}</Field>
-                  <Field label="Chi phí thực tế">
-                    {w.actualCost == null ? 'Chưa xác minh' : formatIncidentMoney(w.actualCost)}
-                  </Field>
                   <Field label="Xác minh hoàn tất">
                     {w.verifiedAt ? formatInstant(w.verifiedAt) : 'Chưa xác minh'}
                   </Field>
                 </Fields>
+                <Button
+                  size="small"
+                  sx={{ alignSelf: 'flex-start' }}
+                  onClick={() => setTab('costs')}
+                >
+                  Xem chi phí thực hiện
+                </Button>
                 <Button
                   size="small"
                   sx={{ alignSelf: 'flex-start' }}
@@ -811,18 +1067,12 @@ export function WorkOrderDetailWorkspace({
                   <CompensationPanel work={w} evidence={evidence.data ?? []} />
                 </>
               )}
-              {!compensationEligible && (
-                <Typography variant="body2" color="text.secondary">
-                  Quyết định bồi thường chỉ áp dụng cho lệnh trong phòng đã nghiệm thu và có chi phí
-                  thực tế lớn hơn 0.
-                </Typography>
-              )}
             </Stack>
           )}
 
           {tab === 'history' && (
             <Stack spacing={3}>
-              <Section title="Lịch sử xử lý">
+              <Section title="Lịch sử xử lý của lệnh">
                 <OwnerFeedback busy={activityHistory.isFetching} error={activityHistory.error} />
                 {activityHistory.error && (
                   <Button

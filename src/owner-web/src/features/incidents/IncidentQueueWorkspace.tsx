@@ -84,7 +84,7 @@ function nextWorkAction(work: WorkOrder): string {
   return 'Xem tiến độ';
 }
 
-function NotificationSummary() {
+export function NotificationSummary() {
   const query = useOwnerQuery<OwnerPage<IncidentNotification>>(
     ['incident-notifications'],
     `${root}/notifications?page=1&pageSize=10`,

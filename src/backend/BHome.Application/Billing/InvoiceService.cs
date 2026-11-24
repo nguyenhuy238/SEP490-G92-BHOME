@@ -1,3 +1,4 @@
+using BHome.Application.Common;
 using System.Text.Json;
 using BHome.Application.IdentityAccess;
 using BHome.Application.Contracts;
@@ -24,7 +25,7 @@ public sealed class InvoiceService(IInvoiceRepository repository, ICurrentUser u
         }
     }
     private void RequireOwner() { _ = Actor; if (!Owner) throw new InvoiceException(403, "invoice_owner_required"); }
-    private DateOnly Today => DateOnly.FromDateTime(TimeZoneInfo.ConvertTimeBySystemTimeZoneId(clock.GetUtcNow(), "Asia/Ho_Chi_Minh").DateTime);
+    private DateOnly Today => clock.BusinessToday();
     public async Task<BillingSchedule?> ScheduleAsync(Guid locationId, CancellationToken t)
     { RequireOwner(); return await repository.ScheduleAsync(locationId, t); }
 
@@ -207,7 +208,7 @@ public sealed class InvoiceService(IInvoiceRepository repository, ICurrentUser u
                 await paymentCodes.IssueAsync("Invoice", invoice.Id, invoice.LocationId, t) is null))
                 throw new InvoiceException(409, "invoice_payment_code_unavailable");
             invoice.Status = InvoiceStatus.Final; invoice.Version++;
-            var now = clock.GetUtcNow();
+            var now = clock.BusinessUtcNow();
             invoice.FinalizedAt = now.AddTicks(-(now.Ticks % 10)); invoice.FinalizedByUserId = Actor;
             invoice.AutomationFinalizationPlanId = expectedAutomationPlanId;
             repository.Add(new InvoiceIssuedEvent { InvoiceId = id, OwnerUserId = Actor, AutomationPlanId = expectedAutomationPlanId, OccurredAt = invoice.FinalizedAt.Value });

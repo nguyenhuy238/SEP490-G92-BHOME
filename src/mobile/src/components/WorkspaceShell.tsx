@@ -125,7 +125,8 @@ export function WorkspaceShell({
   const tenantFeatures = role === 'Tenant' && screen === 'tenant-features';
   const tenantHomeLayout = role === 'Tenant' && ['tenant-home', 'tenant-features'].includes(screen);
   const compactContracts = staff && ['signing', 'contract'].includes(screen) && !preview;
-  const compactTasks = staff && ['work-orders', 'task-detail'].includes(screen) && !preview;
+  const compactTasks =
+    staff && ['work-orders', 'task-detail', 'staff-handovers'].includes(screen) && !preview;
   const compactTaskDetail = compactTasks && screen === 'task-detail';
   const tenantRoom = role === 'Tenant' && screen === 'tenant-room' && !preview;
   const tenantResidence = role === 'Tenant' && screen === 'residence' && !preview;
@@ -160,16 +161,22 @@ export function WorkspaceShell({
               ? 'operations'
               : owner && screen === 'signing'
                 ? 'approvals'
-                : staff && screen === 'task-detail'
-                  ? 'work-orders'
-                  : homeScreen[role!];
+                : staff && ['move-in', 'move-out', 'staff-handover-archive'].includes(screen)
+                  ? 'staff-handovers'
+                  : staff && screen === 'task-detail'
+                    ? 'work-orders'
+                    : homeScreen[role!];
     if (!staff && !owner && role !== 'Tenant' && !profileEdit && screen !== 'incident-inbox')
       return go(fallback);
     requestNavigation(() => {
       if (router.canGoBack()) router.back();
       else if (isWorkspaceTabDestination(role!, fallback))
         router.replace(workspaceTabHref(fallback));
-      else router.replace({ pathname: '/workspace/[screen]', params: { screen: fallback } });
+      else
+        router.replace({
+          pathname: '/workspace/[screen]',
+          params: { screen: fallback, ...(screen === 'move-out' ? { tab: 'MoveOut' } : {}) },
+        });
     });
   }
   return (
@@ -399,7 +406,9 @@ export function WorkspaceShell({
                             : compactTasks
                               ? compactTaskDetail
                                 ? 'Chi tiết công việc'
-                                : 'Công việc vận hành'
+                                : screen === 'staff-handovers'
+                                  ? 'Bàn giao / Trả phòng'
+                                  : 'Công việc vận hành'
                               : compactContracts
                                 ? (headerAction?.title ?? 'Hợp đồng')
                                 : (headerAction?.title ?? 'Quay lại')}
@@ -413,7 +422,7 @@ export function WorkspaceShell({
                             tenantResidence
                               ? 'Tải lại hồ sơ tạm trú'
                               : compactTasks
-                                ? 'Tải lại công việc'
+                                ? `Tải lại ${headerAction?.title ?? 'công việc'}`
                                 : tenantLedger
                                   ? 'Tải lại giao dịch'
                                   : tenantInvoice

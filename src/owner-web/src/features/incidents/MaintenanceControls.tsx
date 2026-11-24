@@ -8,9 +8,12 @@ import {
   DialogActions,
   DialogContent,
   DialogTitle,
+  IconButton,
+  Tooltip,
   Stack,
   Typography,
 } from '@mui/material';
+import { Settings } from 'lucide-react';
 import {
   OwnerLocationPicker,
   OwnerRoomPicker,
@@ -32,8 +35,14 @@ export function CreateProactiveMaintenance() {
   );
 }
 
-function ProactiveForm({ close }: { close: () => void }) {
-  const [location, setLocation] = useState('');
+export function ProactiveForm({
+  close,
+  initialLocation = '',
+}: {
+  close: () => void;
+  initialLocation?: string;
+}) {
+  const [location, setLocation] = useState(initialLocation);
   const [room, setRoom] = useState('');
   const [area, setArea] = useState('');
   const [asset, setAsset] = useState('');
@@ -92,7 +101,7 @@ function ProactiveForm({ close }: { close: () => void }) {
     >
       <DialogTitle id="proactive-title">Tạo bảo trì chủ động</DialogTitle>
       <DialogContent>
-        <Stack spacing={2} sx={{ pt: 1 }}>
+        <Stack spacing={1.5} sx={{ pt: 1 }}>
           <OwnerLocationPicker
             required
             value={location}
@@ -132,7 +141,7 @@ function ProactiveForm({ close }: { close: () => void }) {
             label="Nội dung bảo trì"
             required
             multiline
-            minRows={3}
+            minRows={2}
             value={description}
             onChange={(e) => setDescription(e.target.value)}
           />
@@ -154,13 +163,16 @@ function ProactiveForm({ close }: { close: () => void }) {
             busy={assignment.isFetching || action.busy}
             error={validation || assignment.error || action.error}
           />
-          {assignment.data && (
-            <Alert severity={assignment.data.available ? 'info' : 'warning'}>
-              {assignment.data.available
-                ? 'Máy chủ sẽ giao cho Staff đang phụ trách cơ sở hôm nay.'
-                : 'Cơ sở chưa có Staff đủ điều kiện. Cập nhật phân công trước khi giao việc.'}
-            </Alert>
-          )}
+          {assignment.data &&
+            (assignment.data.available ? (
+              <Typography variant="body2" color="text.secondary">
+                Giao cho Staff đang phụ trách cơ sở.
+              </Typography>
+            ) : (
+              <Alert severity="warning" variant="outlined">
+                Cơ sở chưa có Staff đủ điều kiện. Cập nhật phân công trước khi giao việc.
+              </Alert>
+            ))}
         </Stack>
       </DialogContent>
       <DialogActions>
@@ -183,7 +195,7 @@ interface Policy {
   version: number;
   activeCategories: string[];
 }
-export function FastRepairPolicyPanel() {
+export function FastRepairPolicyPanel({ compact = false }: { compact?: boolean } = {}) {
   const [open, setOpen] = useState(false);
   const policy = useOwnerQuery<Policy>(
     ['fast-repair-policy'],
@@ -192,7 +204,15 @@ export function FastRepairPolicyPanel() {
   );
   return (
     <>
-      <Button onClick={() => setOpen(true)}>Chính sách sửa nhanh</Button>
+      {compact ? (
+        <Tooltip title="Chính sách sửa nhanh">
+          <IconButton aria-label="Chính sách sửa nhanh" onClick={() => setOpen(true)}>
+            <Settings size={19} />
+          </IconButton>
+        </Tooltip>
+      ) : (
+        <Button onClick={() => setOpen(true)}>Chính sách sửa nhanh</Button>
+      )}
       <Dialog
         open={open}
         onClose={() => setOpen(false)}
@@ -223,11 +243,11 @@ function PolicyForm({ policy, close }: { policy: Policy; close: () => void }) {
   const [categories, setCategories] = useState(policy.activeCategories.join('\n'));
   const action = useOwnerAction();
   return (
-    <Stack spacing={2} sx={{ pt: 1 }}>
-      <Alert severity="info">
+    <Stack spacing={1.5} sx={{ pt: 1 }}>
+      <Typography variant="body2" color="text.secondary">
         Chỉ áp dụng công việc 0 VND, không sử dụng vật tư. Owner xác minh kết quả trước khi hoàn
         tất.
-      </Alert>
+      </Typography>
       <TextField
         label="Nhóm công việc được kích hoạt, mỗi dòng một nhóm"
         multiline
@@ -236,8 +256,8 @@ function PolicyForm({ policy, close }: { policy: Policy; close: () => void }) {
         onChange={(e) => setCategories(e.target.value)}
         disabled={action.busy}
       />
-      <Typography variant="body2">
-        Gợi ý chưa kích hoạt. Chọn để thêm vào danh sách rồi lưu quyết định.
+      <Typography variant="caption" color="text.secondary">
+        Gợi ý nhóm để thêm
       </Typography>
       <Stack direction="row" useFlexGap spacing={1} sx={{ flexWrap: 'wrap' }}>
         {['Điều chỉnh cài đặt thiết bị', 'Kiểm tra và khởi động lại thiết bị'].map((name) => (

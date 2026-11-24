@@ -10,6 +10,7 @@ import { QueryCache } from './queryCache';
 import { mutationTags } from './queryPolicies';
 import type { TokenSession } from '../../../../packages/client-core/src/jwtSession';
 import { mobileRequestUrl } from './mobileRequestUrl';
+export { mobileRequestUrl };
 
 export interface Session extends TokenSession {
   refreshToken: string;
@@ -56,6 +57,8 @@ export class MobileApiError extends Error {
     this.name = 'MobileApiError';
   }
 }
+
+const stagingOrigin = 'https://api-staging.103.146.23.157.sslip.io';
 
 export async function mobileResponse<T>(
   base: string,
@@ -128,6 +131,16 @@ export async function mobileResponse<T>(
 
 export async function checkApiConnection(input: string, transport: typeof fetch = fetch) {
   const base = apiBaseUrl(input);
+  const checkPublic = async () => {
+    const path = '/api/v1/public/locations';
+    await mobileResponse(base, path, {}, transport, async (response) => {
+      const locations: unknown = await response.json().catch(() => null);
+      if (!Array.isArray(locations)) throw new MobileApiError(502, 'invalid_response', path);
+    });
+  };
+  // Staging intentionally blocks /health/* at its public edge. Browsers can
+  // hide that 404 as a network error because the edge does not emit CORS headers.
+  if (base === stagingOrigin) return checkPublic();
   try {
     await mobileResponse(base, '/health/ready', {}, transport, async (response) => {
       if ((await response.text()).trim() !== 'Healthy')
@@ -136,11 +149,7 @@ export async function checkApiConnection(input: string, transport: typeof fetch 
   } catch (error) {
     if (!(error instanceof MobileApiError) || error.status !== 404) throw error;
     // Deployed gateways deliberately keep readiness private. Use the anonymous API there.
-    const path = '/api/v1/public/locations';
-    await mobileResponse(base, path, {}, transport, async (response) => {
-      const locations: unknown = await response.json().catch(() => null);
-      if (!Array.isArray(locations)) throw new MobileApiError(502, 'invalid_response', path);
-    });
+    await checkPublic();
   }
 }
 export function apiBaseUrl(input: string): string {
@@ -173,9 +182,13 @@ export function errorMessage(error: unknown): string {
     return invalidCredentialsMessage + requestDiagnostic(error);
   if (error.problem && !['request_timeout', 'invalid_response'].includes(error.code ?? ''))
     return getUserFriendlyMessage(error) + requestDiagnostic(error);
-  if (error.code === 'request_timeout' && contractDocumentTimeout(error.requestPath ?? '') > 15000)
+  if (
+    error.code === 'request_timeout' &&
+    (contractDocumentTimeout(error.requestPath ?? '') > 15000 ||
+      locationAssetHandoverDocumentTimeout(error.requestPath ?? ''))
+  )
     return (
-      'Tạo hoặc hiển thị PDF mất quá nhiều thời gian. Bản nháp đã lưu vẫn được giữ; hãy thử tải lại bản xem trước.' +
+      'Tạo hoặc hiển thị tài liệu PDF mất quá nhiều thời gian. Dữ liệu đã lưu không bị thay đổi; hãy thử tải lại bản xem trước.' +
       requestDiagnostic(error)
     );
   const messages: Record<string, string> = {
@@ -216,7 +229,7 @@ export function errorMessage(error: unknown): string {
     move_in_inventory_reinspection_not_passed:
       'Tài sản Owner yêu cầu kiểm tra lại chưa đạt hoặc thiếu số lượng. Hãy kiểm tra thực tế và lưu kết quả mới.',
     move_in_inventory_reinspection_new_evidence_required:
-      'Chưa có ảnh mới sau yêu cầu kiểm tra lại của Owner. Hãy chụp ảnh mới cho tài sản được chọn, kể cả khi đã Đạt.',
+      'Chưa có ảnh mới sau yêu cầu kiểm tra lại của chủ trọ. Hãy chụp ảnh mới cho tài sản được chọn, kể cả khi đã Đạt.',
     move_in_inventory_checklist_incomplete:
       'Phiếu kiểm kê chưa đủ tình trạng, số lượng, ghi chú hoặc ảnh minh chứng bắt buộc.',
     move_in_inventory_evidence_missing:
@@ -260,7 +273,18 @@ function contractDocumentTimeout(path: string): number {
     ? 60000
     : 15000;
 }
+function locationAssetHandoverDocumentTimeout(path: string): boolean {
+  return (
+    /^\/api\/v1\/operational-tasks\/[a-f0-9-]{36}\/location-asset-handover\/document(?:\/preview|\/pages\/[1-9][0-9]*)?$/i.test(
+      path,
+    ) ||
+    /^\/api\/v1\/location-asset-handovers\/archive\/[a-f0-9-]{36}\/revisions\/[1-9][0-9]*\/document$/i.test(
+      path,
+    )
+  );
+}
 function requestTimeout(path: string): number {
+  if (locationAssetHandoverDocumentTimeout(path)) return 60000;
   if (/^\/api\/v1\/contracts\/[a-f0-9-]{36}\/move-out\/inspection$/i.test(path)) return 60000;
   return contractDocumentTimeout(path);
 }

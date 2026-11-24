@@ -1210,6 +1210,47 @@ function AutomationLocation({ location, period }: { location: string; period: st
     </Stack>
   );
 }
+type ManualMeterOption = {
+  id: string;
+  label: string;
+  parentId: string;
+  installedOn?: string | null;
+  isActive?: boolean | null;
+};
+
+function meterScheduleIssue(meter: ManualMeterOption | undefined, scheduledDate: string): string {
+  if (!meter) return '';
+  if (meter.isActive === false) return 'Đồng hồ đã ngừng hoạt động. Chọn đồng hồ đang hoạt động.';
+  if (meter.installedOn && scheduledDate && scheduledDate < meter.installedOn)
+    return `Ngày ghi số theo lịch (${scheduledDate}) trước ngày lắp đồng hồ (${meter.installedOn}). Chọn kỳ hoặc lịch ghi số phù hợp.`;
+  return '';
+}
+
+function periodicBaselineIssue(tasks: MeterTask[], meterId: string, scheduledDate: string): string {
+  if (!scheduledDate) return '';
+  const confirmed = tasks.filter(
+    (task) => task.meterId === meterId && task.status === 2 && !!task.confirmedReadingId,
+  );
+  if (confirmed.some((task) => task.readingDate <= scheduledDate)) return '';
+  if (
+    tasks.some(
+      (task) =>
+        task.meterId === meterId &&
+        task.purpose === 0 &&
+        task.status !== 3 &&
+        task.readingDate <= scheduledDate,
+    )
+  )
+    return '';
+  const firstInitial = confirmed
+    .filter((task) => task.purpose === 0 && task.readingDate > scheduledDate)
+    .map((task) => task.readingDate)
+    .sort()[0];
+  return firstInitial
+    ? `Ngày ghi số theo lịch (${scheduledDate}) trước chỉ số ban đầu đã xác nhận (${firstInitial}). Chọn kỳ hoặc lịch ghi số phù hợp.`
+    : '';
+}
+
 /** Deliberately calls the Owner's existing single-room endpoints, never location-wide automation run-now. */
 function ManualBillingActions({
   location,
@@ -1238,17 +1279,17 @@ function ManualBillingActions({
   const rooms = useQuery({
     queryKey: ['manual-billing-rooms', session?.userId, location],
     queryFn: ({ signal }) =>
-      api.request<{ id: string; label: string }[]>(`/api/v1/capture/locations/${location}/rooms`, {
-        signal,
-      }),
+      api.request<{ id: string; label: string; status?: string }[]>(
+        `/api/v1/capture/locations/${location}/rooms`,
+        {
+          signal,
+        },
+      ),
   });
   const meters = useQuery({
     queryKey: ['manual-billing-meters', session?.userId, location],
     queryFn: ({ signal }) =>
-      api.request<{ id: string; label: string; parentId: string }[]>(
-        `/api/v1/capture/locations/${location}/meters`,
-        { signal },
-      ),
+      api.request<ManualMeterOption[]>(`/api/v1/capture/locations/${location}/meters`, { signal }),
   });
   const tasks = useQuery({
     queryKey: ['manual-billing-tasks', session?.userId, room],
@@ -1277,9 +1318,13 @@ function ManualBillingActions({
       api.list(1, signal, room, { locationId: location, billingPeriod: period }),
   });
   const visibleMeters = meters.data?.filter((item) => item.parentId === room) ?? [];
-  const meterBelongsToRoom = visibleMeters.some((item) => item.id === meter);
+  const selectedMeter = visibleMeters.find((item) => item.id === meter);
+  const meterBelongsToRoom = !!selectedMeter;
   const invoice = invoices.data?.items.find(
-    (item) => item.roomId === room && item.billingPeriod === period,
+    (item) =>
+      item.roomId === room &&
+      item.billingPeriod === period &&
+      (!item.type || item.type === 'PERIODIC'),
   );
   const draft = invoice?.status === 'Draft' ? invoice : undefined;
   const alreadyInitial =
@@ -1296,6 +1341,21 @@ function ManualBillingActions({
     preview?.phases.find((phase) => phase.phase === 'Meter')?.scheduledDate ?? '';
   const meterDateReached =
     !!scheduledMeterDate && !!businessDate && businessDate >= scheduledMeterDate;
+  const scheduleIssue = meterScheduleIssue(selectedMeter, scheduledMeterDate);
+  const periodicIssue =
+    scheduleIssue ||
+    (!selectedMeter?.installedOn
+      ? periodicBaselineIssue(tasks.data ?? [], meter, scheduledMeterDate)
+      : '');
+  const hasFinalReading =
+    rooms.data?.find((item) => item.id === room)?.status === 'Available' &&
+    tasks.data?.some(
+      (task) =>
+        task.purpose === 2 &&
+        task.status === 2 &&
+        !!task.confirmedReadingId &&
+        task.readingDate.slice(0, 7) === period.slice(0, 7),
+    );
   const scheduledDraftDate =
     preview?.phases.find((phase) => phase.phase === 'Draft')?.scheduledDate ?? '';
   const draftDateReached = !scheduledDraftDate || businessDate >= scheduledDraftDate;
@@ -1305,6 +1365,7 @@ function ManualBillingActions({
     meterBelongsToRoom &&
     meterDateReached &&
     tasks.isSuccess &&
+    !scheduleIssue &&
     !alreadyInitial;
   const periodicReady =
     allowed &&
@@ -1312,8 +1373,13 @@ function ManualBillingActions({
     meterBelongsToRoom &&
     meterDateReached &&
     tasks.isSuccess &&
+    !periodicIssue &&
     !alreadyPeriodic;
-  const draftReady = allowed && !!room && invoices.isSuccess && (!!invoice || draftDateReached);
+  const draftReady =
+    allowed &&
+    !!room &&
+    invoices.isSuccess &&
+    (draft ? draft.version > 0 : !invoice && draftDateReached);
   const finalReady =
     allowed && !!room && !!draft && draft.version > 0 && draft.missingInputs.length === 0;
 
@@ -1336,13 +1402,22 @@ function ManualBillingActions({
         // Refresh the scoped meter and task lists before writing; never create a
         // task for a meter that has moved out of the currently selected room.
         const [latest, latestMeters] = await Promise.all([tasks.refetch(), meters.refetch()]);
-        if (
-          !latestMeters.isSuccess ||
-          !latestMeters.data?.some((item) => item.id === meter && item.parentId === room)
-        ) {
+        const latestMeter = latestMeters.data?.find(
+          (item) => item.id === meter && item.parentId === room,
+        );
+        if (!latestMeters.isSuccess || !latestMeter) {
           setError(
             'Đồng hồ của phòng đã thay đổi. Tải lại phòng và đồng hồ trước khi giao nhiệm vụ.',
           );
+          return;
+        }
+        const latestIssue =
+          meterScheduleIssue(latestMeter, scheduledMeterDate) ||
+          (operation === 'periodic' && !latestMeter.installedOn
+            ? periodicBaselineIssue(latest.data ?? [], meter, scheduledMeterDate)
+            : '');
+        if (latestIssue) {
+          setError(latestIssue);
           return;
         }
         if (
@@ -1386,9 +1461,28 @@ function ManualBillingActions({
           return;
         }
         const existing = latestInvoice.data?.items.find(
-          (item) => item.roomId === room && item.billingPeriod === period,
+          (item) =>
+            item.roomId === room &&
+            item.billingPeriod === period &&
+            (!item.type || item.type === 'PERIODIC'),
         );
-        if (existing) {
+        if (draft) {
+          if (
+            !existing ||
+            existing.id !== draft.id ||
+            existing.status !== 'Draft' ||
+            existing.version !== draft.version
+          ) {
+            setError('Bản nháp đã thay đổi. Kiểm tra phiên bản mới trước khi tính lại.');
+            return;
+          }
+          const updated = await api.refresh(existing.id, existing.version);
+          setFeedback(
+            updated.missingInputs.length
+              ? 'Đã tính lại bản nháp. Vẫn còn dữ liệu cần bổ sung hoặc đối chiếu trước khi phát hành.'
+              : 'Đã tính lại bản nháp. Kiểm tra số tiền trước khi phát hành.',
+          );
+        } else if (existing) {
           setFeedback(
             existing.status === 'Draft'
               ? 'Phòng/kỳ này đã có bản nháp. Mở hóa đơn để kiểm tra.'
@@ -1476,7 +1570,7 @@ function ManualBillingActions({
               ? `Chưa đến ngày giao việc ${scheduledMeterDate}.`
               : !tasks.isSuccess
                 ? 'Chưa kiểm tra được danh sách nhiệm vụ của phòng.'
-                : '';
+                : scheduleIssue;
   const draftReason = !allowed
     ? 'Máy chủ chưa cho phép chạy thử thủ công.'
     : !room
@@ -1485,7 +1579,11 @@ function ManualBillingActions({
         ? 'Đang kiểm tra hóa đơn của phòng/kỳ hoặc dữ liệu chưa tải được.'
         : !invoice && !draftDateReached
           ? `Chưa đến ngày lập nháp ${scheduledDraftDate}.`
-          : '';
+          : invoice && !draft
+            ? 'Hóa đơn kỳ này đã phát hành.'
+            : draft && draft.version <= 0
+              ? 'Bản nháp chưa có phiên bản hợp lệ.'
+              : '';
   const finalReason = !allowed
     ? 'Máy chủ chưa cho phép chạy thử thủ công.'
     : !room
@@ -1659,7 +1757,12 @@ function ManualBillingActions({
             disabled={!room}
             fullWidth
             sx={{ maxWidth: 460 }}
-            onChange={(e) => setMeter(e.target.value)}
+            onChange={(e) => {
+              setMeter(e.target.value);
+              setError('');
+              setFeedback('');
+              setTaskId('');
+            }}
           >
             <MenuItem value="">Chọn đồng hồ</MenuItem>
             {visibleMeters.map((item) => (
@@ -1701,7 +1804,7 @@ function ManualBillingActions({
             'Giao việc chụp và xác nhận chỉ số cho kỳ kiểm thử.',
             periodicReady,
             alreadyPeriodic,
-            alreadyPeriodic ? 'Đã có nhiệm vụ vận hành cho kỳ này.' : meterReason,
+            alreadyPeriodic ? 'Đã có nhiệm vụ vận hành cho kỳ này.' : meterReason || periodicIssue,
             <Button
               variant="outlined"
               disabled={!periodicReady || busy}
@@ -1716,14 +1819,29 @@ function ManualBillingActions({
             ) : null,
           )}
         </Stack>
+        {hasFinalReading && (
+          <Alert
+            severity="info"
+            action={
+              <Button component={Link} to="/handovers" size="small">
+                Xem trả phòng
+              </Button>
+            }
+          >
+            Phòng hiện đang trống và đã có chỉ số chốt trong kỳ. Kiểm tra hồ sơ quyết toán trả
+            phòng; không dùng chỉ số chốt thay cho chỉ số định kỳ.
+          </Alert>
+        )}
         <Typography variant="subtitle2" sx={{ fontWeight: 750, mt: 1 }}>
           Hóa đơn · chỉ dùng phòng và kỳ đã chọn
         </Typography>
         <Stack spacing={1}>
           {step(
             3,
-            'Tạo hóa đơn nháp',
-            'Máy chủ xác định hợp đồng đại diện; không cần chọn đồng hồ.',
+            draft ? 'Cập nhật hóa đơn nháp' : 'Tạo hóa đơn nháp',
+            draft
+              ? 'Tính lại bản nháp hiện có bằng dữ liệu đã xác nhận trên máy chủ.'
+              : 'Máy chủ xác định hợp đồng đại diện; không cần chọn đồng hồ.',
             draftReady,
             !!invoice,
             draftReason,
@@ -1732,7 +1850,7 @@ function ManualBillingActions({
               disabled={!draftReady || busy}
               onClick={() => void execute('draft')}
             >
-              Tạo hóa đơn nháp
+              {draft ? 'Tính lại hóa đơn nháp' : 'Tạo hóa đơn nháp'}
             </Button>,
             invoice ? (
               <Button
@@ -1902,6 +2020,9 @@ function AutomationDrafts({ location, period }: { location: string; period: stri
       await Promise.all([
         cache.invalidateQueries({ queryKey: ['invoices', session?.userId] }),
         cache.invalidateQueries({ queryKey: ['invoice', session?.userId, id] }),
+        cache.invalidateQueries({
+          queryKey: ['manual-billing-invoice', session?.userId, updated.roomId, period],
+        }),
       ]);
     } catch (e) {
       setFeedback({ room, error: invoiceError(e) });

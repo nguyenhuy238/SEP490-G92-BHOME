@@ -10,6 +10,7 @@ const state = vi.hoisted(() => ({
   request: vi.fn(),
   notify: vi.fn(),
   report: null as null | Record<string, unknown>,
+  draftOverride: null as null | Record<string, unknown>,
 }));
 vi.mock('../../../../../../packages/client-core/src/auth', () => ({
   useAuth: () => ({ session: { userId: 'owner', roles: ['Owner'] } }),
@@ -101,11 +102,29 @@ beforeEach(() => {
   state.request.mockReset();
   state.notify.mockReset();
   state.report = null;
+  state.draftOverride = null;
   state.request.mockImplementation(
     async (route: string, init?: { method?: string; body?: string }) => {
       if (route === path && !init?.method) {
         if (!state.report) throw new ApiError(404);
         return state.report;
+      }
+      if (route === `/api/v1/operational-tasks/${task.id}/location-asset-inventory`) {
+        return (
+          state.draftOverride ?? {
+            version: task.version,
+            status: 'PendingVerification',
+            totalCount: 3,
+            checkedCount: 3,
+            pendingOwnerRooms: [],
+            pendingOwnerCommonAssets: false,
+            items: [
+              { checked: true, inherited: false },
+              { checked: true, inherited: true },
+              { checked: true, inherited: true },
+            ],
+          }
+        );
       }
       if (route === path + '/approve') {
         state.report = { ...approvedReport };
@@ -145,8 +164,10 @@ it('requires review, handwritten ink and consent before signing the exact report
     </QueryClientProvider>,
   );
   const approve = await screen.findByRole('button', { name: 'Duyệt và lập biên bản' });
+  expect(await screen.findByText('Duyệt kiểm kê và lập biên bản')).toBeVisible();
+  expect(screen.queryByText('Đã kiểm kê 3/3 mục')).toBeNull();
   expect(approve).toBeDisabled();
-  fireEvent.click(screen.getByLabelText(/Tôi đã đối chiếu đầy đủ tài sản/));
+  fireEvent.click(screen.getByLabelText(/Tôi đã xem kết quả kiểm kê/));
   expect(approve).toBeEnabled();
   fireEvent.click(approve);
   await waitFor(() =>
@@ -216,7 +237,8 @@ it('requires review, handwritten ink and consent before signing the exact report
       }),
     ),
   );
-  expect(await screen.findByText(/Staff cần đọc và ký xác nhận/)).toBeTruthy();
+  expect(await screen.findByText('Staff: Chưa ký')).toBeTruthy();
+  expect(screen.getByText('Chờ Staff ký')).toBeTruthy();
   expect(state.notify).toHaveBeenCalledWith('Owner đã ký. Đang chờ Staff xác nhận cùng phiên bản.');
 });
 
@@ -234,7 +256,7 @@ it('clears handwritten ink and consent if the report revision changes', async ()
   expect(sign).toBeEnabled();
 
   state.report = { ...approvedReport, revision: 4, snapshotSha256: 'C'.repeat(64) };
-  fireEvent.click(screen.getByRole('button', { name: 'Tải lại biên bản' }));
+  fireEvent.click(screen.getByRole('button', { name: 'Làm mới' }));
   await screen.findByText('Biên bản phiên bản 4');
   const newRevisionSign = screen.getByRole('button', { name: 'Owner ký xác nhận' });
   expect(newRevisionSign).toBeDisabled();
@@ -256,13 +278,26 @@ it('requests rework only for selected checklist items with a meaningful explanat
       />
     </QueryClientProvider>,
   );
-  const rework = await screen.findByRole('button', { name: 'Gửi yêu cầu kiểm tra lại' });
+  const expand = await screen.findByRole('button', {
+    name: 'Yêu cầu kiểm tra lại (1 mục đã chọn)',
+  });
+  expect(expand).toHaveAttribute('aria-expanded', 'false');
+  expect(screen.queryByLabelText('Nội dung cần Staff kiểm tra lại')).toBeNull();
+  fireEvent.click(expand);
+  expect(screen.getByLabelText('Nội dung cần Staff kiểm tra lại')).toBeTruthy();
+  const rework = screen.getByRole('button', { name: 'Gửi yêu cầu kiểm tra lại' });
   expect(rework).toBeDisabled();
   fireEvent.change(screen.getByLabelText('Nội dung cần Staff kiểm tra lại'), {
     target: { value: 'Giường phòng 101 cần kiểm tra lại số lượng thực tế.' },
   });
   expect(rework).toBeEnabled();
-  fireEvent.click(rework);
+  fireEvent.click(screen.getByRole('button', { name: 'Đóng yêu cầu kiểm tra lại' }));
+  expect(screen.queryByLabelText('Nội dung cần Staff kiểm tra lại')).toBeNull();
+  fireEvent.click(screen.getByRole('button', { name: 'Yêu cầu kiểm tra lại (1 mục đã chọn)' }));
+  expect(screen.getByLabelText('Nội dung cần Staff kiểm tra lại')).toHaveValue(
+    'Giường phòng 101 cần kiểm tra lại số lượng thực tế.',
+  );
+  fireEvent.click(screen.getByRole('button', { name: 'Gửi yêu cầu kiểm tra lại' }));
   await waitFor(() =>
     expect(state.request).toHaveBeenCalledWith(
       path + '/rework',
@@ -289,7 +324,7 @@ it('allows a new Owner approval after the previous handover report became supers
   );
   const approve = await screen.findByRole('button', { name: 'Duyệt và lập biên bản' });
   expect(approve).toBeDisabled();
-  fireEvent.click(screen.getByLabelText(/Tôi đã đối chiếu đầy đủ tài sản/));
+  fireEvent.click(screen.getByLabelText(/Tôi đã xem kết quả kiểm kê/));
   fireEvent.click(approve);
   await waitFor(() =>
     expect(state.request).toHaveBeenCalledWith(
@@ -299,4 +334,52 @@ it('allows a new Owner approval after the previous handover report became supers
       }),
     ),
   );
+});
+
+it('keeps the approval guard when the submitted checklist revision is stale', async () => {
+  state.draftOverride = {
+    version: 8,
+    status: 'PendingVerification',
+    totalCount: 1,
+    checkedCount: 1,
+    pendingOwnerRooms: [],
+    pendingOwnerCommonAssets: false,
+    items: [{ checked: true, inherited: false }],
+  };
+  const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+  render(
+    <QueryClientProvider client={client}>
+      <LocationAssetHandoverPanel task={task} notify={state.notify} />
+    </QueryClientProvider>,
+  );
+  const approve = await screen.findByRole('button', { name: 'Duyệt và lập biên bản' });
+  expect(await screen.findByText(/Chưa xác minh được phạm vi và phiên bản kiểm kê/)).toBeVisible();
+  fireEvent.click(screen.getByLabelText(/Tôi đã xem kết quả kiểm kê/));
+  expect(approve).toBeDisabled();
+  expect(state.request).not.toHaveBeenCalledWith(path + '/approve', expect.anything());
+});
+
+it('shows a signed report with exactly one status, one refresh and signer details', async () => {
+  state.report = {
+    ...approvedReport,
+    status: 'Completed',
+    ownerSignature: { signedAt: '2026-11-23T08:00:00Z' },
+    staffSignature: { signedAt: '2026-11-23T08:10:00Z' },
+    exceptionDecision: 'Đã đồng ý theo dõi tài sản nứt.',
+  };
+  const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+  render(
+    <QueryClientProvider client={client}>
+      <LocationAssetHandoverPanel task={{ ...task, status: 'Completed' }} notify={state.notify} />
+    </QueryClientProvider>,
+  );
+  expect(await screen.findByText('Biên bản phiên bản 3')).toBeVisible();
+  expect(screen.getAllByRole('button', { name: 'Làm mới' })).toHaveLength(1);
+  expect(screen.getByText('Đã hoàn tất')).toBeVisible();
+  expect(screen.getByText(/Owner: Đã ký/)).toBeVisible();
+  expect(screen.getByText(/Staff: Đã ký/)).toBeVisible();
+  expect(screen.getByText(/Quyết định ngoại lệ: Đã đồng ý theo dõi tài sản nứt/)).toBeVisible();
+  expect(screen.queryByText('Tài liệu bàn giao')).toBeNull();
+  expect(screen.queryByText('1 kiểm kê trực tiếp')).toBeNull();
+  expect(screen.queryByRole('button', { name: 'Owner ký xác nhận' })).toBeNull();
 });

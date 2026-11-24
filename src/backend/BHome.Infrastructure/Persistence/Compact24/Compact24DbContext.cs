@@ -5,14 +5,14 @@ namespace BHome.Infrastructure.Persistence.Compact24;
 // Native Identity rows and domain query projections over the reviewed 24-table schema.
 // Domain writes use the typed Compact24 writer. Never infer schema with EnsureCreated/Migrate.
 public sealed partial class Compact24DbContext(DbContextOptions<Compact24DbContext> options,
-    Compact24Compatibility? compatibility = null) : BHomePersistenceContext(options)
+    Compact24Compatibility? compatibility = null, TimeProvider? clock = null) : BHomePersistenceContext(options)
 {
     public const string MigrationHistorySchema = "bhome_meta";
 
     protected override void OnConfiguring(DbContextOptionsBuilder optionsBuilder) =>
         optionsBuilder.UseNpgsql(options => options.MigrationsHistoryTable("__EFMigrationsHistory", MigrationHistorySchema));
 
-    public override BHomePersistenceContext CreateIndependentContext() => new Compact24DbContext(options, compatibility);
+    public override BHomePersistenceContext CreateIndependentContext() => new Compact24DbContext(options, compatibility, clock);
     public override async Task<bool> IsSchemaReadyAsync(CancellationToken token = default) =>
         await Database.CanConnectAsync(token) && await Compact24Schema.VerifyAsync(this, token);
     internal DbSet<CompactRefreshRow> Refresh => Set<CompactRefreshRow>();

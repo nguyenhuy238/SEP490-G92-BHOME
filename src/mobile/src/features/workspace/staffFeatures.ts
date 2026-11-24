@@ -51,7 +51,7 @@ export const staffFeatureGroups: { title: string; items: StaffFeature[] }[] = [
         title: 'Bàn giao / Trả phòng',
         detail: 'Kiểm tra và xác nhận',
         icon: 'key-outline',
-        screen: 'move-in',
+        screen: 'staff-handovers',
       },
     ],
   },
@@ -80,6 +80,11 @@ export const staffFeatureGroups: { title: string; items: StaffFeature[] }[] = [
 ];
 
 const allFeatures = staffFeatureGroups.flatMap((group) => group.items);
-export const frequentStaffFeatures = ['work-orders', 'meter-reading', 'move-in', 'staff-incidents']
+export const frequentStaffFeatures = [
+  'work-orders',
+  'meter-reading',
+  'staff-handovers',
+  'staff-incidents',
+]
   .map((screen) => allFeatures.find((feature) => feature.screen === screen))
   .filter((feature): feature is StaffFeature => !!feature);
