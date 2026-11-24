@@ -89,15 +89,13 @@ function renderOverview(task: OwnerTask = baseTask) {
   return onOpenTab;
 }
 
-it('shows the five completed steps, factual KPIs and signed PDF action without a pending-task prompt', async () => {
+it('keeps five completed green steps and signed PDF action without duplicated KPIs', async () => {
   const onOpenTab = renderOverview();
   expect(await screen.findByText('Hai bên đã hoàn tất bàn giao')).toBeVisible();
-  expect(screen.getByText('26/26')).toBeVisible();
-  expect(screen.getByText('2/2')).toBeVisible();
-  expect(screen.queryByText('Phiên bản 1')).not.toBeInTheDocument();
-  expect(screen.getByTestId('handover-kpi-assets')).toHaveAttribute('data-tone', 'success');
-  expect(screen.getByTestId('handover-kpi-notes')).toHaveAttribute('data-tone', 'warning');
-  expect(screen.getByTestId('handover-kpi-signatures')).toHaveAttribute('data-tone', 'success');
+  expect(screen.queryByText('Kết quả bàn giao')).not.toBeInTheDocument();
+  expect(screen.queryByText('Thông tin cần chú ý')).not.toBeInTheDocument();
+  expect(screen.queryByTestId('handover-kpi-assets')).not.toBeInTheDocument();
+  expect(screen.queryByText('2 mục có ghi chú')).not.toBeInTheDocument();
   expect(screen.getByText('Bước 5 · Hoàn tất')).toBeVisible();
   for (let step = 1; step <= 5; step += 1) {
     expect(screen.getByTestId(`handover-step-${step}`)).toHaveAttribute('data-state', 'done');
@@ -109,17 +107,11 @@ it('shows the five completed steps, factual KPIs and signed PDF action without a
     window.getComputedStyle(screen.getByTestId('handover-next-action')).backgroundColor,
   ).not.toBe('rgba(0, 0, 0, 0)');
   expect(screen.queryByText(/Việc cần xử lý/)).not.toBeInTheDocument();
-  expect(screen.getByText('2 mục có ghi chú')).toBeVisible();
-  expect(screen.getByTestId('handover-attention-notes')).toHaveAttribute(
-    'data-severity',
-    'warning',
-  );
-  expect(screen.queryByTestId('handover-attention-incidents')).not.toBeInTheDocument();
   fireEvent.click(screen.getByRole('button', { name: 'Xem biên bản đã ký' }));
   expect(onOpenTab).toHaveBeenCalledWith('handover');
 });
 
-it('highlights Owner verification and notes without interpreting all notes as missing assets', async () => {
+it('highlights Owner verification without duplicating progress or note counters', async () => {
   mocks.report = null;
   mocks.inventory = {
     ...inventory,
@@ -145,9 +137,8 @@ it('highlights Owner verification and notes without interpreting all notes as mi
   expect(window.getComputedStyle(screen.getByTestId('handover-step-1')).backgroundColor).not.toBe(
     window.getComputedStyle(screen.getByTestId('handover-step-4')).backgroundColor,
   );
-  expect(screen.getByText('24/26')).toBeVisible();
-  expect(screen.getByTestId('handover-kpi-assets')).toHaveAttribute('data-tone', 'warning');
-  expect(screen.getByText('2 mục có ghi chú')).toBeVisible();
+  expect(screen.queryByText('24/26')).not.toBeInTheDocument();
+  expect(screen.queryByText('2 mục có ghi chú')).not.toBeInTheDocument();
   expect(screen.queryByText(/mục thiếu, hỏng hoặc không thể kiểm tra/)).not.toBeInTheDocument();
   fireEvent.click(screen.getByRole('button', { name: 'Đối soát kiểm kê' }));
   expect(onOpenTab).toHaveBeenCalledWith('inventory');
@@ -182,10 +173,70 @@ it('does not mark Owner scope complete when the submitted checklist still differ
     removedCount: 30,
   };
   const onOpenTab = renderOverview({ ...baseTask, status: 'InProgress' });
-  expect(await screen.findByText('Owner cần đối chiếu và đồng bộ checklist')).toBeVisible();
+  expect(await screen.findByText('Phạm vi Owner và checklist chưa khớp')).toBeVisible();
   expect(screen.getByText('Bước 1 · Đang xử lý')).toBeVisible();
-  fireEvent.click(screen.getByRole('button', { name: 'Đối chiếu checklist' }));
+  expect(screen.getByTestId('handover-step-1')).toHaveAttribute('data-state', 'current');
+  expect(screen.getByTestId('handover-step-2')).toHaveAttribute('data-state', 'pending');
+  fireEvent.click(screen.getByRole('button', { name: 'Xem kiểm kê tài sản' }));
   expect(onOpenTab).toHaveBeenCalledWith('inventory');
+});
+
+it('blocks the first milestone for a Staff conflict even when item counts match', async () => {
+  mocks.report = null;
+  mocks.reconciliation = {
+    currentCount: 26,
+    ownerConfirmedCount: 26,
+    addedCount: 0,
+    removedCount: 0,
+    blockedReason: 'location_asset_inventory_staff_work_conflict',
+  };
+  const onOpenTab = renderOverview({ ...baseTask, status: 'InProgress' });
+  expect(await screen.findByText('Phạm vi Owner xung đột với kết quả Staff')).toBeVisible();
+  expect(screen.getByTestId('handover-step-1')).toHaveAttribute('data-state', 'current');
+  expect(screen.getByTestId('handover-step-2')).toHaveAttribute('data-state', 'pending');
+  expect(screen.queryByTestId('handover-attention-scope')).not.toBeInTheDocument();
+  expect(screen.queryByLabelText('Bàn giao đã hoàn tất')).not.toBeInTheDocument();
+  fireEvent.click(screen.getByRole('button', { name: 'Xem kết quả kiểm kê' }));
+  expect(onOpenTab).toHaveBeenCalledWith('inventory');
+});
+
+it('shows a natural Owner confirmation prompt when only common-area assets are pending', async () => {
+  mocks.report = null;
+  mocks.inventory = {
+    ...inventory,
+    pendingOwnerRooms: [],
+    pendingOwnerCommonAssets: true,
+  };
+  renderOverview({ ...baseTask, status: 'InProgress' });
+  expect(await screen.findByText('Owner cần xác nhận phạm vi tài sản')).toBeVisible();
+  expect(screen.getByText(/Còn tài sản khu vực chung chưa xác nhận/)).toBeVisible();
+  expect(screen.queryByText(/Còn 0 phòng/)).not.toBeInTheDocument();
+  expect(screen.getByRole('link', { name: 'Mở kiểm kê của Owner' })).toHaveAttribute(
+    'href',
+    '/locations/location-1/assets?tab=review',
+  );
+});
+
+it('keeps a historically signed and completed handover green after the live Owner baseline changes', async () => {
+  mocks.inventory = {
+    ...inventory,
+    pendingOwnerRooms: ['P.909'],
+    pendingOwnerCommonAssets: true,
+  };
+  mocks.reconciliation = {
+    currentCount: 26,
+    ownerConfirmedCount: 27,
+    addedCount: 1,
+    removedCount: 0,
+    blockedReason: 'location_asset_inventory_reconciliation_locked',
+  };
+  renderOverview();
+  expect(await screen.findByText('Hai bên đã hoàn tất bàn giao')).toBeVisible();
+  expect(screen.getByTestId('handover-next-action')).toHaveAttribute('data-state', 'completed');
+  for (let step = 1; step <= 5; step += 1) {
+    expect(screen.getByTestId(`handover-step-${step}`)).toHaveAttribute('data-state', 'done');
+  }
+  expect(screen.queryByText('Owner cần xác nhận phạm vi tài sản')).not.toBeInTheDocument();
 });
 
 it('distinguishes Owner signing from waiting for the Staff signature', async () => {
@@ -193,7 +244,7 @@ it('distinguishes Owner signing from waiting for the Staff signature', async () 
   const onOpenTab = renderOverview({ ...baseTask, status: 'PendingVerification' });
   expect(await screen.findByText('Đang chờ Staff ký nhận')).toBeVisible();
   expect(screen.getByText('Bước 5 · Đang xử lý')).toBeVisible();
-  expect(screen.getByText('1/2')).toBeVisible();
+  expect(screen.queryByText('1/2')).not.toBeInTheDocument();
   fireEvent.click(screen.getByRole('button', { name: 'Xem biên bản chờ ký' }));
   expect(onOpenTab).toHaveBeenCalledWith('handover');
 });
@@ -205,10 +256,10 @@ it('does not claim completion when task is completed but the signed report is un
   expect(screen.queryByText('Hai bên đã hoàn tất bàn giao')).not.toBeInTheDocument();
   expect(screen.getByTestId('handover-next-action')).toHaveAttribute('data-state', 'in-progress');
   expect(screen.queryByLabelText('Bàn giao đã hoàn tất')).not.toBeInTheDocument();
-  expect(screen.getAllByText('—')).toHaveLength(1);
+  expect(screen.queryByText('—')).not.toBeInTheDocument();
 });
 
-it('shows linked incidents in red and notes in yellow without hiding either context', async () => {
+it('keeps signed handover compact when historical checklist contains incidents and notes', async () => {
   mocks.inventory = {
     ...inventory,
     items: [
@@ -218,17 +269,7 @@ it('shows linked incidents in red and notes in yellow without hiding either cont
   };
   renderOverview();
   expect(await screen.findByText('Hai bên đã hoàn tất bàn giao')).toBeVisible();
-  expect(screen.getByText('1 mục liên quan sự cố')).toBeVisible();
-  expect(screen.getByTestId('handover-attention-incidents')).toHaveAttribute(
-    'data-severity',
-    'error',
-  );
-  expect(screen.getByTestId('handover-attention-notes')).toHaveAttribute(
-    'data-severity',
-    'warning',
-  );
-  expect(screen.getByTestId('handover-attention-exceptions')).toHaveAttribute(
-    'data-severity',
-    'error',
-  );
+  expect(screen.queryByText('1 mục liên quan sự cố')).not.toBeInTheDocument();
+  expect(screen.queryByText('Thông tin cần chú ý')).not.toBeInTheDocument();
+  expect(screen.getByTestId('handover-next-action')).toHaveAttribute('data-state', 'completed');
 });

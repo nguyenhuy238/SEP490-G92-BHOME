@@ -999,6 +999,7 @@ it('uses server list, pagination and role navigation instead of preview work ord
   const fetcher = vi.fn<typeof fetch>().mockImplementation(async (url) => {
     if (String(url).endsWith('/locations/assigned-to-me'))
       return json([{ id, name: 'Cơ sở kiểm thử' }]);
+    if (String(url).includes('/work-orders?')) return json(page([]));
     return json(
       page([{ ...task, title: String(url).includes('page=2') ? 'Trang hai' : task.title }], 21),
     );
@@ -1023,6 +1024,8 @@ it('does not show stale records after a forbidden reload or failed filter', asyn
   const fetcher = vi.fn<typeof fetch>().mockImplementation(async (url) => {
     if (String(url).endsWith('/locations/assigned-to-me'))
       return json([{ id, name: 'Cơ sở kiểm thử' }]);
+    if (String(url).includes('/work-orders?')) return json(page([]));
+    if (!String(url).includes('/operational-tasks?')) return json({});
     listRequests += 1;
     return listRequests === 1 ? json(page([task])) : json({}, 403);
   });
@@ -1038,8 +1041,10 @@ it('shows compact previews, optional result/evidence and the server overdue flag
   const result = 'Đã kiểm tra, chờ Owner đối chiếu';
   const fetcher = vi
     .fn<typeof fetch>()
-    .mockResolvedValue(
-      json(page([{ ...task, isOverdue: true, dueAt: '2026-11-03T09:21:00Z', result }])),
+    .mockImplementation(async (url) =>
+      String(url).includes('/work-orders?')
+        ? json(page([]))
+        : json(page([{ ...task, isOverdue: true, dueAt: '2026-11-03T09:21:00Z', result }])),
     );
   setApi(fetcher);
   render(<OperationalTasksScreen />);
@@ -1054,7 +1059,11 @@ it('shows compact previews, optional result/evidence and the server overdue flag
 it('hides absent result and optional evidence metadata and routes meter tasks without a mutation', async () => {
   const fetcher = vi
     .fn<typeof fetch>()
-    .mockResolvedValue(json(page([{ ...task, kind: 'MeterReading', evidenceRequired: false }])));
+    .mockImplementation(async (url) =>
+      String(url).includes('/work-orders?')
+        ? json(page([]))
+        : json(page([{ ...task, kind: 'MeterReading', evidenceRequired: false }])),
+    );
   setApi(fetcher);
   render(<OperationalTasksScreen />);
   await screen.findByText(task.title);
@@ -1067,11 +1076,12 @@ it('hides absent result and optional evidence metadata and routes meter tasks wi
 it('shows loading then an empty list without fabricating summary counts', async () => {
   let finish!: (response: Response) => void;
   setApi(
-    vi.fn<typeof fetch>().mockImplementation(
-      () =>
-        new Promise((resolve) => {
-          finish = resolve;
-        }),
+    vi.fn<typeof fetch>().mockImplementation((url) =>
+      String(url).includes('/work-orders?')
+        ? Promise.resolve(json(page([])))
+        : new Promise((resolve) => {
+            finish = resolve;
+          }),
     ),
   );
   render(<OperationalTasksScreen />);
@@ -1086,6 +1096,7 @@ it('filters on the server, resets pagination and clears the filter from an empty
   const fetcher = vi.fn<typeof fetch>().mockImplementation(async (url) => {
     if (String(url).endsWith('/locations/assigned-to-me'))
       return json([{ id, name: 'Cơ sở kiểm thử' }]);
+    if (String(url).includes('/work-orders?')) return json(page([]));
     return json(String(url).includes('status=Assigned') ? page([]) : page([task], 21));
   });
   const listCalls = () =>
@@ -1113,6 +1124,8 @@ it('keeps loaded tasks during refresh, reports a transient failure and permits r
   const fetcher = vi.fn<typeof fetch>().mockImplementation((url) => {
     if (String(url).endsWith('/locations/assigned-to-me'))
       return Promise.resolve(json([{ id, name: 'Cơ sở kiểm thử' }]));
+    if (String(url).includes('/work-orders?')) return Promise.resolve(json(page([])));
+    if (!String(url).includes('/operational-tasks?')) return Promise.resolve(json({}));
     listRequests += 1;
     if (listRequests === 1) return Promise.resolve(json(page([task])));
     if (listRequests === 2)
@@ -1240,6 +1253,7 @@ it('starts an Assigned Staff task using the returned TaskView and hides upload u
   );
   await screen.findByText('Đang thực hiện');
   expect(screen.getByRole('button', { name: 'Cập nhật công việc' })).toBeTruthy();
+  fireEvent.click(screen.getByRole('tab', { name: 'Minh chứng' }));
   expect(screen.getByRole('button', { name: 'Thêm ảnh minh chứng' })).toBeTruthy();
   const post = fetcher.mock.calls.find(([, init]) => init?.method === 'POST')!;
   expect(String(post[0])).toContain('/start');
@@ -1278,8 +1292,10 @@ it.each([
     fireEvent.click(screen.getByRole('button', { name: label }));
     fireEvent.change(screen.getByLabelText(field), { target: { value: note } });
     fireEvent.click(screen.getByRole('button', { name: button }));
+    fireEvent.click(screen.getByRole('tab', { name: 'Lịch sử' }));
     await screen.findByText(note);
     expect(screen.getByText('Đang thực hiện')).toBeTruthy();
+    fireEvent.click(screen.getByRole('tab', { name: 'Tổng quan' }));
     expect(screen.getByText('Kết quả trước đó')).toBeTruthy();
     const post = fetcher.mock.calls.find(([, init]) => init?.method === 'POST')!;
     expect(String(post[0])).toContain('/' + action);
@@ -1363,6 +1379,7 @@ it('uploads raw bytes, reads the incremented version and attaches the returned I
   setApi(fetcher);
   render(<OperationalTaskDetail />);
   await screen.findByText(task.title);
+  fireEvent.click(screen.getByRole('tab', { name: 'Minh chứng' }));
   fireEvent.click(screen.getByRole('button', { name: 'Thêm ảnh minh chứng' }));
   await waitFor(() => expect(getToastSnapshot().toast?.message).toBe('Đã tải ảnh minh chứng.'));
   const put = fetcher.mock.calls.find(([, init]) => init?.method === 'PUT')!;
@@ -1374,6 +1391,7 @@ it('uploads raw bytes, reads the incremented version and attaches the returned I
     target: { value: 'Đã hoàn thành' },
   });
   fireEvent.click(screen.getByRole('button', { name: 'Gửi Owner kiểm tra' }));
+  fireEvent.click(screen.getByRole('tab', { name: 'Tổng quan' }));
   await screen.findByText('Đã gửi kết quả. Đang chờ Chủ trọ xác nhận.');
   const post = fetcher.mock.calls.find(([, init]) => init?.method === 'POST')!;
   expect(JSON.parse(post[1]!.body as string)).toEqual({
@@ -1403,6 +1421,7 @@ it('does not upload twice when refreshing TaskView fails after upload success', 
   setApi(fetcher);
   render(<OperationalTaskDetail />);
   await screen.findByText(task.title);
+  fireEvent.click(screen.getByRole('tab', { name: 'Minh chứng' }));
   fireEvent.click(screen.getByRole('button', { name: 'Thêm ảnh minh chứng' }));
   await screen.findByRole('button', { name: 'Thử lại tải ảnh' });
   expect(screen.queryByRole('button', { name: 'Cập nhật công việc' })).toBeNull();
@@ -1479,6 +1498,7 @@ it('retries an uncertain upload with the original bytes and idempotency key', as
   setApi(fetcher);
   render(<OperationalTaskDetail />);
   await screen.findByText(task.title);
+  fireEvent.click(screen.getByRole('tab', { name: 'Minh chứng' }));
   fireEvent.click(screen.getByRole('button', { name: 'Thêm ảnh minh chứng' }));
   await screen.findByRole('button', { name: 'Thử lại tải ảnh' });
   fireEvent.click(screen.getByRole('button', { name: 'Thử lại tải ảnh' }));

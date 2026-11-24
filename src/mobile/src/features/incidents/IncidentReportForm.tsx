@@ -525,7 +525,7 @@ function ReportForm() {
       <Action
         secondary
         disabled={mutation.busy}
-        onPress={() => go(role === 'Tenant' ? 'tenant-requests' : 'staff-maintenance')}
+        onPress={() => go(role === 'Tenant' ? 'tenant-requests' : 'staff-incidents')}
       >
         Xem báo cáo đã gửi
       </Action>

@@ -136,6 +136,10 @@ internal static class LegacyPersistenceRegistration
         services.RemoveAll<IOperationsRepository>(); services.RemoveAll<OperationsService>();
         services.RemoveAll<IResidentAdministrationRepository>(); services.RemoveAll<ResidentAdministrationService>();
         services.RemoveAll<RecurringOperationsJob>();
+        // Operational work aggregates incidents, maintenance orders and tasks from
+        // Compact24 tables. It is not part of the archived source-schema host.
+        services.RemoveAll<IOperationalWorkRepository>();
+        services.RemoveAll<OperationalWorkService>();
         services.AddDbContext<BHomeDbContext>((p, o) => o.UseNpgsql(p.GetRequiredService<IOptions<DatabaseOptions>>().Value.Database));
         services.Replace(ServiceDescriptor.Scoped<BHomePersistenceContext>(p => p.GetRequiredService<BHomeDbContext>()));
         services.RemoveAll<IUserStore<ApplicationUser>>(); services.RemoveAll<IRoleStore<IdentityRole<Guid>>>();

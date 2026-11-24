@@ -87,8 +87,22 @@ vi.mock('react-native-paper', () => {
     onPress,
     disabled,
     accessibilityLabel,
-  }: C & { onPress: () => void; disabled: boolean; accessibilityLabel: string }) => (
-    <button aria-label={accessibilityLabel} disabled={disabled} onClick={onPress}>
+    accessibilityRole,
+    accessibilityState,
+  }: C & {
+    onPress: () => void;
+    disabled: boolean;
+    accessibilityLabel: string;
+    accessibilityRole?: string;
+    accessibilityState?: { selected?: boolean };
+  }) => (
+    <button
+      role={accessibilityRole ?? 'button'}
+      aria-selected={accessibilityState?.selected}
+      aria-label={accessibilityLabel}
+      disabled={disabled}
+      onClick={onPress}
+    >
       {children}
     </button>
   );
@@ -251,6 +265,7 @@ import { IncidentReportForm } from '../features/incidents/IncidentReportForm';
 import {
   IncidentDetailScreen,
   IncidentListScreen,
+  MaintenanceListScreen,
   MaintenanceDetailScreen,
 } from '../features/incidents/IncidentScreens';
 import { IncidentActionPanel, incidentActions } from '../features/incidents/IncidentActions';
@@ -408,11 +423,68 @@ it('opens a proactive work order and permits Staff actions without an Incident r
   };
   render(<MaintenanceDetailScreen />);
   expect(await screen.findByText(/Kiểm tra phòng trống tổng hợp/)).toBeTruthy();
+  fireEvent.click(screen.getByRole('tab', { name: 'Phương án' }));
   expect(await screen.findByText('Gửi phương án sửa chữa')).toBeTruthy();
   expect(
     s.request.mock.calls.some(([path]) => path === `/api/v1/work-orders/${wid}/evidence`),
   ).toBe(true);
   expect(s.request.mock.calls.some(([path]) => path.includes('/incidents/null'))).toBe(false);
+});
+it('shows each WorkOrder as a separate item in the embedded Staff work list', async () => {
+  const secondWorkId = '88888888-8888-4888-8888-888888888888';
+  s.request.mockImplementation(async (path, init) =>
+    path.startsWith('/api/v1/work-orders?')
+      ? page([
+          work,
+          {
+            ...work,
+            id: secondWorkId,
+            incidentId: null,
+            source: 'Proactive',
+            description: 'Bảo trì máy bơm',
+          },
+        ])
+      : respond(path, init),
+  );
+  render(<MaintenanceListScreen embedded />);
+  await screen.findByText('Bảo trì máy bơm');
+  expect(screen.getAllByText('Xem chi tiết lệnh sửa chữa')).toHaveLength(2);
+  expect(screen.getByText('Bảo trì chủ động')).toBeTruthy();
+  fireEvent.click(screen.getAllByText('Xem chi tiết lệnh sửa chữa')[0]!);
+  expect(s.go).toHaveBeenCalledWith('maintenance-detail', {
+    workOrderId: wid,
+    returnTo: 'work-orders',
+  });
+});
+it('loads authenticated WorkOrder thumbnails only after Staff opens the photos tab', async () => {
+  s.params = { workOrderId: wid };
+  s.request.mockImplementation(async (path, init) => {
+    if (path === `/api/v1/work-orders/${wid}/evidence`)
+      return [
+        {
+          id: eid,
+          workOrderId: wid,
+          activityId: null,
+          kind: 'Completion',
+          contentType: 'image/png',
+          length: 8,
+        },
+      ];
+    if (path === `/api/v1/work-orders/${wid}/evidence/${eid}`)
+      return new Uint8Array([137, 80, 78, 71, 13, 10, 26, 10]);
+    return respond(path, init);
+  });
+  render(<MaintenanceDetailScreen />);
+  await screen.findByText(/Khắc phục rò nước/);
+  expect(
+    s.request.mock.calls.some(([path]) => path === `/api/v1/work-orders/${wid}/evidence/${eid}`),
+  ).toBe(false);
+
+  fireEvent.click(screen.getByRole('tab', { name: 'Ảnh' }));
+  await screen.findByAltText('Ảnh minh chứng đã tải từ máy chủ');
+  expect(
+    s.request.mock.calls.some(([path]) => path === `/api/v1/work-orders/${wid}/evidence/${eid}`),
+  ).toBe(true);
 });
 afterEach(() => {
   cleanup();
@@ -641,6 +713,72 @@ it('filters real report list by backend status and retains existing invoice adju
   );
   fireEvent.click(screen.getByText('Yêu cầu điều chỉnh hóa đơn'));
   expect(s.go).toHaveBeenCalledWith('invoice', { focus: 'adjustment' });
+});
+it('keeps reports in the Staff report inbox even when no WorkOrder has been created', async () => {
+  s.role = 'Staff';
+  render(<IncidentListScreen />);
+  await screen.findByText('Ống nước bị vỡ trong phòng');
+  expect(s.request.mock.calls.some(([path]) => path.includes('/work-orders'))).toBe(false);
+});
+it.each([
+  ['Normal', 'staff-incidents'],
+  ['Emergency', 'staff-emergencies'],
+] as const)(
+  'returns a %s Staff report to its matching report list',
+  async (severity, destination) => {
+    report = { ...report, severity };
+    s.params = { incidentId: id };
+    render(<IncidentDetailScreen />);
+    await screen.findByText('Ống nước bị vỡ trong phòng');
+    fireEvent.click(screen.getByText('Về danh sách báo cáo'));
+    expect(s.go).toHaveBeenCalledWith(destination);
+  },
+);
+it('returns Staff from the submitted-report shortcut to the incident report list', async () => {
+  render(<StaffIncidentReportScreen />);
+  await screen.findByText(/Cơ sở đang làm việc:/);
+  fireEvent.click(screen.getByText('Xem báo cáo đã gửi'));
+  expect(s.go).toHaveBeenCalledWith('staff-incidents');
+});
+it('separates Staff incident content, linked WorkOrders, and history into distinct tabs', async () => {
+  s.params = { incidentId: id };
+  render(<IncidentDetailScreen />);
+  await screen.findByText('Ống nước bị vỡ trong phòng');
+  expect(screen.queryByText('Khắc phục rò nước')).toBeNull();
+
+  fireEvent.click(screen.getByRole('tab', { name: 'Công việc liên quan' }));
+  await screen.findByText('Khắc phục rò nước');
+  expect(screen.queryByText('Đã kiểm tra thực tế')).toBeNull();
+
+  fireEvent.click(screen.getByRole('tab', { name: 'Lịch sử' }));
+  await screen.findByText('Đã kiểm tra thực tế');
+  expect(screen.queryByText('Khắc phục rò nước')).toBeNull();
+});
+it('returns from a linked WorkOrder to the exact source Incident report', async () => {
+  s.params = { workOrderId: wid, returnTo: 'incident-detail', incidentId: id };
+  render(<MaintenanceDetailScreen />);
+  await screen.findByText(/Kết quả yêu cầu/);
+  fireEvent.click(screen.getByText('Về báo cáo sự cố'));
+  expect(s.go).toHaveBeenCalledWith('incident-detail', { incidentId: id });
+});
+it('opens a linked WorkOrder with its exact Incident return context', async () => {
+  s.params = { incidentId: id };
+  render(<IncidentDetailScreen />);
+  fireEvent.click(await screen.findByRole('tab', { name: 'Công việc liên quan' }));
+  await screen.findByText(/Khắc phục rò nước/);
+  fireEvent.click(screen.getByText('Xem chi tiết lệnh sửa chữa'));
+  expect(s.go).toHaveBeenCalledWith('maintenance-detail', {
+    workOrderId: wid,
+    returnTo: 'incident-detail',
+    incidentId: id,
+  });
+});
+it('returns from an embedded WorkOrder to the Staff work list', async () => {
+  s.params = { workOrderId: wid, returnTo: 'work-orders' };
+  render(<MaintenanceDetailScreen />);
+  await screen.findByText(/Kết quả yêu cầu/);
+  fireEvent.click(screen.getByText('Về danh sách công việc'));
+  expect(s.go).toHaveBeenCalledWith('work-orders');
 });
 it('shows Tenant report photos only even if an unexpected internal evidence kind is returned', async () => {
   s.role = 'Tenant';
@@ -918,6 +1056,8 @@ it('does not offer execution controls for a WorkOrder assigned to another Staff 
   work.assignedStaffId = 'other-staff';
   render(<MaintenanceDetailScreen />);
   await screen.findByText(/Khắc phục rò nước/);
+  fireEvent.click(screen.getByRole('tab', { name: 'Phương án' }));
+  expect(await screen.findByText(/Lệnh này được phân công cho nhân viên khác/)).toBeTruthy();
   expect(screen.queryByRole('button', { name: 'Gửi phương án sửa chữa' })).toBeNull();
   expect(screen.queryByRole('button', { name: 'Bắt đầu sửa chữa' })).toBeNull();
 });
@@ -947,6 +1087,7 @@ it('re-fetches WorkOrder detail after start instead of applying a local completi
     return respond(path, init);
   });
   render(<MaintenanceDetailScreen />);
+  fireEvent.click(await screen.findByRole('tab', { name: 'Phương án' }));
   await screen.findByRole('button', { name: 'Thao tác khác' });
   choose('Chọn thao tác', 'start');
   confirm();

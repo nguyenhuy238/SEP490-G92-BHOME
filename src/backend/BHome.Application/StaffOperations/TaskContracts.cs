@@ -89,6 +89,7 @@ public interface IOperationalTaskRepository
     Task<OperationalTask?> FindAsync(Guid id, CancellationToken t);
     Task<MeterTaskStatus?> MoveInMainTaskStatusAsync(Guid contractId, CancellationToken t);
     Task<LocationAssetInventorySnapshot> OwnerConfirmedInventoryAsync(OperationalTask task, CancellationToken t);
+    Task<bool> HasLocationHandoverApprovalAsync(Guid taskId, int version, CancellationToken t);
     Task<IReadOnlyList<TaskIncidentTarget>> IncidentTargetsAsync(Guid[] incidentIds, CancellationToken t);
     Task<bool> IncidentsResolvedAsync(Guid[] incidentIds, CancellationToken t);
     Task NotifyMoveInInventoryCompletedAsync(OperationalTask task, Guid actor, CancellationToken t);
