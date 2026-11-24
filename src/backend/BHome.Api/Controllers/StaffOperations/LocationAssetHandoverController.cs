@@ -9,7 +9,7 @@ namespace BHome.Api.Controllers.StaffOperations;
 [ApiController]
 [Authorize(Policy = Permissions.OperationalTasks.View)]
 [ResponseCache(NoStore = true, Location = ResponseCacheLocation.None)]
-[RequestSizeLimit(65536)]
+[RequestSizeLimit(524288)]
 [Route("api/v1/operational-tasks/{taskId:guid}/location-asset-handover")]
 public sealed class LocationAssetHandoverController(LocationAssetHandoverService service) : ControllerBase
 {
@@ -39,5 +39,18 @@ public sealed class LocationAssetHandoverController(LocationAssetHandoverService
         Response.Headers.XContentTypeOptions = "nosniff";
         Response.Headers.CacheControl = "no-store";
         return File(bytes, "application/pdf", $"ban-giao-tai-san-{taskId:N}.pdf");
+    }
+
+    [HttpGet("document/preview")]
+    public Task<LocationAssetHandoverDocumentPreview> Preview(Guid taskId, CancellationToken token) =>
+        service.DocumentPreviewAsync(taskId, token);
+
+    [HttpGet("document/pages/{page:int}")]
+    public async Task<IActionResult> Page(Guid taskId, int page, CancellationToken token)
+    {
+        var png = await service.DocumentPageAsync(taskId, page, token);
+        Response.Headers.XContentTypeOptions = "nosniff";
+        Response.Headers.CacheControl = "private, no-store";
+        return File(png, "image/png");
     }
 }

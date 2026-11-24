@@ -528,87 +528,88 @@ afterEach(() => {
   vi.restoreAllMocks();
 });
 
-it('keeps handover checklist in sync with task start, hides equipment inspection and collapses history', async () => {
+it('keeps the handover workflow ordered, refreshes checklist after start, and collapses history', async () => {
   const s = scenario('LocationAssetHandover', 'Assigned');
   render(<StaffTaskDetailScreen id={taskId} />);
 
-  await screen.findByText('Cơ sở phân công: Cơ sở Phú Thọ');
-  await screen.findByText('Chưa bắt đầu');
-  expect(screen.getByText('Đã kiểm tra 0/1 tài sản')).toBeTruthy();
-  expect(screen.queryByText('Kiểm tra thiết bị')).toBeNull();
+  await screen.findByText(/C. s. ph.n c.ng/);
+  await screen.findByText(/Ch.a b.t/);
+  await screen.findByRole('progressbar', { name: /0\/1/ });
+  expect(screen.queryByText(/Ki.m tra thi.t b./)).toBeNull();
   expect(s.equipmentReads()).toBe(0);
-  expect(screen.getAllByText('Tạo công việc')).toHaveLength(2);
-  expect(screen.queryByText('Cập nhật xác nhận tài sản')).toBeNull();
+  expect(s.requestEvents().some((event) => event.path.includes('/equipment-inspection'))).toBe(
+    false,
+  );
 
-  fireEvent.click(screen.getByRole('button', { name: 'Xem thêm hoạt động' }));
-  expect(screen.getByText('Cập nhật xác nhận tài sản')).toBeTruthy();
-  fireEvent.click(screen.getByRole('button', { name: 'Thu gọn lịch sử' }));
-  expect(screen.queryByText('Cập nhật xác nhận tài sản')).toBeNull();
+  // Handover history is collapsed initially and does not compete with the checklist.
+  expect(screen.queryByText(/T.o c.ng vi.c/)).toBeNull();
+  fireEvent.click(screen.getByRole('button', { name: /Xem l.ch s. \(4\)/ }));
+  expect(screen.getAllByText(/T.o c.ng vi.c/)).toHaveLength(2);
+  fireEvent.click(screen.getByRole('button', { name: /Thu g.n l.ch s./ }));
+  expect(screen.queryByText(/T.o c.ng vi.c/)).toBeNull();
+  expect(screen.queryByText(/minh ch.ng/)).toBeNull();
 
+  // Assigned -> start: the footer has one clear action.
   const beforeStartReads = s.inventoryReads();
-  fireEvent.click(screen.getByRole('button', { name: 'Bắt đầu công việc' }));
-  const startButtons = screen.getAllByRole('button', { name: 'Bắt đầu công việc' });
+  fireEvent.click(screen.getByRole('button', { name: /B.t.*ki.m k./ }));
+  const startButtons = screen.getAllByRole('button', { name: /B.t.*ki.m k./ });
   fireEvent.click(startButtons[startButtons.length - 1]!);
-
-  await screen.findByText('Đang thực hiện');
   await waitFor(() => expect(s.inventoryReads()).toBeGreaterThan(beforeStartReads));
-  await screen.findByText('Đang kiểm kê');
+  await screen.findByText(/ang ki.m k./);
   const startEventIndex = s
     .requestEvents()
     .findIndex(
       (event) =>
-        event.path.endsWith(`/operational-tasks/${taskId}/start`) && event.method === 'POST',
+        event.path.endsWith('/operational-tasks/' + taskId + '/start') && event.method === 'POST',
     );
   const inventoryRefetchIndex = s
     .requestEvents()
     .findIndex(
       (event, index) =>
         index > startEventIndex &&
-        event.path.endsWith(`/operational-tasks/${taskId}/location-asset-inventory`) &&
+        event.path.endsWith('/operational-tasks/' + taskId + '/location-asset-inventory') &&
         event.method === 'GET',
     );
   expect(startEventIndex).toBeGreaterThanOrEqual(0);
   expect(inventoryRefetchIndex).toBeGreaterThan(startEventIndex);
-  expect(screen.getByRole('button', { name: 'Cập nhật công việc' })).toBeTruthy();
+  expect(screen.queryByRole('button', { name: /B.t.*ki.m k./ })).toBeNull();
   expect(s.equipmentReads()).toBe(0);
 
-  fireEvent.click(screen.getByRole('button', { name: 'Cập nhật công việc' }));
-  expect(screen.getByRole('button', { name: 'Cập nhật tiến độ' })).toBeTruthy();
-  expect(screen.getByRole('button', { name: 'Báo vướng mắc' })).toBeTruthy();
-  expect(screen.getByRole('button', { name: 'Gửi kết quả' }).hasAttribute('disabled')).toBe(true);
-  expect(
-    screen.getByText('Chỉ gửi kết quả sau khi xác nhận đủ các mục kiểm kê toàn cơ sở.'),
-  ).toBeTruthy();
-  expect(
-    s.transport.mock.calls.some(([url]) => String(url).includes('/equipment-inspection')),
-  ).toBe(false);
+  // InProgress -> confirm the physical asset -> submit the complete checklist.
+  fireEvent.click(screen.getAllByRole('button', { name: /Chi ti.t ki.m k./ })[0]!);
+  fireEvent.click(screen.getByRole('button', { name: /X.c nh.n/ }));
+  await waitFor(() =>
+    expect(s.inventoryUpdate()).toMatchObject({
+      checked: true,
+      condition: 'Intact',
+      note: null,
+      incidentId: null,
+    }),
+  );
+  await screen.findByRole('button', { name: /G.i ki.m k. cho Owner/ });
+  fireEvent.click(screen.getByRole('button', { name: /G.i ki.m k. cho Owner/ }));
+  const submitButtons = screen.getAllByRole('button', { name: /G.i ki.m k. cho Owner/ });
+  fireEvent.click(submitButtons[submitButtons.length - 1]!);
 
-  fireEvent.click(screen.getByRole('button', { name: 'Đóng' }));
-  fireEvent.click(screen.getByRole('button', { name: 'Chi tiết kiểm kê: Quạt trần' }));
-  fireEvent.change(screen.getByRole('combobox', { name: 'Hiện trạng thực tế' }), {
-    target: { value: 'Intact' },
-  });
-  fireEvent.click(screen.getByRole('button', { name: 'Lưu kết quả kiểm tra' }));
-
-  await screen.findByText(/Đã ghi nhận đầy đủ hiện trạng/);
-  expect(s.inventoryUpdate()).toMatchObject({
-    checked: true,
-    condition: 'Intact',
-    note: null,
-    incidentId: null,
-  });
-  fireEvent.click(screen.getByRole('button', { name: 'Cập nhật công việc' }));
-  const submitAction = screen.getByRole('button', { name: 'Gửi kết quả' });
-  expect(submitAction.hasAttribute('disabled')).toBe(false);
-  fireEvent.click(submitAction);
-  fireEvent.change(screen.getByRole('textbox', { name: 'Kết quả thực hiện' }), {
-    target: { value: 'Đã kiểm tra và xác nhận tài sản đầy đủ.' },
-  });
-  fireEvent.click(screen.getByRole('button', { name: 'Gửi Owner kiểm tra' }));
-
-  await screen.findByText('Chờ Owner kiểm tra');
-  expect(screen.queryByRole('button', { name: 'Cập nhật công việc' })).toBeNull();
+  await waitFor(() =>
+    expect(
+      s
+        .requestEvents()
+        .some(
+          (event) =>
+            event.path.endsWith('/operational-tasks/' + taskId + '/submit') &&
+            event.method === 'POST',
+        ),
+    ).toBe(true),
+  );
+  await waitFor(() =>
+    expect(screen.queryByRole('button', { name: /G.i ki.m k. cho Owner/ })).toBeNull(),
+  );
+  expect(screen.queryByText(/K.t qu./)).toBeNull();
   expect(s.equipmentReads()).toBe(0);
+  expect(s.requestEvents().some((event) => event.path.includes('/equipment-inspection'))).toBe(
+    false,
+  );
 });
 
 it('keeps the AdHoc equipment inspection panel functional and saves a versioned answer batch', async () => {

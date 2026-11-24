@@ -27,13 +27,15 @@ public sealed record ProfileUpdate(
     [Required, StringLength(256)] string Version,
     [StringLength(1024)] string? CurrentPassword = null);
 
-public sealed record EmploymentView(Guid Id, string? ContractNumber, string EmploymentType,
+public sealed record EmploymentView(Guid Id, string? ContractNumber,
+    [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] string? EmploymentType,
     DateOnly StartDate, DateOnly? EndDate, string? SalaryType, decimal? BaseRate, string Status);
 
 public sealed record EmploymentHistoryEntry(string Action, Guid ActorId, DateTimeOffset OccurredAt,
     string? Reason, EmploymentWrite? Before, EmploymentWrite? After);
 
-public sealed record EmploymentPeriodView(Guid Id, string? ContractNumber, string EmploymentType,
+public sealed record EmploymentPeriodView(Guid Id, string? ContractNumber,
+    [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] string? EmploymentType,
     DateOnly StartDate, DateOnly? EndDate, string? SalaryType, decimal? BaseRate, string Status,
     IReadOnlyList<EmploymentHistoryEntry> History);
 
@@ -60,7 +62,9 @@ public sealed record StaffView(Guid UserId, string FullName, string? Phone, stri
 [JsonUnmappedMemberHandling(JsonUnmappedMemberHandling.Disallow)]
 public sealed record EmploymentWrite(
     [StringLength(100)] string? ContractNumber,
-    [Required, StringLength(30)] string EmploymentType,
+    // Legacy persisted metadata; new Staff forms no longer collect this value.
+    [StringLength(30)]
+    [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] string? EmploymentType,
     DateOnly StartDate,
     DateOnly? EndDate,
     [StringLength(20)] string? SalaryType,

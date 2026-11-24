@@ -19,26 +19,31 @@ import {
 } from '../services/locationAssetInventory';
 import { colors as c } from '../theme/theme';
 
-const conditionOptions = [
-  { id: 'Unassessed', label: 'Chưa ghi nhận hiện trạng' },
-  { id: 'Intact', label: 'Đủ và nguyên vẹn' },
+const issueOptions = [
+  { id: '', label: 'Chọn vấn đề phát hiện' },
   { id: 'Missing', label: 'Thiếu tài sản' },
   { id: 'Damaged', label: 'Tài sản hư hỏng' },
-  { id: 'NotAccessible', label: 'Không thể kiểm tra' },
+  { id: 'NotAccessible', label: 'Không thể tiếp cận để kiểm tra' },
 ];
-const conditionLabels = Object.fromEntries(
-  conditionOptions.map((option) => [option.id, option.label]),
-);
+const conditionLabels: Record<string, string> = {
+  Unassessed: 'Chưa kiểm tra',
+  Intact: 'Đủ và nguyên vẹn',
+  Missing: 'Thiếu tài sản',
+  Damaged: 'Tài sản hư hỏng',
+  NotAccessible: 'Không thể kiểm tra',
+};
 type InventoryFilter = 'all' | 'pending' | 'checked';
 
 export function LocationAssetInventoryChecklist({
   taskId,
-  locationName,
+  taskStatus,
+  editable,
   onTaskRefresh,
   onReadinessChange,
 }: {
   taskId: string;
-  locationName?: string;
+  taskStatus: string;
+  editable: boolean;
   onTaskRefresh: () => void;
   onReadinessChange: (ready: boolean) => void;
 }) {
@@ -60,6 +65,7 @@ export function LocationAssetInventoryChecklist({
   const [selectedGroup, setSelectedGroup] = useState<string | null>(null);
   const [search, setSearch] = useState('');
   const [filter, setFilter] = useState<InventoryFilter>('all');
+  const [issueModes, setIssueModes] = useState<Record<string, boolean>>({});
   // Render the first room immediately. Do not depend on nested horizontal
   // ScrollView measurement inside WorkspaceShell's vertical ScrollView.
   const visibleGroups = useMemo(() => {
@@ -95,10 +101,22 @@ export function LocationAssetInventoryChecklist({
   const [error, setError] = useState('');
   const reload = query.reload;
   useEffect(() => onReadinessChange(inventoryReady(data)), [data, onReadinessChange]);
+  const hasData = data !== undefined && data !== null;
+  const dataStatus = data?.status;
+  useEffect(() => {
+    if (hasData && dataStatus !== taskStatus) reload();
+  }, [hasData, dataStatus, reload, taskStatus]);
 
   const save = useCallback(
     async (item: LocationAssetInventoryItem, checked: boolean, condition: string) => {
-      if (!api || !data || data.status !== 'InProgress' || item.inherited || pending.current)
+      if (
+        !api ||
+        !editable ||
+        !data ||
+        data.status !== 'InProgress' ||
+        item.inherited ||
+        pending.current
+      )
         return;
       pending.current = true;
       setBusy(true);
@@ -119,9 +137,8 @@ export function LocationAssetInventoryChecklist({
         return;
       }
       try {
-        const current = await locationAssetInventoryClient(api).get(taskId);
-        if (current.version !== data.version)
-          throw new Error('Kiểm kê đã thay đổi. Tải lại danh sách rồi xác nhận mục này.');
+        // The versioned PUT is the authoritative stale-write guard on the server.
+        // Avoid an extra GET before every item save; reload once after the write.
         await locationAssetInventoryClient(api).updateItem(
           taskId,
           item.id,
@@ -146,6 +163,11 @@ export function LocationAssetInventoryChecklist({
           delete next[item.id];
           return next;
         });
+        setIssueModes((previous) => {
+          const next = { ...previous };
+          delete next[item.id];
+          return next;
+        });
         reload();
         onTaskRefresh();
         showSuccess('Đã lưu xác nhận kiểm kê.');
@@ -161,14 +183,54 @@ export function LocationAssetInventoryChecklist({
         setBusy(false);
       }
     },
-    [api, data, notes, taskId, reload, onTaskRefresh],
+    [api, data, editable, notes, taskId, reload, onTaskRefresh],
   );
+
+  const reportIssue = useCallback(
+    (
+      item: LocationAssetInventoryItem,
+      groupTitle: string,
+      condition: 'Missing' | 'Damaged',
+      note: string,
+    ) => {
+      if (!editable || !data || data.status !== 'InProgress' || !note.trim()) return;
+      setIssueModes((previous) => ({ ...previous, [item.id]: false }));
+      go('report-incident', {
+        inventoryTaskId: taskId,
+        locationAssetInventoryItemId: item.id,
+        locationId: data.locationId,
+        inventoryCondition: condition,
+        ...(item.roomId ? { roomId: item.roomId } : {}),
+        ...(item.commonArea ? { commonArea: item.commonArea } : {}),
+        ...(item.assetId ? { assetId: item.assetId } : {}),
+        description: `Kiểm kê cơ sở: ${groupTitle}, ${item.name}. ${note.trim()}`.slice(0, 8000),
+      });
+    },
+    [data, editable, go, taskId],
+  );
+
+  const inheritedCount = loadedItems.filter((item) => item.inherited).length;
+  const directCount = loadedItems.length - inheritedCount;
+  const statusLabel =
+    data?.status === 'Assigned'
+      ? 'Chưa bắt đầu'
+      : data?.status === 'InProgress'
+        ? 'Đang kiểm kê'
+        : data?.status === 'Completed'
+          ? 'Đã bàn giao'
+          : data?.status === 'PendingVerification'
+            ? 'Đã gửi kiểm kê'
+            : 'Đã đóng';
+  const unlinkedIssueCount = loadedItems.filter(
+    (item) =>
+      item.checked && ['Missing', 'Damaged'].includes(item.condition ?? '') && !item.incidentId,
+  ).length;
 
   return (
     <View style={[ui.card, styles.root]}>
       <Row spread>
         <Text variant="titleMedium" style={styles.title}>
-          Danh sách kiểm kê từng phòng
+          Kiểm kê tài sản
         </Text>
         <Button compact icon="refresh" onPress={reload} disabled={busy || query.loading}>
           Tải lại
@@ -187,21 +249,19 @@ export function LocationAssetInventoryChecklist({
       )}
       {data && (
         <>
-          {!!locationName && (
-            <Text variant="bodyMedium" style={styles.title}>
-              Cơ sở: {locationName}
-            </Text>
-          )}
           <Row spread>
-            <Text style={styles.title} variant="labelLarge">
-              Đã kiểm tra {data.checkedCount}/{data.totalCount} tài sản
-            </Text>
-            <Pill tone={inventoryReady(data) ? 'green' : 'blue'}>
-              {data.status === 'Assigned'
-                ? 'Chưa bắt đầu'
-                : data.status === 'InProgress'
-                  ? 'Đang kiểm kê'
-                  : 'Đã gửi kiểm kê'}
+            <View style={{ flex: 1, gap: 3 }}>
+              <Text style={styles.title} variant="labelLarge">
+                Đã kiểm tra {data.checkedCount}/{data.totalCount} mục tài sản
+              </Text>
+              <Text variant="bodySmall" style={ui.muted}>
+                {directCount} Staff tự kiểm tra · {inheritedCount} kế thừa từ Tenant
+              </Text>
+            </View>
+            <Pill
+              tone={data.status === 'Completed' ? 'green' : inventoryReady(data) ? 'green' : 'blue'}
+            >
+              {statusLabel}
             </Pill>
           </Row>
           {/* react-native-paper ProgressBar may size its web wrapper to the entire
@@ -279,13 +339,16 @@ export function LocationAssetInventoryChecklist({
             </View>
           )}
           {data.status === 'Assigned' && (
-            <Text style={ui.muted}>Bắt đầu công việc ở trên để xác nhận từng tài sản.</Text>
+            <Text style={ui.muted}>
+              Nhấn “Bắt đầu kiểm kê” để mở thao tác xác nhận từng tài sản.
+            </Text>
           )}
           {data.totalCount === 0 && (
             <View style={styles.notice}>
               <Text accessibilityRole="alert" style={ui.red}>
-                Chưa có tài sản đã được Owner kiểm kê và xác nhận tại cơ sở này. Yêu cầu Owner kiểm
-                kê và xác nhận tài sản trước khi Staff kiểm tra, gửi kết quả và ký bàn giao.
+                {pendingOwnerRooms.length || pendingOwnerCommonAssets
+                  ? 'Owner chưa hoàn tất kiểm kê ban đầu. Bạn chưa thể tạo biên bản bàn giao.'
+                  : 'Chưa có tài sản được Owner xác nhận để kiểm kê. Liên hệ Owner kiểm tra danh mục cơ sở.'}
               </Text>
             </View>
           )}
@@ -307,8 +370,11 @@ export function LocationAssetInventoryChecklist({
                       {group.title}
                     </Text>
                     <Text variant="labelSmall" style={ui.muted}>
-                      {group.items.length} tài sản · Đã kiểm tra{' '}
+                      {group.items.length} mục · Đã kiểm tra{' '}
                       {group.items.filter((item) => item.checked).length}/{group.items.length}
+                      {group.items.some((item) => item.inherited)
+                        ? ` · ${group.items.filter((item) => item.inherited).length} kế thừa Tenant`
+                        : ''}
                     </Text>
                   </View>
                   <Text variant="labelSmall" style={styles.title}>
@@ -320,12 +386,9 @@ export function LocationAssetInventoryChecklist({
                 group.visibleItems.map((item) => {
                   const expanded = expandedId === item.id;
                   const dirtyNote = notes[item.id] ?? item.note ?? '';
-                  const dirtyCondition = conditions[item.id] ?? item.condition ?? 'Unassessed';
-                  const conditionChanged = dirtyCondition !== (item.condition ?? 'Unassessed');
-                  const noteChanged = dirtyNote !== (item.note ?? '');
-                  const needsNote = ['Missing', 'Damaged', 'NotAccessible'].includes(
-                    dirtyCondition,
-                  );
+                  const dirtyCondition = conditions[item.id] ?? '';
+                  const issueMode = !!issueModes[item.id];
+                  const itemCondition = item.condition ?? 'Unassessed';
                   const label = conditionLabels[dirtyCondition] ?? 'Chưa ghi nhận hiện trạng';
                   return (
                     <View key={item.id} style={styles.item}>
@@ -340,21 +403,23 @@ export function LocationAssetInventoryChecklist({
                               {item.name}
                             </Text>
                             <Text variant="bodySmall" style={ui.muted}>
-                              Số lượng Owner đã xác nhận: {item.quantity}
+                              {item.quantity > 0
+                                ? `Số lượng: ${item.quantity}`
+                                : 'Owner đã xác nhận không có tài sản'}
                             </Text>
                           </View>
                           <Pill tone={item.checked ? 'green' : 'neutral'}>
                             {item.inherited
-                              ? 'Kế thừa bàn giao Tenant'
+                              ? 'Kế thừa Tenant'
                               : item.priorStaffTaskId && item.checked
-                                ? 'Kế thừa Staff trước'
+                                ? 'Giữ kết quả Staff trước'
                                 : item.checked
                                   ? 'Đã kiểm tra'
                                   : 'Chưa kiểm tra'}
                           </Pill>
-                          {item.checked && dirtyCondition !== 'Unassessed' && (
-                            <Pill tone={dirtyCondition === 'Intact' ? 'green' : 'amber'}>
-                              {label}
+                          {item.checked && !item.inherited && itemCondition !== 'Unassessed' && (
+                            <Pill tone={itemCondition === 'Intact' ? 'green' : 'amber'}>
+                              {conditionLabels[itemCondition] ?? label}
                             </Pill>
                           )}
                         </View>
@@ -369,106 +434,212 @@ export function LocationAssetInventoryChecklist({
                             </Text>
                           )}
                           {item.inherited ? (
-                            <Text style={ui.muted}>
-                              Đã đối chiếu từ biên bản bàn giao Tenant còn hiệu lực. Mục này được tự
-                              động xác nhận và giữ nguyên lịch sử.
-                            </Text>
-                          ) : (
                             <>
-                              <ChoiceField
-                                label="Hiện trạng thực tế"
-                                value={dirtyCondition}
-                                options={conditionOptions}
-                                disabled={busy || data.status !== 'InProgress'}
-                                onChange={(value) =>
-                                  setConditions((previous) => ({ ...previous, [item.id]: value }))
-                                }
-                              />
-                              <TextInput
-                                mode="outlined"
-                                label={
-                                  needsNote ? 'Ghi chú hiện trạng *' : 'Ghi chú kiểm kê (tùy chọn)'
-                                }
-                                accessibilityLabel={`Ghi chú ${item.name}`}
-                                multiline
-                                maxLength={2000}
-                                value={dirtyNote}
-                                onChangeText={(value) =>
-                                  setNotes((previous) => ({ ...previous, [item.id]: value }))
-                                }
-                                disabled={busy || data.status !== 'InProgress'}
-                              />
-                              {data.status === 'InProgress' && (
+                              <Text style={ui.muted}>
+                                Đã đối chiếu đúng tài sản trong biên bản bàn giao Tenant còn hiệu
+                                lực. Mục này giữ nguyên thông tin và xác nhận gốc. Nếu phát hiện
+                                thiếu hoặc hỏng, hãy tạo báo cáo sự cố riêng.
+                              </Text>
+                              {item.incidentId ? (
                                 <Button
-                                  mode="contained"
-                                  disabled={
-                                    busy ||
-                                    (!item.checked && dirtyCondition === 'Unassessed') ||
-                                    (needsNote && !dirtyNote.trim())
-                                  }
-                                  loading={busy}
+                                  compact
                                   onPress={() =>
-                                    void save(
-                                      item,
-                                      !item.checked || conditionChanged || noteChanged,
-                                      !item.checked || conditionChanged || noteChanged
-                                        ? dirtyCondition
-                                        : 'Unassessed',
-                                    )
+                                    go('incident-detail', { incidentId: item.incidentId! })
                                   }
                                 >
-                                  {!item.checked
-                                    ? 'Lưu kết quả kiểm tra'
-                                    : conditionChanged || noteChanged
-                                      ? 'Lưu cập nhật hiện trạng'
-                                      : 'Đánh dấu cần kiểm tra lại'}
+                                  Xem báo cáo sự cố đã liên kết
+                                </Button>
+                              ) : editable && data.status === 'InProgress' ? (
+                                <View style={styles.itemActions}>
+                                  <Button
+                                    mode="outlined"
+                                    disabled={busy}
+                                    onPress={() =>
+                                      reportIssue(
+                                        item,
+                                        group.title,
+                                        'Missing',
+                                        'Phát hiện thiếu tài sản trong lần kiểm tra hiện tại.',
+                                      )
+                                    }
+                                  >
+                                    Báo thiếu
+                                  </Button>
+                                  <Button
+                                    mode="outlined"
+                                    disabled={busy}
+                                    onPress={() =>
+                                      reportIssue(
+                                        item,
+                                        group.title,
+                                        'Damaged',
+                                        'Phát hiện tài sản hư hỏng trong lần kiểm tra hiện tại.',
+                                      )
+                                    }
+                                  >
+                                    Báo hỏng
+                                  </Button>
+                                </View>
+                              ) : null}
+                            </>
+                          ) : (
+                            <>
+                              {item.note && !issueMode && (
+                                <Text variant="bodySmall" style={ui.muted}>
+                                  Ghi nhận: {item.note}
+                                </Text>
+                              )}
+                              {item.incidentId && (
+                                <Button
+                                  compact
+                                  onPress={() =>
+                                    go('incident-detail', { incidentId: item.incidentId! })
+                                  }
+                                >
+                                  Xem báo cáo sự cố đã liên kết
                                 </Button>
                               )}
+                              {editable && data.status === 'InProgress' && !issueMode && (
+                                <View style={styles.itemActions}>
+                                  {!item.checked && (
+                                    <Button
+                                      mode="contained"
+                                      disabled={busy}
+                                      loading={busy}
+                                      onPress={() => void save(item, true, 'Intact')}
+                                    >
+                                      Xác nhận đủ
+                                    </Button>
+                                  )}
+                                  {!item.incidentId && (
+                                    <Button
+                                      mode="outlined"
+                                      disabled={busy}
+                                      onPress={() => {
+                                        setIssueModes((previous) => ({
+                                          ...previous,
+                                          [item.id]: true,
+                                        }));
+                                        setConditions((previous) => ({
+                                          ...previous,
+                                          [item.id]: [
+                                            'Missing',
+                                            'Damaged',
+                                            'NotAccessible',
+                                          ].includes(itemCondition)
+                                            ? itemCondition
+                                            : '',
+                                        }));
+                                      }}
+                                    >
+                                      Báo vấn đề
+                                    </Button>
+                                  )}
+                                  {item.checked &&
+                                    (item.priorStaffTaskId ||
+                                      itemCondition === 'NotAccessible') && (
+                                      <Button
+                                        compact
+                                        disabled={busy}
+                                        onPress={() => void save(item, false, 'Unassessed')}
+                                      >
+                                        Kiểm tra lại
+                                      </Button>
+                                    )}
+                                </View>
+                              )}
+                              {issueMode && editable && data.status === 'InProgress' && (
+                                <>
+                                  <ChoiceField
+                                    label="Vấn đề phát hiện"
+                                    value={dirtyCondition}
+                                    options={issueOptions}
+                                    disabled={busy}
+                                    onChange={(value) =>
+                                      setConditions((previous) => ({
+                                        ...previous,
+                                        [item.id]: value,
+                                      }))
+                                    }
+                                  />
+                                  <TextInput
+                                    mode="outlined"
+                                    label="Mô tả hiện trạng *"
+                                    accessibilityLabel={`Mô tả hiện trạng ${item.name}`}
+                                    multiline
+                                    maxLength={2000}
+                                    value={dirtyNote}
+                                    onChangeText={(value) =>
+                                      setNotes((previous) => ({ ...previous, [item.id]: value }))
+                                    }
+                                    disabled={busy}
+                                  />
+                                  <View style={styles.itemActions}>
+                                    {dirtyCondition === 'Missing' ||
+                                    dirtyCondition === 'Damaged' ? (
+                                      <Button
+                                        mode="contained"
+                                        disabled={busy || !dirtyNote.trim()}
+                                        onPress={() =>
+                                          reportIssue(item, group.title, dirtyCondition, dirtyNote)
+                                        }
+                                      >
+                                        Tạo báo cáo sự cố
+                                      </Button>
+                                    ) : dirtyCondition === 'NotAccessible' ? (
+                                      <Button
+                                        mode="contained"
+                                        disabled={busy || !dirtyNote.trim()}
+                                        loading={busy}
+                                        onPress={() => void save(item, true, 'NotAccessible')}
+                                      >
+                                        Lưu vướng mắc
+                                      </Button>
+                                    ) : (
+                                      <Text variant="bodySmall" style={ui.muted}>
+                                        Chọn loại vấn đề để tiếp tục.
+                                      </Text>
+                                    )}
+                                    <Button
+                                      compact
+                                      disabled={busy}
+                                      onPress={() =>
+                                        setIssueModes((previous) => ({
+                                          ...previous,
+                                          [item.id]: false,
+                                        }))
+                                      }
+                                    >
+                                      Hủy
+                                    </Button>
+                                  </View>
+                                </>
+                              )}
                               {item.checked &&
-                                (dirtyCondition === 'Missing' || dirtyCondition === 'Damaged') &&
-                                !item.incidentId && (
-                                  <Text variant="bodySmall" style={styles.issueNotice}>
-                                    Cần tạo báo cáo sự cố và liên kết với tài sản này trước khi gửi
-                                    kết quả cho Owner.
-                                  </Text>
+                                ['Missing', 'Damaged'].includes(itemCondition) &&
+                                !item.incidentId &&
+                                !issueMode && (
+                                  <View style={styles.notice}>
+                                    <Text variant="bodySmall" style={styles.issueNotice}>
+                                      Cần có báo cáo sự cố liên kết trước khi gửi kiểm kê.
+                                    </Text>
+                                    <Button
+                                      mode="outlined"
+                                      disabled={busy || !item.note?.trim()}
+                                      onPress={() =>
+                                        reportIssue(
+                                          item,
+                                          group.title,
+                                          itemCondition as 'Missing' | 'Damaged',
+                                          item.note ?? '',
+                                        )
+                                      }
+                                    >
+                                      Tạo báo cáo sự cố
+                                    </Button>
+                                  </View>
                                 )}
                             </>
-                          )}
-                          {item.note && <Text style={ui.muted}>Ghi nhận: {item.note}</Text>}
-                          {item.incidentId ? (
-                            <Button
-                              onPress={() =>
-                                go('incident-detail', { incidentId: item.incidentId! })
-                              }
-                            >
-                              Xem sự cố đã liên kết
-                            </Button>
-                          ) : (
-                            !item.inherited && (
-                              <Button
-                                mode="outlined"
-                                icon="alert-circle-outline"
-                                disabled={
-                                  item.checked &&
-                                  ['Missing', 'Damaged'].includes(item.condition ?? '') &&
-                                  !item.note?.trim()
-                                }
-                                onPress={() =>
-                                  go('report-incident', {
-                                    inventoryTaskId: taskId,
-                                    locationAssetInventoryItemId: item.id,
-                                    locationId: data.locationId,
-                                    ...(item.roomId ? { roomId: item.roomId } : {}),
-                                    ...(item.commonArea ? { commonArea: item.commonArea } : {}),
-                                    ...(item.assetId ? { assetId: item.assetId } : {}),
-                                    description:
-                                      `Kiểm kê cơ sở: ${group.title}, ${item.name}. ${dirtyNote || label}`.trim(),
-                                  })
-                                }
-                              >
-                                Báo cáo sự cố tài sản
-                              </Button>
-                            )
                           )}
                         </View>
                       )}
@@ -484,8 +655,7 @@ export function LocationAssetInventoryChecklist({
           )}
           {!incompletePayload && loadedItems.length > 0 && (
             <Text variant="bodySmall" style={ui.muted}>
-              {roomCount} phòng · {commonCount} khu vực chung · {loadedItems.length} mục tài sản
-              Owner đã xác nhận
+              {roomCount} phòng · {commonCount} khu vực chung · {loadedItems.length} nhóm tài sản
             </Text>
           )}
           {(pendingOwnerRooms.length > 0 || pendingOwnerCommonAssets) && (
@@ -512,26 +682,19 @@ export function LocationAssetInventoryChecklist({
           )}
           {loadedItems.length > 0 && (
             <Text variant="bodySmall" style={ui.muted}>
-              Checklist chỉ gồm tài sản Owner đã xác nhận. Mục kế thừa biên bản Tenant chỉ tự đánh
-              dấu kiểm tra, không tự thêm tài sản mới.
+              Chỉ kiểm tra tài sản Owner đã xác nhận. Mục khớp biên bản Tenant được tự xác nhận,
+              không tạo tài sản mới.
             </Text>
           )}
           {inventoryReady(data) && (
             <Text style={ui.green}>
-              Đã ghi nhận đầy đủ hiện trạng. Bạn có thể gửi kết quả cho Owner đối soát và lập biên
-              bản bàn giao.
+              Đã kiểm tra đủ. Bạn có thể gửi Owner đối soát và lập biên bản bàn giao.
             </Text>
           )}
-          {loadedItems.some(
-            (item) =>
-              item.checked &&
-              ['Missing', 'Damaged'].includes(item.condition ?? '') &&
-              !item.incidentId,
-          ) && (
+          {unlinkedIssueCount > 0 && (
             <View style={styles.notice}>
               <Text style={styles.issueNotice}>
-                Còn tài sản thiếu/hư hỏng chưa có báo cáo sự cố liên kết. Hãy lọc “Cần xử lý” để
-                hoàn tất các mục này.
+                Còn {unlinkedIssueCount} mục thiếu/hư hỏng chưa có báo cáo sự cố liên kết.
               </Text>
             </View>
           )}
@@ -577,4 +740,5 @@ const styles = StyleSheet.create({
   item: { borderWidth: 1, borderColor: c.border, borderRadius: 8, overflow: 'hidden' },
   itemHeading: { flexDirection: 'row', alignItems: 'center', gap: 8, padding: 10 },
   detail: { gap: 10, padding: 12, backgroundColor: c.white },
+  itemActions: { flexDirection: 'row', alignItems: 'center', flexWrap: 'wrap', gap: 8 },
 });

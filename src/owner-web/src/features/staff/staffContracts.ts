@@ -1,13 +1,19 @@
 export interface Employment {
   id?: string;
   contractNumber: string | null;
-  employmentType: string;
   startDate: string;
   endDate: string | null;
   salaryType: string | null;
   baseRate: number | null;
   status: string;
 }
+export const salaryTypeOptions = [
+  { value: 'Monthly', label: 'Theo tháng', unit: 'VND/tháng' },
+] as const;
+export const salaryTypeLabel = (value: string | null | undefined) =>
+  salaryTypeOptions.find((option) => option.value === value)?.label ?? value ?? 'Chưa thiết lập';
+export const salaryRateUnit = (value: string | null | undefined) =>
+  salaryTypeOptions.find((option) => option.value === value)?.unit ?? 'VND';
 export interface Staff {
   userId: string;
   fullName: string;

@@ -1,6 +1,10 @@
 import { ResourcePage } from '../../../components/common/ResourcePage';
-import { IncidentWorkspace } from '../IncidentWorkspace';
+import { IncidentManagementWorkspace } from '../IncidentManagementWorkspace';
 import { isMockMode } from '../../../services/config';
 export default function IncidentsPage() {
-  return isMockMode ? <ResourcePage kind="incidents" variant="table" /> : <IncidentWorkspace />;
+  return isMockMode ? (
+    <ResourcePage kind="incidents" variant="table" />
+  ) : (
+    <IncidentManagementWorkspace />
+  );
 }

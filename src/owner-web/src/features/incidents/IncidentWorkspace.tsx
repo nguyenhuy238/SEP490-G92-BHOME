@@ -21,13 +21,13 @@ import { CreateProactiveMaintenance, FastRepairPolicyPanel } from './Maintenance
 import { CompensationPanel } from './CompensationPanel';
 import { IncidentCommandDialog, type IncidentCommand } from './IncidentCommandDialog';
 import {
-  incidentStatuses,
   workStatuses,
   statusText,
   formatIncidentMoney,
   type Incident,
   type WorkOrder,
   type IncidentEvidence,
+  type IncidentNotification,
 } from './incidentContracts';
 
 const root = '/api/v1/incidents',
@@ -37,6 +37,54 @@ const assetFields: IncidentCommand['fields'] = [
   { name: 'assetStatus', label: 'Trạng thái tài sản sau xử lý', type: 'asset' },
   { name: 'assetCondition', label: 'Tình trạng tài sản sau xử lý' },
 ];
+const incidentNextStep = (incident: Incident) => {
+  if (incident.status === 'Submitted') return 'Tiếp nhận, phân loại và giao xử lý';
+  if (incident.status === 'InProgress') {
+    if (incident.openWorkOrderStatus === 'Assigned') return 'Chờ nhân viên kiểm tra';
+    if (incident.openWorkOrderStatus === 'PendingApproval') return 'Duyệt phương án sửa chữa';
+    if (incident.openWorkOrderStatus === 'PendingVerification') return 'Kiểm tra kết quả sửa chữa';
+    if (incident.openWorkOrderStatus === 'InProgress') return 'Theo dõi tiến độ sửa chữa';
+    return 'Giao nhân viên xử lý';
+  }
+  if (incident.status === 'Resolved') return 'Đã giải quyết';
+  if (incident.status === 'Rejected') return 'Đã từ chối';
+  if (incident.status === 'Duplicate') return 'Đã đánh dấu trùng';
+  return 'Đã đóng';
+};
+const activityLabels: Record<string, string> = {
+  submitted: 'Đã gửi báo cáo',
+  reviewed: 'Đã phân loại sự cố',
+  assigned: 'Đã giao nhân viên xử lý',
+  acknowledged: 'Nhân viên đã tiếp nhận',
+  emergency_action: 'Đã ghi nhận ứng phó khẩn cấp',
+  emergency_cost_decided: 'Đã quyết định chi phí khẩn cấp',
+  rejected: 'Đã từ chối báo cáo',
+  duplicate: 'Đã đánh dấu báo cáo trùng',
+  cancelled: 'Đã hủy sự cố',
+  resolved: 'Đã xác nhận giải quyết',
+  direct_completed: 'Owner đã hoàn tất xử lý trực tiếp',
+  proposal_submitted: 'Nhân viên đã gửi phương án',
+  plan_approved: 'Đã duyệt phương án',
+  plan_rejected: 'Yêu cầu điều chỉnh phương án',
+  start: 'Đã bắt đầu sửa chữa',
+  progress: 'Đã cập nhật tiến độ',
+  blocker: 'Đã ghi nhận vướng mắc',
+  submit: 'Đã gửi yêu cầu nghiệm thu',
+  verified: 'Đã xác minh hoàn tất',
+  rework: 'Yêu cầu làm lại',
+  reassigned: 'Đã đổi nhân viên phụ trách',
+  work_order_cancelled: 'Đã hủy lệnh sửa chữa',
+  fast_repair_started: 'Đã bắt đầu sửa nhanh',
+  fast_repair_blocked: 'Sửa nhanh không đủ điều kiện',
+  asset_proposed: 'Đã đề xuất liên kết tài sản',
+  asset_confirmed: 'Đã xác nhận tài sản',
+  asset_rejected: 'Đã từ chối liên kết tài sản',
+};
+const activityLabel = (action: string) => activityLabels[action] ?? 'Đã cập nhật công việc';
+const notificationLabel = (event: string) =>
+  activityLabels[event] ??
+  activityLabels[event.toLocaleLowerCase('en-US')] ??
+  'Có cập nhật mới về công việc';
 export function IncidentWorkspace({ maintenance = false }: { maintenance?: boolean }) {
   const [params, setParams] = useSearchParams();
   const selectedKey = maintenance ? 'workOrderId' : 'incidentId';
@@ -73,9 +121,14 @@ export function IncidentWorkspace({ maintenance = false }: { maintenance?: boole
   return (
     <Stack spacing={2}>
       <PageHeader
-        title={maintenance ? 'Bảo trì & Lệnh sửa chữa' : 'Sự cố & Xử lý khẩn cấp'}
-        subtitle="Owner phân loại, phân công, duyệt phương án/chi phí và xác minh kết quả."
+        title={maintenance ? 'Lệnh sửa chữa và bảo trì' : 'Hàng đợi sự cố'}
+        subtitle={
+          maintenance
+            ? 'Theo dõi từng công việc từ lúc giao nhân viên đến khi nghiệm thu.'
+            : 'Xem việc mới, việc đang xử lý và việc đang chờ bạn quyết định.'
+        }
       />
+      {!maintenance && <IncidentNotificationInbox />}
       {incidentFilter && (
         <Button
           onClick={() =>
@@ -113,35 +166,45 @@ export function IncidentWorkspace({ maintenance = false }: { maintenance?: boole
             setPage(1);
           }}
         />
-        <TextField
-          select
-          label="Trạng thái cần lọc"
-          value={status}
-          onChange={(e) => {
-            setStatus(e.target.value);
-            setPage(1);
-          }}
-        >
-          <MenuItem value="">Tất cả trạng thái</MenuItem>
-          {Object.entries(maintenance ? workStatuses : incidentStatuses).map(([key, label]) => (
-            <MenuItem key={key} value={key}>
-              {label}
-            </MenuItem>
-          ))}
-        </TextField>
-        <TextField
-          select
-          label="Mức độ sự cố"
-          value={severity}
-          onChange={(e) => {
-            setSeverity(e.target.value);
-            setPage(1);
-          }}
-        >
-          <MenuItem value="">Tất cả</MenuItem>
-          <MenuItem value="Normal">Thông thường</MenuItem>
-          <MenuItem value="Emergency">Khẩn cấp</MenuItem>
-        </TextField>
+        {maintenance ? (
+          <TextField
+            select
+            label="Trạng thái công việc"
+            value={status}
+            onChange={(e) => {
+              setStatus(e.target.value);
+              setPage(1);
+            }}
+          >
+            <MenuItem value="">Tất cả trạng thái</MenuItem>
+            {Object.entries(workStatuses).map(([key, label]) => (
+              <MenuItem key={key} value={key}>
+                {label}
+              </MenuItem>
+            ))}
+          </TextField>
+        ) : (
+          <Stack direction="row" useFlexGap spacing={1} sx={{ flexWrap: 'wrap' }}>
+            {[
+              { value: '', label: 'Tất cả' },
+              { value: 'Submitted', label: 'Mới báo cáo' },
+              { value: 'InProgress', label: 'Đang xử lý' },
+              { value: 'Resolved', label: 'Đã giải quyết' },
+            ].map((item) => (
+              <Button
+                key={item.value || 'all'}
+                size="small"
+                variant={status === item.value ? 'contained' : 'outlined'}
+                onClick={() => {
+                  setStatus(item.value);
+                  setPage(1);
+                }}
+              >
+                {item.label}
+              </Button>
+            ))}
+          </Stack>
+        )}
         <Button disabled={q.isFetching} onClick={() => void q.refetch()}>
           Làm mới danh sách
         </Button>
@@ -168,7 +231,22 @@ export function IncidentWorkspace({ maintenance = false }: { maintenance?: boole
           id={(w) => w.id}
           select={(w) => setSelected(w.id)}
           columns={[
-            { label: 'Công việc', render: (w) => w.description || w.expectedOutcome },
+            {
+              label: 'Công việc',
+              render: (w) => (
+                <Stack spacing={0.25}>
+                  <Typography sx={{ fontWeight: 700 }}>
+                    {w.description || w.expectedOutcome}
+                  </Typography>
+                  <Typography variant="body2" color="text.secondary">
+                    {w.locationName ?? 'Cơ sở liên quan'} ·{' '}
+                    {w.roomNumber ? `Phòng ${w.roomNumber}` : w.commonArea || 'Khu vực chung'}
+                    {w.assetName ? ` · ${w.assetName}` : ''}
+                  </Typography>
+                </Stack>
+              ),
+            },
+            { label: 'Nhân viên', render: (w) => w.assignedStaffName || 'Chưa rõ nhân viên' },
             {
               label: 'Nguồn',
               render: (w) => (w.source === 'Proactive' ? 'Bảo trì chủ động' : 'Sự cố'),
@@ -197,16 +275,36 @@ export function IncidentWorkspace({ maintenance = false }: { maintenance?: boole
           id={(i) => i.id}
           select={(i) => setSelected(i.id)}
           columns={[
-            { label: 'Mã / Nội dung', render: (i) => `${i.code} · ${i.description}` },
-            { label: 'Trạng thái', render: (i) => <StatusChip label={statusText(i.status)} /> },
             {
-              label: 'Ngày báo cáo',
-              render: (i) => (i.createdAt ? formatInstant(i.createdAt) : 'Chưa có'),
+              label: 'Báo cáo',
+              render: (i) => (
+                <Stack spacing={0.25}>
+                  <Typography sx={{ fontWeight: 700 }}>Báo cáo sự cố</Typography>
+                  <Typography>{i.description}</Typography>
+                  <Typography variant="body2" color="text.secondary">
+                    {i.locationName ?? 'Cơ sở liên quan'} ·{' '}
+                    {i.roomNumber ? `Phòng ${i.roomNumber}` : i.commonArea || 'Khu vực chung'}
+                    {i.assetName ? ` · ${i.assetName}` : ''}
+                  </Typography>
+                </Stack>
+              ),
             },
             {
               label: 'Mức độ',
               render: (i) => (
                 <StatusChip label={i.severity === 'Emergency' ? 'Khẩn cấp' : 'Thông thường'} />
+              ),
+            },
+            { label: 'Nhân viên', render: (i) => i.assignedStaffName || 'Chưa giao' },
+            { label: 'Trạng thái', render: (i) => <StatusChip label={statusText(i.status)} /> },
+            {
+              label: 'Thời gian',
+              render: (i) => (i.createdAt ? formatInstant(i.createdAt) : 'Chưa có'),
+            },
+            {
+              label: 'Việc tiếp theo',
+              render: (i) => (
+                <Typography sx={{ fontWeight: 600 }}>{incidentNextStep(i)}</Typography>
               ),
             },
           ]}
@@ -229,6 +327,65 @@ export function IncidentWorkspace({ maintenance = false }: { maintenance?: boole
         </>
       )}
     </Stack>
+  );
+}
+function IncidentNotificationInbox() {
+  const query = useOwnerQuery<OwnerPage<IncidentNotification>>(
+    ['incident-notifications'],
+    `${root}/notifications?page=1&pageSize=10`,
+  );
+  const action = useOwnerAction();
+  const unread = (query.data?.items ?? []).filter((item) => !item.readAt).slice(0, 5);
+  if (!unread.length && !query.isFetching && !query.error) return null;
+  return (
+    <ChartCard title="Thông báo cần chú ý">
+      <Stack spacing={1.25}>
+        <OwnerFeedback busy={query.isFetching || action.busy} error={query.error || action.error} />
+        {!unread.length && !query.error && (
+          <Typography variant="body2" color="text.secondary">
+            {query.isFetching ? 'Đang tải thông báo…' : 'Không có thông báo mới.'}
+          </Typography>
+        )}
+        {unread.map((item) => {
+          const target = item.workOrderId
+            ? `/maintenance?workOrderId=${encodeURIComponent(item.workOrderId)}`
+            : item.incidentId
+              ? `/incidents?incidentId=${encodeURIComponent(item.incidentId)}`
+              : '/incidents';
+          return (
+            <Paper key={item.id} variant="outlined" sx={{ p: 1.5 }}>
+              <Stack
+                direction={{ xs: 'column', sm: 'row' }}
+                spacing={1}
+                sx={{ alignItems: { sm: 'center' } }}
+              >
+                <Stack sx={{ flex: 1 }} spacing={0.25}>
+                  <Typography sx={{ fontWeight: 600 }}>
+                    {item.highPriority ? 'Ưu tiên cao · ' : ''}
+                    {notificationLabel(item.event)}
+                  </Typography>
+                  <Typography variant="body2" color="text.secondary">
+                    {formatInstant(item.createdAt)}
+                  </Typography>
+                </Stack>
+                <Button
+                  component={Link}
+                  to={target}
+                  size="small"
+                  onClick={() =>
+                    void action.run(() =>
+                      action.request(`${root}/notifications/${item.id}/read`, { method: 'POST' }),
+                    )
+                  }
+                >
+                  Mở công việc
+                </Button>
+              </Stack>
+            </Paper>
+          );
+        })}
+      </Stack>
+    </ChartCard>
   );
 }
 export function IncidentDetail({ id }: { id: string }) {
@@ -265,27 +422,70 @@ export function IncidentDetail({ id }: { id: string }) {
     `/api/v1/staff-location-assignments?locationId=${q.data?.locationId}`,
     !!q.data,
   );
+  const staffDirectory = useOwnerQuery<OwnerPage<Staff>>(
+    ['incident-staff-directory'],
+    '/api/v1/staff?page=1&pageSize=100',
+    !!q.data,
+  );
   const action = useOwnerAction();
   const i = q.data;
+  const today = todayVietnam();
+  const eligibleIds = new Set(
+    (assignments.data ?? [])
+      .filter((x) => x.startDate <= today && x.endDate >= today)
+      .map((x) => x.staffUserId),
+  );
+  const staffOptions = (staffDirectory.data?.items ?? [])
+    .filter(
+      (staff) =>
+        staff.isActive &&
+        staff.employment?.status === 'Active' &&
+        staff.employment.startDate <= today &&
+        (!staff.employment.endDate || staff.employment.endDate >= today) &&
+        eligibleIds.has(staff.userId),
+    )
+    .map((staff) => ({ id: staff.userId, label: staff.fullName || staff.email }));
   const currentStaff = assignments.data?.find(
-    (x) => x.startDate <= todayVietnam() && x.endDate >= todayVietnam(),
+    (x) => x.startDate <= today && x.endDate >= today,
   )?.staffUserId;
+  const openWorkOrder = (works.data?.items ?? []).find(
+    (work) => !['Verified', 'Cancelled'].includes(work.status),
+  );
+  const responsibleStaff = openWorkOrder?.assignedStaffId ?? currentStaff;
   function open(
     operation: string,
     title: string,
     fields: IncidentCommand['fields'],
     extra?: Record<string, unknown>,
+    initialValues?: Record<string, string>,
   ) {
     if (i)
-      setCommand({ title, path: `${root}/${id}/${operation}`, version: i.version, fields, extra });
+      setCommand({
+        title,
+        path: `${root}/${id}/${operation}`,
+        version: i.version,
+        fields,
+        extra,
+        initialValues,
+      });
   }
   const editable =
     !!i && !q.isFetching && !q.error && ['Submitted', 'InProgress'].includes(i.status);
   return (
-    <ChartCard title={i ? `${i.code} · ${statusText(i.status)}` : 'Chi tiết sự cố'}>
+    <ChartCard title={i ? `Chi tiết sự cố · ${statusText(i.status)}` : 'Chi tiết sự cố'}>
       <Stack spacing={2}>
         <OwnerFeedback
-          busy={q.isFetching || action.busy}
+          busy={
+            q.isFetching ||
+            action.busy ||
+            history.isFetching ||
+            evidence.isFetching ||
+            works.isFetching ||
+            emergency.isFetching ||
+            expenses.isFetching ||
+            assignments.isFetching ||
+            staffDirectory.isFetching
+          }
           error={
             q.error ||
             action.error ||
@@ -294,12 +494,24 @@ export function IncidentDetail({ id }: { id: string }) {
             works.error ||
             emergency.error ||
             expenses.error ||
-            assignments.error
+            assignments.error ||
+            staffDirectory.error
           }
         />
         <Button
-          disabled={q.isFetching}
-          onClick={() => void action.run(async () => undefined, 'Đã tải lại dữ liệu.')}
+          disabled={q.isFetching || history.isFetching || evidence.isFetching || works.isFetching}
+          onClick={() =>
+            void Promise.all([
+              q.refetch(),
+              history.refetch(),
+              evidence.refetch(),
+              works.refetch(),
+              emergency.refetch(),
+              expenses.refetch(),
+              assignments.refetch(),
+              staffDirectory.refetch(),
+            ])
+          }
         >
           Tải lại chi tiết sự cố
         </Button>
@@ -315,125 +527,166 @@ export function IncidentDetail({ id }: { id: string }) {
                 {i.escalationEnabled ? 'Đã cấu hình leo thang.' : 'Chưa bật leo thang tự động.'}
               </Alert>
             )}
+            <Typography variant="h6">Báo cáo ban đầu</Typography>
+            <Typography variant="body2" color="text.secondary">
+              Mức độ: {i.severity === 'Emergency' ? 'Khẩn cấp' : 'Thông thường'}
+            </Typography>
+            {i.status === 'Submitted' && (
+              <Alert severity="info">
+                Việc cần làm: phân loại báo cáo và giao nhân viên phù hợp.
+              </Alert>
+            )}
+            {i.status === 'InProgress' && (
+              <Alert severity="info">
+                Sự cố đã được tiếp nhận. Theo dõi lệnh sửa chữa bên dưới và nghiệm thu khi nhân viên
+                gửi kết quả.
+              </Alert>
+            )}
             <Typography>{i.description}</Typography>
             <RecordContext
               locationId={i.locationId}
               roomId={i.roomId}
+              commonArea={i.commonArea}
+              assetId={i.assetId}
               incidentId={i.id}
-              staffId={currentStaff}
+              staffId={responsibleStaff}
             />
             <Typography>
-              {i.commonArea || ''}
-              {i.createdAt ? ` · Báo cáo lúc ${formatInstant(i.createdAt)}` : ''}
+              {i.createdAt ? `Báo cáo lúc ${formatInstant(i.createdAt)}` : ''}
+              {i.resolutionNote && i.status === 'Resolved' ? ` · Kết quả: ${i.resolutionNote}` : ''}
             </Typography>
             <Typography>
-              Phân loại: {i.type || 'Chưa phân loại'} · Nhóm: {i.category || 'Chưa có'} · Phiên bản{' '}
-              {i.version}
+              Phân loại: {i.type || 'Chưa phân loại'} · Nhóm: {i.category || 'Chưa có'}
             </Typography>
-            <Typography>{i.resolutionNote}</Typography>
             {editable && (
               <Stack direction="row" sx={{ flexWrap: 'wrap', gap: 1 }}>
-                <Button
-                  onClick={() =>
-                    open('review', 'Phân loại sự cố', [
-                      { name: 'type', label: 'Loại sự cố' },
-                      { name: 'category', label: 'Nhóm xử lý' },
-                    ])
-                  }
-                >
-                  Phân loại
-                </Button>
-                <Button
-                  disabled={!i.type || !currentStaff}
-                  onClick={() =>
-                    open(
-                      'work-orders',
-                      'Giao lệnh sửa chữa',
-                      [
-                        { name: 'expectedOutcome', label: 'Kết quả yêu cầu' },
+                {i.status === 'Submitted' && (
+                  <Button
+                    variant="contained"
+                    onClick={() =>
+                      open('review', 'Phân loại sự cố', [
+                        { name: 'type', label: 'Loại sự cố' },
+                        { name: 'category', label: 'Nhóm xử lý' },
+                      ])
+                    }
+                  >
+                    {i.type && i.category ? 'Cập nhật phân loại' : 'Phân loại sự cố'}
+                  </Button>
+                )}
+                {!works.isFetching && !openWorkOrder && (
+                  <Button
+                    variant="contained"
+                    disabled={!i.type || !staffOptions.length}
+                    onClick={() =>
+                      open('work-orders', 'Giao lệnh sửa chữa', [
+                        {
+                          name: 'staffId',
+                          label: 'Nhân viên phụ trách',
+                          type: 'staff',
+                          options: staffOptions,
+                        },
+                        { name: 'expectedOutcome', label: 'Kết quả cần đạt' },
                         {
                           name: 'targetCompletionAt',
                           label: 'Hạn hoàn thành (giờ Việt Nam)',
                           type: 'instant',
                         },
-                      ],
-                      { staffId: currentStaff },
-                    )
-                  }
-                >
-                  Giao Staff phụ trách hiện tại
-                </Button>
-                <Button onClick={() => open('reject', 'Từ chối báo cáo', reason)}>Từ chối</Button>
-                <Button
-                  onClick={() =>
-                    open('duplicate', 'Đánh dấu trùng báo cáo', [
-                      ...reason,
-                      {
-                        name: 'duplicateOfId',
-                        label: 'Sự cố gốc',
-                        type: 'incident',
-                        incidentScope: {
-                          id: i.id,
-                          locationId: i.locationId,
-                          roomId: i.roomId,
-                          assetId: i.assetId,
+                      ])
+                    }
+                  >
+                    Giao nhân viên xử lý
+                  </Button>
+                )}
+                {!works.isFetching && !openWorkOrder && i.type && (
+                  <Button
+                    onClick={() =>
+                      open(
+                        'direct-completion',
+                        'Xác nhận Owner xử lý trực tiếp',
+                        [
+                          { name: 'actualCost', label: 'Chi phí thực tế (VND)', type: 'money' },
+                          { name: 'result', label: 'Kết quả xử lý' },
+                          ...(i.assetId ? assetFields : []),
+                        ],
+                        {
+                          evidenceIds:
+                            evidence.data
+                              ?.filter((e) => e.kind === 'Direct' && !e.activityId)
+                              .map((e) => e.id) ?? [],
                         },
-                      },
-                    ])
-                  }
-                >
-                  Trùng báo cáo
-                </Button>
-                <Button onClick={() => open('cancel', 'Hủy xử lý sự cố', reason)}>Hủy sự cố</Button>
-                <Button onClick={() => open('resolve', 'Đóng sự cố không cần sửa chữa', reason)}>
-                  Đóng theo quyết định Owner
-                </Button>
-                <Button
-                  disabled={!i.type}
-                  onClick={() =>
-                    open(
-                      'direct-completion',
-                      'Xác nhận Owner xử lý trực tiếp',
-                      [
-                        { name: 'actualCost', label: 'Chi phí thực tế (VND)', type: 'money' },
-                        { name: 'result', label: 'Kết quả xử lý' },
-                        ...(i.assetId ? assetFields : []),
-                      ],
-                      {
-                        evidenceIds:
-                          evidence.data
-                            ?.filter((e) => e.kind === 'Direct' && !e.activityId)
-                            .map((e) => e.id) ?? [],
-                      },
-                    )
-                  }
-                >
-                  Hoàn tất xử lý trực tiếp
-                </Button>
+                      )
+                    }
+                  >
+                    Owner xử lý trực tiếp
+                  </Button>
+                )}
+                {i.status === 'Submitted' && (
+                  <details>
+                    <summary>Thao tác khác</summary>
+                    <Stack direction="row" sx={{ flexWrap: 'wrap', gap: 1, pt: 1 }}>
+                      <Button onClick={() => open('reject', 'Từ chối báo cáo', reason)}>
+                        Từ chối
+                      </Button>
+                      <Button
+                        onClick={() =>
+                          open('duplicate', 'Đánh dấu trùng báo cáo', [
+                            ...reason,
+                            {
+                              name: 'duplicateOfId',
+                              label: 'Sự cố gốc',
+                              type: 'incident',
+                              incidentScope: {
+                                id: i.id,
+                                locationId: i.locationId,
+                                roomId: i.roomId,
+                                assetId: i.assetId,
+                              },
+                            },
+                          ])
+                        }
+                      >
+                        Trùng báo cáo
+                      </Button>
+                      <Button
+                        color="error"
+                        onClick={() => open('cancel', 'Hủy xử lý sự cố', reason)}
+                      >
+                        Hủy sự cố
+                      </Button>
+                      <Button
+                        onClick={() => open('resolve', 'Đóng sự cố không cần sửa chữa', reason)}
+                      >
+                        Đóng không cần sửa chữa
+                      </Button>
+                    </Stack>
+                  </details>
+                )}
               </Stack>
             )}
-            {editable && (
+            {editable && !staffOptions.length && (
               <Alert severity="info">
-                {currentStaff
-                  ? 'Đã có Staff phụ trách hiện tại.'
-                  : 'Chưa có phân công Staff hiệu lực.'}{' '}
-                Máy chủ kiểm tra các lệnh sửa chữa và chi phí tồn đọng trước khi đóng sự cố.
+                Cơ sở chưa có nhân viên đủ điều kiện nhận việc. Hãy kiểm tra phân công và thời gian
+                làm việc trước khi giao xử lý.
               </Alert>
             )}
-            <Typography variant="h6">Bằng chứng báo cáo, kiểm tra và hoàn tất</Typography>
-            {evidence.data?.map((e) => (
-              <PrivateEvidenceViewer
-                key={e.id}
-                label={`${e.kind} · ${e.length} byte · ${e.workOrderId ? 'Lệnh sửa chữa' : 'Sự cố'}`}
-                filename={`su-co-${e.kind}-${e.id}.jpg`}
-                contentType={e.contentType}
-                fetchBlob={(signal) =>
-                  action.request<Blob>(`${root}/${id}/evidence/${e.id}`, { signal }, 'blob')
-                }
-              />
-            ))}
-            {editable && <DirectEvidenceUpload id={id} />}
-            <Typography variant="h6">Ứng phó khẩn cấp và quyết định chi phí</Typography>
+            {!!evidence.data?.filter((e) => e.kind === 'Report').length && (
+              <Typography variant="h6">Ảnh Tenant gửi ban đầu</Typography>
+            )}
+            {evidence.data
+              ?.filter((e) => e.kind === 'Report')
+              .map((e) => (
+                <PrivateEvidenceViewer
+                  key={e.id}
+                  label={`Ảnh báo cáo · ${e.length.toLocaleString('vi-VN')} byte`}
+                  filename={`su-co-${e.kind}-${e.id}.jpg`}
+                  contentType={e.contentType}
+                  fetchBlob={(signal) =>
+                    action.request<Blob>(`${root}/${id}/evidence/${e.id}`, { signal }, 'blob')
+                  }
+                />
+              ))}
+            {editable && !openWorkOrder && i.type && <DirectEvidenceUpload id={id} />}
+            {i.severity === 'Emergency' && <Typography variant="h6">Ứng phó khẩn cấp</Typography>}
             {editable && i.severity === 'Emergency' && (
               <>
                 <DirectEvidenceUpload id={id} kind="EmergencyAction" />
@@ -443,7 +696,10 @@ export function IncidentDetail({ id }: { id: string }) {
                       'emergency-actions',
                       'Ghi nhận ứng phó của Owner',
                       [
-                        { name: 'note', label: 'Hành động ứng phó an toàn đã thực hiện' },
+                        {
+                          name: 'note',
+                          label: 'Biện pháp an toàn đã thực hiện và khó khăn còn gặp phải',
+                        },
                         {
                           name: 'requestedCost',
                           label: 'Chi phí cần quyết định (VND)',
@@ -467,7 +723,15 @@ export function IncidentDetail({ id }: { id: string }) {
             {emergency.data?.map((e) => (
               <Paper key={e.id} variant="outlined" sx={{ p: 2 }}>
                 <Typography>
-                  Hoạt động {e.activityId} · Yêu cầu{' '}
+                  {history.data?.items.find((item) => item.id === e.activityId)?.occurredAt
+                    ? formatInstant(
+                        history.data.items.find((item) => item.id === e.activityId)!.occurredAt,
+                      )
+                    : 'Ứng phó khẩn cấp'}{' '}
+                  ·{' '}
+                  {history.data?.items.find((item) => item.id === e.activityId)?.note ||
+                    'Đã ghi nhận ứng phó'}{' '}
+                  · Yêu cầu{' '}
                   {e.requestedCost == null ? 'Không có' : formatIncidentMoney(e.requestedCost)} ·{' '}
                   {e.costApproved == null
                     ? 'Chưa quyết định'
@@ -475,6 +739,23 @@ export function IncidentDetail({ id }: { id: string }) {
                       ? 'Đã duyệt'
                       : 'Đã từ chối'}
                 </Typography>
+                {evidence.data
+                  ?.filter((image) => image.activityId === e.activityId)
+                  .map((image) => (
+                    <PrivateEvidenceViewer
+                      key={image.id}
+                      label="Ảnh ứng phó khẩn cấp"
+                      filename={`ung-pho-khan-cap-${image.id}.jpg`}
+                      contentType={image.contentType}
+                      fetchBlob={(signal) =>
+                        action.request<Blob>(
+                          `${root}/${id}/evidence/${image.id}`,
+                          { signal },
+                          'blob',
+                        )
+                      }
+                    />
+                  ))}
                 {editable && e.requestedCost != null && e.costApproved == null && (
                   <>
                     <Button
@@ -505,7 +786,7 @@ export function IncidentDetail({ id }: { id: string }) {
                 )}
               </Paper>
             ))}
-            <Typography variant="h6">Lệnh sửa chữa liên quan</Typography>
+            <Typography variant="h6">Kiểm tra và xử lý</Typography>
             <OwnerTable
               loading={works.isFetching}
               error={works.error}
@@ -515,28 +796,46 @@ export function IncidentDetail({ id }: { id: string }) {
               id={(w) => w.id}
               select={(w) => setSelectedWork(w.id)}
               columns={[
-                { label: 'Kết quả yêu cầu', render: (w) => w.expectedOutcome },
+                {
+                  label: 'Công việc',
+                  render: (w) => (
+                    <Stack spacing={0.25}>
+                      <Typography sx={{ fontWeight: 600 }}>
+                        {w.description || w.expectedOutcome}
+                      </Typography>
+                      <Typography variant="body2" color="text.secondary">
+                        {w.locationName ?? 'Cơ sở liên quan'} ·{' '}
+                        {w.roomNumber ? `Phòng ${w.roomNumber}` : w.commonArea || 'Khu vực chung'}
+                        {w.assetName ? ` · ${w.assetName}` : ''}
+                      </Typography>
+                    </Stack>
+                  ),
+                },
+                { label: 'Nhân viên', render: (w) => w.assignedStaffName || 'Chưa rõ nhân viên' },
                 { label: 'Trạng thái', render: (w) => statusText(w.status) },
+                { label: 'Hạn hoàn thành', render: (w) => formatInstant(w.targetCompletionAt) },
               ]}
             />
-            <OwnerPagination
-              page={workPage}
-              total={works.data?.totalCount ?? 0}
-              change={setWorkPage}
-            />
+            {!!works.data?.totalCount && (
+              <OwnerPagination page={workPage} total={works.data.totalCount} change={setWorkPage} />
+            )}
             {selectedWork && <WorkOrderDetail key={selectedWork} id={selectedWork} />}
-            <Typography variant="h6">Chi phí đã ghi nhận</Typography>
+            {!!expenses.data?.length && <Typography variant="h6">Tài chính</Typography>}
             {expenses.data?.map((e) => (
               <Typography key={e.id}>
                 {e.category} · {e.expenseDate.split('-').reverse().join('/')} ·{' '}
                 {formatIncidentMoney(e.amount)}
               </Typography>
             ))}
-            <Typography variant="h6">Lịch sử và ghi nhận khó khăn</Typography>
+            {!!history.data?.items.length && <Typography variant="h6">Lịch sử thao tác</Typography>}
             {history.data?.items.map((h) => (
-              <Typography key={h.id}>
-                {formatInstant(h.occurredAt)} · {h.action} · {h.note} · {h.actorId}
-              </Typography>
+              <Paper key={h.id} variant="outlined" sx={{ p: 1.25 }}>
+                <Typography sx={{ fontWeight: 600 }}>{activityLabel(h.action)}</Typography>
+                <Typography variant="body2" color="text.secondary">
+                  {formatInstant(h.occurredAt)} · Người thực hiện
+                </Typography>
+                {h.note && <Typography>{h.note}</Typography>}
+              </Paper>
             ))}
             <OwnerPagination
               page={historyPage}
@@ -624,7 +923,16 @@ export function WorkOrderDetail({
   const [command, setCommand] = useState<IncidentCommand | null>(null),
     [page, setPage] = useState(1);
   const w = q.data;
-  const history = useOwnerQuery<
+  const activityHistory = useOwnerQuery<
+    OwnerPage<{
+      id: string;
+      action: string;
+      note: string;
+      occurredAt: string;
+      actorId: string | null;
+    }>
+  >(['work-order-activity', id], `${workRoot}/${id}/history?page=1&pageSize=50`, !!w);
+  const maintenanceHistory = useOwnerQuery<
     OwnerPage<{
       id: string;
       action: string;
@@ -645,14 +953,33 @@ export function WorkOrderDetail({
     `/api/v1/staff-location-assignments?locationId=${w?.locationId}`,
     !!w,
   );
-  const currentStaff = assignments.data?.find(
-    (x) => x.startDate <= todayVietnam() && x.endDate >= todayVietnam(),
-  )?.staffUserId;
+  const staffDirectory = useOwnerQuery<OwnerPage<Staff>>(
+    ['work-order-staff-directory'],
+    '/api/v1/staff?page=1&pageSize=100',
+    !!w,
+  );
+  const today = todayVietnam();
+  const eligibleIds = new Set(
+    (assignments.data ?? [])
+      .filter((x) => x.startDate <= today && x.endDate >= today)
+      .map((x) => x.staffUserId),
+  );
+  const staffOptions = (staffDirectory.data?.items ?? [])
+    .filter(
+      (staff) =>
+        staff.isActive &&
+        staff.employment?.status === 'Active' &&
+        staff.employment.startDate <= today &&
+        (!staff.employment.endDate || staff.employment.endDate >= today) &&
+        eligibleIds.has(staff.userId),
+    )
+    .map((staff) => ({ id: staff.userId, label: staff.fullName || staff.email }));
   function open(
     operation: string,
     title: string,
     fields: IncidentCommand['fields'],
     extra?: Record<string, unknown>,
+    initialValues?: Record<string, string>,
   ) {
     if (w)
       setCommand({
@@ -661,6 +988,7 @@ export function WorkOrderDetail({
         version: w.version,
         fields,
         extra,
+        initialValues,
       });
   }
   const action = useOwnerAction();
@@ -673,12 +1001,41 @@ export function WorkOrderDetail({
     <ChartCard title="Chi tiết lệnh sửa chữa">
       <Stack spacing={2}>
         <OwnerFeedback
-          busy={q.isFetching}
-          error={q.error || history.error || assignments.error || evidence.error || action.error}
+          busy={
+            q.isFetching ||
+            activityHistory.isFetching ||
+            maintenanceHistory.isFetching ||
+            assignments.isFetching ||
+            staffDirectory.isFetching ||
+            evidence.isFetching
+          }
+          error={
+            q.error ||
+            activityHistory.error ||
+            maintenanceHistory.error ||
+            assignments.error ||
+            staffDirectory.error ||
+            evidence.error ||
+            action.error
+          }
         />
         <Button
-          disabled={q.isFetching}
-          onClick={() => void action.run(async () => undefined, 'Đã tải lại lệnh sửa chữa.')}
+          disabled={
+            q.isFetching ||
+            activityHistory.isFetching ||
+            maintenanceHistory.isFetching ||
+            evidence.isFetching
+          }
+          onClick={() =>
+            void Promise.all([
+              q.refetch(),
+              activityHistory.refetch(),
+              maintenanceHistory.refetch(),
+              assignments.refetch(),
+              staffDirectory.refetch(),
+              evidence.refetch(),
+            ])
+          }
         >
           Tải lại lệnh sửa chữa
         </Button>
@@ -687,6 +1044,8 @@ export function WorkOrderDetail({
             <RecordContext
               locationId={w.locationId}
               roomId={w.roomId}
+              commonArea={w.commonArea}
+              assetId={w.assetId}
               incidentId={w.incidentId}
               staffId={w.assignedStaffId}
             />
@@ -700,21 +1059,22 @@ export function WorkOrderDetail({
                 {w.fastRepairCategory}. Chi phí 0 VND và không sử dụng vật tư.
               </Alert>
             )}
+            <Typography variant="h6">Công việc cần hoàn thành</Typography>
+            <Typography>{w.expectedOutcome}</Typography>
             <Typography>
-              {w.expectedOutcome} · {statusText(w.status)} · {w.isOverdue ? 'Quá hạn' : 'Hạn'}{' '}
+              {statusText(w.status)} · {w.isOverdue ? 'Quá hạn' : 'Hạn hoàn thành'}{' '}
               {formatInstant(w.targetCompletionAt)}
             </Typography>
             <Typography>
-              Phiên bản {w.version} ·{' '}
               {w.planApproved ? 'Phương án đã được duyệt' : 'Phương án chưa được duyệt'}
             </Typography>
             {w.canStart && (
               <Alert severity="info">
-                Máy chủ xác nhận Staff có thể bắt đầu thực hiện phương án đã duyệt.
+                Phương án đã được duyệt. Nhân viên có thể bắt đầu sửa chữa.
               </Alert>
             )}
             <Typography>
-              Kiểm tra: {w.inspectionResult || 'Chưa có'} · Phương án v{w.proposalVersion}:{' '}
+              Kiểm tra: {w.inspectionResult || 'Chưa có'} · Phương án:{' '}
               {w.proposedSolution || 'Chưa có'} · {w.estimatedMinutes ?? '—'} phút
             </Typography>
             <Typography>
@@ -760,9 +1120,19 @@ export function WorkOrderDetail({
             {w.assetProposalPending && (
               <Stack spacing={1}>
                 <Typography>
-                  Staff đề xuất tài sản {w.proposedAssetName || w.proposedAssetId} ·{' '}
+                  Nhân viên đề xuất tài sản {w.proposedAssetName || 'mới'} ·{' '}
                   {w.proposedAssetCategory} · {w.proposedAssetCondition}
                 </Typography>
+                {activityHistory.data?.items.find((item) => item.action === 'asset_proposed')
+                  ?.note && (
+                  <Typography variant="body2">
+                    Lý do đề xuất:{' '}
+                    {
+                      activityHistory.data.items.find((item) => item.action === 'asset_proposed')!
+                        .note
+                    }
+                  </Typography>
+                )}
                 <Stack direction="row" spacing={1}>
                   <Button
                     disabled={q.isFetching || !!q.error}
@@ -785,79 +1155,121 @@ export function WorkOrderDetail({
                 </Stack>
               </Stack>
             )}
-            <Typography variant="h6">Ảnh kiểm tra và kết quả</Typography>
-            <Stack direction="row" useFlexGap spacing={1} sx={{ flexWrap: 'wrap' }}>
-              {evidence.data?.map((image) => (
-                <PrivateEvidenceViewer
-                  key={image.id}
-                  label={image.kind === 'Completion' ? 'ảnh kết quả sửa chữa' : 'ảnh kiểm tra'}
-                  filename={`sua-chua-${image.kind}-${image.id}.jpg`}
-                  contentType={image.contentType}
-                  fetchBlob={(signal) =>
-                    action.request<Blob>(
-                      `${workRoot}/${id}/evidence/${image.id}`,
-                      { signal },
-                      'blob',
-                    )
-                  }
-                />
-              ))}
-            </Stack>
-            {!q.isFetching && !q.error && w.status === 'PendingVerification' && (
-              <Stack direction="row">
-                <Button
-                  onClick={() =>
-                    open('verify', 'Xác minh kết quả và chi phí sửa chữa', [
-                      { name: 'actualCost', label: 'Chi phí thực tế (VND)', type: 'money' },
-                      { name: 'result', label: 'Kết quả xác minh' },
-                      {
-                        name: 'costVarianceReason',
-                        label: 'Lý do chênh lệch dự toán',
-                        optional: true,
-                      },
-                      ...(w.assetId ? assetFields : []),
-                    ])
-                  }
-                >
-                  Xác minh hoàn tất
-                </Button>
-                <Button
-                  onClick={() =>
-                    open('rework', 'Yêu cầu sửa chữa lại', [
-                      { name: 'note', label: 'Yêu cầu làm lại' },
-                    ])
-                  }
-                >
-                  Yêu cầu làm lại
-                </Button>
+            {w.status === 'PendingVerification' && w.assetProposalPending && (
+              <Alert severity="warning">
+                Cần xác nhận hoặc từ chối liên kết tài sản trước khi nghiệm thu lệnh sửa chữa.
+              </Alert>
+            )}
+            {!!evidence.data?.length && (
+              <Typography variant="h6">Ảnh kiểm tra và kết quả</Typography>
+            )}
+            {!!evidence.data?.length && (
+              <Stack direction="row" useFlexGap spacing={1} sx={{ flexWrap: 'wrap' }}>
+                {evidence.data.map((image) => (
+                  <PrivateEvidenceViewer
+                    key={image.id}
+                    label={image.kind === 'Completion' ? 'ảnh kết quả sửa chữa' : 'ảnh kiểm tra'}
+                    filename={`sua-chua-${image.kind}-${image.id}.jpg`}
+                    contentType={image.contentType}
+                    fetchBlob={(signal) =>
+                      action.request<Blob>(
+                        `${workRoot}/${id}/evidence/${image.id}`,
+                        { signal },
+                        'blob',
+                      )
+                    }
+                  />
+                ))}
               </Stack>
             )}
+            {!q.isFetching &&
+              !q.error &&
+              w.status === 'PendingVerification' &&
+              !w.assetProposalPending && (
+                <Stack direction="row">
+                  <Button
+                    onClick={() =>
+                      open('verify', 'Xác minh kết quả và chi phí sửa chữa', [
+                        { name: 'actualCost', label: 'Chi phí thực tế (VND)', type: 'money' },
+                        { name: 'result', label: 'Kết quả xác minh' },
+                        {
+                          name: 'costVarianceReason',
+                          label: 'Lý do chênh lệch dự toán',
+                          optional: true,
+                        },
+                        ...(w.assetId ? assetFields : []),
+                      ])
+                    }
+                  >
+                    Xác minh hoàn tất
+                  </Button>
+                  <Button
+                    onClick={() =>
+                      open('rework', 'Yêu cầu sửa chữa lại', [
+                        { name: 'note', label: 'Yêu cầu làm lại' },
+                      ])
+                    }
+                  >
+                    Yêu cầu làm lại
+                  </Button>
+                </Stack>
+              )}
             {!q.isFetching && !q.error && !['Verified', 'Cancelled'].includes(w.status) && (
-              <Stack direction="row">
+              <Stack spacing={1}>
+                {!assignments.isFetching && !staffDirectory.isFetching && !staffOptions.length && (
+                  <Alert severity="info">
+                    Không có nhân viên đang làm việc và được phân công hợp lệ tại cơ sở. Chưa thể
+                    đổi người phụ trách.
+                  </Alert>
+                )}
                 <Button
-                  disabled={!currentStaff || currentStaff === w.assignedStaffId}
+                  disabled={!staffOptions.length}
                   onClick={() =>
-                    open('reassign', 'Phân công lại Staff hiện phụ trách', reason, {
-                      staffId: currentStaff,
-                    })
-                  }
-                >
-                  Phân công lại
-                </Button>
-                <Button
-                  onClick={() =>
-                    open('cancel', 'Hủy lệnh sửa chữa', [
+                    open('reassign', 'Phân công lại nhân viên phụ trách', [
+                      {
+                        name: 'staffId',
+                        label: 'Nhân viên phụ trách',
+                        type: 'staff',
+                        options: staffOptions,
+                      },
                       ...reason,
-                      ...(w.assetId ? assetFields : []),
                     ])
                   }
                 >
-                  Hủy lệnh sửa chữa
+                  Đổi nhân viên phụ trách
                 </Button>
+                <details>
+                  <summary>Thao tác khác</summary>
+                  <Button
+                    color="error"
+                    onClick={() =>
+                      open('cancel', 'Hủy lệnh sửa chữa', [
+                        ...reason,
+                        ...(w.assetId ? assetFields : []),
+                      ])
+                    }
+                  >
+                    Hủy lệnh sửa chữa
+                  </Button>
+                </details>
               </Stack>
             )}
-            <Typography variant="h6">Lịch sử bảo trì của lệnh sửa chữa</Typography>
-            {history.data?.items.map((h) => (
+            {!!activityHistory.data?.items.length && (
+              <Typography variant="h6">Lịch sử xử lý</Typography>
+            )}
+            {activityHistory.data?.items.map((h) => (
+              <Paper key={h.id} variant="outlined" sx={{ p: 1.25 }}>
+                <Typography sx={{ fontWeight: 600 }}>{activityLabel(h.action)}</Typography>
+                <Typography variant="body2" color="text.secondary">
+                  {formatInstant(h.occurredAt)} · Người thực hiện
+                </Typography>
+                {h.note && <Typography>{h.note}</Typography>}
+              </Paper>
+            ))}
+            {!!maintenanceHistory.data?.items.length && (
+              <Typography variant="h6">Tài chính và lịch sử xác minh</Typography>
+            )}
+            {maintenanceHistory.data?.items.map((h) => (
               <Typography key={h.id}>
                 {formatInstant(h.verifiedAt)} ·{' '}
                 {h.action === 'verified'
@@ -874,7 +1286,13 @@ export function WorkOrderDetail({
                 · {formatIncidentMoney(h.actualCost)}
               </Typography>
             ))}
-            <OwnerPagination page={page} total={history.data?.totalCount ?? 0} change={setPage} />
+            {!!maintenanceHistory.data?.totalCount && (
+              <OwnerPagination
+                page={page}
+                total={maintenanceHistory.data.totalCount}
+                change={setPage}
+              />
+            )}
             {w.status === 'Verified' && w.roomId && (w.actualCost ?? 0) > 0 && (
               <CompensationPanel work={w} evidence={evidence.data ?? []} />
             )}
@@ -895,11 +1313,15 @@ export function WorkOrderDetail({
 function RecordContext({
   locationId,
   roomId,
+  commonArea,
+  assetId,
   incidentId,
   staffId,
 }: {
   locationId: string;
   roomId?: string | null;
+  commonArea?: string | null;
+  assetId?: string | null;
   incidentId: string | null;
   staffId?: string;
 }) {
@@ -914,6 +1336,11 @@ function RecordContext({
     `/api/v1/rooms/${roomId}`,
     !!roomId,
   );
+  const asset = useOwnerQuery<{ name: string }>(
+    ['incident-asset-name', assetId],
+    `/api/v1/assets/${assetId}`,
+    !!assetId,
+  );
   const staff = useOwnerQuery<Staff>(
     ['staff-detail', staffId],
     `/api/v1/staff/${staffId}`,
@@ -923,12 +1350,15 @@ function RecordContext({
     <Stack spacing={1}>
       <Typography>
         {location.data?.name ?? 'Cơ sở liên quan'}
-        {roomId ? ` · Phòng ${room.data?.roomNumber ?? 'liên quan'}` : ' · Khu vực chung'} ·{' '}
+        {roomId
+          ? ` · Phòng ${room.data?.roomNumber ?? 'liên quan'}`
+          : ` · ${commonArea || 'Khu vực chung'}`}{' '}
+        · {assetId ? `Tài sản: ${asset.data?.name ?? 'đang tải'}` : 'Chưa gắn tài sản'} ·{' '}
         {staffId
           ? (staff.data?.fullName ?? 'Nhân viên đã phân công')
           : 'Chưa có nhân viên phụ trách'}
       </Typography>
-      <OwnerFeedback error={location.error || room.error || staff.error} />
+      <OwnerFeedback error={location.error || room.error || asset.error || staff.error} />
       {routed && (
         <Stack direction="row" useFlexGap spacing={1} sx={{ flexWrap: 'wrap' }}>
           {incidentId && (

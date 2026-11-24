@@ -6,7 +6,8 @@ namespace BHome.Application.PropertyManagement;
 [JsonUnmappedMemberHandling(JsonUnmappedMemberHandling.Disallow)]
 public sealed record SharedFeeData([property: JsonRequired] ChargeCategory Category, string ChargeCode,
     [property: JsonRequired] ChargingMethod Method, [property: JsonRequired] decimal ReferenceRate, string Unit, string Scope,
-    DateOnly EffectiveFrom, DateOnly? EffectiveTo);
+    DateOnly EffectiveFrom, DateOnly? EffectiveTo,
+    [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] string? ServiceName = null);
 [JsonUnmappedMemberHandling(JsonUnmappedMemberHandling.Disallow)]
 public sealed record SharedPolicyData(string Content, DateOnly EffectiveFrom);
 
@@ -18,7 +19,16 @@ public sealed partial class SharedDataValidator
         if (!Enum.IsDefined(input.Category) || !Enum.IsDefined(input.Method) || !PropertyRules.ValidCharge(input.Category, input.Method, code) ||
             code.Any(c => !char.IsAsciiLetterOrDigit(c) && c is not ('-' or '_')) || input.Scope is not ("Location" or "Room") || input.EffectiveFrom == default || input.EffectiveTo < input.EffectiveFrom)
             throw new PropertyException(400, "invalid_shared_fee");
-        return input with { ChargeCode = code, ReferenceRate = Money(input.ReferenceRate), Unit = FeeUnit(input.Category, input.Method, input.Unit) };
+        var serviceName = input.Category == ChargeCategory.ServiceFee && !string.IsNullOrWhiteSpace(input.ServiceName)
+            ? Text(input.ServiceName, 80)
+            : null;
+        return input with
+        {
+            ChargeCode = code,
+            ServiceName = serviceName,
+            ReferenceRate = Money(input.ReferenceRate),
+            Unit = FeeUnit(input.Category, input.Method, input.Unit)
+        };
     }
     private static string FeeUnit(ChargeCategory category, ChargingMethod method, string unit)
     {

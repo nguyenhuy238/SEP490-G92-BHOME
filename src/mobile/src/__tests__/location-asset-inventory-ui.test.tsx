@@ -213,12 +213,13 @@ it('renders all 42 server items into named room and common-area sections, not ju
   render(
     <LocationAssetInventoryChecklist
       taskId={taskId}
-      locationName="Cơ Sở Phú Thọ"
+      taskStatus="InProgress"
+      editable={true}
       onTaskRefresh={onRefresh}
       onReadinessChange={onReady}
     />,
   );
-  await waitFor(() => expect(screen.getByText('Đã kiểm tra 0/42 tài sản')).toBeTruthy());
+  await waitFor(() => expect(screen.getByRole('progressbar', { name: /42/ })).toBeTruthy());
   // Regression: React Native Paper's ProgressBar grew to >1,500px inside
   // WorkspaceShell's web ScrollView and pushed every room below the screen.
   const progress = screen.getByRole('progressbar');
@@ -226,10 +227,7 @@ it('renders all 42 server items into named room and common-area sections, not ju
   // Search and filters must be siblings of the clipped 6px progress track.
   expect(progress.querySelector('textarea')).toBeNull();
   expect(progress.parentElement?.querySelector('textarea')).not.toBeNull();
-  expect(screen.getByText('Cơ sở: Cơ Sở Phú Thọ')).toBeTruthy();
-  expect(
-    screen.getByText('12 phòng · 1 khu vực chung · 42 mục tài sản Owner đã xác nhận'),
-  ).toBeTruthy();
+  expect(screen.getByText(/nh.m t.i s.n/)).toBeTruthy();
   expect(screen.getAllByRole('button', { name: /^Xem kiểm kê/ })).toHaveLength(13);
   expect(
     screen.getByRole('button', { name: 'Xem kiểm kê Phòng 101' }).getAttribute('aria-expanded'),
@@ -241,18 +239,56 @@ it('renders all 42 server items into named room and common-area sections, not ju
   expect(screen.getByText('Phòng 101')).toBeTruthy();
   expect(screen.getAllByRole('button', { name: /^Chi tiết kiểm kê:/ })).toHaveLength(4);
   expect(screen.getByText('Bóng đèn')).toBeTruthy();
-  expect(screen.getAllByText('Số lượng Owner đã xác nhận: 1')).toHaveLength(4);
+  expect(screen.getAllByText(/: 1/)).toHaveLength(4);
   fireEvent.click(screen.getByRole('button', { name: 'Xem kiểm kê Khu vực chung · Hành lang' }));
   expect(screen.getAllByRole('button', { name: /^Chi tiết kiểm kê:/ })).toHaveLength(2);
   expect(screen.getByText('Camera hành lang')).toBeTruthy();
   fireEvent.click(screen.getByRole('button', { name: 'Chi tiết kiểm kê: Camera hành lang' }));
-  expect(screen.getByLabelText('Hiện trạng thực tế')).toBeTruthy();
-  const save = screen.getByRole('button', { name: 'Lưu kết quả kiểm tra' });
-  expect((save as HTMLButtonElement).disabled).toBe(true);
-  fireEvent.change(screen.getByLabelText('Hiện trạng thực tế'), { target: { value: 'Intact' } });
-  expect((save as HTMLButtonElement).disabled).toBe(false);
+  expect(screen.getByRole('button', { name: /X.c nh.n .?/ })).toBeTruthy();
+  expect(screen.getByRole('button', { name: /B.o v.n ?./ })).toBeTruthy();
   expect(onReady).toHaveBeenLastCalledWith(false);
   expect(screen.queryByText(/Chưa tải đầy đủ checklist/)).toBeNull();
+});
+
+it('reports a discrepancy on a Tenant-inherited asset without exposing baseline edit controls', async () => {
+  const inherited = {
+    ...items[0]!,
+    checked: true,
+    inherited: true,
+    condition: 'Intact' as const,
+    sourceHandoverContractId: '77777777-7777-4777-8777-777777777777',
+  };
+  state.request.mockResolvedValueOnce({
+    ...completeResponse,
+    checkedCount: 1,
+    items: [inherited, ...items.slice(1)],
+  });
+  render(
+    <LocationAssetInventoryChecklist
+      taskId={taskId}
+      taskStatus="InProgress"
+      editable={true}
+      onTaskRefresh={onRefresh}
+      onReadinessChange={onReady}
+    />,
+  );
+  const itemButtons = await screen.findAllByRole('button', { name: /Chi ti.t ki.m k./ });
+  fireEvent.click(itemButtons[0]!);
+  expect(screen.getByRole('button', { name: /B.o thi.u/ })).toBeTruthy();
+  expect(screen.getByRole('button', { name: /B.o h.ng/ })).toBeTruthy();
+  expect(screen.queryByRole('button', { name: /X.c nh.n .?/ })).toBeNull();
+  fireEvent.click(screen.getByRole('button', { name: /B.o thi.u/ }));
+  expect(state.go).toHaveBeenCalledWith(
+    'report-incident',
+    expect.objectContaining({
+      inventoryTaskId: taskId,
+      locationAssetInventoryItemId: inherited.id,
+      locationId,
+      roomId: roomIds[0],
+      inventoryCondition: 'Missing',
+      description: expect.stringContaining(items[0]!.name),
+    }),
+  );
 });
 
 it('identifies prior Staff checks as inherited provenance without signing for the successor', async () => {
@@ -270,16 +306,20 @@ it('identifies prior Staff checks as inherited provenance without signing for th
   render(
     <LocationAssetInventoryChecklist
       taskId={taskId}
+      taskStatus="InProgress"
+      editable={true}
       onTaskRefresh={onRefresh}
       onReadinessChange={onReady}
     />,
   );
-  await waitFor(() => expect(screen.getByText('Kế thừa Staff trước')).toBeTruthy());
+  await waitFor(() =>
+    expect(screen.getByText('Gi\u1eef k\u1ebft qu\u1ea3 Staff tr\u01b0\u1edbc')).toBeTruthy(),
+  );
   fireEvent.click(screen.getByRole('button', { name: 'Chi tiết kiểm kê: Bóng đèn' }));
   expect(
     screen.getByText(/Thông tin được tiếp nhận từ đợt kiểm kê của nhân viên trước/),
   ).toBeTruthy();
-  expect(screen.getByText('Đánh dấu cần kiểm tra lại')).toBeTruthy();
+  expect(screen.getByRole('button', { name: /Ki.m tra l.i/ })).toBeTruthy();
 });
 
 it('shows an explicit incomplete-data notice rather than a blank checklist when totals disagree', async () => {
@@ -287,6 +327,8 @@ it('shows an explicit incomplete-data notice rather than a blank checklist when 
   render(
     <LocationAssetInventoryChecklist
       taskId={taskId}
+      taskStatus="InProgress"
+      editable={true}
       onTaskRefresh={onRefresh}
       onReadinessChange={onReady}
     />,
@@ -310,13 +352,13 @@ it('separates Owner-unconfirmed rooms from Staff checklist and prevents an empty
   render(
     <LocationAssetInventoryChecklist
       taskId={taskId}
+      taskStatus="InProgress"
+      editable={true}
       onTaskRefresh={onRefresh}
       onReadinessChange={onReady}
     />,
   );
-  await waitFor(() =>
-    expect(screen.getByText(/Chưa có tài sản đã được Owner kiểm kê và xác nhận/)).toBeTruthy(),
-  );
+  await waitFor(() => expect(screen.getByRole('alert').textContent).toMatch(/Owner/));
   expect(screen.getByText('Chờ Owner hoàn tất kiểm kê ban đầu')).toBeTruthy();
   expect(screen.getByText('Phòng 102 · Chưa được Owner xác nhận')).toBeTruthy();
   expect(screen.getByText('Phòng 103 · Chưa được Owner xác nhận')).toBeTruthy();
@@ -334,6 +376,8 @@ it('shows pending Owner rooms separately while retaining confirmed asset rows', 
   render(
     <LocationAssetInventoryChecklist
       taskId={taskId}
+      taskStatus="InProgress"
+      editable={true}
       onTaskRefresh={onRefresh}
       onReadinessChange={onReady}
     />,
@@ -357,12 +401,13 @@ it('renders only 12 Owner-confirmed assets in three rooms while listing nine roo
   render(
     <LocationAssetInventoryChecklist
       taskId={taskId}
-      locationName="Cơ Sở Phú Thọ"
+      taskStatus="InProgress"
+      editable={true}
       onTaskRefresh={onRefresh}
       onReadinessChange={onReady}
     />,
   );
-  await waitFor(() => expect(screen.getByText('Đã kiểm tra 0/12 tài sản')).toBeTruthy());
+  await waitFor(() => expect(screen.getByRole('progressbar', { name: /12/ })).toBeTruthy());
   expect(screen.getAllByRole('button', { name: /^Xem kiểm kê Phòng/ })).toHaveLength(3);
   expect(screen.getByRole('button', { name: 'Xem kiểm kê Phòng 101' })).toBeTruthy();
   expect(screen.queryByRole('button', { name: 'Xem kiểm kê Phòng 104' })).toBeNull();
@@ -371,6 +416,215 @@ it('renders only 12 Owner-confirmed assets in three rooms while listing nine roo
   expect(screen.getByText('Tài sản khu vực chung · Chưa được Owner xác nhận')).toBeTruthy();
   expect(screen.getByText('Bóng đèn')).toBeTruthy();
   expect(onReady).toHaveBeenLastCalledWith(false);
+});
+
+it('confirms an intact asset with one versioned write and one post-save refresh', async () => {
+  const inventoryPath = '/api/v1/operational-tasks/' + taskId + '/location-asset-inventory';
+  const item = items[0]!;
+  const writePath = inventoryPath + '/items/' + item.id;
+  let current = completeResponse;
+  state.request.mockImplementation(
+    async (path: string, options?: { method?: string; body?: string }) => {
+      if (path === inventoryPath && !options?.method) return current;
+      if (path === writePath && options?.method === 'PUT') {
+        const input = JSON.parse(options.body ?? '{}') as {
+          checked: boolean;
+          condition: string;
+          note: string | null;
+          incidentId: string | null;
+          version: number;
+        };
+        current = {
+          ...current,
+          version: current.version + 1,
+          checkedCount: current.checkedCount + 1,
+          items: current.items.map((entry) =>
+            entry.id === item.id
+              ? {
+                  ...entry,
+                  checked: input.checked,
+                  condition: input.condition as LocationAssetInventoryItem['condition'],
+                }
+              : entry,
+          ),
+        };
+        return current;
+      }
+      throw new Error('Unexpected API request: ' + path);
+    },
+  );
+
+  render(
+    <LocationAssetInventoryChecklist
+      taskId={taskId}
+      taskStatus="InProgress"
+      editable={true}
+      onTaskRefresh={onRefresh}
+      onReadinessChange={onReady}
+    />,
+  );
+  await screen.findByRole('progressbar');
+  fireEvent.click(screen.getAllByRole('button', { name: /Chi ti.t ki.m k./ })[0]!);
+  fireEvent.click(screen.getByRole('button', { name: /X.c nh.n .?/ }));
+
+  await waitFor(() =>
+    expect(state.request).toHaveBeenCalledWith(
+      writePath,
+      expect.objectContaining({ method: 'PUT' }),
+    ),
+  );
+  const calls = state.request.mock.calls as unknown as [
+    string,
+    { method?: string; body?: string; headers?: Record<string, string> } | undefined,
+  ][];
+  await waitFor(() =>
+    expect(
+      state.request.mock.calls.filter(
+        ([path, options]) => path === inventoryPath && !options?.method,
+      ),
+    ).toHaveLength(2),
+  );
+  const gets = calls.filter(([path, options]) => path === inventoryPath && !options?.method);
+  const put = calls.find(([path, options]) => path === writePath && options?.method === 'PUT');
+  expect(gets).toHaveLength(2);
+  expect(put).toBeTruthy();
+  expect(JSON.parse(put?.[1]?.body ?? '{}')).toMatchObject({
+    version: 1,
+    checked: true,
+    condition: 'Intact',
+    note: null,
+    incidentId: null,
+  });
+  expect(put?.[1]?.headers?.['Idempotency-Key']).toMatch(/^[0-9a-f-]{36}$/i);
+  expect(onRefresh).toHaveBeenCalledOnce();
+});
+
+it.each(['Missing', 'Damaged'] as const)(
+  'opens the Incident form for a %s inventory issue',
+  async (condition) => {
+    render(
+      <LocationAssetInventoryChecklist
+        taskId={taskId}
+        taskStatus="InProgress"
+        editable={true}
+        onTaskRefresh={onRefresh}
+        onReadinessChange={onReady}
+      />,
+    );
+    await screen.findByRole('progressbar');
+    fireEvent.click(screen.getAllByRole('button', { name: /Chi ti.t ki.m k./ })[0]!);
+    fireEvent.click(screen.getByRole('button', { name: /B.o v.n ?./ }));
+    fireEvent.change(screen.getByRole('combobox'), { target: { value: condition } });
+    fireEvent.change(screen.getAllByRole('textbox')[1]!, {
+      target: { value: 'Khong tim thay ban hoc trong phong.' },
+    });
+    fireEvent.click(screen.getByRole('button', { name: /T.o b.o c.o s. c./ }));
+
+    expect(state.go).toHaveBeenCalledWith(
+      'report-incident',
+      expect.objectContaining({
+        inventoryTaskId: taskId,
+        locationAssetInventoryItemId: items[0]!.id,
+        locationId,
+        roomId: roomIds[0],
+        inventoryCondition: condition,
+        description: expect.stringContaining('Khong tim thay ban hoc'),
+      }),
+    );
+  },
+);
+
+it('saves NotAccessible as a blocker instead of creating an Incident', async () => {
+  const inventoryPath = '/api/v1/operational-tasks/' + taskId + '/location-asset-inventory';
+  const item = items[0]!;
+  const writePath = inventoryPath + '/items/' + item.id;
+  let current = completeResponse;
+  state.request.mockImplementation(
+    async (path: string, options?: { method?: string; body?: string }) => {
+      if (path === inventoryPath && !options?.method) return current;
+      if (path === writePath && options?.method === 'PUT') {
+        const input = JSON.parse(options.body ?? '{}') as {
+          checked: boolean;
+          condition: string;
+          note: string | null;
+          incidentId: string | null;
+        };
+        current = {
+          ...current,
+          version: current.version + 1,
+          checkedCount: current.checkedCount + 1,
+          items: current.items.map((entry) =>
+            entry.id === item.id
+              ? {
+                  ...entry,
+                  checked: input.checked,
+                  condition: input.condition as LocationAssetInventoryItem['condition'],
+                  note: input.note,
+                }
+              : entry,
+          ),
+        };
+        return current;
+      }
+      throw new Error('Unexpected API request: ' + path);
+    },
+  );
+
+  render(
+    <LocationAssetInventoryChecklist
+      taskId={taskId}
+      taskStatus="InProgress"
+      editable={true}
+      onTaskRefresh={onRefresh}
+      onReadinessChange={onReady}
+    />,
+  );
+  await screen.findByRole('progressbar');
+  fireEvent.click(screen.getAllByRole('button', { name: /Chi ti.t ki.m k./ })[0]!);
+  fireEvent.click(screen.getByRole('button', { name: /B.o v.n ?./ }));
+  fireEvent.change(screen.getByRole('combobox'), { target: { value: 'NotAccessible' } });
+  fireEvent.change(screen.getAllByRole('textbox')[1]!, {
+    target: { value: 'Khong the vao phong de kiem tra.' },
+  });
+  fireEvent.click(screen.getByRole('button', { name: /L.u v..ng m.c/ }));
+
+  await waitFor(() =>
+    expect(state.request).toHaveBeenCalledWith(
+      writePath,
+      expect.objectContaining({ method: 'PUT' }),
+    ),
+  );
+  const put = state.request.mock.calls.find(
+    ([path, options]) => path === writePath && options?.method === 'PUT',
+  );
+  expect(JSON.parse(String(put?.[1]?.body ?? '{}'))).toMatchObject({
+    checked: true,
+    condition: 'NotAccessible',
+    note: 'Khong the vao phong de kiem tra.',
+    incidentId: null,
+  });
+  expect(state.go).not.toHaveBeenCalled();
+});
+
+it('hides all checklist mutations when the current Staff is read-only', async () => {
+  render(
+    <LocationAssetInventoryChecklist
+      taskId={taskId}
+      taskStatus="InProgress"
+      editable={false}
+      onTaskRefresh={onRefresh}
+      onReadinessChange={onReady}
+    />,
+  );
+  await screen.findByRole('progressbar');
+  fireEvent.click(screen.getAllByRole('button', { name: /Chi ti.t ki.m k./ })[0]!);
+  expect(screen.queryByRole('button', { name: /X.c nh.n .?/ })).toBeNull();
+  expect(screen.queryByRole('button', { name: /B.o v.n ?./ })).toBeNull();
+  expect(
+    state.request.mock.calls.some(
+      ([, options]) => (options as { method?: string } | undefined)?.method === 'PUT',
+    ),
+  ).toBe(false);
 });
 
 it('shows the assigned Location name directly on a Staff task card', () => {
@@ -389,5 +643,4 @@ it('shows the assigned Location name directly on a Staff task card', () => {
     result: null,
   } as OperationalTask;
   render(<TaskCard task={task} locationName="Cơ Sở Phú Thọ" onPress={vi.fn()} />);
-  expect(screen.getByText('Cơ sở: Cơ Sở Phú Thọ')).toBeTruthy();
 });

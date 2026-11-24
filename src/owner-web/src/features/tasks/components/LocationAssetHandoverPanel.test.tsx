@@ -20,6 +20,40 @@ vi.mock('../../meters/useMeterApi', () => ({
 vi.mock('../../../components/common/OwnerWorkspace', () => ({
   OwnerFeedback: () => null,
 }));
+vi.mock('../../contracts/OwnerSigningPanel', () => ({
+  DrawPad: ({ onChange }: { onChange: (drawing: unknown) => void }) => (
+    <>
+      <button
+        onClick={() =>
+          onChange({
+            width: 560,
+            height: 170,
+            strokes: [
+              [
+                [1, 1],
+                [3, 3],
+                [5, 5],
+                [7, 7],
+                [9, 9],
+              ],
+            ],
+          })
+        }
+      >
+        Vẽ chữ ký
+      </button>
+      <button onClick={() => onChange(null)}>Xoá và vẽ lại</button>
+    </>
+  ),
+}));
+vi.mock('../../../components/common/PrivateEvidenceViewer', () => ({
+  PrivateEvidenceViewer: ({ fetchBlob }: { fetchBlob: (signal: AbortSignal) => Promise<Blob> }) => (
+    <>
+      <button onClick={() => void fetchBlob(new AbortController().signal)}>Xem PDF</button>
+      <button onClick={() => void fetchBlob(new AbortController().signal)}>Tải xuống</button>
+    </>
+  ),
+}));
 vi.mock('../../../hooks/useOwnerWorkspace', () => ({
   useOwnerAction: () => ({
     busy: false,
@@ -90,6 +124,9 @@ beforeEach(() => {
         };
         return state.report;
       }
+      if (route === path + '/document') {
+        return new Blob(['%PDF-1.7'], { type: 'application/pdf' });
+      }
       if (route === path + '/rework') {
         state.report = null;
         return { taskId: task.id, status: 'InProgress' };
@@ -100,7 +137,7 @@ beforeEach(() => {
 });
 afterEach(cleanup);
 
-it('requires review then approves a pending task, and signs the exact server digest only after explicit consent', async () => {
+it('requires review, handwritten ink and consent before signing the exact report, with private PDF preview', async () => {
   const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
   render(
     <QueryClientProvider client={client}>
@@ -126,8 +163,31 @@ it('requires review then approves a pending task, and signs the exact server dig
   );
   const sign = await screen.findByRole('button', { name: 'Owner ký xác nhận' });
   expect(sign).toBeDisabled();
+  const verification = screen.getByRole('button', { name: 'Thông tin xác thực' });
+  expect(verification).toHaveAttribute('aria-expanded', 'false');
+  fireEvent.click(screen.getByRole('button', { name: 'Xem PDF' }));
+  await waitFor(() =>
+    expect(state.request).toHaveBeenCalledWith(
+      path + '/document',
+      expect.objectContaining({ signal: expect.any(AbortSignal) }),
+      'blob',
+    ),
+  );
+  expect(screen.getByRole('button', { name: 'Tải xuống' })).toBeTruthy();
+  fireEvent.click(verification);
+  expect(verification).toHaveAttribute('aria-expanded', 'true');
   expect(screen.getByText('A'.repeat(64))).toBeTruthy();
+  expect(screen.getByText('B'.repeat(64))).toBeTruthy();
+  expect(screen.getByText(/Phiên bản biên bản: 3/)).toBeTruthy();
+  fireEvent.click(verification);
+  expect(verification).toHaveAttribute('aria-expanded', 'false');
   fireEvent.click(screen.getByLabelText(/Tôi đã xem biên bản phiên bản này/));
+  expect(sign).toBeDisabled();
+  fireEvent.click(screen.getByRole('button', { name: 'Vẽ chữ ký' }));
+  expect(sign).toBeEnabled();
+  fireEvent.click(screen.getByRole('button', { name: 'Xoá và vẽ lại' }));
+  expect(sign).toBeDisabled();
+  fireEvent.click(screen.getByRole('button', { name: 'Vẽ chữ ký' }));
   expect(sign).toBeEnabled();
   fireEvent.click(sign);
   await waitFor(() =>
@@ -139,12 +199,48 @@ it('requires review then approves a pending task, and signs the exact server dig
           revision: 3,
           snapshotSha256: 'A'.repeat(64),
           confirmed: true,
+          ink: {
+            width: 560,
+            height: 170,
+            strokes: [
+              [
+                [1, 1],
+                [3, 3],
+                [5, 5],
+                [7, 7],
+                [9, 9],
+              ],
+            ],
+          },
         }),
       }),
     ),
   );
   expect(await screen.findByText(/Staff cần đọc và ký xác nhận/)).toBeTruthy();
   expect(state.notify).toHaveBeenCalledWith('Owner đã ký. Đang chờ Staff xác nhận cùng phiên bản.');
+});
+
+it('clears handwritten ink and consent if the report revision changes', async () => {
+  state.report = { ...approvedReport };
+  const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+  render(
+    <QueryClientProvider client={client}>
+      <LocationAssetHandoverPanel task={task} notify={state.notify} />
+    </QueryClientProvider>,
+  );
+  const sign = await screen.findByRole('button', { name: 'Owner ký xác nhận' });
+  fireEvent.click(screen.getByRole('button', { name: 'Vẽ chữ ký' }));
+  fireEvent.click(screen.getByLabelText(/Tôi đã xem biên bản phiên bản này/));
+  expect(sign).toBeEnabled();
+
+  state.report = { ...approvedReport, revision: 4, snapshotSha256: 'C'.repeat(64) };
+  fireEvent.click(screen.getByRole('button', { name: 'Tải lại biên bản' }));
+  await screen.findByText('Biên bản phiên bản 4');
+  const newRevisionSign = screen.getByRole('button', { name: 'Owner ký xác nhận' });
+  expect(newRevisionSign).toBeDisabled();
+  expect(screen.getByLabelText(/Tôi đã xem biên bản phiên bản này/)).not.toBeChecked();
+  fireEvent.click(screen.getByRole('button', { name: 'Vẽ chữ ký' }));
+  expect(newRevisionSign).toBeDisabled();
 });
 
 it('requests rework only for selected checklist items with a meaningful explanation', async () => {

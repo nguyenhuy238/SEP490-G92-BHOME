@@ -34,6 +34,9 @@ export interface Incident {
   createdAt: string;
   staffAvailable: boolean | null;
   escalationEnabled: boolean;
+  locationName?: string | null;
+  roomNumber?: string | null;
+  assetName?: string | null;
 }
 export interface WorkOrder {
   id: string;
@@ -49,6 +52,10 @@ export interface WorkOrder {
   proposedAssetName?: string | null;
   proposedAssetCategory?: string | null;
   proposedAssetCondition?: string | null;
+  locationName?: string | null;
+  roomNumber?: string | null;
+  assetName?: string | null;
+  assignedStaffName?: string | null;
   locationId: string;
   roomId: string | null;
   assetId: string | null;
@@ -81,6 +88,10 @@ export interface IncidentActivity {
   occurredAt: string;
   actorId: string | null;
   dataJson: string | null;
+}
+export interface TenantIncidentProgress {
+  currentStep: string;
+  events: Array<{ message: string; occurredAt: string }>;
 }
 export interface IncidentEvidence {
   id: string;

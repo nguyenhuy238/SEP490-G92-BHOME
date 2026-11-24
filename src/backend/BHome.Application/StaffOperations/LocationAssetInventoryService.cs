@@ -149,9 +149,7 @@ public sealed partial class OperationalTaskService
         Permit(Permissions.OperationalTasks.Execute);
         Validate(input);
         if (itemId == Guid.Empty || input.IncidentId == Guid.Empty || input.Note?.Length > 2000 ||
-            !ValidCondition(input.Condition) || input.Checked && input.Condition == "Unassessed" ||
-            input.Checked && input.Condition is "Missing" or "Damaged" or "NotAccessible" &&
-                string.IsNullOrWhiteSpace(input.Note))
+            !ValidCondition(input.Condition))
             throw OperationalTaskException.Invalid("invalid_location_asset_inventory_item");
         var initial = await repository.FindAsync(taskId, t) ?? throw OperationalTaskException.Missing();
         await AccessAsync(initial, t, true);
@@ -169,7 +167,20 @@ public sealed partial class OperationalTaskService
                 var index = Array.FindIndex(snapshot.Items, item => item.Id == itemId);
                 if (index < 0) throw OperationalTaskException.Missing();
                 var previous = snapshot.Items[index];
-                if (previous.Inherited)
+                if (!previous.Inherited && input.Checked && input.Condition == "Unassessed")
+                    throw OperationalTaskException.Invalid("invalid_location_asset_inventory_item");
+                if (!previous.Inherited && input.Checked && input.Condition is "Missing" or "Damaged" or "NotAccessible" &&
+                    string.IsNullOrWhiteSpace(input.Note))
+                    throw OperationalTaskException.Invalid("invalid_location_asset_inventory_item");
+                // A Tenant-inherited row is an immutable Owner-confirmed baseline.
+                // Staff may attach a report about a later discrepancy, but may not
+                // rewrite its checked state, observation, note, or physical identity.
+                if (previous.Inherited &&
+                    (input.Checked != previous.Checked ||
+                     !string.Equals(input.Condition, previous.Condition, StringComparison.Ordinal) ||
+                     !string.Equals(input.Note?.Trim(), previous.Note?.Trim(), StringComparison.Ordinal) ||
+                     input.IncidentId is null ||
+                     previous.IncidentId is { } linkedIncident && linkedIncident != input.IncidentId))
                     throw OperationalTaskException.Conflict("location_asset_inventory_inherited_item_immutable");
                 if (input.IncidentId is { } incidentId)
                 {
@@ -179,21 +190,24 @@ public sealed partial class OperationalTaskService
                         (previous.IncidentId != incidentId && report.ReporterId != Actor))
                         throw OperationalTaskException.Invalid("invalid_location_asset_inventory_incident");
                 }
-                if (input.IncidentId.HasValue && string.IsNullOrWhiteSpace(input.Note))
+                if (!previous.Inherited && input.IncidentId.HasValue && string.IsNullOrWhiteSpace(input.Note))
                     throw OperationalTaskException.Invalid("location_asset_inventory_issue_note_required");
                 repository.Track(task);
                 snapshot.Items[index] = previous with
                 {
-                    Checked = input.Checked,
-                    Condition = input.Checked ? input.Condition : "Unassessed",
-                    Note = input.Note?.Trim(),
+                    Checked = previous.Inherited ? previous.Checked : input.Checked,
+                    Condition = previous.Inherited ? previous.Condition : input.Checked ? input.Condition : "Unassessed",
+                    Note = previous.Inherited ? previous.Note : input.Note?.Trim(),
                     IncidentId = input.IncidentId,
                     // A direct successor check supersedes previously inherited progress.
-                    PriorStaffTaskId = null,
-                    PriorStaffUserId = null
+                    PriorStaffTaskId = previous.Inherited ? previous.PriorStaffTaskId : null,
+                    PriorStaffUserId = previous.Inherited ? previous.PriorStaffUserId : null
                 };
                 task.LocationAssetInventoryJson = JsonSerializer.Serialize(snapshot);
-                await RecordAsync(task, "location_asset_inventory_item_checked", input.Note?.Trim() ?? "",
+                var action = previous.Inherited
+                    ? "location_asset_inventory_inherited_incident_linked"
+                    : "location_asset_inventory_item_checked";
+                await RecordAsync(task, action, input.Note?.Trim() ?? "",
                     new
                     {
                         ItemId = itemId,

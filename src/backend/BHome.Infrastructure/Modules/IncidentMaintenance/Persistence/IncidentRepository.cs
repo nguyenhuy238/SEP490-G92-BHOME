@@ -72,6 +72,15 @@ internal sealed class IncidentRepository(BHomePersistenceContext db,
     }
     public Task<IncidentRoom?> RoomAsync(Guid id, CancellationToken t) => db.Set<Room>().AsNoTracking().Where(r => r.Id == id)
         .Select(r => new IncidentRoom(r.Id, r.LocationId)).SingleOrDefaultAsync(t);
+    public Task<string?> LocationNameAsync(Guid id, CancellationToken t) => db.Locations.AsNoTracking()
+        .Where(l => l.Id == id).Select(l => l.Name).SingleOrDefaultAsync(t);
+    public Task<string?> RoomNumberAsync(Guid id, CancellationToken t) => db.Set<Room>().AsNoTracking()
+        .Where(r => r.Id == id).Select(r => r.RoomNumber).SingleOrDefaultAsync(t);
+    public Task<string?> AssetNameAsync(Guid id, CancellationToken t) => db.Set<Asset>().AsNoTracking()
+        .Where(a => a.Id == id).Select(a => a.Name).SingleOrDefaultAsync(t);
+    public Task<string?> StaffNameAsync(Guid id, CancellationToken t) => db.Users.AsNoTracking()
+        .Where(u => u.Id == id)
+        .Select(u => EF.Property<string>(u, "full_name") ?? u.UserName ?? u.Email).SingleOrDefaultAsync(t);
     public Task<IncidentTenancy?> TenancyAsync(Guid actor, Guid location, Guid? room, DateOnly date, CancellationToken t) =>
         db.Set<Contract>().AsNoTracking().Where(c => (c.TenantUserId == actor || c.Residents.Any(cr =>
                 cr.ResidenceFrom <= date && (cr.ResidenceTo == null || cr.ResidenceTo >= date) &&
@@ -173,9 +182,31 @@ internal sealed class IncidentRepository(BHomePersistenceContext db,
                 Available = (scope.Owner || scope.Staff) && db.StaffLocationAssignments.Any(a =>
                 a.LocationId == r.LocationId && a.StartDate <= scope.Today && a.EndDate >= scope.Today &&
                 db.Locations.Any(l => l.Id == r.LocationId && l.IsActive) && db.Users.Any(u => u.Id == a.StaffUserId && u.IsActive &&
-                    db.UserRoles.Any(ur => ur.UserId == u.Id && db.Roles.Any(role => role.Id == ur.RoleId && role.Name == Roles.Staff))))
+                    db.UserRoles.Any(ur => ur.UserId == u.Id && db.Roles.Any(role => role.Id == ur.RoleId && role.Name == Roles.Staff)))),
+                LocationName = db.Locations.Where(l => l.Id == r.LocationId).Select(l => l.Name).FirstOrDefault(),
+                RoomNumber = r.RoomId == null ? null : db.Set<Room>().Where(room => room.Id == r.RoomId).Select(room => room.RoomNumber).FirstOrDefault(),
+                AssetName = r.AssetId == null ? null : db.Set<Asset>().Where(asset => asset.Id == r.AssetId).Select(asset => asset.Name).FirstOrDefault(),
+                OpenWorkOrderStatus = db.Set<MaintenanceWorkOrder>()
+                    .Where(work => work.IncidentId == r.Id && work.Status != WorkOrderStatus.Verified && work.Status != WorkOrderStatus.Cancelled)
+                    .OrderByDescending(work => work.CreatedAt).Select(work => (WorkOrderStatus?)work.Status).FirstOrDefault(),
+                AssignedStaffName = db.Set<MaintenanceWorkOrder>()
+                    .Where(work => work.IncidentId == r.Id && work.Status != WorkOrderStatus.Verified && work.Status != WorkOrderStatus.Cancelled)
+                    .OrderByDescending(work => work.CreatedAt)
+                    .Select(work => db.Users.Where(user => user.Id == work.AssignedStaffId)
+                        .Select(user => EF.Property<string>(user, "full_name") ?? user.UserName ?? user.Email).FirstOrDefault())
+                    .FirstOrDefault()
             }).ToArrayAsync(t);
-        return new(items.Select(x => IncidentProjection.Report(x.Report, scope.Owner || scope.Staff ? x.Available : null)).ToArray(), query.Page, query.PageSize, count);
+        return new(items.Select(x => IncidentProjection.Report(x.Report, scope.Owner || scope.Staff ? x.Available : null,
+            scope.Tenant && !scope.Owner && !scope.Staff) with
+        {
+            // Tenant can only see their own report, so these human-readable place labels
+            // do not widen the report scope and avoid exposing raw identifiers in Mobile.
+            LocationName = x.LocationName,
+            RoomNumber = x.RoomNumber,
+            AssetName = x.AssetName,
+            OpenWorkOrderStatus = scope.Owner || scope.Staff ? x.OpenWorkOrderStatus?.ToString() : null,
+            AssignedStaffName = scope.Owner || scope.Staff ? x.AssignedStaffName : null
+        }).ToArray(), query.Page, query.PageSize, count);
     }
     public async Task<IncidentPage<WorkOrderView>> ListWorkOrdersAsync(IncidentScope scope, IncidentQuery query, DateTimeOffset now, CancellationToken t)
     {
@@ -189,8 +220,23 @@ internal sealed class IncidentRepository(BHomePersistenceContext db,
         if (query.Status.HasValue || query.Severity.HasValue) rows = rows.Where(w => w.IncidentId != null && reports.Contains(w.IncidentId.Value));
         if (query.WorkOrderStatus is { } status) rows = rows.Where(w => w.Status == status);
         var count = await rows.CountAsync(t);
-        var items = await rows.OrderBy(w => w.TargetCompletionAt).ThenBy(w => w.Id).Skip((query.Page - 1) * query.PageSize).Take(query.PageSize).ToArrayAsync(t);
-        return new(items.Select(w => IncidentProjection.Work(w, now, scope.Owner || w.AssignedStaffId == scope.ActorId)).ToArray(), query.Page, query.PageSize, count);
+        var items = await rows.OrderBy(w => w.TargetCompletionAt).ThenBy(w => w.Id).Skip((query.Page - 1) * query.PageSize).Take(query.PageSize)
+            .Select(w => new
+            {
+                Work = w,
+                LocationName = db.Locations.Where(l => l.Id == w.LocationId).Select(l => l.Name).FirstOrDefault(),
+                RoomNumber = w.RoomId == null ? null : db.Set<Room>().Where(room => room.Id == w.RoomId).Select(room => room.RoomNumber).FirstOrDefault(),
+                AssetName = w.AssetId == null ? null : db.Set<Asset>().Where(asset => asset.Id == w.AssetId).Select(asset => asset.Name).FirstOrDefault(),
+                AssignedStaffName = db.Users.Where(u => u.Id == w.AssignedStaffId)
+                    .Select(u => EF.Property<string>(u, "full_name") ?? u.UserName ?? u.Email).FirstOrDefault()
+            }).ToArrayAsync(t);
+        return new(items.Select(x => IncidentProjection.Work(x.Work, now, scope.Owner || x.Work.AssignedStaffId == scope.ActorId) with
+        {
+            LocationName = scope.Owner || scope.Staff ? x.LocationName : null,
+            RoomNumber = scope.Owner || scope.Staff ? x.RoomNumber : null,
+            AssetName = scope.Owner || scope.Staff ? x.AssetName : null,
+            AssignedStaffName = scope.Owner || x.Work.AssignedStaffId == scope.ActorId ? x.AssignedStaffName : null
+        }).ToArray(), query.Page, query.PageSize, count);
     }
     public async Task<IncidentPage<IncidentActivityView>> HistoryAsync(Guid incident, IncidentScope scope, int page, int size, CancellationToken t)
     {
@@ -234,7 +280,8 @@ internal sealed class IncidentRepository(BHomePersistenceContext db,
             (n.IncidentId != null && reports.Contains(n.IncidentId.Value) || n.WorkOrderId != null && works.Contains(n.WorkOrderId.Value)));
         var count = await rows.CountAsync(t);
         var items = await rows.OrderByDescending(n => n.CreatedAt).ThenBy(n => n.Id).Skip((page - 1) * size).Take(size)
-            .Select(n => new IncidentNotificationView(n.Id, n.IncidentId, n.Event, n.HighPriority, n.CreatedAt, n.ReadAt, n.DeliveryState, n.WorkOrderId)).ToArrayAsync(t);
+            .Select(n => new IncidentNotificationView(n.Id, n.IncidentId, n.Event, n.HighPriority, n.CreatedAt, n.ReadAt,
+                n.DeliveryState, scope.Tenant && !scope.Owner && !scope.Staff ? null : n.WorkOrderId)).ToArrayAsync(t);
         return new(items, page, size, count);
     }
     public Task<IncidentNotification?> NotificationAsync(Guid id, Guid actor, CancellationToken t) =>

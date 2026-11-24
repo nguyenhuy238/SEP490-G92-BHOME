@@ -79,6 +79,7 @@ public sealed partial class Compact24OwnerSetupTests
             Data = System.Text.Json.JsonSerializer.SerializeToElement(new
             {
                 category = "ServiceFee",
+                serviceName = "Internet",
                 chargeCode = "INTERNET",
                 method,
                 referenceRate = "1000",

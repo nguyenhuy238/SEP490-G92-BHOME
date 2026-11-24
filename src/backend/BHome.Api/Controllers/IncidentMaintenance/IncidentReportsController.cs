@@ -58,6 +58,8 @@ public sealed class IncidentReportsController(IncidentService service) : Control
     public Task<IncidentView> Get(Guid id, CancellationToken t) => service.GetAsync(id, t);
     [HttpGet("{id:guid}/history")]
     public Task<IncidentPage<IncidentActivityView>> History(Guid id, [FromQuery] int page = 1, [FromQuery] int pageSize = 20, CancellationToken t = default) => service.HistoryAsync(id, page, pageSize, t);
+    [HttpGet("{id:guid}/progress"), Authorize(Policy = Permissions.Incidents.View)]
+    public Task<TenantIncidentProgressView> Progress(Guid id, CancellationToken t) => service.TenantProgressAsync(id, t);
     [HttpPost("{id:guid}/review"), Authorize(Policy = Permissions.Incidents.Manage)]
     public Task<IncidentCommandResult> Review(Guid id, IncidentReview input, CancellationToken t) => service.ReviewAsync(id, input, Key(), t);
     [HttpPost("{id:guid}/reject"), Authorize(Policy = Permissions.Incidents.Manage)]

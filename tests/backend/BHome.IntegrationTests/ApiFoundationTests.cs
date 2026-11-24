@@ -270,7 +270,7 @@ public sealed class ApiFoundationTests : IClassFixture<ApiFactory>
             email = "invalid",
             phone = "abc",
             fullName = "",
-            employment = new { employmentType = "", startDate = "2026-01-01", status = "Unknown" }
+            employment = new { startDate = "2026-01-01", status = "Unknown" }
         });
         Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
         var body = await response.Content.ReadFromJsonAsync<System.Text.Json.JsonElement>();
@@ -279,9 +279,8 @@ public sealed class ApiFoundationTests : IClassFixture<ApiFactory>
         Assert.Equal("invalid_email_format", fields.GetProperty("email")[0].GetProperty("code").GetString());
         Assert.Equal("required_field", fields.GetProperty("fullName")[0].GetProperty("code").GetString());
         Assert.Equal("invalid_phone_number", fields.GetProperty("phone")[0].GetProperty("code").GetString());
-        Assert.True(fields.TryGetProperty("employment.employmentType", out _));
         Assert.True(fields.TryGetProperty("employment.status", out _));
-        Assert.True(body.GetProperty("errors").EnumerateObject().Count() >= 4);
+        Assert.True(body.GetProperty("errors").EnumerateObject().Count() >= 3);
         Assert.DoesNotContain("The field", body.ToString());
     }
 
