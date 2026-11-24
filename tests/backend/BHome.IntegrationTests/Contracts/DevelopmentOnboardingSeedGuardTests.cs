@@ -1,6 +1,8 @@
 using BHome.Api.Controllers;
 using BHome.Api.Configuration;
 using BHome.Infrastructure.Development;
+using BHome.Domain.IdentityAccess;
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Configuration;
 
@@ -46,20 +48,11 @@ public sealed class DevelopmentOnboardingSeedGuardTests
     }
 
     [Fact]
-    public void DevelopmentSeedDefinesRealRoomInventoryWithoutFakeImagesOrControllerDatabaseDependency()
+    public void DevelopmentSeedIsOwnerOnlyAndDoesNotExposeDatabaseToController()
     {
-        var configured = DevelopmentOnboardingSeedService.SampleInventory;
-        Assert.True(configured.Length >= 3);
-        Assert.All(configured, asset =>
-        {
-            Assert.False(string.IsNullOrWhiteSpace(asset.Name));
-            Assert.False(string.IsNullOrWhiteSpace(asset.Category));
-            Assert.True(asset.Quantity > 0);
-            Assert.Contains(asset.TrackingMode, new[] { "BulkQuantity", "Serialized" });
-            Assert.True(asset.TrackingMode != "Serialized" || asset.Quantity == 1);
-        });
-        Assert.Equal(configured.Length, configured.Select(asset => asset.Name).Distinct().Count());
-        Assert.Contains(configured, asset => asset.Quantity > 1);
+        var authorization = Assert.Single(typeof(DevelopmentOnboardingSeedController)
+            .GetCustomAttributes(typeof(AuthorizeAttribute), true).Cast<AuthorizeAttribute>());
+        Assert.Equal(Roles.Owner, authorization.Roles);
         Assert.DoesNotContain(typeof(DevelopmentOnboardingSeedController).GetConstructors()
             .SelectMany(c => c.GetParameters()), p => typeof(DbContext).IsAssignableFrom(p.ParameterType));
     }

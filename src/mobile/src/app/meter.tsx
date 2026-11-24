@@ -3,6 +3,7 @@ import { AppState, BackHandler, Platform, View } from 'react-native';
 import { Redirect, router, useFocusEffect, useLocalSearchParams } from 'expo-router';
 import { ActivityIndicator, Button, Checkbox, Text } from 'react-native-paper';
 import { CameraCapture } from '../components/CameraCapture';
+import { StaffMeterReadingEvidence } from '../components/StaffMeterReadingEvidence';
 import { Field, Page, styles } from '../components/Controls';
 import { Box, Heading, Pill, ui } from '../components/WorkspaceKit';
 import { WorkspaceShell } from '../components/WorkspaceShell';
@@ -391,7 +392,16 @@ export function MeterTaskScreen({
           </Box>
         ))}
       {saved && embedded ? (
-        <Text variant="titleMedium">Đã chốt: {formatMeterReading(saved.confirmedValue, unit)}</Text>
+        <>
+          <Text variant="titleMedium">
+            Đã chốt: {formatMeterReading(saved.confirmedValue, unit)}
+          </Text>
+          <StaffMeterReadingEvidence
+            key={saved.id}
+            id={saved.id}
+            label={`Ảnh minh chứng ${meterLabel.toLowerCase()}`}
+          />
+        </>
       ) : saved ? (
         <Box style={{ padding: 14, gap: 10 }}>
           <Pill tone="green">Đã lưu chỉ số</Pill>
@@ -465,7 +475,7 @@ export function MeterTaskScreen({
                     Chỉ số OCR: {formatMeterReading(proposal.proposedFields.reading, unit)}
                   </Text>
                 )}
-                {!!proposal?.warnings.length && (
+                {!!proposal?.warnings.length && !proposal.isFallback && (
                   <Text style={ui.muted}>{meterOcrFeedback(proposal)}</Text>
                 )}
                 <Field

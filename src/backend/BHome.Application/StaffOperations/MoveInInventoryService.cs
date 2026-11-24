@@ -63,6 +63,7 @@ public sealed partial class OperationalTaskService
         if (itemId == Guid.Empty || input.ActualQuantity < 0 ||
             input.Condition is not ("Good" or "Missing" or "Damaged") ||
             input.EvidenceIds is null || input.EvidenceIds.Length > 5 ||
+            input.ActualQuantity > 0 && input.EvidenceIds.Length == 0 ||
             input.EvidenceIds.Any(x => x == Guid.Empty) ||
             input.EvidenceIds.Distinct().Count() != input.EvidenceIds.Length ||
             input.IncidentId == Guid.Empty || input.Notes?.Length > 2000)
@@ -147,7 +148,7 @@ public sealed partial class OperationalTaskService
                 if (snapshot.Items.Length == 0 && !input.ConfirmNoAssets)
                     throw OperationalTaskException.Conflict("move_in_inventory_no_assets_confirmation_required");
                 if (snapshot.Items.Any(i => i.Condition is null || i.ActualQuantity is null ||
-                    i.EvidenceIds is null))
+                    i.EvidenceIds is null || i.ActualQuantity > 0 && i.EvidenceIds.Length == 0))
                     throw OperationalTaskException.Conflict("move_in_inventory_checklist_incomplete");
                 var evidence = (await repository.EvidenceAsync(taskId, t)).ToArray();
                 if (snapshot.Items.SelectMany(i => i.EvidenceIds ?? []).Any(id => !evidence.Any(e => e.Id == id)))

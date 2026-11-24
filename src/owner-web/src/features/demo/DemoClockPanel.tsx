@@ -13,6 +13,7 @@ import {
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { Clock, Minus } from 'lucide-react';
 import { useMeterApi } from '../meters/useMeterApi';
+import { QuickContractPanel } from './QuickContractPanel';
 import { ApiError } from '../../../../../packages/client-core/src/api';
 import { useAuth } from '../../../../../packages/client-core/src/auth';
 import {
@@ -244,27 +245,32 @@ export function DemoClockWorkspace({ children }: { children: ReactNode }) {
               </Stack>
             </Paper>
           )}
-          <Button
-            id={`${panelId}-toggle`}
-            variant="contained"
-            color={applied?.simulated ? 'warning' : 'primary'}
-            startIcon={<Clock size={18} />}
-            aria-label={expanded ? 'Thu gọn bảng Demo Clock' : 'Mở Demo Clock'}
-            aria-expanded={expanded}
-            aria-controls={expanded ? panelId : undefined}
-            onClick={() => setExpanded((previous) => !previous)}
-            sx={{
-              display: 'flex',
-              ml: 'auto',
-              minHeight: 44,
-              px: 1.5,
-              borderRadius: 2,
-              fontVariantNumeric: 'tabular-nums',
-              boxShadow: 3,
-            }}
-          >
-            Demo Clock{dateLabel ? ` · ${dateLabel}` : ''}
-          </Button>
+          <Stack direction="row" spacing={1} sx={{ justifyContent: 'flex-end', flexWrap: 'wrap' }}>
+            {synced && applied.canChange && (
+              <QuickContractPanel businessDate={applied.businessDate} />
+            )}
+            <Button
+              id={`${panelId}-toggle`}
+              variant="contained"
+              color={applied?.simulated ? 'warning' : 'primary'}
+              startIcon={<Clock size={18} />}
+              aria-label={expanded ? 'Thu gọn bảng Demo Clock' : 'Mở Demo Clock'}
+              aria-expanded={expanded}
+              aria-controls={expanded ? panelId : undefined}
+              onClick={() => setExpanded((previous) => !previous)}
+              sx={{
+                display: 'flex',
+                ml: 'auto',
+                minHeight: 44,
+                px: 1.5,
+                borderRadius: 2,
+                fontVariantNumeric: 'tabular-nums',
+                boxShadow: 3,
+              }}
+            >
+              Demo Clock{dateLabel ? ` · ${dateLabel}` : ''}
+            </Button>
+          </Stack>
         </Box>
       </Portal>
     </>

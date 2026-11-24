@@ -261,7 +261,7 @@ public sealed class ContractsController(ContractService service, ContractExpiryS
     public Task<MoveOutView> RejectTermination(Guid id, TerminationRejection input, CancellationToken t) => service.RejectTerminationAsync(id, input, Key(), t);
     [HttpPost("{id:guid}/move-out/schedule"), Authorize(Roles = Roles.Owner + "," + Roles.Staff)]
     public Task<MoveOutView> Schedule(Guid id, InspectionScheduleInput x, CancellationToken t) => service.ScheduleInspectionAsync(id, x, Key(), t);
-    [HttpGet("{id:guid}/move-out/inspection-draft"), Authorize(Roles = Roles.Staff)]
+    [HttpGet("{id:guid}/move-out/inspection-draft"), Authorize(Roles = Roles.Owner + "," + Roles.Staff)]
     public Task<MoveOutInspectionDraftView> GetMoveOutInspectionDraft(Guid id, CancellationToken t) =>
         service.GetMoveOutInspectionDraftAsync(id, t);
     [HttpPatch("{id:guid}/move-out/inspection-draft"), HttpPut("{id:guid}/move-out/inspection-draft"),

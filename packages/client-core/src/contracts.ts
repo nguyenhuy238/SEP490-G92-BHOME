@@ -1499,6 +1499,15 @@ export const labels: Record<string, string> = {
   room_contract_price_conflict:
     'Các hợp đồng cùng phòng có biểu phí không đồng nhất trong kỳ thuê. Cần đối chiếu trước khi tiếp tục.',
 };
+Object.assign(labels, {
+  room_summary_evidence_required: 'Chụp ít nhất một ảnh hiện trạng chung.',
+  room_check_evidence_required: 'Hạng mục Đạt hoặc Có vấn đề cần ít nhất một ảnh.',
+  key_evidence_required: 'Chụp ít nhất một ảnh chìa khóa.',
+  asset_evidence_required: 'Chụp ít nhất một ảnh cho mỗi tài sản đã kiểm tra.',
+  room_summary_evidence: 'Thiếu ảnh hiện trạng chung',
+  room_check_evidence: 'Thiếu ảnh hạng mục hiện trạng',
+  key_evidence: 'Thiếu ảnh chìa khóa',
+});
 export const text = (value: string) =>
   labels[value] ?? 'Trạng thái hoặc điều kiện cần kiểm tra với Owner';
 export function contractError(error: unknown): string {

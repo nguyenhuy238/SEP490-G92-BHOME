@@ -216,7 +216,7 @@ export function errorMessage(error: unknown): string {
     move_in_inventory_reinspection_not_passed:
       'Tài sản Owner yêu cầu kiểm tra lại chưa đạt hoặc thiếu số lượng. Hãy kiểm tra thực tế và lưu kết quả mới.',
     move_in_inventory_reinspection_new_evidence_required:
-      'Chưa có ảnh mới sau yêu cầu kiểm tra lại của Owner. Hãy chụp ảnh mới cho tài sản được chọn, kể cả khi đã Đạt.',
+      'Chưa có ảnh mới sau yêu cầu kiểm tra lại của chủ trọ. Hãy chụp ảnh mới cho tài sản được chọn, kể cả khi đã Đạt.',
     move_in_inventory_checklist_incomplete:
       'Phiếu kiểm kê chưa đủ tình trạng, số lượng, ghi chú hoặc ảnh minh chứng bắt buộc.',
     move_in_inventory_evidence_missing:

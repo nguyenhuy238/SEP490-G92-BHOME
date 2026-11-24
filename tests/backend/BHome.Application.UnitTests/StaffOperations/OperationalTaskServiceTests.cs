@@ -174,7 +174,8 @@ public sealed class OperationalTaskServiceTests
         foreach (var query in new TaskQuery[]
         {
             new() { StaffUserId = Guid.Empty },
-            new() { RecordedStaffUserId = Guid.Empty }
+            new() { RecordedStaffUserId = Guid.Empty },
+            new() { RoomId = Guid.Empty }
         })
             Assert.Equal("invalid_task_filter", (await Assert.ThrowsAsync<OperationalTaskException>(
                 () => r.Service.ListAsync(query, default))).Code);

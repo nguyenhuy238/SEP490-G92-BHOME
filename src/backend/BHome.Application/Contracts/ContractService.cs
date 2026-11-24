@@ -1185,9 +1185,20 @@ public sealed partial class ContractService(IContractRepository repository, ICur
     }
     public async Task CopyInspectionEvidenceAsync(Guid id, Guid evidenceId, Stream output, CancellationToken t)
     {
-        await Load(id, [Roles.Owner, Roles.Staff, Roles.Tenant], t);
-        var evidence = (await repository.InspectionEvidenceAsync(id, t)).SingleOrDefault(e => e.Id == evidenceId &&
-            (e.IsLinked || e.UploadedByUserId == Actor)) ?? throw ContractException.Missing();
+        var contract = await Load(id, [Roles.Owner, Roles.Staff, Roles.Tenant], t);
+        var evidence = (await repository.InspectionEvidenceAsync(id, t)).SingleOrDefault(e => e.Id == evidenceId)
+            ?? throw ContractException.Missing();
+        if (!evidence.IsLinked && evidence.UploadedByUserId != Actor)
+        {
+            var draft = user.IsInRole(Roles.Owner) ? await ReadOwnerMoveOutDraft(contract, t) : null;
+            if (draft is null || draft.StaffUserId != evidence.UploadedByUserId ||
+                !draft.EvidenceIds.Concat(draft.KeyEvidenceIds)
+                    .Concat(draft.RoomChecks.SelectMany(check => check.EvidenceIds))
+                    .Concat(draft.Assets.SelectMany(asset => asset.EvidenceIds ?? []))
+                    .Concat((draft.PhysicalItemEvidence ?? []).SelectMany(item => item.EvidenceIds))
+                    .Contains(evidenceId))
+                throw ContractException.Missing();
+        }
         using var bytes = new MemoryStream(); await storage.CopyToAsync(evidence.ObjectKey, bytes, t);
         var recorded = (await repository.FinalInspectionsAsync(id, t)).Select(i => JsonSerializer.Deserialize<HandoverSnapshot>(i.ObservedSnapshot))
             .FirstOrDefault(s => s?.EvidenceHashes?.ContainsKey(evidenceId) == true);

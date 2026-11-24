@@ -103,7 +103,7 @@ const root = '/api/v1/operational-tasks';
 export const taskStatusLabels = {
   Assigned: 'Cần làm',
   InProgress: 'Đang xử lý',
-  PendingVerification: 'Chờ Owner kiểm tra',
+  PendingVerification: 'Chờ chủ trọ kiểm tra',
   Completed: 'Hoàn thành',
   Cancelled: 'Đã hủy',
 };
