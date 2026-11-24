@@ -27,13 +27,13 @@ public sealed class SigningInvitationLinkController(IOptions<ContractSigningOpti
             <meta name="viewport" content="width=device-width, initial-scale=1">
             <meta name="robots" content="noindex">
             <meta http-equiv="refresh" content="0;url={{url}}">
-            <title>Mở BHOME để ký hợp đồng</title></head>
+            <title>Mở BHome để ký hợp đồng</title></head>
             <body style="margin:0;background:#f3f4f6;font-family:Arial,sans-serif;color:#1f2937">
             <div style="max-width:480px;margin:48px auto;padding:24px;background:#fff;border-radius:8px;text-align:center">
-            <div style="font-size:24px;font-weight:bold;color:#166534">BHOME</div>
-            <p style="line-height:1.6">Đang mở ứng dụng BHOME để ký hợp đồng…</p>
-            <p><a href="{{url}}" style="display:inline-block;background:#166534;color:#fff;padding:14px 24px;border-radius:6px;font-weight:bold;text-decoration:none">Mở BHOME để ký hợp đồng</a></p>
-            <p style="font-size:13px;line-height:1.6;color:#6b7280">Nếu ứng dụng không tự mở, hãy bấm nút trên. Bạn cần cài ứng dụng BHOME trên điện thoại này.</p>
+            <div style="font-size:24px;font-weight:bold;color:#194cbb">BHome</div>
+            <p style="line-height:1.6">Đang mở ứng dụng BHome để ký hợp đồng…</p>
+            <p><a href="{{url}}" style="display:inline-block;background:#194cbb;color:#fff;padding:14px 24px;border-radius:6px;font-weight:bold;text-decoration:none">Mở BHome để ký hợp đồng</a></p>
+            <p style="font-size:13px;line-height:1.6;color:#6b7280">Nếu ứng dụng không tự mở, hãy bấm nút trên. Bạn cần cài ứng dụng BHome trên điện thoại này.</p>
             </div></body></html>
             """, "text/html; charset=utf-8");
     }

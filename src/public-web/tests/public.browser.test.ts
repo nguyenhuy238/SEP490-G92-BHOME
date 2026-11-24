@@ -239,7 +239,7 @@ for (const width of [1440, 768, 390])
         await page.getByRole('link', { name: 'Phòng A1', exact: true }).click();
         await page.getByRole('heading', { name: 'Phòng A1', level: 1, exact: true }).waitFor();
         await page.getByRole('link', { name: location.contactEmail }).waitFor();
-        await expect.poll(() => page.title()).toBe('Phòng A1 | BHOME');
+        await expect.poll(() => page.title()).toBe('Phòng A1 | BHome');
         expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(
           true,
         );
@@ -261,7 +261,7 @@ test('Guest home, navigation, unknown URL and mobile layout', () =>
     async (page) => {
       await fixture(page, []);
       await page.goto(base);
-      await page.getByRole('heading', { name: 'Chào mừng đến với BHOME' }).waitFor();
+      await page.getByRole('heading', { name: 'Chào mừng đến với BHome' }).waitFor();
       await page.getByRole('navigation', { name: 'Điều hướng chính' }).waitFor();
       await page.keyboard.press('Tab');
       expect(
@@ -278,7 +278,7 @@ test('Guest home, navigation, unknown URL and mobile layout', () =>
       await page.getByRole('link', { name: 'Khám phá cơ sở', exact: true }).click();
       await page.getByText(/Hiện chưa có cơ sở được công bố/).waitFor();
       await page.getByRole('link', { name: 'Trang chủ', exact: true }).click();
-      await page.getByRole('heading', { name: 'Chào mừng đến với BHOME' }).waitFor();
+      await page.getByRole('heading', { name: 'Chào mừng đến với BHome' }).waitFor();
       await page.getByRole('navigation').getByRole('link', { name: 'Cơ sở', exact: true }).click();
       await page.getByRole('heading', { name: 'Khám phá cơ sở' }).waitFor();
       await page.goto(base + '/unknown-page');

@@ -864,7 +864,7 @@ it('preserves confirmation and gives explicit success feedback after a receiving
     target: { value: 'NGUYEN QUOC HUY' },
   });
   fireEvent.click(screen.getByRole('checkbox', { name: 'Bật hướng dẫn nhận tiền' }));
-  fireEvent.click(screen.getByRole('checkbox', { name: 'Tài khoản tổng hợp Development/Testing' }));
+  fireEvent.click(screen.getByRole('checkbox', { name: 'Tài khoản thử nghiệm (Test)' }));
   fireEvent.click(
     screen.getByRole('checkbox', {
       name: 'Tôi đã kiểm tra và phê duyệt thông tin tài khoản nhận',
@@ -925,6 +925,36 @@ it('keeps edited receiving account fields and approval for retry after a failed 
   expect(approved).toBeChecked();
   expect(screen.getByRole('textbox', { name: 'Số tài khoản nhận tiền' })).toHaveValue('0000000002');
   expect(screen.getByRole('button', { name: 'Lưu tài khoản nhận tiền' })).toBeEnabled();
+  expect(mocks.api.saveAccount).toHaveBeenCalledTimes(1);
+});
+it('explains a rejected demo receiving account and preserves fields without silently changing its classification', async () => {
+  mocks.api.account.mockResolvedValue(configuredReceivingAccount);
+  mocks.api.saveAccount.mockRejectedValue({
+    status: 400,
+    code: 'development_receiving_account_unavailable',
+  });
+  await openReceivingAccountSettings();
+  fireEvent.change(screen.getByRole('textbox', { name: 'Số tài khoản nhận tiền' }), {
+    target: { value: '0000000002' },
+  });
+  const approved = screen.getByRole('checkbox', {
+    name: 'Tôi đã kiểm tra và phê duyệt thông tin tài khoản nhận',
+  });
+  const demo = screen.getByRole('checkbox', { name: 'Tài khoản thử nghiệm (Test)' });
+  fireEvent.click(approved);
+  fireEvent.click(screen.getByRole('button', { name: 'Lưu tài khoản nhận tiền' }));
+  expect(await screen.findByRole('alert')).toHaveTextContent(
+    'Môi trường hiện tại không cho phép lưu tài khoản nhận tiền tổng hợp.',
+  );
+  expect(screen.getByRole('alert')).toHaveTextContent('Staging đã bật SePay Test');
+  expect(screen.getByRole('textbox', { name: 'Số tài khoản nhận tiền' })).toHaveValue('0000000002');
+  expect(approved).toBeChecked();
+  expect(demo).toBeChecked();
+  expect(screen.queryByRole('status')).not.toBeInTheDocument();
+  fireEvent.click(demo);
+  expect(approved).not.toBeChecked();
+  expect(screen.queryByRole('alert')).not.toBeInTheDocument();
+  expect(screen.getByRole('button', { name: 'Lưu tài khoản nhận tiền' })).toBeDisabled();
   expect(mocks.api.saveAccount).toHaveBeenCalledTimes(1);
 });
 it('provides visible overdue debt action and accessible secondary filters', async () => {

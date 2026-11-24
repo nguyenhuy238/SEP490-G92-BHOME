@@ -1481,6 +1481,7 @@ function AccountEditor({
   );
   const markEdited = () => {
     setChecked(false);
+    setError('');
     edited();
   };
   return (
@@ -1606,8 +1607,14 @@ function AccountEditor({
                   }}
                 />
               }
-              label="Tài khoản tổng hợp Development/Testing"
+              label="Tài khoản thử nghiệm (Test)"
             />
+            {demo && (
+              <Typography variant="body2" color="text.secondary">
+                Tài khoản tổng hợp dùng trong Development/Testing hoặc Staging đã bật SePay Test.
+                Giữ đánh dấu này khi dùng tài khoản thử nghiệm. Không chuyển tiền thật.
+              </Typography>
+            )}
           </Stack>
           <Divider sx={{ my: 1 }} />
           <FormControlLabel

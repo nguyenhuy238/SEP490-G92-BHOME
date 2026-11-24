@@ -7,6 +7,7 @@ import { createApiClient } from '../../../../../../packages/client-core/src/api'
 import { internalSigningClient } from '../../../../../../packages/client-core/src/internalSigning';
 import { apiBaseUrl } from '../../../services/config';
 import { PasswordField } from '../components/PasswordField';
+import { AuthBrand } from '../components/AuthBrand';
 
 const invitationMessages: Record<string, string> = {
   Invalid: 'Liên kết lời mời không hợp lệ. Vui lòng mở lại liên kết trong email.',
@@ -61,8 +62,9 @@ export default function AcceptInvitationPage() {
     <Box component="main" sx={{ p: { xs: 2, sm: 3 }, maxWidth: 520, mx: 'auto' }}>
       <Paper sx={{ p: { xs: 2, sm: 3 } }}>
         <Stack spacing={2}>
+          <AuthBrand compact />
           <Typography component="h1" variant="h5">
-            Thiết lập tài khoản BHOME
+            Thiết lập tài khoản
           </Typography>
           {invitation.status === 'Loading' ? (
             <Stack direction="row" spacing={1} role="status">

@@ -200,15 +200,16 @@ export function AppShell() {
           borderColor: 'divider',
         }}
       >
-        <Avatar
-          variant="rounded"
-          sx={{ bgcolor: 'primary.main', width: 36, height: 36, fontSize: 21 }}
-        >
-          B
-        </Avatar>
+        <Box
+          component="img"
+          src="/bhome-mark.png"
+          alt=""
+          aria-hidden="true"
+          sx={{ width: 38, height: 38, objectFit: 'contain', flexShrink: 0 }}
+        />
         {!compact && (
           <Box>
-            <Typography sx={{ fontWeight: 850, fontSize: 17 }}>BHOME</Typography>
+            <Typography sx={{ fontWeight: 850, fontSize: 17 }}>BHome</Typography>
             <Typography sx={{ fontSize: 12, color: 'text.secondary' }}>Owner Portal</Typography>
           </Box>
         )}
@@ -331,7 +332,7 @@ export function AppShell() {
       )}
       {!compact && (
         <Typography variant="caption" sx={{ px: 2, py: 1, color: 'text.secondary' }}>
-          BHOME • Owner Workspace
+          Owner Workspace
         </Typography>
       )}
     </Box>
@@ -405,7 +406,7 @@ export function AppShell() {
               ? 'Cơ sở'
               : navLabels[currentKey] ||
                 featureDefinitions.find((f) => f.kind === (current as ResourceKind))?.title ||
-                'BHOME Portal'}
+                'BHome Portal'}
           </Typography>
           {isMockMode && !inLocationWorkspace && (
             <TextField
