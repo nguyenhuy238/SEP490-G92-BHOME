@@ -45,7 +45,8 @@ public sealed class PersistenceCompositionTests
             typeof(IResidentAdministrationRepository), typeof(ResidentAdministrationService),
             typeof(AuthenticationEmailDelivery), typeof(IEmailVerification), typeof(NotificationEmailContent),
             typeof(LocationLegalRecordService), typeof(AssetLifecycleService), typeof(EquipmentInspectionScheduler), typeof(EquipmentInspectionService),
-            typeof(BHome.Application.Finance.TaxTrackingService), typeof(PersonalDataRequestService), typeof(LifecycleAttentionService) };
+            typeof(BHome.Application.Finance.TaxTrackingService), typeof(PersonalDataRequestService), typeof(LifecycleAttentionService),
+            typeof(IOperationalWorkRepository), typeof(OperationalWorkService) };
         foreach (var service in compactOnlyServices)
         {
             if (compact) Assert.NotNull(services.GetRequiredService(service));
