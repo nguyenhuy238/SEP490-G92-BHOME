@@ -39,20 +39,31 @@ dc() {
   if [ "$target" = staging ]; then
     docker compose -p "$project" --env-file "$config/sepay-staging.db.env" --env-file "$config/stage-storage.env" \
       -f /opt/bhome/deploy/compose.sepay.yml -f "$config/compose.sepay-stage-api.yml" \
-      -f "$config/compose.sepay-stage-web.yml" -f "$config/compose.sepay-stage-public.yml" -f "$config/compose.staging-compat.yml" -f "$config/compose.sepay-stage-release.yml" "$@"
+      -f "$config/compose.sepay-stage-web.yml" -f "$config/compose.sepay-stage-public.yml" -f "$config/compose.staging-compat.yml" \
+      -f "$config/compose.staging-runtime.yml" -f "${release_override:-$config/compose.sepay-stage-release.yml}" "$@"
   else
     docker compose -p "$project" --env-file "$config/stack.env" -f /opt/bhome/docker-compose.yml \
-      -f "$config/compose.vps.yml" -f "$config/compose.integrations.yml" -f "$config/compose.production-environment.yml" -f "$config/compose.production-release.yml" "$@"
+      -f "$config/compose.vps.yml" -f "$config/compose.integrations.yml" -f "$config/compose.production-environment.yml" \
+      -f "${release_override:-$config/compose.production-release.yml}" "$@"
   fi
 }
 release="$config/compose.sepay-stage-release.yml"
 if [ "$target" = production ]; then release="$config/compose.production-release.yml"; fi
 test -s "$release"
+if [ "$target" = staging ]; then
+  python3 "$root/release-config.py" bootstrap-staging "$config/compose.staging-runtime.yml"
+fi
 python3 "$root/release-safety.py" snapshot "$target" "$run/protected.json"
 cp -p "$release" "$run/release.before.yml"
 tar --exclude=bhome-config/backups --exclude=bhome-config/quarantine-git-paste-20261120 -czf "$run/private-config.tar.gz" -C /opt bhome-config
 dc config --quiet
-test "$(df --output=avail -B1 /opt | tail -1)" -gt 4294967296
+dc config --format json > "$run/compose.before.json"
+available_bytes=$(df --output=avail -B1 /opt | tail -1 | tr -d '[:space:]')
+minimum_free_bytes=4294967296
+if ! [[ "$available_bytes" =~ ^[0-9]+$ ]] || [ "$available_bytes" -le "$minimum_free_bytes" ]; then
+  echo "Insufficient free disk space for release: available=${available_bytes:-unknown} bytes, required more than $minimum_free_bytes bytes on /opt." >&2
+  exit 7
+fi
 # A reviewed schema baseline prevents silently deploying a schema-changing release.
 git -C /opt/bhome fetch --quiet origin "$sha"
 git -C /opt/bhome show "$sha:docs/database/2026-11-03/compact-24/BHOME_24_TABLES.sql" | sha256sum | cut -d' ' -f1 > "$run/schema.sha256"
@@ -83,6 +94,10 @@ services:
   public-web:
     image: $public
 YAML
+# Compare fully resolved Compose configurations before replacing a file or container.
+# Never discard an operator override embedded in an older release.
+release_override="$run/release.next.yml" dc config --format json > "$run/compose.next.json"
+python3 "$root/release-config.py" check "$run/compose.before.json" "$run/compose.next.json" "$api" "$owner" "$public"
 ready() {
   for attempt in $(seq 1 60); do
     if docker run --rm --network "container:$api_container" --entrypoint curl bhome/minio-local:2025-10-15 -fsS --max-time 4 http://127.0.0.1:8080/health/ready >/dev/null 2>&1; then return 0; fi

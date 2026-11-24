@@ -68,7 +68,16 @@ Project `bhome-sepay-stage`; ghép các file theo thứ tự:
 3. `/opt/bhome-config/compose.sepay-stage-web.yml`
 4. `/opt/bhome-config/compose.sepay-stage-public.yml`
 5. `/opt/bhome-config/compose.staging-compat.yml`
-6. `/opt/bhome-config/compose.sepay-stage-release.yml`
+6. `/opt/bhome-config/compose.staging-runtime.yml`
+7. `/opt/bhome-config/compose.sepay-stage-release.yml`
+
+File runtime là cấu hình private, tồn tại độc lập với source/image và không bị CD
+ghi đè. Lần commissioning đầu giữ đúng giá trị `BillingAutomation__ManualActionsEnabled`
+của API Staging đang chạy (mặc định false nếu chưa có); các lần sau giữ nguyên file
+do operator quản lý. Mẫu: `deploy/vps/compose.staging-runtime.example.yml`.
+Release overlay cuối chỉ chứa image; không lưu thêm cấu hình môi trường tại đây.
+Những override cũ ngoài cờ manual phải chuyển vào overlay private phù hợp; preflight
+sẽ từ chối release nếu cấu hình Compose hiệu lực thay đổi ngoài ba image ứng dụng.
 
 Dùng cả hai `--env-file`: `sepay-staging.db.env`, `stage-storage.env` trong private
 config. File thứ hai root-only, chứa connection hiện có (đổi host sang PostgreSQL
@@ -91,6 +100,12 @@ chuyên biệt có cờ riêng. Email Staging chưa cấu hình gửi thật.
 `member/<tên>` → PR develop → CI backend/frontend → reusable `release.yml` → build
 API/Owner/Public đúng SHA → GHCR SHA tags + digest + manifest → environment staging
 → SSH → backup → deploy → smoke/rollback. PR/feature/workflow_dispatch không deploy.
+
+CI kiểm TRX bằng `scripts/Verify-StagingRegressions.py`: chín nhóm hồi quy bắt buộc
+cho hotfix staging phải thực sự chạy, đủ các case và PASS; test thiếu/skip/failed
+chặn release. Image API sau CI có nhãn `io.bhome.staging-regressions=v1`.
+Staging từ chối image chưa có nhãn này trước khi thay container. Khi sửa hoặc đổi
+tên bộ test, phải cập nhật guard có review; không bỏ qua guard để deploy.
 Workflow push main chạy release Production riêng có approval. Không có workflow
 khác cạnh tranh deploy. Không merge/push khi chưa được review/ủy quyền.
 
@@ -123,6 +138,12 @@ Scripts root-owned ở `/opt/bhome-deploy/staging/`:
   kiểm metadata/bundle và chỉ update API/Owner/Public.
 - `release-safety.py`: kiểm DB/key/storage/environment, protected containers,
   OCI/digest và image thật đang chạy.
+  Giữ hotfix chuẩn hóa hai đường dẫn PDF canonical từ Release image; đường dẫn
+  executable tùy ý vẫn bị từ chối. Staging API image phải có nhãn regression v1.
+- `release-config.py`: tạo runtime overlay Staging một lần từ capability đang chạy;
+  so cấu hình Compose đầy đủ trước/sau, chỉ cho đổi image API/Owner/Public. Không
+  in giá trị cấu hình hoặc secret khi có khác biệt. Cần cài helper này cùng
+  `deploy-release.sh`; script trên VPS không tự lấy phiên bản mới từ Git.
 - `connect-staging-edge.py`: alias duy nhất sau up/rollback.
 - `smoke-release.sh`, `smoke-auth.py`: HTTPS/public API/CORS/auth/webhook và synthetic
   login/refresh/logout. `backup-storage.py`: mirror private bucket trên cùng VPS.

@@ -21,6 +21,7 @@ public sealed class MainDocxTemplateTests
             ["MainDraft:LibreOfficeContainerImage"] = "bhome/contract-converter:local"
         }).Build();
         var renderer = new MainDraftRenderer(configuration, TimeProvider.System);
+        Assert.True(renderer.SigningReviewAvailable);
         var c = new Contract
         {
             RoomId = Guid.NewGuid(),
@@ -51,11 +52,13 @@ public sealed class MainDocxTemplateTests
             Assert.Contains("CHỦ NHÀ KIỂM THỬ", text); Assert.Contains("NGƯỜI THUÊ KIỂM THỬ", text);
             Assert.Contains("TRÁCH NHIỆM CHUNG", text); Assert.Contains("2.300.000", text); Assert.DoesNotContain("9.900.000", text);
             Assert.Contains("ĐẠI DIỆN BÊN B", text); Assert.Contains("ĐẠI DIỆN BÊN A", text);
+            Assert.DoesNotContain("TÀI LIỆU KIỂM THỬ", text);
         }
         var bytes = await renderer.PdfAsync(docx, default);
         using var pdf = new PdfDocument(new PdfReader(new MemoryStream(bytes)));
         var all = ContractPdfRendererTests.Text(pdf);
         Assert.Contains("HỢP ĐỒNG THUÊ PHÒNG TRỌ", all); Assert.Contains("TRÁCH NHIỆM CHUNG", all);
+        Assert.DoesNotContain("TÀI LIỆU KIỂM THỬ", all);
         Assert.Contains("000000000001", all); Assert.Contains("000000000002", all); Assert.Contains("15/06/2021", all);
         Assert.DoesNotContain("MẪU HỢP ĐỒNG", all);
         var owner = ContractSignatureSlots.Read(bytes, true)!; var renter = ContractSignatureSlots.Read(bytes, false)!;

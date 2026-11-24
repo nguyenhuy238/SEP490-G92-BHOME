@@ -272,7 +272,7 @@ it('requires Tenant consent for a released demo and confirms only the server res
       onSuccess={success}
     />,
   );
-  expect(screen.getByText(/SIMULATED SIGNING: chỉ thử nghiệm/)).toBeTruthy();
+  expect(screen.queryByText(/SIMULATED SIGNING: chỉ thử nghiệm/)).toBeNull();
   fireEvent.click(screen.getByRole('button', { name: 'Xác nhận' }));
   expect(api.mutate).not.toHaveBeenCalled();
   fireEvent.click(screen.getByRole('checkbox'));

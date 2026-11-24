@@ -67,6 +67,9 @@ jobs:
           BHOME_COMPACT24_TEST_ADMIN: Host=127.0.0.1;Port=${{ job.services.compact_postgres.ports['5432'] }};Database=postgres;Username=bhome_ci;Password=synthetic-ci-only
       # Preserve concise test outcomes even if verbose Testcontainers logs are
       # too large for the Actions job-log download endpoint.
+      - name: Require retained Staging hotfix regressions to execute and pass
+        if: ${{ !cancelled() }}
+        run: python3 scripts/Verify-StagingRegressions.py "$RUNNER_TEMP/bhome-backend-trx"
       - name: Upload backend test results
         if: ${{ !cancelled() }}
         uses: actions/upload-artifact@v6

@@ -1247,7 +1247,7 @@ export const labels: Record<string, string> = {
   Dispatching: 'Đang gửi yêu cầu ký',
   Pending: 'Chờ nhà cung cấp xác nhận',
   Signed: 'Đã xác minh chữ ký',
-  Simulated: 'SIMULATED SIGNING — không có giá trị pháp lý',
+  Simulated: 'Ký mô phỏng',
   Confirmed: 'Đã xác nhận bàn giao',
   Disputed: 'Cần sửa nội dung bàn giao',
   Recorded: 'Ghi nhận phiên bản bàn giao',
@@ -1676,12 +1676,12 @@ export function contractActions(
     result.push(
       action(
         'signing',
-        c.isDevelopmentDemo ? 'Mô phỏng ký (Development)' : 'Yêu cầu ký MySign',
+        c.isDevelopmentDemo ? 'Mô phỏng ký' : 'Yêu cầu ký MySign',
         c.isDevelopmentDemo
           ? []
           : [{ name: 'certificateId', label: 'Chứng thư của bạn', type: 'certificate' }],
         c.isDevelopmentDemo
-          ? 'SIMULATED SIGNING: chỉ thử nghiệm, không phải chữ ký điện tử có giá trị pháp lý.'
+          ? ''
           : 'Hãy đọc kỹ điều khoản. Xác nhận ký trên ứng dụng của nhà cung cấp. Gửi yêu cầu chưa đồng nghĩa đã ký hoặc kích hoạt.',
       ),
     );

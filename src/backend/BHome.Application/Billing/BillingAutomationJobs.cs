@@ -15,9 +15,12 @@ public sealed record MeterAssignmentInput(Guid StaffUserId, int ExpectedVersion)
 public sealed record BillingManualMeterTaskInput(Guid MeterId, ReadingPurpose Purpose, DateOnly BillingPeriod, DateOnly? ReadingDate = null);
 public sealed record BillingAutomationRuntime(bool DeveloperActionsEnabled, bool WorkerEnabled = false, Guid? StagingDemoOwnerId = null, bool DeployedDemoEnabled = false)
 {
-    // Deployed demo permits individual manual workflow only, not run-now batches or notification publishing.
+    public bool ManualActionsEnabled { get; init; }
+    public bool CanRunManualActions => DeveloperActionsEnabled || ManualActionsEnabled;
+    // Explicit staging opt-in retains its own scope; Demo Clock alone permits
+    // individual manual workflow only, not run-now batches or notification publishing.
     public bool AllowsManualActions(Guid? actorId, bool isOwner) => DeveloperActionsEnabled ||
-        (isOwner && actorId is not null && (actorId == StagingDemoOwnerId || DeployedDemoEnabled && StagingDemoOwnerId is null));
+        (isOwner && actorId is not null && (ManualActionsEnabled || actorId == StagingDemoOwnerId || DeployedDemoEnabled && StagingDemoOwnerId is null));
 }
 public sealed record BillingPhasePreview(string Phase, DateOnly ScheduledDate, bool Eligible);
 public sealed record BillingAutomationPreview(bool DeveloperActionsEnabled, string TimeZone, DateOnly BusinessDate, IReadOnlyList<BillingPhasePreview> Phases, bool WorkerEnabled = false);
@@ -65,7 +68,7 @@ public sealed class BillingAutomationOperations(IBillingAutomationEngine engine,
     }
     public async Task<BillingAutomationExecution?> RunAsync(BillingRunInput x, CancellationToken t)
     {
-        await Owner(x.LocationId, t); if (!runtime.DeveloperActionsEnabled) throw new InvoiceException(403, "developer_actions_disabled"); BillingAutomationService.ValidatePeriod(x.BillingPeriod);
+        await Owner(x.LocationId, t); if (!runtime.CanRunManualActions) throw new InvoiceException(403, "developer_actions_disabled"); BillingAutomationService.ValidatePeriod(x.BillingPeriod);
         if (x.Phase is not ("Meter" or "Draft" or "Final")) throw new InvoiceException(400, "invalid_billing_job_phase");
         var plan = await schedules.ForPeriodAsync(x.LocationId, x.BillingPeriod, t) ?? throw new InvoiceException(409, "billing_automation_required");
         return await engine.ExecuteAsync(new(plan.Id, x.BillingPeriod), x.Phase, t);

@@ -135,7 +135,7 @@ export function ContractActionForm({
   return (
     <Box>
       <Heading title={action.label} />
-      <Text>{action.warning}</Text>
+      {!!action.warning && <Text>{action.warning}</Text>}
       {action.operation === 'holding-cancellation' && (
         <ChoiceField
           label="Nguyên nhân hủy giữ chỗ"

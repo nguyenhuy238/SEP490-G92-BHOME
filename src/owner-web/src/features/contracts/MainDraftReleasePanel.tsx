@@ -143,12 +143,6 @@ export function MainDraftReleasePanel({
       <Button disabled={busy || disabled} onClick={() => void preview()}>
         {busy ? 'Đang xử lý…' : 'Tạo và xem PDF đưa đi ký'}
       </Button>
-      {file?.developmentOnly && (
-        <Alert severity="warning">
-          Tài liệu kiểm thử; mẫu chưa được duyệt cho production. Không coi đây là hợp đồng đã ký hợp
-          pháp.
-        </Alert>
-      )}
       {url && (
         <iframe
           title="PDF được chọn để đưa đi ký"

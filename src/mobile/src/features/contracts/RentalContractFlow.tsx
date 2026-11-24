@@ -214,11 +214,6 @@ export function RentalContractFlow({
             contract.signingMode === 'INTERNAL_OTP_DRAWN' && (
               <Box>
                 <Heading title="Xác nhận ký hợp đồng · Sandbox" />
-                <Text>
-                  {
-                    'Ch\u1ec9 d\u00f9ng cho ki\u1ec3m th\u1eed; kh\u00f4ng ph\u1ea3i ch\u1eef k\u00fd Tenant th\u1eadt.'
-                  }
-                </Text>
                 <Button
                   mode="outlined"
                   disabled={

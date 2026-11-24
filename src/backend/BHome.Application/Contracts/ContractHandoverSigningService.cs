@@ -6,6 +6,12 @@ namespace BHome.Application.Contracts;
 
 public sealed partial class ContractService
 {
+    // A linked Tenant signs the handover even when the tenancy contract was
+    // accepted internally. Document() intentionally omits that party for the
+    // original internal contract; that signing context does not apply here.
+    private static ContractDocument TenantHandoverDocument(Contract contract) =>
+        Document(contract) with { TenantUserId = RequireTenant(contract) };
+
     private static ContractSignature ToSignature(Guid contractId, HandoverPendingSignature input)
     {
         var signature = ContractSignature.RestoreDetachedAttempt(input.Id);
@@ -188,7 +194,7 @@ public sealed partial class ContractService
                 !await Handovers.InventoryReadyAsync(id, token))
                 throw ContractException.Conflict("handover_changed_since_owner_signature");
             var ownerPdf = await VerifiedHandoverPdf(contract, prior.OwnerSignature, token);
-            var prepared = await signing.PrepareAsync(Document(contract), Guid.Empty, ownerPdf,
+            var prepared = await signing.PrepareAsync(TenantHandoverDocument(contract), Guid.Empty, ownerPdf,
                 new SigningAppearance(input.Signature.Placement, input.Signature.UsePicture ?? true,
                     SigningMethods.Otp), token);
             if (FileHash(prepared.SourcePdf) != prior.OwnerSignature.FileHash)
@@ -273,7 +279,7 @@ public sealed partial class ContractService
         var inkPng = (handoverInkRenderer ??
             throw new ContractException(503, "handover_ink_renderer_unavailable")).Render(input.Ink);
         var ownerPdf = await ownerPdfTask;
-        var prepared = await signing.PrepareAsync(Document(contract), Guid.Empty, ownerPdf,
+        var prepared = await signing.PrepareAsync(TenantHandoverDocument(contract), Guid.Empty, ownerPdf,
             new SigningAppearance(null, true, SigningMethods.TenantSession, inkPng), token);
         if (FileHash(prepared.SourcePdf) != ownerSigned.FileHash)
             throw ContractException.Conflict("handover_signing_source_changed");

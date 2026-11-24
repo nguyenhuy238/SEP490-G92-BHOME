@@ -103,7 +103,8 @@ public sealed class TransferInstructionsService(IPaymentRepository repository, P
             ?? throw new PaymentException(404, "payment_invoice_not_found");
         var account = await repository.ReceivingAccountAsync(invoice.LocationId, t);
         var availability = invoice.Status != InvoiceStatus.Final ? "NotIssued" : state.OutstandingAmount <= 0 ? "Settled" :
-            account is null || !account.Enabled ? "ReceivingAccountUnavailable" : account.IsDevelopmentDemo && !mode.AllowDevelopmentDemo ? "ReceivingAccountUnavailable" : "Available";
+            account is null || !account.Enabled ? "ReceivingAccountUnavailable" :
+            account.IsDevelopmentDemo && !mode.AllowDevelopmentDemo && !mode.AllowSandboxReceivingAccounts ? "ReceivingAccountUnavailable" : "Available";
         var code = state.TransferReference;
         if (availability != "Available") return new(invoiceId, availability, null, null, null, state.OutstandingAmount, code, code, null, null, false, null);
         if (sepay?.Enabled == true)

@@ -55,6 +55,7 @@ public interface IMainDraftRenderer
 {
     string TemplateHash { get; }
     bool SigningReviewAvailable => false;
+    int DocumentVersion => 1;
     Task<byte[]> DocxAsync(MainDraftRenderData data, CancellationToken t);
     Task<byte[]> PdfAsync(byte[] docx, CancellationToken t);
 }
