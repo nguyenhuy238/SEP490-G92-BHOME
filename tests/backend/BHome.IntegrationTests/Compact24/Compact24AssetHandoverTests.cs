@@ -9,6 +9,7 @@ using BHome.Domain.Notifications;
 using BHome.Application.PropertyManagement;
 using BHome.Application.StaffOperations;
 using BHome.Application.Storage;
+using BHome.Application.Ocr;
 using BHome.Domain.Billing;
 using BHome.Domain.PropertyManagement;
 using BHome.Domain.TenantContracts;
@@ -26,12 +27,31 @@ public sealed partial class Compact24OwnerSetupTests
         using var request = new HttpRequestMessage(HttpMethod.Post, $"/api/v1/contracts/{id}/{operation}") { Content = JsonContent.Create(body) };
         request.Headers.Add("Idempotency-Key", (key ?? Guid.NewGuid()).ToString()); return await client.SendAsync(request);
     }
-    private async Task<(Guid Contract, Guid[] Readings)> SeedAssetHandover(Workspace w, IServiceProvider services, int configured = 9, int checkedGroups = 7)
+    private async Task<(Guid Contract, Guid[] Readings)> SeedAssetHandover(Workspace w, IServiceProvider services, int configured = 9, int checkedGroups = 7, bool withPartyIdentity = false)
     {
         await using var scope = services.CreateAsyncScope(); var db = scope.ServiceProvider.GetRequiredService<Compact24DbContext>();
         var store = scope.ServiceProvider.GetRequiredService<ISetupWorkspaceStore>(); var storage = scope.ServiceProvider.GetRequiredService<IObjectStorage>();
         var resident = new Resident { RoomId = w.Room, TenantUserId = w.Tenant.Id, OwnerUserId = w.Owner.Id, DisplayLabel = "Synthetic handover Tenant", VerificationStatus = IdentityVerificationStatus.Verified };
         db.Add(resident); await db.SaveChangesAsync();
+        if (withPartyIdentity)
+        {
+            // PDF signing reads confirmed party identities rather than display labels.
+            var identity = new IdentityConfirmation(true, "000000000123", "Synthetic handover Tenant",
+                new(2000, 1, 1), "Synthetic address", "VN", null, null, new(2020, 1, 1), new(2030, 1, 1));
+            var identityBytes = JsonSerializer.SerializeToUtf8Bytes(identity);
+            try
+            {
+                resident.IdentityData = JsonSerializer.Serialize(scope.ServiceProvider
+                    .GetRequiredService<IIdentityProtection>().Encrypt(identityBytes, new(w.Owner.Id, resident.Id)));
+            }
+            finally { CryptographicOperations.ZeroMemory(identityBytes); }
+            await scope.ServiceProvider.GetRequiredService<IMainDraftData>().SetSettingsAsync(w.Location,
+                new MainContractSettingsInput(w.Owner.Id, Today.AddYears(-1), null, 0,
+                    "Synthetic payment terms", "Synthetic terms",
+                    new("Synthetic handover Owner", new(1980, 1, 1), "000000000456", new(2020, 1, 1),
+                        "Synthetic issuer", "Synthetic address", "0900000000"), 0), w.Owner.Id, default);
+            await db.SaveChangesAsync();
+        }
         var room = await db.Set<Room>().SingleAsync(r => r.Id == w.Room);
         var items = Enumerable.Range(1, configured).Select(i => new AssetTemplateItem(Guid.NewGuid(), $"Ghế tổng hợp {i}", "Furniture", "BulkQuantity", 4, "cái")).ToArray();
         if (configured > 0)

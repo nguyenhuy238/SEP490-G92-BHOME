@@ -25,6 +25,7 @@ namespace BHome.IntegrationTests.Compact24;
 
 public sealed partial class Compact24OwnerSetupTests
 {
+    private static readonly string HandoverIdentityTestKey = Convert.ToBase64String(RandomNumberGenerator.GetBytes(32));
     private sealed class HandoverOtpMailbox : INotificationChannelProvider
     {
         internal ConcurrentQueue<ChannelMessage> Sent { get; } = new();
@@ -41,7 +42,12 @@ public sealed partial class Compact24OwnerSetupTests
         Host().WithWebHostBuilder(b =>
         {
             b.ConfigureAppConfiguration((_, config) => config.AddInMemoryCollection(
-                new Dictionary<string, string?> { ["ContractSigning:Methods:Otp"] = "true" }));
+                new Dictionary<string, string?>
+                {
+                    ["ContractSigning:Methods:Otp"] = "true",
+                    ["IdentityProtection:ActiveEncryptionVersion"] = "test",
+                    ["IdentityProtection:EncryptionKeys:test"] = HandoverIdentityTestKey
+                }));
             b.ConfigureTestServices(services =>
             {
                 services.RemoveAll<IContractSigningProvider>();
@@ -63,7 +69,7 @@ public sealed partial class Compact24OwnerSetupTests
     {
         var w = await Seed();
         var mailbox = new HandoverOtpMailbox(); using var host = HandoverSigningHost(mailbox);
-        var contractId = (await SeedAssetHandover(w, host.Services, configured: 1, checkedGroups: 1)).Contract;
+        var contractId = (await SeedAssetHandover(w, host.Services, configured: 1, checkedGroups: 1, withPartyIdentity: true)).Contract;
         using var staff = await Client(w.Staff, host);
         using var owner = await Client(w.Owner, host);
         using var tenant = await Client(w.Tenant, host);
@@ -165,8 +171,7 @@ public sealed partial class Compact24OwnerSetupTests
             $"/api/v1/contracts/{contractId}/handover/draft"))!;
         Assert.DoesNotContain("assets", beforeSubmit.Missing);
         Assert.DoesNotContain("inventory_changed", beforeSubmit.Missing);
-        Assert.Contains("inventory_issue", beforeSubmit.Missing);
-        Assert.Contains("room_check_failed", beforeSubmit.Missing);
+        Assert.Empty(beforeSubmit.Missing);
         Assert.Equal("Completed", beforeSubmit.MoveInTask!.InventoryStatus);
         Assert.True(beforeSubmit.InventoryHasIssues);
         var actualObservation = Assert.Single(beforeSubmit.InspectedAssets!);
@@ -193,19 +198,17 @@ public sealed partial class Compact24OwnerSetupTests
         Assert.NotNull(submitted.StaffSubmittedAt);
         Assert.DoesNotContain("assets", submitted.Missing);
         Assert.DoesNotContain("inventory_changed", submitted.Missing);
-        Assert.Contains("inventory_issue", submitted.Missing);
-        Assert.Contains("room_check_failed", submitted.Missing);
+        Assert.Empty(submitted.Missing);
         Assert.Equal(submitted.Version, (await Read<HandoverDraftView>(await HandoverPost(staff,
             contractId, "handover/draft/submit", new HandoverDraftSubmit(beforeSubmit.Version), submitKey))).Version);
         Assert.Equal(HttpStatusCode.Conflict, (await HandoverPost(staff, contractId,
             "handover/draft/submit", new HandoverDraftSubmit(beforeSubmit.Version))).StatusCode);
         Assert.Equal(HttpStatusCode.Forbidden, (await HandoverPost(tenant, contractId,
             "handover/draft/submit", new HandoverDraftSubmit(submitted.Version))).StatusCode);
-        // No acceptance of an actual defect by entering a reason or plan.
-        var blocked = await HandoverPost(owner, contractId, "handover/draft/ready",
-            OwnerSignature(submitted.Version, "Chấp thuận khóa hỏng", "Sửa sau"));
-        Assert.Equal(HttpStatusCode.Conflict, blocked.StatusCode);
-        Assert.Contains("handover_draft_incomplete", await blocked.Content.ReadAsStringAsync());
+        // Completed observations remain signable, but only Owner can sign.
+        var blocked = await HandoverPost(staff, contractId, "handover/draft/ready",
+            OwnerSignature(submitted.Version));
+        Assert.Equal(HttpStatusCode.Forbidden, blocked.StatusCode);
         var inspection = await Read<HandoverDraftView>(await HandoverPost(owner, contractId,
             "handover/draft/reinspection",
             new HandoverDraftReinspection(submitted.Version, "Kiểm tra lại khóa và ghế thiếu",
@@ -234,18 +237,6 @@ public sealed partial class Compact24OwnerSetupTests
             request.Headers.Add("Idempotency-Key", Guid.NewGuid().ToString());
             oldEvidenceVersion = (await Read<MoveInInventoryView>(
                 await staff.SendAsync(request))).Version;
-        }
-        using (var request = new HttpRequestMessage(HttpMethod.Post,
-            taskRoute + "/move-in-inventory/complete")
-        {
-            Content = JsonContent.Create(new MoveInInventoryComplete(oldEvidenceVersion))
-        })
-        {
-            request.Headers.Add("Idempotency-Key", Guid.NewGuid().ToString());
-            var response = await staff.SendAsync(request);
-            Assert.Equal(HttpStatusCode.Conflict, response.StatusCode);
-            Assert.Contains("move_in_inventory_reinspection_new_evidence_required",
-                await response.Content.ReadAsStringAsync());
         }
         TaskEvidenceView replacementPhoto;
         using (var upload = new HttpRequestMessage(HttpMethod.Put, taskRoute + "/evidence")
@@ -302,7 +293,7 @@ public sealed partial class Compact24OwnerSetupTests
             "Unexpected Tenant Ready blockers: " + string.Join(", ", tenantReadyView.Missing));
         var tenantRequest = await Read<HandoverDraftView>(await HandoverPost(tenant, contractId,
             "handover/draft/tenant-sign", new HandoverDraftTenantSign(ready.Version,
-                new SigningInput(Guid.Empty, Method: SigningMethods.Otp))));
+                new SigningInput(Guid.Empty, Method: SigningMethods.Otp, Consent: true))));
         Assert.True(tenantRequest.Missing.Length == 0,
             "Unexpected Tenant OTP blockers: " + string.Join(", ", tenantRequest.Missing));
         var otpMail = Assert.Single(mailbox.Sent,
@@ -322,11 +313,11 @@ public sealed partial class Compact24OwnerSetupTests
     }
 
     [CompactPostgresFact]
-    public async Task MissingAssetCannotBeSignedEvenWithOwnerReasonAndHandlingPlan()
+    public async Task MissingAssetRemainsRecordedAfterOwnerAndTenantSign()
     {
         var w = await Seed();
         var mailbox = new HandoverOtpMailbox(); using var host = HandoverSigningHost(mailbox);
-        var id = (await SeedAssetHandover(w, host.Services, configured: 1, checkedGroups: 1)).Contract;
+        var id = (await SeedAssetHandover(w, host.Services, configured: 1, checkedGroups: 1, withPartyIdentity: true)).Contract;
         using var staff = await Client(w.Staff, host); using var owner = await Client(w.Owner, host);
         using var tenant = await Client(w.Tenant, host);
         var initial = await StartRealMoveInTask(staff, host.Services, id, w.Staff.Id);
@@ -346,7 +337,7 @@ public sealed partial class Compact24OwnerSetupTests
                 RoomChecks: HandoverRoomChecklist.RequiredCodes.Select(code =>
                     new HandoverRoomCheck(code, "Passed", "", [])).ToArray(),
                 AccessItems: [new HandoverAccessItem("RoomKey", 2, "Đã đối chiếu")])));
-        Assert.Contains("asset_not_passed", draft.Missing);
+        Assert.Empty(draft.Missing);
         Assert.Equal(1, Assert.Single(draft.Assets).MissingQuantity);
         var submitted = await Read<HandoverDraftView>(await HandoverPost(staff, id,
             "handover/draft/submit", new HandoverDraftSubmit(draft.Version)));
@@ -355,24 +346,33 @@ public sealed partial class Compact24OwnerSetupTests
         var ownerPending = (await owner.GetFromJsonAsync<HandoverDraftView>(
             $"/api/v1/contracts/{id}/handover/draft"))!;
         Assert.True(ownerPending.OwnerInkSigningSupported);
-        Assert.Equal(HttpStatusCode.Conflict,
-            (await HandoverPost(owner, id, "handover/draft/ready",
-                OwnerSignature(submitted.Version))).StatusCode);
-        Assert.Equal(HttpStatusCode.Conflict,
-            (await HandoverPost(owner, id, "handover/draft/ready",
-                OwnerSignature(submitted.Version, "Chấp thuận thiếu một ghế"))).StatusCode);
-        Assert.Equal(HttpStatusCode.Conflict,
-            (await HandoverPost(owner, id, "handover/draft/ready",
-                OwnerSignature(submitted.Version, plan: "Bổ sung sau khi kiểm kê lại"))).StatusCode);
-        var reason = "Owner chấp thuận hiện trạng còn thiếu một ghế";
-        var handlingPlan = "Owner tạo nhiệm vụ bổ sung tài sản riêng";
-        Assert.Equal(HttpStatusCode.Conflict, (await HandoverPost(owner, id,
-            "handover/draft/ready", OwnerSignature(submitted.Version, reason, handlingPlan))).StatusCode);
+        Assert.Equal(HttpStatusCode.Forbidden, (await HandoverPost(staff, id,
+            "handover/draft/ready", OwnerSignature(submitted.Version))).StatusCode);
         Assert.Equal(HttpStatusCode.Conflict, (await HandoverPost(tenant, id,
             "handover/draft/tenant-sign", new HandoverDraftTenantSign(submitted.Version,
-                new SigningInput(Guid.Empty, Method: SigningMethods.Otp)))).StatusCode);
-        Assert.Equal("PendingOwnerReview",
-            (await owner.GetFromJsonAsync<HandoverDraftView>($"/api/v1/contracts/{id}/handover/draft"))!.Status);
+                new SigningInput(Guid.Empty, Method: SigningMethods.Otp, Consent: true)))).StatusCode);
+        var ready = await Read<HandoverDraftView>(await HandoverPost(owner, id,
+            "handover/draft/ready", OwnerSignature(submitted.Version)));
+        Assert.Equal("Ready", ready.Status);
+        Assert.Equal(1, Assert.Single(ready.Assets).MissingQuantity);
+        var signed = await Read<HandoverDraftView>(await HandoverPost(tenant, id,
+            "handover/draft/tenant-sign/session", new HandoverDraftTenantSessionSign(
+                ready.Version, true, OwnerSignature(ready.Version).Ink)));
+        Assert.Equal("Confirmed", signed.Status);
+        var handover = (await tenant.GetFromJsonAsync<HandoverView>(
+            $"/api/v1/contracts/{id}/handover"))!;
+        var actual = Assert.Single(handover.Snapshot.Assets);
+        Assert.Equal(3, actual.ObservedQuantity);
+        Assert.Equal(3, actual.HandedOverQuantity);
+        Assert.Equal(1, actual.MissingQuantity);
+        Assert.Equal("Thiếu một ghế", actual.ObservedCondition);
+        var signedPdf = await tenant.GetByteArrayAsync($"/api/v1/contracts/{id}/handover/draft/pdf");
+        using var pdf = new PdfDocument(new PdfReader(new MemoryStream(signedPdf)));
+        var signatures = new SignatureUtil(pdf);
+        Assert.Equal(2, signatures.GetSignatureNames().Count);
+        Assert.All(signatures.GetSignatureNames(), name =>
+            Assert.True(signatures.ReadSignatureData(name).VerifySignatureIntegrityAndAuthenticity()));
+        Assert.Contains("Thiếu một ghế", BHome.IntegrationTests.Contracts.ContractPdfRendererTests.Text(pdf));
     }
 
     [CompactPostgresFact]
@@ -380,7 +380,7 @@ public sealed partial class Compact24OwnerSetupTests
     {
         var w = await Seed(); var outside = await Seed();
         var mailbox = new HandoverOtpMailbox(); using var host = HandoverSigningHost(mailbox);
-        var id = (await SeedAssetHandover(w, host.Services, configured: 1, checkedGroups: 1)).Contract;
+        var id = (await SeedAssetHandover(w, host.Services, configured: 1, checkedGroups: 1, withPartyIdentity: true)).Contract;
         using var staff = await Client(w.Staff, host); using var owner = await Client(w.Owner, host);
         using var tenant = await Client(w.Tenant, host); using var otherTenant = await Client(outside.Tenant, host);
         var route = $"/api/v1/contracts/{id}/handover/draft";
@@ -454,7 +454,7 @@ public sealed partial class Compact24OwnerSetupTests
     {
         var w = await Seed(); var outside = await Seed();
         var mailbox = new HandoverOtpMailbox(); using var host = HandoverSigningHost(mailbox);
-        var id = (await SeedAssetHandover(w, host.Services, configured: 1, checkedGroups: 1)).Contract;
+        var id = (await SeedAssetHandover(w, host.Services, configured: 1, checkedGroups: 1, withPartyIdentity: true)).Contract;
         using var staff = await Client(w.Staff, host); using var owner = await Client(w.Owner, host);
         using var tenant = await Client(w.Tenant, host); using var outsideTenant = await Client(outside.Tenant, host);
         var route = $"/api/v1/contracts/{id}/handover/draft";
@@ -469,7 +469,7 @@ public sealed partial class Compact24OwnerSetupTests
         Assert.Equal(HttpStatusCode.Conflict,
             (await HandoverPost(tenant, id, "handover/draft/tenant-sign",
                 new HandoverDraftTenantSign(initial.Version,
-                    new SigningInput(Guid.Empty, Method: SigningMethods.Otp)))).StatusCode);
+                    new SigningInput(Guid.Empty, Method: SigningMethods.Otp, Consent: true)))).StatusCode);
 
         await StartRealMoveInTask(staff, host.Services, id, w.Staff.Id);
         var choices = (await staff.GetFromJsonAsync<HandoverChoices>($"/api/v1/contracts/{id}/handover/choices"))!;
@@ -564,9 +564,12 @@ public sealed partial class Compact24OwnerSetupTests
             (await HandoverPost(tenant, id, "handover/draft/tenant-confirmation",
                 new HandoverDraftTenantConfirmation(ready.Version))).StatusCode);
 
+        Assert.Equal(HttpStatusCode.BadRequest, (await HandoverPost(tenant, id,
+            "handover/draft/tenant-sign", new HandoverDraftTenantSign(ready.Version,
+                new SigningInput(Guid.Empty, Method: SigningMethods.Otp, Consent: false)))).StatusCode);
         var pending = await Read<HandoverDraftView>(await HandoverPost(tenant, id,
             "handover/draft/tenant-sign", new HandoverDraftTenantSign(ready.Version,
-                new SigningInput(Guid.Empty, Method: SigningMethods.Otp))));
+                new SigningInput(Guid.Empty, Method: SigningMethods.Otp, Consent: true))));
         Assert.True(pending.TenantSigningPending);
         Assert.Equal(ready.Version + 1, pending.Version);
         var challenge = (await tenant.GetFromJsonAsync<SigningOtpView>(route + "/tenant-sign/otp"))!;
@@ -609,7 +612,7 @@ public sealed partial class Compact24OwnerSetupTests
     {
         var w = await Seed(); var outside = await Seed();
         var mailbox = new HandoverOtpMailbox(); using var host = HandoverSigningHost(mailbox);
-        var id = (await SeedAssetHandover(w, host.Services, configured: 1, checkedGroups: 1)).Contract;
+        var id = (await SeedAssetHandover(w, host.Services, configured: 1, checkedGroups: 1, withPartyIdentity: true)).Contract;
         using var staff = await Client(w.Staff, host); using var owner = await Client(w.Owner, host);
         using var tenant = await Client(w.Tenant, host); using var otherTenant = await Client(outside.Tenant, host);
         var route = $"/api/v1/contracts/{id}/handover/draft";

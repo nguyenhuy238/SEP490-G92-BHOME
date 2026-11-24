@@ -17,6 +17,7 @@ vi.mock('expo-router', () => ({
   useFocusEffect: (callback: () => void) => useEffect(callback, [callback]),
 }));
 vi.mock('react-native', () => ({
+  Platform: { OS: 'android' },
   View: ({ children }: { children?: React.ReactNode }) => <div>{children}</div>,
   BackHandler: { addEventListener: () => ({ remove: vi.fn() }) },
   AppState: {
