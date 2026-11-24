@@ -48,6 +48,17 @@ class ReleaseSafetyTests(unittest.TestCase):
     def test_isolated_databases_keys_and_storage(self):
         self.assertRegex(self.check(self.configuration('staging'), self.configuration('production')), r'^[a-f0-9]{64}$')
 
+    def test_canonical_release_pdf_tools_preserve_existing_private_environment_fingerprint(self):
+        stage, prod = self.configuration('staging'), self.configuration('production')
+        before = self.check(stage.copy(), prod.copy())
+        self.assertEqual(self.check(stage | safety.RELEASE_PDF_TOOLS, prod.copy()), before)
+
+    def test_custom_pdf_executable_is_not_treated_as_a_safe_image_default(self):
+        for key in safety.RELEASE_PDF_TOOLS:
+            stage = self.configuration('staging') | {key: '/tmp/unreviewed-tool'}
+            with self.subTest(key=key), self.assertRaises(ValueError):
+                self.check(stage, self.configuration('production'))
+
     def test_shared_credentials_are_rejected_without_values(self):
         for key in ('Jwt__SigningKey', 'Jwt__Issuer', 'Jwt__Audience', 'ObjectStorage__AccessKey', 'ObjectStorage__SecretKey'):
             stage, prod = self.configuration('staging'), self.configuration('production')
@@ -74,6 +85,21 @@ class ReleaseSafetyTests(unittest.TestCase):
         for labels, digests in [({'org.opencontainers.image.revision': 'b' * 40}, [image]), ({'org.opencontainers.image.revision': sha}, ['repo@sha256:' + 'd' * 64])]:
             with patch.object(safety, 'docker', return_value=json.dumps([{'Config': {'Labels': labels}, 'RepoDigests': digests}])), self.assertRaises(ValueError):
                 safety.verify_image(image, sha, 'api', 'staging')
+
+    def test_staging_api_requires_hotfix_gate_label_before_deploying_an_image(self):
+        sha, digest = 'a' * 40, 'sha256:' + 'c' * 64
+        image = 'ghcr.io/nguyenhuy238/bhome-api:sha-' + sha + '@' + digest
+        for marker in (None, 'v0', 'v1'):
+            labels = {'org.opencontainers.image.revision': sha}
+            if marker is not None:
+                labels['io.bhome.staging-regressions'] = marker
+            inspected = [{'Config': {'Labels': labels}, 'RepoDigests': [image]}]
+            with self.subTest(marker=marker), patch.object(safety, 'docker', return_value=json.dumps(inspected)):
+                if marker == 'v1':
+                    safety.verify_image(image, sha, 'api', 'staging')
+                else:
+                    with self.assertRaises(ValueError):
+                        safety.verify_image(image, sha, 'api', 'staging')
 
     def test_forced_ssh_commands_reject_shell_injection(self):
         import re

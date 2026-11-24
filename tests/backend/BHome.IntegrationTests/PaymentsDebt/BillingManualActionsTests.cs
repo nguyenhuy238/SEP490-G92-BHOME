@@ -52,13 +52,22 @@ public sealed partial class PaymentLedgerTests
             (await owner.PostAsJsonAsync("/api/v1/invoices/drafts", new DraftInvoiceInput(w.Room, CurrentPeriod(), Guid.NewGuid()))).StatusCode);
     }
 
-    [Fact]
-    public async Task DeveloperManualMeterTaskUsesEffectivePlanDayEvenWhenPlanIsDisabled()
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task DeveloperManualMeterTaskUsesEffectivePlanDayEvenWhenPlanIsDisabled(bool stagingManual = false)
     {
         var (w, _, meters) = await MeterWorkspace(water: false);
-        using var owner = await Client(w.Owner);
-        using var staff = await Client(w.Staff);
-        using var tenant = await Client(w.Tenants[0]);
+        using var host = fixture.Factory.WithWebHostBuilder(builder => builder.ConfigureServices(services =>
+            services.AddSingleton(new BillingAutomationRuntime(!stagingManual)
+            { ManualActionsEnabled = stagingManual })));
+        using var owner = await Client(w.Owner, host);
+        using var staff = await Client(w.Staff, host);
+        using var tenant = await Client(w.Tenants[0], host);
+        var preview = (await owner.GetFromJsonAsync<BillingAutomationPreview>(
+            $"/api/v1/billing-automation/preview?locationId={w.Location}&period={CurrentPeriod():yyyy-MM-dd}"))!;
+        Assert.True(preview.DeveloperActionsEnabled);
+        Assert.False(preview.WorkerEnabled);
         // The same location has a new immutable manual-only effective plan; existing
         // enabled plans are not allowed to run background jobs by the global switch.
         (await owner.PutAsJsonAsync("/api/v1/billing-automation", Plan(w) with

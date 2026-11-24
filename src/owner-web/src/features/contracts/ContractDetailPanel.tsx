@@ -190,12 +190,6 @@ export function ContractDetailPanel({
   }
   return (
     <Stack spacing={2}>
-      {c.isDevelopmentDemo && (
-        <Alert severity="warning">
-          HỢP ĐỒNG DEMO · SIMULATED SIGNING · Không có giá trị pháp lý.
-        </Alert>
-      )}
-
       {/* 1. Summary: what this contract is and where it stands */}
       <Paper variant="outlined" sx={{ p: 2 }}>
         <Stack direction="row" spacing={1} sx={{ alignItems: 'center', flexWrap: 'wrap' }}>

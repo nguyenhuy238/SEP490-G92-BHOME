@@ -191,8 +191,6 @@ export function HoldingSigningConfirmation({
       )}
       {simulation && !tenantSigned && (
         <>
-          <HoldingStatusBadge label="Chỉ dùng kiểm thử Sandbox" tone="warning" />
-          <Text style={ui.muted}>Mô phỏng chỉ để kiểm thử, không tạo chữ ký thật.</Text>
           <Button
             mode="outlined"
             contentStyle={{ minHeight: 44 }}

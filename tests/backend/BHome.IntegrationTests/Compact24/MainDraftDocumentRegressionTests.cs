@@ -6,6 +6,12 @@ namespace BHome.IntegrationTests.Compact24;
 [Trait("Category", "Docker")]
 public sealed class MainDraftDocumentRegressionTests(PropertyContractDockerFixture fixture) : IClassFixture<PropertyContractDockerFixture>
 {
+    [Theory]
+    [InlineData("Staging")]
+    [InlineData("Production")]
+    public Task DemoTemplateIsAvailableWithRealPersistence(string environment) =>
+        new MainDraftApiTests(fixture.Contracts).DemoTemplateCanBeReviewedReleasedAndReadInEveryEnvironment(environment);
+
     [Fact]
     public Task CurrentPdfSurvivesPersistenceAndOldPdfIsRejectedAfterDraftUpdate() =>
         new MainDraftApiTests(fixture.Contracts).ActualLibreOfficeConversionPersistsPrivatePdfWithVietnameseAndIssueDate();

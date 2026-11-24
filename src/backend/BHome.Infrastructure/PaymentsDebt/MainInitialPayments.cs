@@ -1,5 +1,6 @@
 using System.Text.Json;
 using BHome.Application.Contracts;
+using BHome.Application.IdentityAccess;
 using BHome.Application.PaymentsDebt;
 using BHome.Application.PaymentsDebt.SePay;
 using BHome.Application.PropertyManagement;
@@ -13,7 +14,7 @@ namespace BHome.Infrastructure.PaymentsDebt;
 
 internal sealed class MainInitialPayments(BHomePersistenceContext db, ContractService contracts, IContractRepository contractData,
     IMainDraftData drafts, IPaymentRepository payments, IPaymentCodeRegistry codes,
-    ITransferQrGenerator qr, IMainInitialPaymentLedger orders, SePayOptions sepay, TimeProvider clock, IContractWorkflowMode workflowMode, IHoldingTestScope testScope) : IMainInitialPayments
+    ITransferQrGenerator qr, IMainInitialPaymentLedger orders, SePayOptions sepay, TimeProvider clock, IContractWorkflowMode workflowMode, IHoldingTestScope testScope, ICurrentUser user) : IMainInitialPayments
 {
     public async Task<MainInitialPaymentView> GetAsync(Guid id, bool issueQr, CancellationToken token)
     {
@@ -148,9 +149,21 @@ internal sealed class MainInitialPayments(BHomePersistenceContext db, ContractSe
                     : new MainInitialMeteredRate(p.ChargeCode, p.Name ?? "Nước", "m³", p.Rate))
                 .ToArray();
             var account = await payments.ReceivingAccountAsync(order.LocationId, token);
-            var payableMode = invoicePayable || pendingShared is not null ? roomScopeMode : ContractPaymentModes.Of(c);
+            var payableMode = roomScopeMode;
             var bound = account is not null && account.Enabled && account.IsDevelopmentDemo == (payableMode == "Test") &&
                 payableMode == sepay.Mode && sepay.Matches(order.LocationId, account);
+            if (issueQr && untaggedSandbox && bound && outstanding > 0)
+            {
+                // Resolve legacy, untagged Staging contracts only on an explicit QR
+                // request with a verified provider/account binding. Never reclassify
+                // an explicit Live contract or one that already has allocations.
+                if (await db.Set<BHome.Domain.PaymentsDebt.PaymentAllocation>().AnyAsync(a =>
+                    a.TargetInitialContractId == id || a.TargetDepositContractId == id, token))
+                    throw new PaymentException(409, "sepay_environment_mismatch");
+                c.PaymentMode = "Test";
+                payments.Audit(user.UserId ?? throw new PaymentException(401, "authentication_required"),
+                    "MainInitialSandboxPaymentModeResolved", id, clock.GetUtcNow());
+            }
             // IssueAsync joins this transaction; it must not clear tracked state or create nested transactions.
             var paymentKind = invoicePayable ? "Invoice" : "MainInitial";
             var paymentId = invoicePayable ? order.SharedInvoiceId!.Value : payable.ContractId;
@@ -162,7 +175,7 @@ internal sealed class MainInitialPayments(BHomePersistenceContext db, ContractSe
             return new MainInitialPaymentView(id, availability, c.Status.ToString(), signed,
                 invoicePayable ? [new MainInitialCharge("INVOICE", "Số dư hóa đơn phòng", invoiceOutstanding)] :
                     new[] { new MainInitialCharge("RENT", "Tiền thuê tháng đầu", requiredRent) }.Concat(payable.Charges).ToArray(),
-                requiredDeposit, payable.ContractId == id ? c.AppliedHoldingDeposit : 0, deposit, rent, outstanding, outstanding == 0, reference, bound ? account!.BankIdentifier : null, bound ? account!.AccountNumber : null, bound ? account!.AccountHolder : null, rendered?.PngDataUri, ContractPaymentModes.IsTest(c),
+                requiredDeposit, payable.ContractId == id ? c.AppliedHoldingDeposit : 0, deposit, rent, outstanding, outstanding == 0, reference, bound ? account!.BankIdentifier : null, bound ? account!.AccountNumber : null, bound ? account!.AccountHolder : null, rendered?.PngDataUri, payableMode == "Test",
                 outstandingDeposit, outstandingRentAndFees, meteredRates);
         }, token);
     }

@@ -10,6 +10,7 @@ using BHome.Application.StaffOperations;
 using BHome.Domain.Billing;
 using BHome.Domain.IdentityAccess;
 using BHome.Domain.StaffOperations;
+using BHome.Domain.TenantContracts;
 using BHome.Infrastructure.Contracts;
 using BHome.Infrastructure.Persistence.Compact24;
 using iText.Kernel.Pdf;
@@ -63,6 +64,16 @@ public sealed partial class Compact24OwnerSetupTests
             new HandoverInkInput(360, 150,
                 [[[20, 100], [60, 40], [90, 110], [130, 50]],
                   [[150, 90], [200, 60], [260, 95], [320, 70]]]));
+
+    private static async Task ConfigureHandoverContractMode(IServiceProvider services, Guid id, bool internalContract)
+    {
+        if (!internalContract) return;
+        await using var scope = services.CreateAsyncScope();
+        var db = scope.ServiceProvider.GetRequiredService<Compact24DbContext>();
+        var contract = await db.Set<Contract>().SingleAsync(c => c.Id == id);
+        contract.SigningMode = ContractSigningModes.Internal;
+        await db.SaveChangesAsync();
+    }
 
     [CompactPostgresFact]
     public async Task StaffCanSubmitFourCompletedSectionsWithRoomIssueAndMissingInventoryWithoutDraftAssets()
@@ -375,12 +386,15 @@ public sealed partial class Compact24OwnerSetupTests
         Assert.Contains("Thiếu một ghế", BHome.IntegrationTests.Contracts.ContractPdfRendererTests.Text(pdf));
     }
 
-    [CompactPostgresFact]
-    public async Task TenantSessionSignatureCompletesOwnerSignedMoveInWithoutOtpAndCannotBeReplayedOrSpoofed()
+    [CompactPostgresTheory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task TenantSessionSignatureCompletesOwnerSignedMoveInWithoutOtpAndCannotBeReplayedOrSpoofed(bool internalContract)
     {
         var w = await Seed(); var outside = await Seed();
         var mailbox = new HandoverOtpMailbox(); using var host = HandoverSigningHost(mailbox);
         var id = (await SeedAssetHandover(w, host.Services, configured: 1, checkedGroups: 1, withPartyIdentity: true)).Contract;
+        await ConfigureHandoverContractMode(host.Services, id, internalContract);
         using var staff = await Client(w.Staff, host); using var owner = await Client(w.Owner, host);
         using var tenant = await Client(w.Tenant, host); using var otherTenant = await Client(outside.Tenant, host);
         var route = $"/api/v1/contracts/{id}/handover/draft";
@@ -449,12 +463,15 @@ public sealed partial class Compact24OwnerSetupTests
             $"/api/v1/contracts/{id}/handover"))!.Status);
     }
 
-    [CompactPostgresFact]
-    public async Task StaffSubmitOwnerSignedPdfAndTenantOtpProduceVerifiedTwoSignatureHandover()
+    [CompactPostgresTheory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task StaffSubmitOwnerSignedPdfAndTenantOtpProduceVerifiedTwoSignatureHandover(bool internalContract)
     {
         var w = await Seed(); var outside = await Seed();
         var mailbox = new HandoverOtpMailbox(); using var host = HandoverSigningHost(mailbox);
         var id = (await SeedAssetHandover(w, host.Services, configured: 1, checkedGroups: 1, withPartyIdentity: true)).Contract;
+        await ConfigureHandoverContractMode(host.Services, id, internalContract);
         using var staff = await Client(w.Staff, host); using var owner = await Client(w.Owner, host);
         using var tenant = await Client(w.Tenant, host); using var outsideTenant = await Client(outside.Tenant, host);
         var route = $"/api/v1/contracts/{id}/handover/draft";

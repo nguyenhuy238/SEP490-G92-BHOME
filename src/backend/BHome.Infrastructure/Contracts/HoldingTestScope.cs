@@ -28,6 +28,10 @@ internal sealed class HoldingTestScope(IConfiguration configuration, IHostEnviro
         if (!options.TestingAvailable(environment.EnvironmentName) || !options.Valid(environment.EnvironmentName)) return false;
         var target = new NpgsqlConnectionStringBuilder(configuration.GetConnectionString("Database") ?? "");
         var pattern = environment.IsEnvironment("Testing") ? "^bhome_compact24_(?:dev_)?[a-f0-9]{32}$" : "^bhome_compact24_dev_[a-f0-9]{32}$";
-        return target.Host is "localhost" or "127.0.0.1" or "::1" && System.Text.RegularExpressions.Regex.IsMatch(target.Database ?? "", pattern);
+        // The deployed Staging stack reaches its isolated disposable database through
+        // Docker DNS. Require the Staging anchor and the same development database name guard.
+        var localHost = target.Host is "localhost" or "127.0.0.1" or "::1";
+        var stagingDocker = environment.IsStaging() && configuration["Deployment:Environment"] == "Staging" && target.Host == "postgres";
+        return (localHost || stagingDocker) && System.Text.RegularExpressions.Regex.IsMatch(target.Database ?? "", pattern);
     }
 }

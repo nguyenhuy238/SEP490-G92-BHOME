@@ -216,9 +216,6 @@ export function MainDraftSigningReview({
             Tải lại hồ sơ bên thuê
           </Action>
         )}
-        {file?.developmentOnly && (
-          <Pill tone="amber">Tài liệu Development · Chưa duyệt cho production</Pill>
-        )}
       </Box>
       {(file || documentBlocker) && (
         <ContractPdfPreview

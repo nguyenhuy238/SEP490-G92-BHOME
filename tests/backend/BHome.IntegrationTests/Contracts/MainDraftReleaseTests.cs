@@ -59,7 +59,7 @@ public sealed partial class MainDraftApiTests
         Assert.True(review.DevelopmentOnly); Assert.Equal("SigningReview", review.Kind);
         var reviewedBytes = await owner.GetByteArrayAsync($"{Root}/{draft.Id}/documents/{review.Id}");
         using (var pdf = new iText.Kernel.Pdf.PdfDocument(new iText.Kernel.Pdf.PdfReader(new MemoryStream(reviewedBytes))))
-        { var text = ContractPdfRendererTests.Text(pdf); Assert.Contains("TÀI LIỆU KIỂM THỬ", text); Assert.DoesNotContain("BẢN NHÁP", text); }
+        { var text = ContractPdfRendererTests.Text(pdf); Assert.DoesNotContain("TÀI LIỆU KIỂM THỬ", text); Assert.DoesNotContain("BẢN NHÁP", text); }
         var input = new MainDraftReleaseInput(tenant.Id, draft.Version, review.Id, true); var key = Guid.NewGuid();
         Assert.Equal(HttpStatusCode.Forbidden, (await Release(stranger, draft.Id, input, key)).StatusCode);
         Assert.Equal(HttpStatusCode.BadRequest, (await Release(owner, draft.Id, input with { HumanReviewed = false }, key)).StatusCode);
@@ -153,7 +153,7 @@ public sealed partial class MainDraftApiTests
         Assert.Equal(tenant.Id, (await db.Set<Resident>().SingleAsync(r => r.Id == w.Resident)).TenantUserId);
     }
     [Fact]
-    public async Task ReleaseRejectsStaleReviewTamperingAndProductionSampleTemplate()
+    public async Task ReleaseRejectsStaleReviewAndTampering()
     {
         var w = await Setup(); var tenant = await User("Tenant");
         await using var host = ReleaseHost(w.Location); using var owner = InHost(host, w.Owner); using var staff = InHost(host, w.Staff);
@@ -168,10 +168,65 @@ public sealed partial class MainDraftApiTests
         var rejected = await Release(owner, draft.Id, new(null, draft.Version, review.Id, true), Guid.NewGuid()); Assert.Equal(HttpStatusCode.Conflict, rejected.StatusCode); Assert.Contains("contract_document_integrity_failed", await rejected.Content.ReadAsStringAsync());
         var updated = await Save(w, Input(w) with { Notes = "Changed saved terms", ExpectedVersion = draft.Version }, id: draft.Id);
         Assert.Equal(HttpStatusCode.Conflict, (await Release(owner, draft.Id, new(null, updated.Version, review.Id, true), Guid.NewGuid())).StatusCode);
-        await using var production = fixture.Factory.WithWebHostBuilder(b => b.UseTestEnvironment("Production")); using var productionOwner = InHost(production, w.Owner);
-        var blocked = await productionOwner.PostAsync($"{Root}/{draft.Id}/signing-review", null); Assert.Equal(HttpStatusCode.ServiceUnavailable, blocked.StatusCode); Assert.Contains("main_draft_signing_template_not_approved", await blocked.Content.ReadAsStringAsync());
         await using var verify = fixture.Factory.Services.CreateAsyncScope(); var db = verify.ServiceProvider.GetRequiredService<BHomePersistenceContext>();
         Assert.Null((await db.Set<Resident>().SingleAsync(r => r.Id == w.Resident)).TenantUserId); Assert.Equal(ContractStatus.Draft, (await db.Set<Contract>().SingleAsync(c => c.Id == draft.Id)).Status);
+    }
+    [Theory]
+    [InlineData("Staging")]
+    [InlineData("Production")]
+    public async Task DemoTemplateCanBeReviewedReleasedAndReadInEveryEnvironment(string environment)
+    {
+        var w = await Setup();
+        await using var host = fixture.Factory.WithWebHostBuilder(b =>
+        {
+            b.UseTestEnvironment(environment);
+            b.ConfigureAppConfiguration((_, config) => config.AddInMemoryCollection(new Dictionary<string, string?>
+            {
+                ["MainDraft:LibreOfficeContainerImage"] = "bhome/contract-converter:local"
+            }));
+        });
+        using var owner = InHost(host, w.Owner); using var staff = InHost(host, w.Staff); using var outside = InHost(host, w.Outside);
+        var draft = await Save(w with { Staff = staff });
+        Assert.Equal(HttpStatusCode.NotFound, (await outside.PostAsync($"{Root}/{draft.Id}/signing-review", null)).StatusCode);
+        var response = await staff.PostAsync($"{Root}/{draft.Id}/signing-review", null); await Success(response);
+        var review = (await response.Content.ReadFromJsonAsync<ContractDocumentView>())!;
+        Assert.True(review.DevelopmentOnly);
+        var bytes = await owner.GetByteArrayAsync($"{Root}/{draft.Id}/documents/{review.Id}");
+        using (var pdf = new iText.Kernel.Pdf.PdfDocument(new iText.Kernel.Pdf.PdfReader(new MemoryStream(bytes))))
+            Assert.DoesNotContain("TÀI LIỆU KIỂM THỬ", ContractPdfRendererTests.Text(pdf));
+        // An unsigned preview from the previous rendering revision must be replaced,
+        // while its original bytes remain available as history.
+        var oldReview = review;
+        var oldBytes = bytes;
+        await using (var legacy = host.Services.CreateAsyncScope())
+        {
+            var legacyDb = legacy.ServiceProvider.GetRequiredService<BHomePersistenceContext>();
+            (await legacyDb.Set<ContractDocumentFile>().SingleAsync(f => f.Id == oldReview.Id)).TemplateVersion = 1;
+            await legacyDb.SaveChangesAsync();
+        }
+        response = await staff.PostAsync($"{Root}/{draft.Id}/signing-review", null); await Success(response);
+        review = (await response.Content.ReadFromJsonAsync<ContractDocumentView>())!;
+        Assert.NotEqual(oldReview.Id, review.Id); Assert.Equal(2, review.TemplateVersion);
+        Assert.Equal(oldBytes, await owner.GetByteArrayAsync($"{Root}/{draft.Id}/documents/{oldReview.Id}"));
+        Assert.Equal(HttpStatusCode.Conflict, (await Release(owner, draft.Id, new(null, draft.Version, oldReview.Id, true), Guid.NewGuid())).StatusCode);
+        bytes = await owner.GetByteArrayAsync($"{Root}/{draft.Id}/documents/{review.Id}");
+        using (var pdf = new iText.Kernel.Pdf.PdfDocument(new iText.Kernel.Pdf.PdfReader(new MemoryStream(bytes))))
+            Assert.DoesNotContain("TÀI LIỆU KIỂM THỬ", ContractPdfRendererTests.Text(pdf));
+        var key = Guid.NewGuid(); var input = new MainDraftReleaseInput(null, draft.Version, review.Id, true);
+        await Success(await Release(owner, draft.Id, input, key));
+        await Success(await Release(owner, draft.Id, input, key));
+        await using var scope = host.Services.CreateAsyncScope();
+        var db = scope.ServiceProvider.GetRequiredService<BHomePersistenceContext>();
+        var contract = await db.Set<Contract>().Include(c => c.Residents).Include(c => c.Signatures).SingleAsync(c => c.Id == draft.Id);
+        Assert.Equal(ContractStatus.PendingSigning, contract.Status);
+        Assert.Empty(contract.Signatures); Assert.Null(contract.ActivatedAt);
+        var document = new ContractDocument(contract.Id, contract.RoomId, contract.OwnerSignerId, Guid.Empty,
+            contract.RepresentativeResidentId, contract.Residents.Select(r => r.ResidentId).Order().ToArray(),
+            contract.StartDate, contract.EndDate, contract.MonthlyRent, contract.RequiredDeposit,
+            contract.HoldingContractId, contract.AppliedHoldingDeposit, contract.Terms, contract.SnapshotHash)
+        { IsInternalResidentAcceptance = true, AgreedCharges = ContractChargeSnapshot.Read(contract).Charges };
+        Assert.Equal(bytes, await scope.ServiceProvider.GetRequiredService<IContractSigningDocumentSource>().ReadAsync(document, default));
+        Assert.Single(await db.Set<ContractDocumentFile>().Where(f => f.ContractId == draft.Id && f.Kind == ContractFileKind.Preview).ToArrayAsync());
     }
     [Theory]
     [InlineData(false)]

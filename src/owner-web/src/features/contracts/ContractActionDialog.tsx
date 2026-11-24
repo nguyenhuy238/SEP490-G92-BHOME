@@ -124,7 +124,7 @@ export function ContractActionDialog({
           <Typography variant="caption" sx={{ overflowWrap: 'anywhere' }}>
             Hồ sơ phòng {contract.roomNumber || 'đang xem'}
           </Typography>
-          <Alert severity="warning">{action.warning}</Alert>
+          {!!action.warning && <Alert severity="warning">{action.warning}</Alert>}
           {action.fields.map((field) =>
             field.type === 'certificate' ? (
               <TextField

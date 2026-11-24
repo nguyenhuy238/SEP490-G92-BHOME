@@ -425,7 +425,11 @@ public static class DependencyInjection
         // Billing automation is independently opted in only after an explicit rollout.
         services.AddSingleton(p => new BHome.Application.Billing.BillingAutomationRuntime(
             p.GetRequiredService<Microsoft.Extensions.Hosting.IHostEnvironment>().EnvironmentName is "Development" or "Testing",
-            configuration.GetValue<bool>("Jobs:Enabled") && configuration.GetValue<bool>("BillingAutomation:AutomaticJobsEnabled")));
+            configuration.GetValue<bool>("Jobs:Enabled") && configuration.GetValue<bool>("BillingAutomation:AutomaticJobsEnabled"))
+        {
+            ManualActionsEnabled = p.GetRequiredService<Microsoft.Extensions.Hosting.IHostEnvironment>().EnvironmentName == "Staging" &&
+                configuration.GetValue<bool>("BillingAutomation:ManualActionsEnabled")
+        });
         services.AddScoped<IBackgroundJobHandler>(p => new BHome.Application.Billing.BillingAutomationJobHandler("billing-meter", "Meter", p.GetRequiredService<BHome.Application.Billing.IBillingAutomationEngine>(), p.GetRequiredService<BHome.Application.Billing.BillingAutomationRuntime>().WorkerEnabled));
         services.AddScoped<IBackgroundJobHandler>(p => new BHome.Application.Billing.BillingAutomationJobHandler("billing-draft", "Draft", p.GetRequiredService<BHome.Application.Billing.IBillingAutomationEngine>(), p.GetRequiredService<BHome.Application.Billing.BillingAutomationRuntime>().WorkerEnabled));
         services.AddScoped<IBackgroundJobHandler>(p => new BHome.Application.Billing.BillingAutomationJobHandler("billing-final", "Final", p.GetRequiredService<BHome.Application.Billing.IBillingAutomationEngine>(), p.GetRequiredService<BHome.Application.Billing.BillingAutomationRuntime>().WorkerEnabled));

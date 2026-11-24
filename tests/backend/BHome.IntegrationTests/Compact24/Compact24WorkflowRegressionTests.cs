@@ -234,5 +234,5 @@ public sealed class Compact24MainDraftRegressionTests
     [CompactPostgresFact] public Task ContactEmail() => Run(t => t.ContactEmailRoundTripsEncryptedWithoutAccountCreationOrIssuePlaceSupplement());
     [CompactPostgresFact] public Task RealPdfAndPages() => Run(t => t.ActualLibreOfficeConversionPersistsPrivatePdfWithVietnameseAndIssueDate());
     [CompactPostgresFact] public Task ReviewReleaseAndActivation() => Run(t => t.ReviewedMainDraftReleasesOnceAndBothPartiesUseTheSamePdfThroughSimulatedActivation());
-    [CompactPostgresFact] public Task RejectInvalidRelease() => Run(t => t.ReleaseRejectsStaleReviewTamperingAndProductionSampleTemplate());
+    [CompactPostgresFact] public Task RejectInvalidRelease() => Run(t => t.ReleaseRejectsStaleReviewAndTampering());
 }

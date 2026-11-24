@@ -6,6 +6,7 @@ using BHome.Application.PaymentsDebt;
 using BHome.Application.PropertyManagement;
 using BHome.Domain.IdentityAccess;
 using BHome.Infrastructure.Persistence;
+using Microsoft.AspNetCore.Mvc.Testing;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
 
@@ -13,11 +14,11 @@ namespace BHome.IntegrationTests.PaymentsDebt;
 
 public sealed partial class PaymentLedgerTests
 {
-    private async Task<HttpClient> Client(Guid actor)
+    private async Task<HttpClient> Client(Guid actor, WebApplicationFactory<Program>? host = null)
     {
         await using var scope = fixture.Factory.Services.CreateAsyncScope(); var db = scope.ServiceProvider.GetRequiredService<BHomePersistenceContext>();
         var email = await db.Users.Where(u => u.Id == actor).Select(u => u.Email).SingleAsync();
-        var client = fixture.Factory.CreateClient(); var login = await client.PostAsJsonAsync("/api/v1/auth/login", new { email, password = BHome.IntegrationTests.Compact24.WorkflowTestUsers.Password });
+        var client = (host ?? fixture.Factory).CreateClient(); var login = await client.PostAsJsonAsync("/api/v1/auth/login", new { email, password = BHome.IntegrationTests.Compact24.WorkflowTestUsers.Password });
         login.EnsureSuccessStatusCode(); var session = (await login.Content.ReadFromJsonAsync<LoginResult>())!;
         client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", session.AccessToken); return client;
     }
