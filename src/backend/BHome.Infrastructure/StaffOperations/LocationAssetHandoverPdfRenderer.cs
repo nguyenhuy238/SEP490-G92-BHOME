@@ -1,6 +1,8 @@
 using System.Globalization;
 using BHome.Application.StaffOperations;
+using BHome.Infrastructure.Branding;
 using iText.IO.Font;
+using iText.Kernel.Colors;
 using iText.Kernel.Font;
 using iText.Kernel.Geom;
 using iText.Kernel.Pdf;
@@ -57,11 +59,14 @@ internal static class LocationAssetHandoverPdfRenderer
                 PdfFontFactory.EmbeddingStrategy.FORCE_EMBEDDED);
             document.SetFont(font).SetFontSize(10).SetMargins(38, 32, 42, 32);
             var info = pdf.GetDocumentInfo();
-            info.SetTitle("Biên bản bàn giao tài sản và trách nhiệm quản lý cơ sở");
+            info.SetTitle("Biên bản bàn giao tài sản và trách nhiệm quản lý cơ sở").SetCreator("BHome");
             info.SetMoreInfo("BHomeInventoryTaskId", report.TaskId.ToString());
             info.SetMoreInfo("BHomeInventoryRevision", report.Revision.ToString(CultureInfo.InvariantCulture));
             info.SetMoreInfo("BHomeInventorySnapshotSHA256", report.SnapshotHash);
 
+            document.Add(new Paragraph("BHome").SetFontColor(new DeviceRgb(25, 76, 187)).SetFontSize(12)
+                .SetTextAlignment(TextAlignment.CENTER).SetMarginBottom(2));
+            BrandAssets.AddPdfMark(document, PageSize.A4.GetWidth() - 62, PageSize.A4.GetHeight() - 31, 26, BrandAssets.MarkPng);
             document.Add(new Paragraph("BIÊN BẢN BÀN GIAO TÀI SẢN VÀ TRÁCH NHIỆM QUẢN LÝ CƠ SỞ")
                 .SetTextAlignment(TextAlignment.CENTER).SetFontSize(13));
             document.Add(new Paragraph($"Mã công việc: {report.TaskId:D}  ·  Lần lập: {report.Revision}\n" +

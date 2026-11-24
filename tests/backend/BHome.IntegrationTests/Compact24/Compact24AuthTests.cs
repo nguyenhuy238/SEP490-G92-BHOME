@@ -303,8 +303,27 @@ public sealed class Compact24AuthTests(Compact24Fixture fixture) : IClassFixture
     }
 }
 
+[Trait("Category", "CompactPostgres")]
+public sealed class Compact24FixtureTests
+{
+    [CompactPostgresFact]
+    public async Task DisposalCanBeRepeatedAfterTheOwnedDatabaseHasBeenRemoved()
+    {
+        var fixture = new Compact24Fixture();
+        try { await fixture.InitializeAsync(); }
+        finally { await fixture.DisposeAsync(); }
+
+        // Before the fix, the second DROP DATABASE failed with SQLSTATE 3D000.
+        // This also exercises clearing the pool for a database that no longer exists.
+        await fixture.DisposeAsync();
+    }
+}
+
 public sealed class Compact24Fixture : IAsyncLifetime
 {
+    // CREATE/DROP DATABASE can wait on template copying, checkpoints or active
+    // connections under CI load. Keep DDL bounded without extending API queries.
+    private const int DatabaseDdlTimeoutSeconds = 120;
     private readonly bool keepHostedServices;
     public Compact24Fixture() { }
     internal Compact24Fixture(bool keepHostedServices) => this.keepHostedServices = keepHostedServices;
@@ -315,16 +334,18 @@ public sealed class Compact24Fixture : IAsyncLifetime
     public WebApplicationFactory<Program>? Factory { get; private set; }
     public async Task InitializeAsync()
     {
-        admin = Environment.GetEnvironmentVariable("BHOME_COMPACT24_TEST_ADMIN");
-        if (string.IsNullOrWhiteSpace(admin)) return;
-        var settings = new NpgsqlConnectionStringBuilder(admin);
+        var configuredAdmin = Environment.GetEnvironmentVariable("BHOME_COMPACT24_TEST_ADMIN");
+        if (string.IsNullOrWhiteSpace(configuredAdmin)) return;
+        var settings = new NpgsqlConnectionStringBuilder(configuredAdmin);
         if (settings.Host is not ("127.0.0.1" or "localhost" or "::1") || settings.Database != "postgres")
             throw new InvalidOperationException("Compact tests require an explicitly authorized loopback admin database.");
+        admin = configuredAdmin;
         name = "bhome_compact24_" + Guid.NewGuid().ToString("N");
         await using (var connection = new NpgsqlConnection(admin))
         {
             await connection.OpenAsync();
             await using var command = new NpgsqlCommand($"CREATE DATABASE \"{name}\"", connection);
+            command.CommandTimeout = DatabaseDdlTimeoutSeconds;
             await command.ExecuteNonQueryAsync();
         }
         settings.Database = name;
@@ -363,7 +384,10 @@ public sealed class Compact24Fixture : IAsyncLifetime
                     NpgsqlConnection.ClearPool(pooledConnection);
                 }
                 await using var connection = new NpgsqlConnection(admin); await connection.OpenAsync();
-                await using var command = new NpgsqlCommand($"DROP DATABASE \"{name}\" WITH (FORCE)", connection);
+                // The server may have canceled CREATE before the database existed.
+                // Only this fixture's random, validated name can be cleaned up.
+                await using var command = new NpgsqlCommand($"DROP DATABASE IF EXISTS \"{name}\" WITH (FORCE)", connection);
+                command.CommandTimeout = DatabaseDdlTimeoutSeconds;
                 await command.ExecuteNonQueryAsync();
             }
         }

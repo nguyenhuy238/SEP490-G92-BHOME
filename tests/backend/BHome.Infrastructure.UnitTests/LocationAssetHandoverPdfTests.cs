@@ -19,7 +19,12 @@ public sealed class LocationAssetHandoverPdfTests
         Assert.Equal(report.TaskId.ToString(), pdf.GetDocumentInfo().GetMoreInfo("BHomeInventoryTaskId"));
         Assert.Equal("1", pdf.GetDocumentInfo().GetMoreInfo("BHomeInventoryRevision"));
         Assert.Equal(report.SnapshotHash, pdf.GetDocumentInfo().GetMoreInfo("BHomeInventorySnapshotSHA256"));
+        Assert.Equal("BHome", pdf.GetDocumentInfo().GetCreator());
+        Assert.Contains(Enumerable.Range(1, pdf.GetNumberOfPdfObjects()),
+            index => pdf.GetPdfObject(index) is PdfStream stream &&
+                PdfName.Image.Equals(stream.GetAsName(PdfName.Subtype)));
         var text = Text(pdf);
+        Assert.Contains("BHome", text);
         Assert.Contains("Bảng kê tài sản", text);
         Assert.Contains("Owner: Nguyễn Văn Quản Lý", text);
         Assert.Contains("Staff nhận bàn giao: Trần Văn Kiểm Kê", text);
