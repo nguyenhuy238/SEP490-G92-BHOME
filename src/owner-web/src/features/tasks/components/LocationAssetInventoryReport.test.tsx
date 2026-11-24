@@ -184,7 +184,9 @@ it('keeps the completed signed baseline distinct from later live Owner changes',
       <LocationAssetInventoryReport taskId={state.preview.taskId} />
     </MemoryRouter>,
   );
-  expect(screen.getByText(/Phạm vi bàn giao đã hoàn tất được lưu theo biên bản đã ký/)).toBeTruthy();
+  expect(
+    screen.getByText(/Phạm vi bàn giao đã hoàn tất được lưu theo biên bản đã ký/),
+  ).toBeTruthy();
   expect(screen.getByRole('progressbar')).toHaveClass('MuiLinearProgress-colorSuccess');
   expect(screen.queryByText(/Checklist hiện tại chưa khớp phạm vi Owner/)).toBeNull();
   expect(screen.queryByRole('link', { name: 'Mở kiểm kê tài sản của Owner' })).toBeNull();

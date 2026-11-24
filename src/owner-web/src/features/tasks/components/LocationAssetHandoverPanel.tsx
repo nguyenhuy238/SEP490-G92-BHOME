@@ -190,15 +190,16 @@ export function LocationAssetHandoverPanel({
       notify('Đã chuyển công việc về đang thực hiện. Staff cần kiểm tra lại các mục được chọn.');
     }
   }
-  const reportState = data?.status === 'Completed'
-    ? 'Đã hoàn tất'
-    : data?.status === 'PendingOwnerSignature'
-      ? 'Chờ Owner ký'
-      : data?.status === 'PendingStaffSignature'
-        ? 'Chờ Staff ký'
-        : data?.status === 'Superseded'
-          ? 'Đã thay thế'
-          : null;
+  const reportState =
+    data?.status === 'Completed'
+      ? 'Đã hoàn tất'
+      : data?.status === 'PendingOwnerSignature'
+        ? 'Chờ Owner ký'
+        : data?.status === 'PendingStaffSignature'
+          ? 'Chờ Staff ký'
+          : data?.status === 'Superseded'
+            ? 'Đã thay thế'
+            : null;
 
   return (
     <Stack spacing={1.5}>
@@ -219,7 +220,13 @@ export function LocationAssetHandoverPanel({
             <Chip
               size="small"
               variant="outlined"
-              color={data?.status === 'Completed' ? 'success' : data?.status === 'Superseded' ? 'warning' : 'primary'}
+              color={
+                data?.status === 'Completed'
+                  ? 'success'
+                  : data?.status === 'Superseded'
+                    ? 'warning'
+                    : 'primary'
+              }
               label={reportState}
             />
           )}
@@ -289,7 +296,9 @@ export function LocationAssetHandoverPanel({
             onClick={() => setReworkExpanded((value) => !value)}
             sx={{ alignSelf: 'flex-start' }}
           >
-            {reworkExpanded ? 'Đóng yêu cầu kiểm tra lại' : `Yêu cầu kiểm tra lại (${reworkItemIds.length} mục đã chọn)`}
+            {reworkExpanded
+              ? 'Đóng yêu cầu kiểm tra lại'
+              : `Yêu cầu kiểm tra lại (${reworkItemIds.length} mục đã chọn)`}
           </Button>
           {reworkExpanded && (
             <Stack spacing={1}>
@@ -340,11 +349,23 @@ export function LocationAssetHandoverPanel({
               compactActions
             />
             <Stack direction={{ xs: 'column', sm: 'row' }} spacing={{ xs: 0.5, sm: 3 }} useFlexGap>
-              <Typography variant="body2" sx={{ color: data.ownerSignature ? 'success.dark' : 'text.secondary' }}>
-                Owner: {data.ownerSignature ? `Đã ký ${formatInstant(data.ownerSignature.signedAt)}` : 'Chưa ký'}
+              <Typography
+                variant="body2"
+                sx={{ color: data.ownerSignature ? 'success.dark' : 'text.secondary' }}
+              >
+                Owner:{' '}
+                {data.ownerSignature
+                  ? `Đã ký ${formatInstant(data.ownerSignature.signedAt)}`
+                  : 'Chưa ký'}
               </Typography>
-              <Typography variant="body2" sx={{ color: data.staffSignature ? 'success.dark' : 'text.secondary' }}>
-                Staff: {data.staffSignature ? `Đã ký ${formatInstant(data.staffSignature.signedAt)}` : 'Chưa ký'}
+              <Typography
+                variant="body2"
+                sx={{ color: data.staffSignature ? 'success.dark' : 'text.secondary' }}
+              >
+                Staff:{' '}
+                {data.staffSignature
+                  ? `Đã ký ${formatInstant(data.staffSignature.signedAt)}`
+                  : 'Chưa ký'}
               </Typography>
             </Stack>
             <Accordion variant="outlined" disableGutters sx={{ '&:before': { display: 'none' } }}>

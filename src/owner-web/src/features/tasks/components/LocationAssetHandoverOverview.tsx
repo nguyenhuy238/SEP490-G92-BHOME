@@ -90,8 +90,7 @@ export function LocationAssetHandoverOverview({
     !!checklist &&
     (!!checklist.pendingOwnerRooms?.length || !!checklist.pendingOwnerCommonAssets);
   const staffConflict =
-    !activeReport &&
-    scopePreview?.blockedReason === 'location_asset_inventory_staff_work_conflict';
+    !activeReport && scopePreview?.blockedReason === 'location_asset_inventory_staff_work_conflict';
   const scopeMismatch =
     !activeReport &&
     !!scopePreview &&
@@ -131,8 +130,11 @@ export function LocationAssetHandoverOverview({
   const phase =
     isArchive || completed || signatureMismatch
       ? -1
-      : !confirmedScope && (ownerConfirmationRequired || scopeMismatch || staffConflict ||
-          (task.status === 'Completed' && fullySigned))
+      : !confirmedScope &&
+          (ownerConfirmationRequired ||
+            scopeMismatch ||
+            staffConflict ||
+            (task.status === 'Completed' && fullySigned))
         ? 0
         : report?.status === 'PendingStaffSignature'
           ? 4
@@ -228,9 +230,10 @@ export function LocationAssetHandoverOverview({
     actionLabel = 'Xem biên bản chờ ký';
   } else if (task.status === 'PendingVerification') {
     heading = 'Owner cần đối soát kết quả Staff';
-    guidance = exceptions || incidents
-      ? `Có ${exceptions} mục hiện trạng bất thường và ${incidents} mục liên quan sự cố. Xem chi tiết trước khi duyệt.`
-      : 'Staff đã nộp kiểm kê. Xem kết quả để duyệt hoặc chọn mục cần kiểm tra lại.';
+    guidance =
+      exceptions || incidents
+        ? `Có ${exceptions} mục hiện trạng bất thường và ${incidents} mục liên quan sự cố. Xem chi tiết trước khi duyệt.`
+        : 'Staff đã nộp kiểm kê. Xem kết quả để duyệt hoặc chọn mục cần kiểm tra lại.';
     action = 'inventory';
     actionLabel = 'Đối soát kiểm kê';
   } else if (checklist) {

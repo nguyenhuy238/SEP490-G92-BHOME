@@ -110,19 +110,21 @@ beforeEach(() => {
         return state.report;
       }
       if (route === `/api/v1/operational-tasks/${task.id}/location-asset-inventory`) {
-        return state.draftOverride ?? {
-          version: task.version,
-          status: 'PendingVerification',
-          totalCount: 3,
-          checkedCount: 3,
-          pendingOwnerRooms: [],
-          pendingOwnerCommonAssets: false,
-          items: [
-            { checked: true, inherited: false },
-            { checked: true, inherited: true },
-            { checked: true, inherited: true },
-          ],
-        };
+        return (
+          state.draftOverride ?? {
+            version: task.version,
+            status: 'PendingVerification',
+            totalCount: 3,
+            checkedCount: 3,
+            pendingOwnerRooms: [],
+            pendingOwnerCommonAssets: false,
+            items: [
+              { checked: true, inherited: false },
+              { checked: true, inherited: true },
+              { checked: true, inherited: true },
+            ],
+          }
+        );
       }
       if (route === path + '/approve') {
         state.report = { ...approvedReport };
@@ -368,10 +370,7 @@ it('shows a signed report with exactly one status, one refresh and signer detail
   const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
   render(
     <QueryClientProvider client={client}>
-      <LocationAssetHandoverPanel
-        task={{ ...task, status: 'Completed' }}
-        notify={state.notify}
-      />
+      <LocationAssetHandoverPanel task={{ ...task, status: 'Completed' }} notify={state.notify} />
     </QueryClientProvider>,
   );
   expect(await screen.findByText('Biên bản phiên bản 3')).toBeVisible();

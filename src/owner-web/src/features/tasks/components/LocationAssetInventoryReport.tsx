@@ -106,8 +106,7 @@ export function LocationAssetInventoryReport({
     .filter(Boolean)
     .join(' và ');
   const scopePending = pendingOwnerRooms.length > 0 || pendingOwnerCommonAssets;
-  const staffConflict =
-    preview?.blockedReason === 'location_asset_inventory_staff_work_conflict';
+  const staffConflict = preview?.blockedReason === 'location_asset_inventory_staff_work_conflict';
   const scopeMismatch =
     !!preview &&
     (preview.currentCount !== preview.ownerConfirmedCount ||
@@ -154,7 +153,14 @@ export function LocationAssetInventoryReport({
         <Stack spacing={0.75} component="section">
           <Stack direction="row" sx={{ justifyContent: 'space-between', alignItems: 'center' }}>
             <Typography sx={{ fontSize: 14, fontWeight: 700 }}>Staff đã kiểm tra</Typography>
-            <Typography sx={{ fontSize: 17, fontWeight: 750, color: progressComplete ? 'success.dark' : 'text.primary', fontVariantNumeric: 'tabular-nums' }}>
+            <Typography
+              sx={{
+                fontSize: 17,
+                fontWeight: 750,
+                color: progressComplete ? 'success.dark' : 'text.primary',
+                fontVariantNumeric: 'tabular-nums',
+              }}
+            >
               {data.checkedCount}/{data.totalCount}
             </Typography>
           </Stack>
@@ -178,31 +184,34 @@ export function LocationAssetInventoryReport({
           ) : null}
         </Stack>
       )}
-      {!historicalComplete && data && (scopeMismatch || requiresOwnerConfirmation || staffConflict) && (
-        <Box sx={{ border: 1, borderColor: 'divider', borderRadius: 1.5, p: 1.5 }}>
-          <Typography variant="body2" sx={{ fontWeight: 650 }}>
-            Phạm vi Owner: {preview?.ownerConfirmedCount ?? '—'} mục xác nhận · checklist {data.totalCount} mục
-          </Typography>
-          {staffConflict && (
-            <Alert severity="warning" variant="outlined" sx={{ mt: 1 }}>
-              Phạm vi Owner đang xung đột với tài sản Staff đã xác nhận hoặc ghi chú.
-              Kết quả Staff được giữ nguyên; cần kiểm tra sai lệch trước khi bàn giao.
-            </Alert>
-          )}
-          {scopeMismatch && !staffConflict && !requiresOwnerConfirmation && (
-            <Alert severity="warning" variant="outlined" sx={{ mt: 1 }}>
-              Checklist hiện tại chưa khớp phạm vi Owner đã xác nhận. Chỉ tự đồng bộ khi
-              bảo toàn được kết quả Staff.
-            </Alert>
-          )}
-        </Box>
-      )}
+      {!historicalComplete &&
+        data &&
+        (scopeMismatch || requiresOwnerConfirmation || staffConflict) && (
+          <Box sx={{ border: 1, borderColor: 'divider', borderRadius: 1.5, p: 1.5 }}>
+            <Typography variant="body2" sx={{ fontWeight: 650 }}>
+              Phạm vi Owner: {preview?.ownerConfirmedCount ?? '—'} mục xác nhận · checklist{' '}
+              {data.totalCount} mục
+            </Typography>
+            {staffConflict && (
+              <Alert severity="warning" variant="outlined" sx={{ mt: 1 }}>
+                Phạm vi Owner đang xung đột với tài sản Staff đã xác nhận hoặc ghi chú. Kết quả
+                Staff được giữ nguyên; cần kiểm tra sai lệch trước khi bàn giao.
+              </Alert>
+            )}
+            {scopeMismatch && !staffConflict && !requiresOwnerConfirmation && (
+              <Alert severity="warning" variant="outlined" sx={{ mt: 1 }}>
+                Checklist hiện tại chưa khớp phạm vi Owner đã xác nhận. Chỉ tự đồng bộ khi bảo toàn
+                được kết quả Staff.
+              </Alert>
+            )}
+          </Box>
+        )}
       {data && (
         <>
           {notedCount > 0 && (
             <Alert severity="warning" variant="outlined">
-              Có {notedCount} mục có ghi chú Staff. Dùng bộ lọc “Có ghi chú” để đọc hiện trạng
-              trước khi duyệt.
+              Có {notedCount} mục có ghi chú Staff. Dùng bộ lọc “Có ghi chú” để đọc hiện trạng trước
+              khi duyệt.
             </Alert>
           )}
           {data.totalCount === 0 && (
@@ -346,8 +355,7 @@ export function LocationAssetInventoryReport({
                           variant="outlined"
                           label={
                             item.checked
-                              ? conditionLabels[item.condition ?? 'Unassessed'] ??
-                                'Đã kiểm tra'
+                              ? (conditionLabels[item.condition ?? 'Unassessed'] ?? 'Đã kiểm tra')
                               : 'Chưa kiểm tra'
                           }
                         />
