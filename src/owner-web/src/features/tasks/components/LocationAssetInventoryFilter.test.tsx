@@ -41,7 +41,6 @@ vi.mock('../../../hooks/useOwnerWorkspace', () => ({
     error: null,
     refetch: vi.fn(),
   }),
-  useOwnerAction: () => ({ busy: false, error: null, run: vi.fn(), command: vi.fn() }),
 }));
 
 vi.mock('../../../components/common/OwnerWorkspace', () => ({
@@ -112,12 +111,12 @@ beforeEach(() => {
 
 afterEach(cleanup);
 
-it('shows the Owner scope counts prominently and keeps reconciliation available on demand', () => {
+it('shows read-only scope counts without a manual synchronization control', () => {
   state.preview = {
     taskId: 'task-1',
     version: 1,
-    currentCount: 26,
-    ownerConfirmedCount: 26,
+    currentCount: 4,
+    ownerConfirmedCount: 4,
     addedCount: 0,
     removedCount: 0,
     preservedChecks: 0,
@@ -130,14 +129,11 @@ it('shows the Owner scope counts prominently and keeps reconciliation available 
     </MemoryRouter>,
   );
 
-  expect(screen.getByText('Phạm vi kiểm kê của Owner')).toBeTruthy();
-  expect(screen.getByText('Checklist hiện tại')).toBeTruthy();
-  expect(screen.getByText('Owner đã xác nhận')).toBeTruthy();
-  expect(screen.getAllByText(/26/)).toHaveLength(2);
-  expect(screen.queryByText('Có thay đổi cần đối chiếu')).toBeNull();
-
-  fireEvent.click(screen.getByRole('button', { name: 'Đối chiếu / đồng bộ' }));
-  expect(screen.getByText('Không có thay đổi danh sách tài sản.')).toBeTruthy();
+  expect(screen.getByText('Phạm vi Owner: 4 mục xác nhận · checklist 4 mục')).toBeTruthy();
+  expect(screen.getByText('Staff đã kiểm tra')).toBeTruthy();
+  expect(screen.getAllByRole('progressbar')).toHaveLength(1);
+  expect(screen.queryByRole('button', { name: /đối chiếu|đồng bộ/i })).toBeNull();
+  expect(screen.getByText(/Cần Owner xác nhận 1 phòng/)).toBeTruthy();
 });
 
 it('counts real unchecked and nonblank notes, showing only matching room groups', () => {
@@ -150,6 +146,7 @@ it('counts real unchecked and nonblank notes, showing only matching room groups'
   expect(screen.getByRole('button', { name: 'Tất cả (4)' })).toBeTruthy();
   expect(screen.getByRole('button', { name: 'Chưa kiểm tra (2)' })).toBeTruthy();
   expect(screen.getByRole('button', { name: 'Có ghi chú (2)' })).toBeTruthy();
+  expect(screen.getByText('Chưa xác minh được phạm vi Owner.')).toBeTruthy();
 
   fireEvent.click(screen.getByRole('button', { name: 'Có ghi chú (2)' }));
   expect(screen.getByRole('button', { name: /Phòng 101/ })).toBeTruthy();

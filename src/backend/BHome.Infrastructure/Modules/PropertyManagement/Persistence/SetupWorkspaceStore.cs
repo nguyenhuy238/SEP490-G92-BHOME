@@ -107,6 +107,8 @@ internal sealed class SetupWorkspaceStore(Compact24DbContext db, CompactNotifica
                 WHERE id=@id AND version=@expected
                 """, t, ("id", id), ("json", json), ("history", history), ("status", status), ("expected", expectedVersion)) != 1)
             throw new PropertyException(409, "stale_version");
+        if (kind == "RoomNoAssets" && db.Database.CurrentTransaction is not null)
+            await LocationAssetInventoryTaskFactory.RefreshOpenAsync(db, this, locationId, actor, sql.Now, t);
         return doc;
     }
     public async Task<IReadOnlyList<SetupDocument>> SaveBatchAsync(Guid locationId, IReadOnlyList<SetupDocumentWrite> documents, Guid actor, CancellationToken t)
@@ -166,6 +168,9 @@ internal sealed class SetupWorkspaceStore(Compact24DbContext db, CompactNotifica
             SELECT count(*)::integer FROM written
             """, t, ("documents", payloadJson));
         if (count != documents.Count) throw new PropertyException(409, "stale_version");
+        if (db.Database.CurrentTransaction is not null &&
+            documents.Any(d => d.Kind is "RoomInventoryChecklistCommand" or "CommonAssetInventoryCommand"))
+            await LocationAssetInventoryTaskFactory.RefreshOpenAsync(db, this, locationId, actor, sql.Now, t);
         return savedDocuments;
     }
     public Task<Guid?> RoomLocationAsync(Guid roomId, CancellationToken t) => db.Set<Room>().Where(r => r.Id == roomId).Select(r => (Guid?)r.LocationId).SingleOrDefaultAsync(t);

@@ -42,7 +42,7 @@ Một Location chỉ có tối đa một `LocationAssetHandover` task đang mở
 stateDiagram-v2
   [*] --> Assigned: Staff responsibility có hiệu lực
   Assigned --> InProgress: Staff bắt đầu kiểm kê
-  InProgress --> PendingVerification: Checklist hợp lệ / Staff gửi Owner
+  InProgress --> PendingVerification: Backend tự xác nhận checklist đầy đủ
   PendingVerification --> InProgress: Owner yêu cầu kiểm tra lại
   PendingVerification --> InProgress: Successor nhận cùng task chưa hoàn tất
   PendingVerification --> Completed: Staff ký đúng biên bản Owner đã ký
@@ -59,9 +59,13 @@ stateDiagram-v2
 
 `progress`/`blockers` là event lịch sử của Operational Task, không phải bước ký biên bản. Với LocationAssetHandover, tiến độ chính được thể hiện bằng checklist; vấn đề thiếu/hỏng cần liên kết Incident cụ thể.
 
-### 2.3. Điều kiện Staff gửi checklist
+### 2.3. Điều kiện tự hoàn tất checklist
 
-Backend là nguồn quyết định cuối cùng. Chỉ cho phép gửi khi:
+Backend là nguồn quyết định cuối cùng. Phạm vi được tự đồng bộ từ kết quả kiểm kê Owner đã xác nhận, không cần Owner thao tác đồng bộ lần nữa. Các quan sát Staff còn khớp được bảo toàn; nếu có xung đột không thể bảo toàn, không tự ghi đè hoặc hoàn tất.
+
+Backend xét điều kiện chuyển sang `PendingVerification` khi Staff bắt đầu, cập nhật checklist hoặc Owner xác nhận phạm vi còn thiếu. Dữ liệu checklist đã lưu tại trạng thái này là dự thảo bàn giao; Owner phê duyệt kết quả/ngoại lệ để tạo PDF bất biến rồi hai bên ký. API submit cũ vẫn hỗ trợ xử lý hồ sơ tồn đọng và trường hợp có yêu cầu bằng chứng. Không tự ký thay bất kỳ bên nào.
+
+Chỉ cho phép hoàn tất khi:
 
 1. Task đang `InProgress` và Staff là người phụ trách hiện hành, assignment có hiệu lực, nhân sự còn active.
 2. Payload checklist đầy đủ và không thiếu item so với `TotalCount`.
@@ -94,7 +98,7 @@ stateDiagram-v2
 
 **Không đồng nhất trạng thái task với trạng thái report.** Trong lúc `task.Status=PendingVerification`:
 
-- Chưa có report: Staff thấy “Đã gửi kiểm kê – chờ Owner đối soát và lập biên bản”.
+- Chưa có report đã duyệt: Staff thấy trạng thái đã hoàn tất kiểm kê, chờ Owner xem dự thảo và lập biên bản ký.
 - Report `PendingOwnerSignature`: Staff thấy “Chờ Owner ký xác nhận”.
 - Report `PendingStaffSignature`: Staff thấy “Owner đã ký – chờ bạn đọc PDF và ký nhận”. Không hiển thị “Chờ Owner kiểm tra”.
 - Report `Completed`: Staff thấy “Bàn giao hoàn tất”.

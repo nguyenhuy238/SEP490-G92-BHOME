@@ -137,6 +137,7 @@ export function availableTaskActions(
   if (task.kind === 'LocationAssetHandover') {
     if (role !== 'Staff' || task.currentResponsibleStaffUserId !== actorId) return [];
     if (task.status === 'Assigned') return ['start'];
+    // Explicit submission is retained only as a compatibility action for ready legacy inventory.
     if (task.status === 'InProgress') return ['progress', 'blockers', 'submit'];
     return [];
   }

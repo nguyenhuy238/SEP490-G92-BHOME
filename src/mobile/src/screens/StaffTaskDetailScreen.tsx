@@ -24,6 +24,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { formatInstant } from '../../../../packages/client-core/src/localization';
 import { CameraCapture } from '../components/CameraCapture';
 import { KeyboardFormScrollView } from '../components/KeyboardFormScrollView';
+import { StaffWorkflowTabs } from '../components/StaffWorkflowTabs';
 import { useWorkspaceHeaderRefresh } from '../components/WorkspaceHeaderContext';
 import { useStaffTaskDetail, taskDetailError } from '../features/workspace/useStaffTaskDetail';
 import { useWorkspace } from '../features/workspace/WorkspaceProvider';
@@ -88,7 +89,7 @@ export function StaffTaskDetailScreen({ id }: { id: string }) {
     ?.label.trim();
   const [expanded, setExpanded] = useState(false);
   const [historyExpanded, setHistoryExpanded] = useState(false);
-  const [inventoryReady, setInventoryReady] = useState(false);
+  const [selectedTab, setSelectedTab] = useState('overview');
   const refresh = model.reload;
   useFocusEffect(
     useCallback(() => {
@@ -105,8 +106,6 @@ export function StaffTaskDetailScreen({ id }: { id: string }) {
     if (model.pendingAction) action = model.pendingAction.action;
     else if (task.kind === 'LocationAssetHandover') {
       if (task.status === 'Assigned' && allowed.includes('start')) action = 'start';
-      else if (task.status === 'InProgress' && inventoryReady && allowed.includes('submit'))
-        action = 'submit';
     } else if (allowed.length) {
       action = task.status === 'Assigned' ? 'start' : 'choose';
     }
@@ -117,11 +116,7 @@ export function StaffTaskDetailScreen({ id }: { id: string }) {
           mode="contained"
           disabled={!!busy || !model.syncedVersion || model.uploadPending}
           onPress={() => {
-            if (
-              task.kind === 'LocationAssetHandover' &&
-              action === 'submit' &&
-              !model.notes.submit.trim()
-            )
+            if (isHandover && action === 'submit' && !model.notes.submit.trim())
               model.setNote(
                 'submit',
                 'Đã hoàn tất checklist kiểm kê tài sản cơ sở. Vui lòng đối soát và lập biên bản bàn giao.',
@@ -133,11 +128,7 @@ export function StaffTaskDetailScreen({ id }: { id: string }) {
           {model.pendingAction
             ? 'Tiếp tục thao tác chưa xác nhận'
             : task.kind === 'LocationAssetHandover'
-              ? action === 'start'
-                ? 'Bắt đầu kiểm kê'
-                : action === 'submit'
-                  ? 'Gửi kiểm kê cho Owner'
-                  : 'Tiếp tục thao tác'
+              ? 'Bắt đầu kiểm kê'
               : task.status === 'Assigned'
                 ? 'Bắt đầu công việc'
                 : 'Cập nhật công việc'}
@@ -181,19 +172,26 @@ export function StaffTaskDetailScreen({ id }: { id: string }) {
     task.dueAt && Number.isFinite(Date.parse(task.dueAt)) ? formatInstant(task.dueAt) : null;
   const entries = model.history.data?.items ?? [];
   const evidenceCount = model.evidence.data?.length ?? 0;
-  const showEvidenceSection =
-    !isHandover || evidenceCount > 0 || model.evidence.loading || !!model.evidence.rawError;
+  const tabs = currentStaff
+    ? isHandover
+      ? [
+          { id: 'overview', label: 'Tổng quan' },
+          { id: 'inventory', label: 'Kiểm kê' },
+          { id: 'handover', label: 'Biên bản' },
+          { id: 'evidence', label: 'Minh chứng' },
+          { id: 'history', label: 'Lịch sử' },
+        ]
+      : [
+          { id: 'overview', label: 'Tổng quan' },
+          { id: 'evidence', label: 'Minh chứng' },
+          { id: 'history', label: 'Lịch sử' },
+        ]
+    : [{ id: 'overview', label: 'Tổng quan' }];
+  const activeTab = tabs.some((tab) => tab.id === selectedTab) ? selectedTab : 'overview';
   return (
     <>
       {!inShell && <Text variant="titleLarge">Chi tiết công việc</Text>}
       {!!detail.rawError && <ReadFailure error={detail.rawError} retry={refresh} />}
-      {task.kind === 'AdHoc' && (
-        <EquipmentInspectionPanel
-          taskId={id}
-          evidence={model.evidence.data ?? []}
-          onSaved={refresh}
-        />
-      )}
       <View style={styles.section}>
         <Text variant="titleLarge" numberOfLines={3} style={styles.title}>
           {task.title || 'Công việc vận hành'}
@@ -235,25 +233,18 @@ export function StaffTaskDetailScreen({ id }: { id: string }) {
             {isMainMoveOutWork(task) ? 'Mở kiểm tra trả phòng' : 'Mở bàn giao nhận phòng'}
           </Button>
         )}
-        {!isHandover && (
-          <View style={styles.row}>
-            <View style={[styles.badge, pending && { backgroundColor: c.amberSoft }]}>
-              <Text variant="labelMedium" style={{ color: pending ? c.amber : c.primary }}>
-                {statusLabels[task.status] ?? 'Đang cập nhật trạng thái'}
-              </Text>
-            </View>
-            {task.priority === 'High' && (
-              <Text variant="labelMedium" style={{ color: c.amber }}>
-                Ưu tiên cao
-              </Text>
-            )}
+        <View style={styles.row}>
+          <View style={[styles.badge, pending && { backgroundColor: c.amberSoft }]}>
+            <Text variant="labelMedium" style={{ color: pending ? c.amber : c.primary }}>
+              {statusLabels[task.status] ?? 'Đang cập nhật trạng thái'}
+            </Text>
           </View>
-        )}
-        {isHandover && task.priority === 'High' && (
-          <Text variant="labelMedium" style={{ color: c.amber }}>
-            Ưu tiên cao
-          </Text>
-        )}
+          {task.priority === 'High' && (
+            <Text variant="labelMedium" style={{ color: c.amber }}>
+              Ưu tiên cao
+            </Text>
+          )}
+        </View>
         {due && (
           <View style={styles.row}>
             <Icon
@@ -270,18 +261,30 @@ export function StaffTaskDetailScreen({ id }: { id: string }) {
             </Text>
           </View>
         )}
-        {!task.responsibilityAvailable && (
+        {!currentStaff && (
           <Text variant="bodySmall" style={styles.muted}>
-            Chưa có nhân viên phụ trách có hiệu lực. Liên hệ Owner để cập nhật phân công.
-          </Text>
-        )}
-        {!isHandover && !allowed.length && task.status === 'InProgress' && !detail.rawError && (
-          <Text variant="bodySmall" style={styles.muted}>
-            Bạn chỉ có quyền xem công việc này.
+            {task.responsibilityAvailable
+              ? 'Công việc này không được phân công cho tài khoản hiện tại. Bạn chỉ có thể xem thông tin chung.'
+              : 'Chưa có nhân viên phụ trách có hiệu lực. Liên hệ Owner để cập nhật phân công.'}
           </Text>
         )}
       </View>
-      {!isHandover && (
+      {currentStaff && (
+        <StaffWorkflowTabs
+          accessibilityLabel="Các phần chi tiết công việc"
+          selected={activeTab}
+          onChange={setSelectedTab}
+          tabs={tabs}
+        />
+      )}
+      {activeTab === 'overview' && task.kind === 'AdHoc' && (
+        <EquipmentInspectionPanel
+          taskId={id}
+          evidence={model.evidence.data ?? []}
+          onSaved={refresh}
+        />
+      )}
+      {activeTab === 'overview' && !isHandover && (
         <View style={styles.section}>
           <Text variant="titleMedium" style={styles.title}>
             Yêu cầu công việc
@@ -305,24 +308,34 @@ export function StaffTaskDetailScreen({ id }: { id: string }) {
           )}
         </View>
       )}
-      {isHandover && canReadHandover && (
-        <>
-          <LocationAssetInventoryChecklist
-            key={task.id}
-            taskId={task.id}
-            taskStatus={task.status}
-            editable={currentStaff && task.status === 'InProgress' && allowed.includes('progress')}
-            onTaskRefresh={refresh}
-            onReadinessChange={setInventoryReady}
-          />
-          <LocationAssetHandoverSigning
-            taskId={task.id}
-            taskStatus={task.status}
-            onTaskRefresh={refresh}
-          />
-        </>
+      {activeTab === 'inventory' && isHandover && canReadHandover && (
+        <LocationAssetInventoryChecklist
+          key={task.id}
+          taskId={task.id}
+          taskStatus={task.status}
+          editable={currentStaff && task.status === 'InProgress' && allowed.includes('progress')}
+          onTaskRefresh={refresh}
+        />
       )}
-      {!isHandover && !!task.result && (
+      {activeTab === 'handover' && isHandover && canReadHandover && (
+        <LocationAssetHandoverSigning
+          taskId={task.id}
+          taskStatus={task.status}
+          onTaskRefresh={refresh}
+        />
+      )}
+      {activeTab === 'overview' && isHandover && !canReadHandover && (
+        <View style={styles.section}>
+          <Text variant="titleMedium" style={styles.title}>
+            Chưa thể mở checklist và biên bản
+          </Text>
+          <Text variant="bodySmall" style={styles.muted}>
+            Chỉ nhân viên đang phụ trách hợp lệ mới được xem và cập nhật phạm vi kiểm kê, biên bản
+            bàn giao.
+          </Text>
+        </View>
+      )}
+      {activeTab === 'overview' && !isHandover && !!task.result && (
         <View style={styles.section}>
           <Text variant="titleMedium" style={styles.title}>
             Kết quả đã gửi
@@ -342,10 +355,10 @@ export function StaffTaskDetailScreen({ id }: { id: string }) {
           )}
         </View>
       )}
-      {task.kind === 'MeterReading' && (
+      {activeTab === 'overview' && task.kind === 'MeterReading' && (
         <Button onPress={() => go('meter-reading')}>Mở tác vụ ghi chỉ số</Button>
       )}
-      {showEvidenceSection && (
+      {activeTab === 'evidence' && (
         <View style={styles.section}>
           <View style={styles.between}>
             <Text variant="titleMedium" style={styles.title}>
@@ -366,7 +379,7 @@ export function StaffTaskDetailScreen({ id }: { id: string }) {
           {!!model.evidence.rawError && (
             <ReadFailure error={model.evidence.rawError} retry={model.evidence.reload} />
           )}
-          {!isHandover && model.evidence.data?.length === 0 && (
+          {model.evidence.data?.length === 0 && (
             <Text variant="bodySmall" style={styles.muted}>
               Chưa có ảnh minh chứng.
             </Text>
@@ -406,7 +419,7 @@ export function StaffTaskDetailScreen({ id }: { id: string }) {
           )}
         </View>
       )}
-      {(!isHandover || entries.length > 0 || model.history.loading || !!model.history.rawError) && (
+      {activeTab === 'history' && (
         <View style={styles.section}>
           <Text variant="titleMedium" style={styles.title}>
             Lịch sử hoạt động
@@ -420,14 +433,7 @@ export function StaffTaskDetailScreen({ id }: { id: string }) {
               Chưa có hoạt động.
             </Text>
           )}
-          {(isHandover
-            ? historyExpanded
-              ? entries
-              : []
-            : historyExpanded
-              ? entries
-              : entries.slice(0, 3)
-          ).map((entry) => (
+          {(isHandover || historyExpanded ? entries : entries.slice(0, 3)).map((entry) => (
             <View key={entry.id} style={styles.timelineRow}>
               <View style={styles.timelineDot} />
               <View style={{ flex: 1, gap: 4 }}>
@@ -441,49 +447,37 @@ export function StaffTaskDetailScreen({ id }: { id: string }) {
               </View>
             </View>
           ))}
-          {((isHandover && entries.length > 0) || (!isHandover && entries.length > 3)) && (
+          {!isHandover && entries.length > 3 && (
             <Button compact onPress={() => setHistoryExpanded(!historyExpanded)}>
-              {historyExpanded
-                ? 'Thu gọn lịch sử'
-                : isHandover
-                  ? `Xem lịch sử (${entries.length})`
-                  : 'Xem thêm hoạt động'}
+              {historyExpanded ? 'Thu gọn lịch sử' : 'Xem thêm hoạt động'}
             </Button>
           )}
-          {(!isHandover || historyExpanded) &&
-            model.history.data &&
-            model.history.data.totalCount > model.history.data.pageSize && (
-              <View style={styles.between}>
-                <IconButton
-                  icon="chevron-left"
-                  accessibilityLabel="Trang lịch sử trước"
-                  disabled={model.history.fetching || model.historyPage === 1}
-                  onPress={() => {
-                    model.setHistoryPage(model.historyPage - 1);
-                    setHistoryExpanded(true);
-                  }}
-                />
-                <Text variant="bodySmall" style={styles.muted}>
-                  Trang {model.historyPage}
-                </Text>
-                <IconButton
-                  icon="chevron-right"
-                  accessibilityLabel="Trang lịch sử sau"
-                  disabled={
-                    model.history.fetching ||
-                    model.historyPage * model.history.data.pageSize >= model.history.data.totalCount
-                  }
-                  onPress={() => {
-                    model.setHistoryPage(model.historyPage + 1);
-                    setHistoryExpanded(true);
-                  }}
-                />
-              </View>
-            )}
+          {model.history.data && model.history.data.totalCount > model.history.data.pageSize && (
+            <View style={styles.between}>
+              <IconButton
+                icon="chevron-left"
+                accessibilityLabel="Trang lịch sử trước"
+                disabled={model.history.fetching || model.historyPage === 1}
+                onPress={() => model.setHistoryPage(model.historyPage - 1)}
+              />
+              <Text variant="bodySmall" style={styles.muted}>
+                Trang {model.historyPage}
+              </Text>
+              <IconButton
+                icon="chevron-right"
+                accessibilityLabel="Trang lịch sử sau"
+                disabled={
+                  model.history.fetching ||
+                  model.historyPage * model.history.data.pageSize >= model.history.data.totalCount
+                }
+                onPress={() => model.setHistoryPage(model.historyPage + 1)}
+              />
+            </View>
+          )}
         </View>
       )}
       {!inShell && footer}
-      <TaskActionSheet model={model} inventoryReady={inventoryReady} />
+      <TaskActionSheet model={model} />
     </>
   );
 }
@@ -535,13 +529,7 @@ function TaskDetailSkeleton() {
   );
 }
 
-function TaskActionSheet({
-  model,
-  inventoryReady,
-}: {
-  model: DetailModel;
-  inventoryReady: boolean;
-}) {
+function TaskActionSheet({ model }: { model: DetailModel }) {
   const { sheet, setSheet, task, busy, notes, pendingAction } = model;
   const close = () => {
     if (!busy) setSheet(null);
@@ -550,22 +538,9 @@ function TaskActionSheet({
   const form = action ? forms[action] : null;
   const isHandover = task?.kind === 'LocationAssetHandover';
   const handoverStart = isHandover && action === 'start';
-  const handoverSubmit = isHandover && action === 'submit';
-  const formTitle = handoverStart
-    ? 'Bắt đầu kiểm kê'
-    : handoverSubmit
-      ? 'Gửi kiểm kê cho Owner'
-      : (form?.title ?? 'Cập nhật công việc');
-  const formSubmit = handoverStart
-    ? 'Bắt đầu kiểm kê'
-    : handoverSubmit
-      ? 'Gửi kiểm kê cho Owner'
-      : form?.submit;
-  const canSend =
-    action &&
-    (pendingAction ||
-      (model.allowed.includes(action) &&
-        !(action === 'submit' && task?.kind === 'LocationAssetHandover' && !inventoryReady)));
+  const formTitle = handoverStart ? 'Bắt đầu kiểm kê' : (form?.title ?? 'Cập nhật công việc');
+  const formSubmit = handoverStart ? 'Bắt đầu kiểm kê' : form?.submit;
+  const canSend = action && (pendingAction || model.allowed.includes(action));
   const selected = model.selected.filter((id) =>
     model.evidence.data?.some((file) => file.id === id),
   );
@@ -594,34 +569,20 @@ function TaskActionSheet({
           >
             {sheet === 'choose' &&
               model.allowed
-                .filter((value) => value !== 'start' && (!isHandover || value === 'submit'))
+                .filter((value) => value !== 'start')
                 .map((value) => (
                   <Button
                     key={value}
                     mode={value === 'submit' ? 'contained' : 'outlined'}
-                    disabled={
-                      value === 'submit' &&
-                      task?.kind === 'LocationAssetHandover' &&
-                      !inventoryReady
-                    }
                     onPress={() => {
                       model.clearError();
                       setSheet(value);
                     }}
                     contentStyle={{ minHeight: 46 }}
                   >
-                    {isHandover && value === 'submit'
-                      ? 'Gửi kiểm kê cho Owner'
-                      : value === 'submit'
-                        ? 'Gửi kết quả'
-                        : forms[value].title}
+                    {value === 'submit' ? 'Gửi kết quả' : forms[value].title}
                   </Button>
                 ))}
-            {sheet === 'choose' && task?.kind === 'LocationAssetHandover' && !inventoryReady && (
-              <Text variant="bodySmall" style={styles.muted}>
-                Chỉ gửi kết quả sau khi xác nhận đủ các mục kiểm kê toàn cơ sở.
-              </Text>
-            )}
             {action && form && (
               <>
                 {handoverStart && (
@@ -629,13 +590,7 @@ function TaskActionSheet({
                     Bắt đầu kiểm tra các tài sản Owner đã xác nhận tại từng phòng và khu vực chung.
                   </Text>
                 )}
-                {handoverSubmit && (
-                  <Text variant="bodyMedium" style={styles.body}>
-                    Checklist đã đủ điều kiện. Gửi kết quả để Owner đối soát và lập biên bản bàn
-                    giao.
-                  </Text>
-                )}
-                {!handoverStart && !handoverSubmit && (
+                {!handoverStart && (
                   <TextInput
                     mode="outlined"
                     label={form.field}

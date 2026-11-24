@@ -10,8 +10,20 @@ import {
 } from 'react-native-paper';
 import { formatInstant } from '../../../../packages/client-core/src/localization';
 import { useWorkspaceHeaderRefresh } from '../components/WorkspaceHeaderContext';
+import { StaffWorkflowTabs } from '../components/StaffWorkflowTabs';
 import { useWorkspace } from '../features/workspace/WorkspaceProvider';
 import { useWorkspaceQuery } from '../features/workspace/useWorkspaceQuery';
+
+const LazyIncidentListScreen = React.lazy(() =>
+  import('../features/incidents/IncidentScreens').then((module) => ({
+    default: module.IncidentListScreen,
+  })),
+);
+const LazyMaintenanceListScreen = React.lazy(() =>
+  import('../features/incidents/IncidentScreens').then((module) => ({
+    default: module.MaintenanceListScreen,
+  })),
+);
 import { queryPolicies } from '../lib/queryPolicies';
 import {
   isEmbeddedInitialMeterTask,
@@ -31,6 +43,30 @@ const filters = [
 type AssignedLocation = { id: string; name: string };
 
 export function StaffTaskListScreen() {
+  const [tab, setTab] = useState('work');
+  return (
+    <>
+      <StaffWorkflowTabs
+        accessibilityLabel="Nội dung công việc Staff"
+        selected={tab}
+        onChange={setTab}
+        tabs={[
+          { id: 'work', label: 'Công việc' },
+          { id: 'reports', label: 'Báo cáo sự cố' },
+        ]}
+      />
+      {tab === 'reports' ? (
+        <React.Suspense fallback={<Text variant="bodySmall">Đang tải báo cáo sự cố…</Text>}>
+          <LazyIncidentListScreen embedded />
+        </React.Suspense>
+      ) : (
+        <StaffTaskListContent />
+      )}
+    </>
+  );
+}
+
+function StaffTaskListContent() {
   const { go, staffLocationId } = useWorkspace();
   const [page, setPage] = useState(1);
   const [status, setStatus] = useState('');
@@ -95,9 +131,6 @@ export function StaffTaskListScreen() {
         </Text>
       )}
       <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 8 }}>
-        <Button icon="wrench-clock" mode="contained-tonal" onPress={() => go('staff-maintenance')}>
-          Lệnh sửa chữa / Bảo trì
-        </Button>
         <Button
           icon="file-document-check-outline"
           mode="outlined"
@@ -116,6 +149,9 @@ export function StaffTaskListScreen() {
           setPage(1);
         }}
       />
+      <Text variant="titleMedium" style={styles.title}>
+        Công việc vận hành
+      </Text>
       {data && (
         <TaskSummaryBar totalCount={data.totalCount} visibleItems={items} filtered={!!status} />
       )}
@@ -218,6 +254,9 @@ export function StaffTaskListScreen() {
           />
         </View>
       )}
+      <React.Suspense fallback={<Text variant="bodySmall">Đang tải lệnh sửa chữa…</Text>}>
+        <LazyMaintenanceListScreen embedded />
+      </React.Suspense>
     </>
   );
 }

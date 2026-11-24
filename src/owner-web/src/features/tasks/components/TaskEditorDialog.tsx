@@ -8,7 +8,6 @@ import {
   DialogActions,
   DialogContent,
   DialogTitle,
-  Divider,
   FormControlLabel,
   MenuItem,
   Stack,
@@ -40,8 +39,8 @@ export function TaskWorkFields({
 }) {
   return (
     <>
-      <Typography sx={{ fontSize: 16, fontWeight: 600 }}>Thông tin công việc</Typography>
       <TextField
+        size="small"
         required
         label="Tên công việc"
         value={work.title}
@@ -53,7 +52,7 @@ export function TaskWorkFields({
       <TextField
         required
         multiline
-        minRows={3}
+        minRows={2}
         label="Yêu cầu"
         value={work.requirements}
         onChange={(e) => change({ ...work, requirements: e.target.value })}
@@ -61,29 +60,33 @@ export function TaskWorkFields({
         helperText={errors.requirements}
         slotProps={{ htmlInput: { maxLength: 8000 } }}
       />
-      <TextField
-        select
-        label="Mức ưu tiên"
-        value={work.priority}
-        onChange={(e) => change({ ...work, priority: e.target.value })}
-      >
-        <MenuItem value="Normal">Bình thường</MenuItem>
-        <MenuItem value="High">Cao</MenuItem>
-      </TextField>
-      <Divider />
-      <Typography sx={{ fontSize: 16, fontWeight: 600 }}>Thời hạn và bằng chứng</Typography>
-      {includeDue && (
+      <Stack direction={{ xs: 'column', sm: 'row' }} spacing={1.5}>
         <TextField
-          required
-          type="datetime-local"
-          label="Thời điểm hoàn thành (giờ Việt Nam)"
-          value={work.dueAt}
-          onChange={(e) => change({ ...work, dueAt: e.target.value })}
-          error={!!errors.dueat}
-          helperText={errors.dueat}
-          slotProps={{ inputLabel: { shrink: true } }}
-        />
-      )}
+          size="small"
+          fullWidth
+          select
+          label="Mức ưu tiên"
+          value={work.priority}
+          onChange={(e) => change({ ...work, priority: e.target.value })}
+        >
+          <MenuItem value="Normal">Bình thường</MenuItem>
+          <MenuItem value="High">Cao</MenuItem>
+        </TextField>
+        {includeDue && (
+          <TextField
+            size="small"
+            fullWidth
+            required
+            type="datetime-local"
+            label="Thời điểm hoàn thành (giờ Việt Nam)"
+            value={work.dueAt}
+            onChange={(e) => change({ ...work, dueAt: e.target.value })}
+            error={!!errors.dueat}
+            helperText={errors.dueat}
+            slotProps={{ inputLabel: { shrink: true } }}
+          />
+        )}
+      </Stack>
       <FormControlLabel
         label="Bắt buộc bằng chứng hoàn thành"
         control={
@@ -219,7 +222,7 @@ export function TaskEditorDialog({
         <Stack
           component={ValidatedForm}
           id="task-editor"
-          spacing={2}
+          spacing={1.5}
           sx={{ pt: 1 }}
           onSubmit={(event) => {
             event.preventDefault();
@@ -273,16 +276,19 @@ export function TaskEditorDialog({
                   chooseTarget({});
                 }}
               />
-              {location && (
-                <Alert severity={responsible ? 'info' : 'warning'}>
-                  {assignments.isFetching
-                    ? 'Đang kiểm tra người phụ trách…'
-                    : responsible
-                      ? `Staff phụ trách: ${person?.fullName || 'Không tải được tên nhân viên'}`
-                      : 'Cơ sở chưa có Staff phụ trách. Cần phân công trước khi tạo công việc.'}
-                  {!responsible && <Button href="/staff-assignments">Mở phân công cơ sở</Button>}
-                </Alert>
-              )}
+              {location &&
+                (assignments.isFetching || responsible ? (
+                  <Typography variant="body2" color="text.secondary">
+                    {assignments.isFetching
+                      ? 'Đang kiểm tra người phụ trách…'
+                      : `Staff phụ trách: ${person?.fullName || 'Không tải được tên nhân viên'}`}
+                  </Typography>
+                ) : (
+                  <Alert severity="warning" variant="outlined">
+                    Cơ sở chưa có Staff phụ trách.{' '}
+                    <Button href="/staff-assignments">Mở phân công cơ sở</Button>
+                  </Alert>
+                ))}
               {!!assignments.error && (
                 <Button onClick={() => void assignments.refetch()}>Tải lại phân công</Button>
               )}

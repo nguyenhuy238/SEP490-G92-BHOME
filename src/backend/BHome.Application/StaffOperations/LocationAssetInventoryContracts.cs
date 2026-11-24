@@ -17,6 +17,9 @@ public sealed record LocationAssetInventoryItem(Guid Id, Guid? RoomId, string? R
     // This does not make a prior Staff's signature the successor's signature.
     public Guid? PriorStaffTaskId { get; init; }
     public Guid? PriorStaffUserId { get; init; }
+    // An Owner rework decision can challenge an otherwise valid Tenant baseline.
+    // Keep the exact challenged source so automatic refresh cannot silently re-inherit it.
+    public Guid? RecheckOfHandoverContractId { get; init; }
 }
 
 public sealed record LocationAssetInventorySnapshot(Guid AssignmentId, DateOnly EffectiveFrom,

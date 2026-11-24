@@ -545,22 +545,9 @@ public sealed class LocationAssetHandoverService(
         if (authoritative.PendingOwnerRooms.Length > 0 || authoritative.PendingOwnerCommonAssets)
             throw OperationalTaskException.Conflict("location_asset_inventory_pending_owner_confirmation");
 
-        static string Identity(LocationAssetInventoryItem item) =>
-            JsonSerializer.Serialize(new
-            {
-                item.Id,
-                item.RoomId,
-                item.RoomNumber,
-                item.AssetId,
-                item.Name,
-                item.Quantity,
-                item.CommonArea,
-                item.Inherited,
-                item.SourceHandoverContractId
-            });
-        var before = persisted.Items.Select(Identity).OrderBy(x => x, StringComparer.Ordinal).ToArray();
-        var now = authoritative.Items.Select(Identity).OrderBy(x => x, StringComparer.Ordinal).ToArray();
-        if (!before.SequenceEqual(now, StringComparer.Ordinal))
+        if (persisted.Items.Length != authoritative.Items.Length ||
+            !persisted.Items.OrderBy(x => x.Id).Zip(authoritative.Items.OrderBy(x => x.Id))
+                .All(pair => LocationAssetInventorySync.SameOwnerItem(pair.First, pair.Second)))
             throw OperationalTaskException.Conflict("location_asset_inventory_owner_baseline_changed");
     }
 
@@ -839,6 +826,7 @@ public sealed class LocationAssetHandoverService(
                     Checked = false,
                     Condition = "Unassessed",
                     Inherited = false,
+                    RecheckOfHandoverContractId = item.SourceHandoverContractId ?? item.RecheckOfHandoverContractId,
                     SourceHandoverContractId = null,
                     IncidentId = null,
                     Note = null

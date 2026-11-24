@@ -76,6 +76,9 @@ internal sealed class PostgresOperationalTaskRepository(BHomePersistenceContext 
         if (db is not Compact24DbContext compact) throw OperationalTaskException.Conflict("owner_inventory_compact_required");
         return BuildOwnerConfirmedInventoryAsync(compact, task, t);
     }
+    public Task<bool> HasLocationHandoverApprovalAsync(Guid taskId, int version, CancellationToken t) =>
+        db.Set<OperationalTaskHistory>().AsNoTracking().AnyAsync(h => h.TaskId == taskId &&
+            h.Action == "location_asset_handover_approved" && h.TaskVersion == version, t);
     private async Task<LocationAssetInventorySnapshot> BuildOwnerConfirmedInventoryAsync(
         Compact24DbContext compact, OperationalTask task, CancellationToken t)
     {

@@ -29,14 +29,16 @@ Checklist Staff chỉ có các nhóm tài sản vật lý mà Owner đã kiểm 
 - `GET /api/v1/operational-tasks/{taskId}/location-asset-inventory` trả snapshot, `TotalCount`/`CheckedCount`, version, trạng thái task, item phòng/common và Owner-pending blockers.
 - `PUT /api/v1/operational-tasks/{taskId}/location-asset-inventory/items/{itemId}` cập nhật `Version`, `Checked`, `Condition`, `Note`, `IncidentId` với `Idempotency-Key`. Chỉ Staff đang phụ trách assignment hiện hành và task `InProgress` được ghi.
 - `Intact` không cần note. `Missing`/`Damaged` cần note và Incident liên kết đúng Location/Room/Asset. `NotAccessible` cần note. Item Tenant-inherited không cho Staff sửa baseline; nếu phát hiện thiếu/hỏng, Staff vẫn tạo Incident và chỉ gắn IncidentId, giữ nguyên checked/condition/note/source gốc.
-- Staff chỉ submit khi payload đầy đủ; mọi item checked; không còn Owner-pending Room/common; Missing/Damaged có note+Incident; NotAccessible có note; source Owner-confirmed và inherited evidence còn khớp; version hiện hành được xác nhận.
+- Backend tự đồng bộ khi Owner xác nhận kiểm kê phòng/khu vực chung/phòng không tài sản, khi Staff bắt đầu/cập nhật checklist, và khi job đồng bộ phân công chạy. Chỉ task mở `Assigned`/`InProgress` được làm mới; giữ ID, quan sát, note, Incident và provenance của Staff. Thay đổi nguồn mâu thuẫn với hạng mục đã kiểm tra sẽ chặn đồng bộ, không tự xóa kết quả.
+- Khi task `InProgress` có mọi item checked, không còn Owner-pending Room/common, Missing/Damaged có note+Incident, NotAccessible có note và source Owner-confirmed còn khớp, Backend tự chuyển `PendingVerification` trong cùng Location transaction, tăng version một lần, lưu history submit và thông báo Owner. Không tự chuyển `Completed`, tạo chữ ký hoặc duyệt ngoại lệ. Task của successor không được job hoặc Owner confirmation tự submit thay cho việc successor rà soát.
+- API `submit` và `reconcile` cũ được giữ để tương thích. Submit lại cùng version của task đã tự chuyển trạng thái không tạo submission thứ hai; ảnh tùy chọn vẫn có thể bổ sung trước khi Owner phê duyệt. Sau khi phê duyệt, phiên bản biên bản không được thay đổi.
 - Task actions `start`, `progress`, `blockers`, `submit` dùng Operational Task API hiện có. `verify`/`cancel`/`rework` generic không thay thế quy trình bàn giao riêng.
 
 ## 4. Owner review, rework và chữ ký
 
 - Owner đối soát snapshot và lập biên bản revision bất biến. Report status lần lượt: `PendingOwnerSignature` → `PendingStaffSignature` → `Completed`.
 - Owner ký trước; chỉ đúng StaffId trên report, đang có responsibility hiện hành, được đọc PDF và ký đúng revision + snapshot hash. Sau khi Staff ký, task chuyển `Completed` và tạo PDF cuối có đủ hai chữ ký.
-- Owner có thể rework khi task `PendingVerification`: chọn 1..1000 item và lý do 10..2000 ký tự. Chỉ item được chọn reset; Tenant-inherited item bị tranh chấp chuyển thành item Staff kiểm tra trực tiếp, còn biên bản cũ vẫn bất biến và bị đánh dấu `Superseded` theo task version.
+- Owner có thể rework khi task `PendingVerification`: chọn 1..1000 item và lý do 10..2000 ký tự. Chỉ item được chọn reset; Tenant-inherited item bị tranh chấp chuyển thành item Staff kiểm tra trực tiếp, lưu tham chiếu nguồn bị yêu cầu kiểm tra lại để đồng bộ không tự kế thừa lại; biên bản cũ vẫn bất biến và bị đánh dấu `Superseded` theo task version.
 - Assignment/version thay đổi trước Staff signature cũng làm report cũ `Superseded`; Staff không được ký bản cũ. Successor tiếp tục task hiện hành và phải submit/approve revision mới.
 - Former Staff không đọc/act trên checklist, evidence, history hoặc report chưa ký/current sau khi hết responsibility. Owner giữ quyền đọc. Former Staff chỉ được read-only report/PDF đã ký bởi chính mình; không được ký lại.
 

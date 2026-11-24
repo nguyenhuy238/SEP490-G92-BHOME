@@ -175,8 +175,10 @@ export function useStaffTaskDetail(id: string) {
       history.reload();
       evidence.reload();
       showSuccess(
-        command.action === 'submit' && task.kind === 'LocationAssetHandover'
-          ? 'Đã gửi kiểm kê. Chờ Owner đối soát và lập biên bản.'
+        (command.action === 'start' || command.action === 'submit') &&
+          result.kind === 'LocationAssetHandover' &&
+          result.status === 'PendingVerification'
+          ? 'Đã hoàn tất kiểm kê. Chờ Owner đối soát và lập biên bản.'
           : {
               start: 'Đã bắt đầu công việc.',
               progress: 'Đã lưu tiến độ.',

@@ -79,7 +79,11 @@ internal static class LocationAssetInventoryTaskFactory
         {
             using var json = JsonDocument.Parse(metadata);
             if (json.RootElement.ValueKind != JsonValueKind.Object) return false;
-            if (json.RootElement.TryGetProperty("unit", out var unitValue) && unitValue.ValueKind != JsonValueKind.String)
+            // Owner-confirmed groups without a configured unit are persisted as
+            // explicit JSON null by AssetMetadata. That is equivalent to an
+            // absent unit, not malformed metadata.
+            if (json.RootElement.TryGetProperty("unit", out var unitValue) &&
+                unitValue.ValueKind is not (JsonValueKind.String or JsonValueKind.Null))
                 return false;
             var unit = json.RootElement.TryGetProperty("unit", out var value) &&
                 value.ValueKind == JsonValueKind.String ? value.GetString() : null;
@@ -103,7 +107,11 @@ internal static class LocationAssetInventoryTaskFactory
             .Select(task => task.Id).Take(2).ToArrayAsync(token);
         if (openTasks.Length > 1)
             throw new InvalidOperationException("A Location has more than one open asset handover task.");
-        if (openTasks.Length == 1) return;
+        if (openTasks.Length == 1)
+        {
+            await RefreshOpenAsync(db, workspace, locationId, actor, now, token);
+            return;
+        }
 
         var taskId = TaskId(assignmentId);
         if (await db.Set<OperationalTask>().AsNoTracking().AnyAsync(t => t.Id == taskId, token)) return;
@@ -218,6 +226,80 @@ internal static class LocationAssetInventoryTaskFactory
                 EventId = history.Id,
                 Event = "location_asset_inventory_created"
             });
+        await db.SaveChangesAsync(token);
+    }
+
+    // Call only under the Location advisory lock, after Owner confirmations or
+    // effective assignment reconciliation. This also recovers older complete tasks.
+    internal static async Task RefreshOpenAsync(Compact24DbContext db, ISetupWorkspaceStore? workspace,
+        Guid locationId, Guid actor, DateTimeOffset now, CancellationToken token)
+    {
+        if (workspace is null) return;
+        var task = await db.Set<OperationalTask>().AsNoTracking().SingleOrDefaultAsync(x =>
+            x.LocationId == locationId && x.Kind == OperationalTaskKind.LocationAssetHandover &&
+            (x.Status == MeterTaskStatus.Assigned || x.Status == MeterTaskStatus.InProgress), token);
+        if (task?.AssignmentId is not { } assignment || task.AssignedStaffUserId is not { } staff ||
+            string.IsNullOrWhiteSpace(task.LocationAssetInventoryJson)) return;
+        var today = DateOnly.FromDateTime(TimeZoneInfo.ConvertTimeBySystemTimeZoneId(now, "Asia/Ho_Chi_Minh").DateTime);
+        if (!await db.StaffLocationAssignments.AsNoTracking().AnyAsync(a =>
+                a.Id == assignment && a.LocationId == locationId && a.StaffUserId == staff &&
+                a.StartDate <= today && a.EndDate >= today, token) ||
+            !await StaffEmploymentEligibility.IsEligibleAsync(db, staff, today, token)) return;
+        LocationAssetInventorySnapshot? current;
+        try { current = JsonSerializer.Deserialize<LocationAssetInventorySnapshot>(task.LocationAssetInventoryJson, Json); }
+        catch (JsonException) { return; } // Do not overwrite an invalid historical snapshot.
+        if (current?.Items is null || current.AssignmentId != assignment ||
+            current.Items.Select(i => i.Id).Distinct().Count() != current.Items.Length) return;
+        var confirmed = await BuildConfirmedSnapshotAsync(db, workspace,
+            locationId, assignment, task.ReadingDate, now, token);
+        confirmed = PreserveExistingItemIds(confirmed, task.LocationAssetInventoryJson);
+        if (!LocationAssetInventorySync.TryMerge(current, confirmed, out var merged)) return;
+        var changed = LocationAssetInventorySync.Changed(current, merged);
+        // Responsibility transfers deliberately reopen the predecessor's submission.
+        // Passive refresh cannot substitute for the successor's own review/action.
+        var ready = LocationAssetInventorySync.Ready(task, merged) &&
+            !merged.Items.Any(i => i.PriorStaffUserId is { } prior && prior != staff);
+        if (!changed && !ready) return;
+        var tracked = db.ChangeTracker.Entries<OperationalTask>().SingleOrDefault(e => e.Entity.Id == task.Id);
+        if (tracked is not null)
+        {
+            if (tracked.State != EntityState.Unchanged)
+                throw new DbUpdateConcurrencyException("Location asset inventory has unflushed changes.");
+            tracked.State = EntityState.Detached;
+        }
+        db.Attach(task);
+        task.LocationAssetInventoryJson = JsonSerializer.Serialize(merged);
+        task.Version++;
+        if (changed)
+        {
+            var history = new OperationalTaskHistory
+            {
+                TaskId = task.Id, ActorId = actor, ResponsibleStaffUserId = staff,
+                Action = "location_asset_inventory_owner_reconciled", Note = "Đồng bộ phạm vi Owner đã xác nhận",
+                OccurredAt = now, TaskVersion = task.Version, WasOverdue = task.IsOverdue(now),
+                ChangesJson = JsonSerializer.Serialize(new { previousCount = current.Items.Length, ownerConfirmedCount = merged.Items.Length, Automatic = true })
+            };
+            db.Add(history);
+            db.Add(new OperationalTaskNotification { TaskId = task.Id, RecipientUserId = staff,
+                EventId = history.Id, Event = history.Action });
+        }
+        if (ready)
+        {
+            task.Result = LocationAssetInventorySync.Result;
+            task.ApplyAction("submit", now, actor);
+            var history = new OperationalTaskHistory
+            {
+                TaskId = task.Id, ActorId = actor, ResponsibleStaffUserId = staff,
+                Action = "submit", Note = task.Result, OccurredAt = now, TaskVersion = task.Version,
+                WasOverdue = task.IsOverdue(now), ChangesJson = JsonSerializer.Serialize(new { task.Status, Automatic = true })
+            };
+            db.Add(history);
+            var owners = await db.Users.AsNoTracking().Where(u => u.IsActive &&
+                EF.Property<string[]>(u, "roles").Contains("Owner")).Select(u => u.Id).ToArrayAsync(token);
+            foreach (var owner in owners.Where(id => id != actor))
+                db.Add(new OperationalTaskNotification { TaskId = task.Id, RecipientUserId = owner,
+                    EventId = history.Id, Event = history.Action });
+        }
         await db.SaveChangesAsync(token);
     }
 

@@ -4,6 +4,7 @@ import {
   MobileApiError,
   checkApiConnection,
   errorMessage,
+  mobileRequestUrl,
 } from '../../../src/mobile/src/lib/api';
 import { MobileSessions, type CredentialStore } from '../../../src/mobile/src/lib/sessions';
 import { contractClient, contractError } from '../../../packages/client-core/src/contracts';
@@ -335,6 +336,33 @@ it('checks the public API when the gateway hides readiness', async () => {
     status: 503,
   });
   expect(fetcher).toHaveBeenCalledTimes(3);
+});
+it('checks Staging through the public API without touching private readiness', async () => {
+  const base = 'https://api-staging.103.146.23.157.sslip.io';
+  const fetcher = vi.fn<typeof fetch>().mockResolvedValue(new Response('[]'));
+  await checkApiConnection(base, fetcher);
+  expect(fetcher).toHaveBeenCalledTimes(1);
+  expect(fetcher.mock.calls[0]![0]).toBe(`${base}/api/v1/public/locations`);
+  expect(fetcher.mock.calls[0]![1]?.credentials).toBe('omit');
+});
+it('uses the opt-in Staging proxy only for loopback development requests', () => {
+  const base = 'https://api-staging.103.146.23.157.sslip.io';
+  const path = '/api/v1/auth/login';
+  vi.stubGlobal('__DEV__', true);
+  vi.stubEnv('EXPO_PUBLIC_STAGING_WEB_PROXY', '1');
+  vi.stubGlobal('location', { hostname: 'localhost', origin: 'http://localhost:8081' });
+  try {
+    expect(mobileRequestUrl(base, path)).toBe(`http://localhost:8081/__bhome_staging${path}`);
+    expect(mobileRequestUrl('https://other.test', path)).toBe(`https://other.test${path}`);
+    vi.stubGlobal('location', { hostname: '192.168.1.1', origin: 'http://192.168.1.1:8081' });
+    expect(mobileRequestUrl(base, path)).toBe(base + path);
+    vi.stubGlobal('location', { hostname: 'localhost', origin: 'http://localhost:8081' });
+    vi.stubGlobal('__DEV__', false);
+    expect(mobileRequestUrl(base, path)).toBe(base + path);
+  } finally {
+    vi.unstubAllGlobals();
+    vi.unstubAllEnvs();
+  }
 });
 it('distinguishes empty, populated, failed and malformed contract list responses', async () => {
   const page = { items: [], page: 1, pageSize: 20, totalCount: 0 };

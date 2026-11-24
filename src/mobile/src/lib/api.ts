@@ -56,6 +56,23 @@ export class MobileApiError extends Error {
   }
 }
 
+const stagingOrigin = 'https://api-staging.103.146.23.157.sslip.io';
+
+// Metro's fixed-target loopback proxy is opt-in and never used by release builds
+// or Expo Go. The stored API origin remains HTTPS and bound to the Staging server.
+export function mobileRequestUrl(base: string, path: string): string {
+  if (
+    typeof __DEV__ !== 'undefined' &&
+    __DEV__ &&
+    process.env.EXPO_PUBLIC_STAGING_WEB_PROXY === '1' &&
+    base === stagingOrigin &&
+    path.startsWith('/api/v1/') &&
+    ['localhost', '127.0.0.1', '[::1]'].includes(globalThis.location?.hostname ?? '')
+  )
+    return `${globalThis.location.origin}/__bhome_staging${path}`;
+  return base + path;
+}
+
 export async function mobileResponse<T>(
   base: string,
   path: string,
@@ -75,7 +92,7 @@ export async function mobileResponse<T>(
     controller.abort();
   }, timeoutMilliseconds);
   try {
-    const response = await transport(base + path, {
+    const response = await transport(mobileRequestUrl(base, path), {
       ...init,
       signal: controller.signal,
       credentials: 'omit',
@@ -127,6 +144,16 @@ export async function mobileResponse<T>(
 
 export async function checkApiConnection(input: string, transport: typeof fetch = fetch) {
   const base = apiBaseUrl(input);
+  const checkPublic = async () => {
+    const path = '/api/v1/public/locations';
+    await mobileResponse(base, path, {}, transport, async (response) => {
+      const locations: unknown = await response.json().catch(() => null);
+      if (!Array.isArray(locations)) throw new MobileApiError(502, 'invalid_response', path);
+    });
+  };
+  // Staging intentionally blocks /health/* at its public edge. Browsers can
+  // hide that 404 as a network error because the edge does not emit CORS headers.
+  if (base === stagingOrigin) return checkPublic();
   try {
     await mobileResponse(base, '/health/ready', {}, transport, async (response) => {
       if ((await response.text()).trim() !== 'Healthy')
@@ -135,11 +162,7 @@ export async function checkApiConnection(input: string, transport: typeof fetch 
   } catch (error) {
     if (!(error instanceof MobileApiError) || error.status !== 404) throw error;
     // Deployed gateways deliberately keep readiness private. Use the anonymous API there.
-    const path = '/api/v1/public/locations';
-    await mobileResponse(base, path, {}, transport, async (response) => {
-      const locations: unknown = await response.json().catch(() => null);
-      if (!Array.isArray(locations)) throw new MobileApiError(502, 'invalid_response', path);
-    });
+    await checkPublic();
   }
 }
 export function apiBaseUrl(input: string): string {
@@ -172,9 +195,13 @@ export function errorMessage(error: unknown): string {
     return invalidCredentialsMessage + requestDiagnostic(error);
   if (error.problem && !['request_timeout', 'invalid_response'].includes(error.code ?? ''))
     return getUserFriendlyMessage(error) + requestDiagnostic(error);
-  if (error.code === 'request_timeout' && contractDocumentTimeout(error.requestPath ?? '') > 15000)
+  if (
+    error.code === 'request_timeout' &&
+    (contractDocumentTimeout(error.requestPath ?? '') > 15000 ||
+      locationAssetHandoverDocumentTimeout(error.requestPath ?? ''))
+  )
     return (
-      'Tạo hoặc hiển thị PDF mất quá nhiều thời gian. Bản nháp đã lưu vẫn được giữ; hãy thử tải lại bản xem trước.' +
+      'Tạo hoặc hiển thị tài liệu PDF mất quá nhiều thời gian. Dữ liệu đã lưu không bị thay đổi; hãy thử tải lại bản xem trước.' +
       requestDiagnostic(error)
     );
   const messages: Record<string, string> = {
@@ -259,7 +286,18 @@ function contractDocumentTimeout(path: string): number {
     ? 60000
     : 15000;
 }
+function locationAssetHandoverDocumentTimeout(path: string): boolean {
+  return (
+    /^\/api\/v1\/operational-tasks\/[a-f0-9-]{36}\/location-asset-handover\/document(?:\/preview|\/pages\/[1-9][0-9]*)?$/i.test(
+      path,
+    ) ||
+    /^\/api\/v1\/location-asset-handovers\/archive\/[a-f0-9-]{36}\/revisions\/[1-9][0-9]*\/document$/i.test(
+      path,
+    )
+  );
+}
 function requestTimeout(path: string): number {
+  if (locationAssetHandoverDocumentTimeout(path)) return 60000;
   if (/^\/api\/v1\/contracts\/[a-f0-9-]{36}\/move-out\/inspection$/i.test(path)) return 60000;
   return contractDocumentTimeout(path);
 }
