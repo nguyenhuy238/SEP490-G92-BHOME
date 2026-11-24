@@ -511,7 +511,7 @@ export function ContractSigningStep({
         />
       )}
       {signer && (status?.tenantAcceptedAt || c.signatures.some((s) => s.status === 'Signed')) && (
-        <ContractEvidence api={api} contractId={c.id} pdf />
+        <ContractEvidence api={api} contractId={c.id} contractKind={c.kind} pdf />
       )}
     </>
   );

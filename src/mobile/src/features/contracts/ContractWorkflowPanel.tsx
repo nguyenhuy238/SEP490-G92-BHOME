@@ -248,7 +248,13 @@ export function ContractWorkflowPanel({
           {data?.previews.map((f) => (
             <Box key={f.id}>
               <Text>Bản xem trước · {formatInstant(f.recordedAt)}</Text>
-              <ContractEvidence api={api} contractId={contract.id} previewId={f.id} pdf />
+              <ContractEvidence
+                api={api}
+                contractId={contract.id}
+                contractKind={contract.kind}
+                previewId={f.id}
+                pdf
+              />
             </Box>
           ))}
         </Box>

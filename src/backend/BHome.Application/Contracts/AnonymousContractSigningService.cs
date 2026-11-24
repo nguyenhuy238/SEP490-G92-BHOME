@@ -338,8 +338,15 @@ public sealed class AnonymousContractSigningService(IContractRepository contract
         var bytes = buffer.ToArray(); if (!Matches(hash, Hash(bytes))) throw ContractException.Conflict("signing_evidence_integrity_failed");
         return bytes;
     }
-    public Task<byte[]> DocumentAsync(AnonymousSigningSession input, CancellationToken t) => WithToken(input.Token, async (i, _) =>
-    { Session(i, input.Session); return await Read(i.DocumentObjectKey, i.DocumentHash, t); }, t);
+    public async Task<byte[]> DocumentAsync(AnonymousSigningSession input, CancellationToken t) =>
+        (await DownloadDocumentAsync(input, t)).Bytes;
+
+    public Task<(byte[] Bytes, string FileName)> DownloadDocumentAsync(AnonymousSigningSession input, CancellationToken t) =>
+        WithToken(input.Token, async (i, c) =>
+        {
+            Session(i, input.Session);
+            return (await Read(i.DocumentObjectKey, i.DocumentHash, t), ContractDownloadName.For(c.Kind, c.Id));
+        }, t);
     public async Task<SigningLayoutInfo> LayoutAsync(AnonymousSigningSession input, CancellationToken t)
     {
         var pdf = await DocumentAsync(input, t); var layout = pages.Inspect(pdf, false);

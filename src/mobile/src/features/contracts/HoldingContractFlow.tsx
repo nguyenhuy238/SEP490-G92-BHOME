@@ -209,7 +209,7 @@ export function HoldingContractFlow({
             <Text style={ui.muted}>Hợp đồng sử dụng phương thức ký số đã cấu hình.</Text>
           </HoldingSectionCard>
           {owner && c.approvedAt && <SigningCertificates api={api} />}
-          {owner && <ContractEvidence api={api} contractId={c.id} pdf />}
+          {owner && <ContractEvidence api={api} contractId={c.id} contractKind="Holding" pdf />}
         </>
       )}
       {step >= 7 && signed(c) && (
@@ -327,6 +327,7 @@ function HoldingDraftDocument({
                 api={api}
                 contractId={c.id}
                 previewId={p.id}
+                contractKind="Holding"
                 pdf
                 label="Xem hợp đồng"
               />
@@ -584,7 +585,13 @@ function HoldingInternalSigning({
             <HoldingSectionCard title="Xác nhận của Owner">
               <HoldingStatusBadge label="Người giữ chỗ đã ký" tone="success" />
               <ReadOnly label="Thời điểm ký" value={formatInstant(status.tenantAcceptedAt)} />
-              <ContractEvidence api={api} contractId={c.id} pdf label="Xem hợp đồng đã ký" />
+              <ContractEvidence
+                api={api}
+                contractId={c.id}
+                contractKind="Holding"
+                pdf
+                label="Xem hợp đồng đã ký"
+              />
               {status.ownerAcceptedAt ? (
                 <ReadOnly label="Owner đã xác nhận" value={formatInstant(status.ownerAcceptedAt)} />
               ) : (
