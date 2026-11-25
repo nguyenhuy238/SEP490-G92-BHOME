@@ -128,6 +128,7 @@ export function WorkspaceShell({
   const compactTasks =
     staff && ['work-orders', 'task-detail', 'staff-handovers'].includes(screen) && !preview;
   const compactTaskDetail = compactTasks && screen === 'task-detail';
+  const staffIncidentList = staff && screen === 'staff-incidents' && !preview;
   const tenantRoom = role === 'Tenant' && screen === 'tenant-room' && !preview;
   const tenantResidence = role === 'Tenant' && screen === 'residence' && !preview;
   const tenantLedger = role === 'Tenant' && screen === 'billing-history' && !preview;
@@ -364,7 +365,7 @@ export function WorkspaceShell({
                 ['contract', 'checklist', 'security', 'preferences', 'notifications'].includes(
                   screen,
                 )) && (
-                <View style={ui.row}>
+                <View style={[ui.row, staffIncidentList && styles.incidentHeaderRow]}>
                   <IconButton
                     icon="arrow-left"
                     accessibilityLabel="Quay lại"
@@ -376,6 +377,7 @@ export function WorkspaceShell({
                       !!headerAction?.title ||
                       compactContracts ||
                       compactTasks ||
+                      staffIncidentList ||
                       tenantResidence ||
                       tenantInvoice ||
                       tenantFeatures ||
@@ -387,11 +389,16 @@ export function WorkspaceShell({
                       !!headerAction?.title ||
                       compactContracts ||
                       compactTasks ||
+                      staffIncidentList ||
                       tenantResidence ||
                       tenantInvoice ||
                       tenantFeatures ||
                       profileEdit
-                        ? [ui.grow, { color: c.primary, fontWeight: '700' }]
+                        ? [
+                            ui.grow,
+                            { color: c.primary, fontWeight: '700' },
+                            staffIncidentList && { textAlign: 'center' },
+                          ]
                         : ui.muted
                     }
                   >
@@ -403,23 +410,30 @@ export function WorkspaceShell({
                           ? 'Tất cả chức năng'
                           : tenantInvoice
                             ? (headerAction?.title ?? 'Hóa đơn của tôi')
-                            : compactTasks
-                              ? compactTaskDetail
-                                ? 'Chi tiết công việc'
-                                : screen === 'staff-handovers'
-                                  ? 'Bàn giao / Trả phòng'
-                                  : 'Công việc vận hành'
-                              : compactContracts
-                                ? (headerAction?.title ?? 'Hợp đồng')
-                                : (headerAction?.title ?? 'Quay lại')}
+                            : staffIncidentList
+                              ? (headerAction?.title ?? 'Báo cáo sự cố')
+                              : compactTasks
+                                ? compactTaskDetail
+                                  ? 'Chi tiết công việc'
+                                  : screen === 'staff-handovers'
+                                    ? 'Bàn giao / Trả phòng'
+                                    : (headerAction?.title ?? 'Công việc vận hành')
+                                : compactContracts
+                                  ? (headerAction?.title ?? 'Hợp đồng')
+                                  : (headerAction?.title ?? 'Quay lại')}
                   </Text>
-                  {(compactContracts || compactTasks || tenantInvoice || tenantResidence) &&
+                  {(compactContracts ||
+                    compactTasks ||
+                    staffIncidentList ||
+                    tenantInvoice ||
+                    tenantResidence) &&
                     headerAction && (
                       <>
                         <IconButton
-                          icon="refresh"
+                          icon={headerAction.action?.icon ?? 'refresh'}
                           accessibilityLabel={
-                            tenantResidence
+                            headerAction.action?.accessibilityLabel ??
+                            (tenantResidence
                               ? 'Tải lại hồ sơ tạm trú'
                               : compactTasks
                                 ? `Tải lại ${headerAction?.title ?? 'công việc'}`
@@ -427,10 +441,10 @@ export function WorkspaceShell({
                                   ? 'Tải lại giao dịch'
                                   : tenantInvoice
                                     ? 'Tải lại hóa đơn'
-                                    : 'Tải lại hợp đồng'
+                                    : 'Tải lại hợp đồng')
                           }
-                          disabled={headerAction.disabled}
-                          onPress={headerAction.onRefresh}
+                          disabled={headerAction.action?.disabled ?? headerAction.disabled}
+                          onPress={headerAction.action?.onPress ?? headerAction.onRefresh}
                         />
                       </>
                     )}
@@ -451,6 +465,7 @@ export function WorkspaceShell({
                 owner ||
                 compactContracts ||
                 compactTasks ||
+                staffIncidentList ||
                 tenantRoom ||
                 tenantResidence ||
                 tenantInvoice ||
@@ -497,6 +512,7 @@ const styles = StyleSheet.create({
     minHeight: 72,
     paddingBottom: 6,
   },
+  incidentHeaderRow: { justifyContent: 'space-between' },
   logo: {
     width: 40,
     height: 40,

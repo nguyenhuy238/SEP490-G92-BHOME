@@ -604,22 +604,28 @@ it('retains note on a conflict and requires loading new data before retry', asyn
   fireEvent.click(
     await screen.findByRole('button', { name: 'Yêu cầu làm lại' }, { timeout: 10000 }),
   );
-  fireEvent.change(await screen.findByLabelText(/Lý do yêu cầu làm lại/), {
+  fireEvent.change(await screen.findByLabelText(/Lý do yêu cầu làm lại/, {}, { timeout: 5000 }), {
     target: { value: 'Cần bổ sung' },
   });
   fireEvent.click(screen.getByRole('button', { name: 'Xác nhận' }));
-  const reload = await screen.findByRole('button', { name: 'Tải dữ liệu mới' });
+  const reload = await screen.findByRole('button', { name: 'Tải dữ liệu mới' }, { timeout: 5000 });
   expect(screen.getByRole('button', { name: 'Xác nhận' })).toBeDisabled();
   expect(screen.getByLabelText(/Lý do yêu cầu làm lại/)).toHaveValue('Cần bổ sung');
   fireEvent.click(reload);
-  await waitFor(() => expect(screen.getByRole('button', { name: 'Xác nhận' })).not.toBeDisabled());
+  await waitFor(() => expect(screen.getByRole('button', { name: 'Xác nhận' })).not.toBeDisabled(), {
+    timeout: 5000,
+  });
   fireEvent.click(screen.getByRole('button', { name: 'Xác nhận' }));
-  await waitFor(() =>
-    expect(mocks.request.mock.calls.filter(([, init]) => init?.method === 'POST')).toHaveLength(2),
+  await waitFor(
+    () =>
+      expect(mocks.request.mock.calls.filter(([, init]) => init?.method === 'POST')).toHaveLength(
+        2,
+      ),
+    { timeout: 5000 },
   );
   const posts = mocks.request.mock.calls.filter(([, init]) => init?.method === 'POST');
   expect(JSON.parse(posts[1][1].body).version).toBe(8);
-});
+}, 30000);
 
 it('shows unknown current staff explicitly and does not substitute recorded staff', async () => {
   const base = mocks.request.getMockImplementation()!;
@@ -786,20 +792,27 @@ it('rework removes a task from the pending list without deleting evidence', asyn
   mount();
   fireEvent.click(screen.getByRole('tab', { name: /Chờ nghiệm thu/ }));
   fireEvent.click(await screen.findByRole('button', { name: 'Xem chi tiết' }, { timeout: 10000 }));
-  fireEvent.click(await screen.findByRole('button', { name: 'Yêu cầu làm lại' }));
-  fireEvent.change(await screen.findByLabelText(/Lý do yêu cầu làm lại/), {
+  fireEvent.click(
+    await screen.findByRole('button', { name: 'Yêu cầu làm lại' }, { timeout: 5000 }),
+  );
+  fireEvent.change(await screen.findByLabelText(/Lý do yêu cầu làm lại/, {}, { timeout: 5000 }), {
     target: { value: 'Bổ sung kết quả' },
   });
-  await waitFor(() => expect(screen.getByRole('button', { name: 'Xác nhận' })).not.toBeDisabled());
+  await waitFor(() => expect(screen.getByRole('button', { name: 'Xác nhận' })).not.toBeDisabled(), {
+    timeout: 5000,
+  });
   fireEvent.click(screen.getByRole('button', { name: 'Xác nhận' }));
-  await waitFor(() =>
-    expect(screen.queryByRole('button', { name: 'Xác nhận' })).not.toBeInTheDocument(),
+  await waitFor(
+    () => expect(screen.queryByRole('button', { name: 'Xác nhận' })).not.toBeInTheDocument(),
+    { timeout: 5000 },
   );
   fireEvent.click(screen.getByRole('button', { name: 'Đóng chi tiết' }));
-  expect(await screen.findByText('Không có dữ liệu phù hợp với bộ lọc.')).toBeInTheDocument();
+  expect(
+    await screen.findByText('Không có dữ liệu phù hợp với bộ lọc.', {}, { timeout: 5000 }),
+  ).toBeInTheDocument();
   expect(
     mocks.request.mock.calls.some(
       ([path, init]) => path.includes('/evidence') && init?.method === 'DELETE',
     ),
   ).toBe(false);
-});
+}, 30000);

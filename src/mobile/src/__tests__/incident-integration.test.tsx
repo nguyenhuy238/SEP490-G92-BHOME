@@ -371,11 +371,14 @@ beforeEach(() => {
     roomId: rid,
     commonArea: null,
     assetId: null,
+    roomNumber: 'P.101',
+    locationName: 'Cơ sở thử nghiệm',
+    assetName: 'Bóng đèn',
     description: 'Ống nước bị vỡ trong phòng',
     severity: 'Normal',
     status: 'Submitted',
-    type: null,
-    category: null,
+    type: 'Thiếu đồ',
+    category: 'Bàn học',
     acknowledgedAt: null,
     resolutionNote: null,
     version: 4,
@@ -448,9 +451,9 @@ it('shows each WorkOrder as a separate item in the embedded Staff work list', as
   );
   render(<MaintenanceListScreen embedded />);
   await screen.findByText('Bảo trì máy bơm');
-  expect(screen.getAllByText('Xem chi tiết lệnh sửa chữa')).toHaveLength(2);
+  expect(screen.getAllByText('Xem chi tiết công việc')).toHaveLength(2);
   expect(screen.getByText('Bảo trì chủ động')).toBeTruthy();
-  fireEvent.click(screen.getAllByText('Xem chi tiết lệnh sửa chữa')[0]!);
+  fireEvent.click(screen.getAllByText('Xem chi tiết công việc')[0]!);
   expect(s.go).toHaveBeenCalledWith('maintenance-detail', {
     workOrderId: wid,
     returnTo: 'work-orders',
@@ -690,7 +693,7 @@ it('Tenant detail shows sanitized progress but never requests or exposes WorkOrd
     ),
   ).toBe(false);
 });
-it.each(['Owner', 'Staff', 'Tenant'])(
+it.each(['Owner', 'Tenant'])(
   'preserves the separate incident inbox entry from the %s incident feature',
   async (role) => {
     s.role = role;
@@ -707,12 +710,64 @@ it('filters real report list by backend status and retains existing invoice adju
   s.role = 'Tenant';
   render(<IncidentListScreen />);
   await screen.findByText('Ống nước bị vỡ trong phòng');
-  choose('Trạng thái báo cáo', 'Resolved');
+  fireEvent.click(screen.getByRole('button', { name: 'Đã giải quyết' }));
   await waitFor(() =>
     expect(s.request.mock.calls.some(([path]) => path.includes('status=Resolved'))).toBe(true),
   );
+  fireEvent.click(screen.getByText('Báo cáo sự cố mới'));
+  expect(s.go).toHaveBeenCalledWith('incidents');
   fireEvent.click(screen.getByText('Yêu cầu điều chỉnh hóa đơn'));
   expect(s.go).toHaveBeenCalledWith('invoice', { focus: 'adjustment' });
+});
+it('presents Staff incident reports as compact mobile cards with clear location, severity, status and asset metadata', async () => {
+  report = { ...report, severity: 'Emergency', status: 'InProgress' };
+  render(<IncidentListScreen />);
+  await screen.findByText('Phòng P.101');
+  expect(screen.getAllByText('Khẩn cấp')).toHaveLength(2);
+  expect(screen.getAllByText('Đang xử lý')).toHaveLength(2);
+  expect(screen.getByText('Ống nước bị vỡ trong phòng')).toBeTruthy();
+  expect(screen.getByText('Cơ sở thử nghiệm')).toBeTruthy();
+  expect(screen.getByText('Bóng đèn')).toBeTruthy();
+  expect(screen.getByText('Thiếu đồ')).toBeTruthy();
+  expect(screen.getByText('Bàn học')).toBeTruthy();
+  fireEvent.click(screen.getByRole('button', { name: 'Đang xử lý' }));
+  await waitFor(() =>
+    expect(s.request.mock.calls.some(([path]) => path.includes('status=InProgress'))).toBe(true),
+  );
+});
+it('opens the new Staff incident report from the compact list action', async () => {
+  render(<IncidentListScreen />);
+  await screen.findByText('Ống nước bị vỡ trong phòng');
+  fireEvent.click(screen.getByRole('button', { name: 'Báo cáo sự cố mới' }));
+  expect(s.go).toHaveBeenCalledWith('report-incident');
+  expect(screen.queryByText('Báo cáo sự cố mới')).toBeNull();
+  fireEvent.click(screen.getByRole('button', { name: 'Thông báo sự cố và bảo trì' }));
+  expect(s.go).toHaveBeenCalledWith('incident-inbox');
+  const requestCount = s.request.mock.calls.length;
+  fireEvent.click(screen.getByRole('button', { name: 'Tải lại danh sách báo cáo' }));
+  await waitFor(() => expect(s.request.mock.calls.length).toBeGreaterThan(requestCount));
+});
+it('registers the Staff report title and incident inbox bell in the workspace header', async () => {
+  const registered: { current: WorkspaceHeaderAction | null } = { current: null };
+  const register = (action: WorkspaceHeaderAction) => {
+    registered.current = action;
+    return () => {
+      registered.current = null;
+    };
+  };
+  render(
+    <WorkspaceHeaderContext.Provider value={register}>
+      <IncidentListScreen />
+    </WorkspaceHeaderContext.Provider>,
+  );
+  await screen.findByText('Ống nước bị vỡ trong phòng');
+  const header = registered.current as WorkspaceHeaderAction | null;
+  expect(header?.title).toBe('Báo cáo sự cố');
+  expect(header?.action?.icon).toBe('bell-outline');
+  expect(header?.action?.accessibilityLabel).toBe('Thông báo sự cố và bảo trì');
+  header?.action?.onPress();
+  expect(s.go).toHaveBeenCalledWith('incident-inbox');
+  expect(screen.queryByRole('button', { name: 'Thông báo sự cố và bảo trì' })).toBeNull();
 });
 it('keeps reports in the Staff report inbox even when no WorkOrder has been created', async () => {
   s.role = 'Staff';
