@@ -177,6 +177,9 @@ public sealed partial class MainDraftApiTests
     public async Task DemoTemplateCanBeReviewedReleasedAndReadInEveryEnvironment(string environment)
     {
         var w = await Setup();
+        var database = new Npgsql.NpgsqlConnectionStringBuilder(
+            fixture.Factory.Services.GetRequiredService<IConfiguration>().GetConnectionString("Database"));
+        var templateHash = new MainDraftRenderer(new ConfigurationBuilder().Build(), TimeProvider.System).TemplateHash;
         Guid? tenantUserId = null;
         await using (var seed = fixture.Factory.Services.CreateAsyncScope())
         {
@@ -195,12 +198,31 @@ public sealed partial class MainDraftApiTests
         await using var host = fixture.Factory.WithWebHostBuilder(b =>
         {
             b.UseTestEnvironment(environment);
-            b.ConfigureAppConfiguration((_, config) => config.AddInMemoryCollection(new Dictionary<string, string?>
+            b.ConfigureAppConfiguration((_, config) =>
             {
-                ["MainDraft:LibreOfficeContainerImage"] = "bhome/contract-converter:local",
-                ["ContractWorkflow:SimulatedSigningEnabled"] = "true",
-                ["SePay:Enabled"] = "false"
-            }));
+                var settings = new Dictionary<string, string?>
+                {
+                    ["MainDraft:LibreOfficeContainerImage"] = "bhome/contract-converter:local",
+                    ["MainDraft:ApprovedProductionTemplateSha256"] = templateHash,
+                    ["ContractWorkflow:SimulatedSigningEnabled"] = "false",
+                    ["SePay:Enabled"] = environment == "Staging" ? "true" : "false",
+                    ["SePay:Mode"] = environment == "Staging" ? "Test" : "Live"
+                };
+                if (environment == "Staging")
+                {
+                    settings["MainDraft:AllowStagingSigningReview"] = "true";
+                    settings["SePay:WebhookSecret"] = "synthetic-staging-template-review-secret";
+                    settings["SePay:ReceivingAccounts:0:LocationId"] = w.Location.ToString();
+                    settings["SePay:ReceivingAccounts:0:BankIdentifier"] = "970416";
+                    settings["SePay:ReceivingAccounts:0:Gateway"] = "ACB";
+                    settings["SePay:ReceivingAccounts:0:AccountNumber"] = "0000000001";
+                    settings["HoldingTesting:Enabled"] = "true";
+                    settings["HoldingTesting:DatabaseHost"] = database.Host;
+                    settings["HoldingTesting:DatabaseName"] = database.Database;
+                    settings["HoldingTesting:LocationIds:0"] = w.Location.ToString();
+                }
+                config.AddInMemoryCollection(settings);
+            });
         });
         using var owner = InHost(host, w.Owner); using var staff = InHost(host, w.Staff); using var outside = InHost(host, w.Outside);
         var draft = await Save(w with { Staff = staff });
@@ -219,11 +241,11 @@ public sealed partial class MainDraftApiTests
             var legacyResponse = await legacyStaff.PostAsync($"{Root}/{draft.Id}/signing-review", null); await Success(legacyResponse);
             oldReview = (await legacyResponse.Content.ReadFromJsonAsync<ContractDocumentView>())!;
         }
-        Assert.True(oldReview.DevelopmentOnly); Assert.Equal(1, oldReview.TemplateVersion);
+        Assert.Equal(environment != "Production", oldReview.DevelopmentOnly); Assert.Equal(1, oldReview.TemplateVersion);
         var oldBytes = await owner.GetByteArrayAsync($"{Root}/{draft.Id}/documents/{oldReview.Id}");
         var response = await staff.PostAsync($"{Root}/{draft.Id}/signing-review", null); await Success(response);
         var review = (await response.Content.ReadFromJsonAsync<ContractDocumentView>())!;
-        Assert.True(review.DevelopmentOnly);
+        Assert.Equal(environment != "Production", review.DevelopmentOnly);
         Assert.NotEqual(oldReview.Id, review.Id); Assert.Equal(3, review.TemplateVersion);
         Assert.Equal(oldBytes, await owner.GetByteArrayAsync($"{Root}/{draft.Id}/documents/{oldReview.Id}"));
         var staleInput = new MainDraftReleaseInput(tenantUserId, draft.Version, oldReview.Id, true, EmailSigning: tenantUserId is not null);
@@ -251,11 +273,14 @@ public sealed partial class MainDraftApiTests
         Assert.Single(await db.Set<ContractDocumentFile>().Where(f => f.ContractId == draft.Id && f.Kind == ContractFileKind.Preview).ToArrayAsync());
     }
 
-    private sealed class LegacyVersionMainDraftRenderer(IConfiguration configuration, TimeProvider clock) : IMainDraftRenderer
+    private sealed class LegacyVersionMainDraftRenderer(IConfiguration configuration, TimeProvider clock,
+        Microsoft.Extensions.Hosting.IHostEnvironment environment, IHoldingTestScope testScope) : IMainDraftRenderer
     {
-        private readonly MainDraftRenderer renderer = new(configuration, clock);
+        private readonly MainDraftRenderer renderer = new(configuration, clock, environment, testScope);
         public string TemplateHash => renderer.TemplateHash;
         public bool SigningReviewAvailable => renderer.SigningReviewAvailable;
+        public bool CanUseSigningReview(Contract contract) => renderer.CanUseSigningReview(contract);
+        public bool IsProductionSigningTemplate(Contract contract) => renderer.IsProductionSigningTemplate(contract);
         public int DocumentVersion => 1;
         public Task<byte[]> DocxAsync(MainDraftRenderData data, CancellationToken t) => renderer.DocxAsync(data, t);
         public Task<byte[]> PdfAsync(byte[] docx, CancellationToken t) => renderer.PdfAsync(docx, t);
