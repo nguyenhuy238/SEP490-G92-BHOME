@@ -52,7 +52,7 @@ it('shows the shared date but hides mutating controls from other Owners', async 
   fireEvent.click(screen.getByRole('button', { name: 'Mở Demo Clock' }));
   expect(screen.getByText(/Chỉ xem/)).toBeInTheDocument();
   expect(screen.queryByRole('button', { name: 'Áp dụng' })).not.toBeInTheDocument();
-  expect(screen.queryByRole('button', { name: 'Ngày thực' })).not.toBeInTheDocument();
+  expect(screen.queryByRole('button', { name: 'Giờ thực' })).not.toBeInTheDocument();
   expect(screen.queryByRole('button', { name: 'Tạo HĐ test' })).not.toBeInTheDocument();
 });
 
@@ -67,12 +67,16 @@ it('uses the versioned API for the designated Owner and displays a shared Stagin
   mount();
   await screen.findByText('Workspace content');
   fireEvent.click(screen.getByRole('button', { name: 'Mở Demo Clock' }));
-  expect(screen.getByText(/Đổi ngày sẽ áp dụng cho toàn bộ Staging/)).toBeInTheDocument();
+  expect(screen.getByText(/Đổi thời gian sẽ áp dụng cho toàn bộ Staging/)).toBeInTheDocument();
   fireEvent.click(screen.getByRole('button', { name: '+1 ngày' }));
   await waitFor(() =>
     expect(mocks.request).toHaveBeenCalledWith('/api/v1/demo-clock', {
       method: 'PUT',
-      body: JSON.stringify({ businessDate: '2026-11-25', expectedVersion: 0 }),
+      body: JSON.stringify({
+        businessDate: null,
+        businessDateTime: '2026-11-25T00:00:00+07:00',
+        expectedVersion: 0,
+      }),
     }),
   );
   expect(await screen.findByText('Demo Clock · 25/11/2026')).toBeInTheDocument();
@@ -84,7 +88,7 @@ it('provides date controls in the Production academic portal', async () => {
   mount('Production');
   await screen.findByText('Workspace content');
   fireEvent.click(screen.getByRole('button', { name: 'Mở Demo Clock' }));
-  expect(screen.getByText(/Đổi ngày sẽ áp dụng cho toàn bộ Production/)).toBeInTheDocument();
+  expect(screen.getByText(/Đổi thời gian sẽ áp dụng cho toàn bộ Production/)).toBeInTheDocument();
   expect(screen.getByRole('button', { name: 'Áp dụng' })).toBeEnabled();
 });
 
@@ -169,4 +173,42 @@ it('creates a test contract only in the selected vacant room and retries with th
     JSON.stringify({ locationId: 'location', roomId: 'free', expectedBusinessDate: '2026-11-24' }),
   );
   expect(screen.getByDisplayValue('synthetic@example.invalid')).toBeInTheDocument();
+});
+
+it('displays the real and business times and applies an exact time without an automation switch', async () => {
+  const original = {
+    ...clock,
+    canChange: true,
+    businessTime: '2026-11-24T21:10:00+07:00',
+    realTime: '2026-11-24T21:10:00+07:00',
+  };
+  mocks.request.mockResolvedValueOnce(original).mockResolvedValue({
+    ...original,
+    simulated: true,
+    businessDate: '2026-12-25',
+    businessTime: '2026-12-25T23:59:58+07:00',
+    version: 1,
+  });
+  mount();
+  await screen.findByText('Workspace content');
+  fireEvent.click(screen.getByRole('button', { name: 'Mở Demo Clock' }));
+  expect(screen.getByText(/Giờ máy chủ: 24\/11\/2026 21:10:/)).toBeInTheDocument();
+  fireEvent.change(screen.getByLabelText('Ngày giờ demo'), {
+    target: { value: '2026-12-25T23:59:58' },
+  });
+  expect(
+    screen.queryByRole('checkbox', { name: 'Chạy tự động điện nước & hóa đơn' }),
+  ).not.toBeInTheDocument();
+  fireEvent.click(screen.getByRole('button', { name: 'Áp dụng' }));
+  await waitFor(() =>
+    expect(mocks.request).toHaveBeenCalledWith('/api/v1/demo-clock', {
+      method: 'PUT',
+      body: JSON.stringify({
+        businessDate: null,
+        businessDateTime: '2026-12-25T23:59:58+07:00',
+        expectedVersion: 0,
+      }),
+    }),
+  );
+  expect(await screen.findByText(/Demo Clock · 25\/12\/2026/)).toBeInTheDocument();
 });

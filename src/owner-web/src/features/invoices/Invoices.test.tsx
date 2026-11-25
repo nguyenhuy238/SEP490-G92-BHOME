@@ -311,51 +311,19 @@ it('guides a first-time Owner from an empty invoice list to verified inputs and 
   expect(screen.getByRole('dialog', { name: 'Lập hóa đơn nháp' })).toBeInTheDocument();
   expect(mocks.api.draft).not.toHaveBeenCalled();
 });
-it('requires Owner to choose every billing rule when the location has no schedule', async () => {
+it('links first-time billing setup to Location Settings without a second rule editor', async () => {
   mocks.api.request.mockResolvedValue([{ id: 'location', label: 'Synthetic' }]);
   mount(<BillingConfigurationPage />);
   fireEvent.mouseDown(await screen.findByLabelText('Cơ sở cấu hình'));
   fireEvent.click(await screen.findByRole('option', { name: 'Synthetic' }));
-  await screen.findByText('Chọn đầy đủ các quy tắc trước khi lập hóa đơn đầu tiên.');
-  expect(screen.getByRole('link', { name: 'Thiết lập lịch' })).toHaveAttribute(
+  expect(await screen.findByRole('link', { name: 'Thiết lập lịch' })).toHaveAttribute(
     'href',
-    '#billing-schedule',
+    '/locations/location/settings',
   );
-  expect(screen.getByText('Lưu quy tắc hóa đơn')).toBeDisabled();
+  expect(screen.queryByRole('button', { name: 'Lưu quy tắc hóa đơn' })).not.toBeInTheDocument();
   expect(mocks.api.saveSchedule).not.toHaveBeenCalled();
-  await waitFor(() =>
-    expect(
-      screen.getByText('Chưa có biểu giá. Thêm giá thuê, điện và nước để lập hóa đơn.'),
-    ).toBeInTheDocument(),
-  );
 });
-it('keeps existing schedule folded until Owner requests a change', async () => {
-  mocks.api.schedule.mockResolvedValue({
-    version: 7,
-    rentSource: 1,
-    rateDate: 0,
-    partialMonth: 0,
-    rounding: 0,
-    draftDay: 5,
-    draftMonthOffset: 0,
-    finalDay: 10,
-    finalMonthOffset: 0,
-    dueDay: 15,
-    dueMonthOffset: 0,
-  });
-  mocks.api.request.mockResolvedValue([{ id: 'location', label: 'Synthetic' }]);
-  mount(<BillingConfigurationPage />);
-  fireEvent.mouseDown(await screen.findByLabelText('Cơ sở cấu hình'));
-  fireEvent.click(await screen.findByRole('option', { name: 'Synthetic' }));
-  expect(await screen.findByText(/Nháp ngày 5 · Phát hành 10/)).toBeInTheDocument();
-  expect(screen.queryByRole('button', { name: 'Lưu quy tắc hóa đơn' })).not.toBeInTheDocument();
-  expect(screen.getAllByRole('button', { name: /Lịch & quy tắc hóa đơn/ })).toHaveLength(1);
-  fireEvent.click(screen.getByRole('button', { name: /Lịch & quy tắc hóa đơn/ }));
-  expect(await screen.findByRole('button', { name: 'Lưu quy tắc hóa đơn' })).toBeInTheDocument();
-  fireEvent.click(screen.getByRole('button', { name: /Lịch & quy tắc hóa đơn/ }));
-  expect(screen.queryByRole('button', { name: 'Lưu quy tắc hóa đơn' })).not.toBeInTheDocument();
-});
-it('identifies schedule month offsets in the saved summary', async () => {
+it('links an existing schedule to the same location configuration', async () => {
   mocks.api.schedule.mockResolvedValue({
     version: 8,
     rentSource: 1,
@@ -374,6 +342,7 @@ it('identifies schedule month offsets in the saved summary', async () => {
   fireEvent.mouseDown(await screen.findByLabelText('Cơ sở cấu hình'));
   fireEvent.click(await screen.findByRole('option', { name: 'Synthetic' }));
   expect(
-    await screen.findByText('Nháp ngày 5 · Phát hành 10 (+1 tháng) · Hạn trả 15 (+2 tháng)'),
-  ).toBeInTheDocument();
+    await screen.findByRole('link', { name: 'Cấu hình lịch điện nước & hóa đơn' }),
+  ).toHaveAttribute('href', '/locations/location/settings');
+  expect(screen.queryByText('Lịch & quy tắc hóa đơn')).not.toBeInTheDocument();
 });

@@ -1,8 +1,24 @@
 ﻿import { useFeedbackState } from '../lib/useFeedbackState';
 import { showSuccess } from '../lib/toast';
 import React, { useEffect, useMemo, useRef, useState } from 'react';
-import { Image, Platform, View } from 'react-native';
-import { Button, IconButton, Checkbox, Text, TextInput, TouchableRipple } from 'react-native-paper';
+import {
+  Image,
+  KeyboardAvoidingView,
+  Modal,
+  Platform,
+  ScrollView,
+  StyleSheet,
+  View,
+} from 'react-native';
+import {
+  Button,
+  IconButton,
+  Checkbox,
+  Portal,
+  Text,
+  TextInput,
+  TouchableRipple,
+} from 'react-native-paper';
 import { randomUUID } from '../lib/randomUUID';
 import {
   adjustmentClient,
@@ -26,9 +42,12 @@ import {
 import { loadAdjustmentPage, loadTenantAdjustment } from '../services/tenantInvoices';
 import { ChoiceField } from '../components/WorkflowControls';
 import { CameraCapture } from '../components/CameraCapture';
+import { FloatingDemoPhotoButton } from '../components/FloatingDemoPhotoButton';
+import { canUseLocalMeterDemo, meterDemoJpegBytes } from '../lib/meterDemoCapture';
 import { useSession } from '../lib/SessionProvider';
 import { useWorkspaceQuery } from '../features/workspace/useWorkspaceQuery';
-import { useWorkspace } from '../features/workspace/WorkspaceProvider';
+import { colors } from '../theme/theme';
+import { ToastHost } from '../components/ToastHost';
 
 const adjustmentTone = (status: string) =>
   status === 'Approved'
@@ -43,19 +62,32 @@ export function TenantAdjustmentPanel({
   invoice,
   compact = false,
   initialOpen = false,
+  historyOnly = false,
+  canSubmit = true,
 }: {
   invoice: Invoice;
   compact?: boolean;
   initialOpen?: boolean;
+  historyOnly?: boolean;
+  canSubmit?: boolean;
 }) {
   const { api, session } = useSession();
-  const { go } = useWorkspace();
   const client = useMemo(() => (api ? adjustmentClient(api.request.bind(api)) : null), [api]);
   const [page, setPage] = useState(1),
     [effectPage, setEffectPage] = useState(1),
     [selected, setSelected] = useState(''),
     [open, setOpen] = useState(initialOpen);
   const [tab, setTab] = useState<'requests' | 'approved'>('requests');
+  const [modal, setModal] = useState<'requests' | 'new' | null>(null);
+  const [formBusy, setFormBusy] = useState(false);
+  useEffect(() => {
+    if (!canSubmit && !formBusy) {
+      setModal((current) => (current === 'new' ? null : current));
+    }
+  }, [canSubmit, formBusy]);
+  const closeModal = () => {
+    if (!formBusy) setModal(null);
+  };
   const allowed = session?.roles.includes('Tenant') && !!client;
   const list = useWorkspaceQuery<Page<Adjustment>>(
     allowed
@@ -93,25 +125,77 @@ export function TenantAdjustmentPanel({
           </View>
         )}
         <View style={invoiceUi.row}>
-          <Button
-            contentStyle={{ minHeight: 44 }}
-            onPress={() => go('adjustment', { invoiceId: invoice.id })}
-          >
+          <Button contentStyle={{ minHeight: 44 }} onPress={() => setModal('requests')}>
             Xem yêu cầu
           </Button>
-          <Button
-            contentStyle={{ minHeight: 44 }}
-            onPress={() => go('adjustment', { invoiceId: invoice.id, newRequest: 'true' })}
-          >
-            Gửi yêu cầu điều chỉnh
-          </Button>
+          {canSubmit && (
+            <Button contentStyle={{ minHeight: 44 }} onPress={() => setModal('new')}>
+              Gửi yêu cầu điều chỉnh
+            </Button>
+          )}
         </View>
+        {modal && (modal === 'requests' || canSubmit || formBusy) && (
+          <Modal transparent visible animationType="fade" onRequestClose={closeModal}>
+            <Portal.Host>
+              <KeyboardAvoidingView
+                style={modalStyles.backdrop}
+                behavior={
+                  Platform.OS === 'ios'
+                    ? 'padding'
+                    : Platform.OS === 'android'
+                      ? 'height'
+                      : undefined
+                }
+              >
+                <View style={modalStyles.card} accessibilityViewIsModal>
+                  <View style={modalStyles.header}>
+                    <Text style={[invoiceUi.heading, { flex: 1 }]}>
+                      {modal === 'new' ? 'Gửi yêu cầu điều chỉnh' : 'Yêu cầu điều chỉnh'}
+                    </Text>
+                    <IconButton
+                      icon="close"
+                      accessibilityLabel="Đóng yêu cầu điều chỉnh"
+                      disabled={formBusy}
+                      onPress={closeModal}
+                    />
+                  </View>
+                  <ScrollView
+                    keyboardShouldPersistTaps="handled"
+                    contentContainerStyle={
+                      modal === 'requests' ? modalStyles.historyContent : modalStyles.content
+                    }
+                  >
+                    {modal === 'new' ? (
+                      <RequestForm
+                        key={invoice.id + ':' + invoice.version}
+                        invoice={invoice}
+                        client={client}
+                        onBusyChange={setFormBusy}
+                        submitted={() => {
+                          setModal(null);
+                          list.reload();
+                        }}
+                      />
+                    ) : (
+                      <TenantAdjustmentPanel invoice={invoice} historyOnly />
+                    )}
+                  </ScrollView>
+                </View>
+                <ToastHost modal />
+              </KeyboardAvoidingView>
+            </Portal.Host>
+          </Modal>
+        )}
       </View>
     );
   return (
-    <View style={[invoiceUi.section, { borderBottomWidth: 0 }]}>
-      <Text style={invoiceUi.heading}>Điều chỉnh hóa đơn</Text>
-      {open && (
+    <View
+      style={
+        historyOnly ? modalStyles.historySection : [invoiceUi.section, { borderBottomWidth: 0 }]
+      }
+    >
+      {!historyOnly && <Text style={invoiceUi.heading}>Điều chỉnh hóa đơn</Text>}
+      {!historyOnly && canSubmit && open && (
         <RequestForm
           key={invoice.id + ':' + invoice.version}
           invoice={invoice}
@@ -208,16 +292,18 @@ export function TenantAdjustmentPanel({
           )}
         </>
       )}
-      <Button
-        compact
-        mode="text"
-        icon={open ? 'close' : 'plus'}
-        style={invoiceUi.inlineAction}
-        onPress={() => setOpen(!open)}
-      >
-        {open ? 'Đóng yêu cầu mới' : 'Gửi yêu cầu điều chỉnh'}
-      </Button>
-      {selected && tab === 'requests' && (
+      {!historyOnly && canSubmit && (
+        <Button
+          compact
+          mode="text"
+          icon={open ? 'close' : 'plus'}
+          style={invoiceUi.inlineAction}
+          onPress={() => setOpen(!open)}
+        >
+          {open ? 'Đóng yêu cầu mới' : 'Gửi yêu cầu điều chỉnh'}
+        </Button>
+      )}
+      {!!selected && tab === 'requests' && (
         <View style={invoiceUi.divider}>
           <View style={invoiceUi.row}>
             <Text variant="titleSmall">Kết quả yêu cầu</Text>
@@ -285,20 +371,68 @@ export function TenantAdjustmentPanel({
     </View>
   );
 }
+const modalStyles = StyleSheet.create({
+  backdrop: {
+    flex: 1,
+    backgroundColor: 'rgba(0,22,55,0.48)',
+    justifyContent: 'center',
+    alignItems: 'center',
+    padding: 16,
+  },
+  card: {
+    width: '100%',
+    maxWidth: 480,
+    maxHeight: '92%',
+    backgroundColor: colors.white,
+    borderRadius: 16,
+    overflow: 'hidden',
+  },
+  header: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingLeft: 16,
+    borderBottomWidth: 1,
+    borderBottomColor: colors.border,
+  },
+  content: { padding: 16, gap: 12 },
+  historyContent: { paddingHorizontal: 16, paddingTop: 4, paddingBottom: 12 },
+  historySection: { gap: 10 },
+  photoGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: 10 },
+  photoTile: { width: '47%', maxWidth: 175, minWidth: 104, flexGrow: 1 },
+  photo: { width: '100%', height: 110, borderRadius: 10 },
+  removePhoto: {
+    position: 'absolute',
+    top: 0,
+    right: 0,
+    margin: 2,
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    backgroundColor: colors.white,
+  },
+});
+function evidencePreviewUri(bytes: Uint8Array, mime: string) {
+  let binary = '';
+  for (let offset = 0; offset < bytes.length; offset += 8192)
+    binary += String.fromCharCode(...bytes.subarray(offset, offset + 8192));
+  return `data:${mime};base64,${btoa(binary)}`;
+}
 type AdjustmentClient = ReturnType<typeof adjustmentClient>;
 function RequestForm({
   invoice,
   client,
   submitted,
+  onBusyChange,
 }: {
   invoice: Invoice;
   client: AdjustmentClient;
   submitted: (id: string) => void;
+  onBusyChange?: (busy: boolean) => void;
 }) {
   const [line, setLine] = useState(''),
     [amount, setAmount] = useState(''),
     [reason, setReason] = useState(''),
-    [evidence, setEvidence] = useState<string[]>([]),
+    [evidence, setEvidence] = useState<{ id: string; uri: string }[]>([]),
     [checked, setChecked] = useState(false),
     [busy, setBusy] = useState(false),
     [uploading, setUploading] = useState(false),
@@ -306,6 +440,13 @@ function RequestForm({
   const key = useRef(randomUUID()),
     lock = useRef(false),
     uploadLock = useRef(false);
+  const canUseSample = canUseLocalMeterDemo(
+    typeof __DEV__ !== 'undefined' && __DEV__,
+    Platform.OS,
+    globalThis.location?.hostname,
+    globalThis.location?.port,
+  );
+  const photoDisabled = !checked || busy || uploading || evidence.length >= 5;
   const changed = () => {
     key.current = randomUUID();
   };
@@ -319,6 +460,7 @@ function RequestForm({
       return;
     }
     lock.current = true;
+    onBusyChange?.(true);
     setBusy(true);
     setError('');
     try {
@@ -328,7 +470,7 @@ function RequestForm({
           invoiceLineId: line || null,
           proposedAmount: amount || null,
           reason: reason.trim(),
-          evidenceIds: evidence,
+          evidenceIds: evidence.map((photo) => photo.id),
           expectedInvoiceVersion: invoice.version,
         },
         key.current,
@@ -340,26 +482,58 @@ function RequestForm({
     } finally {
       lock.current = false;
       setBusy(false);
+      onBusyChange?.(false);
     }
   }
   async function uploadEvidence(bytes: Uint8Array<ArrayBuffer>, mime = 'image/jpeg') {
-    if (uploadLock.current) return;
+    if (uploadLock.current || lock.current || photoDisabled) return false;
     uploadLock.current = true;
+    onBusyChange?.(true);
     setUploading(true);
     setError('');
     try {
       if (bytes.byteLength > 5 * 1024 * 1024) {
         setError('Ảnh vượt quá 5 MB.');
-        return;
+        return false;
       }
+      const uri = evidencePreviewUri(bytes, mime);
       const result = await client.upload(invoice.id, bytes, mime);
-      setEvidence((ids) => [...ids, result.id]);
+      setEvidence((photos) => [...photos, { id: result.id, uri }]);
       changed();
+      return true;
     } catch (e) {
       setError(adjustmentError(e));
+      return false;
     } finally {
       uploadLock.current = false;
       setUploading(false);
+      onBusyChange?.(false);
+    }
+  }
+  async function addSamplePhoto() {
+    if (!canUseSample || photoDisabled || uploadLock.current || lock.current) return;
+    let bytes: Uint8Array<ArrayBuffer> | undefined;
+    try {
+      const canvas = document.createElement('canvas');
+      canvas.width = 800;
+      canvas.height = 480;
+      const context = canvas.getContext('2d');
+      if (!context) throw new Error();
+      context.fillStyle = '#edf2f9';
+      context.fillRect(0, 0, 800, 480);
+      context.fillStyle = '#172b4d';
+      context.font = 'bold 40px sans-serif';
+      context.fillText('BHOME - ẢNH MẪU DEV', 36, 160);
+      context.font = 'bold 28px sans-serif';
+      context.fillText('KHÔNG PHẢI BẰNG CHỨNG THỰC TẾ', 36, 240);
+      context.font = '24px sans-serif';
+      context.fillText('Chỉ dùng thử điều chỉnh hóa đơn', 36, 310);
+      bytes = meterDemoJpegBytes(canvas.toDataURL('image/jpeg', 0.85));
+      await uploadEvidence(bytes);
+    } catch {
+      setError('Không tạo được ảnh mẫu DEV. Hãy thử lại.');
+    } finally {
+      bytes?.fill(0);
     }
   }
   return (
@@ -402,44 +576,49 @@ function RequestForm({
           changed();
         }}
       />
-      <Text>
-        Ảnh bằng chứng liên quan khoản tranh chấp, tối đa 5 ảnh × 5 MB. Không chụp giấy tờ cá nhân.
-      </Text>
       <Checkbox.Item
         label="Tôi đã kiểm tra ảnh bằng chứng"
         status={checked ? 'checked' : 'unchecked'}
         disabled={busy || uploading}
         onPress={() => setChecked(!checked)}
       />
-      {Platform.OS === 'web' ? (
-        <WebEvidencePicker
-          disabled={!checked || busy || uploading || evidence.length >= 5}
-          upload={uploadEvidence}
-        />
-      ) : (
-        <CameraCapture
-          label="Chụp ảnh bằng chứng điều chỉnh"
-          disabled={!checked || busy || uploading || evidence.length >= 5}
-          reviewBeforeSubmit
-          reviewActionLabel="Tải bằng chứng điều chỉnh"
-          reviewNotice="Ảnh được lưu private cùng yêu cầu điều chỉnh. Kiểm tra nội dung trước khi tải."
-          onCapture={uploadEvidence}
-        />
+      <CameraCapture
+        label="Chụp ảnh"
+        presentation="evidence"
+        disabled={photoDisabled}
+        reviewBeforeSubmit
+        onCapture={uploadEvidence}
+      />
+      {canUseSample && (
+        <FloatingDemoPhotoButton disabled={photoDisabled} onPress={() => void addSamplePhoto()} />
       )}
       <Text>Đã tải {evidence.length}/5 ảnh.</Text>
-      {evidence.map((id, index) => (
-        <Action
-          key={id}
-          secondary
-          disabled={busy || uploading}
-          onPress={() => {
-            setEvidence((ids) => ids.filter((x) => x !== id));
-            changed();
-          }}
-        >
-          Bỏ ảnh {index + 1}
-        </Action>
-      ))}
+      {evidence.length > 0 && (
+        <View style={modalStyles.photoGrid}>
+          {evidence.map((photo, index) => (
+            <View key={photo.id} style={modalStyles.photoTile}>
+              <Image
+                source={{ uri: photo.uri }}
+                resizeMode="cover"
+                accessibilityLabel={`Ảnh bằng chứng ${index + 1}`}
+                style={modalStyles.photo}
+              />
+              <IconButton
+                icon="close"
+                size={18}
+                accessibilityLabel={`Xóa ảnh bằng chứng ${index + 1}`}
+                disabled={busy || uploading}
+                onPress={() => {
+                  if (lock.current || uploadLock.current) return;
+                  setEvidence((photos) => photos.filter((entry) => entry.id !== photo.id));
+                  changed();
+                }}
+                style={modalStyles.removePhoto}
+              />
+            </View>
+          ))}
+        </View>
+      )}
       {!!error && (
         <Text accessibilityRole="alert" style={ui.red}>
           {error}
@@ -449,93 +628,6 @@ function RequestForm({
         Gửi yêu cầu cho Owner
       </Action>
       <Text>Đề xuất chưa thay đổi số tiền. Owner cần xem xét và quyết định.</Text>
-    </>
-  );
-}
-function WebEvidencePicker({
-  disabled,
-  upload,
-}: {
-  disabled: boolean;
-  upload: (bytes: Uint8Array<ArrayBuffer>, mime: string) => Promise<void>;
-}) {
-  const [file, setFile] = useState<File | null>(null),
-    [url, setUrl] = useState(''),
-    [error, setError] = useFeedbackState(),
-    [busy, setBusy] = useState(false);
-  const input = useRef<HTMLInputElement | null>(null),
-    lock = useRef(false);
-  useEffect(
-    () => () => {
-      if (url) URL.revokeObjectURL(url);
-    },
-    [url],
-  );
-  return (
-    <>
-      <input
-        ref={input}
-        type="file"
-        accept="image/png,image/jpeg"
-        capture="environment"
-        aria-label="Chọn ảnh bằng chứng điều chỉnh"
-        disabled={disabled || busy}
-        onChange={(event) => {
-          const selected = event.currentTarget.files?.[0];
-          setError('');
-          setFile(null);
-          setUrl('');
-          if (!selected) return;
-          if (
-            selected.size > 5 * 1024 * 1024 ||
-            !['image/png', 'image/jpeg'].includes(selected.type)
-          ) {
-            setError('Chọn PNG/JPEG tối đa 5 MB.');
-            event.currentTarget.value = '';
-            return;
-          }
-          setFile(selected);
-          setUrl(URL.createObjectURL(selected));
-        }}
-      />
-      {url && (
-        <Image
-          source={{ uri: url }}
-          accessibilityLabel="Xem trước ảnh điều chỉnh"
-          style={{ width: '100%', height: 240 }}
-          resizeMode="contain"
-        />
-      )}
-      {!!error && <Text style={ui.red}>{error}</Text>}
-      {file && (
-        <Action
-          disabled={disabled || busy}
-          onPress={() => {
-            if (lock.current) return;
-            lock.current = true;
-            setBusy(true);
-            setError('');
-            void (async () => {
-              let bytes: Uint8Array<ArrayBuffer> | null = null;
-              try {
-                bytes = new Uint8Array(await file.arrayBuffer());
-                await upload(bytes, file.type);
-              } catch {
-                setError('Không đọc được ảnh. Chọn lại ảnh để thử.');
-              } finally {
-                bytes?.fill(0);
-                setFile(null);
-                setUrl('');
-                if (input.current) input.current.value = '';
-                lock.current = false;
-                setBusy(false);
-              }
-            })();
-          }}
-        >
-          Tải bằng chứng điều chỉnh
-        </Action>
-      )}
     </>
   );
 }

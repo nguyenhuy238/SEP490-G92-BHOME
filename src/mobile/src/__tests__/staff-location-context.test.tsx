@@ -102,6 +102,79 @@ it('shares the home-selected Location across sibling workspace pages in one sign
   expect(screen.getByTestId('global-task').textContent).toBe(second.id);
 });
 
+function NotificationLocationProbe({
+  target,
+  opened,
+}: {
+  target: string;
+  opened: (id: string) => void;
+}) {
+  const { staffLocationId, navigateInStaffLocation } = useWorkspace();
+  return (
+    <>
+      <div data-testid="notification-location">{staffLocationId}</div>
+      <button
+        onClick={() =>
+          navigateInStaffLocation(target, () =>
+            opened(screen.getByTestId('notification-location').textContent ?? ''),
+          )
+        }
+      >
+        Mở thông báo cơ sở khác
+      </button>
+    </>
+  );
+}
+
+it('commits the other assigned location before navigating from a notification', async () => {
+  const opened = vi.fn();
+  render(
+    <WorkspaceProvider>
+      <NotificationLocationProbe target={second.id} opened={opened} />
+    </WorkspaceProvider>,
+  );
+  await waitFor(() =>
+    expect(screen.getByTestId('notification-location').textContent).toBe(first.id),
+  );
+  fireEvent.click(screen.getByRole('button', { name: 'Mở thông báo cơ sở khác' }));
+  await waitFor(() => expect(opened).toHaveBeenCalledExactlyOnceWith(second.id));
+});
+
+it('refreshes stale assignments when a notification points to a newly assigned location', async () => {
+  state.request.mockResolvedValueOnce([first]).mockResolvedValueOnce([first, second]);
+  const opened = vi.fn();
+  render(
+    <WorkspaceProvider>
+      <NotificationLocationProbe target={second.id} opened={opened} />
+    </WorkspaceProvider>,
+  );
+  await waitFor(() =>
+    expect(screen.getByTestId('notification-location').textContent).toBe(first.id),
+  );
+  fireEvent.click(screen.getByRole('button', { name: 'Mở thông báo cơ sở khác' }));
+  await waitFor(() => expect(opened).toHaveBeenCalledExactlyOnceWith(second.id));
+  expect(state.request).toHaveBeenCalledTimes(2);
+});
+
+it('does not navigate when the refreshed assignments do not contain the notification location', async () => {
+  state.request.mockResolvedValue([first]);
+  const opened = vi.fn();
+  render(
+    <WorkspaceProvider>
+      <NotificationLocationProbe target={second.id} opened={opened} />
+    </WorkspaceProvider>,
+  );
+  await waitFor(() =>
+    expect(screen.getByTestId('notification-location').textContent).toBe(first.id),
+  );
+  fireEvent.click(screen.getByRole('button', { name: 'Mở thông báo cơ sở khác' }));
+  await waitFor(() => expect(state.request).toHaveBeenCalledTimes(2));
+  await waitFor(() =>
+    expect(screen.getByTestId('notification-location').textContent).toBe(first.id),
+  );
+  expect(opened).not.toHaveBeenCalled();
+});
+
 it('loads all current Staff assignments and shares only a validated selected location', async () => {
   render(
     <StaffLocationProvider>

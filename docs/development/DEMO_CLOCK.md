@@ -1,6 +1,6 @@
 # Demo Clock — BHOME (Development, Staging and Production)
 
-Demo Clock is a server-owned business calendar for the BHOME academic demonstration. It is not a system-clock override. The real clock continues to control JWT, OTP, invitation sessions, evidence upload expiry, network timeouts and integration/security timestamps. The existing reviewed Staging and Production deployments discover the capability by default, with the real date until an Owner changes it. Remote/shared Development databases are not supported.
+Demo Clock is a server-owned business clock for the BHOME academic demonstration. It is not a system-clock override. The real clock continues to control JWT, OTP, invitation sessions, evidence upload expiry, network timeouts and integration/security timestamps. The existing reviewed Staging and Production deployments discover the capability by default, with the real date until an Owner changes it. Remote/shared Development databases are not supported.
 
 ## Use the normal local Owner Portal (port 5173)
 
@@ -12,7 +12,7 @@ DemoClock__AllowLocalDevelopment=true
 DemoClock__DevelopmentDatabaseName=bhome_neon_local_20261115
 DevelopmentDatabase__InitializeOnStartup=false
 Jobs__Enabled=false
-BillingAutomation__AutomaticJobsEnabled=false
+BillingAutomation__AutomaticJobsEnabled=true
 StaffAssignments__AutoReconcileEnabled=false
 OwnerSetup__AssetSyncEnabled=false
 NotificationChannels__AutomationEnabled=false
@@ -51,19 +51,20 @@ The simulation is process-local and resets on API restart. All ordinary business
 
 ## API and safeguards
 
-`GET /api/v1/demo-clock` — authenticated Owner, Staff and Tenant read the same server date and version. `PUT /api/v1/demo-clock` — Owner only; send `businessDate` (`YYYY-MM-DD`, or `null` for real time) and `expectedVersion`. A stale version returns 409. API returns 404 when disabled. The host refuses explicitly enabled incompatible configuration; automatic discovery leaves the feature disabled when deployment anchors or payment/job guards do not match.
+`GET /api/v1/demo-clock` — authenticated Owner, Staff and Tenant read the same business date/time, real server time and version. `PUT /api/v1/demo-clock` — Owner only; send `businessDateTime` (ISO-8601 with +07:00) and `expectedVersion`. Legacy date-only requests remain supported. Send null for both date fields to restore real time. A stale version returns 409. API returns 404 when disabled. The host refuses explicitly enabled incompatible configuration; automatic discovery leaves the feature disabled when deployment anchors or payment/job guards do not match.
 
 Focused validation: `dotnet test tests/backend/BHome.Application.UnitTests --filter FullyQualifiedName~DemoBusinessClockTests`, `dotnet test tests/backend/BHome.Infrastructure.UnitTests --filter FullyQualifiedName~DemoClockGuardTests`, and `npm run test --workspace ./src/mobile -- demoClock.test.ts`.
 
 ## Use the existing Staging and Production deployments
 
-Release the API and Owner Web together through the normal reviewed develop/main CI/CD. No separate backend, database, Docker stack, tunnel, or extra build flag is required. The API automatically enables the capability on the matching BHOME deployment anchors: existing PostgreSQL database and private MinIO bucket, disabled business workers, Staging SePay Test, and Production live banking disabled. This does not change provider configuration or activate a simulated date. Each environment has an independent in-memory clock which starts at the real date.
+Release the API and Owner Web together through the normal reviewed develop/main CI/CD. No separate backend, database, Docker stack, tunnel, or extra build flag is required. The API automatically enables the capability on the matching BHOME deployment anchors: existing PostgreSQL database and private MinIO bucket, disabled general jobs, Staging SePay Test, and Production live banking disabled. Dedicated billing automation is permitted. This does not change provider configuration or activate a simulated date. Each environment has an independent in-memory clock which starts at the real date.
 
 Optional private environment settings:
 
 ```dotenv
 DemoClock__Enabled=true
 DemoClock__OwnerUserId=
+BillingAutomation__AutomaticJobsEnabled=true
 ```
 
 Blank OwnerUserId allows authenticated Owners to change dates; set an actual Owner UUID from GET /api/v1/session to restrict control to that account. Staff and Tenant can read but never change the clock. Explicit Enabled=false disables the feature. Older private environment files without DemoClock keys need no edit if they match the reviewed deployment configuration. Existing explicit false overrides automatic discovery. Production remains unavailable while real bank integrations are enabled; never switch SePay to Test in Production just to bypass this guard. The demo does not simulate bank callbacks, signing or email delivery.
@@ -73,4 +74,8 @@ Blank OwnerUserId allows authenticated Owners to change dates; set an actual Own
 - Mobile: normal Web/Expo/native builds automatically discover the clock from their authenticated API, including npm run mobile:staging. Explicit EXPO_PUBLIC_DEMO_CLOCK_ENABLED=false disables discovery; do not set it for demo builds.
 - Choose the initial date, execute the normal workflow chronologically, and click **Ngày thực** after the demonstration. Restarting an API resets only its own clock to real time.
 
-**Important:** the calendar is shared by all users of one API instance, not isolated per account or location. Use synthetic accounts and rooms and coordinate a demo window with other users. Data persists in the environment's existing database; resetting the date does not undo contracts, readings, invoices or payments. The clock does not support multiple replicas. Auth, OTP, provider timestamps and timers remain real. The four individual manual billing actions are available to Owners authorized for the demo; developer batch run-now and notification-publishing endpoints remain disabled on deployed environments. No automatic publication or background billing jobs are enabled.
+**Important:** the calendar is shared by all users of one API instance, not isolated per account or location. Use synthetic accounts and rooms and coordinate a demo window with other users. Data persists in the environment's existing database; resetting the date does not undo contracts, readings, invoices or payments. The clock does not support multiple replicas. Auth, OTP, provider timestamps and timers remain real. Manual billing actions are for testing, not required for the normal automatic workflow. Developer batch run-now endpoints remain restricted.
+
+## Exact-time billing demonstration
+
+The floating Owner panel displays the ticking business time and actual server time in Vietnam time (UTC+7). A change applies a time offset; the simulated clock continues advancing normally, including at midnight. Billing runs whenever the system setting `BillingAutomation:AutomaticJobsEnabled` is enabled, in both real and simulated time, using the durable billing job queue and execution records. There is no automation checkbox. When general jobs are disabled, the dedicated worker claims only billing handlers; if general jobs are enabled, the existing general scheduler and worker own billing. Resetting to real time or restarting the API does not disable billing or roll back committed tasks and invoices. The isolated contract-demo fixture retains its explicit disabled-worker settings. The simulation is shared across the reviewed environment, so use test data only.

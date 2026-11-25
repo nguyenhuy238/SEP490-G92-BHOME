@@ -8,8 +8,10 @@ import { staffColors } from '../theme/theme';
 
 export function StaffFeatureDirectory({
   onOpen,
+  overdueMeterRooms = null,
 }: {
   onOpen: (screen: WorkspaceScreen, params?: Record<string, string>) => void;
+  overdueMeterRooms?: number | null;
 }) {
   return (
     <View style={dashboardStyles.section}>
@@ -21,8 +23,22 @@ export function StaffFeatureDirectory({
               title={item.title}
               description={item.detail}
               icon={item.icon}
-              color={staffColors.blue}
-              background={staffColors.blueSoft}
+              color={
+                item.screen === 'meter-reading' && !!overdueMeterRooms
+                  ? staffColors.red
+                  : staffColors.blue
+              }
+              background={
+                item.screen === 'meter-reading' && !!overdueMeterRooms
+                  ? staffColors.redSoft
+                  : staffColors.blueSoft
+              }
+              status={
+                item.screen === 'meter-reading' && overdueMeterRooms
+                  ? `${overdueMeterRooms} phòng quá hạn`
+                  : undefined
+              }
+              danger={item.screen === 'meter-reading' && !!overdueMeterRooms}
               onPress={() => onOpen(item.screen)}
               compact
             />

@@ -71,9 +71,11 @@ def check_environment(target):
         for key, value in zip(('OwnerOrigin', 'ApiOrigin', 'PublicOrigin'), origins[target], strict=True):
             if current.get('Deployment__' + key) != value:
                 raise ValueError('Deployment origin mismatch: ' + key)
-    for key in ('DevelopmentDatabase__InitializeOnStartup', 'Jobs__Enabled', 'BillingAutomation__AutomaticJobsEnabled'):
+    for key in ('DevelopmentDatabase__InitializeOnStartup', 'Jobs__Enabled'):
         if current.get(key, '').lower() != 'false':
             raise ValueError('Unapproved startup initializer or job: ' + key)
+    if current.get('BillingAutomation__AutomaticJobsEnabled', '').lower() not in ('true', 'false'):
+        raise ValueError('Invalid dedicated billing worker flag')
     for values, database, host in ((stage, STAGE, 'postgres'), (prod, 'bhome', 'postgres')):
         connection = dict(p.split('=', 1) for p in values.get('ConnectionStrings__Database', '').split(';') if '=' in p)
         if connection.get('Database') != database or connection.get('Host') != host:

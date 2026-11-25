@@ -11,7 +11,7 @@ namespace BHome.Api.Controllers;
 public sealed class DemoClockController(TimeProvider clock, IHostEnvironment environment, IConfiguration configuration,
     ICurrentUser currentUser) : ControllerBase
 {
-    public sealed record ChangeInput(DateOnly? BusinessDate, long? ExpectedVersion);
+    public sealed record ChangeInput(DateOnly? BusinessDate, long? ExpectedVersion, DateTimeOffset? BusinessDateTime = null);
 
     private bool Available => (environment.IsDevelopment() || environment.IsStaging() || environment.IsProduction()) && clock is DemoBusinessClock;
 
@@ -29,7 +29,11 @@ public sealed class DemoClockController(TimeProvider clock, IHostEnvironment env
         if (!Available || clock is not DemoBusinessClock demo) return NotFound();
         if (!CanChange) return Forbid();
         if (input.ExpectedVersion is null or < 0 || input.BusinessDate is { } date && (date.Year < 2000 || date.Year > 2100)) return BadRequest();
-        var state = demo.Change(input.BusinessDate, input.ExpectedVersion.Value);
+        if (input.BusinessDateTime is { } instant &&
+            (instant.Offset != TimeSpan.FromHours(7) || instant.Year is < 2000 or > 2100 || input.BusinessDate is not null)) return BadRequest();
+        var state = input.BusinessDateTime is { } target
+            ? demo.ChangeTime(target, input.ExpectedVersion.Value)
+            : demo.Change(input.BusinessDate, input.ExpectedVersion.Value);
         return state is null ? Conflict() : Ok(state with { CanChange = true });
     }
 }

@@ -27,7 +27,7 @@ import { TenantInvoiceSummary, TenantInvoiceCharges } from './TenantInvoiceCharg
 import { useWorkspaceQuery } from '../features/workspace/useWorkspaceQuery';
 import { useSession } from '../lib/SessionProvider';
 import { useWorkspace } from '../features/workspace/WorkspaceProvider';
-import { TenantPaymentPanel, TenantPaymentDetails } from './TenantPaymentPanel';
+import { TenantPaymentPanel, TenantPaymentDetails, TenantPaymentModal } from './TenantPaymentPanel';
 import { useTenantInvoicePayment } from '../features/tenant/useTenantInvoicePayment';
 import { TenantAdjustmentPanel } from './TenantAdjustmentPanel';
 import { TenantSettlementReceivables } from './TenantSettlementReceivables';
@@ -72,6 +72,7 @@ function TenantInvoiceList({ intent }: { intent?: 'adjustment' }) {
     [statusFilter, setStatusFilter] = useState<'all' | 'unpaid' | 'paid'>('all'),
     [historyOpen, setHistoryOpen] = useState(false),
     [settlementOpen, setSettlementOpen] = useState(false);
+  const [paymentModal, setPaymentModal] = useState(false);
   const visited = useRef(false);
   // Request the exact Vietnamese billing period, not merely the latest 20 invoices.
   // Old or unpaid invoices from other months must not masquerade as this month's bill.
@@ -92,10 +93,10 @@ function TenantInvoiceList({ intent }: { intent?: 'adjustment' }) {
   const paymentView = view === 'payment';
   const adjustmentView = purpose === 'adjustment';
   const payment = useTenantInvoicePayment(
-    allowed && selected && detail.data?.status === 'Final' && !paymentView && !adjustmentView
-      ? selected
-      : null,
+    allowed && selected && detail.data?.status === 'Final' && !paymentView ? selected : null,
   );
+  const canSubmitAdjustment =
+    detail.data?.status === 'Draft' || (!payment.error && payment.data?.paymentStatus === 'Unpaid');
   const finalIds = !selected
     ? [
         ...new Set(
@@ -210,13 +211,13 @@ function TenantInvoiceList({ intent }: { intent?: 'adjustment' }) {
             ) : adjustmentView ? (
               <View style={invoiceUi.card}>
                 <Text style={invoiceUi.secondary}>
-                  Phòng {detail.data.roomNumber} · Kỳ{' '}
-                  {detail.data.billingPeriod.slice(0, 7).split('-').reverse().join('/')}
+                  Kỳ {detail.data.billingPeriod.slice(0, 7).split('-').reverse().join('/')}
                 </Text>
                 <TenantAdjustmentPanel
                   key={detail.data.id + ':' + detail.data.version}
                   invoice={detail.data}
                   initialOpen={newRequest === 'true'}
+                  canSubmit={canSubmitAdjustment}
                 />
               </View>
             ) : (
@@ -224,7 +225,7 @@ function TenantInvoiceList({ intent }: { intent?: 'adjustment' }) {
                 <TenantInvoiceSummary
                   invoice={detail.data}
                   payment={payment.error ? null : payment.data}
-                  onPay={() => go('invoice', { invoiceId: detail.data!.id, view: 'payment' })}
+                  onPay={() => setPaymentModal(true)}
                 />
                 {detail.data.status === 'Final' && <InvoiceFeedback {...payment} />}
                 <TenantInvoiceCharges invoice={detail.data} />
@@ -235,7 +236,15 @@ function TenantInvoiceList({ intent }: { intent?: 'adjustment' }) {
                   key={detail.data.id + ':' + detail.data.version}
                   invoice={detail.data}
                   compact
+                  canSubmit={canSubmitAdjustment}
                 />
+                {paymentModal && (
+                  <TenantPaymentModal
+                    key={'payment-modal:' + detail.data.id}
+                    invoiceId={detail.data.id}
+                    onClose={() => setPaymentModal(false)}
+                  />
+                )}
               </>
             )}
           </View>

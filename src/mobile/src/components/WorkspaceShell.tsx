@@ -128,6 +128,7 @@ export function WorkspaceShell({
   const compactTasks =
     staff && ['work-orders', 'task-detail', 'staff-handovers'].includes(screen) && !preview;
   const compactTaskDetail = compactTasks && screen === 'task-detail';
+  const compactMeter = staff && screen === 'meter-reading' && !preview;
   const tenantRoom = role === 'Tenant' && screen === 'tenant-room' && !preview;
   const tenantResidence = role === 'Tenant' && screen === 'residence' && !preview;
   const tenantLedger = role === 'Tenant' && screen === 'billing-history' && !preview;
@@ -376,6 +377,7 @@ export function WorkspaceShell({
                       !!headerAction?.title ||
                       compactContracts ||
                       compactTasks ||
+                      compactMeter ||
                       tenantResidence ||
                       tenantInvoice ||
                       tenantFeatures ||
@@ -387,6 +389,7 @@ export function WorkspaceShell({
                       !!headerAction?.title ||
                       compactContracts ||
                       compactTasks ||
+                      compactMeter ||
                       tenantResidence ||
                       tenantInvoice ||
                       tenantFeatures ||
@@ -411,9 +414,15 @@ export function WorkspaceShell({
                                   : 'Công việc vận hành'
                               : compactContracts
                                 ? (headerAction?.title ?? 'Hợp đồng')
-                                : (headerAction?.title ?? 'Quay lại')}
+                                : compactMeter
+                                  ? 'Ghi chỉ số điện nước'
+                                  : (headerAction?.title ?? 'Quay lại')}
                   </Text>
-                  {(compactContracts || compactTasks || tenantInvoice || tenantResidence) &&
+                  {(compactContracts ||
+                    compactTasks ||
+                    compactMeter ||
+                    tenantInvoice ||
+                    tenantResidence) &&
                     headerAction && (
                       <>
                         <IconButton
@@ -421,13 +430,15 @@ export function WorkspaceShell({
                           accessibilityLabel={
                             tenantResidence
                               ? 'Tải lại hồ sơ tạm trú'
-                              : compactTasks
-                                ? `Tải lại ${headerAction?.title ?? 'công việc'}`
-                                : tenantLedger
-                                  ? 'Tải lại giao dịch'
-                                  : tenantInvoice
-                                    ? 'Tải lại hóa đơn'
-                                    : 'Tải lại hợp đồng'
+                              : compactMeter
+                                ? 'Tải lại danh sách ghi chỉ số'
+                                : compactTasks
+                                  ? `Tải lại ${headerAction?.title ?? 'công việc'}`
+                                  : tenantLedger
+                                    ? 'Tải lại giao dịch'
+                                    : tenantInvoice
+                                      ? 'Tải lại hóa đơn'
+                                      : 'Tải lại hợp đồng'
                           }
                           disabled={headerAction.disabled}
                           onPress={headerAction.onRefresh}
@@ -451,6 +462,7 @@ export function WorkspaceShell({
                 owner ||
                 compactContracts ||
                 compactTasks ||
+                compactMeter ||
                 tenantRoom ||
                 tenantResidence ||
                 tenantInvoice ||

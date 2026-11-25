@@ -17,7 +17,8 @@ internal sealed partial class BillingAutomationEngine
         {
             if (await db.Set<OperationalTask>().AnyAsync(task => task.BillingRoomId == room && task.BillingPeriod == period && db.Set<Meter>().Any(m => m.RoomId == room && m.UtilityType == task.BillingUtilityType && m.Id != task.MeterId && m.InstalledOn >= period && m.InstalledOn <= period.AddMonths(1).AddDays(-1)), t)) throw new InvoiceException(409, "meter_replacement_review_required");
             var service = Invoices(p); var draft = await service.GetAsync(invoice.Id, t);
-            if ((await invoiceRepository.DraftCorrectionsAsync(invoice.Id, t)).Count == 0) draft = await service.RefreshAsync(invoice.Id, draft.Version, t, p.Id);
+            if (await invoiceRepository.HasPendingAdjustmentsAsync(invoice.Id, t)) throw new InvoiceException(409, "invoice_adjustment_pending");
+            draft = await service.RefreshAsync(invoice.Id, draft.Version, t, p.Id);
             await service.FinalizeAsync(invoice.Id, draft.Version, t, p.Id); return 0;
         }
         catch (InvoiceException ex) when (ex.Status is 400 or 404 or 409) { errors.Add(new { roomId = room, invoiceId = invoice.Id, code = ex.Code }); return 0; }
@@ -28,7 +29,7 @@ internal sealed partial class BillingAutomationEngine
     private InvoiceService Invoices(BillingAutomationPlan plan)
     {
         var actor = new AuthorizedOwner(plan.AuthorizedByUserId);
-        return new(invoiceRepository, actor, clock, schedules, fixedCoverage);
+        return new(invoiceRepository, actor, clock, schedules, fixedCoverage, paymentCodes, sepay);
     }
     private async Task<int> GenerateDraft(BillingAutomationPlan p, DateOnly period, Guid room, List<object> errors, CancellationToken t)
     {
@@ -36,7 +37,13 @@ internal sealed partial class BillingAutomationEngine
         try
         {
             InvoiceView invoice;
-            if (existing is not null) invoice = await Invoices(p).GetAsync(existing.Id, t);
+            if (existing is not null)
+            {
+                var service = Invoices(p);
+                invoice = await service.GetAsync(existing.Id, t);
+                if (invoice.Status == "Draft" && invoice.MissingInputs.Count > 0 && !await invoiceRepository.HasPendingAdjustmentsAsync(existing.Id, t))
+                    invoice = await service.RefreshAsync(existing.Id, invoice.Version, t, p.Id);
+            }
             else
             {
                 var selection = await schedules.RepresentativeAsync(room, period, t);

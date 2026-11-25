@@ -1,14 +1,14 @@
 // @vitest-environment jsdom
 import React, { useEffect } from 'react';
-import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { cleanup, fireEvent, render, screen } from '@testing-library/react';
 import { afterEach, beforeEach, expect, it, vi } from 'vitest';
 import type { MeterTask, Named } from '../lib/api';
-import type { ConfirmedReading } from '../../../../packages/client-core/src/meter';
 import { useWorkspaceQuery } from '../features/workspace/useWorkspaceQuery';
 
 const state = vi.hoisted(() => ({
   role: 'Staff',
   userId: 'staff-1',
+  selectedLocationId: '',
   request: vi.fn(),
   push: vi.fn(),
 }));
@@ -24,7 +24,6 @@ vi.mock('../lib/SessionProvider', () => ({
 
 vi.mock('../features/workspace/WorkspaceProvider', () => ({
   useWorkspace: () => {
-    const [requestedId, setRequestedId] = React.useState('');
     const locations = useWorkspaceQuery<Named[]>(
       state.role === 'Staff' ? '/api/v1/capture/locations' : null,
       { notifyError: false },
@@ -32,12 +31,14 @@ vi.mock('../features/workspace/WorkspaceProvider', () => ({
     const authorized = locations.data ?? [];
     return {
       staffLocationId:
-        authorized.find((item) => item.id === requestedId)?.id ?? authorized[0]?.id ?? '',
+        authorized.find((item) => item.id === state.selectedLocationId)?.id ??
+        authorized[0]?.id ??
+        '',
       staffLocations: authorized,
       staffLocationsLoading: locations.loading,
       staffLocationsError: locations.error,
       selectStaffLocation: (id: string) => {
-        if (authorized.some((item) => item.id === id)) setRequestedId(id);
+        if (authorized.some((item) => item.id === id)) state.selectedLocationId = id;
       },
       reloadStaffLocations: locations.reload,
     };
@@ -182,10 +183,6 @@ import { MeterTasksScreen } from '../screens/MeterTasksScreen';
 
 const sampleLocation: Named = { id: 'loc-1', label: 'BHOME SAMPLE 1' };
 const secondLocation: Named = { id: 'loc-2', label: 'BHOME SAMPLE 2' };
-const sampleRooms: Named[] = [
-  { id: 'room-101', label: '101' },
-  { id: 'room-102', label: '102' },
-];
 
 const baseElectric: MeterTask = {
   id: 'task-e-101',
@@ -199,6 +196,7 @@ const baseElectric: MeterTask = {
   display: 0,
   decimalPlaces: 2,
   purpose: 1,
+  automationPlanId: 'plan-1',
   billingPeriod: '2026-11-01',
   readingDate: '2026-11-05',
   status: 0,
@@ -217,26 +215,22 @@ const baseWater: MeterTask = {
 };
 
 let locationsResponse: Named[];
-let roomsResponse: Named[];
+let floorsResponse: { id: string; floor: string }[];
 let tasksResponse: MeterTask[];
-let readingsResponse: Record<string, ConfirmedReading>;
 
 beforeEach(() => {
   vi.clearAllMocks();
   state.role = 'Staff';
   state.userId = 'staff-1';
+  state.selectedLocationId = '';
   locationsResponse = [sampleLocation];
-  roomsResponse = [...sampleRooms];
+  floorsResponse = [];
   tasksResponse = [{ ...baseElectric }, { ...baseWater }];
-  readingsResponse = {};
 
   state.request.mockImplementation(async (path: string) => {
     if (path === '/api/v1/capture/locations') return locationsResponse;
-    if (path.endsWith('/rooms')) return roomsResponse;
-    if (path.includes('/readings/')) {
-      const id = path.split('/').at(-1)!;
-      return readingsResponse[id];
-    }
+    if (path.startsWith('/api/v1/rooms?'))
+      return { items: floorsResponse, totalCount: floorsResponse.length };
     if (path.startsWith('/api/v1/capture/meter-tasks')) return tasksResponse;
     return [];
   });
@@ -244,380 +238,324 @@ beforeEach(() => {
 
 afterEach(cleanup);
 
-it('auto-identifies the single assigned Location as read-only and removes the location dropdown and oversized buttons', async () => {
+it('uses the header location, latest period, compact room tiles and no reading requests', async () => {
   render(<MeterTasksScreen />);
-  await screen.findByText('Cơ sở: BHOME SAMPLE 1');
+  await screen.findByText('Phòng 101');
   expect(screen.getByText('Ghi chỉ số điện nước')).toBeTruthy();
-  expect(screen.getByText('Quản lý ghi chỉ số theo phòng')).toBeTruthy();
-  expect(screen.queryByText('Tất cả cơ sở được phép')).toBeNull();
+  expect(screen.queryByText('Quản lý ghi chỉ số theo phòng')).toBeNull();
   expect(screen.queryByLabelText('Cơ sở')).toBeNull();
-  expect(screen.queryByText('Lọc kỳ ghi & trạng thái')).toBeNull();
-  expect(screen.queryByText('Tải lại dữ liệu')).toBeNull();
-  expect(screen.queryByLabelText('Phòng')).toBeNull();
-});
-
-it('lets Staff switch between every assigned Location and scopes room/task requests to the selected one', async () => {
-  locationsResponse = [sampleLocation, secondLocation];
-  tasksResponse = [
-    { ...baseElectric },
-    {
-      ...baseElectric,
-      id: 'task-e-201',
-      locationId: secondLocation.id,
-      location: secondLocation.label,
-      roomId: 'room-201',
-      room: '201',
-    },
-  ];
-  render(<MeterTasksScreen />);
-  await screen.findByText('Phòng 101');
-
-  const locationPicker = screen.getByLabelText('Cơ sở') as HTMLSelectElement;
-  expect(Array.from(locationPicker.options, (option) => option.text)).toEqual([
-    sampleLocation.label,
-    secondLocation.label,
-  ]);
-  expect(locationPicker.value).toBe(sampleLocation.id);
-
-  fireEvent.change(locationPicker, { target: { value: secondLocation.id } });
-  await screen.findByText('Phòng 201');
-  expect(locationPicker.value).toBe(secondLocation.id);
-  expect(screen.queryByText('Phòng 101')).toBeNull();
-  expect(state.request).toHaveBeenCalledWith(
-    '/api/v1/capture/locations/loc-2/rooms',
-    expect.objectContaining({ signal: expect.any(AbortSignal) }),
-  );
-  expect(state.request).toHaveBeenCalledWith(
-    expect.stringMatching(/^\/api\/v1\/capture\/meter-tasks\?page=1&locationId=loc-2$/),
-    expect.objectContaining({ signal: expect.any(AbortSignal) }),
-  );
-});
-
-it('drops location-specific room/period filters on switch but preserves status and resets pagination', async () => {
-  locationsResponse = [sampleLocation, secondLocation];
-  tasksResponse = [
-    ...Array.from({ length: 21 }, (_, index) => ({
-      ...baseElectric,
-      id: `task-e-${index + 1}`,
-      roomId: `room-${index + 1}`,
-      room: String(index + 1),
-    })),
-    {
-      ...baseElectric,
-      id: 'task-e-201',
-      locationId: secondLocation.id,
-      location: secondLocation.label,
-      roomId: 'room-201',
-      room: '201',
-    },
-  ];
-  render(<MeterTasksScreen />);
-  await screen.findByText('Phòng được phân công (21)');
-  fireEvent.click(screen.getByRole('button', { name: 'Trang sau' }));
-  expect(screen.getByText('Trang 2 / 2')).toBeTruthy();
-
-  fireEvent.click(screen.getByRole('button', { name: 'Bộ lọc' }));
-  fireEvent.change(screen.getByLabelText('Phòng'), { target: { value: 'room-101' } });
-  fireEvent.click(screen.getByRole('button', { name: 'Áp dụng' }));
-  fireEvent.click(screen.getByRole('tab', { name: 'Chưa ghi' }));
-  await screen.findByRole('button', { name: 'Xóa lọc phòng 101' });
-
-  fireEvent.change(screen.getByLabelText('Cơ sở'), { target: { value: secondLocation.id } });
-  await screen.findByText('Phòng 201');
-  expect(screen.queryByRole('button', { name: 'Xóa lọc phòng 101' })).toBeNull();
-  expect(screen.queryByText('Trang 2 / 2')).toBeNull();
-  expect(screen.getByRole('tab', { name: 'Chưa ghi' }).getAttribute('aria-selected')).toBe('true');
-  expect(
-    state.request.mock.calls.some(
-      ([path]) =>
-        String(path).includes('locationId=loc-2') && String(path).includes('roomId=room-101'),
-    ),
-  ).toBe(false);
-});
-
-it('hides previous Location tasks while the newly selected Location is still loading', async () => {
-  locationsResponse = [sampleLocation, secondLocation];
-  let resolveSecond!: (tasks: MeterTask[]) => void;
-  const pendingSecond = new Promise<MeterTask[]>((resolve) => {
-    resolveSecond = resolve;
-  });
-  state.request.mockImplementation(async (path: string) => {
-    if (path === '/api/v1/capture/locations') return locationsResponse;
-    if (path.endsWith('/rooms')) return roomsResponse;
-    if (path.startsWith('/api/v1/capture/meter-tasks')) {
-      return path.includes('locationId=loc-2') ? pendingSecond : tasksResponse;
-    }
-    return [];
-  });
-  render(<MeterTasksScreen />);
-  await screen.findByText('Phòng 101');
-  fireEvent.change(screen.getByLabelText('Cơ sở'), { target: { value: secondLocation.id } });
-  expect(screen.queryByText('Phòng 101')).toBeNull();
-  expect(screen.getByText('Đang tải danh sách phòng cần ghi chỉ số…')).toBeTruthy();
-  resolveSecond([
-    {
-      ...baseElectric,
-      id: 'task-e-201',
-      locationId: 'loc-2',
-      location: 'BHOME SAMPLE 2',
-      roomId: 'room-201',
-      room: '201',
-    },
-  ]);
-  await screen.findByText('Phòng 201');
-});
-
-it('falls back to a still-authorized Location when the selected assignment is revoked on reload', async () => {
-  locationsResponse = [sampleLocation, secondLocation];
-  render(<MeterTasksScreen />);
-  await screen.findByText('Phòng 101');
-  fireEvent.change(screen.getByLabelText('Cơ sở'), { target: { value: secondLocation.id } });
-  await waitFor(() =>
-    expect((screen.getByLabelText('Cơ sở') as HTMLSelectElement).value).toBe('loc-2'),
-  );
-  locationsResponse = [sampleLocation];
-  fireEvent.click(screen.getByRole('button', { name: 'Tải lại danh sách ghi chỉ số' }));
-  await screen.findByText('Cơ sở: BHOME SAMPLE 1');
-  await screen.findByText('Phòng 101');
-  expect(screen.queryByLabelText('Cơ sở')).toBeNull();
-});
-
-it('shows an empty-assignment state without requesting tasks and keeps non-Staff blocked', async () => {
-  locationsResponse = [];
-  const view = render(<MeterTasksScreen />);
-  await screen.findByText('Chưa có cơ sở được phân công');
-  expect(state.request.mock.calls.some(([path]) => String(path).includes('meter-tasks'))).toBe(
+  expect(screen.queryByText(/Phòng được phân công/)).toBeNull();
+  expect(screen.queryByText('Điện')).toBeNull();
+  expect(screen.queryByText('Nước')).toBeNull();
+  expect(screen.queryByText('Chỉ số trước:')).toBeNull();
+  expect((screen.getByLabelText('Kỳ ghi chỉ số') as HTMLSelectElement).value).toBe('2026-11-01');
+  expect(screen.getByRole('option', { name: '11/2026' })).toBeTruthy();
+  expect(screen.queryByRole('option', { name: '01/11/2026' })).toBeNull();
+  expect(state.request.mock.calls.some(([path]) => String(path).includes('/readings/'))).toBe(
     false,
   );
-  expect(screen.queryByLabelText('Cơ sở')).toBeNull();
-  state.role = 'Tenant';
-  view.rerender(<MeterTasksScreen />);
-  expect(screen.getByText('Chỉ Staff được phép ghi chỉ số điện nước.')).toBeTruthy();
-  expect(screen.queryByLabelText('Cơ sở')).toBeNull();
-});
-
-it('displays 0/2 đã ghi, 1/2 đã ghi, and Hoàn thành progress badges with confirmed readings and action buttons', async () => {
-  readingsResponse = {
-    'reading-e-102': {
-      id: 'reading-e-102',
-      taskId: 'task-e-102',
-      confirmedValue: '150',
-      previousValue: '100',
-      consumption: '50',
-      status: 1,
-      confirmedAt: '2026-11-05T02:00:00Z',
-    },
-    'reading-w-102': {
-      id: 'reading-w-102',
-      taskId: 'task-w-102',
-      confirmedValue: '28',
-      previousValue: '20',
-      consumption: '8',
-      status: 1,
-      confirmedAt: '2026-11-05T02:05:00Z',
-    },
-  };
-  tasksResponse = [
-    { ...baseElectric, status: 0 },
-    { ...baseWater, status: 0 },
-    {
-      ...baseElectric,
-      id: 'task-e-102',
-      roomId: 'room-102',
-      room: '102',
-      status: 2,
-      confirmedReadingId: 'reading-e-102',
-    },
-    {
-      ...baseWater,
-      id: 'task-w-102',
-      roomId: 'room-102',
-      room: '102',
-      status: 2,
-      confirmedReadingId: 'reading-w-102',
-    },
-  ];
-
-  render(<MeterTasksScreen />);
-  await screen.findByText('Phòng được phân công (2)');
-  expect(screen.getByText('0/2 đã ghi')).toBeTruthy();
-  expect(screen.getByText('Hoàn thành')).toBeTruthy();
-  await screen.findByText('150 kWh');
-  expect(screen.getByText('28 m³')).toBeTruthy();
-  expect(screen.getByText('Tiêu thụ: 50 kWh')).toBeTruthy();
-  expect(screen.getByText('Tiêu thụ: 8 m³')).toBeTruthy();
-  expect(
-    screen.getByText('Đã lưu chỉ số kỳ này để hệ thống tổng hợp hóa đơn theo lịch'),
-  ).toBeTruthy();
-  expect(screen.queryByText('BHOME SAMPLE 1')).toBeNull();
-  expect(screen.queryByText('Quá hạn')).toBeNull();
-
-  const recordBtn = screen.getByRole('button', { name: 'Ghi chỉ số' });
-  const detailBtn = screen.getByRole('button', { name: 'Xem chi tiết' });
-  expect(recordBtn).toBeTruthy();
-  expect(detailBtn).toBeTruthy();
-
-  fireEvent.click(recordBtn);
+  fireEvent.click(screen.getByRole('button', { name: 'Phòng 101, Chưa ghi' }));
   expect(state.push).toHaveBeenCalledWith({
     pathname: '/meter',
     params: { taskId: 'task-e-101' },
   });
 });
 
-it('keeps contract-linked Initial readings inside move-in handover while retaining ordinary meter jobs', async () => {
+it('shows overdue when a periodic utility is overdue, and clears the warning for completed rooms', async () => {
   tasksResponse = [
+    { ...baseElectric, isOverdue: true, status: 1 },
+    { ...baseWater, status: 2, confirmedReadingId: 'water-reading' },
     {
       ...baseElectric,
-      id: 'initial-contract-electric',
-      purpose: 0,
-      contractId: 'main-contract-1',
+      id: 'completed',
+      roomId: 'r2',
       room: '102',
-      roomId: 'room-102',
+      status: 2,
+      confirmedReadingId: 'other',
+      isOverdue: true,
     },
-    {
-      ...baseWater,
-      id: 'initial-contract-water',
-      purpose: 0,
-      contractId: 'main-contract-1',
-      room: '102',
-      roomId: 'room-102',
-    },
-    {
-      ...baseElectric,
-      id: 'initial-standalone',
-      purpose: 0,
-      contractId: undefined,
-      room: '103',
-      roomId: 'room-103',
-    },
-    { ...baseWater, id: 'periodic-water', purpose: 1, room: '101', roomId: 'room-101' },
   ];
   render(<MeterTasksScreen />);
-  await screen.findByText('Phòng được phân công (2)');
-  expect(screen.getByText('Phòng 103')).toBeTruthy();
-  expect(screen.getByText('Phòng 101')).toBeTruthy();
-  expect(screen.queryByText('Phòng 102')).toBeNull();
-  expect(screen.queryByText('initial-contract-electric')).toBeNull();
+  expect(await screen.findByRole('button', { name: 'Phòng 101, Quá hạn' })).toBeTruthy();
+  expect(screen.getByRole('button', { name: 'Phòng 102, Đã ghi' })).toBeTruthy();
 });
 
-it('shows Quá hạn indicator only when a pending task is actually overdue', async () => {
+it('shows all assigned rooms in the notified period including completed and not-due rooms', async () => {
   tasksResponse = [
+    { ...baseElectric, isOverdue: true, status: 1 },
+    { ...baseWater, status: 2, confirmedReadingId: 'water-reading' },
+    ...Array.from({ length: 11 }, (_, i) => ({
+      ...baseElectric,
+      id: 'overdue-' + i,
+      roomId: 'overdue-' + i,
+      room: String(200 + i),
+      isOverdue: true,
+    })),
+    { ...baseElectric, id: 'not-due', roomId: 'not-due', room: '301', isOverdue: false },
     {
       ...baseElectric,
-      status: 0,
-      dueAt: '2020-01-01T00:00:00Z',
+      id: 'completed',
+      roomId: 'done',
+      room: '302',
+      status: 2,
+      confirmedReadingId: 'reading',
+      isOverdue: true,
+    },
+    {
+      ...baseElectric,
+      id: 'other-period',
+      roomId: 'other',
+      room: '303',
+      billingPeriod: '2026-12-01',
+      isOverdue: true,
+    },
+  ];
+  render(
+    <MeterTasksScreen
+      initialLocationId={baseElectric.locationId!}
+      initialBillingPeriod="2026-11-01"
+    />,
+  );
+  await screen.findByRole('button', { name: 'Trang sau' });
+  expect(screen.getAllByRole('button', { name: /^Phòng / })).toHaveLength(10);
+  fireEvent.click(screen.getByRole('button', { name: 'Trang sau' }));
+  expect(screen.getAllByRole('button', { name: /^Phòng / })).toHaveLength(4);
+  expect(screen.getByRole('button', { name: 'Phòng 301, Chưa ghi' })).toBeTruthy();
+  expect(screen.getByRole('button', { name: 'Phòng 302, Đã ghi' })).toBeTruthy();
+  expect(screen.queryByText('Phòng 303')).toBeNull();
+});
+
+it('keeps completed rooms visible when opening a period from a notification', async () => {
+  tasksResponse = [{ ...baseElectric, status: 2, confirmedReadingId: 'reading', isOverdue: true }];
+  render(
+    <MeterTasksScreen
+      initialLocationId={baseElectric.locationId!}
+      initialBillingPeriod="2026-11-01"
+    />,
+  );
+  expect(await screen.findByRole('button', { name: 'Phòng 101, Đã ghi' })).toBeTruthy();
+});
+
+it('shows periodic jobs with or without an automation plan and excludes initial and final readings', async () => {
+  tasksResponse = [
+    { ...baseElectric },
+    { ...baseWater, status: 2, confirmedReadingId: 'water-reading' },
+    { ...baseElectric, id: 'initial-contract', purpose: 0, roomId: 'r2', room: '102' },
+    { ...baseElectric, id: 'initial-standalone', purpose: 0, roomId: 'r3', room: '103' },
+    { ...baseElectric, id: 'final', purpose: 2, roomId: 'r4', room: '104' },
+    { ...baseElectric, id: 'legacy-periodic', automationPlanId: null, roomId: 'r5', room: '105' },
+    { ...baseElectric, id: 'cancelled', status: 3, roomId: 'r6', room: '106' },
+    { ...baseElectric, id: 'other-location', locationId: 'other', roomId: 'r7', room: '107' },
+    { ...baseElectric, id: 'other-staff', assignedStaffUserId: 'other', roomId: 'r8', room: '108' },
+    {
+      ...baseElectric,
+      id: 'finished',
+      roomId: 'r9',
+      room: '109',
+      status: 2,
+      confirmedReadingId: 'confirmed',
     },
   ];
   render(<MeterTasksScreen />);
   await screen.findByText('Phòng 101');
-  expect(screen.getByText('Quá hạn')).toBeTruthy();
+  expect(
+    screen
+      .getAllByRole('button', { name: /^Phòng / })
+      .map((button) => button.getAttribute('aria-label')),
+  ).toEqual(['Phòng 101, Chưa ghi', 'Phòng 105, Chưa ghi', 'Phòng 109, Đã ghi']);
+  expect(screen.queryByText('Chờ tổng hợp hóa đơn')).toBeNull();
 });
 
-it('filters out tasks from other locations or assigned to another Staff member', async () => {
-  tasksResponse = [
-    { ...baseElectric, room: '101', locationId: 'loc-1', assignedStaffUserId: 'staff-1' },
-    {
-      ...baseElectric,
-      id: 'other-location-task',
-      room: '201',
-      locationId: 'loc-other',
-      location: 'Cơ sở khác',
-      assignedStaffUserId: 'staff-1',
-    },
-    {
-      ...baseElectric,
-      id: 'other-staff-task',
-      room: '301',
-      locationId: 'loc-1',
-      assignedStaffUserId: 'staff-other',
-    },
-  ];
+it('defaults to the latest generated period even when it is on a later server page and switches exactly', async () => {
+  const earlier = { ...baseElectric, billingPeriod: '2026-10-01', readingDate: '2026-10-03' };
+  const latest = { ...baseElectric, id: 'new', room: '201', roomId: 'r201' };
+  state.request.mockImplementation(async (path: string) => {
+    if (path === '/api/v1/capture/locations') return locationsResponse;
+    if (path.startsWith('/api/v1/rooms?')) return { items: [], totalCount: 0 };
+    if (path.includes('page=2')) return [latest];
+    if (path.includes('/meter-tasks')) return Array.from({ length: 100 }, () => earlier);
+    return [];
+  });
   render(<MeterTasksScreen />);
-  await screen.findByText('Phòng được phân công (1)');
+  await screen.findByText('Phòng 201');
+  const select = screen.getByLabelText('Kỳ ghi chỉ số') as HTMLSelectElement;
+  expect(select.value).toBe('2026-11-01');
+  expect(screen.queryByText('Phòng 101')).toBeNull();
+  expect(Array.from(select.options, (option) => option.value)).toEqual([
+    '2026-11-01',
+    '2026-10-01',
+  ]);
+  fireEvent.change(select, { target: { value: '2026-10-01' } });
   expect(screen.getByText('Phòng 101')).toBeTruthy();
   expect(screen.queryByText('Phòng 201')).toBeNull();
-  expect(screen.queryByText('Phòng 301')).toBeNull();
 });
 
-it('shows error state and does not load meter tasks when assigned Location fails to load', async () => {
+it('opens the period from a notification instead of the newest period', async () => {
+  tasksResponse = [
+    { ...baseElectric, id: 'older', billingPeriod: '2026-10-01' },
+    { ...baseElectric, id: 'newer', roomId: 'r201', room: '201' },
+  ];
+  render(
+    <MeterTasksScreen
+      initialLocationId={baseElectric.locationId!}
+      initialBillingPeriod="2026-10-01"
+    />,
+  );
+  await screen.findByText('Phòng 101');
+  expect((screen.getByLabelText('Kỳ ghi chỉ số') as HTMLSelectElement).value).toBe('2026-10-01');
+  expect(screen.queryByText('Phòng 201')).toBeNull();
+});
+it('sorts by actual floor first and natural room number within each floor', async () => {
+  tasksResponse = [
+    { ...baseElectric, id: 'a', roomId: 'a', room: '101' },
+    { ...baseElectric, id: 'b', roomId: 'b', room: '10' },
+    { ...baseElectric, id: 'c', roomId: 'c', room: '2' },
+    { ...baseElectric, id: 'd', roomId: 'd', room: 'B1' },
+  ];
+  floorsResponse = [
+    { id: 'a', floor: '10' },
+    { id: 'b', floor: '2' },
+    { id: 'c', floor: '2' },
+    { id: 'd', floor: 'B1' },
+  ];
+  render(<MeterTasksScreen />);
+  await screen.findByText('Phòng B1');
+  expect(
+    screen.getAllByRole('button', { name: /^Phòng / }).map((button) => button.textContent),
+  ).toEqual(['Phòng B1Chưa ghi', 'Phòng 2Chưa ghi', 'Phòng 10Chưa ghi', 'Phòng 101Chưa ghi']);
+});
+
+it('switches scope from the workspace header without leaking the previous location or period', async () => {
+  locationsResponse = [sampleLocation, secondLocation];
+  tasksResponse = [
+    { ...baseElectric },
+    { ...baseElectric, id: 'oct', billingPeriod: '2026-10-01' },
+    {
+      ...baseElectric,
+      id: 'other',
+      locationId: secondLocation.id,
+      location: secondLocation.label,
+      room: '201',
+      roomId: 'r201',
+      billingPeriod: '2026-12-01',
+    },
+  ];
+  const view = render(<MeterTasksScreen />);
+  await screen.findByText('Phòng 101');
+  fireEvent.change(screen.getByLabelText('Kỳ ghi chỉ số'), { target: { value: '2026-10-01' } });
+  state.selectedLocationId = secondLocation.id;
+  view.rerender(<MeterTasksScreen />);
+  expect(screen.queryByText('Phòng 101')).toBeNull();
+  await screen.findByText('Phòng 201');
+  expect((screen.getByLabelText('Kỳ ghi chỉ số') as HTMLSelectElement).value).toBe('2026-12-01');
+  expect(state.request).toHaveBeenCalledWith(
+    '/api/v1/capture/meter-tasks?page=1&locationId=loc-2',
+    expect.objectContaining({ signal: expect.any(AbortSignal) }),
+  );
+});
+
+it('shows no assignment and does not request tasks for non-Staff', async () => {
+  locationsResponse = [];
+  const view = render(<MeterTasksScreen />);
+  await screen.findByText('Chưa có cơ sở được phân công');
+  expect(state.request.mock.calls.some(([path]) => String(path).includes('meter-tasks'))).toBe(
+    false,
+  );
+  state.role = 'Tenant';
+  view.rerender(<MeterTasksScreen />);
+  expect(screen.getByText('Chỉ Staff được phép ghi chỉ số điện nước.')).toBeTruthy();
+});
+
+it('shows location loading failures without fetching tasks', async () => {
   state.request.mockImplementation(async (path: string) => {
     if (path === '/api/v1/capture/locations') throw new Error('Không thể kết nối máy chủ');
     return tasksResponse;
   });
   render(<MeterTasksScreen />);
   await screen.findByText('Không tải được cơ sở được phân công');
-  expect(state.request.mock.calls.some(([url]) => String(url).includes('/meter-tasks'))).toBe(
+  expect(state.request.mock.calls.some(([path]) => String(path).includes('meter-tasks'))).toBe(
     false,
   );
-  expect(screen.queryByText('Phòng 101')).toBeNull();
 });
 
-it('supports filtering in the bottom sheet and removing active filter chips', async () => {
+it('has a usable empty state and reload action', async () => {
+  tasksResponse = [];
   render(<MeterTasksScreen />);
+  await screen.findByText('Chưa có tác vụ ghi chỉ số được giao');
+  expect((screen.getByLabelText('Kỳ ghi chỉ số') as HTMLSelectElement).disabled).toBe(true);
+  tasksResponse = [baseElectric];
+  fireEvent.click(screen.getByRole('button', { name: 'Tải lại danh sách ghi chỉ số' }));
   await screen.findByText('Phòng 101');
-  fireEvent.click(screen.getByRole('button', { name: 'Bộ lọc' }));
-  fireEvent.change(screen.getByLabelText('Phòng'), { target: { value: 'room-101' } });
-  fireEvent.click(screen.getByRole('button', { name: 'Áp dụng' }));
-
-  await waitFor(() =>
-    expect(state.request.mock.calls.some(([url]) => String(url).includes('roomId=room-101'))).toBe(
-      true,
-    ),
-  );
-  const chip = await screen.findByRole('button', { name: 'Xóa lọc phòng 101' });
-  fireEvent.click(chip);
-  await waitFor(() =>
-    expect(screen.queryByRole('button', { name: 'Xóa lọc phòng 101' })).toBeNull(),
-  );
 });
 
-it('formats 55555.0000 to 55.555 kWh and 65555.0000 to 65.555 m³, and cleans allCompleted subtitle', async () => {
-  readingsResponse = {
-    'reading-e-long': {
-      id: 'reading-e-long',
-      taskId: 'task-e-long',
-      confirmedValue: '55555.0000',
-      previousValue: '54320.5000',
-      consumption: '1234.5000',
-      status: 1,
-      confirmedAt: '2026-11-05T02:00:00Z',
-    },
-    'reading-w-long': {
-      id: 'reading-w-long',
-      taskId: 'task-w-long',
-      confirmedValue: '65555.0000',
-      previousValue: '64320.4322',
-      consumption: '1234.5678',
-      status: 1,
-      confirmedAt: '2026-11-05T02:05:00Z',
-    },
-  };
+it('keeps an existing billing period visible when every periodic task lacks an automation plan ID', async () => {
   tasksResponse = [
-    {
-      ...baseElectric,
-      id: 'task-e-long',
-      roomId: 'room-105',
-      room: '105',
-      status: 2,
-      confirmedReadingId: 'reading-e-long',
-    },
-    {
-      ...baseWater,
-      id: 'task-w-long',
-      roomId: 'room-105',
-      room: '105',
-      status: 2,
-      confirmedReadingId: 'reading-w-long',
-    },
+    { ...baseElectric, automationPlanId: null, status: 2, confirmedReadingId: 'electric-reading' },
+    { ...baseWater, automationPlanId: undefined, status: 2, confirmedReadingId: 'water-reading' },
+    { ...baseElectric, id: 'final', purpose: 2, billingPeriod: null },
   ];
-
   render(<MeterTasksScreen />);
-  await screen.findByText('Phòng 105');
-  expect(screen.getByText('Hoàn thành')).toBeTruthy();
-  expect(screen.queryByText(/Tiến độ: 2\/2 đã ghi/)).toBeNull();
+  await screen.findByRole('button', { name: 'Phòng 101, Đã ghi' });
+  expect((screen.getByLabelText('Kỳ ghi chỉ số') as HTMLSelectElement).value).toBe('2026-11-01');
+  expect(screen.getAllByRole('button', { name: /^Phòng / })).toHaveLength(1);
+});
 
-  await screen.findByText('55.555 kWh');
-  expect(screen.getByText('65.555 m³')).toBeTruthy();
-  expect(screen.getByText('Tiêu thụ: 1.234,5 kWh')).toBeTruthy();
-  expect(screen.getByText('Tiêu thụ: 1.234,5678 m³')).toBeTruthy();
+it('paginates sorted room groups, preserves complete utilities, and resets to page one when changing periods', async () => {
+  tasksResponse = [
+    ...Array.from({ length: 23 }, (_, index) => ({
+      ...baseElectric,
+      id: 'task-' + (23 - index),
+      roomId: 'room-' + (23 - index),
+      room: String(23 - index),
+    })),
+    { ...baseWater, id: 'water-10', roomId: 'room-10', room: '10' },
+    { ...baseElectric, id: 'old-1', roomId: 'old-1', room: '301', billingPeriod: '2026-10-01' },
+  ];
+  render(<MeterTasksScreen />);
+  await screen.findByText('Trang 1 / 3');
+  const roomLabels = () =>
+    screen.getAllByRole('button', { name: /^Phòng / }).map((button) => button.textContent);
+  expect(roomLabels()).toEqual(
+    Array.from({ length: 10 }, (_, i) => 'Phòng ' + (i + 1) + 'Chưa ghi'),
+  );
+  expect((screen.getByRole('button', { name: 'Trang trước' }) as HTMLButtonElement).disabled).toBe(
+    true,
+  );
+  fireEvent.click(screen.getByRole('button', { name: 'Trang sau' }));
+  expect(screen.getByText('Trang 2 / 3')).toBeTruthy();
+  expect(roomLabels()).toEqual(
+    Array.from({ length: 10 }, (_, i) => 'Phòng ' + (i + 11) + 'Chưa ghi'),
+  );
+  fireEvent.click(screen.getByRole('button', { name: 'Trang sau' }));
+  expect(screen.getByText('Trang 3 / 3')).toBeTruthy();
+  expect(roomLabels()).toEqual(['Phòng 21Chưa ghi', 'Phòng 22Chưa ghi', 'Phòng 23Chưa ghi']);
+  expect((screen.getByRole('button', { name: 'Trang sau' }) as HTMLButtonElement).disabled).toBe(
+    true,
+  );
+  fireEvent.click(screen.getByRole('button', { name: 'Trang trước' }));
+  expect(screen.getByText('Trang 2 / 3')).toBeTruthy();
+  fireEvent.change(screen.getByLabelText('Kỳ ghi chỉ số'), { target: { value: '2026-10-01' } });
+  expect(roomLabels()).toEqual(['Phòng 301Chưa ghi']);
+  expect(screen.queryByRole('button', { name: 'Trang sau' })).toBeNull();
+  fireEvent.change(screen.getByLabelText('Kỳ ghi chỉ số'), { target: { value: '2026-11-01' } });
+  expect(screen.getByText('Trang 1 / 3')).toBeTruthy();
+});
+
+it('clamps the current page after reload when fewer rooms remain', async () => {
+  tasksResponse = Array.from({ length: 22 }, (_, i) => ({
+    ...baseElectric,
+    id: 'task-' + i,
+    roomId: 'room-' + i,
+    room: String(i + 1),
+  }));
+  render(<MeterTasksScreen />);
+  await screen.findByText('Trang 1 / 3');
+  fireEvent.click(screen.getByRole('button', { name: 'Trang sau' }));
+  fireEvent.click(screen.getByRole('button', { name: 'Trang sau' }));
+  expect(screen.getByText('Trang 3 / 3')).toBeTruthy();
+  tasksResponse = tasksResponse.slice(0, 11);
+  fireEvent.click(screen.getByRole('button', { name: 'Tải lại danh sách ghi chỉ số' }));
+  await screen.findByText('Trang 2 / 2');
+  expect(screen.getByRole('button', { name: 'Phòng 11, Chưa ghi' })).toBeTruthy();
+  expect(screen.getAllByRole('button', { name: /^Phòng / })).toHaveLength(1);
 });

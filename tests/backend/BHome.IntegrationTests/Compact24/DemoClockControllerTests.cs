@@ -72,6 +72,22 @@ public sealed class DemoClockControllerTests
         Assert.IsType<NotFoundResult>(disabled.Change(new(Target, 0)).Result);
     }
 
+    [Fact]
+    public void ExactTimeIsVersionedAndOwnerOnly()
+    {
+        var clock = new DemoBusinessClock(TimeProvider.System);
+        var owner = Controller(clock, "Staging", Owner, Roles.Owner);
+        var staff = Controller(clock, "Staging", Guid.NewGuid(), Roles.Staff);
+        var target = new DateTimeOffset(2026, 12, 24, 23, 59, 58, TimeSpan.FromHours(7));
+        Assert.IsType<ForbidResult>(staff.Change(new(null, 0, target)).Result);
+        Assert.IsType<BadRequestResult>(owner.Change(new(null, 0, target.ToUniversalTime())).Result);
+        Assert.IsType<OkObjectResult>(owner.Change(new(null, 0, target)).Result);
+        Assert.True(Read(owner).Simulated);
+        Assert.IsType<ConflictResult>(owner.Change(new(null, 0)).Result);
+        Assert.IsType<OkObjectResult>(owner.Change(new(null, 1)).Result);
+        Assert.False(Read(owner).Simulated);
+    }
+
     private static DemoClockState Read(DemoClockController controller) =>
         Assert.IsType<DemoClockState>(Assert.IsType<OkObjectResult>(controller.Read().Result).Value);
 

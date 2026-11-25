@@ -25,7 +25,12 @@ internal sealed class NotificationChannelWorker(Compact24DbContext db, CompactNo
     }
     internal async Task ProcessPendingAsync(CancellationToken t, bool authenticationOnly = false)
     { foreach (var work in await DueAsync(t, authenticationOnly)) await DeliverAsync(work.Id, t); }
-    private async Task<IReadOnlyList<Work>> DueAsync(CancellationToken t, bool authenticationOnly = false)
+    internal async Task ProcessBillingPendingAsync(CancellationToken t)
+    { foreach (var work in await DueAsync(t, billingOnly: true)) await DeliverAsync(work.Id, t); }
+    private static readonly string[] BillingEvents = ["INVOICE_DRAFT_CREATED", "INVOICE_ADJUSTMENT_REQUESTED", "INVOICE_ADJUSTMENT_DECIDED",
+        "INVOICE_FINALIZATION_BLOCKED", "INVOICE_FINALIZED", "INVOICE_DUE_SOON", "INVOICE_OVERDUE", "METER_READING_CONFIRMED", "PERIODIC_METER_OVERDUE",
+        "PAYMENT_PARTIALLY_CONFIRMED", "INVOICE_FULLY_PAID"];
+    private async Task<IReadOnlyList<Work>> DueAsync(CancellationToken t, bool authenticationOnly = false, bool billingOnly = false)
     {
         if (!options.Value.Enabled) return [];
         // event_data remains immutable; delivery status/history is the mutable envelope.
@@ -37,9 +42,11 @@ internal sealed class NotificationChannelWorker(Compact24DbContext db, CompactNo
             FROM notifications n CROSS JOIN LATERAL jsonb_array_elements_text(COALESCE(n.event_data->'state'->'channels','[]'::jsonb)) c(channel)
             WHERE n.record_kind='INBOX' AND c.channel IN ('EMAIL','PUSH')
               AND (NOT @authenticationOnly OR n.event_data->>'category'='Account')
+              AND (NOT @billingOnly OR n.notification_type=ANY(@billingEvents) OR
+                   (n.related_entity_type='MeterTask' AND n.event_key LIKE 'periodic-meter-overdue:%'))
             ON CONFLICT(record_kind,event_key) WHERE record_kind IN ('OUTBOX','AUDIT') DO NOTHING
-            """, t, ("now", sql.Now), ("authenticationOnly", authenticationOnly));
-        if (!authenticationOnly && smsOptions.Value.Enabled)
+            """, t, ("now", sql.Now), ("authenticationOnly", authenticationOnly), ("billingOnly", billingOnly), ("billingEvents", BillingEvents));
+        if (!authenticationOnly && !billingOnly && smsOptions.Value.Enabled)
             await sql.Execute("""
                 INSERT INTO notifications(id,record_kind,event_key,notification_type,event_data,event_at,delivery_status,next_delivery_at)
                 SELECT gen_random_uuid(),'OUTBOX','sms:'||md5(n.event_key||':'||p.phone),'CHANNEL_DELIVERY',
@@ -64,9 +71,13 @@ internal sealed class NotificationChannelWorker(Compact24DbContext db, CompactNo
                 ('PASSWORD_CHANGED','PASSWORD_RESET_COMPLETED','ACCOUNT_ACTIVATED','ACCOUNT_DEACTIVATED','ACCOUNT_SETUP_COMPLETED','ACCOUNT_ACCESS_CHANGED','ACCOUNT_LOCKED',
                  'STAFF_ASSIGNMENT_CREATED','STAFF_ASSIGNMENT_UPDATED','STAFF_ASSIGNMENT_CANCELLED','STAFF_ASSIGNMENT_REMOVED',
                  'STAFF_ASSIGNMENT_ACTIVATED','STAFF_ASSIGNMENT_ENDED'))
+              AND (NOT @billingOnly OR (event_data->>'channel' IN ('EMAIL','PUSH') AND
+                   (event_data->>'eventType'=ANY(@billingEvents) OR EXISTS (SELECT 1 FROM notifications n
+                       WHERE n.id=(notifications.event_data->>'notificationId')::uuid AND n.record_kind='INBOX'
+                           AND n.related_entity_type='MeterTask' AND n.event_key LIKE 'periodic-meter-overdue:%'))))
               AND ((delivery_status='Pending' AND next_delivery_at<=@now) OR (delivery_status='Processing' AND locked_until<=@now))
             ORDER BY event_at,id LIMIT 50
-            """, t, ("now", sql.Now), ("authenticationOnly", authenticationOnly),
+            """, t, ("now", sql.Now), ("authenticationOnly", authenticationOnly), ("billingOnly", billingOnly), ("billingEvents", BillingEvents),
             ("email", provider.IsConfigured("EMAIL")), ("push", provider.IsConfigured("PUSH")), ("sms", provider.IsConfigured("SMS"))))
         { await using var reader = await cmd.ExecuteReaderAsync(t); while (await reader.ReadAsync(t)) due.Add(new(reader.GetGuid(0), reader.GetInt32(1))); }
         return due;
@@ -125,7 +136,8 @@ internal sealed class NotificationChannelWorker(Compact24DbContext db, CompactNo
                 }
                 else
                 {
-                    var scope = new NotificationScope(claim.Recipient, claim.Role == "Owner", claim.Role == "Staff", claim.Role == "Tenant", BillingAutomationDates.BusinessDate(sql.Now));
+                    var scope = new NotificationScope(claim.Recipient, claim.Role == "Owner", claim.Role == "Staff", claim.Role == "Tenant",
+                        BillingEvents.Contains(claim.EventType) ? sql.BusinessToday : BillingAutomationDates.BusinessDate(sql.Now));
                     var notice = await inbox.GetAsync(scope, claim.Notice, t);
                     var eligible = await sql.Scalar<bool>("SELECT EXISTS(SELECT 1 FROM users WHERE id=@id AND @role=ANY(roles) AND (is_active OR @security))", t,
                         ("id", claim.Recipient), ("role", claim.Role), ("security", notice?.Category == "Account"));
@@ -196,6 +208,8 @@ internal sealed class NotificationChannelWorker(Compact24DbContext db, CompactNo
                                 if (destinations.Count == 0) throw new InvalidOperationException("push_device_unavailable");
                             }
                             var emailContent = auth is not null ? (auth.Title, auth.Body) : claim.Channel == "EMAIL" ? await content.BuildAsync(notice, t) : (notice.Title, notice.Summary);
+                            var mobileAction = auth?.MobileActionUrl ?? (claim.Channel == "EMAIL" && claim.Role == "Tenant" ?
+                                await content.InvoiceMobileLinkAsync(notice, claim.Recipient, t) : null);
                             var attachments = auth?.Attachments;
                             if (auth is null && claim.Channel == "EMAIL" && claim.Role == "Tenant" &&
                                 notice.EventType == "CONTRACT_ACTIVATED" && notice.RelatedObjectType == "Contract" &&
@@ -205,7 +219,7 @@ internal sealed class NotificationChannelWorker(Compact24DbContext db, CompactNo
                             {
                                 using var timeout = CancellationTokenSource.CreateLinkedTokenSource(t); timeout.CancelAfter(TimeSpan.FromSeconds(options.Value.TimeoutSeconds));
                                 // Stable per-device key protects fanout retries after a partial provider failure.
-                                var receipt = await provider.SendAsync(new($"channel/{claim.Id}/{destination.Id}", claim.Channel, destination.Value, auth?.DeliveryEventType ?? notice.EventType, emailContent.Item1, emailContent.Item2, auth?.ActionUrl, attachments, auth?.MobileActionUrl, auth?.Credentials), timeout.Token);
+                                var receipt = await provider.SendAsync(new($"channel/{claim.Id}/{destination.Id}", claim.Channel, destination.Value, auth?.DeliveryEventType ?? notice.EventType, emailContent.Item1, emailContent.Item2, auth?.ActionUrl, attachments, mobileAction, auth?.Credentials), timeout.Token);
                                 if (string.IsNullOrWhiteSpace(receipt) || receipt.Length > 200) throw new InvalidOperationException("invalid_provider_receipt");
                                 providerReference = receipt;
                             }
@@ -261,13 +275,27 @@ internal sealed class NotificationChannelWorker(Compact24DbContext db, CompactNo
     {
         if (n.EventType == "INVOICE_FINALIZATION_BLOCKED")
         {
-            var today = BillingAutomationDates.BusinessDate(sql.Now);
+            var today = sql.BusinessToday;
+            if (n.RelatedObjectType is "Room" or "AutomationExecution")
+            {
+                var key = await db.Set<BHome.Domain.Notifications.UserNotification>().Where(notice => notice.Id == n.Id)
+                    .Select(notice => notice.EventKey).SingleOrDefaultAsync(t);
+                var parts = key?.Split(':');
+                if (parts is { Length: 3 } && parts[0] == "invoice-finalization-no-draft" && Guid.TryParse(parts[1], out var room) &&
+                    DateOnly.TryParseExact(parts[2] + "01", "yyyyMMdd", System.Globalization.CultureInfo.InvariantCulture,
+                        System.Globalization.DateTimeStyles.None, out var period))
+                    return !await db.PeriodicInvoices().AnyAsync(i => i.RoomId == room && i.BillingPeriod == period, t);
+            }
             if (n.RelatedObjectType == "Adjustment")
                 return await HeldInvoiceFinalNotifications.StillHeldForOriginal(
                     db.Set<InvoiceAdjustmentRequest>(), n.RelatedObjectId, today).AnyAsync(t);
             if (n.RelatedObjectType == "Invoice")
+            {
+                var heldForAdjustment = await db.Set<BHome.Domain.Notifications.UserNotification>()
+                    .AnyAsync(notice => notice.Id == n.Id && notice.EventKey.StartsWith("invoice-finalization-held:"), t);
                 return await db.Set<Invoice>().AnyAsync(i => i.Id == n.RelatedObjectId && i.Status == InvoiceStatus.Draft &&
-                    i.ScheduledFinalDate <= today && db.Set<InvoiceAdjustmentRequest>().Any(r => r.InvoiceId == i.Id && r.Decision == null), t);
+                    i.ScheduledFinalDate <= today && (!heldForAdjustment || db.Set<InvoiceAdjustmentRequest>().Any(r => r.InvoiceId == i.Id && r.Decision == null)), t);
+            }
         }
         if (n.EventType == "EXCESS_PAYMENT_OR_REFUND_STATUS" && await db.Set<BHome.Domain.Notifications.UserNotification>()
             .AnyAsync(notice => notice.Id == n.Id && notice.EventKey.StartsWith("deposit-refund:"), t))
@@ -278,6 +306,25 @@ internal sealed class NotificationChannelWorker(Compact24DbContext db, CompactNo
             return await NotificationEventPublisher.ReceiptRefundNotices(db).AnyAsync(r => r.RefundId == n.RelatedObjectId &&
                 db.Set<BHome.Domain.Notifications.UserNotification>().Any(notice => notice.Id == n.Id && notice.EventKey == r.EventKey), t);
         if (n.EventType is "INVOICE_OVERDUE" or "INVOICE_DUE_SOON") return (await db.FinancialsAsync(n.RelatedObjectId, t)).OutstandingAmount > 0;
+        if (n.EventType == "PERIODIC_METER_OVERDUE")
+        {
+            var key = await db.Set<BHome.Domain.Notifications.UserNotification>().Where(notice => notice.Id == n.Id)
+                .Select(notice => notice.EventKey).SingleOrDefaultAsync(t);
+            var parts = key?.Split(':');
+            if (parts is not { Length: 4 } || !Guid.TryParseExact(parts[1], "N", out var location) ||
+                !DateOnly.TryParseExact(parts[2] + "01", "yyyyMMdd", System.Globalization.CultureInfo.InvariantCulture,
+                    System.Globalization.DateTimeStyles.None, out var period)) return false;
+            Guid? staff = null;
+            if (parts[3] != "unassigned")
+            {
+                if (!Guid.TryParseExact(parts[3], "N", out var id)) return false;
+                staff = id;
+            }
+            var now = sql.BusinessNow;
+            return await db.Set<OperationalTask>().AnyAsync(x => x.LocationId == location && x.BillingPeriod == period &&
+                x.Purpose == ReadingPurpose.Periodic && x.AssignedStaffUserId == staff && x.Location.IsActive &&
+                x.DueAt < now && x.Status != MeterTaskStatus.Completed && x.Status != MeterTaskStatus.Cancelled, t);
+        }
         if (n.EventType == "TASK_DUE_OR_OVERDUE") return await db.Set<OperationalTask>().AnyAsync(x => x.Id == n.RelatedObjectId && x.Status != MeterTaskStatus.Completed && x.Status != MeterTaskStatus.Cancelled, t);
         if (n.EventType.StartsWith("EMERGENCY_ACK_")) return await db.Set<BHome.Domain.IncidentMaintenance.IncidentReport>().AnyAsync(x => x.Id == n.RelatedObjectId && x.AcknowledgedAt == null && (x.Status == BHome.Domain.IncidentMaintenance.IncidentStatus.Submitted || x.Status == BHome.Domain.IncidentMaintenance.IncidentStatus.InProgress), t);
         if (n.EventType == "TEMPORARY_RESIDENCE_ACTION") return await sql.Scalar<bool>("""

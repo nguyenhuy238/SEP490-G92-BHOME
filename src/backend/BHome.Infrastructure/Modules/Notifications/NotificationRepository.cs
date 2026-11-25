@@ -36,6 +36,17 @@ internal sealed class NotificationRepository(BHomePersistenceContext db) : INoti
     public async Task<NotificationTarget?> TargetAsync(NotificationScope s, Guid id, CancellationToken t)
     {
         var n = await Visible(s).AsNoTracking().SingleOrDefaultAsync(n => n.Id == id, t); if (n is null) return null;
+        if (s.Staff && n.RelatedObjectType == "MeterTask" && (n.EventType is "TASK_ASSIGNED" or "PERIODIC_METER_OVERDUE") && n.LocationId is { } location)
+        {
+            var meterPeriod = await db.Set<OperationalTask>().Where(task => task.Id == n.RelatedObjectId &&
+                task.LocationId == location && task.Kind == OperationalTaskKind.MeterReading && task.Purpose == ReadingPurpose.Periodic)
+                .Select(task => task.BillingPeriod).SingleOrDefaultAsync(t);
+            if (meterPeriod is { } assignedPeriod)
+                return await db.Set<OperationalTask>().AnyAsync(task => task.LocationId == location &&
+                    task.Kind == OperationalTaskKind.MeterReading && task.Purpose == ReadingPurpose.Periodic &&
+                    task.BillingPeriod == assignedPeriod && task.Status != MeterTaskStatus.Cancelled && task.AssignedStaffUserId == s.Actor, t)
+                    ? new("MeterPeriod", location, location, assignedPeriod) : null;
+        }
         var allowed = n.RelatedObjectType switch
         {
             "Invoice" => await db.Set<Invoice>().AnyAsync(i => i.Id == n.RelatedObjectId && (s.Owner || s.Tenant && i.Recipients.Any(r => r.TenantUserId == s.Actor)), t),

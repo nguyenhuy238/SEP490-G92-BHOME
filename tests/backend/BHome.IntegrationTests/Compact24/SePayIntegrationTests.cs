@@ -7,6 +7,7 @@ using System.Text.Json;
 using BHome.Application.IdentityAccess;
 using BHome.Application.Contracts;
 using BHome.Application.Jobs;
+using BHome.Application.Notifications;
 using BHome.Application.PaymentsDebt;
 using BHome.Application.PaymentsDebt.SePay;
 using BHome.Domain.Billing;
@@ -16,6 +17,7 @@ using BHome.Domain.PaymentsDebt;
 using BHome.Domain.PropertyManagement;
 using BHome.Domain.TenantContracts;
 using BHome.Infrastructure.IdentityAccess;
+using BHome.Infrastructure.Modules.Notifications;
 using BHome.Infrastructure.Persistence;
 using BHome.Infrastructure.Persistence.Compact24;
 using Microsoft.AspNetCore.Hosting;
@@ -546,28 +548,52 @@ public sealed class SePayIntegrationTests(Compact24Fixture fixture) : IClassFixt
     }
 
     [CompactPostgresFact]
-    public async Task OnlyExactReceiptsSettleTheSharedInvoice()
+    public async Task PartialReceiptsRefreshSharedInvoiceQrAndNotifyEveryTenant()
     {
         await using var scenario = await Create();
-        (await scenario.Send(20000)).EnsureSuccessStatusCode();
+        var reference = "SYN-PARTIAL-" + Guid.NewGuid();
+        (await scenario.Send(20000, reference)).EnsureSuccessStatusCode();
+        (await scenario.Send(20000, reference)).EnsureSuccessStatusCode();
         (await scenario.Send(120000)).EnsureSuccessStatusCode();
         foreach (var id in scenario.Tenants)
         {
             using var tenant = await scenario.Client(id);
             var state = (await tenant.GetFromJsonAsync<InvoicePaymentView>($"/api/v1/invoices/{scenario.Invoice}/payment"))!;
-            Assert.Equal(0, state.PaidAmount); Assert.Equal(100000, state.OutstandingAmount); Assert.Equal("Unpaid", state.PaymentStatus);
-            Assert.Empty(state.History);
+            Assert.Equal(20000, state.PaidAmount); Assert.Equal(80000, state.OutstandingAmount); Assert.Equal("Unpaid", state.PaymentStatus);
+            Assert.Single(state.History);
+            var instructions = (await tenant.GetFromJsonAsync<TransferInstructions>($"/api/v1/invoices/{scenario.Invoice}/transfer-instructions"))!;
+            Assert.Equal(80000, instructions.OutstandingAmount);
+            Assert.Equal(scenario.Code, instructions.TransferDescription);
+            Assert.NotNull(instructions.QrImageDataUri);
         }
-        (await scenario.Send(100000)).EnsureSuccessStatusCode();
+        (await scenario.Send(30000)).EnsureSuccessStatusCode();
+        (await scenario.Send(50000)).EnsureSuccessStatusCode();
         using var owner = await scenario.Client(scenario.Owner);
         var paid = (await owner.GetFromJsonAsync<InvoicePaymentView>($"/api/v1/invoices/{scenario.Invoice}/payment"))!;
         Assert.Equal("Paid", paid.PaymentStatus); Assert.Equal(100000, paid.PaidAmount); Assert.True(paid.PendingReview);
         await using var scope = scenario.Host.Services.CreateAsyncScope(); var db = scope.ServiceProvider.GetRequiredService<Compact24DbContext>();
-        Assert.Single(await db.Set<PaymentAllocation>().Where(a => a.InvoiceId == scenario.Invoice).ToArrayAsync());
+        Assert.Equal(3, await db.Set<PaymentAllocation>().CountAsync(a => a.InvoiceId == scenario.Invoice));
         Assert.True(await db.Database.SqlQuery<bool>($"SELECT bool_and(created_by_user_id IS NULL AND paid_by_user_id IS NULL) AS \"Value\" FROM payment_allocations WHERE target_invoice_id={scenario.Invoice}").SingleAsync());
-        Assert.Equal(1, await db.Set<PaymentConfirmedEvent>().CountAsync(e => e.InvoiceId == scenario.Invoice));
+        Assert.Equal(3, await db.Set<PaymentConfirmedEvent>().CountAsync(e => e.InvoiceId == scenario.Invoice));
         (await scenario.Send(100000)).EnsureSuccessStatusCode();
-        Assert.Equal(1, await db.Set<PaymentAllocation>().CountAsync(a => a.InvoiceId == scenario.Invoice));
+        Assert.Equal(3, await db.Set<PaymentAllocation>().CountAsync(a => a.InvoiceId == scenario.Invoice));
+        // The dedicated billing publisher must work even when generic jobs are disabled.
+        var publisher = scope.ServiceProvider.GetRequiredService<INotificationEventPublisher>();
+        await ((NotificationEventPublisher)publisher).PublishBillingPendingAsync(default);
+        await ((NotificationEventPublisher)publisher).PublishBillingPendingAsync(default);
+        foreach (var tenantId in scenario.Tenants)
+        {
+            using var tenant = await scenario.Client(tenantId);
+            var inbox = (await tenant.GetFromJsonAsync<BHome.Application.PropertyManagement.PagedResult<NotificationView>>("/api/v1/notifications?category=Payment"))!;
+            var partials = inbox.Items.Where(n => n.RelatedObjectId == scenario.Invoice && n.EventType == "PAYMENT_PARTIALLY_CONFIRMED").ToArray();
+            Assert.Equal(2, partials.Length);
+            var second = Assert.Single(partials, n => n.Summary.Contains(30000m.ToString("N0")));
+            Assert.Contains(50000m.ToString("N0"), second.Summary);
+            var email = await scope.ServiceProvider.GetRequiredService<NotificationEmailContent>().BuildAsync(second, default);
+            Assert.Contains(30000m.ToString("N0"), email.Body);
+            Assert.Contains(50000m.ToString("N0"), email.Body);
+            Assert.Single(inbox.Items, n => n.RelatedObjectId == scenario.Invoice && n.EventType == "INVOICE_FULLY_PAID");
+        }
     }
     [CompactPostgresFact]
     public async Task ConcurrentDuplicateCallbacksAndAlternateProviderIdsCreditOnce()
@@ -657,7 +683,7 @@ public sealed class SePayIntegrationTests(Compact24Fixture fixture) : IClassFixt
         (await scenario.Send(40000, reference, eventId: "123456")).EnsureSuccessStatusCode();
         var first = new SePayTransaction(Guid.NewGuid().ToString(), "ACB", scenario.TransactionDate, Account, null, scenario.Code,
             "Synthetic transfer " + scenario.Code, "in", 40000, reference, null, 40000);
-        var second = first with { Id = Guid.NewGuid().ToString(), ReferenceCode = "SYN-SECOND-" + Guid.NewGuid(), TransferAmount = 100000 };
+        var second = first with { Id = Guid.NewGuid().ToString(), ReferenceCode = "SYN-SECOND-" + Guid.NewGuid(), TransferAmount = 60000 };
         var failSecond = true;
         var provider = new ScriptedProvider(cursor =>
         {
@@ -676,7 +702,7 @@ public sealed class SePayIntegrationTests(Compact24Fixture fixture) : IClassFixt
         await Assert.ThrowsAsync<HttpRequestException>(() => job.ExecuteAsync(execution, default)); Assert.Equal(2, (await Cursor()).Page);
         failSecond = false; await job.ExecuteAsync(execution, default);
         var completed = await Cursor(); Assert.Equal(second.Id, completed.SinceId); Assert.Equal(1, completed.Page); Assert.NotNull(completed.SynchronizedAt);
-        Assert.Equal(1, await db.Set<PaymentAllocation>().CountAsync(a => a.InvoiceId == scenario.Invoice));
+        Assert.Equal(2, await db.Set<PaymentAllocation>().CountAsync(a => a.InvoiceId == scenario.Invoice));
         Assert.Equal(100000, await db.Set<PaymentAllocation>().Where(a => a.InvoiceId == scenario.Invoice).SumAsync(a => a.Amount));
     }
 

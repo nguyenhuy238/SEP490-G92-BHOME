@@ -28,12 +28,13 @@ public sealed partial class PaymentLedgerTests
     public async Task FinalAdjustmentPreservesIssuedInvoiceAndVerifiedPaymentsAcrossAllMoneyBranches(bool paid, decimal target)
     {
         var w = await Setup(); using var owner = await Client(w.Owner); using var tenant = await Client(w.Tenants[0]);
+        var request = await AdjustRequest(tenant, w.Invoice, 1, target);
         if (paid)
         {
             var transfer = await As(w.Owner, Roles.Owner, s => s.RegisterAsync(Input(w), Guid.NewGuid(), default));
             await As(w.Owner, Roles.Owner, s => s.AllocateAsync(transfer.Id, new(w.Invoice, w.Tenants[0], true), Guid.NewGuid(), default));
         }
-        var request = await AdjustRequest(tenant, w.Invoice, 1, target); var input = new AdjustmentDecisionInput(1, 1, 0, target, null, "Owner checked synthetic error", true); var key = Guid.NewGuid();
+        var input = new AdjustmentDecisionInput(1, 1, 0, target, null, "Owner checked synthetic error", true); var key = Guid.NewGuid();
         var response = await Post(owner, $"/api/v1/invoice-adjustments/{request.Id}/approve", input, key); response.EnsureSuccessStatusCode();
         var result = (await response.Content.ReadFromJsonAsync<AdjustmentView>())!;
         Assert.Equal(target, result.Financials!.EffectivePayableAmount); Assert.Equal(paid ? 100000 : 0, result.Financials.AllocatedPayments);
@@ -64,6 +65,25 @@ public sealed partial class PaymentLedgerTests
         Assert.Equal(100000, (await db.Set<InvoiceLine>().SingleAsync(i => i.InvoiceId == w.Invoice)).Amount);
         Assert.Equal(1, await db.Set<InvoiceAdjustmentDecision>().CountAsync(d => d.InvoiceId == w.Invoice));
         await Assert.ThrowsAsync<PostgresException>(() => db.Database.ExecuteSqlInterpolatedAsync($"UPDATE \"InvoiceAdjustmentDecisions\" SET \"Delta\"=0 WHERE \"RequestId\"={request.Id}"));
+    }
+    [Fact]
+    public async Task PaidInvoiceRejectsNewAdjustmentButPreservesExistingRequestsAndReplay()
+    {
+        var w = await Setup(); using var tenant = await Client(w.Tenants[0]);
+        var route = $"/api/v1/invoices/{w.Invoice}/adjustment-requests";
+        var input = new AdjustmentSubmit(null, 90000, "Synthetic correction before payment", [], 1); var key = Guid.NewGuid();
+        var first = await Post(tenant, route, input, key); first.EnsureSuccessStatusCode();
+        var existing = (await first.Content.ReadFromJsonAsync<AdjustmentView>())!;
+        var transfer = await As(w.Owner, Roles.Owner, s => s.RegisterAsync(Input(w), Guid.NewGuid(), default));
+        Assert.Equal("Allocated", (await As(w.Owner, Roles.Owner, s => s.AllocateAsync(transfer.Id, new(w.Invoice, w.Tenants[0], true), Guid.NewGuid(), default))).Status);
+        var blocked = await Post(tenant, route, input, Guid.NewGuid());
+        Assert.Equal(HttpStatusCode.Conflict, blocked.StatusCode);
+        Assert.Contains("adjustment_invoice_paid", await blocked.Content.ReadAsStringAsync());
+        var replay = await Post(tenant, route, input, key); replay.EnsureSuccessStatusCode();
+        Assert.Equal(existing.Id, (await replay.Content.ReadFromJsonAsync<AdjustmentView>())!.Id);
+        Assert.Equal(HttpStatusCode.OK, (await tenant.GetAsync($"/api/v1/invoice-adjustments/{existing.Id}")).StatusCode);
+        var list = (await tenant.GetFromJsonAsync<PagedResult<AdjustmentView>>($"/api/v1/invoice-adjustments?invoiceId={w.Invoice}"))!;
+        Assert.Single(list.Items);
     }
     [Fact]
     public async Task ConcurrentPaymentAndAdjustmentUseOneFinancialBasisWithoutLosingIncomingMoney()

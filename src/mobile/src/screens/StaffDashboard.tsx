@@ -213,7 +213,10 @@ export function StaffDashboard() {
           </Text>
         )}
       </View>
-      <StaffFeatureDirectory onOpen={open} />
+      <StaffFeatureDirectory
+        onOpen={open}
+        overdueMeterRooms={preview ? null : data.overdueMeterRooms}
+      />
       <View style={styles.section}>
         <StaffFeatureCard
           title="Hợp đồng"

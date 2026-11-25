@@ -1,5 +1,6 @@
 import { TextField, ValidatedForm } from '../../../components/common/ValidatedForm';
 import { useState } from 'react';
+import { LocationBillingSchedule } from '../../invoices/LocationBillingSchedule';
 import { LocationLegalRecords } from '../components/LocationLegalRecords';
 import {
   contactPhoneError,
@@ -442,6 +443,15 @@ export function LocationWorkspaceSettings({ location }: { location: LocationConf
       {canManage && (
         <Box sx={{ mt: 3 }}>
           <LocationLegalRecords locationId={location.id} />
+        </Box>
+      )}
+      {canManage && (
+        <Box sx={{ gridColumn: '1 / -1', width: '100%', maxWidth: 960 }}>
+          <LocationBillingSchedule
+            key={location.id}
+            location={location.id}
+            disabled={!location.isActive}
+          />
         </Box>
       )}
     </Box>

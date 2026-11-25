@@ -2,9 +2,6 @@ import { TextField, ValidatedForm } from '../../components/common/ValidatedForm'
 import { MoneyField } from '../../components/common/MoneyField';
 import { useRef, useState } from 'react';
 import {
-  Accordion,
-  AccordionDetails,
-  AccordionSummary,
   Alert,
   Box,
   Button,
@@ -14,19 +11,18 @@ import {
   Stack,
   Typography,
 } from '@mui/material';
-import ExpandMoreRoundedIcon from '@mui/icons-material/ExpandMoreRounded';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { Link, useParams, useSearchParams } from 'react-router';
 import { useAuth } from '../../../../../packages/client-core/src/auth';
 import {
   invoiceError,
   formatBillingDecimal,
-  type BillingSchedule,
   type Policy,
   type PolicyInput,
 } from '../../../../../packages/client-core/src/invoices';
 import { PageHeader, FilterToolbar } from '../../components/common/PortalUI';
 import { useInvoiceApi } from './useInvoiceApi';
+import { locationBillingSettingsPath } from './LocationBillingSchedule';
 import { ConflictReload } from '../locations/components/ConflictReload';
 import { todayVietnam } from '../staff/staffContracts';
 import { canEditPolicyInPlace } from './policyVersions';
@@ -76,7 +72,7 @@ export function BillingConfigurationPage({
     <>
       <PageHeader
         title="Giá thuê & Chính sách phí"
-        subtitle="Kiểm tra quy tắc tính tiền và các mức giá đang áp dụng trước khi lập hóa đơn."
+        subtitle="Kiểm tra các mức giá đang áp dụng trước khi lập hóa đơn."
       />
       <Stack spacing={2}>
         {locations.isPending && <LinearProgress />}
@@ -117,7 +113,7 @@ export function BillingConfigurationPage({
           </TextField>
         </FilterToolbar>
         {!location && locations.data?.length !== 0 && (
-          <Alert severity="info">Chọn cơ sở để xem quy tắc hóa đơn và biểu giá.</Alert>
+          <Alert severity="info">Chọn cơ sở để xem biểu giá.</Alert>
         )}
         {location && <LocationBilling key={location + actor} location={location} />}
       </Stack>
@@ -129,7 +125,6 @@ function LocationBilling({ location }: { location: string }) {
   const { session } = useAuth();
   const actor = session?.userId ?? '';
   const [page, setPage] = useState(1);
-  const [editSchedule, setEditSchedule] = useState(false);
   const [showPolicyForm, setShowPolicyForm] = useState(false);
   const [notice, setNotice] = useState('');
   const policyAnchor = useRef<HTMLDivElement>(null);
@@ -174,13 +169,12 @@ function LocationBilling({ location }: { location: string }) {
         <Alert
           severity="info"
           action={
-            <Button size="small" href="#billing-schedule">
+            <Button size="small" component={Link} to={locationBillingSettingsPath(location)}>
               Thiết lập lịch
             </Button>
           }
         >
-          Cơ sở chưa có lịch lập nháp và phát hành. Hoàn tất phần “Lịch & quy tắc hóa đơn” bên dưới
-          để xác định các ngày xử lý.
+          Cơ sở chưa có lịch lập nháp và phát hành. Thiết lập lịch trong phần Thiết lập cơ sở.
         </Alert>
       )}
       <Paper variant="outlined" sx={{ p: 1.5 }}>
@@ -275,51 +269,13 @@ function LocationBilling({ location }: { location: string }) {
           </Stack>
         </Stack>
       </Paper>
-      <Accordion
-        id="billing-schedule"
-        variant="outlined"
-        disableGutters
-        sx={{ scrollMarginTop: { xs: '80px', md: '96px' } }}
-        expanded={schedule.isSuccess && (!schedule.data || editSchedule)}
-        onChange={(_, expanded) => {
-          if (schedule.data) setEditSchedule(expanded);
-        }}
-      >
-        <AccordionSummary expandIcon={<ExpandMoreRoundedIcon />}>
-          <Stack
-            direction={{ xs: 'column', sm: 'row' }}
-            sx={{
-              width: '100%',
-              gap: 1,
-              alignItems: { sm: 'center' },
-              justifyContent: 'space-between',
-            }}
-          >
-            <Typography sx={{ fontWeight: 700 }}>Lịch & quy tắc hóa đơn</Typography>
-            {schedule.isSuccess && (
-              <Typography variant="body2" color={schedule.data ? 'text.secondary' : 'warning.dark'}>
-                {schedule.data
-                  ? `Nháp ngày ${schedule.data.draftDay}${schedule.data.draftMonthOffset ? ` (+${schedule.data.draftMonthOffset} tháng)` : ''} · Phát hành ${schedule.data.finalDay}${schedule.data.finalMonthOffset ? ` (+${schedule.data.finalMonthOffset} tháng)` : ''} · Hạn trả ${schedule.data.dueDay}${schedule.data.dueMonthOffset ? ` (+${schedule.data.dueMonthOffset} tháng)` : ''}`
-                  : 'Chưa thiết lập · Cần cấu hình'}
-              </Typography>
-            )}
-          </Stack>
-        </AccordionSummary>
-        {schedule.isSuccess && (!schedule.data || editSchedule) && (
-          <AccordionDetails>
-            <ScheduleForm
-              key={schedule.data?.version ?? 0}
-              location={location}
-              current={schedule.data ?? undefined}
-              onSaved={() => {
-                setEditSchedule(false);
-                setNotice('Đã lưu quy tắc hóa đơn.');
-                void schedule.refetch();
-              }}
-            />
-          </AccordionDetails>
-        )}
-      </Accordion>
+      {schedule.isSuccess && schedule.data && (
+        <Stack direction="row" sx={{ justifyContent: 'flex-end' }}>
+          <Button component={Link} to={locationBillingSettingsPath(location)}>
+            Cấu hình lịch điện nước & hóa đơn
+          </Button>
+        </Stack>
+      )}
       {showPolicyForm && (
         <Box ref={policyAnchor} sx={{ scrollMarginTop: 24 }}>
           <PolicyForm
@@ -341,189 +297,6 @@ function LocationBilling({ location }: { location: string }) {
         </Box>
       )}
     </>
-  );
-}
-export function ScheduleForm({
-  location,
-  current,
-  onSaved,
-}: {
-  location: string;
-  current?: BillingSchedule;
-  onSaved: () => void;
-}) {
-  const api = useInvoiceApi();
-  const [values, setValues] = useState<Record<string, string>>(() =>
-    Object.fromEntries(
-      [
-        'rateDate',
-        'rentSource',
-        'partialMonth',
-        'rounding',
-        'draftDay',
-        'draftMonthOffset',
-        'finalDay',
-        'finalMonthOffset',
-        'dueDay',
-        'dueMonthOffset',
-      ].map((key) => [
-        key,
-        key === 'rentSource' ? '1' : current ? String(current[key as keyof BillingSchedule]) : '',
-      ]),
-    ),
-  );
-  const [error, setError] = useState(''),
-    [notice, setNotice] = useState(''),
-    [busy, setBusy] = useState(false);
-  const lock = useRef(false);
-  const choice = (key: string, label: string, options: string[]) => (
-    <TextField
-      key={key}
-      select
-      required
-      label={label}
-      value={values[key]}
-      onChange={(e) => setValues((v) => ({ ...v, [key]: e.target.value }))}
-    >
-      <MenuItem value="">Chọn quy tắc</MenuItem>
-      {options.map((text, i) => (
-        <MenuItem key={text} value={String(i)}>
-          {text}
-        </MenuItem>
-      ))}
-    </TextField>
-  );
-  return (
-    <Paper variant="outlined" sx={{ p: { xs: 2, md: 2.5 }, borderRadius: 2 }}>
-      <Stack
-        component={ValidatedForm}
-        spacing={2}
-        onSubmit={(event) => {
-          event.preventDefault();
-          if (lock.current) return;
-          lock.current = true;
-          setBusy(true);
-          setError('');
-          setNotice('');
-          const input = {
-            locationId: location,
-            version: current?.version ?? 0,
-            ...Object.fromEntries(
-              Object.entries(values).map(([key, value]) => [key, Number(value)]),
-            ),
-          } as BillingSchedule;
-          void api
-            .saveSchedule(input)
-            .then(() => {
-              setNotice('Đã lưu cấu hình.');
-              onSaved();
-            })
-            .catch((e) => setError(invoiceError(e)))
-            .finally(() => {
-              lock.current = false;
-              setBusy(false);
-            });
-        }}
-      >
-        <Box>
-          <Typography variant="h6" sx={{ fontWeight: 700 }}>
-            Quy tắc và lịch hóa đơn
-          </Typography>
-          <Typography variant="body2" color="text.secondary">
-            Chỉ điều chỉnh cách tính tiền và thời điểm xử lý, không thay đổi đơn giá hợp đồng.
-          </Typography>
-        </Box>
-        {!current && (
-          <Alert severity="info">Chọn đầy đủ các quy tắc trước khi lập hóa đơn đầu tiên.</Alert>
-        )}
-        <Typography variant="subtitle2" sx={{ fontWeight: 700 }}>
-          Cách tính tiền
-        </Typography>
-        <Box
-          sx={{
-            display: 'grid',
-            gridTemplateColumns: { xs: '1fr', sm: 'repeat(2, minmax(0, 1fr))' },
-            gap: 2,
-          }}
-        >
-          <TextField
-            label="Nguồn tiền thuê cả phòng"
-            value="Giá đã chốt trong hợp đồng"
-            disabled
-            sx={{ gridColumn: '1 / -1' }}
-          />
-          {choice('rateDate', 'Mốc tham chiếu kỳ (không thay đổi giá hợp đồng)', [
-            'Ngày đầu tháng',
-            'Ngày cuối tháng',
-          ])}
-          {choice('partialMonth', 'Phí cố định khi ở không đủ tháng', [
-            'Thu cả tháng',
-            'Theo số ngày phòng có khách / số ngày tháng',
-          ])}
-          {choice('rounding', 'Làm tròn từng khoản VND', [
-            'Làm tròn .5 lên',
-            'Làm tròn .5 về số chẵn',
-          ])}
-        </Box>
-        <Alert severity="info">
-          Tiền thuê, đơn giá điện nước và các khoản dịch vụ của hợp đồng được giữ cố định. Lịch hóa
-          đơn chỉ điều khiển kỳ tính tiền, ngày chốt và cách làm tròn.
-        </Alert>
-        <Typography variant="subtitle2" sx={{ fontWeight: 700 }}>
-          Các mốc thời gian
-        </Typography>
-        <Typography variant="body2" color="text.secondary">
-          Tháng cộng thêm tính từ tháng hóa đơn. Ngày 29–31 tự co về cuối tháng ngắn.
-        </Typography>
-        <Box
-          sx={{
-            display: 'grid',
-            gridTemplateColumns: { xs: '1fr', lg: 'repeat(2, minmax(0, 1fr))' },
-            gap: 2,
-          }}
-        >
-          {(['draft', 'final', 'due'] as const).map((kind, i) => (
-            <Box
-              key={kind}
-              sx={{
-                p: 1.5,
-                border: '1px solid',
-                borderColor: 'divider',
-                borderRadius: 1.5,
-                display: 'grid',
-                gridTemplateColumns: { xs: '1fr', sm: 'repeat(2, minmax(0, 1fr))' },
-                gap: 1.5,
-              }}
-            >
-              <TextField
-                required
-                label={`Ngày ${['lập nháp', 'phát hành', 'hạn thanh toán'][i]}`}
-                type="number"
-                value={values[kind + 'Day']}
-                onChange={(e) => setValues((v) => ({ ...v, [kind + 'Day']: e.target.value }))}
-                slotProps={{ htmlInput: { min: 1, max: 31 } }}
-              />
-              {choice(kind + 'MonthOffset', 'Tháng cộng thêm', [
-                'Trong tháng hóa đơn',
-                'Tháng kế tiếp',
-                'Sau hai tháng',
-              ])}
-            </Box>
-          ))}
-        </Box>
-        {error && <Alert severity="error">{error}</Alert>}
-        {notice && <Alert severity="success">{notice}</Alert>}
-        <Stack direction="row" sx={{ justifyContent: 'flex-end' }}>
-          <Button
-            type="submit"
-            variant="contained"
-            disabled={busy || Object.values(values).some((value) => value === '')}
-          >
-            Lưu quy tắc hóa đơn
-          </Button>
-        </Stack>
-      </Stack>
-    </Paper>
   );
 }
 export function PolicyForm({

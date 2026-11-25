@@ -15,6 +15,8 @@ public sealed class BillingAutomationController(BillingAutomationService service
     public Task<IReadOnlyList<BillingAutomationPlan>> History(Guid locationId, CancellationToken t) => service.HistoryAsync(locationId, t);
     [HttpPut]
     public Task<BillingAutomationPlan> Save(BillingAutomationWrite x, CancellationToken t) => service.SaveAsync(x, t);
+    [HttpPut("{locationId:guid}/schedule")]
+    public Task<BillingAutomationPlan> SaveLocationSchedule(Guid locationId, LocationBillingScheduleWrite x, CancellationToken t) => service.SaveLocationScheduleAsync(locationId, x, t);
     [HttpGet("executions")]
     public Task<IReadOnlyList<BillingAutomationExecution>> Executions([FromQuery] Guid locationId, [FromQuery] DateOnly period, CancellationToken t) => operations.ListAsync(locationId, period, t);
     [HttpPost("run-now")]

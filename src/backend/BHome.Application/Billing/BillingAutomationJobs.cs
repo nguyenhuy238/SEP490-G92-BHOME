@@ -59,12 +59,13 @@ public sealed class BillingAutomationOperations(IBillingAutomationEngine engine,
     {
         await Owner(location, t); BillingAutomationService.ValidatePeriod(period);
         var p = await schedules.ForPeriodAsync(location, period, t); var today = clock.BusinessToday();
-        if (p is null) return new(ManualActionsAllowed, "Asia/Ho_Chi_Minh", today, [], runtime.WorkerEnabled);
+        var workerEnabled = runtime.WorkerEnabled;
+        if (p is null) return new(ManualActionsAllowed, "Asia/Ho_Chi_Minh", today, [], workerEnabled);
         var c = BillingAutomationService.Calendar(p);
         var phases = new[] { new BillingPhasePreview("Meter", InvoiceMath.CalendarDate(period, p.MeterDay, 0), false), new("Draft", InvoiceMath.CalendarDate(period, c.DraftDay, c.DraftMonthOffset), false), new("Final", InvoiceMath.CalendarDate(period, c.FinalDay, c.FinalMonthOffset), false) };
         // "Eligible" describes automatic scheduling, not developer-initiated run-now.
         // Do not advertise a runnable phase when billing workers are globally disabled.
-        return new(ManualActionsAllowed, p.TimeZone, today, phases.Select(x => x with { Eligible = runtime.WorkerEnabled && p.Enabled && today >= x.ScheduledDate && (x.Phase != "Final" || p.AuthorizeAutomaticFinalization) }).ToArray(), runtime.WorkerEnabled);
+        return new(ManualActionsAllowed, p.TimeZone, today, phases.Select(x => x with { Eligible = workerEnabled && p.Enabled && today >= x.ScheduledDate && (x.Phase != "Final" || p.AuthorizeAutomaticFinalization) }).ToArray(), workerEnabled);
     }
     public async Task<BillingAutomationExecution?> RunAsync(BillingRunInput x, CancellationToken t)
     {

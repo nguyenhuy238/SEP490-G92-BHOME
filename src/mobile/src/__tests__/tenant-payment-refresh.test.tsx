@@ -164,3 +164,39 @@ it('does not start overlapping requests while a payment refresh is pending', asy
   await advance(90_000);
   expect(transport).toHaveBeenCalledTimes(1);
 });
+
+it('checks the open payment screen every eight seconds without visible loading or duplicate requests', async () => {
+  const { result } = renderHook(() => useTenantInvoicePayment(invoiceId, true));
+  await flush();
+  expect(transport).toHaveBeenCalledTimes(1);
+  let complete!: (response: Response) => void;
+  transport.mockImplementation(
+    () =>
+      new Promise<Response>((resolve) => {
+        complete = resolve;
+      }),
+  );
+  await advance(8_000);
+  expect(transport).toHaveBeenCalledTimes(2);
+  expect(result.current.fetching).toBe(false);
+  expect(result.current.data?.outstandingAmount).toBe('2500000');
+  await advance(24_000);
+  expect(transport).toHaveBeenCalledTimes(2);
+  await act(async () => {
+    complete(json(state));
+  });
+  expect(result.current.fetching).toBe(false);
+  await advance(8_000);
+  act(() => result.current.reload());
+  expect(result.current.fetching).toBe(true);
+  expect(transport).toHaveBeenCalledTimes(3);
+  await act(async () => {
+    complete(
+      json({ ...state, paymentStatus: 'Paid', paidAmount: '2500000', outstandingAmount: '0' }),
+    );
+  });
+  expect(result.current.data?.paymentStatus).toBe('Paid');
+  expect(result.current.fetching).toBe(false);
+  await advance(40_000);
+  expect(transport).toHaveBeenCalledTimes(3);
+});

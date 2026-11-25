@@ -46,7 +46,15 @@ internal sealed partial class CompactNotificationEvents(Compact24DbContext db, C
         await tx.CommitAsync(t); return count;
     }
 
-    private async Task<int> Audits(CancellationToken t, bool authenticationOnly = false)
+    internal async Task<int> PublishBillingAsync(CancellationToken t)
+    {
+        db.ChangeTracker.Clear(); await using var tx = await db.Database.BeginTransactionAsync(t);
+        await sql.Execute("SELECT pg_advisory_xact_lock(hashtextextended('bhome-notification-publication-v2',0))", t);
+        var count = await Audits(t, billingOnly: true) + await MeterReadings(t) + await Reminders(t, billingOnly: true);
+        await tx.CommitAsync(t); return count;
+    }
+
+    private async Task<int> Audits(CancellationToken t, bool authenticationOnly = false, bool billingOnly = false)
     {
         var source = new List<(Guid Id, string Event, Guid Target, DateTimeOffset At)>();
         await using (var cmd = await sql.Command("""
@@ -56,9 +64,10 @@ internal sealed partial class CompactNotificationEvents(Compact24DbContext db, C
               'ContractMoveOutRequested','ContractSigningInitiated','ContractSigningPrepared','ContractSigningRequested','InternalSigningInvitationApproved','ContractActivated','ContractRenewalPrepared','OperatingPolicyAmendmentCancelled','OperatingPolicyAmendmentApplied',
               'HoldingDraftCreated','HoldingSigningSubmitted','MainSigningSubmitted','HoldingActivated','Automatic:HoldingActivated','Automatic:ContractActivated')
             AND (NOT @authenticationOnly OR n.notification_type IN ('PasswordChange','PasswordReset','AccountActivated','AccountDeactivated','AccountInvitationAccepted','RoleChanged','StaffCreated'))
+            AND (NOT @billingOnly OR n.notification_type='InvoiceDraftGenerated')
             AND NOT EXISTS(SELECT 1 FROM notifications p WHERE p.record_kind='OUTBOX' AND p.event_data->>'recordType'='NotificationPublication'
               AND p.event_data->'state'->>'eventKey'='extended-audit:'||n.id::text) ORDER BY n.event_at,n.id LIMIT 50
-            """, t, ("authenticationOnly", authenticationOnly)))
+            """, t, ("authenticationOnly", authenticationOnly), ("billingOnly", billingOnly)))
         { await using var reader = await cmd.ExecuteReaderAsync(t); while (await reader.ReadAsync(t)) if (!reader.IsDBNull(2)) source.Add((reader.GetGuid(0), reader.GetString(1), reader.GetGuid(2), reader.GetFieldValue<DateTimeOffset>(3))); }
         var count = 0;
         foreach (var e in source)

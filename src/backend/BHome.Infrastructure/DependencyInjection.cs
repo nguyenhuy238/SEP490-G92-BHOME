@@ -426,7 +426,7 @@ public static class DependencyInjection
         services.AddScoped<BHome.Application.Billing.IBillingAutomationEngine, BHome.Infrastructure.Modules.Billing.BillingAutomationEngine>();
         services.AddScoped<BHome.Application.Billing.BillingAutomationOperations>();
         // Jobs:Enabled alone never authorizes automatic meter tasks or invoice issuance.
-        // Billing automation is independently opted in only after an explicit rollout.
+        // Billing automation has its own deployment switch and isolated worker.
         services.AddSingleton(p =>
         {
             var host = p.GetRequiredService<IHostEnvironment>().EnvironmentName;
@@ -435,7 +435,7 @@ public static class DependencyInjection
             Guid? demoOwner = deployedDemo &&
                 Guid.TryParse(config["DemoClock:OwnerUserId"], out var ownerId) ? ownerId : null;
             return new BHome.Application.Billing.BillingAutomationRuntime(host is "Development" or "Testing",
-                config.GetValue<bool>("Jobs:Enabled") && config.GetValue<bool>("BillingAutomation:AutomaticJobsEnabled"), demoOwner, deployedDemo)
+                config.GetValue<bool>("BillingAutomation:AutomaticJobsEnabled"), demoOwner, deployedDemo)
             {
                 ManualActionsEnabled = host == "Staging" && config.GetValue<bool>("BillingAutomation:ManualActionsEnabled")
             };
@@ -443,7 +443,10 @@ public static class DependencyInjection
         services.AddScoped<IBackgroundJobHandler>(p => new BHome.Application.Billing.BillingAutomationJobHandler("billing-meter", "Meter", p.GetRequiredService<BHome.Application.Billing.IBillingAutomationEngine>(), p.GetRequiredService<BHome.Application.Billing.BillingAutomationRuntime>().WorkerEnabled));
         services.AddScoped<IBackgroundJobHandler>(p => new BHome.Application.Billing.BillingAutomationJobHandler("billing-draft", "Draft", p.GetRequiredService<BHome.Application.Billing.IBillingAutomationEngine>(), p.GetRequiredService<BHome.Application.Billing.BillingAutomationRuntime>().WorkerEnabled));
         services.AddScoped<IBackgroundJobHandler>(p => new BHome.Application.Billing.BillingAutomationJobHandler("billing-final", "Final", p.GetRequiredService<BHome.Application.Billing.IBillingAutomationEngine>(), p.GetRequiredService<BHome.Application.Billing.BillingAutomationRuntime>().WorkerEnabled));
-        services.AddScoped<IJobScheduleContributor, BHome.Infrastructure.Modules.Billing.BillingAutomationScheduling>();
+        services.AddScoped<BHome.Infrastructure.Modules.Billing.BillingAutomationScheduling>();
+        services.AddScoped<BHome.Infrastructure.Modules.Billing.BillingMeterOverdueNotifier>();
+        services.AddScoped<IJobScheduleContributor>(p => p.GetRequiredService<BHome.Infrastructure.Modules.Billing.BillingAutomationScheduling>());
+        services.AddHostedService<BHome.Infrastructure.Modules.Billing.BillingAutomationWorker>();
         services.AddScoped<BHome.Application.Notifications.INotificationRepository, CompactNotificationRepository>();
         services.AddScoped<BHome.Application.Notifications.NotificationService>();
         services.AddScoped<BHome.Infrastructure.Modules.Notifications.NotificationEventPublisher>();

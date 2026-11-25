@@ -30,6 +30,7 @@ vi.mock('../lib/SessionProvider', () => ({
   }),
 }));
 import SignContractLink from '../app/sign-contract';
+import OpenInvoiceLink from '../app/open-invoice';
 import Index from '../app/index';
 import { clearPendingLink } from '../lib/pendingLink';
 
@@ -73,4 +74,28 @@ it('rejects a link without a valid contract id', () => {
   render(<SignContractLink />);
   expect(screen.queryByTestId('redirect')).toBeNull();
   expect(screen.getByText(/Liên kết ký hợp đồng không hợp lệ/)).toBeTruthy();
+});
+
+it('invoice email link survives sign-in and opens the exact invoice only once', () => {
+  s.params = { invoiceId: id };
+  render(<OpenInvoiceLink />);
+  expect(href()).toBe('/');
+  cleanup();
+  s.session = { userId: 'tenant', roles: ['Tenant'] };
+  render(<Index />);
+  expect(href()).toBe(`/workspace/invoice?invoiceId=${id}`);
+  cleanup();
+  render(<Index />);
+  expect(href()).toBe('/(tabs)/tenant-home');
+});
+
+it('invoice email link rejects invalid ids and non-Tenant roles', () => {
+  s.params = { invoiceId: '../../api/v1/invoices' };
+  render(<OpenInvoiceLink />);
+  expect(screen.queryByTestId('redirect')).toBeNull();
+  cleanup();
+  s.params = { invoiceId: id };
+  s.session = { userId: 'staff', roles: ['Staff'] };
+  render(<OpenInvoiceLink />);
+  expect(screen.queryByTestId('redirect')).toBeNull();
 });

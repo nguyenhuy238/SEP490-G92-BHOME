@@ -274,9 +274,9 @@ function UtilityCard({
       )}
       {item.reading && (
         <Text style={styles.utilityCaption}>
-          Chốt: {formatBillingDecimal(item.reading.confirmedValue)}
+          Chốt: {formatBillingDecimal(item.reading.confirmedValue)} {unit}
           {item.reading.previousValue !== null
-            ? ` · Trước: ${formatBillingDecimal(item.reading.previousValue)}`
+            ? ` · Trước: ${formatBillingDecimal(item.reading.previousValue)} ${unit}`
             : ''}
         </Text>
       )}

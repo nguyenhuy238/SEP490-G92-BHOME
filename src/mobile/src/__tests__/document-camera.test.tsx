@@ -1038,3 +1038,44 @@ it.each([
     expect(capture).not.toHaveBeenCalled();
   },
 );
+
+it('clears the retained meter photo and returns to capture choices on periodic OCR retry', async () => {
+  const capture = vi.fn().mockResolvedValue(undefined);
+  const clear = vi.fn();
+  const props = {
+    label: 'Chụp đồng hồ nước',
+    disabled: false,
+    presentation: 'meter' as const,
+    meterRetryResets: true,
+    retainPreview: true,
+    reviewBeforeSubmit: true,
+    onCapture: capture,
+    onPhotoCleared: clear,
+  };
+  const view = render(<CameraCapture {...props} meterStep={1} />);
+  fireEvent.click(screen.getByRole('button', { name: 'Chụp đồng hồ nước' }));
+  await screen.findByTestId('native-camera');
+  await waitFor(() =>
+    expect((screen.getByRole('button', { name: 'Chụp ảnh' }) as HTMLButtonElement).disabled).toBe(
+      false,
+    ),
+  );
+  fireEvent.click(screen.getByRole('button', { name: 'Chụp ảnh' }));
+  await screen.findByAltText('Ảnh công tơ đã chụp');
+  fireEvent.click(screen.getByRole('button', { name: 'Dùng ảnh này' }));
+  await waitFor(() => expect(capture).toHaveBeenCalledOnce());
+  view.rerender(<CameraCapture {...props} meterStep={2} />);
+  await waitFor(() =>
+    expect(
+      (screen.getByRole('button', { name: 'Thử lại OCR' }) as HTMLButtonElement).disabled,
+    ).toBe(false),
+  );
+  clear.mockClear();
+  fireEvent.click(screen.getByRole('button', { name: 'Thử lại OCR' }));
+  expect(clear).toHaveBeenCalledOnce();
+  expect(native.files.size).toBe(0);
+  expect(screen.getByText('Chưa có ảnh công tơ')).toBeTruthy();
+  expect(screen.getByRole('button', { name: 'Chụp đồng hồ nước' })).toBeTruthy();
+  expect(screen.queryByTestId('native-camera')).toBeNull();
+  expect(capture).toHaveBeenCalledOnce();
+});

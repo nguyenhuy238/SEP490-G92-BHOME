@@ -15,6 +15,7 @@ interface StaffFeatureCardProps {
   compact?: boolean;
   status?: string;
   incident?: boolean;
+  danger?: boolean;
 }
 
 export function StaffFeatureCard({
@@ -27,6 +28,7 @@ export function StaffFeatureCard({
   compact = false,
   status,
   incident = false,
+  danger = false,
 }: StaffFeatureCardProps) {
   const theme = useTheme();
   return (
@@ -34,7 +36,7 @@ export function StaffFeatureCard({
       style={[
         styles.surface,
         incident && styles.incidentSurface,
-        { backgroundColor: theme.colors.surface },
+        { backgroundColor: danger ? staffColors.redSoft : theme.colors.surface },
       ]}
     >
       <TouchableRipple
@@ -60,7 +62,10 @@ export function StaffFeatureCard({
             {description}
           </Text>
           {!!status && (
-            <Text variant="labelSmall" style={styles.status}>
+            <Text
+              variant="labelSmall"
+              style={[styles.status, danger && { color: staffColors.red }]}
+            >
               {status}
             </Text>
           )}

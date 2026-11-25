@@ -21,8 +21,10 @@ public sealed class NotificationChannelOptions
 public static class NotificationEmailPolicy
 {
     public static string[] Channels(string eventType, string role, string[] channels) =>
-        (eventType is "INVOICE_FINALIZED" or "INVOICE_DUE_SOON" or "INVOICE_OVERDUE" or
+        (eventType is "INVOICE_DRAFT_CREATED" or "INVOICE_ADJUSTMENT_REQUESTED" or "INVOICE_ADJUSTMENT_DECIDED" or
+            "INVOICE_FINALIZED" or "INVOICE_DUE_SOON" or "INVOICE_OVERDUE" or
             "INVOICE_FULLY_PAID" or "PAYMENT_PARTIALLY_CONFIRMED" or "CONTRACT_EXPIRY_REMINDER" or "ACCOUNT_LOCKED" ||
+         eventType == "INVOICE_FINALIZATION_BLOCKED" && role is "Owner" or "Tenant" ||
          eventType == "INCIDENT_EMERGENCY_SUBMITTED" && role is "Owner" or "Staff")
         ? channels.Append("EMAIL").Distinct().ToArray() : channels;
 }

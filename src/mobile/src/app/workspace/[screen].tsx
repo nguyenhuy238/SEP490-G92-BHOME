@@ -20,5 +20,13 @@ export default function WorkspaceRoute() {
     return session ? <DemoSmsInboxScreen /> : <Redirect href="/" />;
   if (role && isWorkspaceScreen(screen) && isWorkspaceTabDestination(role, screen, params))
     return <Redirect href={workspaceTabHref(screen)} />;
-  return <WorkspaceScreenView screen={screen} />;
+  return (
+    <WorkspaceScreenView
+      screen={screen}
+      meterLocationId={typeof params.locationId === 'string' ? params.locationId : undefined}
+      meterBillingPeriod={
+        typeof params.billingPeriod === 'string' ? params.billingPeriod : undefined
+      }
+    />
+  );
 }

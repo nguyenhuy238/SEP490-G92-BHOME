@@ -47,6 +47,8 @@ class ReleaseSafetyTests(unittest.TestCase):
 
     def test_isolated_databases_keys_and_storage(self):
         self.assertRegex(self.check(self.configuration('staging'), self.configuration('production')), r'^[a-f0-9]{64}$')
+        stage = self.configuration('staging') | {'BillingAutomation__AutomaticJobsEnabled': 'true'}
+        self.assertRegex(self.check(stage, self.configuration('production')), r'^[a-f0-9]{64}$')
 
     def test_canonical_release_pdf_tools_preserve_existing_private_environment_fingerprint(self):
         stage, prod = self.configuration('staging'), self.configuration('production')

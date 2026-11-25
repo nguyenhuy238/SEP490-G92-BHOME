@@ -39,13 +39,14 @@ def check_api():
     required = {
         'ASPNETCORE_ENVIRONMENT': 'Staging', 'DOTNET_ENVIRONMENT': 'Staging',
         'Deployment__Environment': 'Staging', 'Jobs__Enabled': 'false',
-        'BillingAutomation__AutomaticJobsEnabled': 'false',
         'DevelopmentDatabase__InitializeOnStartup': 'false',
         'SePay__Enabled': 'true', 'SePay__Mode': 'Test',
     }
     for key, expected in required.items():
         if e.get(key) != expected:
             raise ValueError('Staging guard failed: ' + key)
+    if e.get('BillingAutomation__AutomaticJobsEnabled') not in ('true', 'false'):
+        raise ValueError('Staging guard failed: BillingAutomation__AutomaticJobsEnabled')
     db = dict(p.split('=', 1) for p in e.get('ConnectionStrings__Database', '').split(';') if '=' in p)
     if db.get('Host') != '127.0.0.1' or db.get('Database') != STAGE_DB:
         raise ValueError('Staging database target mismatch; connection withheld')

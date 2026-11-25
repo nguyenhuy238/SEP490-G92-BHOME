@@ -32,6 +32,7 @@ export interface MeterTask {
   version?: number;
   locationId?: string;
   roomId?: string;
+  isOverdue?: boolean;
 }
 
 export function meterClient(request: <T>(path: string, init?: RequestInit) => Promise<T>) {

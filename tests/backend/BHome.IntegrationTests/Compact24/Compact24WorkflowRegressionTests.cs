@@ -107,6 +107,7 @@ public sealed class Compact24PaymentRegressionTests
     [CompactPostgresFact] public Task RecipientInbox() => Run(t => t.InboxIsRecipientScopedPaginatedAndReadStatePersistsWithoutCrossTenantMutation());
     [CompactPostgresFact] public Task RevalidateTarget() => Run(t => t.NotificationTargetRechecksInvoiceEntitlementInsteadOfTrustingSavedLink());
     [CompactPostgresFact] public Task StaffReadMirror() => Run(t => t.StaffInboxMirrorsTaskReadStateAndLosesAccessWhenAssignmentEnds());
+    [CompactPostgresFact] public Task StaffPeriodicNoticeGrouping() => Run(t => t.StaffPeriodicAssignmentNoticesGroupExistingHistoryAndMarkTheWholePeriodRead());
     [CompactPostgresFact] public Task ExpiryAndMeterNotices() => Run(t => t.ExistingContractExpiryAndMeterTaskSourcesPublishThroughOneInbox());
     private static async Task Run(Func<PaymentLedgerTests, Task> scenario)
     {
@@ -120,6 +121,10 @@ public sealed class Compact24PaymentRegressionTests
     [CompactPostgresFact] public Task NoUnallocatedNotice() => Run(t => t.UnallocatedTransferDoesNotCreatePaymentConfirmedNotification());
     [CompactPostgresFact] public Task AutomationConfig() => Run(t => t.AutomationPreviewAndHistoryRemainOwnerOnlyAndReflectSelectedPeriod());
     [CompactPostgresFact] public Task MeterAutomation() => Run(t => t.MeterJobAndManualRequestsShareRoomTypePeriodKeyAndHumanConfirmation());
+    [CompactPostgresFact] public Task VacantMeterAutomation() => Run(t => t.MeterJobIncludesVacantRoomsAndReportsMissingMetersWithoutDuplicating());
+    [CompactPostgresFact] public Task PeriodicMeterOverdueNotices() => Run(t => t.PeriodicMeterOverdueNoticesUseBusinessTimeAndDistinctRooms());
+    [CompactPostgresFact] public Task PeriodicScheduler() => Run(t => t.PeriodicSchedulerQueuesWorkOnBusinessDateWithoutDemoOptIn());
+    [CompactPostgresFact] public Task MeterListMonthChange() => Run(t => t.MeterListSurvivesMonthChangeWithLegacyTasksWithoutDeadline());
     [CompactPostgresFact] public Task UnassignedMeter() => Run(t => t.MeterJobPreservesUnassignedWorkAndReportsMissingMetersUntilOwnerAssigns());
     [CompactPostgresFact] public Task ReplacedMeter() => Run(t => t.MeterReplacementDoesNotDuplicatePeriodTasksAndFutureScheduleDoesNotRunEarly());
     [CompactPostgresFact] public Task DraftAutomation() => Run(t => t.DraftJobRequiresSharedRepresentativeAndPreservesApprovedCorrectionOnReplay());
@@ -127,6 +132,7 @@ public sealed class Compact24PaymentRegressionTests
     [CompactPostgresFact] public Task PendingFinal() => Run(t => t.AutomaticFinalizationRequiresAuthorizationAndMissingDataRemainsDraftWithoutRepeatedChanges());
     [CompactPostgresFact] public Task FinalCorrection() => Run(t => t.PendingAdjustmentBlocksAutomationAndApprovedCorrectionIsRevalidatedBeforeFinal());
     [CompactPostgresFact] public Task LateReadings() => Run(t => t.LateConfirmedReadingsMakePendingDraftEligibleWithoutEstimatedUsage());
+    [CompactPostgresFact] public Task LateReadingsWithCorrection() => Run(t => t.LateReadingsRefreshDraftWithoutDiscardingApprovedCorrection());
     [CompactPostgresFact] public Task ReconciliationApi() => Run(t => t.OwnerApiReconcilesPersistedInvoiceAndRejectsUnmatchedTransferWithHistory());
     [CompactPostgresFact] public Task PayerPrivacy() => Run(t => t.SharedTenantStatusAndHistoricalAccessStayScopedWithoutLeakingStatementOrAnotherPayerIdentity());
     [CompactPostgresFact] public Task CompetingPayments() => Run(t => t.ConcurrentTenantsCannotDoubleSettleAndSecondTransferIsPreservedForReview());
@@ -134,6 +140,7 @@ public sealed class Compact24PaymentRegressionTests
     [CompactPostgresFact] public Task Overpayment() => Run(t => t.OwnerConfirmedAmountPolicyPreservesPartialDebtAndUnallocatedExcess(100001, "verified_excess_payment_pending_review"));
     [CompactPostgresFact] public Task InvalidAndUnauthorized() => Run(t => t.UnauthorizedAndInvalidOrConflictingInputsCannotCreatePaidState());
     [CompactPostgresFact] public Task AdjustmentSubmission() => Run(t => t.AdjustmentSubmissionIsPersistedIdempotentAndPrivateToRequesterAndOwner());
+    [CompactPostgresFact] public Task PaidInvoiceAdjustmentGuard() => Run(t => t.PaidInvoiceRejectsNewAdjustmentButPreservesExistingRequestsAndReplay());
     [CompactPostgresFact] public Task PrivateEvidence() => Run(t => t.AdjustmentEvidenceIsValidatedPrivateAndCannotBeReusedOrStolen());
     [CompactPostgresFact] public Task OrphanEvidence() => Run(t => t.FailedEvidenceUploadLeavesOnlyRecoverableIntentAndCannotBeSubmitted());
     [CompactPostgresFact] public Task PaymentAdjustmentRace() => Run(t => t.ConcurrentPaymentAndAdjustmentUseOneFinancialBasisWithoutLosingIncomingMoney());

@@ -1,4 +1,4 @@
-import { TextField, ValidatedForm } from '../../components/common/ValidatedForm';
+import { TextField } from '../../components/common/ValidatedForm';
 import { useRef, useState } from 'react';
 import { Link, useSearchParams } from 'react-router';
 import {
@@ -29,11 +29,9 @@ import {
   formatBillingDecimal,
   invoiceError,
   missingBillingInput,
-  type BillingSchedule,
   type Invoice,
 } from '../../../../../packages/client-core/src/invoices';
 import {
-  automationCalendar,
   automationIssues,
   type AutomationPlan,
   type AutomationPreview,
@@ -44,6 +42,7 @@ import type { MeterTask } from '../../../../../packages/client-core/src/meter';
 import { PageHeader, FilterToolbar } from '../../components/common/PortalUI';
 import { isMockMode } from '../../services/config';
 import { useInvoiceApi } from './useInvoiceApi';
+import { LocationBillingScheduleSummary } from './LocationBillingSchedule';
 
 const phaseLabel: Record<string, string> = {
   Meter: 'Giao việc ghi số',
@@ -85,29 +84,29 @@ export function DemoAutomationPage() {
   const [period, setPeriod] = useState(params.get('period')?.slice(0, 7) ?? '2026-11');
   const [settings, setSettings] = useState(false);
   const automaticFinal = false;
-  const [effective, setEffective] = useState('2026-11');
   const [meterDay, setMeterDay] = useState('3');
   const [meterDueDay, setMeterDueDay] = useState('5');
   const [draftDay, setDraftDay] = useState('7');
   const [finalDay, setFinalDay] = useState('20');
+  const [paymentDay, setPaymentDay] = useState('25');
   const beforeSettings = useRef({
-    effective,
     meterDay,
     meterDueDay,
     draftDay,
     finalDay,
+    paymentDay,
   });
   const openSettings = () => {
-    beforeSettings.current = { effective, meterDay, meterDueDay, draftDay, finalDay };
+    beforeSettings.current = { meterDay, meterDueDay, draftDay, finalDay, paymentDay };
     setSettings(true);
   };
   const cancelSettings = () => {
     const previous = beforeSettings.current;
-    setEffective(previous.effective);
     setMeterDay(previous.meterDay);
     setMeterDueDay(previous.meterDueDay);
     setDraftDay(previous.draftDay);
     setFinalDay(previous.finalDay);
+    setPaymentDay(previous.paymentDay);
     setSettings(false);
   };
   const [notice, setNotice] = useState('');
@@ -146,7 +145,7 @@ export function DemoAutomationPage() {
     <>
       <PageHeader
         title="Cấu hình lịch & chạy thử hóa đơn"
-        subtitle="Hai khu vực riêng: lịch bắt đầu áp dụng từ kỳ được chọn và các bước thử thủ công."
+        subtitle="Lịch hàng tháng và các bước thử thủ công."
         actions={
           <Button component={Link} to="/pricing" variant="outlined">
             Giá & biểu phí
@@ -203,8 +202,8 @@ export function DemoAutomationPage() {
                   Cấu hình lịch
                 </Typography>
                 <Typography variant="body2" color="text.secondary">
-                  Bắt đầu từ kỳ {effective} · Giao việc ngày {meterDay}, hạn ngày {meterDueDay} ·
-                  Nháp ngày {draftDay}, chính thức ngày {finalDay}
+                  Giao việc ngày {meterDay}, hạn ngày {meterDueDay} · Nháp ngày {draftDay}, chính
+                  thức ngày {finalDay} · Hạn trả ngày {paymentDay}
                 </Typography>
               </Box>
               <Button size="small" variant="outlined" onClick={openSettings}>
@@ -391,13 +390,6 @@ export function DemoAutomationPage() {
               </Alert>
               <Stack direction={{ xs: 'column', sm: 'row' }} sx={{ gap: 1.5 }}>
                 <TextField
-                  label="Kỳ bắt đầu áp dụng cấu hình"
-                  type="month"
-                  value={effective}
-                  onChange={(event) => setEffective(event.target.value)}
-                  slotProps={{ inputLabel: { shrink: true } }}
-                />
-                <TextField
                   label="Ngày giao việc ghi số"
                   type="number"
                   value={meterDay}
@@ -423,7 +415,14 @@ export function DemoAutomationPage() {
                   type="number"
                   value={finalDay}
                   onChange={(event) => setFinalDay(event.target.value)}
-                  slotProps={{ htmlInput: { min: 1, max: 28 } }}
+                  slotProps={{ htmlInput: { min: 1, max: 31 } }}
+                />
+                <TextField
+                  label="Ngày hạn thanh toán"
+                  type="number"
+                  value={paymentDay}
+                  onChange={(event) => setPaymentDay(event.target.value)}
+                  slotProps={{ htmlInput: { min: 1, max: 31 } }}
                 />
               </Stack>
               <Alert severity="info">
@@ -436,9 +435,11 @@ export function DemoAutomationPage() {
             <Button
               variant="contained"
               disabled={
-                !/^\d{4}-\d{2}$/.test(effective) ||
-                [meterDay, meterDueDay, draftDay, finalDay].some(
-                  (day) => !/^(?:[1-9]|1\d|2[0-8])$/.test(day),
+                [meterDay, meterDueDay, draftDay, finalDay, paymentDay].some(
+                  (day) => !/^(?:[1-9]|[12]\d|3[01])$/.test(day),
+                ) ||
+                [meterDay, meterDueDay, draftDay, finalDay, paymentDay].some(
+                  (day, i, all) => i > 0 && Number(day) < Number(all[i - 1]),
                 )
               }
               onClick={() => {
@@ -690,7 +691,7 @@ export function LiveAutomationPage() {
     <>
       <PageHeader
         title="Cấu hình lịch & chạy thử hóa đơn"
-        subtitle="Cài lịch cho cơ sở và kiểm tra hóa đơn theo tháng."
+        subtitle="Theo dõi lịch của cơ sở và kiểm tra hóa đơn theo tháng."
         actions={
           <Button
             component={Link}
@@ -731,12 +732,12 @@ export function LiveAutomationPage() {
             slotProps={{ inputLabel: { shrink: true } }}
           />
         </FilterToolbar>
-        {location && <ScheduleConfiguration key={location + session?.userId} location={location} />}
+        {location && (
+          <LocationBillingScheduleSummary key={location + session?.userId} location={location} />
+        )}
         {(!location || !/^\d{4}-\d{2}$/.test(period)) && !locations.error && (
           <Alert severity="info">
-            {!location
-              ? 'Chọn cơ sở để xem và sửa lịch.'
-              : 'Chọn tháng nếu muốn chạy thử thủ công.'}
+            {!location ? 'Chọn cơ sở để xem lịch.' : 'Chọn tháng nếu muốn chạy thử thủ công.'}
           </Alert>
         )}
         {location && /^\d{4}-\d{2}$/.test(period) && (
@@ -748,134 +749,6 @@ export function LiveAutomationPage() {
         )}
       </Stack>
     </>
-  );
-}
-
-/** Config remains visible with only a Location: the test period never selects the effective policy version. */
-function ScheduleConfiguration({ location }: { location: string }) {
-  const api = useInvoiceApi();
-  const cache = useQueryClient();
-  const { session } = useAuth();
-  const [expanded, setExpanded] = useState(false);
-  const settings = useQuery({
-    queryKey: ['manual-billing-schedule', session?.userId, location],
-    queryFn: async ({ signal }) => {
-      const [history, calendar] = await Promise.all([
-        api.request<AutomationPlan[]>(`/api/v1/billing-automation/${location}/history`, { signal }),
-        api.schedule(location, signal),
-      ]);
-      return { history, calendar };
-    },
-  });
-  const existingActive = settings.data?.history.some(
-    (plan) => plan.enabled || plan.authorizeAutomaticFinalization,
-  );
-  const savedPlan = settings.data?.history[0];
-  const savedCalendar = savedPlan ? automationCalendar(savedPlan) : undefined;
-  return (
-    <Paper variant="outlined" sx={{ p: { xs: 1.5, md: 2 }, borderRadius: 2 }}>
-      <Stack spacing={1.5}>
-        <Stack
-          direction={{ xs: 'column', sm: 'row' }}
-          sx={{ alignItems: { sm: 'center' }, justifyContent: 'space-between', gap: 1 }}
-        >
-          <Box>
-            <Typography component="h2" variant="h6" sx={{ fontWeight: 750 }}>
-              Cấu hình lịch
-            </Typography>
-          </Box>
-          <Button
-            size="small"
-            variant="outlined"
-            onClick={() => setExpanded((current) => !current)}
-          >
-            {expanded ? 'Đóng chỉnh sửa' : savedPlan ? 'Chỉnh sửa lịch' : 'Thiết lập lịch'}
-          </Button>
-        </Stack>
-        <Chip
-          size="small"
-          variant="outlined"
-          sx={{ alignSelf: 'flex-start' }}
-          label="Chưa kích hoạt chạy tự động"
-        />
-        {settings.data &&
-          (savedPlan ? (
-            <Box
-              sx={{
-                display: 'grid',
-                gridTemplateColumns: { xs: '1fr 1fr', md: 'repeat(4, minmax(0, 1fr))' },
-                gap: 1,
-                p: 1.5,
-                bgcolor: 'action.hover',
-                borderRadius: 2,
-              }}
-            >
-              {[
-                ['Áp dụng từ kỳ', savedPlan.effectiveFrom.slice(0, 7)],
-                [
-                  'Giao việc ghi số',
-                  `Ngày ${savedPlan.meterDay} · hạn ${savedPlan.meterDueDay} (+${savedPlan.meterDueMonthOffset} tháng)`,
-                ],
-                [
-                  'Tạo nháp',
-                  savedCalendar
-                    ? `Ngày ${savedCalendar.draftDay} (+${savedCalendar.draftMonthOffset} tháng)`
-                    : 'Chưa có',
-                ],
-                [
-                  'Phát hành',
-                  savedCalendar
-                    ? `Ngày ${savedCalendar.finalDay} (+${savedCalendar.finalMonthOffset} tháng)`
-                    : 'Chưa có',
-                ],
-              ].map(([label, value]) => (
-                <Box key={label}>
-                  <Typography variant="caption" color="text.secondary">
-                    {label}
-                  </Typography>
-                  <Typography variant="body2" sx={{ fontWeight: 700 }}>
-                    {value}
-                  </Typography>
-                </Box>
-              ))}
-            </Box>
-          ) : (
-            <Alert severity="info">
-              Chưa lưu lịch cho cơ sở này. Chọn “Thiết lập lịch” để tạo phiên bản áp dụng từ kỳ mong
-              muốn.
-            </Alert>
-          ))}
-        {existingActive && (
-          <Alert severity="warning">
-            Có phiên bản cũ được bật tự động. Lưu lịch mới ở đây sẽ tắt các cờ tự động kể từ kỳ bắt
-            đầu áp dụng; những kỳ còn dùng phiên bản cũ cần được kiểm tra riêng.
-          </Alert>
-        )}
-        {settings.isPending && <LinearProgress />}
-        {settings.error && (
-          <Alert
-            severity="error"
-            action={<Button onClick={() => void settings.refetch()}>Thử lại cấu hình</Button>}
-          >
-            {invoiceError(settings.error)}
-          </Alert>
-        )}
-        {expanded && settings.data && (
-          <AutomationForm
-            key={settings.data.history[0]?.id ?? 'new'}
-            location={location}
-            history={settings.data.history}
-            calendar={settings.data.calendar}
-            saved={() => {
-              void cache.invalidateQueries({
-                queryKey: ['manual-billing-schedule', session?.userId, location],
-              });
-              void cache.invalidateQueries({ queryKey: ['automation'] });
-            }}
-          />
-        )}
-      </Stack>
-    </Paper>
   );
 }
 
@@ -2144,416 +2017,6 @@ function AutomationDrafts({ location, period }: { location: string; period: stri
 }
 
 /** Month offsets stay numeric in the API; owners choose a calendar month instead. */
-function MonthChoice({
-  label,
-  value,
-  onChange,
-}: {
-  label: string;
-  value: string;
-  onChange: (value: string) => void;
-}) {
-  return (
-    <TextField select label={label} value={value} onChange={(e) => onChange(e.target.value)}>
-      <MenuItem value="0">Tháng này</MenuItem>
-      <MenuItem value="1">Tháng sau</MenuItem>
-      {value === '2' && <MenuItem value="2">Hai tháng sau (lịch đã lưu)</MenuItem>}
-    </TextField>
-  );
-}
-
-function scheduledDay(period: string, day: string, monthOffset: string): number | null {
-  if (
-    !/^\d{4}-(0[1-9]|1[0-2])$/.test(period) ||
-    !Number.isInteger(Number(day)) ||
-    Number(day) < 1 ||
-    Number(day) > 31 ||
-    !['0', '1', '2'].includes(monthOffset)
-  )
-    return null;
-  const [year, month] = period.split('-').map(Number);
-  const firstOfMonth = Date.UTC(year!, month! - 1 + Number(monthOffset), 1);
-  const endOfMonth = new Date(Date.UTC(year!, month! + Number(monthOffset), 0)).getUTCDate();
-  return firstOfMonth + (Math.min(Number(day), endOfMonth) - 1) * 86_400_000;
-}
-
-function previewDate(value: number | null): string {
-  if (value === null) return 'Chưa chọn ngày';
-  const date = new Date(value);
-  return `${String(date.getUTCDate()).padStart(2, '0')}/${String(date.getUTCMonth() + 1).padStart(2, '0')}/${date.getUTCFullYear()}`;
-}
-
-function AutomationForm({
-  location,
-  history,
-  calendar,
-  saved,
-}: {
-  location: string;
-  history: AutomationPlan[];
-  calendar?: BillingSchedule;
-  saved: () => void;
-}) {
-  const api = useInvoiceApi();
-  const current = history[0];
-  const schedule = current ? automationCalendar(current) : calendar;
-  const [effective, setEffective] = useState(
-      current?.effectiveFrom.slice(0, 7) ?? businessToday().slice(0, 7),
-    ),
-    [day, setDay] = useState(current ? String(current.meterDay) : ''),
-    [due, setDue] = useState(current ? String(current.meterDueDay) : ''),
-    [offset, setOffset] = useState(current ? String(current.meterDueMonthOffset) : '0');
-  const [draftDay, setDraftDay] = useState(schedule ? String(schedule.draftDay) : ''),
-    [draftOffset, setDraftOffset] = useState(schedule ? String(schedule.draftMonthOffset) : '0'),
-    [finalDay, setFinalDay] = useState(schedule ? String(schedule.finalDay) : ''),
-    [finalOffset, setFinalOffset] = useState(schedule ? String(schedule.finalMonthOffset) : '0');
-  const [rateDate, setRateDate] = useState(
-      calendar
-        ? String(calendar.rateDate)
-        : schedule?.rateDate != null
-          ? String(schedule.rateDate)
-          : '',
-    ),
-    [partialMonth, setPartialMonth] = useState(
-      calendar
-        ? String(calendar.partialMonth)
-        : schedule?.partialMonth != null
-          ? String(schedule.partialMonth)
-          : '',
-    ),
-    [rounding, setRounding] = useState(
-      calendar
-        ? String(calendar.rounding)
-        : schedule?.rounding != null
-          ? String(schedule.rounding)
-          : '',
-    ),
-    [paymentDueDay, setPaymentDueDay] = useState(schedule ? String(schedule.dueDay) : ''),
-    [paymentDueOffset, setPaymentDueOffset] = useState(
-      schedule ? String(schedule.dueMonthOffset) : '0',
-    );
-  const [error, setError] = useState(''),
-    [notice, setNotice] = useState(''),
-    [busy, setBusy] = useState(false);
-  const lock = useRef(false);
-  const validDay = (value: string) =>
-    Number.isInteger(Number(value)) && Number(value) >= 1 && Number(value) <= 31;
-  const assignmentDate = scheduledDay(effective, day, '0');
-  const meterDeadline = scheduledDay(effective, due, offset);
-  const draftDate = scheduledDay(effective, draftDay, draftOffset);
-  const finalDate = scheduledDay(effective, finalDay, finalOffset);
-  const paymentDate = scheduledDay(effective, paymentDueDay, paymentDueOffset);
-  const datesOrdered =
-    assignmentDate !== null &&
-    meterDeadline !== null &&
-    draftDate !== null &&
-    finalDate !== null &&
-    paymentDate !== null &&
-    assignmentDate <= meterDeadline &&
-    draftDate <= finalDate &&
-    finalDate <= paymentDate;
-  const valid =
-    /^\d{4}-(0[1-9]|1[0-2])$/.test(effective) &&
-    [day, due, draftDay, finalDay].every(validDay) &&
-    [offset, draftOffset, finalOffset, paymentDueOffset].every((v) =>
-      ['0', '1', '2'].includes(v),
-    ) &&
-    validDay(paymentDueDay) &&
-    ['0', '1'].includes(rateDate) &&
-    ['0', '1'].includes(partialMonth) &&
-    ['0', '1'].includes(rounding) &&
-    datesOrdered;
-  return (
-    <Box>
-      <Stack
-        component={ValidatedForm}
-        spacing={1.5}
-        onSubmit={(e) => {
-          e.preventDefault();
-          if (lock.current || !valid) return;
-          lock.current = true;
-          setBusy(true);
-          setError('');
-          setNotice('');
-          void api
-            .request('/api/v1/billing-automation', {
-              method: 'PUT',
-              body: JSON.stringify({
-                locationId: location,
-                effectiveFrom: effective + '-01',
-                enabled: false,
-                authorizeAutomaticFinalization: false,
-                meterDay: Number(day),
-                meterDueDay: Number(due),
-                meterDueMonthOffset: Number(offset),
-                draftDay: Number(draftDay),
-                draftMonthOffset: Number(draftOffset),
-                finalDay: Number(finalDay),
-                finalMonthOffset: Number(finalOffset),
-                dueDay: Number(paymentDueDay),
-                dueMonthOffset: Number(paymentDueOffset),
-                timeZone: 'Asia/Ho_Chi_Minh',
-                expectedVersion: current?.version ?? 0,
-                expectedBillingScheduleVersion: calendar?.version ?? 0,
-                initialSchedule: {
-                  rateDate: Number(rateDate),
-                  partialMonth: Number(partialMonth),
-                  rounding: Number(rounding),
-                },
-              }),
-            })
-            .then(() => {
-              setNotice('Đã lưu cấu hình lịch theo kỳ bắt đầu áp dụng. Chưa bật chạy tự động.');
-              saved();
-            })
-            .catch((e) => setError(invoiceError(e)))
-            .finally(() => {
-              lock.current = false;
-              setBusy(false);
-            });
-        }}
-      >
-        <Alert severity="info">
-          Lưu lịch không bật chạy tự động. Có thể chọn tháng áp dụng bên dưới.
-        </Alert>
-        <Box
-          sx={{
-            display: 'grid',
-            gridTemplateColumns: { xs: '1fr', md: 'repeat(2, minmax(0, 1fr))' },
-            gap: 1.5,
-          }}
-        >
-          <TextField
-            required
-            type="month"
-            label="Kỳ bắt đầu áp dụng cấu hình"
-            value={effective}
-            onChange={(e) => setEffective(e.target.value)}
-            slotProps={{ inputLabel: { shrink: true } }}
-          />
-          <Stack direction="row" spacing={1} sx={{ alignItems: 'center', flexWrap: 'wrap' }}>
-            <Button
-              size="small"
-              variant="outlined"
-              onClick={() => setEffective(businessToday().slice(0, 7))}
-            >
-              Tháng này
-            </Button>
-            <Button
-              size="small"
-              variant="outlined"
-              onClick={() => {
-                const [year, month] = businessToday().slice(0, 7).split('-').map(Number);
-                setEffective(
-                  `${month === 12 ? year + 1 : year}-${String((month % 12) + 1).padStart(2, '0')}`,
-                );
-              }}
-            >
-              Tháng sau
-            </Button>
-          </Stack>
-          <TextField
-            required
-            type="number"
-            label="Ngày giao việc ghi chỉ số"
-            value={day}
-            onChange={(e) => setDay(e.target.value)}
-            slotProps={{ htmlInput: { min: 1, max: 31 } }}
-          />
-          <TextField
-            required
-            type="number"
-            label="Ngày hết hạn ghi chỉ số"
-            value={due}
-            onChange={(e) => setDue(e.target.value)}
-            slotProps={{ htmlInput: { min: 1, max: 31 } }}
-          />
-          <MonthChoice label="Hạn ghi số thuộc tháng" value={offset} onChange={setOffset} />
-        </Box>
-        <Typography variant="subtitle2" sx={{ fontWeight: 750 }}>
-          Mốc tạo & phát hành hóa đơn
-        </Typography>
-        <Box
-          sx={{
-            display: 'grid',
-            gridTemplateColumns: { xs: '1fr', md: 'repeat(2, minmax(0, 1fr))' },
-            gap: 1.5,
-          }}
-        >
-          <TextField
-            required
-            type="number"
-            label="Ngày tạo hóa đơn nháp"
-            value={draftDay}
-            onChange={(e) => setDraftDay(e.target.value)}
-            slotProps={{ htmlInput: { min: 1, max: 31 } }}
-          />
-          <MonthChoice label="Tạo nháp vào tháng" value={draftOffset} onChange={setDraftOffset} />
-          <TextField
-            required
-            type="number"
-            label="Ngày phát hành chính thức"
-            value={finalDay}
-            onChange={(e) => setFinalDay(e.target.value)}
-            slotProps={{ htmlInput: { min: 1, max: 31 } }}
-          />
-          <MonthChoice label="Phát hành vào tháng" value={finalOffset} onChange={setFinalOffset} />
-        </Box>
-        <Box sx={{ p: 2, border: '1px solid', borderColor: 'divider', borderRadius: 2 }}>
-          <Stack spacing={1.5}>
-            <Box>
-              <Typography variant="subtitle2" sx={{ fontWeight: 750 }}>
-                Quy tắc tính tiền cho cơ sở
-              </Typography>
-            </Box>
-            <Box
-              sx={{
-                display: 'grid',
-                gridTemplateColumns: { xs: '1fr', md: 'repeat(2, minmax(0, 1fr))' },
-                gap: 1.5,
-              }}
-            >
-              <TextField
-                select
-                required
-                label="Mốc tham chiếu kỳ"
-                value={rateDate}
-                onChange={(e) => setRateDate(e.target.value)}
-              >
-                <MenuItem value="">Chọn mốc tham chiếu</MenuItem>
-                <MenuItem value="0">Ngày đầu tháng</MenuItem>
-                <MenuItem value="1">Ngày cuối tháng</MenuItem>
-              </TextField>
-              <TextField
-                select
-                required
-                label="Phí cố định khi ở không đủ tháng"
-                value={partialMonth}
-                onChange={(e) => setPartialMonth(e.target.value)}
-              >
-                <MenuItem value="">Chọn cách tính</MenuItem>
-                <MenuItem value="0">Thu cả tháng</MenuItem>
-                <MenuItem value="1">Theo số ngày ở</MenuItem>
-              </TextField>
-              <TextField
-                select
-                required
-                label="Làm tròn từng khoản VND"
-                value={rounding}
-                onChange={(e) => setRounding(e.target.value)}
-              >
-                <MenuItem value="">Chọn cách làm tròn</MenuItem>
-                <MenuItem value="0">0,5 làm tròn lên</MenuItem>
-                <MenuItem value="1">0,5 làm tròn về số chẵn</MenuItem>
-              </TextField>
-            </Box>
-          </Stack>
-        </Box>
-        <Typography variant="subtitle2" sx={{ fontWeight: 750 }}>
-          Hạn thanh toán
-        </Typography>
-        <Box
-          sx={{
-            display: 'grid',
-            gridTemplateColumns: { xs: '1fr', md: 'repeat(2, minmax(0, 1fr))' },
-            gap: 1.5,
-          }}
-        >
-          <TextField
-            required
-            type="number"
-            label="Ngày hạn thanh toán"
-            value={paymentDueDay}
-            onChange={(e) => setPaymentDueDay(e.target.value)}
-            slotProps={{ htmlInput: { min: 1, max: 31 } }}
-          />
-          <MonthChoice
-            label="Hạn thanh toán thuộc tháng"
-            value={paymentDueOffset}
-            onChange={setPaymentDueOffset}
-          />
-        </Box>
-        <Box
-          sx={{ bgcolor: 'action.hover', borderRadius: 2, p: 1.5 }}
-          aria-label="Xem trước lịch thực hiện"
-        >
-          <Typography variant="subtitle2" sx={{ fontWeight: 750, mb: 1 }}>
-            Xem trước ngày thực hiện · kỳ{' '}
-            {/^\d{4}-\d{2}$/.test(effective)
-              ? effective.slice(5) + '/' + effective.slice(0, 4)
-              : 'chưa chọn'}
-          </Typography>
-          <Box
-            sx={{
-              display: 'grid',
-              gridTemplateColumns: { xs: '1fr', sm: 'repeat(2, minmax(0, 1fr))' },
-              gap: 1,
-            }}
-          >
-            {(
-              [
-                ['Giao nhiệm vụ ghi số', assignmentDate],
-                ['Hạn ghi chỉ số', meterDeadline],
-                ['Tạo hóa đơn nháp', draftDate],
-                ['Phát hành chính thức', finalDate],
-                ['Hạn thanh toán', paymentDate],
-              ] as const
-            ).map(([label, dateValue]) => (
-              <Typography key={label} variant="body2">
-                <Box component="span" sx={{ color: 'text.secondary' }}>
-                  {label}:{' '}
-                </Box>
-                <Box component="span" sx={{ fontWeight: 700, fontVariantNumeric: 'tabular-nums' }}>
-                  {previewDate(dateValue)}
-                </Box>
-              </Typography>
-            ))}
-          </Box>
-          {!datesOrdered && (
-            <Typography color="error" variant="body2" sx={{ mt: 1 }}>
-              Ngày đang thiếu hoặc chưa theo đúng thứ tự. Kiểm tra các mốc trước khi lưu.
-            </Typography>
-          )}
-        </Box>
-        {!valid && (
-          <Typography variant="caption" color="error">
-            Kiểm tra kỳ, các ngày 1–31 và thứ tự giao việc/hạn ghi số/nháp/phát hành/hạn thanh toán.
-          </Typography>
-        )}
-        {error && <Alert severity="error">{error}</Alert>}
-        {notice && <Alert severity="success">{notice}</Alert>}
-        <Button
-          type="submit"
-          variant="contained"
-          sx={{ alignSelf: 'flex-start' }}
-          disabled={busy || !valid}
-        >
-          {busy
-            ? 'Đang lưu lịch…'
-            : !calendar
-              ? 'Tạo lịch (không kích hoạt tự động)'
-              : 'Lưu lịch (không kích hoạt tự động)'}
-        </Button>
-        {history.length > 0 && (
-          <Box component="details">
-            <Box component="summary" sx={{ cursor: 'pointer', fontWeight: 700 }}>
-              Lịch sử cấu hình ({history.length} phiên bản)
-            </Box>
-            <Stack spacing={0.5} sx={{ mt: 1 }}>
-              {history.map((p) => (
-                <Typography key={p.id} variant="body2">
-                  v{p.version} · từ {p.effectiveFrom} ·{' '}
-                  {p.enabled ? 'Đang bật tự động' : 'Tự động tắt'} · phát hành tự động:{' '}
-                  {p.authorizeAutomaticFinalization ? 'Có' : 'Không'} · {date(p.recordedAt)}
-                </Typography>
-              ))}
-            </Stack>
-          </Box>
-        )}
-      </Stack>
-    </Box>
-  );
-}
 function RepresentativeForm({ location, period }: { location: string; period: string }) {
   const api = useInvoiceApi();
   const { session } = useAuth();

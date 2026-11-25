@@ -13,6 +13,7 @@ const state = vi.hoisted(() => ({
   tasks: null as null | { totalCount: number },
   overdue: [] as { id: string; title: string; locationId: string; status: string; kind?: string }[],
   failed: false,
+  overdueMeterRooms: null as number | null,
 }));
 vi.mock('expo-router', () => ({ router: { push: state.push } }));
 vi.mock('../features/workspace/WorkspaceProvider', () => ({
@@ -34,6 +35,7 @@ vi.mock('../features/workspace/useStaffDashboard', () => ({
     overdue: { data: { items: state.overdue }, error: state.failed ? 'Lỗi tải' : '' },
     inspections: { data: [], error: '' },
     meters: { data: [], error: '' },
+    overdueMeterRooms: state.overdueMeterRooms,
     reload: state.reload,
   }),
 }));
@@ -102,8 +104,17 @@ beforeEach(() => {
   state.tasks = null;
   state.overdue = [];
   state.failed = false;
+  state.overdueMeterRooms = null;
   state.selectedId = 'loc';
   state.locations = [{ id: 'loc', label: 'Cơ sở kiểm thử' }];
+});
+it('shows the distinct overdue-room count on the meter workspace tile and opens the workspace', () => {
+  state.overdueMeterRooms = 3;
+  render(<StaffDashboard />);
+  const tile = screen.getByRole('button', { name: /Ghi điện nước/ });
+  expect(within(tile).getByText('3 phòng quá hạn')).toBeTruthy();
+  fireEvent.click(tile);
+  expect(state.go).toHaveBeenCalledWith('meter-reading');
 });
 it('lets Staff choose between two assigned Locations directly on Home', () => {
   state.locations = [

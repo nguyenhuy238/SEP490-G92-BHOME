@@ -154,9 +154,10 @@ public sealed class InvoiceService(IInvoiceRepository repository, ICurrentUser u
             await ScheduledAuthority(invoice, expectedAutomationPlanId, t);
             if (expectedAutomationPlanId is not null)
             {
-                if ((await repository.DraftCorrectionsAsync(id, t)).Count > 0) throw new InvoiceException(409, "approved_draft_requires_review");
+                if (await repository.HasPendingAdjustmentsAsync(id, t)) throw new InvoiceException(409, "invoice_adjustment_pending");
                 var check = new Invoice { RoomId = invoice.RoomId, LocationId = invoice.LocationId, BillingPeriod = invoice.BillingPeriod, RepresentativeContractId = invoice.RepresentativeContractId };
                 await CalculateAsync(check, JsonSerializer.Deserialize<BillingSchedule>(invoice.ScheduleSnapshot)!, t, id);
+                if (check.MissingInputs.Contains("draft_correction_source_changed")) throw new InvoiceException(409, "approved_draft_requires_review");
                 if (Charges(invoice).SequenceEqual(Charges(check)) && invoice.MissingInputs.Order().SequenceEqual(check.MissingInputs.Order()) && check.Recipients.All(r => invoice.Recipients.Any(old => old.TenantUserId == r.TenantUserId))) return View(invoice);
                 repository.RemoveLines(invoice);
                 foreach (var line in check.Lines) { line.InvoiceId = id; invoice.Lines.Add(line); repository.Add(line); }

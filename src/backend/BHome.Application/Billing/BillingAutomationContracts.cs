@@ -1,3 +1,4 @@
+using BHome.Application.Common;
 using System.Text.Json;
 using System.Text.Json.Nodes;
 using System.Text.Json.Serialization;
@@ -16,6 +17,12 @@ public sealed record BillingAutomationWrite([property: JsonRequired] Guid Locati
 // Required for first setup; on subsequent saves the supplied values are the
 // Owner's desired calculation rules and are versioned only when changed.
 public sealed record BillingAutomationInitialSchedule(BillingRateDate RateDate, PartialMonthRule PartialMonth, VndRounding Rounding);
+public sealed record LocationBillingScheduleWrite(
+    [property: JsonRequired] int MeterDay, [property: JsonRequired] int MeterDueDay, [property: JsonRequired] int MeterDueMonthOffset,
+    [property: JsonRequired] int DraftDay, [property: JsonRequired] int DraftMonthOffset,
+    [property: JsonRequired] int FinalDay, [property: JsonRequired] int FinalMonthOffset,
+    [property: JsonRequired] int DueDay, [property: JsonRequired] int DueMonthOffset,
+    [property: JsonRequired] int ExpectedVersion, [property: JsonRequired] int ExpectedBillingScheduleVersion);
 public interface IBillingAutomationSchedules
 {
     Task<BillingAutomationPlan?> ForPeriodAsync(Guid locationId, DateOnly period, CancellationToken t);
@@ -38,6 +45,35 @@ public sealed class BillingAutomationService(IBillingAutomationSchedules schedul
     { await Owner(location, t); ValidatePeriod(period); return await schedules.ForPeriodAsync(location, period, t); }
     public async Task<IReadOnlyList<BillingAutomationPlan>> HistoryAsync(Guid location, CancellationToken t)
     { await Owner(location, t); return await schedules.HistoryAsync(location, t); }
+    // The recurring location editor owns only the five milestones. Effective dates
+    // and fixed calculation defaults are internal, retaining historical plan snapshots.
+    public async Task<BillingAutomationPlan> SaveLocationScheduleAsync(Guid location, LocationBillingScheduleWrite x, CancellationToken t)
+    {
+        await Owner(location, t);
+        var today = clock.BusinessToday();
+        var period = new DateOnly(today.Year, today.Month, 1);
+        // An inherited plan is just as authoritative as one created this month.
+        // The existing write-version check protects against competing edits.
+        if (await schedules.ForPeriodAsync(location, period, t) is not null)
+            period = period.AddMonths(1);
+        if (new[] { x.MeterDay, x.MeterDueDay, x.DraftDay, x.FinalDay, x.DueDay }.Any(d => d is < 1 or > 31) ||
+            new[] { x.MeterDueMonthOffset, x.DraftMonthOffset, x.FinalMonthOffset, x.DueMonthOffset }.Any(o => o is < 0 or > 1))
+            throw new InvoiceException(400, "invalid_billing_automation");
+        foreach (var month in new[] { new DateOnly(2027, 2, 1), new DateOnly(2028, 2, 1), new DateOnly(2026, 12, 1) })
+        {
+            var dates = new[] { InvoiceMath.CalendarDate(month, x.MeterDay, 0),
+                InvoiceMath.CalendarDate(month, x.MeterDueDay, x.MeterDueMonthOffset),
+                InvoiceMath.CalendarDate(month, x.DraftDay, x.DraftMonthOffset),
+                InvoiceMath.CalendarDate(month, x.FinalDay, x.FinalMonthOffset),
+                InvoiceMath.CalendarDate(month, x.DueDay, x.DueMonthOffset) };
+            if (dates.Zip(dates.Skip(1)).Any(pair => pair.First > pair.Second))
+                throw new InvoiceException(400, "invalid_billing_calendar_order");
+        }
+        return await SaveAsync(new(location, period, true, true, x.MeterDay, x.MeterDueDay, x.MeterDueMonthOffset,
+            "Asia/Ho_Chi_Minh", x.ExpectedVersion, x.ExpectedBillingScheduleVersion,
+            x.DraftDay, x.DraftMonthOffset, x.FinalDay, x.FinalMonthOffset, x.DueDay, x.DueMonthOffset,
+            new(BillingRateDate.PeriodStart, PartialMonthRule.FullMonth, VndRounding.AwayFromZero)), t);
+    }
     public async Task<BillingAutomationPlan> SaveAsync(BillingAutomationWrite x, CancellationToken t)
     {
         var actor = await Owner(x.LocationId, t); ValidatePeriod(x.EffectiveFrom);

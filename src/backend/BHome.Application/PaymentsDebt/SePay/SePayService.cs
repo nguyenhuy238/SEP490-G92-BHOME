@@ -164,7 +164,10 @@ public sealed class SePayService(ISePayRepository repository, IPaymentRepository
         }
         if (outstanding <= 0) return await Review(target.Kind == "Invoice" ? "invoice_already_settled" :
             target.Kind == "Settlement" ? "settlement_already_paid" : "deposit_already_satisfied");
-        if (receipt.Amount != outstanding) return await Review("payment_amount_requires_review");
+        // Monthly invoices support verified installments; other obligations
+        // still require an exact payment. Excess receipts remain for review.
+        if (receipt.Amount > outstanding || (invoice is null && receipt.Amount != outstanding))
+            return await Review("payment_amount_requires_review");
         if (await payments.ReferenceClaimedAsync(reference, token)) return await Review("bank_reference_already_credited");
         var allocation = new PaymentAllocation
         {
@@ -173,11 +176,11 @@ public sealed class SePayService(ISePayRepository repository, IPaymentRepository
             TargetDepositContractId = invoice is null && settlement is null ? target.ObligationId : null,
             TargetSettlementContractId = settlement?.ContractId,
             SettlementReceivableId = settlement?.Charge.Id,
-            Amount = outstanding,
+            Amount = receipt.Amount,
             AllocatedAt = receipt.VerifiedAt
         };
         payments.Add(allocation);
-        const string reason = "verified_full_payment";
+        var reason = receipt.Amount < outstanding ? "verified_partial_payment" : "verified_full_payment";
         payments.Add(new PaymentReconciliation
         {
             TransferId = receipt.Id,
