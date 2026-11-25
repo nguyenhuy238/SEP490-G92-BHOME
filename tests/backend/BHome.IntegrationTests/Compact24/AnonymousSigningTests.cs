@@ -679,7 +679,7 @@ public sealed class AnonymousSigningTests(Compact24Fixture fixture) : IClassFixt
                     new BHome.Infrastructure.Contracts.DrawnSignatureInput(300, 100, [[[10, 70], [80, 20], [145, 65], [220, 50], [270, 30]]])))
                     .EnsureSuccessStatusCode();
             var view = await owner.GetFromJsonAsync<ContractView>(path);
-            var invitationInput = new SigningInvitationInput(DateTimeOffset.UtcNow.AddHours(1), view!.SnapshotHash, deferredContacts ? deliveryEmail : null);
+            var invitationInput = new SigningInvitationInput(DateTimeOffset.UtcNow.AddHours(1), view!.SnapshotHash, deferredContacts && path == root ? deliveryEmail : null);
             var invite = await Result<SigningInvitationResult>(await Post(owner, path + "/signing-invitations", invitationInput));
             var inviteToken = invite.Token!;
             if (path == root)
@@ -863,7 +863,21 @@ public sealed class AnonymousSigningTests(Compact24Fixture fixture) : IClassFixt
         var previewPdf = await assignedStaff.GetByteArrayAsync(mainRoot + $"/previews/{preview.Id}");
         Assert.StartsWith("%PDF-", System.Text.Encoding.ASCII.GetString(previewPdf));
         Assert.Equal(System.Net.HttpStatusCode.Forbidden, (await assignedStaff.GetAsync(mainRoot + "/deposit-verifications")).StatusCode);
+        if (deferredContacts)
+        {
+            await using var scope = host.Services.CreateAsyncScope();
+            var db = scope.ServiceProvider.GetRequiredService<Compact24DbContext>();
+            var resident = await db.Set<Resident>().SingleAsync(r => r.Id == residentId);
+            resident.ContactEmail = "updated-profile@example.invalid";
+            await db.SaveChangesAsync();
+
+            var signing = await assignedStaff.GetFromJsonAsync<InternalSigningStatus>(mainRoot + "/internal-signing");
+            Assert.True(signing!.UsesHoldingEmail);
+            Assert.Equal(deliveryEmail[..1] + "***" + deliveryEmail[deliveryEmail.IndexOf('@')..], signing.MaskedEmail);
+        }
         await Sign(mainRoot);
+        if (deferredContacts)
+            Assert.Equal(deliveryEmail, delivery.Messages.Last(m => m.EventType == "CONTRACT_SIGNING_INVITATION").Destination);
         if (qrPreview)
         {
             var quote = await Result<BHome.Application.PaymentsDebt.MainInitialPaymentView>(await owner.PostAsync(mainRoot + "/initial-payment/transfer-instructions", null));
@@ -900,7 +914,8 @@ public sealed class AnonymousSigningTests(Compact24Fixture fixture) : IClassFixt
             var receipt = Assert.Single(attachments, a => a.FileName.StartsWith("Bien-nhan-thanh-toan-", StringComparison.Ordinal));
             Assert.StartsWith("%PDF-", System.Text.Encoding.ASCII.GetString(receipt.Content));
             Assert.False((await db.Users.SingleAsync(u => u.Id == tenant)).EmailConfirmed);
-            await scope.ServiceProvider.GetRequiredService<INotificationEventPublisher>().PublishPendingAsync(default);
+            var events = scope.ServiceProvider.GetRequiredService<BHome.Infrastructure.Modules.Notifications.CompactNotificationEvents>();
+            await events.PublishMainActivationsAsync(default);
             var notice = await db.Set<BHome.Domain.Notifications.UserNotification>().SingleAsync(n =>
                 n.RelatedObjectId == main.Id && n.RecipientUserId == tenant && n.EventType == "CONTRACT_ACTIVATED");
             var worker = scope.ServiceProvider.GetRequiredService<BHome.Infrastructure.Modules.Notifications.NotificationChannelWorker>();
@@ -917,12 +932,13 @@ public sealed class AnonymousSigningTests(Compact24Fixture fixture) : IClassFixt
                   now()-interval '1 day','Pending',now()-interval '1 day'
                 FROM generate_series(1,51)
                 """);
-            await worker.ProcessPendingAsync(default);
+            await worker.ProcessPendingAsync(default, businessEmailOnly: true);
             var confirmation = Assert.Single(delivery.Messages, m => m.EventType == "MAIN_CONFIRMED");
             Assert.Equal(deliveryEmail, confirmation.Destination);
             Assert.Equal(2, confirmation.Attachments!.Count);
             Assert.Equal(await owner.GetByteArrayAsync(mainRoot + "/document"),
                 Assert.Single(confirmation.Attachments, a => a.FileName.StartsWith("Hop-dong-", StringComparison.Ordinal)).Content);
+            await events.PublishMainActivationsAsync(default);
             await worker.DeliverAsync(emailDelivery, default);
             Assert.Single(delivery.Messages, m => m.EventType == "MAIN_CONFIRMED");
             return;

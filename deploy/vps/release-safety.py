@@ -13,6 +13,10 @@ CONTAINERS = {
     'staging': ['bhome-sepay-api-stage', 'bhome-sepay-owner-web-stage', 'bhome-sepay-stage-public'],
     'production': ['bhome-vps-api-1', 'bhome-vps-owner-web-1', 'bhome-vps-public-web-1'],
 }
+RELEASE_PDF_TOOLS = {
+    'MainDraft__LibreOfficePath': '/usr/bin/libreoffice',
+    'MainDraft__PdfToPpmPath': '/usr/bin/pdftoppm',
+}
 
 
 def docker(*args):
@@ -90,7 +94,14 @@ def check_environment(target):
             raise ValueError('Missing or shared environment identity: ' + key)
     if stage.get('ObjectStorage__Bucket') == prod.get('ObjectStorage__Bucket'):
         raise ValueError('Storage bucket must be environment-specific')
-    managed = {k: v for k, v in current.items() if ('__' in k and not k.startswith('Deployment__')) or k in ('ASPNETCORE_ENVIRONMENT', 'DOTNET_ENVIRONMENT', 'AllowedHosts')}
+    # Canonical tool paths are supplied by Api.Release.Dockerfile, rather than
+    # private runtime configuration. Reject arbitrary paths; normalize only the
+    # reviewed defaults when upgrading an older operator image.
+    for key, expected_path in RELEASE_PDF_TOOLS.items():
+        if key in current and current[key] != expected_path:
+            raise ValueError('Unapproved contract PDF tool path: ' + key)
+    managed = {k: v for k, v in current.items() if k not in RELEASE_PDF_TOOLS and
+               (('__' in k and not k.startswith('Deployment__')) or k in ('ASPNETCORE_ENVIRONMENT', 'DOTNET_ENVIRONMENT', 'AllowedHosts'))}
     return hashlib.sha256(json.dumps(managed, sort_keys=True).encode()).hexdigest()
 
 
@@ -101,6 +112,8 @@ def verify_image(image, sha, app, target):
     config = json.loads(docker('image', 'inspect', image))[0]
     if config['Config']['Labels'].get('org.opencontainers.image.revision') != sha:
         raise ValueError('Image OCI revision does not match the release')
+    if target == 'staging' and app == 'api' and config['Config']['Labels'].get('io.bhome.staging-regressions') != 'v1':
+        raise ValueError('API image predates the required Staging hotfix regression gate')
     if image.split('@')[1] not in [v.split('@')[1] for v in config.get('RepoDigests', [])]:
         raise ValueError('Pulled image digest is not the manifest digest')
     if app != 'api':

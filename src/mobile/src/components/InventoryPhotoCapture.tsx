@@ -1,7 +1,8 @@
 import React, { useEffect, useState } from 'react';
 import { Image, Platform, View } from 'react-native';
-import { Button, IconButton, Text } from 'react-native-paper';
+import { IconButton, Text } from 'react-native-paper';
 import { CameraCapture } from './CameraCapture';
+import { FloatingDemoPhotoButton } from './FloatingDemoPhotoButton';
 import { incidentPhotoUri } from './IncidentEvidencePicker';
 import { validateIncidentPhoto, type IncidentPhoto } from '../services/incidents';
 import { randomUUID } from '../lib/randomUUID';
@@ -77,6 +78,7 @@ export function InventoryPhotoCapture({
   onRemoveSaved,
   error,
   developmentDemo = false,
+  required = true,
 }: {
   api: MobileApi;
   taskId: string;
@@ -87,6 +89,7 @@ export function InventoryPhotoCapture({
   onRemoveSaved: (id: string) => void;
   error?: string;
   developmentDemo?: boolean;
+  required?: boolean;
 }) {
   const [captureError, setCaptureError] = useState('');
   const count = savedIds.length + photos.length;
@@ -101,7 +104,7 @@ export function InventoryPhotoCapture({
   return (
     <View style={{ gap: 8 }}>
       <Text variant="labelMedium" style={{ color: error ? colors.red : colors.navy }}>
-        Ảnh minh chứng:
+        {required ? 'Ảnh minh chứng *' : 'Ảnh minh chứng (không bắt buộc)'}
       </Text>
       <CameraCapture
         label="Chụp ảnh"
@@ -130,29 +133,6 @@ export function InventoryPhotoCapture({
           return true;
         }}
       />
-      {canUseSample && (
-        <Button
-          mode="outlined"
-          icon="flask-outline"
-          disabled={disabled || count >= 5}
-          onPress={() => {
-            if (!canUseSample || disabled || count >= 5) return;
-            try {
-              const bytes = createInventoryDemoPhoto();
-              const problem = validateIncidentPhoto(bytes);
-              if (problem) throw new Error(problem);
-              onChange([...photos, { id: randomUUID(), bytes, contentType: 'image/jpeg' }]);
-              setCaptureError('');
-            } catch (failure) {
-              setCaptureError(
-                failure instanceof Error ? failure.message : 'Không tạo được ảnh mẫu DEV.',
-              );
-            }
-          }}
-        >
-          Thêm ảnh mẫu DEV
-        </Button>
-      )}
       {!!(error || captureError) && (
         <Text accessibilityRole="alert" style={{ color: colors.red }}>
           {error || captureError}
@@ -215,6 +195,25 @@ export function InventoryPhotoCapture({
             </View>
           ))}
         </View>
+      )}
+      {canUseSample && (
+        <FloatingDemoPhotoButton
+          disabled={disabled || count >= 5}
+          onPress={() => {
+            if (!canUseSample || disabled || count >= 5) return;
+            try {
+              const bytes = createInventoryDemoPhoto();
+              const problem = validateIncidentPhoto(bytes);
+              if (problem) throw new Error(problem);
+              onChange([...photos, { id: randomUUID(), bytes, contentType: 'image/jpeg' }]);
+              setCaptureError('');
+            } catch (failure) {
+              setCaptureError(
+                failure instanceof Error ? failure.message : 'Không tạo được ảnh mẫu DEV.',
+              );
+            }
+          }}
+        />
       )}
     </View>
   );

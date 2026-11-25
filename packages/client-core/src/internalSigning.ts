@@ -8,6 +8,7 @@ export type InternalSigningStatus = {
   ownerAcceptedAt: string | null;
   invitations: { id: string; status: string; expiresAt: string }[];
   maskedEmail?: string | null;
+  usesHoldingEmail?: boolean;
   tenantSimulated?: boolean;
   canContinue?: boolean;
   sandboxAvailable?: boolean;

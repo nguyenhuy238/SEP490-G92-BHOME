@@ -25,11 +25,17 @@ internal sealed class NotificationChannelWorker(Compact24DbContext db, CompactNo
     }
     internal async Task ProcessPendingAsync(CancellationToken t, bool authenticationOnly = false, bool businessEmailOnly = false)
     { foreach (var work in await DueAsync(t, authenticationOnly, businessEmailOnly)) await DeliverAsync(work.Id, t); }
-    private async Task<IReadOnlyList<Work>> DueAsync(CancellationToken t, bool authenticationOnly = false, bool businessEmailOnly = false)
+    internal async Task ProcessHoldingConfirmationsAsync(CompactNotificationEvents events, CancellationToken t)
+    {
+        if (!options.Value.Enabled || !provider.IsConfigured("EMAIL")) return;
+        await events.QueueHoldingConfirmationsAsync(t);
+        foreach (var work in await DueAsync(t, holdingOnly: true)) await DeliverAsync(work.Id, t);
+    }
+    private async Task<IReadOnlyList<Work>> DueAsync(CancellationToken t, bool authenticationOnly = false, bool businessEmailOnly = false, bool holdingOnly = false)
     {
         if (!options.Value.Enabled) return [];
         // event_data remains immutable; delivery status/history is the mutable envelope.
-        await sql.Execute("""
+        if (!holdingOnly) await sql.Execute("""
             INSERT INTO notifications(id,record_kind,event_key,notification_type,event_data,event_at,delivery_status,next_delivery_at)
             SELECT gen_random_uuid(),'OUTBOX','channel:'||n.id::text||':'||c.channel,'CHANNEL_DELIVERY',
               jsonb_build_object('schemaVersion',1,'recordType','ChannelDelivery','notificationId',n.id,'recipient',n.recipient_user_id,
@@ -41,7 +47,7 @@ internal sealed class NotificationChannelWorker(Compact24DbContext db, CompactNo
                 AND n.event_data->'state'->>'eventType' IN ('CONTRACT_ACTIVATED','INVOICE_FULLY_PAID'))
             ON CONFLICT(record_kind,event_key) WHERE record_kind IN ('OUTBOX','AUDIT') DO NOTHING
             """, t, ("now", sql.Now), ("authenticationOnly", authenticationOnly), ("businessEmailOnly", businessEmailOnly));
-        if (!authenticationOnly && !businessEmailOnly && smsOptions.Value.Enabled)
+        if (!holdingOnly && !authenticationOnly && !businessEmailOnly && smsOptions.Value.Enabled)
             await sql.Execute("""
                 INSERT INTO notifications(id,record_kind,event_key,notification_type,event_data,event_at,delivery_status,next_delivery_at)
                 SELECT gen_random_uuid(),'OUTBOX','sms:'||md5(n.event_key||':'||p.phone),'CHANNEL_DELIVERY',
@@ -62,6 +68,7 @@ internal sealed class NotificationChannelWorker(Compact24DbContext db, CompactNo
         await using (var cmd = await sql.Command("""
             SELECT id,(SELECT count(*)::int FROM jsonb_array_elements(delivery_history) h WHERE h->>'recordType'='ChannelClaim')+1 FROM notifications WHERE record_kind='OUTBOX' AND event_data->>'recordType'='ChannelDelivery'
               AND ((@email AND event_data->>'channel'='EMAIL') OR (@push AND event_data->>'channel'='PUSH') OR (@sms AND event_data->>'channel'='SMS'))
+              AND (NOT @holdingOnly OR event_data->>'channel'='EMAIL' AND event_data->>'eventType'='HOLDING_CONFIRMED')
               AND (NOT @businessEmailOnly OR event_data->>'channel'='EMAIL' AND (event_data->>'eventType'='HOLDING_CONFIRMED'
                 OR event_data->>'role'='Tenant' AND event_data->>'eventType' IN ('CONTRACT_ACTIVATED','INVOICE_FULLY_PAID')))
               AND (NOT @authenticationOnly OR event_data ? 'protectedAuthenticationEmail' OR event_data->>'eventType' IN
@@ -70,7 +77,7 @@ internal sealed class NotificationChannelWorker(Compact24DbContext db, CompactNo
                  'STAFF_ASSIGNMENT_ACTIVATED','STAFF_ASSIGNMENT_ENDED'))
               AND ((delivery_status='Pending' AND next_delivery_at<=@now) OR (delivery_status='Processing' AND locked_until<=@now))
             ORDER BY event_at,id LIMIT 50
-            """, t, ("now", sql.Now), ("authenticationOnly", authenticationOnly), ("businessEmailOnly", businessEmailOnly),
+            """, t, ("now", sql.Now), ("authenticationOnly", authenticationOnly), ("businessEmailOnly", businessEmailOnly), ("holdingOnly", holdingOnly),
             ("email", provider.IsConfigured("EMAIL")), ("push", provider.IsConfigured("PUSH")), ("sms", provider.IsConfigured("SMS"))))
         { await using var reader = await cmd.ExecuteReaderAsync(t); while (await reader.ReadAsync(t)) due.Add(new(reader.GetGuid(0), reader.GetInt32(1))); }
         return due;

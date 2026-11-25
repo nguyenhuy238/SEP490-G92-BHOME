@@ -39,16 +39,23 @@ vi.mock('../components/WorkflowControls', () => ({
   Input: ({
     label,
     value,
+    placeholder,
     onChange,
     error,
   }: {
     label: string;
     value: string;
+    placeholder?: string;
     onChange: (v: string) => void;
     error?: string;
   }) => (
     <>
-      <input aria-label={label} value={value} onChange={(e) => onChange(e.target.value)} />
+      <input
+        aria-label={label}
+        value={value}
+        placeholder={placeholder}
+        onChange={(e) => onChange(e.target.value)}
+      />
       {error && <span role="alert">{error}</span>}
     </>
   ),
@@ -389,34 +396,42 @@ it.each(['sent', 'timeout', 'rejected', 'missing-pdf', 'unapproved-main-template
     }
   },
 );
-it('lets Staff send a Main invitation to the saved address without retyping it', async () => {
-  const c = { ...contract('Main', true), representativeResidentId: tenant };
-  const request = vi.fn<(path: string, init?: RequestInit) => Promise<unknown>>(async (path) => {
-    if (path.endsWith('/internal-signing'))
-      return { invitations: [], maskedEmail: 't***@example.invalid' };
-    if (path.endsWith('/signing-invitations'))
-      return { id: 'invite', status: 'InvitationAcceptedByProvider', expiresAt: '2099-01-01' };
-    if (path === `/api/v1/contracts/${id}`) return c;
-    throw new Error(path);
-  });
-  render(
-    <ContractSigningStep
-      api={contractClient(request as ContractRequest)}
-      contract={c}
-      role="Staff"
-      actorId="staff"
-      onChanged={vi.fn()}
-    />,
-  );
+it.each([false, true])(
+  'lets Staff send to the saved address without retyping it (Holding source: %s)',
+  async (usesHoldingEmail) => {
+    const c = { ...contract('Main', true), representativeResidentId: tenant };
+    const request = vi.fn<(path: string, init?: RequestInit) => Promise<unknown>>(async (path) => {
+      if (path.endsWith('/internal-signing'))
+        return { invitations: [], maskedEmail: 't***@example.invalid', usesHoldingEmail };
+      if (path.endsWith('/signing-invitations'))
+        return { id: 'invite', status: 'InvitationAcceptedByProvider', expiresAt: '2099-01-01' };
+      if (path === `/api/v1/contracts/${id}`) return c;
+      throw new Error(path);
+    });
+    render(
+      <ContractSigningStep
+        api={contractClient(request as ContractRequest)}
+        contract={c}
+        role="Staff"
+        actorId="staff"
+        onChanged={vi.fn()}
+      />,
+    );
 
-  await screen.findByText(/Sẽ gửi đến email đã lưu/);
-  fireEvent.click(screen.getByRole('button', { name: 'Gửi lời mời ký qua email' }));
-  await waitFor(() =>
-    expect(request.mock.calls.some(([path]) => path.endsWith('/signing-invitations'))).toBe(true),
-  );
-  const submitted = request.mock.calls.find(([path]) => path.endsWith('/signing-invitations'))?.[1];
-  expect(JSON.parse(String(submitted?.body))).not.toHaveProperty('recipientEmail');
-});
+    await screen.findByText(
+      usesHoldingEmail ? /Sẽ dùng email từ hợp đồng giữ chỗ/ : /Sẽ gửi đến email đã lưu/,
+    );
+    expect(screen.queryByPlaceholderText('t***@example.invalid') !== null).toBe(usesHoldingEmail);
+    fireEvent.click(screen.getByRole('button', { name: 'Gửi lời mời ký qua email' }));
+    await waitFor(() =>
+      expect(request.mock.calls.some(([path]) => path.endsWith('/signing-invitations'))).toBe(true),
+    );
+    const submitted = request.mock.calls.find(([path]) =>
+      path.endsWith('/signing-invitations'),
+    )?.[1];
+    expect(JSON.parse(String(submitted?.body))).not.toHaveProperty('recipientEmail');
+  },
+);
 
 it('shows the Holding signing skeleton until server data arrives without displaying premature signing state', async () => {
   let completeLoad!: (value: ContractView) => void;

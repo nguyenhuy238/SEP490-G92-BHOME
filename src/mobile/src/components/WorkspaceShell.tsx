@@ -2,6 +2,7 @@ import { KeyboardFormScrollView } from './KeyboardFormScrollView';
 import React, { useCallback, useContext, useEffect, useRef, useState } from 'react';
 import {
   KeyboardAvoidingView,
+  Image,
   Platform,
   RefreshControl,
   ScrollView,
@@ -12,7 +13,6 @@ import {
 import {
   ActivityIndicator,
   Badge,
-  Icon,
   IconButton,
   Text,
   TouchableRipple,
@@ -37,8 +37,16 @@ import { ui } from './WorkspaceKit';
 import { NotificationBadge } from './NotificationBadge';
 import { useWorkspaceQuery } from '../features/workspace/useWorkspaceQuery';
 import { queryPolicies } from '../lib/queryPolicies';
-import { WorkspaceHeaderContext, type WorkspaceHeaderAction } from './WorkspaceHeaderContext';
+import {
+  WorkspaceHeaderContext,
+  WorkspaceInlineHeaderContext,
+  type WorkspaceHeaderAction,
+} from './WorkspaceHeaderContext';
 import { WorkspaceFooterContext } from './WorkspaceFooter';
+
+// Metro requires a literal path for native image bundling.
+// eslint-disable-next-line @typescript-eslint/no-require-imports
+const brandMark = require('../../assets/bhome-mark.png');
 
 function StaffLocationSubtitle() {
   const { staffLocationId, staffLocations, staffLocationsLoading, staffLocationsError } =
@@ -92,7 +100,9 @@ export function WorkspaceShell({
   const narrowStaff = role === 'Staff' && width <= 360;
   const insideTabs = useContext(WorkspaceTabsContext);
   const navigation = useNavigation();
-  const [focused, setFocused] = useState(() => navigation.isFocused());
+  // Navigation focus is mutable external state. React warns when read during
+  // render; useFocusEffect synchronizes it after the screen becomes active.
+  const [focused, setFocused] = useState(false);
   useFocusEffect(
     useCallback(() => {
       setFocused(true);
@@ -112,6 +122,11 @@ export function WorkspaceShell({
     [screen],
   );
   const [headerAction, setHeaderAction] = useState<WorkspaceHeaderAction | null>(null);
+  const [hasInlineHeader, setHasInlineHeader] = useState(false);
+  const registerInlineHeader = useCallback(() => {
+    setHasInlineHeader(true);
+    return () => setHasInlineHeader(false);
+  }, []);
   const registerHeaderAction = useCallback((action: WorkspaceHeaderAction) => {
     setHeaderAction(action);
     return () => setHeaderAction(null);
@@ -125,7 +140,8 @@ export function WorkspaceShell({
   const tenantFeatures = role === 'Tenant' && screen === 'tenant-features';
   const tenantHomeLayout = role === 'Tenant' && ['tenant-home', 'tenant-features'].includes(screen);
   const compactContracts = staff && ['signing', 'contract'].includes(screen) && !preview;
-  const compactTasks = staff && ['work-orders', 'task-detail'].includes(screen) && !preview;
+  const compactTasks =
+    staff && ['work-orders', 'task-detail', 'staff-handovers'].includes(screen) && !preview;
   const compactTaskDetail = compactTasks && screen === 'task-detail';
   const tenantRoom = role === 'Tenant' && screen === 'tenant-room' && !preview;
   const tenantResidence = role === 'Tenant' && screen === 'residence' && !preview;
@@ -160,16 +176,22 @@ export function WorkspaceShell({
               ? 'operations'
               : owner && screen === 'signing'
                 ? 'approvals'
-                : staff && screen === 'task-detail'
-                  ? 'work-orders'
-                  : homeScreen[role!];
+                : staff && ['move-in', 'move-out', 'staff-handover-archive'].includes(screen)
+                  ? 'staff-handovers'
+                  : staff && screen === 'task-detail'
+                    ? 'work-orders'
+                    : homeScreen[role!];
     if (!staff && !owner && role !== 'Tenant' && !profileEdit && screen !== 'incident-inbox')
       return go(fallback);
     requestNavigation(() => {
       if (router.canGoBack()) router.back();
       else if (isWorkspaceTabDestination(role!, fallback))
         router.replace(workspaceTabHref(fallback));
-      else router.replace({ pathname: '/workspace/[screen]', params: { screen: fallback } });
+      else
+        router.replace({
+          pathname: '/workspace/[screen]',
+          params: { screen: fallback, ...(screen === 'move-out' ? { tab: 'MoveOut' } : {}) },
+        });
     });
   }
   return (
@@ -211,10 +233,14 @@ export function WorkspaceShell({
                 narrowStaff && styles.narrowLogo,
               ]}
             >
-              <Icon
-                source="home-roof"
-                size={tenantHomeLayout ? 24 : narrowStaff ? 26 : 32}
-                color={s.blue}
+              <Image
+                source={brandMark}
+                resizeMode="contain"
+                accessible={false}
+                style={{
+                  width: tenantHomeLayout || narrowStaff ? 26 : 30,
+                  height: tenantHomeLayout || narrowStaff ? 26 : 30,
+                }}
               />
             </View>
             <View style={ui.grow}>
@@ -224,8 +250,8 @@ export function WorkspaceShell({
                 style={ui.white}
               >
                 {tenantHomeLayout
-                  ? 'BHOME'
-                  : `BHOME ${staff ? 'Nhân viên' : role === 'Tenant' ? 'Khách thuê' : 'Chủ cơ sở'}`}
+                  ? 'BHome'
+                  : `BHome ${staff ? 'Nhân viên' : role === 'Tenant' ? 'Khách thuê' : 'Chủ cơ sở'}`}
               </Text>
               {tenantHomeLayout ? (
                 <Text variant="labelSmall" style={styles.staffSubtitle}>
@@ -344,7 +370,8 @@ export function WorkspaceShell({
               ) : undefined
             }
           >
-            {!tenantIncidentForm &&
+            {!hasInlineHeader &&
+              !tenantIncidentForm &&
               (profileEdit ||
                 (owner && !visibleTabs.some((tab) => tab.screen === screen)) ||
                 tenantInvoice ||
@@ -395,7 +422,9 @@ export function WorkspaceShell({
                             : compactTasks
                               ? compactTaskDetail
                                 ? 'Chi tiết công việc'
-                                : 'Công việc vận hành'
+                                : screen === 'staff-handovers'
+                                  ? 'Bàn giao / Trả phòng'
+                                  : 'Công việc vận hành'
                               : compactContracts
                                 ? (headerAction?.title ?? 'Hợp đồng')
                                 : (headerAction?.title ?? 'Quay lại')}
@@ -413,7 +442,7 @@ export function WorkspaceShell({
                             tenantResidence
                               ? 'Tải lại hồ sơ tạm trú'
                               : compactTasks
-                                ? 'Tải lại công việc'
+                                ? `Tải lại ${headerAction?.title ?? 'công việc'}`
                                 : tenantLedger
                                   ? 'Tải lại giao dịch'
                                   : tenantInvoice
@@ -443,7 +472,9 @@ export function WorkspaceShell({
               }
             >
               <WorkspaceFooterContext.Provider value={registerWorkflowFooter}>
-                {children}
+                <WorkspaceInlineHeaderContext.Provider value={registerInlineHeader}>
+                  {children}
+                </WorkspaceInlineHeaderContext.Provider>
               </WorkspaceFooterContext.Provider>
             </WorkspaceHeaderContext.Provider>
           </KeyboardFormScrollView>

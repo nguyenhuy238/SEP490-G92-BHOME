@@ -16,6 +16,7 @@
   "scripts": {
     "storage:dev": "powershell -NoProfile -ExecutionPolicy Bypass -File scripts/Start-LocalStorage.ps1",
     "mobile:dev": "powershell -NoProfile -ExecutionPolicy Bypass -File scripts/Start-OcrMobileApp.ps1",
+    "mobile:staging": "node scripts/Start-StagingMobile.cjs",
     "signing:dev": "powershell -NoProfile -ExecutionPolicy Bypass -File scripts/Start-LocalSigningWeb.ps1",
     "dev:all": "powershell -NoProfile -ExecutionPolicy Bypass -File scripts/Start-DevStack.ps1",
     "mobile": "npm run start --workspace ./src/mobile --",

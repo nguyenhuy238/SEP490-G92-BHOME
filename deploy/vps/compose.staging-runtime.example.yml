@@ -1,0 +1,7 @@
+# Private VPS file: /opt/bhome-config/compose.staging-runtime.yml.
+# Applied before the generated image release overlay. CD never overwrites it.
+# Initial commissioning preserves the running API's current manual-billing value.
+services:
+  api:
+    environment:
+      BillingAutomation__ManualActionsEnabled: 'false'

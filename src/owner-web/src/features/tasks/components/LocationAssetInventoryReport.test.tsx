@@ -1,13 +1,10 @@
 // @vitest-environment jsdom
-import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { cleanup, fireEvent, render, screen } from '@testing-library/react';
 import { afterEach, beforeEach, expect, it, vi } from 'vitest';
 import { MemoryRouter } from 'react-router';
 import { LocationAssetInventoryReport } from './LocationAssetInventoryReport';
 
 const state = vi.hoisted(() => ({
-  command: vi.fn(),
-  refetchInventory: vi.fn(),
-  refetchPreview: vi.fn(),
   preview: {
     taskId: '11111111-1111-4111-8111-111111111111',
     version: 2,
@@ -20,6 +17,11 @@ const state = vi.hoisted(() => ({
     blockedReason: null as null | string,
   },
   items: [] as Array<Record<string, unknown>>,
+  status: 'InProgress',
+  totalCount: 42,
+  checkedCount: 0,
+  pendingOwnerRooms: ['P.201', 'P.202'],
+  pendingOwnerCommonAssets: true,
 }));
 
 vi.mock('../../../hooks/useOwnerWorkspace', () => ({
@@ -29,79 +31,64 @@ vi.mock('../../../hooks/useOwnerWorkspace', () => ({
           data: state.preview,
           isFetching: false,
           error: null,
-          refetch: state.refetchPreview,
+          refetch: vi.fn(),
         }
       : {
           data: {
             taskId: state.preview.taskId,
             locationId: '22222222-2222-4222-8222-222222222222',
             assignmentId: '33333333-3333-4333-8333-333333333333',
-            status: 'InProgress',
+            status: state.status,
             version: 2,
-            totalCount: 42,
-            checkedCount: 0,
+            totalCount: state.totalCount,
+            checkedCount: state.checkedCount,
             items: state.items,
-            pendingOwnerRooms: ['P.201', 'P.202'],
-            pendingOwnerCommonAssets: true,
+            pendingOwnerRooms: state.pendingOwnerRooms,
+            pendingOwnerCommonAssets: state.pendingOwnerCommonAssets,
           },
           isFetching: false,
           error: null,
-          refetch: state.refetchInventory,
+          refetch: vi.fn(),
         },
-  useOwnerAction: () => ({
-    busy: false,
-    error: '',
-    run: async (work: () => Promise<unknown>) => {
-      await work();
-      return true;
-    },
-    command: state.command,
-  }),
 }));
 vi.mock('../../../components/common/OwnerWorkspace', () => ({
   OwnerFeedback: () => null,
 }));
 
 beforeEach(() => {
-  state.command.mockReset().mockResolvedValue({});
-  state.refetchInventory.mockReset().mockResolvedValue({});
-  state.refetchPreview.mockReset().mockResolvedValue({});
+  state.preview.currentCount = 42;
+  state.preview.ownerConfirmedCount = 12;
+  state.preview.addedCount = 0;
+  state.preview.removedCount = 30;
   state.preview.canApply = true;
   state.preview.blockedReason = null;
   state.items = [];
+  state.status = 'InProgress';
+  state.totalCount = 42;
+  state.checkedCount = 0;
+  state.pendingOwnerRooms = ['P.201', 'P.202'];
+  state.pendingOwnerCommonAssets = true;
 });
 afterEach(cleanup);
 
-it('requires explicit Owner confirmation before replacing an old 42-item task with 12 attested items', async () => {
+it('shows a read-only Owner scope summary and routes pending confirmations to Owner inventory', () => {
   render(
     <MemoryRouter>
       <LocationAssetInventoryReport taskId={state.preview.taskId} />
     </MemoryRouter>,
   );
-  expect(screen.getByText('Checklist hiện tại')).toBeTruthy();
-  expect(screen.getByText('42', { exact: true })).toBeTruthy();
-  expect(screen.getByText('Owner đã xác nhận')).toBeTruthy();
-  expect(screen.getByText('12', { exact: true })).toBeTruthy();
+  expect(screen.getByText('Phạm vi Owner: 12 mục xác nhận · checklist 42 mục')).toBeTruthy();
+  expect(screen.getByText('Staff đã kiểm tra')).toBeTruthy();
+  expect(screen.getByRole('progressbar')).toBeTruthy();
   expect(screen.getByText(/Cần Owner xác nhận 2 phòng/)).toBeTruthy();
-  fireEvent.click(screen.getByRole('button', { name: 'Đối chiếu / đồng bộ' }));
-  expect(screen.getByText(/30 mục chưa được Owner xác nhận/)).toBeTruthy();
-  const action = screen.getByRole('button', { name: 'Đồng bộ checklist đã xác nhận' });
-  expect(action).toBeDisabled();
-  fireEvent.click(screen.getByLabelText(/Tôi đã đối chiếu và đồng ý cập nhật checklist/));
-  expect(action).toBeEnabled();
-  fireEvent.click(action);
-  await waitFor(() =>
-    expect(state.command).toHaveBeenCalledWith(
-      '/api/v1/operational-tasks/' + state.preview.taskId + '/location-asset-inventory/reconcile',
-      'POST',
-      { version: 2, confirmed: true },
-    ),
+  expect(screen.getByRole('link', { name: 'Mở kiểm kê tài sản của Owner' })).toHaveAttribute(
+    'href',
+    '/locations/22222222-2222-4222-8222-222222222222/assets?tab=review',
   );
-  expect(state.refetchInventory).toHaveBeenCalledTimes(1);
-  expect(state.refetchPreview).toHaveBeenCalledTimes(1);
+  expect(screen.queryByRole('button', { name: /đối chiếu|đồng bộ/i })).toBeNull();
 });
 
-it('never applies an Owner baseline replacement that would discard checked Staff evidence', () => {
+it('preserves the Staff conflict warning without offering a manual reconciliation action', () => {
   state.preview.canApply = false;
   state.preview.blockedReason = 'location_asset_inventory_staff_work_conflict';
   render(
@@ -109,10 +96,119 @@ it('never applies an Owner baseline replacement that would discard checked Staff
       <LocationAssetInventoryReport taskId={state.preview.taskId} />
     </MemoryRouter>,
   );
-  fireEvent.click(screen.getByRole('button', { name: 'Đối chiếu / đồng bộ' }));
-  expect(screen.getByText(/Cần đối soát thủ công để tránh mất dữ liệu/)).toBeTruthy();
+  expect(screen.getByText(/Kết quả Staff được giữ nguyên/)).toBeTruthy();
   expect(screen.queryByRole('button', { name: 'Đồng bộ checklist đã xác nhận' })).toBeNull();
-  expect(state.command).not.toHaveBeenCalled();
+  expect(screen.getByText(/Cần Owner xác nhận 2 phòng/)).toBeTruthy();
+});
+
+it('does not show green completion for a fully checked checklist with unmatched Owner scope', () => {
+  state.totalCount = 1;
+  state.checkedCount = 1;
+  state.preview.currentCount = 1;
+  state.preview.ownerConfirmedCount = 2;
+  state.preview.removedCount = 0;
+  state.preview.addedCount = 1;
+  state.pendingOwnerRooms = [];
+  state.pendingOwnerCommonAssets = false;
+  render(
+    <MemoryRouter>
+      <LocationAssetInventoryReport taskId={state.preview.taskId} />
+    </MemoryRouter>,
+  );
+  expect(screen.getByText(/Checklist hiện tại chưa khớp phạm vi Owner/)).toBeTruthy();
+  expect(screen.getByRole('progressbar')).toHaveClass('MuiLinearProgress-colorPrimary');
+  expect(screen.queryByRole('link', { name: 'Mở kiểm kê tài sản của Owner' })).toBeNull();
+  expect(screen.queryByRole('button', { name: /đối chiếu|đồng bộ/i })).toBeNull();
+});
+
+it('offers the Owner confirmation link when no rooms are listed but the baseline is missing', () => {
+  state.preview.blockedReason = 'location_asset_inventory_owner_confirmation_required';
+  state.pendingOwnerRooms = [];
+  state.pendingOwnerCommonAssets = false;
+  render(
+    <MemoryRouter>
+      <LocationAssetInventoryReport taskId={state.preview.taskId} />
+    </MemoryRouter>,
+  );
+  expect(screen.getByText(/Owner chưa xác nhận phạm vi tài sản/)).toBeTruthy();
+  expect(screen.getByRole('link', { name: 'Mở kiểm kê tài sản của Owner' })).toBeTruthy();
+});
+
+it('asks for common-area confirmation without saying zero rooms are pending', () => {
+  state.pendingOwnerRooms = [];
+  state.pendingOwnerCommonAssets = true;
+  render(
+    <MemoryRouter>
+      <LocationAssetInventoryReport taskId={state.preview.taskId} />
+    </MemoryRouter>,
+  );
+  expect(screen.getByText(/Cần Owner xác nhận tài sản khu vực chung/)).toBeTruthy();
+  expect(screen.queryByText(/0 phòng/)).toBeNull();
+  expect(screen.getByRole('link', { name: 'Mở kiểm kê tài sản của Owner' })).toBeTruthy();
+});
+
+it('shows success only after the nonempty checklist and Owner scope are both aligned', () => {
+  state.totalCount = 1;
+  state.checkedCount = 1;
+  state.preview.currentCount = 1;
+  state.preview.ownerConfirmedCount = 1;
+  state.preview.removedCount = 0;
+  state.preview.addedCount = 0;
+  state.preview.blockedReason = 'location_asset_inventory_reconciliation_locked';
+  state.pendingOwnerRooms = [];
+  state.pendingOwnerCommonAssets = false;
+  render(
+    <MemoryRouter>
+      <LocationAssetInventoryReport taskId={state.preview.taskId} />
+    </MemoryRouter>,
+  );
+  expect(screen.getByRole('progressbar')).toHaveClass('MuiLinearProgress-colorSuccess');
+  expect(screen.getByText('Owner đã xác nhận đủ phạm vi')).toBeTruthy();
+  expect(screen.queryByText(/Phạm vi Owner:/)).toBeNull();
+  expect(screen.queryByRole('link', { name: 'Mở kiểm kê tài sản của Owner' })).toBeNull();
+  expect(screen.queryByRole('button', { name: /đối chiếu|đồng bộ/i })).toBeNull();
+});
+
+it('keeps the completed signed baseline distinct from later live Owner changes', () => {
+  state.status = 'Completed';
+  state.totalCount = 1;
+  state.checkedCount = 1;
+  state.preview.currentCount = 1;
+  state.preview.ownerConfirmedCount = 2;
+  state.preview.addedCount = 1;
+  state.preview.removedCount = 0;
+  state.pendingOwnerRooms = ['P.909'];
+  state.pendingOwnerCommonAssets = false;
+  render(
+    <MemoryRouter>
+      <LocationAssetInventoryReport taskId={state.preview.taskId} />
+    </MemoryRouter>,
+  );
+  expect(
+    screen.getByText(/Phạm vi bàn giao đã hoàn tất được lưu theo biên bản đã ký/),
+  ).toBeTruthy();
+  expect(screen.getByRole('progressbar')).toHaveClass('MuiLinearProgress-colorSuccess');
+  expect(screen.queryByText(/Checklist hiện tại chưa khớp phạm vi Owner/)).toBeNull();
+  expect(screen.queryByRole('link', { name: 'Mở kiểm kê tài sản của Owner' })).toBeNull();
+});
+
+it('keeps the Staff conflict visible when counts match but confirmed item details differ', () => {
+  state.totalCount = 1;
+  state.checkedCount = 1;
+  state.preview.currentCount = 1;
+  state.preview.ownerConfirmedCount = 1;
+  state.preview.removedCount = 0;
+  state.preview.addedCount = 0;
+  state.preview.blockedReason = 'location_asset_inventory_staff_work_conflict';
+  state.pendingOwnerRooms = [];
+  state.pendingOwnerCommonAssets = false;
+  render(
+    <MemoryRouter>
+      <LocationAssetInventoryReport taskId={state.preview.taskId} />
+    </MemoryRouter>,
+  );
+  expect(screen.getByText(/Kết quả Staff được giữ nguyên/)).toBeTruthy();
+  expect(screen.getByRole('progressbar')).toHaveClass('MuiLinearProgress-colorPrimary');
 });
 
 it('shows Staff-observed asset condition and linked incident context for Owner review', () => {
@@ -140,6 +236,7 @@ it('shows Staff-observed asset condition and linked incident context for Owner r
   );
   fireEvent.click(screen.getByRole('button', { name: /Phòng 101/ }));
   expect(screen.getByText('Tài sản hư hỏng')).toBeTruthy();
+  expect(screen.queryByText('Đã kiểm tra', { exact: true })).toBeNull();
   expect(screen.getByText('Quạt không quay khi bật công tắc.')).toBeTruthy();
   expect(screen.getByRole('link', { name: 'Xem báo cáo sự cố' })).toHaveAttribute(
     'href',

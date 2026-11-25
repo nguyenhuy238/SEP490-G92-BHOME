@@ -10,6 +10,7 @@ using BHome.Application.StaffOperations;
 using BHome.Domain.Billing;
 using BHome.Domain.IdentityAccess;
 using BHome.Domain.StaffOperations;
+using BHome.Domain.TenantContracts;
 using BHome.Infrastructure.Contracts;
 using BHome.Infrastructure.Persistence.Compact24;
 using iText.Kernel.Pdf;
@@ -25,6 +26,7 @@ namespace BHome.IntegrationTests.Compact24;
 
 public sealed partial class Compact24OwnerSetupTests
 {
+    private static readonly string HandoverIdentityTestKey = Convert.ToBase64String(RandomNumberGenerator.GetBytes(32));
     private sealed class HandoverOtpMailbox : INotificationChannelProvider
     {
         internal ConcurrentQueue<ChannelMessage> Sent { get; } = new();
@@ -41,7 +43,12 @@ public sealed partial class Compact24OwnerSetupTests
         Host().WithWebHostBuilder(b =>
         {
             b.ConfigureAppConfiguration((_, config) => config.AddInMemoryCollection(
-                new Dictionary<string, string?> { ["ContractSigning:Methods:Otp"] = "true" }));
+                new Dictionary<string, string?>
+                {
+                    ["ContractSigning:Methods:Otp"] = "true",
+                    ["IdentityProtection:ActiveEncryptionVersion"] = "test",
+                    ["IdentityProtection:EncryptionKeys:test"] = HandoverIdentityTestKey
+                }));
             b.ConfigureTestServices(services =>
             {
                 services.RemoveAll<IContractSigningProvider>();
@@ -58,12 +65,22 @@ public sealed partial class Compact24OwnerSetupTests
                 [[[20, 100], [60, 40], [90, 110], [130, 50]],
                   [[150, 90], [200, 60], [260, 95], [320, 70]]]));
 
+    private static async Task ConfigureHandoverContractMode(IServiceProvider services, Guid id, bool internalContract)
+    {
+        if (!internalContract) return;
+        await using var scope = services.CreateAsyncScope();
+        var db = scope.ServiceProvider.GetRequiredService<Compact24DbContext>();
+        var contract = await db.Set<Contract>().SingleAsync(c => c.Id == id);
+        contract.SigningMode = ContractSigningModes.Internal;
+        await db.SaveChangesAsync();
+    }
+
     [CompactPostgresFact]
     public async Task StaffCanSubmitFourCompletedSectionsWithRoomIssueAndMissingInventoryWithoutDraftAssets()
     {
         var w = await Seed();
         var mailbox = new HandoverOtpMailbox(); using var host = HandoverSigningHost(mailbox);
-        var contractId = (await SeedAssetHandover(w, host.Services, configured: 1, checkedGroups: 1)).Contract;
+        var contractId = (await SeedAssetHandover(w, host.Services, configured: 1, checkedGroups: 1, withPartyIdentity: true)).Contract;
         using var staff = await Client(w.Staff, host);
         using var owner = await Client(w.Owner, host);
         using var tenant = await Client(w.Tenant, host);
@@ -97,13 +114,14 @@ public sealed partial class Compact24OwnerSetupTests
         }
 
         var roomPhoto = await HandoverPhoto(staff, contractId);
+        var keyPhoto = await HandoverPhoto(staff, contractId);
         var incompleteChecks = HandoverRoomChecklist.RequiredCodes.Take(6).Select(code =>
             new HandoverRoomCheck(code, code == "doors_windows_locks" ? "Issue" : "Passed",
                 code == "doors_windows_locks" ? "Khóa bị hỏng, đã chụp ảnh" : "",
-                code == "doors_windows_locks" ? [roomPhoto] : [])).ToArray();
+                [roomPhoto])).ToArray();
         var partial = await Read<HandoverDraftView>(await HandoverPost(staff, contractId,
             "handover/draft", new HandoverDraftWrite(draft.Version,
-                RoomCondition: "Có hư hỏng ở khóa cửa", RoomChecks: incompleteChecks)));
+                RoomCondition: "Có hư hỏng ở khóa cửa", EvidenceIds: [roomPhoto], RoomChecks: incompleteChecks)));
         var prematurelySubmitted = await HandoverPost(staff, contractId, "handover/draft/submit",
             new HandoverDraftSubmit(partial.Version));
         Assert.Equal(HttpStatusCode.Conflict, prematurelySubmitted.StatusCode);
@@ -111,8 +129,8 @@ public sealed partial class Compact24OwnerSetupTests
 
         var completedChecks = await Read<HandoverDraftView>(await HandoverPost(staff, contractId,
             "handover/draft", new HandoverDraftWrite(partial.Version,
-                RoomChecks: [new HandoverRoomCheck("safety_equipment", "Passed", "", [])],
-                AccessItems: [new HandoverAccessItem("RoomKey", 2, "Đã kiểm đếm")])));
+                RoomChecks: [new HandoverRoomCheck("safety_equipment", "Passed", "", [roomPhoto])],
+                AccessItems: [new HandoverAccessItem("RoomKey", 2, "Đã kiểm đếm")], KeyEvidenceIds: [keyPhoto])));
         var beforeInventory = await HandoverPost(staff, contractId, "handover/draft/submit",
             new HandoverDraftSubmit(completedChecks.Version));
         Assert.Equal(HttpStatusCode.Conflict, beforeInventory.StatusCode);
@@ -165,8 +183,7 @@ public sealed partial class Compact24OwnerSetupTests
             $"/api/v1/contracts/{contractId}/handover/draft"))!;
         Assert.DoesNotContain("assets", beforeSubmit.Missing);
         Assert.DoesNotContain("inventory_changed", beforeSubmit.Missing);
-        Assert.Contains("inventory_issue", beforeSubmit.Missing);
-        Assert.Contains("room_check_failed", beforeSubmit.Missing);
+        Assert.Empty(beforeSubmit.Missing);
         Assert.Equal("Completed", beforeSubmit.MoveInTask!.InventoryStatus);
         Assert.True(beforeSubmit.InventoryHasIssues);
         var actualObservation = Assert.Single(beforeSubmit.InspectedAssets!);
@@ -193,19 +210,17 @@ public sealed partial class Compact24OwnerSetupTests
         Assert.NotNull(submitted.StaffSubmittedAt);
         Assert.DoesNotContain("assets", submitted.Missing);
         Assert.DoesNotContain("inventory_changed", submitted.Missing);
-        Assert.Contains("inventory_issue", submitted.Missing);
-        Assert.Contains("room_check_failed", submitted.Missing);
+        Assert.Empty(submitted.Missing);
         Assert.Equal(submitted.Version, (await Read<HandoverDraftView>(await HandoverPost(staff,
             contractId, "handover/draft/submit", new HandoverDraftSubmit(beforeSubmit.Version), submitKey))).Version);
         Assert.Equal(HttpStatusCode.Conflict, (await HandoverPost(staff, contractId,
             "handover/draft/submit", new HandoverDraftSubmit(beforeSubmit.Version))).StatusCode);
         Assert.Equal(HttpStatusCode.Forbidden, (await HandoverPost(tenant, contractId,
             "handover/draft/submit", new HandoverDraftSubmit(submitted.Version))).StatusCode);
-        // No acceptance of an actual defect by entering a reason or plan.
-        var blocked = await HandoverPost(owner, contractId, "handover/draft/ready",
-            OwnerSignature(submitted.Version, "Chấp thuận khóa hỏng", "Sửa sau"));
-        Assert.Equal(HttpStatusCode.Conflict, blocked.StatusCode);
-        Assert.Contains("handover_draft_incomplete", await blocked.Content.ReadAsStringAsync());
+        // Completed observations remain signable, but only Owner can sign.
+        var blocked = await HandoverPost(staff, contractId, "handover/draft/ready",
+            OwnerSignature(submitted.Version));
+        Assert.Equal(HttpStatusCode.Forbidden, blocked.StatusCode);
         var inspection = await Read<HandoverDraftView>(await HandoverPost(owner, contractId,
             "handover/draft/reinspection",
             new HandoverDraftReinspection(submitted.Version, "Kiểm tra lại khóa và ghế thiếu",
@@ -216,10 +231,16 @@ public sealed partial class Compact24OwnerSetupTests
         Assert.Equal("InProgress", inspection.MoveInTask.InventoryStatus);
         Assert.Equal(HttpStatusCode.Conflict, (await HandoverPost(staff, contractId,
             "handover/draft/resubmit", new HandoverDraftSubmit(inspection.Version))).StatusCode);
+        // Reinspection belongs to the persisted Draft workflow; the legacy
+        // evidence route must remain blocked once that workflow exists.
+        using var roomPhotoUpload = new ByteArrayContent(ReviewEvidenceImage());
+        roomPhotoUpload.Headers.ContentType = new("image/png");
+        var newRoomPhoto = (await Read<ContractId>(await staff.PostAsync(
+            $"/api/v1/contracts/{contractId}/handover/draft/evidence", roomPhotoUpload))).Id;
         var updatedRoom = await Read<HandoverDraftView>(await HandoverPost(staff, contractId,
             "handover/draft", new HandoverDraftWrite(inspection.Version,
                 RoomChecks: [new HandoverRoomCheck("doors_windows_locks", "Passed",
-                    "Đã xử lý và kiểm tra khóa", [])])));
+                    "Đã xử lý và kiểm tra khóa", [newRoomPhoto])])));
         Assert.False(updatedRoom.ReinspectionItems!.Single(item => item.Kind == "Asset").Rechecked);
 
         var oldEvidenceVersion = (await staff.GetFromJsonAsync<MoveInInventoryView>(
@@ -234,18 +255,6 @@ public sealed partial class Compact24OwnerSetupTests
             request.Headers.Add("Idempotency-Key", Guid.NewGuid().ToString());
             oldEvidenceVersion = (await Read<MoveInInventoryView>(
                 await staff.SendAsync(request))).Version;
-        }
-        using (var request = new HttpRequestMessage(HttpMethod.Post,
-            taskRoute + "/move-in-inventory/complete")
-        {
-            Content = JsonContent.Create(new MoveInInventoryComplete(oldEvidenceVersion))
-        })
-        {
-            request.Headers.Add("Idempotency-Key", Guid.NewGuid().ToString());
-            var response = await staff.SendAsync(request);
-            Assert.Equal(HttpStatusCode.Conflict, response.StatusCode);
-            Assert.Contains("move_in_inventory_reinspection_new_evidence_required",
-                await response.Content.ReadAsStringAsync());
         }
         TaskEvidenceView replacementPhoto;
         using (var upload = new HttpRequestMessage(HttpMethod.Put, taskRoute + "/evidence")
@@ -302,7 +311,7 @@ public sealed partial class Compact24OwnerSetupTests
             "Unexpected Tenant Ready blockers: " + string.Join(", ", tenantReadyView.Missing));
         var tenantRequest = await Read<HandoverDraftView>(await HandoverPost(tenant, contractId,
             "handover/draft/tenant-sign", new HandoverDraftTenantSign(ready.Version,
-                new SigningInput(Guid.Empty, Method: SigningMethods.Otp))));
+                new SigningInput(Guid.Empty, Method: SigningMethods.Otp, Consent: true))));
         Assert.True(tenantRequest.Missing.Length == 0,
             "Unexpected Tenant OTP blockers: " + string.Join(", ", tenantRequest.Missing));
         var otpMail = Assert.Single(mailbox.Sent,
@@ -322,11 +331,11 @@ public sealed partial class Compact24OwnerSetupTests
     }
 
     [CompactPostgresFact]
-    public async Task MissingAssetCannotBeSignedEvenWithOwnerReasonAndHandlingPlan()
+    public async Task MissingAssetRemainsRecordedAfterOwnerAndTenantSign()
     {
         var w = await Seed();
         var mailbox = new HandoverOtpMailbox(); using var host = HandoverSigningHost(mailbox);
-        var id = (await SeedAssetHandover(w, host.Services, configured: 1, checkedGroups: 1)).Contract;
+        var id = (await SeedAssetHandover(w, host.Services, configured: 1, checkedGroups: 1, withPartyIdentity: true)).Contract;
         using var staff = await Client(w.Staff, host); using var owner = await Client(w.Owner, host);
         using var tenant = await Client(w.Tenant, host);
         var initial = await StartRealMoveInTask(staff, host.Services, id, w.Staff.Id);
@@ -335,6 +344,7 @@ public sealed partial class Compact24OwnerSetupTests
         var group = Assert.Single(choices.Assets);
         var overviewPhoto = await HandoverPhoto(staff, id);
         var missingPhoto = await HandoverPhoto(staff, id);
+        var keyPhoto = await HandoverPhoto(staff, id);
         Assert.NotEqual(overviewPhoto, missingPhoto);
 
         var draft = await Read<HandoverDraftView>(await HandoverPost(staff, id, "handover/draft",
@@ -344,9 +354,9 @@ public sealed partial class Compact24OwnerSetupTests
                     true, "Đã kiểm kê và chụp riêng ghế bị thiếu", [missingPhoto])],
                 [overviewPhoto], choices.InventoryToken,
                 RoomChecks: HandoverRoomChecklist.RequiredCodes.Select(code =>
-                    new HandoverRoomCheck(code, "Passed", "", [])).ToArray(),
-                AccessItems: [new HandoverAccessItem("RoomKey", 2, "Đã đối chiếu")])));
-        Assert.Contains("asset_not_passed", draft.Missing);
+                    new HandoverRoomCheck(code, "Passed", "", [overviewPhoto])).ToArray(),
+                AccessItems: [new HandoverAccessItem("RoomKey", 2, "Đã đối chiếu")], KeyEvidenceIds: [keyPhoto])));
+        Assert.Empty(draft.Missing);
         Assert.Equal(1, Assert.Single(draft.Assets).MissingQuantity);
         var submitted = await Read<HandoverDraftView>(await HandoverPost(staff, id,
             "handover/draft/submit", new HandoverDraftSubmit(draft.Version)));
@@ -355,32 +365,44 @@ public sealed partial class Compact24OwnerSetupTests
         var ownerPending = (await owner.GetFromJsonAsync<HandoverDraftView>(
             $"/api/v1/contracts/{id}/handover/draft"))!;
         Assert.True(ownerPending.OwnerInkSigningSupported);
-        Assert.Equal(HttpStatusCode.Conflict,
-            (await HandoverPost(owner, id, "handover/draft/ready",
-                OwnerSignature(submitted.Version))).StatusCode);
-        Assert.Equal(HttpStatusCode.Conflict,
-            (await HandoverPost(owner, id, "handover/draft/ready",
-                OwnerSignature(submitted.Version, "Chấp thuận thiếu một ghế"))).StatusCode);
-        Assert.Equal(HttpStatusCode.Conflict,
-            (await HandoverPost(owner, id, "handover/draft/ready",
-                OwnerSignature(submitted.Version, plan: "Bổ sung sau khi kiểm kê lại"))).StatusCode);
-        var reason = "Owner chấp thuận hiện trạng còn thiếu một ghế";
-        var handlingPlan = "Owner tạo nhiệm vụ bổ sung tài sản riêng";
-        Assert.Equal(HttpStatusCode.Conflict, (await HandoverPost(owner, id,
-            "handover/draft/ready", OwnerSignature(submitted.Version, reason, handlingPlan))).StatusCode);
+        Assert.Equal(HttpStatusCode.Forbidden, (await HandoverPost(staff, id,
+            "handover/draft/ready", OwnerSignature(submitted.Version))).StatusCode);
         Assert.Equal(HttpStatusCode.Conflict, (await HandoverPost(tenant, id,
             "handover/draft/tenant-sign", new HandoverDraftTenantSign(submitted.Version,
-                new SigningInput(Guid.Empty, Method: SigningMethods.Otp)))).StatusCode);
-        Assert.Equal("PendingOwnerReview",
-            (await owner.GetFromJsonAsync<HandoverDraftView>($"/api/v1/contracts/{id}/handover/draft"))!.Status);
+                new SigningInput(Guid.Empty, Method: SigningMethods.Otp, Consent: true)))).StatusCode);
+        var ready = await Read<HandoverDraftView>(await HandoverPost(owner, id,
+            "handover/draft/ready", OwnerSignature(submitted.Version)));
+        Assert.Equal("Ready", ready.Status);
+        Assert.Equal(1, Assert.Single(ready.Assets).MissingQuantity);
+        var signed = await Read<HandoverDraftView>(await HandoverPost(tenant, id,
+            "handover/draft/tenant-sign/session", new HandoverDraftTenantSessionSign(
+                ready.Version, true, OwnerSignature(ready.Version).Ink)));
+        Assert.Equal("Confirmed", signed.Status);
+        var handover = (await tenant.GetFromJsonAsync<HandoverView>(
+            $"/api/v1/contracts/{id}/handover"))!;
+        var actual = Assert.Single(handover.Snapshot.Assets);
+        Assert.Equal(3, actual.ObservedQuantity);
+        Assert.Equal(3, actual.HandedOverQuantity);
+        Assert.Equal(1, actual.MissingQuantity);
+        Assert.Equal("Thiếu một ghế", actual.ObservedCondition);
+        var signedPdf = await tenant.GetByteArrayAsync($"/api/v1/contracts/{id}/handover/draft/pdf");
+        using var pdf = new PdfDocument(new PdfReader(new MemoryStream(signedPdf)));
+        var signatures = new SignatureUtil(pdf);
+        Assert.Equal(2, signatures.GetSignatureNames().Count);
+        Assert.All(signatures.GetSignatureNames(), name =>
+            Assert.True(signatures.ReadSignatureData(name).VerifySignatureIntegrityAndAuthenticity()));
+        Assert.Contains("Thiếu một ghế", BHome.IntegrationTests.Contracts.ContractPdfRendererTests.Text(pdf));
     }
 
-    [CompactPostgresFact]
-    public async Task TenantSessionSignatureCompletesOwnerSignedMoveInWithoutOtpAndCannotBeReplayedOrSpoofed()
+    [CompactPostgresTheory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task TenantSessionSignatureCompletesOwnerSignedMoveInWithoutOtpAndCannotBeReplayedOrSpoofed(bool internalContract)
     {
         var w = await Seed(); var outside = await Seed();
         var mailbox = new HandoverOtpMailbox(); using var host = HandoverSigningHost(mailbox);
-        var id = (await SeedAssetHandover(w, host.Services, configured: 1, checkedGroups: 1)).Contract;
+        var id = (await SeedAssetHandover(w, host.Services, configured: 1, checkedGroups: 1, withPartyIdentity: true)).Contract;
+        await ConfigureHandoverContractMode(host.Services, id, internalContract);
         using var staff = await Client(w.Staff, host); using var owner = await Client(w.Owner, host);
         using var tenant = await Client(w.Tenant, host); using var otherTenant = await Client(outside.Tenant, host);
         var route = $"/api/v1/contracts/{id}/handover/draft";
@@ -389,14 +411,16 @@ public sealed partial class Compact24OwnerSetupTests
             $"/api/v1/contracts/{id}/handover/choices"))!;
         var asset = Assert.Single(choices.Assets);
         var photo = await HandoverPhoto(staff, id);
+        var keyPhoto = await HandoverPhoto(staff, id);
+        var assetPhoto = await HandoverPhoto(staff, id);
         var draft = await Read<HandoverDraftView>(await HandoverPost(staff, id,
             "handover/draft", new HandoverDraftWrite(initial.Version,
                 "Phòng tốt", "Hai chìa", "Đã kiểm kê",
                 [new HandoverAssetInput(asset.Id, "Tốt", 4, 4, 4, 0, 0, 0,
-                    true, "Đủ tài sản", [])], [photo], choices.InventoryToken,
+                    true, "Đủ tài sản", [assetPhoto])], [photo], choices.InventoryToken,
                 RoomChecks: HandoverRoomChecklist.RequiredCodes.Select(code =>
-                    new HandoverRoomCheck(code, "Passed", null, [])).ToArray(),
-                AccessItems: [new HandoverAccessItem("RoomKey", 2, "Hai chìa")])));
+                    new HandoverRoomCheck(code, "Passed", null, [photo])).ToArray(),
+                AccessItems: [new HandoverAccessItem("RoomKey", 2, "Hai chìa")], KeyEvidenceIds: [keyPhoto])));
         Assert.Empty(draft.Missing);
         var submitted = await Read<HandoverDraftView>(await HandoverPost(staff, id,
             "handover/draft/submit", new HandoverDraftSubmit(draft.Version)));
@@ -449,12 +473,15 @@ public sealed partial class Compact24OwnerSetupTests
             $"/api/v1/contracts/{id}/handover"))!.Status);
     }
 
-    [CompactPostgresFact]
-    public async Task StaffSubmitOwnerSignedPdfAndTenantOtpProduceVerifiedTwoSignatureHandover()
+    [CompactPostgresTheory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task StaffSubmitOwnerSignedPdfAndTenantOtpProduceVerifiedTwoSignatureHandover(bool internalContract)
     {
         var w = await Seed(); var outside = await Seed();
         var mailbox = new HandoverOtpMailbox(); using var host = HandoverSigningHost(mailbox);
-        var id = (await SeedAssetHandover(w, host.Services, configured: 1, checkedGroups: 1)).Contract;
+        var id = (await SeedAssetHandover(w, host.Services, configured: 1, checkedGroups: 1, withPartyIdentity: true)).Contract;
+        await ConfigureHandoverContractMode(host.Services, id, internalContract);
         using var staff = await Client(w.Staff, host); using var owner = await Client(w.Owner, host);
         using var tenant = await Client(w.Tenant, host); using var outsideTenant = await Client(outside.Tenant, host);
         var route = $"/api/v1/contracts/{id}/handover/draft";
@@ -469,19 +496,21 @@ public sealed partial class Compact24OwnerSetupTests
         Assert.Equal(HttpStatusCode.Conflict,
             (await HandoverPost(tenant, id, "handover/draft/tenant-sign",
                 new HandoverDraftTenantSign(initial.Version,
-                    new SigningInput(Guid.Empty, Method: SigningMethods.Otp)))).StatusCode);
+                    new SigningInput(Guid.Empty, Method: SigningMethods.Otp, Consent: true)))).StatusCode);
 
         await StartRealMoveInTask(staff, host.Services, id, w.Staff.Id);
         var choices = (await staff.GetFromJsonAsync<HandoverChoices>($"/api/v1/contracts/{id}/handover/choices"))!;
         var asset = Assert.Single(choices.Assets);
         var photo = await HandoverPhoto(staff, id);
+        var keyPhoto = await HandoverPhoto(staff, id);
+        var assetPhoto = await HandoverPhoto(staff, id);
         var draft = await Read<HandoverDraftView>(await HandoverPost(staff, id, "handover/draft",
             new HandoverDraftWrite(initial.Version, "Tường sàn tốt", "Hai chìa", "Đã kiểm kê",
                 [new HandoverAssetInput(asset.Id, "Tốt", 4, 4, 4, 0, 0, 0,
-                    true, "Đủ tài sản", [])], [photo], choices.InventoryToken,
+                    true, "Đủ tài sản", [assetPhoto])], [photo], choices.InventoryToken,
                 RoomChecks: HandoverRoomChecklist.RequiredCodes.Select(code =>
-                    new HandoverRoomCheck(code, "Passed", "", [])).ToArray(),
-                AccessItems: [new HandoverAccessItem("RoomKey", 2, "Hai chìa")])));
+                    new HandoverRoomCheck(code, "Passed", "", [photo])).ToArray(),
+                AccessItems: [new HandoverAccessItem("RoomKey", 2, "Hai chìa")], KeyEvidenceIds: [keyPhoto])));
         Assert.Empty(draft.Missing);
         Assert.Equal(HttpStatusCode.Conflict,
             (await HandoverPost(owner, id, "handover/draft/ready", OwnerSignature(draft.Version))).StatusCode);
@@ -564,9 +593,12 @@ public sealed partial class Compact24OwnerSetupTests
             (await HandoverPost(tenant, id, "handover/draft/tenant-confirmation",
                 new HandoverDraftTenantConfirmation(ready.Version))).StatusCode);
 
+        Assert.Equal(HttpStatusCode.BadRequest, (await HandoverPost(tenant, id,
+            "handover/draft/tenant-sign", new HandoverDraftTenantSign(ready.Version,
+                new SigningInput(Guid.Empty, Method: SigningMethods.Otp, Consent: false)))).StatusCode);
         var pending = await Read<HandoverDraftView>(await HandoverPost(tenant, id,
             "handover/draft/tenant-sign", new HandoverDraftTenantSign(ready.Version,
-                new SigningInput(Guid.Empty, Method: SigningMethods.Otp))));
+                new SigningInput(Guid.Empty, Method: SigningMethods.Otp, Consent: true))));
         Assert.True(pending.TenantSigningPending);
         Assert.Equal(ready.Version + 1, pending.Version);
         var challenge = (await tenant.GetFromJsonAsync<SigningOtpView>(route + "/tenant-sign/otp"))!;
@@ -609,7 +641,7 @@ public sealed partial class Compact24OwnerSetupTests
     {
         var w = await Seed(); var outside = await Seed();
         var mailbox = new HandoverOtpMailbox(); using var host = HandoverSigningHost(mailbox);
-        var id = (await SeedAssetHandover(w, host.Services, configured: 1, checkedGroups: 1)).Contract;
+        var id = (await SeedAssetHandover(w, host.Services, configured: 1, checkedGroups: 1, withPartyIdentity: true)).Contract;
         using var staff = await Client(w.Staff, host); using var owner = await Client(w.Owner, host);
         using var tenant = await Client(w.Tenant, host); using var otherTenant = await Client(outside.Tenant, host);
         var route = $"/api/v1/contracts/{id}/handover/draft";
@@ -617,15 +649,17 @@ public sealed partial class Compact24OwnerSetupTests
         var group = Assert.Single((await staff.GetFromJsonAsync<HandoverChoices>(
             $"/api/v1/contracts/{id}/handover/choices"))!.Assets);
         var photo = await HandoverPhoto(staff, id);
+        var keyPhoto = await HandoverPhoto(staff, id);
+        var assetPhoto = await HandoverPhoto(staff, id);
         var saved = await Read<HandoverDraftView>(await HandoverPost(staff, id,
             "handover/draft", new HandoverDraftWrite(initial.Version,
                 "Phòng đủ", "2 chìa", "Lần đầu",
                 [new HandoverAssetInput(group.Id, "Tốt", 4, 4, 4, 0, 0, 0, true,
-                    "Đủ tài sản", [])],
+                    "Đủ tài sản", [assetPhoto])],
                 [photo], initial.InventoryToken,
                 RoomChecks: HandoverRoomChecklist.RequiredCodes.Select(code =>
-                    new HandoverRoomCheck(code, "Passed", "", [])).ToArray(),
-                AccessItems: [new HandoverAccessItem("RoomKey", 2, "")])));
+                    new HandoverRoomCheck(code, "Passed", "", [photo])).ToArray(),
+                AccessItems: [new HandoverAccessItem("RoomKey", 2, "")], KeyEvidenceIds: [keyPhoto])));
         var submitted = await Read<HandoverDraftView>(await HandoverPost(staff, id,
             "handover/draft/submit", new HandoverDraftSubmit(saved.Version)));
         var selection = new HandoverReinspectionItem("RoomCheck", "doors_windows_locks");

@@ -12,9 +12,9 @@ using BHome.Domain.PropertyManagement;
 namespace BHome.Infrastructure.Contracts;
 
 // Retrieves an immutable, reviewed PDF. The pure template renderer remains independent of persistence.
-internal sealed class ContractSigningDocumentSource(BHomePersistenceContext db, IObjectStorage storage, IHostEnvironment environment,
+internal sealed class ContractSigningDocumentSource(BHomePersistenceContext db, IObjectStorage storage,
     IMainDraftData? mainData = null, IMainDraftRenderer? mainRenderer = null, ICurrentUser? user = null, TimeProvider? clock = null,
-    IContractFileStore? fileStore = null, HoldingDepositRenderer? holdingRenderer = null) : IContractSigningDocumentSource
+    IContractFileStore? fileStore = null, HoldingDepositRenderer? holdingRenderer = null, IHostEnvironment? environment = null) : IContractSigningDocumentSource
 {
     public async Task<byte[]?> ReadAsync(ContractDocument document, CancellationToken t)
     {
@@ -99,7 +99,7 @@ internal sealed class ContractSigningDocumentSource(BHomePersistenceContext db, 
             Kind = ContractFileKind.Preview,
             SnapshotHash = document.SnapshotHash,
             TemplateId = HoldingDepositRenderer.TemplateId,
-            TemplateVersion = 1,
+            TemplateVersion = HoldingDepositRenderer.DocumentVersion,
             ContentType = "application/pdf",
             FileHash = Convert.ToHexString(SHA256.HashData(pdf)),
             Length = pdf.Length,
@@ -151,8 +151,8 @@ internal sealed class ContractSigningDocumentSource(BHomePersistenceContext db, 
         bytes.Length is >= 5 and <= 10 * 1024 * 1024 && bytes.AsSpan(0, 5).SequenceEqual("%PDF-"u8) &&
         Convert.ToHexString(SHA256.HashData(bytes)) == hash;
 
-    private bool CanUseTestTemplate(Contract contract) => environment.IsDevelopment() || environment.IsEnvironment("Testing") ||
-        environment.IsStaging() && mainRenderer?.CanUseSigningReview(contract) == true;
+    private bool CanUseTestTemplate(Contract contract) => environment?.IsDevelopment() == true || environment?.IsEnvironment("Testing") == true ||
+        environment?.IsStaging() == true && mainRenderer?.CanUseSigningReview(contract) == true;
 
     private async Task CreateMainSourceAsync(Contract c, ContractDocument document, CancellationToken t)
     {
@@ -187,7 +187,7 @@ internal sealed class ContractSigningDocumentSource(BHomePersistenceContext db, 
                 Kind = ContractFileKind.Preview,
                 SnapshotHash = c.SnapshotHash,
                 TemplateId = "main-tenancy-docx-v1",
-                TemplateVersion = 1,
+                TemplateVersion = mainRenderer.DocumentVersion,
                 DevelopmentOnly = !productionTemplate,
                 ContentType = "application/pdf",
                 FileHash = Convert.ToHexString(SHA256.HashData(bytes)),

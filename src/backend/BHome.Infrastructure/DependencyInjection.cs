@@ -49,7 +49,9 @@ public static class DependencyInjection
             options.Lockout.DefaultLockoutTimeSpan = TimeSpan.FromMinutes(15);
         }).AddRoles<IdentityRole<Guid>>().AddUserStore<CompactUserStore>().AddRoleStore<CompactRoleStore>().AddSignInManager().AddDefaultTokenProviders();
         services.AddScoped<IUserClaimsPrincipalFactory<ApplicationUser>, CompactClaimsPrincipalFactory>();
-        services.AddSingleton(TimeProvider.System);
+        services.AddSingleton<TimeProvider>(p => BHome.Infrastructure.Development.DemoClockGuard.Enabled(
+            p.GetRequiredService<IConfiguration>(), p.GetService<IHostEnvironment>()?.EnvironmentName)
+            ? new BHome.Application.Common.DemoBusinessClock(TimeProvider.System) : TimeProvider.System);
         services.AddOptions<SessionOptions>().Bind(configuration.GetSection("Sessions"))
             .Validate(o => o.RefreshTokenDays is >= 1 and <= SessionOptions.MaximumLifetimeDays &&
                 o.AbsoluteLifetimeDays is >= 1 and <= SessionOptions.MaximumLifetimeDays &&
@@ -239,6 +241,8 @@ public static class DependencyInjection
         services.AddScoped<BHome.Application.Operations.PersonalDataRequestService>();
         services.AddScoped<BHome.Application.Operations.ILifecycleAttentionRepository, BHome.Infrastructure.Modules.Operations.LifecycleAttentionRepository>();
         services.AddScoped<BHome.Application.Operations.LifecycleAttentionService>();
+        services.AddScoped<BHome.Application.Operations.IOperationalWorkRepository, BHome.Infrastructure.Modules.Operations.OperationalWorkRepository>();
+        services.AddScoped<BHome.Application.Operations.OperationalWorkService>();
         services.AddScoped<BHome.Infrastructure.Modules.PropertyManagement.EquipmentInspectionJob>();
         services.AddScoped<IBackgroundJobHandler>(p => p.GetRequiredService<BHome.Infrastructure.Modules.PropertyManagement.EquipmentInspectionJob>());
         services.AddScoped<IJobScheduleContributor>(p => p.GetRequiredService<BHome.Infrastructure.Modules.PropertyManagement.EquipmentInspectionJob>());
@@ -423,9 +427,19 @@ public static class DependencyInjection
         services.AddScoped<BHome.Application.Billing.BillingAutomationOperations>();
         // Jobs:Enabled alone never authorizes automatic meter tasks or invoice issuance.
         // Billing automation is independently opted in only after an explicit rollout.
-        services.AddSingleton(p => new BHome.Application.Billing.BillingAutomationRuntime(
-            p.GetRequiredService<Microsoft.Extensions.Hosting.IHostEnvironment>().EnvironmentName is "Development" or "Testing",
-            configuration.GetValue<bool>("Jobs:Enabled") && configuration.GetValue<bool>("BillingAutomation:AutomaticJobsEnabled")));
+        services.AddSingleton(p =>
+        {
+            var host = p.GetRequiredService<IHostEnvironment>().EnvironmentName;
+            var config = p.GetRequiredService<IConfiguration>();
+            var deployedDemo = (host is "Staging" or "Production") && p.GetRequiredService<TimeProvider>() is BHome.Application.Common.DemoBusinessClock;
+            Guid? demoOwner = deployedDemo &&
+                Guid.TryParse(config["DemoClock:OwnerUserId"], out var ownerId) ? ownerId : null;
+            return new BHome.Application.Billing.BillingAutomationRuntime(host is "Development" or "Testing",
+                config.GetValue<bool>("Jobs:Enabled") && config.GetValue<bool>("BillingAutomation:AutomaticJobsEnabled"), demoOwner, deployedDemo)
+            {
+                ManualActionsEnabled = host == "Staging" && config.GetValue<bool>("BillingAutomation:ManualActionsEnabled")
+            };
+        });
         services.AddScoped<IBackgroundJobHandler>(p => new BHome.Application.Billing.BillingAutomationJobHandler("billing-meter", "Meter", p.GetRequiredService<BHome.Application.Billing.IBillingAutomationEngine>(), p.GetRequiredService<BHome.Application.Billing.BillingAutomationRuntime>().WorkerEnabled));
         services.AddScoped<IBackgroundJobHandler>(p => new BHome.Application.Billing.BillingAutomationJobHandler("billing-draft", "Draft", p.GetRequiredService<BHome.Application.Billing.IBillingAutomationEngine>(), p.GetRequiredService<BHome.Application.Billing.BillingAutomationRuntime>().WorkerEnabled));
         services.AddScoped<IBackgroundJobHandler>(p => new BHome.Application.Billing.BillingAutomationJobHandler("billing-final", "Final", p.GetRequiredService<BHome.Application.Billing.IBillingAutomationEngine>(), p.GetRequiredService<BHome.Application.Billing.BillingAutomationRuntime>().WorkerEnabled));
@@ -446,8 +460,14 @@ public static class DependencyInjection
         services.AddScoped<IJobScheduleContributor>(p => p.GetRequiredService<BHome.Application.Notifications.NotificationDeliveryService>());
         services.AddScoped<BHome.Application.PaymentsDebt.IPaymentRepository, BHome.Infrastructure.PaymentsDebt.PaymentRepository>();
         services.AddScoped<BHome.Application.PaymentsDebt.PaymentService>();
-        services.AddSingleton(provider => new BHome.Application.PaymentsDebt.PaymentRuntimeMode(
-            provider.GetRequiredService<Microsoft.Extensions.Hosting.IHostEnvironment>().EnvironmentName is "Development" or "Testing"));
+        services.AddSingleton(provider =>
+        {
+            var environment = provider.GetRequiredService<IHostEnvironment>().EnvironmentName;
+            var sepay = provider.GetRequiredService<BHome.Application.PaymentsDebt.SePay.SePayOptions>();
+            return new BHome.Application.PaymentsDebt.PaymentRuntimeMode(
+                environment is "Development" or "Testing",
+                environment == "Staging" && sepay.TestingAvailable(environment));
+        });
         services.AddSingleton<BHome.Application.PaymentsDebt.ITransferQrGenerator, BHome.Infrastructure.PaymentsDebt.VietQrGenerator>();
         services.AddScoped<BHome.Application.PaymentsDebt.TransferInstructionsService>();
         services.AddScoped<BHome.Application.PaymentsDebt.IMainInitialPaymentLedger, BHome.Infrastructure.PaymentsDebt.MainInitialPaymentLedger>();

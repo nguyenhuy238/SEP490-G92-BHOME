@@ -261,6 +261,7 @@
   "invalid_phone_number": "Nhập số điện thoại Việt Nam hợp lệ hoặc số quốc tế có mã nước (+).",
   "invalid_receiving_bank_account": "Kiểm tra BIN 6 số, tài khoản 6–19 số, tên in hoa không dấu và xác nhận cấu hình.",
   "sandbox_receiving_account_unavailable": "Tài khoản này chưa được cấu hình SePay Test cho cơ sở đã chọn.",
+  "development_receiving_account_unavailable": "Môi trường hiện tại không cho phép lưu tài khoản nhận tiền tổng hợp. Dùng Development/Testing hoặc Staging đã bật SePay Test. Production không hỗ trợ tài khoản tổng hợp.",
   "invalid_residence_state": "Kiểm tra ngày cư trú và thời điểm có kết quả.",
   "invalid_residence_transition": "Hồ sơ chưa đủ điều kiện: kiểm tra hợp đồng đang thuê, ngày cư trú và ảnh kết quả. Hãy tải lại hồ sơ.",
   "invalid_response": "Phản hồi máy chủ không đúng định dạng BHOME. Kiểm tra địa chỉ API và phiên bản ứng dụng.",

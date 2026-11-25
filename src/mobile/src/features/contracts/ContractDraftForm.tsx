@@ -1,3 +1,4 @@
+import { demoBusinessNow } from '../../../../../packages/client-core/src/demoClock';
 import { UserFeedbackError } from '../../../../../packages/client-core/src/api';
 import { ContractNotice } from './ContractNotice';
 import { useFeedbackState } from '../../lib/useFeedbackState';
@@ -164,7 +165,7 @@ export function ContractDraftForm({
         settingsVersion: configured!.settingsVersion,
         expiresAt: configured!.expiresAt,
       };
-      if (Date.parse(body.expiresAt) <= Date.now())
+      if (Date.parse(body.expiresAt) <= demoBusinessNow())
         throw new UserFeedbackError('Hạn giữ chỗ phải ở tương lai.');
     } catch (e) {
       setError(contractError(e));
@@ -262,12 +263,10 @@ export function ContractDraftForm({
               key={selectedLocationId}
               value={values.roomId ?? ''}
               rooms={roomOptions}
-              disabled={
-                busy ||
-                query.catalogLoading ||
-                !selectedLocationId ||
-                !!values.representativeResidentId
-              }
+              loading={query.catalogLoading}
+              error={query.catalogError}
+              onRetry={query.reload}
+              disabled={busy || !selectedLocationId || !!values.representativeResidentId}
               onChange={(roomId) => {
                 setValues((before) => ({
                   ...before,

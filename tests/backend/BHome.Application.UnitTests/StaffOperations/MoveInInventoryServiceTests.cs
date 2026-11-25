@@ -114,14 +114,18 @@ public sealed class MoveInInventoryServiceTests
     }
 
     [Fact]
-    public async Task GoodInventoryCanBeSavedAndCompletedWithoutReasonOrPhoto()
+    public async Task GoodInventoryRequiresPhotoButNotReason()
     {
         var r = new Rig();
         var item = r.Items.Single();
+        var failure = await Assert.ThrowsAsync<OperationalTaskException>(() => r.Service.UpdateInventoryItemAsync(r.Task.Id, item.Id,
+            new(r.Task.Version, item.ExpectedQuantity, "Good", null, [], null), Guid.NewGuid(), default));
+        Assert.Equal("invalid_move_in_inventory_item", failure.Code);
+        var evidence = r.Evidence();
         var saved = await r.Service.UpdateInventoryItemAsync(r.Task.Id, item.Id,
-            new(r.Task.Version, item.ExpectedQuantity, "Good", null, [], null), Guid.NewGuid(), default);
+            new(r.Task.Version, item.ExpectedQuantity, "Good", null, [evidence], null), Guid.NewGuid(), default);
         Assert.Equal("Good", Assert.Single(saved.Items).Condition);
-        Assert.Empty(Assert.Single(saved.Items).EvidenceIds!);
+        Assert.Equal(evidence, Assert.Single(Assert.Single(saved.Items).EvidenceIds!));
         Assert.Null(Assert.Single(saved.Items).IncidentId);
         var completed = await r.Service.CompleteMoveInInventoryAsync(r.Task.Id,
             new(r.Task.Version), Guid.NewGuid(), default);
@@ -132,25 +136,39 @@ public sealed class MoveInInventoryServiceTests
     [Theory]
     [InlineData("Missing", 1)]
     [InlineData("Damaged", 2)]
-    public async Task MissingOrDamagedStillRequirePhotosAndReason(string condition, int actualQuantity)
+    public async Task MissingOrDamagedRequirePhotoButAcceptOptionalNotes(string condition, int actualQuantity)
     {
         var r = new Rig();
         var item = r.Items.Single();
-        var withoutPhoto = await Assert.ThrowsAsync<OperationalTaskException>(() =>
-            r.Service.UpdateInventoryItemAsync(r.Task.Id, item.Id,
-                new(r.Task.Version, actualQuantity, condition, "Hiện trạng bất thường", [], null),
-                Guid.NewGuid(), default));
-        Assert.Equal("invalid_move_in_inventory_item", withoutPhoto.Code);
-
-        var withoutReason = await Assert.ThrowsAsync<OperationalTaskException>(() =>
-            r.Service.UpdateInventoryItemAsync(r.Task.Id, item.Id,
-                new(r.Task.Version, actualQuantity, condition, "", [r.Evidence()], null),
-                Guid.NewGuid(), default));
-        Assert.Equal("invalid_move_in_inventory_item", withoutReason.Code);
+        await Assert.ThrowsAsync<OperationalTaskException>(() => r.Service.UpdateInventoryItemAsync(r.Task.Id, item.Id,
+            new(r.Task.Version, actualQuantity, condition, null, [], null), Guid.NewGuid(), default));
+        var evidence = r.Evidence();
+        var saved = await r.Service.UpdateInventoryItemAsync(r.Task.Id, item.Id,
+            new(r.Task.Version, actualQuantity, condition, null, [evidence], null), Guid.NewGuid(), default);
+        Assert.Equal(condition, Assert.Single(saved.Items).Condition);
+        Assert.Equal(evidence, Assert.Single(Assert.Single(saved.Items).EvidenceIds!));
+        var completed = await r.Service.CompleteMoveInInventoryAsync(r.Task.Id,
+            new(r.Task.Version), Guid.NewGuid(), default);
+        Assert.Equal("Completed", completed.Status);
     }
 
     [Fact]
-    public async Task CannotCompleteUncheckedOrIssueWithoutDescriptionAndPhoto()
+    public async Task ZeroQuantityMissingInventoryCanBeSavedAndCompletedWithoutPhoto()
+    {
+        var r = new Rig();
+        var item = r.Items.Single();
+        var saved = await r.Service.UpdateInventoryItemAsync(r.Task.Id, item.Id,
+            new(r.Task.Version, 0, "Missing", null, [], null), Guid.NewGuid(), default);
+        Assert.Equal(0, Assert.Single(saved.Items).ActualQuantity);
+        Assert.Empty(Assert.Single(saved.Items).EvidenceIds!);
+        var completed = await r.Service.CompleteMoveInInventoryAsync(r.Task.Id,
+            new(r.Task.Version), Guid.NewGuid(), default);
+        Assert.Equal("Completed", completed.Status);
+        Assert.Equal("Missing", completed.Outcome);
+    }
+
+    [Fact]
+    public async Task CannotCompleteUncheckedOrWithoutPhoto()
     {
         var r = new Rig();
         var incomplete = await Assert.ThrowsAsync<OperationalTaskException>(() =>
@@ -160,10 +178,14 @@ public sealed class MoveInInventoryServiceTests
         var snapshot = JsonSerializer.Deserialize<MoveInInventorySnapshot>(r.Task.MoveInInventoryJson)!;
         snapshot.Items[0] = snapshot.Items[0] with { ActualQuantity = 1, Condition = "Missing", Notes = "Thiếu giường", EvidenceIds = [] };
         r.Task.MoveInInventoryJson = JsonSerializer.Serialize(snapshot);
-        var missing = await Assert.ThrowsAsync<OperationalTaskException>(() =>
+        var missingPhoto = await Assert.ThrowsAsync<OperationalTaskException>(() =>
             r.Service.CompleteMoveInInventoryAsync(r.Task.Id, new(r.Task.Version), Guid.NewGuid(), default));
-        Assert.Equal("move_in_inventory_checklist_incomplete", missing.Code);
-        Assert.Equal(MeterTaskStatus.InProgress, r.Task.Status);
+        Assert.Equal("move_in_inventory_checklist_incomplete", missingPhoto.Code);
+        snapshot.Items[0] = snapshot.Items[0] with { Notes = null, EvidenceIds = [r.Evidence()] };
+        r.Task.MoveInInventoryJson = JsonSerializer.Serialize(snapshot);
+        var completed = await r.Service.CompleteMoveInInventoryAsync(r.Task.Id,
+            new(r.Task.Version), Guid.NewGuid(), default);
+        Assert.Equal("Completed", completed.Status);
     }
 
     [Theory]

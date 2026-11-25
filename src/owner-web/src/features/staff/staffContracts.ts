@@ -75,10 +75,4 @@ export interface StaffChangePreview {
   canRemove: boolean;
   openResponsibilities: Array<{ code: string; count: number }>;
 }
-export const todayVietnam = () =>
-  new Intl.DateTimeFormat('en-CA', {
-    timeZone: 'Asia/Ho_Chi_Minh',
-    year: 'numeric',
-    month: '2-digit',
-    day: '2-digit',
-  }).format(new Date());
+export { businessToday as todayVietnam } from '../../../../../packages/client-core/src/contracts';

@@ -1,3 +1,4 @@
+using BHome.Application.Common;
 using System.Text.Json;
 using BHome.Application.Billing;
 using BHome.Application.IdentityAccess;
@@ -13,7 +14,7 @@ namespace BHome.Infrastructure.Modules.Billing;
 
 internal sealed partial class BillingAutomationEngine(BHomePersistenceContext db, IBillingAutomationSchedules schedules, TimeProvider clock, IInvoiceRepository invoiceRepository, IFixedChargeCoverage fixedCoverage) : IBillingAutomationEngine
 {
-    private DateOnly Today => BillingAutomationDates.BusinessDate(clock.GetUtcNow());
+    private DateOnly Today => clock.BusinessToday();
     public Task<IReadOnlyList<BillingQueueView>> QueueAsync(Guid location, DateOnly period, CancellationToken t) => db.BillingQueueAsync(location, period, t);
     public async Task<IReadOnlyList<BillingAutomationAttempt>> AttemptsAsync(Guid location, DateOnly period, CancellationToken t) => await (from a in db.Set<BillingAutomationAttempt>().AsNoTracking() join e in db.Set<BillingAutomationExecution>() on a.ExecutionId equals e.Id where e.LocationId == location && e.BillingPeriod == period orderby a.StartedAt descending select a).Take(100).ToArrayAsync(t);
     internal static DateTimeOffset DueAt(DateOnly date) => new(TimeZoneInfo.ConvertTimeToUtc(date.ToDateTime(new TimeOnly(23, 59, 59)), TimeZoneInfo.FindSystemTimeZoneById("Asia/Ho_Chi_Minh")), TimeSpan.Zero);

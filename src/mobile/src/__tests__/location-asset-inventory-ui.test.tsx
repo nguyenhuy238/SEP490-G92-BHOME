@@ -9,6 +9,7 @@ import type {
 import type { OperationalTask } from '../services/operationalTasks';
 
 const state = vi.hoisted(() => ({ request: vi.fn(), go: vi.fn() }));
+vi.mock('expo-router', () => ({ useLocalSearchParams: () => ({}) }));
 vi.mock('react-native', async () => {
   // Use RN-Web's compiled View and StyleSheet, not native Flow syntax.
   // @ts-expect-error react-native-web does not ship declarations for this direct entry.
@@ -95,8 +96,8 @@ vi.mock('react-native-paper', () => {
 vi.mock('../lib/SessionProvider', () => ({
   useSession: () => ({ api: { request: state.request } }),
 }));
-vi.mock('../features/workspace/useWorkspaceQuery', () => ({
-  useWorkspaceQuery: (path: string) => {
+vi.mock('../features/workspace/useCachedWorkspaceQuery', () => ({
+  useCachedWorkspaceQuery: (path: string) => {
     const [data, setData] = React.useState<LocationAssetInventory | null>(null);
     const [error, setError] = React.useState('');
     const [revision, setRevision] = React.useState(0);
@@ -114,7 +115,8 @@ vi.mock('../features/workspace/useWorkspaceQuery', () => ({
         cancelled = true;
       };
     }, [path, revision]);
-    return { data, error, loading: !data && !error, reload: () => setRevision((r) => r + 1) };
+    const reload = React.useCallback(() => setRevision((r) => r + 1), []);
+    return { data, error, loading: !data && !error, fetching: false, reload, setData };
   },
 }));
 vi.mock('../components/WorkspaceKit', () => ({
@@ -197,7 +199,6 @@ const completeResponse: LocationAssetInventory = {
   checkedCount: 0,
   items,
 };
-const onReady = vi.fn();
 const onRefresh = vi.fn();
 afterEach(cleanup);
 beforeEach(() => {
@@ -216,7 +217,6 @@ it('renders all 42 server items into named room and common-area sections, not ju
       taskStatus="InProgress"
       editable={true}
       onTaskRefresh={onRefresh}
-      onReadinessChange={onReady}
     />,
   );
   await waitFor(() => expect(screen.getByRole('progressbar', { name: /42/ })).toBeTruthy());
@@ -246,7 +246,6 @@ it('renders all 42 server items into named room and common-area sections, not ju
   fireEvent.click(screen.getByRole('button', { name: 'Chi tiết kiểm kê: Camera hành lang' }));
   expect(screen.getByRole('button', { name: /X.c nh.n .?/ })).toBeTruthy();
   expect(screen.getByRole('button', { name: /B.o v.n ?./ })).toBeTruthy();
-  expect(onReady).toHaveBeenLastCalledWith(false);
   expect(screen.queryByText(/Chưa tải đầy đủ checklist/)).toBeNull();
 });
 
@@ -269,7 +268,6 @@ it('reports a discrepancy on a Tenant-inherited asset without exposing baseline 
       taskStatus="InProgress"
       editable={true}
       onTaskRefresh={onRefresh}
-      onReadinessChange={onReady}
     />,
   );
   const itemButtons = await screen.findAllByRole('button', { name: /Chi ti.t ki.m k./ });
@@ -309,7 +307,6 @@ it('identifies prior Staff checks as inherited provenance without signing for th
       taskStatus="InProgress"
       editable={true}
       onTaskRefresh={onRefresh}
-      onReadinessChange={onReady}
     />,
   );
   await waitFor(() =>
@@ -330,14 +327,12 @@ it('shows an explicit incomplete-data notice rather than a blank checklist when 
       taskStatus="InProgress"
       editable={true}
       onTaskRefresh={onRefresh}
-      onReadinessChange={onReady}
     />,
   );
   await waitFor(() =>
     expect(screen.getByText(/Chưa tải đầy đủ checklist: nhận được 0\/42/)).toBeTruthy(),
   );
   expect(screen.getByText('Tải lại checklist')).toBeTruthy();
-  expect(onReady).toHaveBeenLastCalledWith(false);
 });
 
 it('separates Owner-unconfirmed rooms from Staff checklist and prevents an empty checklist being ready', async () => {
@@ -355,16 +350,14 @@ it('separates Owner-unconfirmed rooms from Staff checklist and prevents an empty
       taskStatus="InProgress"
       editable={true}
       onTaskRefresh={onRefresh}
-      onReadinessChange={onReady}
     />,
   );
   await waitFor(() => expect(screen.getByRole('alert').textContent).toMatch(/Owner/));
   expect(screen.getByText('Chờ Owner hoàn tất kiểm kê ban đầu')).toBeTruthy();
-  expect(screen.getByText('Phòng 102 · Chưa được Owner xác nhận')).toBeTruthy();
-  expect(screen.getByText('Phòng 103 · Chưa được Owner xác nhận')).toBeTruthy();
-  expect(screen.getByText('Tài sản khu vực chung · Chưa được Owner xác nhận')).toBeTruthy();
+  expect(screen.getByText('Phòng 102 · Còn tài sản chờ Owner xác nhận')).toBeTruthy();
+  expect(screen.getByText('Phòng 103 · Còn tài sản chờ Owner xác nhận')).toBeTruthy();
+  expect(screen.getByText('Tài sản khu vực chung · Còn tài sản chờ Owner xác nhận')).toBeTruthy();
   expect(screen.queryByRole('button', { name: /^Chi tiết kiểm kê:/ })).toBeNull();
-  expect(onReady).toHaveBeenLastCalledWith(false);
 });
 
 it('shows pending Owner rooms separately while retaining confirmed asset rows', async () => {
@@ -379,14 +372,58 @@ it('shows pending Owner rooms separately while retaining confirmed asset rows', 
       taskStatus="InProgress"
       editable={true}
       onTaskRefresh={onRefresh}
-      onReadinessChange={onReady}
     />,
   );
   await waitFor(() =>
-    expect(screen.getByText('Phòng 105 · Chưa được Owner xác nhận')).toBeTruthy(),
+    expect(screen.getByText('Phòng 105 · Còn tài sản chờ Owner xác nhận')).toBeTruthy(),
   );
   expect(screen.getByText('Bóng đèn')).toBeTruthy();
-  expect(onReady).toHaveBeenLastCalledWith(false);
+});
+
+it('allows work on individually Owner-confirmed room assets while other assets in the room remain pending', async () => {
+  state.request.mockResolvedValueOnce({
+    ...completeResponse,
+    totalCount: 1,
+    checkedCount: 0,
+    items: [{ ...items[0]!, roomNumber: 'P.101' }],
+    pendingOwnerRooms: ['101'],
+    pendingOwnerCommonAssets: false,
+  });
+  render(
+    <LocationAssetInventoryChecklist
+      taskId={taskId}
+      taskStatus="InProgress"
+      editable={true}
+      onTaskRefresh={onRefresh}
+    />,
+  );
+  await screen.findByText('Phòng 101 · Còn tài sản chờ Owner xác nhận');
+  fireEvent.click(screen.getByRole('button', { name: 'Chi tiết kiểm kê: Bóng đèn' }));
+  expect(screen.queryByText(/Dữ liệu không nhất quán/)).toBeNull();
+  expect(screen.getByRole('button', { name: /Xác nhận đủ/ })).toBeTruthy();
+  expect(screen.getByRole('button', { name: /Báo vấn đề/ })).toBeTruthy();
+});
+
+it('allows work on individually Owner-confirmed common assets while other common assets remain pending', async () => {
+  state.request.mockResolvedValueOnce({
+    ...completeResponse,
+    totalCount: 1,
+    checkedCount: 0,
+    items: [items[40]!],
+    pendingOwnerCommonAssets: true,
+  });
+  render(
+    <LocationAssetInventoryChecklist
+      taskId={taskId}
+      taskStatus="InProgress"
+      editable={true}
+      onTaskRefresh={onRefresh}
+    />,
+  );
+  await screen.findByText('Tài sản khu vực chung · Còn tài sản chờ Owner xác nhận');
+  fireEvent.click(screen.getByRole('button', { name: 'Chi tiết kiểm kê: Camera hành lang' }));
+  expect(screen.getByRole('button', { name: /Xác nhận đủ/ })).toBeTruthy();
+  expect(screen.getByRole('button', { name: /Báo vấn đề/ })).toBeTruthy();
 });
 
 it('renders only 12 Owner-confirmed assets in three rooms while listing nine rooms awaiting Owner', async () => {
@@ -404,21 +441,19 @@ it('renders only 12 Owner-confirmed assets in three rooms while listing nine roo
       taskStatus="InProgress"
       editable={true}
       onTaskRefresh={onRefresh}
-      onReadinessChange={onReady}
     />,
   );
   await waitFor(() => expect(screen.getByRole('progressbar', { name: /12/ })).toBeTruthy());
   expect(screen.getAllByRole('button', { name: /^Xem kiểm kê Phòng/ })).toHaveLength(3);
   expect(screen.getByRole('button', { name: 'Xem kiểm kê Phòng 101' })).toBeTruthy();
   expect(screen.queryByRole('button', { name: 'Xem kiểm kê Phòng 104' })).toBeNull();
-  expect(screen.getByText('Phòng 104 · Chưa được Owner xác nhận')).toBeTruthy();
-  expect(screen.getByText('Phòng 112 · Chưa được Owner xác nhận')).toBeTruthy();
-  expect(screen.getByText('Tài sản khu vực chung · Chưa được Owner xác nhận')).toBeTruthy();
+  expect(screen.getByText('Phòng 104 · Còn tài sản chờ Owner xác nhận')).toBeTruthy();
+  expect(screen.getByText('Phòng 112 · Còn tài sản chờ Owner xác nhận')).toBeTruthy();
+  expect(screen.getByText('Tài sản khu vực chung · Còn tài sản chờ Owner xác nhận')).toBeTruthy();
   expect(screen.getByText('Bóng đèn')).toBeTruthy();
-  expect(onReady).toHaveBeenLastCalledWith(false);
 });
 
-it('confirms an intact asset with one versioned write and one post-save refresh', async () => {
+it('confirms an intact asset with one versioned write and uses the returned server snapshot', async () => {
   const inventoryPath = '/api/v1/operational-tasks/' + taskId + '/location-asset-inventory';
   const item = items[0]!;
   const writePath = inventoryPath + '/items/' + item.id;
@@ -460,7 +495,6 @@ it('confirms an intact asset with one versioned write and one post-save refresh'
       taskStatus="InProgress"
       editable={true}
       onTaskRefresh={onRefresh}
-      onReadinessChange={onReady}
     />,
   );
   await screen.findByRole('progressbar');
@@ -477,16 +511,10 @@ it('confirms an intact asset with one versioned write and one post-save refresh'
     string,
     { method?: string; body?: string; headers?: Record<string, string> } | undefined,
   ][];
-  await waitFor(() =>
-    expect(
-      state.request.mock.calls.filter(
-        ([path, options]) => path === inventoryPath && !options?.method,
-      ),
-    ).toHaveLength(2),
-  );
+  await screen.findByRole('progressbar', { name: /1\/42/ });
   const gets = calls.filter(([path, options]) => path === inventoryPath && !options?.method);
   const put = calls.find(([path, options]) => path === writePath && options?.method === 'PUT');
-  expect(gets).toHaveLength(2);
+  expect(gets).toHaveLength(1);
   expect(put).toBeTruthy();
   expect(JSON.parse(put?.[1]?.body ?? '{}')).toMatchObject({
     version: 1,
@@ -508,7 +536,6 @@ it.each(['Missing', 'Damaged'] as const)(
         taskStatus="InProgress"
         editable={true}
         onTaskRefresh={onRefresh}
-        onReadinessChange={onReady}
       />,
     );
     await screen.findByRole('progressbar');
@@ -576,7 +603,6 @@ it('saves NotAccessible as a blocker instead of creating an Incident', async () 
       taskStatus="InProgress"
       editable={true}
       onTaskRefresh={onRefresh}
-      onReadinessChange={onReady}
     />,
   );
   await screen.findByRole('progressbar');
@@ -613,7 +639,6 @@ it('hides all checklist mutations when the current Staff is read-only', async ()
       taskStatus="InProgress"
       editable={false}
       onTaskRefresh={onRefresh}
-      onReadinessChange={onReady}
     />,
   );
   await screen.findByRole('progressbar');

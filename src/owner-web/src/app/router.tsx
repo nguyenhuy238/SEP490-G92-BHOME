@@ -4,6 +4,8 @@ import { LoginRoute, ProtectedRoute } from './routeGuards';
 import { AppShell } from '../components/layout/AppShell';
 import { LoadingState } from '../components/common/PortalUI';
 import { SharedConfigurationProvider } from '../features/configuration/SharedConfigurationContext';
+import { LegacyWorkRedirect } from '../features/tasks/LegacyWorkRedirect';
+import { isMockMode } from '../services/config';
 const NotificationsPage = lazy(() => import('../features/notifications/pages/NotificationsPage'));
 const LocationsPage = lazy(() => import('../features/locations/pages/LocationsPage'));
 const RoomsPage = lazy(() => import('../features/rooms/pages/RoomsPage'));
@@ -138,7 +140,7 @@ export function AppRouter() {
               <Route path="/staff" element={<StaffPage />} />
               <Route path="/staff-assignments" element={<StaffAssignmentsPage />} />
               <Route path="/operational-tasks" element={<TasksPage />} />
-              <Route path="/tasks" element={<Navigate to="/operational-tasks" replace />} />
+              <Route path="/tasks" element={<LegacyWorkRedirect source="tasks" />} />
               <Route path="/tenants" element={<TenantsPage />} />
               <Route path="/contracts" element={<ContractsPage />} />
               <Route
@@ -156,8 +158,16 @@ export function AppRouter() {
               <Route path="/payments" element={<PaymentsPage />} />
               <Route path="/tenant-refund-requests" element={<TenantRefundRequestsPage />} />
               <Route path="/debts" element={<DebtsPage />} />
-              <Route path="/incidents" element={<IncidentsPage />} />
-              <Route path="/maintenance" element={<MaintenancePage />} />
+              <Route
+                path="/incidents"
+                element={isMockMode ? <IncidentsPage /> : <LegacyWorkRedirect source="incidents" />}
+              />
+              <Route
+                path="/maintenance"
+                element={
+                  isMockMode ? <MaintenancePage /> : <LegacyWorkRedirect source="maintenance" />
+                }
+              />
               <Route path="/expenses" element={<ExpensesPage />} />
               <Route path="/finance/tax-records" element={<TaxTrackingPage />} />
               <Route path="/dashboard" element={<DashboardPage />} />

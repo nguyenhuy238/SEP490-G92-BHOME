@@ -56,8 +56,10 @@ jobs:
           labels: |
             org.opencontainers.image.revision=${{ github.sha }}
             org.opencontainers.image.source=https://github.com/${{ github.repository }}
+            io.bhome.staging-regressions=v1
           cache-from: type=gha,scope=release-api
-          cache-to: type=gha,mode=max,scope=release-api
+          # Cache availability must not block a successfully built and pushed image.
+          cache-to: type=gha,mode=max,scope=release-api,ignore-error=true
       - name: Build the environment-specific Owner Web
         id: owner
         uses: docker/build-push-action@v6
@@ -75,7 +77,7 @@ jobs:
             org.opencontainers.image.revision=${{ github.sha }}
             org.opencontainers.image.source=https://github.com/${{ github.repository }}
           cache-from: type=gha,scope=owner-${{ steps.target.outputs.environment }}
-          cache-to: type=gha,mode=max,scope=owner-${{ steps.target.outputs.environment }}
+          cache-to: type=gha,mode=max,scope=owner-${{ steps.target.outputs.environment }},ignore-error=true
       - name: Build the environment-specific Public Web
         id: public
         uses: docker/build-push-action@v6
@@ -93,7 +95,7 @@ jobs:
             org.opencontainers.image.revision=${{ github.sha }}
             org.opencontainers.image.source=https://github.com/${{ github.repository }}
           cache-from: type=gha,scope=public-${{ steps.target.outputs.environment }}
-          cache-to: type=gha,mode=max,scope=public-${{ steps.target.outputs.environment }}
+          cache-to: type=gha,mode=max,scope=public-${{ steps.target.outputs.environment }},ignore-error=true
       - name: Record immutable release manifest
         env:
           API_DIGEST: ${{ steps.api.outputs.digest }}

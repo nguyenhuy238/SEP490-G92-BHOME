@@ -23,7 +23,7 @@ public sealed class ContractWorkflowGuardTests
     [Theory]
     [InlineData("Development")]
     [InlineData("Testing")]
-    public async Task SimulatedAdapterMarksPdfVisiblyWithoutCreatingAnyDigitalSignature(string environment)
+    public async Task SimulatedAdapterKeepsSimulationMetadataWithoutWarningsOrDigitalSignatures(string environment)
     {
         using var backend = ContractPdfRendererTests.Backend(environment, simulation: true);
         using var scope = backend.CreateScope();
@@ -33,7 +33,7 @@ public sealed class ContractWorkflowGuardTests
         var result = await adapter.PrepareAsync(input, Guid.Empty, null, default);
         using var pdf = new PdfDocument(new PdfReader(new MemoryStream(result.PreparedPdf)));
         Assert.Empty(new SignatureUtil(pdf).GetSignatureNames());
-        Assert.Contains("SIMULATED SIGNING - NOT LEGALLY SIGNED", ContractPdfRendererTests.Text(pdf));
+        Assert.DoesNotContain("SIMULATED SIGNING - NOT LEGALLY SIGNED", ContractPdfRendererTests.Text(pdf));
         Assert.Equal("SIMULATED SIGNING - NO LEGAL SIGNATURE", pdf.GetDocumentInfo().GetMoreInfo("BHomeSigningMode"));
         var signature = new ContractSignature { ContractId = input.ContractId, SignerUserId = Actor.Id };
         signature.ProviderReference = await adapter.RequestAsync(signature, default);

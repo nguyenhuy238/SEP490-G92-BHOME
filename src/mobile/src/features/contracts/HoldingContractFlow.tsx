@@ -82,6 +82,7 @@ export function HoldingContractFlow({
   actorId,
   onChanged,
   onList,
+  onComplete,
 }: {
   api: ContractClient;
   contract: ContractView;
@@ -90,6 +91,7 @@ export function HoldingContractFlow({
   actorId: string;
   onChanged: () => void;
   onList: () => void;
+  onComplete?: () => void;
 }) {
   // Reopening always resumes from persisted backend state, never by posting another draft.
   const [verifiedDepositContract, setVerifiedDepositContract] = useState<string | null>(null);
@@ -105,7 +107,6 @@ export function HoldingContractFlow({
   const action = actions.find((a) => a.operation === operation);
   const owner = role === 'Owner' && c.ownerSignerId === actorId;
   const internal = c.signingMode === 'INTERNAL_OTP_DRAWN';
-  const representative = c.occupants?.find((r) => r.representative)?.label;
   const sandbox = useHoldingSandbox(api, c, role !== 'Owner' && c.isDevelopmentDemo);
   const operations =
     step === 5
@@ -128,20 +129,20 @@ export function HoldingContractFlow({
         contract={c}
         sandbox={sandbox}
         onChanged={onChanged}
-        onList={onList}
+        onList={onComplete ?? onList}
       />
     );
   return (
     <>
       <HoldingProgress current={step - 1} />
-      <HoldingSectionCard title="Tóm tắt giữ chỗ">
+      <HoldingSectionCard title="Thông tin giữ chỗ">
         <Heading title={`Phòng ${c.roomNumber || '—'}`} detail={c.locationName} />
         <HoldingStatusBadge
           label={
             step === 5
               ? 'Bản nháp chờ gửi Owner ký'
               : c.status === 'PendingActivation' && depositVerified
-                ? 'Đã xác minh tiền cọc · Đang tự động kích hoạt'
+                ? 'Đang hoàn tất giữ chỗ'
                 : holdingStageLabel(c) || 'Đang xử lý hợp đồng'
           }
           tone={
@@ -152,12 +153,16 @@ export function HoldingContractFlow({
                 : 'neutral'
           }
         />
-        <ReadOnly label="Người giữ chỗ" value={representative} />
+        <View style={holdingPaymentStyles.customer}>
+          <Text style={holdingPaymentStyles.referenceLabel}>Người giữ chỗ</Text>
+          <Text style={holdingPaymentStyles.customerName}>{c.holdingCustomer?.fullName || 'Chưa có thông tin khách hàng'}</Text>
+          <ReadOnly label="Số CCCD" value={c.holdingCustomer?.maskedCitizenNumber} />
+        </View>
         <ReadOnly
           label="Thời hạn giữ chỗ"
           value={`${displayContractDate(c.startDate)} – ${displayContractDate(c.endDate)}`}
         />
-        <ReadOnly label="Tiền giữ chỗ" value={formatContractMoney(c.requiredDeposit)} />
+        {step < 7 && <ReadOnly label="Tiền giữ chỗ" value={formatContractMoney(c.requiredDeposit)} />}
       </HoldingSectionCard>
       {c.isDevelopmentDemo && (
         <Text style={ui.red}>Hợp đồng minh họa · Không dùng để ký hoặc thanh toán thực tế.</Text>
@@ -208,7 +213,7 @@ export function HoldingContractFlow({
             <Text style={ui.muted}>Hợp đồng sử dụng phương thức ký số đã cấu hình.</Text>
           </HoldingSectionCard>
           {owner && c.approvedAt && <SigningCertificates api={api} />}
-          {owner && <ContractEvidence api={api} contractId={c.id} pdf />}
+          {owner && <ContractEvidence api={api} contractId={c.id} contractKind="Holding" pdf />}
         </>
       )}
       {step >= 7 && signed(c) && (
@@ -220,7 +225,7 @@ export function HoldingContractFlow({
           role={role}
           owner={owner}
           readiness={readiness}
-          onList={onList}
+          onList={onComplete ?? onList}
           onChanged={onChanged}
         />
       )}
@@ -322,13 +327,11 @@ function HoldingDraftDocument({
           )}
           {current?.map((p) => (
             <React.Fragment key={p.id}>
-              {p.developmentOnly && (
-                <Text style={ui.muted}>Tài liệu Development · Chưa duyệt cho production</Text>
-              )}
               <ContractEvidence
                 api={api}
                 contractId={c.id}
                 previewId={p.id}
+                contractKind="Holding"
                 pdf
                 label="Xem hợp đồng"
               />
@@ -586,7 +589,13 @@ function HoldingInternalSigning({
             <HoldingSectionCard title="Xác nhận của Owner">
               <HoldingStatusBadge label="Người giữ chỗ đã ký" tone="success" />
               <ReadOnly label="Thời điểm ký" value={formatInstant(status.tenantAcceptedAt)} />
-              <ContractEvidence api={api} contractId={c.id} pdf label="Xem hợp đồng đã ký" />
+              <ContractEvidence
+                api={api}
+                contractId={c.id}
+                contractKind="Holding"
+                pdf
+                label="Xem hợp đồng đã ký"
+              />
               {status.ownerAcceptedAt ? (
                 <ReadOnly label="Owner đã xác nhận" value={formatInstant(status.ownerAcceptedAt)} />
               ) : (
@@ -716,7 +725,7 @@ function HoldingPayment({
   const testPayment = (qr?.mode ?? c.paymentMode) === 'Test';
   return (
     <>
-      <HoldingSectionCard title={success ? 'Giữ chỗ thành công' : 'Tiền giữ chỗ'}>
+        <HoldingSectionCard title={success ? 'Giữ chỗ thành công' : 'Tiền giữ chỗ'}>
         <HoldingStatusBadge
           label={
             success
@@ -737,14 +746,17 @@ function HoldingPayment({
         )}
         {data && (
           <>
-            <ReadOnly label="Cần thanh toán" value={formatContractMoney(data.deposit.required)} />
+            <View style={holdingPaymentStyles.amountBlock}>
+              <Text style={holdingPaymentStyles.referenceLabel}>Tổng tiền giữ chỗ</Text>
+              <Text style={holdingPaymentStyles.amount}>{formatContractMoney(data.deposit.required)}</Text>
+            </View>
             <ReadOnly label="Đã xác minh" value={formatContractMoney(data.deposit.verified)} />
             <ReadOnly label="Còn thiếu" value={formatContractMoney(data.deposit.remaining)} />
             {data.deposit.requiresManualReview && (
               <Text style={ui.red}>Cần Owner kiểm tra và đối chiếu giao dịch.</Text>
             )}
             {success && (
-              <Text style={ui.green}>Hợp đồng đã kích hoạt · Phòng đang giữ chỗ (OnHold).</Text>
+              <Text style={ui.green}>Phòng đã được giữ chỗ cho khách hàng.</Text>
             )}
             {success && reference && <ReadOnly label="Tham chiếu tiền cọc" value={reference} />}
           </>
@@ -821,11 +833,16 @@ function HoldingPayment({
           <OwnerWebNotice task="Đối chiếu và phân bổ tiền cọc giữ chỗ" />
         )}
       {!success && role === 'Staff' && (
-        <Text style={ui.muted}>
-          {data?.deposit.status === 'Verified'
-            ? 'Đã xác minh đủ tiền cọc. Hệ thống đang tự động kích hoạt và cập nhật trạng thái phòng.'
-            : 'Hệ thống tự động kích hoạt khi đủ chữ ký, thanh toán và các điều kiện hợp đồng.'}
-        </Text>
+        <View style={holdingPaymentStyles.nextStep}>
+          <Text style={holdingPaymentStyles.customerName}>Bước tiếp theo</Text>
+          <Text style={ui.muted}>
+            {data?.deposit.requiresManualReview
+              ? 'Chủ nhà cần kiểm tra giao dịch trước khi hoàn tất giữ chỗ.'
+              : data?.deposit.status === 'Verified'
+                ? 'Tiền cọc đã được xác nhận. Chờ hệ thống xác nhận phòng đã được giữ chỗ. Nếu trạng thái không cập nhật, hãy liên hệ chủ nhà.'
+                : 'Hướng dẫn khách chuyển khoản đúng thông tin bên trên và chờ hệ thống xác nhận.'}
+          </Text>
+        </View>
       )}
       {owner && readiness && !success && (
         <HoldingSectionCard title="Điều kiện kích hoạt">
@@ -844,8 +861,8 @@ function HoldingPayment({
       )}
       {success && (
         <HoldingSectionCard title="Hoàn tất giữ chỗ">
-          <HoldingChecklistRow label="Hợp đồng Active" complete={c.status === 'Active'} />
-          <HoldingChecklistRow label="Phòng OnHold" complete={data?.room === 1} />
+          <HoldingChecklistRow label="Hợp đồng có hiệu lực" complete={c.status === 'Active'} />
+          <HoldingChecklistRow label="Phòng đã được giữ chỗ" complete={data?.room === 1} />
           <HoldingChecklistRow
             label="Tiền cọc được xác minh"
             complete={data?.deposit.status === 'Verified'}
@@ -860,6 +877,11 @@ function HoldingPayment({
 }
 
 const holdingPaymentStyles = StyleSheet.create({
+  customer: { backgroundColor: '#F2F6FB', borderRadius: 10, padding: 12, gap: 6 },
+  customerName: { fontSize: 16, lineHeight: 22, fontWeight: '700', color: '#193653' },
+  amountBlock: { alignItems: 'center', paddingVertical: 12, gap: 4 },
+  amount: { fontSize: 28, lineHeight: 36, fontWeight: '700', color: '#193653' },
+  nextStep: { backgroundColor: '#EAF0F7', borderRadius: 12, padding: 14, gap: 6 },
   qrFrame: {
     alignItems: 'center',
     justifyContent: 'center',

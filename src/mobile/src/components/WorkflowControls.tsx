@@ -131,6 +131,7 @@ export function Input({
   multiline = false,
   disabled = false,
   email = false,
+  placeholder,
   error,
   focusOnError = false,
 }: {
@@ -142,6 +143,7 @@ export function Input({
   multiline?: boolean;
   disabled?: boolean;
   email?: boolean;
+  placeholder?: string;
   error?: string;
   focusOnError?: boolean;
 }) {
@@ -181,8 +183,9 @@ export function Input({
           input.current = target;
         }}
         mode="outlined"
-        label={label}
+        label={placeholder ? undefined : label}
         accessibilityLabel={label}
+        placeholder={placeholder}
         value={value}
         error={!!error}
         onChangeText={onChange}

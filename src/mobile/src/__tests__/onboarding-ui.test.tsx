@@ -9,13 +9,16 @@ const state = vi.hoisted(() => ({
   protect: vi.fn(),
   platform: 'android',
   go: vi.fn(),
+  replace: vi.fn(),
   resetScroll: vi.fn(),
-  registerExitGuard: vi.fn(() => () => {}),
+  unregisterExitGuard: vi.fn(),
+  registerExitGuard: vi.fn(),
   requestNavigation: vi.fn(),
   disablePrevention: vi.fn(),
   preventRemove: vi.fn(),
   listeners: [] as ((value: string) => void)[],
   failConfirm: false,
+  multipleLocations: false,
   serial: 0,
   uuidSerial: 0,
 }));
@@ -40,6 +43,7 @@ vi.mock('../features/contracts/MainDraftScreen', () => ({
     ) : null,
 }));
 vi.mock('expo-router', () => ({
+  router: { replace: state.replace },
   useLocalSearchParams: () => ({}),
   useFocusEffect: (cb: () => () => void) => useEffect(cb, [cb]),
   usePreventRemove: (dirty: boolean) => {
@@ -293,7 +297,10 @@ vi.mock('../features/onboarding/useCaptureScope', () => ({
     return {
       location,
       room,
-      locations: [{ id: 'location', label: 'Cơ sở mẫu' }],
+      locations: [
+        { id: 'location', label: 'Cơ sở mẫu' },
+        ...(state.multipleLocations ? [{ id: 'other-location', label: 'Cơ sở thứ hai' }] : []),
+      ],
       rooms: location
         ? [
             { id: 'room', label: '101', status: 'Available', capacity: 2 },
@@ -363,8 +370,10 @@ it('shows empty and occupied rooms together without a reception-type selector', 
 beforeEach(() => {
   vi.stubGlobal('__DEV__', true);
   vi.clearAllMocks();
+  state.registerExitGuard.mockReturnValue(state.unregisterExitGuard);
   state.listeners = [];
   state.failConfirm = false;
+  state.multipleLocations = false;
   state.serial = 0;
   state.uuidSerial = 0;
   state.platform = 'android';
@@ -387,6 +396,40 @@ function selectRoom() {
   });
   fireEvent.click(screen.getByRole('button', { name: 'Tiếp tục' }));
 }
+it('allows switching assigned locations without an exit guard while choosing a room', () => {
+  state.multipleLocations = true;
+  render(<OnboardingScreen />);
+  const location = screen.getByRole('combobox', { name: 'Cơ sở được phân công *' });
+  expect(state.registerExitGuard).not.toHaveBeenCalled();
+  fireEvent.change(location, { target: { value: 'other-location' } });
+  expect((location as HTMLSelectElement).value).toBe('other-location');
+  expect(state.registerExitGuard).not.toHaveBeenCalled();
+  expect(state.preventRemove).not.toHaveBeenCalledWith(true);
+});
+
+it('guards navigation only after CCCD data is entered and releases the guard after saving', async () => {
+  render(<OnboardingScreen />);
+  selectRoom();
+  await openIdentity();
+  expect(state.preventRemove).toHaveBeenLastCalledWith(false);
+  manualIdentity();
+  expect(state.preventRemove).toHaveBeenLastCalledWith(true);
+  fireEvent.click(screen.getByRole('checkbox'));
+  fireEvent.click(screen.getByRole('button', { name: 'Xác nhận thông tin' }));
+  await screen.findByText('Đã xác nhận 1/1 người ở');
+  expect(state.preventRemove).toHaveBeenLastCalledWith(false);
+});
+
+it('removes the exit guard when the CCCD editor is closed even if its draft stays in memory', async () => {
+  render(<OnboardingScreen />);
+  selectRoom();
+  await openIdentity();
+  manualIdentity();
+  expect(state.registerExitGuard).toHaveBeenCalledOnce();
+  fireEvent.click(screen.getByRole('button', { name: 'Đóng xác minh CCCD' }));
+  expect(state.preventRemove).toHaveBeenLastCalledWith(false);
+  expect(state.unregisterExitGuard).toHaveBeenCalledOnce();
+});
 it('offers room selection without a test-data generator in development', () => {
   render(<OnboardingScreen />);
   expect(screen.queryByText('Tạo nhanh dữ liệu kiểm thử')).toBeNull();
@@ -618,9 +661,14 @@ it.each(['Web released contract', 'Contract list'])(
     await screen.findByText('Đã xác nhận 1/1 người ở');
     fireEvent.click(screen.getByRole('button', { name: 'Tiếp tục tạo hợp đồng' }));
     fireEvent.click(screen.getByRole('button', { name: action }));
-    if (action === 'Web released contract')
-      expect(state.go).toHaveBeenCalledWith('signing', { contractId: 'released-contract' });
-    else expect(state.go).toHaveBeenCalledWith('signing');
+    expect(state.replace).toHaveBeenCalledWith({
+      pathname: '/workspace/[screen]',
+      params: {
+        screen: 'signing',
+        contractId: action === 'Web released contract' ? 'released-contract' : '',
+      },
+    });
+    expect(state.disablePrevention).toHaveBeenCalled();
     expect(state.go.mock.calls.some(([destination]) => destination === 'contract')).toBe(false);
   },
 );
@@ -896,6 +944,7 @@ it('retries the back side independently and preserves Staff edits and front fiel
     )
     .mockResolvedValueOnce(proposal({ dateOfIssue: '2020-02-03' }))
     .mockResolvedValueOnce(proposal({ dateOfIssue: '2021-04-05' }))
+    .mockResolvedValueOnce({ ...proposal({}), isFallback: true })
     .mockResolvedValueOnce(proposal({ dateOfIssue: '2022-06-07' }));
   render(<OnboardingScreen />);
   selectRoom();
@@ -919,6 +968,9 @@ it('retries the back side independently and preserves Staff edits and front fiel
   expect(
     (screen.getByRole('textbox', { name: 'Ngày cấp (dd/MM/yyyy)' }) as HTMLInputElement).value,
   ).toBe('05/04/2021');
+  fireEvent.click(screen.getByRole('button', { name: 'Chụp lại mặt sau' }));
+  fireEvent.click(screen.getByRole('button', { name: 'Chụp ảnh mặt sau' }));
+  expect(await screen.findByDisplayValue('05/04/2021')).toBeTruthy();
   fireEvent.change(screen.getByRole('textbox', { name: 'Ngày cấp (dd/MM/yyyy)' }), {
     target: { value: '06/04/2021' },
   });
@@ -930,6 +982,7 @@ it('retries the back side independently and preserves Staff edits and front fiel
   ).toBe('06/04/2021');
   expect(state.image.mock.calls.map((call) => call[0].split('/').at(-1))).toEqual([
     'front',
+    'back',
     'back',
     'back',
     'back',

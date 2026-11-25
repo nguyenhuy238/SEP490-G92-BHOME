@@ -512,6 +512,7 @@ it('releases with the verified linked signer, exact reviewed file and explicit c
   expect(state.request.mock.calls.some(([path]) => path.endsWith('/accounts'))).toBe(false);
   fireEvent.click(screen.getByRole('button', { name: 'Tạo bản PDF để kiểm tra' }));
   await screen.findByText('Private PDF review');
+  expect(screen.queryByText(/Tài liệu Development/)).toBeNull();
   expect(submit.disabled).toBe(true);
   fireEvent.click(screen.getByRole('checkbox'));
   fireEvent.click(submit);

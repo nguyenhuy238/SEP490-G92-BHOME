@@ -91,6 +91,7 @@ export function ContractSigningStep({
       ? 'Nhập email hợp lệ, tối đa 256 ký tự.'
       : undefined;
   const status = data?.contract.id === contract.id ? data.status : null;
+  const holdingEmail = status?.usesHoldingEmail ? (status.maskedEmail ?? undefined) : undefined;
   const displayedError =
     (!status?.tenantAcceptedAt && invitationFailure?.contractId === c.id
       ? invitationFailure.message
@@ -410,6 +411,7 @@ export function ContractSigningStep({
                         ? 'Email người giữ chỗ'
                         : `Email nhận lời mời · ${person.label}`
                     }
+                    placeholder={holdingEmail}
                     email
                     error={recipientEmailError}
                     value={emails[person.id] ?? ''}
@@ -429,7 +431,11 @@ export function ContractSigningStep({
                 {c.kind === 'Main' &&
                   status?.maskedEmail &&
                   !emails[c.representativeResidentId]?.trim() && (
-                    <Text style={ui.muted}>Sẽ gửi đến email đã lưu: {status.maskedEmail}.</Text>
+                    <Text style={ui.muted}>
+                      {holdingEmail
+                        ? `Sẽ dùng email từ hợp đồng giữ chỗ: ${holdingEmail}.`
+                        : `Sẽ gửi đến email đã lưu: ${status.maskedEmail}.`}
+                    </Text>
                   )}
                 {c.kind !== 'Holding' && !staffMain && (
                   <Text style={ui.muted}>
@@ -532,7 +538,7 @@ export function ContractSigningStep({
         />
       )}
       {signer && (status?.tenantAcceptedAt || c.signatures.some((s) => s.status === 'Signed')) && (
-        <ContractEvidence api={api} contractId={c.id} pdf />
+        <ContractEvidence api={api} contractId={c.id} contractKind={c.kind} pdf />
       )}
     </>
   );

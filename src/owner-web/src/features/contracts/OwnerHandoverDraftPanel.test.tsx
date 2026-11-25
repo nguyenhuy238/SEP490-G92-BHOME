@@ -203,7 +203,7 @@ it('renders contract-filled draft and blocks readiness while Staff checklist is 
   render(<OwnerHandoverDraftPanel api={api} id="contract-1" contractStatus="Active" />);
 
   expect(await screen.findByText('Cơ sở: Cơ sở kiểm thử')).toBeInTheDocument();
-  expect(screen.getByText('Điện: Chờ Staff xác nhận')).toBeInTheDocument();
+  expect(screen.getByText('Điện: Chờ nhân viên xác nhận')).toBeInTheDocument();
   expect(
     screen.getByText('Chưa có chỉ số điện ban đầu được xác nhận, kèm ảnh'),
   ).toBeInTheDocument();
@@ -230,11 +230,11 @@ it('summarizes the Staff inspection and its actual task status for Owner review'
     },
   });
   render(<OwnerHandoverDraftPanel api={api} id="contract-1" contractStatus="Active" />);
-  expect(await screen.findByText('Kết quả Staff kiểm tra')).toBeInTheDocument();
+  expect(await screen.findByText('Kết quả nhân viên kiểm tra')).toBeInTheDocument();
   expect(screen.getByText('Hiện trạng phòng 7/7 mục')).toBeInTheDocument();
   expect(screen.getByText('1 mục có vấn đề')).toBeInTheDocument();
   expect(screen.getByText(/Nhiệm vụ bàn giao: Chờ xác minh/)).toBeInTheDocument();
-  expect(screen.getByText(/Staff lưu kiểm tra gần nhất:/)).toBeInTheDocument();
+  expect(screen.getByText(/Nhân viên lưu kiểm tra gần nhất:/)).toBeInTheDocument();
 });
 
 it('renders a compact review with integer meter readings and prioritizes canonical inventory issues even if draft assets are empty', async () => {
@@ -279,13 +279,13 @@ it('renders a compact review with integer meter readings and prioritizes canonic
   expect(screen.getByText('Hiện trạng phòng và 7 hạng mục')).toBeInTheDocument();
   expect(screen.getByText('Kiểm kê tài sản')).toBeInTheDocument();
   expect(screen.getByText('Chìa khóa và vật dụng ra vào')).toBeInTheDocument();
-  expect(await screen.findByText('Staff đã kiểm kê 1/1')).toBeInTheDocument();
-  expect(screen.queryByText(/nhóm\/hạng mục cần Owner chú ý/)).not.toBeInTheDocument();
+  expect(await screen.findByText('Nhân viên đã kiểm kê 1/1')).toBeInTheDocument();
+  expect(screen.queryByText(/nhóm\/hạng mục cần chủ trọ chú ý/)).not.toBeInTheDocument();
   expect(await screen.findByText('Ghế bị hỏng')).toBeInTheDocument();
   expect(screen.getByText(/Hư hỏng · Dự kiến 2, thực tế 1/)).toBeInTheDocument();
   expect(screen.getByText('Gãy chân ghế')).toBeInTheDocument();
-  expect(screen.getByText('Điện: 120')).toBeInTheDocument();
-  expect(screen.getByText('Nước: 32')).toBeInTheDocument();
+  expect(screen.getByText('Điện: 120 kWh')).toBeInTheDocument();
+  expect(screen.getByText('Nước: 32 m³')).toBeInTheDocument();
   expect(screen.queryByText('Điện: 120.75')).not.toBeInTheDocument();
   expect(screen.getByRole('button', { name: 'Ký và duyệt biên bản bàn giao' })).toBeDisabled();
   expect(
@@ -343,7 +343,7 @@ it('counts only canonical damaged items alongside room issues when four stale dr
   );
   render(<OwnerHandoverDraftPanel api={api} id="contract-1" contractStatus="Active" compact />);
 
-  expect(await screen.findByText('Staff đã kiểm kê 4/4')).toBeInTheDocument();
+  expect(await screen.findByText('Nhân viên đã kiểm kê 4/4')).toBeInTheDocument();
   expect(screen.getByText(/Tường bong tróc/)).toBeInTheDocument();
   expect(screen.getByText('Giường ngủ')).toBeInTheDocument();
   expect(screen.getByText(/Hư hỏng · Dự kiến 1, thực tế 1/)).toBeInTheDocument();
@@ -351,8 +351,8 @@ it('counts only canonical damaged items alongside room issues when four stale dr
   expect(screen.queryByText(/Giường ngủ: Chưa kiểm kê/)).not.toBeInTheDocument();
   expect(screen.queryByText(/Bàn học: Chưa kiểm kê/)).not.toBeInTheDocument();
   expect(screen.queryByText(/Điều hòa: Chưa kiểm kê/)).not.toBeInTheDocument();
-  expect(screen.queryByText('5 hạng mục cần Owner chú ý')).not.toBeInTheDocument();
-  expect(screen.getByText(/Staff đã hoàn tất · Phiếu kiểm kê gốc/)).toBeInTheDocument();
+  expect(screen.queryByText('5 hạng mục cần chủ trọ chú ý')).not.toBeInTheDocument();
+  expect(screen.queryByText(/Nhân viên đã hoàn tất · Phiếu kiểm kê gốc/)).not.toBeInTheDocument();
   expect(
     screen.getByRole('checkbox', { name: /Chọn kiểm tra lại: Tài sản: Giường ngủ/ }),
   ).toBeInTheDocument();
@@ -407,7 +407,7 @@ it('shows reinspection checkboxes only for problematic items, never for passed r
       : current,
   );
   render(<OwnerHandoverDraftPanel api={api} id="contract-1" contractStatus="Active" compact />);
-  expect(await screen.findByText('Staff đã kiểm kê 2/2')).toBeInTheDocument();
+  expect(await screen.findByText('Nhân viên đã kiểm kê 2/2')).toBeInTheDocument();
   const options = screen.getAllByRole('checkbox', { name: /Chọn kiểm tra lại:/ });
   expect(options).toHaveLength(2);
   expect(options[0]).toHaveAccessibleName(/Tường, trần, sàn · Có vấn đề/);
@@ -434,13 +434,14 @@ it('hides the reinspection CTA completely for an all-passed compact draft and ke
   expect(screen.getByRole('button', { name: 'Xem PDF' })).toBeInTheDocument();
   expect(screen.getByRole('button', { name: 'Tải xuống' })).toBeInTheDocument();
   expect(screen.queryByText('Máy chủ không báo thiếu mục kiểm tra nào.')).not.toBeInTheDocument();
-  expect(screen.getByText('Đã hoàn thành kiểm kê')).toBeInTheDocument();
+  expect(screen.queryByText('Đã kiểm tra đủ nội dung bàn giao')).not.toBeInTheDocument();
 });
 
 it('does not offer handwritten Ready against older backend versions that silently ignore ink', async () => {
   const { api, mutate } = client({ ...draft, ownerInkSigningSupported: undefined });
   render(<OwnerHandoverDraftPanel api={api} id="contract-1" contractStatus="Active" compact />);
-  expect(await screen.findByText('Đã hoàn thành kiểm kê')).toBeInTheDocument();
+  await screen.findByRole('button', { name: 'Ký và duyệt biên bản bàn giao' });
+  expect(screen.queryByText('Đã kiểm tra đủ nội dung bàn giao')).not.toBeInTheDocument();
   expect(screen.getByText(/phiên bản chưa hỗ trợ ký tay trực tiếp/)).toBeInTheDocument();
   const ready = screen.getByRole('button', { name: 'Ký và duyệt biên bản bàn giao' });
   expect(ready).toBeDisabled();
@@ -506,13 +507,15 @@ it('selects defective room and canonical asset items inline, confirms the reason
       : current,
   );
   render(<OwnerHandoverDraftPanel api={api} id="contract-1" contractStatus="Active" compact />);
-  expect(await screen.findByText('Staff đã kiểm kê 1/1')).toBeInTheDocument();
+  expect(await screen.findByText('Nhân viên đã kiểm kê 1/1')).toBeInTheDocument();
   fireEvent.click(screen.getByRole('checkbox', { name: /Chọn kiểm tra lại: Tường, trần, sàn/ }));
   fireEvent.click(screen.getByRole('checkbox', { name: 'Chọn kiểm tra lại: Tài sản: Ghế' }));
   expect(
     screen.queryByRole('checkbox', { name: /Meter|công tơ điện|công tơ nước/i }),
   ).not.toBeInTheDocument();
-  expect(screen.queryByText('Yêu cầu Staff kiểm tra lại từng hạng mục')).not.toBeInTheDocument();
+  expect(
+    screen.queryByText('Yêu cầu nhân viên kiểm tra lại từng hạng mục'),
+  ).not.toBeInTheDocument();
   expect(screen.queryByText('Xem đầy đủ nội dung biên bản')).not.toBeInTheDocument();
   expect(screen.queryByText(/Ảnh bằng chứng ·/)).not.toBeInTheDocument();
   expect(screen.queryByRole('button', { name: 'Tải lại bản nháp' })).not.toBeInTheDocument();
@@ -524,10 +527,10 @@ it('selects defective room and canonical asset items inline, confirms the reason
   ).toBeTruthy();
   fireEvent.click(requestReinspection);
   expect(
-    screen.getByRole('dialog', { name: 'Xác nhận yêu cầu Staff kiểm tra lại' }),
+    screen.getByRole('dialog', { name: 'Xác nhận yêu cầu nhân viên kiểm tra lại' }),
   ).toBeInTheDocument();
   expect(screen.getByRole('button', { name: 'Gửi yêu cầu kiểm tra lại' })).toBeDisabled();
-  fireEvent.change(screen.getByRole('textbox', { name: 'Nội dung Staff cần kiểm tra lại' }), {
+  fireEvent.change(screen.getByRole('textbox', { name: 'Nội dung nhân viên cần kiểm tra lại' }), {
     target: { value: '  Chụp lại tường và ghế đã sửa.  ' },
   });
   fireEvent.click(screen.getByRole('button', { name: 'Gửi yêu cầu kiểm tra lại' }));
@@ -636,10 +639,10 @@ it('uses server-inspected canonical asset IDs when the older draft.assets list i
       : current,
   );
   render(<OwnerHandoverDraftPanel api={api} id="contract-1" contractStatus="Active" compact />);
-  expect(await screen.findByText('Staff đã kiểm kê 1/1')).toBeInTheDocument();
+  expect(await screen.findByText('Nhân viên đã kiểm kê 1/1')).toBeInTheDocument();
   fireEvent.click(screen.getByRole('checkbox', { name: 'Chọn kiểm tra lại: Tài sản: Giường ngủ' }));
   fireEvent.click(screen.getByRole('button', { name: 'Yêu cầu kiểm tra lại (1)' }));
-  fireEvent.change(screen.getByRole('textbox', { name: 'Nội dung Staff cần kiểm tra lại' }), {
+  fireEvent.change(screen.getByRole('textbox', { name: 'Nội dung nhân viên cần kiểm tra lại' }), {
     target: { value: 'Kiểm tra lại giường sau sửa chữa' },
   });
   fireEvent.click(screen.getByRole('button', { name: 'Gửi yêu cầu kiểm tra lại' }));
@@ -657,7 +660,7 @@ it('uses server-inspected canonical asset IDs when the older draft.assets list i
   );
 });
 
-it('blocks compact Owner signing until every room check and canonical asset passes, even if server missing is empty', async () => {
+it('allows compact Owner signing when a damaged asset is disclosed and the server reports no missing data', async () => {
   const current = {
     ...draft,
     noAssetsConfirmed: false,
@@ -691,14 +694,12 @@ it('blocks compact Owner signing until every room check and canonical asset pass
       : current,
   );
   render(<OwnerHandoverDraftPanel api={api} id="contract-1" contractStatus="Active" compact />);
-  expect(await screen.findByText('Staff đã kiểm kê 1/1')).toBeInTheDocument();
+  expect(await screen.findByText('Nhân viên đã kiểm kê 1/1')).toBeInTheDocument();
   const ready = screen.getByRole('button', { name: 'Ký và duyệt biên bản bàn giao' });
-  expect(ready).toBeDisabled();
+  expect(ready).toBeDisabled(); // Ink and explicit consent are still required.
   expect(screen.queryByLabelText('Lý do chấp thuận ngoại lệ bàn giao')).not.toBeInTheDocument();
   expect(screen.queryByLabelText('Phương án xử lý ngoại lệ bàn giao')).not.toBeInTheDocument();
-  expect(
-    screen.getByText(/Chỉ có thể ký và duyệt khi tất cả hạng mục phòng đều Đạt/),
-  ).toBeInTheDocument();
+  expect(screen.getByText(/Một số hạng mục có vấn đề/)).toBeInTheDocument();
   expect(mutate).not.toHaveBeenCalled();
 });
 
@@ -712,16 +713,20 @@ it('lets Owner request reinspection of only the selected room check and asset', 
     ),
   });
   render(<OwnerHandoverDraftPanel api={api} id="contract-1" contractStatus="Active" />);
-  expect(await screen.findByText('Yêu cầu Staff kiểm tra lại từng hạng mục')).toBeInTheDocument();
-  const send = screen.getByRole('button', { name: 'Gửi yêu cầu Staff kiểm tra lại (0)' });
+  expect(
+    await screen.findByText('Yêu cầu nhân viên kiểm tra lại từng hạng mục'),
+  ).toBeInTheDocument();
+  const send = screen.getByRole('button', { name: 'Gửi yêu cầu nhân viên kiểm tra lại (0)' });
   expect(send).toBeDisabled();
   fireEvent.click(screen.getByRole('checkbox', { name: /Tường, trần, sàn · Có vấn đề/ }));
   fireEvent.click(screen.getByRole('checkbox', { name: 'Tài sản: Ghế' }));
-  expect(screen.getByRole('button', { name: 'Gửi yêu cầu Staff kiểm tra lại (2)' })).toBeDisabled();
-  fireEvent.change(screen.getByLabelText(/Nội dung Staff cần kiểm tra lại/), {
+  expect(
+    screen.getByRole('button', { name: 'Gửi yêu cầu nhân viên kiểm tra lại (2)' }),
+  ).toBeDisabled();
+  fireEvent.change(screen.getByLabelText(/Nội dung nhân viên cần kiểm tra lại/), {
     target: { value: '  Kiểm tra lại phần tường và ghế.  ' },
   });
-  fireEvent.click(screen.getByRole('button', { name: 'Gửi yêu cầu Staff kiểm tra lại (2)' }));
+  fireEvent.click(screen.getByRole('button', { name: 'Gửi yêu cầu nhân viên kiểm tra lại (2)' }));
   await waitFor(() =>
     expect(mutate).toHaveBeenCalledWith(
       'contract-1',
@@ -743,7 +748,9 @@ it('does not offer Meter reinspection even with confirmed readings and keeps the
   const { api, mutate, readingEvidence } = client(draft);
   render(<OwnerHandoverDraftPanel api={api} id="contract-1" contractStatus="Active" />);
 
-  expect(await screen.findByText('Yêu cầu Staff kiểm tra lại từng hạng mục')).toBeInTheDocument();
+  expect(
+    await screen.findByText('Yêu cầu nhân viên kiểm tra lại từng hạng mục'),
+  ).toBeInTheDocument();
   expect(
     screen.queryByRole('checkbox', { name: /Chỉ số và ảnh công tơ điện/i }),
   ).not.toBeInTheDocument();
@@ -751,16 +758,13 @@ it('does not offer Meter reinspection even with confirmed readings and keeps the
     screen.queryByRole('checkbox', { name: /Chỉ số và ảnh công tơ nước/i }),
   ).not.toBeInTheDocument();
   expect(
-    screen.getByText(
+    screen.queryByText(
       'Chỉ số điện/nước đã xác nhận không thể yêu cầu kiểm tra lại qua bước này; kiểm tra qua quy trình công tơ riêng.',
     ),
-  ).toBeInTheDocument();
-  expect(screen.getByRole('link', { name: 'Xem quản lý công tơ' })).toHaveAttribute(
-    'href',
-    '/meters',
-  );
-  expect(screen.getByText('Điện: 120')).toBeInTheDocument();
-  expect(screen.getByText('Nước: 32')).toBeInTheDocument();
+  ).not.toBeInTheDocument();
+  expect(screen.queryByRole('link', { name: 'Xem quản lý công tơ' })).not.toBeInTheDocument();
+  expect(screen.getByText('Điện: 120 kWh')).toBeInTheDocument();
+  expect(screen.getByText('Nước: 32 m³')).toBeInTheDocument();
 
   fireEvent.click(screen.getByRole('button', { name: 'Ảnh công tơ điện ban đầu' }));
   fireEvent.click(screen.getByRole('button', { name: 'Ảnh công tơ nước ban đầu' }));
@@ -772,13 +776,13 @@ it('does not offer Meter reinspection even with confirmed readings and keeps the
 it('keeps the signing and reinspection actions unavailable before Staff submission', async () => {
   const { api, mutate } = client({ ...draft, status: 'Draft' });
   render(<OwnerHandoverDraftPanel api={api} id="contract-1" contractStatus="Active" />);
-  expect(
-    await screen.findByText(/Đang chờ Staff hoàn thành kiểm tra và gửi biên bản/),
-  ).toBeInTheDocument();
+  expect(await screen.findByText(/Đang kiểm tra bàn giao/)).toBeInTheDocument();
   expect(
     screen.queryByRole('button', { name: 'Ký và duyệt biên bản bàn giao' }),
   ).not.toBeInTheDocument();
-  expect(screen.queryByText('Yêu cầu Staff kiểm tra lại từng hạng mục')).not.toBeInTheDocument();
+  expect(
+    screen.queryByText('Yêu cầu nhân viên kiểm tra lại từng hạng mục'),
+  ).not.toBeInTheDocument();
   expect(mutate).not.toHaveBeenCalled();
 });
 
@@ -787,7 +791,7 @@ it('requires a fresh review when Staff submits a newer draft while Owner has the
   const { api, mutate, transport } = client();
   transport.mockImplementation(async () => serverDraft);
   render(<OwnerHandoverDraftPanel api={api} id="contract-1" contractStatus="Active" />);
-  const review = await screen.findByRole('checkbox', { name: /đã kiểm tra nội dung PDF/ });
+  const review = await screen.findByRole('checkbox', { name: /đã kiểm tra PDF và đồng ý ký/ });
   const approve = screen.getByRole('button', { name: 'Ký và duyệt biên bản bàn giao' });
   fireEvent.click(review);
   expect(review).toBeChecked();
@@ -821,7 +825,7 @@ it('shows the specific reinspection requests and prevents an Owner signature whi
     reinspectionItems: [{ kind: 'RoomCheck', code: 'doors_windows_locks' }],
   });
   render(<OwnerHandoverDraftPanel api={api} id="contract-1" contractStatus="Active" />);
-  expect(await screen.findByText('Đã yêu cầu Staff kiểm tra lại')).toBeInTheDocument();
+  expect(await screen.findByText('Đã yêu cầu nhân viên kiểm tra lại')).toBeInTheDocument();
   expect(screen.getByText(/Cần kiểm tra lại khóa/)).toBeInTheDocument();
   expect(screen.getByText(/Cửa, cửa sổ, khóa · Đạt/)).toBeInTheDocument();
   expect(
@@ -960,7 +964,7 @@ it('shows the latest reinspection asset observations alongside a completed origi
   expect(screen.getByText('Ghi chú cập nhật: Ảnh chụp sau khi kiểm tra lại')).toBeInTheDocument();
   expect(await screen.findByText('Kiểm kê lần đầu: hai ghế tốt')).toBeInTheDocument();
   expect(screen.getByText('Dự kiến 2 · Thực tế 2')).toBeInTheDocument();
-  expect(screen.getByText('Staff đã hoàn tất')).toBeInTheDocument();
+  expect(screen.getByText('Nhân viên đã hoàn tất')).toBeInTheDocument();
 
   fireEvent.click(screen.getByRole('button', { name: 'Ghế · Ảnh cập nhật 1' }));
   expect(transport).toHaveBeenCalledWith(
@@ -988,12 +992,12 @@ it('translates invalid asset quantities or evidence and blocks Owner Ready even 
   expect(await screen.findByText('Phòng: TEST-101')).toBeInTheDocument();
   expect(
     screen.getByText(
-      'Số lượng, đối chiếu tài sản hoặc ảnh bằng chứng kiểm kê chưa hợp lệ; Staff cần kiểm tra và bổ sung',
+      'Số lượng, đối chiếu tài sản hoặc ảnh bằng chứng kiểm kê chưa hợp lệ; nhân viên cần kiểm tra và bổ sung',
     ),
   ).toBeInTheDocument();
   expect(screen.queryByText('asset_quantities_or_evidence')).not.toBeInTheDocument();
 
-  const review = screen.getByRole('checkbox', { name: /đã kiểm tra nội dung/ });
+  const review = screen.getByRole('checkbox', { name: /đã kiểm tra PDF và đồng ý ký/ });
   const ready = screen.getByRole('button', { name: 'Ký và duyệt biên bản bàn giao' });
   expect(review).toBeDisabled();
   expect(ready).toBeDisabled();
@@ -1027,9 +1031,9 @@ it('shows room checklist, physical keys and issue handling; requires Owner excep
   expect(screen.getByText('Số lượng thực giao: 2')).toBeInTheDocument();
   expect(screen.getByText('Ảnh chìa khóa: 1')).toBeInTheDocument();
   expect(
-    screen.getByText(/Owner quyết định chấp thuận tình trạng thực tế hoặc phương án xử lý/),
+    screen.getByText(/Chủ trọ quyết định chấp thuận tình trạng thực tế hoặc phương án xử lý/),
   ).toBeInTheDocument();
-  expect(screen.queryByText(/Trám tường · Staff xử lý/)).not.toBeInTheDocument();
+  expect(screen.queryByText(/Trám tường · nhân viên xử lý/)).not.toBeInTheDocument();
   fireEvent.click(screen.getByRole('button', { name: 'Tường, trần, sàn · Ảnh kiểm tra 1' }));
   await waitFor(() =>
     expect(transport).toHaveBeenCalledWith(
@@ -1046,12 +1050,12 @@ it('shows room checklist, physical keys and issue handling; requires Owner excep
       'blob',
     ),
   );
-  fireEvent.click(screen.getByRole('checkbox', { name: /đã kiểm tra nội dung/ }));
+  fireEvent.click(screen.getByRole('checkbox', { name: /đã kiểm tra PDF và đồng ý ký/ }));
   expect(screen.getByRole('button', { name: 'Ký và duyệt biên bản bàn giao' })).toBeDisabled();
   expect(mutate).not.toHaveBeenCalled();
 });
 
-it('never allows damaged inventory to be signed by entering exception text', async () => {
+it('requires explicit consent and ink before accepting a damaged inventory baseline', async () => {
   const { api, mutate } = client({
     ...draft,
     noAssetsConfirmed: false,
@@ -1060,17 +1064,19 @@ it('never allows damaged inventory to be signed by entering exception text', asy
   });
   render(<OwnerHandoverDraftPanel api={api} id="contract-1" contractStatus="Active" />);
   expect(
-    await screen.findByText(/Staff ghi nhận tài sản thiếu hoặc hư hỏng trong phiếu kiểm kê/),
+    await screen.findByText(/Nhân viên ghi nhận tài sản thiếu hoặc hư hỏng trong phiếu kiểm kê/),
   ).toBeInTheDocument();
   expect(screen.getByRole('link', { name: 'Mở quản lý sửa chữa' })).toHaveAttribute(
     'href',
     '/maintenance',
   );
-  fireEvent.click(screen.getByRole('checkbox', { name: /đã kiểm tra nội dung/ }));
+  fireEvent.click(screen.getByRole('checkbox', { name: /đã kiểm tra PDF và đồng ý ký/ }));
   expect(screen.getByRole('button', { name: 'Ký và duyệt biên bản bàn giao' })).toBeDisabled();
   expect(screen.queryByLabelText(/Lý do chấp thuận ngoại lệ bàn giao/)).not.toBeInTheDocument();
   expect(screen.queryByLabelText(/Phương án xử lý ngoại lệ bàn giao/)).not.toBeInTheDocument();
-  expect(screen.getByText(/không thể chấp thuận ngoại lệ bằng lý do/)).toBeInTheDocument();
+  expect(
+    screen.getByText(/Hạng mục có vấn đề sẽ được giữ nguyên trong biên bản/),
+  ).toBeInTheDocument();
   fireEvent.click(screen.getByRole('button', { name: 'Ký và duyệt biên bản bàn giao' }));
   expect(screen.getByRole('button', { name: 'Ký và duyệt biên bản bàn giao' })).toBeDisabled();
   expect(mutate).not.toHaveBeenCalled();
@@ -1084,7 +1090,7 @@ it('translates missing room checklist and blocks Owner Ready', async () => {
   });
   render(<OwnerHandoverDraftPanel api={api} id="contract-1" contractStatus="Active" />);
   expect(
-    await screen.findByText('Staff chưa hoàn tất 7 hạng mục kiểm tra hiện trạng phòng'),
+    await screen.findByText('Nhân viên chưa hoàn tất 7 hạng mục kiểm tra hiện trạng phòng'),
   ).toBeInTheDocument();
   expect(screen.getByText('Chưa ghi nhận số lượng chìa khóa bàn giao')).toBeInTheDocument();
   expect(screen.getByRole('button', { name: 'Ký và duyệt biên bản bàn giao' })).toBeDisabled();
@@ -1110,7 +1116,7 @@ it('requires Owner review and Active contract, then submits the exact displayed 
   expect(ready).toBeDisabled();
   fireEvent.click(screen.getByRole('button', { name: 'Vẽ chữ ký' }));
   expect(ready).toBeDisabled();
-  fireEvent.click(screen.getByRole('checkbox', { name: /đã kiểm tra nội dung/ }));
+  fireEvent.click(screen.getByRole('checkbox', { name: /đã kiểm tra PDF và đồng ý ký/ }));
   fireEvent.click(ready);
   fireEvent.click(ready);
   expect(mutate).toHaveBeenCalledOnce();
@@ -1130,7 +1136,7 @@ it('keeps normal fully approved inventory Ready as a checkbox with version-only 
   expect(await screen.findByText('Phòng: TEST-101')).toBeInTheDocument();
   expect(screen.queryByLabelText('Lý do chấp thuận ngoại lệ bàn giao')).not.toBeInTheDocument();
   expect(screen.queryByLabelText('Phương án xử lý ngoại lệ bàn giao')).not.toBeInTheDocument();
-  fireEvent.click(screen.getByRole('checkbox', { name: /đã kiểm tra nội dung/ }));
+  fireEvent.click(screen.getByRole('checkbox', { name: /đã kiểm tra PDF và đồng ý ký/ }));
   fireEvent.click(screen.getByRole('button', { name: 'Vẽ chữ ký' }));
   fireEvent.click(screen.getByRole('button', { name: 'Ký và duyệt biên bản bàn giao' }));
   await waitFor(() =>
@@ -1143,7 +1149,7 @@ it('keeps normal fully approved inventory Ready as a checkbox with version-only 
   );
 });
 
-it('blocks exception-signing and does not show old reason/handling overrides', async () => {
+it('shows recorded issues and still requires ink before signing', async () => {
   const { api, mutate } = client({
     ...draft,
     noAssetsConfirmed: false,
@@ -1151,11 +1157,13 @@ it('blocks exception-signing and does not show old reason/handling overrides', a
   });
   render(<OwnerHandoverDraftPanel api={api} id="contract-1" contractStatus="Active" />);
   expect(await screen.findByText('Phòng: TEST-101')).toBeInTheDocument();
-  expect(screen.getByText(/không thể chấp thuận ngoại lệ bằng lý do/)).toBeInTheDocument();
+  expect(
+    screen.getByText(/Hạng mục có vấn đề sẽ được giữ nguyên trong biên bản/),
+  ).toBeInTheDocument();
   expect(screen.queryByLabelText(/Lý do chấp thuận ngoại lệ bàn giao/)).not.toBeInTheDocument();
   expect(screen.queryByLabelText(/Phương án xử lý ngoại lệ bàn giao/)).not.toBeInTheDocument();
   const ready = screen.getByRole('button', { name: 'Ký và duyệt biên bản bàn giao' });
-  fireEvent.click(screen.getByRole('checkbox', { name: /đã kiểm tra nội dung/ }));
+  fireEvent.click(screen.getByRole('checkbox', { name: /đã kiểm tra PDF và đồng ý ký/ }));
   expect(ready).toBeDisabled();
   expect(ready).toBeDisabled();
   expect(mutate).not.toHaveBeenCalled();
@@ -1165,7 +1173,7 @@ it('blocks exception-signing and does not show old reason/handling overrides', a
 });
 
 it.each([
-  ['Owner chưa duyệt tài sản', { ownerChecked: false }],
+  ['Chủ trọ chưa duyệt tài sản', { ownerChecked: false }],
   ['thiếu tài sản', { missingQuantity: 1 }],
   ['tài sản hỏng', { damagedQuantity: 1 }],
   ['số lượng kiểm kê lệch', { observedQuantity: 3 }],
@@ -1223,7 +1231,7 @@ it('shows backend refusal instead of reporting success when readiness guard fail
   const { api } = client(draft, vi.fn().mockRejectedValue(new Error('Bản nháp đã thay đổi')));
   render(<OwnerHandoverDraftPanel api={api} id="contract-1" contractStatus="Active" />);
   await screen.findByText('Phòng: TEST-101');
-  fireEvent.click(screen.getByRole('checkbox', { name: /đã kiểm tra nội dung/ }));
+  fireEvent.click(screen.getByRole('checkbox', { name: /đã kiểm tra PDF và đồng ý ký/ }));
   fireEvent.click(screen.getByRole('button', { name: 'Vẽ chữ ký' }));
   fireEvent.click(screen.getByRole('button', { name: 'Ký và duyệt biên bản bàn giao' }));
   expect(await screen.findByText(/Kết quả thao tác chưa được xác nhận/)).toBeInTheDocument();
@@ -1300,15 +1308,15 @@ it('previews the Owner-signed PDF rather than a draft when handover is Ready', a
     ownerDocumentId: 'signed-doc-1',
   });
   render(<OwnerHandoverDraftPanel api={api} id="contract-1" contractStatus="Active" />);
-  expect(await screen.findByText(/Owner đã ký và duyệt biên bản/)).toBeInTheDocument();
-  expect(screen.getByRole('button', { name: 'PDF bàn giao Owner đã ký' })).toBeInTheDocument();
+  expect(await screen.findByText(/Chủ trọ đã ký và duyệt biên bản/)).toBeInTheDocument();
+  expect(screen.getByRole('button', { name: 'PDF bàn giao chủ trọ đã ký' })).toBeInTheDocument();
   expect(
     screen.queryByRole('button', { name: 'PDF bản nháp bàn giao (chưa xác nhận)' }),
   ).not.toBeInTheDocument();
   expect(
     screen.queryByRole('button', { name: 'Ký và duyệt biên bản bàn giao' }),
   ).not.toBeInTheDocument();
-  fireEvent.click(screen.getByRole('button', { name: 'PDF bàn giao Owner đã ký' }));
+  fireEvent.click(screen.getByRole('button', { name: 'PDF bàn giao chủ trọ đã ký' }));
   expect(transport).toHaveBeenCalledWith(
     '/api/v1/contracts/contract-1/handover/draft/pdf',
     { signal: expect.any(AbortSignal) },

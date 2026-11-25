@@ -4,7 +4,7 @@ import { ActivityIndicator, Button, Text, TextInput, TouchableRipple } from 'rea
 import { Pill, Row, ui } from '../components/WorkspaceKit';
 import { ChoiceField } from '../components/WorkflowControls';
 import { useWorkspace } from '../features/workspace/WorkspaceProvider';
-import { useWorkspaceQuery } from '../features/workspace/useWorkspaceQuery';
+import { useCachedWorkspaceQuery } from '../features/workspace/useCachedWorkspaceQuery';
 import { errorMessage } from '../lib/api';
 import { queryPolicies } from '../lib/queryPolicies';
 import { randomUUID } from '../lib/randomUUID';
@@ -39,19 +39,17 @@ export function LocationAssetInventoryChecklist({
   taskStatus,
   editable,
   onTaskRefresh,
-  onReadinessChange,
 }: {
   taskId: string;
   taskStatus: string;
   editable: boolean;
   onTaskRefresh: () => void;
-  onReadinessChange: (ready: boolean) => void;
 }) {
   const { api } = useSession();
   const { go } = useWorkspace();
-  const query = useWorkspaceQuery<LocationAssetInventory>(
+  const query = useCachedWorkspaceQuery<LocationAssetInventory>(
     `/api/v1/operational-tasks/${taskId}/location-asset-inventory`,
-    { cache: queryPolicies.tasks, notifyError: false },
+    queryPolicies.tasks,
   );
   const data = query.data;
   const loadedItems = useMemo(() => (Array.isArray(data?.items) ? data.items : []), [data]);
@@ -59,7 +57,10 @@ export function LocationAssetInventoryChecklist({
   const incompletePayload = !!data && data.totalCount !== loadedItems.length;
   const roomCount = groups.filter((group) => group.title.startsWith('Phòng ')).length;
   const commonCount = groups.length - roomCount;
-  const pendingOwnerRooms = Array.isArray(data?.pendingOwnerRooms) ? data.pendingOwnerRooms : [];
+  const pendingOwnerRooms = useMemo(
+    () => (Array.isArray(data?.pendingOwnerRooms) ? data.pendingOwnerRooms : []),
+    [data],
+  );
   const pendingOwnerCommonAssets = !!data?.pendingOwnerCommonAssets;
   const [expandedId, setExpandedId] = useState<string | null>(null);
   const [selectedGroup, setSelectedGroup] = useState<string | null>(null);
@@ -100,7 +101,7 @@ export function LocationAssetInventoryChecklist({
   const pending = useRef(false);
   const [error, setError] = useState('');
   const reload = query.reload;
-  useEffect(() => onReadinessChange(inventoryReady(data)), [data, onReadinessChange]);
+  const setInventory = query.setData;
   const hasData = data !== undefined && data !== null;
   const dataStatus = data?.status;
   useEffect(() => {
@@ -138,8 +139,8 @@ export function LocationAssetInventoryChecklist({
       }
       try {
         // The versioned PUT is the authoritative stale-write guard on the server.
-        // Avoid an extra GET before every item save; reload once after the write.
-        await locationAssetInventoryClient(api).updateItem(
+        // The returned snapshot includes the authoritative task status and version.
+        const saved = await locationAssetInventoryClient(api).updateItem(
           taskId,
           item.id,
           {
@@ -168,9 +169,13 @@ export function LocationAssetInventoryChecklist({
           delete next[item.id];
           return next;
         });
-        reload();
+        setInventory(saved);
         onTaskRefresh();
-        showSuccess('Đã lưu xác nhận kiểm kê.');
+        showSuccess(
+          saved.status === 'PendingVerification'
+            ? 'Đã hoàn tất kiểm kê. Chờ Owner đối soát và lập biên bản.'
+            : 'Đã lưu xác nhận kiểm kê.',
+        );
       } catch (failure) {
         setError(
           failure instanceof Error && failure.message.startsWith('Kiểm kê đã thay đổi')
@@ -178,12 +183,13 @@ export function LocationAssetInventoryChecklist({
             : errorMessage(failure),
         );
         reload();
+        onTaskRefresh();
       } finally {
         pending.current = false;
         setBusy(false);
       }
     },
-    [api, data, editable, notes, taskId, reload, onTaskRefresh],
+    [api, data, editable, notes, taskId, reload, setInventory, onTaskRefresh],
   );
 
   const reportIssue = useCallback(
@@ -232,7 +238,15 @@ export function LocationAssetInventoryChecklist({
         <Text variant="titleMedium" style={styles.title}>
           Kiểm kê tài sản
         </Text>
-        <Button compact icon="refresh" onPress={reload} disabled={busy || query.loading}>
+        <Button
+          compact
+          icon="refresh"
+          onPress={() => {
+            reload();
+            onTaskRefresh();
+          }}
+          disabled={busy || query.fetching}
+        >
           Tải lại
         </Button>
       </Row>
@@ -259,7 +273,11 @@ export function LocationAssetInventoryChecklist({
               </Text>
             </View>
             <Pill
-              tone={data.status === 'Completed' ? 'green' : inventoryReady(data) ? 'green' : 'blue'}
+              tone={
+                data.status === 'Completed' || data.status === 'PendingVerification'
+                  ? 'green'
+                  : 'blue'
+              }
             >
               {statusLabel}
             </Pill>
@@ -338,6 +356,29 @@ export function LocationAssetInventoryChecklist({
               </Button>
             </View>
           )}
+          {(pendingOwnerRooms.length > 0 || pendingOwnerCommonAssets) && (
+            <View style={styles.notice}>
+              <Text variant="labelLarge" style={styles.title}>
+                Chờ Owner hoàn tất kiểm kê ban đầu
+              </Text>
+              <Text variant="bodySmall" style={ui.muted}>
+                Owner vẫn còn tài sản chưa xác nhận trong các phạm vi này. Những mục đã xuất hiện
+                trong checklist bên dưới là các mục đã được Owner xác nhận riêng lẻ, Staff có thể
+                kiểm tra hoặc báo vấn đề. Chỉ được gửi nghiệm thu khi Owner hoàn tất toàn bộ phạm
+                vi.
+              </Text>
+              {pendingOwnerRooms.map((room, index) => (
+                <Text key={`${room}:${index}`} variant="bodySmall" style={ui.muted}>
+                  Phòng {room} · Còn tài sản chờ Owner xác nhận
+                </Text>
+              ))}
+              {pendingOwnerCommonAssets && (
+                <Text variant="bodySmall" style={ui.muted}>
+                  Tài sản khu vực chung · Còn tài sản chờ Owner xác nhận
+                </Text>
+              )}
+            </View>
+          )}
           {data.status === 'Assigned' && (
             <Text style={ui.muted}>
               Nhấn “Bắt đầu kiểm kê” để mở thao tác xác nhận từng tài sản.
@@ -389,6 +430,7 @@ export function LocationAssetInventoryChecklist({
                   const dirtyCondition = conditions[item.id] ?? '';
                   const issueMode = !!issueModes[item.id];
                   const itemCondition = item.condition ?? 'Unassessed';
+                  const itemEditable = editable && data.status === 'InProgress';
                   const label = conditionLabels[dirtyCondition] ?? 'Chưa ghi nhận hiện trạng';
                   return (
                     <View key={item.id} style={styles.item}>
@@ -449,7 +491,7 @@ export function LocationAssetInventoryChecklist({
                                 >
                                   Xem báo cáo sự cố đã liên kết
                                 </Button>
-                              ) : editable && data.status === 'InProgress' ? (
+                              ) : itemEditable ? (
                                 <View style={styles.itemActions}>
                                   <Button
                                     mode="outlined"
@@ -499,7 +541,7 @@ export function LocationAssetInventoryChecklist({
                                   Xem báo cáo sự cố đã liên kết
                                 </Button>
                               )}
-                              {editable && data.status === 'InProgress' && !issueMode && (
+                              {itemEditable && !issueMode && (
                                 <View style={styles.itemActions}>
                                   {!item.checked && (
                                     <Button
@@ -548,7 +590,7 @@ export function LocationAssetInventoryChecklist({
                                     )}
                                 </View>
                               )}
-                              {issueMode && editable && data.status === 'InProgress' && (
+                              {issueMode && itemEditable && (
                                 <>
                                   <ChoiceField
                                     label="Vấn đề phát hiện"
@@ -621,7 +663,7 @@ export function LocationAssetInventoryChecklist({
                                 !issueMode && (
                                   <View style={styles.notice}>
                                     <Text variant="bodySmall" style={styles.issueNotice}>
-                                      Cần có báo cáo sự cố liên kết trước khi gửi kiểm kê.
+                                      Cần có báo cáo sự cố liên kết trước khi hoàn tất kiểm kê.
                                     </Text>
                                     <Button
                                       mode="outlined"
@@ -658,37 +700,20 @@ export function LocationAssetInventoryChecklist({
               {roomCount} phòng · {commonCount} khu vực chung · {loadedItems.length} nhóm tài sản
             </Text>
           )}
-          {(pendingOwnerRooms.length > 0 || pendingOwnerCommonAssets) && (
-            <View style={styles.notice}>
-              <Text variant="labelLarge" style={styles.title}>
-                Chờ Owner hoàn tất kiểm kê ban đầu
-              </Text>
-              <Text variant="bodySmall" style={ui.muted}>
-                Các phòng hoặc tài sản chung bên dưới chưa được Owner xác nhận nên không được đưa
-                vào checklist của Staff. Liên hệ Owner để kiểm kê và cập nhật lại công việc trước
-                khi gửi kết quả.
-              </Text>
-              {pendingOwnerRooms.map((room, index) => (
-                <Text key={`${room}:${index}`} variant="bodySmall" style={ui.muted}>
-                  Phòng {room} · Chưa được Owner xác nhận
-                </Text>
-              ))}
-              {pendingOwnerCommonAssets && (
-                <Text variant="bodySmall" style={ui.muted}>
-                  Tài sản khu vực chung · Chưa được Owner xác nhận
-                </Text>
-              )}
-            </View>
-          )}
           {loadedItems.length > 0 && (
             <Text variant="bodySmall" style={ui.muted}>
               Chỉ kiểm tra tài sản Owner đã xác nhận. Mục khớp biên bản Tenant được tự xác nhận,
               không tạo tài sản mới.
             </Text>
           )}
-          {inventoryReady(data) && (
+          {data.status === 'InProgress' && inventoryReady(data) && (
+            <Text style={ui.muted}>
+              Đã kiểm tra đủ. Hệ thống đang tự động chuyển công việc sang chờ Owner kiểm tra.
+            </Text>
+          )}
+          {data.status === 'PendingVerification' && (
             <Text style={ui.green}>
-              Đã kiểm tra đủ. Bạn có thể gửi Owner đối soát và lập biên bản bàn giao.
+              Đã hoàn tất kiểm kê. Chờ Owner đối soát và lập biên bản bàn giao.
             </Text>
           )}
           {unlinkedIssueCount > 0 && (

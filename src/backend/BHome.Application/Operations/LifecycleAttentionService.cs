@@ -1,3 +1,4 @@
+using BHome.Application.Common;
 using BHome.Application.IdentityAccess;
 using BHome.Application.Billing;
 using BHome.Domain.IdentityAccess;
@@ -15,6 +16,6 @@ public sealed class LifecycleAttentionService(ILifecycleAttentionRepository repo
     {
         if (user.UserId is null) throw new OperationsException(401, "authentication_required");
         if (!user.IsInRole(Roles.Owner)) throw OperationsException.Forbidden();
-        return repository.ReadAsync(BillingAutomationDates.BusinessDate(clock.GetUtcNow()), t);
+        return repository.ReadAsync(clock.BusinessToday(), t);
     }
 }

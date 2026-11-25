@@ -64,6 +64,7 @@ export function ContractScreen({ prepare = false }: { prepare?: boolean }) {
     representativeResidentId?: string;
     residentIds?: string;
     kind?: string;
+    origin?: string;
   }>();
   const [mainDraftId, setMainDraftId] = useState('');
   const [createHolding, setCreateHolding] = useState(params.kind === 'Holding');
@@ -110,6 +111,10 @@ export function ContractScreen({ prepare = false }: { prepare?: boolean }) {
     }
   }
   const id = deepId || (role === 'Owner' ? '' : selected);
+  const handoverOnly =
+    role === 'Staff' &&
+    !!deepId &&
+    (params.origin === 'staff-handovers' || params.section === 'handover');
   const draftReference = params.mainDraftId || (role !== 'Owner' && !deepId ? mainDraftId : '');
   let invalidOwnerRoute = role === 'Owner' && !!params.contractId && !deepId;
   if (role === 'Owner' && params.mainDraftId) {
@@ -142,21 +147,26 @@ export function ContractScreen({ prepare = false }: { prepare?: boolean }) {
   }
   const previousContracts = useRef<string[]>([]);
   const returnToList = useCallback(() => {
+    if (role === 'Staff' && params.origin === 'staff-handovers') {
+      go('staff-handovers', { tab: 'MoveIn' });
+      return;
+    }
     previousContracts.current = [];
     setSelected('');
     setMainDraftId('');
     router.setParams({ contractId: '', mainDraftId: '' });
     setRevision((v) => v + 1);
-  }, []);
+  }, [go, params.origin, role]);
   const backFromContract = useCallback(() => {
     const previous = previousContracts.current.pop();
     if (previous) {
       router.setParams({ contractId: previous, mainDraftId: '', roomId: '' });
       return setSelected(previous === deepId ? '' : previous);
     }
+    if (role === 'Staff' && params.origin === 'staff-handovers') return returnToList();
     if (deepId && !selected && router.canGoBack()) return router.back();
     returnToList();
-  }, [deepId, selected, returnToList]);
+  }, [deepId, selected, returnToList, role, params.origin]);
   function released(next: string) {
     setCreateHolding(false);
     setCreate(false);
@@ -179,6 +189,7 @@ export function ContractScreen({ prepare = false }: { prepare?: boolean }) {
         api={client}
         initialRoomId={params.roomId}
         onCancel={() => {
+          if (role === 'Staff') return go('staff-home');
           setCreateHolding(false);
           setCreate(false);
           router.setParams({ kind: '' });
@@ -232,6 +243,7 @@ export function ContractScreen({ prepare = false }: { prepare?: boolean }) {
         {...references}
         onReleased={released}
         onCancel={() => {
+          if (role === 'Staff') return go('staff-home');
           setCreate(false);
           setMainDraftId('');
           router.setParams({
@@ -266,6 +278,7 @@ export function ContractScreen({ prepare = false }: { prepare?: boolean }) {
         onReleased={released}
         api={client}
         onCancel={() => {
+          if (role === 'Staff') return go('staff-home');
           setCreate(false);
           if (role === 'Owner') {
             setMainDraftId('');
@@ -286,16 +299,19 @@ export function ContractScreen({ prepare = false }: { prepare?: boolean }) {
   if (id)
     return (
       <LiveContractDetail
-        key={id}
+        key={handoverOnly ? `handover:${id}` : id}
         api={client}
         id={id}
         role={role}
         actorId={session.userId}
+        handoverOnly={handoverOnly}
         initialSection={
-          ['Tenant', 'Owner', 'Staff'].includes(role) &&
-          contractSections.some((item) => item.id === params.section)
-            ? (params.section as ContractSection)
-            : 'overview'
+          handoverOnly
+            ? 'handover'
+            : ['Tenant', 'Owner', 'Staff'].includes(role) &&
+                contractSections.some((item) => item.id === params.section)
+              ? (params.section as ContractSection)
+              : 'overview'
         }
         onNext={(next) => {
           if (next && next !== id) previousContracts.current.push(id);
@@ -308,6 +324,7 @@ export function ContractScreen({ prepare = false }: { prepare?: boolean }) {
         }}
         onBack={backFromContract}
         onList={returnToList}
+        onComplete={role === 'Staff' ? () => go('staff-home') : undefined}
       />
     );
   if (role === 'Staff')
@@ -318,7 +335,7 @@ export function ContractScreen({ prepare = false }: { prepare?: boolean }) {
         onViewStateChange={setStaffListView}
         onCreateHolding={() => setCreateHolding(true)}
         onOpen={(contract) => setSelected(contract.id)}
-        onInspection={() => go('work-orders')}
+        onInspection={() => go('staff-handovers')}
       />
     );
   return (
@@ -399,6 +416,8 @@ function LiveContractDetail({
   onNext,
   onList,
   onBack,
+  handoverOnly = false,
+  onComplete,
   initialSection = 'overview',
 }: {
   api: ReturnType<typeof contractClient>;
@@ -408,17 +427,34 @@ function LiveContractDetail({
   onNext: (id: string) => void;
   onList: () => void;
   onBack: () => void;
+  handoverOnly?: boolean;
+  onComplete?: () => void;
   initialSection?: ContractSection;
 }) {
-  const detail = useContractDetail(api, id, role, 5000);
+  const [section, setSection] = useState<ContractSection>(initialSection);
+  // Move-in inspection does not depend on a move-out request. A contract
+  // without one correctly returns 404, so do not fetch it for this section.
+  const detail = useContractDetail(api, id, role, 5000, section !== 'handover');
+  const currentContract = detail.data?.contract;
+  const staffDraft =
+    role === 'Staff' && !!currentContract && isMainOnboardingDraft(currentContract);
+  const completedFlow =
+    currentContract?.status === 'Active' &&
+    ['Main', 'Holding'].includes(currentContract.kind) &&
+    ['overview', 'signing'].includes(section);
   useWorkspaceHeaderRefresh(detail.reload, detail.loading, {
-    onBack,
-    title: detail.data?.contract.kind === 'Holding' ? 'Hợp đồng giữ chỗ' : 'Hợp đồng',
+    onBack: (staffDraft || completedFlow) && onComplete ? onComplete : onBack,
+    title: handoverOnly
+      ? 'Bàn giao phòng'
+      : detail.data?.contract.kind === 'Holding'
+        ? 'Hợp đồng giữ chỗ'
+        : 'Hợp đồng',
   });
-  const signingMethods = useSigningMethods(api);
+  // Staff can prepare contracts but the signing-methods endpoint is scoped to
+  // Owner/Tenant. Do not call it from Staff's handover or contract screens.
+  const signingMethods = useSigningMethods(api, role === 'Owner' || role === 'Tenant');
   const [selectedAction, setSelectedAction] = useState('');
   const [terminationRequested, setTerminationRequested] = useState(false);
-  const [section, setSection] = useState<ContractSection>(initialSection);
   const [keys] = useState(() => mutationKeys(randomUUID));
   const [evidence, setEvidence] = useState<string[]>([]);
   const [evidenceText, setEvidenceText] = useState(''),
@@ -426,16 +462,59 @@ function LiveContractDetail({
     [uploadChecked, setUploadChecked] = useState(false);
   const uploadLock = useRef(false);
   const [notice, setNotice] = useFeedbackState('success');
-  if (detail.loading) return <ContractLoading label="Đang tải chi tiết hợp đồng…" />;
+  if (detail.loading)
+    return (
+      <ContractLoading
+        label={handoverOnly ? 'Đang tải nhiệm vụ bàn giao…' : 'Đang tải chi tiết hợp đồng…'}
+      />
+    );
   if (detail.error)
     return (
       <Box>
         <ContractNotice message={detail.error} />
-        <Action onPress={detail.reload}>Tải lại hợp đồng</Action>
+        <Action onPress={detail.reload}>
+          {handoverOnly ? 'Tải lại nhiệm vụ' : 'Tải lại hợp đồng'}
+        </Action>
       </Box>
     );
   if (!detail.data) return null;
   const { contract: c, moveOut: m, readiness: r, history } = detail.data;
+  // Task entry points render only the inspection workspace, never the
+  // contract navigation or unrelated contract actions.
+  if (handoverOnly) {
+    if (
+      c.kind !== 'Main' ||
+      ![
+        'Draft',
+        'PendingSigning',
+        'PendingActivation',
+        'Active',
+        'Terminated',
+        'Superseded',
+      ].includes(c.status)
+    )
+      return (
+        <Box>
+          <ContractNotice message="Hợp đồng này không có nhiệm vụ bàn giao hợp lệ." />
+        </Box>
+      );
+    return (
+      <>
+        {!!detail.refreshError && <ContractNotice message={conciseMessage(detail.refreshError)} />}
+        <MoveInDraftHandoverPanel
+          api={api}
+          contract={c}
+          role={role}
+          onUpdated={detail.reload}
+          legacyFallback={
+            ['Active', 'Terminated', 'Superseded'].includes(c.status) ? (
+              <ContractHandoverPanel api={api} contract={c} role={role} />
+            ) : undefined
+          }
+        />
+      </>
+    );
+  }
   const tenantAwaitingMoveOutApproval = role === 'Tenant' && m?.status === 'Requested';
   if (isMainOnboardingDraft(c) && ['Owner', 'Staff'].includes(role))
     return (
@@ -452,6 +531,7 @@ function LiveContractDetail({
         representativeResidentId={c.representativeResidentId}
         residentIds={c.residentIds}
         onCancel={() => {
+          if (staffDraft && onComplete) return onComplete();
           router.setParams({ contractId: '', mainDraftId: '' });
           onNext('');
         }}
@@ -588,6 +668,7 @@ function LiveContractDetail({
           actorId={actorId}
           onChanged={detail.reload}
           onList={onList}
+          onComplete={onComplete}
         />
       )}
       {ownerMain && (
@@ -609,6 +690,7 @@ function LiveContractDetail({
           actorId={actorId}
           onChanged={detail.reload}
           onList={onList}
+          onComplete={onComplete}
         />
       )}
       {section === 'overview' && !rental && !holding && !ownerMain && c.kind !== 'Holding' && (
@@ -672,8 +754,8 @@ function LiveContractDetail({
         <Box>
           <Heading title="Chữ ký và bằng chứng" />
           {[
-            { id: c.ownerSignerId, label: 'Owner' },
-            { id: c.tenantUserId, label: 'Tenant' },
+            { id: c.ownerSignerId, label: 'Chủ trọ' },
+            { id: c.tenantUserId, label: 'Khách thuê' },
           ].map((s) => (
             <View key={s.id} style={ui.soft}>
               <Text variant="titleSmall">
@@ -692,7 +774,7 @@ function LiveContractDetail({
           ))}
           {['Owner', 'Tenant'].includes(role) &&
             c.signatures.some((s) => ['Signed', 'Simulated'].includes(s.status)) && (
-              <ContractEvidence api={api} contractId={id} pdf />
+              <ContractEvidence api={api} contractId={id} contractKind={c.kind} pdf />
             )}
           {signer &&
             !c.isDevelopmentDemo &&
@@ -740,7 +822,7 @@ function LiveContractDetail({
             <ContractHandoverPanel api={api} contract={c} role={role} />
           ) : (
             <Box>
-              <Text>Owner kiểm tra và duyệt biên bản bàn giao nháp tại Web Chủ cơ sở.</Text>
+              <Text>Chủ trọ kiểm tra và duyệt biên bản bàn giao nháp tại Web Chủ cơ sở.</Text>
             </Box>
           )
         ) : (
@@ -773,8 +855,8 @@ function LiveContractDetail({
         )}
       {section === 'signing' && !rental && !holding && role === 'Staff' && (
         <Text style={ui.muted}>
-          Staff chuẩn bị và theo dõi hồ sơ. Owner/Tenant thực hiện ký; Owner xác minh cọc và kích
-          hoạt.
+          Nhân viên chuẩn bị và theo dõi hồ sơ. Chủ trọ/khách thuê thực hiện ký; chủ trọ xác minh
+          cọc và kích hoạt.
         </Text>
       )}
       {section === 'signing' && !rental && !holding && !ownerMain && r && (
@@ -783,7 +865,7 @@ function LiveContractDetail({
           <Text>Cọc đã xác minh: {formatContractMoney(r.verifiedDeposit)}</Text>
           <Text>Cọc còn thiếu: {formatContractMoney(r.remainingDeposit)}</Text>
           {r.ready ? (
-            <Pill tone="green">Đủ điều kiện để Owner kích hoạt</Pill>
+            <Pill tone="green">Đủ điều kiện để chủ trọ kích hoạt</Pill>
           ) : (
             r.blockers.map((b) => (
               <Text key={b} style={ui.red}>
@@ -809,7 +891,7 @@ function LiveContractDetail({
       {section === 'lifecycle' && !m && terminationRequested && (
         <Box>
           <Heading title="Đã gửi yêu cầu chấm dứt trước hạn" />
-          <Text>Yêu cầu đang chờ Owner duyệt.</Text>
+          <Text>Yêu cầu đang chờ chủ trọ duyệt.</Text>
         </Box>
       )}
       {section === 'lifecycle' && !m && !terminationAction && !terminationRequested && (
@@ -904,7 +986,7 @@ function LiveContractDetail({
             Mở tác vụ điện / nước để ghi chỉ số chốt
           </Button>
           <Text variant="bodySmall">
-            Owner tạo tác vụ Final đúng hợp đồng. Sau khi xác nhận chỉ số, sao chép mã reading vào
+            Chủ trọ tạo tác vụ Final đúng hợp đồng. Sau khi xác nhận chỉ số, sao chép mã reading vào
             biên bản.
           </Text>
         </Box>

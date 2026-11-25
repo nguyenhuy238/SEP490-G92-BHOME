@@ -39,8 +39,10 @@ public sealed partial class Compact24NotificationMvpTests
             OccurredAt = DateTimeOffset.UtcNow
         });
         await db.SaveChangesAsync();
-        var publisher = scope.ServiceProvider.GetRequiredService<INotificationEventPublisher>();
-        await publisher.PublishPendingAsync(default); await publisher.PublishPendingAsync(default);
+        var events = scope.ServiceProvider.GetRequiredService<CompactNotificationEvents>();
+        await events.PublishOwnerSigningRequestsAsync(default);
+        await events.PublishOwnerSigningRequestsAsync(default);
+        await scope.ServiceProvider.GetRequiredService<INotificationEventPublisher>().PublishPendingAsync(default);
         var notice = Assert.Single(await db.Set<BHome.Domain.Notifications.UserNotification>().AsNoTracking()
             .Where(n => n.RelatedObjectId == contract.Id && n.EventType == eventType).ToArrayAsync());
         Assert.Equal(w.Owner.Id, notice.RecipientUserId); Assert.Equal("Owner", notice.AudienceRole);
@@ -101,8 +103,20 @@ public sealed partial class Compact24NotificationMvpTests
             });
             if (converted) c.Status = ContractStatus.Converted;
             await db.SaveChangesAsync();
-            var publisher = scope.ServiceProvider.GetRequiredService<INotificationEventPublisher>();
-            await publisher.PublishPendingAsync(default); await publisher.PublishPendingAsync(default);
+            if (!converted)
+            {
+                var publisher = scope.ServiceProvider.GetRequiredService<INotificationEventPublisher>();
+                await publisher.PublishPendingAsync(default);
+                await publisher.PublishPendingAsync(default);
+            }
+            else
+            {
+                // A converted Holding must still send with only the dedicated delivery pass.
+                var channels = scope.ServiceProvider.GetRequiredService<NotificationChannelWorker>();
+                var events = scope.ServiceProvider.GetRequiredService<CompactNotificationEvents>();
+                await channels.ProcessHoldingConfirmationsAsync(events, default);
+                await channels.ProcessHoldingConfirmationsAsync(events, default);
+            }
             delivery = Assert.Single(await db.Database.SqlQuery<Guid>($"SELECT id AS \"Value\" FROM notifications WHERE record_kind='OUTBOX' AND event_key={"holding-confirmed:" + id.ToString("N")}").ToArrayAsync());
             if (!converted)
             {

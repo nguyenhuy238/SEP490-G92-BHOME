@@ -1,9 +1,11 @@
 import React, { useState } from 'react';
+import { View } from 'react-native';
 import { Checkbox, SegmentedButtons, Text } from 'react-native-paper';
 import type { HandoverAsset } from '../../../../../packages/client-core/src/contracts';
 import { quantityFields } from '../../../../../packages/client-core/src/handoverForm';
 import { Input } from '../../components/WorkflowControls';
 import { Action } from '../../components/WorkspaceKit';
+import { colors } from '../../theme/theme';
 
 export function HandoverAssetFields({
   asset,
@@ -18,6 +20,8 @@ export function HandoverAssetFields({
   hideEvidenceChoices = false,
   moveOutBaseline,
   moveOut = false,
+  checkError,
+  onCheckLayout,
 }: {
   asset: HandoverAsset;
   values: Record<string, string>;
@@ -32,6 +36,8 @@ export function HandoverAssetFields({
   /** Move-out comparison uses only a verified Move-In asset, never today's inventory as history. */
   moveOutBaseline?: HandoverAsset | null;
   moveOut?: boolean;
+  checkError?: string;
+  onCheckLayout?: (y: number) => void;
 }) {
   const a = asset;
   const [expanded, setExpanded] = useState(embedded);
@@ -91,7 +97,7 @@ export function HandoverAssetFields({
       ) : (
         <Text>
           Kiểm kê: {a.inventoryCondition || 'Chưa có'} ·{' '}
-          {a.ownerChecked ? 'Owner đã kiểm tra' : 'Chưa được Owner kiểm tra đủ'}
+          {a.ownerChecked ? 'Chủ trọ đã kiểm tra' : 'Chưa được chủ trọ kiểm tra đủ'}
         </Text>
       )}
       {!embedded && (
@@ -216,7 +222,7 @@ export function HandoverAssetFields({
                 disabled={disabled}
                 multiline
               />
-              <Text>Ảnh riêng cho {a.name} (bắt buộc khi thiếu, hỏng hoặc sai lệch):</Text>
+              {!hideEvidenceChoices && <Text>Ảnh riêng cho {a.name}:</Text>}
               {!hideEvidenceChoices &&
                 evidenceIds.map((id, index) => (
                   <Checkbox.Item
@@ -234,15 +240,31 @@ export function HandoverAssetFields({
                 ))}
             </>
           )}
-          {(quantities || showCheckWithoutQuantities) && (
-            <Checkbox.Item
-              label={`Đã kiểm tra ${a.name}`}
-              status={values[`${a.id}.checked`] === 'true' ? 'checked' : 'unchecked'}
-              onPress={() =>
-                set(`${a.id}.checked`, values[`${a.id}.checked`] === 'true' ? 'false' : 'true')
-              }
+          {!quantities && !moveOut && (
+            <Input
+              label="Ghi chú (không bắt buộc)"
+              value={values[`${a.id}.notes`] ?? ''}
+              onChange={(v) => set(`${a.id}.notes`, v)}
               disabled={disabled}
+              multiline
             />
+          )}
+          {(quantities || showCheckWithoutQuantities) && (
+            <View onLayout={({ nativeEvent }) => onCheckLayout?.(nativeEvent.layout.y)}>
+              <Checkbox.Item
+                label={`Đã kiểm tra ${a.name}`}
+                status={values[`${a.id}.checked`] === 'true' ? 'checked' : 'unchecked'}
+                onPress={() =>
+                  set(`${a.id}.checked`, values[`${a.id}.checked`] === 'true' ? 'false' : 'true')
+                }
+                disabled={disabled}
+              />
+              {!!checkError && (
+                <Text accessibilityRole="alert" variant="bodySmall" style={{ color: colors.red }}>
+                  {checkError}
+                </Text>
+              )}
+            </View>
           )}
         </>
       )}

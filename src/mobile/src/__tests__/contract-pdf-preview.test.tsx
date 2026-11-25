@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 import React from 'react';
-import { act, cleanup, fireEvent, render, screen } from '@testing-library/react';
+import { act, cleanup, fireEvent, render, screen, within } from '@testing-library/react';
 import { afterEach, beforeEach, expect, it, vi } from 'vitest';
 const native = vi.hoisted(() => ({ listeners: new Set<(state: string) => void>() }));
 vi.mock('react-native', () => ({
@@ -143,6 +143,8 @@ it('loads authenticated page bytes into a real inline preview, opens all pages a
   expect(
     (screen.getByAltText('Trang 1 của hợp đồng PDF') as HTMLImageElement).style.width,
   ).not.toBe(before);
+  fireEvent.click(screen.getByRole('button', { name: 'Vừa chiều rộng trang' }));
+  expect(screen.getByText('3 trang · 100%')).toBeTruthy();
   fireEvent.click(screen.getByRole('button', { name: 'Đóng xem toàn màn hình' }));
   await screen.findByAltText('Trang 1 của hợp đồng PDF');
   expect(screen.queryByRole('dialog')).toBeNull();
@@ -150,6 +152,18 @@ it('loads authenticated page bytes into a real inline preview, opens all pages a
   fireEvent.click(screen.getByRole('button', { name: 'Mở hoặc lưu DOCX' }));
   expect(options.onOpenPdf).toHaveBeenCalledOnce();
   expect(options.onOpenDocx).toHaveBeenCalledOnce();
+});
+it('downloads the selected PDF without leaving fullscreen or regenerating it', async () => {
+  const options = props();
+  const download = vi.fn();
+  render(<ContractPdfPreview {...options} onDownloadPdf={download} />);
+  await screen.findByAltText('Trang 1 của hợp đồng PDF');
+  fireEvent.click(screen.getByRole('button', { name: 'Xem toàn màn hình' }));
+  const dialog = await screen.findByRole('dialog');
+  fireEvent.click(within(dialog).getByRole('button', { name: 'Tải PDF' }));
+  expect(download).toHaveBeenCalledOnce();
+  expect(options.onRegenerate).not.toHaveBeenCalled();
+  expect(screen.getByRole('dialog')).toBeTruthy();
 });
 it('only marks an external PDF ready after authenticated viewing succeeds', async () => {
   const ready = vi.fn();

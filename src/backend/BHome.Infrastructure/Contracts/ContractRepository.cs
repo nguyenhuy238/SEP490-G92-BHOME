@@ -1,3 +1,4 @@
+using BHome.Application.Common;
 using BHome.Application.Contracts;
 using BHome.Application.PropertyManagement;
 using BHome.Domain.Billing;
@@ -10,11 +11,13 @@ using Microsoft.EntityFrameworkCore;
 using Npgsql;
 using Microsoft.Extensions.Logging;
 using System.Text.Json;
+using System.Security.Cryptography;
+using BHome.Application.Ocr;
 
 namespace BHome.Infrastructure.Contracts;
 
 internal sealed class ContractRepository(BHomePersistenceContext db, ILogger<ContractRepository> logger,
-    ISetupWorkspaceStore? setup = null, IContractHandoverRepository? handoverTasks = null) : IContractRepository
+    ISetupWorkspaceStore? setup = null, IContractHandoverRepository? handoverTasks = null, TimeProvider? clock = null, IIdentityProtection? identityProtection = null) : IContractRepository
 {
     // Sidecar Draft initialization is deliberately attached to persistence, not to
     // any particular contract-creation API (direct draft, Holding conversion, etc.).
@@ -40,15 +43,24 @@ internal sealed class ContractRepository(BHomePersistenceContext db, ILogger<Con
                 Summary = new ContractSummary(c.Id, c.RoomId, c.Room.LocationId, c.Room.Location.Name, c.Room.RoomNumber,
                 c.Kind.ToString(), c.Status.ToString(), c.StartDate, c.EndDate, c.MonthlyRent,
                 c.Kind == ContractKind.Main && c.DraftMetadata != "{}" && c.Status == ContractStatus.Draft,
-                c.RequiredDeposit, c.HoldingExpiryAt),
-                c.AgreedPriceSnapshot
+                c.RequiredDeposit, c.HoldingExpiryAt, null),
+                c.AgreedPriceSnapshot,
+                c.RepresentativeResidentId
             }).ToArrayAsync(t);
+        var representativeIds = items.Where(row => row.Summary.Kind == "Holding").Select(row => row.RepresentativeResidentId).Distinct().ToArray();
+        var customers = (scope.Owner || scope.Staff) && identityProtection is not null && representativeIds.Length > 0
+            ? await db.Set<Resident>().AsNoTracking().Where(r => representativeIds.Contains(r.Id) && r.VerificationStatus == IdentityVerificationStatus.Verified).ToDictionaryAsync(r => r.Id, t)
+            : new Dictionary<Guid, Resident>();
         return new(items.Select(row =>
         {
-            if (row.Summary.Kind != "Holding" || row.Summary.HoldingExpiresAt is not null) return row.Summary;
+            var summary = row.Summary;
+            if (summary.Kind != "Holding") return summary;
+            if (customers.TryGetValue(row.RepresentativeResidentId, out var resident))
+                summary = summary with { HoldingCustomer = ReadHoldingCustomer(resident) };
+            if (summary.HoldingExpiresAt is not null) return summary;
             // Legacy contracts retain the original expiry in their immutable price snapshot.
-            try { return row.Summary with { HoldingExpiresAt = JsonSerializer.Deserialize<HoldingPriceSnapshot>(row.AgreedPriceSnapshot)?.HoldingExpiresAt }; }
-            catch (JsonException) { return row.Summary; }
+            try { return summary with { HoldingExpiresAt = JsonSerializer.Deserialize<HoldingPriceSnapshot>(row.AgreedPriceSnapshot)?.HoldingExpiresAt }; }
+            catch (JsonException) { return summary; }
         }).ToArray(), page, pageSize, total);
     }
     public Task FlushAsync(CancellationToken t) => db.SaveChangesAsync(t);
@@ -192,7 +204,7 @@ internal sealed class ContractRepository(BHomePersistenceContext db, ILogger<Con
             if (db is BHome.Infrastructure.Persistence.Compact24.Compact24DbContext)
                 foreach (var c in handoverDraftCandidates.Values)
                 {
-                    var json = JsonSerializer.Serialize(HandoverDraftState.Create(c, DateTimeOffset.UtcNow),
+                    var json = JsonSerializer.Serialize(HandoverDraftState.Create(c, (clock ?? TimeProvider.System).BusinessUtcNow()),
                         new JsonSerializerOptions(JsonSerializerDefaults.Web));
                     // Never replace the immutable confirmed `current` baseline or an
                     // existing draft when a caller retries a contract creation.
@@ -209,7 +221,7 @@ internal sealed class ContractRepository(BHomePersistenceContext db, ILogger<Con
                     {
                         var loaded = await FindAsync(c.Id, t) ?? throw ContractException.Missing();
                         await handoverTasks.EnsureMoveInTaskAsync(loaded, c.OwnerSignerId,
-                            DateTimeOffset.UtcNow, t);
+                            (clock ?? TimeProvider.System).BusinessUtcNow(), t);
                     }
                 }
             if (handoverDraftCandidates.Count != 0) await db.SaveChangesAsync(t);
@@ -369,6 +381,32 @@ internal sealed class ContractRepository(BHomePersistenceContext db, ILogger<Con
                join resident in db.Set<Resident>() on cr.ResidentId equals resident.Id
                where cr.ContractId == contractId
                select new ContractOccupantView(resident.Id, resident.DisplayLabel, cr.Role == ResidentType.Representative)).ToArrayAsync(t);
+    public async Task<HoldingCustomerView?> HoldingCustomerAsync(Guid contractId, Guid residentId, CancellationToken t)
+    {
+        var resident = await (from cr in db.Set<ContractResident>().AsNoTracking()
+                              join r in db.Set<Resident>().AsNoTracking() on cr.ResidentId equals r.Id
+                              where cr.ContractId == contractId && cr.ResidentId == residentId && cr.Role == ResidentType.Representative && r.VerificationStatus == IdentityVerificationStatus.Verified
+                              select r).SingleOrDefaultAsync(t);
+        return resident is null ? null : ReadHoldingCustomer(resident);
+    }
+    private HoldingCustomerView? ReadHoldingCustomer(Resident resident)
+    {
+        if (identityProtection is null || string.IsNullOrWhiteSpace(resident.IdentityData) || resident.IdentityData == "{}") return null;
+        byte[]? bytes = null;
+        try
+        {
+            var envelope = JsonSerializer.Deserialize<EncryptedIdentity>(resident.IdentityData);
+            if (envelope is null) return null;
+            bytes = identityProtection.Decrypt(envelope, new(resident.OwnerUserId, resident.Id));
+            var identity = JsonSerializer.Deserialize<IdentityConfirmation>(bytes);
+            if (identity is null || !identity.HumanConfirmed || string.IsNullOrWhiteSpace(identity.FullName)) return null;
+            var number = identity.CitizenIdentityNumber;
+            return new(identity.FullName, number?.Length == 12 ? "********" + number[^4..] : "");
+        }
+        catch (Exception e) when (e is JsonException or CryptographicException or ArgumentException or InvalidOperationException)
+        { return null; }
+        finally { if (bytes is not null) CryptographicOperations.ZeroMemory(bytes); }
+    }
     public async Task CloseResidenceAsync(Contract contract, DateOnly actualEndDate, Guid actorId, DateTimeOffset at, CancellationToken t)
     {
         // Only Compact24 is a deployed runtime. The offline legacy regression schema has a

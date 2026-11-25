@@ -1,7 +1,7 @@
 import { useFeedbackState } from '../lib/useFeedbackState';
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { StyleSheet, View } from 'react-native';
-import { useFocusEffect, useLocalSearchParams, usePreventRemove } from 'expo-router';
+import { router, useFocusEffect, useLocalSearchParams, usePreventRemove } from 'expo-router';
 import { ActivityIndicator, Button, Icon, Text } from 'react-native-paper';
 import { Action, Box, Heading, ui } from '../components/WorkspaceKit';
 import { ChoiceField } from '../components/WorkflowControls';
@@ -127,30 +127,33 @@ function NewResidentOnboarding() {
   const dirty =
     !finished &&
     !discarded &&
-    (!!scope.room ||
-      (scope.locations.length > 1 && !!scope.location) ||
-      people.some((p) => !!p.label || !!p.residentId));
-  const dirtyRef = useRef(dirty);
-  useEffect(() => {
-    dirtyRef.current = dirty;
-  }, [dirty]);
+    step === 2 &&
+    !contractOpen &&
+    identityOpen &&
+    people.some(
+      (person) =>
+        person.key === identityKey && person.status !== 'confirmed' && person.hasUnsavedIdentity,
+    );
   const disablePrevention = usePreventRemove(dirty, ({ repeat }) => requestNavigation(repeat));
   useFocusEffect(
     useCallback(() => {
-      const unregister = registerExitGuard(
-        () => dirtyRef.current,
-        () => {
-          dirtyRef.current = false;
-          setDiscarded(true);
-          disablePrevention();
-        },
-      );
-      return () => {
-        setIdentityOpen(false);
-        unregister();
-      };
-    }, [registerExitGuard, disablePrevention, setIdentityOpen]),
+      if (dirty)
+        return registerExitGuard(
+          () => true,
+          () => {
+            setDiscarded(true);
+            disablePrevention();
+          },
+          true,
+        );
+    }, [dirty, registerExitGuard, disablePrevention]),
   );
+  useFocusEffect(useCallback(() => () => setIdentityOpen(false), []));
+  const openSigning = (contractId = '') => {
+    setFinished(true);
+    disablePrevention();
+    router.replace({ pathname: '/workspace/[screen]', params: { screen: 'signing', contractId } });
+  };
   useEffect(() => {
     alive.current = true;
     return () => {
@@ -424,11 +427,7 @@ function NewResidentOnboarding() {
                 api={contracts}
                 locationId={scope.location}
                 roomId={scope.room}
-                onConverted={(id) => {
-                  dirtyRef.current = false;
-                  setFinished(true);
-                  go('signing', { contractId: id, mainDraftId: '', roomId: '' });
-                }}
+                onConverted={openSigning}
               />
             ) : (
               <Action disabled={!roomValid} onPress={() => move(2)}>
@@ -543,6 +542,7 @@ function NewResidentOnboarding() {
                 onModeChange={setIdentityMode}
                 onDismiss={() => setIdentityOpen(false)}
                 onStatusChange={(status) => changeStatus(person.key, status)}
+                onUnsavedChanges={(hasUnsavedIdentity) => patch(person.key, { hasUnsavedIdentity })}
                 onCaptureProgress={(captureProgress) => patch(person.key, { captureProgress })}
                 onSaveError={(verificationError) => patch(person.key, { verificationError })}
                 onConfirmed={() => {
@@ -664,16 +664,17 @@ function NewResidentOnboarding() {
               <Button
                 disabled={busy}
                 onPress={() =>
-                  go('onboarding', {
-                    residentId: emailConflict.residentId!,
-                    locationId: emailConflict.locationId,
-                  })
+                  go(
+                    'onboarding',
+                    { residentId: emailConflict.residentId!, locationId: emailConflict.locationId },
+                    true,
+                  )
                 }
               >
                 Mở hồ sơ đã có tại phòng này
               </Button>
             ) : (
-              <Button disabled={busy} onPress={() => go('rooms')}>
+              <Button disabled={busy} onPress={() => go('rooms', undefined, true)}>
                 Kiểm tra danh sách người ở
               </Button>
             )}
@@ -689,7 +690,7 @@ function NewResidentOnboarding() {
           </Box>
         )}
         {people.some((person) => person.creationUncertain) && (
-          <Button onPress={() => go('rooms')}>Kiểm tra danh sách người ở</Button>
+          <Button onPress={() => go('rooms', undefined, true)}>Kiểm tra danh sách người ở</Button>
         )}
         {step > 0 && step !== 1 && !finished && (
           <Button
@@ -713,20 +714,9 @@ function NewResidentOnboarding() {
             setContractOpen(false);
             move(2);
           }}
-          onCancel={() => {
-            setContractOpen(false);
-            resetScroll();
-          }}
-          onList={() => {
-            dirtyRef.current = false;
-            setFinished(true);
-            go('signing');
-          }}
-          onReleased={(id) => {
-            dirtyRef.current = false;
-            setFinished(true);
-            go('signing', { contractId: id });
-          }}
+          onCancel={() => go('staff-home')}
+          onList={() => openSigning()}
+          onReleased={openSigning}
         />
       )}
     </>

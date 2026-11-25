@@ -98,18 +98,18 @@ public sealed class HandoverDraftStateTests
     }
 
     [Fact]
-    public void DamagedRoomRequiresObservationAndEvidenceButOnlyOwnerDecidesRemediation()
+    public void DamagedRoomCanBeSavedWithoutOptionalNoteOrEvidenceButOnlyOwnerDecidesRemediation()
     {
         var code = "walls_ceiling_floor";
-        Assert.Throws<ContractException>(() => HandoverRoomChecklist.Merge([], [
-            new HandoverRoomCheck(code, "Issue", "", [])]));
+        var optional = HandoverRoomChecklist.Merge([], [new HandoverRoomCheck(code, "Issue", "", [])]);
+        Assert.Equal("Issue", Assert.Single(optional).Status);
         Assert.Throws<ContractException>(() => HandoverRoomChecklist.Merge([], [
             new HandoverRoomCheck("unregistered_code", "Passed", "", [])]));
         Assert.Throws<ContractException>(() => HandoverRoomChecklist.NormalizeIssues([
             new HandoverOutstandingIssue(code, "Trám vết nứt", "Owner", new DateOnly(2026, 12, 1))]));
         var checks = HandoverRoomChecklist.RequiredCodes.Select(item =>
             new HandoverRoomCheck(item, item == code ? "Issue" : "Passed", item == code ? "Vết nứt cũ" : "", [])).ToArray();
-        Assert.Contains("room_issue_evidence", HandoverRoomChecklist.Missing(checks,
+        Assert.Empty(HandoverRoomChecklist.Missing(checks,
             [new HandoverAccessItem("RoomKey", 1, "")], []));
         var reviewed = HandoverRoomChecklist.Merge(checks,
             [new HandoverRoomCheck(code, "Issue", "Vết nứt cũ", [Guid.NewGuid()])]);
@@ -119,22 +119,22 @@ public sealed class HandoverDraftStateTests
     }
 
     [Fact]
-    public void PassedRoomClearsPreviousNotesAndPersistsNullEvenWhenClientSendsStaleText()
+    public void PassedRoomRetainsOptionalNotesAndSavingAnotherItemDoesNotModifyIt()
     {
         const string code = "doors_windows_locks";
         var issue = new HandoverRoomCheck(code, "Issue", "Khóa cửa bị kẹt", [Guid.NewGuid()]);
         var changed = HandoverRoomChecklist.Merge([issue],
             [new HandoverRoomCheck(code, "Passed", "Khóa cửa bị kẹt", [])]);
-        Assert.Null(Assert.Single(changed).Notes);
+        Assert.Equal("Khóa cửa bị kẹt", Assert.Single(changed).Notes);
         Assert.Empty(Assert.Single(changed).EvidenceIds);
 
-        // Saving an unrelated section also cleans up an older mutable draft.
+        // Saving an unrelated section preserves the previous observation.
         HandoverRoomCheck[] prior = [new HandoverRoomCheck(code, "Passed", "Ghi chú từ trước", [])];
-        Assert.Null(Assert.Single(HandoverRoomChecklist.Merge(prior, null)).Notes);
+        Assert.Equal("Ghi chú từ trước", Assert.Single(HandoverRoomChecklist.Merge(prior, null)).Notes);
         Assert.Null(Assert.Single(HandoverRoomChecklist.Merge([], [
             new HandoverRoomCheck(code, "Passed", null, [])])).Notes);
-        Assert.Throws<ContractException>(() => HandoverRoomChecklist.Merge([], [
-            new HandoverRoomCheck(code, "Issue", null, [])]));
+        Assert.Null(Assert.Single(HandoverRoomChecklist.Merge([], [
+            new HandoverRoomCheck(code, "Issue", null, [])])).Notes);
     }
 
     [Fact]

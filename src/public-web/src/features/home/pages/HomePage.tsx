@@ -11,7 +11,7 @@ export default function HomePage() {
           component="h1"
           sx={{ fontWeight: 700, fontSize: { xs: '2.4rem', md: '4rem' }, lineHeight: 1.12, mb: 3 }}
         >
-          Chào mừng đến với BHOME
+          Chào mừng đến với BHome
         </Typography>
         <Typography sx={{ maxWidth: '60ch', fontSize: '1.125rem', mb: 3 }}>
           Tìm nơi ở phù hợp từ thông tin cơ sở, hình ảnh và tiện ích được chủ cơ sở công bố. Xem

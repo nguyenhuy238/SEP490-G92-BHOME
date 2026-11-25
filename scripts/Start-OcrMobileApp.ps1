@@ -100,6 +100,7 @@ $previousProxy = $env:EXPO_PACKAGER_PROXY_URL
 $previousServerId = $env:EXPO_PUBLIC_DEV_SERVER_ID
 $previousDevelopmentUrl = $env:EXPO_PUBLIC_DEV_API_BASE_URL
 $previousConfiguredUrl = $env:EXPO_PUBLIC_API_BASE_URL
+$previousDemoClock = $env:EXPO_PUBLIC_DEMO_CLOCK_ENABLED
 try {
     Assert-LocalApiProcess
     if ((Get-CheckoutApiProcess) -or (Get-NetTCPConnection -State Listen -LocalPort 7240 -ErrorAction SilentlyContinue)) {
@@ -147,6 +148,7 @@ try {
         # Expo's env loader preserves a nonempty inherited process variable.
         # Explicit standalone/staging Expo launches retain their own public setting.
         $env:EXPO_PUBLIC_API_BASE_URL = 'https://localhost:7240'
+        $env:EXPO_PUBLIC_DEMO_CLOCK_ENABLED = 'true'
         $env:EXPO_PACKAGER_PROXY_URL = "http://${lanIp}:$Port"
         Write-Output "API: https://${lanIp}:7240; Expo: exp://${lanIp}:$Port"
         Write-Output "API checked from this computer: $env:EXPO_PUBLIC_DEV_API_BASE_URL"
@@ -197,4 +199,5 @@ try {
     $env:EXPO_PUBLIC_DEV_SERVER_ID = $previousServerId
     $env:EXPO_PUBLIC_DEV_API_BASE_URL = $previousDevelopmentUrl
     $env:EXPO_PUBLIC_API_BASE_URL = $previousConfiguredUrl
+    $env:EXPO_PUBLIC_DEMO_CLOCK_ENABLED = $previousDemoClock
 }

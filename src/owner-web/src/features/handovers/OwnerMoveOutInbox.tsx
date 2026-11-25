@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { Link, useSearchParams } from 'react-router';
+import { useSearchParams } from 'react-router';
 import { useQuery } from '@tanstack/react-query';
 import {
   Alert,
@@ -62,8 +62,8 @@ interface MoveOutProposalProgress {
 
 const moveOutStates = [
   { value: 'Requested', label: 'Chờ duyệt yêu cầu' },
-  { value: 'Approved', label: 'Staff đang xử lý' },
-  { value: 'Inspected', label: 'Đã có kết quả Staff' },
+  { value: 'Approved', label: 'Nhân viên đang xử lý' },
+  { value: 'Inspected', label: 'Đã có kết quả nhân viên' },
   { value: 'PendingSettlement', label: 'Đang quyết toán' },
   { value: 'Settled', label: 'Đã quyết toán' },
   { value: 'Completed', label: 'Đã trả phòng' },
@@ -80,16 +80,16 @@ function progressFor(item: MoveOutInboxItem) {
   if (item.status === 'Requested' || item.status === 'Approved') return labelFor(item.status);
   if (item.proposalStatus === 'Accepted') {
     if (item.proposalSettlementStatus === 'Payable')
-      return 'Tenant đã đồng ý · Đã tạo khoản phải thu';
+      return 'Khách thuê đã đồng ý · Đã tạo khoản phải thu';
     if (item.proposalSettlementStatus === 'RefundEligible')
-      return 'Tenant đã đồng ý · Có tiền cọc cần hoàn';
+      return 'Khách thuê đã đồng ý · Có tiền cọc cần hoàn';
     if (item.proposalSettlementStatus === 'Settled') return 'Đã quyết toán phí trả phòng';
-    return 'Tenant đã đồng ý · Đang đối chiếu';
+    return 'Khách thuê đã đồng ý · Đang đối chiếu';
   }
-  if (item.proposalStatus === 'Disputed') return 'Tenant yêu cầu điều chỉnh phí';
-  if (item.proposalStatus === 'PendingTenant') return 'Chờ Tenant xác nhận phí';
+  if (item.proposalStatus === 'Disputed') return 'Khách thuê yêu cầu điều chỉnh phí';
+  if (item.proposalStatus === 'PendingTenant') return 'Chờ khách thuê xác nhận phí';
   if (item.proposalStatus === 'Outdated') return 'Cần đối chiếu dữ liệu phí';
-  return item.status === 'Inspected' ? 'Chờ Owner gửi phí' : labelFor(item.status);
+  return item.status === 'Inspected' ? 'Chờ chủ trọ gửi phí' : labelFor(item.status);
 }
 
 export function OwnerMoveOutInbox() {
@@ -201,10 +201,7 @@ export function OwnerMoveOutInbox() {
 
   return (
     <Stack spacing={2}>
-      <Stack direction="row" sx={{ alignItems: 'center', justifyContent: 'space-between' }}>
-        <Typography variant="body2" color="text.secondary">
-          Kết quả kiểm tra Staff và các khoản dự kiến thu khi trả phòng
-        </Typography>
+      <Stack direction="row" sx={{ alignItems: 'center', justifyContent: 'flex-end' }}>
         <Button
           startIcon={<RefreshCw size={16} />}
           disabled={inbox.isFetching}
@@ -439,14 +436,6 @@ export function OwnerMoveOutInbox() {
           <Box sx={{ overflowY: 'auto', flex: 1, p: { xs: 1.5, sm: 2.5 } }}>
             {!!selected && (
               <Stack spacing={2}>
-                <Button
-                  component={Link}
-                  to={`/contracts?contractId=${encodeURIComponent(selected)}`}
-                  sx={{ alignSelf: 'flex-start' }}
-                  size="small"
-                >
-                  Mở hồ sơ hợp đồng
-                </Button>
                 <OwnerMoveOutReviewPanel
                   key={selected}
                   api={api}

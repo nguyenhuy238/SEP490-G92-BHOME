@@ -94,6 +94,7 @@ vi.mock('react-native', () => {
   );
   return {
     View,
+    Image: () => <img alt="" />,
     Platform: { OS: 'android' },
     useWindowDimensions: () => ({ width: state.viewportWidth, height: 730 }),
     StyleSheet: { create: (s: unknown) => s },
@@ -190,7 +191,10 @@ vi.mock('react-native-paper', () => {
 vi.mock('../components/WorkspaceKit', () => ({ ui: {} }));
 import { WorkspaceProvider, useWorkspace } from '../features/workspace/WorkspaceProvider';
 import { WorkspaceShell } from '../components/WorkspaceShell';
-import { useWorkspaceHeaderRefresh } from '../components/WorkspaceHeaderContext';
+import {
+  useWorkspaceHeaderRefresh,
+  useWorkspaceInlineHeader,
+} from '../components/WorkspaceHeaderContext';
 import {
   canOpenScreen,
   activeWorkspaceTab,
@@ -288,11 +292,34 @@ it('does not offer a real OCR action in role preview without a session', () => {
   fireEvent.click(screen.getByRole('button', { name: 'Xem mẫu' }));
   expect(screen.queryByRole('button', { name: 'Test OCR' })).toBeNull();
 });
-function Draft() {
+function Draft({ exitToHome = false }: { exitToHome?: boolean }) {
   const { registerExitGuard, go } = useWorkspace();
-  useEffect(() => registerExitGuard(() => true, state.leave), [registerExitGuard]);
+  useEffect(
+    () => registerExitGuard(() => true, state.leave, exitToHome),
+    [exitToHome, registerExitGuard],
+  );
   return <button onClick={() => go('staff-home')}>Đổi màn hình</button>;
 }
+
+function InlineContractHeader({ visible }: { visible: boolean }) {
+  useWorkspaceInlineHeader(visible);
+  return visible ? <button>Quay lại: CCCD</button> : null;
+}
+
+it('shows only the inline draft back button while the Staff contract form is visible', () => {
+  const view = (visible: boolean) => (
+    <WorkspaceProvider>
+      <WorkspaceShell screen="onboarding">
+        <InlineContractHeader visible={visible} />
+      </WorkspaceShell>
+    </WorkspaceProvider>
+  );
+  const { rerender } = render(view(true));
+  expect(screen.getByRole('button', { name: 'Quay lại: CCCD' })).toBeTruthy();
+  expect(screen.queryByRole('button', { name: 'Quay lại' })).toBeNull();
+  rerender(view(false));
+  expect(screen.getByRole('button', { name: 'Quay lại' })).toBeTruthy();
+});
 function ContractHeaderProbe({ refresh }: { refresh: () => void }) {
   useWorkspaceHeaderRefresh(refresh, false);
   return <span>Danh sách hợp đồng</span>;
@@ -321,13 +348,13 @@ it('keeps a compact Staff header and scrollable move-in content at 320px', () =>
       </WorkspaceShell>
     </WorkspaceProvider>,
   );
-  expect(screen.getByText('BHOME Nhân viên')).toBeTruthy();
+  expect(screen.getByText('BHome Nhân viên')).toBeTruthy();
   expect(screen.getByText('Đối chiếu kiểm kê đầu vào')).toBeTruthy();
   expect(screen.getByTestId('shell-scroll')).toBeTruthy();
   expect(screen.getAllByRole('tab')).toHaveLength(4);
   expect(view.container.querySelector('main')?.getAttribute('data-edges')).toBe('top,left,right');
   expect(
-    screen.getByText('BHOME Nhân viên').parentElement?.parentElement?.parentElement?.style.width,
+    screen.getByText('BHome Nhân viên').parentElement?.parentElement?.parentElement?.style.width,
   ).not.toBe('0px');
 });
 function ProfileEditFooterProbe() {
@@ -515,7 +542,7 @@ it('lets meter steps use the Staff shell back action without navigating home', (
       </WorkspaceShell>
     </WorkspaceProvider>,
   );
-  expect(screen.getByText('BHOME Nhân viên')).toBeTruthy();
+  expect(screen.getByText('BHome Nhân viên')).toBeTruthy();
   expect(screen.getAllByRole('tab')).toHaveLength(4);
   fireEvent.click(screen.getByRole('button', { name: 'Quay lại' }));
   expect(back).toHaveBeenCalledOnce();
@@ -622,7 +649,7 @@ it('protects an onboarding draft before going back in Staff history', () => {
   render(
     <WorkspaceProvider>
       <WorkspaceShell screen="onboarding">
-        <Draft />
+        <Draft exitToHome />
       </WorkspaceShell>
     </WorkspaceProvider>,
   );
@@ -633,7 +660,8 @@ it('protects an onboarding draft before going back in Staff history', () => {
   fireEvent.click(screen.getByRole('button', { name: 'Quay lại' }));
   fireEvent.click(screen.getByRole('button', { name: 'Rời quy trình' }));
   expect(state.leave).toHaveBeenCalledOnce();
-  expect(state.back).toHaveBeenCalledOnce();
+  expect(state.back).not.toHaveBeenCalled();
+  expect(state.dismissTo).toHaveBeenCalledExactlyOnceWith('/(tabs)/staff-home');
 });
 
 it.each(['Owner', 'Staff', 'Tenant'] as const)(
@@ -758,6 +786,21 @@ it('retains the draft exit guard for navigator tab presses', () => {
   expect(props.navigateToTab).not.toHaveBeenCalled();
   fireEvent.click(screen.getByRole('button', { name: 'Rời quy trình' }));
   expect(props.navigateToTab).toHaveBeenCalledExactlyOnceWith('work-orders');
+});
+it('returns a Staff contract draft to Home after confirming a tab exit', () => {
+  const props = navigatorBarProps();
+  render(
+    <WorkspaceProvider>
+      <Draft exitToHome />
+      <NavigatorTabBar {...props} />
+    </WorkspaceProvider>,
+  );
+  fireEvent.click(screen.getByRole('tab', { name: 'Công việc' }));
+  expect(screen.getByText('Bạn sẽ trở về Trang chủ.')).toBeTruthy();
+  fireEvent.click(screen.getByRole('button', { name: 'Rời quy trình' }));
+  expect(state.leave).toHaveBeenCalledOnce();
+  expect(props.navigateToTab).not.toHaveBeenCalled();
+  expect(state.dismissTo).toHaveBeenCalledExactlyOnceWith('/(tabs)/staff-home');
 });
 it('renders exactly one bar when a screen shell is hosted inside Tabs', () => {
   const props = navigatorBarProps();

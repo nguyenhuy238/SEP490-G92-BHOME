@@ -1,3 +1,4 @@
+using BHome.Application.Common;
 using BHome.Application.Contracts;
 using BHome.Domain.Billing;
 using BHome.Domain.PropertyManagement;
@@ -16,7 +17,7 @@ using BHome.Application.PropertyManagement;
 namespace BHome.Infrastructure.Contracts;
 
 internal sealed class ContractHandoverRepository(BHomePersistenceContext db, IOperationalTaskRepository tasks,
-    CompactNotificationWriter? inbox = null, RoomInventoryReviewService? inventory = null) : IContractHandoverRepository
+    CompactNotificationWriter? inbox = null, RoomInventoryReviewService? inventory = null, TimeProvider? clock = null) : IContractHandoverRepository
 {
     private static Guid Key(string value) => new(SHA256.HashData(Encoding.UTF8.GetBytes(value)).AsSpan(0, 16));
     internal static Guid MoveOutTaskId(Guid contractId) => Key($"contract-move-out:{contractId:N}");
@@ -395,9 +396,7 @@ internal sealed class ContractHandoverRepository(BHomePersistenceContext db, IOp
             i.ActualQuantity is null || i.EvidenceIds is null ||
             i.Condition == "Good" && i.ActualQuantity != i.ExpectedQuantity ||
             i.Condition == "Missing" && i.ActualQuantity >= i.ExpectedQuantity ||
-            i.ActualQuantity > i.ExpectedQuantity ||
-            (i.Condition is "Missing" or "Damaged") &&
-                (i.EvidenceIds.Length == 0 || string.IsNullOrWhiteSpace(i.Notes)));
+            i.ActualQuantity > i.ExpectedQuantity);
 
     public async Task<HandoverCompletedInventory?> CompletedInventoryAsync(Guid contractId, CancellationToken t)
     {
@@ -528,7 +527,7 @@ internal sealed class ContractHandoverRepository(BHomePersistenceContext db, IOp
         var recipients = await tasks.OwnersAsync(t);
         if (inbox is not null)
         {
-            var date = DateOnly.FromDateTime(TimeZoneInfo.ConvertTimeBySystemTimeZoneId(DateTimeOffset.UtcNow, "Asia/Ho_Chi_Minh").DateTime);
+            var date = (clock ?? TimeProvider.System).BusinessToday();
             var staff = await tasks.ResponsibilityAsync(c.Room.LocationId, date, t);
             foreach (var party in recipients.Select(owner => ((Guid?)owner, Roles.Owner)).Concat(new[] { (c.TenantUserId, Roles.Tenant), (staff?.StaffUserId, Roles.Staff) }).Where(p => p.Item1 is not null && p.Item1 != actor).Distinct())
                 await inbox.Emit(party.Item1!.Value, party.Item2, c.Room.LocationId, $"handover:{c.Id:N}:{version}:{action}:{party.Item1:N}", "HANDOVER_UPDATED", "Contract",

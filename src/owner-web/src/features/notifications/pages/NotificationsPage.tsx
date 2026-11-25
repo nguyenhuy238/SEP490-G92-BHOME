@@ -1,12 +1,10 @@
 import { TextField } from '../../../components/common/ValidatedForm';
 import { ResourcePage } from '../../../components/common/ResourcePage';
-import { useRef, useState } from 'react';
+import { useState } from 'react';
 import {
   Alert,
   Box,
   Button,
-  Chip,
-  LinearProgress,
   MenuItem,
   Paper,
   Stack,
@@ -14,19 +12,20 @@ import {
   Tabs,
   Typography,
 } from '@mui/material';
-import { useQuery, useQueryClient } from '@tanstack/react-query';
+import { useQuery } from '@tanstack/react-query';
 import { useNavigate } from 'react-router';
 import { useAuth } from '../../../../../../packages/client-core/src/auth';
 import { invoiceError } from '../../../../../../packages/client-core/src/invoices';
 import {
   ownerNotificationCategories as notificationCategories,
-  ownerNotificationRoute,
+  type NotificationItem,
 } from '../../../../../../packages/client-core/src/notifications';
-import { formatInstant } from '../../../../../../packages/client-core/src/localization';
 import { useNotifications, useUnreadNotifications } from '../useNotifications';
 import { FilterToolbar, PageHeader } from '../../../components/common/PortalUI';
 import { isMockMode } from '../../../services/config';
 import { NotificationManagement } from '../NotificationManagement';
+import { NotificationDetail, NotificationRows, NotificationSkeleton } from '../NotificationRows';
+import { hasNotificationTarget, useNotificationActions } from '../useNotificationActions';
 export default function NotificationsPage() {
   return isMockMode ? (
     <ResourcePage kind="notifications" variant="notifications" />
@@ -37,7 +36,7 @@ export default function NotificationsPage() {
 export function LiveNotificationsPage() {
   const api = useNotifications();
   const { session } = useAuth();
-  const cache = useQueryClient();
+  const actions = useNotificationActions();
   const navigate = useNavigate();
   const [tab, setTab] = useState('inbox');
   const [composeVisited, setComposeVisited] = useState(false);
@@ -45,36 +44,20 @@ export function LiveNotificationsPage() {
   const [page, setPage] = useState(1),
     [category, setCategory] = useState(''),
     [unread, setUnread] = useState('');
-  const [error, setError] = useState(''),
-    [busy, setBusy] = useState(false);
-  const lock = useRef(false);
+  const [detail, setDetail] = useState<NotificationItem | null>(null);
   const count = useUnreadNotifications();
   const list = useQuery({
     queryKey: ['notification-list', session?.userId, page, category, unread],
     queryFn: ({ signal }) => api.list(page, category, unread, signal),
-    refetchInterval: 30000,
+    enabled: !composing,
+    refetchInterval: composing ? false : 30000,
   });
-  async function action(work: () => Promise<unknown>) {
-    if (lock.current) return;
-    lock.current = true;
-    setBusy(true);
-    setError('');
-    try {
-      await work();
-      await Promise.all([
-        cache.invalidateQueries({ queryKey: ['notification-list'] }),
-        cache.invalidateQueries({ queryKey: ['notification-count'] }),
-      ]);
-    } catch (e) {
-      setError(invoiceError(e));
-    } finally {
-      lock.current = false;
-      setBusy(false);
-    }
-  }
+  const viewDetail = (item: NotificationItem) => void actions.read(item, () => setDetail(item));
+  const openItem = (item: NotificationItem) =>
+    hasNotificationTarget(item) ? void actions.open(item) : viewDetail(item);
   return (
     <>
-      <PageHeader title={composing ? 'Soạn và quản lý thông báo' : 'Thông báo của tôi'} />
+      <PageHeader title={composing ? 'Soạn và quản lý thông báo' : 'Trung tâm thông báo'} />
       {import.meta.env.DEV && import.meta.env.VITE_SMS_DEMO_ENABLED === 'true' && (
         <Button onClick={() => navigate('/demo/sms')}>Hộp thư SMS Demo</Button>
       )}
@@ -114,8 +97,8 @@ export function LiveNotificationsPage() {
               Làm mới
             </Button>
             <Button
-              disabled={busy || !count.data?.unreadCount}
-              onClick={() => void action(() => api.readAll())}
+              disabled={actions.busy || !count.data?.unreadCount}
+              onClick={() => void actions.readAll()}
             >
               Đánh dấu tất cả đã đọc
             </Button>
@@ -130,6 +113,7 @@ export function LiveNotificationsPage() {
               value={category}
               onChange={(e) => {
                 setCategory(e.target.value);
+                setDetail(null);
                 setPage(1);
               }}
             >
@@ -146,6 +130,7 @@ export function LiveNotificationsPage() {
               value={unread}
               onChange={(e) => {
                 setUnread(e.target.value);
+                setDetail(null);
                 setPage(1);
               }}
             >
@@ -154,82 +139,37 @@ export function LiveNotificationsPage() {
               <MenuItem value="false">Đã đọc</MenuItem>
             </TextField>
           </FilterToolbar>
-          {list.isPending && <LinearProgress />}
-          {(error || list.error || count.error) && (
-            <Alert severity="error">{error || invoiceError(list.error ?? count.error)}</Alert>
+          {(actions.error || list.error || count.error) && (
+            <Alert severity="error" action={list.error ? <Button onClick={() => void list.refetch()}>Thử lại</Button> : undefined}>
+              {actions.error || invoiceError(list.error ?? count.error)}
+            </Alert>
           )}
-          {!list.error && !list.isPending && list.data?.items.length === 0 && (
-            <Alert severity="info">Không có thông báo phù hợp.</Alert>
-          )}
-          {!list.error &&
-            list.data?.items.map((n) => (
-              <Paper key={n.id} variant="outlined" sx={{ p: 1.5 }}>
-                <Stack spacing={1}>
-                  <Stack
-                    direction="row"
-                    spacing={1}
-                    useFlexGap
-                    sx={{ flexWrap: 'wrap', alignItems: 'center' }}
-                  >
-                    <Chip
-                      label={
-                        notificationCategories[n.category as keyof typeof notificationCategories] ??
-                        n.category
-                      }
-                    />
-                    <Chip
-                      label={n.readAt ? 'Đã đọc' : 'Chưa đọc'}
-                      color={n.readAt ? 'default' : 'primary'}
-                    />
-                  </Stack>
-                  <Typography variant="h3" sx={{ overflowWrap: 'anywhere' }}>
-                    {n.title}
-                  </Typography>
-                  <Typography variant="body2" sx={{ overflowWrap: 'anywhere' }}>
-                    {n.summary}
-                  </Typography>
-                  <Typography variant="body2">{formatInstant(n.createdAt)}</Typography>
-                  <Stack direction="row" useFlexGap sx={{ flexWrap: 'wrap', gap: 0.5 }}>
-                    {[
-                      'Invoice',
-                      'Adjustment',
-                      'Contract',
-                      'Refund',
-                      'BankTransfer',
-                      'MeterTask',
-                      'OperationalTask',
-                      'AutomationExecution',
-                      'Incident',
-                    ].includes(n.relatedObjectType) && (
-                      <Button
-                        disabled={busy}
-                        onClick={() =>
-                          void action(async () => {
-                            const target = await api.target(n.id);
-                            const route = ownerNotificationRoute(target);
-                            if (!route) throw new Error('unsupported_notification_target');
-                            await api.read(n.id);
-                            navigate(
-                              n.eventType === 'CONTRACT_MOVE_OUT_REQUESTED' &&
-                                target.objectType === 'Contract'
-                                ? `/contracts/${target.objectId}/termination-review`
-                                : route,
-                            );
-                          })
-                        }
-                      >
-                        Mở hồ sơ liên quan
-                      </Button>
-                    )}
-                    {!n.readAt && (
-                      <Button disabled={busy} onClick={() => void action(() => api.read(n.id))}>
-                        Đánh dấu đã đọc
-                      </Button>
-                    )}
-                  </Stack>
-                </Stack>
-              </Paper>
-            ))}
+          <Paper variant="outlined" sx={{ display: 'grid', gridTemplateColumns: { xs: 'minmax(0, 1fr)', md: 'minmax(290px, 38%) minmax(0, 1fr)' }, overflow: 'hidden' }}>
+            <Box sx={{ display: { xs: detail ? 'none' : 'block', md: 'block' }, maxHeight: { md: '65dvh' }, overflowY: 'auto', borderRight: { md: '1px solid' }, borderColor: { md: 'divider' } }}>
+              {list.isPending && <NotificationSkeleton />}
+              {!list.error && list.data?.items.length === 0 && (
+                <Typography color="text.secondary" sx={{ p: 3, textAlign: 'center' }}>
+                  {unread === 'true' && !category ? 'Bạn đã đọc tất cả thông báo.' : 'Không có thông báo phù hợp.'}
+                </Typography>
+              )}
+              {!list.error && !!list.data?.items.length && (
+                <NotificationRows items={list.data.items} busy={actions.busy} selectedId={detail?.id}
+                  onOpen={openItem} onDetail={viewDetail} onRead={(item) => void actions.read(item)} />
+              )}
+            </Box>
+            <Box sx={{ display: { xs: detail ? 'block' : 'none', md: 'block' }, minWidth: 0 }}>
+              {detail ? (
+                <>
+                  <Button sx={{ m: 1.5, mb: 0 }} size="small" onClick={() => setDetail(null)}>Về danh sách</Button>
+                  <NotificationDetail item={detail} busy={actions.busy} onOpen={() => void actions.open(detail)} />
+                </>
+              ) : (
+                <Typography color="text.secondary" sx={{ px: 3, py: 4 }}>
+                  Chọn “Xem chi tiết” trong menu của thông báo để đọc tại đây.
+                </Typography>
+              )}
+            </Box>
+          </Paper>
           <Stack
             direction="row"
             useFlexGap

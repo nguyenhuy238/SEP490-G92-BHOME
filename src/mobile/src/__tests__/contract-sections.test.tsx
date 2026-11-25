@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 import { earlyTerminationDate } from '../../../../packages/client-core/src/contracts';
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { afterEach, beforeEach, expect, it, vi } from 'vitest';
 import type {
@@ -20,8 +20,12 @@ const state = vi.hoisted(() => ({
   readiness: null as Readiness | null,
   moveOut: null as MoveOut | null,
   back: vi.fn(),
+  go: vi.fn(),
+  registerExitGuard: vi.fn(() => () => {}),
+  disablePrevention: vi.fn(),
   headerBack: undefined as (() => void) | undefined,
   viewedId: '',
+  includeMoveOut: true,
   params: null as Record<string, string | undefined> | null,
 }));
 const id = 'bc050000-0000-4000-8000-000000004003';
@@ -29,6 +33,8 @@ vi.mock('../features/contracts/HoldingProgress', () => ({ HoldingProgress: () =>
 const transport = { request: state.request };
 vi.mock('../theme/theme', () => ({ colors: {}, staffColors: {} }));
 vi.mock('expo-router', () => ({
+  useFocusEffect: (callback: () => (() => void) | undefined) => useEffect(callback, [callback]),
+  usePreventRemove: () => state.disablePrevention,
   useLocalSearchParams: () =>
     state.params ?? (state.deep ? { contractId: id, section: state.section } : {}),
   router: { setParams: vi.fn(), canGoBack: () => true, back: state.back },
@@ -50,14 +56,25 @@ vi.mock('../lib/SessionProvider', () => ({
   }),
 }));
 vi.mock('../features/workspace/WorkspaceProvider', () => ({
-  useWorkspace: () => ({ role: state.role }),
+  useWorkspace: () => ({
+    role: state.role,
+    go: state.go,
+    registerExitGuard: state.registerExitGuard,
+  }),
 }));
 vi.mock('../lib/randomUUID', () => ({ randomUUID: () => '00000000-0000-4000-8000-000000000001' }));
 vi.mock('../lib/useFeedbackState', () => ({ useFeedbackState: () => useState('') }));
 vi.mock('../lib/toast', () => ({ conciseMessage: (s: string) => s, showError: vi.fn() }));
 vi.mock('../../../../packages/client-core/src/useContractDetail', () => ({
-  useContractDetail: (_client: unknown, contractId: string) => {
+  useContractDetail: (
+    _client: unknown,
+    contractId: string,
+    _role: string,
+    _interval: number,
+    includeMoveOut: boolean,
+  ) => {
     state.viewedId = contractId;
+    state.includeMoveOut = includeMoveOut;
     return {
       loading: false,
       error: '',
@@ -268,7 +285,7 @@ it('shows the early termination form directly in the Tenant lifecycle section', 
   expect(screen.queryByRole('button', { name: 'Yêu cầu chấm dứt trước hạn' })).toBeNull();
 
   fireEvent.click(screen.getByRole('button', { name: 'Gửi yêu cầu' }));
-  expect(screen.getByText('Yêu cầu đang chờ Owner duyệt.')).toBeTruthy();
+  expect(screen.getByText('Yêu cầu đang chờ chủ trọ duyệt.')).toBeTruthy();
   expect(screen.queryByRole('button', { name: 'Gửi yêu cầu' })).toBeNull();
 });
 
@@ -293,6 +310,7 @@ it('shows the submitted request and waits for Owner approval before showing Tena
 });
 
 it('removes the duplicate detail back button and registers previous-screen navigation on the topbar', () => {
+  state.contract.status = 'PendingSigning';
   render(<ContractScreen />);
   expect(screen.queryByRole('button', { name: 'Về danh sách hợp đồng' })).toBeNull();
   expect(state.headerBack).toBeTypeOf('function');
@@ -300,18 +318,41 @@ it('removes the duplicate detail back button and registers previous-screen navig
   expect(state.back).toHaveBeenCalledOnce();
 });
 
+it('returns Staff home after confirming a completed Main contract or using its header back button', () => {
+  render(<ContractScreen />);
+  expect(screen.queryByRole('button', { name: 'Quay lại' })).toBeNull();
+  fireEvent.click(screen.getByRole('button', { name: 'Xác nhận · Về Trang chủ' }));
+  expect(state.go).toHaveBeenCalledExactlyOnceWith('staff-home');
+
+  state.go.mockClear();
+  state.headerBack!();
+  expect(state.go).toHaveBeenCalledExactlyOnceWith('staff-home');
+  expect(state.back).not.toHaveBeenCalled();
+});
+
+it('returns Staff home from an existing Main draft without a CCCD exit guard', () => {
+  state.contract = { ...state.contract, status: 'Draft', onboardingDraft: true };
+  render(<ContractScreen />);
+  expect(state.registerExitGuard).not.toHaveBeenCalled();
+  state.headerBack!();
+  expect(state.go).toHaveBeenCalledExactlyOnceWith('staff-home');
+  expect(state.back).not.toHaveBeenCalled();
+});
+
 it('opens a Holding draft with metadata in the Holding flow without Main handover tabs', () => {
   state.contract.kind = 'Holding';
   state.contract.status = 'Draft';
   state.contract.onboardingDraft = true;
   state.contract.signingMode = 'INTERNAL_OTP_DRAWN';
+  state.contract.holdingCustomer = { fullName: 'Synthetic Holding Customer', maskedCitizenNumber: '********0001' };
   render(<ContractScreen />);
   expect(screen.getByText('Bản nháp chờ gửi Owner ký')).toBeTruthy();
-  expect(screen.getByText('Người ở tổng hợp')).toBeTruthy();
+  expect(screen.getByText('Synthetic Holding Customer')).toBeTruthy();
   expect(screen.queryByRole('button', { name: 'Bàn giao' })).toBeNull();
   expect(screen.queryByRole('button', { name: 'Gia hạn & trả phòng' })).toBeNull();
   expect(screen.queryByText('Chữ ký số qua MySign')).toBeNull();
 });
+
 it('opens an Owner draft for review and returns to the list when route IDs clear', async () => {
   state.role = 'Owner';
   state.params = {};
@@ -429,6 +470,33 @@ it('opens the handover section directly for the selected Tenant contract', () =>
   render(<ContractScreen />);
   expect(screen.getByText('Handover draft panel')).toBeTruthy();
   expect(screen.queryByText('Điều khoản đưa đi ký')).toBeNull();
+});
+it('does not load signing methods or move-out on a Staff handover deep link', () => {
+  state.role = 'Staff';
+  state.section = 'handover';
+  render(<ContractScreen />);
+  expect(screen.getByText('Handover draft panel')).toBeTruthy();
+  expect(state.includeMoveOut).toBe(false);
+  expect(state.request.mock.calls.some(([path]) => path.endsWith('/signing-methods'))).toBe(false);
+});
+it('renders only the inspection workspace when Staff opens a handover task and returns to the task list', () => {
+  state.params = { contractId: id, section: 'handover', origin: 'staff-handovers' };
+  render(<ContractScreen />);
+  expect(screen.getByText('Handover draft panel')).toBeTruthy();
+  for (const label of [
+    'Tổng quan',
+    'Ký & kích hoạt',
+    'Bàn giao',
+    'Gia hạn & trả phòng',
+    'Lịch sử',
+  ]) {
+    expect(screen.queryByRole('button', { name: label })).toBeNull();
+  }
+  expect(screen.queryByText('Đang hiệu lực')).toBeNull();
+  expect(state.includeMoveOut).toBe(false);
+  expect(state.headerBack).toBeTypeOf('function');
+  state.headerBack?.();
+  expect(state.go).toHaveBeenCalledWith('staff-handovers', { tab: 'MoveIn' });
 });
 it('ignores an invalid initial contract section', () => {
   state.role = 'Tenant';

@@ -103,7 +103,7 @@ const root = '/api/v1/operational-tasks';
 export const taskStatusLabels = {
   Assigned: 'Cần làm',
   InProgress: 'Đang xử lý',
-  PendingVerification: 'Chờ Owner kiểm tra',
+  PendingVerification: 'Chờ chủ trọ kiểm tra',
   Completed: 'Hoàn thành',
   Cancelled: 'Đã hủy',
 };
@@ -137,6 +137,7 @@ export function availableTaskActions(
   if (task.kind === 'LocationAssetHandover') {
     if (role !== 'Staff' || task.currentResponsibleStaffUserId !== actorId) return [];
     if (task.status === 'Assigned') return ['start'];
+    // Explicit submission is retained only as a compatibility action for ready legacy inventory.
     if (task.status === 'InProgress') return ['progress', 'blockers', 'submit'];
     return [];
   }

@@ -20,7 +20,7 @@ internal sealed partial class CompactNotificationEvents(Compact24DbContext db, C
     {
         db.ChangeTracker.Clear(); await using var tx = await db.Database.BeginTransactionAsync(t);
         await sql.Execute("SELECT pg_advisory_xact_lock(hashtextextended('bhome-notification-publication-v2',0))", t);
-        var count = await Audits(t) + await QueueHoldingConfirmations(t) + await AccountLockouts(t) + await Incidents(t) + await MeterReadings(t) + await Reminders(t) + await Unmatched(t) + await OperationalAlerts(t);
+        var count = await Audits(t) + await QueueHoldingConfirmationsAsync(t) + await AccountLockouts(t) + await Incidents(t) + await MeterReadings(t) + await Reminders(t) + await Unmatched(t) + await OperationalAlerts(t);
         await tx.CommitAsync(t); return count;
     }
     private async Task<List<(Guid Id, string Role)>> Roles(IEnumerable<Guid> ids, CancellationToken t)
@@ -46,7 +46,7 @@ internal sealed partial class CompactNotificationEvents(Compact24DbContext db, C
         await tx.CommitAsync(t); return count;
     }
 
-    private Task<int> QueueHoldingConfirmations(CancellationToken t) => sql.Execute("""
+    internal Task<int> QueueHoldingConfirmationsAsync(CancellationToken t) => sql.Execute("""
         INSERT INTO notifications(id,record_kind,event_key,notification_type,event_data,event_at,delivery_status,next_delivery_at)
         SELECT gen_random_uuid(),'OUTBOX','holding-confirmed:'||replace(c.id::text,'-',''),'CHANNEL_DELIVERY',
           jsonb_build_object('schemaVersion',1,'recordType','ChannelDelivery','notificationId',@empty,'recipient',c.owner_signer_id,
@@ -59,7 +59,25 @@ internal sealed partial class CompactNotificationEvents(Compact24DbContext db, C
         ON CONFLICT(record_kind,event_key) WHERE record_kind IN ('OUTBOX','AUDIT') DO NOTHING
         """, t, ("empty", Guid.Empty), ("now", sql.Now), ("active", (int)ContractStatus.Active), ("converted", (int)ContractStatus.Converted));
 
-    private async Task<int> Audits(CancellationToken t, bool authenticationOnly = false)
+    internal async Task PublishMainActivationsAsync(CancellationToken t)
+    {
+        db.ChangeTracker.Clear();
+        await using var tx = await db.Database.BeginTransactionAsync(t);
+        await sql.Execute("SELECT pg_advisory_xact_lock(hashtextextended('bhome-notification-publication-v2',0))", t);
+        await Audits(t, mainActivationOnly: true);
+        await tx.CommitAsync(t);
+    }
+
+    internal async Task PublishOwnerSigningRequestsAsync(CancellationToken t)
+    {
+        db.ChangeTracker.Clear();
+        await using var tx = await db.Database.BeginTransactionAsync(t);
+        await sql.Execute("SELECT pg_advisory_xact_lock(hashtextextended('bhome-notification-publication-v2',0))", t);
+        await Audits(t, ownerSigningOnly: true);
+        await tx.CommitAsync(t);
+    }
+
+    private async Task<int> Audits(CancellationToken t, bool authenticationOnly = false, bool mainActivationOnly = false, bool ownerSigningOnly = false)
     {
         var source = new List<(Guid Id, string Event, Guid Target, DateTimeOffset At)>();
         await using (var cmd = await sql.Command("""
@@ -69,9 +87,11 @@ internal sealed partial class CompactNotificationEvents(Compact24DbContext db, C
               'ContractMoveOutRequested','ContractSigningInitiated','ContractSigningPrepared','ContractSigningRequested','InternalSigningInvitationApproved','ContractActivated','ContractRenewalPrepared','OperatingPolicyAmendmentCancelled','OperatingPolicyAmendmentApplied',
               'HoldingDraftCreated','HoldingSigningSubmitted','MainSigningSubmitted','HoldingActivated','Automatic:HoldingActivated','Automatic:ContractActivated')
             AND (NOT @authenticationOnly OR n.notification_type IN ('PasswordChange','PasswordReset','AccountActivated','AccountDeactivated','AccountInvitationAccepted','RoleChanged','StaffCreated'))
+            AND (NOT @mainActivationOnly OR n.notification_type IN ('ContractActivated','Automatic:ContractActivated'))
+            AND (NOT @ownerSigningOnly OR n.notification_type IN ('HoldingSigningSubmitted','MainSigningSubmitted'))
             AND NOT EXISTS(SELECT 1 FROM notifications p WHERE p.record_kind='OUTBOX' AND p.event_data->>'recordType'='NotificationPublication'
               AND p.event_data->'state'->>'eventKey'='extended-audit:'||n.id::text) ORDER BY n.event_at,n.id LIMIT 50
-            """, t, ("authenticationOnly", authenticationOnly)))
+            """, t, ("authenticationOnly", authenticationOnly), ("mainActivationOnly", mainActivationOnly), ("ownerSigningOnly", ownerSigningOnly)))
         { await using var reader = await cmd.ExecuteReaderAsync(t); while (await reader.ReadAsync(t)) if (!reader.IsDBNull(2)) source.Add((reader.GetGuid(0), reader.GetString(1), reader.GetGuid(2), reader.GetFieldValue<DateTimeOffset>(3))); }
         var count = 0;
         foreach (var e in source)

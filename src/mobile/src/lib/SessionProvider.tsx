@@ -2,10 +2,15 @@ import React, { createContext, useContext, useEffect, useState } from 'react';
 import Constants from 'expo-constants';
 import { AppState, Platform } from 'react-native';
 import { resolveApiEndpoint } from './apiEndpoint';
+import { MobileApiError } from './api';
 import { clearAbandonedCaptures } from './captureFiles';
 import { createCredentialStore } from './credentialStore';
 import { MobileSessions, type SessionView } from './sessions';
 import { showWarning } from './toast';
+import {
+  setDemoBusinessDate,
+  type DemoClockState,
+} from '../../../../packages/client-core/src/demoClock';
 
 // Exported only so ContextPortal can re-provide it inside react-native-paper portals.
 export const SessionContext = createContext<
@@ -33,6 +38,95 @@ export function SessionProvider({ children }: { children: React.ReactNode }) {
       ),
   );
   const [view, setView] = useState(manager.snapshot);
+  const [demoClock, setDemoClock] = useState<{
+    api: SessionView['api'];
+    state: DemoClockState;
+  } | null>(null);
+  // All builds discover the server-owned capability; an explicit false disables the probe.
+  const demoEnabled =
+    process.env.EXPO_PUBLIC_DEMO_CLOCK_ENABLED === 'true' ||
+    (process.env.NODE_ENV !== 'test' && process.env.EXPO_PUBLIC_DEMO_CLOCK_ENABLED !== 'false');
+  const demoApi = view.api;
+  const demoUser = view.session?.userId;
+  useEffect(() => {
+    if (!demoEnabled || !demoApi || !demoUser) {
+      setDemoBusinessDate(null);
+      return;
+    }
+    const api = demoApi;
+    let active = true;
+    let loading = false;
+    async function sync() {
+      if (!active || loading) return;
+      loading = true;
+      try {
+        const state = await api.request<DemoClockState>('/api/v1/demo-clock');
+        if (!active) return;
+        const changed = setDemoBusinessDate(state);
+        setDemoClock((previous) =>
+          previous?.api === api &&
+          previous.state.version === state.version &&
+          previous.state.businessDate === state.businessDate &&
+          previous.state.simulated === state.simulated
+            ? previous
+            : { api, state },
+        );
+        if (changed)
+          api.queryCache.invalidate([
+            'rooms',
+            'contracts',
+            'invoices',
+            'payments',
+            'debts',
+            'tasks',
+            'meters',
+            'notifications',
+            'incidents',
+          ]);
+      } catch (error) {
+        if (active && error instanceof MobileApiError && error.status === 404) {
+          const state: DemoClockState = {
+            enabled: false,
+            simulated: false,
+            businessDate: '',
+            version: 0,
+          };
+          const changed = setDemoBusinessDate(null);
+          setDemoClock((previous) =>
+            previous?.api === api && !previous.state.enabled ? previous : { api, state },
+          );
+          if (changed)
+            api.queryCache.invalidate([
+              'rooms',
+              'contracts',
+              'invoices',
+              'payments',
+              'debts',
+              'tasks',
+              'meters',
+              'notifications',
+              'incidents',
+            ]);
+        }
+        /* Retry on the next foreground poll; retain the last server-confirmed date on transient errors. */
+      } finally {
+        loading = false;
+      }
+    }
+    void sync();
+    const timer = setInterval(() => {
+      if (AppState.currentState === 'active') void sync();
+    }, 3000);
+    const listener = AppState.addEventListener('change', (state) => {
+      if (state === 'active') void sync();
+    });
+    return () => {
+      active = false;
+      clearInterval(timer);
+      listener.remove();
+      setDemoBusinessDate(null);
+    };
+  }, [demoEnabled, demoApi, demoUser]);
   useEffect(() => {
     clearAbandonedCaptures();
     const unsubscribe = manager.subscribe(setView);
@@ -60,6 +154,7 @@ export function SessionProvider({ children }: { children: React.ReactNode }) {
     <SessionContext.Provider
       value={{
         ...view,
+        ready: view.ready && (!demoEnabled || !view.session || demoClock?.api === view.api),
         login: (base, name, password) => manager.login(base, name, password),
         logout: async () => {
           const { api, session, baseUrl } = manager.snapshot;

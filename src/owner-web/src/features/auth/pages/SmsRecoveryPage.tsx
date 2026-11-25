@@ -14,6 +14,7 @@ import { Visibility, VisibilityOff } from '@mui/icons-material';
 import { Link as RouterLink } from 'react-router';
 import { useAuth } from '../../../../../../packages/client-core/src/auth';
 import { useSmsRecovery } from '../../../../../../packages/client-core/src/useSmsRecovery';
+import { AuthBrand } from '../components/AuthBrand';
 
 export default function SmsRecoveryPage() {
   const { client } = useAuth();
@@ -31,9 +32,7 @@ export default function SmsRecoveryPage() {
     <Box component="main" sx={{ minHeight: '100svh', display: 'grid', placeItems: 'center', p: 3 }}>
       <Paper sx={{ p: 4, width: '100%', maxWidth: 440 }}>
         <Stack component={ValidatedForm} onSubmit={submit} spacing={2}>
-          <Typography variant="overline" color="primary">
-            BHOME
-          </Typography>
+          <AuthBrand compact />
           <Typography variant="h5">
             {flow.step === 'success'
               ? 'Đã đặt lại mật khẩu'

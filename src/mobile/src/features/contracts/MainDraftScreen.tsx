@@ -32,6 +32,7 @@ import {
   type PreviewDocument,
 } from '../../../../../packages/client-core/src/contracts';
 import { useSession } from '../../lib/SessionProvider';
+import { useWorkspaceInlineHeader } from '../../components/WorkspaceHeaderContext';
 import { randomUUID } from '../../lib/randomUUID';
 import { inputDate } from '../../lib/identity';
 import { Box, Heading, Pill, Row } from '../../components/WorkspaceKit';
@@ -91,6 +92,7 @@ export function MainDraftScreen({
   const { api, session } = useSession();
   const owner = !!session?.roles.includes('Owner');
   const staff = !owner && !!session?.roles.includes('Staff');
+  useWorkspaceInlineHeader(staff && visible);
   const client = useMemo(
     () => (api ? mainDraftClient((path, init, type) => api.request(path, init, type)) : null),
     [api],
@@ -462,7 +464,7 @@ export function MainDraftScreen({
       onPrevious();
       return;
     }
-    if (dirty.current)
+    if (dirty.current && !staff)
       Alert.alert('Rời tạo hợp đồng?', 'Các thay đổi chưa lưu sẽ mất.', [
         { text: 'Tiếp tục nhập', style: 'cancel' },
         { text: 'Rời màn hình', onPress: onCancel },

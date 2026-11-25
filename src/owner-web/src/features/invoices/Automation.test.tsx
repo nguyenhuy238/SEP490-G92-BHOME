@@ -32,11 +32,7 @@ function mount(page: React.ReactNode = <LiveAutomationPage />) {
 it('renders the actual live automation route when API mode is enabled', async () => {
   respond(false);
   mount(<AutomationPage />);
-  expect(
-    screen.getByText(
-      'Chọn cơ sở để cấu hình lịch. Kỳ kiểm thử dùng riêng cho các thao tác thủ công.',
-    ),
-  ).toBeInTheDocument();
+  expect(screen.getByText('Chọn cơ sở để xem và sửa lịch.')).toBeInTheDocument();
   await choose();
   expect(await screen.findByText('missing_water_meter')).toBeInTheDocument();
   expect(mocks.request).toHaveBeenCalledWith(
@@ -540,6 +536,101 @@ it('gates both manual meter actions until the configured assignment date is reac
   expect(screen.getByRole('button', { name: 'Giao nhiệm vụ vận hành' })).toBeDisabled();
   expect(mocks.request.mock.calls.filter(([, init]) => init?.method === 'POST')).toEqual([]);
 });
+it('blocks a scheduled reading before the meter installation date and explains the exact dates', async () => {
+  respond();
+  const original = mocks.request.getMockImplementation()!;
+  mocks.request.mockImplementation(async (path: string, init?: RequestInit) => {
+    if (path === '/api/v1/capture/locations/loc/meters')
+      return [
+        {
+          id: 'meter-a',
+          label: 'A101 · D01',
+          parentId: 'room',
+          installedOn: '2026-11-20',
+          isActive: true,
+        },
+      ];
+    if (path.includes('/preview?'))
+      return { ...(await original(path, init)), businessDate: '2026-11-24' };
+    return original(path, init);
+  });
+  mount();
+  await choose();
+  await chooseRoom();
+  await chooseMeter();
+  await waitFor(() =>
+    expect(
+      screen.getAllByText(
+        /Ngày ghi số theo lịch \(2026-11-01\) trước ngày lắp đồng hồ \(2026-11-20\)/,
+      ),
+    ).toHaveLength(2),
+  );
+  expect(screen.getByRole('button', { name: 'Giao nhiệm vụ khởi tạo' })).toBeDisabled();
+  expect(screen.getByRole('button', { name: 'Giao nhiệm vụ vận hành' })).toBeDisabled();
+  expect(mocks.request.mock.calls.filter(([, init]) => init?.method === 'POST')).toEqual([]);
+});
+
+it('explains the already confirmed move-out readings even with the older meter list response', async () => {
+  respond();
+  const original = mocks.request.getMockImplementation()!;
+  mocks.request.mockImplementation(async (path: string, init?: RequestInit) => {
+    if (path === '/api/v1/capture/locations/loc/rooms')
+      return [{ id: 'room', label: 'A101', status: 'Available' }];
+    if (path.startsWith('/api/v1/capture/meter-tasks?'))
+      return [
+        {
+          id: 'initial',
+          meterId: 'meter-a',
+          purpose: 0,
+          status: 2,
+          readingDate: '2026-11-20',
+          confirmedReadingId: 'initial-reading',
+        },
+        {
+          id: 'final',
+          meterId: 'meter-a',
+          purpose: 2,
+          status: 2,
+          readingDate: '2026-11-22',
+          confirmedReadingId: 'final-reading',
+        },
+      ];
+    if (path.includes('/preview?'))
+      return { ...(await original(path, init)), businessDate: '2026-11-24' };
+    return original(path, init);
+  });
+  mount();
+  await choose();
+  await chooseRoom();
+  await chooseMeter();
+  expect(
+    await screen.findByText(/trước chỉ số ban đầu đã xác nhận \(2026-11-20\)/),
+  ).toBeInTheDocument();
+  expect(screen.getByRole('button', { name: 'Giao nhiệm vụ vận hành' })).toBeDisabled();
+  expect(screen.getByRole('link', { name: 'Xem trả phòng' })).toHaveAttribute('href', '/handovers');
+  expect(mocks.request.mock.calls.filter(([, init]) => init?.method === 'POST')).toEqual([]);
+});
+
+it('displays the real capture validation error instead of a pricing error', async () => {
+  respond();
+  const original = mocks.request.getMockImplementation()!;
+  mocks.request.mockImplementation(async (path: string, init?: RequestInit) => {
+    if (path === '/api/v1/billing-automation/manual-meter-tasks' && init?.method === 'POST')
+      throw { status: 400, problem: { code: 'reading_before_installation' } };
+    return original(path, init);
+  });
+  mount();
+  await choose();
+  await chooseRoom();
+  await chooseMeter();
+  const button = screen.getByRole('button', { name: 'Giao nhiệm vụ vận hành' });
+  await waitFor(() => expect(button).toBeEnabled());
+  fireEvent.click(button);
+  expect(
+    await screen.findByText(/Ngày ghi chỉ số theo lịch trước ngày lắp đồng hồ/),
+  ).toBeInTheDocument();
+  expect(screen.queryByText(/Kiểm tra phạm vi, đơn giá và ngày hiệu lực/)).not.toBeInTheDocument();
+});
 it('delegates reading dates to backend schedule for a historical test period', async () => {
   respond(true);
   const original = mocks.request.getMockImplementation()!;
@@ -673,6 +764,48 @@ it('only finalizes the exact selected draft after explicit review and a fresh se
     }),
   );
   expect(mocks.request).toHaveBeenCalledWith('/api/v1/invoices/invoice-1', expect.anything());
+});
+it('recalculates the selected periodic draft with its version instead of creating a duplicate or publishing', async () => {
+  respond();
+  const original = mocks.request.getMockImplementation()!;
+  let draft = {
+    id: 'periodic-draft',
+    type: 'PERIODIC',
+    roomId: 'room',
+    billingPeriod: '2026-11-01',
+    roomNumber: 'A101',
+    status: 'Draft',
+    version: 1,
+    total: '3000000',
+    missingInputs: ['confirmed_reading_Electricity'],
+    dueDate: '2026-11-25',
+  };
+  mocks.request.mockImplementation(async (path: string, init?: RequestInit) => {
+    if (path.startsWith('/api/v1/invoices?') && path.includes('roomId=room'))
+      return {
+        items: [{ ...draft, id: 'unrelated-final', type: 'FINAL', status: 'Final' }, draft],
+        totalCount: 2,
+        pageSize: 20,
+      };
+    if (path === '/api/v1/invoices/periodic-draft/refresh') {
+      draft = { ...draft, version: 2, total: '3100000', missingInputs: [] };
+      return draft;
+    }
+    return original(path, init);
+  });
+  mount();
+  await choose();
+  await chooseRoom();
+  const button = await screen.findByRole('button', { name: 'Tính lại hóa đơn nháp' });
+  expect(screen.getByRole('button', { name: 'Kiểm tra và phát hành' })).toBeDisabled();
+  fireEvent.click(button);
+  await waitFor(() =>
+    expect(screen.getByRole('button', { name: 'Kiểm tra và phát hành' })).toBeEnabled(),
+  );
+  expect(screen.getByText(/Đã tính lại bản nháp\. Kiểm tra số tiền/)).toBeInTheDocument();
+  expect(mocks.request.mock.calls.filter(([, init]) => init?.method === 'POST')).toEqual([
+    ['/api/v1/invoices/periodic-draft/refresh', { method: 'POST', body: '{"expectedVersion":1}' }],
+  ]);
 });
 it('demo offers four local sample actions without contacting backend', async () => {
   mount(<DemoAutomationPage />);

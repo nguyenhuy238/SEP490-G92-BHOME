@@ -79,11 +79,6 @@ export function InternalSigningPanel({
     return (
       <Stack spacing={2}>
         <Typography variant="h6">Xác nhận ký hợp đồng · Sandbox</Typography>
-        <Alert severity="warning">
-          Chỉ dùng cho kiểm thử: Owner xác nhận trên Web, Staff mô phỏng Tenant ký trên Mobile.
-          Người thuê chưa ký OTP; thao tác này không phải chữ ký số hoặc bằng chứng ký thật của
-          Tenant.
-        </Alert>
         {(error || status.error) && (
           <Alert severity="error">{error || signingMessage(status.error)}</Alert>
         )}
@@ -129,9 +124,6 @@ export function InternalSigningPanel({
       {contract.kind === 'Holding' && status.data?.sandboxAvailable && (
         <Stack spacing={1.5} sx={{ p: 2, bgcolor: '#F5F7FB', borderRadius: 2 }}>
           <Typography variant="h6">Giả lập chữ ký Owner · Sandbox</Typography>
-          <Alert severity="warning">
-            Chỉ dùng cho kiểm thử, không phải chữ ký số và không có giá trị pháp lý.
-          </Alert>
           {status.data.ownerAcceptedAt ? (
             <Alert severity="success">
               Owner đã xác nhận: {new Date(status.data.ownerAcceptedAt).toLocaleString('vi-VN')}
@@ -224,12 +216,6 @@ export function InternalSigningPanel({
             Thu hồi lời mời chưa ký
           </Button>
         ))}
-      {status.data?.tenantSimulated && (
-        <Alert severity="warning">
-          Tenant đã xác nhận mô phỏng trên Sandbox. Owner xác nhận bằng tài khoản của mình; đây
-          không phải chữ ký Tenant thật.
-        </Alert>
-      )}
       {(status.data?.tenantAcceptedAt || status.data?.tenantSimulated) &&
         !(status.data.sandboxAvailable && !status.data.tenantAcceptedAt) &&
         !status.data.ownerAcceptedAt && (

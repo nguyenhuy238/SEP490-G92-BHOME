@@ -1,5 +1,7 @@
 import { TextField, ValidatedForm } from '../../../components/common/ValidatedForm';
 import { useState, type ReactNode } from 'react';
+import { useQueryClient } from '@tanstack/react-query';
+import { visuallyHidden } from '@mui/utils';
 import { TaskInspectionReview } from '../../property/EquipmentInspectionsPanel';
 import {
   Alert,
@@ -13,17 +15,20 @@ import {
   DialogContent,
   DialogTitle,
   IconButton,
+  Menu,
+  MenuItem,
   Stack,
   Tab,
   Tabs,
   Typography,
 } from '@mui/material';
 import {
-  Building2,
   CalendarDays,
   ChevronDown,
   ChevronUp,
   MapPinned,
+  MoreHorizontal,
+  RefreshCw,
   UserRound,
   X,
 } from 'lucide-react';
@@ -51,6 +56,11 @@ import { LocationAssetInventoryReport } from './LocationAssetInventoryReport';
 import { LocationAssetHandoverPanel } from './LocationAssetHandoverPanel';
 import { LocationAssetHandoverOverview } from './LocationAssetHandoverOverview';
 import { OperationalTaskOverview } from './OperationalTaskOverview';
+import {
+  operationalDetailPaper,
+  operationalFacts,
+  operationalTabs,
+} from './operationalDetailLayout';
 
 export function TaskStatus({ task }: { task: OwnerTask }) {
   const superseded = task.kind === 'LocationAssetHandover' && task.status === 'Cancelled';
@@ -66,9 +76,12 @@ export function TaskStatus({ task }: { task: OwnerTask }) {
               ? 'success'
               : task.status === 'PendingVerification'
                 ? 'warning'
-                : 'default'
+                : task.status === 'Assigned' || task.status === 'InProgress'
+                  ? 'info'
+                  : 'default'
         }
-        sx={{ height: 28, fontSize: 12 }}
+        variant="outlined"
+        sx={{ height: 24, fontSize: 12 }}
       />
       {task.isOverdue && (
         <Chip
@@ -101,6 +114,8 @@ const historyNames: Record<string, string> = {
   evidence_uploaded: 'Tải bằng chứng',
   location_asset_inventory_created: 'Tạo kiểm kê tài sản toàn cơ sở',
   location_asset_inventory_item_checked: 'Cập nhật xác nhận tài sản',
+  location_asset_inventory_owner_reconciled: 'Tự đồng bộ phạm vi đã xác nhận',
+  location_asset_inventory_evidence_selected: 'Bổ sung bằng chứng kiểm kê',
   location_asset_handover_approved: 'Owner đã duyệt biên bản',
   location_asset_handover_owner_signed: 'Owner đã ký xác nhận',
   location_asset_handover_rework_requested: 'Owner yêu cầu kiểm tra lại',
@@ -121,6 +136,7 @@ const keyHistoryActions = new Set([
   'responsibility_superseded',
   'assignment-replaced',
   'location_asset_inventory_progress_inherited',
+  'location_asset_inventory_owner_reconciled',
   'location_asset_handover_approved',
   'location_asset_handover_owner_signed',
   'location_asset_handover_rework_requested',
@@ -160,10 +176,8 @@ function TaskSection({ title, children }: { title?: string; children: ReactNode 
     <Box
       component="section"
       sx={{
-        p: { xs: 2, sm: 2.5 },
-        border: '1px solid',
-        borderColor: 'divider',
-        borderRadius: 2,
+        pb: 1.5,
+        '&:not(:last-child)': { borderBottom: 1, borderColor: 'divider' },
         minWidth: 0,
         overflowWrap: 'anywhere',
       }}
@@ -190,7 +204,7 @@ function TaskFact({
   highlight?: boolean;
 }) {
   return (
-    <Stack direction="row" spacing={1.25} sx={{ alignItems: 'flex-start', minWidth: 0 }}>
+    <Stack direction="row" spacing={0.75} sx={{ alignItems: 'flex-start', minWidth: 0 }}>
       <Box
         aria-hidden="true"
         sx={{
@@ -198,12 +212,8 @@ function TaskFact({
           alignItems: 'center',
           justifyContent: 'center',
           color: highlight ? 'primary.main' : 'text.secondary',
-          bgcolor: 'background.paper',
-          border: 1,
-          borderColor: 'divider',
-          borderRadius: 1.5,
-          width: 34,
-          height: 34,
+          width: 20,
+          height: 20,
           flexShrink: 0,
         }}
       >
@@ -213,7 +223,7 @@ function TaskFact({
         <Typography
           variant="caption"
           component="div"
-          sx={{ color: 'text.secondary', fontSize: 12, fontWeight: 600, mb: 0.25 }}
+          sx={{ color: 'text.secondary', fontSize: 12, fontWeight: 500, lineHeight: 1.25 }}
         >
           {label}
         </Typography>
@@ -222,10 +232,10 @@ function TaskFact({
           component="div"
           sx={{
             fontSize: { xs: 13, md: 14 },
-            fontWeight: highlight ? 750 : 650,
+            fontWeight: 650,
             color: 'text.primary',
             overflowWrap: 'anywhere',
-            lineHeight: 1.45,
+            lineHeight: 1.3,
           }}
         >
           {children}
@@ -235,21 +245,11 @@ function TaskFact({
   );
 }
 
-type TaskDetailTab = 'overview' | 'inventory' | 'handover' | 'history';
+type TaskDetailTab = 'overview' | 'inventory' | 'handover' | 'evidence' | 'history';
 
 function initialTaskTab(task: OwnerTask): TaskDetailTab {
   if (task.kind !== 'LocationAssetHandover') return 'overview';
   return task.status === 'Completed' || task.status === 'Cancelled' ? 'handover' : 'inventory';
-}
-
-function taskNextStep(task: OwnerTask): string {
-  if (task.status === 'PendingVerification')
-    return 'Staff đã nộp kết quả. Owner kiểm tra tiến độ, bằng chứng tại Tổng quan rồi nghiệm thu hoặc yêu cầu làm lại.';
-  if (task.status === 'Completed')
-    return 'Công việc đã nghiệm thu. Bạn có thể xem lại kết quả, bằng chứng và lịch sử xử lý.';
-  if (task.status === 'Cancelled')
-    return 'Công việc đã hủy. Lịch sử và các bằng chứng trước đó vẫn có thể xem lại.';
-  return 'Theo dõi tiến độ và bằng chứng Staff cập nhật. Các thao tác cần xử lý của Owner nằm ở cuối cửa sổ.';
 }
 
 function TaskTabPanel({
@@ -269,7 +269,7 @@ function TaskTabPanel({
       hidden={activeTab !== tab}
       sx={{ display: activeTab === tab ? 'block' : 'none', minWidth: 0 }}
     >
-      <Stack spacing={2} sx={{ p: { xs: 2, md: 3 }, minWidth: 0 }}>
+      <Stack spacing={1.5} sx={{ p: { xs: 2, md: 2.5 }, minWidth: 0 }}>
         {children}
       </Stack>
     </Box>
@@ -293,8 +293,10 @@ export function TaskDetailDrawer({
   notify: (message: string) => void;
   initialOperation?: string;
 }) {
+  const cache = useQueryClient();
   const [page, setPage] = useState(1);
   const [operation, setOperation] = useState(initialOperation);
+  const [actionAnchor, setActionAnchor] = useState<HTMLElement | null>(null);
   const [reworkItemIds, setReworkItemIds] = useState<string[]>([]);
   const [historyExpanded, setHistoryExpanded] = useState(false);
   const [tabSelection, setTabSelection] = useState<{ id: string; tab: TaskDetailTab } | null>(null);
@@ -320,6 +322,9 @@ export function TaskDetailDrawer({
     !!detail.data,
   );
   const task = detail.data;
+  const showEvidenceTab =
+    task?.kind === 'AdHoc' &&
+    (task.evidenceRequired || !!evidence.data?.length || !!evidence.error);
   const activeTab =
     tabSelection?.id === id ? tabSelection.tab : task ? initialTaskTab(task) : 'overview';
   const showTab = (tab: TaskDetailTab) => setTabSelection({ id, tab });
@@ -360,13 +365,10 @@ export function TaskDetailDrawer({
     .slice(0, 5);
   const visibleEntries = historyExpanded ? entries : keyEntries;
   const refresh = async () => {
-    await Promise.all([
-      detail.refetch(),
-      history.refetch(),
-      summaryHistory.refetch(),
-      evidence.refetch(),
-      actors.refetch(),
-    ]);
+    await cache.invalidateQueries({
+      queryKey: ['owner-workspace'],
+      predicate: ({ queryKey }) => queryKey[3] === id || queryKey[2] === 'operational-work',
+    });
   };
   const renderHistoryEntry = (item: TaskHistory) => (
     <Box
@@ -392,7 +394,9 @@ export function TaskDetailDrawer({
       }}
     >
       <Typography variant="body2" sx={{ fontWeight: 700 }}>
-        {historyNames[item.action] ?? item.action}
+        {task?.kind === 'LocationAssetHandover' && item.action === 'submit'
+          ? 'Hoàn tất kiểm kê'
+          : (historyNames[item.action] ?? item.action)}
       </Typography>
       <Typography variant="caption" component="div" sx={{ color: 'text.secondary', mt: 0.25 }}>
         {formatInstant(item.occurredAt)} · {actorName(item.actorId, item.action)}
@@ -424,49 +428,40 @@ export function TaskDetailDrawer({
       }}
       slotProps={{
         paper: {
-          sx: {
-            width: { xs: 'calc(100% - 16px)', sm: 'calc(100% - 48px)' },
-            maxWidth: 1280,
-            maxHeight: '92dvh',
-            m: { xs: 1, sm: 2 },
-            borderRadius: { xs: 2, sm: 3 },
-            overflow: 'hidden',
-            '& .MuiButton-root': { borderRadius: '8px', minHeight: 36, fontSize: 14 },
-          },
+          sx: operationalDetailPaper,
         },
       }}
     >
-      <DialogTitle id="task-detail-container" sx={{ px: { xs: 2, md: 3 }, pt: 2.25, pb: 2 }}>
+      <DialogTitle id="task-detail-container" sx={{ px: { xs: 2, md: 3 }, pt: 1.5, pb: 1 }}>
         <Stack direction="row" spacing={2} sx={{ alignItems: 'center' }}>
           <Box sx={{ flex: 1, minWidth: 0 }}>
-            <Typography
-              id="task-detail-heading"
-              component="span"
-              sx={{
-                display: 'block',
-                fontSize: 12,
-                fontWeight: 700,
-                color: 'text.secondary',
-                letterSpacing: 0.5,
-              }}
-            >
+            <Typography id="task-detail-heading" component="span" sx={visuallyHidden}>
               Chi tiết công việc
             </Typography>
             <Stack
               direction={{ xs: 'column', sm: 'row' }}
               spacing={1}
               useFlexGap
-              sx={{ alignItems: { sm: 'center' }, flexWrap: 'wrap', mt: 0.5 }}
+              sx={{ alignItems: { sm: 'center' }, flexWrap: 'wrap' }}
             >
               <Typography
                 component="div"
-                sx={{ fontSize: { xs: 20, md: 24 }, fontWeight: 750, overflowWrap: 'anywhere' }}
+                sx={{ fontSize: { xs: 19, md: 22 }, fontWeight: 750, overflowWrap: 'anywhere' }}
               >
                 {task?.title || 'Đang tải công việc…'}
               </Typography>
               {task && <TaskStatus task={task} />}
             </Stack>
           </Box>
+          <IconButton
+            aria-label="Làm mới chi tiết"
+            title="Làm mới chi tiết"
+            onClick={() => void refresh()}
+            disabled={detail.isFetching}
+            size="small"
+          >
+            <RefreshCw size={18} />
+          </IconButton>
           <IconButton aria-label="Đóng chi tiết" onClick={close} sx={{ alignSelf: 'flex-start' }}>
             <X size={20} />
           </IconButton>
@@ -475,29 +470,16 @@ export function TaskDetailDrawer({
       {task && (
         <Box
           sx={{
-            px: { xs: 2, md: 3 },
-            py: { xs: 1.75, md: 2 },
-            borderTop: '1px solid',
-            borderBottom: '1px solid',
-            borderColor: 'divider',
-            bgcolor: 'action.hover',
-            display: 'grid',
-            gridTemplateColumns: {
-              xs: 'minmax(0, 1fr)',
-              sm: 'repeat(2, minmax(0, 1fr))',
-              lg: 'repeat(4, minmax(0, 1fr))',
-            },
-            gap: { xs: 1.5, md: 2.5 },
+            mx: { xs: 2, md: 3 },
+            mb: 1,
+            ...operationalFacts,
           }}
         >
-          <TaskFact label="Cơ sở" icon={<Building2 size={18} />} highlight>
-            {locationName(task.locationId)}
-          </TaskFact>
-          <TaskFact
-            label={task.kind === 'LocationAssetHandover' ? 'Phạm vi kiểm kê' : 'Vị trí'}
-            icon={<MapPinned size={18} />}
-          >
-            {task.target?.label ?? 'Toàn cơ sở'}
+          <TaskFact label="Vị trí" icon={<MapPinned size={18} />} highlight>
+            {locationName(task.locationId)} ·{' '}
+            {task.kind === 'LocationAssetHandover'
+              ? 'Toàn cơ sở'
+              : (task.target?.label ?? 'Toàn cơ sở')}
           </TaskFact>
           <TaskFact label="Người phụ trách" icon={<UserRound size={18} />}>
             {responsibleName(task, staff)}
@@ -536,10 +518,7 @@ export function TaskDetailDrawer({
                 scrollButtons="auto"
                 allowScrollButtonsMobile
                 aria-label="Các phần chi tiết công việc"
-                sx={{
-                  minHeight: 46,
-                  '& .MuiTab-root': { minHeight: 46, textTransform: 'none', fontWeight: 600 },
-                }}
+                sx={operationalTabs}
               >
                 <Tab
                   value="overview"
@@ -553,6 +532,14 @@ export function TaskDetailDrawer({
                     label="Kiểm kê tài sản"
                     id="task-tab-inventory"
                     aria-controls="task-panel-inventory"
+                  />
+                )}
+                {showEvidenceTab && (
+                  <Tab
+                    value="evidence"
+                    label="Bằng chứng"
+                    id="task-tab-evidence"
+                    aria-controls="task-panel-evidence"
                   />
                 )}
                 {task.kind === 'LocationAssetHandover' && (
@@ -598,28 +585,18 @@ export function TaskDetailDrawer({
               ) : task.kind === 'AdHoc' ? (
                 <OperationalTaskOverview
                   task={task}
-                  evidence={evidence.data}
-                  evidenceFetching={evidence.isFetching}
-                  evidenceError={evidence.error}
-                  showEvidenceGallery={!operation}
-                  onRetryEvidence={() => void evidence.refetch()}
-                  onOpenHistory={() => showTab('history')}
-                  onVerify={() => void openTaskAction('verify')}
                   verifiedBy={actorName(task.verifiedByUserId, 'verify')}
                 />
               ) : (
                 <>
-                  <TaskSection title="Theo dõi công việc">
-                    <Typography variant="body2" color="text.secondary">
-                      {taskNextStep(task)}
-                    </Typography>
-                    {!task.responsibilityAvailable && (
-                      <Alert severity="warning" sx={{ mt: 1.5 }}>
+                  {!task.responsibilityAvailable &&
+                    task.status !== 'Completed' &&
+                    task.status !== 'Cancelled' && (
+                      <Alert severity="warning" variant="outlined">
                         Cơ sở chưa có người phụ trách.{' '}
                         <Button href="/staff-assignments">Mở phân công cơ sở</Button>
                       </Alert>
                     )}
-                  </TaskSection>
                   <TaskSection title="Yêu cầu công việc">
                     <Typography
                       variant="body2"
@@ -627,32 +604,6 @@ export function TaskDetailDrawer({
                     >
                       {task.requirements || 'Chưa có yêu cầu chi tiết.'}
                     </Typography>
-                    <Stack
-                      direction="row"
-                      spacing={1}
-                      useFlexGap
-                      sx={{ flexWrap: 'wrap', mt: 1.5 }}
-                    >
-                      <Chip
-                        size="small"
-                        variant="outlined"
-                        label={'Ưu tiên: ' + (task.priority === 'High' ? 'Cao' : 'Bình thường')}
-                      />
-                      <Chip
-                        size="small"
-                        variant="outlined"
-                        label={
-                          'Loại: ' +
-                          (task.kind === 'LocationAssetHandover'
-                            ? 'Kiểm kê và bàn giao toàn cơ sở'
-                            : task.kind === 'MoveInInventory'
-                              ? 'Kiểm kê trước bàn giao'
-                              : task.kind === 'AdHoc'
-                                ? 'Công việc vận hành'
-                                : 'Ghi điện nước')
-                        }
-                      />
-                    </Stack>
                     {task.recordedStaffUserId &&
                       task.recordedStaffUserId !== task.currentResponsibleStaffUserId && (
                         <Typography variant="body2" sx={{ mt: 1.25, color: 'text.secondary' }}>
@@ -699,63 +650,73 @@ export function TaskDetailDrawer({
                 </>
               )}
             </TaskTabPanel>
+            {showEvidenceTab && (
+              <TaskTabPanel tab="evidence" activeTab={activeTab}>
+                {activeTab === 'evidence' && (
+                  <>
+                    {task.evidenceRequired && (
+                      <Typography variant="body2" color="text.secondary">
+                        Bắt buộc bằng chứng hoàn thành.
+                      </Typography>
+                    )}
+                    <OwnerFeedback busy={evidence.isFetching} error={evidence.error} />
+                    {evidence.error ? (
+                      <Button onClick={() => void evidence.refetch()}>Tải lại bằng chứng</Button>
+                    ) : (
+                      evidence.data &&
+                      !operation && <TaskEvidenceGallery taskId={id} evidence={evidence.data} />
+                    )}
+                  </>
+                )}
+              </TaskTabPanel>
+            )}
             {task.kind === 'LocationAssetHandover' && (
               <TaskTabPanel tab="inventory" activeTab={activeTab}>
-                <TaskSection>
-                  <LocationAssetInventoryReport
-                    taskId={task.id}
-                    selectable={task.status === 'PendingVerification'}
-                    selectedIds={reworkItemIds}
-                    onSelectedIdsChange={setReworkItemIds}
-                  />
-                </TaskSection>
-                <Stack
-                  direction={{ xs: 'column', sm: 'row' }}
-                  spacing={1}
-                  sx={{ justifyContent: 'flex-end', alignItems: { sm: 'center' } }}
-                >
-                  {task.status === 'PendingVerification' && reworkItemIds.length > 0 && (
-                    <Typography variant="body2" sx={{ color: 'text.secondary' }}>
-                      Đã chọn {reworkItemIds.length} mục cần kiểm tra lại.
-                    </Typography>
-                  )}
-                  <Button variant="outlined" onClick={() => showTab('handover')}>
-                    Mở biên bản & ký
-                  </Button>
-                </Stack>
+                <LocationAssetInventoryReport
+                  taskId={task.id}
+                  selectable={task.status === 'PendingVerification'}
+                  selectedIds={reworkItemIds}
+                  onSelectedIdsChange={setReworkItemIds}
+                />
+                {task.status === 'PendingVerification' && (
+                  <Stack
+                    direction={{ xs: 'column', sm: 'row' }}
+                    spacing={1}
+                    sx={{ justifyContent: 'flex-end', alignItems: { sm: 'center' } }}
+                  >
+                    <Button variant="outlined" onClick={() => showTab('handover')}>
+                      Mở biên bản & ký
+                    </Button>
+                  </Stack>
+                )}
               </TaskTabPanel>
             )}
             {task.kind === 'LocationAssetHandover' && (
               <TaskTabPanel tab="handover" activeTab={activeTab}>
-                {task.status === 'PendingVerification' && (
+                {task.status === 'PendingVerification' && reworkItemIds.length > 0 && (
                   <Stack
                     direction={{ xs: 'column', sm: 'row' }}
                     spacing={1}
                     sx={{ alignItems: { sm: 'center' }, justifyContent: 'space-between' }}
                   >
-                    <Typography variant="body2" sx={{ color: 'text.secondary' }}>
-                      Đã chọn {reworkItemIds.length} mục cần kiểm tra lại từ danh sách tài sản.
-                    </Typography>
                     <Button size="small" variant="outlined" onClick={() => showTab('inventory')}>
                       Quay lại kiểm kê tài sản
                     </Button>
                   </Stack>
                 )}
-                <TaskSection>
-                  <LocationAssetHandoverPanel
-                    task={task}
-                    notify={notify}
-                    reworkItemIds={reworkItemIds}
-                    onReworked={() => {
-                      setReworkItemIds([]);
-                      void refresh();
-                    }}
-                  />
-                </TaskSection>
+                <LocationAssetHandoverPanel
+                  task={task}
+                  notify={notify}
+                  reworkItemIds={reworkItemIds}
+                  onReworked={() => {
+                    setReworkItemIds([]);
+                    void refresh();
+                  }}
+                />
               </TaskTabPanel>
             )}
             <TaskTabPanel tab="history" activeTab={activeTab}>
-              <TaskSection title="Lịch sử xử lý">
+              <TaskSection>
                 <Stack spacing={1.5}>
                   <OwnerFeedback
                     busy={history.isFetching || summaryHistory.isFetching}
@@ -831,22 +792,54 @@ export function TaskDetailDrawer({
           sx={{
             px: { xs: 2, md: 3 },
             py: 1.5,
-            justifyContent: 'flex-start',
+            justifyContent: 'flex-end',
             gap: 1,
             flexWrap: 'wrap',
           }}
         >
-          {taskActions(task).map((op) => (
-            <Button
-              key={op}
-              disabled={detail.isFetching}
-              color={op === 'cancel' ? 'error' : 'primary'}
-              variant={op === 'verify' ? 'contained' : 'outlined'}
-              onClick={() => void openTaskAction(op)}
-            >
-              {actionNames[op]}
-            </Button>
-          ))}
+          {taskActions(task)
+            .filter((op) => op === 'verify' || op === 'rework')
+            .map((op) => (
+              <Button
+                key={op}
+                disabled={detail.isFetching}
+                variant={op === 'verify' ? 'contained' : 'outlined'}
+                onClick={() => void openTaskAction(op)}
+              >
+                {actionNames[op]}
+              </Button>
+            ))}
+          {taskActions(task).some((op) => op !== 'verify' && op !== 'rework') && (
+            <>
+              <Button
+                startIcon={<MoreHorizontal size={18} />}
+                disabled={detail.isFetching}
+                onClick={(event) => setActionAnchor(event.currentTarget)}
+              >
+                Thao tác khác
+              </Button>
+              <Menu
+                anchorEl={actionAnchor}
+                open={!!actionAnchor}
+                onClose={() => setActionAnchor(null)}
+              >
+                {taskActions(task)
+                  .filter((op) => op !== 'verify' && op !== 'rework')
+                  .map((op) => (
+                    <MenuItem
+                      key={op}
+                      sx={{ color: op === 'cancel' ? 'error.main' : 'text.primary' }}
+                      onClick={() => {
+                        setActionAnchor(null);
+                        void openTaskAction(op);
+                      }}
+                    >
+                      {actionNames[op]}
+                    </MenuItem>
+                  ))}
+              </Menu>
+            </>
+          )}
         </DialogActions>
       )}
       {task && operation && (

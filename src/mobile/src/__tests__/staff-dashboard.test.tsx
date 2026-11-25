@@ -198,17 +198,10 @@ it('shows four quick actions and keeps six work areas available', () => {
   expect(screen.queryByText('Công nợ')).toBeNull();
   expect(screen.queryByText('Gửi thông báo')).toBeNull();
 });
-it('offers both move-in and move-out from the handover action', () => {
+it('opens the dedicated two-tab handover list from the dashboard', () => {
   render(<StaffDashboard />);
   fireEvent.click(screen.getByText('Bàn giao / Trả phòng'));
-  fireEvent.click(within(screen.getByRole('dialog')).getByText('Kiểm kê trước nhận phòng'));
-  expect(state.go).toHaveBeenLastCalledWith('move-in-inventory');
-  fireEvent.click(screen.getByText('Bàn giao / Trả phòng'));
-  fireEvent.click(screen.getByText('Bàn giao nhận phòng'));
-  expect(state.go).toHaveBeenLastCalledWith('move-in');
-  fireEvent.click(screen.getByText('Bàn giao / Trả phòng'));
-  fireEvent.click(within(screen.getByRole('dialog')).getByText('Kiểm tra trả phòng'));
-  expect(state.go).toHaveBeenLastCalledWith('move-out');
+  expect(state.go).toHaveBeenLastCalledWith('staff-handovers');
 });
 it('opens both contract creation flows and the contract list from the dashboard', () => {
   render(<StaffDashboard />);
@@ -235,6 +228,7 @@ it('denies other roles the new Staff screens and preserves the correct active ta
     'staff-invoices',
     'staff-maintenance',
     'staff-emergencies',
+    'staff-handovers',
   ] as const) {
     expect(canOpenScreen('Owner', route)).toBe(false);
     expect(canOpenScreen('Tenant', route)).toBe(false);

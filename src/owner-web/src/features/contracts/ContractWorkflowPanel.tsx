@@ -11,6 +11,8 @@ import {
 } from '../../../../../packages/client-core/src/contracts';
 import { formatInstant } from '../../../../../packages/client-core/src/localization';
 import { ChartCard } from '../../components/common/PortalUI';
+import { ContractDocumentViewer } from './ContractDocumentViewer';
+import { contractPdfName } from '../../../../../packages/client-core/src/contractPdfName';
 
 export function ContractConfigurationPanel({ api }: { api: ContractClient }) {
   const query = useQuery({
@@ -31,15 +33,10 @@ export function ContractConfigurationPanel({ api }: { api: ContractClient }) {
           <Typography>
             {query.data.template.title} · phiên bản {query.data.template.version}
           </Typography>
-          <Alert severity={query.data.template.developmentOnly ? 'warning' : 'info'}>
-            {query.data.template.notice}
-          </Alert>
           <Typography>Trường tài liệu: {query.data.template.fields.join(', ')}</Typography>
           <Typography>
             Chế độ ký:{' '}
-            {query.data.signingMode === 'Simulated'
-              ? 'SIMULATED SIGNING — không có giá trị pháp lý'
-              : 'Nhà cung cấp điện tử'}
+            {query.data.signingMode === 'Simulated' ? 'Ký mô phỏng' : 'Nhà cung cấp điện tử'}
           </Typography>
           {!query.data.template.available && (
             <Alert severity="warning">{text(query.data.template.blocker ?? '')}</Alert>
@@ -202,7 +199,6 @@ export function ContractWorkflowPanel({
             >
               <Typography variant="body2">
                 {f.templateId} · v{f.templateVersion} · {formatInstant(f.recordedAt)}
-                {f.developmentOnly ? ' · DEVELOPMENT' : ''}
               </Typography>
               <Button
                 size="small"
@@ -221,7 +217,7 @@ export function ContractWorkflowPanel({
                     const source = URL.createObjectURL(await api.preview(id, f.id));
                     const a = document.createElement('a');
                     a.href = source;
-                    a.download = `hop-dong-xem-truoc-v${f.templateVersion}.pdf`;
+                    a.download = contractPdfName(contract.kind, `${id}-v${f.templateVersion}`);
                     a.click();
                     setTimeout(() => URL.revokeObjectURL(source), 1000);
                   })
@@ -232,10 +228,10 @@ export function ContractWorkflowPanel({
             </Stack>
           ))}
           {url && (
-            <iframe
+            <ContractDocumentViewer
               title="Bản PDF hợp đồng từ máy chủ"
-              src={url}
-              style={{ width: '100%', height: 600, border: 0 }}
+              url={url}
+              filename={contractPdfName(contract.kind, id)}
             />
           )}
         </Stack>

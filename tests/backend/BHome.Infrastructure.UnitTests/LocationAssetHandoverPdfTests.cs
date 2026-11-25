@@ -21,16 +21,35 @@ public sealed class LocationAssetHandoverPdfTests
         Assert.Equal(report.TaskId.ToString(), pdf.GetDocumentInfo().GetMoreInfo("BHomeInventoryTaskId"));
         Assert.Equal("1", pdf.GetDocumentInfo().GetMoreInfo("BHomeInventoryRevision"));
         Assert.Equal(report.SnapshotHash, pdf.GetDocumentInfo().GetMoreInfo("BHomeInventorySnapshotSHA256"));
+        Assert.Equal("BHome", pdf.GetDocumentInfo().GetCreator());
+        Assert.Contains(Enumerable.Range(1, pdf.GetNumberOfPdfObjects()),
+            index => pdf.GetPdfObject(index) is PdfStream stream &&
+                PdfName.Image.Equals(stream.GetAsName(PdfName.Subtype)));
         var text = Text(pdf);
         Assert.Contains("BIÊN BẢN BÀN GIAO TÀI SẢN", text);
-        Assert.Contains("PHỤ LỤC 01", text);
-        Assert.Contains("Phân công quản lý Cơ sở Hòa Bình cho Trần Văn Kiểm Kê", text);
+        Assert.Contains("CỘNG HÒA XÃ HỘI CHỦ NGHĨA VIỆT NAM", text);
+        Assert.Contains("I. BÊN GIAO", text);
+        Assert.Contains("II. BÊN NHẬN", text);
+        Assert.Contains("III. NỘI DUNG BÀN GIAO", text);
+        Assert.Contains("Tên tài sản", text);
+        Assert.Contains("Đơn vị", text);
+        Assert.Contains("Số lượng", text);
+        Assert.Contains("Tình trạng", text);
+        Assert.Contains("—", text); // Legacy snapshots without a configured unit remain readable.
+        Assert.Contains("bộ", text);
+        Assert.DoesNotContain("Thành tiền", text);
+        Assert.DoesNotContain("Chữ ký nhận", text);
+        Assert.DoesNotContain("Bên làm chứng", text);
+        Assert.Contains("Căn cứ phân công quản lý tại Cơ sở Hòa Bình cho Trần Văn Kiểm Kê", text);
         Assert.Contains("Hiệu lực phân công: 01/11/2026 – 30/11/2026", text);
+        Assert.Contains("Khu vực chung: Lobby", text);
+        Assert.Contains("Phòng P101", text);
+        Assert.DoesNotContain("Phòng / khu vực: Phòng P101", text);
         Assert.Contains("Nguyễn Văn Quản Lý", text);
         Assert.Contains("Theo hồ sơ Tenant", text);
         Assert.Contains("Staff kiểm kê trực tiếp", text);
         Assert.Contains("KHÔNG phải chữ ký số", text);
-        Assert.Contains("Chờ xác nhận", text);
+        Assert.Contains("Chờ ký xác nhận", text);
         Assert.Contains("Trang 1", text);
         Assert.DoesNotContain(report.TaskId.ToString("D"), PdfTextExtractor.GetTextFromPage(pdf.GetPage(1)));
         Assert.DoesNotContain(report.AssignmentId.ToString("D"), PdfTextExtractor.GetTextFromPage(pdf.GetPage(1)));
@@ -41,9 +60,9 @@ public sealed class LocationAssetHandoverPdfTests
     {
         var report = MakeReport();
         var owner = new LocationAssetHandoverAcceptance(report.OwnerId,
-            DateTimeOffset.Parse("2026-11-19T09:00:00+07:00"), "AuthenticatedSessionAcceptance", report.SnapshotHash);
+            DateTimeOffset.Parse("2026-11-19T09:00:00+07:00"), "AuthenticatedSessionHandwritten", report.SnapshotHash);
         var staff = new LocationAssetHandoverAcceptance(report.StaffId,
-            DateTimeOffset.Parse("2026-11-19T09:05:00+07:00"), "AuthenticatedSessionAcceptance", report.SnapshotHash);
+            DateTimeOffset.Parse("2026-11-19T09:05:00+07:00"), "AuthenticatedSessionHandwritten", report.SnapshotHash);
         var ink = new SignaturePictureGenerator().Render(new HandoverInkInput(320, 160,
             [[[15d, 25d], [45d, 60d], [72d, 40d], [94d, 76d], [125d, 48d]]]));
         var signed = report with
@@ -67,10 +86,15 @@ public sealed class LocationAssetHandoverPdfTests
             "Both handwritten signatures must appear as images in the PDF.");
         var pages = Enumerable.Range(1, pdf.GetNumberOfPages())
             .Select(page => PdfTextExtractor.GetTextFromPage(pdf.GetPage(page))).ToArray();
-        Assert.Contains(pages, page => page.Contains("BÊN GIAO") && page.Contains("BÊN NHẬN"));
-        Assert.True(Array.FindIndex(pages, page => page.Contains("BÊN GIAO")) <
-            Array.FindIndex(pages, page => page.Contains("PHỤ LỤC 01")),
-            "Balanced Owner/Staff signatures belong to the core minutes, before the appendix.");
+        Assert.Contains(pages, page => page.Contains("BÊN GIAO · OWNER") && page.Contains("BÊN NHẬN · STAFF"));
+        var tablePage = Array.FindIndex(pages, page => page.Contains("Tên tài sản"));
+        var signaturePage = Array.FindIndex(pages, page => page.Contains("BÊN GIAO · OWNER"));
+        Assert.True(tablePage >= 0 && signaturePage >= tablePage,
+            "The two-party signatures must follow the asset table in the minutes.");
+        if (signaturePage == tablePage)
+            Assert.True(pages[signaturePage].IndexOf("Tên tài sản", StringComparison.Ordinal) <
+                pages[signaturePage].IndexOf("BÊN GIAO · OWNER", StringComparison.Ordinal),
+                "When on the same page, the asset table must appear before the signatures.");
         Assert.Equal(report.SnapshotHash, pdf.GetDocumentInfo().GetMoreInfo("BHomeInventorySnapshotSHA256"));
     }
 
@@ -111,7 +135,7 @@ public sealed class LocationAssetHandoverPdfTests
 
         using var pdf = new PdfDocument(new PdfReader(new MemoryStream(bytes)));
         var text = Text(pdf);
-        Assert.Contains("Ghi chú cần đối chiếu", text);
+        Assert.Contains("Cần đối chiếu ghi chú với hiện trạng", text);
         Assert.Contains("Đủ và nguyên vẹn", text);
         Assert.Contains("Thiếu 1 giường so với danh mục ban đầu", text);
         Assert.Contains("Phòng P101", text);
@@ -125,7 +149,7 @@ public sealed class LocationAssetHandoverPdfTests
 
         using var pdf = new PdfDocument(new PdfReader(new MemoryStream(bytes)));
         var text = Text(pdf);
-        Assert.Contains("Tổng số lượng: 0", text);
+        Assert.Contains("Số lượng theo đơn vị: 0", text);
         Assert.Contains("Không có tài sản trong phạm vi bàn giao (0 mục, số lượng 0)", text);
         Assert.Contains("BÊN GIAO", text);
         Assert.Contains("BÊN NHẬN", text);
@@ -146,7 +170,8 @@ public sealed class LocationAssetHandoverPdfTests
             DateTimeOffset.Parse("2026-11-19T08:55:00+07:00"), hash, null,
             [
                 new(Guid.NewGuid(), "Phòng P101", "Giường đơn", 2, true, source, null, "Tenant giữ"),
-                new(Guid.NewGuid(), "Khu vực chung", "Bàn ghế", 3, false, null, null, "Đủ số lượng")
+                new LocationAssetReportItem(Guid.NewGuid(), "Lobby", "Bàn ghế", 3,
+                    false, null, null, "Đủ số lượng") { Unit = "bộ", IsCommonArea = true }
             ], OwnerDisplayName: "Nguyễn Văn Quản Lý",
             StaffDisplayName: "Trần Văn Kiểm Kê",
             AssignmentStart: new DateOnly(2026, 11, 1),

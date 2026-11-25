@@ -9,6 +9,8 @@ import * as Sharing from 'expo-sharing';
 import { ui } from '../../components/WorkspaceKit';
 import { randomUUID } from '../../lib/randomUUID';
 import { acquirePrivatePhotoThumbnail } from '../../lib/privatePhotoThumbnails';
+import { contractPdfName } from '../../../../../packages/client-core/src/contractPdfName';
+import { deliverWebDocument, openPdfWindow } from './webContractDocument';
 import {
   contractError,
   type ContractClient,
@@ -29,6 +31,7 @@ export function ContractEvidence({
   handover = false,
   readingId,
   pdf = false,
+  contractKind,
   number,
   label,
   handoverDocumentId,
@@ -47,6 +50,7 @@ export function ContractEvidence({
   handover?: boolean;
   readingId?: string;
   pdf?: boolean;
+  contractKind?: string;
   number?: number;
   label?: string;
   handoverDocumentId?: string;
@@ -183,16 +187,18 @@ export function ContractEvidence({
       if (!controller.signal.aborted) setBusy(false);
     }
   }
-  async function download() {
+  async function download(view = false) {
     if (lock.current) return;
     lock.current = true;
     setBusy(true);
     setError('');
     let temporary: File | null = null;
+    let tab: Window | null = null;
     const controller = new AbortController();
     abort.current = controller;
     try {
       if (Platform.OS === 'web') {
+        if (view && pdf) tab = openPdfWindow();
         const blob = draftHandoverEvidence
           ? await api.transport<Blob>(
               `/api/v1/contracts/${encodeURIComponent(contractId)}/handover/draft/evidence/${encodeURIComponent(evidenceId!)}`,
@@ -225,7 +231,23 @@ export function ContractEvidence({
                       : pdf
                         ? await api.document(contractId, controller.signal)
                         : await api.evidence(contractId, evidenceId!, controller.signal);
-        if (controller.signal.aborted) return;
+        if (controller.signal.aborted) {
+          tab?.close();
+          return;
+        }
+        if (pdf && !draftHandoverPdf && !handoverDocumentId) {
+          const bytes = new Uint8Array(await blob.arrayBuffer());
+          try {
+            if (controller.signal.aborted) {
+              tab?.close();
+              return;
+            }
+            deliverWebDocument(bytes, true, contractPdfName(contractKind, contractId), tab);
+          } finally {
+            bytes.fill(0);
+          }
+          return;
+        }
         const url = URL.createObjectURL(blob),
           link = document.createElement('a');
         link.href = url;
@@ -233,7 +255,7 @@ export function ContractEvidence({
           draftHandoverPdf || handoverDocumentId
             ? 'bien-ban-ban-giao.pdf'
             : pdf
-              ? 'hop-dong.pdf'
+              ? contractPdfName(contractKind, contractId)
               : 'hien-trang.jpg';
         link.click();
         setTimeout(() => URL.revokeObjectURL(url), 1000);
@@ -280,7 +302,9 @@ export function ContractEvidence({
         // Unpredictable app-cache name; never a public URL or a file from the photo library.
         temporary = new File(
           directory,
-          `${randomUUID()}.${pdf || handoverDocumentId || draftHandoverPdf ? 'pdf' : bytes[0] === 137 ? 'png' : 'jpg'}`,
+          pdf && !handoverDocumentId && !draftHandoverPdf
+            ? contractPdfName(contractKind, `${contractId.slice(0, 8)}-${randomUUID().slice(0, 8)}`)
+            : `${randomUUID()}.${pdf || handoverDocumentId || draftHandoverPdf ? 'pdf' : bytes[0] === 137 ? 'png' : 'jpg'}`,
         );
         temporary.create();
         temporary.write(bytes);
@@ -300,6 +324,7 @@ export function ContractEvidence({
         });
       }
     } catch (e) {
+      tab?.close();
       if (!controller.signal.aborted)
         setError(finalMeterReading ? finalReadingAccessError(e) : contractError(e));
     } finally {
@@ -357,6 +382,15 @@ export function ContractEvidence({
               )}
               <Button disabled={busy} onPress={() => void download()}>
                 Tải ảnh
+              </Button>
+            </>
+          ) : pdf && Platform.OS === 'web' && !draftHandoverPdf && !handoverDocumentId ? (
+            <>
+              <Button disabled={busy} loading={busy} onPress={() => void download(true)}>
+                {label ?? 'Xem PDF hợp đồng'}
+              </Button>
+              <Button disabled={busy} onPress={() => void download()}>
+                Tải PDF
               </Button>
             </>
           ) : (

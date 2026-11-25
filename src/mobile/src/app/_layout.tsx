@@ -55,7 +55,7 @@ function WorkspaceNavigation() {
   // Drop navigation history and mounted tab state at every principal/role change.
   const identity = `${session?.userId ?? (preview ? 'preview' : 'anonymous')}:${role}`;
   return (
-    <Stack key={identity} screenOptions={{ headerTitle: 'BHOME', headerBackTitle: 'Quay lại' }}>
+    <Stack key={identity} screenOptions={{ headerTitle: 'BHome', headerBackTitle: 'Quay lại' }}>
       <Stack.Screen name="index" options={{ headerShown: false }} />
       <Stack.Screen name="accept-invitation" options={{ title: 'Thiết lập tài khoản' }} />
       <Stack.Screen name="forgot-password" options={{ title: 'Quên mật khẩu' }} />

@@ -326,7 +326,7 @@ it.each([true, false])(
 it('resumes at activation after verified deposit without activating the contract for Staff', async () => {
   show(contract({ status: 'PendingActivation', isDevelopmentDemo: false }), 'Staff', 'staff');
   await screen.findByText('Bước 8/8');
-  expect(screen.getByText('Đã xác minh tiền cọc · Đang tự động kích hoạt')).toBeTruthy();
+  expect(screen.getByText('Đang hoàn tất giữ chỗ')).toBeTruthy();
   expect(screen.queryByRole('button', { name: 'Hoàn tất' })).toBeNull();
   expect(request.mock.calls.some(([path]) => path.endsWith('/holding-activation'))).toBe(false);
 });

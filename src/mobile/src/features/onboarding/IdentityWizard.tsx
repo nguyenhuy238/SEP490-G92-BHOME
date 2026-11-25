@@ -51,6 +51,7 @@ interface Props {
   onSaveError?: (message: string) => void;
   onVerifiedSummary?: (summary: { fullName: string; dateOfBirth: string | null }) => void;
   onStatusChange?: (status: IdentityStatus) => void;
+  onUnsavedChanges?: (hasChanges: boolean) => void;
   onCaptureProgress?: (progress: CaptureProgress) => void;
   onCancel: () => void;
 }
@@ -76,6 +77,7 @@ export function IdentityWizard({
   onSaveError,
   onVerifiedSummary,
   onStatusChange,
+  onUnsavedChanges,
   onCaptureProgress,
 }: Props) {
   const { resetScroll } = useWorkspace();
@@ -94,6 +96,7 @@ export function IdentityWizard({
     progressCallback.current = onCaptureProgress;
   }, [onCaptureProgress]);
   const reportProgress = (face: IdentitySide, status: CaptureProgress[IdentitySide]) => {
+    if (captureProgress.current[face] === 'recognized' && status === 'captured') return;
     captureProgress.current = { ...captureProgress.current, [face]: status };
     progressCallback.current?.(captureProgress.current);
   };
@@ -114,10 +117,20 @@ export function IdentityWizard({
   const fieldErrors = identityFieldErrors(fields);
   const confirmed = useRef(false);
   const statusCallback = useRef(onStatusChange);
+  const unsavedChangesCallback = useRef(onUnsavedChanges);
   const dismissCallback = useRef(onDismiss);
   useEffect(() => {
     statusCallback.current = onStatusChange;
   }, [onStatusChange]);
+  useEffect(() => {
+    unsavedChangesCallback.current = onUnsavedChanges;
+  }, [onUnsavedChanges]);
+  const hasUnsavedChanges =
+    step !== 'done' &&
+    (Object.values(fields).some((value) => value.trim()) || !!placeOfIssue.trim());
+  useEffect(() => {
+    unsavedChangesCallback.current?.(hasUnsavedChanges);
+  }, [hasUnsavedChanges]);
   useEffect(() => {
     dismissCallback.current = onDismiss;
   }, [onDismiss]);
@@ -172,10 +185,11 @@ export function IdentityWizard({
     };
   }, [modal, setNotice]);
   const acceptProposal = (proposal: Proposal, face: IdentitySide = side) => {
-    // Replace only this side's earlier OCR suggestions. Never overwrite Staff edits or the other side.
+    // A rescan replaces only suggestions it actually reads from the same side.
     const before = { ...current.current };
     for (const [key] of identityFields) {
-      if (fieldOrigin.current[key] === face) before[key] = '';
+      if (fieldOrigin.current[key] === face && proposal.proposedFields[key]?.trim())
+        before[key] = '';
     }
     const merged = mergeIdentity(before, proposal);
     for (const [key] of identityFields) {
