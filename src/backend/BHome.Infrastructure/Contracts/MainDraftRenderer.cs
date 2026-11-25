@@ -12,7 +12,8 @@ internal sealed class MainDraftRenderer(IConfiguration configuration, TimeProvid
     IHoldingTestScope? testScope = null) : IMainDraftRenderer
 {
     public bool SigningReviewAvailable => environment is not null && (environment.IsDevelopment() || environment.IsEnvironment("Testing"));
-    public bool CanUseSigningReview(BHome.Domain.TenantContracts.Contract contract) => SigningReviewAvailable || contract.IsDevelopmentDemo || IsProductionSigningTemplate(contract) ||
+    public bool CanUseSigningReview(BHome.Domain.TenantContracts.Contract contract) => SigningReviewAvailable ||
+        contract.IsDevelopmentDemo && (environment?.IsProduction() != true || ContractPaymentModes.IsTest(contract)) || IsProductionSigningTemplate(contract) ||
         environment?.IsStaging() == true && configuration.GetValue<bool>("MainDraft:AllowStagingSigningReview") &&
         ContractPaymentModes.IsTest(contract) && testScope?.Allows(contract.Room.LocationId) == true;
 
