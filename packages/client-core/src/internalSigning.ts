@@ -8,6 +8,7 @@ export type InternalSigningStatus = {
   ownerAcceptedAt: string | null;
   invitations: { id: string; status: string; expiresAt: string }[];
   maskedEmail?: string | null;
+  usesHoldingEmail?: boolean;
   tenantSimulated?: boolean;
   canContinue?: boolean;
   sandboxAvailable?: boolean;
@@ -128,6 +129,8 @@ const invitationPreDeliveryErrors: Readonly<Record<string, string>> = {
     'Chưa cấu hình dịch vụ gửi email ký hợp đồng. Vui lòng liên hệ quản trị viên.',
   contract_template_not_configured: 'Máy chủ chưa có mẫu PDF hợp đồng để gửi lời mời ký.',
   contract_template_not_approved: 'Mẫu PDF hợp đồng chưa được phê duyệt cho môi trường này.',
+  main_draft_signing_template_not_approved:
+    'Mẫu PDF hợp đồng thuê chưa được phê duyệt để gửi ký trên môi trường này.',
   contract_template_not_found: 'Máy chủ không tìm thấy mẫu hợp đồng để tạo PDF.',
   contract_pdf_converter_unavailable: 'Máy chủ chưa cấu hình bộ chuyển hợp đồng sang PDF.',
   contract_pdf_conversion_failed: 'Máy chủ không chuyển được mẫu hợp đồng sang PDF.',

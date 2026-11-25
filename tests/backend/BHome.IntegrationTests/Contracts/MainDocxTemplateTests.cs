@@ -20,7 +20,7 @@ public sealed class MainDocxTemplateTests
         {
             ["MainDraft:LibreOfficeContainerImage"] = "bhome/contract-converter:local"
         }).Build();
-        var renderer = new MainDraftRenderer(configuration, TimeProvider.System);
+        var renderer = new MainDraftRenderer(configuration, TimeProvider.System, new TestEnvironment());
         Assert.True(renderer.SigningReviewAvailable);
         var c = new Contract
         {
@@ -79,5 +79,13 @@ public sealed class MainDocxTemplateTests
                 await File.WriteAllBytesAsync(Path.Combine(qa, $"main-template-page-{page}.png"), pages.RenderPage(bytes, page, 1100));
             await File.WriteAllBytesAsync(Path.Combine(qa, "main-template-signatures.png"), pages.RenderPage(accepted.Pdf, owner.Page, 1100));
         }
+    }
+
+    private sealed class TestEnvironment : Microsoft.Extensions.Hosting.IHostEnvironment
+    {
+        public string EnvironmentName { get; set; } = "Testing";
+        public string ApplicationName { get; set; } = "BHome.IntegrationTests";
+        public string ContentRootPath { get; set; } = "";
+        public Microsoft.Extensions.FileProviders.IFileProvider ContentRootFileProvider { get; set; } = new Microsoft.Extensions.FileProviders.NullFileProvider();
     }
 }

@@ -23,7 +23,12 @@ export const contractStates = [
   'Converted',
   'Applied',
 ] as const;
+export interface HoldingCustomerView {
+  fullName: string;
+  maskedCitizenNumber: string;
+}
 export interface ContractSummary {
+  holdingCustomer?: HoldingCustomerView | null;
   onboardingDraft?: boolean;
   id: string;
   roomId: string;
@@ -56,6 +61,7 @@ export interface Signature {
   certificateIssuer?: string | null;
 }
 export interface ContractView {
+  holdingCustomer?: HoldingCustomerView | null;
   onboardingDraft?: boolean;
   id: string;
   roomId: string;

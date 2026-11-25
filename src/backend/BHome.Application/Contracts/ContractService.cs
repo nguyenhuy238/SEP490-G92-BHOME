@@ -164,7 +164,9 @@ public sealed partial class ContractService(IContractRepository repository, ICur
     public async Task<ContractView> GetAsync(Guid id, CancellationToken t)
     {
         var c = await Load(id, [Roles.Owner, Roles.Staff, Roles.Tenant], t);
-        return View(c) with { Occupants = await repository.OccupantsAsync(c.Id, t) };
+        var customer = c.Kind == ContractKind.Holding && (user.IsInRole(Roles.Owner) || user.IsInRole(Roles.Staff))
+            ? await repository.HoldingCustomerAsync(c.Id, c.RepresentativeResidentId, t) : null;
+        return View(c) with { Occupants = await repository.OccupantsAsync(c.Id, t), HoldingCustomer = customer };
     }
 
     public Task<ContractPage> ListAsync(int page, int pageSize, Guid? locationId, string? status, CancellationToken t)

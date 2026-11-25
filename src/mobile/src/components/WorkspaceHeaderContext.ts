@@ -16,6 +16,14 @@ export interface WorkspaceHeaderAction {
 export const WorkspaceHeaderContext = createContext<
   ((action: WorkspaceHeaderAction) => () => void) | null
 >(null);
+export const WorkspaceInlineHeaderContext = createContext<(() => () => void) | null>(null);
+
+export function useWorkspaceInlineHeader(visible: boolean) {
+  const register = useContext(WorkspaceInlineHeaderContext);
+  useEffect(() => {
+    if (visible) return register?.();
+  }, [register, visible]);
+}
 
 export function useWorkspaceHeaderRefresh(
   onRefresh: () => void,

@@ -263,12 +263,10 @@ export function ContractDraftForm({
               key={selectedLocationId}
               value={values.roomId ?? ''}
               rooms={roomOptions}
-              disabled={
-                busy ||
-                query.catalogLoading ||
-                !selectedLocationId ||
-                !!values.representativeResidentId
-              }
+              loading={query.catalogLoading}
+              error={query.catalogError}
+              onRetry={query.reload}
+              disabled={busy || !selectedLocationId || !!values.representativeResidentId}
               onChange={(roomId) => {
                 setValues((before) => ({
                   ...before,

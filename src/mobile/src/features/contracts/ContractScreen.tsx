@@ -189,6 +189,7 @@ export function ContractScreen({ prepare = false }: { prepare?: boolean }) {
         api={client}
         initialRoomId={params.roomId}
         onCancel={() => {
+          if (role === 'Staff') return go('staff-home');
           setCreateHolding(false);
           setCreate(false);
           router.setParams({ kind: '' });
@@ -242,6 +243,7 @@ export function ContractScreen({ prepare = false }: { prepare?: boolean }) {
         {...references}
         onReleased={released}
         onCancel={() => {
+          if (role === 'Staff') return go('staff-home');
           setCreate(false);
           setMainDraftId('');
           router.setParams({
@@ -276,6 +278,7 @@ export function ContractScreen({ prepare = false }: { prepare?: boolean }) {
         onReleased={released}
         api={client}
         onCancel={() => {
+          if (role === 'Staff') return go('staff-home');
           setCreate(false);
           if (role === 'Owner') {
             setMainDraftId('');
@@ -321,6 +324,7 @@ export function ContractScreen({ prepare = false }: { prepare?: boolean }) {
         }}
         onBack={backFromContract}
         onList={returnToList}
+        onComplete={role === 'Staff' ? () => go('staff-home') : undefined}
       />
     );
   if (role === 'Staff')
@@ -413,6 +417,7 @@ function LiveContractDetail({
   onList,
   onBack,
   handoverOnly = false,
+  onComplete,
   initialSection = 'overview',
 }: {
   api: ReturnType<typeof contractClient>;
@@ -423,14 +428,22 @@ function LiveContractDetail({
   onList: () => void;
   onBack: () => void;
   handoverOnly?: boolean;
+  onComplete?: () => void;
   initialSection?: ContractSection;
 }) {
   const [section, setSection] = useState<ContractSection>(initialSection);
   // Move-in inspection does not depend on a move-out request. A contract
   // without one correctly returns 404, so do not fetch it for this section.
   const detail = useContractDetail(api, id, role, 5000, section !== 'handover');
+  const currentContract = detail.data?.contract;
+  const staffDraft =
+    role === 'Staff' && !!currentContract && isMainOnboardingDraft(currentContract);
+  const completedFlow =
+    currentContract?.status === 'Active' &&
+    ['Main', 'Holding'].includes(currentContract.kind) &&
+    ['overview', 'signing'].includes(section);
   useWorkspaceHeaderRefresh(detail.reload, detail.loading, {
-    onBack,
+    onBack: (staffDraft || completedFlow) && onComplete ? onComplete : onBack,
     title: handoverOnly
       ? 'Bàn giao phòng'
       : detail.data?.contract.kind === 'Holding'
@@ -518,6 +531,7 @@ function LiveContractDetail({
         representativeResidentId={c.representativeResidentId}
         residentIds={c.residentIds}
         onCancel={() => {
+          if (staffDraft && onComplete) return onComplete();
           router.setParams({ contractId: '', mainDraftId: '' });
           onNext('');
         }}
@@ -654,6 +668,7 @@ function LiveContractDetail({
           actorId={actorId}
           onChanged={detail.reload}
           onList={onList}
+          onComplete={onComplete}
         />
       )}
       {ownerMain && (
@@ -675,6 +690,7 @@ function LiveContractDetail({
           actorId={actorId}
           onChanged={detail.reload}
           onList={onList}
+          onComplete={onComplete}
         />
       )}
       {section === 'overview' && !rental && !holding && !ownerMain && c.kind !== 'Holding' && (

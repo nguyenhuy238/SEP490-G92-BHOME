@@ -85,7 +85,7 @@ export default function AcceptInvitationScreen() {
       setLink({ userName: '', token: '' });
       setPassword('');
       setRepeat('');
-      router.replace('/');
+      setInvitation({ status: 'Activated' });
     } catch {
       try {
         const result = await api.validateAccountInvitation(link.token);
@@ -105,6 +105,8 @@ export default function AcceptInvitationScreen() {
       <Text variant="headlineSmall">Thiết lập tài khoản BHOME</Text>
       {invitation.status === 'Loading' ? (
         <Text>Đang kiểm tra lời mời…</Text>
+      ) : invitation.status === 'Activated' ? (
+        <Text accessibilityRole="alert">Kích hoạt tài khoản thành công.</Text>
       ) : valid ? (
         <>
           <Text>Tạo mật khẩu để kích hoạt tài khoản của bạn.</Text>
@@ -156,9 +158,11 @@ export default function AcceptInvitationScreen() {
         </>
       )}
       {!!error && <HelperText type="error">{error}</HelperText>}
-      <Button disabled={busy} onPress={() => router.replace('/')}>
-        Quay lại đăng nhập
-      </Button>
+      {invitation.status !== 'Activated' && (
+        <Button disabled={busy} onPress={() => router.replace('/')}>
+          Quay lại đăng nhập
+        </Button>
+      )}
     </ScrollView>
   );
 }

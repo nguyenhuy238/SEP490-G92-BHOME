@@ -141,6 +141,8 @@ export function staffContractPage(
             contract.roomNumber,
             contract.id,
             contract.locationName,
+            contract.holdingCustomer?.fullName,
+            contract.holdingCustomer?.maskedCitizenNumber,
             contract.kind,
             staffContractKindLabel(contract.kind),
           ].join(' '),

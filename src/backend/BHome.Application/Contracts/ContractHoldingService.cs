@@ -87,14 +87,12 @@ public sealed partial class ContractService
             var rent = prices.Charges.SingleOrDefault(x => x.ChargeCode == "RENT")
                 ?? throw ContractException.Conflict("rent_policy_required");
             Money(rent.Rate, false);
-            if (input.SettingsVersion is { } version)
-            {
-                var configured = await HoldingPreparationAsync(input.RoomId, token);
-                if (configured.SettingsVersion != version || configured.HoldingDeposit != input.HoldingDeposit ||
-                    configured.StartDate != input.StartDate || configured.EndDate != input.EndDate ||
-                    configured.ExpiresAt != input.ExpiresAt || configured.Terms != input.Terms.Trim())
-                    throw ContractException.Conflict("holding_configuration_changed_reload");
-            }
+            var configured = await HoldingPreparationAsync(input.RoomId, token);
+            if (input.SettingsVersion != configured.SettingsVersion ||
+                configured.MonthlyRent != decimal.Truncate(rent.Rate) || configured.HoldingDeposit != input.HoldingDeposit ||
+                configured.StartDate != input.StartDate || configured.EndDate != input.EndDate ||
+                configured.ExpiresAt != input.ExpiresAt || configured.Terms != input.Terms.Trim())
+                throw ContractException.Conflict("holding_configuration_changed_reload");
             var c = new Contract
             {
                 RoomId = input.RoomId,
@@ -103,15 +101,15 @@ public sealed partial class ContractService
                 SigningMode = input.TenantUserId is null ? ContractSigningModes.Internal : "",
                 RepresentativeResidentId = input.RepresentativeResidentId,
                 Kind = ContractKind.Holding,
-                StartDate = input.StartDate,
-                EndDate = input.EndDate,
-                HoldingExpiryAt = input.ExpiresAt,
+                StartDate = configured.StartDate,
+                EndDate = configured.EndDate,
+                HoldingExpiryAt = configured.ExpiresAt,
                 ReservedCapacity = input.ReservedCapacity ?? checked((short)input.ResidentIds.Length),
                 // Policy rates have decimal scale, while contract VND columns use numeric(18,0).
                 // Seal the representation that survives persistence so signing can verify it.
-                MonthlyRent = decimal.Truncate(rent.Rate),
-                RequiredDeposit = decimal.Truncate(rent.Rate),
-                Terms = input.Terms.Trim(),
+                MonthlyRent = configured.MonthlyRent,
+                RequiredDeposit = configured.HoldingDeposit,
+                Terms = configured.Terms,
                 IsDevelopmentDemo = DemoEnabled,
                 PaymentMode = ConfiguredPaymentMode(room.LocationId, input.OwnerSignerId)
             };
@@ -123,7 +121,7 @@ public sealed partial class ContractService
                 ResidenceFrom = c.StartDate
             }).ToList();
             await ContractChargeSnapshot.RejectUtilityProfileAsync(repository, c, token);
-            ContractChargeSnapshot.Store(c, ContractChargeSnapshot.FromPolicies(c, prices.Charges), "HoldingDraft", now, holdingSettingsVersion: input.SettingsVersion);
+            ContractChargeSnapshot.Store(c, ContractChargeSnapshot.FromPolicies(c, prices.Charges), "HoldingDraft", now, holdingSettingsVersion: configured.SettingsVersion);
             if (operatingPolicies is not null) await operatingPolicies.BindDraftAsync(c, token);
             Seal(c); repository.Add(c); Audit("HoldingDraftCreated", c.Id);
             Remember(key, "holding-draft", input, c.Id); return new ContractId(c.Id);

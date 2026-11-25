@@ -3,14 +3,24 @@ using System.IO.Compression;
 using System.Xml.Linq;
 using BHome.Application.Contracts;
 using Microsoft.Extensions.Configuration;
+using Microsoft.Extensions.Hosting;
 
 namespace BHome.Infrastructure.Contracts;
 
 // Edit paragraph slots in the supplied OOXML package. All untouched clauses, styles and relationships survive.
-internal sealed class MainDraftRenderer(IConfiguration configuration, TimeProvider clock) : IMainDraftRenderer
+internal sealed class MainDraftRenderer(IConfiguration configuration, TimeProvider clock, IHostEnvironment? environment = null,
+    IHoldingTestScope? testScope = null) : IMainDraftRenderer
 {
-    // The supplied template is available for demonstrations in every environment.
-    public bool SigningReviewAvailable => true;
+    public bool SigningReviewAvailable => environment is not null && (environment.IsDevelopment() || environment.IsEnvironment("Testing"));
+    public bool CanUseSigningReview(BHome.Domain.TenantContracts.Contract contract) => SigningReviewAvailable ||
+        contract.IsDevelopmentDemo && (environment?.IsProduction() != true || ContractPaymentModes.IsTest(contract)) || IsProductionSigningTemplate(contract) ||
+        environment?.IsStaging() == true && configuration.GetValue<bool>("MainDraft:AllowStagingSigningReview") &&
+        ContractPaymentModes.IsTest(contract) && testScope?.Allows(contract.Room.LocationId) == true;
+
+    public bool IsProductionSigningTemplate(BHome.Domain.TenantContracts.Contract contract) =>
+        environment?.IsProduction() == true && !contract.IsDevelopmentDemo && !ContractPaymentModes.IsTest(contract) &&
+        configuration["MainDraft:ApprovedProductionTemplateSha256"] is { Length: 64 } approvedHash &&
+        string.Equals(approvedHash, TemplateHash, StringComparison.OrdinalIgnoreCase);
     public int DocumentVersion => 3;
     public string TemplateHash
     {
@@ -89,10 +99,11 @@ internal sealed class MainDraftRenderer(IConfiguration configuration, TimeProvid
                         p.AddBeforeSelf(extraParagraph);
                     }
                 }
-                if (original == "HỢP ĐỒNG THUÊ PHÒNG TRỌ" && !data.SigningReview)
+                if (original == "HỢP ĐỒNG THUÊ PHÒNG TRỌ" &&
+                    !data.SigningReview)
                 {
                     var notice = new XElement(p);
-                    Text(notice, $"BẢN NHÁP – {data.Contract.Id}");
+                    Text(notice, data.SigningReview ? "TÀI LIỆU KIỂM THỬ – MẪU CHƯA ĐƯỢC DUYỆT CHO PRODUCTION" : $"BẢN NHÁP – {data.Contract.Id}");
                     p.AddAfterSelf(notice);
                 }
             }

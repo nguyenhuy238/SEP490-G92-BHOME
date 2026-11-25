@@ -108,13 +108,27 @@ public sealed partial class Compact24NotificationMvpTests
             Assert.Equal(3, tenantNotices.Length); Assert.Equal(3, tenantNotices.Select(n => n.RecipientUserId).Distinct().Count());
             Assert.All(tenantNotices, n => Assert.Contains("EMAIL", n.Channels));
         }
-        await scope.ServiceProvider.GetRequiredService<NotificationChannelWorker>().EnqueueDueAsync(default);
+        var worker = scope.ServiceProvider.GetRequiredService<NotificationChannelWorker>();
+        await worker.ProcessPendingAsync(default, businessEmailOnly: true);
+        Assert.Equal(3, probe.Messages.Count);
+        Assert.All(probe.Messages, message => Assert.Equal("INVOICE_FULLY_PAID", message.EventType));
+        await worker.EnqueueDueAsync(default);
         foreach (var notice in notices.Where(n => n.AudienceRole == "Tenant" && n.EventType != "INVOICE_OVERDUE"))
         {
             var delivery = await data.Database.SqlQuery<Guid>($"SELECT id AS \"Value\" FROM notifications WHERE event_key={"channel:" + notice.Id + ":EMAIL"}").SingleAsync();
             await SendEmail(host, delivery);
         }
         Assert.Equal(9, probe.Messages.Count);
+        var paidEmails = probe.Messages.Where(message => message.EventType == "INVOICE_FULLY_PAID").ToArray();
+        Assert.Equal(3, paidEmails.Length);
+        Assert.All(paidEmails, message =>
+        {
+            var attachment = Assert.Single(message.Attachments!);
+            Assert.Equal("application/pdf", attachment.ContentType);
+            Assert.StartsWith("Hoa-don-", attachment.FileName);
+        });
+        Assert.Empty(await scope.ServiceProvider.GetRequiredService<NotificationEmailContent>()
+            .PaidInvoiceAttachmentsAsync(invoice.Id, other.Tenants[0].Id, default));
         Assert.All(probe.Messages, message =>
         {
             Assert.Contains("Phòng: NOT-101", message.Body); Assert.Contains("Cơ sở: Synthetic notification location", message.Body);

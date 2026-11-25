@@ -10,7 +10,14 @@ import {
   useWindowDimensions,
   View,
 } from 'react-native';
-import { Badge, Button, IconButton, Text, TouchableRipple } from 'react-native-paper';
+import {
+  ActivityIndicator,
+  Badge,
+  Button,
+  IconButton,
+  Text,
+  TouchableRipple,
+} from 'react-native-paper';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { StatusBar } from 'expo-status-bar';
 import { router, useFocusEffect, useNavigation } from 'expo-router';
@@ -31,7 +38,11 @@ import { ui } from './WorkspaceKit';
 import { NotificationBadge } from './NotificationBadge';
 import { useWorkspaceQuery } from '../features/workspace/useWorkspaceQuery';
 import { queryPolicies } from '../lib/queryPolicies';
-import { WorkspaceHeaderContext, type WorkspaceHeaderAction } from './WorkspaceHeaderContext';
+import {
+  WorkspaceHeaderContext,
+  WorkspaceInlineHeaderContext,
+  type WorkspaceHeaderAction,
+} from './WorkspaceHeaderContext';
 import { WorkspaceFooterContext } from './WorkspaceFooter';
 
 // Metro requires a literal path for native image bundling.
@@ -112,6 +123,11 @@ export function WorkspaceShell({
     [screen],
   );
   const [headerAction, setHeaderAction] = useState<WorkspaceHeaderAction | null>(null);
+  const [inlineHeaderVisible, setInlineHeaderVisible] = useState(false);
+  const registerInlineHeader = useCallback(() => {
+    setInlineHeaderVisible(true);
+    return () => setInlineHeaderVisible(false);
+  }, []);
   const registerHeaderAction = useCallback((action: WorkspaceHeaderAction) => {
     setHeaderAction(action);
     return () => setHeaderAction(null);
@@ -360,7 +376,7 @@ export function WorkspaceShell({
               (profileEdit ||
                 (owner && !visibleTabs.some((tab) => tab.screen === screen)) ||
                 tenantInvoice ||
-                (staff && !['staff-home', 'profile'].includes(screen)) ||
+                (staff && !['staff-home', 'profile'].includes(screen) && !inlineHeaderVisible) ||
                 (role === 'Tenant' && !visibleTabs.some((tab) => tab.screen === screen)) ||
                 ['contract', 'checklist', 'security', 'preferences', 'notifications'].includes(
                   screen,
@@ -429,36 +445,44 @@ export function WorkspaceShell({
                     tenantResidence) &&
                     headerAction && (
                       <>
-                        <IconButton
-                          icon={headerAction.action?.icon ?? 'refresh'}
-                          accessibilityLabel={
-                            headerAction.action?.accessibilityLabel ??
-                            (tenantResidence
-                              ? 'Tải lại hồ sơ tạm trú'
-                              : compactTasks
+                        {headerAction.disabled || headerAction.action?.disabled ? (
+                          <Button
+                            compact
+                            disabled
+                            onPress={() => undefined}
+                            accessibilityLabel={
+                              headerAction.action?.accessibilityLabel ??
+                              (compactTasks
                                 ? `Tải lại ${headerAction?.title ?? 'công việc'}`
-                                : tenantLedger
-                                  ? 'Tải lại giao dịch'
-                                  : tenantInvoice
-                                    ? 'Tải lại hóa đơn'
-                                    : 'Tải lại hợp đồng')
-                          }
-                          disabled={headerAction.action?.disabled ?? headerAction.disabled}
-                          onPress={headerAction.action?.onPress ?? headerAction.onRefresh}
-                        />
+                                : 'Tải lại')
+                            }
+                            icon={() => <ActivityIndicator size="small" />}
+                          >
+                            Đang tải dữ liệu
+                          </Button>
+                        ) : (
+                          <IconButton
+                            icon={headerAction.action?.icon ?? 'refresh'}
+                            accessibilityLabel={
+                              headerAction.action?.accessibilityLabel ??
+                              (tenantResidence
+                                ? 'Tải lại hồ sơ tạm trú'
+                                : compactTasks
+                                  ? `Tải lại ${headerAction?.title ?? 'công việc'}`
+                                  : tenantLedger
+                                    ? 'Tải lại giao dịch'
+                                    : tenantInvoice
+                                      ? 'Tải lại hóa đơn'
+                                      : 'Tải lại hợp đồng')
+                            }
+                            disabled={headerAction.action?.disabled ?? headerAction.disabled}
+                            onPress={headerAction.action?.onPress ?? headerAction.onRefresh}
+                          />
+                        )}
                       </>
                     )}
                 </View>
               )}
-            {__DEV__ && !preview && staff && screen === homeScreen[role] && (
-              <Button
-                mode="contained-tonal"
-                icon="test-tube"
-                onPress={() => requestNavigation(() => router.push('/ocr-test'))}
-              >
-                Test OCR
-              </Button>
-            )}
             <WorkspaceHeaderContext.Provider
               value={
                 dashboard ||
@@ -475,9 +499,11 @@ export function WorkspaceShell({
                   : null
               }
             >
-              <WorkspaceFooterContext.Provider value={registerWorkflowFooter}>
-                {children}
-              </WorkspaceFooterContext.Provider>
+              <WorkspaceInlineHeaderContext.Provider value={registerInlineHeader}>
+                <WorkspaceFooterContext.Provider value={registerWorkflowFooter}>
+                  {children}
+                </WorkspaceFooterContext.Provider>
+              </WorkspaceInlineHeaderContext.Provider>
             </WorkspaceHeaderContext.Provider>
           </KeyboardFormScrollView>
         )}

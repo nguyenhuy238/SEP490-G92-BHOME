@@ -47,6 +47,8 @@ Owner Web production build passed (cảnh báo chunk >500 kB đã tồn tại, k
 
 ## Giai đoạn 2
 
+Sau khi API chấp nhận lời mời và thiết lập mật khẩu thành công, Web và Mobile giữ nguyên màn hiện tại và hiển thị “Kích hoạt tài khoản thành công.”. Màn kết quả kết thúc luồng thiết lập tài khoản.
+
 Staff/Tenant invitation giữ endpoint/actor mapping hiện có: Owner gửi qua thao tác quản trị hiện có;
 Tenant chỉ được provision khi tenancy active/approved theo AccountInvitations và job đã có.
 Không mở quyền mới cho Staff và không tạo login chỉ vì một Resident tồn tại.

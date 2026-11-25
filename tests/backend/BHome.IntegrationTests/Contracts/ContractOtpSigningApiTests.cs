@@ -95,8 +95,9 @@ public sealed partial class ContractLifecycleApiTests
         if (await RunHoldingSigningOnNativeSchemaAsync(holding, tests => tests.SignOwnerThenTenant(true, ownerSession))) return;
         var w = await Setup();
         if (holding) await PrepareHoldingSigningData(w);
+        var holdingQuote = holding ? await ConfigureHoldingPolicyAsync(w, "Synthetic Holding signing terms") : null;
         var id = holding
-            ? (await Success<ContractId>(await Post(w.Staff, "/api/v1/contracts/holdings", new HoldingDraftInput(w.Room, w.Owner.Id, w.Tenant.Id, w.Resident, [w.Resident], Today, Today.AddYears(1), DateTimeOffset.UtcNow.AddDays(2), 1000000, "Synthetic Holding signing terms", 1)))).Id
+            ? (await Success<ContractId>(await Post(w.Staff, "/api/v1/contracts/holdings", new HoldingDraftInput(w.Room, w.Owner.Id, w.Tenant.Id, w.Resident, [w.Resident], holdingQuote!.StartDate, holdingQuote.EndDate, holdingQuote.ExpiresAt, holdingQuote.HoldingDeposit, holdingQuote.Terms, 1, holdingQuote.SettingsVersion)))).Id
             : (await Success<ContractId>(await Post(w.Staff, "/api/v1/contracts", Input(w)))).Id;
         if (holding) await Success<ContractView>(await Post(w.Owner, Path(id, "holding-approval"), new HoldingDecisionInput("Owner reviewed")));
         var email = new CapturedEmail();

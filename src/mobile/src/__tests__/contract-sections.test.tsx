@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 import { earlyTerminationDate } from '../../../../packages/client-core/src/contracts';
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { afterEach, beforeEach, expect, it, vi } from 'vitest';
 import type {
@@ -21,6 +21,8 @@ const state = vi.hoisted(() => ({
   moveOut: null as MoveOut | null,
   back: vi.fn(),
   go: vi.fn(),
+  registerExitGuard: vi.fn(() => () => {}),
+  disablePrevention: vi.fn(),
   headerBack: undefined as (() => void) | undefined,
   viewedId: '',
   includeMoveOut: true,
@@ -31,6 +33,8 @@ vi.mock('../features/contracts/HoldingProgress', () => ({ HoldingProgress: () =>
 const transport = { request: state.request };
 vi.mock('../theme/theme', () => ({ colors: {}, staffColors: {} }));
 vi.mock('expo-router', () => ({
+  useFocusEffect: (callback: () => (() => void) | undefined) => useEffect(callback, [callback]),
+  usePreventRemove: () => state.disablePrevention,
   useLocalSearchParams: () =>
     state.params ?? (state.deep ? { contractId: id, section: state.section } : {}),
   router: { setParams: vi.fn(), canGoBack: () => true, back: state.back },
@@ -52,7 +56,11 @@ vi.mock('../lib/SessionProvider', () => ({
   }),
 }));
 vi.mock('../features/workspace/WorkspaceProvider', () => ({
-  useWorkspace: () => ({ role: state.role, go: state.go }),
+  useWorkspace: () => ({
+    role: state.role,
+    go: state.go,
+    registerExitGuard: state.registerExitGuard,
+  }),
 }));
 vi.mock('../lib/randomUUID', () => ({ randomUUID: () => '00000000-0000-4000-8000-000000000001' }));
 vi.mock('../lib/useFeedbackState', () => ({ useFeedbackState: () => useState('') }));
@@ -302,6 +310,7 @@ it('shows the submitted request and waits for Owner approval before showing Tena
 });
 
 it('removes the duplicate detail back button and registers previous-screen navigation on the topbar', () => {
+  state.contract.status = 'PendingSigning';
   render(<ContractScreen />);
   expect(screen.queryByRole('button', { name: 'Về danh sách hợp đồng' })).toBeNull();
   expect(state.headerBack).toBeTypeOf('function');
@@ -309,18 +318,44 @@ it('removes the duplicate detail back button and registers previous-screen navig
   expect(state.back).toHaveBeenCalledOnce();
 });
 
+it('returns Staff home after confirming a completed Main contract or using its header back button', () => {
+  render(<ContractScreen />);
+  expect(screen.queryByRole('button', { name: 'Quay lại' })).toBeNull();
+  fireEvent.click(screen.getByRole('button', { name: 'Xác nhận · Về Trang chủ' }));
+  expect(state.go).toHaveBeenCalledExactlyOnceWith('staff-home');
+
+  state.go.mockClear();
+  state.headerBack!();
+  expect(state.go).toHaveBeenCalledExactlyOnceWith('staff-home');
+  expect(state.back).not.toHaveBeenCalled();
+});
+
+it('returns Staff home from an existing Main draft without a CCCD exit guard', () => {
+  state.contract = { ...state.contract, status: 'Draft', onboardingDraft: true };
+  render(<ContractScreen />);
+  expect(state.registerExitGuard).not.toHaveBeenCalled();
+  state.headerBack!();
+  expect(state.go).toHaveBeenCalledExactlyOnceWith('staff-home');
+  expect(state.back).not.toHaveBeenCalled();
+});
+
 it('opens a Holding draft with metadata in the Holding flow without Main handover tabs', () => {
   state.contract.kind = 'Holding';
   state.contract.status = 'Draft';
   state.contract.onboardingDraft = true;
   state.contract.signingMode = 'INTERNAL_OTP_DRAWN';
+  state.contract.holdingCustomer = {
+    fullName: 'Synthetic Holding Customer',
+    maskedCitizenNumber: '********0001',
+  };
   render(<ContractScreen />);
   expect(screen.getByText('Bản nháp chờ gửi Owner ký')).toBeTruthy();
-  expect(screen.getByText('Người ở tổng hợp')).toBeTruthy();
+  expect(screen.getByText('Synthetic Holding Customer')).toBeTruthy();
   expect(screen.queryByRole('button', { name: 'Bàn giao' })).toBeNull();
   expect(screen.queryByRole('button', { name: 'Gia hạn & trả phòng' })).toBeNull();
   expect(screen.queryByText('Chữ ký số qua MySign')).toBeNull();
 });
+
 it('opens an Owner draft for review and returns to the list when route IDs clear', async () => {
   state.role = 'Owner';
   state.params = {};

@@ -1,7 +1,7 @@
 // @vitest-environment jsdom
 import React from 'react';
 import { afterEach, beforeEach, expect, it, vi } from 'vitest';
-import { cleanup, fireEvent, render, screen } from '@testing-library/react';
+import { cleanup, fireEvent, render, screen, within } from '@testing-library/react';
 const state = vi.hoisted(() => ({
   preview: false,
   go: vi.fn(),
@@ -19,9 +19,8 @@ vi.mock('../../../src/mobile/src/features/workspace/useStaffDashboard', () => ({
   useStaffDashboard: () => ({
     locations: { data: null },
     tasks: { data: null },
-    overdue: { data: null },
+    priorities: { data: null },
     inspections: { data: state.inspections.length ? state.inspections : null },
-    meters: { data: null },
     reload: vi.fn(),
   }),
 }));
@@ -110,7 +109,7 @@ it('does not present sample identity, shift or counts to a signed-in account', (
   expect(screen.queryByText('Chưa có dữ liệu ca làm')).toBeNull();
 });
 
-it('shows location move-out work on the dashboard even without a schedule, while identifying future inspection dates', () => {
+it('keeps the move-out count linked to the work list without filling the priority preview', () => {
   state.inspections = [
     {
       contractId: 'contract-101',
@@ -122,9 +121,11 @@ it('shows location move-out work on the dashboard even without a schedule, while
     },
   ];
   render(<StaffDashboard />);
-  expect(screen.getByText('Chờ ngày trả ›')).toBeTruthy();
-  expect(screen.getByText(/Phòng R\.101 · Cơ sở A · Ngày trả 18\/11\/2099/)).toBeTruthy();
-  fireEvent.click(screen.getByRole('button', { name: /Kiểm tra trả phòng, Phòng R\.101/ }));
+  const metric = screen.getByRole('button', { name: 'Kiểm tra trả phòng' });
+  expect(within(metric).getByText('1')).toBeTruthy();
+  expect(screen.getByText('Chưa có việc ưu tiên cần xử lý.')).toBeTruthy();
+  expect(state.go).not.toHaveBeenCalled();
+  fireEvent.click(metric);
   expect(state.go).toHaveBeenCalledWith('staff-handovers', { tab: 'MoveOut' });
 });
 

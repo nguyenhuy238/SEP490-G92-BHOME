@@ -61,6 +61,17 @@ Staging đã duyệt. Links mới vẫn sinh từ anchors canonical; không sinh
 
 ## Cấu hình và Compose
 
+Email nghiệp vụ UC-14/15/22 và JOB-04 được bật mặc định trong `appsettings.Staging.json`.
+Nếu private overlay đặt `NotificationChannels__ContractAndInvoiceEmailEnabled`, giá trị phải là `true`.
+Cờ này gửi hợp đồng giữ chỗ, hợp đồng thuê đã kích hoạt và hóa
+đơn đã thanh toán qua SMTP hiện có. Giữ `Jobs__Enabled=false` và
+`NotificationChannels__AutomationEnabled=false` nếu chỉ chạy các email này.
+Hàng đợi dùng cùng một khóa cho xác nhận giữ chỗ ngay cả khi hợp đồng đã chuyển
+sang hợp đồng thuê. Email đính kèm bản PDF đã ký và biên nhận cọc đã xác minh.
+Khi chạy ở chế độ email nghiệp vụ, worker xử lý thư hoàn tất giữ chỗ và thông báo kích hoạt hợp đồng thuê trước lượt phát thông báo chung. Email xác nhận hợp đồng thuê kèm PDF đã ký và biên nhận thanh toán ban đầu khi có khoản thanh toán đã xác minh. Email thiết lập tài khoản được xử lý riêng với hợp đồng thuê ký nội bộ có yêu cầu thanh toán ban đầu.
+Khi gửi lời mời ký hợp đồng thuê từ Mobile, hệ thống dùng email đã lưu của
+người đại diện và hiển thị địa chỉ đã che một phần.
+
 Project `bhome-sepay-stage`; ghép các file theo thứ tự:
 
 1. `/opt/bhome/deploy/compose.sepay.yml`
@@ -83,6 +94,53 @@ Dùng cả hai `--env-file`: `sepay-staging.db.env`, `stage-storage.env` trong p
 config. File thứ hai root-only, chứa connection hiện có (đổi host sang PostgreSQL
 Staging), credential storage mới riêng và image Public bootstrap; không đưa vào Git/log.
 Mẫu: `deploy/vps/compose.staging-public.example.yml` và `compose.staging-compat.example.yml`.
+
+### QR tiền cọc giữ chỗ
+
+Theo UC-14/22 và GBR-10, màn hình Mobile chỉ lấy QR chuyển khoản từ API của
+chính hợp đồng. Nếu API trả `sepay_environment_mismatch`, màn hình báo lỗi cấu
+hình và không đưa ra QR xem thử. Staging dùng SePay Test cho hợp đồng Test đủ
+điều kiện. Hợp đồng Live cần SePay Live được bật và tài khoản nhận tiền hợp lệ.
+
+Để tạo hợp đồng mới dùng SePay Test với PostgreSQL Docker riêng của Staging,
+đặt `HoldingTesting__Enabled=true`, `HoldingTesting__DatabaseHost` và
+`HoldingTesting__DatabaseName` khớp đúng kết nối API Staging. Khai báo
+`HoldingTesting__LocationIds__0`, `__1`, … cho các cơ sở có tài khoản nhận tiền
+sandbox trong cấu hình SePay và trong cơ sở dữ liệu. Hợp đồng mới tại các cơ sở
+đó dùng `PaymentMode=Test`. Các hợp đồng Live đã tạo giữ nguyên chế độ.
+Owner có thể lưu tài khoản tổng hợp qua API tài khoản nhận tiền của cơ sở khi
+BIN và số tài khoản khớp cấu hình SePay Test của chính cơ sở đó. API giữ kiểm
+tra phiên bản và nhật ký xác nhận tài khoản. Production không bật luồng này.
+
+`MainDraft__AllowStagingSigningReview=true` cho phép dùng mẫu hợp đồng thuê
+kiểm thử trong luồng gửi ký UC-15 trên Staging. API chỉ cho phép ở các cơ sở
+thuộc phạm vi thử nghiệm trên database Staging và với hợp đồng `PaymentMode=Test`.
+PDF vẫn mang cờ `DevelopmentOnly`, phải qua bước xem và xác nhận trước khi gửi.
+
+### Ký hợp đồng nội bộ trên Staging
+
+Luồng UC-14/15 theo quyết định 07 trong `BHOME_NQH_BUSINESS_DECISIONS_2026-11-10.md`
+cần khóa xác minh OTP riêng và chứng thư đóng dấu hệ thống. Ghép các mục
+`environment` và `volumes` từ `deploy/vps/compose.contract-signing.example.yml`
+vào service `api` trong `/opt/bhome-config/compose.sepay-stage-api.yml` để bản
+release sau tiếp tục dùng cùng cấu hình. Kiểm tra các overlay phía sau không ghi đè.
+
+- Trong `stage-storage.env` trên VPS, đặt `BHOME_ANON_HMAC_BASE64`
+  bằng khóa Base64 giải mã được ít nhất 32 byte ngẫu nhiên. Giữ khóa ổn định qua
+  các lần triển khai và dùng lại khóa Staging hiện có nếu còn lời mời đang hiệu lực.
+- Đặt `BHOME_SIGNING_PUBLIC_URL` thành URL HTTPS trang `/contract-signing`
+  của Owner Web Staging. Giữ allowlist email Staging và dùng địa chỉ kiểm thử đã được phép.
+- Đặt `BHOME_SIGNING_SEAL_PFX_FILE` thành đường dẫn tuyệt đối đến PFX riêng
+  của Staging có khóa riêng RSA của hệ thống, và đặt mật khẩu PFX qua
+  `BHOME_SIGNING_SEAL_PFX_PASSWORD`. Cấp quyền đọc file cho UID chạy API
+  trong container và giữ mount chỉ đọc. Giữ PFX và các giá trị bí mật trên VPS.
+- Kiểm tra Compose với `config --quiet` theo đúng chuỗi overlay, sau đó tạo lại
+  riêng container `api` với image release Staging hiện tại. Chạy lại
+  `/opt/bhome-deploy/staging/connect-staging-edge.py` để khôi phục alias API trên
+  mạng edge. Kiểm tra readiness nội
+  bộ và dùng hợp đồng thử để xác nhận Owner ký được, Staff được phân quyền gửi
+  được lời mời, và người nhận có thể mở link và xác minh OTP.
+
 File private có thêm `BHOME_STAGE_LEGACY_OWNER_IMAGE`, `BHOME_STAGE_LEGACY_PUBLIC_IMAGE`,
 `BHOME_STAGE_LEGACY_OWNER_INDEX` pin đúng images/index trước migration. Không tự cập
 nhật các bundle này qua CD; chỉ bỏ sau khi chứng minh không còn phiên/link/callback phụ thuộc.

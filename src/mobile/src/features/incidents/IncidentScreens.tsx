@@ -65,7 +65,11 @@ function Pager({
 }
 function QueryState(props: React.ComponentProps<typeof SharedQueryState>) {
   const { role } = useWorkspace();
-  return role === 'Owner' ? <OwnerDataState {...props} /> : <SharedQueryState {...props} />;
+  return role === 'Owner' && !props.loadingLabel ? (
+    <OwnerDataState {...props} />
+  ) : (
+    <SharedQueryState {...props} />
+  );
 }
 function StaffIncidentListHeader({
   query,
@@ -579,7 +583,7 @@ function IncidentDetail({ id }: { id: string }) {
       >
         Về danh sách báo cáo
       </Action>
-      <QueryState {...query} />
+      <QueryState {...query} loadingLabel="?ang t?i chi ti?t s? c??" />
       {role === 'Staff' && query.data && inSelectedLocation && (
         <StaffWorkflowTabs
           accessibilityLabel="Các phần báo cáo sự cố"

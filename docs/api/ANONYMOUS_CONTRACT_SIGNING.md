@@ -1,5 +1,9 @@
 # Ký trước tài khoản và cấp tài khoản sau Main Active
 
+## Email khi chuyển Holding sang Main
+
+Trong luồng BF-03/BF-04, UC-13–15, màn gửi lời mời Main hiển thị email đã che từ lời mời Holding được chấp nhận của cùng người đại diện. Khi `GET /internal-signing` trả `usesHoldingEmail: true`, `maskedEmail` là địa chỉ từ Holding. Người thao tác bấm gửi để backend dùng địa chỉ đầy đủ từ bằng chứng ký Holding. Email nhập rõ trong yêu cầu và địa chỉ của lời mời Main đang gửi lại vẫn được ưu tiên. Khi thiếu bằng chứng Holding phù hợp, luồng dùng email hồ sơ như hiện hành. Các kiểm tra quyền và trùng email vẫn áp dụng.
+
 Nguồn: quyết định được duyệt BR-01–07/09/11, BF-03/04, UC-13/14/15; thay thế yêu cầu tài khoản Tenant trước khi ký. SRS/Report 4 về nhà cung cấp vẫn áp dụng cho nhánh MySign. Nhánh nội bộ không đưa ra tuyên bố pháp lý hoặc chứng thư CA.
 
 ## Luồng và UI

@@ -278,11 +278,20 @@ public sealed class OcrApiTests
     [InlineData(Roles.Tenant, HttpStatusCode.Forbidden)]
     [InlineData(Roles.Staff, HttpStatusCode.OK)]
     [InlineData(Roles.Owner, HttpStatusCode.OK)]
-    public async Task IdentityApiRestrictsRolesAndReturnsOnlyProposal(string? role, HttpStatusCode status)
+    public Task IdentityApiRestrictsRolesAndReturnsOnlyProposal(string? role, HttpStatusCode status) =>
+        IdentityApiRoleScenario("Testing", role, status);
+
+    [Theory]
+    [InlineData("Staging", Roles.Staff, HttpStatusCode.OK)]
+    [InlineData("Production", Roles.Staff, HttpStatusCode.OK)]
+    public Task IdentityApiReturnsOnlyProposalInDeployedEnvironments(string environment, string? role, HttpStatusCode status) =>
+        IdentityApiRoleScenario(environment, role, status);
+
+    private async Task IdentityApiRoleScenario(string environment, string? role, HttpStatusCode status)
     {
         var resources = new TestResources(); var assignments = new TestAssignments { Assigned = true };
         using var root = new ApiFactory();
-        using var factory = Configure(root, resources, assignments);
+        using var factory = Configure(root, resources, assignments, environment);
         using var client = factory.CreateClient();
         using var request = Request($"identity/{resources.ResidentId}/front", role, Image());
         var response = await client.SendAsync(request);

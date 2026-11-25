@@ -41,6 +41,7 @@ public sealed class TaskQuery
     public MeterTaskStatus? Status { get; set; }
     public OperationalTaskPriority? Priority { get; set; }
     public bool? IsOverdue { get; set; }
+    public bool LatestActionable { get; set; }
     public DateTimeOffset? DueFrom { get; set; }
     public DateTimeOffset? DueTo { get; set; }
 }
