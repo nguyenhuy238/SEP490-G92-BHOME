@@ -1,9 +1,14 @@
-import { fireEvent, render, screen } from '@testing-library/react';
+import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { beforeEach, expect, it, vi } from 'vitest';
 import { FinancialReportsApiPage } from './FinancialReportsApiPage';
 import { financeMonthPeriod } from '../finance/monthPeriods';
-const mock = vi.hoisted(() => ({ locations: vi.fn(), rooms: vi.fn(), report: vi.fn() }));
+const mock = vi.hoisted(() => ({
+  locations: vi.fn(),
+  rooms: vi.fn(),
+  report: vi.fn(),
+  expenses: vi.fn(),
+}));
 vi.mock('../expenses/useFinanceApi', () => ({ useFinanceApi: () => mock }));
 vi.mock('../../../../../packages/client-core/src/auth', () => ({
   useAuth: () => ({ session: { userId: 'owner' } }),
@@ -13,6 +18,7 @@ beforeEach(() => {
   mock.locations.mockResolvedValue([]);
   mock.rooms.mockResolvedValue([]);
   mock.report.mockResolvedValue(backendReport);
+  mock.expenses.mockResolvedValue({ items: [], total: 0, page: 1, pageSize: 25, totalAmount: '0' });
 });
 function mount() {
   render(
@@ -60,7 +66,7 @@ it('loads the last completed month from the API immediately and respects a chang
   const lastMonth = financeMonthPeriod(-1);
   await screen.findByText('Lợi nhuận vận hành: 700 ₫');
   expect(mock.report).toHaveBeenCalledWith(
-    { from: lastMonth.from, to: lastMonth.to, locationId: undefined },
+    { from: lastMonth.from, to: lastMonth.to, locationId: undefined, includeComparison: true },
     expect.any(AbortSignal),
   );
   request();
@@ -68,7 +74,7 @@ it('loads the last completed month from the API immediately and respects a chang
   expect(screen.getByText('Phạm vi: Toàn chuỗi')).toBeInTheDocument();
   expect(screen.getByText('Ước tính số tháng còn lại: Chưa xác định')).toBeInTheDocument();
   expect(mock.report).toHaveBeenCalledWith(
-    { from: '2026-11-01', to: '2026-11-30', locationId: undefined },
+    { from: '2026-11-01', to: '2026-11-30', locationId: undefined, includeComparison: true },
     expect.any(AbortSignal),
   );
 });
@@ -84,6 +90,30 @@ it('keeps a missing deposit classification distinct from a verified zero', async
   mount();
   request();
   await screen.findByText('Hoàn gốc cọc đã xác minh trong kỳ: Chưa có dữ liệu phân loại');
+});
+it('explains missing asset prices instead of presenting a zero capital recovery', async () => {
+  mock.report.mockResolvedValue({
+    ...backendReport,
+    total: {
+      ...backendReport.total,
+      management: {
+        cashCapital: {
+          initialInvestment: '1000',
+          netRecovery: null,
+          remainingCapital: null,
+          recoveryPercent: null,
+          estimatedRemainingMonths: null,
+          unavailableReason: 'investment_basis_required',
+        },
+      },
+    },
+  });
+  mount();
+  await screen.findByText(
+    'Chưa đủ nguyên giá tài sản để tính vốn còn lại và tiến độ thu hồi. Bổ sung giá mua tại cơ sở.',
+  );
+  expect(screen.getByText('Vốn còn lại: Chưa xác định')).toBeInTheDocument();
+  expect(screen.getAllByText('Tỷ lệ thu hồi: Chưa xác định').length).toBeGreaterThan(0);
 });
 it('shows backend settlement debt, cash and deposit offsets as separate sources', async () => {
   mock.report.mockResolvedValue({
@@ -208,7 +238,7 @@ it('selects a scoped Room by name and clears it when the Location changes', asyn
   request();
   await screen.findByText('Lợi nhuận vận hành: 700 ₫');
   expect(mock.report).toHaveBeenLastCalledWith(
-    expect.objectContaining({ locationId: 'a', roomId: 'room' }),
+    expect.objectContaining({ locationId: 'a', roomId: 'room', includeComparison: true }),
     expect.any(AbortSignal),
   );
   expect(screen.getByText('Phạm vi: Cơ sở A · Phòng 101')).toBeInTheDocument();
@@ -220,7 +250,7 @@ it('selects a scoped Room by name and clears it when the Location changes', asyn
   await screen.findByText('Lợi nhuận vận hành: 700 ₫');
   expect(screen.getByText('Phạm vi: Cơ sở B')).toBeInTheDocument();
   expect(mock.report).toHaveBeenLastCalledWith(
-    { from: '2026-11-01', to: '2026-11-30', locationId: 'b' },
+    { from: '2026-11-01', to: '2026-11-30', locationId: 'b', includeComparison: true },
     expect.any(AbortSignal),
   );
 });
@@ -249,7 +279,7 @@ it('offers a complete month shortcut and distinguishes unsent filter changes fro
     ),
   ).toBeInTheDocument();
   expect(mock.report).toHaveBeenCalledWith(
-    { from: preset.from, to: preset.to, locationId: undefined },
+    { from: preset.from, to: preset.to, locationId: undefined, includeComparison: true },
     expect.any(AbortSignal),
   );
   fireEvent.change(screen.getByLabelText(/Từ ngày/), { target: { value: '2026-01-01' } });
@@ -269,7 +299,7 @@ it('loads the last complete month automatically without requiring a filter submi
   await screen.findByText('Lợi nhuận vận hành: 700 ₫');
   expect(screen.getByText(/Bộ lọc đang chọn:.*Đã tải/)).toBeInTheDocument();
   expect(mock.report).toHaveBeenCalledWith(
-    { from: period.from, to: period.to, locationId: undefined },
+    { from: period.from, to: period.to, locationId: undefined, includeComparison: true },
     expect.any(AbortSignal),
   );
 });
@@ -285,4 +315,111 @@ it('keeps the summary visible and lets Owner reveal detailed reconciliation, occ
     expect(disclosure).toHaveAttribute('aria-expanded', 'true');
   }
   expect(mock.report).toHaveBeenCalledTimes(1);
+});
+
+it('renders the management acceptance figures and opens both periods of actual expense sources', async () => {
+  mock.report.mockResolvedValue({
+    ...backendReport,
+    total: {
+      ...backendReport.total,
+      issued: '100000000',
+      approvedAdjustments: '0',
+      operatingExpenses: '30000000',
+      operatingProfit: '70000000',
+      outstandingNow: '4000000',
+      management: {
+        revenue: '100000000',
+        actualBusinessCollections: '96000000',
+        currentOutstanding: '4000000',
+        periodOutstanding: '4000000',
+        overdueInvoiceOutstanding: '0',
+        priorPeriodCollections: '0',
+        depositReceipts: '10000000',
+        operatingPaymentsConfirmed: '28000000',
+        operatingUnpaidConfirmed: '2000000',
+        operatingUnknownPaymentAmount: '0',
+        operatingCashFlow: '68000000',
+        operatingMarginPercent: '70',
+        depreciation: '15000000',
+        profitAfterDepreciation: '55000000',
+        expenseCategories: [{ category: 'Maintenance', amount: '10000000' }],
+      },
+    },
+    comparison: {
+      currentFrom: '2026-10-01',
+      currentTo: '2026-10-31',
+      previousFrom: '2026-09-01',
+      previousTo: '2026-09-30',
+      revenue: { current: '100000000', previous: '100000000', change: '0', changePercent: '0' },
+      operatingExpenses: {
+        current: '30000000',
+        previous: '24000000',
+        change: '6000000',
+        changePercent: '25',
+      },
+      operatingProfit: {
+        current: '70000000',
+        previous: '76000000',
+        change: '-6000000',
+        changePercent: '-7.89',
+      },
+      expenseCategories: [
+        {
+          category: 'Maintenance',
+          current: '10000000',
+          previous: '5000000',
+          change: '5000000',
+          changePercent: '100',
+        },
+      ],
+    },
+  });
+  mock.expenses.mockImplementation(async (filter) => ({
+    total: 1,
+    page: 1,
+    pageSize: 25,
+    totalAmount: filter.from === '2026-10-01' ? '10000000' : '5000000',
+    items: [
+      {
+        id: filter.from,
+        category: 'Maintenance',
+        occurredOn: filter.from,
+        amount: filter.from === '2026-10-01' ? '10000000' : '5000000',
+        note: 'Chi phí sửa chữa từ chứng từ',
+      },
+    ],
+  }));
+  mount();
+  await screen.findByText('55.000.000 ₫');
+  for (const amount of [
+    '100.000.000 ₫',
+    '96.000.000 ₫',
+    '28.000.000 ₫',
+    '15.000.000 ₫',
+    '68.000.000 ₫',
+    '4.000.000 ₫',
+    '2.000.000 ₫',
+  ])
+    expect(screen.getAllByText(amount).length).toBeGreaterThan(0);
+  expect(screen.getByText(/24\.000\.000.*30\.000\.000.*6\.000\.000.*25%/)).toBeInTheDocument();
+  expect(screen.getByText(/76\.000\.000.*70\.000\.000.*-6\.000\.000.*-7\.89%/)).toBeInTheDocument();
+  fireEvent.click(screen.getByRole('button', { name: 'Xem nguồn' }));
+  await waitFor(() => expect(screen.getAllByText('Chi phí sửa chữa từ chứng từ')).toHaveLength(2));
+  for (const [from, to] of [
+    ['2026-10-01', '2026-10-31'],
+    ['2026-09-01', '2026-09-30'],
+  ])
+    expect(mock.expenses).toHaveBeenCalledWith(
+      {
+        from,
+        to,
+        locationId: undefined,
+        roomId: undefined,
+        expenseType: 'OPERATING',
+        category: 'Maintenance',
+        page: 1,
+        includeTotalAmount: true,
+      },
+      expect.any(AbortSignal),
+    );
 });

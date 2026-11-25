@@ -32,6 +32,7 @@ import {
   type PreviewDocument,
 } from '../../../../../packages/client-core/src/contracts';
 import { useSession } from '../../lib/SessionProvider';
+import { useWorkspaceInlineHeader } from '../../components/WorkspaceHeaderContext';
 import { randomUUID } from '../../lib/randomUUID';
 import { inputDate } from '../../lib/identity';
 import { Box, Heading, Pill, Row } from '../../components/WorkspaceKit';
@@ -91,6 +92,7 @@ export function MainDraftScreen({
   const { api, session } = useSession();
   const owner = !!session?.roles.includes('Owner');
   const staff = !owner && !!session?.roles.includes('Staff');
+  useWorkspaceInlineHeader(staff && visible);
   const client = useMemo(
     () => (api ? mainDraftClient((path, init, type) => api.request(path, init, type)) : null),
     [api],
@@ -119,6 +121,7 @@ export function MainDraftScreen({
   const [reviewRevision, setReviewRevision] = useState(0);
   const [readyFile, setReadyFile] = useState(''),
     [documentBlocker, setDocumentBlocker] = useState('');
+  const [saveAction, setSaveAction] = useState<'draft' | 'preview' | null>(null);
   const [busy, setBusy] = useState(false),
     [loading, setLoading] = useState(true),
     [error, setError] = useFeedbackState('error', false);
@@ -182,6 +185,7 @@ export function MainDraftScreen({
       operation.current = null;
       lock.current = false;
       setBusy(false);
+      setSaveAction(null);
       setId(initialId ?? '');
       setSaved(null);
       setDocuments(null);
@@ -319,6 +323,7 @@ export function MainDraftScreen({
     if (!body) return;
     setTermOpen(false);
     lock.current = true;
+    setSaveAction(preview ? 'preview' : 'draft');
     setBusy(true);
     setError('');
     const controller = new AbortController();
@@ -371,7 +376,10 @@ export function MainDraftScreen({
     } finally {
       if (operation.current === controller) {
         lock.current = false;
-        if (alive.current) setBusy(false);
+        if (alive.current) {
+          setBusy(false);
+          setSaveAction(null);
+        }
       }
     }
   }
@@ -456,7 +464,7 @@ export function MainDraftScreen({
       onPrevious();
       return;
     }
-    if (dirty.current)
+    if (dirty.current && !staff)
       Alert.alert('Rời tạo hợp đồng?', 'Các thay đổi chưa lưu sẽ mất.', [
         { text: 'Tiếp tục nhập', style: 'cancel' },
         { text: 'Rời màn hình', onPress: onCancel },
@@ -932,7 +940,7 @@ export function MainDraftScreen({
   );
   const footer = !reviewOnly && (
     <View style={[styles.footer, onPrevious && { flexWrap: 'wrap' }, owner && styles.ownerFooter]}>
-      {busy && <ActivityIndicator />}
+      {busy && (!saveAction || mode !== 'edit') && <ActivityIndicator />}
       {!staff && onPrevious && mode === 'edit' && (
         <Button
           style={{ width: '100%' }}
@@ -950,12 +958,13 @@ export function MainDraftScreen({
               contentStyle={{ minHeight: 48 }}
               mode="text"
               style={owner ? styles.ownerAction : styles.secondaryAction}
+              loading={saveAction === 'draft'}
               disabled={
                 busy || readOnly || loading || !preparation || !!preparation.blockers.length
               }
               onPress={() => void save(false)}
             >
-              Lưu nháp
+              {saveAction === 'draft' ? 'Đang lưu bản nháp…' : 'Lưu nháp'}
             </Button>
           )}
           <Button
@@ -963,10 +972,15 @@ export function MainDraftScreen({
             mode="contained"
             buttonColor={s.blue}
             style={owner ? styles.ownerAction : styles.primaryAction}
+            loading={saveAction === 'preview'}
             disabled={busy || readOnly || loading || !preparation || !!preparation.blockers.length}
             onPress={() => void save(true)}
           >
-            {staff ? 'Lưu hợp đồng' : 'Xem trước hợp đồng'}
+            {saveAction === 'preview'
+              ? 'Đang lưu hợp đồng…'
+              : staff
+                ? 'Lưu hợp đồng'
+                : 'Xem trước hợp đồng'}
           </Button>
         </>
       ) : (

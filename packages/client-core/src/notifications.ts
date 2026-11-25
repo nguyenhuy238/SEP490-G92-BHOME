@@ -34,9 +34,9 @@ export const ownerNotificationCategories = {
 };
 export function notificationClient(request: <T>(path: string, init?: RequestInit) => Promise<T>) {
   return {
-    list: (page = 1, category = '', unread = '', signal?: AbortSignal) =>
+    list: (page = 1, category = '', unread = '', signal?: AbortSignal, pageSize = 20) =>
       request<Page<NotificationItem>>(
-        `/api/v1/notifications?page=${page}&pageSize=20${category ? '&category=' + encodeURIComponent(category) : ''}${unread ? '&unread=' + encodeURIComponent(unread) : ''}`,
+        `/api/v1/notifications?page=${page}&pageSize=${pageSize}${category ? '&category=' + encodeURIComponent(category) : ''}${unread ? '&unread=' + encodeURIComponent(unread) : ''}`,
         { signal },
       ),
     count: (signal?: AbortSignal) =>

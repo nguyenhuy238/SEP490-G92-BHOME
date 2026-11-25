@@ -9,13 +9,16 @@ const state = vi.hoisted(() => ({
   protect: vi.fn(),
   platform: 'android',
   go: vi.fn(),
+  replace: vi.fn(),
   resetScroll: vi.fn(),
-  registerExitGuard: vi.fn(() => () => {}),
+  unregisterExitGuard: vi.fn(),
+  registerExitGuard: vi.fn(),
   requestNavigation: vi.fn(),
   disablePrevention: vi.fn(),
   preventRemove: vi.fn(),
   listeners: [] as ((value: string) => void)[],
   failConfirm: false,
+  multipleLocations: false,
   serial: 0,
   uuidSerial: 0,
 }));
@@ -40,6 +43,7 @@ vi.mock('../features/contracts/MainDraftScreen', () => ({
     ) : null,
 }));
 vi.mock('expo-router', () => ({
+  router: { replace: state.replace },
   useLocalSearchParams: () => ({}),
   useFocusEffect: (cb: () => () => void) => useEffect(cb, [cb]),
   usePreventRemove: (dirty: boolean) => {
@@ -150,6 +154,32 @@ vi.mock('react-native-paper', () => ({
       {children}
     </button>
   ),
+  TouchableRipple: ({
+    children,
+    onPress,
+    disabled,
+    accessibilityRole,
+    accessibilityLabel,
+    accessibilityState,
+  }: {
+    children?: React.ReactNode;
+    onPress: () => void;
+    disabled?: boolean;
+    accessibilityRole?: string;
+    accessibilityLabel?: string;
+    accessibilityState?: { checked?: boolean };
+  }) => (
+    <button
+      role={accessibilityRole}
+      aria-label={accessibilityLabel}
+      aria-checked={accessibilityState?.checked}
+      disabled={disabled}
+      onClick={onPress}
+    >
+      {children}
+    </button>
+  ),
+  ProgressBar: () => null,
   IconButton: ({
     onPress,
     disabled,
@@ -293,7 +323,10 @@ vi.mock('../features/onboarding/useCaptureScope', () => ({
     return {
       location,
       room,
-      locations: [{ id: 'location', label: 'Cơ sở mẫu' }],
+      locations: [
+        { id: 'location', label: 'Cơ sở mẫu' },
+        ...(state.multipleLocations ? [{ id: 'other-location', label: 'Cơ sở thứ hai' }] : []),
+      ],
       rooms: location
         ? [
             { id: 'room', label: '101', status: 'Available', capacity: 2 },
@@ -363,8 +396,10 @@ it('shows empty and occupied rooms together without a reception-type selector', 
 beforeEach(() => {
   vi.stubGlobal('__DEV__', true);
   vi.clearAllMocks();
+  state.registerExitGuard.mockReturnValue(state.unregisterExitGuard);
   state.listeners = [];
   state.failConfirm = false;
+  state.multipleLocations = false;
   state.serial = 0;
   state.uuidSerial = 0;
   state.platform = 'android';
@@ -387,16 +422,58 @@ function selectRoom() {
   });
   fireEvent.click(screen.getByRole('button', { name: 'Tiếp tục' }));
 }
-it('does not expose the Owner demo contract generator to Staff', () => {
+it('allows switching assigned locations without an exit guard while choosing a room', () => {
+  state.multipleLocations = true;
   render(<OnboardingScreen />);
-  expect(screen.queryByRole('button', { name: 'Sinh hợp đồng mẫu' })).toBeNull();
-  expect(screen.queryByText('Tạo nhanh dữ liệu kiểm thử')).toBeNull();
+  const location = screen.getByRole('combobox', { name: 'Cơ sở được phân công *' });
+  expect(state.registerExitGuard).not.toHaveBeenCalled();
+  fireEvent.change(location, { target: { value: 'other-location' } });
+  expect((location as HTMLSelectElement).value).toBe('other-location');
+  expect(state.registerExitGuard).not.toHaveBeenCalled();
+  expect(state.preventRemove).not.toHaveBeenCalledWith(true);
 });
+
+it('guards navigation only after CCCD data is entered and releases the guard after saving', async () => {
+  render(<OnboardingScreen />);
+  selectRoom();
+  await openIdentity();
+  expect(state.preventRemove).toHaveBeenLastCalledWith(false);
+  manualIdentity();
+  expect(state.preventRemove).toHaveBeenLastCalledWith(true);
+  fireEvent.click(screen.getByRole('checkbox'));
+  fireEvent.click(screen.getByRole('button', { name: 'Xác nhận thông tin' }));
+  await screen.findByText('Đã xác nhận 1/1 người ở');
+  expect(state.preventRemove).toHaveBeenLastCalledWith(false);
+});
+
+it('removes the exit guard when the CCCD editor is closed even if its draft stays in memory', async () => {
+  render(<OnboardingScreen />);
+  selectRoom();
+  await openIdentity();
+  manualIdentity();
+  expect(state.registerExitGuard).toHaveBeenCalledOnce();
+  fireEvent.click(screen.getByRole('button', { name: 'Đóng xác minh CCCD' }));
+  expect(state.preventRemove).toHaveBeenLastCalledWith(false);
+  expect(state.unregisterExitGuard).toHaveBeenCalledOnce();
+});
+it('offers room selection without a test-data generator in development', () => {
+  render(<OnboardingScreen />);
+  expect(screen.queryByText('Tạo nhanh dữ liệu kiểm thử')).toBeNull();
+  expect(screen.queryByRole('button', { name: 'Sinh hợp đồng mẫu' })).toBeNull();
+
+  selectRoom();
+
+  expect(screen.getByRole('button', { name: 'Bắt đầu quét CCCD' })).toBeTruthy();
+  expect(state.request).not.toHaveBeenCalled();
+});
+
 function addFamilyMember() {
-  fireEvent.change(screen.getByRole('combobox', { name: 'Hình thức thuê' }), {
-    target: { value: 'family' },
-  });
+  fireEvent.click(screen.getByRole('radio', { name: 'Hộ gia đình' }));
   fireEvent.click(screen.getByRole('button', { name: 'Thêm người ở' }));
+}
+function openMemberEditor() {
+  const actions = screen.getAllByRole('button', { name: 'Nhập thủ công' });
+  fireEvent.click(actions[actions.length - 1]);
 }
 it('limits a family to the database room capacity and allows adding again after removing a draft member', () => {
   render(<OnboardingScreen />);
@@ -406,12 +483,18 @@ it('limits a family to the database room capacity and allows adding again after 
   const add = screen.getByRole('button', { name: 'Thêm người ở' });
   expect(add).toHaveProperty('disabled', true);
   fireEvent.click(add);
-  expect(screen.getAllByRole('button', { name: 'Bắt đầu quét CCCD' })).toHaveLength(1);
-  expect(screen.getByRole('textbox', { name: 'CCCD (nếu có)' })).toBeTruthy();
+  expect(screen.getAllByRole('button', { name: 'Bắt đầu quét CCCD' })).toHaveLength(2);
+  expect(screen.queryByRole('textbox', { name: 'CCCD (nếu có)' })).toBeNull();
+  openMemberEditor();
+  expect(screen.getByRole('textbox', { name: 'Họ tên thành viên' })).toBeTruthy();
+  expect(screen.queryByRole('textbox', { name: 'CCCD (nếu có)' })).toBeNull();
+  fireEvent.click(screen.getByRole('button', { name: 'Ẩn thông tin' }));
   fireEvent.click(screen.getByRole('button', { name: 'Xóa Người ở 2' }));
   expect(screen.getByRole('button', { name: 'Thêm người ở' })).toHaveProperty('disabled', false);
   fireEvent.click(screen.getByRole('button', { name: 'Thêm người ở' }));
   expect(screen.getByText('2/2 người')).toBeTruthy();
+  expect(screen.getAllByText('Người ở 2')).toHaveLength(2);
+  expect(screen.queryByRole('textbox', { name: 'Họ tên thành viên' })).toBeNull();
   expect(state.json).not.toHaveBeenCalled();
 });
 it('limits new occupants to the remaining place when a two-person room already has one occupant', () => {
@@ -420,9 +503,7 @@ it('limits new occupants to the remaining place when a two-person room already h
     target: { value: 'occupied' },
   });
   fireEvent.click(screen.getByRole('button', { name: 'Tiếp tục' }));
-  fireEvent.change(screen.getByRole('combobox', { name: 'Hình thức thuê' }), {
-    target: { value: 'family' },
-  });
+  fireEvent.click(screen.getByRole('radio', { name: 'Hộ gia đình' }));
   expect(screen.getByText('1/1 người')).toBeTruthy();
   expect(screen.getByRole('button', { name: 'Thêm người ở' })).toHaveProperty('disabled', true);
   expect(screen.getAllByRole('button', { name: 'Bắt đầu quét CCCD' })).toHaveLength(1);
@@ -514,9 +595,7 @@ it('opens CCCD directly with Individual selected and forbids a second person', (
   render(<OnboardingScreen />);
   selectRoom();
   expect(screen.queryByLabelText('Tên gọi hồ sơ')).toBeNull();
-  expect(
-    (screen.getByRole('combobox', { name: 'Hình thức thuê' }) as HTMLSelectElement).value,
-  ).toBe('individual');
+  expect(screen.getByRole('radio', { name: 'Cá nhân' }).getAttribute('aria-checked')).toBe('true');
   const add = screen.getByRole('button', { name: 'Thêm người ở' }) as HTMLButtonElement;
   expect(add.disabled).toBe(true);
   fireEvent.click(add);
@@ -527,13 +606,13 @@ it('retains a family selection through Back and keeps draft members separate', (
   render(<OnboardingScreen />);
   selectRoom();
   addFamilyMember();
-  expect(screen.getAllByRole('button', { name: 'Bắt đầu quét CCCD' })).toHaveLength(1);
+  expect(screen.getAllByRole('button', { name: 'Bắt đầu quét CCCD' })).toHaveLength(2);
   fireEvent.click(screen.getByRole('button', { name: 'Quay lại' }));
   expect((screen.getByRole('combobox', { name: 'Phòng *' }) as HTMLSelectElement).value).toBe(
     'room',
   );
   fireEvent.click(screen.getByRole('button', { name: 'Tiếp tục' }));
-  expect(screen.getAllByRole('button', { name: 'Bắt đầu quét CCCD' })).toHaveLength(1);
+  expect(screen.getAllByRole('button', { name: 'Bắt đầu quét CCCD' })).toHaveLength(2);
   fireEvent.click(screen.getByRole('button', { name: 'Chọn Người ở 2 làm đại diện' }));
   expect(screen.queryByRole('button', { name: 'Chọn Người ở 2 làm đại diện' })).toBeNull();
   fireEvent.click(screen.getByRole('button', { name: 'Xóa Người ở 2' }));
@@ -548,11 +627,10 @@ it('creates only the representative identity and keeps family members editable w
   closeIdentity();
   expect(state.json.mock.calls[0][1]).toMatchObject({ residentType: 0, displayLabel: 'Người ở 1' });
   expect(state.json).toHaveBeenCalledTimes(1);
+  openMemberEditor();
   expect(screen.getByRole('textbox', { name: 'Họ tên thành viên' })).toBeTruthy();
   expect(screen.getByRole('button', { name: 'Xóa Người ở 2' })).toHaveProperty('disabled', false);
-  expect(
-    (screen.getByRole('combobox', { name: 'Hình thức thuê' }) as HTMLSelectElement).disabled,
-  ).toBe(true);
+  expect((screen.getByRole('radio', { name: 'Cá nhân' }) as HTMLButtonElement).disabled).toBe(true);
 });
 it('allows manual confirmation after OCR failure and completes only after the server accepts it', async () => {
   render(<OnboardingScreen />);
@@ -612,9 +690,14 @@ it.each(['Web released contract', 'Contract list'])(
     await screen.findByText('Đã xác nhận 1/1 người ở');
     fireEvent.click(screen.getByRole('button', { name: 'Tiếp tục tạo hợp đồng' }));
     fireEvent.click(screen.getByRole('button', { name: action }));
-    if (action === 'Web released contract')
-      expect(state.go).toHaveBeenCalledWith('signing', { contractId: 'released-contract' });
-    else expect(state.go).toHaveBeenCalledWith('signing');
+    expect(state.replace).toHaveBeenCalledWith({
+      pathname: '/workspace/[screen]',
+      params: {
+        screen: 'signing',
+        contractId: action === 'Web released contract' ? 'released-contract' : '',
+      },
+    });
+    expect(state.disablePrevention).toHaveBeenCalled();
     expect(state.go.mock.calls.some(([destination]) => destination === 'contract')).toBe(false);
   },
 );
@@ -774,6 +857,7 @@ it('retains unconfirmed identity edits across steps and keeps each person separa
     'NGƯỜI Ở MẪU',
   );
   closeIdentity();
+  openMemberEditor();
   fireEvent.change(screen.getByRole('textbox', { name: 'Họ tên thành viên' }), {
     target: { value: 'THÀNH VIÊN KIỂM THỬ' },
   });
@@ -890,6 +974,7 @@ it('retries the back side independently and preserves Staff edits and front fiel
     )
     .mockResolvedValueOnce(proposal({ dateOfIssue: '2020-02-03' }))
     .mockResolvedValueOnce(proposal({ dateOfIssue: '2021-04-05' }))
+    .mockResolvedValueOnce({ ...proposal({}), isFallback: true })
     .mockResolvedValueOnce(proposal({ dateOfIssue: '2022-06-07' }));
   render(<OnboardingScreen />);
   selectRoom();
@@ -913,6 +998,9 @@ it('retries the back side independently and preserves Staff edits and front fiel
   expect(
     (screen.getByRole('textbox', { name: 'Ngày cấp (dd/MM/yyyy)' }) as HTMLInputElement).value,
   ).toBe('05/04/2021');
+  fireEvent.click(screen.getByRole('button', { name: 'Chụp lại mặt sau' }));
+  fireEvent.click(screen.getByRole('button', { name: 'Chụp ảnh mặt sau' }));
+  expect(await screen.findByDisplayValue('05/04/2021')).toBeTruthy();
   fireEvent.change(screen.getByRole('textbox', { name: 'Ngày cấp (dd/MM/yyyy)' }), {
     target: { value: '06/04/2021' },
   });
@@ -924,6 +1012,7 @@ it('retries the back side independently and preserves Staff edits and front fiel
   ).toBe('06/04/2021');
   expect(state.image.mock.calls.map((call) => call[0].split('/').at(-1))).toEqual([
     'front',
+    'back',
     'back',
     'back',
     'back',
@@ -997,6 +1086,7 @@ it('requires verified representative identity and member details before review',
     (screen.getByRole('button', { name: 'Tiếp tục tạo hợp đồng' }) as HTMLButtonElement).disabled,
   ).toBe(true);
   expect(screen.queryByRole('dialog')).toBeNull();
+  openMemberEditor();
   fireEvent.change(screen.getByRole('textbox', { name: 'Họ tên thành viên' }), {
     target: { value: 'THÀNH VIÊN KIỂM THỬ' },
   });
@@ -1019,6 +1109,7 @@ it('persists a household before common step 3, retries safely and retains editab
   fireEvent.click(screen.getByRole('checkbox'));
   fireEvent.click(screen.getByRole('button', { name: 'Xác nhận thông tin' }));
   await screen.findByText('Đã xác nhận 1/2 người ở');
+  openMemberEditor();
   fireEvent.change(screen.getByRole('textbox', { name: 'Họ tên thành viên' }), {
     target: { value: 'THÀNH VIÊN KIỂM THỬ' },
   });
@@ -1059,6 +1150,7 @@ it('persists a household before common step 3, retries safely and retains editab
   await screen.findByRole('dialog', { name: 'Contract preparation' });
   expect(saves()).toHaveLength(2);
   fireEvent.click(screen.getByText('Previous identity step'));
+  openMemberEditor();
   fireEvent.change(screen.getByRole('textbox', { name: 'Họ tên thành viên' }), {
     target: { value: 'THÀNH VIÊN ĐÃ SỬA' },
   });
@@ -1122,6 +1214,7 @@ it('aborts a closed representative OCR flow and ignores a late response while ed
   fireEvent.click(screen.getByRole('button', { name: 'Chụp ảnh mặt trước' }));
   closeIdentity();
   expect(state.image.mock.calls[0][2].aborted).toBe(true);
+  openMemberEditor();
   fireEvent.change(screen.getByRole('textbox', { name: 'Họ tên thành viên' }), {
     target: { value: 'THÀNH VIÊN KIỂM THỬ' },
   });

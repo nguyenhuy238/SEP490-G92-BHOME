@@ -32,8 +32,11 @@ public sealed class AnonymousContractSigningController(AnonymousContractSigningS
     [HttpPost("api/v1/contract-signing/verify"), AllowAnonymous]
     public Task<AnonymousSigningAccess> Verify(AnonymousOtpInput input, CancellationToken t) => service.VerifyOtpAsync(input, t);
     [HttpPost("api/v1/contract-signing/document"), AllowAnonymous]
-    public async Task<IActionResult> Document(AnonymousSigningSession input, CancellationToken t) =>
-        File(await service.DocumentAsync(input, t), "application/pdf", "hop-dong-can-xac-nhan.pdf");
+    public async Task<IActionResult> Document(AnonymousSigningSession input, CancellationToken t)
+    {
+        var (bytes, name) = await service.DownloadDocumentAsync(input, t);
+        return File(bytes, "application/pdf", name);
+    }
     [HttpPost("api/v1/contract-signing/accept"), AllowAnonymous]
     public async Task<IActionResult> Accept(AnonymousAcceptanceInput input, CancellationToken t)
     { await service.AcceptAsync(input, t); return NoContent(); }

@@ -64,8 +64,9 @@ public sealed partial class Compact24OwnerSetupTests
             });
             await db.SaveChangesAsync();
         }
-        var input = new HoldingDraftInput(w.Room, w.Owner.Id, w.Tenant.Id, residentId, [residentId], Today,
-            Today.AddYears(1), DateTimeOffset.UtcNow.AddDays(1), 1000000, "Synthetic holding pricing lock");
+        var quote = await ConfigureHoldingPolicyAsync(owner, w.Room, "Synthetic holding pricing lock");
+        var input = new HoldingDraftInput(w.Room, w.Owner.Id, w.Tenant.Id, residentId, [residentId], quote.StartDate,
+            quote.EndDate, quote.ExpiresAt, quote.HoldingDeposit, quote.Terms, 1, quote.SettingsVersion);
         var charge = new PolicyWrite(w.Location, w.Room, ChargeCategory.Water, "WATER", "Water",
             ChargingMethod.Metered, 15000, Today, null);
         var water = await Read<PolicyDto>(await owner.PostAsJsonAsync("/api/v1/billing-policies", charge));
@@ -145,8 +146,9 @@ public sealed partial class Compact24OwnerSetupTests
         foreach (var input in inputs)
             originals.Add(await Read<PolicyDto>(await owner.PostAsJsonAsync("/api/v1/billing-policies", input)));
         var shadowed = await Read<PolicyDto>(await owner.PostAsJsonAsync("/api/v1/billing-policies", inputs[2] with { RoomId = null, Rate = 15000 }));
-        var holdingInput = new HoldingDraftInput(w.Room, w.Owner.Id, w.Tenant.Id, residentId, [residentId], today,
-            today.AddYears(1), DateTimeOffset.UtcNow.AddDays(1), 1000000, "Synthetic successor holding");
+        var quote = await ConfigureHoldingPolicyAsync(owner, w.Room, "Synthetic successor holding");
+        var holdingInput = new HoldingDraftInput(w.Room, w.Owner.Id, w.Tenant.Id, residentId, [residentId], quote.StartDate,
+            quote.EndDate, quote.ExpiresAt, quote.HoldingDeposit, quote.Terms, 1, quote.SettingsVersion);
         var holding = await Read<ContractId>(await Keyed(owner, "/api/v1/contracts/holdings", holdingInput, Guid.NewGuid()));
         await Read<ContractView>(await Keyed(owner, $"/api/v1/contracts/{holding.Id}/holding-approval", new HoldingDecisionInput("Approved"), Guid.NewGuid()));
 
@@ -206,13 +208,23 @@ public sealed partial class Compact24OwnerSetupTests
         Assert.Equal(unused.Id, edited.Id); Assert.Equal(2, edited.Edition); Assert.Equal(unused.Version + 1, edited.Version);
         await Read<ContractView>(await Keyed(owner, $"/api/v1/contracts/{holding.Id}/holding-cancellation",
             new HoldingCancellationInput("Synthetic cancellation", HoldingCancellationCause.TenantVoluntary, true), Guid.NewGuid()));
-        var newHolding = await Read<ContractId>(await Keyed(owner, "/api/v1/contracts/holdings",
-            holdingInput with { StartDate = cutover, EndDate = cutover.AddYears(1) }, Guid.NewGuid()));
-        await Read<ContractView>(await Keyed(owner, $"/api/v1/contracts/{newHolding.Id}/holding-approval", new HoldingDecisionInput("Approved successor"), Guid.NewGuid()));
+        // A new holding always starts on the current business date. Advance only the
+        // disposable test host to the successor effective date, then request a fresh quote.
+        var futureTime = new DateTimeOffset(cutover.ToDateTime(new TimeOnly(12, 0)), TimeSpan.FromHours(7)).ToUniversalTime();
+        await using var future = fixture.Factory!.WithWebHostBuilder(b => b.ConfigureServices(s => s.AddSingleton<TimeProvider>(new Clock(futureTime))));
+        using var futureOwner = future.CreateClient();
+        futureOwner.DefaultRequestHeaders.Authorization = owner.DefaultRequestHeaders.Authorization;
+        var nextQuote = await Read<HoldingPreparation>(await futureOwner.GetAsync($"/api/v1/contracts/holdings/preparation?roomId={w.Room}"));
+        Assert.Equal(cutover, nextQuote.StartDate);
+        Assert.Equal(cutover.AddMonths(1), nextQuote.EndDate);
+        Assert.Equal(successors[0].Rate, nextQuote.HoldingDeposit);
+        var newHolding = await Read<ContractId>(await Keyed(futureOwner, "/api/v1/contracts/holdings",
+            holdingInput with { StartDate = nextQuote.StartDate, EndDate = nextQuote.EndDate, ExpiresAt = nextQuote.ExpiresAt, HoldingDeposit = nextQuote.HoldingDeposit, Terms = nextQuote.Terms, SettingsVersion = nextQuote.SettingsVersion }, Guid.NewGuid()));
+        await Read<ContractView>(await Keyed(futureOwner, $"/api/v1/contracts/{newHolding.Id}/holding-approval", new HoldingDecisionInput("Approved successor"), Guid.NewGuid()));
         var nextSnapshot = ContractChargeSnapshot.Read(await LoadContract(newHolding.Id));
         Assert.All(successors, p => Assert.Equal(p.Id, nextSnapshot.Charges.Single(c => c.ChargeCode == p.ChargeCode).PolicyId));
         Assert.Equal(edited.Rate, nextSnapshot.Charges.Single(c => c.ChargeCode == edited.ChargeCode).Rate);
         Assert.Equal(0, (await LoadPolicy(originals[0].Id)).BindingContractCount);
-        Assert.Equal(cutover.AddYears(1), (await LoadPolicy(successors[0].Id)).LastContractEndDate);
+        Assert.Equal(nextQuote.EndDate, (await LoadPolicy(successors[0].Id)).LastContractEndDate);
     }
 }

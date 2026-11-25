@@ -60,6 +60,7 @@ export interface RefundSource {
   refundedAmount: string;
   reservedAmount: string;
   availableAmount: string | null;
+  eligibleReceiptRefundAmount?: string | null;
   isDevelopmentDemo: boolean;
   beneficiaries: { id: string; label: string }[];
   requests: Refund[];

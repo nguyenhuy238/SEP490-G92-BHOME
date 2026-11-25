@@ -1,5 +1,6 @@
 import importlib.util
 import json
+import tempfile
 import unittest
 from pathlib import Path
 from unittest.mock import patch
@@ -41,9 +42,123 @@ class ReleaseSafetyTests(unittest.TestCase):
             'Deployment__PublicOrigin': 'https://public-staging.103.146.23.157.sslip.io' if stage else 'https://www.103.146.23.157.sslip.io',
         }
 
-    def check(self, stage, prod):
+    def check(self, stage, prod, target='staging'):
         with patch.object(safety, 'env', side_effect=[stage, prod]):
-            return safety.check_environment('staging')
+            return safety.check_environment(target)
+
+    def pdf_tools(self):
+        return {'MainDraft__LibreOfficePath': '/usr/bin/libreoffice', 'MainDraft__PdfToPpmPath': '/usr/bin/pdftoppm'}
+
+    def test_release_image_pdf_defaults_do_not_change_private_configuration_fingerprint(self):
+        for target in ('staging', 'production'):
+            with self.subTest(target=target):
+                stage, prod = self.configuration('staging'), self.configuration('production')
+                before = self.check(stage, prod, target)
+                (stage if target == 'staging' else prod).update(self.pdf_tools())
+                self.assertEqual(before, self.check(stage, prod, target))
+
+    def test_pdf_tool_override_is_rejected_without_exposing_its_value(self):
+        for target in ('staging', 'production'):
+            for key in self.pdf_tools():
+                stage, prod = self.configuration('staging'), self.configuration('production')
+                (stage if target == 'staging' else prod)[key] = '/tmp/synthetic-private-executable'
+                with self.subTest(target=target, key=key):
+                    with self.assertRaises(ValueError) as error:
+                        self.check(stage, prod, target)
+                    self.assertIn(key, str(error.exception))
+                    self.assertNotIn('synthetic-private', str(error.exception))
+
+    def test_release_ocr_defaults_preserve_fingerprint_on_upgrade_and_rollback(self):
+        defaults = {'Ocr__Enabled': 'true', 'Ocr__ModelDirectory': '/models'}
+        for target in ('staging', 'production'):
+            with self.subTest(target=target):
+                stage, prod = self.configuration('staging'), self.configuration('production')
+                current = stage if target == 'staging' else prod
+                before = self.check(stage.copy(), prod.copy(), target)
+                current.update(defaults)
+                self.assertEqual(before, self.check(stage.copy(), prod.copy(), target))
+                # Rollback to the older approved image removes only these defaults.
+                for key in defaults:
+                    current.pop(key)
+                self.assertEqual(before, self.check(stage.copy(), prod.copy(), target))
+
+    def test_ocr_operator_overrides_and_other_options_remain_protected(self):
+        defaults = {'Ocr__Enabled': 'true', 'Ocr__ModelDirectory': '/models'}
+        for target in ('staging', 'production'):
+            for key, override in [('Ocr__Enabled', 'false'), ('Ocr__Enabled', ''),
+                                  ('Ocr__ModelDirectory', '/operator/models'),
+                                  ('Ocr__ModelDirectory', ''), ('Ocr__TimeoutSeconds', '60'),
+                                  ('Jwt__SigningKey', 'synthetic-rotated-private-key')]:
+                with self.subTest(target=target, key=key, override=override):
+                    stage, prod = self.configuration('staging'), self.configuration('production')
+                    current = stage if target == 'staging' else prod
+                    baseline = self.check(stage.copy(), prod.copy(), target)
+                    current.update(defaults)
+                    current[key] = override
+                    changed = self.check(stage.copy(), prod.copy(), target)
+                    self.assertNotEqual(baseline, changed)
+                    # An existing operator override is legal if it stays unchanged.
+                    self.assertEqual(changed, self.check(stage.copy(), prod.copy(), target))
+                    current[key] = 'different-value'
+                    self.assertNotEqual(changed, self.check(stage.copy(), prod.copy(), target))
+
+    def test_ocr_defaults_do_not_hide_a_protected_container_or_private_setting_change(self):
+        containers = [{'Id': 'synthetic-id', 'Image': 'synthetic-image', 'Mounts': [], 'started': 'synthetic-start'}]
+        stage, prod = self.configuration('staging'), self.configuration('production')
+        with tempfile.TemporaryDirectory() as directory:
+            path = str(Path(directory) / 'protected.json')
+            with patch.object(safety, 'protected', return_value=containers), \
+                    patch.object(safety, 'env', side_effect=[stage.copy(), prod.copy()]), \
+                    patch.object(safety.sys, 'argv', ['release-safety.py', 'snapshot', 'staging', path]):
+                safety.main()
+            stage.update({'Ocr__Enabled': 'true', 'Ocr__ModelDirectory': '/models'})
+            with patch.object(safety, 'protected', return_value=containers), \
+                    patch.object(safety, 'env', side_effect=[stage.copy(), prod.copy()]), \
+                    patch.object(safety.sys, 'argv', ['release-safety.py', 'unchanged', 'staging', path]):
+                safety.main()
+            for changed_containers, changed_stage in (
+                ([containers[0] | {'started': 'restarted'}], stage),
+                (containers, stage | {'Ocr__Enabled': 'false'}),
+                (containers, stage | {'Ocr__ModelDirectory': '/operator/models'}),
+                (containers, stage | {'Jwt__SigningKey': 'synthetic-rotated-private-key'}),
+            ):
+                with patch.object(safety, 'protected', return_value=changed_containers), \
+                        patch.object(safety, 'env', side_effect=[changed_stage.copy(), prod.copy()]), \
+                        patch.object(safety.sys, 'argv', ['release-safety.py', 'unchanged', 'staging', path]), \
+                        self.assertRaisesRegex(ValueError, 'Protected containers'):
+                    safety.main()
+
+    def test_other_draft_options_and_credentials_still_change_fingerprint(self):
+        for key, value in [('MainDraft__LibreOfficeContainerImage', 'synthetic-converter'),
+                           ('Jwt__SigningKey', 'synthetic-rotated-private-key')]:
+            stage, prod = self.configuration('staging'), self.configuration('production')
+            before = self.check(stage, prod)
+            stage.update(self.pdf_tools())
+            stage[key] = value
+            with self.subTest(key=key):
+                self.assertNotEqual(before, self.check(stage, prod))
+
+    def test_snapshot_accepts_pdf_defaults_but_rejects_protected_container_changes(self):
+        containers = [{'Id': 'synthetic-id', 'Image': 'synthetic-image', 'Mounts': [], 'started': 'synthetic-start'}]
+        stage, prod = self.configuration('staging'), self.configuration('production')
+        with tempfile.TemporaryDirectory() as directory:
+            path = str(Path(directory) / 'protected.json')
+            with patch.object(safety, 'protected', return_value=containers), \
+                    patch.object(safety, 'env', side_effect=[stage.copy(), prod.copy()]), \
+                    patch.object(safety.sys, 'argv', ['release-safety.py', 'snapshot', 'staging', path]):
+                safety.main()
+            stage.update(self.pdf_tools())
+            with patch.object(safety, 'protected', return_value=containers), \
+                    patch.object(safety, 'env', side_effect=[stage.copy(), prod.copy()]), \
+                    patch.object(safety.sys, 'argv', ['release-safety.py', 'unchanged', 'staging', path]):
+                safety.main()
+            for key, value in [('Id', 'recreated'), ('Image', 'changed'), ('Mounts', [{'Source': '/other'}]), ('started', 'restarted')]:
+                changed = [containers[0] | {key: value}]
+                with self.subTest(key=key), patch.object(safety, 'protected', return_value=changed), \
+                        patch.object(safety, 'env', side_effect=[stage.copy(), prod.copy()]), \
+                        patch.object(safety.sys, 'argv', ['release-safety.py', 'unchanged', 'staging', path]), \
+                        self.assertRaisesRegex(ValueError, 'Protected containers'):
+                    safety.main()
 
     def test_isolated_databases_keys_and_storage(self):
         self.assertRegex(self.check(self.configuration('staging'), self.configuration('production')), r'^[a-f0-9]{64}$')

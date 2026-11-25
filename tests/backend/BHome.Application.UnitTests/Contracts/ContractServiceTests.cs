@@ -309,19 +309,34 @@ public sealed class ContractServiceTests
     public async Task HoldingPreparationUsesOneMonthOfRentAndLocationTermWithVietnamMidnightExpiry()
     {
         var rig = new Rig();
-        rig.Settings.GetAsync(rig.Room.LocationId, default).ReturnsForAnyArgs(new HoldingSettings(rig.Room.LocationId, 2, 1.5m, "Owner configured terms", 3));
+        rig.Settings.GetForLocationAsync(rig.Room.LocationId, default).ReturnsForAnyArgs(new HoldingSettings(Guid.NewGuid(), 1, 1m, "Owner configured terms", 3, DateTimeOffset.UtcNow, Guid.NewGuid()));
         var result = await rig.Service.HoldingPreparationAsync(rig.Room.Id, default);
-        Assert.Equal(Today, result.StartDate); Assert.Equal(Today.AddMonths(2), result.EndDate);
-        Assert.Equal(new DateTimeOffset(2026, 12, 28, 17, 0, 0, TimeSpan.Zero), result.ExpiresAt);
+        Assert.Equal(Today, result.StartDate); Assert.Equal(Today.AddMonths(1), result.EndDate);
+        Assert.Equal(new DateTimeOffset(Today.AddMonths(1).ToDateTime(TimeOnly.MinValue), TimeSpan.FromHours(7)).ToUniversalTime(), result.ExpiresAt);
         Assert.Equal(3000000, result.HoldingDeposit); Assert.Equal(3000000, result.MonthlyRent);
+        Assert.Equal(1, result.HoldingMonths);
         Assert.Equal(3, result.SettingsVersion);
     }
     [Fact]
     public async Task HoldingPreparationDoesNotInventMissingLocationConfiguration()
     {
         var rig = new Rig();
+        rig.Settings.GetForLocationAsync(rig.Room.LocationId, default).ReturnsForAnyArgs((HoldingSettings?)null);
         var error = await Assert.ThrowsAsync<ContractException>(() => rig.Service.HoldingPreparationAsync(rig.Room.Id, default));
         Assert.Equal("holding_settings_required", error.Code);
+    }
+    [Fact]
+    public async Task HoldingCreationCannotBypassMissingOrStaleGlobalPolicy()
+    {
+        var rig = new Rig();
+        rig.Settings.GetForLocationAsync(rig.Room.LocationId, default).ReturnsForAnyArgs((HoldingSettings?)null);
+        var missing = await Assert.ThrowsAsync<ContractException>(() => rig.Service.CreateHoldingAsync(rig.HoldingDraft, Guid.NewGuid(), default));
+        Assert.Equal("holding_settings_required", missing.Code);
+        rig.Settings.GetForLocationAsync(rig.Room.LocationId, default).ReturnsForAnyArgs(
+            new HoldingSettings(Guid.NewGuid(), 1, 1m, "Synthetic Holding terms", 3, DateTimeOffset.UtcNow, Guid.NewGuid()));
+        var stale = await Assert.ThrowsAsync<ContractException>(() => rig.Service.CreateHoldingAsync(rig.HoldingDraft with { SettingsVersion = null }, Guid.NewGuid(), default));
+        Assert.Equal("holding_configuration_changed_reload", stale.Code);
+        Assert.Empty(rig.Contracts);
     }
     [Fact]
     public async Task HoldingMetadataDoesNotTurnItsDetailIntoMainOnboarding()
@@ -396,6 +411,8 @@ public sealed class ContractServiceTests
                     ChargingMethod.Metered, 15000, Today.AddMonths(-1), null, 1),
                  new PolicyDto(Guid.NewGuid(), Room.LocationId, Room.Id, ChargeCategory.ServiceFee, "INTERNET", "Internet",
                     ChargingMethod.FixedPerRoomPerMonth, 100000, Today.AddMonths(-1), null, 1)], []));
+            Settings.GetForLocationAsync(Room.LocationId, default).ReturnsForAnyArgs(
+                new HoldingSettings(Guid.NewGuid(), 1, 1m, "Synthetic Holding terms", 3, DateTimeOffset.UtcNow, Guid.NewGuid()));
             Repo.BindingContractsAsync(default, default, default, default, default).ReturnsForAnyArgs(Array.Empty<Contract>());
             Repo.MainForHoldingAsync(default, default).ReturnsForAnyArgs(c => Contracts.SingleOrDefault(x => x.HoldingContractId == c.Arg<Guid>()));
             Repo.OperationAsync(default, default, default!, default).ReturnsForAnyArgs(c => Operations.SingleOrDefault(o => o.ActorId == c.ArgAt<Guid>(0) && o.Key == c.ArgAt<Guid>(1) && o.Operation == c.Arg<string>()));
@@ -421,8 +438,8 @@ public sealed class ContractServiceTests
         }
         public ContractDraftInput Draft => new(Room.Id, User.UserId!.Value, Tenant, Resident.Id, [Resident.Id], Today.AddDays(-10), Today.AddDays(30), 3000000, 3000000, "Synthetic approved terms");
         public HoldingDraftInput HoldingDraft => new(Room.Id, User.UserId!.Value, Tenant, Resident.Id, [Resident.Id],
-            Today.AddDays(1), Today.AddMonths(12), new DateTimeOffset(2026, 10, 31, 8, 0, 0, TimeSpan.Zero),
-            2000000, "Synthetic Holding terms", 1);
+            Today, Today.AddMonths(1), new DateTimeOffset(Today.AddMonths(1).ToDateTime(TimeOnly.MinValue), TimeSpan.FromHours(7)).ToUniversalTime(),
+            3000000, "Synthetic Holding terms", 1, 3);
         public async Task<Contract> Create()
         { var id = await Service.CreateAsync(Draft, Guid.NewGuid(), default); return Contracts.Single(c => c.Id == id.Id); }
         public async Task<Contract> Ready()

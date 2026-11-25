@@ -164,7 +164,9 @@ public sealed partial class ContractService(IContractRepository repository, ICur
     public async Task<ContractView> GetAsync(Guid id, CancellationToken t)
     {
         var c = await Load(id, [Roles.Owner, Roles.Staff, Roles.Tenant], t);
-        return View(c) with { Occupants = await repository.OccupantsAsync(c.Id, t) };
+        var customer = c.Kind == ContractKind.Holding && (user.IsInRole(Roles.Owner) || user.IsInRole(Roles.Staff))
+            ? await repository.HoldingCustomerAsync(c.Id, c.RepresentativeResidentId, t) : null;
+        return View(c) with { Occupants = await repository.OccupantsAsync(c.Id, t), HoldingCustomer = customer };
     }
 
     public Task<ContractPage> ListAsync(int page, int pageSize, Guid? locationId, string? status, CancellationToken t)
@@ -716,13 +718,14 @@ public sealed partial class ContractService(IContractRepository repository, ICur
     }
 
     // UPLOAD_PROOF: the exact PDF the Owner must sign outside BHOME (kept when signing started).
-    public async Task CopyUploadSourceAsync(Guid id, Stream output, CancellationToken t)
+    public async Task<string> CopyUploadSourceAsync(Guid id, Stream output, CancellationToken t)
     {
         var c = await Load(id, [Roles.Owner], t);
         var s = PendingUploadSignature(c);
         if (s.Status != SignatureStatus.Pending) throw ContractException.Conflict("signing_not_pending");
         var issued = await PreparedPdfAsync(c, s, t);
         await output.WriteAsync(issued, t);
+        return ContractDownloadName.For(c.Kind, c.Id);
     }
 
     // UPLOAD_PROOF: the issued PDF signed by the Owner's own certificate. A rejected file changes nothing, so the
@@ -959,7 +962,7 @@ public sealed partial class ContractService(IContractRepository repository, ICur
         return signingPages!.RenderPage(pdf, page, Math.Clamp(width, 200, 1400));
     }
 
-    public async Task CopyDocumentAsync(Guid id, Stream output, CancellationToken t)
+    public async Task<string> CopyDocumentAsync(Guid id, Stream output, CancellationToken t)
     {
         var c = await Load(id, [Roles.Owner, Roles.Tenant], t);
         if (c.SigningMode == ContractSigningModes.Internal)
@@ -970,7 +973,7 @@ public sealed partial class ContractService(IContractRepository repository, ICur
                 using var accepted = new MemoryStream();
                 await storage.CopyToAsync(evidence.FinalDocumentKey ?? evidence.TenantDocumentKey, accepted, t);
                 if (FileHash(accepted.ToArray()) != (evidence.FinalDocumentHash ?? evidence.TenantDocumentHash)) throw ContractException.Conflict("signing_evidence_integrity_failed");
-                accepted.Position = 0; await accepted.CopyToAsync(output, t); return;
+                accepted.Position = 0; await accepted.CopyToAsync(output, t); return ContractDownloadName.For(c.Kind, c.Id);
             }
             if (!AnonymousContractSigningService.AllowsEitherSigningOrder(c)) throw ContractException.Conflict("signed_document_not_available");
             // Owner-first Holding can expose its verified Owner PDF while awaiting Tenant acceptance.
@@ -982,6 +985,7 @@ public sealed partial class ContractService(IContractRepository repository, ICur
         await storage.CopyToAsync(s.SignedObjectKey, buffer, t);
         if (FileHash(buffer.ToArray()) != s.SignedHash) throw ContractException.Conflict("signing_evidence_integrity_failed");
         buffer.Position = 0; await buffer.CopyToAsync(output, t);
+        return ContractDownloadName.For(c.Kind, c.Id);
     }
 
     public Task<MoveOutView> RequestTerminationAsync(Guid id, TerminationInput x, Guid key, bool expiry, CancellationToken t)

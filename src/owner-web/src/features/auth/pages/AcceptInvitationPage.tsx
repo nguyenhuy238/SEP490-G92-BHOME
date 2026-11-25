@@ -71,6 +71,8 @@ export default function AcceptInvitationPage() {
               <CircularProgress size={20} />
               <Typography>Đang kiểm tra lời mời…</Typography>
             </Stack>
+          ) : invitation.status === 'Activated' ? (
+            <Alert severity="success">Kích hoạt tài khoản thành công.</Alert>
           ) : valid ? (
             <Stack
               component="form"
@@ -108,7 +110,7 @@ export default function AcceptInvitationPage() {
                     setPassword('');
                     setRepeat('');
                     setLink({ userName: '', token: '' });
-                    void navigate('/login', { replace: true, state: { invitationAccepted: true } });
+                    setInvitation({ status: 'Activated' });
                   })
                   .catch(async (failure: unknown) => {
                     if ((failure as { status?: number }).status === 400) {
@@ -189,9 +191,11 @@ export default function AcceptInvitationPage() {
               )}
             </>
           )}
-          <Button component={Link} to="/login">
-            Đến đăng nhập
-          </Button>
+          {invitation.status !== 'Activated' && (
+            <Button component={Link} to="/login">
+              Đến đăng nhập
+            </Button>
+          )}
         </Stack>
       </Paper>
     </Box>

@@ -1,6 +1,7 @@
-import React, { useCallback, useState } from 'react';
+import React, { useCallback, useMemo, useState } from 'react';
 import { useLocalSearchParams } from 'expo-router';
-import { Button, Text } from 'react-native-paper';
+import { ScrollView, StyleSheet, View } from 'react-native';
+import { Icon, IconButton, Text, TouchableRipple } from 'react-native-paper';
 import { Action as SharedAction, Box, Heading, Pill, ui } from '../../components/WorkspaceKit';
 import { useWorkspaceHeaderRefresh } from '../../components/WorkspaceHeaderContext';
 import { StaffWorkflowTabs } from '../../components/StaffWorkflowTabs';
@@ -37,6 +38,7 @@ import {
   incidentMoney,
 } from './IncidentUi';
 import { IncidentActionPanel } from './IncidentActions';
+import { colors as c } from '../../theme/theme';
 
 const idPattern = /^[\da-f]{8}-(?:[\da-f]{4}-){3}[\da-f]{12}$/i;
 function Action(props: React.ComponentProps<typeof SharedAction>) {
@@ -63,7 +65,11 @@ function Pager({
 }
 function QueryState(props: React.ComponentProps<typeof SharedQueryState>) {
   const { role } = useWorkspace();
-  return role === 'Owner' ? <OwnerDataState {...props} /> : <SharedQueryState {...props} />;
+  return role === 'Owner' && !props.loadingLabel ? (
+    <OwnerDataState {...props} />
+  ) : (
+    <SharedQueryState {...props} />
+  );
 }
 function StaffIncidentListHeader({
   query,
@@ -72,15 +78,187 @@ function StaffIncidentListHeader({
   query: { reload: () => void; loading: boolean };
   emergency: boolean;
 }) {
+  const { role, go } = useWorkspace();
   const title = emergency ? 'Sự cố khẩn cấp' : 'Báo cáo sự cố';
-  const inHeader = useWorkspaceHeaderRefresh(query.reload, query.loading, { title });
+  const openInbox = useCallback(() => go('incident-inbox'), [go]);
+  const action = useMemo(
+    () =>
+      role === 'Staff' && !emergency
+        ? {
+            icon: 'bell-outline',
+            accessibilityLabel: 'Thông báo sự cố và bảo trì',
+            onPress: openInbox,
+            disabled: false,
+          }
+        : undefined,
+    [emergency, openInbox, role],
+  );
+  const inHeader = useWorkspaceHeaderRefresh(query.reload, query.loading, { title, action });
+  if (inHeader) return null;
+  if (emergency)
+    return (
+      <Heading
+        title={title}
+        detail="Dữ liệu theo cơ sở và phân công hiện hành"
+        action="Tải lại"
+        onPress={query.reload}
+      />
+    );
   return (
-    <Heading
-      title={title}
-      detail="Dữ liệu theo cơ sở và phân công hiện hành"
-      action={inHeader ? undefined : 'Tải lại'}
-      onPress={inHeader ? undefined : query.reload}
-    />
+    <View style={incidentStyles.standaloneHeader}>
+      <Text variant="titleLarge" style={incidentStyles.reportTitle}>
+        {title}
+      </Text>
+      <IconButton
+        icon="bell-outline"
+        accessibilityLabel="Thông báo sự cố và bảo trì"
+        onPress={openInbox}
+      />
+    </View>
+  );
+}
+
+function IncidentFilterRow({
+  label,
+  value,
+  options,
+  onChange,
+}: {
+  label: string;
+  value: string;
+  options: { id: string; label: string }[];
+  onChange: (value: string) => void;
+}) {
+  return (
+    <View style={incidentStyles.filterGroup}>
+      <Text variant="labelMedium" style={incidentStyles.filterLabel}>
+        {label}
+      </Text>
+      <ScrollView
+        horizontal
+        showsHorizontalScrollIndicator={false}
+        contentContainerStyle={incidentStyles.filterRail}
+      >
+        {options.map((option) => {
+          const selected = value === option.id;
+          return (
+            <TouchableRipple
+              key={option.id}
+              accessibilityRole="button"
+              accessibilityLabel={option.label}
+              accessibilityState={{ selected }}
+              onPress={() => onChange(option.id)}
+              style={[incidentStyles.filterChip, selected && incidentStyles.filterChipSelected]}
+            >
+              <Text
+                variant="labelMedium"
+                style={[
+                  incidentStyles.filterChipText,
+                  selected && incidentStyles.filterChipTextSelected,
+                ]}
+              >
+                {option.label}
+              </Text>
+            </TouchableRipple>
+          );
+        })}
+      </ScrollView>
+    </View>
+  );
+}
+
+function IncidentMeta({ label, value }: { label: string; value: string | null | undefined }) {
+  if (!value?.trim()) return null;
+  return (
+    <View style={incidentStyles.metaCell}>
+      <Text variant="labelSmall" style={incidentStyles.metaLabel}>
+        {label}
+      </Text>
+      <Text variant="bodySmall" numberOfLines={2} style={incidentStyles.metaValue}>
+        {value}
+      </Text>
+    </View>
+  );
+}
+
+function IncidentReportCard({
+  report,
+  role,
+  onPress,
+}: {
+  report: Incident;
+  role: string | null;
+  onPress: () => void;
+}) {
+  const statusTone =
+    report.status === 'Resolved'
+      ? 'green'
+      : ['Rejected', 'Duplicate', 'Cancelled'].includes(report.status)
+        ? 'neutral'
+        : 'blue';
+  const title = report.roomNumber
+    ? `Phòng ${report.roomNumber}`
+    : report.commonArea || 'Báo cáo sự cố';
+  return (
+    <Box style={incidentStyles.reportCard}>
+      <View style={incidentStyles.reportHeader}>
+        <View style={incidentStyles.reportHeading}>
+          <Text variant="titleMedium" numberOfLines={2} style={incidentStyles.reportTitle}>
+            {title}
+          </Text>
+          <View style={incidentStyles.dateRow}>
+            <Icon source="clock-outline" size={14} color={c.muted} />
+            <Text variant="labelSmall" style={incidentStyles.dateText}>
+              {incidentDate(report.createdAt)}
+            </Text>
+          </View>
+        </View>
+        <View style={incidentStyles.badges}>
+          <Pill tone={report.severity === 'Emergency' ? 'red' : 'blue'}>
+            {incidentText(report.severity)}
+          </Pill>
+          <Pill tone={statusTone}>{incidentText(report.status)}</Pill>
+        </View>
+      </View>
+      <Text variant="bodyMedium" numberOfLines={3} style={incidentStyles.description}>
+        {report.description}
+      </Text>
+      <View style={incidentStyles.metaDivider} />
+      <View style={incidentStyles.metaGrid}>
+        <IncidentMeta label="Cơ sở" value={report.locationName} />
+        {!!report.roomNumber && <IncidentMeta label="Khu vực chung" value={report.commonArea} />}
+        <IncidentMeta label="Tài sản" value={report.assetName} />
+        {role !== 'Tenant' && <IncidentMeta label="Loại sự cố" value={report.type} />}
+        {role !== 'Tenant' && <IncidentMeta label="Nhóm sự cố" value={report.category} />}
+      </View>
+      <Action onPress={onPress}>Xem chi tiết báo cáo</Action>
+    </Box>
+  );
+}
+
+function IncidentInboxLink({ onPress }: { onPress: () => void }) {
+  return (
+    <TouchableRipple
+      accessibilityRole="button"
+      accessibilityLabel="Thông báo sự cố và bảo trì"
+      onPress={onPress}
+      style={incidentStyles.inboxLink}
+    >
+      <View style={incidentStyles.inboxLinkContent}>
+        <View style={incidentStyles.inboxIcon}>
+          <Icon source="bell-outline" size={19} color={c.blue} />
+        </View>
+        <View style={incidentStyles.inboxCopy}>
+          <Text variant="labelLarge" style={incidentStyles.reportTitle}>
+            Thông báo sự cố và bảo trì
+          </Text>
+          <Text variant="bodySmall" style={incidentStyles.dateText}>
+            Xem cập nhật và công việc được thông báo
+          </Text>
+        </View>
+        <Icon source="chevron-right" size={20} color={c.muted} />
+      </View>
+    </TouchableRipple>
   );
 }
 
@@ -121,84 +299,107 @@ export function IncidentListScreen({
       )}
       {active && (
         <>
-          <Button compact mode="text" icon="bell-outline" onPress={() => go('incident-inbox')}>
-            Thông báo sự cố và bảo trì
-          </Button>
-          <ChoiceField
-            label="Trạng thái báo cáo"
-            value={status}
-            onChange={(value) => {
-              setStatus(value);
-              setPage(1);
-            }}
-            options={[
-              { id: '', label: 'Tất cả' },
-              ...['Submitted', 'InProgress', 'Resolved', 'Rejected', 'Duplicate', 'Cancelled'].map(
-                (id) => ({ id, label: incidentText(id) }),
-              ),
-            ]}
-          />
-          {!emergency && (
-            <ChoiceField
-              label="Mức độ sự cố"
-              value={severity}
+          {role !== 'Staff' && <IncidentInboxLink onPress={() => go('incident-inbox')} />}
+          <View style={incidentStyles.filterPanel}>
+            <IncidentFilterRow
+              label="Trạng thái báo cáo"
+              value={status}
               onChange={(value) => {
-                setSeverity(value);
+                setStatus(value);
                 setPage(1);
               }}
               options={[
                 { id: '', label: 'Tất cả' },
-                { id: 'Normal', label: 'Thông thường' },
-                { id: 'Emergency', label: 'Khẩn cấp' },
+                ...[
+                  'Submitted',
+                  'InProgress',
+                  'Resolved',
+                  'Rejected',
+                  'Duplicate',
+                  'Cancelled',
+                ].map((id) => ({ id, label: incidentText(id) })),
               ]}
             />
-          )}
+            {!emergency && (
+              <IncidentFilterRow
+                label="Mức độ sự cố"
+                value={severity}
+                onChange={(value) => {
+                  setSeverity(value);
+                  setPage(1);
+                }}
+                options={[
+                  { id: '', label: 'Tất cả' },
+                  { id: 'Normal', label: 'Thông thường' },
+                  { id: 'Emergency', label: 'Khẩn cấp' },
+                ]}
+              />
+            )}
+          </View>
           <QueryState {...query} />
+          {(!!query.data || role === 'Staff') && (
+            <View style={incidentStyles.resultHeading}>
+              <Text variant="titleSmall" style={incidentStyles.reportTitle}>
+                {query.data ? `${query.data.totalCount} báo cáo` : 'Danh sách báo cáo'}
+              </Text>
+              {role === 'Staff' && (
+                <View style={incidentStyles.resultActions}>
+                  <IconButton
+                    icon="plus"
+                    accessibilityLabel="Báo cáo sự cố mới"
+                    disabled={preview || !staffLocationId}
+                    onPress={() => go('report-incident')}
+                    style={{ margin: 0 }}
+                  />
+                  <IconButton
+                    icon="refresh"
+                    accessibilityLabel="Tải lại danh sách báo cáo"
+                    disabled={query.loading}
+                    onPress={query.reload}
+                    style={{ margin: 0 }}
+                  />
+                </View>
+              )}
+            </View>
+          )}
           {query.data?.items.length === 0 && (
-            <Text>Không có báo cáo trong phạm vi và bộ lọc này.</Text>
+            <Box style={incidentStyles.emptyState}>
+              <View style={incidentStyles.emptyIcon}>
+                <Icon source="clipboard-text-search-outline" size={24} color={c.blue} />
+              </View>
+              <Text variant="titleMedium" style={incidentStyles.reportTitle}>
+                Không có báo cáo phù hợp
+              </Text>
+              <Text variant="bodySmall" style={incidentStyles.dateText}>
+                Thử đổi trạng thái hoặc mức độ sự cố để xem thêm báo cáo.
+              </Text>
+            </Box>
           )}
           {query.data?.items.map((report) => (
-            <Box key={report.id}>
-              <Heading
-                title={
-                  report.roomNumber
-                    ? `Phòng ${report.roomNumber}`
-                    : report.commonArea || 'Báo cáo sự cố'
-                }
-                detail={incidentDate(report.createdAt)}
-              />
-              <Pill tone={report.severity === 'Emergency' ? 'red' : 'blue'}>
-                {incidentText(report.severity)} · {incidentText(report.status)}
-              </Pill>
-              <Text numberOfLines={3}>{report.description}</Text>
-              <Info label="Cơ sở" value={report.locationName} />
-              <Info label="Khu vực chung" value={report.commonArea} />
-              <Info label="Tài sản" value={report.assetName} />
-              {role !== 'Tenant' && <Info label="Loại" value={report.type} />}
-              {role !== 'Tenant' && <Info label="Nhóm" value={report.category} />}
-              <Action onPress={() => go('incident-detail', { incidentId: report.id })}>
-                Xem chi tiết báo cáo
-              </Action>
-            </Box>
+            <IncidentReportCard
+              key={report.id}
+              report={report}
+              role={role}
+              onPress={() => go('incident-detail', { incidentId: report.id })}
+            />
           ))}
           <Pager query={query} page={page} setPage={setPage} />
         </>
       )}
-      {role !== 'Owner' && (
-        <Action onPress={() => go(role === 'Staff' ? 'report-incident' : 'incidents')}>
-          Báo cáo sự cố mới
-        </Action>
-      )}
       {role !== 'Tenant' && !embedded && (
-        <Action
-          secondary
-          onPress={() => go(role === 'Owner' ? 'owner-maintenance' : 'staff-maintenance')}
-        >
-          Lệnh sửa chữa bảo trì
-        </Action>
+        <View style={incidentStyles.pageActions}>
+          <Action
+            icon="wrench-outline"
+            secondary
+            onPress={() => go(role === 'Owner' ? 'owner-maintenance' : 'staff-maintenance')}
+          >
+            Lệnh sửa chữa bảo trì
+          </Action>
+        </View>
       )}
       {role === 'Tenant' && (
         <>
+          <Action onPress={() => go('incidents')}>Báo cáo sự cố mới</Action>
           <Action secondary onPress={() => go('invoice', { focus: 'adjustment' })}>
             Yêu cầu điều chỉnh hóa đơn
           </Action>
@@ -210,6 +411,78 @@ export function IncidentListScreen({
     </>
   );
 }
+
+const incidentStyles = StyleSheet.create({
+  filterPanel: {
+    backgroundColor: c.soft,
+    borderRadius: 12,
+    paddingVertical: 12,
+    gap: 12,
+  },
+  standaloneHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    minHeight: 48,
+  },
+  filterGroup: { gap: 7 },
+  filterLabel: { color: c.primary, paddingHorizontal: 12 },
+  filterRail: { flexDirection: 'row', gap: 7, paddingHorizontal: 12 },
+  filterChip: {
+    minHeight: 40,
+    justifyContent: 'center',
+    paddingHorizontal: 13,
+    borderRadius: 18,
+    backgroundColor: c.white,
+    borderWidth: 1,
+    borderColor: c.border,
+  },
+  filterChipSelected: { backgroundColor: c.primary, borderColor: c.primary },
+  filterChipText: { color: c.muted },
+  filterChipTextSelected: { color: c.white },
+  inboxLink: { borderRadius: 12, backgroundColor: c.white, borderWidth: 1, borderColor: c.border },
+  inboxLinkContent: {
+    minHeight: 68,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 11,
+    padding: 12,
+  },
+  inboxIcon: {
+    width: 38,
+    height: 38,
+    borderRadius: 11,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: c.tint,
+  },
+  inboxCopy: { flex: 1, minWidth: 0, gap: 2 },
+  reportCard: { gap: 11, padding: 14 },
+  reportHeader: { flexDirection: 'row', alignItems: 'flex-start', gap: 10 },
+  reportHeading: { flex: 1, minWidth: 0, gap: 4 },
+  reportTitle: { color: c.primary },
+  dateRow: { flexDirection: 'row', alignItems: 'center', gap: 5 },
+  dateText: { color: c.muted },
+  badges: { maxWidth: '44%', alignItems: 'flex-end', gap: 5 },
+  description: { color: c.ink, lineHeight: 20 },
+  metaDivider: { height: 1, backgroundColor: c.border },
+  metaGrid: { flexDirection: 'row', flexWrap: 'wrap', columnGap: 12, rowGap: 10 },
+  metaCell: { flexBasis: '46%', flexGrow: 1, minWidth: 120, gap: 2 },
+  metaLabel: { color: c.muted },
+  metaValue: { color: c.primary },
+  resultHeading: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
+  resultActions: { flexDirection: 'row', alignItems: 'center' },
+  emptyState: { alignItems: 'center', paddingVertical: 24, gap: 8 },
+  emptyIcon: {
+    width: 48,
+    height: 48,
+    borderRadius: 14,
+    backgroundColor: c.tint,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  pageActions: { gap: 9, paddingTop: 2, paddingBottom: 8 },
+});
 
 export function IncidentDetailScreen() {
   const { incidentId } = useLocalSearchParams<{ incidentId?: string }>();
@@ -310,7 +583,7 @@ function IncidentDetail({ id }: { id: string }) {
       >
         Về danh sách báo cáo
       </Action>
-      <QueryState {...query} />
+      <QueryState {...query} loadingLabel="?ang t?i chi ti?t s? c??" />
       {role === 'Staff' && query.data && inSelectedLocation && (
         <StaffWorkflowTabs
           accessibilityLabel="Các phần báo cáo sự cố"
@@ -537,7 +810,9 @@ function WorkCard({
           })
         }
       >
-        Xem chi tiết lệnh sửa chữa
+        {role === 'Staff' && returnTo === 'work-orders'
+          ? 'Xem chi tiết công việc'
+          : 'Xem chi tiết lệnh sửa chữa'}
       </Action>
     </Box>
   );
@@ -558,10 +833,10 @@ export function MaintenanceListScreen({ embedded = false }: { embedded?: boolean
   return (
     <>
       <Heading
-        title={embedded ? 'Lệnh sửa chữa & bảo trì' : 'Xử lý sự cố & Bảo trì'}
+        title={embedded ? 'Công việc sửa chữa & bảo trì' : 'Xử lý sự cố & Bảo trì'}
         detail={
           embedded
-            ? 'Mỗi lệnh sửa chữa là một công việc riêng, kể cả lệnh liên kết với báo cáo sự cố'
+            ? 'Các việc được giao từ báo cáo sự cố hoặc kế hoạch bảo trì chủ động'
             : 'Lệnh sửa chữa theo phân công và quyền truy cập'
         }
         action={embedded ? 'Tải lại' : undefined}
@@ -574,7 +849,7 @@ export function MaintenanceListScreen({ embedded = false }: { embedded?: boolean
       {active && (
         <>
           <ChoiceField
-            label="Trạng thái lệnh sửa chữa"
+            label={embedded ? 'Trạng thái sửa chữa / bảo trì' : 'Trạng thái lệnh sửa chữa'}
             value={status}
             onChange={(value) => {
               setStatus(value);

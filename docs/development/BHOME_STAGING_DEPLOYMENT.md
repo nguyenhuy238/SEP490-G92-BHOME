@@ -61,6 +61,17 @@ Staging đã duyệt. Links mới vẫn sinh từ anchors canonical; không sinh
 
 ## Cấu hình và Compose
 
+Email nghiệp vụ UC-14/15/22 và JOB-04 được bật mặc định trong `appsettings.Staging.json`.
+Nếu private overlay đặt `NotificationChannels__ContractAndInvoiceEmailEnabled`, giá trị phải là `true`.
+Cờ này gửi hợp đồng giữ chỗ, hợp đồng thuê đã kích hoạt và hóa
+đơn đã thanh toán qua SMTP hiện có. Giữ `Jobs__Enabled=false` và
+`NotificationChannels__AutomationEnabled=false` nếu chỉ chạy các email này.
+Hàng đợi dùng cùng một khóa cho xác nhận giữ chỗ ngay cả khi hợp đồng đã chuyển
+sang hợp đồng thuê. Email đính kèm bản PDF đã ký và biên nhận cọc đã xác minh.
+Khi chạy ở chế độ email nghiệp vụ, worker xử lý thư hoàn tất giữ chỗ và thông báo kích hoạt hợp đồng thuê trước lượt phát thông báo chung. Email xác nhận hợp đồng thuê kèm PDF đã ký và biên nhận thanh toán ban đầu khi có khoản thanh toán đã xác minh. Email thiết lập tài khoản được xử lý riêng với hợp đồng thuê ký nội bộ có yêu cầu thanh toán ban đầu.
+Khi gửi lời mời ký hợp đồng thuê từ Mobile, hệ thống dùng email đã lưu của
+người đại diện và hiển thị địa chỉ đã che một phần.
+
 Project `bhome-sepay-stage`; ghép các file theo thứ tự:
 
 1. `/opt/bhome/deploy/compose.sepay.yml`
@@ -83,6 +94,53 @@ Dùng cả hai `--env-file`: `sepay-staging.db.env`, `stage-storage.env` trong p
 config. File thứ hai root-only, chứa connection hiện có (đổi host sang PostgreSQL
 Staging), credential storage mới riêng và image Public bootstrap; không đưa vào Git/log.
 Mẫu: `deploy/vps/compose.staging-public.example.yml` và `compose.staging-compat.example.yml`.
+
+### QR tiền cọc giữ chỗ
+
+Theo UC-14/22 và GBR-10, màn hình Mobile chỉ lấy QR chuyển khoản từ API của
+chính hợp đồng. Nếu API trả `sepay_environment_mismatch`, màn hình báo lỗi cấu
+hình và không đưa ra QR xem thử. Staging dùng SePay Test cho hợp đồng Test đủ
+điều kiện. Hợp đồng Live cần SePay Live được bật và tài khoản nhận tiền hợp lệ.
+
+Để tạo hợp đồng mới dùng SePay Test với PostgreSQL Docker riêng của Staging,
+đặt `HoldingTesting__Enabled=true`, `HoldingTesting__DatabaseHost` và
+`HoldingTesting__DatabaseName` khớp đúng kết nối API Staging. Khai báo
+`HoldingTesting__LocationIds__0`, `__1`, … cho các cơ sở có tài khoản nhận tiền
+sandbox trong cấu hình SePay và trong cơ sở dữ liệu. Hợp đồng mới tại các cơ sở
+đó dùng `PaymentMode=Test`. Các hợp đồng Live đã tạo giữ nguyên chế độ.
+Owner có thể lưu tài khoản tổng hợp qua API tài khoản nhận tiền của cơ sở khi
+BIN và số tài khoản khớp cấu hình SePay Test của chính cơ sở đó. API giữ kiểm
+tra phiên bản và nhật ký xác nhận tài khoản. Production không bật luồng này.
+
+`MainDraft__AllowStagingSigningReview=true` cho phép dùng mẫu hợp đồng thuê
+kiểm thử trong luồng gửi ký UC-15 trên Staging. API chỉ cho phép ở các cơ sở
+thuộc phạm vi thử nghiệm trên database Staging và với hợp đồng `PaymentMode=Test`.
+PDF vẫn mang cờ `DevelopmentOnly`, phải qua bước xem và xác nhận trước khi gửi.
+
+### Ký hợp đồng nội bộ trên Staging
+
+Luồng UC-14/15 theo quyết định 07 trong `BHOME_NQH_BUSINESS_DECISIONS_2026-11-10.md`
+cần khóa xác minh OTP riêng và chứng thư đóng dấu hệ thống. Ghép các mục
+`environment` và `volumes` từ `deploy/vps/compose.contract-signing.example.yml`
+vào service `api` trong `/opt/bhome-config/compose.sepay-stage-api.yml` để bản
+release sau tiếp tục dùng cùng cấu hình. Kiểm tra các overlay phía sau không ghi đè.
+
+- Trong `stage-storage.env` trên VPS, đặt `BHOME_ANON_HMAC_BASE64`
+  bằng khóa Base64 giải mã được ít nhất 32 byte ngẫu nhiên. Giữ khóa ổn định qua
+  các lần triển khai và dùng lại khóa Staging hiện có nếu còn lời mời đang hiệu lực.
+- Đặt `BHOME_SIGNING_PUBLIC_URL` thành URL HTTPS trang `/contract-signing`
+  của Owner Web Staging. Giữ allowlist email Staging và dùng địa chỉ kiểm thử đã được phép.
+- Đặt `BHOME_SIGNING_SEAL_PFX_FILE` thành đường dẫn tuyệt đối đến PFX riêng
+  của Staging có khóa riêng RSA của hệ thống, và đặt mật khẩu PFX qua
+  `BHOME_SIGNING_SEAL_PFX_PASSWORD`. Cấp quyền đọc file cho UID chạy API
+  trong container và giữ mount chỉ đọc. Giữ PFX và các giá trị bí mật trên VPS.
+- Kiểm tra Compose với `config --quiet` theo đúng chuỗi overlay, sau đó tạo lại
+  riêng container `api` với image release Staging hiện tại. Chạy lại
+  `/opt/bhome-deploy/staging/connect-staging-edge.py` để khôi phục alias API trên
+  mạng edge. Kiểm tra readiness nội
+  bộ và dùng hợp đồng thử để xác nhận Owner ký được, Staff được phân quyền gửi
+  được lời mời, và người nhận có thể mở link và xác minh OTP.
+
 File private có thêm `BHOME_STAGE_LEGACY_OWNER_IMAGE`, `BHOME_STAGE_LEGACY_PUBLIC_IMAGE`,
 `BHOME_STAGE_LEGACY_OWNER_INDEX` pin đúng images/index trước migration. Không tự cập
 nhật các bundle này qua CD; chỉ bỏ sau khi chứng minh không còn phiên/link/callback phụ thuộc.
@@ -140,6 +198,9 @@ Scripts root-owned ở `/opt/bhome-deploy/staging/`:
   OCI/digest và image thật đang chạy.
   Giữ hotfix chuẩn hóa hai đường dẫn PDF canonical từ Release image; đường dẫn
   executable tùy ý vẫn bị từ chối. Staging API image phải có nhãn regression v1.
+  Hai OCR defaults canonical (`Ocr__Enabled=true`, `Ocr__ModelDirectory=/models`)
+  được chuẩn hóa; override khác vẫn nằm trong fingerprint và Compose guard vẫn
+  kiểm tra mọi thay đổi cấu hình tường minh.
 - `release-config.py`: tạo runtime overlay Staging một lần từ capability đang chạy;
   so cấu hình Compose đầy đủ trước/sau, chỉ cho đổi image API/Owner/Public. Không
   in giá trị cấu hình hoặc secret khi có khác biệt. Cần cài helper này cùng
@@ -158,6 +219,170 @@ Forced command chỉ chấp nhận dạng trên. GitHub/VPS đều khóa deploym
 `cancel-in-progress: false`. Kiểm `/opt/bhome-deploy/runs/staging-<run-id>-<attempt>/`
 và tmux `bhome-deploy`, rồi reconnect cùng lệnh. Watcher khoảng 25 phút; timeout
 không có nghĩa worker đã dừng. Không tạo run ID mới chỉ vì SSH disconnect.
+
+### Cập nhật release guard do operator phê duyệt (CI #346)
+
+Push hoặc merge source không cập nhật script root-owned trên VPS. CI key không
+được cấp quyền cài guard. Dùng quy trình sau chỉ sau khi operator đã duyệt
+commit, kết quả kiểm thử và hai checksum; không dùng key CI để truyền file.
+
+1. Tại máy review, dùng full SHA của commit rollout đã duyệt, không dùng branch
+   động. Ví dụ PowerShell (điền SHA từ biên bản review):
+
+   ```powershell
+   $reviewed = '<full-reviewed-rollout-commit>'
+   git show --stat $reviewed
+   git merge-base --is-ancestor 3efcfe64 $reviewed
+   if ($LASTEXITCODE -ne 0) { throw 'OCR fix is not an ancestor' }
+   $zip = ".tools/guard-rollout-$reviewed.zip"
+   git archive --format=zip --output=$zip $reviewed deploy/vps/install-staging-release-guard.py deploy/vps/release-safety.py
+   if ($LASTEXITCODE -ne 0) { throw 'Archive failed' }
+   Expand-Archive -LiteralPath $zip -DestinationPath ".tools/guard-rollout-$reviewed"
+   Get-FileHash -Algorithm SHA256 $zip
+   Get-FileHash -Algorithm SHA256 ".tools/guard-rollout-$reviewed/deploy/vps/*.py"
+   ```
+
+   Review đúng hai file, kiểm tra test evidence, xác nhận hash archive và từng
+   file qua kênh tin cậy. Hash tự nó không chứng minh phê duyệt.
+   Guard cũ quan sát sau rollback #346:
+   `02df240c004728671697e1b5c2e501a6ab8e8be9b461ab351ccbbaa1c871be41`.
+   Guard OCR tại commit `3efcfe64`:
+   `e71ef6f53b75b9fbd96008f3c86d83e5ea71fa8c8487d9c4c7e164197b17854d`.
+
+2. Operator phối hợp giữ cửa sổ bảo trì, không bắt đầu release mới (kể cả
+   Production vì dùng chung lock), kiểm tra không có GitHub release đang chạy
+   hoặc chờ, và không có worker chưa kết thúc. Các lệnh chỉ kiểm tra trên VPS
+   qua phiên root operator đã được duyệt:
+
+   ```sh
+   git -C /opt/bhome ls-remote origin refs/heads/develop
+   tmux list-windows -t bhome-deploy || true
+   pgrep -af '[/]opt/bhome-deploy/.*(run-release|deploy-release)\.sh' || true
+   lslocks -o COMMAND,PID,MODE,PATH
+   sha256sum /opt/bhome-deploy/staging/release-safety.py
+   stat -c '%u:%g %a %n' /opt/bhome-deploy/staging/release-safety.py
+   grep -nF 'release-safety.py' /opt/bhome-deploy/staging/deploy-release.sh
+   ```
+
+   Đối chiếu worker thực tế với bản đã duyệt: root staging cố định, gọi
+   release-safety.py khi snapshot, verify-running và unchanged; không có
+   đường dẫn guard khác. Nếu worker đang hoạt động/chờ, hash khác hash cũ
+   đã duyệt, quyền không an toàn hoặc SHA không còn phù hợp, dừng để review.
+   Kiểm tra lock ở đây chỉ là quan sát; helper lấy lock độc quyền thực tế.
+
+3. Operator tạo thư mục private trên VPS bằng
+   `mktemp -d /root/bhome-guard-review.XXXXXX`. Qua SSH/SCP operator đã xác
+   thực host key, chuyển đúng hai file từ archive đã duyệt vào thư mục đó
+   (không dùng CI key). Ví dụ từ máy review, nếu alias operator root đã được
+   cấu hình, thay đường dẫn và alias bằng giá trị được phê duyệt:
+
+   ```powershell
+   scp ".tools/guard-rollout-$reviewed/deploy/vps/install-staging-release-guard.py" ".tools/guard-rollout-$reviewed/deploy/vps/release-safety.py" "bhome-vps:/root/bhome-guard-review.<actual-suffix>/"
+   ```
+
+4. Trong thư mục private trên VPS, với quyền root, đối chiếu hash installer
+   đã nhận qua kênh review và hash guard cố định trước khi chạy file nào:
+
+   ```sh
+   set -eu
+   umask 077
+   test "$(stat -c '%u:%a' .)" = '0:700'
+   test ! -L install-staging-release-guard.py
+   test ! -L release-safety.py
+   OLD=02df240c004728671697e1b5c2e501a6ab8e8be9b461ab351ccbbaa1c871be41
+   NEW=e71ef6f53b75b9fbd96008f3c86d83e5ea71fa8c8487d9c4c7e164197b17854d
+   INSTALLER='<approved-installer-sha256>'
+   printf '%s  %s\n' "$INSTALLER" install-staging-release-guard.py "$NEW" release-safety.py | sha256sum -c -
+   printf '%s  %s\n' "$OLD" /opt/bhome-deploy/staging/release-safety.py | sha256sum -c -
+   BEFORE_META=$(stat -c '%u:%g %a' /opt/bhome-deploy/staging/release-safety.py)
+   python3 -I install-staging-release-guard.py install release-safety.py "$OLD" "$NEW"
+   ```
+
+   Helper chỉ chạy với root, khóa shared rồi staging theo thứ tự của release,
+   từ chối lock bận, symlink, quyền không an toàn và hash sai. Backup private
+   `guard-rollout-*` nằm trong thư mục staging, gồm bytes cũ/mới, hash và
+   snapshot candidate đã fsync trước khi đổi file. Giữ UID/GID/mode của guard.
+   Chỉ tiếp tục sau `GUARD_INSTALL_PASS`. Gán BACKUP bằng chính đường dẫn
+   "Guard backup:" do helper in ra, không tự chọn thư mục mới nhất:
+
+   ```sh
+   BACKUP='/opt/bhome-deploy/staging/guard-rollout-<actual-suffix>'
+   python3 -I install-staging-release-guard.py verify "$NEW" --snapshot "$BACKUP/protected.json"
+   printf '%s  %s\n' "$NEW" /opt/bhome-deploy/staging/release-safety.py | sha256sum -c -
+   cmp -s release-safety.py /opt/bhome-deploy/staging/release-safety.py
+   test "$(stat -c '%u:%g %a' /opt/bhome-deploy/staging/release-safety.py)" = "$BEFORE_META"
+   stat -c '%u:%g %a %n' /opt/bhome-deploy/staging/release-safety.py
+   ```
+
+   Phải có `GUARD_VERIFY_PASS`, hash NEW và UID/GID/mode như trước; verify
+   gọi check và unchanged từ chính guard cài đặt dưới cả hai lock. Không
+   chạy trực tiếp candidate ngoài helper. Không fetch/execute từ branch.
+
+5. Nếu lỗi sau thay file, helper cố khôi phục bytes cũ và kiểm lại hash/check.
+   `GUARD_ROLLBACK_PASS` chỉ xác nhận khôi phục guard, không chứng minh
+   runtime hoặc DB đã rollback. Nếu helper báo
+   `Guard rollback failed; operator intervention required`, dừng và điều tra.
+   Với SIGKILL/mất điện, không tự rollback:
+   giữ cửa sổ bảo trì, kiểm worker/lock và hash, không xóa backup. Nếu hash
+   NEW, thực hiện verify với đúng snapshot ở bước 4. Nếu hash OLD, verify
+   OLD bằng `python3 -I install-staging-release-guard.py verify "$OLD"`
+   rồi review evidence và trạng thái runtime trước khi bắt đầu một
+   lần install mới; snapshot candidate không nhất thiết tương thích thuật
+   toán fingerprint của guard cũ. Nếu hash khác, snapshot thiếu/không khớp
+   hoặc rollback thất bại, dừng release để operator điều tra. Worker hiện
+   tại không tự chặn release sau khi process installer bị kill.
+
+   Nếu cần chủ động rollback guard đã cài, sau phê duyệt và khi không có
+   release hoạt động, dùng đúng backup đã xác nhận (lệnh tạo backup mới):
+
+   ```sh
+   printf '%s  %s\n' "$OLD" "$BACKUP/release-safety.before.py" | sha256sum -c -
+   python3 -I install-staging-release-guard.py install "$BACKUP/release-safety.before.py" "$NEW" "$OLD"
+   ```
+
+   Sau khi có `GUARD_INSTALL_PASS`, lấy đúng đường dẫn backup mới do helper
+   in ra và tiếp tục:
+
+   ```sh
+   RESTORE_BACKUP='/opt/bhome-deploy/staging/guard-rollout-<actual-restore-suffix>'
+   python3 -I install-staging-release-guard.py verify "$OLD" --snapshot "$RESTORE_BACKUP/protected.json"
+   printf '%s  %s\n' "$OLD" /opt/bhome-deploy/staging/release-safety.py | sha256sum -c -
+   cmp -s "$BACKUP/release-safety.before.py" /opt/bhome-deploy/staging/release-safety.py
+   stat -c '%u:%g %a %n' /opt/bhome-deploy/staging/release-safety.py
+   ```
+
+   Nếu guard cũ không còn tương thích runtime, dừng và yêu cầu review,
+   không bỏ qua check. Không restore DB hay thay image từ helper.
+
+6. Phê duyệt release riêng sau khi nghiệm thu guard; bỏ cửa sổ bảo trì chỉ
+   khi an toàn. Nếu SHA của #346 vẫn là HEAD develop, dùng **Re-run all
+   jobs** của workflow gốc sau phê duyệt, không chỉ re-run failed jobs.
+   Workflow đặt tên artifact `release-<SHA>-<run_attempt>` và bắt buộc
+   provenance của cả ba image cùng commit, run ID-attempt và môi trường;
+   manifest từ attempt trước không hợp lệ cho attempt mới. Giữ nguyên
+   quality gates; kiểm tra manifest và ba immutable digests của attempt
+   mới, không mặc định dùng lại digests cũ. Run ID-attempt mới phải lớn hơn
+   current.json theo thứ tự cặp số (run ID, attempt). Nếu develop đã tiến,
+   dùng CI/release của HEAD mới nhất đã duyệt, không retry SHA cũ.
+   Không tự gọi worker bằng run ID giả.
+   Kiểm tra log GitHub có DEPLOY_PASS, PASS: unchanged staging và job
+   SUCCESS. Đối chiếu SHA, run ID và ba immutable images trong
+   `/opt/bhome-deploy/staging/current.json` với manifest trong thư mục
+   evidence được log release in ra. Kiểm tra running digest qua guard:
+
+   ```sh
+   cat /opt/bhome-deploy/staging/current.json
+   # Dùng ba image reference đầy đủ (repository:sha-SHA@sha256:DIGEST)
+   # từ manifest đã duyệt, không lấy từ container hiện chạy làm baseline.
+   python3 /opt/bhome-deploy/staging/release-safety.py verify-running staging "$API_IMAGE" "$OWNER_IMAGE" "$PUBLIC_IMAGE"
+   ```
+
+   Kiểm tra evidence log/manifest của đúng run; chỉ báo CD xanh khi tất cả
+   điều kiện trên thành công. Không chạy Production.
+
+Quy trình này không tự thay đổi VPS từ GitHub. Việc cài guard và chạy release
+thật là hai thao tác vận hành cần phê duyệt; kiểm thử local không thay thế
+bằng chứng deploy thành công.
 
 Backup/evidence: `/opt/bhome-backups/staging-cd-<UTC>-<SHA12>-*/`. Không xóa image cũ
 trước nghiệm thu. DB restore kiểm chứng vào DB mới; không restore đè. Storage mirror

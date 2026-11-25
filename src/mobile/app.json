@@ -10,10 +10,12 @@
     "ios": {
       "supportsTablet": true,
       "infoPlist": {
+        "NSCameraUsageDescription": "Cho phép BHOME chụp CCCD và đồng hồ để nhập dữ liệu.",
         "NSLocalNetworkUsageDescription": "Kết nối BHOME API trong mạng nội bộ để xử lý OCR."
       }
     },
     "android": {
+      "permissions": ["android.permission.CAMERA"],
       "adaptiveIcon": {
         "backgroundColor": "#F6F9FD",
         "foregroundImage": "./assets/android-icon-foreground.png",

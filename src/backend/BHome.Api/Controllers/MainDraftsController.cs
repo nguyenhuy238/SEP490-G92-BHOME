@@ -1,5 +1,6 @@
 using BHome.Application.Contracts;
 using BHome.Domain.IdentityAccess;
+using BHome.Domain.TenantContracts;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 
@@ -33,7 +34,7 @@ public sealed class MainDraftsController(MainDraftService service) : ControllerB
     public async Task<IActionResult> Download(Guid id, Guid fileId, CancellationToken t)
     {
         var buffer = new MemoryStream();
-        try { var type = await service.CopyFileAsync(id, fileId, buffer, t); buffer.Position = 0; return File(buffer, type, type == "application/pdf" ? "hop-dong-nhap.pdf" : "hop-dong-nhap.docx"); }
+        try { var type = await service.CopyFileAsync(id, fileId, buffer, t); buffer.Position = 0; return File(buffer, type, ContractDownloadName.For(ContractKind.Main, id, docx: type != "application/pdf")); }
         catch { await buffer.DisposeAsync(); throw; }
     }
     [HttpGet("{id:guid}/documents/{fileId:guid}/preview")]

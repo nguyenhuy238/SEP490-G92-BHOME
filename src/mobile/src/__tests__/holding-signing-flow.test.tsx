@@ -197,7 +197,7 @@ beforeEach(() => {
     if (path.endsWith('/transfer-instructions'))
       return {
         mode: 'Test',
-        previewOnly: true,
+        previewOnly: false,
         bankIdentifier: '970416',
         accountNumber: '12345678',
         accountHolder: 'SYNTHETIC TEST',
@@ -209,102 +209,37 @@ beforeEach(() => {
   });
 });
 afterEach(cleanup);
-it('lets Staff explicitly open the guarded sandbox preview when a Live contract cannot be paid in Test mode', async () => {
-  const original = request.getMockImplementation()!;
-  request.mockImplementation((path: string, init?: RequestInit) => {
-    if (path.endsWith('/holding-deposit'))
-      return Promise.resolve({
-        required: '2000000',
-        verified: '0',
-        remaining: '2000000',
-        status: 'Unpaid',
-      });
-    if (path.endsWith('/deposit-payment/transfer-instructions'))
-      return Promise.reject(new ApiError(409, { code: 'sepay_environment_mismatch' }));
-    return original(path, init);
-  });
-  show(
-    contract({ paymentMode: 'Live', isDevelopmentDemo: false, status: 'PendingActivation' }),
-    'Staff',
-    'staff',
-  );
-  const button = await screen.findByRole('button', { name: 'Xem QR thử nghiệm' });
-  expect(request.mock.calls.some(([path]) => path.includes('/testing/holdings/'))).toBe(false);
-  fireEvent.click(button);
-  await screen.findByAltText('QR chuyển khoản sandbox');
-  expect(screen.getByText(/Giao dịch Test không được tính thành tiền cọc thật/)).toBeTruthy();
-  expect(
-    request.mock.calls.some(
-      ([path]) => path.includes('/testing/holdings/') && path.endsWith('/transfer-instructions'),
-    ),
-  ).toBe(true);
-  expect(
-    request.mock.calls.some(
-      ([path, init]) =>
-        path.includes('/simulation/') ||
-        path.endsWith('/holding-activation') ||
-        init?.method === 'POST',
-    ),
-  ).toBe(false);
-});
-it.each([
-  ['Tenant', 409, 'sepay_environment_mismatch'],
-  ['Staff', 403, 'payment_forbidden'],
-  ['Staff', 409, 'signed_terms_changed'],
-])('does not offer a sandbox preview for %s with error %s/%s', async (role, status, code) => {
-  const original = request.getMockImplementation()!;
-  request.mockImplementation((path: string, init?: RequestInit) => {
-    if (path.endsWith('/holding-deposit'))
-      return Promise.resolve({
-        required: '2000000',
-        verified: '0',
-        remaining: '2000000',
-        status: 'Unpaid',
-      });
-    if (path.endsWith('/deposit-payment/transfer-instructions'))
-      return Promise.reject(new ApiError(Number(status), { code: String(code) }));
-    return original(path, init);
-  });
-  show(
-    contract({ paymentMode: 'Live', isDevelopmentDemo: false, status: 'PendingActivation' }),
-    String(role),
-    String(role).toLowerCase(),
-  );
-  await waitFor(() =>
-    expect(
-      request.mock.calls.some(([path]) => path.endsWith('/deposit-payment/transfer-instructions')),
-    ).toBe(true),
-  );
-  expect(screen.queryByRole('button', { name: 'Xem QR thử nghiệm' })).toBeNull();
-  expect(request.mock.calls.some(([path]) => path.includes('/testing/holdings/'))).toBe(false);
-});
-it('keeps a rejected sandbox preview as an error without displaying a QR', async () => {
-  const original = request.getMockImplementation()!;
-  request.mockImplementation((path: string, init?: RequestInit) => {
-    if (path.endsWith('/holding-deposit'))
-      return Promise.resolve({
-        required: '2000000',
-        verified: '0',
-        remaining: '2000000',
-        status: 'Unpaid',
-      });
-    if (path.endsWith('/deposit-payment/transfer-instructions'))
-      return Promise.reject(new ApiError(409, { code: 'sepay_environment_mismatch' }));
-    if (path.includes('/testing/holdings/'))
-      return Promise.reject(new ApiError(404, { code: 'sandbox_unavailable' }));
-    return original(path, init);
-  });
-  show(
-    contract({ paymentMode: 'Live', isDevelopmentDemo: false, status: 'PendingActivation' }),
-    'Staff',
-    'staff',
-  );
-  fireEvent.click(await screen.findByRole('button', { name: 'Xem QR thử nghiệm' }));
-  await screen.findByText(
-    'QR chưa khả dụng cho cơ sở này. Owner kiểm tra cấu hình tài khoản nhận tiền.',
-  );
-  expect(screen.queryByAltText('QR chuyển khoản sandbox')).toBeNull();
-});
+it.each(['Owner', 'Staff', 'Tenant'])(
+  'reports a payment configuration mismatch to %s without offering a sandbox QR',
+  async (role) => {
+    const original = request.getMockImplementation()!;
+    request.mockImplementation((path: string, init?: RequestInit) => {
+      if (path.endsWith('/holding-deposit'))
+        return Promise.resolve({
+          required: '2000000',
+          verified: '0',
+          remaining: '2000000',
+          status: 'Unpaid',
+        });
+      if (path.endsWith('/deposit-payment/transfer-instructions'))
+        return Promise.reject(new ApiError(409, { code: 'sepay_environment_mismatch' }));
+      return original(path, init);
+    });
+    show(
+      contract({ paymentMode: 'Live', isDevelopmentDemo: false, status: 'PendingActivation' }),
+      role,
+      role.toLowerCase(),
+    );
+    const message =
+      'Cấu hình SePay hiện tại chưa hỗ trợ thanh toán cho hợp đồng này. Liên hệ chủ nhà để kiểm tra.';
+    await screen.findByText(message);
+    expect(screen.queryByRole('button', { name: 'Xem QR thử nghiệm' })).toBeNull();
+    expect(screen.queryByAltText('QR chuyển khoản sandbox')).toBeNull();
+    fireEvent.click(screen.getByRole('button', { name: 'Tải lại QR chuyển khoản' }));
+    await screen.findByText(message);
+    expect(request.mock.calls.some(([path]) => path.includes('/testing/holdings/'))).toBe(false);
+  },
+);
 it('loads sandbox QR for Staff at Step 7 and never activates or claims a real deposit', async () => {
   const original = request.getMockImplementation()!;
   request.mockImplementation((path: string, init?: RequestInit) =>
@@ -328,7 +263,7 @@ it('loads sandbox QR for Staff at Step 7 and never activates or claims a real de
   );
   await screen.findByAltText('QR chuyển khoản sandbox');
   expect(screen.getByText('SePay Test · QR sandbox')).toBeTruthy();
-  expect(screen.getByText(/Giao dịch Test không được tính thành tiền cọc thật/)).toBeTruthy();
+  expect(screen.getByText(/Không chuyển tiền thật vào tài khoản Test/)).toBeTruthy();
   expect(request.mock.calls.some(([path]) => path.endsWith('/transfer-instructions'))).toBe(true);
   expect(
     request.mock.calls.some(
@@ -391,7 +326,7 @@ it.each([true, false])(
 it('resumes at activation after verified deposit without activating the contract for Staff', async () => {
   show(contract({ status: 'PendingActivation', isDevelopmentDemo: false }), 'Staff', 'staff');
   await screen.findByText('Bước 8/8');
-  expect(screen.getByText('Đã xác minh tiền cọc · Đang tự động kích hoạt')).toBeTruthy();
+  expect(screen.getByText('Đang hoàn tất giữ chỗ')).toBeTruthy();
   expect(screen.queryByRole('button', { name: 'Hoàn tất' })).toBeNull();
   expect(request.mock.calls.some(([path]) => path.endsWith('/holding-activation'))).toBe(false);
 });

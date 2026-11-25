@@ -16,6 +16,8 @@ interface Props {
   onRetake: () => void;
   onUse: () => void;
   onRequestPermission: () => void;
+  showSettings: boolean;
+  onOpenSettings: () => void;
   onManual: () => void;
 }
 
@@ -58,6 +60,17 @@ export function DocumentCameraView(props: Props) {
             >
               Mở camera
             </Button>
+            {props.showSettings && (
+              <Button
+                mode="outlined"
+                textColor="#FFFFFF"
+                style={styles.settings}
+                onPress={props.onOpenSettings}
+                contentStyle={styles.touch}
+              >
+                Mở Cài đặt
+              </Button>
+            )}
           </View>
         )}
       </View>
@@ -238,6 +251,7 @@ const styles = StyleSheet.create({
   shutterDisabled: { opacity: 0.4 },
   previewActions: { flexDirection: 'row', gap: 12 },
   retake: { flex: 1, borderColor: '#94A3B8', borderRadius: 12 },
+  settings: { borderColor: '#94A3B8', borderRadius: 12 },
   use: { flex: 1, borderRadius: 12 },
   touch: { minHeight: 48 },
   error: { color: '#FECACA', fontSize: 13, lineHeight: 20, textAlign: 'center' },

@@ -28,6 +28,7 @@ const native = vi.hoisted(() => ({
   focusExtension: false,
   lenses: vi.fn(),
   allowMeterDemo: false,
+  openSettings: vi.fn(),
 }));
 vi.mock('../lib/cameraFocus', async (original) => ({
   ...(await original<typeof import('../lib/cameraFocus')>()),
@@ -48,6 +49,7 @@ vi.mock('react-native', () => ({
       return { remove: () => native.listeners.delete(cb) };
     },
   },
+  Linking: { openSettings: native.openSettings },
   StyleSheet: { create: (s: unknown) => s },
   Modal: ({
     visible,
@@ -185,6 +187,7 @@ beforeEach(() => {
   native.listeners.clear();
   native.bytes = new Uint8Array([1, 2, 3]);
   native.request.mockResolvedValue({ granted: false });
+  native.openSettings.mockResolvedValue(undefined);
   native.take.mockResolvedValue({ width: 2000, height: 1200, release: native.release });
   native.render.mockResolvedValue({ saveAsync: native.save, release: native.release });
   native.save.mockImplementation(async () => {
@@ -816,6 +819,16 @@ it('allows a native permission prompt to return through inactive and active stat
   expect(screen.queryByTestId('native-camera')).toBeNull();
   act(() => native.listeners.forEach((listener) => listener('active')));
   await readyShutter();
+});
+it('offers device settings after a permanently denied camera permission', async () => {
+  native.granted = false;
+  native.request.mockResolvedValueOnce({ granted: false, canAskAgain: false });
+  render(
+    <CameraCapture label="CCCD" presentation="document" disabled={false} onCapture={vi.fn()} />,
+  );
+  await screen.findByRole('button', { name: 'Mở Cài đặt' });
+  fireEvent.click(screen.getByRole('button', { name: 'Mở Cài đặt' }));
+  expect(native.openSettings).toHaveBeenCalledOnce();
 });
 it('uploads the exact reviewed JPEG bytes once and zeroes the buffer after processing', async () => {
   let uploaded: number[] = [];

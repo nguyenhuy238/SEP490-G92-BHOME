@@ -15,7 +15,32 @@ internal sealed class NotificationAutomationWorker(IServiceScopeFactory scopes, 
     IHostEnvironment environment, IOptions<BHome.Application.IdentityAccess.SmsRecoveryOptions> recovery) : BackgroundService
 {
     protected override Task ExecuteAsync(CancellationToken stoppingToken) => Task.WhenAll(
-        DeliverAuthenticationAsync(stoppingToken), PublishNotificationsAsync(stoppingToken));
+        DeliverAuthenticationAsync(stoppingToken), PublishOwnerSigningRequestsAsync(stoppingToken),
+        PublishNotificationsAsync(stoppingToken));
+
+    private async Task PublishOwnerSigningRequestsAsync(CancellationToken stoppingToken)
+    {
+        if (jobs.Value.Enabled) return;
+        await Task.Yield();
+        using var timer = new PeriodicTimer(TimeSpan.FromSeconds(Math.Max(1, jobs.Value.PollSeconds)));
+        try
+        {
+            do
+            {
+                try
+                {
+                    await using var scope = scopes.CreateAsyncScope();
+                    await scope.ServiceProvider.GetRequiredService<CompactNotificationEvents>()
+                        .PublishOwnerSigningRequestsAsync(stoppingToken);
+                }
+                catch (Exception e) when (e is not OperationCanceledException || !stoppingToken.IsCancellationRequested)
+                {
+                    logger.LogWarning("Owner signing notification deferred with {ErrorCode}", e.GetType().Name);
+                }
+            } while (await timer.WaitForNextTickAsync(stoppingToken));
+        }
+        catch (OperationCanceledException) when (stoppingToken.IsCancellationRequested) { }
+    }
 
     private async Task DeliverAuthenticationAsync(CancellationToken stoppingToken)
     {
@@ -45,20 +70,30 @@ internal sealed class NotificationAutomationWorker(IServiceScopeFactory scopes, 
         // await. Resolving notification/job persistence can block startup for minutes;
         // allow Kestrel to start independently of the notification delivery loop.
         await Task.Yield();
-        var authenticationOnly = !options.Value.AutomationEnabled;
+        var businessEmailOnly = !options.Value.AutomationEnabled && options.Value.ContractAndInvoiceEmailEnabled;
+        var authenticationOnly = !options.Value.AutomationEnabled && !businessEmailOnly;
         if (jobs.Value.Enabled || authenticationOnly && !authentication.Value.AnyConfigured(environment.IsDevelopment()) && !recovery.Value.Enabled) return;
         while (!stoppingToken.IsCancellationRequested)
         {
             try
             {
                 await using var scope = scopes.CreateAsyncScope();
+                var services = scope.ServiceProvider;
+                var channels = services.GetRequiredService<NotificationChannelWorker>();
+                if (businessEmailOnly)
+                {
+                    var events = services.GetRequiredService<CompactNotificationEvents>();
+                    await channels.ProcessHoldingConfirmationsAsync(events, stoppingToken);
+                    await events.PublishMainActivationsAsync(stoppingToken);
+                    await channels.ProcessPendingAsync(stoppingToken, businessEmailOnly: true);
+                }
                 // Reuse the durable job lease/retry implementation, allowing account invitations only.
                 // Jobs.Enabled remains false: invoice/contract/payment automation cannot run here.
                 await scope.ServiceProvider.GetRequiredService<PostgresJobWorker>()
                     .ProcessAllowedAsync(stoppingToken, [AccountInvitationJob.JobName, SmsPasswordRecovery.JobName]);
                 if (!authenticationOnly) await scope.ServiceProvider.GetRequiredService<INotificationEventPublisher>().PublishPendingAsync(stoppingToken);
                 else await scope.ServiceProvider.GetRequiredService<CompactNotificationEvents>().PublishAuthenticationAsync(stoppingToken);
-                if (!authenticationOnly) await scope.ServiceProvider.GetRequiredService<NotificationChannelWorker>().ProcessPendingAsync(stoppingToken);
+                if (options.Value.AutomationEnabled) await channels.ProcessPendingAsync(stoppingToken);
             }
             catch (OperationCanceledException) when (stoppingToken.IsCancellationRequested) { break; }
             catch (Exception e) { logger.LogWarning("Notification automation deferred with {ErrorCode}", e.GetType().Name); }

@@ -469,6 +469,23 @@ it('does not allow confirmation when evidence upload fails', async () => {
   ).toBe(true);
   expect(state.json).not.toHaveBeenCalled();
 });
+it('shows recognition progress until the meter OCR response arrives', async () => {
+  let release!: () => void;
+  const recognize = state.image.getMockImplementation()!;
+  state.image.mockImplementationOnce(async (...args: unknown[]) => {
+    await new Promise<void>((resolve) => {
+      release = resolve;
+    });
+    return recognize(...args);
+  });
+  await overview();
+  const capturing = capture();
+  expect(await screen.findByTestId('periodic-meter-processing-overlay')).toBeTruthy();
+  await act(async () => release());
+  await capturing;
+  expect(screen.queryByTestId('periodic-meter-processing-overlay')).toBeNull();
+});
+
 it('keeps correction and photo on save failure, locks double taps, and retries the same payload', async () => {
   let reject!: (error: Error) => void;
   state.json.mockImplementationOnce(
@@ -485,6 +502,8 @@ it('keeps correction and photo on save failure, locks double taps, and retries t
   fireEvent.click(confirm);
   fireEvent.click(confirm);
   await waitFor(() => expect(state.json).toHaveBeenCalledTimes(1));
+  expect(screen.getByRole('button', { name: 'Đang lưu chỉ số…' })).toHaveProperty('disabled', true);
+  expect(screen.queryByText('Đang nhận dạng chỉ số…')).toBeNull();
   await act(async () => reject(Error('offline')));
   expect((screen.getByLabelText('Chỉ số xác nhận (kWh)') as HTMLInputElement).value).toBe('122');
   expect(screen.getByAltText('Ảnh công tơ')).toBeTruthy();

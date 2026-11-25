@@ -63,7 +63,7 @@ it('marks the recipient notification and resolves its authorized invoice before 
   });
   mocks.target.mockResolvedValue({ objectType: 'Invoice', objectId: id });
   mount();
-  fireEvent.click(await screen.findByRole('button', { name: 'Mở hồ sơ liên quan' }));
+  fireEvent.click(await screen.findByRole('button', { name: 'Hóa đơn kỳ tổng hợp' }));
   await waitFor(() => expect(mocks.read).toHaveBeenCalledWith(id));
   await waitFor(() => expect(screen.getByTestId('route')).toHaveTextContent('invoiceId=' + id));
 });
@@ -85,7 +85,7 @@ it('opens a termination notification directly in the dedicated Owner review', as
   });
   mocks.target.mockResolvedValue({ objectType: 'Contract', objectId: id });
   mount();
-  fireEvent.click(await screen.findByRole('button', { name: 'Mở hồ sơ liên quan' }));
+  fireEvent.click(await screen.findByRole('button', { name: 'Có yêu cầu kết thúc hợp đồng' }));
   await waitFor(() =>
     expect(screen.getByTestId('route')).toHaveTextContent(`/contracts/${id}/termination-review`),
   );
@@ -108,7 +108,7 @@ it('keeps the inbox visible when opening a revoked target fails', async () => {
   });
   mocks.target.mockRejectedValue(new Error('404'));
   mount();
-  fireEvent.click(await screen.findByRole('button', { name: 'Mở hồ sơ liên quan' }));
+  fireEvent.click(await screen.findByRole('button', { name: 'Công việc' }));
   expect(await screen.findByRole('alert')).toBeInTheDocument();
   expect(mocks.read).not.toHaveBeenCalled();
   expect(screen.getByTestId('route')).toBeEmptyDOMElement();
@@ -130,7 +130,7 @@ it('resolves an Owner refund notice to its authorized source receipt before mark
   });
   mocks.target.mockResolvedValue({ objectType: 'BankTransfer', objectId: id });
   mount();
-  fireEvent.click(await screen.findByRole('button', { name: 'Mở hồ sơ liên quan' }));
+  fireEvent.click(await screen.findByRole('button', { name: 'Cập nhật hoàn tiền dư' }));
   await waitFor(() => expect(mocks.target).toHaveBeenCalledWith(id));
   await waitFor(() => expect(mocks.read).toHaveBeenCalledWith(id));
   await waitFor(() => expect(screen.getByTestId('route')).toHaveTextContent('transferId=' + id));
@@ -195,7 +195,8 @@ it('keeps read actions for an announcement without exposing an unsupported recor
   mount();
   await screen.findByText('Nội dung đầy đủ');
   expect(screen.queryByRole('button', { name: 'Mở hồ sơ liên quan' })).not.toBeInTheDocument();
-  fireEvent.click(screen.getByRole('button', { name: 'Đánh dấu đã đọc' }));
+  fireEvent.click(screen.getByRole('button', { name: 'Tùy chọn: Thông báo chung' }));
+  fireEvent.click(await screen.findByRole('menuitem', { name: 'Đánh dấu đã đọc' }));
   await waitFor(() => expect(mocks.read).toHaveBeenCalledWith(id));
   expect(mocks.target).not.toHaveBeenCalled();
 });

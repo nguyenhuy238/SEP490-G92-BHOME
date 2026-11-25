@@ -314,7 +314,8 @@ export function MeterTaskScreen({
   const [step, setStep] = useState(1);
   const [error, setError] = useFeedbackState();
   const [notice, setNotice] = useFeedbackState('info');
-  const [busy, setBusy] = useState(false);
+  const [operation, setOperation] = useState<'recognize' | 'save' | null>(null);
+  const busy = operation !== null;
   const [loading, setLoading] = useState(true);
   const [revision, setRevision] = useState(0);
   const [saved, setSaved] = useState<ConfirmedReading | null>(null);
@@ -399,7 +400,7 @@ export function MeterTaskScreen({
     }
     lock.current = true;
     setStep(2);
-    setBusy(true);
+    setOperation('recognize');
     setError('');
     setEvidence('');
     setProposal(null);
@@ -449,7 +450,7 @@ export function MeterTaskScreen({
       clearTimeout(timeout);
       lock.current = false;
       if (mounted.current) {
-        setBusy(false);
+        setOperation(null);
         onBusyChange?.(false);
       }
     }
@@ -461,7 +462,7 @@ export function MeterTaskScreen({
       return;
     }
     lock.current = true;
-    setBusy(true);
+    setOperation('save');
     setError('');
     const controller = new AbortController();
     abort.current = controller;
@@ -489,7 +490,7 @@ export function MeterTaskScreen({
       clearTimeout(timeout);
       lock.current = false;
       if (mounted.current) {
-        setBusy(false);
+        setOperation(null);
         onBusyChange?.(false);
       }
     }
@@ -599,10 +600,14 @@ export function MeterTaskScreen({
               onPhotoCleared={clearPhoto}
               onCapture={recognize}
             />
-            {busy && !onBusyChange && (
-              <View style={{ gap: 8 }}>
-                <ActivityIndicator />
-                <Text>Đang xử lý…</Text>
+            {operation === 'recognize' && !onBusyChange && (
+              <View
+                style={{ gap: 8 }}
+                accessibilityRole="progressbar"
+                accessibilityLabel="Đang nhận dạng chỉ số"
+              >
+                <ActivityIndicator size="small" />
+                <Text>Đang nhận dạng chỉ số…</Text>
               </View>
             )}
             {step >= 2 && (
@@ -667,11 +672,11 @@ export function MeterTaskScreen({
                 <Button
                   mode="contained"
                   contentStyle={{ minHeight: 48 }}
-                  loading={busy && !onBusyChange}
+                  loading={operation === 'save' && !onBusyChange}
                   disabled={busy || !evidence || !checked || !!validation || decreased}
                   onPress={() => void confirm()}
                 >
-                  Xác nhận chỉ số
+                  {operation === 'save' ? 'Đang lưu chỉ số…' : 'Xác nhận chỉ số'}
                 </Button>
               </Box>
             )}

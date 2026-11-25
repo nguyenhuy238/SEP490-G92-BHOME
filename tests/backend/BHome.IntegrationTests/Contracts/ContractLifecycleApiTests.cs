@@ -68,6 +68,19 @@ public sealed partial class ContractLifecycleApiTests(ContractFixture fixture) :
             new BillingPolicy { LocationId = location.Id, Category = ChargeCategory.Water, ChargeCode = "WATER", Name = "Synthetic water", Method = ChargingMethod.Metered, Rate = 15000, EffectiveFrom = Today.AddMonths(-1) });
         await db.SaveChangesAsync(); return new(owner, staff, tenant, location.Id, room.Id, resident.Id);
     }
+    private static async Task<HoldingSettings?> ReadHoldingPolicyAsync(HttpClient owner)
+    {
+        using var response = await owner.GetAsync("/api/v1/contracts/holding-settings");
+        if (response.StatusCode == HttpStatusCode.NoContent) return null;
+        return await Success<HoldingSettings>(response);
+    }
+    private async Task<HoldingPreparation> ConfigureHoldingPolicyAsync(Workspace workspace, string terms)
+    {
+        var current = await ReadHoldingPolicyAsync(workspace.Owner.Client);
+        var saved = await workspace.Owner.Client.PutAsJsonAsync("/api/v1/contracts/holding-settings", new HoldingSettingsInput(terms, current?.Version ?? 0));
+        Assert.Equal(HttpStatusCode.NoContent, saved.StatusCode);
+        return await Success<HoldingPreparation>(await workspace.Staff.Client.GetAsync($"/api/v1/contracts/holdings/preparation?roomId={workspace.Room}"));
+    }
     private static string Path(Guid id, string operation = "") => $"/api/v1/contracts/{id}" + (operation.Length == 0 ? "" : "/" + operation);
     private static HandoverRoomCheck[] PassedMoveOutRoomChecks() => HandoverRoomChecklist.RequiredCodes
         .Select(code => new HandoverRoomCheck(code, "Passed", null, [])).ToArray();
@@ -1525,8 +1538,9 @@ public sealed partial class ContractLifecycleApiTests(ContractFixture fixture) :
             });
             await setupDb.SaveChangesAsync();
         }
+        var quote = await ConfigureHoldingPolicyAsync(w, "SYNTHETIC protected Holding terms");
         var holdingInput = new HoldingDraftInput(w.Room, w.Owner.Id, w.Tenant.Id, w.Resident, [w.Resident],
-            Today, Today.AddYears(1), DateTimeOffset.UtcNow.AddDays(2), 1000000, "SYNTHETIC protected Holding terms", 1);
+            quote.StartDate, quote.EndDate, quote.ExpiresAt, quote.HoldingDeposit, quote.Terms, 1, quote.SettingsVersion);
         var holding = (await Success<ContractId>(await Post(w.Staff, "/api/v1/contracts/holdings", holdingInput))).Id;
         Assert.Equal(HttpStatusCode.Forbidden, (await Post(w.Staff, Path(holding, "holding-approval"), new HoldingDecisionInput("Not allowed"))).StatusCode);
         await Success<ContractView>(await Post(w.Owner, Path(holding, "holding-approval"), new HoldingDecisionInput("Owner reviewed and approved")));

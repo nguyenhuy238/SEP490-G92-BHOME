@@ -20,9 +20,10 @@ const response = (path: string) =>
     ? {
         total: {
           issued: '5000000',
-          verifiedCollections: '3000000',
+          verifiedCollections: '4000000',
           outstandingNow: '2000000',
           operatingExpenses: '125000',
+          management: { actualBusinessCollections: '3000000', currentOutstanding: '2000000' },
         },
       }
     : {

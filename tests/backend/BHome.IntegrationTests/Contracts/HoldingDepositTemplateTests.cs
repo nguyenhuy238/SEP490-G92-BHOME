@@ -54,7 +54,18 @@ public sealed class HoldingDepositTemplateTests
         }).Build();
         var bytes = await new HoldingDepositRenderer(config).PdfAsync(Draft(), Owner, Tenant, "0911111111", default);
         using var pdf = new PdfDocument(new PdfReader(new MemoryStream(bytes)));
-        var text = ContractPdfRendererTests.Text(pdf);
+        var qa = Environment.GetEnvironmentVariable("BHOME_CONTRACT_QA_DIR");
+        if (!string.IsNullOrWhiteSpace(qa))
+        {
+            Directory.CreateDirectory(qa);
+            await File.WriteAllBytesAsync(Path.Combine(qa, "holding-template.docx"), HoldingDepositRenderer.Docx(Draft(), Owner, Tenant, "0911111111"));
+            await File.WriteAllBytesAsync(Path.Combine(qa, "holding-template.pdf"), bytes);
+            var pages = new ContractSigningPages();
+            for (var page = 1; page <= pdf.GetNumberOfPages(); page++)
+                await File.WriteAllBytesAsync(Path.Combine(qa, $"holding-template-{page}.png"), pages.RenderPage(bytes, page, 1100));
+        }
+        // Line wrapping in a formatted PDF may insert line breaks within a clause.
+        var text = System.Text.RegularExpressions.Regex.Replace(ContractPdfRendererTests.Text(pdf), @"\s+", " ");
         Assert.Contains("HỢP ĐỒNG NHẬN TIỀN ĐẶT CỌC", text);
         Assert.Contains("000000000001", text);
         Assert.Contains("000000000002", text);
@@ -70,13 +81,5 @@ public sealed class HoldingDepositTemplateTests
         Assert.Equal(owner.Page, tenant.Page);
         Assert.True(owner.X + owner.Width < tenant.X);
         Assert.True(owner.Y < .85);
-        var qa = Environment.GetEnvironmentVariable("BHOME_CONTRACT_QA_DIR");
-        if (!string.IsNullOrWhiteSpace(qa))
-        {
-            Directory.CreateDirectory(qa);
-            var pages = new ContractSigningPages();
-            for (var page = 1; page <= pdf.GetNumberOfPages(); page++)
-                await File.WriteAllBytesAsync(Path.Combine(qa, $"holding-template-{page}.png"), pages.RenderPage(bytes, page, 1100));
-        }
     }
 }

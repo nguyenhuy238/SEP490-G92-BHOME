@@ -255,9 +255,13 @@ internal sealed class PostgresOperationalTaskRepository(BHomePersistenceContext 
         if (query.DueFrom is { } from) rows = rows.Where(x => x.DueAt >= from);
         if (query.DueTo is { } to) rows = rows.Where(x => x.DueAt <= to);
         if (query.IsOverdue is { } overdue) rows = rows.Where(x => (x.DueAt < now && x.Status != MeterTaskStatus.Completed && x.Status != MeterTaskStatus.Cancelled) == overdue);
+        if (query.LatestActionable)
+            rows = rows.Where(x =>
+                (x.Status == MeterTaskStatus.Assigned || x.Status == MeterTaskStatus.InProgress) &&
+                (x.Kind != OperationalTaskKind.MoveInInventory || x.ContractId == null));
         var count = await rows.CountAsync(t);
-        var ordered = query.ActionableOnly
-            ? rows.OrderBy(x => x.Status == MeterTaskStatus.InProgress ? 0 : 1).ThenBy(x => x.CreatedAt)
+        var ordered = query.LatestActionable ? rows.OrderByDescending(x => x.CreatedAt)
+            : query.ActionableOnly ? rows.OrderBy(x => x.Status == MeterTaskStatus.InProgress ? 0 : 1).ThenBy(x => x.CreatedAt)
             : rows.OrderBy(x => x.DueAt);
         var items = await ordered.ThenBy(x => x.Id).Skip((query.Page - 1) * query.PageSize).Take(query.PageSize)
             .Select(task => new

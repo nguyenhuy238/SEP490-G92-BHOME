@@ -178,7 +178,7 @@ function StaffProbe() {
   const locations = useWorkspaceQuery('/api/v1/capture/locations', { cache: queryPolicies.rooms });
   return <output>{JSON.stringify({ data, locations })}</output>;
 }
-it('measures Staff Home plus header as nine scoped reads and reuses them on remount', async () => {
+it('measures Staff Home plus header as eight scoped reads and reuses them on remount', async () => {
   state.role = 'Staff';
   const transport = vi
     .fn<typeof fetch>()
@@ -192,19 +192,22 @@ it('measures Staff Home plus header as nine scoped reads and reuses them on remo
   client(transport);
   const view = render(<StaffProbe />);
   await waitFor(() =>
-    expect(JSON.parse(screen.getByRole('status').textContent!).data.meters.loading).toBe(false),
+    expect(JSON.parse(screen.getByRole('status').textContent!).data.priorities.loading).toBe(false),
   );
-  expect(transport).toHaveBeenCalledTimes(9);
+  expect(transport).toHaveBeenCalledTimes(8);
   expect(
     transport.mock.calls.filter(([url]) => String(url).endsWith('/capture/locations')),
   ).toHaveLength(1);
   expect(
     transport.mock.calls.some(([url]) => String(url).includes('/capture/locations/loc/rooms')),
   ).toBe(true);
+  expect(
+    transport.mock.calls.filter(([url]) => String(url).includes('/capture/meter-tasks?')),
+  ).toHaveLength(1);
   view.unmount();
   render(<StaffProbe />);
   await act(async () => {});
-  expect(transport).toHaveBeenCalledTimes(9);
+  expect(transport).toHaveBeenCalledTimes(8);
 });
 it('keeps Tenant Home visible on stale background refetch and refreshes only expired resources', async () => {
   let now = Date.now();

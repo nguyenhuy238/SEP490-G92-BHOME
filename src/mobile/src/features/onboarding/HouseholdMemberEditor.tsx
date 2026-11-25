@@ -1,6 +1,6 @@
 import React from 'react';
 import { View } from 'react-native';
-import { HelperText, Text, TextInput } from 'react-native-paper';
+import { Button, HelperText, Text, TextInput } from 'react-native-paper';
 import type { OnboardingPerson } from './onboarding';
 import { inputDate } from '../../lib/identity';
 
@@ -51,15 +51,17 @@ export function HouseholdMemberEditor({
   person,
   disabled,
   onChange,
+  onClose,
 }: {
   person: OnboardingPerson;
   disabled: boolean;
   onChange: (value: NonNullable<OnboardingPerson['member']>) => void;
+  onClose: () => void;
 }) {
   const m = person.member ?? emptyMember();
   return (
     <View style={{ gap: 12, padding: 16, backgroundColor: '#FFFFFF', borderRadius: 14 }}>
-      <Text variant="titleMedium">Thông tin thành viên</Text>
+      <Text variant="titleMedium">{person.label || 'Thông tin thành viên'}</Text>
       <Text>
         Nhập họ tên, ngày sinh và quan hệ với người đại diện. Số điện thoại và CCCD không bắt buộc.
       </Text>
@@ -69,7 +71,6 @@ export function HouseholdMemberEditor({
           ['dateOfBirth', 'Ngày sinh thành viên (dd/MM/yyyy)'],
           ['relationship', 'Quan hệ với người đại diện'],
           ['phone', 'Số điện thoại (nếu có)'],
-          ['citizenNumber', 'CCCD (nếu có)'],
         ] as const
       ).map(([field, label]) => (
         <View key={field}>
@@ -81,19 +82,15 @@ export function HouseholdMemberEditor({
             disabled={disabled}
             error={!!fieldError(field, m[field])}
             maxLength={
-              field === 'citizenNumber'
-                ? 12
-                : field === 'phone'
-                  ? 30
-                  : field === 'dateOfBirth'
-                    ? 10
-                    : field === 'relationship'
-                      ? 100
-                      : 150
+              field === 'phone'
+                ? 30
+                : field === 'dateOfBirth'
+                  ? 10
+                  : field === 'relationship'
+                    ? 100
+                    : 150
             }
-            keyboardType={
-              field === 'phone' ? 'phone-pad' : field === 'citizenNumber' ? 'number-pad' : 'default'
-            }
+            keyboardType={field === 'phone' ? 'phone-pad' : 'default'}
             onChangeText={(value) => onChange({ ...m, [field]: value })}
           />
           {!!fieldError(field, m[field]) && (
@@ -104,6 +101,9 @@ export function HouseholdMemberEditor({
         </View>
       ))}
       <Text>CCCD không bắt buộc với thành viên. Thông tin chỉ được lưu khi hoàn tất bước này.</Text>
+      <Button mode="text" disabled={disabled} onPress={onClose}>
+        Ẩn thông tin
+      </Button>
     </View>
   );
 }

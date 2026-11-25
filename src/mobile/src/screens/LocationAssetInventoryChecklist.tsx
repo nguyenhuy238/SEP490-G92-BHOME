@@ -34,6 +34,167 @@ const conditionLabels: Record<string, string> = {
 };
 type InventoryFilter = 'all' | 'pending' | 'checked';
 
+function inventoryStatusLabel(status?: string) {
+  return status === 'Assigned'
+    ? 'Chưa bắt đầu'
+    : status === 'InProgress'
+      ? 'Đang kiểm kê'
+      : status === 'Completed'
+        ? 'Đã bàn giao'
+        : status === 'PendingVerification'
+          ? 'Đã gửi kiểm kê'
+          : 'Đã đóng';
+}
+
+export function LocationAssetInventoryProgressSummary({
+  taskId,
+  taskStatus,
+  onOpenInventory,
+}: {
+  taskId: string;
+  taskStatus: string;
+  onOpenInventory: () => void;
+}) {
+  const query = useCachedWorkspaceQuery<LocationAssetInventory>(
+    `/api/v1/operational-tasks/${taskId}/location-asset-inventory`,
+    queryPolicies.tasks,
+  );
+  const reload = query.reload;
+  const data = query.data;
+  const dataStatus = data?.status;
+  const items = Array.isArray(data?.items) ? data.items : [];
+  const incompletePayload = !!data && data.totalCount !== items.length;
+  const pendingOwnerRooms = Array.isArray(data?.pendingOwnerRooms) ? data.pendingOwnerRooms : [];
+  const pendingOwnerCommonAssets = !!data?.pendingOwnerCommonAssets;
+  const inheritedCount = items.filter((item) => item.inherited).length;
+  const priorStaffCount = items.filter(
+    (item) => !item.inherited && (item.priorStaffTaskId || item.priorStaffUserId),
+  ).length;
+  const directCount = items.length - inheritedCount - priorStaffCount;
+  const progress = data?.totalCount
+    ? Math.min(100, Math.max(0, (100 * data.checkedCount) / data.totalCount))
+    : 0;
+  const statusLabel = inventoryStatusLabel(data?.status);
+
+  useEffect(() => {
+    if (dataStatus && dataStatus !== taskStatus) reload();
+  }, [dataStatus, reload, taskStatus]);
+
+  return (
+    <View style={[ui.card, styles.progressSummary]}>
+      <View style={styles.progressSummaryHeader}>
+        <View style={ui.grow}>
+          <Text variant="titleMedium" style={styles.title}>
+            Tiến độ kiểm kê
+          </Text>
+          <Text variant="bodySmall" style={ui.muted}>
+            Tổng số mục tài sản trong phạm vi được giao
+          </Text>
+        </View>
+        {data && (
+          <Pill
+            tone={
+              data.status === 'Completed' || data.status === 'PendingVerification'
+                ? 'green'
+                : data.status === 'InProgress'
+                  ? 'blue'
+                  : 'neutral'
+            }
+          >
+            {statusLabel}
+          </Pill>
+        )}
+      </View>
+      {query.loading && !data && (
+        <View style={styles.progressLoading}>
+          <ActivityIndicator size="small" />
+          <Text variant="bodySmall" style={ui.muted}>
+            Đang tải tiến độ kiểm kê…
+          </Text>
+        </View>
+      )}
+      {!!query.error && (
+        <View style={styles.progressError}>
+          <Text accessibilityRole="alert" variant="bodySmall" style={ui.red}>
+            {query.error}
+          </Text>
+          <Button compact mode="text" icon="refresh" onPress={query.reload}>
+            Tải lại tiến độ
+          </Button>
+        </View>
+      )}
+      {data && (
+        <>
+          <Text variant="titleMedium" style={styles.progressCount}>
+            Đã kiểm tra {data.checkedCount.toLocaleString('vi-VN')}/
+            {data.totalCount.toLocaleString('vi-VN')} mục tài sản
+          </Text>
+          <View
+            accessibilityRole="progressbar"
+            accessibilityLabel={`Đã kiểm tra ${data.checkedCount}/${data.totalCount} tài sản`}
+            accessibilityValue={{
+              min: 0,
+              max: Math.max(1, data.totalCount),
+              now: Math.min(Math.max(0, data.checkedCount), data.totalCount),
+            }}
+            style={styles.progressTrack}
+          >
+            <View style={[styles.progressFill, { width: `${progress}%` }]} />
+          </View>
+          {!incompletePayload ? (
+            <View style={styles.progressSources}>
+              <Text variant="bodySmall" style={ui.muted}>
+                {directCount.toLocaleString('vi-VN')} Staff kiểm tra trực tiếp
+              </Text>
+              <Text variant="bodySmall" style={ui.muted}>
+                {priorStaffCount.toLocaleString('vi-VN')} kế thừa từ Staff trước
+              </Text>
+              <Text variant="bodySmall" style={ui.muted}>
+                {inheritedCount.toLocaleString('vi-VN')} kế thừa từ Tenant
+              </Text>
+            </View>
+          ) : (
+            <Text accessibilityRole="alert" variant="bodySmall" style={ui.red}>
+              Chưa tải đầy đủ checklist: nhận được {items.length}/{data.totalCount} mục tài sản. Hãy
+              tải lại trong tab Kiểm kê.
+            </Text>
+          )}
+          {(pendingOwnerRooms.length > 0 || pendingOwnerCommonAssets) && (
+            <View style={styles.progressNotice}>
+              <Text variant="labelMedium" style={styles.progressNoticeTitle}>
+                Chờ Owner hoàn tất kiểm kê ban đầu
+              </Text>
+              <Text variant="bodySmall" style={styles.progressNoticeText}>
+                {[
+                  pendingOwnerRooms.length > 0
+                    ? `${pendingOwnerRooms.length} phòng chưa được Owner xác nhận`
+                    : '',
+                  pendingOwnerCommonAssets ? 'Tài sản khu vực chung chưa được xác nhận' : '',
+                ]
+                  .filter(Boolean)
+                  .join(' · ')}
+              </Text>
+            </View>
+          )}
+          {data.totalCount === 0 && !pendingOwnerRooms.length && !pendingOwnerCommonAssets && (
+            <Text variant="bodySmall" style={ui.muted}>
+              Chưa có tài sản được Owner xác nhận để kiểm kê.
+            </Text>
+          )}
+        </>
+      )}
+      <Button
+        mode="outlined"
+        icon="clipboard-list-outline"
+        onPress={onOpenInventory}
+        contentStyle={{ minHeight: 40 }}
+      >
+        Mở danh sách kiểm kê
+      </Button>
+    </View>
+  );
+}
+
 export function LocationAssetInventoryChecklist({
   taskId,
   taskStatus,
@@ -215,18 +376,6 @@ export function LocationAssetInventoryChecklist({
     [data, editable, go, taskId],
   );
 
-  const inheritedCount = loadedItems.filter((item) => item.inherited).length;
-  const directCount = loadedItems.length - inheritedCount;
-  const statusLabel =
-    data?.status === 'Assigned'
-      ? 'Chưa bắt đầu'
-      : data?.status === 'InProgress'
-        ? 'Đang kiểm kê'
-        : data?.status === 'Completed'
-          ? 'Đã bàn giao'
-          : data?.status === 'PendingVerification'
-            ? 'Đã gửi kiểm kê'
-            : 'Đã đóng';
   const unlinkedIssueCount = loadedItems.filter(
     (item) =>
       item.checked && ['Missing', 'Damaged'].includes(item.condition ?? '') && !item.incidentId,
@@ -263,50 +412,6 @@ export function LocationAssetInventoryChecklist({
       )}
       {data && (
         <>
-          <Row spread>
-            <View style={{ flex: 1, gap: 3 }}>
-              <Text style={styles.title} variant="labelLarge">
-                Đã kiểm tra {data.checkedCount}/{data.totalCount} mục tài sản
-              </Text>
-              <Text variant="bodySmall" style={ui.muted}>
-                {directCount} Staff tự kiểm tra · {inheritedCount} kế thừa từ Tenant
-              </Text>
-            </View>
-            <Pill
-              tone={
-                data.status === 'Completed' || data.status === 'PendingVerification'
-                  ? 'green'
-                  : 'blue'
-              }
-            >
-              {statusLabel}
-            </Pill>
-          </Row>
-          {/* react-native-paper ProgressBar may size its web wrapper to the entire
-              ScrollView content (observed >1500px), pushing room rows behind
-              the following task sections. Use a fixed-height native View. */}
-          <View
-            accessibilityRole="progressbar"
-            accessibilityLabel={`Đã kiểm tra ${data.checkedCount}/${data.totalCount} tài sản`}
-            accessibilityValue={{
-              min: 0,
-              max: Math.max(1, data.totalCount),
-              now: data.checkedCount,
-            }}
-            style={styles.progressTrack}
-          >
-            <View
-              style={[
-                styles.progressFill,
-                {
-                  width: `${Math.min(
-                    100,
-                    Math.max(0, data.totalCount ? (100 * data.checkedCount) / data.totalCount : 0),
-                  )}%`,
-                },
-              ]}
-            />
-          </View>
           <View style={styles.tools}>
             <TextInput
               mode="outlined"
@@ -734,6 +839,15 @@ const styles = StyleSheet.create({
   // let the checklist's measured height collapse: otherwise its rows may paint
   // over the following handover / evidence / history cards on React Native Web.
   root: { width: '100%', flexShrink: 0, gap: 12, overflow: 'visible' },
+  progressSummary: { width: '100%', flexShrink: 0, gap: 11 },
+  progressSummaryHeader: { flexDirection: 'row', alignItems: 'center', gap: 10 },
+  progressLoading: { flexDirection: 'row', alignItems: 'center', gap: 8, minHeight: 32 },
+  progressError: { gap: 2 },
+  progressCount: { color: c.primary },
+  progressSources: { flexDirection: 'row', flexWrap: 'wrap', columnGap: 14, rowGap: 4 },
+  progressNotice: { backgroundColor: c.amberSoft, borderRadius: 8, padding: 10, gap: 3 },
+  progressNoticeTitle: { color: c.amber },
+  progressNoticeText: { color: c.ink },
   progressTrack: {
     width: '100%',
     height: 6,

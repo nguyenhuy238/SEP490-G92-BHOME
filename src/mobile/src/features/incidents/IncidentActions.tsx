@@ -797,10 +797,11 @@ export function IncidentActionPanel({
           />
           <Action
             minHeight={role === 'Owner' ? 48 : 44}
+            loading={mutation.busy}
             disabled={!confirmed || mutation.busy}
             onPress={() => (role === 'Owner' ? setConfirmDecision(true) : void execute())}
           >
-            {mutation.busy ? 'Đang xử lý…' : names[action]}
+            {mutation.busy ? 'Đang gửi cập nhật…' : names[action]}
           </Action>
         </>
       )}

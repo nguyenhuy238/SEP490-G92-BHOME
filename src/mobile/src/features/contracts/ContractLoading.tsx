@@ -1,6 +1,6 @@
 import React from 'react';
 import { StyleSheet, View } from 'react-native';
-import { Text } from 'react-native-paper';
+import { ActivityIndicator, Text } from 'react-native-paper';
 import { colors } from '../../theme/theme';
 
 /** Keep the summary/form footprint visible while the server response is pending. */
@@ -13,7 +13,10 @@ export function ContractLoading({
 }) {
   return (
     <View style={styles.root} accessibilityRole="progressbar" accessibilityLabel={label}>
-      <Text>{label}</Text>
+      <View style={styles.status}>
+        <ActivityIndicator size="small" />
+        <Text>{label}</Text>
+      </View>
       {Array.from({ length: compact ? 1 : 2 }, (_, index) => (
         <View
           key={index}
@@ -33,6 +36,7 @@ export function ContractLoading({
 
 const styles = StyleSheet.create({
   root: { gap: 16 },
+  status: { flexDirection: 'row', alignItems: 'center', gap: 8 },
   card: { padding: 16, gap: 16, borderRadius: 16, backgroundColor: colors.white },
   line: { height: 14, width: '85%', borderRadius: 6, backgroundColor: colors.border },
   title: { width: '55%', height: 20 },

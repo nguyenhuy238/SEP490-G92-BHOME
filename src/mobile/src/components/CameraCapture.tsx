@@ -1,6 +1,6 @@
 import { useFeedbackState } from '../lib/useFeedbackState';
 import React, { useCallback, useEffect, useRef, useState } from 'react';
-import { AppState, Image, Platform, View } from 'react-native';
+import { AppState, Image, Linking, Platform, View } from 'react-native';
 import { CameraView, useCameraPermissions } from 'expo-camera';
 import { File, Paths } from 'expo-file-system';
 import { Button, Text } from 'react-native-paper';
@@ -76,6 +76,7 @@ export function CameraCapture({
   const [working, setWorking] = useState(false);
   const [preview, setPreview] = useState('');
   const [error, setError] = useFeedbackState();
+  const [cameraPermissionBlocked, setCameraPermissionBlocked] = useState(false);
   const files = useRef(new Set<string>());
   const pending = useRef('');
   const alive = useRef(true);
@@ -129,15 +130,20 @@ export function CameraCapture({
     clearFiles();
     setPreview('');
     setError('');
+    setCameraPermissionBlocked(false);
     readyAccess.current = false;
     setReady(false);
     if (presentation === 'evidence') setEvidenceVisible(true);
     setRequestingPermission(true);
     try {
       const access = permissionAccess.current;
-      const allowed = access.permission?.granted || (await access.requestPermission()).granted;
+      const result = access.permission?.granted
+        ? access.permission
+        : await access.requestPermission();
+      const allowed = result.granted;
       if (!alive.current || epoch !== generation.current) return;
       if (!allowed) {
+        setCameraPermissionBlocked(result.canAskAgain === false);
         setError(
           presentation === 'meter' || presentation === 'evidence'
             ? 'Cần cấp quyền camera trong Cài đặt để chụp ảnh.'
@@ -446,6 +452,12 @@ export function CameraCapture({
         onUse={() => void submitPending()}
         onRetake={retake}
         onRequestPermission={() => void openCamera()}
+        showSettings={cameraPermissionBlocked}
+        onOpenSettings={() => {
+          void Linking.openSettings().catch(() =>
+            setError('Không mở được Cài đặt. Hãy cấp quyền Camera cho BHOME rồi thử lại.'),
+          );
+        }}
         onManual={() => {
           closeCamera();
           clearFiles();

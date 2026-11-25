@@ -317,6 +317,12 @@ public static class DependencyInjection
         services.AddScoped<BHome.Application.Contracts.IHoldingSettingsData, BHome.Infrastructure.Contracts.HoldingSettingsData>();
         services.AddScoped<BHome.Application.Finance.IExpenseRepository, BHome.Infrastructure.Finance.ExpenseRepository>();
         services.AddScoped<BHome.Application.Finance.ExpenseService>();
+        services.AddScoped<BHome.Application.Finance.IExpensePaymentRepository, BHome.Infrastructure.Finance.ExpensePaymentRepository>();
+        services.AddScoped<BHome.Application.Finance.ExpensePaymentService>();
+        services.AddScoped<BHome.Application.Finance.IDepreciationRepository, BHome.Infrastructure.Finance.DepreciationRepository>();
+        services.AddScoped<BHome.Application.Finance.DepreciationService>();
+        services.AddScoped<BHome.Application.Finance.IStaffCostRepository, BHome.Infrastructure.Finance.StaffCostRepository>();
+        services.AddScoped<BHome.Application.Finance.StaffCostService>();
         services.AddScoped<BHome.Application.Finance.ICapitalAssetRepository, BHome.Infrastructure.Finance.CapitalAssetRepository>();
         services.AddScoped<BHome.Application.Finance.CapitalAssetService>();
         services.AddScoped<BHome.Application.Finance.RecurringExpenseService>();

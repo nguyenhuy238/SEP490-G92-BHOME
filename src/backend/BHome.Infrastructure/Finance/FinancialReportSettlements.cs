@@ -28,11 +28,21 @@ public sealed partial class FinancialReportRepository
                     WHERE a.target_settlement_contract_id=c.contract_id AND a.settlement_receivable_id=c.charge_id),0) paid
                   FROM charges c
                 ), cash AS (
-                  SELECT c.location_id,COALESCE(sum(a.amount),0) cumulative,
-                    COALESCE(sum(a.amount) FILTER(WHERE a.allocated_at>={start}),0) period_amount
+                  SELECT c.location_id,COALESCE(sum(a.amount) FILTER(WHERE a.allocated_at<{end}),0) cumulative,
+                    COALESCE(sum(a.amount) FILTER(WHERE a.allocated_at>={start} AND a.allocated_at<{end}),0) period_amount,
+                    COALESCE(sum(a.amount) FILTER(WHERE p.received_at>={start}
+                      AND p.received_at<{end}),0) actual_amount,
+                    COALESCE(sum(a.amount) FILTER(WHERE c.basis_date<{filter.From}
+                      AND p.received_at>={start}
+                      AND p.received_at<{end}),0) prior_amount,
+                    COALESCE(sum(a.amount) FILTER(WHERE c.basis_date>{filter.To}
+                      AND p.received_at>={start}
+                      AND p.received_at<{end}),0) advance_amount,
+                    COALESCE(sum(a.amount) FILTER(WHERE c.basis_date BETWEEN {filter.From} AND {filter.To}),0) period_verified,
+                    COALESCE(sum(a.amount) FILTER(WHERE p.received_at<{end}),0) actual_cumulative
                   FROM charges c JOIN payment_allocations a ON a.target_settlement_contract_id=c.contract_id AND a.settlement_receivable_id=c.charge_id
                   JOIN payments p ON p.id=a.source_payment_id
-                  WHERE p.status='VERIFIED' AND a.allocated_at<{end} AND COALESCE(p.verification_data->'compactState'->>'isDevelopmentDemo','false')<>'true'
+                  WHERE p.status='VERIFIED' AND COALESCE(p.verification_data->'compactState'->>'isDevelopmentDemo','false')<>'true'
                   GROUP BY c.location_id
                 ), offsets AS (
                   SELECT room.location_id,sum(a.amount) amount FROM payment_allocations a
@@ -59,6 +69,7 @@ public sealed partial class FinancialReportRepository
                 ), charge_totals AS (
                   SELECT location_id,sum(amount) FILTER(WHERE basis_date>={filter.From} AND basis_date<={filter.To}) amount,
                     sum(amount-paid) FILTER(WHERE basis_date>={filter.From} AND basis_date<={filter.To}) debt,
+                    sum(amount-paid) all_debt,
                     bool_or(amount IS NULL OR amount<0 OR amount<>trunc(amount) OR paid<0 OR paid>amount OR basis_date IS NULL OR COALESCE(valid_source,false)=false) invalid
                   FROM balances GROUP BY location_id
                 ), scopes AS (
@@ -66,7 +77,11 @@ public sealed partial class FinancialReportRepository
                 )
                 SELECT scope.location_id AS "LocationId",COALESCE(c.amount,0) AS "Charges",COALESCE(c.debt,0) AS "Debt",
                   COALESCE(cash.period_amount,0) AS "Collections",COALESCE(cash.cumulative,0) AS "CumulativeCollections",
-                  COALESCE(offsets.amount,0) AS "DepositOffsets",COALESCE(forfeitures.amount,0) AS "HoldingForfeitures",COALESCE(c.invalid,false) AS "Invalid"
+                  COALESCE(offsets.amount,0) AS "DepositOffsets",COALESCE(forfeitures.amount,0) AS "HoldingForfeitures",COALESCE(c.invalid,false) AS "Invalid",
+                  COALESCE(c.all_debt,0) AS "AllDebt",COALESCE(cash.actual_amount,0) AS "ActualCollections",
+                  COALESCE(cash.prior_amount,0) AS "PriorCollections",COALESCE(cash.advance_amount,0) AS "AdvanceCollections",
+                  COALESCE(cash.period_verified,0) AS "PeriodVerifiedCollections",
+                  COALESCE(cash.actual_cumulative,0) AS "CumulativeActualCollections"
                 FROM scopes scope LEFT JOIN charge_totals c USING(location_id) LEFT JOIN cash USING(location_id)
                   LEFT JOIN offsets USING(location_id) LEFT JOIN forfeitures USING(location_id)
                 """).ToArrayAsync(token);
@@ -87,4 +102,10 @@ public sealed class SettlementReportAggregate
     public decimal DepositOffsets { get; set; }
     public decimal HoldingForfeitures { get; set; }
     public bool Invalid { get; set; }
+    public decimal AllDebt { get; set; }
+    public decimal ActualCollections { get; set; }
+    public decimal PriorCollections { get; set; }
+    public decimal AdvanceCollections { get; set; }
+    public decimal PeriodVerifiedCollections { get; set; }
+    public decimal CumulativeActualCollections { get; set; }
 }

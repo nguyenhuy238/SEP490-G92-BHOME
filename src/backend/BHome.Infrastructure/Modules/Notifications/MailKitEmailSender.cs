@@ -76,7 +76,7 @@ internal sealed class MailKitEmailSender(IOptions<EmailOptions> options, ILogger
             TextBody = EmailTemplate.Text(message),
             HtmlBody = EmailTemplate.Html(message.Title, message.Body, message.ActionUrl,
                 EmailTemplate.ActionLabel(message.EventType), message.MobileActionUrl, message.Credentials,
-                includeBrandMark: brandMark is not null)
+                includeBrandMark: brandMark is not null, eventType: message.EventType)
         };
         if (brandMark is not null)
         {

@@ -1,6 +1,7 @@
 using System.ComponentModel.DataAnnotations;
 using System.Text.Json.Serialization;
 using System.Text.RegularExpressions;
+using BHome.Application.Contracts;
 using BHome.Application.IdentityAccess;
 using BHome.Domain.Billing;
 using BHome.Domain.IdentityAccess;
@@ -22,7 +23,7 @@ public sealed record TransferInstructions(Guid InvoiceId, string Availability, s
     string TransferReference, string TransferDescription, string? QrPayload, string? QrImageDataUri, bool IsDevelopmentDemo, int? ReceivingAccountVersion);
 public sealed class TransferInstructionsService(IPaymentRepository repository, PaymentService payments, ICurrentUser user,
     ITransferQrGenerator qr, PaymentRuntimeMode mode, TimeProvider clock, SePay.IPaymentCodeRegistry? codes = null,
-    SePay.SePayOptions? sepay = null)
+    SePay.SePayOptions? sepay = null, IHoldingTestScope? holdingTestScope = null)
 {
     private Guid Actor => user.UserId is { } id && id != Guid.Empty ? id : throw new PaymentException(401, "authentication_required");
     private void Owner() { _ = Actor; if (!user.IsInRole(Roles.Owner)) throw new PaymentException(403, "payment_owner_required"); }
@@ -72,8 +73,15 @@ public sealed class TransferInstructionsService(IPaymentRepository repository, P
     public Task<ReceivingBankAccount> SaveAccountAsync(ReceivingAccountInput x, CancellationToken t)
     {
         Owner();
-        ValidateAccount(x.BankIdentifier, x.AccountNumber, x.AccountHolder, x.IsDevelopmentDemo, x.HumanVerified, x.ExpectedVersion);
-        if (x.LocationId == Guid.Empty) throw new PaymentException(400, "invalid_receiving_bank_account");
+        if (x.LocationId == Guid.Empty || x.ExpectedVersion < 0 || !x.HumanVerified ||
+            !Regex.IsMatch(x.BankIdentifier ?? "", "^[0-9]{6}$") || !Regex.IsMatch(x.AccountNumber ?? "", "^[0-9]{6,19}$") ||
+            !Regex.IsMatch(x.AccountHolder ?? "", "^[A-Z0-9 ]{5,50}$") || string.IsNullOrWhiteSpace(x.AccountHolder))
+            throw new PaymentException(400, "invalid_receiving_bank_account");
+        if (x.IsDevelopmentDemo && !mode.AllowDevelopmentDemo &&
+            (holdingTestScope?.Allows(x.LocationId) != true || sepay?.ReceivingAccounts.Any(account =>
+                account.LocationId == x.LocationId && account.BankIdentifier == x.BankIdentifier &&
+                account.AccountNumber == x.AccountNumber) != true))
+            throw new PaymentException(400, "sandbox_receiving_account_unavailable");
         return repository.TransactionAsync<ReceivingBankAccount>(null, null, async () =>
         {
             if (!await repository.ActiveLocationAsync(x.LocationId, t)) throw new PaymentException(404, "payment_location_not_found");

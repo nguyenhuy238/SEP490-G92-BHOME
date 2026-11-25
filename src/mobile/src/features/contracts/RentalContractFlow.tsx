@@ -33,6 +33,7 @@ export function RentalContractFlow({
   actorId,
   onChanged,
   onList,
+  onComplete,
   initialStep,
 }: {
   api: ContractClient;
@@ -42,6 +43,7 @@ export function RentalContractFlow({
   actorId: string;
   onChanged: () => void;
   onList: () => void;
+  onComplete?: () => void;
   initialStep?: number;
 }) {
   const state = rentalContractState(contract, readiness);
@@ -193,7 +195,9 @@ export function RentalContractFlow({
           <Action secondary onPress={() => setDetails((value) => !value)}>
             Xem chi tiết hợp đồng
           </Action>
-          <Action onPress={onList}>Quay về danh sách hợp đồng</Action>
+          <Action onPress={onComplete ?? onList}>
+            {onComplete ? 'Xác nhận · Về Trang chủ' : 'Quay về danh sách hợp đồng'}
+          </Action>
         </>
       ) : (
         <>
@@ -351,7 +355,14 @@ export function RentalContractFlow({
                 {signer &&
                   contract.signatures.some((signature) =>
                     ['Signed', 'Simulated'].includes(signature.status),
-                  ) && <ContractEvidence api={api} contractId={contract.id} pdf />}
+                  ) && (
+                    <ContractEvidence
+                      api={api}
+                      contractId={contract.id}
+                      contractKind={contract.kind}
+                      pdf
+                    />
+                  )}
               </Box>
               {otpSigning && (
                 <ContractSigningPanel

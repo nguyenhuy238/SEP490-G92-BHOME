@@ -456,3 +456,12 @@ Migration `20261122000100_PublicContentSnapshots` backfill snapshot trong JSON
 hiện tại, không thêm bảng/cột. Runtime tương thích dữ liệu cũ: đóng băng nội
 dung cũ dưới row lock trước thay đổi đầu tiên. Xem bằng chứng và giới hạn tại
 `docs/development/FE09_IMPLEMENTATION_2026-11-22.md`.
+
+## Công việc mới trên trang chủ Staff
+
+Trang chủ Staff dùng UC-10 để lấy tối đa hai công việc tại cơ sở đang chọn qua
+`GET /api/v1/operational-tasks?page=1&pageSize=2&locationId=…&latestActionable=true`.
+Khi bật bộ lọc, backend chỉ lấy `Assigned` và `InProgress`, bỏ bước kiểm kê
+nằm trong hợp đồng và sắp xếp theo thời điểm tạo mới nhất trước khi phân trang.
+Quyền xem theo vai trò và cơ sở vẫn áp dụng. Trang Công việc dùng thứ tự mặc
+định theo hạn xử lý.

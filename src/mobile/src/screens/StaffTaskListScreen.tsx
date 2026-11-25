@@ -13,15 +13,9 @@ import {
 } from 'react-native-paper';
 import { formatInstant } from '../../../../packages/client-core/src/localization';
 import { useWorkspaceHeaderRefresh } from '../components/WorkspaceHeaderContext';
-import { StaffWorkflowTabs } from '../components/StaffWorkflowTabs';
 import { useWorkspace } from '../features/workspace/WorkspaceProvider';
 import { useWorkspaceQuery } from '../features/workspace/useWorkspaceQuery';
 
-const LazyIncidentListScreen = React.lazy(() =>
-  import('../features/incidents/IncidentScreens').then((module) => ({
-    default: module.IncidentListScreen,
-  })),
-);
 const LazyMaintenanceListScreen = React.lazy(() =>
   import('../features/incidents/IncidentScreens').then((module) => ({
     default: module.MaintenanceListScreen,
@@ -98,28 +92,7 @@ export function StaffTaskListScreen({
   handovers = false,
   initialCategory = 'MoveIn',
 }: { handovers?: boolean; initialCategory?: 'MoveIn' | 'MoveOut' } = {}) {
-  const [tab, setTab] = useState('work');
-  if (handovers) return <StaffTaskListContent handovers initialCategory={initialCategory} />;
-  return (
-    <>
-      <StaffWorkflowTabs
-        accessibilityLabel="Nội dung công việc Staff"
-        selected={tab}
-        onChange={setTab}
-        tabs={[
-          { id: 'work', label: 'Công việc' },
-          { id: 'reports', label: 'Báo cáo sự cố' },
-        ]}
-      />
-      {tab === 'reports' ? (
-        <React.Suspense fallback={<Text variant="bodySmall">Đang tải báo cáo sự cố…</Text>}>
-          <LazyIncidentListScreen embedded />
-        </React.Suspense>
-      ) : (
-        <StaffTaskListContent />
-      )}
-    </>
-  );
+  return <StaffTaskListContent handovers={handovers} initialCategory={initialCategory} />;
 }
 
 function StaffTaskListContent({
@@ -218,28 +191,27 @@ function StaffTaskListContent({
     <>
       {!inHeader && (
         <View style={styles.between}>
-          <Text variant="titleLarge" style={styles.title}>
-            {handovers ? 'Bàn giao / Trả phòng' : 'Công việc vận hành'}
-          </Text>
+          {handovers ? (
+            <Text variant="titleLarge" style={styles.title}>
+              Bàn giao / Trả phòng
+            </Text>
+          ) : (
+            <View style={{ flex: 1 }} />
+          )}
           <IconButton
-            icon="refresh"
+            icon={query.fetching ? () => <ActivityIndicator size="small" /> : 'refresh'}
             accessibilityLabel="Tải lại công việc"
             disabled={query.fetching}
             onPress={reload}
           />
         </View>
       )}
-      {!handovers && (
-        <Text variant="bodySmall" style={styles.muted}>
-          Công việc thuộc cơ sở đang chọn trên trang chủ
-        </Text>
-      )}
       {!staffLocationId && (
         <Text accessibilityRole="alert" variant="bodySmall" style={styles.muted}>
           Chưa có cơ sở được phân công để xem công việc.
         </Text>
       )}
-      {handovers ? (
+      {handovers && (
         <>
           <SegmentedButtons
             value={category}
@@ -292,24 +264,6 @@ function StaffTaskListContent({
             </Button>
           )}
         </>
-      ) : (
-        <>
-          <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 8 }}>
-            <Button icon="key-outline" mode="outlined" onPress={() => go('staff-handovers')}>
-              Bàn giao / Trả phòng
-            </Button>
-            <Button
-              icon="file-document-check-outline"
-              mode="outlined"
-              onPress={() => go('staff-handover-archive')}
-            >
-              Biên bản đã ký
-            </Button>
-          </View>
-          <Button icon="calendar-month-outline" onPress={() => go('shifts')}>
-            Lịch làm việc
-          </Button>
-        </>
       )}
       {!handovers && (
         <TaskFilterBar
@@ -320,22 +274,19 @@ function StaffTaskListContent({
           }}
         />
       )}
-      {data &&
-        (handovers ? (
-          <View style={styles.summary}>
-            <Text variant="labelLarge" style={[styles.title, { flex: 1 }]}>
-              {data.totalCount} nhiệm vụ cần xử lý
+      {data && handovers && (
+        <View style={styles.between}>
+          <Text variant="labelLarge" style={[styles.title, { flex: 1 }]}>
+            {data.totalCount} nhiệm vụ cần xử lý
+          </Text>
+          {data.totalCount > data.pageSize && (
+            <Text variant="bodySmall" style={styles.muted}>
+              {(data.page - 1) * data.pageSize + 1}–
+              {Math.min(data.page * data.pageSize, data.totalCount)} / {data.totalCount}
             </Text>
-            {data.totalCount > data.pageSize && (
-              <Text variant="bodySmall" style={styles.muted}>
-                {(data.page - 1) * data.pageSize + 1}–
-                {Math.min(data.page * data.pageSize, data.totalCount)} / {data.totalCount}
-              </Text>
-            )}
-          </View>
-        ) : (
-          <TaskSummaryBar totalCount={data.totalCount} visibleItems={items} filtered={!!status} />
-        ))}
+          )}
+        </View>
+      )}
       {query.fetching && (
         <View
           style={styles.loading}
@@ -512,40 +463,6 @@ function TaskFilterBar({
         </TouchableRipple>
       ))}
     </ScrollView>
-  );
-}
-
-function TaskSummaryBar({
-  totalCount,
-  visibleItems,
-  filtered,
-}: {
-  totalCount: number;
-  visibleItems: OperationalTask[];
-  filtered: boolean;
-}) {
-  // The API already excludes embedded inventory checkpoints for Staff before
-  // pagination; its total count is authoritative across all pages.
-  const overdue = visibleItems.filter((task) => task.isOverdue).length;
-  const assigned = visibleItems.filter((task) => task.status === 'Assigned').length;
-  return (
-    <View style={{ gap: 4 }}>
-      <View style={styles.summary}>
-        <Text variant="labelLarge" style={styles.title}>
-          {totalCount} công việc{filtered ? ' phù hợp' : ''}
-        </Text>
-        {overdue > 0 && (
-          <Text variant="bodySmall" style={styles.overdue}>
-            {overdue} quá hạn
-          </Text>
-        )}
-        {assigned > 0 && (
-          <Text variant="bodySmall" style={styles.muted}>
-            {assigned} cần làm
-          </Text>
-        )}
-      </View>
-    </View>
   );
 }
 
@@ -736,13 +653,6 @@ const styles = StyleSheet.create({
     borderColor: c.border,
   },
   filterSelected: { backgroundColor: c.primary, borderColor: c.primary },
-  summary: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    alignItems: 'center',
-    columnGap: 14,
-    rowGap: 4,
-  },
   loading: { flexDirection: 'row', alignItems: 'center', gap: 8, paddingVertical: 8 },
   state: {
     alignItems: 'center',

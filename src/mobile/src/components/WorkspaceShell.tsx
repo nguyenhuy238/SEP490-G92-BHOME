@@ -10,7 +10,14 @@ import {
   useWindowDimensions,
   View,
 } from 'react-native';
-import { Badge, Button, IconButton, Text, TouchableRipple } from 'react-native-paper';
+import {
+  ActivityIndicator,
+  Badge,
+  Button,
+  IconButton,
+  Text,
+  TouchableRipple,
+} from 'react-native-paper';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { StatusBar } from 'expo-status-bar';
 import { router, useFocusEffect, useNavigation } from 'expo-router';
@@ -31,7 +38,11 @@ import { ui } from './WorkspaceKit';
 import { NotificationBadge } from './NotificationBadge';
 import { useWorkspaceQuery } from '../features/workspace/useWorkspaceQuery';
 import { queryPolicies } from '../lib/queryPolicies';
-import { WorkspaceHeaderContext, type WorkspaceHeaderAction } from './WorkspaceHeaderContext';
+import {
+  WorkspaceHeaderContext,
+  WorkspaceInlineHeaderContext,
+  type WorkspaceHeaderAction,
+} from './WorkspaceHeaderContext';
 import { WorkspaceFooterContext } from './WorkspaceFooter';
 
 // Metro requires a literal path for native image bundling.
@@ -112,6 +123,11 @@ export function WorkspaceShell({
     [screen],
   );
   const [headerAction, setHeaderAction] = useState<WorkspaceHeaderAction | null>(null);
+  const [inlineHeaderVisible, setInlineHeaderVisible] = useState(false);
+  const registerInlineHeader = useCallback(() => {
+    setInlineHeaderVisible(true);
+    return () => setInlineHeaderVisible(false);
+  }, []);
   const registerHeaderAction = useCallback((action: WorkspaceHeaderAction) => {
     setHeaderAction(action);
     return () => setHeaderAction(null);
@@ -129,6 +145,7 @@ export function WorkspaceShell({
     staff && ['work-orders', 'task-detail', 'staff-handovers'].includes(screen) && !preview;
   const compactTaskDetail = compactTasks && screen === 'task-detail';
   const compactMeter = staff && screen === 'meter-reading' && !preview;
+  const staffIncidentList = staff && screen === 'staff-incidents' && !preview;
   const tenantRoom = role === 'Tenant' && screen === 'tenant-room' && !preview;
   const tenantResidence = role === 'Tenant' && screen === 'residence' && !preview;
   const tenantLedger = role === 'Tenant' && screen === 'billing-history' && !preview;
@@ -360,12 +377,12 @@ export function WorkspaceShell({
               (profileEdit ||
                 (owner && !visibleTabs.some((tab) => tab.screen === screen)) ||
                 tenantInvoice ||
-                (staff && !['staff-home', 'profile'].includes(screen)) ||
+                (staff && !['staff-home', 'profile'].includes(screen) && !inlineHeaderVisible) ||
                 (role === 'Tenant' && !visibleTabs.some((tab) => tab.screen === screen)) ||
                 ['contract', 'checklist', 'security', 'preferences', 'notifications'].includes(
                   screen,
                 )) && (
-                <View style={ui.row}>
+                <View style={[ui.row, staffIncidentList && styles.incidentHeaderRow]}>
                   <IconButton
                     icon="arrow-left"
                     accessibilityLabel="Quay lại"
@@ -378,6 +395,7 @@ export function WorkspaceShell({
                       compactContracts ||
                       compactTasks ||
                       compactMeter ||
+                      staffIncidentList ||
                       tenantResidence ||
                       tenantInvoice ||
                       tenantFeatures ||
@@ -390,11 +408,16 @@ export function WorkspaceShell({
                       compactContracts ||
                       compactTasks ||
                       compactMeter ||
+                      staffIncidentList ||
                       tenantResidence ||
                       tenantInvoice ||
                       tenantFeatures ||
                       profileEdit
-                        ? [ui.grow, { color: c.primary, fontWeight: '700' }]
+                        ? [
+                            ui.grow,
+                            { color: c.primary, fontWeight: '700' },
+                            staffIncidentList && { textAlign: 'center' },
+                          ]
                         : ui.muted
                     }
                   >
@@ -406,56 +429,70 @@ export function WorkspaceShell({
                           ? 'Tất cả chức năng'
                           : tenantInvoice
                             ? (headerAction?.title ?? 'Hóa đơn của tôi')
-                            : compactTasks
-                              ? compactTaskDetail
-                                ? 'Chi tiết công việc'
-                                : screen === 'staff-handovers'
-                                  ? 'Bàn giao / Trả phòng'
-                                  : 'Công việc vận hành'
-                              : compactContracts
-                                ? (headerAction?.title ?? 'Hợp đồng')
-                                : compactMeter
-                                  ? 'Ghi chỉ số điện nước'
-                                  : (headerAction?.title ?? 'Quay lại')}
+                            : staffIncidentList
+                              ? (headerAction?.title ?? 'Báo cáo sự cố')
+                              : compactTasks
+                                ? compactTaskDetail
+                                  ? 'Chi tiết công việc'
+                                  : screen === 'staff-handovers'
+                                    ? 'Bàn giao / Trả phòng'
+                                    : (headerAction?.title ?? 'Công việc vận hành')
+                                : compactContracts
+                                  ? (headerAction?.title ?? 'Hợp đồng')
+                                  : compactMeter
+                                    ? 'Ghi chỉ số điện nước'
+                                    : (headerAction?.title ?? 'Quay lại')}
                   </Text>
                   {(compactContracts ||
                     compactTasks ||
                     compactMeter ||
+                    staffIncidentList ||
                     tenantInvoice ||
                     tenantResidence) &&
                     headerAction && (
                       <>
-                        <IconButton
-                          icon="refresh"
-                          accessibilityLabel={
-                            tenantResidence
-                              ? 'Tải lại hồ sơ tạm trú'
-                              : compactMeter
+                        {headerAction.disabled || headerAction.action?.disabled ? (
+                          <Button
+                            compact
+                            disabled
+                            onPress={() => undefined}
+                            accessibilityLabel={
+                              headerAction.action?.accessibilityLabel ??
+                              (compactMeter
                                 ? 'Tải lại danh sách ghi chỉ số'
                                 : compactTasks
                                   ? `Tải lại ${headerAction?.title ?? 'công việc'}`
-                                  : tenantLedger
-                                    ? 'Tải lại giao dịch'
-                                    : tenantInvoice
-                                      ? 'Tải lại hóa đơn'
-                                      : 'Tải lại hợp đồng'
-                          }
-                          disabled={headerAction.disabled}
-                          onPress={headerAction.onRefresh}
-                        />
+                                  : 'Tải lại')
+                            }
+                            icon={() => <ActivityIndicator size="small" />}
+                          >
+                            Đang tải dữ liệu
+                          </Button>
+                        ) : (
+                          <IconButton
+                            icon={headerAction.action?.icon ?? 'refresh'}
+                            accessibilityLabel={
+                              headerAction.action?.accessibilityLabel ??
+                              (tenantResidence
+                                ? 'Tải lại hồ sơ tạm trú'
+                                : compactMeter
+                                  ? 'Tải lại danh sách ghi chỉ số'
+                                  : compactTasks
+                                    ? `Tải lại ${headerAction?.title ?? 'công việc'}`
+                                    : tenantLedger
+                                      ? 'Tải lại giao dịch'
+                                      : tenantInvoice
+                                        ? 'Tải lại hóa đơn'
+                                        : 'Tải lại hợp đồng')
+                            }
+                            disabled={headerAction.action?.disabled ?? headerAction.disabled}
+                            onPress={headerAction.action?.onPress ?? headerAction.onRefresh}
+                          />
+                        )}
                       </>
                     )}
                 </View>
               )}
-            {__DEV__ && !preview && staff && screen === homeScreen[role] && (
-              <Button
-                mode="contained-tonal"
-                icon="test-tube"
-                onPress={() => requestNavigation(() => router.push('/ocr-test'))}
-              >
-                Test OCR
-              </Button>
-            )}
             <WorkspaceHeaderContext.Provider
               value={
                 dashboard ||
@@ -463,6 +500,7 @@ export function WorkspaceShell({
                 compactContracts ||
                 compactTasks ||
                 compactMeter ||
+                staffIncidentList ||
                 tenantRoom ||
                 tenantResidence ||
                 tenantInvoice ||
@@ -472,9 +510,11 @@ export function WorkspaceShell({
                   : null
               }
             >
-              <WorkspaceFooterContext.Provider value={registerWorkflowFooter}>
-                {children}
-              </WorkspaceFooterContext.Provider>
+              <WorkspaceInlineHeaderContext.Provider value={registerInlineHeader}>
+                <WorkspaceFooterContext.Provider value={registerWorkflowFooter}>
+                  {children}
+                </WorkspaceFooterContext.Provider>
+              </WorkspaceInlineHeaderContext.Provider>
             </WorkspaceHeaderContext.Provider>
           </KeyboardFormScrollView>
         )}
@@ -509,6 +549,7 @@ const styles = StyleSheet.create({
     minHeight: 72,
     paddingBottom: 6,
   },
+  incidentHeaderRow: { justifyContent: 'space-between' },
   logo: {
     width: 40,
     height: 40,

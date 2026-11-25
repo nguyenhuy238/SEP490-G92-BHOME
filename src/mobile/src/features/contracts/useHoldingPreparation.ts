@@ -247,6 +247,7 @@ export function useHoldingPreparation(api: ContractClient, selectedRoomId = '') 
         }
       : null,
     catalogLoading: loading,
+    catalogError: error,
     checkingRoom: loading || (!!room && !current),
     roomReady: !!room && !loading && !error && current?.roomReady === true,
     selectionBlocked: !!current?.error && current.codes !== undefined,

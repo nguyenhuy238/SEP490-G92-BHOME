@@ -548,7 +548,7 @@ public sealed class SePayIntegrationTests(Compact24Fixture fixture) : IClassFixt
     }
 
     [CompactPostgresFact]
-    public async Task PartialReceiptsRefreshSharedInvoiceQrAndNotifyEveryTenant()
+    public async Task OnlyExactReceiptsSettleTheSharedInvoice()
     {
         await using var scenario = await Create();
         var reference = "SYN-PARTIAL-" + Guid.NewGuid();

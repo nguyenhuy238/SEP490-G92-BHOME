@@ -129,10 +129,18 @@ vi.mock('react-native-paper', () => ({
   IconButton: ({
     onPress,
     accessibilityLabel,
+    disabled,
+    icon,
   }: {
     onPress: () => void;
     accessibilityLabel: string;
-  }) => <button onClick={onPress} aria-label={accessibilityLabel} />,
+    disabled?: boolean;
+    icon?: string | (() => React.ReactNode);
+  }) => (
+    <button onClick={onPress} aria-label={accessibilityLabel} disabled={disabled}>
+      {typeof icon === 'function' ? icon() : null}
+    </button>
+  ),
   ProgressBar: () => null,
   Menu: Object.assign(
     ({ anchor, visible, children }: Children & { anchor: React.ReactNode; visible: boolean }) => (
@@ -359,7 +367,12 @@ vi.mock('../../../src/mobile/src/components/CameraCapture', () => ({
     disabled: boolean;
     onCapture: (bytes: Uint8Array<ArrayBuffer>) => Promise<void>;
   }) =>
-    ['Chụp ảnh', 'Thêm ảnh minh chứng'].includes(label) ? (
+    [
+      'Chụp ảnh',
+      'Thêm ảnh minh chứng',
+      'Chụp ảnh bằng chứng điều chỉnh',
+      'Chụp ảnh minh chứng',
+    ].includes(label) ? (
       <button disabled={disabled} onClick={() => void onCapture(new Uint8Array([137, 80, 78, 71]))}>
         {label}
       </button>
@@ -790,7 +803,7 @@ it('Tenant reads persisted invoice consumption and amount without a fake payment
   expect(screen.getByText('25,5 kWh')).toBeTruthy();
   expect(screen.getByText('100 kWh')).toBeTruthy();
   // The server's zero paidAmount may be displayed, but must not imply Paid.
-  expect(screen.getByText('Còn phải thanh toán')).toBeTruthy();
+  expect(await screen.findByText('Còn phải thanh toán')).toBeTruthy();
   expect(screen.queryByText(/^Đã thanh toán$/)).toBeNull();
   expect(screen.queryByText('Thanh toán thành công')).toBeNull();
   expect(fetcher.mock.calls.some((call) => String(call[0]).endsWith('/api/v1/invoices/bill'))).toBe(
@@ -1127,7 +1140,7 @@ it('shows compact previews, optional result/evidence and the server overdue flag
   expect(screen.getByText(/Kết quả gần nhất:/).parentElement?.getAttribute('data-lines')).toBe('1');
   expect(screen.getByText(/Quá hạn · 16:21.*03\/11\/2026/)).toBeTruthy();
   expect(screen.getByText('Cần ảnh minh chứng')).toBeTruthy();
-  expect(screen.getByText('1 quá hạn')).toBeTruthy();
+  expect(screen.queryByText('1 quá hạn')).toBeNull();
   expect(screen.queryByText(/currentResponsibleStaffUserId|version|AdHoc/)).toBeNull();
 });
 it('hides absent result and optional evidence metadata and routes meter tasks without a mutation', async () => {
@@ -1164,7 +1177,7 @@ it('shows loading then an empty list without fabricating summary counts', async 
   await waitFor(() => expect(finish).toBeTypeOf('function'));
   finish(json(page([])));
   await screen.findByText('Chưa có công việc được giao');
-  expect(screen.getByText('0 công việc')).toBeTruthy();
+  expect(screen.queryByText('0 công việc')).toBeNull();
 });
 it('filters on the server, resets pagination and clears the filter from an empty state', async () => {
   const fetcher = vi.fn<typeof fetch>().mockImplementation(async (url) => {
@@ -1213,7 +1226,9 @@ it('keeps loaded tasks during refresh, reports a transient failure and permits r
   await screen.findByText(task.title);
   fireEvent.click(screen.getByRole('button', { name: 'Tải lại công việc' }));
   expect(screen.getByText(task.title)).toBeTruthy();
-  expect(screen.getByText('Đang cập nhật…')).toBeTruthy();
+  const refresh = screen.getByRole('button', { name: 'Tải lại công việc' });
+  expect(refresh).toHaveProperty('disabled', true);
+  expect(within(refresh).getByText('Đang tải dữ liệu')).toBeTruthy();
   await waitFor(() => expect(finish).toBeTypeOf('function'));
   finish(json({}, 503));
   await screen.findByText('Chưa cập nhật được danh sách');
@@ -1269,7 +1284,7 @@ it('requires result and evidence before Staff submits, blocks duplicates, and us
   await screen.findByText('Kết quả đã gửi');
   expect(getToastSnapshot().toast?.message).toBe('Đã gửi kết quả. Chờ Owner kiểm tra.');
   expect(screen.queryByRole('button', { name: 'Cập nhật công việc' })).toBeNull();
-  expect(screen.queryByRole('button', { name: 'Thêm ảnh minh chứng' })).toBeNull();
+  expect(screen.queryByRole('button', { name: 'Chụp ảnh minh chứng' })).toBeNull();
 });
 it('retains the idempotency key after an uncertain mutation response and never claims success', async () => {
   const fetcher = vi.fn<typeof fetch>().mockImplementation(async (url, init) => {
@@ -1317,7 +1332,7 @@ it('starts an Assigned Staff task using the returned TaskView and hides upload u
   setApi(fetcher);
   render(<OperationalTaskDetail />);
   await screen.findByText(task.title);
-  expect(screen.queryByRole('button', { name: 'Thêm ảnh minh chứng' })).toBeNull();
+  expect(screen.queryByRole('button', { name: 'Chụp ảnh minh chứng' })).toBeNull();
   fireEvent.click(screen.getByRole('button', { name: 'Bắt đầu công việc' }));
   fireEvent.change(screen.getByLabelText('Ghi chú (không bắt buộc)'), {
     target: { value: 'Bắt đầu kiểm tra' },
@@ -1328,7 +1343,8 @@ it('starts an Assigned Staff task using the returned TaskView and hides upload u
   await screen.findByText('Đang thực hiện');
   expect(screen.getByRole('button', { name: 'Cập nhật công việc' })).toBeTruthy();
   fireEvent.click(screen.getByRole('tab', { name: 'Minh chứng' }));
-  expect(screen.getByRole('button', { name: 'Thêm ảnh minh chứng' })).toBeTruthy();
+  expect(screen.getByRole('button', { name: 'Chụp ảnh minh chứng' })).toBeTruthy();
+  expect(screen.getByRole('button', { name: 'Chọn ảnh từ thư viện' })).toBeTruthy();
   const post = fetcher.mock.calls.find(([, init]) => init?.method === 'POST')!;
   expect(String(post[0])).toContain('/start');
   expect(JSON.parse(post[1]!.body as string)).toEqual({
@@ -1454,11 +1470,11 @@ it('uploads raw bytes, reads the incremented version and attaches the returned I
   render(<OperationalTaskDetail />);
   await screen.findByText(task.title);
   fireEvent.click(screen.getByRole('tab', { name: 'Minh chứng' }));
-  fireEvent.click(screen.getByRole('button', { name: 'Thêm ảnh minh chứng' }));
+  fireEvent.click(screen.getByRole('button', { name: 'Chụp ảnh minh chứng' }));
   await waitFor(() => expect(getToastSnapshot().toast?.message).toBe('Đã tải ảnh minh chứng.'));
   const put = fetcher.mock.calls.find(([, init]) => init?.method === 'PUT')!;
   expect(put[1]!.body).toBeInstanceOf(Uint8Array);
-  expect(new Headers(put[1]!.headers).get('Content-Type')).toBe('image/jpeg');
+  expect(new Headers(put[1]!.headers).get('Content-Type')).toBe('image/png');
   fireEvent.click(screen.getByRole('button', { name: 'Cập nhật công việc' }));
   fireEvent.click(screen.getByRole('button', { name: 'Gửi kết quả' }));
   fireEvent.change(screen.getByLabelText('Kết quả thực hiện'), {
@@ -1496,7 +1512,7 @@ it('does not upload twice when refreshing TaskView fails after upload success', 
   render(<OperationalTaskDetail />);
   await screen.findByText(task.title);
   fireEvent.click(screen.getByRole('tab', { name: 'Minh chứng' }));
-  fireEvent.click(screen.getByRole('button', { name: 'Thêm ảnh minh chứng' }));
+  fireEvent.click(screen.getByRole('button', { name: 'Chụp ảnh minh chứng' }));
   await screen.findByRole('button', { name: 'Thử lại tải ảnh' });
   expect(screen.queryByRole('button', { name: 'Cập nhật công việc' })).toBeNull();
   fireEvent.click(screen.getByRole('button', { name: 'Thử lại tải ảnh' }));
@@ -1523,7 +1539,7 @@ it.each(['PendingVerification', 'Completed', 'Cancelled', 'FutureStatus'])(
     await screen.findByText(task.title);
     expect(screen.queryByRole('button', { name: 'Bắt đầu công việc' })).toBeNull();
     expect(screen.queryByRole('button', { name: 'Cập nhật công việc' })).toBeNull();
-    expect(screen.queryByRole('button', { name: 'Thêm ảnh minh chứng' })).toBeNull();
+    expect(screen.queryByRole('button', { name: 'Chụp ảnh minh chứng' })).toBeNull();
     expect(screen.queryByText('FutureStatus')).toBeNull();
     if (status === 'PendingVerification') expect(screen.queryByText(/Quá hạn ·/)).toBeNull();
   },
@@ -1547,7 +1563,7 @@ it.each([{ responsibilityAvailable: false }, { currentResponsibleStaffUserId: 'o
     render(<OperationalTaskDetail />);
     await screen.findByText(task.title);
     expect(screen.queryByRole('button', { name: 'Cập nhật công việc' })).toBeNull();
-    expect(screen.queryByRole('button', { name: 'Thêm ảnh minh chứng' })).toBeNull();
+    expect(screen.queryByRole('button', { name: 'Chụp ảnh minh chứng' })).toBeNull();
   },
 );
 it('retries an uncertain upload with the original bytes and idempotency key', async () => {
@@ -1573,7 +1589,7 @@ it('retries an uncertain upload with the original bytes and idempotency key', as
   render(<OperationalTaskDetail />);
   await screen.findByText(task.title);
   fireEvent.click(screen.getByRole('tab', { name: 'Minh chứng' }));
-  fireEvent.click(screen.getByRole('button', { name: 'Thêm ảnh minh chứng' }));
+  fireEvent.click(screen.getByRole('button', { name: 'Chụp ảnh minh chứng' }));
   await screen.findByRole('button', { name: 'Thử lại tải ảnh' });
   fireEvent.click(screen.getByRole('button', { name: 'Thử lại tải ảnh' }));
   await waitFor(() => expect(getToastSnapshot().toast?.message).toBe('Đã tải ảnh minh chứng.'));
@@ -2422,7 +2438,7 @@ it('loads real incident requests and preserves the adjustment destination', asyn
   const fetcher = vi.fn<typeof fetch>().mockResolvedValue(json(page([])));
   setApi(fetcher);
   render(<TenantRequestsScreen />);
-  await screen.findByText('Không có báo cáo trong phạm vi và bộ lọc này.');
+  await screen.findByText('Không có báo cáo phù hợp');
   fireEvent.click(screen.getByText('Yêu cầu điều chỉnh hóa đơn'));
   expect(mocks.go).toHaveBeenLastCalledWith('invoice', { focus: 'adjustment' });
   expect(fetcher.mock.calls.some(([url]) => String(url).includes('/api/v1/incidents?'))).toBe(true);

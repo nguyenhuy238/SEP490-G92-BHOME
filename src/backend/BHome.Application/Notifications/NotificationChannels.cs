@@ -4,6 +4,7 @@ public sealed class NotificationChannelOptions
 {
     public bool Enabled { get; set; }
     public bool AutomationEnabled { get; set; }
+    public bool ContractAndInvoiceEmailEnabled { get; set; }
     public string Mode { get; set; } = "Unconfigured";
     public int MaxAttempts { get; set; } = 4;
     public int RetrySeconds { get; set; } = 60;

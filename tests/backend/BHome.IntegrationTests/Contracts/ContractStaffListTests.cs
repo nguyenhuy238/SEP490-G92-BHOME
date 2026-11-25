@@ -13,7 +13,7 @@ namespace BHome.IntegrationTests.Contracts;
 
 public sealed partial class ContractLifecycleApiTests
 {
-    internal async Task HoldingSettingsAreLocationScopedVersionedAndDoNotRewriteCreatedContracts()
+    internal async Task HoldingSettingsAreOwnerGlobalVersionedAndDoNotRewriteCreatedContracts()
     {
         var w = await Setup(); var outside = await Setup();
         await using (var scope = fixture.Factory.Services.CreateAsyncScope())
@@ -33,28 +33,33 @@ public sealed partial class ContractLifecycleApiTests
             await db.SaveChangesAsync();
         }
         var path = $"/api/v1/contracts/holding-settings/{w.Location}";
-        var config = new HoldingSettingsInput(2, 1.5m, "Synthetic location A terms", 0);
+        var currentSettings = await ReadHoldingPolicyAsync(w.Owner.Client);
+        var initialVersion = currentSettings?.Version ?? 0;
+        var config = new HoldingSettingsInput("Synthetic global terms " + Guid.NewGuid().ToString("N"), initialVersion);
         Assert.Equal(HttpStatusCode.Forbidden, (await w.Staff.Client.PutAsJsonAsync(path, config)).StatusCode);
         Assert.Equal(HttpStatusCode.NoContent, (await w.Owner.Client.PutAsJsonAsync(path, config)).StatusCode);
-        Assert.Equal(HttpStatusCode.NoContent, (await w.Owner.Client.PutAsJsonAsync($"/api/v1/contracts/holding-settings/{outside.Location}", new HoldingSettingsInput(1, 1m, "Synthetic location B terms", 0))).StatusCode);
+        Assert.Equal(HttpStatusCode.Conflict, (await w.Owner.Client.PutAsJsonAsync($"/api/v1/contracts/holding-settings/{outside.Location}", new HoldingSettingsInput("Synthetic conflicting terms", initialVersion))).StatusCode);
+        var shared = await Success<HoldingSettings>(await outside.Owner.Client.GetAsync($"/api/v1/contracts/holding-settings/{outside.Location}"));
+        Assert.Equal(config.Terms, shared.Terms);
         var quote = await Success<HoldingPreparation>(await w.Staff.Client.GetAsync($"/api/v1/contracts/holdings/preparation?roomId={w.Room}"));
-        Assert.Equal(3000000, quote.HoldingDeposit); Assert.Equal(2, quote.HoldingMonths);
+        Assert.Equal(3000000, quote.HoldingDeposit); Assert.Equal(1, quote.HoldingMonths);
         var other = await Success<HoldingPreparation>(await outside.Staff.Client.GetAsync($"/api/v1/contracts/holdings/preparation?roomId={outside.Room}"));
         Assert.Equal(4000000, other.HoldingDeposit); Assert.Equal(1, other.HoldingMonths);
         Assert.Equal(HttpStatusCode.NotFound, (await outside.Staff.Client.GetAsync($"/api/v1/contracts/holdings/preparation?roomId={w.Room}")).StatusCode);
         Assert.Equal(HttpStatusCode.Conflict, (await w.Owner.Client.PutAsJsonAsync(path, config)).StatusCode);
-        Assert.Equal(HttpStatusCode.NoContent, (await w.Owner.Client.PutAsJsonAsync(path, config with { HoldingMonths = 3, DepositRentMonths = 2, ExpectedVersion = 1 })).StatusCode);
+        Assert.Equal(HttpStatusCode.NoContent, (await w.Owner.Client.PutAsJsonAsync(path, config with { Terms = "Updated global terms " + Guid.NewGuid().ToString("N"), ExpectedVersion = initialVersion + 1 })).StatusCode);
         var stale = new HoldingDraftInput(w.Room, w.Owner.Id, w.Tenant.Id, w.Resident, [w.Resident], quote.StartDate, quote.EndDate, quote.ExpiresAt, quote.HoldingDeposit, quote.Terms, 1, quote.SettingsVersion);
         Assert.Equal(HttpStatusCode.Conflict, (await Post(w.Staff, "/api/v1/contracts/holdings", stale)).StatusCode);
         quote = await Success<HoldingPreparation>(await w.Staff.Client.GetAsync($"/api/v1/contracts/holdings/preparation?roomId={w.Room}"));
-        var id = (await Success<ContractId>(await Post(w.Staff, "/api/v1/contracts/holdings", stale with { StartDate = quote.StartDate, EndDate = quote.EndDate, ExpiresAt = quote.ExpiresAt, HoldingDeposit = quote.HoldingDeposit, SettingsVersion = quote.SettingsVersion }))).Id;
-        Assert.Equal(HttpStatusCode.NoContent, (await w.Owner.Client.PutAsJsonAsync(path, config with { HoldingMonths = 4, ExpectedVersion = 2 })).StatusCode);
+        var id = (await Success<ContractId>(await Post(w.Staff, "/api/v1/contracts/holdings", stale with { StartDate = quote.StartDate, EndDate = quote.EndDate, ExpiresAt = quote.ExpiresAt, HoldingDeposit = quote.HoldingDeposit, Terms = quote.Terms, SettingsVersion = quote.SettingsVersion }))).Id;
+        Assert.Equal(HttpStatusCode.NoContent, (await w.Owner.Client.PutAsJsonAsync(path, config with { Terms = "Next global terms " + Guid.NewGuid().ToString("N"), ExpectedVersion = initialVersion + 2 })).StatusCode);
         var created = await Success<ContractView>(await w.Staff.Client.GetAsync(Path(id)));
         Assert.Equal(3000000, created.RequiredDeposit); Assert.Equal(quote.EndDate, created.EndDate);
     }
     [Fact]
     public async Task StaffListIncludesHoldingAndMainWithTypeSpecificFieldsAndPreservesLocationScope()
     {
+        if (await RunHoldingSigningOnNativeSchemaAsync(true, tests => tests.StaffListIncludesHoldingAndMainWithTypeSpecificFieldsAndPreservesLocationScope())) return;
         var main = await Setup(); var holding = await Setup(); var outside = await Setup();
         var mainId = await Draft(main); var outsideId = await Draft(outside);
         await using (var scope = fixture.Factory.Services.CreateAsyncScope())
@@ -73,9 +78,10 @@ public sealed partial class ContractLifecycleApiTests
             });
             await db.SaveChangesAsync();
         }
-        var expiry = DateTimeOffset.UtcNow.AddDays(2);
+        var quote = await ConfigureHoldingPolicyAsync(holding, "Synthetic Holding list terms");
+        var expiry = quote.ExpiresAt;
         var input = new HoldingDraftInput(holding.Room, holding.Owner.Id, holding.Tenant.Id, holding.Resident,
-            [holding.Resident], Today, Today.AddYears(1), expiry, 750000, "Synthetic Holding list terms", 1);
+            [holding.Resident], quote.StartDate, quote.EndDate, expiry, quote.HoldingDeposit, quote.Terms, 1, quote.SettingsVersion);
         var holdingId = (await Success<ContractId>(await Post(holding.Staff, "/api/v1/contracts/holdings", input))).Id;
         await using (var scope = fixture.Factory.Services.CreateAsyncScope())
         {

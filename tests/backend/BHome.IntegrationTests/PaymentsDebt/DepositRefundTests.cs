@@ -126,7 +126,7 @@ public sealed partial class PaymentLedgerTests
         await db.Database.ExecuteSqlInterpolatedAsync($"UPDATE refund_requests SET history=history||jsonb_build_array({json}::jsonb) WHERE id={row.Id}");
         var demo = await RefundValue<FinancialReport>(await owner.GetAsync("/api/v1/financial-reports?from=2000-01-01&to=2100-12-31"));
         Assert.False(demo.HasUnclassifiedRefunds); Assert.Equal("0", demo.VerifiedDepositReturns);
-        Assert.Equal(afterReturn.Total, demo.Total);
+        Assert.Equal(System.Text.Json.JsonSerializer.Serialize(afterReturn.Total), System.Text.Json.JsonSerializer.Serialize(demo.Total));
         await VerifySettlementNotifications(w, false, true);
         Assert.Equal(ContractStatus.Terminated, (await db.Set<Contract>().SingleAsync(c => c.Id == w.Contract)).Status);
         Assert.Equal(0, (await RefundValue<RefundSource>(await owner.GetAsync(sourceRoute))).AvailableAmount);

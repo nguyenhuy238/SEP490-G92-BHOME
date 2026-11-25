@@ -92,6 +92,45 @@ vi.mock('expo-router', () => ({
   useFocusEffect: (callback: () => void | (() => void)) => React.useEffect(callback, [callback]),
 }));
 vi.mock('react-native', () => ({
+  Animated: {
+    Value: class {
+      setValue() {}
+    },
+    View: ({ children }: React.PropsWithChildren) => <div>{children}</div>,
+  },
+  Keyboard: { dismiss: vi.fn() },
+  KeyboardAvoidingView: ({ children }: React.PropsWithChildren) => <div>{children}</div>,
+  Modal: ({ children }: React.PropsWithChildren) => <div role="dialog">{children}</div>,
+  PanResponder: { create: () => ({ panHandlers: {} }) },
+  Platform: { OS: 'web' },
+  Pressable: ({
+    children,
+    accessibilityRole,
+    accessibilityLabel,
+    accessibilityState,
+    onPress,
+    disabled,
+  }: React.PropsWithChildren<{
+    accessibilityRole?: string;
+    accessibilityLabel?: string;
+    accessibilityState?: { expanded?: boolean; selected?: boolean };
+    onPress: () => void;
+    disabled?: boolean;
+  }>) =>
+    accessibilityRole === 'button' ? (
+      <button
+        aria-label={accessibilityLabel}
+        aria-expanded={accessibilityState?.expanded}
+        aria-pressed={accessibilityState?.selected}
+        onClick={onPress}
+        disabled={disabled}
+      >
+        {children}
+      </button>
+    ) : (
+      <div />
+    ),
+  useWindowDimensions: () => ({ width: 390, fontScale: 1 }),
   AppState: {
     addEventListener: (_event: string, callback: (value: string) => void) => {
       state.foreground = callback;
@@ -102,7 +141,25 @@ vi.mock('react-native', () => ({
   View: ({ children }: { children: React.ReactNode }) => <div>{children}</div>,
   ScrollView: ({ children }: { children: React.ReactNode }) => <div>{children}</div>,
 }));
+vi.mock('react-native-safe-area-context', () => ({
+  useSafeAreaInsets: () => ({ top: 0, left: 0, right: 0, bottom: 0 }),
+}));
 vi.mock('react-native-paper', () => ({
+  Searchbar: ({
+    accessibilityLabel,
+    value,
+    onChangeText,
+  }: {
+    accessibilityLabel: string;
+    value: string;
+    onChangeText: (value: string) => void;
+  }) => (
+    <input
+      aria-label={accessibilityLabel}
+      value={value}
+      onChange={(event) => onChangeText(event.target.value)}
+    />
+  ),
   Portal: ({ children }: React.PropsWithChildren) => children,
   Dialog: Object.assign(
     ({ children }: React.PropsWithChildren) => <div role="dialog">{children}</div>,
@@ -309,6 +366,7 @@ async function chooseRoom() {
   fireEvent.click(await roomPickerButton());
   fireEvent.click(screen.getByRole('button', { name: 'Chưa phân tầng · 1 phòng' }));
   fireEvent.click(screen.getByRole('button', { name: 'P101' }));
+  fireEvent.click(screen.getByRole('button', { name: 'Xác nhận chọn phòng' }));
   await waitFor(() => expect((continueButton() as HTMLButtonElement).disabled).toBe(false));
   fireEvent.click(continueButton());
   expect(screen.getByText(/2\/7/)).toBeTruthy();
@@ -323,6 +381,21 @@ async function confirmApplicant() {
   expect(screen.getByText(/3\/7/)).toBeTruthy();
 }
 const submit = () => screen.getByRole('button', { name: 'Tạo bản nháp và tiếp tục' });
+it('discards an unconfirmed room when the sheet closes', async () => {
+  mount();
+  fireEvent.click(await roomPickerButton());
+  const confirm = () =>
+    screen.getByRole<HTMLButtonElement>('button', { name: 'Xác nhận chọn phòng' });
+  expect(confirm().disabled).toBe(true);
+  fireEvent.click(screen.getByRole('button', { name: 'Chưa phân tầng · 1 phòng' }));
+  fireEvent.click(screen.getByRole('button', { name: 'P101' }));
+  expect(confirm().disabled).toBe(false);
+  expect(screen.getByText('Đã chọn: P101')).toBeTruthy();
+  fireEvent.click(screen.getByRole('button', { name: 'Đóng' }));
+  expect(continueButton()).toHaveProperty('disabled', true);
+  fireEvent.click(await roomPickerButton());
+  expect(confirm().disabled).toBe(true);
+});
 it('starts at room selection without a duplicate header, refresh icon or location selector', async () => {
   const { api } = mount();
   await roomPickerButton();
@@ -386,22 +459,30 @@ it('switches between assigned locations and filters rooms by minimum capacity', 
   fireEvent.click(await roomPickerButton());
   expect(screen.getByRole('button', { name: 'Tầng 1 · 1 phòng' })).toBeTruthy();
   expect(screen.getByRole('button', { name: 'Tầng 2 · 1 phòng' })).toBeTruthy();
-  expect(screen.queryByText('P101 · 2 người')).toBeNull();
+  expect(screen.queryByRole('button', { name: 'P101 · 2 người' })).toBeNull();
   fireEvent.click(screen.getByRole('button', { name: 'Tầng 1 · 1 phòng' }));
-  expect(screen.getByText('P101 · 2 người')).toBeTruthy();
-  fireEvent.change(screen.getByLabelText('Sức chứa tối thiểu'), { target: { value: '3' } });
+  expect(screen.getByRole('button', { name: 'P101 · 2 người' })).toBeTruthy();
+  fireEvent.click(screen.getByRole('button', { name: '3+ người' }));
   expect(screen.queryByRole('button', { name: 'Tầng 1 · 1 phòng' })).toBeNull();
   fireEvent.click(screen.getByRole('button', { name: 'Tầng 2 · 1 phòng' }));
-  expect(screen.getByText('P202 · 4 người')).toBeTruthy();
-  expect(screen.queryByText('P201 · 4 người')).toBeNull();
+  expect(screen.getByRole('button', { name: 'P202 · 4 người' })).toBeTruthy();
+  expect(screen.queryByRole('button', { name: 'P201 · 4 người' })).toBeNull();
+  fireEvent.click(screen.getByRole('button', { name: 'Tùy chỉnh' }));
   fireEvent.change(screen.getByLabelText('Sức chứa tối thiểu'), { target: { value: '9' } });
-  expect(screen.getByText('Không có phòng phù hợp bộ lọc.')).toBeTruthy();
+  expect(screen.getByText('Không tìm thấy phòng phù hợp')).toBeTruthy();
+  fireEvent.click(screen.getByRole('button', { name: 'Đặt lại bộ lọc' }));
   fireEvent.click(screen.getByRole('button', { name: 'Đóng' }));
   fireEvent.change(screen.getByLabelText('Cơ sở được phân công *'), { target: { value: ids[3] } });
   fireEvent.click(await roomPickerButton());
-  fireEvent.click(screen.getByRole('button', { name: 'Tầng 2 · 1 phòng' }));
+  fireEvent.change(screen.getByLabelText('Tìm theo mã phòng'), { target: { value: 'p201' } });
+  expect(
+    screen.getByRole('button', { name: 'Tầng 2 · 1 phòng' }).getAttribute('aria-expanded'),
+  ).toBe('true');
   expect(screen.queryByText(/P301/)).toBeNull();
   fireEvent.click(screen.getByRole('button', { name: 'P201 · 4 người' }));
+  expect(screen.getByText('Đã chọn: P201')).toBeTruthy();
+  expect(api.preparation).not.toHaveBeenCalled();
+  fireEvent.click(screen.getByRole('button', { name: 'Xác nhận chọn phòng' }));
   expect(await screen.findByText('Sức chứa: 4 người')).toBeTruthy();
   await waitFor(() =>
     expect(api.preparation).toHaveBeenCalledWith(ids[3], expect.any(AbortSignal)),
