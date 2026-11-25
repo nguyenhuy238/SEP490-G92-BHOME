@@ -320,10 +320,13 @@ commit, kết quả kiểm thử và hai checksum; không dùng key CI để tru
 
 5. Nếu lỗi sau thay file, helper cố khôi phục bytes cũ và kiểm lại hash/check.
    `GUARD_ROLLBACK_PASS` chỉ xác nhận khôi phục guard, không chứng minh
-   runtime hoặc DB đã rollback. Với SIGKILL/mất điện, không tự rollback:
+   runtime hoặc DB đã rollback. Nếu helper báo
+   `Guard rollback failed; operator intervention required`, dừng và điều tra.
+   Với SIGKILL/mất điện, không tự rollback:
    giữ cửa sổ bảo trì, kiểm worker/lock và hash, không xóa backup. Nếu hash
    NEW, thực hiện verify với đúng snapshot ở bước 4. Nếu hash OLD, verify
-   OLD rồi review evidence và trạng thái runtime trước khi bắt đầu một
+   OLD bằng `python3 -I install-staging-release-guard.py verify "$OLD"`
+   rồi review evidence và trạng thái runtime trước khi bắt đầu một
    lần install mới; snapshot candidate không nhất thiết tương thích thuật
    toán fingerprint của guard cũ. Nếu hash khác, snapshot thiếu/không khớp
    hoặc rollback thất bại, dừng release để operator điều tra. Worker hiện
@@ -335,6 +338,12 @@ commit, kết quả kiểm thử và hai checksum; không dùng key CI để tru
    ```sh
    printf '%s  %s\n' "$OLD" "$BACKUP/release-safety.before.py" | sha256sum -c -
    python3 -I install-staging-release-guard.py install "$BACKUP/release-safety.before.py" "$NEW" "$OLD"
+   ```
+
+   Sau khi có `GUARD_INSTALL_PASS`, lấy đúng đường dẫn backup mới do helper
+   in ra và tiếp tục:
+
+   ```sh
    RESTORE_BACKUP='/opt/bhome-deploy/staging/guard-rollout-<actual-restore-suffix>'
    python3 -I install-staging-release-guard.py verify "$OLD" --snapshot "$RESTORE_BACKUP/protected.json"
    printf '%s  %s\n' "$OLD" /opt/bhome-deploy/staging/release-safety.py | sha256sum -c -
@@ -346,10 +355,16 @@ commit, kết quả kiểm thử và hai checksum; không dùng key CI để tru
    không bỏ qua check. Không restore DB hay thay image từ helper.
 
 6. Phê duyệt release riêng sau khi nghiệm thu guard; bỏ cửa sổ bảo trì chỉ
-   khi an toàn. Retry failed job #346 chỉ nếu SHA vẫn là HEAD develop,
-   đúng artifact/digest bất biến đã duyệt và run ID-attempt mới lớn hơn
-   current.json; nếu develop đã tiến, dùng CI/release của HEAD mới nhất
-   đã duyệt, không retry SHA cũ. Không tự gọi worker bằng run ID giả.
+   khi an toàn. Nếu SHA của #346 vẫn là HEAD develop, dùng **Re-run all
+   jobs** của workflow gốc sau phê duyệt, không chỉ re-run failed jobs.
+   Workflow đặt tên artifact `release-<SHA>-<run_attempt>` và bắt buộc
+   provenance của cả ba image cùng commit, run ID-attempt và môi trường;
+   manifest từ attempt trước không hợp lệ cho attempt mới. Giữ nguyên
+   quality gates; kiểm tra manifest và ba immutable digests của attempt
+   mới, không mặc định dùng lại digests cũ. Run ID-attempt mới phải lớn hơn
+   current.json theo thứ tự cặp số (run ID, attempt). Nếu develop đã tiến,
+   dùng CI/release của HEAD mới nhất đã duyệt, không retry SHA cũ.
+   Không tự gọi worker bằng run ID giả.
    Kiểm tra log GitHub có DEPLOY_PASS, PASS: unchanged staging và job
    SUCCESS. Đối chiếu SHA, run ID và ba immutable images trong
    `/opt/bhome-deploy/staging/current.json` với manifest trong thư mục
