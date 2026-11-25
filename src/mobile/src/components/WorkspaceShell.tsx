@@ -415,19 +415,12 @@ export function WorkspaceShell({
                               : compactTasks
                                 ? compactTaskDetail
                                   ? 'Chi tiết công việc'
-                                  : (headerAction?.title ?? 'Công việc vận hành')
+                                  : screen === 'staff-handovers'
+                                    ? 'Bàn giao / Trả phòng'
+                                    : (headerAction?.title ?? 'Công việc vận hành')
                                 : compactContracts
                                   ? (headerAction?.title ?? 'Hợp đồng')
                                   : (headerAction?.title ?? 'Quay lại')}
-                            : compactTasks
-                              ? compactTaskDetail
-                                ? 'Chi tiết công việc'
-                                : screen === 'staff-handovers'
-                                  ? 'Bàn giao / Trả phòng'
-                                  : 'Công việc vận hành'
-                              : compactContracts
-                                ? (headerAction?.title ?? 'Hợp đồng')
-                                : (headerAction?.title ?? 'Quay lại')}
                   </Text>
                   {(compactContracts ||
                     compactTasks ||
