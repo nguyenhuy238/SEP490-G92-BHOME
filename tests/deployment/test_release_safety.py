@@ -68,6 +68,66 @@ class ReleaseSafetyTests(unittest.TestCase):
                     self.assertIn(key, str(error.exception))
                     self.assertNotIn('synthetic-private', str(error.exception))
 
+    def test_release_ocr_defaults_preserve_fingerprint_on_upgrade_and_rollback(self):
+        defaults = {'Ocr__Enabled': 'true', 'Ocr__ModelDirectory': '/models'}
+        for target in ('staging', 'production'):
+            with self.subTest(target=target):
+                stage, prod = self.configuration('staging'), self.configuration('production')
+                current = stage if target == 'staging' else prod
+                before = self.check(stage.copy(), prod.copy(), target)
+                current.update(defaults)
+                self.assertEqual(before, self.check(stage.copy(), prod.copy(), target))
+                # Rollback to the older approved image removes only these defaults.
+                for key in defaults:
+                    current.pop(key)
+                self.assertEqual(before, self.check(stage.copy(), prod.copy(), target))
+
+    def test_ocr_operator_overrides_and_other_options_remain_protected(self):
+        defaults = {'Ocr__Enabled': 'true', 'Ocr__ModelDirectory': '/models'}
+        for target in ('staging', 'production'):
+            for key, override in [('Ocr__Enabled', 'false'), ('Ocr__Enabled', ''),
+                                  ('Ocr__ModelDirectory', '/operator/models'),
+                                  ('Ocr__ModelDirectory', ''), ('Ocr__TimeoutSeconds', '60'),
+                                  ('Jwt__SigningKey', 'synthetic-rotated-private-key')]:
+                with self.subTest(target=target, key=key, override=override):
+                    stage, prod = self.configuration('staging'), self.configuration('production')
+                    current = stage if target == 'staging' else prod
+                    baseline = self.check(stage.copy(), prod.copy(), target)
+                    current.update(defaults)
+                    current[key] = override
+                    changed = self.check(stage.copy(), prod.copy(), target)
+                    self.assertNotEqual(baseline, changed)
+                    # An existing operator override is legal if it stays unchanged.
+                    self.assertEqual(changed, self.check(stage.copy(), prod.copy(), target))
+                    current[key] = 'different-value'
+                    self.assertNotEqual(changed, self.check(stage.copy(), prod.copy(), target))
+
+    def test_ocr_defaults_do_not_hide_a_protected_container_or_private_setting_change(self):
+        containers = [{'Id': 'synthetic-id', 'Image': 'synthetic-image', 'Mounts': [], 'started': 'synthetic-start'}]
+        stage, prod = self.configuration('staging'), self.configuration('production')
+        with tempfile.TemporaryDirectory() as directory:
+            path = str(Path(directory) / 'protected.json')
+            with patch.object(safety, 'protected', return_value=containers), \
+                    patch.object(safety, 'env', side_effect=[stage.copy(), prod.copy()]), \
+                    patch.object(safety.sys, 'argv', ['release-safety.py', 'snapshot', 'staging', path]):
+                safety.main()
+            stage.update({'Ocr__Enabled': 'true', 'Ocr__ModelDirectory': '/models'})
+            with patch.object(safety, 'protected', return_value=containers), \
+                    patch.object(safety, 'env', side_effect=[stage.copy(), prod.copy()]), \
+                    patch.object(safety.sys, 'argv', ['release-safety.py', 'unchanged', 'staging', path]):
+                safety.main()
+            for changed_containers, changed_stage in (
+                ([containers[0] | {'started': 'restarted'}], stage),
+                (containers, stage | {'Ocr__Enabled': 'false'}),
+                (containers, stage | {'Ocr__ModelDirectory': '/operator/models'}),
+                (containers, stage | {'Jwt__SigningKey': 'synthetic-rotated-private-key'}),
+            ):
+                with patch.object(safety, 'protected', return_value=changed_containers), \
+                        patch.object(safety, 'env', side_effect=[changed_stage.copy(), prod.copy()]), \
+                        patch.object(safety.sys, 'argv', ['release-safety.py', 'unchanged', 'staging', path]), \
+                        self.assertRaisesRegex(ValueError, 'Protected containers'):
+                    safety.main()
+
     def test_other_draft_options_and_credentials_still_change_fingerprint(self):
         for key, value in [('MainDraft__LibreOfficeContainerImage', 'synthetic-converter'),
                            ('Jwt__SigningKey', 'synthetic-rotated-private-key')]:

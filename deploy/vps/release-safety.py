@@ -17,6 +17,10 @@ RELEASE_PDF_TOOLS = {
     'MainDraft__LibreOfficePath': '/usr/bin/libreoffice',
     'MainDraft__PdfToPpmPath': '/usr/bin/pdftoppm',
 }
+RELEASE_OCR_DEFAULTS = {
+    'Ocr__Enabled': 'true',
+    'Ocr__ModelDirectory': '/models',
+}
 
 
 def docker(*args):
@@ -100,7 +104,13 @@ def check_environment(target):
     for key, expected_path in RELEASE_PDF_TOOLS.items():
         if key in current and current[key] != expected_path:
             raise ValueError('Unapproved contract PDF tool path: ' + key)
+    # The verified release image supplies these exact OCR defaults. An older
+    # image may omit them. Retain every noncanonical value in the fingerprint
+    # so disabling OCR or changing the model directory still counts as drift.
+    # Explicit Compose overrides (including canonical values) are independently
+    # protected by release-config.py's image-only transition check.
     managed = {k: v for k, v in current.items() if k not in RELEASE_PDF_TOOLS and
+               not (k in RELEASE_OCR_DEFAULTS and v == RELEASE_OCR_DEFAULTS[k]) and
                (('__' in k and not k.startswith('Deployment__')) or k in ('ASPNETCORE_ENVIRONMENT', 'DOTNET_ENVIRONMENT', 'AllowedHosts'))}
     return hashlib.sha256(json.dumps(managed, sort_keys=True).encode()).hexdigest()
 
