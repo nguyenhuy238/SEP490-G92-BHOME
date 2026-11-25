@@ -1,14 +1,12 @@
 import React, { useState } from 'react';
 import { ScrollView, StyleSheet, View } from 'react-native';
 import { Button, Dialog, Portal, Text, TouchableRipple } from 'react-native-paper';
-import { router } from 'expo-router';
 import { DashboardHeading, dashboardStyles } from '../components/DashboardKit';
 import { StaffFeatureDirectory } from '../components/StaffFeatureDirectory';
 import { StaffFeatureCard } from '../components/StaffFeatureCard';
 import { useWorkspace } from '../features/workspace/WorkspaceProvider';
 import { useStaffDashboard } from '../features/workspace/useStaffDashboard';
 import { type WorkspaceScreen } from '../features/workspace/navigation';
-import { businessToday, displayContractDate } from '../../../../packages/client-core/src/contracts';
 import { colors as c, staffColors as s } from '../theme/theme';
 import { typography } from '../theme/typography';
 import {
@@ -30,7 +28,6 @@ export function StaffDashboard() {
     reloadStaffLocations,
   } = useWorkspace();
   const data = useStaffDashboard();
-  const [handover, setHandover] = useState(false);
   const [contracts, setContracts] = useState(false);
   const [locationPickerOpen, setLocationPickerOpen] = useState(false);
   const availableLocations = staffLocations ?? data.locations.data ?? [];
@@ -51,62 +48,37 @@ export function StaffDashboard() {
           open: () => go('meter-reading'),
         },
       ]
-    : [
-        ...(data.overdue.data?.items ?? [])
-          .filter(
-            (task) =>
-              ['Assigned', 'InProgress'].includes(task.status) &&
-              !isEmbeddedMoveInInventory(task) &&
-              !isEmbeddedInitialMeterTask(task) &&
-              !!scopedLocationId &&
-              task.locationId === scopedLocationId,
-          )
-          .map((task) => ({
-            id: task.id,
-            title: task.title,
-            detail:
-              data.locations.data?.find((location) => location.id === task.locationId)?.label ??
-              'Cơ sở được phân công',
-            status: 'Quá hạn',
-            open: () =>
-              isMainMoveInWork(task)
-                ? go('move-in', { contractId: task.target!.contractId!, section: 'handover' })
-                : isMainMoveOutWork(task)
-                  ? go('move-out', { contractId: task.target!.contractId!, taskId: task.id })
-                  : go(task.kind === 'MoveInInventory' ? 'move-in-inventory' : 'task-detail', {
-                      taskId: task.id,
-                    }),
-          })),
-        ...selectedInspections
-          .filter((item) => item.status === 'Approved')
-          .slice(0, 2)
-          .map((item) => ({
-            id: item.contractId,
-            title: 'Kiểm tra trả phòng',
-            detail: `Phòng ${item.roomNumber} · ${item.locationName}${item.proposedDate ? ` · Ngày trả ${displayContractDate(item.proposedDate)}` : ''}`,
-            status:
-              item.proposedDate && item.proposedDate > businessToday()
-                ? 'Chờ ngày trả'
-                : 'Cần kiểm tra',
-            open: () => go('work-orders'),
-          })),
-        ...(data.meters.data ?? [])
-          .filter(
-            (item) =>
-              item.status === 0 && !!scopedLocationId && item.locationId === scopedLocationId,
-          )
-          .slice(0, 2)
-          .map((item) => ({
-            id: item.id,
-            title: `Ghi chỉ số ${item.utilityType === 0 ? 'điện' : 'nước'}`,
-            detail: `Phòng ${item.room} · ${item.location}`,
-            status: 'Cần ghi số',
-            open: () => router.push({ pathname: '/meter', params: { taskId: item.id } }),
-          })),
-      ];
-  const priorityError = [data.overdue, data.inspections, data.meters].some(
-    (query) => !!query.error,
-  );
+    : (data.priorities.data?.items ?? [])
+        .filter(
+          (task) =>
+            ['Assigned', 'InProgress'].includes(task.status) &&
+            !isEmbeddedMoveInInventory(task) &&
+            !isEmbeddedInitialMeterTask(task) &&
+            !!scopedLocationId &&
+            task.locationId === scopedLocationId,
+        )
+        .slice(0, 2)
+        .map((task) => ({
+          id: task.id,
+          title: task.title,
+          detail:
+            data.locations.data?.find((location) => location.id === task.locationId)?.label ??
+            'Cơ sở được phân công',
+          status: task.isOverdue
+            ? 'Quá hạn'
+            : task.status === 'InProgress'
+              ? 'Đang xử lý'
+              : 'Cần làm',
+          open: () =>
+            isMainMoveInWork(task)
+              ? go('move-in', { contractId: task.target!.contractId!, section: 'handover' })
+              : isMainMoveOutWork(task)
+                ? go('move-out', { contractId: task.target!.contractId!, taskId: task.id })
+                : go(task.kind === 'MoveInInventory' ? 'move-in-inventory' : 'task-detail', {
+                    taskId: task.id,
+                  }),
+        }));
+  const priorityError = !!data.priorities.error;
   const locationLabel = preview
     ? 'BHOME Đống Đa - Tòa B · Mẫu'
     : (staffLocationsLoading ?? data.locations.loading)
@@ -122,8 +94,7 @@ export function StaffDashboard() {
     ? selectedInspections.filter((item) => item.status === 'Approved')
     : null;
   function open(screen: WorkspaceScreen, params?: Record<string, string>) {
-    if (screen === 'move-in') setHandover(true);
-    else if (params) go(screen, params);
+    if (params) go(screen, params);
     else go(screen);
   }
   return (
@@ -179,13 +150,17 @@ export function StaffDashboard() {
                 : pendingInspections
                   ? `${data.inspections.data!.length >= 100 ? '≥' : ''}${pendingInspections.length}`
                   : '—',
-              screen: 'work-orders' as const,
+              screen: 'staff-handovers' as const,
             },
           ].map((metric, index) => (
             <TouchableRipple
               key={metric.label}
               style={[styles.metric, index > 0 && styles.divider]}
-              onPress={() => go(metric.screen)}
+              onPress={() =>
+                metric.screen === 'staff-handovers'
+                  ? go(metric.screen, { tab: 'MoveOut' })
+                  : go(metric.screen)
+              }
               accessibilityRole="button"
               accessibilityLabel={metric.label}
             >
@@ -207,23 +182,11 @@ export function StaffDashboard() {
           </Text>
         )}
       </View>
-      <StaffFeatureDirectory onOpen={open} />
-      <View style={styles.section}>
-        <StaffFeatureCard
-          title="Hợp đồng"
-          description="Tạo và theo dõi hợp đồng"
-          icon="file-document-outline"
-          color={s.blue}
-          background={s.blueSoft}
-          onPress={() => setContracts(true)}
-          compact
-        />
-      </View>
       {priorities.length > 0 && (
         <View style={styles.section}>
           <DashboardHeading title="Cần xử lý" detail="Các tác vụ ưu tiên trong phạm vi được giao" />
           <View style={styles.priorityList}>
-            {priorities.slice(0, 5).map((item) => (
+            {priorities.map((item) => (
               <TouchableRipple
                 key={item.id}
                 onPress={item.open}
@@ -252,15 +215,25 @@ export function StaffDashboard() {
         <View style={styles.section}>
           <DashboardHeading title="Cần xử lý" />
           <Text style={styles.muted}>
-            {data.overdue.loading || data.inspections.loading || data.meters.loading
-              ? 'Đang tải việc ưu tiên…'
-              : 'Chưa có việc ưu tiên cần xử lý.'}
+            {data.priorities.loading ? 'Đang tải việc ưu tiên…' : 'Chưa có việc ưu tiên cần xử lý.'}
           </Text>
         </View>
       )}
       {!preview && priorityError && (
         <Button onPress={data.reload}>Chưa tải đủ tác vụ ưu tiên · Thử lại</Button>
       )}
+      <StaffFeatureDirectory onOpen={open} />
+      <View style={styles.section}>
+        <StaffFeatureCard
+          title="Hợp đồng"
+          description="Tạo và theo dõi hợp đồng"
+          icon="file-document-outline"
+          color={s.blue}
+          background={s.blueSoft}
+          onPress={() => setContracts(true)}
+          compact
+        />
+      </View>
       <Portal>
         <Dialog visible={contracts} onDismiss={() => setContracts(false)}>
           <Dialog.Title>Hợp đồng</Dialog.Title>
@@ -312,39 +285,6 @@ export function StaffDashboard() {
           </Dialog.ScrollArea>
           <Dialog.Actions>
             <Button onPress={() => setLocationPickerOpen(false)}>Đóng</Button>
-          </Dialog.Actions>
-        </Dialog>
-        <Dialog visible={handover} onDismiss={() => setHandover(false)}>
-          <Dialog.Title>Bàn giao / Trả phòng</Dialog.Title>
-          <Dialog.Content>
-            <Text style={typography.body}>Chọn nghiệp vụ cần thực hiện theo hồ sơ hợp đồng.</Text>
-          </Dialog.Content>
-          <Dialog.Actions style={styles.dialogActions}>
-            <Button
-              onPress={() => {
-                setHandover(false);
-                go('move-in-inventory');
-              }}
-            >
-              Kiểm kê trước nhận phòng
-            </Button>
-            <Button
-              onPress={() => {
-                setHandover(false);
-                go('move-in');
-              }}
-            >
-              Bàn giao nhận phòng
-            </Button>
-            <Button
-              onPress={() => {
-                setHandover(false);
-                go('move-out');
-              }}
-            >
-              Kiểm tra trả phòng
-            </Button>
-            <Button onPress={() => setHandover(false)}>Đóng</Button>
           </Dialog.Actions>
         </Dialog>
       </Portal>

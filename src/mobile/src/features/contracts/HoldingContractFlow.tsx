@@ -23,7 +23,6 @@ import {
   paymentClient,
   type ContractDepositInstructions,
 } from '../../../../../packages/client-core/src/payments';
-import { holdingSandboxClient } from '../../../../../packages/client-core/src/holdingSandbox';
 import { formatInstant } from '../../../../../packages/client-core/src/localization';
 import { Action, Heading, ui } from '../../components/WorkspaceKit';
 import { randomUUID } from '../../lib/randomUUID';
@@ -83,6 +82,7 @@ export function HoldingContractFlow({
   actorId,
   onChanged,
   onList,
+  onComplete,
 }: {
   api: ContractClient;
   contract: ContractView;
@@ -91,6 +91,7 @@ export function HoldingContractFlow({
   actorId: string;
   onChanged: () => void;
   onList: () => void;
+  onComplete?: () => void;
 }) {
   // Reopening always resumes from persisted backend state, never by posting another draft.
   const [verifiedDepositContract, setVerifiedDepositContract] = useState<string | null>(null);
@@ -106,7 +107,6 @@ export function HoldingContractFlow({
   const action = actions.find((a) => a.operation === operation);
   const owner = role === 'Owner' && c.ownerSignerId === actorId;
   const internal = c.signingMode === 'INTERNAL_OTP_DRAWN';
-  const representative = c.occupants?.find((r) => r.representative)?.label;
   const sandbox = useHoldingSandbox(api, c, role !== 'Owner' && c.isDevelopmentDemo);
   const operations =
     step === 5
@@ -129,20 +129,20 @@ export function HoldingContractFlow({
         contract={c}
         sandbox={sandbox}
         onChanged={onChanged}
-        onList={onList}
+        onList={onComplete ?? onList}
       />
     );
   return (
     <>
       <HoldingProgress current={step - 1} />
-      <HoldingSectionCard title="Tóm tắt giữ chỗ">
+      <HoldingSectionCard title="Thông tin giữ chỗ">
         <Heading title={`Phòng ${c.roomNumber || '—'}`} detail={c.locationName} />
         <HoldingStatusBadge
           label={
             step === 5
               ? 'Bản nháp chờ gửi Owner ký'
               : c.status === 'PendingActivation' && depositVerified
-                ? 'Đã xác minh tiền cọc · Đang tự động kích hoạt'
+                ? 'Đang hoàn tất giữ chỗ'
                 : holdingStageLabel(c) || 'Đang xử lý hợp đồng'
           }
           tone={
@@ -153,12 +153,20 @@ export function HoldingContractFlow({
                 : 'neutral'
           }
         />
-        <ReadOnly label="Người giữ chỗ" value={representative} />
+        <View style={holdingPaymentStyles.customer}>
+          <Text style={holdingPaymentStyles.referenceLabel}>Người giữ chỗ</Text>
+          <Text style={holdingPaymentStyles.customerName}>
+            {c.holdingCustomer?.fullName || 'Chưa có thông tin khách hàng'}
+          </Text>
+          <ReadOnly label="Số CCCD" value={c.holdingCustomer?.maskedCitizenNumber} />
+        </View>
         <ReadOnly
           label="Thời hạn giữ chỗ"
           value={`${displayContractDate(c.startDate)} – ${displayContractDate(c.endDate)}`}
         />
-        <ReadOnly label="Tiền giữ chỗ" value={formatContractMoney(c.requiredDeposit)} />
+        {step < 7 && (
+          <ReadOnly label="Tiền giữ chỗ" value={formatContractMoney(c.requiredDeposit)} />
+        )}
       </HoldingSectionCard>
       {c.isDevelopmentDemo && (
         <Text style={ui.red}>Hợp đồng minh họa · Không dùng để ký hoặc thanh toán thực tế.</Text>
@@ -209,7 +217,7 @@ export function HoldingContractFlow({
             <Text style={ui.muted}>Hợp đồng sử dụng phương thức ký số đã cấu hình.</Text>
           </HoldingSectionCard>
           {owner && c.approvedAt && <SigningCertificates api={api} />}
-          {owner && <ContractEvidence api={api} contractId={c.id} pdf />}
+          {owner && <ContractEvidence api={api} contractId={c.id} contractKind="Holding" pdf />}
         </>
       )}
       {step >= 7 && signed(c) && (
@@ -221,7 +229,7 @@ export function HoldingContractFlow({
           role={role}
           owner={owner}
           readiness={readiness}
-          onList={onList}
+          onList={onComplete ?? onList}
           onChanged={onChanged}
         />
       )}
@@ -323,13 +331,11 @@ function HoldingDraftDocument({
           )}
           {current?.map((p) => (
             <React.Fragment key={p.id}>
-              {p.developmentOnly && (
-                <Text style={ui.muted}>Tài liệu Development · Chưa duyệt cho production</Text>
-              )}
               <ContractEvidence
                 api={api}
                 contractId={c.id}
                 previewId={p.id}
+                contractKind="Holding"
                 pdf
                 label="Xem hợp đồng"
               />
@@ -587,7 +593,13 @@ function HoldingInternalSigning({
             <HoldingSectionCard title="Xác nhận của Owner">
               <HoldingStatusBadge label="Người giữ chỗ đã ký" tone="success" />
               <ReadOnly label="Thời điểm ký" value={formatInstant(status.tenantAcceptedAt)} />
-              <ContractEvidence api={api} contractId={c.id} pdf label="Xem hợp đồng đã ký" />
+              <ContractEvidence
+                api={api}
+                contractId={c.id}
+                contractKind="Holding"
+                pdf
+                label="Xem hợp đồng đã ký"
+              />
               {status.ownerAcceptedAt ? (
                 <ReadOnly label="Owner đã xác nhận" value={formatInstant(status.ownerAcceptedAt)} />
               ) : (
@@ -630,33 +642,25 @@ function HoldingPayment({
   const [reference, setReference] = useState<string | null>(null);
   const [qr, setQr] = useState<ContractDepositInstructions | null>(null);
   const [qrError, setQrError] = useState('');
-  const [qrErrorCode, setQrErrorCode] = useState('');
-  const [previewContractId, setPreviewContractId] = useState<string | null>(null);
   const [qrRevision, setQrRevision] = useState(0);
-  const previewRequested = previewContractId === c.id;
   useEffect(() => {
     const controller = new AbortController();
     if (c.status !== 'Active')
-      void (
-        previewRequested
-          ? holdingSandboxClient(api.transport, c.id).qr(controller.signal)
-          : paymentClient(api.transport).depositInstructions(c.id, controller.signal)
-      )
+      void paymentClient(api.transport)
+        .depositInstructions(c.id, controller.signal)
         .then((result) => {
           if (!controller.signal.aborted) {
             setQr(result);
             setQrError('');
-            setQrErrorCode('');
           }
         })
         .catch((e) => {
           if (!controller.signal.aborted) {
             const problem = e as { status?: number; code?: string; problem?: { code?: string } };
             const code = problem.code ?? problem.problem?.code ?? '';
-            setQrErrorCode(code);
             setQrError(
-              !previewRequested && code === 'sepay_environment_mismatch'
-                ? 'Chế độ thanh toán của hợp đồng không khớp cấu hình SePay trên máy chủ. Tải lại QR không thay đổi chế độ thanh toán.'
+              code === 'sepay_environment_mismatch'
+                ? 'Cấu hình SePay hiện tại chưa hỗ trợ thanh toán cho hợp đồng này. Liên hệ chủ nhà để kiểm tra.'
                 : problem.status === 404
                   ? 'QR chưa khả dụng cho cơ sở này. Owner kiểm tra cấu hình tài khoản nhận tiền.'
                   : contractError(e),
@@ -664,7 +668,7 @@ function HoldingPayment({
           }
         });
     return () => controller.abort();
-  }, [api, c.id, c.status, previewRequested, qrRevision]);
+  }, [api, c.id, c.status, qrRevision]);
   const [error, setError] = useState('');
   const refreshedPayment = useRef('');
   useEffect(() => {
@@ -723,11 +727,6 @@ function HoldingPayment({
   }, [api, c.id, c.roomId, c.status, owner, onChanged, onDepositVerified]);
   const success = c.status === 'Active' && data?.room === 1;
   const testPayment = (qr?.mode ?? c.paymentMode) === 'Test';
-  const canPreview =
-    !previewRequested &&
-    qrErrorCode === 'sepay_environment_mismatch' &&
-    (c.paymentMode ?? (c.isDevelopmentDemo ? 'Test' : 'Live')) === 'Live' &&
-    ['Owner', 'Staff'].includes(role);
   return (
     <>
       <HoldingSectionCard title={success ? 'Giữ chỗ thành công' : 'Tiền giữ chỗ'}>
@@ -745,22 +744,24 @@ function HoldingPayment({
           !success &&
           data.deposit.status !== 'Verified' &&
           !data.deposit.requiresManualReview &&
-          qr?.transferReference &&
-          !previewRequested && <PaymentStatusCountdown checkedAt={checkedAt} />}
+          qr?.transferReference && <PaymentStatusCountdown checkedAt={checkedAt} />}
         {!data && !error && (
           <Text style={ui.muted}>Đang kiểm tra thanh toán và trạng thái phòng…</Text>
         )}
         {data && (
           <>
-            <ReadOnly label="Cần thanh toán" value={formatContractMoney(data.deposit.required)} />
+            <View style={holdingPaymentStyles.amountBlock}>
+              <Text style={holdingPaymentStyles.referenceLabel}>Tổng tiền giữ chỗ</Text>
+              <Text style={holdingPaymentStyles.amount}>
+                {formatContractMoney(data.deposit.required)}
+              </Text>
+            </View>
             <ReadOnly label="Đã xác minh" value={formatContractMoney(data.deposit.verified)} />
             <ReadOnly label="Còn thiếu" value={formatContractMoney(data.deposit.remaining)} />
             {data.deposit.requiresManualReview && (
               <Text style={ui.red}>Cần Owner kiểm tra và đối chiếu giao dịch.</Text>
             )}
-            {success && (
-              <Text style={ui.green}>Hợp đồng đã kích hoạt · Phòng đang giữ chỗ (OnHold).</Text>
-            )}
+            {success && <Text style={ui.green}>Phòng đã được giữ chỗ cho khách hàng.</Text>}
             {success && reference && <ReadOnly label="Tham chiếu tiền cọc" value={reference} />}
           </>
         )}
@@ -802,11 +803,9 @@ function HoldingPayment({
                 </Text>
               </View>
               <Text style={holdingPaymentStyles.paymentNote}>
-                {qr.previewOnly
-                  ? 'QR dùng thử sandbox. Giao dịch Test không được tính thành tiền cọc thật và không kích hoạt hợp đồng này.'
-                  : qr.mode === 'Test'
-                    ? 'SePay Sandbox · Giao dịch Test được đối soát qua cùng luồng thanh toán. Không chuyển tiền thật vào tài khoản Test.'
-                    : 'Chuyển đúng số tiền và nội dung bên trên để hệ thống tự đối soát.'}
+                {qr.mode === 'Test'
+                  ? 'SePay Sandbox · Giao dịch Test được đối soát qua cùng luồng thanh toán. Không chuyển tiền thật vào tài khoản Test.'
+                  : 'Chuyển đúng số tiền và nội dung bên trên để hệ thống tự đối soát.'}
               </Text>
               {!qr.qrImageDataUri && (
                 <Text style={ui.muted}>
@@ -816,26 +815,6 @@ function HoldingPayment({
             </>
           )}
           {!!qrError && <ContractNotice message={qrError} />}
-          {canPreview && (
-            <>
-              <Text style={ui.muted}>
-                Có thể xem QR thử nghiệm nếu máy chủ đã cấu hình sandbox. Giao dịch Test không thanh
-                toán hoặc kích hoạt hợp đồng Live này.
-              </Text>
-              <Button
-                mode="outlined"
-                contentStyle={{ minHeight: 44 }}
-                onPress={() => {
-                  setQr(null);
-                  setQrError('');
-                  setQrErrorCode('');
-                  setPreviewContractId(c.id);
-                }}
-              >
-                Xem QR thử nghiệm
-              </Button>
-            </>
-          )}
           <Button
             mode="outlined"
             contentStyle={{ minHeight: 44 }}
@@ -858,13 +837,16 @@ function HoldingPayment({
           <OwnerWebNotice task="Đối chiếu và phân bổ tiền cọc giữ chỗ" />
         )}
       {!success && role === 'Staff' && (
-        <Text style={ui.muted}>
-          {qr?.previewOnly
-            ? 'Đây là bản xem thử QR sandbox. Hợp đồng Live vẫn cần thanh toán đúng môi trường trước khi kích hoạt.'
-            : data?.deposit.status === 'Verified'
-              ? 'Đã xác minh đủ tiền cọc. Hệ thống đang tự động kích hoạt và cập nhật trạng thái phòng.'
-              : 'Hệ thống tự động kích hoạt khi đủ chữ ký, thanh toán và các điều kiện hợp đồng.'}
-        </Text>
+        <View style={holdingPaymentStyles.nextStep}>
+          <Text style={holdingPaymentStyles.customerName}>Bước tiếp theo</Text>
+          <Text style={ui.muted}>
+            {data?.deposit.requiresManualReview
+              ? 'Chủ nhà cần kiểm tra giao dịch trước khi hoàn tất giữ chỗ.'
+              : data?.deposit.status === 'Verified'
+                ? 'Tiền cọc đã được xác nhận. Chờ hệ thống xác nhận phòng đã được giữ chỗ. Nếu trạng thái không cập nhật, hãy liên hệ chủ nhà.'
+                : 'Hướng dẫn khách chuyển khoản đúng thông tin bên trên và chờ hệ thống xác nhận.'}
+          </Text>
+        </View>
       )}
       {owner && readiness && !success && (
         <HoldingSectionCard title="Điều kiện kích hoạt">
@@ -883,8 +865,8 @@ function HoldingPayment({
       )}
       {success && (
         <HoldingSectionCard title="Hoàn tất giữ chỗ">
-          <HoldingChecklistRow label="Hợp đồng Active" complete={c.status === 'Active'} />
-          <HoldingChecklistRow label="Phòng OnHold" complete={data?.room === 1} />
+          <HoldingChecklistRow label="Hợp đồng có hiệu lực" complete={c.status === 'Active'} />
+          <HoldingChecklistRow label="Phòng đã được giữ chỗ" complete={data?.room === 1} />
           <HoldingChecklistRow
             label="Tiền cọc được xác minh"
             complete={data?.deposit.status === 'Verified'}
@@ -899,6 +881,11 @@ function HoldingPayment({
 }
 
 const holdingPaymentStyles = StyleSheet.create({
+  customer: { backgroundColor: '#F2F6FB', borderRadius: 10, padding: 12, gap: 6 },
+  customerName: { fontSize: 16, lineHeight: 22, fontWeight: '700', color: '#193653' },
+  amountBlock: { alignItems: 'center', paddingVertical: 12, gap: 4 },
+  amount: { fontSize: 28, lineHeight: 36, fontWeight: '700', color: '#193653' },
+  nextStep: { backgroundColor: '#EAF0F7', borderRadius: 12, padding: 14, gap: 6 },
   qrFrame: {
     alignItems: 'center',
     justifyContent: 'center',

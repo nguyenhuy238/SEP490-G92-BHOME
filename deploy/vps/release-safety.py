@@ -94,9 +94,9 @@ def check_environment(target):
             raise ValueError('Missing or shared environment identity: ' + key)
     if stage.get('ObjectStorage__Bucket') == prod.get('ObjectStorage__Bucket'):
         raise ValueError('Storage bucket must be environment-specific')
-    # Api.Release.Dockerfile adds these reviewed tool paths when an older image
-    # is upgraded. They belong to the immutable image, not private operator config.
-    # Normalize only absent/canonical paths; arbitrary executables still fail closed.
+    # Canonical tool paths are supplied by Api.Release.Dockerfile, rather than
+    # private runtime configuration. Reject arbitrary paths; normalize only the
+    # reviewed defaults when upgrading an older operator image.
     for key, expected_path in RELEASE_PDF_TOOLS.items():
         if key in current and current[key] != expected_path:
             raise ValueError('Unapproved contract PDF tool path: ' + key)
@@ -112,6 +112,8 @@ def verify_image(image, sha, app, target):
     config = json.loads(docker('image', 'inspect', image))[0]
     if config['Config']['Labels'].get('org.opencontainers.image.revision') != sha:
         raise ValueError('Image OCI revision does not match the release')
+    if target == 'staging' and app == 'api' and config['Config']['Labels'].get('io.bhome.staging-regressions') != 'v1':
+        raise ValueError('API image predates the required Staging hotfix regression gate')
     if image.split('@')[1] not in [v.split('@')[1] for v in config.get('RepoDigests', [])]:
         raise ValueError('Pulled image digest is not the manifest digest')
     if app != 'api':

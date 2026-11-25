@@ -1,3 +1,4 @@
+using BHome.Application.Common;
 using BHome.Domain.PropertyManagement;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.ChangeTracking;
@@ -37,12 +38,12 @@ public sealed partial class Compact24DbContext
             throw new PostgresException("Overlapping effective policy versions.", "ERROR", "ERROR", "23P01");
     }
 
-    private static void ValidatePolicyHistory(EntityEntry entry)
+    private void ValidatePolicyHistory(EntityEntry entry)
     {
         var policy = (BillingPolicy)entry.Entity;
         var oldFrom = entry.Property(nameof(BillingPolicy.EffectiveFrom)).OriginalValue;
         var oldUsed = entry.Property(nameof(BillingPolicy.FirstUsedAt)).OriginalValue;
-        var today = DateOnly.FromDateTime(TimeZoneInfo.ConvertTimeBySystemTimeZoneId(DateTimeOffset.UtcNow, "Asia/Ho_Chi_Minh").DateTime);
+        var today = (clock ?? TimeProvider.System).BusinessToday();
         var immutable = new[] { "LocationId", "RoomId", "RoomTypeId", "ChargeCode", "Category", "Method" };
         bool Changed(string name) => !Equals(entry.Property(name).OriginalValue, entry.Property(name).CurrentValue);
         var invalid = immutable.Any(Changed) || oldUsed is not null && Changed("FirstUsedAt");

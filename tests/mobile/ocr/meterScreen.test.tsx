@@ -17,6 +17,7 @@ vi.mock('expo-router', () => ({
   useFocusEffect: (callback: () => void) => useEffect(callback, [callback]),
 }));
 vi.mock('react-native', () => ({
+  Platform: { OS: 'android' },
   View: ({ children }: { children?: React.ReactNode }) => <div>{children}</div>,
   BackHandler: { addEventListener: () => ({ remove: vi.fn() }) },
   AppState: {
@@ -201,7 +202,8 @@ it('keeps unknown images editable with explicit review and no automatic confirma
     .mockResolvedValueOnce({ id: 'evidence' });
   render(<MeterScreen />);
   await capture();
-  expect(await screen.findByText(/OCR chưa đọc được/)).toBeTruthy();
+  expect(await screen.findByText(/Không nhận diện được chỉ số/)).toBeTruthy();
+  expect(screen.queryByText(/OCR chưa đọc được/)).toBeNull();
   expect(screen.getByLabelText(valueLabel)).toHaveValue('');
   expect(screen.getByLabelText(confirmLabel)).not.toBeChecked();
   expect(screen.getByText(saveLabel)).toBeDisabled();
@@ -228,14 +230,16 @@ it('shows OCR progress, warnings, explicit correction and only one pending confi
   );
   render(<MeterScreen />);
   await capture();
-  expect(screen.getByText('Đang xử lý…')).toBeTruthy();
+  expect(screen.getByText('Đang nhận dạng chỉ số…')).toBeTruthy();
   await act(async () => finishOcr(proposal));
   await waitFor(() => expect(screen.getByLabelText(valueLabel)).toHaveValue('00123.4'));
   expect(screen.getByText(/Ảnh có thể mờ hoặc lóa/)).toBeTruthy();
   fireEvent.change(screen.getByLabelText(valueLabel), { target: { value: '123.5' } });
   fireEvent.click(screen.getByLabelText(confirmLabel));
-  fireEvent.click(screen.getByText(saveLabel));
-  fireEvent.click(screen.getByText(saveLabel));
+  const save = screen.getByRole('button', { name: saveLabel });
+  fireEvent.click(save);
+  fireEvent.click(save);
+  expect(screen.getByRole('button', { name: 'Đang lưu chỉ số…' })).toBeDisabled();
   await waitFor(() => expect(mocks.json).toHaveBeenCalledTimes(1));
   expect(mocks.json.mock.calls[0][1]).toEqual({
     humanConfirmed: true,

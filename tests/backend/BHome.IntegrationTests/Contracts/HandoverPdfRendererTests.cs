@@ -64,7 +64,7 @@ public sealed class HandoverPdfRendererTests
             n => verified.GetPdfObject(n) is PdfStream stream &&
                  PdfName.Image.Equals(stream.GetAsName(PdfName.Subtype)));
         Assert.DoesNotContain("PHỤ LỤC BẰNG CHỨNG", ContractPdfRendererTests.Text(verified));
-        Assert.DoesNotContain("Ghi chú cũ: khóa cửa hỏng", ContractPdfRendererTests.Text(verified));
+        Assert.Contains("Ghi chú cũ: khóa cửa hỏng", ContractPdfRendererTests.Text(verified));
     }
 
     private static void NoEmbeddedPhotos(PdfDocument pdf)
@@ -108,8 +108,9 @@ public sealed class HandoverPdfRendererTests
             "Ảnh hiện trạng · SHA256 " + new string('B', 64), png.ToArray());
         var template = scope.ServiceProvider.GetRequiredService<IHandoverDraftPdfRenderer>();
 
-        var draftPdf = await template.RenderDraftAsync(draft, default);
-        var signingPdf = await template.RenderSigningAsync(draft, [photo], default);
+        var named = draft with { OwnerName = "Chủ nhà mẫu", TenantName = "Người thuê mẫu" };
+        var draftPdf = await template.RenderDraftAsync(named, default);
+        var signingPdf = await template.RenderSigningAsync(named, [photo], default);
         using var preview = new PdfDocument(new PdfReader(new MemoryStream(draftPdf)));
         using var signing = new PdfDocument(new PdfReader(new MemoryStream(signingPdf)));
         var content = ContractPdfRendererTests.Text(signing);
@@ -118,17 +119,17 @@ public sealed class HandoverPdfRendererTests
         Assert.Contains("CỘNG HÒA XÃ HỘI CHỦ NGHĨA VIỆT NAM", content);
         Assert.Contains("Độc lập - Tự do - Hạnh phúc", content);
         Assert.Contains("BIÊN BẢN BÀN GIAO PHÒNG Ở", content);
-        Assert.Contains("Bên giao: Chủ nhà", content);
-        Assert.Contains("Bên nhận: Người thuê", content);
+        Assert.Contains("Bên giao (Chủ nhà): Chủ nhà mẫu", content);
+        Assert.Contains("Bên nhận (Người thuê): Người thuê mẫu", content);
         Assert.Contains("Cơ sở: Cơ sở thử nghiệm", content);
         Assert.Contains("Phòng: A101", content);
         Assert.Contains("Giá thuê: 3.500.000 đ/tháng", content);
         Assert.Contains("Tiền cọc: 3.500.000 đ", content);
         Assert.Contains("Ngày lập/ghi nhận kiểm tra: 20/11/2026 12:30", content);
         Assert.Contains("Trạng thái: Cần xử lý", content);
-        Assert.Contains("Lý do: Tường có vết nứt cần sửa", content);
-        Assert.DoesNotContain("Đã kiểm tra và đạt, không in vào PDF", content);
-        Assert.DoesNotContain("Đã kiểm tra và đạt, không in vào PDF", ContractPdfRendererTests.Text(preview));
+        Assert.Contains("Lý do / ghi chú: Tường có vết nứt cần sửa", content);
+        Assert.Contains("Đã kiểm tra và đạt, không in vào PDF", content);
+        Assert.Contains("Đã kiểm tra và đạt, không in vào PDF", ContractPdfRendererTests.Text(preview));
         Assert.DoesNotContain("PendingOwnerReview", content);
         Assert.DoesNotContain("Chưa duyệt", content);
         Assert.DoesNotContain("Chưa xác nhận", content);
@@ -175,8 +176,9 @@ public sealed class HandoverPdfRendererTests
         Assert.Contains("Thực tế kiểm kê", content);
         Assert.Contains("Ghế kiểm kê", content);
         Assert.Contains("Trạng thái: Cần xử lý", content);
-        Assert.Contains("Lý do: Thiếu tài sản", content);
-        Assert.Contains("Thiếu một ghế trong phòng", content);
+        Assert.Contains("Lý do / ghi chú: Thiếu tài sản", content);
+        Assert.Contains("Thiếu một ghế trong phòng", string.Join(" ", content.Split((char[]?)null,
+            StringSplitOptions.RemoveEmptyEntries)));
         Assert.DoesNotContain("Chưa kiểm kê", content);
         NoEmbeddedPhotos(pdf);
     }
@@ -220,9 +222,8 @@ public sealed class HandoverPdfRendererTests
             .RenderDraftAsync(draft, default);
         using var pdf = new PdfDocument(new PdfReader(new MemoryStream(bytes)));
         var content = ContractPdfRendererTests.Text(pdf);
-        // Staff notes are retained in source/history, but successful items no
-        // longer display notes in the signed or draft PDF.
-        Assert.DoesNotContain("Đã kiểm tra lại đủ hai bàn", content);
+        // Staff notes on a passing reinspection are retained in the PDF.
+        Assert.Contains("Đã kiểm tra lại đủ hai bàn", content);
         Assert.DoesNotContain("Trước kiểm tra lại còn thiếu", content);
         Assert.DoesNotContain("Chưa kiểm kê", content);
     }
@@ -271,8 +272,8 @@ public sealed class HandoverPdfRendererTests
         Assert.DoesNotContain("PHỤ LỤC BẰNG CHỨNG", text);
         if (type == "MoveIn")
         {
-            Assert.DoesNotContain("Ghi chú cũ trên biên bản đã ký", text);
-            Assert.Contains("Lý do: Tường có vết nứt cũ", text);
+            Assert.Contains("Ghi chú cũ trên biên bản đã ký", text);
+            Assert.Contains("Lý do / ghi chú: Tường có vết nứt cũ", text);
         }
         NoEmbeddedPhotos(pdf);
         Assert.Contains("không phải chữ ký số", text); Assert.Empty(new iText.Signatures.SignatureUtil(pdf).GetSignatureNames());

@@ -200,7 +200,7 @@ public sealed class Compact24ContractRegressionTests(Compact24WorkflowFixture fi
     [CompactPostgresFact] public Task DuplicateDeposit() => Run(t => t.BankReferenceCannotBeAllocatedToTwoContractsEvenInParallel());
     [CompactPostgresFact] public Task Renewal() => Run(t => t.T08_T09_RenewalPreservesSignedVersionRejectsDuplicateAndWaitsForEffectiveDate());
     [CompactPostgresFact] public Task MoveOut() => Run(t => t.T10_T11_T12_T13_T14_InspectionFinalMetersPendingSettlementAndCompletedMoveOut());
-    [CompactPostgresFact] public Task MoveOutDraft() => Run(t => t.MoveOutDraftPersistsPartialItemsWithVersionedStaffOnlyAccess());
+    [CompactPostgresFact] public Task MoveOutDraft() => Run(t => t.MoveOutDraftPersistsPartialItemsWithVersionedStaffWritesAndOwnerReadAccess());
     [CompactPostgresFact] public Task Handover() => Run(t => t.MoveInHandoverRequiresScopedStaffRealReadingsEvidenceAndSameVersionConfirmations());
     [CompactPostgresFact] public Task Scope() => Run(t => t.ListScopesBeforeCountingAndPagingAndReturnsOnlySafeSummaries());
     [CompactPostgresFact] public Task ScopeRevocation() => Run(t => t.ListRechecksEffectiveAssignmentsWithSameToken());
@@ -234,5 +234,5 @@ public sealed class Compact24MainDraftRegressionTests
     [CompactPostgresFact] public Task ContactEmail() => Run(t => t.ContactEmailRoundTripsEncryptedWithoutAccountCreationOrIssuePlaceSupplement());
     [CompactPostgresFact] public Task RealPdfAndPages() => Run(t => t.ActualLibreOfficeConversionPersistsPrivatePdfWithVietnameseAndIssueDate());
     [CompactPostgresFact] public Task ReviewReleaseAndActivation() => Run(t => t.ReviewedMainDraftReleasesOnceAndBothPartiesUseTheSamePdfThroughSimulatedActivation());
-    [CompactPostgresFact] public Task RejectInvalidRelease() => Run(t => t.ReleaseRejectsStaleReviewTamperingAndProductionSampleTemplate());
+    [CompactPostgresFact] public Task RejectInvalidRelease() => Run(t => t.ReleaseRejectsStaleReviewAndTampering());
 }

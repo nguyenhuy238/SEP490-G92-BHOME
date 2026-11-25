@@ -50,12 +50,35 @@ const page = (items: unknown[], pageSize = 20) => ({
   totalCount: items.length,
 });
 const month = businessToday().slice(0, 7);
+const tenantRoom = '11111111-1111-4111-8111-111111111111';
 function tenantTransport() {
   return vi.fn<typeof fetch>().mockImplementation(async (url) => {
     const path = String(url);
-    if (path.includes('/contracts?')) return json(page([{ id: 'contract', roomNumber: 'P1' }]));
+    if (path.includes('/contracts?'))
+      return json(
+        page([
+          {
+            id: 'contract',
+            roomId: tenantRoom,
+            roomNumber: 'P1',
+            status: 'Active',
+            kind: 'Main',
+          },
+        ]),
+      );
     if (path.includes('/invoices?'))
-      return json(page([{ id: 'bill', status: 'Final', billingPeriod: month + '-01', lines: [] }]));
+      return json(
+        page([
+          {
+            id: 'bill',
+            roomId: tenantRoom,
+            status: 'Final',
+            billingPeriod: month + '-01',
+            lines: [],
+          },
+        ]),
+      );
+    if (path.includes('/tenant/meter-readings?')) return json(page([]));
     if (path.endsWith('/payment'))
       return json({ paymentStatus: 'Unpaid', outstandingAmount: '100', paidAmount: '0' });
     if (path.endsWith('/expiry-reminders')) return json([]);
@@ -134,19 +157,19 @@ it('measures uncached control versus shared caching for duplicate consumers and 
   await waitFor(() => expect(screen.getByRole('status').textContent).toContain('room'));
   expect(transport).toHaveBeenCalledTimes(1);
 });
-it('measures Tenant Home as six initial reads and zero additional reads on immediate return', async () => {
+it('reuses the seven scoped Tenant Home queries including monthly meter readings on return', async () => {
   const transport = tenantTransport();
   client(transport);
   const view = render(<TenantDashboardScreen />);
   await waitFor(() =>
     expect(screen.getByRole('status').textContent).toContain('outstandingAmount'),
   );
-  expect(transport).toHaveBeenCalledTimes(6);
+  expect(transport).toHaveBeenCalledTimes(7);
   view.unmount();
   render(<TenantDashboardScreen />);
   expect(screen.getByRole('status').textContent).toContain('outstandingAmount');
   await act(async () => {});
-  expect(transport).toHaveBeenCalledTimes(6);
+  expect(transport).toHaveBeenCalledTimes(7);
   expect(JSON.parse(screen.getByRole('status').textContent!).paymentState.loading).toBe(false);
 });
 function StaffProbe() {
@@ -155,7 +178,7 @@ function StaffProbe() {
   const locations = useWorkspaceQuery('/api/v1/capture/locations', { cache: queryPolicies.rooms });
   return <output>{JSON.stringify({ data, locations })}</output>;
 }
-it('measures Staff Home plus header as nine scoped reads and reuses them on remount', async () => {
+it('measures Staff Home plus header as seven scoped reads and reuses them on remount', async () => {
   state.role = 'Staff';
   const transport = vi
     .fn<typeof fetch>()
@@ -169,9 +192,9 @@ it('measures Staff Home plus header as nine scoped reads and reuses them on remo
   client(transport);
   const view = render(<StaffProbe />);
   await waitFor(() =>
-    expect(JSON.parse(screen.getByRole('status').textContent!).data.meters.loading).toBe(false),
+    expect(JSON.parse(screen.getByRole('status').textContent!).data.priorities.loading).toBe(false),
   );
-  expect(transport).toHaveBeenCalledTimes(9);
+  expect(transport).toHaveBeenCalledTimes(7);
   expect(
     transport.mock.calls.filter(([url]) => String(url).endsWith('/capture/locations')),
   ).toHaveLength(1);
@@ -181,7 +204,7 @@ it('measures Staff Home plus header as nine scoped reads and reuses them on remo
   view.unmount();
   render(<StaffProbe />);
   await act(async () => {});
-  expect(transport).toHaveBeenCalledTimes(9);
+  expect(transport).toHaveBeenCalledTimes(7);
 });
 it('keeps Tenant Home visible on stale background refetch and refreshes only expired resources', async () => {
   let now = Date.now();
@@ -212,10 +235,10 @@ it('keeps Tenant Home visible on stale background refetch and refreshes only exp
   render(<TenantDashboardScreen />);
   expect(JSON.parse(screen.getByRole('status').textContent!).paymentState.loading).toBe(false);
   expect(screen.getByRole('status').textContent).toContain('contract');
-  await waitFor(() => expect(transport).toHaveBeenCalledTimes(8));
-  // Only payment (30s) and notifications (30s), not contracts/invoices/debts.
+  await waitFor(() => expect(transport).toHaveBeenCalledTimes(9));
+  // Only payment (30s) and notifications (30s), not contracts/invoices/meters/debts.
   expect(
-    transport.mock.calls.slice(6).every(([url]) => /\/payment$|notifications\?/.test(String(url))),
+    transport.mock.calls.slice(7).every(([url]) => /\/payment$|notifications\?/.test(String(url))),
   ).toBe(true);
   await act(async () => {
     pending.splice(0).forEach((resolve) => resolve());
@@ -236,14 +259,37 @@ it('never exposes cached data under a different account or role, even with the s
   view.rerender(<TwinProbe cached />);
   expect(screen.getByRole('status').textContent).not.toContain('PRIVATE-A');
 });
-it('does not request the invoice list when the selected outstanding invoice needs its existing detail API', async () => {
+it('does not mistake a previous debt for this month’s invoice on Tenant Home', async () => {
   const transport = tenantTransport();
   transport.mockImplementation(async (url) => {
     const path = String(url);
     if (path.includes('/debts?'))
       return json(page([{ invoiceId: 'due-bill', outstandingAmount: '100' }], 1));
-    if (path.endsWith('/invoices/due-bill'))
-      return json({ id: 'due-bill', status: 'Final', billingPeriod: month + '-01' });
+    if (path.includes('/invoices?'))
+      return json(
+        page([
+          {
+            id: 'current-bill',
+            roomId: tenantRoom,
+            status: 'Final',
+            billingPeriod: month + '-01',
+            lines: [],
+          },
+        ]),
+      );
+    if (path.includes('/contracts?'))
+      return json(
+        page([
+          {
+            id: 'contract',
+            roomId: tenantRoom,
+            roomNumber: 'P1',
+            status: 'Active',
+            kind: 'Main',
+          },
+        ]),
+      );
+    if (path.includes('/tenant/meter-readings?')) return json(page([]));
     if (path.endsWith('/payment'))
       return json({ paymentStatus: 'Unpaid', outstandingAmount: '100' });
     return json(page([]));
@@ -253,7 +299,51 @@ it('does not request the invoice list when the selected outstanding invoice need
   await waitFor(() =>
     expect(screen.getByRole('status').textContent).toContain('"paymentStatus":"Unpaid"'),
   );
-  expect(transport.mock.calls.some(([url]) => String(url).includes('/invoices?'))).toBe(false);
+  const props = JSON.parse(screen.getByRole('status').textContent!);
+  expect(props.invoice.id).toBe('current-bill');
+  expect(props.debt.invoiceId).toBe('due-bill');
+  expect(
+    transport.mock.calls.some(([url]) => String(url).includes(`billingPeriod=${month}-01`)),
+  ).toBe(true);
+  expect(transport.mock.calls.some(([url]) => String(url).endsWith('/invoices/due-bill'))).toBe(
+    false,
+  );
+});
+it('does not load Tenant financial features after a completed move-out has no Active contract', async () => {
+  const transport = tenantTransport();
+  transport.mockImplementation(async (url) => {
+    const path = String(url);
+    if (path.includes('/contracts?')) return json(page([]));
+    if (path.includes('/invoices?'))
+      return json(
+        page([
+          {
+            id: 'post-moveout-bill',
+            roomId: tenantRoom,
+            billingPeriod: month + '-01',
+            status: 'Final',
+            lines: [],
+          },
+        ]),
+      );
+    if (path.includes('/tenant/meter-readings?')) return json(page([]));
+    if (path.endsWith('/payment'))
+      return json({ paymentStatus: 'Paid', outstandingAmount: '0', paidAmount: '20000' });
+    if (path.endsWith('/expiry-reminders')) return json([]);
+    return json(page([]));
+  });
+  client(transport);
+  render(<TenantDashboardScreen />);
+  await waitFor(() => expect(screen.getByRole('status').textContent).toContain('"contracts":[]'));
+  const props = JSON.parse(screen.getByRole('status').textContent!);
+  expect(props.contracts).toEqual([]);
+  expect(props.invoice).toBeUndefined();
+  expect(props.payment).toBeUndefined();
+  expect(
+    transport.mock.calls.some(([url]) =>
+      /\/invoices\?|\/debts\?|\/tenant\/meter-readings\?|\/notifications\?/.test(String(url)),
+    ),
+  ).toBe(false);
 });
 function RetryProbe() {
   const query = useWorkspaceQuery<{ label: string }>('/api/v1/capture/locations', {

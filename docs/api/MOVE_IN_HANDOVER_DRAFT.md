@@ -117,6 +117,8 @@ Muốn đổi `RoomStatus` thành `Occupied` **chỉ sau khi Tenant xác nhận*
 
 ## Kiểm thử và vận hành
 
+Khắc phục 24/11/2026 (UC-17, GBR-01/02): khi hợp đồng có `signingMode=INTERNAL_OTP_DRAWN` và đã liên kết tài khoản Tenant, ngữ cảnh ký **biên bản bàn giao** phải dùng `Contract.TenantUserId` thực tế cho cả session và OTP. Ngữ cảnh ký hợp đồng nội bộ vẫn giữ nguyên. Backend tiếp tục kiểm tra đúng Tenant, phạm vi hợp đồng, Owner đã ký, version/hash, consent và bằng chứng trước khi hoàn tất; không đổi endpoint, DTO hay quyền.
+
 Phần Backend có các integration trên PostgreSQL 16 **disposable** (`Compact24MoveInDraftTests`): tạo Main→Draft & tác vụ theo contract, không cho Staff lưu/ảnh trước `start`, bắt đầu thật qua Task API với phân quyền, version, Staff lưu nhóm kiểm kê từng phần, Owner xử lý ngoại lệ (không cần Staff đề xuất sửa), Tenant request/decision, PDF hoàn tất không nhúng ảnh nhưng bằng chứng vẫn được bảo vệ, rollback khi thiếu điều kiện. Chạy trong CI qua `BHOME_COMPACT24_TEST_ADMIN` của service PostgreSQL tạm; không chạy trên Neon Development/Production.
 
 Sau merge cần restart Backend để nạp API mới. Không có auto-migrate hay auto-finalize các hợp đồng đang Active; các hồ sơ lịch sử có thể xuất hiện bản nháp version 0 khi GET, và chỉ ghi state khi Staff thực hiện lần đầu.

@@ -5,11 +5,13 @@ using BHome.Domain.Locations;
 using BHome.Domain.TenantContracts;
 using BHome.Infrastructure.Persistence.Compact24;
 using BHome.Infrastructure.IdentityAccess;
+using BHome.Infrastructure.Branding;
 using Microsoft.EntityFrameworkCore;
 using BHome.Application.Contracts;
 using BHome.Application.Storage;
 using System.Security.Cryptography;
 using iText.IO.Font;
+using iText.Kernel.Colors;
 using iText.Kernel.Font;
 using iText.Kernel.Pdf;
 using iText.Kernel.Geom;
@@ -117,8 +119,8 @@ internal sealed class NotificationEmailContent(Compact24DbContext db,
     {
         var c = await db.Set<Contract>().AsNoTracking().Include(c => c.Room).ThenInclude(r => r.Location)
             .Include(c => c.Signatures).SingleOrDefaultAsync(c => c.Id == id && c.OwnerSignerId == owner &&
-                c.Kind == ContractKind.Holding && c.Status == ContractStatus.Active, t);
-        if (c is null || c.Room.Status != BHome.Domain.PropertyManagement.RoomStatus.OnHold ||
+                c.Kind == ContractKind.Holding && (c.Status == ContractStatus.Active || c.Status == ContractStatus.Converted), t);
+        if (c is null || c.Status == ContractStatus.Active && c.Room.Status != BHome.Domain.PropertyManagement.RoomStatus.OnHold ||
             !BHome.Application.Contracts.AnonymousContractSigningService.HoldingOwnerHasSigned(c)) return null;
         var invitation = await db.Set<ContractSigningInvitation>().AsNoTracking()
             .Where(i => i.ContractId == id && i.ResidentId == c.RepresentativeResidentId && i.SnapshotHash == c.SnapshotHash &&
@@ -163,9 +165,38 @@ internal sealed class NotificationEmailContent(Compact24DbContext db,
             $"Thông tin:\n- Cơ sở: {c.Room.Location.Name}\n- Phòng: {c.Room.RoomNumber}\n- Hợp đồng: {c.Id:D}\n" +
             $"- Thời gian giữ chỗ: {c.StartDate:dd/MM/yyyy} – {c.EndDate:dd/MM/yyyy}\n" +
             $"- Số tiền giữ chỗ: {c.RequiredDeposit.ToString("N0", CultureInfo.GetCultureInfo("vi-VN"))} VND\n" +
-            "- Trạng thái: Đã giữ chỗ thành công\n\nĐính kèm: hợp đồng đã ký và biên nhận tiền giữ chỗ đã xác minh.\n\nTrân trọng,\nBHOME.",
+            (c.Status == ContractStatus.Converted ? "- Trạng thái: Đã chuyển sang hợp đồng thuê" : "- Trạng thái: Đã giữ chỗ thành công") +
+            "\n\nĐính kèm: hợp đồng đã ký và biên nhận tiền giữ chỗ đã xác minh.\n\nTrân trọng,\nBHOME.",
             [new($"Hop-dong-giu-cho-{id:N}.pdf", "application/pdf", signedPdf),
              new($"Bien-nhan-giu-cho-{id:N}.pdf", "application/pdf", receipt)]);
+    }
+
+    internal async Task<IReadOnlyList<EmailAttachment>> PaidInvoiceAttachmentsAsync(Guid id, Guid recipient, CancellationToken t)
+    {
+        var invoice = await db.Set<Invoice>().AsNoTracking().Include(i => i.Lines)
+            .SingleOrDefaultAsync(i => i.Id == id && i.Status == InvoiceStatus.Final &&
+                i.Recipients.Any(r => r.TenantUserId == recipient), t);
+        if (invoice is null) return [];
+        var balance = await BHome.Infrastructure.Billing.InvoiceFinancialQueries.FinancialsAsync(db, id, t);
+        if (balance.OutstandingAmount != 0) return [];
+
+        using var output = new MemoryStream();
+        string Money(decimal value) => value.ToString("N0", CultureInfo.GetCultureInfo("vi-VN")) + " VND";
+        using (var pdf = new PdfDocument(new PdfWriter(output)))
+        using (var document = new Document(pdf, PageSize.A4))
+        {
+            document.SetFont(PdfFontFactory.CreateFont(ReceiptFont.Value, PdfEncodings.IDENTITY_H,
+                PdfFontFactory.EmbeddingStrategy.FORCE_EMBEDDED)).SetFontSize(11);
+            document.Add(new Paragraph("BHOME – HÓA ĐƠN ĐÃ THANH TOÁN").SetFontSize(17));
+            document.Add(new Paragraph($"Mã hóa đơn: {id:D}\nCơ sở: {invoice.LocationName}\nPhòng: {invoice.RoomNumber}\nKỳ hóa đơn: {invoice.BillingPeriod:MM/yyyy}"));
+            var table = new Table(UnitValue.CreatePercentArray([70f, 30f])).UseAllAvailableWidth();
+            table.AddHeaderCell("Khoản thu").AddHeaderCell("Thành tiền");
+            foreach (var line in invoice.Lines.OrderBy(l => l.Category).ThenBy(l => l.ChargeCode))
+                table.AddCell(line.Name).AddCell(Money(line.Amount));
+            document.Add(table);
+            document.Add(new Paragraph($"Tổng phát hành: {Money(balance.OriginalIssuedAmount)}\nĐiều chỉnh đã duyệt: {Money(balance.ApprovedAdjustmentTotal)}\nĐã thanh toán: {Money(balance.AllocatedPayments)}\nCòn phải trả: {Money(balance.OutstandingAmount)}"));
+        }
+        return [new($"Hoa-don-{id:N}.pdf", "application/pdf", output.ToArray())];
     }
 
     private sealed record ReceiptRow(Guid Id, string Reference, decimal Amount, DateTimeOffset PaidAt);
@@ -183,8 +214,9 @@ internal sealed class NotificationEmailContent(Compact24DbContext db,
         {
             var font = PdfFontFactory.CreateFont(ReceiptFont.Value, PdfEncodings.IDENTITY_H, PdfFontFactory.EmbeddingStrategy.FORCE_EMBEDDED);
             doc.SetFont(font).SetFontSize(11).SetMargins(40, 40, 40, 40);
-            pdf.GetDocumentInfo().SetTitle(title).SetCreator("BHOME");
-            doc.Add(new Paragraph($"BHOME – {title.ToUpperInvariant()}").SetFontSize(17));
+            pdf.GetDocumentInfo().SetTitle(title).SetCreator("BHome");
+            doc.Add(new Paragraph($"BHome – {title.ToUpperInvariant()}").SetFontSize(17).SetFontColor(new DeviceRgb(25, 76, 187)));
+            BrandAssets.AddPdfMark(doc, PageSize.A4.GetWidth() - 70, PageSize.A4.GetHeight() - 31, 26, BrandAssets.MarkPng);
             doc.Add(new Paragraph($"Hợp đồng: {c.Id:D}\nCơ sở: {c.Room.Location.Name}\nPhòng: {c.Room.RoomNumber}\nThời hạn: {c.StartDate:dd/MM/yyyy} – {c.EndDate:dd/MM/yyyy}\n{detail}"));
             var table = new Table(UnitValue.CreatePercentArray([30f, 45f, 25f])).UseAllAvailableWidth();
             foreach (var label in new[] { "Ngày giao dịch", "Tham chiếu giao dịch", "Số tiền ghi nhận (VND)" }) table.AddHeaderCell(new Cell().Add(new Paragraph(label)));

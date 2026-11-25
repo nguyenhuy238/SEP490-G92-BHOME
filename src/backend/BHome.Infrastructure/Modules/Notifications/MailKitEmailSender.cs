@@ -2,6 +2,7 @@ using System.Security.Cryptography;
 using System.Net.Sockets;
 using System.Text;
 using BHome.Application.Notifications;
+using BHome.Infrastructure.Branding;
 using MailKit;
 using MailKit.Net.Smtp;
 using MailKit.Security;
@@ -21,8 +22,6 @@ internal sealed class MailKitEmailSender(IOptions<EmailOptions> options, ILogger
         var config = options.Value;
         if (!IsConfigured) throw new ChannelDeliveryException("email_configuration_invalid");
         if (!EmailOptions.ValidAddress(message.Destination)) throw new ChannelDeliveryException("email_recipient_invalid");
-        if (!config.RecipientAllowed(message.Destination, environment.EnvironmentName))
-            throw new ChannelDeliveryException("email_recipient_not_allowed");
         var key = Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes(message.IdempotencyKey))).ToLowerInvariant();
         using var mail = new MimeMessage();
         mail.From.Add(new MailboxAddress(Encoding.UTF8, config.FromName, config.FromEmail));
@@ -68,14 +67,23 @@ internal sealed class MailKitEmailSender(IOptions<EmailOptions> options, ILogger
         }
     }
 
-    internal static MimeEntity BuildBody(ChannelMessage message)
+    internal static MimeEntity BuildBody(ChannelMessage message) => BuildBody(message, BrandAssets.MarkPng);
+
+    internal static MimeEntity BuildBody(ChannelMessage message, byte[]? brandMark)
     {
         var body = new BodyBuilder
         {
             TextBody = EmailTemplate.Text(message),
             HtmlBody = EmailTemplate.Html(message.Title, message.Body, message.ActionUrl,
-                EmailTemplate.ActionLabel(message.EventType), message.MobileActionUrl, message.Credentials)
+                EmailTemplate.ActionLabel(message.EventType), message.MobileActionUrl, message.Credentials,
+                includeBrandMark: brandMark is not null, eventType: message.EventType)
         };
+        if (brandMark is not null)
+        {
+            var logo = body.LinkedResources.Add("bhome-mark.png", brandMark, new ContentType("image", "png"));
+            logo.ContentId = EmailTemplate.BrandContentId;
+            logo.ContentDisposition = new ContentDisposition(ContentDisposition.Inline);
+        }
         if (message.Attachments is { } attachments)
         {
             if (attachments.Count > 2) throw new ChannelDeliveryException("email_attachments_invalid");

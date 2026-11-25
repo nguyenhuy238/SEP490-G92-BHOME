@@ -36,12 +36,32 @@ export interface AssetTemplateData {
 export interface FeeTemplateData {
   category: string;
   chargeCode: string;
+  serviceName?: string | null;
   method: string;
   referenceRate: DecimalValue;
   unit: string;
   scope: 'Location' | 'Room';
   effectiveFrom: string;
   effectiveTo: string | null;
+}
+export function sharedFeeServiceName(
+  data: Pick<FeeTemplateData, 'serviceName' | 'chargeCode'>,
+  fallback: string,
+) {
+  if (data.serviceName?.trim()) return data.serviceName.trim();
+  const legacyNames: Record<string, string> = {
+    INTERNET: 'Internet',
+    DV_I: 'Internet',
+    WIFI: 'Wifi',
+    DV_W: 'Wifi',
+    CLEANING: 'Vệ sinh',
+    DV_VS: 'Vệ sinh',
+    PARKING: 'Gửi xe',
+    DV_GX: 'Gửi xe',
+    MANAGEMENT: 'Quản lý tòa nhà',
+    DV_QLTN: 'Quản lý tòa nhà',
+  };
+  return legacyNames[data.chargeCode.toUpperCase()] ?? (fallback || data.chargeCode);
 }
 export interface PolicyTemplateData {
   content: string;

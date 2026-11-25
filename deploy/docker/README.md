@@ -20,6 +20,9 @@ docker build -f deploy/docker/Web.Dockerfile --build-arg APP=public-web --build-
 It includes the LibreOffice Writer, Poppler and font packages required by contract document/PDF
 workflows, plus the `schema-output` and `seed` targets retained for separately reviewed operations.
 The normal release pipeline builds only `--target api`; it never applies migrations or runs seeds.
+The API release target also includes the pinned ONNX OCR models and enables the regular OCR endpoint
+for Staging and Production. Keep `Ocr__Enabled` enabled and avoid overriding `Ocr__ModelDirectory`
+or mounting over `/models` in the private overlays. Diagnostic OCR remains Development-only.
 Keep the older `Api.Dockerfile` available for the lightweight local image. Do not replace an
 existing VPS image until the release image has passed the Staging acceptance checks.
 

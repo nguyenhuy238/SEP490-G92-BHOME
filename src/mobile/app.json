@@ -1,6 +1,6 @@
 {
   "expo": {
-    "name": "mobile",
+    "name": "BHome",
     "slug": "mobile",
     "version": "1.0.0",
     "scheme": "bhome",
@@ -10,12 +10,14 @@
     "ios": {
       "supportsTablet": true,
       "infoPlist": {
+        "NSCameraUsageDescription": "Cho phép BHOME chụp CCCD và đồng hồ để nhập dữ liệu.",
         "NSLocalNetworkUsageDescription": "Kết nối BHOME API trong mạng nội bộ để xử lý OCR."
       }
     },
     "android": {
+      "permissions": ["android.permission.CAMERA"],
       "adaptiveIcon": {
-        "backgroundColor": "#E6F4FE",
+        "backgroundColor": "#F6F9FD",
         "foregroundImage": "./assets/android-icon-foreground.png",
         "backgroundImage": "./assets/android-icon-background.png",
         "monochromeImage": "./assets/android-icon-monochrome.png"
@@ -47,8 +49,23 @@
         }
       ],
       "expo-sharing",
-      "expo-notifications",
-      "expo-status-bar"
+      [
+        "expo-notifications",
+        {
+          "icon": "./assets/notification-icon.png",
+          "color": "#194cbb"
+        }
+      ],
+      "expo-status-bar",
+      [
+        "expo-splash-screen",
+        {
+          "image": "./assets/splash-icon.png",
+          "imageWidth": 160,
+          "resizeMode": "contain",
+          "backgroundColor": "#F6F9FD"
+        }
+      ]
     ]
   }
 }

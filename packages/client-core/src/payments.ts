@@ -521,6 +521,8 @@ export function paymentError(error: unknown) {
       'Yêu cầu đã dùng với nội dung khác. Hãy tải lại trước khi thao tác.',
     bank_transaction_identity_conflict: 'Tham chiếu ngân hàng đã tồn tại với dữ liệu khác.',
     receiving_account_version_changed: 'Tài khoản nhận đã thay đổi. Hãy tải lại.',
+    sandbox_receiving_account_unavailable:
+      'Tài khoản này chưa được cấu hình SePay Test cho cơ sở đã chọn.',
     invalid_receiving_bank_account:
       'Kiểm tra BIN 6 số, tài khoản 6–19 số, tên in hoa không dấu và xác nhận cấu hình.',
     payer_not_invoice_viewer: 'Người trả phải thuộc danh sách khách có quyền trên hóa đơn.',

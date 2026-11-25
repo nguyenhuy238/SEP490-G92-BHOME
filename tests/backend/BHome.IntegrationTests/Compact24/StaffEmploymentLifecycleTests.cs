@@ -10,6 +10,75 @@ namespace BHome.IntegrationTests.Compact24;
 public sealed partial class Compact24NotificationMvpTests
 {
     [CompactPostgresFact]
+    public async Task NewStaffAndInitialEmploymentMustStartActive()
+    {
+        var w = await Seed();
+        using var owner = await Client(w.Owner);
+        var ended = new EmploymentWrite("ENDED-NEW", null, Today.AddMonths(-1), Today, "Monthly", 5000000m, "Ended");
+
+        var rejectedCreate = await owner.PostAsJsonAsync("/api/v1/staff",
+            new StaffCreate($"{Guid.NewGuid():N}@example.invalid", "Synthetic ended staff", null, null, ended));
+        Assert.Equal(HttpStatusCode.BadRequest, rejectedCreate.StatusCode);
+
+        var active = ended with { ContractNumber = "ACTIVE-NEW", EndDate = null, Status = "Active" };
+        var unsupportedSalary = active with { SalaryType = "Weekly" };
+        Assert.Equal(HttpStatusCode.BadRequest, (await owner.PostAsJsonAsync("/api/v1/staff",
+            new StaffCreate($"{Guid.NewGuid():N}@example.invalid", "Synthetic weekly staff", null, null, unsupportedSalary))).StatusCode);
+        var create = await owner.PostAsJsonAsync("/api/v1/staff",
+            new StaffCreate($"{Guid.NewGuid():N}@example.invalid", "Synthetic active staff", null, null, active));
+        Assert.Equal(HttpStatusCode.Created, create.StatusCode);
+        var created = (await create.Content.ReadFromJsonAsync<StaffView>())!;
+        Assert.Equal("Active", created.Employment!.Status);
+
+        // The seeded Staff account has no employment rows. Use it to exercise the first-period
+        // endpoints without deleting append-only employment history from a created account.
+        var route = $"/api/v1/staff/{w.Staff.Id}";
+        var accountWithoutEmployment = (await owner.GetFromJsonAsync<StaffView>(route))!;
+        Assert.Null(accountWithoutEmployment.Employment);
+        var rejectedFirstPeriodCreate = await owner.PostAsJsonAsync(route + "/employments",
+            new EmploymentPeriodCreate(accountWithoutEmployment.AccountVersion, ended, "Try ended first period through period endpoint"));
+        Assert.Equal(HttpStatusCode.BadRequest, rejectedFirstPeriodCreate.StatusCode);
+
+        var rejectedFirstPeriodUpdate = await owner.PutAsJsonAsync(route,
+            new StaffUpdate(accountWithoutEmployment.AccountVersion, accountWithoutEmployment.Email,
+                "Synthetic staff", accountWithoutEmployment.Phone, true, ended, "Try ended first period"));
+        Assert.Equal(HttpStatusCode.BadRequest, rejectedFirstPeriodUpdate.StatusCode);
+
+        var firstActive = active with { StartDate = Today.AddYears(-2) };
+        Assert.Equal(HttpStatusCode.BadRequest, (await owner.PutAsJsonAsync(route,
+            new StaffUpdate(accountWithoutEmployment.AccountVersion, accountWithoutEmployment.Email,
+                "Synthetic staff", accountWithoutEmployment.Phone, true,
+                firstActive with { SalaryType = "Weekly" }, "Reject unsupported salary frequency"))).StatusCode);
+        var activeFirstPeriod = await owner.PutAsJsonAsync(route,
+            new StaffUpdate(accountWithoutEmployment.AccountVersion, accountWithoutEmployment.Email,
+                "Synthetic staff", accountWithoutEmployment.Phone, true, firstActive, "Create active first period"));
+        Assert.Equal(HttpStatusCode.OK, activeFirstPeriod.StatusCode);
+        var activeStaff = (await activeFirstPeriod.Content.ReadFromJsonAsync<StaffView>())!;
+        Assert.Equal("Active", activeStaff.Employment!.Status);
+
+        var closed = firstActive with { EndDate = Today.AddYears(-1), Status = "Ended" };
+        var closeResponse = await owner.PutAsJsonAsync(route,
+            new StaffUpdate(activeStaff.AccountVersion, activeStaff.Email, "Synthetic staff", activeStaff.Phone,
+                true, closed, "Close first employment period"));
+        Assert.Equal(HttpStatusCode.OK, closeResponse.StatusCode);
+        var closedStaff = (await closeResponse.Content.ReadFromJsonAsync<StaffView>())!;
+
+        var historical = ended with
+        {
+            ContractNumber = "HISTORICAL-ENDED",
+            StartDate = Today.AddMonths(-6),
+            EndDate = Today.AddMonths(-3)
+        };
+        Assert.Equal(HttpStatusCode.BadRequest, (await owner.PostAsJsonAsync(route + "/employments",
+            new EmploymentPeriodCreate(closedStaff.AccountVersion,
+                historical with { SalaryType = "Weekly" }, "Reject unsupported historical salary frequency"))).StatusCode);
+        var historicalResponse = await owner.PostAsJsonAsync(route + "/employments",
+            new EmploymentPeriodCreate(closedStaff.AccountVersion, historical, "Record historical ended period"));
+        Assert.Equal(HttpStatusCode.Created, historicalResponse.StatusCode);
+        Assert.Equal("Ended", (await historicalResponse.Content.ReadFromJsonAsync<StaffView>())!.Employment!.Status);
+    }
+
+    [CompactPostgresFact]
     public async Task EmploymentPeriodsPreserveHistoryAndSerializeConcurrentRenewal()
     {
         var w = await Seed();
@@ -77,6 +146,13 @@ public sealed partial class Compact24NotificationMvpTests
         var route = $"/api/v1/staff/{w.Staff.Id}";
         var employment = new EmploymentWrite("STAFF", "FullTime", Today.AddMonths(-1), Today, "Monthly", 5000000m, "Ended");
         var account = (await owner.GetFromJsonAsync<StaffView>(route))!;
+        var firstEmployment = employment with { EndDate = null, Status = "Active" };
+        var firstUpdate = new StaffUpdate(account.AccountVersion, account.Email, "Synthetic staff", account.Phone,
+            true, firstEmployment, "Create initial employment");
+        var firstResponse = await owner.PutAsJsonAsync(route, firstUpdate);
+        firstResponse.EnsureSuccessStatusCode();
+        account = (await firstResponse.Content.ReadFromJsonAsync<StaffView>())!;
+
         var update = new StaffUpdate(account.AccountVersion, account.Email, "Synthetic staff", account.Phone, true, employment, "Record employment");
         var response = await owner.PutAsJsonAsync(route, update);
         response.EnsureSuccessStatusCode();

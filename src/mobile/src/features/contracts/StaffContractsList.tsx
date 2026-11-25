@@ -304,7 +304,7 @@ export function StaffContractsList({
         <TextInput
           mode="outlined"
           dense
-          placeholder="Tìm theo mã phòng, hợp đồng..."
+          placeholder="Tìm phòng, tên khách, 4 số cuối CCCD"
           accessibilityLabel="Tìm hợp đồng"
           value={search}
           onChangeText={(value) => {
@@ -383,6 +383,17 @@ export function StaffContractsList({
                     <Text variant="labelSmall" numberOfLines={1} style={ui.muted}>
                       {contract.locationName}
                     </Text>
+                    {contract.kind === 'Holding' && (
+                      <View style={{ gap: 3 }}>
+                        <Text variant="bodyMedium">
+                          {contract.holdingCustomer?.fullName || 'Chưa có thông tin khách hàng'}
+                        </Text>
+                        <Text variant="labelSmall" style={ui.muted}>
+                          CCCD:{' '}
+                          {contract.holdingCustomer?.maskedCitizenNumber || 'Chưa có thông tin'}
+                        </Text>
+                      </View>
+                    )}
                     <View style={{ alignSelf: 'flex-start' }}>
                       <Pill tone={contract.kind === 'Holding' ? 'blue' : 'neutral'}>
                         {staffContractKindLabel(contract.kind)}

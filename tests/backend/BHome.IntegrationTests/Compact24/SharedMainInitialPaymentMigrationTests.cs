@@ -37,8 +37,11 @@ public sealed class SharedMainInitialPaymentMigrationTests
             Assert.True(await db.IsSchemaReadyAsync());
             var after = await Functions();
             const string guard = "bhome24_initial_payment_guard:";
-            Assert.Equal(before.Where(f => !f.StartsWith(guard, StringComparison.Ordinal)), after.Where(f => !f.StartsWith(guard, StringComparison.Ordinal)));
+            const string sepayGuard = "bhome24_sepay_technical_guard:";
+            Assert.Equal(before.Where(f => !f.StartsWith(guard, StringComparison.Ordinal) && !f.StartsWith(sepayGuard, StringComparison.Ordinal)),
+                after.Where(f => !f.StartsWith(guard, StringComparison.Ordinal) && !f.StartsWith(sepayGuard, StringComparison.Ordinal)));
             Assert.NotEqual(before.Single(f => f.StartsWith(guard, StringComparison.Ordinal)), after.Single(f => f.StartsWith(guard, StringComparison.Ordinal)));
+            Assert.NotEqual(before.Single(f => f.StartsWith(sepayGuard, StringComparison.Ordinal)), after.Single(f => f.StartsWith(sepayGuard, StringComparison.Ordinal)));
             Assert.Equal("Synthetic schema upgrade", await db.Database.SqlQuery<string>($"SELECT name AS \"Value\" FROM locations WHERE id={location}").SingleAsync());
             Assert.Empty(await db.Database.GetPendingMigrationsAsync());
 
@@ -51,6 +54,17 @@ public sealed class SharedMainInitialPaymentMigrationTests
             Assert.Equal(after, await Functions());
             Assert.True(await db.IsSchemaReadyAsync());
             Assert.Equal(1, await db.Database.SqlQuery<int>($"SELECT count(*)::integer AS \"Value\" FROM locations WHERE id={location}").SingleAsync());
+
+            await using (var transaction = await db.Database.BeginTransactionAsync())
+            {
+                await db.Database.ExecuteSqlRawAsync("""
+                    CREATE OR REPLACE FUNCTION bhome24_sepay_technical_guard() RETURNS trigger LANGUAGE plpgsql AS $fn$
+                    BEGIN RETURN NEW; END $fn$;
+                    """);
+                Assert.False(await db.IsSchemaReadyAsync());
+                await transaction.RollbackAsync();
+            }
+            Assert.True(await db.IsSchemaReadyAsync());
         }
         finally
         {

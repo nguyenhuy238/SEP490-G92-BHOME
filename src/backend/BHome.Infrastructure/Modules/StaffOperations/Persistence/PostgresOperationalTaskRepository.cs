@@ -76,6 +76,9 @@ internal sealed class PostgresOperationalTaskRepository(BHomePersistenceContext 
         if (db is not Compact24DbContext compact) throw OperationalTaskException.Conflict("owner_inventory_compact_required");
         return BuildOwnerConfirmedInventoryAsync(compact, task, t);
     }
+    public Task<bool> HasLocationHandoverApprovalAsync(Guid taskId, int version, CancellationToken t) =>
+        db.Set<OperationalTaskHistory>().AsNoTracking().AnyAsync(h => h.TaskId == taskId &&
+            h.Action == "location_asset_handover_approved" && h.TaskVersion == version, t);
     private async Task<LocationAssetInventorySnapshot> BuildOwnerConfirmedInventoryAsync(
         Compact24DbContext compact, OperationalTask task, CancellationToken t)
     {
@@ -225,6 +228,24 @@ internal sealed class PostgresOperationalTaskRepository(BHomePersistenceContext 
             rows = rows.Where(x => x.Kind != OperationalTaskKind.LocationAssetHandover ||
                 db.StaffLocationAssignments.Any(a => a.Id == x.AssignmentId && a.StaffUserId == staffId.Value && a.StartDate <= date && a.EndDate >= date));
         if (query.LocationId is { } location) rows = rows.Where(x => x.LocationId == location);
+        if (query.RoomId is { } room) rows = rows.Where(x => x.TargetRoomId == room);
+        if (query.ActionableOnly)
+            rows = rows.Where(x => x.Status == MeterTaskStatus.Assigned || x.Status == MeterTaskStatus.InProgress);
+        if (query.Category == TaskCategory.MoveIn)
+            rows = rows.Where(x => x.Kind == OperationalTaskKind.AdHoc && x.ContractId != null && x.Title.StartsWith("Bàn giao vào phòng"));
+        else if (query.Category == TaskCategory.MoveOut)
+            rows = rows.Where(x => x.Kind == OperationalTaskKind.AdHoc && x.ContractId != null && x.Title.StartsWith("Kiểm tra trả phòng"));
+        else if (query.Category == TaskCategory.Operational)
+            rows = rows.Where(x => !(x.ContractId != null &&
+                (x.Kind == OperationalTaskKind.MoveInInventory ||
+                 (x.Kind == OperationalTaskKind.AdHoc &&
+                  (x.Title.StartsWith("Bàn giao vào phòng") || x.Title.StartsWith("Kiểm tra trả phòng"))))));
+        if (!string.IsNullOrWhiteSpace(query.Search))
+        {
+            var search = query.Search.Trim().ToLower();
+            rows = rows.Where(x => x.Title.ToLower().Contains(search) ||
+                (x.TargetLabel != null && x.TargetLabel.ToLower().Contains(search)));
+        }
         if (query.RecordedStaffUserId is { } recorded) rows = rows.Where(x => x.AssignedStaffUserId == recorded);
         if (query.HasResponsibility is { } available) rows = rows.Where(task =>
             (task.Location.IsActive && db.StaffLocationAssignments.Any(a => a.LocationId == task.LocationId && a.StartDate <= date && a.EndDate >= date &&
@@ -234,8 +255,15 @@ internal sealed class PostgresOperationalTaskRepository(BHomePersistenceContext 
         if (query.DueFrom is { } from) rows = rows.Where(x => x.DueAt >= from);
         if (query.DueTo is { } to) rows = rows.Where(x => x.DueAt <= to);
         if (query.IsOverdue is { } overdue) rows = rows.Where(x => (x.DueAt < now && x.Status != MeterTaskStatus.Completed && x.Status != MeterTaskStatus.Cancelled) == overdue);
+        if (query.LatestActionable)
+            rows = rows.Where(x =>
+                (x.Status == MeterTaskStatus.Assigned || x.Status == MeterTaskStatus.InProgress) &&
+                (x.Kind != OperationalTaskKind.MoveInInventory || x.ContractId == null));
         var count = await rows.CountAsync(t);
-        var items = await rows.OrderBy(x => x.DueAt).ThenBy(x => x.Id).Skip((query.Page - 1) * query.PageSize).Take(query.PageSize)
+        var ordered = query.LatestActionable ? rows.OrderByDescending(x => x.CreatedAt)
+            : query.ActionableOnly ? rows.OrderBy(x => x.Status == MeterTaskStatus.InProgress ? 0 : 1).ThenBy(x => x.CreatedAt)
+            : rows.OrderBy(x => x.DueAt);
+        var items = await ordered.ThenBy(x => x.Id).Skip((query.Page - 1) * query.PageSize).Take(query.PageSize)
             .Select(task => new
             {
                 Task = task,

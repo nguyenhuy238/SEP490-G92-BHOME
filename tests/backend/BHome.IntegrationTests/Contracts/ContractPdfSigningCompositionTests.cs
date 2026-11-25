@@ -144,7 +144,7 @@ public sealed class ContractPdfSigningCompositionTests
     }
 
     [Fact]
-    public async Task ReusingAnEarlierPdfDoesNotBypassProductionTemplatePolicy()
+    public async Task PreviouslyRenderedSnapshotRemainsValidInProductionForDemo()
     {
         using var backend = ContractPdfRendererTests.Backend();
         using var scope = backend.CreateScope();
@@ -152,9 +152,10 @@ public sealed class ContractPdfSigningCompositionTests
         var input = ContractPdfRendererTests.Snapshot();
         await renderer.RenderAsync(input, default);
         backend.GetRequiredService<Microsoft.Extensions.Hosting.IHostEnvironment>().EnvironmentName = "Production";
-        var error = await Assert.ThrowsAsync<ContractException>(() => renderer.ValidateAsync(input, default));
-        Assert.Equal(503, error.Status);
-        Assert.Equal("contract_template_not_approved", error.Code);
+        await renderer.ValidateAsync(input, default);
+        var template = await renderer.ConfigurationAsync(default);
+        Assert.True(template.Available);
+        Assert.True(template.DevelopmentOnly);
     }
 
     [Fact]
@@ -171,7 +172,7 @@ public sealed class ContractPdfSigningCompositionTests
             .RenderAsync(ContractPdfRendererTests.Snapshot(), default);
         using var pdf = new PdfDocument(new PdfReader(new MemoryStream(bytes)));
         Assert.Equal(ContractPdfRendererTests.TemplateId, pdf.GetDocumentInfo().GetMoreInfo("BHomeTemplateId"));
-        Assert.Contains("CHƯA PHÊ DUYỆT", ContractPdfRendererTests.Text(pdf));
+        Assert.DoesNotContain("CHƯA PHÊ DUYỆT", ContractPdfRendererTests.Text(pdf));
     }
 
     [Theory]

@@ -19,6 +19,7 @@ export interface OnboardingPerson {
   email?: string;
   residentId?: string;
   status: IdentityStatus;
+  hasUnsavedIdentity?: boolean;
   captureProgress?: CaptureProgress;
   creationUncertain?: boolean;
   verificationError?: string;

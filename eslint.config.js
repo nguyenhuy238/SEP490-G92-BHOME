@@ -21,7 +21,12 @@ export default tseslint.config(
   js.configs.recommended,
   ...tseslint.configs.recommended,
   {
-    files: ['scripts/**/*.cjs', 'tests/**/*.cjs', 'postman/mocks/**/*.cjs'],
+    files: [
+      'scripts/**/*.cjs',
+      'tests/**/*.cjs',
+      'postman/mocks/**/*.cjs',
+      'src/mobile/metro.config.js',
+    ],
     languageOptions: { sourceType: 'commonjs', globals: globals.node },
     rules: { '@typescript-eslint/no-require-imports': 'off' },
   },

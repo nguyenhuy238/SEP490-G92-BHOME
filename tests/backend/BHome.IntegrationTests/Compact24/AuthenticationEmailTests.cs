@@ -130,7 +130,9 @@ public sealed partial class Compact24NotificationMvpTests
     [CompactPostgresTheory]
     [InlineData("Testing")]
     [InlineData("Development")]
-    public async Task OwnerInvitationUsesEnvironmentPolicyBeforeChangingGrantOrQueue(string environment)
+    [InlineData("Staging")]
+    [InlineData("Production")]
+    public async Task OwnerInvitationIgnoresLegacyAllowlistAndRemainsAuthorizedAndDeduplicated(string environment)
     {
         var w = await Seed(); var probe = new SmtpProbe(); using var host = AuthenticationHost(probe, environment);
         using var owner = await Client(w.Owner, host);
@@ -140,27 +142,75 @@ public sealed partial class Compact24NotificationMvpTests
         created.EnsureSuccessStatusCode(); var staff = (await created.Content.ReadFromJsonAsync<BHome.Application.Operations.StaffView>())!;
         await using var scope = host.Services.CreateAsyncScope();
         var db = scope.ServiceProvider.GetRequiredService<Compact24DbContext>();
-        var before = await db.Database.SqlQuery<string>($"SELECT reset_token_hash AS \"Value\" FROM users WHERE id={staff.UserId}").SingleAsync();
         var path = $"/api/v1/staff/{staff.UserId}/invitation";
         using var anonymous = host.CreateClient();
         Assert.Equal(HttpStatusCode.Unauthorized, (await anonymous.PostAsync(path, null)).StatusCode);
-        var blocked = await owner.PostAsync(path, null);
-        if (environment == "Development")
-        {
-            blocked.EnsureSuccessStatusCode();
-            await SendEmail(host, await AuthenticationDelivery(host, staff.UserId));
-            Assert.Equal(email, Assert.Single(probe.Messages).Destination);
-            return;
-        }
-        Assert.Equal(HttpStatusCode.ServiceUnavailable, blocked.StatusCode);
-        Assert.Equal("email_recipient_not_allowed", System.Text.Json.JsonDocument.Parse(await blocked.Content.ReadAsStringAsync()).RootElement.GetProperty("code").GetString());
-        Assert.Equal(before, await db.Database.SqlQuery<string>($"SELECT reset_token_hash AS \"Value\" FROM users WHERE id={staff.UserId}").SingleAsync());
-        Assert.False(await db.Database.SqlQuery<bool>($"SELECT EXISTS(SELECT 1 FROM notifications WHERE event_data ? 'protectedAuthenticationEmail' AND event_data->>'recipient'={staff.UserId.ToString()}) AS \"Value\"").SingleAsync());
-        Assert.Empty(probe.Messages);
-        host.Services.GetRequiredService<IOptions<EmailOptions>>().Value.AllowedRecipients = [email];
+        using var tenant = await Client(w.Tenants[0], host);
+        Assert.Equal(HttpStatusCode.Forbidden, (await tenant.PostAsync(path, null)).StatusCode);
+        host.Services.GetRequiredService<IOptions<EmailOptions>>().Value.AllowedRecipients = ["stale-invalid-entry"];
+        var accepted = await owner.PostAsync(path, null);
+        accepted.EnsureSuccessStatusCode();
+        var grant = await db.Database.SqlQuery<string>($"SELECT reset_token_hash AS \"Value\" FROM users WHERE id={staff.UserId}").SingleAsync();
         (await owner.PostAsync(path, null)).EnsureSuccessStatusCode();
+        Assert.Equal(grant, await db.Database.SqlQuery<string>($"SELECT reset_token_hash AS \"Value\" FROM users WHERE id={staff.UserId}").SingleAsync());
         await SendEmail(host, await AuthenticationDelivery(host, staff.UserId));
         Assert.Equal(email, Assert.Single(probe.Messages).Destination);
+    }
+
+    [CompactPostgresTheory]
+    [InlineData("Development")]
+    [InlineData("Testing")]
+    [InlineData("Staging")]
+    [InlineData("Production")]
+    public async Task OwnerIssuesStaffPasswordOutsideLegacyListInEveryEnvironment(string environment)
+    {
+        var w = await Seed(); var probe = new SmtpProbe(); using var host = AuthenticationHost(probe, environment);
+        var settings = host.Services.GetRequiredService<IOptions<EmailOptions>>().Value;
+        settings.AllowedRecipients = ["stale-invalid-entry"];
+        settings.AllowAnyRecipientInDevelopment = true;
+        using var owner = await Client(w.Owner, host);
+        using var tenant = await Client(w.Tenants[0], host);
+        using var anonymous = host.CreateClient();
+        var path = $"/api/v1/staff/{w.Staff.Id}/issue-password";
+        Assert.Equal(HttpStatusCode.Unauthorized, (await anonymous.PostAsync(path, null)).StatusCode);
+        Assert.Equal(HttpStatusCode.Forbidden, (await tenant.PostAsync(path, null)).StatusCode);
+        var issued = await owner.PostAsync(path, null);
+        issued.EnsureSuccessStatusCode();
+        Assert.Equal("Queued", (await issued.Content.ReadFromJsonAsync<TenantInvitationResult>())!.DeliveryState);
+        Assert.Equal("ExistingRequestPreserved", (await (await owner.PostAsync(path, null)).Content.ReadFromJsonAsync<TenantInvitationResult>())!.DeliveryState);
+        await SendEmail(host, await AuthenticationDelivery(host, w.Staff.Id));
+        var mail = Assert.Single(probe.Messages);
+        Assert.Equal(w.Staff.Email, mail.Destination);
+        Assert.Equal("STAFF_PASSWORD_ISSUED", mail.EventType);
+        Assert.DoesNotContain(mail.Credentials!.Password, await issued.Content.ReadAsStringAsync());
+        Assert.Equal(HttpStatusCode.OK, (await anonymous.PostAsJsonAsync("/api/v1/auth/login", new { email = w.Staff.Email, password = mail.Credentials.Password })).StatusCode);
+    }
+
+    [CompactPostgresFact]
+    public async Task InvalidStaffEmailDoesNotChangePasswordOrQueueCredentials()
+    {
+        var w = await Seed(); var probe = new SmtpProbe(); using var host = AuthenticationHost(probe);
+        using var owner = await Client(w.Owner, host);
+        await using var scope = host.Services.CreateAsyncScope();
+        var db = scope.ServiceProvider.GetRequiredService<Compact24DbContext>();
+        var originalHash = await db.Users.Where(u => u.Id == w.Staff.Id).Select(u => u.PasswordHash).SingleAsync();
+        var originalEmail = await db.Users.AsNoTracking().Where(u => u.Id == w.Staff.Id).Select(u => u.Email).SingleAsync();
+        await db.Database.ExecuteSqlInterpolatedAsync($"UPDATE users SET email={"invalid-address"} WHERE id={w.Staff.Id}");
+        try
+        {
+            var response = await owner.PostAsync($"/api/v1/staff/{w.Staff.Id}/issue-password", null);
+            Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
+            Assert.Contains("email_recipient_invalid", await response.Content.ReadAsStringAsync());
+            Assert.Equal(originalHash, await db.Users.AsNoTracking().Where(u => u.Id == w.Staff.Id).Select(u => u.PasswordHash).SingleAsync());
+            Assert.False(await db.Database.SqlQuery<bool>($"SELECT EXISTS(SELECT 1 FROM notifications WHERE event_data ? 'protectedAuthenticationEmail' AND event_data->>'recipient'={w.Staff.Id.ToString()}) AS \"Value\"").SingleAsync());
+            Assert.Empty(probe.Messages);
+        }
+        finally
+        {
+            // This class shares a disposable PostgreSQL fixture across tests. Restore the
+            // deliberately malformed address so it cannot poison subsequent Mock SMS tests.
+            await db.Database.ExecuteSqlInterpolatedAsync($"UPDATE users SET email={originalEmail} WHERE id={w.Staff.Id}");
+        }
     }
 
     private WebApplicationFactory<Program> AuthenticationHost(SmtpProbe probe, string environment = "Testing") => EmailHost(probe, environment).WithWebHostBuilder(b => b.ConfigureAppConfiguration((_, c) =>

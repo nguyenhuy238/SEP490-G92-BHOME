@@ -18,9 +18,10 @@ public static class Compact24DevelopmentDatabase
 {
     public static async Task<DevelopmentDatabaseResult> PrepareAsync(string? environment, string connectionString,
         bool archiveLegacy = false, bool checkOnly = false, CancellationToken token = default,
-        bool allowPreviousPropertySchema = false)
+        bool allowPreviousPropertySchema = false, bool contractDemo = false)
     {
-        var settings = ValidateTarget(environment, connectionString);
+        var settings = ValidateTarget(environment, connectionString, contractDemo);
+        if (contractDemo && (archiveLegacy || allowPreviousPropertySchema)) throw new DevelopmentDatabaseException("contract_demo_requires_current_schema");
         if (archiveLegacy && checkOnly) throw new DevelopmentDatabaseException("incompatible_modes");
         try
         {
@@ -92,14 +93,15 @@ public static class Compact24DevelopmentDatabase
         catch (NpgsqlException) { throw new DevelopmentDatabaseException("postgres_unavailable_or_invalid_credentials"); }
     }
 
-    internal static NpgsqlConnectionStringBuilder ValidateTarget(string? environment, string connectionString)
+    internal static NpgsqlConnectionStringBuilder ValidateTarget(string? environment, string connectionString, bool contractDemo = false)
     {
         if (environment != "Development") throw new DevelopmentDatabaseException("development_environment_required");
         NpgsqlConnectionStringBuilder settings;
         try { settings = new(connectionString); }
         catch (ArgumentException) { throw new DevelopmentDatabaseException("invalid_connection_configuration"); }
         if (settings.Host is not ("localhost" or "127.0.0.1" or "::1") ||
-            settings.Database != "bhome" && !Regex.IsMatch(settings.Database ?? "", "^bhome_compact24_dev_[a-f0-9]{32}$"))
+            (contractDemo ? settings.Database != "bhome_contract_demo" :
+                settings.Database != "bhome" && !Regex.IsMatch(settings.Database ?? "", "^bhome_compact24_dev_[a-f0-9]{32}$")))
             throw new DevelopmentDatabaseException("dedicated_loopback_development_database_required");
         settings.Pooling = false;
         settings.IncludeErrorDetail = false;

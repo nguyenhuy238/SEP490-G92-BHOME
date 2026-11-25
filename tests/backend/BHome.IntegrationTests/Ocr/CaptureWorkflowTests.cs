@@ -561,6 +561,10 @@ public sealed class CaptureFixture : IAsyncLifetime
     internal CaptureFixture(WebApplicationFactory<Program> supplied, string storageUrl)
     { Factory = supplied; StorageUrl = storageUrl; externallyManaged = true; }
     private readonly string storagePassword = Convert.ToBase64String(RandomNumberGenerator.GetBytes(32));
+    // Child WebApplicationFactory hosts share this fixture's encrypted records.
+    // Generate keys once per fixture, not each time configuration is rebuilt.
+    private readonly string encryptionKey = Convert.ToBase64String(RandomNumberGenerator.GetBytes(32));
+    private readonly string hmacKey = Convert.ToBase64String(RandomNumberGenerator.GetBytes(32));
     private IContainer? minio;
     private ApiFactory? root;
     public WebApplicationFactory<Program> Factory { get; private set; } = null!;
@@ -581,8 +585,8 @@ public sealed class CaptureFixture : IAsyncLifetime
         {
             ["IdentityProtection:ActiveEncryptionVersion"] = "test",
             ["IdentityProtection:ActiveHmacVersion"] = "test",
-            ["IdentityProtection:EncryptionKeys:test"] = Convert.ToBase64String(RandomNumberGenerator.GetBytes(32)),
-            ["IdentityProtection:HmacKeys:test"] = Convert.ToBase64String(RandomNumberGenerator.GetBytes(32)),
+            ["IdentityProtection:EncryptionKeys:test"] = encryptionKey,
+            ["IdentityProtection:HmacKeys:test"] = hmacKey,
             ["ObjectStorage:Endpoint"] = endpoint,
             ["ObjectStorage:UseSsl"] = "false",
             ["ObjectStorage:Bucket"] = "capture-tests",

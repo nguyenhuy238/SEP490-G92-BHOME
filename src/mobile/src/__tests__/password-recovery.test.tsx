@@ -111,7 +111,9 @@ it('opens a native invitation and submits its token only after password setup co
     target: { value: 'Synthetic!Invited-725' },
   });
   fireEvent.click(screen.getByText('Thiết lập mật khẩu'));
-  await waitFor(() => expect(state.replace).toHaveBeenCalledWith('/'));
+  expect(await screen.findByText('Kích hoạt tài khoản thành công.')).toBeTruthy();
+  expect(state.replace).not.toHaveBeenCalled();
+  expect(screen.queryByText('Quay lại đăng nhập')).toBeNull();
   expect(JSON.parse(fetch.mock.calls[1][1].body)).toEqual({
     token: 'synthetic-invitation-link',
     newPassword: 'Synthetic!Invited-725',

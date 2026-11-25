@@ -269,7 +269,9 @@ function OwnerInternalSigning({ api, contract, onChanged }: OwnerSigningProps) {
           )}
         </>
       )}
-      {canConfirm && <ContractEvidence api={api} contractId={contract.id} pdf />}
+      {canConfirm && (
+        <ContractEvidence api={api} contractId={contract.id} contractKind="Holding" pdf />
+      )}
       {(canInvite || canConfirm) && (
         <Checkbox.Item
           label="Tôi đã đọc đúng PDF và đồng ý nội dung hợp đồng"

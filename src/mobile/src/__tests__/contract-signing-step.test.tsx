@@ -39,12 +39,26 @@ vi.mock('../components/WorkflowControls', () => ({
   Input: ({
     label,
     value,
+    placeholder,
     onChange,
+    error,
   }: {
     label: string;
     value: string;
+    placeholder?: string;
     onChange: (v: string) => void;
-  }) => <input aria-label={label} value={value} onChange={(e) => onChange(e.target.value)} />,
+    error?: string;
+  }) => (
+    <>
+      <input
+        aria-label={label}
+        value={value}
+        placeholder={placeholder}
+        onChange={(e) => onChange(e.target.value)}
+      />
+      {error && <span role="alert">{error}</span>}
+    </>
+  ),
 }));
 vi.mock('../components/WorkspaceKit', () => ({
   ui: {},
@@ -53,13 +67,15 @@ vi.mock('../components/WorkspaceKit', () => ({
   Action: ({
     children,
     disabled,
+    loading,
     onPress,
   }: {
     children: React.ReactNode;
     disabled?: boolean;
+    loading?: boolean;
     onPress: () => void;
   }) => (
-    <button disabled={disabled} onClick={onPress}>
+    <button disabled={disabled || loading} aria-busy={loading} onClick={onPress}>
       {children}
     </button>
   ),
@@ -182,7 +198,16 @@ it.each([
     const button = await screen.findByRole('button', { name: 'Gửi lại email' });
     expect(screen.queryByLabelText('Email người giữ chỗ')).toBeNull();
     const email = screen.getByLabelText('Email nhận lời mời mới');
-    if (correctEmail) fireEvent.change(email, { target: { value: 'corrected@example.invalid' } });
+    fireEvent.change(email, { target: { value: 'missing-domain@example' } });
+    expect(screen.getByRole('alert').textContent).toBe('Nhập email hợp lệ, tối đa 256 ký tự.');
+    expect(button).toHaveProperty('disabled', true);
+    fireEvent.click(button);
+    expect(request.mock.calls.some(([p]) => p.endsWith('/signing-invitations'))).toBe(false);
+    fireEvent.change(email, {
+      target: { value: correctEmail ? '  corrected@example.invalid  ' : '' },
+    });
+    expect(screen.queryByRole('alert')).toBeNull();
+    expect(button).toHaveProperty('disabled', false);
     expect(screen.getByText(/liên kết và mã OTP mới/)).toBeTruthy();
     fireEvent.click(button);
     fireEvent.click(button);
@@ -277,10 +302,11 @@ it.each([
     expect(screen.queryByRole('alert')).toBeNull();
   },
 );
-it.each(['sent', 'timeout', 'rejected', 'missing-pdf'] as const)(
-  'Holding email %s: distinguishes sending, delivery confirmation and actual failure',
+it.each(['sent', 'timeout', 'rejected', 'missing-pdf', 'unapproved-main-template'] as const)(
+  'Signing email %s: distinguishes sending, delivery confirmation and actual failure',
   async (outcome) => {
-    const c = { ...contract('Holding', true), representativeResidentId: tenant };
+    const main = outcome === 'unapproved-main-template';
+    const c = { ...contract(main ? 'Main' : 'Holding', true), representativeResidentId: tenant };
     let finish!: (value: unknown) => void;
     let fail!: (error: unknown) => void;
     let submitted = false;
@@ -310,9 +336,12 @@ it.each(['sent', 'timeout', 'rejected', 'missing-pdf'] as const)(
         onContinue={vi.fn()}
       />,
     );
-    fireEvent.change(await screen.findByLabelText('Email người giữ chỗ'), {
-      target: { value: 'synthetic@example.invalid' },
-    });
+    fireEvent.change(
+      await screen.findByLabelText(
+        main ? 'Email nhận lời mời · Người đại diện thuê' : 'Email người giữ chỗ',
+      ),
+      { target: { value: 'synthetic@example.invalid' } },
+    );
     expect(screen.queryByText('Bước 6 · Ký hợp đồng')).toBeNull();
     expect(screen.queryByText(/OTP và chữ ký vẽ/)).toBeNull();
     expect(screen.getByText('Làm mới trạng thái ký')).toBeTruthy();
@@ -322,7 +351,9 @@ it.each(['sent', 'timeout', 'rejected', 'missing-pdf'] as const)(
     await waitFor(() =>
       expect(request.mock.calls.some(([path]) => path.endsWith('/signing-invitations'))).toBe(true),
     );
-    expect(screen.getByText('Đang gửi email, vui lòng chờ…')).toBeTruthy();
+    const sending = screen.getByRole('button', { name: 'Đang gửi lời mời…' });
+    expect(sending.getAttribute('aria-busy')).toBe('true');
+    expect(sending).toHaveProperty('disabled', true);
     expect(screen.queryByRole('alert')).toBeNull();
     expect(screen.queryByText(/Chưa xác định/)).toBeNull();
     if (outcome === 'sent') {
@@ -336,7 +367,7 @@ it.each(['sent', 'timeout', 'rejected', 'missing-pdf'] as const)(
       await screen.findByText(/Đã gửi email · Chờ ký/);
       expect(screen.queryByRole('alert')).toBeNull();
       expect(screen.queryByText('must-not-display')).toBeNull();
-      expect(screen.queryByText('Đang gửi email, vui lòng chờ…')).toBeNull();
+      expect(screen.queryByText('Đang gửi lời mời…')).toBeNull();
     } else if (outcome === 'timeout') {
       fail({ status: 0 });
       await screen.findByText(/Chưa xác định được kết quả gửi/);
@@ -349,11 +380,14 @@ it.each(['sent', 'timeout', 'rejected', 'missing-pdf'] as const)(
       fail(
         outcome === 'missing-pdf'
           ? { status: 503, code: 'contract_template_not_configured' }
-          : { status: 400, code: 'signing_contacts_required' },
+          : main
+            ? { status: 503, code: 'main_draft_signing_template_not_approved' }
+            : { status: 400, code: 'signing_contacts_required' },
       );
       await screen.findByRole('alert');
       if (outcome === 'missing-pdf')
         expect(screen.getAllByText(/chưa có mẫu PDF/i).length).toBeGreaterThan(0);
+      if (main) expect(screen.getByRole('alert').textContent).toMatch(/chưa được phê duyệt/);
       expect(screen.queryByText(/Chưa xác định/)).toBeNull();
       expect(
         (screen.getByRole('button', { name: 'Gửi lời mời ký qua email' }) as HTMLButtonElement)
@@ -362,6 +396,43 @@ it.each(['sent', 'timeout', 'rejected', 'missing-pdf'] as const)(
     }
   },
 );
+it.each([false, true])(
+  'lets Staff send to the saved address without retyping it (Holding source: %s)',
+  async (usesHoldingEmail) => {
+    const c = { ...contract('Main', true), representativeResidentId: tenant };
+    const request = vi.fn<(path: string, init?: RequestInit) => Promise<unknown>>(async (path) => {
+      if (path.endsWith('/internal-signing'))
+        return { invitations: [], maskedEmail: 't***@example.invalid', usesHoldingEmail };
+      if (path.endsWith('/signing-invitations'))
+        return { id: 'invite', status: 'InvitationAcceptedByProvider', expiresAt: '2099-01-01' };
+      if (path === `/api/v1/contracts/${id}`) return c;
+      throw new Error(path);
+    });
+    render(
+      <ContractSigningStep
+        api={contractClient(request as ContractRequest)}
+        contract={c}
+        role="Staff"
+        actorId="staff"
+        onChanged={vi.fn()}
+      />,
+    );
+
+    await screen.findByText(
+      usesHoldingEmail ? /Sẽ dùng email từ hợp đồng giữ chỗ/ : /Sẽ gửi đến email đã lưu/,
+    );
+    expect(screen.queryByPlaceholderText('t***@example.invalid') !== null).toBe(usesHoldingEmail);
+    fireEvent.click(screen.getByRole('button', { name: 'Gửi lời mời ký qua email' }));
+    await waitFor(() =>
+      expect(request.mock.calls.some(([path]) => path.endsWith('/signing-invitations'))).toBe(true),
+    );
+    const submitted = request.mock.calls.find(([path]) =>
+      path.endsWith('/signing-invitations'),
+    )?.[1];
+    expect(JSON.parse(String(submitted?.body))).not.toHaveProperty('recipientEmail');
+  },
+);
+
 it('shows the Holding signing skeleton until server data arrives without displaying premature signing state', async () => {
   let completeLoad!: (value: ContractView) => void;
   const c = contract('Holding', true);

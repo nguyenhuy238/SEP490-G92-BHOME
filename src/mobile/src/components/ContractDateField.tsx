@@ -1,3 +1,4 @@
+import { businessToday } from '../../../../packages/client-core/src/contracts';
 import React, { useState } from 'react';
 import { StyleSheet, View } from 'react-native';
 import { Button, Dialog, IconButton, Portal, Text, TextInput } from 'react-native-paper';
@@ -19,9 +20,7 @@ export function ContractDateField({
   onCalendarChange?: (close: (() => void) | null) => void;
 }) {
   const [open, setOpen] = useState(false);
-  const [month, setMonth] = useState(
-    () => new Date(new Date().getFullYear(), new Date().getMonth(), 1),
-  );
+  const [month, setMonth] = useState(() => new Date(businessToday().slice(0, 7) + '-01T12:00:00'));
   function show() {
     try {
       const raw = inputDate(value)!;

@@ -1,3 +1,4 @@
+using BHome.Application.Common;
 using System.Text.Json;
 using BHome.Application.IdentityAccess;
 using BHome.Application.Jobs;
@@ -12,7 +13,15 @@ public sealed record MeterAssignmentInput(Guid StaffUserId, int ExpectedVersion)
 // Dedicated developer-only manual task request: the billing period selects the immutable
 // effective plan; ReadingDate is optional and defaults to its configured meter day.
 public sealed record BillingManualMeterTaskInput(Guid MeterId, ReadingPurpose Purpose, DateOnly BillingPeriod, DateOnly? ReadingDate = null);
-public sealed record BillingAutomationRuntime(bool DeveloperActionsEnabled, bool WorkerEnabled = false);
+public sealed record BillingAutomationRuntime(bool DeveloperActionsEnabled, bool WorkerEnabled = false, Guid? StagingDemoOwnerId = null, bool DeployedDemoEnabled = false)
+{
+    public bool ManualActionsEnabled { get; init; }
+    public bool CanRunManualActions => DeveloperActionsEnabled || ManualActionsEnabled;
+    // Explicit staging opt-in retains its own scope; Demo Clock alone permits
+    // individual manual workflow only, not run-now batches or notification publishing.
+    public bool AllowsManualActions(Guid? actorId, bool isOwner) => DeveloperActionsEnabled ||
+        (isOwner && actorId is not null && (ManualActionsEnabled || actorId == StagingDemoOwnerId || DeployedDemoEnabled && StagingDemoOwnerId is null));
+}
 public sealed record BillingPhasePreview(string Phase, DateOnly ScheduledDate, bool Eligible);
 public sealed record BillingAutomationPreview(bool DeveloperActionsEnabled, string TimeZone, DateOnly BusinessDate, IReadOnlyList<BillingPhasePreview> Phases, bool WorkerEnabled = false);
 public sealed record BillingQueueView(Guid Id, string Name, string State, int Attempts, DateTimeOffset AvailableAt, DateTimeOffset? LockedUntil, string? LastErrorCode);
@@ -34,6 +43,7 @@ public sealed class BillingAutomationJobHandler(string name, string phase, IBill
 public sealed class BillingAutomationOperations(IBillingAutomationEngine engine, IBillingAutomationSchedules schedules, ICurrentUser user, PermissionAccess permissions, BillingAutomationRuntime runtime, TimeProvider clock,
     CaptureService capture, ICaptureRepository captureRepository)
 {
+    private bool ManualActionsAllowed => runtime.AllowsManualActions(user.UserId, user.IsInRole(Roles.Owner));
     private async Task<Guid> Owner(Guid location, CancellationToken t)
     {
         if (user.UserId is not { } actor) throw new InvoiceException(401, "authentication_required");
@@ -48,24 +58,24 @@ public sealed class BillingAutomationOperations(IBillingAutomationEngine engine,
     public async Task<BillingAutomationPreview> PreviewAsync(Guid location, DateOnly period, CancellationToken t)
     {
         await Owner(location, t); BillingAutomationService.ValidatePeriod(period);
-        var p = await schedules.ForPeriodAsync(location, period, t); var today = BillingAutomationDates.BusinessDate(clock.GetUtcNow());
-        if (p is null) return new(runtime.DeveloperActionsEnabled, "Asia/Ho_Chi_Minh", today, [], runtime.WorkerEnabled);
+        var p = await schedules.ForPeriodAsync(location, period, t); var today = clock.BusinessToday();
+        if (p is null) return new(ManualActionsAllowed, "Asia/Ho_Chi_Minh", today, [], runtime.WorkerEnabled);
         var c = BillingAutomationService.Calendar(p);
         var phases = new[] { new BillingPhasePreview("Meter", InvoiceMath.CalendarDate(period, p.MeterDay, 0), false), new("Draft", InvoiceMath.CalendarDate(period, c.DraftDay, c.DraftMonthOffset), false), new("Final", InvoiceMath.CalendarDate(period, c.FinalDay, c.FinalMonthOffset), false) };
         // "Eligible" describes automatic scheduling, not developer-initiated run-now.
         // Do not advertise a runnable phase when billing workers are globally disabled.
-        return new(runtime.DeveloperActionsEnabled, p.TimeZone, today, phases.Select(x => x with { Eligible = runtime.WorkerEnabled && p.Enabled && today >= x.ScheduledDate && (x.Phase != "Final" || p.AuthorizeAutomaticFinalization) }).ToArray(), runtime.WorkerEnabled);
+        return new(ManualActionsAllowed, p.TimeZone, today, phases.Select(x => x with { Eligible = runtime.WorkerEnabled && p.Enabled && today >= x.ScheduledDate && (x.Phase != "Final" || p.AuthorizeAutomaticFinalization) }).ToArray(), runtime.WorkerEnabled);
     }
     public async Task<BillingAutomationExecution?> RunAsync(BillingRunInput x, CancellationToken t)
     {
-        await Owner(x.LocationId, t); if (!runtime.DeveloperActionsEnabled) throw new InvoiceException(403, "developer_actions_disabled"); BillingAutomationService.ValidatePeriod(x.BillingPeriod);
+        await Owner(x.LocationId, t); if (!runtime.CanRunManualActions) throw new InvoiceException(403, "developer_actions_disabled"); BillingAutomationService.ValidatePeriod(x.BillingPeriod);
         if (x.Phase is not ("Meter" or "Draft" or "Final")) throw new InvoiceException(400, "invalid_billing_job_phase");
         var plan = await schedules.ForPeriodAsync(x.LocationId, x.BillingPeriod, t) ?? throw new InvoiceException(409, "billing_automation_required");
         return await engine.ExecuteAsync(new(plan.Id, x.BillingPeriod), x.Phase, t);
     }
     public async Task<IdResult> CreateManualMeterTaskAsync(BillingManualMeterTaskInput x, CancellationToken t)
     {
-        if (!runtime.DeveloperActionsEnabled) throw new InvoiceException(403, "developer_actions_disabled");
+        if (!ManualActionsAllowed) throw new InvoiceException(403, "developer_actions_disabled");
         BillingAutomationService.ValidatePeriod(x.BillingPeriod);
         if (x.MeterId == Guid.Empty || x.Purpose is not (ReadingPurpose.Initial or ReadingPurpose.Periodic))
             throw new InvoiceException(400, "invalid_manual_meter_task");
@@ -73,10 +83,10 @@ public sealed class BillingAutomationOperations(IBillingAutomationEngine engine,
         await Owner(location, t);
         var plan = await schedules.ForPeriodAsync(location, x.BillingPeriod, t) ?? throw new InvoiceException(409, "billing_automation_required");
         // A disabled plan still supplies its immutable calendar for explicitly requested
-        // tests; it must never start a background scheduler. Gate on the real VN business
+        // tests; it must never start a background scheduler. Gate on the server VN business
         // date, not the date entered into the task by the caller.
         var assignmentDate = InvoiceMath.CalendarDate(x.BillingPeriod, plan.MeterDay, 0);
-        var today = BillingAutomationDates.BusinessDate(clock.GetUtcNow());
+        var today = clock.BusinessToday();
         if (today < assignmentDate) throw new InvoiceException(409, "meter_assignment_date_not_reached");
         var readingDate = x.ReadingDate ?? assignmentDate;
         if (readingDate > today) throw new InvoiceException(409, "meter_reading_date_not_reached");

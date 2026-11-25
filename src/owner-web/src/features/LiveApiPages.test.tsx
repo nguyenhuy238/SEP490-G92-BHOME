@@ -53,7 +53,7 @@ function mount(Page: React.ComponentType) {
 }
 it.each([
   [StaffPage, '/api/v1/staff?'],
-  [TasksPage, '/api/v1/operational-tasks?'],
+  [TasksPage, '/api/v1/operational-work?'],
   [IncidentsPage, '/api/v1/incidents?'],
   [MaintenancePage, '/api/v1/work-orders?'],
 ] as const)('loads the actual API branch of %s after merge', async (Page, path) => {

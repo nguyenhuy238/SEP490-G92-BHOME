@@ -20,7 +20,7 @@ internal sealed partial class CompactNotificationEvents(Compact24DbContext db, C
     {
         db.ChangeTracker.Clear(); await using var tx = await db.Database.BeginTransactionAsync(t);
         await sql.Execute("SELECT pg_advisory_xact_lock(hashtextextended('bhome-notification-publication-v2',0))", t);
-        var count = await Audits(t) + await AccountLockouts(t) + await Incidents(t) + await MeterReadings(t) + await Reminders(t) + await Unmatched(t) + await OperationalAlerts(t);
+        var count = await Audits(t) + await QueueHoldingConfirmationsAsync(t) + await AccountLockouts(t) + await Incidents(t) + await MeterReadings(t) + await Reminders(t) + await Unmatched(t) + await OperationalAlerts(t);
         await tx.CommitAsync(t); return count;
     }
     private async Task<List<(Guid Id, string Role)>> Roles(IEnumerable<Guid> ids, CancellationToken t)
@@ -46,7 +46,38 @@ internal sealed partial class CompactNotificationEvents(Compact24DbContext db, C
         await tx.CommitAsync(t); return count;
     }
 
-    private async Task<int> Audits(CancellationToken t, bool authenticationOnly = false)
+    internal Task<int> QueueHoldingConfirmationsAsync(CancellationToken t) => sql.Execute("""
+        INSERT INTO notifications(id,record_kind,event_key,notification_type,event_data,event_at,delivery_status,next_delivery_at)
+        SELECT gen_random_uuid(),'OUTBOX','holding-confirmed:'||replace(c.id::text,'-',''),'CHANNEL_DELIVERY',
+          jsonb_build_object('schemaVersion',1,'recordType','ChannelDelivery','notificationId',@empty,'recipient',c.owner_signer_id,
+            'role','Owner','channel','EMAIL','eventType','HOLDING_CONFIRMED','holdingContractId',c.id),@now,'Pending',@now
+        FROM contracts c
+        WHERE c.contract_type='HOLDING' AND c.activated_at IS NOT NULL AND c.status IN (@active,@converted)
+          AND NOT EXISTS(SELECT 1 FROM notifications n WHERE n.record_kind='OUTBOX' AND n.event_key='holding-confirmed:'||replace(c.id::text,'-',''))
+          AND NOT COALESCE((SELECT (h->'state'->>'isDevelopmentDemo')::boolean FROM jsonb_array_elements(c.history) WITH ORDINALITY j(h,position)
+              WHERE h->>'recordType'='Contract' ORDER BY position DESC LIMIT 1),false)
+        ON CONFLICT(record_kind,event_key) WHERE record_kind IN ('OUTBOX','AUDIT') DO NOTHING
+        """, t, ("empty", Guid.Empty), ("now", sql.Now), ("active", (int)ContractStatus.Active), ("converted", (int)ContractStatus.Converted));
+
+    internal async Task PublishMainActivationsAsync(CancellationToken t)
+    {
+        db.ChangeTracker.Clear();
+        await using var tx = await db.Database.BeginTransactionAsync(t);
+        await sql.Execute("SELECT pg_advisory_xact_lock(hashtextextended('bhome-notification-publication-v2',0))", t);
+        await Audits(t, mainActivationOnly: true);
+        await tx.CommitAsync(t);
+    }
+
+    internal async Task PublishOwnerSigningRequestsAsync(CancellationToken t)
+    {
+        db.ChangeTracker.Clear();
+        await using var tx = await db.Database.BeginTransactionAsync(t);
+        await sql.Execute("SELECT pg_advisory_xact_lock(hashtextextended('bhome-notification-publication-v2',0))", t);
+        await Audits(t, ownerSigningOnly: true);
+        await tx.CommitAsync(t);
+    }
+
+    private async Task<int> Audits(CancellationToken t, bool authenticationOnly = false, bool mainActivationOnly = false, bool ownerSigningOnly = false)
     {
         var source = new List<(Guid Id, string Event, Guid Target, DateTimeOffset At)>();
         await using (var cmd = await sql.Command("""
@@ -56,9 +87,11 @@ internal sealed partial class CompactNotificationEvents(Compact24DbContext db, C
               'ContractMoveOutRequested','ContractSigningInitiated','ContractSigningPrepared','ContractSigningRequested','InternalSigningInvitationApproved','ContractActivated','ContractRenewalPrepared','OperatingPolicyAmendmentCancelled','OperatingPolicyAmendmentApplied',
               'HoldingDraftCreated','HoldingSigningSubmitted','MainSigningSubmitted','HoldingActivated','Automatic:HoldingActivated','Automatic:ContractActivated')
             AND (NOT @authenticationOnly OR n.notification_type IN ('PasswordChange','PasswordReset','AccountActivated','AccountDeactivated','AccountInvitationAccepted','RoleChanged','StaffCreated'))
+            AND (NOT @mainActivationOnly OR n.notification_type IN ('ContractActivated','Automatic:ContractActivated'))
+            AND (NOT @ownerSigningOnly OR n.notification_type IN ('HoldingSigningSubmitted','MainSigningSubmitted'))
             AND NOT EXISTS(SELECT 1 FROM notifications p WHERE p.record_kind='OUTBOX' AND p.event_data->>'recordType'='NotificationPublication'
               AND p.event_data->'state'->>'eventKey'='extended-audit:'||n.id::text) ORDER BY n.event_at,n.id LIMIT 50
-            """, t, ("authenticationOnly", authenticationOnly)))
+            """, t, ("authenticationOnly", authenticationOnly), ("mainActivationOnly", mainActivationOnly), ("ownerSigningOnly", ownerSigningOnly)))
         { await using var reader = await cmd.ExecuteReaderAsync(t); while (await reader.ReadAsync(t)) if (!reader.IsDBNull(2)) source.Add((reader.GetGuid(0), reader.GetString(1), reader.GetGuid(2), reader.GetFieldValue<DateTimeOffset>(3))); }
         var count = 0;
         foreach (var e in source)
@@ -133,24 +166,6 @@ internal sealed partial class CompactNotificationEvents(Compact24DbContext db, C
                         "Giữ chỗ đã được kích hoạt",
                         $"Phòng {holding.Room.RoomNumber} tại {holding.Room.Location.Name} đã giữ chỗ thành công. Tiền giữ chỗ đã được xác minh.",
                         "Contract", holding.Id, t, channels: ["IN_APP"]);
-                    // This publisher sees only committed activation audits. All activation paths share this key.
-                    // Anonymous signers need no user account: delivery resolves the accepted invitation's email.
-                    var payload = System.Text.Json.JsonSerializer.Serialize(new
-                    {
-                        schemaVersion = 1,
-                        recordType = "ChannelDelivery",
-                        notificationId = Guid.Empty,
-                        recipient = holding.OwnerSignerId,
-                        role = "Owner",
-                        channel = "EMAIL",
-                        eventType = "HOLDING_CONFIRMED",
-                        holdingContractId = holding.Id
-                    }, CompactNotificationWriter.Json);
-                    count += await sql.Execute("""
-                        INSERT INTO notifications(id,record_kind,event_key,notification_type,event_data,event_at,delivery_status,next_delivery_at)
-                        VALUES(@id,'OUTBOX',@key,'CHANNEL_DELIVERY',@data::jsonb,@now,'Pending',@now)
-                        ON CONFLICT(record_kind,event_key) WHERE record_kind IN ('OUTBOX','AUDIT') DO NOTHING
-                        """, t, ("id", Guid.NewGuid()), ("key", $"holding-confirmed:{holding.Id:N}"), ("data", payload), ("now", sql.Now));
                 }
             }
             else if (e.Event == "ContractSigningRequested")

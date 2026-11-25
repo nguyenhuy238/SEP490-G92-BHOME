@@ -17,7 +17,11 @@ namespace BHome.IntegrationTests.Compact24;
 // Always a disposable PostgreSQL 16 container; never reads a developer database connection.
 public sealed class PropertyContractDockerFixture : IAsyncLifetime
 {
-    private readonly PostgreSqlContainer database = new PostgreSqlBuilder("postgres:16-alpine").Build();
+    // The Development quick-create feature is intentionally restricted to
+    // loopback databases named bhome_*. This Docker-only database exercises
+    // that guard without weakening it or touching a real environment.
+    private readonly PostgreSqlContainer database = new PostgreSqlBuilder("postgres:16-alpine")
+        .WithDatabase("bhome_compact24_test").Build();
     private ApiFactory api = null!;
     private WebApplicationFactory<Program> host = null!;
     internal ContractFixture Contracts { get; private set; } = null!;
@@ -32,6 +36,11 @@ public sealed class PropertyContractDockerFixture : IAsyncLifetime
         using var reader = new StreamReader(schema);
         await using var command = new NpgsqlCommand(await reader.ReadToEndAsync(), connection);
         await command.ExecuteNonQueryAsync();
+        await using var paymentCodeUpgrade = typeof(Compact24DbContext).Assembly
+            .GetManifestResourceStream("BHome.Compact24.SettlementSePayCodes.sql")!;
+        using var paymentCodeReader = new StreamReader(paymentCodeUpgrade);
+        await using var paymentCodeCommand = new NpgsqlCommand(await paymentCodeReader.ReadToEndAsync(), connection);
+        await paymentCodeCommand.ExecuteNonQueryAsync();
         var encryptionKey = Convert.ToBase64String(RandomNumberGenerator.GetBytes(32));
         var hmacKey = Convert.ToBase64String(RandomNumberGenerator.GetBytes(32));
         var storage = new Compact24WorkflowFixture.TestObjectStorage();
@@ -75,8 +84,19 @@ public sealed class PropertyContractDockerTests(PropertyContractDockerFixture fi
     [Fact]
     public Task ReusedMeterMoveInRequiresCurrentContractBaseline() =>
         new ContractLifecycleApiTests(fixture.Contracts).ReusedMetersRequireFreshContractInitialReadingsBeforeMoveInHandover();
+    [Fact]
+    public Task ManualMoveInRepairsMissingElectricityWaterBaselines() =>
+        new ContractLifecycleApiTests(fixture.Contracts).StartedManualMoveInCanRepairMissingMeterBaselinesWithoutCreatingAnotherStaffJob();
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public Task ManualMoveInStartPreparesExistingElectricityWaterMeters(bool existingBaselines) =>
+        new ContractLifecycleApiTests(fixture.Contracts).StartingManualMoveInCreatesBaselineCheckpointsForExistingPhysicalMeters(existingBaselines);
+    [Fact]
+    public Task QuickCreateHandoverWithoutSeparateMeterJobs() =>
+        new ContractLifecycleApiTests(fixture.Contracts).QuickCreateUsesExistingMetersAndUnifiedMoveIn();
     [Fact] public Task MixedStaffContractList() => new ContractLifecycleApiTests(fixture.Contracts).StaffListIncludesHoldingAndMainWithTypeSpecificFieldsAndPreservesLocationScope();
-    [Fact] public Task HoldingLocationConfiguration() => new ContractLifecycleApiTests(fixture.Contracts).HoldingSettingsAreLocationScopedVersionedAndDoNotRewriteCreatedContracts();
+    [Fact] public Task HoldingGlobalConfiguration() => new ContractLifecycleApiTests(fixture.Contracts).HoldingSettingsAreOwnerGlobalVersionedAndDoNotRewriteCreatedContracts();
     [Fact] public Task AssetConfigurationHistory() => new PropertyApiTests(fixture.Properties).FullConfigurationUpdatesRequireVersionsAndRetainActorAndSnapshots();
     [Theory]
     [InlineData(false)]
@@ -100,4 +120,15 @@ public sealed class PropertyContractDockerTests(PropertyContractDockerFixture fi
     [Fact] public Task AuditRollback() => new PropertyApiTests(fixture.Properties).DuplicateRoomAndPolicyRacesHaveOneWinnerAndNoOrphanAudit();
     [Fact] public Task InvoiceSnapshot() => new Billing.InvoiceApiTests(fixture.Capture).SharedRoomDraftIsPersistedIdempotentScopedAndExplicitlyMissingReadings();
     [Fact] public Task RoomInsights() => new PropertyApiTests(fixture.Properties).RoomInsightsAreReadOnlyScopedAndUseCompact24AuditDates();
+    [Theory]
+    [InlineData(3500000, "Payable", 500000)]
+    [InlineData(2800000, "RefundEligible", 200000)]
+    [InlineData(3000000, "Settled", 0)]
+    public Task MoveOutProposalNetDepositSePay(int proposedFee, string expectedStatus, int expectedAmount) =>
+        new ContractLifecycleApiTests(fixture.Contracts).TenantAcceptedVerifiedMoveOutQuotePostsOnlyNetMoneyAndSePaySettlesOnce(
+            proposedFee, expectedStatus, expectedAmount);
+    [Fact]
+    public Task MoveOutAlreadyAcceptedReconcilesWithoutSecondConsent() =>
+        new ContractLifecycleApiTests(fixture.Contracts).TenantAcceptedVerifiedMoveOutQuotePostsOnlyNetMoneyAndSePaySettlesOnce(
+            3500000, "Payable", 500000, recoverPreviousConsent: true);
 }

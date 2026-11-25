@@ -36,6 +36,9 @@ vi.mock('react-native', () => ({
   Platform: { OS: 'ios' },
   StyleSheet: { create: (s: unknown) => s },
   View: ({ children }: { children: React.ReactNode }) => <div>{children}</div>,
+  Image: ({ accessibilityLabel }: { accessibilityLabel?: string }) => (
+    <img alt={accessibilityLabel ?? ''} />
+  ),
   KeyboardAvoidingView: ({ children }: { children: React.ReactNode }) => <div>{children}</div>,
 }));
 vi.mock('react-native-paper', () => ({

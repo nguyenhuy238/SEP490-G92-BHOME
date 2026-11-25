@@ -8,6 +8,9 @@ import { Directory, File, Paths } from 'expo-file-system';
 import * as Sharing from 'expo-sharing';
 import { ui } from '../../components/WorkspaceKit';
 import { randomUUID } from '../../lib/randomUUID';
+import { acquirePrivatePhotoThumbnail } from '../../lib/privatePhotoThumbnails';
+import { contractPdfName } from '../../../../../packages/client-core/src/contractPdfName';
+import { deliverWebDocument, openPdfWindow } from './webContractDocument';
 import {
   contractError,
   type ContractClient,
@@ -28,6 +31,7 @@ export function ContractEvidence({
   handover = false,
   readingId,
   pdf = false,
+  contractKind,
   number,
   label,
   handoverDocumentId,
@@ -46,6 +50,7 @@ export function ContractEvidence({
   handover?: boolean;
   readingId?: string;
   pdf?: boolean;
+  contractKind?: string;
   number?: number;
   label?: string;
   handoverDocumentId?: string;
@@ -78,57 +83,42 @@ export function ContractEvidence({
   );
   useEffect(() => {
     if (!thumbnail || localThumbnailUri || !(evidenceId || readingId)) return;
-    const controller = new AbortController();
-    let objectUrl: string | null = null;
-    let cachedPhoto: File | null = null;
-    void (async () => {
-      try {
-        const path = `/api/v1/contracts/${encodeURIComponent(contractId)}/handover/draft/evidence/${encodeURIComponent(evidenceId ?? '')}`;
-        if (Platform.OS === 'web') {
-          const blob = readingId
+    let active = true;
+    const path = `/api/v1/contracts/${encodeURIComponent(contractId)}/handover/draft/evidence/${encodeURIComponent(evidenceId ?? '')}`;
+    const source = readingId
+      ? finalMeterReading
+        ? 'final-meter'
+        : 'handover-meter'
+      : draftHandoverEvidence
+        ? 'draft-handover'
+        : 'contract-evidence';
+    const photo = acquirePrivatePhotoThumbnail(
+      api,
+      `${source}:${contractId}:${readingId ?? evidenceId}`,
+      (signal) => {
+        if (Platform.OS === 'web')
+          return readingId
             ? finalMeterReading
-              ? await api.moveOutMeterEvidence(contractId, readingId, controller.signal)
-              : await api.handoverMeterEvidence(contractId, readingId, controller.signal)
+              ? api.moveOutMeterEvidence(contractId, readingId, signal)
+              : api.handoverMeterEvidence(contractId, readingId, signal)
             : draftHandoverEvidence
-              ? await api.transport<Blob>(path, { signal: controller.signal }, 'blob')
-              : await api.evidence(contractId, evidenceId!, controller.signal);
-          if (controller.signal.aborted) return;
-          if (blob.size > 5 * 1024 * 1024) throw new UserFeedbackError('Ảnh vượt quá 5 MB.');
-          const signature = new Uint8Array(await blob.slice(0, 8).arrayBuffer());
-          const png = [137, 80, 78, 71, 13, 10, 26, 10].every((byte, i) => signature[i] === byte);
-          const jpeg = signature[0] === 255 && signature[1] === 216 && signature[2] === 255;
-          if (!png && !jpeg) throw new UserFeedbackError('Ảnh không phải PNG/JPEG hợp lệ.');
-          if (controller.signal.aborted) return;
-          objectUrl = URL.createObjectURL(
-            new Blob([blob], { type: png ? 'image/png' : 'image/jpeg' }),
-          );
-          setThumbnailState({ key: thumbnailKey, uri: objectUrl, error: '' });
-        } else {
-          const bytes = readingId
-            ? finalMeterReading
-              ? await api.moveOutMeterEvidenceBytes(contractId, readingId, controller.signal)
-              : await api.handoverMeterEvidenceBytes(contractId, readingId, controller.signal)
-            : draftHandoverEvidence
-              ? await api.transport<Uint8Array>(path, { signal: controller.signal }, 'bytes')
-              : await api.evidenceBytes(contractId, evidenceId!, controller.signal);
-          if (controller.signal.aborted) return;
-          if (bytes.length > 5 * 1024 * 1024) throw new UserFeedbackError('Ảnh vượt quá 5 MB.');
-          const png = [137, 80, 78, 71, 13, 10, 26, 10].every((byte, i) => bytes[i] === byte);
-          const jpeg = bytes[0] === 255 && bytes[1] === 216 && bytes[2] === 255;
-          if (!png && !jpeg) throw new UserFeedbackError('Ảnh không phải PNG/JPEG hợp lệ.');
-          const directory = new Directory(Paths.cache, 'bhome-handover-photo-thumbnails');
-          directory.create({ idempotent: true, intermediates: true });
-          cachedPhoto = new File(directory, `${randomUUID()}.${png ? 'png' : 'jpg'}`);
-          cachedPhoto.create();
-          await cachedPhoto.write(bytes);
-          if (controller.signal.aborted) {
-            if (cachedPhoto.exists) cachedPhoto.delete();
-            return;
-          }
-          setThumbnailState({ key: thumbnailKey, uri: cachedPhoto.uri, error: '' });
-        }
-      } catch (cause) {
-        if (!controller.signal.aborted)
+              ? api.transport<Blob>(path, { signal }, 'blob')
+              : api.evidence(contractId, evidenceId!, signal);
+        return readingId
+          ? finalMeterReading
+            ? api.moveOutMeterEvidenceBytes(contractId, readingId, signal)
+            : api.handoverMeterEvidenceBytes(contractId, readingId, signal)
+          : draftHandoverEvidence
+            ? api.transport<Uint8Array<ArrayBuffer>>(path, { signal }, 'bytes')
+            : api.evidenceBytes(contractId, evidenceId!, signal);
+      },
+    );
+    void photo.uri.then(
+      (uri) => {
+        if (active) setThumbnailState({ key: thumbnailKey, uri, error: '' });
+      },
+      (cause) => {
+        if (active)
           setThumbnailState({
             key: thumbnailKey,
             uri: '',
@@ -139,12 +129,11 @@ export function ContractEvidence({
                   ? cause.message
                   : contractError(cause),
           });
-      }
-    })();
+      },
+    );
     return () => {
-      controller.abort();
-      if (objectUrl) URL.revokeObjectURL(objectUrl);
-      if (cachedPhoto?.exists) cachedPhoto.delete();
+      active = false;
+      photo.release();
     };
   }, [
     api,
@@ -198,16 +187,18 @@ export function ContractEvidence({
       if (!controller.signal.aborted) setBusy(false);
     }
   }
-  async function download() {
+  async function download(view = false) {
     if (lock.current) return;
     lock.current = true;
     setBusy(true);
     setError('');
     let temporary: File | null = null;
+    let tab: Window | null = null;
     const controller = new AbortController();
     abort.current = controller;
     try {
       if (Platform.OS === 'web') {
+        if (view && pdf) tab = openPdfWindow();
         const blob = draftHandoverEvidence
           ? await api.transport<Blob>(
               `/api/v1/contracts/${encodeURIComponent(contractId)}/handover/draft/evidence/${encodeURIComponent(evidenceId!)}`,
@@ -240,7 +231,23 @@ export function ContractEvidence({
                       : pdf
                         ? await api.document(contractId, controller.signal)
                         : await api.evidence(contractId, evidenceId!, controller.signal);
-        if (controller.signal.aborted) return;
+        if (controller.signal.aborted) {
+          tab?.close();
+          return;
+        }
+        if (pdf && !draftHandoverPdf && !handoverDocumentId) {
+          const bytes = new Uint8Array(await blob.arrayBuffer());
+          try {
+            if (controller.signal.aborted) {
+              tab?.close();
+              return;
+            }
+            deliverWebDocument(bytes, true, contractPdfName(contractKind, contractId), tab);
+          } finally {
+            bytes.fill(0);
+          }
+          return;
+        }
         const url = URL.createObjectURL(blob),
           link = document.createElement('a');
         link.href = url;
@@ -248,7 +255,7 @@ export function ContractEvidence({
           draftHandoverPdf || handoverDocumentId
             ? 'bien-ban-ban-giao.pdf'
             : pdf
-              ? 'hop-dong.pdf'
+              ? contractPdfName(contractKind, contractId)
               : 'hien-trang.jpg';
         link.click();
         setTimeout(() => URL.revokeObjectURL(url), 1000);
@@ -295,7 +302,9 @@ export function ContractEvidence({
         // Unpredictable app-cache name; never a public URL or a file from the photo library.
         temporary = new File(
           directory,
-          `${randomUUID()}.${pdf || handoverDocumentId || draftHandoverPdf ? 'pdf' : bytes[0] === 137 ? 'png' : 'jpg'}`,
+          pdf && !handoverDocumentId && !draftHandoverPdf
+            ? contractPdfName(contractKind, `${contractId.slice(0, 8)}-${randomUUID().slice(0, 8)}`)
+            : `${randomUUID()}.${pdf || handoverDocumentId || draftHandoverPdf ? 'pdf' : bytes[0] === 137 ? 'png' : 'jpg'}`,
         );
         temporary.create();
         temporary.write(bytes);
@@ -315,6 +324,7 @@ export function ContractEvidence({
         });
       }
     } catch (e) {
+      tab?.close();
       if (!controller.signal.aborted)
         setError(finalMeterReading ? finalReadingAccessError(e) : contractError(e));
     } finally {
@@ -372,6 +382,15 @@ export function ContractEvidence({
               )}
               <Button disabled={busy} onPress={() => void download()}>
                 Tải ảnh
+              </Button>
+            </>
+          ) : pdf && Platform.OS === 'web' && !draftHandoverPdf && !handoverDocumentId ? (
+            <>
+              <Button disabled={busy} loading={busy} onPress={() => void download(true)}>
+                {label ?? 'Xem PDF hợp đồng'}
+              </Button>
+              <Button disabled={busy} onPress={() => void download()}>
+                Tải PDF
               </Button>
             </>
           ) : (

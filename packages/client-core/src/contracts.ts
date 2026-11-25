@@ -7,6 +7,7 @@ import {
   catalogError,
 } from './api';
 import { groupVietnameseIntegerDigits } from './localization';
+import { demoBusinessDate, demoBusinessNow } from './demoClock';
 import type { RoomConfiguration } from './propertySetup';
 import type { Page } from './invoices';
 import type { HoldingPreparation } from './holdingSettings';
@@ -22,7 +23,12 @@ export const contractStates = [
   'Converted',
   'Applied',
 ] as const;
+export interface HoldingCustomerView {
+  fullName: string;
+  maskedCitizenNumber: string;
+}
 export interface ContractSummary {
+  holdingCustomer?: HoldingCustomerView | null;
   onboardingDraft?: boolean;
   id: string;
   roomId: string;
@@ -55,6 +61,7 @@ export interface Signature {
   certificateIssuer?: string | null;
 }
 export interface ContractView {
+  holdingCustomer?: HoldingCustomerView | null;
   onboardingDraft?: boolean;
   id: string;
   roomId: string;
@@ -595,6 +602,78 @@ export interface SettlementTransferInstructions {
   qrImageDataUri: string | null;
   isDevelopmentDemo: boolean;
 }
+
+export interface MoveOutProposalCharge {
+  kind: 'Asset' | 'RoomCheck' | 'Access';
+  assetId?: string | null;
+  roomCheckCode?: string | null;
+  accessType?: string | null;
+  label?: string | null;
+  amount: string;
+  reason: string;
+}
+export interface MoveOutProposalDisputedItem {
+  kind: MoveOutProposalCharge['kind'];
+  assetId: string | null;
+  roomCheckCode: string | null;
+  accessType: string | null;
+  reason: string;
+}
+export interface MoveOutProposalFeedbackInput {
+  proposalId: string;
+  expectedReference: string;
+  confirmed: boolean;
+  reason: string;
+  disputedItems?: MoveOutProposalDisputedItem[];
+}
+export interface MoveOutProposalReconcileInput {
+  proposalId: string;
+}
+export interface MoveOutProposalSettlement {
+  status: 'Payable' | 'RefundEligible' | 'Settled' | 'PendingOwnerReview';
+  payableAmount: string;
+  refundAmount: string;
+  payableReceivableId: string | null;
+  createdReceivableIds: string[];
+  depositOffsetIds: string[];
+  reason?: string | null;
+}
+export interface MoveOutProposalFeedback {
+  proposalId: string;
+  confirmed: boolean;
+  reason: string;
+  disputedItems?: MoveOutProposalDisputedItem[] | null;
+  settlement?: MoveOutProposalSettlement | null;
+}
+export interface MoveOutProposalPreview {
+  contractId: string;
+  reference: string;
+  verifiedDeposit: string;
+  availableDeposit: string;
+  existingOutstanding: string;
+  status: 'None' | 'PendingTenant' | 'Accepted' | 'Disputed' | 'Outdated';
+  latestProposal: {
+    id: string;
+    items: MoveOutProposalCharge[];
+    verifiedDeposit: string;
+    availableDeposit: string;
+    existingOutstanding: string;
+    totalCharges: string;
+    signedBalance: string;
+    note: string | null;
+    tenantFeedback?: MoveOutProposalFeedback | null;
+  } | null;
+  items: {
+    kind: string;
+    assetId?: string | null;
+    roomCheckCode?: string | null;
+    accessType?: string | null;
+    label: string;
+    baseline?: string | null;
+    observed?: string | null;
+    evidenceIds?: string[];
+  }[];
+}
 export interface BillableMeterPoint {
   readingId: string;
   evidenceId: string;
@@ -745,6 +824,22 @@ export function contractClient(request: ContractRequest) {
       request<SettlementSummary>(`${root}/${id}/move-out/settlement-summary`, { signal }),
     settlementReceivables: (id: string, signal?: AbortSignal) =>
       request<SettlementReceivables>(`${root}/${id}/move-out/receivables`, { signal }),
+    moveOutProposal: (id: string, signal?: AbortSignal) =>
+      request<MoveOutProposalPreview>(`${root}/${id}/move-out/receivables/proposal`, { signal }),
+    respondMoveOutProposal: (id: string, body: MoveOutProposalFeedbackInput, key: string) =>
+      request<MoveOutProposalFeedback>(
+        `${root}/${id}/move-out/receivables/proposal/tenant-feedback`,
+        {
+          method: 'POST',
+          headers: { 'Idempotency-Key': key },
+          body: JSON.stringify(body),
+        },
+      ),
+    reconcileMoveOutProposal: (id: string, body: MoveOutProposalReconcileInput) =>
+      request<MoveOutProposalFeedback>(`${root}/${id}/move-out/receivables/proposal/reconcile`, {
+        method: 'POST',
+        body: JSON.stringify(body),
+      }),
     settlementChargeReview: (id: string, signal?: AbortSignal) =>
       request<SettlementChargeReviewPreview>(`${root}/${id}/move-out/receivables/charge-review`, {
         signal,
@@ -1158,7 +1253,7 @@ export const labels: Record<string, string> = {
   Dispatching: 'Đang gửi yêu cầu ký',
   Pending: 'Chờ nhà cung cấp xác nhận',
   Signed: 'Đã xác minh chữ ký',
-  Simulated: 'SIMULATED SIGNING — không có giá trị pháp lý',
+  Simulated: 'Ký mô phỏng',
   Confirmed: 'Đã xác nhận bàn giao',
   Disputed: 'Cần sửa nội dung bàn giao',
   Recorded: 'Ghi nhận phiên bản bàn giao',
@@ -1410,6 +1505,15 @@ export const labels: Record<string, string> = {
   room_contract_price_conflict:
     'Các hợp đồng cùng phòng có biểu phí không đồng nhất trong kỳ thuê. Cần đối chiếu trước khi tiếp tục.',
 };
+Object.assign(labels, {
+  room_summary_evidence_required: 'Chụp ít nhất một ảnh hiện trạng chung.',
+  room_check_evidence_required: 'Hạng mục Đạt hoặc Có vấn đề cần ít nhất một ảnh.',
+  key_evidence_required: 'Chụp ít nhất một ảnh chìa khóa.',
+  asset_evidence_required: 'Chụp ít nhất một ảnh cho mỗi tài sản đã kiểm tra.',
+  room_summary_evidence: 'Thiếu ảnh hiện trạng chung',
+  room_check_evidence: 'Thiếu ảnh hạng mục hiện trạng',
+  key_evidence: 'Thiếu ảnh chìa khóa',
+});
 export const text = (value: string) =>
   labels[value] ?? 'Trạng thái hoặc điều kiện cần kiểm tra với Owner';
 export function contractError(error: unknown): string {
@@ -1476,6 +1580,8 @@ export function dateOnly(value: string): string {
 }
 export const displayContractDate = (value: string) => value.split('-').reverse().join('/');
 export function businessToday() {
+  const simulated = demoBusinessDate();
+  if (simulated) return simulated;
   const parts = new Intl.DateTimeFormat('en', {
     timeZone: 'Asia/Ho_Chi_Minh',
     year: 'numeric',
@@ -1493,7 +1599,7 @@ export function localSchedule(value: string) {
   if (Number(value.slice(11, 13)) > 23 || Number(value.slice(14)) > 59)
     throw new UserFeedbackError('Giờ không hợp lệ.');
   const instant = new Date(value + ':00+07:00');
-  if (instant.getTime() < Date.now())
+  if (instant.getTime() < demoBusinessNow())
     throw new UserFeedbackError('Lịch kiểm tra không được trong quá khứ.');
   return instant.toISOString();
 }
@@ -1576,12 +1682,12 @@ export function contractActions(
     result.push(
       action(
         'signing',
-        c.isDevelopmentDemo ? 'Mô phỏng ký (Development)' : 'Yêu cầu ký MySign',
+        c.isDevelopmentDemo ? 'Mô phỏng ký' : 'Yêu cầu ký MySign',
         c.isDevelopmentDemo
           ? []
           : [{ name: 'certificateId', label: 'Chứng thư của bạn', type: 'certificate' }],
         c.isDevelopmentDemo
-          ? 'SIMULATED SIGNING: chỉ thử nghiệm, không phải chữ ký điện tử có giá trị pháp lý.'
+          ? ''
           : 'Hãy đọc kỹ điều khoản. Xác nhận ký trên ứng dụng của nhà cung cấp. Gửi yêu cầu chưa đồng nghĩa đã ký hoặc kích hoạt.',
       ),
     );
@@ -1635,7 +1741,7 @@ export function contractActions(
       ),
     );
   if (c.kind === 'Holding') {
-    const expired = !!c.holdingExpiresAt && Date.parse(c.holdingExpiresAt) <= Date.now();
+    const expired = !!c.holdingExpiresAt && Date.parse(c.holdingExpiresAt) <= demoBusinessNow();
     if (owner && c.status === 'Draft' && !c.approvedAt && !expired)
       result.push(
         action(

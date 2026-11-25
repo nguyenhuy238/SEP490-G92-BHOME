@@ -21,8 +21,12 @@ interface WorkspaceContext {
   staffLocationsError: string;
   selectStaffLocation: (id: string) => void;
   reloadStaffLocations: () => void;
-  registerExitGuard: (guard: () => boolean, onLeave: () => void) => () => void;
-  requestNavigation: (action: () => void) => void;
+  registerExitGuard: (
+    guard: () => boolean,
+    onLeave: () => void,
+    exitToHome?: boolean,
+  ) => () => void;
+  requestNavigation: (action: () => void, keepDestination?: boolean) => void;
   scrollRevision: number;
   resetScroll: () => void;
   requests: { id: string; kind: string; role: MobileRole; summary: string }[];
@@ -31,7 +35,7 @@ interface WorkspaceContext {
   preview: boolean;
   startPreview: (role: MobileRole) => void;
   leavePreview: () => void;
-  go: (screen: WorkspaceScreen, params?: Record<string, string>) => void;
+  go: (screen: WorkspaceScreen, params?: Record<string, string>, keepDestination?: boolean) => void;
   unavailable: (action?: string) => void;
 }
 const Context = createContext<WorkspaceContext | null>(null);
@@ -50,20 +54,39 @@ function WorkspaceSessionProvider({ children }: { children: React.ReactNode }) {
   const segments = useSegments();
   const [previewRole, setPreviewRole] = useState<MobileRole | null>(null);
   const [message, setMessage] = useState('');
-  const [confirmExit, setConfirmExit] = useState(false);
-  const exitGuard = useRef<{ shouldBlock: () => boolean; onLeave: () => void } | null>(null);
-  const pendingNavigation = useRef<(() => void) | null>(null);
-  const registerExitGuard = useCallback((guard: () => boolean, onLeave: () => void) => {
-    const entry = { shouldBlock: guard, onLeave };
-    exitGuard.current = entry;
-    return () => {
-      if (exitGuard.current === entry) exitGuard.current = null;
-    };
+  const [confirmExit, setConfirmExit] = useState<{ exitToHome: boolean } | null>(null);
+  const exitGuard = useRef<{
+    shouldBlock: () => boolean;
+    onLeave: () => void;
+    exitToHome: boolean;
+  } | null>(null);
+  const pendingNavigation = useRef<{
+    action: () => void;
+    guard: NonNullable<typeof exitGuard.current>;
+    exitToHome: boolean;
+  } | null>(null);
+  const cancelExit = useCallback(() => {
+    pendingNavigation.current = null;
+    setConfirmExit(null);
   }, []);
-  const requestNavigation = useCallback((action: () => void) => {
-    if (exitGuard.current?.shouldBlock()) {
-      pendingNavigation.current = action;
-      setConfirmExit(true);
+  const registerExitGuard = useCallback(
+    (guard: () => boolean, onLeave: () => void, exitToHome = false) => {
+      const entry = { shouldBlock: guard, onLeave, exitToHome };
+      exitGuard.current = entry;
+      return () => {
+        if (exitGuard.current === entry) exitGuard.current = null;
+        if (pendingNavigation.current?.guard === entry) cancelExit();
+      };
+    },
+    [cancelExit],
+  );
+  const requestNavigation = useCallback((action: () => void, keepDestination = false) => {
+    const guard = exitGuard.current;
+    if (guard?.shouldBlock()) {
+      if (pendingNavigation.current) return;
+      const exitToHome = guard.exitToHome && !keepDestination;
+      pendingNavigation.current = { action, guard, exitToHome };
+      setConfirmExit({ exitToHome });
     } else action();
   }, []);
   const [scrollRevision, setScrollRevision] = useState(0);
@@ -71,7 +94,7 @@ function WorkspaceSessionProvider({ children }: { children: React.ReactNode }) {
   const requestId = React.useRef(0);
   const preview = __DEV__ && !session && previewRole !== null;
   const role = session ? sessionRole(session.roles) : previewRole;
-  const go = (screen: WorkspaceScreen, params?: Record<string, string>) =>
+  const go = (screen: WorkspaceScreen, params?: Record<string, string>, keepDestination = false) =>
     requestNavigation(() => {
       if (role && isWorkspaceTabDestination(role, screen, params)) {
         const href = workspaceTabHref(screen);
@@ -80,7 +103,7 @@ function WorkspaceSessionProvider({ children }: { children: React.ReactNode }) {
         if (segments.includes('(tabs)')) router.navigate(href);
         else router.dismissTo(href);
       } else router.push({ pathname: '/workspace/[screen]', params: { ...params, screen } });
-    });
+    }, keepDestination);
   return (
     <Context.Provider
       value={{
@@ -127,34 +150,26 @@ function WorkspaceSessionProvider({ children }: { children: React.ReactNode }) {
     >
       {children}
       <Portal>
-        <Dialog
-          visible={confirmExit}
-          onDismiss={() => {
-            setConfirmExit(false);
-            pendingNavigation.current = null;
-          }}
-        >
-          <Dialog.Title>Rời quy trình tiếp nhận?</Dialog.Title>
+        <Dialog visible={!!confirmExit} onDismiss={cancelExit}>
+          <Dialog.Title>
+            {confirmExit?.exitToHome ? 'Rời bước nhập CCCD?' : 'Rời quy trình tiếp nhận?'}
+          </Dialog.Title>
           <Dialog.Content>
             <Text>Thông tin chưa xác nhận có thể bị mất. Hồ sơ đã lưu vẫn được giữ lại.</Text>
+            {confirmExit?.exitToHome && <Text>Bạn sẽ trở về Trang chủ.</Text>}
           </Dialog.Content>
           <Dialog.Actions>
+            <Button onPress={cancelExit}>Tiếp tục nhập</Button>
             <Button
               onPress={() => {
-                setConfirmExit(false);
-                pendingNavigation.current = null;
-              }}
-            >
-              Tiếp tục nhập
-            </Button>
-            <Button
-              onPress={() => {
-                const action = pendingNavigation.current;
-                pendingNavigation.current = null;
-                exitGuard.current?.onLeave();
+                const pending = pendingNavigation.current;
+                cancelExit();
+                if (!pending || pending.guard !== exitGuard.current) return;
                 exitGuard.current = null;
-                setConfirmExit(false);
-                action?.();
+                pending.guard.onLeave();
+                if (pending.exitToHome && role)
+                  router.dismissTo(workspaceTabHref(homeScreen[role]));
+                else pending.action();
               }}
             >
               Rời quy trình

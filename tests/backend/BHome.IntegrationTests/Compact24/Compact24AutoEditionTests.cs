@@ -81,17 +81,17 @@ public sealed partial class Compact24OwnerSetupTests
     {
         var w = await Seed(); using var owner = await Client(w.Owner); using var staff = await Client(w.Staff);
         var route = $"/api/v1/contracts/holding-settings/{w.Location}";
-        var input = new HoldingSettingsInput(1, 1, "Synthetic holding terms", 0);
+        var input = new HoldingSettingsInput("Synthetic holding terms", 0);
         Assert.True((await owner.PutAsJsonAsync(route, input)).IsSuccessStatusCode);
         var v1 = await owner.GetFromJsonAsync<HoldingSettings>(route);
         Assert.NotNull(v1);
         Assert.True((await owner.PutAsJsonAsync(route, input with { ExpectedVersion = v1.Version })).IsSuccessStatusCode);
         Assert.Equal(v1.Version, (await owner.GetFromJsonAsync<HoldingSettings>(route))!.Version);
-        Assert.True((await owner.PutAsJsonAsync(route, input with { HoldingMonths = 2, DepositRentMonths = 1.5m, Terms = "New terms", ExpectedVersion = v1.Version })).IsSuccessStatusCode);
+        Assert.True((await owner.PutAsJsonAsync(route, input with { Terms = "New terms", ExpectedVersion = v1.Version })).IsSuccessStatusCode);
         var history = await owner.GetFromJsonAsync<HoldingSettings[]>($"{route}/versions");
         Assert.Equal(2, history!.Length);
         Assert.Contains(history, d => d.Version == v1.Version && d.HoldingMonths == 1 && d.Terms == "Synthetic holding terms");
-        Assert.Contains(history, d => d.Version == v1.Version + 1 && d.HoldingMonths == 2 && d.Terms == "New terms");
+        Assert.Contains(history, d => d.Version == v1.Version + 1 && d.HoldingMonths == 1 && d.DepositRentMonths == 1 && d.Terms == "New terms");
         Assert.Equal(HttpStatusCode.Forbidden, (await staff.GetAsync($"{route}/versions")).StatusCode);
     }
 }

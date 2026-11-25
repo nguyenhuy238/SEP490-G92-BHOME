@@ -40,6 +40,8 @@ beforeEach(() => {
         locationName: 'Cơ sở Trường Vũ',
         proposedDate: '2026-11-30',
         status: 'Inspected',
+        proposalStatus: null,
+        proposalSettlementStatus: null,
       },
     ],
     page: 1,
@@ -56,31 +58,98 @@ it('loads the authorized MoveOut queue, opens its detail and preserves the contr
     '/api/v1/contracts/move-out-inbox?page=1&pageSize=20',
     { signal: expect.any(AbortSignal) },
   );
-  expect(screen.getAllByText('Đã có kết quả Staff').length).toBeGreaterThan(0);
+  expect((await screen.findAllByText('Chờ chủ trọ gửi phí')).length).toBeGreaterThan(0);
   fireEvent.click(screen.getAllByRole('button', { name: 'Xem kết quả' })[0]);
   expect(await screen.findByText('Kết quả kiểm kê contract-1')).toBeInTheDocument();
-  expect(screen.getByRole('link', { name: 'Mở hồ sơ hợp đồng' })).toHaveAttribute(
-    'href',
-    '/contracts?contractId=contract-1',
-  );
+  expect(screen.queryByRole('link', { name: 'Mở hồ sơ hợp đồng' })).not.toBeInTheDocument();
   fireEvent.click(screen.getByRole('button', { name: 'Đóng chi tiết trả phòng' }));
   expect(screen.queryByText('Kết quả kiểm kê contract-1')).not.toBeInTheDocument();
+});
+
+it.each([
+  ['PendingTenant', null, 'Chờ khách thuê xác nhận phí'],
+  ['Disputed', null, 'Khách thuê yêu cầu điều chỉnh phí'],
+  ['Accepted', 'PendingOwnerReview', 'Khách thuê đã đồng ý · Đang đối chiếu'],
+  ['Accepted', 'Payable', 'Khách thuê đã đồng ý · Đã tạo khoản phải thu'],
+  ['Accepted', 'RefundEligible', 'Khách thuê đã đồng ý · Có tiền cọc cần hoàn'],
+  ['Accepted', 'Settled', 'Đã quyết toán phí trả phòng'],
+] as const)(
+  'shows the actual Tenant financial step in the inbox for %s / %s',
+  async (proposalStatus, proposalSettlementStatus, label) => {
+    mocks.transport.mockResolvedValue({
+      items: [
+        {
+          contractId: 'contract-1',
+          roomNumber: 'TEST-9A0205575A',
+          locationId: 'location-1',
+          locationName: 'Cơ sở Test',
+          proposedDate: '2026-11-22',
+          status: 'Inspected',
+          proposalStatus,
+          proposalSettlementStatus,
+        },
+      ],
+      page: 1,
+      pageSize: 20,
+      totalCount: 1,
+    });
+    mount();
+    expect((await screen.findAllByText(label)).length).toBeGreaterThan(0);
+    expect(screen.queryByText('Đã có kết quả nhân viên')).not.toBeInTheDocument();
+  },
+);
+
+it('recovers the accepted fee status from the existing proposal API while the inbox API is still old', async () => {
+  const oldInbox = {
+    items: [
+      {
+        contractId: 'contract-1',
+        roomNumber: 'TEST-9A0205575A',
+        locationId: 'location-1',
+        locationName: 'Cơ sở Test',
+        proposedDate: '2026-11-22',
+        status: 'Inspected',
+      },
+    ],
+    page: 1,
+    pageSize: 20,
+    totalCount: 1,
+  };
+  mocks.transport.mockImplementation(async (path: string) =>
+    path.endsWith('/move-out/receivables/proposal')
+      ? {
+          status: 'Accepted',
+          latestProposal: {
+            tenantFeedback: {
+              confirmed: true,
+              settlement: { status: 'Payable' },
+            },
+          },
+        }
+      : oldInbox,
+  );
+  mount();
+  expect(
+    (await screen.findAllByText('Khách thuê đã đồng ý · Đã tạo khoản phải thu')).length,
+  ).toBeGreaterThan(0);
+  expect(mocks.transport).toHaveBeenCalledWith(
+    '/api/v1/contracts/contract-1/move-out/receivables/proposal',
+    { signal: expect.any(AbortSignal) },
+  );
+  expect(screen.queryByText('Đã có kết quả nhân viên')).not.toBeInTheDocument();
 });
 
 it('opens an authorized contract deep link even when that contract is outside the current list page', async () => {
   mount('/handovers?tab=move-out&contractId=contract-on-another-page');
   expect(await screen.findByText('Kết quả kiểm kê contract-on-another-page')).toBeInTheDocument();
-  expect(screen.getByRole('link', { name: 'Mở hồ sơ hợp đồng' })).toHaveAttribute(
-    'href',
-    '/contracts?contractId=contract-on-another-page',
-  );
+  expect(screen.queryByRole('link', { name: 'Mở hồ sơ hợp đồng' })).not.toBeInTheDocument();
 });
 
 it('filters the server-side queue by location/status and exposes location-load failure', async () => {
   mount();
   await screen.findByText('1 yêu cầu trả phòng phù hợp');
   fireEvent.mouseDown(screen.getByRole('combobox', { name: 'Trạng thái trả phòng' }));
-  fireEvent.click(screen.getByRole('option', { name: 'Đã có kết quả Staff' }));
+  fireEvent.click(screen.getByRole('option', { name: 'Đã có kết quả nhân viên' }));
   await waitFor(() =>
     expect(mocks.transport).toHaveBeenCalledWith(
       '/api/v1/contracts/move-out-inbox?page=1&pageSize=20&status=Inspected',

@@ -1,6 +1,6 @@
 import { TextField } from '../../../components/common/ValidatedForm';
 import { useEffect, useState } from 'react';
-import { Link, useSearchParams } from 'react-router';
+import { useSearchParams } from 'react-router';
 import { useQuery } from '@tanstack/react-query';
 import {
   Alert,
@@ -58,12 +58,12 @@ interface HandoverInboxPage {
 }
 
 const handoverStates = [
-  { value: 'PendingOwnerReview', label: 'Chờ Owner duyệt' },
-  { value: 'ReinspectionRequested', label: 'Chờ Staff kiểm tra lại' },
-  { value: 'Ready', label: 'Chờ Tenant ký' },
+  { value: 'PendingOwnerReview', label: 'Chờ chủ trọ duyệt' },
+  { value: 'ReinspectionRequested', label: 'Chờ nhân viên kiểm tra lại' },
+  { value: 'Ready', label: 'Chờ khách thuê ký' },
   { value: 'Confirmed', label: 'Hoàn tất' },
-  { value: 'Draft', label: 'Đang lập biên bản' },
-  { value: 'ChangesRequested', label: 'Tenant đề nghị chỉnh sửa' },
+  { value: 'Draft', label: 'Đang kiểm tra bàn giao' },
+  { value: 'ChangesRequested', label: 'Khách thuê đề nghị chỉnh sửa' },
 ] as const;
 
 function handoverStatus(status: string) {
@@ -73,13 +73,13 @@ function handoverStatus(status: string) {
 function handoverActivity(item: HandoverInboxItem) {
   const date = item.tenantConfirmedAt ?? item.ownerReadyAt ?? item.staffSubmittedAt;
   const label = item.tenantConfirmedAt
-    ? 'Tenant xác nhận'
+    ? 'Khách thuê xác nhận'
     : item.ownerReadyAt
-      ? 'Owner duyệt'
+      ? 'Chủ trọ duyệt'
       : item.staffSubmittedAt
-        ? 'Staff gửi'
+        ? 'Nhân viên gửi'
         : '';
-  return date ? `${label} · ${formatInstant(date)}` : 'Chưa ghi nhận mốc xác nhận';
+  return date ? `${label} · ${formatInstant(date)}` : 'Chờ nhân viên hoàn thành';
 }
 
 export default function HandoversPage() {
@@ -247,18 +247,11 @@ function LiveHandoversPage() {
               <Button onClick={() => void locations.refetch()}>Thử lại</Button>
             </Alert>
           )}
-          <Stack
-            direction={{ xs: 'column', sm: 'row' }}
-            spacing={0.5}
-            sx={{ justifyContent: 'space-between' }}
-          >
+          <Stack direction={{ xs: 'column', sm: 'row' }} spacing={0.5}>
             <Typography variant="body2" color="text.secondary">
               {inbox.data
                 ? `${inbox.data.totalCount} biên bản phù hợp`
                 : 'Danh sách biên bản bàn giao'}
-            </Typography>
-            <Typography variant="caption" color="text.secondary">
-              Danh sách từ hệ thống · {inbox.data?.items.length ?? 0} biên bản trên trang này
             </Typography>
           </Stack>
           {inbox.isFetching && <LinearProgress aria-label="Đang tải danh sách biên bản" />}
@@ -442,14 +435,6 @@ function LiveHandoversPage() {
           <Box sx={{ px: { xs: 1.5, sm: 3 }, py: 2, overflowY: 'auto', flex: 1, minHeight: 0 }}>
             {selected && (
               <Stack spacing={2}>
-                <Button
-                  component={Link}
-                  to={`/contracts?contractId=${encodeURIComponent(selected)}`}
-                  sx={{ alignSelf: 'flex-start' }}
-                  size="small"
-                >
-                  Mở hồ sơ hợp đồng
-                </Button>
                 <OwnerHandoverDraftPanel
                   key={selected}
                   api={api}

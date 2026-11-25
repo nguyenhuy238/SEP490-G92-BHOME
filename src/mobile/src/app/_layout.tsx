@@ -10,6 +10,7 @@ import { WorkspaceProvider, useWorkspace } from '../features/workspace/Workspace
 import { theme } from '../theme/theme';
 import { ToastProvider } from '../components/ToastHost';
 import { TenantProfileGate } from '../features/profile/TenantProfileGate';
+import { TenantContractAccessGate } from '../features/tenant/TenantContractAccessGate';
 export default function RootLayout() {
   const [loaded, error] = useFonts({
     'Inter-Regular': require('../../assets/fonts/Inter-Regular.ttf'),
@@ -35,9 +36,11 @@ export default function RootLayout() {
         <ToastProvider>
           <SessionProvider>
             <WorkspaceProvider>
-              <TenantProfileGate>
-                <WorkspaceNavigation />
-              </TenantProfileGate>
+              <TenantContractAccessGate>
+                <TenantProfileGate>
+                  <WorkspaceNavigation />
+                </TenantProfileGate>
+              </TenantContractAccessGate>
             </WorkspaceProvider>
           </SessionProvider>
         </ToastProvider>
@@ -52,7 +55,7 @@ function WorkspaceNavigation() {
   // Drop navigation history and mounted tab state at every principal/role change.
   const identity = `${session?.userId ?? (preview ? 'preview' : 'anonymous')}:${role}`;
   return (
-    <Stack key={identity} screenOptions={{ headerTitle: 'BHOME', headerBackTitle: 'Quay lại' }}>
+    <Stack key={identity} screenOptions={{ headerTitle: 'BHome', headerBackTitle: 'Quay lại' }}>
       <Stack.Screen name="index" options={{ headerShown: false }} />
       <Stack.Screen name="accept-invitation" options={{ title: 'Thiết lập tài khoản' }} />
       <Stack.Screen name="forgot-password" options={{ title: 'Quên mật khẩu' }} />

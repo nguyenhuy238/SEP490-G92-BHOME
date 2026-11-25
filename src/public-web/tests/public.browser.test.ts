@@ -119,6 +119,141 @@ function fixture(page: Page, body: unknown, status = 200) {
   );
 }
 
+test('Guest approved photos load only through the anonymous proxy', () =>
+  run(
+    'approved-gallery',
+    'Approved proxy image decodes; external private URL is never requested.',
+    async (page) => {
+      const requests: string[] = [];
+      page.on('request', (request) => requests.push(request.url()));
+      await page.route('**/api/v1/public/**', (route) => {
+        const pathname = new URL(route.request().url()).pathname;
+        if (pathname.endsWith('/rooms'))
+          return route.fulfill({ json: [], headers: { 'access-control-allow-origin': '*' } });
+        if (pathname.endsWith('/photos/7'))
+          return route.fulfill({
+            contentType: 'image/png',
+            body: Buffer.from(
+              'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+jRZkAAAAASUVORK5CYII=',
+              'base64',
+            ),
+            headers: { 'access-control-allow-origin': '*' },
+          });
+        return route.fulfill({
+          json: {
+            ...location,
+            photos: [
+              {
+                index: 7,
+                url: `/api/v1/public/locations/${id}/photos/7`,
+                contentType: 'image/png',
+                length: 68,
+              },
+              { index: 9, url: 'https://private.example.invalid/hidden.png' },
+            ],
+          },
+          headers: { 'access-control-allow-origin': '*' },
+        });
+      });
+      await page.goto(base + `/locations/${id}`);
+      const photo = page.getByRole('img', { name: `${location.name} — ảnh 8` });
+      await photo.waitFor();
+      await photo.evaluate(async (image) => {
+        await (image as HTMLImageElement).decode();
+      });
+      expect(
+        await photo.evaluate((image) => (image as HTMLImageElement).naturalWidth),
+      ).toBeGreaterThan(0);
+      expect(requests.some((url) => url.includes('private.example.invalid'))).toBe(false);
+    },
+  ));
+
+for (const width of [1440, 768, 390])
+  test(`Published catalogue search, room filters and layout at ${width}px`, () =>
+    run(
+      `catalogue-${width}`,
+      'Synthetic published data; name/address search, room filters, contact, SEO, GET-only requests and no horizontal overflow.',
+      async (page) => {
+        const methods: string[] = [];
+        await page.setViewportSize({ width, height: 900 });
+        await page.route('**/api/v1/public/**', (route) => {
+          methods.push(route.request().method());
+          const path = new URL(route.request().url()).pathname;
+          const body =
+            path === '/api/v1/public/locations'
+              ? [location]
+              : path.endsWith('/rooms')
+                ? [
+                    room,
+                    {
+                      ...room,
+                      roomId: '00000000-0000-0000-0000-000000000002',
+                      roomNumber: 'B2',
+                      vacancy: 'Occupied',
+                      capacity: 4,
+                      indicativePrice: null,
+                      amenities: ['Parking'],
+                    },
+                  ]
+                : path.includes('/public/rooms/')
+                  ? room
+                  : location;
+          return route.fulfill({ json: body, headers: { 'access-control-allow-origin': '*' } });
+        });
+        await page.goto(base);
+        await page.getByRole('heading', { name: location.name }).waitFor();
+        await page.screenshot({
+          path: resolve(artifactDir, `fe09-home-${width}.png`),
+          fullPage: true,
+        });
+        await page.getByLabel('Tìm tên cơ sở hoặc địa chỉ').fill('không có');
+        await page.getByText(/Không có cơ sở phù hợp/).waitFor();
+        await page.getByLabel('Tìm tên cơ sở hoặc địa chỉ').fill('tổng hợp');
+        await page.getByRole('link', { name: 'Xem cơ sở và phòng' }).click();
+        const occupiedRoom = page.getByRole('link', { name: 'Phòng B2', exact: true });
+        const availableRoom = page.getByRole('link', { name: 'Phòng A1', exact: true });
+        await occupiedRoom.waitFor();
+        await availableRoom.waitFor();
+        await page.getByRole('button', { name: 'Chỉ xem phòng còn trống' }).click();
+        await occupiedRoom.waitFor({ state: 'detached' });
+        await page.getByLabel('Giá tối đa mỗi tháng').fill('1000000');
+        await page.getByText('Không có phòng phù hợp với bộ lọc.').waitFor();
+        await page.getByRole('button', { name: 'Xóa bộ lọc' }).click();
+        await availableRoom.waitFor();
+        await occupiedRoom.waitFor();
+        await page.getByRole('button', { name: 'Bộ lọc thêm' }).click();
+        await page.getByLabel('Số người ở').click();
+        await page.getByRole('option', { name: '4 người', exact: true }).click();
+        await availableRoom.waitFor({ state: 'detached' });
+        await occupiedRoom.waitFor();
+        await page.getByRole('button', { name: 'Xóa bộ lọc' }).click();
+        await availableRoom.waitFor();
+        await occupiedRoom.waitFor();
+        await page.getByLabel('Tiện nghi').click();
+        await page.getByRole('option', { name: 'Wifi', exact: true }).click();
+        await occupiedRoom.waitFor({ state: 'detached' });
+        await availableRoom.waitFor();
+        expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(
+          true,
+        );
+        await page.getByRole('link', { name: 'Phòng A1', exact: true }).click();
+        await page.getByRole('heading', { name: 'Phòng A1', level: 1, exact: true }).waitFor();
+        await page.getByRole('link', { name: location.contactEmail }).waitFor();
+        await expect.poll(() => page.title()).toBe('Phòng A1 | BHome');
+        expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(
+          true,
+        );
+        expect(methods.every((method) => method === 'GET')).toBe(true);
+        expect(
+          await page.getByRole('button', { name: /đặt phòng|đặt cọc|thanh toán/i }).count(),
+        ).toBe(0);
+        await page.screenshot({
+          path: resolve(artifactDir, `fe09-room-${width}.png`),
+          fullPage: true,
+        });
+      },
+    ));
+
 test('Guest home, navigation, unknown URL and mobile layout', () =>
   run(
     'home-navigation-not-found-mobile',
@@ -126,13 +261,24 @@ test('Guest home, navigation, unknown URL and mobile layout', () =>
     async (page) => {
       await fixture(page, []);
       await page.goto(base);
-      await page.getByRole('heading', { name: 'Chào mừng đến với BHOME' }).waitFor();
+      await page.getByRole('heading', { name: 'Chào mừng đến với BHome' }).waitFor();
       await page.getByRole('navigation', { name: 'Điều hướng chính' }).waitFor();
-      expect(await page.locator('form,input,textarea').count()).toBe(0);
+      await page.keyboard.press('Tab');
+      expect(
+        await page
+          .getByRole('link', { name: 'Trang chủ', exact: true })
+          .evaluate((link) => getComputedStyle(link).outlineColor),
+      ).toBe('rgb(255, 255, 255)');
+      await page.screenshot({ path: resolve(artifactDir, 'fe09-nav-focus.png'), fullPage: true });
+      expect(
+        await page
+          .locator('form,textarea,input[type=password],input[type=email],input[type=tel]')
+          .count(),
+      ).toBe(0);
       await page.getByRole('link', { name: 'Khám phá cơ sở', exact: true }).click();
       await page.getByText(/Hiện chưa có cơ sở được công bố/).waitFor();
       await page.getByRole('link', { name: 'Trang chủ', exact: true }).click();
-      await page.getByRole('heading', { name: 'Chào mừng đến với BHOME' }).waitFor();
+      await page.getByRole('heading', { name: 'Chào mừng đến với BHome' }).waitFor();
       await page.getByRole('navigation').getByRole('link', { name: 'Cơ sở', exact: true }).click();
       await page.getByRole('heading', { name: 'Khám phá cơ sở' }).waitFor();
       await page.goto(base + '/unknown-page');
@@ -289,7 +435,11 @@ test('Guest location rooms independent error and retry, static contact only', ()
       await page.getByRole('button', { name: 'Thử lại', exact: true }).click();
       await page.getByText('Cơ sở chưa công bố phòng.').waitFor();
       await page.getByText('demo@example.invalid').waitFor();
-      expect(await page.locator('form,input,textarea').count()).toBe(0);
+      expect(
+        await page
+          .locator('form,textarea,input[type=password],input[type=email],input[type=tel]')
+          .count(),
+      ).toBe(0);
     },
   ));
 

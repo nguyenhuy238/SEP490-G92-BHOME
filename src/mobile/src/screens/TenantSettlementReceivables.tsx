@@ -6,11 +6,12 @@ import {
 } from '../../../../packages/client-core/src/contracts';
 import { Action, Box, Heading, ui } from '../components/WorkspaceKit';
 import { useWorkspaceQuery } from '../features/workspace/useWorkspaceQuery';
-import { TenantSettlementTransfer } from './TenantSettlementTransfer';
+import { useWorkspace } from '../features/workspace/WorkspaceProvider';
 import { formatBillingDecimal } from '../../../../packages/client-core/src/invoices';
 import { loadTenantSettlements } from '../features/workspace/tenantFinancialLoads';
 
 export function TenantSettlementReceivables() {
+  const { go } = useWorkspace();
   const [page, setPage] = useState(1);
   const query = useWorkspaceQuery<{ items: SettlementReceivables[]; total: number }>(
     `/api/v1/tenant/settlement-receivables?page=${page}&pageSize=10`,
@@ -96,13 +97,18 @@ export function TenantSettlementReceivables() {
               <Text>
                 Chi phí theo biên bản kiểm tra được Owner duyệt. Số đã phân bổ do máy chủ xác nhận.
               </Text>
-              {r.status !== 'Paid' && (
-                <TenantSettlementTransfer
-                  contractId={source.contractId}
-                  chargeId={r.charge.id}
-                  changed={query.reload}
-                />
-              )}
+              <Action
+                secondary
+                onPress={() =>
+                  go('invoice', {
+                    view: 'settlement',
+                    settlementContractId: source.contractId,
+                    settlementChargeId: r.charge.id,
+                  })
+                }
+              >
+                Xem chi tiết khoản phải thu
+              </Action>
             </Box>
           ))}
           {source.offsets

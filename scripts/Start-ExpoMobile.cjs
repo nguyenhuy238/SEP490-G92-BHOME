@@ -87,18 +87,26 @@ function developmentArguments(args) {
 
 async function main(
   args = process.argv.slice(2),
-  { platform = process.platform, runCommand = run } = {},
+  {
+    platform = process.platform,
+    runCommand = run,
+    nodeVersion = process.versions.node,
+    nodeExecutable = process.execPath,
+    nodeCandidates,
+  } = {},
 ) {
   const tools = path.join(repository, '.tools');
-  const candidates = fs.existsSync(tools)
-    ? fs.readdirSync(tools).flatMap((name) => {
-        const match = /^node-v(22\.\d+\.\d+)-win-x64$/.exec(name);
-        const executable = path.join(tools, name, 'node.exe');
-        return match && fs.existsSync(executable) ? [{ version: match[1], executable }] : [];
-      })
-    : [];
-  const runtime = selectRuntime(process.versions.node, process.execPath, candidates);
-  if (runtime !== process.execPath) {
+  const candidates =
+    nodeCandidates ??
+    (fs.existsSync(tools)
+      ? fs.readdirSync(tools).flatMap((name) => {
+          const match = /^node-v(22\.\d+\.\d+)-win-x64$/.exec(name);
+          const executable = path.join(tools, name, 'node.exe');
+          return match && fs.existsSync(executable) ? [{ version: match[1], executable }] : [];
+        })
+      : []);
+  const runtime = selectRuntime(nodeVersion, nodeExecutable, candidates);
+  if (runtime !== nodeExecutable) {
     console.log('BHOME: sử dụng Node 22 trong .tools cho Expo.');
     return runCommand(runtime, [__filename, ...args]);
   }

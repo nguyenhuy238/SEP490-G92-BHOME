@@ -12,6 +12,8 @@ import {
 } from '../../../../../packages/client-core/src/mainDrafts';
 import { useAuth } from '../../../../../packages/client-core/src/auth';
 import { useContractsApi, useMainDraftApi } from './useContractsApi';
+import { ContractDocumentViewer } from './ContractDocumentViewer';
+import { contractPdfName } from '../../../../../packages/client-core/src/contractPdfName';
 
 export function MainDraftReleasePanel({
   draft,
@@ -143,17 +145,11 @@ export function MainDraftReleasePanel({
       <Button disabled={busy || disabled} onClick={() => void preview()}>
         {busy ? 'Đang xử lý…' : 'Tạo và xem PDF đưa đi ký'}
       </Button>
-      {file?.developmentOnly && (
-        <Alert severity="warning">
-          Tài liệu kiểm thử; mẫu chưa được duyệt cho production. Không coi đây là hợp đồng đã ký hợp
-          pháp.
-        </Alert>
-      )}
       {url && (
-        <iframe
+        <ContractDocumentViewer
           title="PDF được chọn để đưa đi ký"
-          src={url}
-          style={{ width: '100%', height: 600, border: 0 }}
+          url={url}
+          filename={contractPdfName('Main', draft.id)}
         />
       )}
       <FormControlLabel

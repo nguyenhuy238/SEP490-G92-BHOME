@@ -69,6 +69,7 @@ export function ContractSigningStep({
   } | null>(null);
   const [emails, setEmails] = useState<Record<string, string>>({});
   const [busy, setBusy] = useState(false);
+  const [sendingInvitation, setSendingInvitation] = useState(false);
   const [uncertainInvitation, setUncertainInvitation] = useState(false);
   const [operation, setOperation] = useState('');
   const [resendAfter, setResendAfter] = useState<number | null>(null);
@@ -82,7 +83,15 @@ export function ContractSigningStep({
     return () => clearTimeout(timer);
   }, [resendAfter]);
   const c = data?.contract.id === contract.id ? data.contract : contract;
+  const recipientEmail = emails[c.representativeResidentId]?.trim() ?? '';
+  const recipientEmailError =
+    recipientEmail &&
+    (recipientEmail.length > 256 ||
+      !/^[^\s@<>(),;]+@[^\s@<>(),;]+\.[^\s@<>(),;.]+$/.test(recipientEmail))
+      ? 'Nhập email hợp lệ, tối đa 256 ký tự.'
+      : undefined;
   const status = data?.contract.id === contract.id ? data.status : null;
+  const holdingEmail = status?.usesHoldingEmail ? (status.maskedEmail ?? undefined) : undefined;
   const displayedError =
     (!status?.tenantAcceptedAt && invitationFailure?.contractId === c.id
       ? invitationFailure.message
@@ -173,9 +182,10 @@ export function ContractSigningStep({
     }
   }
   async function invite(resend = false) {
-    if (lock.current || !c.snapshotHash) return;
+    if (lock.current || !c.snapshotHash || recipientEmailError) return;
     lock.current = true;
     setBusy(true);
+    setSendingInvitation(true);
     setError('');
     setInvitationFailure(null);
     let dispatched = false;
@@ -195,7 +205,7 @@ export function ContractSigningStep({
             : new Date(
                 Math.min(Date.now() + 3600000, Date.parse(c.holdingExpiresAt ?? '') || Infinity),
               ).toISOString(),
-          emails[c.representativeResidentId]?.trim() || undefined,
+          recipientEmail || undefined,
           resend
             ? undefined
             : Object.entries(emails)
@@ -210,8 +220,8 @@ export function ContractSigningStep({
           methods,
           status: {
             ...latest,
-            maskedEmail: emails[c.representativeResidentId]?.trim()
-              ? emails[c.representativeResidentId].trim().replace(/^([^@])[^@]*(@.*)$/, '$1***$2')
+            maskedEmail: recipientEmail
+              ? recipientEmail.replace(/^([^@])[^@]*(@.*)$/, '$1***$2')
               : latest.maskedEmail,
             invitations: [
               { id: result.id, status: result.status, expiresAt: result.expiresAt },
@@ -241,6 +251,7 @@ export function ContractSigningStep({
     } finally {
       lock.current = false;
       setBusy(false);
+      setSendingInvitation(false);
     }
   }
   if (c.kind === 'Holding' && (!data || data.contract.id !== contract.id) && !error)
@@ -351,6 +362,7 @@ export function ContractSigningStep({
                   <Input
                     label="Email nhận lời mời mới"
                     email
+                    error={recipientEmailError}
                     value={emails[c.representativeResidentId] ?? ''}
                     onChange={(email) => {
                       setEmails((before) => ({ ...before, [c.representativeResidentId]: email }));
@@ -366,10 +378,13 @@ export function ContractSigningStep({
                     Email chỉ được lưu vào hồ sơ sau khi người nhận xác nhận OTP và ký thành công.
                   </Text>
                   <Action
-                    disabled={busy || uncertainInvitation || resendAfter !== null}
+                    loading={sendingInvitation}
+                    disabled={
+                      busy || uncertainInvitation || resendAfter !== null || !!recipientEmailError
+                    }
                     onPress={() => void invite(true)}
                   >
-                    {busy
+                    {sendingInvitation
                       ? 'Đang gửi lại email…'
                       : resendAfter !== null
                         ? 'Gửi lại sau 1 phút'
@@ -396,7 +411,9 @@ export function ContractSigningStep({
                         ? 'Email người giữ chỗ'
                         : `Email nhận lời mời · ${person.label}`
                     }
+                    placeholder={holdingEmail}
                     email
+                    error={recipientEmailError}
                     value={emails[person.id] ?? ''}
                     onChange={(email) => {
                       setEmails((before) => ({ ...before, [person.id]: email }));
@@ -411,22 +428,35 @@ export function ContractSigningStep({
                     ký trên web hoặc mobile.
                   </Text>
                 )}
+                {c.kind === 'Main' &&
+                  status?.maskedEmail &&
+                  !emails[c.representativeResidentId]?.trim() && (
+                    <Text style={ui.muted}>
+                      {holdingEmail
+                        ? `Sẽ dùng email từ hợp đồng giữ chỗ: ${holdingEmail}.`
+                        : `Sẽ gửi đến email đã lưu: ${status.maskedEmail}.`}
+                    </Text>
+                  )}
                 {c.kind !== 'Holding' && !staffMain && (
                   <Text style={ui.muted}>
                     Email dùng cho lời mời ký, không tự tạo tài khoản Tenant.
                   </Text>
                 )}
                 <Action
+                  loading={sendingInvitation}
                   disabled={
                     busy ||
                     uncertainInvitation ||
+                    !!recipientEmailError ||
                     !status ||
                     !!currentInvitation ||
-                    (c.kind === 'Main' && !emails[c.representativeResidentId]?.trim())
+                    (c.kind === 'Main' &&
+                      !status.maskedEmail &&
+                      !emails[c.representativeResidentId]?.trim())
                   }
                   onPress={() => void invite()}
                 >
-                  {busy ? 'Đang gửi lời mời…' : 'Gửi lời mời ký qua email'}
+                  {sendingInvitation ? 'Đang gửi lời mời…' : 'Gửi lời mời ký qua email'}
                 </Action>
               </>
             )}
@@ -456,9 +486,6 @@ export function ContractSigningStep({
         )}
         {!!displayedError && (!staffMain || !internal || !!status?.tenantAcceptedAt) && (
           <ContractNotice message={displayedError} />
-        )}
-        {c.kind === 'Holding' && busy && (
-          <Text style={ui.muted}>Đang gửi email, vui lòng chờ…</Text>
         )}
         <Action secondary disabled={busy} onPress={() => setRevision((v) => v + 1)}>
           Làm mới trạng thái ký
@@ -511,7 +538,7 @@ export function ContractSigningStep({
         />
       )}
       {signer && (status?.tenantAcceptedAt || c.signatures.some((s) => s.status === 'Signed')) && (
-        <ContractEvidence api={api} contractId={c.id} pdf />
+        <ContractEvidence api={api} contractId={c.id} contractKind={c.kind} pdf />
       )}
     </>
   );

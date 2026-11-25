@@ -62,13 +62,22 @@ export function useStaffTaskDetail(id: string) {
     `/api/v1/operational-tasks/${id}`,
     queryPolicies.tasks,
   );
+  const task = detail.data;
+  const canReadTaskArtifacts =
+    !!task &&
+    (session?.roles.includes('Owner') === true ||
+      (session?.roles.includes('Staff') === true &&
+        task.responsibilityAvailable &&
+        task.currentResponsibleStaffUserId === session.userId));
   const evidence = useCachedWorkspaceQuery<TaskEvidence[]>(
-    `/api/v1/operational-tasks/${id}/evidence`,
+    canReadTaskArtifacts ? `/api/v1/operational-tasks/${id}/evidence` : null,
     queryPolicies.tasks,
   );
   const [historyPage, setHistoryPage] = useState(1);
   const history = useCachedWorkspaceQuery<TaskPage<TaskHistory>>(
-    `/api/v1/operational-tasks/${id}/history?page=${historyPage}&pageSize=20`,
+    canReadTaskArtifacts
+      ? `/api/v1/operational-tasks/${id}/history?page=${historyPage}&pageSize=20`
+      : null,
     queryPolicies.tasks,
   );
   const [sheet, setSheet] = useState<StaffTaskAction | 'choose' | null>(null);
@@ -97,7 +106,6 @@ export function useStaffTaskDetail(id: string) {
       upload.current = null;
     };
   }, []);
-  const task = detail.data;
   const allowed =
     task && session?.roles.includes('Staff') && task.responsibilityAvailable && !detail.rawError
       ? availableTaskActions(task, 'Staff', session.userId).filter(
@@ -167,12 +175,16 @@ export function useStaffTaskDetail(id: string) {
       history.reload();
       evidence.reload();
       showSuccess(
-        {
-          start: 'Đã bắt đầu công việc.',
-          progress: 'Đã lưu tiến độ.',
-          blockers: 'Đã gửi báo cáo vướng mắc.',
-          submit: 'Đã gửi kết quả. Chờ Owner kiểm tra.',
-        }[command.action],
+        (command.action === 'start' || command.action === 'submit') &&
+          result.kind === 'LocationAssetHandover' &&
+          result.status === 'PendingVerification'
+          ? 'Đã hoàn tất kiểm kê. Chờ Owner đối soát và lập biên bản.'
+          : {
+              start: 'Đã bắt đầu công việc.',
+              progress: 'Đã lưu tiến độ.',
+              blockers: 'Đã gửi báo cáo vướng mắc.',
+              submit: 'Đã gửi kết quả. Chờ Owner kiểm tra.',
+            }[command.action],
       );
     } catch (failure) {
       if (!alive.current) return;
@@ -213,7 +225,13 @@ export function useStaffTaskDetail(id: string) {
     setSyncedVersion(false);
     setUploadPending(true);
     try {
-      if (!pending.file) pending.file = await client.upload(id, pending.bytes, pending.key);
+      if (!pending.file)
+        pending.file = await client.upload(
+          id,
+          pending.bytes,
+          pending.key,
+          pending.bytes[0] === 137 ? 'image/png' : 'image/jpeg',
+        );
       if (!alive.current) return false;
       // Upload returns metadata, not a TaskView; the following GET must succeed before any action.
       await refreshTask();

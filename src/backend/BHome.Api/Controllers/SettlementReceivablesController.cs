@@ -19,6 +19,9 @@ public sealed class SettlementReceivablesController(SettlementReceivablesService
     [HttpPost("proposal/tenant-feedback"), Authorize(Roles = Roles.Tenant)]
     public Task<MoveOutChargeProposalFeedback> RespondToProposal(Guid id, MoveOutChargeProposalFeedbackInput input, CancellationToken token) =>
         service.RespondToProposalAsync(id, input, Key(), token);
+    [HttpPost("proposal/reconcile"), Authorize(Roles = Roles.Tenant)]
+    public Task<MoveOutChargeProposalFeedback> ReconcileProposal(Guid id, MoveOutChargeProposalReconcileInput input, CancellationToken token) =>
+        service.ReconcileAcceptedProposalAsync(id, input, token);
     [HttpGet("charge-review"), Authorize(Roles = Roles.Owner)]
     public Task<SettlementChargeReviewPreview> Review(Guid id, CancellationToken token) => service.PreviewChargeReviewAsync(id, token);
     [HttpPost("charge-review"), Authorize(Roles = Roles.Owner)]

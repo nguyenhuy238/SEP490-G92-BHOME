@@ -26,18 +26,31 @@ public sealed class SePayOptions
             WebhookSecret is { Length: >= 32 } && !WebhookSecret.Contains("replace", StringComparison.OrdinalIgnoreCase) &&
             (string.IsNullOrEmpty(ApiToken) || !ApiToken.Contains("replace", StringComparison.OrdinalIgnoreCase) && !ApiToken.Contains('\r') && !ApiToken.Contains('\n')) &&
             RequestTimeoutSeconds is >= 1 and <= 30 && SignatureToleranceSeconds is >= 1 and <= 300 &&
-            PollIntervalSeconds is >= 30 and <= 3600 && ReceivingAccounts.Count > 0 &&
-            ReceivingAccounts.All(a => a.Valid()) && ReceivingAccounts.Select(a => a.LocationId).Distinct().Count() == ReceivingAccounts.Count;
+            PollIntervalSeconds is >= 30 and <= 3600 &&
+            ReceivingAccounts.Count > 0 &&
+            ReceivingAccounts.All(a => a.Valid()) && ReceivingAccounts.Select(a => a.OwnerUserId != Guid.Empty
+                ? "owner:" + a.OwnerUserId : "location:" + a.LocationId).Distinct().Count() == ReceivingAccounts.Count;
     }
+
+    public bool Bound(Guid locationId, Guid ownerId) => ReceivingAccounts.Any(a =>
+        a.OwnerUserId != Guid.Empty ? a.OwnerUserId == ownerId : a.LocationId == locationId);
+
+    public bool Matches(Guid locationId, BHome.Domain.PaymentsDebt.ReceivingBankAccount account, string? gateway = null) =>
+        ReceivingAccounts.Any(a => (a.OwnerUserId != Guid.Empty
+            ? a.OwnerUserId == account.OwnerUserId && account.OwnerUserId != Guid.Empty
+            : a.LocationId == locationId) && a.BankIdentifier == account.BankIdentifier &&
+            a.AccountNumber == account.AccountNumber && (gateway is null ||
+                a.Gateway.Equals(gateway, StringComparison.OrdinalIgnoreCase)));
 }
 
 public sealed class SePayReceivingAccount
 {
     public Guid LocationId { get; set; }
+    public Guid OwnerUserId { get; set; }
     public string BankIdentifier { get; set; } = "";
     public string Gateway { get; set; } = "";
     public string AccountNumber { get; set; } = "";
-    internal bool Valid() => LocationId != Guid.Empty &&
+    internal bool Valid() => (LocationId != Guid.Empty) != (OwnerUserId != Guid.Empty) &&
         System.Text.RegularExpressions.Regex.IsMatch(BankIdentifier, "^[0-9]{6}$") &&
         System.Text.RegularExpressions.Regex.IsMatch(AccountNumber, "^[0-9]{6,19}$") &&
         System.Text.RegularExpressions.Regex.IsMatch(Gateway, "^[A-Za-z0-9 -]{2,80}$");

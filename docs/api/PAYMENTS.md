@@ -15,7 +15,21 @@ Cập nhật **06/11/2026**, contract runtime Compact24. [Trạng thái toàn AP
 GET/PUT `/api/v1/receiving-bank-accounts/{locationId}` / `/api/v1/receiving-bank-accounts`:
 Owner tạo phiên bản cấu hình với expectedVersion, humanVerified, bankIdentifier BIN 6 số,
 accountNumber 6–19 số, accountHolder ASCII hoa, enabled, isDevelopmentDemo.
-Mỗi version bất biến; bản mới nhất disabled ngừng cấp instructions. Demo chỉ cho Development/Testing.
+Mỗi version bất biến; bản mới nhất disabled ngừng cấp instructions.
+Quyết định ngày 24/11/2026: cho phép cấu hình tài khoản thử nghiệm trên Staging để kiểm thử,
+phù hợp [ma trận môi trường SePay Test](../development/BHOME_TEAM_ENVIRONMENT_SETUP.md).
+`PUT /api/v1/receiving-bank-accounts/owner` và route theo Location cho phép tài khoản tổng hợp
+(`isDevelopmentDemo=true`) trong Development/Testing, hoặc Staging khi `SePay:Enabled=true`, `Mode=Test`.
+Production, Staging tắt SePay hoặc Mode=Live trả 400 `development_receiving_account_unavailable`,
+không ghi version/audit. Luôn giữ cờ demo, xác nhận Owner và version/audit hiện hữu.
+Lỗi định dạng hoặc thiếu xác nhận vẫn trả `invalid_receiving_bank_account`. Frontend giữ dữ liệu,
+hiển thị đúng lỗi môi trường và không tự đổi tài khoản tổng hợp thành tài khoản thật.
+Truy vết BF-06, UC-22, GBR-10/13 và BH-25: chỉ mở cấu hình tài khoản Sandbox;
+không mở quyền đối soát thủ công demo, không tự bật SePay, cấp QR hoặc xác nhận thanh toán.
+Các luồng thanh toán vẫn kiểm tra môi trường, nghĩa vụ Test/Live và binding của provider riêng.
+Hồi quy: `ReceivingAccountValidationTests` kiểm tra Owner/Location, demo bị chặn, tài khoản được phép,
+validation và Owner-only; `PaymentRuntimeModeTests` kiểm tra ma trận môi trường qua DI;
+`Payments.test.tsx` kiểm tra lưu demo, lỗi môi trường, giữ form và xác nhận lại khi sửa.
 GET `/api/v1/invoices/{id}/transfer-instructions`: Owner hoặc Tenant có InvoiceRecipients.
 Số dư = server ledger. Draft/Settled/missing configuration không trả QR hoặc tài khoản giả.
 QR dựng local với QRCoder 1.8.1 (MIT, PNG không cần System.Drawing), không gọi dịch vụ ngoài.
@@ -104,5 +118,11 @@ Offline legacy regression giữ constraint exact cũ qua capability repository; 
 Receipt nhận sau khi hóa đơn/khoản phải thu đã thanh toán đủ hoặc Holding đã đóng có Owner confirmation riêng. Xem [hợp đồng hoàn tiền](REFUNDS.md). `paymentStatus` của danh sách receipt hỗ trợ thêm `ExcessRefundPending` và `ExcessRefundCompleted`; filter `settlementContractId` bao gồm disposition đích tương ứng. Chúng không tạo allocation và không tăng verified collections. Existing allocated excess vẫn dùng luồng refund cũ.
 
 ## Xác minh cọc trực tiếp — giới hạn số tiền (11/11/2026)
+
+Khắc phục 24/11/2026: hướng dẫn chuyển khoản hóa đơn chấp nhận tài khoản Owner
+được đánh dấu Test khi runtime cho phép tài khoản SePay Sandbox trên Staging.
+Không yêu cầu bật chế độ thanh toán demo thủ công. Production vẫn từ chối tài khoản
+Test; tài khoản phải đang bật và khớp binding SePay để cấp QR/mã BH. Đọc hướng dẫn
+không ghi nhận thanh toán, thay đổi số tiền hoặc bỏ qua đối soát.
 
 POST contracts/{id}/deposit-verifications giữ DTO/key cũ. Main tính remaining = RequiredDeposit - AppliedHoldingDeposit - tổng receipt cọc đã xác minh; số tiền vượt remaining trả 409 main_deposit_excess_requires_manual_review. Holding giữ lỗi holding_deposit_excess_requires_manual_review. Không nhận mới trên hợp đồng đóng hoặc phiên bản renewal/addendum (deposit_not_payable); exact-key replay vẫn hợp lệ. Không sửa số tiền sao kê để làm vừa remaining. Receipt vượt cọc cần nguồn receipt đầy đủ, phân bổ cọc và hoàn phần dư riêng; đường xác minh trực tiếp không thực hiện thay luồng này. Lịch sử đã có không bị viết lại.

@@ -2,6 +2,7 @@ using System.Net.Mail;
 using System.Security.Cryptography;
 using System.Text;
 using System.Text.Json;
+using BHome.Application.Common;
 using BHome.Application.IdentityAccess;
 using BHome.Application.Storage;
 using BHome.Domain.IdentityAccess;
@@ -41,6 +42,18 @@ public sealed class AnonymousContractSigningService(IContractRepository contract
     private bool TestHolding(Contract c) => c.Kind == ContractKind.Holding && c.IsDevelopmentDemo && testScope?.Allows(c.Room.LocationId) == true;
     private bool TestMain(Contract c) => c.Kind == ContractKind.Main && c.SigningMode == ContractSigningModes.Internal && c.TenantUserId is null &&
         testScope?.Allows(c.Room.LocationId) == true;
+    private async Task<string?> AcceptedHoldingEmailAsync(Contract c, CancellationToken t)
+    {
+        if (c.Kind != ContractKind.Main || c.HoldingContractId is not { } sourceId ||
+            await contracts.FindAsync(sourceId, t) is not { Kind: ContractKind.Holding } holding ||
+            holding.RoomId != c.RoomId || holding.OwnerSignerId != c.OwnerSignerId ||
+            holding.RepresentativeResidentId != c.RepresentativeResidentId || Evidence(holding) is not { } signed ||
+            await invitations.FindAsync(signed.InvitationId, t) is not { } invitation ||
+            invitation.ContractId != holding.Id || invitation.ResidentId != c.RepresentativeResidentId ||
+            invitation.SnapshotHash != holding.SnapshotHash || invitation.RevokedAt != null || invitation.AcceptedAt == null)
+            return null;
+        return invitation.RecipientEmail;
+    }
     private async Task<Contract> SigningOperator(Guid id, CancellationToken t)
     {
         if (actor.IsInRole(Roles.Owner)) return await OwnerContract(id, t);
@@ -66,7 +79,9 @@ public sealed class AnonymousContractSigningService(IContractRepository contract
         var simulation = TestHolding(c) ? SandboxSignatures.Read(c) : null;
         var simulated = evidence is null && simulation?.TenantAt is not null;
         var ownerAt = evidence?.OwnerAcceptedAt ?? (AllowsEitherSigningOrder(c) ? VerifiedOwnerSignature(c)?.SignedAt : null) ?? (simulation?.OwnerConfirmed(c) == true ? simulation.OwnerConfirmedAt : null);
-        var email = rows.FirstOrDefault()?.RecipientEmail;
+        var holdingEmail = rows.All(i => i.AcceptedAt is null && (i.RevokedAt is not null || i.ExpiresAt <= Now))
+            ? await AcceptedHoldingEmailAsync(c, t) : null;
+        var email = holdingEmail ?? rows.FirstOrDefault()?.RecipientEmail;
         if (email is null)
             email = (await contracts.ResidentsAsync(c.RoomId, [c.RepresentativeResidentId], t)).FirstOrDefault()?.ContactEmail;
         var masked = email is { Length: > 0 } && email.Contains('@') ? email[..1] + "***" + email[email.IndexOf('@')..] : null;
@@ -75,7 +90,8 @@ public sealed class AnonymousContractSigningService(IContractRepository contract
             evidence?.AcceptedAt, ownerAt,
             rows.Select(i => new SigningInvitationResult(i.Id,
                 i.RevokedAt is not null ? "Revoked" : i.AcceptedAt is not null ? "Accepted" : i.ExpiresAt <= Now ? "Expired" : i.DeliveryStatus, i.ExpiresAt)).ToArray(),
-            masked, simulated, Complete(c) && (MainSandboxAcceptance.Read(c) is null || TestMain(c)) || simulated && ownerAt is not null, simulation is not null || sandboxAvailable);
+            masked, simulated, Complete(c) && (MainSandboxAcceptance.Read(c) is null || TestMain(c)) || simulated && ownerAt is not null, simulation is not null || sandboxAvailable,
+            UsesHoldingEmail: holdingEmail is not null && masked is not null);
     }
     public async Task<SigningInvitationResult> InviteAsync(Guid id, SigningInvitationInput input, CancellationToken t)
     {
@@ -96,7 +112,7 @@ public sealed class AnonymousContractSigningService(IContractRepository contract
                 throw ContractException.Conflict("signing_already_started");
             if (input.SnapshotHash != c.SnapshotHash || Evidence(c) is not null || MainSandboxAcceptance.Read(c) is not null)
                 throw ContractException.Conflict("signing_review_changed");
-            if (c.Kind == ContractKind.Holding && c.HoldingExpiryAt <= Now)
+            if (c.Kind == ContractKind.Holding && c.HoldingExpiryAt <= clock.BusinessUtcNow())
                 throw ContractException.Conflict("holding_expired");
             if (c.Kind == ContractKind.Main && c.DraftMetadata != "{}" && c.Status == ContractStatus.Draft) throw ContractException.Conflict("main_draft_review_required");
             if (c.Kind is ContractKind.Main or ContractKind.Renewal or ContractKind.Holding)
@@ -116,10 +132,12 @@ public sealed class AnonymousContractSigningService(IContractRepository contract
             var heldInvitation = AllowsEitherSigningOrder(c) ? (await invitations.ListAsync(id, t))
                 .FirstOrDefault(i => i.RevokedAt is null && i.AcceptedAt is null && i.ExpiresAt > Now) : null;
             var heldContacts = SigningContacts.Read(heldInvitation);
+            var savedEmail = await AcceptedHoldingEmailAsync(c, t) ??
+                people.Single(r => r.Id == c.RepresentativeResidentId).ContactEmail;
             var contacts = people.Where(r => r.Id == c.RepresentativeResidentId).ToDictionary(r => r.Id, r =>
                 (r.Id == c.RepresentativeResidentId ? input.RecipientEmail : null)?.Trim().ToLowerInvariant() ??
                 input.Contacts?.SingleOrDefault(p => p.ResidentId == r.Id)?.Email?.Trim().ToLowerInvariant() ??
-                (heldContacts.TryGetValue(r.Id, out var heldEmail) ? heldEmail : null) ?? r.ContactEmail?.Trim().ToLowerInvariant() ?? "");
+                (heldContacts.TryGetValue(r.Id, out var heldEmail) ? heldEmail : null) ?? savedEmail?.Trim().ToLowerInvariant() ?? "");
             if (contacts.Values.Any(email => email.Length > 256 || !MailAddress.TryCreate(email, out _)) ||
                 contacts.Values.Distinct().Count() != contacts.Count)
                 throw ContractException.Invalid("signing_contacts_required");
@@ -338,8 +356,15 @@ public sealed class AnonymousContractSigningService(IContractRepository contract
         var bytes = buffer.ToArray(); if (!Matches(hash, Hash(bytes))) throw ContractException.Conflict("signing_evidence_integrity_failed");
         return bytes;
     }
-    public Task<byte[]> DocumentAsync(AnonymousSigningSession input, CancellationToken t) => WithToken(input.Token, async (i, _) =>
-    { Session(i, input.Session); return await Read(i.DocumentObjectKey, i.DocumentHash, t); }, t);
+    public async Task<byte[]> DocumentAsync(AnonymousSigningSession input, CancellationToken t) =>
+        (await DownloadDocumentAsync(input, t)).Bytes;
+
+    public Task<(byte[] Bytes, string FileName)> DownloadDocumentAsync(AnonymousSigningSession input, CancellationToken t) =>
+        WithToken(input.Token, async (i, c) =>
+        {
+            Session(i, input.Session);
+            return (await Read(i.DocumentObjectKey, i.DocumentHash, t), ContractDownloadName.For(c.Kind, c.Id));
+        }, t);
     public async Task<SigningLayoutInfo> LayoutAsync(AnonymousSigningSession input, CancellationToken t)
     {
         var pdf = await DocumentAsync(input, t); var layout = pages.Inspect(pdf, false);
@@ -477,7 +502,7 @@ public sealed class AnonymousContractSigningService(IContractRepository contract
             if (e is null && TestHolding(c))
             {
                 var simulated = SandboxSignatures.Read(c);
-                if (c.HoldingExpiryAt <= Now) throw ContractException.Conflict("holding_expired");
+                if (c.HoldingExpiryAt <= clock.BusinessUtcNow()) throw ContractException.Conflict("holding_expired");
                 if (!input.Consent || input.ConsentVersion != ContractSigningModes.InternalConsent || input.DocumentHash != c.SnapshotHash)
                     throw ContractException.Invalid("exact_document_consent_required");
                 if (!simulated.OwnerConfirmed(c))

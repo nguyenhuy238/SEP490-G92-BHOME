@@ -1,3 +1,4 @@
+using BHome.Application.Common;
 using System.Text.Json;
 using BHome.Domain.IdentityAccess;
 using BHome.Domain.TenantContracts;
@@ -368,7 +369,7 @@ public sealed partial class ContractService
             BaselineSnapshot = JsonSerializer.Serialize(baseline),
             ObservedSnapshot = JsonSerializer.Serialize(observed),
             StaffId = Actor,
-            InspectedAt = clock.GetUtcNow()
+            InspectedAt = clock.BusinessUtcNow()
         });
     }
     public async Task<IReadOnlyList<FinalInspectionView>> FinalInspectionsAsync(Guid id, CancellationToken t)
@@ -408,10 +409,10 @@ public sealed partial class ContractService
 
         using var buffer = new MemoryStream();
         await storage.CopyToAsync(current.EvidenceObjectKey, buffer, t);
-        var bytes = buffer.ToArray();
-        if (FileHash(bytes) != recorded.EvidenceHash)
+        if (FileHash(buffer) != recorded.EvidenceHash)
             throw ContractException.Conflict("inspection_evidence_integrity_failed");
-        await output.WriteAsync(bytes, t);
+        buffer.Position = 0;
+        await buffer.CopyToAsync(output, t);
     }
     public Task<MoveOutView> RespondToInspectionAsync(Guid id, InspectionTenantFeedback x, Guid key, CancellationToken t) => Mutate(id, [Roles.Tenant], async c =>
     {

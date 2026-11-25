@@ -1,3 +1,4 @@
+using BHome.Application.Common;
 using System.Text.Json;
 using BHome.Domain.IdentityAccess;
 using BHome.Domain.PropertyManagement;
@@ -15,7 +16,7 @@ public sealed partial class ContractService
     private async Task ValidateHoldingOwnerSigningAsync(Contract c, CancellationToken t)
     {
         if (c.Kind != ContractKind.Holding) return;
-        if (c.HoldingExpiryAt <= clock.GetUtcNow()) throw ContractException.Conflict("holding_expired");
+        if (c.HoldingExpiryAt <= clock.BusinessUtcNow()) throw ContractException.Conflict("holding_expired");
         if (AnonymousContractSigningService.HoldingOwnerHasSigned(c) || c.ApprovedAt is not null) return;
         if (c.Room.Status != RoomStatus.Available) throw ContractException.Conflict("room_not_available_for_holding");
         var prices = await repository.ResolvePricesAsync(c.RoomId, c.StartDate, t);
@@ -56,7 +57,7 @@ public sealed partial class ContractService
     public async Task<ContractId> CreateHoldingAsync(HoldingDraftInput input, Guid key, CancellationToken token)
     {
         Role(Roles.Owner, Roles.Staff); Validate(input); Money(input.HoldingDeposit);
-        var now = clock.GetUtcNow();
+        var now = clock.BusinessUtcNow();
         if (input.OwnerSignerId == input.TenantUserId || input.StartDate == default || input.EndDate <= input.StartDate ||
             input.ExpiresAt.Offset != TimeSpan.Zero || input.ExpiresAt <= now || input.ResidentIds is null || input.ResidentIds.Length != 1 ||
             input.ResidentIds.Distinct().Count() != input.ResidentIds.Length || !input.ResidentIds.Contains(input.RepresentativeResidentId) ||
@@ -86,14 +87,12 @@ public sealed partial class ContractService
             var rent = prices.Charges.SingleOrDefault(x => x.ChargeCode == "RENT")
                 ?? throw ContractException.Conflict("rent_policy_required");
             Money(rent.Rate, false);
-            if (input.SettingsVersion is { } version)
-            {
-                var configured = await HoldingPreparationAsync(input.RoomId, token);
-                if (configured.SettingsVersion != version || configured.HoldingDeposit != input.HoldingDeposit ||
-                    configured.StartDate != input.StartDate || configured.EndDate != input.EndDate ||
-                    configured.ExpiresAt != input.ExpiresAt || configured.Terms != input.Terms.Trim())
-                    throw ContractException.Conflict("holding_configuration_changed_reload");
-            }
+            var configured = await HoldingPreparationAsync(input.RoomId, token);
+            if (input.SettingsVersion != configured.SettingsVersion ||
+                configured.MonthlyRent != decimal.Truncate(rent.Rate) || configured.HoldingDeposit != input.HoldingDeposit ||
+                configured.StartDate != input.StartDate || configured.EndDate != input.EndDate ||
+                configured.ExpiresAt != input.ExpiresAt || configured.Terms != input.Terms.Trim())
+                throw ContractException.Conflict("holding_configuration_changed_reload");
             var c = new Contract
             {
                 RoomId = input.RoomId,
@@ -102,17 +101,17 @@ public sealed partial class ContractService
                 SigningMode = input.TenantUserId is null ? ContractSigningModes.Internal : "",
                 RepresentativeResidentId = input.RepresentativeResidentId,
                 Kind = ContractKind.Holding,
-                StartDate = input.StartDate,
-                EndDate = input.EndDate,
-                HoldingExpiryAt = input.ExpiresAt,
+                StartDate = configured.StartDate,
+                EndDate = configured.EndDate,
+                HoldingExpiryAt = configured.ExpiresAt,
                 ReservedCapacity = input.ReservedCapacity ?? checked((short)input.ResidentIds.Length),
                 // Policy rates have decimal scale, while contract VND columns use numeric(18,0).
                 // Seal the representation that survives persistence so signing can verify it.
-                MonthlyRent = decimal.Truncate(rent.Rate),
-                RequiredDeposit = decimal.Truncate(rent.Rate),
-                Terms = input.Terms.Trim(),
+                MonthlyRent = configured.MonthlyRent,
+                RequiredDeposit = configured.HoldingDeposit,
+                Terms = configured.Terms,
                 IsDevelopmentDemo = DemoEnabled,
-                PaymentMode = ConfiguredPaymentMode(room.LocationId)
+                PaymentMode = ConfiguredPaymentMode(room.LocationId, input.OwnerSignerId)
             };
             c.Residents = residents.Select(r => new ContractResident
             {
@@ -122,7 +121,7 @@ public sealed partial class ContractService
                 ResidenceFrom = c.StartDate
             }).ToList();
             await ContractChargeSnapshot.RejectUtilityProfileAsync(repository, c, token);
-            ContractChargeSnapshot.Store(c, ContractChargeSnapshot.FromPolicies(c, prices.Charges), "HoldingDraft", now, holdingSettingsVersion: input.SettingsVersion);
+            ContractChargeSnapshot.Store(c, ContractChargeSnapshot.FromPolicies(c, prices.Charges), "HoldingDraft", now, holdingSettingsVersion: configured.SettingsVersion);
             if (operatingPolicies is not null) await operatingPolicies.BindDraftAsync(c, token);
             Seal(c); repository.Add(c); Audit("HoldingDraftCreated", c.Id);
             Remember(key, "holding-draft", input, c.Id); return new ContractId(c.Id);
@@ -135,7 +134,7 @@ public sealed partial class ContractService
         return Mutate(id, [Roles.Owner], async c =>
         {
             if (await Replay(key, "holding-approve", new { id, input }, token) is not null) return View(c);
-            if (c.Kind != ContractKind.Holding || c.Status != ContractStatus.Draft || c.HoldingExpiryAt <= clock.GetUtcNow())
+            if (c.Kind != ContractKind.Holding || c.Status != ContractStatus.Draft || c.HoldingExpiryAt <= clock.BusinessUtcNow())
                 throw ContractException.Conflict("holding_not_pending_approval");
             if (c.ApprovedAt.HasValue) throw ContractException.Conflict("holding_already_approved");
             if (await repository.HoldingConflictAsync(c.RoomId, c.Id, c.StartDate, c.EndDate, token))
@@ -215,7 +214,7 @@ public sealed partial class ContractService
         if (lifecycle is not null) blockers.AddRange(await lifecycle.RoomBlockersAsync(c.RoomId, token, c.Id, includeActiveContracts: false));
         if (c.Kind != ContractKind.Holding) blockers.Add("holding_contract_required");
         if (c.Status != ContractStatus.PendingActivation) blockers.Add("holding_not_pending_activation");
-        if (c.HoldingExpiryAt is null || c.HoldingExpiryAt <= clock.GetUtcNow()) blockers.Add("holding_expired");
+        if (c.HoldingExpiryAt is null || c.HoldingExpiryAt <= clock.BusinessUtcNow()) blockers.Add("holding_expired");
         if (c.Room.Status != RoomStatus.Available || !c.Room.Location.IsActive || c.Room.RoomType is { IsActive: false }) blockers.Add("room_not_available");
         if (!Intact(c) || !HoldingSigned(c)) blockers.Add("verified_signature_evidence_required");
         var deposit = await repository.DepositTotalAsync(c.Id, token);
@@ -251,7 +250,7 @@ public sealed partial class ContractService
             if (FileHash(bytes.ToArray()) != signature.SignedHash) throw ContractException.Conflict("signing_evidence_integrity_failed");
         }
         ChangeRoomStatus(c, RoomStatus.OnHold, RoomTransitionSource.HoldingActivation, approvedOwner: automatic ? c.OwnerSignerId : null);
-        c.Status = ContractStatus.Active; c.ActivatedByUserId = automatic ? c.OwnerSignerId : Actor; c.ActivatedAt = clock.GetUtcNow();
+        c.Status = ContractStatus.Active; c.ActivatedByUserId = automatic ? c.OwnerSignerId : Actor; c.ActivatedAt = clock.BusinessUtcNow();
         if (automatic) repository.AuditAnonymous("Automatic:HoldingActivated", id, clock.GetUtcNow());
         else Audit("HoldingActivated", id);
         if (key is { } operationKey) Remember(operationKey, "holding-activate", id, id);
@@ -304,7 +303,7 @@ public sealed partial class ContractService
             input = input with { RequiredSecurityDeposit = holding.RequiredDeposit };
             Money(holding.RequiredDeposit);
             if (await Replay(key, "holding-convert", new { id, input }, token) is { } replay) return new ContractId(replay);
-            if (holding.Kind != ContractKind.Holding || holding.Status != ContractStatus.Active || holding.HoldingExpiryAt <= clock.GetUtcNow() ||
+            if (holding.Kind != ContractKind.Holding || holding.Status != ContractStatus.Active || holding.HoldingExpiryAt <= clock.BusinessUtcNow() ||
                 holding.Room.Status != RoomStatus.OnHold || holding.PriceLockedAt is null)
                 throw ContractException.Conflict("holding_not_convertible");
             if (await repository.MainForHoldingAsync(id, token) is { } existing)

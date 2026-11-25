@@ -23,13 +23,19 @@ internal sealed class NotificationChannelWorker(Compact24DbContext db, CompactNo
     {
         foreach (var work in await DueAsync(t)) await queue.EnqueueAsync(new(Name, $"channel/{work.Id}/{work.Sequence}/{sql.Now:yyyyMMddHHmm}", JsonSerializer.Serialize(work.Id)), t);
     }
-    internal async Task ProcessPendingAsync(CancellationToken t, bool authenticationOnly = false)
-    { foreach (var work in await DueAsync(t, authenticationOnly)) await DeliverAsync(work.Id, t); }
-    private async Task<IReadOnlyList<Work>> DueAsync(CancellationToken t, bool authenticationOnly = false)
+    internal async Task ProcessPendingAsync(CancellationToken t, bool authenticationOnly = false, bool businessEmailOnly = false)
+    { foreach (var work in await DueAsync(t, authenticationOnly, businessEmailOnly)) await DeliverAsync(work.Id, t); }
+    internal async Task ProcessHoldingConfirmationsAsync(CompactNotificationEvents events, CancellationToken t)
+    {
+        if (!options.Value.Enabled || !provider.IsConfigured("EMAIL")) return;
+        await events.QueueHoldingConfirmationsAsync(t);
+        foreach (var work in await DueAsync(t, holdingOnly: true)) await DeliverAsync(work.Id, t);
+    }
+    private async Task<IReadOnlyList<Work>> DueAsync(CancellationToken t, bool authenticationOnly = false, bool businessEmailOnly = false, bool holdingOnly = false)
     {
         if (!options.Value.Enabled) return [];
         // event_data remains immutable; delivery status/history is the mutable envelope.
-        await sql.Execute("""
+        if (!holdingOnly) await sql.Execute("""
             INSERT INTO notifications(id,record_kind,event_key,notification_type,event_data,event_at,delivery_status,next_delivery_at)
             SELECT gen_random_uuid(),'OUTBOX','channel:'||n.id::text||':'||c.channel,'CHANNEL_DELIVERY',
               jsonb_build_object('schemaVersion',1,'recordType','ChannelDelivery','notificationId',n.id,'recipient',n.recipient_user_id,
@@ -37,9 +43,11 @@ internal sealed class NotificationChannelWorker(Compact24DbContext db, CompactNo
             FROM notifications n CROSS JOIN LATERAL jsonb_array_elements_text(COALESCE(n.event_data->'state'->'channels','[]'::jsonb)) c(channel)
             WHERE n.record_kind='INBOX' AND c.channel IN ('EMAIL','PUSH')
               AND (NOT @authenticationOnly OR n.event_data->>'category'='Account')
+              AND (NOT @businessEmailOnly OR c.channel='EMAIL' AND n.event_data->>'audienceRole'='Tenant'
+                AND n.event_data->'state'->>'eventType' IN ('CONTRACT_ACTIVATED','INVOICE_FULLY_PAID'))
             ON CONFLICT(record_kind,event_key) WHERE record_kind IN ('OUTBOX','AUDIT') DO NOTHING
-            """, t, ("now", sql.Now), ("authenticationOnly", authenticationOnly));
-        if (!authenticationOnly && smsOptions.Value.Enabled)
+            """, t, ("now", sql.Now), ("authenticationOnly", authenticationOnly), ("businessEmailOnly", businessEmailOnly));
+        if (!holdingOnly && !authenticationOnly && !businessEmailOnly && smsOptions.Value.Enabled)
             await sql.Execute("""
                 INSERT INTO notifications(id,record_kind,event_key,notification_type,event_data,event_at,delivery_status,next_delivery_at)
                 SELECT gen_random_uuid(),'OUTBOX','sms:'||md5(n.event_key||':'||p.phone),'CHANNEL_DELIVERY',
@@ -60,13 +68,16 @@ internal sealed class NotificationChannelWorker(Compact24DbContext db, CompactNo
         await using (var cmd = await sql.Command("""
             SELECT id,(SELECT count(*)::int FROM jsonb_array_elements(delivery_history) h WHERE h->>'recordType'='ChannelClaim')+1 FROM notifications WHERE record_kind='OUTBOX' AND event_data->>'recordType'='ChannelDelivery'
               AND ((@email AND event_data->>'channel'='EMAIL') OR (@push AND event_data->>'channel'='PUSH') OR (@sms AND event_data->>'channel'='SMS'))
+              AND (NOT @holdingOnly OR event_data->>'channel'='EMAIL' AND event_data->>'eventType'='HOLDING_CONFIRMED')
+              AND (NOT @businessEmailOnly OR event_data->>'channel'='EMAIL' AND (event_data->>'eventType'='HOLDING_CONFIRMED'
+                OR event_data->>'role'='Tenant' AND event_data->>'eventType' IN ('CONTRACT_ACTIVATED','INVOICE_FULLY_PAID')))
               AND (NOT @authenticationOnly OR event_data ? 'protectedAuthenticationEmail' OR event_data->>'eventType' IN
                 ('PASSWORD_CHANGED','PASSWORD_RESET_COMPLETED','ACCOUNT_ACTIVATED','ACCOUNT_DEACTIVATED','ACCOUNT_SETUP_COMPLETED','ACCOUNT_ACCESS_CHANGED','ACCOUNT_LOCKED',
                  'STAFF_ASSIGNMENT_CREATED','STAFF_ASSIGNMENT_UPDATED','STAFF_ASSIGNMENT_CANCELLED','STAFF_ASSIGNMENT_REMOVED',
                  'STAFF_ASSIGNMENT_ACTIVATED','STAFF_ASSIGNMENT_ENDED'))
               AND ((delivery_status='Pending' AND next_delivery_at<=@now) OR (delivery_status='Processing' AND locked_until<=@now))
             ORDER BY event_at,id LIMIT 50
-            """, t, ("now", sql.Now), ("authenticationOnly", authenticationOnly),
+            """, t, ("now", sql.Now), ("authenticationOnly", authenticationOnly), ("businessEmailOnly", businessEmailOnly), ("holdingOnly", holdingOnly),
             ("email", provider.IsConfigured("EMAIL")), ("push", provider.IsConfigured("PUSH")), ("sms", provider.IsConfigured("SMS"))))
         { await using var reader = await cmd.ExecuteReaderAsync(t); while (await reader.ReadAsync(t)) due.Add(new(reader.GetGuid(0), reader.GetInt32(1))); }
         return due;
@@ -201,6 +212,9 @@ internal sealed class NotificationChannelWorker(Compact24DbContext db, CompactNo
                                 notice.EventType == "CONTRACT_ACTIVATED" && notice.RelatedObjectType == "Contract" &&
                                 await content.MainConfirmationAsync(notice.RelatedObjectId, claim.Recipient, t) is not null)
                                 attachments = await content.MainAttachmentsAsync(notice.RelatedObjectId, claim.Recipient, destinations.Single().Value, t);
+                            if (auth is null && claim.Channel == "EMAIL" && claim.Role == "Tenant" &&
+                                notice.EventType == "INVOICE_FULLY_PAID" && notice.RelatedObjectType == "Invoice")
+                                attachments = await content.PaidInvoiceAttachmentsAsync(notice.RelatedObjectId, claim.Recipient, t);
                             foreach (var destination in destinations)
                             {
                                 using var timeout = CancellationTokenSource.CreateLinkedTokenSource(t); timeout.CancelAfter(TimeSpan.FromSeconds(options.Value.TimeoutSeconds));

@@ -156,6 +156,12 @@ vi.mock('expo-file-system', () => ({
   File: class {},
   Paths: { cache: '/private-move-out-cache' },
 }));
+// The inspection exercises authenticated preview bytes, not the native share
+// sheet. Expo Sharing must not initialize an unavailable native module in jsdom.
+vi.mock('expo-sharing', () => ({
+  isAvailableAsync: vi.fn(async () => false),
+  shareAsync: vi.fn(),
+}));
 vi.mock('../theme/theme', () => ({
   colors: {
     blue: '#236abc',
@@ -555,8 +561,8 @@ it('refuses opening a contract that is no longer a Location move-out task', () =
 it('routes the legacy shortcut back to the Location work-order queue', () => {
   state.routeId = '';
   render(<StaffMoveOutInspectionScreen />);
-  fireEvent.click(screen.getByText('Xem công việc tại cơ sở'));
-  expect(state.go).toHaveBeenCalledWith('work-orders');
+  fireEvent.click(screen.getByText('Xem nhiệm vụ trả phòng'));
+  expect(state.go).toHaveBeenCalledWith('staff-handovers', { tab: 'MoveOut' });
 });
 
 it('only shows tasks for rooms in the selected authorized Location', () => {
@@ -569,7 +575,9 @@ it('only shows tasks for rooms in the selected authorized Location', () => {
 it('does not expose the inspection with a missing or unrelated work order', () => {
   state.taskId = '';
   const view = render(<StaffMoveOutInspectionScreen />);
-  expect(screen.getByText(/mở nhiệm vụ kiểm tra trả phòng từ mục Công việc/)).toBeTruthy();
+  expect(
+    screen.getByText(/mở nhiệm vụ kiểm tra trả phòng từ mục Bàn giao \/ Trả phòng/),
+  ).toBeTruthy();
   expect(screen.queryByText('4 phần kiểm tra trả phòng')).toBeNull();
   state.taskId = '55555555-5555-4555-8555-555555555555';
   state.taskTitle = 'Bàn giao vào phòng R.101';

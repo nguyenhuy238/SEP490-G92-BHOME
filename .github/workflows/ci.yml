@@ -67,6 +67,9 @@ jobs:
           BHOME_COMPACT24_TEST_ADMIN: Host=127.0.0.1;Port=${{ job.services.compact_postgres.ports['5432'] }};Database=postgres;Username=bhome_ci;Password=synthetic-ci-only
       # Preserve concise test outcomes even if verbose Testcontainers logs are
       # too large for the Actions job-log download endpoint.
+      - name: Require retained Staging hotfix regressions to execute and pass
+        if: ${{ !cancelled() }}
+        run: python3 scripts/Verify-StagingRegressions.py "$RUNNER_TEMP/bhome-backend-trx"
       - name: Upload backend test results
         if: ${{ !cancelled() }}
         uses: actions/upload-artifact@v6
@@ -96,6 +99,10 @@ jobs:
       - run: npm run typecheck --workspace ./src/mobile
       - run: npm test
       - run: npm run build
+      - name: Install Chromium for Public Web regression
+        run: npx --no-install playwright-core install --with-deps chromium
+      - name: Test Public Web browser workflows
+        run: npm run test:browser --workspace ./src/public-web
       - name: Export Mobile web bundle
         working-directory: src/mobile
         run: npx --no-install expo export --platform web --max-workers 2 --output-dir dist
@@ -109,6 +116,7 @@ jobs:
         run: |
           for file in deploy/vps/*.sh; do bash -n "$file"; done
           python3 -m unittest discover -s tests/deployment -p 'test_*.py' -v
+          python3 -m unittest discover -s tests/scripts -p 'test_email_preflight.py' -v
           node --test tests/deployment/*.test.cjs
   release:
     if: github.event_name == 'push' && (github.ref == 'refs/heads/develop' || github.ref == 'refs/heads/main')
@@ -142,7 +150,8 @@ jobs:
           push: false
           tags: ghcr.io/${{ github.repository_owner }}/bhome-api:sha-${{ github.sha }}
           cache-from: type=gha,scope=staging-api
-          cache-to: type=gha,mode=max,scope=staging-api
+          # Cache export is optional; image build failures still fail this job.
+          cache-to: type=gha,mode=max,scope=staging-api,ignore-error=true
       - name: Validate Owner Web image
         uses: docker/build-push-action@v6
         with:
@@ -156,7 +165,7 @@ jobs:
             BHOME_REVISION=${{ github.sha }}
           tags: ghcr.io/${{ github.repository_owner }}/bhome-owner-web:sha-${{ github.sha }}
           cache-from: type=gha,scope=staging-owner-web
-          cache-to: type=gha,mode=max,scope=staging-owner-web
+          cache-to: type=gha,mode=max,scope=staging-owner-web,ignore-error=true
       - name: Validate Public Web image
         uses: docker/build-push-action@v6
         with:
@@ -170,4 +179,4 @@ jobs:
             BHOME_REVISION=${{ github.sha }}
           tags: ghcr.io/${{ github.repository_owner }}/bhome-public-web:sha-${{ github.sha }}
           cache-from: type=gha,scope=staging-public-web
-          cache-to: type=gha,mode=max,scope=staging-public-web
+          cache-to: type=gha,mode=max,scope=staging-public-web,ignore-error=true

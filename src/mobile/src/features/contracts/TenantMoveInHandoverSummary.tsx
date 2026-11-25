@@ -25,7 +25,7 @@ type Detail = { section: Section; item?: string } | null;
 
 const statusLabels: Record<MoveInDraft['status'], string> = {
   Draft: 'Đang chuẩn bị',
-  PendingOwnerReview: 'Chờ Owner duyệt',
+  PendingOwnerReview: 'Chờ chủ trọ duyệt',
   ReinspectionRequested: 'Cần kiểm tra lại',
   Ready: 'Sẵn sàng bàn giao',
   ChangesRequested: 'Đang xử lý chỉnh sửa',
@@ -346,7 +346,7 @@ export function TenantMoveInHandoverSummary({
           {entry(
             'Biên bản và chữ ký',
             draft.status === 'Ready'
-              ? 'Xem PDF Owner đã ký'
+              ? 'Xem PDF chủ trọ đã ký'
               : draft.status === 'Confirmed'
                 ? 'Xem biên bản đã hoàn tất'
                 : 'Thông tin xác nhận',
@@ -402,7 +402,7 @@ export function TenantMoveInHandoverSummary({
               {detail?.section === 'room' && !detail.item && (
                 <>
                   <Text style={styles.sectionSubtitle}>
-                    Hiện trạng tổng quan: {draft.roomCondition || 'Chưa kiểm tra'}
+                    Ghi chú hiện trạng: {draft.roomCondition || 'Không có ghi chú'}
                   </Text>
                   {roomHandoverChecks.map(({ code, label }) => {
                     const observed = (draft.roomChecks ?? []).find((item) => item.code === code);
@@ -572,12 +572,12 @@ export function TenantMoveInHandoverSummary({
                   )}
                   {!!draft.ownerReadyAt && (
                     <Text style={styles.sectionSubtitle}>
-                      Owner xác nhận: {formatInstant(draft.ownerReadyAt)}
+                      Chủ trọ xác nhận: {formatInstant(draft.ownerReadyAt)}
                     </Text>
                   )}
                   {!!draft.tenantConfirmedAt && (
                     <Text style={styles.sectionSubtitle}>
-                      Tenant xác nhận: {formatInstant(draft.tenantConfirmedAt)}
+                      Khách thuê xác nhận: {formatInstant(draft.tenantConfirmedAt)}
                     </Text>
                   )}
                   {draft.status === 'Ready' && (
@@ -585,7 +585,7 @@ export function TenantMoveInHandoverSummary({
                       api={api}
                       contractId={contractId}
                       draftHandoverPdf
-                      label="Xem PDF Owner đã ký"
+                      label="Xem PDF chủ trọ đã ký"
                     />
                   )}
                   {documents.map((document) => (
@@ -607,7 +607,7 @@ export function TenantMoveInHandoverSummary({
                     !documents.length &&
                     !documentsError && (
                       <Text style={styles.subtle}>
-                        Biên bản đã ký chưa có PDF cuối cùng. Hãy tải lại hoặc liên hệ Owner.
+                        Biên bản đã ký chưa có PDF cuối cùng. Hãy tải lại hoặc liên hệ chủ trọ.
                       </Text>
                     )}
                   {draft.requests.map((request) => (
@@ -615,7 +615,7 @@ export function TenantMoveInHandoverSummary({
                       <Text style={styles.rowLabel}>Yêu cầu chỉnh sửa · {request.status}</Text>
                       <Text>{request.reason}</Text>
                       {!!request.decisionReason && (
-                        <Text>Phản hồi Owner: {request.decisionReason}</Text>
+                        <Text>Phản hồi chủ trọ: {request.decisionReason}</Text>
                       )}
                     </View>
                   ))}

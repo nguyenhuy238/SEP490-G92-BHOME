@@ -14,6 +14,44 @@ namespace BHome.IntegrationTests.Compact24;
 public sealed partial class Compact24NotificationMvpTests
 {
     [CompactPostgresFact]
+    public async Task StaffHomeListsOnlyTheTwoNewestActionableTasksInSelectedLocation()
+    {
+        var selected = await Seed();
+        var other = await Seed();
+        using var staff = await Client(selected.Staff);
+        await using var scope = fixture.Factory!.Services.CreateAsyncScope();
+        var db = scope.ServiceProvider.GetRequiredService<Compact24DbContext>();
+        var now = DateTimeOffset.UtcNow;
+
+        async Task<Guid> AddTask(Guid location, MeterTaskStatus status, int dueInHours)
+        {
+            var task = new OperationalTask
+            {
+                LocationId = location,
+                Kind = OperationalTaskKind.AdHoc,
+                Title = "Synthetic priority task",
+                Status = status,
+                DueAt = now.AddHours(dueInHours)
+            };
+            db.Add(task);
+            await db.SaveChangesAsync();
+            return task.Id;
+        }
+
+        await AddTask(selected.Location, MeterTaskStatus.Assigned, -2);
+        var second = await AddTask(selected.Location, MeterTaskStatus.InProgress, -1);
+        var newest = await AddTask(selected.Location, MeterTaskStatus.Assigned, 1);
+        await AddTask(selected.Location, MeterTaskStatus.PendingVerification, 2);
+        await AddTask(other.Location, MeterTaskStatus.Assigned, 3);
+
+        var page = await staff.GetFromJsonAsync<TaskPage<TaskView>>(
+            $"/api/v1/operational-tasks?locationId={selected.Location}&latestActionable=true&pageSize=2");
+
+        Assert.Equal(3, page!.TotalCount);
+        Assert.Equal(new[] { newest, second }, page.Items.Select(task => task.Id));
+    }
+
+    [CompactPostgresFact]
     public async Task OwnerTaskTargetsPersistAndRejectAssetsOutsideSelectedPosition()
     {
         var first = await Seed();

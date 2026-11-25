@@ -1,3 +1,4 @@
+using BHome.Application.Common;
 using BHome.Application.Contracts;
 using BHome.Application.Jobs;
 using BHome.Domain.TenantContracts;
@@ -15,11 +16,11 @@ internal sealed class ContractExpiryProcessor(BHomePersistenceContext db, TimePr
     public string Name => JobName;
     public async Task ExecuteAsync(JobExecution job, CancellationToken t)
     {
-        var today = DateOnly.FromDateTime(TimeZoneInfo.ConvertTimeBySystemTimeZoneId(clock.GetUtcNow(), "Asia/Ho_Chi_Minh").DateTime);
+        var today = clock.BusinessToday();
         var through = today.AddDays(30); Guid? after = null;
         while (true)
         {
-            var now = clock.GetUtcNow();
+            var now = clock.BusinessUtcNow();
             // The offline source schema predates Holding expiry metadata. Keep its Main tenancy
             // regression query translatable. Runtime Compact24 expires Holding drafts and pending
             // signing/activation records as well as Active Holding contracts.
@@ -176,7 +177,7 @@ internal sealed class ContractExpiryProcessor(BHomePersistenceContext db, TimePr
     }
     public async Task<IReadOnlyList<ContractExpiryNoticeView>> ListAsync(Guid actor, bool owner, CancellationToken t)
     {
-        var today = DateOnly.FromDateTime(TimeZoneInfo.ConvertTimeBySystemTimeZoneId(clock.GetUtcNow(), "Asia/Ho_Chi_Minh").DateTime);
+        var today = clock.BusinessToday();
         return await
         (from n in db.Set<ContractExpiryNotice>().AsNoTracking()
          join c in db.Set<Contract>() on n.ContractId equals c.Id

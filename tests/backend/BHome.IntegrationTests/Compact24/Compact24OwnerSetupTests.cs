@@ -27,6 +27,13 @@ namespace BHome.IntegrationTests.Compact24;
 [Trait("Category", "CompactPostgres")]
 public sealed partial class Compact24OwnerSetupTests(Compact24Fixture fixture) : IClassFixture<Compact24Fixture>
 {
+    private async Task<HoldingPreparation> ConfigureHoldingPolicyAsync(HttpClient owner, Guid roomId, string terms)
+    {
+        var current = await owner.GetFromJsonAsync<HoldingSettings>("/api/v1/contracts/holding-settings");
+        Assert.Equal(HttpStatusCode.NoContent, (await owner.PutAsJsonAsync("/api/v1/contracts/holding-settings", new HoldingSettingsInput(terms, current?.Version ?? 0))).StatusCode);
+        return (await owner.GetFromJsonAsync<HoldingPreparation>($"/api/v1/contracts/holdings/preparation?roomId={roomId}"))!;
+    }
+
     private sealed class Clock(DateTimeOffset now) : TimeProvider { public override DateTimeOffset GetUtcNow() => now; }
     private const string Password = "Synthetic!Setup-9273";
     private sealed class Files : IObjectStorage
@@ -498,7 +505,8 @@ public sealed partial class Compact24OwnerSetupTests(Compact24Fixture fixture) :
         }
         async Task<HttpResponseMessage> Post(HttpClient client, string path, object? input = null)
         { client.DefaultRequestHeaders.Remove("Idempotency-Key"); client.DefaultRequestHeaders.Add("Idempotency-Key", Guid.NewGuid().ToString()); return input is null ? await client.PostAsync(path, null) : await client.PostAsJsonAsync(path, input); }
-        var input = new HoldingDraftInput(w.Room, w.Owner.Id, w.Tenant.Id, resident, [resident], Today, Today.AddYears(1), DateTimeOffset.UtcNow.AddDays(1), 2000000, "Synthetic Holding terms");
+        var quote = await ConfigureHoldingPolicyAsync(owner, w.Room, "Synthetic Holding terms");
+        var input = new HoldingDraftInput(w.Room, w.Owner.Id, w.Tenant.Id, resident, [resident], quote.StartDate, quote.EndDate, quote.ExpiresAt, quote.HoldingDeposit, quote.Terms, 1, quote.SettingsVersion);
         var a = (await Read<ContractId>(await Post(owner, "/api/v1/contracts/holdings", input))).Id;
         var b = (await Read<ContractId>(await Post(owner, "/api/v1/contracts/holdings", input))).Id;
         foreach (var id in new[] { a, b }) await Read<ContractView>(await Post(owner, $"/api/v1/contracts/{id}/holding-approval", new HoldingDecisionInput("Synthetic Owner approval")));

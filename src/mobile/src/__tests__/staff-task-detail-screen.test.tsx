@@ -3,6 +3,7 @@ import React, { useEffect } from 'react';
 import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { afterEach, beforeEach, expect, it, vi } from 'vitest';
 import { MobileApi } from '../lib/api';
+import type { TaskEvidence } from '../services/operationalTasks';
 
 const taskId = '11111111-1111-4111-8111-111111111111';
 const locationId = '22222222-2222-4222-8222-222222222222';
@@ -17,7 +18,11 @@ const state = vi.hoisted(() => ({
   api: null as unknown,
   role: 'Staff',
   go: vi.fn(),
+  gallery: vi.fn(),
 }));
+
+vi.mock('expo-image-picker', () => ({ launchImageLibraryAsync: state.gallery }));
+vi.mock('../features/incidents/TenantIncidentStyle', () => ({ reportColors: {}, reportUi: {} }));
 
 vi.mock('expo-router', () => ({
   useFocusEffect: (callback: () => (() => void) | void) => useEffect(callback, [callback]),
@@ -67,6 +72,7 @@ vi.mock('react-native', () => {
     Modal: ({ visible, children }: { visible: boolean; children?: React.ReactNode }) =>
       visible ? <div role="dialog">{children}</div> : null,
     Platform: { OS: 'web' },
+    ScrollView: View,
     StyleSheet: { create: (value: unknown) => value },
     View,
   };
@@ -305,7 +311,7 @@ function task(
 }
 
 function inventory(
-  status: 'Assigned' | 'InProgress',
+  status: 'Assigned' | 'InProgress' | 'PendingVerification',
   version: number,
   checked = false,
   condition: 'Unassessed' | 'Intact' = 'Unassessed',
@@ -428,12 +434,15 @@ type Scenario = {
 function scenario(
   kind: 'LocationAssetHandover' | 'AdHoc',
   initialStatus: 'Assigned' | 'InProgress',
+  pendingOwner = false,
+  legacyReady = false,
+  evidenceItems: TaskEvidence[] = [],
 ): Scenario {
   let currentStatus: 'Assigned' | 'InProgress' | 'PendingVerification' = initialStatus;
   let currentVersion = 1;
   let inventoryVersion = 1;
-  let inventoryChecked = false;
-  let inventoryCondition: 'Unassessed' | 'Intact' = 'Unassessed';
+  let inventoryChecked = legacyReady;
+  let inventoryCondition: 'Unassessed' | 'Intact' = legacyReady ? 'Intact' : 'Unassessed';
   let inventoryReadCount = 0;
   let equipmentReadCount = 0;
   let saved: Record<string, unknown> | null = null;
@@ -445,7 +454,29 @@ function scenario(
     events.push({ path, method });
     if (path === `/api/v1/operational-tasks/${taskId}`)
       return json(task(kind, currentStatus, currentVersion));
-    if (path.endsWith(`/operational-tasks/${taskId}/evidence`)) return json([]);
+    if (path.endsWith(`/operational-tasks/${taskId}/evidence`)) {
+      if (method === 'PUT') {
+        const uploaded: TaskEvidence = {
+          id: '99999999-9999-4999-8999-999999999997',
+          contentType: 'image/png',
+          length: 8,
+          createdAt: '2026-11-24T10:00:00+07:00',
+          submissionId: null,
+        };
+        evidenceItems.push(uploaded);
+        currentVersion++;
+        return json(uploaded);
+      }
+      return json(evidenceItems);
+    }
+    if (
+      evidenceItems.some((file) =>
+        path.endsWith(`/operational-tasks/${taskId}/evidence/${file.id}`),
+      )
+    )
+      return new Response(new Uint8Array([137, 80, 78, 71, 13, 10, 26, 10]), {
+        headers: { 'content-type': 'image/png' },
+      });
     if (path.endsWith(`/operational-tasks/${taskId}/history`)) return json(history());
     if (path === '/api/v1/capture/locations')
       return json([{ id: locationId, label: 'Cơ sở Phú Thọ' }]);
@@ -454,14 +485,10 @@ function scenario(
       method === 'GET'
     ) {
       inventoryReadCount++;
-      return json(
-        inventory(
-          currentStatus === 'Assigned' ? 'Assigned' : 'InProgress',
-          inventoryVersion,
-          inventoryChecked,
-          inventoryCondition,
-        ),
-      );
+      return json({
+        ...inventory(currentStatus, inventoryVersion, inventoryChecked, inventoryCondition),
+        pendingOwnerRooms: pendingOwner ? ['102'] : [],
+      });
     }
     if (
       path.endsWith(`/operational-tasks/${taskId}/location-asset-inventory/items/${itemId}`) &&
@@ -471,7 +498,14 @@ function scenario(
       inventoryChecked = inventorySaved.checked === true;
       inventoryCondition = inventorySaved.condition === 'Intact' ? 'Intact' : 'Unassessed';
       inventoryVersion++;
-      return json(inventory('InProgress', inventoryVersion, inventoryChecked, inventoryCondition));
+      if (inventoryChecked && !pendingOwner) {
+        currentStatus = 'PendingVerification';
+        currentVersion++;
+      }
+      return json({
+        ...inventory(currentStatus, inventoryVersion, inventoryChecked, inventoryCondition),
+        pendingOwnerRooms: pendingOwner ? ['102'] : [],
+      });
     }
     if (path.endsWith(`/operational-tasks/${taskId}/location-asset-handover`))
       return json({ code: 'resource_not_found' }, 404);
@@ -519,6 +553,7 @@ function scenario(
 beforeEach(() => {
   state.role = 'Staff';
   state.go.mockReset();
+  state.gallery.mockReset();
 });
 afterEach(() => {
   cleanup();
@@ -528,87 +563,141 @@ afterEach(() => {
   vi.restoreAllMocks();
 });
 
-it('keeps handover checklist in sync with task start, hides equipment inspection and collapses history', async () => {
+it('keeps the handover workflow ordered, refreshes checklist after start, and separates history', async () => {
   const s = scenario('LocationAssetHandover', 'Assigned');
   render(<StaffTaskDetailScreen id={taskId} />);
 
-  await screen.findByText('Cơ sở phân công: Cơ sở Phú Thọ');
-  await screen.findByText('Chưa bắt đầu');
-  expect(screen.getByText('Đã kiểm tra 0/1 tài sản')).toBeTruthy();
-  expect(screen.queryByText('Kiểm tra thiết bị')).toBeNull();
+  await screen.findByText(/C. s. ph.n c.ng/);
+  await screen.findByText('Tiến độ kiểm kê');
+  await screen.findByRole('progressbar', { name: /0\/1/ });
+  expect(s.inventoryReads()).toBeGreaterThan(0);
+  fireEvent.click(screen.getByRole('tab', { name: 'Kiểm kê' }));
+  await screen.findByText('Kiểm kê tài sản');
+  expect(screen.queryByRole('progressbar')).toBeNull();
+  expect(screen.queryByText(/Ki.m tra thi.t b./)).toBeNull();
   expect(s.equipmentReads()).toBe(0);
-  expect(screen.getAllByText('Tạo công việc')).toHaveLength(2);
-  expect(screen.queryByText('Cập nhật xác nhận tài sản')).toBeNull();
+  expect(s.requestEvents().some((event) => event.path.includes('/equipment-inspection'))).toBe(
+    false,
+  );
 
-  fireEvent.click(screen.getByRole('button', { name: 'Xem thêm hoạt động' }));
-  expect(screen.getByText('Cập nhật xác nhận tài sản')).toBeTruthy();
-  fireEvent.click(screen.getByRole('button', { name: 'Thu gọn lịch sử' }));
-  expect(screen.queryByText('Cập nhật xác nhận tài sản')).toBeNull();
+  // Handover history is isolated on its own tab and visible without another expansion step.
+  fireEvent.click(screen.getByRole('tab', { name: 'Lịch sử' }));
+  await screen.findAllByText(/T.o c.ng vi.c/);
+  expect(screen.getAllByText(/T.o c.ng vi.c/)).toHaveLength(2);
+  expect(screen.queryByRole('button', { name: /Xem l.ch s./ })).toBeNull();
+  expect(screen.queryByText(/minh ch.ng/)).toBeNull();
+  fireEvent.click(screen.getByRole('tab', { name: 'Kiểm kê' }));
 
+  // Assigned -> start: the footer has one clear action.
   const beforeStartReads = s.inventoryReads();
-  fireEvent.click(screen.getByRole('button', { name: 'Bắt đầu công việc' }));
-  const startButtons = screen.getAllByRole('button', { name: 'Bắt đầu công việc' });
+  fireEvent.click(screen.getByRole('button', { name: /B.t.*ki.m k./ }));
+  const startButtons = screen.getAllByRole('button', { name: /B.t.*ki.m k./ });
   fireEvent.click(startButtons[startButtons.length - 1]!);
-
-  await screen.findByText('Đang thực hiện');
   await waitFor(() => expect(s.inventoryReads()).toBeGreaterThan(beforeStartReads));
-  await screen.findByText('Đang kiểm kê');
+  await screen.findByText('Đang thực hiện');
   const startEventIndex = s
     .requestEvents()
     .findIndex(
       (event) =>
-        event.path.endsWith(`/operational-tasks/${taskId}/start`) && event.method === 'POST',
+        event.path.endsWith('/operational-tasks/' + taskId + '/start') && event.method === 'POST',
     );
   const inventoryRefetchIndex = s
     .requestEvents()
     .findIndex(
       (event, index) =>
         index > startEventIndex &&
-        event.path.endsWith(`/operational-tasks/${taskId}/location-asset-inventory`) &&
+        event.path.endsWith('/operational-tasks/' + taskId + '/location-asset-inventory') &&
         event.method === 'GET',
     );
   expect(startEventIndex).toBeGreaterThanOrEqual(0);
   expect(inventoryRefetchIndex).toBeGreaterThan(startEventIndex);
-  expect(screen.getByRole('button', { name: 'Cập nhật công việc' })).toBeTruthy();
+  expect(screen.queryByRole('button', { name: /B.t.*ki.m k./ })).toBeNull();
   expect(s.equipmentReads()).toBe(0);
 
-  fireEvent.click(screen.getByRole('button', { name: 'Cập nhật công việc' }));
-  expect(screen.getByRole('button', { name: 'Cập nhật tiến độ' })).toBeTruthy();
-  expect(screen.getByRole('button', { name: 'Báo vướng mắc' })).toBeTruthy();
-  expect(screen.getByRole('button', { name: 'Gửi kết quả' }).hasAttribute('disabled')).toBe(true);
+  // The final item PUT completes the checklist on the server.
+  fireEvent.click(screen.getAllByRole('button', { name: /Chi ti.t ki.m k./ })[0]!);
+  fireEvent.click(screen.getByRole('button', { name: /X.c nh.n/ }));
+  await waitFor(() =>
+    expect(s.inventoryUpdate()).toMatchObject({
+      checked: true,
+      condition: 'Intact',
+      note: null,
+      incidentId: null,
+    }),
+  );
+  await screen.findByText('Đã hoàn tất kiểm kê. Chờ Owner đối soát và lập biên bản bàn giao.');
+  fireEvent.click(screen.getByRole('tab', { name: 'Biên bản' }));
+  await screen.findByText('Đã gửi kiểm kê. Đang chờ Owner đối soát và lập biên bản.');
+  const itemWrite = s.requestEvents().findIndex((event) => event.method === 'PUT');
+  expect(itemWrite).toBeGreaterThanOrEqual(0);
   expect(
-    screen.getByText('Chỉ gửi kết quả sau khi xác nhận đủ các mục kiểm kê toàn cơ sở.'),
-  ).toBeTruthy();
+    s
+      .requestEvents()
+      .slice(itemWrite + 1)
+      .some(
+        (event) => event.path.endsWith('/operational-tasks/' + taskId) && event.method === 'GET',
+      ),
+  ).toBe(true);
+  await waitFor(() =>
+    expect(
+      s
+        .requestEvents()
+        .slice(itemWrite + 1)
+        .some((event) => event.path.endsWith('/location-asset-handover') && event.method === 'GET'),
+    ).toBe(true),
+  );
   expect(
-    s.transport.mock.calls.some(([url]) => String(url).includes('/equipment-inspection')),
+    s.requestEvents().some((event) => event.path.endsWith('/submit') && event.method === 'POST'),
   ).toBe(false);
-
-  fireEvent.click(screen.getByRole('button', { name: 'Đóng' }));
-  fireEvent.click(screen.getByRole('button', { name: 'Chi tiết kiểm kê: Quạt trần' }));
-  fireEvent.change(screen.getByRole('combobox', { name: 'Hiện trạng thực tế' }), {
-    target: { value: 'Intact' },
-  });
-  fireEvent.click(screen.getByRole('button', { name: 'Lưu kết quả kiểm tra' }));
-
-  await screen.findByText(/Đã ghi nhận đầy đủ hiện trạng/);
-  expect(s.inventoryUpdate()).toMatchObject({
-    checked: true,
-    condition: 'Intact',
-    note: null,
-    incidentId: null,
-  });
-  fireEvent.click(screen.getByRole('button', { name: 'Cập nhật công việc' }));
-  const submitAction = screen.getByRole('button', { name: 'Gửi kết quả' });
-  expect(submitAction.hasAttribute('disabled')).toBe(false);
-  fireEvent.click(submitAction);
-  fireEvent.change(screen.getByRole('textbox', { name: 'Kết quả thực hiện' }), {
-    target: { value: 'Đã kiểm tra và xác nhận tài sản đầy đủ.' },
-  });
-  fireEvent.click(screen.getByRole('button', { name: 'Gửi Owner kiểm tra' }));
-
-  await screen.findByText('Chờ Owner kiểm tra');
-  expect(screen.queryByRole('button', { name: 'Cập nhật công việc' })).toBeNull();
+  expect(screen.queryByRole('button', { name: /G.i ki.m k. cho Owner/ })).toBeNull();
+  expect(screen.queryByRole('button', { name: 'Hoàn tất kiểm kê tồn đọng' })).toBeNull();
+  expect(screen.queryByRole('button', { name: /Ki.m tra l.i/ })).toBeNull();
+  expect(screen.queryByText(/K.t qu./)).toBeNull();
   expect(s.equipmentReads()).toBe(0);
+  expect(s.requestEvents().some((event) => event.path.includes('/equipment-inspection'))).toBe(
+    false,
+  );
+});
+
+it('does not complete or submit the checklist if Owner confirmation is still pending', async () => {
+  const s = scenario('LocationAssetHandover', 'InProgress', true);
+  render(<StaffTaskDetailScreen id={taskId} />);
+  await screen.findByText('Tiến độ kiểm kê');
+  await screen.findByRole('progressbar', { name: /0\/1/ });
+  fireEvent.click(screen.getByRole('tab', { name: 'Kiểm kê' }));
+  await screen.findByText('Kiểm kê tài sản');
+  expect(screen.queryByRole('progressbar')).toBeNull();
+  fireEvent.click(screen.getAllByRole('button', { name: /Chi ti.t ki.m k./ })[0]!);
+  fireEvent.click(screen.getByRole('button', { name: /X.c nh.n/ }));
+  await waitFor(() => expect(s.inventoryUpdate()).toMatchObject({ checked: true }));
+  fireEvent.click(screen.getByRole('tab', { name: 'Tổng quan' }));
+  await screen.findByRole('progressbar', { name: /1\/1/ });
+  await screen.findByText(/1 phòng chưa được Owner xác nhận/);
+  expect(
+    screen.queryByText('Đã hoàn tất kiểm kê. Chờ Owner đối soát và lập biên bản bàn giao.'),
+  ).toBeNull();
+  expect(screen.queryByRole('button', { name: /G.i ki.m k. cho Owner/ })).toBeNull();
+  expect(screen.queryByRole('button', { name: 'Hoàn tất kiểm kê tồn đọng' })).toBeNull();
+  expect(
+    s.requestEvents().some((event) => event.path.endsWith('/submit') && event.method === 'POST'),
+  ).toBe(false);
+});
+
+it('does not expose manual completion for a server-ready legacy inventory still in progress', async () => {
+  const s = scenario('LocationAssetHandover', 'InProgress', false, true);
+  render(<StaffTaskDetailScreen id={taskId} />);
+  await screen.findByRole('progressbar', { name: /1\/1/ });
+  fireEvent.click(screen.getByRole('tab', { name: 'Kiểm kê' }));
+  await screen.findByText('Kiểm kê tài sản');
+  await screen.findByText(
+    'Đã kiểm tra đủ. Hệ thống đang tự động chuyển công việc sang chờ Owner kiểm tra.',
+  );
+  expect(screen.queryByRole('progressbar')).toBeNull();
+  expect(screen.queryByRole('button', { name: 'Hoàn tất kiểm kê tồn đọng' })).toBeNull();
+  expect(screen.queryByRole('button', { name: 'Gửi kết quả' })).toBeNull();
+  expect(
+    s.requestEvents().some((event) => event.path.endsWith('/submit') && event.method === 'POST'),
+  ).toBe(false);
 });
 
 it('keeps the AdHoc equipment inspection panel functional and saves a versioned answer batch', async () => {
@@ -637,4 +726,62 @@ it('keeps the AdHoc equipment inspection panel functional and saves a versioned 
         init?.method === 'PUT',
     ),
   ).toBe(true);
+});
+
+it('does not fetch authenticated task evidence blobs until the Staff evidence tab is opened', async () => {
+  const evidenceId = '99999999-9999-4999-8999-999999999998';
+  const s = scenario('AdHoc', 'InProgress', false, false, [
+    {
+      id: evidenceId,
+      contentType: 'image/png',
+      length: 8,
+      createdAt: '2026-11-21T08:30:00+07:00',
+      submissionId: null,
+    },
+  ]);
+  render(<StaffTaskDetailScreen id={taskId} />);
+  await screen.findByText('Kiểm tra thiết bị');
+  const evidencePath = `/api/v1/operational-tasks/${taskId}/evidence/${evidenceId}`;
+  expect(s.requestEvents().some((event) => event.path === evidencePath)).toBe(false);
+
+  fireEvent.click(screen.getByRole('tab', { name: 'Minh chứng' }));
+  await waitFor(() =>
+    expect(s.requestEvents().some((event) => event.path === evidencePath)).toBe(true),
+  );
+});
+
+it('previews a library image, supports cancellation, and uploads PNG only after confirmation', async () => {
+  const s = scenario('AdHoc', 'InProgress');
+  const bytes = new Uint8Array([137, 80, 78, 71, 13, 10, 26, 10]);
+  state.gallery.mockResolvedValue({
+    canceled: false,
+    assets: [
+      {
+        uri: 'blob:fixture',
+        mimeType: 'image/png',
+        width: 10,
+        height: 10,
+        fileSize: bytes.length,
+        file: { arrayBuffer: async () => bytes.buffer },
+      },
+    ],
+  });
+  render(<StaffTaskDetailScreen id={taskId} />);
+  await screen.findByText('Kiểm tra thiết bị');
+  fireEvent.click(screen.getByRole('tab', { name: 'Minh chứng' }));
+  fireEvent.click(await screen.findByRole('button', { name: 'Chọn ảnh từ thư viện' }));
+  await screen.findByRole('button', { name: 'Dùng ảnh' });
+  const uploads = () =>
+    s.transport.mock.calls.filter(
+      ([url, init]) =>
+        String(url).endsWith(`/operational-tasks/${taskId}/evidence`) && init?.method === 'PUT',
+    );
+  expect(uploads()).toHaveLength(0);
+  fireEvent.click(screen.getByRole('button', { name: 'Hủy ảnh' }));
+  expect(uploads()).toHaveLength(0);
+  fireEvent.click(screen.getByRole('button', { name: 'Chọn ảnh từ thư viện' }));
+  fireEvent.click(await screen.findByRole('button', { name: 'Dùng ảnh' }));
+  await waitFor(() => expect(uploads()).toHaveLength(1));
+  expect(new Headers(uploads()[0][1]?.headers).get('Content-Type')).toBe('image/png');
+  await screen.findByText('1 ảnh');
 });

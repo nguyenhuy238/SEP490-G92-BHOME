@@ -12,9 +12,12 @@ import {
   loadTenantRoomContract,
   loadTenantRoomHandover,
 } from '../../services/tenantRoom';
+import { useTenantCurrentRental } from './TenantCurrentRentalContext';
+import { isActiveRoomRental } from './tenantContractEligibility';
 
 // Select only from the account-scoped server list; route text cannot select another tenancy.
 export function useTenantTenancy(withDetails = true) {
+  const verifiedRental = useTenantCurrentRental();
   const { session, api } = useSession();
   const allowed = session?.roles.includes('Tenant');
   const [pagination, setPagination] = useState({ api, page: 1 });
@@ -27,9 +30,11 @@ export function useTenantTenancy(withDetails = true) {
     allowed ? `/api/v1/contracts?page=${page}&pageSize=20&status=Active` : null,
     withDetails ? { load: loadTenantRoomPage, notifyError: false } : undefined,
   );
+  const visibleItems = contracts.data?.items.filter(isActiveRoomRental) ?? [];
   const items =
-    contracts.data?.items.filter((item) => item.status === 'Active' && item.kind !== 'Holding') ??
-    [];
+    verifiedRental && !visibleItems.some((item) => item.id === verifiedRental.id)
+      ? [...visibleItems, verifiedRental]
+      : visibleItems;
   const current =
     items.find((item) => item.id === selected) ??
     (!selected && (!withDetails || (items.length === 1 && (contracts.data?.totalCount ?? 0) <= 20))

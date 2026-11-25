@@ -53,14 +53,12 @@ export function validateInventoryItem(
   if (!Number.isSafeInteger(expectedQuantity) || expectedQuantity < 0)
     return 'Số lượng cần kiểm kê không hợp lệ; hãy tải lại.';
   if (input.actualQuantity > expectedQuantity)
-    return 'Số lượng thực tế vượt số lượng dự kiến. Hãy báo Owner kiểm tra cấu hình.';
+    return 'Số lượng thực tế vượt số lượng dự kiến. Hãy báo chủ trọ kiểm tra cấu hình.';
   if (input.condition === 'Good' && input.actualQuantity !== expectedQuantity)
     return 'Đạt yêu cầu phải đủ số lượng dự kiến.';
   if (input.condition === 'Missing' && input.actualQuantity >= expectedQuantity)
     return 'Chọn Thiếu khi số lượng thực tế nhỏ hơn dự kiến.';
   if (!['Good', 'Missing', 'Damaged'].includes(input.condition)) return 'Chọn tình trạng tài sản.';
-  if (input.condition !== 'Good' && !input.notes.trim())
-    return 'Ghi rõ tài sản thiếu hoặc hư hỏng để Owner xem xét.';
   if (input.notes.length > 2000) return 'Ghi chú không quá 2000 ký tự.';
   return '';
 }
@@ -70,7 +68,7 @@ export function readyToComplete(items: MoveInInventoryItem[], reinspectionItemId
     (item) =>
       item.actualQuantity !== null &&
       !!item.condition &&
-      (item.condition === 'Good' || (item.evidenceIds ?? []).length > 0) &&
+      (item.actualQuantity === 0 || (item.evidenceIds ?? []).length > 0) &&
       (!reinspectionItemIds.includes(item.id) ||
         (item.condition === 'Good' && item.actualQuantity === item.expectedQuantity)) &&
       !validateInventoryItem(

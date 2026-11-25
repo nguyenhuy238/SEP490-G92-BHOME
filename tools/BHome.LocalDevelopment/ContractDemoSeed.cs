@@ -5,6 +5,7 @@ using BHome.Domain.Locations;
 using BHome.Domain.PropertyManagement;
 using BHome.Domain.TenantContracts;
 using BHome.Infrastructure.Persistence;
+using BHome.Infrastructure.Persistence.Compact24;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Configuration;
@@ -31,7 +32,7 @@ public static class ContractDemoSeed
             throw new LocalTestAccountException("Seed chỉ được phép trên PostgreSQL loopback, database bhome_contract_demo, Development/Testing.");
     }
 
-    public static async Task RunAsync(IServiceProvider services, string? environment, string password, CancellationToken t = default)
+    public static async Task RunAsync(IServiceProvider services, string? environment, string password, CancellationToken t = default, bool demoClock = false)
     {
         var config = services.GetRequiredService<IConfiguration>();
         ValidateTarget(environment, config.GetConnectionString("Database") ?? "");
@@ -40,6 +41,8 @@ public static class ContractDemoSeed
         var endpoint = config["ObjectStorage:Endpoint"] ?? "";
         if (!Uri.TryCreate("http://" + endpoint, UriKind.Absolute, out var storageUri) || !storageUri.IsLoopback || config["ObjectStorage:Bucket"] != "contract-demo")
             throw new LocalTestAccountException("Seed yêu cầu MinIO loopback và bucket contract-demo riêng.");
+        if (environment == "Development")
+            await Compact24DevelopmentDatabase.PrepareAsync(environment, config.GetConnectionString("Database")!, token: t, contractDemo: true);
         await using var scope = services.CreateAsyncScope();
         var db = scope.ServiceProvider.GetRequiredService<BHomePersistenceContext>();
         if (!await db.IsSchemaReadyAsync(t)) throw new LocalTestAccountException("Prepare the reviewed Compact24 schema before seeding; automatic schema migration is disabled.");
@@ -103,6 +106,13 @@ public static class ContractDemoSeed
             Cv2.PutText(synthetic, "METER / ROOM EVIDENCE FIXTURE", new Point(20, 130), HersheyFonts.HersheySimplex, 0.7, Scalar.Black, 2);
             Cv2.PutText(synthetic, "100 - NOT A REAL PHOTO", new Point(20, 190), HersheyFonts.HersheySimplex, 0.8, Scalar.Black, 2);
             await File.WriteAllBytesAsync(System.IO.Path.Combine(artifacts, "synthetic-evidence.png"), synthetic.ImEncode(".png"), t);
+        }
+        // Demo Clock starts with ordinary available rooms so the presenter can create a contract
+        // through the actual workflow; the historical signed BH40 fixture is a separate test scenario.
+        if (demoClock)
+        {
+            Console.WriteLine("Demo Clock fixtures ready. Existing data preserved. No historical contract or automatic job was run.");
+            return;
         }
         await ContractLifecycleDemoSeed.HistoricalParentAsync(services, t);
         // Invoke the registered idempotent handler in this guarded demo database. Re-running the

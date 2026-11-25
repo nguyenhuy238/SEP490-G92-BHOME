@@ -3,7 +3,7 @@ import { useCallback } from 'react';
 import { queryPolicies } from '../../lib/queryPolicies';
 import { useWorkspaceHeaderRefresh } from '../../components/WorkspaceHeaderContext';
 import { businessToday } from '../../../../../packages/client-core/src/contracts';
-import type { MeterTask, Named } from '../../lib/api';
+import type { Named } from '../../lib/api';
 import type { OperationalTask, TaskPage } from '../../services/operationalTasks';
 import { useWorkspace } from './WorkspaceProvider';
 import { useWorkspaceQuery } from './useWorkspaceQuery';
@@ -29,40 +29,16 @@ export function useStaffDashboard() {
   });
   const tasks = useWorkspaceQuery<TaskPage<OperationalTask>>(
     scoped
-      ? `/api/v1/operational-tasks?page=1&pageSize=1&${locationQuery}&dueFrom=${today}T00:00:00%2B07:00&dueTo=${today}T23:59:59.999%2B07:00`
+      ? `/api/v1/operational-tasks?page=1&pageSize=1&${locationQuery}&category=Operational&dueFrom=${today}T00:00:00%2B07:00&dueTo=${today}T23:59:59.999%2B07:00`
       : null,
     { cache: queryPolicies.tasks },
   );
-  const overdueAssigned = useWorkspaceQuery<TaskPage<OperationalTask>>(
+  const priorities = useWorkspaceQuery<TaskPage<OperationalTask>>(
     scoped
-      ? `/api/v1/operational-tasks?page=1&pageSize=3&${locationQuery}&isOverdue=true&status=Assigned`
+      ? `/api/v1/operational-tasks?page=1&pageSize=2&${locationQuery}&latestActionable=true`
       : null,
     { cache: queryPolicies.tasks },
   );
-  const overdueProgress = useWorkspaceQuery<TaskPage<OperationalTask>>(
-    scoped
-      ? `/api/v1/operational-tasks?page=1&pageSize=3&${locationQuery}&isOverdue=true&status=InProgress`
-      : null,
-    { cache: queryPolicies.tasks },
-  );
-  // PendingVerification needs Owner action. Query the two actionable states separately
-  // so its earlier rows cannot hide Staff tasks behind the first server page.
-  const overdue = {
-    data:
-      overdueAssigned.data || overdueProgress.data
-        ? {
-            items: [...(overdueAssigned.data?.items ?? []), ...(overdueProgress.data?.items ?? [])]
-              .sort(
-                (a, b) =>
-                  (a.dueAt ? Date.parse(a.dueAt) : Infinity) -
-                    (b.dueAt ? Date.parse(b.dueAt) : Infinity) || a.id.localeCompare(b.id),
-              )
-              .slice(0, 3),
-          }
-        : null,
-    error: overdueAssigned.error || overdueProgress.error,
-    loading: overdueAssigned.loading || overdueProgress.loading,
-  };
   const inspections = useWorkspaceQuery<MoveOutAssignment[]>(
     scoped ? '/api/v1/contracts/move-out-assignments' : null,
     { cache: queryPolicies.contracts },
@@ -85,10 +61,6 @@ export function useStaffDashboard() {
     loading: inspections.loading || rooms.loading,
     fetching: inspections.fetching || rooms.fetching,
   };
-  const meters = useWorkspaceQuery<MeterTask[]>(
-    scoped ? `/api/v1/capture/meter-tasks?page=1&status=0&${locationQuery}` : null,
-    { cache: queryPolicies.meters },
-  );
   const submittedIncidents = useWorkspaceQuery<IncidentPage<Incident>>(
     scoped ? `${incidentRoot}?status=Submitted&page=1&pageSize=1&${locationQuery}` : null,
     { cache: queryPolicies.incidents },
@@ -109,29 +81,23 @@ export function useStaffDashboard() {
   const reloadProcessingIncidents = processingIncidents.reload;
   const reloadLocations = locations.reload;
   const reloadTasks = tasks.reload;
-  const reloadOverdueAssigned = overdueAssigned.reload;
-  const reloadOverdueProgress = overdueProgress.reload;
+  const reloadPriorities = priorities.reload;
   const reloadInspections = inspections.reload;
   const reloadRooms = rooms.reload;
-  const reloadMeters = meters.reload;
   const reload = useCallback(() => {
     reloadLocations();
     reloadTasks();
-    reloadOverdueAssigned();
-    reloadOverdueProgress();
+    reloadPriorities();
     reloadInspections();
     reloadRooms();
-    reloadMeters();
     reloadSubmittedIncidents();
     reloadProcessingIncidents();
   }, [
     reloadLocations,
     reloadTasks,
-    reloadOverdueAssigned,
-    reloadOverdueProgress,
+    reloadPriorities,
     reloadInspections,
     reloadRooms,
-    reloadMeters,
     reloadSubmittedIncidents,
     reloadProcessingIncidents,
   ]);
@@ -140,14 +106,12 @@ export function useStaffDashboard() {
     [
       locations,
       tasks,
-      overdueAssigned,
-      overdueProgress,
+      priorities,
       inspections,
       rooms,
-      meters,
       submittedIncidents,
       processingIncidents,
     ].some((query) => query.fetching),
   );
-  return { locations, tasks, overdue, inspections: scopedInspections, meters, incidents, reload };
+  return { locations, tasks, priorities, inspections: scopedInspections, incidents, reload };
 }

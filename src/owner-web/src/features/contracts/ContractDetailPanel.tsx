@@ -51,6 +51,9 @@ import { OwnerSigningPanel } from './OwnerSigningPanel';
 import { useSigningMethods } from './useContractsApi';
 import { signingMethodLabel } from '../../../../../packages/client-core/src/signing';
 import { InternalSigningPanel } from './InternalSigningPanel';
+import { contractPdfName } from '../../../../../packages/client-core/src/contractPdfName';
+import { ContractDocumentViewer } from './ContractDocumentViewer';
+import { useObjectUrl } from './useObjectUrl';
 
 function downloadBlob(blob: Blob, name: string) {
   const url = URL.createObjectURL(blob),
@@ -82,6 +85,17 @@ export function ContractDetailPanel({
     [error, setError] = useState(''),
     [busy, setBusy] = useState(false);
   const lock = useRef(false);
+  const [signedDocument, setSignedDocument] = useState<{ key: string; blob: Blob } | null>(null);
+  const currentContract = detail.data?.contract;
+  const signedKey = JSON.stringify([
+    id,
+    currentContract?.snapshotHash,
+    currentContract?.signatures.map(({ id, status, signedAt }) => [id, status, signedAt]),
+  ]);
+  const signedUrl = useObjectUrl(
+    signedKey,
+    signedDocument?.key === signedKey ? async () => signedDocument.blob : null,
+  );
   async function run(work: () => Promise<void>) {
     if (lock.current) return;
     lock.current = true;
@@ -178,24 +192,13 @@ export function ContractDetailPanel({
       : []),
   ];
   async function openSigned() {
-    // Open the tab now (a tab opened after an await is blocked as a pop-up), fill it when the PDF arrives.
-    const tab = window.open('', '_blank');
     await run(async () => {
       const pdf = new Blob([await api.document(id)], { type: 'application/pdf' });
-      const url = URL.createObjectURL(pdf);
-      if (tab) tab.location.href = url;
-      else downloadBlob(pdf, 'hop-dong.pdf');
-      setTimeout(() => URL.revokeObjectURL(url), 120000);
+      setSignedDocument({ key: signedKey, blob: pdf });
     });
   }
   return (
     <Stack spacing={2}>
-      {c.isDevelopmentDemo && (
-        <Alert severity="warning">
-          HỢP ĐỒNG DEMO · SIMULATED SIGNING · Không có giá trị pháp lý.
-        </Alert>
-      )}
-
       {/* 1. Summary: what this contract is and where it stands */}
       <Paper variant="outlined" sx={{ p: 2 }}>
         <Stack direction="row" spacing={1} sx={{ alignItems: 'center', flexWrap: 'wrap' }}>
@@ -478,12 +481,21 @@ export function ContractDetailPanel({
             <Button
               disabled={busy || !anySigned}
               onClick={() =>
-                void run(async () => downloadBlob(await api.document(id), 'hop-dong.pdf'))
+                void run(async () =>
+                  downloadBlob(await api.document(id), contractPdfName(c.kind, id)),
+                )
               }
             >
               Tải tài liệu ký
             </Button>
           </Stack>
+          {anySigned && signedUrl && (
+            <ContractDocumentViewer
+              url={signedUrl}
+              title="PDF hợp đồng đã ký"
+              filename={contractPdfName(c.kind, id)}
+            />
+          )}
         </ChartCard>
       )}
 

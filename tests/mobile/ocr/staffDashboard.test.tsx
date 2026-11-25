@@ -19,9 +19,8 @@ vi.mock('../../../src/mobile/src/features/workspace/useStaffDashboard', () => ({
   useStaffDashboard: () => ({
     locations: { data: null },
     tasks: { data: null },
-    overdue: { data: null },
+    priorities: { data: null },
     inspections: { data: state.inspections.length ? state.inspections : null },
-    meters: { data: null },
     reload: vi.fn(),
   }),
 }));
@@ -94,15 +93,11 @@ it.each([
   fireEvent.click(screen.getAllByRole('button', { name: label }).at(-1)!);
   expect(state.go).toHaveBeenCalledWith(destination);
 });
-it.each([
-  ['Bàn giao nhận phòng', 'move-in'],
-  ['Kiểm tra trả phòng', 'move-out'],
-])('lets Staff choose %s', (label, destination) => {
+it('opens the dedicated handover and move-out task workspace directly', () => {
   render(<StaffDashboard />);
   expect(screen.queryByRole('dialog')).toBeNull();
   fireEvent.click(screen.getByRole('button', { name: 'Bàn giao / Trả phòng' }));
-  fireEvent.click(within(screen.getByRole('dialog')).getByRole('button', { name: label }));
-  expect(state.go).toHaveBeenCalledWith(destination);
+  expect(state.go).toHaveBeenCalledWith('staff-handovers');
   expect(screen.queryByRole('dialog')).toBeNull();
 });
 it('does not present sample identity, shift or counts to a signed-in account', () => {
@@ -114,7 +109,7 @@ it('does not present sample identity, shift or counts to a signed-in account', (
   expect(screen.queryByText('Chưa có dữ liệu ca làm')).toBeNull();
 });
 
-it('shows location move-out work on the dashboard even without a schedule, while identifying future inspection dates', () => {
+it('keeps the move-out count linked to the work list without filling the priority preview', () => {
   state.inspections = [
     {
       contractId: 'contract-101',
@@ -126,10 +121,12 @@ it('shows location move-out work on the dashboard even without a schedule, while
     },
   ];
   render(<StaffDashboard />);
-  expect(screen.getByText('Chờ ngày trả ›')).toBeTruthy();
-  expect(screen.getByText(/Phòng R\.101 · Cơ sở A · Ngày trả 18\/11\/2099/)).toBeTruthy();
-  fireEvent.click(screen.getByRole('button', { name: /Kiểm tra trả phòng, Phòng R\.101/ }));
-  expect(state.go).toHaveBeenCalledWith('work-orders');
+  const metric = screen.getByRole('button', { name: 'Kiểm tra trả phòng' });
+  expect(within(metric).getByText('1')).toBeTruthy();
+  expect(screen.getByText('Chưa có việc ưu tiên cần xử lý.')).toBeTruthy();
+  expect(state.go).not.toHaveBeenCalled();
+  fireEvent.click(metric);
+  expect(state.go).toHaveBeenCalledWith('staff-handovers', { tab: 'MoveOut' });
 });
 
 it('shows four quick actions and hides management shortcuts', () => {
@@ -139,12 +136,11 @@ it('shows four quick actions and hides management shortcuts', () => {
   for (const title of ['Hóa đơn', 'Công nợ', 'Gửi thông báo'])
     expect(screen.queryByRole('button', { name: title })).toBeNull();
 });
-it('allows closing handover selection without navigating', () => {
+it('opens the move-out queue directly from the dashboard metric', () => {
   render(<StaffDashboard />);
-  fireEvent.click(screen.getByRole('button', { name: 'Bàn giao / Trả phòng' }));
-  fireEvent.click(screen.getByRole('button', { name: 'Đóng' }));
+  fireEvent.click(screen.getByRole('button', { name: 'Kiểm tra trả phòng' }));
   expect(screen.queryByRole('dialog')).toBeNull();
-  expect(state.go).not.toHaveBeenCalled();
+  expect(state.go).toHaveBeenCalledWith('staff-handovers', { tab: 'MoveOut' });
 });
 
 it('states that sending is unavailable and only offers the existing inbox', () => {

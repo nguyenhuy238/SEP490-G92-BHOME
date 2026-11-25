@@ -20,7 +20,8 @@ public sealed class MainDocxTemplateTests
         {
             ["MainDraft:LibreOfficeContainerImage"] = "bhome/contract-converter:local"
         }).Build();
-        var renderer = new MainDraftRenderer(configuration, TimeProvider.System);
+        var renderer = new MainDraftRenderer(configuration, TimeProvider.System, new TestEnvironment());
+        Assert.True(renderer.SigningReviewAvailable);
         var c = new Contract
         {
             RoomId = Guid.NewGuid(),
@@ -51,11 +52,13 @@ public sealed class MainDocxTemplateTests
             Assert.Contains("CHỦ NHÀ KIỂM THỬ", text); Assert.Contains("NGƯỜI THUÊ KIỂM THỬ", text);
             Assert.Contains("TRÁCH NHIỆM CHUNG", text); Assert.Contains("2.300.000", text); Assert.DoesNotContain("9.900.000", text);
             Assert.Contains("ĐẠI DIỆN BÊN B", text); Assert.Contains("ĐẠI DIỆN BÊN A", text);
+            Assert.DoesNotContain("TÀI LIỆU KIỂM THỬ", text);
         }
         var bytes = await renderer.PdfAsync(docx, default);
         using var pdf = new PdfDocument(new PdfReader(new MemoryStream(bytes)));
         var all = ContractPdfRendererTests.Text(pdf);
         Assert.Contains("HỢP ĐỒNG THUÊ PHÒNG TRỌ", all); Assert.Contains("TRÁCH NHIỆM CHUNG", all);
+        Assert.DoesNotContain("TÀI LIỆU KIỂM THỬ", all);
         Assert.Contains("000000000001", all); Assert.Contains("000000000002", all); Assert.Contains("15/06/2021", all);
         Assert.DoesNotContain("MẪU HỢP ĐỒNG", all);
         var owner = ContractSignatureSlots.Read(bytes, true)!; var renter = ContractSignatureSlots.Read(bytes, false)!;
@@ -72,8 +75,17 @@ public sealed class MainDocxTemplateTests
             await File.WriteAllBytesAsync(Path.Combine(qa, "main-template.docx"), docx);
             await File.WriteAllBytesAsync(Path.Combine(qa, "main-template.pdf"), bytes);
             var pages = new ContractSigningPages();
-            await File.WriteAllBytesAsync(Path.Combine(qa, "main-template-page-1.png"), pages.RenderPage(bytes, 1, 1100));
+            for (var page = 1; page <= pdf.GetNumberOfPages(); page++)
+                await File.WriteAllBytesAsync(Path.Combine(qa, $"main-template-page-{page}.png"), pages.RenderPage(bytes, page, 1100));
             await File.WriteAllBytesAsync(Path.Combine(qa, "main-template-signatures.png"), pages.RenderPage(accepted.Pdf, owner.Page, 1100));
         }
+    }
+
+    private sealed class TestEnvironment : Microsoft.Extensions.Hosting.IHostEnvironment
+    {
+        public string EnvironmentName { get; set; } = "Testing";
+        public string ApplicationName { get; set; } = "BHome.IntegrationTests";
+        public string ContentRootPath { get; set; } = "";
+        public Microsoft.Extensions.FileProviders.IFileProvider ContentRootFileProvider { get; set; } = new Microsoft.Extensions.FileProviders.NullFileProvider();
     }
 }

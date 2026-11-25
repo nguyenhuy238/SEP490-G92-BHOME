@@ -62,6 +62,7 @@ const review = {
 const api = {
   moveOut: vi.fn(),
   inspections: vi.fn(),
+  inspectionPreparation: vi.fn(),
   transport: vi.fn(),
   handoverEvidence: vi.fn(),
   evidence: vi.fn(),
@@ -79,6 +80,12 @@ function mount() {
 }
 
 beforeEach(() => {
+  vi.mocked(api.inspectionPreparation).mockReset().mockResolvedValue({
+    baseline: null,
+    baselineContractId: null,
+    finalReadings: [],
+    otherTenantsRemain: false,
+  });
   vi.mocked(api.moveOut)
     .mockReset()
     .mockResolvedValue({ status: 'Inspected' } as never);
@@ -91,7 +98,56 @@ beforeEach(() => {
   vi.mocked(api.handoverEvidence).mockReset();
   vi.mocked(api.evidence).mockReset();
   vi.mocked(api.readingEvidence).mockReset();
+  const photo = () =>
+    new Blob([new Uint8Array([255, 216, 255, 224, 0, 16, 74, 70])], { type: 'image/jpeg' });
+  vi.mocked(api.handoverEvidence).mockImplementation(async () => photo());
+  vi.mocked(api.evidence).mockImplementation(async () => photo());
+  vi.mocked(api.readingEvidence).mockImplementation(async () => photo());
   mutation.mockReset().mockResolvedValue({ id: 'proposal-1' });
+});
+
+it('shows saved partial inspection during staff work without enabling financial approval', async () => {
+  vi.mocked(api.moveOut).mockResolvedValue({ status: 'Approved' } as never);
+  vi.mocked(api.transport).mockImplementation(async (path) => {
+    if (path.endsWith('/move-out/inspection-draft')) {
+      return {
+        contractId: 'contract-1',
+        roomCondition: 'Tường đã kiểm tra',
+        keysAndAccess: '',
+        notes: '',
+        assets: [],
+        roomChecks: [
+          { code: 'cleanliness', status: 'Issue', notes: 'Cần vệ sinh', evidenceIds: [] },
+        ],
+        accessItems: [{ type: 'RoomKey', quantity: 0 }],
+        evidenceIds: [],
+        keyEvidenceIds: [],
+        electricityReadingId: null,
+        waterReadingId: null,
+      } as never;
+    }
+    return review as never;
+  });
+  mount();
+  expect(await screen.findByText('Hiện trạng chung: Tường đã kiểm tra')).toBeInTheDocument();
+  expect(screen.getByText('Cần vệ sinh')).toBeInTheDocument();
+  expect(screen.getByText('Số lượng: 0')).toBeInTheDocument();
+  expect(screen.getByText('Điện: Chưa xác nhận')).toBeInTheDocument();
+  expect(screen.queryByRole('button', { name: /Gửi.*duyệt/ })).not.toBeInTheDocument();
+  expect(mutation).not.toHaveBeenCalled();
+});
+
+it('shows a completed move-out instead of the stale negative provisional balance', async () => {
+  vi.mocked(api.moveOut).mockResolvedValue({ status: 'Completed' } as never);
+  vi.mocked(api.transport).mockResolvedValue({ ...review, status: 'Outdated' } as never);
+  mount();
+  expect(await screen.findByText(/Máy chủ đã xác minh đủ khoản thanh toán/)).toBeInTheDocument();
+  expect(await screen.findByText('Số còn cần thu hoặc hoàn')).toBeInTheDocument();
+  expect(screen.getByText('Phí trả phòng đã chốt')).toBeInTheDocument();
+  expect(screen.queryByText('Chênh lệch dự kiến')).not.toBeInTheDocument();
+  expect(
+    screen.queryByText(/Dữ liệu tài chính hoặc kết quả kiểm tra đã thay đổi/),
+  ).not.toBeInTheDocument();
 });
 
 it('shows whole-number meter readings, Vietnamese item details and private opening/return photos without downloads', async () => {
@@ -145,13 +201,16 @@ it('shows whole-number meter readings, Vietnamese item details and private openi
   expect(screen.queryByText('Passed')).not.toBeInTheDocument();
   expect(screen.queryByText('Issue')).not.toBeInTheDocument();
   expect(screen.queryByText('100.0000')).not.toBeInTheDocument();
-  expect(screen.getByText('100 kW')).toBeInTheDocument();
+  expect(screen.getByText('100 kWh')).toBeInTheDocument();
   expect(screen.getByText('200 m³')).toBeInTheDocument();
   expect(screen.queryByRole('button', { name: 'Xem ảnh bàn giao' })).not.toBeInTheDocument();
   expect(screen.queryByText('Chưa có phí')).not.toBeInTheDocument();
   expect(screen.queryByRole('button', { name: /Tải xuống/ })).not.toBeInTheDocument();
   await waitFor(() => expect(screen.getAllByRole('button', { name: 'Xem ảnh' })).toHaveLength(2));
   const previews = screen.getAllByRole('button', { name: 'Xem ảnh' });
+  await waitFor(() => expect(previews[0]).toBeEnabled());
+  expect(screen.getByRole('img', { name: /Ảnh bàn giao/ })).toBeInTheDocument();
+  expect(screen.getByRole('img', { name: /Ảnh trả phòng/ })).toBeInTheDocument();
   fireEvent.click(previews[0]);
   await waitFor(() =>
     expect(api.handoverEvidence).toHaveBeenCalledWith(
@@ -164,20 +223,25 @@ it('shows whole-number meter readings, Vietnamese item details and private openi
 
 it('uses the same stored handover draft photos as the Bàn giao tab even when final snapshot has no photo IDs', async () => {
   vi.mocked(api.transport).mockImplementation(async (path) =>
-    path.endsWith('/handover/draft')
-      ? ({
-          status: 'Confirmed',
-          contractId: 'contract-1',
-          evidenceIds: ['general-draft'],
-          roomChecks: [{ code: 'cleanliness', evidenceIds: ['room-draft-photo'] }],
-          assets: [],
-          keyEvidenceIds: [],
-        } as never)
-      : (review as never),
+    path.includes('/handover/draft/evidence/')
+      ? (new Blob([new Uint8Array([255, 216, 255, 224, 0, 16, 74, 70])], {
+          type: 'image/jpeg',
+        }) as never)
+      : path.endsWith('/handover/draft')
+        ? ({
+            status: 'Confirmed',
+            contractId: 'contract-1',
+            evidenceIds: ['general-draft'],
+            roomChecks: [{ code: 'cleanliness', evidenceIds: ['room-draft-photo'] }],
+            assets: [],
+            keyEvidenceIds: [],
+          } as never)
+        : (review as never),
   );
   mount();
   await screen.findByText('Ảnh bàn giao chung');
   await waitFor(() => expect(screen.getAllByRole('button', { name: 'Xem ảnh' })).toHaveLength(2));
+  await waitFor(() => expect(screen.getAllByRole('button', { name: 'Xem ảnh' })[1]).toBeEnabled());
   fireEvent.click(screen.getAllByRole('button', { name: 'Xem ảnh' })[1]);
   await waitFor(() =>
     expect(api.transport).toHaveBeenCalledWith(
@@ -188,11 +252,15 @@ it('uses the same stored handover draft photos as the Bàn giao tab even when fi
   );
 });
 
-it('allows pricing each Staff-inspected item without Owner review, then sends a described proposal to Tenant', async () => {
+it('allows pricing Staff-inspected items and sending fees without a second Owner inspection approval', async () => {
   mount();
   expect(await screen.findByText(/1\.200\.000/)).toBeInTheDocument();
   expect(screen.getByText(/100\.000/)).toBeInTheDocument();
-  expect(screen.queryByText('Xác minh kết quả Staff')).not.toBeInTheDocument();
+  expect(screen.queryByText('Xác minh kết quả nhân viên')).not.toBeInTheDocument();
+  expect(screen.queryByText('Chờ chủ trọ xác nhận kiểm kê')).not.toBeInTheDocument();
+  expect(
+    screen.queryByRole('button', { name: 'Xác nhận kết quả kiểm kê' }),
+  ).not.toBeInTheDocument();
   const firstItem = await screen.findByRole('button', {
     name: 'Nhập phí · Vệ sinh và hiện trạng phòng',
   });
@@ -219,7 +287,7 @@ it('allows pricing each Staff-inspected item without Owner review, then sends a 
   fireEvent.change(screen.getByRole('textbox', { name: 'Mô tả bổ sung (nếu có)' }), {
     target: { value: 'Đề nghị người thuê xem chi tiết các khoản chi phí' },
   });
-  fireEvent.click(await screen.findByRole('button', { name: 'Gửi Tenant duyệt' }));
+  fireEvent.click(await screen.findByRole('button', { name: 'Gửi khách thuê duyệt' }));
   fireEvent.click(await screen.findByRole('button', { name: 'Xác nhận thực hiện' }));
   await waitFor(() => expect(mutation).toHaveBeenCalledOnce());
   expect(mutation).toHaveBeenCalledWith(
@@ -242,3 +310,178 @@ it('allows pricing each Staff-inspected item without Owner review, then sends a 
     expect.any(String),
   );
 });
+
+it('shows the Tenant objection on the exact charge and lets Owner revise and resend it', async () => {
+  vi.mocked(api.transport).mockResolvedValue({
+    ...review,
+    status: 'Disputed',
+    latestProposal: {
+      id: 'proposal-1',
+      sourceReference: review.reference,
+      items: [
+        {
+          kind: 'RoomCheck',
+          roomCheckCode: 'cleanliness',
+          amount: '250000',
+          reason: 'Phí vệ sinh',
+        },
+      ],
+      totalCharges: '250000',
+      signedBalance: '650000',
+      availableDeposit: '1000000',
+      verifiedDeposit: '1200000',
+      sentAt: '2026-11-22T10:00:00Z',
+      tenantFeedback: {
+        confirmed: false,
+        reason: 'Mong chủ trọ kiểm tra lại ảnh',
+        disputedItems: [
+          {
+            kind: 'RoomCheck',
+            roomCheckCode: 'cleanliness',
+            reason: 'Đã dọn sạch trước khi trả phòng',
+          },
+        ],
+      },
+    },
+  } as never);
+  mount();
+  expect(await screen.findByText(/Khách thuê không đồng ý với đề xuất trước/)).toBeInTheDocument();
+  expect(
+    screen.getByText('Lý do khách thuê yêu cầu xem lại: Đã dọn sạch trước khi trả phòng'),
+  ).toBeInTheDocument();
+  expect(screen.getByText('Phản hồi chung: Mong chủ trọ kiểm tra lại ảnh')).toBeInTheDocument();
+  expect(screen.getAllByText('Khách thuê không đồng ý phí')).toHaveLength(1);
+  fireEvent.click(screen.getByRole('button', { name: 'Sửa phí · Vệ sinh và hiện trạng phòng' }));
+  fireEvent.change(screen.getByRole('textbox', { name: 'Số tiền cần thu (₫)' }), {
+    target: { value: '80000' },
+  });
+  fireEvent.change(screen.getByRole('textbox', { name: 'Lý do thu' }), {
+    target: { value: 'Giảm phí sau khi xem bằng chứng khách thuê' },
+  });
+  fireEvent.click(screen.getByRole('button', { name: 'Xong' }));
+  fireEvent.click(await screen.findByRole('button', { name: 'Gửi lại khách thuê duyệt' }));
+  fireEvent.click(await screen.findByRole('button', { name: 'Xác nhận thực hiện' }));
+  await waitFor(() =>
+    expect(mutation).toHaveBeenCalledWith(
+      'contract-1',
+      'move-out/receivables/proposal',
+      expect.objectContaining({
+        items: [
+          {
+            kind: 'RoomCheck',
+            roomCheckCode: 'cleanliness',
+            amount: '80000',
+            reason: 'Giảm phí sau khi xem bằng chứng khách thuê',
+          },
+        ],
+      }),
+      expect.any(String),
+    ),
+  );
+});
+
+it('shows Staff final status and enables sending a proposal without redundant Owner confirmation', async () => {
+  mount();
+  expect(await screen.findByRole('button', { name: 'Gửi khách thuê duyệt' })).toBeEnabled();
+  expect(screen.getByText('Chờ chủ trọ gửi phí')).toBeInTheDocument();
+  expect(screen.queryByText('Chờ chủ trọ xác nhận kiểm kê')).not.toBeInTheDocument();
+  expect(
+    screen.queryByText(/Đã nhận kết quả nhân viên nhưng chủ trọ chưa xác nhận kiểm kê thực tế/),
+  ).not.toBeInTheDocument();
+  expect(
+    screen.queryByRole('button', { name: 'Xác nhận kết quả kiểm kê' }),
+  ).not.toBeInTheDocument();
+  fireEvent.click(screen.getByRole('button', { name: 'Gửi khách thuê duyệt' }));
+  fireEvent.click(screen.getByRole('button', { name: 'Xác nhận thực hiện' }));
+  await waitFor(() =>
+    expect(mutation).toHaveBeenCalledWith(
+      'contract-1',
+      'move-out/receivables/proposal',
+      expect.objectContaining({ inspectionId: 'inspection-1', items: [] }),
+      expect.any(String),
+    ),
+  );
+});
+
+it('does not redirect a Tenant-accepted fee back to redundant Owner inspection review', async () => {
+  vi.mocked(api.transport).mockResolvedValue({
+    ...review,
+    status: 'Accepted',
+    latestProposal: {
+      id: 'old-proposal',
+      sourceReference: review.reference,
+      items: [
+        { kind: 'RoomCheck', roomCheckCode: 'cleanliness', amount: '20000', reason: 'Hỏng tường' },
+      ],
+      totalCharges: '20000',
+      signedBalance: '-20000',
+      availableDeposit: '0',
+      verifiedDeposit: '0',
+      sentAt: '2026-11-22T10:00:00Z',
+      tenantFeedback: {
+        confirmed: true,
+        reason: '',
+        settlement: {
+          status: 'PendingOwnerReview',
+          payableAmount: '0',
+          refundAmount: '0',
+          reason: 'owner_confirmed_inspection_required',
+        },
+      },
+    },
+  } as never);
+  mount();
+  expect(await screen.findByText('Khách thuê đã đồng ý đề xuất.')).toBeInTheDocument();
+  expect(screen.getByText('Khách thuê đã đồng ý · Đang đối chiếu')).toBeInTheDocument();
+  expect(screen.queryByText('Đã nhận kết quả nhân viên')).not.toBeInTheDocument();
+  expect(
+    screen.queryByText(/Chủ trọ chưa xác nhận kết quả kiểm kê thực tế của nhân viên/),
+  ).not.toBeInTheDocument();
+  expect(
+    screen.queryByText(/Khách thuê đã đồng ý nhưng khoản phí chưa đủ điều kiện/),
+  ).not.toBeInTheDocument();
+  expect(
+    screen.queryByRole('button', { name: 'Xác nhận kết quả kiểm kê' }),
+  ).not.toBeInTheDocument();
+  expect(screen.queryByRole('button', { name: 'Gửi khách thuê duyệt' })).not.toBeInTheDocument();
+});
+
+it.each([
+  ['PendingTenant', null, 'Chờ khách thuê xác nhận phí'],
+  ['Disputed', null, 'Khách thuê yêu cầu điều chỉnh phí'],
+  ['Accepted', 'Payable', 'Khách thuê đã đồng ý · Đã tạo khoản phải thu'],
+  ['Accepted', 'RefundEligible', 'Khách thuê đã đồng ý · Có tiền cọc cần hoàn'],
+  ['Accepted', 'Settled', 'Đã quyết toán phí trả phòng'],
+  ['Outdated', null, 'Khách thuê đã đồng ý · Cần đối chiếu dữ liệu'],
+] as const)(
+  'shows the actual move-out progress for %s / %s',
+  async (status, settlement, expected) => {
+    vi.mocked(api.transport).mockResolvedValue({
+      ...review,
+      status,
+      latestProposal: {
+        id: 'proposal-1',
+        sourceReference: review.reference,
+        items: [],
+        totalCharges: '20000',
+        signedBalance: '-20000',
+        availableDeposit: '0',
+        verifiedDeposit: '0',
+        sentAt: '2026-11-22T10:00:00Z',
+        tenantFeedback:
+          status === 'Accepted' || status === 'Outdated'
+            ? {
+                confirmed: true,
+                reason: '',
+                settlement: settlement
+                  ? { status: settlement, payableAmount: '20000', refundAmount: '0' }
+                  : null,
+              }
+            : null,
+      },
+    } as never);
+    mount();
+    expect(await screen.findByText(expected)).toBeInTheDocument();
+    expect(screen.queryByText('Đã nhận kết quả nhân viên')).not.toBeInTheDocument();
+  },
+);

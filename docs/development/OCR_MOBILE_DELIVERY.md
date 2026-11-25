@@ -1,5 +1,7 @@
 # OCR dùng thử trên mobile — triển khai tiếp
 
+Trang chủ Staff đã bỏ nút **Test OCR**. Màn thử vẫn mở từ nút **Thử OCR ngay** trong màn hình capture khi chế độ phát triển cho phép. Các mô tả nút trang chủ bên dưới là lịch sử triển khai.
+
 ## Luồng một nút chụp tự động (04/11/2026)
 
 Màn **Thử OCR trực tiếp** hiện mở bằng nút **Test OCR**, sau đó chỉ có hành động

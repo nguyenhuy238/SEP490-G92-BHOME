@@ -1,3 +1,4 @@
+using BHome.Application.Common;
 using System.Text.Json;
 using BHome.Application.Contracts;
 using BHome.Application.Billing;
@@ -18,7 +19,7 @@ internal sealed partial class SettlementReceivablesRepository
             .OrderByDescending(i => i.Version).FirstOrDefaultAsync(token);
         var snapshot = inspection is null ? null : JsonSerializer.Deserialize<HandoverSnapshot>(inspection.ObservedSnapshot);
         var observed = type == UtilityType.Electricity ? snapshot?.Electricity : snapshot?.Water;
-        var effectiveDate = observed?.Date ?? DateOnly.FromDateTime(TimeZoneInfo.ConvertTimeBySystemTimeZoneId(clock.GetUtcNow(), "Asia/Ho_Chi_Minh").DateTime);
+        var effectiveDate = observed?.Date ?? clock.BusinessToday();
         var period = new DateOnly(effectiveDate.Year, effectiveDate.Month, 1);
         var missing = new List<string>(); BillableMeterPoint? final = null;
         var meterId = Guid.Empty; var confirmedAt = DateTimeOffset.MinValue;

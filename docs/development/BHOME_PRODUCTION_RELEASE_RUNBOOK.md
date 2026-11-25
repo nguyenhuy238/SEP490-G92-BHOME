@@ -110,3 +110,35 @@ nằm trong [tài liệu vận hành](BHOME_PRODUCTION_OPERATIONS_2026-11-21.md)
 Alert hiện ghi journal qua systemd OnFailure; chưa có thông báo chủ động tới người trực.
 Backup ngoài VPS hiện là checkpoint có mã hóa, chưa có replication định kỳ đến storage
 độc lập. Các giới hạn này được ghi trong biên bản nghiệm thu.
+
+## Cấu hình ký nội bộ trên Production
+
+Sau khi image có hỗ trợ email nghiệp vụ, cấu hình
+`NotificationChannels__ContractAndInvoiceEmailEnabled=true` trong môi trường API
+Production để gửi PDF sau kích hoạt và sau thanh toán. Chạy kiểm tra SMTP,
+hàng đợi và tài khoản nhận đã xác minh theo quy trình phát hành. Cờ này hoạt động
+khi `Jobs__Enabled=false` và không yêu cầu bật thông báo tự động diện rộng.
+
+Để phát hành ký hợp đồng thuê UC-15, cần phê duyệt đúng phiên bản DOCX được
+nhúng trong image. Ghi nhận quyết định duyệt mẫu và SHA-256 của chính file DOCX
+đó, rồi đặt `MainDraft__ApprovedProductionTemplateSha256` trong `services.api.environment`
+của `/opt/bhome-config/compose.production-environment.yml`. API chỉ mở bước duyệt
+và gửi ký hợp đồng Live khi hash trùng. Mỗi
+lần thay mẫu cần ghi nhận và cấu hình hash đã được duyệt của bản mới.
+
+Ghép `environment` và `volumes` của service `api` trong
+`deploy/vps/compose.contract-signing.example.yml` vào
+`/opt/bhome-config/compose.production-environment.yml`. Đặt các giá trị sau trong
+`/opt/bhome-config/stack.env` trên VPS.
+
+- `BHOME_ANON_HMAC_BASE64` là khóa OTP riêng của Production, Base64 giải mã ra
+  ít nhất 32 byte. Giữ khóa Production hiện có nếu đã cấp lời mời còn hiệu lực.
+- `BHOME_SIGNING_PUBLIC_URL` là URL HTTPS trang `/contract-signing` trên Owner Web Production.
+- `BHOME_SIGNING_SEAL_PFX_FILE` là đường dẫn tuyệt đối đến chứng thư PFX riêng
+  của BHOME trên Production, có khóa riêng RSA. Cấp quyền đọc cho UID chạy API.
+  `BHOME_SIGNING_SEAL_PFX_PASSWORD` là mật khẩu mở PFX. Mount chỉ đọc và giữ
+  bản sao lưu chứng thư theo quy trình quản lý bí mật của Production.
+
+Kiểm tra `docker compose config --quiet` với chuỗi overlay Production. Áp dụng
+qua quy trình release ở trên, kiểm tra readiness nội bộ và dùng hợp đồng thử
+để xác minh Owner ký PDF, Staff có quyền gửi lời mời và người nhận xác minh OTP.

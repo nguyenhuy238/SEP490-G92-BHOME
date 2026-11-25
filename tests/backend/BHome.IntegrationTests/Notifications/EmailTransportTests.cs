@@ -20,7 +20,12 @@ public sealed class EmailTransportTests
     [InlineData("Development", false)]
     [InlineData("Development", true)]
     [InlineData("Testing", false)]
-    public void StartupRecipientPolicyUsesEnvironmentAndIgnoresLegacyDevelopmentSettings(string environment, bool staleList)
+    [InlineData("Testing", true)]
+    [InlineData("Staging", false)]
+    [InlineData("Staging", true)]
+    [InlineData("Production", false)]
+    [InlineData("Production", true)]
+    public void StartupIgnoresLegacyRecipientSettingsInEveryEnvironment(string environment, bool staleList)
     {
         using var factory = new ApiFactory();
         using var host = factory.WithWebHostBuilder(b =>
@@ -33,24 +38,20 @@ public sealed class EmailTransportTests
                 ["Email:Username"] = "sender@example.invalid",
                 ["Email:FromEmail"] = "sender@example.invalid",
                 ["Email:AppPassword"] = "SYNTHETIC_PRIVATE_PASSWORD",
-                ["Email:AllowAnyRecipientInDevelopment"] = "false",
+                ["Email:AllowAnyRecipientInDevelopment"] = "true",
                 ["Email:AllowedRecipients:0"] = staleList ? "stale-invalid-entry" : null,
+                ["Deployment:Environment"] = environment,
+                ["Deployment:OwnerOrigin"] = environment is "Staging" or "Production" ? "https://owner.example.invalid" : null,
+                ["Deployment:ApiOrigin"] = environment is "Staging" or "Production" ? "https://api.example.invalid" : null,
+                ["AllowedHosts"] = "localhost;owner.example.invalid;api.example.invalid",
+                ["SePay:Mode"] = environment == "Production" ? "Live" : "Test",
                 ["Email:TestRecipient"] = "diagnostic@example.invalid"
             }));
         });
-        if (environment == "Development")
-        {
-            using var client = host.CreateClient();
-            var options = host.Services.GetRequiredService<IOptions<EmailOptions>>().Value;
-            Assert.True(options.ValidForEnvironment(environment));
-            Assert.True(options.RecipientAllowed("outside@example.invalid", environment));
-        }
-        else
-        {
-            var error = Assert.Throws<OptionsValidationException>(() => host.CreateClient());
-            Assert.Contains("Email:AllowedRecipients:0", error.Message);
-            Assert.DoesNotContain("SYNTHETIC_PRIVATE_PASSWORD", error.Message);
-        }
+        using var client = host.CreateClient();
+        var options = host.Services.GetRequiredService<IOptions<EmailOptions>>().Value;
+        Assert.True(options.ValidForEnvironment(environment));
+        Assert.True(options.RecipientAllowed("outside@example.invalid", environment));
     }
     [Theory]
     [InlineData("http://localhost:5173/accept-invitation", "#")]

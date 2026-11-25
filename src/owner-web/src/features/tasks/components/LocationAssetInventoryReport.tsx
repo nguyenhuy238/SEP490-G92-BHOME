@@ -12,11 +12,13 @@ import {
   FormControlLabel,
   LinearProgress,
   Stack,
+  ToggleButton,
+  ToggleButtonGroup,
   Typography,
 } from '@mui/material';
 import { ChevronDown } from 'lucide-react';
 import { OwnerFeedback } from '../../../components/common/OwnerWorkspace';
-import { useOwnerAction, useOwnerQuery } from '../../../hooks/useOwnerWorkspace';
+import { useOwnerQuery } from '../../../hooks/useOwnerWorkspace';
 import { taskRoot } from '../useOperationalTasksApi';
 
 interface InventoryItem {
@@ -56,16 +58,14 @@ const conditionLabels: Record<string, string> = {
   NotAccessible: 'Không thể kiểm tra',
 };
 interface ReconcilePreview {
-  taskId: string;
-  version: number;
   currentCount: number;
   ownerConfirmedCount: number;
   removedCount: number;
   addedCount: number;
-  preservedChecks: number;
-  canApply: boolean;
   blockedReason: string | null;
 }
+
+type ItemFilter = 'all' | 'unchecked' | 'noted';
 
 export function LocationAssetInventoryReport({
   taskId,
@@ -79,8 +79,8 @@ export function LocationAssetInventoryReport({
   onSelectedIdsChange?: (ids: string[]) => void;
 }) {
   const [opened, setOpened] = useState<string | null>(null);
-  const [confirmScope, setConfirmScope] = useState(false);
-  const action = useOwnerAction();
+  const [roomsExpanded, setRoomsExpanded] = useState(false);
+  const [itemFilter, setItemFilter] = useState<ItemFilter>('all');
   const report = useOwnerQuery<InventoryView>(
     ['task-location-asset-inventory', taskId],
     `${taskRoot}/${taskId}/location-asset-inventory`,
@@ -91,33 +91,44 @@ export function LocationAssetInventoryReport({
   );
   const data = report.data;
   const preview = reconcile.data;
+  const items = data?.items ?? [];
+  const uncheckedCount = items.filter((item) => !item.checked).length;
+  const notedCount = items.filter((item) => !!item.note?.trim()).length;
+  const visibleItems = items.filter((item) =>
+    itemFilter === 'all' ? true : itemFilter === 'unchecked' ? !item.checked : !!item.note?.trim(),
+  );
   const pendingOwnerRooms = data?.pendingOwnerRooms ?? [];
   const pendingOwnerCommonAssets = !!data?.pendingOwnerCommonAssets;
-  const blockedReasons: Record<string, string> = {
-    location_asset_inventory_reconciliation_locked:
-      'Công việc đã sang bước đối soát hoặc ký nên không thể thay đổi phạm vi kiểm kê.',
-    location_asset_inventory_owner_confirmation_required:
-      'Chủ cơ sở chưa xác nhận tài sản nào. Cần hoàn tất kiểm kê ban đầu.',
-    location_asset_inventory_staff_work_conflict:
-      'Một số mục Staff đã xác nhận hoặc ghi chú không còn khớp hồ sơ Owner. Cần đối soát thủ công để tránh mất dữ liệu.',
-  };
-  async function applyOwnerScope() {
-    if (!preview?.canApply || !confirmScope || action.busy) return;
-    const ok = await action.run(
-      () =>
-        action.command(taskRoot + '/' + taskId + '/location-asset-inventory/reconcile', 'POST', {
-          version: preview.version,
-          confirmed: true,
-        }),
-      'Đã đồng bộ danh sách theo các mục tài sản Owner xác nhận.',
-    );
-    if (ok) {
-      setConfirmScope(false);
-      await Promise.all([report.refetch(), reconcile.refetch()]);
-    }
-  }
+  const pendingOwnerDescription = [
+    pendingOwnerRooms.length > 0 ? `${pendingOwnerRooms.length} phòng` : null,
+    pendingOwnerCommonAssets ? 'tài sản khu vực chung' : null,
+  ]
+    .filter(Boolean)
+    .join(' và ');
+  const scopePending = pendingOwnerRooms.length > 0 || pendingOwnerCommonAssets;
+  const staffConflict = preview?.blockedReason === 'location_asset_inventory_staff_work_conflict';
+  const scopeMismatch =
+    !!preview &&
+    (preview.currentCount !== preview.ownerConfirmedCount ||
+      preview.currentCount !== data?.totalCount ||
+      preview.addedCount !== 0 ||
+      preview.removedCount !== 0);
+  const scopeReady =
+    !!data &&
+    !!preview &&
+    data.totalCount > 0 &&
+    !scopePending &&
+    !scopeMismatch &&
+    !staffConflict &&
+    preview.ownerConfirmedCount > 0;
+  const requiresOwnerConfirmation =
+    scopePending ||
+    preview?.blockedReason === 'location_asset_inventory_owner_confirmation_required';
+  const staffComplete = !!data && data.totalCount > 0 && data.checkedCount === data.totalCount;
+  const historicalComplete = data?.status === 'Completed';
+  const progressComplete = staffComplete && (scopeReady || historicalComplete);
   const groups = new Map<string, { title: string; items: InventoryItem[] }>();
-  for (const item of data?.items ?? []) {
+  for (const item of visibleItems) {
     const key = item.roomId ? `room:${item.roomId}` : `common:${item.commonArea || ''}`;
     if (!groups.has(key))
       groups.set(key, {
@@ -135,107 +146,137 @@ export function LocationAssetInventoryReport({
 
   return (
     <Stack spacing={1.5}>
-      <Typography variant="h6" sx={{ fontSize: 16 }}>
-        Kiểm kê và bàn giao tài sản toàn cơ sở
-      </Typography>
       <OwnerFeedback busy={report.isFetching} error={report.error} />
       {report.error && <Button onClick={() => void report.refetch()}>Tải lại kiểm kê</Button>}
-      <OwnerFeedback
-        busy={reconcile.isFetching || action.busy}
-        error={reconcile.error || action.error}
-      />
-      {preview && (
-        <Stack spacing={1.2} sx={{ border: 1, borderColor: 'divider', borderRadius: 1, p: 1.5 }}>
-          <Typography sx={{ fontSize: 14, fontWeight: 600 }}>
-            Phạm vi tài sản Owner đã xác nhận
-          </Typography>
-          <Typography sx={{ fontSize: 13, color: 'text.secondary' }}>
-            Checklist hiện tại: {preview.currentCount} mục · Đã được Owner kiểm kê:{' '}
-            {preview.ownerConfirmedCount} mục.
-            {preview.removedCount > 0 &&
-              ' Có ' + preview.removedCount + ' mục chưa đủ xác nhận sẽ được bỏ khỏi checklist.'}
-            {preview.addedCount > 0 &&
-              ' Có ' + preview.addedCount + ' mục được bổ sung từ xác nhận Owner.'}
-            {preview.preservedChecks > 0 &&
-              ' Bảo toàn ' + preview.preservedChecks + ' kết quả Staff đã nhập.'}
-          </Typography>
-          {!preview.canApply ? (
-            <Alert severity="warning" variant="outlined">
-              {blockedReasons[preview.blockedReason || ''] ||
-                'Cần kiểm tra lại phiên bản và kết quả Staff trước khi thay đổi checklist.'}
-            </Alert>
-          ) : (
-            <>
-              <FormControlLabel
-                control={
-                  <Checkbox
-                    checked={confirmScope}
-                    onChange={(_, checked) => setConfirmScope(checked)}
-                  />
-                }
-                label="Tôi đã đối chiếu và đồng ý cập nhật danh sách theo kết quả kiểm kê ban đầu của Owner"
-              />
-              <Button
-                variant="outlined"
-                disabled={!confirmScope || action.busy}
-                onClick={() => void applyOwnerScope()}
-              >
-                Đồng bộ checklist đã xác nhận
-              </Button>
-            </>
-          )}
-        </Stack>
-      )}
+      <OwnerFeedback busy={reconcile.isFetching} error={reconcile.error} />
       {data && (
-        <>
-          <Stack direction="row" spacing={1} useFlexGap sx={{ flexWrap: 'wrap' }}>
-            <Chip
-              size="small"
-              variant="outlined"
-              label={`${data.checkedCount}/${data.totalCount} mục đã kiểm tra`}
-            />
-            <Chip
-              size="small"
-              variant="outlined"
-              label={`${data.items.filter((item) => item.inherited).length} mục kế thừa từ Tenant`}
-            />
-            {data.items.some((item) => !!item.priorStaffTaskId) && (
-              <Chip
-                size="small"
-                variant="outlined"
-                label={`${data.items.filter((item) => item.priorStaffTaskId && item.checked).length} mục đã kiểm tra từ Staff trước`}
-              />
-            )}
+        <Stack spacing={0.75} component="section">
+          <Stack direction="row" sx={{ justifyContent: 'space-between', alignItems: 'center' }}>
+            <Typography sx={{ fontSize: 14, fontWeight: 700 }}>Staff đã kiểm tra</Typography>
+            <Typography
+              sx={{
+                fontSize: 17,
+                fontWeight: 750,
+                color: progressComplete ? 'success.dark' : 'text.primary',
+                fontVariantNumeric: 'tabular-nums',
+              }}
+            >
+              {data.checkedCount}/{data.totalCount}
+            </Typography>
           </Stack>
           <LinearProgress
+            color={progressComplete ? 'success' : 'primary'}
             variant="determinate"
-            value={data.totalCount ? (data.checkedCount / data.totalCount) * 100 : 100}
+            value={data.totalCount ? (data.checkedCount / data.totalCount) * 100 : 0}
           />
+          {historicalComplete ? (
+            <Typography variant="caption" color="text.secondary">
+              Phạm vi bàn giao đã hoàn tất được lưu theo biên bản đã ký.
+            </Typography>
+          ) : scopeReady ? (
+            <Typography variant="caption" sx={{ color: 'success.dark', fontWeight: 600 }}>
+              Owner đã xác nhận đủ phạm vi
+            </Typography>
+          ) : !preview && !reconcile.isFetching ? (
+            <Typography variant="caption" sx={{ color: 'warning.dark' }}>
+              Chưa xác minh được phạm vi Owner.
+            </Typography>
+          ) : null}
+        </Stack>
+      )}
+      {!historicalComplete &&
+        data &&
+        (scopeMismatch || requiresOwnerConfirmation || staffConflict) && (
+          <Box sx={{ border: 1, borderColor: 'divider', borderRadius: 1.5, p: 1.5 }}>
+            <Typography variant="body2" sx={{ fontWeight: 650 }}>
+              Phạm vi Owner: {preview?.ownerConfirmedCount ?? '—'} mục xác nhận · checklist{' '}
+              {data.totalCount} mục
+            </Typography>
+            {staffConflict && (
+              <Alert severity="warning" variant="outlined" sx={{ mt: 1 }}>
+                Phạm vi Owner đang xung đột với tài sản Staff đã xác nhận hoặc ghi chú. Kết quả
+                Staff được giữ nguyên; cần kiểm tra sai lệch trước khi bàn giao.
+              </Alert>
+            )}
+            {scopeMismatch && !staffConflict && !requiresOwnerConfirmation && (
+              <Alert severity="warning" variant="outlined" sx={{ mt: 1 }}>
+                Checklist hiện tại chưa khớp phạm vi Owner đã xác nhận. Chỉ tự đồng bộ khi bảo toàn
+                được kết quả Staff.
+              </Alert>
+            )}
+          </Box>
+        )}
+      {data && (
+        <>
+          {notedCount > 0 && (
+            <Alert severity="warning" variant="outlined">
+              Có {notedCount} mục có ghi chú Staff. Dùng bộ lọc “Có ghi chú” để đọc hiện trạng trước
+              khi duyệt.
+            </Alert>
+          )}
           {data.totalCount === 0 && (
             <Typography sx={{ fontSize: 14, color: 'text.secondary' }}>
               Chưa có tài sản được Owner kiểm kê và xác nhận để bàn giao. Không thể ký nhận nếu
               không có phạm vi kiểm kê hợp lệ.
             </Typography>
           )}
-          {(pendingOwnerRooms.length > 0 || pendingOwnerCommonAssets) && (
+          {requiresOwnerConfirmation && !historicalComplete && (
             <Alert severity="warning" variant="outlined">
-              Còn {pendingOwnerRooms.length} phòng
-              {pendingOwnerRooms.length > 0 && ' (' + pendingOwnerRooms.join(', ') + ')'} chờ Owner
-              kiểm kê xác nhận
-              {pendingOwnerCommonAssets ? ' và tài sản khu vực chung chưa xác nhận' : ''}. Staff có
-              thể cập nhật tiến độ và báo vướng mắc, nhưng chưa được hoàn tất bàn giao.
+              <Stack spacing={0.5}>
+                <Typography variant="body2">
+                  {scopePending
+                    ? `Cần Owner xác nhận ${pendingOwnerDescription} trước khi hoàn tất bàn giao.`
+                    : 'Owner chưa xác nhận phạm vi tài sản. Cần hoàn tất kiểm kê ban đầu trước khi bàn giao.'}
+                </Typography>
+                <Button
+                  component={Link}
+                  to={`/locations/${data.locationId}/assets?tab=review`}
+                  size="small"
+                  variant="text"
+                  sx={{ p: 0, alignSelf: 'flex-start' }}
+                >
+                  Mở kiểm kê tài sản của Owner
+                </Button>
+                {pendingOwnerRooms.length > 0 && (
+                  <Box>
+                    <Button
+                      size="small"
+                      aria-expanded={roomsExpanded}
+                      sx={{ p: 0, minHeight: 28 }}
+                      onClick={() => setRoomsExpanded((value) => !value)}
+                    >
+                      {roomsExpanded ? 'Ẩn danh sách phòng' : 'Xem các phòng chưa xác nhận'}
+                    </Button>
+                    {roomsExpanded && (
+                      <Typography variant="body2" sx={{ mt: 0.5 }}>
+                        {pendingOwnerRooms.join(', ')}
+                      </Typography>
+                    )}
+                  </Box>
+                )}
+              </Stack>
             </Alert>
           )}
-          {data.checkedCount < data.totalCount && (
-            <Alert severity="info" variant="outlined">
-              Nhân viên đang kiểm kê; còn {data.totalCount - data.checkedCount} mục chưa xác nhận.
-            </Alert>
-          )}
-          {selectable && data.totalCount > 0 && (
-            <Alert severity="info" variant="outlined">
-              Muốn yêu cầu Staff kiểm tra lại, mở từng phòng/khu vực và chọn mục cần đối soát. Các
-              mục kế thừa từ biên bản Tenant cũng có thể được yêu cầu kiểm tra trực tiếp.
-            </Alert>
+          <Box sx={{ overflowX: 'auto' }}>
+            <ToggleButtonGroup
+              size="small"
+              exclusive
+              value={itemFilter}
+              aria-label="Lọc mục tài sản"
+              onChange={(_, value: ItemFilter | null) => {
+                if (value) setItemFilter(value);
+              }}
+              sx={{ '& .MuiToggleButton-root': { textTransform: 'none', fontSize: 13, px: 1.5 } }}
+            >
+              <ToggleButton value="all">Tất cả ({items.length})</ToggleButton>
+              <ToggleButton value="unchecked">Chưa kiểm tra ({uncheckedCount})</ToggleButton>
+              <ToggleButton value="noted">Có ghi chú ({notedCount})</ToggleButton>
+            </ToggleButtonGroup>
+          </Box>
+          {itemFilter !== 'all' && visibleItems.length === 0 && (
+            <Typography variant="body2" color="text.secondary">
+              Không có mục tài sản phù hợp với bộ lọc.
+            </Typography>
           )}
           {sorted.map(([key, group]) => (
             <Accordion
@@ -251,14 +292,23 @@ export function LocationAssetInventoryReport({
                   direction="row"
                   spacing={1}
                   useFlexGap
-                  sx={{ flexWrap: 'wrap', alignItems: 'center' }}
+                  sx={{ flexWrap: 'wrap', alignItems: 'center', width: '100%' }}
                 >
                   <Typography sx={{ fontSize: 14, fontWeight: 600 }}>{group.title}</Typography>
                   <Chip
                     size="small"
                     variant="outlined"
-                    label={`${group.items.filter((item) => item.checked).length}/${group.items.length}`}
+                    color={group.items.every((item) => item.checked) ? 'success' : 'default'}
+                    label={`${group.items.filter((item) => item.checked).length}/${group.items.length} đã kiểm tra`}
                   />
+                  {selectable && group.items.some((item) => selectedIds.includes(item.id)) && (
+                    <Chip
+                      size="small"
+                      color="warning"
+                      variant="outlined"
+                      label={`${group.items.filter((item) => selectedIds.includes(item.id)).length} mục chọn kiểm tra lại`}
+                    />
+                  )}
                 </Stack>
               </AccordionSummary>
               <AccordionDetails>
@@ -293,27 +343,22 @@ export function LocationAssetInventoryReport({
                         <Typography sx={{ fontSize: 14, fontWeight: 600 }}>{item.name}</Typography>
                         <Chip
                           size="small"
-                          color={item.checked ? 'success' : 'default'}
-                          variant="outlined"
-                          label={item.checked ? 'Đã kiểm tra' : 'Chưa kiểm tra'}
-                        />
-                        {item.checked && (
-                          <Chip
-                            size="small"
-                            variant="outlined"
-                            color={
-                              item.condition === 'Intact'
+                          color={
+                            !item.checked
+                              ? 'default'
+                              : item.condition === 'Intact'
                                 ? 'success'
                                 : item.condition === 'Missing' || item.condition === 'Damaged'
                                   ? 'warning'
                                   : 'default'
-                            }
-                            label={
-                              conditionLabels[item.condition ?? 'Unassessed'] ??
-                              'Chưa ghi nhận hiện trạng'
-                            }
-                          />
-                        )}
+                          }
+                          variant="outlined"
+                          label={
+                            item.checked
+                              ? (conditionLabels[item.condition ?? 'Unassessed'] ?? 'Đã kiểm tra')
+                              : 'Chưa kiểm tra'
+                          }
+                        />
                         {item.inherited && (
                           <Chip size="small" variant="outlined" label="Kế thừa bàn giao Tenant" />
                         )}
@@ -325,9 +370,20 @@ export function LocationAssetInventoryReport({
                         Số lượng theo hồ sơ: {item.quantity}
                       </Typography>
                       {item.note && (
-                        <Typography sx={{ fontSize: 14, whiteSpace: 'pre-wrap' }}>
-                          {item.note}
-                        </Typography>
+                        <Box
+                          sx={{ px: 1.5, py: 1, borderRadius: 1, bgcolor: 'action.hover', mt: 1 }}
+                        >
+                          <Typography
+                            sx={{ fontSize: 12, fontWeight: 600, color: 'text.secondary' }}
+                          >
+                            Ghi chú Staff
+                          </Typography>
+                          <Typography
+                            sx={{ fontSize: 14, whiteSpace: 'pre-wrap', overflowWrap: 'anywhere' }}
+                          >
+                            {item.note}
+                          </Typography>
+                        </Box>
                       )}
                       {item.incidentId && (
                         <Button

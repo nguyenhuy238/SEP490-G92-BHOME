@@ -29,7 +29,11 @@ public sealed class MinioStorageRegressionTests : IAsyncLifetime
         storage = new(Options.Create(new ObjectStorageOptions
         { Endpoint = endpoint, AccessKey = "synthetic-test", SecretKey = password, Bucket = "storage-regression", UseSsl = false }), NullLogger<MinioObjectStorage>.Instance);
     }
-    public Task DisposeAsync() => container.DisposeAsync().AsTask();
+    public async Task DisposeAsync()
+    {
+        storage?.Dispose();
+        await container.DisposeAsync();
+    }
 
     [Fact]
     public async Task PrivateBytesRoundTripAndMissingObjectIsExplicit()
@@ -43,6 +47,23 @@ public sealed class MinioStorageRegressionTests : IAsyncLifetime
         var missing = await Assert.ThrowsAsync<PrivateObjectNotFoundException>(() => storage.CopyToAsync("missing.pdf", output, default));
         // Existing draft generation deliberately catches FileNotFoundException to regenerate a missing draft.
         Assert.IsAssignableFrom<FileNotFoundException>(missing);
+    }
+
+    [Fact]
+    public async Task SharedClientSupportsConcurrentPrivateReads()
+    {
+        var bytes = System.Security.Cryptography.RandomNumberGenerator.GetBytes(128 * 1024);
+        using var input = new MemoryStream(bytes);
+        await storage.PutAsync("concurrent-private.jpg", input, bytes.Length, "image/jpeg", default);
+
+        var downloads = await Task.WhenAll(Enumerable.Range(0, 8).Select(async _ =>
+        {
+            using var output = new MemoryStream();
+            await storage.CopyToAsync("concurrent-private.jpg", output, default);
+            return output.ToArray();
+        }));
+
+        Assert.All(downloads, downloaded => Assert.Equal(bytes, downloaded));
     }
 
     [Fact]

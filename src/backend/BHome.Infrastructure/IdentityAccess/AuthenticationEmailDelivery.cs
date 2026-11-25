@@ -24,8 +24,8 @@ internal sealed class AuthenticationEmailDelivery(Compact24DbContext db, Compact
 {
     public void ValidateInvitationRecipient(string destination, bool automaticTenantSetup = false)
     {
-        if (email.Value.Enabled && !email.Value.RecipientAllowed(destination, environment.EnvironmentName))
-            throw new NotificationException(503, "email_recipient_not_allowed");
+        if (!EmailOptions.ValidAddress(destination))
+            throw new NotificationException(400, "email_recipient_invalid");
     }
     private IDataProtector Protector => protection.CreateProtector("BHome.AuthenticationEmail.v1");
     public bool IsAvailable => IsAvailableFor("PasswordReset");

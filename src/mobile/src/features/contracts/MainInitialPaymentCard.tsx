@@ -229,7 +229,7 @@ export function MainInitialPaymentCard({
             <Text style={styles.note}>Cần đủ chữ ký hai bên trước khi tạo QR thanh toán.</Text>
           )}
           {data.availability === 'ReceivingAccountUnavailable' && (
-            <ContractNotice message="Chưa có tài khoản nhận tiền tại cơ sở. Owner cần kiểm tra cấu hình." />
+            <ContractNotice message="Tài khoản nhận tiền chưa sẵn sàng. Owner cần kiểm tra tài khoản và kết nối SePay." />
           )}
           {data.availability === 'PaymentProviderDisabled' && (
             <ContractNotice message="SePay đang tắt trong môi trường này. Hệ thống chưa thể cấp mã thanh toán hoặc QR." />

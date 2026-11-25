@@ -1,5 +1,19 @@
 # Bàn giao tài sản theo hợp đồng
 
+## Quyết định UC-17 ngày 24/11/2026
+
+Trong yêu cầu sửa CI cho `member/THuy`, người dùng xác nhận: cho phép ký biên bản
+và giữ nguyên hiện trạng tài sản thiếu/hỏng. Thiếu/hỏng đã được kiểm kê không phải
+là thiếu dữ liệu bắt buộc; Owner vẫn phải ký trước Tenant. Biên bản và snapshot
+phải giữ số lượng thực nhận, số lượng thiếu, tình trạng và bằng chứng gốc.
+Quyết định này áp dụng cho bàn giao UC-17 (BF-03/04), không thay đổi điều kiện
+kích hoạt hợp đồng, thanh toán hoặc quyết toán trả phòng.
+
+Ánh xạ kiểm thử: `Compact24MoveInSignedWorkflowTests` kiểm tra ký với tài sản thiếu,
+lưu snapshot đúng hiện trạng, từ chối Staff ký và từ chối Tenant ký trước Owner;
+`SeedAssetHandover` cung cấp danh tính giả lập đã xác nhận và cấu hình Owner
+có hiệu lực để kiểm tra PDF qua luồng bảo vệ dữ liệu hiện có.
+
 ## Nguồn và phạm vi
 
 Baseline: `member/QHuy`, `5b2323a724a8b273e0f1a77adf2f324982a33b20`, workspace sạch.

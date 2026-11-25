@@ -52,13 +52,22 @@ public sealed partial class PaymentLedgerTests
             (await owner.PostAsJsonAsync("/api/v1/invoices/drafts", new DraftInvoiceInput(w.Room, CurrentPeriod(), Guid.NewGuid()))).StatusCode);
     }
 
-    [Fact]
-    public async Task DeveloperManualMeterTaskUsesEffectivePlanDayEvenWhenPlanIsDisabled()
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task DeveloperManualMeterTaskUsesEffectivePlanDayEvenWhenPlanIsDisabled(bool stagingManual = false)
     {
         var (w, _, meters) = await MeterWorkspace(water: false);
-        using var owner = await Client(w.Owner);
-        using var staff = await Client(w.Staff);
-        using var tenant = await Client(w.Tenants[0]);
+        using var host = fixture.Factory.WithWebHostBuilder(builder => builder.ConfigureServices(services =>
+            services.AddSingleton(new BillingAutomationRuntime(!stagingManual)
+            { ManualActionsEnabled = stagingManual })));
+        using var owner = await Client(w.Owner, host);
+        using var staff = await Client(w.Staff, host);
+        using var tenant = await Client(w.Tenants[0], host);
+        var preview = (await owner.GetFromJsonAsync<BillingAutomationPreview>(
+            $"/api/v1/billing-automation/preview?locationId={w.Location}&period={CurrentPeriod():yyyy-MM-dd}"))!;
+        Assert.True(preview.DeveloperActionsEnabled);
+        Assert.False(preview.WorkerEnabled);
         // The same location has a new immutable manual-only effective plan; existing
         // enabled plans are not allowed to run background jobs by the global switch.
         (await owner.PutAsJsonAsync("/api/v1/billing-automation", Plan(w) with
@@ -96,5 +105,29 @@ public sealed partial class PaymentLedgerTests
         var tasks = (await staff.GetFromJsonAsync<MeterTaskSummary[]>($"/api/v1/capture/meter-tasks?roomId={w.Room}"))!;
         Assert.Contains(tasks, t => t.Id == firstId && t.Purpose == ReadingPurpose.Initial && t.ReadingDate == CurrentPeriod() && t.BillingPeriod == null);
         Assert.Contains(tasks, t => t.Id == periodicId && t.Purpose == ReadingPurpose.Periodic && t.ReadingDate == CurrentPeriod() && t.BillingPeriod == CurrentPeriod());
+    }
+
+    [Fact]
+    public async Task MeterOptionsExposeInstallationDateAndManualScheduleCannotBackdateReading()
+    {
+        var (w, _, meters) = await MeterWorkspace(water: false);
+        var installed = CurrentPeriod().AddDays(1);
+        await using (var scope = fixture.Factory.Services.CreateAsyncScope())
+        {
+            var db = scope.ServiceProvider.GetRequiredService<BHomePersistenceContext>();
+            (await db.Set<Meter>().SingleAsync(m => m.Id == meters[0])).InstalledOn = installed;
+            await db.SaveChangesAsync();
+        }
+        using var owner = await Client(w.Owner);
+        var options = (await owner.GetFromJsonAsync<NamedResource[]>($"/api/v1/capture/locations/{w.Location}/meters"))!;
+        var meter = Assert.Single(options, item => item.Id == meters[0]);
+        Assert.Equal(installed, meter.InstalledOn);
+        Assert.True(meter.IsActive);
+        var response = await owner.PostAsJsonAsync("/api/v1/billing-automation/manual-meter-tasks",
+            new BillingManualMeterTaskInput(meters[0], ReadingPurpose.Periodic, CurrentPeriod()));
+        Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
+        Assert.Contains("reading_before_installation", await response.Content.ReadAsStringAsync());
+        var tasks = (await owner.GetFromJsonAsync<MeterTaskSummary[]>($"/api/v1/capture/meter-tasks?roomId={w.Room}"))!;
+        Assert.DoesNotContain(tasks, task => task.MeterId == meters[0] && task.Purpose == ReadingPurpose.Periodic);
     }
 }

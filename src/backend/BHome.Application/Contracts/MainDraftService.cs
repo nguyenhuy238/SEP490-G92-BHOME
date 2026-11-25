@@ -151,7 +151,7 @@ public sealed class MainDraftService(IContractRepository repository, IMainDraftD
                     Status = ContractStatus.Draft,
                     InitialPaymentRequired = true,
                     IsDevelopmentDemo = workflowMode?.SimulatedSigningEnabled == true,
-                    PaymentMode = paymentOptions?.Enabled == true && paymentOptions.ReceivingAccounts.Any(a => a.LocationId == room.LocationId) &&
+                    PaymentMode = paymentOptions?.Enabled == true && paymentOptions.Bound(room.LocationId, settings.OwnerSignerId) &&
                         (paymentOptions.Mode == "Live" || paymentScope?.Allows(room.LocationId) == true || paymentScope?.AllowsExternalDatabase == true) ? paymentOptions.Mode : null
                 };
                 var representative = (await repository.ResidentsAsync(x.RoomId, [x.RepresentativeResidentId], t)).Single();
@@ -200,8 +200,8 @@ public sealed class MainDraftService(IContractRepository repository, IMainDraftD
             if (prep.Blockers.Count > 0) throw ContractException.Conflict(prep.Blockers[0]);
             if (!prep.Charges.Select(p => (p.Id, p.Version, p.Rate)).SequenceEqual(state.Charges.Select(p => (p.Id, p.Version, p.Rate)))) throw ContractException.Conflict("draft_configuration_changed_save_again");
             var existing = await data.FilesAsync(id, c.SnapshotHash, t);
-            var docx = existing.FirstOrDefault(f => f.Kind == ContractFileKind.DraftDocx);
-            var pdf = existing.FirstOrDefault(f => f.Kind == ContractFileKind.DraftPdf);
+            var docx = existing.FirstOrDefault(f => f.Kind == ContractFileKind.DraftDocx && f.TemplateVersion == renderer.DocumentVersion);
+            var pdf = existing.FirstOrDefault(f => f.Kind == ContractFileKind.DraftPdf && f.TemplateVersion == renderer.DocumentVersion);
             // Existing database metadata is not proof that storage accepted a prior upload.
             // Only this explicit Draft-generation operation may replace an unavailable file;
             // retain every old record and never change an approved/signed document in place.
@@ -255,7 +255,7 @@ public sealed class MainDraftService(IContractRepository repository, IMainDraftD
             Kind = kind,
             SnapshotHash = c.SnapshotHash,
             TemplateId = "main-tenancy-docx-v1",
-            TemplateVersion = 1,
+            TemplateVersion = renderer.DocumentVersion,
             ContentType = contentType,
             Length = bytes.Length,
             FileHash = Convert.ToHexString(SHA256.HashData(bytes)),
@@ -308,7 +308,7 @@ public sealed class MainDraftService(IContractRepository repository, IMainDraftD
 
     private async Task<(MainDraftState State, MainContractSettings Settings, MainDraftPreparation Preparation)> ReviewInputs(Contract c, CancellationToken t)
     {
-        if (!renderer.SigningReviewAvailable) throw new ContractException(503, "main_draft_signing_template_not_approved");
+        if (!renderer.CanUseSigningReview(c)) throw new ContractException(503, "main_draft_signing_template_not_approved");
         if (c.Status != ContractStatus.Draft || c.Signatures.Count > 0) throw ContractException.Conflict("draft_version_or_status_changed");
         await data.LockConfigurationAsync(c.Room.LocationId, t);
         var state = data.Unprotect(c);
@@ -327,7 +327,9 @@ public sealed class MainDraftService(IContractRepository repository, IMainDraftD
         return await repository.InTransactionAsync(before.RoomId, async () =>
         {
             var c = await Load(id, t); var (state, settings, prep) = await ReviewInputs(c, t);
-            var existing = (await data.FilesAsync(id, c.SnapshotHash, t)).FirstOrDefault(f => f.Kind == ContractFileKind.SigningReview);
+            var developmentOnly = !renderer.IsProductionSigningTemplate(c);
+            var existing = (await data.FilesAsync(id, c.SnapshotHash, t)).FirstOrDefault(f =>
+                f.Kind == ContractFileKind.SigningReview && f.DevelopmentOnly == developmentOnly && f.TemplateVersion == renderer.DocumentVersion);
             if (existing is not null)
             {
                 var stored = await ReusableDraftFile(existing, t);
@@ -336,7 +338,7 @@ public sealed class MainDraftService(IContractRepository repository, IMainDraftD
             var docx = await renderer.DocxAsync(new(c, state, settings, await data.IdentityAsync(c.RoomId, c.RepresentativeResidentId, t),
                 c.Room.Location.Name, c.Room.RoomNumber, c.Room.Location.Address, prep.Residents.Where(r => !r.Representative).Select(r => r.FullName).ToArray(), SigningReview: true), t);
             var file = await Store(c, await renderer.PdfAsync(docx, t), "application/pdf", ContractFileKind.SigningReview, "pdf", t);
-            file.DevelopmentOnly = true;
+            file.DevelopmentOnly = developmentOnly;
             repository.Audit(Actor, "MainDraftSigningReviewGenerated", id, clock.GetUtcNow()); return FileView(file);
         }, t);
     }
@@ -375,7 +377,8 @@ public sealed class MainDraftService(IContractRepository repository, IMainDraftD
             if (await repository.ConflictsAsync(c.RoomId, c.Id, c.StartDate, c.EndDate, c.Residents.Select(r => r.ResidentId).ToArray(), t))
                 throw ContractException.Conflict("room_contract_conflict");
             var review = await data.FileAsync(id, input.ReviewedFileId, t) ?? throw ContractException.Missing();
-            if (review.Kind != ContractFileKind.SigningReview || review.SnapshotHash != c.SnapshotHash) throw ContractException.Conflict("draft_document_outdated");
+            if (review.Kind != ContractFileKind.SigningReview || review.SnapshotHash != c.SnapshotHash || review.TemplateVersion != renderer.DocumentVersion) throw ContractException.Conflict("draft_document_outdated");
+            if (review.DevelopmentOnly == renderer.IsProductionSigningTemplate(c)) throw ContractException.Conflict("draft_document_outdated");
             using var bytes = new MemoryStream(); await CopyFileAsync(id, review.Id, bytes, t);
             if (bytes.Length != review.Length || FileHash(bytes.ToArray()) != review.FileHash) throw ContractException.Conflict("contract_document_integrity_failed");
             c.TenantUserId = tenantUserId;
@@ -394,7 +397,7 @@ public sealed class MainDraftService(IContractRepository repository, IMainDraftD
                 SnapshotHash = c.SnapshotHash,
                 TemplateId = review.TemplateId,
                 TemplateVersion = review.TemplateVersion,
-                DevelopmentOnly = true,
+                DevelopmentOnly = review.DevelopmentOnly,
                 FileHash = review.FileHash,
                 ContentType = review.ContentType,
                 Length = review.Length,

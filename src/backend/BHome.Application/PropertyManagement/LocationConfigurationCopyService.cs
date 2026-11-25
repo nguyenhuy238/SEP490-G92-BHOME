@@ -1,3 +1,4 @@
+using BHome.Application.Common;
 using System.Text.Json;
 using System.Text.Json.Serialization;
 using BHome.Application.IdentityAccess;
@@ -26,7 +27,7 @@ public sealed class LocationConfigurationCopyService(ISharedConfigurationStore s
         if (input.SourceLocationId == Guid.Empty || input.TargetLocationId == Guid.Empty || input.SourceLocationId == input.TargetLocationId ||
             input.ConflictStrategy != "Reject" || input.Groups is null || input.Groups.Length is < 1 or > 5 || input.Groups.Distinct().Count() != input.Groups.Length || input.Groups.Any(g => !Supported.Contains(g)))
             throw new PropertyException(400, "invalid_configuration_copy");
-        if (input.Groups.Contains("FeePolicies") && (input.EffectiveFrom is null || input.EffectiveFrom < BHome.Application.Billing.BillingAutomationDates.BusinessDate(clock.GetUtcNow()))) throw new PropertyException(400, "copy_fee_effective_date_required");
+        if (input.Groups.Contains("FeePolicies") && (input.EffectiveFrom is null || input.EffectiveFrom < clock.BusinessToday())) throw new PropertyException(400, "copy_fee_effective_date_required");
     }
     private sealed record ConfigurationState(LocationDto Location, IReadOnlyList<SetupDocument> Defaults, IReadOnlyList<SetupDocument> Assets, IReadOnlyList<PolicyDto> Fees, IReadOnlyList<SetupDocument> Policies, IReadOnlyList<SetupDocument> LifecyclePolicies);
     private async Task<ConfigurationState> State(Guid location, ConfigurationCopy input, CancellationToken t)
@@ -42,7 +43,7 @@ public sealed class LocationConfigurationCopyService(ISharedConfigurationStore s
         input.Groups.Contains("AssetLifecyclePolicies") ? (await local.ListAsync(location, "AssetLifecyclePolicy", t)).Where(d => location != input.SourceLocationId || d.Status == "Published").ToArray() : []);
     }
     private static string Name(SetupDocument document) => document.Data.TryGetProperty("name", out var name) ? name.GetString() ?? "" : document.Data.GetProperty("title").GetString() ?? "";
-    private static string Label(string group) => group switch { "RoomDefaults" => "Gợi ý tạo phòng", "AssetTemplates" => "Gói tài sản", "OperatingPolicies" => "Nội quy", "AssetLifecyclePolicies" => "Chính sách vòng đời thiết bị", _ => "Biểu phí" };
+    private static string Label(string group) => group switch { "RoomDefaults" => "Gợi ý tạo phòng", "AssetTemplates" => "Định mức tài sản theo loại phòng", "OperatingPolicies" => "Nội quy", "AssetLifecyclePolicies" => "Chính sách vòng đời thiết bị", _ => "Biểu phí" };
     private static IReadOnlyList<PolicyDto> EffectiveFees(ConfigurationState state, ConfigurationCopy input) => state.Fees.Where(p => p.EffectiveFrom <= input.EffectiveFrom && (p.EffectiveTo is null || p.EffectiveTo >= input.EffectiveFrom)).ToArray();
     private static ConfigurationCopyPlan Plan(ConfigurationCopy input, ConfigurationState source, ConfigurationState target)
     {

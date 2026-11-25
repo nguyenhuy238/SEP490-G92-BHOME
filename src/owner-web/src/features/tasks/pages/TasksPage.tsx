@@ -1,6 +1,6 @@
 import { ResourcePage } from '../../../components/common/ResourcePage';
 import { isMockMode } from '../../../services/config';
-import { TasksApiPage } from '../TasksApiPage';
+import { UnifiedWorkPage } from '../UnifiedWorkPage';
 export default function TasksPage() {
-  return isMockMode ? <ResourcePage kind="tasks" variant="table" /> : <TasksApiPage />;
+  return isMockMode ? <ResourcePage kind="tasks" variant="table" /> : <UnifiedWorkPage />;
 }
