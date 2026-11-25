@@ -15,7 +15,7 @@ import {
 import { Action, Box, Heading, Pill, ui } from '../../components/WorkspaceKit';
 import { colors as c } from '../../theme/theme';
 import { randomUUID } from '../../lib/randomUUID';
-import { ContractActionForm, SigningCertificates } from './ContractActionForm';
+import { ContractActionForm } from './ContractActionForm';
 import { ContractSigningPanel, useSigningMethods } from './ContractSigningPanel';
 import { ContractEvidence } from './ContractEvidence';
 import { ContractWorkflowPanel } from './ContractWorkflowPanel';
@@ -348,9 +348,6 @@ export function RentalContractFlow({
                       ? 'Chỉ dùng cho kiểm thử: Staff mô phỏng ký, backend lưu kết quả.'
                       : 'Staff theo dõi hồ sơ; Chủ cơ sở và Người thuê thực hiện ký.'}
                   </Text>
-                )}
-                {signer && !contract.isDevelopmentDemo && !otpSigning && (
-                  <SigningCertificates api={api} />
                 )}
                 {signer &&
                   contract.signatures.some((signature) =>

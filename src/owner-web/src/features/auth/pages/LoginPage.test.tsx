@@ -78,6 +78,7 @@ it('keeps required fields empty, masks the password, and explains unsupported re
   const identifier = screen.getByLabelText('Email hoặc số điện thoại');
   expect(identifier).toBeRequired();
   expect(identifier).toHaveValue('');
+  expect(screen.queryByRole('link', { name: /SMS/i })).not.toBeInTheDocument();
   expect(screen.getByLabelText('Mật khẩu')).toHaveAttribute('type', 'password');
   expect(screen.getByRole('checkbox', { name: 'Ghi nhớ đăng nhập' })).toBeDisabled();
   fireEvent.click(screen.getByRole('button', { name: 'Hiện mật khẩu' }));

@@ -66,6 +66,7 @@ it('keeps desktop navigation fully labeled without a collapse button, including 
     screen.queryByRole('button', { name: 'Mở rộng thanh điều hướng' }),
   ).not.toBeInTheDocument();
   const nav = screen.getByRole('navigation', { name: 'Điều hướng chính' });
+  expect(within(nav).queryByRole('link', { name: /MySign|Ký số/ })).not.toBeInTheDocument();
   expect(within(nav).getByText('Cơ sở & Phòng')).toBeInTheDocument();
   expect(within(nav).getByRole('link', { name: 'Tổng quan' })).toHaveAttribute(
     'aria-current',
