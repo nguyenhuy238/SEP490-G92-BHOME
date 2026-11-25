@@ -2,7 +2,6 @@ import { act, fireEvent, render, screen, waitFor, within } from '@testing-librar
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { MemoryRouter, useLocation, useNavigate } from 'react-router';
 import { beforeEach, expect, it, vi } from 'vitest';
-import DigitalSigningPage from './pages/DigitalSigningPage';
 import ContractsPage from './pages/ContractsPage';
 const mocks = vi.hoisted(() => ({ list: vi.fn(), locations: vi.fn(), expiryReminders: vi.fn() }));
 vi.mock('./useContractsApi', () => ({ useContractsApi: () => mocks, useSigningApi: () => ({}) }));
@@ -12,11 +11,6 @@ vi.mock('../../../../../packages/client-core/src/auth', () => ({
 vi.mock('./ContractDetailPanel', () => ({
   ContractDetailPanel: ({ id }: { id: string }) => <span>Reviewed {id}</span>,
 }));
-vi.mock('./ViettelSettingsPanel', () => ({
-  ViettelSettingsPanel: () => <span>Restricted settings fixture</span>,
-}));
-vi.mock('./SigningCertificates', () => ({ SigningCertificates: () => null }));
-vi.mock('./SignatureImagePanel', () => ({ SignatureImagePanel: () => null }));
 beforeEach(() => {
   vi.mocked(window.matchMedia).mockImplementation((query) => ({
     matches: false,
@@ -48,7 +42,7 @@ beforeEach(() => {
     totalCount: 1,
   });
 });
-function mount(element = <DigitalSigningPage />) {
+function mount(element = <ContractsPage />) {
   render(
     <MemoryRouter>
       <QueryClientProvider
@@ -59,21 +53,6 @@ function mount(element = <DigitalSigningPage />) {
     </MemoryRouter>,
   );
 }
-it('starts with pending signing contracts and opens the existing review instead of exposing credentials', async () => {
-  mount();
-  fireEvent.click(await screen.findByRole('button', { name: 'Mở hồ sơ ký' }));
-  expect(screen.getByText('Reviewed contract')).toBeInTheDocument();
-  expect(mocks.list).toHaveBeenCalledWith(1, 'PendingSigning', '', expect.any(AbortSignal));
-  expect(screen.queryByText('Restricted settings fixture')).not.toBeInTheDocument();
-  fireEvent.click(screen.getByRole('tab', { name: 'Cấu hình tích hợp MySign' }));
-  expect(screen.getByText('Restricted settings fixture')).toBeInTheDocument();
-});
-it('shows failed retrieval as an error and retries without a false empty list', async () => {
-  mocks.list.mockRejectedValueOnce(new Error('Synthetic unavailable'));
-  mount();
-  fireEvent.click(await screen.findByRole('button', { name: 'Thử lại' }));
-  expect(await screen.findByText('Synthetic · Phòng P101')).toBeInTheDocument();
-});
 it('keeps the real contract identity, status, rent and review action visible on mobile', async () => {
   vi.mocked(window.matchMedia).mockImplementation((query) => ({
     matches: query.includes('max-width:599px'),

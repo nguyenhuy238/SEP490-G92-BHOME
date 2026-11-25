@@ -437,7 +437,7 @@ it('does not offer Owner actions to a different Owner account', () => {
 });
 it('keeps certificate signing separate from internal OTP signing', async () => {
   show(contract({ approvedAt: '2026-11-12T00:00:00Z', signingMode: 'REMOTE_CA' }));
-  expect(screen.getByText('Chọn chứng thư ký số')).toBeTruthy();
+  expect(screen.queryByText('Chọn chứng thư ký số')).toBeNull();
   expect(request).not.toHaveBeenCalled();
   expect(screen.queryByText('Tạo lời mời ký')).toBeNull();
 });

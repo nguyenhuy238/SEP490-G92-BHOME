@@ -27,7 +27,7 @@ import { formatInstant } from '../../../../../packages/client-core/src/localizat
 import { Action, Heading, ui } from '../../components/WorkspaceKit';
 import { randomUUID } from '../../lib/randomUUID';
 import { mobileContractActions } from './contractSections';
-import { ContractActionForm, SigningCertificates } from './ContractActionForm';
+import { ContractActionForm } from './ContractActionForm';
 import { ContractEvidence } from './ContractEvidence';
 import { OwnerWebNotice } from '../../components/OwnerWebNotice';
 import { HoldingProgress } from './HoldingProgress';
@@ -216,7 +216,6 @@ export function HoldingContractFlow({
             <HoldingStatusBadge label="Chờ ký số" tone="warning" />
             <Text style={ui.muted}>Hợp đồng sử dụng phương thức ký số đã cấu hình.</Text>
           </HoldingSectionCard>
-          {owner && c.approvedAt && <SigningCertificates api={api} />}
           {owner && <ContractEvidence api={api} contractId={c.id} contractKind="Holding" pdf />}
         </>
       )}

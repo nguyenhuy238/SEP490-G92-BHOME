@@ -104,7 +104,6 @@ export default function LiveDashboardPage() {
           </Button>
         }
       />
-      <LifecycleAttention request={api.request} actor={actor} />
       <Box component="section" aria-label="Tình hình khai thác">
         <Stack
           direction="row"
@@ -267,6 +266,7 @@ export default function LiveDashboardPage() {
           />
         </Box>
       )}
+      <LifecycleAttention request={api.request} actor={actor} />
     </Stack>
   );
 }

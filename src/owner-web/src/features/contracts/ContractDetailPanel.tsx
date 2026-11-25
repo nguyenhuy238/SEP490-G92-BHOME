@@ -408,13 +408,6 @@ export function ContractDetailPanel({
                 ? 'Chủ trọ ký số MySign (chứng thư qua VNeID) · Người thuê ký điện tử, xác thực OTP email'
                 : 'Mỗi bên ký bằng chứng thư Viettel MySign của chính mình'
           }
-          action={
-            signer &&
-            !c.isDevelopmentDemo &&
-            (!signingMethods || signingMethods.methods.includes('VIETTEL_MYSIGN')) ? (
-              <SigningSetupLink />
-            ) : undefined
-          }
         >
           <Stack divider={<Divider flexItem />} spacing={1}>
             {parties.map((p) => (
@@ -697,20 +690,6 @@ function ContractNavigation({ id, reviewRequest }: { id: string; reviewRequest: 
         Bảo trì sau bàn giao
       </Button>
     </Stack>
-  );
-}
-
-// Certificates, signature picture and the Viettel account live on their own page (menu "Ký số (MySign)").
-function SigningSetupLink() {
-  const routed = useInRouterContext();
-  return routed ? (
-    <Button size="small" component={RouterLink} to="/digital-signing">
-      Thiết lập ký số
-    </Button>
-  ) : (
-    <Button size="small" href="/digital-signing">
-      Thiết lập ký số
-    </Button>
   );
 }
 

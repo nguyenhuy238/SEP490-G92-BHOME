@@ -24,6 +24,42 @@ beforeAll(async () => {
   await demoAuth.login(DEMO_USER, DEMO_PASSWORD);
 });
 beforeEach(() => localStorage.clear());
+it('redirects the old SMS recovery URL to the email recovery dialog', async () => {
+  await demoAuth.logout();
+  render(
+    <ThemeProvider theme={theme}>
+      <AuthProvider>
+        <PortalProvider>
+          <MemoryRouter initialEntries={['/forgot-password']}>
+            <AppRouter />
+          </MemoryRouter>
+        </PortalProvider>
+      </AuthProvider>
+    </ThemeProvider>,
+  );
+  const dialog = await screen.findByRole('dialog');
+  expect(within(dialog).getByRole('textbox', { name: 'Email' })).toBeInTheDocument();
+  expect(within(dialog).getByRole('button', { name: 'Gửi hướng dẫn' })).toBeInTheDocument();
+  expect(screen.queryByText(/SMS/)).not.toBeInTheDocument();
+});
+it('redirects the retired MySign configuration URL to contracts', async () => {
+  await demoAuth.login(DEMO_USER, DEMO_PASSWORD);
+  render(
+    <ThemeProvider theme={theme}>
+      <AuthProvider>
+        <PortalProvider>
+          <MemoryRouter initialEntries={['/digital-signing']}>
+            <AppRouter />
+          </MemoryRouter>
+        </PortalProvider>
+      </AuthProvider>
+    </ThemeProvider>,
+  );
+  expect(
+    await screen.findByRole('heading', { name: 'Quản lý hợp đồng' }, { timeout: 20000 }),
+  ).toBeInTheDocument();
+  expect(screen.queryByRole('tab', { name: 'Cấu hình tích hợp MySign' })).not.toBeInTheDocument();
+}, 25000);
 it('protects deep links and returns to the requested screen after demo login', async () => {
   await demoAuth.logout();
   render(

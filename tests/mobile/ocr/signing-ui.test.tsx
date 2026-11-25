@@ -110,10 +110,7 @@ vi.mock('../../../src/mobile/src/components/WorkflowControls', () => ({
 vi.mock('../../../src/mobile/src/components/IdentityDateField', () => ({
   IdentityDateField: () => null,
 }));
-import {
-  ContractActionForm,
-  SigningCertificates,
-} from '../../../src/mobile/src/features/contracts/ContractActionForm';
+import { ContractActionForm } from '../../../src/mobile/src/features/contracts/ContractActionForm';
 
 afterEach(cleanup);
 const id = '00000000-0000-0000-0000-000000000003';
@@ -208,38 +205,15 @@ it('clears the previous selection and consent when a refreshed certificate is lo
   );
   expect(api.mutate).not.toHaveBeenCalled();
 });
-it('manages the own certificate and reloads the authoritative lock status', async () => {
+it('keeps certificate configuration out of the signing action', async () => {
   const api = setup();
-  render(<SigningCertificates api={api} />);
-  expect(api.certificates).not.toHaveBeenCalled();
-  fireEvent.click(screen.getByRole('button', { name: 'Khai báo chứng thư MySign của bạn' }));
-  await screen.findByText(/SYNTHETIC-CERT/);
-  vi.mocked(api.certificates).mockResolvedValue([{ ...certificate, locked: true, usable: false }]);
-  fireEvent.click(screen.getByRole('button', { name: 'Khóa chứng thư' }));
-  await screen.findByRole('button', { name: 'Mở khóa chứng thư' });
-  expect(api.lockCertificate).toHaveBeenCalledWith(id, true);
-  vi.mocked(api.certificates).mockResolvedValue([certificate]);
-  fireEvent.click(screen.getByRole('button', { name: 'Mở khóa chứng thư' }));
-  await screen.findByRole('button', { name: 'Khóa chứng thư' });
-  expect(api.lockCertificate).toHaveBeenCalledWith(id, false);
-});
-it('does not show success when declaring fails and allows retry without losing input', async () => {
-  const api = setup();
-  vi.mocked(api.declareCertificate).mockRejectedValueOnce({ status: 503 });
-  render(<SigningCertificates api={api} />);
-  fireEvent.click(screen.getByRole('button', { name: 'Khai báo chứng thư MySign của bạn' }));
-  fireEvent.change(screen.getByLabelText('Mã thuê bao MySign của bạn'), {
-    target: { value: 'SYNTHETIC-SUBSCRIBER' },
-  });
-  fireEvent.click(screen.getByRole('button', { name: 'Tra cứu và lưu chứng thư' }));
-  await screen.findByText(/Dịch vụ ký hoặc thành phần xử lý chưa sẵn sàng/);
-  expect(screen.queryByText('Đã truy vấn và lưu chứng thư từ nhà cung cấp.')).toBeNull();
-  expect((screen.getByLabelText('Mã thuê bao MySign của bạn') as HTMLInputElement).value).toBe(
-    'SYNTHETIC-SUBSCRIBER',
-  );
-  fireEvent.click(screen.getByRole('button', { name: 'Tra cứu và lưu chứng thư' }));
-  await screen.findByText('Đã truy vấn và lưu chứng thư từ nhà cung cấp.');
-  expect((screen.getByLabelText('Mã thuê bao MySign của bạn') as HTMLInputElement).value).toBe('');
+  mountForm(api);
+  await screen.findByRole('option', { name: /SYNTHETIC-CERT/ });
+  expect(
+    screen.queryByRole('button', { name: /Khai báo|Khóa chứng thư|Tra cứu và lưu/ }),
+  ).toBeNull();
+  expect(api.declareCertificate).not.toHaveBeenCalled();
+  expect(api.lockCertificate).not.toHaveBeenCalled();
 });
 
 it('requires Tenant consent for a released demo and confirms only the server result without duplicate submissions', async () => {
