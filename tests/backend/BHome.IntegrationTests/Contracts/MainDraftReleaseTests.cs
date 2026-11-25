@@ -176,6 +176,20 @@ public sealed partial class MainDraftApiTests
     [InlineData("Production")]
     public async Task DemoTemplateCanBeReviewedReleasedAndReadInEveryEnvironment(string environment)
     {
+        // Staging signing requires the persisted Test payment mode, which is not
+        // mapped by the archived source schema. Exercise the entire scenario on
+        // the same disposable Compact24 schema used by the deployed application.
+        if (environment == "Staging" && fixture.Factory.Services.GetService<BHome.Infrastructure.Persistence.Compact24.Compact24DbContext>() is null)
+        {
+            var native = new BHome.IntegrationTests.Compact24.PropertyContractDockerFixture();
+            try
+            {
+                await native.InitializeAsync();
+                await new MainDraftApiTests(native.Contracts).DemoTemplateCanBeReviewedReleasedAndReadInEveryEnvironment(environment);
+            }
+            finally { await native.DisposeAsync(); }
+            return;
+        }
         var w = await Setup();
         var templateHash = new MainDraftRenderer(new ConfigurationBuilder().Build(), TimeProvider.System).TemplateHash;
         Guid? tenantUserId = null;

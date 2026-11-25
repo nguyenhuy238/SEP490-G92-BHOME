@@ -68,9 +68,15 @@ public sealed partial class ContractLifecycleApiTests(ContractFixture fixture) :
             new BillingPolicy { LocationId = location.Id, Category = ChargeCategory.Water, ChargeCode = "WATER", Name = "Synthetic water", Method = ChargingMethod.Metered, Rate = 15000, EffectiveFrom = Today.AddMonths(-1) });
         await db.SaveChangesAsync(); return new(owner, staff, tenant, location.Id, room.Id, resident.Id);
     }
+    private static async Task<HoldingSettings?> ReadHoldingPolicyAsync(HttpClient owner)
+    {
+        using var response = await owner.GetAsync("/api/v1/contracts/holding-settings");
+        if (response.StatusCode == HttpStatusCode.NoContent) return null;
+        return await Success<HoldingSettings>(response);
+    }
     private async Task<HoldingPreparation> ConfigureHoldingPolicyAsync(Workspace workspace, string terms)
     {
-        var current = await workspace.Owner.Client.GetFromJsonAsync<HoldingSettings>("/api/v1/contracts/holding-settings");
+        var current = await ReadHoldingPolicyAsync(workspace.Owner.Client);
         var saved = await workspace.Owner.Client.PutAsJsonAsync("/api/v1/contracts/holding-settings", new HoldingSettingsInput(terms, current?.Version ?? 0));
         Assert.Equal(HttpStatusCode.NoContent, saved.StatusCode);
         return await Success<HoldingPreparation>(await workspace.Staff.Client.GetAsync($"/api/v1/contracts/holdings/preparation?roomId={workspace.Room}"));

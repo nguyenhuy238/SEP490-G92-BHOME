@@ -33,7 +33,7 @@ public sealed partial class ContractLifecycleApiTests
             await db.SaveChangesAsync();
         }
         var path = $"/api/v1/contracts/holding-settings/{w.Location}";
-        var currentSettings = await w.Owner.Client.GetFromJsonAsync<HoldingSettings>("/api/v1/contracts/holding-settings");
+        var currentSettings = await ReadHoldingPolicyAsync(w.Owner.Client);
         var initialVersion = currentSettings?.Version ?? 0;
         var config = new HoldingSettingsInput("Synthetic global terms " + Guid.NewGuid().ToString("N"), initialVersion);
         Assert.Equal(HttpStatusCode.Forbidden, (await w.Staff.Client.PutAsJsonAsync(path, config)).StatusCode);
@@ -51,7 +51,7 @@ public sealed partial class ContractLifecycleApiTests
         var stale = new HoldingDraftInput(w.Room, w.Owner.Id, w.Tenant.Id, w.Resident, [w.Resident], quote.StartDate, quote.EndDate, quote.ExpiresAt, quote.HoldingDeposit, quote.Terms, 1, quote.SettingsVersion);
         Assert.Equal(HttpStatusCode.Conflict, (await Post(w.Staff, "/api/v1/contracts/holdings", stale)).StatusCode);
         quote = await Success<HoldingPreparation>(await w.Staff.Client.GetAsync($"/api/v1/contracts/holdings/preparation?roomId={w.Room}"));
-        var id = (await Success<ContractId>(await Post(w.Staff, "/api/v1/contracts/holdings", stale with { StartDate = quote.StartDate, EndDate = quote.EndDate, ExpiresAt = quote.ExpiresAt, HoldingDeposit = quote.HoldingDeposit, SettingsVersion = quote.SettingsVersion }))).Id;
+        var id = (await Success<ContractId>(await Post(w.Staff, "/api/v1/contracts/holdings", stale with { StartDate = quote.StartDate, EndDate = quote.EndDate, ExpiresAt = quote.ExpiresAt, HoldingDeposit = quote.HoldingDeposit, Terms = quote.Terms, SettingsVersion = quote.SettingsVersion }))).Id;
         Assert.Equal(HttpStatusCode.NoContent, (await w.Owner.Client.PutAsJsonAsync(path, config with { Terms = "Next global terms " + Guid.NewGuid().ToString("N"), ExpectedVersion = initialVersion + 2 })).StatusCode);
         var created = await Success<ContractView>(await w.Staff.Client.GetAsync(Path(id)));
         Assert.Equal(3000000, created.RequiredDeposit); Assert.Equal(quote.EndDate, created.EndDate);
@@ -59,6 +59,7 @@ public sealed partial class ContractLifecycleApiTests
     [Fact]
     public async Task StaffListIncludesHoldingAndMainWithTypeSpecificFieldsAndPreservesLocationScope()
     {
+        if (await RunHoldingSigningOnNativeSchemaAsync(true, tests => tests.StaffListIncludesHoldingAndMainWithTypeSpecificFieldsAndPreservesLocationScope())) return;
         var main = await Setup(); var holding = await Setup(); var outside = await Setup();
         var mainId = await Draft(main); var outsideId = await Draft(outside);
         await using (var scope = fixture.Factory.Services.CreateAsyncScope())

@@ -55,12 +55,19 @@ public sealed partial class Compact24NotificationMvpTests
     }
 
     [CompactPostgresTheory]
-    [InlineData(false, false, false, false)]
-    [InlineData(true, false, false, false)]
-    [InlineData(false, true, false, false)]
-    [InlineData(false, false, true, false)]
-    [InlineData(false, false, false, true)]
-    public async Task HoldingActivationQueuesOneConfirmationToAcceptedInvitationEmailAndSmtpFailureDoesNotUndoHolding(
+    [InlineData(false, false, false)]
+    [InlineData(true, false, false)]
+    [InlineData(false, true, false)]
+    [InlineData(false, false, true)]
+    public Task HoldingActivationQueuesOneConfirmationToAcceptedInvitationEmailAndSmtpFailureDoesNotUndoHolding(
+        bool smtpUnknown, bool corruptDocument, bool missingDocument) =>
+        HoldingConfirmationScenario(smtpUnknown, corruptDocument, missingDocument, false);
+
+    [CompactPostgresFact]
+    public Task ConvertedHoldingStillQueuesOneConfirmationThroughDedicatedDeliveryPass() =>
+        HoldingConfirmationScenario(false, false, false, true);
+
+    private async Task HoldingConfirmationScenario(
         bool smtpUnknown, bool corruptDocument, bool missingDocument, bool converted)
     {
         var w = await Seed(); var probe = new SmtpProbe

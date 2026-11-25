@@ -29,7 +29,8 @@ public sealed partial class Compact24OwnerSetupTests(Compact24Fixture fixture) :
 {
     private async Task<HoldingPreparation> ConfigureHoldingPolicyAsync(HttpClient owner, Guid roomId, string terms)
     {
-        var current = await owner.GetFromJsonAsync<HoldingSettings>("/api/v1/contracts/holding-settings");
+        using var response = await owner.GetAsync("/api/v1/contracts/holding-settings");
+        var current = response.StatusCode == HttpStatusCode.NoContent ? null : await Read<HoldingSettings>(response);
         Assert.Equal(HttpStatusCode.NoContent, (await owner.PutAsJsonAsync("/api/v1/contracts/holding-settings", new HoldingSettingsInput(terms, current?.Version ?? 0))).StatusCode);
         return (await owner.GetFromJsonAsync<HoldingPreparation>($"/api/v1/contracts/holdings/preparation?roomId={roomId}"))!;
     }
@@ -523,7 +524,7 @@ public sealed partial class Compact24OwnerSetupTests(Compact24Fixture fixture) :
         Assert.Equal("SigningAndDepositCompleted", (await owner.GetFromJsonAsync<ContractView>($"/api/v1/contracts/{a}"))!.PriceLockTrigger);
         await Read<ContractView>(await Post(owner, $"/api/v1/contracts/{a}/holding-activation"));
         Assert.Equal(RoomStatus.OnHold, (await owner.GetFromJsonAsync<RoomDto>($"/api/v1/rooms/{w.Room}"))!.Status);
-        using var future = host.WithWebHostBuilder(builder => builder.ConfigureServices(s => s.AddSingleton<TimeProvider>(new Clock(DateTimeOffset.UtcNow.AddDays(2)))));
+        using var future = host.WithWebHostBuilder(builder => builder.ConfigureServices(s => s.AddSingleton<TimeProvider>(new Clock(quote.ExpiresAt.AddSeconds(1)))));
         await using (var scope = future.Services.CreateAsyncScope()) await scope.ServiceProvider.GetServices<IBackgroundJobHandler>().Single(j => j.Name == "contract-expiry").ExecuteAsync(new(Guid.NewGuid(), "synthetic-expiry", "{}"), default);
         Assert.Equal("Expired", (await Read<ContractView>(await Post(owner, $"/api/v1/contracts/{a}/signing/sync"))).Status);
         Assert.Equal(3000000, (await owner.GetFromJsonAsync<HoldingDepositStatus>($"/api/v1/contracts/{a}/holding-deposit"))!.Verified);
