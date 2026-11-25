@@ -197,7 +197,9 @@ public sealed partial class MainDraftApiTests
             b.UseTestEnvironment(environment);
             b.ConfigureAppConfiguration((_, config) => config.AddInMemoryCollection(new Dictionary<string, string?>
             {
-                ["MainDraft:LibreOfficeContainerImage"] = "bhome/contract-converter:local"
+                ["MainDraft:LibreOfficeContainerImage"] = "bhome/contract-converter:local",
+                ["ContractWorkflow:SimulatedSigningEnabled"] = "true",
+                ["SePay:Enabled"] = "false"
             }));
         });
         using var owner = InHost(host, w.Owner); using var staff = InHost(host, w.Staff); using var outside = InHost(host, w.Outside);
