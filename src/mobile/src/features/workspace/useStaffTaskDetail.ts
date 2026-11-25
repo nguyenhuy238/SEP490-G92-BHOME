@@ -225,7 +225,13 @@ export function useStaffTaskDetail(id: string) {
     setSyncedVersion(false);
     setUploadPending(true);
     try {
-      if (!pending.file) pending.file = await client.upload(id, pending.bytes, pending.key);
+      if (!pending.file)
+        pending.file = await client.upload(
+          id,
+          pending.bytes,
+          pending.key,
+          pending.bytes[0] === 137 ? 'image/png' : 'image/jpeg',
+        );
       if (!alive.current) return false;
       // Upload returns metadata, not a TaskView; the following GET must succeed before any action.
       await refreshTask();
