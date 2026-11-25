@@ -92,28 +92,7 @@ export function StaffTaskListScreen({
   handovers = false,
   initialCategory = 'MoveIn',
 }: { handovers?: boolean; initialCategory?: 'MoveIn' | 'MoveOut' } = {}) {
-  const [tab, setTab] = useState('work');
-  if (handovers) return <StaffTaskListContent handovers initialCategory={initialCategory} />;
-  return (
-    <>
-      <StaffWorkflowTabs
-        accessibilityLabel="Nội dung công việc Staff"
-        selected={tab}
-        onChange={setTab}
-        tabs={[
-          { id: 'work', label: 'Công việc' },
-          { id: 'reports', label: 'Báo cáo sự cố' },
-        ]}
-      />
-      {tab === 'reports' ? (
-        <React.Suspense fallback={<Text variant="bodySmall">Đang tải báo cáo sự cố…</Text>}>
-          <LazyIncidentListScreen embedded />
-        </React.Suspense>
-      ) : (
-        <StaffTaskListContent />
-      )}
-    </>
-  );
+  return <StaffTaskListContent handovers={handovers} initialCategory={initialCategory} />;
 }
 
 function StaffTaskListContent({
@@ -210,10 +189,10 @@ function StaffTaskListContent({
       : 'Chưa xác định tên cơ sở';
   return (
     <>
-      {!inHeader && (
+      {handovers && !inHeader && (
         <View style={styles.between}>
           <Text variant="titleLarge" style={styles.title}>
-            {handovers ? 'Bàn giao / Trả phòng' : 'Công việc vận hành'}
+            Bàn giao / Trả phòng
           </Text>
           <IconButton
             icon="refresh"
@@ -223,17 +202,12 @@ function StaffTaskListContent({
           />
         </View>
       )}
-      {!handovers && (
-        <Text variant="bodySmall" style={styles.muted}>
-          Công việc thuộc cơ sở đang chọn trên trang chủ
-        </Text>
-      )}
       {!staffLocationId && (
         <Text accessibilityRole="alert" variant="bodySmall" style={styles.muted}>
           Chưa có cơ sở được phân công để xem công việc.
         </Text>
       )}
-      {handovers ? (
+      {handovers && (
         <>
           <SegmentedButtons
             value={category}
@@ -286,24 +260,6 @@ function StaffTaskListContent({
             </Button>
           )}
         </>
-      ) : (
-        <>
-          <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 8 }}>
-            <Button icon="key-outline" mode="outlined" onPress={() => go('staff-handovers')}>
-              Bàn giao / Trả phòng
-            </Button>
-            <Button
-              icon="file-document-check-outline"
-              mode="outlined"
-              onPress={() => go('staff-handover-archive')}
-            >
-              Biên bản đã ký
-            </Button>
-          </View>
-          <Button icon="calendar-month-outline" onPress={() => go('shifts')}>
-            Lịch làm việc
-          </Button>
-        </>
       )}
       {!handovers && (
         <TaskFilterBar
@@ -314,22 +270,19 @@ function StaffTaskListContent({
           }}
         />
       )}
-      {data &&
-        (handovers ? (
-          <View style={styles.summary}>
-            <Text variant="labelLarge" style={[styles.title, { flex: 1 }]}>
-              {data.totalCount} nhiệm vụ cần xử lý
+      {data && handovers && (
+        <View style={styles.between}>
+          <Text variant="labelLarge" style={[styles.title, { flex: 1 }]}>
+            {data.totalCount} nhiệm vụ cần xử lý
+          </Text>
+          {data.totalCount > data.pageSize && (
+            <Text variant="bodySmall" style={styles.muted}>
+              {(data.page - 1) * data.pageSize + 1}–
+              {Math.min(data.page * data.pageSize, data.totalCount)} / {data.totalCount}
             </Text>
-            {data.totalCount > data.pageSize && (
-              <Text variant="bodySmall" style={styles.muted}>
-                {(data.page - 1) * data.pageSize + 1}–
-                {Math.min(data.page * data.pageSize, data.totalCount)} / {data.totalCount}
-              </Text>
-            )}
-          </View>
-        ) : (
-          <TaskSummaryBar totalCount={data.totalCount} visibleItems={items} filtered={!!status} />
-        ))}
+          )}
+        </View>
+      )}
       {query.fetching && (
         <View
           style={styles.loading}
