@@ -81,17 +81,33 @@ public sealed partial class Compact24OwnerSetupTests
     {
         var w = await Seed(); using var owner = await Client(w.Owner); using var staff = await Client(w.Staff);
         var route = $"/api/v1/contracts/holding-settings/{w.Location}";
-        var input = new HoldingSettingsInput("Synthetic holding terms", 0);
-        Assert.True((await owner.PutAsJsonAsync(route, input)).IsSuccessStatusCode);
+        // The Owner-global policy is shared by all locations in this fixture.
+        // Preserve prior revisions regardless of the order of the other tests.
+        using var currentResponse = await owner.GetAsync(route);
+        var current = currentResponse.StatusCode == HttpStatusCode.NoContent ? null : await Read<HoldingSettings>(currentResponse);
+        // Guarantee a pre-existing revision even when this test is run alone.
+        var existingTerms = "Synthetic previous policy " + Guid.NewGuid().ToString("N");
+        Assert.Equal(HttpStatusCode.NoContent, (await owner.PutAsJsonAsync(route, new HoldingSettingsInput(existingTerms, current?.Version ?? 0))).StatusCode);
+        current = await Read<HoldingSettings>(await owner.GetAsync(route));
+        var priorHistory = await Read<HoldingSettings[]>(await owner.GetAsync($"{route}/versions"));
+        Assert.Contains(priorHistory, d => d.Version == current.Version && d.Terms == existingTerms);
+        var terms = "Synthetic holding terms " + Guid.NewGuid().ToString("N");
+        var nextTerms = "New terms " + Guid.NewGuid().ToString("N");
+        var input = new HoldingSettingsInput(terms, current?.Version ?? 0);
+        Assert.Equal(HttpStatusCode.NoContent, (await owner.PutAsJsonAsync(route, input)).StatusCode);
         var v1 = await owner.GetFromJsonAsync<HoldingSettings>(route);
         Assert.NotNull(v1);
-        Assert.True((await owner.PutAsJsonAsync(route, input with { ExpectedVersion = v1.Version })).IsSuccessStatusCode);
+        Assert.Equal(input.ExpectedVersion + 1, v1.Version);
+        Assert.Equal(HttpStatusCode.NoContent, (await owner.PutAsJsonAsync(route, input with { ExpectedVersion = v1.Version })).StatusCode);
         Assert.Equal(v1.Version, (await owner.GetFromJsonAsync<HoldingSettings>(route))!.Version);
-        Assert.True((await owner.PutAsJsonAsync(route, input with { Terms = "New terms", ExpectedVersion = v1.Version })).IsSuccessStatusCode);
+        var afterNoOp = await Read<HoldingSettings[]>(await owner.GetAsync($"{route}/versions"));
+        Assert.Equal(priorHistory.Length + 1, afterNoOp.Length);
+        Assert.Equal(HttpStatusCode.NoContent, (await owner.PutAsJsonAsync(route, input with { Terms = nextTerms, ExpectedVersion = v1.Version })).StatusCode);
         var history = await owner.GetFromJsonAsync<HoldingSettings[]>($"{route}/versions");
-        Assert.Equal(2, history!.Length);
-        Assert.Contains(history, d => d.Version == v1.Version && d.HoldingMonths == 1 && d.Terms == "Synthetic holding terms");
-        Assert.Contains(history, d => d.Version == v1.Version + 1 && d.HoldingMonths == 1 && d.DepositRentMonths == 1 && d.Terms == "New terms");
+        Assert.Equal(priorHistory.Length + 2, history!.Length);
+        Assert.Contains(history, d => d.Version == v1.Version && d.HoldingMonths == 1 && d.Terms == terms);
+        Assert.Contains(history, d => d.Version == v1.Version + 1 && d.HoldingMonths == 1 && d.DepositRentMonths == 1 && d.Terms == nextTerms);
+        Assert.Equal(priorHistory, history.Skip(2).ToArray());
         Assert.Equal(HttpStatusCode.Forbidden, (await staff.GetAsync($"{route}/versions")).StatusCode);
     }
 }
