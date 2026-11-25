@@ -102,17 +102,15 @@ export function IdentityPersonCard({
           {action}
         </Button>
       )}
-      {person.status !== 'confirmed' && (
-        <Button
-          mode="text"
-          icon="pencil-outline"
-          contentStyle={styles.touch}
-          onPress={onManual}
-          disabled={disabled}
-        >
-          Nhập thủ công
-        </Button>
-      )}
+      <Button
+        mode="text"
+        icon={person.status === 'confirmed' ? 'file-document-edit-outline' : 'pencil-outline'}
+        contentStyle={styles.touch}
+        onPress={onManual}
+        disabled={disabled}
+      >
+        {person.status === 'confirmed' ? 'Xem / sửa thông tin' : 'Nhập thủ công'}
+      </Button>
     </View>
   );
 }

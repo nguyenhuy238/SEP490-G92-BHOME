@@ -154,6 +154,32 @@ vi.mock('react-native-paper', () => ({
       {children}
     </button>
   ),
+  TouchableRipple: ({
+    children,
+    onPress,
+    disabled,
+    accessibilityRole,
+    accessibilityLabel,
+    accessibilityState,
+  }: {
+    children?: React.ReactNode;
+    onPress: () => void;
+    disabled?: boolean;
+    accessibilityRole?: string;
+    accessibilityLabel?: string;
+    accessibilityState?: { checked?: boolean };
+  }) => (
+    <button
+      role={accessibilityRole}
+      aria-label={accessibilityLabel}
+      aria-checked={accessibilityState?.checked}
+      disabled={disabled}
+      onClick={onPress}
+    >
+      {children}
+    </button>
+  ),
+  ProgressBar: () => null,
   IconButton: ({
     onPress,
     disabled,
@@ -442,10 +468,12 @@ it('offers room selection without a test-data generator in development', () => {
 });
 
 function addFamilyMember() {
-  fireEvent.change(screen.getByRole('combobox', { name: 'Hình thức thuê' }), {
-    target: { value: 'family' },
-  });
+  fireEvent.click(screen.getByRole('radio', { name: 'Hộ gia đình' }));
   fireEvent.click(screen.getByRole('button', { name: 'Thêm người ở' }));
+}
+function openMemberEditor() {
+  const actions = screen.getAllByRole('button', { name: 'Nhập thủ công' });
+  fireEvent.click(actions[actions.length - 1]);
 }
 it('limits a family to the database room capacity and allows adding again after removing a draft member', () => {
   render(<OnboardingScreen />);
@@ -455,12 +483,18 @@ it('limits a family to the database room capacity and allows adding again after 
   const add = screen.getByRole('button', { name: 'Thêm người ở' });
   expect(add).toHaveProperty('disabled', true);
   fireEvent.click(add);
-  expect(screen.getAllByRole('button', { name: 'Bắt đầu quét CCCD' })).toHaveLength(1);
-  expect(screen.getByRole('textbox', { name: 'CCCD (nếu có)' })).toBeTruthy();
+  expect(screen.getAllByRole('button', { name: 'Bắt đầu quét CCCD' })).toHaveLength(2);
+  expect(screen.queryByRole('textbox', { name: 'CCCD (nếu có)' })).toBeNull();
+  openMemberEditor();
+  expect(screen.getByRole('textbox', { name: 'Họ tên thành viên' })).toBeTruthy();
+  expect(screen.queryByRole('textbox', { name: 'CCCD (nếu có)' })).toBeNull();
+  fireEvent.click(screen.getByRole('button', { name: 'Ẩn thông tin' }));
   fireEvent.click(screen.getByRole('button', { name: 'Xóa Người ở 2' }));
   expect(screen.getByRole('button', { name: 'Thêm người ở' })).toHaveProperty('disabled', false);
   fireEvent.click(screen.getByRole('button', { name: 'Thêm người ở' }));
   expect(screen.getByText('2/2 người')).toBeTruthy();
+  expect(screen.getAllByText('Người ở 2')).toHaveLength(2);
+  expect(screen.queryByRole('textbox', { name: 'Họ tên thành viên' })).toBeNull();
   expect(state.json).not.toHaveBeenCalled();
 });
 it('limits new occupants to the remaining place when a two-person room already has one occupant', () => {
@@ -469,9 +503,7 @@ it('limits new occupants to the remaining place when a two-person room already h
     target: { value: 'occupied' },
   });
   fireEvent.click(screen.getByRole('button', { name: 'Tiếp tục' }));
-  fireEvent.change(screen.getByRole('combobox', { name: 'Hình thức thuê' }), {
-    target: { value: 'family' },
-  });
+  fireEvent.click(screen.getByRole('radio', { name: 'Hộ gia đình' }));
   expect(screen.getByText('1/1 người')).toBeTruthy();
   expect(screen.getByRole('button', { name: 'Thêm người ở' })).toHaveProperty('disabled', true);
   expect(screen.getAllByRole('button', { name: 'Bắt đầu quét CCCD' })).toHaveLength(1);
@@ -563,9 +595,7 @@ it('opens CCCD directly with Individual selected and forbids a second person', (
   render(<OnboardingScreen />);
   selectRoom();
   expect(screen.queryByLabelText('Tên gọi hồ sơ')).toBeNull();
-  expect(
-    (screen.getByRole('combobox', { name: 'Hình thức thuê' }) as HTMLSelectElement).value,
-  ).toBe('individual');
+  expect(screen.getByRole('radio', { name: 'Cá nhân' }).getAttribute('aria-checked')).toBe('true');
   const add = screen.getByRole('button', { name: 'Thêm người ở' }) as HTMLButtonElement;
   expect(add.disabled).toBe(true);
   fireEvent.click(add);
@@ -576,13 +606,13 @@ it('retains a family selection through Back and keeps draft members separate', (
   render(<OnboardingScreen />);
   selectRoom();
   addFamilyMember();
-  expect(screen.getAllByRole('button', { name: 'Bắt đầu quét CCCD' })).toHaveLength(1);
+  expect(screen.getAllByRole('button', { name: 'Bắt đầu quét CCCD' })).toHaveLength(2);
   fireEvent.click(screen.getByRole('button', { name: 'Quay lại' }));
   expect((screen.getByRole('combobox', { name: 'Phòng *' }) as HTMLSelectElement).value).toBe(
     'room',
   );
   fireEvent.click(screen.getByRole('button', { name: 'Tiếp tục' }));
-  expect(screen.getAllByRole('button', { name: 'Bắt đầu quét CCCD' })).toHaveLength(1);
+  expect(screen.getAllByRole('button', { name: 'Bắt đầu quét CCCD' })).toHaveLength(2);
   fireEvent.click(screen.getByRole('button', { name: 'Chọn Người ở 2 làm đại diện' }));
   expect(screen.queryByRole('button', { name: 'Chọn Người ở 2 làm đại diện' })).toBeNull();
   fireEvent.click(screen.getByRole('button', { name: 'Xóa Người ở 2' }));
@@ -597,11 +627,10 @@ it('creates only the representative identity and keeps family members editable w
   closeIdentity();
   expect(state.json.mock.calls[0][1]).toMatchObject({ residentType: 0, displayLabel: 'Người ở 1' });
   expect(state.json).toHaveBeenCalledTimes(1);
+  openMemberEditor();
   expect(screen.getByRole('textbox', { name: 'Họ tên thành viên' })).toBeTruthy();
   expect(screen.getByRole('button', { name: 'Xóa Người ở 2' })).toHaveProperty('disabled', false);
-  expect(
-    (screen.getByRole('combobox', { name: 'Hình thức thuê' }) as HTMLSelectElement).disabled,
-  ).toBe(true);
+  expect((screen.getByRole('radio', { name: 'Cá nhân' }) as HTMLButtonElement).disabled).toBe(true);
 });
 it('allows manual confirmation after OCR failure and completes only after the server accepts it', async () => {
   render(<OnboardingScreen />);
@@ -828,6 +857,7 @@ it('retains unconfirmed identity edits across steps and keeps each person separa
     'NGƯỜI Ở MẪU',
   );
   closeIdentity();
+  openMemberEditor();
   fireEvent.change(screen.getByRole('textbox', { name: 'Họ tên thành viên' }), {
     target: { value: 'THÀNH VIÊN KIỂM THỬ' },
   });
@@ -1056,6 +1086,7 @@ it('requires verified representative identity and member details before review',
     (screen.getByRole('button', { name: 'Tiếp tục tạo hợp đồng' }) as HTMLButtonElement).disabled,
   ).toBe(true);
   expect(screen.queryByRole('dialog')).toBeNull();
+  openMemberEditor();
   fireEvent.change(screen.getByRole('textbox', { name: 'Họ tên thành viên' }), {
     target: { value: 'THÀNH VIÊN KIỂM THỬ' },
   });
@@ -1078,6 +1109,7 @@ it('persists a household before common step 3, retries safely and retains editab
   fireEvent.click(screen.getByRole('checkbox'));
   fireEvent.click(screen.getByRole('button', { name: 'Xác nhận thông tin' }));
   await screen.findByText('Đã xác nhận 1/2 người ở');
+  openMemberEditor();
   fireEvent.change(screen.getByRole('textbox', { name: 'Họ tên thành viên' }), {
     target: { value: 'THÀNH VIÊN KIỂM THỬ' },
   });
@@ -1118,6 +1150,7 @@ it('persists a household before common step 3, retries safely and retains editab
   await screen.findByRole('dialog', { name: 'Contract preparation' });
   expect(saves()).toHaveLength(2);
   fireEvent.click(screen.getByText('Previous identity step'));
+  openMemberEditor();
   fireEvent.change(screen.getByRole('textbox', { name: 'Họ tên thành viên' }), {
     target: { value: 'THÀNH VIÊN ĐÃ SỬA' },
   });
@@ -1181,6 +1214,7 @@ it('aborts a closed representative OCR flow and ignores a late response while ed
   fireEvent.click(screen.getByRole('button', { name: 'Chụp ảnh mặt trước' }));
   closeIdentity();
   expect(state.image.mock.calls[0][2].aborted).toBe(true);
+  openMemberEditor();
   fireEvent.change(screen.getByRole('textbox', { name: 'Họ tên thành viên' }), {
     target: { value: 'THÀNH VIÊN KIỂM THỬ' },
   });

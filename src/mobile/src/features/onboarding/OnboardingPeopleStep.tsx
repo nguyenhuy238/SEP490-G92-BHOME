@@ -1,7 +1,6 @@
 import React from 'react';
 import { StyleSheet, View } from 'react-native';
-import { Button, IconButton, Text } from 'react-native-paper';
-import { ChoiceField } from '../../components/WorkflowControls';
+import { Button, Icon, IconButton, ProgressBar, Text, TouchableRipple } from 'react-native-paper';
 import { colors as c, staffColors as s } from '../../theme/theme';
 import { identityStatusLabels, type HouseholdMode, type OnboardingPerson } from './onboarding';
 
@@ -15,6 +14,7 @@ interface Props {
   editing: string;
   created: boolean;
   canContinue: boolean;
+  completedCount: number;
   backDisabled: boolean;
   onModeChange: (mode: HouseholdMode) => void;
   onAdd: () => void;
@@ -32,16 +32,36 @@ export function OnboardingPeopleStep(props: Props) {
   return (
     <View style={styles.content}>
       <View style={styles.section}>
-        <ChoiceField
-          label="Hình thức thuê"
-          value={props.mode}
-          disabled={props.created}
-          options={[
-            { id: 'family', label: 'Hộ gia đình' },
-            { id: 'individual', label: 'Cá nhân' },
-          ]}
-          onChange={(value) => props.onModeChange(value as HouseholdMode)}
-        />
+        <Text style={styles.modeLabel}>Hình thức thuê</Text>
+        <View style={styles.modeCards}>
+          {(
+            [
+              ['family', 'Hộ gia đình', 'account-group-outline'],
+              ['individual', 'Cá nhân', 'account-outline'],
+            ] as const
+          ).map(([value, label, icon]) => {
+            const selected = props.mode === value;
+            return (
+              <TouchableRipple
+                key={value}
+                accessibilityRole="radio"
+                accessibilityState={{ checked: selected, disabled: props.created }}
+                accessibilityLabel={label}
+                disabled={props.created}
+                onPress={() => props.onModeChange(value)}
+                style={[styles.modeCard, selected && styles.modeCardSelected]}
+              >
+                <View style={styles.modeCardContent}>
+                  <Icon source={icon} size={24} color={selected ? s.blue : '#64748B'} />
+                  <Text style={[styles.modeCardLabel, selected && styles.modeCardLabelSelected]}>
+                    {label}
+                  </Text>
+                  {selected && <Icon source="check-circle" size={20} color={s.blue} />}
+                </View>
+              </TouchableRipple>
+            );
+          })}
+        </View>
         <Text style={styles.description}>
           {props.mode === 'family'
             ? 'Một người đại diện và các thành viên cùng ở.'
@@ -56,9 +76,22 @@ export function OnboardingPeopleStep(props: Props) {
             {props.people.length}/{props.maxPeople} người
           </Text>
         </View>
+        <Text style={styles.count}>
+          {props.completedCount}/{props.people.length} hoàn tất
+        </Text>
+        <ProgressBar
+          progress={props.people.length ? props.completedCount / props.people.length : 0}
+          color={s.blue}
+          style={styles.progress}
+        />
         <View style={styles.list}>
           {props.people.map((item, index) => {
-            const name = item.label || `Người ở ${index + 1}`;
+            const label = item.label.trim();
+            const name =
+              item.member?.fullName.trim() ||
+              (/^Người ở \d+$/.test(label)
+                ? `Người ở ${index + 1}`
+                : label || `Người ở ${index + 1}`);
             const representative = item.key === props.representative;
             const selected = item.key === props.editing;
             const canDelete =
@@ -185,6 +218,36 @@ export function OnboardingPeopleStep(props: Props) {
 const styles = StyleSheet.create({
   content: { gap: 24 },
   section: { gap: 10 },
+  modeLabel: { color: s.navy, fontSize: 15, lineHeight: 22, fontWeight: '700' },
+  modeCards: { flexDirection: 'row', gap: 10 },
+  modeCard: {
+    flex: 1,
+    minWidth: 0,
+    minHeight: 64,
+    borderRadius: 14,
+    borderWidth: 1,
+    borderColor: '#CBD5E1',
+    backgroundColor: c.white,
+    overflow: 'hidden',
+  },
+  modeCardSelected: { borderColor: s.blue, backgroundColor: s.blueSoft },
+  modeCardContent: {
+    minHeight: 62,
+    paddingHorizontal: 10,
+    gap: 8,
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  modeCardLabel: {
+    flex: 1,
+    minWidth: 0,
+    color: s.navy,
+    fontSize: 14,
+    lineHeight: 19,
+    fontWeight: '600',
+  },
+  modeCardLabelSelected: { color: s.blue },
+  progress: { height: 6, borderRadius: 3, backgroundColor: '#E2E8F0' },
   sectionHeader: {
     flexDirection: 'row',
     alignItems: 'center',
