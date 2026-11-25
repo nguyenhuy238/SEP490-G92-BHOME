@@ -10,7 +10,14 @@ import {
   useWindowDimensions,
   View,
 } from 'react-native';
-import { ActivityIndicator, Badge, Button, IconButton, Text, TouchableRipple } from 'react-native-paper';
+import {
+  ActivityIndicator,
+  Badge,
+  Button,
+  IconButton,
+  Text,
+  TouchableRipple,
+} from 'react-native-paper';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { StatusBar } from 'expo-status-bar';
 import { router, useFocusEffect, useNavigation } from 'expo-router';
@@ -438,14 +445,16 @@ export function WorkspaceShell({
                     tenantResidence) &&
                     headerAction && (
                       <>
-                        {(headerAction.disabled || headerAction.action?.disabled) ? (
+                        {headerAction.disabled || headerAction.action?.disabled ? (
                           <Button
                             compact
                             disabled
                             onPress={() => undefined}
                             accessibilityLabel={
                               headerAction.action?.accessibilityLabel ??
-                              (compactTasks ? `Tải lại ${headerAction?.title ?? 'công việc'}` : 'Tải lại')
+                              (compactTasks
+                                ? `Tải lại ${headerAction?.title ?? 'công việc'}`
+                                : 'Tải lại')
                             }
                             icon={() => <ActivityIndicator size="small" />}
                           >
@@ -453,23 +462,21 @@ export function WorkspaceShell({
                           </Button>
                         ) : (
                           <IconButton
-                          icon={
-                            headerAction.action?.icon ?? 'refresh'
-                          }
-                          accessibilityLabel={
-                            headerAction.action?.accessibilityLabel ??
-                            (tenantResidence
-                              ? 'Tải lại hồ sơ tạm trú'
-                              : compactTasks
-                                ? `Tải lại ${headerAction?.title ?? 'công việc'}`
-                                : tenantLedger
-                                  ? 'Tải lại giao dịch'
-                                  : tenantInvoice
-                                    ? 'Tải lại hóa đơn'
-                                    : 'Tải lại hợp đồng')
-                          }
-                          disabled={headerAction.action?.disabled ?? headerAction.disabled}
-                          onPress={headerAction.action?.onPress ?? headerAction.onRefresh}
+                            icon={headerAction.action?.icon ?? 'refresh'}
+                            accessibilityLabel={
+                              headerAction.action?.accessibilityLabel ??
+                              (tenantResidence
+                                ? 'Tải lại hồ sơ tạm trú'
+                                : compactTasks
+                                  ? `Tải lại ${headerAction?.title ?? 'công việc'}`
+                                  : tenantLedger
+                                    ? 'Tải lại giao dịch'
+                                    : tenantInvoice
+                                      ? 'Tải lại hóa đơn'
+                                      : 'Tải lại hợp đồng')
+                            }
+                            disabled={headerAction.action?.disabled ?? headerAction.disabled}
+                            onPress={headerAction.action?.onPress ?? headerAction.onRefresh}
                           />
                         )}
                       </>
