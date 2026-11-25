@@ -152,7 +152,7 @@ internal sealed class ContractSigningDocumentSource(BHomePersistenceContext db, 
         Convert.ToHexString(SHA256.HashData(bytes)) == hash;
 
     private bool CanUseTestTemplate(Contract contract) => environment?.IsDevelopment() == true || environment?.IsEnvironment("Testing") == true ||
-        environment?.IsStaging() == true && mainRenderer?.CanUseSigningReview(contract) == true;
+        mainRenderer?.CanUseSigningReview(contract) == true;
 
     private async Task CreateMainSourceAsync(Contract c, ContractDocument document, CancellationToken t)
     {

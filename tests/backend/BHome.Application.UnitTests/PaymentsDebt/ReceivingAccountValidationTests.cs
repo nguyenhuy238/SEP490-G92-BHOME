@@ -1,5 +1,7 @@
 using BHome.Application.IdentityAccess;
 using BHome.Application.PaymentsDebt;
+using BHome.Application.PaymentsDebt.SePay;
+using BHome.Application.Contracts;
 using BHome.Domain.IdentityAccess;
 using BHome.Domain.PaymentsDebt;
 using NSubstitute;
@@ -13,7 +15,8 @@ public sealed class ReceivingAccountValidationTests
         public readonly Guid Owner = Guid.NewGuid();
         public readonly IPaymentRepository Repository = Substitute.For<IPaymentRepository>();
         public readonly ICurrentUser User = Substitute.For<ICurrentUser>();
-        public TransferInstructionsService Service(bool allowDemo, bool allowSandboxAccounts = false)
+        public TransferInstructionsService Service(bool allowDemo, bool allowSandboxAccounts = false,
+            IHoldingTestScope? holdingTestScope = null, SePayOptions? sepay = null)
         {
             User.UserId.Returns(Owner);
             User.IsInRole(Roles.Owner).Returns(true);
@@ -23,7 +26,8 @@ public sealed class ReceivingAccountValidationTests
             Repository.ActiveLocationAsync(Arg.Any<Guid>(), Arg.Any<CancellationToken>()).Returns(true);
             Repository.ReceivingOwnerAsync(Arg.Any<Guid>(), Arg.Any<CancellationToken>()).Returns(Owner);
             return new(Repository, new PaymentService(Repository, User, TimeProvider.System), User,
-                Substitute.For<ITransferQrGenerator>(), new PaymentRuntimeMode(allowDemo, allowSandboxAccounts), TimeProvider.System);
+                Substitute.For<ITransferQrGenerator>(), new PaymentRuntimeMode(allowDemo, allowSandboxAccounts), TimeProvider.System,
+                sepay: sepay, holdingTestScope: holdingTestScope);
         }
     }
 
@@ -46,7 +50,7 @@ public sealed class ReceivingAccountValidationTests
         var w = new Workspace();
         var error = await Assert.ThrowsAsync<PaymentException>(() => w.Service(false).SaveAccountAsync(
             new(Guid.NewGuid(), "970415", "000000000000", "SYNTHETIC OWNER", true, true, true, 0), default));
-        Assert.Equal("development_receiving_account_unavailable", error.Code);
+        Assert.Equal("sandbox_receiving_account_unavailable", error.Code);
         Assert.Empty(w.Repository.ReceivedCalls());
     }
 
@@ -82,7 +86,10 @@ public sealed class ReceivingAccountValidationTests
     public async Task StagingSandboxCanSaveDemoLocationAccountWithOwnerScope()
     {
         var w = new Workspace(); var location = Guid.NewGuid();
-        var result = await w.Service(false, true).SaveAccountAsync(
+        var scope = Substitute.For<IHoldingTestScope>();
+        scope.Allows(location).Returns(true);
+        var result = await w.Service(false, true, scope,
+            new SePayOptions { ReceivingAccounts = [new() { LocationId = location, BankIdentifier = "970415", AccountNumber = "000000000000" }] }).SaveAccountAsync(
             new(location, "970415", "000000000000", "SYNTHETIC OWNER", true, true, true, 0), default);
         Assert.True(result.IsDevelopmentDemo);
         Assert.Equal(location, result.LocationId);

@@ -12,7 +12,7 @@ internal sealed class MainDraftRenderer(IConfiguration configuration, TimeProvid
     IHoldingTestScope? testScope = null) : IMainDraftRenderer
 {
     public bool SigningReviewAvailable => environment is not null && (environment.IsDevelopment() || environment.IsEnvironment("Testing"));
-    public bool CanUseSigningReview(BHome.Domain.TenantContracts.Contract contract) => SigningReviewAvailable || IsProductionSigningTemplate(contract) ||
+    public bool CanUseSigningReview(BHome.Domain.TenantContracts.Contract contract) => SigningReviewAvailable || contract.IsDevelopmentDemo || IsProductionSigningTemplate(contract) ||
         environment?.IsStaging() == true && configuration.GetValue<bool>("MainDraft:AllowStagingSigningReview") &&
         ContractPaymentModes.IsTest(contract) && testScope?.Allows(contract.Room.LocationId) == true;
 
@@ -99,7 +99,7 @@ internal sealed class MainDraftRenderer(IConfiguration configuration, TimeProvid
                     }
                 }
                 if (original == "HỢP ĐỒNG THUÊ PHÒNG TRỌ" &&
-                    (!data.SigningReview || data.Contract.IsDevelopmentDemo || environment?.IsStaging() == true))
+                    !data.SigningReview)
                 {
                     var notice = new XElement(p);
                     Text(notice, data.SigningReview ? "TÀI LIỆU KIỂM THỬ – MẪU CHƯA ĐƯỢC DUYỆT CHO PRODUCTION" : $"BẢN NHÁP – {data.Contract.Id}");
