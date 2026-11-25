@@ -198,6 +198,9 @@ Scripts root-owned ở `/opt/bhome-deploy/staging/`:
   OCI/digest và image thật đang chạy.
   Giữ hotfix chuẩn hóa hai đường dẫn PDF canonical từ Release image; đường dẫn
   executable tùy ý vẫn bị từ chối. Staging API image phải có nhãn regression v1.
+  Hai OCR defaults canonical (`Ocr__Enabled=true`, `Ocr__ModelDirectory=/models`)
+  được chuẩn hóa; override khác vẫn nằm trong fingerprint và Compose guard vẫn
+  kiểm tra mọi thay đổi cấu hình tường minh.
 - `release-config.py`: tạo runtime overlay Staging một lần từ capability đang chạy;
   so cấu hình Compose đầy đủ trước/sau, chỉ cho đổi image API/Owner/Public. Không
   in giá trị cấu hình hoặc secret khi có khác biệt. Cần cài helper này cùng
@@ -216,6 +219,155 @@ Forced command chỉ chấp nhận dạng trên. GitHub/VPS đều khóa deploym
 `cancel-in-progress: false`. Kiểm `/opt/bhome-deploy/runs/staging-<run-id>-<attempt>/`
 và tmux `bhome-deploy`, rồi reconnect cùng lệnh. Watcher khoảng 25 phút; timeout
 không có nghĩa worker đã dừng. Không tạo run ID mới chỉ vì SSH disconnect.
+
+### Cập nhật release guard do operator phê duyệt (CI #346)
+
+Push hoặc merge source không cập nhật script root-owned trên VPS. CI key không
+được cấp quyền cài guard. Dùng quy trình sau chỉ sau khi operator đã duyệt
+commit, kết quả kiểm thử và hai checksum; không dùng key CI để truyền file.
+
+1. Tại máy review, dùng full SHA của commit rollout đã duyệt, không dùng branch
+   động. Ví dụ PowerShell (điền SHA từ biên bản review):
+
+   ```powershell
+   $reviewed = '<full-reviewed-rollout-commit>'
+   git show --stat $reviewed
+   git merge-base --is-ancestor 3efcfe64 $reviewed
+   if ($LASTEXITCODE -ne 0) { throw 'OCR fix is not an ancestor' }
+   $zip = ".tools/guard-rollout-$reviewed.zip"
+   git archive --format=zip --output=$zip $reviewed deploy/vps/install-staging-release-guard.py deploy/vps/release-safety.py
+   if ($LASTEXITCODE -ne 0) { throw 'Archive failed' }
+   Expand-Archive -LiteralPath $zip -DestinationPath ".tools/guard-rollout-$reviewed"
+   Get-FileHash -Algorithm SHA256 $zip
+   Get-FileHash -Algorithm SHA256 ".tools/guard-rollout-$reviewed/deploy/vps/*.py"
+   ```
+
+   Review đúng hai file, kiểm tra test evidence, xác nhận hash archive và từng
+   file qua kênh tin cậy. Hash tự nó không chứng minh phê duyệt.
+   Guard cũ quan sát sau rollback #346:
+   `02df240c004728671697e1b5c2e501a6ab8e8be9b461ab351ccbbaa1c871be41`.
+   Guard OCR tại commit `3efcfe64`:
+   `e71ef6f53b75b9fbd96008f3c86d83e5ea71fa8c8487d9c4c7e164197b17854d`.
+
+2. Operator phối hợp giữ cửa sổ bảo trì, không bắt đầu release mới (kể cả
+   Production vì dùng chung lock), kiểm tra không có GitHub release đang chạy
+   hoặc chờ, và không có worker chưa kết thúc. Các lệnh chỉ kiểm tra trên VPS
+   qua phiên root operator đã được duyệt:
+
+   ```sh
+   git -C /opt/bhome ls-remote origin refs/heads/develop
+   tmux list-windows -t bhome-deploy || true
+   pgrep -af '[/]opt/bhome-deploy/.*(run-release|deploy-release)\.sh' || true
+   lslocks -o COMMAND,PID,MODE,PATH
+   sha256sum /opt/bhome-deploy/staging/release-safety.py
+   stat -c '%u:%g %a %n' /opt/bhome-deploy/staging/release-safety.py
+   grep -nF 'release-safety.py' /opt/bhome-deploy/staging/deploy-release.sh
+   ```
+
+   Đối chiếu worker thực tế với bản đã duyệt: root staging cố định, gọi
+   release-safety.py khi snapshot, verify-running và unchanged; không có
+   đường dẫn guard khác. Nếu worker đang hoạt động/chờ, hash khác hash cũ
+   đã duyệt, quyền không an toàn hoặc SHA không còn phù hợp, dừng để review.
+   Kiểm tra lock ở đây chỉ là quan sát; helper lấy lock độc quyền thực tế.
+
+3. Operator tạo thư mục private trên VPS bằng
+   `mktemp -d /root/bhome-guard-review.XXXXXX`. Qua SSH/SCP operator đã xác
+   thực host key, chuyển đúng hai file từ archive đã duyệt vào thư mục đó
+   (không dùng CI key). Ví dụ từ máy review, nếu alias operator root đã được
+   cấu hình, thay đường dẫn và alias bằng giá trị được phê duyệt:
+
+   ```powershell
+   scp ".tools/guard-rollout-$reviewed/deploy/vps/install-staging-release-guard.py" ".tools/guard-rollout-$reviewed/deploy/vps/release-safety.py" "bhome-vps:/root/bhome-guard-review.<actual-suffix>/"
+   ```
+
+4. Trong thư mục private trên VPS, với quyền root, đối chiếu hash installer
+   đã nhận qua kênh review và hash guard cố định trước khi chạy file nào:
+
+   ```sh
+   set -eu
+   umask 077
+   test "$(stat -c '%u:%a' .)" = '0:700'
+   test ! -L install-staging-release-guard.py
+   test ! -L release-safety.py
+   OLD=02df240c004728671697e1b5c2e501a6ab8e8be9b461ab351ccbbaa1c871be41
+   NEW=e71ef6f53b75b9fbd96008f3c86d83e5ea71fa8c8487d9c4c7e164197b17854d
+   INSTALLER='<approved-installer-sha256>'
+   printf '%s  %s\n' "$INSTALLER" install-staging-release-guard.py "$NEW" release-safety.py | sha256sum -c -
+   printf '%s  %s\n' "$OLD" /opt/bhome-deploy/staging/release-safety.py | sha256sum -c -
+   BEFORE_META=$(stat -c '%u:%g %a' /opt/bhome-deploy/staging/release-safety.py)
+   python3 -I install-staging-release-guard.py install release-safety.py "$OLD" "$NEW"
+   ```
+
+   Helper chỉ chạy với root, khóa shared rồi staging theo thứ tự của release,
+   từ chối lock bận, symlink, quyền không an toàn và hash sai. Backup private
+   `guard-rollout-*` nằm trong thư mục staging, gồm bytes cũ/mới, hash và
+   snapshot candidate đã fsync trước khi đổi file. Giữ UID/GID/mode của guard.
+   Chỉ tiếp tục sau `GUARD_INSTALL_PASS`. Gán BACKUP bằng chính đường dẫn
+   "Guard backup:" do helper in ra, không tự chọn thư mục mới nhất:
+
+   ```sh
+   BACKUP='/opt/bhome-deploy/staging/guard-rollout-<actual-suffix>'
+   python3 -I install-staging-release-guard.py verify "$NEW" --snapshot "$BACKUP/protected.json"
+   printf '%s  %s\n' "$NEW" /opt/bhome-deploy/staging/release-safety.py | sha256sum -c -
+   cmp -s release-safety.py /opt/bhome-deploy/staging/release-safety.py
+   test "$(stat -c '%u:%g %a' /opt/bhome-deploy/staging/release-safety.py)" = "$BEFORE_META"
+   stat -c '%u:%g %a %n' /opt/bhome-deploy/staging/release-safety.py
+   ```
+
+   Phải có `GUARD_VERIFY_PASS`, hash NEW và UID/GID/mode như trước; verify
+   gọi check và unchanged từ chính guard cài đặt dưới cả hai lock. Không
+   chạy trực tiếp candidate ngoài helper. Không fetch/execute từ branch.
+
+5. Nếu lỗi sau thay file, helper cố khôi phục bytes cũ và kiểm lại hash/check.
+   `GUARD_ROLLBACK_PASS` chỉ xác nhận khôi phục guard, không chứng minh
+   runtime hoặc DB đã rollback. Với SIGKILL/mất điện, không tự rollback:
+   giữ cửa sổ bảo trì, kiểm worker/lock và hash, không xóa backup. Nếu hash
+   NEW, thực hiện verify với đúng snapshot ở bước 4. Nếu hash OLD, verify
+   OLD rồi review evidence và trạng thái runtime trước khi bắt đầu một
+   lần install mới; snapshot candidate không nhất thiết tương thích thuật
+   toán fingerprint của guard cũ. Nếu hash khác, snapshot thiếu/không khớp
+   hoặc rollback thất bại, dừng release để operator điều tra. Worker hiện
+   tại không tự chặn release sau khi process installer bị kill.
+
+   Nếu cần chủ động rollback guard đã cài, sau phê duyệt và khi không có
+   release hoạt động, dùng đúng backup đã xác nhận (lệnh tạo backup mới):
+
+   ```sh
+   printf '%s  %s\n' "$OLD" "$BACKUP/release-safety.before.py" | sha256sum -c -
+   python3 -I install-staging-release-guard.py install "$BACKUP/release-safety.before.py" "$NEW" "$OLD"
+   RESTORE_BACKUP='/opt/bhome-deploy/staging/guard-rollout-<actual-restore-suffix>'
+   python3 -I install-staging-release-guard.py verify "$OLD" --snapshot "$RESTORE_BACKUP/protected.json"
+   printf '%s  %s\n' "$OLD" /opt/bhome-deploy/staging/release-safety.py | sha256sum -c -
+   cmp -s "$BACKUP/release-safety.before.py" /opt/bhome-deploy/staging/release-safety.py
+   stat -c '%u:%g %a %n' /opt/bhome-deploy/staging/release-safety.py
+   ```
+
+   Nếu guard cũ không còn tương thích runtime, dừng và yêu cầu review,
+   không bỏ qua check. Không restore DB hay thay image từ helper.
+
+6. Phê duyệt release riêng sau khi nghiệm thu guard; bỏ cửa sổ bảo trì chỉ
+   khi an toàn. Retry failed job #346 chỉ nếu SHA vẫn là HEAD develop,
+   đúng artifact/digest bất biến đã duyệt và run ID-attempt mới lớn hơn
+   current.json; nếu develop đã tiến, dùng CI/release của HEAD mới nhất
+   đã duyệt, không retry SHA cũ. Không tự gọi worker bằng run ID giả.
+   Kiểm tra log GitHub có DEPLOY_PASS, PASS: unchanged staging và job
+   SUCCESS. Đối chiếu SHA, run ID và ba immutable images trong
+   `/opt/bhome-deploy/staging/current.json` với manifest trong thư mục
+   evidence được log release in ra. Kiểm tra running digest qua guard:
+
+   ```sh
+   cat /opt/bhome-deploy/staging/current.json
+   # Dùng ba image reference đầy đủ (repository:sha-SHA@sha256:DIGEST)
+   # từ manifest đã duyệt, không lấy từ container hiện chạy làm baseline.
+   python3 /opt/bhome-deploy/staging/release-safety.py verify-running staging "$API_IMAGE" "$OWNER_IMAGE" "$PUBLIC_IMAGE"
+   ```
+
+   Kiểm tra evidence log/manifest của đúng run; chỉ báo CD xanh khi tất cả
+   điều kiện trên thành công. Không chạy Production.
+
+Quy trình này không tự thay đổi VPS từ GitHub. Việc cài guard và chạy release
+thật là hai thao tác vận hành cần phê duyệt; kiểm thử local không thay thế
+bằng chứng deploy thành công.
 
 Backup/evidence: `/opt/bhome-backups/staging-cd-<UTC>-<SHA12>-*/`. Không xóa image cũ
 trước nghiệm thu. DB restore kiểm chứng vào DB mới; không restore đè. Storage mirror

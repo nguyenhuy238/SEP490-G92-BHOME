@@ -70,6 +70,20 @@ class ReleaseConfigTests(unittest.TestCase):
         config.check_image_only_transition(before, after, images)
         self.assertEqual(before, original)
 
+    def test_explicit_ocr_compose_overrides_cannot_be_added_removed_or_changed(self):
+        for key, value, changed in [('Ocr__Enabled', 'true', 'false'),
+                                    ('Ocr__ModelDirectory', '/models', '/operator/models')]:
+            for mutation in ('add', 'remove', 'change'):
+                before, after, images = self.configurations()
+                old_env = before['services']['api']['environment']
+                new_env = after['services']['api']['environment']
+                if mutation != 'add':
+                    old_env[key] = value
+                if mutation != 'remove':
+                    new_env[key] = changed if mutation == 'change' else value
+                with self.subTest(key=key, mutation=mutation), self.assertRaises(ValueError):
+                    config.check_image_only_transition(before, after, images)
+
     def test_environment_mounts_networks_protected_images_and_removed_services_are_rejected(self):
         for mutation in ('environment', 'mount', 'network', 'database-image', 'remove-service', 'wrong-image'):
             before, after, images = self.configurations()
