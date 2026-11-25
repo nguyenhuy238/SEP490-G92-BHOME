@@ -99,9 +99,13 @@ public sealed partial class Compact24ExpenseTests(Compact24Fixture fixture) : IC
     public async Task ReportReadsActualExpensesRejectsOtherRolesAndHandlesEmptyCapital()
     {
         var (owner, input) = await Setup();
+        var today = DateOnly.FromDateTime(TimeZoneInfo.ConvertTimeBySystemTimeZoneId(
+            DateTimeOffset.UtcNow, "Asia/Ho_Chi_Minh").DateTime);
+        var completedMonth = new DateOnly(today.Year, today.Month, 1).AddMonths(-1);
+        input = input with { OccurredOn = completedMonth };
         await Value(await Create(owner, input with { ExpenseType = "INITIAL_INVESTMENT", Amount = 1000000 }, Guid.NewGuid()));
         await Value(await Create(owner, input, Guid.NewGuid()));
-        const string reportRoot = "/api/v1/financial-reports?from=2026-11-01&to=2026-11-30";
+        var reportRoot = $"/api/v1/financial-reports?from={completedMonth:yyyy-MM-dd}&to={completedMonth.AddMonths(1).AddDays(-1):yyyy-MM-dd}";
         var response = await owner.GetAsync(reportRoot + $"&locationId={input.LocationId}");
         Assert.True(response.IsSuccessStatusCode, await response.Content.ReadAsStringAsync());
         var report = (await response.Content.ReadFromJsonAsync<FinancialReport>())!;

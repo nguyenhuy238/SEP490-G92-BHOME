@@ -21,8 +21,11 @@ public sealed class ExpenseRepository(BHomePersistenceContext db) : IExpenseRepo
         (roomId is null || await db.Set<BHome.Domain.PropertyManagement.Room>().AnyAsync(r => r.Id == roomId && r.LocationId == locationId, token));
     public async Task<ExpensePage> ListAsync(ExpenseFilter filter, CancellationToken token)
     {
+        await using var snapshot = filter.IncludeTotalAmount
+            ? await db.Database.BeginTransactionAsync(System.Data.IsolationLevel.RepeatableRead, token) : null;
         var query = Rows;
         if (filter.LocationId is { } location) query = query.Where(e => e.LocationId == location);
+        if (filter.RoomId is { } room) query = query.Where(e => e.RoomId == room);
         if (filter.From is { } from) query = query.Where(e => e.OccurredOn >= from);
         if (filter.To is { } to) query = query.Where(e => e.OccurredOn <= to);
         if (filter.ExpenseType is { } type) query = query.Where(e => e.ExpenseType == type);
@@ -37,7 +40,10 @@ public sealed class ExpenseRepository(BHomePersistenceContext db) : IExpenseRepo
         var total = await query.LongCountAsync(token);
         var rows = await query.OrderByDescending(e => e.OccurredOn).ThenBy(e => e.Id)
             .Skip(checked((filter.Page - 1) * filter.PageSize)).Take(filter.PageSize).ToArrayAsync(token);
-        return new(rows.Select(View).ToArray(), total, filter.Page, filter.PageSize);
+        var totalAmount = filter.IncludeTotalAmount
+            ? (await query.SumAsync(e => e.Amount, token)).ToString("0.############################", System.Globalization.CultureInfo.InvariantCulture) : null;
+        if (snapshot is not null) await snapshot.CommitAsync(token);
+        return new(rows.Select(View).ToArray(), total, filter.Page, filter.PageSize, totalAmount);
     }
     private static ExpenseView View(ExpenseRow row) => new(row.Id, row.LocationId, row.RoomId, row.ExpenseType,
         row.Category, row.Amount, row.OccurredOn, row.Note, row.Version, row.SourceKey?.StartsWith("expense:", StringComparison.Ordinal) == true,
@@ -111,7 +117,23 @@ public sealed class ExpenseRepository(BHomePersistenceContext db) : IExpenseRepo
         var previous = await GetAsync(id, token) ?? throw new FinanceException(404, "expense_not_found");
         if (!previous.CanEdit) throw new FinanceException(409, "expense_source_managed");
         if (previous.Version != input.ExpectedVersion) throw new FinanceException(409, "expense_version_changed");
+        if (await db.Database.SqlQuery<bool>($"""
+            SELECT EXISTS(SELECT 1 FROM expenses WHERE id={id}
+              AND (history @> jsonb_build_array(jsonb_build_object('recordType','ExpensePaymentV1'))
+                OR history @> jsonb_build_array(jsonb_build_object('recordType','DepreciationPlanV1')))) AS "Value"
+            """).SingleAsync(token))
+            throw new FinanceException(409, "expense_payment_history_locked");
         var value = input.Expense;
+        // A previously recorded due date cannot become inconsistent through a
+        // subsequent edit of the underlying incurred date.
+        var dueDate = await db.Database.SqlQuery<DateOnly?>($"""
+            SELECT (SELECT (h->'state'->'input'->>'dueOn')::date
+              FROM jsonb_array_elements(history) WITH ORDINALITY e(h,n)
+              WHERE h->>'recordType'='ExpenseDueDateV1' ORDER BY n DESC LIMIT 1) AS "Value"
+            FROM expenses WHERE id={id}
+            """).SingleAsync(token);
+        if (dueDate is { } due && value.OccurredOn > due)
+            throw new FinanceException(400, "invalid_expense_due_date");
         if (previous.LocationId != value.LocationId || previous.RoomId != value.RoomId || previous.ExpenseType != value.ExpenseType ||
             previous.AssetId != value.AssetId || previous.TaskId != value.TaskId)
             throw new FinanceException(409, "expense_scope_immutable");
