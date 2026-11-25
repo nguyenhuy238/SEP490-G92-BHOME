@@ -286,11 +286,15 @@ commit, kết quả kiểm thử và hai checksum; không dùng key CI để tru
    ```sh
    set -eu
    umask 077
+   test "$(stat -c '%u:%a' .)" = '0:700'
+   test ! -L install-staging-release-guard.py
+   test ! -L release-safety.py
    OLD=02df240c004728671697e1b5c2e501a6ab8e8be9b461ab351ccbbaa1c871be41
    NEW=e71ef6f53b75b9fbd96008f3c86d83e5ea71fa8c8487d9c4c7e164197b17854d
    INSTALLER='<approved-installer-sha256>'
    printf '%s  %s\n' "$INSTALLER" install-staging-release-guard.py "$NEW" release-safety.py | sha256sum -c -
    printf '%s  %s\n' "$OLD" /opt/bhome-deploy/staging/release-safety.py | sha256sum -c -
+   BEFORE_META=$(stat -c '%u:%g %a' /opt/bhome-deploy/staging/release-safety.py)
    python3 -I install-staging-release-guard.py install release-safety.py "$OLD" "$NEW"
    ```
 
@@ -302,9 +306,11 @@ commit, kết quả kiểm thử và hai checksum; không dùng key CI để tru
    "Guard backup:" do helper in ra, không tự chọn thư mục mới nhất:
 
    ```sh
-   BACKUP=/opt/bhome-deploy/staging/guard-rollout-<actual-suffix>
+   BACKUP='/opt/bhome-deploy/staging/guard-rollout-<actual-suffix>'
    python3 -I install-staging-release-guard.py verify "$NEW" --snapshot "$BACKUP/protected.json"
-   sha256sum /opt/bhome-deploy/staging/release-safety.py
+   printf '%s  %s\n' "$NEW" /opt/bhome-deploy/staging/release-safety.py | sha256sum -c -
+   cmp -s release-safety.py /opt/bhome-deploy/staging/release-safety.py
+   test "$(stat -c '%u:%g %a' /opt/bhome-deploy/staging/release-safety.py)" = "$BEFORE_META"
    stat -c '%u:%g %a %n' /opt/bhome-deploy/staging/release-safety.py
    ```
 
@@ -329,9 +335,10 @@ commit, kết quả kiểm thử và hai checksum; không dùng key CI để tru
    ```sh
    printf '%s  %s\n' "$OLD" "$BACKUP/release-safety.before.py" | sha256sum -c -
    python3 -I install-staging-release-guard.py install "$BACKUP/release-safety.before.py" "$NEW" "$OLD"
-   RESTORE_BACKUP=/opt/bhome-deploy/staging/guard-rollout-<actual-restore-suffix>
+   RESTORE_BACKUP='/opt/bhome-deploy/staging/guard-rollout-<actual-restore-suffix>'
    python3 -I install-staging-release-guard.py verify "$OLD" --snapshot "$RESTORE_BACKUP/protected.json"
-   sha256sum /opt/bhome-deploy/staging/release-safety.py
+   printf '%s  %s\n' "$OLD" /opt/bhome-deploy/staging/release-safety.py | sha256sum -c -
+   cmp -s "$BACKUP/release-safety.before.py" /opt/bhome-deploy/staging/release-safety.py
    stat -c '%u:%g %a %n' /opt/bhome-deploy/staging/release-safety.py
    ```
 

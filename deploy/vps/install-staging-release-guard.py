@@ -93,6 +93,7 @@ def install(root, candidate, expected_old, expected_new):
     info = trusted(installed)
     mode = stat.S_IMODE(info.st_mode)
     owner = (info.st_uid, info.st_gid)
+    trusted(candidate.parent, directory=True)
     trusted(candidate)
     new = candidate.read_bytes()
     if digest(new) != expected_new or digest(old) != expected_old:

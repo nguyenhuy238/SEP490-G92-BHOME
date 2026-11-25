@@ -58,6 +58,12 @@ class GuardInstallationTests(unittest.TestCase):
             backup, = self.root.glob('guard-rollout-*')
             self.assertEqual(stat.S_IMODE(backup.stat().st_mode), 0o700)
             self.assertEqual((backup / 'release-safety.before.py').read_bytes(), self.old)
+            self.assertEqual((backup / 'release-safety.candidate.py').read_bytes(), self.new)
+            self.assertEqual((backup / 'sha256.txt').read_text(),
+                             self.before + '  before\n' + self.after + '  candidate\n')
+            for evidence in backup.iterdir():
+                self.assertEqual(stat.S_IMODE(evidence.stat().st_mode), 0o600)
+                self.assertEqual(evidence.stat().st_uid, os.geteuid())
             self.assertEqual([call.args[1] for call in check.call_args_list],
                              ['check', 'snapshot', 'check', 'unchanged'])
             self.assertEqual(check.call_args_list[-1].args[0], self.installed)
@@ -69,6 +75,29 @@ class GuardInstallationTests(unittest.TestCase):
                 installer.install(self.root, self.candidate, old, new)
             self.assertEqual(self.installed.read_bytes(), self.old)
             self.assertEqual(list(self.root.glob('guard-rollout-*')), [])
+
+    def test_refuses_candidate_in_untrusted_directory(self):
+        directory = self.root / 'untrusted'
+        directory.mkdir()
+        candidate = directory / 'candidate.py'
+        candidate.write_bytes(self.new)
+        candidate.chmod(0o600)
+        directory.chmod(0o777)
+        with patch.object(installer, 'guard_check'), self.assertRaisesRegex(ValueError, 'Unsafe'):
+            installer.install(self.root, candidate, self.before, self.after)
+        self.assertEqual(self.installed.read_bytes(), self.old)
+        self.assertEqual(list(self.root.glob('guard-rollout-*')), [])
+
+    def test_reviewed_backup_can_be_reinstalled_and_verified(self):
+        with patch.object(installer, 'guard_check', side_effect=self.fake_check):
+            self.install()
+            backup, = self.root.glob('guard-rollout-*')
+            installer.install(self.root, backup / 'release-safety.before.py', self.after, self.before)
+            restored, = set(self.root.glob('guard-rollout-*')) - {backup}
+            installer.verify(self.root, self.before, restored / 'protected.json')
+        self.assertEqual(self.installed.read_bytes(), self.old)
+        self.assertEqual((restored / 'release-safety.before.py').read_bytes(), self.new)
+        self.assertEqual(stat.S_IMODE(self.installed.stat().st_mode), 0o750)
 
     def test_failed_candidate_snapshot_leaves_installed_guard_untouched(self):
         with patch.object(installer, 'guard_check', side_effect=[None, ValueError('snapshot')]):
@@ -175,6 +204,21 @@ class GuardInstallationTests(unittest.TestCase):
                         self.fail('Concurrent update must not acquire locks')
         self.assertEqual(self.installed.read_bytes(), self.old)
 
+    def test_each_worker_lock_blocks_install_and_releases_partial_acquisition(self):
+        locks = (self.root / 'shared.lock', self.root / 'staging.lock')
+        for lock in locks:
+            with self.subTest(lock=lock.name), patch.object(installer, 'LOCKS', (lock,)):
+                with installer.release_locks():
+                    with patch.object(installer, 'LOCKS', locks):
+                        with self.assertRaises(BlockingIOError):
+                            with installer.release_locks():
+                                self.install()
+        with patch.object(installer, 'LOCKS', locks):
+            with installer.release_locks():
+                pass
+        self.assertEqual(self.installed.read_bytes(), self.old)
+        self.assertEqual(list(self.root.glob('guard-rollout-*')), [])
+
     def test_release_worker_uses_installed_guard_and_ci_cannot_call_installer(self):
         deploy = (ROOT / 'deploy/vps/deploy-release.sh').read_text()
         forced = (ROOT / 'deploy/vps/ci-ssh-entry.sh').read_text()
@@ -182,6 +226,11 @@ class GuardInstallationTests(unittest.TestCase):
         self.assertIn('root=/opt/bhome-deploy/$target', deploy)
         self.assertIn('python3 "$root/release-safety.py" snapshot', deploy)
         self.assertIn('python3 "$root/release-safety.py" unchanged', deploy)
+        self.assertEqual(tuple(map(str, installer.LOCKS)),
+                         ('/run/lock/bhome-vps-application-release.lock',
+                          '/run/lock/bhome-staging-cd.lock'))
+        self.assertLess(deploy.index('exec 8>/run/lock/bhome-vps-application-release.lock'),
+                        deploy.index('exec 9>"/run/lock/bhome-$target-cd.lock"'))
         self.assertNotIn('install-staging-release-guard', forced + workflow)
         self.assertIn('/opt/bhome-deploy/staging/run-staging-release.sh', workflow)
         self.assertIn('exit 126', forced)
@@ -208,6 +257,10 @@ class GuardInstallationTests(unittest.TestCase):
         # Reuse the actual worker's EXIT trap, not a reimplementation.
         deploy = (ROOT / 'deploy/vps/deploy-release.sh').read_text()
         trap = deploy[deploy.index('rollback() {'):deploy.index('connect_edge() {')]
+        snapshot_command = next(line for line in deploy.splitlines()
+                                if line.startswith('python3 "$root/release-safety.py" snapshot '))
+        unchanged_command = next(line for line in deploy.splitlines()
+                                 if line.startswith('python3 "$root/release-safety.py" unchanged '))
         (self.root / 'smoke-release.sh').write_text('exit 0\n')
         release = self.root / 'release.yml'
         (self.root / 'release.before.yml').write_text('old\n')
@@ -236,7 +289,8 @@ class GuardInstallationTests(unittest.TestCase):
                 installer.verify(self.root, approved, backup / 'protected.json')
             state.write_text(json.dumps(stage))
             self.assertEqual(self.installed.read_bytes(), self.candidate.read_bytes())
-            installer.guard_check(self.installed, 'snapshot', self.root / 'protected.json')
+            subprocess.run(['bash', '-ec', 'root=$1; run=$1; target=staging\n' + snapshot_command,
+                            'fixture', str(self.root)], env=environment, check=True, timeout=30)
             for override, expected in (({}, 0), ({'Ocr__Enabled': 'false'}, 1),
                                        ({'Jwt__SigningKey': 'synthetic-drift'}, 1)):
                 with self.subTest(override=override):
@@ -249,10 +303,7 @@ root=$1; run=$1; target=staging; release="$root/release.yml"; changed=true
 dc() { if [ "$1" = up ]; then cp "$root/old-state.json" "$root/state.json"; fi; }
 connect_edge() { :; }
 ready() { :; }
-''' + trap + '''
-python3 "$root/release-safety.py" unchanged "$target" "$run/protected.json"
-echo DEPLOY_PASS
-'''
+''' + trap + unchanged_command + '\necho DEPLOY_PASS\n'
                     (self.root / 'old-state.json').write_text(json.dumps(stage))
                     result = subprocess.run(['bash', '-c', script, 'fixture', str(self.root)],
                                             env=environment, capture_output=True, text=True, timeout=30)
