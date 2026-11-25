@@ -177,8 +177,6 @@ public sealed partial class MainDraftApiTests
     public async Task DemoTemplateCanBeReviewedReleasedAndReadInEveryEnvironment(string environment)
     {
         var w = await Setup();
-        var database = new Npgsql.NpgsqlConnectionStringBuilder(
-            fixture.Factory.Services.GetRequiredService<IConfiguration>().GetConnectionString("Database"));
         var templateHash = new MainDraftRenderer(new ConfigurationBuilder().Build(), TimeProvider.System).TemplateHash;
         Guid? tenantUserId = null;
         await using (var seed = fixture.Factory.Services.CreateAsyncScope())
@@ -216,13 +214,17 @@ public sealed partial class MainDraftApiTests
                     settings["SePay:ReceivingAccounts:0:BankIdentifier"] = "970416";
                     settings["SePay:ReceivingAccounts:0:Gateway"] = "ACB";
                     settings["SePay:ReceivingAccounts:0:AccountNumber"] = "0000000001";
-                    settings["HoldingTesting:Enabled"] = "true";
-                    settings["HoldingTesting:DatabaseHost"] = database.Host;
-                    settings["HoldingTesting:DatabaseName"] = database.Database;
-                    settings["HoldingTesting:LocationIds:0"] = w.Location.ToString();
                 }
                 config.AddInMemoryCollection(settings);
             });
+            if (environment == "Staging")
+            {
+                b.ConfigureTestServices(services =>
+                {
+                    services.RemoveAll<IHoldingTestScope>();
+                    services.AddSingleton<IHoldingTestScope>(new SigningTestScope(w.Location));
+                });
+            }
         });
         using var owner = InHost(host, w.Owner); using var staff = InHost(host, w.Staff); using var outside = InHost(host, w.Outside);
         var draft = await Save(w with { Staff = staff });
@@ -284,6 +286,12 @@ public sealed partial class MainDraftApiTests
         public int DocumentVersion => 1;
         public Task<byte[]> DocxAsync(MainDraftRenderData data, CancellationToken t) => renderer.DocxAsync(data, t);
         public Task<byte[]> PdfAsync(byte[] docx, CancellationToken t) => renderer.PdfAsync(docx, t);
+    }
+
+    private sealed class SigningTestScope(Guid locationId) : IHoldingTestScope
+    {
+        public bool AllowsExternalDatabase => false;
+        public bool Allows(Guid candidate) => candidate == locationId;
     }
 
     [Theory]
