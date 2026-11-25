@@ -101,9 +101,8 @@ vi.mock('../components/WorkspaceHeaderContext', () => ({
   useWorkspaceHeaderRefresh: () => false,
 }));
 vi.mock('../features/incidents/IncidentScreens', () => ({
-  IncidentListScreen: () => <div>Danh sách báo cáo sự cố</div>,
   MaintenanceListScreen: ({ embedded }: { embedded?: boolean }) =>
-    embedded ? <div>Danh sách lệnh sửa chữa &amp; bảo trì</div> : <div>Danh sách bảo trì</div>,
+    embedded ? <div>Danh sách công việc sửa chữa &amp; bảo trì</div> : <div>Danh sách bảo trì</div>,
 }));
 vi.mock('../features/workspace/useWorkspaceQuery', () => ({
   useWorkspaceQuery: (path: string | null) => {
@@ -273,20 +272,24 @@ it('always renders a Location row for a standalone ordinary task card', () => {
   expect(screen.getByText('Cơ sở: Chưa xác định tên cơ sở')).toBeTruthy();
 });
 
-it('keeps reports separate from actual work and includes the WorkOrder list in the work tab', async () => {
+it('shows the work queue without a separate reports tab and retains repair/maintenance work', async () => {
   state.request.mockImplementation(async (path: string) =>
     path === '/api/v1/locations/assigned-to-me'
       ? [{ id: loc1, name: 'Cơ sở Phú Thọ' }]
       : page([task('one', loc1)]),
   );
   render(<StaffTaskListScreen />);
-  await screen.findByText('Danh sách lệnh sửa chữa & bảo trì');
+  await screen.findByText('Danh sách công việc sửa chữa & bảo trì');
   expect(screen.getByText('Công việc one')).toBeTruthy();
+  expect(screen.queryByRole('tab', { name: 'Công việc' })).toBeNull();
+  expect(screen.queryByRole('tab', { name: 'Báo cáo sự cố' })).toBeNull();
+  expect(screen.queryByText('Công việc thuộc cơ sở đang chọn trên trang chủ')).toBeNull();
+  expect(screen.queryByText('Biên bản đã ký')).toBeNull();
+  expect(screen.queryByText('Lịch làm việc')).toBeNull();
+  expect(screen.queryByText('Công việc vận hành')).toBeNull();
+  expect(screen.queryByText(/\d+ công việc/)).toBeNull();
+  expect(screen.getByRole('tab', { name: 'Tất cả' })).toBeTruthy();
   expect(screen.queryByText('Danh sách báo cáo sự cố')).toBeNull();
-
-  fireEvent.click(screen.getByRole('tab', { name: 'Báo cáo sự cố' }));
-  expect(await screen.findByText('Danh sách báo cáo sự cố')).toBeTruthy();
-  expect(screen.queryByText('Công việc one')).toBeNull();
 });
 
 it('opens the same move-out contract wizard from Cần làm and Đang xử lý task filters', async () => {
