@@ -198,6 +198,9 @@ Scripts root-owned ở `/opt/bhome-deploy/staging/`:
   OCI/digest và image thật đang chạy.
   Giữ hotfix chuẩn hóa hai đường dẫn PDF canonical từ Release image; đường dẫn
   executable tùy ý vẫn bị từ chối. Staging API image phải có nhãn regression v1.
+  Hai OCR defaults canonical (`Ocr__Enabled=true`, `Ocr__ModelDirectory=/models`)
+  được chuẩn hóa; override khác vẫn nằm trong fingerprint và Compose guard vẫn
+  kiểm tra mọi thay đổi cấu hình tường minh.
 - `release-config.py`: tạo runtime overlay Staging một lần từ capability đang chạy;
   so cấu hình Compose đầy đủ trước/sau, chỉ cho đổi image API/Owner/Public. Không
   in giá trị cấu hình hoặc secret khi có khác biệt. Cần cài helper này cùng
@@ -216,6 +219,57 @@ Forced command chỉ chấp nhận dạng trên. GitHub/VPS đều khóa deploym
 `cancel-in-progress: false`. Kiểm `/opt/bhome-deploy/runs/staging-<run-id>-<attempt>/`
 và tmux `bhome-deploy`, rồi reconnect cùng lệnh. Watcher khoảng 25 phút; timeout
 không có nghĩa worker đã dừng. Không tạo run ID mới chỉ vì SSH disconnect.
+
+### Cập nhật release guard do operator phê duyệt (CI #346)
+
+Push hoặc merge source không cập nhật script root-owned trên VPS. CI key không
+được cấp quyền cài guard. Dùng quy trình sau chỉ sau khi operator đã duyệt
+commit, kết quả kiểm thử và hai checksum; không dùng key CI để truyền file.
+
+1. Kiểm tra HEAD develop, CI run và release worker; không retry SHA cũ nếu
+   develop đã tiến. Kiểm tra checksum guard đang chạy bằng SSH operator:
+   `sha256sum /opt/bhome-deploy/staging/release-safety.py`.
+2. Xuất đúng byte từ commit đã review (Git checkout LF), tính SHA-256 của cả
+   `install-staging-release-guard.py` và `release-safety.py` tại máy review.
+   Guard cũ quan sát sau rollback #346:
+   `02df240c004728671697e1b5c2e501a6ab8e8be9b461ab351ccbbaa1c871be41`.
+   Guard OCR tại commit `3efcfe64`:
+   `e71ef6f53b75b9fbd96008f3c86d83e5ea71fa8c8487d9c4c7e164197b17854d`.
+   Nếu checksum hiện tại khác, dừng và review drift; không tự chấp nhận hash mới.
+3. Operator tạo thư mục private bằng `mktemp -d /root/bhome-guard-review.XXXXXX`
+   trên VPS; chuyển hai file đã review vào thư mục đó qua SSH/SCP operator.
+   Xác minh cả hai hash trên VPS khớp giá trị đã duyệt từ máy review trước khi
+   chạy bất kỳ file nào. Không fetch và execute mã động từ branch.
+4. Trong thư mục private trên VPS, chạy (chỉ sau phê duyệt):
+
+   ```sh
+   python3 -I install-staging-release-guard.py install release-safety.py \
+     02df240c004728671697e1b5c2e501a6ab8e8be9b461ab351ccbbaa1c871be41 \
+     e71ef6f53b75b9fbd96008f3c86d83e5ea71fa8c8487d9c4c7e164197b17854d
+   python3 -I install-staging-release-guard.py verify \
+     e71ef6f53b75b9fbd96008f3c86d83e5ea71fa8c8487d9c4c7e164197b17854d
+   ```
+
+   Helper chỉ chạy với root, khóa shared rồi staging theo thứ tự của release,
+   từ chối lock bận, kiểm ownership và hash cũ/mới. Backup private
+   `guard-rollout-*` nằm trong thư mục staging. Candidate tạo snapshot trước
+   khi thay file nguyên tử; guard tại đường dẫn thực thi phải qua check và
+   unchanged. Lỗi sau khi thay file sẽ khôi phục bytes cũ và kiểm lại hash.
+   Nếu process bị kill hoặc mất điện, kiểm hash tại đường dẫn cài đặt và
+   evidence trước khi cho release tiếp tục; không tự xóa backup.
+
+5. Nếu cần rollback guard, dùng helper install với file
+   `release-safety.before.py` trong đúng backup và đảo hai hash đã duyệt.
+   Thực hiện dưới cùng khóa; nếu guard cũ không còn tương thích runtime,
+   dừng và yêu cầu operator review, không bỏ qua check. Không rollback DB.
+6. Chỉ sau `GUARD_INSTALL_PASS` và `GUARD_VERIFY_PASS` mới cho phép retry
+   failed jobs của #346 nếu SHA vẫn là HEAD develop; nếu không, dùng CI của
+   HEAD mới nhất đã duyệt. Xác nhận `DEPLOY_PASS`, `PASS: unchanged staging`,
+   manifest/digest đang chạy và GitHub release success. Không chạy Production.
+
+Quy trình này không tự thay đổi VPS từ GitHub. Việc cài guard và chạy release
+thật là hai thao tác vận hành cần phê duyệt; kiểm thử local không thay thế
+bằng chứng deploy thành công.
 
 Backup/evidence: `/opt/bhome-backups/staging-cd-<UTC>-<SHA12>-*/`. Không xóa image cũ
 trước nghiệm thu. DB restore kiểm chứng vào DB mới; không restore đè. Storage mirror
