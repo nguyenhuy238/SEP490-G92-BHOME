@@ -25,6 +25,7 @@ import {
   type AutomationPlan,
 } from '../../../../../packages/client-core/src/billingAutomation';
 import { useInvoiceApi } from './useInvoiceApi';
+import { locationBillingSettingsPath } from './locationBillingSettingsPath';
 
 const milestones = [
   { label: 'Giao nhiệm vụ ghi số', day: 'meterDay', offset: null },
@@ -35,8 +36,6 @@ const milestones = [
 ] as const;
 
 const offsetLabels = ['Trong kỳ', 'Kỳ kế tiếp'];
-export const locationBillingSettingsPath = (id: string) =>
-  `/locations/${encodeURIComponent(id)}/settings`;
 
 function useSchedule(location: string) {
   const api = useInvoiceApi();

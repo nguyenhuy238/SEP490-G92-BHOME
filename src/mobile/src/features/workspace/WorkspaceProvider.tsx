@@ -96,38 +96,41 @@ function WorkspaceSessionProvider({ children }: { children: React.ReactNode }) {
   const requestId = React.useRef(0);
   const preview = __DEV__ && !session && previewRole !== null;
   const role = session ? sessionRole(session.roles) : previewRole;
-  const [locationNavigation, setLocationNavigation] = useState<{
+  const locationNavigation = useRef<{
     id: string;
     action: () => void;
   } | null>(null);
+  const [locationNavigationRevision, setLocationNavigationRevision] = useState(0);
   const navigateInStaffLocation = (id: string, action: () => void) =>
     requestNavigation(() => {
       if (role !== 'Staff' || preview) return;
-      setLocationNavigation({ id, action });
+      locationNavigation.current = { id, action };
+      setLocationNavigationRevision((revision) => revision + 1);
       // A newly assigned location may not yet be in the shared catalogue.
       if (!staffLocation.loading && !staffLocation.locations.some((item) => item.id === id))
         staffLocation.reload();
     });
   useEffect(() => {
-    if (!locationNavigation || staffLocation.loading) return;
+    const pending = locationNavigation.current;
+    if (!pending || staffLocation.loading) return;
     if (
       role !== 'Staff' ||
       preview ||
-      !staffLocation.locations.some((item) => item.id === locationNavigation.id)
+      !staffLocation.locations.some((item) => item.id === pending.id)
     ) {
-      setLocationNavigation(null);
+      locationNavigation.current = null;
       showInfo('Cơ sở không còn khả dụng hoặc bạn không còn quyền truy cập.');
       return;
     }
-    if (staffLocation.selectedLocationId !== locationNavigation.id) {
-      staffLocation.selectLocation(locationNavigation.id);
+    if (staffLocation.selectedLocationId !== pending.id) {
+      staffLocation.selectLocation(pending.id);
       return;
     }
     // Wait until the shared selection has committed before mounting a scoped
     // destination. This also survives the inbox remount when its location changes.
-    setLocationNavigation(null);
-    locationNavigation.action();
-  }, [locationNavigation, staffLocation, role, preview]);
+    locationNavigation.current = null;
+    pending.action();
+  }, [locationNavigationRevision, staffLocation, role, preview]);
   const go = (screen: WorkspaceScreen, params?: Record<string, string>, keepDestination = false) =>
     requestNavigation(() => {
       if (role && isWorkspaceTabDestination(role, screen, params)) {

@@ -22,7 +22,7 @@ import {
 } from '../../../../../packages/client-core/src/invoices';
 import { PageHeader, FilterToolbar } from '../../components/common/PortalUI';
 import { useInvoiceApi } from './useInvoiceApi';
-import { locationBillingSettingsPath } from './LocationBillingSchedule';
+import { locationBillingSettingsPath } from './locationBillingSettingsPath';
 import { ConflictReload } from '../locations/components/ConflictReload';
 import { todayVietnam } from '../staff/staffContracts';
 import { canEditPolicyInPlace } from './policyVersions';

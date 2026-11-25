@@ -16,9 +16,11 @@ internal sealed class BillingMeterOverdueNotifier(BHomePersistenceContext db, Ti
         if (sql is null) return; // Legacy source-schema fixture does not use Compact24 notifications.
         var now = clock.BusinessUtcNow();
         var today = clock.BusinessToday();
-        var owners = await (from u in db.Users join grant in db.UserRoles on u.Id equals grant.UserId
+        var owners = await (from u in db.Users
+                            join grant in db.UserRoles on u.Id equals grant.UserId
                             join role in db.Roles on grant.RoleId equals role.Id
-                            where u.IsActive && role.Name == Roles.Owner select u.Id).Distinct().ToArrayAsync(t);
+                            where u.IsActive && role.Name == Roles.Owner
+                            select u.Id).Distinct().ToArrayAsync(t);
         var eligibleStaff = db is Compact24DbContext compact ? StaffEmploymentEligibility.EligibleIds(compact, today) :
             (from u in db.Users join grant in db.UserRoles on u.Id equals grant.UserId join role in db.Roles on grant.RoleId equals role.Id where u.IsActive && role.Name == Roles.Staff select u.Id);
         var tasks = await db.Set<OperationalTask>().AsNoTracking()

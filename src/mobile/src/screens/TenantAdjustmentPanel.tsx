@@ -80,11 +80,9 @@ export function TenantAdjustmentPanel({
   const [tab, setTab] = useState<'requests' | 'approved'>('requests');
   const [modal, setModal] = useState<'requests' | 'new' | null>(null);
   const [formBusy, setFormBusy] = useState(false);
-  useEffect(() => {
-    if (!canSubmit && !formBusy) {
-      setModal((current) => (current === 'new' ? null : current));
-    }
-  }, [canSubmit, formBusy]);
+  if (modal === 'new' && !canSubmit && !formBusy) {
+    setModal(null);
+  }
   const closeModal = () => {
     if (!formBusy) setModal(null);
   };
