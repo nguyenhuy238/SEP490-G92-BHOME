@@ -1,3 +1,4 @@
+using BHome.Application.Common;
 using System.Text.Json;
 using System.Text.Json.Serialization;
 using BHome.Application.IdentityAccess;
@@ -57,7 +58,7 @@ internal sealed class CompactLocationAssignments(Compact24DbContext db, TimeProv
         await db.Database.ExecuteSqlInterpolatedAsync($"""
             UPDATE locations SET staff_assignments=staff_assignments||CAST({json} AS jsonb),version=version+1,history=history||CAST({history} AS jsonb) WHERE id={locationId}
             """, token);
-        var today = DateOnly.FromDateTime(TimeZoneInfo.ConvertTimeBySystemTimeZoneId(clock.GetUtcNow(), "Asia/Ho_Chi_Minh").DateTime);
+        var today = clock.BusinessToday();
         if (start <= today && end >= today)
             await ReconcileLocationAsync(locationId, entry, actor, entry.RecordedAt, "Location responsibility assigned", token);
         await NotifyAssignmentAsync(locationId, entry, "STAFF_ASSIGNMENT_CREATED", token);
@@ -139,7 +140,7 @@ internal sealed class CompactLocationAssignments(Compact24DbContext db, TimeProv
         var index = assignments.FindIndex(a => a.Id == assignmentId);
         if (index < 0) return new(UpdateAssignmentPeriodStatus.AssignmentNotFound);
         var old = assignments[index];
-        var today = DateOnly.FromDateTime(TimeZoneInfo.ConvertTime(clock.GetUtcNow(), TimeZoneInfo.FindSystemTimeZoneById("Asia/Ho_Chi_Minh")).DateTime);
+        var today = clock.BusinessToday();
         var current = old.StartDate <= today && today <= old.EndDate;
         var cancelling = start is null;
         Assignment changed;
@@ -192,8 +193,7 @@ internal sealed class CompactLocationAssignments(Compact24DbContext db, TimeProv
             stored = reader.GetString(0); version = reader.GetInt32(1); active = reader.GetBoolean(2);
         }
         if (version != expectedVersion) return new(ChangeAssignmentStatus.StaleVersion, LocationVersion: version);
-        var today = DateOnly.FromDateTime(TimeZoneInfo.ConvertTime(clock.GetUtcNow(),
-            TimeZoneInfo.FindSystemTimeZoneById("Asia/Ho_Chi_Minh")).DateTime);
+        var today = clock.BusinessToday();
         if (effectiveFrom != today) return new(ChangeAssignmentStatus.Invalid);
         if (!await db.Users.AnyAsync(u => u.Id == actor && u.IsActive && EF.Property<string[]>(u, "roles").Contains(Roles.Owner), token))
             throw new UnauthorizedAccessException("Owner authorization is required.");
@@ -285,7 +285,7 @@ internal sealed class CompactLocationAssignments(Compact24DbContext db, TimeProv
             active = reader.GetBoolean(1);
         }
         var now = clock.GetUtcNow();
-        var today = DateOnly.FromDateTime(TimeZoneInfo.ConvertTimeBySystemTimeZoneId(now, "Asia/Ho_Chi_Minh").DateTime);
+        var today = clock.BusinessToday();
         var next = active ? assignments.SingleOrDefault(a => a.StartDate <= today && today <= a.EndDate) : null;
         if (next is not null)
         {
@@ -603,7 +603,7 @@ internal sealed class CompactLocationAssignments(Compact24DbContext db, TimeProv
 
     public async Task<bool> IsAssignedAsync(Guid staffId, Guid locationId, CancellationToken token)
     {
-        var today = DateOnly.FromDateTime(TimeZoneInfo.ConvertTime(clock.GetUtcNow(), TimeZoneInfo.FindSystemTimeZoneById("Asia/Ho_Chi_Minh")).DateTime);
+        var today = clock.BusinessToday();
         if (!await StaffAvailableAsync(staffId, today, token)) return false;
         await db.Database.OpenConnectionAsync(token);
         await using var query = Command("""

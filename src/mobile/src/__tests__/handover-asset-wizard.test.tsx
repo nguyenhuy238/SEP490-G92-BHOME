@@ -4,6 +4,10 @@ import { cleanup, fireEvent, render, screen } from '@testing-library/react';
 import { afterEach, expect, it, vi } from 'vitest';
 import type { HandoverAsset } from '../../../../packages/client-core/src/contracts';
 
+vi.mock('react-native', () => ({
+  View: ({ children }: { children: React.ReactNode }) => <div>{children}</div>,
+}));
+vi.mock('../theme/theme', () => ({ colors: { red: '#b91c1c' } }));
 vi.mock('react-native-paper', () => ({
   Text: ({ children }: { children: React.ReactNode }) => <span>{children}</span>,
   SegmentedButtons: ({

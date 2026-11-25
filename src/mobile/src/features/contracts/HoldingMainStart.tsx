@@ -1,3 +1,4 @@
+import { demoBusinessNow } from '../../../../../packages/client-core/src/demoClock';
 import { ContractNotice } from './ContractNotice';
 import React, { useEffect, useRef, useState } from 'react';
 import { Button, Text } from 'react-native-paper';
@@ -57,7 +58,7 @@ export function HoldingMainStart({
             (c) =>
               c.kind === 'Holding' &&
               c.roomId === roomId &&
-              Date.parse(c.holdingExpiresAt ?? '') > Date.now(),
+              Date.parse(c.holdingExpiresAt ?? '') > demoBusinessNow(),
           );
           const details = await Promise.all(candidates.map((c) => api.get(c.id)));
           rows.push(...details.filter((c) => !c.convertedMainContractId));

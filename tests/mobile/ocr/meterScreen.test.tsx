@@ -202,7 +202,8 @@ it('keeps unknown images editable with explicit review and no automatic confirma
     .mockResolvedValueOnce({ id: 'evidence' });
   render(<MeterScreen />);
   await capture();
-  expect(await screen.findByText(/OCR chưa đọc được/)).toBeTruthy();
+  expect(await screen.findByText(/Không nhận diện được chỉ số/)).toBeTruthy();
+  expect(screen.queryByText(/OCR chưa đọc được/)).toBeNull();
   expect(screen.getByLabelText(valueLabel)).toHaveValue('');
   expect(screen.getByLabelText(confirmLabel)).not.toBeChecked();
   expect(screen.getByText(saveLabel)).toBeDisabled();

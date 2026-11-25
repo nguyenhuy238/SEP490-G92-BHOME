@@ -78,7 +78,7 @@ public sealed class ContractsController(ContractService service, ContractExpiryS
     public Task<ContractDocumentView> GeneratePreview(Guid id, CancellationToken t) => service.GeneratePreviewAsync(id, Key(), t);
     [HttpGet("{id:guid}/previews/{fileId:guid}"), Authorize(Roles = Roles.Owner + "," + Roles.Staff + "," + Roles.Tenant)]
     public async Task<IActionResult> PreviewFile(Guid id, Guid fileId, CancellationToken t)
-    { var buffer = new MemoryStream(); await service.CopyPreviewAsync(id, fileId, buffer, t); buffer.Position = 0; return File(buffer, "application/pdf", "ban-xem-truoc.pdf"); }
+    { var buffer = new MemoryStream(); var name = await service.CopyPreviewAsync(id, fileId, buffer, t); buffer.Position = 0; return File(buffer, "application/pdf", name); }
 
     [HttpPost, Authorize(Roles = Roles.Owner + "," + Roles.Staff)]   // Dòng 58–62
     public async Task<IActionResult> Create(ContractDraftInput x, CancellationToken t)
@@ -127,8 +127,8 @@ public sealed class ContractsController(ContractService service, ContractExpiryS
     public async Task<IActionResult> SigningUploadSource(Guid id, CancellationToken t)
     {
         using var buffer = new MemoryStream();
-        await service.CopyUploadSourceAsync(id, buffer, t);
-        return File(buffer.ToArray(), "application/pdf", $"hop-dong-{id:N}.pdf");
+        var name = await service.CopyUploadSourceAsync(id, buffer, t);
+        return File(buffer.ToArray(), "application/pdf", name);
     }
     [HttpPut("{id:guid}/signing/upload"), Authorize(Roles = Roles.Owner), Consumes("application/pdf"), RequestSizeLimit(11 * 1024 * 1024)]
     public async Task<ContractView> UploadSignedDocument(Guid id, CancellationToken t)
@@ -143,7 +143,7 @@ public sealed class ContractsController(ContractService service, ContractExpiryS
     public Task<ContractView> Recover(Guid id, SigningRecoveryInput x, CancellationToken t) => service.RecoverSigningAsync(id, x, Key(), t);
     [HttpGet("{id:guid}/document"), Authorize(Roles = Roles.Owner + "," + Roles.Tenant)]
     public async Task<IActionResult> Document(Guid id, CancellationToken t)
-    { var buffer = new MemoryStream(); await service.CopyDocumentAsync(id, buffer, t); buffer.Position = 0; return File(buffer, "application/pdf", "hop-dong.pdf"); }
+    { var buffer = new MemoryStream(); var name = await service.CopyDocumentAsync(id, buffer, t); buffer.Position = 0; return File(buffer, "application/pdf", name); }
     [HttpPost("{id:guid}/renewals"), Authorize(Roles = Roles.Owner + "," + Roles.Staff)]
     public async Task<IActionResult> Renewal(Guid id, RenewalInput x, CancellationToken t)
     { var result = await service.RenewAsync(id, x, Key(), t); return CreatedAtAction(nameof(Get), new { id = result.Id }, result); }
@@ -261,7 +261,7 @@ public sealed class ContractsController(ContractService service, ContractExpiryS
     public Task<MoveOutView> RejectTermination(Guid id, TerminationRejection input, CancellationToken t) => service.RejectTerminationAsync(id, input, Key(), t);
     [HttpPost("{id:guid}/move-out/schedule"), Authorize(Roles = Roles.Owner + "," + Roles.Staff)]
     public Task<MoveOutView> Schedule(Guid id, InspectionScheduleInput x, CancellationToken t) => service.ScheduleInspectionAsync(id, x, Key(), t);
-    [HttpGet("{id:guid}/move-out/inspection-draft"), Authorize(Roles = Roles.Staff)]
+    [HttpGet("{id:guid}/move-out/inspection-draft"), Authorize(Roles = Roles.Owner + "," + Roles.Staff)]
     public Task<MoveOutInspectionDraftView> GetMoveOutInspectionDraft(Guid id, CancellationToken t) =>
         service.GetMoveOutInspectionDraftAsync(id, t);
     [HttpPatch("{id:guid}/move-out/inspection-draft"), HttpPut("{id:guid}/move-out/inspection-draft"),

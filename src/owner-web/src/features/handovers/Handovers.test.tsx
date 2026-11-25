@@ -101,10 +101,7 @@ it('loads move-in handover list immediately, opens a compact right Drawer, and k
 
   fireEvent.click(screen.getAllByRole('button', { name: 'Xem chi tiết' })[0]);
   expect(await screen.findByText('Biên bản chi tiết contract-1 dạng gọn')).toBeInTheDocument();
-  expect(screen.getByRole('link', { name: 'Mở hồ sơ hợp đồng' })).toHaveAttribute(
-    'href',
-    '/contracts?contractId=contract-1',
-  );
+  expect(screen.queryByRole('link', { name: 'Mở hồ sơ hợp đồng' })).not.toBeInTheDocument();
   fireEvent.click(screen.getByRole('button', { name: 'Đóng chi tiết' }));
   expect(screen.queryByText('Biên bản chi tiết contract-1 dạng gọn')).not.toBeInTheDocument();
 });
@@ -119,7 +116,7 @@ it('shows a handover task to Owner before Staff has completed any draft', async 
   mount();
   expect(await screen.findByText('1 biên bản phù hợp')).toBeInTheDocument();
   expect(screen.getAllByText('Đang kiểm tra bàn giao').length).toBeGreaterThan(0);
-  expect(screen.getAllByText('Chờ Staff hoàn thành').length).toBeGreaterThan(0);
+  expect(screen.getAllByText('Chờ nhân viên hoàn thành').length).toBeGreaterThan(0);
   fireEvent.click(screen.getAllByRole('button', { name: 'Xem chi tiết' })[0]);
   expect(await screen.findByText('Biên bản chi tiết contract-1 dạng gọn')).toBeInTheDocument();
 });
@@ -154,7 +151,7 @@ it('filters status, location and room on the backend instead of filtering only o
   await screen.findByText('2 biên bản phù hợp');
 
   fireEvent.mouseDown(screen.getByRole('combobox', { name: 'Trạng thái biên bản' }));
-  fireEvent.click(screen.getByRole('option', { name: 'Chờ Owner duyệt' }));
+  fireEvent.click(screen.getByRole('option', { name: 'Chờ chủ trọ duyệt' }));
   await waitFor(() =>
     expect(mocks.transport).toHaveBeenCalledWith(
       '/api/v1/contracts/handovers?page=1&pageSize=20&status=PendingOwnerReview',
@@ -187,10 +184,7 @@ it('supports deep-linked report without selecting a location or room, and refres
   expect(
     await screen.findByText('Biên bản chi tiết synthetic-contract dạng gọn'),
   ).toBeInTheDocument();
-  expect(screen.getByRole('link', { name: 'Mở hồ sơ hợp đồng' })).toHaveAttribute(
-    'href',
-    '/contracts?contractId=synthetic-contract',
-  );
+  expect(screen.queryByRole('link', { name: 'Mở hồ sơ hợp đồng' })).not.toBeInTheDocument();
   await screen.findByText('2 biên bản phù hợp');
   const calls = mocks.transport.mock.calls.length;
   fireEvent.click(
@@ -216,7 +210,7 @@ it('paginates handovers from the server and resets to the first page for a chang
     }),
   );
   fireEvent.mouseDown(screen.getByRole('combobox', { name: 'Trạng thái biên bản' }));
-  fireEvent.click(screen.getByRole('option', { name: 'Chờ Owner duyệt' }));
+  fireEvent.click(screen.getByRole('option', { name: 'Chờ chủ trọ duyệt' }));
   await waitFor(() =>
     expect(mocks.transport).toHaveBeenCalledWith(
       '/api/v1/contracts/handovers?page=1&pageSize=20&status=PendingOwnerReview',

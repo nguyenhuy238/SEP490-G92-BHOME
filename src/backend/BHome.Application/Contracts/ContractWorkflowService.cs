@@ -138,7 +138,7 @@ public sealed partial class ContractService
             .Where(f => !StaffPreviewOnly(c) || f.SnapshotHash == c.SnapshotHash).Select(DocumentView).ToArray();
     }
 
-    public async Task CopyPreviewAsync(Guid id, Guid fileId, Stream output, CancellationToken t)
+    public async Task<string> CopyPreviewAsync(Guid id, Guid fileId, Stream output, CancellationToken t)
     {
         var c = await Load(id, [Roles.Owner, Roles.Staff, Roles.Tenant], t);
         RequirePreviewAccess(c);
@@ -147,6 +147,7 @@ public sealed partial class ContractService
         if (StaffPreviewOnly(c) && file.SnapshotHash != c.SnapshotHash)
             throw ContractException.Conflict("signed_terms_changed");
         await CopyVerifiedFile(file, output, t);
+        return ContractDownloadName.For(c.Kind, c.Id);
     }
 
     private bool StaffPreviewOnly(Contract c) => user.IsInRole(Roles.Staff) &&

@@ -58,23 +58,20 @@ it('loads the authorized MoveOut queue, opens its detail and preserves the contr
     '/api/v1/contracts/move-out-inbox?page=1&pageSize=20',
     { signal: expect.any(AbortSignal) },
   );
-  expect((await screen.findAllByText('Chờ Owner gửi phí')).length).toBeGreaterThan(0);
+  expect((await screen.findAllByText('Chờ chủ trọ gửi phí')).length).toBeGreaterThan(0);
   fireEvent.click(screen.getAllByRole('button', { name: 'Xem kết quả' })[0]);
   expect(await screen.findByText('Kết quả kiểm kê contract-1')).toBeInTheDocument();
-  expect(screen.getByRole('link', { name: 'Mở hồ sơ hợp đồng' })).toHaveAttribute(
-    'href',
-    '/contracts?contractId=contract-1',
-  );
+  expect(screen.queryByRole('link', { name: 'Mở hồ sơ hợp đồng' })).not.toBeInTheDocument();
   fireEvent.click(screen.getByRole('button', { name: 'Đóng chi tiết trả phòng' }));
   expect(screen.queryByText('Kết quả kiểm kê contract-1')).not.toBeInTheDocument();
 });
 
 it.each([
-  ['PendingTenant', null, 'Chờ Tenant xác nhận phí'],
-  ['Disputed', null, 'Tenant yêu cầu điều chỉnh phí'],
-  ['Accepted', 'PendingOwnerReview', 'Tenant đã đồng ý · Đang đối chiếu'],
-  ['Accepted', 'Payable', 'Tenant đã đồng ý · Đã tạo khoản phải thu'],
-  ['Accepted', 'RefundEligible', 'Tenant đã đồng ý · Có tiền cọc cần hoàn'],
+  ['PendingTenant', null, 'Chờ khách thuê xác nhận phí'],
+  ['Disputed', null, 'Khách thuê yêu cầu điều chỉnh phí'],
+  ['Accepted', 'PendingOwnerReview', 'Khách thuê đã đồng ý · Đang đối chiếu'],
+  ['Accepted', 'Payable', 'Khách thuê đã đồng ý · Đã tạo khoản phải thu'],
+  ['Accepted', 'RefundEligible', 'Khách thuê đã đồng ý · Có tiền cọc cần hoàn'],
   ['Accepted', 'Settled', 'Đã quyết toán phí trả phòng'],
 ] as const)(
   'shows the actual Tenant financial step in the inbox for %s / %s',
@@ -98,7 +95,7 @@ it.each([
     });
     mount();
     expect((await screen.findAllByText(label)).length).toBeGreaterThan(0);
-    expect(screen.queryByText('Đã có kết quả Staff')).not.toBeInTheDocument();
+    expect(screen.queryByText('Đã có kết quả nhân viên')).not.toBeInTheDocument();
   },
 );
 
@@ -133,29 +130,26 @@ it('recovers the accepted fee status from the existing proposal API while the in
   );
   mount();
   expect(
-    (await screen.findAllByText('Tenant đã đồng ý · Đã tạo khoản phải thu')).length,
+    (await screen.findAllByText('Khách thuê đã đồng ý · Đã tạo khoản phải thu')).length,
   ).toBeGreaterThan(0);
   expect(mocks.transport).toHaveBeenCalledWith(
     '/api/v1/contracts/contract-1/move-out/receivables/proposal',
     { signal: expect.any(AbortSignal) },
   );
-  expect(screen.queryByText('Đã có kết quả Staff')).not.toBeInTheDocument();
+  expect(screen.queryByText('Đã có kết quả nhân viên')).not.toBeInTheDocument();
 });
 
 it('opens an authorized contract deep link even when that contract is outside the current list page', async () => {
   mount('/handovers?tab=move-out&contractId=contract-on-another-page');
   expect(await screen.findByText('Kết quả kiểm kê contract-on-another-page')).toBeInTheDocument();
-  expect(screen.getByRole('link', { name: 'Mở hồ sơ hợp đồng' })).toHaveAttribute(
-    'href',
-    '/contracts?contractId=contract-on-another-page',
-  );
+  expect(screen.queryByRole('link', { name: 'Mở hồ sơ hợp đồng' })).not.toBeInTheDocument();
 });
 
 it('filters the server-side queue by location/status and exposes location-load failure', async () => {
   mount();
   await screen.findByText('1 yêu cầu trả phòng phù hợp');
   fireEvent.mouseDown(screen.getByRole('combobox', { name: 'Trạng thái trả phòng' }));
-  fireEvent.click(screen.getByRole('option', { name: 'Đã có kết quả Staff' }));
+  fireEvent.click(screen.getByRole('option', { name: 'Đã có kết quả nhân viên' }));
   await waitFor(() =>
     expect(mocks.transport).toHaveBeenCalledWith(
       '/api/v1/contracts/move-out-inbox?page=1&pageSize=20&status=Inspected',

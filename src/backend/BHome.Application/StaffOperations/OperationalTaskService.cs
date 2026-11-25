@@ -1,3 +1,4 @@
+using BHome.Application.Common;
 using System.ComponentModel.DataAnnotations;
 using System.Security.Cryptography;
 using System.Text;
@@ -16,7 +17,7 @@ public sealed partial class OperationalTaskService(IOperationalTaskRepository re
     IContractHandoverRepository? handovers = null)
 {
     private Guid Actor => user.UserId is { } id && id != Guid.Empty ? id : throw new OperationalTaskException(401, "authentication_required");
-    private DateTimeOffset Now => clock.GetUtcNow();
+    private DateTimeOffset Now => clock.BusinessUtcNow();
     private DateOnly Today => DateOnly.FromDateTime(TimeZoneInfo.ConvertTime(Now, TimeZoneInfo.FindSystemTimeZoneById("Asia/Ho_Chi_Minh")).DateTime);
     private bool Owner => user.IsInRole(Roles.Owner);
     private Guid? StaffFilter => Owner ? null : Actor;
@@ -104,7 +105,8 @@ public sealed partial class OperationalTaskService(IOperationalTaskRepository re
     {
         Permit(Permissions.OperationalTasks.View); Page(query.Page, query.PageSize);
         if (query.Status is { } s && !Enum.IsDefined(s) || query.Priority is { } p && !Enum.IsDefined(p) ||
-            query.LocationId == Guid.Empty || query.StaffUserId == Guid.Empty ||
+            query.Category is { } category && !Enum.IsDefined(category) || query.Search?.Length > 100 ||
+            query.LocationId == Guid.Empty || query.RoomId == Guid.Empty || query.StaffUserId == Guid.Empty ||
             query.RecordedStaffUserId == Guid.Empty || query.DueFrom > query.DueTo)
             throw OperationalTaskException.Invalid("invalid_task_filter");
         // The recorded assignee and unresolved responsibility filters are Owner management views.

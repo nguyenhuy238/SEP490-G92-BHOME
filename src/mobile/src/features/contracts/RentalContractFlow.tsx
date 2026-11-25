@@ -351,7 +351,14 @@ export function RentalContractFlow({
                 {signer &&
                   contract.signatures.some((signature) =>
                     ['Signed', 'Simulated'].includes(signature.status),
-                  ) && <ContractEvidence api={api} contractId={contract.id} pdf />}
+                  ) && (
+                    <ContractEvidence
+                      api={api}
+                      contractId={contract.id}
+                      contractKind={contract.kind}
+                      pdf
+                    />
+                  )}
               </Box>
               {otpSigning && (
                 <ContractSigningPanel

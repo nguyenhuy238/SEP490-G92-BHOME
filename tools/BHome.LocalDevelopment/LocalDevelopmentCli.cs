@@ -276,7 +276,7 @@ internal static class LocalDevelopmentCli
             var config = new ConfigurationBuilder().AddEnvironmentVariables().Build();
             var services = new ServiceCollection().AddLogging().AddSingleton<IConfiguration>(config);
             services.AddInfrastructure(config);
-            if ((args.Length == 1 && args[0] is "seed-contract-demo" or "seed-billing-automation-demo" or "demo-billing-retry" or "seed-sepay-sandbox") ||
+            if ((args.Length == 1 && args[0] is "seed-contract-demo" or "seed-contract-demo-clock" or "seed-billing-automation-demo" or "demo-billing-retry" or "seed-sepay-sandbox") ||
                 (args.Length is 1 or 2 && args[0] == "seed-e2e-meter-workflow"))
             {
                 services.AddSingleton<Microsoft.Extensions.Hosting.IHostEnvironment>(new DemoHostEnvironment(Environment.GetEnvironmentVariable("DOTNET_ENVIRONMENT") ?? ""));
@@ -299,9 +299,9 @@ internal static class LocalDevelopmentCli
             if (args.SequenceEqual(new[] { "seed-mobile-test" })) { await MobileTestSeed.RunAsync(provider, password); return 0; }
             if (args.SequenceEqual(new[] { "seed-billing-automation-demo" })) { await BillingAutomationDemoSeed.PrepareAsync(provider); return 0; }
             if (args.SequenceEqual(new[] { "demo-billing-retry" })) { await BillingAutomationDemoSeed.RetryAsync(provider); return 0; }
-            if (args.SequenceEqual(new[] { "seed-contract-demo" }))
+            if (args.Length == 1 && args[0] is "seed-contract-demo" or "seed-contract-demo-clock")
             {
-                await ContractDemoSeed.RunAsync(provider, Environment.GetEnvironmentVariable("DOTNET_ENVIRONMENT"), password);
+                await ContractDemoSeed.RunAsync(provider, Environment.GetEnvironmentVariable("DOTNET_ENVIRONMENT"), password, demoClock: args[0] == "seed-contract-demo-clock");
                 return 0;
             }
             if (args.Length != 0) throw new LocalTestAccountException("Lệnh không hợp lệ.");

@@ -36,6 +36,7 @@ import { StaffScheduleScreen } from '../../screens/StaffScheduleScreen';
 import { StaffMoveInInventoryScreen } from '../../screens/StaffMoveInInventoryScreen';
 import { StaffMoveOutInspectionScreen } from '../../screens/StaffMoveOutInspectionScreen';
 import { StaffHandoverArchiveScreen } from '../../screens/StaffHandoverArchiveScreen';
+import { StaffHandoverListScreen } from '../../screens/StaffTaskListScreen';
 import {
   StaffIncidentReportScreen,
   StaffMaintenanceScreen,
@@ -125,6 +126,7 @@ const screens = {
   'staff-assets': StaffAssets,
   'staff-maintenance': StaffMaintenanceScreen,
   'staff-handover-archive': StaffHandoverArchiveScreen,
+  'staff-handovers': StaffHandoverListScreen,
   'staff-emergencies': StaffEmergencyScreen,
   'staff-invoices': StaffInvoices,
   onboarding: OnboardingScreen,
@@ -314,6 +316,7 @@ export function WorkspaceScreenView({ screen }: { screen: string }) {
         case 'move-in-inventory':
         case 'staff-maintenance':
         case 'staff-handover-archive':
+        case 'staff-handovers':
         case 'staff-emergencies':
         case 'rooms':
         case 'send-notification':
@@ -325,7 +328,7 @@ export function WorkspaceScreenView({ screen }: { screen: string }) {
     return (
       <WorkspaceShell screen={screen}>
         <React.Fragment
-          key={`${session?.userId}:${role}:${screen}:${role === 'Staff' ? staffLocationId : ''}`}
+          key={`${session?.userId}:${role}:${screen}:${role === 'Staff' && screen !== 'staff-handovers' ? staffLocationId : ''}`}
         >
           {content}
         </React.Fragment>

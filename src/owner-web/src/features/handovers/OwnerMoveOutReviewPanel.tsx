@@ -22,6 +22,9 @@ import {
   mutationKeys,
   type ContractClient,
   type FinalInspection,
+  type HandoverSnapshot,
+  type HandoverAsset,
+  type InspectionPreparation,
 } from '../../../../../packages/client-core/src/contracts';
 import { ConfirmActionButton } from '../../components/common/ConfirmActionButton';
 import { MoneyField } from '../../components/common/MoneyField';
@@ -120,9 +123,9 @@ const roomCheckLabels: Record<string, string> = {
 };
 const statusLabels: Record<ProposalPreview['status'], string> = {
   None: 'Chưa gửi đề xuất',
-  PendingTenant: 'Đang chờ Tenant duyệt',
-  Accepted: 'Tenant đã đồng ý',
-  Disputed: 'Tenant yêu cầu xem xét lại',
+  PendingTenant: 'Đang chờ khách thuê duyệt',
+  Accepted: 'Khách thuê đã đồng ý',
+  Disputed: 'Khách thuê yêu cầu xem xét lại',
   Outdated: 'Dữ liệu đã thay đổi',
 };
 
@@ -135,29 +138,29 @@ function moveOutProgress(
 ) {
   if (moveOutStatus === 'Completed')
     return { label: 'Trả phòng thành công', color: 'success' as const };
-  if (!inspectionReady) return { label: 'Staff đang kiểm tra', color: 'warning' as const };
+  if (!inspectionReady) return { label: 'Nhân viên đang kiểm tra', color: 'warning' as const };
   if (!proposal) return { label: 'Đã kiểm kê · Đang tải phí', color: 'default' as const };
 
   switch (proposal.status) {
     case 'None':
-      return { label: 'Chờ Owner gửi phí', color: 'info' as const };
+      return { label: 'Chờ chủ trọ gửi phí', color: 'info' as const };
     case 'PendingTenant':
-      return { label: 'Chờ Tenant xác nhận phí', color: 'info' as const };
+      return { label: 'Chờ khách thuê xác nhận phí', color: 'info' as const };
     case 'Disputed':
-      return { label: 'Tenant yêu cầu điều chỉnh phí', color: 'warning' as const };
+      return { label: 'Khách thuê yêu cầu điều chỉnh phí', color: 'warning' as const };
     case 'Outdated':
       if (proposal.latestProposal?.tenantFeedback?.confirmed)
-        return { label: 'Tenant đã đồng ý · Cần đối chiếu dữ liệu', color: 'warning' as const };
+        return { label: 'Khách thuê đã đồng ý · Cần đối chiếu dữ liệu', color: 'warning' as const };
       return { label: 'Cần đối chiếu dữ liệu phí', color: 'warning' as const };
     case 'Accepted': {
       const settlement = proposal.latestProposal?.tenantFeedback?.settlement?.status;
       if (settlement === 'Payable')
-        return { label: 'Tenant đã đồng ý · Đã tạo khoản phải thu', color: 'success' as const };
+        return { label: 'Khách thuê đã đồng ý · Đã tạo khoản phải thu', color: 'success' as const };
       if (settlement === 'RefundEligible')
-        return { label: 'Tenant đã đồng ý · Có tiền cọc cần hoàn', color: 'success' as const };
+        return { label: 'Khách thuê đã đồng ý · Có tiền cọc cần hoàn', color: 'success' as const };
       if (settlement === 'Settled')
         return { label: 'Đã quyết toán phí trả phòng', color: 'success' as const };
-      return { label: 'Tenant đã đồng ý · Đang đối chiếu', color: 'info' as const };
+      return { label: 'Khách thuê đã đồng ý · Đang đối chiếu', color: 'info' as const };
     }
   }
 }
@@ -469,7 +472,7 @@ function MeterResults({ api, inspection }: { api: ContractClient; inspection: Fi
           {(['electricity', 'water'] as const).map((name) => {
             const reading = inspection.observed[name];
             const meterLabel = name === 'electricity' ? 'điện' : 'nước';
-            const unit = name === 'electricity' ? 'kW' : 'm³';
+            const unit = name === 'electricity' ? 'kWh' : 'm³';
             return (
               <Stack key={name} spacing={0.5} sx={{ flex: 1 }}>
                 <Typography variant="body2" color="text.secondary">
@@ -500,6 +503,174 @@ function MeterResults({ api, inspection }: { api: ContractClient; inspection: Fi
   );
 }
 
+interface WorkingInspection {
+  contractId: string;
+  roomCondition: string;
+  keysAndAccess: string;
+  notes: string;
+  assets: (Pick<
+    HandoverAsset,
+    | 'id'
+    | 'observedQuantity'
+    | 'handedOverQuantity'
+    | 'notes'
+    | 'evidenceIds'
+    | 'physicalObservations'
+    | 'checked'
+  > & { condition: string })[];
+  roomChecks: NonNullable<HandoverSnapshot['roomChecks']>;
+  accessItems: NonNullable<HandoverSnapshot['accessItems']>;
+  evidenceIds: string[];
+  keyEvidenceIds: string[];
+  electricityReadingId: string | null;
+  waterReadingId: string | null;
+  physicalItemEvidence?: HandoverSnapshot['physicalItemEvidence'];
+}
+
+function WorkingInspectionDetails({
+  api,
+  id,
+  draft,
+  preparation,
+}: {
+  api: ContractClient;
+  id: string;
+  draft?: WorkingInspection | null;
+  preparation?: InspectionPreparation;
+}) {
+  const photos = (ids: string[] | undefined, label: string) => (
+    <EvidencePhotos api={api} contractId={id} ids={ids ?? []} label={label} opening={false} />
+  );
+  const key = draft?.accessItems.find((item) => item.type === 'RoomKey');
+  const groups = preparation?.inspectionGroups ?? preparation?.inventory?.groups ?? [];
+  const assets = [
+    ...groups.map((group) => ({ id: group.id, name: group.name })),
+    ...(draft?.assets ?? [])
+      .filter((asset) => !groups.some((group) => group.id === asset.id))
+      .map((asset) => ({ id: asset.id, name: 'Tài sản đã ghi nhận' })),
+  ];
+  return (
+    <Stack spacing={1.5}>
+      <Chip label="Đang kiểm tra trả phòng" color="info" sx={{ alignSelf: 'flex-start' }} />
+      <Paper variant="outlined" sx={{ p: 2, borderRadius: 2 }}>
+        <Stack spacing={1}>
+          <Typography sx={{ fontWeight: 700 }}>Điện và nước</Typography>
+          {(['electricity', 'water'] as const).map((utility) => {
+            const readingId = draft?.[`${utility}ReadingId`];
+            const readings =
+              preparation?.finalReadings?.filter(
+                (r) => r.utilityType === (utility === 'electricity' ? 0 : 1),
+              ) ?? [];
+            const reading =
+              readings.find((r) => r.id === readingId) ??
+              (!readingId && readings.length === 1 ? readings[0] : undefined);
+            return (
+              <Stack key={utility} spacing={0.5}>
+                <Typography variant="body2">
+                  {utility === 'electricity' ? 'Điện' : 'Nước'}:{' '}
+                  {reading
+                    ? `${meterInteger(reading.value)} ${utility === 'electricity' ? 'kWh' : 'm³'}`
+                    : 'Chưa xác nhận'}
+                </Typography>
+                {reading && (
+                  <PrivateEvidenceViewer
+                    label={utility === 'electricity' ? 'Ảnh công tơ điện' : 'Ảnh công tơ nước'}
+                    filename="chi-so-tra-phong.jpg"
+                    fetchBlob={(signal) => api.readingEvidence(reading.id, signal)}
+                    errorMessage={contractError}
+                    inlineThumbnail
+                  />
+                )}
+              </Stack>
+            );
+          })}
+        </Stack>
+      </Paper>
+      <Paper variant="outlined" sx={{ p: 2, borderRadius: 2 }}>
+        <Stack spacing={1}>
+          <Typography sx={{ fontWeight: 700 }}>Hiện trạng phòng</Typography>
+          <Typography variant="body2">
+            Hiện trạng chung: {draft?.roomCondition || 'Chưa ghi nhận'}
+          </Typography>
+          {photos(draft?.evidenceIds, 'Hiện trạng chung')}
+          {Object.entries(roomCheckLabels).map(([code, label]) => {
+            const check = draft?.roomChecks.find((item) => item.code === code);
+            return (
+              <Box key={code} sx={{ pt: 1, borderTop: '1px solid', borderColor: 'divider' }}>
+                <Typography variant="body2" sx={{ fontWeight: 600 }}>
+                  {label}
+                </Typography>
+                <Typography variant="body2" color="text.secondary">
+                  {check?.status === 'Passed'
+                    ? 'Đạt'
+                    : check?.status === 'Issue'
+                      ? 'Có vấn đề'
+                      : check?.status === 'NotApplicable'
+                        ? 'Không áp dụng'
+                        : 'Chưa kiểm tra'}
+                </Typography>
+                {check?.notes && <Typography variant="body2">{check.notes}</Typography>}
+                {photos(check?.evidenceIds, label)}
+              </Box>
+            );
+          })}
+        </Stack>
+      </Paper>
+      <Paper variant="outlined" sx={{ p: 2, borderRadius: 2 }}>
+        <Stack spacing={1}>
+          <Typography sx={{ fontWeight: 700 }}>Tài sản</Typography>
+          {!assets.length && (
+            <Typography variant="body2" color="text.secondary">
+              {preparation?.inventory?.noAssetsConfirmed
+                ? 'Không có tài sản'
+                : 'Chưa có dữ liệu kiểm kê'}
+            </Typography>
+          )}
+          {assets.map((asset) => {
+            const item = draft?.assets.find((entry) => entry.id === asset.id);
+            return (
+              <Box key={asset.id} sx={{ pt: 1, borderTop: '1px solid', borderColor: 'divider' }}>
+                <Typography variant="body2" sx={{ fontWeight: 600 }}>
+                  {asset.name}
+                </Typography>
+                <Typography variant="body2" color="text.secondary">
+                  {item?.checked ? item.condition || 'Đã ghi nhận' : 'Chưa hoàn tất kiểm kê'} · Thực
+                  tế: {item?.observedQuantity ?? 'Chưa ghi'}
+                </Typography>
+                {item?.notes && <Typography variant="body2">{item.notes}</Typography>}
+                {photos(item?.evidenceIds, asset.name)}
+                {item?.physicalObservations?.map((physical, index) => {
+                  const evidence = draft?.physicalItemEvidence?.find(
+                    (entry) => entry.assetId === asset.id && entry.physicalAssetId === physical.id,
+                  );
+                  return (
+                    <Box key={physical.id} sx={{ pl: 1.5, pt: 0.5 }}>
+                      <Typography variant="body2">
+                        Vật dụng {index + 1}: {physical.quantity} · {physical.condition}
+                      </Typography>
+                      {evidence?.notes && <Typography variant="body2">{evidence.notes}</Typography>}
+                      {photos(evidence?.evidenceIds, `${asset.name} · Vật dụng ${index + 1}`)}
+                    </Box>
+                  );
+                })}
+              </Box>
+            );
+          })}
+        </Stack>
+      </Paper>
+      <Paper variant="outlined" sx={{ p: 2, borderRadius: 2 }}>
+        <Stack spacing={0.5}>
+          <Typography sx={{ fontWeight: 700 }}>Chìa khóa</Typography>
+          <Typography variant="body2">Số lượng: {key?.quantity ?? 'Chưa ghi nhận'}</Typography>
+          {key?.notes && <Typography variant="body2">{key.notes}</Typography>}
+          {photos(draft?.keyEvidenceIds, 'Chìa khóa')}
+        </Stack>
+      </Paper>
+      {draft?.notes && <Typography variant="body2">Ghi chú: {draft.notes}</Typography>}
+    </Stack>
+  );
+}
+
 export function OwnerMoveOutReviewPanel({
   api,
   id,
@@ -518,8 +689,34 @@ export function OwnerMoveOutReviewPanel({
   const inspection = useQuery({
     queryKey: ['owner-move-out-inspections', id],
     queryFn: ({ signal }) => api.inspections(id, signal),
+    refetchInterval: moveOut.data?.status === 'Completed' ? false : 5000,
   });
-  const latest = inspection.data?.[0];
+  const working = moveOut.data?.status === 'Approved';
+  const latest = working ? undefined : inspection.data?.[0];
+  const workingDraft = useQuery({
+    queryKey: ['owner-move-out-working-draft', id],
+    enabled: working,
+    retry: false,
+    refetchInterval: 5000,
+    queryFn: async ({ signal }) => {
+      try {
+        return await api.transport<WorkingInspection>(
+          `/api/v1/contracts/${encodeURIComponent(id)}/move-out/inspection-draft`,
+          { signal },
+        );
+      } catch (cause) {
+        if ((cause as { status?: number })?.status === 404) return null;
+        throw cause;
+      }
+    },
+  });
+  const preparation = useQuery({
+    queryKey: ['owner-move-out-working-preparation', id],
+    enabled: working,
+    retry: false,
+    refetchInterval: 5000,
+    queryFn: ({ signal }) => api.inspectionPreparation(id, signal),
+  });
   // Staff Final is the physical source. Sending a priced proposal is Owner's
   // financial approval; no second physical-inspection approval is required.
   const inspectionReady =
@@ -711,7 +908,7 @@ export function OwnerMoveOutReviewPanel({
         keys.get('financial-proposal', body),
       );
       keys.confirmed('financial-proposal', body);
-      setNotice('Đã gửi đề xuất khoản thu cho Tenant xem và duyệt.');
+      setNotice('Đã gửi đề xuất khoản thu cho khách thuê xem và duyệt.');
       await refresh();
     } catch (cause) {
       setError(contractError(cause));
@@ -750,8 +947,8 @@ export function OwnerMoveOutReviewPanel({
       )}
       {data?.status === 'Disputed' && (
         <Alert severity="warning">
-          Tenant không đồng ý với đề xuất trước. Xem từng khoản có phản hồi bên dưới, kiểm tra lại
-          bằng chứng, sửa số tiền hoặc lý do thu rồi gửi một đề xuất mới để Tenant xác nhận.
+          Khách thuê không đồng ý với đề xuất trước. Xem từng khoản có phản hồi bên dưới, kiểm tra
+          lại bằng chứng, sửa số tiền hoặc lý do thu rồi gửi một đề xuất mới để khách thuê xác nhận.
           {!!data.latestProposal?.tenantFeedback?.reason && (
             <Typography variant="body2" sx={{ mt: 0.5, whiteSpace: 'pre-wrap' }}>
               Phản hồi chung: {data.latestProposal.tenantFeedback.reason}
@@ -763,8 +960,8 @@ export function OwnerMoveOutReviewPanel({
         data?.status === 'Accepted' &&
         data.latestProposal?.tenantFeedback?.settlement?.status === 'Payable' && (
           <Alert severity="info">
-            Đã cấn trừ tiền cọc theo khoản phí hợp lệ. Tenant được cấp thông tin thanh toán cho số
-            còn phải trả{' '}
+            Đã cấn trừ tiền cọc theo khoản phí hợp lệ. khách thuê được cấp thông tin thanh toán cho
+            số còn phải trả{' '}
             {formatContractMoney(data.latestProposal.tenantFeedback.settlement.payableAmount)}. Chỉ
             chuyển sang đã thanh toán sau khi SePay xác minh giao dịch.
           </Alert>
@@ -772,16 +969,31 @@ export function OwnerMoveOutReviewPanel({
       {data?.status === 'Accepted' &&
         data.latestProposal?.tenantFeedback?.settlement?.status === 'RefundEligible' && (
           <Alert severity="info">
-            Tenant đã đồng ý và có thể gửi yêu cầu hoàn cọc{' '}
-            {formatContractMoney(data.latestProposal.tenantFeedback.settlement.refundAmount)}. Owner
-            duyệt đơn và thực hiện hoàn từ sổ hoàn cọc đã đối chiếu, không chuyển khoản trùng.
+            Khách thuê đã đồng ý và có thể gửi yêu cầu hoàn cọc{' '}
+            {formatContractMoney(data.latestProposal.tenantFeedback.settlement.refundAmount)}. chủ
+            trọ duyệt đơn và thực hiện hoàn từ sổ hoàn cọc đã đối chiếu, không chuyển khoản trùng.
           </Alert>
         )}
-      {!latest && !inspection.isPending && !inspection.error && (
-        <Alert severity="info">
-          Staff chưa gửi kết quả kiểm kê. Yêu cầu trả phòng hiện tại:{' '}
-          {moveOut.data?.status ?? 'Chưa rõ'}.
-        </Alert>
+      {working && (
+        <>
+          {(workingDraft.error || preparation.error) && (
+            <Alert severity="error">
+              Không tải được dữ liệu đang kiểm tra:{' '}
+              {contractError(workingDraft.error ?? preparation.error)}
+            </Alert>
+          )}
+          <WorkingInspectionDetails
+            api={api}
+            id={id}
+            draft={workingDraft.data}
+            preparation={preparation.data}
+          />
+        </>
+      )}
+      {!working && !latest && !inspection.isPending && !inspection.error && (
+        <Typography color="text.secondary" variant="body2">
+          Chưa có kết quả kiểm kê.
+        </Typography>
       )}
       {latest && (
         <>
@@ -840,7 +1052,7 @@ export function OwnerMoveOutReviewPanel({
                       ? data
                         ? statusLabels[data.status]
                         : 'Đang tải'
-                      : 'Chờ Staff hoàn tất'
+                      : 'Chờ nhân viên hoàn tất'
                   }
                 />
               </Stack>
@@ -920,13 +1132,13 @@ export function OwnerMoveOutReviewPanel({
                                   <Chip
                                     size="small"
                                     color="error"
-                                    label="Tenant không đồng ý phí"
+                                    label="Khách thuê không đồng ý phí"
                                   />
                                 )}
                               </Stack>
                               {disputedReason && (
                                 <Alert severity="warning" sx={{ mt: 1 }}>
-                                  Lý do Tenant yêu cầu xem lại: {disputedReason}
+                                  Lý do khách thuê yêu cầu xem lại: {disputedReason}
                                 </Alert>
                               )}
                               <Stack
@@ -1067,8 +1279,8 @@ export function OwnerMoveOutReviewPanel({
                     </Stack>
                     {!completed && (
                       <Typography variant="caption" color="text.secondary">
-                        Dương: dự kiến còn tiền cọc hoàn lại. Âm: dự kiến Tenant cần trả thêm. Đã
-                        trừ các khoản thu hiện có trong sổ; nợ hóa đơn khác được đối chiếu riêng.
+                        Dương: dự kiến còn tiền cọc hoàn lại. Âm: dự kiến khách thuê cần trả thêm.
+                        Đã trừ các khoản thu hiện có trong sổ; nợ hóa đơn khác được đối chiếu riêng.
                         Chưa phải giao dịch thanh toán hay quyết toán chính thức.
                       </Typography>
                     )}
@@ -1079,8 +1291,8 @@ export function OwnerMoveOutReviewPanel({
                         }
                       >
                         {data.latestProposal.tenantFeedback.confirmed
-                          ? 'Tenant đã đồng ý đề xuất.'
-                          : 'Tenant yêu cầu xem xét lại.'}
+                          ? 'Khách thuê đã đồng ý đề xuất.'
+                          : 'Khách thuê yêu cầu xem xét lại.'}
                         {data.latestProposal.tenantFeedback.reason
                           ? ' ' + data.latestProposal.tenantFeedback.reason
                           : ''}
@@ -1097,7 +1309,7 @@ export function OwnerMoveOutReviewPanel({
                         <TextField
                           size="small"
                           label="Mô tả bổ sung (nếu có)"
-                          placeholder="Thông tin chung muốn gửi thêm cho Tenant…"
+                          placeholder="Thông tin chung muốn gửi thêm cho khách thuê…"
                           value={note}
                           onChange={(event) => setNote(event.target.value)}
                           multiline
@@ -1108,21 +1320,23 @@ export function OwnerMoveOutReviewPanel({
                         />
                         <ConfirmActionButton
                           variant="contained"
-                          title="Gửi đề xuất cho Tenant"
-                          description="Tenant sẽ xem từng khoản thu, lý do và chênh lệch sau khi Owner rà soát. Khi Tenant đã phản đối, đề xuất mới thay thế bản cũ để Tenant phản hồi lại. Việc gửi không xác nhận tiền đã thanh toán hoặc hoàn tiền."
+                          title="Gửi đề xuất cho khách thuê"
+                          description="Khách thuê sẽ xem từng khoản thu, lý do và chênh lệch sau khi chủ trọ rà soát. Khi khách thuê đã phản đối, đề xuất mới thay thế bản cũ để khách thuê phản hồi lại. Việc gửi không xác nhận tiền đã thanh toán hoặc hoàn tiền."
                           confirmationKey={
                             data.reference + ':' + JSON.stringify(entries) + ':' + note
                           }
                           disabled={!canSend}
                           onConfirm={send}
                         >
-                          {data.status === 'Disputed' ? 'Gửi lại Tenant duyệt' : 'Gửi Tenant duyệt'}
+                          {data.status === 'Disputed'
+                            ? 'Gửi lại khách thuê duyệt'
+                            : 'Gửi khách thuê duyệt'}
                         </ConfirmActionButton>
                       </>
                     )}
                     {locked && !!data.latestProposal?.note && (
                       <Box>
-                        <Typography variant="subtitle2">Mô tả đã gửi Tenant</Typography>
+                        <Typography variant="subtitle2">Mô tả đã gửi khách thuê</Typography>
                         <Typography variant="body2" sx={{ whiteSpace: 'pre-wrap' }}>
                           {data.latestProposal.note}
                         </Typography>

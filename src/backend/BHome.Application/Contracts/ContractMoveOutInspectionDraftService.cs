@@ -36,8 +36,27 @@ public sealed partial class ContractService
     public async Task<MoveOutInspectionDraftView> GetMoveOutInspectionDraftAsync(Guid id,
         CancellationToken token)
     {
-        var contract = await Load(id, [Roles.Staff], token);
+        var contract = await Load(id, [Roles.Owner, Roles.Staff], token);
+        if (user.IsInRole(Roles.Owner))
+            return MoveOutDraftView(await ReadOwnerMoveOutDraft(contract, token)
+                ?? throw ContractException.Missing());
         return MoveOutDraftView(await WorkingMoveOutDraft(contract, token));
+    }
+
+    // Read-only access for an authorized Owner. Never grant the Owner the
+    // Staff write path, initialize a draft, or expose stale submitted data.
+    private async Task<MoveOutInspectionDraftState?> ReadOwnerMoveOutDraft(
+        Contract contract, CancellationToken token)
+    {
+        if (handoverRepository is null || contract.Status != ContractStatus.Active)
+            return null;
+        var move = await repository.MoveOutAsync(contract.Id, token);
+        if (move?.Status != MoveOutStatus.Approved) return null;
+        var draft = await handoverRepository.MoveOutInspectionDraftAsync(contract.Id, token);
+        return draft is not null && draft.ContractId == contract.Id &&
+            draft.ContractSnapshotHash == contract.SnapshotHash && draft.Version > 0 &&
+            (move.InspectionStaffId is null || move.InspectionStaffId == draft.StaffUserId)
+            ? draft : null;
     }
 
     public Task<MoveOutInspectionDraftView> SaveMoveOutInspectionDraftAsync(Guid id,

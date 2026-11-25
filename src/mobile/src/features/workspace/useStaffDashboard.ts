@@ -29,7 +29,7 @@ export function useStaffDashboard() {
   });
   const tasks = useWorkspaceQuery<TaskPage<OperationalTask>>(
     scoped
-      ? `/api/v1/operational-tasks?page=1&pageSize=1&${locationQuery}&dueFrom=${today}T00:00:00%2B07:00&dueTo=${today}T23:59:59.999%2B07:00`
+      ? `/api/v1/operational-tasks?page=1&pageSize=1&${locationQuery}&category=Operational&dueFrom=${today}T00:00:00%2B07:00&dueTo=${today}T23:59:59.999%2B07:00`
       : null,
     { cache: queryPolicies.tasks },
   );

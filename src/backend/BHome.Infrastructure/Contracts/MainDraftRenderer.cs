@@ -11,7 +11,7 @@ internal sealed class MainDraftRenderer(IConfiguration configuration, TimeProvid
 {
     // The supplied template is available for demonstrations in every environment.
     public bool SigningReviewAvailable => true;
-    public int DocumentVersion => 2;
+    public int DocumentVersion => 3;
     public string TemplateHash
     {
         get { using var stream = typeof(MainDraftRenderer).Assembly.GetManifestResourceStream("BHome.Contracts.main-tenancy-original.docx") ?? throw new ContractException(503, "contract_template_not_found"); return Convert.ToHexString(System.Security.Cryptography.SHA256.HashData(stream)); }
@@ -49,13 +49,7 @@ internal sealed class MainDraftRenderer(IConfiguration configuration, TimeProvid
                 string? replacement = null;
                 if (original.StartsWith("ĐẠI DIỆN BÊN B") && original.Contains("ĐẠI DIỆN BÊN A"))
                 {
-                    var signatureFont = p.Elements(W + "r").Select(r => r.Element(W + "rPr")).FirstOrDefault(r => r is not null);
-                    XElement Cell(string title) => new(W + "tc", new XElement(W + "tcPr", new XElement(W + "tcW", new XAttribute(W + "w", "2500"), new XAttribute(W + "type", "pct"))),
-                        new XElement(W + "p", new XElement(W + "pPr", new XElement(W + "jc", new XAttribute(W + "val", "center")), new XElement(W + "keepNext")),
-                            new XElement(W + "r", signatureFont is null ? new XElement(W + "rPr", new XElement(W + "rFonts", new XAttribute(W + "ascii", "Times New Roman"), new XAttribute(W + "hAnsi", "Times New Roman"))) : new XElement(signatureFont), new XElement(W + "t", title))));
-                    var table = new XElement(W + "tbl", new XElement(W + "tblPr", new XElement(W + "tblW", new XAttribute(W + "w", "5000"), new XAttribute(W + "type", "pct"))),
-                        new XElement(W + "tr", new XElement(W + "trPr", new XElement(W + "cantSplit")), Cell("ĐẠI DIỆN BÊN B"), Cell("ĐẠI DIỆN BÊN A")),
-                        new XElement(W + "tr", new XElement(W + "trPr", new XElement(W + "cantSplit"), new XElement(W + "trHeight", new XAttribute(W + "val", "2800"), new XAttribute(W + "hRule", "atLeast"))), Cell(""), Cell("")));
+                    var table = ContractDocxLayout.SignatureTable("ĐẠI DIỆN BÊN B", "ĐẠI DIỆN BÊN A");
                     p.ReplaceWith(table);
                     table.ElementsAfterSelf().TakeWhile(e => e.Name == W + "p" && !e.Descendants(W + "sectPr").Any() &&
                         string.IsNullOrWhiteSpace(string.Concat(e.Descendants(W + "t").Select(n => n.Value)))).ToArray().Remove();
@@ -103,6 +97,7 @@ internal sealed class MainDraftRenderer(IConfiguration configuration, TimeProvid
                 }
             }
             if (mapped != 16) throw new ContractException(503, "contract_template_slots_changed");
+            ContractDocxLayout.Apply(xml);
             using var stream = entry.Open(); stream.SetLength(0); xml.Save(stream, SaveOptions.DisableFormatting);
         }
         return Task.FromResult(output.ToArray());

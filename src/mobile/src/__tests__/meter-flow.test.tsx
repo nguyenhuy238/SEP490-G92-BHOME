@@ -15,7 +15,7 @@ const state = vi.hoisted(() => ({
 }));
 const api = { request: state.request, image: state.image, json: state.json };
 vi.mock('../lib/SessionProvider', () => ({
-  useSession: () => ({ api, session: { roles: [state.role] } }),
+  useSession: () => ({ api, session: { userId: 'staff-1', roles: [state.role] } }),
 }));
 vi.mock('../features/workspace/WorkspaceProvider', () => ({
   useWorkspace: () => ({ staffLocationId: 'location-a' }),
@@ -35,6 +35,13 @@ vi.mock('react-native', () => ({
   View: ({ children, style }: { children?: React.ReactNode; style?: React.CSSProperties }) => (
     <div style={style}>{children}</div>
   ),
+  Image: ({
+    source,
+    accessibilityLabel,
+  }: {
+    source: { uri: string };
+    accessibilityLabel: string;
+  }) => <img src={source.uri} alt={accessibilityLabel} />,
   StyleSheet: { create: (s: unknown) => s },
   AppState: { addEventListener: () => ({ remove: vi.fn() }) },
   BackHandler: {
@@ -199,7 +206,7 @@ vi.mock('../components/CameraCapture', () => ({
     );
   },
 }));
-import MeterScreen from '../app/meter';
+import MeterScreen, { MeterTaskScreen } from '../app/meter';
 import type { MeterTask } from '../lib/api';
 import type { ConfirmedReading } from '../../../../packages/client-core/src/meter';
 const electric: MeterTask = {
@@ -377,6 +384,26 @@ it('allows manual correction after OCR failure when evidence was uploaded', asyn
   await save();
   expect(screen.getByText('121 kWh')).toBeTruthy();
 });
+it('shows only the concise OCR failure notice for a fallback proposal', async () => {
+  state.image.mockImplementation(async (path: string) =>
+    path.includes('/ocr/')
+      ? {
+          ...proposal,
+          isFallback: true,
+          proposedFields: { reading: '' },
+          warnings: ['ocr_unavailable'],
+        }
+      : { id: 'evidence-electric' },
+  );
+  await overview();
+  await capture();
+  expect(screen.getByText(/Không nhận diện được chỉ số/)).toBeTruthy();
+  expect(screen.queryByText(/OCR chưa đọc được/)).toBeNull();
+  expect(screen.queryByText(/Hãy kiểm tra đúng phòng, mã đồng hồ/)).toBeNull();
+  fireEvent.change(screen.getByLabelText('Chỉ số xác nhận (kWh)'), { target: { value: '121' } });
+  await save();
+  expect(screen.getByText('121 kWh')).toBeTruthy();
+});
 it.each(['', '-2', 'abc', '120.123', '99'])(
   'blocks invalid or decreased reading %s',
   async (value) => {
@@ -470,6 +497,72 @@ it('shows persisted completed details as read-only and returns to the same overv
   fireEvent.click(screen.getByRole('button', { name: 'Về tổng quan phòng' }));
   await screen.findByText('1/2 đồng hồ đã ghi');
   expect(state.json).toHaveBeenCalledTimes(1);
+});
+it.each([
+  [electric, '22.0000', '22 kWh', 'Ảnh minh chứng điện'],
+  [water, '15.2500', '15,25 m³', 'Ảnh minh chứng nước'],
+] as const)(
+  'shows the captured evidence for a confirmed embedded utility',
+  async (meter, value, display, label) => {
+    const readingId = 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa';
+    serverTasks = [{ ...meter, status: 2, confirmedReadingId: readingId }];
+    serverReadings[readingId] = {
+      id: readingId,
+      taskId: meter.id,
+      confirmedValue: value,
+      previousValue: meter.previousValue,
+      consumption: null,
+      status: 1,
+      confirmedAt: '2026-11-04T01:00:00Z',
+    };
+    const original = state.request.getMockImplementation()!;
+    state.request.mockImplementation(async (...args: unknown[]) => {
+      if (String(args[0]).endsWith('/evidence'))
+        return new Uint8Array([137, 80, 78, 71, 13, 10, 26, 10]);
+      return original(...args);
+    });
+    render(<MeterTaskScreen embedded taskId={meter.id} onReturn={vi.fn()} />);
+    await screen.findByText(`Đã chốt: ${display}`);
+    const photo = await screen.findByRole('img', { name: label });
+    expect(photo.getAttribute('src')).toBe('data:image/png;base64,iVBORw0KGgo=');
+    expect(state.request).toHaveBeenCalledWith(
+      `/api/v1/capture/readings/${readingId}/evidence`,
+      expect.objectContaining({ signal: expect.any(AbortSignal) }),
+      'bytes',
+    );
+    expect(state.image).not.toHaveBeenCalled();
+    expect(state.json).not.toHaveBeenCalled();
+  },
+);
+it('preserves the confirmed reading on evidence access failure and retries only the photo', async () => {
+  const readingId = 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa';
+  serverTasks = [{ ...electric, status: 2, confirmedReadingId: readingId }];
+  serverReadings[readingId] = {
+    id: readingId,
+    taskId: electric.id,
+    confirmedValue: '22.0000',
+    previousValue: null,
+    consumption: null,
+    status: 1,
+    confirmedAt: '2026-11-04T01:00:00Z',
+  };
+  const original = state.request.getMockImplementation()!;
+  const photoRequest = vi
+    .fn()
+    .mockRejectedValueOnce(Object.assign(Error('forbidden'), { status: 403 }))
+    .mockResolvedValueOnce(new Uint8Array([255, 216, 255]));
+  state.request.mockImplementation(async (...args: unknown[]) =>
+    String(args[0]).endsWith('/evidence') ? photoRequest() : original(...args),
+  );
+  render(<MeterTaskScreen embedded taskId={electric.id} onReturn={vi.fn()} />);
+  await screen.findByText('Đã chốt: 22 kWh');
+  const retry = await screen.findByRole('button', { name: 'Thử tải lại ảnh' });
+  expect(screen.queryByRole('img', { name: 'Ảnh minh chứng điện' })).toBeNull();
+  fireEvent.click(retry);
+  const photo = await screen.findByRole('img', { name: 'Ảnh minh chứng điện' });
+  expect(photo.getAttribute('src')).toBe('data:image/jpeg;base64,/9j/');
+  expect(photoRequest).toHaveBeenCalledTimes(2);
+  expect(state.json).not.toHaveBeenCalled();
 });
 it('does not show a completed room or enable capture when a persisted reading cannot be loaded', async () => {
   const task = serverTasks[0]!;

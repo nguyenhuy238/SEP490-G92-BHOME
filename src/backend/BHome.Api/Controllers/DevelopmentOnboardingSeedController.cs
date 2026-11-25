@@ -6,9 +6,9 @@ using Microsoft.AspNetCore.RateLimiting;
 
 namespace BHome.Api.Controllers;
 
-// Development-only endpoint; all persistence, scope, and transaction checks
+// Owner-only demo endpoint; all persistence, scope, and transaction checks
 // live in DevelopmentOnboardingSeedService, not in the API controller.
-[ApiController, Route("api/v1/development/onboarding-seed"), Authorize(Roles = Roles.Staff)]
+[ApiController, Route("api/v1/development/onboarding-seed"), Authorize(Roles = Roles.Owner)]
 [ResponseCache(NoStore = true, Location = ResponseCacheLocation.None)]
 [EnableRateLimiting("Auth")]
 public sealed class DevelopmentOnboardingSeedController(DevelopmentOnboardingSeedService seed) : ControllerBase

@@ -93,6 +93,60 @@ public sealed class OperationalTaskApiTests(CaptureFixture fixture) : IClassFixt
         Assert.Empty((await List(start.AddDays(1), end.AddDays(1))).Items);
     }
     [Fact]
+    public async Task ActionableQueueFiltersRoomAndPrioritizesInProgressBeforePagination()
+    {
+        var w = await Setup();
+        Guid roomId;
+        Guid otherRoomId;
+        await using (var scope = fixture.Factory.Services.CreateAsyncScope())
+        {
+            var db = scope.ServiceProvider.GetRequiredService<BHomePersistenceContext>();
+            var room = new BHome.Domain.PropertyManagement.Room { LocationId = w.Location, RoomNumber = "QUEUE-101", Capacity = 2 };
+            var other = new BHome.Domain.PropertyManagement.Room { LocationId = w.Location, RoomNumber = "QUEUE-102", Capacity = 2 };
+            db.AddRange(room, other);
+            await db.SaveChangesAsync();
+            roomId = room.Id;
+            otherRoomId = other.Id;
+        }
+        async Task<TaskView> Create(Guid room, int days, string title)
+        {
+            var input = Input(w, false);
+            return await Success<TaskView>(await Send(w.Owner, Base, input with
+            {
+                Work = input.Work with { Title = title, DueAt = DateTimeOffset.UtcNow.AddDays(days), Target = new TaskTarget(RoomId: room) }
+            }));
+        }
+        var oldest = await Create(roomId, 10, "First arrival");
+        var newer = await Create(roomId, 1, "Second arrival");
+        newer = await Action(w.Staff, newer, "start");
+        var laterAssigned = await Create(roomId, 1, "Third arrival");
+        var laterStarted = await Create(roomId, 2, "Fourth arrival");
+        laterStarted = await Action(w.Staff, laterStarted, "start");
+        var submitted = await Create(roomId, 2, "Waiting review");
+        submitted = await Action(w.Staff, submitted, "start");
+        await Action(w.Staff, submitted, "submit", "Synthetic result");
+        var completed = await Create(roomId, 3, "Completed work");
+        completed = await Action(w.Staff, completed, "start");
+        completed = await Action(w.Staff, completed, "submit", "Synthetic result");
+        await Action(w.Owner, completed, "verify");
+        var cancelled = await Create(roomId, 4, "Cancelled work");
+        await Action(w.Owner, cancelled, "cancel", "Synthetic cancellation");
+        await Create(otherRoomId, 5, "Another room");
+        async Task<TaskPage<TaskView>> List(int page) =>
+            await Success<TaskPage<TaskView>>(await w.Staff.Client.GetAsync(
+                $"{Base}?locationId={w.Location}&roomId={roomId}&actionableOnly=true&page={page}&pageSize=1"));
+        var first = await List(1);
+        var second = await List(2);
+        Assert.Equal(4, first.TotalCount);
+        Assert.Equal(4, second.TotalCount);
+        Assert.Equal(newer.Id, Assert.Single(first.Items).Id);
+        Assert.Equal(laterStarted.Id, Assert.Single(second.Items).Id);
+        Assert.Equal(oldest.Id, Assert.Single((await List(3)).Items).Id);
+        Assert.Equal(laterAssigned.Id, Assert.Single((await List(4)).Items).Id);
+        Assert.Empty((await List(5)).Items);
+    }
+
+    [Fact]
     public async Task CompleteWorkflowPersistsPrivateEvidenceNotificationsReworkAndOwnerVerification()
     {
         var w = await Setup(); var task = await Success<TaskView>(await Send(w.Owner, Base, Input(w)));

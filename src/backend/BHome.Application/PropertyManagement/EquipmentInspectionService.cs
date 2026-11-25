@@ -1,3 +1,4 @@
+using BHome.Application.Common;
 using BHome.Application.IdentityAccess;
 using BHome.Application.IncidentMaintenance;
 using BHome.Application.StaffOperations;
@@ -18,7 +19,7 @@ public sealed class EquipmentInspectionService(ISetupWorkspaceStore store, ICurr
         return await Store.TransactionAsync(asset.LocationId, async () =>
         {
             var previous = await Store.GetAsync(id, "EquipmentInspectionSchedule", t);
-            if (previous is null && input.StartsOn < BHome.Application.Billing.BillingAutomationDates.BusinessDate(clock.GetUtcNow()))
+            if (previous is null && input.StartsOn < clock.BusinessToday())
                 throw new PropertyException(400, "historical_inspection_schedule_not_allowed");
             if (previous is not null && (Read<InspectionScheduleWrite>(previous).AssetId != assetId || Read<InspectionScheduleWrite>(previous) with { Enabled = input.Enabled, ExpectedVersion = input.ExpectedVersion } != input))
                 throw new PropertyException(409, "inspection_schedule_immutable_create_replacement");

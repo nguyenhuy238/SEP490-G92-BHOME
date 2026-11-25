@@ -56,6 +56,7 @@ import { ConfirmDialog } from '../common/PortalUI';
 import type { ResourceKind } from '../../types/portal';
 import { NotificationBell } from '../../features/notifications/NotificationBell';
 import { FinanceWorkflowStrip } from '../../features/finance/FinanceWorkflowStrip';
+import { DemoClockWorkspace } from '../../features/demo/DemoClockPanel';
 
 const iconMap: Record<string, typeof Building2> = {
   dashboard: LayoutDashboard,
@@ -586,8 +587,22 @@ export function AppShell() {
             boxSizing: 'border-box',
           }}
         >
-          <FinanceWorkflowStrip pathname={location.pathname} />
-          <Outlet />
+          {((import.meta.env.DEV && import.meta.env.MODE !== 'test') ||
+            (import.meta.env.DEV && import.meta.env.VITE_DEMO_CLOCK_ENABLED === 'true') ||
+            ['Staging', 'Production'].includes(
+              import.meta.env.VITE_DEPLOYMENT_ENVIRONMENT ?? '',
+            )) &&
+          !isMockMode ? (
+            <DemoClockWorkspace>
+              <FinanceWorkflowStrip pathname={location.pathname} />
+              <Outlet />
+            </DemoClockWorkspace>
+          ) : (
+            <>
+              <FinanceWorkflowStrip pathname={location.pathname} />
+              <Outlet />
+            </>
+          )}
         </Box>
       </Box>
       <ConfirmDialog
