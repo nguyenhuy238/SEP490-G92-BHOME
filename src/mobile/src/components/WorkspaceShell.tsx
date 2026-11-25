@@ -10,13 +10,7 @@ import {
   useWindowDimensions,
   View,
 } from 'react-native';
-import {
-  ActivityIndicator,
-  Badge,
-  IconButton,
-  Text,
-  TouchableRipple,
-} from 'react-native-paper';
+import { ActivityIndicator, Badge, IconButton, Text, TouchableRipple } from 'react-native-paper';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { StatusBar } from 'expo-status-bar';
 import { router, useFocusEffect, useNavigation } from 'expo-router';

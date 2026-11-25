@@ -1,17 +1,7 @@
 import { TextField } from '../../../components/common/ValidatedForm';
 import { ResourcePage } from '../../../components/common/ResourcePage';
 import { useState } from 'react';
-import {
-  Alert,
-  Box,
-  Button,
-  MenuItem,
-  Paper,
-  Stack,
-  Tab,
-  Tabs,
-  Typography,
-} from '@mui/material';
+import { Alert, Box, Button, MenuItem, Paper, Stack, Tab, Tabs, Typography } from '@mui/material';
 import { useQuery } from '@tanstack/react-query';
 import { useNavigate } from 'react-router';
 import { useAuth } from '../../../../../../packages/client-core/src/auth';
@@ -140,28 +130,67 @@ export function LiveNotificationsPage() {
             </TextField>
           </FilterToolbar>
           {(actions.error || list.error || count.error) && (
-            <Alert severity="error" action={list.error ? <Button onClick={() => void list.refetch()}>Thử lại</Button> : undefined}>
+            <Alert
+              severity="error"
+              action={
+                list.error ? (
+                  <Button onClick={() => void list.refetch()}>Thử lại</Button>
+                ) : undefined
+              }
+            >
               {actions.error || invoiceError(list.error ?? count.error)}
             </Alert>
           )}
-          <Paper variant="outlined" sx={{ display: 'grid', gridTemplateColumns: { xs: 'minmax(0, 1fr)', md: 'minmax(290px, 38%) minmax(0, 1fr)' }, overflow: 'hidden' }}>
-            <Box sx={{ display: { xs: detail ? 'none' : 'block', md: 'block' }, maxHeight: { md: '65dvh' }, overflowY: 'auto', borderRight: { md: '1px solid' }, borderColor: { md: 'divider' } }}>
+          <Paper
+            variant="outlined"
+            sx={{
+              display: 'grid',
+              gridTemplateColumns: {
+                xs: 'minmax(0, 1fr)',
+                md: 'minmax(290px, 38%) minmax(0, 1fr)',
+              },
+              overflow: 'hidden',
+            }}
+          >
+            <Box
+              sx={{
+                display: { xs: detail ? 'none' : 'block', md: 'block' },
+                maxHeight: { md: '65dvh' },
+                overflowY: 'auto',
+                borderRight: { md: '1px solid' },
+                borderColor: { md: 'divider' },
+              }}
+            >
               {list.isPending && <NotificationSkeleton />}
               {!list.error && list.data?.items.length === 0 && (
                 <Typography color="text.secondary" sx={{ p: 3, textAlign: 'center' }}>
-                  {unread === 'true' && !category ? 'Bạn đã đọc tất cả thông báo.' : 'Không có thông báo phù hợp.'}
+                  {unread === 'true' && !category
+                    ? 'Bạn đã đọc tất cả thông báo.'
+                    : 'Không có thông báo phù hợp.'}
                 </Typography>
               )}
               {!list.error && !!list.data?.items.length && (
-                <NotificationRows items={list.data.items} busy={actions.busy} selectedId={detail?.id}
-                  onOpen={openItem} onDetail={viewDetail} onRead={(item) => void actions.read(item)} />
+                <NotificationRows
+                  items={list.data.items}
+                  busy={actions.busy}
+                  selectedId={detail?.id}
+                  onOpen={openItem}
+                  onDetail={viewDetail}
+                  onRead={(item) => void actions.read(item)}
+                />
               )}
             </Box>
             <Box sx={{ display: { xs: detail ? 'block' : 'none', md: 'block' }, minWidth: 0 }}>
               {detail ? (
                 <>
-                  <Button sx={{ m: 1.5, mb: 0 }} size="small" onClick={() => setDetail(null)}>Về danh sách</Button>
-                  <NotificationDetail item={detail} busy={actions.busy} onOpen={() => void actions.open(detail)} />
+                  <Button sx={{ m: 1.5, mb: 0 }} size="small" onClick={() => setDetail(null)}>
+                    Về danh sách
+                  </Button>
+                  <NotificationDetail
+                    item={detail}
+                    busy={actions.busy}
+                    onOpen={() => void actions.open(detail)}
+                  />
                 </>
               ) : (
                 <Typography color="text.secondary" sx={{ px: 3, py: 4 }}>

@@ -385,8 +385,13 @@ export function StaffContractsList({
                     </Text>
                     {contract.kind === 'Holding' && (
                       <View style={{ gap: 3 }}>
-                        <Text variant="bodyMedium">{contract.holdingCustomer?.fullName || 'Chưa có thông tin khách hàng'}</Text>
-                        <Text variant="labelSmall" style={ui.muted}>CCCD: {contract.holdingCustomer?.maskedCitizenNumber || 'Chưa có thông tin'}</Text>
+                        <Text variant="bodyMedium">
+                          {contract.holdingCustomer?.fullName || 'Chưa có thông tin khách hàng'}
+                        </Text>
+                        <Text variant="labelSmall" style={ui.muted}>
+                          CCCD:{' '}
+                          {contract.holdingCustomer?.maskedCitizenNumber || 'Chưa có thông tin'}
+                        </Text>
                       </View>
                     )}
                     <View style={{ alignSelf: 'flex-start' }}>

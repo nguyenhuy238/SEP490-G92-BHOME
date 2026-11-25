@@ -155,14 +155,18 @@ export function HoldingContractFlow({
         />
         <View style={holdingPaymentStyles.customer}>
           <Text style={holdingPaymentStyles.referenceLabel}>Người giữ chỗ</Text>
-          <Text style={holdingPaymentStyles.customerName}>{c.holdingCustomer?.fullName || 'Chưa có thông tin khách hàng'}</Text>
+          <Text style={holdingPaymentStyles.customerName}>
+            {c.holdingCustomer?.fullName || 'Chưa có thông tin khách hàng'}
+          </Text>
           <ReadOnly label="Số CCCD" value={c.holdingCustomer?.maskedCitizenNumber} />
         </View>
         <ReadOnly
           label="Thời hạn giữ chỗ"
           value={`${displayContractDate(c.startDate)} – ${displayContractDate(c.endDate)}`}
         />
-        {step < 7 && <ReadOnly label="Tiền giữ chỗ" value={formatContractMoney(c.requiredDeposit)} />}
+        {step < 7 && (
+          <ReadOnly label="Tiền giữ chỗ" value={formatContractMoney(c.requiredDeposit)} />
+        )}
       </HoldingSectionCard>
       {c.isDevelopmentDemo && (
         <Text style={ui.red}>Hợp đồng minh họa · Không dùng để ký hoặc thanh toán thực tế.</Text>
@@ -725,7 +729,7 @@ function HoldingPayment({
   const testPayment = (qr?.mode ?? c.paymentMode) === 'Test';
   return (
     <>
-        <HoldingSectionCard title={success ? 'Giữ chỗ thành công' : 'Tiền giữ chỗ'}>
+      <HoldingSectionCard title={success ? 'Giữ chỗ thành công' : 'Tiền giữ chỗ'}>
         <HoldingStatusBadge
           label={
             success
@@ -748,16 +752,16 @@ function HoldingPayment({
           <>
             <View style={holdingPaymentStyles.amountBlock}>
               <Text style={holdingPaymentStyles.referenceLabel}>Tổng tiền giữ chỗ</Text>
-              <Text style={holdingPaymentStyles.amount}>{formatContractMoney(data.deposit.required)}</Text>
+              <Text style={holdingPaymentStyles.amount}>
+                {formatContractMoney(data.deposit.required)}
+              </Text>
             </View>
             <ReadOnly label="Đã xác minh" value={formatContractMoney(data.deposit.verified)} />
             <ReadOnly label="Còn thiếu" value={formatContractMoney(data.deposit.remaining)} />
             {data.deposit.requiresManualReview && (
               <Text style={ui.red}>Cần Owner kiểm tra và đối chiếu giao dịch.</Text>
             )}
-            {success && (
-              <Text style={ui.green}>Phòng đã được giữ chỗ cho khách hàng.</Text>
-            )}
+            {success && <Text style={ui.green}>Phòng đã được giữ chỗ cho khách hàng.</Text>}
             {success && reference && <ReadOnly label="Tham chiếu tiền cọc" value={reference} />}
           </>
         )}

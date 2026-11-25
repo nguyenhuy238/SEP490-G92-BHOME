@@ -135,7 +135,9 @@ export function CameraCapture({
     setRequestingPermission(true);
     try {
       const access = permissionAccess.current;
-      const result = access.permission?.granted ? access.permission : await access.requestPermission();
+      const result = access.permission?.granted
+        ? access.permission
+        : await access.requestPermission();
       const allowed = result.granted;
       if (!alive.current || epoch !== generation.current) return;
       if (!allowed) {

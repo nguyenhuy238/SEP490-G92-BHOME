@@ -344,7 +344,10 @@ it('opens a Holding draft with metadata in the Holding flow without Main handove
   state.contract.status = 'Draft';
   state.contract.onboardingDraft = true;
   state.contract.signingMode = 'INTERNAL_OTP_DRAWN';
-  state.contract.holdingCustomer = { fullName: 'Synthetic Holding Customer', maskedCitizenNumber: '********0001' };
+  state.contract.holdingCustomer = {
+    fullName: 'Synthetic Holding Customer',
+    maskedCitizenNumber: '********0001',
+  };
   render(<ContractScreen />);
   expect(screen.getByText('Bản nháp chờ gửi Owner ký')).toBeTruthy();
   expect(screen.getByText('Synthetic Holding Customer')).toBeTruthy();
