@@ -59,7 +59,7 @@ public sealed partial class Compact24ExpenseTests
         Assert.Equal("Complete", closed.HistoricalOccupancy!.Status);
         Assert.Equal(0, closed.HistoricalOccupancy.RentableRoomDays);
         Assert.Null(closed.HistoricalOccupancy.OccupancyRate);
-        Assert.Equal(report.Total, closed.Total);
+        Assert.Equal(System.Text.Json.JsonSerializer.Serialize(report.Total), System.Text.Json.JsonSerializer.Serialize(closed.Total));
         Assert.True(await db.IsSchemaReadyAsync());
     }
 

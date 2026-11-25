@@ -132,12 +132,50 @@ public sealed partial class Compact24RefundTests
             var sourceRoute = $"/api/v1/payment-transactions/{sourceId}/refunds";
             var source = await Value<RefundSource>(await owner.GetAsync(sourceRoute));
             Assert.Equal(20000, source.AvailableAmount); var person = Assert.Single(source.Beneficiaries);
+            Assert.Equal(20000, source.EligibleReceiptRefundAmount);
+            const string reportRoute = "/api/v1/financial-reports?from=2000-01-01&to=2100-12-31";
+            const string bankRoute = "/api/v1/financial-reports/bank-receipt-sources?from=2000-01-01&to=2100-12-31&pageSize=1";
+            async Task AssertReconciliation(string refunded)
+            {
+                var finance = await Value<FinancialReport>(await owner.GetAsync(reportRoute));
+                Assert.Equal("100000", finance.Total.Management!.Revenue);
+                Assert.Equal("100000", finance.Total.Management.ActualBusinessCollections);
+                Assert.Equal("120000", finance.ReceiptReconciliation!.VerifiedBankReceipts);
+                Assert.Equal("20000", finance.ReceiptReconciliation.UnallocatedAtReview);
+                Assert.Equal(refunded, finance.ReceiptReconciliation.ExcessRefundedInPeriod);
+                var bank = await Value<BankReceiptSourcePage>(await owner.GetAsync(bankRoute));
+                Assert.Equal(1, bank.Total);
+                Assert.Equal("120000", bank.TotalReceived);
+                Assert.Equal("20000", bank.TotalGrossUnallocated);
+                var receipt = Assert.Single(bank.Items);
+                Assert.Equal(sourceId, receipt.Id);
+                Assert.Equal("100000", receipt.Allocated);
+                Assert.Equal("20000", receipt.GrossUnallocated);
+                var next = await Value<BankReceiptSourcePage>(await owner.GetAsync(bankRoute + "&page=2"));
+                Assert.Empty(next.Items);
+                Assert.Equal(bank.TotalReceived, next.TotalReceived);
+                Assert.Equal(bank.TotalGrossUnallocated, next.TotalGrossUnallocated);
+                var refunds = await Value<BankRefundSourcePage>(await owner.GetAsync("/api/v1/financial-reports/bank-refund-sources?from=2000-01-01&to=2100-12-31"));
+                Assert.Equal(refunded, refunds.TotalAmount);
+                if (refunded == "0") Assert.Empty(refunds.Items);
+                else
+                {
+                    var refund = Assert.Single(refunds.Items);
+                    Assert.Equal(sourceId, refund.PaymentId);
+                    Assert.Equal(refunded, refund.Amount);
+                    Assert.Equal("SYN-REFUND", refund.Reference);
+                }
+            }
+            await AssertReconciliation("0");
+            Assert.Equal(HttpStatusCode.BadRequest, (await owner.GetAsync(bankRoute + "&locationId=" + Guid.NewGuid())).StatusCode);
             var input = new RefundInput(person.Id, 20000, "Synthetic excess refund", true); var key = Guid.NewGuid();
             var row = await Value<RefundView>(await Post(owner, sourceRoute, input, key));
             Assert.Equal(row.Id, (await Value<RefundView>(await Post(owner, sourceRoute, input, key))).Id);
             Assert.Equal(HttpStatusCode.Conflict, (await Post(owner, sourceRoute, input with { Amount = 1 }, key)).StatusCode);
             Assert.Equal(HttpStatusCode.Conflict, (await Post(owner, sourceRoute, input, Guid.NewGuid())).StatusCode);
             Assert.Equal(0, (await Value<RefundSource>(await owner.GetAsync(sourceRoute))).AvailableAmount);
+            Assert.Equal(0, (await Value<RefundSource>(await owner.GetAsync(sourceRoute))).EligibleReceiptRefundAmount);
+            await AssertReconciliation("0");
             var rejected = await Value<RefundView>(await Post(owner, $"{Root}/{row.Id}/decision", new RefundDecision(1, false, "Synthetic reject", true), Guid.NewGuid()));
             Assert.Equal("REJECTED", rejected.Status);
             Assert.Equal(20000, (await Value<RefundSource>(await owner.GetAsync(sourceRoute))).AvailableAmount);
@@ -156,6 +194,8 @@ public sealed partial class Compact24RefundTests
             Assert.Equal(bytes, await owner.GetByteArrayAsync($"{Root}/{row.Id}/evidence"));
             var after = await Value<RefundSource>(await owner.GetAsync(sourceRoute));
             Assert.Equal(20000, after.RefundedAmount); Assert.Equal(0, after.ReservedAmount); Assert.Equal(0, after.AvailableAmount);
+            Assert.Equal(0, after.EligibleReceiptRefundAmount);
+            await AssertReconciliation("20000");
             await using var scope = fixture.Capture.Factory.Services.CreateAsyncScope(); var db = scope.ServiceProvider.GetRequiredService<Compact24DbContext>();
             Assert.Equal(100000, (await db.Set<Invoice>().SingleAsync()).Total);
             Assert.Equal(100000, (await db.Set<PaymentAllocation>().SingleAsync()).Amount);

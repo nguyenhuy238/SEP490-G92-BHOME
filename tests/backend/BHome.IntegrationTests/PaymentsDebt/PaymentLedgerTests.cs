@@ -26,7 +26,7 @@ public sealed partial class PaymentLedgerTests(CaptureFixture fixture) : IClassF
         await using var scope = fixture.Factory.Services.CreateAsyncScope();
         return await work(new PaymentService(scope.ServiceProvider.GetRequiredService<IPaymentRepository>(), new User(actor, role), TimeProvider.System));
     }
-    private async Task<Workspace> Setup(bool sharedContract = false)
+    private async Task<Workspace> Setup(bool sharedContract = false, decimal rent = 100000)
     {
         await using var scope = fixture.Factory.Services.CreateAsyncScope(); var db = scope.ServiceProvider.GetRequiredService<BHomePersistenceContext>();
         var manager = scope.ServiceProvider.GetRequiredService<UserManager<ApplicationUser>>();
@@ -62,7 +62,7 @@ public sealed partial class PaymentLedgerTests(CaptureFixture fixture) : IClassF
                 RepresentativeResidentId = resident.Id,
                 StartDate = period.AddMonths(-1),
                 EndDate = period.AddMonths(12),
-                MonthlyRent = 100000,
+                MonthlyRent = rent,
                 RequiredDeposit = 0,
                 Status = ContractStatus.Active,
                 ActivatedAt = DateTimeOffset.UtcNow,
@@ -81,12 +81,12 @@ public sealed partial class PaymentLedgerTests(CaptureFixture fixture) : IClassF
             BillingPeriod = period,
             RepresentativeContractId = contracts[0].Id,
             RepresentativeTenantUserId = tenants[0],
-            Total = 100000,
+            Total = rent,
             CreatedByUserId = owner,
             ScheduledFinalDate = period,
             DueDate = today.AddDays(-1),
             ScheduleSnapshot = "{}",
-            Lines = [new InvoiceLine { Category = ChargeCategory.Rent, ChargeCode = "RENT", Name = "Synthetic rent", Rate = 100000, Quantity = 1, Amount = 100000,
+            Lines = [new InvoiceLine { Category = ChargeCategory.Rent, ChargeCode = "RENT", Name = "Synthetic rent", Rate = rent, Quantity = 1, Amount = rent,
                 OccupiedDays = 30, PeriodDays = 30, RateDate = period }],
             Recipients = tenants.Select(t => new InvoiceRecipient { TenantUserId = t }).ToList()
         };

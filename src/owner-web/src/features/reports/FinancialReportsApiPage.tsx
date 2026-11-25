@@ -20,6 +20,7 @@ import {
   financeError,
   formatFinanceMoney,
   type FinanceTotals,
+  type FinanceSourceKind,
   type ReportFilter,
   type SettlementFinanceSources,
 } from '../../../../../packages/client-core/src/finance';
@@ -27,28 +28,43 @@ import { displayContractDate } from '../../../../../packages/client-core/src/con
 import { FilterToolbar, KPIGrid, PageHeader } from '../../components/common/PortalUI';
 import { OptionPicker } from '../../components/common/OptionPicker';
 import { FinancialAmountChart } from './FinancialAmountChart';
+import { FinancialTrendChart } from './FinancialTrendChart';
 import { useFinanceApi } from '../expenses/useFinanceApi';
 import { downloadFinance, reportCsv } from '../../services/financeExport';
 import { formatInstant } from '../../../../../packages/client-core/src/localization';
 import { financeMonthPeriod } from '../finance/monthPeriods';
+import { useFinanceSearch } from '../finance/financeScope';
+import { ManagementFinanceSummary } from './ManagementFinanceSummary';
+import { managementMoney } from '../finance/managementMoney';
+import { ExpenseSourceDetails } from './ExpenseSourceDetails';
+import { DepreciationSourceDetails } from './DepreciationSourceDetails';
+import { LocationPerformanceTable } from './LocationPerformanceTable';
+import { FinanceLedgerDetails } from './FinanceLedgerDetails';
+import { sourceLabels } from './financeSourceLabels';
+import { BankReceiptSourceDetails, BankRefundSourceDetails } from './BankReceiptSourceDetails';
 
 export function FinancialReportsApiPage() {
   const api = useFinanceApi();
   const { session } = useAuth();
+  const initialLocation = useFinanceSearch().get('locationId') ?? '';
   const [from, setFrom] = useState(() => financeMonthPeriod(-1).from),
     [to, setTo] = useState(() => financeMonthPeriod(-1).to),
-    [location, setLocation] = useState('');
+    [location, setLocation] = useState(initialLocation);
   // Open with the latest completed month so owners can read the report immediately.
   // Query values still come from the API, never from page-local estimates.
   const [filter, setFilter] = useState<ReportFilter | null>(() => ({
     from: financeMonthPeriod(-1).from,
     to: financeMonthPeriod(-1).to,
-    locationId: undefined,
+    locationId: initialLocation || undefined,
+    includeComparison: true,
   }));
-  const [reportScope, setReportScope] = useState('Toàn chuỗi');
+  const [reportScope, setReportScope] = useState(initialLocation ? 'Cơ sở đã chọn' : 'Toàn chuỗi');
   const [room, setRoom] = useState('');
   const [advancedFiltersOpen, setAdvancedFiltersOpen] = useState(false);
   const [dateError, setDateError] = useState(false);
+  const [expenseDetailsOpen, setExpenseDetailsOpen] = useState(false);
+  const [categoryDetails, setCategoryDetails] = useState<string | null>(null);
+  const [ledgerKind, setLedgerKind] = useState<FinanceSourceKind | null>(null);
   const locations = useQuery({
     queryKey: ['finance-locations', session?.userId],
     queryFn: ({ signal }) => api.locations(signal),
@@ -69,6 +85,9 @@ export function FinancialReportsApiPage() {
       return;
     }
     setDateError(false);
+    setExpenseDetailsOpen(false);
+    setCategoryDetails(null);
+    setLedgerKind(null);
     setReportScope(
       [
         location
@@ -83,10 +102,12 @@ export function FinancialReportsApiPage() {
       from: fromValue,
       to: toValue,
       locationId: location || undefined,
+      includeComparison: true,
       ...(room ? { roomId: room } : {}),
     });
   }
   const value = report.data;
+  const cashCapital = value?.total.management?.cashCapital;
   const filtersChanged =
     filter !== null &&
     (from !== filter.from ||
@@ -104,7 +125,9 @@ export function FinancialReportsApiPage() {
     refund_classification_required:
       'Có khoản hoàn tiền cần phân loại trước khi tính dòng tiền và hoàn vốn.',
     initial_investment_required: 'Chưa có vốn đầu tư để tính tỷ lệ thu hồi.',
-    full_month_baseline_required: 'Chọn khoảng gồm các tháng trọn vẹn để ước tính hoàn vốn.',
+    investment_basis_required:
+      'Chưa đủ nguyên giá tài sản để tính vốn còn lại và tiến độ thu hồi. Bổ sung giá mua tại cơ sở.',
+    full_month_baseline_required: 'Chọn khoảng gồm các tháng đã kết thúc để ước tính hoàn vốn.',
     positive_cash_flow_required: 'Dòng tiền chưa dương; chưa thể ước tính thời gian hoàn vốn.',
   };
   return (
@@ -284,7 +307,13 @@ export function FinancialReportsApiPage() {
                 Kỳ báo cáo đã tải: {filter && displayContractDate(filter.from)} –{' '}
                 {filter && displayContractDate(filter.to)}
               </Typography>
-              <Typography variant="body2">Phạm vi: {reportScope}</Typography>
+              <Typography variant="body2">
+                Phạm vi:{' '}
+                {filter?.locationId && !filter.roomId
+                  ? (locations.data?.find((item) => item.id === filter.locationId)?.label ??
+                    reportScope)
+                  : reportScope}
+              </Typography>
               <Typography color="text.secondary" variant="caption">
                 Ảnh chụp dữ liệu:{' '}
                 {value.snapshotAt ? formatInstant(value.snapshotAt) : 'Chưa có thời điểm'}
@@ -305,19 +334,130 @@ export function FinancialReportsApiPage() {
             </Button>
           </Stack>
           <KPIGrid
-            items={[
-              { label: 'Hóa đơn / khoản phải thu', value: formatFinanceMoney(value.total.issued) },
-              {
-                label: 'Thu đã xác minh',
-                value: formatFinanceMoney(value.total.verifiedCollections),
-              },
-              {
-                label: 'Nợ hiện tại trong kỳ',
-                value: formatFinanceMoney(value.total.outstandingNow),
-              },
-              { label: 'OPEX trong kỳ', value: formatFinanceMoney(value.total.operatingExpenses) },
-            ]}
+            items={
+              value.total.management
+                ? [
+                    {
+                      label: 'Doanh thu trong kỳ',
+                      value: managementMoney(value.total.management.revenue),
+                    },
+                    {
+                      label: 'Tiền kinh doanh thực thu',
+                      value: managementMoney(value.total.management.actualBusinessCollections),
+                    },
+                    {
+                      label: 'Công nợ hiện tại',
+                      value: managementMoney(value.total.management.currentOutstanding),
+                    },
+                    {
+                      label: 'Dòng tiền vận hành',
+                      value: managementMoney(value.total.management.operatingCashFlow),
+                    },
+                  ]
+                : [
+                    {
+                      label: 'Hóa đơn / khoản phải thu',
+                      value: formatFinanceMoney(value.total.issued),
+                    },
+                    {
+                      label: 'Tiền phân bổ xác minh (dữ liệu cũ)',
+                      value: formatFinanceMoney(value.total.verifiedCollections),
+                    },
+                    {
+                      label: 'Nợ hiện tại trong kỳ',
+                      value: formatFinanceMoney(value.total.outstandingNow),
+                    },
+                    {
+                      label: 'OPEX trong kỳ',
+                      value: formatFinanceMoney(value.total.operatingExpenses),
+                    },
+                  ]
+            }
           />
+          <ManagementFinanceSummary value={value.total.management} />
+          {value.comparison && (
+            <Paper variant="outlined" sx={{ p: 2 }}>
+              <Typography variant="h3">Biến động so với kỳ trước</Typography>
+              <Typography variant="caption" color="text.secondary">
+                {displayContractDate(value.comparison.currentFrom)} –{' '}
+                {displayContractDate(value.comparison.currentTo)}
+                {' so với '}
+                {displayContractDate(value.comparison.previousFrom)} –{' '}
+                {displayContractDate(value.comparison.previousTo)}
+              </Typography>
+              <Stack spacing={1} sx={{ mt: 1 }}>
+                {[
+                  { label: 'Doanh thu', ...value.comparison.revenue },
+                  { label: 'Chi phí vận hành', ...value.comparison.operatingExpenses },
+                  { label: 'Lợi nhuận vận hành', ...value.comparison.operatingProfit },
+                  ...value.comparison.expenseCategories.map((row) => ({
+                    label: row.category,
+                    ...row,
+                  })),
+                ].map((row, index) => (
+                  <Stack
+                    key={index}
+                    direction={{ xs: 'column', sm: 'row' }}
+                    sx={{ justifyContent: 'space-between' }}
+                    spacing={0.5}
+                  >
+                    <Typography>{row.label}</Typography>
+                    <Typography sx={{ fontVariantNumeric: 'tabular-nums' }}>
+                      {managementMoney(row.previous)} → {managementMoney(row.current)} ·{' '}
+                      {managementMoney(row.change)}
+                      {' ('}
+                      {row.changePercent == null
+                        ? 'Không có tỷ lệ so sánh'
+                        : row.changePercent + '%'}
+                      {')'}
+                    </Typography>
+                    {index >= 3 && (
+                      <Button
+                        size="small"
+                        onClick={() =>
+                          setCategoryDetails(categoryDetails === row.label ? null : row.label)
+                        }
+                      >
+                        {categoryDetails === row.label ? 'Ẩn nguồn' : 'Xem nguồn'}
+                      </Button>
+                    )}
+                  </Stack>
+                ))}
+              </Stack>
+              {categoryDetails && filter && (
+                <Stack spacing={2} sx={{ mt: 2 }}>
+                  <ExpenseSourceDetails
+                    key={categoryDetails + '-current'}
+                    filter={{
+                      ...filter,
+                      from: value.comparison.currentFrom,
+                      to: value.comparison.currentTo,
+                    }}
+                    category={categoryDetails}
+                    expected={
+                      value.comparison.expenseCategories.find(
+                        (row) => row.category === categoryDetails,
+                      )?.current
+                    }
+                  />
+                  <ExpenseSourceDetails
+                    key={categoryDetails + '-previous'}
+                    filter={{
+                      ...filter,
+                      from: value.comparison.previousFrom,
+                      to: value.comparison.previousTo,
+                    }}
+                    category={categoryDetails}
+                    expected={
+                      value.comparison.expenseCategories.find(
+                        (row) => row.category === categoryDetails,
+                      )?.previous
+                    }
+                  />
+                </Stack>
+              )}
+            </Paper>
+          )}
           <Accordion variant="outlined" disableGutters>
             <AccordionSummary expandIcon={<ChevronDown size={18} />}>
               <Typography variant="subtitle1" sx={{ fontWeight: 750 }}>
@@ -325,7 +465,13 @@ export function FinancialReportsApiPage() {
               </Typography>
             </AccordionSummary>
             <AccordionDetails>
-              <FinancialAmountChart totals={value.total} />
+              <FinancialTrendChart
+                points={value.trend}
+                unavailableReason={value.trendUnavailableReason}
+              />
+              <Box sx={{ mt: 2 }}>
+                <FinancialAmountChart totals={value.total} />
+              </Box>
             </AccordionDetails>
           </Accordion>
           <Accordion
@@ -348,7 +494,134 @@ export function FinancialReportsApiPage() {
                 Toàn bộ phạm vi đã chọn
               </Typography>
               <Totals value={value.total} />
+              {filter && value.total.management && (
+                <Stack spacing={1} sx={{ my: 1.5 }}>
+                  <Stack direction="row" useFlexGap spacing={0.5} sx={{ flexWrap: 'wrap' }}>
+                    {(Object.keys(sourceLabels) as FinanceSourceKind[]).map((kind) => (
+                      <Button
+                        key={kind}
+                        size="small"
+                        variant={ledgerKind === kind ? 'contained' : 'outlined'}
+                        aria-pressed={ledgerKind === kind}
+                        onClick={() => setLedgerKind(ledgerKind === kind ? null : kind)}
+                      >
+                        {sourceLabels[kind]}
+                      </Button>
+                    ))}
+                  </Stack>
+                  {ledgerKind && (
+                    <FinanceLedgerDetails
+                      key={JSON.stringify(filter) + ledgerKind}
+                      filter={filter}
+                      kind={ledgerKind}
+                      expected={
+                        {
+                          revenue: value.total.management.revenue,
+                          cash: value.total.management.actualBusinessCollections,
+                          debt: value.total.management.currentOutstanding,
+                          'period-debt': value.total.management.periodOutstanding,
+                          deposit: value.total.management.depositReceipts,
+                        }[ledgerKind]
+                      }
+                    />
+                  )}
+                </Stack>
+              )}
+              {filter && (
+                <Box sx={{ my: 1.5 }}>
+                  <Button
+                    size="small"
+                    aria-expanded={expenseDetailsOpen}
+                    onClick={() => setExpenseDetailsOpen(!expenseDetailsOpen)}
+                  >
+                    {expenseDetailsOpen ? 'Ẩn danh sách chi phí' : 'Xem danh sách chi phí vận hành'}
+                  </Button>
+                  {expenseDetailsOpen && (
+                    <ExpenseSourceDetails
+                      key={JSON.stringify(filter)}
+                      filter={filter}
+                      expected={value.total.operatingExpenses}
+                    />
+                  )}
+                </Box>
+              )}
+              {filter && value.total.management && (
+                <Accordion
+                  variant="outlined"
+                  disableGutters
+                  slotProps={{ transition: { unmountOnExit: true } }}
+                >
+                  <AccordionSummary expandIcon={<ChevronDown size={18} />}>
+                    Xem nguồn khấu hao
+                  </AccordionSummary>
+                  <AccordionDetails>
+                    <DepreciationSourceDetails
+                      key={JSON.stringify(filter)}
+                      filter={filter}
+                      expected={value.total.management.depreciation}
+                    />
+                  </AccordionDetails>
+                </Accordion>
+              )}
               <SettlementSources value={value.settlementSources} />
+              {value.receiptReconciliation && (
+                <Stack spacing={0.5}>
+                  <Typography variant="subtitle2">Đối chiếu ngân hàng toàn chuỗi</Typography>
+                  <Typography>
+                    Tổng tiền ngân hàng xác minh:{' '}
+                    {managementMoney(value.receiptReconciliation.verifiedBankReceipts)}
+                  </Typography>
+                  <Typography>
+                    Phần chưa phân bổ (trước khi trừ hoàn tiền):{' '}
+                    {managementMoney(value.receiptReconciliation.unallocatedAtReview)}
+                  </Typography>
+                  <Typography>
+                    Hoàn tiền thừa đã xác minh trong kỳ:{' '}
+                    {managementMoney(value.receiptReconciliation.excessRefundedInPeriod)}
+                  </Typography>
+                  <Typography variant="caption" color="text.secondary">
+                    Tiền chưa phân bổ không phải doanh thu hoặc số dư được dùng về sau. Khoản thu
+                    thừa chỉ được hoàn cho người thực tế thanh toán sau khi kiểm tra hồ sơ.
+                  </Typography>
+                  {filter && !filter.locationId && !filter.roomId && (
+                    <Accordion
+                      variant="outlined"
+                      disableGutters
+                      slotProps={{ transition: { unmountOnExit: true } }}
+                    >
+                      <AccordionSummary expandIcon={<ChevronDown size={18} />}>
+                        Xem nguồn giao dịch ngân hàng
+                      </AccordionSummary>
+                      <AccordionDetails>
+                        <BankReceiptSourceDetails
+                          key={JSON.stringify(filter)}
+                          filter={filter}
+                          expectedReceived={value.receiptReconciliation.verifiedBankReceipts}
+                          expectedUnallocated={value.receiptReconciliation.unallocatedAtReview}
+                        />
+                      </AccordionDetails>
+                    </Accordion>
+                  )}
+                  {filter && !filter.locationId && !filter.roomId && (
+                    <Accordion
+                      variant="outlined"
+                      disableGutters
+                      slotProps={{ transition: { unmountOnExit: true } }}
+                    >
+                      <AccordionSummary expandIcon={<ChevronDown size={18} />}>
+                        Xem khoản hoàn tiền trong kỳ
+                      </AccordionSummary>
+                      <AccordionDetails>
+                        <BankRefundSourceDetails
+                          key={JSON.stringify(filter)}
+                          filter={filter}
+                          expected={value.receiptReconciliation.excessRefundedInPeriod}
+                        />
+                      </AccordionDetails>
+                    </Accordion>
+                  )}
+                </Stack>
+              )}
               <Typography>
                 Hoàn gốc cọc đã xác minh trong kỳ:{' '}
                 {value.verifiedDepositReturns == null
@@ -436,6 +709,41 @@ export function FinancialReportsApiPage() {
                 <Typography variant="h2" component="h2" sx={{ mb: 1 }}>
                   Vốn & Thu hồi
                 </Typography>
+                {value.total.management && (
+                  <Stack spacing={0.5} sx={{ mb: 2 }}>
+                    <Typography variant="subtitle2">Theo dòng tiền thực tế</Typography>
+                    <Typography>
+                      Vốn đầu tư: {managementMoney(cashCapital?.initialInvestment)}
+                    </Typography>
+                    <Typography>
+                      Vốn đã thu hồi: {managementMoney(cashCapital?.netRecovery)}
+                    </Typography>
+                    <Typography>
+                      Vốn còn lại: {managementMoney(cashCapital?.remainingCapital)}
+                    </Typography>
+                    <Typography>
+                      Tỷ lệ thu hồi:{' '}
+                      {cashCapital?.recoveryPercent == null
+                        ? 'Chưa xác định'
+                        : cashCapital.recoveryPercent + '%'}
+                    </Typography>
+                    <Typography>
+                      Thời gian dự kiến:{' '}
+                      {cashCapital?.estimatedRemainingMonths == null
+                        ? 'Chưa xác định'
+                        : cashCapital.estimatedRemainingMonths + ' tháng'}
+                    </Typography>
+                    {cashCapital?.unavailableReason && (
+                      <Alert severity="info">
+                        {reasons[cashCapital.unavailableReason] ||
+                          'Chưa đủ lịch sử thực thu và thực chi để ước tính hoàn vốn.'}
+                      </Alert>
+                    )}
+                    <Typography variant="subtitle2" color="text.secondary">
+                      Chỉ tiêu đối chiếu cũ (tiền phân bổ trừ chi phí phát sinh)
+                    </Typography>
+                  </Stack>
+                )}
                 <Typography>
                   Đầu tư đến cuối kỳ: {formatFinanceMoney(value.capital.initialInvestment)}
                 </Typography>
@@ -476,6 +784,7 @@ export function FinancialReportsApiPage() {
               </Typography>
             </AccordionSummary>
             <AccordionDetails sx={{ display: 'grid', gap: 1.5 }}>
+              {value.locations.length > 0 && <LocationPerformanceTable report={value} />}
               {value.locations.length === 0 && (
                 <Alert severity="info">
                   Không có dòng theo từng cơ sở trong kết quả này. Kiểm tra phạm vi đang xem; nếu đã
@@ -492,6 +801,9 @@ export function FinancialReportsApiPage() {
                     {l.locationName}
                   </Typography>
                   <Totals value={l.totals} />
+                  {l.totals.management && (
+                    <ManagementFinanceSummary value={l.totals.management} compact />
+                  )}
                   <SettlementSources value={l.settlementSources} />
                 </Paper>
               ))}
@@ -527,7 +839,7 @@ function Totals({ value }: { value: FinanceTotals }) {
           ['Chi phí vận hành', value.operatingExpenses],
           ['Lợi nhuận vận hành', value.operatingProfit],
           ['Nợ hiện tại của hóa đơn và khoản phải thu trong kỳ', value.outstandingNow],
-          ['Dòng tiền vận hành', value.netOperatingCashFlow],
+          ['Tiền phân bổ đã xác minh trừ OPEX (chỉ tiêu đối chiếu)', value.netOperatingCashFlow],
         ] as const
       ).map(([label, amount]) => (
         <Typography

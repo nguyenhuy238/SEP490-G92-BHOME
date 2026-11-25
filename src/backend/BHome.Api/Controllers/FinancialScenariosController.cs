@@ -9,6 +9,8 @@ namespace BHome.Api.Controllers;
 [ResponseCache(NoStore = true, Location = ResponseCacheLocation.None), RequestSizeLimit(32768)]
 public sealed class FinancialScenariosController(FinancialScenarioService service) : ControllerBase
 {
+    [HttpGet("defaults")]
+    public Task<ScenarioDefaults> Defaults([FromQuery] ReportFilter filter, CancellationToken t) => service.DefaultsAsync(filter, t);
     [HttpPost("analyze")] public Task<ScenarioView> Analyze(ScenarioInput input, CancellationToken t) => service.AnalyzeAsync(input, t);
     [HttpPost]
     public Task<ScenarioView> Save(ScenarioInput input, CancellationToken t) => service.SaveAsync(input,

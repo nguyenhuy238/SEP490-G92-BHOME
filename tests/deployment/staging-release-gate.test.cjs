@@ -10,7 +10,7 @@ const release = fs.readFileSync(path.join(root, '.github/workflows/release.yml')
 test('release images depend on CI including the retained Staging regression gate', () => {
   const backend = ci.split('\n  backend:')[1].split('\n  frontend:')[0];
   assert.match(backend, /python3 scripts\/Verify-StagingRegressions\.py/);
-  assert.match(ci.split('\n  release:')[1], /needs: \[backend, frontend\]/);
+  assert.match(ci.split('\n  release:')[1], /needs: \[backend, frontend, ci-quality-gate\]/);
   const api = release
     .split('name: Build API from the exact triggering commit')[1]
     .split('name: Build the environment-specific Owner Web')[0];

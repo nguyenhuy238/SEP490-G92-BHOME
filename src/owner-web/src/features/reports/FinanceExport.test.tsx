@@ -69,5 +69,8 @@ it('exports settlement sources without converting decimal strings to JavaScript 
   };
   const csv = reportCsv(report);
   expect(csv).toContain('"settlementApprovedCharges"');
+  expect(csv).toContain('"verifiedCollections"');
+  expect(csv).toContain('"netOperatingCashFlow"');
+  expect(csv).toContain('verifiedCollections=allocated verified receipts');
   expect(csv).toContain('"9007199254740993","200000","0","400000","100000"');
 });

@@ -1,11 +1,25 @@
 # syntax=docker/dockerfile:1
 # Release image shared by Staging and Production.
 # Keep this in source control so the deployed runtime stays reproducible.
-FROM mcr.microsoft.com/dotnet/sdk:8.0 AS source
+FROM mcr.microsoft.com/dotnet/sdk:8.0 AS dependencies
 
 WORKDIR /source
 
 COPY global.json Directory.Build.targets ./
+COPY src/backend/Directory.Build.props src/backend/
+COPY src/digital-signing/Directory.Build.props src/digital-signing/
+COPY src/backend/BHome.Api/BHome.Api.csproj src/backend/BHome.Api/
+COPY src/backend/BHome.Application/BHome.Application.csproj src/backend/BHome.Application/
+COPY src/backend/BHome.Domain/BHome.Domain.csproj src/backend/BHome.Domain/
+COPY src/backend/BHome.Infrastructure/BHome.Infrastructure.csproj src/backend/BHome.Infrastructure/
+COPY src/digital-signing/BHome.DigitalSigning.Application/BHome.DigitalSigning.Application.csproj src/digital-signing/BHome.DigitalSigning.Application/
+COPY src/digital-signing/BHome.DigitalSigning.Domain/BHome.DigitalSigning.Domain.csproj src/digital-signing/BHome.DigitalSigning.Domain/
+COPY src/digital-signing/BHome.DigitalSigning.Infrastructure/BHome.DigitalSigning.Infrastructure.csproj src/digital-signing/BHome.DigitalSigning.Infrastructure/
+COPY src/digital-signing/BHome.DigitalSigning.MySign/BHome.DigitalSigning.MySign.csproj src/digital-signing/BHome.DigitalSigning.MySign/
+RUN dotnet restore src/backend/BHome.Api/BHome.Api.csproj -p:Configuration=Release
+
+FROM dependencies AS source
+
 COPY .config/ .config/
 COPY src/backend/ src/backend/
 COPY src/digital-signing/ src/digital-signing/
@@ -16,7 +30,7 @@ COPY tools/BHome.LocalDevelopment/ tools/BHome.LocalDevelopment/
 
 FROM source AS build
 
-RUN dotnet publish src/backend/BHome.Api/BHome.Api.csproj -c Release -o /app
+RUN dotnet publish src/backend/BHome.Api/BHome.Api.csproj -c Release --no-restore -o /app
 
 # Optional offline schema artifact for an explicitly reviewed database bootstrap.
 # This target is never used by the application image build or deployment workflow.

@@ -14,6 +14,8 @@ const mock = vi.hoisted(() => ({
   updateExpense: vi.fn(),
   expenseEvidence: vi.fn(),
   expenseReferences: vi.fn(),
+  expensePayments: vi.fn(),
+  recordExpensePayment: vi.fn(),
 }));
 vi.mock('./useFinanceApi', () => ({ useFinanceApi: () => mock }));
 vi.mock('../../../../../packages/client-core/src/auth', () => ({
@@ -40,6 +42,15 @@ beforeEach(() => {
   });
   mock.expense.mockResolvedValue(expense);
   mock.expenseEvidence.mockResolvedValue([]);
+  mock.expensePayments.mockResolvedValue({
+    expenseId: expense.id,
+    version: 1,
+    amount: expense.amount,
+    paidAmount: '0',
+    remainingAmount: expense.amount,
+    status: 'Unpaid',
+    events: [],
+  });
   mock.expenseReferences.mockResolvedValue({
     rooms: [],
     assets: [],
@@ -200,6 +211,41 @@ it('loads detail and submits the server revision and correction reason', async (
   await screen.findByText('Đã lưu khoản chi.');
   expect(mock.expense).toHaveBeenCalledWith('expense');
   expect(mock.updateExpense).toHaveBeenCalledWith('expense', expense, 1, 'Đối chiếu lại');
+});
+
+it('keeps the expense dialog open and blocks editing while a payment is being recorded', async () => {
+  let finish!: () => void;
+  mock.recordExpensePayment.mockImplementation(
+    () =>
+      new Promise<void>((resolve) => {
+        finish = resolve;
+      }),
+  );
+  mount();
+  fireEvent.click((await screen.findAllByRole('button', { name: 'Chi tiết / chỉnh sửa' }))[0]);
+  fireEvent.change(await screen.findByLabelText('Số tiền đã chuyển (đ)'), {
+    target: { value: '100000' },
+  });
+  fireEvent.change(screen.getByLabelText('Ghi chú xác nhận / chứng từ'), {
+    target: { value: 'Verified synthetic transfer' },
+  });
+  fireEvent.click(
+    screen.getByRole('checkbox', {
+      name: 'Tôi xác nhận thông tin thanh toán đúng thực tế.',
+    }),
+  );
+  fireEvent.click(screen.getByRole('button', { name: 'Ghi nhận thực chi' }));
+  await waitFor(() => expect(mock.recordExpensePayment).toHaveBeenCalledTimes(1));
+  expect(screen.getByRole('button', { name: 'Đóng' })).toBeDisabled();
+  expect(screen.getByRole('button', { name: 'Đang lưu…' })).toBeDisabled();
+  expect(screen.getByRole('textbox', { name: /Danh mục khoản chi/ })).toBeDisabled();
+  fireEvent.keyDown(screen.getByRole('dialog'), { key: 'Escape' });
+  expect(screen.getByRole('dialog')).toBeInTheDocument();
+  fireEvent.submit(document.getElementById('expense-editor')!);
+  expect(mock.updateExpense).not.toHaveBeenCalled();
+  await act(async () => finish());
+  await waitFor(() => expect(screen.queryByRole('dialog')).not.toBeInTheDocument());
+  expect(screen.getByText('Đã cập nhật thông tin tài chính.')).toBeInTheDocument();
 });
 
 it('selects real Room/Asset/Work Order references and submits the exact source IDs', async () => {

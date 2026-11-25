@@ -2,6 +2,7 @@ using System.Net;
 using System.Net.Http.Json;
 using System.Text.Json;
 using BHome.Application.IncidentMaintenance;
+using BHome.Application.Finance;
 using BHome.Domain.IncidentMaintenance;
 using BHome.Infrastructure.Persistence.Compact24;
 using Microsoft.Extensions.DependencyInjection;
@@ -46,6 +47,20 @@ public sealed partial class Compact24OwnerSetupTests
         using var host = Host();
         using var owner = await Client(w.Owner, host); using var staff = await Client(w.Staff, host); using var stranger = await Client(outside.Staff, host);
         var asset = await Read<AssetDto>(await owner.PostAsJsonAsync("/api/v1/assets", new AssetWrite(w.Location, null, "Lobby", "SYN-INSPECT", "Synthetic equipment", "FireSafetyEquipment", "Unassessed", InitialTrackingMode: "BulkQuantity", InitialQuantity: 4)));
+        using var createLot = new HttpRequestMessage(HttpMethod.Post, "/api/v1/expenses")
+        {
+            Content = JsonContent.Create(new ExpenseInput(w.Location, null, "INITIAL_INVESTMENT", "Equipment", 500000, Today, "Synthetic equipment lot", asset.Id))
+        };
+        createLot.Headers.Add("Idempotency-Key", Guid.NewGuid().ToString());
+        var lot = await Read<BHome.Application.Finance.ExpenseView>(await owner.SendAsync(createLot));
+        var reviewRoute = $"/api/v1/depreciation/{lot.Id}/replacement-review";
+        var beforeRepair = (await owner.GetFromJsonAsync<AssetReplacementReview>(reviewRoute))!;
+        Assert.Equal(0, beforeRepair.RepairCount);
+        Assert.Equal("0", beforeRepair.RepairCost);
+        Assert.Null(beforeRepair.LatestRepairAt);
+        Assert.Null(beforeRepair.CarryingValue);
+        Assert.Contains("depreciation_unknown", beforeRepair.Reasons);
+        Assert.Equal(HttpStatusCode.Forbidden, (await staff.GetAsync(reviewRoute)).StatusCode);
         var units = Enumerable.Range(0, 4).Select(_ => Guid.NewGuid()).ToArray();
         foreach (var unit in units) await Read<SetupDocument>(await owner.PutAsJsonAsync($"/api/v1/assets/{asset.Id}/equipment-units/{unit}", new EquipmentUnitWrite("Synthetic unit", null, null, null, null, Today, "Lobby", "InService", null, null, null)));
         var policy = await Read<SetupDocument>(await owner.PutAsJsonAsync($"/api/v1/locations/{w.Location}/asset-lifecycle-policies/{Guid.NewGuid()}", LifecyclePolicy() with { EvidenceRequired = false }));
@@ -102,6 +117,15 @@ public sealed partial class Compact24OwnerSetupTests
             var db = scope.ServiceProvider.GetRequiredService<Compact24DbContext>();
             Assert.Equal(1, await db.Set<MaintenanceExpense>().CountAsync(expense => expense.WorkOrderId == workId));
         }
+        var replacementReview = (await owner.GetFromJsonAsync<AssetReplacementReview>(reviewRoute + "?replacementCost=200000"))!;
+        Assert.Equal(1, replacementReview.RepairCount);
+        Assert.Equal("100000", replacementReview.RepairCost);
+        Assert.Equal("50", replacementReview.RepairCostPercent);
+        Assert.NotNull(replacementReview.LatestRepairAt);
+        // The ratio is informational; no automatic replacement threshold has been approved.
+        Assert.DoesNotContain("repair_cost_half_replacement", replacementReview.Reasons);
+        Assert.DoesNotContain("repeated_repairs", replacementReview.Reasons);
+        Assert.Equal(HttpStatusCode.BadRequest, (await owner.GetAsync(reviewRoute + "?replacementCost=0")).StatusCode);
         var reinspectionSchedule = await Read<SetupDocument>(await owner.PutAsJsonAsync($"/api/v1/assets/{asset.Id}/inspection-schedules/{Guid.NewGuid()}", new InspectionScheduleWrite(asset.Id, policy.Id, policy.Version, Today, null, 2, true)));
         Assert.True((await owner.PostAsync($"/api/v1/equipment-inspection-schedules/{reinspectionSchedule.Id}/generate", null)).IsSuccessStatusCode);
         var reinspection = (await owner.GetFromJsonAsync<SetupPage>($"/api/v1/assets/{asset.Id}/inspections"))!.Items.Single(item => item.Data.GetProperty("scheduleId").GetGuid() == reinspectionSchedule.Id);

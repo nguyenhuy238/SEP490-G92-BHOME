@@ -1,7 +1,14 @@
-import { Box, Button, Paper, Stack, Typography } from '@mui/material';
+import { Alert, Box, Button, LinearProgress, Paper, Stack, Typography } from '@mui/material';
+import { useQuery } from '@tanstack/react-query';
+import { useAuth } from '../../../../../packages/client-core/src/auth';
+import { financeError } from '../../../../../packages/client-core/src/finance';
+import { useFinanceApi } from '../expenses/useFinanceApi';
+import { financeMonthPeriod } from './monthPeriods';
+import { managementMoney } from './managementMoney';
 import { ArrowRight, ChevronRight } from 'lucide-react';
 import { Link } from 'react-router';
 import { PageHeader } from '../../components/common/PortalUI';
+import { isMockMode } from '../../services/config';
 
 type FinanceTask = {
   label: string;
@@ -218,6 +225,7 @@ export default function FinanceHomePage() {
         title="Tài chính & Hóa đơn"
         subtitle="Bắt đầu theo quy trình thường dùng, hoặc mở trực tiếp công việc bạn đang cần."
       />
+      {!isMockMode && <FinanceSnapshot />}
       <Paper
         component="section"
         aria-labelledby="finance-workflow-title"
@@ -292,5 +300,83 @@ export default function FinanceHomePage() {
         </Stack>
       </Box>
     </>
+  );
+}
+
+function FinanceSnapshot() {
+  const api = useFinanceApi();
+  const { session } = useAuth();
+  const filter = financeMonthPeriod(0);
+  const report = useQuery({
+    queryKey: ['financial-report', session?.userId, filter],
+    queryFn: ({ signal }) => api.report(filter, signal),
+  });
+  if (report.isPending) return <LinearProgress sx={{ mb: 2 }} />;
+  if (report.isError)
+    return (
+      <Alert
+        severity="error"
+        sx={{ mb: 2 }}
+        action={<Button onClick={() => void report.refetch()}>Thử lại</Button>}
+      >
+        {financeError(report.error)}
+      </Alert>
+    );
+  const total = report.data.total;
+  const management = total.management;
+  return (
+    <Paper variant="outlined" sx={{ p: 2, mb: 2 }}>
+      <Typography variant="h6">Tình hình tài chính tháng này</Typography>
+      <Typography variant="caption" color="text.secondary">
+        {report.data.filter.from} – {report.data.filter.to}
+      </Typography>
+      <Box
+        sx={{
+          display: 'grid',
+          gridTemplateColumns: {
+            xs: 'minmax(0,1fr)',
+            sm: 'repeat(2,minmax(0,1fr))',
+            lg: 'repeat(4,minmax(0,1fr))',
+          },
+          gap: 2,
+          my: 2,
+        }}
+      >
+        {[
+          ['Tiền kinh doanh thực thu', management?.actualBusinessCollections],
+          ['Công nợ hiện tại', management?.currentOutstanding],
+          ['Chi phí vận hành', total.operatingExpenses],
+          ['Lợi nhuận vận hành', total.operatingProfit],
+        ].map(([label, amount]) => (
+          <Box key={label}>
+            <Typography variant="body2" color="text.secondary">
+              {label}
+            </Typography>
+            <Typography
+              variant="h6"
+              sx={{ overflowWrap: 'anywhere', fontVariantNumeric: 'tabular-nums' }}
+            >
+              {managementMoney(amount)}
+            </Typography>
+          </Box>
+        ))}
+      </Box>
+      <Stack spacing={0.5}>
+        <Typography>
+          Hóa đơn quá hạn: {managementMoney(management?.overdueInvoiceOutstanding)}
+        </Typography>
+        <Typography>
+          Chi phí chưa thanh toán: {managementMoney(management?.operatingUnpaidConfirmed)}
+        </Typography>
+        {management?.cashFlowUnavailableReason && (
+          <Alert severity="info">
+            Cần bổ sung lịch sử thanh toán hoặc đối chiếu khoản hoàn tiền.
+          </Alert>
+        )}
+        <Button component={Link} to="/reports" sx={{ alignSelf: 'flex-start' }}>
+          Xem báo cáo chi tiết
+        </Button>
+      </Stack>
+    </Paper>
   );
 }

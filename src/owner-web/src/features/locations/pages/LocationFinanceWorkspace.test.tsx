@@ -69,6 +69,17 @@ beforeEach(() => {
       operatingExpenses: '5000000',
       verifiedCollections: '11000000',
       outstandingNow: '1000000',
+      management: {
+        actualBusinessCollections: '10000000',
+        currentOutstanding: '1000000',
+        depreciation: null,
+        cashCapital: {
+          unavailableReason: 'full_month_baseline_required',
+          remainingCapital: null,
+          recoveryPercent: null,
+          estimatedRemainingMonths: null,
+        },
+      },
     },
     capital: {
       unavailableReason: 'full_month_baseline_required',
@@ -100,7 +111,7 @@ it('shows real API finance totals and warns when recovery is unavailable', async
   expect(await screen.findByText('150.000.000 ₫')).toBeInTheDocument();
   expect(
     screen.getByText(
-      'Chưa đủ dữ liệu tin cậy để xác định thời gian hoàn vốn. Kiểm tra vốn ban đầu, công nợ, hoàn tiền và các kỳ báo cáo đầy đủ.',
+      'Chưa đủ dữ liệu tin cậy để xác định thời gian hoàn vốn. Kiểm tra vốn ban đầu, công nợ, hoàn tiền và các kỳ báo cáo đã kết thúc.',
     ),
   ).toBeInTheDocument();
   expect(state.report).toHaveBeenCalledWith(

@@ -1,14 +1,37 @@
 import '@testing-library/jest-dom/vitest';
 import { render, screen, within } from '@testing-library/react';
 import { MemoryRouter } from 'react-router';
-import { expect, it } from 'vitest';
+import { expect, it, vi } from 'vitest';
+import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import FinanceHomePage from './FinanceHomePage';
+const report = vi.hoisted(() => vi.fn());
+vi.mock('../expenses/useFinanceApi', () => ({ useFinanceApi: () => ({ report }) }));
+vi.mock('../../../../../packages/client-core/src/auth', () => ({
+  useAuth: () => ({ session: { userId: 'owner' } }),
+}));
 
 function renderFinanceHome() {
+  report.mockResolvedValue({
+    filter: { from: '2026-11-01', to: '2026-11-25' },
+    total: {
+      operatingExpenses: '30000000',
+      operatingProfit: '70000000',
+      management: {
+        actualBusinessCollections: '96000000',
+        currentOutstanding: '4000000',
+        operatingUnpaidConfirmed: '2000000',
+        overdueInvoiceOutstanding: '0',
+      },
+    },
+  });
   render(
-    <MemoryRouter>
-      <FinanceHomePage />
-    </MemoryRouter>,
+    <QueryClientProvider
+      client={new QueryClient({ defaultOptions: { queries: { retry: false } } })}
+    >
+      <MemoryRouter>
+        <FinanceHomePage />
+      </MemoryRouter>
+    </QueryClientProvider>,
   );
 }
 
@@ -64,6 +87,13 @@ it('shows three visible work areas with direct links to each core finance task',
     '/finance/tax-records',
   );
   expect(screen.getAllByRole('link')).toHaveLength(12);
+});
+it('shows actual receipt and operating profit supplied by the server', async () => {
+  renderFinanceHome();
+  expect(await screen.findByText('96.000.000 ₫')).toBeVisible();
+  expect(screen.getByText('70.000.000 ₫')).toBeVisible();
+  expect(screen.getByText('4.000.000 ₫')).toBeVisible();
+  expect(screen.getByText('30.000.000 ₫')).toBeVisible();
 });
 
 it('keeps all destinations visible without speculative progress, figures or hidden tabs', () => {
