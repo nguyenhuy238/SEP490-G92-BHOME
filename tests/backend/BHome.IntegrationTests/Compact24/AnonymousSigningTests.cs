@@ -649,9 +649,11 @@ public sealed class AnonymousSigningTests(Compact24Fixture fixture) : IClassFixt
                 await db.SaveChangesAsync();
             }
         }
+        Assert.Equal(HttpStatusCode.NoContent, (await owner.PutAsJsonAsync("/api/v1/contracts/holding-settings", new HoldingSettingsInput("Synthetic holding terms", 0))).StatusCode);
+        var holdingQuote = (await owner.GetFromJsonAsync<HoldingPreparation>($"/api/v1/contracts/holdings/preparation?roomId={Compact24SampleSeed.Id(40)}"))!;
         var holding = await Result<ContractId>(await Post(owner, "/api/v1/contracts/holdings", new HoldingDraftInput(
-            Compact24SampleSeed.Id(40), Compact24SampleSeed.Id(1), null, residentId, [residentId], Today, Today.AddMonths(6),
-            DateTimeOffset.UtcNow.AddDays(2), 100000, "Synthetic holding terms")));
+            Compact24SampleSeed.Id(40), Compact24SampleSeed.Id(1), null, residentId, [residentId], holdingQuote.StartDate, holdingQuote.EndDate,
+            holdingQuote.ExpiresAt, holdingQuote.HoldingDeposit, holdingQuote.Terms, 1, holdingQuote.SettingsVersion)));
         var root = $"/api/v1/contracts/{holding.Id}";
         var qrPath = $"/api/v1/contracts/{holding.Id}/deposit-payment/transfer-instructions";
         if (qrPreview)

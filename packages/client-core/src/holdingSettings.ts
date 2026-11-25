@@ -1,11 +1,13 @@
 import type { ContractRequest } from './contracts';
 
 export interface HoldingSettings {
-  locationId: string;
+  ownerUserId: string;
   holdingMonths: number;
   depositRentMonths: string;
   terms: string;
   version: number;
+  updatedAt: string;
+  updatedByUserId: string;
 }
 export interface HoldingPreparation {
   roomId: string;
@@ -22,19 +24,12 @@ export interface HoldingPreparation {
 }
 export function holdingSettingsClient(request: ContractRequest) {
   return {
-    get: (locationId: string, signal?: AbortSignal) =>
-      request<HoldingSettings | null>(`/api/v1/contracts/holding-settings/${locationId}`, {
-        signal,
-      }),
-    versions: (locationId: string, signal?: AbortSignal) =>
-      request<HoldingSettings[]>(`/api/v1/contracts/holding-settings/${locationId}/versions`, {
-        signal,
-      }),
-    save: (
-      locationId: string,
-      input: Omit<HoldingSettings, 'locationId' | 'version'> & { expectedVersion: number },
-    ) =>
-      request<void>(`/api/v1/contracts/holding-settings/${locationId}`, {
+    get: (signal?: AbortSignal) =>
+      request<HoldingSettings | null>('/api/v1/contracts/holding-settings', { signal }),
+    versions: (signal?: AbortSignal) =>
+      request<HoldingSettings[]>('/api/v1/contracts/holding-settings/versions', { signal }),
+    save: (input: Pick<HoldingSettings, 'terms'> & { expectedVersion: number }) =>
+      request<void>('/api/v1/contracts/holding-settings', {
         method: 'PUT',
         body: JSON.stringify(input),
       }),

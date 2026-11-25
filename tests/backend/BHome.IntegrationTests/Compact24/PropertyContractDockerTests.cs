@@ -96,7 +96,7 @@ public sealed class PropertyContractDockerTests(PropertyContractDockerFixture fi
     public Task QuickCreateHandoverWithoutSeparateMeterJobs() =>
         new ContractLifecycleApiTests(fixture.Contracts).QuickCreateUsesExistingMetersAndUnifiedMoveIn();
     [Fact] public Task MixedStaffContractList() => new ContractLifecycleApiTests(fixture.Contracts).StaffListIncludesHoldingAndMainWithTypeSpecificFieldsAndPreservesLocationScope();
-    [Fact] public Task HoldingLocationConfiguration() => new ContractLifecycleApiTests(fixture.Contracts).HoldingSettingsAreLocationScopedVersionedAndDoNotRewriteCreatedContracts();
+    [Fact] public Task HoldingGlobalConfiguration() => new ContractLifecycleApiTests(fixture.Contracts).HoldingSettingsAreOwnerGlobalVersionedAndDoNotRewriteCreatedContracts();
     [Fact] public Task AssetConfigurationHistory() => new PropertyApiTests(fixture.Properties).FullConfigurationUpdatesRequireVersionsAndRetainActorAndSnapshots();
     [Theory]
     [InlineData(false)]
