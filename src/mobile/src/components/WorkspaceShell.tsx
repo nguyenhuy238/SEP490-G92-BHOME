@@ -10,7 +10,7 @@ import {
   useWindowDimensions,
   View,
 } from 'react-native';
-import { ActivityIndicator, Badge, IconButton, Text, TouchableRipple } from 'react-native-paper';
+import { Badge, IconButton, Text, TouchableRipple } from 'react-native-paper';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { StatusBar } from 'expo-status-bar';
 import { router, useFocusEffect, useNavigation } from 'expo-router';
@@ -116,10 +116,10 @@ export function WorkspaceShell({
     [screen],
   );
   const [headerAction, setHeaderAction] = useState<WorkspaceHeaderAction | null>(null);
-  const [hasInlineHeader, setHasInlineHeader] = useState(false);
+  const [inlineHeaderVisible, setInlineHeaderVisible] = useState(false);
   const registerInlineHeader = useCallback(() => {
-    setHasInlineHeader(true);
-    return () => setHasInlineHeader(false);
+    setInlineHeaderVisible(true);
+    return () => setInlineHeaderVisible(false);
   }, []);
   const registerHeaderAction = useCallback((action: WorkspaceHeaderAction) => {
     setHeaderAction(action);
@@ -137,6 +137,7 @@ export function WorkspaceShell({
   const compactTasks =
     staff && ['work-orders', 'task-detail', 'staff-handovers'].includes(screen) && !preview;
   const compactTaskDetail = compactTasks && screen === 'task-detail';
+  const staffIncidentList = staff && screen === 'staff-incidents' && !preview;
   const tenantRoom = role === 'Tenant' && screen === 'tenant-room' && !preview;
   const tenantResidence = role === 'Tenant' && screen === 'residence' && !preview;
   const tenantLedger = role === 'Tenant' && screen === 'billing-history' && !preview;
@@ -364,17 +365,16 @@ export function WorkspaceShell({
               ) : undefined
             }
           >
-            {!hasInlineHeader &&
-              !tenantIncidentForm &&
+            {!tenantIncidentForm &&
               (profileEdit ||
                 (owner && !visibleTabs.some((tab) => tab.screen === screen)) ||
                 tenantInvoice ||
-                (staff && !['staff-home', 'profile'].includes(screen)) ||
+                (staff && !['staff-home', 'profile'].includes(screen) && !inlineHeaderVisible) ||
                 (role === 'Tenant' && !visibleTabs.some((tab) => tab.screen === screen)) ||
                 ['contract', 'checklist', 'security', 'preferences', 'notifications'].includes(
                   screen,
                 )) && (
-                <View style={ui.row}>
+                <View style={[ui.row, staffIncidentList && styles.incidentHeaderRow]}>
                   <IconButton
                     icon="arrow-left"
                     accessibilityLabel="Quay lại"
@@ -386,6 +386,7 @@ export function WorkspaceShell({
                       !!headerAction?.title ||
                       compactContracts ||
                       compactTasks ||
+                      staffIncidentList ||
                       tenantResidence ||
                       tenantInvoice ||
                       tenantFeatures ||
@@ -397,11 +398,16 @@ export function WorkspaceShell({
                       !!headerAction?.title ||
                       compactContracts ||
                       compactTasks ||
+                      staffIncidentList ||
                       tenantResidence ||
                       tenantInvoice ||
                       tenantFeatures ||
                       profileEdit
-                        ? [ui.grow, { color: c.primary, fontWeight: '700' }]
+                        ? [
+                            ui.grow,
+                            { color: c.primary, fontWeight: '700' },
+                            staffIncidentList && { textAlign: 'center' },
+                          ]
                         : ui.muted
                     }
                   >
@@ -413,27 +419,30 @@ export function WorkspaceShell({
                           ? 'Tất cả chức năng'
                           : tenantInvoice
                             ? (headerAction?.title ?? 'Hóa đơn của tôi')
-                            : compactTasks
-                              ? compactTaskDetail
-                                ? 'Chi tiết công việc'
-                                : screen === 'staff-handovers'
-                                  ? 'Bàn giao / Trả phòng'
-                                  : 'Công việc vận hành'
-                              : compactContracts
-                                ? (headerAction?.title ?? 'Hợp đồng')
-                                : (headerAction?.title ?? 'Quay lại')}
+                            : staffIncidentList
+                              ? (headerAction?.title ?? 'Báo cáo sự cố')
+                              : compactTasks
+                                ? compactTaskDetail
+                                  ? 'Chi tiết công việc'
+                                  : screen === 'staff-handovers'
+                                    ? 'Bàn giao / Trả phòng'
+                                    : (headerAction?.title ?? 'Công việc vận hành')
+                                : compactContracts
+                                  ? (headerAction?.title ?? 'Hợp đồng')
+                                  : (headerAction?.title ?? 'Quay lại')}
                   </Text>
-                  {(compactContracts || compactTasks || tenantInvoice || tenantResidence) &&
+                  {(compactContracts ||
+                    compactTasks ||
+                    staffIncidentList ||
+                    tenantInvoice ||
+                    tenantResidence) &&
                     headerAction && (
                       <>
                         <IconButton
-                          icon={
-                            compactTasks && headerAction.disabled
-                              ? () => <ActivityIndicator size="small" />
-                              : 'refresh'
-                          }
+                          icon={headerAction.action?.icon ?? 'refresh'}
                           accessibilityLabel={
-                            tenantResidence
+                            headerAction.action?.accessibilityLabel ??
+                            (tenantResidence
                               ? 'Tải lại hồ sơ tạm trú'
                               : compactTasks
                                 ? `Tải lại ${headerAction?.title ?? 'công việc'}`
@@ -441,10 +450,10 @@ export function WorkspaceShell({
                                   ? 'Tải lại giao dịch'
                                   : tenantInvoice
                                     ? 'Tải lại hóa đơn'
-                                    : 'Tải lại hợp đồng'
+                                    : 'Tải lại hợp đồng')
                           }
-                          disabled={headerAction.disabled}
-                          onPress={headerAction.onRefresh}
+                          disabled={headerAction.action?.disabled ?? headerAction.disabled}
+                          onPress={headerAction.action?.onPress ?? headerAction.onRefresh}
                         />
                       </>
                     )}
@@ -456,6 +465,7 @@ export function WorkspaceShell({
                 owner ||
                 compactContracts ||
                 compactTasks ||
+                staffIncidentList ||
                 tenantRoom ||
                 tenantResidence ||
                 tenantInvoice ||
@@ -465,11 +475,11 @@ export function WorkspaceShell({
                   : null
               }
             >
-              <WorkspaceFooterContext.Provider value={registerWorkflowFooter}>
-                <WorkspaceInlineHeaderContext.Provider value={registerInlineHeader}>
+              <WorkspaceInlineHeaderContext.Provider value={registerInlineHeader}>
+                <WorkspaceFooterContext.Provider value={registerWorkflowFooter}>
                   {children}
-                </WorkspaceInlineHeaderContext.Provider>
-              </WorkspaceFooterContext.Provider>
+                </WorkspaceFooterContext.Provider>
+              </WorkspaceInlineHeaderContext.Provider>
             </WorkspaceHeaderContext.Provider>
           </KeyboardFormScrollView>
         )}
@@ -504,6 +514,7 @@ const styles = StyleSheet.create({
     minHeight: 72,
     paddingBottom: 6,
   },
+  incidentHeaderRow: { justifyContent: 'space-between' },
   logo: {
     width: 40,
     height: 40,

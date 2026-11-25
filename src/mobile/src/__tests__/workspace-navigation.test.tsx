@@ -1,5 +1,5 @@
 // @vitest-environment jsdom
-import React, { forwardRef, useEffect, useImperativeHandle } from 'react';
+import React, { forwardRef, useEffect, useImperativeHandle, useMemo } from 'react';
 import { afterEach, beforeEach, expect, it, vi } from 'vitest';
 import { cleanup, fireEvent, render, screen } from '@testing-library/react';
 import type { BottomTabBarProps } from 'expo-router/js-tabs';
@@ -324,6 +324,18 @@ function ContractHeaderProbe({ refresh }: { refresh: () => void }) {
   useWorkspaceHeaderRefresh(refresh, false);
   return <span>Danh sách hợp đồng</span>;
 }
+function TaskHeaderActionProbe({ onCreate }: { onCreate: () => void }) {
+  const action = useMemo(
+    () => ({
+      icon: 'plus',
+      accessibilityLabel: 'Báo cáo sự cố mới',
+      onPress: onCreate,
+    }),
+    [onCreate],
+  );
+  useWorkspaceHeaderRefresh(vi.fn(), false, { title: 'Báo cáo sự cố', action });
+  return null;
+}
 it('keeps the Staff task title, refresh, back and four bottom tabs in the shell', () => {
   const refresh = vi.fn();
   render(
@@ -338,6 +350,20 @@ it('keeps the Staff task title, refresh, back and four bottom tabs in the shell'
   fireEvent.click(screen.getByRole('button', { name: 'Tải lại công việc' }));
   expect(refresh).toHaveBeenCalledOnce();
   expect(screen.getAllByRole('tab')).toHaveLength(4);
+});
+it('shows a contextual add action at the top right of the Staff report tab', () => {
+  const create = vi.fn();
+  render(
+    <WorkspaceProvider>
+      <WorkspaceShell screen="work-orders">
+        <TaskHeaderActionProbe onCreate={create} />
+      </WorkspaceShell>
+    </WorkspaceProvider>,
+  );
+  expect(screen.getByText('Báo cáo sự cố')).toBeTruthy();
+  expect(screen.queryByRole('button', { name: 'Tải lại Báo cáo sự cố' })).toBeNull();
+  fireEvent.click(screen.getByRole('button', { name: 'Báo cáo sự cố mới' }));
+  expect(create).toHaveBeenCalledOnce();
 });
 it('keeps a compact Staff header and scrollable move-in content at 320px', () => {
   state.viewportWidth = 320;

@@ -18,7 +18,11 @@ const state = vi.hoisted(() => ({
   api: null as unknown,
   role: 'Staff',
   go: vi.fn(),
+  gallery: vi.fn(),
 }));
+
+vi.mock('expo-image-picker', () => ({ launchImageLibraryAsync: state.gallery }));
+vi.mock('../features/incidents/TenantIncidentStyle', () => ({ reportColors: {}, reportUi: {} }));
 
 vi.mock('expo-router', () => ({
   useFocusEffect: (callback: () => (() => void) | void) => useEffect(callback, [callback]),
@@ -450,7 +454,21 @@ function scenario(
     events.push({ path, method });
     if (path === `/api/v1/operational-tasks/${taskId}`)
       return json(task(kind, currentStatus, currentVersion));
-    if (path.endsWith(`/operational-tasks/${taskId}/evidence`)) return json(evidenceItems);
+    if (path.endsWith(`/operational-tasks/${taskId}/evidence`)) {
+      if (method === 'PUT') {
+        const uploaded: TaskEvidence = {
+          id: '99999999-9999-4999-8999-999999999997',
+          contentType: 'image/png',
+          length: 8,
+          createdAt: '2026-11-24T10:00:00+07:00',
+          submissionId: null,
+        };
+        evidenceItems.push(uploaded);
+        currentVersion++;
+        return json(uploaded);
+      }
+      return json(evidenceItems);
+    }
     if (
       evidenceItems.some((file) =>
         path.endsWith(`/operational-tasks/${taskId}/evidence/${file.id}`),
@@ -535,6 +553,7 @@ function scenario(
 beforeEach(() => {
   state.role = 'Staff';
   state.go.mockReset();
+  state.gallery.mockReset();
 });
 afterEach(() => {
   cleanup();
@@ -549,9 +568,12 @@ it('keeps the handover workflow ordered, refreshes checklist after start, and se
   render(<StaffTaskDetailScreen id={taskId} />);
 
   await screen.findByText(/C. s. ph.n c.ng/);
-  expect(screen.queryByRole('progressbar', { name: /0\/1/ })).toBeNull();
-  fireEvent.click(screen.getByRole('tab', { name: 'Kiểm kê' }));
+  await screen.findByText('Tiến độ kiểm kê');
   await screen.findByRole('progressbar', { name: /0\/1/ });
+  expect(s.inventoryReads()).toBeGreaterThan(0);
+  fireEvent.click(screen.getByRole('tab', { name: 'Kiểm kê' }));
+  await screen.findByText('Kiểm kê tài sản');
+  expect(screen.queryByRole('progressbar')).toBeNull();
   expect(screen.queryByText(/Ki.m tra thi.t b./)).toBeNull();
   expect(s.equipmentReads()).toBe(0);
   expect(s.requestEvents().some((event) => event.path.includes('/equipment-inspection'))).toBe(
@@ -572,7 +594,7 @@ it('keeps the handover workflow ordered, refreshes checklist after start, and se
   const startButtons = screen.getAllByRole('button', { name: /B.t.*ki.m k./ });
   fireEvent.click(startButtons[startButtons.length - 1]!);
   await waitFor(() => expect(s.inventoryReads()).toBeGreaterThan(beforeStartReads));
-  await screen.findByText(/ang ki.m k./);
+  await screen.findByText('Đang thực hiện');
   const startEventIndex = s
     .requestEvents()
     .findIndex(
@@ -640,13 +662,17 @@ it('keeps the handover workflow ordered, refreshes checklist after start, and se
 it('does not complete or submit the checklist if Owner confirmation is still pending', async () => {
   const s = scenario('LocationAssetHandover', 'InProgress', true);
   render(<StaffTaskDetailScreen id={taskId} />);
-  await screen.findByText(/Ki.m tra t.i s.n to.n c. s./);
-  fireEvent.click(screen.getByRole('tab', { name: 'Kiểm kê' }));
+  await screen.findByText('Tiến độ kiểm kê');
   await screen.findByRole('progressbar', { name: /0\/1/ });
+  fireEvent.click(screen.getByRole('tab', { name: 'Kiểm kê' }));
+  await screen.findByText('Kiểm kê tài sản');
+  expect(screen.queryByRole('progressbar')).toBeNull();
   fireEvent.click(screen.getAllByRole('button', { name: /Chi ti.t ki.m k./ })[0]!);
   fireEvent.click(screen.getByRole('button', { name: /X.c nh.n/ }));
+  await waitFor(() => expect(s.inventoryUpdate()).toMatchObject({ checked: true }));
+  fireEvent.click(screen.getByRole('tab', { name: 'Tổng quan' }));
   await screen.findByRole('progressbar', { name: /1\/1/ });
-  await screen.findByText('Phòng 102 · Còn tài sản chờ Owner xác nhận');
+  await screen.findByText(/1 phòng chưa được Owner xác nhận/);
   expect(
     screen.queryByText('Đã hoàn tất kiểm kê. Chờ Owner đối soát và lập biên bản bàn giao.'),
   ).toBeNull();
@@ -660,11 +686,13 @@ it('does not complete or submit the checklist if Owner confirmation is still pen
 it('does not expose manual completion for a server-ready legacy inventory still in progress', async () => {
   const s = scenario('LocationAssetHandover', 'InProgress', false, true);
   render(<StaffTaskDetailScreen id={taskId} />);
-  await screen.findByText(/Ki.m tra t.i s.n to.n c. s./);
+  await screen.findByRole('progressbar', { name: /1\/1/ });
   fireEvent.click(screen.getByRole('tab', { name: 'Kiểm kê' }));
+  await screen.findByText('Kiểm kê tài sản');
   await screen.findByText(
     'Đã kiểm tra đủ. Hệ thống đang tự động chuyển công việc sang chờ Owner kiểm tra.',
   );
+  expect(screen.queryByRole('progressbar')).toBeNull();
   expect(screen.queryByRole('button', { name: 'Hoàn tất kiểm kê tồn đọng' })).toBeNull();
   expect(screen.queryByRole('button', { name: 'Gửi kết quả' })).toBeNull();
   expect(
@@ -720,4 +748,40 @@ it('does not fetch authenticated task evidence blobs until the Staff evidence ta
   await waitFor(() =>
     expect(s.requestEvents().some((event) => event.path === evidencePath)).toBe(true),
   );
+});
+
+it('previews a library image, supports cancellation, and uploads PNG only after confirmation', async () => {
+  const s = scenario('AdHoc', 'InProgress');
+  const bytes = new Uint8Array([137, 80, 78, 71, 13, 10, 26, 10]);
+  state.gallery.mockResolvedValue({
+    canceled: false,
+    assets: [
+      {
+        uri: 'blob:fixture',
+        mimeType: 'image/png',
+        width: 10,
+        height: 10,
+        fileSize: bytes.length,
+        file: { arrayBuffer: async () => bytes.buffer },
+      },
+    ],
+  });
+  render(<StaffTaskDetailScreen id={taskId} />);
+  await screen.findByText('Kiểm tra thiết bị');
+  fireEvent.click(screen.getByRole('tab', { name: 'Minh chứng' }));
+  fireEvent.click(await screen.findByRole('button', { name: 'Chọn ảnh từ thư viện' }));
+  await screen.findByRole('button', { name: 'Dùng ảnh' });
+  const uploads = () =>
+    s.transport.mock.calls.filter(
+      ([url, init]) =>
+        String(url).endsWith(`/operational-tasks/${taskId}/evidence`) && init?.method === 'PUT',
+    );
+  expect(uploads()).toHaveLength(0);
+  fireEvent.click(screen.getByRole('button', { name: 'Hủy ảnh' }));
+  expect(uploads()).toHaveLength(0);
+  fireEvent.click(screen.getByRole('button', { name: 'Chọn ảnh từ thư viện' }));
+  fireEvent.click(await screen.findByRole('button', { name: 'Dùng ảnh' }));
+  await waitFor(() => expect(uploads()).toHaveLength(1));
+  expect(new Headers(uploads()[0][1]?.headers).get('Content-Type')).toBe('image/png');
+  await screen.findByText('1 ảnh');
 });

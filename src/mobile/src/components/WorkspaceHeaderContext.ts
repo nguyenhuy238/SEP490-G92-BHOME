@@ -6,6 +6,12 @@ export interface WorkspaceHeaderAction {
   title?: string;
   onBack?: () => void;
   footer?: ReactNode;
+  action?: {
+    icon: string;
+    accessibilityLabel: string;
+    onPress: () => void;
+    disabled?: boolean;
+  };
 }
 export const WorkspaceHeaderContext = createContext<
   ((action: WorkspaceHeaderAction) => () => void) | null
@@ -22,13 +28,18 @@ export function useWorkspaceInlineHeader(visible: boolean) {
 export function useWorkspaceHeaderRefresh(
   onRefresh: () => void,
   disabled: boolean,
-  options: { title?: string; onBack?: () => void; footer?: ReactNode } = {},
+  options: {
+    title?: string;
+    onBack?: () => void;
+    footer?: ReactNode;
+    action?: WorkspaceHeaderAction['action'];
+  } = {},
 ) {
   const register = useContext(WorkspaceHeaderContext);
-  const { title, onBack, footer } = options;
+  const { title, onBack, footer, action } = options;
   useEffect(
-    () => register?.({ onRefresh, disabled, title, onBack, footer }),
-    [register, onRefresh, disabled, title, onBack, footer],
+    () => register?.({ onRefresh, disabled, title, onBack, footer, action }),
+    [register, onRefresh, disabled, title, onBack, footer, action],
   );
   return register !== null;
 }

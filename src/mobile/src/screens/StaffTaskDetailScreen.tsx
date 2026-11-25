@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useState } from 'react';
+import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { EquipmentInspectionPanel } from '../features/workspace/EquipmentInspectionPanel';
 import {
   AppState,
@@ -23,6 +23,10 @@ import { useFocusEffect } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { formatInstant } from '../../../../packages/client-core/src/localization';
 import { CameraCapture } from '../components/CameraCapture';
+import {
+  readPickedIncidentPhoto,
+  type TenantIncidentPhoto,
+} from '../components/TenantIncidentPhotos';
 import { KeyboardFormScrollView } from '../components/KeyboardFormScrollView';
 import { StaffWorkflowTabs } from '../components/StaffWorkflowTabs';
 import { useWorkspaceHeaderRefresh } from '../components/WorkspaceHeaderContext';
@@ -38,7 +42,10 @@ import {
   taskActionLabels,
   type TaskEvidence,
 } from '../services/operationalTasks';
-import { LocationAssetInventoryChecklist } from './LocationAssetInventoryChecklist';
+import {
+  LocationAssetInventoryChecklist,
+  LocationAssetInventoryProgressSummary,
+} from './LocationAssetInventoryChecklist';
 import { LocationAssetHandoverSigning } from './LocationAssetHandoverSigning';
 import { colors as c } from '../theme/theme';
 
@@ -308,6 +315,13 @@ export function StaffTaskDetailScreen({ id }: { id: string }) {
           )}
         </View>
       )}
+      {activeTab === 'overview' && isHandover && currentStaff && (
+        <LocationAssetInventoryProgressSummary
+          taskId={task.id}
+          taskStatus={task.status}
+          onOpenInventory={() => setSelectedTab('inventory')}
+        />
+      )}
       {activeTab === 'inventory' && isHandover && canReadHandover && (
         <LocationAssetInventoryChecklist
           key={task.id}
@@ -385,17 +399,7 @@ export function StaffTaskDetailScreen({ id }: { id: string }) {
             </Text>
           )}
           {evidenceCount > 0 && <TaskEvidenceGrid model={model} />}
-          {model.canUpload && (
-            <CameraCapture
-              label={isHandover ? 'Thêm ảnh (tùy chọn)' : 'Thêm ảnh minh chứng'}
-              presentation="evidence"
-              disabled={busy === 'action' || !!model.pendingAction}
-              retryOnly={model.uploadPending}
-              uploadError={model.uploadError}
-              reviewBeforeSubmit
-              onCapture={model.uploadPhoto}
-            />
-          )}
+          {model.canUpload && <TaskEvidenceCapture model={model} />}
           {busy === 'upload' && (
             <View style={styles.row}>
               <ActivityIndicator size="small" />
@@ -478,6 +482,114 @@ export function StaffTaskDetailScreen({ id }: { id: string }) {
       )}
       {!inShell && footer}
       <TaskActionSheet model={model} />
+    </>
+  );
+}
+
+function TaskEvidenceCapture({ model }: { model: DetailModel }) {
+  const [picking, setPicking] = useState(false);
+  const [photo, setPhoto] = useState<TenantIncidentPhoto | null>(null);
+  const [error, setError] = useState('');
+  const lock = useRef(false);
+  const alive = useRef(true);
+  const blocked = !!model.busy || !!model.pendingAction || model.uploadPending;
+  const blockedRef = useRef(blocked);
+  useEffect(() => {
+    blockedRef.current = blocked;
+  }, [blocked]);
+  useEffect(() => {
+    alive.current = true;
+    return () => {
+      alive.current = false;
+    };
+  }, []);
+
+  async function choose() {
+    if (blockedRef.current || lock.current) return;
+    lock.current = true;
+    setPicking(true);
+    setError('');
+    try {
+      const picker = await import('expo-image-picker');
+      const result = await picker.launchImageLibraryAsync({
+        mediaTypes: ['images'],
+        allowsMultipleSelection: false,
+        quality: 1,
+        exif: false,
+        base64: false,
+      });
+      if (result.canceled || !alive.current || blockedRef.current) return;
+      const selected = await readPickedIncidentPhoto(result.assets[0]);
+      if (alive.current && !blockedRef.current) setPhoto(selected);
+    } catch (cause) {
+      if (alive.current)
+        setError(
+          cause instanceof Error && /^(Chỉ nhận|Ảnh |Không đọc được)/.test(cause.message)
+            ? cause.message
+            : 'Không mở hoặc đọc được ảnh từ thư viện. Vui lòng thử lại.',
+        );
+    } finally {
+      lock.current = false;
+      if (alive.current) setPicking(false);
+    }
+  }
+
+  async function confirm() {
+    if (!photo || blockedRef.current || lock.current) return;
+    lock.current = true;
+    try {
+      // The task model owns the upload bytes and idempotent retry after confirmation.
+      const upload = model.uploadPhoto(photo.bytes);
+      setPhoto(null);
+      await upload;
+    } finally {
+      lock.current = false;
+    }
+  }
+
+  return (
+    <>
+      <CameraCapture
+        label="Chụp ảnh minh chứng"
+        presentation="evidence"
+        disabled={model.busy === 'action' || !!model.pendingAction || picking || !!photo}
+        retryOnly={model.uploadPending}
+        uploadError={model.uploadError}
+        reviewBeforeSubmit
+        onCapture={model.uploadPhoto}
+      />
+      {!photo && (
+        <Button
+          mode="outlined"
+          icon="image-outline"
+          disabled={blocked || picking}
+          loading={picking}
+          onPress={() => void choose()}
+        >
+          Chọn ảnh từ thư viện
+        </Button>
+      )}
+      {photo && (
+        <View style={styles.section}>
+          <Image
+            source={{ uri: photo.previewUri }}
+            accessibilityLabel="Ảnh minh chứng đã chọn"
+            resizeMode="contain"
+            style={{ width: '100%', height: 200 }}
+          />
+          <Button mode="contained" disabled={blocked} onPress={() => void confirm()}>
+            Dùng ảnh
+          </Button>
+          <Button disabled={blocked} onPress={() => setPhoto(null)}>
+            Hủy ảnh
+          </Button>
+        </View>
+      )}
+      {!!error && (
+        <Text accessibilityRole="alert" style={styles.error}>
+          {error}
+        </Text>
+      )}
     </>
   );
 }
