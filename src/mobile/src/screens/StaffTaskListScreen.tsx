@@ -189,11 +189,15 @@ function StaffTaskListContent({
       : 'Chưa xác định tên cơ sở';
   return (
     <>
-      {handovers && !inHeader && (
+      {!inHeader && (
         <View style={styles.between}>
-          <Text variant="titleLarge" style={styles.title}>
-            Bàn giao / Trả phòng
-          </Text>
+          {handovers ? (
+            <Text variant="titleLarge" style={styles.title}>
+              Bàn giao / Trả phòng
+            </Text>
+          ) : (
+            <View style={{ flex: 1 }} />
+          )}
           <IconButton
             icon="refresh"
             accessibilityLabel="Tải lại công việc"
