@@ -10,7 +10,7 @@ import {
   useWindowDimensions,
   View,
 } from 'react-native';
-import { Badge, IconButton, Text, TouchableRipple } from 'react-native-paper';
+import { ActivityIndicator, Badge, Button, IconButton, Text, TouchableRipple } from 'react-native-paper';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { StatusBar } from 'expo-status-bar';
 import { router, useFocusEffect, useNavigation } from 'expo-router';
@@ -438,8 +438,24 @@ export function WorkspaceShell({
                     tenantResidence) &&
                     headerAction && (
                       <>
-                        <IconButton
-                          icon={headerAction.action?.icon ?? 'refresh'}
+                        {(headerAction.disabled || headerAction.action?.disabled) ? (
+                          <Button
+                            compact
+                            disabled
+                            onPress={() => undefined}
+                            accessibilityLabel={
+                              headerAction.action?.accessibilityLabel ??
+                              (compactTasks ? `Tải lại ${headerAction?.title ?? 'công việc'}` : 'Tải lại')
+                            }
+                            icon={() => <ActivityIndicator size="small" />}
+                          >
+                            Đang tải dữ liệu
+                          </Button>
+                        ) : (
+                          <IconButton
+                          icon={
+                            headerAction.action?.icon ?? 'refresh'
+                          }
                           accessibilityLabel={
                             headerAction.action?.accessibilityLabel ??
                             (tenantResidence
@@ -454,7 +470,8 @@ export function WorkspaceShell({
                           }
                           disabled={headerAction.action?.disabled ?? headerAction.disabled}
                           onPress={headerAction.action?.onPress ?? headerAction.onRefresh}
-                        />
+                          />
+                        )}
                       </>
                     )}
                 </View>

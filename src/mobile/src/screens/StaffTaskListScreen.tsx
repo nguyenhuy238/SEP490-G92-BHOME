@@ -199,7 +199,7 @@ function StaffTaskListContent({
             <View style={{ flex: 1 }} />
           )}
           <IconButton
-            icon="refresh"
+            icon={query.fetching ? () => <ActivityIndicator size="small" /> : 'refresh'}
             accessibilityLabel="Tải lại công việc"
             disabled={query.fetching}
             onPress={reload}
