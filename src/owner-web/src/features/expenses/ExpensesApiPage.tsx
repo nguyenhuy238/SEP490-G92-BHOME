@@ -43,23 +43,80 @@ import { FilterToolbar, PageHeader } from '../../components/common/PortalUI';
 import { OptionPicker } from '../../components/common/OptionPicker';
 import { useFinanceApi } from './useFinanceApi';
 import { ExpenseEvidencePanel } from './ExpenseEvidencePanel';
+import { ExpenseFinanceActions } from './ExpenseFinanceActions';
+import { StaffCostDialog } from './StaffCostDialog';
 import { todayVietnam } from '../staff/staffContracts';
+import { useFinanceSearch } from '../finance/financeScope';
+import { invalidateFinance } from '../finance/invalidateFinance';
 
 type Editor = { value: ExpenseInput; previous?: Expense; key: string; reason: string };
 export function ExpensesApiPage() {
+  const api = useFinanceApi();
+  const { session } = useAuth();
+  const { locationId: routeLocation } = useParams();
+  const search = useFinanceSearch();
+  const linkedExpense = search.get('expenseId');
+  const locationId = routeLocation || search.get('locationId');
+  const linkedDetail = useQuery({
+    queryKey: ['expense-detail-link', session?.userId, linkedExpense],
+    queryFn: ({ signal }) => api.expense(linkedExpense!, signal),
+    enabled: !!linkedExpense,
+  });
+  if (linkedExpense && linkedDetail.isPending)
+    return <LinearProgress aria-label="Đang tải chi tiết khoản chi" />;
+  const initialExpense =
+    linkedDetail.data && (!locationId || linkedDetail.data.locationId === locationId)
+      ? linkedDetail.data
+      : undefined;
+  return (
+    <>
+      {linkedExpense && linkedDetail.isError && (
+        <Alert
+          severity="error"
+          action={<Button onClick={() => void linkedDetail.refetch()}>Thử lại</Button>}
+        >
+          {financeError(linkedDetail.error)}
+        </Alert>
+      )}
+      {linkedDetail.data && !initialExpense && (
+        <Alert severity="warning">Khoản chi không thuộc cơ sở đang chọn.</Alert>
+      )}
+      <ExpensesWorkspace
+        key={`${locationId ?? ''}:${initialExpense?.id ?? ''}`}
+        initialExpense={initialExpense}
+      />
+    </>
+  );
+}
+
+function ExpensesWorkspace({ initialExpense }: { initialExpense?: Expense }) {
   const api = useFinanceApi(),
     queryClient = useQueryClient();
   const { session } = useAuth();
   const actor = session?.userId;
   const { locationId: routeLocation } = useParams();
+  const search = useFinanceSearch();
   const routed = useInRouterContext();
-  const [filter, setFilter] = useState<ExpenseFilter>({ page: 1 });
+  const [filter, setFilter] = useState<ExpenseFilter>(() => ({
+    page: 1,
+    locationId: search.get('locationId') || undefined,
+    expenseType: ['INITIAL_INVESTMENT', 'OPERATING'].includes(search.get('expenseType') ?? '')
+      ? search.get('expenseType')!
+      : undefined,
+  }));
   const [advancedFiltersOpen, setAdvancedFiltersOpen] = useState(false);
   const [summaryOpen, setSummaryOpen] = useState(false);
-  const [editor, setEditor] = useState<Editor | null>(null);
-  const [busy, setBusy] = useState(false),
+  const [editor, setEditor] = useState<Editor | null>(() =>
+    initialExpense
+      ? { value: initialExpense, previous: initialExpense, key: crypto.randomUUID(), reason: '' }
+      : null,
+  );
+  const [staffCostOpen, setStaffCostOpen] = useState(false);
+  const [editorBusy, setBusy] = useState(false),
     [error, setError] = useState(''),
     [success, setSuccess] = useState('');
+  const [financeBusy, setFinanceBusy] = useState(false);
+  const busy = editorBusy || financeBusy;
   const lock = useRef(false);
   const locations = useQuery({
     queryKey: ['finance-locations', actor],
@@ -75,11 +132,15 @@ export function ExpensesApiPage() {
     filter.to
   );
   const today = todayVietnam();
-  const reportFilter = { from: `${today.slice(0, 7)}-01`, to: today, locationId: routeLocation };
+  const reportFilter = {
+    from: `${today.slice(0, 7)}-01`,
+    to: today,
+    locationId: scopedFilter.locationId,
+  };
   const report = useQuery({
     queryKey: ['financial-report', actor, reportFilter],
     queryFn: ({ signal }) => api.report(reportFilter, signal),
-    enabled: !!routeLocation && summaryOpen,
+    enabled: summaryOpen,
   });
   const rows = useQuery({
     queryKey: ['expenses', actor, scopedFilter],
@@ -115,7 +176,7 @@ export function ExpensesApiPage() {
     }
   }
   async function save() {
-    if (!editor || lock.current || editor.previous?.canEdit === false) return;
+    if (!editor || lock.current || financeBusy || editor.previous?.canEdit === false) return;
     lock.current = true;
     setBusy(true);
     setError('');
@@ -129,8 +190,8 @@ export function ExpensesApiPage() {
           editor.reason,
         );
       else await api.createExpense(editor.value, editor.key);
-      await queryClient.invalidateQueries({ queryKey: ['expenses', actor] });
-      await queryClient.invalidateQueries({ queryKey: ['financial-report', actor] });
+      await invalidateFinance(queryClient, actor, editor.value.locationId);
+      await queryClient.invalidateQueries({ queryKey: ['expense-detail-link', actor] });
       setEditor(null);
       setSuccess('Đã lưu khoản chi.');
     } catch (e) {
@@ -184,7 +245,13 @@ export function ExpensesApiPage() {
           </Button>
         }
       />
-      {routeLocation && (
+      {!routeLocation && (
+        <Button variant="outlined" sx={{ mb: 1.5 }} onClick={() => setStaffCostOpen(true)}>
+          Phân bổ chi phí nhân viên
+        </Button>
+      )}
+      {staffCostOpen && <StaffCostDialog close={() => setStaffCostOpen(false)} />}
+      {
         <Accordion
           variant="outlined"
           disableGutters
@@ -199,7 +266,8 @@ export function ExpensesApiPage() {
           </AccordionSummary>
           <AccordionDetails>
             <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mb: 1 }}>
-              Toàn cơ sở · đến {today.split('-').reverse().join('/')}
+              {scopedFilter.locationId ? 'Toàn cơ sở' : 'Toàn chuỗi'} · đến{' '}
+              {today.split('-').reverse().join('/')}
             </Typography>
             {report.isPending && <LinearProgress aria-label="Đang tải báo cáo chi phí" />}
             {report.isError && (
@@ -232,7 +300,7 @@ export function ExpensesApiPage() {
             )}
           </AccordionDetails>
         </Accordion>
-      )}
+      }
       {error && !editor && <Alert severity="error">{error}</Alert>}
       {success && <Alert severity="success">{success}</Alert>}
       {((!invalidRange && rows.isPending) || locations.isPending) && <LinearProgress />}
@@ -874,6 +942,18 @@ export function ExpensesApiPage() {
                 )}
               </Stack>
             </ValidatedForm>
+          )}
+          {editor?.previous && (
+            <ExpenseFinanceActions
+              key={editor.previous.id}
+              expense={editor.previous}
+              disabled={editorBusy}
+              onBusyChange={setFinanceBusy}
+              onChanged={() => {
+                setEditor(null);
+                setSuccess('Đã cập nhật thông tin tài chính.');
+              }}
+            />
           )}
         </DialogContent>
         <DialogActions>

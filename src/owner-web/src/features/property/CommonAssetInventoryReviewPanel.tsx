@@ -222,6 +222,11 @@ export function CommonAssetInventoryReviewPanel({ locationId }: { locationId: st
       void cache.invalidateQueries({
         queryKey: ['location-finance', 'report', session?.userId, locationId],
       });
+      void cache.invalidateQueries({
+        queryKey: ['location-finance', 'capital-report', session?.userId, locationId],
+      });
+      void cache.invalidateQueries({ queryKey: ['financial-report', session?.userId] });
+      void cache.invalidateQueries({ queryKey: ['expenses', session?.userId] });
       setDialog(null);
       setNotice('Đã lưu kiểm kê tài sản chung của cơ sở.');
     } catch (cause) {
