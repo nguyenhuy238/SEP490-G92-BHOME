@@ -1,16 +1,16 @@
 FROM node:22-alpine AS build
 WORKDIR /source
 COPY package.json package-lock.json ./
-COPY packages/ packages/
+COPY packages/client-core/package.json packages/client-core/package.json
 COPY src/owner-web/package.json src/owner-web/package.json
 COPY src/public-web/package.json src/public-web/package.json
 COPY src/mobile/package.json src/mobile/package.json
 RUN npm ci --no-fund --no-audit
-COPY tsconfig.base.json ./
-COPY src/ src/
-COPY tests/ tests/
-COPY scripts/Verify-WebArtifact.cjs scripts/Verify-WebArtifact.cjs
 ARG APP=owner-web
+COPY tsconfig.base.json ./
+COPY packages/client-core/ packages/client-core/
+COPY src/${APP}/ src/${APP}/
+COPY scripts/Verify-WebArtifact.cjs scripts/Verify-WebArtifact.cjs
 ARG VITE_API_BASE_URL
 ARG VITE_DEPLOYMENT_ENVIRONMENT
 ARG BHOME_REVISION
