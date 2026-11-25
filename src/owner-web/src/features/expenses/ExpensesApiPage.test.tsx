@@ -238,7 +238,7 @@ it('keeps the expense dialog open and blocks editing while a payment is being re
   await waitFor(() => expect(mock.recordExpensePayment).toHaveBeenCalledTimes(1));
   expect(screen.getByRole('button', { name: 'Đóng' })).toBeDisabled();
   expect(screen.getByRole('button', { name: 'Đang lưu…' })).toBeDisabled();
-  expect(screen.getByLabelText('Danh mục khoản chi')).toBeDisabled();
+  expect(screen.getByRole('textbox', { name: /Danh mục khoản chi/ })).toBeDisabled();
   fireEvent.keyDown(screen.getByRole('dialog'), { key: 'Escape' });
   expect(screen.getByRole('dialog')).toBeInTheDocument();
   fireEvent.submit(document.getElementById('expense-editor')!);

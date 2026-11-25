@@ -75,6 +75,10 @@ public sealed class ManagementFinanceTests
         Assert.Contains("repeated_repairs", review.Reasons);
         Assert.DoesNotContain("repair_cost_half_replacement", review.Reasons);
         Assert.Contains("depreciation_unknown", review.Reasons);
+        var aboveHalf = DepreciationService.Review(lot, evidence with { Count = 1, TotalCost = 750 }, today, 1000);
+        Assert.Equal("75", aboveHalf.RepairCostPercent);
+        Assert.DoesNotContain("repair_cost_half_replacement", aboveHalf.Reasons);
+        Assert.DoesNotContain("repeated_repairs", aboveHalf.Reasons);
         Assert.Contains("repeated_repairs", DepreciationService.Review(lot,
             evidence with { Count = 2 }, today, 1000).Reasons);
         Assert.DoesNotContain("repeated_repairs", DepreciationService.Review(lot,

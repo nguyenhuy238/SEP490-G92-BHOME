@@ -32,4 +32,20 @@ SRS còn OQ-06 về đầu vào lương. Yêu cầu bổ sung của người dù
 
 ## Kết quả thực thi
 
-Đang kiểm chứng; chưa kết luận READY FOR OWNER REVIEW AND PUSH. Kết quả và artifact sẽ được cập nhật sau các lượt chạy.
+### Kiểm tra sau merge develop, HEAD `0de10e04`
+
+CI #335 thất bại ở integration test và Owner Web test. Regression kiểm kê tài sản phải giữ tỷ lệ chi phí sửa chữa 50% nhưng không yêu cầu cảnh báo theo ngưỡng chưa được phê duyệt. Test khoản chi truy vấn textbox theo accessible name (bao gồm nhãn bắt buộc của MUI), vẫn kiểm tra khóa chỉnh sửa, đóng dialog và gửi lặp khi đang xác nhận thực chi.
+
+Kiểm tra lại trên workspace ngày 25/11/2026:
+
+- Owner Web: 69/69 test expenses, reports, finance và 6/6 test What-if.
+- Backend Application: 73/73 unit test Finance, gồm cả kiểm tra tỷ lệ sửa chữa 75% không tự sinh cảnh báo thay tài sản.
+- Compact24: 7/7 integration test trên PostgreSQL 18 loopback riêng, gồm kiểm kê tài sản, ledger, phân bổ chi phí nhân viên, tính dòng tiền, so sánh và snapshot What-if; không skip. Dừng instance test sau khi chạy.
+- `dotnet build src/backend/BHome.sln -c Release --no-restore` thành công, 0 warning và 0 error.
+- `npm run lint`, Mobile typecheck, `npm run format:check` và `dotnet format src/backend/BHome.sln --verify-no-changes --no-restore` thành công.
+- `npm run build` thành công với Node 22.23.4 và `VITE_API_BASE_URL=https://api.example.com` như workflow CI; lần chạy thiếu biến môi trường bị từ chối đúng theo cấu hình.
+- Log local có sẵn của lượt kiểm tra sau CI #335 ghi nhận Owner Web 1059/1059, Mobile 1751/1751, Public Web 11/11; đây là bằng chứng lượt chạy trước, không phải lần chạy lại toàn bộ ở mục này.
+
+Lượt kiểm chứng độc lập khi tiếp tục công việc: chạy lại `ExpensesApiPage.test.tsx` (12/12), Application UnitTests với bộ lọc `FullyQualifiedName~Finance` (73/73), và 7 integration test Compact24 kể trên (7/7, không skip). TRX của lượt này nằm tại `.artifacts/finance-ci335-recheck-fe1f5d7731ba443cb7fb4dbdda60b629/finance-ci335-recheck.trx`. PostgreSQL test đã được dừng sau khi hoàn tất.
+
+Chưa xác nhận toàn bộ CI trên Ubuntu: Docker Desktop không chạy trong môi trường kiểm tra hiện tại, nên chưa chạy lại toàn bộ backend suite sử dụng Testcontainers và các bước Docker image. Không thay workflow, không bỏ test, không chạy trên database nghiệp vụ. Chờ CI của commit tiếp theo để xác nhận trạng thái xanh.

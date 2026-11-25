@@ -122,7 +122,8 @@ public sealed partial class Compact24OwnerSetupTests
         Assert.Equal("100000", replacementReview.RepairCost);
         Assert.Equal("50", replacementReview.RepairCostPercent);
         Assert.NotNull(replacementReview.LatestRepairAt);
-        Assert.Contains("repair_cost_half_replacement", replacementReview.Reasons);
+        // The ratio is informational; no automatic replacement threshold has been approved.
+        Assert.DoesNotContain("repair_cost_half_replacement", replacementReview.Reasons);
         Assert.DoesNotContain("repeated_repairs", replacementReview.Reasons);
         Assert.Equal(HttpStatusCode.BadRequest, (await owner.GetAsync(reviewRoute + "?replacementCost=0")).StatusCode);
         var reinspectionSchedule = await Read<SetupDocument>(await owner.PutAsJsonAsync($"/api/v1/assets/{asset.Id}/inspection-schedules/{Guid.NewGuid()}", new InspectionScheduleWrite(asset.Id, policy.Id, policy.Version, Today, null, 2, true)));
