@@ -6,6 +6,29 @@ namespace BHome.Application.UnitTests.Finance;
 
 public sealed class FinancialReportTests
 {
+    [Theory]
+    [InlineData("2026-11-25T05:00:00Z", false)]
+    [InlineData("2026-11-30T16:59:59Z", false)]
+    [InlineData("2026-11-30T17:00:00Z", true)]
+    public void PaybackUsesCompletedMonthsInVietnamForLegacyAndActualCashModels(string snapshot, bool completed)
+    {
+        var period = new ReportFilter(new(2026, 11, 1), new(2026, 11, 30));
+        var management = new FinanceManagementBasis(600, 0, 0, 0, 0, 0, 0, 600,
+            OperatingPaymentsConfirmed: 200, OperatingPaymentHistoryComplete: true,
+            CumulativeBusinessCollections: 1600, CumulativeOperatingPayments: 400);
+        var row = new FinanceBasis(Guid.NewGuid(), "Synthetic", Collected: 600, Operating: 200,
+            Investment: 2000, CumulativeCollected: 1600, CumulativeOperating: 400, Management: management);
+        var report = FinancialReportService.Calculate(period, new([row], false), DateTimeOffset.Parse(snapshot));
+        Assert.Equal("800", report.Capital.RemainingCapital);
+        Assert.Equal("800", report.Total.Management!.CashCapital!.RemainingCapital);
+        foreach (var recovery in new[] { report.Capital, report.Total.Management.CashCapital,
+                     Assert.Single(report.Locations).Totals.Management!.CashCapital! })
+        {
+            Assert.Equal(completed ? "2" : null, recovery.EstimatedRemainingMonths);
+            Assert.Equal(completed ? null : "full_month_baseline_required", recovery.UnavailableReason);
+        }
+    }
+
     [Fact]
     public void SettlementBreakdownDoesNotAddTheSameMoneyToTotalsTwiceOrTreatOffsetsAsCash()
     {

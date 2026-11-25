@@ -48,10 +48,15 @@ public sealed class Compact24FinanceLedgerTests
             var response = await client.GetAsync("/api/v1/financial-reports?from=2000-01-01&to=2100-12-31");
             Assert.True(response.IsSuccessStatusCode, await response.Content.ReadAsStringAsync());
             var report = (await response.Content.ReadFromJsonAsync<FinancialReport>())!;
+            Assert.Null(report.Trend);
+            Assert.Equal("period_too_long", report.TrendUnavailableReason);
             Assert.Equal("100000", report.Total.Issued); Assert.Equal("100000", report.Total.VerifiedCollections);
             Assert.Equal("0", report.Total.OutstandingNow); Assert.Equal(1, report.Total.TotalRooms); Assert.Equal(1, report.Total.OccupiedRooms);
             Assert.Equal("100000", report.Total.OperatingProfit); Assert.Null(report.Capital.EstimatedRemainingMonths);
-            var scenario = new ScenarioInput("Tổng hợp", new(new(2026, 1, 1), new(2026, 12, 31)), 12, new(200000, 100, 50, 10000, 0, 0, 0));
+            var today = DateOnly.FromDateTime(TimeZoneInfo.ConvertTimeBySystemTimeZoneId(
+                DateTimeOffset.UtcNow, "Asia/Ho_Chi_Minh").DateTime);
+            var completedMonth = new DateOnly(today.Year, today.Month, 1).AddMonths(-1);
+            var scenario = new ScenarioInput("Tổng hợp", new(completedMonth, completedMonth.AddMonths(1).AddDays(-1)), 12, new(200000, 100, 50, 10000, 0, 0, 0));
             var analysis = await client.PostAsJsonAsync("/api/v1/financial-scenarios/analyze", scenario);
             Assert.True(analysis.IsSuccessStatusCode, await analysis.Content.ReadAsStringAsync());
             var calculated = (await analysis.Content.ReadFromJsonAsync<ScenarioView>())!;
@@ -64,20 +69,48 @@ public sealed class Compact24FinanceLedgerTests
             Assert.Equal(first.Id, second.Id); Assert.Equal(first.Baseline.SnapshotAt, second.Baseline.SnapshotAt);
             Assert.Equal(System.Net.HttpStatusCode.Conflict, (await Save(scenario with { Name = "Changed" })).StatusCode);
             var loaded = (await client.GetFromJsonAsync<ScenarioView>($"/api/v1/financial-scenarios/{key}"))!;
-            Assert.Equal(first.Result, loaded.Result); Assert.Equal(scenario, loaded.Input);
+            Assert.Equal(System.Text.Json.JsonSerializer.Serialize(first.Result), System.Text.Json.JsonSerializer.Serialize(loaded.Result)); Assert.Equal(scenario, loaded.Input);
             Assert.Single((await client.GetFromJsonAsync<ScenarioSummary[]>("/api/v1/financial-scenarios"))!);
             var unchanged = (await client.GetFromJsonAsync<FinancialReport>("/api/v1/financial-reports?from=2000-01-01&to=2100-12-31"))!;
-            Assert.Equal(report.Total, unchanged.Total);
+            Assert.Equal(System.Text.Json.JsonSerializer.Serialize(report.Total), System.Text.Json.JsonSerializer.Serialize(unchanged.Total));
             Assert.Equal(System.Net.HttpStatusCode.BadRequest, (await client.PostAsJsonAsync("/api/v1/financial-scenarios/analyze", scenario with { Assumptions = scenario.Assumptions with { OccupancyPercent = 101 } })).StatusCode);
             Assert.Equal(System.Net.HttpStatusCode.BadRequest, (await client.PostAsJsonAsync("/api/v1/financial-scenarios/analyze", scenario with { ForecastMonths = 0 })).StatusCode);
             Assert.Equal(System.Net.HttpStatusCode.BadRequest, (await client.PostAsJsonAsync("/api/v1/financial-scenarios/analyze", scenario with { Baseline = scenario.Baseline with { LocationId = Guid.Empty } })).StatusCode);
+            var legacyKey = Guid.NewGuid();
             await using (var scope = fixture.Capture.Factory.Services.CreateAsyncScope())
             {
                 var db = scope.ServiceProvider.GetRequiredService<Compact24DbContext>();
                 Assert.Equal(1, await db.Database.SqlQuery<int>($"SELECT count(*)::integer AS \"Value\" FROM financial_scenarios").SingleAsync());
                 Assert.Equal(0, await db.Database.SqlQuery<int>($"SELECT count(*)::integer AS \"Value\" FROM expenses").SingleAsync());
                 Assert.True(await db.IsSchemaReadyAsync());
+                // Reproduce the persisted v1 shape in the disposable fixture. Its
+                // recorded result must remain immutable, rather than being recalculated.
+                await db.Database.ExecuteSqlInterpolatedAsync($$"""
+                    INSERT INTO financial_scenarios(id,location_id,name,baseline_from,baseline_to,forecast_months,
+                        assumptions,baseline_snapshot,result_snapshot,calculation_version,created_by_user_id,calculated_at)
+                    SELECT {{legacyKey}},location_id,name,baseline_from,baseline_to,forecast_months,
+                        jsonb_set(assumptions,'{Assumptions}',(assumptions->'Assumptions')
+                            - ARRAY['MonthlyServiceRevenue','AdditionalInvestment','MonthlyDepreciation','OperatingPaymentPercent','CostIncreasePercent']),
+                        (baseline_snapshot #- '{Total,Management}') - 'Comparison' - 'ReceiptReconciliation',
+                        result_snapshot - ARRAY['MonthlyProfitAfterDepreciation','MonthlyMarginPercent','MonthlyOperatingPayments','ForecastCashAfterInvestment','Warnings'],
+                        'management-constant-v1',created_by_user_id,calculated_at
+                    FROM financial_scenarios WHERE id={{key}}
+                    """);
             }
+            var legacy = (await client.GetFromJsonAsync<ScenarioView>($"/api/v1/financial-scenarios/{legacyKey}"))!;
+            Assert.Equal("management-constant-v1", legacy.CalculationVersion);
+            Assert.Equal(scenario, legacy.Input);
+            Assert.Null(legacy.Baseline.Total.Management);
+            Assert.Equal("90000", legacy.Result.MonthlyNetCashFlow);
+            Assert.Null(legacy.Result.MonthlyOperatingPayments);
+            Assert.Null(legacy.Result.MonthlyProfitAfterDepreciation);
+            using var legacyReplay = new HttpRequestMessage(HttpMethod.Post, "/api/v1/financial-scenarios") { Content = JsonContent.Create(scenario) };
+            legacyReplay.Headers.Add("Idempotency-Key", legacyKey.ToString());
+            using var legacyResponse = await client.SendAsync(legacyReplay);
+            legacyResponse.EnsureSuccessStatusCode();
+            var replayedLegacy = (await legacyResponse.Content.ReadFromJsonAsync<ScenarioView>())!;
+            Assert.Equal(legacy.CalculationVersion, replayedLegacy.CalculationVersion);
+            Assert.Equal(legacy.Result, replayedLegacy.Result);
         }
         finally { await fixture.DisposeAsync(); }
     }

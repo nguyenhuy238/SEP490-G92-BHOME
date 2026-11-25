@@ -24,7 +24,8 @@ import { formatRoomCount } from '../../../components/common/roomOccupancy';
 import { propertyError, usePropertyApi } from '../../property-api/propertyApi';
 import { todayVietnam } from '../../staff/staffContracts';
 
-const money = (amount?: string) => (typeof amount === 'string' ? formatFinanceMoney(amount) : '—');
+const money = (amount?: string | null) =>
+  typeof amount === 'string' ? formatFinanceMoney(amount) : '—';
 const dateLabel = (date: string) => date.split('-').reverse().join('/');
 
 export default function LiveDashboardPage() {
@@ -248,14 +249,14 @@ export default function LiveDashboardPage() {
                 hint: 'Hóa đơn / khoản phải thu trong kỳ',
               },
               {
-                label: 'Đã thu (đã xác minh)',
-                value: money(totals?.verifiedCollections),
-                hint: 'Khoản thu trong kỳ',
+                label: 'Thực thu kinh doanh',
+                value: money(totals?.management?.actualBusinessCollections),
+                hint: 'Tiền kinh doanh xác minh trong kỳ, không gồm cọc',
               },
               {
                 label: 'Công nợ hiện tại',
-                value: money(totals?.outstandingNow),
-                hint: 'Số dư thuộc kỳ báo cáo',
+                value: money(totals?.management?.currentOutstanding),
+                hint: 'Số dư tất cả kỳ tại thời điểm tải',
               },
               {
                 label: 'Chi phí vận hành',

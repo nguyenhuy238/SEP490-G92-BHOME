@@ -355,6 +355,11 @@ export function RoomInventoryReviewPanel({
       void cache.invalidateQueries({
         queryKey: ['location-finance', 'report', session?.userId, locationId],
       });
+      void cache.invalidateQueries({
+        queryKey: ['location-finance', 'capital-report', session?.userId, locationId],
+      });
+      void cache.invalidateQueries({ queryKey: ['financial-report', session?.userId] });
+      void cache.invalidateQueries({ queryKey: ['expenses', session?.userId] });
       setSelected([]);
       setDialog(null);
       setNotice('Đã lưu xác nhận kiểm kê.');

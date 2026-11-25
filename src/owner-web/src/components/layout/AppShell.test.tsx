@@ -158,7 +158,7 @@ it('switches the highlighted workspace and tabs when navigating between finance 
     'href',
     '/expenses',
   );
-  expect(screen.getByRole('tab', { name: 'Kịch bản What-if' })).toHaveAttribute('href', '/what-if');
+  expect(screen.getByRole('tab', { name: /^Kịch bản$/ })).toHaveAttribute('href', '/what-if');
 });
 
 it.each([
@@ -166,7 +166,7 @@ it.each([
   ['/billing-automation', 'Lập hóa đơn', 'Lịch lập hóa đơn'],
   ['/invoice-adjustments', 'Lập hóa đơn', 'Điều chỉnh hóa đơn'],
   ['/expenses', 'Chi phí & báo cáo', 'Chi phí & đầu tư'],
-  ['/what-if', 'Chi phí & báo cáo', 'Kịch bản What-if'],
+  ['/what-if', 'Chi phí & báo cáo', 'Kịch bản'],
 ])('keeps %s discoverable under its workspace', (route, workspace, tab) => {
   render(shell(route));
   const sidebar = screen.getByRole('navigation', { name: 'Điều hướng chính' });

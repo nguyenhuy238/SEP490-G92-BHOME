@@ -3,6 +3,7 @@ using System.Net;
 using System.Net.Http.Json;
 using System.Text.Json;
 using BHome.Application.Common;
+using BHome.Application.Finance;
 using BHome.Application.IdentityAccess;
 using BHome.Application.IncidentMaintenance;
 using BHome.Application.Integrations;
@@ -25,6 +26,7 @@ using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
 using Npgsql;
 using OpenCvSharp;
+using ExpenseView = BHome.Application.IncidentMaintenance.ExpenseView;
 
 namespace BHome.IntegrationTests.IncidentMaintenance;
 
@@ -156,9 +158,21 @@ public sealed partial class IncidentApiTests(IncidentFixture fixture) : IClassFi
     {
         var w = await Setup(); var incident = await Create(w); await Review(w, incident); var work = await Assign(w, incident);
         var other = await Assign(w, incident);
+        var reportRoute = $"/api/v1/financial-reports?from={Today.AddDays(-1):yyyy-MM-dd}&to={Today.AddDays(1):yyyy-MM-dd}&locationId={w.Location}";
+        var expensesRoute = $"/api/v1/expenses?locationId={w.Location}&includeTotalAmount=true";
+        async Task AssertFinance(string accrued, string paid, string unknown, string unpaid)
+        {
+            var report = await Ok<FinancialReport>(await w.Owner.Client.GetAsync(reportRoute));
+            Assert.Equal(accrued, report.Total.OperatingExpenses);
+            Assert.Equal(paid, report.Total.Management!.OperatingPaymentsConfirmed);
+            Assert.Equal(unknown, report.Total.Management.OperatingUnknownPaymentAmount);
+            Assert.Equal(unpaid, report.Total.Management.OperatingUnpaidConfirmed);
+        }
+        await AssertFinance("0", "0", "0", "0");
         var initial = (await Work(w.Staff, work))!;
         Assert.Equal(HttpStatusCode.Conflict, (await Send(w.Staff, $"{Orders}/{work}/start", new WorkOrderAction(initial.Version))).StatusCode);
         await ProposeAndStart(w, work);
+        await AssertFinance("0", "0", "0", "0");
         var running = (await Work(w.Staff, work))!;
         Assert.Equal(HttpStatusCode.Conflict, (await Send(w.Staff, $"{Orders}/{work}/submit", new WorkOrderAction(running.Version, "Missing evidence"))).StatusCode);
         await Complete(w, incident, work);
@@ -166,10 +180,37 @@ public sealed partial class IncidentApiTests(IncidentFixture fixture) : IClassFi
         Assert.Equal(HttpStatusCode.BadRequest, (await Send(w.Owner, $"{Orders}/{work}/rework", new WorkOrderAction(state.Version))).StatusCode);
         await Ok<IncidentCommandResult>(await Send(w.Owner, $"{Orders}/{work}/rework", new WorkOrderAction(state.Version, "Synthetic rework")));
         await Complete(w, incident, work);
+        await AssertFinance("0", "0", "0", "0");
         var key = Guid.NewGuid(); state = (await Work(w.Owner, work))!;
         var verification = new MaintenanceVerification(state.Version, 100000m, "Synthetic verification", null, "Repaired");
         var responses = await Task.WhenAll(Enumerable.Range(0, 3).Select(_ => Send(w.Owner, $"{Orders}/{work}/verify", verification, key)));
         foreach (var response in responses) await Ok<IncidentCommandResult>(response);
+        await AssertFinance("100000", "0", "100000", "0");
+        var expensePage = await Ok<ExpensePage>(await w.Owner.Client.GetAsync(expensesRoute));
+        var official = Assert.Single(expensePage.Items);
+        Assert.Equal("100000", expensePage.TotalAmount);
+        Assert.Equal(w.Location, official.LocationId);
+        Assert.Equal(w.Room, official.RoomId);
+        Assert.Equal(w.Asset, official.AssetId);
+        Assert.Equal(work, official.TaskId);
+        Assert.False(official.CanEdit);
+        var paymentRoute = $"/api/v1/expenses/{official.Id}/payments";
+        var payment = await Ok<ExpensePaymentView>(await w.Owner.Client.GetAsync(paymentRoute));
+        Assert.Equal("Unknown", payment.Status);
+        Assert.Null(payment.PaidAmount);
+        var paymentKey = Guid.NewGuid();
+        var paymentInput = new ExpensePaymentInput(40000, Today, payment.Version, "Synthetic partial payment");
+        var partial = await Ok<ExpensePaymentView>(await Send(w.Owner, paymentRoute, paymentInput, paymentKey));
+        Assert.Equal("PartiallyPaid", partial.Status);
+        Assert.Equal(60000m, partial.RemainingAmount);
+        var paymentReplay = await Ok<ExpensePaymentView>(await Send(w.Owner, paymentRoute, paymentInput, paymentKey));
+        Assert.Equal(partial.Version, paymentReplay.Version);
+        await AssertFinance("100000", "40000", "0", "60000");
+        var fullyPaid = await Ok<ExpensePaymentView>(await Send(w.Owner, paymentRoute,
+            new ExpensePaymentInput(60000, Today, partial.Version, "Synthetic final payment")));
+        Assert.Equal("Paid", fullyPaid.Status);
+        await AssertFinance("100000", "100000", "0", "0");
+        Assert.Equal(HttpStatusCode.Forbidden, (await w.Staff.Client.GetAsync(paymentRoute)).StatusCode);
         Assert.Equal("InProgress", (await Report(w.Owner, incident))!.Status);
         await using (var scope = fixture.Factory.Services.CreateAsyncScope())
         {
@@ -192,6 +233,27 @@ public sealed partial class IncidentApiTests(IncidentFixture fixture) : IClassFi
         Assert.Contains(maintenance.Items, h => h.WorkOrderId == work && h.Action == "verified" && h.ActualCost == 100000);
         Assert.Contains(maintenance.Items, h => h.WorkOrderId == other && h.Action == "work_order_cancelled");
         Assert.Single(await finalDb.SecurityAudit.Where(a => a.Event == "Incident_verified" && finalDb.Set<IncidentActivity>().Any(h => h.Id == a.TargetId && h.IncidentId == incident)).ToArrayAsync());
+    }
+
+    [CompactPostgresFact]
+    public async Task AcceptedZeroCostWorkNeverCreatesAnExpense()
+    {
+        var w = await Setup(); var incident = await Create(w); await Review(w, incident);
+        var work = await Assign(w, incident);
+        await ProposeAndStart(w, work);
+        await Complete(w, incident, work);
+        var state = (await Work(w.Owner, work))!;
+        var verification = new MaintenanceVerification(state.Version, 0, "Synthetic zero-cost completion", "No actual expenditure", "Repaired");
+        var key = Guid.NewGuid();
+        await Ok<IncidentCommandResult>(await Send(w.Owner, $"{Orders}/{work}/verify", verification, key));
+        await Ok<IncidentCommandResult>(await Send(w.Owner, $"{Orders}/{work}/verify", verification, key));
+        await using var scope = fixture.Factory.Services.CreateAsyncScope();
+        var db = scope.ServiceProvider.GetRequiredService<BHomePersistenceContext>();
+        Assert.Empty(await db.Set<MaintenanceExpense>().Where(e => e.IncidentId == incident).ToArrayAsync());
+        var report = await Ok<FinancialReport>(await w.Owner.Client.GetAsync($"/api/v1/financial-reports?from={Today.AddDays(-1):yyyy-MM-dd}&to={Today.AddDays(1):yyyy-MM-dd}&locationId={w.Location}"));
+        Assert.Equal("0", report.Total.OperatingExpenses);
+        Assert.Equal("0", report.Total.Management!.OperatingPaymentsConfirmed);
+        Assert.Equal("0", report.Total.Management.OperatingUnknownPaymentAmount);
     }
 
     [CompactPostgresFact]

@@ -83,9 +83,12 @@ function RefundPanelContent({ sourceId, sourceKind = 'Receipt', onChanged }: Ref
   };
   async function reload() {
     await Promise.all(
-      [['refund-source'], ['invoice-payment'], ['financial-report']].map((queryKey) =>
-        cache.invalidateQueries({ queryKey }),
-      ),
+      [
+        ['refund-source'],
+        ['invoice-payment'],
+        ['financial-report'],
+        ['finance-ledger-sources'],
+      ].map((queryKey) => cache.invalidateQueries({ queryKey })),
     );
     onChanged?.();
   }

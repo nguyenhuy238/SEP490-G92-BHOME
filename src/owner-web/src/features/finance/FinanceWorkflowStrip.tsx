@@ -1,6 +1,7 @@
 import { Box, Button, Stack, Tab, Tabs, Typography } from '@mui/material';
 import { ArrowRight, Info } from 'lucide-react';
 import { Link as RouterLink } from 'react-router';
+import { scopedFinancePath, useFinanceSearch } from './financeScope';
 
 const financeWorkspaces = [
   {
@@ -26,7 +27,7 @@ const financeWorkspaces = [
     tabs: [
       { path: '/reports', label: 'Báo cáo' },
       { path: '/expenses', label: 'Chi phí & đầu tư' },
-      { path: '/what-if', label: 'Kịch bản What-if' },
+      { path: '/what-if', label: 'Kịch bản' },
     ],
   },
 ] as const;
@@ -106,6 +107,7 @@ const matchesPath = (pathname: string, path: string) =>
   pathname === path || pathname.startsWith(`${path}/`);
 
 export function FinanceWorkflowStrip({ pathname }: { pathname: string }) {
+  const locationId = useFinanceSearch().get('locationId');
   const workspace = financeWorkspaces.find(({ tabs }) =>
     tabs.some((tab) => matchesPath(pathname, tab.path)),
   );
@@ -172,7 +174,11 @@ export function FinanceWorkflowStrip({ pathname }: { pathname: string }) {
             <Tab
               key={tab.path}
               component={RouterLink}
-              to={tab.path}
+              to={
+                workspace.label === 'Chi phí & báo cáo'
+                  ? scopedFinancePath(tab.path, locationId)
+                  : tab.path
+              }
               value={tab.path}
               label={tab.label}
               aria-current={activeTab?.path === tab.path ? 'page' : undefined}
@@ -217,7 +223,11 @@ export function FinanceWorkflowStrip({ pathname }: { pathname: string }) {
           </Stack>
           <Button
             component={RouterLink}
-            to={help.nextPath}
+            to={
+              workspace.label === 'Chi phí & báo cáo'
+                ? scopedFinancePath(help.nextPath, locationId)
+                : help.nextPath
+            }
             size="small"
             variant="outlined"
             endIcon={<ArrowRight size={15} aria-hidden="true" />}

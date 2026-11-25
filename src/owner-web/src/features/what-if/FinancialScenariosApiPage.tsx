@@ -30,6 +30,8 @@ import { useFinanceApi } from '../expenses/useFinanceApi';
 import { OwnerTable } from '../../components/common/OwnerWorkspace';
 import { downloadFinance } from '../../services/financeExport';
 import { financeMonthPeriod } from '../finance/monthPeriods';
+import { useFinanceSearch } from '../finance/financeScope';
+import { managementMoney } from '../finance/managementMoney';
 
 const initial: ScenarioInput = {
   name: '',
@@ -43,6 +45,11 @@ const initial: ScenarioInput = {
     monthlyStaffCost: '',
     monthlyMaintenanceCost: '',
     monthlyOtherCost: '',
+    monthlyServiceRevenue: '',
+    additionalInvestment: '',
+    monthlyDepreciation: null,
+    operatingPaymentPercent: '',
+    costIncreasePercent: '0',
   },
 };
 export function FinancialScenariosApiPage() {
@@ -50,7 +57,11 @@ export function FinancialScenariosApiPage() {
     cache = useQueryClient();
   const { session } = useAuth();
   const actor = session?.userId;
-  const [input, setInput] = useState(initial),
+  const initialLocation = useFinanceSearch().get('locationId');
+  const [input, setInput] = useState<ScenarioInput>(() => ({
+      ...initial,
+      baseline: { ...financeMonthPeriod(-1), locationId: initialLocation || undefined },
+    })),
     [page, setPage] = useState(1);
   const [baselineOpen, setBaselineOpen] = useState(false);
   const [view, setView] = useState<ScenarioView | null>(null),
@@ -74,6 +85,52 @@ export function FinancialScenariosApiPage() {
     queryKey: ['financial-scenarios', actor, page],
     queryFn: ({ signal }) => api.scenarios(page, signal),
   });
+  const defaults = useQuery({
+    queryKey: ['scenario-defaults', actor, input.baseline],
+    queryFn: ({ signal }) => api.scenarioDefaults(input.baseline, signal),
+    enabled: false,
+  });
+  async function restoreDefaults() {
+    if (lock.current) return;
+    lock.current = true;
+    setBusy(true);
+    setError('');
+    try {
+      const result = await defaults.refetch();
+      if (result.isError || !result.data) throw result.error;
+      const { baseline } = result.data;
+      const values = {
+        monthlyRent: result.data.monthlyRent,
+        occupancyPercent: result.data.occupancyPercent,
+        collectionPercent: result.data.collectionPercent,
+        monthlyUtilityServiceCost: result.data.monthlyUtilityServiceCost,
+        monthlyStaffCost: result.data.monthlyStaffCost,
+        monthlyMaintenanceCost: result.data.monthlyMaintenanceCost,
+        monthlyOtherCost: result.data.monthlyOtherCost,
+        monthlyDepreciation: result.data.monthlyDepreciation,
+        monthlyServiceRevenue: result.data.monthlyServiceRevenue,
+        operatingPaymentPercent: result.data.operatingPaymentPercent,
+      };
+      change({
+        ...input,
+        baseline,
+        assumptions: {
+          ...initial.assumptions,
+          ...Object.fromEntries(
+            Object.entries(values).map(([field, value]) => [
+              field,
+              value ?? (field === 'monthlyDepreciation' ? null : ''),
+            ]),
+          ),
+        },
+      });
+    } catch (e) {
+      setError(financeError(e));
+    } finally {
+      lock.current = false;
+      setBusy(false);
+    }
+  }
   function change(value: ScenarioInput) {
     setInput(value);
     setView(null);
@@ -89,8 +146,23 @@ export function FinancialScenariosApiPage() {
     try {
       const result =
         action === 'analyze'
-          ? await api.analyzeScenario(input)
-          : await api.saveScenario(input, key.current);
+          ? await api.analyzeScenario({
+              ...input,
+              assumptions: {
+                ...input.assumptions,
+                monthlyDepreciation: input.assumptions.monthlyDepreciation || null,
+              },
+            })
+          : await api.saveScenario(
+              {
+                ...input,
+                assumptions: {
+                  ...input.assumptions,
+                  monthlyDepreciation: input.assumptions.monthlyDepreciation || null,
+                },
+              },
+              key.current,
+            );
       setView(result);
       if (action === 'save') {
         await cache.invalidateQueries({ queryKey: ['financial-scenarios', actor] });
@@ -132,6 +204,11 @@ export function FinancialScenariosApiPage() {
     ['monthlyStaffCost', 'Chi phí Staff mỗi tháng (VND)'],
     ['monthlyMaintenanceCost', 'Bảo trì mỗi tháng (VND)'],
     ['monthlyOtherCost', 'Chi phí khác mỗi tháng (VND)'],
+    ['monthlyServiceRevenue', 'Doanh thu dịch vụ mỗi tháng (VND)'],
+    ['additionalInvestment', 'Đầu tư bổ sung một lần (VND)'],
+    ['monthlyDepreciation', 'Khấu hao mỗi tháng (VND, nếu biết)'],
+    ['operatingPaymentPercent', 'Tỷ lệ thực chi dự kiến (%)'],
+    ['costIncreasePercent', 'Tỷ lệ tăng chi phí (%)'],
   ] as const;
   return (
     <>
@@ -276,6 +353,57 @@ export function FinancialScenariosApiPage() {
                 </Stack>
               </AccordionDetails>
             </Accordion>
+            <Button
+              variant="outlined"
+              disabled={busy}
+              onClick={() => void restoreDefaults()}
+              sx={{ alignSelf: 'flex-start' }}
+            >
+              Lấy lại giả định từ dữ liệu thực tế
+            </Button>
+            {defaults.data &&
+              defaults.data.baseline.from === input.baseline.from &&
+              defaults.data.baseline.to === input.baseline.to &&
+              (defaults.data.baseline.locationId ?? null) ===
+                (input.baseline.locationId ?? null) && (
+                <Alert severity="info">
+                  <Typography variant="body2">
+                    Dữ liệu nền tải lúc {formatInstant(defaults.data.snapshotAt)}.
+                  </Typography>
+                  {defaults.data.obligations && (
+                    <Typography variant="body2">
+                      Nghĩa vụ từ {displayContractDate(defaults.data.obligations.from)} đến{' '}
+                      {displayContractDate(defaults.data.obligations.to)}: định kỳ{' '}
+                      {managementMoney(defaults.data.obligations.recurringDue)} (
+                      {defaults.data.obligations.recurringCount} khoản); lương hợp đồng{' '}
+                      {managementMoney(defaults.data.obligations.contractualSalary)} (
+                      {defaults.data.obligations.staffCount} nhân viên).
+                      {defaults.data.obligations.unresolvedStaffCount > 0 &&
+                        ' Cần xác nhận thêm ' +
+                          defaults.data.obligations.unresolvedStaffCount +
+                          ' nhân viên.'}
+                    </Typography>
+                  )}
+                  {defaults.data.obligations?.rentCoverage && (
+                    <Typography variant="body2">
+                      Phòng có hợp đồng trong tháng dự báo:{' '}
+                      {defaults.data.obligations.rentCoverage.contractedRooms}/
+                      {defaults.data.obligations.rentCoverage.rooms}; ngày phòng có hợp đồng:{' '}
+                      {defaults.data.obligations.rentCoverage.occupiedRoomDays}/
+                      {defaults.data.obligations.rentCoverage.possibleRoomDays}.
+                      {defaults.data.obligations.rentCoverage.unresolvedRooms > 0 &&
+                        ' Cần xác nhận giá thuê của ' +
+                          defaults.data.obligations.rentCoverage.unresolvedRooms +
+                          ' phòng.'}
+                    </Typography>
+                  )}
+                  {defaults.data.limitations.map((item) => (
+                    <Typography key={item} variant="body2">
+                      {item}
+                    </Typography>
+                  ))}
+                </Alert>
+              )}
             <Box
               sx={{
                 display: 'grid',
@@ -305,10 +433,10 @@ export function FinancialScenariosApiPage() {
                   )}
                   {!field.endsWith('Percent') ? (
                     <MoneyField
-                      required
+                      required={field !== 'monthlyDepreciation'}
                       label={label}
                       disabled={busy}
-                      value={input.assumptions[field]}
+                      value={input.assumptions[field] ?? ''}
                       maxRawLength={24}
                       onValueChange={(raw) =>
                         change({
@@ -322,7 +450,7 @@ export function FinancialScenariosApiPage() {
                       required
                       label={label}
                       disabled={busy}
-                      value={input.assumptions[field]}
+                      value={input.assumptions[field] ?? ''}
                       slotProps={{
                         htmlInput: {
                           inputMode: 'decimal',
@@ -510,6 +638,16 @@ export function FinancialScenariosApiPage() {
 }
 function Result({ title, value }: { title: string; value: ScenarioView }) {
   const r = value.result;
+  const warnings: Record<string, string> = {
+    outstanding_debt: 'Còn công nợ tại thời điểm lập kịch bản; không mặc định sẽ thu đủ.',
+    incomplete_cash_history:
+      'Dữ liệu thực thu hoặc thực chi chưa đủ để xác định dòng tiền lịch sử.',
+    missing_depreciation: 'Chưa xác định khấu hao dự kiến; lợi nhuận sau khấu hao chưa xác định.',
+    higher_operating_cost: 'Chi phí vận hành dự kiến cao hơn bình quân kỳ nền.',
+    lower_operating_profit: 'Lợi nhuận vận hành dự kiến thấp hơn bình quân kỳ nền.',
+    cash_shortfall_risk:
+      'Dòng tiền vận hành không dương hoặc dòng tiền sau đầu tư âm; cần xem lại khả năng tài trợ.',
+  };
   const mainFigures = [
     ['Tiền thu dự kiến / tháng', r.monthlyCollections],
     ['Lợi nhuận / tháng', r.monthlyProfit],
@@ -521,6 +659,9 @@ function Result({ title, value }: { title: string; value: ScenarioView }) {
     ['Dòng tiền cả kỳ dự báo', r.forecastNetCashFlow],
     ['Vốn chưa thu hồi cuối dự báo', r.remainingCapitalAtEnd],
     ['Chênh lệch lợi nhuận tháng so với nền', r.monthlyProfitDifference],
+    ['Lợi nhuận sau khấu hao / tháng', r.monthlyProfitAfterDepreciation],
+    ['Thực chi vận hành dự kiến / tháng', r.monthlyOperatingPayments],
+    ['Dòng tiền dự báo sau đầu tư', r.forecastCashAfterInvestment],
   ] as const;
   return (
     <Paper variant="outlined" sx={{ p: 1.5, my: 2, minWidth: 0, overflowWrap: 'anywhere' }}>
@@ -546,8 +687,19 @@ function Result({ title, value }: { title: string; value: ScenarioView }) {
       </Box>
       {r.unavailableReason && (
         <Alert severity="info">
-          Chưa đủ căn cứ để ước tính hoàn vốn; xem báo cáo dữ liệu nền về vốn, dòng tiền và khoản
-          hoàn tiền.
+          {r.unavailableReason === 'investment_basis_required'
+            ? 'Chưa đủ nguyên giá tài sản để dự báo vốn còn lại và thời gian hoàn vốn. Bổ sung giá mua trong dữ liệu thực tế rồi lập lại kịch bản.'
+            : 'Chưa đủ căn cứ để ước tính hoàn vốn; xem báo cáo dữ liệu nền về vốn, dòng tiền và khoản hoàn tiền.'}
+        </Alert>
+      )}
+      {!!r.warnings?.length && (
+        <Alert severity="warning" sx={{ mt: 1 }}>
+          <Typography variant="subtitle2">Các rủi ro cần xem xét</Typography>
+          {Array.from(new Set(r.warnings)).map((code) => (
+            <Typography key={code} variant="body2">
+              {warnings[code] ?? 'Có cảnh báo từ máy chủ: ' + code}
+            </Typography>
+          ))}
         </Alert>
       )}
       <Accordion variant="outlined" disableGutters sx={{ mt: 1.5 }}>
@@ -567,8 +719,12 @@ function Result({ title, value }: { title: string; value: ScenarioView }) {
                 Phát hành kỳ nền: {formatFinanceMoney(value.baseline.total.issued)}
               </Typography>
               <Typography>
-                Thu đã xác minh kỳ nền:{' '}
-                {formatFinanceMoney(value.baseline.total.verifiedCollections)}
+                {value.baseline.total.management
+                  ? 'Thực thu kinh doanh kỳ nền: '
+                  : 'Tiền phân bổ xác minh kỳ nền (dữ liệu cũ): '}
+                {value.baseline.total.management
+                  ? managementMoney(value.baseline.total.management.actualBusinessCollections)
+                  : formatFinanceMoney(value.baseline.total.verifiedCollections)}
               </Typography>
               <Typography>
                 Lợi nhuận kỳ nền: {formatFinanceMoney(value.baseline.total.operatingProfit)}
@@ -578,9 +734,13 @@ function Result({ title, value }: { title: string; value: ScenarioView }) {
           <Stack spacing={0.75}>
             {otherFigures.map(([label, amount]) => (
               <Typography key={label} sx={{ fontVariantNumeric: 'tabular-nums' }}>
-                {label}: {amount === null ? 'Chưa xác định' : formatFinanceMoney(amount)}
+                {label}: {managementMoney(amount)}
               </Typography>
             ))}
+            <Typography>
+              Biên lợi nhuận:{' '}
+              {r.monthlyMarginPercent == null ? 'Chưa xác định' : r.monthlyMarginPercent + '%'}
+            </Typography>
             <Typography>
               Ước tính số tháng hoàn vốn còn lại: {r.estimatedRemainingMonths ?? 'Chưa xác định'}
             </Typography>
