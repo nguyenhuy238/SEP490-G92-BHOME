@@ -7,15 +7,28 @@ import {
 
 // Only the bounded bar width becomes a Number. Amount labels keep their exact server strings.
 export function FinancialAmountChart({ totals }: { totals: FinanceTotals }) {
-  const rows = [
-    ['Doanh thu phát hành', totals.issued],
-    ['Thu đã xác minh', totals.verifiedCollections],
-    ['Chi phí vận hành', totals.operatingExpenses],
-    ['Nợ hiện tại trong kỳ', totals.outstandingNow],
-  ].map(([label, amount]) => ({ label: label!, amount: amount! }));
-  if (rows.some((r) => !/^\d+(?:\.0{1,4})?$/.test(r.amount))) return null;
-  const values = rows.map((r) => BigInt(r.amount.split('.')[0]!));
-  const max = values.reduce((a, b) => (a > b ? a : b), 0n);
+  const management = totals.management;
+  const rows = (
+    management
+      ? [
+          ['Doanh thu trong kỳ', management.revenue],
+          ['Tiền kinh doanh thực thu', management.actualBusinessCollections],
+          ['Chi phí vận hành đã chi xác nhận', management.operatingPaymentsConfirmed],
+          ['Công nợ hiện tại', management.currentOutstanding],
+        ]
+      : [
+          ['Doanh thu phát hành', totals.issued],
+          ['Tiền phân bổ xác minh (dữ liệu cũ)', totals.verifiedCollections],
+          ['Chi phí vận hành đã ghi nhận', totals.operatingExpenses],
+          ['Nợ hiện tại trong kỳ', totals.outstandingNow],
+        ]
+  ).map(([label, amount]) => ({ label: label!, amount }));
+  const values = rows.map((r) =>
+    r.amount != null && /^\d+(?:\.0{1,4})?$/.test(r.amount)
+      ? BigInt(r.amount.split('.')[0]!)
+      : null,
+  );
+  const max = values.reduce<bigint>((a, b) => (b != null && b > a ? b : a), 0n);
   return (
     <ChartCard
       title="Quy mô các chỉ tiêu"
@@ -25,14 +38,16 @@ export function FinancialAmountChart({ totals }: { totals: FinanceTotals }) {
         {rows.map((r, i) => (
           <Stack key={r.label} spacing={0.75}>
             <Typography variant="body2">
-              {r.label}: {formatFinanceMoney(r.amount)}
+              {r.label}: {r.amount == null ? 'Chưa xác định' : formatFinanceMoney(r.amount)}
             </Typography>
-            <LinearProgress
-              aria-label={r.label}
-              variant="determinate"
-              value={max === 0n ? 0 : Number((values[i]! * 10000n) / max) / 100}
-              sx={{ height: 8, borderRadius: 1 }}
-            />
+            {values[i] != null && (
+              <LinearProgress
+                aria-label={r.label}
+                variant="determinate"
+                value={max === 0n ? 0 : Number((values[i]! * 10000n) / max) / 100}
+                sx={{ height: 8, borderRadius: 1 }}
+              />
+            )}
           </Stack>
         ))}
       </Stack>
