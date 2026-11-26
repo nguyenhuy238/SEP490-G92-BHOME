@@ -6,6 +6,16 @@ Thiết kế lại cách **Owner hoàn thành công việc**, không thay đổi
 UC-20..25, JOB-09/10, API, quy tắc giá, việc phê duyệt hay nguyên tắc xác minh thanh toán.
 Các số liệu tài chính và trạng thái nghiệp vụ luôn lấy từ backend.
 
+## Cập nhật ngày 26/11/2026
+
+- Báo cáo mặc định chỉ hiện ba số chính: doanh thu, chi phí vận hành, lợi nhuận; một dòng thực thu/đã chi/còn phải thu và biến động chi phí. Khấu hao, vốn, biểu đồ và đối chiếu nằm trong “Xem chi tiết báo cáo”. Chọn tháng/cơ sở tải ngay, khoảng ngày/phòng tùy chọn mới cần “Xem báo cáo”. Không tính lại chỉ tiêu backend tại frontend.
+- Ba trang Báo cáo / Chi phí & đầu tư / Kịch bản giữ thanh tab; bỏ banner hướng dẫn lặp với nội dung trang. Bộ lọc tháng đặt cạnh nhau trên điện thoại, chỉ mở ngày/phòng khi cần.
+- Ghi khoản chi: ngày mặc định là hôm nay theo Việt Nam; danh mục dùng ô chọn có thể tìm gợi ý hoặc tự nhập. Form gọn hai cột trên desktop, một cột trên điện thoại; bỏ dãy nút danh mục và hướng dẫn lặp. Số tiền vẫn để Owner nhập. Lương/định kỳ/tổng hợp vốn mở khi cần. Lưu chi phí và xác nhận thực chi là hai thao tác riêng.
+- “Chi phí định kỳ” tại danh sách chi phí dẫn đến cơ sở đã chọn; khi xem toàn chuỗi, Owner chọn cơ sở trước. Deep link `/locations/:locationId/investment?tab=recurring` mở đúng tab, không tạo chi phí khi điều hướng.
+- What-if mặc định chỉ mở giá thuê, tỷ lệ lấp đầy và chi phí nhân viên; “Lấy số liệu thực tế” điền các chỉ tiêu backend đã biết. Những khoản khác nằm trong “Các khoản thu, chi khác”, giữ giá trị khi đóng. Thiếu đầu vào bắt buộc phải mở bổ sung, không gửi phân tích và không đổi dữ liệu thiếu thành 0. Đầu tư bổ sung có giả định khởi đầu rõ là không đầu tư thêm (0), sửa được trong phần mở rộng; không suy giả định này từ dữ liệu lịch sử. Nguồn dữ liệu mở riêng, hạn chế/thiếu dữ liệu vẫn cảnh báo bên ngoài.
+
+Đối chiếu và kết quả kiểm tra: [Đơn giản hóa tài chính Owner](../development/OWNER_FINANCE_SIMPLIFICATION_2026-11-26.md).
+
 ## Các vấn đề tìm thấy khi đọc giao diện và luồng hiện tại
 
 | Tình huống              | Ma sát trước đây                                                          | Hướng xử lý                                                                                    |

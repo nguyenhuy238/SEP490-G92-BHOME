@@ -77,7 +77,12 @@ function mount() {
     </QueryClientProvider>,
   );
 }
+function openOtherAssumptions() {
+  const toggle = screen.getByRole('button', { name: 'Các khoản thu, chi khác' });
+  if (toggle.getAttribute('aria-expanded') === 'false') fireEvent.click(toggle);
+}
 function fill() {
+  openOtherAssumptions();
   fireEvent.change(screen.getByLabelText(/Tên kịch bản/), { target: { value: input.name } });
   fireEvent.click(screen.getByRole('button', { name: /Kỳ dữ liệu nền/ }));
   fireEvent.change(screen.getByLabelText(/Dữ liệu nền từ/), {
@@ -91,7 +96,7 @@ function fill() {
     /Tỷ lệ lấp đầy/,
     /Tỷ lệ thu tiền/,
     /Điện nước/,
-    /Chi phí Staff/,
+    /Chi phí nhân viên/,
     /Bảo trì/,
     /Chi phí khác/,
   ];
@@ -107,6 +112,53 @@ function fill() {
   fireEvent.change(screen.getByLabelText(/Tỷ lệ thực chi dự kiến/), { target: { value: '100' } });
   fireEvent.submit(screen.getByRole('button', { name: 'Phân tích' }).closest('form')!);
 }
+it('starts with three common assumptions and keeps secondary amounts out of the form', () => {
+  mount();
+  for (const label of [/Giá thuê giả định/, /Tỷ lệ lấp đầy/, /Chi phí nhân viên/])
+    expect(screen.getByLabelText(label)).toBeVisible();
+  expect(screen.queryByLabelText(/Tỷ lệ thu tiền/)).not.toBeInTheDocument();
+  expect(screen.queryByLabelText(/Điện nước/)).not.toBeInTheDocument();
+  expect(screen.getByRole('button', { name: 'Các khoản thu, chi khác' })).toHaveAttribute(
+    'aria-expanded',
+    'false',
+  );
+  expect(mock.analyzeScenario).not.toHaveBeenCalled();
+});
+
+it('reveals missing secondary inputs rather than submitting guessed zero costs', async () => {
+  mount();
+  fireEvent.change(screen.getByLabelText(/Tên kịch bản/), {
+    target: { value: 'Kịch bản kiểm tra' },
+  });
+  fireEvent.change(screen.getByLabelText(/Giá thuê giả định/), { target: { value: '3000000' } });
+  fireEvent.change(screen.getByLabelText(/Tỷ lệ lấp đầy/), { target: { value: '80' } });
+  fireEvent.change(screen.getByLabelText(/Chi phí nhân viên/), { target: { value: '1000000' } });
+  fireEvent.submit(screen.getByRole('button', { name: 'Phân tích' }).closest('form')!);
+  expect(await screen.findByText(/Kiểm tra các khoản chưa đủ dữ liệu/)).toBeVisible();
+  expect(screen.getByLabelText(/Điện nước/)).toHaveValue('');
+  expect(screen.getByRole('button', { name: 'Các khoản thu, chi khác' })).toHaveAttribute(
+    'aria-expanded',
+    'true',
+  );
+  expect(mock.analyzeScenario).not.toHaveBeenCalled();
+});
+
+it('analyzes server defaults while secondary inputs stay collapsed', async () => {
+  const baseline = financeMonthPeriod(-1);
+  mock.scenarioDefaults.mockResolvedValue({
+    baseline,
+    snapshotAt: '2026-11-26T00:00:00Z',
+    ...input.assumptions,
+    limitations: [],
+  });
+  mount();
+  fireEvent.change(screen.getByLabelText(/Tên kịch bản/), { target: { value: input.name } });
+  fireEvent.click(screen.getByRole('button', { name: 'Lấy số liệu thực tế' }));
+  await waitFor(() => expect(screen.getByLabelText(/Giá thuê giả định/)).toHaveValue('3.000.000'));
+  expect(screen.queryByLabelText(/Điện nước/)).not.toBeInTheDocument();
+  fireEvent.submit(screen.getByRole('button', { name: 'Phân tích' }).closest('form')!);
+  await waitFor(() => expect(mock.analyzeScenario).toHaveBeenCalledWith({ ...input, baseline }));
+});
 it('analyzes explicit assumptions and preserves a save key across uncertain errors', async () => {
   mock.saveScenario.mockRejectedValue({ status: 503 });
   mount();
@@ -214,9 +266,10 @@ it('restores server defaults with future obligations without inventing an unreso
     },
   });
   mount();
-  fireEvent.click(screen.getByRole('button', { name: 'Lấy lại giả định từ dữ liệu thực tế' }));
+  fireEvent.click(screen.getByRole('button', { name: 'Lấy số liệu thực tế' }));
   expect(await screen.findByText(/Cần xác nhận thêm 1 nhân viên/)).toBeInTheDocument();
-  expect(screen.getByLabelText(/Chi phí Staff/)).toHaveValue('');
+  expect(screen.getByLabelText(/Chi phí nhân viên/)).toHaveValue('');
+  openOtherAssumptions();
   expect(screen.getByLabelText(/Chi phí khác/)).toHaveValue('300.000');
   expect(screen.getByLabelText(/Doanh thu dịch vụ mỗi tháng/)).toHaveValue('250.000');
   expect(screen.getByLabelText(/Tỷ lệ thực chi dự kiến/)).toHaveValue('93.33');
