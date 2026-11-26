@@ -21,7 +21,7 @@ internal sealed class MainDraftRenderer(IConfiguration configuration, TimeProvid
         environment?.IsProduction() == true && !contract.IsDevelopmentDemo && !ContractPaymentModes.IsTest(contract) &&
         configuration["MainDraft:ApprovedProductionTemplateSha256"] is { Length: 64 } approvedHash &&
         string.Equals(approvedHash, TemplateHash, StringComparison.OrdinalIgnoreCase);
-    public int DocumentVersion => 3;
+    public int DocumentVersion => 4;
     public string TemplateHash
     {
         get { using var stream = typeof(MainDraftRenderer).Assembly.GetManifestResourceStream("BHome.Contracts.main-tenancy-original.docx") ?? throw new ContractException(503, "contract_template_not_found"); return Convert.ToHexString(System.Security.Cryptography.SHA256.HashData(stream)); }

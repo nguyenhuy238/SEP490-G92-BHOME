@@ -66,7 +66,11 @@ internal static class ContractDocxLayout
                     ? new XElement(W + "ind", new XAttribute(W + "left", "567"), new XAttribute(W + "hanging", "283"))
                     : new XElement(W + "ind", new XAttribute(W + "firstLine", centered || heading || field ? "0" : "567")));
             if (!inTable || signature)
-                Set(properties, Element("jc", centered ? "center" : heading || field ? "left" : "both"));
+                Set(properties, Element("jc", centered ? "center" : "left"));
+            // Word/LibreOffice otherwise stretches every manual line break in justified
+            // policy paragraphs, including short headings and effective dates.
+            if (paragraph.Descendants(W + "br").Any())
+                Set(properties, new XElement(W + "ind", new XAttribute(W + "firstLine", "0")));
             // Keep numbering, styles, borders, section breaks and run emphasis intact.
             var paragraphRun = properties.Element(W + "rPr") ?? new XElement(W + "rPr");
             Set(properties, paragraphRun);

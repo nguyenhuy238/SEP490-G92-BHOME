@@ -262,7 +262,7 @@ public sealed partial class MainDraftApiTests
         var response = await staff.PostAsync($"{Root}/{draft.Id}/signing-review", null); await Success(response);
         var review = (await response.Content.ReadFromJsonAsync<ContractDocumentView>())!;
         Assert.Equal(environment != "Production", review.DevelopmentOnly);
-        Assert.NotEqual(oldReview.Id, review.Id); Assert.Equal(3, review.TemplateVersion);
+        Assert.NotEqual(oldReview.Id, review.Id); Assert.Equal(4, review.TemplateVersion);
         Assert.Equal(oldBytes, await owner.GetByteArrayAsync($"{Root}/{draft.Id}/documents/{oldReview.Id}"));
         var staleInput = new MainDraftReleaseInput(tenantUserId, draft.Version, oldReview.Id, true, EmailSigning: tenantUserId is not null);
         var staleResponse = await Release(owner, draft.Id, staleInput, Guid.NewGuid());
