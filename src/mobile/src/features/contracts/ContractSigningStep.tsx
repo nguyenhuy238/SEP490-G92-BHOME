@@ -134,7 +134,11 @@ export function ContractSigningStep({
   const bothSigned = internal
     ? !!status?.ownerAcceptedAt && !!status.tenantAcceptedAt && !status.tenantSimulated
     : [c.ownerSignerId, c.tenantUserId].every(
-        (id) => !!id && c.signatures.some((signature) => signature.signerUserId === id && signature.status === 'Signed'),
+        (id) =>
+          !!id &&
+          c.signatures.some(
+            (signature) => signature.signerUserId === id && signature.status === 'Signed',
+          ),
       );
   const currentInvitation = status?.invitations.find(
     (i) => !['Expired', 'Revoked', 'Accepted'].includes(i.status),

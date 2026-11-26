@@ -87,7 +87,7 @@ internal sealed class ContractSigningDocumentSource(BHomePersistenceContext db, 
         if (mainData is null || fileStore is null || holdingRenderer is null || clock is null)
             throw new ContractException(503, "holding_contract_document_source_unavailable");
         if (user?.UserId is not { } actor) throw new ContractException(403, "contract_role_forbidden");
-        var settings = await mainData.SettingsAsync(contract.Room.LocationId, contract.StartDate, t);
+        var settings = await mainData.SettingsAsync(contract.OwnerSignerId, contract.StartDate, t);
         if (settings is null || settings.OwnerSignerId != contract.OwnerSignerId)
             throw ContractException.Conflict("owner_contract_settings_required");
         var tenant = await mainData.IdentityAsync(contract.RoomId, contract.RepresentativeResidentId, t);
@@ -167,7 +167,7 @@ internal sealed class ContractSigningDocumentSource(BHomePersistenceContext db, 
         if (!await db.Set<ContractDocumentFile>().AnyAsync(f => f.ContractId == c.Id && f.Kind == ContractFileKind.Preview &&
             f.SnapshotHash == c.SnapshotHash && f.TemplateId == "main-tenancy-docx-v1", t))
         {
-            var settings = await mainData.SettingsAsync(c.Room.LocationId, c.StartDate, t)
+            var settings = await mainData.SettingsAsync(c.OwnerSignerId, c.StartDate, t)
                 ?? throw ContractException.Conflict("owner_contract_settings_required");
             if (settings.OwnerSignerId != c.OwnerSignerId) throw ContractException.Conflict("owner_contract_settings_required");
             var tenant = await mainData.IdentityAsync(c.RoomId, c.RepresentativeResidentId, t);

@@ -102,7 +102,10 @@ const navGroups = [
     ],
   ],
   ['Nhân sự & Vận hành', ['staff', 'staff-assignments', 'operational-tasks']],
-  ['Khách thuê & Hợp đồng', ['tenants', 'contracts', 'contract-settings', 'handovers', 'temporary-residence']],
+  [
+    'Khách thuê & Hợp đồng',
+    ['tenants', 'contracts', 'contract-settings', 'handovers', 'temporary-residence'],
+  ],
   ['Tài chính & Hóa đơn', ['finance', 'invoices', 'payments', 'reports']],
   ['Sự cố & Bảo trì', ['incidents', 'maintenance']],
   ['Thông báo', ['notifications']],
@@ -173,7 +176,12 @@ export function AppShell() {
   const location = useLocation();
   const workspaceParts = location.pathname.split('/');
   const current = workspaceParts[1] || 'dashboard';
-  const currentKey = current === 'configuration' ? workspaceParts.slice(1, 3).join('/') : current === 'contracts' && workspaceParts[2] === 'settings' ? 'contract-settings' : current;
+  const currentKey =
+    current === 'configuration'
+      ? workspaceParts.slice(1, 3).join('/')
+      : current === 'contracts' && workspaceParts[2] === 'settings'
+        ? 'contract-settings'
+        : current;
   const selectedNavKey = financeWorkspaceByRoute[current] ?? currentKey;
   const inLocationWorkspace = workspaceParts[1] === 'locations' && Boolean(workspaceParts[2]);
   const locations = data?.records.locations ?? [];

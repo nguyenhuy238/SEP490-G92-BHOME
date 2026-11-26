@@ -489,7 +489,14 @@ function contract(kind: string, internal: boolean, signed = false): ContractView
 }
 
 it.each([
-  { state: 'chưa ký', ownerAt: null, tenantAt: null, title: 'Gửi hợp đồng để ký', signed: false, waiting: 2 },
+  {
+    state: 'chưa ký',
+    ownerAt: null,
+    tenantAt: null,
+    title: 'Gửi hợp đồng để ký',
+    signed: false,
+    waiting: 2,
+  },
   {
     state: 'ký một phần',
     ownerAt: '2026-11-15T00:00:00Z',
@@ -506,44 +513,47 @@ it.each([
     signed: true,
     waiting: 0,
   },
-])('shows compact staff signing status for $state', async ({ ownerAt, tenantAt, title, signed, waiting }) => {
-  const c = contract('Main', true, signed);
-  const request = vi.fn(async (path: string) => {
-    if (path.endsWith('/internal-signing'))
-      return {
-        invitations: [],
-        ownerAcceptedAt: ownerAt,
-        tenantAcceptedAt: tenantAt,
-        canContinue: signed,
-      };
-    if (path === `/api/v1/contracts/${id}`) return c;
-    throw new Error(`Unexpected request: ${path}`);
-  });
-  render(
-    <ContractSigningStep
-      api={contractClient(request as unknown as Parameters<typeof contractClient>[0])}
-      contract={c}
-      actorId="staff"
-      role="Staff"
-      onChanged={vi.fn()}
-      onContinue={vi.fn()}
-    />,
-  );
-  await screen.findByText(title);
-  expect(screen.getByText('Chủ nhà')).toBeTruthy();
-  expect(screen.getByText('Người đại diện thuê')).toBeTruthy();
-  expect(screen.queryByText(/\(Owner\)/)).toBeNull();
-  expect(screen.queryByText('OTP qua lời mời')).toBeNull();
-  expect(screen.queryByText('2026-11-15')).toBeNull();
-  if (signed) {
-    expect(screen.getByText('Đã hoàn tất ký hợp đồng')).toBeTruthy();
-    expect(screen.queryByText('Làm mới trạng thái ký')).toBeNull();
-    expect(screen.getByText('Tiếp tục thanh toán')).toBeTruthy();
-  } else {
-    expect(screen.getAllByText('Chờ ký')).toHaveLength(waiting);
-    expect(screen.getByText('Làm mới trạng thái ký')).toBeTruthy();
-  }
-});
+])(
+  'shows compact staff signing status for $state',
+  async ({ ownerAt, tenantAt, title, signed, waiting }) => {
+    const c = contract('Main', true, signed);
+    const request = vi.fn(async (path: string) => {
+      if (path.endsWith('/internal-signing'))
+        return {
+          invitations: [],
+          ownerAcceptedAt: ownerAt,
+          tenantAcceptedAt: tenantAt,
+          canContinue: signed,
+        };
+      if (path === `/api/v1/contracts/${id}`) return c;
+      throw new Error(`Unexpected request: ${path}`);
+    });
+    render(
+      <ContractSigningStep
+        api={contractClient(request as unknown as Parameters<typeof contractClient>[0])}
+        contract={c}
+        actorId="staff"
+        role="Staff"
+        onChanged={vi.fn()}
+        onContinue={vi.fn()}
+      />,
+    );
+    await screen.findByText(title);
+    expect(screen.getByText('Chủ nhà')).toBeTruthy();
+    expect(screen.getByText('Người đại diện thuê')).toBeTruthy();
+    expect(screen.queryByText(/\(Owner\)/)).toBeNull();
+    expect(screen.queryByText('OTP qua lời mời')).toBeNull();
+    expect(screen.queryByText('2026-11-15')).toBeNull();
+    if (signed) {
+      expect(screen.getByText('Đã hoàn tất ký hợp đồng')).toBeTruthy();
+      expect(screen.queryByText('Làm mới trạng thái ký')).toBeNull();
+      expect(screen.getByText('Tiếp tục thanh toán')).toBeTruthy();
+    } else {
+      expect(screen.getAllByText('Chờ ký')).toHaveLength(waiting);
+      expect(screen.getByText('Làm mới trạng thái ký')).toBeTruthy();
+    }
+  },
+);
 
 it.each([
   ['Holding', true],

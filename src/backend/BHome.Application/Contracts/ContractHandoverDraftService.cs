@@ -810,7 +810,7 @@ public sealed partial class ContractService
     {
         if (handoverPartyData is null)
             throw new ContractException(503, "handover_party_data_unavailable");
-        var settings = await handoverPartyData.SettingsAsync(contract.Room.LocationId, contract.StartDate, token);
+        var settings = await handoverPartyData.SettingsAsync(contract.OwnerSignerId, contract.StartDate, token);
         if (settings is null || settings.OwnerSignerId != contract.OwnerSignerId ||
             string.IsNullOrWhiteSpace(settings.Owner.FullName))
             throw ContractException.Conflict("handover_owner_identity_unavailable");

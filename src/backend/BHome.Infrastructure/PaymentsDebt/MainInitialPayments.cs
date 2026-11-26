@@ -186,12 +186,15 @@ internal sealed class MainInitialPayments(BHomePersistenceContext db, ContractSe
             var rendered = issueQr && bound && reference is not null && outstanding > 0 ? qr.Generate(account!.BankIdentifier, account.AccountNumber, outstanding, reference) : null;
             var availability = outstanding == 0 ? "Settled" : !sepay.Enabled ? "PaymentProviderDisabled" :
                 !bound ? "ReceivingAccountUnavailable" : reference is null ? "PaymentCodeUnavailable" : rendered is null ? "InstructionsOnly" : "Available";
+            List<MainInitialCharge> charges = invoicePayable
+                ? [new("INVOICE", "Số dư hóa đơn phòng", invoiceOutstanding)]
+                : [new("RENT", "Tiền thuê tháng đầu", requiredRent)];
+            if (!invoicePayable && payable.CalculationVersion < 2) charges.AddRange(payable.Charges);
             return new MainInitialPaymentView(id, availability, c.Status.ToString(), signed,
-                invoicePayable ? [new MainInitialCharge("INVOICE", "Số dư hóa đơn phòng", invoiceOutstanding)] :
-                    [new MainInitialCharge("RENT", "Tiền thuê tháng đầu", requiredRent)],
+                charges,
                 invoicePayable ? 0 : requiredRent,
                 requiredDeposit, payable.ContractId == id ? c.AppliedHoldingDeposit : 0, deposit, rent, outstanding, outstanding == 0, reference, bound ? account!.BankIdentifier : null, bound ? account!.AccountNumber : null, bound ? account!.AccountHolder : null, rendered?.PngDataUri, payableMode == "Test",
-                outstandingDeposit, outstandingRentAndFees, []);
+                outstandingDeposit, outstandingRentAndFees, payable.CalculationVersion < 2 ? meteredRates : []);
         }, token);
     }
 }

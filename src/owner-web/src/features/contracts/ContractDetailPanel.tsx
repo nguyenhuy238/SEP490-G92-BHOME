@@ -58,7 +58,15 @@ import { contractPdfName } from '../../../../../packages/client-core/src/contrac
 import { ContractDocumentViewer } from './ContractDocumentViewer';
 import { useObjectUrl } from './useObjectUrl';
 import { OwnerContractPreview } from './OwnerContractPreview';
-import { ContractEventHistory, ContractPaymentHistory, ContractPeople, ContractRelatedVersions, DetailFacts, DetailSection, useContractFunds } from './ContractDetailSections';
+import {
+  ContractEventHistory,
+  ContractPaymentHistory,
+  ContractPeople,
+  ContractRelatedVersions,
+  DetailFacts,
+  DetailSection,
+} from './ContractDetailSections';
+import { useContractFunds } from './useContractFunds';
 import ContentCopyIcon from '@mui/icons-material/ContentCopy';
 import CloseIcon from '@mui/icons-material/Close';
 import MoreVertIcon from '@mui/icons-material/MoreVert';
@@ -193,7 +201,13 @@ export function ContractDetailPanel({
     });
   }
   const primaryAction = actions.find((candidate) =>
-    ['activate', 'holding-activation', 'signing', 'holding-conversion', 'deposit-verifications'].includes(candidate.operation),
+    [
+      'activate',
+      'holding-activation',
+      'signing',
+      'holding-conversion',
+      'deposit-verifications',
+    ].includes(candidate.operation),
   );
   const menuActions = actions.filter((candidate) => candidate !== primaryAction);
   const hasTerminationReview = m?.status === 'Requested' || m?.status === 'Rejected';
@@ -205,7 +219,17 @@ export function ContractDetailPanel({
   };
   return (
     <Stack spacing={0} sx={{ height: '100%', minHeight: 0, minWidth: 0, overflow: 'hidden' }}>
-      <Box sx={{ flex: '0 0 auto', p: { xs: 1.5, sm: 2 }, pb: 0, borderBottom: 1, borderColor: 'divider', bgcolor: 'background.paper', zIndex: 1 }}>
+      <Box
+        sx={{
+          flex: '0 0 auto',
+          p: { xs: 1.5, sm: 2 },
+          pb: 0,
+          borderBottom: 1,
+          borderColor: 'divider',
+          bgcolor: 'background.paper',
+          zIndex: 1,
+        }}
+      >
         <Stack direction="row" spacing={1} sx={{ alignItems: 'center', flexWrap: 'wrap' }}>
           <Typography component="h2" sx={{ fontSize: 18, fontWeight: 700, mr: 0.5 }}>
             Phòng {c.roomNumber || '—'}
@@ -214,7 +238,16 @@ export function ContractDetailPanel({
           <Chip size="small" variant="outlined" label={text(c.kind)} />
           <Box sx={{ flex: 1 }} />
           <Tooltip title={copied ? 'Đã sao chép mã hợp đồng' : 'Sao chép mã hợp đồng'}>
-            <IconButton size="small" aria-label="Sao chép mã hợp đồng" onClick={() => void navigator.clipboard?.writeText(c.id).then(() => { setCopied(true); setTimeout(() => setCopied(false), 1500); })}>
+            <IconButton
+              size="small"
+              aria-label="Sao chép mã hợp đồng"
+              onClick={() =>
+                void navigator.clipboard?.writeText(c.id).then(() => {
+                  setCopied(true);
+                  setTimeout(() => setCopied(false), 1500);
+                })
+              }
+            >
               <ContentCopyIcon fontSize="small" />
             </IconButton>
           </Tooltip>
@@ -230,417 +263,552 @@ export function ContractDetailPanel({
               </IconButton>
             </span>
           </Tooltip>
-          {onClose && <IconButton size="small" aria-label="Đóng chi tiết hợp đồng" onClick={onClose}><CloseIcon fontSize="small" /></IconButton>}
+          {onClose && (
+            <IconButton size="small" aria-label="Đóng chi tiết hợp đồng" onClick={onClose}>
+              <CloseIcon fontSize="small" />
+            </IconButton>
+          )}
         </Stack>
         <Typography variant="caption" color="text.secondary" sx={{ overflowWrap: 'anywhere' }}>
           {c.locationName || 'Cơ sở'}
         </Typography>
-        <Tabs value={tab} onChange={(_, value: number) => setTab(value)} variant="scrollable" allowScrollButtonsMobile aria-label="Các mục chi tiết hợp đồng">
-          {['Tổng quan', 'Thanh toán', 'Hợp đồng', 'Người thuê', 'Lịch sử'].map((label) => <Tab key={label} label={label} />)}
+        <Tabs
+          value={tab}
+          onChange={(_, value: number) => setTab(value)}
+          variant="scrollable"
+          allowScrollButtonsMobile
+          aria-label="Các mục chi tiết hợp đồng"
+        >
+          {['Tổng quan', 'Thanh toán', 'Hợp đồng', 'Người thuê', 'Lịch sử'].map((label) => (
+            <Tab key={label} label={label} />
+          ))}
         </Tabs>
       </Box>
-      <Box sx={{ flex: '1 1 auto', minHeight: 0, overflowY: 'auto', overflowX: 'hidden', p: { xs: 1.5, sm: 2 }, display: 'flex', flexDirection: 'column', gap: 2 }}>
-      {tab === 0 && <>
-      <Paper variant="outlined" sx={{ p: 2 }}>
-        <DetailSection title="Thông tin hợp đồng">
-          <DetailFacts rows={[
-            ['Người đại diện', representative], ['Số người ở', `${c.residentIds.length} người`],
-            ...(c.kind !== 'Holding' ? [['Tiền thuê / tháng', formatContractMoney(c.monthlyRent)] as [string, ReactNode]] : []),
-            ['Ngày bắt đầu', displayContractDate(c.startDate)], ['Ngày hết hạn', displayContractDate(c.endDate)],
-            ['Tiền cọc đã nhận', funds.verified ? formatContractMoney(funds.verified) : 'Chưa có thông tin'],
-          ]} />
-        </DetailSection>
-        {!activated && r && <Alert sx={{ mt: 2 }} severity={r.ready ? 'success' : 'info'}>
-          {r.ready ? 'Đã đủ điều kiện theo xác nhận của hệ thống.' : `Còn thiếu tiền cọc: ${funds.remaining ? formatContractMoney(funds.remaining) : 'Chưa có thông tin'}${r.blockers.length ? ` · ${r.blockers.map(text).join(', ')}` : ''}`}
-        </Alert>}
-        <Accordion disableGutters elevation={0} sx={{ mt: 1 }}>
-          <AccordionSummary expandIcon={<ExpandMoreIcon />}><Typography variant="body2">Tiến trình hợp đồng</Typography></AccordionSummary>
-          <AccordionDetails><Stepper activeStep={activeStep} alternativeLabel sx={{ '& .MuiStep-root': { px: { xs: 0.25, sm: 1 } }, '& .MuiStepLabel-label': { overflowWrap: 'anywhere' } }}>
-            {steps.map((s) => <Step key={s.label} completed={s.done}><StepLabel>{s.label}</StepLabel></Step>)}
-          </Stepper></AccordionDetails>
-        </Accordion>
-        {c.previousContractId && <Button size="small" sx={{ mt: 1 }} onClick={() => onChanged(c.previousContractId!)}>Xem hợp đồng trước</Button>}
-      </Paper>
-      <ContractNavigation id={c.id} reviewRequest={m?.status === 'Requested' || m?.status === 'Rejected'} />
-      </>}
-
-      {!!error && <Alert severity="error">{error}</Alert>}
-      {!!notice && <Alert severity="success">{notice}</Alert>}
-      {tab === 2 && <>
-      {c.signingMode !== 'INTERNAL_OTP_DRAWN' && <OwnerContractPreview api={api} contract={c} />}
-      {c.signingMode === 'INTERNAL_OTP_DRAWN' && (
-        <Paper variant="outlined" sx={{ p: 2, borderRadius: 3 }}>
-          <InternalSigningPanel api={api} contract={c} onChanged={detail.reload} />
-        </Paper>
-      )}
-      </>}
-
-      {tab === 0 && <>
-      {/* 2. What to do next: the actions the server allows now, and what still blocks activation */}
-      <ChartCard title="Việc cần làm">
-        <Stack spacing={1.5}>
-          {r && !activated && (
-            <Box>
-              {r.ready ? (
-                <Alert severity="success">
-                  {['Main', 'Holding'].includes(c.kind)
-                    ? 'Đủ điều kiện. Hệ thống đang tự động cập nhật trạng thái hợp đồng.'
-                    : 'Đủ điều kiện để Owner xác nhận kích hoạt.'}
-                </Alert>
-              ) : (
-                <>
-                  <Typography variant="body2" color="text.secondary">
-                    Chưa kích hoạt được vì (máy chủ kiểm tra lại khi kích hoạt):
-                  </Typography>
-                  <Box component="ul" sx={{ m: 0, pl: 2.5 }}>
-                    {r.blockers.map((b) => (
-                      <Typography component="li" variant="body2" key={b}>
-                        {text(b)}
-                      </Typography>
-                    ))}
-                  </Box>
-                  <Typography variant="caption" color="text.secondary">
-                    Cọc đã xác minh: {formatContractMoney(r.verifiedDeposit)} · Còn thiếu:{' '}
-                    {formatContractMoney(r.remainingDeposit)}
-                  </Typography>
-                </>
-              )}
-            </Box>
-          )}
-        </Stack>
-      </ChartCard>
-      </>}
-
-      {tab === 2 && <>
-      {c.agreedCharges?.length ||
-      c.priceLockedAt ||
-      ['Active', 'PendingSigning', 'PendingActivation', 'Terminated', 'Superseded'].includes(
-        c.status,
-      ) ? (
-        <Accordion disableGutters variant="outlined">
-          <AccordionSummary expandIcon={<ExpandMoreIcon />}>
-            <Typography>Giá & phí theo hợp đồng</Typography>
-          </AccordionSummary>
-          <AccordionDetails>
-            <Stack spacing={1.5}>
-              {c.agreedCharges?.length ? (
-                <>
-                  <Alert severity="info">
-                    {c.priceLockedAt || c.approvedAt || c.status !== 'Draft'
-                      ? 'Biểu phí đã chốt được giữ nguyên trong suốt hợp đồng. Hóa đơn sử dụng đơn giá này, không sử dụng biểu giá mới của phòng.'
-                      : 'Biểu phí dự kiến của bản nháp; sẽ được khóa khi hợp đồng có ràng buộc.'}
-                  </Alert>
-                  {c.agreedCharges.map((charge) => (
-                    <Stack
-                      key={charge.chargeCode}
-                      direction={{ xs: 'column', sm: 'row' }}
-                      sx={{
-                        justifyContent: 'space-between',
-                        gap: { xs: 0.5, sm: 2 },
-                        overflowWrap: 'anywhere',
-                      }}
-                    >
-                      <Typography variant="body2">
-                        {charge.name || charge.chargeCode} · {charge.chargeCode}
-                      </Typography>
-                      <Typography
-                        variant="body2"
-                        sx={{ fontWeight: 600, fontVariantNumeric: 'tabular-nums' }}
-                      >
-                        {formatBillingDecimal(charge.rate)} đ/
-                        {charge.category === 1
-                          ? 'kWh'
-                          : charge.category === 2
-                            ? 'm³'
-                            : charge.method === 2
-                              ? 'người/tháng'
-                              : 'tháng'}
-                      </Typography>
-                    </Stack>
-                  ))}
-                </>
-              ) : (
-                <Alert severity="warning">
-                  Hợp đồng chưa có biểu phí đã chốt để đối chiếu. Không sử dụng giá cấu hình hiện
-                  tại thay thế.
+      <Box
+        sx={{
+          flex: '1 1 auto',
+          minHeight: 0,
+          overflowY: 'auto',
+          overflowX: 'hidden',
+          p: { xs: 1.5, sm: 2 },
+          display: 'flex',
+          flexDirection: 'column',
+          gap: 2,
+        }}
+      >
+        {tab === 0 && (
+          <>
+            <Paper variant="outlined" sx={{ p: 2 }}>
+              <DetailSection title="Thông tin hợp đồng">
+                <DetailFacts
+                  rows={[
+                    ['Người đại diện', representative],
+                    ['Số người ở', `${c.residentIds.length} người`],
+                    ...(c.kind !== 'Holding'
+                      ? [
+                          ['Tiền thuê / tháng', formatContractMoney(c.monthlyRent)] as [
+                            string,
+                            ReactNode,
+                          ],
+                        ]
+                      : []),
+                    ['Ngày bắt đầu', displayContractDate(c.startDate)],
+                    ['Ngày hết hạn', displayContractDate(c.endDate)],
+                    [
+                      'Tiền cọc đã nhận',
+                      funds.verified ? formatContractMoney(funds.verified) : 'Chưa có thông tin',
+                    ],
+                  ]}
+                />
+              </DetailSection>
+              {!activated && r && (
+                <Alert sx={{ mt: 2 }} severity={r.ready ? 'success' : 'info'}>
+                  {r.ready
+                    ? 'Đã đủ điều kiện theo xác nhận của hệ thống.'
+                    : `Còn thiếu tiền cọc: ${funds.remaining ? formatContractMoney(funds.remaining) : 'Chưa có thông tin'}${r.blockers.length ? ` · ${r.blockers.map(text).join(', ')}` : ''}`}
                 </Alert>
               )}
-            </Stack>
-          </AccordionDetails>
-        </Accordion>
-      ) : null}
-
-      {/* 3. Signatures: one line per party, then the signed PDF */}
-      {c.signingMode !== 'INTERNAL_OTP_DRAWN' && (
-        <ChartCard
-          title="Chữ ký số"
-          subtitle={
-            c.isDevelopmentDemo
-              ? 'Mô phỏng Development — không dùng chứng thư hoặc chữ ký điện tử'
-              : signingMethods && !signingMethods.methods.includes('VIETTEL_MYSIGN')
-                ? 'Chủ trọ ký số MySign (chứng thư qua VNeID) · Người thuê ký điện tử, xác thực OTP email'
-                : 'Mỗi bên ký bằng chứng thư Viettel MySign của chính mình'
-          }
-        >
-          {signedCount === 2 && <Alert severity="success" sx={{ mb: 2 }}>Hai bên đã ký hợp đồng.</Alert>}
-          <Stack divider={<Divider flexItem />} spacing={1}>
-            {parties.map((p) => (
-              <Stack
-                key={p.party}
-                direction="row"
-                spacing={1}
-                sx={{ alignItems: 'center', flexWrap: 'wrap' }}
-              >
-                <Typography sx={{ fontWeight: 600, minWidth: 150 }}>
-                  {p.party} · {p.role}
-                  {p.id === actorId ? ' (bạn)' : ''}
-                </Typography>
-                {p.signature ? (
-                  <StatusChip label={text(p.signature.status)} />
-                ) : (
-                  <Chip size="small" variant="outlined" label="Chưa có yêu cầu ký" />
-                )}
-                {p.signature && !c.isDevelopmentDemo && (
-                  <Typography variant="body2" color="text.secondary">
-                    {signingMethodLabel(p.signature.method)}
-                  </Typography>
-                )}
-                {p.signature?.signedAt && (
-                  <Typography variant="body2" color="text.secondary">
-                    {formatInstant(p.signature.signedAt)}
-                  </Typography>
-                )}
-                {p.signature?.certificateSubject && p.signature.method !== 'OTP' && (
-                  <Typography
-                    variant="body2"
-                    color="text.secondary"
-                    sx={{ overflowWrap: 'anywhere' }}
+              <Accordion disableGutters elevation={0} sx={{ mt: 1 }}>
+                <AccordionSummary expandIcon={<ExpandMoreIcon />}>
+                  <Typography variant="body2">Tiến trình hợp đồng</Typography>
+                </AccordionSummary>
+                <AccordionDetails>
+                  <Stepper
+                    activeStep={activeStep}
+                    alternativeLabel
+                    sx={{
+                      '& .MuiStep-root': { px: { xs: 0.25, sm: 1 } },
+                      '& .MuiStepLabel-label': { overflowWrap: 'anywhere' },
+                    }}
                   >
-                    {p.signature.certificateSubject}
-                    {p.signature.certificateIssuer ? ` (${p.signature.certificateIssuer})` : ''}
-                  </Typography>
+                    {steps.map((s) => (
+                      <Step key={s.label} completed={s.done}>
+                        <StepLabel>{s.label}</StepLabel>
+                      </Step>
+                    ))}
+                  </Stepper>
+                </AccordionDetails>
+              </Accordion>
+              {c.previousContractId && (
+                <Button
+                  size="small"
+                  sx={{ mt: 1 }}
+                  onClick={() => onChanged(c.previousContractId!)}
+                >
+                  Xem hợp đồng trước
+                </Button>
+              )}
+            </Paper>
+            <ContractNavigation
+              id={c.id}
+              reviewRequest={m?.status === 'Requested' || m?.status === 'Rejected'}
+            />
+          </>
+        )}
+
+        {!!error && <Alert severity="error">{error}</Alert>}
+        {!!notice && <Alert severity="success">{notice}</Alert>}
+        {tab === 2 && (
+          <>
+            {c.signingMode !== 'INTERNAL_OTP_DRAWN' && (
+              <OwnerContractPreview api={api} contract={c} />
+            )}
+            {c.signingMode === 'INTERNAL_OTP_DRAWN' && (
+              <Paper variant="outlined" sx={{ p: 2, borderRadius: 3 }}>
+                <InternalSigningPanel api={api} contract={c} onChanged={detail.reload} />
+              </Paper>
+            )}
+          </>
+        )}
+
+        {tab === 0 && (
+          <>
+            {/* 2. What to do next: the actions the server allows now, and what still blocks activation */}
+            <ChartCard title="Việc cần làm">
+              <Stack spacing={1.5}>
+                {r && !activated && (
+                  <Box>
+                    {r.ready ? (
+                      <Alert severity="success">
+                        {['Main', 'Holding'].includes(c.kind)
+                          ? 'Đủ điều kiện. Hệ thống đang tự động cập nhật trạng thái hợp đồng.'
+                          : 'Đủ điều kiện để Owner xác nhận kích hoạt.'}
+                      </Alert>
+                    ) : (
+                      <>
+                        <Typography variant="body2" color="text.secondary">
+                          Chưa kích hoạt được vì (máy chủ kiểm tra lại khi kích hoạt):
+                        </Typography>
+                        <Box component="ul" sx={{ m: 0, pl: 2.5 }}>
+                          {r.blockers.map((b) => (
+                            <Typography component="li" variant="body2" key={b}>
+                              {text(b)}
+                            </Typography>
+                          ))}
+                        </Box>
+                        <Typography variant="caption" color="text.secondary">
+                          Cọc đã xác minh: {formatContractMoney(r.verifiedDeposit)} · Còn thiếu:{' '}
+                          {formatContractMoney(r.remainingDeposit)}
+                        </Typography>
+                      </>
+                    )}
+                  </Box>
                 )}
               </Stack>
-            ))}
-          </Stack>
-          {signer && (
-            <Box sx={{ mt: 2 }}>
-              <OwnerSigningPanel
-                api={api}
+            </ChartCard>
+          </>
+        )}
+
+        {tab === 2 && (
+          <>
+            {c.agreedCharges?.length ||
+            c.priceLockedAt ||
+            ['Active', 'PendingSigning', 'PendingActivation', 'Terminated', 'Superseded'].includes(
+              c.status,
+            ) ? (
+              <Accordion disableGutters variant="outlined">
+                <AccordionSummary expandIcon={<ExpandMoreIcon />}>
+                  <Typography>Giá & phí theo hợp đồng</Typography>
+                </AccordionSummary>
+                <AccordionDetails>
+                  <Stack spacing={1.5}>
+                    {c.agreedCharges?.length ? (
+                      <>
+                        <Alert severity="info">
+                          {c.priceLockedAt || c.approvedAt || c.status !== 'Draft'
+                            ? 'Biểu phí đã chốt được giữ nguyên trong suốt hợp đồng. Hóa đơn sử dụng đơn giá này, không sử dụng biểu giá mới của phòng.'
+                            : 'Biểu phí dự kiến của bản nháp; sẽ được khóa khi hợp đồng có ràng buộc.'}
+                        </Alert>
+                        {c.agreedCharges.map((charge) => (
+                          <Stack
+                            key={charge.chargeCode}
+                            direction={{ xs: 'column', sm: 'row' }}
+                            sx={{
+                              justifyContent: 'space-between',
+                              gap: { xs: 0.5, sm: 2 },
+                              overflowWrap: 'anywhere',
+                            }}
+                          >
+                            <Typography variant="body2">
+                              {charge.name || charge.chargeCode} · {charge.chargeCode}
+                            </Typography>
+                            <Typography
+                              variant="body2"
+                              sx={{ fontWeight: 600, fontVariantNumeric: 'tabular-nums' }}
+                            >
+                              {formatBillingDecimal(charge.rate)} đ/
+                              {charge.category === 1
+                                ? 'kWh'
+                                : charge.category === 2
+                                  ? 'm³'
+                                  : charge.method === 2
+                                    ? 'người/tháng'
+                                    : 'tháng'}
+                            </Typography>
+                          </Stack>
+                        ))}
+                      </>
+                    ) : (
+                      <Alert severity="warning">
+                        Hợp đồng chưa có biểu phí đã chốt để đối chiếu. Không sử dụng giá cấu hình
+                        hiện tại thay thế.
+                      </Alert>
+                    )}
+                  </Stack>
+                </AccordionDetails>
+              </Accordion>
+            ) : null}
+
+            {/* 3. Signatures: one line per party, then the signed PDF */}
+            {c.signingMode !== 'INTERNAL_OTP_DRAWN' && (
+              <ChartCard
+                title="Chữ ký số"
+                subtitle={
+                  c.isDevelopmentDemo
+                    ? 'Mô phỏng Development — không dùng chứng thư hoặc chữ ký điện tử'
+                    : signingMethods && !signingMethods.methods.includes('VIETTEL_MYSIGN')
+                      ? 'Chủ trọ ký số MySign (chứng thư qua VNeID) · Người thuê ký điện tử, xác thực OTP email'
+                      : 'Mỗi bên ký bằng chứng thư Viettel MySign của chính mình'
+                }
+              >
+                {signedCount === 2 && (
+                  <Alert severity="success" sx={{ mb: 2 }}>
+                    Hai bên đã ký hợp đồng.
+                  </Alert>
+                )}
+                <Stack divider={<Divider flexItem />} spacing={1}>
+                  {parties.map((p) => (
+                    <Stack
+                      key={p.party}
+                      direction="row"
+                      spacing={1}
+                      sx={{ alignItems: 'center', flexWrap: 'wrap' }}
+                    >
+                      <Typography sx={{ fontWeight: 600, minWidth: 150 }}>
+                        {p.party} · {p.role}
+                        {p.id === actorId ? ' (bạn)' : ''}
+                      </Typography>
+                      {p.signature ? (
+                        <StatusChip label={text(p.signature.status)} />
+                      ) : (
+                        <Chip size="small" variant="outlined" label="Chưa có yêu cầu ký" />
+                      )}
+                      {p.signature && !c.isDevelopmentDemo && (
+                        <Typography variant="body2" color="text.secondary">
+                          {signingMethodLabel(p.signature.method)}
+                        </Typography>
+                      )}
+                      {p.signature?.signedAt && (
+                        <Typography variant="body2" color="text.secondary">
+                          {formatInstant(p.signature.signedAt)}
+                        </Typography>
+                      )}
+                      {p.signature?.certificateSubject && p.signature.method !== 'OTP' && (
+                        <Typography
+                          variant="body2"
+                          color="text.secondary"
+                          sx={{ overflowWrap: 'anywhere' }}
+                        >
+                          {p.signature.certificateSubject}
+                          {p.signature.certificateIssuer
+                            ? ` (${p.signature.certificateIssuer})`
+                            : ''}
+                        </Typography>
+                      )}
+                    </Stack>
+                  ))}
+                </Stack>
+                {signer && (
+                  <Box sx={{ mt: 2 }}>
+                    <OwnerSigningPanel
+                      api={api}
+                      contract={c}
+                      actorId={actorId}
+                      methods={signingMethods}
+                      onChanged={() => {
+                        detail.reload();
+                        onChanged();
+                      }}
+                    />
+                  </Box>
+                )}
+                <Stack direction="row" spacing={1} sx={{ mt: 2, flexWrap: 'wrap' }}>
+                  <Button
+                    variant="outlined"
+                    disabled={busy || !anySigned}
+                    onClick={() => void openSigned()}
+                  >
+                    Xem hợp đồng đã ký
+                  </Button>
+                  <Button
+                    disabled={busy || !anySigned}
+                    onClick={() =>
+                      void run(async () =>
+                        downloadBlob(await api.document(id), contractPdfName(c.kind, id)),
+                      )
+                    }
+                  >
+                    Tải tài liệu ký
+                  </Button>
+                </Stack>
+                {anySigned && signedUrl && (
+                  <ContractDocumentViewer
+                    url={signedUrl}
+                    title="PDF hợp đồng đã ký"
+                    filename={contractPdfName(c.kind, id)}
+                  />
+                )}
+              </ChartCard>
+            )}
+
+            {/* 4. Reference material, folded away until needed */}
+          </>
+        )}
+        {tab === 1 && (
+          <>
+            {['Main', 'Holding'].includes(c.kind) && !c.previousContractId && (
+              <DepositReceiptPanel
                 contract={c}
-                actorId={actorId}
-                methods={signingMethods}
-                onChanged={() => {
+                changed={() => {
                   detail.reload();
                   onChanged();
                 }}
               />
-            </Box>
-          )}
-          <Stack direction="row" spacing={1} sx={{ mt: 2, flexWrap: 'wrap' }}>
-            <Button
-              variant="outlined"
-              disabled={busy || !anySigned}
-              onClick={() => void openSigned()}
-            >
-              Xem hợp đồng đã ký
-            </Button>
-            <Button
-              disabled={busy || !anySigned}
-              onClick={() =>
-                void run(async () =>
-                  downloadBlob(await api.document(id), contractPdfName(c.kind, id)),
-                )
-              }
-            >
-              Tải tài liệu ký
-            </Button>
-          </Stack>
-          {anySigned && signedUrl && (
-            <ContractDocumentViewer
-              url={signedUrl}
-              title="PDF hợp đồng đã ký"
-              filename={contractPdfName(c.kind, id)}
-            />
-          )}
-        </ChartCard>
-      )}
+            )}
+            {c.kind === 'Holding' && (
+              <HoldingDepositPanel
+                contract={c}
+                changed={() => {
+                  detail.reload();
+                  onChanged();
+                }}
+              />
+            )}
+            {['Main', 'Holding'].includes(c.kind) && <ContractPaymentHistory api={api} id={c.id} />}
+          </>
+        )}
+        {tab === 2 && (
+          <>
+            <Accordion disableGutters variant="outlined">
+              <AccordionSummary expandIcon={<ExpandMoreIcon />}>
+                <Typography sx={{ fontWeight: 600 }}>Điều khoản đưa đi ký</Typography>
+              </AccordionSummary>
+              <AccordionDetails>
+                {!!c.occupants?.length && (
+                  <Typography variant="body2" color="text.secondary" sx={{ mb: 1 }}>
+                    Người ở: {c.occupants.map((o) => o.label).join(', ')}
+                  </Typography>
+                )}
+                <Box
+                  sx={{
+                    whiteSpace: 'pre-wrap',
+                    overflowWrap: 'anywhere',
+                    maxHeight: 300,
+                    overflowY: 'auto',
+                  }}
+                >
+                  {c.terms}
+                </Box>
+              </AccordionDetails>
+            </Accordion>
+            <Accordion disableGutters variant="outlined">
+              <AccordionSummary expandIcon={<ExpandMoreIcon />}>
+                <Typography>Tài liệu và lịch sử</Typography>
+              </AccordionSummary>
+              <AccordionDetails>
+                <ContractWorkflowPanel api={api} contract={c} />
+              </AccordionDetails>
+            </Accordion>
+            {c.kind !== 'Holding' && typeof api.transport === 'function' && (
+              <ContractPolicyPanel
+                api={api}
+                contract={c}
+                actorId={actorId}
+                onChanged={(next) => {
+                  detail.reload();
+                  onChanged(next);
+                }}
+              />
+            )}
+            <ContractRelatedVersions api={api} id={c.id} onOpen={(nextId) => onChanged(nextId)} />
+          </>
+        )}
+        {tab === 3 && <ContractPeople api={api} contract={c} />}
+        {tab === 4 && (
+          <>
+            <ContractEventHistory api={api} contract={c} actorId={actorId} />
 
-      {/* 4. Reference material, folded away until needed */}
-      </>}
-      {tab === 1 && <>
-      {['Main', 'Holding'].includes(c.kind) && !c.previousContractId && (
-        <DepositReceiptPanel
-          contract={c}
-          changed={() => {
-            detail.reload();
-            onChanged();
-          }}
-        />
-      )}
-      {c.kind === 'Holding' && (
-        <HoldingDepositPanel
-          contract={c}
-          changed={() => {
-            detail.reload();
-            onChanged();
-          }}
-        />
-      )}
-      {['Main', 'Holding'].includes(c.kind) && <ContractPaymentHistory api={api} id={c.id} />}
-      </>}
-      {tab === 2 && <>
-      <Accordion disableGutters variant="outlined">
-        <AccordionSummary expandIcon={<ExpandMoreIcon />}>
-          <Typography sx={{ fontWeight: 600 }}>Điều khoản đưa đi ký</Typography>
-        </AccordionSummary>
-        <AccordionDetails>
-          {!!c.occupants?.length && (
-            <Typography variant="body2" color="text.secondary" sx={{ mb: 1 }}>
-              Người ở: {c.occupants.map((o) => o.label).join(', ')}
-            </Typography>
-          )}
-          <Box
-            sx={{
-              whiteSpace: 'pre-wrap',
-              overflowWrap: 'anywhere',
-              maxHeight: 300,
-              overflowY: 'auto',
-            }}
-          >
-            {c.terms}
-          </Box>
-        </AccordionDetails>
-      </Accordion>
-      <Accordion disableGutters variant="outlined">
-        <AccordionSummary expandIcon={<ExpandMoreIcon />}>
-          <Typography>Tài liệu và lịch sử</Typography>
-        </AccordionSummary>
-        <AccordionDetails>
-          <ContractWorkflowPanel api={api} contract={c} />
-        </AccordionDetails>
-      </Accordion>
-      {c.kind !== 'Holding' && typeof api.transport === 'function' && (
-        <ContractPolicyPanel
-          api={api}
-          contract={c}
-          actorId={actorId}
-          onChanged={(next) => {
-            detail.reload();
-            onChanged(next);
-          }}
-        />
-      )}
-      <ContractRelatedVersions api={api} id={c.id} onOpen={(nextId) => onChanged(nextId)} />
-      </>}
-      {tab === 3 && <ContractPeople api={api} contract={c} />}
-      {tab === 4 && <>
-      <ContractEventHistory api={api} contract={c} actorId={actorId} />
-
-      {c.kind !== 'Holding' && (
-        <ContractHandoverPanel
-          api={api}
-          id={c.id}
-          contractStatus={c.status}
-          showDraft={
-            c.kind === 'Main' &&
-            !c.previousContractId &&
-            !['Cancelled', 'Terminated', 'Expired'].includes(c.status)
-          }
-        />
-      )}
-      {!m && c.kind !== 'Holding' && c.status === 'Active' && (
-        <ChartCard title="Kết thúc hợp đồng">
-          <Typography color="text.secondary">
-            Chưa có hồ sơ trả phòng. Chọn “Lập yêu cầu trả phòng” trong các thao tác hợp đồng để mở
-            nhiệm vụ kiểm tra cho Staff tại cơ sở, dù trả phòng trước hay sau ngày hết hạn.
-          </Typography>
-        </ChartCard>
-      )}
-      {m && m.status !== 'Requested' && m.status !== 'Rejected' && (
-        <>
-          {m.status === 'Approved' && (
-            <FinalMeterTask
-              api={api}
-              id={id}
-              roomId={c.roomId}
-              locationId={c.locationId || locationId}
-              proposedDate={m.proposedDate}
-            />
-          )}
-          <ContractLifecyclePanel
+            {c.kind !== 'Holding' && (
+              <ContractHandoverPanel
+                api={api}
+                id={c.id}
+                contractStatus={c.status}
+                showDraft={
+                  c.kind === 'Main' &&
+                  !c.previousContractId &&
+                  !['Cancelled', 'Terminated', 'Expired'].includes(c.status)
+                }
+              />
+            )}
+            {!m && c.kind !== 'Holding' && c.status === 'Active' && (
+              <ChartCard title="Kết thúc hợp đồng">
+                <Typography color="text.secondary">
+                  Chưa có hồ sơ trả phòng. Chọn “Lập yêu cầu trả phòng” trong các thao tác hợp đồng
+                  để mở nhiệm vụ kiểm tra cho Staff tại cơ sở, dù trả phòng trước hay sau ngày hết
+                  hạn.
+                </Typography>
+              </ChartCard>
+            )}
+            {m && m.status !== 'Requested' && m.status !== 'Rejected' && (
+              <>
+                {m.status === 'Approved' && (
+                  <FinalMeterTask
+                    api={api}
+                    id={id}
+                    roomId={c.roomId}
+                    locationId={c.locationId || locationId}
+                    proposedDate={m.proposedDate}
+                  />
+                )}
+                <ContractLifecyclePanel
+                  api={api}
+                  contract={c}
+                  moveOut={m}
+                  onChanged={() => {
+                    detail.reload();
+                    onChanged();
+                  }}
+                />
+                {detail.data.historyError && (
+                  <Alert severity="warning">
+                    Không tải được lịch sử quyết toán: {detail.data.historyError}
+                  </Alert>
+                )}
+                {!!history.length && (
+                  <ChartCard title="Lịch sử xem xét quyết toán">
+                    <Stack spacing={1}>
+                      {history.map((review) => (
+                        <Box
+                          key={review.id}
+                          sx={{ borderTop: '1px solid', borderColor: 'divider', pt: 1 }}
+                        >
+                          <Typography variant="caption">
+                            {formatInstant(review.reviewedAt)} ·{' '}
+                            {review.settled ? 'Đã xác minh quyết toán' : 'Còn chờ đối chiếu'}
+                          </Typography>
+                          <Typography sx={{ whiteSpace: 'pre-wrap', overflowWrap: 'anywhere' }}>
+                            {review.decision}
+                          </Typography>
+                        </Box>
+                      ))}
+                    </Stack>
+                  </ChartCard>
+                )}
+              </>
+            )}
+          </>
+        )}
+        {action && (
+          <ContractActionDialog
             api={api}
             contract={c}
-            moveOut={m}
-            onChanged={() => {
+            action={action}
+            keys={keys}
+            actorId={actorId}
+            onConflict={() => {
               detail.reload();
               onChanged();
             }}
+            onClose={() => {
+              setAction(null);
+              detail.reload();
+            }}
+            onSuccess={(next) => {
+              void cache.invalidateQueries({ queryKey: ['contract-workflow', id] });
+              setAction(null);
+              setNotice('Máy chủ đã ghi nhận thao tác. Trạng thái đang được tải lại.');
+              detail.reload();
+              onChanged(next);
+            }}
           />
-          {detail.data.historyError && (
-            <Alert severity="warning">
-              Không tải được lịch sử quyết toán: {detail.data.historyError}
-            </Alert>
-          )}
-          {!!history.length && (
-            <ChartCard title="Lịch sử xem xét quyết toán">
-              <Stack spacing={1}>
-                {history.map((review) => (
-                  <Box
-                    key={review.id}
-                    sx={{ borderTop: '1px solid', borderColor: 'divider', pt: 1 }}
-                  >
-                    <Typography variant="caption">
-                      {formatInstant(review.reviewedAt)} ·{' '}
-                      {review.settled ? 'Đã xác minh quyết toán' : 'Còn chờ đối chiếu'}
-                    </Typography>
-                    <Typography sx={{ whiteSpace: 'pre-wrap', overflowWrap: 'anywhere' }}>
-                      {review.decision}
-                    </Typography>
-                  </Box>
-                ))}
-              </Stack>
-            </ChartCard>
-          )}
-        </>
-      )}
-      </>}
-      {action && (
-        <ContractActionDialog
-          api={api}
-          contract={c}
-          action={action}
-          keys={keys}
-          actorId={actorId}
-          onConflict={() => {
-            detail.reload();
-            onChanged();
-          }}
-          onClose={() => {
-            setAction(null);
-            detail.reload();
-          }}
-          onSuccess={(next) => {
-            void cache.invalidateQueries({ queryKey: ['contract-workflow', id] });
-            setAction(null);
-            setNotice('Máy chủ đã ghi nhận thao tác. Trạng thái đang được tải lại.');
-            detail.reload();
-            onChanged(next);
-          }}
-        />
-      )}
+        )}
       </Box>
-      <Stack direction="row" spacing={1} sx={{ flex: '0 0 auto', p: 1.5, borderTop: 1, borderColor: 'divider', bgcolor: 'background.paper', alignItems: 'center' }}>
+      <Stack
+        direction="row"
+        spacing={1}
+        sx={{
+          flex: '0 0 auto',
+          p: 1.5,
+          borderTop: 1,
+          borderColor: 'divider',
+          bgcolor: 'background.paper',
+          alignItems: 'center',
+        }}
+      >
         <Box sx={{ flex: 1 }} />
-        {primaryAction && <Button variant="contained" disabled={busy || (['activate', 'holding-activation'].includes(primaryAction.operation) && !r?.ready)} onClick={() => showAction(primaryAction)}>{primaryAction.label}</Button>}
-        {(!!menuActions.length || hasTerminationReview) && <>
-          <IconButton aria-label="Thao tác khác" onClick={(event) => setMenuAnchor(event.currentTarget)}><MoreVertIcon /></IconButton>
-          <Menu anchorEl={menuAnchor} open={!!menuAnchor} onClose={() => setMenuAnchor(null)}>
-            {hasTerminationReview && <MenuItem component="a" href={`/contracts/${id}/termination-review`} onClick={() => setMenuAnchor(null)}>{m?.status === 'Requested' ? 'Xét duyệt yêu cầu kết thúc' : 'Xem kết quả xét duyệt'}</MenuItem>}
-            {menuActions.map((candidate) => <MenuItem key={candidate.operation} onClick={() => showAction(candidate)}>{candidate.label}</MenuItem>)}
-          </Menu>
-        </>}
-        {!primaryAction && !menuActions.length && !hasTerminationReview && onClose && <Button onClick={onClose}>Đóng</Button>}
+        {primaryAction && (
+          <Button
+            variant="contained"
+            disabled={
+              busy ||
+              (['activate', 'holding-activation'].includes(primaryAction.operation) && !r?.ready)
+            }
+            onClick={() => showAction(primaryAction)}
+          >
+            {primaryAction.label}
+          </Button>
+        )}
+        {(!!menuActions.length || hasTerminationReview) && (
+          <>
+            <IconButton
+              aria-label="Thao tác khác"
+              onClick={(event) => setMenuAnchor(event.currentTarget)}
+            >
+              <MoreVertIcon />
+            </IconButton>
+            <Menu anchorEl={menuAnchor} open={!!menuAnchor} onClose={() => setMenuAnchor(null)}>
+              {hasTerminationReview && (
+                <MenuItem
+                  component="a"
+                  href={`/contracts/${id}/termination-review`}
+                  onClick={() => setMenuAnchor(null)}
+                >
+                  {m?.status === 'Requested'
+                    ? 'Xét duyệt yêu cầu kết thúc'
+                    : 'Xem kết quả xét duyệt'}
+                </MenuItem>
+              )}
+              {menuActions.map((candidate) => (
+                <MenuItem key={candidate.operation} onClick={() => showAction(candidate)}>
+                  {candidate.label}
+                </MenuItem>
+              ))}
+            </Menu>
+          </>
+        )}
+        {!primaryAction && !menuActions.length && !hasTerminationReview && onClose && (
+          <Button onClick={onClose}>Đóng</Button>
+        )}
       </Stack>
     </Stack>
   );

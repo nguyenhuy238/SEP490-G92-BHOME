@@ -1,4 +1,4 @@
-﻿import { fireEvent, render, screen, waitFor } from '@testing-library/react';
+﻿import { fireEvent, render, screen } from '@testing-library/react';
 import { beforeEach, expect, it, vi } from 'vitest';
 import type { MainContractSettings } from '../../../../../packages/client-core/src/mainDrafts';
 import { MainDraftSettingsPanel } from './MainDraftSettingsPanel';
@@ -51,7 +51,7 @@ it('loads Owner-wide settings without a Location selector or editable deposit am
   expect(await screen.findByDisplayValue('Owner tổng hợp')).toBeVisible();
   expect(mocks.settings).toHaveBeenCalledWith(expect.any(AbortSignal));
   expect(screen.queryByRole('combobox')).not.toBeInTheDocument();
-  expect(screen.getByText('01 tháng tiền thuê phòng (tự động tính theo giá thuê)')).toBeVisible();
+  expect(screen.getByText('01 tháng tiền thuê phòng')).toBeVisible();
   expect(screen.queryByLabelText(/Tiền cọc đảm bảo/)).not.toBeInTheDocument();
 });
 it('saves the Owner-wide configuration without a client-supplied deposit amount', async () => {
@@ -61,7 +61,7 @@ it('saves the Owner-wide configuration without a client-supplied deposit amount'
     target: { value: 'Chuyển khoản hàng tháng' },
   });
   fireEvent.submit(document.getElementById('main-contract-settings')!);
-  await screen.findByText('Đã lưu cấu hình dùng chung cho Owner.');
+  await screen.findByText('Đã lưu cấu hình dùng chung cho tất cả cơ sở.');
   expect(mocks.setSettings).toHaveBeenCalledWith(
     expect.objectContaining({
       ownerSignerId: 'owner',
@@ -75,7 +75,7 @@ it('saves the Owner-wide configuration without a client-supplied deposit amount'
 it('disables save if initial Owner-wide settings cannot be loaded', async () => {
   mocks.settings.mockRejectedValueOnce({ status: 503 });
   render(<MainDraftSettingsPanel />);
-  await waitFor(() => expect(screen.getByRole('alert')).toBeDefined());
+  await screen.findByText(/Dịch vụ ký hoặc thành phần xử lý chưa sẵn sàng/);
   expect(screen.getByRole('button', { name: 'Lưu cấu hình' })).toBeDisabled();
   expect(screen.queryByRole('combobox')).not.toBeInTheDocument();
 });

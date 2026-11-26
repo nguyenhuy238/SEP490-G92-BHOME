@@ -101,10 +101,22 @@ export function MainInitialPaymentCard({
               data.availability !== 'PaymentProviderDisabled' &&
               data.transferReference && <PaymentStatusCountdown checkedAt={checkedAt} />}
             <View style={styles.amountBlock}>
-              <HoldingInfoRow label="Tiền cọc yêu cầu" value={formatContractMoney(data.requiredDeposit)} />
-              <HoldingInfoRow label="Tiền cọc đã thanh toán" value={formatContractMoney(data.verifiedDeposit)} />
-              <HoldingInfoRow label="Tiền cọc còn thiếu" value={formatContractMoney(data.outstandingDeposit ?? '0')} />
-              <HoldingInfoRow label="Tiền thuê tháng đầu tiên" value={formatContractMoney(data.firstMonthRent)} />
+              <HoldingInfoRow
+                label="Tiền cọc yêu cầu"
+                value={formatContractMoney(data.requiredDeposit)}
+              />
+              <HoldingInfoRow
+                label="Tiền cọc đã thanh toán"
+                value={formatContractMoney(data.verifiedDeposit)}
+              />
+              <HoldingInfoRow
+                label="Tiền cọc còn thiếu"
+                value={formatContractMoney(data.outstandingDeposit ?? '0')}
+              />
+              <HoldingInfoRow
+                label="Tiền thuê tháng đầu tiên"
+                value={formatContractMoney(data.firstMonthRent)}
+              />
               <Text style={styles.note}>Tổng số tiền cần thanh toán</Text>
               <Text selectable style={styles.amount}>
                 {formatContractMoney(data.outstandingAmount)}

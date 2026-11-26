@@ -59,6 +59,7 @@ public sealed partial class MainDraftApiTests(ContractFixture fixture) : IClassF
         db.AddRange(location, room, resident, new StaffLocationAssignment(location.Id, staff.Id, owner.Id, Today.AddDays(-5), Today.AddDays(500)));
         if (prices) foreach (var (code, category, rate) in new[] { ("RENT", ChargeCategory.Rent, 3100000m), ("ELECTRICITY", ChargeCategory.Electricity, 3500m), ("WATER", ChargeCategory.Water, 18000m) }) db.Add(new BillingPolicy { LocationId = location.Id, Category = category, ChargeCode = code, Name = code, Rate = rate, Method = category == ChargeCategory.Rent ? ChargingMethod.FixedPerRoomPerMonth : ChargingMethod.Metered, EffectiveFrom = Today.AddDays(-1) });
         await db.SaveChangesAsync();
+        await BHome.IntegrationTests.Fixtures.MainDraftTestSettings.ResetOwnerPolicyAsync(db, owner.Id);
         if (settings)
         {
             var config = new MainContractSettingsInput(owner.Id, Today.AddDays(-1), null, "Chuyển khoản theo cấu hình kiểm thử", "Điều khoản kiểm thử tổng hợp", new("OWNER KIỂM THỬ", new(1980, 1, 1), "000000000456", new(2020, 1, 1), "Nơi cấp kiểm thử", "Địa chỉ Owner kiểm thử", "0900000000"), 0);

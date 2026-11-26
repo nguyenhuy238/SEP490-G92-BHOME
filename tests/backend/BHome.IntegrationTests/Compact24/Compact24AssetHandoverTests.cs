@@ -45,6 +45,7 @@ public sealed partial class Compact24OwnerSetupTests
                     .GetRequiredService<IIdentityProtection>().Encrypt(identityBytes, new(w.Owner.Id, resident.Id)));
             }
             finally { CryptographicOperations.ZeroMemory(identityBytes); }
+            await BHome.IntegrationTests.Fixtures.MainDraftTestSettings.ResetOwnerPolicyAsync(db, w.Owner.Id);
             await scope.ServiceProvider.GetRequiredService<IMainDraftData>().SetSettingsAsync(w.Location,
                 new MainContractSettingsInput(w.Owner.Id, Today.AddYears(-1), null,
                     "Synthetic payment terms", "Synthetic terms",

@@ -11,6 +11,8 @@ public static class Compact24Schema
     private static readonly string Script = ReadScript();
     private static readonly string SettlementSePayCodesScript = ReadScript("BHome.Compact24.SettlementSePayCodes.sql");
     private static readonly string MainInitialPaymentNoFeesScript = ReadScript("BHome.Compact24.MainInitialPaymentNoFees.sql");
+    private static readonly string SePayPaymentModesScript = ReadScript("BHome.Compact24.SePayPaymentModes.sql");
+    private static readonly string SePayOwnerConnectionsScript = ReadScript("BHome.Compact24.SePayOwnerConnections.sql");
     public static string ScriptSha256 { get; } = Convert.ToHexString(System.Security.Cryptography.SHA256.HashData(System.Text.Encoding.UTF8.GetBytes(Script)));
     private static readonly string[] Tables = Regex.Matches(Script, @"(?m)^CREATE TABLE ([a-z_]+)").Select(m => m.Groups[1].Value).Order(StringComparer.Ordinal).ToArray();
 
@@ -92,12 +94,18 @@ public static class Compact24Schema
         }
         if (!foreignKeys.Order(StringComparer.Ordinal).SequenceEqual(ExpectedForeignKeys(reference).Order(StringComparer.Ordinal))) return false;
         var functionReference = reference;
-        if (!propertyRefresh && ReferenceEquals(reference, Script) &&
-            (await db.Database.GetAppliedMigrationsAsync(token)).Contains("20261122000100_SettlementSePayCodes", StringComparer.Ordinal))
-            functionReference += "\n" + SettlementSePayCodesScript;
-        if (!propertyRefresh && ReferenceEquals(reference, Script) &&
-            (await db.Database.GetAppliedMigrationsAsync(token)).Contains("20261126000200_MainInitialPaymentNoFees", StringComparer.Ordinal))
-            functionReference += "\n" + MainInitialPaymentNoFeesScript;
+        if (!propertyRefresh && ReferenceEquals(reference, Script))
+        {
+            var applied = (await db.Database.GetAppliedMigrationsAsync(token)).ToHashSet(StringComparer.Ordinal);
+            if (applied.Contains("20261122000100_SettlementSePayCodes"))
+                functionReference += "\n" + SettlementSePayCodesScript;
+            if (applied.Contains("20261126000200_MainInitialPaymentNoFees"))
+                functionReference += "\n" + MainInitialPaymentNoFeesScript;
+            if (applied.Contains("20261126000200_SePayPaymentModes"))
+                functionReference += "\n" + SePayPaymentModesScript;
+            if (applied.Contains("20261126000300_SePayOwnerConnections"))
+                functionReference += "\n" + SePayOwnerConnectionsScript;
+        }
         // Verify the original append-only/invoice/payment/refresh protections, including their bodies.
         var functions = Regex.Matches(functionReference, @"CREATE(?: OR REPLACE)? FUNCTION ([a-z0-9_]+)\([^$]+?AS \$fn\$([\s\S]*?)\$fn\$;")
             .Cast<Match>().Where(f => !propertyRefresh || f.Groups[1].Value != "bhome24_work_order_guard")

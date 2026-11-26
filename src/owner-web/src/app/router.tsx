@@ -26,7 +26,9 @@ const StaffAssignmentsPage = lazy(() => import('../features/staff/pages/StaffAss
 const TasksPage = lazy(() => import('../features/tasks/pages/TasksPage'));
 const TenantsPage = lazy(() => import('../features/tenants/pages/TenantsPage'));
 const ContractsPage = lazy(() => import('../features/contracts/pages/ContractsPage'));
-const MainContractSettingsPage = lazy(() => import('../features/contracts/pages/MainContractSettingsPage'));
+const MainContractSettingsPage = lazy(
+  () => import('../features/contracts/pages/MainContractSettingsPage'),
+);
 const TerminationReviewPage = lazy(
   () => import('../features/contracts/pages/TerminationReviewPage'),
 );

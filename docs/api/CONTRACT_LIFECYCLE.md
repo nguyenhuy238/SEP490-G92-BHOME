@@ -14,7 +14,7 @@ Khi gửi lại lời mời ký còn hiệu lực, backend áp dụng khoảng c
 
 Email đã gắn với hồ sơ cư dân khác, kể cả hồ sơ chưa có hợp đồng, bị từ chối với HTTP 409 `signing_email_already_in_use` khi gửi lời mời hoặc chấp thuận ký.
 
-UC-15 / UC-21 / GBR-10. API thanh toán ban đầu trả từng khoản thuê và phí cố định đã ghi trong lệnh thanh toán, cùng số cọc và tiền thuê/phí còn phải nộp sau các phân bổ trong ledger. Tiền giữ chỗ đã cấn nằm trong tổng cọc đã ghi nhận. Đơn giá điện, nước lấy từ giá đã ký nếu có. Hóa đơn định kỳ tính tiền điện, nước sau khi xác nhận mức sử dụng.
+UC-15 / UC-21 / GBR-10. Lệnh thanh toán ban đầu mới (calculation v2) thu cọc còn thiếu và tiền thuê tháng đầu; phí cố định và điện/nước được xử lý trong hóa đơn định kỳ. API trả khoản thuê, cọc và số dư sau các phân bổ đã xác minh. Tiền giữ chỗ đã cấn nằm trong tổng cọc đã ghi nhận. Lệnh v1 đã phát mã giữ nguyên mã, số tiền và các khoản phí đã chốt; API tiếp tục trả chi tiết phí và đơn giá điện/nước đã ký của lệnh lịch sử, không tính lại theo v2. Báo giá legacy chưa phát mã và chưa được phân bổ có thể tạo lệnh v2 theo nghĩa vụ chung của phòng, đồng thời giữ nguyên bản ghi báo giá cũ. Nội dung này mô tả triển khai `MainInitialPaymentNoFees` và khả năng tương thích lịch sử; không sửa chứng từ hoặc nghĩa vụ đã phát hành.
 
 Khi SePay tắt, thanh toán ban đầu vẫn trả số dư và các khoản thu. Trạng thái `PaymentProviderDisabled` cho biết chưa thể cấp mã đối soát hoặc QR. Mobile chỉ hiển thị hướng dẫn chuyển khoản khi đã có mã đối soát.
 

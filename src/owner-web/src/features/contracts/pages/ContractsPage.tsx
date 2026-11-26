@@ -382,19 +382,40 @@ function LiveContractsPage() {
           setSelected('');
           setMainDraft(false);
         }}
-        slotProps={{ paper: { sx: { width: { xs: '100%', md: 760 }, maxWidth: '100%', display: 'flex', flexDirection: 'column', overflow: 'hidden' } } }}
+        slotProps={{
+          paper: {
+            sx: {
+              width: { xs: '100%', md: 760 },
+              maxWidth: '100%',
+              display: 'flex',
+              flexDirection: 'column',
+              overflow: 'hidden',
+            },
+          },
+        }}
       >
-        <Box sx={{ display: 'flex', flex: 1, minHeight: 0, minWidth: 0, overflow: 'hidden', overflowWrap: 'anywhere' }}>
+        <Box
+          sx={{
+            display: 'flex',
+            flex: 1,
+            minHeight: 0,
+            minWidth: 0,
+            overflow: 'hidden',
+            overflowWrap: 'anywhere',
+          }}
+        >
           {selected && mainDraft ? (
-            <Box sx={{ p: { xs: 1.5, sm: 2 }, overflowY: 'auto', flex: 1 }}><MainDraftDetailPanel
-              key={selected}
-              id={selected}
-              onChanged={() => void list.refetch()}
-              onReleased={() => {
-                setMainDraft(false);
-                void list.refetch();
-              }}
-            /></Box>
+            <Box sx={{ p: { xs: 1.5, sm: 2 }, overflowY: 'auto', flex: 1 }}>
+              <MainDraftDetailPanel
+                key={selected}
+                id={selected}
+                onChanged={() => void list.refetch()}
+                onReleased={() => {
+                  setMainDraft(false);
+                  void list.refetch();
+                }}
+              />
+            </Box>
           ) : (
             selected && (
               <ContractDetailPanel
@@ -403,7 +424,10 @@ function LiveContractsPage() {
                 id={selected}
                 actorId={actorId}
                 locationId={selectedLocation}
-                onClose={() => { setSelected(''); setMainDraft(false); }}
+                onClose={() => {
+                  setSelected('');
+                  setMainDraft(false);
+                }}
                 onChanged={(next) => {
                   void list.refetch();
                   if (next) {
