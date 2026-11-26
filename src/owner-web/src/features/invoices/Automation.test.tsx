@@ -223,12 +223,12 @@ it('creates a draft for only selected room and billing period and delegates cont
     ),
   ).toBe(false);
 });
-it('explains the backend ambiguous representative conflict without selecting any contract in UI', async () => {
+it('explains a skipped room without an eligible reference contract', async () => {
   respond();
   const original = mocks.request.getMockImplementation()!;
   mocks.request.mockImplementation(async (path: string, init?: RequestInit) => {
     if (path === '/api/v1/invoices/drafts' && init?.method === 'POST') {
-      throw { status: 409, problem: { code: 'representative_selection_required' } };
+      throw { status: 409, problem: { code: 'no_reference_contract_for_period' } };
     }
     return original(path, init);
   });
@@ -238,7 +238,9 @@ it('explains the backend ambiguous representative conflict without selecting any
   const button = screen.getByRole('button', { name: 'Tạo hóa đơn nháp' });
   await waitFor(() => expect(button).toBeEnabled());
   fireEvent.click(button);
-  expect((await screen.findAllByText(/Có nhiều hợp đồng trong kỳ/)).length).toBeGreaterThan(0);
+  expect(
+    (await screen.findAllByText(/Phòng không có hợp đồng đối chiếu đủ điều kiện/)).length,
+  ).toBeGreaterThan(0);
   expect(screen.queryByLabelText(/Hợp đồng đại diện khi lập nháp/)).not.toBeInTheDocument();
   const writes = mocks.request.mock.calls.filter(([, init]) => init?.method === 'POST');
   expect(writes.map(([path]) => path)).toEqual(['/api/v1/invoices/drafts']);

@@ -124,36 +124,18 @@ it('keeps creation out of the operational list and sends status/month filters to
   fireEvent.click(screen.getByRole('button', { name: 'Lập hóa đơn nháp' }));
   expect(screen.getByRole('dialog', { name: 'Lập hóa đơn nháp' })).toBeInTheDocument();
   expect(screen.getByRole('button', { name: 'Tạo / mở bản nháp' })).toBeDisabled();
-  expect(screen.getByLabelText('Hợp đồng đại diện phòng trong kỳ')).toHaveAttribute(
-    'aria-disabled',
-    'true',
-  );
+  expect(screen.queryByLabelText('Hợp đồng đại diện phòng trong kỳ')).not.toBeInTheDocument();
   expect(screen.queryByRole('stepper')).not.toBeInTheDocument();
   expect(mocks.api.draft).not.toHaveBeenCalled();
 });
-it('creates in one form from room history and preserves input after a server conflict', async () => {
+it('creates by room and period without manual contract selection and preserves input after a server conflict', async () => {
   const room = '00000000-0000-4000-8000-000000000001';
-  const contract = '00000000-0000-4000-8000-000000000002';
-  mocks.api.request.mockImplementation(async (path: string) =>
-    path.endsWith('/occupancy-history')
-      ? {
-          periods: [
-            {
-              contractId: contract,
-              contractStatus: 'Active',
-              from: '2026-01-01',
-              to: '2027-01-01',
-              occupants: [{ displayLabel: 'Người ở tổng hợp' }],
-            },
-          ],
-        }
-      : [
-          {
-            id: path.endsWith('/locations') ? 'location' : room,
-            label: path.endsWith('/locations') ? 'Cơ sở tổng hợp' : 'Phòng tổng hợp',
-          },
-        ],
-  );
+  mocks.api.request.mockImplementation(async (path: string) => [
+    {
+      id: path.endsWith('/locations') ? 'location' : room,
+      label: path.endsWith('/locations') ? 'Cơ sở tổng hợp' : 'Phòng tổng hợp',
+    },
+  ]);
   mocks.api.draft.mockRejectedValue({ status: 409 });
   mount(<LiveInvoicesPage />);
   fireEvent.click(screen.getByRole('button', { name: 'Lập hóa đơn nháp' }));
@@ -163,21 +145,20 @@ it('creates in one form from room history and preserves input after a server con
   fireEvent.mouseDown(within(dialog).getByLabelText('Phòng'));
   fireEvent.click(await screen.findByRole('option', { name: 'Phòng tổng hợp' }));
   fireEvent.change(within(dialog).getByLabelText('Kỳ hóa đơn'), { target: { value: '2026-11' } });
-  const contractSelector = within(dialog).getByLabelText('Hợp đồng đại diện phòng trong kỳ');
-  await waitFor(() => expect(contractSelector).not.toHaveAttribute('aria-disabled', 'true'));
-  fireEvent.mouseDown(contractSelector);
-  fireEvent.click(await screen.findByRole('option', { name: /Người ở tổng hợp/ }));
+  expect(
+    within(dialog).queryByLabelText('Hợp đồng đại diện phòng trong kỳ'),
+  ).not.toBeInTheDocument();
   fireEvent.click(within(dialog).getByRole('button', { name: 'Tạo / mở bản nháp' }));
   expect(
     await within(dialog).findByText(
       'Cấu hình đã thay đổi hoặc bị xung đột. Tải lại và kiểm tra trước khi lưu.',
     ),
   ).toBeInTheDocument();
-  await waitFor(() => expect(mocks.api.draft).toHaveBeenCalledWith(room, '2026-11-01', contract));
+  await waitFor(() => expect(mocks.api.draft).toHaveBeenCalledWith(room, '2026-11-01'));
   expect(within(dialog).getByLabelText('Kỳ hóa đơn')).toHaveValue('2026-11');
-  expect(within(dialog).getByLabelText('Hợp đồng đại diện phòng trong kỳ')).toHaveTextContent(
-    'Người ở tổng hợp',
-  );
+  expect(
+    within(dialog).queryByLabelText('Hợp đồng đại diện phòng trong kỳ'),
+  ).not.toBeInTheDocument();
 });
 it('shows persisted charges and finalizes only after explicit review confirmation, blocking duplicate clicks', async () => {
   let resolve!: (value: Invoice) => void;

@@ -41,16 +41,13 @@ internal sealed partial class BillingAutomationEngine
             {
                 var service = Invoices(p);
                 invoice = await service.GetAsync(existing.Id, t);
-                if (invoice.Status == "Draft" && invoice.MissingInputs.Count > 0 && !await invoiceRepository.HasPendingAdjustmentsAsync(existing.Id, t))
+                if (invoice.Status == "Draft" && !await invoiceRepository.HasPendingAdjustmentsAsync(existing.Id, t))
                     invoice = await service.RefreshAsync(existing.Id, invoice.Version, t, p.Id);
             }
             else
             {
-                var selection = await schedules.RepresentativeAsync(room, period, t);
-                var occupants = await invoiceRepository.OccupanciesAsync(room, period, period.AddMonths(1).AddDays(-1), t);
-                var representative = selection?.ContractId ?? (occupants.Count == 1 ? occupants[0].Contract.Id : (Guid?)null);
-                if (representative is null) { errors.Add(new { roomId = room, code = "representative_selection_required" }); return 0; }
-                invoice = await Invoices(p).GenerateAsync(new(room, period, representative.Value), t, p.Id);
+                try { invoice = await Invoices(p).GenerateAsync(new(room, period), t, p.Id); }
+                catch (InvoiceException ex) when (ex.Code == "no_reference_contract_for_period") { return 0; }
             }
             if (invoice.Status == "Draft" && invoice.MissingInputs.Count > 0) errors.Add(new { roomId = room, invoiceId = invoice.Id, code = "draft_missing_inputs", missingInputs = invoice.MissingInputs });
             return existing is null ? 0 : 1;

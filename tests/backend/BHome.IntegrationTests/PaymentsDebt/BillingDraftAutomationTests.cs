@@ -32,11 +32,11 @@ public sealed partial class PaymentLedgerTests
     public async Task DraftJobRequiresSharedRepresentativeAndPreservesApprovedCorrectionOnReplay()
     {
         var (w, p, _) = await MeterWorkspace(); await AddAutomationRates(w); using var owner = await Client(w.Owner); using var tenant = await Client(w.Tenants[0]);
-        var missing = (await RunPhase(w, "Draft"))!; Assert.Contains("representative_selection_required", missing.ExceptionsJson);
-        (await owner.PutAsJsonAsync("/api/v1/billing-automation/representative", new BillingRepresentativeInput(w.Room, CurrentPeriod(), w.Contract, 0))).EnsureSuccessStatusCode();
+        var generated = (await RunPhase(w, "Draft"))!; Assert.DoesNotContain("representative_selection_required", generated.ExceptionsJson);
         await Task.WhenAll(RunPhase(w, "Draft"), RunPhase(w, "Draft"));
         InvoiceView draft; await using (var s = fixture.Factory.Services.CreateAsyncScope()) { var db = s.ServiceProvider.GetRequiredService<BHomePersistenceContext>(); Assert.Equal(1, await db.Set<Invoice>().CountAsync(i => i.RoomId == w.Room && i.BillingPeriod == CurrentPeriod())); var invoice = await db.Set<Invoice>().SingleAsync(i => i.RoomId == w.Room && i.BillingPeriod == CurrentPeriod()); draft = (await owner.GetFromJsonAsync<InvoiceView>($"/api/v1/invoices/{invoice.Id}"))!; Assert.Equal(p.Id, invoice.AutomationPlanId); Assert.Equal(3, await db.Set<InvoiceRecipient>().CountAsync(r => r.InvoiceId == invoice.Id)); }
         Assert.Equal("Draft", draft.Status); Assert.Contains("confirmed_reading_Electricity", draft.MissingInputs); Assert.DoesNotContain(draft.Lines, l => l.MeterReadingId != null);
+        Assert.Contains(CurrentPeriod().AddMonths(1).ToString("MM/yyyy"), draft.Lines.Single(l => l.ChargeCode == "RENT").Name);
         var request = await Post(tenant, $"/api/v1/invoices/{draft.Id}/adjustment-requests", new AdjustmentSubmit(draft.Lines.Single(l => l.ChargeCode == "RENT").Id, 90000, "Synthetic draft rent correction", [], draft.Version)); request.EnsureSuccessStatusCode(); var adjustment = (await request.Content.ReadFromJsonAsync<AdjustmentView>())!;
         (await Post(owner, $"/api/v1/invoice-adjustments/{adjustment.Id}/approve", new AdjustmentDecisionInput(1, draft.Version, 0, 90000, "RENT", "Owner checked synthetic correction", true))).EnsureSuccessStatusCode();
         var before = (await owner.GetFromJsonAsync<InvoiceView>($"/api/v1/invoices/{draft.Id}"))!; await RunPhase(w, "Draft"); var after = (await tenant.GetFromJsonAsync<InvoiceView>($"/api/v1/invoices/{draft.Id}"))!;

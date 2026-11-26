@@ -182,8 +182,8 @@ export function invoiceClient(request: <T>(path: string, init?: RequestInit) => 
     },
     get: (id: string, signal?: AbortSignal) =>
       request<Invoice>(`/api/v1/invoices/${encodeURIComponent(id)}`, { signal }),
-    draft: (roomId: string, billingPeriod: string, representativeContractId: string) =>
-      json<Invoice>('/api/v1/invoices/drafts', { roomId, billingPeriod, representativeContractId }),
+    draft: (roomId: string, billingPeriod: string) =>
+      json<Invoice>('/api/v1/invoices/drafts', { roomId, billingPeriod }),
     refresh: (id: string, expectedVersion: number) =>
       json<Invoice>(`/api/v1/invoices/${encodeURIComponent(id)}/refresh`, { expectedVersion }),
     finalize: (id: string, expectedVersion: number) =>
@@ -246,9 +246,10 @@ const messages: Record<string, string> = {
   draft_refresh_and_review_required:
     'Đầu vào đã thay đổi. Cập nhật và xem lại bản nháp trước khi phát hành.',
   invoice_changed_or_final: 'Hóa đơn đã thay đổi hoặc đã phát hành. Hãy tải lại.',
-  representative_contract_not_eligible:
-    'Chọn hợp đồng của phòng có hiệu lực trong kỳ cần lập hóa đơn.',
-  invoice_period_already_exists: 'Phòng đã có hóa đơn kỳ này với hợp đồng đại diện khác.',
+  representative_contract_not_eligible: 'Hợp đồng đối chiếu không đủ điều kiện trong kỳ.',
+  no_reference_contract_for_period:
+    'Phòng không có hợp đồng đối chiếu đủ điều kiện trong kỳ này. Không lập hóa đơn định kỳ.',
+  invoice_period_already_exists: 'Phòng đã có hóa đơn kỳ này.',
   room_pricing_locked_by_contract:
     'Phòng đang có hợp đồng ràng buộc giá. Không thể sửa trực tiếp giá này khi hợp đồng còn ràng buộc.',
   utility_tariff_locked_by_contract:

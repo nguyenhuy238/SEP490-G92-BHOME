@@ -52,7 +52,9 @@ const phaseLabel: Record<string, string> = {
 const issueLabel: Record<string, string> = {
   active_meter_configuration_required: 'Thiếu đồng hồ hoạt động đúng ngày ghi số',
   staff_assignment_required: 'Cơ sở chưa có nhân viên phụ trách hợp lệ',
-  representative_selection_required: 'Cần chọn hợp đồng đại diện hóa đơn phòng/kỳ',
+  representative_selection_required:
+    'Dữ liệu lịch sử cần đối chiếu; lần chạy mới sẽ tự chọn hợp đồng',
+  no_reference_contract_for_period: 'Không có hợp đồng đối chiếu đủ điều kiện trong kỳ',
   draft_missing_inputs: 'Bản nháp còn thiếu dữ liệu bắt buộc',
   confirmed_billing_inputs_required: 'Chưa đủ giá hoặc chỉ số hợp lệ để phát hành',
   draft_invoice_required: 'Chưa có hóa đơn nháp',
@@ -757,14 +759,6 @@ function AutomationLocation({ location, period }: { location: string; period: st
   const cache = useQueryClient();
   const { session } = useAuth();
   const [showAdvanced, setShowAdvanced] = useState(false);
-  const representativeRef = useRef<HTMLDivElement>(null);
-  const revealRepresentative = () => {
-    setShowAdvanced(true);
-    window.setTimeout(
-      () => representativeRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' }),
-      100,
-    );
-  };
   const key = ['automation', session?.userId, location, period];
   const query = `locationId=${location}&period=${period}`;
   const data = useQuery({
@@ -786,11 +780,6 @@ function AutomationLocation({ location, period }: { location: string; period: st
       return { history, preview, executions, attempts, calendar, queue };
     },
   });
-  const needsRepresentative = data.data?.executions.some((execution) =>
-    automationIssues(execution.exceptionsJson).some(
-      (issue) => issue.code === 'representative_selection_required',
-    ),
-  );
   const issues =
     data.data?.executions.flatMap((execution) => automationIssues(execution.exceptionsJson)) ?? [];
   return (
@@ -810,18 +799,13 @@ function AutomationLocation({ location, period }: { location: string; period: st
       </Stack>
       {data.isPending && <LinearProgress />}
       {data.error && <Alert severity="error">{invoiceError(data.error)}</Alert>}
-      <ManualBillingActions
-        location={location}
-        period={period}
-        preview={data.data?.preview}
-        onRepresentativeRequired={revealRepresentative}
-      />
+      <ManualBillingActions location={location} period={period} preview={data.data?.preview} />
       <AutomationDrafts location={location} period={period} />
       {issues.length > 0 && (
         <Alert
           severity="warning"
           action={
-            <Button size="small" onClick={revealRepresentative}>
+            <Button size="small" onClick={() => setShowAdvanced(true)}>
               Xem cách xử lý
             </Button>
           }
@@ -941,18 +925,6 @@ function AutomationLocation({ location, period }: { location: string; period: st
                   <Typography variant="subtitle2" sx={{ fontWeight: 700 }}>
                     Kết quả và vấn đề
                   </Typography>
-                  {needsRepresentative && (
-                    <Alert
-                      severity="warning"
-                      action={
-                        <Button size="small" onClick={() => setShowAdvanced(true)}>
-                          Chọn hợp đồng
-                        </Button>
-                      }
-                    >
-                      Có phòng/kỳ thiếu hợp đồng đại diện. Mở mục hợp đồng bên dưới để chọn.
-                    </Alert>
-                  )}
                   {data.data.executions.length === 0 && (
                     <Alert severity="info">Chưa có lần chạy cho cơ sở/kỳ này.</Alert>
                   )}
@@ -1010,11 +982,6 @@ function AutomationLocation({ location, period }: { location: string; period: st
                                   Kiểm tra đồng hồ
                                 </Button>
                               )}
-                            {issue.code === 'representative_selection_required' && (
-                              <Button size="small" onClick={() => setShowAdvanced(true)}>
-                                Chọn hợp đồng đại diện
-                              </Button>
-                            )}
                             {[
                               'draft_invoice_required',
                               'draft_missing_inputs',
@@ -1034,12 +1001,6 @@ function AutomationLocation({ location, period }: { location: string; period: st
                       </Stack>
                     </Paper>
                   ))}
-                  <Box ref={representativeRef} sx={{ scrollMarginTop: 24 }}>
-                    <Typography variant="subtitle2" sx={{ fontWeight: 700 }}>
-                      Chọn hợp đồng đại diện
-                    </Typography>
-                    <RepresentativeForm location={location} period={period} />
-                  </Box>
                   <DeliveryMonitor location={location} />
                   <Typography variant="subtitle2" sx={{ fontWeight: 700 }}>
                     Lịch sử xử lý (tối đa 100 lần gần nhất)
@@ -1129,12 +1090,10 @@ function ManualBillingActions({
   location,
   period,
   preview,
-  onRepresentativeRequired,
 }: {
   location: string;
   period: string;
   preview?: AutomationPreview;
-  onRepresentativeRequired: () => void;
 }) {
   const api = useInvoiceApi();
   const cache = useQueryClient();
@@ -1147,7 +1106,6 @@ function ManualBillingActions({
   const [feedback, setFeedback] = useState('');
   const [error, setError] = useState('');
   const [taskId, setTaskId] = useState('');
-  const [representativeIssue, setRepresentativeIssue] = useState(false);
   const lock = useRef(false);
   const rooms = useQuery({
     queryKey: ['manual-billing-rooms', session?.userId, location],
@@ -1362,8 +1320,7 @@ function ManualBillingActions({
               : 'Hóa đơn phòng/kỳ này đã phát hành. Không tạo thêm bản nháp.',
           );
         } else {
-          // The backend chooses the persisted representative, or the only eligible
-          // contract. A conflict requires Owner review instead of a guessed contract.
+          // The backend selects the earliest eligible reference contract.
           const created = await api.request<Invoice>('/api/v1/invoices/drafts', {
             method: 'POST',
             body: JSON.stringify({ roomId: room, billingPeriod: period }),
@@ -1371,7 +1328,6 @@ function ManualBillingActions({
           setFeedback(
             `Đã tạo hóa đơn nháp cho phòng đã chọn (trạng thái ${created.status}). Kiểm tra dữ liệu trước khi phát hành.`,
           );
-          setRepresentativeIssue(false);
         }
       } else if (draft) {
         // Recheck the exact room, period and version after Owner confirms the dialog.
@@ -1412,16 +1368,12 @@ function ManualBillingActions({
     } catch (e) {
       const problem = e as { code?: string; problem?: { code?: string } };
       const code = problem.problem?.code ?? problem.code;
-      if (operation === 'draft' && code === 'representative_selection_required')
-        setRepresentativeIssue(true);
       setError(
-        operation === 'draft' && code === 'representative_selection_required'
-          ? 'Có nhiều hợp đồng trong kỳ. Hãy chọn hợp đồng đại diện bên dưới rồi tạo nháp lại.'
-          : operation === 'draft' && code === 'representative_contract_not_eligible'
-            ? 'Phòng chưa có hợp đồng hợp lệ trong kỳ này. Kiểm tra lịch sử thuê phòng trước khi tạo nháp.'
-            : operation === 'draft' && code === 'draft_date_not_reached'
-              ? `Chưa đến ngày tạo hóa đơn nháp${scheduledDraftDate ? ` (${scheduledDraftDate})` : ''}. Kiểm tra mốc tạo nháp trong Cấu hình lịch và thử lại khi đến ngày.`
-              : invoiceError(e),
+        operation === 'draft' && code === 'no_reference_contract_for_period'
+          ? 'Phòng không có hợp đồng đối chiếu đủ điều kiện trong kỳ này. Không lập hóa đơn định kỳ.'
+          : operation === 'draft' && code === 'draft_date_not_reached'
+            ? `Chưa đến ngày tạo hóa đơn nháp${scheduledDraftDate ? ` (${scheduledDraftDate})` : ''}. Kiểm tra mốc tạo nháp trong Cấu hình lịch và thử lại khi đến ngày.`
+            : invoiceError(e),
       );
     } finally {
       lock.current = false;
@@ -1580,7 +1532,6 @@ function ManualBillingActions({
               setFeedback('');
               setError('');
               setTaskId('');
-              setRepresentativeIssue(false);
               setConfirmFinal(false);
               setFinalChecked(false);
             }}
@@ -1714,7 +1665,7 @@ function ManualBillingActions({
             draft ? 'Cập nhật hóa đơn nháp' : 'Tạo hóa đơn nháp',
             draft
               ? 'Tính lại bản nháp hiện có bằng dữ liệu đã xác nhận trên máy chủ.'
-              : 'Máy chủ xác định hợp đồng đại diện; không cần chọn đồng hồ.',
+              : 'Máy chủ tự chọn hợp đồng đối chiếu và tính đủ tháng; tiền thuê cho tháng kế tiếp.',
             draftReady,
             !!invoice,
             draftReason,
@@ -1735,19 +1686,6 @@ function ManualBillingActions({
                 Mở hóa đơn hiện có
               </Button>
             ) : null,
-          )}
-          {representativeIssue && (
-            <Alert
-              severity="warning"
-              action={
-                <Button size="small" onClick={onRepresentativeRequired}>
-                  Chọn hợp đồng
-                </Button>
-              }
-            >
-              Phòng này có nhiều hợp đồng cùng kỳ. Chọn hợp đồng đại diện trong mục giám sát rồi thử
-              tạo nháp lại.
-            </Alert>
           )}
           {step(
             4,
@@ -2016,136 +1954,6 @@ function AutomationDrafts({ location, period }: { location: string; period: stri
   );
 }
 
-/** Month offsets stay numeric in the API; owners choose a calendar month instead. */
-function RepresentativeForm({ location, period }: { location: string; period: string }) {
-  const api = useInvoiceApi();
-  const { session } = useAuth();
-  const [room, setRoom] = useState(''),
-    [contract, setContract] = useState(''),
-    [error, setError] = useState(''),
-    [notice, setNotice] = useState(''),
-    [busy, setBusy] = useState(false);
-  const lock = useRef(false);
-  const rooms = useQuery({
-    queryKey: ['automation-rooms', session?.userId, location],
-    queryFn: ({ signal }) =>
-      api.request<{ id: string; label: string }[]>(`/api/v1/capture/locations/${location}/rooms`, {
-        signal,
-      }),
-  });
-  const selection = useQuery({
-    queryKey: ['automation-representative', session?.userId, room, period],
-    enabled: !!room,
-    queryFn: async ({ signal }) =>
-      (await api.request<{ contractId: string; version: number } | undefined>(
-        `/api/v1/billing-automation/representative?roomId=${room}&period=${period}`,
-        { signal },
-      )) ?? null,
-  });
-  const contracts = useQuery({
-    queryKey: ['automation-contract-options', session?.userId, room],
-    enabled: !!room,
-    queryFn: ({ signal }) =>
-      api.request<{
-        periods: {
-          contractId: string;
-          from: string;
-          to: string;
-          contractStatus: string;
-          occupants: { displayLabel: string }[];
-        }[];
-      }>(`/api/v1/rooms/${room}/occupancy-history`, { signal }),
-  });
-  return (
-    <Paper sx={{ p: 2 }}>
-      <Stack spacing={2}>
-        <Typography variant="h6">Hợp đồng đại diện hóa đơn phòng</Typography>
-        <Typography variant="body2">
-          Khi nhiều hợp đồng cùng kỳ, chọn đại diện từ lịch sử thuê phòng. Máy chủ kiểm tra phòng,
-          kỳ và quyền trước khi lưu.
-        </Typography>
-        <Button component={Link} to="/contracts">
-          Xem hợp đồng
-        </Button>
-        <TextField
-          select
-          label="Phòng chọn đại diện"
-          value={room}
-          onChange={(e) => {
-            setRoom(e.target.value);
-            setContract('');
-            setNotice('');
-          }}
-        >
-          <MenuItem value="">Chọn phòng</MenuItem>
-          {rooms.data?.map((r) => (
-            <MenuItem key={r.id} value={r.id}>
-              {r.label}
-            </MenuItem>
-          ))}
-        </TextField>
-        {(rooms.error || selection.error || contracts.error) && (
-          <Alert severity="error">
-            {invoiceError(rooms.error ?? selection.error ?? contracts.error)}
-          </Alert>
-        )}
-        {selection.data && (
-          <Typography>
-            Đang chọn: {selection.data.contractId} · v{selection.data.version}
-          </Typography>
-        )}
-        <TextField
-          select
-          label="Hợp đồng đại diện"
-          value={contract}
-          onChange={(e) => setContract(e.target.value)}
-          disabled={!room || contracts.isFetching}
-        >
-          <MenuItem value="">Chọn hợp đồng</MenuItem>
-          {contracts.data?.periods
-            .filter((c) => ['Active', 'Terminated', 'Superseded'].includes(c.contractStatus))
-            .map((c) => (
-              <MenuItem key={c.contractId} value={c.contractId}>
-                {c.from} – {c.to} · {c.occupants.map((o) => o.displayLabel).join(', ')}
-              </MenuItem>
-            ))}
-        </TextField>
-        {error && <Alert severity="error">{error}</Alert>}
-        {notice && <Alert severity="success">{notice}</Alert>}
-        <Button
-          disabled={!room || !contract || !selection.isSuccess || busy}
-          onClick={() => {
-            if (lock.current) return;
-            lock.current = true;
-            setBusy(true);
-            setError('');
-            void api
-              .request('/api/v1/billing-automation/representative', {
-                method: 'PUT',
-                body: JSON.stringify({
-                  roomId: room,
-                  billingPeriod: period,
-                  contractId: contract.trim(),
-                  expectedVersion: selection.data?.version ?? 0,
-                }),
-              })
-              .then(async () => {
-                setNotice('Đã lưu hợp đồng đại diện.');
-                await selection.refetch();
-              })
-              .catch((e) => setError(invoiceError(e)))
-              .finally(() => {
-                lock.current = false;
-                setBusy(false);
-              });
-          }}
-        >
-          Lưu đại diện kỳ
-        </Button>
-      </Stack>
-    </Paper>
-  );
-}
 function DeliveryMonitor({ location }: { location: string }) {
   const api = useInvoiceApi();
   const { session } = useAuth();

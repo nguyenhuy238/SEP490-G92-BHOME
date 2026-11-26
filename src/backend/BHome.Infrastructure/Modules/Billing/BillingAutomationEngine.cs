@@ -53,7 +53,10 @@ internal sealed partial class BillingAutomationEngine(BHomePersistenceContext db
             while (true)
             {
                 var rooms = await db.Set<Room>().AsNoTracking().Where(r => r.LocationId == p.LocationId && (after == null || r.Id.CompareTo(after.Value) > 0) &&
-                    (phase == "Meter" || (phase == "Final" && db.PeriodicInvoices().Any(i => i.RoomId == r.Id && i.BillingPeriod == x.BillingPeriod)) || (r.Status == RoomStatus.Occupied && db.Set<Contract>().Any(c => c.RoomId == r.Id && c.ActivatedAt != null && (c.Status == ContractStatus.Active || c.Status == ContractStatus.Superseded || c.Status == ContractStatus.Terminated) && c.StartDate <= end && (c.ActualEndDate ?? c.EndDate) >= from))))
+                    (phase == "Meter" || db.PeriodicInvoices().Any(i => i.RoomId == r.Id && i.BillingPeriod == x.BillingPeriod) || db.Set<Contract>().Any(c => c.RoomId == r.Id && c.ActivatedAt != null &&
+                        (c.Kind == ContractKind.Main || c.Kind == ContractKind.Renewal) &&
+                        (c.Status == ContractStatus.Active || c.Status == ContractStatus.Superseded || c.Status == ContractStatus.Terminated || c.Status == ContractStatus.Expired) &&
+                        c.StartDate <= end && (c.ActualEndDate ?? c.EndDate) > end)))
                     .OrderBy(r => r.Id).Select(r => r.Id).Take(100).ToArrayAsync(t);
                 if (rooms.Length == 0) break;
                 foreach (var room in rooms)
