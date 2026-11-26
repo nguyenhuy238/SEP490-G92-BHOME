@@ -85,10 +85,6 @@ internal sealed partial class NotificationEventPublisher(BHomePersistenceContext
         var assignments = db.StaffLocationAssignments.AsNoTracking().Where(a => a.LocationId == location && a.StartDate <= day && a.EndDate >= day);
         if (db is Compact24DbContext compact) assignments = assignments.Where(a => StaffEmploymentEligibility.EligibleIds(compact, day).Contains(a.StaffUserId));
         var ids = await assignments.Select(a => a.StaffUserId).Distinct().ToArrayAsync(t);
-        var responsible = await db.Set<OperationalTask>().AsNoTracking().Where(task => task.LocationId == location && task.BillingRoomId == roomId &&
-            task.BillingPeriod == period && task.Purpose == ReadingPurpose.Periodic && task.AssignedStaffUserId != null && ids.Contains(task.AssignedStaffUserId.Value))
-            .Select(task => task.AssignedStaffUserId!.Value).Distinct().ToArrayAsync(t);
-        if (responsible.Length > 0) ids = responsible;
         return ids.Select(id => new Intent(id, Roles.Staff, location, "Task", "Kỳ hóa đơn còn thiếu dữ liệu",
             $"Phòng {roomNumber} kỳ {period:MM/yyyy} chưa đủ điều kiện phát hành. Kiểm tra công việc được phân công nếu cần bổ sung dữ liệu.",
             "Location", location, EventType: "INVOICE_FINALIZATION_BLOCKED", Channels: ["IN_APP"])).ToList();
@@ -264,7 +260,7 @@ internal sealed partial class NotificationEventPublisher(BHomePersistenceContext
                 e.Event is "assigned" or "assign" or "created" or "scheduled_meter_created" or "scheduled_meter_assigned" or "responsibility_changed")
             {
                 var key = $"periodic-meter-assigned:{e.RecipientUserId:N}:{task.LocationId:N}:{period:yyyyMM}";
-                if (task.Status != MeterTaskStatus.Cancelled && task.AssignedStaffUserId == e.RecipientUserId &&
+                if (task.Status != MeterTaskStatus.Completed && task.Status != MeterTaskStatus.Cancelled &&
                     await db.StaffLocationAssignments.AnyAsync(a => a.StaffUserId == e.RecipientUserId && a.LocationId == task.LocationId && a.StartDate <= today && a.EndDate >= today, t) &&
                     (db is not Compact24DbContext compact || await StaffEmploymentEligibility.IsEligibleAsync(compact, e.RecipientUserId, today, t)))
                     count += await Publish(key, () => Task.FromResult<IReadOnlyList<Intent>>([
@@ -278,7 +274,7 @@ internal sealed partial class NotificationEventPublisher(BHomePersistenceContext
             count += await Publish("task:" + e.Id, async () =>
             {
                 var assignmentDate = task.AutomationPlanId is not null ? clock.BusinessToday() : BillingAutomationDates.BusinessDate(clock.GetUtcNow());
-                if (role == Roles.Staff && (!await db.StaffLocationAssignments.AnyAsync(a => a.StaffUserId == e.RecipientUserId && a.LocationId == task.LocationId && a.StartDate <= assignmentDate && a.EndDate >= assignmentDate, t) || task.AutomationPlanId != null && task.AssignedStaffUserId != e.RecipientUserId)) return [];
+                if (role == Roles.Staff && (!await db.StaffLocationAssignments.AnyAsync(a => a.StaffUserId == e.RecipientUserId && a.LocationId == task.LocationId && a.StartDate <= assignmentDate && a.EndDate >= assignmentDate, t) || task.Purpose != ReadingPurpose.Periodic && task.AutomationPlanId != null && task.AssignedStaffUserId != e.RecipientUserId)) return [];
                 return [new Intent(e.RecipientUserId, role, task.LocationId, "Task", task.Kind == OperationalTaskKind.MeterReading ? "Công việc ghi chỉ số định kỳ" : "Công việc có cập nhật", "Mở công việc để xem yêu cầu và thời hạn trong phạm vi được phân công.", task.Kind == OperationalTaskKind.MeterReading ? "MeterTask" : "OperationalTask", task.Id, e.Id, e.ReadAt, EventType: e.Event switch { "assigned" or "assign" or "created" or "scheduled_meter_created" or "scheduled_meter_assigned" or "responsibility_changed" => "TASK_ASSIGNED", "submit" or "submitted" => "TASK_COMPLETION_SUBMITTED", "rework" => "TASK_REWORK_REQUIRED", _ => "TASK_UPDATED" })];
             }, t);
         }

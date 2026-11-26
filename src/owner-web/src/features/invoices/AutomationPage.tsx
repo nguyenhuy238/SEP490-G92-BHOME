@@ -51,7 +51,7 @@ const phaseLabel: Record<string, string> = {
 };
 const issueLabel: Record<string, string> = {
   active_meter_configuration_required: 'Thiếu đồng hồ hoạt động đúng ngày ghi số',
-  staff_assignment_required: 'Cần phân công Staff đang phụ trách cơ sở',
+  staff_assignment_required: 'Cơ sở chưa có nhân viên phụ trách hợp lệ',
   representative_selection_required: 'Cần chọn hợp đồng đại diện hóa đơn phòng/kỳ',
   draft_missing_inputs: 'Bản nháp còn thiếu dữ liệu bắt buộc',
   confirmed_billing_inputs_required: 'Chưa đủ giá hoặc chỉ số hợp lệ để phát hành',

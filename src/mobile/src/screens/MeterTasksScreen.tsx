@@ -152,10 +152,9 @@ export function MeterTasksScreen({
           task.purpose === 1 &&
           !!task.billingPeriod &&
           task.status !== 3 &&
-          (task.locationId ? task.locationId === locationId : task.location === location?.label) &&
-          (!task.assignedStaffUserId || task.assignedStaffUserId === actor),
+          (task.locationId ? task.locationId === locationId : task.location === location?.label),
       ),
-    [current, locationId, location?.label, actor],
+    [current, locationId, location?.label],
   );
   const requestedPeriod =
     initialLocationId === locationId &&

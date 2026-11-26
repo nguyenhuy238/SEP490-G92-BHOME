@@ -362,7 +362,12 @@ it('shows periodic jobs with or without an automation plan and excludes initial 
     screen
       .getAllByRole('button', { name: /^Phòng / })
       .map((button) => button.getAttribute('aria-label')),
-  ).toEqual(['Phòng 101, Chưa ghi', 'Phòng 105, Chưa ghi', 'Phòng 109, Đã ghi']);
+  ).toEqual([
+    'Phòng 101, Chưa ghi',
+    'Phòng 105, Chưa ghi',
+    'Phòng 108, Chưa ghi',
+    'Phòng 109, Đã ghi',
+  ]);
   expect(screen.queryByText('Chờ tổng hợp hóa đơn')).toBeNull();
 });
 

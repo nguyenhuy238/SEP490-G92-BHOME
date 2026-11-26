@@ -25,7 +25,6 @@ import { formatBillingDecimal } from '../../../../../../packages/client-core/src
 import { ResourcePage } from '../../../components/common/ResourcePage';
 import { isMockMode } from '../../../services/config';
 import { useMeterApi } from '../useMeterApi';
-import { MeterAssignment } from '../MeterAssignment';
 import { OwnerTable } from '../../../components/common/OwnerWorkspace';
 import { PrivateEvidenceViewer } from '../../../components/common/PrivateEvidenceViewer';
 
@@ -526,14 +525,15 @@ export function LiveMetersPage() {
                     Hạn ghi số:{' '}
                     {detail.data.dueAt ? formatInstant(detail.data.dueAt) : 'Chưa cấu hình'}
                   </Typography>
-                  <MeterAssignment
-                    key={detail.data.id + ':' + detail.data.version}
-                    task={detail.data}
-                    saved={() => {
-                      void detail.refetch();
-                      void tasks.refetch();
-                    }}
-                  />
+                  {detail.data.automationPlanId &&
+                    detail.data.status !== 2 &&
+                    detail.data.status !== 3 && (
+                      <Alert severity={detail.data.assignedStaffUserId ? 'info' : 'warning'}>
+                        {detail.data.assignedStaffUserId
+                          ? 'Nhiệm vụ thuộc cơ sở, nhân viên đang phụ trách cơ sở có thể thực hiện.'
+                          : 'Cơ sở chưa có nhân viên phụ trách. Nhiệm vụ được giữ lại và tự hiển thị khi có phân công cơ sở hợp lệ.'}
+                      </Alert>
+                    )}
                   {!readingId && (
                     <Alert severity="info">
                       {detail.data.status === 3

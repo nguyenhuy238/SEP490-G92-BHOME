@@ -44,7 +44,7 @@ internal sealed class NotificationRepository(BHomePersistenceContext db) : INoti
             if (meterPeriod is { } assignedPeriod)
                 return await db.Set<OperationalTask>().AnyAsync(task => task.LocationId == location &&
                     task.Kind == OperationalTaskKind.MeterReading && task.Purpose == ReadingPurpose.Periodic &&
-                    task.BillingPeriod == assignedPeriod && task.Status != MeterTaskStatus.Cancelled && task.AssignedStaffUserId == s.Actor, t)
+                    task.BillingPeriod == assignedPeriod && task.Status != MeterTaskStatus.Cancelled, t)
                     ? new("MeterPeriod", location, location, assignedPeriod) : null;
         }
         var allowed = n.RelatedObjectType switch
@@ -52,7 +52,7 @@ internal sealed class NotificationRepository(BHomePersistenceContext db) : INoti
             "Invoice" => await db.Set<Invoice>().AnyAsync(i => i.Id == n.RelatedObjectId && (s.Owner || s.Tenant && i.Recipients.Any(r => r.TenantUserId == s.Actor)), t),
             "Adjustment" => await db.Set<InvoiceAdjustmentRequest>().AnyAsync(r => r.Id == n.RelatedObjectId && (s.Owner || s.Tenant && r.RequesterId == s.Actor && r.Invoice.Recipients.Any(v => v.TenantUserId == s.Actor)), t),
             "Contract" => await db.Set<Contract>().AnyAsync(c => c.Id == n.RelatedObjectId && (s.Owner || s.Tenant && c.TenantUserId == s.Actor), t),
-            "MeterTask" => await db.Set<OperationalTask>().AnyAsync(task => task.Id == n.RelatedObjectId && task.Kind == OperationalTaskKind.MeterReading && (s.Owner || s.Staff && task.Meter.Room.Location.IsActive && (task.AutomationPlanId == null || task.AssignedStaffUserId == s.Actor) && db.StaffLocationAssignments.Any(a => a.LocationId == task.Meter.Room.LocationId && a.StaffUserId == s.Actor && a.StartDate <= s.Today && a.EndDate >= s.Today)), t),
+            "MeterTask" => await db.Set<OperationalTask>().AnyAsync(task => task.Id == n.RelatedObjectId && task.Kind == OperationalTaskKind.MeterReading && (s.Owner || s.Staff && task.Meter.Room.Location.IsActive && (task.Purpose == ReadingPurpose.Periodic || task.AutomationPlanId == null || task.AssignedStaffUserId == s.Actor) && db.StaffLocationAssignments.Any(a => a.LocationId == task.Meter.Room.LocationId && a.StaffUserId == s.Actor && a.StartDate <= s.Today && a.EndDate >= s.Today)), t),
             "OperationalTask" => await db.Set<OperationalTask>().AnyAsync(task => task.Id == n.RelatedObjectId && (task.Kind == OperationalTaskKind.AdHoc || task.Kind == OperationalTaskKind.MoveInInventory) && (s.Owner || s.Staff && task.Location.IsActive && db.StaffLocationAssignments.Any(a => a.LocationId == task.LocationId && a.StaffUserId == s.Actor && a.StartDate <= s.Today && a.EndDate >= s.Today)), t),
             "Incident" => await db.Set<BHome.Domain.IncidentMaintenance.IncidentReport>().AnyAsync(r => r.Id == n.RelatedObjectId &&
                 (s.Owner || s.Tenant && r.ReporterRole == "Tenant" && r.ReporterId == s.Actor || s.Staff &&

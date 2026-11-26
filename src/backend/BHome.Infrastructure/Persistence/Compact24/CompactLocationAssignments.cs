@@ -312,6 +312,7 @@ internal sealed class CompactLocationAssignments(Compact24DbContext db, TimeProv
             {
                 task.Id,
                 task.Kind,
+                task.Purpose,
                 task.AssignedStaffUserId,
                 task.AssignmentId,
                 task.AssignedAt,
@@ -331,7 +332,8 @@ internal sealed class CompactLocationAssignments(Compact24DbContext db, TimeProv
         // Location-owned during a responsibility gap, ready for the next eligible Staff.
         if (next is null && blockSpecialists && (orders.Length > 0 || inspections.Length > 0))
             throw new BHome.Application.PropertyManagement.PropertyException(409, "staff_specialist_work_unresolved");
-        if (next is null && blockSpecialists && tasks.Any(task => task.Kind != OperationalTaskKind.LocationAssetHandover))
+        if (next is null && blockSpecialists && tasks.Any(task => task.Kind != OperationalTaskKind.LocationAssetHandover &&
+            !(task.Kind == OperationalTaskKind.MeterReading && task.Purpose == ReadingPurpose.Periodic)))
             throw new BHome.Application.PropertyManagement.PropertyException(409, "staff_operational_tasks_unresolved");
 
         var nextStaff = next?.StaffUserId;

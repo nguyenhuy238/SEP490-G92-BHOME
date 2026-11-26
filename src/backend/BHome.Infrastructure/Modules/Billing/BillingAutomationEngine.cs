@@ -106,7 +106,9 @@ internal sealed partial class BillingAutomationEngine(BHomePersistenceContext db
                 if (meters.Length != 1 || previous.MeterId != meters[0].Id) errors.Add(new { roomId = room, utilityType = type, code = "meter_replacement_review_required" });
                 if (previous.AutomationPlanId is not null && previous.Status is not (MeterTaskStatus.Completed or MeterTaskStatus.Cancelled))
                 {
-                    if (previous.AssignedStaffUserId == null && assignment is not null)
+                    // The recorded Staff is a routing snapshot, not an access grant.
+                    // Refresh it from the effective Location responsibility on retries.
+                    if (assignment is not null && (previous.AssignedStaffUserId != assignment.StaffUserId || previous.AssignmentId != assignment.Id))
                     {
                         previous.AssignedStaffUserId = assignment.StaffUserId;
                         previous.AssignmentId = assignment.Id;
@@ -116,7 +118,7 @@ internal sealed partial class BillingAutomationEngine(BHomePersistenceContext db
                         db.Add(assigned);
                         db.Add(new OperationalTaskNotification { TaskId = previous.Id, RecipientUserId = assignment.StaffUserId, EventId = assigned.Id, Event = "scheduled_meter_assigned" });
                     }
-                    else if (previous.AssignedStaffUserId is not { } assignee || !assignees.Contains(assignee))
+                    else if (assignment is null)
                         errors.Add(new { roomId = room, utilityType = type, code = "staff_assignment_required", taskId = previous.Id });
                 }
                 continue;

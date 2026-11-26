@@ -316,7 +316,9 @@ internal sealed partial class CompactNotificationEvents(Compact24DbContext db, C
     {
         var count = 0;
         var tasks = await db.Set<OperationalTask>().AsNoTracking().Where(x => x.Status != MeterTaskStatus.Completed && x.Status != MeterTaskStatus.Cancelled &&
-            (x.AssignedStaffUserId == null || !db.StaffLocationAssignments.Any(a => a.LocationId == x.LocationId && a.StaffUserId == x.AssignedStaffUserId && a.StartDate <= Today && a.EndDate >= Today)) &&
+            (x.Kind == BHome.Domain.StaffOperations.OperationalTaskKind.MeterReading && x.Purpose == ReadingPurpose.Periodic
+                ? !db.StaffLocationAssignments.Any(a => a.LocationId == x.LocationId && a.StartDate <= Today && a.EndDate >= Today && StaffEmploymentEligibility.EligibleIds(db, Today).Contains(a.StaffUserId))
+                : x.AssignedStaffUserId == null || !db.StaffLocationAssignments.Any(a => a.LocationId == x.LocationId && a.StaffUserId == x.AssignedStaffUserId && a.StartDate <= Today && a.EndDate >= Today)) &&
             !db.Set<NotificationPublication>().Any(p => p.EventKey == "task-unassigned:" + x.Id.ToString() + ":" + x.Version.ToString())).OrderBy(x => x.Id).Take(25).ToArrayAsync(t);
         foreach (var task in tasks)
         {

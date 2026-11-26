@@ -26,12 +26,14 @@ internal sealed class BillingMeterOverdueNotifier(BHomePersistenceContext db, Ti
         var tasks = await db.Set<OperationalTask>().AsNoTracking()
             .Where(x => x.Kind == OperationalTaskKind.MeterReading && x.Purpose == ReadingPurpose.Periodic && x.BillingPeriod != null &&
                 x.Location.IsActive && x.DueAt < now && x.Status != MeterTaskStatus.Completed && x.Status != MeterTaskStatus.Cancelled)
-            .Select(x => new { x.Id, x.LocationId, x.Location.Name, x.Meter.RoomId, x.Meter.Room.RoomNumber, x.BillingPeriod, x.DueAt, x.AssignedStaffUserId })
+            .Select(x => new { x.Id, x.LocationId, x.Location.Name, x.Meter.RoomId, x.Meter.Room.RoomNumber, x.BillingPeriod, x.DueAt })
             .ToArrayAsync(t);
-        foreach (var group in tasks.GroupBy(task => new { task.LocationId, task.Name, task.BillingPeriod, task.AssignedStaffUserId }))
+        foreach (var group in tasks.GroupBy(task => new { task.LocationId, task.Name, task.BillingPeriod }))
         {
             var location = group.Key.LocationId;
-            var staff = group.Key.AssignedStaffUserId;
+            var staff = await db.StaffLocationAssignments.AsNoTracking()
+                .Where(a => a.LocationId == location && a.StartDate <= today && a.EndDate >= today && eligibleStaff.Contains(a.StaffUserId))
+                .Select(a => (Guid?)a.StaffUserId).SingleOrDefaultAsync(t);
             var period = group.Key.BillingPeriod!.Value;
             var rooms = group.GroupBy(task => task.RoomId).Select(room => room.First().RoomNumber).OrderBy(name => name).ToArray();
             var deadline = group.Min(task => task.DueAt)!.Value.ToOffset(TimeSpan.FromHours(7));

@@ -278,7 +278,12 @@ internal sealed class CaptureRepository(BHomePersistenceContext db, CaptureScope
                         (x.Purpose == ReadingPurpose.Final && previous.ReadingDate == x.ReadingDate &&
                             (previous.Purpose != ReadingPurpose.Final || previous.ContractId != x.ContractId)))))
                     .OrderByDescending(r => r.ConfirmedAt).ThenBy(r => r.Id).Select(r => (decimal?)r.ConfirmedValue).FirstOrDefault(),
-            x.ContractId, db.Set<MeterReading>().Where(r => r.TaskId == x.Id).Select(r => (Guid?)r.Id).FirstOrDefault(), x.DueAt, x.AssignedStaffUserId, x.AutomationPlanId, x.Version, x.LocationId, x.Meter.RoomId,
+            x.ContractId, db.Set<MeterReading>().Where(r => r.TaskId == x.Id).Select(r => (Guid?)r.Id).FirstOrDefault(), x.DueAt,
+            x.Purpose == ReadingPurpose.Periodic && x.Status != MeterTaskStatus.Completed && x.Status != MeterTaskStatus.Cancelled
+                ? db.StaffLocationAssignments.Where(a => a.LocationId == x.LocationId && a.StartDate <= scope.Today && a.EndDate >= scope.Today && scope.EligibleStaff.Contains(a.StaffUserId))
+                    .Select(a => (Guid?)a.StaffUserId).FirstOrDefault()
+                : x.AssignedStaffUserId,
+            x.AutomationPlanId, x.Version, x.LocationId, x.Meter.RoomId,
             x.Purpose == ReadingPurpose.Periodic && x.BillingPeriod != null && x.DueAt.HasValue && x.DueAt.Value < now && x.Status != MeterTaskStatus.Completed && x.Status != MeterTaskStatus.Cancelled));
     }
     public async Task<IReadOnlyList<MeterTaskSummary>> TasksAsync(CancellationToken t, MeterTaskQuery? q = null)

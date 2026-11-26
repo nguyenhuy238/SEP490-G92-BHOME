@@ -335,8 +335,12 @@ internal sealed class NotificationChannelWorker(Compact24DbContext db, CompactNo
                 staff = id;
             }
             var now = sql.BusinessNow;
+            var today = sql.BusinessToday;
+            var currentStaff = db.StaffLocationAssignments.Where(a => a.LocationId == location &&
+                a.StartDate <= today && a.EndDate >= today && StaffEmploymentEligibility.EligibleIds(db, today).Contains(a.StaffUserId));
+            if (staff is { } recipient ? !await currentStaff.AnyAsync(a => a.StaffUserId == recipient, t) : await currentStaff.AnyAsync(t)) return false;
             return await db.Set<OperationalTask>().AnyAsync(x => x.LocationId == location && x.BillingPeriod == period &&
-                x.Purpose == ReadingPurpose.Periodic && x.AssignedStaffUserId == staff && x.Location.IsActive &&
+                x.Purpose == ReadingPurpose.Periodic && x.Location.IsActive &&
                 x.DueAt < now && x.Status != MeterTaskStatus.Completed && x.Status != MeterTaskStatus.Cancelled, t);
         }
         if (n.EventType == "TASK_DUE_OR_OVERDUE") return await db.Set<OperationalTask>().AnyAsync(x => x.Id == n.RelatedObjectId && x.Status != MeterTaskStatus.Completed && x.Status != MeterTaskStatus.Cancelled, t);

@@ -125,7 +125,8 @@ public sealed class Compact24PaymentRegressionTests
     [CompactPostgresFact] public Task PeriodicMeterOverdueNotices() => Run(t => t.PeriodicMeterOverdueNoticesUseBusinessTimeAndDistinctRooms());
     [CompactPostgresFact] public Task PeriodicScheduler() => Run(t => t.PeriodicSchedulerQueuesWorkOnBusinessDateWithoutDemoOptIn());
     [CompactPostgresFact] public Task MeterListMonthChange() => Run(t => t.MeterListSurvivesMonthChangeWithLegacyTasksWithoutDeadline());
-    [CompactPostgresFact] public Task UnassignedMeter() => Run(t => t.MeterJobPreservesUnassignedWorkAndReportsMissingMetersUntilOwnerAssigns());
+    [CompactPostgresFact] public Task UnassignedMeter() => Run(t => t.MeterJobPreservesUnassignedWorkAndMakesItVisibleOnLocationAssignment());
+    [CompactPostgresFact] public Task PeriodicMeterLocationResponsibility() => Run(t => t.PeriodicMeterTaskFollowsCurrentLocationStaffWithoutReassignment());
     [CompactPostgresFact] public Task ReplacedMeter() => Run(t => t.MeterReplacementDoesNotDuplicatePeriodTasksAndFutureScheduleDoesNotRunEarly());
     [CompactPostgresFact] public Task DraftAutomation() => Run(t => t.DraftJobRequiresSharedRepresentativeAndPreservesApprovedCorrectionOnReplay());
     [CompactPostgresFact] public Task FinalAutomation() => Run(t => t.ManualAndScheduledFinalizationCommitOneImmutableInvoiceAndIssuanceEvent());

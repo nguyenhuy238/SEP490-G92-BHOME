@@ -92,13 +92,49 @@ public sealed partial class PaymentLedgerTests
         await RunMeter(w); await using var scope = fixture.Factory.Services.CreateAsyncScope(); var db = scope.ServiceProvider.GetRequiredService<BHomePersistenceContext>(); Assert.Equal(2, await db.Set<OperationalTask>().CountAsync(t => t.AutomationPlanId == p.Id)); Assert.Equal(2, await db.Set<MeterReading>().CountAsync(r => tasks.Select(t => t.Id).Contains(r.TaskId)));
     }
     [Fact]
-    public async Task MeterJobPreservesUnassignedWorkAndReportsMissingMetersUntilOwnerAssigns()
+    public async Task MeterJobPreservesUnassignedWorkAndMakesItVisibleOnLocationAssignment()
     {
         var (w, p, _) = await MeterWorkspace(false, false); var result = (await RunMeter(w))!; Assert.Equal("PendingInputs", result.Status); Assert.Contains("staff_assignment_required", result.ExceptionsJson); Assert.Contains("active_meter_configuration_required", result.ExceptionsJson);
         Guid taskId; await using (var s = fixture.Factory.Services.CreateAsyncScope()) { var db = s.ServiceProvider.GetRequiredService<BHomePersistenceContext>(); var task = await db.Set<OperationalTask>().SingleAsync(t => t.AutomationPlanId == p.Id); Assert.Null(task.AssignedStaffUserId); taskId = task.Id; db.Add(new StaffLocationAssignment(w.Location, w.Staff, w.Owner, CurrentPeriod().AddYears(-1), CurrentPeriod().AddYears(1))); await db.SaveChangesAsync(); }
-        using var staff = await Client(w.Staff); using var owner = await Client(w.Owner); Assert.Equal(HttpStatusCode.NotFound, (await staff.GetAsync($"/api/v1/capture/meter-tasks/{taskId}")).StatusCode);
-        (await owner.PostAsJsonAsync($"/api/v1/billing-automation/meter-tasks/{taskId}/assignment", new MeterAssignmentInput(w.Staff, 1))).EnsureSuccessStatusCode(); Assert.Equal(HttpStatusCode.OK, (await staff.GetAsync($"/api/v1/capture/meter-tasks/{taskId}")).StatusCode);
+        using var staff = await Client(w.Staff);
+        var visible = await staff.GetFromJsonAsync<MeterTaskSummary>($"/api/v1/capture/meter-tasks/{taskId}");
+        Assert.NotNull(visible);
+        Assert.Equal(w.Staff, visible.AssignedStaffUserId);
         var repeated = (await RunMeter(w))!; Assert.Equal(1, repeated.CreatedCount); Assert.DoesNotContain("staff_assignment_required", repeated.ExceptionsJson);
+    }
+    [Fact]
+    public async Task PeriodicMeterTaskFollowsCurrentLocationStaffWithoutReassignment()
+    {
+        var (w, p, meters) = await MeterWorkspace();
+        await RunMeter(w);
+        using var owner = await Client(w.Owner);
+        var initial = await owner.PostAsJsonAsync("/api/v1/capture/meter-tasks", new MeterTaskInput(meters[0], ReadingPurpose.Initial, CurrentPeriod().AddDays(-1), null));
+        initial.EnsureSuccessStatusCode();
+        await ConfirmSyntheticTask(w, (await initial.Content.ReadFromJsonAsync<IdResult>())!.Id, 100);
+        var successor = await Setup();
+        Guid taskId;
+        await using (var scope = fixture.Factory.Services.CreateAsyncScope())
+        {
+            var db = scope.ServiceProvider.GetRequiredService<BHomePersistenceContext>();
+            var task = await db.Set<OperationalTask>().SingleAsync(t => t.AutomationPlanId == p.Id && t.MeterId == meters[0]);
+            taskId = task.Id;
+            var assignment = await db.StaffLocationAssignments.SingleAsync(a => a.LocationId == w.Location);
+            var date = DateOnly.FromDateTime(TimeZoneInfo.ConvertTimeBySystemTimeZoneId(DateTimeOffset.UtcNow, "Asia/Ho_Chi_Minh").DateTime);
+            assignment.ChangePeriod(assignment.StartDate, date.AddDays(-1));
+            await db.SaveChangesAsync();
+            db.Add(new StaffLocationAssignment(w.Location, successor.Staff, w.Owner, date, date.AddYears(1)));
+            await db.SaveChangesAsync();
+            Assert.Equal(w.Staff, task.AssignedStaffUserId);
+        }
+        using var previous = await Client(w.Staff);
+        using var current = await Client(successor.Staff);
+        Assert.Equal(HttpStatusCode.NotFound, (await previous.GetAsync($"/api/v1/capture/meter-tasks/{taskId}")).StatusCode);
+        var visible = await current.GetFromJsonAsync<MeterTaskSummary>($"/api/v1/capture/meter-tasks/{taskId}");
+        Assert.Equal(successor.Staff, visible!.AssignedStaffUserId);
+        Assert.Equal(10, (await ConfirmSyntheticTask(w with { Staff = successor.Staff }, taskId, 110)).Consumption);
+        await using var check = fixture.Factory.Services.CreateAsyncScope();
+        var store = check.ServiceProvider.GetRequiredService<BHomePersistenceContext>();
+        Assert.Equal(successor.Staff, (await store.Set<MeterReading>().SingleAsync(r => r.TaskId == taskId)).ConfirmedByUserId);
     }
     [Fact]
     public async Task MeterJobIncludesVacantRoomsAndReportsMissingMetersWithoutDuplicating()
