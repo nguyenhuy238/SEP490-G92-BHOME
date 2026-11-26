@@ -30,6 +30,7 @@ import {
 import { formatInstant } from '../../../../../packages/client-core/src/localization';
 import {
   paymentError,
+  isSePayPaymentCode,
   paymentText,
   type BankTransfer,
   type InvoicePayment,
@@ -67,11 +68,11 @@ export function OwnerInvoicePaymentPanel({ invoiceId }: { invoiceId: string }) {
   // Only a persisted BH code can be matched by SePay. The older invoice
   // reference is an internal/manual-payment reference, not a SePay memo.
   const bhCode = [instructions.data?.transferReference, state.data?.transferReference].find(
-    (value) => typeof value === 'string' && /^BH\d{8}$/.test(value),
+    (value) => typeof value === 'string' && isSePayPaymentCode(value),
   );
   const legacyInstructions = Boolean(
     instructions.data?.accountNumber &&
-    !/^BH\d{8}$/.test(instructions.data.transferDescription ?? ''),
+    !isSePayPaymentCode(instructions.data.transferDescription ?? ''),
   );
   return (
     <Paper variant="outlined" sx={{ p: { xs: 1.5, sm: 2 }, borderRadius: 2 }}>

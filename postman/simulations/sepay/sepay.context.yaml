@@ -30,6 +30,13 @@ assumptions:
     verification: One adapter smoke test passed through Postman CLI 1.80.0. A preliminary incorrectly quoted environment command only used the loopback fallback and is excluded from this evidence.
     source: docs/development/SEPAY_SANDBOX_COMPLETION_2026-11-13.md
     updated_at: '2026-11-13'
+  - id: dual-mode-adapter-recheck-20261126
+    status: supported
+    claim: The runtime-mode changes retain compatibility with the SePay API v2 transaction envelope.
+    reason: The source-built BHOME adapter parsed the existing provider contract fixture over a real local HTTP connection.
+    verification: ProviderContractSmokeCanUseTheLocalPostmanSimulation passed with BHOME_SEPAY_SIMULATION_URL directed to the local simulation. Its NDJSON log recorded GET /v2/transactions with HTTP 200. This establishes local adapter compatibility only; no real Test or Live bank credential, delivery or transfer was exercised.
+    source: docs/development/SEPAY_PAYMENT_MODES.md
+    updated_at: '2026-11-26'
 fingerprints:
   - id: initial-contract
     date: '2026-11-12'

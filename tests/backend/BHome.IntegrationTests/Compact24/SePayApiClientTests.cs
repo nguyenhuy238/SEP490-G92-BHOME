@@ -1,6 +1,7 @@
 using System.Net;
 using System.Text.Json;
 using BHome.Application.Common;
+using BHome.Application.PaymentsDebt;
 using BHome.Application.PaymentsDebt.SePay;
 using BHome.Infrastructure.PaymentsDebt;
 using Microsoft.AspNetCore.Builder;
@@ -23,12 +24,50 @@ public sealed class SePayApiClientTests
         {
             var builder = WebApplication.CreateBuilder(); builder.Logging.ClearProviders(); builder.WebHost.UseUrls("http://127.0.0.1:0");
             app = builder.Build();
-            app.MapGet("/v2/transactions", async context => { Requests++; Authorization = context.Request.Headers.Authorization; Query = context.Request.QueryString.Value; await respond(context); });
+            app.MapGet("/v2/{resource}", async context => { Requests++; Authorization = context.Request.Headers.Authorization; Query = context.Request.QueryString.Value; await respond(context); });
         }
         internal Task Start() => app.StartAsync();
         public ValueTask DisposeAsync() => app.DisposeAsync();
     }
     private static SePayOptions Options() => new() { Enabled = true, ApiToken = "synthetic-only-token", RequestTimeoutSeconds = 1 };
+    [Theory]
+    [InlineData("970416", "0000001234", 1, true)]
+    [InlineData("970416", "0000001234", 0, false)]
+    [InlineData("970422", "0000001234", 1, false)]
+    [InlineData("970416", "0000009999", 1, false)]
+    public async Task ConnectionCheckRequiresExactActiveLinkedBankAccount(string bin, string account, int active, bool expected)
+    {
+        await using var server = new Server(context => context.Response.WriteAsJsonAsync(new
+        {
+            status = "success",
+            data = new[] { new { bank_bin = bin, account_number = account, active, bank_short_name = "ACB" } },
+            meta = new { pagination = new { has_more = false } }
+        })); await server.Start();
+        using var http = new HttpClient(); var options = Options(); options.ApiBaseUrl = server.Address.ToString();
+        var result = await new SePayApiClient(http, options, TimeProvider.System).CheckAccountAsync("970416", "0000001234", default);
+        Assert.Equal(expected ? "ACB" : null, result); Assert.Equal("Bearer synthetic-only-token", server.Authorization);
+        Assert.Contains("active=1", server.Query); Assert.Contains("q=0000001234", server.Query);
+    }
+    [Theory]
+    [InlineData(401, "sepay_credentials_rejected")]
+    [InlineData(403, "sepay_credentials_rejected")]
+    [InlineData(429, "sepay_connection_unavailable")]
+    [InlineData(500, "sepay_connection_unavailable")]
+    public async Task ConnectionCheckPreservesProviderRejectionAndOutage(int status, string code)
+    {
+        await using var server = new Server(context => { context.Response.StatusCode = status; return Task.CompletedTask; }); await server.Start();
+        using var http = new HttpClient(); var options = Options(); options.ApiBaseUrl = server.Address.ToString();
+        var error = await Assert.ThrowsAsync<PaymentException>(() => new SePayApiClient(http, options, TimeProvider.System).CheckAccountAsync("970416", "0000001234", default));
+        Assert.Equal(code, error.Code);
+    }
+    [Fact]
+    public async Task ConnectionCheckBoundsSlowResponseAndNeverReportsConnected()
+    {
+        await using var server = new Server(async context => { await context.Response.WriteAsync("{"); await context.Response.Body.FlushAsync(); await Task.Delay(5000, context.RequestAborted); }); await server.Start();
+        using var http = new HttpClient(); var options = Options(); options.ApiBaseUrl = server.Address.ToString();
+        var error = await Assert.ThrowsAsync<PaymentException>(() => new SePayApiClient(http, options, TimeProvider.System).CheckAccountAsync("970416", "0000001234", default));
+        Assert.Equal("sepay_connection_unavailable", error.Code);
+    }
     internal static object ProviderResponse(bool more = false, int page = 1) => new
     {
         status = "success",

@@ -21,7 +21,8 @@ internal sealed class SePayRepository(BHomePersistenceContext db, IPaymentReposi
     public Task<Guid> ReceiveAsync(SePayTransaction transaction, CancellationToken token) => TransactionAsync(async () =>
     {
         if (db is not Compact24DbContext) throw new PaymentException(503, "sepay_storage_unavailable");
-        var identity = ReceiptExcessRules.Hash(new[] { options.Mode, transaction.Gateway.ToUpperInvariant(), transaction.AccountNumber, transaction.Id });
+        var parts = new[] { options.Mode, transaction.Gateway.ToUpperInvariant(), transaction.AccountNumber, transaction.Id };
+        var identity = ReceiptExcessRules.Hash(options.OwnerUserId is { } owner ? parts.Append(owner.ToString("D")).ToArray() : parts);
         var key = "sepay-event:" + identity;
         var previous = await db.Database.SqlQuery<string>($"SELECT task_data::text AS \"Value\" FROM operational_tasks WHERE source_key={key}").SingleOrDefaultAsync(token);
         if (previous is not null)
@@ -31,12 +32,12 @@ internal sealed class SePayRepository(BHomePersistenceContext db, IPaymentReposi
             return received.Id;
         }
         var id = Guid.NewGuid();
-        var data = JsonSerializer.Serialize(new SePayEvent(id, options.Mode, transaction, "Pending", null, null), Json);
+        var data = JsonSerializer.Serialize(new SePayEvent(id, options.Mode, transaction, "Pending", null, null, options.OwnerUserId), Json);
         await db.Database.ExecuteSqlInterpolatedAsync($"""
             INSERT INTO operational_tasks(id,task_type,source_key,status,assigned_at,task_data)
             VALUES({id},'COMMAND',{key},'Pending',{clock.GetUtcNow()},CAST({data} AS jsonb)||jsonb_build_object('recordType','SePayEventV1'))
             """, token);
-        await jobs.EnqueueAsync(new("sepay-reconcile-" + options.Mode.ToLowerInvariant(), id.ToString(), JsonSerializer.Serialize(new { EventId = id })), token);
+        await jobs.EnqueueAsync(new("sepay-reconcile-" + options.Mode.ToLowerInvariant(), id.ToString(), JsonSerializer.Serialize(new { EventId = id, OwnerId = options.OwnerUserId })), token);
         return id;
     }, token);
     public async Task<SePayEvent> EventAsync(Guid id, CancellationToken token)
@@ -49,8 +50,12 @@ internal sealed class SePayRepository(BHomePersistenceContext db, IPaymentReposi
     public async Task<PaymentCode?> ResolveAsync(string code, CancellationToken token)
     {
         var data = await db.Database.SqlQuery<string>($"""
-            SELECT (task_data->'state')::text AS "Value" FROM operational_tasks WHERE source_key={"payment-code:" + code}
-              AND task_data->>'recordType'='PaymentCodeV1' AND task_data->'state'->>'mode'={options.Mode}
+            SELECT (t.task_data->'state')::text AS "Value" FROM operational_tasks t WHERE t.source_key={"payment-code:" + code}
+              AND t.task_data->>'recordType'='PaymentCodeV1' AND t.task_data->'state'->>'mode'={options.Mode}
+              AND NOT EXISTS(SELECT 1 FROM operational_tasks other
+                WHERE other.id<>t.id AND other.task_data->>'recordType'='PaymentCodeV1'
+                  AND other.task_data->'state'->>'kind'=t.task_data->'state'->>'kind'
+                  AND other.task_data->'state'->>'obligationId'=t.task_data->'state'->>'obligationId')
             """).SingleOrDefaultAsync(token);
         return data is null ? null : JsonSerializer.Deserialize<PaymentCode>(data, Json);
     }
@@ -169,7 +174,12 @@ internal sealed class SePayRepository(BHomePersistenceContext db, IPaymentReposi
     {
         if (page < 1 || pageSize is < 1 or > 100 || page > int.MaxValue / pageSize) throw new PaymentException(400, "invalid_payment_query");
         if (db is not Compact24DbContext) throw new PaymentException(503, "sepay_storage_unavailable");
-        var count = await db.Database.SqlQuery<int>($"SELECT count(*)::int AS \"Value\" FROM operational_tasks WHERE task_data->>'recordType'='SePayEventV1'").SingleAsync(token);
+        var count = await db.Database.SqlQuery<int>($"""
+            SELECT count(*)::int AS "Value" FROM operational_tasks e WHERE task_data->>'recordType'='SePayEventV1'
+              AND (CAST({options.OwnerUserId} AS uuid) IS NULL OR e.task_data->>'ownerId'={options.OwnerUserId.ToString()}
+                OR e.task_data->>'ownerId' IS NULL AND (SELECT count(*) FROM users WHERE 'Owner'=ANY(roles))=1
+                  AND EXISTS(SELECT 1 FROM users WHERE id={options.OwnerUserId} AND 'Owner'=ANY(roles)))
+            """).SingleAsync(token);
         var values = await db.Database.SqlQuery<SePayEventView>($"""
             SELECT e.id AS "Id",e.task_data->>'mode' AS "Mode",
               CASE WHEN e.status='Pending' AND j.status='Failed' THEN 'ManualReview' ELSE e.status END AS "Status",
@@ -177,7 +187,11 @@ internal sealed class SePayRepository(BHomePersistenceContext db, IPaymentReposi
               (e.task_data->>'transferId')::uuid AS "TransferId",e.assigned_at AS "ReceivedAt"
             FROM operational_tasks e LEFT JOIN operational_tasks j ON j.task_type='SYSTEM_JOB'
               AND j.task_data->>'name'='sepay-reconcile-'||lower(e.task_data->>'mode') AND j.task_data->'payload'->>'EventId'=e.id::text
-            WHERE e.task_data->>'recordType'='SePayEventV1' ORDER BY e.assigned_at DESC,e.id LIMIT {pageSize} OFFSET {(page - 1) * pageSize}
+            WHERE e.task_data->>'recordType'='SePayEventV1'
+              AND (CAST({options.OwnerUserId} AS uuid) IS NULL OR e.task_data->>'ownerId'={options.OwnerUserId.ToString()}
+                OR e.task_data->>'ownerId' IS NULL AND (SELECT count(*) FROM users WHERE 'Owner'=ANY(roles))=1
+                  AND EXISTS(SELECT 1 FROM users WHERE id={options.OwnerUserId} AND 'Owner'=ANY(roles)))
+            ORDER BY e.assigned_at DESC,e.id LIMIT {pageSize} OFFSET {(page - 1) * pageSize}
             """).ToArrayAsync(token);
         return new(values, page, pageSize, count);
     }
@@ -196,6 +210,7 @@ internal sealed class SePayRepository(BHomePersistenceContext db, IPaymentReposi
             JOIN contracts c ON c.id=a.target_settlement_contract_id
             WHERE a.target_settlement_contract_id IS NOT NULL AND a.settlement_receivable_id IS NOT NULL
               AND p.provider_code={mode} AND p.status='VERIFIED' AND p.verification_method='AUTO'
+              AND (CAST({options.OwnerUserId} AS uuid) IS NULL OR c.owner_signer_id={options.OwnerUserId})
               AND c.status={(short)ContractStatus.Active}
               AND c.move_out->'current'->>'status'={((int)MoveOutStatus.Inspected).ToString()}
               AND EXISTS(SELECT 1 FROM operational_tasks e WHERE e.task_type='COMMAND'

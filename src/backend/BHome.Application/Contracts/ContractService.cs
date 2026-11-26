@@ -31,7 +31,9 @@ public sealed partial class ContractService(IContractRepository repository, ICur
     IInternalAcceptanceRenderer? acceptanceRenderer = null,
     IHandoverSignatureInkRenderer? handoverInkRenderer = null,
     ISettlementReceivablesRepository? settlementRecords = null,
-    IMainDraftData? handoverPartyData = null) : IAdministrativeContractReadiness
+    IMainDraftData? handoverPartyData = null,
+    BHome.Application.PaymentsDebt.IPaymentRepository? paymentAccounts = null,
+    BHome.Application.PaymentsDebt.SePay.ISePayOwnerConnections? paymentConnections = null) : IAdministrativeContractReadiness
 {
     private Guid Actor => user.UserId is { } id && id != Guid.Empty ? id : throw new ContractException(401, "authentication_required");
     private DateOnly Today => clock.BusinessToday();
@@ -238,7 +240,7 @@ public sealed partial class ContractService(IContractRepository repository, ICur
                 MonthlyRent = x.MonthlyRent,
                 RequiredDeposit = x.MonthlyRent,
                 IsDevelopmentDemo = DemoEnabled,
-                PaymentMode = ConfiguredPaymentMode((await repository.RoomAsync(x.RoomId, t))!.LocationId, x.OwnerSignerId),
+                PaymentMode = await ConfiguredPaymentModeAsync((await repository.RoomAsync(x.RoomId, t))!.LocationId, x.OwnerSignerId, t),
                 Terms = x.Terms.Trim()
             };
             c.Residents = residents.Select(r => new ContractResident

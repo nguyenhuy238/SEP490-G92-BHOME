@@ -23,7 +23,7 @@ public sealed partial class SettlementReceivablesService
         var source = await repository.FinalFixedAsync(id, token); var missing = source.MissingInputs.ToList();
         if (!source.Context.InspectionConfirmed) missing.Add("owner_confirmed_inspection_required");
         if (source.Context.HasLegacyDeductions) missing.Add("legacy_deduction_requires_migration_review");
-        if (source.Context.IsDevelopmentDemo && mode?.AllowDevelopmentDemo != true) throw ContractException.Conflict("development_payment_unavailable");
+        if (source.Context.IsDevelopmentDemo && mode?.AllowDevelopmentDemo != true && mode?.AllowSandboxReceivingAccounts != true) throw ContractException.Conflict("development_payment_unavailable");
         if (source.Schedule is null) missing.Add("billing_schedule_required");
         if (missing.Count > 0) return [new("", "Tiền thuê và phí cố định", source.Period, "", null, null, null, missing.Distinct().Order().ToArray())];
         var schedule = source.Schedule!;
@@ -63,7 +63,7 @@ public sealed partial class SettlementReceivablesService
             if (previous is not null)
             {
                 if (previous.ContractId != id || previous.Kind != "FinalFixed" || previous.Fingerprint != fingerprint) throw ContractException.Conflict("settlement_idempotency_conflict");
-                if (previous.IsDevelopmentDemo && mode?.AllowDevelopmentDemo != true) throw ContractException.Conflict("development_payment_unavailable");
+                if (previous.IsDevelopmentDemo && mode?.AllowDevelopmentDemo != true && mode?.AllowSandboxReceivingAccounts != true) throw ContractException.Conflict("development_payment_unavailable");
                 return previous;
             }
             await AuthorizeAsync(id, true, token);
@@ -75,6 +75,7 @@ public sealed partial class SettlementReceivablesService
             if (row.MissingInputs.Count > 0 || row.Amount is null || row.Calculation is null) throw ContractException.Conflict("fixed_charge_inputs_required");
             var context = await repository.FinalFixedAsync(id, token);
             var proofs = await evidence.CaptureAsync(id, context.Context.EvidenceIds.Order().ToArray(), token);
+            var channel = await NewPaymentModeAsync(id, token);
             var charge = new SettlementReceivable(Guid.NewGuid(), id, context.Context.View.RoomId, "FinalFixed",
                 $"fixed:{id:N}:{row.BillingPeriod:yyyyMM}:{row.ChargeCode}:{Fingerprint(id, row.Calculation)}",
                 context.Context.InspectionId, context.Context.InspectionVersion, null, row.Amount.Value, row.Name,
@@ -87,7 +88,7 @@ public sealed partial class SettlementReceivablesService
                     scheduleVersion = context.Schedule!.Version,
                     policyAppliesToSignedTermsConfirmed = true
                 }),
-                proofs, context.RecipientUserIds, Actor, clock.GetUtcNow(), key, fingerprint, context.Context.IsDevelopmentDemo, FixedCharge: row.Calculation);
+                proofs, context.RecipientUserIds, Actor, clock.GetUtcNow(), key, fingerprint, channel is null ? context.Context.IsDevelopmentDemo : channel == "Test", FixedCharge: row.Calculation, PaymentMode: channel);
             await repository.SaveChargeAsync(charge, token); return charge;
         }, token);
     }

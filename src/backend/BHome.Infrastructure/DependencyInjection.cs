@@ -277,21 +277,31 @@ public static class DependencyInjection
             .Validate<IHostEnvironment>((options, host) => options.Valid(host.EnvironmentName),
                 "SePay requires isolated Test/Live configuration, a strong webhook secret and receiving accounts.")
             .ValidateOnStart();
-        services.AddSingleton(p => p.GetRequiredService<IOptions<BHome.Application.PaymentsDebt.SePay.SePayOptions>>().Value);
-        services.AddSingleton<BHome.Application.PaymentsDebt.SePay.SePayWebhookSecurity>();
+        services.AddScoped(p =>
+        {
+            var options = p.GetRequiredService<IOptions<BHome.Application.PaymentsDebt.SePay.SePayOptions>>().Value.Copy();
+            if (options.DualMode) options.Select(options.Mode);
+            return options;
+        });
+        services.AddScoped<BHome.Application.PaymentsDebt.SePay.SePayWebhookSecurity>();
         services.AddScoped<BHome.Application.PaymentsDebt.SePay.ISePayRepository, BHome.Infrastructure.PaymentsDebt.SePayRepository>();
         services.AddScoped<BHome.Application.PaymentsDebt.SePay.IPaymentCodeRegistry, BHome.Infrastructure.PaymentsDebt.PaymentCodeRegistry>();
         services.AddScoped<BHome.Application.PaymentsDebt.SePay.SePayService>();
+        services.AddScoped<BHome.Application.PaymentsDebt.SePay.ISePayOwnerConnections, BHome.Infrastructure.PaymentsDebt.SePayOwnerConnections>();
         services.AddHttpClient<BHome.Infrastructure.PaymentsDebt.SePayApiClient>((p, client) =>
         {
-            var settings = p.GetRequiredService<BHome.Application.PaymentsDebt.SePay.SePayOptions>();
+            var settings = p.GetRequiredService<IOptions<BHome.Application.PaymentsDebt.SePay.SePayOptions>>().Value;
             if (!settings.Enabled) return;
             client.BaseAddress = new Uri(settings.ApiBaseUrl.TrimEnd('/') + "/");
-            client.Timeout = TimeSpan.FromSeconds(settings.RequestTimeoutSeconds);
+            client.Timeout = TimeSpan.FromSeconds(30); // The adapter applies the selected profile's timeout to the entire request.
         }).ConfigurePrimaryHttpMessageHandler(() => new HttpClientHandler { AllowAutoRedirect = false });
         services.AddScoped<BHome.Application.PaymentsDebt.SePay.ISePayTransactionClient>(p => p.GetRequiredService<BHome.Infrastructure.PaymentsDebt.SePayApiClient>());
-        services.AddScoped<IBackgroundJobHandler, BHome.Infrastructure.PaymentsDebt.SePayReconciliationJob>();
-        services.AddScoped<IBackgroundJobHandler, BHome.Infrastructure.PaymentsDebt.SePayPollingJob>();
+        foreach (var mode in new[] { "Test", "Live" })
+        {
+            foreach (var polling in new[] { false, true })
+                services.AddScoped<IBackgroundJobHandler>(p => new BHome.Infrastructure.PaymentsDebt.SePayModeJob(
+                    p.GetRequiredService<IServiceScopeFactory>(), p.GetRequiredService<BHome.Application.PaymentsDebt.SePay.SePayOptions>(), mode, polling));
+        }
         services.AddScoped<BHome.Infrastructure.PaymentsDebt.SePayScheduling>();
         services.AddScoped<IJobScheduleContributor>(p => p.GetRequiredService<BHome.Infrastructure.PaymentsDebt.SePayScheduling>());
         services.AddHostedService<BHome.Infrastructure.PaymentsDebt.SePayAutomationWorker>();
@@ -469,13 +479,12 @@ public static class DependencyInjection
         services.AddScoped<IJobScheduleContributor>(p => p.GetRequiredService<BHome.Application.Notifications.NotificationDeliveryService>());
         services.AddScoped<BHome.Application.PaymentsDebt.IPaymentRepository, BHome.Infrastructure.PaymentsDebt.PaymentRepository>();
         services.AddScoped<BHome.Application.PaymentsDebt.PaymentService>();
-        services.AddSingleton(provider =>
+        services.AddScoped(provider =>
         {
             var environment = provider.GetRequiredService<IHostEnvironment>().EnvironmentName;
-            var sepay = provider.GetRequiredService<BHome.Application.PaymentsDebt.SePay.SePayOptions>();
             return new BHome.Application.PaymentsDebt.PaymentRuntimeMode(
                 environment is "Development" or "Testing",
-                environment == "Staging" && sepay.TestingAvailable(environment));
+                true); // Test is a receiving channel on every host, independent of signing simulations.
         });
         services.AddSingleton<BHome.Application.PaymentsDebt.ITransferQrGenerator, BHome.Infrastructure.PaymentsDebt.VietQrGenerator>();
         services.AddScoped<BHome.Application.PaymentsDebt.TransferInstructionsService>();
@@ -484,7 +493,7 @@ public static class DependencyInjection
         services.AddScoped<BHome.Infrastructure.PaymentsDebt.MainContractActivationScheduling>();
         services.AddScoped<IJobScheduleContributor>(p => p.GetRequiredService<BHome.Infrastructure.PaymentsDebt.MainContractActivationScheduling>());
         services.AddScoped<BHome.Application.PaymentsDebt.IMainInitialPayments, BHome.Infrastructure.PaymentsDebt.MainInitialPayments>();
-        services.AddSingleton<BHome.Application.Contracts.IHoldingTestScope, BHome.Infrastructure.Contracts.HoldingTestScope>();
+        services.AddScoped<BHome.Application.Contracts.IHoldingTestScope, BHome.Infrastructure.Contracts.HoldingTestScope>();
         services.AddHostedService<MeterEvidenceCleanup>();
         services.AddOptions<IdentityProtectionOptions>().Bind(configuration.GetSection("IdentityProtection"));
         services.AddSingleton<IIdentityProtection, IdentityProtection>();

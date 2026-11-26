@@ -14,7 +14,8 @@ namespace BHome.Infrastructure.PaymentsDebt;
 
 internal sealed class MainInitialPayments(BHomePersistenceContext db, ContractService contracts, IContractRepository contractData,
     IMainDraftData drafts, IPaymentRepository payments, IPaymentCodeRegistry codes,
-    ITransferQrGenerator qr, IMainInitialPaymentLedger orders, SePayOptions sepay, TimeProvider clock, IContractWorkflowMode workflowMode, IHoldingTestScope testScope, ICurrentUser user) : IMainInitialPayments
+    ITransferQrGenerator qr, IMainInitialPaymentLedger orders, SePayOptions sepay, TimeProvider clock, IContractWorkflowMode workflowMode, IHoldingTestScope testScope, ICurrentUser user,
+    ISePayOwnerConnections connections) : IMainInitialPayments
 {
     public async Task<MainInitialPaymentView> GetAsync(Guid id, bool issueQr, CancellationToken token)
     {
@@ -23,6 +24,7 @@ internal sealed class MainInitialPayments(BHomePersistenceContext db, ContractSe
         return await payments.TransactionAsync(null, null, async () =>
         {
             var c = await contractData.FindAsync(id, token) ?? throw new PaymentException(404, "contract_not_found");
+            await connections.ApplyOwnerAsync(c.OwnerSignerId, token);
             await db.Database.ExecuteSqlInterpolatedAsync($"SELECT pg_advisory_xact_lock(hashtextextended({c.Room.LocationId.ToString()},0))", token);
             await db.Locked<Room>(c.RoomId).SingleAsync(token);
             if (c.Kind != ContractKind.Main || c.PreviousContractId is not null) throw new PaymentException(409, "initial_main_contract_required");
@@ -59,7 +61,7 @@ internal sealed class MainInitialPayments(BHomePersistenceContext db, ContractSe
                 Guid? depositSource = null;
                 Guid? rentSource = null;
                 Guid? invoiceSource = null;
-                foreach (var candidate in candidates.Where(other => ContractPaymentModes.Of(other) == roomScopeMode))
+                foreach (var candidate in candidates)
                 {
                     var root = candidate;
                     while (root.PreviousContractId is { } previous)
@@ -105,8 +107,7 @@ internal sealed class MainInitialPayments(BHomePersistenceContext db, ContractSe
                                           invoice.Status == BHome.Domain.Billing.InvoiceStatus.Final && invoice.Lines.Any(line => line.ChargeCode == "RENT")
                                       select new { invoice.Id, Representative = representative }).ToArrayAsync(token);
                 var invoiceId = rentSource is null
-                    ? invoiceSource ?? invoices.Where(invoice => ContractPaymentModes.Of(invoice.Representative) == roomScopeMode)
-                        .Select(invoice => (Guid?)invoice.Id).SingleOrDefault()
+                    ? invoiceSource ?? invoices.Select(invoice => (Guid?)invoice.Id).SingleOrDefault()
                     : null;
                 IEnumerable<(int Category, int Method, string Code, string Name, decimal Rate)> policies;
                 if (signedCharges is not null)
@@ -160,10 +161,15 @@ internal sealed class MainInitialPayments(BHomePersistenceContext db, ContractSe
                     ? new MainInitialMeteredRate(p.ChargeCode, p.Name ?? "Điện", "kWh", p.Rate)
                     : new MainInitialMeteredRate(p.ChargeCode, p.Name ?? "Nước", "m³", p.Rate))
                 .ToArray();
-            var account = await payments.ReceivingAccountAsync(order.LocationId, token);
-            var payableMode = roomScopeMode;
+            var payableKind = invoicePayable ? "Invoice" : "MainInitial";
+            var payableId = invoicePayable ? order.SharedInvoiceId!.Value : payable.ContractId;
+            var payableMode = await codes.PersistedModeAsync(payableKind, payableId, token) ??
+                (payable.ContractId == c.Id ? roomScopeMode : ContractPaymentModes.Of(
+                    await contractData.FindAsync(payable.ContractId, token) ?? throw new PaymentException(404, "contract_not_found")));
+            var account = await codes.AccountAsync(payableKind, payableId, order.LocationId, token) ??
+                await payments.ReceivingAccountForModeAsync(order.LocationId, payableMode, token);
             var bound = account is not null && account.Enabled && account.IsDevelopmentDemo == (payableMode == "Test") &&
-                payableMode == sepay.Mode && sepay.Matches(order.LocationId, account);
+                sepay.For(payableMode).Enabled && sepay.For(payableMode).Matches(order.LocationId, account);
             if (issueQr && untaggedSandbox && bound && outstanding > 0)
             {
                 // Resolve legacy, untagged Staging contracts only on an explicit QR

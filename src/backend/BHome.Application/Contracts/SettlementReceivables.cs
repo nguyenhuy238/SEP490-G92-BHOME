@@ -21,7 +21,8 @@ public sealed record SettlementReceivable(Guid Id, Guid ContractId, Guid RoomId,
     string CalculationPolicy, IReadOnlyList<DeductionEvidence> Evidence, Guid[] RecipientUserIds,
     Guid ApprovedByUserId, DateTimeOffset ApprovedAt, Guid OperationKey, string Fingerprint, bool IsDevelopmentDemo = false,
     SettlementUtilitySource? Utility = null, BHome.Application.Billing.FixedChargeSource? FixedCharge = null,
-    string? RoomCheckCode = null);
+    string? RoomCheckCode = null,
+    [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] string? PaymentMode = null);
 [JsonNumberHandling(JsonNumberHandling.AllowReadingFromString | JsonNumberHandling.WriteAsString)]
 public sealed record DepositOffsetApproval(Guid Id, Guid ContractId, Guid SourceDepositContractId,
     Guid? ReceivableId, Guid? InvoiceId, decimal Amount, string Reason, Guid ApprovedByUserId,
@@ -80,9 +81,16 @@ public sealed partial class SettlementReceivablesService(ISettlementReceivablesR
     ITransferQrGenerator? qr = null, ISettlementChargeEvidence? chargeEvidence = null,
     BHome.Application.Billing.IFixedChargeCoverage? fixedCoverage = null,
     BHome.Application.Finance.RefundService? refunds = null,
-    IPaymentCodeRegistry? paymentCodes = null, SePayOptions? sepay = null)
+    IPaymentCodeRegistry? paymentCodes = null, SePayOptions? sepay = null, ISePayOwnerConnections? paymentConnections = null)
 {
     private Guid Actor => user.UserId is { } id && id != Guid.Empty ? id : throw new ContractException(401, "authentication_required");
+    private async Task<string?> NewPaymentModeAsync(Guid contractId, CancellationToken token)
+    {
+        if (payments is null) return null;
+        var location = await repository.LocationAsync(contractId, token);
+        var owner = await payments.ReceivingOwnerAsync(location, token);
+        return owner is null ? null : await ContractPaymentModes.ConfiguredAsync(sepay, payments, location, owner.Value, token, paymentConnections);
+    }
     private async Task AuthorizeAsync(Guid id, bool write, CancellationToken token)
     {
         var actor = Actor;
@@ -94,7 +102,7 @@ public sealed partial class SettlementReceivablesService(ISettlementReceivablesR
     {
         await AuthorizeAsync(id, false, token);
         var context = await repository.ContextAsync(id, token);
-        if (context.IsDevelopmentDemo && mode?.AllowDevelopmentDemo != true) throw ContractException.Conflict("development_payment_unavailable");
+        if (context.IsDevelopmentDemo && mode?.AllowDevelopmentDemo != true && mode?.AllowSandboxReceivingAccounts != true) throw ContractException.Conflict("development_payment_unavailable");
         var view = context.View;
         if (user.IsInRole(Roles.Owner))
             return view with { RoomCheckChargesSupported = true, NoAdditionalCharges = context.NoAdditionalCharges };
@@ -138,7 +146,7 @@ public sealed partial class SettlementReceivablesService(ISettlementReceivablesR
             var previous = await repository.ChargeOperationAsync(Actor, key, token);
             if (previous is not null)
             {
-                if (previous.IsDevelopmentDemo && mode?.AllowDevelopmentDemo != true) throw ContractException.Conflict("development_payment_unavailable");
+                if (previous.IsDevelopmentDemo && mode?.AllowDevelopmentDemo != true && mode?.AllowSandboxReceivingAccounts != true) throw ContractException.Conflict("development_payment_unavailable");
                 if (previous.ContractId != id || previous.Fingerprint != fingerprint) throw ContractException.Conflict("settlement_idempotency_conflict");
                 return previous;
             }
@@ -146,7 +154,7 @@ public sealed partial class SettlementReceivablesService(ISettlementReceivablesR
             if (await repository.LatestFinancialCloseAsync(id, token) is not null)
                 throw ContractException.Conflict("settlement_financial_already_closed");
             var context = await repository.ContextAsync(id, token);
-            if (context.IsDevelopmentDemo && mode?.AllowDevelopmentDemo != true) throw ContractException.Conflict("development_payment_unavailable");
+            if (context.IsDevelopmentDemo && mode?.AllowDevelopmentDemo != true && mode?.AllowSandboxReceivingAccounts != true) throw ContractException.Conflict("development_payment_unavailable");
             if (context.View.Reference != input.ExpectedReference) throw ContractException.Conflict("settlement_review_changed");
             if (!context.InspectionConfirmed || context.NoAdditionalCharges || context.HasLegacyDeductions ||
                 context.InspectionId != input.InspectionId || context.InspectionVersion != input.InspectionVersion || context.RecipientUserIds.Length == 0)
@@ -179,10 +187,11 @@ public sealed partial class SettlementReceivablesService(ISettlementReceivablesR
                 input.AssetId is null && input.RoomCheckCode is null && r.Charge.RoomCheckCode is not null))
                 throw ContractException.Conflict("settlement_source_already_charged");
             var proofs = await evidence.CaptureAsync(id, input.EvidenceIds, token);
+            var channel = await NewPaymentModeAsync(id, token);
             var charge = new SettlementReceivable(Guid.NewGuid(), id, context.View.RoomId, "TenantDamage", sourceKey,
                 input.InspectionId, input.InspectionVersion, input.AssetId, input.Amount, input.Description,
-                "OwnerApprovedInspectionDamage/v1", proofs, context.RecipientUserIds.Order().ToArray(), Actor, clock.GetUtcNow(), key, fingerprint, context.IsDevelopmentDemo,
-                RoomCheckCode: input.RoomCheckCode);
+                "OwnerApprovedInspectionDamage/v1", proofs, context.RecipientUserIds.Order().ToArray(), Actor, clock.GetUtcNow(), key, fingerprint, channel is null ? context.IsDevelopmentDemo : channel == "Test",
+                RoomCheckCode: input.RoomCheckCode, PaymentMode: channel);
             await repository.SaveChargeAsync(charge, token); return charge;
         }, token);
     }
@@ -199,7 +208,7 @@ public sealed partial class SettlementReceivablesService(ISettlementReceivablesR
             var previous = await repository.OffsetOperationAsync(Actor, key, token);
             if (previous is not null)
             {
-                if (previous.IsDevelopmentDemo && mode?.AllowDevelopmentDemo != true) throw ContractException.Conflict("development_payment_unavailable");
+                if (previous.IsDevelopmentDemo && mode?.AllowDevelopmentDemo != true && mode?.AllowSandboxReceivingAccounts != true) throw ContractException.Conflict("development_payment_unavailable");
                 if (previous.ContractId != id || previous.Fingerprint != fingerprint) throw ContractException.Conflict("settlement_idempotency_conflict");
                 return previous;
             }
@@ -207,7 +216,7 @@ public sealed partial class SettlementReceivablesService(ISettlementReceivablesR
             if (await repository.LatestFinancialCloseAsync(id, token) is not null)
                 throw ContractException.Conflict("settlement_financial_already_closed");
             var context = await repository.ContextAsync(id, token);
-            if (context.IsDevelopmentDemo && mode?.AllowDevelopmentDemo != true) throw ContractException.Conflict("development_payment_unavailable");
+            if (context.IsDevelopmentDemo && mode?.AllowDevelopmentDemo != true && mode?.AllowSandboxReceivingAccounts != true) throw ContractException.Conflict("development_payment_unavailable");
             if (context.View.Reference != input.ExpectedReference) throw ContractException.Conflict("settlement_review_changed");
             if (!context.InspectionConfirmed || context.HasLegacyDeductions || input.Amount > context.View.AvailableDeposit)
                 throw ContractException.Conflict("deposit_offset_not_available");

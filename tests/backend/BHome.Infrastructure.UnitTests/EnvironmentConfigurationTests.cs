@@ -193,7 +193,7 @@ public sealed class EnvironmentConfigurationTests
     }
 
     [Fact]
-    public void SandboxSePayIsAcceptedOnlyInNonProductionAndCannotUseLiveApi()
+    public void SePayModesAreAcceptedOnEveryHostAndCannotUseTheOtherModeApi()
     {
         var o = new SePayOptions
         {
@@ -202,13 +202,12 @@ public sealed class EnvironmentConfigurationTests
             ReceivingAccounts =
             [new() { LocationId = Guid.NewGuid(), BankIdentifier = "970416", Gateway = "ACB", AccountNumber = "0000001234" }]
         };
-        Assert.True(o.Valid("Staging")); Assert.True(o.Valid("Development")); Assert.False(o.Valid("Production"));
+        Assert.True(o.Valid("Staging")); Assert.True(o.Valid("Development")); Assert.True(o.Valid("Production"));
         o.ApiBaseUrl = "https://userapi.sepay.vn/v2"; Assert.False(o.Valid("Staging"));
-        o.Mode = "Live"; Assert.False(o.Valid("Staging")); Assert.True(o.Valid("Production"));
-        Assert.False(o.Valid("Stagin"));
+        o.Mode = "Live"; Assert.True(o.Valid("Staging")); Assert.True(o.Valid("Production"));
         Assert.Contains(EnvironmentConfiguration.Errors(new ConfigurationManager(), "Stagin"), e => e.Contains("supported host environment"));
         var c = Deployment("Production"); c["SePay:Mode"] = "Test";
-        Assert.Contains(EnvironmentConfiguration.Errors(c, "Production"), e => e.Contains("SePay:Mode"));
+        Assert.DoesNotContain(EnvironmentConfiguration.Errors(c, "Production"), e => e.Contains("SePay"));
     }
 
     [Fact]

@@ -31,7 +31,7 @@ public sealed class ExternalPaymentPayerService(IExternalPaymentPayerRepository 
     public async Task<ExternalPaymentPayerContext> ContextAsync(Guid id, CancellationToken token)
     {
         _ = Owner(); var context = await repository.ContextAsync(id, token);
-        if (context.IsDevelopmentDemo && mode?.AllowDevelopmentDemo != true) throw new PaymentException(409, "development_payment_unavailable");
+        if (context.IsDevelopmentDemo && mode?.AllowDevelopmentDemo != true && mode?.AllowSandboxReceivingAccounts != true) throw new PaymentException(409, "development_payment_unavailable");
         return context;
     }
     public Task<ExternalPaymentPayer> ConfirmAsync(Guid transferId, ExternalPaymentPayerInput input, Guid key, CancellationToken token)
@@ -47,7 +47,7 @@ public sealed class ExternalPaymentPayerService(IExternalPaymentPayerRepository 
             if (await repository.OperationAsync(actor, key, token) is { } previous)
             {
                 if (previous.TransferId != transferId || previous.Fingerprint != fingerprint) throw new PaymentException(409, "payment_idempotency_conflict");
-                if (previous.IsDevelopmentDemo && mode?.AllowDevelopmentDemo != true) throw new PaymentException(409, "development_payment_unavailable");
+                if (previous.IsDevelopmentDemo && mode?.AllowDevelopmentDemo != true && mode?.AllowSandboxReceivingAccounts != true) throw new PaymentException(409, "development_payment_unavailable");
                 return previous;
             }
             var context = await ContextAsync(transferId, token);

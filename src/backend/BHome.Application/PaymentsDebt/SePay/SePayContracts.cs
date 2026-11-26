@@ -5,16 +5,22 @@ using BHome.Domain.PaymentsDebt;
 
 namespace BHome.Application.PaymentsDebt.SePay;
 
-public sealed record PaymentCode(string Code, string Mode, string Kind, Guid ObligationId, Guid LocationId);
+public sealed record PaymentCode(string Code, string Mode, string Kind, Guid ObligationId, Guid LocationId,
+    ReceivingBankAccount? AccountSnapshot = null, string? InstanceCode = null, bool SnapshotPending = false);
 public sealed record SePaySettlementTarget(Guid ContractId, Guid LocationId, SettlementReceivable Charge,
     decimal OutstandingAmount, bool MayAllocate = false, string? Blocker = null);
 public interface IPaymentCodeRegistry
 {
     Task<string?> GetAsync(string kind, Guid id, CancellationToken token);
+    Task FreezeAsync(Guid invoiceId, Guid locationId, CancellationToken token) => Task.CompletedTask;
     Task<string?> IssueAsync(string kind, Guid id, Guid locationId, CancellationToken token);
     Task<bool> MatchesAsync(string kind, Guid id, string description, CancellationToken token);
+    Task<PaymentCode?> ContextAsync(string kind, Guid id, CancellationToken token) => Task.FromResult<PaymentCode?>(null);
+    async Task<string?> PersistedModeAsync(string kind, Guid id, CancellationToken token) => (await ContextAsync(kind, id, token))?.Mode;
+    Task<ReceivingBankAccount?> AccountAsync(string kind, Guid id, Guid locationId, CancellationToken token) =>
+        Task.FromResult<ReceivingBankAccount?>(null);
 }
-public sealed record SePayEvent(Guid Id, string Mode, SePayTransaction Transaction, string Status, string? Reason, Guid? TransferId);
+public sealed record SePayEvent(Guid Id, string Mode, SePayTransaction Transaction, string Status, string? Reason, Guid? TransferId, Guid? OwnerId = null);
 public sealed record SePayEventView(Guid Id, string Mode, string Status, string? Reason, Guid? TransferId, DateTimeOffset ReceivedAt);
 public sealed record SePayVerifiedMoveOutCandidate(Guid ContractId, Guid ReceivableId);
 public interface ISePayRepository

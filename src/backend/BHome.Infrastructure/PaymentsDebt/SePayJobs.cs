@@ -30,7 +30,7 @@ internal sealed class SePayPollingJob(BHomePersistenceContext db, ISePayTransact
         await using var connection = new NpgsqlConnection(db.Database.GetConnectionString());
         await connection.OpenAsync(cancellationToken);
         await using var sync = await connection.BeginTransactionAsync(cancellationToken);
-        var key = "sepay-sync:" + options.Mode;
+        var key = options.OwnerUserId is { } owner ? "sepay-sync:" + owner + ":" + options.Mode : "sepay-sync:" + options.Mode;
         await using (var gate = new NpgsqlCommand("SELECT pg_try_advisory_xact_lock(hashtextextended(@key,0))", connection, sync))
         {
             gate.Parameters.AddWithValue("key", key);
@@ -57,16 +57,21 @@ internal sealed class SePayPollingJob(BHomePersistenceContext db, ISePayTransact
     }
 }
 
-internal sealed class SePayScheduling(BHomePersistenceContext db, IBackgroundJobQueue jobs, SePayOptions options, TimeProvider clock) : IJobScheduleContributor
+internal sealed class SePayScheduling(BHomePersistenceContext db, IBackgroundJobQueue jobs, ISePayOwnerConnections connections, TimeProvider clock) : IJobScheduleContributor
 {
     public async Task EnqueueDueAsync(CancellationToken t)
     {
-        if (db is not Compact24DbContext || !options.Enabled || string.IsNullOrWhiteSpace(options.ApiToken)) return;
-        var name = "sepay-poll-" + options.Mode.ToLowerInvariant();
-        if (await db.Database.SqlQuery<bool>($"""
-            SELECT EXISTS(SELECT 1 FROM operational_tasks WHERE task_type='SYSTEM_JOB' AND task_data->>'name'={name} AND status IN ('Pending','Processing')) AS "Value"
-            """).SingleAsync(t)) return;
-        var window = clock.GetUtcNow().ToUnixTimeSeconds() / options.PollIntervalSeconds;
-        await jobs.EnqueueAsync(new(name, options.Mode + ":" + window.ToString(System.Globalization.CultureInfo.InvariantCulture), "{}"), t);
+        if (db is not Compact24DbContext) return;
+        foreach (var profile in await connections.ProfilesAsync(t))
+        {
+            var name = "sepay-poll-" + profile.Mode.ToLowerInvariant();
+            if (await db.Database.SqlQuery<bool>($"""
+                SELECT EXISTS(SELECT 1 FROM operational_tasks WHERE task_type='SYSTEM_JOB' AND task_data->>'name'={name} AND status IN ('Pending','Processing')
+                  AND (task_data->'payload'->>'OwnerId')::uuid IS NOT DISTINCT FROM {profile.OwnerId}) AS "Value"
+                """).SingleAsync(t)) continue;
+            var window = clock.GetUtcNow().ToUnixTimeSeconds() / profile.PollIntervalSeconds;
+            await jobs.EnqueueAsync(new(name, profile.OwnerId + ":" + profile.Mode + ":" + window.ToString(System.Globalization.CultureInfo.InvariantCulture),
+                JsonSerializer.Serialize(new { profile.OwnerId })), t);
+        }
     }
 }
