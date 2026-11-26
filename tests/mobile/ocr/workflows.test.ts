@@ -19,7 +19,7 @@ describe('new mobile workflow permissions', () => {
     expect(canOpenScreen('Owner', screen)).toBe(false);
     expect(canOpenScreen('Tenant', screen)).toBe(false);
   });
-  it.each(['residence', 'adjustment', 'contract-request', 'billing-history'] as const)(
+  it.each(['adjustment', 'contract-request', 'billing-history'] as const)(
     'restricts %s to own Tenant flows',
     (screen) => {
       expect(canOpenScreen('Tenant', screen)).toBe(true);
@@ -27,6 +27,14 @@ describe('new mobile workflow permissions', () => {
       expect(canOpenScreen('Owner', screen)).toBe(false);
     },
   );
+  it('opens role-specific residence screens for Owner, Tenant and scoped Staff tracking', () => {
+    for (const role of ['Tenant', 'Staff'] as const) {
+      expect(canOpenScreen(role, 'residence')).toBe(true);
+      expect(canOpenScreen(role, 'owner-residence')).toBe(false);
+    }
+    expect(canOpenScreen('Owner', 'residence')).toBe(false);
+    expect(canOpenScreen('Owner', 'owner-residence')).toBe(true);
+  });
   it('allows Owner to inspect operational tasks, while Tenant remains excluded', () => {
     expect(canOpenScreen('Owner', 'task-detail')).toBe(true);
     expect(canOpenScreen('Staff', 'task-detail')).toBe(true);

@@ -71,6 +71,7 @@ export function HouseholdMemberEditor({
           ['dateOfBirth', 'Ngày sinh thành viên (dd/MM/yyyy)'],
           ['relationship', 'Quan hệ với người đại diện'],
           ['phone', 'Số điện thoại (nếu có)'],
+          ['citizenNumber', 'Số CCCD / số định danh cá nhân (nếu có)'],
         ] as const
       ).map(([field, label]) => (
         <View key={field}>
@@ -82,15 +83,19 @@ export function HouseholdMemberEditor({
             disabled={disabled}
             error={!!fieldError(field, m[field])}
             maxLength={
-              field === 'phone'
-                ? 30
-                : field === 'dateOfBirth'
-                  ? 10
-                  : field === 'relationship'
-                    ? 100
-                    : 150
+              field === 'citizenNumber'
+                ? 12
+                : field === 'phone'
+                  ? 30
+                  : field === 'dateOfBirth'
+                    ? 10
+                    : field === 'relationship'
+                      ? 100
+                      : 150
             }
-            keyboardType={field === 'phone' ? 'phone-pad' : 'default'}
+            keyboardType={
+              field === 'citizenNumber' ? 'number-pad' : field === 'phone' ? 'phone-pad' : 'default'
+            }
             onChangeText={(value) => onChange({ ...m, [field]: value })}
           />
           {!!fieldError(field, m[field]) && (
@@ -100,7 +105,10 @@ export function HouseholdMemberEditor({
           )}
         </View>
       ))}
-      <Text>CCCD không bắt buộc với thành viên. Thông tin chỉ được lưu khi hoàn tất bước này.</Text>
+      <Text>
+        Có thẻ căn cước hoặc chỉ có số định danh: nhập 12 chữ số. Chưa có thông tin định danh: để
+        trống. Thành viên vẫn được tính vào số người ở.
+      </Text>
       <Button mode="text" disabled={disabled} onPress={onClose}>
         Ẩn thông tin
       </Button>
