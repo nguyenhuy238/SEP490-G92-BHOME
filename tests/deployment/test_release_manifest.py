@@ -70,3 +70,30 @@ class ReleaseManifestTests(unittest.TestCase):
                 path.write_text('{}', encoding='utf-8')
                 with self.assertRaisesRegex(ValueError, 'checksum'):
                     manifest.verify_download(path, checksum, env)
+
+    def test_staging_retry_verifies_the_original_producer_attempt(self):
+        with tempfile.TemporaryDirectory() as directory:
+            env = self.environment()
+            path = Path(directory) / 'release-manifest.json'
+            path.write_text(json.dumps(manifest.build(env)), encoding='utf-8')
+            checksum = hashlib.sha256(path.read_bytes()).hexdigest()
+            retry = dict(env, GITHUB_RUN_ATTEMPT='3', STAGING_MANIFEST_ATTEMPT='2')
+            manifest.verify_download(path, checksum, retry)
+            for key, value in [('STAGING_MANIFEST_ATTEMPT', ''), ('STAGING_MANIFEST_ATTEMPT', '4'),
+                               ('STAGING_MANIFEST_ATTEMPT', '1'), ('STAGING_MANIFEST_ATTEMPT', '03'),
+                               ('GITHUB_RUN_ID', '124'), ('GITHUB_SHA', 'b' * 40),
+                               ('API_DIGEST', 'sha256:' + '9' * 64)]:
+                with self.subTest(key=key, value=value), self.assertRaises(ValueError):
+                    manifest.verify_download(path, checksum, {**retry, key: value})
+            with self.assertRaisesRegex(ValueError, 'checksum'):
+                manifest.verify_download(path, '0' * 64, retry)
+
+    def test_production_cannot_use_staging_retry_exception(self):
+        with tempfile.TemporaryDirectory() as directory:
+            env = self.environment(production=True)
+            path = Path(directory) / 'release-manifest.json'
+            path.write_text(json.dumps(manifest.build(env)), encoding='utf-8')
+            checksum = hashlib.sha256(path.read_bytes()).hexdigest()
+            with self.assertRaisesRegex(ValueError, 'Invalid Staging'):
+                manifest.verify_download(path, checksum, dict(
+                    env, GITHUB_RUN_ATTEMPT='3', STAGING_MANIFEST_ATTEMPT='2'))

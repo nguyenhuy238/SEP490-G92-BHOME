@@ -48,9 +48,16 @@ def verify_download(path, expected_sha256, env):
     ref = env['GITHUB_REF']
     require(ref in ('refs/heads/main', 'refs/heads/develop'), 'Unexpected deployment branch')
     target = 'Production' if ref == 'refs/heads/main' else 'Staging'
-    run = env['GITHUB_RUN_ID'] + '-' + env['GITHUB_RUN_ATTEMPT']
     expected = dict(env, TARGET=target, SUFFIX='-production' if target == 'Production' else '',
                     REGISTRY='ghcr.io/' + env['GITHUB_REPOSITORY_OWNER'].lower())
+    if 'STAGING_MANIFEST_ATTEMPT' in env:
+        attempt = env['STAGING_MANIFEST_ATTEMPT']
+        current = env['GITHUB_RUN_ATTEMPT']
+        require(target == 'Staging' and re.fullmatch(r'[1-9][0-9]*', attempt) and
+                re.fullmatch(r'[1-9][0-9]*', current) and int(attempt) <= int(current),
+                'Invalid Staging manifest producer attempt')
+        expected['GITHUB_RUN_ATTEMPT'] = attempt
+    run = env['GITHUB_RUN_ID'] + '-' + expected['GITHUB_RUN_ATTEMPT']
     for key in ('API', 'OWNER', 'PUBLIC'):
         expected[key + '_PROVENANCE'] = f"{env['GITHUB_SHA']}:{run}:{target}"
     require(json.loads(raw) == build(expected), 'Release manifest does not match deployment inputs')
@@ -67,6 +74,7 @@ if __name__ == '__main__':
             path.write_bytes((json.dumps(manifest, indent=2) + '\n').encode('utf-8'))
             with open(os.environ['GITHUB_OUTPUT'], 'a', encoding='utf-8') as output:
                 output.write('sha256=' + hashlib.sha256(path.read_bytes()).hexdigest() + '\n')
+                output.write('attempt=' + os.environ['GITHUB_RUN_ATTEMPT'] + '\n')
         else:
             raise ValueError('Unknown release manifest operation')
     except (ValueError, KeyError, OSError) as error:
