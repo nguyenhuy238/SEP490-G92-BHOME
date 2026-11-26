@@ -11,6 +11,7 @@ using BHome.Domain.PropertyManagement;
 using BHome.Domain.TenantContracts;
 using BHome.Infrastructure.Persistence;
 using BHome.IntegrationTests.Compact24;
+using BHome.IntegrationTests.Fixtures;
 using BHome.LocalDevelopment;
 using DotNet.Testcontainers.Builders;
 using DotNet.Testcontainers.Containers;
@@ -21,7 +22,6 @@ using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
 using Minio;
-using Minio.DataModel.Args;
 
 namespace BHome.IntegrationTests.IncidentMaintenance;
 
@@ -39,11 +39,12 @@ public sealed class MaintenanceStorageFixture : IAsyncLifetime
         minio = new ContainerBuilder("bhome/minio-local:2025-10-15")
             .WithEnvironment("MINIO_ROOT_USER", "synthetic-bf07").WithEnvironment("MINIO_ROOT_PASSWORD", password)
             .WithCommand("server", "/data").WithPortBinding(9000, true)
-            .WithWaitStrategy(Wait.ForUnixContainer().UntilHttpRequestIsSucceeded(r => r.ForPort(9000).ForPath("/minio/health/live"))).Build();
+            .WithWaitStrategy(Wait.ForUnixContainer().UntilHttpRequestIsSucceeded(r => r.ForPort(9000).ForPath("/minio/health/ready"))).Build();
         await minio.StartAsync();
         var endpoint = $"{minio.Hostname}:{minio.GetMappedPublicPort(9000)}"; StorageUrl = "http://" + endpoint;
         using var storage = new MinioClient().WithEndpoint(endpoint).WithCredentials("synthetic-bf07", password).Build();
-        await storage.MakeBucketAsync(new MakeBucketArgs().WithBucket("maintenance-tests"));
+        using var readiness = new CancellationTokenSource(TimeSpan.FromSeconds(30));
+        await MinioTestBucket.CreateAsync(storage, "maintenance-tests", readiness.Token);
         Factory = database.Factory.WithWebHostBuilder(b => b.ConfigureAppConfiguration((_, c) => c.AddInMemoryCollection(new Dictionary<string, string?>
         {
             ["ObjectStorage:Endpoint"] = endpoint,
