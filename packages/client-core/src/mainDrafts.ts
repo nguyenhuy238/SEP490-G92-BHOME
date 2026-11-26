@@ -72,7 +72,6 @@ export interface MainContractSettings {
   ownerSignerId: string;
   effectiveFrom: string;
   effectiveTo: string | null;
-  securityDeposit: string;
   paymentTerms: string;
   additionalTerms: string;
   version: number;
@@ -137,13 +136,10 @@ export function mainDraftClient(request: MainDraftRequest) {
         { signal },
         'bytes',
       ),
-    settings: (id: string, signal?: AbortSignal) =>
-      request<MainContractSettings | null>(`${base}/settings/${id}`, { signal }),
-    setSettings: (
-      id: string,
-      input: Omit<MainContractSettings, 'version'> & { expectedVersion: number },
-    ) =>
-      request<void>(`${base}/settings/${id}`, {
+    settings: (signal?: AbortSignal) =>
+      request<MainContractSettings | null>(`${base}/settings`, { signal }),
+    setSettings: (input: Omit<MainContractSettings, 'version'> & { expectedVersion: number }) =>
+      request<void>(`${base}/settings`, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(input),

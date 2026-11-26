@@ -189,23 +189,27 @@ async function openList() {
   );
   await screen.findByText('Hiển thị 1–5 / 14');
 }
-it('opens holding creation from its own staff action', async () => {
+it('opens an existing Holding contract without duplicate creation actions', async () => {
+  all = all.map((contract) => ({ ...contract, kind: 'Holding' }));
   await openList();
-  fireEvent.click(screen.getByText('Tạo hợp đồng giữ chỗ'));
-  expect(state.create).toHaveBeenCalledWith('Holding');
+  expect(screen.queryByText('Tạo hợp đồng giữ chỗ')).toBeNull();
+  fireEvent.click(screen.getByRole('button', { name: /CT201,/ }));
+  expect(state.open).toHaveBeenCalledWith(all[0]);
+  expect(state.create).not.toHaveBeenCalled();
 });
-it('provides location-scoped entry points for both pending and Active Main handovers', async () => {
+it('opens pending and Active Main contracts for their detail workflow', async () => {
   await openList();
-  fireEvent.click(screen.getByRole('button', { name: 'Mở bàn giao phòng CT204' }));
-  expect(state.go).toHaveBeenCalledWith('move-in', {
-    contractId: 'contract-4',
-    section: 'handover',
+  fireEvent.change(screen.getByRole('textbox', { name: 'Tìm hợp đồng' }), {
+    target: { value: 'CT204' },
   });
-  fireEvent.click(screen.getByRole('button', { name: 'Xem bàn giao phòng CT205' }));
-  expect(state.go).toHaveBeenCalledWith('move-in', {
-    contractId: 'contract-5',
-    section: 'handover',
+  fireEvent.click(screen.getByRole('button', { name: /Mở hợp đồng.*phòng CT204,/ }));
+  expect(state.open).toHaveBeenLastCalledWith(all[3]);
+  fireEvent.change(screen.getByRole('textbox', { name: 'Tìm hợp đồng' }), {
+    target: { value: 'CT205' },
   });
+  fireEvent.click(screen.getByRole('button', { name: /Mở hợp đồng.*phòng CT205,/ }));
+  expect(state.open).toHaveBeenLastCalledWith(all[4]);
+  expect(state.go).not.toHaveBeenCalled();
 });
 it('keeps Holding kind independent from Draft/Signing/Active states and counts every matching record', async () => {
   all = [

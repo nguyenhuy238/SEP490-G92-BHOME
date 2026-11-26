@@ -13,7 +13,7 @@ namespace BHome.Infrastructure.Contracts;
 internal sealed class MainDraftData(BHomePersistenceContext db, IIdentityProtection protection) : IMainDraftData
 {
     private sealed record StoredSettings(Guid OwnerId, DateOnly From, DateOnly? To, int Version, EncryptedIdentity Envelope);
-    private static IdentityProtectionScope SettingsScope(Guid owner, Guid location) => new(owner, new Guid(SHA256.HashData(Encoding.UTF8.GetBytes($"contract-lessor:{location:N}"))[..16]));
+    private static IdentityProtectionScope OwnerSettingsScope(Guid owner) => new(owner, new Guid(SHA256.HashData(Encoding.UTF8.GetBytes("contract-lessor-owner-wide-v1"))[..16]));
     private T Decode<T>(EncryptedIdentity value, IdentityProtectionScope scope)
     {
         var bytes = protection.Decrypt(value, scope);
@@ -25,35 +25,69 @@ internal sealed class MainDraftData(BHomePersistenceContext db, IIdentityProtect
         var bytes = JsonSerializer.SerializeToUtf8Bytes(value);
         try { return protection.Encrypt(bytes, scope); } finally { CryptographicOperations.ZeroMemory(bytes); }
     }
-    private async Task<StoredSettings[]> AllSettings(Guid location, CancellationToken t)
+    private async Task<Guid> OwnerForLocation(Guid locationId, CancellationToken t)
     {
-        var json = await db.Locations.Where(l => l.Id == location && l.IsActive).Select(l => l.ContractSettings).SingleOrDefaultAsync(t) ?? throw ContractException.Missing();
+        Guid[] owners;
+        if (db is BHome.Infrastructure.Persistence.Compact24.Compact24DbContext)
+            owners = await db.Database.SqlQuery<Guid>($"SELECT id AS \"Value\" FROM public.users WHERE 'Owner'=ANY(roles) ORDER BY id LIMIT 2").ToArrayAsync(t);
+        else
+            owners = await db.Database.SqlQuery<Guid>($"""
+                SELECT u.id AS "Value" FROM public.users u
+                WHERE 'Owner'=ANY(u.roles) AND (
+                    u.business_profile->'chain'->>'id' = (SELECT chain_id::text FROM public.locations WHERE id={locationId} AND is_active)
+                    OR (SELECT count(*) FROM public.users WHERE 'Owner'=ANY(roles)) = 1)
+                ORDER BY u.id LIMIT 2
+                """).ToArrayAsync(t);
+        if (!await db.Database.SqlQuery<Guid>($"SELECT id AS \"Value\" FROM public.locations WHERE id={locationId} AND is_active").AnyAsync(t)) throw ContractException.Missing();
+        if (owners.Length != 1) throw ContractException.Conflict("contract_owner_scope_unavailable");
+        return owners[0];
+    }
+    private async Task<StoredSettings[]> OwnerSettings(Guid ownerId, CancellationToken t)
+    {
+        var json = await db.Database.SqlQuery<string>($"SELECT COALESCE(business_profile->'mainContractPolicy'->'versions','[]'::jsonb)::text AS \"Value\" FROM public.users WHERE id={ownerId} AND 'Owner'=ANY(roles)").SingleOrDefaultAsync(t)
+            ?? throw ContractException.Missing();
         return JsonSerializer.Deserialize<StoredSettings[]>(json) ?? [];
     }
-    public async Task<MainContractSettings?> SettingsAsync(Guid locationId, DateOnly on, CancellationToken t)
+    public async Task<MainContractSettings?> SettingsAsync(Guid ownerId, DateOnly on, CancellationToken t)
     {
-        var matches = (await AllSettings(locationId, t)).GroupBy(s => s.From).Select(g => g.MaxBy(s => s.Version)!).Where(s => s.From <= on && (s.To is null || s.To >= on)).ToArray();
+        var versions = await OwnerSettings(ownerId, t);
+        var matches = versions.GroupBy(s => s.From).Select(g => g.MaxBy(s => s.Version)!).Where(s => s.From <= on && (s.To is null || s.To >= on)).ToArray();
         if (matches.Length > 1) throw ContractException.Conflict("ambiguous_contract_settings");
         var s = matches.SingleOrDefault();
-        return s is null ? null : Decode<MainContractSettings>(s.Envelope, SettingsScope(s.OwnerId, locationId));
+        return s is null ? null : Decode<MainContractSettings>(s.Envelope, OwnerSettingsScope(s.OwnerId));
     }
     public async Task<MainContractSettings?> OwnerSettingsAsync(Guid locationId, CancellationToken t)
     {
-        var s = (await AllSettings(locationId, t)).MaxBy(s => s.Version);
-        return s is null ? null : Decode<MainContractSettings>(s.Envelope, SettingsScope(s.OwnerId, locationId));
+        var ownerId = await OwnerForLocation(locationId, t);
+        return await OwnerWideSettingsAsync(ownerId, t);
     }
     public async Task SetSettingsAsync(Guid locationId, MainContractSettingsInput input, Guid actor, CancellationToken t)
     {
+        var ownerId = await OwnerForLocation(locationId, t);
+        if (ownerId != input.OwnerSignerId) throw new ContractException(403, "owner_profile_must_be_own");
+        await SetOwnerSettingsAsync(ownerId, input, actor, t);
+    }
+    public async Task<MainContractSettings?> OwnerWideSettingsAsync(Guid ownerId, CancellationToken t)
+    {
+        var settings = (await OwnerSettings(ownerId, t)).MaxBy(s => s.Version);
+        return settings is null ? null : Decode<MainContractSettings>(settings.Envelope, OwnerSettingsScope(ownerId));
+    }
+    public async Task SetOwnerSettingsAsync(Guid ownerId, MainContractSettingsInput input, Guid actor, CancellationToken t)
+    {
         await using var transaction = await db.Database.BeginTransactionAsync(t);
-        var location = await db.Locked<BHome.Domain.Locations.Location>(locationId).SingleOrDefaultAsync(t) ?? throw ContractException.Missing();
-        var all = JsonSerializer.Deserialize<StoredSettings[]>(location.ContractSettings) ?? [];
+        await db.Database.ExecuteSqlInterpolatedAsync($"SELECT pg_advisory_xact_lock(hashtextextended({ownerId.ToString()},0))", t);
+        var locked = await db.Database.SqlQuery<Guid>($"SELECT id AS \"Value\" FROM public.users WHERE id={ownerId} AND 'Owner'=ANY(roles) FOR UPDATE").SingleOrDefaultAsync(t);
+        if (locked == Guid.Empty) throw ContractException.Missing();
+        var all = await OwnerSettings(ownerId, t);
         var version = all.Select(s => s.Version).DefaultIfEmpty(0).Max();
         if (version != input.ExpectedVersion) throw ContractException.Conflict("draft_configuration_changed_save_again");
         if (all.GroupBy(s => s.From).Select(g => g.MaxBy(s => s.Version)!).Any(s => s.From != input.EffectiveFrom && s.From <= (input.EffectiveTo ?? DateOnly.MaxValue) && input.EffectiveFrom <= (s.To ?? DateOnly.MaxValue))) throw ContractException.Conflict("contract_settings_period_overlaps");
-        var value = new MainContractSettings(input.OwnerSignerId, input.EffectiveFrom, input.EffectiveTo, input.SecurityDeposit, input.PaymentTerms, input.AdditionalTerms, input.Owner, version + 1);
-        location.ContractSettings = JsonSerializer.Serialize(all.Append(new(input.OwnerSignerId, input.EffectiveFrom, input.EffectiveTo, version + 1, Encode(value, SettingsScope(input.OwnerSignerId, locationId)))));
-        location.Version++;
-        db.SecurityAudit.Add(new SecurityAuditRecord { UserId = actor, Event = "ContractSettingsConfigured", TargetType = "Location", TargetId = locationId, Succeeded = true, OccurredAt = DateTimeOffset.UtcNow });
+        var value = new MainContractSettings(input.OwnerSignerId, input.EffectiveFrom, input.EffectiveTo, input.PaymentTerms, input.AdditionalTerms, input.Owner, version + 1);
+        var saved = all.Append(new StoredSettings(ownerId, input.EffectiveFrom, input.EffectiveTo, version + 1, Encode(value, OwnerSettingsScope(ownerId)))).ToArray();
+        var policy = JsonSerializer.Serialize(new { current = saved.MaxBy(s => s.Version), versions = saved });
+        var historyEntry = JsonSerializer.Serialize(new { recordType = "OwnerContractSettingsConfigured", recordedAt = DateTimeOffset.UtcNow, actorId = actor, state = saved.MaxBy(s => s.Version) });
+        await db.Database.ExecuteSqlInterpolatedAsync($"UPDATE public.users SET business_profile=jsonb_set(COALESCE(business_profile,'{{}}'::jsonb), '{{mainContractPolicy}}', CAST({policy} AS jsonb), true), history=COALESCE(history,'[]'::jsonb)||jsonb_build_array(CAST({historyEntry} AS jsonb)) WHERE id={ownerId}", t);
+        db.SecurityAudit.Add(new SecurityAuditRecord { UserId = actor, Event = "OwnerContractSettingsConfigured", TargetType = "Owner", TargetId = ownerId, Succeeded = true, OccurredAt = DateTimeOffset.UtcNow });
         await db.SaveChangesAsync(t); await transaction.CommitAsync(t);
     }
     public async Task<IdentityConfirmation> IdentityAsync(Guid roomId, Guid residentId, CancellationToken t)
@@ -92,6 +126,6 @@ internal sealed class MainDraftData(BHomePersistenceContext db, IIdentityProtect
     public async Task<IReadOnlyList<ContractDocumentFile>> FilesAsync(Guid id, string hash, CancellationToken t) => await db.Set<ContractDocumentFile>().AsNoTracking().Where(f => f.ContractId == id && f.SnapshotHash == hash).OrderByDescending(f => f.RecordedAt).ToArrayAsync(t);
     public async Task LockConfigurationAsync(Guid id, CancellationToken t)
     {
-        await db.Locked<BHome.Domain.Locations.Location>(id, shared: true).SingleAsync(t);
+        await db.Database.ExecuteSqlInterpolatedAsync($"SELECT pg_advisory_xact_lock_shared(hashtextextended({id.ToString()},0))", t);
     }
 }

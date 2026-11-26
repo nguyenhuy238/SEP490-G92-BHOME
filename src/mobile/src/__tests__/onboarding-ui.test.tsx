@@ -19,6 +19,7 @@ const state = vi.hoisted(() => ({
   listeners: [] as ((value: string) => void)[],
   failConfirm: false,
   multipleLocations: false,
+  roomCapacity: 2,
   serial: 0,
   uuidSerial: 0,
 }));
@@ -329,7 +330,7 @@ vi.mock('../features/onboarding/useCaptureScope', () => ({
       ],
       rooms: location
         ? [
-            { id: 'room', label: '101', status: 'Available', capacity: 2 },
+            { id: 'room', label: '101', status: 'Available', capacity: state.roomCapacity },
             {
               id: 'occupied',
               label: '102',
@@ -400,6 +401,7 @@ beforeEach(() => {
   state.listeners = [];
   state.failConfirm = false;
   state.multipleLocations = false;
+  state.roomCapacity = 2;
   state.serial = 0;
   state.uuidSerial = 0;
   state.platform = 'android';
@@ -471,32 +473,32 @@ function addFamilyMember() {
   fireEvent.click(screen.getByRole('radio', { name: 'Hộ gia đình' }));
   fireEvent.click(screen.getByRole('button', { name: 'Thêm người ở' }));
 }
-function openMemberEditor() {
+async function openMemberEditor() {
   const actions = screen.getAllByRole('button', { name: 'Nhập thủ công' });
   fireEvent.click(actions[actions.length - 1]);
+  await screen.findByRole('dialog');
 }
-it('limits a family to the database room capacity and allows adding again after removing a draft member', () => {
+it('limits a family to room capacity and never renders an inline member form', async () => {
   render(<OnboardingScreen />);
   selectRoom();
   addFamilyMember();
   expect(screen.getByText('2/2 người')).toBeTruthy();
-  const add = screen.getByRole('button', { name: 'Thêm người ở' });
-  expect(add).toHaveProperty('disabled', true);
-  fireEvent.click(add);
-  expect(screen.getAllByRole('button', { name: 'Bắt đầu quét CCCD' })).toHaveLength(2);
-  expect(screen.queryByRole('textbox', { name: 'CCCD (nếu có)' })).toBeNull();
-  openMemberEditor();
-  expect(screen.getByRole('textbox', { name: 'Họ tên thành viên' })).toBeTruthy();
-  expect(screen.queryByRole('textbox', { name: 'CCCD (nếu có)' })).toBeNull();
-  fireEvent.click(screen.getByRole('button', { name: 'Ẩn thông tin' }));
+  expect(screen.getByRole('button', { name: 'Thêm người ở' })).toHaveProperty('disabled', true);
+  expect(screen.queryByRole('textbox', { name: 'Họ tên thành viên' })).toBeNull();
+  await openMemberEditor();
+  expect(
+    within(screen.getByRole('dialog')).getByRole('textbox', { name: 'Họ và tên' }),
+  ).toBeTruthy();
+  expect(screen.queryByRole('textbox', { name: 'Họ tên thành viên' })).toBeNull();
+  closeIdentity();
+  expect(screen.queryByRole('textbox', { name: 'Họ và tên' })).toBeNull();
   fireEvent.click(screen.getByRole('button', { name: 'Xóa Người ở 2' }));
   expect(screen.getByRole('button', { name: 'Thêm người ở' })).toHaveProperty('disabled', false);
   fireEvent.click(screen.getByRole('button', { name: 'Thêm người ở' }));
   expect(screen.getByText('2/2 người')).toBeTruthy();
-  expect(screen.getAllByText('Người ở 2')).toHaveLength(2);
-  expect(screen.queryByRole('textbox', { name: 'Họ tên thành viên' })).toBeNull();
-  expect(state.json).not.toHaveBeenCalled();
+  expect(state.json).toHaveBeenCalledTimes(1);
 });
+
 it('limits new occupants to the remaining place when a two-person room already has one occupant', () => {
   render(<OnboardingScreen />);
   fireEvent.change(screen.getByRole('combobox', { name: 'Phòng *' }), {
@@ -619,19 +621,69 @@ it('retains a family selection through Back and keeps draft members separate', (
   expect(screen.getAllByRole('button', { name: 'Bắt đầu quét CCCD' })).toHaveLength(1);
   expect(state.json).not.toHaveBeenCalled();
 });
-it('creates only the representative identity and keeps family members editable without requiring CCCD', async () => {
+it('connects people 1, 2 and 3 to the exact same existing information screen', async () => {
+  state.roomCapacity = 3;
   render(<OnboardingScreen />);
   selectRoom();
   addFamilyMember();
-  await openIdentity();
-  closeIdentity();
-  expect(state.json.mock.calls[0][1]).toMatchObject({ residentType: 0, displayLabel: 'Người ở 1' });
-  expect(state.json).toHaveBeenCalledTimes(1);
-  openMemberEditor();
-  expect(screen.getByRole('textbox', { name: 'Họ tên thành viên' })).toBeTruthy();
-  expect(screen.getByRole('button', { name: 'Xóa Người ở 2' })).toHaveProperty('disabled', false);
-  expect((screen.getByRole('radio', { name: 'Cá nhân' }) as HTMLButtonElement).disabled).toBe(true);
+  fireEvent.click(screen.getByRole('button', { name: 'Thêm người ở' }));
+  let originalFields: string[] = [];
+  for (let index = 0; index < 3; index++) {
+    fireEvent.click(screen.getAllByRole('button', { name: 'Nhập thủ công' })[index]);
+    const dialog = await screen.findByRole('dialog');
+    expect(within(dialog).getByText('Kiểm tra thông tin')).toBeTruthy();
+    expect(within(dialog).getByText(`Người ở ${index + 1}`)).toBeTruthy();
+    const fields = within(dialog)
+      .getAllByRole('textbox')
+      .map((input) => input.getAttribute('aria-label')!);
+    if (index === 0) originalFields = fields;
+    else expect(fields).toEqual(originalFields);
+    expect(within(dialog).getByRole('button', { name: 'Xác nhận thông tin' })).toBeTruthy();
+    expect(screen.queryByRole('textbox', { name: 'Họ tên thành viên' })).toBeNull();
+    closeIdentity();
+  }
+  expect(state.json.mock.calls.map(([, body]) => body.residentType)).toEqual([0, 1, 1]);
+  expect(state.request).not.toHaveBeenCalled();
 });
+it.each([1, 2])(
+  'connects member %s to the existing camera and information screen',
+  async (index) => {
+    state.roomCapacity = 3;
+    state.image.mockResolvedValue({
+      proposedFields: {
+        fullName: 'THÀNH VIÊN MẪU',
+        dateOfBirth: '2000-01-01',
+        citizenIdentityNumber: '000000000002',
+      },
+      warnings: [],
+      missingFields: [],
+      confidence: {},
+      isFallback: false,
+    });
+    render(<OnboardingScreen />);
+    selectRoom();
+    addFamilyMember();
+    fireEvent.click(screen.getByRole('button', { name: 'Thêm người ở' }));
+    await openIdentity(index);
+    expect(screen.queryByRole('textbox', { name: 'Họ và tên' })).toBeNull();
+    fireEvent.click(screen.getByRole('button', { name: 'Chụp ảnh mặt trước' }));
+    fireEvent.click(await screen.findByRole('button', { name: 'Chụp ảnh mặt sau' }));
+    await screen.findByRole('textbox', { name: 'Họ và tên' });
+    expect(screen.getByRole('textbox', { name: 'Họ và tên' })).toHaveProperty(
+      'value',
+      'THÀNH VIÊN MẪU',
+    );
+    expect(state.image.mock.calls.map(([path]) => path)).toEqual([
+      '/api/v1/ocr/identity/resident-1/front',
+      '/api/v1/ocr/identity/resident-1/back',
+    ]);
+    expect(state.json).toHaveBeenCalledTimes(1);
+    expect(state.json.mock.calls[0][1].residentType).toBe(1);
+    closeIdentity();
+    expect(screen.queryByRole('textbox', { name: 'Họ và tên' })).toBeNull();
+  },
+);
+
 it('allows manual confirmation after OCR failure and completes only after the server accepts it', async () => {
   render(<OnboardingScreen />);
   selectRoom();
@@ -857,11 +909,11 @@ it('retains unconfirmed identity edits across steps and keeps each person separa
     'NGƯỜI Ở MẪU',
   );
   closeIdentity();
-  openMemberEditor();
-  fireEvent.change(screen.getByRole('textbox', { name: 'Họ tên thành viên' }), {
+  await openMemberEditor();
+  fireEvent.change(screen.getByRole('textbox', { name: 'Họ và tên' }), {
     target: { value: 'THÀNH VIÊN KIỂM THỬ' },
   });
-  expect(state.json).toHaveBeenCalledTimes(1);
+  expect(state.json).toHaveBeenCalledTimes(2);
 });
 it('keeps OCR suggestions and Staff edits in memory without confirming them when backgrounded', async () => {
   state.image.mockResolvedValue({
@@ -1071,101 +1123,67 @@ it('does not mark a person confirmed when the response lacks a verified status',
     (screen.getByRole('button', { name: 'Tiếp tục tạo hợp đồng' }) as HTMLButtonElement).disabled,
   ).toBe(true);
 });
-it('requires verified representative identity and member details before review', async () => {
-  render(<OnboardingScreen />);
-  selectRoom();
-
-  addFamilyMember();
-
-  await openIdentity();
-  manualIdentity();
-  fireEvent.click(screen.getByRole('checkbox'));
-  fireEvent.click(screen.getByRole('button', { name: 'Xác nhận thông tin' }));
-  await screen.findByText('Đã xác nhận 1/2 người ở');
-  expect(
-    (screen.getByRole('button', { name: 'Tiếp tục tạo hợp đồng' }) as HTMLButtonElement).disabled,
-  ).toBe(true);
-  expect(screen.queryByRole('dialog')).toBeNull();
-  openMemberEditor();
-  fireEvent.change(screen.getByRole('textbox', { name: 'Họ tên thành viên' }), {
-    target: { value: 'THÀNH VIÊN KIỂM THỬ' },
-  });
-  fireEvent.change(screen.getByRole('textbox', { name: 'Ngày sinh thành viên (dd/MM/yyyy)' }), {
-    target: { value: '01/01/2015' },
-  });
-  fireEvent.change(screen.getByRole('textbox', { name: 'Quan hệ với người đại diện' }), {
-    target: { value: 'Con' },
-  });
-  expect(
-    (screen.getByRole('button', { name: 'Tiếp tục tạo hợp đồng' }) as HTMLButtonElement).disabled,
-  ).toBe(false);
-});
-it('persists a household before common step 3, retries safely and retains editable members on Back', async () => {
+it('requires the server to confirm every selected identity before opening the contract', async () => {
   render(<OnboardingScreen />);
   selectRoom();
   addFamilyMember();
-  await openIdentity();
-  manualIdentity();
-  fireEvent.click(screen.getByRole('checkbox'));
-  fireEvent.click(screen.getByRole('button', { name: 'Xác nhận thông tin' }));
-  await screen.findByText('Đã xác nhận 1/2 người ở');
-  openMemberEditor();
-  fireEvent.change(screen.getByRole('textbox', { name: 'Họ tên thành viên' }), {
-    target: { value: 'THÀNH VIÊN KIỂM THỬ' },
-  });
-  fireEvent.change(screen.getByRole('textbox', { name: 'Ngày sinh thành viên (dd/MM/yyyy)' }), {
-    target: { value: '31/02/2015' },
-  });
-  fireEvent.change(screen.getByRole('textbox', { name: 'Quan hệ với người đại diện' }), {
-    target: { value: 'Con' },
-  });
-  const next = () => screen.getByRole('button', { name: 'Tiếp tục tạo hợp đồng' });
-  expect(next()).toHaveProperty('disabled', true);
-  fireEvent.change(screen.getByRole('textbox', { name: 'Ngày sinh thành viên (dd/MM/yyyy)' }), {
-    target: { value: '01/01/2015' },
-  });
-  state.request.mockRejectedValueOnce(new MobileApiError(0, 'request_timeout'));
-  fireEvent.click(next());
-  await screen.findByRole('alert');
-  expect(screen.queryByRole('dialog', { name: 'Contract preparation' })).toBeNull();
-  const response = {
-    representativeResidentId: 'resident-1',
-    version: 1,
-    members: [{ residentId: 'saved-child', clientKey: 'person-2' }],
-  };
-  state.request.mockResolvedValueOnce(response);
-  fireEvent.click(next());
-  await screen.findByRole('dialog', { name: 'Contract preparation' });
-  expect(screen.getByText('Room: room; Residents: resident-1,saved-child')).toBeTruthy();
-  const saves = () => state.request.mock.calls.filter(([path]) => path.endsWith('/household'));
-  expect(saves()).toHaveLength(2);
-  expect(saves()[0][1].headers['Idempotency-Key']).toBe(saves()[1][1].headers['Idempotency-Key']);
-  expect(JSON.parse(saves()[1][1].body)).toMatchObject({
-    expectedVersion: 0,
-    humanConfirmed: true,
-    members: [{ fullName: 'THÀNH VIÊN KIỂM THỬ', dateOfBirth: '2015-01-01' }],
-  });
-  fireEvent.click(screen.getByText('Previous identity step'));
-  fireEvent.click(next());
-  await screen.findByRole('dialog', { name: 'Contract preparation' });
-  expect(saves()).toHaveLength(2);
-  fireEvent.click(screen.getByText('Previous identity step'));
-  openMemberEditor();
-  fireEvent.change(screen.getByRole('textbox', { name: 'Họ tên thành viên' }), {
-    target: { value: 'THÀNH VIÊN ĐÃ SỬA' },
-  });
-  state.request.mockResolvedValueOnce({ ...response, version: 2 });
-  fireEvent.click(next());
-  await screen.findByRole('dialog', { name: 'Contract preparation' });
-  expect(saves()).toHaveLength(3);
-  expect(JSON.parse(saves()[2][1].body)).toMatchObject({
-    expectedVersion: 1,
-    members: [{ residentId: 'saved-child', fullName: 'THÀNH VIÊN ĐÃ SỬA' }],
-  });
-  expect(saves()[2][1].headers['Idempotency-Key']).not.toBe(
-    saves()[1][1].headers['Idempotency-Key'],
+  for (let index = 0; index < 2; index++) {
+    await openMemberOrRepresentative(index);
+    manualIdentity();
+    fireEvent.change(screen.getByRole('textbox', { name: 'Số CCCD (12 chữ số)' }), {
+      target: { value: index === 0 ? '000000000001' : '000000000002' },
+    });
+    expect(screen.getByRole('button', { name: 'Tiếp tục tạo hợp đồng' })).toHaveProperty(
+      'disabled',
+      true,
+    );
+    fireEvent.click(screen.getByRole('checkbox'));
+    fireEvent.click(screen.getByRole('button', { name: 'Xác nhận thông tin' }));
+    await screen.findByText(`Đã xác nhận ${index + 1}/2 người ở`);
+  }
+  expect(screen.getByRole('button', { name: 'Tiếp tục tạo hợp đồng' })).toHaveProperty(
+    'disabled',
+    false,
   );
+  fireEvent.click(screen.getByRole('button', { name: 'Tiếp tục tạo hợp đồng' }));
+  await screen.findByRole('dialog', { name: 'Contract preparation' });
+  expect(screen.getByText('Room: room; Residents: resident-1,resident-2')).toBeTruthy();
+  expect(state.request).not.toHaveBeenCalled();
 });
+async function openMemberOrRepresentative(index: number) {
+  const actions = screen.getAllByRole('button', { name: /^(Nhập thủ công|Xem \/ sửa thông tin)$/ });
+  fireEvent.click(actions[index]);
+  await screen.findByRole('dialog');
+}
+
+it('keeps a failed member confirmation pending and reuses its identity when retrying and going Back', async () => {
+  render(<OnboardingScreen />);
+  selectRoom();
+  addFamilyMember();
+  await openMemberEditor();
+  manualIdentity();
+  fireEvent.click(screen.getByRole('checkbox'));
+  state.failConfirm = true;
+  fireEvent.click(screen.getByRole('button', { name: 'Xác nhận thông tin' }));
+  await within(screen.getByRole('dialog')).findByRole('alert');
+  expect(screen.getByText('Đã xác nhận 0/2 người ở')).toBeTruthy();
+  expect(screen.getByRole('button', { name: 'Tiếp tục tạo hợp đồng' })).toHaveProperty(
+    'disabled',
+    true,
+  );
+  state.failConfirm = false;
+  fireEvent.click(screen.getByRole('button', { name: 'Xác nhận thông tin' }));
+  await screen.findByText('Đã xác nhận 1/2 người ở');
+  fireEvent.click(screen.getByRole('button', { name: 'Quay lại' }));
+  fireEvent.click(screen.getByRole('button', { name: 'Tiếp tục' }));
+  expect(screen.getByText('Đã xác nhận 1/2 người ở')).toBeTruthy();
+  expect(
+    state.json.mock.calls.filter(([path]) => path === '/api/v1/capture/residents'),
+  ).toHaveLength(1);
+  expect(state.json.mock.calls.filter(([path]) => path.endsWith('/confirm'))).toHaveLength(2);
+  expect(state.request).not.toHaveBeenCalled();
+});
+
 it('handles Android Back without losing the selected step or manual edits', async () => {
   render(<OnboardingScreen />);
   selectRoom();
@@ -1214,8 +1232,8 @@ it('aborts a closed representative OCR flow and ignores a late response while ed
   fireEvent.click(screen.getByRole('button', { name: 'Chụp ảnh mặt trước' }));
   closeIdentity();
   expect(state.image.mock.calls[0][2].aborted).toBe(true);
-  openMemberEditor();
-  fireEvent.change(screen.getByRole('textbox', { name: 'Họ tên thành viên' }), {
+  await openMemberEditor();
+  fireEvent.change(screen.getByRole('textbox', { name: 'Họ và tên' }), {
     target: { value: 'THÀNH VIÊN KIỂM THỬ' },
   });
   await act(async () =>
@@ -1227,9 +1245,9 @@ it('aborts a closed representative OCR flow and ignores a late response while ed
       isFallback: false,
     }),
   );
-  expect(
-    (screen.getByRole('textbox', { name: 'Họ tên thành viên' }) as HTMLInputElement).value,
-  ).toBe('THÀNH VIÊN KIỂM THỬ');
+  expect((screen.getByRole('textbox', { name: 'Họ và tên' }) as HTMLInputElement).value).toBe(
+    'THÀNH VIÊN KIỂM THỬ',
+  );
   expect(screen.queryByText('LATE RESULT')).toBeNull();
 });
 const signature = (id: string, status: string): Signature => ({

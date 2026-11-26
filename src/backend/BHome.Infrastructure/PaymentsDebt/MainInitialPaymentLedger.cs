@@ -18,9 +18,12 @@ internal sealed class MainInitialPaymentLedger(BHomePersistenceContext db, IPaym
         if (db is not Compact24DbContext) return null;
         var raw = await db.Database.SqlQuery<string>($"""
             SELECT (task_data->'state')::text AS "Value" FROM operational_tasks
-            WHERE source_key IN ({"main-initial:" + id}, {"main-initial-room:" + id}, {"main-initial-sandbox-room:" + id})
+            WHERE source_key IN ({"main-initial-v2:" + id}, {"main-initial-room-v2:" + id}, {"main-initial-sandbox-room-v2:" + id},
+              {"main-initial:" + id}, {"main-initial-room:" + id}, {"main-initial-sandbox-room:" + id})
               AND task_data->>'recordType'={Kind}
-            ORDER BY (source_key={"main-initial-sandbox-room:" + id}) DESC, (source_key={"main-initial-room:" + id}) DESC
+            ORDER BY (source_key LIKE '%-v2:'||{id.ToString()}) DESC,
+              (source_key IN ({"main-initial-sandbox-room-v2:" + id}, {"main-initial-sandbox-room:" + id})) DESC,
+              (source_key IN ({"main-initial-room-v2:" + id}, {"main-initial-room:" + id})) DESC
             LIMIT 1
             """).SingleOrDefaultAsync(token);
         return raw is null ? null : JsonSerializer.Deserialize<MainInitialOrder>(raw, Json);
@@ -39,7 +42,8 @@ internal sealed class MainInitialPaymentLedger(BHomePersistenceContext db, IPaym
     {
         var id = order.ContractId;
         var deposit = order.SharedDepositContractId is null ? order.RequiredDeposit : 0;
-        var rental = (order.SharedRentContractId is null && order.SharedInvoiceId is null ? order.MonthlyRent : 0) + order.Charges.Sum(f => f.Amount);
+        var rental = (order.SharedRentContractId is null && order.SharedInvoiceId is null ? order.MonthlyRent : 0) +
+            (order.CalculationVersion < 2 ? order.Charges.Sum(f => f.Amount) : 0);
         var depositPaid = await DepositAsync(id, t);
         var rentalPaid = await RentalAsync(id, t);
         if (depositPaid > deposit || rentalPaid > rental) throw new PaymentException(409, "initial_payment_excess_requires_review");

@@ -9,6 +9,33 @@ namespace BHome.IntegrationTests.Compact24;
 public sealed class SharedMainInitialPaymentMigrationTests
 {
     [CompactPostgresFact]
+    public async Task SqlBootstrapUsesCurrentInitialPaymentGuardWithoutAdoptingEfHistory()
+    {
+        var fixture = new Compact24Fixture();
+        await fixture.InitializeAsync();
+        try
+        {
+            await using var db = new Compact24DbContext(new DbContextOptionsBuilder<Compact24DbContext>().UseNpgsql(fixture.Connection).Options);
+            Assert.Empty(await db.Database.GetAppliedMigrationsAsync());
+            Assert.True(await db.IsSchemaReadyAsync());
+            async Task<string> Guard() => await db.Database.SqlQuery<string>($"SELECT prosrc AS \"Value\" FROM pg_proc WHERE oid='public.bhome24_initial_payment_guard()'::regprocedure").SingleAsync();
+            var before = await Guard();
+            await using var stream = typeof(Compact24DbContext).Assembly.GetManifestResourceStream("BHome.Compact24.MainInitialPaymentNoFees.sql")!;
+            using var reader = new StreamReader(stream);
+            await db.Database.ExecuteSqlRawAsync(await reader.ReadToEndAsync());
+            Assert.Equal(before.Replace("\r\n", "\n", StringComparison.Ordinal), (await Guard()).Replace("\r\n", "\n", StringComparison.Ordinal));
+            Assert.True(await db.IsSchemaReadyAsync());
+            Assert.Empty(await db.Database.GetAppliedMigrationsAsync());
+            await db.Database.ExecuteSqlRawAsync("""
+                CREATE OR REPLACE FUNCTION bhome24_initial_payment_guard() RETURNS trigger LANGUAGE plpgsql AS $fn$
+                BEGIN RETURN NEW; END $fn$;
+                """);
+            Assert.False(await db.IsSchemaReadyAsync());
+        }
+        finally { await fixture.DisposeAsync(); }
+    }
+
+    [CompactPostgresFact]
     public async Task UpgradeChangesOnlyInitialPaymentGuardAndPreservesExistingRows()
     {
         var admin = new NpgsqlConnectionStringBuilder(Environment.GetEnvironmentVariable("BHOME_COMPACT24_TEST_ADMIN"));
@@ -52,8 +79,8 @@ public sealed class SharedMainInitialPaymentMigrationTests
             Assert.Empty(await db.Database.GetPendingMigrationsAsync());
 
             // VPS databases bootstrapped from SQL have no EF history. The reviewed
-            // operator path applies only this resource, without adopting a baseline.
-            await using var stream = typeof(Compact24DbContext).Assembly.GetManifestResourceStream("BHome.Compact24.SharedMainInitialPayment.sql")!;
+            // operator path applies the latest payment guard resource without adopting a baseline.
+            await using var stream = typeof(Compact24DbContext).Assembly.GetManifestResourceStream("BHome.Compact24.MainInitialPaymentNoFees.sql")!;
             using var reader = new StreamReader(stream);
             await db.Database.ExecuteSqlRawAsync(await reader.ReadToEndAsync());
             Assert.True(await db.IsSchemaReadyAsync());

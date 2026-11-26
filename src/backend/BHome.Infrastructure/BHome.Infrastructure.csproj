@@ -9,6 +9,7 @@
     <EmbeddedResource Include="Persistence/Compact24/Migrations/MainInitialPayment.sql" LogicalName="BHome.Compact24.MainInitialPayment.sql" />
     <EmbeddedResource Include="Persistence/Compact24/Migrations/SettlementSePayCodes.sql" LogicalName="BHome.Compact24.SettlementSePayCodes.sql" />
     <EmbeddedResource Include="Persistence/Compact24/Migrations/SharedMainInitialPayment.sql" LogicalName="BHome.Compact24.SharedMainInitialPayment.sql" />
+    <EmbeddedResource Include="Persistence/Compact24/Migrations/MainInitialPaymentNoFees.sql" LogicalName="BHome.Compact24.MainInitialPaymentNoFees.sql" />
     <EmbeddedResource Include="Persistence/Compact24/Migrations/SharedInvoiceDepositOffsets.sql" LogicalName="BHome.Compact24.SharedInvoiceDepositOffsets.sql" />
     <EmbeddedResource Include="Persistence/Compact24/Migrations/LifecycleAlignment.sql" LogicalName="BHome.Compact24.LifecycleAlignment.sql" />
     <EmbeddedResource Include="Persistence/Compact24/Migrations/PhysicalResidenceClosure.sql" LogicalName="BHome.Compact24.PhysicalResidenceClosure.sql" />

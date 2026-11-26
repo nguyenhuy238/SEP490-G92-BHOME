@@ -143,7 +143,12 @@ public sealed partial class SePayIntegrationTests(Compact24Fixture fixture) : IC
         }
         var response = await owner.PostAsync(root + "/transfer-instructions", null);
         Assert.True(response.IsSuccessStatusCode, await response.Content.ReadAsStringAsync()); var quote = (await response.Content.ReadFromJsonAsync<MainInitialPaymentView>())!;
-        Assert.Equal(3150000, quote.OutstandingAmount); Assert.False(quote.Paid); Assert.StartsWith("data:image/png;base64,", quote.QrImageDataUri); Assert.Matches("^BH[0-9]{8}$", quote.TransferReference!);
+        // Retain this CI regression identity; v2 collects deposit and rent only.
+        // The configured Internet fee belongs to periodic billing, not this order.
+        Assert.Equal(3100000, quote.OutstandingAmount);
+        var rent = Assert.Single(quote.Charges); Assert.Equal("RENT", rent.Code); Assert.Equal(3000000, rent.Amount);
+        Assert.Empty(quote.MeteredRates);
+        Assert.False(quote.Paid); Assert.StartsWith("data:image/png;base64,", quote.QrImageDataUri); Assert.Matches("^BH[0-9]{8}$", quote.TransferReference!);
         if (!simulatedSigning)
         {
             db.ChangeTracker.Clear(); c = await db.Set<Contract>().SingleAsync(x => x.Id == c.Id);
@@ -189,11 +194,8 @@ public sealed partial class SePayIntegrationTests(Compact24Fixture fixture) : IC
             VALUES({Guid.NewGuid()},'COMMAND',{scenario.Location},{"main-initial-room:" + second.Id},'Issued',
                 jsonb_build_object('recordType','MainInitialPaymentV1','state',CAST({previousRoomQuote} AS jsonb)))
             """);
-        var staleCode = await scope.ServiceProvider.GetRequiredService<IPaymentCodeRegistry>()
-            .IssueAsync("MainInitial", second.Id, scenario.Location, default);
-        Assert.NotNull(staleCode);
-        (await scenario.Send(3150000, code: staleCode)).EnsureSuccessStatusCode();
-        Assert.Empty(await db.Set<PaymentAllocation>().Where(a => a.TargetInitialContractId == second.Id || a.TargetDepositContractId == second.Id).ToArrayAsync());
+        // Unissued legacy quotes can be resolved to the existing Room obligation.
+        // An already issued legacy code must retain its amount; exercise that below.
         var secondRoot = $"/api/v1/contracts/{second.Id}/initial-payment";
         var secondResponses = await Task.WhenAll(Enumerable.Range(0, 2).Select(_ => unrelatedTenant.PostAsync(secondRoot + "/transfer-instructions", null)));
         foreach (var item in secondResponses) Assert.True(item.IsSuccessStatusCode, await item.Content.ReadAsStringAsync());
@@ -203,14 +205,14 @@ public sealed partial class SePayIntegrationTests(Compact24Fixture fixture) : IC
         Assert.Equal(quote.TransferReference, concurrentQuote.TransferReference);
         Assert.Equal(quote.OutstandingAmount, secondQuote.OutstandingAmount);
         (await scenario.Send(100, code: quote.TransferReference)).EnsureSuccessStatusCode();
-        (await scenario.Send(3150001, code: quote.TransferReference)).EnsureSuccessStatusCode();
+        (await scenario.Send(3100001, code: quote.TransferReference)).EnsureSuccessStatusCode();
         Assert.Empty(await db.Set<PaymentAllocation>().Where(a => a.TargetInitialContractId == c.Id || a.TargetDepositContractId == c.Id).ToArrayAsync());
         Assert.False(await scope.ServiceProvider.GetRequiredService<IMainInitialPaymentLedger>().SatisfiedAsync(c.Id, default));
         var eventId = Guid.NewGuid().ToString(); var reference = "INITIAL-" + Guid.NewGuid().ToString("N");
-        var full = await scenario.Send(3150000, reference, secondQuote.TransferReference, eventId: eventId); Assert.True(full.IsSuccessStatusCode, (await full.Content.ReadAsStringAsync()));
-        (await scenario.Send(3150000, reference, quote.TransferReference, eventId: eventId)).EnsureSuccessStatusCode();
+        var full = await scenario.Send(3100000, reference, secondQuote.TransferReference, eventId: eventId); Assert.True(full.IsSuccessStatusCode, (await full.Content.ReadAsStringAsync()));
+        (await scenario.Send(3100000, reference, quote.TransferReference, eventId: eventId)).EnsureSuccessStatusCode();
         db.ChangeTracker.Clear(); var allocations = await db.Set<PaymentAllocation>().Where(a => a.TargetInitialContractId == c.Id || a.TargetDepositContractId == c.Id).ToArrayAsync();
-        Assert.Equal(2, allocations.Length); Assert.Single(allocations.Select(a => a.TransferId).Distinct()); Assert.Equal(100000, allocations.Single(a => a.TargetDepositContractId == c.Id).Amount); Assert.Equal(3050000, allocations.Single(a => a.TargetInitialContractId == c.Id).Amount);
+        Assert.Equal(2, allocations.Length); Assert.Single(allocations.Select(a => a.TransferId).Distinct()); Assert.Equal(100000, allocations.Single(a => a.TargetDepositContractId == c.Id).Amount); Assert.Equal(3000000, allocations.Single(a => a.TargetInitialContractId == c.Id).Amount);
         Assert.Equal(ContractStatus.PendingActivation, (await db.Set<Contract>().SingleAsync(x => x.Id == c.Id)).Status);
         var settled = await owner.GetFromJsonAsync<MainInitialPaymentView>(root); Assert.True(settled!.Paid); Assert.Equal(0, settled.OutstandingAmount);
         Assert.True(await scope.ServiceProvider.GetRequiredService<IMainInitialPaymentLedger>().SatisfiedAsync(c.Id, default));
@@ -240,6 +242,62 @@ public sealed partial class SePayIntegrationTests(Compact24Fixture fixture) : IC
         Assert.Equal(100000, finalSettlement.VerifiedSecurityDeposit);
         var refundSource = await scope.ServiceProvider.GetRequiredService<BHome.Application.Finance.IRefundRepository>().DepositSourceAsync(last.Id, default);
         Assert.Equal(secondResident.Id, Assert.Single(refundSource.Beneficiaries).Id);
+
+        var legacyRoom = new Room { LocationId = scenario.Location, RoomNumber = "LEGACY-INITIAL-QR", Capacity = 1, Status = RoomStatus.Available };
+        var legacyResident = new Resident { RoomId = legacyRoom.Id, OwnerUserId = scenario.Owner, DisplayLabel = "SYNTHETIC LEGACY INITIAL", VerificationStatus = IdentityVerificationStatus.Verified };
+        var legacy = new Contract
+        {
+            RoomId = legacyRoom.Id,
+            OwnerSignerId = scenario.Owner,
+            RepresentativeResidentId = legacyResident.Id,
+            StartDate = today,
+            EndDate = today.AddMonths(6),
+            MonthlyRent = 3000000,
+            RequiredDeposit = 100000,
+            Terms = "SYNTHETIC LEGACY INITIAL PAYMENT",
+            SigningMode = ContractSigningModes.Internal,
+            Status = ContractStatus.PendingActivation,
+            InitialPaymentRequired = true,
+            IsDevelopmentDemo = simulatedSigning,
+            PaymentMode = "Test",
+            Residents = [new ContractResident { ResidentId = legacyResident.Id, Role = ResidentType.Representative, ResidenceFrom = today }]
+        };
+        legacy.SnapshotHash = ContractDocumentSnapshot.Hash(new ContractDocument(legacy.Id, legacy.RoomId, legacy.OwnerSignerId,
+            Guid.Empty, legacy.RepresentativeResidentId, [legacyResident.Id], legacy.StartDate, legacy.EndDate,
+            legacy.MonthlyRent, legacy.RequiredDeposit, null, 0, legacy.Terms, "")
+        { IsInternalResidentAcceptance = true });
+        legacy.InternalAcceptance = JsonSerializer.Serialize(source with { ResidentId = legacyResident.Id, SnapshotHash = legacy.SnapshotHash });
+        db.AddRange(legacyRoom, legacyResident, legacy); await db.SaveChangesAsync();
+        var issuedLegacyOrder = JsonSerializer.Serialize(new MainInitialOrder(legacy.Id, scenario.Location, legacy.SnapshotHash,
+            legacy.RequiredDeposit, legacy.MonthlyRent, [new("INTERNET", "Synthetic Internet", 50000)], DateTimeOffset.UtcNow,
+            RoomScopeResolved: true, RoomScopeMode: "Test"), new JsonSerializerOptions(JsonSerializerDefaults.Web));
+        await db.Database.ExecuteSqlInterpolatedAsync($"""
+            INSERT INTO operational_tasks(id,task_type,location_id,source_key,status,task_data)
+            VALUES({Guid.NewGuid()},'COMMAND',{scenario.Location},{"main-initial:" + legacy.Id},'Issued',
+                jsonb_build_object('recordType','MainInitialPaymentV1','state',CAST({issuedLegacyOrder} AS jsonb)))
+            """);
+        var legacyCode = await scope.ServiceProvider.GetRequiredService<IPaymentCodeRegistry>().IssueAsync("MainInitial", legacy.Id, scenario.Location, default);
+        Assert.NotNull(legacyCode);
+        var legacyResponse = await owner.PostAsync($"/api/v1/contracts/{legacy.Id}/initial-payment/transfer-instructions", null);
+        Assert.True(legacyResponse.IsSuccessStatusCode, await legacyResponse.Content.ReadAsStringAsync());
+        var legacyView = (await legacyResponse.Content.ReadFromJsonAsync<MainInitialPaymentView>())!;
+        Assert.Equal(legacyCode, legacyView.TransferReference); Assert.Equal(3150000, legacyView.OutstandingAmount);
+        Assert.Contains(legacyView.Charges, charge => charge.Code == "INTERNET" && charge.Amount == 50000);
+        var storedLegacyOrder = (await scope.ServiceProvider.GetRequiredService<IMainInitialPaymentLedger>().ReadAsync(legacy.Id, default))!;
+        Assert.Equal(1, storedLegacyOrder.CalculationVersion);
+        Assert.Contains(storedLegacyOrder.Charges, charge => charge.Code == "INTERNET" && charge.Amount == 50000);
+        (await scenario.Send(100, code: legacyCode)).EnsureSuccessStatusCode();
+        Assert.Empty(await db.Set<PaymentAllocation>().Where(a => a.TargetInitialContractId == legacy.Id || a.TargetDepositContractId == legacy.Id).ToArrayAsync());
+        var legacyReference = "LEGACY-INITIAL-" + Guid.NewGuid().ToString("N");
+        var legacyEvent = Guid.NewGuid().ToString();
+        (await scenario.Send(3150000, legacyReference, legacyCode, eventId: legacyEvent)).EnsureSuccessStatusCode();
+        (await scenario.Send(3150000, legacyReference, legacyCode, eventId: legacyEvent)).EnsureSuccessStatusCode();
+        var legacyAllocations = await db.Set<PaymentAllocation>().Where(a => a.TargetInitialContractId == legacy.Id || a.TargetDepositContractId == legacy.Id).ToArrayAsync();
+        Assert.Equal(2, legacyAllocations.Length); Assert.Single(legacyAllocations.Select(a => a.TransferId).Distinct());
+        Assert.Equal(100000, legacyAllocations.Single(a => a.TargetDepositContractId == legacy.Id).Amount);
+        Assert.Equal(3050000, legacyAllocations.Single(a => a.TargetInitialContractId == legacy.Id).Amount);
+        Assert.True(await scope.ServiceProvider.GetRequiredService<IMainInitialPaymentLedger>().SatisfiedAsync(legacy.Id, default));
+        Assert.Equal(issuedLegacyOrder, JsonSerializer.Serialize(await scope.ServiceProvider.GetRequiredService<IMainInitialPaymentLedger>().ReadAsync(legacy.Id, default), new JsonSerializerOptions(JsonSerializerDefaults.Web)));
     }
     private const string Secret = "synthetic-sepay-integration-secret-at-least-32-bytes";
     [CompactPostgresFact]

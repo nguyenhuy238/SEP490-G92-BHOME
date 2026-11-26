@@ -44,10 +44,10 @@ internal static class MainDraftSettingsSeed
         var drafts = services.GetRequiredService<MainDraftService>();
         var properties = services.GetRequiredService<PropertyService>();
         var created = 0;
-        var settings = await data.OwnerSettingsAsync(location.Id, default);
+        var settings = await data.OwnerWideSettingsAsync(owner.Id, default);
         if (settings is null)
         {
-            await drafts.SetSettingsAsync(location.Id, new(owner.Id, today, null, 3000000m,
+            await drafts.SetSettingsAsync(new(owner.Id, today, null,
                 "DỮ LIỆU TEST: thanh toán tiền thuê hàng tháng; chưa ghi nhận thanh toán hoặc thu cọc.",
                 "HỢP ĐỒNG THỬ NGHIỆM — thông tin bên cho thuê là dữ liệu tổng hợp, không sử dụng để ký thực tế.",
                 new LessorProfile("CHỦ NHÀ TEST BHOME", new(1980, 1, 1), "000000000001", new(2020, 1, 1),
@@ -67,7 +67,7 @@ internal static class MainDraftSettingsSeed
             if (prices.MissingRequiredCharges.Count != 0) throw new InvalidOperationException("Room still has missing prices.");
             Console.WriteLine($"{room.RoomNumber}: {string.Join(", ", prices.Charges.Select(p => $"{p.ChargeCode}={p.Rate:0.####}"))}");
         }
-        if (await data.SettingsAsync(location.Id, today, default) is null)
+        if (await data.SettingsAsync(owner.Id, today, default) is null)
             throw new InvalidOperationException("No effective contract settings today; existing configuration preserved.");
         actor.UserId = staff.Id;
         actor.Role = Roles.Staff;

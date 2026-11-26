@@ -1283,14 +1283,16 @@ BEGIN
   SELECT * INTO receipt FROM payments WHERE id=NEW.source_payment_id FOR UPDATE;
   SELECT * INTO contract FROM contracts WHERE id=NEW.target_initial_contract_id;
   SELECT task_data->'state' INTO quote FROM operational_tasks
-    WHERE source_key IN ('main-initial:'||contract.id::text,'main-initial-room:'||contract.id::text,'main-initial-sandbox-room:'||contract.id::text)
+    WHERE source_key IN ('main-initial-v2:'||contract.id::text,'main-initial-room-v2:'||contract.id::text,'main-initial-sandbox-room-v2:'||contract.id::text,
+      'main-initial:'||contract.id::text,'main-initial-room:'||contract.id::text,'main-initial-sandbox-room:'||contract.id::text)
       AND task_data->>'recordType'='MainInitialPaymentV1'
-    ORDER BY (source_key='main-initial-sandbox-room:'||contract.id::text) DESC,
-      (source_key='main-initial-room:'||contract.id::text) DESC LIMIT 1;
+    ORDER BY COALESCE((task_data->'state'->>'calculationVersion')::int,1) DESC,
+      (source_key IN ('main-initial-sandbox-room-v2:'||contract.id::text,'main-initial-sandbox-room:'||contract.id::text)) DESC,
+      (source_key IN ('main-initial-room-v2:'||contract.id::text,'main-initial-room:'||contract.id::text)) DESC LIMIT 1;
   SELECT task_data->'state'->>'code' INTO code FROM operational_tasks
     WHERE task_data->>'recordType'='PaymentCodeV1' AND task_data->'state'->>'kind'='MainInitial'
-    AND task_data->'state'->>'obligationId'=contract.id::text
-    AND upper(task_data->'state'->>'mode')=split_part(receipt.provider_code,':',2);
+      AND task_data->'state'->>'obligationId'=contract.id::text
+      AND upper(task_data->'state'->>'mode')=split_part(receipt.provider_code,':',2);
   IF quote IS NULL OR code IS NULL OR receipt.status<>'VERIFIED' OR receipt.verification_method<>'AUTO'
     OR receipt.provider_code NOT IN ('SEPAY:TEST','SEPAY:LIVE') OR contract.contract_type<>'MAIN' OR contract.status<>2
     OR quote->>'snapshotHash'<>contract.snapshot_hash
@@ -1301,8 +1303,10 @@ BEGIN
   SELECT COALESCE(sum(amount),0) INTO deposit_paid FROM payment_allocations WHERE target_deposit_contract_id=contract.id;
   SELECT COALESCE(sum(amount),0) INTO rental_paid FROM payment_allocations WHERE target_initial_contract_id=contract.id;
   SELECT CASE WHEN quote->>'sharedRentContractId' IS NULL AND quote->>'sharedInvoiceId' IS NULL
-    THEN (quote->>'monthlyRent')::numeric ELSE 0 END+COALESCE(sum((fee->>'amount')::numeric),0)
-    INTO rental_due FROM jsonb_array_elements(quote->'charges') fee;
+    THEN (quote->>'monthlyRent')::numeric ELSE 0 END+
+    CASE WHEN COALESCE((quote->>'calculationVersion')::int,1)<2
+      THEN COALESCE((SELECT sum((fee->>'amount')::numeric) FROM jsonb_array_elements(quote->'charges') fee),0)
+      ELSE 0 END INTO rental_due;
   SELECT COALESCE(sum(amount),0) INTO receipt_used FROM payment_allocations WHERE source_payment_id=receipt.id;
   IF NEW.amount<>rental_due-rental_paid OR (quote->>'sharedDepositContractId' IS NULL AND deposit_paid<(quote->>'requiredDeposit')::numeric)
     OR receipt_used+NEW.amount<>receipt.amount

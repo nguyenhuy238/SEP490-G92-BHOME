@@ -65,8 +65,9 @@ public sealed partial class ContractLifecycleApiTests
         }
         finally { CryptographicOperations.ZeroMemory(bytes); }
         await db.SaveChangesAsync();
+        await BHome.IntegrationTests.Fixtures.MainDraftTestSettings.ResetOwnerPolicyAsync(db, workspace.Owner.Id);
         await scope.ServiceProvider.GetRequiredService<IMainDraftData>().SetSettingsAsync(workspace.Location,
-            new(workspace.Owner.Id, Today.AddDays(-1), null, 1000000, "Synthetic bank transfer terms", "",
+            new(workspace.Owner.Id, Today.AddDays(-1), null, "Synthetic bank transfer terms", "",
                 new("SYNTHETIC OWNER", new(1980, 1, 1), "000000000456", new(2020, 1, 1),
                     "Synthetic issuing authority", "Synthetic owner address", "0900000000"), 0), workspace.Owner.Id, default);
     }

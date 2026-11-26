@@ -13,7 +13,7 @@ using Microsoft.EntityFrameworkCore;
 namespace BHome.Infrastructure.PaymentsDebt;
 
 internal sealed class MainInitialPayments(BHomePersistenceContext db, ContractService contracts, IContractRepository contractData,
-    IMainDraftData drafts, IPaymentRepository payments, IPaymentCodeRegistry codes,
+    IPaymentRepository payments, IPaymentCodeRegistry codes,
     ITransferQrGenerator qr, IMainInitialPaymentLedger orders, SePayOptions sepay, TimeProvider clock, IContractWorkflowMode workflowMode, IHoldingTestScope testScope, ICurrentUser user,
     ISePayOwnerConnections connections) : IMainInitialPayments
 {
@@ -45,12 +45,20 @@ internal sealed class MainInitialPayments(BHomePersistenceContext db, ContractSe
                 sepay.Mode == "Test" && testScope.Allows(c.Room.LocationId);
             if (order?.RoomScopeMode == "Test" && !ContractPaymentModes.IsTest(c) && !untaggedSandbox)
                 throw new PaymentException(409, "sepay_environment_mismatch");
+            var legacyPaymentCode = order is { CalculationVersion: < 2 } && await db.Database.SqlQuery<bool>($"""
+                SELECT EXISTS(SELECT 1 FROM operational_tasks WHERE task_data->>'recordType'='PaymentCodeV1'
+                  AND task_data->'state'->>'kind'='MainInitial' AND task_data->'state'->>'obligationId'={id.ToString()}) AS "Value"
+                """).SingleAsync(token);
             var roomScopeMode = untaggedSandbox ? "Test" : ContractPaymentModes.Of(c);
             var reconcile = order is { SharedDepositContractId: null, SharedRentContractId: null, SharedInvoiceId: null } &&
                 (!order.RoomScopeResolved || untaggedSandbox && order.RoomScopeMode != roomScopeMode) &&
+                !legacyPaymentCode &&
                 !await db.Set<BHome.Domain.PaymentsDebt.PaymentAllocation>().AnyAsync(a =>
                     a.TargetInitialContractId == id || a.TargetDepositContractId == id, token);
-            if (order is null || reconcile)
+            var legacyAllocations = order is { CalculationVersion: < 2 } && await db.Set<BHome.Domain.PaymentsDebt.PaymentAllocation>()
+                .AnyAsync(a => a.TargetInitialContractId == id || a.TargetDepositContractId == id, token);
+            var replaceLegacyQuote = order is { CalculationVersion: < 2 } && !legacyAllocations && !legacyPaymentCode;
+            if (order is null || reconcile || replaceLegacyQuote)
             {
                 var period = new DateOnly(c.StartDate.Year, c.StartDate.Month, 1);
                 var candidates = await db.Set<Contract>().AsNoTracking()
@@ -107,27 +115,15 @@ internal sealed class MainInitialPayments(BHomePersistenceContext db, ContractSe
                                           invoice.Status == BHome.Domain.Billing.InvoiceStatus.Final && invoice.Lines.Any(line => line.ChargeCode == "RENT")
                                       select new { invoice.Id, Representative = representative }).ToArrayAsync(token);
                 var invoiceId = rentSource is null
-                    ? invoiceSource ?? invoices.Select(invoice => (Guid?)invoice.Id).SingleOrDefault()
+                    ? invoiceSource ?? invoices.Where(invoice => ContractPaymentModes.Of(invoice.Representative) == roomScopeMode)
+                        .Select(invoice => (Guid?)invoice.Id).SingleOrDefault()
                     : null;
-                IEnumerable<(int Category, int Method, string Code, string Name, decimal Rate)> policies;
-                if (signedCharges is not null)
-                    policies = signedCharges.Select(p => (p.Category, p.Method, p.ChargeCode, p.Name ?? p.ChargeCode, p.Rate));
-                else
-                {
-                    var legacy = c.DraftMetadata != "{}" ? drafts.Unprotect(c).Charges : (await contractData.ResolvePricesAsync(c.RoomId, c.StartDate, token)).Charges;
-                    policies = legacy.Select(p => ((int)p.Category, (int)p.Method, p.ChargeCode, p.Name, p.Rate));
-                }
-                var fees = policies.Where(p => p.Category == (int)ChargeCategory.ServiceFee && p.Method is (int)ChargingMethod.FixedPerRoomPerMonth or (int)ChargingMethod.FixedPerPersonPerMonth)
-                    .Where(p => rentSource is null && invoiceId is null)
-                    .Select(p => new MainInitialCharge(p.Code, p.Name, p.Rate * (p.Method == (int)ChargingMethod.FixedPerPersonPerMonth ? c.Room.Capacity : 1)))
-                    .OrderBy(p => p.Code, StringComparer.Ordinal).ToArray();
-                if (fees.Any(f => f.Amount < 0 || decimal.Truncate(f.Amount) != f.Amount)) throw new PaymentException(409, "initial_charge_invalid_vnd_amount");
-                if (reconcile && depositSource is null && rentSource is null && invoiceId is null)
-                    fees = order!.Charges;
-                order = new(c.Id, c.Room.LocationId, c.SnapshotHash, c.RequiredDeposit, c.MonthlyRent, fees, order?.CreatedAt ?? clock.GetUtcNow(),
-                    depositSource, rentSource, invoiceId, RoomScopeResolved: true, RoomScopeMode: roomScopeMode);
+                // The initial activation transfer contains only the remaining deposit and first rent.
+                // Contract charge snapshots remain intact and continue to feed periodic invoices.
+                order = new(c.Id, c.Room.LocationId, c.SnapshotHash, c.RequiredDeposit, c.MonthlyRent, [], order?.CreatedAt ?? clock.GetUtcNow(),
+                    depositSource, rentSource, invoiceId, RoomScopeResolved: true, RoomScopeMode: roomScopeMode, CalculationVersion: 2);
                 var raw = JsonSerializer.Serialize(order, MainInitialPaymentLedger.Json);
-                var sourceKey = (reconcile ? untaggedSandbox ? "main-initial-sandbox-room:" : "main-initial-room:" : "main-initial:") + id;
+                var sourceKey = (reconcile ? untaggedSandbox ? "main-initial-sandbox-room-v2:" : "main-initial-room-v2:" : "main-initial-v2:") + id;
                 await db.Database.ExecuteSqlInterpolatedAsync($"""
                     INSERT INTO operational_tasks(id,task_type,location_id,source_key,status,task_data)
                     VALUES({Guid.NewGuid()},'COMMAND',{order.LocationId},{sourceKey},'Issued',jsonb_build_object('recordType',{MainInitialPaymentLedger.Kind},'state',CAST({raw} AS jsonb)))
@@ -190,11 +186,15 @@ internal sealed class MainInitialPayments(BHomePersistenceContext db, ContractSe
             var rendered = issueQr && bound && reference is not null && outstanding > 0 ? qr.Generate(account!.BankIdentifier, account.AccountNumber, outstanding, reference) : null;
             var availability = outstanding == 0 ? "Settled" : !sepay.Enabled ? "PaymentProviderDisabled" :
                 !bound ? "ReceivingAccountUnavailable" : reference is null ? "PaymentCodeUnavailable" : rendered is null ? "InstructionsOnly" : "Available";
+            List<MainInitialCharge> charges = invoicePayable
+                ? [new("INVOICE", "Số dư hóa đơn phòng", invoiceOutstanding)]
+                : [new("RENT", "Tiền thuê tháng đầu", requiredRent)];
+            if (!invoicePayable && payable.CalculationVersion < 2) charges.AddRange(payable.Charges);
             return new MainInitialPaymentView(id, availability, c.Status.ToString(), signed,
-                invoicePayable ? [new MainInitialCharge("INVOICE", "Số dư hóa đơn phòng", invoiceOutstanding)] :
-                    new[] { new MainInitialCharge("RENT", "Tiền thuê tháng đầu", requiredRent) }.Concat(payable.Charges).ToArray(),
+                charges,
+                invoicePayable ? 0 : requiredRent,
                 requiredDeposit, payable.ContractId == id ? c.AppliedHoldingDeposit : 0, deposit, rent, outstanding, outstanding == 0, reference, bound ? account!.BankIdentifier : null, bound ? account!.AccountNumber : null, bound ? account!.AccountHolder : null, rendered?.PngDataUri, payableMode == "Test",
-                outstandingDeposit, outstandingRentAndFees, meteredRates);
+                outstandingDeposit, outstandingRentAndFees, payable.CalculationVersion < 2 ? meteredRates : []);
         }, token);
     }
 }

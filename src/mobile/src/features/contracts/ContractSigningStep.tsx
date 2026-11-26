@@ -1,6 +1,6 @@
 import { ContractNotice } from './ContractNotice';
 import React, { useEffect, useMemo, useRef, useState } from 'react';
-import { Text } from 'react-native-paper';
+import { Icon, Text } from 'react-native-paper';
 import {
   contractActions,
   contractError,
@@ -17,7 +17,7 @@ import {
 } from '../../../../../packages/client-core/src/internalSigning';
 import { signingClient, signingMethodLabel } from '../../../../../packages/client-core/src/signing';
 import { formatInstant } from '../../../../../packages/client-core/src/localization';
-import { Action, Box, Heading, ui } from '../../components/WorkspaceKit';
+import { Action, Box, Heading, Row, ui } from '../../components/WorkspaceKit';
 import { randomUUID } from '../../lib/randomUUID';
 import { ContractSigningPanel } from './ContractSigningPanel';
 import { ContractActionForm } from './ContractActionForm';
@@ -25,6 +25,7 @@ import { SignaturePlacementField } from './SigningSetup';
 import { ContractEvidence } from './ContractEvidence';
 import { ContractLoading } from './ContractLoading';
 import { Input } from '../../components/WorkflowControls';
+import { staffColors as s } from '../../theme/theme';
 
 function signingComplete(c: ContractView, status: InternalSigningStatus | null) {
   if (!['PendingActivation', 'Active'].includes(c.status)) return false;
@@ -130,9 +131,24 @@ export function ContractSigningStep({
   const readyToSign =
     !internal || !!status?.tenantAcceptedAt || (['Holding', 'Main'].includes(c.kind) && owner);
   const complete = signingComplete(c, status);
+  const bothSigned = internal
+    ? !!status?.ownerAcceptedAt && !!status.tenantAcceptedAt && !status.tenantSimulated
+    : [c.ownerSignerId, c.tenantUserId].every(
+        (id) =>
+          !!id &&
+          c.signatures.some(
+            (signature) => signature.signerUserId === id && signature.status === 'Signed',
+          ),
+      );
   const currentInvitation = status?.invitations.find(
     (i) => !['Expired', 'Revoked', 'Accepted'].includes(i.status),
   );
+  const signingSent =
+    c.status === 'PendingActivation' ||
+    !!currentInvitation ||
+    !!status?.ownerAcceptedAt ||
+    !!status?.tenantAcceptedAt ||
+    c.signatures.length > 0;
   const representativeLabel = c.kind === 'Holding' ? 'Người giữ chỗ' : 'Người đại diện thuê';
   const nextSignerMessage = !data
     ? error
@@ -258,11 +274,13 @@ export function ContractSigningStep({
     return <ContractLoading compact label="Đang tải thông tin gửi ký…" />;
   return (
     <>
-      <Box>
+      <Box style={staffMain ? styles.staffSigning : undefined}>
         <Heading
           title={
             staffMain
-              ? 'Gửi hợp đồng để ký'
+              ? signingSent
+                ? 'Trạng thái ký hợp đồng'
+                : 'Gửi hợp đồng để ký'
               : c.kind === 'Holding'
                 ? 'Ký hợp đồng'
                 : 'Bước 5 · Ký hợp đồng'
@@ -280,34 +298,54 @@ export function ContractSigningStep({
           </Text>
         )}
         {[
-          { id: c.ownerSignerId, label: 'Chủ nhà (Owner)', at: status?.ownerAcceptedAt },
+          { id: c.ownerSignerId, label: 'Chủ nhà', at: status?.ownerAcceptedAt },
           { id: c.tenantUserId, label: representativeLabel, at: status?.tenantAcceptedAt },
         ].map((p) => {
           const signature = c.signatures.find(
             (s) => s.signerUserId === p.id && s.status === 'Signed',
           );
           const at = signature?.signedAt ?? p.at;
+          const isSigned = !!at || signature?.status === 'Signed';
           return (
             <React.Fragment key={p.label}>
-              <Text
-                style={{
-                  fontSize: 13,
-                  lineHeight: 20,
-                  fontWeight: '600',
-                  color: at ? '#16804A' : '#193653',
-                }}
-              >
-                {p.label}: {at ? 'Đã ký' : 'Chờ ký'}
-              </Text>
-              {!!at && c.kind !== 'Holding' && (
-                <Text style={{ fontSize: 12, lineHeight: 18, color: '#526581' }}>
-                  {formatInstant(at)} ·{' '}
-                  {signature?.method ? signingMethodLabel(signature.method) : 'OTP qua lời mời'}
-                </Text>
+              {staffMain ? (
+                <Row spread>
+                  <Icon
+                    source={isSigned ? 'check-circle' : 'clock-outline'}
+                    size={19}
+                    color={isSigned ? s.green : s.orange}
+                  />
+                  <Text style={styles.staffSignerName}>{p.label}</Text>
+                  <Text style={isSigned ? styles.staffSigned : styles.staffWaiting}>
+                    {isSigned ? 'Đã ký' : 'Chờ ký'}
+                  </Text>
+                </Row>
+              ) : (
+                <>
+                  <Text
+                    style={{
+                      fontSize: 13,
+                      lineHeight: 20,
+                      fontWeight: '600',
+                      color: at ? '#16804A' : '#193653',
+                    }}
+                  >
+                    {p.label}: {at ? 'Đã ký' : 'Chờ ký'}
+                  </Text>
+                  {!!at && c.kind !== 'Holding' && (
+                    <Text style={{ fontSize: 12, lineHeight: 18, color: '#526581' }}>
+                      {formatInstant(at)} ·{' '}
+                      {signature?.method ? signingMethodLabel(signature.method) : 'OTP qua lời mời'}
+                    </Text>
+                  )}
+                </>
               )}
             </React.Fragment>
           );
         })}
+        {staffMain && bothSigned && (
+          <Text style={styles.staffComplete}>Đã hoàn tất ký hợp đồng</Text>
+        )}
         {c.kind !== 'Holding' && !staffMain && (
           <Text
             style={{
@@ -487,10 +525,7 @@ export function ContractSigningStep({
         {!!displayedError && (!staffMain || !internal || !!status?.tenantAcceptedAt) && (
           <ContractNotice message={displayedError} />
         )}
-        <Action secondary disabled={busy} onPress={() => setRevision((v) => v + 1)}>
-          Làm mới trạng thái ký
-        </Action>
-        {onContinue && ((c.kind !== 'Holding' && !staffMain) || complete) && (
+        {onContinue && ((c.kind !== 'Holding' && !staffMain) || bothSigned) && (
           <Action
             disabled={!complete || busy || !!displayedError}
             onPress={() => {
@@ -498,6 +533,11 @@ export function ContractSigningStep({
             }}
           >
             Tiếp tục thanh toán
+          </Action>
+        )}
+        {!bothSigned && (
+          <Action secondary disabled={busy} onPress={() => setRevision((v) => v + 1)}>
+            Làm mới trạng thái ký
           </Action>
         )}
       </Box>
@@ -540,3 +580,11 @@ export function ContractSigningStep({
     </>
   );
 }
+
+const styles = {
+  staffSigning: { padding: 12, gap: 8 },
+  staffSignerName: { flex: 1, color: s.navy, fontWeight: '600' as const, fontSize: 13 },
+  staffSigned: { color: s.green, fontWeight: '600' as const, fontSize: 13 },
+  staffWaiting: { color: s.orange, fontWeight: '600' as const, fontSize: 13 },
+  staffComplete: { color: s.green, fontWeight: '600' as const, fontSize: 14 },
+};

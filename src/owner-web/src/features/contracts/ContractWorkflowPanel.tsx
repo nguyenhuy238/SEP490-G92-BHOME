@@ -20,7 +20,7 @@ export function ContractConfigurationPanel({ api }: { api: ContractClient }) {
     queryFn: ({ signal }) => api.configuration(signal),
   });
   return (
-    <ChartCard title="Cấu hình hợp đồng" subtitle="Mẫu và chế độ ký đang được máy chủ cho phép">
+    <Box sx={{ pt: 1, pb: 0.5 }}>
       {query.isFetching && <LinearProgress />}
       {query.error && (
         <Alert severity="error">
@@ -44,7 +44,7 @@ export function ContractConfigurationPanel({ api }: { api: ContractClient }) {
           <Alert severity="info">{text(query.data.holdingBlocker)}</Alert>
         </Stack>
       )}
-    </ChartCard>
+    </Box>
   );
 }
 
