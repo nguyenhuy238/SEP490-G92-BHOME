@@ -89,6 +89,7 @@ public sealed record TerminationReview(string Status, int Version, string Locati
     DateTimeOffset? DecidedAt, string? DecidedBy, string? RejectionReason);
 public sealed record TerminationInput(DateOnly ProposedDate,
     [Required, StringLength(2000, MinimumLength = 1)] string Reason);
+public sealed record MoveOutConsentInput(bool Confirmed, int ExpectedVersion);
 public sealed record InspectionScheduleInput(DateTimeOffset ScheduledAt, Guid? StaffUserId = null, int? ExpectedVersion = null);
 // Move-Out-only evidence for an individually tracked physical asset.
 // Separate from Move-In physical observations and its signed snapshot format.
@@ -140,7 +141,9 @@ public sealed record MoveOutView(Guid Id, string Status, DateOnly ProposedDate, 
     DateTimeOffset? InspectionScheduledAt, string PendingReason, string? InspectionNotes = null,
     DateTimeOffset? InspectedAt = null, Guid? ElectricityReadingId = null, Guid? WaterReadingId = null,
     IReadOnlyList<Guid>? EvidenceIds = null, Guid? InspectionStaffId = null, int Version = 1,
-    bool OwnerConfirmedInspection = false, string FinancialReviewStatus = "PendingReview");
+    bool OwnerConfirmedInspection = false, string FinancialReviewStatus = "PendingReview",
+    bool IsForced = false, int? RequiredConsents = null, int? ReceivedConsents = null,
+    bool CanConfirm = false, bool IsGroupPrimary = true, bool CanReject = false);
 public sealed record MoveOutHistoryView(int Version, string Action, Guid ActorId, DateTimeOffset OccurredAt, string Snapshot);
 public sealed record MoveOutAssignment(Guid ContractId, Guid RoomId, string RoomNumber, string LocationName, string Status, DateOnly ProposedDate, DateTimeOffset? ScheduledAt, int Version);
 public sealed record OwnerMoveOutInboxItem(Guid ContractId, string RoomNumber, Guid LocationId, string LocationName,
@@ -259,6 +262,7 @@ public interface IContractRepository
     Task<bool> ConflictsAsync(Guid roomId, Guid exceptId, DateOnly from, DateOnly to, Guid[] residentIds, CancellationToken t);
     Task<IReadOnlySet<Guid>> RoomsAwaitingMainOwnerSignatureAsync(Guid[] roomIds, Guid exceptContractId, CancellationToken t);
     Task<bool> HasOtherActiveContractsAsync(Guid roomId, Guid exceptId, CancellationToken t);
+    Task<IReadOnlyList<Contract>> RoomActiveContractsAsync(Guid roomId, CancellationToken t);
     Task<bool> OpenRenewalAsync(Guid contractId, CancellationToken t);
     Task<IReadOnlyList<Contract>> VersionsAsync(Guid roomId, Guid tenantId, CancellationToken t);
     Task<IReadOnlyList<ContractMoveOutHistory>> MoveOutHistoryAsync(Guid contractId, CancellationToken t);

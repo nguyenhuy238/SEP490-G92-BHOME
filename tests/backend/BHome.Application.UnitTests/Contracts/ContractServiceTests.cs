@@ -385,6 +385,7 @@ public sealed class ContractServiceTests
         public readonly IHoldingSettingsData Settings = Substitute.For<IHoldingSettingsData>();
         public readonly List<Contract> Contracts = [];
         public readonly List<ContractMoveOut> Moves = [];
+        public readonly List<ContractMoveOutHistory> MoveHistory = [];
         public readonly List<ContractOperation> Operations = [];
         public readonly List<DepositVerification> Deposits = [];
         public readonly Resident Resident = new() { VerificationStatus = IdentityVerificationStatus.Verified };
@@ -400,6 +401,8 @@ public sealed class ContractServiceTests
             Repo.ActiveUserInRoleAsync(default, default!, default).ReturnsForAnyArgs(true);
             Repo.FindAsync(default, default).ReturnsForAnyArgs(c => Contracts.SingleOrDefault(x => x.Id == c.Arg<Guid>()));
             Repo.MoveOutAsync(default, default).ReturnsForAnyArgs(c => Moves.SingleOrDefault(x => x.ContractId == c.Arg<Guid>()));
+            Repo.RoomActiveContractsAsync(default, default).ReturnsForAnyArgs(c => Contracts.Where(x => x.RoomId == c.Arg<Guid>() && x.Status == ContractStatus.Active && x.Kind is ContractKind.Main or ContractKind.Renewal).ToArray());
+            Repo.MoveOutHistoryAsync(default, default).ReturnsForAnyArgs(c => MoveHistory.Where(x => x.ContractId == c.Arg<Guid>()).OrderByDescending(x => x.Version).ToArray());
             Repo.DepositTotalAsync(default, default).ReturnsForAnyArgs(c => Deposits.Where(d => d.ContractId == c.Arg<Guid>()).Sum(d => d.Amount));
             Repo.BankReferenceAsync(default!, default).ReturnsForAnyArgs(c => Deposits.SingleOrDefault(d => d.BankTransactionReference == c.Arg<string>()));
             Repo.ResolvePricesAsync(default, default, default).ReturnsForAnyArgs(new ResolvedPrices(Room.Id, Today,
@@ -427,6 +430,7 @@ public sealed class ContractServiceTests
                 {
                     case Contract x: x.Room = Room; Contracts.Add(x); break;
                     case ContractMoveOut x: Moves.Add(x); break;
+                    case ContractMoveOutHistory x: MoveHistory.Add(x); break;
                     case ContractOperation x: Operations.Add(x); break;
                     case DepositVerification x: Deposits.Add(x); break;
                     case ContractSignature x: Contracts.Single(a => a.Id == x.ContractId).Signatures.Add(x); break;
@@ -876,26 +880,45 @@ public sealed class ContractServiceTests
     [InlineData(0)]
     [InlineData(30)]
     [InlineData(45)]
-    public async Task OwnerCreatesApprovedMoveOutWithUnscheduledLocationWorkAtAnyLeaseDate(int daysFromToday)
+    public async Task OwnerCannotInitiateOrdinaryMoveOutAtAnyFutureLeaseDate(int daysFromToday)
     {
         var r = new Rig(); var c = await r.Ready(); c.Status = ContractStatus.Active;
         var date = Today.AddDays(daysFromToday); var input = new TerminationInput(date, "Synthetic owner move-out");
         var key = Guid.NewGuid();
-        var opened = await r.Service.RequestTerminationAsync(c.Id, input, key, true, default);
-        Assert.Equal("Approved", opened.Status);
-        Assert.Null(opened.InspectionScheduledAt);
-        Assert.Null(opened.InspectionStaffId);
-        Assert.Equal(MoveOutStatus.Approved, Assert.Single(r.Moves).Status);
-        Assert.Equal(c.OwnerSignerId, r.Moves.Single().ApprovedByUserId);
-        Assert.Equal(daysFromToday >= 30, r.Moves.Single().IsExpiry);
+        await Assert.ThrowsAsync<ContractException>(() => r.Service.RequestTerminationAsync(c.Id, input, key, true, default));
         Assert.Equal(ContractStatus.Active, c.Status);
-        Assert.Equal(opened.Id, (await r.Service.RequestTerminationAsync(c.Id, input, key, true, default)).Id);
-        var duplicate = await Assert.ThrowsAsync<ContractException>(() => r.Service.RequestTerminationAsync(c.Id, input, Guid.NewGuid(), true, default));
-        Assert.Equal("move_out_already_requested", duplicate.Code);
-        Assert.Single(r.Moves);
+        Assert.Empty(r.Moves);
     }
     [Fact]
-    public async Task OwnerCanReopenRejectedTenantRequestWithoutLosingImmediateStaffTask()
+    public async Task RoomMoveOutRequiresEveryTenantBeforeOwnerApproval()
+    {
+        var r = new Rig(); var c = await r.Ready(); c.Status = ContractStatus.Active;
+        var member = new Resident { RoomId = c.RoomId, TenantUserId = Guid.NewGuid(), VerificationStatus = IdentityVerificationStatus.Verified };
+        var second = new Contract { RoomId = c.RoomId, Room = c.Room, Kind = ContractKind.Main, Status = ContractStatus.Active,
+            OwnerSignerId = c.OwnerSignerId, TenantUserId = member.TenantUserId, RepresentativeResidentId = member.Id,
+            StartDate = c.StartDate, EndDate = c.EndDate, Residents = [new() { ResidentId = member.Id, ResidenceFrom = c.StartDate }] };
+        r.Contracts.Add(second);
+        r.Repo.ResidentsAsync(default, default!, default).ReturnsForAnyArgs(call => new[] { r.Resident, member }
+            .Where(x => call.Arg<Guid[]>().Contains(x.Id)).ToArray());
+        r.User.Role = Roles.Tenant; r.User.UserId = c.TenantUserId;
+        var first = await r.Service.RequestTerminationAsync(c.Id, new(Today, "Room move-out"), Guid.NewGuid(), false, default);
+        Assert.Equal("AwaitingConsent", first.Status);
+        Assert.Equal(2, first.RequiredConsents); Assert.Equal(1, first.ReceivedConsents);
+        r.User.Role = Roles.Owner; r.User.UserId = c.OwnerSignerId;
+        await Assert.ThrowsAsync<ContractException>(() => r.Service.ApproveTerminationAsync(c.Id, Guid.NewGuid(), default));
+        await r.Handovers.DidNotReceiveWithAnyArgs().EnsureMoveOutTaskAsync(default!, default!, default, default, default);
+        r.User.Role = Roles.Tenant; r.User.UserId = second.TenantUserId;
+        var pending = await r.Service.GetMoveOutAsync(second.Id, default);
+        Assert.True(pending.CanConfirm);
+        var agreed = await r.Service.ConfirmRoomTerminationAsync(second.Id, new(true, pending.Version), Guid.NewGuid(), default);
+        Assert.Equal("Requested", agreed.Status); Assert.Equal(2, agreed.ReceivedConsents);
+        r.User.Role = Roles.Owner; r.User.UserId = c.OwnerSignerId;
+        var approved = await r.Service.ApproveTerminationAsync(c.Id, Guid.NewGuid(), default);
+        Assert.Equal("Approved", approved.Status);
+        Assert.All(r.Moves, x => Assert.Equal(MoveOutStatus.Approved, x.Status));
+    }
+    [Fact]
+    public async Task TenantCanReopenRejectedRequestAndOwnerCanApprove()
     {
         var r = new Rig(); var c = await r.Ready(); c.Status = ContractStatus.Active;
         r.User.Role = Roles.Tenant; r.User.UserId = c.TenantUserId;
@@ -906,10 +929,15 @@ public sealed class ContractServiceTests
         var rejectedVersion = rejected.Version;
         Assert.Equal(MoveOutStatus.Rejected, rejected.Status);
 
+        await Assert.ThrowsAsync<ContractException>(() => r.Service.RequestTerminationAsync(c.Id,
+            new(Today.AddDays(2), "Synthetic owner reopening"), Guid.NewGuid(), true, default));
+        r.User.Role = Roles.Tenant; r.User.UserId = c.TenantUserId;
         var opened = await r.Service.RequestTerminationAsync(c.Id,
-            new(Today.AddDays(2), "Synthetic owner reopening"), Guid.NewGuid(), true, default);
-        Assert.Equal("Approved", opened.Status);
+            new(Today.AddDays(2), "Synthetic tenant reopening"), Guid.NewGuid(), false, default);
+        Assert.Equal("Requested", opened.Status);
         Assert.Equal(rejectedVersion + 1, rejected.Version);
+        r.User.Role = Roles.Owner; r.User.UserId = c.OwnerSignerId;
+        await r.Service.ApproveTerminationAsync(c.Id, Guid.NewGuid(), default);
         Assert.Same(rejected, Assert.Single(r.Moves));
         Assert.Equal(c.OwnerSignerId, rejected.ApprovedByUserId);
         Assert.Null(rejected.InspectionStaffId);
@@ -935,7 +963,8 @@ public sealed class ContractServiceTests
         r.Moves.Add(move);
         r.User.Role = expiry ? Roles.Owner : Roles.Tenant;
         r.User.UserId = expiry ? c.OwnerSignerId : c.TenantUserId;
-        var date = expiry ? c.EndDate : Today;
+        if (expiry) c.EndDate = Today;
+        var date = Today;
         var updated = await r.Service.RequestTerminationAsync(c.Id, new(date, "Revised request"), Guid.NewGuid(), expiry, default);
 
         Assert.Single(r.Moves);

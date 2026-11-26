@@ -21,6 +21,7 @@ internal sealed class HandoverDraftRepository(BHomePersistenceContext db) : IHan
             SELECT COUNT(*)::integer AS "Value"
             FROM contracts c JOIN rooms r ON r.id = c.room_id
             WHERE c.contract_type = 'MAIN'
+              AND COALESCE(c.handover->>'roomMoveInSuppressed','false') <> 'true'
               AND (c.handover->'preparation'->>'status' IS NOT NULL OR EXISTS (
                   SELECT 1 FROM operational_tasks task
                   WHERE task.contract_id = c.id AND task.task_type = 'GENERAL'
@@ -41,6 +42,7 @@ internal sealed class HandoverDraftRepository(BHomePersistenceContext db) : IHan
             FROM contracts c JOIN rooms r ON r.id = c.room_id
                              JOIN locations l ON l.id = r.location_id
             WHERE c.contract_type = 'MAIN'
+              AND COALESCE(c.handover->>'roomMoveInSuppressed','false') <> 'true'
               AND (c.handover->'preparation'->>'status' IS NOT NULL OR EXISTS (
                   SELECT 1 FROM operational_tasks task
                   WHERE task.contract_id = c.id AND task.task_type = 'GENERAL'
@@ -68,9 +70,11 @@ internal sealed class HandoverDraftRepository(BHomePersistenceContext db) : IHan
         if (db is not BHome.Infrastructure.Persistence.Compact24.Compact24DbContext)
             return null;
         var json = await db.Database.SqlQuery<string>($"""
-            SELECT COALESCE((handover->'preparation')::text, 'null') AS "Value"
+            SELECT CASE WHEN handover->>'roomMoveInSuppressed'='true' THEN 'suppressed'
+                ELSE COALESCE((handover->'preparation')::text, 'null') END AS "Value"
             FROM contracts WHERE id={contractId}
             """).SingleOrDefaultAsync(token);
+        if (json == "suppressed") throw ContractException.Missing();
         return json is null or "null" ? null : JsonSerializer.Deserialize<HandoverDraftState>(json, Json)
             ?? throw ContractException.Conflict("handover_draft_integrity_failed");
     }

@@ -1368,7 +1368,11 @@ function InspectionForm({
         )}
         <View style={wizardStyles.compactSummary}>
           <Pill tone={isSubmitted ? 'green' : 'blue'}>
-            {moveOut.status === 'Inspected' ? 'Đã gửi chủ trọ duyệt' : 'Đang kiểm tra'}
+            {moveOut.status === 'Inspected'
+              ? moveOut.isForced
+                ? 'Đã lưu đối soát'
+                : 'Đã gửi chủ trọ duyệt'
+              : 'Đang kiểm tra'}
           </Pill>
         </View>
         <Text variant="bodySmall" style={ui.muted}>

@@ -22,7 +22,8 @@ internal sealed class AdjustmentEvidenceFiles(BHomePersistenceContext context, I
             Length = content.Length,
             CleanupAfter = clock.GetUtcNow().AddDays(1)
         };
-        file.ObjectKey = $"invoice-adjustments/{invoiceId:N}/{file.Id:N}";
+        var invoice = await db.Set<Invoice>().AsNoTracking().SingleAsync(i => i.Id == invoiceId, t);
+        file.ObjectKey = PrivateImageKeys.Evidence(invoice.LocationId, invoice.RoomId, "invoice-adjustments", invoiceId, file.Id);
         db.Add(file); await db.SaveChangesAsync(t); // Durable orphan intent before the upload.
         using var deadline = CancellationTokenSource.CreateLinkedTokenSource(t); deadline.CancelAfter(TimeSpan.FromSeconds(30));
         using var data = new MemoryStream(content);

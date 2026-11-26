@@ -48,9 +48,13 @@ export function groupContracts(items: ContractSummary[]) {
 
 export function contractActionSection(operation: string): ContractSection {
   if (
-    ['renewals', 'renewal-cancellation', 'termination-requests', 'expiry-move-out'].includes(
-      operation,
-    ) ||
+    [
+      'renewals',
+      'renewal-cancellation',
+      'termination-requests',
+      'expiry-move-out',
+      'forced-move-out',
+    ].includes(operation) ||
     operation.startsWith('move-out/')
   )
     return 'lifecycle';

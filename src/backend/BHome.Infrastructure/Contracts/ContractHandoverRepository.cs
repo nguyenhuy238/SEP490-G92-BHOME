@@ -63,7 +63,7 @@ internal sealed class ContractHandoverRepository(BHomePersistenceContext db, IOp
     public async Task EnsureMoveOutTaskAsync(Contract contract, ContractMoveOut moveOut, Guid actor, DateTimeOffset now, CancellationToken t)
     {
         if (db is not BHome.Infrastructure.Persistence.Compact24.Compact24DbContext) return;
-        if (moveOut.ContractId != contract.Id || moveOut.Status == MoveOutStatus.Requested)
+        if (moveOut.ContractId != contract.Id || moveOut.Status is MoveOutStatus.Requested or MoveOutStatus.AwaitingConsent or MoveOutStatus.Rejected)
             throw ContractException.Conflict("move_out_not_approved");
         var id = MoveOutTaskId(contract.Id);
         if (await db.Set<OperationalTask>().AnyAsync(task => task.Id == id, t)) return;
@@ -155,6 +155,21 @@ internal sealed class ContractHandoverRepository(BHomePersistenceContext db, IOp
             TaskVersion = task.Version
         });
     }
+    public async Task SubmitForcedMoveOutTaskAsync(Guid contractId, Guid staffId, DateTimeOffset now, CancellationToken t)
+    {
+        if (db is not BHome.Infrastructure.Persistence.Compact24.Compact24DbContext) return;
+        await RequireMoveOutTaskStartedAsync(contractId, staffId, t);
+        var task = await MoveOutTaskAsync(contractId, t);
+        task.Status = MeterTaskStatus.Completed;
+        task.CompletedAt = now;
+        task.Version++;
+        task.Result = "Nhân viên đã lưu kết quả kiểm tra trả phòng bắt buộc. Chưa có quyết định tài chính.";
+        db.Add(new OperationalTaskHistory
+        {
+            TaskId = task.Id, ActorId = staffId, Action = "ForcedMoveOutRecorded",
+            OccurredAt = now, TaskVersion = task.Version
+        });
+    }
     public async Task<HandoverMoveInTask?> MoveInTaskAsync(Guid contractId, Guid roomId,
         Guid? staffUserId, bool includeOwnerInventory, CancellationToken t)
     {
@@ -183,12 +198,25 @@ internal sealed class ContractHandoverRepository(BHomePersistenceContext db, IOp
     public async Task EnsureMoveInTaskAsync(Contract c, Guid actor, DateTimeOffset now, CancellationToken t)
     {
         if (db is not BHome.Infrastructure.Persistence.Compact24.Compact24DbContext) return;
-        await EnsureInventoryTaskAsync(c, actor, now, t);
+        if (c.Kind != ContractKind.Main || c.PreviousContractId is not null ||
+            c.Status is ContractStatus.Cancelled or ContractStatus.Terminated or ContractStatus.Expired or ContractStatus.Superseded) return;
+        if (!await PrepareRoomMoveInAsync(c, actor, now, t)) return;
         var id = Key($"contract-move-in:{c.Id:N}");
+        var prior = db.Set<OperationalTask>().Local.FirstOrDefault(x => x.Id == id) ??
+            await db.Set<OperationalTask>().SingleOrDefaultAsync(x => x.Id == id, t);
+        if (prior?.Status == MeterTaskStatus.Completed) return;
+        // Never replace a legacy confirmed baseline or a saved preparation.
+        var json = JsonSerializer.Serialize(HandoverDraftState.Create(c, now), new JsonSerializerOptions(JsonSerializerDefaults.Web));
+        await db.Database.ExecuteSqlInterpolatedAsync($"""
+            UPDATE contracts SET handover=jsonb_set(COALESCE(handover,jsonb_build_object()),
+                ARRAY['preparation'],{json}::jsonb,true)
+            WHERE id={c.Id} AND handover->'preparation' IS NULL AND handover->'current' IS NULL
+            """, t);
+        await EnsureInventoryTaskAsync(c, actor, now, t);
         var date = DateOnly.FromDateTime(TimeZoneInfo.ConvertTimeBySystemTimeZoneId(now, "Asia/Ho_Chi_Minh").DateTime);
         var responsible = await tasks.ResponsibilityAsync(c.Room.LocationId, date, t);
         await EnsureMeterBaselinesAsync(c, now, responsible, t);
-        if (await db.Set<OperationalTask>().AnyAsync(x => x.Id == id, t)) return;
+        if (prior is not null) return;
         var task = new OperationalTask
         {
             Kind = OperationalTaskKind.AdHoc,
@@ -233,6 +261,130 @@ internal sealed class ContractHandoverRepository(BHomePersistenceContext db, IOp
                         : "Biên bản bàn giao nháp đã được tạo. Có thể chuẩn bị kiểm kê và chụp chỉ số điện nước ban đầu; việc vào ở chính thức vẫn phụ thuộc các bước duyệt hợp đồng.",
                     "Contract", c.Id, t);
     }
+
+    private const string DuplicateMoveInResult = "Nhiệm vụ trùng trong cùng chu kỳ thuê của phòng.";
+
+    // Both callers execute under the existing Location advisory and Room row
+    // locks. A renewal remains part of its original Main's physical occupancy.
+    // Overlapping draft contracts also share a planned move-in. No historical
+    // task belonging only to an ended tenancy is considered for a new cycle.
+    private async Task<bool> PrepareRoomMoveInAsync(Contract c, Guid actor, DateTimeOffset now, CancellationToken t)
+    {
+        var contracts = await db.Set<Contract>().AsNoTracking().Where(x => x.RoomId == c.RoomId &&
+            (x.Kind == ContractKind.Main || x.Kind == ContractKind.Renewal))
+            .Select(x => new { x.Id, x.PreviousContractId, x.Status, x.StartDate, x.EndDate }).ToArrayAsync(t);
+        var byId = contracts.ToDictionary(x => x.Id);
+        Guid Root(Guid id)
+        {
+            var visited = new HashSet<Guid>();
+            while (byId.TryGetValue(id, out var row) && row.PreviousContractId is { } parent)
+            {
+                if (!visited.Add(id)) throw ContractException.Conflict("contract_renewal_history_invalid");
+                id = parent;
+            }
+            return id;
+        }
+        var today = DateOnly.FromDateTime(TimeZoneInfo.ConvertTimeBySystemTimeZoneId(now, "Asia/Ho_Chi_Minh").DateTime);
+        var occupiedRoots = contracts.Where(x => x.Id != c.Id && (x.Status is ContractStatus.Active or ContractStatus.Expired) &&
+            (c.Status == ContractStatus.Active || c.StartDate <= today || x.StartDate <= c.EndDate && x.EndDate >= c.StartDate))
+            .Select(x => Root(x.Id)).ToHashSet();
+        if (c.Status == ContractStatus.Active) occupiedRoots.Add(c.Id);
+        var cycleRoots = contracts.Where(x => x.Id != c.Id &&
+                (x.Status is ContractStatus.Draft or ContractStatus.PendingSigning or ContractStatus.PendingActivation) &&
+                x.StartDate <= c.EndDate && x.EndDate >= c.StartDate)
+            .Select(x => Root(x.Id)).Concat(occupiedRoots).Append(c.Id).Distinct().ToArray();
+        var rows = await db.Set<OperationalTask>().Where(x => x.ContractId != null && cycleRoots.Contains(x.ContractId.Value) &&
+            (x.Kind == OperationalTaskKind.MoveInInventory || x.Kind == OperationalTaskKind.MeterReading && x.Purpose == ReadingPurpose.Initial ||
+                x.Kind == OperationalTaskKind.AdHoc && x.TargetRoomId == c.RoomId && x.Title.StartsWith("Bàn giao vào phòng")))
+            .ToArrayAsync(t);
+        var all = rows.Concat(db.Set<OperationalTask>().Local.Where(x => x.ContractId != null && cycleRoots.Contains(x.ContractId.Value) &&
+                (x.Kind == OperationalTaskKind.MoveInInventory || x.Kind == OperationalTaskKind.MeterReading && x.Purpose == ReadingPurpose.Initial ||
+                    x.Kind == OperationalTaskKind.AdHoc && x.TargetRoomId == c.RoomId && x.Title.StartsWith("Bàn giao vào phòng"))))
+            .DistinctBy(x => x.Id).ToArray();
+        var main = all.Where(x => x.Kind == OperationalTaskKind.AdHoc && x.Status != MeterTaskStatus.Cancelled)
+            .OrderBy(x => x.CreatedAt).ThenBy(x => x.Id).ToArray();
+        var pristine = new HashSet<Guid>();
+        foreach (var task in main)
+        {
+            var contractId = task.ContractId!.Value;
+            if (await IsPristineMoveInAsync(contractId, all.Where(x => x.ContractId == contractId).ToArray(), t))
+                pristine.Add(task.Id);
+        }
+        // Existing inspected/signed history wins; otherwise keep the first
+        // task of an occupied contract, then the first planned task. If a
+        // different pending draft won the race but has no progress, promote
+        // the actual activated contract so its initial readings can be saved.
+        var canonical = main.FirstOrDefault(x => !pristine.Contains(x.Id)) ??
+            main.FirstOrDefault(x => occupiedRoots.Contains(x.ContractId!.Value)) ??
+            (c.Status == ContractStatus.Active ? null : main.FirstOrDefault());
+        var canonicalId = canonical?.ContractId ?? c.Id;
+        var historical = await db.Set<ContractHandover>().Where(h => occupiedRoots.Contains(h.ContractId) && h.Status == ContractHandoverStatus.Confirmed)
+            .Select(h => h.ContractId).ToArrayAsync(t);
+        if ((canonical is null || pristine.Contains(canonical.Id)) && historical.Length != 0) canonicalId = historical.Order().First();
+        foreach (var duplicate in main.Where(x => x.ContractId != canonicalId && pristine.Contains(x.Id)))
+        {
+            foreach (var child in all.Where(x => x.ContractId == duplicate.ContractId && x.Status == MeterTaskStatus.Assigned))
+            {
+                child.Status = MeterTaskStatus.Cancelled; child.Version++; child.Result = DuplicateMoveInResult;
+                db.Add(new OperationalTaskHistory { TaskId = child.Id, ActorId = actor, Action = "MoveInDuplicateCancelled",
+                    TaskVersion = child.Version, OccurredAt = now, Note = DuplicateMoveInResult });
+            }
+            await MarkMoveInSuppressedAsync(duplicate.ContractId!.Value, true, t);
+        }
+        var own = main.FirstOrDefault(x => x.ContractId == c.Id);
+        if (own is null && await db.Set<ContractHandover>().AnyAsync(h => h.ContractId == c.Id, t))
+            return false;
+        // Never suppress existing work that already has observations/evidence,
+        // even if it was created by the old per-contract generator.
+        if (canonicalId != c.Id && (own is null || pristine.Contains(own.Id)))
+        {
+            await MarkMoveInSuppressedAsync(c.Id, true, t);
+            return false;
+        }
+        await MarkMoveInSuppressedAsync(c.Id, false, t);
+        if (historical.Contains(c.Id) && own is null) return false;
+        // A pristine duplicate may later become the first actual occupant
+        // after the earlier candidate was cancelled. Resume the same IDs and
+        // preserve the cancellation in their history instead of inserting again.
+        foreach (var child in all.Where(x => x.ContractId == c.Id && x.Status == MeterTaskStatus.Cancelled && x.Result == DuplicateMoveInResult))
+        {
+            child.Status = MeterTaskStatus.Assigned; child.Version++; child.Result = null;
+            if (child.Kind == OperationalTaskKind.MeterReading && child.ReadingDate < today) child.ReadingDate = today;
+            db.Add(new OperationalTaskHistory { TaskId = child.Id, ActorId = actor, Action = "MoveInDuplicateResumed",
+                TaskVersion = child.Version, OccurredAt = now });
+        }
+        return true;
+    }
+
+    private async Task<bool> IsPristineMoveInAsync(Guid contractId, OperationalTask[] related, CancellationToken t)
+    {
+        if (related.Any(x => x.Status != MeterTaskStatus.Assigned || x.CompletedAt != null || x.Result != null || x.OcrImageHash != null)) return false;
+        var ids = related.Select(x => x.Id).ToArray();
+        if (await db.Set<OperationalTaskEvidence>().AnyAsync(x => ids.Contains(x.TaskId), t) ||
+            await db.Set<OperationalTaskFileUpload>().AnyAsync(x => ids.Contains(x.TaskId), t) ||
+            await db.Set<MeterEvidence>().AnyAsync(x => ids.Contains(x.TaskId), t) ||
+            await db.Set<MeterReading>().AnyAsync(x => ids.Contains(x.TaskId), t) ||
+            await db.Set<ContractDocumentFile>().AnyAsync(x => x.ContractId == contractId &&
+                (x.Kind == ContractFileKind.HandoverEvidence || x.Kind == ContractFileKind.MoveInReport), t) ||
+            await db.Set<ContractHandover>().AnyAsync(x => x.ContractId == contractId, t) ||
+            await db.Set<OperationalTaskHistory>().AnyAsync(x => ids.Contains(x.TaskId) &&
+                x.Action != "MoveInCreated" && x.Action != "MoveInInventoryCreated" && x.Action != "responsibility_changed" &&
+                x.Action != "MoveInDuplicateCancelled" && x.Action != "MoveInDuplicateResumed", t)) return false;
+        return !await db.Database.SqlQuery<bool>($"""
+            SELECT EXISTS(SELECT 1 FROM contracts WHERE id={contractId}
+                AND (COALESCE((handover->'preparation'->>'version')::integer,0)>1
+                    OR handover->'preparation'->>'ownerSignature' IS NOT NULL)) AS "Value"
+            """).SingleAsync(t);
+    }
+
+    private Task<int> MarkMoveInSuppressedAsync(Guid id, bool suppressed, CancellationToken t) => suppressed
+        ? db.Database.ExecuteSqlInterpolatedAsync($"""
+            UPDATE contracts SET handover=jsonb_set(COALESCE(handover,jsonb_build_object()),ARRAY['roomMoveInSuppressed'],'true'::jsonb,true)
+            WHERE id={id}
+            """, t)
+        : db.Database.ExecuteSqlInterpolatedAsync($"""
+            UPDATE contracts SET handover=COALESCE(handover,jsonb_build_object())-'roomMoveInSuppressed' WHERE id={id}
+            """, t);
 
     // Repair missing capture checkpoints on older manually activated Main contracts
     // without creating a second Staff job, replacing physical meters, or reusing an
@@ -308,7 +460,7 @@ internal sealed class ContractHandoverRepository(BHomePersistenceContext db, IOp
     private async Task EnsureInventoryTaskAsync(Contract c, Guid actor, DateTimeOffset now, CancellationToken t)
     {
         var id = Key($"contract-pre-move-in-inventory:{c.Id:N}");
-        if (await db.Set<OperationalTask>().AnyAsync(x => x.Id == id, t)) return;
+        if (db.Set<OperationalTask>().Local.Any(x => x.Id == id) || await db.Set<OperationalTask>().AnyAsync(x => x.Id == id, t)) return;
         var source = inventory is null ? throw ContractException.Conflict("move_in_inventory_unavailable") :
             await inventory.PrepareForMoveInTaskAsync(c.RoomId, t);
         var items = source.Groups.Select(group =>

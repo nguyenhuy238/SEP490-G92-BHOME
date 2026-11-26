@@ -76,15 +76,15 @@ const draft: ContractView = {
   appliedHoldingDeposit: '0',
 };
 
-it('lets Owner open a Location move-out task before contract expiry while Tenant remains request-only', () => {
+it('only offers ordinary move-out to Tenant and forced move-out to Staff', () => {
   const active = { ...draft, status: 'Active', endDate: '2100-12-31' } as ContractView;
   const ownerAction = contractActions(active, null, 'Owner', owner).find(
     (a) => a.operation === 'expiry-move-out',
   );
-  expect(ownerAction?.label).toBe('Lập yêu cầu trả phòng');
-  expect(
-    actionPayload(ownerAction!, { proposedDate: '2099-01-01', reason: 'Trả phòng sớm' }, active),
-  ).toMatchObject({ proposedDate: '2099-01-01', reason: 'Trả phòng sớm' });
+  expect(ownerAction).toBeUndefined();
+  expect(contractActions(active, null, 'Staff', owner).map((a) => a.operation)).toContain(
+    'forced-move-out',
+  );
   expect(contractActions(active, null, 'Tenant', tenant).map((a) => a.operation)).toContain(
     'termination-requests',
   );

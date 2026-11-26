@@ -16,6 +16,11 @@ import { useTenantCurrentRental } from '../features/tenant/TenantCurrentRentalCo
 import type { TenantMeterReadingPage } from '../../../../packages/client-core/src/tenantReadings';
 import { loadTenantReadings } from '../features/workspace/tenantFinancialLoads';
 import { TenantDashboard } from './TenantDashboard';
+import {
+  loadTenantInvoicePeriod,
+  tenantInvoiceScheduleMessage,
+  type TenantInvoicePeriod,
+} from '../services/tenantInvoices';
 
 // Presentation reads only: reuse the same Tenant endpoints as the existing detail screens.
 export function TenantDashboardScreen() {
@@ -56,6 +61,17 @@ export function TenantDashboardScreen() {
   const invoice = invoices.data?.items.find(
     (item) => item.billingPeriod.slice(0, 7) === month && item.roomId === roomId,
   );
+  const period = useWorkspaceQuery<TenantInvoicePeriod>(
+    contractScopeReady && invoices.data && !invoices.error && !invoice
+      ? '/api/v1/invoices/current-period'
+      : null,
+    { load: loadTenantInvoicePeriod, cache: queryPolicies.invoices, notifyError: false },
+  );
+  const invoiceScheduleMessage = period.loading
+    ? 'Đang tải lịch phát hành hóa đơn…'
+    : tenantInvoiceScheduleMessage(
+        !period.error && period.data?.billingPeriod === month + '-01' ? period.data : null,
+      );
   const readings = useWorkspaceQuery<TenantMeterReadingPage>(
     contractScopeReady
       ? `/api/v1/tenant/meter-readings?page=1&pageSize=20&roomId=${encodeURIComponent(roomId)}`
@@ -78,6 +94,7 @@ export function TenantDashboardScreen() {
   );
   const reloadContracts = contracts.reload,
     reloadInvoices = invoices.reload,
+    reloadPeriod = period.reload,
     reloadDebts = debts.reload,
     reloadReadings = readings.reload,
     reloadNotices = notices.reload,
@@ -86,6 +103,7 @@ export function TenantDashboardScreen() {
   const reload = useCallback(() => {
     reloadContracts();
     reloadInvoices();
+    reloadPeriod();
     reloadDebts();
     reloadReadings();
     reloadNotices();
@@ -94,6 +112,7 @@ export function TenantDashboardScreen() {
   }, [
     reloadContracts,
     reloadInvoices,
+    reloadPeriod,
     reloadDebts,
     reloadReadings,
     reloadNotices,
@@ -102,7 +121,7 @@ export function TenantDashboardScreen() {
   ]);
   useWorkspaceHeaderRefresh(
     reload,
-    [contracts, invoices, debts, readings, notices, expiry, payment].some(
+    [contracts, invoices, period, debts, readings, notices, expiry, payment].some(
       (query) => query.fetching,
     ),
   );
@@ -111,6 +130,7 @@ export function TenantDashboardScreen() {
       contracts={visibleContracts}
       month={month}
       invoice={invoice}
+      invoiceScheduleMessage={invoiceScheduleMessage}
       meterReadings={readings.data?.items}
       meterState={readings}
       payment={payment.data ?? undefined}

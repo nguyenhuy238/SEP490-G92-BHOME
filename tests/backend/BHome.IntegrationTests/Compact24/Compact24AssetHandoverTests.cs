@@ -317,10 +317,10 @@ public sealed partial class Compact24OwnerSetupTests
         Assert.Equal(w.Owner.Id, Assert.Single(history, h => h.Action == "Rejected").ActorId);
         Assert.Contains("Synthetic rejection", Assert.Single(history, h => h.Action == "Rejected").Snapshot);
 
-        var expiry = await Read<MoveOutView>(await HandoverPost(owner, id, "expiry-move-out",
-            new TerminationInput(before.EndDate, "Synthetic expiry")));
-        // The Owner expiry path opens an already-approved departure. Only Tenant
-        // requests enter Requested and can be rejected by Owner.
+        Assert.Equal(HttpStatusCode.Forbidden, (await HandoverPost(owner, id, "expiry-move-out",
+            new TerminationInput(before.EndDate, "Synthetic expiry"))).StatusCode);
+        await Read<MoveOutView>(await HandoverPost(tenant, id, "termination-requests", input));
+        var expiry = await Read<MoveOutView>(await HandoverPost(owner, id, "move-out/approve", new { }));
         Assert.Equal("Approved", expiry.Status);
         Assert.True(expiry.Version > after.Version);
         Assert.Equal(HttpStatusCode.Conflict,

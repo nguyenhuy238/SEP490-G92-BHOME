@@ -17,11 +17,12 @@ public sealed record FinalFixedChargeApproval(string ChargeCode, string Expected
 
 public sealed partial class SettlementReceivablesService
 {
-    private async Task<IReadOnlyList<FinalFixedChargePreview>> FixedPreviewAsync(Guid id, CancellationToken token)
+    private async Task<IReadOnlyList<FinalFixedChargePreview>> FixedPreviewAsync(Guid id, CancellationToken token,
+        bool staffProposal = false, bool servicesOnly = false)
     {
         if (fixedCoverage is null) throw new ContractException(503, "fixed_charge_pricing_unavailable");
         var source = await repository.FinalFixedAsync(id, token); var missing = source.MissingInputs.ToList();
-        if (!source.Context.InspectionConfirmed) missing.Add("owner_confirmed_inspection_required");
+        if (!staffProposal && !source.Context.InspectionConfirmed) missing.Add("owner_confirmed_inspection_required");
         if (source.Context.HasLegacyDeductions) missing.Add("legacy_deduction_requires_migration_review");
         if (source.Context.IsDevelopmentDemo && mode?.AllowDevelopmentDemo != true) throw ContractException.Conflict("development_payment_unavailable");
         if (source.Schedule is null) missing.Add("billing_schedule_required");
@@ -29,10 +30,10 @@ public sealed partial class SettlementReceivablesService
         var schedule = source.Schedule!;
         var policies = (source.ContractCharges ?? []).Where(p => p.Method is ChargingMethod.FixedPerRoomPerMonth or ChargingMethod.FixedPerPersonPerMonth).ToList();
         if (source.ContractCharges is null) missing.Add("contract_price_snapshot_missing");
-        if (!policies.Any(p => p.Category == ChargeCategory.Rent)) missing.Add("rate_Rent");
+        if (!servicesOnly && !policies.Any(p => p.Category == ChargeCategory.Rent)) missing.Add("rate_Rent");
         if (missing.Count > 0) return [new("", "Tiền thuê và phí cố định", source.Period, "", null, null, null, missing)];
         var result = new List<FinalFixedChargePreview>();
-        foreach (var policy in policies.OrderBy(p => p.ChargeCode))
+        foreach (var policy in policies.Where(p => !servicesOnly || p.Category == ChargeCategory.ServiceFee).OrderBy(p => p.ChargeCode))
         {
             var coverage = await fixedCoverage.ReadAsync(source.Context.View.RoomId, source.Period, policy.ChargeCode, token);
             FixedChargeResult calculated;
@@ -73,22 +74,29 @@ public sealed partial class SettlementReceivablesService
             if (row.Reference != input.ExpectedReference) throw ContractException.Conflict("settlement_review_changed");
             if (row.ExistingReceivableId is not null) throw ContractException.Conflict("settlement_source_already_charged");
             if (row.MissingInputs.Count > 0 || row.Amount is null || row.Calculation is null) throw ContractException.Conflict("fixed_charge_inputs_required");
-            var context = await repository.FinalFixedAsync(id, token);
-            var proofs = await evidence.CaptureAsync(id, context.Context.EvidenceIds.Order().ToArray(), token);
-            var charge = new SettlementReceivable(Guid.NewGuid(), id, context.Context.View.RoomId, "FinalFixed",
-                $"fixed:{id:N}:{row.BillingPeriod:yyyyMM}:{row.ChargeCode}:{Fingerprint(id, row.Calculation)}",
-                context.Context.InspectionId, context.Context.InspectionVersion, null, row.Amount.Value, row.Name,
-                JsonSerializer.Serialize(new
-                {
-                    kind = "OwnerConfirmedFixedSettlement/v1",
-                    row.Calculation,
-                    context.SignedContractHash,
-                    context.HandoverDate,
-                    scheduleVersion = context.Schedule!.Version,
-                    policyAppliesToSignedTermsConfirmed = true
-                }),
-                proofs, context.RecipientUserIds, Actor, clock.GetUtcNow(), key, fingerprint, context.Context.IsDevelopmentDemo, FixedCharge: row.Calculation);
+            var charge = await BuildFinalFixedChargeAsync(id, row, Actor, key, fingerprint, token);
             await repository.SaveChargeAsync(charge, token); return charge;
         }, token);
+    }
+    private async Task<SettlementReceivable> BuildFinalFixedChargeAsync(Guid id, FinalFixedChargePreview row,
+        Guid owner, Guid key, string fingerprint, CancellationToken token)
+    {
+        if (row.MissingInputs.Count > 0 || row.Amount is null || row.Calculation is null || row.ExistingReceivableId is not null)
+            throw ContractException.Conflict("fixed_charge_inputs_required");
+        var context = await repository.FinalFixedAsync(id, token);
+        var proofs = await evidence.CaptureAsync(id, context.Context.EvidenceIds.Order().ToArray(), token);
+        return new SettlementReceivable(Guid.NewGuid(), id, context.Context.View.RoomId, "FinalFixed",
+            $"fixed:{id:N}:{row.BillingPeriod:yyyyMM}:{row.ChargeCode}:{Fingerprint(id, row.Calculation)}",
+            context.Context.InspectionId, context.Context.InspectionVersion, null, row.Amount.Value, row.Name,
+            JsonSerializer.Serialize(new
+            {
+                kind = "OwnerConfirmedFixedSettlement/v1",
+                row.Calculation,
+                context.SignedContractHash,
+                context.HandoverDate,
+                scheduleVersion = context.Schedule!.Version,
+                policyAppliesToSignedTermsConfirmed = true
+            }),
+            proofs, context.RecipientUserIds, owner, clock.GetUtcNow(), key, fingerprint, context.Context.IsDevelopmentDemo, FixedCharge: row.Calculation);
     }
 }

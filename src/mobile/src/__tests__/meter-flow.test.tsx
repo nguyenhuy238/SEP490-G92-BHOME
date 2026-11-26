@@ -442,7 +442,7 @@ it('shows only the concise OCR failure notice for a fallback proposal', async ()
   await save();
   expect(screen.getByText('121 kWh')).toBeTruthy();
 });
-it.each(['', '-2', 'abc', '120.123', '99'])(
+it.each(['', '-2', 'abc', '120.123', '120.5', '120,5', '120 5', '99'])(
   'blocks invalid or decreased reading %s',
   async (value) => {
     await overview();
@@ -555,16 +555,87 @@ it('shows persisted completed details as read-only and returns to the same overv
   await save();
   fireEvent.click(screen.getByRole('button', { name: 'Xem chi tiết đồng hồ điện' }));
   const dialog = await screen.findByRole('dialog');
-  expect(within(dialog).getByText('Chỉ số đã xác nhận')).toBeTruthy();
+  expect(await within(dialog).findByText('Chỉ số đã xác nhận')).toBeTruthy();
   expect(within(dialog).getByText('120 kWh')).toBeTruthy();
   expect(await within(dialog).findByRole('img', { name: 'Ảnh minh chứng điện' })).toBeTruthy();
   expect(within(dialog).queryByText(/Chỉ số trước:/)).toBeNull();
   expect(within(dialog).queryByRole('button', { name: 'Xác nhận chỉ số' })).toBeNull();
   expect(within(dialog).queryByRole('button', { name: 'Chụp công tơ điện' })).toBeNull();
+  expect(within(dialog).queryByRole('button', { name: 'Sửa chỉ số' })).toBeNull();
   fireEvent.click(within(dialog).getByRole('button', { name: 'Đóng' }));
   await screen.findByText('1/2 đồng hồ đã ghi');
   expect(state.json).toHaveBeenCalledTimes(1);
 });
+it.each([electric, water])(
+  'allows correcting a confirmed $meterCode in the periodic detail modal using fresh task permissions',
+  async (meter) => {
+    const readingId = meter.id + '-reading';
+    serverTasks = [electric, water].map((task) =>
+      task.id === meter.id
+        ? { ...task, status: 2, confirmedReadingId: readingId, canCorrect: false, version: 3 }
+        : { ...task },
+    );
+    serverReadings[readingId] = {
+      id: readingId,
+      taskId: meter.id,
+      confirmedValue: '125',
+      previousValue: meter.previousValue,
+      consumption: '25',
+      status: 1,
+      confirmedAt: '2026-11-04T01:00:00Z',
+    };
+    const original = state.request.getMockImplementation()!;
+    state.request.mockImplementation(async (...args: unknown[]) => {
+      const path = String(args[0]);
+      if (path.endsWith('/evidence')) return new Uint8Array([137, 80, 78, 71, 13, 10, 26, 10]);
+      if (path.endsWith('/meter-tasks/' + meter.id))
+        return {
+          ...serverTasks.find((task) => task.id === meter.id),
+          canCorrect: true,
+          version: 4,
+        };
+      return original(...args);
+    });
+    render(<MeterScreen />);
+    const name = meter.utilityType === 0 ? 'điện' : 'nước';
+    fireEvent.click(await screen.findByRole('button', { name: 'Xem chi tiết đồng hồ ' + name }));
+    const dialog = await screen.findByRole('dialog');
+    fireEvent.click(await within(dialog).findByRole('button', { name: 'Sửa chỉ số' }));
+    const cameraLabel = meter.utilityType === 0 ? 'Chụp công tơ điện' : 'Chụp đồng hồ nước';
+    expect(await within(dialog).findByRole('button', { name: cameraLabel })).toBeTruthy();
+    fireEvent.click(within(dialog).getByRole('button', { name: 'Hủy sửa' }));
+    expect(
+      await within(dialog).findByText(meter.utilityType === 0 ? '125 kWh' : '125 m³'),
+    ).toBeTruthy();
+    expect(state.json).not.toHaveBeenCalled();
+    fireEvent.click(within(dialog).getByRole('button', { name: 'Sửa chỉ số' }));
+    fireEvent.click(await within(dialog).findByRole('button', { name: cameraLabel }));
+    fireEvent.click(within(dialog).getByRole('button', { name: 'Dùng ảnh này' }));
+    fireEvent.change(
+      await within(dialog).findByLabelText(
+        `Chỉ số xác nhận (${meter.utilityType === 0 ? 'kWh' : 'm³'})`,
+      ),
+      { target: { value: '130' } },
+    );
+    fireEvent.click(within(dialog).getByRole('checkbox'));
+    fireEvent.click(within(dialog).getByRole('button', { name: 'Lưu chỉ số đã sửa' }));
+    await waitFor(() =>
+      expect(state.json).toHaveBeenCalledWith(
+        '/api/v1/capture/meter-tasks/' + meter.id + '/confirm',
+        {
+          humanConfirmed: true,
+          confirmedValue: '130',
+          evidenceId: meter.utilityType === 0 ? 'evidence-electric' : 'evidence-water',
+          expectedVersion: 4,
+        },
+        expect.any(AbortSignal),
+      ),
+    );
+    await waitFor(() => expect(screen.queryByRole('dialog')).toBeNull());
+    expect(await screen.findByText(meter.utilityType === 0 ? '130 kWh' : '130 m³')).toBeTruthy();
+    expect(state.image).toHaveBeenCalledTimes(2);
+  },
+);
 it.each([
   [electric, '22.0000', '22 kWh', 'Ảnh minh chứng điện'],
   [water, '15.2500', '15,25 m³', 'Ảnh minh chứng nước'],
@@ -693,7 +764,7 @@ it('shows initial baseline reading without calculating monthly consumption', asy
 it('does not fetch Staff meter data for a Tenant', async () => {
   state.role = 'Tenant';
   render(<MeterScreen />);
-  await screen.findByText(/Chỉ Staff/);
+  await screen.findByText(/Chỉ nhân viên được phân công/);
   expect(state.request).not.toHaveBeenCalled();
 });
 

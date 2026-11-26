@@ -25,13 +25,15 @@ public sealed partial class SettlementReceivablesService
             return new(id, chargeId, "Settled", null, null, null, 0, "", null,
                 balance.Charge.IsDevelopmentDemo);
         var proposal = await repository.LatestProposalAsync(id, token);
+        MoveOutProposalSettlement? accepted = null;
         if (proposal is not null)
         {
             var answer = await repository.ProposalFeedbackAsync(id, proposal.Id, token);
             if (answer?.Confirmed != true)
                 return new(id, chargeId, "TenantConfirmationRequired", null, null, null,
                     balance.Outstanding, "", null, balance.Charge.IsDevelopmentDemo);
-            if (answer.Settlement?.Status != "Payable" || answer.Settlement.PayableReceivableId != chargeId ||
+            accepted = answer.Settlement;
+            if (accepted is null || !MoveOutProposalSettlementRules.IsQuotedPayable(accepted, chargeId) ||
                 !MatchesAcceptedPhysical(proposal, answer, await repository.ProposalSourceAsync(id, token)))
                 return new(id, chargeId, "OwnerFinancialReviewRequired", null, null, null,
                     balance.Outstanding, "", null, balance.Charge.IsDevelopmentDemo);
@@ -40,7 +42,8 @@ public sealed partial class SettlementReceivablesService
         // a bank transfer would collect money that the verified deposit covers.
         var context = await repository.ContextAsync(id, token);
         if (proposal is not null && (context.View.AvailableDeposit > 0 ||
-            context.View.Receivables.Count(r => r.Outstanding > 0) != 1 ||
+            context.View.Receivables.Any(r => r.Outstanding > 0 &&
+                (accepted is null || !MoveOutProposalSettlementRules.IsQuotedPayable(accepted, r.Charge.Id))) ||
             context.View.Invoices?.Any(i => i.Outstanding > 0) == true))
             return new(id, chargeId, "DepositAllocationRequired", null, null, null,
                 balance.Outstanding, "", null, balance.Charge.IsDevelopmentDemo);

@@ -212,7 +212,7 @@ public sealed partial class ContractService
             await RequireLegacyHandoverCompatibility(c, t);
             if ((await Workflow.FilesAsync(id, ContractFileKind.HandoverEvidence, t)).Count >= 200) throw ContractException.Conflict("handover_evidence_limit");
             var f = new ContractDocumentFile { ContractId = id, Kind = ContractFileKind.HandoverEvidence, SnapshotHash = c.SnapshotHash, DevelopmentOnly = c.IsDevelopmentDemo, ContentType = type, Length = bytes.Length, FileHash = FileHash(bytes), RecordedByUserId = Actor, RecordedAt = clock.GetUtcNow() };
-            f.ObjectKey = $"contracts/{id:N}/handover/{f.Id:N}"; await files.PutAsync(c.RoomId, f.ObjectKey, bytes, type, t); repository.Add(f); Audit("ContractHandoverEvidenceAdded", id); return new ContractId(f.Id);
+            f.ObjectKey = BHome.Application.Storage.PrivateImageKeys.Evidence(c.Room.LocationId, c.RoomId, "move-in", id, f.Id); await files.PutAsync(c.RoomId, f.ObjectKey, bytes, type, t); repository.Add(f); Audit("ContractHandoverEvidenceAdded", id); return new ContractId(f.Id);
         }, t);
     }
     public async Task CopyHandoverEvidenceAsync(Guid id, Guid fileId, Stream output, CancellationToken t)

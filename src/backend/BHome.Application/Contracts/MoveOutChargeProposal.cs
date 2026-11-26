@@ -28,8 +28,17 @@ public sealed record MoveOutChargeProposalFeedbackInput(Guid ProposalId, string 
 public sealed record MoveOutChargeProposalReconcileInput(Guid ProposalId);
 
 [JsonNumberHandling(JsonNumberHandling.AllowReadingFromString | JsonNumberHandling.WriteAsString)]
+public sealed record MoveOutAutomaticCharge(string Kind, string Code, string Name, decimal? Amount,
+    string Reference, IReadOnlyList<string> MissingInputs, Guid? ExistingReceivableId = null,
+    decimal? Quantity = null, decimal? PreviousReading = null, decimal? ConfirmedReading = null);
+
+[JsonNumberHandling(JsonNumberHandling.AllowReadingFromString | JsonNumberHandling.WriteAsString)]
+public sealed record MoveOutPayableReceivable(Guid Id, decimal Amount, string Name);
+
+[JsonNumberHandling(JsonNumberHandling.AllowReadingFromString | JsonNumberHandling.WriteAsString)]
 public sealed record MoveOutProposalSettlement(string Status, decimal PayableAmount, decimal RefundAmount,
-    Guid? PayableReceivableId, Guid[] CreatedReceivableIds, Guid[] DepositOffsetIds, string? Reason = null);
+    Guid? PayableReceivableId, Guid[] CreatedReceivableIds, Guid[] DepositOffsetIds, string? Reason = null,
+    MoveOutPayableReceivable[]? PayableReceivables = null);
 
 public sealed record MoveOutChargeProposalFeedback(Guid Id, Guid ContractId, Guid ProposalId, bool Confirmed,
     string Reason, Guid TenantUserId, DateTimeOffset RespondedAt, Guid OperationKey, string Fingerprint,
@@ -47,17 +56,19 @@ public sealed record MoveOutChargeProposal(Guid Id, Guid ContractId, string Sour
     Guid OwnerUserId, DateTimeOffset SentAt, Guid[] RecipientUserIds, Guid OperationKey,
     string Fingerprint, bool IsDevelopmentDemo = false,
     MoveOutChargeProposalFeedback? TenantFeedback = null, decimal ExistingOutstanding = 0,
-    string PhysicalReference = "");
+    string PhysicalReference = "", MoveOutAutomaticCharge[]? AutomaticCharges = null);
 
 [JsonNumberHandling(JsonNumberHandling.WriteAsString | JsonNumberHandling.AllowReadingFromString)]
 public sealed record MoveOutChargeProposalPreview(Guid ContractId, string Reference,
     Guid InspectionId, int InspectionVersion, decimal VerifiedDeposit, decimal AvailableDeposit,
     IReadOnlyList<MoveOutChargeProposalItem> Items, MoveOutChargeProposal? LatestProposal, string Status,
-    decimal ExistingOutstanding = 0, Guid? BaselineContractId = null);
+    decimal ExistingOutstanding = 0, Guid? BaselineContractId = null,
+    MoveOutAutomaticCharge[]? AutomaticCharges = null, bool Forced = false);
 
 public sealed record MoveOutChargeProposalSource(SettlementChargeContext Context,
     MoveOutChargeProposalItem[] Items, string Reference, bool StaffInspectionReady,
-    Guid? BaselineContractId = null, string PhysicalReference = "");
+    Guid? BaselineContractId = null, string PhysicalReference = "",
+    MoveOutAutomaticCharge[]? AutomaticCharges = null, bool Forced = false);
 
 public sealed partial class SettlementReceivablesService
 {
@@ -81,7 +92,7 @@ public sealed partial class SettlementReceivablesService
     {
         var pinned = string.IsNullOrWhiteSpace(proposal.PhysicalReference)
             ? feedback?.VerifiedPhysicalReference : proposal.PhysicalReference;
-        return !string.IsNullOrWhiteSpace(pinned) && pinned == source.PhysicalReference;
+        return !source.Forced && !string.IsNullOrWhiteSpace(pinned) && pinned == source.PhysicalReference;
     }
 
     public static MoveOutChargeProposalDisputedItem[] NormalizeDisputedItems(
@@ -104,7 +115,7 @@ public sealed partial class SettlementReceivablesService
 
     private async Task<MoveOutChargeProposalPreview> ProposalPreviewAsync(Guid id, CancellationToken token)
     {
-        var source = await repository.ProposalSourceAsync(id, token);
+        var source = await ProposalSourceWithChargesAsync(id, token);
         // Access to an older receivable is not permission to inspect the
         // current move-out proposal or its private opening/closing photo IDs.
         if (!user.IsInRole(Roles.Owner) && !source.Context.RecipientUserIds.Contains(Actor))
@@ -132,7 +143,8 @@ public sealed partial class SettlementReceivablesService
             ? "Outdated" : feedback is null ? "PendingTenant" : feedback.Confirmed ? "Accepted" : "Disputed";
         return new(id, source.Reference, source.Context.InspectionId, source.Context.InspectionVersion,
             source.Context.VerifiedDeposit, source.Context.View.AvailableDeposit, source.Items, latest, status,
-            source.Context.View.Receivables.Sum(row => row.Outstanding), source.BaselineContractId);
+            source.Context.View.Receivables.Sum(row => row.Outstanding) + (source.Context.View.Invoices?.Sum(row => row.Outstanding) ?? 0),
+            source.BaselineContractId, source.AutomaticCharges, source.Forced);
     }
 
     public async Task<MoveOutChargeProposalPreview> GetProposalAsync(Guid id, CancellationToken token)
@@ -150,6 +162,7 @@ public sealed partial class SettlementReceivablesService
     {
         await AuthorizeAsync(id, false, token);
         var source = await repository.ProposalSourceAsync(id, token);
+        if (source.Forced) return false;
         var proposal = await repository.LatestProposalAsync(id, token);
         if (proposal is null)
             return false;
@@ -185,9 +198,10 @@ public sealed partial class SettlementReceivablesService
             var feedback = await repository.ProposalFeedbackAsync(id, latest.Id, token);
             if (feedback?.Confirmed != true || feedback.TenantUserId != Actor)
                 throw ContractException.Conflict("move_out_proposal_tenant_confirmation_required");
+            var source = await ProposalSourceWithChargesAsync(id, token);
+            if (source.Forced) throw ContractException.Conflict("forced_move_out_financial_actions_forbidden");
             if (feedback.Settlement is { Status: "Payable" or "RefundEligible" or "Settled" })
                 return feedback;
-            var source = await repository.ProposalSourceAsync(id, token);
             if (source.Reference != latest.SourceReference ||
                 !string.IsNullOrWhiteSpace(latest.PhysicalReference) &&
                 source.PhysicalReference != latest.PhysicalReference ||
@@ -234,7 +248,8 @@ public sealed partial class SettlementReceivablesService
             await AuthorizeAsync(id, true, token);
             if (await repository.LatestFinancialCloseAsync(id, token) is not null)
                 throw ContractException.Conflict("settlement_financial_already_closed");
-            var source = await repository.ProposalSourceAsync(id, token);
+            var source = await ProposalSourceWithChargesAsync(id, token);
+            if (source.Forced) throw ContractException.Conflict("forced_move_out_financial_actions_forbidden");
             var context = source.Context;
             // Owner sending priced charges is the financial approval. Staff's
             // completed Final inspection is authoritative physical evidence;
@@ -254,14 +269,16 @@ public sealed partial class SettlementReceivablesService
                 if (feedback is null || feedback.Confirmed)
                     throw ContractException.Conflict("move_out_proposal_already_sent");
             }
-            var total = items.Sum(item => item.Amount);
-            var existingOutstanding = context.View.Receivables.Sum(row => row.Outstanding);
+            if (source.AutomaticCharges is null || source.AutomaticCharges.Any(row => row.Amount is null || row.MissingInputs.Count != 0))
+                throw ContractException.Conflict("move_out_automatic_charge_inputs_required");
+            var total = items.Sum(item => item.Amount) + source.AutomaticCharges.Sum(row => row.Amount!.Value);
+            var existingOutstanding = context.View.Receivables.Sum(row => row.Outstanding) + (context.View.Invoices?.Sum(row => row.Outstanding) ?? 0);
             var proposal = new MoveOutChargeProposal(Guid.NewGuid(), id, source.Reference, context.InspectionId,
                 context.InspectionVersion, items, context.VerifiedDeposit, context.View.AvailableDeposit,
                 total, context.View.AvailableDeposit - total - existingOutstanding, normalized.Note, Actor,
                 clock.GetUtcNow(), context.RecipientUserIds.Order().ToArray(), key, fingerprint,
                 context.IsDevelopmentDemo, ExistingOutstanding: existingOutstanding,
-                PhysicalReference: source.PhysicalReference);
+                PhysicalReference: source.PhysicalReference, AutomaticCharges: source.AutomaticCharges);
             await repository.SaveProposalAsync(proposal, token);
             return proposal;
         }, token);
@@ -294,7 +311,8 @@ public sealed partial class SettlementReceivablesService
                     throw ContractException.Conflict("settlement_idempotency_conflict");
                 return previous;
             }
-            var source = await repository.ProposalSourceAsync(id, token);
+            var source = await ProposalSourceWithChargesAsync(id, token);
+            if (source.Forced) throw ContractException.Conflict("forced_move_out_financial_actions_forbidden");
             var latest = await repository.LatestProposalAsync(id, token);
             if (latest is null || latest.Id != input.ProposalId ||
                 latest.SourceReference != input.ExpectedReference || source.Reference != latest.SourceReference ||

@@ -101,6 +101,27 @@ public sealed class EmailTransportTests
         Assert.Throws<ChannelDeliveryException>(() => MailKitEmailSender.BuildBody(message with { Attachments = [contract with { FileName = "bad\r\nBcc: attacker" }] }));
         Assert.Throws<ChannelDeliveryException>(() => MailKitEmailSender.BuildBody(message with { Attachments = [contract with { Content = "not pdf"u8.ToArray() }] }));
     }
+    [Fact]
+    public void DraftMimePreservesOriginalMeterImagesWithoutAllowingThemOnOtherEvents()
+    {
+        var bytes = Convert.FromBase64String("iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+jG1sAAAAASUVORK5CYII=");
+        var electricity = new EmailAttachment("dien.png", "image/png", bytes);
+        var water = new EmailAttachment("nuoc.png", "image/png", bytes);
+        var message = new ChannelMessage("draft", "EMAIL", "tenant@example.invalid", "INVOICE_DRAFT_CREATED",
+            "Hóa đơn nháp", "Chi tiết điện nước", Attachments: [electricity, water]);
+        using var mime = new MimeKit.MimeMessage { Body = MailKitEmailSender.BuildBody(message) };
+        var parts = mime.Attachments.Cast<MimeKit.MimePart>().ToArray();
+        Assert.Equal(new[] { "dien.png", "nuoc.png" }, parts.Select(part => part.FileName));
+        foreach (var part in parts)
+        {
+            using var original = new MemoryStream(); part.Content!.DecodeTo(original);
+            Assert.Equal(bytes, original.ToArray());
+        }
+        Assert.Throws<ChannelDeliveryException>(() => MailKitEmailSender.BuildBody(message with { EventType = "INVOICE_FULLY_PAID" }));
+        Assert.Throws<ChannelDeliveryException>(() => MailKitEmailSender.BuildBody(message with { Attachments = [electricity with { ContentType = "image/jpeg" }] }));
+        Assert.Throws<ChannelDeliveryException>(() => MailKitEmailSender.BuildBody(message with { Attachments = [electricity, water, water] }));
+    }
+
     private sealed class SigningChannel(bool configured) : INotificationChannelProvider
     {
         public bool IsConfigured(string channel) => configured && channel == "EMAIL";

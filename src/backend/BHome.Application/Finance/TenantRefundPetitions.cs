@@ -285,7 +285,7 @@ public sealed class TenantRefundPetitionService(
                     throw new FinanceException(409, "refund_execution_intent_conflict");
                 if (row.State.Upload is null)
                 {
-                    row.State.Upload = new(key, fingerprint, $"tenant-refund-petitions/{id:N}/{key:N}", contentType,
+                    row.State.Upload = new(key, fingerprint, BHome.Application.Storage.PrivateImageKeys.Entity("tenant-refund-petitions", id, key), contentType,
                         bytes.Length, sha, x.ExecutedAt, x.ExternalReference, x.Reason);
                     await repository.SaveAsync(row, false, actor, "TenantRefundPetitionExecutionPending", Now, token);
                 }

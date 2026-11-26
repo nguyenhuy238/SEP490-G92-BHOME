@@ -51,7 +51,7 @@ internal sealed class NotificationChannelWorker(Compact24DbContext db, CompactNo
               AND (NOT @billingOnly OR n.notification_type=ANY(@billingEvents) OR
                    (n.related_entity_type='MeterTask' AND n.event_key LIKE 'periodic-meter-overdue:%'))
               AND (NOT @businessEmailOnly OR c.channel='EMAIL' AND n.event_data->>'audienceRole'='Tenant'
-                AND n.event_data->'state'->>'eventType' IN ('CONTRACT_ACTIVATED','INVOICE_FULLY_PAID'))
+                AND n.event_data->'state'->>'eventType' IN ('CONTRACT_ACTIVATED','INVOICE_FULLY_PAID','INVOICE_DRAFT_CREATED','MOVE_OUT_CONSENT_REQUIRED','MOVE_OUT_CONSENT_REJECTED'))
             ON CONFLICT(record_kind,event_key) WHERE record_kind IN ('OUTBOX','AUDIT') DO NOTHING
             """, t, ("now", sql.Now), ("authenticationOnly", authenticationOnly), ("businessEmailOnly", businessEmailOnly), ("billingOnly", billingOnly), ("billingEvents", BillingEvents));
         if (!holdingOnly && !authenticationOnly && !businessEmailOnly && !billingOnly && smsOptions.Value.Enabled)
@@ -77,7 +77,7 @@ internal sealed class NotificationChannelWorker(Compact24DbContext db, CompactNo
               AND ((@email AND event_data->>'channel'='EMAIL') OR (@push AND event_data->>'channel'='PUSH') OR (@sms AND event_data->>'channel'='SMS'))
               AND (NOT @holdingOnly OR event_data->>'channel'='EMAIL' AND event_data->>'eventType'='HOLDING_CONFIRMED')
               AND (NOT @businessEmailOnly OR event_data->>'channel'='EMAIL' AND (event_data->>'eventType'='HOLDING_CONFIRMED'
-                OR event_data->>'role'='Tenant' AND event_data->>'eventType' IN ('CONTRACT_ACTIVATED','INVOICE_FULLY_PAID')))
+                OR event_data->>'role'='Tenant' AND event_data->>'eventType' IN ('CONTRACT_ACTIVATED','INVOICE_FULLY_PAID','INVOICE_DRAFT_CREATED','MOVE_OUT_CONSENT_REQUIRED','MOVE_OUT_CONSENT_REJECTED')))
               AND (NOT @authenticationOnly OR event_data ? 'protectedAuthenticationEmail' OR event_data->>'eventType' IN
                 ('PASSWORD_CHANGED','PASSWORD_RESET_COMPLETED','ACCOUNT_ACTIVATED','ACCOUNT_DEACTIVATED','ACCOUNT_SETUP_COMPLETED','ACCOUNT_ACCESS_CHANGED','ACCOUNT_LOCKED',
                  'STAFF_ASSIGNMENT_CREATED','STAFF_ASSIGNMENT_UPDATED','STAFF_ASSIGNMENT_CANCELLED','STAFF_ASSIGNMENT_REMOVED',
@@ -167,6 +167,23 @@ internal sealed class NotificationChannelWorker(Compact24DbContext db, CompactNo
                     else if (claim.Channel == "EMAIL" && claim.Role == "Tenant" && notice.EventType == "CONTRACT_ACTIVATED" &&
                         !await sql.Scalar<bool>("SELECT email_confirmed FROM users WHERE id=@id", t, ("id", claim.Recipient)))
                         state = "Suppressed"; // The durable account-setup email contains the same activation confirmation and password link.
+                    else if (claim.Channel == "EMAIL" && claim.Role == "Tenant" &&
+                        notice.EventType == "INVOICE_DRAFT_CREATED" && notice.RelatedObjectType == "Invoice")
+                    {
+                        var draft = await content.DraftInvoiceEmailAsync(notice.RelatedObjectId, claim.Recipient, t);
+                        if (draft is null) state = "Suppressed";
+                        else
+                        {
+                            var mobile = await content.InvoiceMobileLinkAsync(notice, claim.Recipient, t);
+                            using var timeout = CancellationTokenSource.CreateLinkedTokenSource(t);
+                            timeout.CancelAfter(TimeSpan.FromSeconds(options.Value.TimeoutSeconds));
+                            providerReference = await provider.SendAsync(new($"channel/{claim.Id}/email", "EMAIL",
+                                draft.Value.Destination, notice.EventType, draft.Value.Title, draft.Value.Body,
+                                Attachments: draft.Value.Attachments, MobileActionUrl: mobile), timeout.Token);
+                            if (string.IsNullOrWhiteSpace(providerReference) || providerReference.Length > 200)
+                                throw new ChannelDeliveryException("email_submission_outcome_unknown", outcomeUnknown: true);
+                        }
+                    }
                     else if (claim.Channel == "SMS")
                     {
                         var template = SmsNotificationPolicy.Template(notice.EventType, claim.Role);

@@ -348,6 +348,33 @@ it('does not load Tenant financial features after a completed move-out has no Ac
     ),
   ).toBe(false);
 });
+it('loads the configured issue date only when the active rental has no monthly invoice', async () => {
+  const transport = tenantTransport();
+  const original = transport.getMockImplementation()!;
+  transport.mockImplementation(async (...args) => {
+    const path = String(args[0]);
+    if (path.includes('/invoices?')) return json(page([]));
+    if (path.endsWith('/invoices/current-period'))
+      return json({
+        billingPeriod: month + '-01',
+        businessDate: month + '-01',
+        hasInvoice: false,
+        draftDates: [month + '-27'],
+      });
+    return original(...args);
+  });
+  client(transport);
+  render(<TenantDashboardScreen />);
+  await waitFor(() =>
+    expect(JSON.parse(screen.getByRole('status').textContent!).invoiceScheduleMessage).toBe(
+      `Hóa đơn sẽ được phát hành trong ngày 27/${Number(month.slice(5))}.`,
+    ),
+  );
+  expect(
+    transport.mock.calls.filter(([url]) => String(url).endsWith('/invoices/current-period')),
+  ).toHaveLength(1);
+});
+
 function RetryProbe() {
   const query = useWorkspaceQuery<{ label: string }>('/api/v1/capture/locations', {
     cache: queryPolicies.rooms,

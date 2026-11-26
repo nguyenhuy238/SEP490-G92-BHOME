@@ -80,6 +80,7 @@ public interface IContractHandoverRepository
     Task ResetMoveOutInspectionDraftAsync(Guid contractId, Guid staffId, string snapshotHash,
         DateTimeOffset now, CancellationToken t);
     Task SubmitMoveOutTaskAsync(Guid contractId, Guid staffId, DateTimeOffset now, CancellationToken t);
+    Task SubmitForcedMoveOutTaskAsync(Guid contractId, Guid staffId, DateTimeOffset now, CancellationToken t);
     Task ReviewMoveOutTaskAsync(Guid contractId, Guid ownerId, bool confirmed, DateTimeOffset now, CancellationToken t);
     Task<HandoverMoveInTask?> MoveInTaskAsync(Guid contractId, Guid roomId, Guid? staffUserId,
         bool includeOwnerInventory, CancellationToken t);

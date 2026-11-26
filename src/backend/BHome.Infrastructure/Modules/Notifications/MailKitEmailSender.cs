@@ -82,13 +82,28 @@ internal sealed class MailKitEmailSender(IOptions<EmailOptions> options, ILogger
             {
                 if (string.IsNullOrWhiteSpace(attachment.FileName) || attachment.FileName.Length > 150 ||
                     attachment.FileName.IndexOfAny(['\r', '\n', '/', '\\']) >= 0 ||
-                    attachment.ContentType != "application/pdf" || attachment.Content.Length is < 5 or > 10_485_760 ||
-                    !attachment.Content.AsSpan(0, 5).SequenceEqual("%PDF-"u8))
+                    !ValidAttachment(message.EventType, attachment))
                     throw new ChannelDeliveryException("email_attachments_invalid");
                 body.Attachments.Add(attachment.FileName, attachment.Content, ContentType.Parse(attachment.ContentType));
             }
         }
         return body.ToMessageBody();
+    }
+
+    private static bool ValidAttachment(string eventType, EmailAttachment attachment)
+    {
+        var bytes = attachment.Content.AsSpan();
+        if (eventType != "INVOICE_DRAFT_CREATED")
+            return attachment.ContentType == "application/pdf" && bytes.Length is >= 5 and <= 10_485_760 &&
+                bytes.StartsWith("%PDF-"u8);
+        if (bytes.Length is < 12 or > BHome.Application.Storage.PrivateImageEvidence.MaximumBytes) return false;
+        return attachment.ContentType switch
+        {
+            "image/png" => bytes.StartsWith(new byte[] { 137, 80, 78, 71, 13, 10, 26, 10 }),
+            "image/jpeg" => bytes.StartsWith(new byte[] { 255, 216, 255 }),
+            "image/webp" => bytes.StartsWith("RIFF"u8) && bytes.Slice(8, 4).SequenceEqual("WEBP"u8),
+            _ => false
+        };
     }
 
     internal static ChannelDeliveryException Classify(Exception error, bool submitting) => error switch

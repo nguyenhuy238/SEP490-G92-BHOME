@@ -491,7 +491,7 @@ public sealed partial class OperationalTaskService(IOperationalTaskRepository re
                         ContentType = type,
                         Length = length,
                         Sha256 = hash,
-                        ObjectKey = "task-evidence/" + id.ToString("N") + "/" + Guid.NewGuid().ToString("N")
+                        ObjectKey = BHome.Application.Storage.PrivateImageKeys.Evidence(task.LocationId, task.TargetRoomId, "tasks", id, Guid.NewGuid())
                     };
                     await files.PutAsync(id, evidence.ObjectKey, content, type, t);
                     repository.Add(evidence);

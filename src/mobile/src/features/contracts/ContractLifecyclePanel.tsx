@@ -35,8 +35,8 @@ export function ContractLifecyclePanel({
   moveOut: MoveOut;
   onChanged: () => void;
 }) {
-  const q = useContractLifecycle(api, id, role);
-  const summary = q.summary;
+  const q = useContractLifecycle(api, id, role, !!moveOut.isForced);
+  const summary = moveOut.isForced ? null : q.summary;
   const money = (v: string | null) => (v === null ? 'Chờ xác minh' : formatContractMoney(v));
 
   if (role === 'Tenant') {
@@ -234,7 +234,7 @@ export function ContractLifecyclePanel({
           )}
         </>
       )}
-      {role === 'Owner' && (
+      {role === 'Owner' && !moveOut.isForced && (
         <>
           {!q.loading && !q.error && (
             <OwnerMoveOutDecisions

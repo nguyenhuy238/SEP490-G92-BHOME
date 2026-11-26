@@ -254,6 +254,30 @@ public sealed partial class InvoiceApiTests(CaptureFixture fixture) : IClassFixt
     }
 
     [Fact]
+    public async Task TenantCurrentInvoicePeriodUsesConfiguredDraftDateAndOwnContract()
+    {
+        var w = await Setup();
+        const string path = "/api/v1/invoices/current-period";
+        var before = await Success<TenantInvoicePeriodView>(await w.Tenant.Client.GetAsync(path));
+        Assert.False(before.HasInvoice);
+        Assert.Empty(before.DraftDates);
+        await Success<BillingSchedule>(await w.Owner.Client.PutAsJsonAsync("/api/v1/billing-schedules",
+            Schedule(w) with { DraftDay = 27, DraftMonthOffset = 1, FinalDay = 28, DueMonthOffset = 2 }));
+        var result = await Success<TenantInvoicePeriodView>(await w.Tenant.Client.GetAsync(path));
+        Assert.Equal(new DateOnly(result.BusinessDate.Year, result.BusinessDate.Month, 1), result.BillingPeriod);
+        Assert.False(result.HasInvoice);
+        Assert.Equal(new[] { InvoiceMath.CalendarDate(result.BillingPeriod, 27, 1) }, result.DraftDates);
+        var other = await User(Roles.Tenant);
+        var outsider = await Success<TenantInvoicePeriodView>(await other.Client.GetAsync(path));
+        Assert.False(outsider.HasInvoice);
+        Assert.Empty(outsider.DraftDates);
+        Assert.Equal(HttpStatusCode.Forbidden, (await w.Staff.Client.GetAsync(path)).StatusCode);
+        Assert.Equal(HttpStatusCode.Forbidden, (await w.Owner.Client.GetAsync(path)).StatusCode);
+        using var anonymous = fixture.Factory.CreateClient();
+        Assert.Equal(HttpStatusCode.Unauthorized, (await anonymous.GetAsync(path)).StatusCode);
+    }
+
+    [Fact]
     public async Task SharedTenancyDatabaseGuardRejectsOverCapacityAndDuplicateTenant()
     {
         var w = await Setup();

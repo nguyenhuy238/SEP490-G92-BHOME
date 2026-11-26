@@ -327,7 +327,7 @@ public sealed class RefundService(IRefundRepository repository, IObjectStorage s
                 if (await repository.ReferenceUsedAsync(x.ExternalReference, id, t)) throw new FinanceException(409, "refund_reference_used");
                 if (current.State.Upload is null)
                 {
-                    current.State.Upload = new(key, fingerprint, $"refunds/{id:N}/{key:N}", type, bytes.Length, hash,
+                    current.State.Upload = new(key, fingerprint, PrivateImageKeys.Entity("refunds", id, key), type, bytes.Length, hash,
                         x.ExecutedAt, x.ExternalReference, x.Reason);
                     await repository.SaveAsync(current, false, actor, AuditPrefix(current) + "ExecutionPending", Now, t);
                 }

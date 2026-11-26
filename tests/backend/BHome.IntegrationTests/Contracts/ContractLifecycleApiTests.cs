@@ -129,9 +129,9 @@ public sealed partial class ContractLifecycleApiTests(ContractFixture fixture) :
 
     [Theory]
     [InlineData(0)] // Before the lease end date.
-    [InlineData(30)] // On the lease end date.
-    [InlineData(45)] // After the lease end date.
-    public async Task OwnerOpensMoveOutImmediatelyForLocationWithoutStaffAssignmentOrSchedule(int daysFromToday)
+    [InlineData(10)]
+    [InlineData(20)]
+    public async Task OwnerApprovesTenantMoveOutForLocationWithoutStaffAssignmentOrSchedule(int daysFromToday)
     {
         var w = await Setup(); var outsider = await Setup(); var id = await Active(w);
         var date = Today.AddDays(daysFromToday);
@@ -141,13 +141,17 @@ public sealed partial class ContractLifecycleApiTests(ContractFixture fixture) :
         Assert.Equal(HttpStatusCode.NotFound, (await Post(outsider.Tenant, Path(id, "termination-requests"), input)).StatusCode);
 
         var key = Guid.NewGuid();
-        var opened = await Success<MoveOutView>(await Post(w.Owner, Path(id, "expiry-move-out"), input, key));
+        Assert.Equal(HttpStatusCode.Forbidden, (await Post(w.Owner, Path(id, "expiry-move-out"), input, key)).StatusCode);
+        var requested = await Success<MoveOutView>(await Post(w.Tenant, Path(id, "termination-requests"), input, key));
+        Assert.Equal("Requested", requested.Status);
+        var approvalKey = Guid.NewGuid();
+        var opened = await Success<MoveOutView>(await Post(w.Owner, Path(id, "move-out/approve"), key: approvalKey));
         Assert.Equal("Approved", opened.Status);
         Assert.Equal(date, opened.ProposedDate);
         Assert.Null(opened.InspectionScheduledAt);
         Assert.Null(opened.InspectionStaffId);
-        Assert.Equal(opened.Id, (await Success<MoveOutView>(await Post(w.Owner, Path(id, "expiry-move-out"), input, key))).Id);
-        Assert.Equal(HttpStatusCode.Conflict, (await Post(w.Owner, Path(id, "expiry-move-out"), input, Guid.NewGuid())).StatusCode);
+        Assert.Equal(opened.Id, (await Success<MoveOutView>(await Post(w.Owner, Path(id, "move-out/approve"), key: approvalKey))).Id);
+        Assert.Equal(HttpStatusCode.Conflict, (await Post(w.Tenant, Path(id, "termination-requests"), input, Guid.NewGuid())).StatusCode);
         if (await UsesCompact24())
         {
             var tasksPage = await w.Staff.Client.GetFromJsonAsync<TaskPage<TaskView>>(
@@ -173,7 +177,7 @@ public sealed partial class ContractLifecycleApiTests(ContractFixture fixture) :
             Assert.Equal(RoomStatus.Occupied, (await db.Set<Room>().SingleAsync(r => r.Id == w.Room)).Status);
             Assert.Single(await db.Set<ContractMoveOut>().Where(m => m.ContractId == id).ToArrayAsync());
         }
-        Assert.Single((await w.Owner.Client.GetFromJsonAsync<MoveOutHistoryView[]>(Path(id, "move-out/history")))!, h => h.Action == "OwnerMoveOutOpened");
+        Assert.Single((await w.Owner.Client.GetFromJsonAsync<MoveOutHistoryView[]>(Path(id, "move-out/history")))!, h => h.Action == "ConsentReady");
         if (daysFromToday > 0)
         {
             var premature = await Post(w.Staff, Path(id, "move-out/inspection"), new InspectionInput(Guid.NewGuid(), Guid.NewGuid(), "Premature synthetic", [Guid.NewGuid()]));
@@ -187,8 +191,9 @@ public sealed partial class ContractLifecycleApiTests(ContractFixture fixture) :
         var w = await Setup();
         var outsider = await Setup();
         var id = await Active(w);
-        await Success<MoveOutView>(await Post(w.Owner, Path(id, "expiry-move-out"),
+        await Success<MoveOutView>(await Post(w.Tenant, Path(id, "termination-requests"),
             new TerminationInput(Today, "Synthetic draft inspection")));
+        await Success<MoveOutView>(await Post(w.Owner, Path(id, "move-out/approve")));
         var draftPath = Path(id, "move-out/inspection-draft");
         Assert.Equal(HttpStatusCode.NotFound, (await w.Owner.Client.GetAsync(draftPath)).StatusCode);
         Assert.Equal(HttpStatusCode.Forbidden, (await w.Tenant.Client.GetAsync(draftPath)).StatusCode);
@@ -1141,7 +1146,9 @@ public sealed partial class ContractLifecycleApiTests(ContractFixture fixture) :
     [Fact]
     public async Task T10_T11_T12_T13_T14_InspectionFinalMetersPendingSettlementAndCompletedMoveOut()
     {
-        var w = await Setup(); var id = await Active(w); var termination = new TerminationInput(Today, "SYNTHETIC EARLY TERMINATION");
+        var w = await Setup();
+        if (await UsesCompact24()) await ConfigureMoveOutBillingAsync(w);
+        var id = await Active(w); var termination = new TerminationInput(Today, "SYNTHETIC EARLY TERMINATION");
         var request = await Success<MoveOutView>(await Post(w.Tenant, Path(id, "termination-requests"), termination)); Assert.Equal("Requested", request.Status);
         Assert.Equal("Active", (await w.Tenant.Client.GetFromJsonAsync<ContractView>(Path(id)))!.Status);
         Assert.Equal(HttpStatusCode.Forbidden, (await Post(w.Staff, Path(id, "move-out/approve"))).StatusCode);
@@ -1498,8 +1505,8 @@ public sealed partial class ContractLifecycleApiTests(ContractFixture fixture) :
         var w = await Setup(); var id = await Active(w);
         var next = (await Success<ContractId>(await Post(w.Owner, Path(id, "renewals"), new RenewalInput(Today.AddYears(1), 4000000, "SYNTHETIC renewal")))).Id;
         await Success<ContractView>(await Post(w.Owner, Path(next, "renewal-cancellation")));
-        var expiry = await Success<MoveOutView>(await Post(w.Owner, Path(id, "expiry-move-out"), new TerminationInput(Today.AddDays(30), "SYNTHETIC end of term")));
-        Assert.Equal("Approved", expiry.Status); Assert.Equal("Active", (await w.Tenant.Client.GetFromJsonAsync<ContractView>(Path(id)))!.Status);
+        Assert.Equal(HttpStatusCode.Forbidden, (await Post(w.Owner, Path(id, "expiry-move-out"), new TerminationInput(Today.AddDays(30), "SYNTHETIC end of term"))).StatusCode);
+        Assert.Equal("Active", (await w.Tenant.Client.GetFromJsonAsync<ContractView>(Path(id)))!.Status);
         await using var scope = fixture.Factory.Services.CreateAsyncScope(); var db = scope.ServiceProvider.GetRequiredService<BHomePersistenceContext>();
         Assert.Equal(RoomStatus.Occupied, (await db.Set<Room>().SingleAsync(r => r.Id == w.Room)).Status);
         Assert.Equal(ContractStatus.Cancelled, (await db.Set<Contract>().SingleAsync(c => c.Id == next)).Status);

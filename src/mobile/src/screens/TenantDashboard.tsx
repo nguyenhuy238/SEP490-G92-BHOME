@@ -33,6 +33,7 @@ export interface TenantDashboardProps {
   contracts?: ContractSummary[];
   month?: string;
   invoice?: Invoice;
+  invoiceScheduleMessage?: string;
   payment?: InvoicePayment;
   meterReadings?: TenantMeterReading[];
   contractState?: LoadState;
@@ -100,7 +101,11 @@ function MonthlyInvoice({
   payment,
   invoiceState,
   paymentState,
-}: Pick<TenantDashboardProps, 'invoice' | 'payment' | 'invoiceState' | 'paymentState'> & {
+  invoiceScheduleMessage,
+}: Pick<
+  TenantDashboardProps,
+  'invoice' | 'payment' | 'invoiceState' | 'paymentState' | 'invoiceScheduleMessage'
+> & {
   month: string;
 }) {
   const { go } = useWorkspace();
@@ -121,9 +126,9 @@ function MonthlyInvoice({
       </View>
       {!invoice && !invoiceState?.loading && !invoiceState?.error ? (
         <>
-          <Text style={styles.billEmpty}>Chưa có hóa đơn</Text>
+          <Text style={styles.billEmpty}>Chưa có hóa đơn kỳ này</Text>
           <Text style={styles.billSupporting}>
-            Khi chủ nhà phát hành hóa đơn tháng này, số tiền và hạn thanh toán sẽ xuất hiện ở đây.
+            {invoiceScheduleMessage ?? 'Chưa có thông tin lịch phát hành hóa đơn.'}
           </Text>
         </>
       ) : invoice ? (
@@ -234,6 +239,7 @@ function UtilityCard({
   month: string;
   roomId?: string;
   invoice?: Invoice;
+  invoiceScheduleMessage?: string;
   meterReadings?: TenantMeterReading[];
   meterState?: LoadState;
 }) {
@@ -317,6 +323,7 @@ function Attention({
   state,
 }: {
   invoice?: Invoice;
+  invoiceScheduleMessage?: string;
   debt?: DebtInvoice;
   notices: NotificationItem[];
   expiryNotices: ContractExpiryNotice[];
@@ -416,6 +423,7 @@ export function TenantDashboard({
   meterReadings = [],
   contractState,
   invoiceState,
+  invoiceScheduleMessage,
   paymentState,
   meterState,
   debt,
@@ -460,6 +468,7 @@ export function TenantDashboard({
         invoice={invoice}
         payment={payment}
         invoiceState={invoiceState}
+        invoiceScheduleMessage={invoiceScheduleMessage}
         paymentState={paymentState}
       />
 

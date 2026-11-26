@@ -188,10 +188,24 @@ it('puts the genuine current-month invoice, kWh, m³, evidence and service fees 
 
 it('shows verified consumption without inventing a bill or fees before invoice issuance', () => {
   render(<TenantDashboard month="2026-11" contracts={[room]} meterReadings={readings} />);
-  expect(screen.getByText('Chưa có hóa đơn')).toBeTruthy();
+  expect(screen.getByText('Chưa có hóa đơn kỳ này')).toBeTruthy();
+  expect(screen.getByText('Chưa có thông tin lịch phát hành hóa đơn.')).toBeTruthy();
   expect(screen.getByText(/Chưa có phí dịch vụ của kỳ này/)).toBeTruthy();
   expect(screen.getAllByTestId('verified-meter-photo')).toHaveLength(2);
   expect(screen.queryByText(/Thanh toán hóa đơn/)).toBeNull();
+});
+
+it('shows the configured issue date on Home when the monthly invoice is missing', () => {
+  render(
+    <TenantDashboard
+      month="2026-11"
+      contracts={[room]}
+      invoiceScheduleMessage="Hóa đơn sẽ được phát hành trong ngày 27/1."
+    />,
+  );
+  expect(screen.getByText('Chưa có hóa đơn kỳ này')).toBeTruthy();
+  expect(screen.getByText('Hóa đơn sẽ được phát hành trong ngày 27/1.')).toBeTruthy();
+  expect(screen.getByRole('button', { name: 'Xem hóa đơn của tôi' })).toBeTruthy();
 });
 
 it('shows paid state from verified payment data, not inferred from invoice total', () => {

@@ -66,6 +66,54 @@ public sealed partial class Compact24OwnerSetupTests
     }
 
     [CompactPostgresFact]
+    public async Task OverlappingMainDraftsCreateOnlyOnePhysicalMoveInTask()
+    {
+        var w = await Seed(); using var host = Host();
+        var residentIds = new[] { Guid.NewGuid(), Guid.NewGuid() };
+        await using (var setup = host.Services.CreateAsyncScope())
+        {
+            var db = setup.ServiceProvider.GetRequiredService<Compact24DbContext>();
+            foreach (var id in residentIds)
+            {
+                var resident = new Resident { RoomId = w.Room, OwnerUserId = w.Owner.Id,
+                    DisplayLabel = "Move-in dedup test", VerificationStatus = IdentityVerificationStatus.Verified };
+                db.Entry(resident).Property(x => x.Id).CurrentValue = id;
+                db.Add(resident);
+            }
+            await db.SaveChangesAsync();
+        }
+        async Task<Guid> Create(Guid residentId)
+        {
+            await using var scope = host.Services.CreateAsyncScope();
+            var repository = scope.ServiceProvider.GetRequiredService<IContractRepository>();
+            var contract = new Contract { RoomId = w.Room, OwnerSignerId = w.Owner.Id,
+                RepresentativeResidentId = residentId, Kind = ContractKind.Main, Status = ContractStatus.Draft,
+                StartDate = Today.AddDays(2), EndDate = Today.AddYears(1), MonthlyRent = 2000000,
+                RequiredDeposit = 3000000, Terms = "Synthetic move-in dedup test", SnapshotHash = Guid.NewGuid().ToString("N") };
+            return await repository.InTransactionAsync(w.Room, () =>
+            {
+                repository.Add(contract);
+                repository.Add(new ContractResident { ContractId = contract.Id, ResidentId = residentId,
+                    Role = ResidentType.Representative, ResidenceFrom = contract.StartDate });
+                return Task.FromResult(contract.Id);
+            }, default);
+        }
+        var ids = await Task.WhenAll(residentIds.Select(Create));
+        await using var check = host.Services.CreateAsyncScope();
+        var readDb = check.ServiceProvider.GetRequiredService<Compact24DbContext>();
+        var jobs = await readDb.Set<OperationalTask>().AsNoTracking()
+            .Where(x => x.ContractId != null && ids.Contains(x.ContractId.Value) && x.Status != MeterTaskStatus.Cancelled)
+            .ToArrayAsync();
+        Assert.Single(jobs, x => x.Kind == OperationalTaskKind.AdHoc);
+        Assert.Single(jobs, x => x.Kind == OperationalTaskKind.MoveInInventory);
+        Assert.Single(jobs.Select(x => x.ContractId).Distinct());
+        var canonical = jobs[0].ContractId!.Value;
+        using var owner = await Client(w.Owner, host);
+        Assert.Equal(HttpStatusCode.OK, (await owner.GetAsync($"/api/v1/contracts/{canonical}/handover/draft")).StatusCode);
+        Assert.Equal(HttpStatusCode.NotFound, (await owner.GetAsync($"/api/v1/contracts/{ids.Single(x => x != canonical)}/handover/draft")).StatusCode);
+    }
+
+    [CompactPostgresFact]
     public async Task CreatingMainContractWithinExistingTransactionAutomaticallyPersistsOneDraftWithoutChangingCreationApi()
     {
         var w = await Seed(); using var host = Host();

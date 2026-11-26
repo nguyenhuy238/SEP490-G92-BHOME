@@ -455,6 +455,8 @@ function LiveContractDetail({
   const signingMethods = useSigningMethods(api, role === 'Owner' || role === 'Tenant');
   const [selectedAction, setSelectedAction] = useState('');
   const [terminationRequested, setTerminationRequested] = useState(false);
+  const [consenting, setConsenting] = useState(false);
+  const consentLock = useRef(false);
   const [keys] = useState(() => mutationKeys(randomUUID));
   const [evidence, setEvidence] = useState<string[]>([]);
   const [evidenceText, setEvidenceText] = useState(''),
@@ -515,7 +517,34 @@ function LiveContractDetail({
       </>
     );
   }
-  const tenantAwaitingMoveOutApproval = role === 'Tenant' && m?.status === 'Requested';
+  const tenantAwaitingMoveOutApproval =
+    role === 'Tenant' &&
+    !!m &&
+    (['Requested', 'AwaitingConsent', 'Rejected'].includes(m.status) || !!m.isForced);
+  async function submitConsent(confirmed: boolean) {
+    if (
+      !m ||
+      !(confirmed ? m.canConfirm : m.canReject) ||
+      m.version === undefined ||
+      consentLock.current
+    )
+      return;
+    consentLock.current = true;
+    setConsenting(true);
+    const body = { confirmed, expectedVersion: m.version };
+    const scope = id + '/move-out/consent';
+    try {
+      await api.mutate(id, 'move-out/consent', body, keys.get(scope, body));
+      keys.confirmed(scope, body);
+      detail.reload();
+    } catch (error) {
+      showError(contractError(error));
+      detail.reload();
+    } finally {
+      consentLock.current = false;
+      setConsenting(false);
+    }
+  }
   if (isMainOnboardingDraft(c) && ['Owner', 'Staff'].includes(role))
     return (
       <MainDraftScreen
@@ -882,7 +911,7 @@ function LiveContractDetail({
       {section === 'lifecycle' && !m && terminationRequested && (
         <Box>
           <Heading title="Đã gửi yêu cầu chấm dứt trước hạn" />
-          <Text>Yêu cầu đang chờ chủ trọ duyệt.</Text>
+          <Text>Yêu cầu cần đủ đồng thuận của các thành viên trước khi chủ trọ duyệt.</Text>
         </Box>
       )}
       {section === 'lifecycle' && !m && !terminationAction && !terminationRequested && (
@@ -896,9 +925,30 @@ function LiveContractDetail({
       )}
       {section === 'lifecycle' && m && (
         <Box>
-          <Heading title="Trả phòng" detail={text(m.status)} />
+          <Heading
+            title={m.isForced ? 'Trả phòng bắt buộc' : 'Trả phòng'}
+            detail={text(m.status)}
+          />
           <Text>Ngày đề nghị: {displayContractDate(m.proposedDate)}</Text>
           {!!m.reason?.trim() && <Text>Lý do: {m.reason}</Text>}
+          {m.requiredConsents !== undefined && m.requiredConsents !== null && (
+            <Text>
+              Đã đồng thuận: {m.receivedConsents ?? 0}/{m.requiredConsents} thành viên
+            </Text>
+          )}
+          {role === 'Tenant' && m.canConfirm && (
+            <Action disabled={consenting} onPress={() => void submitConsent(true)}>
+              Đồng ý trả phòng
+            </Action>
+          )}
+          {role === 'Tenant' && m.canReject && (
+            <Button disabled={consenting} onPress={() => void submitConsent(false)}>
+              Hủy đồng thuận trả phòng
+            </Button>
+          )}
+          {m.isForced && (
+            <Text>Hồ sơ kiểm tra hiện trạng, không xác nhận quyết toán hoặc thanh toán.</Text>
+          )}
           {role !== 'Tenant' && m.inspectionScheduledAt && (
             <Text>Lịch kiểm tra: {formatInstant(m.inspectionScheduledAt)} (giờ Việt Nam)</Text>
           )}

@@ -417,6 +417,7 @@ public sealed partial class ContractService
     public Task<MoveOutView> RespondToInspectionAsync(Guid id, InspectionTenantFeedback x, Guid key, CancellationToken t) => Mutate(id, [Roles.Tenant], async c =>
     {
         var m = await repository.MoveOutAsync(id, t) ?? throw ContractException.Missing();
+        if (Forced(m)) throw ContractException.Conflict("forced_move_out_read_only");
         if (await Replay(key, "inspection-tenant-feedback", new { id, x }, t) is not null) return View(m);
         var inspection = (await repository.FinalInspectionsAsync(id, t)).FirstOrDefault() ?? throw ContractException.Missing();
         if (inspection.Version != x.Version || inspection.OwnerDecision is not null || m.Status != MoveOutStatus.Inspected) throw ContractException.Conflict("inspection_changed_or_reviewed");
@@ -430,6 +431,7 @@ public sealed partial class ContractService
     public Task<MoveOutView> ReviewInspectionAsync(Guid id, InspectionReviewInput x, Guid key, CancellationToken t) => Mutate(id, [Roles.Owner], async c =>
     {
         var m = await repository.MoveOutAsync(id, t) ?? throw ContractException.Missing();
+        if (Forced(m)) throw ContractException.Conflict("forced_move_out_read_only");
         if (await Replay(key, "inspection-review", new { id, x }, t) is not null) return View(m);
         var inspection = (await repository.FinalInspectionsAsync(id, t)).FirstOrDefault() ?? throw ContractException.Conflict("move_out_inspection_required");
         if (inspection.Version != x.Version || inspection.OwnerDecision != null || m.Status != MoveOutStatus.Inspected) throw ContractException.Conflict("inspection_changed_or_reviewed");

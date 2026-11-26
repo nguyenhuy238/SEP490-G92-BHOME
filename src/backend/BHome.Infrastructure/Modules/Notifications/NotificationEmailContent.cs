@@ -171,6 +171,82 @@ internal sealed class NotificationEmailContent(Compact24DbContext db,
              new($"Bien-nhan-giu-cho-{id:N}.pdf", "application/pdf", receipt)]);
     }
 
+    internal async Task<(string Destination, string Title, string Body, IReadOnlyList<EmailAttachment> Attachments)?> DraftInvoiceEmailAsync(
+        Guid id, Guid recipient, CancellationToken t)
+    {
+        var invoice = await db.Set<Invoice>().AsNoTracking().Include(i => i.Lines)
+            .SingleOrDefaultAsync(i => i.Id == id && i.Status == InvoiceStatus.Draft &&
+                i.Recipients.Any(r => r.TenantUserId == recipient), t);
+        if (invoice is null) return null;
+        var destination = await db.Users.AsNoTracking().Where(u => u.Id == recipient && u.IsActive && u.EmailConfirmed)
+            .Select(u => u.Email).SingleOrDefaultAsync(t);
+        if (!EmailOptions.ValidAddress(destination)) throw new ChannelDeliveryException("email_recipient_unavailable");
+
+        var culture = CultureInfo.GetCultureInfo("vi-VN");
+        string Money(decimal value) => value.ToString("N0", culture) + " VND";
+        string Quantity(decimal value) => value.ToString("0.####", culture);
+        var lines = new List<string>();
+        var attachments = new List<EmailAttachment>();
+        foreach (var line in invoice.Lines.OrderBy(l => l.Category).ThenBy(l => l.ChargeCode))
+        {
+            var detail = $"{line.Name}: {Money(line.Amount)} (đơn giá {Money(line.Rate)}, số lượng {Quantity(line.Quantity)})";
+            if (line.MeterReadingId is { } readingId)
+            {
+                var type = line.Category switch
+                {
+                    BHome.Domain.PropertyManagement.ChargeCategory.Electricity => UtilityType.Electricity,
+                    BHome.Domain.PropertyManagement.ChargeCategory.Water => UtilityType.Water,
+                    _ => throw new ChannelDeliveryException("draft_invoice_evidence_invalid")
+                };
+                var proof = await (from reading in db.Set<MeterReading>().AsNoTracking()
+                                   join meter in db.Set<Meter>() on reading.MeterId equals meter.Id
+                                   join task in db.Set<OperationalTask>() on reading.TaskId equals task.Id
+                                   join image in db.Set<MeterEvidence>() on reading.EvidenceId equals image.Id
+                                   where reading.Id == readingId && meter.RoomId == invoice.RoomId && meter.UtilityType == type &&
+                                       task.MeterId == meter.Id && task.LocationId == invoice.LocationId &&
+                                       task.Purpose == ReadingPurpose.Periodic && task.BillingPeriod == invoice.BillingPeriod &&
+                                       task.Status == MeterTaskStatus.Completed && image.TaskId == task.Id &&
+                                       image.IsUploaded && image.IsLinked && reading.ConfirmedValue == line.ConfirmedReading
+                                   select image).SingleOrDefaultAsync(t);
+                // A reading correction can temporarily make a draft stale. Retry after
+                // its normal refresh rather than attaching an image for a different reading.
+                if (proof is null || line.PreviousReading is null || line.ConfirmedReading is null)
+                    throw new ChannelDeliveryException("draft_invoice_evidence_changed", retryable: true);
+                if (storage is null) throw new ChannelDeliveryException("draft_invoice_storage_unavailable", retryable: true);
+                var extension = proof.ContentType switch
+                {
+                    "image/jpeg" => "jpg",
+                    "image/png" => "png",
+                    "image/webp" => "webp",
+                    _ => throw new ChannelDeliveryException("draft_invoice_evidence_invalid")
+                };
+                if (proof.Length is < 1 or > PrivateImageEvidence.MaximumBytes)
+                    throw new ChannelDeliveryException("draft_invoice_evidence_invalid");
+                using var output = new MemoryStream();
+                try { await PrivateImageEvidence.CopyVerifiedAsync(storage, proof.ObjectKey, proof.Length, proof.ImageHash, output, t); }
+                catch (PrivateImageIntegrityException) { throw new ChannelDeliveryException("draft_invoice_evidence_invalid"); }
+                catch (Exception e) when (e is not OperationCanceledException and not OutOfMemoryException)
+                { throw new ChannelDeliveryException("draft_invoice_evidence_unavailable", retryable: true); }
+                if (!attachments.Any(a => a.FileName == $"Chi-so-{type}-{proof.Id:N}.{extension}"))
+                    attachments.Add(new($"Chi-so-{type}-{proof.Id:N}.{extension}", proof.ContentType, output.ToArray()));
+                detail += $"\n  Chỉ số trước: {Quantity(line.PreviousReading.Value)}; chỉ số xác nhận: {Quantity(line.ConfirmedReading.Value)}.";
+            }
+            lines.Add(detail);
+        }
+        // Recheck version and entitlement after reading private storage.
+        if (!await db.Set<Invoice>().AnyAsync(i => i.Id == id && i.Status == InvoiceStatus.Draft &&
+            i.Version == invoice.Version && i.Recipients.Any(r => r.TenantUserId == recipient), t))
+            throw new ChannelDeliveryException("draft_invoice_changed", retryable: true);
+        var pending = invoice.MissingInputs.Length == 0 ? "" :
+            "\nHóa đơn vẫn còn dữ liệu cần bổ sung hoặc xác minh; tổng tiền hiện tại chưa đầy đủ.";
+        var body = $"BHOME đã tạo hóa đơn nháp để bạn kiểm tra trước khi phát hành. Chưa đến bước thanh toán.\n\n" +
+            $"Cơ sở: {invoice.LocationName}\nPhòng: {invoice.RoomNumber}\nKỳ hóa đơn: {invoice.BillingPeriod:MM/yyyy}\n" +
+            $"Ngày dự kiến phát hành: {invoice.ScheduledFinalDate:dd/MM/yyyy}\n\n" +
+            string.Join("\n", lines) + $"\n\nTổng tiền tạm tính: {Money(invoice.Total)}.{pending}\n\n" +
+            "Vui lòng mở hóa đơn trong BHOME để kiểm tra nội dung mới nhất và gửi yêu cầu điều chỉnh nếu cần.";
+        return (destination!, $"Hóa đơn nháp — kỳ {invoice.BillingPeriod:MM/yyyy}", body, attachments);
+    }
+
     internal async Task<IReadOnlyList<EmailAttachment>> PaidInvoiceAttachmentsAsync(Guid id, Guid recipient, CancellationToken t)
     {
         var invoice = await db.Set<Invoice>().AsNoTracking().Include(i => i.Lines)
