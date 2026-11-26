@@ -9,6 +9,7 @@ import {
 import { formatInstant } from '../../../../../packages/client-core/src/localization';
 import {
   paymentError,
+  isSePayPaymentCode,
   paymentText,
   type DebtInvoice,
 } from '../../../../../packages/client-core/src/payments';
@@ -84,7 +85,7 @@ function TestingInvoice({ invoice }: { invoice: DebtInvoice }) {
     transfer?.isDevelopmentDemo &&
     ['Available', 'InstructionsOnly'].includes(transfer.availability) &&
     transfer.accountNumber &&
-    /^BH\d{8}$/.test(transfer.transferReference) &&
+    isSePayPaymentCode(transfer.transferReference) &&
     transfer.transferDescription === transfer.transferReference &&
     transfer.invoiceId === state.invoiceId &&
     // The instructions endpoint may issue the BH code after the parallel payment

@@ -1,12 +1,12 @@
-import { TextField, ValidatedForm } from '../../components/common/ValidatedForm';
-import { useRef, useState } from 'react';
+import { TextField } from '../../components/common/ValidatedForm';
+import { useState } from 'react';
+import { OwnerReceivingAccountPanel } from './OwnerReceivingAccountPanel';
 import { useSearchParams } from 'react-router';
 import {
   Alert,
   Box,
   Button,
   Collapse,
-  Divider,
   Dialog,
   DialogTitle,
   DialogContent,
@@ -45,7 +45,6 @@ import { formatInstant } from '../../../../../packages/client-core/src/localizat
 import {
   paymentError,
   paymentText,
-  type BankAccount,
   type BankTransfer,
   type DebtInvoice,
 } from '../../../../../packages/client-core/src/payments';
@@ -940,7 +939,7 @@ export function PaymentManagementPage({ debtOnly = false }: { debtOnly?: boolean
             </Drawer>
           </>
         )}
-        {!debtOnly && section === 3 && <ReceivingAccountForm />}
+        {!debtOnly && section === 3 && <OwnerReceivingAccountPanel />}
         {!debtOnly && section === 1 && (
           <Box
             component="section"
@@ -1402,242 +1401,5 @@ function TransferListItem({
         </Button>
       </Stack>
     </Box>
-  );
-}
-
-const ownerReceivingAccountRoute = '/api/v1/receiving-bank-accounts/owner';
-
-function ReceivingAccountForm() {
-  const api = usePaymentApi();
-  const { session } = useAuth();
-  const actor = session?.userId ?? '';
-  const cache = useQueryClient();
-  const [lastSaved, setLastSaved] = useState<number | null>(null);
-  const account = useQuery({
-    queryKey: ['receiving-account', actor, 'owner'],
-    queryFn: ({ signal }) =>
-      api.request<BankAccount | null>(ownerReceivingAccountRoute, { signal }),
-  });
-  return (
-    <>
-      {account.isPending && <LinearProgress />}
-      {account.error && (
-        <Alert
-          severity="error"
-          action={<Button onClick={() => void account.refetch()}>Thử lại</Button>}
-        >
-          {paymentError(account.error)}
-        </Alert>
-      )}
-      {account.isSuccess && (
-        <>
-          {lastSaved === account.data?.version && (
-            <Alert severity="success" role="status">
-              Đã lưu tài khoản nhận tiền thành công (phiên bản {lastSaved}).
-            </Alert>
-          )}
-          <AccountEditor
-            key={actor + ':' + (account.data?.version ?? 0)}
-            current={account.data}
-            edited={() => setLastSaved(null)}
-            saved={(value) => {
-              setLastSaved(value.version);
-              cache.setQueryData(['receiving-account', actor, 'owner'], value);
-              void account.refetch();
-            }}
-          />
-        </>
-      )}
-    </>
-  );
-}
-function AccountEditor({
-  current,
-  edited,
-  saved,
-}: {
-  current: BankAccount | null;
-  edited: () => void;
-  saved: (value: BankAccount) => void;
-}) {
-  const api = usePaymentApi();
-  const cache = useQueryClient();
-  const [bank, setBank] = useState(current?.bankIdentifier ?? ''),
-    [number, setNumber] = useState(current?.accountNumber ?? ''),
-    [holder, setHolder] = useState(current?.accountHolder ?? '');
-  const [enabled, setEnabled] = useState(current?.enabled ?? false),
-    [demo, setDemo] = useState(current?.isDevelopmentDemo ?? false),
-    [checked, setChecked] = useState(Boolean(current)),
-    [busy, setBusy] = useState(false),
-    [error, setError] = useState('');
-  const lock = useRef(false);
-  const unchanged = Boolean(
-    current &&
-    bank === current.bankIdentifier &&
-    number === current.accountNumber &&
-    holder === current.accountHolder &&
-    enabled === current.enabled &&
-    demo === current.isDevelopmentDemo,
-  );
-  const markEdited = () => {
-    setChecked(false);
-    setError('');
-    edited();
-  };
-  return (
-    <Paper variant="outlined" sx={{ p: { xs: 1.5, md: 2.5 } }}>
-      <Stack
-        component={ValidatedForm}
-        spacing={2}
-        sx={{ maxWidth: 860 }}
-        onSubmit={(event) => {
-          event.preventDefault();
-          if (lock.current || !checked || unchanged) return;
-          lock.current = true;
-          setBusy(true);
-          setError('');
-          void api
-            .request<BankAccount>(ownerReceivingAccountRoute, {
-              method: 'PUT',
-              body: JSON.stringify({
-                bankIdentifier: bank,
-                accountNumber: number,
-                accountHolder: holder,
-                enabled,
-                isDevelopmentDemo: demo,
-                humanVerified: true,
-                expectedVersion: current?.version ?? 0,
-              }),
-            })
-            .then((value) => {
-              void cache.invalidateQueries({ queryKey: ['transfer-instructions'] });
-              saved(value);
-            })
-            .catch((e) => setError(paymentError(e)))
-            .finally(() => {
-              lock.current = false;
-              setBusy(false);
-            });
-        }}
-      >
-        <Box>
-          <Typography variant="h6">Tài khoản nhận tiền chung cho tất cả cơ sở</Typography>
-          <Typography variant="body2" color="text.secondary" sx={{ mt: 0.5 }}>
-            Cấu hình một lần cho tất cả cơ sở thuộc Owner đang đăng nhập. Các phiên bản tài khoản
-            theo từng cơ sở trước đây được giữ lại để đối chiếu.
-          </Typography>
-          <Typography variant="body2" color="text.secondary" sx={{ mt: 0.5 }}>
-            Bật hướng dẫn nhận tiền không tự kích hoạt SePay. QR có mã đối soát chỉ xuất hiện khi
-            tài khoản này được liên kết chính xác với SePay ở môi trường tương ứng.
-          </Typography>
-          {current && (
-            <Typography variant="body2" color="text.secondary" sx={{ mt: 0.5 }}>
-              Đã xác nhận và lưu cấu hình phiên bản {current.version}.
-            </Typography>
-          )}
-        </Box>
-        <Box
-          sx={{
-            display: 'grid',
-            gridTemplateColumns: { xs: '1fr', md: 'repeat(2, minmax(0, 1fr))' },
-            gap: 2,
-          }}
-        >
-          <TextField
-            size="small"
-            required
-            disabled={busy}
-            label="BIN ngân hàng (6 số)"
-            value={bank}
-            onChange={(e) => {
-              setBank(e.target.value);
-              markEdited();
-            }}
-          />
-          <TextField
-            size="small"
-            required
-            disabled={busy}
-            label="Số tài khoản nhận tiền"
-            value={number}
-            onChange={(e) => {
-              setNumber(e.target.value);
-              markEdited();
-            }}
-          />
-          <TextField
-            size="small"
-            required
-            disabled={busy}
-            label="Chủ tài khoản (in hoa không dấu)"
-            value={holder}
-            sx={{ gridColumn: { md: '1 / -1' } }}
-            onChange={(e) => {
-              setHolder(e.target.value.toUpperCase());
-              markEdited();
-            }}
-          />
-        </Box>
-        <Box sx={{ border: '1px solid', borderColor: 'divider', p: 1.5, borderRadius: 1.5 }}>
-          <Typography variant="subtitle2" sx={{ mb: 0.5 }}>
-            Cấu hình hướng dẫn nhận tiền
-          </Typography>
-          <Stack>
-            <FormControlLabel
-              control={
-                <Checkbox
-                  checked={enabled}
-                  disabled={busy}
-                  onChange={(e) => {
-                    setEnabled(e.target.checked);
-                    markEdited();
-                  }}
-                />
-              }
-              label="Bật hướng dẫn nhận tiền"
-            />
-            <FormControlLabel
-              control={
-                <Checkbox
-                  checked={demo}
-                  disabled={busy}
-                  onChange={(e) => {
-                    setDemo(e.target.checked);
-                    markEdited();
-                  }}
-                />
-              }
-              label="Tài khoản thử nghiệm (Test)"
-            />
-            {demo && (
-              <Typography variant="body2" color="text.secondary">
-                Tài khoản tổng hợp dùng trong Development/Testing hoặc Staging đã bật SePay Test.
-                Giữ đánh dấu này khi dùng tài khoản thử nghiệm. Không chuyển tiền thật.
-              </Typography>
-            )}
-          </Stack>
-          <Divider sx={{ my: 1 }} />
-          <FormControlLabel
-            control={
-              <Checkbox
-                checked={checked}
-                disabled={busy}
-                onChange={(e) => setChecked(e.target.checked)}
-              />
-            }
-            label="Tôi đã kiểm tra và phê duyệt thông tin tài khoản nhận"
-          />
-        </Box>
-        {error && <Alert severity="error">{error}</Alert>}
-        <Button
-          type="submit"
-          variant="contained"
-          disabled={busy || !checked || unchanged}
-          sx={{ alignSelf: { xs: 'stretch', sm: 'flex-start' } }}
-        >
-          Lưu tài khoản nhận tiền
-        </Button>
-      </Stack>
-    </Paper>
   );
 }
