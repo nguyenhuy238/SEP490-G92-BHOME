@@ -93,11 +93,11 @@ beforeEach(() => {
 });
 afterEach(cleanup);
 
-function mount() {
+function mount(search = '') {
   const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
   return render(
     <QueryClientProvider client={client}>
-      <MemoryRouter initialEntries={['/locations/location-123/investment']}>
+      <MemoryRouter initialEntries={['/locations/location-123/investment' + search]}>
         <Routes>
           <Route path="/locations/:locationId/investment" element={<LocationFinanceWorkspace />} />
         </Routes>
@@ -105,6 +105,27 @@ function mount() {
     </QueryClientProvider>,
   );
 }
+
+it('opens recurring cost setup for the linked location without creating expenses', async () => {
+  mount('?tab=recurring');
+  expect(screen.getByRole('tab', { name: 'Chi phí định kỳ' })).toHaveAttribute(
+    'aria-selected',
+    'true',
+  );
+  await waitFor(() =>
+    expect(state.request).toHaveBeenCalledWith(
+      '/api/v1/recurring-expenses?locationId=location-123',
+      expect.objectContaining({ signal: expect.anything() }),
+    ),
+  );
+  expect(state.createExpense).not.toHaveBeenCalled();
+  expect(state.request.mock.calls.every(([, init]) => !init?.method)).toBe(true);
+});
+
+it('falls back to the overview for an unknown finance tab', () => {
+  mount('?tab=unknown');
+  expect(screen.getByRole('tab', { name: 'Tổng quan' })).toHaveAttribute('aria-selected', 'true');
+});
 
 it('shows real API finance totals and warns when recovery is unavailable', async () => {
   mount();

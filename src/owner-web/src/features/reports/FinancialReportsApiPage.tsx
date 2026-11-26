@@ -25,7 +25,7 @@ import {
   type SettlementFinanceSources,
 } from '../../../../../packages/client-core/src/finance';
 import { displayContractDate } from '../../../../../packages/client-core/src/contracts';
-import { FilterToolbar, KPIGrid, PageHeader } from '../../components/common/PortalUI';
+import { KPIGrid, PageHeader } from '../../components/common/PortalUI';
 import { OptionPicker } from '../../components/common/OptionPicker';
 import { FinancialAmountChart } from './FinancialAmountChart';
 import { FinancialTrendChart } from './FinancialTrendChart';
@@ -35,7 +35,9 @@ import { formatInstant } from '../../../../../packages/client-core/src/localizat
 import { financeMonthPeriod } from '../finance/monthPeriods';
 import { useFinanceSearch } from '../finance/financeScope';
 import { ManagementFinanceSummary } from './ManagementFinanceSummary';
+import { BusinessFinanceOverview } from './BusinessFinanceOverview';
 import { managementMoney } from '../finance/managementMoney';
+import { compareDecimal } from '../finance/compareDecimal';
 import { ExpenseSourceDetails } from './ExpenseSourceDetails';
 import { DepreciationSourceDetails } from './DepreciationSourceDetails';
 import { LocationPerformanceTable } from './LocationPerformanceTable';
@@ -79,7 +81,12 @@ export function FinancialReportsApiPage() {
     enabled: !!location,
     queryFn: ({ signal }) => api.rooms(location, signal),
   });
-  function loadReport(fromValue: string, toValue: string) {
+  function loadReport(
+    fromValue: string,
+    toValue: string,
+    locationValue = location,
+    roomValue = room,
+  ) {
     if (!fromValue || !toValue || fromValue > toValue) {
       setDateError(true);
       return;
@@ -90,10 +97,10 @@ export function FinancialReportsApiPage() {
     setLedgerKind(null);
     setReportScope(
       [
-        location
-          ? (locations.data?.find((item) => item.id === location)?.label ?? location)
+        locationValue
+          ? (locations.data?.find((item) => item.id === locationValue)?.label ?? locationValue)
           : 'Toàn chuỗi',
-        room ? (rooms.data?.find((item) => item.id === room)?.label ?? room) : '',
+        roomValue ? (rooms.data?.find((item) => item.id === roomValue)?.label ?? roomValue) : '',
       ]
         .filter(Boolean)
         .join(' · '),
@@ -101,9 +108,9 @@ export function FinancialReportsApiPage() {
     setFilter({
       from: fromValue,
       to: toValue,
-      locationId: location || undefined,
+      locationId: locationValue || undefined,
       includeComparison: true,
-      ...(room ? { roomId: room } : {}),
+      ...(roomValue ? { roomId: roomValue } : {}),
     });
   }
   const value = report.data;
@@ -134,25 +141,16 @@ export function FinancialReportsApiPage() {
     <>
       <PageHeader
         title="Báo cáo kinh doanh"
-        subtitle="Kết quả thu chi và hoàn vốn theo kỳ. Chỉ hiển thị số liệu do máy chủ tổng hợp."
+        subtitle="Thu bao nhiêu, chi bao nhiêu, lợi nhuận còn lại bao nhiêu."
       />
       <Paper variant="outlined" sx={{ p: 1.5, mb: 1.5 }}>
-        <Box sx={{ mb: 1.5 }}>
-          <Typography variant="subtitle2" sx={{ fontWeight: 750 }}>
-            Chọn kỳ và phạm vi cần xem
-          </Typography>
-          <Typography variant="body2" color="text.secondary">
-            Trang tự tải tháng đã hoàn tất gần nhất. Khi đổi bộ lọc, nhấn Xem báo cáo để lấy số liệu
-            cho lựa chọn mới.
-          </Typography>
-        </Box>
         <ValidatedForm
           onSubmit={(e) => {
             e.preventDefault();
             loadReport(from, to);
           }}
         >
-          <FilterToolbar>
+          <Stack direction="row" useFlexGap sx={{ flexWrap: 'wrap', alignItems: 'center', gap: 1 }}>
             <Button
               size="small"
               variant={
@@ -165,6 +163,7 @@ export function FinancialReportsApiPage() {
                 setFrom(period.from);
                 setTo(period.to);
                 setDateError(false);
+                loadReport(period.from, period.to);
               }}
             >
               Tháng trước
@@ -181,22 +180,26 @@ export function FinancialReportsApiPage() {
                 setFrom(period.from);
                 setTo(period.to);
                 setDateError(false);
+                loadReport(period.from, period.to);
               }}
             >
               Tháng này
             </Button>
-            <OptionPicker
-              label="Cơ sở"
-              value={location}
-              options={locations.data ?? []}
-              loading={locations.isPending}
-              error={!!locations.error}
-              emptyLabel="Toàn chuỗi"
-              change={(id) => {
-                setLocation(id);
-                setRoom('');
-              }}
-            />
+            <Box sx={{ width: { xs: '100%', sm: 220 } }}>
+              <OptionPicker
+                label="Cơ sở"
+                value={location}
+                options={locations.data ?? []}
+                loading={locations.isPending}
+                error={!!locations.error}
+                emptyLabel="Toàn chuỗi"
+                change={(id) => {
+                  setLocation(id);
+                  setRoom('');
+                  loadReport(from, to, id, '');
+                }}
+              />
+            </Box>
             <Button
               size="small"
               color="inherit"
@@ -208,10 +211,12 @@ export function FinancialReportsApiPage() {
               {advancedFiltersOpen ? 'Ẩn bộ lọc chi tiết' : 'Bộ lọc chi tiết'}
               {!advancedFiltersOpen && room ? ' • Đang lọc phòng' : ''}
             </Button>
-            <Button type="submit" variant="contained" disabled={report.isFetching}>
-              Xem báo cáo
-            </Button>
-          </FilterToolbar>
+            {advancedFiltersOpen && (
+              <Button type="submit" variant="contained" disabled={report.isFetching}>
+                Xem báo cáo
+              </Button>
+            )}
+          </Stack>
           <Collapse in={advancedFiltersOpen} unmountOnExit>
             <Stack
               id="report-advanced-filters"
@@ -303,7 +308,7 @@ export function FinancialReportsApiPage() {
             sx={{ justifyContent: 'space-between', alignItems: { sm: 'center' } }}
           >
             <Box sx={{ minWidth: 0 }}>
-              <Typography variant="h2" component="h2">
+              <Typography variant="body2" sx={{ fontWeight: 700 }}>
                 Kỳ báo cáo đã tải: {filter && displayContractDate(filter.from)} –{' '}
                 {filter && displayContractDate(filter.to)}
               </Typography>
@@ -314,13 +319,9 @@ export function FinancialReportsApiPage() {
                     reportScope)
                   : reportScope}
               </Typography>
-              <Typography color="text.secondary" variant="caption">
-                Ảnh chụp dữ liệu:{' '}
-                {value.snapshotAt ? formatInstant(value.snapshotAt) : 'Chưa có thời điểm'}
-              </Typography>
             </Box>
             <Button
-              variant="outlined"
+              size="small"
               sx={{ flexShrink: 0 }}
               onClick={() =>
                 downloadFinance(
@@ -330,490 +331,520 @@ export function FinancialReportsApiPage() {
                 )
               }
             >
-              Tải CSV số liệu máy chủ
+              Xuất báo cáo
             </Button>
           </Stack>
-          <KPIGrid
-            items={
-              value.total.management
-                ? [
-                    {
-                      label: 'Doanh thu trong kỳ',
-                      value: managementMoney(value.total.management.revenue),
-                    },
-                    {
-                      label: 'Tiền kinh doanh thực thu',
-                      value: managementMoney(value.total.management.actualBusinessCollections),
-                    },
-                    {
-                      label: 'Công nợ hiện tại',
-                      value: managementMoney(value.total.management.currentOutstanding),
-                    },
-                    {
-                      label: 'Dòng tiền vận hành',
-                      value: managementMoney(value.total.management.operatingCashFlow),
-                    },
-                  ]
-                : [
-                    {
-                      label: 'Hóa đơn / khoản phải thu',
-                      value: formatFinanceMoney(value.total.issued),
-                    },
-                    {
-                      label: 'Tiền phân bổ xác minh (dữ liệu cũ)',
-                      value: formatFinanceMoney(value.total.verifiedCollections),
-                    },
-                    {
-                      label: 'Nợ hiện tại trong kỳ',
-                      value: formatFinanceMoney(value.total.outstandingNow),
-                    },
-                    {
-                      label: 'OPEX trong kỳ',
-                      value: formatFinanceMoney(value.total.operatingExpenses),
-                    },
-                  ]
-            }
-          />
-          <ManagementFinanceSummary value={value.total.management} />
+          {value.total.management ? (
+            <BusinessFinanceOverview totals={value.total} />
+          ) : (
+            <KPIGrid
+              items={[
+                {
+                  label: 'Hóa đơn / khoản phải thu',
+                  value: formatFinanceMoney(value.total.issued),
+                },
+                {
+                  label: 'Tiền phân bổ xác minh (dữ liệu cũ)',
+                  value: formatFinanceMoney(value.total.verifiedCollections),
+                },
+                {
+                  label: 'Nợ hiện tại trong kỳ',
+                  value: formatFinanceMoney(value.total.outstandingNow),
+                },
+                {
+                  label: 'OPEX trong kỳ',
+                  value: formatFinanceMoney(value.total.operatingExpenses),
+                },
+              ]}
+            />
+          )}
           {value.comparison && (
-            <Paper variant="outlined" sx={{ p: 2 }}>
-              <Typography variant="h3">Biến động so với kỳ trước</Typography>
-              <Typography variant="caption" color="text.secondary">
-                {displayContractDate(value.comparison.currentFrom)} –{' '}
-                {displayContractDate(value.comparison.currentTo)}
-                {' so với '}
-                {displayContractDate(value.comparison.previousFrom)} –{' '}
-                {displayContractDate(value.comparison.previousTo)}
-              </Typography>
-              <Stack spacing={1} sx={{ mt: 1 }}>
-                {[
-                  { label: 'Doanh thu', ...value.comparison.revenue },
-                  { label: 'Chi phí vận hành', ...value.comparison.operatingExpenses },
-                  { label: 'Lợi nhuận vận hành', ...value.comparison.operatingProfit },
-                  ...value.comparison.expenseCategories.map((row) => ({
-                    label: row.category,
-                    ...row,
-                  })),
-                ].map((row, index) => (
-                  <Stack
-                    key={index}
-                    direction={{ xs: 'column', sm: 'row' }}
-                    sx={{ justifyContent: 'space-between' }}
-                    spacing={0.5}
-                  >
-                    <Typography>{row.label}</Typography>
-                    <Typography sx={{ fontVariantNumeric: 'tabular-nums' }}>
-                      {managementMoney(row.previous)} → {managementMoney(row.current)} ·{' '}
-                      {managementMoney(row.change)}
-                      {' ('}
-                      {row.changePercent == null
-                        ? 'Không có tỷ lệ so sánh'
-                        : row.changePercent + '%'}
-                      {')'}
-                    </Typography>
-                    {index >= 3 && (
-                      <Button
-                        size="small"
-                        onClick={() =>
-                          setCategoryDetails(categoryDetails === row.label ? null : row.label)
-                        }
-                      >
-                        {categoryDetails === row.label ? 'Ẩn nguồn' : 'Xem nguồn'}
-                      </Button>
-                    )}
-                  </Stack>
-                ))}
-              </Stack>
-              {categoryDetails && filter && (
-                <Stack spacing={2} sx={{ mt: 2 }}>
-                  <ExpenseSourceDetails
-                    key={categoryDetails + '-current'}
-                    filter={{
-                      ...filter,
-                      from: value.comparison.currentFrom,
-                      to: value.comparison.currentTo,
-                    }}
-                    category={categoryDetails}
-                    expected={
-                      value.comparison.expenseCategories.find(
-                        (row) => row.category === categoryDetails,
-                      )?.current
-                    }
-                  />
-                  <ExpenseSourceDetails
-                    key={categoryDetails + '-previous'}
-                    filter={{
-                      ...filter,
-                      from: value.comparison.previousFrom,
-                      to: value.comparison.previousTo,
-                    }}
-                    category={categoryDetails}
-                    expected={
-                      value.comparison.expenseCategories.find(
-                        (row) => row.category === categoryDetails,
-                      )?.previous
-                    }
-                  />
-                </Stack>
-              )}
-            </Paper>
+            <Typography variant="body2">
+              {compareDecimal(value.comparison.operatingExpenses.change, '0') === 0
+                ? 'Chi phí vận hành không đổi so với kỳ trước.'
+                : `Chi phí vận hành ${compareDecimal(value.comparison.operatingExpenses.change, '0') > 0 ? 'tăng' : 'giảm'} ${managementMoney(value.comparison.operatingExpenses.change.replace(/^-/, ''))} so với kỳ trước.`}
+            </Typography>
           )}
           <Accordion variant="outlined" disableGutters>
             <AccordionSummary expandIcon={<ChevronDown size={18} />}>
-              <Typography variant="subtitle1" sx={{ fontWeight: 750 }}>
-                Biểu đồ các khoản thu chi
+              <Typography variant="subtitle1" sx={{ fontWeight: 700 }}>
+                Xem chi tiết báo cáo
               </Typography>
             </AccordionSummary>
             <AccordionDetails>
-              <FinancialTrendChart
-                points={value.trend}
-                unavailableReason={value.trendUnavailableReason}
-              />
-              <Box sx={{ mt: 2 }}>
-                <FinancialAmountChart totals={value.total} />
-              </Box>
-            </AccordionDetails>
-          </Accordion>
-          <Accordion
-            variant="outlined"
-            disableGutters
-            sx={{ minWidth: 0, overflowWrap: 'anywhere' }}
-          >
-            <AccordionSummary expandIcon={<ChevronDown size={18} />}>
-              <Box>
-                <Typography variant="subtitle1" sx={{ fontWeight: 750 }}>
-                  Đối chiếu chi tiết số liệu
+              <Stack spacing={2}>
+                <Typography color="text.secondary" variant="caption">
+                  Cập nhật:{' '}
+                  {value.snapshotAt ? formatInstant(value.snapshotAt) : 'Chưa có thời điểm'}
                 </Typography>
-                <Typography variant="caption" color="text.secondary">
-                  Xem từng khoản phải thu, tiền đã xác minh và cấn trừ cọc khi cần kiểm tra.
-                </Typography>
-              </Box>
-            </AccordionSummary>
-            <AccordionDetails>
-              <Typography variant="h2" component="h2" sx={{ mb: 1 }}>
-                Toàn bộ phạm vi đã chọn
-              </Typography>
-              <Totals value={value.total} />
-              {filter && value.total.management && (
-                <Stack spacing={1} sx={{ my: 1.5 }}>
-                  <Stack direction="row" useFlexGap spacing={0.5} sx={{ flexWrap: 'wrap' }}>
-                    {(Object.keys(sourceLabels) as FinanceSourceKind[]).map((kind) => (
-                      <Button
-                        key={kind}
-                        size="small"
-                        variant={ledgerKind === kind ? 'contained' : 'outlined'}
-                        aria-pressed={ledgerKind === kind}
-                        onClick={() => setLedgerKind(ledgerKind === kind ? null : kind)}
-                      >
-                        {sourceLabels[kind]}
-                      </Button>
-                    ))}
-                  </Stack>
-                  {ledgerKind && (
-                    <FinanceLedgerDetails
-                      key={JSON.stringify(filter) + ledgerKind}
-                      filter={filter}
-                      kind={ledgerKind}
-                      expected={
-                        {
-                          revenue: value.total.management.revenue,
-                          cash: value.total.management.actualBusinessCollections,
-                          debt: value.total.management.currentOutstanding,
-                          'period-debt': value.total.management.periodOutstanding,
-                          deposit: value.total.management.depositReceipts,
-                        }[ledgerKind]
-                      }
-                    />
-                  )}
-                </Stack>
-              )}
-              {filter && (
-                <Box sx={{ my: 1.5 }}>
-                  <Button
-                    size="small"
-                    aria-expanded={expenseDetailsOpen}
-                    onClick={() => setExpenseDetailsOpen(!expenseDetailsOpen)}
+                {value.total.management ? (
+                  <Accordion
+                    variant="outlined"
+                    disableGutters
+                    slotProps={{ transition: { unmountOnExit: true } }}
                   >
-                    {expenseDetailsOpen ? 'Ẩn danh sách chi phí' : 'Xem danh sách chi phí vận hành'}
-                  </Button>
-                  {expenseDetailsOpen && (
-                    <ExpenseSourceDetails
-                      key={JSON.stringify(filter)}
-                      filter={filter}
-                      expected={value.total.operatingExpenses}
+                    <AccordionSummary expandIcon={<ChevronDown size={18} />}>
+                      <Typography variant="subtitle1" sx={{ fontWeight: 750 }}>
+                        Chi tiết doanh thu, chi phí & dòng tiền
+                      </Typography>
+                    </AccordionSummary>
+                    <AccordionDetails>
+                      <ManagementFinanceSummary value={value.total.management} />
+                    </AccordionDetails>
+                  </Accordion>
+                ) : (
+                  <ManagementFinanceSummary value={value.total.management} />
+                )}
+                {value.comparison && (
+                  <Paper variant="outlined" sx={{ p: 2 }}>
+                    <Typography variant="h3">Biến động so với kỳ trước</Typography>
+                    <Typography variant="caption" color="text.secondary">
+                      {displayContractDate(value.comparison.currentFrom)} –{' '}
+                      {displayContractDate(value.comparison.currentTo)}
+                      {' so với '}
+                      {displayContractDate(value.comparison.previousFrom)} –{' '}
+                      {displayContractDate(value.comparison.previousTo)}
+                    </Typography>
+                    <Stack spacing={1} sx={{ mt: 1 }}>
+                      {[
+                        { label: 'Doanh thu', ...value.comparison.revenue },
+                        { label: 'Chi phí vận hành', ...value.comparison.operatingExpenses },
+                        { label: 'Lợi nhuận vận hành', ...value.comparison.operatingProfit },
+                        ...value.comparison.expenseCategories.map((row) => ({
+                          label: row.category,
+                          ...row,
+                        })),
+                      ].map((row, index) => (
+                        <Stack
+                          key={index}
+                          direction={{ xs: 'column', sm: 'row' }}
+                          sx={{ justifyContent: 'space-between' }}
+                          spacing={0.5}
+                        >
+                          <Typography>{row.label}</Typography>
+                          <Typography sx={{ fontVariantNumeric: 'tabular-nums' }}>
+                            {managementMoney(row.previous)} → {managementMoney(row.current)} ·{' '}
+                            {managementMoney(row.change)}
+                            {' ('}
+                            {row.changePercent == null
+                              ? 'Không có tỷ lệ so sánh'
+                              : row.changePercent + '%'}
+                            {')'}
+                          </Typography>
+                          {index >= 3 && (
+                            <Button
+                              size="small"
+                              onClick={() =>
+                                setCategoryDetails(categoryDetails === row.label ? null : row.label)
+                              }
+                            >
+                              {categoryDetails === row.label ? 'Ẩn nguồn' : 'Xem nguồn'}
+                            </Button>
+                          )}
+                        </Stack>
+                      ))}
+                    </Stack>
+                    {categoryDetails && filter && (
+                      <Stack spacing={2} sx={{ mt: 2 }}>
+                        <ExpenseSourceDetails
+                          key={categoryDetails + '-current'}
+                          filter={{
+                            ...filter,
+                            from: value.comparison.currentFrom,
+                            to: value.comparison.currentTo,
+                          }}
+                          category={categoryDetails}
+                          expected={
+                            value.comparison.expenseCategories.find(
+                              (row) => row.category === categoryDetails,
+                            )?.current
+                          }
+                        />
+                        <ExpenseSourceDetails
+                          key={categoryDetails + '-previous'}
+                          filter={{
+                            ...filter,
+                            from: value.comparison.previousFrom,
+                            to: value.comparison.previousTo,
+                          }}
+                          category={categoryDetails}
+                          expected={
+                            value.comparison.expenseCategories.find(
+                              (row) => row.category === categoryDetails,
+                            )?.previous
+                          }
+                        />
+                      </Stack>
+                    )}
+                  </Paper>
+                )}
+                <Accordion variant="outlined" disableGutters>
+                  <AccordionSummary expandIcon={<ChevronDown size={18} />}>
+                    <Typography variant="subtitle1" sx={{ fontWeight: 750 }}>
+                      Biểu đồ các khoản thu chi
+                    </Typography>
+                  </AccordionSummary>
+                  <AccordionDetails>
+                    <FinancialTrendChart
+                      points={value.trend}
+                      unavailableReason={value.trendUnavailableReason}
                     />
-                  )}
-                </Box>
-              )}
-              {filter && value.total.management && (
+                    <Box sx={{ mt: 2 }}>
+                      <FinancialAmountChart totals={value.total} />
+                    </Box>
+                  </AccordionDetails>
+                </Accordion>
                 <Accordion
                   variant="outlined"
                   disableGutters
-                  slotProps={{ transition: { unmountOnExit: true } }}
+                  sx={{ minWidth: 0, overflowWrap: 'anywhere' }}
                 >
                   <AccordionSummary expandIcon={<ChevronDown size={18} />}>
-                    Xem nguồn khấu hao
+                    <Box>
+                      <Typography variant="subtitle1" sx={{ fontWeight: 750 }}>
+                        Đối chiếu chi tiết số liệu
+                      </Typography>
+                      <Typography variant="caption" color="text.secondary">
+                        Xem từng khoản phải thu, tiền đã xác minh và cấn trừ cọc khi cần kiểm tra.
+                      </Typography>
+                    </Box>
                   </AccordionSummary>
                   <AccordionDetails>
-                    <DepreciationSourceDetails
-                      key={JSON.stringify(filter)}
-                      filter={filter}
-                      expected={value.total.management.depreciation}
-                    />
+                    <Typography variant="h2" component="h2" sx={{ mb: 1 }}>
+                      Toàn bộ phạm vi đã chọn
+                    </Typography>
+                    <Totals value={value.total} />
+                    {filter && value.total.management && (
+                      <Stack spacing={1} sx={{ my: 1.5 }}>
+                        <Stack direction="row" useFlexGap spacing={0.5} sx={{ flexWrap: 'wrap' }}>
+                          {(Object.keys(sourceLabels) as FinanceSourceKind[]).map((kind) => (
+                            <Button
+                              key={kind}
+                              size="small"
+                              variant={ledgerKind === kind ? 'contained' : 'outlined'}
+                              aria-pressed={ledgerKind === kind}
+                              onClick={() => setLedgerKind(ledgerKind === kind ? null : kind)}
+                            >
+                              {sourceLabels[kind]}
+                            </Button>
+                          ))}
+                        </Stack>
+                        {ledgerKind && (
+                          <FinanceLedgerDetails
+                            key={JSON.stringify(filter) + ledgerKind}
+                            filter={filter}
+                            kind={ledgerKind}
+                            expected={
+                              {
+                                revenue: value.total.management.revenue,
+                                cash: value.total.management.actualBusinessCollections,
+                                debt: value.total.management.currentOutstanding,
+                                'period-debt': value.total.management.periodOutstanding,
+                                deposit: value.total.management.depositReceipts,
+                              }[ledgerKind]
+                            }
+                          />
+                        )}
+                      </Stack>
+                    )}
+                    {filter && (
+                      <Box sx={{ my: 1.5 }}>
+                        <Button
+                          size="small"
+                          aria-expanded={expenseDetailsOpen}
+                          onClick={() => setExpenseDetailsOpen(!expenseDetailsOpen)}
+                        >
+                          {expenseDetailsOpen
+                            ? 'Ẩn danh sách chi phí'
+                            : 'Xem danh sách chi phí vận hành'}
+                        </Button>
+                        {expenseDetailsOpen && (
+                          <ExpenseSourceDetails
+                            key={JSON.stringify(filter)}
+                            filter={filter}
+                            expected={value.total.operatingExpenses}
+                          />
+                        )}
+                      </Box>
+                    )}
+                    {filter && value.total.management && (
+                      <Accordion
+                        variant="outlined"
+                        disableGutters
+                        slotProps={{ transition: { unmountOnExit: true } }}
+                      >
+                        <AccordionSummary expandIcon={<ChevronDown size={18} />}>
+                          Xem nguồn khấu hao
+                        </AccordionSummary>
+                        <AccordionDetails>
+                          <DepreciationSourceDetails
+                            key={JSON.stringify(filter)}
+                            filter={filter}
+                            expected={value.total.management.depreciation}
+                          />
+                        </AccordionDetails>
+                      </Accordion>
+                    )}
+                    <SettlementSources value={value.settlementSources} />
+                    {value.receiptReconciliation && (
+                      <Stack spacing={0.5}>
+                        <Typography variant="subtitle2">Đối chiếu ngân hàng toàn chuỗi</Typography>
+                        <Typography>
+                          Tổng tiền ngân hàng xác minh:{' '}
+                          {managementMoney(value.receiptReconciliation.verifiedBankReceipts)}
+                        </Typography>
+                        <Typography>
+                          Phần chưa phân bổ (trước khi trừ hoàn tiền):{' '}
+                          {managementMoney(value.receiptReconciliation.unallocatedAtReview)}
+                        </Typography>
+                        <Typography>
+                          Hoàn tiền thừa đã xác minh trong kỳ:{' '}
+                          {managementMoney(value.receiptReconciliation.excessRefundedInPeriod)}
+                        </Typography>
+                        <Typography variant="caption" color="text.secondary">
+                          Tiền chưa phân bổ không phải doanh thu hoặc số dư được dùng về sau. Khoản
+                          thu thừa chỉ được hoàn cho người thực tế thanh toán sau khi kiểm tra hồ
+                          sơ.
+                        </Typography>
+                        {filter && !filter.locationId && !filter.roomId && (
+                          <Accordion
+                            variant="outlined"
+                            disableGutters
+                            slotProps={{ transition: { unmountOnExit: true } }}
+                          >
+                            <AccordionSummary expandIcon={<ChevronDown size={18} />}>
+                              Xem nguồn giao dịch ngân hàng
+                            </AccordionSummary>
+                            <AccordionDetails>
+                              <BankReceiptSourceDetails
+                                key={JSON.stringify(filter)}
+                                filter={filter}
+                                expectedReceived={value.receiptReconciliation.verifiedBankReceipts}
+                                expectedUnallocated={
+                                  value.receiptReconciliation.unallocatedAtReview
+                                }
+                              />
+                            </AccordionDetails>
+                          </Accordion>
+                        )}
+                        {filter && !filter.locationId && !filter.roomId && (
+                          <Accordion
+                            variant="outlined"
+                            disableGutters
+                            slotProps={{ transition: { unmountOnExit: true } }}
+                          >
+                            <AccordionSummary expandIcon={<ChevronDown size={18} />}>
+                              Xem khoản hoàn tiền trong kỳ
+                            </AccordionSummary>
+                            <AccordionDetails>
+                              <BankRefundSourceDetails
+                                key={JSON.stringify(filter)}
+                                filter={filter}
+                                expected={value.receiptReconciliation.excessRefundedInPeriod}
+                              />
+                            </AccordionDetails>
+                          </Accordion>
+                        )}
+                      </Stack>
+                    )}
+                    <Typography>
+                      Hoàn gốc cọc đã xác minh trong kỳ:{' '}
+                      {value.verifiedDepositReturns == null
+                        ? 'Chưa có dữ liệu phân loại'
+                        : formatFinanceMoney(value.verifiedDepositReturns)}
+                    </Typography>
+                    <Alert severity="info">
+                      Hoàn gốc cọc được theo dõi riêng, không phải chi phí vận hành hoặc giảm doanh
+                      thu hóa đơn. Khoản phải thu trả phòng đã duyệt được cộng vào giá trị phải thu
+                      và nợ; cấn trừ cọc làm giảm nợ và được trình bày riêng, không ghi thành tiền
+                      chuyển khoản mới.
+                    </Alert>
                   </AccordionDetails>
                 </Accordion>
-              )}
-              <SettlementSources value={value.settlementSources} />
-              {value.receiptReconciliation && (
-                <Stack spacing={0.5}>
-                  <Typography variant="subtitle2">Đối chiếu ngân hàng toàn chuỗi</Typography>
-                  <Typography>
-                    Tổng tiền ngân hàng xác minh:{' '}
-                    {managementMoney(value.receiptReconciliation.verifiedBankReceipts)}
-                  </Typography>
-                  <Typography>
-                    Phần chưa phân bổ (trước khi trừ hoàn tiền):{' '}
-                    {managementMoney(value.receiptReconciliation.unallocatedAtReview)}
-                  </Typography>
-                  <Typography>
-                    Hoàn tiền thừa đã xác minh trong kỳ:{' '}
-                    {managementMoney(value.receiptReconciliation.excessRefundedInPeriod)}
-                  </Typography>
-                  <Typography variant="caption" color="text.secondary">
-                    Tiền chưa phân bổ không phải doanh thu hoặc số dư được dùng về sau. Khoản thu
-                    thừa chỉ được hoàn cho người thực tế thanh toán sau khi kiểm tra hồ sơ.
-                  </Typography>
-                  {filter && !filter.locationId && !filter.roomId && (
-                    <Accordion
-                      variant="outlined"
-                      disableGutters
-                      slotProps={{ transition: { unmountOnExit: true } }}
-                    >
-                      <AccordionSummary expandIcon={<ChevronDown size={18} />}>
-                        Xem nguồn giao dịch ngân hàng
-                      </AccordionSummary>
-                      <AccordionDetails>
-                        <BankReceiptSourceDetails
-                          key={JSON.stringify(filter)}
-                          filter={filter}
-                          expectedReceived={value.receiptReconciliation.verifiedBankReceipts}
-                          expectedUnallocated={value.receiptReconciliation.unallocatedAtReview}
-                        />
-                      </AccordionDetails>
-                    </Accordion>
-                  )}
-                  {filter && !filter.locationId && !filter.roomId && (
-                    <Accordion
-                      variant="outlined"
-                      disableGutters
-                      slotProps={{ transition: { unmountOnExit: true } }}
-                    >
-                      <AccordionSummary expandIcon={<ChevronDown size={18} />}>
-                        Xem khoản hoàn tiền trong kỳ
-                      </AccordionSummary>
-                      <AccordionDetails>
-                        <BankRefundSourceDetails
-                          key={JSON.stringify(filter)}
-                          filter={filter}
-                          expected={value.receiptReconciliation.excessRefundedInPeriod}
-                        />
-                      </AccordionDetails>
-                    </Accordion>
-                  )}
-                </Stack>
-              )}
-              <Typography>
-                Hoàn gốc cọc đã xác minh trong kỳ:{' '}
-                {value.verifiedDepositReturns == null
-                  ? 'Chưa có dữ liệu phân loại'
-                  : formatFinanceMoney(value.verifiedDepositReturns)}
-              </Typography>
-              <Alert severity="info">
-                Hoàn gốc cọc được theo dõi riêng, không phải chi phí vận hành hoặc giảm doanh thu
-                hóa đơn. Khoản phải thu trả phòng đã duyệt được cộng vào giá trị phải thu và nợ; cấn
-                trừ cọc làm giảm nợ và được trình bày riêng, không ghi thành tiền chuyển khoản mới.
-              </Alert>
-            </AccordionDetails>
-          </Accordion>
-          <Box
-            sx={{
-              display: 'grid',
-              gridTemplateColumns: { xs: 'minmax(0, 1fr)', lg: 'repeat(2, minmax(0, 1fr))' },
-              gap: 1.5,
-            }}
-          >
-            <Accordion
-              variant="outlined"
-              disableGutters
-              sx={{ minWidth: 0, overflowWrap: 'anywhere' }}
-            >
-              <AccordionSummary expandIcon={<ChevronDown size={18} />}>
-                <Box>
-                  <Typography variant="subtitle1" sx={{ fontWeight: 750 }}>
-                    Tỷ lệ lấp đầy
-                  </Typography>
-                  <Typography variant="caption" color="text.secondary">
-                    Xem lịch sử ngày-phòng đã thuê trong kỳ đã chọn.
-                  </Typography>
+                <Box
+                  sx={{
+                    display: 'grid',
+                    gridTemplateColumns: { xs: 'minmax(0, 1fr)', lg: 'repeat(2, minmax(0, 1fr))' },
+                    gap: 1.5,
+                  }}
+                >
+                  <Accordion
+                    variant="outlined"
+                    disableGutters
+                    sx={{ minWidth: 0, overflowWrap: 'anywhere' }}
+                  >
+                    <AccordionSummary expandIcon={<ChevronDown size={18} />}>
+                      <Box>
+                        <Typography variant="subtitle1" sx={{ fontWeight: 750 }}>
+                          Tỷ lệ lấp đầy
+                        </Typography>
+                        <Typography variant="caption" color="text.secondary">
+                          Xem lịch sử ngày-phòng đã thuê trong kỳ đã chọn.
+                        </Typography>
+                      </Box>
+                    </AccordionSummary>
+                    <AccordionDetails>
+                      <Typography variant="h2" component="h2" sx={{ mb: 1 }}>
+                        Lấp đầy theo kỳ
+                      </Typography>
+                      {value.historicalOccupancy?.from && value.historicalOccupancy.to && (
+                        <Typography>
+                          Kỳ lịch sử: {displayContractDate(value.historicalOccupancy.from)} –{' '}
+                          {displayContractDate(value.historicalOccupancy.to)}
+                        </Typography>
+                      )}
+                      {value.historicalOccupancy?.status === 'Complete' ? (
+                        <>
+                          <Typography>
+                            Ngày-phòng có người ở: {value.historicalOccupancy.occupiedRoomDays}
+                          </Typography>
+                          <Typography>
+                            Ngày-phòng có thể cho thuê: {value.historicalOccupancy.rentableRoomDays}
+                          </Typography>
+                          <Typography>
+                            Tỷ lệ lấp đầy trong kỳ:{' '}
+                            {value.historicalOccupancy.occupancyRate === null
+                              ? 'Chưa xác định (không có ngày-phòng có thể cho thuê)'
+                              : `${value.historicalOccupancy.occupancyRate.toLocaleString('vi-VN')}%`}
+                          </Typography>
+                        </>
+                      ) : (
+                        <Alert severity="info">
+                          {occupancyReasons[value.historicalOccupancy?.status ?? ''] ??
+                            'Chưa có dữ liệu lấp đầy lịch sử từ máy chủ.'}
+                        </Alert>
+                      )}
+                    </AccordionDetails>
+                  </Accordion>
+                  <Accordion
+                    variant="outlined"
+                    disableGutters
+                    sx={{ minWidth: 0, overflowWrap: 'anywhere' }}
+                  >
+                    <AccordionSummary expandIcon={<ChevronDown size={18} />}>
+                      <Box>
+                        <Typography variant="subtitle1" sx={{ fontWeight: 750 }}>
+                          Tiến độ thu hồi vốn
+                        </Typography>
+                        <Typography variant="caption" color="text.secondary">
+                          Xem số vốn, tiền đã thu hồi và ước tính thời gian còn lại.
+                        </Typography>
+                      </Box>
+                    </AccordionSummary>
+                    <AccordionDetails>
+                      <Typography variant="h2" component="h2" sx={{ mb: 1 }}>
+                        Vốn & Thu hồi
+                      </Typography>
+                      {value.total.management && (
+                        <Stack spacing={0.5} sx={{ mb: 2 }}>
+                          <Typography variant="subtitle2">Theo dòng tiền thực tế</Typography>
+                          <Typography>
+                            Vốn đầu tư: {managementMoney(cashCapital?.initialInvestment)}
+                          </Typography>
+                          <Typography>
+                            Vốn đã thu hồi: {managementMoney(cashCapital?.netRecovery)}
+                          </Typography>
+                          <Typography>
+                            Vốn còn lại: {managementMoney(cashCapital?.remainingCapital)}
+                          </Typography>
+                          <Typography>
+                            Tỷ lệ thu hồi:{' '}
+                            {cashCapital?.recoveryPercent == null
+                              ? 'Chưa xác định'
+                              : cashCapital.recoveryPercent + '%'}
+                          </Typography>
+                          <Typography>
+                            Thời gian dự kiến:{' '}
+                            {cashCapital?.estimatedRemainingMonths == null
+                              ? 'Chưa xác định'
+                              : cashCapital.estimatedRemainingMonths + ' tháng'}
+                          </Typography>
+                          {cashCapital?.unavailableReason && (
+                            <Alert severity="info">
+                              {reasons[cashCapital.unavailableReason] ||
+                                'Chưa đủ lịch sử thực thu và thực chi để ước tính hoàn vốn.'}
+                            </Alert>
+                          )}
+                          <Typography variant="subtitle2" color="text.secondary">
+                            Chỉ tiêu đối chiếu cũ (tiền phân bổ trừ chi phí phát sinh)
+                          </Typography>
+                        </Stack>
+                      )}
+                      <Typography>
+                        Đầu tư đến cuối kỳ: {formatFinanceMoney(value.capital.initialInvestment)}
+                      </Typography>
+                      <Typography>
+                        Tiền thu hồi lũy kế:{' '}
+                        {value.capital.netRecovery === null
+                          ? 'Chưa xác định'
+                          : formatFinanceMoney(value.capital.netRecovery)}
+                      </Typography>
+                      <Typography>
+                        Vốn chưa thu hồi:{' '}
+                        {value.capital.remainingCapital === null
+                          ? 'Chưa xác định'
+                          : formatFinanceMoney(value.capital.remainingCapital)}
+                      </Typography>
+                      <Typography>
+                        Tỷ lệ thu hồi:{' '}
+                        {value.capital.recoveryPercent === null
+                          ? 'Chưa xác định'
+                          : `${value.capital.recoveryPercent}%`}
+                      </Typography>
+                      <Typography>
+                        Ước tính số tháng còn lại:{' '}
+                        {value.capital.estimatedRemainingMonths ?? 'Chưa xác định'}
+                      </Typography>
+                      {value.capital.unavailableReason && (
+                        <Alert severity="info">
+                          {reasons[value.capital.unavailableReason] ||
+                            'Chưa đủ dữ liệu tính hoàn vốn.'}
+                        </Alert>
+                      )}
+                    </AccordionDetails>
+                  </Accordion>
                 </Box>
-              </AccordionSummary>
-              <AccordionDetails>
-                <Typography variant="h2" component="h2" sx={{ mb: 1 }}>
-                  Lấp đầy theo kỳ
-                </Typography>
-                {value.historicalOccupancy?.from && value.historicalOccupancy.to && (
-                  <Typography>
-                    Kỳ lịch sử: {displayContractDate(value.historicalOccupancy.from)} –{' '}
-                    {displayContractDate(value.historicalOccupancy.to)}
-                  </Typography>
-                )}
-                {value.historicalOccupancy?.status === 'Complete' ? (
-                  <>
-                    <Typography>
-                      Ngày-phòng có người ở: {value.historicalOccupancy.occupiedRoomDays}
+                <Accordion variant="outlined" disableGutters>
+                  <AccordionSummary expandIcon={<ChevronDown size={18} />}>
+                    <Typography variant="subtitle1" sx={{ fontWeight: 750 }}>
+                      Theo từng cơ sở ({value.locations.length})
                     </Typography>
-                    <Typography>
-                      Ngày-phòng có thể cho thuê: {value.historicalOccupancy.rentableRoomDays}
-                    </Typography>
-                    <Typography>
-                      Tỷ lệ lấp đầy trong kỳ:{' '}
-                      {value.historicalOccupancy.occupancyRate === null
-                        ? 'Chưa xác định (không có ngày-phòng có thể cho thuê)'
-                        : `${value.historicalOccupancy.occupancyRate.toLocaleString('vi-VN')}%`}
-                    </Typography>
-                  </>
-                ) : (
-                  <Alert severity="info">
-                    {occupancyReasons[value.historicalOccupancy?.status ?? ''] ??
-                      'Chưa có dữ liệu lấp đầy lịch sử từ máy chủ.'}
-                  </Alert>
-                )}
-              </AccordionDetails>
-            </Accordion>
-            <Accordion
-              variant="outlined"
-              disableGutters
-              sx={{ minWidth: 0, overflowWrap: 'anywhere' }}
-            >
-              <AccordionSummary expandIcon={<ChevronDown size={18} />}>
-                <Box>
-                  <Typography variant="subtitle1" sx={{ fontWeight: 750 }}>
-                    Tiến độ thu hồi vốn
-                  </Typography>
-                  <Typography variant="caption" color="text.secondary">
-                    Xem số vốn, tiền đã thu hồi và ước tính thời gian còn lại.
-                  </Typography>
-                </Box>
-              </AccordionSummary>
-              <AccordionDetails>
-                <Typography variant="h2" component="h2" sx={{ mb: 1 }}>
-                  Vốn & Thu hồi
-                </Typography>
-                {value.total.management && (
-                  <Stack spacing={0.5} sx={{ mb: 2 }}>
-                    <Typography variant="subtitle2">Theo dòng tiền thực tế</Typography>
-                    <Typography>
-                      Vốn đầu tư: {managementMoney(cashCapital?.initialInvestment)}
-                    </Typography>
-                    <Typography>
-                      Vốn đã thu hồi: {managementMoney(cashCapital?.netRecovery)}
-                    </Typography>
-                    <Typography>
-                      Vốn còn lại: {managementMoney(cashCapital?.remainingCapital)}
-                    </Typography>
-                    <Typography>
-                      Tỷ lệ thu hồi:{' '}
-                      {cashCapital?.recoveryPercent == null
-                        ? 'Chưa xác định'
-                        : cashCapital.recoveryPercent + '%'}
-                    </Typography>
-                    <Typography>
-                      Thời gian dự kiến:{' '}
-                      {cashCapital?.estimatedRemainingMonths == null
-                        ? 'Chưa xác định'
-                        : cashCapital.estimatedRemainingMonths + ' tháng'}
-                    </Typography>
-                    {cashCapital?.unavailableReason && (
+                  </AccordionSummary>
+                  <AccordionDetails sx={{ display: 'grid', gap: 1.5 }}>
+                    {value.locations.length > 0 && <LocationPerformanceTable report={value} />}
+                    {value.locations.length === 0 && (
                       <Alert severity="info">
-                        {reasons[cashCapital.unavailableReason] ||
-                          'Chưa đủ lịch sử thực thu và thực chi để ước tính hoàn vốn.'}
+                        Không có dòng theo từng cơ sở trong kết quả này. Kiểm tra phạm vi đang xem;
+                        nếu đã chọn một phòng hoặc cơ sở, thử bỏ lựa chọn đó và nhấn Xem báo cáo.
                       </Alert>
                     )}
-                    <Typography variant="subtitle2" color="text.secondary">
-                      Chỉ tiêu đối chiếu cũ (tiền phân bổ trừ chi phí phát sinh)
-                    </Typography>
-                  </Stack>
-                )}
-                <Typography>
-                  Đầu tư đến cuối kỳ: {formatFinanceMoney(value.capital.initialInvestment)}
+                    {value.locations.map((l) => (
+                      <Paper
+                        key={l.locationId}
+                        variant="outlined"
+                        sx={{ p: 1.5, minWidth: 0, overflowWrap: 'anywhere' }}
+                      >
+                        <Typography variant="h2" component="h2" sx={{ mb: 1 }}>
+                          {l.locationName}
+                        </Typography>
+                        <Totals value={l.totals} />
+                        {l.totals.management && (
+                          <ManagementFinanceSummary value={l.totals.management} compact />
+                        )}
+                        <SettlementSources value={l.settlementSources} />
+                      </Paper>
+                    ))}
+                  </AccordionDetails>
+                </Accordion>
+                <Typography variant="caption">
+                  Chỉ tiêu quản trị nội bộ. Nợ và số phòng đang ở phản ánh trạng thái lúc tải báo
+                  cáo. Dòng tiền thu hồi không tính cọc, giao dịch chưa phân bổ hoặc chuyển khoản mô
+                  phỏng. Ước tính dùng dòng tiền bình quân các tháng đã chọn và giữ nguyên giả định
+                  đó.
                 </Typography>
-                <Typography>
-                  Tiền thu hồi lũy kế:{' '}
-                  {value.capital.netRecovery === null
-                    ? 'Chưa xác định'
-                    : formatFinanceMoney(value.capital.netRecovery)}
-                </Typography>
-                <Typography>
-                  Vốn chưa thu hồi:{' '}
-                  {value.capital.remainingCapital === null
-                    ? 'Chưa xác định'
-                    : formatFinanceMoney(value.capital.remainingCapital)}
-                </Typography>
-                <Typography>
-                  Tỷ lệ thu hồi:{' '}
-                  {value.capital.recoveryPercent === null
-                    ? 'Chưa xác định'
-                    : `${value.capital.recoveryPercent}%`}
-                </Typography>
-                <Typography>
-                  Ước tính số tháng còn lại:{' '}
-                  {value.capital.estimatedRemainingMonths ?? 'Chưa xác định'}
-                </Typography>
-                {value.capital.unavailableReason && (
-                  <Alert severity="info">
-                    {reasons[value.capital.unavailableReason] || 'Chưa đủ dữ liệu tính hoàn vốn.'}
-                  </Alert>
-                )}
-              </AccordionDetails>
-            </Accordion>
-          </Box>
-          <Accordion variant="outlined" disableGutters>
-            <AccordionSummary expandIcon={<ChevronDown size={18} />}>
-              <Typography variant="subtitle1" sx={{ fontWeight: 750 }}>
-                Theo từng cơ sở ({value.locations.length})
-              </Typography>
-            </AccordionSummary>
-            <AccordionDetails sx={{ display: 'grid', gap: 1.5 }}>
-              {value.locations.length > 0 && <LocationPerformanceTable report={value} />}
-              {value.locations.length === 0 && (
-                <Alert severity="info">
-                  Không có dòng theo từng cơ sở trong kết quả này. Kiểm tra phạm vi đang xem; nếu đã
-                  chọn một phòng hoặc cơ sở, thử bỏ lựa chọn đó và nhấn Xem báo cáo.
-                </Alert>
-              )}
-              {value.locations.map((l) => (
-                <Paper
-                  key={l.locationId}
-                  variant="outlined"
-                  sx={{ p: 1.5, minWidth: 0, overflowWrap: 'anywhere' }}
-                >
-                  <Typography variant="h2" component="h2" sx={{ mb: 1 }}>
-                    {l.locationName}
-                  </Typography>
-                  <Totals value={l.totals} />
-                  {l.totals.management && (
-                    <ManagementFinanceSummary value={l.totals.management} compact />
-                  )}
-                  <SettlementSources value={l.settlementSources} />
-                </Paper>
-              ))}
+              </Stack>
             </AccordionDetails>
           </Accordion>
-          <Typography variant="caption">
-            Chỉ tiêu quản trị nội bộ. Nợ và số phòng đang ở phản ánh trạng thái lúc tải báo cáo.
-            Dòng tiền thu hồi không tính cọc, giao dịch chưa phân bổ hoặc chuyển khoản mô phỏng. Ước
-            tính dùng dòng tiền bình quân các tháng đã chọn và giữ nguyên giả định đó.
-          </Typography>
         </Stack>
       )}
     </>

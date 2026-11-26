@@ -83,24 +83,6 @@ const guidance: Record<string, { purpose: string; next: string; nextPath: string
       next: 'Đối soát giao dịch',
       nextPath: '/payments',
     },
-    '/expenses': {
-      purpose: 'Ghi nhận, quản lý khoản đầu tư và chi phí thực tế theo phạm vi.',
-      note: 'Ghi chi phí khác với xác nhận khoản tiền khách thuê đã thanh toán.',
-      next: 'Xem báo cáo kinh doanh',
-      nextPath: '/reports',
-    },
-    '/reports': {
-      purpose: 'Chọn cơ sở và kỳ, sau đó bấm Xem báo cáo để tải kết quả kinh doanh.',
-      note: 'Số liệu đang hiển thị thuộc bộ lọc đã tải, không tự đổi khi đang sửa bộ lọc.',
-      next: 'Thử kịch bản What-if',
-      nextPath: '/what-if',
-    },
-    '/what-if': {
-      purpose: 'Thử các giả định về giá, lấp đầy và chi phí để so sánh kết quả.',
-      note: 'Phân tích tạo kết quả thử; Lưu kịch bản để xem lại. Không thay đổi sổ tài chính thực tế.',
-      next: 'Về báo cáo thực tế',
-      nextPath: '/reports',
-    },
   };
 
 const matchesPath = (pathname: string, path: string) =>
@@ -223,11 +205,7 @@ export function FinanceWorkflowStrip({ pathname }: { pathname: string }) {
           </Stack>
           <Button
             component={RouterLink}
-            to={
-              workspace.label === 'Chi phí & báo cáo'
-                ? scopedFinancePath(help.nextPath, locationId)
-                : help.nextPath
-            }
+            to={help.nextPath}
             size="small"
             variant="outlined"
             endIcon={<ArrowRight size={15} aria-hidden="true" />}

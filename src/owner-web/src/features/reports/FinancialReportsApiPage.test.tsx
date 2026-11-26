@@ -29,6 +29,10 @@ function mount() {
     </QueryClientProvider>,
   );
 }
+function openReportDetails() {
+  const toggle = screen.getByRole('button', { name: 'Xem chi tiết báo cáo' });
+  if (toggle.getAttribute('aria-expanded') === 'false') fireEvent.click(toggle);
+}
 function request() {
   const toggle = screen.getByRole('button', { name: /bộ lọc chi tiết/i });
   if (toggle.getAttribute('aria-expanded') === 'false') fireEvent.click(toggle);
@@ -245,13 +249,29 @@ it('selects a scoped Room by name and clears it when the Location changes', asyn
   fireEvent.mouseDown(screen.getByRole('combobox', { name: 'Cơ sở' }));
   fireEvent.click(await screen.findByRole('option', { name: 'Cơ sở B' }));
   expect(screen.getByRole('combobox', { name: 'Phòng' })).toHaveValue('');
-  expect(screen.getByText('Phạm vi: Cơ sở A · Phòng 101')).toBeInTheDocument();
-  request();
   await screen.findByText('Lợi nhuận vận hành: 700 ₫');
   expect(screen.getByText('Phạm vi: Cơ sở B')).toBeInTheDocument();
   expect(mock.report).toHaveBeenLastCalledWith(
     { from: '2026-11-01', to: '2026-11-30', locationId: 'b', includeComparison: true },
     expect.any(AbortSignal),
+  );
+});
+
+it('loads a month shortcut immediately and keeps the initial report concise', async () => {
+  mount();
+  await screen.findByText('Lợi nhuận vận hành: 700 ₫');
+  expect(screen.queryByRole('button', { name: 'Xem báo cáo' })).not.toBeInTheDocument();
+  expect(screen.getByRole('button', { name: 'Xem chi tiết báo cáo' })).toHaveAttribute(
+    'aria-expanded',
+    'false',
+  );
+  expect(screen.queryByRole('button', { name: /Tiến độ thu hồi vốn/ })).not.toBeInTheDocument();
+  fireEvent.click(screen.getByRole('button', { name: 'Tháng này' }));
+  await waitFor(() =>
+    expect(mock.report).toHaveBeenLastCalledWith(
+      { ...financeMonthPeriod(0), locationId: undefined, includeComparison: true },
+      expect.any(AbortSignal),
+    ),
   );
 });
 it('rejects a reversed date range without sending another report request', () => {
@@ -308,6 +328,7 @@ it('keeps the summary visible and lets Owner reveal detailed reconciliation, occ
   mount();
   await screen.findByText('Lợi nhuận vận hành: 700 ₫');
   expect(screen.getByText('Hóa đơn / khoản phải thu')).toBeInTheDocument();
+  openReportDetails();
   for (const heading of [/Đối chiếu chi tiết số liệu/, /Tỷ lệ lấp đầy/, /Tiến độ thu hồi vốn/]) {
     const disclosure = screen.getByRole('button', { name: heading });
     expect(disclosure).toHaveAttribute('aria-expanded', 'false');
@@ -390,7 +411,13 @@ it('renders the management acceptance figures and opens both periods of actual e
     ],
   }));
   mount();
-  await screen.findByText('55.000.000 ₫');
+  await screen.findByText('70.000.000 ₫');
+  openReportDetails();
+  expect(
+    screen.getByRole('button', { name: 'Chi tiết doanh thu, chi phí & dòng tiền' }),
+  ).toHaveAttribute('aria-expanded', 'false');
+  expect(screen.getByText(/Chi phí vận hành tăng 6.000.000/)).toBeVisible();
+  fireEvent.click(screen.getByRole('button', { name: 'Chi tiết doanh thu, chi phí & dòng tiền' }));
   for (const amount of [
     '100.000.000 ₫',
     '96.000.000 ₫',

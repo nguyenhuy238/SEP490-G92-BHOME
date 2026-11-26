@@ -1,5 +1,5 @@
 import { TextField, ValidatedForm } from '../../components/common/ValidatedForm';
-import { Fragment, useEffect, useRef, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import {
   Accordion,
   AccordionDetails,
@@ -46,7 +46,7 @@ const initial: ScenarioInput = {
     monthlyMaintenanceCost: '',
     monthlyOtherCost: '',
     monthlyServiceRevenue: '',
-    additionalInvestment: '',
+    additionalInvestment: '0',
     monthlyDepreciation: null,
     operatingPaymentPercent: '',
     costIncreasePercent: '0',
@@ -64,6 +64,7 @@ export function FinancialScenariosApiPage() {
     })),
     [page, setPage] = useState(1);
   const [baselineOpen, setBaselineOpen] = useState(false);
+  const [additionalOpen, setAdditionalOpen] = useState(false);
   const [view, setView] = useState<ScenarioView | null>(null),
     [comparison, setComparison] = useState<ScenarioView | null>(null);
   const [busy, setBusy] = useState(false),
@@ -139,6 +140,19 @@ export function FinancialScenariosApiPage() {
   }
   async function run(action: 'analyze' | 'save') {
     if (lock.current) return;
+    const invalidFields = fields.filter(
+      ([field]) =>
+        field !== 'monthlyDepreciation' && !/^\d+([.]\d+)?$/.test(input.assumptions[field] ?? ''),
+    );
+    if (invalidFields.length) {
+      setAdditionalOpen(true);
+      setError(
+        'Kiểm tra các khoản chưa đủ dữ liệu: ' +
+          invalidFields.map(([, label]) => label).join(', ') +
+          '. Nhập 0 nếu không phát sinh.',
+      );
+      return;
+    }
     lock.current = true;
     setBusy(true);
     setError('');
@@ -200,21 +214,51 @@ export function FinancialScenariosApiPage() {
     ['monthlyRent', 'Giá thuê giả định / phòng / tháng (VND)'],
     ['occupancyPercent', 'Tỷ lệ lấp đầy (%)'],
     ['collectionPercent', 'Tỷ lệ thu tiền dự kiến (%)'],
+    ['monthlyServiceRevenue', 'Doanh thu dịch vụ mỗi tháng (VND)'],
     ['monthlyUtilityServiceCost', 'Điện nước / dịch vụ mỗi tháng (VND)'],
-    ['monthlyStaffCost', 'Chi phí Staff mỗi tháng (VND)'],
+    ['monthlyStaffCost', 'Chi phí nhân viên mỗi tháng (VND)'],
     ['monthlyMaintenanceCost', 'Bảo trì mỗi tháng (VND)'],
     ['monthlyOtherCost', 'Chi phí khác mỗi tháng (VND)'],
-    ['monthlyServiceRevenue', 'Doanh thu dịch vụ mỗi tháng (VND)'],
     ['additionalInvestment', 'Đầu tư bổ sung một lần (VND)'],
     ['monthlyDepreciation', 'Khấu hao mỗi tháng (VND, nếu biết)'],
     ['operatingPaymentPercent', 'Tỷ lệ thực chi dự kiến (%)'],
     ['costIncreasePercent', 'Tỷ lệ tăng chi phí (%)'],
   ] as const;
+  const mainFields = new Set(['monthlyRent', 'occupancyPercent', 'monthlyStaffCost']);
+  function assumptionField([field, label]: (typeof fields)[number]) {
+    return !field.endsWith('Percent') ? (
+      <MoneyField
+        key={field}
+        required={field !== 'monthlyDepreciation'}
+        label={label}
+        disabled={busy}
+        value={input.assumptions[field] ?? ''}
+        maxRawLength={24}
+        onValueChange={(raw) =>
+          change({ ...input, assumptions: { ...input.assumptions, [field]: raw } })
+        }
+      />
+    ) : (
+      <TextField
+        key={field}
+        required
+        label={label}
+        disabled={busy}
+        value={input.assumptions[field] ?? ''}
+        slotProps={{
+          htmlInput: { inputMode: 'decimal', pattern: '[0-9]+([.][0-9]+)?', maxLength: 24 },
+        }}
+        onChange={(e) =>
+          change({ ...input, assumptions: { ...input.assumptions, [field]: e.target.value } })
+        }
+      />
+    );
+  }
   return (
     <>
       <PageHeader
         title="Thử kịch bản tài chính"
-        subtitle="Thử các giả định và so sánh dự báo mà không thay đổi sổ tài chính thực tế."
+        subtitle="Thử thay đổi giá thuê, số phòng có khách hoặc chi phí để xem lợi nhuận dự kiến."
       />
       {(busy || locations.isPending || saved.isPending) && <LinearProgress />}
       {(error || locations.error || saved.error) && (
@@ -245,21 +289,14 @@ export function FinancialScenariosApiPage() {
           }}
         >
           <Stack spacing={1.5}>
-            <Typography variant="h6" component="h2" sx={{ fontWeight: 750 }}>
-              Giả định & kỳ dữ liệu nền
-            </Typography>
             <Typography variant="body2" color="text.secondary">
-              Kỳ dữ liệu nền dùng số liệu thực tế để đối chiếu; số tháng dự báo xác định khoảng thời
-              gian ước tính. Các số tiền và tỷ lệ bên dưới là giả định bạn nhập.
+              Lấy số liệu thực tế, sửa khoản muốn thử rồi nhấn Phân tích. Dữ liệu thật không thay
+              đổi.
             </Typography>
             <Box
               sx={{
                 display: 'grid',
-                gridTemplateColumns: {
-                  xs: 'minmax(0,1fr)',
-                  sm: 'repeat(2,minmax(0,1fr))',
-                  lg: 'repeat(3,minmax(0,1fr))',
-                },
+                gridTemplateColumns: { xs: '1fr', md: 'repeat(3,minmax(0,1fr))' },
                 gap: 1.5,
               }}
             >
@@ -280,10 +317,7 @@ export function FinancialScenariosApiPage() {
                 error={!!locations.error}
                 emptyLabel="Toàn chuỗi"
                 change={(id) =>
-                  change({
-                    ...input,
-                    baseline: { ...input.baseline, locationId: id || undefined },
-                  })
+                  change({ ...input, baseline: { ...input.baseline, locationId: id || undefined } })
                 }
               />
               <TextField
@@ -359,116 +393,100 @@ export function FinancialScenariosApiPage() {
               onClick={() => void restoreDefaults()}
               sx={{ alignSelf: 'flex-start' }}
             >
-              Lấy lại giả định từ dữ liệu thực tế
+              Lấy số liệu thực tế
             </Button>
             {defaults.data &&
               defaults.data.baseline.from === input.baseline.from &&
               defaults.data.baseline.to === input.baseline.to &&
               (defaults.data.baseline.locationId ?? null) ===
                 (input.baseline.locationId ?? null) && (
-                <Alert severity="info">
-                  <Typography variant="body2">
-                    Dữ liệu nền tải lúc {formatInstant(defaults.data.snapshotAt)}.
-                  </Typography>
-                  {defaults.data.obligations && (
-                    <Typography variant="body2">
-                      Nghĩa vụ từ {displayContractDate(defaults.data.obligations.from)} đến{' '}
-                      {displayContractDate(defaults.data.obligations.to)}: định kỳ{' '}
-                      {managementMoney(defaults.data.obligations.recurringDue)} (
-                      {defaults.data.obligations.recurringCount} khoản); lương hợp đồng{' '}
-                      {managementMoney(defaults.data.obligations.contractualSalary)} (
-                      {defaults.data.obligations.staffCount} nhân viên).
-                      {defaults.data.obligations.unresolvedStaffCount > 0 &&
-                        ' Cần xác nhận thêm ' +
-                          defaults.data.obligations.unresolvedStaffCount +
-                          ' nhân viên.'}
-                    </Typography>
+                <Box>
+                  {!!defaults.data.limitations.length && (
+                    <Alert severity="warning" sx={{ mb: 1 }}>
+                      {defaults.data.limitations.map((item) => (
+                        <Typography key={item} variant="body2">
+                          {item}
+                        </Typography>
+                      ))}
+                    </Alert>
                   )}
-                  {defaults.data.obligations?.rentCoverage && (
-                    <Typography variant="body2">
-                      Phòng có hợp đồng trong tháng dự báo:{' '}
-                      {defaults.data.obligations.rentCoverage.contractedRooms}/
-                      {defaults.data.obligations.rentCoverage.rooms}; ngày phòng có hợp đồng:{' '}
-                      {defaults.data.obligations.rentCoverage.occupiedRoomDays}/
-                      {defaults.data.obligations.rentCoverage.possibleRoomDays}.
-                      {defaults.data.obligations.rentCoverage.unresolvedRooms > 0 &&
-                        ' Cần xác nhận giá thuê của ' +
-                          defaults.data.obligations.rentCoverage.unresolvedRooms +
-                          ' phòng.'}
-                    </Typography>
-                  )}
-                  {defaults.data.limitations.map((item) => (
-                    <Typography key={item} variant="body2">
-                      {item}
-                    </Typography>
-                  ))}
-                </Alert>
+                  <Accordion variant="outlined" disableGutters>
+                    <AccordionSummary expandIcon={<ChevronDown size={18} />}>
+                      Nguồn số liệu đang dùng
+                    </AccordionSummary>
+                    <AccordionDetails>
+                      <Typography variant="body2">
+                        Dữ liệu nền tải lúc {formatInstant(defaults.data.snapshotAt)}.
+                      </Typography>
+                      {defaults.data.obligations && (
+                        <Typography variant="body2">
+                          Nghĩa vụ từ {displayContractDate(defaults.data.obligations.from)} đến{' '}
+                          {displayContractDate(defaults.data.obligations.to)}: định kỳ{' '}
+                          {managementMoney(defaults.data.obligations.recurringDue)} (
+                          {defaults.data.obligations.recurringCount} khoản); lương hợp đồng{' '}
+                          {managementMoney(defaults.data.obligations.contractualSalary)} (
+                          {defaults.data.obligations.staffCount} nhân viên).
+                          {defaults.data.obligations.unresolvedStaffCount > 0 &&
+                            ' Cần xác nhận thêm ' +
+                              defaults.data.obligations.unresolvedStaffCount +
+                              ' nhân viên.'}
+                        </Typography>
+                      )}
+                      {defaults.data.obligations?.rentCoverage && (
+                        <Typography variant="body2">
+                          Phòng có hợp đồng trong tháng dự báo:{' '}
+                          {defaults.data.obligations.rentCoverage.contractedRooms}/
+                          {defaults.data.obligations.rentCoverage.rooms}; ngày phòng có hợp đồng:{' '}
+                          {defaults.data.obligations.rentCoverage.occupiedRoomDays}/
+                          {defaults.data.obligations.rentCoverage.possibleRoomDays}.
+                          {defaults.data.obligations.rentCoverage.unresolvedRooms > 0 &&
+                            ' Cần xác nhận giá thuê của ' +
+                              defaults.data.obligations.rentCoverage.unresolvedRooms +
+                              ' phòng.'}
+                        </Typography>
+                      )}
+                    </AccordionDetails>
+                  </Accordion>
+                </Box>
               )}
+            <Typography variant="subtitle1" sx={{ fontWeight: 700 }}>
+              Bạn muốn thay đổi gì?
+            </Typography>
             <Box
               sx={{
                 display: 'grid',
-                gridTemplateColumns: {
-                  xs: 'minmax(0,1fr)',
-                  sm: 'repeat(2,minmax(0,1fr))',
-                  lg: 'repeat(3,minmax(0,1fr))',
-                },
+                gridTemplateColumns: { xs: '1fr', md: 'repeat(3,minmax(0,1fr))' },
                 gap: 1.5,
               }}
             >
-              {fields.map(([field, label], index) => (
-                <Fragment key={field}>
-                  {index === 0 && (
-                    <Box sx={{ gridColumn: '1 / -1' }}>
-                      <Typography variant="subtitle1" sx={{ fontWeight: 750 }}>
-                        Doanh thu và tỷ lệ thu tiền
-                      </Typography>
-                    </Box>
-                  )}
-                  {index === 3 && (
-                    <Box sx={{ gridColumn: '1 / -1', pt: 1 }}>
-                      <Typography variant="subtitle1" sx={{ fontWeight: 750 }}>
-                        Chi phí dự kiến
-                      </Typography>
-                    </Box>
-                  )}
-                  {!field.endsWith('Percent') ? (
-                    <MoneyField
-                      required={field !== 'monthlyDepreciation'}
-                      label={label}
-                      disabled={busy}
-                      value={input.assumptions[field] ?? ''}
-                      maxRawLength={24}
-                      onValueChange={(raw) =>
-                        change({
-                          ...input,
-                          assumptions: { ...input.assumptions, [field]: raw },
-                        })
-                      }
-                    />
-                  ) : (
-                    <TextField
-                      required
-                      label={label}
-                      disabled={busy}
-                      value={input.assumptions[field] ?? ''}
-                      slotProps={{
-                        htmlInput: {
-                          inputMode: 'decimal',
-                          pattern: field.endsWith('Percent') ? '[0-9]+([.][0-9]+)?' : '[0-9]+',
-                          maxLength: 24,
-                        },
-                      }}
-                      onChange={(e) =>
-                        change({
-                          ...input,
-                          assumptions: { ...input.assumptions, [field]: e.target.value },
-                        })
-                      }
-                    />
-                  )}
-                </Fragment>
-              ))}
+              {fields.filter(([field]) => mainFields.has(field)).map(assumptionField)}
             </Box>
+            <Accordion
+              variant="outlined"
+              disableGutters
+              expanded={additionalOpen}
+              onChange={(_, open) => setAdditionalOpen(open)}
+              slotProps={{ transition: { unmountOnExit: true } }}
+            >
+              <AccordionSummary expandIcon={<ChevronDown size={18} />}>
+                <Typography variant="subtitle2">Các khoản thu, chi khác</Typography>
+              </AccordionSummary>
+              <AccordionDetails>
+                <Typography variant="body2" color="text.secondary" sx={{ mb: 1.5 }}>
+                  Chi phí là tổng mỗi tháng cho phạm vi đã chọn. Mặc định không đầu tư thêm; sửa bên
+                  dưới nếu cần.
+                </Typography>
+                <Box
+                  sx={{
+                    display: 'grid',
+                    gridTemplateColumns: { xs: '1fr', sm: 'repeat(2,minmax(0,1fr))' },
+                    gap: 1.5,
+                  }}
+                >
+                  {fields.filter(([field]) => !mainFields.has(field)).map(assumptionField)}
+                </Box>
+              </AccordionDetails>
+            </Accordion>
             <Stack direction={{ xs: 'column', sm: 'row' }} spacing={1}>
               <Button type="submit" variant="contained" disabled={busy}>
                 Phân tích
