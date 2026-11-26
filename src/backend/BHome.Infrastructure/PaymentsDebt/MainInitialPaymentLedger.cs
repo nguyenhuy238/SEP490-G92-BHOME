@@ -50,13 +50,19 @@ internal sealed class MainInitialPaymentLedger(BHomePersistenceContext db, IPaym
     {
         if (order.SharedDepositContractId is { } depositId)
         {
-            var deposit = await db.Set<Contract>().Where(c => c.Id == depositId).Select(c => c.RequiredDeposit).SingleAsync(t);
-            if (await DepositAsync(depositId, t) < deposit) return depositId;
+            var contract = await db.Set<Contract>().AsNoTracking().SingleAsync(c => c.Id == depositId, t);
+            var legacyActive = contract.Status == ContractStatus.Active && contract.ActivatedAt is not null && !contract.InitialPaymentRequired;
+            if (!legacyActive && await DepositAsync(depositId, t) < contract.RequiredDeposit) return depositId;
         }
         if (order.SharedRentContractId is { } rentId)
         {
             var source = await ReadAsync(rentId, t);
-            if (source is null || (await OutstandingAsync(source, t)).RentAndFees != 0) return rentId;
+            if (source is null)
+            {
+                var contract = await db.Set<Contract>().AsNoTracking().SingleAsync(c => c.Id == rentId, t);
+                if (contract.Status != ContractStatus.Active || contract.ActivatedAt is null || contract.InitialPaymentRequired) return rentId;
+            }
+            else if ((await OutstandingAsync(source, t)).RentAndFees != 0) return rentId;
         }
         return null;
     }

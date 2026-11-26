@@ -84,7 +84,7 @@ internal sealed class MainDraftRenderer(IConfiguration configuration, TimeProvid
                 else if (original.Contains('…') || original.Contains("....") || original.Contains("{{")) throw new ContractException(503, "contract_template_slots_changed");
                 if (original == "TRÁCH NHIỆM CỦA CÁC BÊN")
                 {
-                    var extra = charges.Where(c => c.ChargeCode is not ("RENT" or "ELECTRICITY" or "WATER")).Select(c => $"{c.Name}: {Money(c.Rate)} đ/{(c.Method == BHome.Domain.PropertyManagement.ChargingMethod.FixedPerPersonPerMonth ? "người" : "phòng")}/tháng.");
+                    var extra = charges.Where(c => c.ChargeCode is not ("RENT" or "ELECTRICITY" or "WATER")).Select(c => $"{c.Name}: {Money(c.Rate)} đ/{(c.Method == BHome.Domain.PropertyManagement.ChargingMethod.FixedPerPersonPerMonth ? "người/tháng (tính theo sức chứa phòng)" : "phòng/tháng")}.");
                     var occupants = data.Occupants is { Length: > 0 } ? "Thành viên cùng ở: " + string.Join(", ", data.Occupants) : "";
                     var terms = System.Text.RegularExpressions.Regex.Replace(data.Contract.Terms,
                         @"(?m)^NỘI QUY ĐƯỢC THỎA THUẬN [0-9a-fA-F-]{36} / phiên bản [0-9]+ / SHA256 [a-fA-F0-9]{64}\r?\n", "");

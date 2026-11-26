@@ -351,7 +351,9 @@ public sealed partial class Compact24NotificationMvpTests(Compact24Fixture fixtu
             var db = s.ServiceProvider.GetRequiredService<Compact24DbContext>(); var person = new Resident { RoomId = w.Room, OwnerUserId = w.Owner.Id, DisplayLabel = "Synthetic co-occupant" }; resident = person.Id;
             db.Add(person); db.Add(new ContractResident { ContractId = w.Contracts[0], ResidentId = resident, ResidenceFrom = Today.AddDays(-1), Role = ResidentType.CoOccupant }); await db.SaveChangesAsync();
             var repository = s.ServiceProvider.GetRequiredService<BHome.Application.Billing.IInvoiceRepository>();
-            Assert.Contains(await repository.OccupanciesAsync(w.Room, Today, Today.AddDays(1), default), o => !o.ContactsComplete);
+            // A co-occupant without an account must not block billing through the representative.
+            Assert.True(Assert.Single(await repository.OccupanciesAsync(w.Room, Today, Today.AddDays(1), default),
+                o => o.Contract.Id == w.Contracts[0]).ContactsComplete);
         }
         using var owner = await Client(w.Owner, host); using var staff = await Client(w.Staff, host); var email = Guid.NewGuid().ToString("N") + "@example.invalid";
         Assert.Equal(HttpStatusCode.Forbidden, (await staff.PostAsJsonAsync($"/api/v1/residents/{resident}/invitation", new TenantInvitationRequest(email))).StatusCode);
