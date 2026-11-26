@@ -1,5 +1,16 @@
 # Billing automation
 
+## Quyết định tích hợp 26/11/2026
+
+Khi chuẩn bị PR #174, người dùng xác nhận giữ quy tắc THuy: hóa đơn kỳ N thu
+tiền thuê N+1 và điện/nước/dịch vụ kỳ N; phí cố định đủ tháng, phí theo người
+nhân sức chứa phòng. Backend tự chọn hợp đồng đối chiếu. Quyết định này thay
+các mô tả cũ bên dưới về chọn đại diện thủ công và tính phí theo ngày/người
+cư trú cho **hóa đơn định kỳ mới**. Xem [INVOICES.md](INVOICES.md#quyết-định-tích-hợp-memberthuy--26112026)
+và [bàn giao JOB-10](../development/BILLING_REFERENCE_CONTRACT_HANDOFF.md).
+Hóa đơn Final và snapshot coverage lịch sử được giữ nguyên; thiếu hợp đồng
+đủ điều kiện không tự lập hóa đơn mới.
+
 ## Chế độ cấu hình lịch + chạy thử thủ công (14/11/2026)
 
 Owner Web `/billing-automation` tách **Cấu hình lịch** khỏi **Chạy thử thủ công**.

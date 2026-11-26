@@ -62,7 +62,8 @@ internal sealed class InvoiceRepository(BHomePersistenceContext db) : IInvoiceRe
     public async Task<IReadOnlyList<BillingOccupancy>> OccupanciesAsync(Guid roomId, DateOnly from, DateOnly to, CancellationToken t)
     {
         var contracts = await db.Set<Contract>().AsNoTracking().Include(c => c.Residents).Where(c => c.RoomId == roomId &&
-            (c.Status == ContractStatus.Active || c.Status == ContractStatus.Terminated || c.Status == ContractStatus.Superseded) &&
+            (c.Kind == ContractKind.Main || c.Kind == ContractKind.Renewal) &&
+            (c.Status == ContractStatus.Active || c.Status == ContractStatus.Terminated || c.Status == ContractStatus.Superseded || c.Status == ContractStatus.Expired) &&
             c.ActivatedAt != null && c.StartDate <= to && (c.ActualEndDate ?? c.EndDate) >= from).Take(501).ToArrayAsync(t);
         if (contracts.Length > 500) throw new InvoiceException(409, "billing_occupancy_review_required");
         var residentIds = contracts.SelectMany(c => c.Residents.Where(r => r.ResidenceFrom <= to && (r.ResidenceTo == null || r.ResidenceTo >= from)).Select(r => r.ResidentId)).Distinct().ToArray();

@@ -119,6 +119,13 @@ public sealed partial class Compact24NotificationMvpTests
             await SendEmail(host, delivery);
         }
         Assert.Equal(9, probe.Messages.Count);
+        var partialEmails = probe.Messages.Where(m => m.EventType == "PAYMENT_PARTIALLY_CONFIRMED").ToArray();
+        Assert.Equal(3, partialEmails.Length);
+        Assert.All(partialEmails, message =>
+        {
+            Assert.Contains(20000m.ToString("N0"), message.Body);
+            Assert.Contains(80000m.ToString("N0"), message.Body);
+        });
         var paidEmails = probe.Messages.Where(message => message.EventType == "INVOICE_FULLY_PAID").ToArray();
         Assert.Equal(3, paidEmails.Length);
         Assert.All(paidEmails, message =>

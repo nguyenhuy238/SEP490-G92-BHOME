@@ -64,6 +64,7 @@ function WorkspaceNavigation() {
       <Stack.Screen name="reset-password" options={{ title: 'Đặt lại mật khẩu' }} />
       <Stack.Screen name="contract-signing" options={{ title: 'Chấp thuận hợp đồng' }} />
       <Stack.Screen name="sign-contract" options={{ title: 'Ký hợp đồng' }} />
+      <Stack.Screen name="open-invoice" options={{ title: 'Mở hóa đơn' }} />
       <Stack.Protected guard={!!role}>
         <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
         <Stack.Screen name="workspace/[screen]" options={{ headerShown: false }} />

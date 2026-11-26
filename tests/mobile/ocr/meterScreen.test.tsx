@@ -18,6 +18,7 @@ vi.mock('expo-router', () => ({
 }));
 vi.mock('react-native', () => ({
   Platform: { OS: 'android' },
+  StyleSheet: { create: (s: unknown) => s },
   View: ({ children }: { children?: React.ReactNode }) => <div>{children}</div>,
   BackHandler: { addEventListener: () => ({ remove: vi.fn() }) },
   AppState: {
@@ -28,6 +29,7 @@ vi.mock('react-native', () => ({
   },
 }));
 type Children = { children?: React.ReactNode };
+vi.mock('../../../src/mobile/src/theme/theme', () => ({ colors: {} }));
 vi.mock('react-native-paper', () => ({
   ActivityIndicator: () => <span>Đang tải</span>,
   Text: ({ children }: Children) => <span>{children}</span>,

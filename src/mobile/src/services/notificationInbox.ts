@@ -81,13 +81,15 @@ export function appendInbox(current: InboxData, next: Page<NotificationItem>): I
     hasMore: added.length > 0 && next.page * next.pageSize < next.totalCount,
   };
 }
-export type NotificationDestination =
-  { screen: WorkspaceScreen; params: Record<string, string> } | { meterId: string };
+export type NotificationDestination = (
+  { screen: WorkspaceScreen; params: Record<string, string> } | { meterId: string }
+) & { staffLocationId?: string };
 export async function notificationDestination(
   api: MobileApi,
   role: MobileRole,
   id: string,
   signal: AbortSignal,
+  eventType?: string,
 ): Promise<NotificationDestination | null> {
   const client = notificationClient(<T>(path: string, init?: RequestInit) =>
     api.request<T>(path, { ...init, signal }),
@@ -95,6 +97,8 @@ export async function notificationDestination(
   const target = (await client.target(id)) as NotificationTarget | null;
   if (!target || !validId(target.objectId) || typeof target.objectType !== 'string')
     throw invalid();
+  const staffScope =
+    role === 'Staff' && validId(target.locationId) ? { staffLocationId: target.locationId } : {};
   if (target.objectType === 'Invoice' && role === 'Tenant')
     return { screen: 'invoice', params: { invoiceId: target.objectId } };
   if (target.objectType === 'MeterReading' && role === 'Tenant')
@@ -117,7 +121,9 @@ export async function notificationDestination(
       params: { adjustmentId: target.objectId },
     };
   if (target.objectType === 'Room' && role === 'Tenant')
-    return { screen: 'tenant-meters', params: { roomId: target.objectId } };
+    return eventType === 'INVOICE_FINALIZATION_BLOCKED'
+      ? { screen: 'invoice', params: {} }
+      : { screen: 'tenant-meters', params: { roomId: target.objectId } };
   if (target.objectType === 'Residence' && role === 'Tenant')
     return { screen: 'residence', params: { residentId: target.objectId } };
   if (target.objectType === 'Residence' && role === 'Owner')
@@ -127,13 +133,38 @@ export async function notificationDestination(
       screen: role === 'Tenant' ? 'contract' : 'signing',
       params: { contractId: target.objectId },
     };
-  if (target.objectType === 'MeterTask' && role === 'Staff') return { meterId: target.objectId };
+  if (target.objectType === 'MeterTask' && role === 'Staff')
+    return { meterId: target.objectId, ...staffScope };
+  if (
+    (target.objectType === 'MeterPeriod' || target.objectType === 'MeterOverduePeriod') &&
+    role === 'Staff'
+  ) {
+    if (
+      !validId(target.locationId) ||
+      target.locationId !== target.objectId ||
+      typeof target.billingPeriod !== 'string' ||
+      !/^\d{4}-(0[1-9]|1[0-2])-01$/.test(target.billingPeriod)
+    )
+      throw invalid();
+    return {
+      screen: 'meter-reading',
+      ...staffScope,
+      params: {
+        locationId: target.locationId,
+        billingPeriod: target.billingPeriod,
+      },
+    };
+  }
   if (target.objectType === 'OperationalTask' && role !== 'Tenant')
-    return { screen: 'task-detail', params: { taskId: target.objectId } };
+    return { screen: 'task-detail', params: { taskId: target.objectId }, ...staffScope };
   if (target.objectType === 'Incident')
-    return { screen: 'incident-detail', params: { incidentId: target.objectId } };
+    return { screen: 'incident-detail', params: { incidentId: target.objectId }, ...staffScope };
   if (target.objectType === 'WorkOrder' && role !== 'Tenant')
-    return { screen: 'maintenance-detail', params: { workOrderId: target.objectId } };
+    return {
+      screen: 'maintenance-detail',
+      params: { workOrderId: target.objectId },
+      ...staffScope,
+    };
   if (
     (target.objectType === 'PaymentTransaction' || target.objectType === 'BankTransfer') &&
     role === 'Owner'

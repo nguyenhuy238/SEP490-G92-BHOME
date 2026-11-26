@@ -1,5 +1,14 @@
 import React, { useCallback, useEffect, useRef, useState } from 'react';
-import { AppState, BackHandler, Platform, View } from 'react-native';
+import {
+  AppState,
+  BackHandler,
+  KeyboardAvoidingView,
+  Modal,
+  Platform,
+  ScrollView,
+  StyleSheet,
+  View,
+} from 'react-native';
 import { Redirect, router, useFocusEffect, useLocalSearchParams } from 'expo-router';
 import { ActivityIndicator, Button, Checkbox, Text } from 'react-native-paper';
 import { CameraCapture } from '../components/CameraCapture';
@@ -18,6 +27,7 @@ import { meterOcrFeedback } from '../services/meterOcrFeedback';
 import { MeterRoomOverview } from '../screens/MeterRoomOverview';
 import { meterRoundLabel, roomMeterTasks } from '../features/workspace/roomMeterTasks';
 import { useWorkspace } from '../features/workspace/WorkspaceProvider';
+import { colors as c } from '../theme/theme';
 import {
   estimatedConsumption,
   normalizedReading,
@@ -65,6 +75,7 @@ function RoomMeterScreen({ taskId, staffLocationId }: { taskId: string; staffLoc
   const [error, setError] = useFeedbackState();
   const [revision, setRevision] = useState(0);
   const [selected, setSelected] = useState<string | null>(null);
+  const [modalBusy, setModalBusy] = useState(false);
   const loadAbort = useRef<AbortController | null>(null);
   const reload = useCallback(() => {
     setLoading(true);
@@ -73,6 +84,7 @@ function RoomMeterScreen({ taskId, staffLocationId }: { taskId: string; staffLoc
   }, [setError]);
   const returnToOverview = useCallback(() => {
     setSelected(null);
+    setModalBusy(false);
     reload();
   }, [reload]);
   useFocusEffect(
@@ -133,33 +145,165 @@ function RoomMeterScreen({ taskId, staffLocationId }: { taskId: string; staffLoc
     });
     return () => listener.remove();
   }, [selected, reload]);
-  if (selected)
-    return <MeterTaskScreen key={selected} taskId={selected} onReturn={returnToOverview} />;
+  const selectedTask = tasks.find((task) => task.id === selected);
+  // Keep legacy direct Initial/Final routes intact; only the periodic workspace
+  // uses the new room modal. Handover and move-out already embed their own capture.
+  if (selectedTask && selectedTask.purpose !== 1)
+    return (
+      <MeterTaskScreen key={selectedTask.id} taskId={selectedTask.id} onReturn={returnToOverview} />
+    );
+  const selectedReading = selectedTask ? readings[selectedTask.id] : undefined;
+  const closeModal = () => {
+    if (!modalBusy) returnToOverview();
+  };
+  const meterName = selectedTask?.utilityType === 0 ? 'điện' : 'nước';
+  const unit = selectedTask?.utilityType === 0 ? 'kWh' : 'm³';
   return (
-    <MeterRoomOverview
-      tasks={tasks}
-      readings={readings}
-      loading={loading}
-      error={error}
-      onSelect={setSelected}
-      onReload={reload}
-      onBack={() => {
-        if (router.canGoBack()) router.back();
-        else
-          router.replace({ pathname: '/workspace/[screen]', params: { screen: 'meter-reading' } });
-      }}
-    />
+    <>
+      <MeterRoomOverview
+        tasks={tasks}
+        readings={readings}
+        loading={loading}
+        error={error}
+        onSelect={setSelected}
+        onReload={reload}
+        onBack={() => {
+          if (router.canGoBack()) router.back();
+          else
+            router.replace({
+              pathname: '/workspace/[screen]',
+              params: { screen: 'meter-reading' },
+            });
+        }}
+      />
+      {selectedTask && (
+        <Modal visible transparent animationType="slide" onRequestClose={closeModal}>
+          <KeyboardAvoidingView
+            style={meterModalStyles.overlay}
+            behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+          >
+            <View style={meterModalStyles.card} testID="periodic-meter-modal-card">
+              <View style={meterModalStyles.header}>
+                <Text variant="titleMedium" style={meterModalStyles.title}>
+                  {selectedReading ? 'Chỉ số' : 'Ghi chỉ số'} {meterName}
+                </Text>
+                <Button mode="text" disabled={modalBusy} onPress={closeModal}>
+                  Đóng
+                </Button>
+              </View>
+              <ScrollView
+                style={meterModalStyles.scroll}
+                contentContainerStyle={meterModalStyles.body}
+                keyboardShouldPersistTaps="handled"
+              >
+                {selectedReading ? (
+                  <>
+                    <Text variant="labelLarge">Chỉ số đã xác nhận</Text>
+                    <Text variant="headlineMedium" style={ui.money}>
+                      {formatMeterReading(selectedReading.confirmedValue, unit)}
+                    </Text>
+                    <StaffMeterReadingEvidence
+                      key={selectedReading.id}
+                      id={selectedReading.id}
+                      label={`Ảnh minh chứng ${meterName}`}
+                    />
+                  </>
+                ) : (
+                  <MeterTaskScreen
+                    key={selectedTask.id}
+                    embedded
+                    taskId={selectedTask.id}
+                    onReturn={returnToOverview}
+                    onBusyChange={setModalBusy}
+                  />
+                )}
+              </ScrollView>
+            </View>
+            {modalBusy && (
+              <View
+                style={meterModalStyles.processingOverlay}
+                testID="periodic-meter-processing-overlay"
+                accessibilityViewIsModal
+              >
+                <View style={meterModalStyles.processingCard}>
+                  <ActivityIndicator
+                    size="large"
+                    color={c.primary}
+                    accessibilityLabel="Đang xử lý chỉ số"
+                  />
+                  <Text variant="titleMedium" accessibilityLiveRegion="polite">
+                    Đang xử lý…
+                  </Text>
+                </View>
+              </View>
+            )}
+          </KeyboardAvoidingView>
+        </Modal>
+      )}
+    </>
   );
 }
+
+const meterModalStyles = StyleSheet.create({
+  overlay: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    padding: 12,
+    backgroundColor: 'rgba(13, 26, 49, 0.62)',
+  },
+  card: {
+    width: '100%',
+    maxWidth: 620,
+    maxHeight: '93%',
+    borderRadius: 16,
+    backgroundColor: c.white,
+    overflow: 'hidden',
+  },
+  header: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: 16,
+    paddingVertical: 8,
+    borderBottomWidth: 1,
+    borderBottomColor: c.border,
+  },
+  title: { flex: 1, color: c.primary, fontWeight: '700' },
+  scroll: { flexShrink: 1, minHeight: 0 },
+  body: { padding: 16, gap: 12, paddingBottom: 24 },
+  processingOverlay: {
+    position: 'absolute',
+    top: 0,
+    right: 0,
+    bottom: 0,
+    left: 0,
+    zIndex: 2,
+    elevation: 8,
+    backgroundColor: 'rgba(13, 26, 49, 0.36)',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  processingCard: {
+    width: 208,
+    maxWidth: '90%',
+    alignItems: 'center',
+    backgroundColor: c.white,
+    borderRadius: 16,
+    padding: 20,
+    gap: 12,
+  },
+});
 
 export function MeterTaskScreen({
   taskId,
   onReturn,
   embedded = false,
+  onBusyChange,
 }: {
   taskId: string;
   onReturn: () => void;
   embedded?: boolean;
+  onBusyChange?: (busy: boolean) => void;
 }) {
   const { api } = useSession();
   const [task, setTask] = useState<MeterTask | null>(null);
@@ -185,6 +329,7 @@ export function MeterTaskScreen({
     setChecked(false);
     setStep(1);
     setNotice('');
+    if (onBusyChange) setError('');
   };
   useEffect(() => {
     mounted.current = true;
@@ -263,6 +408,7 @@ export function MeterTaskScreen({
     setReading('');
     const controller = new AbortController();
     abort.current = controller;
+    onBusyChange?.(true);
     const timeout = setTimeout(() => controller.abort(), 45000);
     try {
       try {
@@ -303,7 +449,10 @@ export function MeterTaskScreen({
     } finally {
       clearTimeout(timeout);
       lock.current = false;
-      if (mounted.current) setOperation(null);
+      if (mounted.current) {
+        setOperation(null);
+        onBusyChange?.(false);
+      }
     }
   }
   async function confirm() {
@@ -317,6 +466,7 @@ export function MeterTaskScreen({
     setError('');
     const controller = new AbortController();
     abort.current = controller;
+    onBusyChange?.(true);
     const timeout = setTimeout(() => controller.abort(), 45000);
     try {
       const client = meterService(api);
@@ -339,12 +489,14 @@ export function MeterTaskScreen({
     } finally {
       clearTimeout(timeout);
       lock.current = false;
-      if (mounted.current) setOperation(null);
+      if (mounted.current) {
+        setOperation(null);
+        onBusyChange?.(false);
+      }
     }
   }
   const content = (
     <>
-      {!embedded && <Heading title="Ghi chỉ số điện nước" detail="Quản lý ghi chỉ số theo phòng" />}
       {loading && <ActivityIndicator accessibilityLabel="Đang tải tác vụ" />}
       {!!error && (
         <Text accessibilityRole="alert" style={styles.error}>
@@ -439,6 +591,7 @@ export function MeterTaskScreen({
               label={captureLabel}
               presentation="meter"
               meterCompact={embedded}
+              meterRetryResets={!!onBusyChange}
               meterStep={step}
               retainPreview
               reviewBeforeSubmit
@@ -447,7 +600,7 @@ export function MeterTaskScreen({
               onPhotoCleared={clearPhoto}
               onCapture={recognize}
             />
-            {operation === 'recognize' && (
+            {operation === 'recognize' && !onBusyChange && (
               <View
                 style={{ gap: 8 }}
                 accessibilityRole="progressbar"
@@ -519,7 +672,7 @@ export function MeterTaskScreen({
                 <Button
                   mode="contained"
                   contentStyle={{ minHeight: 48 }}
-                  loading={operation === 'save'}
+                  loading={operation === 'save' && !onBusyChange}
                   disabled={busy || !evidence || !checked || !!validation || decreased}
                   onPress={() => void confirm()}
                 >
@@ -527,7 +680,9 @@ export function MeterTaskScreen({
                 </Button>
               </Box>
             )}
-            {busy && <Button onPress={() => abort.current?.abort()}>Hủy yêu cầu</Button>}
+            {busy && !onBusyChange && (
+              <Button onPress={() => abort.current?.abort()}>Hủy yêu cầu</Button>
+            )}
           </>
         )
       )}

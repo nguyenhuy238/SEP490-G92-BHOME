@@ -38,18 +38,16 @@ public sealed partial class PaymentLedgerTests
         var w = await Setup(); using var owner = await Client(w.Owner);
         (await owner.PutAsJsonAsync("/api/v1/billing-schedules", Calendar(w))).EnsureSuccessStatusCode();
         var input = new DraftInvoiceInput(w.Room, CurrentPeriod());
-        var ambiguous = await owner.PostAsJsonAsync("/api/v1/invoices/drafts", input);
-        Assert.Equal(HttpStatusCode.Conflict, ambiguous.StatusCode);
-        Assert.Contains("representative_selection_required", await ambiguous.Content.ReadAsStringAsync());
-        (await owner.PutAsJsonAsync("/api/v1/billing-automation/representative",
-            new BillingRepresentativeInput(w.Room, CurrentPeriod(), w.Contract, 0))).EnsureSuccessStatusCode();
         var created = await owner.PostAsJsonAsync("/api/v1/invoices/drafts", input); created.EnsureSuccessStatusCode();
         var invoice = (await created.Content.ReadFromJsonAsync<InvoiceView>())!;
         await using var scope = fixture.Factory.Services.CreateAsyncScope();
-        Assert.Equal(w.Contract, (await scope.ServiceProvider.GetRequiredService<BHomePersistenceContext>()
-            .Set<Invoice>().SingleAsync(i => i.Id == invoice.Id)).RepresentativeContractId);
-        Assert.Equal(HttpStatusCode.Conflict,
-            (await owner.PostAsJsonAsync("/api/v1/invoices/drafts", new DraftInvoiceInput(w.Room, CurrentPeriod(), Guid.NewGuid()))).StatusCode);
+        var db = scope.ServiceProvider.GetRequiredService<BHomePersistenceContext>();
+        var candidates = await db.Set<BHome.Domain.TenantContracts.Contract>().Where(c => c.RoomId == w.Room).ToArrayAsync();
+        var expected = candidates.OrderBy(c => c.CreatedAt).ThenBy(c => c.Id).First().Id;
+        Assert.Equal(expected, (await db.Set<Invoice>().SingleAsync(i => i.Id == invoice.Id)).RepresentativeContractId);
+        var repeated = await owner.PostAsJsonAsync("/api/v1/invoices/drafts", new DraftInvoiceInput(w.Room, CurrentPeriod(), Guid.NewGuid()));
+        repeated.EnsureSuccessStatusCode();
+        Assert.Equal(invoice.Id, (await repeated.Content.ReadFromJsonAsync<InvoiceView>())!.Id);
     }
 
     [Theory]

@@ -11,18 +11,19 @@ namespace BHome.Infrastructure.Modules.Notifications;
 
 internal sealed partial class CompactNotificationEvents
 {
-    private async Task<int> Reminders(CancellationToken t)
+    private async Task<int> Reminders(CancellationToken t, bool billingOnly = false)
     {
         var policies = new List<(Guid Id, NotificationReminderPolicy Policy)>();
         await using (var cmd = await sql.Command("SELECT id,operating_settings->'notificationPolicy' FROM locations WHERE is_active AND operating_settings ? 'notificationPolicy'", t))
         { await using var reader = await cmd.ExecuteReaderAsync(t); while (await reader.ReadAsync(t)) policies.Add((reader.GetGuid(0), JsonSerializer.Deserialize<NotificationReminderPolicy>(reader.GetString(1), CompactNotificationWriter.Json)!)); }
-        var count = await ResidenceDateAlerts(t);
+        var count = billingOnly ? 0 : await ResidenceDateAlerts(t);
+        var billingToday = sql.BusinessToday;
         foreach (var (location, policy) in policies)
         {
             if (policy.InvoiceDueSoonDays is >= 1 and <= 30)
             {
-                var until = Today.AddDays(policy.InvoiceDueSoonDays.Value);
-                var invoices = await db.Set<Invoice>().AsNoTracking().Where(i => i.LocationId == location && i.Status == InvoiceStatus.Final && i.DueDate >= Today && i.DueDate <= until).ToArrayAsync(t);
+                var until = billingToday.AddDays(policy.InvoiceDueSoonDays.Value);
+                var invoices = await db.Set<Invoice>().AsNoTracking().Where(i => i.LocationId == location && i.Status == InvoiceStatus.Final && i.DueDate >= billingToday && i.DueDate <= until).ToArrayAsync(t);
                 foreach (var invoice in invoices)
                 {
                     var key = $"invoice-due-soon:{invoice.Id}:{invoice.DueDate:yyyyMMdd}";
@@ -34,10 +35,10 @@ internal sealed partial class CompactNotificationEvents
             }
             if (policy.DebtEnabled && policy.DebtWindowDays is > 0)
             {
-                var invoices = await db.Set<Invoice>().AsNoTracking().Where(i => i.LocationId == location && i.Status == InvoiceStatus.Final && i.DueDate < Today).OrderBy(i => i.Id).ToArrayAsync(t);
+                var invoices = await db.Set<Invoice>().AsNoTracking().Where(i => i.LocationId == location && i.Status == InvoiceStatus.Final && i.DueDate < billingToday).OrderBy(i => i.Id).ToArrayAsync(t);
                 foreach (var invoice in invoices)
                 {
-                    var key = $"overdue:{invoice.Id}:{Today.DayNumber / policy.DebtWindowDays}";
+                    var key = $"overdue:{invoice.Id}:{billingToday.DayNumber / policy.DebtWindowDays}";
                     if (await Done(key, t)) continue;
                     var balance = await db.FinancialsAsync(invoice.Id, t); if (balance.OutstandingAmount <= 0) continue;
                     var audience = (await db.Set<InvoiceRecipient>().Where(r => r.InvoiceId == invoice.Id).Select(r => r.TenantUserId).ToArrayAsync(t)).Concat(await Staff(location, t)).Concat(await Owners(t));
@@ -46,10 +47,12 @@ internal sealed partial class CompactNotificationEvents
                     await Mark(key, t);
                 }
             }
+            if (billingOnly) continue;
             if (policy.TaskEnabled && policy.TaskWindowHours is > 0)
             {
                 var window = sql.Now.ToUnixTimeSeconds() / (policy.TaskWindowHours.Value * 3600L);
-                var tasks = await db.Set<OperationalTask>().AsNoTracking().Where(x => x.LocationId == location && x.DueAt <= sql.Now && x.Status != MeterTaskStatus.Completed && x.Status != MeterTaskStatus.Cancelled).ToArrayAsync(t);
+                var tasks = await db.Set<OperationalTask>().AsNoTracking().Where(x => x.LocationId == location && x.DueAt <= sql.Now && x.Status != MeterTaskStatus.Completed && x.Status != MeterTaskStatus.Cancelled &&
+                    !(x.Kind == BHome.Domain.StaffOperations.OperationalTaskKind.MeterReading && x.Purpose == ReadingPurpose.Periodic && x.BillingPeriod != null)).ToArrayAsync(t);
                 foreach (var task in tasks)
                 {
                     var key = $"task-overdue:{task.Id}:{window}"; if (await Done(key, t)) continue;

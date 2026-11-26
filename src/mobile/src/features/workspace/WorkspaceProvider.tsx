@@ -1,10 +1,11 @@
-import React, { createContext, useCallback, useContext, useRef, useState } from 'react';
+import React, { createContext, useCallback, useContext, useEffect, useRef, useState } from 'react';
 import { router, useSegments } from 'expo-router';
 import { Dialog, Portal, Button, Text } from 'react-native-paper';
 import { useSession } from '../../lib/SessionProvider';
 import { StaffLocationProvider } from './StaffLocationProvider';
 import { useStaffLocation } from './StaffLocationProvider';
 import type { Named } from '../../lib/api';
+import { showInfo } from '../../lib/toast';
 import {
   homeScreen,
   sessionRole,
@@ -20,6 +21,7 @@ interface WorkspaceContext {
   staffLocationsLoading: boolean;
   staffLocationsError: string;
   selectStaffLocation: (id: string) => void;
+  navigateInStaffLocation: (id: string, action: () => void) => void;
   reloadStaffLocations: () => void;
   registerExitGuard: (
     guard: () => boolean,
@@ -94,6 +96,41 @@ function WorkspaceSessionProvider({ children }: { children: React.ReactNode }) {
   const requestId = React.useRef(0);
   const preview = __DEV__ && !session && previewRole !== null;
   const role = session ? sessionRole(session.roles) : previewRole;
+  const locationNavigation = useRef<{
+    id: string;
+    action: () => void;
+  } | null>(null);
+  const [locationNavigationRevision, setLocationNavigationRevision] = useState(0);
+  const navigateInStaffLocation = (id: string, action: () => void) =>
+    requestNavigation(() => {
+      if (role !== 'Staff' || preview) return;
+      locationNavigation.current = { id, action };
+      setLocationNavigationRevision((revision) => revision + 1);
+      // A newly assigned location may not yet be in the shared catalogue.
+      if (!staffLocation.loading && !staffLocation.locations.some((item) => item.id === id))
+        staffLocation.reload();
+    });
+  useEffect(() => {
+    const pending = locationNavigation.current;
+    if (!pending || staffLocation.loading) return;
+    if (
+      role !== 'Staff' ||
+      preview ||
+      !staffLocation.locations.some((item) => item.id === pending.id)
+    ) {
+      locationNavigation.current = null;
+      showInfo('Cơ sở không còn khả dụng hoặc bạn không còn quyền truy cập.');
+      return;
+    }
+    if (staffLocation.selectedLocationId !== pending.id) {
+      staffLocation.selectLocation(pending.id);
+      return;
+    }
+    // Wait until the shared selection has committed before mounting a scoped
+    // destination. This also survives the inbox remount when its location changes.
+    locationNavigation.current = null;
+    pending.action();
+  }, [locationNavigationRevision, staffLocation, role, preview]);
   const go = (screen: WorkspaceScreen, params?: Record<string, string>, keepDestination = false) =>
     requestNavigation(() => {
       if (role && isWorkspaceTabDestination(role, screen, params)) {
@@ -115,6 +152,7 @@ function WorkspaceSessionProvider({ children }: { children: React.ReactNode }) {
           requestNavigation(() => {
             staffLocation.selectLocation(id);
           }),
+        navigateInStaffLocation,
         reloadStaffLocations: staffLocation.reload,
         role,
         registerExitGuard,

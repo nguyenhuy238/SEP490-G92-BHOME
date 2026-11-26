@@ -43,7 +43,7 @@ public static class DemoClockGuard
             config["ObjectStorage:Bucket"] != "bhome-private" ||
             config["Deployment:Environment"] is not (null or "" or "Development") ||
             new[] { "DevelopmentDatabase:InitializeOnStartup", "Jobs:Enabled", "StaffAssignments:AutoReconcileEnabled",
-                "OwnerSetup:AssetSyncEnabled", "BillingAutomation:AutomaticJobsEnabled", "BankIntegration:Enabled",
+                "OwnerSetup:AssetSyncEnabled", "BankIntegration:Enabled",
                 "NotificationChannels:AutomationEnabled" }.Any(key => config.GetValue<bool>(key)) ||
             config.GetValue<bool>("SePay:Enabled") && config["SePay:Mode"] != "Test")
             throw new InvalidOperationException("DemoClock local Development requires an explicitly selected local snapshot and local storage, disabled automatic business jobs and no live bank integration.");
@@ -56,7 +56,7 @@ public static class DemoClockGuard
         if (config["Deployment:Environment"] != environment ||
             config.GetValue<bool>("BankIntegration:Enabled") ||
             new[] { "DevelopmentDatabase:InitializeOnStartup", "Jobs:Enabled", "StaffAssignments:AutoReconcileEnabled",
-                "OwnerSetup:AssetSyncEnabled", "BillingAutomation:AutomaticJobsEnabled", "ContractWorkflow:SimulatedSigningEnabled" }
+                "OwnerSetup:AssetSyncEnabled", "ContractWorkflow:SimulatedSigningEnabled" }
                 .Any(key => config.GetValue<bool>(key)))
             return false;
         var owner = config["DemoClock:OwnerUserId"];

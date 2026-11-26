@@ -1,4 +1,5 @@
 using System.Text.Json;
+using BHome.Application.Common;
 using BHome.Application.Notifications;
 using BHome.Domain.Notifications;
 using BHome.Infrastructure.Persistence.Compact24;
@@ -14,6 +15,8 @@ internal sealed class CompactNotificationWriter(Compact24DbContext db, TimeProvi
 {
     internal static readonly JsonSerializerOptions Json = new(JsonSerializerDefaults.Web);
     internal DateTimeOffset Now => clock.GetUtcNow();
+    internal DateOnly BusinessToday => clock.BusinessToday();
+    internal DateTimeOffset BusinessNow => clock.BusinessUtcNow();
     internal async Task<NpgsqlCommand> Command(string sql, CancellationToken t, params (string Key, object? Value)[] args)
     {
         await db.Database.OpenConnectionAsync(t);

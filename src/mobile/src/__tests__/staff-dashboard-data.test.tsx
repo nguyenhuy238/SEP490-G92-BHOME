@@ -87,8 +87,10 @@ it('requests only two latest actionable tasks for the selected Location', async 
   expect(paths.filter((path) => path.includes('latestActionable=true'))).toEqual([
     '/api/v1/operational-tasks?page=1&pageSize=2&locationId=loc-1&latestActionable=true',
   ]);
-  expect(
-    paths.some((path) => path.includes('isOverdue=true') || path.includes('/meter-tasks')),
-  ).toBe(false);
+  expect(paths.some((path) => path.includes('isOverdue=true'))).toBe(false);
+  expect(paths.filter((path) => path.includes('/meter-tasks'))).toEqual([
+    '/api/v1/capture/meter-tasks?locationId=loc-1&page=1',
+  ]);
+  expect(view.result.current.overdueMeterRooms).toBe(0);
   expect(view.result.current.priorities.data?.items).toEqual([]);
 });

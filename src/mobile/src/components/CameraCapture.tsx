@@ -40,6 +40,7 @@ export function CameraCapture({
   onPhotoCleared,
   meterStep = 1,
   meterCompact = false,
+  meterRetryResets = false,
   autoOpen = false,
   captureInstruction,
   retryOnly = false,
@@ -59,6 +60,7 @@ export function CameraCapture({
   uploadError?: string;
   meterStep?: number;
   meterCompact?: boolean;
+  meterRetryResets?: boolean;
   autoOpen?: boolean;
   captureInstruction?: string;
   onManual?: () => void;
@@ -341,12 +343,15 @@ export function CameraCapture({
     setReady(false);
     setOpen(false);
   };
-  const retake = () => {
+  const resetCapture = () => {
     closeCamera();
-    setSession(generation.current);
     clearFiles();
     setPreview('');
     setError('');
+  };
+  const retake = () => {
+    resetCapture();
+    setSession(generation.current);
     setOpen(true);
   };
   const selectDemoMeterPhoto = async () => {
@@ -428,6 +433,7 @@ export function CameraCapture({
         onClose={closeCamera}
         onUse={() => void submitPending()}
         onRetake={retake}
+        onRetry={meterRetryResets ? resetCapture : undefined}
         onUseDemo={localMeterDemo && !preview ? () => void selectDemoMeterPhoto() : undefined}
       />
     );

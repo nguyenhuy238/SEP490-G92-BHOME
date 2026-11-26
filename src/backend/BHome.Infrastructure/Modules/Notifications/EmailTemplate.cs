@@ -143,7 +143,7 @@ internal static class EmailTemplate
         foreach (var url in new[] { actionUrl, mobileActionUrl })
             if (url is not null && (!Uri.TryCreate(url, UriKind.Absolute, out var uri) || uri.UserInfo.Length > 0 ||
                 url.Any(char.IsControl) || !(uri.Scheme == "https" || uri.Scheme == "http" && uri.IsLoopback ||
-                    uri.Scheme == "bhome" && uri.Host is "reset-password" or "accept-invitation" or "confirm-email" or "sign-contract")))
+                    uri.Scheme == "bhome" && uri.Host is "reset-password" or "accept-invitation" or "confirm-email" or "sign-contract" or "open-invoice")))
                 throw new ChannelDeliveryException("email_action_url_invalid");
     }
 }

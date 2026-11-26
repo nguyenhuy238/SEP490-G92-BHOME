@@ -1,748 +1,303 @@
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
-import { ScrollView, StyleSheet, View } from 'react-native';
+import { StyleSheet, View } from 'react-native';
 import { router, useFocusEffect } from 'expo-router';
+import { ActivityIndicator, Button, IconButton, Text, TouchableRipple } from 'react-native-paper';
+import { Pill } from '../components/WorkspaceKit';
+import { ChoiceField } from '../components/WorkflowControls';
+import { useWorkspaceHeaderRefresh } from '../components/WorkspaceHeaderContext';
 import {
-  ActivityIndicator,
-  Button,
-  Dialog,
-  Icon,
-  IconButton,
-  Portal,
-  Text,
-  TouchableRipple,
-} from 'react-native-paper';
-import { Pill, ui } from '../components/WorkspaceKit';
-import { ChoiceField, Input } from '../components/WorkflowControls';
-import { groupRoomMeterTasks, meterRoundLabel } from '../features/workspace/roomMeterTasks';
-import { useWorkspaceQuery } from '../features/workspace/useWorkspaceQuery';
+  groupRoomMeterTasks,
+  isOverduePeriodicMeterTask,
+} from '../features/workspace/roomMeterTasks';
 import { useSession } from '../lib/SessionProvider';
 import { useWorkspace } from '../features/workspace/WorkspaceProvider';
-import { errorMessage, type MeterTask, type Named } from '../lib/api';
+import { errorMessage, type MeterTask } from '../lib/api';
 import { conciseMessage } from '../lib/toast';
-import { displayContractDate } from '../../../../packages/client-core/src/contracts';
-import {
-  formatInstant,
-  formatMeterReading,
-} from '../../../../packages/client-core/src/localization';
-import type { ConfirmedReading } from '../../../../packages/client-core/src/meter';
+import { getDemoClockState } from '../../../../packages/client-core/src/demoClock';
 import { colors as c } from '../theme/theme';
 
-const QUICK_STATUS_FILTERS = [
-  { id: '', label: 'Tất cả' },
-  { id: 'pending', label: 'Chưa ghi' },
-  { id: '2', label: 'Đã ghi' },
-] as const;
+const PAGE_SIZE = 10;
 
-const SHEET_STATUS_OPTIONS = [
-  { id: '', label: 'Tất cả trạng thái' },
-  { id: 'pending', label: 'Chưa ghi' },
-  { id: '2', label: 'Đã ghi' },
-  { id: '0', label: 'Được giao' },
-  { id: '1', label: 'Đang xử lý' },
-  { id: '3', label: 'Đã hủy' },
-];
+type RoomFloor = { id: string; floor?: string | null };
+type RoomPage = { items: RoomFloor[]; totalCount: number };
 
-function statusFilterLabel(status: string): string {
-  return SHEET_STATUS_OPTIONS.find((item) => item.id === status)?.label ?? status;
+function floorRank(floor: string | null | undefined): number | null {
+  const value = floor?.trim().toLocaleLowerCase('vi');
+  if (!value) return null;
+  if (/^(trệt|tầng trệt|ground|g)$/.test(value)) return 0;
+  const basement = /^(?:b|hầm\s*|tầng hầm\s*)(\d+)$/.exec(value);
+  if (basement) return -Number(basement[1]);
+  const number = /^(?:tầng\s*)?(-?\d+)$/.exec(value);
+  return number ? Number(number[1]) : null;
 }
 
-function matchesStatusFilter(group: MeterTask[], status: string): boolean {
-  if (!status) return true;
-  if (status === 'pending') return group.some((task) => task.status < 2);
-  if (status === '2') {
-    const required = group.filter((task) => task.status !== 3);
-    return required.length > 0
-      ? required.every((task) => task.status === 2)
-      : group.some((task) => task.status === 2);
-  }
-  return group.some((task) => String(task.status) === status);
+function compareRooms(a: MeterTask, b: MeterTask, floors: Map<string, string | null | undefined>) {
+  const af = floors.get(a.roomId ?? '');
+  const bf = floors.get(b.roomId ?? '');
+  const an = floorRank(af);
+  const bn = floorRank(bf);
+  return (
+    (an !== null && bn !== null ? an - bn : Number(an === null) - Number(bn === null)) ||
+    (an === null && bn === null && af && bf ? af.localeCompare(bf, 'vi', { numeric: true }) : 0) ||
+    a.room.localeCompare(b.room, 'vi', { numeric: true }) ||
+    (a.roomId ?? a.id).localeCompare(b.roomId ?? b.id)
+  );
 }
 
-export function MeterTasksScreen() {
+export function MeterTasksScreen({
+  initialLocationId,
+  initialBillingPeriod,
+}: {
+  initialLocationId?: string;
+  initialBillingPeriod?: string;
+} = {}) {
   const { api, session } = useSession();
   const {
     staffLocationId,
     staffLocations,
     staffLocationsLoading,
     staffLocationsError,
-    selectStaffLocation,
     reloadStaffLocations,
   } = useWorkspace();
   const staff = session?.roles.includes('Staff');
-  const currentUserId = session?.userId;
-  const [filterLocationId, setFilterLocationId] = useState('');
-  const [room, setRoom] = useState('');
-  const [period, setPeriod] = useState('');
-  const [due, setDue] = useState('');
-  const [status, setStatus] = useState('');
-  const [filterOpen, setFilterOpen] = useState(false);
-  const [page, setPage] = useState(1);
+  const actor = session?.userId;
+  const location = staffLocations.find((item) => item.id === staffLocationId);
+  const locationId = location?.id ?? '';
   const [revision, setRevision] = useState(0);
+  const [selection, setSelection] = useState<{ scope: string; period: string } | null>(null);
+  const [pagination, setPagination] = useState<{
+    scope: string;
+    period: string;
+    page: number;
+  } | null>(null);
   const [state, setState] = useState<{
     api: typeof api;
     key: string;
-    data: MeterTask[];
+    tasks: MeterTask[];
+    floors: Map<string, string | null | undefined>;
     error: string;
   } | null>(null);
-  const [readings, setReadings] = useState<Record<string, ConfirmedReading>>({});
+  const scope = `${actor ?? ''}:${locationId}`;
+  const demoClock = getDemoClockState();
+  const key = `${scope}:${revision}:${demoClock?.version ?? ''}:${demoClock?.businessDate ?? ''}`;
+  const current = locationId && state?.key === key && state.api === api ? state : null;
+  const loading = !!api && !!staff && !!locationId && !current;
 
-  const locations = useMemo(
-    () => ({
-      data: staffLocations,
-      loading: staffLocationsLoading,
-      error: staffLocationsError,
-      reload: reloadStaffLocations,
-    }),
-    [staffLocations, staffLocationsLoading, staffLocationsError, reloadStaffLocations],
-  );
-  const assignedLocation = staffLocations.find((item) => item.id === staffLocationId) ?? null;
-  const assignedLocationId = assignedLocation?.id ?? '';
-  // A refreshed assignment may revoke the selected Location. The fallback must not
-  // carry that Location's room/period or page into a different authorized scope.
-  const selectionRevoked = !!filterLocationId && filterLocationId !== assignedLocationId;
-  const scopedRoom = selectionRevoked ? '' : room;
-  const scopedPeriod = selectionRevoked ? '' : period;
-  const scopedPage = selectionRevoked ? 1 : page;
-
-  const changeLocation = (id: string) => {
-    if (id === assignedLocationId || !staffLocations.some((item) => item.id === id)) return;
-    setFilterLocationId(id);
-    selectStaffLocation(id);
-    setRoom('');
-    setPeriod('');
-    setPage(1);
-    setFilterOpen(false);
-  };
-
-  const rooms = useWorkspaceQuery<Named[]>(
-    staff && assignedLocationId
-      ? `/api/v1/capture/locations/${encodeURIComponent(assignedLocationId)}/rooms`
-      : null,
-    { notifyError: false },
-  );
-
-  const validDue =
-    !due ||
-    (/^\d{4}-\d{2}-\d{2}$/.test(due) &&
-      !Number.isNaN(Date.parse(due)) &&
-      new Date(due).toISOString().slice(0, 10) === due);
-  const params = new URLSearchParams();
-  if (assignedLocationId) params.set('locationId', assignedLocationId);
-  if (scopedRoom) params.set('roomId', scopedRoom);
-  if (due && validDue) params.set('dueDate', due);
-  const scope = params.toString();
-  const key = `${assignedLocationId}:${scope}:${revision}`;
-
-  const reloadTasks = useCallback(() => setRevision((v) => v + 1), []);
-  const handleReload = useCallback(() => {
-    locations.reload();
-    if (assignedLocationId) {
-      rooms.reload();
-      reloadTasks();
-    }
-  }, [assignedLocationId, locations, reloadTasks, rooms]);
-
+  const reloadTasks = useCallback(() => setRevision((value) => value + 1), []);
+  const reload = useCallback(() => {
+    reloadStaffLocations();
+    reloadTasks();
+  }, [reloadStaffLocations, reloadTasks]);
   useFocusEffect(
     useCallback(() => {
       reloadTasks();
     }, [reloadTasks]),
   );
+  const header = useWorkspaceHeaderRefresh(reload, loading || staffLocationsLoading, {
+    title: 'Ghi chỉ số điện nước',
+  });
 
   useEffect(() => {
-    if (!api || !staff || !assignedLocationId || !validDue) return;
+    if (!api || !staff || !locationId) return;
     const controller = new AbortController();
+    const signal = controller.signal;
     void (async () => {
       try {
-        // The existing API has no billingPeriod filter. Collect its scoped pages
-        // before filtering periods locally, so later pages cannot be omitted.
-        const data: MeterTask[] = [];
-        for (let serverPage = 1; ; serverPage++) {
+        const tasks: MeterTask[] = [];
+        for (let page = 1; ; page++) {
           const batch = await api.request<MeterTask[]>(
-            `/api/v1/capture/meter-tasks?page=${serverPage}&${scope}`,
-            { signal: controller.signal },
+            `/api/v1/capture/meter-tasks?page=${page}&locationId=${encodeURIComponent(locationId)}`,
+            { signal },
           );
-          if (controller.signal.aborted) return;
-          data.push(...batch);
+          if (signal.aborted) return;
+          tasks.push(...batch);
           if (batch.length < 100) break;
         }
-        setState({ api, key, data, error: '' });
-      } catch (e) {
-        if (!controller.signal.aborted) {
-          setState({ api, key, data: [], error: conciseMessage(errorMessage(e)) });
+        // Use the existing Staff-scoped room catalogue for the actual floor, not
+        // the first digit of a room number (which may be an arbitrary code).
+        const floors = new Map<string, string | null | undefined>();
+        try {
+          for (let page = 1; ; page++) {
+            const result = await api.request<RoomPage>(
+              `/api/v1/rooms?locationId=${encodeURIComponent(locationId)}&page=${page}&pageSize=100`,
+              { signal },
+            );
+            if (signal.aborted) return;
+            for (const room of result.items) floors.set(room.id, room.floor);
+            if (!result.items.length || page * 100 >= result.totalCount) break;
+          }
+        } catch {
+          // Room metadata is supplemental; tasks remain usable in natural room order.
+          floors.clear();
         }
+        if (!signal.aborted) setState({ api, key, tasks, floors, error: '' });
+      } catch (cause) {
+        if (!signal.aborted)
+          setState({
+            api,
+            key,
+            tasks: [],
+            floors: new Map(),
+            error: conciseMessage(errorMessage(cause)),
+          });
       }
     })();
     return () => controller.abort();
-  }, [api, assignedLocationId, key, scope, staff, validDue]);
+  }, [api, key, locationId, staff]);
 
-  const current =
-    assignedLocationId && validDue && state?.key === key && state.api === api ? state : null;
-  const loading = !!api && !!staff && !!assignedLocationId && validDue && !current;
-  const currentData = current?.data;
-
-  const scopedTasks = useMemo(() => {
-    if (!assignedLocation) return [];
-    const raw = currentData ?? [];
-    return raw.filter((task) => {
-      // Main move-in Initial readings are steps within the contract handover job.
-      // Keep their exact /meter?taskId route available from ContractInitialMeterTasks.
-      if (task.purpose === 0 && !!task.contractId) return false;
-      if (task.locationId && task.locationId !== assignedLocation.id) return false;
-      if (!task.locationId && task.location && task.location !== assignedLocation.label)
-        return false;
-      if (task.assignedStaffUserId && currentUserId && task.assignedStaffUserId !== currentUserId)
-        return false;
-      return true;
-    });
-  }, [assignedLocation, currentData, currentUserId]);
-
+  const tasks = useMemo(
+    () =>
+      (current?.tasks ?? []).filter(
+        (task) =>
+          task.purpose === 1 &&
+          !!task.billingPeriod &&
+          task.status !== 3 &&
+          (task.locationId ? task.locationId === locationId : task.location === location?.label),
+      ),
+    [current, locationId, location?.label],
+  );
+  const requestedPeriod =
+    initialLocationId === locationId &&
+    initialBillingPeriod &&
+    /^\d{4}-(0[1-9]|1[0-2])-01$/.test(initialBillingPeriod)
+      ? initialBillingPeriod
+      : '';
   const periods = useMemo(
     () =>
-      [...new Set(scopedTasks.map((task) => task.billingPeriod).filter((p): p is string => !!p))]
+      [
+        ...new Set([
+          ...tasks.map((task) => task.billingPeriod!),
+          ...(requestedPeriod ? [requestedPeriod] : []),
+        ]),
+      ]
         .sort()
         .reverse(),
-    [scopedTasks],
+    [tasks, requestedPeriod],
   );
-
-  // Filter status after grouping, so a completed meter is not hidden beside its pending counterpart.
-  const filtered = useMemo(
+  const period =
+    selection?.scope === scope && periods.includes(selection.period)
+      ? selection.period
+      : requestedPeriod || periods[0] || '';
+  const rooms = useMemo(
     () =>
-      groupRoomMeterTasks(
-        scopedTasks.filter((task) => !scopedPeriod || task.billingPeriod === scopedPeriod),
-      ).filter((group) => matchesStatusFilter(group, status)),
-    [scopedPeriod, scopedTasks, status],
-  );
-
-  const visiblePage = Math.min(scopedPage, Math.max(1, Math.ceil(filtered.length / 20)));
-  const items = useMemo(
-    () => filtered.slice((visiblePage - 1) * 20, visiblePage * 20),
-    [filtered, visiblePage],
-  );
-
-  useEffect(() => {
-    if (!api || !staff || !items.length) return;
-    const missingIds = [
-      ...new Set(
-        items
-          .flatMap((group) => group)
-          .filter((task) => task.status === 2 && !!task.confirmedReadingId)
-          .map((task) => task.confirmedReadingId!)
-          .filter((readingId) => !readings[readingId]),
+      groupRoomMeterTasks(tasks.filter((task) => task.billingPeriod === period)).sort((a, b) =>
+        compareRooms(a[0]!, b[0]!, current?.floors ?? new Map()),
       ),
-    ];
-    if (!missingIds.length) return;
-    const controller = new AbortController();
-    void (async () => {
-      const loaded: Record<string, ConfirmedReading> = {};
-      await Promise.allSettled(
-        missingIds.map(async (readingId) => {
-          const reading = await api.request<ConfirmedReading>(
-            `/api/v1/capture/readings/${encodeURIComponent(readingId)}`,
-            { signal: controller.signal },
-          );
-          if (!controller.signal.aborted && reading) {
-            loaded[readingId] = reading;
-          }
-        }),
-      );
-      if (!controller.signal.aborted && Object.keys(loaded).length > 0) {
-        setReadings((prev) => ({ ...prev, ...loaded }));
-      }
-    })();
-    return () => controller.abort();
-  }, [api, items, readings, staff]);
+    [tasks, period, current],
+  );
 
-  const changeFilter = (setter: (v: string) => void, value: string) => {
-    setter(value);
-    setPage(1);
-  };
-
-  const clearFilters = () => {
-    setRoom('');
-    setPeriod('');
-    setDue('');
-    setStatus('');
-    setPage(1);
-  };
-
-  const hasActiveFilters = Boolean(scopedRoom || scopedPeriod || due || status);
-  const advancedFilterCount =
-    (scopedRoom ? 1 : 0) + (scopedPeriod ? 1 : 0) + (due ? 1 : 0) + (status ? 1 : 0);
-  const selectedRoomLabel = rooms.data?.find((item) => item.id === scopedRoom)?.label ?? scopedRoom;
+  const pageCount = Math.max(1, Math.ceil(rooms.length / PAGE_SIZE));
+  const page =
+    pagination?.scope === scope && pagination.period === period
+      ? Math.min(pagination.page, pageCount)
+      : 1;
+  const visibleRooms = rooms.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE);
+  const changePage = (next: number) =>
+    setPagination({ scope, period, page: Math.max(1, Math.min(next, pageCount)) });
 
   if (!staff) return <Text>Chỉ Staff được phép ghi chỉ số điện nước.</Text>;
 
   return (
     <View style={styles.screen}>
-      <View style={styles.headerRow}>
-        <View style={styles.headerText}>
-          <Text variant="titleLarge" style={styles.title}>
+      {!header && (
+        <View style={styles.header}>
+          <Text variant="titleMedium" style={styles.title}>
             Ghi chỉ số điện nước
           </Text>
-          <Text variant="bodySmall" style={styles.subtitle}>
-            Quản lý ghi chỉ số theo phòng
-          </Text>
-        </View>
-        <IconButton
-          icon="refresh"
-          size={20}
-          accessibilityLabel="Tải lại danh sách ghi chỉ số"
-          disabled={locations.loading || loading}
-          onPress={handleReload}
-          style={styles.refreshBtn}
-        />
-      </View>
-
-      {assignedLocation && (locations.data?.length ?? 0) > 1 && (
-        <ChoiceField
-          label="Cơ sở"
-          value={assignedLocationId}
-          options={locations.data ?? []}
-          onChange={changeLocation}
-          searchable
-        />
-      )}
-
-      {assignedLocation && (locations.data?.length ?? 0) === 1 && (
-        <View style={styles.locationBadge}>
-          <Icon source="map-marker-outline" size={15} color={c.primary} />
-          <Text variant="labelLarge" style={styles.locationText} numberOfLines={1}>
-            Cơ sở: {assignedLocation.label}
-          </Text>
+          <IconButton
+            icon="refresh"
+            accessibilityLabel="Tải lại danh sách ghi chỉ số"
+            disabled={loading || staffLocationsLoading}
+            onPress={reload}
+          />
         </View>
       )}
-
-      {locations.loading && !assignedLocation ? (
-        <View
-          style={styles.stateCard}
-          accessibilityRole="progressbar"
-          accessibilityLabel="Đang tải cơ sở được phân công"
-        >
-          <ActivityIndicator size="small" color={c.primary} />
-          <Text variant="bodySmall" style={styles.subtitle}>
-            Đang tải cơ sở và tác vụ được phân công…
-          </Text>
+      {staffLocationsLoading && !location ? (
+        <ActivityIndicator accessibilityLabel="Đang tải cơ sở được phân công" />
+      ) : staffLocationsError && !location ? (
+        <View style={styles.state}>
+          <Text>Không tải được cơ sở được phân công</Text>
+          <Text accessibilityRole="alert">{staffLocationsError}</Text>
+          <Button onPress={reload}>Thử lại</Button>
         </View>
-      ) : locations.error && !assignedLocation ? (
-        <View style={styles.stateCard}>
-          <Icon source="alert-circle-outline" size={28} color={c.red} />
-          <Text variant="titleMedium" style={styles.stateTitle}>
-            Không tải được cơ sở được phân công
-          </Text>
-          <Text accessibilityRole="alert" variant="bodySmall" style={ui.red}>
-            {locations.error}
-          </Text>
-          <Button mode="outlined" compact onPress={handleReload}>
-            Thử lại
-          </Button>
+      ) : !location ? (
+        <View style={styles.state}>
+          <Text>Chưa có cơ sở được phân công</Text>
+          <Button onPress={reload}>Tải lại</Button>
         </View>
-      ) : !assignedLocation ? (
-        <View style={styles.stateCard}>
-          <Icon source="office-building-outline" size={28} color={c.muted} />
-          <Text variant="titleMedium" style={styles.stateTitle}>
-            Chưa có cơ sở được phân công
-          </Text>
-          <Text variant="bodySmall" style={styles.stateDescription}>
-            Tài khoản của bạn hiện chưa được phân công cơ sở để ghi chỉ số điện nước.
-          </Text>
-          <Button mode="outlined" compact onPress={handleReload}>
-            Tải lại
-          </Button>
+      ) : loading ? (
+        <View style={styles.state}>
+          <ActivityIndicator accessibilityLabel="Đang tải danh sách phòng" />
+          <Text>Đang tải danh sách phòng cần ghi chỉ số…</Text>
+        </View>
+      ) : current?.error ? (
+        <View style={styles.state}>
+          <Text accessibilityRole="alert">{current.error}</Text>
+          <Button onPress={reload}>Thử lại</Button>
         </View>
       ) : (
         <>
-          <View style={styles.toolbarRow}>
-            <ScrollView
-              horizontal
-              showsHorizontalScrollIndicator={false}
-              contentContainerStyle={styles.quickTabs}
-            >
-              {QUICK_STATUS_FILTERS.map((tab) => {
-                const active = status === tab.id;
-                return (
-                  <TouchableRipple
-                    key={tab.id}
-                    accessibilityRole="tab"
-                    accessibilityLabel={tab.label}
-                    accessibilityState={{ selected: active }}
-                    onPress={() => changeFilter(setStatus, tab.id)}
-                    style={[styles.quickTab, active && styles.quickTabActive]}
-                  >
-                    <Text
-                      variant="labelMedium"
-                      style={{ color: active ? c.white : c.ink, fontWeight: '600' }}
-                    >
-                      {tab.label}
-                    </Text>
-                  </TouchableRipple>
-                );
-              })}
-            </ScrollView>
-            <TouchableRipple
-              accessibilityRole="button"
-              accessibilityLabel="Bộ lọc"
-              onPress={() => setFilterOpen(true)}
-              style={[styles.filterTrigger, advancedFilterCount > 0 && styles.filterTriggerActive]}
-            >
-              <View style={styles.filterTriggerRow}>
-                <Icon
-                  source="tune-variant"
-                  size={18}
-                  color={advancedFilterCount > 0 ? c.primary : c.ink}
-                />
-                <Text
-                  variant="labelMedium"
-                  style={{
-                    color: advancedFilterCount > 0 ? c.primary : c.ink,
-                    fontWeight: '600',
-                  }}
-                >
-                  Lọc{advancedFilterCount > 0 ? ` (${advancedFilterCount})` : ''}
-                </Text>
-              </View>
-            </TouchableRipple>
-          </View>
-
-          {hasActiveFilters && (
-            <View style={styles.activeChipsRow}>
-              {!!scopedRoom && (
-                <TouchableRipple
-                  accessibilityRole="button"
-                  accessibilityLabel={`Xóa lọc phòng ${selectedRoomLabel}`}
-                  onPress={() => changeFilter(setRoom, '')}
-                  style={styles.activeChip}
-                >
-                  <View style={styles.activeChipInner}>
-                    <Text variant="labelSmall" style={styles.activeChipText}>
-                      Phòng: {selectedRoomLabel}
-                    </Text>
-                    <Icon source="close" size={14} color={c.primary} />
-                  </View>
-                </TouchableRipple>
-              )}
-              {!!scopedPeriod && (
-                <TouchableRipple
-                  accessibilityRole="button"
-                  accessibilityLabel={`Xóa lọc kỳ ${displayContractDate(scopedPeriod)}`}
-                  onPress={() => changeFilter(setPeriod, '')}
-                  style={styles.activeChip}
-                >
-                  <View style={styles.activeChipInner}>
-                    <Text variant="labelSmall" style={styles.activeChipText}>
-                      Kỳ: {displayContractDate(scopedPeriod)}
-                    </Text>
-                    <Icon source="close" size={14} color={c.primary} />
-                  </View>
-                </TouchableRipple>
-              )}
-              {!!status && (
-                <TouchableRipple
-                  accessibilityRole="button"
-                  accessibilityLabel={`Xóa lọc trạng thái ${statusFilterLabel(status)}`}
-                  onPress={() => changeFilter(setStatus, '')}
-                  style={styles.activeChip}
-                >
-                  <View style={styles.activeChipInner}>
-                    <Text variant="labelSmall" style={styles.activeChipText}>
-                      Trạng thái: {statusFilterLabel(status)}
-                    </Text>
-                    <Icon source="close" size={14} color={c.primary} />
-                  </View>
-                </TouchableRipple>
-              )}
-              <Button compact mode="text" onPress={clearFilters}>
-                Xóa bộ lọc
-              </Button>
-            </View>
-          )}
-
-          {current && !current.error && (
-            <View style={styles.listSummaryRow}>
-              <Text variant="labelLarge" style={styles.listSummaryText}>
-                Phòng được phân công ({filtered.length})
-              </Text>
-            </View>
-          )}
-
-          {loading && (
-            <View
-              style={styles.stateCard}
-              accessibilityRole="progressbar"
-              accessibilityLabel="Đang tải tác vụ ghi chỉ số"
-            >
-              <ActivityIndicator size="small" color={c.primary} />
-              <Text variant="bodySmall" style={styles.subtitle}>
-                Đang tải danh sách phòng cần ghi chỉ số…
-              </Text>
-            </View>
-          )}
-
-          {!!current?.error && (
-            <View style={styles.stateCard}>
-              <Icon source="alert-circle-outline" size={28} color={c.red} />
-              <Text variant="titleMedium" style={styles.stateTitle}>
-                Không tải được danh sách ghi chỉ số
-              </Text>
-              <Text accessibilityRole="alert" variant="bodySmall" style={ui.red}>
-                {current.error}
-              </Text>
-              <Button mode="outlined" compact onPress={handleReload}>
-                Thử lại
-              </Button>
-            </View>
-          )}
-
-          {!loading &&
-            !current?.error &&
-            items.map((group) => {
-              const ordered = [...group].sort(
-                (a, b) => a.utilityType - b.utilityType || a.meterCode.localeCompare(b.meterCode),
-              );
-              const primaryTask = ordered.find((item) => item.status < 2) ?? ordered[0]!;
-              const requiredTasks = ordered.filter((item) => item.status !== 3);
-              const totalRequired = requiredTasks.length;
-              const completedCount = requiredTasks.filter((item) => item.status === 2).length;
-              const hasPending = requiredTasks.some((item) => item.status < 2);
-              const allCompleted = totalRequired > 0 && completedCount === totalRequired;
-              const progressLabel = allCompleted
-                ? 'Hoàn thành'
-                : `${completedCount}/${totalRequired || ordered.length} đã ghi`;
-              const progressTone = allCompleted ? 'green' : completedCount > 0 ? 'blue' : 'amber';
-              const dueTask =
-                ordered.find((item) => item.status < 2 && item.dueAt) ??
-                ordered.find((item) => item.dueAt) ??
-                primaryTask;
-              const dueAt = dueTask?.dueAt ?? null;
-              const isOverdue = ordered.some(
-                (item) =>
-                  item.status < 2 &&
-                  !!item.dueAt &&
-                  Number.isFinite(Date.parse(item.dueAt)) &&
-                  Date.parse(item.dueAt) < Date.now(),
-              );
-
+          <ChoiceField
+            label="Kỳ ghi chỉ số"
+            value={period}
+            options={periods.map((id) => ({ id, label: `${id.slice(5, 7)}/${id.slice(0, 4)}` }))}
+            onChange={(value) => {
+              setSelection({ scope, period: value });
+              setPagination({ scope, period: value, page: 1 });
+            }}
+            disabled={!periods.length}
+            placeholder="Chưa có kỳ ghi"
+          />
+          <View style={styles.grid}>
+            {visibleRooms.map((group) => {
+              const first = group[0]!;
+              const done = group.every((task) => task.status === 2 && !!task.confirmedReadingId);
+              const overdue = group.some(isOverduePeriodicMeterTask);
+              const label = done ? 'Đã ghi' : overdue ? 'Quá hạn' : 'Chưa ghi';
               return (
-                <View
-                  key={ordered.map((item) => item.id).join(':')}
-                  testID="meter-room-card"
-                  style={styles.roomCard}
+                <TouchableRipple
+                  key={first.id}
+                  style={[styles.tile, overdue && styles.overdueTile]}
+                  accessibilityRole="button"
+                  accessibilityLabel={`Phòng ${first.room}, ${label}`}
+                  onPress={() => router.push({ pathname: '/meter', params: { taskId: first.id } })}
                 >
-                  <View style={styles.cardHeader}>
-                    <View style={styles.cardHeaderLeft}>
-                      <Text variant="titleMedium" style={styles.roomNumber}>
-                        Phòng {primaryTask.room}
-                      </Text>
-                      <Text variant="bodySmall" style={styles.metadataText} numberOfLines={1}>
-                        {allCompleted
-                          ? meterRoundLabel(primaryTask)
-                          : `${meterRoundLabel(primaryTask)} · Tiến độ: ${completedCount}/${
-                              totalRequired || ordered.length
-                            } đã ghi`}
-                      </Text>
-                    </View>
-                    <Pill tone={progressTone}>{progressLabel}</Pill>
-                  </View>
-
-                  <View style={styles.meterSection}>
-                    {ordered.map((meter, index) => {
-                      const isElectric = meter.utilityType === 0;
-                      const unit = isElectric ? 'kWh' : 'm³';
-                      const sameUtilityCount = ordered.filter(
-                        (item) => item.utilityType === meter.utilityType,
-                      ).length;
-                      const confirmed = meter.confirmedReadingId
-                        ? readings[meter.confirmedReadingId]
-                        : undefined;
-                      const statusLabel =
-                        meter.status === 2 ? 'Đã ghi' : meter.status === 3 ? 'Đã hủy' : 'Chưa ghi';
-                      const statusTone =
-                        meter.status === 2 ? 'green' : meter.status === 3 ? 'neutral' : 'amber';
-
-                      return (
-                        <View
-                          key={meter.id}
-                          style={[styles.meterRow, index > 0 && styles.meterRowDivider]}
-                        >
-                          <View style={styles.meterLabelGroup}>
-                            <Icon
-                              source={isElectric ? 'lightning-bolt-outline' : 'water-outline'}
-                              size={18}
-                              color={isElectric ? c.amber : c.blue}
-                            />
-                            <Text variant="bodyMedium" style={styles.meterTypeLabel}>
-                              {isElectric ? 'Điện' : 'Nước'}
-                              {sameUtilityCount > 1 ? ` · ${meter.meterCode}` : ''}
-                            </Text>
-                          </View>
-                          <View style={styles.meterValueGroup}>
-                            {meter.status === 2 && confirmed && (
-                              <View style={styles.confirmedReadingGroup}>
-                                <Text variant="labelLarge" style={styles.confirmedReadingText}>
-                                  {formatMeterReading(confirmed.confirmedValue, unit)}
-                                </Text>
-                                {meter.purpose !== 0 &&
-                                  confirmed.consumption !== null &&
-                                  confirmed.consumption !== undefined && (
-                                    <Text variant="labelSmall" style={styles.consumptionSubtext}>
-                                      Tiêu thụ: {formatMeterReading(confirmed.consumption, unit)}
-                                    </Text>
-                                  )}
-                              </View>
-                            )}
-                            <Pill tone={statusTone}>{statusLabel}</Pill>
-                          </View>
-                        </View>
-                      );
-                    })}
-                  </View>
-
-                  {allCompleted && (
-                    <Text variant="labelSmall" style={styles.completedRoomNote}>
-                      {primaryTask.purpose === 0
-                        ? 'Đã lưu chỉ số đầu kỳ (không tính tiêu thụ tháng)'
-                        : 'Đã lưu chỉ số kỳ này để hệ thống tổng hợp hóa đơn theo lịch'}
+                  <View style={styles.tileContent}>
+                    <Text variant="titleMedium" style={styles.room}>
+                      Phòng {first.room}
                     </Text>
-                  )}
-
-                  <View style={styles.cardFooter}>
-                    <View style={styles.dueGroup}>
-                      <Text
-                        variant="labelSmall"
-                        style={isOverdue ? styles.overdueText : styles.dueText}
-                      >
-                        {dueAt
-                          ? `Hạn: ${formatInstant(dueAt)}`
-                          : `Ngày ghi: ${displayContractDate(primaryTask.readingDate)}`}
-                      </Text>
-                      {isOverdue && <Pill tone="red">Quá hạn</Pill>}
-                    </View>
-                    <Button
-                      mode={hasPending ? 'contained' : 'outlined'}
-                      compact
-                      icon={hasPending ? 'camera-outline' : 'text-box-search-outline'}
-                      disabled={!hasPending && totalRequired === 0}
-                      contentStyle={styles.cardActionContent}
-                      style={[
-                        styles.cardActionButton,
-                        hasPending && { backgroundColor: c.primary },
-                      ]}
-                      onPress={() =>
-                        router.push({ pathname: '/meter', params: { taskId: primaryTask.id } })
-                      }
-                    >
-                      {hasPending ? 'Ghi chỉ số' : 'Xem chi tiết'}
-                    </Button>
+                    <Pill tone={done ? 'green' : overdue ? 'red' : 'amber'}>{label}</Pill>
                   </View>
-                </View>
+                </TouchableRipple>
               );
             })}
-
-          {current && !current.error && !items.length && (
-            <View style={styles.stateCard}>
-              <Icon source="gauge-empty" size={28} color={c.muted} />
-              <Text variant="titleMedium" style={styles.stateTitle}>
-                {hasActiveFilters
-                  ? 'Không có phòng phù hợp bộ lọc'
-                  : 'Chưa có tác vụ ghi chỉ số được giao'}
+          </View>
+          {pageCount > 1 && (
+            <View style={styles.pagination}>
+              <IconButton
+                icon="chevron-left"
+                accessibilityLabel="Trang trước"
+                disabled={page === 1}
+                onPress={() => changePage(page - 1)}
+                style={styles.pageButton}
+              />
+              <Text accessibilityLiveRegion="polite" variant="labelLarge" style={styles.pageText}>
+                Trang {page} / {pageCount}
               </Text>
-              <Text variant="bodySmall" style={styles.stateDescription}>
-                {hasActiveFilters
-                  ? 'Hãy thử đổi phòng, kỳ ghi hoặc trạng thái để xem tác vụ.'
-                  : 'Các tác vụ ghi chỉ số điện nước tại cơ sở của bạn sẽ hiển thị tại đây.'}
-              </Text>
-              {hasActiveFilters && (
-                <Button mode="outlined" compact onPress={clearFilters}>
-                  Xóa bộ lọc
-                </Button>
-              )}
+              <IconButton
+                icon="chevron-right"
+                accessibilityLabel="Trang sau"
+                disabled={page === pageCount}
+                onPress={() => changePage(page + 1)}
+                style={styles.pageButton}
+              />
             </View>
           )}
-
-          {filtered.length > 20 && (
-            <View style={styles.paginationRow}>
-              <Button
-                mode="outlined"
-                compact
-                disabled={visiblePage === 1 || loading}
-                onPress={() => setPage(visiblePage - 1)}
-              >
-                Trang trước
-              </Button>
-              <Text variant="labelMedium" style={styles.subtitle}>
-                Trang {visiblePage} / {Math.ceil(filtered.length / 20)}
-              </Text>
-              <Button
-                mode="outlined"
-                compact
-                disabled={visiblePage * 20 >= filtered.length || loading}
-                onPress={() => setPage(visiblePage + 1)}
-              >
-                Trang sau
-              </Button>
+          {!rooms.length && (
+            <View style={styles.state}>
+              <Text>Chưa có tác vụ ghi chỉ số được giao</Text>
             </View>
           )}
-
-          <Portal>
-            <Dialog
-              visible={filterOpen}
-              onDismiss={() => setFilterOpen(false)}
-              style={styles.sheetContainer}
-            >
-              <Dialog.Title>Bộ lọc ghi chỉ số</Dialog.Title>
-              <Dialog.Content>
-                <View style={styles.sheetBodyContent}>
-                  <ChoiceField
-                    label="Phòng"
-                    value={scopedRoom}
-                    disabled={rooms.loading}
-                    options={[{ id: '', label: 'Tất cả phòng' }, ...(rooms.data ?? [])]}
-                    onChange={(v) => changeFilter(setRoom, v)}
-                  />
-                  {!!rooms.error && (
-                    <View style={styles.inlineErrorRow}>
-                      <Text variant="bodySmall" style={ui.red}>
-                        {rooms.error}
-                      </Text>
-                      <Button compact mode="text" onPress={rooms.reload}>
-                        Thử lại
-                      </Button>
-                    </View>
-                  )}
-                  <ChoiceField
-                    label="Kỳ ghi chỉ số"
-                    value={scopedPeriod}
-                    options={[
-                      { id: '', label: 'Tất cả kỳ ghi' },
-                      ...periods.map((p) => ({ id: p, label: displayContractDate(p) })),
-                    ]}
-                    onChange={(v) => changeFilter(setPeriod, v)}
-                  />
-                  <ChoiceField
-                    label="Trạng thái tác vụ"
-                    value={status}
-                    options={SHEET_STATUS_OPTIONS}
-                    onChange={(v) => changeFilter(setStatus, v)}
-                  />
-                  <Input
-                    label="Hạn ghi số (yyyy-MM-dd)"
-                    value={due}
-                    onChange={(v) => changeFilter(setDue, v)}
-                  />
-                  {!validDue && (
-                    <Text variant="bodySmall" style={ui.red}>
-                      Nhập ngày hợp lệ theo yyyy-MM-dd.
-                    </Text>
-                  )}
-                </View>
-              </Dialog.Content>
-              <Dialog.Actions>
-                <Button disabled={!hasActiveFilters} onPress={clearFilters}>
-                  Đặt lại
-                </Button>
-                <Button onPress={() => setFilterOpen(false)}>Áp dụng</Button>
-              </Dialog.Actions>
-            </Dialog>
-          </Portal>
         </>
       )}
     </View>
@@ -750,204 +305,30 @@ export function MeterTasksScreen() {
 }
 
 const styles = StyleSheet.create({
-  screen: { gap: 10 },
-  headerRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    gap: 8,
-  },
-  headerText: { flex: 1, minWidth: 0, gap: 2 },
-  title: { color: c.primary, fontWeight: '700' },
-  subtitle: { color: c.muted },
-  refreshBtn: { margin: 0 },
-  locationBadge: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    alignSelf: 'flex-start',
-    gap: 6,
-    backgroundColor: c.soft,
-    borderWidth: 1,
-    borderColor: c.border,
-    borderRadius: 8,
-    paddingHorizontal: 10,
-    paddingVertical: 5,
-  },
-  locationText: { color: c.primary, fontWeight: '600' },
-  toolbarRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    gap: 8,
-  },
-  quickTabs: { gap: 6, paddingVertical: 2 },
-  quickTab: {
-    minHeight: 36,
-    paddingHorizontal: 12,
-    borderRadius: 8,
-    backgroundColor: c.white,
-    borderWidth: 1,
-    borderColor: c.border,
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  quickTabActive: {
-    backgroundColor: c.primary,
-    borderColor: c.primary,
-  },
-  filterTrigger: {
-    minHeight: 36,
-    paddingHorizontal: 12,
-    borderRadius: 8,
-    backgroundColor: c.white,
-    borderWidth: 1,
-    borderColor: c.border,
-    justifyContent: 'center',
-  },
-  filterTriggerActive: {
-    backgroundColor: c.tint,
-    borderColor: c.blue,
-  },
-  filterTriggerRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 5,
-  },
-  activeChipsRow: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    alignItems: 'center',
-    gap: 6,
-  },
-  activeChip: {
-    backgroundColor: c.tint,
-    borderRadius: 6,
-    paddingHorizontal: 8,
-    paddingVertical: 4,
-    borderWidth: 1,
-    borderColor: c.border,
-  },
-  activeChipInner: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 4,
-  },
-  activeChipText: { color: c.primary, fontWeight: '600' },
-  listSummaryRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-  },
-  listSummaryText: { color: c.muted },
-  stateCard: {
+  screen: { gap: 12 },
+  header: { flexDirection: 'row', alignItems: 'center' },
+  title: { flex: 1, color: c.primary, fontWeight: '700' },
+  grid: { flexDirection: 'row', flexWrap: 'wrap', gap: 10 },
+  tile: {
+    width: '48%',
+    flexGrow: 0,
     backgroundColor: c.white,
     borderWidth: 1,
     borderColor: c.border,
     borderRadius: 12,
-    padding: 18,
-    alignItems: 'center',
+    overflow: 'hidden',
+  },
+  tileContent: {
+    padding: 12,
     gap: 8,
-  },
-  stateTitle: { color: c.ink, fontWeight: '600', textAlign: 'center' },
-  stateDescription: { color: c.muted, textAlign: 'center' },
-  roomCard: {
-    backgroundColor: c.white,
-    borderWidth: 1,
-    borderColor: c.border,
-    borderRadius: 12,
-    padding: 14,
-    gap: 10,
-  },
-  cardHeader: {
-    flexDirection: 'row',
     alignItems: 'flex-start',
-    justifyContent: 'space-between',
-    gap: 8,
+    minHeight: 84,
+    justifyContent: 'center',
   },
-  cardHeaderLeft: { flex: 1, minWidth: 0, gap: 2 },
-  roomNumber: { color: c.primary, fontWeight: '700' },
-  metadataText: { color: c.muted },
-  meterSection: {
-    backgroundColor: c.soft,
-    borderRadius: 8,
-    borderWidth: 1,
-    borderColor: c.border,
-    paddingHorizontal: 10,
-    paddingVertical: 4,
-  },
-  meterRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    paddingVertical: 6,
-    gap: 8,
-    flexWrap: 'nowrap',
-  },
-  meterRowDivider: {
-    borderTopWidth: 1,
-    borderTopColor: c.border,
-  },
-  meterLabelGroup: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 6,
-    flex: 1,
-    minWidth: 0,
-  },
-  meterTypeLabel: { color: c.ink, fontWeight: '500', flexShrink: 1 },
-  meterValueGroup: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 8,
-    flexShrink: 0,
-  },
-  confirmedReadingGroup: {
-    alignItems: 'flex-end',
-    minWidth: 0,
-  },
-  confirmedReadingText: {
-    color: c.primary,
-    fontWeight: '700',
-    fontVariant: ['tabular-nums'],
-    textAlign: 'right',
-  },
-  consumptionSubtext: {
-    color: c.muted,
-    fontVariant: ['tabular-nums'],
-    textAlign: 'right',
-  },
-  completedRoomNote: {
-    color: c.muted,
-  },
-  cardFooter: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    gap: 8,
-    paddingTop: 2,
-  },
-  dueGroup: {
-    flex: 1,
-    minWidth: 0,
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    alignItems: 'center',
-    gap: 6,
-  },
-  dueText: { color: c.muted },
-  overdueText: { color: c.red, fontWeight: '600' },
-  cardActionButton: { borderRadius: 8 },
-  cardActionContent: { minHeight: 38, paddingHorizontal: 6 },
-  paginationRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    paddingVertical: 4,
-  },
-  sheetContainer: {
-    backgroundColor: c.white,
-    borderRadius: 16,
-  },
-  sheetBodyContent: { gap: 12 },
-  inlineErrorRow: { flexDirection: 'row', alignItems: 'center', gap: 8 },
+  overdueTile: { borderColor: c.red, backgroundColor: c.redSoft },
+  room: { color: c.ink, fontWeight: '700', flexShrink: 1 },
+  pagination: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 12 },
+  pageButton: { margin: 0 },
+  pageText: { color: c.primary },
+  state: { alignItems: 'center', padding: 16, gap: 8 },
 });

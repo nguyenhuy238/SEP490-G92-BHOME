@@ -11,7 +11,6 @@ import { RoomTypesApiPage } from '../../room-types/pages/RoomTypesApiPage';
 import { PortalProvider } from '../../../app/PortalProvider';
 import { LocationWorkspaceSettings } from './LocationWorkspaceSettings';
 import { EndPolicyDialog } from '../components/EndPolicyDialog';
-import { ScheduleForm } from '../../invoices/BillingConfigurationPage';
 
 const state = vi.hoisted(() => ({ request: vi.fn(), roles: ['Owner'] }));
 vi.mock('../../property/usePropertySetupApi', () => ({
@@ -53,42 +52,12 @@ afterEach(() => {
   cleanup();
   vi.unstubAllGlobals();
 });
-it('always saves the agreed contract rent source even for a legacy room-price schedule', async () => {
-  const onSaved = vi.fn();
-  mount(
-    <ScheduleForm
-      location="location"
-      current={{
-        locationId: 'location',
-        rateDate: 1,
-        rentSource: 0,
-        partialMonth: 0,
-        rounding: 0,
-        draftDay: 1,
-        draftMonthOffset: 0,
-        finalDay: 2,
-        finalMonthOffset: 0,
-        dueDay: 5,
-        dueMonthOffset: 0,
-        version: 2,
-      }}
-      onSaved={onSaved}
-    />,
-  );
-  expect(screen.getByLabelText('Nguồn tiền thuê cả phòng')).toBeDisabled();
-  fireEvent.click(screen.getByRole('button', { name: 'Lưu quy tắc hóa đơn' }));
-  await waitFor(() => expect(onSaved).toHaveBeenCalled());
-  const write = state.request.mock.calls.find(
-    ([path, init]) => path === '/api/v1/billing-schedules' && init?.method === 'PUT',
-  );
-  expect(JSON.parse(write![1].body)).toMatchObject({ rentSource: 1, expectedVersion: 2 });
-});
 it('opens utility configuration within pricing and keeps billing policy creation separate', async () => {
   mount(<LocationPricingWorkspace locationId="location" />);
   expect(screen.queryByRole('tab', { name: 'Lịch & quy tắc hóa đơn' })).toBeNull();
-  expect(screen.getByRole('link', { name: 'Lịch tự động & quy tắc hóa đơn' })).toHaveAttribute(
+  expect(screen.getByRole('link', { name: 'Cấu hình lịch điện nước & hóa đơn' })).toHaveAttribute(
     'href',
-    '/billing-automation?locationId=location',
+    '/locations/location/settings',
   );
   fireEvent.click(screen.getByRole('tab', { name: 'Điện & nước' }));
   expect(screen.getByRole('tab', { name: 'Đơn giá điện trực tiếp' })).toHaveAttribute(

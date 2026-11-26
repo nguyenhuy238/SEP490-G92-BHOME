@@ -3,10 +3,24 @@ import { useCallback } from 'react';
 import { queryPolicies } from '../../lib/queryPolicies';
 import { useWorkspaceHeaderRefresh } from '../../components/WorkspaceHeaderContext';
 import { businessToday } from '../../../../../packages/client-core/src/contracts';
-import type { Named } from '../../lib/api';
+import type { MeterTask, Named, MobileApi } from '../../lib/api';
 import type { OperationalTask, TaskPage } from '../../services/operationalTasks';
 import { useWorkspace } from './WorkspaceProvider';
 import { useWorkspaceQuery } from './useWorkspaceQuery';
+import { countOverdueMeterRooms } from './roomMeterTasks';
+
+async function loadMeterTasks(
+  api: MobileApi,
+  path: string,
+  signal: AbortSignal,
+): Promise<MeterTask[]> {
+  const tasks: MeterTask[] = [];
+  for (let page = 1; ; page++) {
+    const batch = await api.request<MeterTask[]>(`${path}&page=${page}`, { signal });
+    tasks.push(...batch);
+    if (batch.length < 100) return tasks;
+  }
+}
 
 export interface MoveOutAssignment {
   contractId: string;
@@ -61,6 +75,10 @@ export function useStaffDashboard() {
     loading: inspections.loading || rooms.loading,
     fetching: inspections.fetching || rooms.fetching,
   };
+  const meters = useWorkspaceQuery<MeterTask[]>(
+    scoped ? `/api/v1/capture/meter-tasks?${locationQuery}` : null,
+    { cache: queryPolicies.meters, load: loadMeterTasks },
+  );
   const submittedIncidents = useWorkspaceQuery<IncidentPage<Incident>>(
     scoped ? `${incidentRoot}?status=Submitted&page=1&pageSize=1&${locationQuery}` : null,
     { cache: queryPolicies.incidents },
@@ -84,12 +102,14 @@ export function useStaffDashboard() {
   const reloadPriorities = priorities.reload;
   const reloadInspections = inspections.reload;
   const reloadRooms = rooms.reload;
+  const reloadMeters = meters.reload;
   const reload = useCallback(() => {
     reloadLocations();
     reloadTasks();
     reloadPriorities();
     reloadInspections();
     reloadRooms();
+    reloadMeters();
     reloadSubmittedIncidents();
     reloadProcessingIncidents();
   }, [
@@ -98,6 +118,7 @@ export function useStaffDashboard() {
     reloadPriorities,
     reloadInspections,
     reloadRooms,
+    reloadMeters,
     reloadSubmittedIncidents,
     reloadProcessingIncidents,
   ]);
@@ -109,9 +130,23 @@ export function useStaffDashboard() {
       priorities,
       inspections,
       rooms,
+      meters,
       submittedIncidents,
       processingIncidents,
     ].some((query) => query.fetching),
   );
-  return { locations, tasks, priorities, inspections: scopedInspections, incidents, reload };
+  const overdueMeterRooms =
+    meters.data && !meters.error
+      ? countOverdueMeterRooms(meters.data.filter((task) => task.locationId === staffLocationId))
+      : null;
+  return {
+    locations,
+    tasks,
+    priorities,
+    inspections: scopedInspections,
+    meters,
+    overdueMeterRooms,
+    incidents,
+    reload,
+  };
 }

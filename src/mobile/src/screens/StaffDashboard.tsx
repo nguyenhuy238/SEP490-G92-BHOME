@@ -222,7 +222,10 @@ export function StaffDashboard() {
       {!preview && priorityError && (
         <Button onPress={data.reload}>Chưa tải đủ tác vụ ưu tiên · Thử lại</Button>
       )}
-      <StaffFeatureDirectory onOpen={open} />
+      <StaffFeatureDirectory
+        onOpen={open}
+        overdueMeterRooms={preview ? null : data.overdueMeterRooms}
+      />
       <View style={styles.section}>
         <StaffFeatureCard
           title="Hợp đồng"

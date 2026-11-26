@@ -8,13 +8,13 @@ import { queryPolicies } from '../../lib/queryPolicies';
 import { useSession } from '../../lib/SessionProvider';
 import { showToast } from '../../lib/toast';
 
-export function useTenantInvoicePayment(invoiceId?: string | null) {
+export function useTenantInvoicePayment(invoiceId?: string | null, livePayment = false) {
   const query = useWorkspaceQuery<InvoicePayment>(
     invoiceId ? `/api/v1/invoices/${encodeURIComponent(invoiceId)}/payment` : null,
     { load: loadInvoicePayment, notifyError: false, cache: queryPolicies.payments },
   );
   const { api } = useSession();
-  const { reload, revalidate } = query;
+  const { reload, revalidate, poll } = query;
   const reloadRef = useRef(reload);
   useEffect(() => {
     reloadRef.current = reload;
@@ -52,13 +52,22 @@ export function useTenantInvoicePayment(invoiceId?: string | null) {
         stop();
         reload(); // Session cache coalesces concurrent consumers and focus refreshes.
         const deadline = Date.now() + 5 * 60_000;
-        timer = setInterval(() => {
-          if (Date.now() >= deadline || latest.current.data?.paymentStatus !== 'Unpaid') {
-            stop();
-            return;
-          }
-          if (!latest.current.fetching) revalidate();
-        }, 30_000);
+        timer = setInterval(
+          () => {
+            if (!livePayment && Date.now() >= deadline) {
+              stop();
+              return;
+            }
+            if (latest.current.fetching) return;
+            if (latest.current.data?.paymentStatus !== 'Unpaid') {
+              if (!livePayment) stop();
+              return;
+            }
+            if (livePayment) poll();
+            else revalidate();
+          },
+          livePayment ? 8_000 : 30_000,
+        );
       };
       if (AppState.currentState !== 'background' && AppState.currentState !== 'inactive') start();
       const listener = AppState.addEventListener('change', (state) => {
@@ -69,7 +78,7 @@ export function useTenantInvoicePayment(invoiceId?: string | null) {
         stop();
         listener.remove();
       };
-    }, [invoiceId, reload, revalidate]),
+    }, [invoiceId, reload, revalidate, poll, livePayment]),
   );
   return { ...query, reload: refresh };
 }

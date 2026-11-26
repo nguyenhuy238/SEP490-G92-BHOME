@@ -21,6 +21,10 @@ public sealed class Compact24BillingScheduleSafetyTests
     public Task InitialSchedule() => Run(t => t.FirstAutomationSaveCreatesBillingScheduleAtomicallyWithoutPricingPage());
 
     [CompactPostgresFact]
+    public Task RecurringScheduleKeepsCurrentMonthFrozen() =>
+        Run(t => t.LocationRecurringScheduleSavesFiveMilestonesWithServerDefaultsAndVersions());
+
+    [CompactPostgresFact]
     public Task LegacyScheduleVersionAndFinancialRules() =>
         Run(t => t.EditingExistingAutomationUpdatesFinancialRulesAtomicallyWithoutChangingOldSnapshots());
 

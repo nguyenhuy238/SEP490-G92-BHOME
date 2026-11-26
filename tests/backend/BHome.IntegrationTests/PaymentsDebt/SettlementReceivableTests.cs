@@ -243,7 +243,7 @@ public sealed partial class PaymentLedgerTests
     }
     internal async Task DepositOffsetsVerifyDamageEvidenceAndFinalInvoiceBalance()
     {
-        var (w, proof, photo) = await DamageFixture(); using var owner = await Client(w.Owner); using var tenant = await Client(w.Tenants[0]);
+        var (w, proof, photo) = await DamageFixture(pendingInvoiceAdjustment: true); using var owner = await Client(w.Owner);
         var route = $"/api/v1/contracts/{w.Contract}/move-out/receivables";
         var view = await RefundValue<SettlementReceivablesView>(await owner.GetAsync(route));
         await using var scope = fixture.Factory.Services.CreateAsyncScope(); var db = scope.ServiceProvider.GetRequiredService<BHomePersistenceContext>();
@@ -259,7 +259,7 @@ public sealed partial class PaymentLedgerTests
         Assert.Equal(HttpStatusCode.Conflict, (await Post(owner, route + "/deposit-offsets", new DepositOffsetInput(view.Reference, charge.Id, null, 1, "Tampered proof", true))).StatusCode);
         using (var content = new MemoryStream(photo)) await storage.PutAsync(evidence.ObjectKey, content, photo.Length, "image/png", default);
         // An approved post-finalization adjustment creates a real remaining invoice balance.
-        var adjustment = await AdjustRequest(tenant, w.Invoice, 1, 150000);
+        var adjustment = await db.Set<BHome.Domain.Billing.InvoiceAdjustmentRequest>().SingleAsync(r => r.InvoiceId == w.Invoice);
         (await Post(owner, $"/api/v1/invoice-adjustments/{adjustment.Id}/approve",
             new BHome.Application.Billing.AdjustmentDecisionInput(1, 1, 0, 150000, null, "Synthetic additional approved rent", true))).EnsureSuccessStatusCode();
         view = await RefundValue<SettlementReceivablesView>(await owner.GetAsync(route));

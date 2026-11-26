@@ -144,6 +144,7 @@ export function WorkspaceShell({
   const compactTasks =
     staff && ['work-orders', 'task-detail', 'staff-handovers'].includes(screen) && !preview;
   const compactTaskDetail = compactTasks && screen === 'task-detail';
+  const compactMeter = staff && screen === 'meter-reading' && !preview;
   const staffIncidentList = staff && screen === 'staff-incidents' && !preview;
   const tenantRoom = role === 'Tenant' && screen === 'tenant-room' && !preview;
   const tenantResidence = role === 'Tenant' && screen === 'residence' && !preview;
@@ -393,6 +394,7 @@ export function WorkspaceShell({
                       !!headerAction?.title ||
                       compactContracts ||
                       compactTasks ||
+                      compactMeter ||
                       staffIncidentList ||
                       tenantResidence ||
                       tenantInvoice ||
@@ -405,6 +407,7 @@ export function WorkspaceShell({
                       !!headerAction?.title ||
                       compactContracts ||
                       compactTasks ||
+                      compactMeter ||
                       staffIncidentList ||
                       tenantResidence ||
                       tenantInvoice ||
@@ -436,10 +439,13 @@ export function WorkspaceShell({
                                     : (headerAction?.title ?? 'Công việc vận hành')
                                 : compactContracts
                                   ? (headerAction?.title ?? 'Hợp đồng')
-                                  : (headerAction?.title ?? 'Quay lại')}
+                                  : compactMeter
+                                    ? 'Ghi chỉ số điện nước'
+                                    : (headerAction?.title ?? 'Quay lại')}
                   </Text>
                   {(compactContracts ||
                     compactTasks ||
+                    compactMeter ||
                     staffIncidentList ||
                     tenantInvoice ||
                     tenantResidence) &&
@@ -452,9 +458,11 @@ export function WorkspaceShell({
                             onPress={() => undefined}
                             accessibilityLabel={
                               headerAction.action?.accessibilityLabel ??
-                              (compactTasks
-                                ? `Tải lại ${headerAction?.title ?? 'công việc'}`
-                                : 'Tải lại')
+                              (compactMeter
+                                ? 'Tải lại danh sách ghi chỉ số'
+                                : compactTasks
+                                  ? `Tải lại ${headerAction?.title ?? 'công việc'}`
+                                  : 'Tải lại')
                             }
                             icon={() => <ActivityIndicator size="small" />}
                           >
@@ -467,13 +475,15 @@ export function WorkspaceShell({
                               headerAction.action?.accessibilityLabel ??
                               (tenantResidence
                                 ? 'Tải lại hồ sơ tạm trú'
-                                : compactTasks
-                                  ? `Tải lại ${headerAction?.title ?? 'công việc'}`
-                                  : tenantLedger
-                                    ? 'Tải lại giao dịch'
-                                    : tenantInvoice
-                                      ? 'Tải lại hóa đơn'
-                                      : 'Tải lại hợp đồng')
+                                : compactMeter
+                                  ? 'Tải lại danh sách ghi chỉ số'
+                                  : compactTasks
+                                    ? `Tải lại ${headerAction?.title ?? 'công việc'}`
+                                    : tenantLedger
+                                      ? 'Tải lại giao dịch'
+                                      : tenantInvoice
+                                        ? 'Tải lại hóa đơn'
+                                        : 'Tải lại hợp đồng')
                             }
                             disabled={headerAction.action?.disabled ?? headerAction.disabled}
                             onPress={headerAction.action?.onPress ?? headerAction.onRefresh}
@@ -489,6 +499,7 @@ export function WorkspaceShell({
                 owner ||
                 compactContracts ||
                 compactTasks ||
+                compactMeter ||
                 staffIncidentList ||
                 tenantRoom ||
                 tenantResidence ||

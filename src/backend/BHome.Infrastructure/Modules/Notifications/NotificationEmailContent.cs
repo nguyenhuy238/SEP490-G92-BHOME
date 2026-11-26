@@ -231,6 +231,21 @@ internal sealed class NotificationEmailContent(Compact24DbContext db,
         }
         return output.ToArray();
     }
+    internal async Task<string?> InvoiceMobileLinkAsync(NotificationView notice, Guid tenant, CancellationToken t)
+    {
+        if (notice.EventType is not ("INVOICE_DRAFT_CREATED" or "INVOICE_FINALIZATION_BLOCKED" or "INVOICE_FINALIZED" or
+            "INVOICE_ADJUSTMENT_REQUESTED" or "INVOICE_ADJUSTMENT_DECIDED" or "INVOICE_DUE_SOON" or "INVOICE_OVERDUE")) return null;
+        var invoiceId = notice.RelatedObjectType switch
+        {
+            "Invoice" => notice.RelatedObjectId,
+            "Adjustment" => await db.Set<InvoiceAdjustmentRequest>().AsNoTracking()
+                .Where(r => r.Id == notice.RelatedObjectId && r.RequesterId == tenant).Select(r => r.InvoiceId).SingleOrDefaultAsync(t),
+            _ => Guid.Empty
+        };
+        if (invoiceId == Guid.Empty || !await db.Set<InvoiceRecipient>().AnyAsync(r => r.InvoiceId == invoiceId && r.TenantUserId == tenant, t)) return null;
+        return $"bhome://open-invoice?invoiceId={invoiceId:D}";
+    }
+
     internal async Task<(string Title, string Body)> BuildAsync(NotificationView notice, CancellationToken t)
     {
         if (notice.EventType == "HOLDING_OWNER_SIGNING_REQUIRED" && notice.RelatedObjectType == "Contract")
@@ -264,7 +279,7 @@ internal sealed class NotificationEmailContent(Compact24DbContext db,
             {
                 "INVOICE_FINALIZED" => "Hóa đơn thuê phòng của bạn đã được phát hành.",
                 "INVOICE_FULLY_PAID" => "BHOME đã xác nhận thanh toán đủ cho hóa đơn. Mở lịch sử thanh toán để xem chi tiết.",
-                "PAYMENT_PARTIALLY_CONFIRMED" => "BHOME đã xác nhận một khoản thanh toán cho hóa đơn. Mở lịch sử thanh toán để xem chi tiết.",
+                "PAYMENT_PARTIALLY_CONFIRMED" => $"{notice.Summary.Split(" Mã xác nhận nội bộ", StringSplitOptions.None)[0]}\nVui lòng mở hóa đơn để lấy mã QR theo số tiền còn phải trả.",
                 _ => "Vui lòng kiểm tra nghĩa vụ thanh toán còn lại của hóa đơn trong BHOME."
             };
             return ($"{notice.Title} — kỳ {invoice.BillingPeriod.ToString("MM/yyyy", CultureInfo.InvariantCulture)}",

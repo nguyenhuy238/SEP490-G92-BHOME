@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 import React, { useEffect, useState } from 'react';
-import { act, cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { act, cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import { afterEach, beforeEach, expect, it, vi } from 'vitest';
 const state = vi.hoisted(() => ({
   role: 'Staff',
@@ -32,8 +32,18 @@ vi.mock('react-native', () => ({
       return state.platform;
     },
   },
-  View: ({ children, style }: { children?: React.ReactNode; style?: React.CSSProperties }) => (
-    <div style={style}>{children}</div>
+  View: ({
+    children,
+    style,
+    testID,
+  }: {
+    children?: React.ReactNode;
+    style?: React.CSSProperties;
+    testID?: string;
+  }) => (
+    <div style={style} data-testid={testID}>
+      {children}
+    </div>
   ),
   Image: ({
     source,
@@ -43,6 +53,27 @@ vi.mock('react-native', () => ({
     accessibilityLabel: string;
   }) => <img src={source.uri} alt={accessibilityLabel} />,
   StyleSheet: { create: (s: unknown) => s },
+  Modal: ({
+    children,
+    visible,
+    onRequestClose,
+  }: {
+    children: React.ReactNode;
+    visible: boolean;
+    onRequestClose: () => void;
+  }) =>
+    visible ? (
+      <div
+        role="dialog"
+        onKeyDown={(event) => {
+          if (event.key === 'Escape') onRequestClose();
+        }}
+      >
+        {children}
+      </div>
+    ) : null,
+  KeyboardAvoidingView: ({ children }: { children: React.ReactNode }) => <div>{children}</div>,
+  ScrollView: ({ children }: { children: React.ReactNode }) => <div>{children}</div>,
   AppState: { addEventListener: () => ({ remove: vi.fn() }) },
   BackHandler: {
     addEventListener: (_: string, callback: () => boolean) => {
@@ -155,6 +186,7 @@ vi.mock('../components/CameraCapture', () => ({
     retainPreview,
     label,
     meterStep,
+    meterRetryResets,
   }: {
     onCapture: (b: Uint8Array<ArrayBuffer>) => Promise<void>;
     onPhotoCleared: () => void;
@@ -163,6 +195,7 @@ vi.mock('../components/CameraCapture', () => ({
     retainPreview: boolean;
     label: string;
     meterStep: number;
+    meterRetryResets?: boolean;
   }) => {
     const [photo, setPhoto] = useState(false);
     return (
@@ -184,6 +217,11 @@ vi.mock('../components/CameraCapture', () => ({
               <button
                 disabled={disabled}
                 onClick={() => {
+                  if (meterStep === 2 && meterRetryResets) {
+                    setPhoto(false);
+                    onPhotoCleared();
+                    return;
+                  }
                   void onCapture(new Uint8Array([1]));
                   if (!retainPreview) setPhoto(false);
                 }}
@@ -442,10 +480,10 @@ it('shows recognition progress until the meter OCR response arrives', async () =
   });
   await overview();
   const capturing = capture();
-  expect(await screen.findByText('Đang nhận dạng chỉ số…')).toBeTruthy();
+  expect(await screen.findByTestId('periodic-meter-processing-overlay')).toBeTruthy();
   await act(async () => release());
   await capturing;
-  expect(screen.queryByText('Đang nhận dạng chỉ số…')).toBeNull();
+  expect(screen.queryByTestId('periodic-meter-processing-overlay')).toBeNull();
 });
 
 it('keeps correction and photo on save failure, locks double taps, and retries the same payload', async () => {
@@ -506,14 +544,24 @@ it('does not register an unsupported hardware BackHandler on Web', async () => {
   expect(state.json).not.toHaveBeenCalled();
 });
 it('shows persisted completed details as read-only and returns to the same overview', async () => {
+  const original = state.request.getMockImplementation()!;
+  state.request.mockImplementation(async (...args: unknown[]) =>
+    String(args[0]).endsWith('/evidence')
+      ? new Uint8Array([137, 80, 78, 71, 13, 10, 26, 10])
+      : original(...args),
+  );
   await overview();
   await capture();
   await save();
   fireEvent.click(screen.getByRole('button', { name: 'Xem chi tiết đồng hồ điện' }));
-  await screen.findByText('Đã lưu chỉ số');
-  expect(screen.queryByRole('button', { name: 'Xác nhận chỉ số' })).toBeNull();
-  expect(screen.queryByRole('button', { name: 'Chụp công tơ điện' })).toBeNull();
-  fireEvent.click(screen.getByRole('button', { name: 'Về tổng quan phòng' }));
+  const dialog = await screen.findByRole('dialog');
+  expect(within(dialog).getByText('Chỉ số đã xác nhận')).toBeTruthy();
+  expect(within(dialog).getByText('120 kWh')).toBeTruthy();
+  expect(await within(dialog).findByRole('img', { name: 'Ảnh minh chứng điện' })).toBeTruthy();
+  expect(within(dialog).queryByText(/Chỉ số trước:/)).toBeNull();
+  expect(within(dialog).queryByRole('button', { name: 'Xác nhận chỉ số' })).toBeNull();
+  expect(within(dialog).queryByRole('button', { name: 'Chụp công tơ điện' })).toBeNull();
+  fireEvent.click(within(dialog).getByRole('button', { name: 'Đóng' }));
   await screen.findByText('1/2 đồng hồ đã ghi');
   expect(state.json).toHaveBeenCalledTimes(1);
 });
@@ -647,4 +695,45 @@ it('does not fetch Staff meter data for a Tenant', async () => {
   render(<MeterScreen />);
   await screen.findByText(/Chỉ Staff/);
   expect(state.request).not.toHaveBeenCalled();
+});
+
+it('shows only loading above the periodic meter modal until OCR finishes', async () => {
+  let finishOcr!: (value: typeof proposal) => void;
+  state.image.mockImplementationOnce(
+    () =>
+      new Promise<typeof proposal>((resolve) => {
+        finishOcr = resolve;
+      }),
+  );
+  await overview();
+  fireEvent.click(screen.getByRole('button', { name: 'Chụp ảnh đồng hồ điện' }));
+  fireEvent.click(await screen.findByRole('button', { name: 'Chụp công tơ điện' }));
+  fireEvent.click(screen.getByRole('button', { name: 'Dùng ảnh này' }));
+  const overlay = await screen.findByTestId('periodic-meter-processing-overlay');
+  const card = screen.getByTestId('periodic-meter-modal-card');
+  expect(card.contains(overlay)).toBe(false);
+  expect(within(card).queryByText('Đang xử lý…')).toBeNull();
+  expect(within(overlay).getByText('Đang xử lý…')).toBeTruthy();
+  expect(within(overlay).queryByRole('button')).toBeNull();
+  expect(screen.queryByRole('button', { name: 'Hủy yêu cầu' })).toBeNull();
+  await act(async () => finishOcr(proposal));
+  await waitFor(() => expect(screen.queryByTestId('periodic-meter-processing-overlay')).toBeNull());
+  expect(screen.getByTestId('periodic-meter-modal-card')).toBeTruthy();
+});
+
+it('returns to the capture choice when retrying periodic OCR, clearing the old photo and confirmation', async () => {
+  await overview();
+  await capture();
+  fireEvent.change(screen.getByLabelText('Chỉ số xác nhận (kWh)'), { target: { value: '125' } });
+  consent();
+  const previousCalls = state.image.mock.calls.length;
+  fireEvent.click(screen.getByRole('button', { name: 'Thử lại OCR' }));
+  expect(screen.getByRole('button', { name: 'Chụp công tơ điện' })).toBeTruthy();
+  expect(screen.queryByAltText('Ảnh công tơ')).toBeNull();
+  expect(screen.queryByLabelText('Chỉ số xác nhận (kWh)')).toBeNull();
+  expect(screen.queryByRole('checkbox')).toBeNull();
+  expect(screen.queryByTestId('periodic-meter-processing-overlay')).toBeNull();
+  expect(state.image).toHaveBeenCalledTimes(previousCalls);
+  expect(state.json).not.toHaveBeenCalled();
+  expect(screen.getByTestId('periodic-meter-modal-card')).toBeTruthy();
 });

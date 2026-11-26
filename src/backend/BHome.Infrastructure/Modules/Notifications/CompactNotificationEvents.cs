@@ -46,6 +46,14 @@ internal sealed partial class CompactNotificationEvents(Compact24DbContext db, C
         await tx.CommitAsync(t); return count;
     }
 
+    internal async Task<int> PublishBillingAsync(CancellationToken t)
+    {
+        db.ChangeTracker.Clear(); await using var tx = await db.Database.BeginTransactionAsync(t);
+        await sql.Execute("SELECT pg_advisory_xact_lock(hashtextextended('bhome-notification-publication-v2',0))", t);
+        var count = await Audits(t, billingOnly: true) + await MeterReadings(t) + await Reminders(t, billingOnly: true);
+        await tx.CommitAsync(t); return count;
+    }
+
     internal Task<int> QueueHoldingConfirmationsAsync(CancellationToken t) => sql.Execute("""
         INSERT INTO notifications(id,record_kind,event_key,notification_type,event_data,event_at,delivery_status,next_delivery_at)
         SELECT gen_random_uuid(),'OUTBOX','holding-confirmed:'||replace(c.id::text,'-',''),'CHANNEL_DELIVERY',
@@ -77,7 +85,7 @@ internal sealed partial class CompactNotificationEvents(Compact24DbContext db, C
         await tx.CommitAsync(t);
     }
 
-    private async Task<int> Audits(CancellationToken t, bool authenticationOnly = false, bool mainActivationOnly = false, bool ownerSigningOnly = false)
+    private async Task<int> Audits(CancellationToken t, bool authenticationOnly = false, bool mainActivationOnly = false, bool ownerSigningOnly = false, bool billingOnly = false)
     {
         var source = new List<(Guid Id, string Event, Guid Target, DateTimeOffset At)>();
         await using (var cmd = await sql.Command("""
@@ -87,11 +95,12 @@ internal sealed partial class CompactNotificationEvents(Compact24DbContext db, C
               'ContractMoveOutRequested','ContractSigningInitiated','ContractSigningPrepared','ContractSigningRequested','InternalSigningInvitationApproved','ContractActivated','ContractRenewalPrepared','OperatingPolicyAmendmentCancelled','OperatingPolicyAmendmentApplied',
               'HoldingDraftCreated','HoldingSigningSubmitted','MainSigningSubmitted','HoldingActivated','Automatic:HoldingActivated','Automatic:ContractActivated')
             AND (NOT @authenticationOnly OR n.notification_type IN ('PasswordChange','PasswordReset','AccountActivated','AccountDeactivated','AccountInvitationAccepted','RoleChanged','StaffCreated'))
+            AND (NOT @billingOnly OR n.notification_type='InvoiceDraftGenerated')
             AND (NOT @mainActivationOnly OR n.notification_type IN ('ContractActivated','Automatic:ContractActivated'))
             AND (NOT @ownerSigningOnly OR n.notification_type IN ('HoldingSigningSubmitted','MainSigningSubmitted'))
             AND NOT EXISTS(SELECT 1 FROM notifications p WHERE p.record_kind='OUTBOX' AND p.event_data->>'recordType'='NotificationPublication'
               AND p.event_data->'state'->>'eventKey'='extended-audit:'||n.id::text) ORDER BY n.event_at,n.id LIMIT 50
-            """, t, ("authenticationOnly", authenticationOnly), ("mainActivationOnly", mainActivationOnly), ("ownerSigningOnly", ownerSigningOnly)))
+            """, t, ("authenticationOnly", authenticationOnly), ("mainActivationOnly", mainActivationOnly), ("ownerSigningOnly", ownerSigningOnly), ("billingOnly", billingOnly)))
         { await using var reader = await cmd.ExecuteReaderAsync(t); while (await reader.ReadAsync(t)) if (!reader.IsDBNull(2)) source.Add((reader.GetGuid(0), reader.GetString(1), reader.GetGuid(2), reader.GetFieldValue<DateTimeOffset>(3))); }
         var count = 0;
         foreach (var e in source)
@@ -307,7 +316,9 @@ internal sealed partial class CompactNotificationEvents(Compact24DbContext db, C
     {
         var count = 0;
         var tasks = await db.Set<OperationalTask>().AsNoTracking().Where(x => x.Status != MeterTaskStatus.Completed && x.Status != MeterTaskStatus.Cancelled &&
-            (x.AssignedStaffUserId == null || !db.StaffLocationAssignments.Any(a => a.LocationId == x.LocationId && a.StaffUserId == x.AssignedStaffUserId && a.StartDate <= Today && a.EndDate >= Today)) &&
+            (x.Kind == BHome.Domain.StaffOperations.OperationalTaskKind.MeterReading && x.Purpose == ReadingPurpose.Periodic
+                ? !db.StaffLocationAssignments.Any(a => a.LocationId == x.LocationId && a.StartDate <= Today && a.EndDate >= Today && StaffEmploymentEligibility.EligibleIds(db, Today).Contains(a.StaffUserId))
+                : x.AssignedStaffUserId == null || !db.StaffLocationAssignments.Any(a => a.LocationId == x.LocationId && a.StaffUserId == x.AssignedStaffUserId && a.StartDate <= Today && a.EndDate >= Today)) &&
             !db.Set<NotificationPublication>().Any(p => p.EventKey == "task-unassigned:" + x.Id.ToString() + ":" + x.Version.ToString())).OrderBy(x => x.Id).Take(25).ToArrayAsync(t);
         foreach (var task in tasks)
         {

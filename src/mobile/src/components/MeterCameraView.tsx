@@ -20,6 +20,7 @@ export function MeterCameraView({
   onClose,
   onUse,
   onRetake,
+  onRetry,
   onUseDemo,
 }: {
   camera: React.ReactNode;
@@ -37,6 +38,7 @@ export function MeterCameraView({
   onClose: () => void;
   onUse: () => void;
   onRetake: () => void;
+  onRetry?: () => void;
   onUseDemo?: () => void;
 }) {
   const blocked = disabled || working || requestingPermission;
@@ -100,7 +102,7 @@ export function MeterCameraView({
             </>
           )}
           {step === 2 && (
-            <Button disabled={blocked} onPress={onUse}>
+            <Button disabled={blocked} onPress={onRetry ?? onUse}>
               Thử lại OCR
             </Button>
           )}

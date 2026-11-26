@@ -77,43 +77,27 @@ public sealed class InvoiceService(IInvoiceRepository repository, ICurrentUser u
     public Task<InvoiceView> GenerateAsync(DraftInvoiceInput x, CancellationToken t, Guid? expectedAutomationPlanId = null)
     {
         RequireOwner();
-        if (x.RoomId == Guid.Empty || x.RepresentativeContractId == Guid.Empty || x.BillingPeriod == default ||
+        if (x.RoomId == Guid.Empty || x.BillingPeriod == default ||
             x.BillingPeriod.Day != 1 || x.BillingPeriod.Year is < 2000 or > 9997) throw new InvoiceException(400, "invalid_invoice_period");
         return repository.WithRoomLockAsync(x.RoomId, async () =>
         {
             var existing = await repository.ForPeriodAsync(x.RoomId, x.BillingPeriod, t);
             if (existing is not null)
             {
-                if (x.RepresentativeContractId is { } selected && existing.RepresentativeContractId != selected) throw new InvoiceException(409, "invoice_period_already_exists");
                 return View(existing);
             }
             var room = await repository.RoomAsync(x.RoomId, t) ?? throw new InvoiceException(404, "room_not_found");
             if (!room.Location.IsActive) throw new InvoiceException(409, "billing_location_inactive");
             var plan = automation is null ? null : await automation.ForPeriodAsync(room.LocationId, x.BillingPeriod, t);
-            var representativeId = x.RepresentativeContractId;
-            BillingRepresentativeSelection? selection = null;
-            IReadOnlyList<BillingOccupancy>? eligible = null;
-            if (representativeId is null || expectedAutomationPlanId is not null)
-            {
-                eligible = await repository.OccupanciesAsync(x.RoomId, x.BillingPeriod, x.BillingPeriod.AddMonths(1).AddDays(-1), t);
-                selection = automation is null ? null : await automation.RepresentativeAsync(x.RoomId, x.BillingPeriod, t);
-            }
-            if (representativeId is null)
-            {
-                if (selection is not null)
-                {
-                    if (!eligible!.Any(o => o.Contract.Id == selection.ContractId)) throw new InvoiceException(409, "representative_selection_required");
-                    representativeId = selection.ContractId;
-                }
-                else if (eligible!.Count == 1) representativeId = eligible[0].Contract.Id;
-                else throw new InvoiceException(409, eligible.Count == 0 ? "representative_contract_not_eligible" : "representative_selection_required");
-            }
+            var eligible = await repository.OccupanciesAsync(x.RoomId, x.BillingPeriod, x.BillingPeriod.AddMonths(1).AddDays(-1), t);
+            var reference = BillingReferenceContract.Select(eligible, x.BillingPeriod)
+                ?? throw new InvoiceException(409, "no_reference_contract_for_period");
             if (expectedAutomationPlanId is { } expected)
             {
                 if (plan?.Id != expected || !await automation!.AuthorizedAsync(plan, Actor, x.BillingPeriod, false, t)) throw new InvoiceException(409, "automation_authorization_changed");
-                if (selection is null && eligible!.Count != 1 || selection is not null && selection.ContractId != representativeId) throw new InvoiceException(409, "representative_selection_required");
             }
             var schedule = plan is null ? await repository.ScheduleForPeriodAsync(room.LocationId, x.BillingPeriod, t) ?? throw new InvoiceException(409, "billing_schedule_required") : BillingAutomationService.Calendar(plan);
+            schedule.PartialMonth = PartialMonthRule.FullMonth;
             if (Today < InvoiceMath.CalendarDate(x.BillingPeriod, schedule.DraftDay, schedule.DraftMonthOffset))
                 throw new InvoiceException(409, "draft_date_not_reached");
             var invoice = new Invoice
@@ -123,7 +107,7 @@ public sealed class InvoiceService(IInvoiceRepository repository, ICurrentUser u
                 RoomNumber = room.RoomNumber,
                 LocationName = room.Location.Name,
                 BillingPeriod = x.BillingPeriod,
-                RepresentativeContractId = representativeId.Value,
+                RepresentativeContractId = reference.Contract.Id,
                 CreatedByUserId = Actor,
                 AutomationPlanId = expectedAutomationPlanId,
                 ScheduleSnapshot = JsonSerializer.Serialize(schedule),
@@ -140,7 +124,10 @@ public sealed class InvoiceService(IInvoiceRepository repository, ICurrentUser u
         if (expected is null) return;
         var plan = automation is null ? null : await automation.ForPeriodAsync(invoice.LocationId, invoice.BillingPeriod, t);
         if (plan?.Id != expected || !await automation!.AuthorizedAsync(plan, Actor, invoice.BillingPeriod, true, t)) throw new InvoiceException(409, "automation_authorization_changed");
-        if (BillingAutomationService.CalendarKey(JsonSerializer.Deserialize<BillingSchedule>(invoice.ScheduleSnapshot)!) != BillingAutomationService.CalendarKey(BillingAutomationService.Calendar(plan))) throw new InvoiceException(409, "automation_calendar_conflict");
+        var stored = JsonSerializer.Deserialize<BillingSchedule>(invoice.ScheduleSnapshot)!;
+        var effective = BillingAutomationService.Calendar(plan);
+        stored.PartialMonth = effective.PartialMonth = PartialMonthRule.FullMonth;
+        if (BillingAutomationService.CalendarKey(stored) != BillingAutomationService.CalendarKey(effective)) throw new InvoiceException(409, "automation_calendar_conflict");
     }
     private static IEnumerable<InvoiceLineView> Charges(Invoice i) => View(i).Lines.Select(line => line with { Id = Guid.Empty });
     public async Task<InvoiceView> RefreshAsync(Guid id, int version, CancellationToken t, Guid? expectedAutomationPlanId = null)
@@ -152,19 +139,26 @@ public sealed class InvoiceService(IInvoiceRepository repository, ICurrentUser u
             var invoice = await repository.FindAsync(id, Scope, t) ?? throw new InvoiceException(404, "invoice_not_found");
             if (invoice.Status != InvoiceStatus.Draft || invoice.Version != version) throw new InvoiceException(409, "invoice_changed_or_final");
             await ScheduledAuthority(invoice, expectedAutomationPlanId, t);
+            var schedule = JsonSerializer.Deserialize<BillingSchedule>(invoice.ScheduleSnapshot)!;
+            schedule.PartialMonth = PartialMonthRule.FullMonth;
             if (expectedAutomationPlanId is not null)
             {
-                if ((await repository.DraftCorrectionsAsync(id, t)).Count > 0) throw new InvoiceException(409, "approved_draft_requires_review");
+                if (await repository.HasPendingAdjustmentsAsync(id, t)) throw new InvoiceException(409, "invoice_adjustment_pending");
                 var check = new Invoice { RoomId = invoice.RoomId, LocationId = invoice.LocationId, BillingPeriod = invoice.BillingPeriod, RepresentativeContractId = invoice.RepresentativeContractId };
-                await CalculateAsync(check, JsonSerializer.Deserialize<BillingSchedule>(invoice.ScheduleSnapshot)!, t, id);
-                if (Charges(invoice).SequenceEqual(Charges(check)) && invoice.MissingInputs.Order().SequenceEqual(check.MissingInputs.Order()) && check.Recipients.All(r => invoice.Recipients.Any(old => old.TenantUserId == r.TenantUserId))) return View(invoice);
+                await CalculateAsync(check, schedule, t, id);
+                if (check.MissingInputs.Contains("draft_correction_source_changed")) throw new InvoiceException(409, "approved_draft_requires_review");
+                if (invoice.RepresentativeContractId == check.RepresentativeContractId && Charges(invoice).SequenceEqual(Charges(check)) && invoice.MissingInputs.Order().SequenceEqual(check.MissingInputs.Order()) && check.Recipients.All(r => invoice.Recipients.Any(old => old.TenantUserId == r.TenantUserId))) return View(invoice);
                 repository.RemoveLines(invoice);
                 foreach (var line in check.Lines) { line.InvoiceId = id; invoice.Lines.Add(line); repository.Add(line); }
                 foreach (var recipient in check.Recipients.Where(r => invoice.Recipients.All(old => old.TenantUserId != r.TenantUserId))) invoice.Recipients.Add(new() { InvoiceId = id, TenantUserId = recipient.TenantUserId });
+                invoice.RepresentativeContractId = check.RepresentativeContractId;
+                invoice.RepresentativeTenantUserId = check.RepresentativeTenantUserId;
+                invoice.ScheduleSnapshot = JsonSerializer.Serialize(schedule);
                 invoice.Total = check.Total; invoice.MissingInputs = check.MissingInputs; invoice.Version++; repository.Audit(Actor, "InvoiceDraftScheduledRefresh", id, clock.GetUtcNow()); return View(invoice);
             }
             repository.RemoveLines(invoice);
-            await CalculateAsync(invoice, JsonSerializer.Deserialize<BillingSchedule>(invoice.ScheduleSnapshot)!, t);
+            await CalculateAsync(invoice, schedule, t);
+            invoice.ScheduleSnapshot = JsonSerializer.Serialize(schedule);
             foreach (var line in invoice.Lines) repository.Add(line);
             invoice.Version++; repository.Audit(Actor, "InvoiceDraftRefreshed", id, clock.GetUtcNow()); return View(invoice);
         }, t);
@@ -198,7 +192,7 @@ public sealed class InvoiceService(IInvoiceRepository repository, ICurrentUser u
             };
             await CalculateAsync(check, JsonSerializer.Deserialize<BillingSchedule>(invoice.ScheduleSnapshot)!, t, invoice.Id);
             if (check.MissingInputs.Length > 0) throw new InvoiceException(409, "confirmed_billing_inputs_required");
-            if (invoice.MissingInputs.Length > 0 || !Charges(invoice).SequenceEqual(Charges(check)) ||
+            if (invoice.RepresentativeContractId != check.RepresentativeContractId || invoice.MissingInputs.Length > 0 || !Charges(invoice).SequenceEqual(Charges(check)) ||
                 !invoice.Recipients.Select(r => r.TenantUserId).Order().SequenceEqual(check.Recipients.Select(r => r.TenantUserId).Order()))
                 throw new InvoiceException(409, "draft_refresh_and_review_required");
             // Publish only after a unique, persisted SePay payment memo has been issued.
@@ -220,14 +214,15 @@ public sealed class InvoiceService(IInvoiceRepository repository, ICurrentUser u
     {
         var start = invoice.BillingPeriod; var end = start.AddMonths(1).AddDays(-1);
         var occupants = await repository.OccupanciesAsync(invoice.RoomId, start, end, t);
-        var representative = occupants.SingleOrDefault(o => o.Contract.Id == invoice.RepresentativeContractId)
-            ?? throw new InvoiceException(409, "representative_contract_not_eligible");
+        var representative = BillingReferenceContract.Select(occupants, start)
+            ?? throw new InvoiceException(409, "no_reference_contract_for_period");
+        invoice.RepresentativeContractId = representative.Contract.Id;
+        schedule.PartialMonth = PartialMonthRule.FullMonth;
         invoice.RepresentativeTenantUserId = representative.Contract.TenantUserId ?? throw new InvalidOperationException("Active contract requires a Tenant account.");
         var audience = occupants.SelectMany(o => o.TenantIds).Distinct().ToArray();
         foreach (var tenantId in audience.Where(tenantId => invoice.Recipients.All(r => r.TenantUserId != tenantId)))
             invoice.Recipients.Add(new InvoiceRecipient { InvoiceId = invoice.Id, TenantUserId = tenantId });
-        var occupiedDays = Enumerable.Range(0, end.Day).Count(day => occupants.Any(o => o.Contract.StartDate <= start.AddDays(day) &&
-            (o.Contract.ActualEndDate ?? o.Contract.EndDate) >= start.AddDays(day)));
+        var occupiedDays = end.Day;
         var room = await repository.RoomAsync(invoice.RoomId, t) ?? throw new InvoiceException(404, "room_not_found");
         var people = PersonMonthOccupancy.ForRoomCapacity(room.Capacity, occupiedDays);
         var missing = new List<string>();
@@ -240,6 +235,7 @@ public sealed class InvoiceService(IInvoiceRepository repository, ICurrentUser u
         }
         foreach (var policy in charges)
         {
+            var chargePeriod = policy.Category == ChargeCategory.Rent ? start.AddMonths(1) : start;
             BillingReading? reading = null;
             var metered = policy.Method == ChargingMethod.Metered;
             if (metered)
@@ -270,11 +266,11 @@ public sealed class InvoiceService(IInvoiceRepository repository, ICurrentUser u
             else if (!metered && (fixedCoverage is not null || perPerson))
             {
                 if (perPerson && fixedCoverage is null) missing.Add("fixed_charge_coverage_unavailable");
-                var prior = fixedCoverage is null ? [] : await fixedCoverage.ReadAsync(invoice.RoomId, start, policy.ChargeCode, t);
-                if (prior.Count > 0 || perPerson)
+                var prior = fixedCoverage is null ? [] : await fixedCoverage.ReadAsync(invoice.RoomId, chargePeriod, policy.ChargeCode, t);
+                if (prior.Count > 0 || perPerson || policy.Category == ChargeCategory.Rent)
                 {
                     FixedChargeResult fixedResult;
-                    try { fixedResult = FixedChargeCalculation.Calculate(start, policy, schedule, representative.Contract.SnapshotHash, occupiedDays, prior, people); }
+                    try { fixedResult = FixedChargeCalculation.Calculate(chargePeriod, policy, schedule, representative.Contract.SnapshotHash, DateTime.DaysInMonth(chargePeriod.Year, chargePeriod.Month), prior, people); }
                     catch (Exception error) when (error is OverflowException or ArgumentOutOfRangeException) { throw new InvoiceException(400, "invoice_amount_out_of_range"); }
                     missing.AddRange(fixedResult.MissingInputs);
                     amount = fixedResult.Amount ?? 0;
@@ -286,14 +282,14 @@ public sealed class InvoiceService(IInvoiceRepository repository, ICurrentUser u
                 InvoiceId = invoice.Id,
                 Category = policy.Category,
                 ChargeCode = policy.ChargeCode,
-                Name = policy.Name,
+                Name = policy.Category == ChargeCategory.Rent ? $"Tiền thuê tháng {chargePeriod:MM/yyyy}" : policy.Name,
                 PolicyId = policy.Id == Guid.Empty ? null : policy.Id,
                 PolicyVersion = policy.Id == Guid.Empty ? null : policy.Version,
                 RateDate = policy.EffectiveFrom,
                 Rate = policy.Rate,
                 Quantity = quantity,
-                OccupiedDays = occupiedDays,
-                PeriodDays = end.Day,
+                OccupiedDays = DateTime.DaysInMonth(chargePeriod.Year, chargePeriod.Month),
+                PeriodDays = DateTime.DaysInMonth(chargePeriod.Year, chargePeriod.Month),
                 Amount = amount,
                 UtilityCalculationSnapshot = utility?.Snapshot,
                 MeterReadingId = reading?.FullyCovered == true ? null : reading?.Reading.Id,

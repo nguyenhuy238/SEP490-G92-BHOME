@@ -5,6 +5,10 @@ namespace BHome.Application.UnitTests;
 public sealed class NotificationEmailPolicyTests
 {
     [Theory]
+    [InlineData("INVOICE_DRAFT_CREATED")]
+    [InlineData("INVOICE_ADJUSTMENT_REQUESTED")]
+    [InlineData("INVOICE_ADJUSTMENT_DECIDED")]
+    [InlineData("INVOICE_FINALIZATION_BLOCKED")]
     [InlineData("INVOICE_FINALIZED")]
     [InlineData("INVOICE_OVERDUE")]
     [InlineData("INVOICE_DUE_SOON")]
@@ -24,6 +28,13 @@ public sealed class NotificationEmailPolicyTests
     [InlineData("Tenant", false)]
     public void EmergencyEmailOnlyExtendsOperationalRecipients(string role, bool email) => Assert.Equal(email,
         NotificationEmailPolicy.Channels("INCIDENT_EMERGENCY_SUBMITTED", role, ["IN_APP", "PUSH"]).Contains("EMAIL"));
+
+    [Theory]
+    [InlineData("Owner", true)]
+    [InlineData("Tenant", true)]
+    [InlineData("Staff", false)]
+    public void FinalBlockedEmailOnlyExtendsInvoiceRecipients(string role, bool email) => Assert.Equal(email,
+        NotificationEmailPolicy.Channels("INVOICE_FINALIZATION_BLOCKED", role, ["IN_APP"]).Contains("EMAIL"));
 
     [Fact]
     public void OtherEventsAndExplicitAnnouncementChannelsRemainUnchanged()

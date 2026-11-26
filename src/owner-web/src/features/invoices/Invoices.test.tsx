@@ -124,36 +124,18 @@ it('keeps creation out of the operational list and sends status/month filters to
   fireEvent.click(screen.getByRole('button', { name: 'Lập hóa đơn nháp' }));
   expect(screen.getByRole('dialog', { name: 'Lập hóa đơn nháp' })).toBeInTheDocument();
   expect(screen.getByRole('button', { name: 'Tạo / mở bản nháp' })).toBeDisabled();
-  expect(screen.getByLabelText('Hợp đồng đại diện phòng trong kỳ')).toHaveAttribute(
-    'aria-disabled',
-    'true',
-  );
+  expect(screen.queryByLabelText('Hợp đồng đại diện phòng trong kỳ')).not.toBeInTheDocument();
   expect(screen.queryByRole('stepper')).not.toBeInTheDocument();
   expect(mocks.api.draft).not.toHaveBeenCalled();
 });
-it('creates in one form from room history and preserves input after a server conflict', async () => {
+it('creates by room and period without manual contract selection and preserves input after a server conflict', async () => {
   const room = '00000000-0000-4000-8000-000000000001';
-  const contract = '00000000-0000-4000-8000-000000000002';
-  mocks.api.request.mockImplementation(async (path: string) =>
-    path.endsWith('/occupancy-history')
-      ? {
-          periods: [
-            {
-              contractId: contract,
-              contractStatus: 'Active',
-              from: '2026-01-01',
-              to: '2027-01-01',
-              occupants: [{ displayLabel: 'Người ở tổng hợp' }],
-            },
-          ],
-        }
-      : [
-          {
-            id: path.endsWith('/locations') ? 'location' : room,
-            label: path.endsWith('/locations') ? 'Cơ sở tổng hợp' : 'Phòng tổng hợp',
-          },
-        ],
-  );
+  mocks.api.request.mockImplementation(async (path: string) => [
+    {
+      id: path.endsWith('/locations') ? 'location' : room,
+      label: path.endsWith('/locations') ? 'Cơ sở tổng hợp' : 'Phòng tổng hợp',
+    },
+  ]);
   mocks.api.draft.mockRejectedValue({ status: 409 });
   mount(<LiveInvoicesPage />);
   fireEvent.click(screen.getByRole('button', { name: 'Lập hóa đơn nháp' }));
@@ -163,21 +145,20 @@ it('creates in one form from room history and preserves input after a server con
   fireEvent.mouseDown(within(dialog).getByLabelText('Phòng'));
   fireEvent.click(await screen.findByRole('option', { name: 'Phòng tổng hợp' }));
   fireEvent.change(within(dialog).getByLabelText('Kỳ hóa đơn'), { target: { value: '2026-11' } });
-  const contractSelector = within(dialog).getByLabelText('Hợp đồng đại diện phòng trong kỳ');
-  await waitFor(() => expect(contractSelector).not.toHaveAttribute('aria-disabled', 'true'));
-  fireEvent.mouseDown(contractSelector);
-  fireEvent.click(await screen.findByRole('option', { name: /Người ở tổng hợp/ }));
+  expect(
+    within(dialog).queryByLabelText('Hợp đồng đại diện phòng trong kỳ'),
+  ).not.toBeInTheDocument();
   fireEvent.click(within(dialog).getByRole('button', { name: 'Tạo / mở bản nháp' }));
   expect(
     await within(dialog).findByText(
       'Cấu hình đã thay đổi hoặc bị xung đột. Tải lại và kiểm tra trước khi lưu.',
     ),
   ).toBeInTheDocument();
-  await waitFor(() => expect(mocks.api.draft).toHaveBeenCalledWith(room, '2026-11-01', contract));
+  await waitFor(() => expect(mocks.api.draft).toHaveBeenCalledWith(room, '2026-11-01'));
   expect(within(dialog).getByLabelText('Kỳ hóa đơn')).toHaveValue('2026-11');
-  expect(within(dialog).getByLabelText('Hợp đồng đại diện phòng trong kỳ')).toHaveTextContent(
-    'Người ở tổng hợp',
-  );
+  expect(
+    within(dialog).queryByLabelText('Hợp đồng đại diện phòng trong kỳ'),
+  ).not.toBeInTheDocument();
 });
 it('shows persisted charges and finalizes only after explicit review confirmation, blocking duplicate clicks', async () => {
   let resolve!: (value: Invoice) => void;
@@ -311,51 +292,19 @@ it('guides a first-time Owner from an empty invoice list to verified inputs and 
   expect(screen.getByRole('dialog', { name: 'Lập hóa đơn nháp' })).toBeInTheDocument();
   expect(mocks.api.draft).not.toHaveBeenCalled();
 });
-it('requires Owner to choose every billing rule when the location has no schedule', async () => {
+it('links first-time billing setup to Location Settings without a second rule editor', async () => {
   mocks.api.request.mockResolvedValue([{ id: 'location', label: 'Synthetic' }]);
   mount(<BillingConfigurationPage />);
   fireEvent.mouseDown(await screen.findByLabelText('Cơ sở cấu hình'));
   fireEvent.click(await screen.findByRole('option', { name: 'Synthetic' }));
-  await screen.findByText('Chọn đầy đủ các quy tắc trước khi lập hóa đơn đầu tiên.');
-  expect(screen.getByRole('link', { name: 'Thiết lập lịch' })).toHaveAttribute(
+  expect(await screen.findByRole('link', { name: 'Thiết lập lịch' })).toHaveAttribute(
     'href',
-    '#billing-schedule',
+    '/locations/location/settings',
   );
-  expect(screen.getByText('Lưu quy tắc hóa đơn')).toBeDisabled();
+  expect(screen.queryByRole('button', { name: 'Lưu quy tắc hóa đơn' })).not.toBeInTheDocument();
   expect(mocks.api.saveSchedule).not.toHaveBeenCalled();
-  await waitFor(() =>
-    expect(
-      screen.getByText('Chưa có biểu giá. Thêm giá thuê, điện và nước để lập hóa đơn.'),
-    ).toBeInTheDocument(),
-  );
 });
-it('keeps existing schedule folded until Owner requests a change', async () => {
-  mocks.api.schedule.mockResolvedValue({
-    version: 7,
-    rentSource: 1,
-    rateDate: 0,
-    partialMonth: 0,
-    rounding: 0,
-    draftDay: 5,
-    draftMonthOffset: 0,
-    finalDay: 10,
-    finalMonthOffset: 0,
-    dueDay: 15,
-    dueMonthOffset: 0,
-  });
-  mocks.api.request.mockResolvedValue([{ id: 'location', label: 'Synthetic' }]);
-  mount(<BillingConfigurationPage />);
-  fireEvent.mouseDown(await screen.findByLabelText('Cơ sở cấu hình'));
-  fireEvent.click(await screen.findByRole('option', { name: 'Synthetic' }));
-  expect(await screen.findByText(/Nháp ngày 5 · Phát hành 10/)).toBeInTheDocument();
-  expect(screen.queryByRole('button', { name: 'Lưu quy tắc hóa đơn' })).not.toBeInTheDocument();
-  expect(screen.getAllByRole('button', { name: /Lịch & quy tắc hóa đơn/ })).toHaveLength(1);
-  fireEvent.click(screen.getByRole('button', { name: /Lịch & quy tắc hóa đơn/ }));
-  expect(await screen.findByRole('button', { name: 'Lưu quy tắc hóa đơn' })).toBeInTheDocument();
-  fireEvent.click(screen.getByRole('button', { name: /Lịch & quy tắc hóa đơn/ }));
-  expect(screen.queryByRole('button', { name: 'Lưu quy tắc hóa đơn' })).not.toBeInTheDocument();
-});
-it('identifies schedule month offsets in the saved summary', async () => {
+it('links an existing schedule to the same location configuration', async () => {
   mocks.api.schedule.mockResolvedValue({
     version: 8,
     rentSource: 1,
@@ -374,6 +323,7 @@ it('identifies schedule month offsets in the saved summary', async () => {
   fireEvent.mouseDown(await screen.findByLabelText('Cơ sở cấu hình'));
   fireEvent.click(await screen.findByRole('option', { name: 'Synthetic' }));
   expect(
-    await screen.findByText('Nháp ngày 5 · Phát hành 10 (+1 tháng) · Hạn trả 15 (+2 tháng)'),
-  ).toBeInTheDocument();
+    await screen.findByRole('link', { name: 'Cấu hình lịch điện nước & hóa đơn' }),
+  ).toHaveAttribute('href', '/locations/location/settings');
+  expect(screen.queryByText('Lịch & quy tắc hóa đơn')).not.toBeInTheDocument();
 });

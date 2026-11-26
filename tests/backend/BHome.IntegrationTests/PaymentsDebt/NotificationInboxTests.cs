@@ -54,4 +54,40 @@ public sealed partial class PaymentLedgerTests
         }
         Assert.Equal(0, (await staff.GetFromJsonAsync<PagedResult<NotificationView>>("/api/v1/notifications"))!.TotalCount); Assert.Equal(HttpStatusCode.NotFound, (await staff.PostAsync($"/api/v1/notifications/{noticeId}/read", null)).StatusCode);
     }
+    internal async Task StaffPeriodicAssignmentNoticesGroupExistingHistoryAndMarkTheWholePeriodRead()
+    {
+        var (w, plan, _) = await MeterWorkspace(); await RunMeter(w);
+        await using (var scope = fixture.Factory.Services.CreateAsyncScope())
+        {
+            var db = scope.ServiceProvider.GetRequiredService<BHomePersistenceContext>();
+            var tasks = await db.Set<OperationalTask>().Where(x => x.AutomationPlanId == plan.Id).ToArrayAsync();
+            Assert.Equal(2, tasks.Length);
+            foreach (var task in tasks)
+            {
+                var source = await db.Set<OperationalTaskNotification>().SingleAsync(n => n.TaskId == task.Id);
+                var notice = Notice(w.Staff, Roles.Staff, "task:" + source.Id, task.Id, w.Location);
+                notice.Category = "Task"; notice.EventType = "TASK_ASSIGNED";
+                notice.RelatedObjectType = "MeterTask"; notice.SourceTaskNotificationId = source.Id;
+                db.Add(notice);
+            }
+            await db.SaveChangesAsync();
+        }
+        await PumpNotifications(); await PumpNotifications();
+        using var staff = await Client(w.Staff);
+        var inbox = (await staff.GetFromJsonAsync<PagedResult<NotificationView>>("/api/v1/notifications?category=Task&pageSize=1"))!;
+        Assert.Equal(1, inbox.TotalCount);
+        var noticeItem = Assert.Single(inbox.Items);
+        Assert.Equal($"Có nhiệm vụ ghi chỉ số kỳ {CurrentPeriod():MM/yyyy}", noticeItem.Title);
+        Assert.Equal(1, (await staff.GetFromJsonAsync<NotificationCount>("/api/v1/notifications/unread-count"))!.UnreadCount);
+        var target = (await staff.GetFromJsonAsync<NotificationTarget>($"/api/v1/notifications/{noticeItem.Id}/target"))!;
+        Assert.Equal("MeterPeriod", target.ObjectType);
+        Assert.Equal(w.Location, target.LocationId);
+        Assert.Equal(CurrentPeriod(), target.BillingPeriod);
+        (await staff.PostAsync($"/api/v1/notifications/{noticeItem.Id}/read", null)).EnsureSuccessStatusCode();
+        Assert.Equal(0, (await staff.GetFromJsonAsync<NotificationCount>("/api/v1/notifications/unread-count"))!.UnreadCount);
+        await using var check = fixture.Factory.Services.CreateAsyncScope();
+        var stored = await check.ServiceProvider.GetRequiredService<BHomePersistenceContext>().Set<UserNotification>()
+            .Where(n => n.RecipientUserId == w.Staff && n.LocationId == w.Location && n.EventType == "TASK_ASSIGNED").ToArrayAsync();
+        Assert.True(stored.Length >= 2); Assert.All(stored, n => Assert.NotNull(n.ReadAt));
+    }
 }

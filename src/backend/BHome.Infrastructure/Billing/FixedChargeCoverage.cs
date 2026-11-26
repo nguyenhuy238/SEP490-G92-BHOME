@@ -21,8 +21,10 @@ internal sealed class FixedChargeCoverageRepository(BHomePersistenceContext db) 
         var lines = await (from line in db.Set<InvoiceLine>().AsNoTracking()
                            join invoice in db.Set<Invoice>() on line.InvoiceId equals invoice.Id
                            join contract in db.Set<Contract>() on invoice.RepresentativeContractId equals contract.Id
-                           where invoice.RoomId == roomId && invoice.BillingPeriod == period && invoice.Status == InvoiceStatus.Final && line.ChargeCode == code
-                           select new { line, invoice.ScheduleSnapshot, contract.SnapshotHash }).ToArrayAsync(token);
+                           where invoice.RoomId == roomId && (invoice.BillingPeriod == period ||
+                               code == "RENT" && invoice.BillingPeriod == period.AddMonths(-1)) &&
+                               invoice.Status == InvoiceStatus.Final && line.ChargeCode == code
+                           select new { line, invoice.BillingPeriod, invoice.ScheduleSnapshot, contract.SnapshotHash }).ToArrayAsync(token);
         var invoiceIds = lines.Select(r => r.line.InvoiceId).Distinct().ToArray();
         var adjustments = await db.Set<InvoiceAdjustmentDecision>().AsNoTracking().Where(d => invoiceIds.Contains(d.InvoiceId) && d.ChargeCode == code &&
             d.InvoiceStatus == InvoiceStatus.Final && d.Outcome == "Approved").Select(d => new { d.Id, d.InvoiceId, d.Delta }).Take(501).ToArrayAsync(token);
@@ -36,9 +38,14 @@ internal sealed class FixedChargeCoverageRepository(BHomePersistenceContext db) 
                 using var json = JsonDocument.Parse(row.line.UtilityCalculationSnapshot);
                 if (json.RootElement.TryGetProperty("kind", out var kind) && kind.GetString() == "FixedChargeCoverage/v1")
                 {
-                    result.Add(new(row.line.Id, json.RootElement.GetProperty("source").Deserialize<FixedChargeSource>()!, reduction, decisions.Select(d => d.Id).Order().ToArray())); continue;
+                    var source = json.RootElement.GetProperty("source").Deserialize<FixedChargeSource>()!;
+                    if (source.BillingPeriod == period)
+                        result.Add(new(row.line.Id, source, reduction, decisions.Select(d => d.Id).Order().ToArray()));
+                    continue;
                 }
             }
+            // Historical invoices without a charge-period snapshot charged rent in their own billing period.
+            if (row.BillingPeriod != period) continue;
             var schedule = JsonSerializer.Deserialize<BillingSchedule>(row.ScheduleSnapshot) ?? throw ContractException.Conflict("billing_schedule_snapshot_invalid");
             var policy = new PolicyDto(row.line.PolicyId ?? Guid.Empty, Guid.Empty, roomId, row.line.Category, row.line.ChargeCode,
                 row.line.Name, ChargingMethod.FixedPerRoomPerMonth, row.line.Rate, period, null, row.line.PolicyVersion ?? 0);

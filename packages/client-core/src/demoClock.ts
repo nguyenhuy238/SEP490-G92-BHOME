@@ -4,9 +4,12 @@ export interface DemoClockState {
   businessDate: string;
   version: number;
   canChange?: boolean;
+  businessTime?: string | null;
+  realTime?: string | null;
 }
 
 let current: DemoClockState | null = null;
+let anchor: { instant: number; received: number } | null = null;
 const listeners = new Set<() => void>();
 
 export function getDemoClockState(): DemoClockState | null {
@@ -22,6 +25,8 @@ export function subscribeDemoClock(listener: () => void): () => void {
 
 export function setDemoBusinessDate(state: DemoClockState | null): boolean {
   const next = state?.enabled ? state : null;
+  const instant = next?.businessTime ? Date.parse(next.businessTime) : NaN;
+  anchor = next?.simulated && Number.isFinite(instant) ? { instant, received: Date.now() } : null;
   if (
     next?.version === current?.version &&
     next?.businessDate === current?.businessDate &&
@@ -35,7 +40,10 @@ export function setDemoBusinessDate(state: DemoClockState | null): boolean {
 }
 
 export function demoBusinessDate(): string | undefined {
-  return current?.simulated ? current.businessDate : undefined;
+  if (!current?.simulated) return undefined;
+  return anchor
+    ? new Date(demoBusinessNow() + 7 * 3600_000).toISOString().slice(0, 10)
+    : current.businessDate;
 }
 
 export function addDemoDays(date: string, days: number): string {
@@ -44,9 +52,10 @@ export function addDemoDays(date: string, days: number): string {
   return instant.toISOString().slice(0, 10);
 }
 
-// Shift the business calendar only. Never use this for tokens, OTPs or network timeouts.
+// Shift business time only. Never use this for tokens, OTPs or network timeouts.
 export function demoBusinessNow(real = Date.now()): number {
-  const simulatedDate = demoBusinessDate();
+  if (anchor) return anchor.instant + (real - anchor.received);
+  const simulatedDate = current?.simulated ? current.businessDate : undefined;
   if (!simulatedDate) return real;
   const realDate = new Date(real + 7 * 3600_000).toISOString().slice(0, 10);
   return real + Date.parse(simulatedDate) - Date.parse(realDate);

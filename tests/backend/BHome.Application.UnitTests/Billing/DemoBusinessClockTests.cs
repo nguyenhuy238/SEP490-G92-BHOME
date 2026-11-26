@@ -61,8 +61,26 @@ public sealed class DemoBusinessClockTests
         Assert.False(runtime.WorkerEnabled);
     }
 
+    [Fact]
+    public void ExactDemoTimeTicksAcrossMidnightAndResetPreservesRealClock()
+    {
+        var real = new Clock(new DateTimeOffset(2026, 11, 24, 18, 30, 0, TimeSpan.Zero));
+        var demo = new DemoBusinessClock(real);
+        var target = new DateTimeOffset(2026, 12, 24, 23, 59, 58, TimeSpan.FromHours(7));
+        var changed = demo.ChangeTime(target, 0)!;
+        Assert.Equal(target, changed.BusinessTime);
+        real.Advance(TimeSpan.FromSeconds(3));
+        Assert.Equal(new DateOnly(2026, 12, 25), demo.BusinessToday());
+        Assert.Equal(target.AddSeconds(3), demo.Read().BusinessTime);
+        Assert.Equal(real.GetUtcNow(), demo.GetUtcNow());
+        Assert.Null(demo.ChangeTime(target, 0));
+        Assert.False(demo.ChangeTime(null, 1)!.Simulated);
+        Assert.Equal(real.GetUtcNow(), demo.BusinessUtcNow());
+    }
+
     private sealed class Clock(DateTimeOffset now) : TimeProvider
     {
+        public void Advance(TimeSpan elapsed) => now += elapsed;
         public override DateTimeOffset GetUtcNow() => now;
         public override long GetTimestamp() => 123;
     }

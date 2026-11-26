@@ -177,6 +177,8 @@ it('puts the genuine current-month invoice, kWh, m³, evidence and service fees 
   expect(screen.getAllByText('3.455.000 ₫')).toHaveLength(2);
   expect(screen.getByText('kWh')).toBeTruthy();
   expect(screen.getByText('m³')).toBeTruthy();
+  expect(screen.getByText('Chốt: 150 kWh · Trước: 120 kWh')).toBeTruthy();
+  expect(screen.getByText('Chốt: 17 m³ · Trước: 14 m³')).toBeTruthy();
   expect(screen.getAllByTestId('verified-meter-photo')).toHaveLength(2);
   expect(screen.getByText('Internet')).toBeTruthy();
   expect(screen.getByText('50.000 ₫')).toBeTruthy();

@@ -170,7 +170,15 @@ const screens = {
   security: SecuritySettings,
   preferences: () => <UnavailableWorkspaceScreen screen="preferences" />,
 };
-export function WorkspaceScreenView({ screen }: { screen: string }) {
+export function WorkspaceScreenView({
+  screen,
+  meterLocationId,
+  meterBillingPeriod,
+}: {
+  screen: string;
+  meterLocationId?: string;
+  meterBillingPeriod?: string;
+}) {
   const { role, preview, go, staffLocationId } = useWorkspace();
   const { session } = useSession();
   if (!role) return <Redirect href="/" />;
@@ -275,7 +283,12 @@ export function WorkspaceScreenView({ screen }: { screen: string }) {
           content = <OperationalTaskDetail />;
           break;
         case 'meter-reading':
-          content = <MeterTasksScreen />;
+          content = (
+            <MeterTasksScreen
+              initialLocationId={meterLocationId}
+              initialBillingPeriod={meterBillingPeriod}
+            />
+          );
           break;
         case 'move-out':
           content = <StaffMoveOutInspectionScreen />;

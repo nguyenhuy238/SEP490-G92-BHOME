@@ -201,11 +201,8 @@ export function LocationPricingWorkspace({
       </Tabs>
       {owner && (
         <Stack direction="row" sx={{ justifyContent: 'flex-end' }}>
-          <Button
-            component={Link}
-            to={`/billing-automation?locationId=${encodeURIComponent(locationId)}`}
-          >
-            Lịch tự động & quy tắc hóa đơn
+          <Button component={Link} to={`/locations/${encodeURIComponent(locationId)}/settings`}>
+            Cấu hình lịch điện nước & hóa đơn
           </Button>
         </Stack>
       )}

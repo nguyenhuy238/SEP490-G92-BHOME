@@ -38,10 +38,12 @@ public sealed class SharedMainInitialPaymentMigrationTests
             var after = await Functions();
             const string guard = "bhome24_initial_payment_guard:";
             const string sepayGuard = "bhome24_sepay_technical_guard:";
-            Assert.Equal(before.Where(f => !f.StartsWith(guard, StringComparison.Ordinal) && !f.StartsWith(sepayGuard, StringComparison.Ordinal)),
-                after.Where(f => !f.StartsWith(guard, StringComparison.Ordinal) && !f.StartsWith(sepayGuard, StringComparison.Ordinal)));
+            const string settlementGuard = "bhome24_settlement_allocation_guard:";
+            Assert.Equal(before.Where(f => !f.StartsWith(guard, StringComparison.Ordinal) && !f.StartsWith(sepayGuard, StringComparison.Ordinal) && !f.StartsWith(settlementGuard, StringComparison.Ordinal)),
+                after.Where(f => !f.StartsWith(guard, StringComparison.Ordinal) && !f.StartsWith(sepayGuard, StringComparison.Ordinal) && !f.StartsWith(settlementGuard, StringComparison.Ordinal)));
             Assert.NotEqual(before.Single(f => f.StartsWith(guard, StringComparison.Ordinal)), after.Single(f => f.StartsWith(guard, StringComparison.Ordinal)));
             Assert.NotEqual(before.Single(f => f.StartsWith(sepayGuard, StringComparison.Ordinal)), after.Single(f => f.StartsWith(sepayGuard, StringComparison.Ordinal)));
+            Assert.NotEqual(before.Single(f => f.StartsWith(settlementGuard, StringComparison.Ordinal)), after.Single(f => f.StartsWith(settlementGuard, StringComparison.Ordinal)));
             Assert.Equal("Synthetic schema upgrade", await db.Database.SqlQuery<string>($"SELECT name AS \"Value\" FROM locations WHERE id={location}").SingleAsync());
             Assert.Empty(await db.Database.GetPendingMigrationsAsync());
 

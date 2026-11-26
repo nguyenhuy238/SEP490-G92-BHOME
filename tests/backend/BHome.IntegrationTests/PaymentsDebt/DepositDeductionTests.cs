@@ -29,9 +29,15 @@ public sealed partial class PaymentLedgerTests
         db.SecurityAudit.Add(new() { UserId = w.Owner, TargetId = plan.Id, TargetType = "DepositDeduction", Event = "DepositDeductionApproved", Succeeded = true, OccurredAt = plan.ApprovedAt });
         await db.SaveChangesAsync(); return plan;
     }
-    private async Task<(Workspace Workspace, Guid Proof, byte[] Photo)> DamageFixture(bool otherResidents = false)
+    private async Task<(Workspace Workspace, Guid Proof, byte[] Photo)> DamageFixture(bool otherResidents = false, bool pendingInvoiceAdjustment = false)
     {
-        var w = await Setup(); await ReadySettlementFixture(w, otherResidents, agreedDeposit: 400000);
+        var w = await Setup();
+        if (pendingInvoiceAdjustment)
+        {
+            using var tenant = await Client(w.Tenants[0]);
+            await AdjustRequest(tenant, w.Invoice, 1, 150000);
+        }
+        await ReadySettlementFixture(w, otherResidents, agreedDeposit: 400000);
         await using var scope = fixture.Factory.Services.CreateAsyncScope(); var db = scope.ServiceProvider.GetRequiredService<BHomePersistenceContext>();
         using var image = new Mat(40, 100, MatType.CV_8UC3, Scalar.White); var photo = image.ImEncode(".png");
         var proof = new ContractInspectionEvidence

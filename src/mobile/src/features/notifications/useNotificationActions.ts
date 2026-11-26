@@ -16,7 +16,7 @@ type Sync = {
 };
 export function useNotificationActions({ confirmRead, refresh, refreshCount }: Sync) {
   const { api } = useSession();
-  const { role, go } = useWorkspace();
+  const { role, go, navigateInStaffLocation } = useWorkspace();
   const [busy, setBusy] = useState<string | null>(null);
   const request = useRef<AbortController | null>(null);
   useEffect(() => () => request.current?.abort(), [api]);
@@ -54,7 +54,13 @@ export function useNotificationActions({ confirmRead, refresh, refreshCount }: S
         }
         if (!hasNotificationTarget(item) || controller.signal.aborted) return;
         try {
-          const destination = await notificationDestination(api, role, item.id, controller.signal);
+          const destination = await notificationDestination(
+            api,
+            role,
+            item.id,
+            controller.signal,
+            item.eventType,
+          );
           if (controller.signal.aborted) return;
           if (!destination) {
             showInfo(
@@ -64,9 +70,14 @@ export function useNotificationActions({ confirmRead, refresh, refreshCount }: S
             );
             return;
           }
-          if ('meterId' in destination)
-            router.push({ pathname: '/meter', params: { taskId: destination.meterId } });
-          else go(destination.screen, destination.params);
+          const navigate = () => {
+            if ('meterId' in destination)
+              router.push({ pathname: '/meter', params: { taskId: destination.meterId } });
+            else go(destination.screen, destination.params);
+          };
+          if (destination.staffLocationId)
+            navigateInStaffLocation(destination.staffLocationId, navigate);
+          else navigate();
         } catch (e) {
           if (controller.signal.aborted) return;
           if (e instanceof MobileApiError && [403, 404].includes(e.status))
@@ -81,7 +92,7 @@ export function useNotificationActions({ confirmRead, refresh, refreshCount }: S
         }
       }
     },
-    [api, role, go, synchronize],
+    [api, role, go, navigateInStaffLocation, synchronize],
   );
   const readAll = useCallback(async () => {
     if (!api || request.current) return;

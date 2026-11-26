@@ -66,13 +66,23 @@ public sealed class DemoClockGuardTests
     }
 
     [Theory]
+    [InlineData("Development")]
+    [InlineData("Staging")]
+    [InlineData("Production")]
+    public void DedicatedBillingDoesNotRequireGeneralJobs(string environment)
+    {
+        var settings = environment == "Development" ? LocalDevelopment() : environment == "Staging" ? Staging() : Production();
+        settings["BillingAutomation:AutomaticJobsEnabled"] = "true";
+        Assert.True(DemoClockGuard.Enabled(new ConfigurationBuilder().AddInMemoryCollection(settings).Build(), environment));
+    }
+
+    [Theory]
     [InlineData("DemoClock:AllowLocalDevelopment", "false")]
     [InlineData("DemoClock:DevelopmentDatabaseName", "bhome_neon_local_20261116")]
     [InlineData("ConnectionStrings:Database", "Host=neon.example;Database=bhome_neon_local_20261115")]
     [InlineData("ObjectStorage:Endpoint", "storage.example:9000")]
     [InlineData("Deployment:Environment", "Production")]
     [InlineData("Jobs:Enabled", "true")]
-    [InlineData("BillingAutomation:AutomaticJobsEnabled", "true")]
     [InlineData("StaffAssignments:AutoReconcileEnabled", "true")]
     [InlineData("DevelopmentDatabase:InitializeOnStartup", "true")]
     [InlineData("OwnerSetup:AssetSyncEnabled", "true")]
@@ -118,7 +128,6 @@ public sealed class DemoClockGuardTests
     [InlineData("SePay:Mode", "Live")]
     [InlineData("SePay:Enabled", "false")]
     [InlineData("Jobs:Enabled", "true")]
-    [InlineData("BillingAutomation:AutomaticJobsEnabled", "true")]
     [InlineData("DevelopmentDatabase:InitializeOnStartup", "true")]
     [InlineData("StaffAssignments:AutoReconcileEnabled", "true")]
     [InlineData("OwnerSetup:AssetSyncEnabled", "true")]
@@ -164,7 +173,6 @@ public sealed class DemoClockGuardTests
     [InlineData("ObjectStorage:Endpoint", "stage-minio:9000")]
     [InlineData("ObjectStorage:Bucket", "bhome-staging-private")]
     [InlineData("Jobs:Enabled", "true")]
-    [InlineData("BillingAutomation:AutomaticJobsEnabled", "true")]
     [InlineData("StaffAssignments:AutoReconcileEnabled", "true")]
     [InlineData("OwnerSetup:AssetSyncEnabled", "true")]
     [InlineData("DevelopmentDatabase:InitializeOnStartup", "true")]
