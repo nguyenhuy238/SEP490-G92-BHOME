@@ -27,7 +27,7 @@ public sealed partial class FinancialReportRepository
               SELECT sum(amount) allocated FROM payment_allocations WHERE source_payment_id=p.id
             ) a ON true
             WHERE p.status='VERIFIED' AND p.received_at>={start} AND p.received_at<{end}
-              AND COALESCE(p.verification_data->'compactState'->>'isDevelopmentDemo','false')<>'true'
+              AND (COALESCE(p.verification_data->'compactState'->>'isDevelopmentDemo','false')<>'true' OR p.provider_code='SEPAY:TEST')
             """);
 
     public async Task<BankReceiptSourcePage> BankReceiptSourcesAsync(ReportFilter filter, int page, int pageSize, CancellationToken token)

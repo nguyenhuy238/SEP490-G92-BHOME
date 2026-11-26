@@ -32,7 +32,7 @@ internal sealed partial class RefundRepository
         var people = await db.Set<Resident>().AsNoTracking().Where(r => r.VerificationStatus == IdentityVerificationStatus.Verified &&
             db.Set<ContractResident>().Any(cr => cr.ContractId == contract.Id && cr.ResidentId == r.Id)).OrderBy(r => r.Id)
             .Select(r => new RefundPerson(r.Id, r.DisplayLabel)).ToArrayAsync(token);
-        return new(decision?.RefundRequired ?? 0, contract.IsDevelopmentDemo, people, requests, contract.Id, reference,
+        return new(decision?.RefundRequired ?? 0, BHome.Application.Contracts.ContractPaymentModes.IsTest(contract), people, requests, contract.Id, reference,
             blockers.Distinct().Order().ToArray(), position is null ? null : Math.Max(0, (decision?.RefundRequired ?? 0) - position.Refunded - position.Reserved),
             position?.Received, DepositClassification: "HoldingDepositRefundV1");
     }

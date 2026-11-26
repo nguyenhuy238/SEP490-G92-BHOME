@@ -12,12 +12,14 @@ public sealed record ContractDepositInstructions(Guid ContractId, string Mode, s
 // One instruction and payment-code path for either configured provider environment.
 public sealed class ContractDepositInstructionsService(ContractService contracts, IContractRepository contractData,
     IPaymentRepository payments, IPaymentCodeRegistry codes, ITransferQrGenerator qr, SePayOptions options,
-    IHoldingTestScope testScope, TimeProvider clock)
+    IHoldingTestScope testScope, TimeProvider clock, ISePayOwnerConnections? connections = null)
 {
     public async Task<ContractDepositInstructions> GetAsync(Guid id, CancellationToken t)
     {
+        _ = testScope; // Retained for constructor compatibility; provider mode is independent of signing sandbox scope.
         await contracts.GetAsync(id, t); // Effective Owner/Staff/Tenant resource scope.
         var c = await contractData.FindAsync(id, t) ?? throw new PaymentException(404, "contract_not_found");
+        if (connections is not null) await connections.ApplyOwnerAsync(c.OwnerSignerId, t);
         if (c.Kind != ContractKind.Holding || (c.ApprovedAt is null && !BHome.Application.Contracts.AnonymousContractSigningService.HoldingOwnerHasSigned(c)) || c.Status is not (ContractStatus.PendingActivation or ContractStatus.Active))
             throw new PaymentException(409, "holding_not_payable");
         if (!ContractChargeSnapshot.IsIntact(c)) throw new PaymentException(409, "signed_terms_changed");
@@ -28,14 +30,14 @@ public sealed class ContractDepositInstructionsService(ContractService contracts
                 throw new PaymentException(409, "verified_signature_evidence_required");
         }
         var mode = ContractPaymentModes.Of(c);
-        if (!options.Enabled || options.Mode != mode || mode == "Test" && !testScope.Allows(c.Room.LocationId) && !testScope.AllowsExternalDatabase)
+        if (!options.For(mode).Enabled)
             throw new PaymentException(409, "sepay_environment_mismatch");
         var remaining = Math.Max(0, c.RequiredDeposit - await contractData.DepositTotalAsync(id, t));
         if (remaining > 0 && (c.HoldingExpiryAt is null || c.HoldingExpiryAt <= clock.GetUtcNow()))
             throw new PaymentException(409, "holding_expired");
-        var account = await payments.ReceivingAccountAsync(c.Room.LocationId, t);
+        var account = await codes.AccountAsync("Deposit", id, c.Room.LocationId, t) ?? await payments.ReceivingAccountForModeAsync(c.Room.LocationId, mode, t);
         if (account is null || !account.Enabled || account.IsDevelopmentDemo != (mode == "Test") ||
-            !options.Matches(c.Room.LocationId, account))
+            !options.For(mode).Matches(c.Room.LocationId, account))
             throw new PaymentException(409, "receiving_account_unavailable");
         var code = remaining > 0 ? await codes.IssueAsync("Deposit", id, c.Room.LocationId, t) : await codes.GetAsync("Deposit", id, t);
         if (remaining > 0 && code is null) throw new PaymentException(503, "payment_code_generation_unavailable");

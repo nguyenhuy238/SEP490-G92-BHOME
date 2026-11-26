@@ -10,15 +10,15 @@ namespace BHome.Infrastructure.UnitTests;
 public sealed class PaymentRuntimeModeTests
 {
     [Theory]
-    [InlineData("Development", false, "Test", true, false)]
-    [InlineData("Testing", false, "Test", true, false)]
+    [InlineData("Development", false, "Test", true, true)]
+    [InlineData("Testing", false, "Test", true, true)]
     [InlineData("Staging", true, "Test", false, true)]
-    [InlineData("Staging", false, "Test", false, false)]
-    [InlineData("Staging", true, "Live", false, false)]
-    [InlineData("Production", true, "Test", false, false)]
-    [InlineData("Production", true, "Live", false, false)]
-    [InlineData("Production", false, "Test", false, false)]
-    public void ReceivingConfigurationUsesStagingSandboxWithoutEnablingManualDemoPayments(
+    [InlineData("Staging", false, "Test", false, true)]
+    [InlineData("Staging", true, "Live", false, true)]
+    [InlineData("Production", true, "Test", false, true)]
+    [InlineData("Production", true, "Live", false, true)]
+    [InlineData("Production", false, "Test", false, true)]
+    public void ReceivingChannelsAreAvailableOnEveryHostWithoutEnablingManualDemoPayments(
         string environment, bool enabled, string providerMode, bool allowDevelopmentDemo, bool allowSandboxAccounts)
     {
         var builder = Host.CreateApplicationBuilder(new HostApplicationBuilderSettings

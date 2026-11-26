@@ -5,6 +5,20 @@ public static class ContractPaymentModes
     public static string Of(BHome.Domain.TenantContracts.Contract contract) =>
         contract.PaymentMode ?? (contract.IsDevelopmentDemo ? "Test" : "Live");
     public static bool IsTest(BHome.Domain.TenantContracts.Contract contract) => Of(contract) == "Test";
+    public static async Task<string?> ConfiguredAsync(BHome.Application.PaymentsDebt.SePay.SePayOptions? options,
+        BHome.Application.PaymentsDebt.IPaymentRepository? accounts, Guid locationId, Guid ownerId, CancellationToken token,
+        BHome.Application.PaymentsDebt.SePay.ISePayOwnerConnections? connections = null)
+    {
+        if (connections is not null) await connections.ApplyOwnerAsync(ownerId, token);
+        if (accounts is not null && await accounts.OwnerPaymentModeAsync(ownerId, token) is { } selected) return selected;
+        if (options?.Enabled != true) return null;
+        var mode = accounts is null ? options.Mode : await accounts.OwnerPaymentModeAsync(ownerId, token) ?? options.Mode;
+        var provider = options.For(mode);
+        // Freeze the selected mode even before a new Location has a receiving binding.
+        // Instructions/activation still require the configured bank; missing setup must never turn Test into Live.
+        if (options.DualMode) return mode;
+        return provider.Enabled && provider.Bound(locationId, ownerId) ? mode : null;
+    }
 }
 
 // The ways a contract party can sign. OTP is the in-app electronic signature (drawn or uploaded picture, a one-time

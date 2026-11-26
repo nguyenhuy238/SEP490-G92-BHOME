@@ -86,7 +86,8 @@ internal static class ReceiptExcessRecords
     }
 }
 
-internal sealed class ReceiptExcessRepository(BHomePersistenceContext db, IContractRepository contracts, IPaymentRepository payments) : IReceiptExcessRepository
+internal sealed class ReceiptExcessRepository(BHomePersistenceContext db, IContractRepository contracts, IPaymentRepository payments,
+    BHome.Application.PaymentsDebt.SePay.IPaymentCodeRegistry? codes = null) : IReceiptExcessRepository
 {
     private async Task<Guid> RoomAsync(ReceiptExcessTarget target, CancellationToken token)
     {
@@ -120,7 +121,7 @@ internal sealed class ReceiptExcessRepository(BHomePersistenceContext db, IContr
         if (db is not Compact24DbContext) throw new PaymentException(503, "receipt_excess_unavailable");
         var transfer = await payments.TransferAsync(id, token) ?? throw new PaymentException(404, "bank_transfer_not_found");
         var room = await RoomAsync(target, token); var problems = new List<string>();
-        Guid[] users = []; Guid[] residents = []; decimal outstanding; string reference; bool targetDemo;
+        Guid[] users = []; Guid[] residents = []; decimal outstanding; string reference;
         if (target.InvoiceId is { } invoiceId)
         {
             var invoice = await db.Set<Invoice>().AsNoTracking().SingleAsync(i => i.Id == invoiceId, token);
@@ -128,7 +129,6 @@ internal sealed class ReceiptExcessRepository(BHomePersistenceContext db, IContr
             outstanding = (await db.FinancialsAsync(invoiceId, token)).OutstandingAmount;
             users = await db.Set<InvoiceRecipient>().Where(r => r.InvoiceId == invoiceId).Select(r => r.TenantUserId).ToArrayAsync(token);
             reference = PaymentRules.InvoiceReference(invoiceId);
-            targetDemo = await db.Set<Contract>().Where(c => c.Id == invoice.RepresentativeContractId).Select(c => c.PaymentMode == "Test" || c.PaymentMode == null && c.IsDevelopmentDemo).SingleAsync(token);
         }
         else if (target.SettlementContractId is { } contractId)
         {
@@ -136,7 +136,7 @@ internal sealed class ReceiptExcessRepository(BHomePersistenceContext db, IContr
                 .SingleOrDefault(c => c.Id == target.ReceivableId) ?? throw new PaymentException(404, "settlement_receivable_not_found");
             var paid = await db.Set<PaymentAllocation>().Where(a => a.TargetSettlementContractId == contractId && a.SettlementReceivableId == charge.Id).SumAsync(a => (decimal?)a.Amount, token) ?? 0;
             if (paid < 0 || paid > charge.Amount) throw new PaymentException(409, "settlement_ledger_integrity_failed");
-            outstanding = charge.Amount - paid; users = charge.RecipientUserIds; reference = PaymentRules.InvoiceReference(charge.Id); targetDemo = charge.IsDevelopmentDemo;
+            outstanding = charge.Amount - paid; users = charge.RecipientUserIds; reference = PaymentRules.InvoiceReference(charge.Id);
         }
         else
         {
@@ -146,7 +146,7 @@ internal sealed class ReceiptExcessRepository(BHomePersistenceContext db, IContr
             var received = await db.Set<PaymentAllocation>().Where(a => a.TargetDepositContractId == holding.Id).SumAsync(a => (decimal?)a.Amount, token) ?? 0;
             outstanding = holding.Status is ContractStatus.Cancelled or ContractStatus.Expired or ContractStatus.Converted or ContractStatus.Terminated or ContractStatus.Superseded or ContractStatus.Applied ? 0 : Math.Max(0, holding.RequiredDeposit - received);
             residents = await db.Set<ContractResident>().Where(r => r.ContractId == holding.Id).Select(r => r.ResidentId).ToArrayAsync(token);
-            reference = PaymentRules.DepositReference(holding.Id); targetDemo = BHome.Application.Contracts.ContractPaymentModes.IsTest(holding);
+            reference = PaymentRules.DepositReference(holding.Id);
         }
         if (outstanding != 0) problems.Add("receipt_target_not_settled");
         var people = await db.Set<Resident>().AsNoTracking().Where(r => r.VerificationStatus == IdentityVerificationStatus.Verified &&
@@ -156,7 +156,10 @@ internal sealed class ReceiptExcessRepository(BHomePersistenceContext db, IContr
         var existing = await GetAsync(id, token);
         var verified = await db.Database.SqlQuery<bool>($"SELECT EXISTS(SELECT 1 FROM payments WHERE id={id} AND status='VERIFIED') AS \"Value\"").SingleAsync(token);
         if (!verified || transfer.Currency != "VND" || !PaymentRules.ValidMoney(transfer.Amount)) problems.Add("verified_bank_receipt_required");
-        if (transfer.IsDevelopmentDemo != targetDemo) problems.Add("development_payment_mismatch");
+        var codeKind = target.InvoiceId is not null ? "Invoice" : target.SettlementContractId is not null ? "Settlement" : "Deposit";
+        var obligation = target.InvoiceId ?? target.ReceivableId ?? target.HoldingContractId ?? target.DepositContractId;
+        if (codes is not null && obligation is { } obligationId && await codes.MatchesAsync(codeKind, obligationId, transfer.TransferDescription, token))
+            reference = transfer.TransferDescription.Trim();
         if (!string.Equals(transfer.TransferDescription.Trim(), reference, StringComparison.OrdinalIgnoreCase)) problems.Add("invoice_transfer_reference_mismatch");
         if (await db.Set<PaymentAllocation>().AnyAsync(a => a.TransferId == id, token)) problems.Add("bank_transaction_already_allocated");
         if (await payments.ReferenceClaimedAsync(transfer.NormalizedReference, token)) problems.Add("bank_reference_already_credited");

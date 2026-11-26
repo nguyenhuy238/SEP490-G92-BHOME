@@ -43,7 +43,7 @@ public sealed partial class SettlementReceivablesService
         if (!source.Context.InspectionConfirmed) missing.Add("owner_confirmed_inspection_required");
         if (source.Context.HasLegacyDeductions) missing.Add("legacy_deduction_requires_migration_review");
         if (source.Schedule is null && !source.FullyCovered) missing.Add("billing_schedule_required");
-        if (source.Context.IsDevelopmentDemo && mode?.AllowDevelopmentDemo != true) throw ContractException.Conflict("development_payment_unavailable");
+        if (source.Context.IsDevelopmentDemo && mode?.AllowDevelopmentDemo != true && mode?.AllowSandboxReceivingAccounts != true) throw ContractException.Conflict("development_payment_unavailable");
         if (source.Baseline is { } baseline && source.Final is { } final)
         {
             quantity = final.Value - baseline.Value;
@@ -96,7 +96,7 @@ public sealed partial class SettlementReceivablesService
             var previous = await repository.ChargeOperationAsync(Actor, key, token);
             if (previous is not null)
             {
-                if (previous.IsDevelopmentDemo && mode?.AllowDevelopmentDemo != true) throw ContractException.Conflict("development_payment_unavailable");
+                if (previous.IsDevelopmentDemo && mode?.AllowDevelopmentDemo != true && mode?.AllowSandboxReceivingAccounts != true) throw ContractException.Conflict("development_payment_unavailable");
                 if (previous.ContractId != id || previous.Kind != "FinalUtility" || previous.Fingerprint != fingerprint) throw ContractException.Conflict("settlement_idempotency_conflict");
                 return previous;
             }
@@ -113,11 +113,12 @@ public sealed partial class SettlementReceivablesService
                 preview.AlreadyBilledQuantity, preview.Quantity.Value, source.FullyCovered ? source.PreviousPricingSnapshot ?? "" : preview.CalculationSnapshot,
                 preview.PricePolicyId, preview.PricePolicyVersion);
             var proofs = await chargeEvidence.CaptureUtilityAsync(id, calculation, token);
+            var channel = await NewPaymentModeAsync(id, token);
             var charge = new SettlementReceivable(Guid.NewGuid(), id, source.Context.View.RoomId, "FinalUtility",
                 $"utility:{source.MeterId:N}:{preview.Final!.ReadingId:N}", source.Context.InspectionId, source.Context.InspectionVersion, null,
                 preview.Amount.Value, input.UtilityType == UtilityType.Electricity ? "Điện chốt khi trả phòng" : "Nước chốt khi trả phòng",
                 preview.CalculationSnapshot, proofs, source.Context.RecipientUserIds.Order().ToArray(), Actor, clock.GetUtcNow(), key, fingerprint,
-                source.Context.IsDevelopmentDemo, calculation);
+                channel is null ? source.Context.IsDevelopmentDemo : channel == "Test", calculation, PaymentMode: channel);
             await repository.SaveChargeAsync(charge, token); return charge;
         }, token);
     }

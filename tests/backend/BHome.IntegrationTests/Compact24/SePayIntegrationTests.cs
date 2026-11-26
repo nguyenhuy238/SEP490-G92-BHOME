@@ -30,7 +30,7 @@ using Npgsql;
 
 namespace BHome.IntegrationTests.Compact24;
 
-public sealed class SePayIntegrationTests(Compact24Fixture fixture) : IClassFixture<Compact24Fixture>
+public sealed partial class SePayIntegrationTests(Compact24Fixture fixture) : IClassFixture<Compact24Fixture>
 {
     [CompactPostgresFact]
     public async Task OwnerReceivingAccountIsVersionedSharedAcrossLocationsAndIsolatedFromOtherOwners()
@@ -307,10 +307,18 @@ public sealed class SePayIntegrationTests(Compact24Fixture fixture) : IClassFixt
             });
             return await Signed(client, body);
         }
-        public ValueTask DisposeAsync() => Host.DisposeAsync();
+        internal Compact24Fixture? OwnedFixture { get; set; }
+        public async ValueTask DisposeAsync() { await Host.DisposeAsync(); if (OwnedFixture is not null) await OwnedFixture.DisposeAsync(); }
     }
-    private async Task<Scenario> Create()
+    private async Task<Scenario> Create(bool dualMode = false, bool isolatedMode = false, bool isolatedDatabase = false)
     {
+        if ((dualMode || isolatedDatabase) && !isolatedMode)
+        {
+            var isolatedFixture = new Compact24Fixture(); await isolatedFixture.InitializeAsync();
+            var isolatedScenario = await new SePayIntegrationTests(isolatedFixture).Create(dualMode, true);
+            isolatedScenario.OwnedFixture = isolatedFixture;
+            return isolatedScenario;
+        }
         var location = new Location("Synthetic SePay " + Guid.NewGuid().ToString("N")) { Address = "Synthetic" };
         var host = fixture.Factory!.WithWebHostBuilder(builder => builder.ConfigureAppConfiguration((_, config) => config.AddInMemoryCollection(new Dictionary<string, string?>
         {
@@ -322,6 +330,25 @@ public sealed class SePayIntegrationTests(Compact24Fixture fixture) : IClassFixt
             ["SePay:ReceivingAccounts:0:BankIdentifier"] = "970416",
             ["SePay:ReceivingAccounts:0:Gateway"] = "ACB",
             ["SePay:ReceivingAccounts:0:AccountNumber"] = Account
+        })));
+        if (dualMode) host = host.WithWebHostBuilder(b => b.ConfigureAppConfiguration((_, config) => config.AddInMemoryCollection(new Dictionary<string, string?>
+        {
+            ["SePay:InstanceCode"] = "CI01",
+            ["SePay:Test:Enabled"] = "true",
+            ["SePay:Test:WebhookSecret"] = Secret,
+            ["SePay:Test:ReceivingAccounts:0:LocationId"] = location.Id.ToString(),
+            ["SePay:Test:ReceivingAccounts:0:BankIdentifier"] = "970416",
+            ["SePay:Test:ReceivingAccounts:0:Gateway"] = "ACB",
+            ["SePay:Test:ReceivingAccounts:0:AccountNumber"] = Account,
+            ["SePay:Live:Enabled"] = "true",
+            ["SePay:Live:WebhookSecret"] = Secret + "-live",
+            ["SePay:Live:ApiBaseUrl"] = "https://userapi.sepay.vn/v2",
+            ["SePay:Live:ApiToken"] = "synthetic-live-token",
+            ["SePay:Test:ApiToken"] = "synthetic-test-token",
+            ["SePay:Live:ReceivingAccounts:0:LocationId"] = location.Id.ToString(),
+            ["SePay:Live:ReceivingAccounts:0:BankIdentifier"] = "970416",
+            ["SePay:Live:ReceivingAccounts:0:Gateway"] = "ACB",
+            ["SePay:Live:ReceivingAccounts:0:AccountNumber"] = Account
         })));
         host = host.WithWebHostBuilder(b => b.ConfigureTestServices(s => s.Insert(0, ServiceDescriptor.Singleton<Microsoft.AspNetCore.Diagnostics.IExceptionHandler, InitialDiagnostic>())));
         await using var scope = host.Services.CreateAsyncScope();
@@ -410,7 +437,7 @@ public sealed class SePayIntegrationTests(Compact24Fixture fixture) : IClassFixt
         using var context = JsonDocument.Parse(await response.Content.ReadAsStringAsync());
         Assert.Equal("Test", context.RootElement.GetProperty("mode").GetString());
         Assert.Single(context.RootElement.EnumerateObject());
-        var options = scenario.Host.Services.GetRequiredService<SePayOptions>();
+        var options = scenario.Host.Services.GetRequiredService<Microsoft.Extensions.Options.IOptions<SePayOptions>>().Value;
         options.Enabled = false;
         Assert.Equal(HttpStatusCode.NotFound, (await owner.GetAsync(path)).StatusCode);
         options.Enabled = true; options.Mode = "Live";
@@ -418,7 +445,7 @@ public sealed class SePayIntegrationTests(Compact24Fixture fixture) : IClassFixt
     }
 
     [CompactPostgresFact]
-    public async Task ExplicitPaymentEnvironmentRecoversOriginalReceiptWithoutChangingSigningModeOrDoubleCredit()
+    public async Task IssuedPaymentModeSurvivesSigningMetadataChangesWithoutDoubleCredit()
     {
         await using var scenario = await Create();
         await using var scope = scenario.Host.Services.CreateAsyncScope();
@@ -428,10 +455,12 @@ public sealed class SePayIntegrationTests(Compact24Fixture fixture) : IClassFixt
         await db.SaveChangesAsync();
         var eventId = Guid.NewGuid().ToString();
         (await scenario.Send(100000, reference: "SYN-ENV-RECOVERY", eventId: eventId)).EnsureSuccessStatusCode();
-        Assert.Empty(await db.Set<PaymentAllocation>().Where(a => a.InvoiceId == scenario.Invoice).ToArrayAsync());
-        var events = await scope.ServiceProvider.GetRequiredService<ISePayRepository>().EventsAsync(1, 100, default);
-        var pending = Assert.Single(events.Items, e => e.Reason == "sepay_environment_mismatch");
-        contract.PaymentMode = "Test"; await db.SaveChangesAsync();
+        var receivedId = await db.Database.SqlQuery<Guid>($"""
+            SELECT id AS "Value" FROM operational_tasks WHERE task_data->>'recordType'='SePayEventV1'
+              AND task_data->'transaction'->>'id'={eventId}
+            """).SingleAsync();
+        var pending = await scope.ServiceProvider.GetRequiredService<ISePayRepository>().EventAsync(receivedId, default);
+        Assert.Equal("Completed", pending.Status);
         var service = scope.ServiceProvider.GetRequiredService<SePayService>();
         await service.ReconcileAsync(pending.Id, default);
         await service.ReconcileAsync(pending.Id, default);
@@ -541,10 +570,11 @@ public sealed class SePayIntegrationTests(Compact24Fixture fixture) : IClassFixt
                 }, accountInput.ExpectedVersion + 1, default);
         }
         var unavailable = (await tenant.GetFromJsonAsync<TransferInstructions>(path))!;
-        Assert.Equal("PaymentCodeUnavailable", unavailable.Availability);
-        Assert.Null(unavailable.AccountNumber);
-        Assert.Null(unavailable.QrPayload);
-        Assert.Null(unavailable.QrImageDataUri);
+        // Issued obligations keep the original account even after Owner saves a new account.
+        Assert.Equal("Available", unavailable.Availability);
+        Assert.Equal(Account, unavailable.AccountNumber);
+        Assert.Equal(instructions.QrPayload, unavailable.QrPayload);
+        Assert.NotNull(unavailable.QrImageDataUri);
     }
 
     [CompactPostgresFact]
@@ -647,7 +677,8 @@ public sealed class SePayIntegrationTests(Compact24Fixture fixture) : IClassFixt
     [CompactPostgresFact]
     public async Task FailedAllocationRollsBackMoneyAndDurableInboxCanBeRetried()
     {
-        await using var scenario = await Create();
+        // This test drains the durable queue. Other cases must not supply its pending jobs.
+        await using var scenario = await Create(isolatedDatabase: true);
         await using (var scope = scenario.Host.Services.CreateAsyncScope())
         {
             var db = scope.ServiceProvider.GetRequiredService<Compact24DbContext>();
@@ -952,7 +983,7 @@ public sealed class SePayIntegrationTests(Compact24Fixture fixture) : IClassFixt
             INSERT INTO operational_tasks(id,task_type,location_id,source_key,status,task_data)
             SELECT {Guid.NewGuid()},task_type,location_id,source_key,status,task_data FROM operational_tasks WHERE source_key={"payment-code:" + first.Code}
             """));
-        Assert.Equal("23505", duplicate.SqlState);
+        Assert.Equal("23514", duplicate.SqlState);
         await Assert.ThrowsAsync<PostgresException>(() => db.Database.ExecuteSqlInterpolatedAsync($"""
             UPDATE operational_tasks SET task_data=jsonb_set(task_data,ARRAY['state','obligationId'],to_jsonb({second.Invoice.ToString()}::text))
               WHERE source_key={"payment-code:" + first.Code}
@@ -960,19 +991,29 @@ public sealed class SePayIntegrationTests(Compact24Fixture fixture) : IClassFixt
     }
 
     [CompactPostgresFact]
-    public async Task SandboxReceiptCannotBeAppliedToANonDemoObligationThroughAutomaticOrManualPaths()
+    public async Task OwnerCanVerifyBankStatementForOldTestQrAfterContractChangesToLive()
     {
         await using var scenario = await Create();
-        await using var scope = scenario.Host.Services.CreateAsyncScope(); var db = scope.ServiceProvider.GetRequiredService<Compact24DbContext>();
-        var contract = await db.Set<Contract>().SingleAsync(c => c.Id == scenario.Contract); contract.IsDevelopmentDemo = false; await db.SaveChangesAsync();
-        (await scenario.Send(100000)).EnsureSuccessStatusCode();
-        Assert.Empty(await db.Set<PaymentAllocation>().Where(a => a.InvoiceId == scenario.Invoice).ToArrayAsync());
-        var receipt = await db.Set<PaymentTransfer>().SingleAsync(p => p.ProposedInvoiceId == scenario.Invoice);
+        (await scenario.Send(40000)).EnsureSuccessStatusCode();
+        await using var scope = scenario.Host.Services.CreateAsyncScope();
+        var db = scope.ServiceProvider.GetRequiredService<Compact24DbContext>();
+        var contract = await db.Set<Contract>().SingleAsync(c => c.Id == scenario.Contract);
+        contract.PaymentMode = "Live"; contract.IsDevelopmentDemo = false; await db.SaveChangesAsync();
         using var owner = await scenario.Client(scenario.Owner);
+        using var manual = new HttpRequestMessage(HttpMethod.Post, "/api/v1/payment-transactions")
+        {
+            Content = JsonContent.Create(new PaymentTransferInput("SYNTHETIC-MANUAL", "SYN-MANUAL-" + Guid.NewGuid(), 60000,
+            "VND", DateTimeOffset.UtcNow.AddSeconds(-1), scenario.Code, "Synthetic checked statement", "Synthetic Owner verification", scenario.Invoice, true))
+        };
+        manual.Headers.Add("Idempotency-Key", Guid.NewGuid().ToString());
+        using var response = await owner.SendAsync(manual); response.EnsureSuccessStatusCode();
+        var receipt = (await response.Content.ReadFromJsonAsync<TransferView>())!;
         using var request = new HttpRequestMessage(HttpMethod.Post, $"/api/v1/payment-transactions/{receipt.Id}/allocate")
         { Content = JsonContent.Create(new PaymentMatchInput(scenario.Invoice, null, true)) };
         request.Headers.Add("Idempotency-Key", Guid.NewGuid().ToString());
-        Assert.Equal(HttpStatusCode.Conflict, (await owner.SendAsync(request)).StatusCode);
+        (await owner.SendAsync(request)).EnsureSuccessStatusCode();
+        Assert.Equal(100000m, await db.Set<PaymentAllocation>().Where(a => a.InvoiceId == scenario.Invoice).SumAsync(a => a.Amount));
+        Assert.Equal("Test", await scope.ServiceProvider.GetRequiredService<IPaymentCodeRegistry>().PersistedModeAsync("Invoice", scenario.Invoice, default));
     }
 
     [CompactPostgresFact]

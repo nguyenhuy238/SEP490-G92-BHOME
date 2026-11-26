@@ -11,6 +11,7 @@ public sealed class HoldingTestScopeTests
     [Theory]
     [InlineData("Staging", "Staging", "postgres", "bhome_compact24_dev_0123456789abcdef0123456789abcdef", true)]
     [InlineData("Production", "Staging", "postgres", "bhome_compact24_dev_0123456789abcdef0123456789abcdef", false)]
+    [InlineData("Production", "Production", "127.0.0.1", "bhome_compact24_dev_0123456789abcdef0123456789abcdef", false)]
     [InlineData("Staging", "Production", "postgres", "bhome_compact24_dev_0123456789abcdef0123456789abcdef", false)]
     [InlineData("Staging", null, "postgres", "bhome_compact24_dev_0123456789abcdef0123456789abcdef", false)]
     [InlineData("Staging", "Staging", "postgres", "bhome", false)]

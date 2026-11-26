@@ -8,13 +8,14 @@ namespace BHome.Infrastructure.Contracts;
 
 internal sealed class HoldingTestScope(IConfiguration configuration, IHostEnvironment environment, SePayOptions options) : IHoldingTestScope
 {
+    private bool SigningSandboxAvailable => environment.EnvironmentName is "Development" or "Testing" or "Staging" && options.Enabled && options.Mode == "Test";
     private Guid[] Locations => configuration.GetSection("HoldingTesting:LocationIds").Get<string[]>()?
         .Select(x => Guid.TryParse(x, out var id) ? id : Guid.Empty).Where(x => x != Guid.Empty).Distinct().ToArray() ?? [];
     public bool AllowsExternalDatabase
     {
         get
         {
-            if (!configuration.GetValue<bool>("HoldingTesting:Enabled") || !options.TestingAvailable(environment.EnvironmentName) ||
+            if (!configuration.GetValue<bool>("HoldingTesting:Enabled") || !SigningSandboxAvailable ||
                 !options.Valid(environment.EnvironmentName) || Locations.Length == 0) return false;
             var target = new NpgsqlConnectionStringBuilder(configuration.GetConnectionString("Database") ?? "");
             return target.Host is { } host && host.EndsWith(".neon.tech", StringComparison.OrdinalIgnoreCase) &&
@@ -24,6 +25,7 @@ internal sealed class HoldingTestScope(IConfiguration configuration, IHostEnviro
     }
     public bool Allows(Guid locationId)
     {
+        if (!SigningSandboxAvailable) return false;
         if (AllowsExternalDatabase && Locations.Contains(locationId)) return true;
         if (!options.TestingAvailable(environment.EnvironmentName) || !options.Valid(environment.EnvironmentName)) return false;
         var target = new NpgsqlConnectionStringBuilder(configuration.GetConnectionString("Database") ?? "");

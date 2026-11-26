@@ -14,7 +14,8 @@ public sealed class MainDraftService(IContractRepository repository, IMainDraftD
     ResourceAccess access, PropertyService prices, IMainDraftRenderer renderer, IContractFileStore files,
     IObjectStorage storage, TimeProvider clock, IMainDraftPreviewRenderer preview, IContractWorkflowMode? workflowMode = null,
     IOperatingPolicyWorkflow? operatingPolicies = null, BHome.Application.PaymentsDebt.SePay.SePayOptions? paymentOptions = null,
-    IHoldingTestScope? paymentScope = null)
+    IHoldingTestScope? paymentScope = null, BHome.Application.PaymentsDebt.IPaymentRepository? paymentAccounts = null,
+    BHome.Application.PaymentsDebt.SePay.ISePayOwnerConnections? paymentConnections = null)
 {
     private Guid Actor => user.UserId is { } id && id != Guid.Empty ? id : throw new ContractException(401, "authentication_required");
     private void Role() { _ = Actor; if (!user.IsInRole(Roles.Staff) && !user.IsInRole(Roles.Owner)) throw new ContractException(403, "contract_role_forbidden"); }
@@ -143,6 +144,7 @@ public sealed class MainDraftService(IContractRepository repository, IMainDraftD
             }
             else
             {
+                _ = paymentScope; // Retain constructor compatibility; payment selection does not grant simulated signing authority.
                 c = new Contract
                 {
                     RoomId = x.RoomId,
@@ -151,8 +153,7 @@ public sealed class MainDraftService(IContractRepository repository, IMainDraftD
                     Status = ContractStatus.Draft,
                     InitialPaymentRequired = true,
                     IsDevelopmentDemo = workflowMode?.SimulatedSigningEnabled == true,
-                    PaymentMode = paymentOptions?.Enabled == true && paymentOptions.Bound(room.LocationId, settings.OwnerSignerId) &&
-                        (paymentOptions.Mode == "Live" || paymentScope?.Allows(room.LocationId) == true || paymentScope?.AllowsExternalDatabase == true) ? paymentOptions.Mode : null
+                    PaymentMode = await ContractPaymentModes.ConfiguredAsync(paymentOptions, paymentAccounts, room.LocationId, settings.OwnerSignerId, t, paymentConnections)
                 };
                 var representative = (await repository.ResidentsAsync(x.RoomId, [x.RepresentativeResidentId], t)).Single();
                 c.TenantUserId = representative.TenantUserId;

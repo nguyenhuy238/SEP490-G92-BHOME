@@ -7,7 +7,7 @@ using Microsoft.Extensions.Options;
 
 namespace BHome.Infrastructure.PaymentsDebt;
 
-internal sealed class SePayAutomationWorker(IServiceScopeFactory scopes, SePayOptions options, IOptions<JobWorkerOptions> jobs,
+internal sealed class SePayAutomationWorker(IServiceScopeFactory scopes, IOptions<SePayOptions> configuration, IOptions<JobWorkerOptions> jobs,
     PostgresJobWorker worker, ILogger<SePayAutomationWorker> logger) : BackgroundService
 {
     protected override async Task ExecuteAsync(CancellationToken stoppingToken)
@@ -15,7 +15,7 @@ internal sealed class SePayAutomationWorker(IServiceScopeFactory scopes, SePayOp
         // Do not hold up Kestrel startup while the first payment/activation
         // scheduling query initializes or waits for external persistence.
         await Task.Yield();
-        var pendingVerifiedMoveOutRecovery = options.Enabled;
+        var pendingVerifiedMoveOutRecovery = true;
         while (!stoppingToken.IsCancellationRequested)
         {
             try
@@ -28,14 +28,22 @@ internal sealed class SePayAutomationWorker(IServiceScopeFactory scopes, SePayOp
                     // Inspect the already-verified local ledger once at start,
                     // never poll SePay or manufacture a webhook signature.
                     pendingVerifiedMoveOutRecovery = false;
-                    var recovered = await scope.ServiceProvider.GetRequiredService<SePayService>()
-                        .RecoverPreviouslyVerifiedMoveOutsAsync(stoppingToken);
+                    var recovered = 0;
+                    foreach (var profile in await scope.ServiceProvider.GetRequiredService<ISePayOwnerConnections>().ProfilesAsync(stoppingToken))
+                    {
+                        await using var recovery = scopes.CreateAsyncScope();
+                        if (profile.OwnerId is { } owner)
+                            await recovery.ServiceProvider.GetRequiredService<ISePayOwnerConnections>().ApplyOwnerAsync(owner, stoppingToken);
+                        recovery.ServiceProvider.GetRequiredService<SePayOptions>().Select(profile.Mode);
+                        recovered += await recovery.ServiceProvider.GetRequiredService<SePayService>().RecoverPreviouslyVerifiedMoveOutsAsync(stoppingToken);
+                    }
                     if (recovered > 0)
                         logger.LogInformation("Completed {Count} previously verified move-outs", recovered);
                 }
-                if (options.Enabled) await scope.ServiceProvider.GetRequiredService<SePayScheduling>().EnqueueDueAsync(stoppingToken);
+                _ = configuration;
+                await scope.ServiceProvider.GetRequiredService<SePayScheduling>().EnqueueDueAsync(stoppingToken);
                 await scope.ServiceProvider.GetRequiredService<MainContractActivationScheduling>().EnqueueDueAsync(stoppingToken);
-                if (!jobs.Value.Enabled && await worker.ProcessAllowedAsync(stoppingToken, ["sepay-reconcile-" + options.Mode.ToLowerInvariant(), "sepay-poll-" + options.Mode.ToLowerInvariant(), MainContractActivationJob.JobName])) continue;
+                if (!jobs.Value.Enabled && await worker.ProcessAllowedAsync(stoppingToken, ["sepay-reconcile-test", "sepay-reconcile-live", "sepay-poll-test", "sepay-poll-live", MainContractActivationJob.JobName])) continue;
             }
             catch (OperationCanceledException) when (stoppingToken.IsCancellationRequested) { break; }
             catch (Exception error) { logger.LogWarning("SePay automation deferred with {ErrorCode}", error.GetType().Name); }

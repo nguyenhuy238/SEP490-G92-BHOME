@@ -102,12 +102,13 @@ public sealed partial class FinancialReportRepository
         SELECT r.id AS "Id",r.source_payment_id AS "PaymentId",r.executed_at AS "ExecutedAt",
           r.requested_amount AS "Amount",r.external_refund_reference AS "Reference",r.category AS "Category",
           COALESCE(r.category='DepositPrincipal' AND r.executed_at>={start}
-              AND COALESCE(r.state->>'isDevelopmentDemo','false')<>'true'
+              AND (COALESCE(r.state->>'isDevelopmentDemo','false')<>'true' OR bhome24_contract_payment_mode(c.id)='Test')
+              AND NOT bhome24_contract_is_simulation(c.id)
               AND room.id IS NOT NULL
               AND ({filter.LocationId}::uuid IS NULL OR room.location_id={filter.LocationId})
               AND ({filter.RoomId}::uuid IS NULL OR room.id={filter.RoomId}),false) AS "DepositInPeriod",
           COALESCE(r.category='ReceiptExcess' AND r.executed_at>={start} AND p.id IS NOT NULL
-              AND COALESCE(p.verification_data->'compactState'->>'isDevelopmentDemo','false')<>'true',false) AS "ExcessInPeriod"
+              AND (COALESCE(p.verification_data->'compactState'->>'isDevelopmentDemo','false')<>'true' OR p.provider_code='SEPAY:TEST'),false) AS "ExcessInPeriod"
         FROM classified r LEFT JOIN contracts c ON c.id=r.source_deposit_contract_id
           LEFT JOIN rooms room ON room.id=c.room_id LEFT JOIN payments p ON p.id=r.source_payment_id
         ) classified_results

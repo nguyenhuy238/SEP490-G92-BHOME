@@ -132,7 +132,9 @@ public sealed partial class FinancialReportRepository
           COALESCE((SELECT sum(a.amount) FROM payment_allocations a WHERE a.target_settlement_contract_id=c.id
             AND a.settlement_receivable_id=(h->'state'->>'id')::uuid),0) AS "Allocated"
         FROM contracts c JOIN rooms r ON r.id=c.room_id CROSS JOIN LATERAL jsonb_array_elements(c.history) h
-        WHERE h->>'recordType'='SettlementReceivableV1' AND COALESCE(h->'state'->>'isDevelopmentDemo','false')<>'true'
+        WHERE h->>'recordType'='SettlementReceivableV1'
+          AND (COALESCE(h->'state'->>'isDevelopmentDemo','false')<>'true' OR h->'state'->>'paymentMode' IN ('Test','Live') OR bhome24_contract_payment_mode(c.id)='Test')
+          AND NOT bhome24_contract_is_simulation(c.id)
           AND ({filter.LocationId}::uuid IS NULL OR r.location_id={filter.LocationId})
           AND ({filter.RoomId}::uuid IS NULL OR r.id={filter.RoomId})
         """);
@@ -145,7 +147,7 @@ public sealed partial class FinancialReportRepository
         FROM payment_allocations a JOIN payments p ON p.id=a.source_payment_id
         JOIN invoices i ON i.id=a.target_invoice_id JOIN rooms r ON r.id=i.room_id
         WHERE p.status='VERIFIED' AND i.status=1
-          AND COALESCE(p.verification_data->'compactState'->>'isDevelopmentDemo','false')<>'true'
+          AND (COALESCE(p.verification_data->'compactState'->>'isDevelopmentDemo','false')<>'true' OR p.provider_code='SEPAY:TEST')
           AND p.received_at>={start} AND p.received_at<{end}
           AND ({filter.LocationId}::uuid IS NULL OR i.location_id={filter.LocationId})
           AND ({filter.RoomId}::uuid IS NULL OR i.room_id={filter.RoomId})
@@ -154,7 +156,7 @@ public sealed partial class FinancialReportRepository
           r.location_id,r.id,r.room_number,c.id,c.start_date,a.amount,p.id,p.received_at,p.transaction_reference,a.amount
         FROM payment_allocations a JOIN payments p ON p.id=a.source_payment_id
         JOIN contracts c ON c.id=COALESCE(a.target_initial_contract_id,a.target_deposit_contract_id) JOIN rooms r ON r.id=c.room_id
-        WHERE p.status='VERIFIED' AND COALESCE(p.verification_data->'compactState'->>'isDevelopmentDemo','false')<>'true'
+        WHERE p.status='VERIFIED' AND (COALESCE(p.verification_data->'compactState'->>'isDevelopmentDemo','false')<>'true' OR p.provider_code='SEPAY:TEST')
           AND p.received_at>={start} AND p.received_at<{end}
           AND ({filter.LocationId}::uuid IS NULL OR r.location_id={filter.LocationId})
           AND ({filter.RoomId}::uuid IS NULL OR r.id={filter.RoomId})
@@ -167,8 +169,10 @@ public sealed partial class FinancialReportRepository
         FROM contracts c JOIN rooms r ON r.id=c.room_id CROSS JOIN LATERAL jsonb_array_elements(c.history) h
         JOIN payment_allocations a ON a.target_settlement_contract_id=c.id AND a.settlement_receivable_id=(h->'state'->>'id')::uuid
         JOIN payments p ON p.id=a.source_payment_id
-        WHERE h->>'recordType'='SettlementReceivableV1' AND COALESCE(h->'state'->>'isDevelopmentDemo','false')<>'true'
-          AND p.status='VERIFIED' AND COALESCE(p.verification_data->'compactState'->>'isDevelopmentDemo','false')<>'true'
+        WHERE h->>'recordType'='SettlementReceivableV1'
+          AND (COALESCE(h->'state'->>'isDevelopmentDemo','false')<>'true' OR h->'state'->>'paymentMode' IN ('Test','Live') OR bhome24_contract_payment_mode(c.id)='Test')
+          AND NOT bhome24_contract_is_simulation(c.id)
+          AND p.status='VERIFIED' AND (COALESCE(p.verification_data->'compactState'->>'isDevelopmentDemo','false')<>'true' OR p.provider_code='SEPAY:TEST')
           AND p.received_at>={start} AND p.received_at<{end}
           AND ({filter.LocationId}::uuid IS NULL OR r.location_id={filter.LocationId})
           AND ({filter.RoomId}::uuid IS NULL OR r.id={filter.RoomId})

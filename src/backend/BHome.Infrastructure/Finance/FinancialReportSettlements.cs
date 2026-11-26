@@ -20,7 +20,9 @@ public sealed partial class FinancialReportRepository
                       WHEN 'FinalFixed' THEN (h->'state'->'fixedCharge'->>'billingPeriod')::date
                       ELSE ((h->'state'->>'approvedAt')::timestamptz AT TIME ZONE 'Asia/Ho_Chi_Minh')::date END basis_date
                   FROM contracts c JOIN rooms room ON room.id=c.room_id CROSS JOIN LATERAL jsonb_array_elements(c.history) h
-                  WHERE h->>'recordType'='SettlementReceivableV1' AND COALESCE(h->'state'->>'isDevelopmentDemo','false')<>'true'
+                  WHERE h->>'recordType'='SettlementReceivableV1'
+                    AND (COALESCE(h->'state'->>'isDevelopmentDemo','false')<>'true' OR h->'state'->>'paymentMode' IN ('Test','Live') OR bhome24_contract_payment_mode(c.id)='Test')
+                    AND NOT bhome24_contract_is_simulation(c.id)
                     AND ({filter.LocationId}::uuid IS NULL OR room.location_id={filter.LocationId})
                     AND ({filter.RoomId}::uuid IS NULL OR c.room_id={filter.RoomId})
                 ), balances AS (
@@ -42,7 +44,7 @@ public sealed partial class FinancialReportRepository
                     COALESCE(sum(a.amount) FILTER(WHERE p.received_at<{end}),0) actual_cumulative
                   FROM charges c JOIN payment_allocations a ON a.target_settlement_contract_id=c.contract_id AND a.settlement_receivable_id=c.charge_id
                   JOIN payments p ON p.id=a.source_payment_id
-                  WHERE p.status='VERIFIED' AND COALESCE(p.verification_data->'compactState'->>'isDevelopmentDemo','false')<>'true'
+                  WHERE p.status='VERIFIED' AND (COALESCE(p.verification_data->'compactState'->>'isDevelopmentDemo','false')<>'true' OR p.provider_code='SEPAY:TEST')
                   GROUP BY c.location_id
                 ), offsets AS (
                   SELECT room.location_id,sum(a.amount) amount FROM payment_allocations a
