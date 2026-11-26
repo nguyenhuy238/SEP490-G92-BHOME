@@ -175,7 +175,7 @@ internal sealed partial class SettlementReceivablesRepository(BHomePersistenceCo
             inspection?.Id ?? Guid.Empty, inspection?.Version ?? 0,
             contract.Kind is ContractKind.Main or ContractKind.Renewal && contract.Status is ContractStatus.Active or ContractStatus.Terminated && move?.ApprovedAt != null && inspection?.OwnerDecision == "Confirmed",
             inspection?.NoAdditionalCharges ?? true, issueAssets.Keys.ToArray(), verifiedEvidenceIds, recipients,
-            legacy is not null, contract.IsDevelopmentDemo, issueAssets, issueRoomChecks,
+            legacy is not null, ContractPaymentModes.IsTest(contract), issueAssets, issueRoomChecks,
             observed?.RoomChecks is { Length: > 0 }, position.Received);
     }
     private async Task<T?> OperationAsync<T>(Guid actor, Guid key, string kind, CancellationToken token)

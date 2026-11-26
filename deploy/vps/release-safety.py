@@ -35,13 +35,72 @@ def env(name):
     return dict(v.split('=', 1) for v in inspect(name)['Config']['Env'] if '=' in v)
 
 
+def validate_sepay(settings):
+    if settings.get('SePay__Mode', 'Test') not in ('Test', 'Live'):
+        raise ValueError('Invalid SePay default mode')
+    if settings.get('SePay__Enabled', '').lower() not in ('true', 'false'):
+        raise ValueError('SePay enablement must be explicit')
+    dual = any('SePay__' + mode + '__Enabled' in settings for mode in ('Test', 'Live'))
+    if not dual or settings.get('SePay__Enabled') == 'false':
+        return
+    if not re.fullmatch('[A-Z0-9]{4}', settings.get('SePay__InstanceCode', '')):
+        raise ValueError('SePay requires a unique four-character deployment code')
+    active = []
+    for mode in ('Test', 'Live'):
+        prefix = 'SePay__' + mode + '__'
+        if settings.get(prefix + 'Enabled') not in ('true', 'false'):
+            raise ValueError('SePay profile enablement must be explicit')
+        if settings[prefix + 'Enabled'] == 'false':
+            continue
+        secret = settings.get(prefix + 'WebhookSecret', '')
+        if len(secret) < 32 or 'replace' in secret.lower():
+            raise ValueError('SePay requires a strong profile webhook secret')
+        expected = 'https://userapi-sandbox.sepay.vn/v2' if mode == 'Test' else 'https://userapi.sepay.vn/v2'
+        if settings.get(prefix + 'ApiBaseUrl', '').rstrip('/') != expected:
+            raise ValueError('SePay profile endpoint mismatch')
+        legacy = [value for key, value in settings.items() if key.startswith(prefix + 'LegacyPaymentCodes__')]
+        if len(set(legacy)) != len(legacy) or any(not re.fullmatch('BH[0-9]{8}', code) for code in legacy):
+            raise ValueError('Invalid or duplicate legacy SePay routing code')
+        active.append(prefix)
+    if not active:
+        raise ValueError('No enabled SePay profile')
+    if len(active) == 2:
+        for key in ('WebhookSecret', 'ApiToken'):
+            if settings.get(active[0] + key) and settings.get(active[0] + key) == settings.get(active[1] + key):
+                raise ValueError('SePay Test/Live credentials must be isolated')
+
+
+def validate_sepay_routing(stage, prod):
+    if stage.get('SePay__InstanceCode') and stage.get('SePay__InstanceCode') == prod.get('SePay__InstanceCode'):
+        raise ValueError('SePay instance codes must differ between deployments')
+    def legacy(settings, mode):
+        prefix = 'SePay__' + mode + '__LegacyPaymentCodes__'
+        return {value for key, value in settings.items() if key.startswith(prefix)}
+    def banks(settings, prefix):
+        keys = [key for key in settings if key.startswith(prefix) and key.endswith('__AccountNumber')]
+        return {(settings.get(key.rsplit('__', 1)[0] + '__Gateway', '').upper(), settings[key]) for key in keys}
+    for mode in ('Test', 'Live'):
+        key = 'SePay__' + mode + '__WebhookSecret'
+        if stage.get(key) and stage.get(key) == prod.get(key):
+            raise ValueError('SePay webhook identity must be environment-specific')
+        if legacy(stage, mode) & legacy(prod, mode):
+            raise ValueError('Legacy SePay codes must have exactly one deployment owner per mode')
+        profiles = []
+        for settings in (stage, prod):
+            dual = any('SePay__' + name + '__Enabled' in settings for name in ('Test', 'Live'))
+            prefix = 'SePay__' + mode + '__' if dual else 'SePay__'
+            active = settings.get('SePay__Enabled') == 'true' and settings.get(prefix + 'Enabled') == 'true' and (dual or settings.get('SePay__Mode') == mode)
+            profiles.append((dual, banks(settings, prefix + 'ReceivingAccounts__') if active else set()))
+        if profiles[0][1] & profiles[1][1] and not all(profile[0] for profile in profiles):
+            raise ValueError('Upgrade both shared-bank deployments before enabling same-mode SePay routing')
+
+
 def webhook_policy(target):
     settings = env(CONTAINERS[target][0])
     enabled = settings.get('SePay__Enabled', '').lower()
     if enabled not in ('true', 'false'):
         raise ValueError('SePay enablement must be explicit before webhook smoke')
-    if target == 'staging' and (enabled != 'true' or settings.get('SePay__Mode') != 'Test'):
-        raise ValueError('Staging SePay must remain enabled in Test mode')
+    validate_sepay(settings)
     # SePayWebhookSecurity rejects disabled integrations before authenticating.
     return (401, 'sepay_authentication_failed') if enabled == 'true' else (503, 'sepay_disabled')
 
@@ -84,10 +143,9 @@ def check_environment(target):
         connection = dict(p.split('=', 1) for p in values.get('ConnectionStrings__Database', '').split(';') if '=' in p)
         if connection.get('Database') != database or connection.get('Host') != host:
             raise ValueError('Database target mismatch; credentials withheld')
-    if stage.get('SePay__Enabled') != 'true' or stage.get('SePay__Mode') != 'Test':
-        raise ValueError('Staging SePay must remain Test')
-    if prod.get('SePay__Mode') == 'Test':
-        raise ValueError('Production contains a Sandbox payment mode')
+    for settings in (stage, prod):
+        validate_sepay(settings)
+    validate_sepay_routing(stage, prod)
     # Older Production images inherit non-secret issuer/audience from appsettings.
     # Resolve those effective defaults without reading signing keys from a file.
     for values, name in ((stage, CONTAINERS['staging'][0]), (prod, CONTAINERS['production'][0])):

@@ -35,13 +35,14 @@ public sealed class ReceivingAccountValidationTests
         new("970415", "000000000000", "SYNTHETIC OWNER", true, demo, true, 0);
 
     [Fact]
-    public async Task OwnerDemoOutsideDevelopmentAndTestingReturnsSpecificErrorBeforeWriting()
+    public async Task OwnerCanConfigureTestReceivingAccountBeforeProviderIsEnabledOnAnyHost()
     {
         var w = new Workspace();
-        var error = await Assert.ThrowsAsync<PaymentException>(() => w.Service(false).SaveOwnerAccountAsync(Input(), default));
-        Assert.Equal(400, error.Status);
-        Assert.Equal("development_receiving_account_unavailable", error.Code);
-        Assert.Empty(w.Repository.ReceivedCalls());
+        var result = await w.Service(false).SaveOwnerAccountAsync(Input(), default);
+        Assert.True(result.IsDevelopmentDemo);
+        Assert.Equal(w.Owner, result.OwnerUserId);
+        Assert.Equal(1, result.Version);
+        await w.Repository.Received(1).SaveOwnerReceivingAccountAsync(w.Owner, result, 0, default);
     }
 
     [Fact]

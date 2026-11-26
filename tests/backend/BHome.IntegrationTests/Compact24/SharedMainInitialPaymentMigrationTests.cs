@@ -39,8 +39,12 @@ public sealed class SharedMainInitialPaymentMigrationTests
             const string guard = "bhome24_initial_payment_guard:";
             const string sepayGuard = "bhome24_sepay_technical_guard:";
             const string settlementGuard = "bhome24_settlement_allocation_guard:";
-            Assert.Equal(before.Where(f => !f.StartsWith(guard, StringComparison.Ordinal) && !f.StartsWith(sepayGuard, StringComparison.Ordinal) && !f.StartsWith(settlementGuard, StringComparison.Ordinal)),
-                after.Where(f => !f.StartsWith(guard, StringComparison.Ordinal) && !f.StartsWith(sepayGuard, StringComparison.Ordinal) && !f.StartsWith(settlementGuard, StringComparison.Ordinal)));
+            const string signingSimulation = "bhome24_contract_is_simulation:";
+            Assert.Equal(before.Where(f => !f.StartsWith(guard, StringComparison.Ordinal) && !f.StartsWith(sepayGuard, StringComparison.Ordinal) && !f.StartsWith(settlementGuard, StringComparison.Ordinal) && !f.StartsWith("bhome24_contract_payment_mode:", StringComparison.Ordinal) && !f.StartsWith(signingSimulation, StringComparison.Ordinal)),
+                after.Where(f => !f.StartsWith(guard, StringComparison.Ordinal) && !f.StartsWith(sepayGuard, StringComparison.Ordinal) && !f.StartsWith(settlementGuard, StringComparison.Ordinal) && !f.StartsWith("bhome24_contract_payment_mode:", StringComparison.Ordinal) && !f.StartsWith(signingSimulation, StringComparison.Ordinal)));
+            Assert.Single(after, f => f.StartsWith(signingSimulation, StringComparison.Ordinal));
+            Assert.Single(after, f => f.StartsWith("bhome24_contract_payment_mode:", StringComparison.Ordinal));
+            Assert.DoesNotContain(after, f => f.StartsWith("bhome24_sepay_deposit_mode_guard:", StringComparison.Ordinal));
             Assert.NotEqual(before.Single(f => f.StartsWith(guard, StringComparison.Ordinal)), after.Single(f => f.StartsWith(guard, StringComparison.Ordinal)));
             Assert.NotEqual(before.Single(f => f.StartsWith(sepayGuard, StringComparison.Ordinal)), after.Single(f => f.StartsWith(sepayGuard, StringComparison.Ordinal)));
             Assert.NotEqual(before.Single(f => f.StartsWith(settlementGuard, StringComparison.Ordinal)), after.Single(f => f.StartsWith(settlementGuard, StringComparison.Ordinal)));
@@ -52,6 +56,15 @@ public sealed class SharedMainInitialPaymentMigrationTests
             await using var stream = typeof(Compact24DbContext).Assembly.GetManifestResourceStream("BHome.Compact24.MainInitialPaymentNoFees.sql")!;
             using var reader = new StreamReader(stream);
             await db.Database.ExecuteSqlRawAsync(await reader.ReadToEndAsync());
+            Assert.True(await db.IsSchemaReadyAsync());
+            await using var modes = typeof(Compact24DbContext).Assembly.GetManifestResourceStream("BHome.Compact24.SePayPaymentModes.sql")!;
+            using var modesReader = new StreamReader(modes);
+            await db.Database.OpenConnectionAsync();
+            await using (var command = db.Database.GetDbConnection().CreateCommand())
+            {
+                command.CommandText = await modesReader.ReadToEndAsync();
+                await command.ExecuteNonQueryAsync();
+            }
             await db.Database.MigrateAsync();
             Assert.Equal(after, await Functions());
             Assert.True(await db.IsSchemaReadyAsync());

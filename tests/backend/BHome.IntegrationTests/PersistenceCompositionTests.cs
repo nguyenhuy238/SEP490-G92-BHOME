@@ -37,7 +37,7 @@ public sealed class PersistenceCompositionTests
         var expected = compact ? shared.Concat(["activate-paid-main-contract", "asset-template-sync",
             "equipment-inspections", "finance-capital-assets", "finance-recurring-expenses", "notification-channels",
             "recurring-operational-tasks", "post-activation-account-invitation", "sepay-poll-test",
-            "sepay-reconcile-test", "sms-recovery-delivery", "staff-assignment-reconciliation"]) : shared;
+            "sepay-reconcile-test", "sepay-poll-live", "sepay-reconcile-live", "sms-recovery-delivery", "staff-assignment-reconciliation"]) : shared;
         Assert.Equal(expected.Order(), names);
         Assert.Equal(compact ? 12 : 3, services.GetServices<IJobScheduleContributor>().Count());
         var compactOnlyServices = new[] { typeof(ISharedConfigurationStore), typeof(ISharedDataValidator),

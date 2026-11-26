@@ -7,6 +7,7 @@ Current releases use release-safety.py and connect-staging-edge.py instead.
 import hashlib
 import json
 import re
+import runpy
 import subprocess
 import sys
 from pathlib import Path
@@ -40,11 +41,12 @@ def check_api():
         'ASPNETCORE_ENVIRONMENT': 'Staging', 'DOTNET_ENVIRONMENT': 'Staging',
         'Deployment__Environment': 'Staging', 'Jobs__Enabled': 'false',
         'DevelopmentDatabase__InitializeOnStartup': 'false',
-        'SePay__Enabled': 'true', 'SePay__Mode': 'Test',
+        'SePay__Enabled': 'true',
     }
     for key, expected in required.items():
         if e.get(key) != expected:
             raise ValueError('Staging guard failed: ' + key)
+    runpy.run_path(str(Path(__file__).with_name('release-safety.py')))['validate_sepay'](e)
     if e.get('BillingAutomation__AutomaticJobsEnabled') not in ('true', 'false'):
         raise ValueError('Staging guard failed: BillingAutomation__AutomaticJobsEnabled')
     db = dict(p.split('=', 1) for p in e.get('ConnectionStrings__Database', '').split(';') if '=' in p)
@@ -53,7 +55,7 @@ def check_api():
     pg = json.loads(docker('inspect', 'bhome-sepay-vps-stage'))[0]
     if c['HostConfig']['NetworkMode'] != 'container:' + pg['Id']:
         raise ValueError('API is outside the isolated staging database network namespace')
-    print('PASS: Staging environment, database target, jobs and SePay Test guards')
+    print('PASS: Staging environment, database target, jobs and SePay isolation guards')
 
 
 def clean_web(image, output):

@@ -659,7 +659,9 @@ public sealed class AnonymousSigningTests(Compact24Fixture fixture) : IClassFixt
         if (qrPreview)
         {
             // Model a previously genuinely signed contract when sandbox QR is enabled later.
-            host.Services.GetRequiredService<BHome.Application.PaymentsDebt.SePay.SePayOptions>().Enabled = true;
+            // Request/job selections are scoped. This fixture changes the startup configuration
+            // so later requests observe enablement without sharing mutable selected credentials.
+            host.Services.GetRequiredService<Microsoft.Extensions.Options.IOptions<BHome.Application.PaymentsDebt.SePay.SePayOptions>>().Value.Enabled = true;
             await using var scope = host.Services.CreateAsyncScope();
             var db = scope.ServiceProvider.GetRequiredService<Compact24DbContext>();
             (await db.Set<Contract>().SingleAsync(c => c.Id == holding.Id)).PaymentMode = "Test";

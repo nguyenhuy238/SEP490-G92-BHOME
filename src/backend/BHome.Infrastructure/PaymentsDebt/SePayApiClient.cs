@@ -9,18 +9,63 @@ namespace BHome.Infrastructure.PaymentsDebt;
 
 public sealed class SePayApiClient(HttpClient http, SePayOptions options, TimeProvider clock) : ISePayTransactionClient, IBankTransactionProvider
 {
+    public async Task<string?> CheckAccountAsync(string bank, string account, CancellationToken token)
+    {
+        using var timeout = CancellationTokenSource.CreateLinkedTokenSource(token);
+        timeout.CancelAfter(TimeSpan.FromSeconds(options.RequestTimeoutSeconds));
+        try { return await CheckAccountCoreAsync(bank, account, timeout.Token); }
+        catch (Exception error) when (error is HttpRequestException || error is OperationCanceledException && !token.IsCancellationRequested)
+        { throw new PaymentException(503, "sepay_connection_unavailable"); }
+    }
+    private async Task<string?> CheckAccountCoreAsync(string bank, string account, CancellationToken token)
+    {
+        if (string.IsNullOrWhiteSpace(options.ApiToken)) throw new PaymentException(409, "sepay_configuration_incomplete");
+        for (var page = 1; page <= 100; page++)
+        {
+            using var request = new HttpRequestMessage(HttpMethod.Get, options.ApiBaseUrl.TrimEnd('/') +
+                "/bank-accounts?per_page=100&active=1&page=" + page + "&q=" + Uri.EscapeDataString(account));
+            request.Headers.Authorization = new AuthenticationHeaderValue("Bearer", options.ApiToken);
+            using var response = await http.SendAsync(request, HttpCompletionOption.ResponseHeadersRead, token);
+            if (response.StatusCode is System.Net.HttpStatusCode.Unauthorized or System.Net.HttpStatusCode.Forbidden)
+                throw new PaymentException(409, "sepay_credentials_rejected");
+            if (!response.IsSuccessStatusCode) throw new PaymentException(503, "sepay_connection_unavailable");
+            await using var stream = await response.Content.ReadAsStreamAsync(token);
+            using var buffer = new MemoryStream(); var chunk = new byte[8192]; int read;
+            while ((read = await stream.ReadAsync(chunk, token)) > 0)
+            {
+                if (buffer.Length + read > 2_000_000) throw new PaymentException(503, "sepay_connection_unavailable");
+                await buffer.WriteAsync(chunk.AsMemory(0, read), token);
+            }
+            try
+            {
+                using var document = JsonDocument.Parse(buffer.ToArray()); var root = document.RootElement;
+                if (root.GetProperty("status").GetString() != "success") throw new JsonException();
+                foreach (var item in root.GetProperty("data").EnumerateArray())
+                {
+                    var active = item.GetProperty("active");
+                    if (item.GetProperty("bank_bin").GetString() == bank && item.GetProperty("account_number").GetString() == account &&
+                        (active.ValueKind == JsonValueKind.True || active.ValueKind == JsonValueKind.Number && active.GetInt32() == 1 || active.ValueKind == JsonValueKind.String && active.GetString() == "1"))
+                        return item.GetProperty("bank_short_name").GetString();
+                }
+                if (!root.GetProperty("meta").GetProperty("pagination").GetProperty("has_more").GetBoolean()) return null;
+            }
+            catch (Exception error) when (error is JsonException or InvalidOperationException or KeyNotFoundException or FormatException)
+            { throw new PaymentException(503, "sepay_connection_unavailable"); }
+        }
+        throw new PaymentException(503, "sepay_connection_unavailable");
+    }
     public async Task<SePayPage> GetAsync(SePayPollingCursor cursor, CancellationToken token)
     {
         if (!options.Enabled || string.IsNullOrWhiteSpace(options.ApiToken)) throw new IntegrationUnavailableException("bank transactions");
         if (cursor.Page < 1 || cursor.SinceId is not null && !Guid.TryParse(cursor.SinceId, out _)) throw new PaymentException(400, "invalid_sepay_cursor");
         var path = "transactions?per_page=100&transaction_date_sort=asc&timestamp_format=iso8601&page=" + cursor.Page.ToString(System.Globalization.CultureInfo.InvariantCulture);
         if (cursor.SinceId is not null) path += "&since_id=" + Uri.EscapeDataString(cursor.SinceId);
-        using var request = new HttpRequestMessage(HttpMethod.Get, path);
+        using var request = new HttpRequestMessage(HttpMethod.Get, options.DualMode ? options.ApiBaseUrl.TrimEnd('/') + "/" + path : path);
         request.Headers.Authorization = new AuthenticationHeaderValue("Bearer", options.ApiToken);
-        using var response = await http.SendAsync(request, HttpCompletionOption.ResponseHeadersRead, token);
-        if (!response.IsSuccessStatusCode) throw new IntegrationUnavailableException("bank transactions");
         using var timeout = CancellationTokenSource.CreateLinkedTokenSource(token);
         timeout.CancelAfter(TimeSpan.FromSeconds(options.RequestTimeoutSeconds));
+        using var response = await http.SendAsync(request, HttpCompletionOption.ResponseHeadersRead, timeout.Token);
+        if (!response.IsSuccessStatusCode) throw new IntegrationUnavailableException("bank transactions");
         await using var stream = await response.Content.ReadAsStreamAsync(timeout.Token);
         using var buffer = new MemoryStream();
         var chunk = new byte[8192];

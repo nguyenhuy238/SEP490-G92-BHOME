@@ -1,6 +1,26 @@
 import { ApiError, infrastructureError, catalogError } from './api';
 import type { Page } from './invoices';
 
+export type PaymentMode = 'Test' | 'Live';
+export interface PaymentModeView {
+  mode: PaymentMode;
+  testAvailable: boolean;
+  liveAvailable: boolean;
+}
+export interface SePayConnectionView {
+  mode: PaymentMode;
+  version: number;
+  hasApiToken: boolean;
+  hasWebhookSecret: boolean;
+  status: 'NotConfigured' | 'Configured' | 'Connected' | 'ServerConfigured' | 'KeyUnavailable';
+  webhookPath: string;
+  gateway?: string | null;
+  verifiedAt?: string | null;
+  account: BankAccount | null;
+}
+export function isSePayPaymentCode(value: string) {
+  return /^BH(?:[0-9]{8}|[A-Z0-9]{4}[TL][A-F0-9]{16})$/.test(value);
+}
 export interface VerifiedPayment {
   id: string;
   amount: string;
@@ -12,6 +32,7 @@ export interface VerifiedPayment {
 }
 export interface InvoicePayment {
   invoiceId: string;
+  paymentMode?: PaymentMode | null;
   paymentStatus: 'NotIssued' | 'Paid' | 'Unpaid';
   payableAmount: string;
   paidAmount: string;
@@ -114,6 +135,7 @@ export interface Reconciliation {
   occurredAt: string;
 }
 export interface DebtInvoice {
+  paymentMode?: PaymentMode | null;
   invoiceId: string;
   locationId: string;
   roomId: string;
@@ -478,6 +500,18 @@ export function paymentError(error: unknown) {
   const code =
     error instanceof ApiError ? error.problem?.code : (value?.code ?? value?.problem?.code);
   const errors: Record<string, string> = {
+    sepay_configuration_incomplete:
+      'Hãy lưu tài khoản nhận tiền, API Token và HMAC Secret trước khi kiểm tra kết nối.',
+    sepay_credentials_rejected:
+      'SePay từ chối API Token. Hãy kiểm tra token đúng chế độ đang chọn.',
+    sepay_receiving_account_not_linked:
+      'Tài khoản này chưa hoạt động hoặc chưa được liên kết trong SePay của chế độ đang chọn.',
+    sepay_connection_unavailable:
+      'Chưa kết nối được với SePay. Cấu hình đã lưu; vui lòng thử kiểm tra lại.',
+    sepay_connection_changed: 'Cấu hình SePay đã thay đổi. Hãy tải lại trước khi lưu.',
+    invalid_sepay_credentials:
+      'API Token không được chứa ký tự điều khiển. HMAC Secret cần ít nhất 32 ký tự.',
+    sepay_credentials_must_differ: 'Test và Live cần sử dụng API Token và HMAC Secret riêng.',
     deposit_context_changed: labels.deposit_context_changed,
     deposit_payer_confirmation_required: labels.deposit_payer_confirmation_required,
     deposit_allocation_confirmation_required: labels.deposit_allocation_confirmation_required,
@@ -520,6 +554,16 @@ export function paymentError(error: unknown) {
     payment_idempotency_key_reused:
       'Yêu cầu đã dùng với nội dung khác. Hãy tải lại trước khi thao tác.',
     bank_transaction_identity_conflict: 'Tham chiếu ngân hàng đã tồn tại với dữ liệu khác.',
+    legacy_payment_code_route_required:
+      'Mã thanh toán cũ cần được xác nhận máy chủ nhận tiền. Vui lòng liên hệ người vận hành để đối chiếu định tuyến.',
+    legacy_payment_mode_ambiguous:
+      'Nghĩa vụ cũ có nhiều chế độ thanh toán. Vui lòng liên hệ Owner để đối chiếu.',
+    payment_mode_not_configured:
+      'Chế độ này chưa được cấu hình SePay trên máy chủ. Vui lòng liên hệ người vận hành.',
+    payment_mode_changed: 'Chế độ đã được thay đổi. Hãy tải lại và thử lại.',
+    invalid_payment_mode: 'Chế độ thanh toán không hợp lệ.',
+    payment_snapshot_unavailable:
+      'Nghĩa vụ cũ thiếu thông tin tài khoản nhận. Vui lòng liên hệ Owner để đối chiếu.',
     receiving_account_version_changed: 'Tài khoản nhận đã thay đổi. Hãy tải lại.',
     sandbox_receiving_account_unavailable:
       'Tài khoản này chưa được cấu hình SePay Test cho cơ sở đã chọn.',

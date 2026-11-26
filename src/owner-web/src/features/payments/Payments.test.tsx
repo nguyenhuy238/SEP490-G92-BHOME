@@ -815,43 +815,57 @@ const configuredReceivingAccount = {
   isDevelopmentDemo: true,
   version: 15,
 };
-async function openReceivingAccountSettings() {
+async function openReceivingAccountSettings(
+  check = { connected: true, code: 'sepay_connection_verified' },
+) {
   mocks.api.request.mockImplementation(async (url: string, init?: RequestInit) => {
-    if (url === '/api/v1/receiving-bank-accounts/owner') {
-      if (init?.method === 'PUT') return mocks.api.saveAccount(JSON.parse(String(init.body)));
-      return mocks.api.account();
+    if (url === '/api/v1/receiving-bank-accounts/owner/mode')
+      return { mode: 'Test', testAvailable: true, liveAvailable: true };
+    if (url === '/api/v1/receiving-bank-accounts/owner/sepay/Test/check') return check;
+    if (url === '/api/v1/receiving-bank-accounts/owner/sepay/Test') {
+      const account =
+        init?.method === 'PUT'
+          ? await mocks.api.saveAccount(JSON.parse(String(init.body)))
+          : await mocks.api.account();
+      return {
+        mode: 'Test',
+        version: account?.version ?? 0,
+        hasApiToken: !!account,
+        hasWebhookSecret: !!account,
+        status: account ? 'ServerConfigured' : 'NotConfigured',
+        gateway: 'MB',
+        webhookPath: '/api/v1/integrations/sepay/Test/owners/synthetic-owner/webhook',
+        account,
+      };
     }
     if (url === '/api/v1/capture/locations')
       return [{ id: testReceivingLocationId, label: 'Cơ sở Hòa Lạc' }];
     return [];
   });
   mount(<PaymentManagementPage />, '/payments?setupAccount=1');
-  expect(screen.queryByRole('combobox', { name: 'Cơ sở' })).not.toBeInTheDocument();
-  return screen.findByText('Tài khoản nhận tiền chung cho tất cả cơ sở');
+  await screen.findByRole('button', { name: 'Lưu cấu hình' });
 }
-it('shows an already confirmed receiving account as saved and prevents an unchanged resubmission', async () => {
+it('shows the saved receiving account and requires renewed confirmation after an edit', async () => {
   mocks.api.account.mockResolvedValue(configuredReceivingAccount);
   await openReceivingAccountSettings();
-  await screen.findByText('Đã xác nhận và lưu cấu hình phiên bản 15.');
+  expect(screen.getByRole('textbox', { name: 'Số tài khoản nhận tiền' })).toHaveValue('0000000001');
   const approved = screen.getByRole('checkbox', {
-    name: 'Tôi đã kiểm tra và phê duyệt thông tin tài khoản nhận',
+    name: 'Tôi đã kiểm tra thông tin tài khoản nhận',
   });
   expect(approved).toBeChecked();
-  expect(screen.getByRole('button', { name: 'Lưu tài khoản nhận tiền' })).toBeDisabled();
+  expect(screen.getByRole('button', { name: 'Lưu cấu hình' })).toBeDisabled();
   fireEvent.change(screen.getByRole('textbox', { name: 'BIN ngân hàng (6 số)' }), {
     target: { value: '970418' },
   });
   expect(approved).not.toBeChecked();
-  expect(screen.getByRole('button', { name: 'Lưu tài khoản nhận tiền' })).toBeDisabled();
   fireEvent.click(approved);
-  expect(screen.getByRole('button', { name: 'Lưu tài khoản nhận tiền' })).toBeEnabled();
+  expect(screen.getByRole('button', { name: 'Lưu cấu hình' })).toBeEnabled();
   expect(mocks.api.saveAccount).not.toHaveBeenCalled();
 });
-it('preserves confirmation and gives explicit success feedback after a receiving account is saved', async () => {
-  mocks.api.account.mockResolvedValueOnce(null).mockResolvedValue({
-    ...configuredReceivingAccount,
-    version: 1,
-  });
+it('saves the complete mode-specific SePay configuration without echoing credentials', async () => {
+  mocks.api.account
+    .mockResolvedValueOnce(null)
+    .mockResolvedValue({ ...configuredReceivingAccount, version: 1 });
   mocks.api.saveAccount.mockResolvedValue({ ...configuredReceivingAccount, version: 1 });
   await openReceivingAccountSettings();
   fireEvent.change(screen.getByRole('textbox', { name: 'BIN ngân hàng (6 số)' }), {
@@ -860,52 +874,38 @@ it('preserves confirmation and gives explicit success feedback after a receiving
   fireEvent.change(screen.getByRole('textbox', { name: 'Số tài khoản nhận tiền' }), {
     target: { value: '0000000001' },
   });
-  fireEvent.change(screen.getByRole('textbox', { name: 'Chủ tài khoản (in hoa không dấu)' }), {
-    target: { value: 'NGUYEN QUOC HUY' },
+  fireEvent.change(screen.getByRole('textbox', { name: 'Chủ tài khoản' }), {
+    target: { value: 'SYNTHETIC OWNER' },
   });
-  fireEvent.click(screen.getByRole('checkbox', { name: 'Bật hướng dẫn nhận tiền' }));
-  fireEvent.click(screen.getByRole('checkbox', { name: 'Tài khoản thử nghiệm (Test)' }));
+  fireEvent.change(screen.getByLabelText('API Token Test'), {
+    target: { value: 'synthetic-token' },
+  });
+  fireEvent.change(screen.getByLabelText('Webhook Secret Test'), {
+    target: { value: 'synthetic-hmac-secret-at-least-32-bytes' },
+  });
   fireEvent.click(
-    screen.getByRole('checkbox', {
-      name: 'Tôi đã kiểm tra và phê duyệt thông tin tài khoản nhận',
-    }),
+    screen.getByRole('checkbox', { name: 'Tôi đã kiểm tra thông tin tài khoản nhận' }),
   );
-  fireEvent.click(screen.getByRole('button', { name: 'Lưu tài khoản nhận tiền' }));
-  expect(await screen.findByRole('status')).toHaveTextContent(
-    'Đã lưu tài khoản nhận tiền thành công (phiên bản 1).',
-  );
-  await waitFor(() => expect(mocks.api.account).toHaveBeenCalledTimes(2));
-  expect(
-    screen.getByRole('checkbox', {
-      name: 'Tôi đã kiểm tra và phê duyệt thông tin tài khoản nhận',
-    }),
-  ).toBeChecked();
-  expect(screen.getByRole('button', { name: 'Lưu tài khoản nhận tiền' })).toBeDisabled();
-  expect(mocks.api.saveAccount).toHaveBeenCalledTimes(1);
+  fireEvent.click(screen.getByRole('button', { name: 'Lưu cấu hình' }));
+  expect(await screen.findByText('Đã lưu cấu hình Test.')).toBeInTheDocument();
   expect(mocks.api.saveAccount).toHaveBeenCalledWith(
     expect.objectContaining({
       bankIdentifier: '970422',
+      gateway: 'MB',
+      expectedAccountVersion: 0,
       expectedVersion: 0,
       humanVerified: true,
       enabled: true,
-      isDevelopmentDemo: true,
+      apiToken: 'synthetic-token',
+      webhookSecret: 'synthetic-hmac-secret-at-least-32-bytes',
     }),
   );
-  expect(mocks.api.request).toHaveBeenCalledWith(
-    '/api/v1/receiving-bank-accounts/owner',
-    expect.objectContaining({ method: 'PUT' }),
-  );
-  fireEvent.change(screen.getByRole('textbox', { name: 'Số tài khoản nhận tiền' }), {
-    target: { value: '0000000002' },
-  });
-  expect(screen.queryByRole('status')).not.toBeInTheDocument();
-  expect(
-    screen.getByRole('checkbox', {
-      name: 'Tôi đã kiểm tra và phê duyệt thông tin tài khoản nhận',
-    }),
-  ).not.toBeChecked();
+  await waitFor(() => expect(screen.getByRole('button', { name: 'Lưu cấu hình' })).toBeDisabled());
+  expect(document.querySelector('input[value="synthetic-token"]')).not.toBeInTheDocument();
+  fireEvent.click(screen.getByRole('button', { name: 'Cấu hình kết nối SePay' }));
+  expect(screen.getByLabelText('API Token Test')).toHaveValue('');
 });
-it('keeps edited receiving account fields and approval for retry after a failed save', async () => {
+it('preserves edited receiving fields and confirmation after a failed save', async () => {
   mocks.api.account.mockResolvedValue(configuredReceivingAccount);
   mocks.api.saveAccount.mockRejectedValue({
     status: 409,
@@ -916,46 +916,43 @@ it('keeps edited receiving account fields and approval for retry after a failed 
     target: { value: '0000000002' },
   });
   const approved = screen.getByRole('checkbox', {
-    name: 'Tôi đã kiểm tra và phê duyệt thông tin tài khoản nhận',
+    name: 'Tôi đã kiểm tra thông tin tài khoản nhận',
   });
   fireEvent.click(approved);
-  fireEvent.click(screen.getByRole('button', { name: 'Lưu tài khoản nhận tiền' }));
-  expect(await screen.findByText('Tài khoản nhận đã thay đổi. Hãy tải lại.')).toBeInTheDocument();
-  expect(screen.queryByText(/Đã lưu tài khoản nhận tiền thành công/)).not.toBeInTheDocument();
+  fireEvent.click(screen.getByRole('button', { name: 'Lưu cấu hình' }));
+  expect(await screen.findByRole('alert')).toHaveTextContent(
+    'Tài khoản nhận đã thay đổi. Hãy tải lại.',
+  );
   expect(approved).toBeChecked();
   expect(screen.getByRole('textbox', { name: 'Số tài khoản nhận tiền' })).toHaveValue('0000000002');
-  expect(screen.getByRole('button', { name: 'Lưu tài khoản nhận tiền' })).toBeEnabled();
+  await waitFor(() => expect(screen.getByRole('button', { name: 'Lưu cấu hình' })).toBeEnabled());
   expect(mocks.api.saveAccount).toHaveBeenCalledTimes(1);
 });
-it('explains a rejected demo receiving account and preserves fields without silently changing its classification', async () => {
-  mocks.api.account.mockResolvedValue(configuredReceivingAccount);
-  mocks.api.saveAccount.mockRejectedValue({
-    status: 400,
-    code: 'development_receiving_account_unavailable',
+it('reports a rejected SePay connection without claiming the account is connected', async () => {
+  mocks.api.account.mockResolvedValue(null);
+  mocks.api.saveAccount.mockResolvedValue({ ...configuredReceivingAccount, version: 1 });
+  await openReceivingAccountSettings({ connected: false, code: 'sepay_credentials_rejected' });
+  fireEvent.change(screen.getByRole('textbox', { name: 'BIN ngân hàng (6 số)' }), {
+    target: { value: '970422' },
   });
-  await openReceivingAccountSettings();
   fireEvent.change(screen.getByRole('textbox', { name: 'Số tài khoản nhận tiền' }), {
-    target: { value: '0000000002' },
+    target: { value: '0000000001' },
   });
-  const approved = screen.getByRole('checkbox', {
-    name: 'Tôi đã kiểm tra và phê duyệt thông tin tài khoản nhận',
+  fireEvent.change(screen.getByRole('textbox', { name: 'Chủ tài khoản' }), {
+    target: { value: 'SYNTHETIC OWNER' },
   });
-  const demo = screen.getByRole('checkbox', { name: 'Tài khoản thử nghiệm (Test)' });
-  fireEvent.click(approved);
-  fireEvent.click(screen.getByRole('button', { name: 'Lưu tài khoản nhận tiền' }));
-  expect(await screen.findByRole('alert')).toHaveTextContent(
-    'Môi trường hiện tại không cho phép lưu tài khoản nhận tiền tổng hợp.',
+  fireEvent.click(
+    screen.getByRole('checkbox', { name: 'Tôi đã kiểm tra thông tin tài khoản nhận' }),
   );
-  expect(screen.getByRole('alert')).toHaveTextContent('Staging đã bật SePay Test');
-  expect(screen.getByRole('textbox', { name: 'Số tài khoản nhận tiền' })).toHaveValue('0000000002');
-  expect(approved).toBeChecked();
-  expect(demo).toBeChecked();
-  expect(screen.queryByRole('status')).not.toBeInTheDocument();
-  fireEvent.click(demo);
-  expect(approved).not.toBeChecked();
-  expect(screen.queryByRole('alert')).not.toBeInTheDocument();
-  expect(screen.getByRole('button', { name: 'Lưu tài khoản nhận tiền' })).toBeDisabled();
-  expect(mocks.api.saveAccount).toHaveBeenCalledTimes(1);
+  fireEvent.click(screen.getByRole('button', { name: 'Kiểm tra kết nối' }));
+  expect(await screen.findByRole('alert')).toHaveTextContent(
+    paymentError({ code: 'sepay_credentials_rejected' }),
+  );
+  expect(screen.queryByText(/Đã kết nối SePay Test/)).not.toBeInTheDocument();
+  expect(mocks.api.request).toHaveBeenCalledWith(
+    '/api/v1/receiving-bank-accounts/owner/sepay/Test/check',
+    { method: 'POST' },
+  );
 });
 it('provides visible overdue debt action and accessible secondary filters', async () => {
   mocks.api.debts.mockResolvedValue({ items: [], totalCount: 0 });

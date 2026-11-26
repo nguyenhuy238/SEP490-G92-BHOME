@@ -21,7 +21,7 @@ public sealed partial class PaymentService
         Owner();
         var contract = await repository.HoldingAsync(contractId, token) ?? throw new PaymentException(404, "contract_not_found");
         if (contract.Kind is not (ContractKind.Main or ContractKind.Holding) || contract.PreviousContractId is not null) throw new PaymentException(400, "deposit_contract_required");
-        if (BHome.Application.Contracts.ContractPaymentModes.IsTest(contract) && mode?.AllowDevelopmentDemo != true) throw new PaymentException(409, "development_payment_unavailable");
+        if (BHome.Application.Contracts.ContractPaymentModes.IsTest(contract) && mode?.AllowDevelopmentDemo != true && mode?.AllowSandboxReceivingAccounts != true) throw new PaymentException(409, "development_payment_unavailable");
         var received = await repository.DepositAllocatedAsync(contract.Id, token);
         var reference = codes is null ? null : await codes.IssueAsync("Deposit", contract.Id, contract.Room.LocationId, token);
         return new(contract.Id, reference ?? PaymentRules.DepositReference(contract.Id), contract.RequiredDeposit.ToString("0", CultureInfo.InvariantCulture),
@@ -42,7 +42,8 @@ public sealed partial class PaymentService
             contract.Status is not (ContractStatus.Draft or ContractStatus.PendingSigning or ContractStatus.PendingActivation or ContractStatus.Active)) problems.Add("deposit_not_payable");
         if (contract.Kind == ContractKind.Holding && ((contract.ApprovedAt is null && !BHome.Application.Contracts.AnonymousContractSigningService.HoldingOwnerHasSigned(contract)) || contract.HoldingExpiryAt is null || contract.HoldingExpiryAt <= Now)) problems.Add("holding_deposit_requires_manual_review");
         if (!contract.Room.Location.IsActive) problems.Add("location_inactive");
-        if (transfer.IsDevelopmentDemo != BHome.Application.Contracts.ContractPaymentModes.IsTest(contract) || transfer.IsDevelopmentDemo && mode?.AllowDevelopmentDemo != true) problems.Add("development_payment_unavailable");
+        if (transfer.IsDevelopmentDemo && transfer.VerificationSource != "SePayTest" && mode?.AllowDevelopmentDemo != true)
+            problems.Add("development_payment_unavailable");
         if (await repository.AllocationAsync(transferId, token) is not null) problems.Add("bank_transaction_already_allocated");
         if (await repository.ReferenceClaimedAsync(transfer.NormalizedReference, token)) problems.Add("bank_reference_already_credited");
         var review = await repository.LatestReviewAsync(transferId, token);

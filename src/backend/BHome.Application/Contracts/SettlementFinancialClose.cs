@@ -131,7 +131,7 @@ public sealed partial class SettlementReceivablesService
             }
             var review = await ChargeReviewPreviewAsync(id, token);
             var context = (await repository.ChargeReviewAsync(id, token)).Context;
-            if (context.IsDevelopmentDemo && mode?.AllowDevelopmentDemo != true)
+            if (context.IsDevelopmentDemo && mode?.AllowDevelopmentDemo != true && mode?.AllowSandboxReceivingAccounts != true)
                 throw ContractException.Conflict("development_payment_unavailable");
             if (!context.InspectionConfirmed || context.HasLegacyDeductions ||
                 context.View.Reference != normalized.ExpectedReference ||

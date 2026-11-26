@@ -7,7 +7,7 @@ namespace BHome.Infrastructure.Persistence.Compact24;
 
 public static class Compact24Schema
 {
-    public const string Version = "compact24-2026-11-12-sepay";
+    public const string Version = "compact24-2026-11-26-sepay-modes";
     private static readonly string Script = ReadScript();
     private static readonly string SettlementSePayCodesScript = ReadScript("BHome.Compact24.SettlementSePayCodes.sql");
     private static readonly string MainInitialPaymentNoFeesScript = ReadScript("BHome.Compact24.MainInitialPaymentNoFees.sql");
@@ -91,8 +91,6 @@ public static class Compact24Schema
             while (await reader.ReadAsync(token)) foreignKeys.Add($"{reader.GetString(0)}({reader.GetString(1)})->{reader.GetString(2)}({reader.GetString(3)})");
         }
         if (!foreignKeys.Order(StringComparer.Ordinal).SequenceEqual(ExpectedForeignKeys(reference).Order(StringComparer.Ordinal))) return false;
-        // A forward migration updates the payment-code guard without rewriting the frozen
-        // baseline reference. Verify the corresponding body only after that migration is applied.
         var functionReference = reference;
         if (!propertyRefresh && ReferenceEquals(reference, Script) &&
             (await db.Database.GetAppliedMigrationsAsync(token)).Contains("20261122000100_SettlementSePayCodes", StringComparer.Ordinal))
@@ -125,7 +123,7 @@ public static class Compact24Schema
             while (await reader.ReadAsync(token)) requiredTriggers.Remove(reader.GetString(0));
         }
         if (requiredTriggers.Count != 0) return false;
-        var requiredIndexes = Regex.Matches(reference, @"(?m)^CREATE (?:UNIQUE )?INDEX ([a-z0-9_]+)").Select(m => m.Groups[1].Value).ToHashSet(StringComparer.Ordinal);
+        var requiredIndexes = Regex.Matches(reference, @"(?m)^CREATE (?:UNIQUE )?INDEX (?:IF NOT EXISTS )?([a-z0-9_]+)").Select(m => m.Groups[1].Value).ToHashSet(StringComparer.Ordinal);
         await using (var query = new NpgsqlCommand("SELECT indexname FROM pg_indexes WHERE schemaname='public'", connection, transaction))
         {
             await using var reader = await query.ExecuteReaderAsync(token);

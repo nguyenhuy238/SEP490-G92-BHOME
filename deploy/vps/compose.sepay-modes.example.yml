@@ -1,0 +1,4 @@
+services:
+  api:
+    env_file:
+      - ${BHOME_SEPAY_MODES_ENV_FILE:?Set the private server-side SePay dual-mode environment file}

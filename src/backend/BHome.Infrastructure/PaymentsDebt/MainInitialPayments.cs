@@ -13,8 +13,9 @@ using Microsoft.EntityFrameworkCore;
 namespace BHome.Infrastructure.PaymentsDebt;
 
 internal sealed class MainInitialPayments(BHomePersistenceContext db, ContractService contracts, IContractRepository contractData,
-    IPaymentRepository payments, IPaymentCodeRegistry codes,
-    ITransferQrGenerator qr, IMainInitialPaymentLedger orders, SePayOptions sepay, TimeProvider clock, IContractWorkflowMode workflowMode, IHoldingTestScope testScope, ICurrentUser user) : IMainInitialPayments
+    IMainDraftData drafts, IPaymentRepository payments, IPaymentCodeRegistry codes,
+    ITransferQrGenerator qr, IMainInitialPaymentLedger orders, SePayOptions sepay, TimeProvider clock, IContractWorkflowMode workflowMode, IHoldingTestScope testScope, ICurrentUser user,
+    ISePayOwnerConnections connections) : IMainInitialPayments
 {
     public async Task<MainInitialPaymentView> GetAsync(Guid id, bool issueQr, CancellationToken token)
     {
@@ -23,6 +24,7 @@ internal sealed class MainInitialPayments(BHomePersistenceContext db, ContractSe
         return await payments.TransactionAsync(null, null, async () =>
         {
             var c = await contractData.FindAsync(id, token) ?? throw new PaymentException(404, "contract_not_found");
+            await connections.ApplyOwnerAsync(c.OwnerSignerId, token);
             await db.Database.ExecuteSqlInterpolatedAsync($"SELECT pg_advisory_xact_lock(hashtextextended({c.Room.LocationId.ToString()},0))", token);
             await db.Locked<Room>(c.RoomId).SingleAsync(token);
             if (c.Kind != ContractKind.Main || c.PreviousContractId is not null) throw new PaymentException(409, "initial_main_contract_required");
@@ -34,6 +36,8 @@ internal sealed class MainInitialPayments(BHomePersistenceContext db, ContractSe
                 new[] { c.OwnerSignerId, c.TenantUserId }.All(id => id is not null && c.Signatures.Any(s => s.SignerUserId == id && (c.IsDevelopmentDemo ? sepay.Mode == "Test" && workflowMode.SimulatedSigningEnabled && s.Status == SignatureStatus.Simulated : s.Status == SignatureStatus.Signed) && s.SignedAt is not null && s.SnapshotHash == c.SnapshotHash && !string.IsNullOrWhiteSpace(s.SignedObjectKey) && !string.IsNullOrWhiteSpace(s.ProviderReference)));
             if (!signed || c.Status is not (ContractStatus.PendingActivation or ContractStatus.Active)) throw new PaymentException(409, "initial_payment_signatures_required");
             if (!ContractChargeSnapshot.IsIntact(c)) throw new PaymentException(409, "signed_terms_changed");
+            var signedCharges = string.IsNullOrWhiteSpace(c.AgreedPriceSnapshot) || c.AgreedPriceSnapshot == "{}"
+                ? null : ContractChargeSnapshot.Read(c).Charges;
             var order = await orders.ReadAsync(id, token);
             if (order is not null && order.SnapshotHash != c.SnapshotHash)
                 throw new PaymentException(409, "initial_payment_snapshot_changed");
@@ -65,7 +69,7 @@ internal sealed class MainInitialPayments(BHomePersistenceContext db, ContractSe
                 Guid? depositSource = null;
                 Guid? rentSource = null;
                 Guid? invoiceSource = null;
-                foreach (var candidate in candidates.Where(other => ContractPaymentModes.Of(other) == roomScopeMode))
+                foreach (var candidate in candidates)
                 {
                     var root = candidate;
                     while (root.PreviousContractId is { } previous)
@@ -147,10 +151,21 @@ internal sealed class MainInitialPayments(BHomePersistenceContext db, ContractSe
                 rent = 0;
             }
             var outstanding = outstandingDeposit + outstandingRentAndFees;
-            var account = await payments.ReceivingAccountAsync(order.LocationId, token);
-            var payableMode = roomScopeMode;
+            var meteredRates = (signedCharges ?? []).Where(p => p.Method == (int)ChargingMethod.Metered &&
+                    p.Category is (int)ChargeCategory.Electricity or (int)ChargeCategory.Water)
+                .Select(p => p.Category == (int)ChargeCategory.Electricity
+                    ? new MainInitialMeteredRate(p.ChargeCode, p.Name ?? "Điện", "kWh", p.Rate)
+                    : new MainInitialMeteredRate(p.ChargeCode, p.Name ?? "Nước", "m³", p.Rate))
+                .ToArray();
+            var payableKind = invoicePayable ? "Invoice" : "MainInitial";
+            var payableId = invoicePayable ? order.SharedInvoiceId!.Value : payable.ContractId;
+            var payableMode = await codes.PersistedModeAsync(payableKind, payableId, token) ??
+                (payable.ContractId == c.Id ? roomScopeMode : ContractPaymentModes.Of(
+                    await contractData.FindAsync(payable.ContractId, token) ?? throw new PaymentException(404, "contract_not_found")));
+            var account = await codes.AccountAsync(payableKind, payableId, order.LocationId, token) ??
+                await payments.ReceivingAccountForModeAsync(order.LocationId, payableMode, token);
             var bound = account is not null && account.Enabled && account.IsDevelopmentDemo == (payableMode == "Test") &&
-                payableMode == sepay.Mode && sepay.Matches(order.LocationId, account);
+                sepay.For(payableMode).Enabled && sepay.For(payableMode).Matches(order.LocationId, account);
             if (issueQr && untaggedSandbox && bound && outstanding > 0)
             {
                 // Resolve legacy, untagged Staging contracts only on an explicit QR

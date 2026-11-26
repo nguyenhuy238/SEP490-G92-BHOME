@@ -18,7 +18,7 @@ public sealed partial class FinancialReportRepository
               FROM payment_allocations a JOIN payments p ON p.id=a.source_payment_id
               JOIN invoices i ON i.id=a.target_invoice_id
               WHERE p.status='VERIFIED' AND i.status=1
-                AND COALESCE(p.verification_data->'compactState'->>'isDevelopmentDemo','false')<>'true'
+                AND (COALESCE(p.verification_data->'compactState'->>'isDevelopmentDemo','false')<>'true' OR p.provider_code='SEPAY:TEST')
               UNION ALL
               SELECT r.location_id,r.id,c.start_date,a.amount,
                 p.received_at,
@@ -27,7 +27,7 @@ public sealed partial class FinancialReportRepository
               JOIN contracts c ON c.id=COALESCE(a.target_initial_contract_id,a.target_deposit_contract_id)
               JOIN rooms r ON r.id=c.room_id
               WHERE p.status='VERIFIED'
-                AND COALESCE(p.verification_data->'compactState'->>'isDevelopmentDemo','false')<>'true'
+                AND (COALESCE(p.verification_data->'compactState'->>'isDevelopmentDemo','false')<>'true' OR p.provider_code='SEPAY:TEST')
             )
             SELECT location_id AS "LocationId",
               COALESCE(sum(amount) FILTER(WHERE kind IN ('Invoice','InitialRent') AND cash_at>={start} AND cash_at<{end}),0) AS "BusinessCollected",

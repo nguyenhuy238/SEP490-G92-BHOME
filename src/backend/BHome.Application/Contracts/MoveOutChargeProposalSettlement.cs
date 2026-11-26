@@ -73,6 +73,7 @@ public sealed partial class SettlementReceivablesService
         // remains atomic, including private evidence verification, immutable
         // Owner-approved charges and verified deposit allocations.
         var created = new List<SettlementReceivable>();
+        var channel = await NewPaymentModeAsync(id, token);
         foreach (var plan in proofPlans)
         {
             var proofs = await evidence.CaptureAsync(id, plan.Evidence, token);
@@ -84,8 +85,8 @@ public sealed partial class SettlementReceivablesService
                 plan.Item.Reason, "OwnerApprovedTenantAcceptedMoveOutProposal/v1:" + proposal.Id.ToString("N"),
                 proofs, context.RecipientUserIds.Order().ToArray(), proposal.OwnerUserId, now,
                 SettlementFinancialCloseRules.ChildKey(proposal.OperationKey, proposal.Id, "charge:" + sourceKey),
-                ProposalFingerprint(id, new { proposal.Id, sourceKey, plan.Item }), context.IsDevelopmentDemo,
-                RoomCheckCode: plan.RoomCheckCode);
+                ProposalFingerprint(id, new { proposal.Id, sourceKey, plan.Item }), channel is null ? context.IsDevelopmentDemo : channel == "Test",
+                RoomCheckCode: plan.RoomCheckCode, PaymentMode: channel);
             await repository.SaveChargeAsync(record, token);
             created.Add(record);
         }

@@ -111,7 +111,7 @@ public sealed partial class ContractService
                 RequiredDeposit = configured.HoldingDeposit,
                 Terms = configured.Terms,
                 IsDevelopmentDemo = DemoEnabled,
-                PaymentMode = ConfiguredPaymentMode(room.LocationId, input.OwnerSignerId)
+                PaymentMode = await ConfiguredPaymentModeAsync(room.LocationId, input.OwnerSignerId, token)
             };
             c.Residents = residents.Select(r => new ContractResident
             {

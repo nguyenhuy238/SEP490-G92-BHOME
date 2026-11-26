@@ -88,7 +88,7 @@ public sealed partial class FinancialReportRepository(BHomePersistenceContext db
               COALESCE(sum(a.amount) FILTER(WHERE a.allocated_at>={start}),0) AS "Collected"
             FROM payment_allocations a JOIN payments p ON p.id=a.source_payment_id JOIN invoices i ON i.id=a.target_invoice_id
             WHERE p.status='VERIFIED' AND i.status=1 AND a.allocated_at<{end}
-              AND COALESCE(p.verification_data->'compactState'->>'isDevelopmentDemo','false')<>'true'
+              AND (COALESCE(p.verification_data->'compactState'->>'isDevelopmentDemo','false')<>'true' OR p.provider_code='SEPAY:TEST')
               AND ({filter.LocationId}::uuid IS NULL OR i.location_id={filter.LocationId})
               AND ({filter.RoomId}::uuid IS NULL OR i.room_id={filter.RoomId}) GROUP BY i.location_id
             """).ToDictionaryAsync(c => c.LocationId, token);
