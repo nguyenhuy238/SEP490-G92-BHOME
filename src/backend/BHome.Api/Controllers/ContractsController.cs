@@ -15,8 +15,8 @@ public sealed class ContractsController(ContractService service, ContractExpiryS
 
     [HttpGet]
     public Task<ContractPage> List(CancellationToken t, [FromQuery] int page = 1, [FromQuery] int pageSize = 20,
-        [FromQuery] Guid? locationId = null, [FromQuery] string? status = null)
-        => service.ListAsync(page, pageSize, locationId, status, t);
+        [FromQuery] Guid? locationId = null, [FromQuery] string? status = null, [FromQuery] string? kind = null)
+        => service.ListAsync(page, pageSize, locationId, status, t, kind);
 
     [HttpGet("handovers"), Authorize(Roles = Roles.Owner)]
     public Task<HandoverInboxPage> HandoverInbox(CancellationToken t, [FromQuery] int page = 1,

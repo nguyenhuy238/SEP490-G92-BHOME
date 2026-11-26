@@ -276,3 +276,10 @@ Khi lập nghĩa vụ ban đầu, backend khóa phòng và liên kết khoản c
 Trong Sandbox đã được cấp phạm vi, hợp đồng chưa lưu chế độ thanh toán có thể đối chiếu khoản chung Sandbox của cùng phòng. Hợp đồng đã ghi rõ Live vẫn đối chiếu theo Live.
 
 Khi một Tenant kết thúc trước, khoản cọc chung được giữ cho hồ sơ bàn giao cuối của chu kỳ. Owner xác nhận người nhận đã được xác minh từ hồ sơ của Tenant bàn giao cuối. Nguồn tiền hoàn vẫn tham chiếu đúng khoản cọc gốc và quy trình đối soát, bằng chứng chuyển tiền vẫn được áp dụng.
+
+# Cập nhật danh sách và hồ sơ — 26/11/2026
+
+- `GET /api/v1/contracts` bổ sung query `kind` (Main/Renewal/Holding/Addendum); lọc sau quyền truy cập và trước count/pagination. `pageSize` vẫn theo API hiện có, Owner Web chọn 10; các client khác giữ mặc định 20.
+- Mỗi summary bổ sung `representativeName` từ hồ sơ đã xác nhận. Các occupant trong chi tiết cũng dùng đúng tên hồ sơ/hồ sơ rút gọn; không dùng tên phòng làm tên người.
+- `GET /contracts/preparation` trả label người ở từ hồ sơ xác nhận. Owner có số định danh đầy đủ trong picker theo yêu cầu; Staff chỉ thấy số đã che (4 số cuối), không nhận CCCD đầy đủ. Không thay quyền của `/residents` hoặc thêm ảnh CCCD.
+- DOCX renderer version 4 sửa căn chữ nội quy nhiều dòng và ghi rõ phí theo người tính theo sức chứa phòng. PDF đã đưa đi ký/đã ký tiếp tục dùng file snapshot bất biến.

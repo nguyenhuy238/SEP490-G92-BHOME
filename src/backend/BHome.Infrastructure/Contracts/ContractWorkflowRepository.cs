@@ -1,4 +1,5 @@
 using BHome.Application.Contracts;
+using BHome.Application.Ocr;
 using BHome.Domain.IdentityAccess;
 using BHome.Domain.TenantContracts;
 using BHome.Domain.PropertyManagement;
@@ -8,7 +9,7 @@ using Microsoft.EntityFrameworkCore;
 
 namespace BHome.Infrastructure.Contracts;
 
-internal sealed class ContractWorkflowRepository(BHomePersistenceContext db) : IContractWorkflowRepository
+internal sealed class ContractWorkflowRepository(BHomePersistenceContext db, IIdentityProtection? protection = null) : IContractWorkflowRepository
 {
     private IQueryable<Guid> EligibleStaff(DateOnly date) => db is Compact24DbContext compact
         ? StaffEmploymentEligibility.EligibleIds(compact, date)
@@ -26,9 +27,17 @@ internal sealed class ContractWorkflowRepository(BHomePersistenceContext db) : I
             (r.Status == RoomStatus.Available || r.Status == RoomStatus.Occupied || r.Status == RoomStatus.OnHold) && locations.Any(l => l.Id == r.LocationId))
             .OrderBy(r => r.RoomNumber).Take(100).Select(r => new ContractRoomChoice(r.Id, r.RoomNumber, r.LocationId, r.Status.ToString())).ToArrayAsync(t);
         var ids = rooms.Select(r => r.Id).ToArray();
-        var residents = await db.Set<Resident>().AsNoTracking().Where(r => r.RoomId != null && ids.Contains(r.RoomId.Value))
-            .OrderBy(r => r.DisplayLabel).Take(500).Select(r => new ContractResidentChoice(r.Id, r.RoomId!.Value, r.DisplayLabel, r.TenantUserId,
-                r.VerificationStatus == IdentityVerificationStatus.Verified, r.ResidentType.ToString())).ToArrayAsync(t);
+        var people = await db.Set<Resident>().AsNoTracking().Where(r => r.RoomId != null && ids.Contains(r.RoomId.Value))
+            .OrderBy(r => r.DisplayLabel).Take(500).ToArrayAsync(t);
+        var residents = people.Select(r =>
+        {
+            var identity = ContractResidentDisplay.Read(r, protection);
+            // Full identity number is restricted to the authorized Owner's selection UI.
+            var number = identity.Number is { Length: >= 4 } ? scope.Owner ? identity.Number : "********" + identity.Number[^4..] : null;
+            var label = number is not null ? $"{identity.Name} · {number}" : identity.Name;
+            return new ContractResidentChoice(r.Id, r.RoomId!.Value, label, r.TenantUserId,
+                ContractResidentEligibility.Ready(r, r.HouseholdRepresentativeId ?? r.Id), r.ResidentType.ToString());
+        }).ToArray();
         var owners = await (from account in db.Users.AsNoTracking()
                             join grant in db.UserRoles on account.Id equals grant.UserId
                             join role in db.Roles on grant.RoleId equals role.Id
