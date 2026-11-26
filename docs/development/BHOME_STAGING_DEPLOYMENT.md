@@ -355,13 +355,14 @@ commit, kết quả kiểm thử và hai checksum; không dùng key CI để tru
    không bỏ qua check. Không restore DB hay thay image từ helper.
 
 6. Phê duyệt release riêng sau khi nghiệm thu guard; bỏ cửa sổ bảo trì chỉ
-   khi an toàn. Nếu SHA của #346 vẫn là HEAD develop, dùng **Re-run all
-   jobs** của workflow gốc sau phê duyệt, không chỉ re-run failed jobs.
-   Workflow đặt tên artifact `release-<SHA>-<run_attempt>` và bắt buộc
-   provenance của cả ba image cùng commit, run ID-attempt và môi trường;
-   manifest từ attempt trước không hợp lệ cho attempt mới. Giữ nguyên
-   quality gates; kiểm tra manifest và ba immutable digests của attempt
-   mới, không mặc định dùng lại digests cũ. Run ID-attempt mới phải lớn hơn
+   khi an toàn. Nếu SHA vẫn là HEAD develop và chỉ bước deploy Staging lỗi,
+   có thể re-run riêng job Staging. Workflow tải đúng artifact
+   `release-<SHA>-<producer_attempt>` theo output của job `images` đã thành công,
+   kiểm tra checksum, run ID, producer attempt, môi trường và cả ba digest.
+   Nếu build hoặc job `images` lỗi, dùng **Re-run all jobs** để cả ba image
+   có provenance cùng attempt; không ghép image từ nhiều attempt. Production
+   vẫn yêu cầu manifest đúng attempt hiện hành. Giữ nguyên quality gates.
+   Deployment run ID-attempt mới phải lớn hơn
    current.json theo thứ tự cặp số (run ID, attempt). Nếu develop đã tiến,
    dùng CI/release của HEAD mới nhất đã duyệt, không retry SHA cũ.
    Không tự gọi worker bằng run ID giả.

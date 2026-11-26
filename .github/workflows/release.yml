@@ -169,6 +169,7 @@ jobs:
       owner: ${{ needs.build-owner.outputs.digest }}
       public: ${{ needs.build-public.outputs.digest }}
       manifest-sha256: ${{ steps.manifest.outputs.sha256 }}
+      manifest-attempt: ${{ steps.manifest.outputs.attempt }}
     steps:
       - uses: actions/checkout@v5
         with:
@@ -231,10 +232,11 @@ jobs:
           ref: ${{ github.sha }}
       - uses: actions/download-artifact@v5
         with:
-          name: release-${{ github.sha }}-${{ github.run_attempt }}
+          name: release-${{ github.sha }}-${{ needs.images.outputs.manifest-attempt }}
       - name: Verify release manifest before Staging deployment
         env:
           MANIFEST_SHA256: ${{ needs.images.outputs.manifest-sha256 }}
+          STAGING_MANIFEST_ATTEMPT: ${{ needs.images.outputs.manifest-attempt }}
           API_DIGEST: ${{ needs.images.outputs.api }}
           OWNER_DIGEST: ${{ needs.images.outputs.owner }}
           PUBLIC_DIGEST: ${{ needs.images.outputs.public }}

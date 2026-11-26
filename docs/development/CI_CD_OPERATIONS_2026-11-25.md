@@ -205,9 +205,12 @@ Dispatch chạy toàn bộ checks nhưng không gọi branch release.
 
 Nếu CI fail: đọc job đầu lỗi, log và artifact đúng attempt; sửa nguyên nhân,
 không nới assertion. Thiếu test phải kiểm discovery, filter, assembly và baseline.
-Re-run failed jobs có thể tái dùng output của build thành công ở attempt trước;
-manifest cố ý từ chối provenance khác attempt. Khi lỗi này xảy ra, chọn Re-run
-all jobs để có một bộ image/provenance thống nhất. Không xóa kiểm tra attempt.
+Re-run failed jobs có thể tái dùng output của build thành công ở attempt trước.
+Job tạo manifest vẫn từ chối provenance build khác attempt; nếu lỗi ở build
+hoặc tạo manifest, chọn Re-run all jobs. Nếu chỉ deploy Staging lỗi, có thể
+retry riêng job đó: manifest được tải theo producer attempt từ job `images`,
+được xác minh checksum, SHA, cùng run ID, môi trường và ba digest. Production
+không sử dụng ngoại lệ retry Staging này.
 Cache miss không được làm mất test/build; cache exporter lỗi không che lỗi
 thực thi. Cancelled/failed/missing/unexpected skipped mandatory job chặn gate.
 
