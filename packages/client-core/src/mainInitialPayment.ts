@@ -4,6 +4,7 @@ export interface MainInitialPayment {
   availability: string;
   signingComplete: boolean;
   charges: { code: string; name: string; amount: string }[];
+  firstMonthRent: string;
   requiredDeposit: string;
   holdingCredit: string;
   verifiedDeposit: string;

@@ -14,7 +14,7 @@ import {
   type ContractClient,
 } from '../../../../../packages/client-core/src/contracts';
 import { useHoldingPreparation } from './useHoldingPreparation';
-import { ChoiceField, Input } from '../../components/WorkflowControls';
+import { ChoiceField } from '../../components/WorkflowControls';
 import { mainDraftClient } from '../../../../../packages/client-core/src/mainDrafts';
 import type { HoldingPreparation } from '../../../../../packages/client-core/src/holdingSettings';
 import { HoldingConfirmationSummary } from './HoldingConfirmationSummary';
@@ -50,7 +50,6 @@ export function ContractDraftForm({
   }>({ key: '' });
   const [defaultsRevision, setDefaultsRevision] = useState(0);
   const [confirmedApplicantId, setConfirmedApplicantId] = useState('');
-  const [personSearch, setPersonSearch] = useState('');
   const [step, setStep] = useState(0),
     [busy, setBusy] = useState(false),
     [error, setError] = useFeedbackState('warning', false);
@@ -200,7 +199,7 @@ export function ContractDraftForm({
   function back() {
     if (busy) return;
     setError('');
-    if (step > 0) setStep((value) => value - 1);
+    if (step > 0) setStep((value) => (value === 2 ? 0 : value - 1));
     else onCancel();
   }
   function next() {
@@ -211,7 +210,7 @@ export function ContractDraftForm({
         validateSelection();
       }
       setError('');
-      setStep((value) => value + 1);
+      setStep((value) => (value === 0 ? 2 : value + 1));
     } catch (e) {
       setError(contractError(e));
     }
@@ -346,69 +345,6 @@ export function ContractDraftForm({
             )}
           </HoldingSectionCard>
         )}
-        {!!room && step === 1 && (
-          <HoldingSectionCard title="Thông tin người giữ chỗ">
-            {!!eligible.length && (
-              <>
-                <Input
-                  label={
-                    role === 'Owner'
-                      ? 'Tìm theo họ tên hoặc CCCD'
-                      : 'Tìm họ tên hoặc 4 số cuối CCCD'
-                  }
-                  value={personSearch}
-                  onChange={setPersonSearch}
-                  disabled={busy}
-                />
-                <ChoiceField
-                  label="Chọn người giữ chỗ đã xác minh"
-                  value={values.representativeResidentId ?? ''}
-                  options={eligible.filter((r) =>
-                    r.label
-                      .toLocaleLowerCase('vi')
-                      .includes(personSearch.trim().toLocaleLowerCase('vi')),
-                  )}
-                  onChange={(id) => {
-                    const person = eligible.find((r) => r.id === id);
-                    if (!person) return;
-                    setValues((before) => ({
-                      ...before,
-                      representativeResidentId: id,
-                      tenantName: person.label.split(' · ')[0],
-                      applicantFullName: person.label.split(' · ')[0],
-                    }));
-                    setConfirmedApplicantId(id);
-                  }}
-                  disabled={busy}
-                />
-              </>
-            )}
-            <HoldingNewTenant
-              key={`applicant:${room.id}:${values.representativeResidentId ?? ''}`}
-              api={api}
-              roomId={room.id}
-              role={role ?? ''}
-              context="holding"
-              stage="details"
-              disabled={busy}
-              initialResidentId={values.representativeResidentId}
-              initialName={values.applicantFullName || values.tenantName || ''}
-              initialEmail={values.tenantEmail}
-              initialConfirmed={!!representative?.verified}
-              onCreated={(id, name, email) =>
-                setValues((before) => ({
-                  ...before,
-                  representativeResidentId: id,
-                  tenantName: name,
-                  tenantEmail: email,
-                }))
-              }
-              onConfirmed={() => setConfirmedApplicantId(values.representativeResidentId)}
-              onContinue={() => setStep(2)}
-              onBack={back}
-            />
-          </HoldingSectionCard>
-        )}
         {!!room && (
           <View style={[styles.identityStage, step !== 2 && { display: 'none' }]}>
             <Text style={styles.sectionTitle}>CCCD của người giữ chỗ</Text>
@@ -417,7 +353,7 @@ export function ContractDraftForm({
             </Text>
             {!!room && (
               <HoldingNewTenant
-                key={`${room.id}:${values.representativeResidentId || values.tenantName || ''}`}
+                key={room.id}
                 api={api}
                 roomId={room.id}
                 role={role ?? ''}
@@ -502,7 +438,7 @@ export function ContractDraftForm({
         )}
         {!!error && <ContractNotice message={error} />}
       </View>
-      {step < 3 && step !== 1 && (
+      {step < 3 && (
         <WorkspaceFooter>
           <View style={styles.footer}>
             <Button

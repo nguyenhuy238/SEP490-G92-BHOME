@@ -5,7 +5,11 @@ import { holdingSteps as allHoldingSteps } from './holdingSteps';
 
 export function HoldingProgress({ current: sourceStep }: { current: number }) {
   const holdingSteps = allHoldingSteps;
-  const current = sourceStep;
+  // Flow stages retain their existing IDs; the separate applicant-details stage is skipped.
+  const current = Math.max(
+    0,
+    Math.min(sourceStep > 0 ? sourceStep - 1 : 0, holdingSteps.length - 1),
+  );
   const [expanded, setExpanded] = useState(false);
   const step = holdingSteps[current];
   return (

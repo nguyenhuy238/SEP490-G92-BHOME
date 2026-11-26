@@ -72,6 +72,7 @@ const iconMap: Record<string, typeof Building2> = {
   'operational-tasks': ClipboardList,
   tenants: Contact,
   contracts: FileText,
+  'contract-settings': FileText,
   handovers: KeyRound,
   'temporary-residence': ShieldCheck,
   finance: ChartNoAxesCombined,
@@ -101,7 +102,7 @@ const navGroups = [
     ],
   ],
   ['Nhân sự & Vận hành', ['staff', 'staff-assignments', 'operational-tasks']],
-  ['Khách thuê & Hợp đồng', ['tenants', 'contracts', 'handovers', 'temporary-residence']],
+  ['Khách thuê & Hợp đồng', ['tenants', 'contracts', 'contract-settings', 'handovers', 'temporary-residence']],
   ['Tài chính & Hóa đơn', ['finance', 'invoices', 'payments', 'reports']],
   ['Sự cố & Bảo trì', ['incidents', 'maintenance']],
   ['Thông báo', ['notifications']],
@@ -129,6 +130,7 @@ const navLabels: Record<string, string> = {
   'operational-tasks': 'Công việc vận hành',
   tenants: 'Khách thuê',
   contracts: 'Hợp đồng',
+  'contract-settings': 'Cấu hình hợp đồng',
   handovers: 'Bàn giao & trả phòng',
   'temporary-residence': 'Đăng ký tạm trú',
   meters: 'Chỉ số điện nước',
@@ -171,7 +173,7 @@ export function AppShell() {
   const location = useLocation();
   const workspaceParts = location.pathname.split('/');
   const current = workspaceParts[1] || 'dashboard';
-  const currentKey = current === 'configuration' ? workspaceParts.slice(1, 3).join('/') : current;
+  const currentKey = current === 'configuration' ? workspaceParts.slice(1, 3).join('/') : current === 'contracts' && workspaceParts[2] === 'settings' ? 'contract-settings' : current;
   const selectedNavKey = financeWorkspaceByRoute[current] ?? currentKey;
   const inLocationWorkspace = workspaceParts[1] === 'locations' && Boolean(workspaceParts[2]);
   const locations = data?.records.locations ?? [];
@@ -249,7 +251,7 @@ export function AppShell() {
                   >
                     <ListItemButton
                       component={NavLink}
-                      to={`/${key}`}
+                      to={key === 'contract-settings' ? '/contracts/settings' : `/${key}`}
                       aria-label={accessibleLabel}
                       aria-description={
                         selectedNavKey === key &&

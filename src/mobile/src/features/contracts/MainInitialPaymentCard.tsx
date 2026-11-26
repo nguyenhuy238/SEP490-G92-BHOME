@@ -34,7 +34,6 @@ export function MainInitialPaymentCard({
   const [error, setError] = useState('');
   const [busy, setBusy] = useState(false);
   const [checkedAt, setCheckedAt] = useState(Date.now);
-  const [showDetails, setShowDetails] = useState(false);
   const lock = useRef(false);
   useEffect(() => {
     const controller = new AbortController();
@@ -88,7 +87,6 @@ export function MainInitialPaymentCard({
     qr.outstandingAmount === data.outstandingAmount
       ? qr
       : null;
-  const meteredRates = data?.meteredRates ?? [];
   if (!data && !error) return <ContractLoading compact label="Đang tải thông tin thanh toán…" />;
   return (
     <>
@@ -103,74 +101,20 @@ export function MainInitialPaymentCard({
               data.availability !== 'PaymentProviderDisabled' &&
               data.transferReference && <PaymentStatusCountdown checkedAt={checkedAt} />}
             <View style={styles.amountBlock}>
-              <Text style={styles.note}>Còn phải trả</Text>
+              <HoldingInfoRow label="Tiền cọc yêu cầu" value={formatContractMoney(data.requiredDeposit)} />
+              <HoldingInfoRow label="Tiền cọc đã thanh toán" value={formatContractMoney(data.verifiedDeposit)} />
+              <HoldingInfoRow label="Tiền cọc còn thiếu" value={formatContractMoney(data.outstandingDeposit ?? '0')} />
+              <HoldingInfoRow label="Tiền thuê tháng đầu tiên" value={formatContractMoney(data.firstMonthRent)} />
+              <Text style={styles.note}>Tổng số tiền cần thanh toán</Text>
               <Text selectable style={styles.amount}>
                 {formatContractMoney(data.outstandingAmount)}
               </Text>
             </View>
             {Number(data.holdingCredit) > 0 && (
               <HoldingInfoRow
-                label="Tiền giữ chỗ đã áp dụng"
+                label="Trong đó có tiền giữ chỗ đã chuyển thành tiền cọc"
                 value={formatContractMoney(data.holdingCredit)}
               />
-            )}
-            <Button
-              mode="text"
-              icon={showDetails ? 'chevron-up' : 'chevron-down'}
-              accessibilityState={{ expanded: showDetails }}
-              contentStyle={styles.buttonContent}
-              style={styles.detailsButton}
-              onPress={() => setShowDetails((shown) => !shown)}
-            >
-              {showDetails ? 'Thu gọn chi tiết' : 'Xem chi tiết khoản thu'}
-            </Button>
-            {showDetails && (
-              <View style={styles.details}>
-                <HoldingInfoRow
-                  label="Cọc đảm bảo theo hợp đồng"
-                  value={formatContractMoney(data.requiredDeposit)}
-                />
-                {data.charges.map((line) => (
-                  <HoldingInfoRow
-                    key={line.code}
-                    label={line.name}
-                    value={formatContractMoney(line.amount)}
-                  />
-                ))}
-                <HoldingInfoRow
-                  label="Cọc đã ghi nhận (gồm tiền giữ chỗ đã cấn)"
-                  value={formatContractMoney(data.verifiedDeposit)}
-                />
-                {data.outstandingDeposit !== undefined && (
-                  <HoldingInfoRow
-                    label="Cọc còn phải nộp"
-                    value={formatContractMoney(data.outstandingDeposit)}
-                  />
-                )}
-                <HoldingInfoRow
-                  label="Tiền thuê và phí đã thanh toán"
-                  value={formatContractMoney(data.verifiedRentAndFees)}
-                />
-                {data.outstandingRentAndFees !== undefined && (
-                  <HoldingInfoRow
-                    label="Tiền thuê và phí còn phải nộp"
-                    value={formatContractMoney(data.outstandingRentAndFees)}
-                  />
-                )}
-                {meteredRates.length > 0 && (
-                  <View style={styles.details}>
-                    <Text variant="titleSmall">Tính trên hóa đơn theo chỉ số</Text>
-                    {meteredRates.map((line) => (
-                      <HoldingInfoRow
-                        key={line.code}
-                        label={line.name}
-                        value={`${formatContractMoney(line.rate)}/${line.unit}`}
-                      />
-                    ))}
-                    <Text style={styles.note}>Tính theo mức sử dụng đã xác nhận.</Text>
-                  </View>
-                )}
-              </View>
             )}
             {data.paid ? (
               <Text style={ui.green}>
@@ -263,8 +207,6 @@ const styles = StyleSheet.create({
   amountBlock: { gap: 4, paddingVertical: 6 },
   amount: { fontSize: 28, lineHeight: 36, fontWeight: '700', color: '#193653' },
   note: { fontSize: 12, lineHeight: 18, color: '#526581' },
-  details: { gap: 8, borderTopWidth: 1, borderColor: '#E2E8F0', paddingTop: 12 },
-  detailsButton: { alignSelf: 'flex-start', marginLeft: -8 },
   button: { borderRadius: 10 },
   buttonContent: { minHeight: 44 },
   qrFrame: {

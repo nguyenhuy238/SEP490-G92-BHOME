@@ -18,6 +18,10 @@ public sealed class MainDraftsController(MainDraftService service) : ControllerB
     public Task<MainContractSettings?> Settings(Guid locationId, CancellationToken t) => service.OwnerSettingsAsync(locationId, t);
     [HttpPut("settings/{locationId:guid}"), Authorize(Roles = Roles.Owner)]
     public async Task<IActionResult> Settings(Guid locationId, MainContractSettingsInput input, CancellationToken t) { await service.SetSettingsAsync(locationId, input, t); return NoContent(); }
+    [HttpGet("settings"), Authorize(Roles = Roles.Owner)]
+    public Task<MainContractSettings?> GlobalSettings(CancellationToken t) => service.OwnerSettingsAsync(t);
+    [HttpPut("settings"), Authorize(Roles = Roles.Owner)]
+    public async Task<IActionResult> GlobalSettings(MainContractSettingsInput input, CancellationToken t) { await service.SetSettingsAsync(input, t); return NoContent(); }
     [HttpPost]
     public Task<MainDraftView> Create(MainDraftInput input, CancellationToken t) => service.SaveAsync(null, input, Key(), t);
     [HttpGet("{id:guid}")]

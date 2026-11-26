@@ -184,6 +184,34 @@ function fill() {
     target: { value: 'Người thuê mới' },
   });
 }
+it.each([
+  ['Nhập thủ công', 'Nhập thủ công CCCD'],
+  ['Bắt đầu quét CCCD', 'Quét CCCD'],
+])('opens Holding %s without collecting a name beforehand', async (entry, dialogName) => {
+  const create = vi.fn().mockResolvedValue({ id: 'holding-resident' });
+  const summary = vi.fn();
+  const confirmed = vi.fn();
+  render(
+    <HoldingNewTenant
+      api={{ createHoldingResident: create } as unknown as ContractClient}
+      roomId="room"
+      role="Staff"
+      context="holding"
+      stage="identity"
+      onCreated={vi.fn()}
+      onConfirmed={confirmed}
+      onVerifiedSummary={summary}
+    />,
+  );
+  expect(screen.queryByLabelText('Họ và tên *')).toBeNull();
+  fireEvent.click(screen.getByRole('button', { name: entry }));
+  await screen.findByRole('dialog', { name: dialogName });
+  expect(create).toHaveBeenCalledExactlyOnceWith('room', 'Người giữ chỗ');
+  expect(confirmed).not.toHaveBeenCalled();
+  fireEvent.click(screen.getByText('Xác nhận từ quy trình CCCD'));
+  expect(summary).toHaveBeenCalledWith({ fullName: 'Tên đã xác minh', dateOfBirth: '1995-05-20' });
+  expect(confirmed).toHaveBeenCalledOnce();
+});
 it('opens Holding CCCD directly using the selected room label and reuses the same Resident', async () => {
   const create = vi.fn().mockResolvedValue({ id: 'holding-resident' });
   const props = {

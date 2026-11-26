@@ -48,8 +48,8 @@ public sealed class SharedMainInitialPaymentMigrationTests
             Assert.Empty(await db.Database.GetPendingMigrationsAsync());
 
             // VPS databases bootstrapped from SQL have no EF history. The reviewed
-            // operator path applies only this resource, without adopting a baseline.
-            await using var stream = typeof(Compact24DbContext).Assembly.GetManifestResourceStream("BHome.Compact24.SharedMainInitialPayment.sql")!;
+            // operator path applies the latest payment guard resource without adopting a baseline.
+            await using var stream = typeof(Compact24DbContext).Assembly.GetManifestResourceStream("BHome.Compact24.MainInitialPaymentNoFees.sql")!;
             using var reader = new StreamReader(stream);
             await db.Database.ExecuteSqlRawAsync(await reader.ReadToEndAsync());
             await db.Database.MigrateAsync();

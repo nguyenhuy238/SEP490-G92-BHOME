@@ -10,10 +10,6 @@ import {
   Box,
   Button,
   Drawer,
-  Dialog,
-  DialogTitle,
-  DialogContent,
-  DialogActions,
   LinearProgress,
   MenuItem,
   Pagination,
@@ -45,8 +41,6 @@ import { isMockMode } from '../../../services/config';
 import { useContractsApi } from '../useContractsApi';
 import { ContractDraftDialog } from '../ContractDraftDialog';
 import { ContractDetailPanel } from '../ContractDetailPanel';
-import { ContractConfigurationPanel } from '../ContractWorkflowPanel';
-import { MainDraftSettingsPanel } from '../MainDraftSettingsPanel';
 import { MainDraftDetailPanel } from '../MainDraftDetailPanel';
 
 export default function ContractsPage() {
@@ -85,7 +79,6 @@ function LiveContractsPage() {
   }
   const [mainDraft, setMainDraft] = useState(false);
   const [holding, setHolding] = useState(false);
-  const [settings, setSettings] = useState(false);
   const [draft, setDraft] = useState(false),
     [lookup, setLookup] = useState(''),
     [lookupError, setLookupError] = useState('');
@@ -107,7 +100,6 @@ function LiveContractsPage() {
         title="Hợp đồng thuê"
         actions={
           <>
-            <Button onClick={() => setSettings(true)}>Cấu hình hợp đồng</Button>
             <Button
               variant="contained"
               onClick={() => {
@@ -383,26 +375,6 @@ function LiveContractsPage() {
         </Accordion>
         {!!lookupError && <Alert severity="error">{lookupError}</Alert>}
       </Stack>
-      <Dialog
-        open={settings}
-        onClose={() => setSettings(false)}
-        maxWidth="md"
-        fullWidth
-        aria-labelledby="contract-settings-title"
-      >
-        <DialogTitle id="contract-settings-title">Cấu hình mẫu và quy trình hợp đồng</DialogTitle>
-        <DialogContent>
-          {settings && (
-            <Stack spacing={2}>
-              <MainDraftSettingsPanel api={api} />
-              <ContractConfigurationPanel api={api} />
-            </Stack>
-          )}
-        </DialogContent>
-        <DialogActions>
-          <Button onClick={() => setSettings(false)}>Đóng cấu hình</Button>
-        </DialogActions>
-      </Dialog>
       <Drawer
         anchor="right"
         open={!!selected}
@@ -410,24 +382,11 @@ function LiveContractsPage() {
           setSelected('');
           setMainDraft(false);
         }}
-        slotProps={{ paper: { sx: { width: { xs: '100%', md: 760 }, maxWidth: '100%' } } }}
+        slotProps={{ paper: { sx: { width: { xs: '100%', md: 760 }, maxWidth: '100%', display: 'flex', flexDirection: 'column', overflow: 'hidden' } } }}
       >
-        <Box sx={{ p: { xs: 1.5, sm: 2 }, minWidth: 0, overflowWrap: 'anywhere' }}>
-          <Stack direction="row" sx={{ justifyContent: 'space-between', mb: 2 }}>
-            <Typography component="h2" variant="h5">
-              Chi tiết hợp đồng
-            </Typography>
-            <Button
-              onClick={() => {
-                setSelected('');
-                setMainDraft(false);
-              }}
-            >
-              Đóng
-            </Button>
-          </Stack>
+        <Box sx={{ display: 'flex', flex: 1, minHeight: 0, minWidth: 0, overflow: 'hidden', overflowWrap: 'anywhere' }}>
           {selected && mainDraft ? (
-            <MainDraftDetailPanel
+            <Box sx={{ p: { xs: 1.5, sm: 2 }, overflowY: 'auto', flex: 1 }}><MainDraftDetailPanel
               key={selected}
               id={selected}
               onChanged={() => void list.refetch()}
@@ -435,7 +394,7 @@ function LiveContractsPage() {
                 setMainDraft(false);
                 void list.refetch();
               }}
-            />
+            /></Box>
           ) : (
             selected && (
               <ContractDetailPanel
@@ -444,6 +403,7 @@ function LiveContractsPage() {
                 id={selected}
                 actorId={actorId}
                 locationId={selectedLocation}
+                onClose={() => { setSelected(''); setMainDraft(false); }}
                 onChanged={(next) => {
                   void list.refetch();
                   if (next) {

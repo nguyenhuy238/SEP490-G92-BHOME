@@ -48,12 +48,12 @@ public sealed class MainDraftService(IContractRepository repository, IMainDraftD
         if (c.DraftMetadata == "{}") throw ContractException.Conflict("not_onboarding_draft");
         return c;
     }
-    public async Task<MainContractSettings?> OwnerSettingsAsync(Guid locationId, CancellationToken t)
+    public async Task<MainContractSettings?> OwnerSettingsAsync(CancellationToken t)
     {
         if (!user.IsInRole(Roles.Owner)) throw new ContractException(403, "contract_role_forbidden");
-        _ = Actor; return await data.OwnerSettingsAsync(locationId, t);
+        return await data.OwnerWideSettingsAsync(Actor, t);
     }
-    public Task SetSettingsAsync(Guid locationId, MainContractSettingsInput input, CancellationToken t)
+    public Task SetSettingsAsync(MainContractSettingsInput input, CancellationToken t)
     {
         if (!user.IsInRole(Roles.Owner)) throw new ContractException(403, "contract_role_forbidden");
         if (input.OwnerSignerId != Actor) throw new ContractException(403, "owner_profile_must_be_own");
@@ -63,11 +63,17 @@ public sealed class MainDraftService(IContractRepository repository, IMainDraftD
            p.DateOfBirth == default || p.DateOfIssue == default || p.DateOfBirth > input.EffectiveFrom || p.DateOfIssue > input.EffectiveFrom ||
            string.IsNullOrWhiteSpace(p.Address) || p.Address.Length > 1000 || string.IsNullOrWhiteSpace(p.PlaceOfIssue) || p.PlaceOfIssue.Length > 200 ||
            ContactPhone.Normalize(p.Phone) is null || input.EffectiveFrom == default || input.EffectiveTo < input.EffectiveFrom ||
-           input.SecurityDeposit < 0 || input.SecurityDeposit >= 1_000_000_000_000_000_000m || decimal.Truncate(input.SecurityDeposit) != input.SecurityDeposit ||
            string.IsNullOrWhiteSpace(input.PaymentTerms) || input.PaymentTerms.Length > 1000 || input.AdditionalTerms is null || input.AdditionalTerms.Length > 4000)
             throw ContractException.Invalid("invalid_contract_settings");
-        return data.SetSettingsAsync(locationId, input with { Owner = p with { Phone = ContactPhone.Normalize(p.Phone)! } }, Actor, t);
+        return data.SetOwnerSettingsAsync(Actor, input with { Owner = p with { Phone = ContactPhone.Normalize(p.Phone)! } }, Actor, t);
     }
+    // Compatibility for the former Location-scoped route. The persisted configuration is Owner-wide.
+    public async Task<MainContractSettings?> OwnerSettingsAsync(Guid locationId, CancellationToken t)
+    {
+        if (!user.IsInRole(Roles.Owner)) throw new ContractException(403, "contract_role_forbidden");
+        return await data.OwnerWideSettingsAsync(Actor, t);
+    }
+    public Task SetSettingsAsync(Guid locationId, MainContractSettingsInput input, CancellationToken t) => SetSettingsAsync(input, t);
     public async Task<MainDraftPreparation> PrepareAsync(Guid roomId, Guid representative, Guid[] ids, DateOnly on, CancellationToken t)
     {
         var room = await Room(roomId, t);
@@ -75,7 +81,7 @@ public sealed class MainDraftService(IContractRepository repository, IMainDraftD
         if (ids.Length > room.Capacity) throw ContractException.Conflict("room_capacity_exceeded");
         var residents = await repository.ResidentsAsync(roomId, ids, t);
         if (residents.Count != ids.Length || residents.Any(r => !BHome.Application.Ocr.ContractResidentEligibility.Ready(r, representative))) throw ContractException.Invalid("verified_residents_required");
-        var settings = await data.SettingsAsync(room.LocationId, on, t);
+        var settings = await data.SettingsAsync(residents.Single(r => r.Id == representative).OwnerUserId, on, t);
         var pricing = await prices.ResolvePricesAsync(roomId, on, t);
         var blockers = new List<string>();
         if (residents.Single(r => r.Id == representative).ResidentType != ResidentType.Representative || residents.Any(r => r.Id != representative && r.ResidentType == ResidentType.Representative)) blockers.Add("individual_representatives_require_separate_contracts");
@@ -121,7 +127,9 @@ public sealed class MainDraftService(IContractRepository repository, IMainDraftD
         Validate(x);
         return await repository.InTransactionAsync(x.RoomId, async () =>
         {
-            var room = await Room(x.RoomId, t); await data.LockConfigurationAsync(room.LocationId, t);
+            var room = await Room(x.RoomId, t);
+            var representativeRecord = (await repository.ResidentsAsync(x.RoomId, [x.RepresentativeResidentId], t)).Single();
+            await data.LockConfigurationAsync(representativeRecord.OwnerUserId, t);
             var fingerprint = Hash(new { id, input = x });
             var operation = await repository.OperationAsync(Actor, key, "main-draft", t);
             if (operation is not null)
@@ -131,7 +139,7 @@ public sealed class MainDraftService(IContractRepository repository, IMainDraftD
             }
             var preparation = await PrepareAsync(x.RoomId, x.RepresentativeResidentId, x.ResidentIds, x.StartDate, t);
             if (preparation.Blockers.Count > 0) throw ContractException.Conflict(preparation.Blockers[0]);
-            var settings = (await data.SettingsAsync(room.LocationId, x.StartDate, t))!;
+            var settings = (await data.SettingsAsync(representativeRecord.OwnerUserId, x.StartDate, t))!;
             if (!await repository.ActiveUserInRoleAsync(settings.OwnerSignerId, Roles.Owner, t)) throw ContractException.Conflict("owner_contract_settings_required");
             Contract c;
             if (id is { } existing)
@@ -192,7 +200,7 @@ public sealed class MainDraftService(IContractRepository repository, IMainDraftD
         {
             var c = await Load(id, t);
             if (c.Status != ContractStatus.Draft || c.Signatures.Count > 0) throw ContractException.Conflict("draft_version_or_status_changed");
-            var state = data.Unprotect(c); var settings = await data.SettingsAsync(c.Room.LocationId, c.StartDate, t) ?? throw ContractException.Conflict("owner_contract_settings_required");
+            var state = data.Unprotect(c); var settings = await data.SettingsAsync(c.OwnerSignerId, c.StartDate, t) ?? throw ContractException.Conflict("owner_contract_settings_required");
             if (c.SnapshotHash != Snapshot(c, state)) throw ContractException.Conflict("signed_terms_changed");
             if (state.TemplateHash != renderer.TemplateHash) throw ContractException.Conflict("draft_template_changed_save_again");
             if (Hash(settings) != state.SettingsHash) throw ContractException.Conflict("draft_configuration_changed_save_again");
@@ -310,10 +318,10 @@ public sealed class MainDraftService(IContractRepository repository, IMainDraftD
     {
         if (!renderer.CanUseSigningReview(c)) throw new ContractException(503, "main_draft_signing_template_not_approved");
         if (c.Status != ContractStatus.Draft || c.Signatures.Count > 0) throw ContractException.Conflict("draft_version_or_status_changed");
-        await data.LockConfigurationAsync(c.Room.LocationId, t);
+        await data.LockConfigurationAsync(c.OwnerSignerId, t);
         var state = data.Unprotect(c);
         if (c.SnapshotHash != Snapshot(c, state)) throw ContractException.Conflict("signed_terms_changed");
-        var settings = await data.SettingsAsync(c.Room.LocationId, c.StartDate, t) ?? throw ContractException.Conflict("owner_contract_settings_required");
+        var settings = await data.SettingsAsync(c.OwnerSignerId, c.StartDate, t) ?? throw ContractException.Conflict("owner_contract_settings_required");
         if (state.TemplateHash != renderer.TemplateHash || Hash(settings) != state.SettingsHash) throw ContractException.Conflict("draft_configuration_changed_save_again");
         var prep = await PrepareAsync(c.RoomId, c.RepresentativeResidentId, c.Residents.Select(r => r.ResidentId).ToArray(), c.StartDate, t);
         if (prep.Blockers.Count > 0) throw ContractException.Conflict(prep.Blockers[0]);
