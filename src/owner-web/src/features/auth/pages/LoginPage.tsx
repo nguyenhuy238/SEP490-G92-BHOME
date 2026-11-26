@@ -119,9 +119,6 @@ export function LoginPage() {
                   setResetOpen(true);
                 }}
               />
-              <Button component={RouterLink} to="/forgot-password">
-                Quên mật khẩu qua SMS
-              </Button>
             </Stack>
           )}
 

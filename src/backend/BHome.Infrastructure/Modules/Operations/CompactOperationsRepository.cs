@@ -4,6 +4,8 @@ using System.Text.Json;
 using System.Security.Cryptography;
 using BHome.Infrastructure.IdentityAccess;
 using BHome.Application.Operations;
+using BHome.Application.Ocr;
+using BHome.Infrastructure.Contracts;
 using BHome.Application.IdentityAccess;
 using BHome.Domain.IdentityAccess;
 using BHome.Infrastructure.Persistence;
@@ -17,7 +19,7 @@ using NpgsqlTypes;
 namespace BHome.Infrastructure.Modules.Operations;
 
 internal sealed partial class CompactOperationsRepository(Compact24DbContext db, UserManager<ApplicationUser> users,
-    SignInManager<ApplicationUser> signIn)
+    SignInManager<ApplicationUser> signIn, IIdentityProtection? identityProtection = null)
     : IOperationsRepository
 {
     private static readonly JsonSerializerOptions Json = new(JsonSerializerDefaults.Web);
@@ -306,9 +308,13 @@ internal sealed partial class CompactOperationsRepository(Compact24DbContext db,
 
     public async Task<ResidenceTaskView?> ResidenceAsync(Guid contractId, Guid residentId, Guid? tenantUserId, CancellationToken t)
     {
-        await Open(t); await using var command = Command(ResidenceSelect + " WHERE cr.contract_id=@contract AND cr.resident_id=@resident AND (@tenant IS NULL OR r.user_id=@tenant)");
+        await Open(t); await using var command = Command(ResidenceSelect + " WHERE cr.contract_id=@contract AND cr.resident_id=@resident AND (@tenant IS NULL OR r.user_id=@tenant OR c.tenant_user_id=@tenant)");
         command.Parameters.AddWithValue("contract", contractId); command.Parameters.AddWithValue("resident", residentId); AddNullableUuid(command, "tenant", tenantUserId);
-        await using var reader = await command.ExecuteReaderAsync(t); return await reader.ReadAsync(t) ? Residence(reader) : null;
+        ResidenceTaskView? result;
+        await using (var reader = await command.ExecuteReaderAsync(t)) result = await reader.ReadAsync(t) ? Residence(reader) : null;
+        if (result is null) return null;
+        var person = await db.Set<BHome.Domain.TenantContracts.Resident>().AsNoTracking().SingleAsync(r => r.Id == residentId, t);
+        return result with { ResidentLabel = ContractResidentDisplay.Read(person, identityProtection).Name };
     }
 
     public Task<ResidenceTaskView> UpdateResidenceAsync(Guid actorId, Guid contractId, Guid residentId,
@@ -318,15 +324,16 @@ internal sealed partial class CompactOperationsRepository(Compact24DbContext db,
             UPDATE contract_residents cr SET actual_residence_from=@actual,registration_status=@status,
                 registration_result_at=@result,owner_confirmed_by_user_id=NULL,owner_confirmed_at=NULL,
                 history=cr.history||jsonb_build_array(jsonb_build_object('action','TenantStatusUpdated','actorId',@actor,
-                    'occurredAt',@now,'status',@status,'note',@note))
+                    'occurredAt',@now,'status',@status,'note',@note) || jsonb_strip_nulls(jsonb_build_object('registrationExpiresOn',@expires)))
             FROM residents r,contracts c WHERE cr.contract_id=@contract AND cr.resident_id=@resident
-              AND r.id=cr.resident_id AND r.user_id=@actor AND c.id=cr.contract_id AND c.status=3
+              AND r.id=cr.resident_id AND (r.user_id=@actor OR c.tenant_user_id=@actor) AND c.id=cr.contract_id AND c.status=3
               AND @actual>=cr.residence_from
               AND (@reference::text IS NULL OR md5(cr.history::text)=@reference)
               AND (COALESCE(cr.registration_status,'Pending')<>'Completed' OR @status='Completed')
               AND (@status<>'Completed' OR (cr.registration_evidence_key IS NOT NULL AND @result IS NOT NULL))
             """);
         command.Parameters.AddWithValue("actual", input.ActualResidenceFrom); command.Parameters.AddWithValue("status", input.Status);
+        command.Parameters.AddWithValue("expires", NpgsqlDbType.Date, (object?)input.RegistrationExpiresOn ?? DBNull.Value);
         command.Parameters.AddWithValue("reference", NpgsqlDbType.Text, (object?)input.ExpectedReference ?? DBNull.Value);
         command.Parameters.AddWithValue("result", NpgsqlDbType.TimestampTz, (object?)input.ResultAt ?? DBNull.Value); command.Parameters.AddWithValue("actor", actorId);
         command.Parameters.AddWithValue("now", now); command.Parameters.AddWithValue("note", NpgsqlDbType.Text, (object?)input.Note ?? DBNull.Value);
@@ -380,7 +387,7 @@ internal sealed partial class CompactOperationsRepository(Compact24DbContext db,
                 history=cr.history||jsonb_build_array(jsonb_build_object('action','EvidenceUploaded','actorId',@actor,
                   'occurredAt',@now,'contentType',@type,'length',@length,'objectKey',@key))
             FROM residents r,contracts c WHERE cr.contract_id=@contract AND cr.resident_id=@resident
-              AND r.id=cr.resident_id AND r.user_id=@actor AND c.id=cr.contract_id AND c.status=3
+              AND r.id=cr.resident_id AND (r.user_id=@actor OR c.tenant_user_id=@actor) AND c.id=cr.contract_id AND c.status=3
               AND (@reference::text IS NULL OR md5(cr.history::text)=@reference)
             """);
         command.Parameters.AddWithValue("key", file.ObjectKey); command.Parameters.AddWithValue("actor", actorId); command.Parameters.AddWithValue("now", now);
@@ -396,9 +403,9 @@ internal sealed partial class CompactOperationsRepository(Compact24DbContext db,
             SELECT cr.registration_evidence_key,
               COALESCE((SELECT h->>'contentType' FROM jsonb_array_elements(cr.history) h WHERE h->>'action'='EvidenceUploaded' ORDER BY (h->>'occurredAt')::timestamptz DESC LIMIT 1),'image/jpeg'),
               COALESCE((SELECT (h->>'length')::bigint FROM jsonb_array_elements(cr.history) h WHERE h->>'action'='EvidenceUploaded' ORDER BY (h->>'occurredAt')::timestamptz DESC LIMIT 1),0)
-            FROM contract_residents cr JOIN residents r ON r.id=cr.resident_id
+            FROM contract_residents cr JOIN residents r ON r.id=cr.resident_id JOIN contracts c ON c.id=cr.contract_id
             WHERE cr.contract_id=@contract AND cr.resident_id=@resident AND cr.registration_evidence_key IS NOT NULL
-              AND (@tenant IS NULL OR r.user_id=@tenant)
+              AND (@tenant IS NULL OR r.user_id=@tenant OR c.tenant_user_id=@tenant)
             """); command.Parameters.AddWithValue("contract", contractId); command.Parameters.AddWithValue("resident", residentId); AddNullableUuid(command, "tenant", tenantUserId);
         await using var reader = await command.ExecuteReaderAsync(t); return await reader.ReadAsync(t) ? new(reader.GetString(0), reader.GetString(1), reader.GetInt64(2)) : null;
     }
@@ -640,12 +647,16 @@ internal sealed partial class CompactOperationsRepository(Compact24DbContext db,
 
     private async Task<OperationsPage<ResidenceTaskView>> ResidencePage(ResidenceQuery query, Guid? tenant, CancellationToken t)
     {
-        await Open(t); var where = "(@location IS NULL OR l.id=@location) AND (@status IS NULL OR COALESCE(cr.registration_status,'Pending')=@status) AND (@tenant IS NULL OR r.user_id=@tenant)";
+        await Open(t); var where = "c.status=3 AND cr.actual_residence_from<=CURRENT_TIMESTAMP AT TIME ZONE 'Asia/Ho_Chi_Minh' AND cr.actual_move_out_date IS NULL AND (@location IS NULL OR l.id=@location) AND (@status IS NULL OR COALESCE(cr.registration_status,'Pending')=@status) AND (@tenant IS NULL OR r.user_id=@tenant OR c.tenant_user_id=@tenant)";
         await using var count = Command("SELECT count(*) FROM contract_residents cr JOIN contracts c ON c.id=cr.contract_id JOIN rooms rm ON rm.id=c.room_id JOIN locations l ON l.id=rm.location_id JOIN residents r ON r.id=cr.resident_id WHERE " + where);
         ResidenceParameters(count, query, tenant); var total = Convert.ToInt32(await count.ExecuteScalarAsync(t), CultureInfo.InvariantCulture);
         await using var command = Command(ResidenceSelect + " WHERE " + where + " ORDER BY cr.residence_from DESC,cr.contract_id,cr.resident_id OFFSET @skip LIMIT @take");
         ResidenceParameters(command, query, tenant); command.Parameters.AddWithValue("skip", checked((query.Page - 1) * query.PageSize)); command.Parameters.AddWithValue("take", query.PageSize);
-        var items = new List<ResidenceTaskView>(); await using var reader = await command.ExecuteReaderAsync(t); while (await reader.ReadAsync(t)) items.Add(Residence(reader));
+        var items = new List<ResidenceTaskView>();
+        await using (var reader = await command.ExecuteReaderAsync(t)) while (await reader.ReadAsync(t)) items.Add(Residence(reader));
+        var ids = items.Select(r => r.ResidentId).Distinct().ToArray();
+        var people = await db.Set<BHome.Domain.TenantContracts.Resident>().AsNoTracking().Where(r => ids.Contains(r.Id)).ToDictionaryAsync(r => r.Id, t);
+        items = items.Select(r => r with { ResidentLabel = ContractResidentDisplay.Read(people[r.ResidentId], identityProtection).Name }).ToList();
         return new(items, query.Page, query.PageSize, total);
     }
 
@@ -989,7 +1000,8 @@ internal sealed partial class CompactOperationsRepository(Compact24DbContext db,
         r.GetFieldValue<DateOnly>(8), r.IsDBNull(9) ? null : r.GetFieldValue<DateOnly>(9), r.GetString(10), r.GetBoolean(11),
         r.IsDBNull(12) ? null : r.GetFieldValue<DateTimeOffset>(12), !r.IsDBNull(13), r.IsDBNull(14) ? null : r.GetFieldValue<DateTimeOffset>(14),
         ParseResidenceHistory(r.GetString(15)), r.GetString(16), r.GetBoolean(17),
-        r.IsDBNull(18) ? null : r.GetFieldValue<DateOnly>(18), r.GetBoolean(19));
+        r.IsDBNull(18) ? null : r.GetFieldValue<DateOnly>(18), r.GetBoolean(19),
+        r.IsDBNull(20) ? null : r.GetFieldValue<DateOnly>(20), r.GetBoolean(21), r.GetBoolean(22));
 
     private static IReadOnlyList<ResidenceHistoryView> ParseResidenceHistory(string json)
     {
@@ -1057,7 +1069,18 @@ internal sealed partial class CompactOperationsRepository(Compact24DbContext db,
               WHERE h->>'action'='AccommodationConfirmed' AND h->>'actualResidenceFrom'=cr.actual_residence_from::text),
           (SELECT (h.value->>'registrationDeadline')::date FROM jsonb_array_elements(cr.history) WITH ORDINALITY h(value,seq)
               WHERE h.value->>'action'='AccommodationConfirmed' AND h.value->>'actualResidenceFrom'=cr.actual_residence_from::text ORDER BY h.seq DESC LIMIT 1),
-          c.status=3 AND cr.actual_residence_from IS NOT NULL AND cr.actual_move_out_date IS NULL
+          c.status=3 AND cr.actual_residence_from IS NOT NULL AND cr.actual_move_out_date IS NULL,
+          (SELECT (h.value->>'registrationExpiresOn')::date FROM jsonb_array_elements(cr.history) WITH ORDINALITY h(value,seq)
+            WHERE h.value ? 'registrationExpiresOn' ORDER BY h.seq DESC LIMIT 1),
+          COALESCE((SELECT (h.value->>'registrationRequired')::boolean FROM jsonb_array_elements(cr.history) WITH ORDINALITY h(value,seq)
+            WHERE h.value->>'action'='TrackingConfigured' ORDER BY h.seq DESC LIMIT 1),true),
+          c.status=3 AND EXISTS(SELECT 1 FROM contract_residents started WHERE started.contract_id=c.id
+            AND started.actual_residence_from<=CURRENT_TIMESTAMP AT TIME ZONE 'Asia/Ho_Chi_Minh' AND started.actual_move_out_date IS NULL)
+          AND NOT EXISTS(SELECT 1 FROM contract_residents member WHERE member.contract_id=c.id
+            AND member.actual_residence_from IS NOT NULL AND member.actual_move_out_date IS NULL
+            AND COALESCE((SELECT (h.value->>'registrationRequired')::boolean FROM jsonb_array_elements(member.history) WITH ORDINALITY h(value,seq)
+              WHERE h.value->>'action'='TrackingConfigured' ORDER BY h.seq DESC LIMIT 1),true)
+            AND (COALESCE(member.registration_status,'Pending')<>'Completed' OR member.owner_confirmed_at IS NULL))
         FROM contract_residents cr JOIN contracts c ON c.id=cr.contract_id JOIN rooms rm ON rm.id=c.room_id
         JOIN locations l ON l.id=rm.location_id JOIN residents r ON r.id=cr.resident_id
         """;

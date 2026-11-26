@@ -30,6 +30,7 @@ import { OwnerWebNotice } from '../../components/OwnerWebNotice';
 import { OwnerHome, ApprovalCenter, Operations } from '../../screens/OwnerScreens';
 import { OwnerOverviewScreen } from '../../screens/OwnerOverviewScreen';
 import { OwnerResidenceScreen } from '../../screens/OwnerResidenceScreen';
+import { StaffResidenceScreen } from '../../screens/StaffResidenceScreen';
 import { StaffHome, WorkOrders, MeterReading } from '../../screens/StaffScreens';
 import { StaffNotificationScreen } from '../../screens/StaffNotificationScreen';
 import { StaffScheduleScreen } from '../../screens/StaffScheduleScreen';
@@ -246,7 +247,7 @@ export function WorkspaceScreenView({
           content = <TenantIncidentScreen />;
           break;
         case 'residence':
-          content = <TenantResidenceScreen />;
+          content = role === 'Staff' ? <StaffResidenceScreen /> : <TenantResidenceScreen />;
           break;
         case 'tenant-room':
         case 'tenant-features':

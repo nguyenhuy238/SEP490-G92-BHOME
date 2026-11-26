@@ -7,6 +7,7 @@ import {
   residenceError,
   residenceImageUri,
   residenceStatus,
+  residenceAlert,
   residenceKey,
   type ResidenceClient,
   type ResidencePage,
@@ -244,6 +245,15 @@ function OwnerResidenceRecord({
           <Heading title={`${task.residentLabel} · Phòng ${task.roomNumber}`} />
           <Pill>{task.ownerConfirmed ? 'Owner đã xác nhận' : residenceStatus[task.status]}</Pill>
           {task.resultAt && <Text>Có kết quả: {formatInstant(task.resultAt)}</Text>}
+          {task.registrationExpiresOn && (
+            <Text>Hết hạn tạm trú: {displayContractDate(task.registrationExpiresOn)}</Text>
+          )}
+          {!!residenceAlert(task) && <Text style={ui.red}>{residenceAlert(task)}</Text>}
+          <Text>
+            {task.householdCompleted
+              ? 'Tất cả thành viên thuộc diện đăng ký đã được xác nhận.'
+              : 'Còn thành viên thuộc diện đăng ký chưa hoàn thành.'}
+          </Text>
           {!!photoError && <Text style={ui.red}>{photoError}</Text>}
           {!!uri && (
             <Image

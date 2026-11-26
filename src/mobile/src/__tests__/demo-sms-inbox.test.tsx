@@ -1,8 +1,7 @@
 // @vitest-environment jsdom
 import React from 'react';
-import { cleanup, fireEvent, render, screen } from '@testing-library/react';
+import { cleanup, render, screen } from '@testing-library/react';
 import { afterEach, beforeEach, expect, it, vi } from 'vitest';
-import SmsPasswordRecoveryScreen from '../screens/SmsPasswordRecoveryScreen';
 import DemoSmsInboxScreen from '../screens/DemoSmsInboxScreen';
 
 const state = vi.hoisted(() => ({ request: vi.fn(), replace: vi.fn(), push: vi.fn() }));
@@ -88,42 +87,6 @@ afterEach(() => {
   cleanup();
   vi.unstubAllGlobals();
   vi.unstubAllEnvs();
-});
-it('completes SMS recovery on Mobile with the actual anonymous API contract', async () => {
-  const fetchMock = vi.fn(async (url: string) =>
-    url.endsWith('/request')
-      ? Response.json(
-          { challengeId: 'synthetic-challenge', retryAfterSeconds: 60, expiresInSeconds: 300 },
-          { status: 202 },
-        )
-      : url.endsWith('/verify')
-        ? Response.json({ authorization: 'synthetic-authorization', expiresInSeconds: 300 })
-        : new Response(null, { status: 204 }),
-  );
-  vi.stubGlobal('fetch', fetchMock);
-  render(<SmsPasswordRecoveryScreen />);
-  fireEvent.change(screen.getByLabelText('Tài khoản hoặc số điện thoại'), {
-    target: { value: 'tenant.sms-demo' },
-  });
-  fireEvent.click(screen.getByText('Gửi mã xác minh'));
-  await screen.findByLabelText('Mã xác minh');
-  expect((screen.getByText(/Gửi lại sau/) as HTMLButtonElement).disabled).toBe(true);
-  fireEvent.change(screen.getByLabelText('Mã xác minh'), { target: { value: '123456' } });
-  fireEvent.click(screen.getByText('Xác minh'));
-  await screen.findByLabelText('Mật khẩu mới');
-  fireEvent.click(screen.getByLabelText('Hiện mật khẩu'));
-  expect((screen.getByLabelText('Mật khẩu mới') as HTMLInputElement).type).toBe('text');
-  fireEvent.change(screen.getByLabelText('Mật khẩu mới'), {
-    target: { value: 'Next!Password-927' },
-  });
-  fireEvent.change(screen.getByLabelText('Xác nhận mật khẩu'), {
-    target: { value: 'Next!Password-927' },
-  });
-  fireEvent.click(screen.getByText('Đặt lại mật khẩu'));
-  await screen.findByText('Đã đặt lại mật khẩu');
-  expect(fetchMock).toHaveBeenCalledTimes(3);
-  fireEvent.click(screen.getByText('Quay lại đăng nhập'));
-  expect(state.replace).toHaveBeenCalledWith('/');
 });
 it('renders protected simulated messages in the Mobile demo inbox', async () => {
   vi.stubEnv('EXPO_PUBLIC_SMS_DEMO_ENABLED', 'true');

@@ -191,9 +191,12 @@ it('opens an assigned move-in inventory task from priorities', () => {
   fireEvent.click(screen.getByRole('button', { name: 'Kiểm kê trước nhận phòng, Cơ sở kiểm thử' }));
   expect(state.go).toHaveBeenCalledWith('move-in-inventory', { taskId: 'inventory-task' });
 });
-it('shows four quick actions and keeps six work areas available', () => {
+it('shows four quick actions and keeps seven work areas including residence tracking available', () => {
   render(<StaffDashboard />);
-  expect(staffFeatureGroups).toHaveLength(6);
+  expect(staffFeatureGroups).toHaveLength(7);
+  expect(staffFeatureGroups.flatMap((group) => group.items)).toContainEqual(
+    expect.objectContaining({ screen: 'residence' }),
+  );
   expect(screen.queryByText('Sự cố khẩn cấp')).toBeNull();
   for (const group of staffFeatureGroups) {
     for (const item of group.items) {

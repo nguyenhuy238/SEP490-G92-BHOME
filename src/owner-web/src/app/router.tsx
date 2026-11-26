@@ -29,7 +29,6 @@ const ContractsPage = lazy(() => import('../features/contracts/pages/ContractsPa
 const TerminationReviewPage = lazy(
   () => import('../features/contracts/pages/TerminationReviewPage'),
 );
-const DigitalSigningPage = lazy(() => import('../features/contracts/pages/DigitalSigningPage'));
 const HandoversPage = lazy(() => import('../features/handovers/pages/HandoversPage'));
 const TemporaryResidencePage = lazy(
   () => import('../features/temporary-residence/pages/TemporaryResidencePage'),
@@ -84,7 +83,6 @@ const PolicyTemplatesPage = lazy(() =>
 );
 const ResetPasswordPage = lazy(() => import('../features/auth/pages/ResetPasswordPage'));
 const HoldingSettingsPage = lazy(() => import('../features/contracts/pages/HoldingSettingsPage'));
-const SmsRecoveryPage = lazy(() => import('../features/auth/pages/SmsRecoveryPage'));
 const DemoSmsInboxPage =
   import.meta.env.DEV && import.meta.env.VITE_SMS_DEMO_ENABLED === 'true'
     ? lazy(() => import('../features/notifications/pages/DemoSmsInboxPage'))
@@ -100,7 +98,10 @@ export function AppRouter() {
         <Routes>
           <Route path="/login" element={<LoginRoute />} />
           <Route path="/reset-password" element={<ResetPasswordPage />} />
-          <Route path="/forgot-password" element={<SmsRecoveryPage />} />
+          <Route
+            path="/forgot-password"
+            element={<Navigate to="/login" state={{ emailRecovery: true }} replace />}
+          />
           <Route path="/confirm-email" element={<ConfirmEmailPage />} />
           <Route path="/accept-invitation" element={<AcceptInvitationPage />} />
           <Route path="/contract-signing" element={<AnonymousSigningPage />} />
@@ -147,7 +148,7 @@ export function AppRouter() {
                 path="/contracts/:contractId/termination-review"
                 element={<TerminationReviewPage />}
               />
-              <Route path="/digital-signing" element={<DigitalSigningPage />} />
+              <Route path="/digital-signing" element={<Navigate to="/contracts" replace />} />
               <Route path="/handovers" element={<HandoversPage />} />
               <Route path="/temporary-residence" element={<TemporaryResidencePage />} />
               <Route path="/meters" element={<MetersPage />} />

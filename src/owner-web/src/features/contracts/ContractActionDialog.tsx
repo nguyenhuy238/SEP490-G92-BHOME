@@ -230,9 +230,7 @@ export function ContractActionDialog({
             !certs.isFetching &&
             !certs.error &&
             !certs.data?.some(canUseCertificate) && (
-              <Alert severity="info">
-                Chưa có chứng thư dùng được. Đóng hộp thoại và khai báo chứng thư MySign của bạn.
-              </Alert>
+              <Alert severity="info">Chưa có chứng thư dùng được cho yêu cầu ký này.</Alert>
             )}
           {certs.error && (
             <Alert severity="error">

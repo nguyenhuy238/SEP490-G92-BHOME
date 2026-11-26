@@ -223,7 +223,8 @@ public sealed class InvoiceService(IInvoiceRepository repository, ICurrentUser u
         foreach (var tenantId in audience.Where(tenantId => invoice.Recipients.All(r => r.TenantUserId != tenantId)))
             invoice.Recipients.Add(new InvoiceRecipient { InvoiceId = invoice.Id, TenantUserId = tenantId });
         var occupiedDays = end.Day;
-        var people = PersonMonthOccupancy.Read(start, occupants.Select(o => o.Contract));
+        var room = await repository.RoomAsync(invoice.RoomId, t) ?? throw new InvoiceException(404, "room_not_found");
+        var people = PersonMonthOccupancy.ForRoomCapacity(room.Capacity, occupiedDays);
         var missing = new List<string>();
         if (occupants.Any(o => !o.ContactsComplete)) missing.Add("occupant_account_email_required");
         var charges = ContractBillingPrices.Read(representative.Contract, invoice.LocationId, missing);

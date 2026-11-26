@@ -4,6 +4,7 @@ import { beforeEach, expect, it, vi } from 'vitest';
 import { ExpensesApiPage } from './ExpensesApiPage';
 import { MemoryRouter, Route, Routes } from 'react-router';
 import type { ExpenseReferences } from '../../../../../packages/client-core/src/finance';
+import { todayVietnam } from '../staff/staffContracts';
 
 const mock = vi.hoisted(() => ({
   locations: vi.fn(),
@@ -58,6 +59,10 @@ beforeEach(() => {
     truncated: false,
   });
 });
+function openTools() {
+  const toggle = screen.getByRole('button', { name: 'Lương, chi phí định kỳ & vốn' });
+  if (toggle.getAttribute('aria-expanded') === 'false') fireEvent.click(toggle);
+}
 function mount() {
   render(
     <QueryClientProvider
@@ -67,6 +72,76 @@ function mount() {
     </QueryClientProvider>,
   );
 }
+it('keeps specialist tools collapsed when Owner opens the expense list', async () => {
+  mount();
+  await screen.findAllByText('Bảo trì');
+  expect(screen.getByRole('button', { name: 'Ghi khoản chi' })).toBeVisible();
+  expect(
+    screen.queryByRole('button', { name: 'Phân bổ chi phí nhân viên' }),
+  ).not.toBeInTheDocument();
+  expect(screen.getByRole('button', { name: 'Lương, chi phí định kỳ & vốn' })).toHaveAttribute(
+    'aria-expanded',
+    'false',
+  );
+});
+it('offers category shortcuts and today without inventing an amount or confirming a payment', async () => {
+  mount();
+  await screen.findAllByText('Bảo trì');
+  fireEvent.click(screen.getByRole('button', { name: 'Ghi khoản chi' }));
+  expect(screen.getByLabelText(/Ngày phát sinh/)).toHaveValue(todayVietnam());
+  expect(screen.getByLabelText(/Số tiền/)).toHaveValue('');
+  fireEvent.mouseDown(screen.getByRole('combobox', { name: /Danh mục khoản chi/ }));
+  fireEvent.click(screen.getByRole('option', { name: /^Internet$/ }));
+  expect(screen.getByLabelText(/Danh mục khoản chi/)).toHaveValue('Internet');
+  fireEvent.change(screen.getByLabelText(/Danh mục khoản chi/), {
+    target: { value: 'Dịch vụ tùy chọn' },
+  });
+  expect(screen.getByLabelText(/Danh mục khoản chi/)).toHaveValue('Dịch vụ tùy chọn');
+  expect(screen.getByText(/Lưu chi phí trước/)).toBeVisible();
+  expect(mock.createExpense).not.toHaveBeenCalled();
+  expect(mock.recordExpensePayment).not.toHaveBeenCalled();
+});
+
+it('lets Owner choose a location before opening its recurring cost setup', async () => {
+  render(
+    <QueryClientProvider
+      client={new QueryClient({ defaultOptions: { queries: { retry: false } } })}
+    >
+      <MemoryRouter>
+        <ExpensesApiPage />
+      </MemoryRouter>
+    </QueryClientProvider>,
+  );
+  await screen.findAllByText('Bảo trì');
+  openTools();
+  fireEvent.click(screen.getByRole('button', { name: 'Chi phí định kỳ' }));
+  expect(screen.getByRole('dialog')).toHaveTextContent(
+    'Hệ thống tạo chi phí theo lịch; bạn xác nhận thực chi riêng.',
+  );
+  expect(screen.getByRole('link', { name: 'Cơ sở tổng hợp' })).toHaveAttribute(
+    'href',
+    '/locations/location/investment?tab=recurring',
+  );
+  expect(mock.createExpense).not.toHaveBeenCalled();
+});
+
+it('keeps the selected location in the recurring cost shortcut', async () => {
+  render(
+    <QueryClientProvider
+      client={new QueryClient({ defaultOptions: { queries: { retry: false } } })}
+    >
+      <MemoryRouter initialEntries={['/expenses?locationId=location']}>
+        <ExpensesApiPage />
+      </MemoryRouter>
+    </QueryClientProvider>,
+  );
+  await screen.findAllByText('Bảo trì');
+  openTools();
+  expect(screen.getByRole('link', { name: 'Chi phí định kỳ' })).toHaveAttribute(
+    'href',
+    '/locations/location/investment?tab=recurring',
+  );
+});
 it('keeps the Location Workspace scope when loading and creating expenses', async () => {
   render(
     <QueryClientProvider
@@ -82,6 +157,7 @@ it('keeps the Location Workspace scope when loading and creating expenses', asyn
   await screen.findAllByText('Bảo trì');
   expect(screen.getAllByText('500.000 ₫').length).toBeGreaterThan(0);
   expect(mock.report).not.toHaveBeenCalled();
+  openTools();
   fireEvent.click(screen.getByRole('button', { name: 'Xem tổng hợp vốn và chi phí' }));
   expect(await screen.findByText('15.000.000 ₫')).toBeInTheDocument();
   expect(screen.getByText('1.200.000 ₫')).toBeInTheDocument();
@@ -238,7 +314,7 @@ it('keeps the expense dialog open and blocks editing while a payment is being re
   await waitFor(() => expect(mock.recordExpensePayment).toHaveBeenCalledTimes(1));
   expect(screen.getByRole('button', { name: 'Đóng' })).toBeDisabled();
   expect(screen.getByRole('button', { name: 'Đang lưu…' })).toBeDisabled();
-  expect(screen.getByRole('textbox', { name: /Danh mục khoản chi/ })).toBeDisabled();
+  expect(screen.getByRole('combobox', { name: /Danh mục khoản chi/ })).toBeDisabled();
   fireEvent.keyDown(screen.getByRole('dialog'), { key: 'Escape' });
   expect(screen.getByRole('dialog')).toBeInTheDocument();
   fireEvent.submit(document.getElementById('expense-editor')!);

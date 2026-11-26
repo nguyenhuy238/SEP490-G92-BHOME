@@ -2,7 +2,6 @@ using System.Security.Cryptography;
 using System.Net.Sockets;
 using System.Text;
 using BHome.Application.Notifications;
-using BHome.Infrastructure.Branding;
 using MailKit;
 using MailKit.Net.Smtp;
 using MailKit.Security;
@@ -67,23 +66,15 @@ internal sealed class MailKitEmailSender(IOptions<EmailOptions> options, ILogger
         }
     }
 
-    internal static MimeEntity BuildBody(ChannelMessage message) => BuildBody(message, BrandAssets.MarkPng);
-
-    internal static MimeEntity BuildBody(ChannelMessage message, byte[]? brandMark)
+    internal static MimeEntity BuildBody(ChannelMessage message)
     {
         var body = new BodyBuilder
         {
             TextBody = EmailTemplate.Text(message),
             HtmlBody = EmailTemplate.Html(message.Title, message.Body, message.ActionUrl,
                 EmailTemplate.ActionLabel(message.EventType), message.MobileActionUrl, message.Credentials,
-                includeBrandMark: brandMark is not null, eventType: message.EventType)
+                eventType: message.EventType)
         };
-        if (brandMark is not null)
-        {
-            var logo = body.LinkedResources.Add("bhome-mark.png", brandMark, new ContentType("image", "png"));
-            logo.ContentId = EmailTemplate.BrandContentId;
-            logo.ContentDisposition = new ContentDisposition(ContentDisposition.Inline);
-        }
         if (message.Attachments is { } attachments)
         {
             if (attachments.Count > 2) throw new ChannelDeliveryException("email_attachments_invalid");

@@ -169,7 +169,7 @@ public sealed partial class ContractService(IContractRepository repository, ICur
         return View(c) with { Occupants = await repository.OccupantsAsync(c.Id, t), HoldingCustomer = customer };
     }
 
-    public Task<ContractPage> ListAsync(int page, int pageSize, Guid? locationId, string? status, CancellationToken t)
+    public Task<ContractPage> ListAsync(int page, int pageSize, Guid? locationId, string? status, CancellationToken t, string? kind = null)
     {
         Role(Roles.Owner, Roles.Staff, Roles.Tenant);
         if (page < 1 || pageSize is < 1 or > 100 || page > int.MaxValue / pageSize || locationId == Guid.Empty)
@@ -181,7 +181,14 @@ public sealed partial class ContractService(IContractRepository repository, ICur
                 throw ContractException.Invalid("invalid_contract_status");
             filter = parsed;
         }
-        return repository.ListAsync(new(Actor, user.IsInRole(Roles.Owner), user.IsInRole(Roles.Staff), user.IsInRole(Roles.Tenant), Today),
+        ContractKind? kindFilter = null;
+        if (kind is not null)
+        {
+            if (!Enum.TryParse<ContractKind>(kind, out var parsedKind) || !Enum.IsDefined(parsedKind))
+                throw ContractException.Invalid("invalid_contract_kind");
+            kindFilter = parsedKind;
+        }
+        return repository.ListAsync(new(Actor, user.IsInRole(Roles.Owner), user.IsInRole(Roles.Staff), user.IsInRole(Roles.Tenant), Today, kindFilter),
             page, pageSize, locationId, filter, t);
     }
 

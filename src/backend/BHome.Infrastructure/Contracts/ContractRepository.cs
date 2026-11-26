@@ -35,6 +35,7 @@ internal sealed class ContractRepository(BHomePersistenceContext db, ILogger<Con
                 a.LocationId == c.Room.LocationId && a.StartDate <= scope.Today && a.EndDate >= scope.Today)));
         if (locationId is { } location) query = query.Where(c => c.Room.LocationId == location);
         if (status is { } state) query = query.Where(c => c.Status == state);
+        if (scope.Kind is { } kind) query = query.Where(c => c.Kind == kind);
         var total = await query.CountAsync(t);
         var items = await query.OrderByDescending(c => c.StartDate).ThenBy(c => c.Id)
             .Skip((page - 1) * pageSize).Take(pageSize)
@@ -43,17 +44,19 @@ internal sealed class ContractRepository(BHomePersistenceContext db, ILogger<Con
                 Summary = new ContractSummary(c.Id, c.RoomId, c.Room.LocationId, c.Room.Location.Name, c.Room.RoomNumber,
                 c.Kind.ToString(), c.Status.ToString(), c.StartDate, c.EndDate, c.MonthlyRent,
                 c.Kind == ContractKind.Main && c.DraftMetadata != "{}" && c.Status == ContractStatus.Draft,
-                c.RequiredDeposit, c.HoldingExpiryAt, null),
+                c.RequiredDeposit, c.HoldingExpiryAt, null, null),
                 c.AgreedPriceSnapshot,
                 c.RepresentativeResidentId
             }).ToArrayAsync(t);
-        var representativeIds = items.Where(row => row.Summary.Kind == "Holding").Select(row => row.RepresentativeResidentId).Distinct().ToArray();
-        var customers = (scope.Owner || scope.Staff) && identityProtection is not null && representativeIds.Length > 0
+        var representativeIds = items.Select(row => row.RepresentativeResidentId).Distinct().ToArray();
+        var customers = identityProtection is not null && representativeIds.Length > 0
             ? await db.Set<Resident>().AsNoTracking().Where(r => representativeIds.Contains(r.Id) && r.VerificationStatus == IdentityVerificationStatus.Verified).ToDictionaryAsync(r => r.Id, t)
             : new Dictionary<Guid, Resident>();
         return new(items.Select(row =>
         {
             var summary = row.Summary;
+            if (customers.TryGetValue(row.RepresentativeResidentId, out var primary))
+                summary = summary with { RepresentativeName = ContractResidentDisplay.Read(primary, identityProtection).Name };
             if (summary.Kind != "Holding") return summary;
             if (customers.TryGetValue(row.RepresentativeResidentId, out var resident))
                 summary = summary with { HoldingCustomer = ReadHoldingCustomer(resident) };
@@ -376,11 +379,15 @@ internal sealed class ContractRepository(BHomePersistenceContext db, ILogger<Con
         if (entity is Contract { Kind: ContractKind.Main, PreviousContractId: null } c)
             handoverDraftCandidates[c.Id] = c;
     }
-    public async Task<IReadOnlyList<ContractOccupantView>> OccupantsAsync(Guid contractId, CancellationToken t) =>
-        await (from cr in db.Set<ContractResident>().AsNoTracking()
-               join resident in db.Set<Resident>() on cr.ResidentId equals resident.Id
-               where cr.ContractId == contractId
-               select new ContractOccupantView(resident.Id, resident.DisplayLabel, cr.Role == ResidentType.Representative)).ToArrayAsync(t);
+    public async Task<IReadOnlyList<ContractOccupantView>> OccupantsAsync(Guid contractId, CancellationToken t)
+    {
+        var occupants = await (from cr in db.Set<ContractResident>().AsNoTracking()
+                               join resident in db.Set<Resident>() on cr.ResidentId equals resident.Id
+                               where cr.ContractId == contractId
+                               select new { Resident = resident, cr.Role }).ToArrayAsync(t);
+        return occupants.Select(o => new ContractOccupantView(o.Resident.Id,
+            ContractResidentDisplay.Read(o.Resident, identityProtection).Name, o.Role == ResidentType.Representative)).ToArray();
+    }
     public async Task<HoldingCustomerView?> HoldingCustomerAsync(Guid contractId, Guid residentId, CancellationToken t)
     {
         var resident = await (from cr in db.Set<ContractResident>().AsNoTracking()

@@ -16,7 +16,7 @@ internal sealed partial class CompactNotificationEvents
         var policies = new List<(Guid Id, NotificationReminderPolicy Policy)>();
         await using (var cmd = await sql.Command("SELECT id,operating_settings->'notificationPolicy' FROM locations WHERE is_active AND operating_settings ? 'notificationPolicy'", t))
         { await using var reader = await cmd.ExecuteReaderAsync(t); while (await reader.ReadAsync(t)) policies.Add((reader.GetGuid(0), JsonSerializer.Deserialize<NotificationReminderPolicy>(reader.GetString(1), CompactNotificationWriter.Json)!)); }
-        var count = 0;
+        var count = billingOnly ? 0 : await ResidenceDateAlerts(t);
         var billingToday = sql.BusinessToday;
         foreach (var (location, policy) in policies)
         {
@@ -69,10 +69,12 @@ internal sealed partial class CompactNotificationEvents
                     $"{ISOWeek.GetYear(Today.ToDateTime(TimeOnly.MinValue))}W{ISOWeek.GetWeekOfYear(Today.ToDateTime(TimeOnly.MinValue))}";
                 var rows = new List<(Guid Contract, Guid Resident, Guid? User, Guid Owner)>();
                 await using (var cmd = await sql.Command("""
-                    SELECT cr.contract_id,cr.resident_id,r.user_id,c.owner_signer_id FROM contract_residents cr JOIN contracts c ON c.id=cr.contract_id
+                    SELECT cr.contract_id,cr.resident_id,COALESCE(r.user_id,c.tenant_user_id),c.owner_signer_id FROM contract_residents cr JOIN contracts c ON c.id=cr.contract_id
                     JOIN rooms rm ON rm.id=c.room_id JOIN residents r ON r.id=cr.resident_id WHERE rm.location_id=@location AND c.status=3
                     AND cr.actual_residence_from<=@today AND (cr.residence_to IS NULL OR cr.residence_to>=@today)
                     AND cr.actual_move_out_date IS NULL AND COALESCE(cr.registration_status,'Pending') IN ('Pending','InProgress')
+                    AND COALESCE((SELECT (h.value->>'registrationRequired')::boolean FROM jsonb_array_elements(cr.history) WITH ORDINALITY h(value,n)
+                        WHERE h.value->>'action'='TrackingConfigured' ORDER BY h.n DESC LIMIT 1),true)
                     FOR UPDATE OF cr
                     """, t, ("location", location), ("today", Today)))
                 { await using var reader = await cmd.ExecuteReaderAsync(t); while (await reader.ReadAsync(t)) rows.Add((reader.GetGuid(0), reader.GetGuid(1), reader.IsDBNull(2) ? null : reader.GetGuid(2), reader.GetGuid(3))); }

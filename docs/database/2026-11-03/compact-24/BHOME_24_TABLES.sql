@@ -910,9 +910,16 @@ BEGIN
     IF NEW.target_invoice_id IS NOT NULL THEN
       SELECT room_id,contract_id,status,base_total_amount INTO source_room,invoice_contract,invoice_state,outstanding FROM invoices WHERE id=NEW.target_invoice_id;
       IF source_room IS DISTINCT FROM target_room OR invoice_state IS DISTINCT FROM 1 OR NOT EXISTS(
-        WITH RECURSIVE versions AS (SELECT id,previous_contract_id FROM contracts WHERE id=approval_contract
-          UNION ALL SELECT c.id,c.previous_contract_id FROM contracts c JOIN versions v ON c.id=v.previous_contract_id)
-        SELECT 1 FROM versions WHERE id=invoice_contract) THEN RAISE EXCEPTION 'Invoice outside deposit tenancy' USING ERRCODE='23514'; END IF;
+        WITH RECURSIVE versions AS (SELECT id,previous_contract_id,start_date FROM contracts WHERE id=approval_contract
+          UNION ALL SELECT c.id,c.previous_contract_id,c.start_date FROM contracts c JOIN versions v ON c.id=v.previous_contract_id)
+        SELECT 1 FROM invoices i JOIN contracts c ON c.id=approval_contract
+        WHERE i.id=NEW.target_invoice_id AND (EXISTS(SELECT 1 FROM versions WHERE id=invoice_contract)
+          OR i.invoice_type='PERIODIC' AND c.tenant_user_id=ANY(i.recipient_user_ids)
+            AND i.billing_period>=date_trunc('month',(SELECT min(start_date) FROM versions))::date
+            AND i.billing_period<=date_trunc('month',COALESCE(
+              (SELECT ((h->'state'->>'observedSnapshot')::jsonb->>'date')::date
+                FROM jsonb_array_elements(COALESCE(c.move_out->'inspections','[]'::jsonb)) h
+                ORDER BY (h->'state'->>'version')::int DESC LIMIT 1),c.actual_end_date,c.end_date))::date)) THEN RAISE EXCEPTION 'Invoice outside deposit tenancy' USING ERRCODE='23514'; END IF;
       outstanding:=outstanding+COALESCE((SELECT sum(approved_delta_amount) FROM invoice_adjustments WHERE invoice_id=NEW.target_invoice_id AND status IN ('APPROVED','APPLIED') AND decision_snapshot->>'invoiceStatus'='1'),0)
         -COALESCE((SELECT sum(amount) FROM payment_allocations WHERE target_invoice_id=NEW.target_invoice_id),0);
       IF NEW.amount>outstanding THEN RAISE EXCEPTION 'Offset exceeds invoice balance' USING ERRCODE='23514'; END IF;

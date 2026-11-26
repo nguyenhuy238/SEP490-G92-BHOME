@@ -44,9 +44,19 @@ internal sealed class MinioObjectStorage : IObjectStorage, IDisposable
             // SDK 6 can return without throwing after a transport failure. A completed
             // Task alone is not evidence that the private object was persisted.
             if (response is null || string.IsNullOrWhiteSpace(response.Etag) || response.Size != length)
+            {
+                logger.LogWarning("Object storage upload was not acknowledged");
                 throw new IntegrationUnavailableException("object storage");
+            }
         }
-        catch (MinioException) { throw new IntegrationUnavailableException("object storage"); }
+        catch (MinioException error)
+        {
+            // SDK messages/responses can contain private object paths and signed
+            // requests. Retain only safe failure categories for CI/operations.
+            logger.LogWarning("Object storage upload failed ({ErrorType}, HTTP {StatusCode})",
+                error.GetType().Name, (int?)error.ServerResponse?.StatusCode);
+            throw new IntegrationUnavailableException("object storage");
+        }
     }
 
     public async Task CopyToAsync(string key, Stream destination, CancellationToken cancellationToken)

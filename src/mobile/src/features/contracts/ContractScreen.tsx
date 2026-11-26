@@ -25,7 +25,7 @@ import { useSession } from '../../lib/SessionProvider';
 import { useWorkspace } from '../workspace/WorkspaceProvider';
 import { Action, Box, Heading, Pill, Row, ui } from '../../components/WorkspaceKit';
 import { ChoiceField } from '../../components/WorkflowControls';
-import { ContractActionForm, SigningCertificates } from './ContractActionForm';
+import { ContractActionForm } from './ContractActionForm';
 import { ContractSigningPanel, signatureLine, useSigningMethods } from './ContractSigningPanel';
 import { ContractDraftForm } from './ContractDraftForm';
 import { MainDraftScreen } from './MainDraftScreen';
@@ -575,9 +575,6 @@ function LiveContractDetail({
   const sectionActions = actions.filter(
     (a) => a !== terminationAction && contractActionSection(a.operation) === section,
   );
-  const signer =
-    (role === 'Tenant' && c.tenantUserId === actorId) ||
-    (c.kind === 'Holding' && role === 'Owner' && c.ownerSignerId === actorId);
   const ownerMain =
     role === 'Owner' &&
     c.kind === 'Main' &&
@@ -775,12 +772,6 @@ function LiveContractDetail({
           {['Owner', 'Tenant'].includes(role) &&
             c.signatures.some((s) => ['Signed', 'Simulated'].includes(s.status)) && (
               <ContractEvidence api={api} contractId={id} contractKind={c.kind} pdf />
-            )}
-          {signer &&
-            !c.isDevelopmentDemo &&
-            !(role === 'Owner' && c.signingMode === 'INTERNAL_OTP_DRAWN') &&
-            (!signingMethods || signingMethods.methods.includes('VIETTEL_MYSIGN')) && (
-              <SigningCertificates api={api} />
             )}
         </Box>
       )}

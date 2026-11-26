@@ -54,6 +54,7 @@ import { InternalSigningPanel } from './InternalSigningPanel';
 import { contractPdfName } from '../../../../../packages/client-core/src/contractPdfName';
 import { ContractDocumentViewer } from './ContractDocumentViewer';
 import { useObjectUrl } from './useObjectUrl';
+import { OwnerContractPreview } from './OwnerContractPreview';
 
 function downloadBlob(blob: Blob, name: string) {
   const url = URL.createObjectURL(blob),
@@ -181,8 +182,6 @@ export function ContractDetailPanel({
         <strong>{formatContractMoney(c.monthlyRent)}</strong> / tháng
       </span>,
     ],
-    ['Cọc yêu cầu', formatContractMoney(c.requiredDeposit)],
-    ['Cọc giữ chỗ áp dụng', formatContractMoney(c.appliedHoldingDeposit)],
     ['Người ở', `${c.residentIds.length} người · Đại diện: ${representative}`],
     ...(c.actualEndDate
       ? ([['Kết thúc thực tế', displayContractDate(c.actualEndDate)]] as [string, string][])
@@ -229,21 +228,28 @@ export function ContractDetailPanel({
           id={c.id}
           reviewRequest={m?.status === 'Requested' || m?.status === 'Rejected'}
         />
-        <Stepper
-          activeStep={activeStep}
-          alternativeLabel
-          sx={{
-            my: 1.5,
-            '& .MuiStep-root': { px: { xs: 0.25, sm: 1 } },
-            '& .MuiStepLabel-label': { overflowWrap: 'anywhere' },
-          }}
-        >
-          {steps.map((s) => (
-            <Step key={s.label} completed={s.done}>
-              <StepLabel>{s.label}</StepLabel>
-            </Step>
-          ))}
-        </Stepper>
+        <Accordion disableGutters elevation={0}>
+          <AccordionSummary expandIcon={<ExpandMoreIcon />}>
+            <Typography variant="body2">Tiến trình hợp đồng</Typography>
+          </AccordionSummary>
+          <AccordionDetails>
+            <Stepper
+              activeStep={activeStep}
+              alternativeLabel
+              sx={{
+                my: 1.5,
+                '& .MuiStep-root': { px: { xs: 0.25, sm: 1 } },
+                '& .MuiStepLabel-label': { overflowWrap: 'anywhere' },
+              }}
+            >
+              {steps.map((s) => (
+                <Step key={s.label} completed={s.done}>
+                  <StepLabel>{s.label}</StepLabel>
+                </Step>
+              ))}
+            </Stepper>
+          </AccordionDetails>
+        </Accordion>
         <Box
           component="dl"
           sx={{
@@ -274,6 +280,7 @@ export function ContractDetailPanel({
 
       {!!error && <Alert severity="error">{error}</Alert>}
       {!!notice && <Alert severity="success">{notice}</Alert>}
+      {c.signingMode !== 'INTERNAL_OTP_DRAWN' && <OwnerContractPreview api={api} contract={c} />}
       {c.signingMode === 'INTERNAL_OTP_DRAWN' && (
         <Paper variant="outlined" sx={{ p: 2, borderRadius: 3 }}>
           <InternalSigningPanel api={api} contract={c} onChanged={detail.reload} />
@@ -349,52 +356,57 @@ export function ContractDetailPanel({
       ['Active', 'PendingSigning', 'PendingActivation', 'Terminated', 'Superseded'].includes(
         c.status,
       ) ? (
-        <ChartCard title="Giá & phí theo hợp đồng">
-          <Stack spacing={1.5}>
-            {c.agreedCharges?.length ? (
-              <>
-                <Alert severity="info">
-                  {c.priceLockedAt || c.approvedAt || c.status !== 'Draft'
-                    ? 'Biểu phí đã chốt được giữ nguyên trong suốt hợp đồng. Hóa đơn sử dụng đơn giá này, không sử dụng biểu giá mới của phòng.'
-                    : 'Biểu phí dự kiến của bản nháp; sẽ được khóa khi hợp đồng có ràng buộc.'}
-                </Alert>
-                {c.agreedCharges.map((charge) => (
-                  <Stack
-                    key={charge.chargeCode}
-                    direction={{ xs: 'column', sm: 'row' }}
-                    sx={{
-                      justifyContent: 'space-between',
-                      gap: { xs: 0.5, sm: 2 },
-                      overflowWrap: 'anywhere',
-                    }}
-                  >
-                    <Typography variant="body2">
-                      {charge.name || charge.chargeCode} · {charge.chargeCode}
-                    </Typography>
-                    <Typography
-                      variant="body2"
-                      sx={{ fontWeight: 600, fontVariantNumeric: 'tabular-nums' }}
+        <Accordion disableGutters variant="outlined">
+          <AccordionSummary expandIcon={<ExpandMoreIcon />}>
+            <Typography>Giá & phí theo hợp đồng</Typography>
+          </AccordionSummary>
+          <AccordionDetails>
+            <Stack spacing={1.5}>
+              {c.agreedCharges?.length ? (
+                <>
+                  <Alert severity="info">
+                    {c.priceLockedAt || c.approvedAt || c.status !== 'Draft'
+                      ? 'Biểu phí đã chốt được giữ nguyên trong suốt hợp đồng. Hóa đơn sử dụng đơn giá này, không sử dụng biểu giá mới của phòng.'
+                      : 'Biểu phí dự kiến của bản nháp; sẽ được khóa khi hợp đồng có ràng buộc.'}
+                  </Alert>
+                  {c.agreedCharges.map((charge) => (
+                    <Stack
+                      key={charge.chargeCode}
+                      direction={{ xs: 'column', sm: 'row' }}
+                      sx={{
+                        justifyContent: 'space-between',
+                        gap: { xs: 0.5, sm: 2 },
+                        overflowWrap: 'anywhere',
+                      }}
                     >
-                      {formatBillingDecimal(charge.rate)} đ/
-                      {charge.category === 1
-                        ? 'kWh'
-                        : charge.category === 2
-                          ? 'm³'
-                          : charge.method === 2
-                            ? 'người/tháng'
-                            : 'tháng'}
-                    </Typography>
-                  </Stack>
-                ))}
-              </>
-            ) : (
-              <Alert severity="warning">
-                Hợp đồng chưa có biểu phí đã chốt để đối chiếu. Không sử dụng giá cấu hình hiện tại
-                thay thế.
-              </Alert>
-            )}
-          </Stack>
-        </ChartCard>
+                      <Typography variant="body2">
+                        {charge.name || charge.chargeCode} · {charge.chargeCode}
+                      </Typography>
+                      <Typography
+                        variant="body2"
+                        sx={{ fontWeight: 600, fontVariantNumeric: 'tabular-nums' }}
+                      >
+                        {formatBillingDecimal(charge.rate)} đ/
+                        {charge.category === 1
+                          ? 'kWh'
+                          : charge.category === 2
+                            ? 'm³'
+                            : charge.method === 2
+                              ? 'người/tháng'
+                              : 'tháng'}
+                      </Typography>
+                    </Stack>
+                  ))}
+                </>
+              ) : (
+                <Alert severity="warning">
+                  Hợp đồng chưa có biểu phí đã chốt để đối chiếu. Không sử dụng giá cấu hình hiện
+                  tại thay thế.
+                </Alert>
+              )}
+            </Stack>
+          </AccordionDetails>
+        </Accordion>
       ) : null}
 
       {/* 3. Signatures: one line per party, then the signed PDF */}
@@ -407,13 +419,6 @@ export function ContractDetailPanel({
               : signingMethods && !signingMethods.methods.includes('VIETTEL_MYSIGN')
                 ? 'Chủ trọ ký số MySign (chứng thư qua VNeID) · Người thuê ký điện tử, xác thực OTP email'
                 : 'Mỗi bên ký bằng chứng thư Viettel MySign của chính mình'
-          }
-          action={
-            signer &&
-            !c.isDevelopmentDemo &&
-            (!signingMethods || signingMethods.methods.includes('VIETTEL_MYSIGN')) ? (
-              <SigningSetupLink />
-            ) : undefined
           }
         >
           <Stack divider={<Divider flexItem />} spacing={1}>
@@ -540,7 +545,14 @@ export function ContractDetailPanel({
           </Box>
         </AccordionDetails>
       </Accordion>
-      <ContractWorkflowPanel api={api} contract={c} />
+      <Accordion disableGutters variant="outlined">
+        <AccordionSummary expandIcon={<ExpandMoreIcon />}>
+          <Typography>Tài liệu và lịch sử</Typography>
+        </AccordionSummary>
+        <AccordionDetails>
+          <ContractWorkflowPanel api={api} contract={c} />
+        </AccordionDetails>
+      </Accordion>
       {c.kind !== 'Holding' && typeof api.transport === 'function' && (
         <ContractPolicyPanel
           api={api}
@@ -697,20 +709,6 @@ function ContractNavigation({ id, reviewRequest }: { id: string; reviewRequest: 
         Bảo trì sau bàn giao
       </Button>
     </Stack>
-  );
-}
-
-// Certificates, signature picture and the Viettel account live on their own page (menu "Ký số (MySign)").
-function SigningSetupLink() {
-  const routed = useInRouterContext();
-  return routed ? (
-    <Button size="small" component={RouterLink} to="/digital-signing">
-      Thiết lập ký số
-    </Button>
-  ) : (
-    <Button size="small" href="/digital-signing">
-      Thiết lập ký số
-    </Button>
   );
 }
 

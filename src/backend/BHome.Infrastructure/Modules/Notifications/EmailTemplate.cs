@@ -4,10 +4,9 @@ using BHome.Application.Notifications;
 
 namespace BHome.Infrastructure.Modules.Notifications;
 
-// Transactional email: shared table layout, inline styles and local embedded branding.
+// Transactional email: shared table layout, inline styles and image-free branding.
 internal static class EmailTemplate
 {
-    internal const string BrandContentId = "bhome-brand-mark@bhome.notification";
     private const string Footer = "Đây là email được gửi tự động từ hệ thống BHome.";
     private const string CredentialGuidance = "Bạn có thể đổi mật khẩu trong mục Hồ sơ cá nhân sau khi đăng nhập. Không chia sẻ mật khẩu này. Nếu không nhận ra thao tác cấp mật khẩu, vui lòng liên hệ người quản lý.";
 
@@ -42,7 +41,7 @@ internal static class EmailTemplate
     }
 
     internal static string Html(string title, string body, string? actionUrl = null, string actionLabel = "Mở BHOME",
-        string? mobileActionUrl = null, EmailCredentials? credentials = null, bool includeBrandMark = false,
+        string? mobileActionUrl = null, EmailCredentials? credentials = null,
         string? eventType = null)
     {
         Validate(title, body, actionUrl, mobileActionUrl, credentials);
@@ -69,9 +68,7 @@ internal static class EmailTemplate
         var mobile = mobileActionUrl is null ? "" : $$"""
             <p style="margin:12px 0 0;font-size:13px;line-height:1.7;color:#53657f">Đã cài BHOME? <a rel="noreferrer" href="{{Encode(mobileActionUrl)}}" style="color:#194cbb;text-decoration:underline">Mở trong ứng dụng</a>. Nếu chưa cài, hãy dùng nút phía trên để tiếp tục trên trình duyệt.</p>
             """;
-        var brand = includeBrandMark
-            ? $"<img src=\"cid:{BrandContentId}\" alt=\"Logo BHome\" width=\"36\" height=\"36\" style=\"width:36px;height:36px;vertical-align:middle;margin-right:8px;border:0\" />"
-            : "";
+        // Text branding works with blocked images and never creates a PNG attachment.
         return $$"""
             <!doctype html><html lang="vi"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><title>{{Encode(title)}}</title></head>
             <body style="margin:0;padding:0;background-color:#ffffff;color:#1f2937;font-family:Arial,Helvetica,sans-serif;-webkit-text-size-adjust:100%">
@@ -79,7 +76,7 @@ internal static class EmailTemplate
             <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="background-color:#ffffff"><tr><td align="center" style="padding:16px 12px">
             <!--[if mso]><table role="presentation" width="600" cellpadding="0" cellspacing="0"><tr><td><![endif]-->
             <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="width:100%;max-width:600px;background-color:#ffffff;border:1px solid #e5e7eb;border-radius:8px"><tr><td style="padding:24px 20px">
-            <p style="margin:0 0 20px;padding-bottom:16px;border-bottom:1px solid #e5e7eb;font-size:22px;line-height:1.2;font-weight:bold;color:#062757">{{brand}}BHome</p>
+            <p style="margin:0 0 20px;padding-bottom:16px;border-bottom:1px solid #e5e7eb;font-size:22px;line-height:1.2;font-weight:bold;color:#062757">BHome</p>
             <h1 style="margin:0 0 18px;font-size:24px;line-height:1.35;font-weight:bold;color:#062757;overflow-wrap:anywhere">{{Encode(title)}}</h1>
             {{paragraphs}}{{details}}{{action}}{{mobile}}
             <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="margin-top:24px"><tr><td style="border-top:1px solid #e5e7eb;padding-top:16px;font-size:13px;line-height:1.6;color:#53657f">{{Footer}}</td></tr></table>

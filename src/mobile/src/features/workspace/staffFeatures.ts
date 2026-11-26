@@ -12,6 +12,17 @@ export interface StaffFeature {
 
 export const staffFeatureGroups: { title: string; items: StaffFeature[] }[] = [
   {
+    title: 'Theo dõi tạm trú',
+    items: [
+      {
+        title: 'Theo dõi tạm trú',
+        detail: 'Trạng thái và thời hạn trong phạm vi phân công',
+        icon: 'shield-home-outline',
+        screen: 'residence',
+      },
+    ],
+  },
+  {
     title: 'Công việc của tôi',
     items: [
       {

@@ -66,6 +66,7 @@ it('keeps desktop navigation fully labeled without a collapse button, including 
     screen.queryByRole('button', { name: 'Mở rộng thanh điều hướng' }),
   ).not.toBeInTheDocument();
   const nav = screen.getByRole('navigation', { name: 'Điều hướng chính' });
+  expect(within(nav).queryByRole('link', { name: /MySign|Ký số/ })).not.toBeInTheDocument();
   expect(within(nav).getByText('Cơ sở & Phòng')).toBeInTheDocument();
   expect(within(nav).getByRole('link', { name: 'Tổng quan' })).toHaveAttribute(
     'aria-current',
@@ -182,9 +183,6 @@ it.each([
   ['/invoice-adjustments', /kiểm tra bằng chứng/, 'Xem danh sách hóa đơn', '/invoices'],
   ['/payments', /xác minh hóa đơn trước khi phân bổ/, 'Theo dõi công nợ', '/debts'],
   ['/debts', /hóa đơn còn phải thu/, 'Đối soát giao dịch', '/payments'],
-  ['/expenses', /khoản đầu tư và chi phí thực tế/, 'Xem báo cáo kinh doanh', '/reports'],
-  ['/reports', /bấm Xem báo cáo để tải kết quả kinh doanh/, 'Thử kịch bản What-if', '/what-if'],
-  ['/what-if', /giả định về giá, lấp đầy và chi phí/, 'Về báo cáo thực tế', '/reports'],
 ] as const)('guides the user through the real purpose of %s', (path, description, next, href) => {
   render(shell(path));
   const guidance = screen.getByRole('region', { name: 'Hướng dẫn sử dụng mục này' });
@@ -194,6 +192,21 @@ it.each([
     within(screen.getByRole('main')).getByRole('link', { name: 'Tổng quan tài chính' }),
   ).toHaveAttribute('href', '/finance');
 });
+
+it.each(['/expenses', '/reports', '/what-if'])(
+  'keeps %s navigation compact without repeating the page guidance',
+  (path) => {
+    render(shell(path));
+    expect(
+      screen.queryByRole('region', { name: 'Hướng dẫn sử dụng mục này' }),
+    ).not.toBeInTheDocument();
+    for (const name of ['Báo cáo', 'Chi phí & đầu tư', 'Kịch bản'])
+      expect(screen.getByRole('tab', { name })).toBeVisible();
+    expect(
+      within(screen.getByRole('main')).getByRole('link', { name: 'Tổng quan tài chính' }),
+    ).toHaveAttribute('href', '/finance');
+  },
+);
 
 it('keeps the location from the deep link during loading and switches to another location on the same section', () => {
   const { rerender } = render(shell('/locations/loc-1/rooms'));

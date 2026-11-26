@@ -65,6 +65,19 @@ internal sealed partial class SettlementReceivablesRepository(BHomePersistenceCo
         }
         return chain;
     }
+    private IQueryable<Invoice> OffsetInvoices(List<Contract> chain, DateOnly incurred)
+    {
+        var contract = chain[0];
+        var chainIds = chain.Select(c => c.Id).ToArray();
+        var firstPeriod = new DateOnly(chain[^1].StartDate.Year, chain[^1].StartDate.Month, 1);
+        var lastPeriod = new DateOnly(incurred.Year, incurred.Month, 1);
+        // The billing reference may be another tenancy in the same room. Match
+        // shared periodic debt by the issued recipient snapshot and tenancy dates,
+        // while retaining contract-specific invoices from this contract chain.
+        return db.Set<Invoice>().AsNoTracking().Where(i => i.RoomId == contract.RoomId && i.Status == InvoiceStatus.Final &&
+            (chainIds.Contains(i.RepresentativeContractId) || i.Type == "PERIODIC" && i.BillingPeriod >= firstPeriod && i.BillingPeriod <= lastPeriod &&
+                db.Set<InvoiceRecipient>().Any(r => r.InvoiceId == i.Id && r.TenantUserId == contract.TenantUserId)));
+    }
     public async Task<(Guid[] Ids, int Total)> TenantContractsAsync(Guid userId, int page, int pageSize, CancellationToken token)
     {
         if (db is not Compact24DbContext) throw new ContractException(503, "settlement_receivables_unavailable");
@@ -78,7 +91,7 @@ internal sealed partial class SettlementReceivablesRepository(BHomePersistenceCo
     public async Task<SettlementChargeContext> ContextAsync(Guid id, CancellationToken token)
     {
         if (db is not Compact24DbContext) throw new ContractException(503, "settlement_receivables_unavailable");
-        var chain = await ChainAsync(id, token); var contract = chain[0]; var chainIds = chain.Select(c => c.Id).ToArray();
+        var chain = await ChainAsync(id, token); var contract = chain[0];
         var inspection = await db.Set<ContractFinalInspection>().AsNoTracking().Where(i => i.ContractId == id).OrderByDescending(i => i.Version).FirstOrDefaultAsync(token);
         var move = await db.Set<ContractMoveOut>().AsNoTracking().SingleOrDefaultAsync(m => m.ContractId == id, token);
         var observed = inspection is null ? null : JsonSerializer.Deserialize<HandoverSnapshot>(inspection.ObservedSnapshot);
@@ -115,7 +128,7 @@ internal sealed partial class SettlementReceivablesRepository(BHomePersistenceCo
         var payerRows = await db.Set<Resident>().AsNoTracking().Where(r => r.TenantUserId != null && payerIds.Contains(r.TenantUserId.Value))
             .OrderBy(r => r.Id).Select(r => new { Id = r.TenantUserId!.Value, r.DisplayLabel }).ToArrayAsync(token);
         var payers = payerRows.DistinctBy(r => r.Id).Select(r => new BHome.Application.PaymentsDebt.PayerChoice(r.Id, r.DisplayLabel)).ToArray();
-        var invoiceRows = await db.Financials(db.Set<Invoice>().AsNoTracking().Where(i => i.RoomId == contract.RoomId && i.Status == InvoiceStatus.Final && chainIds.Contains(i.RepresentativeContractId)))
+        var invoiceRows = await db.Financials(OffsetInvoices(chain, incurred))
             .OrderBy(i => i.BillingPeriod).ThenBy(i => i.Id).Take(251).ToArrayAsync(token);
         if (invoiceRows.Length > 250) throw ContractException.Conflict("settlement_period_review_required");
         var invoiceBalances = new List<SettlementOffsetInvoice>();
@@ -221,8 +234,11 @@ internal sealed partial class SettlementReceivablesRepository(BHomePersistenceCo
     }
     public async Task<decimal?> InvoiceOutstandingAsync(Guid id, Guid invoiceId, CancellationToken token)
     {
-        var chain = await ChainAsync(id, token); var ids = chain.Select(c => c.Id).ToArray();
-        if (!await db.Set<Invoice>().AnyAsync(i => i.Id == invoiceId && i.RoomId == chain[0].RoomId && i.Status == InvoiceStatus.Final && ids.Contains(i.RepresentativeContractId), token)) return null;
+        var chain = await ChainAsync(id, token);
+        var snapshot = await db.Set<ContractFinalInspection>().AsNoTracking().Where(i => i.ContractId == id)
+            .OrderByDescending(i => i.Version).Select(i => i.ObservedSnapshot).FirstOrDefaultAsync(token);
+        var incurred = snapshot is null ? chain[0].ActualEndDate ?? chain[0].EndDate : JsonSerializer.Deserialize<HandoverSnapshot>(snapshot)!.Date;
+        if (!await OffsetInvoices(chain, incurred).AnyAsync(i => i.Id == invoiceId, token)) return null;
         return (await db.FinancialsAsync(invoiceId, token)).OutstandingAmount;
     }
     private async Task AppendAsync<T>(Guid contractId, Guid id, string kind, T record, Guid actor, DateTimeOffset at,

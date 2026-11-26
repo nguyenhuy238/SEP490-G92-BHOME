@@ -53,9 +53,9 @@ public sealed record ContractSummary(Guid Id, Guid RoomId, Guid LocationId, stri
     string Kind, string Status, DateOnly StartDate, DateOnly EndDate,
     [property: JsonNumberHandling(JsonNumberHandling.WriteAsString | JsonNumberHandling.AllowReadingFromString)] decimal MonthlyRent, bool OnboardingDraft = false,
     [property: JsonNumberHandling(JsonNumberHandling.WriteAsString | JsonNumberHandling.AllowReadingFromString)] decimal RequiredDeposit = 0,
-    DateTimeOffset? HoldingExpiresAt = null, HoldingCustomerView? HoldingCustomer = null);
+    DateTimeOffset? HoldingExpiresAt = null, HoldingCustomerView? HoldingCustomer = null, string? RepresentativeName = null);
 public sealed record ContractPage(IReadOnlyList<ContractSummary> Items, int Page, int PageSize, int TotalCount);
-public sealed record ContractListScope(Guid ActorId, bool Owner, bool Staff, bool Tenant, DateOnly Today);
+public sealed record ContractListScope(Guid ActorId, bool Owner, bool Staff, bool Tenant, DateOnly Today, ContractKind? Kind = null);
 // Placement null puts the signature in the signer's own box of the contract's signature block. UsePicture null/true
 // shows the signer's saved signature picture (when there is one) above "Ký bởi / Ngày ký"; false shows the text only.
 // Method: OTP (in-app electronic signature) or null for the certificate-based provider of the deployment.

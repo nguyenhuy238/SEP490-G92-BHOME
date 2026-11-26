@@ -887,7 +887,7 @@ public sealed class AnonymousSigningTests(Compact24Fixture fixture) : IClassFixt
             Assert.Equal(holdingDeposit, quote.HoldingCredit); Assert.Equal(holdingDeposit, quote.VerifiedDeposit);
             Assert.Equal(0m, quote.OutstandingDeposit);
             Assert.Contains(quote.Charges, p => p.Code == "SYN_INTERNET" && p.Amount == 50000m);
-            Assert.Contains(quote.Charges, p => p.Code == "SYN_PERSON" && p.Amount == 10000m);
+            Assert.Contains(quote.Charges, p => p.Code == "SYN_PERSON" && p.Amount == 20000m);
             Assert.Contains(quote.MeteredRates, p => p.Code == "ELECTRICITY" && p.Unit == "kWh");
             Assert.Contains(quote.MeteredRates, p => p.Code == "WATER" && p.Unit == "m³");
             Assert.DoesNotContain(quote.Charges, p => p.Code is "ELECTRICITY" or "WATER");

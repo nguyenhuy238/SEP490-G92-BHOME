@@ -11,6 +11,7 @@ import {
 import { useFocusEffect } from 'expo-router';
 import {
   residenceAction,
+  residenceAlert,
   residenceClient,
   residenceKey,
   residencePayload,
@@ -98,6 +99,7 @@ function ResidenceList({ api }: { api: ResidenceClient }) {
           contractId={current.contractId}
           residentId={current.residentId}
           listRecord={current}
+          members={items.filter((item) => item.contractId === current.contractId)}
         />
       )}
       {list.data && list.data.totalCount > list.data.pageSize && (
@@ -125,11 +127,13 @@ function ResidenceRecord({
   contractId,
   residentId,
   listRecord,
+  members,
 }: {
   api: ResidenceClient;
   contractId: string;
   residentId: string;
   listRecord: ResidenceTask;
+  members: ResidenceTask[];
 }) {
   const record = useResidenceRecord(api, contractId, residentId);
   const reload = record.reload;
@@ -175,7 +179,9 @@ function ResidenceRecord({
           )}
         </View>
       )}
-      {record.task && <ResidenceContent api={api} record={record} task={record.task} />}
+      {record.task && (
+        <ResidenceContent api={api} record={record} task={record.task} members={members} />
+      )}
     </>
   );
 }
@@ -183,11 +189,17 @@ function ResidenceContent({
   api,
   record,
   task,
+  members,
 }: {
   api: ResidenceClient;
   record: ReturnType<typeof useResidenceRecord>;
   task: ResidenceTask;
+  members: ResidenceTask[];
 }) {
+  const [selectedMembers, setSelectedMembers] = useState([task.residentId]);
+  const [expiresOn, setExpiresOn] = useState(() =>
+    task.registrationExpiresOn ? displayContractDate(task.registrationExpiresOn) : '',
+  );
   const [actual, setActual] = useState(() =>
     displayContractDate(task.actualResidenceFrom ?? task.residenceFrom),
   );
@@ -213,6 +225,7 @@ function ResidenceContent({
         resultTime,
         note,
         task.status !== 'Pending',
+        expiresOn,
       );
       if (
         await record.mutate(
@@ -259,6 +272,22 @@ function ResidenceContent({
         {task.registrationDeadline && (
           <Text>Hạn đăng ký được ghi nhận {displayContractDate(task.registrationDeadline)}</Text>
         )}
+        {!!task.registrationExpiresOn && (
+          <Text>Hết hạn tạm trú: {displayContractDate(task.registrationExpiresOn)}</Text>
+        )}
+        {!!residenceAlert(task) && (
+          <Text accessibilityRole="alert" style={s.error}>
+            {residenceAlert(task)}
+          </Text>
+        )}
+        {task.registrationRequired === false && (
+          <Text>Owner đã ghi nhận thành viên không thuộc diện phải đăng ký.</Text>
+        )}
+        <Text>
+          {task.householdCompleted
+            ? 'Tất cả thành viên thuộc diện đăng ký đã được Owner xác nhận.'
+            : 'Hộ gia đình còn thành viên chưa hoàn thành đăng ký.'}
+        </Text>
         {task.ownerConfirmedAt && (
           <Text variant="bodySmall">Xác nhận lúc: {formatInstant(task.ownerConfirmedAt)}</Text>
         )}
@@ -296,6 +325,30 @@ function ResidenceContent({
           Cập nhật kết quả
         </Text>
         {task.resultAt && <Text>Thời điểm có kết quả: {formatInstant(task.resultAt)}</Text>}
+        {members.length > 1 && task.status !== 'Pending' && (
+          <View>
+            <Text>Minh chứng này bao gồm những thành viên nào?</Text>
+            {members.map((member) => (
+              <Checkbox.Item
+                key={member.residentId}
+                label={member.residentLabel}
+                status={selectedMembers.includes(member.residentId) ? 'checked' : 'unchecked'}
+                disabled={disabled || member.residentId === task.residentId}
+                onPress={() =>
+                  setSelectedMembers((ids) =>
+                    ids.includes(member.residentId)
+                      ? ids.filter((id) => id !== member.residentId)
+                      : [...ids, member.residentId],
+                  )
+                }
+              />
+            ))}
+            <Text variant="bodySmall">
+              Chỉ chọn người có tên trong minh chứng. Tải minh chứng mới sẽ yêu cầu Owner xác nhận
+              lại từng người.
+            </Text>
+          </View>
+        )}
         {task.status !== 'Pending' && (
           <ResidenceEvidence
             api={api}
@@ -304,7 +357,11 @@ function ResidenceContent({
             disabled={disabled || !known}
             reviewRequired={record.review}
             upload={(bytes) =>
-              record.mutate(() => api.upload(task, bytes), 'Đã lưu ảnh minh chứng.')
+              record.mutate(
+                () =>
+                  api.upload(task, bytes, selectedMembers.length > 1 ? selectedMembers : undefined),
+                'Đã lưu ảnh minh chứng cho các thành viên được chọn.',
+              )
             }
           />
         )}
@@ -362,6 +419,12 @@ function ResidenceContent({
                 />
               </>
             )}
+            <ContractDateField
+              label="Ngày hết hạn tạm trú (nếu có)"
+              value={expiresOn}
+              onChange={setExpiresOn}
+              disabled={disabled}
+            />
             <TextInput
               mode="outlined"
               label="Ghi chú (không bắt buộc)"

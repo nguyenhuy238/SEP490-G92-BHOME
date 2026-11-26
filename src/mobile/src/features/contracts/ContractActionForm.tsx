@@ -6,7 +6,6 @@ import { Button, Checkbox, HelperText, Text } from 'react-native-paper';
 import {
   actionPayload,
   canUseCertificate,
-  certificateStatus,
   contractError,
   earlyTerminationDate,
   type ContractAction,
@@ -15,20 +14,11 @@ import {
   type mutationKeys,
 } from '../../../../../packages/client-core/src/contracts';
 import { useSigningCertificates } from '../../../../../packages/client-core/src/useSigningCertificates';
-import { formatInstant } from '../../../../../packages/client-core/src/localization';
 import { Action, Box, Heading } from '../../components/WorkspaceKit';
 import { IdentityDateField } from '../../components/IdentityDateField';
 import { ChoiceField, Input } from '../../components/WorkflowControls';
-import {
-  signingClient,
-  signingError,
-  signingPayload,
-} from '../../../../../packages/client-core/src/signing';
-import {
-  SignatureImageSection,
-  SignaturePlacementField,
-  type PlacementChoice,
-} from './SigningSetup';
+import { signingClient, signingPayload } from '../../../../../packages/client-core/src/signing';
+import { SignaturePlacementField, type PlacementChoice } from './SigningSetup';
 
 export function ContractActionForm({
   api,
@@ -218,14 +208,9 @@ export function ContractActionForm({
           {!directory.loading &&
             !directory.error &&
             !directory.certificates.some(canUseCertificate) && (
-              <Text>
-                Chưa có chứng thư dùng được. Khai báo hoặc mở khóa chứng thư của bạn ở phần chữ ký.
-              </Text>
+              <Text>Chưa có chứng thư dùng được cho yêu cầu ký này.</Text>
             )}
-          <Text variant="bodySmall">
-            Chỉ dùng chứng thư của bạn, còn hiệu lực và không khóa. Nếu chưa có, khai báo MySign ở
-            phần chữ ký.
-          </Text>
+          <Text variant="bodySmall">Chỉ dùng chứng thư của bạn, còn hiệu lực và không khóa.</Text>
           <Button
             disabled={busy || directory.loading}
             onPress={() => {
@@ -272,119 +257,5 @@ export function ContractActionForm({
         </Action>
       )}
     </Box>
-  );
-}
-export function SigningCertificates({ api }: { api: ContractClient }) {
-  const [open, setOpen] = useState(false),
-    [subscriber, setSubscriber] = useState(''),
-    [serial, setSerial] = useState(''),
-    [busy, setBusy] = useState(false),
-    [error, setError] = useFeedbackState('warning', false),
-    [notice, setNotice] = useFeedbackState('success');
-  const lock = useRef(false);
-  const directory = useSigningCertificates(api, open);
-  const signing = useMemo(() => signingClient(api.transport), [api]);
-  async function run(work: () => Promise<unknown>, message: string) {
-    if (lock.current) return;
-    lock.current = true;
-    setBusy(true);
-    setError('');
-    setNotice('');
-    try {
-      await work();
-      setSubscriber('');
-      setSerial('');
-      setNotice(message);
-      directory.reload();
-    } catch (e) {
-      setError(signingError(e));
-      directory.reload();
-    } finally {
-      lock.current = false;
-      setBusy(false);
-    }
-  }
-  return (
-    <>
-      <Button
-        disabled={busy}
-        onPress={() => {
-          setOpen((v) => !v);
-          directory.reload();
-        }}
-      >
-        {open ? 'Đóng quản lý chứng thư' : 'Khai báo chứng thư MySign của bạn'}
-      </Button>
-      {open && (
-        <>
-          <Text variant="titleSmall">Chứng thư MySign của bạn</Text>
-          <Text>
-            Khai báo chứng thư không đồng nghĩa đã ký hợp đồng. Xác nhận ký trên ứng dụng MySign khi
-            có yêu cầu.
-          </Text>
-          {directory.loading && <Text>Đang tải chứng thư…</Text>}
-          {!!directory.error && <ContractNotice message={directory.error} />}
-          {!directory.loading && !directory.error && !directory.certificates.length && (
-            <Text>Bạn chưa khai báo chứng thư MySign.</Text>
-          )}
-          {directory.certificates.map((c) => (
-            <Box key={c.id}>
-              <Text>
-                {c.provider} · {c.serialNumber}
-              </Text>
-              <Text>
-                Thuê bao: {c.providerUserIdHint} · {certificateStatus(c)}
-              </Text>
-              <Text>Hết hạn: {formatInstant(c.validTo)}</Text>
-              <Button
-                disabled={busy || directory.loading}
-                onPress={() =>
-                  void run(
-                    () => api.lockCertificate(c.id, !c.locked),
-                    c.locked
-                      ? 'Đã mở khóa chứng thư. Máy chủ vẫn kiểm tra hiệu lực khi ký.'
-                      : 'Đã khóa chứng thư cho các yêu cầu ký mới.',
-                  )
-                }
-              >
-                {c.locked ? 'Mở khóa chứng thư' : 'Khóa chứng thư'}
-              </Button>
-              <Button
-                disabled={busy || directory.loading}
-                onPress={() =>
-                  void run(() => signing.removeCertificate(c.id), 'Đã gỡ chứng thư khỏi BHOME.')
-                }
-              >
-                Gỡ chứng thư
-              </Button>
-            </Box>
-          ))}
-          <Button disabled={busy || directory.loading} onPress={directory.reload}>
-            Tải lại chứng thư
-          </Button>
-          <Input
-            label="Mã thuê bao MySign của bạn"
-            value={subscriber}
-            onChange={setSubscriber}
-            disabled={busy}
-          />
-          <Input label="Số serial (tùy chọn)" value={serial} onChange={setSerial} disabled={busy} />
-          {!!error && <ContractNotice message={error} />}
-          {!!notice && <Text>{notice}</Text>}
-          <Action
-            disabled={busy || !subscriber.trim() || subscriber.length > 100 || serial.length > 100}
-            onPress={() =>
-              void run(
-                () => api.declareCertificate(subscriber.trim(), serial.trim()),
-                'Đã truy vấn và lưu chứng thư từ nhà cung cấp.',
-              )
-            }
-          >
-            Tra cứu và lưu chứng thư
-          </Action>
-          <SignatureImageSection signing={signing} />
-        </>
-      )}
-    </>
   );
 }

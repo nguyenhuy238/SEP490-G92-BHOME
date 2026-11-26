@@ -87,7 +87,7 @@ public sealed partial class PaymentLedgerTests
     [Fact]
     public async Task NewAdjustmentAfterSettlementReviewPreservesDebtButDoesNotPreventPhysicalRelease()
     {
-        var w = await Setup(); await ReadySettlementFixture(w, true); using var owner = await Client(w.Owner); using var tenant = await Client(w.Tenants[0]); var path = $"/api/v1/contracts/{w.Contract}/move-out";
+        var w = await Setup(); await ReadySettlementFixture(w, true, payInvoices: false); using var owner = await Client(w.Owner); using var tenant = await Client(w.Tenants[0]); var path = $"/api/v1/contracts/{w.Contract}/move-out";
         var summary = (await owner.GetFromJsonAsync<ContractSettlementSummary>(path + "/settlement-summary"))!; (await Post(owner, path + "/settlement", new SettlementInput("Synthetic reviewed", summary.Reference))).EnsureSuccessStatusCode();
         await AdjustRequest(tenant, w.Invoice, 1, 90000);
         var today = DateOnly.FromDateTime(TimeZoneInfo.ConvertTimeBySystemTimeZoneId(DateTimeOffset.UtcNow, "Asia/Ho_Chi_Minh").DateTime);

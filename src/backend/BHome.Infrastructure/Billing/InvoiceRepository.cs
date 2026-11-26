@@ -73,6 +73,7 @@ internal sealed class InvoiceRepository(BHomePersistenceContext db) : IInvoiceRe
         var validEmails = emails.Where(u => !string.IsNullOrWhiteSpace(u.Email) && new System.ComponentModel.DataAnnotations.EmailAddressAttribute().IsValid(u.Email)).Select(u => u.Id).ToHashSet();
         return contracts.Select(c => new BillingOccupancy(c, c.Residents.Where(r => r.ResidenceFrom <= to && (r.ResidenceTo == null || r.ResidenceTo >= from) && links.ContainsKey(r.ResidentId))
             .Select(r => links[r.ResidentId]).Append(c.TenantUserId ?? throw new InvoiceException(409, "active_tenant_account_required")).Distinct().ToArray(), c.Residents.Where(r => r.ResidenceFrom <= to && (r.ResidenceTo == null || r.ResidenceTo >= from))
+                .Where(r => r.Role == ResidentType.Representative)
                 .All(r => links.TryGetValue(r.ResidentId, out var user) && validEmails.Contains(user)) && c.TenantUserId is { } representative && validEmails.Contains(representative))).ToArray();
     }
     public async Task<BillingReading?> ReadingAsync(Guid roomId, UtilityType type, DateOnly period, CancellationToken t)

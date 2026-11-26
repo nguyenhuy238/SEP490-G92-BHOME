@@ -3,7 +3,7 @@
 ## Quy tắc Billing đã thống nhất
 
 - Một hóa đơn định kỳ cho mỗi phòng/kỳ, gồm điện, nước, dịch vụ của kỳ hiện tại và tiền thuê của tháng kế tiếp.
-- Không phân bổ phí cố định theo số ngày ở. Dịch vụ theo người tính đủ tháng cho mỗi người có thời gian cư trú giao với kỳ, không đếm trùng khi gia hạn.
+- Không phân bổ phí cố định theo số ngày ở. Dịch vụ theo người tính đủ tháng theo **sức chứa phòng**, không lấy số người cư trú thực tế làm số lượng thu (quyết định tích hợp được người dùng xác nhận 26/11/2026; xem [INVOICES.md](../api/INVOICES.md)).
 - Chọn hợp đồng đối chiếu tự động: Main/Renewal đã kích hoạt, thuộc phòng, bắt đầu trước tháng kế tiếp, kết thúc thực tế (nếu có) hoặc dự kiến từ tháng kế tiếp trở đi. Sắp theo CreatedAt tăng dần, sau đó Id để ổn định. Đối chiếu hiệu lực lịch sử của kỳ, không chỉ trạng thái Active ngày chạy JOB-10.
 - Không có hợp đồng đối chiếu: bỏ qua sinh hóa đơn mới. Không đổi trạng thái phòng. Bản nháp đã tồn tại nhưng không còn hợp đồng đủ điều kiện không được phát hành; hóa đơn Final lịch sử không sửa.
 - Giữ kiểm tra các bộ giá đã ký không đồng nhất, không đoán giá.

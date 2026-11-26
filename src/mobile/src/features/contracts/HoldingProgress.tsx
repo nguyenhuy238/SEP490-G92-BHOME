@@ -4,8 +4,8 @@ import { Button, ProgressBar, Text } from 'react-native-paper';
 import { holdingSteps as allHoldingSteps } from './holdingSteps';
 
 export function HoldingProgress({ current: sourceStep }: { current: number }) {
-  const holdingSteps = allHoldingSteps.filter((step) => step.key !== 'applicant');
-  const current = sourceStep > 1 ? sourceStep - 1 : sourceStep;
+  const holdingSteps = allHoldingSteps;
+  const current = sourceStep;
   const [expanded, setExpanded] = useState(false);
   const step = holdingSteps[current];
   return (

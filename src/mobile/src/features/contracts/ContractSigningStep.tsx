@@ -20,7 +20,7 @@ import { formatInstant } from '../../../../../packages/client-core/src/localizat
 import { Action, Box, Heading, ui } from '../../components/WorkspaceKit';
 import { randomUUID } from '../../lib/randomUUID';
 import { ContractSigningPanel } from './ContractSigningPanel';
-import { ContractActionForm, SigningCertificates } from './ContractActionForm';
+import { ContractActionForm } from './ContractActionForm';
 import { SignaturePlacementField } from './SigningSetup';
 import { ContractEvidence } from './ContractEvidence';
 import { ContractLoading } from './ContractLoading';
@@ -518,9 +518,6 @@ export function ContractSigningStep({
           methods={methods}
           onChanged={changed}
         />
-      )}
-      {signer && methods?.methods.includes('VIETTEL_MYSIGN') && readyToSign && !complete && (
-        <SigningCertificates api={api} />
       )}
       {actions.map((a) => (
         <Action key={a.operation} onPress={() => setOperation(a.operation)}>

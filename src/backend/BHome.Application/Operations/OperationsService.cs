@@ -6,7 +6,7 @@ using BHome.Domain.IdentityAccess;
 
 namespace BHome.Application.Operations;
 
-public sealed class OperationsService(IOperationsRepository repository, IOperationsFiles files,
+public sealed partial class OperationsService(IOperationsRepository repository, IOperationsFiles files,
     ICurrentUser user, PermissionAccess permissions, TimeProvider clock)
 {
     private Guid Actor => user.UserId is { } id && id != Guid.Empty ? id : throw new OperationsException(401, "authentication_required");
@@ -162,7 +162,7 @@ public sealed class OperationsService(IOperationsRepository repository, IOperati
         if (!user.IsInRole(Roles.Tenant)) throw OperationsException.Forbidden();
         Validate(input);
         if (input.ActualResidenceFrom == default || input.ActualResidenceFrom > Today || input.ResultAt is { } result && result > Now.AddMinutes(5) ||
-            input.Status == "Completed" && input.ResultAt is null)
+            input.Status == "Completed" && input.ResultAt is null || input.RegistrationExpiresOn < input.ActualResidenceFrom)
             throw OperationsException.Invalid("invalid_residence_state");
         _ = await repository.ResidenceAsync(contractId, residentId, Actor, t) ?? throw OperationsException.Missing();
         return await repository.UpdateResidenceAsync(Actor, contractId, residentId,

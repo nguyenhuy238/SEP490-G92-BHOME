@@ -15,7 +15,7 @@ import { FilterToolbar, PageHeader } from '../../../components/common/PortalUI';
 import { isMockMode } from '../../../services/config';
 import { NotificationManagement } from '../NotificationManagement';
 import { NotificationDetail, NotificationRows, NotificationSkeleton } from '../NotificationRows';
-import { hasNotificationTarget, useNotificationActions } from '../useNotificationActions';
+import { useNotificationActions } from '../useNotificationActions';
 export default function NotificationsPage() {
   return isMockMode ? (
     <ResourcePage kind="notifications" variant="notifications" />
@@ -43,8 +43,6 @@ export function LiveNotificationsPage() {
     refetchInterval: composing ? false : 30000,
   });
   const viewDetail = (item: NotificationItem) => void actions.read(item, () => setDetail(item));
-  const openItem = (item: NotificationItem) =>
-    hasNotificationTarget(item) ? void actions.open(item) : viewDetail(item);
   return (
     <>
       <PageHeader title={composing ? 'Soạn và quản lý thông báo' : 'Trung tâm thông báo'} />
@@ -147,7 +145,7 @@ export function LiveNotificationsPage() {
               display: 'grid',
               gridTemplateColumns: {
                 xs: 'minmax(0, 1fr)',
-                md: 'minmax(290px, 38%) minmax(0, 1fr)',
+                md: detail ? 'minmax(300px, 42%) minmax(0, 1fr)' : 'minmax(0, 1fr)',
               },
               overflow: 'hidden',
             }}
@@ -157,7 +155,7 @@ export function LiveNotificationsPage() {
                 display: { xs: detail ? 'none' : 'block', md: 'block' },
                 maxHeight: { md: '65dvh' },
                 overflowY: 'auto',
-                borderRight: { md: '1px solid' },
+                borderRight: { md: detail ? '1px solid' : 0 },
                 borderColor: { md: 'divider' },
               }}
             >
@@ -174,13 +172,13 @@ export function LiveNotificationsPage() {
                   items={list.data.items}
                   busy={actions.busy}
                   selectedId={detail?.id}
-                  onOpen={openItem}
+                  onOpen={viewDetail}
                   onDetail={viewDetail}
                   onRead={(item) => void actions.read(item)}
                 />
               )}
             </Box>
-            <Box sx={{ display: { xs: detail ? 'block' : 'none', md: 'block' }, minWidth: 0 }}>
+            <Box sx={{ display: detail ? 'block' : 'none', minWidth: 0 }}>
               {detail ? (
                 <>
                   <Button sx={{ m: 1.5, mb: 0 }} size="small" onClick={() => setDetail(null)}>
@@ -194,7 +192,7 @@ export function LiveNotificationsPage() {
                 </>
               ) : (
                 <Typography color="text.secondary" sx={{ px: 3, py: 4 }}>
-                  Chọn “Xem chi tiết” trong menu của thông báo để đọc tại đây.
+                  Chọn thông báo để xem nội dung.
                 </Typography>
               )}
             </Box>

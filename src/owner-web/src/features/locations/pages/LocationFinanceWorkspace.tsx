@@ -42,7 +42,7 @@ import { MoneyField } from '../../../components/common/MoneyField';
 import { todayVietnam } from '../../staff/staffContracts';
 import { useFinanceApi } from '../../expenses/useFinanceApi';
 import { usePropertySetupApi } from '../../property/usePropertySetupApi';
-import { scopedFinancePath } from '../../finance/financeScope';
+import { scopedFinancePath, useFinanceSearch } from '../../finance/financeScope';
 import { invalidateFinance } from '../../finance/invalidateFinance';
 import { DepreciationSourceDetails } from '../../reports/DepreciationSourceDetails';
 
@@ -214,7 +214,10 @@ export function LocationFinanceWorkspace() {
   const api = useFinanceApi();
   const propertyApi = usePropertySetupApi();
   const client = useQueryClient();
-  const [section, setSection] = useState<FinanceSection>('overview');
+  const initialSection = useFinanceSearch().get('tab');
+  const [section, setSection] = useState<FinanceSection>(
+    () => sections.find((item) => item.id === initialSection)?.id ?? 'overview',
+  );
   const [entryMode, setEntryMode] = useState<EntryMode>('total');
   const [dialog, setDialog] = useState<'initial' | 'expenses' | null>(null);
   const [inspect, setInspect] = useState<Expense | null>(null);

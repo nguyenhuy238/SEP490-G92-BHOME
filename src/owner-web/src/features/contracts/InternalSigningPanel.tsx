@@ -26,6 +26,7 @@ export function InternalSigningPanel({
 }) {
   const service = internalSigningClient(api.transport);
   const status = useQuery({
+    enabled: contract.isDevelopmentDemo,
     queryKey: [
       'internal-signing',
       contract.id,
@@ -290,18 +291,13 @@ function RealInternalSigning({
   return (
     <Stack spacing={2}>
       <Typography variant="h6">Ký hợp đồng · Owner và đại diện người thuê</Typography>
-      <Alert severity="info">
-        {['Holding', 'Main'].includes(c.kind)
-          ? 'Xem PDF và ký phần Chủ nhà. Staff gửi lời mời ký cho người thuê trên Mobile; hai bên có thể ký theo bất kỳ thứ tự nào.'
-          : 'Người thuê xác minh OTP và ký qua lời mời trước. Owner ký tiếp trên PDF đó.'}{' '}
-        OTP và dấu BHOME không phải chữ ký số cá nhân được CA chứng thực.
-      </Alert>
-      <Typography>
-        Người thuê: {status?.tenantAcceptedAt ? `Đã ký · ${status.tenantAcceptedAt}` : 'Chờ ký'}
+      <Typography variant="body2" color="text.secondary">
+        Xem PDF, kiểm tra người đại diện rồi ký phần Chủ nhà.
       </Typography>
-      <Typography>
-        Owner: {status?.ownerAcceptedAt ? `Đã ký · ${status.ownerAcceptedAt}` : 'Chờ ký'}
-      </Typography>
+      <Stack direction={{ xs: 'column', sm: 'row' }} spacing={2}>
+        <Typography>Người thuê: {status?.tenantAcceptedAt ? 'Đã ký' : 'Chờ ký'}</Typography>
+        <Typography>Chủ nhà: {status?.ownerAcceptedAt ? 'Đã ký' : 'Chờ ký'}</Typography>
+      </Stack>
       {(error || query.error) && (
         <Alert severity="error">{error || signingMessage(query.error)}</Alert>
       )}

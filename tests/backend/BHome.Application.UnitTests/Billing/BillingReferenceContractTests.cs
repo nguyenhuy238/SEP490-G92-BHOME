@@ -11,7 +11,10 @@ public sealed class BillingReferenceContractTests
     {
         var contract = new Contract
         {
-            Kind = ContractKind.Main, Status = status, StartDate = start, EndDate = end,
+            Kind = ContractKind.Main,
+            Status = status,
+            StartDate = start,
+            EndDate = end,
             ActivatedAt = new DateTimeOffset(2026, 10, 1, 0, 0, 0, TimeSpan.Zero)
         };
         contract.Stamp(new DateTimeOffset(2026, 10, createdDay, 0, 0, 0, TimeSpan.Zero), true);

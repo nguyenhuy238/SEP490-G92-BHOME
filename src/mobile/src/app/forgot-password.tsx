@@ -1,1 +1,1 @@
-export { default } from '../screens/SmsPasswordRecoveryScreen';
+export { default } from '../screens/PasswordRecoveryScreen';

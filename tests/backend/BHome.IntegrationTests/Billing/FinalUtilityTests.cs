@@ -40,8 +40,18 @@ public sealed partial class InvoiceApiTests
         var period = new DateOnly(Today.Year, Today.Month, 1).AddMonths(-1);
         var finalDate = period.AddMonths(1).AddDays(-1);
         var activatedAt = new DateTimeOffset(period.AddMonths(-1).ToDateTime(TimeOnly.MinValue), TimeSpan.FromHours(7)).ToUniversalTime();
-        var agreedDeposit = reviewRefund ? offsetAllDeposit ? 3215000m : 4000000m : 0m;
+        // Include the current month's unpaid rent as well as the periodic
+        // invoice's advance rent; this fixture has no verified initial payment.
+        var agreedDeposit = reviewRefund ? offsetAllDeposit ? 6215000m : 7000000m : 0m;
         var w = await Setup(activatedAt, primaryStart: reviewRefund ? period : null, primaryDeposit: agreedDeposit);
+        if (reviewRefund)
+        {
+            await using var scope = fixture.Factory.Services.CreateAsyncScope();
+            var db = scope.ServiceProvider.GetRequiredService<BHomePersistenceContext>();
+            foreach (var tenancy in await db.Set<Contract>().Where(c => c.RoomId == w.Room).ToArrayAsync())
+                tenancy.Stamp(activatedAt.AddDays(tenancy.Id == w.Contract ? 1 : 0), true);
+            await db.SaveChangesAsync();
+        }
         var meterIds = new Dictionary<UtilityType, Guid>();
         foreach (var type in new[] { UtilityType.Electricity, UtilityType.Water })
         {
@@ -73,6 +83,12 @@ public sealed partial class InvoiceApiTests
         var draft = await Success<InvoiceView>(await w.Owner.Client.PostAsJsonAsync("/api/v1/invoices/drafts", new DraftInvoiceInput(w.Room, w.Period, w.Contract)));
         Assert.Empty(draft.MissingInputs);
         var invoice = settlementFirst ? draft : await Success<InvoiceView>(await w.Owner.Client.PostAsJsonAsync($"/api/v1/invoices/{draft.Id}/finalize", new InvoiceFinalizeInput(draft.Version)));
+        if (reviewRefund)
+        {
+            await using var scope = fixture.Factory.Services.CreateAsyncScope();
+            var db = scope.ServiceProvider.GetRequiredService<BHomePersistenceContext>();
+            Assert.NotEqual(w.Contract, (await db.Set<Invoice>().SingleAsync(i => i.Id == invoice.Id)).RepresentativeContractId);
+        }
         Assert.Equal(89250, invoice.Lines.Single(l => l.Category == "Electricity").Amount);
         var original = await w.Owner.Client.GetStringAsync($"/api/v1/invoices/{invoice.Id}");
         Guid otherContract;
@@ -220,7 +236,7 @@ public sealed partial class InvoiceApiTests
         var tenantView = await Success<SettlementReceivablesView>(await w.OtherTenant.Client.GetAsync($"/api/v1/contracts/{w.Contract}/move-out/receivables"));
         Assert.Equal(charge.Id, Assert.Single(tenantView.Receivables).Charge.Id);
         var receivablesRoute = $"/api/v1/contracts/{w.Contract}/move-out/receivables";
-        if (reviewRefund) { await ReviewChargesOffsetAndRefundRemainder(w, charge, finalDate, offsetAllDeposit ? invoice.Total + 95750 : 4000000, autoFinancialClose, autoFinancialClose && offsetAllDeposit); return; }
+        if (reviewRefund) { await ReviewChargesOffsetAndRefundRemainder(w, charge, finalDate, offsetAllDeposit ? invoice.Total + 3000000 + 95750 : 7000000, autoFinancialClose, autoFinancialClose && offsetAllDeposit); return; }
         var instructions = await Success<SettlementTransferInstructions>(await w.OtherTenant.Client.GetAsync(receivablesRoute + $"/{charge.Id}/transfer-instructions"));
         var receipt = await Success<TransferView>(await UtilityPost(w.Owner.Client, "/api/v1/payment-transactions",
             new PaymentTransferInput("SYNTHETIC-UTILITY", "SYN-UTILITY-" + Guid.NewGuid(), charge.Amount, "VND", DateTimeOffset.UtcNow.AddSeconds(-1),

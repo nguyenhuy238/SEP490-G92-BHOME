@@ -6,6 +6,7 @@ import {
   AccordionDetails,
   AccordionSummary,
   Alert,
+  Autocomplete,
   Box,
   Button,
   Collapse,
@@ -112,6 +113,7 @@ function ExpensesWorkspace({ initialExpense }: { initialExpense?: Expense }) {
       : null,
   );
   const [staffCostOpen, setStaffCostOpen] = useState(false);
+  const [recurringPickerOpen, setRecurringPickerOpen] = useState(false);
   const [editorBusy, setBusy] = useState(false),
     [error, setError] = useState(''),
     [success, setSuccess] = useState('');
@@ -210,12 +212,8 @@ function ExpensesWorkspace({ initialExpense }: { initialExpense?: Expense }) {
       <PageHeader
         group={null}
         headingLevel={routeLocation ? 'h2' : 'h1'}
-        title="Đầu tư ban đầu & Chi phí"
-        subtitle={
-          routeLocation
-            ? undefined
-            : 'Xem chi phí đã ghi nhận, lọc theo kỳ và thêm khoản chi mới khi cần.'
-        }
+        title="Chi phí & đầu tư"
+        subtitle={routeLocation ? undefined : 'Ghi khoản chi và theo dõi số tiền đã trả.'}
         actions={
           <Button
             variant="contained"
@@ -235,7 +233,7 @@ function ExpensesWorkspace({ initialExpense }: { initialExpense?: Expense }) {
                       : 'OPERATING',
                   category: '',
                   amount: '',
-                  occurredOn: '',
+                  occurredOn: todayVietnam(),
                   note: '',
                 },
               });
@@ -245,62 +243,131 @@ function ExpensesWorkspace({ initialExpense }: { initialExpense?: Expense }) {
           </Button>
         }
       />
-      {!routeLocation && (
-        <Button variant="outlined" sx={{ mb: 1.5 }} onClick={() => setStaffCostOpen(true)}>
-          Phân bổ chi phí nhân viên
-        </Button>
-      )}
-      {staffCostOpen && <StaffCostDialog close={() => setStaffCostOpen(false)} />}
-      {
-        <Accordion
-          variant="outlined"
-          disableGutters
-          expanded={summaryOpen}
-          onChange={(_, open) => setSummaryOpen(open)}
-          sx={{ mb: 1.5, '&:before': { display: 'none' } }}
-        >
-          <AccordionSummary expandIcon={<ChevronDown size={18} />}>
-            <Typography variant="subtitle2" sx={{ fontWeight: 700 }}>
-              Xem tổng hợp vốn và chi phí
-            </Typography>
-          </AccordionSummary>
-          <AccordionDetails>
-            <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mb: 1 }}>
-              {scopedFilter.locationId ? 'Toàn cơ sở' : 'Toàn chuỗi'} · đến{' '}
-              {today.split('-').reverse().join('/')}
-            </Typography>
-            {report.isPending && <LinearProgress aria-label="Đang tải báo cáo chi phí" />}
-            {report.isError && (
-              <Alert
-                severity="warning"
-                action={<Button onClick={() => void report.refetch()}>Thử lại</Button>}
-              >
-                {financeError(report.error)}
-              </Alert>
+      <Accordion variant="outlined" disableGutters sx={{ mb: 1.5 }}>
+        <AccordionSummary expandIcon={<ChevronDown size={18} />}>
+          <Typography variant="subtitle2">Lương, chi phí định kỳ & vốn</Typography>
+        </AccordionSummary>
+        <AccordionDetails>
+          <Stack direction="row" useFlexGap sx={{ flexWrap: 'wrap', gap: 1, mb: 1.5 }}>
+            {!routeLocation && (
+              <Button variant="outlined" onClick={() => setStaffCostOpen(true)}>
+                Phân bổ chi phí nhân viên
+              </Button>
             )}
-            {report.data && !report.isError && (
-              <Stack direction={{ xs: 'column', sm: 'row' }} spacing={2}>
-                <Box sx={{ flex: 1, minWidth: 0 }}>
-                  <Typography variant="caption" color="text.secondary">
-                    Vốn đầu tư ban đầu lũy kế
-                  </Typography>
-                  <Typography sx={{ fontWeight: 750, fontVariantNumeric: 'tabular-nums' }}>
-                    {formatFinanceMoney(report.data.total.initialInvestment)}
-                  </Typography>
-                </Box>
-                <Box sx={{ flex: 1, minWidth: 0 }}>
-                  <Typography variant="caption" color="text.secondary">
-                    Chi phí vận hành từ đầu tháng
-                  </Typography>
-                  <Typography sx={{ fontWeight: 750, fontVariantNumeric: 'tabular-nums' }}>
-                    {formatFinanceMoney(report.data.total.operatingExpenses)}
-                  </Typography>
-                </Box>
+            {routed &&
+              (scopedFilter.locationId ? (
+                <Button
+                  component={RouterLink}
+                  variant="outlined"
+                  to={`/locations/${encodeURIComponent(scopedFilter.locationId)}/investment?tab=recurring`}
+                >
+                  Chi phí định kỳ
+                </Button>
+              ) : (
+                <Button variant="outlined" onClick={() => setRecurringPickerOpen(true)}>
+                  Chi phí định kỳ
+                </Button>
+              ))}
+          </Stack>
+          <Dialog
+            open={recurringPickerOpen}
+            onClose={() => setRecurringPickerOpen(false)}
+            fullWidth
+            maxWidth="xs"
+          >
+            <DialogTitle>Chi phí định kỳ theo cơ sở</DialogTitle>
+            <DialogContent>
+              <Typography variant="body2" color="text.secondary" sx={{ mb: 1.5 }}>
+                Chọn cơ sở để thiết lập khoản cần chi lặp lại như Internet, vệ sinh. Hệ thống tạo
+                chi phí theo lịch; bạn xác nhận thực chi riêng.
+              </Typography>
+              {locations.isPending && <LinearProgress />}
+              {locations.isError && (
+                <Alert
+                  severity="error"
+                  action={<Button onClick={() => void locations.refetch()}>Thử lại</Button>}
+                >
+                  {financeError(locations.error)}
+                </Alert>
+              )}
+              {locations.data?.length === 0 && (
+                <Alert severity="info">Chưa có cơ sở để cấu hình chi phí định kỳ.</Alert>
+              )}
+              <Stack spacing={1}>
+                {routed &&
+                  locations.data?.map((item) => (
+                    <Button
+                      key={item.id}
+                      component={RouterLink}
+                      variant="outlined"
+                      to={`/locations/${encodeURIComponent(item.id)}/investment?tab=recurring`}
+                    >
+                      {item.label}
+                    </Button>
+                  ))}
               </Stack>
-            )}
-          </AccordionDetails>
-        </Accordion>
-      }
+            </DialogContent>
+            <DialogActions>
+              <Button onClick={() => setRecurringPickerOpen(false)}>Đóng</Button>
+            </DialogActions>
+          </Dialog>
+          {staffCostOpen && <StaffCostDialog close={() => setStaffCostOpen(false)} />}
+          {
+            <Accordion
+              variant="outlined"
+              disableGutters
+              expanded={summaryOpen}
+              onChange={(_, open) => setSummaryOpen(open)}
+              sx={{ mb: 1.5, '&:before': { display: 'none' } }}
+            >
+              <AccordionSummary expandIcon={<ChevronDown size={18} />}>
+                <Typography variant="subtitle2" sx={{ fontWeight: 700 }}>
+                  Xem tổng hợp vốn và chi phí
+                </Typography>
+              </AccordionSummary>
+              <AccordionDetails>
+                <Typography
+                  variant="caption"
+                  color="text.secondary"
+                  sx={{ display: 'block', mb: 1 }}
+                >
+                  {scopedFilter.locationId ? 'Toàn cơ sở' : 'Toàn chuỗi'} · đến{' '}
+                  {today.split('-').reverse().join('/')}
+                </Typography>
+                {report.isPending && <LinearProgress aria-label="Đang tải báo cáo chi phí" />}
+                {report.isError && (
+                  <Alert
+                    severity="warning"
+                    action={<Button onClick={() => void report.refetch()}>Thử lại</Button>}
+                  >
+                    {financeError(report.error)}
+                  </Alert>
+                )}
+                {report.data && !report.isError && (
+                  <Stack direction={{ xs: 'column', sm: 'row' }} spacing={2}>
+                    <Box sx={{ flex: 1, minWidth: 0 }}>
+                      <Typography variant="caption" color="text.secondary">
+                        Vốn đầu tư ban đầu lũy kế
+                      </Typography>
+                      <Typography sx={{ fontWeight: 750, fontVariantNumeric: 'tabular-nums' }}>
+                        {formatFinanceMoney(report.data.total.initialInvestment)}
+                      </Typography>
+                    </Box>
+                    <Box sx={{ flex: 1, minWidth: 0 }}>
+                      <Typography variant="caption" color="text.secondary">
+                        Chi phí vận hành từ đầu tháng
+                      </Typography>
+                      <Typography sx={{ fontWeight: 750, fontVariantNumeric: 'tabular-nums' }}>
+                        {formatFinanceMoney(report.data.total.operatingExpenses)}
+                      </Typography>
+                    </Box>
+                  </Stack>
+                )}
+              </AccordionDetails>
+            </Accordion>
+          }
+        </AccordionDetails>
+      </Accordion>
       {error && !editor && <Alert severity="error">{error}</Alert>}
       {success && <Alert severity="success">{success}</Alert>}
       {((!invalidRange && rows.isPending) || locations.isPending) && <LinearProgress />}
@@ -339,11 +406,6 @@ function ExpensesWorkspace({ initialExpense }: { initialExpense?: Expense }) {
           <Tab key={t.id} value={t.id} label={t.name} />
         ))}
       </Tabs>
-      <Typography variant="body2" color="text.secondary" sx={{ mb: 1.5 }}>
-        Danh sách gồm các khoản chi ghi tại đây và khoản chi do nghiệp vụ khác quản lý. Trạng thái
-        chỉnh sửa được hiển thị trên từng khoản; liên kết tài sản hoặc Work Order chỉ xuất hiện khi
-        khoản chi có tham chiếu tương ứng.
-      </Typography>
       <Stack
         direction={{ xs: 'column', sm: 'row' }}
         sx={{ alignItems: { sm: 'center' }, gap: 1, mb: 1.5 }}
@@ -641,7 +703,7 @@ function ExpensesWorkspace({ initialExpense }: { initialExpense?: Expense }) {
           if (!busy) setEditor(null);
         }}
         fullWidth
-        maxWidth="md"
+        maxWidth="sm"
       >
         <DialogTitle>{editor?.previous ? 'Chi tiết khoản chi' : 'Ghi khoản chi mới'}</DialogTitle>
         <DialogContent>
@@ -668,97 +730,119 @@ function ExpensesWorkspace({ initialExpense }: { initialExpense?: Expense }) {
                     )}
                   </Alert>
                 )}
-                <Box>
-                  <Typography variant="subtitle2" sx={{ fontWeight: 750 }}>
-                    1. Nơi phát sinh khoản chi
-                  </Typography>
-                  <Typography variant="caption" color="text.secondary">
-                    Chọn cơ sở để ghi nhận; phòng, tài sản và Work Order chỉ cần chọn khi có liên
-                    quan.
-                  </Typography>
+                <Box
+                  sx={{
+                    display: 'grid',
+                    gridTemplateColumns: { xs: '1fr', sm: '1fr 1fr' },
+                    gap: 1.5,
+                  }}
+                >
+                  <TextField
+                    select
+                    required
+                    label="Cơ sở ghi nhận"
+                    disabled={busy || !!editor.previous || !!routeLocation}
+                    value={editor.value.locationId}
+                    onChange={(e) =>
+                      setEditor(
+                        (v) =>
+                          v && {
+                            ...v,
+                            value: {
+                              ...v.value,
+                              locationId: e.target.value,
+                              roomId: null,
+                              assetId: null,
+                              taskId: null,
+                            },
+                          },
+                      )
+                    }
+                  >
+                    {locations.data?.map((l) => (
+                      <MenuItem key={l.id} value={l.id}>
+                        {l.label}
+                      </MenuItem>
+                    ))}
+                  </TextField>
+                  <TextField
+                    select
+                    required
+                    label="Phân loại"
+                    disabled={busy || !!editor.previous}
+                    value={editor.value.expenseType}
+                    onChange={(e) =>
+                      setEditor(
+                        (v) =>
+                          v && {
+                            ...v,
+                            value: {
+                              ...v.value,
+                              expenseType: e.target.value as ExpenseInput['expenseType'],
+                              taskId: null,
+                            },
+                          },
+                      )
+                    }
+                  >
+                    {types.map((t) => (
+                      <MenuItem key={t.id} value={t.id}>
+                        {t.name}
+                      </MenuItem>
+                    ))}
+                  </TextField>
                 </Box>
-                <TextField
-                  select
-                  required
-                  label="Cơ sở ghi nhận"
-                  disabled={busy || !!editor.previous || !!routeLocation}
-                  value={editor.value.locationId}
-                  onChange={(e) =>
-                    setEditor(
-                      (v) =>
-                        v && {
-                          ...v,
-                          value: {
-                            ...v.value,
-                            locationId: e.target.value,
-                            roomId: null,
-                            assetId: null,
-                            taskId: null,
-                          },
-                        },
-                    )
+                <Autocomplete
+                  freeSolo
+                  clearText="Xóa tên khoản chi"
+                  openText="Xem gợi ý"
+                  closeText="Đóng gợi ý"
+                  options={
+                    editor.value.expenseType === 'OPERATING'
+                      ? ['Điện', 'Nước', 'Internet', 'Vệ sinh', 'Sửa chữa']
+                      : ['Xây dựng', 'Cải tạo', 'Trang thiết bị']
                   }
+                  disabled={busy || editor.previous?.canEdit === false}
+                  inputValue={editor.value.category}
+                  onInputChange={(_, value) => editField('category', value)}
+                  renderInput={(params) => (
+                    <TextField
+                      {...params}
+                      required
+                      label="Danh mục khoản chi"
+                      placeholder="Chọn hoặc nhập tên khoản chi"
+                      slotProps={{
+                        ...params.slotProps,
+                        htmlInput: { ...params.slotProps.htmlInput, maxLength: 60 },
+                      }}
+                    />
+                  )}
+                />
+                <Box
+                  sx={{
+                    display: 'grid',
+                    gridTemplateColumns: { xs: '1fr', sm: '1fr 1fr' },
+                    gap: 1.5,
+                  }}
                 >
-                  {locations.data?.map((l) => (
-                    <MenuItem key={l.id} value={l.id}>
-                      {l.label}
-                    </MenuItem>
-                  ))}
-                </TextField>
-                <Typography variant="subtitle2" sx={{ fontWeight: 750 }}>
-                  2. Nội dung & số tiền
-                </Typography>
-                <TextField
-                  select
-                  required
-                  label="Phân loại"
-                  disabled={busy || !!editor.previous}
-                  value={editor.value.expenseType}
-                  onChange={(e) =>
-                    setEditor(
-                      (v) =>
-                        v && {
-                          ...v,
-                          value: {
-                            ...v.value,
-                            expenseType: e.target.value as ExpenseInput['expenseType'],
-                            taskId: null,
-                          },
-                        },
-                    )
-                  }
-                >
-                  {types.map((t) => (
-                    <MenuItem key={t.id} value={t.id}>
-                      {t.name}
-                    </MenuItem>
-                  ))}
-                </TextField>
-                <TextField
-                  required
-                  label="Danh mục khoản chi"
-                  disabled={busy || editor.previous?.canEdit === false}
-                  value={editor.value.category}
-                  slotProps={{ htmlInput: { maxLength: 60 } }}
-                  onChange={(e) => editField('category', e.target.value)}
-                />
-                <MoneyField
-                  maxRawLength={18}
-                  required
-                  label="Số tiền (VND)"
-                  disabled={busy || editor.previous?.canEdit === false}
-                  value={editor.value.amount}
-                  onValueChange={(raw) => editField('amount', raw)}
-                />
-                <TextField
-                  required
-                  label="Ngày phát sinh"
-                  type="date"
-                  disabled={busy || editor.previous?.canEdit === false}
-                  value={editor.value.occurredOn}
-                  slotProps={{ inputLabel: { shrink: true } }}
-                  onChange={(e) => editField('occurredOn', e.target.value)}
-                />
+                  <MoneyField
+                    maxRawLength={18}
+                    required
+                    label="Số tiền (VND)"
+                    disabled={busy || editor.previous?.canEdit === false}
+                    value={editor.value.amount}
+                    onValueChange={(raw) => editField('amount', raw)}
+                  />
+                  <TextField
+                    required
+                    label="Ngày phát sinh"
+                    type="date"
+                    disabled={busy || editor.previous?.canEdit === false}
+                    value={editor.value.occurredOn}
+                    slotProps={{ inputLabel: { shrink: true } }}
+                    onChange={(e) => editField('occurredOn', e.target.value)}
+                  />
+                </Box>
                 <TextField
                   required
                   multiline
@@ -768,6 +852,11 @@ function ExpensesWorkspace({ initialExpense }: { initialExpense?: Expense }) {
                   slotProps={{ htmlInput: { maxLength: 4000 } }}
                   onChange={(e) => editField('note', e.target.value)}
                 />
+                {!editor.previous && (
+                  <Typography variant="body2" color="text.secondary">
+                    Lưu chi phí trước, xác nhận tiền đã trả tại Chi tiết.
+                  </Typography>
+                )}
                 <Accordion
                   variant="outlined"
                   defaultExpanded={Boolean(
@@ -782,11 +871,7 @@ function ExpensesWorkspace({ initialExpense }: { initialExpense?: Expense }) {
                   >
                     <Box>
                       <Typography variant="subtitle2" sx={{ fontWeight: 750 }}>
-                        3. Liên kết bổ sung (không bắt buộc)
-                      </Typography>
-                      <Typography variant="caption" color="text.secondary">
-                        Mở khi cần gắn khoản chi với phòng, tài sản hoặc Work Order đã tồn tại. Liên
-                        kết này chỉ dùng để tham chiếu, không tạo Work Order mới.
+                        Liên kết bổ sung (không bắt buộc)
                       </Typography>
                     </Box>
                   </AccordionSummary>

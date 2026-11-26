@@ -28,6 +28,7 @@ export interface HoldingCustomerView {
   maskedCitizenNumber: string;
 }
 export interface ContractSummary {
+  representativeName?: string | null;
   holdingCustomer?: HoldingCustomerView | null;
   onboardingDraft?: boolean;
   id: string;
@@ -989,9 +990,16 @@ export function contractClient(request: ContractRequest) {
           terms: string;
         }[]
       >(`${root}/${id}/versions`, { signal }),
-    list: async (page = 1, status = '', locationId = '', signal?: AbortSignal) => {
+    list: async (
+      page = 1,
+      status = '',
+      locationId = '',
+      signal?: AbortSignal,
+      kind = '',
+      pageSize = 20,
+    ) => {
       const result = await request<ContractPage>(
-        `${root}?${new URLSearchParams({ page: String(page), pageSize: '20', ...(status ? { status } : {}), ...(locationId ? { locationId } : {}) })}`,
+        `${root}?${new URLSearchParams({ page: String(page), pageSize: String(pageSize), ...(status ? { status } : {}), ...(locationId ? { locationId } : {}), ...(kind ? { kind } : {}) })}`,
         { signal },
       );
       if (
@@ -1000,7 +1008,7 @@ export function contractClient(request: ContractRequest) {
         !Number.isSafeInteger(result.totalCount) ||
         result.totalCount < result.items.length ||
         result.page !== page ||
-        result.pageSize !== 20 ||
+        result.pageSize !== pageSize ||
         result.items.some(
           (item) =>
             !item ||
@@ -1223,6 +1231,8 @@ export const labels: Record<string, string> = {
     'Giá phòng hoặc cấu hình giữ chỗ đã thay đổi. Hãy tải lại trước khi tạo hợp đồng.',
   invalid_holding_configuration: 'Kiểm tra số tháng giữ chỗ, hệ số tiền cọc và điều khoản.',
   Main: 'Hợp đồng thuê',
+  Holding: 'Giữ chỗ',
+  Addendum: 'Phụ lục',
   Renewal: 'Gia hạn',
   Draft: 'Bản nháp',
   PendingSigning: 'Chờ ký',

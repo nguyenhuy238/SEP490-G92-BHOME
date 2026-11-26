@@ -18,7 +18,7 @@ import { OwnerHoldingSigning } from './OwnerHoldingSigning';
 import { ContractSigningStep } from '../contracts/ContractSigningStep';
 import { RentalContractStepper } from '../contracts/RentalContractStepper';
 import { rentalContractState } from '../contracts/rentalContractState';
-import { ContractActionForm, SigningCertificates } from '../contracts/ContractActionForm';
+import { ContractActionForm } from '../contracts/ContractActionForm';
 import { ContractWorkflowPanel } from '../contracts/ContractWorkflowPanel';
 import { randomUUID } from '../../lib/randomUUID';
 import { useSession } from '../../lib/SessionProvider';
@@ -150,9 +150,6 @@ export function OwnerMainContractFlow({
                 onChanged();
               }}
             />
-          )}
-          {mySign && actorId === contract.ownerSignerId && !contract.isDevelopmentDemo && (
-            <SigningCertificates api={api} />
           )}
         </>
       )}

@@ -145,7 +145,7 @@ it('separates requesting MySign from a verified signature and refreshes after th
   mount();
   expect(screen.getByText(/Chữ ký số MySign/)).toBeTruthy();
   expect(screen.queryByText('Chấp thuận nội bộ')).toBeNull();
-  expect(screen.getByText('Chứng thư của Owner hiện tại')).toBeTruthy();
+  expect(screen.queryByText('Chứng thư của Owner hiện tại')).toBeNull();
   fireEvent.click(screen.getByText('Yêu cầu ký MySign'));
   fireEvent.click(screen.getByText('Thực hiện signing'));
   expect(state.changed).toHaveBeenCalledOnce();

@@ -64,7 +64,9 @@ public sealed partial class InvoiceApiTests
         var water = (await Success<FinalUtilityPreview[]>(await w.Owner.Client.GetAsync(route + "/final-utilities"))).Single(p => p.UtilityType == "Water");
         await Success<SettlementReceivable>(await UtilityPost(w.Owner.Client, route + "/final-utilities", new FinalUtilityApprovalInput(UtilityType.Water, water.Reference, true), Guid.NewGuid()));
         var rent = Assert.Single(await Success<FinalFixedChargePreview[]>(await w.Owner.Client.GetAsync(route + "/final-fixed-charges")));
-        Assert.Empty(rent.MissingInputs); Assert.Equal(0, rent.Amount);
+        // The periodic invoice bills next month's rent. It cannot cover the
+        // current departure month's rent in this fixture, which has no initial payment.
+        Assert.Empty(rent.MissingInputs); Assert.Equal(3000000, rent.Amount);
         await Success<SettlementReceivable>(await UtilityPost(w.Owner.Client, route + "/final-fixed-charges", new FinalFixedChargeApproval(rent.ChargeCode, rent.Reference, true), Guid.NewGuid()));
         Assert.Equal(HttpStatusCode.Conflict, (await UtilityPost(w.Owner.Client, route + "/charge-review", new SettlementChargeReviewInput(review.Reference, "Stale source review", true), Guid.NewGuid())).StatusCode);
         review = await Success<SettlementChargeReviewPreview>(await w.Owner.Client.GetAsync(route + "/charge-review")); Assert.Empty(review.MissingInputs);
@@ -79,6 +81,7 @@ public sealed partial class InvoiceApiTests
         Assert.NotNull(summary.ChargeReview); Assert.Contains("settlement_receivable_outstanding", summary.UnresolvedItems);
         Assert.DoesNotContain("final_charge_review_required", summary.UnresolvedItems);
         var view = await Success<SettlementReceivablesView>(await w.Owner.Client.GetAsync(route));
+        Assert.Single(view.Invoices!);
         var targets = view.Receivables.Where(r => r.Outstanding > 0).Select(r => (Receivable: (Guid?)r.Charge.Id, Invoice: (Guid?)null, r.Outstanding))
             .Concat(view.Invoices!.Where(i => i.Outstanding > 0).Select(i => (Receivable: (Guid?)null, Invoice: (Guid?)i.Id, i.Outstanding))).ToArray();
         var total = targets.Sum(t => t.Outstanding); Assert.True(total <= deposit || autoOverage);
@@ -91,6 +94,7 @@ public sealed partial class InvoiceApiTests
         if (autoFinancialClose)
         {
             view = await Success<SettlementReceivablesView>(await w.Owner.Client.GetAsync(route));
+            Assert.Empty((await Success<SettlementChargeReviewPreview>(await w.Owner.Client.GetAsync(route + "/charge-review"))).MissingInputs);
             var eligible = await Success<RefundSource>(await w.Owner.Client.GetAsync(root + "/deposit-refunds"));
             var beneficiary = autoOverage ? (Guid?)null : Assert.Single(eligible.Beneficiaries).Id;
             var closeInput = new SettlementFinancialCloseInput(view.Reference, approved.Id, beneficiary, !autoOverage, [],

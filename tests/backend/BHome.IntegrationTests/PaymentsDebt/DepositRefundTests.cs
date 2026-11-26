@@ -138,11 +138,16 @@ public sealed partial class PaymentLedgerTests
         await RefundValue<ContractId>(await Post(owner, contract + "/deposit-verifications", new DepositInput("SYN-CHANGED-" + Guid.NewGuid(), 20000, "Synthetic")));
         var source = await RefundValue<RefundSource>(await owner.GetAsync(route));
         var row = await RefundValue<RefundView>(await Post(owner, route, new DepositRefundInput(new(source.Beneficiaries[0].Id, 20000, "Synthetic", true), source.FinancialReference!, true, true)));
-        await AdjustRequest(tenant, w.Invoice, 1, 90000);
+        var adjustment = await Post(tenant, $"/api/v1/invoices/{w.Invoice}/adjustment-requests",
+            new BHome.Application.Billing.AdjustmentSubmit(null, 90000, "Synthetic paid invoice", [], 1));
+        Assert.Equal(HttpStatusCode.Conflict, adjustment.StatusCode);
+        Assert.Contains("adjustment_invoice_paid", await adjustment.Content.ReadAsStringAsync());
+        // A new verified receipt awaiting reconciliation changes the reviewed source.
+        (await Post(owner, "/api/v1/payment-transactions", Input(w))).EnsureSuccessStatusCode();
         Assert.Equal(HttpStatusCode.Conflict, (await Post(owner, $"/api/v1/refund-requests/{row.Id}/decision", new RefundDecision(1, true, "Stale", true))).StatusCode);
         var rejected = await RefundValue<RefundView>(await Post(owner, $"/api/v1/refund-requests/{row.Id}/decision", new RefundDecision(1, false, "Release after obligations changed", true)));
         Assert.Equal("REJECTED", rejected.Status);
-        var changed = await RefundValue<RefundSource>(await owner.GetAsync(route)); Assert.Contains("invoice_adjustment_pending", changed.Blockers!);
+        var changed = await RefundValue<RefundSource>(await owner.GetAsync(route)); Assert.Contains("bank_transfer_pending_review", changed.Blockers!);
         Assert.Equal(20000, changed.AvailableAmount); Assert.DoesNotContain(changed.Requests, r => r.Status != "REJECTED");
     }
     internal async Task UnclassifiedFullDepositRefundCannotAuthorizeClosureOrDuplicateReturn()
