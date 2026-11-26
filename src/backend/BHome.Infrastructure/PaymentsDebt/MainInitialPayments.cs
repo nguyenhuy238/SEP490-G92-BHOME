@@ -13,7 +13,7 @@ using Microsoft.EntityFrameworkCore;
 namespace BHome.Infrastructure.PaymentsDebt;
 
 internal sealed class MainInitialPayments(BHomePersistenceContext db, ContractService contracts, IContractRepository contractData,
-    IMainDraftData drafts, IPaymentRepository payments, IPaymentCodeRegistry codes,
+    IPaymentRepository payments, IPaymentCodeRegistry codes,
     ITransferQrGenerator qr, IMainInitialPaymentLedger orders, SePayOptions sepay, TimeProvider clock, IContractWorkflowMode workflowMode, IHoldingTestScope testScope, ICurrentUser user,
     ISePayOwnerConnections connections) : IMainInitialPayments
 {

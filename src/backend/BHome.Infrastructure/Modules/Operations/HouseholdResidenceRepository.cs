@@ -12,7 +12,7 @@ internal sealed partial class CompactOperationsRepository
         if (!await StaffEmploymentEligibility.EligibleIds(db, today).AnyAsync(id => id == staffId, t))
             return new([], query.Page, query.PageSize, 0);
         await Open(t);
-        const string where = "c.status=3 AND cr.actual_residence_from<=@today AND cr.actual_move_out_date IS NULL AND (@location IS NULL OR l.id=@location) AND (@status IS NULL OR COALESCE(cr.registration_status,'Pending')=@status) AND EXISTS(SELECT 1 FROM jsonb_array_elements(l.staff_assignments) a WHERE (a->>'staffUserId')::uuid=@staff AND (a->>'startDate')::date<=@today AND (a->>'endDate')::date>=@today)";
+        const string where = "c.status=3 AND COALESCE(cr.actual_residence_from,cr.residence_from)<=@today AND cr.actual_move_out_date IS NULL AND (@location IS NULL OR l.id=@location) AND (@status IS NULL OR COALESCE(cr.registration_status,'Pending')=@status) AND EXISTS(SELECT 1 FROM jsonb_array_elements(l.staff_assignments) a WHERE (a->>'staffUserId')::uuid=@staff AND (a->>'startDate')::date<=@today AND (a->>'endDate')::date>=@today)";
         const string from = " FROM contract_residents cr JOIN contracts c ON c.id=cr.contract_id JOIN rooms rm ON rm.id=c.room_id JOIN locations l ON l.id=rm.location_id JOIN residents r ON r.id=cr.resident_id WHERE ";
         void Bind(Npgsql.NpgsqlCommand command)
         {
