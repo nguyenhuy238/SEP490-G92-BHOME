@@ -36,9 +36,16 @@ public sealed partial class ContractLifecycleApiTests
         await using (var scope = fixture.Factory.Services.CreateAsyncScope())
         {
             var db = scope.ServiceProvider.GetRequiredService<BHomePersistenceContext>();
-            db.Add(new BillingPolicy { LocationId = w.Location, Category = ChargeCategory.ServiceFee,
-                ChargeCode = "CLEANING", Name = "Synthetic monthly service", Method = ChargingMethod.FixedPerRoomPerMonth,
-                Rate = 30000, EffectiveFrom = Today.AddMonths(-1) });
+            db.Add(new BillingPolicy
+            {
+                LocationId = w.Location,
+                Category = ChargeCategory.ServiceFee,
+                ChargeCode = "CLEANING",
+                Name = "Synthetic monthly service",
+                Method = ChargingMethod.FixedPerRoomPerMonth,
+                Rate = 30000,
+                EffectiveFrom = Today.AddMonths(-1)
+            });
             await db.SaveChangesAsync();
         }
         var contractId = await Active(w);

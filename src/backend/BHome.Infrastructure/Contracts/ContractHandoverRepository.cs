@@ -166,8 +166,11 @@ internal sealed class ContractHandoverRepository(BHomePersistenceContext db, IOp
         task.Result = "Nhân viên đã lưu kết quả kiểm tra trả phòng bắt buộc. Chưa có quyết định tài chính.";
         db.Add(new OperationalTaskHistory
         {
-            TaskId = task.Id, ActorId = staffId, Action = "ForcedMoveOutRecorded",
-            OccurredAt = now, TaskVersion = task.Version
+            TaskId = task.Id,
+            ActorId = staffId,
+            Action = "ForcedMoveOutRecorded",
+            OccurredAt = now,
+            TaskVersion = task.Version
         });
     }
     public async Task<HandoverMoveInTask?> MoveInTaskAsync(Guid contractId, Guid roomId,
@@ -326,8 +329,15 @@ internal sealed class ContractHandoverRepository(BHomePersistenceContext db, IOp
             foreach (var child in all.Where(x => x.ContractId == duplicate.ContractId && x.Status == MeterTaskStatus.Assigned))
             {
                 child.Status = MeterTaskStatus.Cancelled; child.Version++; child.Result = DuplicateMoveInResult;
-                db.Add(new OperationalTaskHistory { TaskId = child.Id, ActorId = actor, Action = "MoveInDuplicateCancelled",
-                    TaskVersion = child.Version, OccurredAt = now, Note = DuplicateMoveInResult });
+                db.Add(new OperationalTaskHistory
+                {
+                    TaskId = child.Id,
+                    ActorId = actor,
+                    Action = "MoveInDuplicateCancelled",
+                    TaskVersion = child.Version,
+                    OccurredAt = now,
+                    Note = DuplicateMoveInResult
+                });
             }
             await MarkMoveInSuppressedAsync(duplicate.ContractId!.Value, true, t);
         }
@@ -350,8 +360,14 @@ internal sealed class ContractHandoverRepository(BHomePersistenceContext db, IOp
         {
             child.Status = MeterTaskStatus.Assigned; child.Version++; child.Result = null;
             if (child.Kind == OperationalTaskKind.MeterReading && child.ReadingDate < today) child.ReadingDate = today;
-            db.Add(new OperationalTaskHistory { TaskId = child.Id, ActorId = actor, Action = "MoveInDuplicateResumed",
-                TaskVersion = child.Version, OccurredAt = now });
+            db.Add(new OperationalTaskHistory
+            {
+                TaskId = child.Id,
+                ActorId = actor,
+                Action = "MoveInDuplicateResumed",
+                TaskVersion = child.Version,
+                OccurredAt = now
+            });
         }
         return true;
     }

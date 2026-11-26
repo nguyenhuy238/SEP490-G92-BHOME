@@ -498,7 +498,8 @@ public sealed partial class Compact24OwnerSetupTests
         var nextPhoto = await HandoverPhoto(staff, id, true);
         await Read<MoveOutView>(await HandoverPost(staff, id, "move-out/inspection", input with
         {
-            EvidenceIds = [nextPhoto], InventoryToken = fresh.Inventory!.StateToken,
+            EvidenceIds = [nextPhoto],
+            InventoryToken = fresh.Inventory!.StateToken,
             Assets = [input.Assets![0] with { EvidenceIds = [await HandoverPhoto(staff, id, true)] }],
             RoomChecks = await MoveOutRoomChecks(staff, id),
             KeyEvidenceIds = [await HandoverPhoto(staff, id, true)]

@@ -70,8 +70,12 @@ public sealed partial class ContractService
     private void ConsentEvent(ContractMoveOut move, RoomMoveOutConsent consent, string action) =>
         repository.Add(new ContractMoveOutHistory
         {
-            ContractId = move.ContractId, Version = move.Version, Action = action,
-            Snapshot = JsonSerializer.Serialize(consent), ActorId = Actor, OccurredAt = clock.GetUtcNow()
+            ContractId = move.ContractId,
+            Version = move.Version,
+            Action = action,
+            Snapshot = JsonSerializer.Serialize(consent),
+            ActorId = Actor,
+            OccurredAt = clock.GetUtcNow()
         });
 
     private MoveOutView ConsentView(ContractMoveOut move, RoomMoveOutConsent? consent)

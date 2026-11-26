@@ -75,8 +75,13 @@ public sealed partial class Compact24OwnerSetupTests
             var db = setup.ServiceProvider.GetRequiredService<Compact24DbContext>();
             foreach (var id in residentIds)
             {
-                var resident = new Resident { RoomId = w.Room, OwnerUserId = w.Owner.Id,
-                    DisplayLabel = "Move-in dedup test", VerificationStatus = IdentityVerificationStatus.Verified };
+                var resident = new Resident
+                {
+                    RoomId = w.Room,
+                    OwnerUserId = w.Owner.Id,
+                    DisplayLabel = "Move-in dedup test",
+                    VerificationStatus = IdentityVerificationStatus.Verified
+                };
                 db.Entry(resident).Property(x => x.Id).CurrentValue = id;
                 db.Add(resident);
             }
@@ -86,15 +91,30 @@ public sealed partial class Compact24OwnerSetupTests
         {
             await using var scope = host.Services.CreateAsyncScope();
             var repository = scope.ServiceProvider.GetRequiredService<IContractRepository>();
-            var contract = new Contract { RoomId = w.Room, OwnerSignerId = w.Owner.Id,
-                RepresentativeResidentId = residentId, Kind = ContractKind.Main, Status = ContractStatus.Draft,
-                StartDate = Today.AddDays(2), EndDate = Today.AddYears(1), MonthlyRent = 2000000,
-                RequiredDeposit = 3000000, Terms = "Synthetic move-in dedup test", SnapshotHash = Guid.NewGuid().ToString("N") };
+            var contract = new Contract
+            {
+                RoomId = w.Room,
+                OwnerSignerId = w.Owner.Id,
+                RepresentativeResidentId = residentId,
+                Kind = ContractKind.Main,
+                Status = ContractStatus.Draft,
+                StartDate = Today.AddDays(2),
+                EndDate = Today.AddYears(1),
+                MonthlyRent = 2000000,
+                RequiredDeposit = 3000000,
+                Terms = "Synthetic move-in dedup test",
+                SnapshotHash = Guid.NewGuid().ToString("N")
+            };
             return await repository.InTransactionAsync(w.Room, () =>
             {
                 repository.Add(contract);
-                repository.Add(new ContractResident { ContractId = contract.Id, ResidentId = residentId,
-                    Role = ResidentType.Representative, ResidenceFrom = contract.StartDate });
+                repository.Add(new ContractResident
+                {
+                    ContractId = contract.Id,
+                    ResidentId = residentId,
+                    Role = ResidentType.Representative,
+                    ResidenceFrom = contract.StartDate
+                });
                 return Task.FromResult(contract.Id);
             }, default);
         }

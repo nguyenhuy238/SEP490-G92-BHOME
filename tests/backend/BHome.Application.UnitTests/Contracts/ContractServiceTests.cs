@@ -969,9 +969,19 @@ public sealed class ContractServiceTests
     {
         var r = new Rig(); var c = await r.Ready(); c.Status = ContractStatus.Active;
         var member = new Resident { RoomId = c.RoomId, TenantUserId = Guid.NewGuid(), VerificationStatus = IdentityVerificationStatus.Verified };
-        var second = new Contract { RoomId = c.RoomId, Room = c.Room, Kind = ContractKind.Main, Status = ContractStatus.Active,
-            OwnerSignerId = c.OwnerSignerId, TenantUserId = member.TenantUserId, RepresentativeResidentId = member.Id,
-            StartDate = c.StartDate, EndDate = c.EndDate, Residents = [new() { ResidentId = member.Id, ResidenceFrom = c.StartDate }] };
+        var second = new Contract
+        {
+            RoomId = c.RoomId,
+            Room = c.Room,
+            Kind = ContractKind.Main,
+            Status = ContractStatus.Active,
+            OwnerSignerId = c.OwnerSignerId,
+            TenantUserId = member.TenantUserId,
+            RepresentativeResidentId = member.Id,
+            StartDate = c.StartDate,
+            EndDate = c.EndDate,
+            Residents = [new() { ResidentId = member.Id, ResidenceFrom = c.StartDate }]
+        };
         r.Contracts.Add(second);
         r.Repo.ResidentsAsync(default, default!, default).ReturnsForAnyArgs(call => new[] { r.Resident, member }
             .Where(x => call.Arg<Guid[]>().Contains(x.Id)).ToArray());

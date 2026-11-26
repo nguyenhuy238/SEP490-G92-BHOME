@@ -1447,9 +1447,12 @@ public sealed partial class ContractLifecycleApiTests(ContractFixture fixture) :
             freshPhoto.Headers.ContentType = new("image/png");
             var freshEvidence = (await Success<ContractId>(
                 await w.Staff.Client.PostAsync(Path(id, "move-out/evidence"), freshPhoto))).Id;
-            inspect = inspect with { EvidenceIds = [freshEvidence],
+            inspect = inspect with
+            {
+                EvidenceIds = [freshEvidence],
                 RoomChecks = await PassedMoveOutRoomChecks(w.Staff, id, "cleanliness"),
-                KeyEvidenceIds = [await MoveOutPhoto(w.Staff, id)] };
+                KeyEvidenceIds = [await MoveOutPhoto(w.Staff, id)]
+            };
             await Success<MoveOutView>(await Post(w.Staff, Path(id, "move-out/inspection"), inspect));
             var resubmitted = await w.Staff.Client.GetFromJsonAsync<TaskView>(
                 $"/api/v1/operational-tasks/{moveOutTask.Id}");

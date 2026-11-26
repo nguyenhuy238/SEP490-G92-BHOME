@@ -37,7 +37,8 @@ internal sealed class CaptureScope(BHomePersistenceContext db, ICurrentUser user
             r.ConfirmedAt >= reading.ConfirmedAt, t)) return false;
         if (task.BillingPeriod != null && await db.Set<Invoice>().AnyAsync(i => i.Status == InvoiceStatus.Final &&
             i.RoomId == meter.RoomId && i.BillingPeriod == task.BillingPeriod, t)) return false;
-        if (await (from line in db.Set<InvoiceLine>() join invoice in db.Set<Invoice>() on line.InvoiceId equals invoice.Id
+        if (await (from line in db.Set<InvoiceLine>()
+                   join invoice in db.Set<Invoice>() on line.InvoiceId equals invoice.Id
                    where invoice.Status == InvoiceStatus.Final && line.MeterReadingId == reading.Id
                    select line.Id).AnyAsync(t)) return false;
         if (await db.Set<ContractHandover>().AnyAsync(h => h.Status == ContractHandoverStatus.Confirmed &&
