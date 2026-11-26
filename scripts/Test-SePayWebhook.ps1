@@ -1,4 +1,4 @@
-param([Parameter(Mandatory=$true)][string]$PublicBaseUrl)
+param([Parameter(Mandatory=$true)][string]$PublicBaseUrl, [ValidateSet('Test','Live')][string]$Mode)
 $ErrorActionPreference = 'Stop'
 $baseUri = $null
 if (-not [Uri]::TryCreate($PublicBaseUrl, [UriKind]::Absolute, [ref]$baseUri) -or
@@ -12,7 +12,8 @@ $http = [Net.Http.HttpClient]::new($handler)
 $http.Timeout = [TimeSpan]::FromSeconds(15)
 $http.MaxResponseContentBufferSize = 32768
 try {
-    foreach ($route in @('/health/live','/api/v1/integrations/sepay/webhook')) {
+    $webhookRoute = if ($Mode) { '/api/v1/integrations/sepay/' + $Mode + '/webhook' } else { '/api/v1/integrations/sepay/webhook' }
+    foreach ($route in @('/health/live', $webhookRoute)) {
         $response = $null
         try {
             if ($route -eq '/health/live') { $response = $http.GetAsync($baseUri.GetLeftPart([UriPartial]::Authority) + $route).GetAwaiter().GetResult() }
@@ -31,7 +32,7 @@ try {
             Write-Output ([pscustomobject]@{ Route=$route; HttpStatus=[int]$response.StatusCode; TunnelError=$ngrokCode; BackendCode=$backendCode } | ConvertTo-Json -Compress)
             if ($ngrokCode) { throw ('Public tunnel is unavailable: ' + $ngrokCode) }
             $expected = if ($route -eq '/health/live') { 200 } else { 401 }
-            if ([int]$response.StatusCode -ne $expected) { throw ('Unexpected public status ' + [int]$response.StatusCode + '; expected ' + $expected + '. Check routing and Enabled/Test configuration.') }
+            if ([int]$response.StatusCode -ne $expected) { throw ('Unexpected public status ' + [int]$response.StatusCode + '; expected ' + $expected + '. Check routing and selected profile configuration.') }
             if ($route -ne '/health/live' -and $backendCode -ne 'sepay_authentication_failed') { throw 'The 401 did not come from the SePay HMAC guard. Check proxy authentication and the upstream service.' }
         } finally { if ($response) { $response.Dispose() } }
     }
