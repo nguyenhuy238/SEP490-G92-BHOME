@@ -65,6 +65,18 @@ internal sealed class MainInitialPayments(BHomePersistenceContext db, ContractSe
                     while (root.PreviousContractId is { } previous)
                         root = await db.Set<Contract>().AsNoTracking().SingleAsync(other => other.Id == previous, token);
                     var previousOrder = await orders.ReadAsync(root.Id, token);
+                    // An arrival into an already occupied Room does not buy another
+                    // first month or another set of capacity-based service charges.
+                    // Existing periodic debt remains on the Room's ordinary invoice.
+                    if (candidate.Status == ContractStatus.Active && candidate.ActivatedAt is not null &&
+                        candidate.StartDate <= c.StartDate && (candidate.ActualEndDate ?? candidate.EndDate) >= c.StartDate)
+                    {
+                        if (previousOrder is null && root.InitialPaymentRequired)
+                            throw new PaymentException(409, "shared_initial_payment_requires_review");
+                        depositSource ??= root.Id;
+                        rentSource ??= root.Id;
+                        continue;
+                    }
                     if (reconcile && candidate.Status == ContractStatus.PendingActivation && previousOrder is not null &&
                         !previousOrder.RoomScopeResolved && (previousOrder.CreatedAt > order!.CreatedAt ||
                             previousOrder.CreatedAt == order.CreatedAt && root.Id.CompareTo(id) > 0))
@@ -105,8 +117,8 @@ internal sealed class MainInitialPayments(BHomePersistenceContext db, ContractSe
                     policies = legacy.Select(p => ((int)p.Category, (int)p.Method, p.ChargeCode, p.Name, p.Rate));
                 }
                 var fees = policies.Where(p => p.Category == (int)ChargeCategory.ServiceFee && p.Method is (int)ChargingMethod.FixedPerRoomPerMonth or (int)ChargingMethod.FixedPerPersonPerMonth)
-                    .Where(p => (rentSource is null && invoiceId is null) || p.Method == (int)ChargingMethod.FixedPerPersonPerMonth)
-                    .Select(p => new MainInitialCharge(p.Code, p.Name, p.Rate * (p.Method == (int)ChargingMethod.FixedPerPersonPerMonth ? c.Residents.Count : 1)))
+                    .Where(p => rentSource is null && invoiceId is null)
+                    .Select(p => new MainInitialCharge(p.Code, p.Name, p.Rate * (p.Method == (int)ChargingMethod.FixedPerPersonPerMonth ? c.Room.Capacity : 1)))
                     .OrderBy(p => p.Code, StringComparer.Ordinal).ToArray();
                 if (fees.Any(f => f.Amount < 0 || decimal.Truncate(f.Amount) != f.Amount)) throw new PaymentException(409, "initial_charge_invalid_vnd_amount");
                 if (reconcile && depositSource is null && rentSource is null && invoiceId is null)

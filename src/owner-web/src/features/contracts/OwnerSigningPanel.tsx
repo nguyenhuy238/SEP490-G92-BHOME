@@ -398,14 +398,19 @@ function OtpStart({
   }
   return (
     <Stack spacing={1.5}>
-      <SignaturePlacementPicker
-        signing={signing}
-        contractId={contractId}
-        value={choice}
-        onChange={setChoice}
-        disabled={busy}
-        showSignatureImage={false}
-      />
+      <Box component="details">
+        <Typography component="summary" sx={{ cursor: 'pointer', py: 1 }}>
+          Điều chỉnh vị trí chữ ký (nếu cần)
+        </Typography>
+        <SignaturePlacementPicker
+          signing={signing}
+          contractId={contractId}
+          value={choice}
+          onChange={setChoice}
+          disabled={busy}
+          showSignatureImage={false}
+        />
+      </Box>
       <Typography variant="subtitle2">Chữ ký của bạn</Typography>
       <DrawPad onChange={setDrawing} disabled={busy} />
       <Button component="label" disabled={busy}>
@@ -436,7 +441,7 @@ function OtpStart({
             onChange={(e) => setAgreed(e.target.checked)}
           />
         }
-        label="Tôi đã đọc toàn bộ hợp đồng và đồng ý ký điện tử. Tôi hiểu chữ ký này có giá trị như cam kết của tôi đối với hợp đồng."
+        label="Tôi đã đọc hợp đồng và đồng ý ký điện tử."
       />
       {!!error && <Alert severity="error">{error}</Alert>}
       <Box>

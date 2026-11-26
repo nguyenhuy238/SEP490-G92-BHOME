@@ -4,8 +4,13 @@ namespace BHome.Application.Billing;
 
 // Count actual contract members, including co-occupants, once per room/day.
 // Neither Room.Capacity nor the billing notification audience is an occupancy source.
-public sealed record PersonMonthOccupancy(int ResidentCount, int PersonDays, bool IsComplete)
+public sealed record PersonMonthOccupancy(int ResidentCount, int PersonDays, bool IsComplete, int? RoomCapacity = null)
 {
+    // Billing quantity is independent of the actual household roster (decision 26/11/2026).
+    // Keep Read() for actual occupancy and never use this quantity for admission checks.
+    public static PersonMonthOccupancy ForRoomCapacity(int capacity, int occupiedDays) =>
+        new(capacity, checked(capacity * occupiedDays), capacity > 0 && occupiedDays > 0, capacity);
+
     public static PersonMonthOccupancy Read(DateOnly period, IEnumerable<Contract> contracts)
     {
         var members = contracts.ToArray();

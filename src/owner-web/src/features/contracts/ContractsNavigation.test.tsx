@@ -73,7 +73,31 @@ it('keeps the real contract identity, status, rent and review action visible on 
   expect(within(identity).getByText('Chờ ký')).toBeVisible();
   fireEvent.click(within(table).getByRole('button', { name: 'Chi tiết' }));
   expect(await screen.findByText('Reviewed contract')).toBeVisible();
-  expect(mocks.list).toHaveBeenCalledWith(1, '', '', expect.any(AbortSignal));
+  expect(mocks.list).toHaveBeenCalledWith(1, '', '', expect.any(AbortSignal), '', 10);
+});
+
+it('paginates ten contracts and resets to the first page when changing kind', async () => {
+  const data = await mocks.list();
+  mocks.list.mockClear();
+  mocks.list.mockResolvedValue({
+    ...data,
+    pageSize: 10,
+    totalCount: 25,
+    items: data.items.map((item: Record<string, unknown>) => ({
+      ...item,
+      representativeName: 'Người đại diện kiểm thử',
+    })),
+  });
+  mount(<ContractsPage />);
+  expect(await screen.findByText('Người đại diện kiểm thử')).toBeVisible();
+  fireEvent.click(screen.getByRole('button', { name: /go to page 2/i }));
+  await waitFor(() =>
+    expect(mocks.list).toHaveBeenCalledWith(2, '', '', expect.any(AbortSignal), '', 10),
+  );
+  fireEvent.click(screen.getByRole('tab', { name: 'Giữ chỗ' }));
+  await waitFor(() =>
+    expect(mocks.list).toHaveBeenCalledWith(1, '', '', expect.any(AbortSignal), 'Holding', 10),
+  );
 });
 
 it('opens deep links, reacts to browser history and removes only detail parameters on close', async () => {

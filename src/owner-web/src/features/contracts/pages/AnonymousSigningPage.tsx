@@ -93,6 +93,20 @@ export default function AnonymousSigningPage() {
             chữ ký số CA.
           </Alert>
           {error && <Alert severity="error">{error}</Alert>}
+          {!!error && !info && !done && (
+            <Button
+              disabled={busy}
+              onClick={() =>
+                void run(async () => {
+                  const next = await api.info(token);
+                  setInfo('Email nhận OTP: ' + next.maskedEmail);
+                  setDone(next.accepted);
+                })
+              }
+            >
+              Tải lại lời mời
+            </Button>
+          )}
           {done ? (
             <Alert severity="success">
               Đã ghi nhận chấp thuận. Hệ thống tự động kích hoạt khi đủ chữ ký và thanh toán. Bạn sẽ
@@ -154,9 +168,14 @@ export default function AnonymousSigningPage() {
               ) : (
                 <>
                   <ContractDocumentViewer title="PDF hợp đồng cần chấp thuận" url={url} />
-                  <Typography variant="caption" sx={{ overflowWrap: 'anywhere' }}>
-                    Mã tài liệu: {access.documentHash}
-                  </Typography>
+                  <Box component="details">
+                    <Typography component="summary" variant="caption">
+                      Thông tin xác thực tài liệu
+                    </Typography>
+                    <Typography variant="caption" sx={{ overflowWrap: 'anywhere' }}>
+                      Mã tài liệu: {access.documentHash}
+                    </Typography>
+                  </Box>
                   <Typography>Vẽ chữ ký trong khung dưới</Typography>
                   <canvas
                     ref={canvas}

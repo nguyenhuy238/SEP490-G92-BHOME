@@ -36,28 +36,21 @@ public sealed class EmailTemplateTests
         Assert.Contains("max-width:600px", html);
         Assert.Contains(">BHome</p>", html);
         Assert.Contains("Đây là email được gửi tự động từ hệ thống BHome.", mime.TextBody);
-        Assert.Single(Regex.Matches(html, "<img", RegexOptions.IgnoreCase));
-        Assert.Contains("src=\"cid:" + EmailTemplate.BrandContentId + "\"", html);
+        Assert.Empty(Regex.Matches(html, "<img", RegexOptions.IgnoreCase));
+        Assert.DoesNotContain("cid:", html);
         using var wire = new MemoryStream();
         mime.WriteTo(wire);
         wire.Position = 0;
         using var decoded = MimeMessage.Load(wire);
         var alternatives = Assert.IsType<MultipartAlternative>(decoded.Body);
-        var related = Assert.Single(alternatives.OfType<MultipartRelated>());
-        Assert.True(related.ContentType.IsMimeType("multipart", "related"));
-        var logo = Assert.Single(decoded.BodyParts.OfType<MimePart>(), part => part.ContentType.IsMimeType("image", "png"));
-        Assert.Equal(EmailTemplate.BrandContentId, logo.ContentId);
-        Assert.Equal(ContentDisposition.Inline, Assert.IsType<ContentDisposition>(logo.ContentDisposition).Disposition);
-        Assert.False(logo.IsAttachment);
-        using var png = new MemoryStream();
-        Assert.NotNull(logo.Content);
-        logo.Content.DecodeTo(png);
-        Assert.Equal(BrandAssets.MarkPng, png.ToArray());
+        Assert.Empty(alternatives.OfType<MultipartRelated>());
+        Assert.DoesNotContain(decoded.BodyParts.OfType<MimePart>(), part => part.ContentType.MediaType == "image");
         Assert.Empty(decoded.Attachments);
-        Assert.Contains("cid:" + logo.ContentId, decoded.HtmlBody);
+        Assert.DoesNotContain("cid:", decoded.HtmlBody);
     }
 
     [Fact]
+    // Preserve the CI inventory identity while asserting the current text-only brand.
     public void InlineBrandPreservesBothExistingPdfAttachmentsExactly()
     {
         var signed = "%PDF-synthetic signed document"u8.ToArray();
@@ -81,8 +74,7 @@ public sealed class EmailTemplateTests
             attachment.Content!.DecodeTo(bytes);
             Assert.Equal(expected, bytes.ToArray());
         }
-        var logo = Assert.Single(decoded.BodyParts.OfType<MimePart>(), part => part.ContentId == EmailTemplate.BrandContentId);
-        Assert.False(logo.IsAttachment);
+        Assert.DoesNotContain(decoded.BodyParts.OfType<MimePart>(), part => part.ContentType.MediaType == "image");
     }
 
     [Fact]
@@ -90,7 +82,7 @@ public sealed class EmailTemplateTests
     {
         Assert.Null(BrandAssets.ReadMark(() => null));
         Assert.Null(BrandAssets.ReadMark(() => new MemoryStream("invalid"u8.ToArray())));
-        using var mime = new MimeMessage { Body = MailKitEmailSender.BuildBody(Invitation, null) };
+        using var mime = new MimeMessage { Body = MailKitEmailSender.BuildBody(Invitation) };
         Assert.DoesNotContain("<img", mime.HtmlBody, StringComparison.OrdinalIgnoreCase);
         Assert.Contains(">BHome</p>", mime.HtmlBody);
         Assert.Contains(Invitation.ActionUrl!, mime.TextBody);
@@ -113,8 +105,8 @@ public sealed class EmailTemplateTests
         using var mime = new MimeMessage { Body = MailKitEmailSender.BuildBody(message) };
         Assert.Contains("&lt;BHOME&gt;", mime.HtmlBody);
         Assert.Contains("&lt;img src=x&gt;", mime.HtmlBody);
-        Assert.Single(Regex.Matches(Assert.IsType<string>(mime.HtmlBody), "<img", RegexOptions.IgnoreCase));
-        Assert.Contains("src=\"cid:" + EmailTemplate.BrandContentId + "\"", mime.HtmlBody);
+        Assert.Empty(Regex.Matches(Assert.IsType<string>(mime.HtmlBody), "<img", RegexOptions.IgnoreCase));
+        Assert.DoesNotContain("cid:", mime.HtmlBody);
         Assert.DoesNotContain("<img src=x>", mime.HtmlBody);
         Assert.Contains("Demo&lt;&amp;&gt;Only!2", mime.HtmlBody);
         Assert.Contains("staff&amp;demo@example.invalid", mime.HtmlBody);

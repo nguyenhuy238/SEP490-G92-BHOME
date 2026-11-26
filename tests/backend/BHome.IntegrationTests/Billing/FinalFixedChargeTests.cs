@@ -24,6 +24,7 @@ public sealed partial class InvoiceApiTests
         await using (var scope = fixture.Factory.Services.CreateAsyncScope())
         {
             var db = scope.ServiceProvider.GetRequiredService<BHomePersistenceContext>();
+            if (personFee) (await db.Set<BHome.Domain.PropertyManagement.Room>().SingleAsync(r => r.Id == w.Room)).Capacity = 3;
             var contracts = await db.Set<Contract>().Where(c => c.RoomId == w.Room).ToArrayAsync();
             foreach (var c in contracts)
             {
@@ -81,14 +82,15 @@ public sealed partial class InvoiceApiTests
         var draft = await Success<InvoiceView>(await w.Owner.Client.PostAsJsonAsync("/api/v1/invoices/drafts", new DraftInvoiceInput(w.Room, w.Period, w.Contract)));
         Assert.Empty(draft.MissingInputs);
         var expected = fullMonth ? 3000000 : InvoiceMath.Amount(3000000, 1, 15, DateTime.DaysInMonth(w.Period.Year, w.Period.Month), PartialMonthRule.OccupiedCalendarDays, VndRounding.AwayFromZero, false);
-        var expectedPerson = fullMonth ? 200002m : InvoiceMath.Amount(100001m, 30, 1,
+        var expectedPerson = fullMonth ? 300003m : InvoiceMath.Amount(100001m, 45, 1,
             DateTime.DaysInMonth(w.Period.Year, w.Period.Month), PartialMonthRule.OccupiedCalendarDays, VndRounding.AwayFromZero, false);
         if (personFee)
         {
             var person = Assert.Single(draft.Lines, l => l.ChargeCode == "CLEANING");
-            Assert.Equal(2m, person.Quantity); Assert.Equal(expectedPerson, person.Amount);
+            Assert.Equal(3m, person.Quantity); Assert.Equal(expectedPerson, person.Amount);
             using var snapshot = JsonDocument.Parse(person.UtilityCalculationSnapshot!);
-            Assert.Equal("30", snapshot.RootElement.GetProperty("source").GetProperty("PersonDays").GetString());
+            Assert.Equal("45", snapshot.RootElement.GetProperty("source").GetProperty("PersonDays").GetString());
+            Assert.Equal("3", snapshot.RootElement.GetProperty("source").GetProperty("RoomCapacity").GetString());
         }
         if (invoiceFirst) draft = await Success<InvoiceView>(await w.Owner.Client.PostAsJsonAsync($"/api/v1/invoices/{draft.Id}/finalize", new InvoiceFinalizeInput(draft.Version)));
         var original = await w.Owner.Client.GetStringAsync($"/api/v1/invoices/{draft.Id}");
@@ -126,7 +128,7 @@ public sealed partial class InvoiceApiTests
         {
             var person = Assert.Single(await Success<FinalFixedChargePreview[]>(await w.Owner.Client.GetAsync(route)), p => p.ChargeCode == "CLEANING");
             Assert.Empty(person.MissingInputs); Assert.Equal(invoiceFirst ? 0m : expectedPerson, person.Amount);
-            Assert.Equal(2, person.Calculation!.ResidentCount); Assert.Equal(30, person.Calculation.PersonDays);
+            Assert.Equal(3, person.Calculation!.ResidentCount); Assert.Equal(45, person.Calculation.PersonDays);
             personCharge = await Success<SettlementReceivable>(await UtilityPost(w.Owner.Client, route,
                 new FinalFixedChargeApproval(person.ChargeCode, person.Reference, true), Guid.NewGuid()));
             Assert.Equal(person.Amount, personCharge.Amount);

@@ -22,6 +22,9 @@ export interface ResidenceTask {
   accommodationConfirmed?: boolean;
   registrationDeadline?: string | null;
   trackingActive?: boolean;
+  registrationExpiresOn?: string | null;
+  registrationRequired?: boolean;
+  householdCompleted?: boolean;
 }
 export interface ResidencePage {
   items: ResidenceTask[];
@@ -35,6 +38,7 @@ export interface ResidenceUpdate {
   resultAt: string | null;
   note: string | null;
   expectedReference?: string;
+  registrationExpiresOn?: string | null;
 }
 type Transport = <T>(
   path: string,
@@ -54,7 +58,27 @@ export const residenceAction: Record<string, string> = {
   OwnerConfirmed: 'Owner xác nhận',
   AccommodationConfirmed: 'Owner ghi nhận xác nhận chỗ ở trên kênh chính thức',
   EvidenceUploaded: 'Cập nhật ảnh minh chứng',
+  TrackingConfigured: 'Owner cập nhật theo dõi',
 };
+export function residenceAlert(
+  task: ResidenceTask,
+  today = new Intl.DateTimeFormat('en-CA', {
+    timeZone: 'Asia/Ho_Chi_Minh',
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+  }).format(new Date()),
+) {
+  if (task.registrationRequired === false || task.trackingActive === false) return null;
+  if (task.registrationExpiresOn) {
+    const days = (Date.parse(task.registrationExpiresOn) - Date.parse(today)) / 86_400_000;
+    if (days < 0) return 'Tạm trú đã hết hạn';
+    if (days <= 15) return 'Tạm trú sắp hết hạn (trong 15 ngày)';
+  }
+  if (task.registrationDeadline && task.registrationDeadline < today && !task.ownerConfirmed)
+    return 'Đã quá hạn đăng ký được ghi nhận';
+  return null;
+}
 export function residenceImageType(bytes: Uint8Array): 'image/png' | 'image/jpeg' {
   if (!bytes.length || bytes.length > 5 * 1024 * 1024)
     throw new Error('Ảnh cần nhỏ hơn hoặc bằng 5 MB.');
@@ -104,6 +128,7 @@ export function residencePayload(
   resultTime: string,
   note: string,
   completed: boolean,
+  expiresOn = '',
 ): ResidenceUpdate {
   const actualResidenceFrom = dateOnly(actual);
   if (actualResidenceFrom < task.residenceFrom)
@@ -126,6 +151,7 @@ export function residencePayload(
     status: completed ? 'Completed' : 'InProgress',
     resultAt,
     note: note.trim() || null,
+    ...(expiresOn ? { registrationExpiresOn: dateOnly(expiresOn) } : {}),
   };
 }
 export function residenceClient(request: Transport) {
@@ -150,11 +176,30 @@ export function residenceClient(request: Transport) {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ ...input, expectedReference: task.reference }),
       }),
-    upload: (task: ResidenceTask, bytes: Uint8Array<ArrayBuffer>) =>
-      request<ResidenceTask>(`${path(task.contractId, task.residentId)}/evidence`, {
+    upload: (task: ResidenceTask, bytes: Uint8Array<ArrayBuffer>, residentIds?: string[]) =>
+      request<ResidenceTask>(
+        `${path(task.contractId, task.residentId)}/evidence${residentIds?.length ? '?' + new URLSearchParams(residentIds.map((id) => ['residentIds', guid(id)])) : ''}`,
+        {
+          method: 'PUT',
+          headers: { 'Content-Type': residenceImageType(bytes) },
+          body: bytes,
+        },
+      ),
+    configure: (
+      task: ResidenceTask,
+      registrationRequired: boolean,
+      registrationExpiresOn: string | null,
+      reason: string,
+    ) =>
+      request<ResidenceTask>(`${path(task.contractId, task.residentId)}/tracking-settings`, {
         method: 'PUT',
-        headers: { 'Content-Type': residenceImageType(bytes) },
-        body: bytes,
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          registrationRequired,
+          registrationExpiresOn,
+          expectedReference: task.reference,
+          reason: reason.trim(),
+        }),
       }),
     image: (task: ResidenceTask, signal?: AbortSignal) =>
       request<Uint8Array<ArrayBuffer>>(

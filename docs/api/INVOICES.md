@@ -83,3 +83,11 @@ Chuỗi browser tổng hợp đã kiểm một Main Contract có representative 
 Invoice/ba recipients, không nhân tiền thuê theo số người, rồi partial payment và Adjustment sau
 Final giữ nguyên issued DTO. Staff/Tenant đi qua MobileApi transport thật; chưa nghiệm thu UI
 native hoặc delivery ngoài hệ thống. Bằng chứng: [báo cáo triển khai](../development/NGUYEN_QUOC_HUY_E2E_IMPLEMENTATION.md).
+
+# Quyết định phí theo sức chứa — 26/11/2026
+
+Theo yêu cầu trực tiếp của người dùng, `FixedPerPersonPerMonth` tính đơn giá nhân **sức chứa phòng**, kể cả khi số người ở thực tế ít hơn. Quy tắc ngày lẻ và làm tròn đã cấu hình vẫn áp dụng. Số người thực tế tiếp tục dùng để kiểm soát sức chứa, hồ sơ và tạm trú; không dùng làm số lượng tính khoản phí này.
+
+Thanh toán ban đầu tính phí cả sức chứa một lần cho phòng. Người vào thêm trong phòng đang có hợp đồng Active không bị thu thêm tiền thuê/cọc/phí theo người; backend liên kết nghĩa vụ phòng đang có, kể cả hợp đồng trước bắt đầu ở tháng cũ. Khoản thu ban đầu còn thiếu hoặc dữ liệu nguồn không đủ phải được rà soát; không giả lập giao dịch đã thanh toán. Công nợ hóa đơn định kỳ của phòng không chuyển thành khoản thu ban đầu mới.
+
+Snapshot phí cố định bổ sung `roomCapacity`. Không sửa hóa đơn Final hoặc khoản thu đã có phân bổ. Nếu đối chiếu cùng kỳ với chứng từ theo công thức cũ hoặc sức chứa đã đổi, trả thiếu đầu vào `fixed_charge_policy_changed` để Owner xử lý theo luồng điều chỉnh; không tự thu phần chênh lệch.

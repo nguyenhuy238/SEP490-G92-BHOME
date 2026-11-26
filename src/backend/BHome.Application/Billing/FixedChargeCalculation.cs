@@ -13,7 +13,8 @@ public sealed record FixedChargeSource(DateOnly BillingPeriod, string ChargeCode
     int OccupiedDays, int PeriodDays, decimal CumulativePricedAmount, decimal AlreadyPricedAmount,
     decimal? PolicyCalculatedAmount = null, decimal ApprovedReduction = 0, Guid[]? ApprovedAdjustmentIds = null,
     [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] int? ResidentCount = null,
-    [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] int? PersonDays = null);
+    [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] int? PersonDays = null,
+    [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] int? RoomCapacity = null);
 public sealed record FixedChargeCoverage(Guid SourceId, FixedChargeSource Source, decimal ApprovedReduction = 0, Guid[]? AdjustmentIds = null);
 public sealed record FixedChargeResult(decimal? Amount, FixedChargeSource Source, IReadOnlyList<string> MissingInputs);
 public interface IFixedChargeCoverage
@@ -75,6 +76,8 @@ public static class FixedChargeCalculation
                 missing.Add("fixed_charge_policy_changed");
             if (perPerson && (prior.Source.ResidentCount is not > 0 || prior.Source.PersonDays is not > 0))
                 missing.Add("fixed_charge_coverage_invalid");
+            if (perPerson && prior.Source.RoomCapacity != people?.RoomCapacity)
+                missing.Add("fixed_charge_policy_changed");
             if (prior.Source.CumulativePricedAmount > cumulative && prior.Source.CumulativePricedAmount - cumulative > reduction)
                 missing.Add("fixed_charge_occupancy_changed");
             if (prior.ApprovedReduction < 0 || prior.Source.AlreadyPricedAmount < 0 || prior.Source.CumulativePricedAmount < prior.Source.AlreadyPricedAmount)
@@ -84,7 +87,8 @@ public static class FixedChargeCalculation
             policy.Id == Guid.Empty ? null : policy.Version, policy.Rate, reference, schedule.PartialMonth, schedule.Rounding,
             occupiedDays, days, Math.Max(cumulative, previous), previous, cumulative, reduction,
             coverage.SelectMany(c => c.AdjustmentIds ?? []).Distinct().Order().ToArray(),
-            perPerson ? people?.ResidentCount : null, perPerson ? people?.PersonDays : null);
+            perPerson ? people?.ResidentCount : null, perPerson ? people?.PersonDays : null,
+            perPerson ? people?.RoomCapacity : null);
         return new(missing.Count == 0 ? Math.Max(0, cumulative - previous) : null, source, missing.Distinct().ToArray());
     }
 }

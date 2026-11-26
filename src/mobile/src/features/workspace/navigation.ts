@@ -15,7 +15,7 @@ export const screenRoles = {
   'report-incident': ['Staff'],
   'move-in-inventory': ['Staff'],
   'move-in': ['Staff'],
-  residence: ['Tenant'],
+  residence: ['Tenant', 'Staff'],
   adjustment: ['Tenant'],
   'contract-request': ['Tenant'],
   signing: ['Owner', 'Staff', 'Tenant'],

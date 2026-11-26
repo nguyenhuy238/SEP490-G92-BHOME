@@ -52,6 +52,17 @@ public static class ApiFoundation
         services.AddRateLimiter(options =>
         {
             options.RejectionStatusCode = StatusCodes.Status429TooManyRequests;
+            // Owner polling must not consume anonymous signers' or login request budgets.
+            // Per-invitation OTP cooldown/send/guess limits remain enforced by the service.
+            foreach (var policy in new[] { "SigningRead", "SigningOtp", "SigningVerify" })
+                options.AddPolicy(policy, context => RateLimitPartition.GetFixedWindowLimiter(
+                    policy + ":" + (context.Connection.RemoteIpAddress?.ToString() ?? "unknown"),
+                    _ => new FixedWindowRateLimiterOptions
+                    {
+                        PermitLimit = context.RequestServices.GetRequiredService<IOptions<AuthRateLimitOptions>>().Value.PermitLimit,
+                        Window = TimeSpan.FromSeconds(context.RequestServices.GetRequiredService<IOptions<AuthRateLimitOptions>>().Value.WindowSeconds),
+                        QueueLimit = 0
+                    }));
             options.AddPolicy("EmailTest", context => context.User.IsInRole("Owner")
                 ? RateLimitPartition.GetFixedWindowLimiter("development-email-test", _ => new FixedWindowRateLimiterOptions
                 { PermitLimit = 1, Window = TimeSpan.FromMinutes(10), QueueLimit = 0 })
