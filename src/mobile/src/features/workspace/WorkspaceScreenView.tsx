@@ -13,7 +13,10 @@ import { Redirect } from 'expo-router';
 import { TenantInvoicesScreen } from '../../screens/TenantInvoicesScreen';
 import { NotificationsScreen } from '../../screens/NotificationsScreen';
 import { TenantPaymentHistoryScreen } from '../../screens/TenantPaymentHistoryScreen';
-import { TenantRefundRequestsScreen } from '../../screens/TenantRefundRequestsScreen';
+import {
+  TenantRefundRequestsScreen,
+  TenantRefundHistoryScreen,
+} from '../../screens/TenantRefundRequestsScreen';
 import { TenantFeaturesScreen } from '../../screens/TenantFeaturesScreen';
 import { Text } from 'react-native-paper';
 import { Action, Box, Heading } from '../../components/WorkspaceKit';
@@ -120,9 +123,12 @@ const screens = {
   'owner-maintenance': MaintenanceListScreen,
   'owner-emergencies': EmergencyIncidents,
   'tenant-room': TenantRoomScreen,
+  'tenant-handovers': () => <ContractScreen tenantHandoverOnly />,
   'tenant-features': TenantFeaturesScreen,
   'tenant-requests': TenantRequestsScreen,
   'refund-requests': TenantRefundRequestsScreen,
+  'refund-history': TenantRefundHistoryScreen,
+  'incident-history': () => <IncidentListScreen sentOnly />,
   'tenant-meters': TenantMeterHistoryScreen,
   'staff-assets': StaffAssets,
   'staff-maintenance': StaffMaintenanceScreen,
@@ -250,6 +256,7 @@ export function WorkspaceScreenView({
           content = role === 'Staff' ? <StaffResidenceScreen /> : <TenantResidenceScreen />;
           break;
         case 'tenant-room':
+        case 'tenant-handovers':
         case 'tenant-features':
         case 'tenant-requests':
         case 'tenant-meters':
@@ -260,6 +267,10 @@ export function WorkspaceScreenView({
           break;
         case 'refund-requests':
           content = <TenantRefundRequestsScreen />;
+          break;
+        case 'refund-history':
+        case 'incident-history':
+          content = <Screen />;
           break;
         case 'owner-home':
           content = <OwnerOverviewScreen />;

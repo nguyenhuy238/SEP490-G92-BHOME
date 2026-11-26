@@ -1,22 +1,21 @@
 import React from 'react';
 import { StyleSheet, View } from 'react-native';
 import { ActivityIndicator, Button, Icon, Text, TouchableRipple } from 'react-native-paper';
-import type {
-  ContractExpiryNotice,
-  ContractSummary,
-} from '../../../../packages/client-core/src/contracts';
+import type { ContractSummary } from '../../../../packages/client-core/src/contracts';
 import {
   businessToday,
   displayContractDate,
   formatContractMoney,
 } from '../../../../packages/client-core/src/contracts';
-import type { Invoice, InvoiceLine } from '../../../../packages/client-core/src/invoices';
+import type { Invoice } from '../../../../packages/client-core/src/invoices';
 import { formatBillingDecimal } from '../../../../packages/client-core/src/invoices';
-import type { DebtInvoice, InvoicePayment } from '../../../../packages/client-core/src/payments';
+import type { InvoicePayment } from '../../../../packages/client-core/src/payments';
 import type { TenantMeterReading } from '../../../../packages/client-core/src/tenantReadings';
-import type { NotificationItem } from '../../../../packages/client-core/src/notifications';
 import { TenantMeterReadingEvidence } from '../components/TenantMeterReadingEvidence';
+import { featureCardLayout } from '../components/FeatureCardLayout';
+import { typography } from '../theme/typography';
 import { positiveAmount, tenantPaymentLabel } from '../features/tenant/paymentPresentation';
+import { isActiveRoomRental } from '../features/tenant/tenantContractEligibility';
 import { useWorkspace } from '../features/workspace/WorkspaceProvider';
 import { colors as c, staffColors as s } from '../theme/theme';
 
@@ -40,10 +39,7 @@ export interface TenantDashboardProps {
   invoiceState?: LoadState;
   paymentState?: LoadState;
   meterState?: LoadState;
-  debt?: DebtInvoice;
-  notices?: NotificationItem[];
-  expiryNotices?: ContractExpiryNotice[];
-  alertsState?: LoadState;
+  activeRental?: ContractSummary;
 }
 
 function Feedback({ state }: { state?: LoadState }) {
@@ -297,107 +293,6 @@ function UtilityCard({
   );
 }
 
-function MoneyRow({ line }: { line: InvoiceLine }) {
-  return (
-    <View style={styles.moneyRow}>
-      <Text style={styles.moneyName} numberOfLines={2}>
-        {line.name || line.chargeCode}
-      </Text>
-      <Text
-        style={styles.moneyValue}
-        numberOfLines={1}
-        adjustsFontSizeToFit
-        minimumFontScale={0.75}
-      >
-        {formatContractMoney(line.amount)}
-      </Text>
-    </View>
-  );
-}
-
-function Attention({
-  invoice,
-  debt,
-  notices,
-  expiryNotices,
-  state,
-}: {
-  invoice?: Invoice;
-  invoiceScheduleMessage?: string;
-  debt?: DebtInvoice;
-  notices: NotificationItem[];
-  expiryNotices: ContractExpiryNotice[];
-  state?: LoadState;
-}) {
-  const { go } = useWorkspace();
-  const otherDebt = debt && debt.invoiceId !== invoice?.id ? debt : undefined;
-  const important = notices.filter(
-    (notice) =>
-      !(notice.relatedObjectId === invoice?.id && ['Invoice', 'Payment'].includes(notice.category)),
-  );
-  if (!otherDebt && !expiryNotices.length && !important.length) return null;
-  return (
-    <View style={styles.section}>
-      <Heading title="Cần chú ý" />
-      <View style={styles.whiteSurface}>
-        {otherDebt && (
-          <TouchableRipple
-            accessibilityRole="button"
-            onPress={() => go('invoice', { invoiceId: otherDebt.invoiceId })}
-          >
-            <View style={styles.alertRow}>
-              <Icon source="alert-circle-outline" size={20} color={c.red} />
-              <View style={styles.grow}>
-                <Text style={styles.alertTitle}>Còn hóa đơn kỳ khác cần thanh toán</Text>
-                <Text style={styles.secondary}>
-                  {formatContractMoney(otherDebt.outstandingAmount)}
-                  {otherDebt.overdueDays > 0 ? ` · Quá hạn ${otherDebt.overdueDays} ngày` : ''}
-                </Text>
-              </View>
-              <Icon source="chevron-right" size={18} color={s.blue} />
-            </View>
-          </TouchableRipple>
-        )}
-        {expiryNotices.slice(0, 1).map((notice) => (
-          <TouchableRipple
-            key={notice.id}
-            accessibilityRole="button"
-            onPress={() => go('contract', { contractId: notice.contractId })}
-          >
-            <View style={styles.alertRow}>
-              <Icon source="calendar-clock-outline" size={20} color={c.amber} />
-              <View style={styles.grow}>
-                <Text style={styles.alertTitle}>Cần xem hạn hợp đồng</Text>
-                <Text style={styles.secondary}>{displayContractDate(notice.endDate)}</Text>
-              </View>
-              <Icon source="chevron-right" size={18} color={s.blue} />
-            </View>
-          </TouchableRipple>
-        ))}
-        {important.slice(0, 1).map((notice) => (
-          <TouchableRipple
-            key={notice.id}
-            accessibilityRole="button"
-            onPress={() => go('notifications')}
-          >
-            <View style={styles.alertRow}>
-              <Icon source="bell-outline" size={20} color={s.blue} />
-              <View style={styles.grow}>
-                <Text style={styles.alertTitle} numberOfLines={2}>
-                  {notice.title}
-                </Text>
-                <Text style={styles.secondary}>Xem thông báo</Text>
-              </View>
-              <Icon source="chevron-right" size={18} color={s.blue} />
-            </View>
-          </TouchableRipple>
-        ))}
-      </View>
-      <Feedback state={state} />
-    </View>
-  );
-}
-
 function Shortcut({ icon, title, onPress }: { icon: string; title: string; onPress: () => void }) {
   return (
     <TouchableRipple
@@ -407,9 +302,10 @@ function Shortcut({ icon, title, onPress }: { icon: string; title: string; onPre
       onPress={onPress}
     >
       <View style={styles.shortcutBody}>
-        <Icon source={icon} size={20} color={s.blue} />
+        <View style={styles.shortcutIcon}>
+          <Icon source={icon} size={22} color={s.blue} />
+        </View>
         <Text style={styles.shortcutTitle}>{title}</Text>
-        <Icon source="chevron-right" size={17} color={c.muted} />
       </View>
     </TouchableRipple>
   );
@@ -426,15 +322,10 @@ export function TenantDashboard({
   invoiceScheduleMessage,
   paymentState,
   meterState,
-  debt,
-  notices = [],
-  expiryNotices = [],
-  alertsState,
+  activeRental,
 }: TenantDashboardProps) {
   const { go } = useWorkspace();
-  const contract = contracts.find((item) => item.status === 'Active' && item.kind !== 'Holding');
-  const rent = invoice?.lines.filter((line) => line.category === 'Rent') ?? [];
-  const serviceFees = invoice?.lines.filter((line) => line.category === 'ServiceFee') ?? [];
+  const contract = activeRental ?? contracts.find(isActiveRoomRental);
   // A recently returned room can still have a current-period Final invoice.
   // The invoice itself supplies its room, while the Tenant endpoint continues
   // to enforce which historical invoice/readings this account may see.
@@ -497,68 +388,31 @@ export function TenantDashboard({
           />
         </View>
         <Feedback state={meterState} />
-        <Text style={styles.footnote}>
-          Chỉ số do nhân viên xác nhận; ảnh công tơ chỉ xem được trong tài khoản của bạn.
-        </Text>
       </View>
 
-      <View style={styles.section}>
-        <Heading
-          title="Tiền thuê & dịch vụ"
-          action="Chi tiết hóa đơn"
-          onPress={() => go('invoice', invoice ? { invoiceId: invoice.id } : undefined)}
-        />
-        <View style={styles.whiteSurface}>
-          {invoice ? (
-            <View style={styles.moneyList}>
-              {rent.map((line) => (
-                <MoneyRow key={line.id} line={line} />
-              ))}
-              {serviceFees.map((line) => (
-                <MoneyRow key={line.id} line={line} />
-              ))}
-              {!rent.length && !serviceFees.length && (
-                <Text style={styles.secondary}>
-                  Hóa đơn này không có khoản tiền thuê hoặc phí dịch vụ.
-                </Text>
-              )}
-              {invoice.status === 'Draft' && (
-                <Text style={styles.footnote}>Số tiền đang tạm tính, chưa phát hành.</Text>
-              )}
-            </View>
-          ) : (
-            <View style={styles.emptyFees}>
-              <Text style={styles.secondary}>
-                {invoiceState?.loading
-                  ? 'Đang kiểm tra hóa đơn…'
-                  : 'Chưa có phí dịch vụ của kỳ này trên hóa đơn. Không phải số tiền 0đ.'}
-              </Text>
-            </View>
-          )}
+      {activeRental && isActiveRoomRental(activeRental) && (
+        <View style={styles.section}>
+          <Heading title="Chức năng" />
+          <View style={styles.shortcutGrid}>
+            <Shortcut
+              icon="receipt-text-outline"
+              title="Lịch sử hóa đơn"
+              onPress={() => go('invoice', { view: 'history' })}
+            />
+            <Shortcut icon="wrench-outline" title="Báo cáo sự cố" onPress={() => go('incidents')} />
+            <Shortcut
+              icon="cash-refund"
+              title="Yêu cầu hoàn tiền"
+              onPress={() => go('refund-requests')}
+            />
+            <Shortcut
+              icon="key-outline"
+              title="Bàn giao / Trả phòng"
+              onPress={() => go('tenant-handovers')}
+            />
+          </View>
         </View>
-      </View>
-
-      <Attention
-        invoice={invoice}
-        debt={debt}
-        notices={notices}
-        expiryNotices={expiryNotices}
-        state={alertsState}
-      />
-
-      <View style={styles.section}>
-        <Heading
-          title="Bạn cần làm gì khác?"
-          action="Tất cả tiện ích"
-          onPress={() => go('tenant-features', contract ? { contractId: contract.id } : undefined)}
-        />
-        <Shortcut icon="wrench-outline" title="Báo sự cố" onPress={() => go('incidents')} />
-        <Shortcut
-          icon="clipboard-text-outline"
-          title="Yêu cầu của tôi"
-          onPress={() => go('tenant-requests')}
-        />
-      </View>
+      )}
     </View>
   );
 }
@@ -648,38 +502,36 @@ const styles = StyleSheet.create({
   },
   utilityCaption: { color: c.muted, fontSize: 11, lineHeight: 16 },
   utilityCost: { fontSize: 12, lineHeight: 18, color: s.navy, fontWeight: '600' },
-  whiteSurface: { borderRadius: 14, backgroundColor: c.white, overflow: 'hidden' },
-  moneyList: { paddingHorizontal: 14, paddingVertical: 4 },
-  moneyRow: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    gap: 10,
-    minHeight: 48,
-    paddingVertical: 9,
-    borderBottomWidth: 1,
-    borderBottomColor: '#F0F3F8',
+  shortcutGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: 8, alignItems: 'stretch' },
+  shortcut: {
+    ...featureCardLayout.surface,
+    flex: undefined,
+    flexBasis: '45%',
+    flexGrow: 1,
+    maxWidth: '48%',
+    minHeight: 88,
+    borderRadius: 12,
+    backgroundColor: c.white,
+    overflow: 'hidden',
   },
-  moneyName: { color: c.ink, fontSize: 13, flex: 1, flexShrink: 1 },
-  moneyValue: { color: s.navy, fontSize: 13, fontWeight: '700' },
-  emptyFees: { padding: 15 },
-  alertRow: {
-    flexDirection: 'row',
-    gap: 10,
-    alignItems: 'center',
-    paddingHorizontal: 14,
-    minHeight: 62,
-    borderBottomWidth: 1,
-    borderBottomColor: '#F0F3F8',
-  },
-  alertTitle: { color: s.navy, fontSize: 13, fontWeight: '600' },
-  shortcut: { minHeight: 52, borderRadius: 12, backgroundColor: c.white },
   shortcutBody: {
-    minHeight: 52,
-    paddingHorizontal: 14,
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 11,
+    ...featureCardLayout.content,
+    justifyContent: 'center',
+    padding: 8,
+    gap: 4,
   },
-  shortcutTitle: { flex: 1, color: s.navy, fontSize: 13, fontWeight: '600' },
+  shortcutIcon: {
+    ...featureCardLayout.icon,
+    width: 32,
+    height: 32,
+    borderRadius: 9,
+    backgroundColor: s.blueSoft,
+  },
+  shortcutTitle: {
+    ...typography.cardTitle,
+    fontSize: 13,
+    lineHeight: 18,
+    color: s.navy,
+    textAlign: 'center',
+  },
 });

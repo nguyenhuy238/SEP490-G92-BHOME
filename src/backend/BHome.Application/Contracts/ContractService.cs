@@ -1039,7 +1039,7 @@ public sealed partial class ContractService(IContractRepository repository, ICur
         var consent = await ReadConsent(id, t);
         if (consent is not null && !Forced(move) && !move.IsExpiry && user.IsInRole(Roles.Tenant) &&
             (!consent.Members.Any(m => m.ContractId == id && m.UserId == Actor) ||
-             (move.Status is MoveOutStatus.AwaitingConsent or MoveOutStatus.Requested && !await CurrentConsentMember(contract, t))))
+             (move.Status is MoveOutStatus.AwaitingConsent or MoveOutStatus.Requested && !await CurrentConsentMember(contract, Today, t))))
             throw ContractException.Missing();
         var view = ConsentView(move, consent);
         var inspection = (await repository.FinalInspectionsAsync(id, t)).FirstOrDefault();
@@ -1065,7 +1065,7 @@ public sealed partial class ContractService(IContractRepository repository, ICur
             // A legacy request may only be approved without a recorded
             // group snapshot when its sole member initiated it.
             var contracts = await repository.RoomActiveContractsAsync(c.RoomId, t);
-            var roster = await ConsentRoster(contracts, t);
+            var roster = await ConsentRoster(contracts, Today, t);
             if (contracts.Count != 1 || !roster.Select(r => r.UserId).Distinct().SequenceEqual([m.RequestedByUserId]))
                 throw ContractException.Conflict("move_out_consent_required");
             m.Status = MoveOutStatus.Approved; m.ApprovedByUserId = Actor; m.ApprovedAt = clock.GetUtcNow(); m.Version++; MoveOutEvent(m, "Approved");

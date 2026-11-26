@@ -98,13 +98,13 @@ public sealed partial class ContractLifecycleApiTests
             Path(contractId, "move-out/evidence"), roomProofPhoto))).Id;
         var preparation = await Success<InspectionPreparation>(await w.Staff.Client.GetAsync(
             Path(contractId, "move-out/inspection-preparation")));
-        var roomChecks = HandoverRoomChecklist.RequiredCodes.Select(code =>
-            new HandoverRoomCheck(code, code == "cleanliness" ? "Issue" : "Passed",
-                code == "cleanliness" ? "Synthetic cleaning damage" : null,
-                code == "cleanliness" ? [roomProof] : [])).ToArray();
+        var roomChecks = await PassedMoveOutRoomChecks(w.Staff, contractId, "cleanliness");
+        roomChecks = roomChecks.Select(check => check.Code == "cleanliness"
+            ? check with { Notes = "Synthetic cleaning damage", EvidenceIds = [roomProof] } : check).ToArray();
         var inspection = new InspectionInput(electricity, water, "Synthetic final condition", [proof], [],
             "Synthetic room final", "Synthetic returned keys", InventoryToken: preparation.Inventory?.StateToken,
-            RoomChecks: roomChecks, AccessItems: [new HandoverAccessItem("RoomKey", 0, "")]);
+            RoomChecks: roomChecks, AccessItems: [new HandoverAccessItem("RoomKey", 0, "")],
+            KeyEvidenceIds: [await MoveOutPhoto(w.Staff, contractId)]);
         var draft = await Success<MoveOutInspectionDraftView>(await w.Staff.Client.GetAsync(
             Path(contractId, "move-out/inspection-draft")));
         using (var request = new HttpRequestMessage(HttpMethod.Patch,

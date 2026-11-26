@@ -23,13 +23,15 @@ public sealed partial class ContractService
     private static bool Forced(ContractMoveOut move) =>
         move.PendingReason is ForcedInspectionPending or ForcedInspectionSaved;
 
-    private async Task<MoveOutConsentMember[]> ConsentRoster(IReadOnlyList<Contract> contracts, CancellationToken t)
+    private async Task<MoveOutConsentMember[]> ConsentRoster(IReadOnlyList<Contract> contracts, DateOnly businessDate, CancellationToken t)
     {
         var members = new List<MoveOutConsentMember>();
         foreach (var contract in contracts)
         {
-            var ids = contract.Residents.Where(r => r.ResidenceFrom <= Today &&
-                (r.ResidenceTo == null || r.ResidenceTo >= Today)).Select(r => r.ResidentId).Distinct().ToArray();
+            var ids = contract.Residents.Where(r => r.ResidenceFrom <= businessDate &&
+                (r.ResidenceTo == null || r.ResidenceTo >= businessDate)).Select(r => r.ResidentId).Distinct().ToArray();
+            if (ids.Length == 0 && contract.Residents.Count > 0 && contract.Residents.All(r => r.ResidenceFrom > businessDate))
+                throw ContractException.Conflict("move_out_residence_not_started");
             var residents = await repository.ResidentsAsync(contract.RoomId, ids, t);
             if (ids.Length == 0 || residents.Count != ids.Length)
                 throw ContractException.Conflict("move_out_roster_unavailable");
@@ -56,11 +58,11 @@ public sealed partial class ContractService
             ?? throw ContractException.Conflict("move_out_consent_integrity_failed");
     }
 
-    private async Task<bool> CurrentConsentMember(Contract contract, CancellationToken t)
+    private async Task<bool> CurrentConsentMember(Contract contract, DateOnly businessDate, CancellationToken t)
     {
         if (contract.Status != ContractStatus.Active) return false;
-        var ids = contract.Residents.Where(r => r.ResidenceFrom <= Today &&
-            (r.ResidenceTo == null || r.ResidenceTo >= Today)).Select(r => r.ResidentId).ToArray();
+        var ids = contract.Residents.Where(r => r.ResidenceFrom <= businessDate &&
+            (r.ResidenceTo == null || r.ResidenceTo >= businessDate)).Select(r => r.ResidentId).ToArray();
         return (await repository.ResidentsAsync(contract.RoomId, ids, t)).Any(r => ids.Contains(r.Id) &&
             (r.TenantUserId ?? (r.Id == contract.RepresentativeResidentId ? contract.TenantUserId : null)) == Actor);
     }
@@ -99,17 +101,18 @@ public sealed partial class ContractService
                 var saved = await repository.MoveOutAsync(id, t) ?? throw ContractException.Missing();
                 return ConsentView(saved, await ReadConsent(id, t));
             }
+            var businessDate = clock.BusinessToday();
             var contracts = await repository.RoomActiveContractsAsync(contract.RoomId, t);
             if (!contracts.Any(c => c.Id == id) || string.IsNullOrWhiteSpace(input.Reason))
                 throw ContractException.Conflict("contract_not_terminable");
-            var roster = await ConsentRoster(contracts, t);
+            var roster = await ConsentRoster(contracts, businessDate, t);
             if (!roster.Any(m => m.ContractId == id && m.UserId == Actor))
                 throw ContractException.Missing();
             foreach (var c in contracts)
             {
                 if (await repository.OpenRenewalAsync(c.Id, t))
                     throw ContractException.Conflict("contract_not_terminable");
-                if (input.ProposedDate < Today || input.ProposedDate < c.StartDate || input.ProposedDate >= c.EndDate)
+                if (input.ProposedDate < businessDate || input.ProposedDate < c.StartDate || input.ProposedDate >= c.EndDate)
                     throw ContractException.Invalid("invalid_move_out_date");
                 if (await repository.MoveOutAsync(c.Id, t) is { Status: not MoveOutStatus.Rejected })
                     throw ContractException.Conflict("move_out_already_requested");
@@ -139,11 +142,11 @@ public sealed partial class ContractService
             return ConsentView(result!, consent);
         }, t);
 
-    private async Task<IReadOnlyList<Contract>> ValidateConsentRoster(Contract contract, RoomMoveOutConsent consent, CancellationToken t)
+    private async Task<IReadOnlyList<Contract>> ValidateConsentRoster(Contract contract, RoomMoveOutConsent consent, DateOnly businessDate, CancellationToken t)
     {
         var contracts = await repository.RoomActiveContractsAsync(contract.RoomId, t);
         if (!contracts.Select(c => c.Id).Order().SequenceEqual(consent.ContractIds) ||
-            !(await ConsentRoster(contracts, t)).SequenceEqual(consent.Members))
+            !(await ConsentRoster(contracts, businessDate, t)).SequenceEqual(consent.Members))
             throw ContractException.Conflict("move_out_members_changed");
         foreach (var c in contracts)
             if (await repository.OpenRenewalAsync(c.Id, t))
@@ -166,11 +169,12 @@ public sealed partial class ContractService
                 throw ContractException.Conflict("move_out_version_changed");
             if (input.Confirmed && consent.AgreedUserIds.Contains(Actor))
                 throw ContractException.Conflict("move_out_already_consented");
-            if (input.Confirmed) await ValidateConsentRoster(contract, consent, t);
+            var businessDate = clock.BusinessToday();
+            if (input.Confirmed) await ValidateConsentRoster(contract, consent, businessDate, t);
             else
             {
                 // Cancellation remains possible if the room roster changes.
-                if (!await CurrentConsentMember(contract, t))
+                if (!await CurrentConsentMember(contract, businessDate, t))
                     throw ContractException.Missing();
             }
             var next = input.Confirmed
@@ -199,7 +203,9 @@ public sealed partial class ContractService
     {
         if (consent.PrimaryContractId != contract.Id || !consent.Unanimous)
             throw ContractException.Conflict("move_out_consent_required");
-        var contracts = await ValidateConsentRoster(contract, consent, t);
+        var businessNow = clock.BusinessUtcNow();
+        var businessDate = DateOnly.FromDateTime(businessNow.ToOffset(TimeSpan.FromHours(7)).DateTime);
+        var contracts = await ValidateConsentRoster(contract, consent, businessDate, t);
         foreach (var c in contracts)
         {
             var linked = await repository.MoveOutAsync(c.Id, t) ?? throw ContractException.Conflict("move_out_group_changed");
@@ -212,7 +218,7 @@ public sealed partial class ContractService
             linked.Version++;
             MoveOutEvent(linked, "Approved");
             if (handoverRepository is not null)
-                await handoverRepository.EnsureMoveOutTaskAsync(c, linked, Actor, clock.BusinessUtcNow(), t);
+                await handoverRepository.EnsureMoveOutTaskAsync(c, linked, Actor, businessNow, t);
         }
     }
 

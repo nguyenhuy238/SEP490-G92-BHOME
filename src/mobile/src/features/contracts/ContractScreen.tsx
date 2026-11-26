@@ -51,10 +51,18 @@ import { mobileContractActions } from './contractSections';
 import { OwnerMainContractFlow } from '../owner/OwnerMainContractFlow';
 import { OwnerWebNotice } from '../../components/OwnerWebNotice';
 import { ContractLoading } from './ContractLoading';
+import { useTenantCurrentRental } from '../tenant/TenantCurrentRentalContext';
 
-export function ContractScreen({ prepare = false }: { prepare?: boolean }) {
+export function ContractScreen({
+  prepare = false,
+  tenantHandoverOnly = false,
+}: {
+  prepare?: boolean;
+  tenantHandoverOnly?: boolean;
+}) {
   const { api: transport, session } = useSession();
   const { role, go } = useWorkspace();
+  const verifiedRental = useTenantCurrentRental();
   const [staffListView, setStaffListView] = useState({ ...defaultStaffContractListView });
   const params = useLocalSearchParams<{
     contractId?: string;
@@ -84,7 +92,7 @@ export function ContractScreen({ prepare = false }: { prepare?: boolean }) {
     [transport],
   );
   useEffect(() => {
-    if (!client || role === 'Staff') return;
+    if (!client || role === 'Staff' || tenantHandoverOnly) return;
     const controller = new AbortController();
     async function load() {
       setListing({ data: null, error: '', loading: true });
@@ -101,7 +109,7 @@ export function ContractScreen({ prepare = false }: { prepare?: boolean }) {
     }
     void load();
     return () => controller.abort();
-  }, [client, page, filter, revision, role]);
+  }, [client, page, filter, revision, role, tenantHandoverOnly]);
   let deepId = '';
   if (params.contractId) {
     try {
@@ -176,6 +184,24 @@ export function ContractScreen({ prepare = false }: { prepare?: boolean }) {
     router.setParams({ mainDraftId: '', roomId: '', contractId: next, kind: '' });
   }
   if (!client || !session || !role) return <Text>Cần đăng nhập để xem hợp đồng.</Text>;
+  if (tenantHandoverOnly) {
+    if (role !== 'Tenant' || !verifiedRental) return <Text>Chưa có hợp đồng thuê hiện tại.</Text>;
+    const back = () => (router.canGoBack() ? router.back() : go('tenant-home'));
+    return (
+      <LiveContractDetail
+        key={`tenant-handovers:${verifiedRental.id}`}
+        api={client}
+        id={verifiedRental.id}
+        role={role}
+        actorId={session.userId}
+        tenantHandoverOnly
+        initialSection="handover"
+        onNext={() => undefined}
+        onBack={back}
+        onList={back}
+      />
+    );
+  }
   if (invalidOwnerRoute)
     return <Text>Tham chiếu hợp đồng không hợp lệ. Hãy mở lại từ danh sách hợp đồng.</Text>;
   if (
@@ -417,6 +443,7 @@ function LiveContractDetail({
   onList,
   onBack,
   handoverOnly = false,
+  tenantHandoverOnly = false,
   onComplete,
   initialSection = 'overview',
 }: {
@@ -428,6 +455,7 @@ function LiveContractDetail({
   onList: () => void;
   onBack: () => void;
   handoverOnly?: boolean;
+  tenantHandoverOnly?: boolean;
   onComplete?: () => void;
   initialSection?: ContractSection;
 }) {
@@ -444,11 +472,13 @@ function LiveContractDetail({
     ['overview', 'signing'].includes(section);
   useWorkspaceHeaderRefresh(detail.reload, detail.loading, {
     onBack: (staffDraft || completedFlow) && onComplete ? onComplete : onBack,
-    title: handoverOnly
-      ? 'Bàn giao phòng'
-      : detail.data?.contract.kind === 'Holding'
-        ? 'Hợp đồng giữ chỗ'
-        : 'Hợp đồng',
+    title: tenantHandoverOnly
+      ? 'Bàn giao / Trả phòng'
+      : handoverOnly
+        ? 'Bàn giao phòng'
+        : detail.data?.contract.kind === 'Holding'
+          ? 'Hợp đồng giữ chỗ'
+          : 'Hợp đồng',
   });
   // Staff can prepare contracts but the signing-methods endpoint is scoped to
   // Owner/Tenant. Do not call it from Staff's handover or contract screens.
@@ -602,7 +632,10 @@ function LiveContractDetail({
   const action = actions.find((a) => a.operation === selectedAction);
   const terminationAction = actions.find((a) => a.operation === 'termination-requests');
   const sectionActions = actions.filter(
-    (a) => a !== terminationAction && contractActionSection(a.operation) === section,
+    (a) =>
+      a !== terminationAction &&
+      contractActionSection(a.operation) === section &&
+      (!tenantHandoverOnly || !['renewals', 'renewal-cancellation'].includes(a.operation)),
   );
   const ownerMain =
     role === 'Owner' &&
@@ -612,7 +645,7 @@ function LiveContractDetail({
     ['overview', 'signing'].includes(section);
   return (
     <>
-      {!rental && !holding && !ownerMain && (
+      {!tenantHandoverOnly && !rental && !holding && !ownerMain && (
         <Heading
           title={`Phòng ${c.roomNumber || c.roomId}`}
           detail={`${text(c.kind)} · ${c.locationName ?? ''}`}
@@ -621,13 +654,44 @@ function LiveContractDetail({
       {!rental && c.isDevelopmentDemo && (
         <Text style={ui.red}>HỢP ĐỒNG DEMO · Dữ liệu minh họa, không dùng làm hợp đồng thật.</Text>
       )}
-      {!holding && <Pill tone={c.status === 'Active' ? 'green' : 'amber'}>{text(c.status)}</Pill>}
+      {!tenantHandoverOnly && !holding && (
+        <Pill tone={c.status === 'Active' ? 'green' : 'amber'}>{text(c.status)}</Pill>
+      )}
       {!!detail.refreshError && (
         <ContractNotice
           message={`Chưa cập nhật được trạng thái mới. Nội dung trước đó vẫn được giữ lại. ${conciseMessage(detail.refreshError)}`}
         />
       )}
-      {!hideSectionTabs &&
+      {tenantHandoverOnly ? (
+        <View style={holdingTabs.styles.container}>
+          {(
+            [
+              ['handover', 'Bàn giao'],
+              ['lifecycle', 'Trả phòng'],
+            ] as const
+          ).map(([key, label]) => (
+            <Button
+              key={key}
+              compact
+              mode="text"
+              style={[holdingTabs.styles.tab, section === key && holdingTabs.styles.activeTab]}
+              labelStyle={[
+                holdingTabs.styles.label,
+                section === key && holdingTabs.styles.activeLabel,
+              ]}
+              contentStyle={{ minHeight: 42 }}
+              accessibilityState={{ selected: section === key }}
+              onPress={() => {
+                setSection(key);
+                setSelectedAction('');
+              }}
+            >
+              {label}
+            </Button>
+          ))}
+        </View>
+      ) : (
+        !hideSectionTabs &&
         (c.kind === 'Holding' ? (
           <View style={holdingTabs.styles.container}>
             {(
@@ -683,7 +747,8 @@ function LiveContractDetail({
                 </Button>
               ))}
           </ScrollView>
-        ))}
+        ))
+      )}
       {rental && (section === 'overview' || section === 'signing') && (
         <RentalContractFlow
           key={`${c.id}:${section}`}
@@ -858,7 +923,11 @@ function LiveContractDetail({
             }
           />
         ))}
+      {section === 'handover' && tenantHandoverOnly && c.kind === 'Renewal' && (
+        <ContractHandoverPanel api={api} contract={c} role={role} />
+      )}
       {section === 'handover' &&
+        !(tenantHandoverOnly && c.kind === 'Renewal') &&
         (c.kind !== 'Main' ||
           ![
             'Draft',
@@ -916,7 +985,7 @@ function LiveContractDetail({
       )}
       {section === 'lifecycle' && !m && !terminationAction && !terminationRequested && (
         <Box>
-          <Heading title="Gia hạn & trả phòng" />
+          <Heading title={tenantHandoverOnly ? 'Trả phòng' : 'Gia hạn & trả phòng'} />
           <Text>
             Chưa có yêu cầu trả phòng. Các thao tác khả dụng hiển thị theo trạng thái và quyền tài
             khoản.

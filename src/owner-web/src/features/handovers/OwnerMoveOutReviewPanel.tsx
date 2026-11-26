@@ -30,6 +30,7 @@ import {
 import { ConfirmActionButton } from '../../components/common/ConfirmActionButton';
 import { MoneyField } from '../../components/common/MoneyField';
 import { PrivateEvidenceViewer } from '../../components/common/PrivateEvidenceViewer';
+import { TerminationReviewPanel } from '../contracts/pages/TerminationReviewPage';
 
 type ItemKind = 'Asset' | 'RoomCheck' | 'Access';
 interface ProposalItem {
@@ -677,10 +678,12 @@ function WorkingInspectionDetails({
 export function OwnerMoveOutReviewPanel({
   api,
   id,
+  ownerId,
   onChanged,
 }: {
   api: ContractClient;
   id: string;
+  ownerId?: string;
   onChanged: () => void;
 }) {
   const moveOut = useQuery({
@@ -689,9 +692,13 @@ export function OwnerMoveOutReviewPanel({
     refetchInterval: (query) =>
       (query.state.data as { status?: string } | undefined)?.status === 'Completed' ? false : 5000,
   });
+  const awaitingConsent = moveOut.data?.status === 'AwaitingConsent';
+  const reviewingRequest =
+    moveOut.data?.status === 'Requested' || moveOut.data?.status === 'Rejected';
   const inspection = useQuery({
     queryKey: ['owner-move-out-inspections', id],
     queryFn: ({ signal }) => api.inspections(id, signal),
+    enabled: !!moveOut.data && !awaitingConsent && !reviewingRequest,
     refetchInterval: moveOut.data?.status === 'Completed' ? false : 5000,
   });
   const working = moveOut.data?.status === 'Approved';
@@ -953,9 +960,46 @@ export function OwnerMoveOutReviewPanel({
     setChargeReason(existing?.reason ?? '');
   }
 
+  if (awaitingConsent) {
+    return (
+      <Alert severity="info">
+        Yêu cầu cần đủ đồng thuận của các thành viên trước khi chủ trọ duyệt.
+      </Alert>
+    );
+  }
+  if (reviewingRequest) {
+    const request = moveOut.data;
+    if (
+      request?.status === 'Requested' &&
+      (request.isGroupPrimary === false ||
+        (request.requiredConsents != null && request.receivedConsents !== request.requiredConsents))
+    ) {
+      return <Alert severity="info">Yêu cầu chưa đủ điều kiện để chủ trọ duyệt.</Alert>;
+    }
+    return (
+      <Stack spacing={2}>
+        {request?.status === 'Requested' && request.requiredConsents != null && (
+          <Alert severity="success">
+            Đã đồng thuận: {request.receivedConsents}/{request.requiredConsents} thành viên.
+          </Alert>
+        )}
+        <TerminationReviewPanel
+          id={id}
+          api={api}
+          ownerId={ownerId}
+          embedded
+          onChanged={() => {
+            void moveOut.refetch();
+            onChanged();
+          }}
+        />
+      </Stack>
+    );
+  }
+
   return (
     <Stack spacing={2}>
-      {(moveOut.isPending || inspection.isPending) && (
+      {(moveOut.isPending || (!!moveOut.data && inspection.isPending)) && (
         <Alert severity="info">Đang tải kết quả kiểm tra...</Alert>
       )}
       {(moveOut.error || inspection.error) && (
@@ -1002,6 +1046,9 @@ export function OwnerMoveOutReviewPanel({
         )}
       {working && (
         <>
+          <Alert severity="info">
+            Đã duyệt yêu cầu trả phòng. Đang chờ nhân viên hoàn thành kiểm tra.
+          </Alert>
           {(workingDraft.error || preparation.error) && (
             <Alert severity="error">
               Không tải được dữ liệu đang kiểm tra:{' '}

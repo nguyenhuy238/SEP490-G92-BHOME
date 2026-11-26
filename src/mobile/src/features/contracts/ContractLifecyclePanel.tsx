@@ -92,7 +92,7 @@ export function ContractLifecyclePanel({
             title={`Kết quả kiểm tra lần ${i.version}`}
             detail={formatInstant(i.inspectedAt)}
           />
-          {i.baseline && <Text>Dữ liệu lúc bàn giao: phiên bản {i.baselineVersion}</Text>}
+          {i.baseline && <Text>Có dữ liệu đối chiếu lúc bàn giao</Text>}
           <Text>
             Phòng: {i.baseline?.roomCondition ?? 'Chưa có dữ liệu ban đầu'} →{' '}
             {i.observed.roomCondition}
@@ -255,7 +255,7 @@ export function ContractLifecyclePanel({
       )}
       {q.history.map((h) => (
         <Text key={h.version} variant="bodySmall">
-          {formatInstant(h.occurredAt)} · Phiên bản {h.version} · {moveOutActionLabel(h.action)}
+          {formatInstant(h.occurredAt)} · {moveOutActionLabel(h.action)}
         </Text>
       ))}
     </Box>

@@ -393,7 +393,7 @@ public sealed class ContractServiceTests
         public Guid Owner => Contracts[0].OwnerSignerId;
         public Guid Tenant { get; } = Guid.NewGuid();
         public ContractService Service { get; }
-        public Rig(bool withInitialPayments = true, IAnonymousSigningRepository? signingInvitations = null, IInternalAcceptanceRenderer? acceptanceRenderer = null, IContractWorkflowRepository? workflowRepository = null)
+        public Rig(bool withInitialPayments = true, IAnonymousSigningRepository? signingInvitations = null, IInternalAcceptanceRenderer? acceptanceRenderer = null, IContractWorkflowRepository? workflowRepository = null, IHandoverInventory? inventory = null, TimeProvider? clock = null)
         {
             Room.LocationId = Room.Location.Id; Resident.RoomId = Room.Id;
             Repo.RoomAsync(Room.Id, default).ReturnsForAnyArgs(Room);
@@ -438,7 +438,7 @@ public sealed class ContractServiceTests
             });
             Holdings.ApplyAsync(default, default, default, default, default, default).ReturnsForAnyArgs(Task.FromException<HoldingDepositApplication>(new IntegrationUnavailableException("holding ledger")));
             Positions.ReadAsync(default!, default, default!).ReturnsForAnyArgs(call => (DepositLedgerPosition?)new(Deposits.Where(d => call.Arg<Guid[]>().Contains(d.ContractId)).Sum(d => d.Amount), 0, 0, 0));
-            Service = new(Repo, User, new ResourceAccess(User, Staff), Signing, Storage, Files, Images, Ledger, Holdings, new Clock(), workflowRepository: workflowRepository, handoverRepository: Handovers, depositPositions: Positions, holdingSettings: Settings, initialPayments: withInitialPayments ? InitialPayments : null, signingInvitations: signingInvitations, acceptanceRenderer: acceptanceRenderer);
+            Service = new(Repo, User, new ResourceAccess(User, Staff), Signing, Storage, Files, Images, Ledger, Holdings, clock ?? new Clock(), workflowRepository: workflowRepository, handoverRepository: Handovers, handoverInventory: inventory, depositPositions: Positions, holdingSettings: Settings, initialPayments: withInitialPayments ? InitialPayments : null, signingInvitations: signingInvitations, acceptanceRenderer: acceptanceRenderer);
         }
         public ContractDraftInput Draft => new(Room.Id, User.UserId!.Value, Tenant, Resident.Id, [Resident.Id], Today.AddDays(-10), Today.AddDays(30), 3000000, 3000000, "Synthetic approved terms");
         public HoldingDraftInput HoldingDraft => new(Room.Id, User.UserId!.Value, Tenant, Resident.Id, [Resident.Id],
@@ -876,6 +876,56 @@ public sealed class ContractServiceTests
         r.User.Role = Roles.Owner; r.User.UserId = c.OwnerSignerId;
         await r.Service.ApproveTerminationAsync(c.Id, Guid.NewGuid(), default); Assert.Equal(MoveOutStatus.Approved, r.Moves.Single().Status);
     }
+
+    [Theory]
+    [InlineData("Good", 2, true, null)]
+    [InlineData("Good", 1, true, "invalid_move_out_asset_quantities")]
+    [InlineData("Good", 2, false, "asset_evidence_required")]
+    [InlineData("Missing", 2, true, "invalid_move_out_asset_quantities")]
+    [InlineData("Missing", 0, false, null)]
+    [InlineData("Missing", 1, false, "asset_evidence_required")]
+    [InlineData("Damaged", 2, true, null)]
+    [InlineData("Damaged", 3, true, "invalid_move_out_asset_quantities")]
+    [InlineData("Unrecognized", 2, true, "invalid_move_out_asset")]
+    public async Task MoveOutDraftInventoryMatchesMoveInQuantityAndPhotoRequirements(string condition,
+        int actual, bool withPhoto, string? expectedError)
+    {
+        var inventory = Substitute.For<IHandoverInventory>();
+        var r = new Rig(inventory: inventory);
+        var c = await r.Ready();
+        c.Status = ContractStatus.Active;
+        r.User.Role = Roles.Staff;
+        r.User.UserId = Guid.NewGuid();
+        r.Staff.IsAssignedAsync(default, default, default).ReturnsForAnyArgs(true);
+        r.Moves.Add(new() { ContractId = c.Id, Status = MoveOutStatus.Approved, ProposedDate = Today });
+        var group = new HandoverAsset(Guid.NewGuid(), "Synthetic chairs", "Good", "",
+            ConfiguredQuantity: 2, PhysicalAssets: [new(Guid.NewGuid(), 1, 2, "Good", "Active")]);
+        inventory.PrepareAsync(c.RoomId, default).Returns(new HandoverInventory("test-token", "Ready", false, [group]));
+        r.Repo.FinalReadingsAsync(c.Id, c.RoomId, Today, default).Returns(Array.Empty<HandoverReading>());
+        var photo = new ContractInspectionEvidence { ContractId = c.Id, UploadedByUserId = r.User.UserId.Value };
+        r.Repo.InspectionEvidenceAsync(c.Id, default).Returns(new[] { photo });
+        r.Repo.InTransactionAsync(default, default(Func<Task<MoveOutInspectionDraftView>>)!, default)
+            .ReturnsForAnyArgs(call => call.Arg<Func<Task<MoveOutInspectionDraftView>>>()());
+        r.Handovers.ReplaceMoveOutInspectionDraftAsync(default, default, default!, default)
+            .ReturnsForAnyArgs(true);
+        var input = new MoveOutInspectionDraftWrite(0,
+            Assets: [new(group.Id, condition, actual, EvidenceIds: withPhoto ? [photo.Id] : [])],
+            InventoryToken: "test-token");
+        if (expectedError is not null)
+        {
+            var error = await Assert.ThrowsAsync<ContractException>(() =>
+                r.Service.SaveMoveOutInspectionDraftAsync(c.Id, input, Guid.NewGuid(), default));
+            Assert.Equal(expectedError, error.Code);
+            await r.Handovers.DidNotReceiveWithAnyArgs().ReplaceMoveOutInspectionDraftAsync(default, default, default!, default);
+        }
+        else
+        {
+            var saved = await r.Service.SaveMoveOutInspectionDraftAsync(c.Id, input, Guid.NewGuid(), default);
+            Assert.Equal(1, saved.Version);
+            Assert.Equal(condition, Assert.Single(saved.Assets).Condition);
+            Assert.Equal(actual, saved.Assets[0].ObservedQuantity);
+        }
+    }
     [Theory]
     [InlineData(0)]
     [InlineData(30)]
@@ -888,6 +938,31 @@ public sealed class ContractServiceTests
         await Assert.ThrowsAsync<ContractException>(() => r.Service.RequestTerminationAsync(c.Id, input, key, true, default));
         Assert.Equal(ContractStatus.Active, c.Status);
         Assert.Empty(r.Moves);
+    }
+    [Fact]
+    public async Task RoomMoveOutUsesDemoBusinessDateForResidencyAndProposedDate()
+    {
+        var real = new Clock(); var demo = new DemoBusinessClock(real);
+        var r = new Rig(clock: demo); var c = await r.Ready(); c.Status = ContractStatus.Active;
+        var start = new DateOnly(2027, 2, 27);
+        c.StartDate = start; c.EndDate = start.AddYears(1);
+        Assert.Single(c.Residents).ResidenceFrom = start;
+        r.User.Role = Roles.Tenant; r.User.UserId = c.TenantUserId;
+        r.Repo.ResidentsAsync(default, default!, default).ReturnsForAnyArgs(call => new[] { r.Resident }
+            .Where(x => call.Arg<Guid[]>().Contains(x.Id)).ToArray());
+        var input = new TerminationInput(start.AddDays(4), "Room move-out");
+        var error = await Assert.ThrowsAsync<ContractException>(() => r.Service.RequestTerminationAsync(c.Id, input, Guid.NewGuid(), false, default));
+        Assert.Equal("move_out_residence_not_started", error.Code);
+        Assert.Empty(r.Moves);
+        Assert.NotNull(demo.Change(start.AddDays(1), 0));
+        var past = await Assert.ThrowsAsync<ContractException>(() => r.Service.RequestTerminationAsync(c.Id, input with { ProposedDate = start }, Guid.NewGuid(), false, default));
+        Assert.Equal("invalid_move_out_date", past.Code);
+        var move = await r.Service.RequestTerminationAsync(c.Id, input, Guid.NewGuid(), false, default);
+        Assert.Equal("Requested", move.Status);
+        Assert.Equal(1, move.RequiredConsents); Assert.Equal(1, move.ReceivedConsents);
+        Assert.Equal(real.Now, demo.GetUtcNow());
+        r.User.Role = Roles.Owner; r.User.UserId = c.OwnerSignerId;
+        Assert.Equal("Approved", (await r.Service.ApproveTerminationAsync(c.Id, Guid.NewGuid(), default)).Status);
     }
     [Fact]
     public async Task RoomMoveOutRequiresEveryTenantBeforeOwnerApproval()

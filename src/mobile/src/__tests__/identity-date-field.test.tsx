@@ -168,3 +168,25 @@ it('inserts hyphens while typing a move-out date and lets Backspace remove them'
   fireEvent.click(screen.getByText('Chọn ngày'));
   expect(input.value).toBe('29-02-2028');
 });
+
+it('opens an empty move-out calendar on the business date without changing the input', () => {
+  const change = vi.fn();
+  render(
+    <IdentityDateField
+      label="Ngày trả phòng"
+      accessibilityLabel="Ngày trả phòng"
+      value=""
+      onChange={change}
+      disabled={false}
+      hyphenated
+      compactCalendar
+      calendarDate="2027-02-27"
+    />,
+  );
+  fireEvent.click(screen.getByLabelText('Chọn Ngày trả phòng'));
+  expect(state.picker?.date?.getFullYear()).toBe(2027);
+  expect(state.picker?.date?.getMonth()).toBe(1);
+  expect(state.picker?.date?.getDate()).toBe(27);
+  fireEvent.click(screen.getByText('Đóng lịch'));
+  expect(change).not.toHaveBeenCalled();
+});

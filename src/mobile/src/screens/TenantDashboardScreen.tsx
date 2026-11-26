@@ -3,13 +3,9 @@ import { queryPolicies } from '../lib/queryPolicies';
 import { useWorkspaceHeaderRefresh } from '../components/WorkspaceHeaderContext';
 import { useWorkspaceQuery } from '../features/workspace/useWorkspaceQuery';
 import { useSession } from '../lib/SessionProvider';
-import type {
-  ContractPage,
-  ContractExpiryNotice,
-} from '../../../../packages/client-core/src/contracts';
+import type { ContractPage } from '../../../../packages/client-core/src/contracts';
 import type { Invoice, Page } from '../../../../packages/client-core/src/invoices';
-import type { InvoicePayment, DebtInvoice } from '../../../../packages/client-core/src/payments';
-import type { NotificationItem } from '../../../../packages/client-core/src/notifications';
+import type { InvoicePayment } from '../../../../packages/client-core/src/payments';
 import { businessToday } from '../../../../packages/client-core/src/contracts';
 import { isActiveRoomRental } from '../features/tenant/tenantContractEligibility';
 import { useTenantCurrentRental } from '../features/tenant/TenantCurrentRentalContext';
@@ -45,11 +41,6 @@ export function TenantDashboardScreen() {
   // A completed move-out must not fall back to unscoped finance endpoints.
   // Global navigation restricts this state too; this protects direct mounts.
   const contractScopeReady = allowed && !!roomId && !contracts.error;
-  const debts = useWorkspaceQuery<Page<DebtInvoice>>(
-    contractScopeReady ? '/api/v1/debts?page=1&pageSize=1' : null,
-    { cache: queryPolicies.debts },
-  );
-  const debt = debts.data?.items[0];
   const invoices = useWorkspaceQuery<Page<Invoice>>(
     contractScopeReady
       ? `/api/v1/invoices?page=1&pageSize=20&billingPeriod=${month}-01&roomId=${encodeURIComponent(roomId)}`
@@ -78,14 +69,6 @@ export function TenantDashboardScreen() {
       : null,
     { load: loadTenantReadings, cache: queryPolicies.meters },
   );
-  const notices = useWorkspaceQuery<Page<NotificationItem>>(
-    contractScopeReady ? '/api/v1/notifications?page=1&pageSize=3&unread=true' : null,
-    { cache: queryPolicies.notifications },
-  );
-  const expiry = useWorkspaceQuery<ContractExpiryNotice[]>(
-    contractScopeReady ? '/api/v1/contracts/expiry-reminders' : null,
-    { cache: queryPolicies.contracts },
-  );
   const payment = useWorkspaceQuery<InvoicePayment>(
     contractScopeReady && invoice?.status === 'Final'
       ? `/api/v1/invoices/${encodeURIComponent(invoice.id)}/payment`
@@ -95,39 +78,23 @@ export function TenantDashboardScreen() {
   const reloadContracts = contracts.reload,
     reloadInvoices = invoices.reload,
     reloadPeriod = period.reload,
-    reloadDebts = debts.reload,
     reloadReadings = readings.reload,
-    reloadNotices = notices.reload,
-    reloadExpiry = expiry.reload,
     reloadPayment = payment.reload;
   const reload = useCallback(() => {
     reloadContracts();
     reloadInvoices();
     reloadPeriod();
-    reloadDebts();
     reloadReadings();
-    reloadNotices();
-    reloadExpiry();
     reloadPayment();
-  }, [
-    reloadContracts,
-    reloadInvoices,
-    reloadPeriod,
-    reloadDebts,
-    reloadReadings,
-    reloadNotices,
-    reloadExpiry,
-    reloadPayment,
-  ]);
+  }, [reloadContracts, reloadInvoices, reloadPeriod, reloadReadings, reloadPayment]);
   useWorkspaceHeaderRefresh(
     reload,
-    [contracts, invoices, period, debts, readings, notices, expiry, payment].some(
-      (query) => query.fetching,
-    ),
+    [contracts, invoices, period, readings, payment].some((query) => query.fetching),
   );
   return (
     <TenantDashboard
       contracts={visibleContracts}
+      activeRental={allowed && verifiedRental ? verifiedRental : undefined}
       month={month}
       invoice={invoice}
       invoiceScheduleMessage={invoiceScheduleMessage}
@@ -137,17 +104,6 @@ export function TenantDashboardScreen() {
       contractState={contracts}
       invoiceState={invoices}
       paymentState={payment}
-      debt={debt}
-      notices={notices.data?.items}
-      expiryNotices={Array.isArray(expiry.data) ? expiry.data : []}
-      alertsState={{
-        loading: debts.loading || notices.loading || expiry.loading,
-        error: debts.error || notices.error || expiry.error,
-        updatedAt: debts.updatedAt || notices.updatedAt || expiry.updatedAt,
-        fetching: debts.fetching || notices.fetching || expiry.fetching,
-        stale: debts.stale || notices.stale || expiry.stale,
-        reload,
-      }}
     />
   );
 }

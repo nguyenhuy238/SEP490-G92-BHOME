@@ -204,7 +204,16 @@ expectedVersion?}`. Staff không chỉ định người ngoài assignment Locati
 
 GET `{id}/move-out/inspection-preparation`: Owner/Staff lấy confirmed handover snapshot của
 Contract hoặc ancestor renewal và danh sách confirmed Final readings hôm nay đúng Contract.
-InspectionInput thêm assets `{id,condition}[]`, roomCondition, keysAndAccess, expectedVersion.
+InspectionInput và PATCH `{id}/move-out/inspection-draft` (Staff thực hiện nhiệm vụ đã bắt đầu)
+ghi nhận kiểm tra thực tế theo bốn nhóm giống bàn giao vào phòng (UC-17/UC-19):
+chỉ số điện/nước đã xác nhận, hiện trạng, tài sản và chìa khóa. Hiện trạng chung cần nội dung
+và ảnh riêng; mỗi mã checklist hiện trạng chọn `Passed`, `Issue` hoặc `NotApplicable`, có ảnh
+trừ `NotApplicable`. Tài sản chọn `Good`, `Missing` hoặc `Damaged` (có tương thích mã cũ),
+số lượng không vượt số dự kiến khi có dữ liệu; `Good` phải đủ, `Missing` phải ít hơn số dự kiến.
+Mỗi tài sản đã kiểm tra có ảnh riêng, trừ số lượng thực tế bằng 0. Chìa khóa cần số lượng
+và ảnh riêng kể cả khi nhận 0. Ghi chú của từng mục tùy chọn. Gửi kết quả kiểm tra cần đủ các mục;
+lưu draft theo từng mục không tự hoàn thành công việc. Ảnh vẫn phải thuộc đúng hợp đồng,
+nhân viên tải lên, chưa gắn vào kết quả khác và không được dùng chung giữa các mục.
 Snapshot baseline không lấy Asset condition hiện tại. Legacy inspection thiếu baseline giữ
 blocker; không thể resolve production settlement. Final reading là observation của Contract,
 không reset baseline hoặc tự tạo phí cho cả phòng khi co-Tenants vẫn ở.

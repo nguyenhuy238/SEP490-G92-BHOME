@@ -90,7 +90,8 @@ public sealed partial class ContractLifecycleApiTests
         var preparation = await Success<InspectionPreparation>(await w.Staff.Client.GetAsync(Path(id, "move-out/inspection-preparation")));
         await Success<MoveOutView>(await Post(w.Staff, Path(id, "move-out/inspection"), new InspectionInput(electricity, water,
             "Synthetic physical condition", [evidence], [], "Synthetic final room", "Synthetic returned keys", InventoryToken: preparation.Inventory?.StateToken,
-            RoomChecks: PassedMoveOutRoomChecks(), AccessItems: [new HandoverAccessItem("RoomKey", 0, "Returned")])));
+            RoomChecks: await PassedMoveOutRoomChecks(w.Staff, id), AccessItems: [new HandoverAccessItem("RoomKey", 0, "Returned")],
+            KeyEvidenceIds: [await MoveOutPhoto(w.Staff, id)])));
         var inspection = (await Success<FinalInspectionView[]>(await w.Owner.Client.GetAsync(Path(id, "move-out/inspections")))).First();
         await Success<MoveOutView>(await Post(w.Owner, Path(id, "move-out/inspection-review"), new InspectionReviewInput(inspection.Version, true, "Synthetic Owner physical approval", true, true, "Synthetic Tenant unavailable; explicit Owner exception")));
     }

@@ -1,4 +1,4 @@
-import { fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { beforeEach, expect, it, vi } from 'vitest';
 import type { ContractClient } from '../../../../../packages/client-core/src/contracts';
@@ -61,6 +61,7 @@ const review = {
 };
 const api = {
   moveOut: vi.fn(),
+  terminationReview: vi.fn(),
   inspections: vi.fn(),
   inspectionPreparation: vi.fn(),
   transport: vi.fn(),
@@ -70,16 +71,17 @@ const api = {
   mutate: mutation,
 } as unknown as ContractClient;
 
-function mount() {
+function mount(onChanged = () => {}) {
   const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } });
   return render(
     <QueryClientProvider client={queryClient}>
-      <OwnerMoveOutReviewPanel api={api} id="contract-1" onChanged={() => {}} />
+      <OwnerMoveOutReviewPanel api={api} id="contract-1" onChanged={onChanged} />
     </QueryClientProvider>,
   );
 }
 
 beforeEach(() => {
+  vi.mocked(api.terminationReview).mockReset();
   vi.mocked(api.inspectionPreparation).mockReset().mockResolvedValue({
     baseline: null,
     baselineContractId: null,
@@ -104,6 +106,82 @@ beforeEach(() => {
   vi.mocked(api.evidence).mockImplementation(async () => photo());
   vi.mocked(api.readingEvidence).mockImplementation(async () => photo());
   mutation.mockReset().mockResolvedValue({ id: 'proposal-1' });
+});
+
+it('approves a unanimously consented request in place before staff inspection starts', async () => {
+  vi.mocked(api.moveOut).mockResolvedValue({
+    status: 'Requested',
+    requiredConsents: 2,
+    receivedConsents: 2,
+    isGroupPrimary: true,
+  } as never);
+  const request = {
+    status: 'Requested',
+    version: 7,
+    locationName: 'Cơ sở Trường Vũ',
+    roomNumber: 'P.103',
+    tenantName: 'Khách thuê A',
+    startDate: '2027-02-27',
+    endDate: '2028-02-26',
+    proposedDate: '2027-04-08',
+    reason: 'Chuyển nơi ở',
+    decidedAt: null,
+    decidedBy: null,
+    rejectionReason: null,
+  } as const;
+  vi.mocked(api.terminationReview).mockResolvedValue(request);
+  vi.mocked(api.inspections).mockResolvedValue([]);
+  vi.mocked(api.transport).mockResolvedValue(null as never);
+  const onChanged = vi.fn();
+  mount(onChanged);
+  const approve = await screen.findByRole('button', { name: 'Duyệt yêu cầu trả phòng' });
+  expect(screen.getByText('Đã đồng thuận: 2/2 thành viên.')).toBeInTheDocument();
+  expect(screen.getByText('Chuyển nơi ở')).toBeInTheDocument();
+  expect(screen.queryByText('Chưa có kết quả kiểm kê.')).not.toBeInTheDocument();
+  expect(api.inspections).not.toHaveBeenCalled();
+  fireEvent.click(approve);
+  expect(mutation).not.toHaveBeenCalled();
+  mutation.mockImplementation(async () => {
+    vi.mocked(api.moveOut).mockResolvedValue({ status: 'Approved' } as never);
+    vi.mocked(api.terminationReview).mockResolvedValue({
+      ...request,
+      status: 'Approved',
+      version: 8,
+    });
+    return { status: 'Approved', version: 8 };
+  });
+  const confirm = within(screen.getByRole('dialog')).getByRole('button', {
+    name: 'Xác nhận chấp nhận',
+  });
+  fireEvent.click(confirm);
+  fireEvent.click(confirm);
+  expect(
+    await screen.findByText(/Đã duyệt yêu cầu trả phòng. Đang chờ nhân viên/),
+  ).toBeInTheDocument();
+  expect(mutation).toHaveBeenCalledExactlyOnceWith(
+    'contract-1',
+    'move-out/approve?expectedVersion=7',
+    {},
+    expect.any(String),
+  );
+  expect(onChanged).toHaveBeenCalled();
+  expect(screen.queryByRole('button', { name: 'Duyệt yêu cầu trả phòng' })).not.toBeInTheDocument();
+  expect(screen.queryByRole('button', { name: 'Gửi khách thuê duyệt' })).not.toBeInTheDocument();
+});
+
+it.each([
+  { status: 'AwaitingConsent', requiredConsents: 2, receivedConsents: 1 },
+  { status: 'Requested', requiredConsents: 2, receivedConsents: 1 },
+  { status: 'Requested', requiredConsents: 2, receivedConsents: 2, isGroupPrimary: false },
+])('does not allow approval of an ineligible request: %j', async (request) => {
+  vi.mocked(api.moveOut).mockResolvedValue(request as never);
+  mount();
+  expect(
+    await screen.findByText(/Yêu cầu (cần đủ đồng thuận|chưa đủ điều kiện)/),
+  ).toBeInTheDocument();
+  expect(screen.queryByRole('button', { name: 'Duyệt yêu cầu trả phòng' })).not.toBeInTheDocument();
+  expect(api.terminationReview).not.toHaveBeenCalled();
+  expect(mutation).not.toHaveBeenCalled();
 });
 
 it('shows saved partial inspection during staff work without enabling financial approval', async () => {

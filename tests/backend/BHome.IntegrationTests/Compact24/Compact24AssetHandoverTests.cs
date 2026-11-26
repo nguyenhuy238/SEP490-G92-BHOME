@@ -152,6 +152,15 @@ public sealed partial class Compact24OwnerSetupTests
         using var body = new ByteArrayContent(ReviewEvidenceImage()); body.Headers.ContentType = new("image/png");
         return (await Read<ContractId>(await client.PostAsync($"/api/v1/contracts/{contract}/{(moveOut ? "move-out" : "handover")}/evidence", body))).Id;
     }
+    private static async Task<HandoverRoomCheck[]> MoveOutRoomChecks(HttpClient staff, Guid contract,
+        string? issue = null, Guid? issuePhoto = null)
+    {
+        var checks = new List<HandoverRoomCheck>();
+        foreach (var code in HandoverRoomChecklist.RequiredCodes)
+            checks.Add(new(code, code == issue ? "Issue" : "Passed", null,
+                [code == issue && issuePhoto is { } proof ? proof : await HandoverPhoto(staff, contract, true)]));
+        return checks.ToArray();
+    }
     private static async Task StartMoveOutTask(HttpClient staff, Guid contract)
     {
         var route = $"/api/v1/operational-tasks/{HandoverTestKey($"contract-move-out:{contract:N}")}";
@@ -456,12 +465,13 @@ public sealed partial class Compact24OwnerSetupTests
         Assert.Null(preparation.LegacyExceptionReason);
         var photo = await HandoverPhoto(staff, id, true); var group = Assert.Single(preparation.InspectionGroups!);
         var input = new InspectionInput(readings[0], readings[1], "Legacy observed only", [photo],
-            [new(group.Id, "Đã kiểm tra tình trạng mới", ObservedQuantity: 4, GoodQuantity: 4,
-                WornQuantity: 0, DamagedQuantity: 0, Checked: true, Notes: "Chưa có số lượng bàn giao được xác thực")],
+            [new(group.Id, "Good", ObservedQuantity: 4, GoodQuantity: 4,
+                WornQuantity: 0, DamagedQuantity: 0, Checked: true, Notes: "Chưa có số lượng bàn giao được xác thực",
+                EvidenceIds: [await HandoverPhoto(staff, id, true)])],
             "Observed room", "Keys returned", InventoryToken: preparation.Inventory!.StateToken,
-            RoomChecks: HandoverRoomChecklist.RequiredCodes.Select(code =>
-                new HandoverRoomCheck(code, "Passed", null, [])).ToArray(),
-            AccessItems: [new HandoverAccessItem("RoomKey", 1, "Đã nhận chìa khóa")]);
+            RoomChecks: await MoveOutRoomChecks(staff, id),
+            AccessItems: [new HandoverAccessItem("RoomKey", 1, "Đã nhận chìa khóa")],
+            KeyEvidenceIds: [await HandoverPhoto(staff, id, true)]);
         Assert.Equal(HttpStatusCode.BadRequest, (await HandoverPost(staff, id, "move-out/inspection",
             input with { RoomChecks = null })).StatusCode);
         Assert.Equal(HttpStatusCode.Forbidden, (await HandoverPost(staff, id, "move-out/legacy-baseline-exception", new LegacyHandoverException("Not permitted"))).StatusCode);
@@ -485,7 +495,13 @@ public sealed partial class Compact24OwnerSetupTests
         await Read<MoveOutView>(await HandoverPost(owner, id, "move-out/inspection-review", new InspectionReviewInput(1, false, "Reinspect after concurrent Asset edit")));
         var fresh = (await staff.GetFromJsonAsync<InspectionPreparation>(route + "/move-out/inspection-preparation"))!;
         var nextPhoto = await HandoverPhoto(staff, id, true);
-        await Read<MoveOutView>(await HandoverPost(staff, id, "move-out/inspection", input with { EvidenceIds = [nextPhoto], InventoryToken = fresh.Inventory!.StateToken }));
+        await Read<MoveOutView>(await HandoverPost(staff, id, "move-out/inspection", input with
+        {
+            EvidenceIds = [nextPhoto], InventoryToken = fresh.Inventory!.StateToken,
+            Assets = [input.Assets![0] with { EvidenceIds = [await HandoverPhoto(staff, id, true)] }],
+            RoomChecks = await MoveOutRoomChecks(staff, id),
+            KeyEvidenceIds = [await HandoverPhoto(staff, id, true)]
+        }));
         var versions = (await tenant.GetFromJsonAsync<FinalInspectionView[]>(route + "/move-out/inspections"))!;
         Assert.Equal(new[] { 2, 1 }, versions.Select(v => v.Version)); Assert.Equal("Reinspection", versions[1].OwnerDecision);
         Assert.Equal(JsonSerializer.Serialize(inspection.Observed), JsonSerializer.Serialize(versions[1].Observed));
@@ -633,8 +649,8 @@ public sealed partial class Compact24OwnerSetupTests
             var photo = await HandoverPhoto(staff, party.Id, true);
             var keyPhoto = await HandoverPhoto(staff, party.Id, true);
             await Read<MoveOutView>(await HandoverPost(staff, party.Id, "move-out/inspection", new InspectionInput(readings[0], readings[1], "Shared chair stays in room", [photo],
-                [new(group.Id, "Tốt", 1, 1, 1, 0, 0, 0, true)], "Synthetic", "Tenant private key returned", InventoryToken: comparison.Inventory!.StateToken,
-                RoomChecks: HandoverRoomChecklist.RequiredCodes.Select(code => new HandoverRoomCheck(code, "Passed", null, [])).ToArray(),
+                [new(group.Id, "Good", 1, 1, 1, 0, 0, 0, true, EvidenceIds: [await HandoverPhoto(staff, party.Id, true)])], "Synthetic", "Tenant private key returned", InventoryToken: comparison.Inventory!.StateToken,
+                RoomChecks: await MoveOutRoomChecks(staff, party.Id),
                 AccessItems: [new HandoverAccessItem("RoomKey", 0, "Keys returned")], KeyEvidenceIds: [keyPhoto])));
             await Read<MoveOutView>(await HandoverPost(party.Tenant, party.Id, "move-out/tenant-feedback", new InspectionTenantFeedback(1, true, "Current state confirmed")));
             await Read<MoveOutView>(await HandoverPost(owner, party.Id, "move-out/inspection-review", new InspectionReviewInput(1, true, "Observed state only")));
@@ -761,12 +777,12 @@ public sealed partial class Compact24OwnerSetupTests
         var overall = await HandoverPhoto(staff, id, true); var problem = await HandoverPhoto(staff, id, true);
         var roomIssuePhoto = await HandoverPhoto(staff, id, true);
         var keyPhoto = await HandoverPhoto(staff, id, true);
-        var roomChecks = HandoverRoomChecklist.RequiredCodes.Select(code =>
-            new HandoverRoomCheck(code, code == "walls_ceiling_floor" ? "Issue" : "Passed",
-                code == "walls_ceiling_floor" ? "Quan sát vết xước ở tường, chờ Owner định giá" : "Đã kiểm tra",
-                code == "walls_ceiling_floor" ? [roomIssuePhoto] : [])).ToArray();
+        var roomChecks = await MoveOutRoomChecks(staff, id, "walls_ceiling_floor", roomIssuePhoto);
+        roomChecks = roomChecks.Select(check => check.Code == "safety_equipment"
+            ? check with { Status = "NotApplicable", EvidenceIds = [] }
+            : check with { Notes = check.Status == "Issue" ? null : "Đã kiểm tra" }).ToArray();
         var inspection = new InspectionInput(finalReadings[0], finalReadings[1], "Thiếu một ghế; kiểm tra thực tế", [overall],
-            [new(source.Id, "Hiện trạng tổng hợp đã kiểm tra", observed, observed, observed - worn - damaged, worn, damaged, 4 - observed, true, "Ghi nhận hiện trạng; chưa kết luận trách nhiệm", [problem])], "Đã kiểm tra tường sàn cửa", "Đã thu chìa khóa riêng của Tenant", InventoryToken: preparation.Inventory!.StateToken,
+            [new(source.Id, observed < 4 ? "Missing" : "Damaged", observed, observed, observed - worn - damaged, worn, damaged, 4 - observed, true, null, observed == 0 ? [] : [problem])], "Đã kiểm tra tường sàn cửa", "Đã thu chìa khóa riêng của Tenant", InventoryToken: preparation.Inventory!.StateToken,
             ProposedCompensation: "Đề nghị Owner đối chiếu bằng chứng, chưa tạo khoản phải thu",
             RoomChecks: roomChecks, AccessItems: [new HandoverAccessItem("RoomKey", 0, "Staff chưa nhận được chìa khóa")],
             KeyEvidenceIds: [keyPhoto]);
@@ -776,13 +792,24 @@ public sealed partial class Compact24OwnerSetupTests
             inspection with
             {
                 RoomChecks = roomChecks.Select(check => check.Code == "walls_ceiling_floor"
-                ? check with { Notes = "" } : check).ToArray()
+                ? check with { EvidenceIds = [] } : check).ToArray()
             })).StatusCode);
+        Assert.Equal(HttpStatusCode.BadRequest, (await HandoverPost(staff, id, "move-out/inspection",
+            inspection with { KeyEvidenceIds = [] })).StatusCode);
+        Assert.Equal(HttpStatusCode.BadRequest, (await HandoverPost(staff, id, "move-out/inspection",
+            inspection with { RoomCondition = "" })).StatusCode);
+        Assert.Equal(HttpStatusCode.BadRequest, (await HandoverPost(staff, id, "move-out/inspection",
+            inspection with { Assets = [inspection.Assets![0] with { Condition = observed < 4 ? "Good" : "Missing" }] })).StatusCode);
+        if (observed > 0)
+            Assert.Equal(HttpStatusCode.BadRequest, (await HandoverPost(staff, id, "move-out/inspection",
+                inspection with { Assets = [inspection.Assets![0] with { EvidenceIds = [] }] })).StatusCode);
         await Read<MoveOutView>(await HandoverPost(staff, id, "move-out/inspection", inspection));
         var observedInspection = Assert.Single((await tenant.GetFromJsonAsync<FinalInspectionView[]>(
             route + "/move-out/inspections"))!);
         Assert.Equal(7, observedInspection.Observed.RoomChecks!.Length);
         Assert.Single(observedInspection.Observed.RoomChecks, x => x.Code == "walls_ceiling_floor" && x.Status == "Issue");
+        Assert.Single(observedInspection.Observed.RoomChecks, x => x.Code == "safety_equipment" && x.Status == "NotApplicable");
+        Assert.Equal("Đã kiểm tra", observedInspection.Observed.RoomChecks.Single(x => x.Code == "doors_windows_locks").Notes);
         Assert.Equal(0, Assert.Single(observedInspection.Observed.AccessItems!).Quantity);
         Assert.Contains(keyPhoto, observedInspection.Observed.KeyEvidenceIds!);
         Assert.Contains(roomIssuePhoto, observedInspection.Observed.EvidenceHashes!.Keys);

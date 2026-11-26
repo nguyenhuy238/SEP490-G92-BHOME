@@ -157,19 +157,19 @@ it('measures uncached control versus shared caching for duplicate consumers and 
   await waitFor(() => expect(screen.getByRole('status').textContent).toContain('room'));
   expect(transport).toHaveBeenCalledTimes(1);
 });
-it('reuses the seven scoped Tenant Home queries including monthly meter readings on return', async () => {
+it('reuses the four scoped Tenant Home queries including monthly meter readings on return', async () => {
   const transport = tenantTransport();
   client(transport);
   const view = render(<TenantDashboardScreen />);
   await waitFor(() =>
     expect(screen.getByRole('status').textContent).toContain('outstandingAmount'),
   );
-  expect(transport).toHaveBeenCalledTimes(7);
+  expect(transport).toHaveBeenCalledTimes(4);
   view.unmount();
   render(<TenantDashboardScreen />);
   expect(screen.getByRole('status').textContent).toContain('outstandingAmount');
   await act(async () => {});
-  expect(transport).toHaveBeenCalledTimes(7);
+  expect(transport).toHaveBeenCalledTimes(4);
   expect(JSON.parse(screen.getByRole('status').textContent!).paymentState.loading).toBe(false);
 });
 function StaffProbe() {
@@ -238,11 +238,9 @@ it('keeps Tenant Home visible on stale background refetch and refreshes only exp
   render(<TenantDashboardScreen />);
   expect(JSON.parse(screen.getByRole('status').textContent!).paymentState.loading).toBe(false);
   expect(screen.getByRole('status').textContent).toContain('contract');
-  await waitFor(() => expect(transport).toHaveBeenCalledTimes(9));
-  // Only payment (30s) and notifications (30s), not contracts/invoices/meters/debts.
-  expect(
-    transport.mock.calls.slice(7).every(([url]) => /\/payment$|notifications\?/.test(String(url))),
-  ).toBe(true);
+  await waitFor(() => expect(transport).toHaveBeenCalledTimes(5));
+  // Only payment (30s), not contracts/invoices/meters.
+  expect(String(transport.mock.calls[4][0])).toMatch(/\/payment$/);
   await act(async () => {
     pending.splice(0).forEach((resolve) => resolve());
   });
@@ -304,7 +302,12 @@ it('does not mistake a previous debt for this month’s invoice on Tenant Home',
   );
   const props = JSON.parse(screen.getByRole('status').textContent!);
   expect(props.invoice.id).toBe('current-bill');
-  expect(props.debt.invoiceId).toBe('due-bill');
+  expect(props.debt).toBeUndefined();
+  expect(
+    transport.mock.calls.some(([url]) =>
+      /\/debts\?|\/notifications\?|\/expiry-reminders$/.test(String(url)),
+    ),
+  ).toBe(false);
   expect(
     transport.mock.calls.some(([url]) => String(url).includes(`billingPeriod=${month}-01`)),
   ).toBe(true);

@@ -149,7 +149,7 @@ export function ContractHandoverPanel({
       {h && !editing && (
         <>
           <Text>
-            Phiên bản {h.version} · {text(h.status)} · {displayContractDate(h.snapshot.date)}
+            {text(h.status)} · {displayContractDate(h.snapshot.date)}
           </Text>
           <Text>
             Phòng {h.snapshot.roomNumber}: {h.snapshot.roomCondition}
@@ -376,7 +376,7 @@ export function ContractHandoverPanel({
               disabled={busy}
             />
             <Checkbox.Item
-              label={`Tôi đã kiểm tra nội dung phiên bản ${h.version}`}
+              label="Tôi đã kiểm tra nội dung biên bản"
               status={checked ? 'checked' : 'unchecked'}
               onPress={() => setChecked(!checked)}
               disabled={busy}

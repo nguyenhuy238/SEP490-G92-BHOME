@@ -327,7 +327,7 @@ export interface HandoverChoices {
   noAssetsConfirmed?: boolean;
 }
 export interface TerminationReview {
-  status: 'Requested' | 'Approved' | 'Rejected';
+  status: 'Requested' | 'Approved' | 'Rejected' | 'AwaitingConsent';
   version: number;
   locationName: string;
   roomNumber: string;
@@ -1390,6 +1390,13 @@ export const labels: Record<string, string> = {
   forced_move_out_inspection: 'Chờ kiểm tra trả phòng bắt buộc',
   forced_move_out_inspected: 'Đã lưu kết quả kiểm tra trả phòng bắt buộc',
   move_out_member_account_required: 'Mỗi thành viên cần có tài khoản khách thuê riêng để xác nhận.',
+  move_out_residence_not_started:
+    'Ngày nghiệp vụ hiện tại chưa tới ngày bắt đầu cư trú. Hãy kiểm tra ngày trên Demo Clock hoặc liên hệ chủ trọ.',
+  move_out_roster_unavailable:
+    'Không tìm thấy đầy đủ thành viên đang cư trú theo ngày nghiệp vụ. Hãy kiểm tra ngày và hồ sơ cư trú.',
+  move_out_already_requested: 'Phòng đã có yêu cầu trả phòng đang xử lý.',
+  invalid_move_out_date:
+    'Ngày dự kiến trả phòng phải không trước ngày nghiệp vụ và nằm trong thời hạn của các hợp đồng liên quan.',
   move_out_members_changed: 'Danh sách thành viên đã thay đổi. Cần tạo lại yêu cầu.',
   move_out_consent_required: 'Chưa đủ đồng thuận của các thành viên.',
   Approved: 'Đã duyệt trả phòng',

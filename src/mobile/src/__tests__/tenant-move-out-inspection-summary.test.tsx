@@ -8,7 +8,27 @@ import type {
 } from '../../../../packages/client-core/src/contracts';
 
 vi.mock('react-native', () => ({
-  View: ({ children }: { children: React.ReactNode }) => <div>{children}</div>,
+  View: ({
+    children,
+    style,
+    testID,
+    accessibilityElementsHidden,
+  }: {
+    children: React.ReactNode;
+    style?: unknown;
+    testID?: string;
+    accessibilityElementsHidden?: boolean;
+  }) => (
+    <div
+      data-testid={testID}
+      aria-hidden={accessibilityElementsHidden}
+      data-rn-style={JSON.stringify(
+        Array.isArray(style) ? Object.assign({}, ...style.filter(Boolean)) : style,
+      )}
+    >
+      {children}
+    </div>
+  ),
   ScrollView: ({ children }: { children: React.ReactNode }) => <div>{children}</div>,
   Modal: ({ children, visible }: { children: React.ReactNode; visible: boolean }) =>
     visible ? <div role="dialog">{children}</div> : null,
@@ -122,6 +142,7 @@ it('shows the four MoveIn-style result rows with whole-number final meters and n
   );
 
   expect(screen.getByText('Nội dung trả phòng')).toBeTruthy();
+  expect(screen.queryByText(/Kiểm kê lần/)).toBeNull();
   expect(screen.getByText(/Điện: 100 kWh · Nước: 200 m³/)).toBeTruthy();
   expect(screen.getByRole('button', { name: 'Tài sản' })).toBeTruthy();
   expect(screen.getByRole('button', { name: 'Chìa khóa' })).toBeTruthy();
@@ -132,10 +153,34 @@ it('shows the four MoveIn-style result rows with whole-number final meters and n
 
   fireEvent.click(screen.getByRole('button', { name: 'Hiện trạng phòng' }));
   expect(screen.getByRole('dialog')).toBeTruthy();
+  const listPanel = screen.getByTestId('handover-list-panel');
+  const overlay = listPanel.parentElement;
+  expect(JSON.parse(overlay?.getAttribute('data-rn-style') ?? '{}')).toMatchObject({
+    justifyContent: 'center',
+    alignItems: 'center',
+    padding: 16,
+  });
+  expect(JSON.parse(listPanel.getAttribute('data-rn-style') ?? '{}')).toMatchObject({
+    maxHeight: '80%',
+    borderRadius: 16,
+  });
   fireEvent.click(screen.getByRole('button', { name: /Tường, trần và sàn/ }));
+  expect(screen.getAllByRole('dialog')).toHaveLength(1);
+  expect(screen.getByTestId('handover-list-panel')).toBe(listPanel);
+  expect(overlay?.getAttribute('aria-hidden')).toBe('true');
+  expect(
+    JSON.parse(
+      screen.getByTestId('handover-detail-panel').parentElement?.getAttribute('data-rn-style') ??
+        '{}',
+    ),
+  ).toMatchObject({ position: 'absolute', justifyContent: 'center', padding: 24 });
+  expect(screen.queryByRole('button', { name: 'Hiện trạng chung' })).toBeNull();
   expect(screen.getByText('Nội dung: Bị tróc sơn')).toBeTruthy();
   expect(screen.queryByText('Lúc bàn giao')).toBeNull();
   expect(screen.queryByText('Lúc trả phòng')).toBeNull();
+  fireEvent.click(screen.getByRole('button', { name: 'Đóng' }));
+  expect(screen.queryByTestId('handover-detail-panel')).toBeNull();
+  expect(screen.getByTestId('handover-list-panel')).toBe(listPanel);
   fireEvent.click(screen.getByRole('button', { name: 'Đóng' }));
   expect(screen.queryByRole('dialog')).toBeNull();
 
@@ -145,6 +190,7 @@ it('shows the four MoveIn-style result rows with whole-number final meters and n
   expect(screen.getByText('Trầy cạnh giường')).toBeTruthy();
   expect(screen.getByText(/private-move-out-asset-photo/)).toBeTruthy();
   expect(screen.queryByText('Số lượng lúc bàn giao')).toBeNull();
+  fireEvent.click(screen.getByRole('button', { name: 'Đóng' }));
   fireEvent.click(screen.getByRole('button', { name: 'Đóng' }));
 
   fireEvent.click(screen.getByRole('button', { name: 'Chìa khóa' }));

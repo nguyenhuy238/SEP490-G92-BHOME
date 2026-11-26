@@ -345,9 +345,7 @@ export function LocationAssetHandoverSigning({
       {data && (
         <View style={{ gap: 10 }}>
           <View style={{ gap: 3 }}>
-            <Text>
-              Phiên bản {data.revision} · {data.totalItems} mục tài sản
-            </Text>
+            <Text>{data.totalItems} mục tài sản</Text>
             <Text style={ui.muted}>
               {data.directItems} Staff kiểm tra · {data.inheritedItems} kế thừa Tenant
             </Text>
@@ -409,7 +407,7 @@ export function LocationAssetHandoverSigning({
                     disabled={busy}
                   />
                   <Checkbox.Item
-                    label={`Tôi đã đọc PDF và đồng ý ký nhận bàn giao theo phiên bản ${data.revision}.`}
+                    label="Tôi đã đọc PDF và đồng ý ký nhận bàn giao."
                     status={confirmed ? 'checked' : 'unchecked'}
                     onPress={() => setConfirmedKey(confirmed ? null : signingKey)}
                     disabled={busy}
