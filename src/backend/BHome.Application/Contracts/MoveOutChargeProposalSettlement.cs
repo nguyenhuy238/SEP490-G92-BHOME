@@ -114,13 +114,14 @@ public sealed partial class SettlementReceivablesService
         // remains atomic, including private evidence verification, immutable
         // Owner-approved charges and verified deposit allocations.
         var created = new List<SettlementReceivable>();
+        var channel = await NewPaymentModeAsync(id, token);
         foreach (var plan in automaticPlans.Where(p => p.Line.ExistingReceivableId is null))
         {
             var key = SettlementFinancialCloseRules.ChildKey(proposal.OperationKey, proposal.Id, "automatic:" + plan.Line.Kind + ":" + plan.Line.Code);
             var fingerprint = ProposalFingerprint(id, new { proposal.Id, plan.Line });
             var charge = plan.Utility is { } utility && plan.Type is { } type
-                ? await BuildFinalUtilityChargeAsync(id, type, utility, proposal.OwnerUserId, key, fingerprint, token)
-                : await BuildFinalFixedChargeAsync(id, plan.Fixed!, proposal.OwnerUserId, key, fingerprint, token);
+                ? await BuildFinalUtilityChargeAsync(id, type, utility, proposal.OwnerUserId, key, fingerprint, channel, token)
+                : await BuildFinalFixedChargeAsync(id, plan.Fixed!, proposal.OwnerUserId, key, fingerprint, channel, token);
             created.Add(charge);
         }
         foreach (var plan in proofPlans)
@@ -134,8 +135,8 @@ public sealed partial class SettlementReceivablesService
                 plan.Item.Reason, "OwnerApprovedTenantAcceptedMoveOutProposal/v1:" + proposal.Id.ToString("N"),
                 proofs, context.RecipientUserIds.Order().ToArray(), proposal.OwnerUserId, now,
                 SettlementFinancialCloseRules.ChildKey(proposal.OperationKey, proposal.Id, "charge:" + sourceKey),
-                ProposalFingerprint(id, new { proposal.Id, sourceKey, plan.Item }), context.IsDevelopmentDemo,
-                RoomCheckCode: plan.RoomCheckCode);
+                ProposalFingerprint(id, new { proposal.Id, sourceKey, plan.Item }), channel is null ? context.IsDevelopmentDemo : channel == "Test",
+                RoomCheckCode: plan.RoomCheckCode, PaymentMode: channel);
             created.Add(record);
         }
         foreach (var record in created) await repository.SaveChargeAsync(record, token);

@@ -50,7 +50,9 @@ export function HoldingNewTenant({
   disabled?: boolean;
 }) {
   const applicant = context === 'holding';
-  const [name, setName] = useState(initialName);
+  const [name, setName] = useState(
+    initialName || (applicant && stage === 'identity' ? 'Người giữ chỗ' : ''),
+  );
   const [email] = useState(initialEmail);
   const [residentId, setResidentId] = useState(initialResidentId);
   const [mode, setMode] = useState<'capture' | 'verify'>('verify');

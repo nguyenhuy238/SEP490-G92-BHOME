@@ -12,6 +12,7 @@ import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/re
 import { contractClient, type ContractView } from '../../../../packages/client-core/src/contracts';
 import { ApiError } from '../../../../packages/client-core/src/api';
 import { type InternalSigningStatus } from '../../../../packages/client-core/src/internalSigning';
+vi.mock('../theme/theme', () => ({ staffColors: {} }));
 vi.mock('../features/contracts/ContractSigningPanel', () => ({ ContractSigningPanel: () => null }));
 vi.mock('../features/contracts/SigningSetup', () => ({ SignaturePlacementField: () => null }));
 vi.mock('../components/WorkflowControls', () => ({

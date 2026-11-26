@@ -71,7 +71,7 @@ public sealed class DepositDeductionService(IDepositDeductionRepository reposito
             var fingerprint = Convert.ToHexString(SHA256.HashData(JsonSerializer.SerializeToUtf8Bytes(new { contractId, input = normalized })));
             if (previous is not null)
             {
-                if (previous.IsDevelopmentDemo && mode?.AllowDevelopmentDemo != true) throw ContractException.Conflict("development_payment_unavailable");
+                if (previous.IsDevelopmentDemo && mode?.AllowDevelopmentDemo != true && mode?.AllowSandboxReceivingAccounts != true) throw ContractException.Conflict("development_payment_unavailable");
                 if (previous.ContractId != contractId || previous.Fingerprint != fingerprint)
                     throw ContractException.Conflict("deposit_deduction_idempotency_conflict");
                 return previous;

@@ -33,7 +33,7 @@ public sealed class MainDocxTemplateTests
             RequiredDeposit = 2300000,
             Terms = "Nội quy kiểm thử\nThanh toán đúng hạn."
         };
-        var settings = new MainContractSettings(c.OwnerSignerId, c.StartDate, null, 9900000, "Chuyển khoản hàng tháng", "",
+        var settings = new MainContractSettings(c.OwnerSignerId, c.StartDate, null, "Chuyển khoản hàng tháng", "",
             new("CHỦ NHÀ KIỂM THỬ", new(1980, 1, 1), "000000000001", new(2020, 1, 1), "Cơ quan kiểm thử", "Địa chỉ Owner kiểm thử", "0900000000"), 1);
         var tenant = new IdentityConfirmation(true, "000000000002", "NGƯỜI THUÊ KIỂM THỬ", new(2000, 1, 1), "Địa chỉ Tenant kiểm thử", null, null, null, new(2021, 6, 15), null);
         var charges = new[] {

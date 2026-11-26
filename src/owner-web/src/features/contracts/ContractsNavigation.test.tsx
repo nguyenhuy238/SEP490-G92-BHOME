@@ -9,7 +9,12 @@ vi.mock('../../../../../packages/client-core/src/auth', () => ({
   useAuth: () => ({ session: { userId: 'owner', roles: ['Owner'] } }),
 }));
 vi.mock('./ContractDetailPanel', () => ({
-  ContractDetailPanel: ({ id }: { id: string }) => <span>Reviewed {id}</span>,
+  ContractDetailPanel: ({ id, onClose }: { id: string; onClose: () => void }) => (
+    <>
+      <span>Reviewed {id}</span>
+      <button onClick={onClose}>Đóng chi tiết hợp đồng</button>
+    </>
+  ),
 }));
 beforeEach(() => {
   vi.mocked(window.matchMedia).mockImplementation((query) => ({
@@ -119,7 +124,7 @@ it('opens deep links, reacts to browser history and removes only detail paramete
   expect(await screen.findByText('Reviewed first')).toBeVisible();
   await act(async () => navigate('/contracts?contractId=second&filter=keep'));
   expect(await screen.findByText('Reviewed second')).toBeVisible();
-  fireEvent.click(screen.getByRole('button', { name: 'Đóng' }));
+  fireEvent.click(screen.getByRole('button', { name: 'Đóng chi tiết hợp đồng' }));
   await waitFor(() => expect(screen.getByTestId('query')).toHaveTextContent('?filter=keep'));
   expect(screen.getByTestId('query')).not.toHaveTextContent('contractId');
   await act(async () => navigate(-1));

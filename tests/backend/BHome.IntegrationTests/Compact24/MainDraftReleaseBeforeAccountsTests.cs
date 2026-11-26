@@ -91,7 +91,7 @@ public sealed class MainDraftReleaseBeforeAccountsTests
             db.Add(person); await db.SaveChangesAsync(); resident = person.Id;
         }
         var root = "/api/v1/contracts/main-drafts";
-        var settings = new MainContractSettingsInput(ownerId, today, null, 3000000, "Synthetic monthly payment terms", "Synthetic terms", new("SYNTHETIC OWNER", new(1980, 1, 1), "000000000456", new(2020, 1, 1), "Synthetic issuer", "Synthetic address", "0900000000"), 0);
+        var settings = new MainContractSettingsInput(ownerId, today, null, "Synthetic monthly payment terms", "Synthetic terms", new("SYNTHETIC OWNER", new(1980, 1, 1), "000000000456", new(2020, 1, 1), "Synthetic issuer", "Synthetic address", "0900000000"), 0);
         (await owner.PutAsJsonAsync(root + "/settings/" + location, settings)).EnsureSuccessStatusCode();
         async Task<HttpResponseMessage> Post(HttpClient c, string path, object body, Guid key)
         {

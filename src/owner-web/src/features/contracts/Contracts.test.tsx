@@ -286,13 +286,15 @@ it('shows frozen contract charges instead of fetching mutable room rates', async
   mount(
     <ContractDetailPanel api={api} id={id} actorId={owner} locationId={id} onChanged={vi.fn()} />,
   );
+  fireEvent.click(await screen.findByRole('tab', { name: 'Hợp đồng' }));
+  fireEvent.click(screen.getByRole('button', { name: 'Giá & phí theo hợp đồng' }));
   expect(await screen.findByText('Nước đã chốt · WATER')).toBeInTheDocument();
   expect(screen.getByText('15.000 đ/m³')).toBeInTheDocument();
   expect(screen.getByText('100.000 đ/tháng')).toBeInTheDocument();
   expect(request.mock.calls.every(([path]) => !path.includes('/prices?'))).toBe(true);
 });
 
-it('shows the real Holding Owner signing form before activation blockers without waiting for Tenant', async () => {
+it('shows Holding activation blockers and the Owner signing form in their tabs without waiting for Tenant', async () => {
   const c: ContractView = {
     ...draft,
     kind: 'Holding',
@@ -307,9 +309,9 @@ it('shows the real Holding Owner signing form before activation blockers without
   mount(
     <ContractDetailPanel api={api} id={id} actorId={owner} locationId={id} onChanged={vi.fn()} />,
   );
-  const button = await screen.findByRole('button', { name: 'Ký hợp đồng' });
-  const blocker = await screen.findByText('Tiền cọc đã xác minh chưa đủ.');
-  expect(button.compareDocumentPosition(blocker) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+  expect(await screen.findByText('Tiền cọc đã xác minh chưa đủ.')).toBeInTheDocument();
+  fireEvent.click(screen.getByRole('tab', { name: 'Hợp đồng' }));
+  expect(await screen.findByRole('button', { name: 'Ký hợp đồng' })).toBeInTheDocument();
   expect(screen.getAllByRole('button', { name: 'Ký hợp đồng' })).toHaveLength(1);
   expect(screen.queryByRole('button', { name: 'Phê duyệt hợp đồng giữ chỗ' })).toBeNull();
 });
@@ -445,10 +447,10 @@ it('links a pending request to the dedicated review without rendering settlement
   mount(
     <ContractDetailPanel api={api} id={id} actorId={owner} locationId={id} onChanged={vi.fn()} />,
   );
-  expect(await screen.findByRole('link', { name: 'Xét duyệt yêu cầu kết thúc' })).toHaveAttribute(
-    'href',
-    `/contracts/${id}/termination-review`,
-  );
+  fireEvent.click(await screen.findByRole('button', { name: 'Thao tác khác' }));
+  expect(
+    await screen.findByRole('menuitem', { name: 'Xét duyệt yêu cầu kết thúc' }),
+  ).toHaveAttribute('href', `/contracts/${id}/termination-review`);
   expect(screen.queryByRole('button', { name: 'Duyệt yêu cầu trả phòng' })).not.toBeInTheDocument();
   expect(screen.queryByText('Lịch sử xem xét quyết toán')).not.toBeInTheDocument();
 });
@@ -470,6 +472,7 @@ it('keeps settlement pending with visible history and does not offer room releas
   mount(
     <ContractDetailPanel api={api} id={id} actorId={owner} locationId={id} onChanged={vi.fn()} />,
   );
+  fireEvent.click(await screen.findByRole('tab', { name: 'Lịch sử' }));
   expect(
     await screen.findByText(/Chờ đối chiếu nghĩa vụ, cọc và giao dịch thực tế/),
   ).toBeInTheDocument();

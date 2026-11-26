@@ -75,6 +75,7 @@ vi.mock('react-native-paper', () => ({
 }));
 vi.mock('../components/WorkspaceKit', () => ({
   ui: {},
+  Row: ({ children }: { children: React.ReactNode }) => <div>{children}</div>,
   Box: ({ children }: { children: React.ReactNode }) => <div>{children}</div>,
   Heading: ({ title }: { title: string }) => <h2>{title}</h2>,
   Pill: ({ children }: { children: React.ReactNode }) => <span>{children}</span>,

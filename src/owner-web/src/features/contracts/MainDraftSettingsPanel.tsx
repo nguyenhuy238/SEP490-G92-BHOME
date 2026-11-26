@@ -1,31 +1,28 @@
-import { TextField, ValidatedForm } from '../../components/common/ValidatedForm';
-import { MoneyField } from '../../components/common/MoneyField';
-import {
-  contactPhoneError,
-  normalizeContactPhone,
-} from '../../../../../packages/client-core/src/contactPhone';
+﻿import { TextField, ValidatedForm } from '../../components/common/ValidatedForm';
 import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
-import ApartmentOutlined from '@mui/icons-material/ApartmentOutlined';
 import ArticleOutlined from '@mui/icons-material/ArticleOutlined';
-import Close from '@mui/icons-material/Close';
 import CreditCardOutlined from '@mui/icons-material/CreditCardOutlined';
+import ExpandMore from '@mui/icons-material/ExpandMore';
+import LockOutlined from '@mui/icons-material/LockOutlined';
 import PersonOutlined from '@mui/icons-material/PersonOutlined';
 import SaveOutlined from '@mui/icons-material/SaveOutlined';
 import {
+  Accordion,
+  AccordionDetails,
+  AccordionSummary,
   Alert,
   Box,
   Button,
   CircularProgress,
-  Dialog,
-  DialogActions,
-  DialogContent,
-  DialogContentText,
-  DialogTitle,
-  IconButton,
-  MenuItem,
+  Paper,
   Stack,
   Typography,
 } from '@mui/material';
+import { DatePicker } from '@mui/x-date-pickers/DatePicker';
+import { LocalizationProvider } from '@mui/x-date-pickers/LocalizationProvider';
+import { AdapterDayjs } from '@mui/x-date-pickers/AdapterDayjs';
+import dayjs, { type Dayjs } from 'dayjs';
+import { useNavigate } from 'react-router';
 import { useAuth } from '../../../../../packages/client-core/src/auth';
 import { createApiClient } from '../../../../../packages/client-core/src/api';
 import { apiBaseUrl } from '../../services/config';
@@ -34,19 +31,23 @@ import {
   type ContractClient,
 } from '../../../../../packages/client-core/src/contracts';
 import {
+  contactPhoneError,
+  normalizeContactPhone,
+} from '../../../../../packages/client-core/src/contactPhone';
+import {
   mainDraftClient,
   type MainContractSettings,
 } from '../../../../../packages/client-core/src/mainDrafts';
+import { ContractConfigurationPanel } from './ContractWorkflowPanel';
+import { useContractsApi } from './useContractsApi';
 
-const compact = '@media (max-width: 767px)';
 const fieldGrid = {
   display: 'grid',
   gridTemplateColumns: 'repeat(2, minmax(0, 1fr))',
   gap: 2,
   alignItems: 'start',
-  [compact]: { gridTemplateColumns: 'minmax(0, 1fr)' },
+  '@media (max-width: 767px)': { gridTemplateColumns: 'minmax(0, 1fr)' },
 };
-
 function SettingsSection({
   title,
   icon,
@@ -57,29 +58,53 @@ function SettingsSection({
   children: ReactNode;
 }) {
   return (
-    <Box component="section">
+    <Paper
+      component="section"
+      variant="outlined"
+      sx={{ p: { xs: 2, sm: 2.5 }, borderRadius: 2, bgcolor: 'background.paper' }}
+    >
       <Typography
-        component="h3"
+        component="h2"
         sx={{
           display: 'flex',
           alignItems: 'center',
           gap: 1,
           mb: 2,
-          fontSize: 15,
-          fontWeight: 600,
-          '& svg': { fontSize: 19, color: '#475569' },
+          fontSize: 16,
+          fontWeight: 700,
+          '& svg': { fontSize: 20, color: 'primary.main' },
         }}
       >
         {icon}
         {title}
       </Typography>
       <Box sx={fieldGrid}>{children}</Box>
-    </Box>
+    </Paper>
   );
 }
-
-export function MainDraftSettingsPanel({ api }: { api: ContractClient }) {
+function blankSettings(ownerSignerId: string): MainContractSettings {
+  return {
+    ownerSignerId,
+    effectiveFrom: '',
+    effectiveTo: null,
+    paymentTerms: '',
+    additionalTerms: '',
+    version: 0,
+    owner: {
+      fullName: '',
+      dateOfBirth: '',
+      citizenNumber: '',
+      dateOfIssue: '',
+      placeOfIssue: '',
+      address: '',
+      phone: '',
+    },
+  };
+}
+export function MainDraftSettingsPanel() {
   const { client, session } = useAuth();
+  const navigate = useNavigate();
+  const api = useContractsApi() as ContractClient;
   const request = useMemo(
     () =>
       mainDraftClient(
@@ -92,67 +117,21 @@ export function MainDraftSettingsPanel({ api }: { api: ContractClient }) {
       ),
     [client],
   );
-  const [open, setOpen] = useState(false),
-    [location, setLocation] = useState('');
-  const [locations, setLocations] = useState<{ id: string; label: string }[]>([]);
   const [value, setValue] = useState<MainContractSettings | null>(null);
-  const [busy, setBusy] = useState(false),
-    [loading, setLoading] = useState(false),
-    [error, setError] = useState(''),
-    [success, setSuccess] = useState(false);
+  const [busy, setBusy] = useState(false);
+  const [loading, setLoading] = useState(true);
+  const [needsOwnerConfiguration, setNeedsOwnerConfiguration] = useState(false);
+  const [error, setError] = useState('');
+  const [success, setSuccess] = useState(false);
+  const [phoneTouched, setPhoneTouched] = useState(false);
   const lock = useRef(false);
-  const saved = useRef<MainContractSettings | null>(null);
-  const [confirmClose, setConfirmClose] = useState(false);
-  function close() {
-    setConfirmClose(false);
-    setOpen(false);
-    setValue(null);
-  }
-  function requestClose() {
-    if (lock.current) return;
-    if (value && JSON.stringify(value) !== JSON.stringify(saved.current)) setConfirmClose(true);
-    else close();
-  }
   useEffect(() => {
-    if (!open) return;
-    const c = new AbortController();
-    void api
-      .preparation('', c.signal)
-      .then((result) => {
-        if (!c.signal.aborted) setLocations(result.locations);
-      })
-      .catch((e) => {
-        if (!c.signal.aborted) setError(contractError(e));
-      });
-    return () => c.abort();
-  }, [api, open]);
-  useEffect(() => {
-    if (!open || !location) return;
     const c = new AbortController();
     request
-      .settings(location, c.signal)
+      .settings(c.signal)
       .then((result) => {
-        if (!c.signal.aborted) {
-          saved.current = result ?? {
-            ownerSignerId: session!.userId,
-            effectiveFrom: '',
-            effectiveTo: null,
-            securityDeposit: '',
-            paymentTerms: '',
-            additionalTerms: '',
-            version: 0,
-            owner: {
-              fullName: '',
-              dateOfBirth: '',
-              citizenNumber: '',
-              dateOfIssue: '',
-              placeOfIssue: '',
-              address: '',
-              phone: '',
-            },
-          };
-          setValue(saved.current);
-        }
+        setNeedsOwnerConfiguration(!result);
+        setValue(result ?? blankSettings(session?.userId ?? ''));
       })
       .catch((e) => {
         if (!c.signal.aborted) setError(contractError(e));
@@ -161,7 +140,7 @@ export function MainDraftSettingsPanel({ api }: { api: ContractClient }) {
         if (!c.signal.aborted) setLoading(false);
       });
     return () => c.abort();
-  }, [location, open, request, session]);
+  }, [request, session?.userId]);
   async function save() {
     if (!value || lock.current) return;
     const phoneError = contactPhoneError(value.owner.phone, true);
@@ -174,14 +153,15 @@ export function MainDraftSettingsPanel({ api }: { api: ContractClient }) {
     setError('');
     setSuccess(false);
     try {
-      await request.setSettings(location, {
-        ...value,
+      const { version, ...settings } = value;
+      await request.setSettings({
+        ...settings,
         owner: { ...value.owner, phone: normalizeContactPhone(value.owner.phone)! },
-        ownerSignerId: session!.userId,
-        expectedVersion: value.version,
+        ownerSignerId: session?.userId ?? '',
+        expectedVersion: version,
       });
-      saved.current = await request.settings(location);
-      setValue(saved.current);
+      setValue(await request.settings());
+      setNeedsOwnerConfiguration(false);
       setSuccess(true);
     } catch (e) {
       setError(contractError(e));
@@ -191,316 +171,262 @@ export function MainDraftSettingsPanel({ api }: { api: ContractClient }) {
     }
   }
   const ownerFields = [
-    ['fullName', 'Họ tên Owner', 'text'],
-    ['dateOfBirth', 'Ngày sinh Owner', 'date'],
-    ['citizenNumber', 'CCCD Owner', 'text'],
+    ['fullName', 'Họ tên bên cho thuê', 'text'],
+    ['dateOfBirth', 'Ngày sinh bên cho thuê', 'date'],
+    ['citizenNumber', 'CCCD bên cho thuê', 'text'],
     ['dateOfIssue', 'Ngày cấp CCCD Owner', 'date'],
     ['placeOfIssue', 'Nơi cấp', 'text'],
     ['address', 'Địa chỉ thường trú', 'text'],
     ['phone', 'Điện thoại', 'tel'],
   ] as const;
+  const dateValue = (value: string | null | undefined): Dayjs | null => {
+    if (!value) return null;
+    const parsed = dayjs(value);
+    return parsed.isValid() ? parsed : null;
+  };
+  const updateDate = (key: 'effectiveFrom' | 'effectiveTo', date: Dayjs | null) =>
+    setValue(
+      (current) =>
+        current && {
+          ...current,
+          [key]: date?.isValid() ? date.format('YYYY-MM-DD') : key === 'effectiveFrom' ? '' : null,
+        },
+    );
   return (
-    <>
-      <Button
-        variant="outlined"
-        onClick={() => {
-          setError('');
-          setSuccess(false);
-          setLoading(!!location);
-          setOpen(true);
-        }}
-      >
-        Cấu hình bên cho thuê & tiền cọc
-      </Button>
-      <Dialog
-        open={open}
-        onClose={requestClose}
-        aria-labelledby="main-contract-settings-title"
-        aria-describedby="main-contract-settings-description"
-        maxWidth={false}
-        slotProps={{
-          paper: {
-            sx: {
-              width: 'min(900px, 90vw)',
-              maxWidth: 'none',
-              maxHeight: '88dvh',
-              m: 0,
-              borderRadius: '12px',
-              color: '#0F172A',
-              fontFamily: 'Inter, Roboto, Arial, sans-serif',
-              boxShadow: '0 16px 48px rgba(15, 23, 42, 0.14)',
-              [compact]: { width: '100%', height: '100dvh', maxHeight: '100dvh', borderRadius: 0 },
-            },
-          },
-        }}
-      >
-        <Box
-          component="header"
-          sx={{
-            display: 'flex',
-            alignItems: 'flex-start',
-            gap: 2,
-            px: { xs: 2, sm: 4 },
-            py: 2,
-            borderBottom: '1px solid #E2E8F0',
-          }}
-        >
-          <Box
-            sx={{
-              display: 'grid',
-              placeItems: 'center',
-              flexShrink: 0,
-              width: 44,
-              height: 44,
-              borderRadius: '10px',
-              bgcolor: '#EFF6FF',
-              color: '#2563EB',
-            }}
-          >
-            <ArticleOutlined />
-          </Box>
-          <Box sx={{ flex: 1, minWidth: 0 }}>
-            <DialogTitle
-              id="main-contract-settings-title"
-              sx={{ p: 0, fontSize: 22, lineHeight: 1.25, fontWeight: 600 }}
-            >
-              Cấu hình hợp đồng
-            </DialogTitle>
-            <Typography
-              id="main-contract-settings-description"
-              sx={{ color: '#64748B', mt: 0.5, fontSize: 14 }}
-            >
-              Thiết lập thông tin chủ sở hữu và điều khoản hợp đồng
-            </Typography>
-          </Box>
-          <IconButton
-            aria-label="Đóng cấu hình"
-            disabled={busy}
-            onClick={requestClose}
-            sx={{ width: 44, height: 44 }}
-          >
-            <Close />
-          </IconButton>
+    <Box
+      sx={{
+        width: '100%',
+        maxWidth: 1180,
+        mx: 'auto',
+        bgcolor: 'background.default',
+        boxSizing: 'border-box',
+      }}
+    >
+      <Stack spacing={2.5}>
+        <Box sx={{ px: { xs: 0, sm: 0.5 } }}>
+          <Typography component="h1" variant="h5" sx={{ fontWeight: 750 }}>
+            Cấu hình hợp đồng
+          </Typography>
+          <Alert severity="info" sx={{ mt: 1.5, py: 0, '& .MuiAlert-message': { py: 0.75 } }}>
+            Cấu hình này dùng cho hợp đồng tạo mới tại tất cả cơ sở, kể cả cơ sở được thêm sau này.
+          </Alert>
         </Box>
-        <DialogContent
-          sx={{
-            px: { xs: 2, sm: 4 },
-            py: 3,
-            bgcolor: '#F8FAFC',
-            overscrollBehavior: 'contain',
-            '& .MuiFormControl-root': { minWidth: 0 },
-            '& .MuiInputLabel-root': {
-              position: 'static',
-              transform: 'none',
-              maxWidth: '100%',
-              whiteSpace: 'normal',
-              mb: 0.75,
-              fontSize: 13,
-              fontWeight: 500,
-              color: '#0F172A',
-            },
-            '& .MuiFormLabel-asterisk': { color: 'error.main' },
-            '& .MuiOutlinedInput-root': {
-              bgcolor: '#FFFFFF',
-              borderRadius: '8px',
-              fontSize: 14,
-              minHeight: 44,
-              transition: 'box-shadow 160ms ease',
-              '&.Mui-focused': { boxShadow: '0 0 0 3px #BFDBFE' },
-              '&.Mui-focused:not(.Mui-error) .MuiOutlinedInput-notchedOutline': {
-                borderColor: '#2563EB',
-                borderWidth: 1,
-              },
-            },
-            '& .MuiOutlinedInput-notchedOutline': {
-              borderColor: '#E2E8F0',
-              top: 0,
-              '& legend': { display: 'none' },
-            },
-            '& .MuiOutlinedInput-input:not(textarea)': { py: '11px', lineHeight: '22px' },
-            '& .MuiOutlinedInput-root.MuiInputBase-multiline': {
-              py: 1.25,
-              lineHeight: 1.55,
-              alignItems: 'start',
-            },
-            '& .MuiFormHelperText-root': { mx: 0 },
-            '@media (prefers-reduced-motion: reduce)': {
-              '& .MuiOutlinedInput-root': { transition: 'none' },
-            },
+        <ValidatedForm
+          id="main-contract-settings"
+          onSubmit={(event) => {
+            event.preventDefault();
+            void save();
           }}
         >
-          <ValidatedForm
-            id="main-contract-settings"
-            onSubmit={(event) => {
-              event.preventDefault();
-              void save();
-            }}
-          >
-            <Stack spacing={3} sx={{ pt: 1 }}>
-              {!!error && <Alert severity="error">{error}</Alert>}
-              {success && <Alert severity="success">Đã lưu cấu hình.</Alert>}
-              {loading && <Alert severity="info">Đang tải cấu hình…</Alert>}
-              <SettingsSection title="Cơ sở áp dụng" icon={<ApartmentOutlined />}>
-                <TextField
-                  select
-                  label="Cơ sở"
-                  value={location}
-                  disabled={busy}
-                  required
-                  onChange={(e) => {
-                    setLocation(e.target.value);
-                    setValue(null);
-                    setLoading(true);
-                    setSuccess(false);
-                    setError('');
+          <Stack spacing={2}>
+            {error && <Alert severity="error">{error}</Alert>}
+            {success && (
+              <Alert severity="success">Đã lưu cấu hình dùng chung cho tất cả cơ sở.</Alert>
+            )}
+            {needsOwnerConfiguration && (
+              <Alert severity="info" variant="outlined">
+                Chưa có cấu hình chung. Cấu hình theo cơ sở đã lưu trước đây vẫn được giữ nguyên;
+                cấu hình này áp dụng cho hợp đồng tạo mới sau khi lưu.
+              </Alert>
+            )}
+            {loading && <Alert severity="info">Đang tải cấu hình…</Alert>}
+            <LocalizationProvider dateAdapter={AdapterDayjs} adapterLocale="vi">
+              <SettingsSection title="Thông tin bên cho thuê" icon={<PersonOutlined />}>
+                {ownerFields.map(([key, label, type]) =>
+                  type === 'date' ? (
+                    <DatePicker
+                      key={key}
+                      label={label}
+                      format="DD/MM/YYYY"
+                      value={dateValue(value?.owner[key])}
+                      disabled={busy || loading}
+                      onChange={(date) =>
+                        setValue(
+                          (current) =>
+                            current && {
+                              ...current,
+                              owner: {
+                                ...current.owner,
+                                [key]: date?.isValid() ? date.format('YYYY-MM-DD') : '',
+                              },
+                            },
+                        )
+                      }
+                      slotProps={{
+                        textField: {
+                          required: true,
+                          fullWidth: true,
+                          size: 'small',
+                          sx: { '& .MuiInputBase-root': { minHeight: 46 } },
+                          slotProps: { inputLabel: { shrink: true } },
+                        },
+                      }}
+                    />
+                  ) : (
+                    <TextField
+                      key={key}
+                      label={label}
+                      type={type}
+                      value={value?.owner[key] ?? ''}
+                      disabled={busy || loading}
+                      required
+                      sx={{
+                        ...(key === 'address' ? { gridColumn: '1 / -1' } : {}),
+                        '& .MuiInputBase-root:not(.MuiInputBase-multiline)': { minHeight: 46 },
+                      }}
+                      error={
+                        key === 'phone' &&
+                        phoneTouched &&
+                        !!value &&
+                        !!contactPhoneError(value.owner.phone, true)
+                      }
+                      helperText={
+                        key === 'phone' && phoneTouched && value
+                          ? contactPhoneError(value.owner.phone, true)
+                          : undefined
+                      }
+                      onBlur={() => {
+                        if (key === 'phone') setPhoneTouched(true);
+                      }}
+                      slotProps={{ inputLabel: { shrink: true } }}
+                      onChange={(e) =>
+                        setValue((v) => v && { ...v, owner: { ...v.owner, [key]: e.target.value } })
+                      }
+                    />
+                  ),
+                )}
+              </SettingsSection>
+              <SettingsSection title="Thông tin hợp đồng" icon={<ArticleOutlined />}>
+                <DatePicker
+                  label="Hiệu lực từ"
+                  format="DD/MM/YYYY"
+                  value={dateValue(value?.effectiveFrom)}
+                  disabled={busy || loading}
+                  onChange={(date) => updateDate('effectiveFrom', date)}
+                  slotProps={{
+                    textField: {
+                      required: true,
+                      fullWidth: true,
+                      size: 'small',
+                      sx: { '& .MuiInputBase-root': { minHeight: 46 } },
+                      slotProps: { inputLabel: { shrink: true } },
+                    },
+                  }}
+                />
+                <DatePicker
+                  label="Hiệu lực đến (nếu có)"
+                  format="DD/MM/YYYY"
+                  value={dateValue(value?.effectiveTo)}
+                  disabled={busy || loading}
+                  onChange={(date) => updateDate('effectiveTo', date)}
+                  slotProps={{
+                    textField: {
+                      fullWidth: true,
+                      size: 'small',
+                      sx: { '& .MuiInputBase-root': { minHeight: 46 } },
+                      slotProps: { inputLabel: { shrink: true } },
+                    },
+                  }}
+                />
+                <Box
+                  sx={{
+                    gridColumn: '1 / -1',
+                    display: 'flex',
+                    alignItems: 'flex-start',
+                    gap: 1.5,
+                    p: 2,
+                    bgcolor: 'primary.light',
+                    border: '1px solid',
+                    borderColor: 'primary.light',
+                    borderRadius: 1.5,
                   }}
                 >
-                  {locations.map((l) => (
-                    <MenuItem key={l.id} value={l.id}>
-                      {l.label}
-                    </MenuItem>
-                  ))}
-                </TextField>
+                  <LockOutlined sx={{ mt: 0.25, color: 'primary.main' }} />
+                  <Box>
+                    <Typography variant="body2" sx={{ fontWeight: 700 }}>
+                      Tiền cọc đảm bảo
+                    </Typography>
+                    <Typography variant="body1" sx={{ fontWeight: 650, mt: 0.25 }}>
+                      01 tháng tiền thuê phòng
+                    </Typography>
+                    <Typography variant="body2" color="text.secondary">
+                      Hệ thống tự động tính theo giá thuê của phòng được chọn. Không cho phép chỉnh
+                      sửa giá trị này.
+                    </Typography>
+                  </Box>
+                </Box>
               </SettingsSection>
-              {value && (
-                <>
-                  <SettingsSection title="Thông tin chủ sở hữu" icon={<PersonOutlined />}>
-                    {ownerFields.map(([key, label, type]) => (
-                      <TextField
-                        key={key}
-                        label={label}
-                        type={type}
-                        value={value.owner[key]}
-                        disabled={busy}
-                        required
-                        sx={
-                          key === 'placeOfIssue' || key === 'address'
-                            ? { gridColumn: '1 / -1' }
-                            : undefined
-                        }
-                        error={key === 'phone' && !!contactPhoneError(value.owner.phone, true)}
-                        helperText={
-                          key === 'phone' ? contactPhoneError(value.owner.phone, true) : undefined
-                        }
-                        slotProps={{ inputLabel: { shrink: true } }}
-                        onChange={(e) =>
-                          setValue(
-                            (v) => v && { ...v, owner: { ...v.owner, [key]: e.target.value } },
-                          )
-                        }
-                      />
-                    ))}
-                  </SettingsSection>
-                  <SettingsSection title="Thông tin hợp đồng" icon={<ArticleOutlined />}>
-                    <TextField
-                      label="Hiệu lực từ"
-                      type="date"
-                      value={value.effectiveFrom}
-                      disabled={busy}
-                      required
-                      slotProps={{ inputLabel: { shrink: true } }}
-                      onChange={(e) =>
-                        setValue((v) => v && { ...v, effectiveFrom: e.target.value })
-                      }
-                    />
-                    <TextField
-                      label="Hiệu lực đến (nếu có)"
-                      type="date"
-                      value={value.effectiveTo ?? ''}
-                      disabled={busy}
-                      slotProps={{ inputLabel: { shrink: true } }}
-                      onChange={(e) =>
-                        setValue((v) => v && { ...v, effectiveTo: e.target.value || null })
-                      }
-                    />
-                    <MoneyField
-                      maxRawLength={18}
-                      label="Tiền cọc đảm bảo (VND)"
-                      value={value.securityDeposit}
-                      disabled={busy}
-                      required
-                      onValueChange={(raw) => setValue((v) => v && { ...v, securityDeposit: raw })}
-                    />
-                  </SettingsSection>
-                  <SettingsSection title="Điều khoản và thanh toán" icon={<CreditCardOutlined />}>
-                    <TextField
-                      label="Hình thức / chính sách thanh toán"
-                      value={value.paymentTerms}
-                      disabled={busy}
-                      required
-                      multiline
-                      minRows={3}
-                      sx={{ gridColumn: '1 / -1' }}
-                      onChange={(e) => setValue((v) => v && { ...v, paymentTerms: e.target.value })}
-                    />
-                    <TextField
-                      label="Điều khoản bổ sung của Owner"
-                      value={value.additionalTerms}
-                      disabled={busy}
-                      multiline
-                      minRows={3}
-                      sx={{ gridColumn: '1 / -1' }}
-                      onChange={(e) =>
-                        setValue((v) => v && { ...v, additionalTerms: e.target.value })
-                      }
-                    />
-                  </SettingsSection>
-                </>
-              )}
+              <SettingsSection title="Điều khoản và thanh toán" icon={<CreditCardOutlined />}>
+                <TextField
+                  label="Hình thức / chính sách thanh toán"
+                  value={value?.paymentTerms ?? ''}
+                  disabled={busy || loading}
+                  required
+                  multiline
+                  minRows={3}
+                  sx={{ gridColumn: '1 / -1' }}
+                  slotProps={{ inputLabel: { shrink: true } }}
+                  onChange={(e) => setValue((v) => v && { ...v, paymentTerms: e.target.value })}
+                />
+                <TextField
+                  label="Điều khoản bổ sung của bên cho thuê"
+                  value={value?.additionalTerms ?? ''}
+                  disabled={busy || loading}
+                  multiline
+                  minRows={3}
+                  sx={{ gridColumn: '1 / -1' }}
+                  slotProps={{ inputLabel: { shrink: true } }}
+                  onChange={(e) => setValue((v) => v && { ...v, additionalTerms: e.target.value })}
+                />
+              </SettingsSection>
+            </LocalizationProvider>
+            <Stack
+              direction={{ xs: 'column-reverse', sm: 'row' }}
+              sx={{
+                justifyContent: 'flex-end',
+                alignItems: { xs: 'stretch', sm: 'center' },
+                gap: 1,
+                pt: 0.5,
+              }}
+            >
+              <Button variant="outlined" onClick={() => navigate('/contracts')}>
+                Quay lại
+              </Button>
+              <Button
+                variant="contained"
+                type="submit"
+                disabled={busy || loading || !value}
+                startIcon={busy ? <CircularProgress size={16} color="inherit" /> : <SaveOutlined />}
+              >
+                {busy ? 'Đang lưu…' : 'Lưu cấu hình'}
+              </Button>
             </Stack>
-          </ValidatedForm>
-        </DialogContent>
-        <DialogActions
+          </Stack>
+        </ValidatedForm>
+        <Accordion
+          disableGutters
+          elevation={0}
           sx={{
-            borderTop: '1px solid #E2E8F0',
-            px: { xs: 2, sm: 4 },
-            py: 2,
-            pb: 'max(16px, env(safe-area-inset-bottom))',
-            gap: 1,
+            border: '1px solid',
+            borderColor: 'divider',
+            borderRadius: '12px !important',
+            '&:before': { display: 'none' },
+            overflow: 'hidden',
           }}
-          disableSpacing
         >
-          <Button disabled={busy} onClick={requestClose} sx={{ minHeight: 44, color: '#475569' }}>
-            Hủy
-          </Button>
-          <Button
-            variant="contained"
-            type="submit"
-            form="main-contract-settings"
-            disabled={busy || loading || !value}
-            startIcon={busy ? <CircularProgress size={16} color="inherit" /> : <SaveOutlined />}
-            sx={{
-              minHeight: 44,
-              borderRadius: '8px',
-              bgcolor: '#2563EB',
-              '&:hover': { bgcolor: '#1D4ED8' },
-            }}
-          >
-            {busy ? 'Đang lưu…' : 'Lưu cấu hình'}
-          </Button>
-        </DialogActions>
-      </Dialog>
-      <Dialog
-        open={confirmClose}
-        onClose={() => setConfirmClose(false)}
-        aria-labelledby="discard-contract-settings-title"
-        aria-describedby="discard-contract-settings-description"
-      >
-        <DialogTitle id="discard-contract-settings-title">Bỏ thay đổi chưa lưu?</DialogTitle>
-        <DialogContent>
-          <DialogContentText id="discard-contract-settings-description">
-            Các chỉnh sửa cho cơ sở này sẽ bị mất khi đóng.
-          </DialogContentText>
-        </DialogContent>
-        <DialogActions>
-          <Button autoFocus onClick={() => setConfirmClose(false)}>
-            Tiếp tục chỉnh sửa
-          </Button>
-          <Button color="error" onClick={close}>
-            Bỏ thay đổi
-          </Button>
-        </DialogActions>
-      </Dialog>
-    </>
+          <AccordionSummary expandIcon={<ExpandMore />} sx={{ px: 2.5 }}>
+            <Box>
+              <Typography sx={{ fontWeight: 700 }}>Thông tin mẫu hợp đồng và chế độ ký</Typography>
+              <Typography variant="body2" color="text.secondary">
+                Chi tiết kỹ thuật và trạng thái cấu hình
+              </Typography>
+            </Box>
+          </AccordionSummary>
+          <AccordionDetails sx={{ pt: 0 }}>
+            <ContractConfigurationPanel api={api} />
+          </AccordionDetails>
+        </Accordion>
+      </Stack>
+    </Box>
   );
 }

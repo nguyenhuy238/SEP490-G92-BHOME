@@ -254,7 +254,7 @@ public sealed class AnonymousSigningTests(Compact24Fixture fixture) : IClassFixt
             await db.SaveChangesAsync(); representative = first.Id; coOccupant = second.Id;
             var mainData = scope.ServiceProvider.GetRequiredService<IMainDraftData>();
             if (await mainData.OwnerSettingsAsync(Compact24SampleSeed.Id(10), default) is null)
-                await mainData.SetSettingsAsync(Compact24SampleSeed.Id(10), new(Compact24SampleSeed.Id(1), Today.AddDays(-1), null, 990000,
+                await mainData.SetSettingsAsync(Compact24SampleSeed.Id(10), new(Compact24SampleSeed.Id(1), Today.AddDays(-1), null,
                     "Synthetic bank transfer terms", "", new("SYNTHETIC OWNER", new(1980, 1, 1), "000000000008", new(2020, 1, 1),
                         "Synthetic issuing authority", "Synthetic owner address", "0900000000"), 0), Compact24SampleSeed.Id(1), default);
         }
@@ -639,7 +639,7 @@ public sealed class AnonymousSigningTests(Compact24Fixture fixture) : IClassFixt
             db.Add(person); await db.SaveChangesAsync(); residentId = person.Id;
             var mainData = scope.ServiceProvider.GetRequiredService<IMainDraftData>();
             if (await mainData.OwnerSettingsAsync(Compact24SampleSeed.Id(10), default) is null)
-                await mainData.SetSettingsAsync(Compact24SampleSeed.Id(10), new(Compact24SampleSeed.Id(1), Today.AddDays(-1), null, 990000,
+                await mainData.SetSettingsAsync(Compact24SampleSeed.Id(10), new(Compact24SampleSeed.Id(1), Today.AddDays(-1), null,
                     "Synthetic bank transfer terms", "", new("SYNTHETIC OWNER", new(1980, 1, 1), "000000000008", new(2020, 1, 1),
                         "Synthetic issuing authority", "Synthetic owner address", "0900000000"), 0), Compact24SampleSeed.Id(1), default);
             if (qrPreview)
@@ -659,7 +659,9 @@ public sealed class AnonymousSigningTests(Compact24Fixture fixture) : IClassFixt
         if (qrPreview)
         {
             // Model a previously genuinely signed contract when sandbox QR is enabled later.
-            host.Services.GetRequiredService<BHome.Application.PaymentsDebt.SePay.SePayOptions>().Enabled = true;
+            // Request/job selections are scoped. This fixture changes the startup configuration
+            // so later requests observe enablement without sharing mutable selected credentials.
+            host.Services.GetRequiredService<Microsoft.Extensions.Options.IOptions<BHome.Application.PaymentsDebt.SePay.SePayOptions>>().Value.Enabled = true;
             await using var scope = host.Services.CreateAsyncScope();
             var db = scope.ServiceProvider.GetRequiredService<Compact24DbContext>();
             (await db.Set<Contract>().SingleAsync(c => c.Id == holding.Id)).PaymentMode = "Test";
@@ -886,14 +888,11 @@ public sealed class AnonymousSigningTests(Compact24Fixture fixture) : IClassFixt
             Assert.True(quote.IsDevelopmentDemo);
             Assert.Equal(holdingDeposit, quote.HoldingCredit); Assert.Equal(holdingDeposit, quote.VerifiedDeposit);
             Assert.Equal(0m, quote.OutstandingDeposit);
-            Assert.Contains(quote.Charges, p => p.Code == "SYN_INTERNET" && p.Amount == 50000m);
-            Assert.Contains(quote.Charges, p => p.Code == "SYN_PERSON" && p.Amount == 20000m);
-            Assert.Contains(quote.MeteredRates, p => p.Code == "ELECTRICITY" && p.Unit == "kWh");
-            Assert.Contains(quote.MeteredRates, p => p.Code == "WATER" && p.Unit == "m³");
-            Assert.DoesNotContain(quote.Charges, p => p.Code is "ELECTRICITY" or "WATER");
-            Assert.Equal(quote.Charges.Sum(p => p.Amount), quote.OutstandingRentAndFees);
+            Assert.DoesNotContain(quote.Charges, p => p.Code is "SYN_INTERNET" or "SYN_PERSON" or "ELECTRICITY" or "WATER");
+            Assert.Empty(quote.MeteredRates);
             var mainView = (await owner.GetFromJsonAsync<ContractView>(mainRoot))!;
-            Assert.Equal(quote.RequiredDeposit - quote.VerifiedDeposit + quote.Charges.Sum(p => p.Amount), quote.OutstandingAmount);
+            Assert.Equal(mainView.MonthlyRent, quote.FirstMonthRent);
+            Assert.Equal(quote.RequiredDeposit - quote.VerifiedDeposit + quote.FirstMonthRent, quote.OutstandingAmount);
             Assert.Equal(mainView.MonthlyRent, Assert.Single(quote.Charges, p => p.Code == "RENT").Amount);
             Assert.StartsWith("data:image/png;base64,", quote.QrImageDataUri);
             (await SendSandbox(quote.TransferReference!, quote.OutstandingAmount)).EnsureSuccessStatusCode();

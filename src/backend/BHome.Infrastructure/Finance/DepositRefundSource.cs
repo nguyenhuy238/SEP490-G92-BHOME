@@ -55,7 +55,7 @@ internal sealed partial class RefundRepository
             .OrderBy(r => r.Id).Select(r => new RefundPerson(r.Id, r.DisplayLabel)).ToArrayAsync(t);
         // BR-30: the Owner confirms the recipient under the Contract agreement. These choices
         // are eligible Residents, not an inference about who originally paid the deposit.
-        return new(summary.VerifiedSecurityDeposit - (summary.DepositDeductions?.Total ?? 0) - summary.MaintenanceDeductions - summary.ApprovedDepositOffsets, contract.IsDevelopmentDemo, people, requests,
+        return new(summary.VerifiedSecurityDeposit - (summary.DepositDeductions?.Total ?? 0) - summary.MaintenanceDeductions - summary.ApprovedDepositOffsets, BHome.Application.Contracts.ContractPaymentModes.IsTest(contract), people, requests,
             summary.DepositContractId, summary.FinancialReference, blockers.Distinct().Order().ToArray(), summary.Calculation?.AvailableSecurityDeposit,
             summary.VerifiedSecurityDeposit, summary.DepositDeductions, summary.ApprovedDepositOffsets, MaintenanceDeductions: summary.MaintenanceDeductions);
     }

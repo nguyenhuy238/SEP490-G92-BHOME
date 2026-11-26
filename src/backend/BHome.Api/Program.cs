@@ -61,6 +61,7 @@ app.Use(async (context, next) =>
     }
 });
 app.UseAuthentication();
+app.UseMiddleware<SePayOwnerConfigurationMiddleware>();
 app.UseRateLimiter();
 app.UseAuthorization();
 app.MapControllers();

@@ -44,7 +44,7 @@ public sealed partial class SettlementReceivablesService
         if (!staffProposal && !source.Context.InspectionConfirmed) missing.Add("owner_confirmed_inspection_required");
         if (source.Context.HasLegacyDeductions) missing.Add("legacy_deduction_requires_migration_review");
         if (source.Schedule is null && !source.FullyCovered) missing.Add("billing_schedule_required");
-        if (source.Context.IsDevelopmentDemo && mode?.AllowDevelopmentDemo != true) throw ContractException.Conflict("development_payment_unavailable");
+        if (source.Context.IsDevelopmentDemo && mode?.AllowDevelopmentDemo != true && mode?.AllowSandboxReceivingAccounts != true) throw ContractException.Conflict("development_payment_unavailable");
         if (source.Baseline is { } baseline && source.Final is { } final)
         {
             quantity = final.Value - baseline.Value;
@@ -97,7 +97,7 @@ public sealed partial class SettlementReceivablesService
             var previous = await repository.ChargeOperationAsync(Actor, key, token);
             if (previous is not null)
             {
-                if (previous.IsDevelopmentDemo && mode?.AllowDevelopmentDemo != true) throw ContractException.Conflict("development_payment_unavailable");
+                if (previous.IsDevelopmentDemo && mode?.AllowDevelopmentDemo != true && mode?.AllowSandboxReceivingAccounts != true) throw ContractException.Conflict("development_payment_unavailable");
                 if (previous.ContractId != id || previous.Kind != "FinalUtility" || previous.Fingerprint != fingerprint) throw ContractException.Conflict("settlement_idempotency_conflict");
                 return previous;
             }
@@ -108,12 +108,13 @@ public sealed partial class SettlementReceivablesService
             if (preview.Reference != input.ExpectedReference) throw ContractException.Conflict("settlement_review_changed");
             if (preview.ExistingReceivableId is not null) throw ContractException.Conflict("settlement_source_already_charged");
             if (preview.MissingInputs.Count != 0 || preview.Amount is null || preview.Quantity is null) throw ContractException.Conflict("final_utility_inputs_required");
-            var charge = await BuildFinalUtilityChargeAsync(id, input.UtilityType, preview, Actor, key, fingerprint, token);
+            var channel = await NewPaymentModeAsync(id, token);
+            var charge = await BuildFinalUtilityChargeAsync(id, input.UtilityType, preview, Actor, key, fingerprint, channel, token);
             await repository.SaveChargeAsync(charge, token); return charge;
         }, token);
     }
     private async Task<SettlementReceivable> BuildFinalUtilityChargeAsync(Guid id, UtilityType type,
-        FinalUtilityPreview preview, Guid owner, Guid key, string fingerprint, CancellationToken token)
+        FinalUtilityPreview preview, Guid owner, Guid key, string fingerprint, string? channel, CancellationToken token)
     {
         if (preview.MissingInputs.Count != 0 || preview.Amount is null || preview.Quantity is null ||
             preview.Baseline is null || preview.Final is null || preview.ExistingReceivableId is not null)
@@ -128,7 +129,7 @@ public sealed partial class SettlementReceivablesService
             $"utility:{source.MeterId:N}:{preview.Final.ReadingId:N}", source.Context.InspectionId, source.Context.InspectionVersion, null,
             preview.Amount.Value, type == UtilityType.Electricity ? "Điện chốt khi trả phòng" : "Nước chốt khi trả phòng",
             preview.CalculationSnapshot, proofs, source.Context.RecipientUserIds.Order().ToArray(), owner, clock.GetUtcNow(), key, fingerprint,
-            source.Context.IsDevelopmentDemo, calculation);
+            channel is null ? source.Context.IsDevelopmentDemo : channel == "Test", calculation, PaymentMode: channel);
     }
     private async Task VerifyChargeAsync(SettlementReceivable charge, CancellationToken token)
     {

@@ -215,6 +215,7 @@ public sealed class InvoiceService(IInvoiceRepository repository, ICurrentUser u
             // Publish only after a unique, persisted SePay payment memo has been issued.
             // This runs inside the same location/room transaction as Final, so a failed
             // registration cannot leave a publicly payable invoice with a legacy memo.
+            if (paymentCodes is not null) await paymentCodes.FreezeAsync(invoice.Id, invoice.LocationId, t);
             if (sepay?.Enabled == true && (paymentCodes is null ||
                 await paymentCodes.IssueAsync("Invoice", invoice.Id, invoice.LocationId, t) is null))
                 throw new InvoiceException(409, "invoice_payment_code_unavailable");

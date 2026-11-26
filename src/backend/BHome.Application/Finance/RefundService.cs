@@ -121,7 +121,7 @@ public sealed class RefundService(IRefundRepository repository, IObjectStorage s
         return actor;
     }
     private DateTimeOffset Now => clock.GetUtcNow();
-    private void ValidateMode(bool demo) { if (demo && mode?.AllowDevelopmentDemo != true) throw new FinanceException(409, "development_payment_unavailable"); }
+    private void ValidateMode(bool demo) { if (demo && mode?.AllowDevelopmentDemo != true && mode?.AllowSandboxReceivingAccounts != true) throw new FinanceException(409, "development_payment_unavailable"); }
     private static string Reason(string value) => string.IsNullOrWhiteSpace(value) || value.Length > 2000
         ? throw new FinanceException(400, "invalid_refund_reason") : value.Trim();
     private static void Key(Guid key) { if (key == Guid.Empty) throw new FinanceException(400, "idempotency_key_required"); }
@@ -145,7 +145,7 @@ public sealed class RefundService(IRefundRepository repository, IObjectStorage s
             var paid = source.Requests.Where(r => r.Status == "COMPLETED").Sum(r => r.Amount);
             var held = Reserved(source) - paid;
             var available = Math.Max(0, source.Excess - paid - held);
-            var eligible = !deposit && (!source.IsDevelopmentDemo || mode?.AllowDevelopmentDemo == true) &&
+            var eligible = !deposit && (!source.IsDevelopmentDemo || mode?.AllowDevelopmentDemo == true || mode?.AllowSandboxReceivingAccounts == true) &&
                 !(source.Blockers?.Count > 0) && source.Requests.Count < 100 &&
                 (source.Beneficiaries.Count > 0 || source.ExternalBeneficiary is not null);
             return new RefundSource(deposit ? null : id, deposit ? 0 : source.Excess, paid, held,

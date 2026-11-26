@@ -6,10 +6,8 @@ namespace BHome.Application.Contracts;
 public sealed partial class ContractService
 {
     private bool DemoEnabled => workflowMode?.SimulatedSigningEnabled == true;
-    private string? ConfiguredPaymentMode(Guid locationId, Guid ownerId) => paymentOptions?.Enabled == true &&
-        paymentOptions.Bound(locationId, ownerId) &&
-        (paymentOptions.Mode == "Live" || holdingTestScope?.Allows(locationId) == true || holdingTestScope?.AllowsExternalDatabase == true)
-        ? paymentOptions.Mode : null;
+    private Task<string?> ConfiguredPaymentModeAsync(Guid locationId, Guid ownerId, CancellationToken token) =>
+        ContractPaymentModes.ConfiguredAsync(paymentOptions, paymentAccounts, locationId, ownerId, token, paymentConnections);
     private IContractWorkflowRepository Workflow => workflowRepository ?? throw new ContractException(503, "contract_workflow_unavailable");
     private IContractDocumentRenderer Renderer => renderer ?? throw new ContractException(503, "contract_template_not_configured");
     private bool CompleteSignature(ContractSignature signature, Contract contract) => contract.IsDevelopmentDemo

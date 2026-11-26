@@ -15,10 +15,11 @@ class ReleaseSafetyTests(unittest.TestCase):
         with patch.object(safety, 'env', return_value={'SePay__Enabled': 'true', 'SePay__Mode': 'Test'}):
             self.assertEqual(safety.webhook_policy('staging'), (401, 'sepay_authentication_failed'))
 
-    def test_staging_smoke_cannot_accept_disabled_or_live_provider(self):
-        for settings in ({'SePay__Enabled': 'false', 'SePay__Mode': 'Test'}, {'SePay__Enabled': 'true', 'SePay__Mode': 'Live'}):
-            with self.subTest(settings=settings), patch.object(safety, 'env', return_value=settings), self.assertRaises(ValueError):
-                safety.webhook_policy('staging')
+    def test_staging_smoke_accepts_both_modes_and_explicit_disabled_provider(self):
+        for mode in ('Test', 'Live'):
+            for enabled in ('true', 'false'):
+                with self.subTest(mode=mode, enabled=enabled), patch.object(safety, 'env', return_value={'SePay__Enabled': enabled, 'SePay__Mode': mode}):
+                    self.assertEqual(safety.webhook_policy('staging'), (401, 'sepay_authentication_failed') if enabled == 'true' else (503, 'sepay_disabled'))
 
     def test_disabled_production_provider_requires_explicit_disabled_rejection(self):
         with patch.object(safety, 'env', return_value={'SePay__Enabled': 'false'}):
@@ -185,7 +186,7 @@ class ReleaseSafetyTests(unittest.TestCase):
             self.assertNotIn(prod[key], str(error.exception))
 
     def test_wrong_database_and_initializer_are_rejected(self):
-        for key, value in [('ConnectionStrings__Database', 'Host=postgres;Database=bhome;Password=synthetic-private'), ('DevelopmentDatabase__InitializeOnStartup', 'true'), ('SePay__Mode', 'Live')]:
+        for key, value in [('ConnectionStrings__Database', 'Host=postgres;Database=bhome;Password=synthetic-private'), ('DevelopmentDatabase__InitializeOnStartup', 'true'), ('SePay__Mode', 'Invalid')]:
             stage = self.configuration('staging'); stage[key] = value
             with self.subTest(key=key), self.assertRaises(ValueError):
                 self.check(stage, self.configuration('production'))

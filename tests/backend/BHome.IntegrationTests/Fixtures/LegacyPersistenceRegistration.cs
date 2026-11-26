@@ -37,6 +37,7 @@ internal static class LegacyPersistenceRegistration
                     options.JsonSerializerOptions.Converters.RemoveAt(i);
         });
         services.RemoveAll<Compact24DbContext>(); services.RemoveAll<DbContextOptions<Compact24DbContext>>();
+        services.Replace(ServiceDescriptor.Scoped<BHome.Application.Contracts.IMainDraftData, LegacyMainDraftData>());
         // ITenantContractAccess remains registered in both schema compositions and
         // resolves through BHomePersistenceContext, which is replaced below for this host.
         // The archived source-schema regression host intentionally has no Compact24

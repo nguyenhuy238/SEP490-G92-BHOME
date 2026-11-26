@@ -647,7 +647,7 @@ internal sealed partial class CompactOperationsRepository(Compact24DbContext db,
 
     private async Task<OperationsPage<ResidenceTaskView>> ResidencePage(ResidenceQuery query, Guid? tenant, CancellationToken t)
     {
-        await Open(t); var where = "c.status=3 AND cr.actual_residence_from<=CURRENT_TIMESTAMP AT TIME ZONE 'Asia/Ho_Chi_Minh' AND cr.actual_move_out_date IS NULL AND (@location IS NULL OR l.id=@location) AND (@status IS NULL OR COALESCE(cr.registration_status,'Pending')=@status) AND (@tenant IS NULL OR r.user_id=@tenant OR c.tenant_user_id=@tenant)";
+        await Open(t); var where = "c.status=3 AND COALESCE(cr.actual_residence_from,cr.residence_from)<=(CURRENT_TIMESTAMP AT TIME ZONE 'Asia/Ho_Chi_Minh')::date AND cr.actual_move_out_date IS NULL AND (@location IS NULL OR l.id=@location) AND (@status IS NULL OR COALESCE(cr.registration_status,'Pending')=@status) AND (@tenant IS NULL OR r.user_id=@tenant OR c.tenant_user_id=@tenant)";
         await using var count = Command("SELECT count(*) FROM contract_residents cr JOIN contracts c ON c.id=cr.contract_id JOIN rooms rm ON rm.id=c.room_id JOIN locations l ON l.id=rm.location_id JOIN residents r ON r.id=cr.resident_id WHERE " + where);
         ResidenceParameters(count, query, tenant); var total = Convert.ToInt32(await count.ExecuteScalarAsync(t), CultureInfo.InvariantCulture);
         await using var command = Command(ResidenceSelect + " WHERE " + where + " ORDER BY cr.residence_from DESC,cr.contract_id,cr.resident_id OFFSET @skip LIMIT @take");

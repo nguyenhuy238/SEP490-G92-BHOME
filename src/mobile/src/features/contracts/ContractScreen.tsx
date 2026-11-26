@@ -359,7 +359,6 @@ export function ContractScreen({
         api={client}
         viewState={staffListView}
         onViewStateChange={setStaffListView}
-        onCreateHolding={() => setCreateHolding(true)}
         onOpen={(contract) => setSelected(contract.id)}
         onInspection={() => go('staff-handovers')}
       />
@@ -654,7 +653,7 @@ function LiveContractDetail({
       {!rental && c.isDevelopmentDemo && (
         <Text style={ui.red}>HỢP ĐỒNG DEMO · Dữ liệu minh họa, không dùng làm hợp đồng thật.</Text>
       )}
-      {!tenantHandoverOnly && !holding && (
+      {!tenantHandoverOnly && !holding && !(role === 'Staff' && rental) && (
         <Pill tone={c.status === 'Active' ? 'green' : 'amber'}>{text(c.status)}</Pill>
       )}
       {!!detail.refreshError && (

@@ -69,7 +69,7 @@ public sealed class ReceiptExcessService(IReceiptExcessRepository repository, IP
     {
         _ = Owner(); ReceiptExcessRules.Validate(target);
         var context = await repository.ContextAsync(transferId, target, token);
-        if (context.IsDevelopmentDemo && mode?.AllowDevelopmentDemo != true) throw new PaymentException(409, "development_payment_unavailable");
+        if (context.IsDevelopmentDemo && mode?.AllowDevelopmentDemo != true && mode?.AllowSandboxReceivingAccounts != true) throw new PaymentException(409, "development_payment_unavailable");
         return context;
     }
     public Task<ReceiptExcessDisposition> ConfirmAsync(Guid transferId, ReceiptExcessConfirmation input, Guid key, CancellationToken token)
@@ -84,7 +84,7 @@ public sealed class ReceiptExcessService(IReceiptExcessRepository repository, IP
             if (await repository.OperationAsync(actor, key, token) is { } previous)
             {
                 if (previous.TransferId != transferId || previous.Fingerprint != fingerprint) throw new PaymentException(409, "payment_idempotency_conflict");
-                if (previous.IsDevelopmentDemo && mode?.AllowDevelopmentDemo != true) throw new PaymentException(409, "development_payment_unavailable");
+                if (previous.IsDevelopmentDemo && mode?.AllowDevelopmentDemo != true && mode?.AllowSandboxReceivingAccounts != true) throw new PaymentException(409, "development_payment_unavailable");
                 return previous;
             }
             var context = await ContextAsync(transferId, input.Target, token);

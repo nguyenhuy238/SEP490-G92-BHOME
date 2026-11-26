@@ -150,9 +150,9 @@ export function RentalContractFlow({
           ? ['activate']
           : [];
   return (
-    <View style={styles.flow}>
+    <View style={[styles.flow, role === 'Staff' && styles.staffFlow]}>
       <RentalContractStepper current={state.active ? 3 : step} completed={state.completed} />
-      <Box>
+      <Box style={role === 'Staff' && styles.staffSummary}>
         <View style={styles.row}>
           <Text style={styles.title}>
             {state.active ? 'Hợp đồng đã được kích hoạt' : `Phòng ${contract.roomNumber ?? '—'}`}
@@ -533,6 +533,8 @@ function Check({ label, done, fallback }: { label: string; done: boolean; fallba
 }
 const styles = StyleSheet.create({
   flow: { gap: 12 },
+  staffFlow: { gap: 8 },
+  staffSummary: { padding: 12, gap: 8 },
   row: { flexDirection: 'row', alignItems: 'center', flexWrap: 'wrap', gap: 8 },
   title: { color: c.navy, fontSize: 16, lineHeight: 23, fontWeight: '600', flexShrink: 1 },
   valueRow: { flexDirection: 'row', gap: 12, alignItems: 'flex-start' },

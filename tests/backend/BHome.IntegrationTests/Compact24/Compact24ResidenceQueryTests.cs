@@ -236,6 +236,54 @@ public sealed class Compact24ResidenceQueryTests(Compact24Fixture fixture) : ICl
     }
 
     [CompactPostgresFact]
+    public async Task ActiveContractListsResidenceTaskBeforeTenantRecordsActualResidenceDate()
+    {
+        using var tenant = await User(Roles.Tenant);
+        var tenantId = (await tenant.GetFromJsonAsync<SessionIdentity>("/api/v1/auth/me"))!.UserId;
+        Guid ownerId;
+        using (var owner = await User(Roles.Owner))
+            ownerId = (await owner.GetFromJsonAsync<SessionIdentity>("/api/v1/auth/me"))!.UserId;
+
+        await using var scope = fixture.Factory!.Services.CreateAsyncScope();
+        var db = scope.ServiceProvider.GetRequiredService<BHomePersistenceContext>();
+        var chain = new Chain { Name = "Synthetic residence onboarding" };
+        var location = new Location("Synthetic residence onboarding") { ChainId = chain.Id };
+        var room = new Room { LocationId = location.Id, RoomNumber = "RES-START", Capacity = 1, Status = RoomStatus.Occupied };
+        var resident = new Resident { RoomId = room.Id, TenantUserId = tenantId, OwnerUserId = ownerId, DisplayLabel = "Synthetic residence tenant" };
+        var start = DateOnly.FromDateTime(TimeZoneInfo.ConvertTimeBySystemTimeZoneId(DateTimeOffset.UtcNow, "Asia/Ho_Chi_Minh").DateTime).AddDays(-1);
+        var contract = new Contract
+        {
+            RoomId = room.Id,
+            OwnerSignerId = ownerId,
+            TenantUserId = tenantId,
+            RepresentativeResidentId = resident.Id,
+            StartDate = start,
+            EndDate = start.AddMonths(12),
+            Status = ContractStatus.Active,
+            Terms = "Synthetic active residence contract",
+            SnapshotHash = new string('0', 64),
+            ActivatedByUserId = ownerId,
+            ActivatedAt = DateTimeOffset.UtcNow,
+            Residents = [new ContractResident { ResidentId = resident.Id, Role = ResidentType.Representative, ResidenceFrom = start }]
+        };
+        contract.Residents[0].ContractId = contract.Id;
+        db.AddRange(chain, location, room, resident, contract);
+        await db.SaveChangesAsync();
+
+        var route = $"/api/v1/residence-tasks/{contract.Id}/{resident.Id}";
+        var initialPage = (await tenant.GetFromJsonAsync<OperationsPage<ResidenceTaskView>>("/api/v1/residence-tasks"))!;
+        var initial = Assert.Single(initialPage.Items, item => item.ContractId == contract.Id && item.ResidentId == resident.Id);
+        Assert.Null(initial.ActualResidenceFrom);
+        Assert.Equal("Pending", initial.Status);
+
+        var update = await tenant.PutAsJsonAsync(route, new ResidenceUpdate(start, "InProgress", null, "Synthetic residence tracking started"));
+        Assert.True(update.IsSuccessStatusCode, await update.Content.ReadAsStringAsync());
+        var updated = (await update.Content.ReadFromJsonAsync<ResidenceTaskView>())!;
+        Assert.Equal(start, updated.ActualResidenceFrom);
+        Assert.Equal("InProgress", updated.Status);
+    }
+
+    [CompactPostgresFact]
     public async Task OmittedAndExplicitStatusFiltersExecuteOnPostgresForOwnerAndTenant()
     {
         foreach (var role in new[] { Roles.Owner, Roles.Tenant })

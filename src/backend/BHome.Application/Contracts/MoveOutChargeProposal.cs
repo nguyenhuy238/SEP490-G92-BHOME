@@ -120,7 +120,7 @@ public sealed partial class SettlementReceivablesService
         // current move-out proposal or its private opening/closing photo IDs.
         if (!user.IsInRole(Roles.Owner) && !source.Context.RecipientUserIds.Contains(Actor))
             throw ContractException.Missing();
-        if (source.Context.IsDevelopmentDemo && mode?.AllowDevelopmentDemo != true)
+        if (source.Context.IsDevelopmentDemo && mode?.AllowDevelopmentDemo != true && mode?.AllowSandboxReceivingAccounts != true)
             throw ContractException.Conflict("development_payment_unavailable");
         var latest = await repository.LatestProposalAsync(id, token);
         var feedback = latest is null ? null : await repository.ProposalFeedbackAsync(id, latest.Id, token);
@@ -205,7 +205,7 @@ public sealed partial class SettlementReceivablesService
             if (source.Reference != latest.SourceReference ||
                 !string.IsNullOrWhiteSpace(latest.PhysicalReference) &&
                 source.PhysicalReference != latest.PhysicalReference ||
-                source.Context.IsDevelopmentDemo && mode?.AllowDevelopmentDemo != true)
+                source.Context.IsDevelopmentDemo && mode?.AllowDevelopmentDemo != true && mode?.AllowSandboxReceivingAccounts != true)
                 throw ContractException.Conflict("move_out_proposal_changed");
             var settlement = await MaterializeAcceptedProposalAsync(id, latest, source, token);
             if (settlement.Status == "PendingOwnerReview")
@@ -241,7 +241,7 @@ public sealed partial class SettlementReceivablesService
             {
                 if (previous.ContractId != id || previous.Fingerprint != fingerprint)
                     throw ContractException.Conflict("settlement_idempotency_conflict");
-                if (previous.IsDevelopmentDemo && mode?.AllowDevelopmentDemo != true)
+                if (previous.IsDevelopmentDemo && mode?.AllowDevelopmentDemo != true && mode?.AllowSandboxReceivingAccounts != true)
                     throw ContractException.Conflict("development_payment_unavailable");
                 return previous;
             }
@@ -256,7 +256,7 @@ public sealed partial class SettlementReceivablesService
             // the Owner inspection-review action is not a second prerequisite.
             if (!source.StaffInspectionReady || context.HasLegacyDeductions || context.RecipientUserIds.Length == 0 ||
                 context.InspectionId != normalized.InspectionId || context.InspectionVersion != normalized.InspectionVersion ||
-                source.Reference != normalized.ExpectedReference || context.IsDevelopmentDemo && mode?.AllowDevelopmentDemo != true)
+                source.Reference != normalized.ExpectedReference || context.IsDevelopmentDemo && mode?.AllowDevelopmentDemo != true && mode?.AllowSandboxReceivingAccounts != true)
                 throw ContractException.Conflict("move_out_proposal_source_changed");
             var choices = source.Items.Where(i => i.Chargeable).ToDictionary(i =>
                 ProposalItemKey(i.Kind, i.AssetId, i.RoomCheckCode, i.AccessType));

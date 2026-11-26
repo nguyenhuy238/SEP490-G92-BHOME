@@ -49,7 +49,7 @@ public sealed record InvoicePaymentView(Guid InvoiceId, string PaymentStatus,
     [property: JsonNumberHandling(JsonNumberHandling.WriteAsString | JsonNumberHandling.AllowReadingFromString)] decimal OriginalIssuedAmount = 0,
     [property: JsonNumberHandling(JsonNumberHandling.WriteAsString | JsonNumberHandling.AllowReadingFromString)] decimal ApprovedAdjustmentTotal = 0,
     [property: JsonNumberHandling(JsonNumberHandling.WriteAsString | JsonNumberHandling.AllowReadingFromString)] decimal PotentialExcessAmount = 0,
-    int FinancialVersion = 0, string ReviewStatus = "None");
+    int FinancialVersion = 0, string ReviewStatus = "None", string? PaymentMode = null);
 public sealed record TransferView(Guid Id, string ProviderIdentity, string BankReference,
     [property: JsonNumberHandling(JsonNumberHandling.WriteAsString | JsonNumberHandling.AllowReadingFromString)] decimal Amount,
     string Currency, DateTimeOffset OccurredAt, string TransferDescription, string StatementReference,
@@ -71,7 +71,8 @@ public sealed record DebtInvoiceView(Guid InvoiceId, Guid LocationId, Guid RoomI
     string PaymentStatus, int OverdueDays,
     [property: JsonNumberHandling(JsonNumberHandling.WriteAsString | JsonNumberHandling.AllowReadingFromString)] decimal? OriginalIssuedAmount = null,
     [property: JsonNumberHandling(JsonNumberHandling.WriteAsString | JsonNumberHandling.AllowReadingFromString)] decimal? ApprovedAdjustmentTotal = null,
-    [property: JsonNumberHandling(JsonNumberHandling.WriteAsString | JsonNumberHandling.AllowReadingFromString)] decimal? PotentialExcessAmount = null);
+    [property: JsonNumberHandling(JsonNumberHandling.WriteAsString | JsonNumberHandling.AllowReadingFromString)] decimal? PotentialExcessAmount = null,
+    string? PaymentMode = null);
 public sealed record PaymentHistoryEntry(Guid Id, Guid InvoiceId, Guid LocationId, Guid RoomId, string LocationName, string RoomNumber, DateOnly BillingPeriod,
     [property: JsonNumberHandling(JsonNumberHandling.WriteAsString | JsonNumberHandling.AllowReadingFromString)] decimal Amount,
     DateTimeOffset PaidAt, string PaidBy, string VerificationSource, string? BankReference, Guid? VerifiedByUserId);
@@ -110,6 +111,10 @@ public interface IPaymentRepository
     Task<PagedResult<ReconciliationView>> ReviewsAsync(Guid transferId, int page, int pageSize, CancellationToken t);
     Task<ReceivingBankAccount?> ReceivingAccountAsync(Guid locationId, CancellationToken t);
     Task<ReceivingBankAccount?> OwnerReceivingAccountAsync(Guid ownerId, CancellationToken t) => Task.FromResult<ReceivingBankAccount?>(null);
+    Task<ReceivingBankAccount?> OwnerReceivingAccountForModeAsync(Guid ownerId, string mode, CancellationToken t) => OwnerReceivingAccountAsync(ownerId, t);
+    Task<ReceivingBankAccount?> ReceivingAccountForModeAsync(Guid locationId, string mode, CancellationToken t) => ReceivingAccountAsync(locationId, t);
+    Task<string?> OwnerPaymentModeAsync(Guid ownerId, CancellationToken t) => Task.FromResult<string?>(null);
+    Task SetOwnerPaymentModeAsync(Guid ownerId, string mode, string? expectedMode, CancellationToken t) => throw new PaymentException(503, "payment_mode_unavailable");
     Task<Guid?> ReceivingOwnerAsync(Guid locationId, CancellationToken t) => Task.FromResult<Guid?>(null);
     Task SaveOwnerReceivingAccountAsync(Guid ownerId, ReceivingBankAccount account, int expectedVersion, CancellationToken t) =>
         throw new PaymentException(503, "owner_receiving_account_unavailable");

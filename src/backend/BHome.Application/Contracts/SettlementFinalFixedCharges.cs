@@ -24,7 +24,7 @@ public sealed partial class SettlementReceivablesService
         var source = await repository.FinalFixedAsync(id, token); var missing = source.MissingInputs.ToList();
         if (!staffProposal && !source.Context.InspectionConfirmed) missing.Add("owner_confirmed_inspection_required");
         if (source.Context.HasLegacyDeductions) missing.Add("legacy_deduction_requires_migration_review");
-        if (source.Context.IsDevelopmentDemo && mode?.AllowDevelopmentDemo != true) throw ContractException.Conflict("development_payment_unavailable");
+        if (source.Context.IsDevelopmentDemo && mode?.AllowDevelopmentDemo != true && mode?.AllowSandboxReceivingAccounts != true) throw ContractException.Conflict("development_payment_unavailable");
         if (source.Schedule is null) missing.Add("billing_schedule_required");
         if (missing.Count > 0) return [new("", "Tiền thuê và phí cố định", source.Period, "", null, null, null, missing.Distinct().Order().ToArray())];
         var schedule = source.Schedule!;
@@ -64,7 +64,7 @@ public sealed partial class SettlementReceivablesService
             if (previous is not null)
             {
                 if (previous.ContractId != id || previous.Kind != "FinalFixed" || previous.Fingerprint != fingerprint) throw ContractException.Conflict("settlement_idempotency_conflict");
-                if (previous.IsDevelopmentDemo && mode?.AllowDevelopmentDemo != true) throw ContractException.Conflict("development_payment_unavailable");
+                if (previous.IsDevelopmentDemo && mode?.AllowDevelopmentDemo != true && mode?.AllowSandboxReceivingAccounts != true) throw ContractException.Conflict("development_payment_unavailable");
                 return previous;
             }
             await AuthorizeAsync(id, true, token);
@@ -74,12 +74,13 @@ public sealed partial class SettlementReceivablesService
             if (row.Reference != input.ExpectedReference) throw ContractException.Conflict("settlement_review_changed");
             if (row.ExistingReceivableId is not null) throw ContractException.Conflict("settlement_source_already_charged");
             if (row.MissingInputs.Count > 0 || row.Amount is null || row.Calculation is null) throw ContractException.Conflict("fixed_charge_inputs_required");
-            var charge = await BuildFinalFixedChargeAsync(id, row, Actor, key, fingerprint, token);
+            var channel = await NewPaymentModeAsync(id, token);
+            var charge = await BuildFinalFixedChargeAsync(id, row, Actor, key, fingerprint, channel, token);
             await repository.SaveChargeAsync(charge, token); return charge;
         }, token);
     }
     private async Task<SettlementReceivable> BuildFinalFixedChargeAsync(Guid id, FinalFixedChargePreview row,
-        Guid owner, Guid key, string fingerprint, CancellationToken token)
+        Guid owner, Guid key, string fingerprint, string? channel, CancellationToken token)
     {
         if (row.MissingInputs.Count > 0 || row.Amount is null || row.Calculation is null || row.ExistingReceivableId is not null)
             throw ContractException.Conflict("fixed_charge_inputs_required");
@@ -97,6 +98,6 @@ public sealed partial class SettlementReceivablesService
                 scheduleVersion = context.Schedule!.Version,
                 policyAppliesToSignedTermsConfirmed = true
             }),
-            proofs, context.RecipientUserIds, owner, clock.GetUtcNow(), key, fingerprint, context.Context.IsDevelopmentDemo, FixedCharge: row.Calculation);
+            proofs, context.RecipientUserIds, owner, clock.GetUtcNow(), key, fingerprint, channel is null ? context.Context.IsDevelopmentDemo : channel == "Test", FixedCharge: row.Calculation, PaymentMode: channel);
     }
 }

@@ -6,11 +6,12 @@ public sealed record MainInitialCharge(string Code, string Name,
 public sealed record MainInitialOrder(Guid ContractId, Guid LocationId, string SnapshotHash,
     decimal RequiredDeposit, decimal MonthlyRent, MainInitialCharge[] Charges, DateTimeOffset CreatedAt,
     Guid? SharedDepositContractId = null, Guid? SharedRentContractId = null, Guid? SharedInvoiceId = null,
-    bool RoomScopeResolved = false, string? RoomScopeMode = null);
+    bool RoomScopeResolved = false, string? RoomScopeMode = null, int CalculationVersion = 1);
 public sealed record MainInitialMeteredRate(string Code, string Name, string Unit,
     [property: JsonNumberHandling(JsonNumberHandling.WriteAsString | JsonNumberHandling.AllowReadingFromString)] decimal Rate);
 public sealed record MainInitialPaymentView(Guid ContractId, string Availability, string ContractStatus, bool SigningComplete,
     IReadOnlyList<MainInitialCharge> Charges,
+    [property: JsonNumberHandling(JsonNumberHandling.WriteAsString | JsonNumberHandling.AllowReadingFromString)] decimal FirstMonthRent,
     [property: JsonNumberHandling(JsonNumberHandling.WriteAsString | JsonNumberHandling.AllowReadingFromString)] decimal RequiredDeposit,
     [property: JsonNumberHandling(JsonNumberHandling.WriteAsString | JsonNumberHandling.AllowReadingFromString)] decimal HoldingCredit,
     [property: JsonNumberHandling(JsonNumberHandling.WriteAsString | JsonNumberHandling.AllowReadingFromString)] decimal VerifiedDeposit,

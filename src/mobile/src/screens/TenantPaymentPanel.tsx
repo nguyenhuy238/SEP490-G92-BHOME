@@ -7,6 +7,7 @@ import { formatInstant } from '../../../../packages/client-core/src/localization
 import { signedVnd } from '../../../../packages/client-core/src/adjustments';
 import {
   paymentText,
+  isSePayPaymentCode,
   type InvoicePayment,
   type TransferInstructions,
 } from '../../../../packages/client-core/src/payments';
@@ -43,6 +44,9 @@ export function TenantPaymentDetails({ state }: { state: InvoicePayment }) {
       </TouchableRipple>
       {expanded && (
         <View style={invoiceUi.detail}>
+          {state.paymentMode === 'Test' && (
+            <Text style={styles.warning}>Kênh nhận tiền: SePay Test</Text>
+          )}
           {state.originalIssuedAmount !== undefined && (
             <InvoiceMoneyRow label="Tiền hóa đơn gốc" value={state.originalIssuedAmount} />
           )}
@@ -183,7 +187,7 @@ export function TenantPaymentPanel({
   // A SePay Test QR with a legacy invoice reference cannot be reconciled via
   // webhook. Do not offer it to the tenant as a payable QR.
   const unregisteredDemoMemo = Boolean(
-    transfer?.isDevelopmentDemo && !/^BH\d{8}$/.test(transfer.transferDescription ?? ''),
+    transfer?.isDevelopmentDemo && !isSePayPaymentCode(transfer.transferDescription ?? ''),
   );
   const usable =
     !payment.fetching &&
@@ -225,6 +229,11 @@ export function TenantPaymentPanel({
           <InvoiceFeedback {...instructions} />
           {(payment.fetching || instructions.fetching) && (
             <Text style={invoiceUi.secondary}>Đang cập nhật thông tin chuyển khoản...</Text>
+          )}
+          {transfer?.isDevelopmentDemo && (
+            <Text accessibilityRole="alert" style={styles.warning}>
+              Kênh nhận tiền: SePay Test. Thông tin tài khoản của QR đã phát hành được giữ nguyên.
+            </Text>
           )}
           {unregisteredDemoMemo && (
             <Text accessibilityRole="alert" style={styles.warning}>

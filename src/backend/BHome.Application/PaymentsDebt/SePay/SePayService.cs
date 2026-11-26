@@ -10,12 +10,54 @@ namespace BHome.Application.PaymentsDebt.SePay;
 
 public sealed class SePayService(ISePayRepository repository, IPaymentRepository payments, SePayOptions options,
     ContractService contracts, TimeProvider clock, IMainInitialPaymentLedger? initialPayments = null,
-    ISettlementChargeEvidence? settlementEvidence = null)
+    ISettlementChargeEvidence? settlementEvidence = null, ISePayOwnerConnections? connections = null)
 {
-    public async Task ReceiveAsync(SePayTransaction transaction, CancellationToken token)
+    public const string PaymentCodePattern = "(?<![A-Z0-9])BH(?:[0-9]{8}|[A-Z0-9]{4}[TL][A-F0-9]{16})(?![A-Z0-9])";
+    public async Task ReceiveAsync(SePayTransaction transaction, CancellationToken token, string? authenticatedWebhookSecret = null)
+    {
+        var original = options.Copy();
+        try { await ReceiveCoreAsync(transaction, token, authenticatedWebhookSecret); }
+        finally { options.Restore(original); }
+    }
+    private async Task ReceiveCoreAsync(SePayTransaction transaction, CancellationToken token, string? authenticatedWebhookSecret)
     {
         if (!options.Enabled) throw new PaymentException(503, "sepay_disabled");
         transaction.Validate(clock.GetUtcNow());
+        Guid? routedOwner = null;
+        if (ResolveCode(transaction) is { } routedCode && await repository.ResolveAsync(routedCode, token) is { } routedTarget)
+            routedOwner = await payments.ReceivingOwnerAsync(routedTarget.LocationId, token);
+        else
+        {
+            var owners = new HashSet<Guid>();
+            foreach (var binding in options.ReceivingAccounts.Where(b => b.Gateway.Equals(transaction.Gateway, StringComparison.OrdinalIgnoreCase) && b.AccountNumber == transaction.AccountNumber))
+            {
+                var owner = binding.OwnerUserId != Guid.Empty ? binding.OwnerUserId : await payments.ReceivingOwnerAsync(binding.LocationId, token);
+                if (owner is { } boundOwner) owners.Add(boundOwner);
+            }
+            if (owners.Count == 1) routedOwner = owners.Single();
+        }
+        if (routedOwner is { } ownerId)
+        {
+            if (options.OwnerUserId is { } configuredOwner && configuredOwner != ownerId) return;
+            if (options.OwnerUserId is null && connections is not null)
+            {
+                var receivedMode = options.Mode;
+                await connections.ApplyOwnerAsync(ownerId, token); options.Select(receivedMode);
+            }
+        }
+        // A legacy callback URL must not keep accepting a key that the Owner replaced.
+        // Polling has already authenticated its HTTPS response and supplies no webhook key.
+        if (authenticatedWebhookSecret is not null)
+        {
+            if (!options.Enabled) throw new PaymentException(503, "sepay_disabled");
+            if (!CryptographicOperations.FixedTimeEquals(SHA256.HashData(Encoding.UTF8.GetBytes(authenticatedWebhookSecret)),
+                SHA256.HashData(Encoding.UTF8.GetBytes(options.WebhookSecret ?? ""))))
+                throw new PaymentException(401, "sepay_authentication_failed");
+        }
+        // Shared bank accounts may deliver the same callback to multiple deployments.
+        // Only the deployment namespace carried by the issued memo owns its financial effect.
+        var routingCodes = Regex.Matches(transaction.Content.ToUpperInvariant(), PaymentCodePattern).Select(m => m.Value).Distinct().ToArray();
+        if (options.DualMode && routingCodes.Length > 0 && routingCodes.All(c => c.Length == 23 && c.Substring(2, 4) != options.InstanceCode)) return;
         var id = await repository.ReceiveAsync(transaction, token);
         await ReconcileAsync(id, token);
         // A completed, signed provider event may be replayed (including after a
@@ -41,9 +83,9 @@ public sealed class SePayService(ISePayRepository repository, IPaymentRepository
     public Task ReconcileAsync(Guid id, CancellationToken token) => repository.TransactionAsync(async () =>
     {
         var received = await repository.EventAsync(id, token);
-        var retryEnvironment = received.Status == "ManualReview" && received.Reason == "sepay_environment_mismatch";
+        var retryEnvironment = received.Status == "ManualReview" && received.Reason is "sepay_environment_mismatch" or "legacy_payment_code_route_required";
         if (received.Status != "Pending" && !retryEnvironment) return true;
-        if (!options.Enabled || received.Mode != options.Mode) return true;
+        if (!options.Enabled || received.Mode != options.Mode || received.OwnerId is not null && received.OwnerId != options.OwnerUserId) return true;
         var tx = received.Transaction;
         async Task<bool> Finish(string status, string reason, Guid? receipt = null)
         { await repository.FinishAsync(received, status, reason, receipt, token); return true; }
@@ -66,6 +108,8 @@ public sealed class SePayService(ISePayRepository repository, IPaymentRepository
             return await Finish("ManualReview", "legacy_bank_reference_requires_manual_review");
         var code = ResolveCode(tx);
         var target = code is null ? null : await repository.ResolveAsync(code, token);
+        if (options.DualMode && target is null) return await Finish("ManualReview", "unknown_or_ambiguous_payment_code");
+        if (target is not null && !options.Owns(target)) return await Finish("ManualReview", "legacy_payment_code_route_required");
         var receipt = prior ?? new PaymentTransfer
         {
             ProviderIdentity = "SEPAY:" + received.Mode.ToUpperInvariant(),
@@ -98,7 +142,7 @@ public sealed class SePayService(ISePayRepository repository, IPaymentRepository
         }
         if (target is null) return await Review("unknown_or_ambiguous_payment_code");
         await repository.LockTargetAsync(target, token);
-        var account = await payments.ReceivingAccountAsync(target.LocationId, token);
+        var account = target.AccountSnapshot;
         if (account is null || !options.Matches(target.LocationId, account, tx.Gateway) || !account.Enabled ||
             account.AccountNumber != tx.AccountNumber || account.IsDevelopmentDemo != receipt.IsDevelopmentDemo ||
             !await payments.ActiveLocationAsync(target.LocationId, token)) return await Review("receiving_account_mismatch");
@@ -117,7 +161,7 @@ public sealed class SePayService(ISePayRepository repository, IPaymentRepository
         {
             invoice = await repository.InvoiceAsync(target.ObligationId, token);
             if (invoice?.Status != InvoiceStatus.Final) return await Review("final_invoice_required");
-            if (await repository.DemoInvoiceAsync(invoice.Id, token) != receipt.IsDevelopmentDemo) return await Review("sepay_environment_mismatch");
+            if ((target.Mode == "Test") != receipt.IsDevelopmentDemo) return await Review("sepay_environment_mismatch");
             outstanding = (await payments.FinancialsAsync(invoice.Id, token)).OutstandingAmount;
         }
         else if (target.Kind == "Settlement")
@@ -209,7 +253,7 @@ public sealed class SePayService(ISePayRepository repository, IPaymentRepository
         System.Text.Json.JsonSerializer.Serialize(new[] { mode, tx.Gateway.ToUpperInvariant(), tx.AccountNumber, tx.ReferenceCode.Trim().ToUpperInvariant() }))));
     private static string? ResolveCode(SePayTransaction tx)
     {
-        var matches = Regex.Matches(tx.Content.ToUpperInvariant(), "(?<![A-Z0-9])BH[0-9]{8}(?![A-Z0-9])").Select(m => m.Value).Distinct().ToArray();
+        var matches = Regex.Matches(tx.Content.ToUpperInvariant(), PaymentCodePattern).Select(m => m.Value).Distinct().ToArray();
         if (matches.Length != 1 || !string.IsNullOrEmpty(tx.Code) && !string.Equals(tx.Code, matches[0], StringComparison.OrdinalIgnoreCase)) return null;
         return matches[0];
     }

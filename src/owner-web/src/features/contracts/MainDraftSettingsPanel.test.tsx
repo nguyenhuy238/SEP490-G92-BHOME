@@ -1,23 +1,33 @@
-import { act, fireEvent, render, screen, waitFor } from '@testing-library/react';
+﻿import { fireEvent, render, screen } from '@testing-library/react';
 import { beforeEach, expect, it, vi } from 'vitest';
-import { contractClient } from '../../../../../packages/client-core/src/contracts';
 import type { MainContractSettings } from '../../../../../packages/client-core/src/mainDrafts';
 import { MainDraftSettingsPanel } from './MainDraftSettingsPanel';
 
 const mocks = vi.hoisted(() => ({
   settings: vi.fn(),
   setSettings: vi.fn(),
-  auth: { session: { userId: 'owner' }, client: {} },
+  navigate: vi.fn(),
+  auth: {
+    session: { userId: 'owner' },
+    client: { session: null, clear: vi.fn(), refresh: vi.fn() },
+  },
 }));
 vi.mock('../../../../../packages/client-core/src/auth', () => ({ useAuth: () => mocks.auth }));
 vi.mock('../../../../../packages/client-core/src/mainDrafts', () => ({
   mainDraftClient: () => mocks,
 }));
+vi.mock('react-router', async () => ({
+  ...(await vi.importActual('react-router')),
+  useNavigate: () => mocks.navigate,
+}));
+vi.mock('./useContractsApi', () => ({ useContractsApi: () => ({}) }));
+vi.mock('./ContractWorkflowPanel', () => ({
+  ContractConfigurationPanel: () => <div>Thông tin mẫu và quy trình ký</div>,
+}));
 const settings: MainContractSettings = {
   ownerSignerId: 'owner',
   effectiveFrom: '2026-11-01',
   effectiveTo: null,
-  securityDeposit: '3000000',
   paymentTerms: 'Chuyển khoản',
   additionalTerms: '',
   version: 2,
@@ -36,79 +46,36 @@ beforeEach(() => {
   mocks.settings.mockResolvedValue(settings);
   mocks.setSettings.mockResolvedValue(undefined);
 });
-async function open() {
-  const api = contractClient(vi.fn());
-  api.preparation = vi.fn().mockResolvedValue({
-    locations: [
-      { id: 'a', label: 'Cơ sở A' },
-      { id: 'b', label: 'Cơ sở B' },
-    ],
+it('loads Owner-wide settings without a Location selector or editable deposit amount', async () => {
+  render(<MainDraftSettingsPanel />);
+  expect(await screen.findByDisplayValue('Owner tổng hợp')).toBeVisible();
+  expect(mocks.settings).toHaveBeenCalledWith(expect.any(AbortSignal));
+  expect(screen.queryByRole('combobox')).not.toBeInTheDocument();
+  expect(screen.getByText('01 tháng tiền thuê phòng')).toBeVisible();
+  expect(screen.queryByLabelText(/Tiền cọc đảm bảo/)).not.toBeInTheDocument();
+});
+it('saves the Owner-wide configuration without a client-supplied deposit amount', async () => {
+  render(<MainDraftSettingsPanel />);
+  await screen.findByDisplayValue('Owner tổng hợp');
+  fireEvent.change(screen.getByDisplayValue('Chuyển khoản'), {
+    target: { value: 'Chuyển khoản hàng tháng' },
   });
-  render(<MainDraftSettingsPanel api={api} />);
-  fireEvent.click(screen.getByRole('button', { name: 'Cấu hình bên cho thuê & tiền cọc' }));
-  await choose('Cơ sở A');
-}
-async function choose(label: string) {
-  fireEvent.mouseDown(screen.getByRole('combobox', { name: 'Cơ sở' }));
-  fireEvent.click(await screen.findByRole('option', { name: label }));
-}
-it('saves the current version and reloads persisted settings before showing success', async () => {
-  await open();
-  await screen.findByDisplayValue('3.000.000');
-  fireEvent.change(screen.getByLabelText(/Tiền cọc đảm bảo/), { target: { value: '4000000' } });
-  mocks.settings.mockResolvedValue({ ...settings, version: 3, securityDeposit: '4000000' });
   fireEvent.submit(document.getElementById('main-contract-settings')!);
-  await screen.findByText('Đã lưu cấu hình.');
+  await screen.findByText('Đã lưu cấu hình dùng chung cho tất cả cơ sở.');
   expect(mocks.setSettings).toHaveBeenCalledWith(
-    'a',
-    expect.objectContaining({ securityDeposit: '4000000', expectedVersion: 2 }),
+    expect.objectContaining({
+      ownerSignerId: 'owner',
+      expectedVersion: 2,
+      paymentTerms: 'Chuyển khoản hàng tháng',
+    }),
   );
+  expect(mocks.setSettings.mock.calls[0][0]).not.toHaveProperty('securityDeposit');
   expect(mocks.settings).toHaveBeenCalledTimes(2);
-  expect(screen.getByLabelText(/Tiền cọc đảm bảo/)).toHaveValue('4.000.000');
 });
-it('clears old values during location loading and ignores a late response from an aborted request', async () => {
-  let finish!: (value: MainContractSettings) => void;
-  mocks.settings.mockImplementationOnce(
-    () =>
-      new Promise((resolve) => {
-        finish = resolve;
-      }),
-  );
-  await open();
-  await waitFor(() => expect(mocks.settings).toHaveBeenCalledWith('a', expect.any(AbortSignal)));
+it('disables save if initial Owner-wide settings cannot be loaded', async () => {
+  mocks.settings.mockRejectedValueOnce({ status: 503 });
+  render(<MainDraftSettingsPanel />);
+  await screen.findByText(/Dịch vụ ký hoặc thành phần xử lý chưa sẵn sàng/);
   expect(screen.getByRole('button', { name: 'Lưu cấu hình' })).toBeDisabled();
-  await choose('Cơ sở B');
-  await screen.findByDisplayValue('3.000.000');
-  await act(async () => {
-    finish({ ...settings, securityDeposit: '9999999' });
-  });
-  expect(screen.queryByDisplayValue('9.999.999')).not.toBeInTheDocument();
-  expect(mocks.settings.mock.calls[0][1].aborted).toBe(true);
-});
-it('does not offer stale values after a failed reload or report a failed save as successful', async () => {
-  await open();
-  await screen.findByDisplayValue('3.000.000');
-  mocks.setSettings.mockRejectedValue({ status: 409 });
-  fireEvent.submit(document.getElementById('main-contract-settings')!);
-  await waitFor(() => expect(screen.getByRole('alert')).toBeDefined());
-  expect(screen.queryByText('Đã lưu cấu hình.')).not.toBeInTheDocument();
-  mocks.settings.mockRejectedValue({ status: 503 });
-  await choose('Cơ sở B');
-  await waitFor(() => expect(screen.getByRole('button', { name: 'Lưu cấu hình' })).toBeDisabled());
-  expect(screen.queryByDisplayValue('3.000.000')).not.toBeInTheDocument();
-});
-it('keeps edited fields when the user cancels closing and discards them only after confirmation', async () => {
-  await open();
-  await screen.findByDisplayValue('3.000.000');
-  fireEvent.change(screen.getByLabelText(/Điều khoản bổ sung/), {
-    target: { value: 'Điều khoản đang chỉnh sửa' },
-  });
-  fireEvent.click(screen.getByRole('button', { name: 'Đóng cấu hình' }));
-  expect(screen.getByRole('dialog', { name: 'Bỏ thay đổi chưa lưu?' })).toBeVisible();
-  fireEvent.click(screen.getByRole('button', { name: 'Tiếp tục chỉnh sửa' }));
-  expect(screen.getByLabelText(/Điều khoản bổ sung/)).toHaveValue('Điều khoản đang chỉnh sửa');
-  fireEvent.click(await screen.findByRole('button', { name: 'Hủy' }));
-  fireEvent.click(screen.getByRole('button', { name: 'Bỏ thay đổi' }));
-  await waitFor(() => expect(screen.queryByRole('dialog')).not.toBeInTheDocument());
-  expect(mocks.setSettings).not.toHaveBeenCalled();
+  expect(screen.queryByRole('combobox')).not.toBeInTheDocument();
 });

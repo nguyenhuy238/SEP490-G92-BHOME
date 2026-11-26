@@ -17,15 +17,8 @@ import { WorkspaceFooter } from '../components/WorkspaceFooter';
 import { IdentityWizard } from '../features/onboarding/IdentityWizard';
 import { ResidentProfile } from '../features/onboarding/ResidentProfile';
 import { OnboardingPeopleStep } from '../features/onboarding/OnboardingPeopleStep';
-import { HouseholdMemberEditor, memberReady } from '../features/onboarding/HouseholdMemberEditor';
-import {
-  householdClient,
-  type HouseholdView,
-} from '../../../../packages/client-core/src/households';
-import { randomUUID } from '../lib/randomUUID';
-import { displayDate, inputDate } from '../lib/identity';
 import { HoldingMainStart } from '../features/contracts/HoldingMainStart';
-import { contractClient, contractError } from '../../../../packages/client-core/src/contracts';
+import { contractClient } from '../../../../packages/client-core/src/contracts';
 import {
   allIdentitiesConfirmed,
   peopleReady,
@@ -92,22 +85,10 @@ function NewResidentOnboarding() {
   const [people, setPeople] = useState<OnboardingPerson[]>([blankPerson('person-1')]);
   const [representative, setRepresentative] = useState('person-1');
   const [editing, setEditing] = useState('person-1');
-  const [householdVersion, setHouseholdVersion] = useState(0);
   const [mainDraftId, setMainDraftId] = useState('');
-  const householdRequest = useRef(randomUUID());
-  const savedHousehold = useRef<HouseholdView | null>(null);
-  const household = useMemo(
-    () => (api ? householdClient((path, init, type) => api.request(path, init, type)) : null),
-    [api],
-  );
-  const invalidateHousehold = () => {
-    householdRequest.current = randomUUID();
-    savedHousehold.current = null;
-  };
   const [identityKey, setIdentityKey] = useState('person-1');
   const [identityOpen, setIdentityOpen] = useState(false);
   const [identityMode, setIdentityMode] = useState<'capture' | 'verify'>('capture');
-  const [manualPersonKey, setManualPersonKey] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   const [emailConflict, setEmailConflict] = useState<{
     personKey: string;
@@ -201,23 +182,11 @@ function NewResidentOnboarding() {
     scope.locations.some((l) => l.id === scope.location) &&
     selectableRooms.some((r) => r.id === scope.room && r.remainingCapacity !== 0);
   const peopleValid = people.length <= maxPeople && peopleReady(people, representative);
-  const allConfirmed =
-    mode === 'family'
-      ? people.every((p) =>
-          p.key === representative ? !!p.residentId && p.status === 'confirmed' : memberReady(p),
-        )
-      : allIdentitiesConfirmed(people);
+  const allConfirmed = allIdentitiesConfirmed(people);
   const created = people.some((p) => !!p.residentId);
   const confirmedCount = people.filter((p) => p.status === 'confirmed').length;
-  const completedCount = people.filter((p) =>
-    mode === 'family' && p.key !== representative ? memberReady(p) : p.status === 'confirmed',
-  ).length;
-  const pendingPerson =
-    people.find((person) =>
-      mode === 'family' && person.key !== representative
-        ? !memberReady(person)
-        : !person.residentId || person.status !== 'confirmed',
-    ) ?? people[0];
+  const completedCount = confirmedCount;
+  const pendingPerson = people.find((p) => !p.residentId || p.status !== 'confirmed') ?? people[0];
   const recognizing = people.some((p) => p.status === 'recognizing');
   const checkSavedIdentities = async () => {
     if (!api || preview || lock.current || recognizing || !scope.location) return;
@@ -241,10 +210,7 @@ function NewResidentOnboarding() {
       );
       if (
         people.some(
-          (p) =>
-            (mode !== 'family' || p.key === representative) &&
-            p.status !== 'confirmed' &&
-            (!p.residentId || !verified.has(p.residentId)),
+          (p) => p.status !== 'confirmed' && (!p.residentId || !verified.has(p.residentId)),
         )
       )
         setError(
@@ -278,38 +244,7 @@ function NewResidentOnboarding() {
     setEmailConflict(null);
     try {
       let id = preview ? `sample-${person.key}` : null;
-      if (!preview && mode === 'family' && person.key !== representative) {
-        const representativePerson = people.find((candidate) => candidate.key === representative);
-        if (!household || !representativePerson?.residentId || !memberReady(person)) {
-          setManualPersonKey(person.key);
-          throw new Error('Nhập họ tên, ngày sinh và quan hệ trước khi quét CCCD cho thành viên.');
-        }
-        const result = await household.save(
-          representativePerson.residentId,
-          people
-            .filter((candidate) => candidate.key !== representative && memberReady(candidate))
-            .map((candidate) => ({
-              clientKey: candidate.key,
-              residentId: candidate.residentId,
-              fullName: candidate.member!.fullName.trim(),
-              dateOfBirth: inputDate(candidate.member!.dateOfBirth)!,
-              relationship: candidate.member!.relationship,
-              phone: candidate.member!.phone || null,
-              citizenNumber: candidate.member!.citizenNumber || null,
-            })),
-          householdVersion,
-          householdRequest.current,
-        );
-        savedHousehold.current = result;
-        setHouseholdVersion(result.version);
-        setPeople((before) =>
-          before.map((candidate) => {
-            const saved = result.members.find((member) => member.clientKey === candidate.key);
-            return saved ? { ...candidate, residentId: saved.residentId } : candidate;
-          }),
-        );
-        id = result.members.find((member) => member.clientKey === person.key)?.residentId ?? null;
-      } else if (!preview && api) {
+      if (!preview && api) {
         id = (
           await captureService(api).createResident(
             scope.room,
@@ -508,7 +443,6 @@ function NewResidentOnboarding() {
             onRepresentative={setRepresentative}
             onAdd={() => {
               if (mode !== 'family' || people.length >= maxPeople || busy || recognizing) return;
-              invalidateHousehold();
               const key = `person-${++serial.current}`;
               setPeople((before) =>
                 before.length >= maxPeople
@@ -516,14 +450,11 @@ function NewResidentOnboarding() {
                   : [...before, blankPerson(key, before.length + 1)],
               );
               setEditing(key);
-              setManualPersonKey(null);
             }}
             onDelete={(key) => {
-              invalidateHousehold();
               const next = people.filter((p) => p.key !== key);
               setPeople(next);
               setEditing(next[0].key);
-              if (manualPersonKey === key) setManualPersonKey(null);
               if (representative === key) setRepresentative(next[0].key);
             }}
             onLabelChange={(key, label) => patch(key, { label })}
@@ -566,29 +497,10 @@ function NewResidentOnboarding() {
                 );
               }}
               onManual={() => {
-                if (mode === 'family' && person.key !== representative) {
-                  setManualPersonKey(person.key);
-                  return;
-                }
                 void openIdentity(person, 'verify');
               }}
             />
           ))}
-          {mode === 'family' &&
-            people
-              .filter((p) => p.key !== representative && p.key === manualPersonKey)
-              .map((person) => (
-                <HouseholdMemberEditor
-                  key={person.key}
-                  person={person}
-                  disabled={busy}
-                  onChange={(member) => {
-                    invalidateHousehold();
-                    patch(person.key, { member, label: member.fullName || person.label });
-                  }}
-                  onClose={() => setManualPersonKey(null)}
-                />
-              ))}
           {busy && <ActivityIndicator accessibilityLabel="Đang tạo hồ sơ người ở" />}
           {people
             .filter((p) => !!p.residentId)
@@ -610,23 +522,6 @@ function NewResidentOnboarding() {
                 onUnsavedChanges={(hasUnsavedIdentity) => patch(person.key, { hasUnsavedIdentity })}
                 onCaptureProgress={(captureProgress) => patch(person.key, { captureProgress })}
                 onSaveError={(verificationError) => patch(person.key, { verificationError })}
-                onVerifiedSummary={({ fullName, dateOfBirth }) => {
-                  if (mode === 'family' && person.key !== representative) {
-                    invalidateHousehold();
-                    patch(person.key, {
-                      label: fullName,
-                      member: {
-                        fullName,
-                        dateOfBirth: dateOfBirth
-                          ? displayDate(dateOfBirth)
-                          : (person.member?.dateOfBirth ?? ''),
-                        relationship: person.member?.relationship ?? '',
-                        phone: person.member?.phone ?? '',
-                        citizenNumber: person.member?.citizenNumber ?? '',
-                      },
-                    });
-                  }
-                }}
                 onConfirmed={() => {
                   patch(person.key, { status: 'confirmed', verificationError: '' });
                   setIdentityOpen(false);
@@ -727,9 +622,7 @@ function NewResidentOnboarding() {
                   ? 'Kiểm tra danh sách người ở theo sức chứa của phòng.'
                   : allConfirmed
                     ? `Đã hoàn tất thông tin ${completedCount}/${people.length} người ở. Sẵn sàng tạo bản nháp hợp đồng.`
-                    : mode === 'family' && pendingPerson?.key !== representative
-                      ? `Hoàn tất họ tên, ngày sinh và quan hệ của ${personLabel(pendingPerson)}.`
-                      : `Xác minh CCCD của ${personLabel(pendingPerson)} để tiếp tục.`}
+                    : `Xác minh CCCD của ${personLabel(pendingPerson)} để tiếp tục.`}
             </Text>
             <Button
               mode="contained"
@@ -742,58 +635,13 @@ function NewResidentOnboarding() {
               disabled={
                 !roomValid || !peopleValid || !allConfirmed || busy || recognizing || preview
               }
-              onPress={async () => {
+              onPress={() => {
                 if (!roomValid || !peopleValid) return;
                 const representativePerson = people.find((p) => p.key === representative)!;
-                let ids =
+                const ids =
                   mode === 'individual'
                     ? [representativePerson.residentId!]
                     : people.map((p) => p.residentId!);
-                if (mode === 'family') {
-                  if (lock.current || !household) return;
-                  lock.current = true;
-                  setBusy(true);
-                  setError('');
-                  try {
-                    const result =
-                      savedHousehold.current ??
-                      (await household.save(
-                        representativePerson.residentId!,
-                        people
-                          .filter((p) => p.key !== representative)
-                          .map((p) => ({
-                            clientKey: p.key,
-                            residentId: p.residentId,
-                            fullName: p.member!.fullName.trim(),
-                            dateOfBirth: inputDate(p.member!.dateOfBirth)!,
-                            relationship: p.member!.relationship,
-                            phone: p.member!.phone || null,
-                            citizenNumber: p.member!.citizenNumber || null,
-                          })),
-                        householdVersion,
-                        householdRequest.current,
-                      ));
-                    savedHousehold.current = result;
-                    setHouseholdVersion(result.version);
-                    if (result.draftId) setMainDraftId(result.draftId);
-                    ids = [
-                      representativePerson.residentId!,
-                      ...result.members.map((m) => m.residentId),
-                    ];
-                    setPeople((before) =>
-                      before.map((p) => {
-                        const member = result.members.find((m) => m.clientKey === p.key);
-                        return member ? { ...p, residentId: member.residentId } : p;
-                      }),
-                    );
-                  } catch (e) {
-                    setError(contractError(e));
-                    return;
-                  } finally {
-                    lock.current = false;
-                    setBusy(false);
-                  }
-                }
                 setContractInput({
                   roomId: scope.room,
                   representativeResidentId: representativePerson.residentId!,
@@ -810,7 +658,7 @@ function NewResidentOnboarding() {
       </WorkspaceFooter>
       {contractInput && (
         <MainDraftScreen
-          key={`${contractInput.roomId}:${contractInput.representativeResidentId}:${contractInput.residentIds.join(',')}:${householdVersion}`}
+          key={`${contractInput.roomId}:${contractInput.representativeResidentId}:${contractInput.residentIds.join(',')}`}
           {...contractInput}
           initialId={mainDraftId || undefined}
           onSaved={setMainDraftId}

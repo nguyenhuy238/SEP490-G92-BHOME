@@ -242,7 +242,7 @@ public sealed partial class PaymentService(IPaymentRepository repository, ICurre
                 (transfer.StatementEvidenceSha256 is null || transfer.StatementEvidenceObjectKey is null))
                 throw new PaymentException(409, "bank_statement_image_missing");
             if (x.PaidByUserId is not null && await repository.ExternalPayerRecordedAsync(transferId, t)) throw new PaymentException(409, "receipt_payer_already_external");
-            if (transfer.IsDevelopmentDemo && mode?.AllowDevelopmentDemo != true)
+            if (transfer.IsDevelopmentDemo && mode?.AllowDevelopmentDemo != true && transfer.VerificationSource != "SePayTest")
                 throw new PaymentException(409, "development_payment_unavailable");
             var allocated = await repository.AllocationAsync(transferId, t);
             if (allocated is not null)
@@ -252,12 +252,6 @@ public sealed partial class PaymentService(IPaymentRepository repository, ICurre
             }
             var invoice = await Invoice(x.InvoiceId, t);
             if (invoice.Status != InvoiceStatus.Final) throw new PaymentException(409, "final_invoice_required");
-            if (transfer.VerificationSource is "SePayTest" or "SePayLive")
-            {
-                var paymentContract = await repository.HoldingAsync(invoice.RepresentativeContractId, t);
-                if (paymentContract is null || BHome.Application.Contracts.ContractPaymentModes.IsTest(paymentContract) != transfer.IsDevelopmentDemo)
-                    throw new PaymentException(409, "sepay_environment_mismatch");
-            }
             var latest = await repository.LatestReviewAsync(transferId, t);
             if (latest?.Decision is "ExcessRefundPending" or "ExcessRefundCompleted") throw new PaymentException(409, "receipt_excess_already_confirmed");
             if (latest?.Decision == "Rejected") throw new PaymentException(409, "bank_transfer_rejected");
@@ -374,7 +368,7 @@ public sealed partial class PaymentService(IPaymentRepository repository, ICurre
                 entry.ExternalPayerVerified ? "Người trả bên ngoài (đã xác minh)" : entry.Allocation.PaidByUserId == Actor ? "Bạn" : entry.Allocation.PaidByUserId is not null ?
                     scope.Owner ? payers.FirstOrDefault(p => p.UserId == entry.Allocation.PaidByUserId)?.DisplayLabel ?? "Khách thuê đã liên kết" : "Khách thuê khác trong hóa đơn" : "Chưa xác định người trả",
                 scope.Owner ? entry.Allocation.PaidByUserId : null, entry.Transfer.VerificationSource, entry.Allocation.AllocatedAt)).ToArray(),
-            financial.OriginalIssuedAmount, financial.ApprovedAdjustmentTotal, financial.PotentialExcessAmount, financial.FinancialVersion, financial.ReviewStatus);
+            financial.OriginalIssuedAmount, financial.ApprovedAdjustmentTotal, financial.PotentialExcessAmount, financial.FinancialVersion, financial.ReviewStatus, codes is null ? null : await codes.PersistedModeAsync("Invoice", invoice.Id, t));
     }
     public async Task<IReadOnlyList<PayerChoice>> PayersAsync(Guid id, CancellationToken t)
     { Owner(); _ = await Invoice(id, t); return await repository.PayersAsync(id, t); }
