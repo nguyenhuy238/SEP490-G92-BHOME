@@ -12,7 +12,6 @@ import { useSession } from '../lib/SessionProvider';
 import { captureService } from '../services/captureService';
 import { errorMessage, MobileApiError } from '../lib/api';
 import { useCaptureScope } from '../features/onboarding/useCaptureScope';
-import { IdentityPersonCard } from '../features/onboarding/IdentityPersonCard';
 import { WorkspaceFooter } from '../components/WorkspaceFooter';
 import { IdentityWizard } from '../features/onboarding/IdentityWizard';
 import { ResidentProfile } from '../features/onboarding/ResidentProfile';
@@ -37,12 +36,13 @@ const blankPerson = (key: string, number = 1): OnboardingPerson => ({
   status: 'unscanned',
 });
 export function OnboardingScreen() {
-  const { residentId, locationId } = useLocalSearchParams<{
+  const { residentId, locationId, representativeResidentId } = useLocalSearchParams<{
     residentId?: string;
     locationId?: string;
+    representativeResidentId?: string;
   }>();
   return residentId ? (
-    <ResidentProfile key={residentId} residentId={residentId} locationId={locationId} />
+    <ResidentProfile key={residentId} residentId={residentId} locationId={locationId} representativeResidentId={representativeResidentId} />
   ) : (
     <NewResidentOnboarding />
   );
@@ -135,7 +135,7 @@ function NewResidentOnboarding() {
         );
     }, [dirty, registerExitGuard, disablePrevention]),
   );
-  useFocusEffect(useCallback(() => () => setIdentityOpen(false), []));
+  useFocusEffect(useCallback(() => () => setIdentityOpen(false), [setIdentityOpen]));
   const openSigning = (contractId = '') => {
     setFinished(true);
     disablePrevention();
@@ -188,8 +188,7 @@ function NewResidentOnboarding() {
   const peopleValid = people.length <= maxPeople && peopleReady(people, representative);
   const allConfirmed = allIdentitiesConfirmed(people);
   const created = people.some((p) => !!p.residentId);
-  const confirmedCount = people.filter((p) => p.status === 'confirmed').length;
-  const completedCount = confirmedCount;
+  const completedCount = people.filter((p) => p.status === 'confirmed').length;
   const pendingPerson = people.find((p) => !p.residentId || p.status !== 'confirmed') ?? people[0];
   const recognizing = people.some((p) => p.status === 'recognizing');
   const checkSavedIdentities = async () => {
@@ -316,14 +315,9 @@ function NewResidentOnboarding() {
         importantForAccessibility={contractOpen ? 'no-hide-descendants' : 'auto'}
       >
         <Heading
-          title={step === 1 ? 'Thông tin người ở' : 'Tiếp nhận khách thuê'}
-          detail={
-            step === 1
-              ? 'Bước 2/8 · Người ở'
-              : 'Chuẩn bị hồ sơ người ở, kiểm tra và xác nhận thông tin.'
-          }
+          title={step === 2 ? 'Thông tin khách thuê' : 'Tiếp nhận khách thuê'}
         />
-        <MainContractProgress current={step} />
+        <MainContractProgress current={step} compact={step === 2} />
         {step === 0 && (
           <Box style={styles.panel}>
             <Heading title="Chọn nơi ở" detail="Chọn phòng tại cơ sở bạn đang phụ trách." />
@@ -465,56 +459,33 @@ function NewResidentOnboarding() {
             onEmailChange={(key, email) => patch(key, { email })}
             onBack={() => move(0)}
             onContinue={() => move(2)}
+            personLabel={(person) => personLabel(person)}
+            disabledFor={(person) => busy || recognizing || !!person.creationUncertain}
+            onScan={(person, side) => {
+              if (side)
+                setCaptureRequest((before) => ({
+                  side,
+                  personKey: person.key,
+                  id: (before?.id ?? 0) + 1,
+                }));
+              const progress = person.captureProgress;
+              const both = progress?.front === 'recognized' && progress?.back === 'recognized';
+              const started =
+                progress && (progress.front !== 'unscanned' || progress.back !== 'unscanned');
+              if (person.status === 'confirmed') return;
+              void openIdentity(
+                person,
+                side
+                  ? 'capture'
+                  : both || (!started && person.status === 'pending')
+                    ? 'verify'
+                    : 'capture',
+              );
+            }}
+            onManual={(person) => void openIdentity(person, 'verify')}
           />
         )}
-        <View
-          style={step === 2 ? [styles.identity, styles.identityWithFooter] : styles.hidden}
-          accessibilityElementsHidden={step !== 2}
-          importantForAccessibility={step === 2 ? 'auto' : 'no-hide-descendants'}
-        >
-          <Heading
-            title="CCCD của người ở"
-            detail={`Đã xác nhận ${confirmedCount}/${people.length} người ở`}
-          />
-          {people.map((person) => (
-            <IdentityPersonCard
-              key={person.key}
-              person={person}
-              label={personLabel(person)}
-              role={
-                person.key === representative
-                  ? mode === 'family'
-                    ? 'Người đại diện'
-                    : 'Người thuê'
-                  : 'Thành viên'
-              }
-              disabled={busy || recognizing || !!person.creationUncertain}
-              onScan={(side) => {
-                if (side)
-                  setCaptureRequest((before) => ({
-                    side,
-                    personKey: person.key,
-                    id: (before?.id ?? 0) + 1,
-                  }));
-                const progress = person.captureProgress;
-                const both = progress?.front === 'recognized' && progress?.back === 'recognized';
-                const started =
-                  progress && (progress.front !== 'unscanned' || progress.back !== 'unscanned');
-                if (person.status === 'confirmed') return;
-                void openIdentity(
-                  person,
-                  side
-                    ? 'capture'
-                    : both || (!started && person.status === 'pending')
-                      ? 'verify'
-                      : 'capture',
-                );
-              }}
-              onManual={() => {
-                void openIdentity(person, 'verify');
-              }}
-            />
-          ))}
+        <View style={styles.hidden} accessibilityElementsHidden importantForAccessibility="no-hide-descendants">
           {busy && <ActivityIndicator accessibilityLabel="Đang tạo hồ sơ người ở" />}
           {people
             .filter((p) => !!p.residentId)
@@ -555,25 +526,6 @@ function NewResidentOnboarding() {
                 onCancel={() => move(0)}
               />
             ))}
-          {!allConfirmed && (
-            <Text variant="bodySmall" style={ui.muted}>
-              Xác nhận thông tin của từng người ở trước khi hoàn tất tiếp nhận.
-            </Text>
-          )}
-          {created && !allConfirmed && !preview && (
-            <Button disabled={busy || recognizing} onPress={() => void checkSavedIdentities()}>
-              Kiểm tra trạng thái đã lưu
-            </Button>
-          )}
-          {mode === 'individual' && people.length > 1 && (
-            <ChoiceField
-              label="Người thuê tạo hợp đồng"
-              value={representative}
-              options={people.map((p) => ({ id: p.key, label: p.label }))}
-              onChange={setRepresentative}
-              disabled={!allConfirmed || busy}
-            />
-          )}
         </View>
         {!!error && (
           <Text accessibilityRole="alert" style={ui.red}>
@@ -619,28 +571,26 @@ function NewResidentOnboarding() {
         {people.some((person) => person.creationUncertain) && (
           <Button onPress={() => go('rooms', undefined, true)}>Kiểm tra danh sách người ở</Button>
         )}
-        {step > 0 && step !== 1 && !finished && (
-          <Button
-            disabled={busy || recognizing}
-            icon="arrow-left"
-            onPress={() => move(step === 2 ? 0 : step - 1)}
-          >
-            Quay lại
-          </Button>
-        )}
       </View>
       <WorkspaceFooter>
         {step === 2 && !contractOpen && (
           <View style={styles.footerContent}>
-            <Text style={styles.footerHint}>
+            <Text style={styles.footerHint} numberOfLines={2}>
               {!roomValid
                 ? 'Chọn phòng còn chỗ trước khi tiếp tục.'
                 : !peopleValid
                   ? 'Kiểm tra danh sách người ở theo sức chứa của phòng.'
-                  : allConfirmed
-                    ? `Đã hoàn tất thông tin ${completedCount}/${people.length} người ở. Sẵn sàng tạo bản nháp hợp đồng.`
+                : allConfirmed
+                  ? `Đã xác nhận ${completedCount}/${people.length} người ở. Sẵn sàng tiếp tục.`
+                  : created && !preview
+                    ? `Xác minh CCCD của ${personLabel(pendingPerson)} để tiếp tục. Nhấn để kiểm tra hồ sơ đã lưu.`
                     : `Xác minh CCCD của ${personLabel(pendingPerson)} để tiếp tục.`}
             </Text>
+            {created && !allConfirmed && !preview && (
+              <Button compact disabled={busy || recognizing} onPress={() => void checkSavedIdentities()}>
+                Kiểm tra trạng thái đã lưu
+              </Button>
+            )}
             <Button
               mode="contained"
               icon="arrow-right"
@@ -668,7 +618,7 @@ function NewResidentOnboarding() {
                 resetScroll();
               }}
             >
-              Tiếp tục tạo hợp đồng
+              Tiếp tục
             </Button>
           </View>
         )}
@@ -697,11 +647,10 @@ const styles = StyleSheet.create({
   panel: { borderRadius: 16, padding: 16, gap: 16 },
   summary: { padding: 12, borderRadius: 12, backgroundColor: s.blueSoft, gap: 4 },
   empty: { alignItems: 'center', gap: 12, paddingVertical: 24 },
-  identity: { gap: 16 },
-  identityWithFooter: { paddingBottom: 118 },
-  footerContent: { gap: 8, paddingHorizontal: 16, paddingTop: 8 },
-  footerHint: { color: '#475569', fontSize: 12, lineHeight: 17 },
+  identity: { gap: 12 },
+  footerContent: { gap: 4, paddingHorizontal: 16, paddingTop: 6 },
+  footerHint: { color: '#475569', fontSize: 11, lineHeight: 15 },
   footerButton: { borderRadius: 12 },
-  footerButtonContent: { minHeight: 52, flexDirection: 'row-reverse' },
+  footerButtonContent: { minHeight: 46, flexDirection: 'row-reverse' },
   hidden: { display: 'none' },
 });

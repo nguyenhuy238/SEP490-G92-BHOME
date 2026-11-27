@@ -138,15 +138,17 @@ it('returns to the existing room instead of stacking a fresh directory', async (
 it('does not enable verification or contract actions for an unknown status', async () => {
   state.verified = 99;
   render(<ResidentProfile residentId={residentId} locationId={locationId} />);
-  await screen.findByText('Chưa rõ trạng thái');
+  await screen.findAllByText('Hồ sơ tổng hợp');
+  expect(screen.getAllByText('Chưa rõ trạng thái')).toHaveLength(2);
   expect(screen.queryByText('OCR wizard')).toBeNull();
   expect(screen.queryByRole('button', { name: 'Xem / chuẩn bị hợp đồng' })).toBeNull();
 });
 it('reads authoritative Verified status and never opens an empty identity wizard', async () => {
   render(<ResidentProfile residentId={residentId} locationId={locationId} />);
-  await screen.findByText('Đã xác minh');
-  expect(screen.getByText('Hồ sơ tổng hợp')).toBeTruthy();
-  expect(screen.getByText('Phòng: 101')).toBeTruthy();
+  await screen.findAllByText('Hồ sơ tổng hợp');
+  expect(screen.getAllByText('Đã xác minh')).toHaveLength(2);
+  expect(screen.getAllByText('Hồ sơ tổng hợp')).toHaveLength(2);
+  expect(screen.getByText('101')).toBeTruthy();
   expect(screen.queryByText('OCR wizard')).toBeNull();
   expect(screen.queryByText(/Số CCCD/)).toBeNull();
 });
@@ -155,7 +157,7 @@ it('opens identity capture only for a Pending Resident', async () => {
   render(<ResidentProfile residentId={residentId} locationId={locationId} />);
   await screen.findByText('OCR wizard');
   expect(screen.queryByText('Đã xác minh')).toBeNull();
-  expect(screen.getByText('Chờ xác minh')).toBeTruthy();
+  expect(screen.getAllByText('Chờ xác minh')).toHaveLength(2);
   expect(screen.getByText('Chưa hoàn tất xác minh danh tính')).toBeTruthy();
   expect(screen.getByRole('button', { name: 'Quét CCCD (Camera)' })).toBeTruthy();
   expect(screen.getByRole('button', { name: 'Nhập thông tin thủ công' })).toBeTruthy();
