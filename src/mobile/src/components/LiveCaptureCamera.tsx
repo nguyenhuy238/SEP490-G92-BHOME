@@ -116,6 +116,7 @@ export function LiveCaptureCamera({
   );
   const blocked = disabled || settling;
   const textColor = dark ? '#CBD5E1' : undefined;
+  const focusMessage = settling ? 'Đang mở camera…' : cameraFocusMessage(focus, nativeFocus);
   return (
     <View style={{ flex: 1 }}>
       <View style={{ flex: 1, overflow: 'hidden' }}>
@@ -174,13 +175,13 @@ export function LiveCaptureCamera({
             }}
           />
         )}
-        {showControls && (
+        {showControls && !!focusMessage && (
           <View pointerEvents="none" style={{ position: 'absolute', top: 8, left: 8, right: 8 }}>
             <Text
               accessibilityLiveRegion="polite"
               style={{ color: '#FFFFFF', backgroundColor: '#07121F', padding: 8, borderRadius: 8 }}
             >
-              {settling ? 'Đang mở camera…' : cameraFocusMessage(focus, nativeFocus)}
+              {focusMessage}
             </Text>
           </View>
         )}

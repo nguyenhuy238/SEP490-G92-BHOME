@@ -57,7 +57,7 @@ export function acceptCameraFocusEvent(
 }
 
 export function cameraFocusMessage(event: CameraFocusEvent | null, extension: boolean) {
-  if (!extension) return 'Chờ chữ rõ rồi chụp. Chạm lấy nét cần bản ứng dụng hỗ trợ.';
+  if (!extension) return '';
   if (!event) return 'Đang chuẩn bị lấy nét…';
   switch (event.state) {
     case 'focusing':

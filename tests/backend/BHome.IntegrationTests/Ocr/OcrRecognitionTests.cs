@@ -6,6 +6,30 @@ namespace BHome.IntegrationTests.Ocr;
 
 public sealed class OcrRecognitionTests
 {
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public void TensorPreservesChannelOrderNormalizationAndPixelPositions(bool detection)
+    {
+        using var image = new Mat(2, 2, MatType.CV_8UC3);
+        image.Set(0, 0, new Vec3b(0, 64, 255));
+        image.Set(0, 1, new Vec3b(15, 100, 230));
+        image.Set(1, 0, new Vec3b(30, 120, 200));
+        image.Set(1, 1, new Vec3b(255, 128, 0));
+        var tensor = OnnxOcrEngine.Tensor(image, 2, 2, detection);
+        Assert.Equal(new[] { 1, 3, 2, 2 }, tensor.Dimensions.ToArray());
+        float[] means = [.485f, .456f, .406f];
+        float[] deviations = [.229f, .224f, .225f];
+        for (var y = 0; y < 2; y++)
+            for (var x = 0; x < 2; x++)
+                for (var channel = 0; channel < 3; channel++)
+                {
+                    var pixel = image.At<Vec3b>(y, x)[detection ? 2 - channel : channel] / 255f;
+                    var expected = detection ? (pixel - means[channel]) / deviations[channel] : (pixel - .5f) / .5f;
+                    Assert.Equal(expected, tensor[0, channel, y, x]);
+                }
+    }
+
     [Fact]
     public void LongIdentityLinesSplitOnlyAtAnObservedWordGap()
     {
