@@ -239,7 +239,11 @@ public sealed partial class ContractLifecycleApiTests
         var view = await Success<SettlementReceivablesView>(await w.Owner.Client.GetAsync(
             Path(contractId, "move-out/receivables")));
         Assert.Equal(2, view.Receivables.Count(row => row.Charge.Kind == "FinalUtility"));
-        Assert.Equal(30000m, Assert.Single(view.Receivables, row => row.Charge.Kind == "FinalFixed").Charge.Amount);
+        var fixedCharge = Assert.Single(view.Receivables, row => row.Charge.Kind == "FinalFixed").Charge;
+        Assert.Equal(30000m, fixedCharge.Amount);
+        Assert.True(fixedCharge.Evidence.Count > 5);
+        Assert.Contains(fixedCharge.Evidence, file => file.Id == proof);
+        Assert.Contains(fixedCharge.Evidence, file => file.Id == roomProof);
         var charge = Assert.Single(view.Receivables, row => row.Charge.Kind == "TenantDamage");
         Assert.Equal(manualFee, charge.Charge.Amount);
         Assert.Equal(proposedFee, view.Receivables.Sum(row => row.Charge.Amount));

@@ -52,8 +52,11 @@ internal sealed class SettlementChargeEvidence(BHomePersistenceContext db, IObje
     }
     public async Task VerifyAsync(SettlementReceivable charge, CancellationToken token)
     {
+        var ids = charge.Evidence.Select(e => e.Id).Order().ToArray();
         var current = charge.Utility is { } utility ? await CaptureUtilityAsync(charge.ContractId, utility, token) :
-            await inspectionEvidence.CaptureAsync(charge.ContractId, charge.Evidence.Select(e => e.Id).Order().ToArray(), token);
+            charge.Kind == "FinalFixed"
+                ? await SettlementInspectionEvidence.CaptureAsync(inspectionEvidence, charge.ContractId, ids, token)
+                : await inspectionEvidence.CaptureAsync(charge.ContractId, ids, token);
         if (!current.OrderBy(e => e.Id).SequenceEqual(charge.Evidence.OrderBy(e => e.Id))) throw ContractException.Conflict("settlement_evidence_integrity_failed");
     }
 }

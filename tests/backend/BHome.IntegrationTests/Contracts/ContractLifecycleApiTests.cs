@@ -497,52 +497,36 @@ public sealed partial class ContractLifecycleApiTests(ContractFixture fixture) :
         Assert.NotEqual(firstId, secondId);
         var allTasks = await Success<MeterTaskSummary[]>(await w.Staff.Client.GetAsync("/api/v1/capture/meter-tasks"));
         var secondTasks = allTasks.Where(task => task.ContractId == secondId).OrderBy(task => task.UtilityType).ToArray();
-        Assert.Equal(2, secondTasks.Length);
-        Assert.Equal(meters.Select(meter => meter.Id).Order().ToArray(), secondTasks.Select(task => task.MeterId).Order().ToArray());
-        Assert.All(secondTasks, task => Assert.Equal(ReadingPurpose.Initial, task.Purpose));
-        Assert.Empty(secondTasks.Select(task => task.Id).Intersect(firstTasks.Select(task => task.Id)));
-        Assert.Equal(firstTasks.Select(task => task.ReadingDate).ToArray(), secondTasks.Select(task => task.ReadingDate).ToArray());
-
-        // Same physical meters still need new evidence for this contract.
-        var choices = await EmptyRoomHandoverChoices(second, secondId);
+        // A second contract in the same occupied room cycle must not generate
+        // duplicate move-in work or inherit another contract's private capture.
+        Assert.Empty(secondTasks);
+        Assert.Equal(meters.Select(meter => meter.Id).Order().ToArray(),
+            allTasks.Where(task => task.ContractId == firstId).Select(task => task.MeterId).Order().ToArray());
+        var choices = await Success<HandoverChoices>(await second.Staff.Client.GetAsync(Path(secondId, "handover/choices")));
         Assert.Empty(choices.Readings);
-        var pendingDraft = await Success<HandoverDraftView>(await w.Staff.Client.GetAsync(Path(secondId, "handover/draft")));
-        Assert.Null(pendingDraft.Electricity);
-        Assert.Null(pendingDraft.Water);
+        Assert.Equal(HttpStatusCode.NotFound,
+            (await w.Staff.Client.GetAsync(Path(secondId, "handover/draft"))).StatusCode);
+        var inbox = await Success<HandoverInboxPage>(await w.Owner.Client.GetAsync(
+            $"/api/v1/contracts/handovers?locationId={w.Location}"));
+        Assert.Single(inbox.Items, item => item.ContractId == firstId);
+        Assert.DoesNotContain(inbox.Items, item => item.ContractId == secondId);
         var stale = new HandoverInput(0, firstTasks[0].ReadingDate, "Synthetic room", "Synthetic keys", "", [],
             firstReadings[0].Id, firstReadings[1].Id, [], choices.InventoryToken);
         var staleResponse = await Post(w.Staff, Path(secondId, "handover"), stale);
-        Assert.Equal(HttpStatusCode.Conflict, staleResponse.StatusCode);
-        Assert.Contains("handover_draft_workflow_required", await staleResponse.Content.ReadAsStringAsync());
+        Assert.Equal(HttpStatusCode.NotFound, staleResponse.StatusCode);
 
-        // Staff cannot issue extra tasks, and Owner cannot bypass the per-contract uniqueness key.
+        // Staff cannot issue extra tasks, and Owner cannot duplicate the
+        // canonical contract's existing checkpoints.
         Assert.Equal(HttpStatusCode.Forbidden, (await w.Staff.Client.PostAsJsonAsync("/api/v1/capture/meter-tasks",
-            new MeterTaskInput(secondTasks[0].MeterId, ReadingPurpose.Initial, secondTasks[0].ReadingDate, null, secondId))).StatusCode);
+            new MeterTaskInput(firstTasks[0].MeterId, ReadingPurpose.Initial, firstTasks[0].ReadingDate, null, secondId))).StatusCode);
         Assert.Equal(HttpStatusCode.Conflict, (await w.Owner.Client.PostAsJsonAsync("/api/v1/capture/meter-tasks",
-            new MeterTaskInput(secondTasks[0].MeterId, ReadingPurpose.Initial, secondTasks[0].ReadingDate, null, secondId))).StatusCode);
-
-        using var secondPhoto = new ByteArrayContent(Image()); secondPhoto.Headers.ContentType = new("image/png");
-        var secondProof = await Success<IdResult>(await second.Staff.Client.PutAsync($"/api/v1/capture/meter-tasks/{secondTasks[0].Id}/evidence", secondPhoto));
-        var decreasing = await second.Staff.Client.PostAsJsonAsync($"/api/v1/capture/meter-tasks/{secondTasks[0].Id}/confirm",
-            new MeterConfirmation(true, 90, secondProof.Id));
-        Assert.Equal(HttpStatusCode.Conflict, decreasing.StatusCode);
-        Assert.Contains("meter_reset_or_rollover_requires_review", await decreasing.Content.ReadAsStringAsync());
-        // Same-day recapture is valid at a non-decreasing value, but its delta is not billable usage.
-        var secondReadings = new[]
-        {
-            await Success<ConfirmedReading>(await second.Staff.Client.PostAsJsonAsync($"/api/v1/capture/meter-tasks/{secondTasks[0].Id}/confirm",
-                new MeterConfirmation(true, 110, secondProof.Id))),
-            await ConfirmInitialTask(second, secondTasks[1].Id, 55)
-        };
-        Assert.All(secondReadings, reading => Assert.Null(reading.Consumption));
-        var current = await Success<HandoverChoices>(await w.Staff.Client.GetAsync(Path(secondId, "handover/choices")));
-        Assert.Equal(secondReadings.Select(reading => reading.Id).Order().ToArray(), current.Readings.Select(reading => reading.Id).Order().ToArray());
+            new MeterTaskInput(firstTasks[0].MeterId, ReadingPurpose.Initial, firstTasks[0].ReadingDate, null, firstId))).StatusCode);
         var original = await Success<HandoverChoices>(await w.Staff.Client.GetAsync(Path(firstId, "handover/choices")));
         Assert.Equal(firstReadings.Select(reading => reading.Id).Order().ToArray(), original.Readings.Select(reading => reading.Id).Order().ToArray());
 
-        var recorded = await Success<HandoverDraftView>(await w.Staff.Client.GetAsync(Path(secondId, "handover/draft")));
-        Assert.Equal(secondReadings[0].Id, recorded.Electricity!.Id);
-        Assert.Equal(secondReadings[1].Id, recorded.Water!.Id);
+        var recorded = await Success<HandoverDraftView>(await w.Staff.Client.GetAsync(Path(firstId, "handover/draft")));
+        Assert.Equal(firstReadings[0].Id, recorded.Electricity!.Id);
+        Assert.Equal(firstReadings[1].Id, recorded.Water!.Id);
     }
 
     internal async Task StartedManualMoveInCanRepairMissingMeterBaselinesWithoutCreatingAnotherStaffJob()
@@ -1390,20 +1374,27 @@ public sealed partial class ContractLifecycleApiTests(ContractFixture fixture) :
                     answer)).StatusCode);
                 Assert.Empty((await Success<SettlementReceivablesView>(await w.Owner.Client.GetAsync(
                     Path(id, "move-out/receivables")))).Receivables);
-                // The Owner's priced proposal is the financial approval. However,
-                // a specific item with no linked Final photo cannot be posted to
-                // the settlement ledger using an unrelated general room photo.
+                // The revised inspection contains item-scoped photos. Acceptance
+                // posts verified charges and offsets once, without another Owner
+                // financial approval or pretending that a transfer occurred.
                 var accepted = await Success<MoveOutChargeProposalFeedback>(await Post(w.Tenant,
                     proposalPath + "/tenant-feedback", new MoveOutChargeProposalFeedbackInput(
                         revision.Id, revisedPreview.Reference, true), Guid.NewGuid()));
                 Assert.True(accepted.Confirmed);
-                Assert.Equal("PendingOwnerReview", accepted.Settlement?.Status);
-                Assert.Equal("verified_item_evidence_required", accepted.Settlement?.Reason);
+                Assert.Equal("RefundEligible", accepted.Settlement?.Status);
+                Assert.Equal(revision.SignedBalance, accepted.Settlement!.RefundAmount);
+                Assert.Equal(0m, accepted.Settlement.PayableAmount);
                 Assert.Null(accepted.Settlement?.PayableReceivableId);
                 Assert.Equal("Accepted", (await Success<MoveOutChargeProposalPreview>(
                     await w.Tenant.Client.GetAsync(proposalPath))).Status);
-                Assert.Empty((await Success<SettlementReceivablesView>(await w.Owner.Client.GetAsync(
-                    Path(id, "move-out/receivables")))).Receivables);
+                var posted = await Success<SettlementReceivablesView>(await w.Owner.Client.GetAsync(
+                    Path(id, "move-out/receivables")));
+                Assert.Equal(revision.TotalCharges, posted.Receivables.Sum(row => row.Charge.Amount));
+                var damage = Assert.Single(posted.Receivables, row => row.Charge.Kind == "TenantDamage");
+                Assert.Equal(90000m, damage.Charge.Amount);
+                Assert.Equal("cleanliness", damage.Charge.RoomCheckCode);
+                Assert.NotEmpty(damage.Charge.Evidence);
+                Assert.All(posted.Receivables, row => Assert.Equal(0m, row.Outstanding));
             }
             else
             {
@@ -1670,7 +1661,13 @@ public sealed partial class ContractLifecycleApiTests(ContractFixture fixture) :
         Assert.Empty(await db.Set<ContractSignature>().Where(s => s.ContractId == id).ToArrayAsync());
         var intent = await db.Set<ContractFileUpload>().SingleAsync(f => f.RoomId == w.Room);
         await realStorage.CopyToAsync(intent.ObjectKey, Stream.Null, default);
-        await ContractFileCleanup.CleanupAsync(db, realStorage, DateTimeOffset.UtcNow.AddDays(2), default);
+        // The production cleanup processes 100 intents per pass. Shared test
+        // databases can contain older successful uploads ahead of this one.
+        var cutoff = DateTimeOffset.UtcNow.AddDays(2);
+        var due = await db.Set<ContractFileUpload>().CountAsync(f => f.CleanupAfter <= cutoff);
+        for (var pass = 0; pass < (due + 99) / 100 &&
+            await db.Set<ContractFileUpload>().AnyAsync(f => f.ObjectKey == intent.ObjectKey); pass++)
+            await ContractFileCleanup.CleanupAsync(db, realStorage, cutoff, default);
         Assert.False(await db.Set<ContractFileUpload>().AnyAsync(f => f.RoomId == w.Room));
         await Assert.ThrowsAnyAsync<Exception>(() => realStorage.CopyToAsync(intent.ObjectKey, Stream.Null, default));
     }

@@ -103,11 +103,11 @@ public sealed class TenantPreInvoiceReadingsTests(Compact24WorkflowFixture fixtu
             task.OcrProposedValue = 999; await db.SaveChangesAsync();
         }
         Assert.Single((await tenant.GetFromJsonAsync<TenantMeterReadingPage>(route))!.Items);
-        var readingId = await Confirm(taskId, 125.5m);
+        var readingId = await Confirm(taskId, 126m);
         var visible = await tenant.GetFromJsonAsync<TenantMeterReadingPage>(route + "?page=1&pageSize=1");
         Assert.Equal(2, visible!.TotalCount);
-        var newest = Assert.Single(visible.Items); Assert.Equal(readingId, newest.Id); Assert.Equal(100, newest.PreviousValue); Assert.Equal(25.5m, newest.Consumption);
-        Assert.Equal(125.5m, newest.ConfirmedValue);
+        var newest = Assert.Single(visible.Items); Assert.Equal(readingId, newest.Id); Assert.Equal(100, newest.PreviousValue); Assert.Equal(26m, newest.Consumption);
+        Assert.Equal(126m, newest.ConfirmedValue);
         Assert.Equal(2, (await familyClient.GetFromJsonAsync<TenantMeterReadingPage>(route))!.TotalCount);
         Assert.Empty((await outside.GetFromJsonAsync<TenantMeterReadingPage>(route))!.Items);
         Assert.Equal(0, (await tenant.GetFromJsonAsync<TenantMeterReadingPage>(route + "?roomId=" + Compact24SampleSeed.Id(43)))!.TotalCount);

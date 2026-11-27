@@ -85,7 +85,7 @@ public sealed partial class SettlementReceivablesService
         if (row.MissingInputs.Count > 0 || row.Amount is null || row.Calculation is null || row.ExistingReceivableId is not null)
             throw ContractException.Conflict("fixed_charge_inputs_required");
         var context = await repository.FinalFixedAsync(id, token);
-        var proofs = await evidence.CaptureAsync(id, context.Context.EvidenceIds.Order().ToArray(), token);
+        var proofs = await SettlementInspectionEvidence.CaptureAsync(evidence, id, context.Context.EvidenceIds, token);
         return new SettlementReceivable(Guid.NewGuid(), id, context.Context.View.RoomId, "FinalFixed",
             $"fixed:{id:N}:{row.BillingPeriod:yyyyMM}:{row.ChargeCode}:{Fingerprint(id, row.Calculation)}",
             context.Context.InspectionId, context.Context.InspectionVersion, null, row.Amount.Value, row.Name,

@@ -68,9 +68,17 @@ public sealed partial class ContractLifecycleApiTests
             (await actual.Set<Contract>().SingleAsync(c => c.Id == id)).Status);
     }
 
-    private async Task ConfirmedPhysicalBoundary(Workspace w, Guid id)
+    private async Task ConfirmedPhysicalBoundary(Workspace w, Guid id, (Actor Tenant, Guid ContractId)? member = null)
     {
         await Success<MoveOutView>(await Post(w.Tenant, Path(id, "termination-requests"), new TerminationInput(Today, "Synthetic reviewed move-out")));
+        if (member is { } linked)
+        {
+            Assert.Equal(HttpStatusCode.Conflict, (await Post(w.Owner, Path(id, "move-out/approve"))).StatusCode);
+            var pending = await Success<MoveOutView>(await linked.Tenant.Client.GetAsync(Path(linked.ContractId, "move-out")));
+            Assert.True(pending.CanConfirm);
+            await Success<MoveOutView>(await Post(linked.Tenant, Path(linked.ContractId, "move-out/consent"),
+                new MoveOutConsentInput(true, pending.Version)));
+        }
         await Success<MoveOutView>(await Post(w.Owner, Path(id, "move-out/approve")));
         await Success<MoveOutView>(await Post(w.Staff, Path(id, "move-out/schedule"), new InspectionScheduleInput(DateTimeOffset.UtcNow.AddMinutes(5))));
         await StartMoveOutTaskForInspection(w, id);
@@ -115,7 +123,7 @@ public sealed partial class ContractLifecycleApiTests
         var second = await Active(w with { Tenant = tenant, Resident = resident.Id });
         var before = (await w.Owner.Client.GetFromJsonAsync<RoomDto>($"/api/v1/rooms/{w.Room}"))!;
         Assert.Equal(2, before.Version);
-        await ConfirmedPhysicalBoundary(w, first);
+        await ConfirmedPhysicalBoundary(w, first, (tenant, second));
         await Success<ContractView>(await Post(w.Owner, Path(first, "move-out/complete"), new CompletionInput(Today, "Available")));
         var after = (await w.Owner.Client.GetFromJsonAsync<RoomDto>($"/api/v1/rooms/{w.Room}"))!;
         Assert.Equal(RoomStatus.Occupied, after.Status); Assert.Equal(before.Version, after.Version);

@@ -135,11 +135,12 @@ public sealed partial class InvoiceApiTests(CaptureFixture fixture) : IClassFixt
                 var date = purpose == ReadingPurpose.Initial ? w.Period.AddDays(-1) : w.Period.AddMonths(1).AddDays(-1);
                 var task = await Success<IdResult>(await w.Owner.Client.PostAsJsonAsync("/api/v1/capture/meter-tasks", new MeterTaskInput(meter.Id, purpose, date, purpose == ReadingPurpose.Periodic ? w.Period : null)));
                 using var image = new Mat(120, 300, MatType.CV_8UC3, Scalar.White);
-                Cv2.PutText(image, "SYNTHETIC 125.5", new(10, 70), HersheyFonts.HersheySimplex, .6, Scalar.Black, 1);
+                var value = purpose == ReadingPurpose.Initial ? 100 : utility == UtilityType.Electricity ? 126 : 102;
+                Cv2.PutText(image, $"SYNTHETIC {value}", new(10, 70), HersheyFonts.HersheySimplex, .6, Scalar.Black, 1);
                 using var content = new ByteArrayContent(image.ImEncode(".png")); content.Headers.ContentType = new("image/png");
                 var evidence = await Success<IdResult>(await w.Staff.Client.PutAsync($"/api/v1/capture/meter-tasks/{task.Id}/evidence", content));
                 await Success<ConfirmedReading>(await w.Staff.Client.PostAsJsonAsync($"/api/v1/capture/meter-tasks/{task.Id}/confirm", new MeterConfirmation(true,
-                    purpose == ReadingPurpose.Initial ? 100 : utility == UtilityType.Electricity ? 125.5m : 102m, evidence.Id)));
+                    value, evidence.Id)));
             }
         }
     }
@@ -160,8 +161,8 @@ public sealed partial class InvoiceApiTests(CaptureFixture fixture) : IClassFixt
         Assert.Null(ready.FinalizedAt);
         Assert.Equal(draft.Version + 1, ready.Version);
         Assert.Equal(HttpStatusCode.Conflict, (await w.Owner.Client.PostAsJsonAsync(path + "/refresh", new InvoiceFinalizeInput(draft.Version))).StatusCode);
-        Assert.Empty(ready.MissingInputs); Assert.Equal(3119250m, ready.Total);
-        Assert.Equal(25.5m, ready.Lines.Single(l => l.Category == "Electricity").Quantity);
+        Assert.Empty(ready.MissingInputs); Assert.Equal(3121000m, ready.Total);
+        Assert.Equal(26m, ready.Lines.Single(l => l.Category == "Electricity").Quantity);
         Assert.Equal(HttpStatusCode.Conflict, (await w.Owner.Client.PostAsJsonAsync(path + "/finalize", new InvoiceFinalizeInput(draft.Version))).StatusCode);
         var finals = await Task.WhenAll(Enumerable.Range(0, 3).Select(_ => w.Owner.Client.PostAsJsonAsync(path + "/finalize", new InvoiceFinalizeInput(ready.Version))));
         foreach (var response in finals)

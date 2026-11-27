@@ -135,7 +135,10 @@ public sealed partial class SettlementReceivablesService
     {
         if (chargeEvidence is not null) { await chargeEvidence.VerifyAsync(charge, token); return; }
         if (charge.Utility is not null) throw new ContractException(503, "settlement_evidence_unavailable");
-        var current = await evidence.CaptureAsync(charge.ContractId, charge.Evidence.Select(e => e.Id).Order().ToArray(), token);
+        var ids = charge.Evidence.Select(e => e.Id).Order().ToArray();
+        var current = charge.Kind == "FinalFixed"
+            ? await SettlementInspectionEvidence.CaptureAsync(evidence, charge.ContractId, ids, token)
+            : await evidence.CaptureAsync(charge.ContractId, ids, token);
         if (!current.OrderBy(e => e.Id).SequenceEqual(charge.Evidence.OrderBy(e => e.Id))) throw ContractException.Conflict("settlement_evidence_integrity_failed");
     }
 }

@@ -485,7 +485,17 @@ public sealed class CaptureWorkflowTests : IClassFixture<CaptureFixture>
         var replacement = Image("128");
         using var ocr = new ByteArrayContent(replacement);
         ocr.Headers.ContentType = new("image/png");
-        (await w.Staff.PostAsync($"/api/v1/ocr/meter-tasks/{periodic}", ocr)).EnsureSuccessStatusCode();
+        // CI does not provision the optional real OCR models. Exercise the
+        // authorized retake endpoint with the same deterministic engine as
+        // the other OCR workflow tests instead of depending on local models.
+        using var host = fixture.Factory.WithWebHostBuilder(builder => builder.ConfigureTestServices(services =>
+            services.AddSingleton<IOcrService>(_ => new LocalOcrService(new OcrOptions { Enabled = true },
+                new Lazy<IOcrEngine>(() => new DigitsEngine()), NullLogger<LocalOcrService>.Instance))));
+        using var ocrClient = host.CreateClient();
+        ocrClient.DefaultRequestHeaders.Authorization = w.Staff.DefaultRequestHeaders.Authorization;
+        var recognized = await ocrClient.PostAsync($"/api/v1/ocr/meter-tasks/{periodic}", ocr);
+        Assert.True(recognized.IsSuccessStatusCode, await recognized.Content.ReadAsStringAsync());
+        Assert.True((await recognized.Content.ReadFromJsonAsync<OcrProposal>())!.RequiresConfirmation);
         var newProof = await Evidence(w.Staff, periodic, replacement);
         // Abandoning a retake leaves the original reading and image untouched.
         Assert.Equal(original, await w.Staff.GetFromJsonAsync<ConfirmedReading>($"/api/v1/capture/readings/{original.Id}"));

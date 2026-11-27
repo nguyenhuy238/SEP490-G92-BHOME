@@ -364,10 +364,11 @@ public sealed partial class Compact24OwnerSetupTests
     }
 
     [CompactPostgresFact]
-    public async Task TenantMoveOutRequestNotifiesOwnerAndAssignedStaffOnce()
+    public async Task TenantMoveOutRequestNotifiesOwnerOnceWithoutPrematureStaffAssignment()
     {
         var w = await Seed(); using var host = Host();
         var id = (await SeedAssetHandover(w, host.Services, 0, 0)).Contract;
+        using var owner = await Client(w.Owner, host);
         using var tenant = await Client(w.Tenant, host);
         using var staff = await Client(w.Staff, host);
         var request = new TerminationInput(Today, "Synthetic private reason");
@@ -391,16 +392,24 @@ public sealed partial class Compact24OwnerSetupTests
         await publisher.PublishPendingAsync(default);
         var db = scope.ServiceProvider.GetRequiredService<Compact24DbContext>();
         var notices = await db.Set<UserNotification>().AsNoTracking()
-            .Where(n => n.RelatedObjectId == id && n.EventType == "CONTRACT_MOVE_OUT_REQUESTED").ToArrayAsync();
+            .Where(n => n.RelatedObjectId == id && n.EventType == "MOVE_OUT_STATUS_CHANGED").ToArrayAsync();
         Assert.Single(notices, n => n.RecipientUserId == w.Owner.Id && n.AudienceRole == "Owner");
-        Assert.Equal(w.Staff.Id, Assert.Single(notices, n => n.AudienceRole == "Staff").RecipientUserId);
-        Assert.DoesNotContain(notices, n => n.RecipientUserId == w.Tenant.Id || n.RecipientUserId == otherStaff.Id);
+        Assert.DoesNotContain(notices, n => n.AudienceRole == "Staff" ||
+            n.RecipientUserId == w.Tenant.Id || n.RecipientUserId == otherStaff.Id);
+        Assert.False(await db.Set<OperationalTask>().AnyAsync(t => t.ContractId == id &&
+            t.Title.StartsWith("Kiểm tra trả phòng")));
         Assert.All(notices, n =>
         {
             Assert.Equal(w.Location, n.LocationId);
             Assert.Contains("IN_APP", n.Channels);
             Assert.DoesNotContain(request.Reason, n.Summary);
         });
+        Assert.Equal("Approved", (await Read<MoveOutView>(await HandoverPost(owner, id, "move-out/approve", new { }))).Status);
+        await StartMoveOutTask(staff, id);
+        var task = await db.Set<OperationalTask>().AsNoTracking().SingleAsync(t => t.ContractId == id &&
+            t.Title.StartsWith("Kiểm tra trả phòng"));
+        Assert.Equal(w.Staff.Id, task.AssignedStaffUserId);
+        Assert.Equal(MeterTaskStatus.InProgress, task.Status);
     }
 
     [CompactPostgresTheory]
@@ -640,10 +649,18 @@ public sealed partial class Compact24OwnerSetupTests
         Assert.Single(secondView.Data.Parties); Assert.Empty(secondView.Data.Acknowledgements);
         await Read<AssetChangeView>(await HandoverPost(secondTenant, secondId, $"asset-changes/{change.Id}/confirmation", new InspectionTenantFeedback(1, true, "Second Tenant received")));
         Assert.Equal(1, Assert.Single((await staff.GetFromJsonAsync<InspectionPreparation>($"/api/v1/contracts/{secondId}/move-out/inspection-preparation"))!.Baseline!.Snapshot.Assets).HandedOverQuantity);
+        var requested = await Read<MoveOutView>(await HandoverPost(tenant, seeded.Contract,
+            "termination-requests", new TerminationInput(Today, "Synthetic shared departure")));
+        Assert.Equal("AwaitingConsent", requested.Status);
+        Assert.Equal(HttpStatusCode.Conflict, (await HandoverPost(owner, seeded.Contract, "move-out/approve", new { })).StatusCode);
+        var linked = await Read<MoveOutView>(await secondTenant.GetAsync($"/api/v1/contracts/{secondId}/move-out"));
+        Assert.True(linked.CanConfirm);
+        await Read<MoveOutView>(await HandoverPost(secondTenant, secondId, "move-out/consent", new MoveOutConsentInput(true, linked.Version)));
+        Assert.Equal(HttpStatusCode.Conflict, (await HandoverPost(owner, secondId, "move-out/approve", new { })).StatusCode);
+        await Read<MoveOutView>(await HandoverPost(owner, seeded.Contract, "move-out/approve", new { }));
         foreach (var party in parties)
         {
-            await Read<MoveOutView>(await HandoverPost(party.Tenant, party.Id, "termination-requests", new TerminationInput(Today, "Synthetic shared departure")));
-            await Read<MoveOutView>(await HandoverPost(owner, party.Id, "move-out/approve", new { }));
+            Assert.Equal("Approved", (await Read<MoveOutView>(await owner.GetAsync($"/api/v1/contracts/{party.Id}/move-out"))).Status);
             await Read<MoveOutView>(await HandoverPost(owner, party.Id, "move-out/schedule", new InspectionScheduleInput(DateTimeOffset.UtcNow.AddMinutes(1), w.Staff.Id)));
             await StartMoveOutTask(staff, party.Id);
             var readings = await FinalHandoverReadings(host.Services, owner, staff, party.Id, w.Room);
@@ -770,6 +787,15 @@ public sealed partial class Compact24OwnerSetupTests
             db.Add(other); db.Add(new ContractResident { ContractId = other.Id, ResidentId = resident.Id }); await db.SaveChangesAsync(); secondId = other.Id;
         }
         await Read<MoveOutView>(await HandoverPost(tenant, id, "termination-requests", new TerminationInput(Today, "Synthetic leaving")));
+        if (secondId is { } memberContractId)
+        {
+            Assert.Equal(HttpStatusCode.Conflict, (await HandoverPost(owner, id, "move-out/approve", new { })).StatusCode);
+            using var member = await Client(second.Tenant, host);
+            var pending = await Read<MoveOutView>(await member.GetAsync($"/api/v1/contracts/{memberContractId}/move-out"));
+            Assert.True(pending.CanConfirm);
+            await Read<MoveOutView>(await HandoverPost(member, memberContractId, "move-out/consent",
+                new MoveOutConsentInput(true, pending.Version)));
+        }
         await Read<MoveOutView>(await HandoverPost(owner, id, "move-out/approve", new { }));
         await Read<MoveOutView>(await HandoverPost(owner, id, "move-out/schedule", new InspectionScheduleInput(DateTimeOffset.UtcNow.AddMinutes(1), w.Staff.Id)));
         await StartMoveOutTask(staff, id);
