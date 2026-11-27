@@ -7,10 +7,11 @@ namespace BHome.IntegrationTests.Compact24;
 public sealed class MainDraftDocumentRegressionTests(PropertyContractDockerFixture fixture) : IClassFixture<PropertyContractDockerFixture>
 {
     [Theory]
-    [InlineData("Staging")]
-    [InlineData("Production")]
-    public Task DemoTemplateIsAvailableWithRealPersistence(string environment) =>
-        new MainDraftApiTests(fixture.Contracts).DemoTemplateCanBeReviewedReleasedAndReadInEveryEnvironment(environment);
+    [InlineData("Staging", false)]
+    [InlineData("Staging", true)]
+    [InlineData("Production", true)]
+    public Task DemoTemplateIsAvailableWithRealPersistence(string environment, bool live) =>
+        new MainDraftApiTests(fixture.Contracts).DemoTemplateCanBeReviewedReleasedAndReadInEveryEnvironment(environment, live);
 
     [Fact]
     public Task CurrentPdfSurvivesPersistenceAndOldPdfIsRejectedAfterDraftUpdate() =>

@@ -119,12 +119,12 @@ Production để gửi PDF sau kích hoạt và sau thanh toán. Chạy kiểm t
 hàng đợi và tài khoản nhận đã xác minh theo quy trình phát hành. Cờ này hoạt động
 khi `Jobs__Enabled=false` và không yêu cầu bật thông báo tự động diện rộng.
 
-Để phát hành ký hợp đồng thuê UC-15, cần phê duyệt đúng phiên bản DOCX được
-nhúng trong image. Ghi nhận quyết định duyệt mẫu và SHA-256 của chính file DOCX
-đó, rồi đặt `MainDraft__ApprovedProductionTemplateSha256` trong `services.api.environment`
-của `/opt/bhome-config/compose.production-environment.yml`. API chỉ mở bước duyệt
-và gửi ký hợp đồng Live khi hash trùng. Mỗi
-lần thay mẫu cần ghi nhận và cấu hình hash đã được duyệt của bản mới.
+Theo quyết định chủ dự án ngày 27/11/2026, ký hợp đồng thuê UC-15 dùng mẫu DOCX
+nhúng trong image, không yêu cầu phê duyệt mẫu hoặc cấu hình
+`MainDraft__ApprovedProductionTemplateSha256`. Giá trị khóa cũ không chặn xem PDF
+hay gửi ký hợp đồng Live. Backend tiếp tục kiểm tra phiên bản/snapshot và hash
+nội dung tài liệu mà người dùng đã xem. Chi tiết:
+[MAIN_CONTRACT_TEMPLATE_2026-11-27.md](MAIN_CONTRACT_TEMPLATE_2026-11-27.md).
 
 Ghép `environment` và `volumes` của service `api` trong
 `deploy/vps/compose.contract-signing.example.yml` vào

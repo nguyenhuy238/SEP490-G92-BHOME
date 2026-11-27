@@ -317,7 +317,6 @@ public sealed class MainDraftService(IContractRepository repository, IMainDraftD
 
     private async Task<(MainDraftState State, MainContractSettings Settings, MainDraftPreparation Preparation)> ReviewInputs(Contract c, CancellationToken t)
     {
-        if (!renderer.CanUseSigningReview(c)) throw new ContractException(503, "main_draft_signing_template_not_approved");
         if (c.Status != ContractStatus.Draft || c.Signatures.Count > 0) throw ContractException.Conflict("draft_version_or_status_changed");
         await data.LockConfigurationAsync(c.OwnerSignerId, t);
         var state = data.Unprotect(c);
@@ -387,7 +386,6 @@ public sealed class MainDraftService(IContractRepository repository, IMainDraftD
                 throw ContractException.Conflict("room_contract_conflict");
             var review = await data.FileAsync(id, input.ReviewedFileId, t) ?? throw ContractException.Missing();
             if (review.Kind != ContractFileKind.SigningReview || review.SnapshotHash != c.SnapshotHash || review.TemplateVersion != renderer.DocumentVersion) throw ContractException.Conflict("draft_document_outdated");
-            if (review.DevelopmentOnly == renderer.IsProductionSigningTemplate(c)) throw ContractException.Conflict("draft_document_outdated");
             using var bytes = new MemoryStream(); await CopyFileAsync(id, review.Id, bytes, t);
             if (bytes.Length != review.Length || FileHash(bytes.ToArray()) != review.FileHash) throw ContractException.Conflict("contract_document_integrity_failed");
             c.TenantUserId = tenantUserId;

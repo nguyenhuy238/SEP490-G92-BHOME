@@ -112,10 +112,13 @@ Owner có thể lưu tài khoản tổng hợp qua API tài khoản nhận tiề
 BIN và số tài khoản khớp cấu hình SePay Test của chính cơ sở đó. API giữ kiểm
 tra phiên bản và nhật ký xác nhận tài khoản. Production không bật luồng này.
 
-`MainDraft__AllowStagingSigningReview=true` cho phép dùng mẫu hợp đồng thuê
-kiểm thử trong luồng gửi ký UC-15 trên Staging. API chỉ cho phép ở các cơ sở
-thuộc phạm vi thử nghiệm trên database Staging và với hợp đồng `PaymentMode=Test`.
-PDF vẫn mang cờ `DevelopmentOnly`, phải qua bước xem và xác nhận trước khi gửi.
+Theo quyết định trực tiếp ngày 27/11/2026, luồng hợp đồng thuê UC-15 dùng mẫu
+được cung cấp để xem PDF và gửi ký ở cả Test/Live, kể cả trên Staging và ngoài
+phạm vi HoldingTesting. Không cần phê duyệt mẫu hay cấu hình
+`MainDraft__ApprovedProductionTemplateSha256` / `MainDraft__AllowStagingSigningReview`;
+hai khóa cũ không còn chặn luồng này. Tài liệu Live mới không mang cờ
+`DevelopmentOnly`; cờ cũ trên tài liệu đã tạo không chặn đọc/gửi ký. Hash nội dung,
+snapshot, phiên bản tài liệu và xác nhận đã xem vẫn được kiểm tra khi gửi ký.
 
 ### Ký hợp đồng nội bộ trên Staging
 

@@ -172,26 +172,24 @@ public sealed partial class MainDraftApiTests
         Assert.Null((await db.Set<Resident>().SingleAsync(r => r.Id == w.Resident)).TenantUserId); Assert.Equal(ContractStatus.Draft, (await db.Set<Contract>().SingleAsync(c => c.Id == draft.Id)).Status);
     }
     [Theory]
-    [InlineData("Staging")]
-    [InlineData("Production")]
-    public async Task DemoTemplateCanBeReviewedReleasedAndReadInEveryEnvironment(string environment)
+    [InlineData("Staging", false)]
+    [InlineData("Staging", true)]
+    [InlineData("Production", true)]
+    public async Task DemoTemplateCanBeReviewedReleasedAndReadInEveryEnvironment(string environment, bool live)
     {
-        // Staging signing requires the persisted Test payment mode, which is not
-        // mapped by the archived source schema. Exercise the entire scenario on
-        // the same disposable Compact24 schema used by the deployed application.
+        // Exercise both persisted payment modes on the deployed Compact24 schema.
         if (environment == "Staging" && fixture.Factory.Services.GetService<BHome.Infrastructure.Persistence.Compact24.Compact24DbContext>() is null)
         {
             var native = new BHome.IntegrationTests.Compact24.PropertyContractDockerFixture();
             try
             {
                 await native.InitializeAsync();
-                await new MainDraftApiTests(native.Contracts).DemoTemplateCanBeReviewedReleasedAndReadInEveryEnvironment(environment);
+                await new MainDraftApiTests(native.Contracts).DemoTemplateCanBeReviewedReleasedAndReadInEveryEnvironment(environment, live);
             }
             finally { await native.DisposeAsync(); }
             return;
         }
         var w = await Setup();
-        var templateHash = new MainDraftRenderer(new ConfigurationBuilder().Build(), TimeProvider.System).TemplateHash;
         Guid? tenantUserId = null;
         await using (var seed = fixture.Factory.Services.CreateAsyncScope())
         {
@@ -215,14 +213,14 @@ public sealed partial class MainDraftApiTests
                 var settings = new Dictionary<string, string?>
                 {
                     ["MainDraft:LibreOfficeContainerImage"] = "bhome/contract-converter:local",
-                    ["MainDraft:ApprovedProductionTemplateSha256"] = templateHash,
+                    ["MainDraft:ApprovedProductionTemplateSha256"] = "",
+                    ["MainDraft:AllowStagingSigningReview"] = "false",
                     ["ContractWorkflow:SimulatedSigningEnabled"] = "false",
-                    ["SePay:Enabled"] = environment == "Staging" ? "true" : "false",
-                    ["SePay:Mode"] = environment == "Staging" ? "Test" : "Live"
+                    ["SePay:Enabled"] = !live ? "true" : "false",
+                    ["SePay:Mode"] = !live ? "Test" : "Live"
                 };
                 if (environment == "Staging")
                 {
-                    settings["MainDraft:AllowStagingSigningReview"] = "true";
                     settings["SePay:WebhookSecret"] = "synthetic-staging-template-review-secret";
                     settings["SePay:ReceivingAccounts:0:LocationId"] = w.Location.ToString();
                     settings["SePay:ReceivingAccounts:0:BankIdentifier"] = "970416";
@@ -236,7 +234,7 @@ public sealed partial class MainDraftApiTests
                 b.ConfigureTestServices(services =>
                 {
                     services.RemoveAll<IHoldingTestScope>();
-                    services.AddSingleton<IHoldingTestScope>(new SigningTestScope(w.Location));
+                    services.AddSingleton<IHoldingTestScope>(new SigningTestScope(live ? Guid.NewGuid() : w.Location));
                 });
             }
         });
@@ -257,17 +255,33 @@ public sealed partial class MainDraftApiTests
             var legacyResponse = await legacyStaff.PostAsync($"{Root}/{draft.Id}/signing-review", null); await Success(legacyResponse);
             oldReview = (await legacyResponse.Content.ReadFromJsonAsync<ContractDocumentView>())!;
         }
-        Assert.Equal(environment != "Production", oldReview.DevelopmentOnly); Assert.Equal(1, oldReview.TemplateVersion);
+        Assert.Equal(!live, oldReview.DevelopmentOnly); Assert.Equal(1, oldReview.TemplateVersion);
         var oldBytes = await owner.GetByteArrayAsync($"{Root}/{draft.Id}/documents/{oldReview.Id}");
         var response = await staff.PostAsync($"{Root}/{draft.Id}/signing-review", null); await Success(response);
         var review = (await response.Content.ReadFromJsonAsync<ContractDocumentView>())!;
-        Assert.Equal(environment != "Production", review.DevelopmentOnly);
+        Assert.Equal(!live, review.DevelopmentOnly);
         Assert.NotEqual(oldReview.Id, review.Id); Assert.Equal(4, review.TemplateVersion);
         Assert.Equal(oldBytes, await owner.GetByteArrayAsync($"{Root}/{draft.Id}/documents/{oldReview.Id}"));
         var staleInput = new MainDraftReleaseInput(tenantUserId, draft.Version, oldReview.Id, true, EmailSigning: tenantUserId is not null);
         var staleResponse = await Release(owner, draft.Id, staleInput, Guid.NewGuid());
         Assert.Equal(HttpStatusCode.Conflict, staleResponse.StatusCode);
         Assert.Contains("draft_document_outdated", await staleResponse.Content.ReadAsStringAsync());
+        if (live)
+        {
+            // Reproduce an older renderer's label through an appended document;
+            // immutable document evidence must never be edited in place.
+            await using var historical = host.WithWebHostBuilder(b => b.ConfigureTestServices(s =>
+            {
+                s.RemoveAll<IMainDraftRenderer>();
+                s.AddScoped<IMainDraftRenderer>(p => new LegacyVersionMainDraftRenderer(
+                    p.GetRequiredService<IConfiguration>(), p.GetRequiredService<TimeProvider>(), 4, true));
+            }));
+            using var historicalStaff = InHost(historical, w.Staff);
+            var historicalResponse = await historicalStaff.PostAsync($"{Root}/{draft.Id}/signing-review", null);
+            await Success(historicalResponse);
+            review = (await historicalResponse.Content.ReadFromJsonAsync<ContractDocumentView>())!;
+            Assert.True(review.DevelopmentOnly);
+        }
         var bytes = await owner.GetByteArrayAsync($"{Root}/{draft.Id}/documents/{review.Id}");
         using (var pdf = new iText.Kernel.Pdf.PdfDocument(new iText.Kernel.Pdf.PdfReader(new MemoryStream(bytes))))
             Assert.DoesNotContain("TÀI LIỆU KIỂM THỬ", ContractPdfRendererTests.Text(pdf));
@@ -290,14 +304,14 @@ public sealed partial class MainDraftApiTests
     }
 
     private sealed class LegacyVersionMainDraftRenderer(IConfiguration configuration, TimeProvider clock,
-        Microsoft.Extensions.Hosting.IHostEnvironment environment, IHoldingTestScope testScope) : IMainDraftRenderer
+        int version = 1, bool developmentOnly = false) : IMainDraftRenderer
     {
-        private readonly MainDraftRenderer renderer = new(configuration, clock, environment, testScope);
+        private readonly MainDraftRenderer renderer = new(configuration, clock);
         public string TemplateHash => renderer.TemplateHash;
         public bool SigningReviewAvailable => renderer.SigningReviewAvailable;
         public bool CanUseSigningReview(Contract contract) => renderer.CanUseSigningReview(contract);
-        public bool IsProductionSigningTemplate(Contract contract) => renderer.IsProductionSigningTemplate(contract);
-        public int DocumentVersion => 1;
+        public bool IsProductionSigningTemplate(Contract contract) => !developmentOnly && renderer.IsProductionSigningTemplate(contract);
+        public int DocumentVersion => version;
         public Task<byte[]> DocxAsync(MainDraftRenderData data, CancellationToken t) => renderer.DocxAsync(data, t);
         public Task<byte[]> PdfAsync(byte[] docx, CancellationToken t) => renderer.PdfAsync(docx, t);
     }
