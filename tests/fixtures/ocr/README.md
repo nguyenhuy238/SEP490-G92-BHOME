@@ -45,3 +45,9 @@ một mẫu chỉ có nhãn phải trả fallback. Sinh ảnh trên Windows bằ
 `scripts/New-IdentityChipFixtures.ps1`. Không có danh tính, chân dung hoặc vân tay thật.
 Chạy bằng `BHome.OcrSmoke <model-directory> --evaluate tests/fixtures/ocr/identity-chip/manifest.json`.
 Xem [kết quả và giới hạn](../../../docs/testing/IDENTITY_OCR_CHIP_LAYOUT_2026-11-27.md).
+
+Tool `--generate-identity-challenges <fixture-root> <output>` sinh bộ suy giảm chất
+lượng từ `identity-chip`; `--generate-identity-validation` sinh các tổ hợp góc/blur
+bổ sung. Các ảnh sinh để trong `.tools`, không dùng ảnh danh tính thật. Đây là nhiều
+biến thể của cùng bố cục, không phải nhiều người/CCCD độc lập.
+Xem [đợt cải thiện ảnh chụp](../../../docs/testing/IDENTITY_OCR_CAPTURE_ROBUSTNESS_2026-11-27.md).

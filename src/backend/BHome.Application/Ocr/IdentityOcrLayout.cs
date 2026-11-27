@@ -32,8 +32,10 @@ internal static class IdentityOcrLayout
         if (lines[index].Bounds is not { } anchor)
             return Enumerable.Range(index + 1, Math.Min(3, lines.Length - index - 1));
         return Enumerable.Range(0, lines.Length).Where(next => next != index && lines[next].Bounds is { } value &&
-            NearAfter(anchor, value) && !lines.Any(line => line.Bounds is { } barrier &&
-                barrier.Y > anchor.Y + anchor.Height * .5f && barrier.Y < value.Y && SameColumn(anchor, barrier) && differentLabel(line.Text)))
+            NearAfter(anchor, value) && !lines.Any(line => line.Bounds is { } barrier && differentLabel(line.Text) &&
+                ((barrier.Y > anchor.Y + anchor.Height * .5f && barrier.Y < value.Y && SameColumn(anchor, barrier)) ||
+                 (Math.Abs(barrier.Y + barrier.Height / 2 - anchor.Y - anchor.Height / 2) <= Math.Max(anchor.Height, barrier.Height) * .5f &&
+                  barrier.X >= anchor.X + anchor.Width - anchor.Height * .2f && barrier.X < value.X))))
             .OrderBy(next => Distance(anchor, lines[next].Bounds!));
     }
 
@@ -41,7 +43,7 @@ internal static class IdentityOcrLayout
     {
         var height = Math.Max(anchor.Height, value.Height);
         var sameRow = Math.Abs(anchor.Y + anchor.Height / 2 - value.Y - value.Height / 2) <= height * .5f;
-        if (sameRow) return value.X >= anchor.X + anchor.Width - height * .2f && value.X - anchor.X - anchor.Width <= height * 4;
+        if (sameRow) return value.X >= anchor.X + anchor.Width - height * .2f && value.X - anchor.X - anchor.Width <= height * 6;
         return value.Y >= anchor.Y + anchor.Height * .7f && value.Y - anchor.Y - anchor.Height <= height * 3 && SameColumn(anchor, value);
     }
 

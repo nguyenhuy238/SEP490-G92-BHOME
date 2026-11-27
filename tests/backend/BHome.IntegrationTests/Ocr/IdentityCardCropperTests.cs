@@ -68,6 +68,10 @@ public sealed class IdentityCardCropperTests
     [Theory]
     [InlineData(0)]
     [InlineData(6)]
+    [InlineData(-18)]
+    [InlineData(35)]
+    [InlineData(60)]
+    [InlineData(90)]
     public void LocalizesOneCardBeforeResizingAndPreservesItsContents(float angle)
     {
         using var scene = Scene();
@@ -126,4 +130,19 @@ public sealed class IdentityCardCropperTests
     }
 
     private static Mat Scene() => new(3000, 2400, MatType.CV_8UC3, new Scalar(65, 74, 85));
+
+    [Theory]
+    [InlineData(-75)]
+    [InlineData(-35)]
+    [InlineData(35)]
+    [InlineData(75)]
+    [InlineData(90)]
+    public void CornerOrderPreservesLongAndShortEdgesForSteepTilt(float angle)
+    {
+        var box = new RotatedRect(new(1200, 1400), new(1400, 880), angle);
+        var corners = IdentityCardCropper.OrderCorners(box.Points().Reverse().ToArray());
+        Assert.InRange(corners[0].DistanceTo(corners[1]), 1399, 1401);
+        Assert.InRange(corners[0].DistanceTo(corners[3]), 879, 881);
+        Assert.True(corners[0].Y + corners[1].Y <= corners[2].Y + corners[3].Y + .01);
+    }
 }
