@@ -1,0 +1,1326 @@
+{
+  "baselineCommit": "985eba78",
+  "syntheticPopulatedLayouts": 2,
+  "syntheticBlankLayouts": 1,
+  "independentRealIdentityDocuments": 0,
+  "sets": [
+    {
+      "name": "development",
+      "manifestSha256": "c9890fb075858c091a073e405adf12b5759533cf7ebc8368b5d9b8df5fcf4aae",
+      "before": {
+        "engineVersions": ["ocrdoc-ppocrv6-vi-run6-9b534643-yolo2-cache1-category2-identity-card2"],
+        "sourceCount": 3,
+        "total": 31,
+        "exactMatches": 20,
+        "expectedRejections": 1,
+        "falseProposals": 0,
+        "incorrectExpectedFields": 3,
+        "missingExpectedFields": 10,
+        "fallbacks": 2,
+        "proposalOrFallbackWithin10Seconds": 31,
+        "maxMilliseconds": 6263,
+        "p95Milliseconds": 6235
+      },
+      "after": {
+        "engineVersions": ["ocrdoc-ppocrv6-vi-run6-9b534643-yolo2-cache1-category2-identity-card3"],
+        "sourceCount": 3,
+        "total": 31,
+        "exactMatches": 29,
+        "expectedRejections": 1,
+        "falseProposals": 0,
+        "incorrectExpectedFields": 2,
+        "missingExpectedFields": 0,
+        "fallbacks": 1,
+        "proposalOrFallbackWithin10Seconds": 31,
+        "maxMilliseconds": 5216,
+        "p95Milliseconds": 4397
+      },
+      "cases": [
+        {
+          "file": "front-reference.jpg",
+          "kind": "IdentityFront",
+          "expectedRejection": false,
+          "before": {
+            "index": 0,
+            "profile": "IdentityFront",
+            "passed": true,
+            "fields": {
+              "citizenIdentityNumber": true,
+              "fullName": true,
+              "dateOfBirth": true
+            },
+            "elapsedMilliseconds": 3210,
+            "isFallback": false,
+            "warnings": [],
+            "expectedRejection": false
+          },
+          "after": {
+            "index": 0,
+            "profile": "IdentityFront",
+            "passed": true,
+            "fields": {
+              "citizenIdentityNumber": true,
+              "fullName": true,
+              "dateOfBirth": true
+            },
+            "elapsedMilliseconds": 2697,
+            "isFallback": false,
+            "warnings": [],
+            "expectedRejection": false
+          }
+        },
+        {
+          "file": "front-rotate-18.jpg",
+          "kind": "IdentityFront",
+          "expectedRejection": false,
+          "before": {
+            "index": 1,
+            "profile": "IdentityFront",
+            "passed": true,
+            "fields": {
+              "citizenIdentityNumber": true,
+              "fullName": true,
+              "dateOfBirth": true
+            },
+            "elapsedMilliseconds": 3556,
+            "isFallback": false,
+            "warnings": [],
+            "expectedRejection": false
+          },
+          "after": {
+            "index": 1,
+            "profile": "IdentityFront",
+            "passed": true,
+            "fields": {
+              "citizenIdentityNumber": true,
+              "fullName": true,
+              "dateOfBirth": true
+            },
+            "elapsedMilliseconds": 2451,
+            "isFallback": false,
+            "warnings": [],
+            "expectedRejection": false
+          }
+        },
+        {
+          "file": "front-rotate18.jpg",
+          "kind": "IdentityFront",
+          "expectedRejection": false,
+          "before": {
+            "index": 2,
+            "profile": "IdentityFront",
+            "passed": true,
+            "fields": {
+              "citizenIdentityNumber": true,
+              "fullName": true,
+              "dateOfBirth": true
+            },
+            "elapsedMilliseconds": 3523,
+            "isFallback": false,
+            "warnings": [],
+            "expectedRejection": false
+          },
+          "after": {
+            "index": 2,
+            "profile": "IdentityFront",
+            "passed": true,
+            "fields": {
+              "citizenIdentityNumber": true,
+              "fullName": true,
+              "dateOfBirth": true
+            },
+            "elapsedMilliseconds": 2406,
+            "isFallback": false,
+            "warnings": [],
+            "expectedRejection": false
+          }
+        },
+        {
+          "file": "front-rotate35.jpg",
+          "kind": "IdentityFront",
+          "expectedRejection": false,
+          "before": {
+            "index": 3,
+            "profile": "IdentityFront",
+            "passed": false,
+            "fields": {
+              "citizenIdentityNumber": true,
+              "fullName": false,
+              "dateOfBirth": true
+            },
+            "elapsedMilliseconds": 3710,
+            "isFallback": false,
+            "warnings": [],
+            "expectedRejection": false
+          },
+          "after": {
+            "index": 3,
+            "profile": "IdentityFront",
+            "passed": true,
+            "fields": {
+              "citizenIdentityNumber": true,
+              "fullName": true,
+              "dateOfBirth": true
+            },
+            "elapsedMilliseconds": 2330,
+            "isFallback": false,
+            "warnings": [],
+            "expectedRejection": false
+          }
+        },
+        {
+          "file": "front-rotate60.jpg",
+          "kind": "IdentityFront",
+          "expectedRejection": false,
+          "before": {
+            "index": 4,
+            "profile": "IdentityFront",
+            "passed": false,
+            "fields": {
+              "citizenIdentityNumber": true,
+              "fullName": false,
+              "dateOfBirth": true
+            },
+            "elapsedMilliseconds": 5935,
+            "isFallback": false,
+            "warnings": ["orientation_uncertain", "low_confidence"],
+            "expectedRejection": false
+          },
+          "after": {
+            "index": 4,
+            "profile": "IdentityFront",
+            "passed": true,
+            "fields": {
+              "citizenIdentityNumber": true,
+              "fullName": true,
+              "dateOfBirth": true
+            },
+            "elapsedMilliseconds": 2300,
+            "isFallback": false,
+            "warnings": [],
+            "expectedRejection": false
+          }
+        },
+        {
+          "file": "front-rotate90.jpg",
+          "kind": "IdentityFront",
+          "expectedRejection": false,
+          "before": {
+            "index": 5,
+            "profile": "IdentityFront",
+            "passed": false,
+            "fields": {
+              "citizenIdentityNumber": true,
+              "fullName": false,
+              "dateOfBirth": false
+            },
+            "elapsedMilliseconds": 5586,
+            "isFallback": false,
+            "warnings": ["orientation_corrected"],
+            "expectedRejection": false
+          },
+          "after": {
+            "index": 5,
+            "profile": "IdentityFront",
+            "passed": true,
+            "fields": {
+              "citizenIdentityNumber": true,
+              "fullName": true,
+              "dateOfBirth": true
+            },
+            "elapsedMilliseconds": 3427,
+            "isFallback": false,
+            "warnings": ["orientation_corrected"],
+            "expectedRejection": false
+          }
+        },
+        {
+          "file": "front-rotate180.jpg",
+          "kind": "IdentityFront",
+          "expectedRejection": false,
+          "before": {
+            "index": 6,
+            "profile": "IdentityFront",
+            "passed": false,
+            "fields": {
+              "citizenIdentityNumber": true,
+              "fullName": false,
+              "dateOfBirth": false
+            },
+            "elapsedMilliseconds": 5918,
+            "isFallback": false,
+            "warnings": ["orientation_uncertain"],
+            "expectedRejection": false
+          },
+          "after": {
+            "index": 6,
+            "profile": "IdentityFront",
+            "passed": true,
+            "fields": {
+              "citizenIdentityNumber": true,
+              "fullName": true,
+              "dateOfBirth": true
+            },
+            "elapsedMilliseconds": 3136,
+            "isFallback": false,
+            "warnings": ["orientation_corrected"],
+            "expectedRejection": false
+          }
+        },
+        {
+          "file": "front-blur1.1.jpg",
+          "kind": "IdentityFront",
+          "expectedRejection": false,
+          "before": {
+            "index": 7,
+            "profile": "IdentityFront",
+            "passed": true,
+            "fields": {
+              "citizenIdentityNumber": true,
+              "fullName": true,
+              "dateOfBirth": true
+            },
+            "elapsedMilliseconds": 3450,
+            "isFallback": false,
+            "warnings": [],
+            "expectedRejection": false
+          },
+          "after": {
+            "index": 7,
+            "profile": "IdentityFront",
+            "passed": true,
+            "fields": {
+              "citizenIdentityNumber": true,
+              "fullName": true,
+              "dateOfBirth": true
+            },
+            "elapsedMilliseconds": 2365,
+            "isFallback": false,
+            "warnings": [],
+            "expectedRejection": false
+          }
+        },
+        {
+          "file": "front-blur1.8.jpg",
+          "kind": "IdentityFront",
+          "expectedRejection": false,
+          "before": {
+            "index": 8,
+            "profile": "IdentityFront",
+            "passed": true,
+            "fields": {
+              "citizenIdentityNumber": true,
+              "fullName": true,
+              "dateOfBirth": true
+            },
+            "elapsedMilliseconds": 3243,
+            "isFallback": false,
+            "warnings": ["blur_or_low_detail"],
+            "expectedRejection": false
+          },
+          "after": {
+            "index": 8,
+            "profile": "IdentityFront",
+            "passed": true,
+            "fields": {
+              "citizenIdentityNumber": true,
+              "fullName": true,
+              "dateOfBirth": true
+            },
+            "elapsedMilliseconds": 2059,
+            "isFallback": false,
+            "warnings": ["blur_or_low_detail"],
+            "expectedRejection": false
+          }
+        },
+        {
+          "file": "front-blur3.2.jpg",
+          "kind": "IdentityFront",
+          "expectedRejection": false,
+          "before": {
+            "index": 9,
+            "profile": "IdentityFront",
+            "passed": false,
+            "fields": {
+              "citizenIdentityNumber": true,
+              "fullName": false,
+              "dateOfBirth": true
+            },
+            "elapsedMilliseconds": 2996,
+            "isFallback": false,
+            "warnings": ["blur_or_low_detail"],
+            "expectedRejection": false
+          },
+          "after": {
+            "index": 9,
+            "profile": "IdentityFront",
+            "passed": false,
+            "fields": {
+              "citizenIdentityNumber": true,
+              "fullName": false,
+              "dateOfBirth": true
+            },
+            "elapsedMilliseconds": 2044,
+            "isFallback": false,
+            "warnings": ["blur_or_low_detail"],
+            "expectedRejection": false
+          }
+        },
+        {
+          "file": "front-low-contrast.jpg",
+          "kind": "IdentityFront",
+          "expectedRejection": false,
+          "before": {
+            "index": 10,
+            "profile": "IdentityFront",
+            "passed": true,
+            "fields": {
+              "citizenIdentityNumber": true,
+              "fullName": true,
+              "dateOfBirth": true
+            },
+            "elapsedMilliseconds": 3633,
+            "isFallback": false,
+            "warnings": [],
+            "expectedRejection": false
+          },
+          "after": {
+            "index": 10,
+            "profile": "IdentityFront",
+            "passed": true,
+            "fields": {
+              "citizenIdentityNumber": true,
+              "fullName": true,
+              "dateOfBirth": true
+            },
+            "elapsedMilliseconds": 2328,
+            "isFallback": false,
+            "warnings": [],
+            "expectedRejection": false
+          }
+        },
+        {
+          "file": "front-shadow.jpg",
+          "kind": "IdentityFront",
+          "expectedRejection": false,
+          "before": {
+            "index": 11,
+            "profile": "IdentityFront",
+            "passed": true,
+            "fields": {
+              "citizenIdentityNumber": true,
+              "fullName": true,
+              "dateOfBirth": true
+            },
+            "elapsedMilliseconds": 3615,
+            "isFallback": false,
+            "warnings": [],
+            "expectedRejection": false
+          },
+          "after": {
+            "index": 11,
+            "profile": "IdentityFront",
+            "passed": true,
+            "fields": {
+              "citizenIdentityNumber": true,
+              "fullName": true,
+              "dateOfBirth": true
+            },
+            "elapsedMilliseconds": 2359,
+            "isFallback": false,
+            "warnings": [],
+            "expectedRejection": false
+          }
+        },
+        {
+          "file": "front-motion7.jpg",
+          "kind": "IdentityFront",
+          "expectedRejection": false,
+          "before": {
+            "index": 12,
+            "profile": "IdentityFront",
+            "passed": false,
+            "fields": {
+              "citizenIdentityNumber": true,
+              "fullName": false,
+              "dateOfBirth": true
+            },
+            "elapsedMilliseconds": 3848,
+            "isFallback": false,
+            "warnings": [],
+            "expectedRejection": false
+          },
+          "after": {
+            "index": 12,
+            "profile": "IdentityFront",
+            "passed": false,
+            "fields": {
+              "citizenIdentityNumber": true,
+              "fullName": false,
+              "dateOfBirth": true
+            },
+            "elapsedMilliseconds": 2497,
+            "isFallback": false,
+            "warnings": [],
+            "expectedRejection": false
+          }
+        },
+        {
+          "file": "front-perspective.jpg",
+          "kind": "IdentityFront",
+          "expectedRejection": false,
+          "before": {
+            "index": 13,
+            "profile": "IdentityFront",
+            "passed": true,
+            "fields": {
+              "citizenIdentityNumber": true,
+              "fullName": true,
+              "dateOfBirth": true
+            },
+            "elapsedMilliseconds": 3586,
+            "isFallback": false,
+            "warnings": [],
+            "expectedRejection": false
+          },
+          "after": {
+            "index": 13,
+            "profile": "IdentityFront",
+            "passed": true,
+            "fields": {
+              "citizenIdentityNumber": true,
+              "fullName": true,
+              "dateOfBirth": true
+            },
+            "elapsedMilliseconds": 2428,
+            "isFallback": false,
+            "warnings": [],
+            "expectedRejection": false
+          }
+        },
+        {
+          "file": "front-perspective-blur.jpg",
+          "kind": "IdentityFront",
+          "expectedRejection": false,
+          "before": {
+            "index": 14,
+            "profile": "IdentityFront",
+            "passed": true,
+            "fields": {
+              "citizenIdentityNumber": true,
+              "fullName": true,
+              "dateOfBirth": true
+            },
+            "elapsedMilliseconds": 3391,
+            "isFallback": false,
+            "warnings": [],
+            "expectedRejection": false
+          },
+          "after": {
+            "index": 14,
+            "profile": "IdentityFront",
+            "passed": true,
+            "fields": {
+              "citizenIdentityNumber": true,
+              "fullName": true,
+              "dateOfBirth": true
+            },
+            "elapsedMilliseconds": 2334,
+            "isFallback": false,
+            "warnings": [],
+            "expectedRejection": false
+          }
+        },
+        {
+          "file": "back-reference.jpg",
+          "kind": "IdentityBack",
+          "expectedRejection": false,
+          "before": {
+            "index": 15,
+            "profile": "IdentityBack",
+            "passed": true,
+            "fields": {
+              "dateOfIssue": true
+            },
+            "elapsedMilliseconds": 4254,
+            "isFallback": false,
+            "warnings": ["low_confidence"],
+            "expectedRejection": false
+          },
+          "after": {
+            "index": 15,
+            "profile": "IdentityBack",
+            "passed": true,
+            "fields": {
+              "dateOfIssue": true
+            },
+            "elapsedMilliseconds": 3035,
+            "isFallback": false,
+            "warnings": ["low_confidence"],
+            "expectedRejection": false
+          }
+        },
+        {
+          "file": "back-rotate-18.jpg",
+          "kind": "IdentityBack",
+          "expectedRejection": false,
+          "before": {
+            "index": 16,
+            "profile": "IdentityBack",
+            "passed": true,
+            "fields": {
+              "dateOfIssue": true
+            },
+            "elapsedMilliseconds": 4498,
+            "isFallback": false,
+            "warnings": ["low_confidence"],
+            "expectedRejection": false
+          },
+          "after": {
+            "index": 16,
+            "profile": "IdentityBack",
+            "passed": true,
+            "fields": {
+              "dateOfIssue": true
+            },
+            "elapsedMilliseconds": 2959,
+            "isFallback": false,
+            "warnings": ["low_confidence"],
+            "expectedRejection": false
+          }
+        },
+        {
+          "file": "back-rotate18.jpg",
+          "kind": "IdentityBack",
+          "expectedRejection": false,
+          "before": {
+            "index": 17,
+            "profile": "IdentityBack",
+            "passed": false,
+            "fields": {
+              "dateOfIssue": false
+            },
+            "elapsedMilliseconds": 4210,
+            "isFallback": false,
+            "warnings": ["invalid_dateOfIssue", "low_confidence"],
+            "expectedRejection": false
+          },
+          "after": {
+            "index": 17,
+            "profile": "IdentityBack",
+            "passed": true,
+            "fields": {
+              "dateOfIssue": true
+            },
+            "elapsedMilliseconds": 2889,
+            "isFallback": false,
+            "warnings": ["low_confidence"],
+            "expectedRejection": false
+          }
+        },
+        {
+          "file": "back-rotate35.jpg",
+          "kind": "IdentityBack",
+          "expectedRejection": false,
+          "before": {
+            "index": 18,
+            "profile": "IdentityBack",
+            "passed": true,
+            "fields": {
+              "dateOfIssue": true
+            },
+            "elapsedMilliseconds": 4337,
+            "isFallback": false,
+            "warnings": ["low_confidence"],
+            "expectedRejection": false
+          },
+          "after": {
+            "index": 18,
+            "profile": "IdentityBack",
+            "passed": true,
+            "fields": {
+              "dateOfIssue": true
+            },
+            "elapsedMilliseconds": 2936,
+            "isFallback": false,
+            "warnings": ["low_confidence"],
+            "expectedRejection": false
+          }
+        },
+        {
+          "file": "back-rotate60.jpg",
+          "kind": "IdentityBack",
+          "expectedRejection": false,
+          "before": {
+            "index": 19,
+            "profile": "IdentityBack",
+            "passed": false,
+            "fields": {
+              "dateOfIssue": false
+            },
+            "elapsedMilliseconds": 3663,
+            "isFallback": false,
+            "warnings": ["invalid_dateOfIssue"],
+            "expectedRejection": false
+          },
+          "after": {
+            "index": 19,
+            "profile": "IdentityBack",
+            "passed": true,
+            "fields": {
+              "dateOfIssue": true
+            },
+            "elapsedMilliseconds": 2841,
+            "isFallback": false,
+            "warnings": ["low_confidence"],
+            "expectedRejection": false
+          }
+        },
+        {
+          "file": "back-rotate90.jpg",
+          "kind": "IdentityBack",
+          "expectedRejection": false,
+          "before": {
+            "index": 20,
+            "profile": "IdentityBack",
+            "passed": false,
+            "fields": {
+              "dateOfIssue": false
+            },
+            "elapsedMilliseconds": 6263,
+            "isFallback": true,
+            "warnings": ["orientation_corrected", "unsupported_or_unreadable_layout"],
+            "expectedRejection": false
+          },
+          "after": {
+            "index": 20,
+            "profile": "IdentityBack",
+            "passed": true,
+            "fields": {
+              "dateOfIssue": true
+            },
+            "elapsedMilliseconds": 3802,
+            "isFallback": false,
+            "warnings": ["orientation_corrected", "low_confidence"],
+            "expectedRejection": false
+          }
+        },
+        {
+          "file": "back-rotate180.jpg",
+          "kind": "IdentityBack",
+          "expectedRejection": false,
+          "before": {
+            "index": 21,
+            "profile": "IdentityBack",
+            "passed": false,
+            "fields": {
+              "dateOfIssue": false
+            },
+            "elapsedMilliseconds": 4383,
+            "isFallback": false,
+            "warnings": ["low_confidence"],
+            "expectedRejection": false
+          },
+          "after": {
+            "index": 21,
+            "profile": "IdentityBack",
+            "passed": true,
+            "fields": {
+              "dateOfIssue": true
+            },
+            "elapsedMilliseconds": 4026,
+            "isFallback": false,
+            "warnings": ["orientation_corrected"],
+            "expectedRejection": false
+          }
+        },
+        {
+          "file": "back-blur1.1.jpg",
+          "kind": "IdentityBack",
+          "expectedRejection": false,
+          "before": {
+            "index": 22,
+            "profile": "IdentityBack",
+            "passed": true,
+            "fields": {
+              "dateOfIssue": true
+            },
+            "elapsedMilliseconds": 4141,
+            "isFallback": false,
+            "warnings": ["low_confidence"],
+            "expectedRejection": false
+          },
+          "after": {
+            "index": 22,
+            "profile": "IdentityBack",
+            "passed": true,
+            "fields": {
+              "dateOfIssue": true
+            },
+            "elapsedMilliseconds": 2835,
+            "isFallback": false,
+            "warnings": ["low_confidence"],
+            "expectedRejection": false
+          }
+        },
+        {
+          "file": "back-blur1.8.jpg",
+          "kind": "IdentityBack",
+          "expectedRejection": false,
+          "before": {
+            "index": 23,
+            "profile": "IdentityBack",
+            "passed": true,
+            "fields": {
+              "dateOfIssue": true
+            },
+            "elapsedMilliseconds": 4045,
+            "isFallback": false,
+            "warnings": ["low_confidence"],
+            "expectedRejection": false
+          },
+          "after": {
+            "index": 23,
+            "profile": "IdentityBack",
+            "passed": true,
+            "fields": {
+              "dateOfIssue": true
+            },
+            "elapsedMilliseconds": 2842,
+            "isFallback": false,
+            "warnings": ["low_confidence"],
+            "expectedRejection": false
+          }
+        },
+        {
+          "file": "back-blur3.2.jpg",
+          "kind": "IdentityBack",
+          "expectedRejection": false,
+          "before": {
+            "index": 24,
+            "profile": "IdentityBack",
+            "passed": true,
+            "fields": {
+              "dateOfIssue": true
+            },
+            "elapsedMilliseconds": 3335,
+            "isFallback": false,
+            "warnings": ["blur_or_low_detail", "low_confidence"],
+            "expectedRejection": false
+          },
+          "after": {
+            "index": 24,
+            "profile": "IdentityBack",
+            "passed": true,
+            "fields": {
+              "dateOfIssue": true
+            },
+            "elapsedMilliseconds": 4091,
+            "isFallback": false,
+            "warnings": ["blur_or_low_detail", "low_confidence"],
+            "expectedRejection": false
+          }
+        },
+        {
+          "file": "back-low-contrast.jpg",
+          "kind": "IdentityBack",
+          "expectedRejection": false,
+          "before": {
+            "index": 25,
+            "profile": "IdentityBack",
+            "passed": true,
+            "fields": {
+              "dateOfIssue": true
+            },
+            "elapsedMilliseconds": 5174,
+            "isFallback": false,
+            "warnings": ["low_confidence"],
+            "expectedRejection": false
+          },
+          "after": {
+            "index": 25,
+            "profile": "IdentityBack",
+            "passed": true,
+            "fields": {
+              "dateOfIssue": true
+            },
+            "elapsedMilliseconds": 5216,
+            "isFallback": false,
+            "warnings": ["low_confidence"],
+            "expectedRejection": false
+          }
+        },
+        {
+          "file": "back-shadow.jpg",
+          "kind": "IdentityBack",
+          "expectedRejection": false,
+          "before": {
+            "index": 26,
+            "profile": "IdentityBack",
+            "passed": true,
+            "fields": {
+              "dateOfIssue": true
+            },
+            "elapsedMilliseconds": 6235,
+            "isFallback": false,
+            "warnings": ["low_confidence"],
+            "expectedRejection": false
+          },
+          "after": {
+            "index": 26,
+            "profile": "IdentityBack",
+            "passed": true,
+            "fields": {
+              "dateOfIssue": true
+            },
+            "elapsedMilliseconds": 4397,
+            "isFallback": false,
+            "warnings": ["low_confidence"],
+            "expectedRejection": false
+          }
+        },
+        {
+          "file": "back-motion7.jpg",
+          "kind": "IdentityBack",
+          "expectedRejection": false,
+          "before": {
+            "index": 27,
+            "profile": "IdentityBack",
+            "passed": false,
+            "fields": {
+              "dateOfIssue": false
+            },
+            "elapsedMilliseconds": 5080,
+            "isFallback": false,
+            "warnings": ["invalid_dateOfIssue", "low_confidence"],
+            "expectedRejection": false
+          },
+          "after": {
+            "index": 27,
+            "profile": "IdentityBack",
+            "passed": true,
+            "fields": {
+              "dateOfIssue": true
+            },
+            "elapsedMilliseconds": 3175,
+            "isFallback": false,
+            "warnings": ["low_confidence"],
+            "expectedRejection": false
+          }
+        },
+        {
+          "file": "back-perspective.jpg",
+          "kind": "IdentityBack",
+          "expectedRejection": false,
+          "before": {
+            "index": 28,
+            "profile": "IdentityBack",
+            "passed": true,
+            "fields": {
+              "dateOfIssue": true
+            },
+            "elapsedMilliseconds": 5063,
+            "isFallback": false,
+            "warnings": ["low_confidence"],
+            "expectedRejection": false
+          },
+          "after": {
+            "index": 28,
+            "profile": "IdentityBack",
+            "passed": true,
+            "fields": {
+              "dateOfIssue": true
+            },
+            "elapsedMilliseconds": 3037,
+            "isFallback": false,
+            "warnings": ["low_confidence"],
+            "expectedRejection": false
+          }
+        },
+        {
+          "file": "back-perspective-blur.jpg",
+          "kind": "IdentityBack",
+          "expectedRejection": false,
+          "before": {
+            "index": 29,
+            "profile": "IdentityBack",
+            "passed": true,
+            "fields": {
+              "dateOfIssue": true
+            },
+            "elapsedMilliseconds": 5017,
+            "isFallback": false,
+            "warnings": ["low_confidence"],
+            "expectedRejection": false
+          },
+          "after": {
+            "index": 29,
+            "profile": "IdentityBack",
+            "passed": true,
+            "fields": {
+              "dateOfIssue": true
+            },
+            "elapsedMilliseconds": 2906,
+            "isFallback": false,
+            "warnings": ["low_confidence"],
+            "expectedRejection": false
+          }
+        },
+        {
+          "file": "blank.jpg",
+          "kind": "IdentityFront",
+          "expectedRejection": true,
+          "before": {
+            "index": 30,
+            "profile": "IdentityFront",
+            "passed": true,
+            "fields": {},
+            "elapsedMilliseconds": 5727,
+            "isFallback": true,
+            "warnings": ["orientation_uncertain", "unsupported_or_unreadable_layout"],
+            "expectedRejection": true
+          },
+          "after": {
+            "index": 30,
+            "profile": "IdentityFront",
+            "passed": true,
+            "fields": {},
+            "elapsedMilliseconds": 2060,
+            "isFallback": true,
+            "warnings": ["unsupported_or_unreadable_layout"],
+            "expectedRejection": true
+          }
+        }
+      ]
+    },
+    {
+      "name": "additional_transforms",
+      "manifestSha256": "85f480c97435161a3cec080fd81203bfd1fabdad783bc3b23161221d1b7e1b91",
+      "before": {
+        "engineVersions": ["ocrdoc-ppocrv6-vi-run6-9b534643-yolo2-cache1-category2-identity-card2"],
+        "sourceCount": 3,
+        "total": 7,
+        "exactMatches": 4,
+        "expectedRejections": 1,
+        "falseProposals": 0,
+        "incorrectExpectedFields": 1,
+        "missingExpectedFields": 3,
+        "fallbacks": 2,
+        "proposalOrFallbackWithin10Seconds": 7,
+        "maxMilliseconds": 7356,
+        "p95Milliseconds": 7356
+      },
+      "after": {
+        "engineVersions": ["ocrdoc-ppocrv6-vi-run6-9b534643-yolo2-cache1-category2-identity-card3"],
+        "sourceCount": 3,
+        "total": 7,
+        "exactMatches": 7,
+        "expectedRejections": 1,
+        "falseProposals": 0,
+        "incorrectExpectedFields": 0,
+        "missingExpectedFields": 0,
+        "fallbacks": 1,
+        "proposalOrFallbackWithin10Seconds": 7,
+        "maxMilliseconds": 3476,
+        "p95Milliseconds": 3476
+      },
+      "cases": [
+        {
+          "file": "front-rotate-minus27-blur.jpg",
+          "kind": "IdentityFront",
+          "expectedRejection": false,
+          "before": {
+            "index": 0,
+            "profile": "IdentityFront",
+            "passed": false,
+            "fields": {
+              "citizenIdentityNumber": true,
+              "fullName": false,
+              "dateOfBirth": true
+            },
+            "elapsedMilliseconds": 4733,
+            "isFallback": false,
+            "warnings": [],
+            "expectedRejection": false
+          },
+          "after": {
+            "index": 0,
+            "profile": "IdentityFront",
+            "passed": true,
+            "fields": {
+              "citizenIdentityNumber": true,
+              "fullName": true,
+              "dateOfBirth": true
+            },
+            "elapsedMilliseconds": 3225,
+            "isFallback": false,
+            "warnings": [],
+            "expectedRejection": false
+          }
+        },
+        {
+          "file": "front-rotate75.jpg",
+          "kind": "IdentityFront",
+          "expectedRejection": false,
+          "before": {
+            "index": 1,
+            "profile": "IdentityFront",
+            "passed": false,
+            "fields": {
+              "citizenIdentityNumber": true,
+              "fullName": false,
+              "dateOfBirth": false
+            },
+            "elapsedMilliseconds": 5487,
+            "isFallback": false,
+            "warnings": ["orientation_corrected"],
+            "expectedRejection": false
+          },
+          "after": {
+            "index": 1,
+            "profile": "IdentityFront",
+            "passed": true,
+            "fields": {
+              "citizenIdentityNumber": true,
+              "fullName": true,
+              "dateOfBirth": true
+            },
+            "elapsedMilliseconds": 2914,
+            "isFallback": false,
+            "warnings": [],
+            "expectedRejection": false
+          }
+        },
+        {
+          "file": "front-perspective-motion5.jpg",
+          "kind": "IdentityFront",
+          "expectedRejection": false,
+          "before": {
+            "index": 2,
+            "profile": "IdentityFront",
+            "passed": true,
+            "fields": {
+              "citizenIdentityNumber": true,
+              "fullName": true,
+              "dateOfBirth": true
+            },
+            "elapsedMilliseconds": 4014,
+            "isFallback": false,
+            "warnings": [],
+            "expectedRejection": false
+          },
+          "after": {
+            "index": 2,
+            "profile": "IdentityFront",
+            "passed": true,
+            "fields": {
+              "citizenIdentityNumber": true,
+              "fullName": true,
+              "dateOfBirth": true
+            },
+            "elapsedMilliseconds": 2678,
+            "isFallback": false,
+            "warnings": [],
+            "expectedRejection": false
+          }
+        },
+        {
+          "file": "back-rotate-minus27-blur.jpg",
+          "kind": "IdentityBack",
+          "expectedRejection": false,
+          "before": {
+            "index": 3,
+            "profile": "IdentityBack",
+            "passed": true,
+            "fields": {
+              "dateOfIssue": true
+            },
+            "elapsedMilliseconds": 5665,
+            "isFallback": false,
+            "warnings": ["low_confidence"],
+            "expectedRejection": false
+          },
+          "after": {
+            "index": 3,
+            "profile": "IdentityBack",
+            "passed": true,
+            "fields": {
+              "dateOfIssue": true
+            },
+            "elapsedMilliseconds": 3028,
+            "isFallback": false,
+            "warnings": ["low_confidence"],
+            "expectedRejection": false
+          }
+        },
+        {
+          "file": "back-rotate75.jpg",
+          "kind": "IdentityBack",
+          "expectedRejection": false,
+          "before": {
+            "index": 4,
+            "profile": "IdentityBack",
+            "passed": false,
+            "fields": {
+              "dateOfIssue": false
+            },
+            "elapsedMilliseconds": 7356,
+            "isFallback": true,
+            "warnings": ["orientation_corrected", "unsupported_or_unreadable_layout"],
+            "expectedRejection": false
+          },
+          "after": {
+            "index": 4,
+            "profile": "IdentityBack",
+            "passed": true,
+            "fields": {
+              "dateOfIssue": true
+            },
+            "elapsedMilliseconds": 3476,
+            "isFallback": false,
+            "warnings": ["low_confidence"],
+            "expectedRejection": false
+          }
+        },
+        {
+          "file": "back-perspective-motion5.jpg",
+          "kind": "IdentityBack",
+          "expectedRejection": false,
+          "before": {
+            "index": 5,
+            "profile": "IdentityBack",
+            "passed": true,
+            "fields": {
+              "dateOfIssue": true
+            },
+            "elapsedMilliseconds": 5763,
+            "isFallback": false,
+            "warnings": ["low_confidence"],
+            "expectedRejection": false
+          },
+          "after": {
+            "index": 5,
+            "profile": "IdentityBack",
+            "passed": true,
+            "fields": {
+              "dateOfIssue": true
+            },
+            "elapsedMilliseconds": 3389,
+            "isFallback": false,
+            "warnings": ["low_confidence"],
+            "expectedRejection": false
+          }
+        },
+        {
+          "file": "blank.jpg",
+          "kind": "IdentityFront",
+          "expectedRejection": true,
+          "before": {
+            "index": 6,
+            "profile": "IdentityFront",
+            "passed": true,
+            "fields": {},
+            "elapsedMilliseconds": 5597,
+            "isFallback": true,
+            "warnings": ["orientation_uncertain", "unsupported_or_unreadable_layout"],
+            "expectedRejection": true
+          },
+          "after": {
+            "index": 6,
+            "profile": "IdentityFront",
+            "passed": true,
+            "fields": {},
+            "elapsedMilliseconds": 2216,
+            "isFallback": true,
+            "warnings": ["unsupported_or_unreadable_layout"],
+            "expectedRejection": true
+          }
+        }
+      ]
+    }
+  ],
+  "clearRegressions": [
+    {
+      "engineVersions": ["ocrdoc-ppocrv6-vi-run6-9b534643-yolo2-cache1-category2-identity-card3"],
+      "sourceCount": 6,
+      "total": 6,
+      "exactMatches": 6,
+      "expectedRejections": 0,
+      "falseProposals": 0,
+      "incorrectExpectedFields": 0,
+      "missingExpectedFields": 0,
+      "fallbacks": 0,
+      "proposalOrFallbackWithin10Seconds": 6,
+      "maxMilliseconds": 2013,
+      "p95Milliseconds": 2013
+    },
+    {
+      "engineVersions": ["ocrdoc-ppocrv6-vi-run6-9b534643-yolo2-cache1-category2-identity-card3"],
+      "sourceCount": 3,
+      "total": 3,
+      "exactMatches": 3,
+      "expectedRejections": 0,
+      "falseProposals": 0,
+      "incorrectExpectedFields": 0,
+      "missingExpectedFields": 0,
+      "fallbacks": 0,
+      "proposalOrFallbackWithin10Seconds": 3,
+      "maxMilliseconds": 3142,
+      "p95Milliseconds": 3142
+    }
+  ],
+  "vps": {
+    "cpuLimit": 2,
+    "memoryLimitMiB": 1024,
+    "reports": [
+      {
+        "engineVersions": ["ocrdoc-ppocrv6-vi-run6-9b534643-yolo2-cache1-category2-identity-card3"],
+        "sourceCount": 6,
+        "total": 6,
+        "exactMatches": 6,
+        "expectedRejections": 0,
+        "falseProposals": 0,
+        "incorrectExpectedFields": 0,
+        "missingExpectedFields": 0,
+        "fallbacks": 0,
+        "proposalOrFallbackWithin10Seconds": 6,
+        "maxMilliseconds": 8020,
+        "p95Milliseconds": 8020
+      },
+      {
+        "engineVersions": ["ocrdoc-ppocrv6-vi-run6-9b534643-yolo2-cache1-category2-identity-card3"],
+        "sourceCount": 3,
+        "total": 3,
+        "exactMatches": 3,
+        "expectedRejections": 0,
+        "falseProposals": 0,
+        "incorrectExpectedFields": 0,
+        "missingExpectedFields": 0,
+        "fallbacks": 0,
+        "proposalOrFallbackWithin10Seconds": 3,
+        "maxMilliseconds": 8447,
+        "p95Milliseconds": 8447
+      },
+      {
+        "engineVersions": ["ocrdoc-ppocrv6-vi-run6-9b534643-yolo2-cache1-category2-identity-card3"],
+        "sourceCount": 3,
+        "total": 7,
+        "exactMatches": 7,
+        "expectedRejections": 1,
+        "falseProposals": 0,
+        "incorrectExpectedFields": 0,
+        "missingExpectedFields": 0,
+        "fallbacks": 1,
+        "proposalOrFallbackWithin10Seconds": 7,
+        "maxMilliseconds": 8480,
+        "p95Milliseconds": 8480
+      }
+    ]
+  },
+  "sourceSha256": {
+    "src/backend/BHome.Application/Ocr/IdentityOcrLayout.cs": "f90dca22a8504f2c54389522cc309b3a6c0801cd38e1e67b30414ead095588e4",
+    "src/backend/BHome.Infrastructure/Ocr/IdentityCardCropper.cs": "f77205724e6224eeb45e606d5fba492f591c9cf39c13a051e7a25825adb88652",
+    "src/backend/BHome.Infrastructure/Ocr/IdentityOrientation.cs": "e644ceaec8bebe8a1df420f43908424151744aa47e85b8a6ee507cf363bb95f7",
+    "src/backend/BHome.Infrastructure/Ocr/OnnxOcrEngine.cs": "5b98b5059542eaee8ca0dd6c5ee6403d0e2b0eac7f7fabc2abbb363d772e677f"
+  }
+}

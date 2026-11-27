@@ -6,6 +6,19 @@ namespace BHome.Application.UnitTests.Ocr;
 
 public sealed class OcrParserTests
 {
+    [Fact]
+    public void ADateMayFollowABilingualLabelAcrossPrintedWhitespaceButNotAcrossAnotherField()
+    {
+        OcrLine label = new("Ngày, tháng, năm / Date, month, year:", .99f) { Bounds = new(55, 235, 367, 28) };
+        OcrLine value = new("01/07/2024", .97f) { Bounds = new(567, 230, 167, 34) };
+        var result = OcrFieldParser.Parse(new([label, value], "synthetic", []), OcrDocumentKind.IdentityBack);
+        Assert.Equal("2024-07-01", result.ProposedFields["dateOfIssue"]);
+        OcrLine otherLabel = new("Có giá trị đến:", .99f) { Bounds = new(435, 233, 120, 28) };
+        result = OcrFieldParser.Parse(new([label, otherLabel, value], "synthetic", []), OcrDocumentKind.IdentityBack);
+        Assert.False(result.ProposedFields.ContainsKey("dateOfIssue"));
+        Assert.Equal("2024-07-01", result.ProposedFields["dateOfExpiry"]);
+    }
+
     [Theory]
     [InlineData("Ngày sinh / Date of birth: 01 / 02 / 2000", OcrDocumentKind.IdentityFront, "dateOfBirth", "2000-02-01")]
     [InlineData("Ngày, tháng, năm / Date, month, year: 01 . 07 . 2024", OcrDocumentKind.IdentityBack, "dateOfIssue", "2024-07-01")]

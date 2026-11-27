@@ -27,10 +27,12 @@ internal static class IdentityCardCropper
             if (contourArea < area * .12 || contourArea > area * .92) continue;
             var polygon = Cv2.ApproxPolyDP(contour, Cv2.ArcLength(contour, true) * .02, true);
             if (polygon.Length != 4 || !Cv2.IsContourConvex(polygon)) continue;
-            // A portrait inset on a tightly framed card is not the card boundary.
-            // Leave vertical/strongly rotated frames to the existing orientation path.
+            // A portrait inset on a tightly framed landscape card is not its
+            // boundary. A portrait-oriented photograph can still contain a whole
+            // rotated card and must be localized before the image is reduced.
             var bounds = Cv2.BoundingRect(polygon);
-            if (bounds.Width < bounds.Height * 1.2) continue;
+            var frameRatio = small.Width / (double)small.Height;
+            if (frameRatio is >= 1.35 and <= 1.9 && bounds.Width < bounds.Height * 1.2 && contourArea < area * .5) continue;
             if (polygon.Any(p => p.X <= 2 || p.Y <= 2 || p.X >= small.Width - 3 || p.Y >= small.Height - 3)) continue;
             var box = Cv2.MinAreaRect(polygon);
             var ratio = Math.Max(box.Size.Width, box.Size.Height) / Math.Min(box.Size.Width, box.Size.Height);
@@ -42,10 +44,8 @@ internal static class IdentityCardCropper
         // Nested contours are the two sides of one border. Distinct cards are ambiguous.
         if (candidates.Skip(1).Any(c => c.Area > best.Area * .7 &&
             c.Box.Center.DistanceTo(best.Box.Center) > Math.Min(best.Box.Size.Width, best.Box.Size.Height) * .25)) return false;
-        var points = best.Points.Select(p => new Point2f((float)(p.X / scale), (float)(p.Y / scale))).OrderBy(p => p.X).ToArray();
-        var left = points.Take(2).OrderBy(p => p.Y).ToArray();
-        var right = points.Skip(2).OrderBy(p => p.Y).ToArray();
-        Point2f[] corners = [left[0], right[0], right[1], left[1]];
+        var points = best.Points.Select(p => new Point2f((float)(p.X / scale), (float)(p.Y / scale))).ToArray();
+        var corners = OrderCorners(points);
         var width = (int)Math.Max(corners[0].DistanceTo(corners[1]), corners[3].DistanceTo(corners[2]));
         var height = (int)Math.Max(corners[0].DistanceTo(corners[3]), corners[1].DistanceTo(corners[2]));
         if (width < 200 || height < 120) return false;
@@ -68,5 +68,19 @@ internal static class IdentityCardCropper
         using var transform = Cv2.GetPerspectiveTransform(corners, target);
         Cv2.WarpPerspective(source, destination, transform, new Size(width, height), InterpolationFlags.Linear, BorderTypes.Replicate);
         return true;
+    }
+
+    internal static Point2f[] OrderCorners(IReadOnlyList<Point2f> points)
+    {
+        var center = new Point2f(points.Average(p => p.X), points.Average(p => p.Y));
+        var cycle = points.OrderBy(p => Math.Atan2(p.Y - center.Y, p.X - center.X)).ToArray();
+        double Edge(int index) => cycle[index].DistanceTo(cycle[(index + 1) % 4]);
+        var first = Edge(0) + Edge(2) >= Edge(1) + Edge(3) ? 0 : 1;
+        var opposite = (first + 2) % 4;
+        // Choose the upper of the two long edges; retain cyclic winding so that
+        // a steep tilt cannot swap a long edge with the card's short edge.
+        if (cycle[first].Y + cycle[(first + 1) % 4].Y > cycle[opposite].Y + cycle[(opposite + 1) % 4].Y)
+            first = opposite;
+        return Enumerable.Range(0, 4).Select(i => cycle[(first + i) % 4]).ToArray();
     }
 }

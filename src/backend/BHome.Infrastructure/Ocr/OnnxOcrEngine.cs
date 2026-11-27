@@ -11,7 +11,7 @@ namespace BHome.Infrastructure.Ocr;
 // One detector + recognizer per process. No network, file writes or image logging.
 public sealed class OnnxOcrEngine : IOcrEngine, IOcrAnalysisEngine, IExperimentalMeterAnalysisEngine, IDisposable
 {
-    public const string Version = "ocrdoc-ppocrv6-vi-run6-9b534643-yolo2-cache1-category2-identity-card2";
+    public const string Version = "ocrdoc-ppocrv6-vi-run6-9b534643-yolo2-cache1-category2-identity-card3";
     private readonly OcrOptions options;
     private readonly IImagePreprocessor preprocessor;
     private readonly InferenceSession detector;
@@ -231,10 +231,12 @@ public sealed class OnnxOcrEngine : IOcrEngine, IOcrAnalysisEngine, IExperimenta
     private OcrText Recognize(ReadOnlyMemory<byte> image, OcrDocumentKind kind, CancellationToken token)
     {
         token.ThrowIfCancellationRequested();
+        // Preprocessing consumes the same request deadline as recognition. Do
+        // not let a late decorative line discard identity fields already read.
+        var clock = Stopwatch.StartNew();
         using var prepared = preprocessor.Prepare(image, kind);
         using var run = new RunOptions { LogSeverityLevel = OrtLoggingLevel.ORT_LOGGING_LEVEL_FATAL };
         using var registration = token.Register(() => run.Terminate = true);
-        var clock = Stopwatch.StartNew();
         try
         {
             using var upright = new Mat();
@@ -275,13 +277,52 @@ public sealed class OnnxOcrEngine : IOcrEngine, IOcrAnalysisEngine, IExperimenta
                 source = upright;
                 regions = Detect(source, run, token);
             }
+            var orientationCorrected = axisCorrected;
+            var orientationKnown = false;
+            Dictionary<RotatedRect, OcrLine>? identityLines = null;
+            if (kind is OcrDocumentKind.IdentityFront or OcrDocumentKind.IdentityBack &&
+                IdentityOrientation.Probe(regions) is { } probe && clock.ElapsedMilliseconds < options.TimeoutMilliseconds / 3)
+            {
+                // Probe one alphabetic line before spending the page budget on
+                // upside-down text. Reuse an upright probe in the normal pass.
+                using var probeTimeout = CancellationTokenSource.CreateLinkedTokenSource(token);
+                probeTimeout.CancelAfter(options.TimeoutMilliseconds / 4);
+                using var probeRun = new RunOptions { LogSeverityLevel = OrtLoggingLevel.ORT_LOGGING_LEVEL_FATAL };
+                using var probeRegistration = probeTimeout.Token.Register(() => probeRun.Terminate = true);
+                try
+                {
+                    using var crop = Crop(source, probe);
+                    var direct = ReadLine(crop, probeRun, wideLine: true);
+                    identityLines = new() { [probe] = direct };
+                    orientationKnown = IdentityOrientation.Reliable(direct);
+                    if (!orientationKnown)
+                    {
+                        using var opposite = new Mat();
+                        Cv2.Rotate(crop, opposite, RotateFlags.Rotate180);
+                        var alternative = ReadLine(opposite, probeRun, wideLine: true);
+                        if (IdentityOrientation.PreferReversed(direct, alternative))
+                        {
+                            Cv2.Rotate(source, reversed, RotateFlags.Rotate180);
+                            source = reversed;
+                            regions = Detect(source, run, token);
+                            // Redetection can change the crop's interpolation.
+                            // Reread values in the corrected image to preserve accents.
+                            identityLines = null;
+                            orientationKnown = orientationCorrected = true;
+                        }
+                    }
+                }
+                catch (OnnxRuntimeException) when (probeTimeout.IsCancellationRequested && !token.IsCancellationRequested)
+                { /* The normal pass still owns the remaining request budget. */ }
+            }
             var text = ReadPage(source, regions, kind, run, token,
+                recognizedLines: identityLines,
                 identityClock: kind is OcrDocumentKind.IdentityFront or OcrDocumentKind.IdentityBack ? clock : null);
             var proposal = OcrFieldParser.Parse(text, kind);
             // Try the opposite direction only when the first result is missing data, leaving
             // budget for the request deadline. Detect again in the upright image: DBNet's
             // shrunken regions are not invariant under a 180-degree flip.
-            if (!text.Warnings.Contains("conflicting_reading") && !text.Warnings.Contains("ocr_partial") &&
+            if (!orientationKnown && !text.Warnings.Contains("conflicting_reading") && !text.Warnings.Contains("ocr_partial") &&
                 (kind is OcrDocumentKind.IdentityFront or OcrDocumentKind.IdentityBack ||
                     !proposal.Warnings.Any(warning => warning is "multiple_reading_regions" or "text_region_limit")) &&
                 (proposal.IsFallback || proposal.MissingFields.Count > 0) && regions.Count > 0 &&
@@ -316,7 +357,7 @@ public sealed class OnnxOcrEngine : IOcrEngine, IOcrAnalysisEngine, IExperimenta
                 Warnings = [.. prepared.Warnings, .. localizationWarnings, .. text.Warnings,
                 .. kind is OcrDocumentKind.DigitalElectricity or OcrDocumentKind.DigitalWater
                     ? new[] { "billing_register_unverified" } : Array.Empty<string>(),
-                .. axisCorrected ? new[] { "orientation_corrected" } : Array.Empty<string>()]
+                .. orientationCorrected ? new[] { "orientation_corrected" } : Array.Empty<string>()]
             };
         }
         catch (OnnxRuntimeException) when (token.IsCancellationRequested) { throw new OperationCanceledException(token); }
@@ -333,6 +374,9 @@ public sealed class OnnxOcrEngine : IOcrEngine, IOcrAnalysisEngine, IExperimenta
         var meter = kind is OcrDocumentKind.MechanicalElectricity or OcrDocumentKind.DigitalElectricity or
             OcrDocumentKind.MechanicalWater or OcrDocumentKind.DigitalWater;
         var profile = kind.GetValueOrDefault(); // used only inside a known-meter branch
+        // Native inference termination is cooperative. Leave room for it to
+        // finish and for parsing before the outer service's hard deadline.
+        var identityReturnReserve = Math.Min(1000, options.TimeoutMilliseconds / 4);
         if (identityClock is not null) regions = IdentityTextRegionOrder.Prioritize(regions, source.Size(), kind);
         if (regions.Count > options.MaxTextRegions) warnings.Add("text_region_limit");
         foreach (var region in regions.Take(options.MaxTextRegions))
@@ -344,7 +388,8 @@ public sealed class OnnxOcrEngine : IOcrEngine, IOcrAnalysisEngine, IExperimenta
             // line its own cancellable run instead of guessing its cost from a
             // slower bilingual label and prematurely discarding names/dates.
             // Meter passes must still inspect all candidate readings for conflicts.
-            if (identityClock is not null && identityClock.ElapsedMilliseconds >= options.TimeoutMilliseconds - 500)
+            if (identityClock is not null && identityClock.ElapsedMilliseconds >=
+                options.TimeoutMilliseconds - identityReturnReserve - Math.Min(100, options.TimeoutMilliseconds / 10))
             { warnings.Add("ocr_partial"); break; }
             // Neutral and meter passes have identical recognizer input for the 320 bucket.
             // Wider neutral text may use 640 or word splitting, so it must be reread.
@@ -352,13 +397,18 @@ public sealed class OnnxOcrEngine : IOcrEngine, IOcrAnalysisEngine, IExperimenta
             OcrLine line;
             if (identityClock is not null)
             {
-                using var lineTimeout = CancellationTokenSource.CreateLinkedTokenSource(token);
-                lineTimeout.CancelAfter((int)Math.Max(1, options.TimeoutMilliseconds - identityClock.ElapsedMilliseconds - 400));
-                using var lineRun = new RunOptions { LogSeverityLevel = OrtLoggingLevel.ORT_LOGGING_LEVEL_FATAL };
-                using var lineRegistration = lineTimeout.Token.Register(() => lineRun.Terminate = true);
-                try { line = ReadLine(crop, lineRun, wideLine: true); }
-                catch (OnnxRuntimeException) when (lineTimeout.IsCancellationRequested && !token.IsCancellationRequested)
-                { warnings.Add("ocr_partial"); break; }
+                if (recognizedLines is not null && recognizedLines.TryGetValue(region, out var identityCached))
+                    line = identityCached;
+                else
+                {
+                    using var lineTimeout = CancellationTokenSource.CreateLinkedTokenSource(token);
+                    lineTimeout.CancelAfter((int)Math.Max(1, options.TimeoutMilliseconds - identityClock.ElapsedMilliseconds - identityReturnReserve));
+                    using var lineRun = new RunOptions { LogSeverityLevel = OrtLoggingLevel.ORT_LOGGING_LEVEL_FATAL };
+                    using var lineRegistration = lineTimeout.Token.Register(() => lineRun.Terminate = true);
+                    try { line = ReadLine(crop, lineRun, wideLine: true); }
+                    catch (OnnxRuntimeException) when (lineTimeout.IsCancellationRequested && !token.IsCancellationRequested)
+                    { warnings.Add("ocr_partial"); break; }
+                }
             }
             else
                 line = recognizedLines is not null && recognizedLines.TryGetValue(region, out var cached) && narrow
