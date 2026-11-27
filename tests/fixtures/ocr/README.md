@@ -29,3 +29,12 @@ tự quyết định precision. Không chứa danh tính thật.
 Smoke test so khớp chính xác tên tiếng Việt/ngày cấp/chỉ số và trả exit 1 nếu không khớp.
 Không chỉnh nhãn kỳ vọng theo kết quả model. Không suy ra accuracy thực tế từ ảnh tổng hợp.
 Xem [kết quả theo sáu profile](../../../docs/development/OCR_SIX_PROFILES_DELIVERY.md).
+
+`identity-smoke.json` chạy riêng sáu mẫu CCCD tổng hợp qua engine và deadline thật:
+
+```powershell
+dotnet run --project tools/BHome.OcrSmoke -c Release -- .tools/ocr-models --evaluate tests/fixtures/ocr/identity-smoke.json
+```
+
+Lệnh trả mã lỗi nếu thiếu trường kỳ vọng hoặc OCR timeout. Không dùng ảnh CCCD thật.
+Xem [đợt sửa staging 27/11/2026](../../../docs/testing/IDENTITY_OCR_STAGING_2026-11-27.md).

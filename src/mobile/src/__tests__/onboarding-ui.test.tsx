@@ -2,6 +2,7 @@
 import React, { useEffect, useState } from 'react';
 import { afterEach, beforeEach, expect, it, vi } from 'vitest';
 import { act, cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
+import { getToastSnapshot } from '../lib/toast';
 const state = vi.hoisted(() => ({
   json: vi.fn(),
   request: vi.fn(),
@@ -922,7 +923,7 @@ it('keeps OCR suggestions and Staff edits in memory without confirming them when
       fullName: 'NGƯỜI Ở MẪU',
       dateOfBirth: '2000-01-01',
     },
-    warnings: ['blur_or_low_detail'],
+    warnings: ['blur_or_low_detail', 'ocr_partial'],
     missingFields: [],
     confidence: {},
     isFallback: false,
@@ -934,6 +935,8 @@ it('keeps OCR suggestions and Staff edits in memory without confirming them when
   fireEvent.click(screen.getByRole('button', { name: 'Chụp ảnh mặt trước' }));
   fireEvent.click(await screen.findByRole('button', { name: 'Chụp ảnh mặt sau' }));
   await screen.findByText(/Ảnh mờ hoặc thiếu chi tiết/);
+  expect(screen.getByText(/OCR đã đọc được một phần thông tin/)).toBeTruthy();
+  expect(getToastSnapshot().toast).toBeNull();
   expect(screen.getByText('Chờ bạn kiểm tra và xác nhận')).toBeTruthy();
   expect((screen.getByRole('textbox', { name: 'Họ và tên' }) as HTMLInputElement).value).toBe(
     'NGƯỜI Ở MẪU',
@@ -1070,7 +1073,12 @@ it('retries the back side independently and preserves Staff edits and front fiel
     'back',
   ]);
 });
-it('resumes the back camera after closing and leaves a missing issue date empty on fallback', async () => {
+it.each([
+  ['ocr_timeout', 'Xử lý OCR vượt thời gian cho phép.'],
+  ['ocr_unavailable', 'Engine/model OCR chưa sẵn sàng trên máy chủ.'],
+  ['ocr_busy', 'Engine đang xử lý ảnh khác. Hãy thử lại.'],
+  ['no_text', 'Không phát hiện được chữ trong ảnh.'],
+])('preserves front fields and explains %s when the back scan fails', async (code, message) => {
   state.image
     .mockResolvedValueOnce({
       proposedFields: { fullName: 'NGƯỜI MẪU' },
@@ -1081,7 +1089,7 @@ it('resumes the back camera after closing and leaves a missing issue date empty 
     })
     .mockResolvedValueOnce({
       proposedFields: {},
-      warnings: [],
+      warnings: [code],
       missingFields: [],
       confidence: {},
       isFallback: true,
@@ -1102,6 +1110,10 @@ it('resumes the back camera after closing and leaves a missing issue date empty 
     (screen.getByRole('textbox', { name: 'Ngày cấp (dd/MM/yyyy)' }) as HTMLInputElement).value,
   ).toBe('');
   expect(screen.getByText('Chưa đọc được Ngày cấp. Vui lòng nhập theo giấy tờ.')).toBeTruthy();
+  expect(getToastSnapshot().toast).toMatchObject({
+    type: 'warning',
+    message: expect.stringContaining(message),
+  });
   closeIdentity();
   expect(screen.getAllByText('Đã nhận diện')).toHaveLength(1);
   expect(screen.getByText('Đã chụp')).toBeTruthy();

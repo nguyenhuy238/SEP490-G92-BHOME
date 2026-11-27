@@ -231,13 +231,15 @@ export function IdentityWizard({
       setStep('capture');
     } else setStep('verify');
     resetScroll();
+    const fallbackMessage = proposal.warnings.length
+      ? proposal.warnings.map(diagnosticWarning).join(' ')
+      : 'OCR chưa đọc được thông tin. Hãy chụp lại rõ chữ hoặc nhập thủ công.';
     setNotice(
       proposal.isFallback
-        ? 'OCR không đọc đủ dữ liệu. Chụp lại hoặc chuyển sang nhập thủ công.'
+        ? fallbackMessage
         : `Đã nhận đề xuất, chưa xác minh. ${merged.conflicts.length ? 'Có thông tin khác với lần nhập trước; hãy đối chiếu lại giấy tờ.' : ''} ${proposal.warnings.length || proposal.missingFields.length ? 'Có cảnh báo hoặc thiếu trường. Hãy kiểm tra toàn bộ.' : ''}`,
     );
-    if (!preview && (proposal.isFallback || proposal.warnings.length > 0))
-      showWarning('OCR cần được kiểm tra lại. Bạn có thể sửa thông tin hoặc nhập thủ công.');
+    if (!preview && proposal.isFallback) showWarning(fallbackMessage);
   };
   const scan = async (bytes: Uint8Array<ArrayBuffer>) => {
     if (!api || lock.current || preview) return;

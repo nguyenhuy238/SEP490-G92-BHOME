@@ -22,6 +22,8 @@ const warnings: Record<string, string> = {
   ocr_unavailable: 'Engine/model OCR chưa sẵn sàng trên máy chủ.',
   ocr_timeout: 'Xử lý OCR vượt thời gian cho phép.',
   ocr_busy: 'Engine đang xử lý ảnh khác. Hãy thử lại.',
+  ocr_partial:
+    'OCR đã đọc được một phần thông tin. Hãy đối chiếu và nhập bổ sung các trường còn thiếu.',
   no_text: 'Không phát hiện được chữ trong ảnh.',
   possible_glare: 'Ảnh có thể bị lóa hoặc có nhiều vùng quá sáng.',
   blur_or_low_detail: 'Ảnh mờ hoặc thiếu chi tiết. Hãy giữ máy ổn định và chụp gần hơn.',

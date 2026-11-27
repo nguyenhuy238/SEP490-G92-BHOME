@@ -432,7 +432,7 @@ it('unmounts the camera for an undistorted preview and deletes a rejected image 
   expect(screen.getByAltText('Ảnh CCCD vừa chụp').getAttribute('data-resize')).toBe('contain');
   expect(capture).not.toHaveBeenCalled();
   expect(native.files.size).toBe(1);
-  expect(native.resized).not.toHaveBeenCalled();
+  expect(native.resized).toHaveBeenCalledExactlyOnceWith({ width: 1600, height: 960 });
   expect(native.save).toHaveBeenCalledWith({ format: 'jpeg', compress: 0.95 });
   expect(native.release).toHaveBeenCalledTimes(3);
   fireEvent.click(screen.getByRole('button', { name: 'Chụp lại' }));
@@ -1002,14 +1002,24 @@ it('ignores old focus results after a later tap, zoom, background and unmount', 
   view.unmount();
   expect(native.listeners.size).toBe(0);
 });
-it('shows a standard-camera fallback in an Expo Go or older binary', async () => {
+it('keeps the standard camera usable without an unsupported-focus notice covering the preview', async () => {
   render(
-    <CameraCapture label="CCCD" presentation="document" disabled={false} onCapture={vi.fn()} />,
+    <CameraCapture
+      label="CCCD"
+      presentation="document"
+      disabled={false}
+      reviewBeforeSubmit
+      onCapture={vi.fn()}
+    />,
   );
-  await readyShutter();
+  const shutter = await readyShutter();
   expect(native.props.bhomeFocusEnabled).toBeUndefined();
   expect(native.props.onBhomeFocusChanged).toBeUndefined();
-  expect(screen.getByText(/Chạm lấy nét cần bản ứng dụng hỗ trợ/)).toBeTruthy();
+  expect(screen.queryByText(/Chạm lấy nét cần bản ứng dụng hỗ trợ/)).toBeNull();
+  expect(screen.queryByText('Đang mở camera…')).toBeNull();
+  expect(shutter).toHaveProperty('disabled', false);
+  fireEvent.click(shutter);
+  expect(await screen.findByAltText('Ảnh CCCD vừa chụp')).toBeTruthy();
 });
 it.each([
   ['CCCD mặt sau', 'document', 'back'],

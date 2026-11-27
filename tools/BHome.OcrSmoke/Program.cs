@@ -97,7 +97,9 @@ Console.WriteLine(JsonSerializer.Serialize(new
     stage = "initialization",
     elapsedMs = clock.ElapsedMilliseconds,
     os = System.Runtime.InteropServices.RuntimeInformation.OSDescription,
-    cpuCount = Environment.ProcessorCount
+    cpuCount = Environment.ProcessorCount,
+    timeoutMilliseconds = options.TimeoutMilliseconds,
+    inferenceThreads = options.InferenceThreads
 }));
 foreach (var name in new[] { "detection.onnx", "recognition.onnx" })
 {
