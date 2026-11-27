@@ -11,7 +11,7 @@ namespace BHome.Infrastructure.Ocr;
 // One detector + recognizer per process. No network, file writes or image logging.
 public sealed class OnnxOcrEngine : IOcrEngine, IOcrAnalysisEngine, IExperimentalMeterAnalysisEngine, IDisposable
 {
-    public const string Version = "ocrdoc-ppocrv6-vi-run6-9b534643-yolo2-cache1-category2-identity-card1";
+    public const string Version = "ocrdoc-ppocrv6-vi-run6-9b534643-yolo2-cache1-category2-identity-card2";
     private readonly OcrOptions options;
     private readonly IImagePreprocessor preprocessor;
     private readonly InferenceSession detector;
@@ -333,26 +333,36 @@ public sealed class OnnxOcrEngine : IOcrEngine, IOcrAnalysisEngine, IExperimenta
         var meter = kind is OcrDocumentKind.MechanicalElectricity or OcrDocumentKind.DigitalElectricity or
             OcrDocumentKind.MechanicalWater or OcrDocumentKind.DigitalWater;
         var profile = kind.GetValueOrDefault(); // used only inside a known-meter branch
-        var longestLineMilliseconds = 0L;
         if (identityClock is not null) regions = IdentityTextRegionOrder.Prioritize(regions, source.Size(), kind);
         if (regions.Count > options.MaxTextRegions) warnings.Add("text_region_limit");
         foreach (var region in regions.Take(options.MaxTextRegions))
         {
             token.ThrowIfCancellationRequested();
-            // Keep completed identity lines rather than losing every field at the
-            // hard deadline. Reserve twice the slowest observed line for variability.
-            // Meter passes must still inspect all candidate readings for conflicts.
-            if (identityClock is not null && lines.Count > 0 &&
-                identityClock.ElapsedMilliseconds + 2 * longestLineMilliseconds >= options.TimeoutMilliseconds)
-            { warnings.Add("ocr_partial"); break; }
-            var lineStarted = identityClock?.ElapsedMilliseconds ?? 0;
             using var crop = Crop(source, region);
+            var narrow = Math.Ceiling(48d * crop.Width / crop.Height) <= 320;
+            // Leave time to parse/return completed identity lines. Give the next
+            // line its own cancellable run instead of guessing its cost from a
+            // slower bilingual label and prematurely discarding names/dates.
+            // Meter passes must still inspect all candidate readings for conflicts.
+            if (identityClock is not null && identityClock.ElapsedMilliseconds >= options.TimeoutMilliseconds - 500)
+            { warnings.Add("ocr_partial"); break; }
             // Neutral and meter passes have identical recognizer input for the 320 bucket.
             // Wider neutral text may use 640 or word splitting, so it must be reread.
             // Meter-specific numeric splitting/refinement/conflict checks still run below.
-            var line = recognizedLines is not null && recognizedLines.TryGetValue(region, out var cached) &&
-                Math.Ceiling(48d * crop.Width / crop.Height) <= 320
-                ? cached : ReadLine(crop, run, wideLine: !meter);
+            OcrLine line;
+            if (identityClock is not null)
+            {
+                using var lineTimeout = CancellationTokenSource.CreateLinkedTokenSource(token);
+                lineTimeout.CancelAfter((int)Math.Max(1, options.TimeoutMilliseconds - identityClock.ElapsedMilliseconds - 400));
+                using var lineRun = new RunOptions { LogSeverityLevel = OrtLoggingLevel.ORT_LOGGING_LEVEL_FATAL };
+                using var lineRegistration = lineTimeout.Token.Register(() => lineRun.Terminate = true);
+                try { line = ReadLine(crop, lineRun, wideLine: true); }
+                catch (OnnxRuntimeException) when (lineTimeout.IsCancellationRequested && !token.IsCancellationRequested)
+                { warnings.Add("ocr_partial"); break; }
+            }
+            else
+                line = recognizedLines is not null && recognizedLines.TryGetValue(region, out var cached) && narrow
+                    ? cached : ReadLine(crop, run, wideLine: !meter);
             recognizedLines?.TryAdd(region, line);
             // Read the number and its unit separately when a display's whitespace gives a
             // clear boundary. Identity-tuned CTC can otherwise swallow m³ into the digits.
@@ -377,8 +387,6 @@ public sealed class OnnxOcrEngine : IOcrEngine, IOcrAnalysisEngine, IExperimenta
                 lines.Add(line with { Bounds = OcrImageGeometry.LayoutBounds(region, pageAngle) });
                 lineRegions.Add(region);
             }
-            if (identityClock is not null)
-                longestLineMilliseconds = Math.Max(longestLineMilliseconds, identityClock.ElapsedMilliseconds - lineStarted);
         }
         if (meter)
         {

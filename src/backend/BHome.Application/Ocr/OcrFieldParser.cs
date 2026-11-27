@@ -76,20 +76,23 @@ public static class OcrFieldParser
                     }
                     if (key is "dateOfBirth" or "dateOfIssue" or "dateOfExpiry")
                     {
-                        const string datePattern = @"(?<!\d)\d{1,2}[/.-]\d{1,2}[/.-]\d{4}(?!\d)";
+                        const string datePattern = @"(?<!\d)\d{1,2}\s*[/.-]\s*\d{1,2}\s*[/.-]\s*\d{4}(?!\d)";
                         var dates = Matches(candidate, datePattern);
                         // A partially recognized English translation must not hide a clear date
                         // on the next row. Do not cross another field label or use an unlabelled date.
-                        for (var next = i + 1; dates.Count == 0 && next < lines.Length && next <= i + 3; next++)
+                        foreach (var next in dates.Count == 0
+                            ? IdentityOcrLayout.Following(lines, i, value => IsLabel(value) && !MatchLabel(value, label).Success)
+                            : Enumerable.Empty<int>())
                         {
+                            if (dates.Count > 0) break;
                             if (IsLabel(lines[next].Text) && !MatchLabel(lines[next].Text, label).Success) break;
-                            if (lines[i].Bounds is { } a && lines[next].Bounds is { } b && !IdentityOcrLayout.NearAfter(a, b)) continue;
                             var following = StripLabel(lines[next].Text, label);
                             if (!Regex.IsMatch(following, $@"^{datePattern}$", RegexOptions.CultureInvariant, RegexTimeout)) continue;
                             dates = Matches(following, datePattern);
                             score = Math.Min(score, lines[next].Confidence);
                         }
-                        if (dates.Count != 1 || !DateOnly.TryParseExact(dates[0].Value,
+                        var dateText = dates.Count == 1 ? string.Concat(dates[0].Value.Where(c => !char.IsWhiteSpace(c))) : "";
+                        if (dates.Count != 1 || !DateOnly.TryParseExact(dateText,
                             ["d/M/yyyy", "d-M-yyyy", "d.M.yyyy"], CultureInfo.InvariantCulture,
                             DateTimeStyles.None, out var date)) { warnings.Add($"invalid_{key}"); continue; }
                         candidate = date.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture);

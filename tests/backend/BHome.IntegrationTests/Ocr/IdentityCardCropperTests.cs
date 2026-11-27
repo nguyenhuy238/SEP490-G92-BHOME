@@ -7,6 +7,49 @@ namespace BHome.IntegrationTests.Ocr;
 public sealed class IdentityCardCropperTests
 {
     [Fact]
+    public void UpperFrontValueCanBeReadBeforeItsLabelWhileAllRegionsRemainAvailable()
+    {
+        var number = new RotatedRect(new(650, 300), new(400, 45), 0);
+        var numberLabel = new RotatedRect(new(530, 250), new(150, 25), 0);
+        var name = new RotatedRect(new(750, 420), new(500, 40), 0);
+        var nameLabel = new RotatedRect(new(750, 370), new(500, 25), 0);
+        List<RotatedRect> regions = [numberLabel, number, nameLabel, name];
+        var ordered = IdentityTextRegionOrder.Prioritize(regions, new(1400, 880), OcrDocumentKind.IdentityFront);
+        Assert.Equal(new[] { number, nameLabel, name }, ordered.Take(3));
+        Assert.Equal(regions.Count, ordered.Distinct().Count());
+    }
+
+    [Fact]
+    public void FrontNameAndDatePrecedeLargerAddressTextAndTheNationalHeading()
+    {
+        var header = new RotatedRect(new(850, 100), new(900, 65), 0);
+        var address = new RotatedRect(new(800, 760), new(800, 55), 0);
+        var name = new RotatedRect(new(750, 400), new(500, 40), 0);
+        var nameLabel = new RotatedRect(new(750, 350), new(500, 25), 0);
+        var birth = new RotatedRect(new(650, 530), new(300, 40), 0);
+        var birthLabel = new RotatedRect(new(750, 480), new(500, 25), 0);
+        List<RotatedRect> regions = [header, address, nameLabel, name, birthLabel, birth];
+        var ordered = IdentityTextRegionOrder.Prioritize(regions, new(1400, 880), OcrDocumentKind.IdentityFront);
+        Assert.Equal(new[] { nameLabel, name, birthLabel, birth }, ordered.Take(4));
+        Assert.Equal(regions.Count, ordered.Distinct().Count());
+    }
+
+    [Fact]
+    public void BackFieldRegionsPrecedeLargeMrzAndSignatoryTextWithoutDiscardingThem()
+    {
+        var mrz = new RotatedRect(new(700, 780), new(1250, 65), 0);
+        var signatory = new RotatedRect(new(600, 640), new(700, 60), 0);
+        var issue = new RotatedRect(new(750, 240), new(250, 35), 0);
+        var label = new RotatedRect(new(320, 240), new(500, 25), 0);
+        List<RotatedRect> regions = [mrz, signatory, label, issue];
+        var ordered = IdentityTextRegionOrder.Prioritize(regions, new(1400, 880), OcrDocumentKind.IdentityBack);
+        Assert.Equal(new[] { issue, label }, ordered.Take(2));
+        Assert.Equal(regions.Count, ordered.Distinct().Count());
+        Assert.Contains(mrz, ordered);
+        Assert.Contains(signatory, ordered);
+    }
+
+    [Fact]
     public void ReadsLargeValuesTogetherWithTheirLabelsBeforeHeaderAndMicroprint()
     {
         var nameLabel = new RotatedRect(new(700, 300), new(500, 25), 0);
