@@ -34,18 +34,6 @@ const conditionLabels: Record<string, string> = {
 };
 type InventoryFilter = 'all' | 'pending' | 'checked';
 
-function inventoryStatusLabel(status?: string) {
-  return status === 'Assigned'
-    ? 'Chưa bắt đầu'
-    : status === 'InProgress'
-      ? 'Đang kiểm kê'
-      : status === 'Completed'
-        ? 'Đã bàn giao'
-        : status === 'PendingVerification'
-          ? 'Đã gửi kiểm kê'
-          : 'Đã đóng';
-}
-
 export function LocationAssetInventoryProgressSummary({
   taskId,
   taskStatus,
@@ -74,7 +62,6 @@ export function LocationAssetInventoryProgressSummary({
   const progress = data?.totalCount
     ? Math.min(100, Math.max(0, (100 * data.checkedCount) / data.totalCount))
     : 0;
-  const statusLabel = inventoryStatusLabel(data?.status);
 
   useEffect(() => {
     if (dataStatus && dataStatus !== taskStatus) reload();
@@ -87,23 +74,7 @@ export function LocationAssetInventoryProgressSummary({
           <Text variant="titleMedium" style={styles.title}>
             Tiến độ kiểm kê
           </Text>
-          <Text variant="bodySmall" style={ui.muted}>
-            Tổng số mục tài sản trong phạm vi được giao
-          </Text>
         </View>
-        {data && (
-          <Pill
-            tone={
-              data.status === 'Completed' || data.status === 'PendingVerification'
-                ? 'green'
-                : data.status === 'InProgress'
-                  ? 'blue'
-                  : 'neutral'
-            }
-          >
-            {statusLabel}
-          </Pill>
-        )}
       </View>
       {query.loading && !data && (
         <View style={styles.progressLoading}>
@@ -142,17 +113,25 @@ export function LocationAssetInventoryProgressSummary({
             <View style={[styles.progressFill, { width: `${progress}%` }]} />
           </View>
           {!incompletePayload ? (
-            <View style={styles.progressSources}>
-              <Text variant="bodySmall" style={ui.muted}>
-                {directCount.toLocaleString('vi-VN')} Staff kiểm tra trực tiếp
-              </Text>
-              <Text variant="bodySmall" style={ui.muted}>
-                {priorStaffCount.toLocaleString('vi-VN')} kế thừa từ Staff trước
-              </Text>
-              <Text variant="bodySmall" style={ui.muted}>
-                {inheritedCount.toLocaleString('vi-VN')} kế thừa từ Tenant
-              </Text>
-            </View>
+            (priorStaffCount > 0 || inheritedCount > 0) && (
+              <View style={styles.progressSources}>
+                {directCount > 0 && (
+                  <Text variant="bodySmall" style={ui.muted}>
+                    {directCount.toLocaleString('vi-VN')} mục cần kiểm tra trực tiếp
+                  </Text>
+                )}
+                {priorStaffCount > 0 && (
+                  <Text variant="bodySmall" style={ui.muted}>
+                    {priorStaffCount.toLocaleString('vi-VN')} kế thừa từ Staff trước
+                  </Text>
+                )}
+                {inheritedCount > 0 && (
+                  <Text variant="bodySmall" style={ui.muted}>
+                    {inheritedCount.toLocaleString('vi-VN')} kế thừa từ Tenant
+                  </Text>
+                )}
+              </View>
+            )
           ) : (
             <Text accessibilityRole="alert" variant="bodySmall" style={ui.red}>
               Chưa tải đầy đủ checklist: nhận được {items.length}/{data.totalCount} mục tài sản. Hãy
@@ -200,11 +179,13 @@ export function LocationAssetInventoryChecklist({
   taskStatus,
   editable,
   onTaskRefresh,
+  hideReload = false,
 }: {
   taskId: string;
   taskStatus: string;
   editable: boolean;
   onTaskRefresh: () => void;
+  hideReload?: boolean;
 }) {
   const { api } = useSession();
   const { go } = useWorkspace();
@@ -216,8 +197,6 @@ export function LocationAssetInventoryChecklist({
   const loadedItems = useMemo(() => (Array.isArray(data?.items) ? data.items : []), [data]);
   const groups = useMemo(() => inventoryGroups(loadedItems), [loadedItems]);
   const incompletePayload = !!data && data.totalCount !== loadedItems.length;
-  const roomCount = groups.filter((group) => group.title.startsWith('Phòng ')).length;
-  const commonCount = groups.length - roomCount;
   const pendingOwnerRooms = useMemo(
     () => (Array.isArray(data?.pendingOwnerRooms) ? data.pendingOwnerRooms : []),
     [data],
@@ -383,27 +362,34 @@ export function LocationAssetInventoryChecklist({
 
   return (
     <View style={[ui.card, styles.root]}>
-      <Row spread>
-        <Text variant="titleMedium" style={styles.title}>
-          Kiểm kê tài sản
-        </Text>
-        <Button
-          compact
-          icon="refresh"
-          onPress={() => {
-            reload();
-            onTaskRefresh();
-          }}
-          disabled={busy || query.fetching}
-        >
-          Tải lại
-        </Button>
-      </Row>
+      {!hideReload && (
+        <Row spread>
+          <Text variant="titleMedium" style={styles.title}>
+            Kiểm kê tài sản
+          </Text>
+          <Button
+            compact
+            icon="refresh"
+            onPress={() => {
+              reload();
+              onTaskRefresh();
+            }}
+            disabled={busy || query.fetching}
+          >
+            Tải lại
+          </Button>
+        </Row>
+      )}
       {query.loading && <ActivityIndicator accessibilityLabel="Đang tải danh sách kiểm kê" />}
       {!!query.error && (
-        <Text accessibilityRole="alert" style={ui.red}>
-          {query.error}
-        </Text>
+        <View style={styles.notice}>
+          <Text accessibilityRole="alert" style={ui.red}>
+            {query.error}
+          </Text>
+          <Button compact onPress={reload} disabled={busy || query.fetching}>
+            Thử lại
+          </Button>
+        </View>
       )}
       {!!error && (
         <Text accessibilityRole="alert" style={ui.red}>
@@ -462,15 +448,18 @@ export function LocationAssetInventoryChecklist({
             </View>
           )}
           {(pendingOwnerRooms.length > 0 || pendingOwnerCommonAssets) && (
-            <View style={styles.notice}>
+            <View style={styles.progressNotice}>
               <Text variant="labelLarge" style={styles.title}>
                 Chờ Owner hoàn tất kiểm kê ban đầu
               </Text>
-              <Text variant="bodySmall" style={ui.muted}>
-                Owner vẫn còn tài sản chưa xác nhận trong các phạm vi này. Những mục đã xuất hiện
-                trong checklist bên dưới là các mục đã được Owner xác nhận riêng lẻ, Staff có thể
-                kiểm tra hoặc báo vấn đề. Chỉ được gửi nghiệm thu khi Owner hoàn tất toàn bộ phạm
-                vi.
+              <Text
+                accessibilityRole={data.totalCount === 0 ? 'alert' : undefined}
+                variant="bodySmall"
+                style={ui.muted}
+              >
+                {data.totalCount > 0
+                  ? 'Vẫn kiểm tra được các mục đã xác nhận; chưa thể gửi nghiệm thu.'
+                  : 'Owner chưa xác nhận tài sản để kiểm kê; chưa thể lập biên bản bàn giao.'}
               </Text>
               {pendingOwnerRooms.map((room, index) => (
                 <Text key={`${room}:${index}`} variant="bodySmall" style={ui.muted}>
@@ -489,12 +478,11 @@ export function LocationAssetInventoryChecklist({
               Nhấn “Bắt đầu kiểm kê” để mở thao tác xác nhận từng tài sản.
             </Text>
           )}
-          {data.totalCount === 0 && (
+          {data.totalCount === 0 && !pendingOwnerRooms.length && !pendingOwnerCommonAssets && (
             <View style={styles.notice}>
               <Text accessibilityRole="alert" style={ui.red}>
-                {pendingOwnerRooms.length || pendingOwnerCommonAssets
-                  ? 'Owner chưa hoàn tất kiểm kê ban đầu. Bạn chưa thể tạo biên bản bàn giao.'
-                  : 'Chưa có tài sản được Owner xác nhận để kiểm kê. Liên hệ Owner kiểm tra danh mục cơ sở.'}
+                Chưa có tài sản được Owner xác nhận để kiểm kê. Liên hệ Owner kiểm tra danh mục cơ
+                sở.
               </Text>
             </View>
           )}
@@ -516,8 +504,8 @@ export function LocationAssetInventoryChecklist({
                       {group.title}
                     </Text>
                     <Text variant="labelSmall" style={ui.muted}>
-                      {group.items.length} mục · Đã kiểm tra{' '}
-                      {group.items.filter((item) => item.checked).length}/{group.items.length}
+                      Đã kiểm tra {group.items.filter((item) => item.checked).length}/
+                      {group.items.length}
                       {group.items.some((item) => item.inherited)
                         ? ` · ${group.items.filter((item) => item.inherited).length} kế thừa Tenant`
                         : ''}
@@ -555,20 +543,38 @@ export function LocationAssetInventoryChecklist({
                                 : 'Owner đã xác nhận không có tài sản'}
                             </Text>
                           </View>
-                          <Pill tone={item.checked ? 'green' : 'neutral'}>
-                            {item.inherited
-                              ? 'Kế thừa Tenant'
-                              : item.priorStaffTaskId && item.checked
-                                ? 'Giữ kết quả Staff trước'
-                                : item.checked
-                                  ? 'Đã kiểm tra'
-                                  : 'Chưa kiểm tra'}
-                          </Pill>
-                          {item.checked && !item.inherited && itemCondition !== 'Unassessed' && (
-                            <Pill tone={itemCondition === 'Intact' ? 'green' : 'amber'}>
-                              {conditionLabels[itemCondition] ?? label}
+                          <View style={styles.itemStatus}>
+                            <Pill
+                              tone={
+                                item.checked
+                                  ? !item.inherited &&
+                                    itemCondition !== 'Unassessed' &&
+                                    itemCondition !== 'Intact' &&
+                                    !item.priorStaffTaskId
+                                    ? 'amber'
+                                    : 'green'
+                                  : 'neutral'
+                              }
+                            >
+                              {item.inherited
+                                ? 'Kế thừa Tenant'
+                                : item.priorStaffTaskId && item.checked
+                                  ? 'Giữ kết quả Staff trước'
+                                  : item.checked
+                                    ? itemCondition !== 'Unassessed'
+                                      ? (conditionLabels[itemCondition] ?? 'Đã kiểm tra')
+                                      : 'Đã kiểm tra'
+                                    : 'Chưa kiểm tra'}
                             </Pill>
-                          )}
+                            {item.checked &&
+                              !item.inherited &&
+                              item.priorStaffTaskId &&
+                              itemCondition !== 'Unassessed' && (
+                                <Pill tone={itemCondition === 'Intact' ? 'green' : 'amber'}>
+                                  {conditionLabels[itemCondition] ?? label}
+                                </Pill>
+                              )}
+                          </View>
                         </View>
                       </TouchableRipple>
                       {expanded && (
@@ -800,17 +806,6 @@ export function LocationAssetInventoryChecklist({
               Không có tài sản phù hợp với bộ lọc. Hãy đổi bộ lọc hoặc từ khóa tìm kiếm.
             </Text>
           )}
-          {!incompletePayload && loadedItems.length > 0 && (
-            <Text variant="bodySmall" style={ui.muted}>
-              {roomCount} phòng · {commonCount} khu vực chung · {loadedItems.length} nhóm tài sản
-            </Text>
-          )}
-          {loadedItems.length > 0 && (
-            <Text variant="bodySmall" style={ui.muted}>
-              Chỉ kiểm tra tài sản Owner đã xác nhận. Mục khớp biên bản Tenant được tự xác nhận,
-              không tạo tài sản mới.
-            </Text>
-          )}
           {data.status === 'InProgress' && inventoryReady(data) && (
             <Text style={ui.muted}>
               Đã kiểm tra đủ. Hệ thống đang tự động chuyển công việc sang chờ Owner kiểm tra.
@@ -838,8 +833,8 @@ const styles = StyleSheet.create({
   // This section lives inside the WorkspaceShell vertical ScrollView. Never
   // let the checklist's measured height collapse: otherwise its rows may paint
   // over the following handover / evidence / history cards on React Native Web.
-  root: { width: '100%', flexShrink: 0, gap: 12, overflow: 'visible' },
-  progressSummary: { width: '100%', flexShrink: 0, gap: 11 },
+  root: { width: '100%', flexShrink: 0, gap: 8, overflow: 'visible', padding: 10 },
+  progressSummary: { width: '100%', flexShrink: 0, padding: 12, gap: 8 },
   progressSummaryHeader: { flexDirection: 'row', alignItems: 'center', gap: 10 },
   progressLoading: { flexDirection: 'row', alignItems: 'center', gap: 8, minHeight: 32 },
   progressError: { gap: 2 },
@@ -867,17 +862,26 @@ const styles = StyleSheet.create({
   filter: {
     borderWidth: 1,
     borderColor: c.border,
-    borderRadius: 18,
+    borderRadius: 8,
     paddingHorizontal: 12,
     paddingVertical: 8,
+    minHeight: 44,
+    justifyContent: 'center',
   },
   filterSelected: { backgroundColor: c.primary, borderColor: c.primary },
   issueNotice: { color: c.red },
-  group: { gap: 8, borderWidth: 1, borderColor: c.border, borderRadius: 8, padding: 8 },
-  groupHeader: { borderRadius: 6, backgroundColor: c.soft },
-  groupHeaderInner: { flexDirection: 'row', alignItems: 'center', gap: 8, padding: 10 },
-  item: { borderWidth: 1, borderColor: c.border, borderRadius: 8, overflow: 'hidden' },
-  itemHeading: { flexDirection: 'row', alignItems: 'center', gap: 8, padding: 10 },
-  detail: { gap: 10, padding: 12, backgroundColor: c.white },
+  group: { borderWidth: 1, borderColor: c.border, borderRadius: 12, overflow: 'hidden' },
+  groupHeader: { backgroundColor: c.soft },
+  groupHeaderInner: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    padding: 12,
+    minHeight: 48,
+  },
+  item: { borderTopWidth: 1, borderColor: c.border, overflow: 'hidden' },
+  itemHeading: { flexDirection: 'row', alignItems: 'center', gap: 8, padding: 12, minHeight: 48 },
+  itemStatus: { maxWidth: '48%', alignItems: 'flex-start', gap: 4, flexShrink: 1 },
+  detail: { gap: 8, padding: 12, backgroundColor: c.white },
   itemActions: { flexDirection: 'row', alignItems: 'center', flexWrap: 'wrap', gap: 8 },
 });

@@ -16,7 +16,11 @@ export function NavigatorTabBar({ state, emitter, navigateToTab, insets }: Botto
     <View
       style={{
         backgroundColor:
-          role === 'Tenant' && current.name === 'tenant-home' ? '#173654' : staffColors.navy,
+          role === 'Staff'
+            ? '#ffffff'
+            : role === 'Tenant' && current.name === 'tenant-home'
+              ? '#173654'
+              : staffColors.navy,
         paddingLeft: insets.left,
         paddingRight: insets.right,
       }}

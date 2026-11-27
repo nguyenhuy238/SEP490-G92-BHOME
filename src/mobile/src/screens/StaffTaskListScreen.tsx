@@ -1,4 +1,4 @@
-import React, { useCallback, useMemo, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import { useLocalSearchParams } from 'expo-router';
 import { ScrollView, StyleSheet, View } from 'react-native';
 import {
@@ -92,16 +92,83 @@ export function StaffTaskListScreen({
   handovers = false,
   initialCategory = 'MoveIn',
 }: { handovers?: boolean; initialCategory?: 'MoveIn' | 'MoveOut' } = {}) {
-  return <StaffTaskListContent handovers={handovers} initialCategory={initialCategory} />;
+  const { tab: routeTab } = useLocalSearchParams<{ tab?: string }>();
+  const [tab, setTab] = useState(routeTab === 'maintenance' ? 'maintenance' : 'operational');
+  const [previousRouteTab, setPreviousRouteTab] = useState(routeTab);
+  const [page, setPage] = useState(1);
+  const [status, setStatus] = useState('');
+  const [maintenancePage, setMaintenancePage] = useState(1);
+  const [maintenanceStatus, setMaintenanceStatus] = useState('');
+  if (previousRouteTab !== routeTab) {
+    setPreviousRouteTab(routeTab);
+    if (routeTab === 'maintenance' || routeTab === 'operational') setTab(routeTab);
+  }
+  return (
+    <>
+      {!handovers && (
+        <View style={styles.queueTabs} accessibilityLabel="Loại công việc">
+          {[
+            { id: 'operational', label: 'Vận hành' },
+            { id: 'maintenance', label: 'Sửa chữa & bảo trì' },
+          ].map((item) => (
+            <Button
+              key={item.id}
+              accessibilityRole="tab"
+              accessibilityLabel={item.label}
+              accessibilityState={{ selected: tab === item.id }}
+              mode={tab === item.id ? 'contained-tonal' : 'outlined'}
+              style={styles.queueTab}
+              contentStyle={styles.pageButtonContent}
+              compact
+              onPress={() => setTab(item.id)}
+            >
+              {item.label}
+            </Button>
+          ))}
+        </View>
+      )}
+      {handovers || tab === 'operational' ? (
+        <StaffTaskListContent
+          handovers={handovers}
+          initialCategory={initialCategory}
+          page={page}
+          setPage={setPage}
+          status={status}
+          setStatus={setStatus}
+        />
+      ) : (
+        <React.Suspense fallback={<Text variant="bodySmall">Đang tải lệnh sửa chữa…</Text>}>
+          <LazyMaintenanceListScreen
+            embedded
+            queueState={{
+              page: maintenancePage,
+              status: maintenanceStatus,
+              setPage: setMaintenancePage,
+              setStatus: setMaintenanceStatus,
+            }}
+          />
+        </React.Suspense>
+      )}
+    </>
+  );
 }
 
 function StaffTaskListContent({
   handovers = false,
   initialCategory = 'MoveIn',
-}: { handovers?: boolean; initialCategory?: 'MoveIn' | 'MoveOut' } = {}) {
+  page,
+  setPage,
+  status,
+  setStatus,
+}: {
+  handovers?: boolean;
+  initialCategory?: 'MoveIn' | 'MoveOut';
+  page: number;
+  setPage: (page: number) => void;
+  status: string;
+  setStatus: (status: string) => void;
+}) {
   const { go, staffLocationId, resetScroll } = useWorkspace();
-  const [page, setPage] = useState(1);
-  const [status, setStatus] = useState('');
   const [category, setCategory] = useState<string>(initialCategory);
   const [roomSelection, setRoomSelection] = useState({ locationId: '', roomId: '' });
   const [roomOpen, setRoomOpen] = useState(false);
@@ -144,7 +211,7 @@ function StaffTaskListContent({
       reloadRooms();
     }
     reloadTasks();
-  }, [handovers, staffLocationId, reloadRooms, reloadTasks]);
+  }, [handovers, staffLocationId, reloadRooms, reloadTasks, setPage]);
   const inHeader = useWorkspaceHeaderRefresh(
     reload,
     query.fetching || (handovers && rooms.fetching),
@@ -153,9 +220,9 @@ function StaffTaskListContent({
   const lastPage = data ? Math.max(1, Math.ceil(data.totalCount / data.pageSize)) : page;
   // A task can leave the active queue while Staff moves between pages.
   // Recover the last valid page instead of showing a false empty queue.
-  if (handovers && data && !query.fetching && page > lastPage) {
-    setPage(lastPage);
-  }
+  useEffect(() => {
+    if (handovers && data && !query.fetching && page > lastPage) setPage(lastPage);
+  }, [handovers, data, query.fetching, page, lastPage, setPage]);
   function changePage(next: number) {
     if (query.fetching || next < 1 || next === page) return;
     setPage(next);
@@ -426,11 +493,6 @@ function StaffTaskListContent({
           />
         </View>
       )}
-      {!handovers && (
-        <React.Suspense fallback={<Text variant="bodySmall">Đang tải lệnh sửa chữa…</Text>}>
-          <LazyMaintenanceListScreen embedded />
-        </React.Suspense>
-      )}
     </>
   );
 }
@@ -543,7 +605,7 @@ export function TaskCard({
         </View>
         <View style={styles.dueRow}>
           <Icon source="map-marker-outline" size={15} color={c.muted} />
-          <Text variant="bodySmall" style={styles.title}>
+          <Text variant="bodySmall" style={[styles.title, styles.metaText]}>
             Cơ sở: {locationName?.trim() || 'Chưa xác định tên cơ sở'}
           </Text>
         </View>
@@ -558,63 +620,46 @@ export function TaskCard({
             size={15}
             color={task.isOverdue ? c.red : c.muted}
           />
-          <Text variant="bodySmall" style={task.isOverdue ? styles.overdue : styles.muted}>
+          <Text
+            variant="bodySmall"
+            style={[task.isOverdue ? styles.overdue : styles.muted, styles.metaText]}
+          >
             {task.isOverdue ? 'Quá hạn · ' : due ? 'Hạn · ' : ''}
             {due ?? 'Chưa có thời hạn'}
           </Text>
+          <Icon source="chevron-right" size={18} color={c.blue} />
         </View>
-        {!!task.requirements && (
-          <Text variant="bodySmall" numberOfLines={2} ellipsizeMode="tail" style={styles.preview}>
-            {task.requirements}
-          </Text>
-        )}
-        {task.kind === 'LocationAssetHandover' && (
-          <Text variant="labelMedium" style={styles.link}>
-            Kiểm kê toàn bộ phòng và tài sản chung
-          </Text>
-        )}
-        {!!task.result && (
-          <Text variant="bodySmall" numberOfLines={1} ellipsizeMode="tail" style={styles.muted}>
-            <Text variant="labelMedium">Kết quả gần nhất: </Text>
-            {task.result}
-          </Text>
-        )}
         {!task.responsibilityAvailable && (
           <Text variant="bodySmall" style={styles.overdue}>
             Chưa có người phụ trách có hiệu lực
           </Text>
         )}
-        <View style={styles.cardFooter}>
-          <View style={styles.metadata}>
-            <Text
-              variant="labelMedium"
-              style={task.priority === 'High' ? styles.highPriority : styles.muted}
-            >
-              {task.priority === 'High' ? 'Ưu tiên cao' : 'Bình thường'}
-            </Text>
-            {task.evidenceRequired && (
-              <View style={styles.evidence}>
-                <Icon source="camera-outline" size={13} color={c.muted} />
-                <Text variant="labelSmall" style={styles.muted}>
-                  Cần ảnh minh chứng
+        {(task.priority === 'High' || task.evidenceRequired) && (
+          <View style={styles.cardFooter}>
+            <View style={styles.metadata}>
+              {task.priority === 'High' && (
+                <Text variant="labelMedium" style={styles.highPriority}>
+                  Ưu tiên cao
                 </Text>
-              </View>
-            )}
+              )}
+              {task.evidenceRequired && (
+                <View style={styles.evidence}>
+                  <Icon source="camera-outline" size={13} color={c.muted} />
+                  <Text variant="labelSmall" style={styles.muted}>
+                    Cần ảnh minh chứng
+                  </Text>
+                </View>
+              )}
+            </View>
           </View>
-          <View style={styles.open}>
-            <Text variant="labelMedium" style={styles.link}>
-              Chi tiết
-            </Text>
-            <Icon source="chevron-right" size={18} color={c.blue} />
-          </View>
-        </View>
+        )}
       </View>
     </TouchableRipple>
   );
 }
 
 function TaskBadge({ status, label }: { status: string; label: string }) {
-  const pending = status === 'PendingVerification';
+  const pending = status === 'PendingVerification' || status === 'InProgress';
   const completed = status === 'Completed';
   return (
     <View
@@ -635,6 +680,8 @@ function TaskBadge({ status, label }: { status: string; label: string }) {
 }
 
 const styles = StyleSheet.create({
+  queueTabs: { flexDirection: 'row', gap: 8 },
+  queueTab: { flex: 1, minWidth: 0, borderRadius: 8 },
   between: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 8 },
   pager: { flexDirection: 'row', alignItems: 'center', gap: 8, paddingVertical: 8 },
   pageButton: { flex: 1, minWidth: 0 },
@@ -669,7 +716,7 @@ const styles = StyleSheet.create({
     backgroundColor: c.white,
     overflow: 'hidden',
   },
-  cardContent: { padding: 14, gap: 8 },
+  cardContent: { padding: 12, gap: 4 },
   cardTop: { flexDirection: 'row', alignItems: 'flex-start', gap: 10 },
   taskTitle: { flex: 1, minWidth: 0, color: c.ink },
   badge: {
@@ -679,7 +726,8 @@ const styles = StyleSheet.create({
     paddingVertical: 4,
     backgroundColor: c.soft,
   },
-  dueRow: { flexDirection: 'row', alignItems: 'center', gap: 5, flexWrap: 'wrap' },
+  dueRow: { flexDirection: 'row', alignItems: 'center', gap: 5 },
+  metaText: { flex: 1, minWidth: 0 },
   overdue: { color: c.red },
   preview: { color: c.muted, lineHeight: 18 },
   cardFooter: {
@@ -700,6 +748,6 @@ const styles = StyleSheet.create({
   },
   evidence: { flexDirection: 'row', alignItems: 'center', gap: 4 },
   highPriority: { color: c.amber },
-  open: { flexDirection: 'row', alignItems: 'center', gap: 2, minHeight: 32 },
+  open: { flexDirection: 'row', alignItems: 'center', gap: 2, minHeight: 24 },
   link: { color: c.blue },
 });

@@ -34,7 +34,8 @@ internal sealed record LocationAssetReportPdf(
     LocationAssetHandoverAcceptance? StaffSignature = null,
     string? OwnerDisplayName = null, string? StaffDisplayName = null,
     byte[]? OwnerInkPng = null, byte[]? StaffInkPng = null,
-    DateOnly? AssignmentStart = null, DateOnly? AssignmentEnd = null);
+    DateOnly? AssignmentStart = null, DateOnly? AssignmentEnd = null,
+    int LayoutVersion = 2);
 
 internal static class LocationAssetHandoverPdfRenderer
 {
@@ -107,35 +108,37 @@ internal static class LocationAssetHandoverPdfRenderer
             .SetPadding(5).SetFontSize(9)
             .SetBackgroundColor(heading ? HeaderBackground : ColorConstants.WHITE);
 
-    private static Cell AssetConditionCell(LocationAssetReportItem item)
+    private static Cell AssetNoteCell(LocationAssetReportItem item)
     {
         var cell = new Cell().SetPadding(5).SetFontSize(8.5f);
-        cell.Add(new Paragraph(ConditionLabel(item)).SetMargin(0));
-        var source = item.Quantity == 0 && !item.Inherited ? "Owner xác nhận không có tài sản"
-            : item.Inherited ? "Theo hồ sơ Tenant"
+        var source = item.Quantity == 0 && !item.Inherited ? "Chủ sở hữu xác nhận không có tài sản"
+            : item.Inherited ? "Theo biên bản bàn giao phòng"
             : item.PriorStaffUserId is not null || item.PriorStaffTaskId is not null
-                ? "Kế thừa kết quả kiểm kê từ Staff trước"
-            : "Staff kiểm kê trực tiếp";
-        cell.Add(new Paragraph($"Nguồn: {source}")
-            .SetFontSize(7.5f).SetFontColor(Secondary).SetMarginTop(2).SetMarginBottom(0));
+                ? "Kế thừa kết quả kiểm kê trước"
+            : null;
+        if (source is not null)
+            cell.Add(new Paragraph(source).SetMargin(0));
         if (item.IncidentId is not null)
             cell.Add(new Paragraph("Có sự cố liên kết")
-                .SetFontSize(7.5f).SetFontColor(Secondary).SetMarginTop(1).SetMarginBottom(0));
+                .SetMarginTop(1).SetMarginBottom(0));
         if (!string.IsNullOrWhiteSpace(item.Note))
-            cell.Add(new Paragraph("Ghi chú: " + item.Note.Trim())
-                .SetFontSize(7.5f).SetFontColor(Secondary).SetMarginTop(1).SetMarginBottom(0));
+            cell.Add(new Paragraph(item.Note.Trim()).SetMarginTop(1).SetMarginBottom(0));
         if (NeedsConditionReview(item))
             cell.Add(new Paragraph("Cần đối chiếu ghi chú với hiện trạng")
                 .SetFontSize(7.5f).SetFontColor(Secondary).SetMarginTop(1).SetMarginBottom(0));
+        if (source is null && item.IncidentId is null && string.IsNullOrWhiteSpace(item.Note))
+            cell.Add(new Paragraph("—").SetMargin(0));
         return cell;
     }
 
-    private static Cell SignatureCell(string heading, string? displayName,
+    private static Cell SignatureCell(string heading, string role, string? displayName,
         LocationAssetHandoverAcceptance? acceptance, byte[]? ink)
     {
         var cell = new Cell().SetPadding(6).SetMinHeight(108).SetKeepTogether(true);
         cell.Add(new Paragraph(heading).SetFontColor(Ink)
-            .SetTextAlignment(TextAlignment.CENTER).SetMarginBottom(3));
+            .SetTextAlignment(TextAlignment.CENTER).SetMarginBottom(2));
+        cell.Add(new Paragraph("(Ký và ghi rõ họ tên)").SetFontSize(8)
+            .SetTextAlignment(TextAlignment.CENTER).SetMarginBottom(4));
 
         if (ink is { Length: > 0 })
         {
@@ -152,16 +155,15 @@ internal static class LocationAssetHandoverPdfRenderer
         }
         else
         {
-            cell.Add(new Paragraph("Đã xác nhận (không lưu ảnh chữ ký)")
+            cell.Add(new Paragraph("Đã xác nhận (không có hình chữ ký)")
                 .SetFontColor(Secondary).SetFontSize(8).SetTextAlignment(TextAlignment.CENTER)
                 .SetHeight(44).SetMargin(0));
         }
 
-        cell.Add(new Paragraph(DisplayName(displayName,
-                heading.Contains("OWNER", StringComparison.Ordinal) ? "Owner" : "Staff"))
+        cell.Add(new Paragraph(DisplayName(displayName, role))
             .SetTextAlignment(TextAlignment.CENTER).SetMarginTop(3).SetMarginBottom(2));
         if (acceptance is not null)
-            cell.Add(new Paragraph($"Đã xác nhận qua tài khoản BHOME · {Date(acceptance.SignedAt)}")
+            cell.Add(new Paragraph($"Ngày ký: {Date(acceptance.SignedAt)}")
                 .SetFontColor(Secondary).SetFontSize(8).SetTextAlignment(TextAlignment.CENTER).SetMargin(0));
         return cell;
     }
@@ -198,6 +200,11 @@ internal static class LocationAssetHandoverPdfRenderer
 
     internal static byte[] Render(LocationAssetReportPdf report, CancellationToken token)
     {
+        // A revision approved before the layout change must retain its original content when signed.
+        if (report.LayoutVersion == 1)
+            return LegacyLocationAssetHandoverPdfRenderer.Render(report, token);
+        if (report.LayoutVersion != 2)
+            throw OperationalTaskException.Conflict("location_handover_pdf_layout_unsupported");
         token.ThrowIfCancellationRequested();
         using var output = new MemoryStream();
         using (var pdf = new PdfDocument(new PdfWriter(output)))
@@ -216,13 +223,8 @@ internal static class LocationAssetHandoverPdfRenderer
             var documentNumber = $"BBBG/{report.ApprovedAt.ToOffset(TimeSpan.FromHours(7)):yyyyMMdd}/" +
                 $"{report.TaskId.ToString("N")[..8].ToUpperInvariant()}/L{report.Revision:D2}";
             pdf.AddEventHandler(PdfDocumentEvent.END_PAGE, new PageFooter(font, documentNumber));
-            var ownerName = DisplayName(report.OwnerDisplayName, "Owner");
-            var staffName = DisplayName(report.StaffDisplayName, "Staff");
-            var direct = report.Items.Count(item => !item.Inherited &&
-                item.PriorStaffUserId is null && item.PriorStaffTaskId is null);
-            var previousStaff = report.Items.Count(item => !item.Inherited &&
-                (item.PriorStaffUserId is not null || item.PriorStaffTaskId is not null));
-            var tenantEvidence = report.Items.Count(item => item.Inherited);
+            var ownerName = DisplayName(report.OwnerDisplayName, "Chủ sở hữu");
+            var staffName = DisplayName(report.StaffDisplayName, "Nhân viên");
             var assessedItems = report.Items.Where(item => item.Quantity > 0).ToArray();
             var conditionSummary = string.Join("  ·  ", new[]
             {
@@ -244,22 +246,20 @@ internal static class LocationAssetHandoverPdfRenderer
             document.Add(new Paragraph("BIÊN BẢN BÀN GIAO TÀI SẢN")
                 .SetTextAlignment(TextAlignment.CENTER).SetFontSize(15)
                 .SetFontColor(Ink).SetMarginBottom(5));
-            document.Add(new Paragraph($"Số biên bản: {documentNumber}  |  Lần lập: {report.Revision}")
+            document.Add(new Paragraph($"Số biên bản: {documentNumber}  |  Phiên bản: {report.Revision}")
                 .SetTextAlignment(TextAlignment.CENTER).SetFontSize(8.5f)
                 .SetFontColor(Secondary).SetMarginBottom(5));
-            document.Add(new Paragraph($"Hôm nay, ngày {report.ApprovedAt.ToOffset(TimeSpan.FromHours(7)).ToString("dd/MM/yyyy", CultureInfo.InvariantCulture)}, " +
-                $"tại {report.LocationName}, địa chỉ {report.Address}.")
+            document.Add(new Paragraph($"Ngày lập: {Date(report.ApprovedAt)}\n" +
+                $"Cơ sở: {report.LocationName}\nĐịa chỉ: {report.Address}")
                 .SetMarginTop(0).SetMarginBottom(8));
 
-            document.Add(new Paragraph("Chúng tôi gồm:").SetMarginBottom(3));
-            document.Add(Section("I. BÊN GIAO"));
-            document.Add(new Paragraph($"Ông/Bà: {ownerName}\nVai trò: Chủ sở hữu (Owner)")
+            document.Add(Section("I. THÔNG TIN CÁC BÊN"));
+            document.Add(new Paragraph($"Bên giao: {ownerName}\nVai trò: Chủ sở hữu")
                 .SetMarginTop(0).SetMarginBottom(5));
-            document.Add(Section("II. BÊN NHẬN"));
-            document.Add(new Paragraph($"Ông/Bà: {staffName}\nVai trò: Nhân viên quản lý cơ sở (Staff)")
+            document.Add(new Paragraph($"Bên nhận: {staffName}\nVai trò: Nhân viên quản lý cơ sở")
                 .SetMarginTop(0).SetMarginBottom(5));
 
-            document.Add(Section("III. NỘI DUNG BÀN GIAO"));
+            document.Add(Section("II. NỘI DUNG BÀN GIAO"));
             document.Add(new Paragraph($"Căn cứ phân công quản lý tại {report.LocationName} cho {staffName}.")
                 .SetMarginTop(0).SetMarginBottom(3));
             if (report.AssignmentStart is { } assignmentStart && report.AssignmentEnd is { } assignmentEnd)
@@ -269,22 +269,19 @@ internal static class LocationAssetHandoverPdfRenderer
                     $"{assignmentEnd.ToString("dd/MM/yyyy", CultureInfo.InvariantCulture)}")
                     .SetMarginTop(0).SetMarginBottom(4));
             }
-            document.Add(new Paragraph("Bên giao tiến hành bàn giao cho Bên nhận danh mục tài sản thuộc " +
-                $"{report.LocationName}, bao gồm các phòng và khu vực chung, theo bảng kê chi tiết sau:")
+            document.Add(new Paragraph("Bên giao bàn giao cho Bên nhận trách nhiệm quản lý tài sản trong phạm vi phân công, theo bảng kê dưới đây.")
                 .SetMarginTop(0).SetMarginBottom(4));
-            document.Add(new Paragraph($"Phạm vi: {report.Items.Count} dòng trong bảng kê tại " +
-                $"{groups.Length} phòng/khu vực. Số lượng theo đơn vị: {QuantitySummary(report.Items)}.")
+            document.Add(new Paragraph($"Phạm vi: {groups.Count(group => !group.Key.IsCommonArea)} phòng, " +
+                $"{groups.Count(group => group.Key.IsCommonArea)} khu vực chung; {assessedItems.Length} mục tài sản. " +
+                $"Số lượng theo danh mục: {QuantitySummary(report.Items)}.")
                 .SetMarginTop(0).SetMarginBottom(3));
-            document.Add(new Paragraph($"Nguồn đối soát: {direct} mục Staff kiểm kê trực tiếp; " +
-                $"{previousStaff} mục kế thừa kết quả Staff trước; {tenantEvidence} mục theo hồ sơ Tenant.")
-                .SetFontSize(8.5f).SetMarginTop(0).SetMarginBottom(3));
             if (assessedItems.Length > 0)
                 document.Add(new Paragraph("Hiện trạng theo số mục: " + conditionSummary + ".")
                     .SetFontSize(8.5f).SetMarginTop(0).SetMarginBottom(4));
-            document.Add(new Paragraph(string.IsNullOrWhiteSpace(report.ExceptionDecision)
-                    ? "Nội dung ngoại lệ do Owner ghi nhận: Không ghi nhận."
-                    : "Nội dung ngoại lệ do Owner ghi nhận: " + report.ExceptionDecision)
-                .SetFontSize(8.5f).SetMarginTop(0).SetMarginBottom(5));
+            document.Add(Section("III. DANH MỤC TÀI SẢN BÀN GIAO"));
+            document.Add(new Paragraph("Số lượng là số lượng theo danh mục đã xác nhận, không phải số lượng thực tế đếm được. " +
+                "Các mục không có ghi chú về nguồn được kiểm kê trực tiếp.")
+                .SetFontSize(8.5f).SetMarginTop(0).SetMarginBottom(4));
 
             if (report.Items.Count == 0)
             {
@@ -300,9 +297,9 @@ internal static class LocationAssetHandoverPdfRenderer
                     document.Add(Section(group.Key.IsCommonArea
                         ? $"Khu vực chung: {group.Key.Name}"
                         : group.Key.Name));
-                    var ledger = new Table(UnitValue.CreatePercentArray([7f, 35f, 13f, 13f, 32f]))
+                    var ledger = new Table(UnitValue.CreatePercentArray([7f, 28f, 10f, 10f, 20f, 25f]))
                         .UseAllAvailableWidth().SetFontSize(8.5f);
-                    foreach (var heading in new[] { "STT", "Tên tài sản", "Đơn vị", "Số lượng", "Tình trạng" })
+                    foreach (var heading in new[] { "STT", "Tên tài sản", "ĐVT", "SL danh mục", "Hiện trạng", "Ghi chú" })
                         ledger.AddHeaderCell(TableCell(heading, true));
                     foreach (var item in group)
                     {
@@ -312,66 +309,48 @@ internal static class LocationAssetHandoverPdfRenderer
                         ledger.AddCell(TableCell(item.Quantity == 0 ? "Không có tài sản" : item.Name));
                         ledger.AddCell(TableCell(UnitLabel(item.Unit)));
                         ledger.AddCell(TableCell(item.Quantity.ToString("N0", CultureInfo.InvariantCulture)));
-                        ledger.AddCell(AssetConditionCell(item));
+                        ledger.AddCell(TableCell(ConditionLabel(item)));
+                        ledger.AddCell(AssetNoteCell(item));
                     }
                     document.Add(ledger);
                 }
             }
 
-            document.Add(Section("IV. CAM KẾT VÀ TRÁCH NHIỆM"));
-            document.Add(new Paragraph("Bên giao cam đoan danh mục bàn giao được lập từ phạm vi tài sản đã được Owner xác nhận " +
-                "và kết quả đối soát thể hiện trong biên bản. Bên nhận xác nhận đã xem bảng kê, hiện trạng và tiếp nhận trách nhiệm " +
-                "quản lý tài sản trong thời hạn, phạm vi phân công nêu trên.")
+            document.Add(Section("IV. TỒN TẠI VÀ HƯỚNG XỬ LÝ"));
+            var exceptions = groups.SelectMany(group => group)
+                .Where(item => item.Quantity > 0 && (item.Condition != "Intact" ||
+                    item.IncidentId is not null || NeedsConditionReview(item))).ToArray();
+            if (exceptions.Length == 0)
+                document.Add(new Paragraph("Không ghi nhận mục tài sản bất thường trong bảng kê.").SetMarginTop(0));
+            else
+                foreach (var item in exceptions)
+                    document.Add(new Paragraph($"{item.Scope} – {item.Name}: {ConditionLabel(item)}" +
+                        (NeedsConditionReview(item) ? "; cần đối chiếu ghi chú" : "") +
+                        (item.IncidentId is not null ? "; có sự cố liên kết" : "") + ".")
+                        .SetFontSize(8.5f).SetMarginTop(0).SetMarginBottom(2));
+            document.Add(new Paragraph(string.IsNullOrWhiteSpace(report.ExceptionDecision)
+                ? "Ý kiến xử lý của bên giao: Chưa ghi nhận."
+                : "Ý kiến xử lý của bên giao: " + report.ExceptionDecision).SetMarginTop(0).SetMarginBottom(5));
+
+            document.Add(Section("V. TRÁCH NHIỆM VÀ XÁC NHẬN"));
+            document.Add(new Paragraph("Bên giao xác nhận danh mục và kết quả đối soát được ghi trong biên bản; phối hợp xử lý các tồn tại. " +
+                "Bên nhận tiếp nhận trách nhiệm quản lý, theo dõi và báo cáo mất mát, hư hỏng trong phạm vi phân công.")
                 .SetMarginTop(0).SetMarginBottom(4));
-            document.Add(new Paragraph("Các mục có nguồn theo hồ sơ Tenant là bằng chứng kế thừa từ biên bản bàn giao phòng đã được xác nhận, " +
-                "không đồng nghĩa Staff đã trực tiếp kiểm kê tại phòng. Trách nhiệm bảo quản của Tenant theo hợp đồng và biên bản bàn giao phòng " +
-                "không tự động chuyển sang Staff. Ngoại lệ hoặc sự cố còn tồn tại phải được ghi nhận và xử lý theo quy trình của cơ sở.")
-                .SetMarginTop(0).SetMarginBottom(5));
-            document.Add(new Paragraph("Hai bên ký tay và xác nhận trong phiên đăng nhập BHOME trên cùng phiên bản dữ liệu. " +
-                "Đây là ghi nhận chấp thuận điện tử, KHÔNG phải chữ ký số chứng thư số/PAdES.")
-                .SetFontSize(8.5f).SetMarginBottom(6));
+            document.Add(new Paragraph("Các mục kế thừa từ biên bản bàn giao phòng hoặc kết quả kiểm kê trước không phải kiểm kê trực tiếp của bên nhận. " +
+                "Trách nhiệm bảo quản của người thuê theo hợp đồng không tự động chuyển sang bên nhận.")
+                .SetMarginTop(0).SetMarginBottom(4));
+            document.Add(new Paragraph("Hai bên thống nhất nội dung bàn giao khi đã ký xác nhận.").SetMarginBottom(5));
+            if (report.OwnerSignature is { } ownerSignature && report.StaffSignature is { } staffSignature)
+                document.Add(new Paragraph($"Hoàn tất bàn giao: {Date(ownerSignature.SignedAt > staffSignature.SignedAt ? ownerSignature.SignedAt : staffSignature.SignedAt)}")
+                    .SetMarginTop(0).SetMarginBottom(5));
 
             var signatures = new Table(UnitValue.CreatePercentArray([50f, 50f]))
                 .UseAllAvailableWidth().SetKeepTogether(true);
-            signatures.AddCell(SignatureCell("BÊN GIAO · OWNER", report.OwnerDisplayName,
+            signatures.AddCell(SignatureCell("BÊN GIAO", "Chủ sở hữu", report.OwnerDisplayName,
                 report.OwnerSignature, report.OwnerInkPng));
-            signatures.AddCell(SignatureCell("BÊN NHẬN · STAFF", report.StaffDisplayName,
+            signatures.AddCell(SignatureCell("BÊN NHẬN", "Nhân viên", report.StaffDisplayName,
                 report.StaffSignature, report.StaffInkPng));
             document.Add(signatures);
-            document.Add(new Paragraph("Biên bản đã chốt không được sửa trực tiếp. Nếu kết quả kiểm kê thay đổi, " +
-                "hệ thống phải lập phiên bản mới và thu thập lại xác nhận.")
-                .SetFontColor(Secondary).SetFontSize(8).SetMarginTop(5));
-
-            document.Add(Section("THÔNG TIN TRUY VẾT KỸ THUẬT"));
-            document.Add(new Paragraph($"Mã công việc: {report.TaskId:D}\n" +
-                $"Mã phân công: {report.AssignmentId:D}\n" +
-                $"Tài khoản Owner: {report.OwnerId:D} · Tài khoản Staff: {report.StaffId:D}\n" +
-                $"SHA-256 dữ liệu kiểm kê đã đóng băng: {report.SnapshotHash}")
-                .SetFontSize(7.5f).SetFontColor(Secondary).SetMarginBottom(5));
-            var referenced = groups.SelectMany(group => group)
-                .Select((item, index) => (Item: item, Number: index + 1))
-                .Where(row => row.Item.SourceHandoverContractId is not null ||
-                    row.Item.IncidentId is not null || row.Item.PriorStaffTaskId is not null ||
-                    row.Item.PriorStaffUserId is not null).ToArray();
-            if (referenced.Length > 0)
-            {
-                document.Add(new Paragraph("Tham chiếu hồ sơ/nguồn liên kết (theo STT Phụ lục 01):")
-                    .SetFontColor(Secondary).SetFontSize(7.5f).SetMarginBottom(2).SetKeepWithNext(true));
-                var references = new List<string>(referenced.Length);
-                foreach (var row in referenced)
-                {
-                    token.ThrowIfCancellationRequested();
-                    var item = row.Item;
-                    var links = new List<string> { $"Mục {row.Number}" };
-                    if (item.SourceHandoverContractId is { } source) links.Add($"Hồ sơ Tenant: {source:D}");
-                    if (item.IncidentId is { } incident) links.Add($"Sự cố: {incident:D}");
-                    if (item.PriorStaffTaskId is { } priorTask) links.Add($"Công việc Staff trước: {priorTask:D}");
-                    if (item.PriorStaffUserId is { } priorStaff) links.Add($"Staff trước: {priorStaff:D}");
-                    references.Add(string.Join(" · ", links));
-                }
-                document.Add(new Paragraph(string.Join("  |  ", references))
-                    .SetFontColor(Secondary).SetFontSize(7f).SetMarginBottom(0));
-            }
 
         }
         // iText closes the writer's stream along with the PDF. MemoryStream.ToArray()

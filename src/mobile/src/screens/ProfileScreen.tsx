@@ -2,7 +2,7 @@ import React, { useRef, useState } from 'react';
 import { TenantHouseholdPanel } from '../features/profile/TenantHouseholdPanel';
 import { View } from 'react-native';
 import { router } from 'expo-router';
-import { Avatar, Button, Dialog, Portal, Text } from 'react-native-paper';
+import { Avatar, Button, Dialog, Icon, Portal, Text } from 'react-native-paper';
 import { useProfile } from '../features/profile/useProfile';
 import {
   ProfileInfoCard,
@@ -76,15 +76,15 @@ export function ProfileScreen() {
       )}
       {data && (
         <>
-          <View style={[styles.card, styles.row, { paddingVertical: 20 }]}>
+          <View style={[styles.card, styles.row, { paddingVertical: staff ? 12 : 20 }]}>
             <Avatar.Text
-              size={64}
+              size={staff ? 48 : 64}
               label={initials}
               color={staffColors.blue}
               style={{ backgroundColor: staffColors.blueSoft }}
             />
             <View style={[styles.grow, { gap: 4 }]}>
-              <Text variant="titleLarge" style={{ color: colors.ink }}>
+              <Text variant="titleLarge" style={{ color: staff ? staffColors.navy : colors.ink }}>
                 {data.fullName.trim() || 'Chưa cập nhật'}
               </Text>
               <Text style={styles.label}>{role ? roleLabel[role] : 'Tài khoản'}</Text>
@@ -109,10 +109,17 @@ export function ProfileScreen() {
           {role === 'Tenant' && <TenantHouseholdPanel />}
           {staff && (
             <View style={styles.card}>
-              <Text variant="titleMedium">Cơ sở được phân công</Text>
+              <Text variant="titleMedium" style={{ color: staffColors.navy }}>
+                Cơ sở được phân công
+              </Text>
               {Array.isArray(locations.data) ? (
                 locations.data.length ? (
-                  locations.data.map((location) => <Text key={location.id}>{location.label}</Text>)
+                  locations.data.map((location) => (
+                    <View key={location.id} style={[styles.row, { minHeight: 44, gap: 12 }]}>
+                      <Icon source="office-building-outline" size={20} color={staffColors.blue} />
+                      <Text style={styles.grow}>{location.label}</Text>
+                    </View>
+                  ))
                 ) : (
                   <Text>Chưa có cơ sở được phân công hiện tại.</Text>
                 )
@@ -145,11 +152,12 @@ export function ProfileScreen() {
         />
       </View>
       <Button
-        mode="text"
+        mode={staff ? 'outlined' : 'text'}
         icon="logout"
         textColor={colors.red}
         disabled={busy}
         loading={busy}
+        contentStyle={staff ? { minHeight: 44 } : undefined}
         onPress={() => setConfirm(true)}
       >
         Đăng xuất

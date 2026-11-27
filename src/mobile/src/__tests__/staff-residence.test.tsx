@@ -40,6 +40,7 @@ vi.mock('../features/workspace/useWorkspaceQuery', () => ({
 vi.mock('react-native-paper', () => ({
   Text: ({ children }: React.PropsWithChildren) => <span>{children}</span>,
 }));
+vi.mock('../theme/theme', () => ({ colors: {}, staffColors: {} }));
 vi.mock('../components/WorkspaceKit', () => ({
   Box: ({ children }: React.PropsWithChildren) => <div>{children}</div>,
   Heading: ({ title }: { title: string }) => <h1>{title}</h1>,
