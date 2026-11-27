@@ -7,6 +7,7 @@ import { Box, Heading } from '../components/WorkspaceKit';
 import { Pagination, QueryState } from '../components/WorkspaceQueryState';
 import { displayContractDate } from '../../../../packages/client-core/src/contracts';
 import { residenceStatus } from '../../../../packages/client-core/src/residence';
+import { colors, staffColors } from '../theme/theme';
 
 interface TrackingSummary {
   contractId: string;
@@ -32,26 +33,29 @@ export function StaffResidenceScreen() {
   return (
     <>
       <Heading title="Theo dõi tạm trú" />
-      <Text>
-        Trạng thái và thời hạn tại cơ sở được phân công. Tenant đăng ký chính thức; Owner kiểm tra
-        kết quả.
+      <Text variant="bodySmall" style={{ color: colors.muted }}>
+        Tenant đăng ký tạm trú; Owner kiểm tra kết quả. Staff theo dõi trạng thái và thời hạn.
       </Text>
       <QueryState loading={query.loading} error={query.error} reload={query.reload} />
       {query.data?.items.map((item) => (
-        <Box key={`${item.contractId}/${item.residentId}`}>
-          <Text variant="titleMedium">
+        <Box key={`${item.contractId}/${item.residentId}`} style={{ padding: 12, gap: 4 }}>
+          <Text variant="titleMedium" style={{ color: staffColors.navy }}>
             Phòng {item.roomNumber} · {item.residentLabel}
           </Text>
-          <Text>
+          <Text variant="labelLarge" style={{ color: colors.ink }}>
             {item.registrationRequired
               ? residenceStatus[item.status]
               : 'Owner ghi nhận không thuộc diện đăng ký'}
           </Text>
           {!!item.registrationDeadline && (
-            <Text>Hạn đăng ký: {displayContractDate(item.registrationDeadline)}</Text>
+            <Text variant="bodySmall" style={{ color: colors.muted }}>
+              Hạn đăng ký: {displayContractDate(item.registrationDeadline)}
+            </Text>
           )}
           {!!item.registrationExpiresOn && (
-            <Text>Hết hạn tạm trú: {displayContractDate(item.registrationExpiresOn)}</Text>
+            <Text variant="bodySmall" style={{ color: colors.muted }}>
+              Hết hạn tạm trú: {displayContractDate(item.registrationExpiresOn)}
+            </Text>
           )}
         </Box>
       ))}

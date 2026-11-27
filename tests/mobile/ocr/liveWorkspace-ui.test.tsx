@@ -1123,7 +1123,7 @@ it('does not show stale records after a forbidden reload or failed filter', asyn
   expect(listRequests).toBe(2);
   expect(screen.queryByRole('button', { name: `Xem chi tiết: ${task.title}` })).toBeNull();
 });
-it('shows compact previews, optional result/evidence and the server overdue flag in Vietnam time', async () => {
+it('keeps the Staff list compact and shows evidence and the server overdue flag in Vietnam time', async () => {
   const result = 'Đã kiểm tra, chờ Owner đối chiếu';
   const fetcher = vi
     .fn<typeof fetch>()
@@ -1135,12 +1135,15 @@ it('shows compact previews, optional result/evidence and the server overdue flag
   setApi(fetcher);
   render(<OperationalTasksScreen />);
   await screen.findByText(task.title);
-  expect(screen.getByText(task.requirements).getAttribute('data-lines')).toBe('2');
-  expect(screen.getByText(/Kết quả gần nhất:/).parentElement?.getAttribute('data-lines')).toBe('1');
+  expect(screen.queryByText(task.requirements)).toBeNull();
+  expect(screen.queryByText(result)).toBeNull();
+  expect(screen.queryByText(/Kết quả gần nhất:/)).toBeNull();
   expect(screen.getByText(/Quá hạn · 16:21.*03\/11\/2026/)).toBeTruthy();
   expect(screen.getByText('Cần ảnh minh chứng')).toBeTruthy();
   expect(screen.queryByText('1 quá hạn')).toBeNull();
   expect(screen.queryByText(/currentResponsibleStaffUserId|version|AdHoc/)).toBeNull();
+  fireEvent.click(screen.getByRole('button', { name: `Xem chi tiết: ${task.title}` }));
+  expect(mocks.go).toHaveBeenCalledWith('task-detail', { taskId: id });
 });
 it('hides absent result and optional evidence metadata and routes meter tasks without a mutation', async () => {
   const fetcher = vi

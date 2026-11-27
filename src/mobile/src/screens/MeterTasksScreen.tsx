@@ -192,6 +192,10 @@ export function MeterTasksScreen({
       ? Math.min(pagination.page, pageCount)
       : 1;
   const visibleRooms = rooms.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE);
+  const completedRooms = rooms.filter((group) =>
+    group.every((task) => task.status === 2 && !!task.confirmedReadingId),
+  ).length;
+  const overdueRooms = rooms.filter((group) => group.some(isOverduePeriodicMeterTask)).length;
   const changePage = (next: number) =>
     setPagination({ scope, period, page: Math.max(1, Math.min(next, pageCount)) });
 
@@ -248,6 +252,18 @@ export function MeterTasksScreen({
             disabled={!periods.length}
             placeholder="Chưa có kỳ ghi"
           />
+          {!!rooms.length && (
+            <View style={styles.summary}>
+              <Text variant="labelLarge" style={styles.title}>
+                {completedRooms}/{rooms.length} phòng đã ghi
+              </Text>
+              {overdueRooms > 0 && (
+                <Text variant="bodySmall" style={{ color: c.red }}>
+                  {overdueRooms} phòng quá hạn
+                </Text>
+              )}
+            </View>
+          )}
           <View style={styles.grid}>
             {visibleRooms.map((group) => {
               const first = group[0]!;
@@ -320,15 +336,22 @@ const styles = StyleSheet.create({
   },
   tileContent: {
     padding: 12,
-    gap: 8,
+    gap: 4,
     alignItems: 'flex-start',
-    minHeight: 84,
+    minHeight: 72,
     justifyContent: 'center',
   },
-  overdueTile: { borderColor: c.red, backgroundColor: c.redSoft },
+  overdueTile: { borderColor: c.red },
   room: { color: c.ink, fontWeight: '700', flexShrink: 1 },
   pagination: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 12 },
   pageButton: { margin: 0 },
   pageText: { color: c.primary },
+  summary: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    flexWrap: 'wrap',
+    gap: 8,
+    paddingVertical: 4,
+  },
   state: { alignItems: 'center', padding: 16, gap: 8 },
 });

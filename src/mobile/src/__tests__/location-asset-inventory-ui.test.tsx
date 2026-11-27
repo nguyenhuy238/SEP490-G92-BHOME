@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 import React from 'react';
-import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import { afterEach, beforeEach, expect, it, vi } from 'vitest';
 import type {
   LocationAssetInventory,
@@ -225,8 +225,10 @@ it('shows the authoritative checked/total progress and provenance on the task ov
   await screen.findByRole('progressbar', { name: /0\/42/ });
   expect(screen.getByText('Tiến độ kiểm kê')).toBeTruthy();
   expect(screen.getByText('Đã kiểm tra 0/42 mục tài sản')).toBeTruthy();
-  expect(screen.getByText('42 Staff kiểm tra trực tiếp')).toBeTruthy();
-  expect(screen.getByText('0 kế thừa từ Tenant')).toBeTruthy();
+  expect(screen.queryByText('42 mục cần kiểm tra trực tiếp')).toBeNull();
+  expect(screen.queryByText('0 kế thừa từ Tenant')).toBeNull();
+  expect(screen.queryByText('Tổng số mục tài sản trong phạm vi được giao')).toBeNull();
+  expect(screen.queryByText('Đang kiểm kê')).toBeNull();
   fireEvent.click(screen.getByRole('button', { name: 'Mở danh sách kiểm kê' }));
   expect(openInventory).toHaveBeenCalledTimes(1);
 });
@@ -257,7 +259,7 @@ it('keeps Owner-pending scope visible on the overview progress without mixing it
   expect(screen.getByText('Chờ Owner hoàn tất kiểm kê ban đầu')).toBeTruthy();
   expect(screen.getByText(/2 phòng chưa được Owner xác nhận/)).toBeTruthy();
   expect(screen.getByText(/Tài sản khu vực chung chưa được xác nhận/)).toBeTruthy();
-  expect(screen.getByText('0 Staff kiểm tra trực tiếp')).toBeTruthy();
+  expect(screen.queryByText('0 mục cần kiểm tra trực tiếp')).toBeNull();
   expect(screen.getByText('1 kế thừa từ Staff trước')).toBeTruthy();
 });
 
@@ -273,7 +275,7 @@ it('renders all 42 server items into named room and common-area sections without
   await waitFor(() => expect(screen.getByText('Bóng đèn')).toBeTruthy());
   // Overall progress belongs on the task overview, not repeated above the detail checklist.
   expect(screen.queryByRole('progressbar')).toBeNull();
-  expect(screen.getByText(/nh.m t.i s.n/)).toBeTruthy();
+  expect(screen.queryByText(/nh.m t.i s.n/)).toBeNull();
   expect(screen.getAllByRole('button', { name: /^Xem kiểm kê/ })).toHaveLength(13);
   expect(
     screen.getByRole('button', { name: 'Xem kiểm kê Phòng 101' }).getAttribute('aria-expanded'),
@@ -293,6 +295,45 @@ it('renders all 42 server items into named room and common-area sections without
   expect(screen.getByRole('button', { name: /X.c nh.n .?/ })).toBeTruthy();
   expect(screen.getByRole('button', { name: /B.o v.n ?./ })).toBeTruthy();
   expect(screen.queryByText(/Chưa tải đầy đủ checklist/)).toBeNull();
+});
+
+it('uses the shared header and shows one condition label for a directly checked asset', async () => {
+  state.request.mockResolvedValueOnce({
+    ...completeResponse,
+    totalCount: 1,
+    checkedCount: 1,
+    items: [{ ...items[0]!, checked: true, condition: 'Intact' }],
+  });
+  render(
+    <LocationAssetInventoryChecklist
+      taskId={taskId}
+      taskStatus="InProgress"
+      editable={true}
+      onTaskRefresh={onRefresh}
+      hideReload
+    />,
+  );
+  await screen.findByText('Đủ và nguyên vẹn');
+  expect(screen.queryByText('Kiểm kê tài sản')).toBeNull();
+  expect(screen.queryByRole('button', { name: 'Tải lại' })).toBeNull();
+  const asset = screen.getByRole('button', { name: 'Chi tiết kiểm kê: Bóng đèn' });
+  expect(within(asset).queryByText('Đã kiểm tra', { exact: true })).toBeNull();
+  expect(screen.getByText('Đã kiểm tra 1/1')).toBeTruthy();
+});
+
+it('keeps error retry available when the shared header replaces the local reload', async () => {
+  state.request.mockRejectedValueOnce(new Error('Checklist unavailable'));
+  render(
+    <LocationAssetInventoryChecklist
+      taskId={taskId}
+      taskStatus="InProgress"
+      editable={true}
+      onTaskRefresh={onRefresh}
+      hideReload
+    />,
+  );
+  await screen.findByText(/Checklist unavailable/);
+  expect(screen.getByRole('button', { name: 'Thử lại' })).toBeTruthy();
 });
 
 it('reports a discrepancy on a Tenant-inherited asset without exposing baseline edit controls', async () => {
