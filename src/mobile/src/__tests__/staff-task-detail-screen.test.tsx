@@ -574,6 +574,8 @@ it('keeps the handover workflow ordered, refreshes checklist after start, and se
   fireEvent.click(screen.getByRole('tab', { name: 'Kiểm kê' }));
   await screen.findByText('Kiểm kê tài sản');
   expect(screen.queryByRole('progressbar')).toBeNull();
+  expect(screen.queryByText(/C. s. ph.n c.ng/)).toBeNull();
+  expect(screen.queryByText(/Kiểm tra các nhóm tài sản Owner/)).toBeNull();
   expect(screen.queryByText(/Ki.m tra thi.t b./)).toBeNull();
   expect(s.equipmentReads()).toBe(0);
   expect(s.requestEvents().some((event) => event.path.includes('/equipment-inspection'))).toBe(
@@ -594,7 +596,11 @@ it('keeps the handover workflow ordered, refreshes checklist after start, and se
   const startButtons = screen.getAllByRole('button', { name: /B.t.*ki.m k./ });
   fireEvent.click(startButtons[startButtons.length - 1]!);
   await waitFor(() => expect(s.inventoryReads()).toBeGreaterThan(beforeStartReads));
+  fireEvent.click(screen.getByRole('tab', { name: 'Tổng quan' }));
   await screen.findByText('Đang thực hiện');
+  fireEvent.click(screen.getByRole('tab', { name: 'Kiểm kê' }));
+  await screen.findByText('Kiểm kê tài sản');
+  expect(screen.queryByText('Đang thực hiện')).toBeNull();
   const startEventIndex = s
     .requestEvents()
     .findIndex(

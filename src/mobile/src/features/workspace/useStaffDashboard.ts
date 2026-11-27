@@ -33,7 +33,7 @@ export interface MoveOutAssignment {
 }
 
 export function useStaffDashboard() {
-  const { role, preview, staffLocationId } = useWorkspace();
+  const { role, preview, staffLocationId, reloadStaffLocations } = useWorkspace();
   const enabled = role === 'Staff' && !preview;
   const scoped = enabled && !!staffLocationId;
   const locationQuery = `locationId=${encodeURIComponent(staffLocationId)}`;
@@ -104,6 +104,8 @@ export function useStaffDashboard() {
   const reloadRooms = rooms.reload;
   const reloadMeters = meters.reload;
   const reload = useCallback(() => {
+    if (!enabled) return;
+    reloadStaffLocations?.();
     reloadLocations();
     reloadTasks();
     reloadPriorities();
@@ -113,6 +115,8 @@ export function useStaffDashboard() {
     reloadSubmittedIncidents();
     reloadProcessingIncidents();
   }, [
+    enabled,
+    reloadStaffLocations,
     reloadLocations,
     reloadTasks,
     reloadPriorities,

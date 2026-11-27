@@ -8,6 +8,7 @@ const state = vi.hoisted(() => ({
   request: vi.fn(),
   go: vi.fn(),
   resetScroll: vi.fn(),
+  routeTab: '' as string,
   cache: new Map<string, unknown>(),
 }));
 
@@ -28,7 +29,7 @@ vi.mock('react-native', () => ({
   ScrollView: ({ children }: { children?: React.ReactNode }) => <div>{children}</div>,
   StyleSheet: { create: (styles: unknown) => styles },
 }));
-vi.mock('expo-router', () => ({ useLocalSearchParams: () => ({}) }));
+vi.mock('expo-router', () => ({ useLocalSearchParams: () => ({ tab: state.routeTab }) }));
 
 vi.mock('react-native-paper', () => {
   const Button = ({
@@ -158,8 +159,29 @@ vi.mock('../components/WorkspaceHeaderContext', () => ({
   useWorkspaceHeaderRefresh: () => false,
 }));
 vi.mock('../features/incidents/IncidentScreens', () => ({
-  MaintenanceListScreen: ({ embedded }: { embedded?: boolean }) =>
-    embedded ? <div>Danh sách công việc sửa chữa &amp; bảo trì</div> : <div>Danh sách bảo trì</div>,
+  MaintenanceListScreen: ({
+    embedded,
+    queueState,
+  }: {
+    embedded?: boolean;
+    queueState: {
+      page: number;
+      status: string;
+      setPage: (n: number) => void;
+      setStatus: (s: string) => void;
+    };
+  }) =>
+    embedded ? (
+      <div>
+        Danh sách công việc sửa chữa &amp; bảo trì
+        <span>Trang bảo trì: {queueState.page}</span>
+        <span>Trạng thái bảo trì: {queueState.status}</span>
+        <button onClick={() => queueState.setStatus('InProgress')}>Lọc bảo trì</button>
+        <button onClick={() => queueState.setPage(2)}>Trang bảo trì sau</button>
+      </div>
+    ) : (
+      <div>Danh sách bảo trì</div>
+    ),
 }));
 vi.mock('../features/workspace/useWorkspaceQuery', () => ({
   useWorkspaceQuery: (
@@ -262,6 +284,7 @@ beforeEach(() => {
   state.request.mockReset();
   state.go.mockReset();
   state.resetScroll.mockReset();
+  state.routeTab = '';
   state.cache.clear();
 });
 afterEach(() => cleanup());
@@ -290,6 +313,18 @@ it('loads the Location directory once for all visible task kinds and preserves p
   await waitFor(() => expect(screen.getByText('Công việc next')).toBeTruthy());
   expect(screen.getByText('Cơ sở: Cơ sở Phú Thọ')).toBeTruthy();
   expect(screen.getByText('Trang 2 / 2')).toBeTruthy();
+  fireEvent.click(screen.getByRole('tab', { name: 'Sửa chữa & bảo trì' }));
+  await screen.findByText('Danh sách công việc sửa chữa & bảo trì');
+  fireEvent.click(screen.getByRole('button', { name: 'Lọc bảo trì' }));
+  fireEvent.click(screen.getByRole('button', { name: 'Trang bảo trì sau' }));
+  fireEvent.click(screen.getByRole('tab', { name: 'Vận hành' }));
+  await screen.findByText('Công việc next');
+  expect(screen.getByText('Trang 2 / 2')).toBeTruthy();
+  fireEvent.click(screen.getByRole('tab', { name: 'Sửa chữa & bảo trì' }));
+  expect(await screen.findByText('Trang bảo trì: 2')).toBeTruthy();
+  expect(screen.getByText('Trạng thái bảo trì: InProgress')).toBeTruthy();
+  fireEvent.click(screen.getByRole('tab', { name: 'Vận hành' }));
+  await screen.findByText('Công việc next');
   expect(
     state.request.mock.calls.filter(([path]) => path === '/api/v1/locations/assigned-to-me'),
   ).toHaveLength(1);
@@ -344,15 +379,21 @@ it('always renders a Location row for a standalone ordinary task card', () => {
   expect(screen.getByText('Cơ sở: Chưa xác định tên cơ sở')).toBeTruthy();
 });
 
-it('shows the work queue without a separate reports tab and retains repair/maintenance work', async () => {
+it('switches between operational and maintenance queues without adding incident reports', async () => {
   state.request.mockImplementation(async (path: string) =>
     path === '/api/v1/locations/assigned-to-me'
       ? [{ id: loc1, name: 'Cơ sở Phú Thọ' }]
       : page([task('one', loc1)]),
   );
   render(<StaffTaskListScreen />);
+  await screen.findByText('Công việc one');
+  expect(screen.queryByText('Danh sách công việc sửa chữa & bảo trì')).toBeNull();
+  fireEvent.click(screen.getByRole('tab', { name: 'Sửa chữa & bảo trì' }));
   await screen.findByText('Danh sách công việc sửa chữa & bảo trì');
-  expect(screen.getByText('Công việc one')).toBeTruthy();
+  expect(screen.queryByText('Công việc one')).toBeNull();
+  fireEvent.click(screen.getByRole('tab', { name: 'Vận hành' }));
+  await screen.findByText('Công việc one');
+  expect(screen.queryByText('Danh sách công việc sửa chữa & bảo trì')).toBeNull();
   expect(screen.queryByRole('tab', { name: 'Công việc' })).toBeNull();
   expect(screen.queryByRole('tab', { name: 'Báo cáo sự cố' })).toBeNull();
   expect(screen.queryByText('Công việc thuộc cơ sở đang chọn trên trang chủ')).toBeNull();
@@ -362,6 +403,16 @@ it('shows the work queue without a separate reports tab and retains repair/maint
   expect(screen.queryByText(/\d+ công việc/)).toBeNull();
   expect(screen.getByRole('tab', { name: 'Tất cả' })).toBeTruthy();
   expect(screen.queryByText('Danh sách báo cáo sự cố')).toBeNull();
+});
+
+it('opens the maintenance tab when returning from an embedded work order', async () => {
+  state.routeTab = 'maintenance';
+  render(<StaffTaskListScreen />);
+  await screen.findByText('Danh sách công việc sửa chữa & bảo trì');
+  expect(
+    screen.getByRole('tab', { name: 'Sửa chữa & bảo trì' }).getAttribute('aria-selected'),
+  ).toBe('true');
+  expect(state.request).not.toHaveBeenCalled();
 });
 
 it('shows only actionable handovers, selects a room, and opens both task categories', async () => {

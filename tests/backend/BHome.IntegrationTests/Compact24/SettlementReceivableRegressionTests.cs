@@ -1,0 +1,35 @@
+using BHome.IntegrationTests.PaymentsDebt;
+
+namespace BHome.IntegrationTests.Compact24;
+
+public sealed class SettlementReceivableRegressionTests
+{
+    [CompactPostgresFact]
+    public async Task RoomChecksCannotBeCrossChargedOrDuplicated()
+    {
+        var fixture = new Compact24WorkflowFixture(); await fixture.InitializeAsync();
+        try { await new PaymentLedgerTests(fixture.Capture).OwnerPricesEachActualRoomIssueWithItsOwnPhotoAndTenantSeesTheCharge(); }
+        finally { await fixture.DisposeAsync(); }
+    }
+    [CompactPostgresFact]
+    public async Task DamageDebtAndOffsetsSurvivePhysicalRelease()
+    {
+        var fixture = new Compact24WorkflowFixture(); await fixture.InitializeAsync();
+        try { await new PaymentLedgerTests(fixture.Capture).DamageAboveDepositRemainsRoomDebtWithSeparateCanonicalOffsets(); }
+        finally { await fixture.DisposeAsync(); }
+    }
+    [CompactPostgresFact]
+    public async Task DamageEvidenceAndInvoiceOffsetsAreValidated()
+    {
+        var fixture = new Compact24WorkflowFixture(); await fixture.InitializeAsync();
+        try { await new PaymentLedgerTests(fixture.Capture).DepositOffsetsVerifyDamageEvidenceAndFinalInvoiceBalance(); }
+        finally { await fixture.DisposeAsync(); }
+    }
+    [CompactPostgresFact]
+    public async Task BankPaymentsAndActualPayerRefunds()
+    {
+        var fixture = new Compact24WorkflowFixture(); await fixture.InitializeAsync();
+        try { await new PaymentLedgerTests(fixture.Capture).SettlementBankPaymentsPreservePartialDebtAndRefundExcessToActualPayer(); }
+        finally { await fixture.DisposeAsync(); }
+    }
+}

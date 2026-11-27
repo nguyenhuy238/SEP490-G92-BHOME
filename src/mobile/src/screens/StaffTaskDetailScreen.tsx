@@ -33,6 +33,7 @@ import { useWorkspaceHeaderRefresh } from '../components/WorkspaceHeaderContext'
 import { useStaffTaskDetail, taskDetailError } from '../features/workspace/useStaffTaskDetail';
 import { useWorkspace } from '../features/workspace/WorkspaceProvider';
 import { useWorkspaceQuery } from '../features/workspace/useWorkspaceQuery';
+import { useCachedWorkspaceQuery } from '../features/workspace/useCachedWorkspaceQuery';
 import { useSession } from '../lib/SessionProvider';
 import type { Named } from '../lib/api';
 import { queryPolicies } from '../lib/queryPolicies';
@@ -48,6 +49,7 @@ import {
 } from './LocationAssetInventoryChecklist';
 import { LocationAssetHandoverSigning } from './LocationAssetHandoverSigning';
 import { colors as c } from '../theme/theme';
+import type { LocationAssetInventory } from '../services/locationAssetInventory';
 
 type DetailModel = ReturnType<typeof useStaffTaskDetail>;
 const statusLabels: Record<string, string> = {
@@ -97,7 +99,21 @@ export function StaffTaskDetailScreen({ id }: { id: string }) {
   const [expanded, setExpanded] = useState(false);
   const [historyExpanded, setHistoryExpanded] = useState(false);
   const [selectedTab, setSelectedTab] = useState('overview');
+  const inventory = useCachedWorkspaceQuery<LocationAssetInventory>(
+    isHandover &&
+      currentStaff &&
+      inSelectedLocation &&
+      (selectedTab === 'overview' || selectedTab === 'inventory')
+      ? `/api/v1/operational-tasks/${id}/location-asset-inventory`
+      : null,
+    queryPolicies.tasks,
+  );
   const refresh = model.reload;
+  const reloadInventory = inventory.reload;
+  const refreshHeader = useCallback(() => {
+    refresh();
+    reloadInventory();
+  }, [refresh, reloadInventory]);
   useFocusEffect(
     useCallback(() => {
       refresh();
@@ -143,10 +159,14 @@ export function StaffTaskDetailScreen({ id }: { id: string }) {
       </View>
     );
   })();
-  const inShell = useWorkspaceHeaderRefresh(refresh, !!busy || detail.fetching, {
-    title: 'Chi tiết công việc',
-    footer,
-  });
+  const inShell = useWorkspaceHeaderRefresh(
+    refreshHeader,
+    !!busy || detail.fetching || inventory.fetching,
+    {
+      title: 'Chi tiết công việc',
+      footer,
+    },
+  );
   if (!inSelectedLocation)
     return (
       <View style={styles.section}>
@@ -199,84 +219,90 @@ export function StaffTaskDetailScreen({ id }: { id: string }) {
     <>
       {!inShell && <Text variant="titleLarge">Chi tiết công việc</Text>}
       {!!detail.rawError && <ReadFailure error={detail.rawError} retry={refresh} />}
-      <View style={styles.section}>
-        <Text variant="titleLarge" numberOfLines={3} style={styles.title}>
-          {task.title || 'Công việc vận hành'}
-        </Text>
-        {!!task.target?.label && (
-          <Text variant="bodyMedium" style={styles.title}>
-            Vị trí / thiết bị: {task.target.label}
+      {currentStaff && isHandover && (
+        <StaffWorkflowTabs
+          accessibilityLabel="Các phần chi tiết công việc"
+          selected={activeTab}
+          onChange={setSelectedTab}
+          tabs={tabs}
+        />
+      )}
+      {(!isHandover || activeTab === 'overview') && (
+        <View style={styles.section}>
+          <Text variant="titleMedium" numberOfLines={3} style={styles.title}>
+            {task.title || 'Công việc vận hành'}
           </Text>
-        )}
-        {task.kind === 'LocationAssetHandover' && (
-          <View style={{ gap: 8 }}>
-            <Text variant="titleMedium" style={styles.title}>
-              Cơ sở phân công:{' '}
-              {locationName ||
-                (assignedLocations.loading
-                  ? 'Đang tải tên cơ sở…'
-                  : 'Chưa xác định được tên cơ sở')}
+          {!isHandover && !!task.target?.label && (
+            <Text variant="bodyMedium" style={styles.title}>
+              Vị trí / thiết bị: {task.target.label}
             </Text>
-            {!locationName && !assignedLocations.loading && (
-              <Text variant="bodySmall" style={styles.muted}>
-                {assignedLocations.error || 'Tên cơ sở chưa có trong danh sách được phân công.'}
+          )}
+          {task.kind === 'LocationAssetHandover' && (!inShell || !locationName) && (
+            <View style={{ gap: 4 }}>
+              <Text variant="bodyMedium" style={styles.title}>
+                Cơ sở phân công:{' '}
+                {locationName ||
+                  (assignedLocations.loading
+                    ? 'Đang tải tên cơ sở…'
+                    : 'Chưa xác định được tên cơ sở')}
+              </Text>
+              {!locationName && !assignedLocations.loading && (
+                <Text variant="bodySmall" style={styles.muted}>
+                  {assignedLocations.error || 'Tên cơ sở chưa có trong danh sách được phân công.'}
+                </Text>
+              )}
+            </View>
+          )}
+          {task.target?.contractId && (isMainMoveInWork(task) || isMainMoveOutWork(task)) && (
+            <Button
+              mode="contained"
+              onPress={() =>
+                isMainMoveOutWork(task)
+                  ? go('move-out', { contractId: task.target!.contractId!, taskId: task.id })
+                  : go('move-in', { contractId: task.target!.contractId!, section: 'handover' })
+              }
+            >
+              {isMainMoveOutWork(task) ? 'Mở kiểm tra trả phòng' : 'Mở bàn giao nhận phòng'}
+            </Button>
+          )}
+          <View style={styles.row}>
+            <View style={[styles.badge, pending && { backgroundColor: c.amberSoft }]}>
+              <Text variant="labelMedium" style={{ color: pending ? c.amber : c.primary }}>
+                {statusLabels[task.status] ?? 'Đang cập nhật trạng thái'}
+              </Text>
+            </View>
+            {task.priority === 'High' && (
+              <Text variant="labelMedium" style={{ color: c.amber }}>
+                Ưu tiên cao
               </Text>
             )}
+          </View>
+          {due && (
+            <View style={styles.row}>
+              <Icon
+                source="clock-outline"
+                size={16}
+                color={task.isOverdue && !pending ? c.red : c.muted}
+              />
+              <Text
+                variant="bodySmall"
+                style={task.isOverdue && !pending ? styles.error : styles.muted}
+              >
+                {task.isOverdue && !pending ? 'Quá hạn · ' : 'Hạn · '}
+                {due}
+              </Text>
+            </View>
+          )}
+          {!currentStaff && (
             <Text variant="bodySmall" style={styles.muted}>
-              Kiểm tra các nhóm tài sản Owner đã xác nhận tại từng phòng và khu vực chung. Nếu thiếu
-              hoặc hỏng, báo ngay tại mục tài sản đó.
-            </Text>
-          </View>
-        )}
-        {task.target?.contractId && (isMainMoveInWork(task) || isMainMoveOutWork(task)) && (
-          <Button
-            mode="contained"
-            onPress={() =>
-              isMainMoveOutWork(task)
-                ? go('move-out', { contractId: task.target!.contractId!, taskId: task.id })
-                : go('move-in', { contractId: task.target!.contractId!, section: 'handover' })
-            }
-          >
-            {isMainMoveOutWork(task) ? 'Mở kiểm tra trả phòng' : 'Mở bàn giao nhận phòng'}
-          </Button>
-        )}
-        <View style={styles.row}>
-          <View style={[styles.badge, pending && { backgroundColor: c.amberSoft }]}>
-            <Text variant="labelMedium" style={{ color: pending ? c.amber : c.primary }}>
-              {statusLabels[task.status] ?? 'Đang cập nhật trạng thái'}
-            </Text>
-          </View>
-          {task.priority === 'High' && (
-            <Text variant="labelMedium" style={{ color: c.amber }}>
-              Ưu tiên cao
+              {task.responsibilityAvailable
+                ? 'Công việc này không được phân công cho tài khoản hiện tại. Bạn chỉ có thể xem thông tin chung.'
+                : 'Chưa có nhân viên phụ trách có hiệu lực. Liên hệ Owner để cập nhật phân công.'}
             </Text>
           )}
         </View>
-        {due && (
-          <View style={styles.row}>
-            <Icon
-              source="clock-outline"
-              size={16}
-              color={task.isOverdue && !pending ? c.red : c.muted}
-            />
-            <Text
-              variant="bodySmall"
-              style={task.isOverdue && !pending ? styles.error : styles.muted}
-            >
-              {task.isOverdue && !pending ? 'Quá hạn · ' : 'Hạn · '}
-              {due}
-            </Text>
-          </View>
-        )}
-        {!currentStaff && (
-          <Text variant="bodySmall" style={styles.muted}>
-            {task.responsibilityAvailable
-              ? 'Công việc này không được phân công cho tài khoản hiện tại. Bạn chỉ có thể xem thông tin chung.'
-              : 'Chưa có nhân viên phụ trách có hiệu lực. Liên hệ Owner để cập nhật phân công.'}
-          </Text>
-        )}
-      </View>
-      {currentStaff && (
+      )}
+      {currentStaff && !isHandover && (
         <StaffWorkflowTabs
           accessibilityLabel="Các phần chi tiết công việc"
           selected={activeTab}
@@ -329,6 +355,7 @@ export function StaffTaskDetailScreen({ id }: { id: string }) {
           taskStatus={task.status}
           editable={currentStaff && task.status === 'InProgress' && allowed.includes('progress')}
           onTaskRefresh={refresh}
+          hideReload={inShell}
         />
       )}
       {activeTab === 'handover' && isHandover && canReadHandover && (
@@ -915,7 +942,7 @@ const styles = StyleSheet.create({
     borderColor: c.border,
     borderRadius: 12,
     padding: 12,
-    gap: 8,
+    gap: 6,
   },
   title: { color: c.primary },
   body: { color: c.ink, lineHeight: 21 },
@@ -923,7 +950,7 @@ const styles = StyleSheet.create({
   error: { color: c.red },
   row: { flexDirection: 'row', alignItems: 'center', gap: 8, flexWrap: 'wrap' },
   between: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', gap: 8 },
-  badge: { backgroundColor: c.soft, paddingVertical: 5, paddingHorizontal: 8, borderRadius: 5 },
+  badge: { backgroundColor: c.soft, paddingVertical: 4, paddingHorizontal: 8, borderRadius: 5 },
   inlineButton: { alignSelf: 'flex-start', marginLeft: -8 },
   actionBar: {
     backgroundColor: c.white,

@@ -1,6 +1,6 @@
 import React, { useCallback, useState } from 'react';
 import { Platform, View } from 'react-native';
-import { ActivityIndicator, Button, Text } from 'react-native-paper';
+import { ActivityIndicator, Button, Icon, Text, TouchableRipple } from 'react-native-paper';
 import { formatInstant } from '../../../../packages/client-core/src/localization';
 import { Box, Heading, Pill, ui } from '../components/WorkspaceKit';
 import { useWorkspaceHeaderRefresh } from '../components/WorkspaceHeaderContext';
@@ -8,6 +8,7 @@ import { useWorkspaceQuery } from '../features/workspace/useWorkspaceQuery';
 import { errorMessage, MobileApiError, type MobileApi } from '../lib/api';
 import { randomUUID } from '../lib/randomUUID';
 import { useSession } from '../lib/SessionProvider';
+import { colors } from '../theme/theme';
 import {
   locationAssetHandoverArchiveClient,
   type LocationAssetHandoverArchiveListItem,
@@ -57,8 +58,19 @@ function ArchiveCard({
   onOpen: (value: SelectedReport) => void;
 }) {
   return (
-    <Box>
-      <View style={{ gap: 5 }}>
+    <TouchableRipple
+      accessibilityRole="button"
+      accessibilityLabel={`Xem biên bản: ${report.locationName}`}
+      onPress={() => onOpen({ taskId: report.taskId, revision: report.revision })}
+      style={{
+        borderWidth: 1,
+        borderColor: colors.border,
+        borderRadius: 12,
+        backgroundColor: colors.white,
+        overflow: 'hidden',
+      }}
+    >
+      <View style={{ gap: 4, padding: 12 }}>
         <View style={{ flexDirection: 'row', justifyContent: 'space-between', gap: 8 }}>
           <Text variant="titleMedium" style={{ flex: 1 }}>
             {report.locationName}
@@ -77,14 +89,16 @@ function ArchiveCard({
           {formatInstant(report.approvedAt)} · {report.directItems} mục Staff kiểm tra ·{' '}
           {report.inheritedItems} mục kế thừa từ Tenant
         </Text>
+        <View
+          style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'flex-end', gap: 4 }}
+        >
+          <Text variant="labelMedium" style={{ color: colors.blue }}>
+            Xem biên bản
+          </Text>
+          <Icon source="chevron-right" size={18} color={colors.blue} />
+        </View>
       </View>
-      <Button
-        mode="contained-tonal"
-        onPress={() => onOpen({ taskId: report.taskId, revision: report.revision })}
-      >
-        Xem biên bản
-      </Button>
-    </Box>
+    </TouchableRipple>
   );
 }
 
