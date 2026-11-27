@@ -7,6 +7,47 @@ namespace BHome.IntegrationTests.Ocr;
 public sealed class IdentityCardCropperTests
 {
     [Fact]
+    public void LowContrastCardCanBeLocalizedWithoutAStrongCannyBoundary()
+    {
+        using var source = new Mat(1280, 960, MatType.CV_8UC3, Scalar.All(100));
+        Cv2.Rectangle(source, new Rect(180, 350, 600, 375), Scalar.All(125), -1);
+        using var crop = new Mat();
+        Assert.True(IdentityCardCropper.TryCrop(source, crop));
+        Assert.InRange(crop.Width, 570, 630);
+        Assert.InRange(crop.Height, 345, 405);
+        Assert.True(Cv2.Mean(crop).Val0 > 120);
+    }
+
+    [Fact]
+    public void BrightnessFallbackStillRejectsTwoCardsAndASquare()
+    {
+        using var source = new Mat(1000, 1600, MatType.CV_8UC3, Scalar.All(100));
+        using var crop = new Mat();
+        Cv2.Rectangle(source, new Rect(100, 300, 600, 375), Scalar.All(125), -1);
+        Cv2.Rectangle(source, new Rect(900, 300, 600, 375), Scalar.All(125), -1);
+        Assert.False(IdentityCardCropper.TryCrop(source, crop));
+        source.SetTo(Scalar.All(100));
+        Cv2.Rectangle(source, new Rect(400, 200, 600, 600), Scalar.All(125), -1);
+        Assert.False(IdentityCardCropper.TryCrop(source, crop));
+    }
+
+    [Theory]
+    [InlineData(1600, 1200)]
+    [InlineData(800, 800)]
+    public void SmallIdentityIsResampledWithinConfiguredLimitButMeterIsNot(int limit, int expectedWidth)
+    {
+        using var source = new Mat(375, 600, MatType.CV_8UC3, Scalar.White);
+        var options = new OcrOptions { MaxDimension = limit };
+        var processor = new ImagePreprocessor(options);
+        using var identity = processor.Prepare(source.ImEncode(".png"), OcrDocumentKind.IdentityFront);
+        using var back = processor.Prepare(source.ImEncode(".png"), OcrDocumentKind.IdentityBack);
+        using var meter = processor.Prepare(source.ImEncode(".png"), OcrDocumentKind.DigitalWater);
+        Assert.Equal(expectedWidth, identity.Image.Width);
+        Assert.Equal(600, back.Image.Width);
+        Assert.Equal(600, meter.Image.Width);
+    }
+
+    [Fact]
     public void UpperFrontValueCanBeReadBeforeItsLabelWhileAllRegionsRemainAvailable()
     {
         var number = new RotatedRect(new(650, 300), new(400, 45), 0);

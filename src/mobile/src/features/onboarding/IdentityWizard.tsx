@@ -101,6 +101,7 @@ export function IdentityWizard({
     setSide(captureRequest.side);
   }
   const captureProgress = useRef(emptyCaptureProgress());
+  const cameraLensPreferenceRef = useRef('');
   const progressCallback = useRef(onCaptureProgress);
   useEffect(() => {
     progressCallback.current = onCaptureProgress;
@@ -548,6 +549,7 @@ export function IdentityWizard({
       ) : visible && active ? (
         <CameraCapture
           key={side}
+          lensPreferenceRef={cameraLensPreferenceRef}
           label="Quét CCCD"
           presentation="document"
           documentSide={side}
@@ -645,6 +647,7 @@ export function IdentityWizard({
           ) : (
             active && (
               <CameraCapture
+                lensPreferenceRef={cameraLensPreferenceRef}
                 label={`${scanned ? 'Chụp lại' : 'Chụp ảnh'} mặt trước`}
                 documentSide="front"
                 disabled={busy}

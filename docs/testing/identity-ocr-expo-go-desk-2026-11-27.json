@@ -1,0 +1,224 @@
+{
+  "dataset": "synthetic",
+  "baselineCommit": "1d41add1",
+  "engineVersion": "ocrdoc-ppocrv6-vi-run6-9b534643-yolo2-cache1-category2-identity-desk1",
+  "limitations": [
+    "Transformed samples are not independent people or cards.",
+    "No real identity photos or values were saved or evaluated.",
+    "Windows and Linux timings are separate workloads; model initialization precedes each benchmark.",
+    "All-face resampling was an unreleased trial. Final resampling applies to IdentityFront only.",
+    "Benchmark mismatches return exit code 1; these are not 100-percent OCR accuracy results."
+  ],
+  "windows": {
+    "before": {
+      "desk": {
+        "total": 17,
+        "sourceCount": 3,
+        "exactMatches": 11,
+        "expectedRejections": 1,
+        "falseProposals": 0,
+        "incorrectExpectedFields": 6,
+        "missingExpectedFields": 0,
+        "proposalOrFallbackWithin10Seconds": 17,
+        "maxMilliseconds": 5035
+      },
+      "dense": {
+        "total": 17,
+        "sourceCount": 3,
+        "exactMatches": 16,
+        "expectedRejections": 1,
+        "falseProposals": 0,
+        "incorrectExpectedFields": 1,
+        "missingExpectedFields": 0,
+        "proposalOrFallbackWithin10Seconds": 17,
+        "maxMilliseconds": 3686
+      }
+    },
+    "final": {
+      "desk": {
+        "total": 17,
+        "sourceCount": 3,
+        "exactMatches": 13,
+        "expectedRejections": 1,
+        "falseProposals": 0,
+        "incorrectExpectedFields": 4,
+        "missingExpectedFields": 0,
+        "proposalOrFallbackWithin10Seconds": 17,
+        "maxMilliseconds": 5567
+      },
+      "dense": {
+        "total": 17,
+        "sourceCount": 3,
+        "exactMatches": 16,
+        "expectedRejections": 1,
+        "falseProposals": 0,
+        "incorrectExpectedFields": 1,
+        "missingExpectedFields": 0,
+        "proposalOrFallbackWithin10Seconds": 17,
+        "maxMilliseconds": 4090
+      }
+    },
+    "challengingRegression": {
+      "total": 31,
+      "sourceCount": 3,
+      "exactMatches": 29,
+      "expectedRejections": 1,
+      "falseProposals": 0,
+      "incorrectExpectedFields": 2,
+      "missingExpectedFields": 0,
+      "proposalOrFallbackWithin10Seconds": 31,
+      "maxMilliseconds": 6958
+    }
+  },
+  "linux2Cpu": {
+    "before": {
+      "challenges": {
+        "total": 31,
+        "sourceCount": 3,
+        "exactMatches": 27,
+        "expectedRejections": 1,
+        "falseProposals": 0,
+        "incorrectExpectedFields": 2,
+        "missingExpectedFields": 3,
+        "proposalOrFallbackWithin10Seconds": 31,
+        "maxMilliseconds": 8495
+      },
+      "desk": {
+        "total": 17,
+        "sourceCount": 3,
+        "exactMatches": 11,
+        "expectedRejections": 1,
+        "falseProposals": 0,
+        "incorrectExpectedFields": 6,
+        "missingExpectedFields": 0,
+        "proposalOrFallbackWithin10Seconds": 17,
+        "maxMilliseconds": 8481
+      },
+      "dense": {
+        "total": 17,
+        "sourceCount": 3,
+        "exactMatches": 16,
+        "expectedRejections": 1,
+        "falseProposals": 0,
+        "incorrectExpectedFields": 1,
+        "missingExpectedFields": 0,
+        "proposalOrFallbackWithin10Seconds": 17,
+        "maxMilliseconds": 8507
+      }
+    },
+    "trialAllFaceResampling": {
+      "clear": {
+        "total": 6,
+        "sourceCount": 6,
+        "exactMatches": 6,
+        "expectedRejections": 0,
+        "falseProposals": 0,
+        "incorrectExpectedFields": 0,
+        "missingExpectedFields": 0,
+        "proposalOrFallbackWithin10Seconds": 6,
+        "maxMilliseconds": 8038
+      },
+      "camera": {
+        "total": 3,
+        "sourceCount": 3,
+        "exactMatches": 3,
+        "expectedRejections": 0,
+        "falseProposals": 0,
+        "incorrectExpectedFields": 0,
+        "missingExpectedFields": 0,
+        "proposalOrFallbackWithin10Seconds": 3,
+        "maxMilliseconds": 8456
+      },
+      "validation": {
+        "total": 7,
+        "sourceCount": 3,
+        "exactMatches": 7,
+        "expectedRejections": 1,
+        "falseProposals": 0,
+        "incorrectExpectedFields": 0,
+        "missingExpectedFields": 0,
+        "proposalOrFallbackWithin10Seconds": 7,
+        "maxMilliseconds": 8677
+      },
+      "challenges": {
+        "total": 31,
+        "sourceCount": 3,
+        "exactMatches": 27,
+        "expectedRejections": 1,
+        "falseProposals": 0,
+        "incorrectExpectedFields": 2,
+        "missingExpectedFields": 2,
+        "proposalOrFallbackWithin10Seconds": 31,
+        "maxMilliseconds": 8561
+      },
+      "desk": {
+        "total": 17,
+        "sourceCount": 3,
+        "exactMatches": 13,
+        "expectedRejections": 1,
+        "falseProposals": 0,
+        "incorrectExpectedFields": 4,
+        "missingExpectedFields": 0,
+        "proposalOrFallbackWithin10Seconds": 17,
+        "maxMilliseconds": 8484
+      },
+      "dense": {
+        "total": 17,
+        "sourceCount": 3,
+        "exactMatches": 15,
+        "expectedRejections": 1,
+        "falseProposals": 0,
+        "incorrectExpectedFields": 1,
+        "missingExpectedFields": 1,
+        "proposalOrFallbackWithin10Seconds": 17,
+        "maxMilliseconds": 8637
+      }
+    },
+    "finalFrontOnlyResampling": {
+      "dense": {
+        "total": 17,
+        "sourceCount": 3,
+        "exactMatches": 16,
+        "expectedRejections": 1,
+        "falseProposals": 0,
+        "incorrectExpectedFields": 1,
+        "missingExpectedFields": 0,
+        "proposalOrFallbackWithin10Seconds": 17,
+        "maxMilliseconds": 8687
+      }
+    }
+  },
+  "checks": {
+    "backendFullSuite": {
+      "passed": 2787,
+      "failed": 0,
+      "skipped": 32,
+      "assemblies": 5,
+      "inventoryAndDiscovery": "PASS",
+      "requiredStagingRegressionGroups": 21,
+      "note": "Executed before the final front-only resampling guard; the OCR group was rerun afterwards."
+    },
+    "backendFinalOcrGroup": {
+      "passed": 212,
+      "failed": 0,
+      "skipped": 19
+    },
+    "mobile": {
+      "passed": 1829,
+      "failed": 0,
+      "skipped": 0,
+      "files": 167,
+      "junitVerification": "PASS"
+    },
+    "mobileAfterRefNamingFix": {
+      "documentCamera": 41,
+      "onboardingUi": 52
+    },
+    "releaseBuild": "PASS: 0 warnings/errors after waiting for Windows testhost DLL locks",
+    "lint": "PASS",
+    "prettier": "PASS",
+    "dotnetFormat": "PASS; changed preprocessing/test files rechecked after final guard",
+    "mobileTypecheck": "PASS",
+    "expoWebExport": "PASS; not an iPhone hardware test"
+  }
+}
