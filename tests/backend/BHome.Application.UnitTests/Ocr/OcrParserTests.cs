@@ -6,6 +6,28 @@ namespace BHome.Application.UnitTests.Ocr;
 
 public sealed class OcrParserTests
 {
+    [Fact]
+    public void PartialTextWithoutIdentityFieldsDoesNotClaimPartialIdentityData()
+    {
+        var result = OcrFieldParser.Parse(new([new("BACKGROUND TEST TEXT", .99f)], "synthetic", ["ocr_partial"]), OcrDocumentKind.IdentityFront);
+        Assert.True(result.IsFallback);
+        Assert.Empty(result.ProposedFields);
+        Assert.DoesNotContain("ocr_partial", result.Warnings);
+        Assert.Contains("unsupported_or_unreadable_layout", result.Warnings);
+    }
+
+    [Fact]
+    public void PartialIdentityKeepsOnlyObservedFieldsAndRequiresConfirmation()
+    {
+        var result = OcrFieldParser.Parse(new([new("Số: 000000000000", .99f)], "synthetic", ["ocr_partial"]), OcrDocumentKind.IdentityFront);
+        Assert.False(result.IsFallback);
+        Assert.Equal("000000000000", result.ProposedFields["citizenIdentityNumber"]);
+        Assert.Contains("ocr_partial", result.Warnings);
+        Assert.Contains("fullName", result.MissingFields);
+        Assert.Contains("dateOfBirth", result.MissingFields);
+        Assert.True(result.RequiresConfirmation);
+    }
+
     [Theory]
     [InlineData("m³/h")]
     [InlineData("m3/min")]
