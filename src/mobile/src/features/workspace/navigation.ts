@@ -21,6 +21,8 @@ export const screenRoles = {
   signing: ['Owner', 'Staff', 'Tenant'],
   'billing-history': ['Tenant'],
   'refund-requests': ['Tenant'],
+  'refund-history': ['Tenant'],
+  'incident-history': ['Tenant'],
   shifts: ['Staff'],
   rooms: ['Staff'],
   'debt-follow-up': ['Staff'],
@@ -44,6 +46,7 @@ export const screenRoles = {
   'tenant-home': ['Tenant'],
   'tenant-features': ['Tenant'],
   'tenant-room': ['Tenant'],
+  'tenant-handovers': ['Tenant'],
   'tenant-requests': ['Tenant'],
   'tenant-meters': ['Tenant'],
   invoice: ['Tenant'],
@@ -134,6 +137,8 @@ export function activeWorkspaceTab(role: MobileRole, screen: WorkspaceScreen): W
         'incident-detail',
         'incident-inbox',
         'refund-requests',
+        'refund-history',
+        'incident-history',
       ].includes(screen)
     )
       return 'tenant-requests';

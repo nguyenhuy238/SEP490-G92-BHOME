@@ -265,14 +265,12 @@ beforeEach(() => {
 });
 afterEach(cleanup);
 
-it('starts a server-assigned inventory task before allowing edits', async () => {
-  const view = render(<StaffMoveInInventoryScreen />);
+it('starts a server-assigned inventory task automatically when an item opens', async () => {
+  render(<StaffMoveInInventoryScreen />);
   expect(screen.queryByText('Tải lại kiểm kê')).toBeNull();
   expect(screen.queryByLabelText('Số lượng thực tế – Giường đơn')).toBeNull();
   fireEvent.click(screen.getByText('Kiểm tra'));
-  expect(screen.getByLabelText('Số lượng thực tế – Giường đơn')).toHaveProperty('disabled', true);
-  fireEvent.click(screen.getByText('Về danh sách tài sản'));
-  fireEvent.click(screen.getByText('Bắt đầu kiểm kê'));
+  expect(screen.queryByText('Bắt đầu kiểm kê')).toBeNull();
   await waitFor(() =>
     expect(
       state.request.mock.calls.some(
@@ -281,10 +279,26 @@ it('starts a server-assigned inventory task before allowing edits', async () => 
       ),
     ).toBe(true),
   );
-  view.rerender(<StaffMoveInInventoryScreen />);
-  fireEvent.click(screen.getByText('Kiểm tra'));
-  expect(screen.getByLabelText('Số lượng thực tế – Giường đơn')).toHaveProperty('disabled', false);
+  await waitFor(() =>
+    expect(screen.getByLabelText('Số lượng thực tế – Giường đơn')).toHaveProperty(
+      'disabled',
+      false,
+    ),
+  );
+  expect(state.request.mock.calls.filter(([path]) => path.endsWith('/start'))).toHaveLength(1);
   expect(state.reload).toHaveBeenCalled();
+});
+
+it('opens an assigned embedded item and enables editing without a manual start button', async () => {
+  render(<StaffMoveInInventoryScreen embeddedTaskId={taskId} embeddedItemId={itemId} />);
+  expect(screen.queryByText('Bắt đầu kiểm kê')).toBeNull();
+  await waitFor(() =>
+    expect(screen.getByLabelText('Số lượng thực tế – Giường đơn')).toHaveProperty(
+      'disabled',
+      false,
+    ),
+  );
+  expect(state.request.mock.calls.filter(([path]) => path.endsWith('/start'))).toHaveLength(1);
 });
 
 it('shows only the selected asset on mobile, keeps unsaved input and resets the modal scroll', () => {

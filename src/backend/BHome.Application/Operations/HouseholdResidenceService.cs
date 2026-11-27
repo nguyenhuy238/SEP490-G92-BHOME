@@ -32,14 +32,18 @@ public sealed partial class OperationsService
         if (residentIds.Length is < 1 or > 100 || !residentIds.Contains(residentId) || residentIds.Any(id => id == Guid.Empty) ||
             residentIds.Distinct().Count() != residentIds.Length) throw OperationsException.Invalid("invalid_residence_members");
         var targets = new List<ResidenceEvidenceTarget>();
+        ResidenceTaskView? primary = null;
         foreach (var id in residentIds.Order())
         {
             var member = await repository.ResidenceAsync(contractId, id, Actor, t) ?? throw OperationsException.Missing();
+            if (id == residentId) primary = member;
             targets.Add(new(id, member.Reference!));
         }
         var content = await ReadImageAsync(input, t);
         var type = files.ValidateImage(content);
-        var key = $"residence/{contractId:N}/household/{Guid.NewGuid():N}";
+        var scope = primary ?? throw OperationsException.Missing();
+        var key = BHome.Application.Storage.PrivateImageKeys.Evidence(scope.LocationId, scope.RoomId,
+            "residence-household", contractId, Guid.NewGuid());
         await files.PutAsync(key, content, type, t);
         try
         {

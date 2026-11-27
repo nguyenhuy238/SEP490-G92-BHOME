@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Modal, ScrollView, StyleSheet, View, useWindowDimensions } from 'react-native';
+import { Modal, ScrollView, StyleSheet, View } from 'react-native';
 import { Button, Icon, Text, TouchableRipple } from 'react-native-paper';
 import {
   type ContractClient,
@@ -47,7 +47,7 @@ const styles = StyleSheet.create({
   },
   overlay: {
     flex: 1,
-    padding: 12,
+    padding: 16,
     alignItems: 'center',
     justifyContent: 'center',
     backgroundColor: 'rgba(14, 27, 47, 0.65)',
@@ -55,13 +55,21 @@ const styles = StyleSheet.create({
   modal: {
     width: '100%',
     maxWidth: 520,
-    maxHeight: '88%',
+    maxHeight: '80%',
     borderRadius: 16,
     overflow: 'hidden',
     backgroundColor: '#fff',
   },
-  phoneOverlay: { paddingHorizontal: 0, paddingBottom: 0, justifyContent: 'flex-end' },
-  phoneModal: { maxHeight: '92%', borderBottomLeftRadius: 0, borderBottomRightRadius: 0 },
+  childOverlay: {
+    position: 'absolute',
+    top: 0,
+    right: 0,
+    bottom: 0,
+    left: 0,
+    padding: 24,
+    backgroundColor: 'rgba(14, 27, 47, 0.45)',
+  },
+  childPanel: { maxHeight: '75%' },
   modalHeader: {
     paddingHorizontal: 14,
     paddingVertical: 12,
@@ -187,8 +195,6 @@ export function TenantMoveOutInspectionSummary({
   inspection: FinalInspection;
 }) {
   const [detail, setDetail] = useState<Detail>(null);
-  const { width } = useWindowDimensions();
-  const compactPhone = width < 540;
   const observed = inspection.observed;
   const checks = observed.roomChecks ?? [];
   const totalChecks = roomHandoverChecks.length;
@@ -198,35 +204,252 @@ export function TenantMoveOutInspectionSummary({
   const roomIssues = checks.filter((item) => item.status === 'Issue').length;
   const assetIssues = observed.assets.filter(assetIssue).length;
   const newKeys = observed.accessItems?.find((item) => item.type === 'RoomKey')?.quantity;
-  const room =
-    detail?.section === 'room' && detail.item
-      ? checks.find((item) => item.code === detail.item)
-      : undefined;
-  const asset =
-    detail?.section === 'assets' && detail.item
-      ? observed.assets.find((item) => item.id === detail.item)
-      : undefined;
-  const physicalAssetEvidence = asset
-    ? (observed.physicalItemEvidence ?? []).filter((item) => item.assetId === asset.id)
-    : [];
-  const roomTitle = roomHandoverChecks.find((item) => item.code === detail?.item)?.label;
-  const title =
-    detail?.section === 'room'
-      ? (roomTitle ?? 'Hiện trạng phòng')
-      : detail?.section === 'meters'
-        ? 'Chỉ số điện và nước chốt'
-        : detail?.section === 'assets'
-          ? (asset?.name ?? 'Tài sản trả phòng')
-          : 'Chìa khóa';
+
   const goBack = () =>
     setDetail((current) => (current?.item ? { section: current.section } : null));
+
+  function renderPanel(detail: NonNullable<Detail>, covered = false, child = false) {
+    const room =
+      detail?.section === 'room' && detail.item
+        ? checks.find((item) => item.code === detail.item)
+        : undefined;
+    const asset =
+      detail?.section === 'assets' && detail.item
+        ? observed.assets.find((item) => item.id === detail.item)
+        : undefined;
+    const physicalAssetEvidence = asset
+      ? (observed.physicalItemEvidence ?? []).filter((item) => item.assetId === asset.id)
+      : [];
+    const roomTitle = roomHandoverChecks.find((item) => item.code === detail?.item)?.label;
+    const title =
+      detail?.section === 'room'
+        ? (roomTitle ?? (detail.item === 'overall' ? 'Hiện trạng chung' : 'Hiện trạng phòng'))
+        : detail?.section === 'meters'
+          ? detail.item === 'electricity'
+            ? 'Chỉ số điện chốt'
+            : detail.item === 'water'
+              ? 'Chỉ số nước chốt'
+              : 'Điện và nước'
+          : detail?.section === 'assets'
+            ? (asset?.name ?? 'Tài sản trả phòng')
+            : 'Chìa khóa';
+    return (
+      <View
+        style={[styles.overlay, child && styles.childOverlay]}
+        pointerEvents={covered ? 'none' : 'auto'}
+        accessibilityElementsHidden={covered}
+        importantForAccessibility={covered ? 'no-hide-descendants' : 'auto'}
+      >
+        <View
+          testID={child ? 'handover-detail-panel' : 'handover-list-panel'}
+          style={[styles.modal, child && styles.childPanel]}
+        >
+          <View style={styles.modalHeader}>
+            {!!detail?.item && (
+              <Button compact onPress={goBack} accessibilityLabel="Quay lại danh sách">
+                Quay lại
+              </Button>
+            )}
+            <Text style={styles.modalTitle} numberOfLines={2}>
+              {title}
+            </Text>
+            <Button compact onPress={child ? goBack : () => setDetail(null)}>
+              Đóng
+            </Button>
+          </View>
+          <ScrollView
+            style={{ flexShrink: 1 }}
+            keyboardShouldPersistTaps="handled"
+            contentContainerStyle={styles.modalContent}
+          >
+            {detail?.section === 'room' && !detail.item && (
+              <>
+                <DetailRow
+                  label="Hiện trạng chung"
+                  detail={`${observed.roomCondition ? 'Đã ghi nhận' : 'Chưa ghi nhận'} · ${observed.evidenceIds?.length ?? 0} ảnh`}
+                  icon="home-outline"
+                  onPress={() => setDetail({ section: 'room', item: 'overall' })}
+                />
+                <View style={styles.divider} />
+                {roomHandoverChecks.map(({ code, label }) => {
+                  const observedCheck = checks.find((item) => item.code === code);
+                  const issue = observedCheck?.status === 'Issue';
+                  return (
+                    <View key={code}>
+                      <DetailRow
+                        label={label}
+                        detail={
+                          observedCheck
+                            ? `${statusText(observedCheck.status)}${issue && observedCheck.notes ? ` · ${observedCheck.notes}` : ''}`
+                            : 'Chưa có kết quả'
+                        }
+                        icon={issue ? 'alert-circle-outline' : 'check-circle-outline'}
+                        warning={issue}
+                        onPress={() => setDetail({ section: 'room', item: code })}
+                      />
+                      <View style={styles.divider} />
+                    </View>
+                  );
+                })}
+              </>
+            )}
+            {detail?.section === 'room' && detail.item === 'overall' && (
+              <>
+                <Text style={styles.detailText}>
+                  {observed.roomCondition || 'Không có ghi chú'}
+                </Text>
+                <EvidenceGallery
+                  api={api}
+                  contractId={contractId}
+                  ids={observed.evidenceIds}
+                  label="Ảnh hiện trạng"
+                />
+              </>
+            )}
+            {detail?.section === 'room' && detail.item && detail.item !== 'overall' && (
+              <>
+                <Pill tone={!room ? 'neutral' : room.status === 'Issue' ? 'amber' : 'green'}>
+                  {statusText(room?.status)}
+                </Pill>
+                {!!room?.notes?.trim() && (
+                  <Text style={styles.detailText}>Nội dung: {room.notes}</Text>
+                )}
+                <EvidenceGallery
+                  api={api}
+                  contractId={contractId}
+                  ids={room?.evidenceIds}
+                  label="Ảnh hiện trạng"
+                />
+              </>
+            )}
+            {detail?.section === 'meters' && !detail.item && (
+              <>
+                <DetailRow
+                  label="Điện"
+                  detail={`${meterNumber(observed.electricity?.value)} kWh`}
+                  icon="lightning-bolt-outline"
+                  onPress={() => setDetail({ section: 'meters', item: 'electricity' })}
+                />
+                <View style={styles.divider} />
+                <DetailRow
+                  label="Nước"
+                  detail={`${meterNumber(observed.water?.value)} m³`}
+                  icon="water-outline"
+                  onPress={() => setDetail({ section: 'meters', item: 'water' })}
+                />
+              </>
+            )}
+            {detail?.section === 'meters' && detail.item && (
+              <>
+                {(['electricity', 'water'] as const)
+                  .filter((kind) => kind === detail.item)
+                  .map((kind) => {
+                    const reading = observed[kind];
+                    return (
+                      <View key={kind} style={styles.detailBlock}>
+                        <Text style={styles.detailLabel}>
+                          {kind === 'electricity' ? 'Điện' : 'Nước'}
+                        </Text>
+                        <Text style={styles.detailText}>
+                          {meterNumber(reading?.value)} {kind === 'electricity' ? 'kWh' : 'm³'}
+                        </Text>
+                        {!!reading?.id && (
+                          <ContractEvidence
+                            api={api}
+                            contractId={contractId}
+                            readingId={reading.id}
+                            finalMeterReading
+                            thumbnail
+                            thumbnailHeight={205}
+                            label="Ảnh công tơ đã chốt"
+                          />
+                        )}
+                      </View>
+                    );
+                  })}
+              </>
+            )}
+            {detail?.section === 'assets' && !asset && (
+              <>
+                {observed.assets.map((item) => {
+                  return (
+                    <View key={item.id}>
+                      <DetailRow
+                        label={item.name}
+                        detail={`${item.observedQuantity ?? 'Chưa kiểm kê'} ${item.unit ?? 'chiếc'} · ${statusText(item.observedCondition)}`}
+                        icon="package-variant-closed"
+                        warning={assetIssue(item)}
+                        onPress={() => setDetail({ section: 'assets', item: item.id })}
+                      />
+                      <View style={styles.divider} />
+                    </View>
+                  );
+                })}
+                {!observed.assets.length && (
+                  <Text style={styles.subtle}>
+                    Không có tài sản được ghi nhận trong lần kiểm kê.
+                  </Text>
+                )}
+              </>
+            )}
+            {detail?.section === 'assets' && asset && (
+              <>
+                <View style={styles.detailBlock}>
+                  <Text style={styles.detailLabel}>Số lượng hiện tại</Text>
+                  <Text style={styles.detailText}>
+                    {asset.observedQuantity ?? 'Chưa kiểm kê'} {asset.unit ?? 'chiếc'}
+                  </Text>
+                </View>
+                <Text style={styles.detailText}>
+                  Tình trạng: {statusText(asset.observedCondition)}
+                </Text>
+                {!!asset.notes?.trim() && (
+                  <Text style={styles.detailText}>Nội dung: {asset.notes}</Text>
+                )}
+                <EvidenceGallery
+                  api={api}
+                  contractId={contractId}
+                  ids={asset.evidenceIds}
+                  label="Ảnh tài sản"
+                />
+                {physicalAssetEvidence.map((item, index) => (
+                  <View key={`${item.physicalAssetId}-${index}`} style={styles.detailBlock}>
+                    <Text style={styles.detailLabel}>Ảnh kiểm kê tài sản riêng {index + 1}</Text>
+                    {!!item.notes?.trim() && <Text style={styles.detailText}>{item.notes}</Text>}
+                    <EvidenceGallery
+                      api={api}
+                      contractId={contractId}
+                      ids={item.evidenceIds}
+                      label={`Ảnh hiện trạng tài sản riêng ${index + 1}`}
+                    />
+                  </View>
+                ))}
+              </>
+            )}
+            {detail?.section === 'keys' && (
+              <>
+                <Text style={styles.detailText}>
+                  Số chìa khóa hiện tại: {newKeys ?? 'Chưa kiểm đếm'}
+                </Text>
+                <EvidenceGallery
+                  api={api}
+                  contractId={contractId}
+                  ids={observed.keyEvidenceIds}
+                  label="Ảnh chìa khóa"
+                />
+              </>
+            )}
+          </ScrollView>
+        </View>
+      </View>
+    );
+  }
 
   return (
     <View style={styles.root}>
       <View style={styles.intro}>
         <View style={styles.status}>
           <Pill tone={roomIssues || assetIssues ? 'amber' : 'green'}>Đã kiểm tra</Pill>
-          <Text style={styles.subtle}>Kiểm kê lần {inspection.version}</Text>
         </View>
         <Text style={styles.heading}>Kết quả kiểm tra trả phòng</Text>
         <Text style={styles.subtle}>
@@ -272,174 +495,12 @@ export function TenantMoveOutInspectionSummary({
       <Modal
         visible={!!detail}
         transparent
-        animationType="slide"
-        onRequestClose={() => setDetail(null)}
+        animationType="fade"
+        onRequestClose={detail?.item ? goBack : () => setDetail(null)}
       >
-        <View style={[styles.overlay, compactPhone && styles.phoneOverlay]}>
-          <View style={[styles.modal, compactPhone && styles.phoneModal]}>
-            <View style={styles.modalHeader}>
-              {!!detail?.item && (
-                <Button compact onPress={goBack} accessibilityLabel="Quay lại danh sách">
-                  Quay lại
-                </Button>
-              )}
-              <Text style={styles.modalTitle} numberOfLines={2}>
-                {title}
-              </Text>
-              <Button compact onPress={() => setDetail(null)}>
-                Đóng
-              </Button>
-            </View>
-            <ScrollView
-              keyboardShouldPersistTaps="handled"
-              contentContainerStyle={styles.modalContent}
-            >
-              {detail?.section === 'room' && !detail.item && (
-                <>
-                  {roomHandoverChecks.map(({ code, label }) => {
-                    const observedCheck = checks.find((item) => item.code === code);
-                    const issue = observedCheck?.status === 'Issue';
-                    return (
-                      <View key={code}>
-                        <DetailRow
-                          label={label}
-                          detail={
-                            observedCheck
-                              ? `${statusText(observedCheck.status)}${issue && observedCheck.notes ? ` · ${observedCheck.notes}` : ''}`
-                              : 'Chưa có kết quả'
-                          }
-                          icon={issue ? 'alert-circle-outline' : 'check-circle-outline'}
-                          warning={issue}
-                          onPress={() => setDetail({ section: 'room', item: code })}
-                        />
-                        <View style={styles.divider} />
-                      </View>
-                    );
-                  })}
-                  <EvidenceGallery
-                    api={api}
-                    contractId={contractId}
-                    ids={observed.evidenceIds}
-                    label="Ảnh hiện trạng"
-                  />
-                </>
-              )}
-              {detail?.section === 'room' && detail.item && (
-                <>
-                  <Pill tone={room?.status === 'Issue' ? 'amber' : 'green'}>
-                    {statusText(room?.status)}
-                  </Pill>
-                  {!!room?.notes?.trim() && (
-                    <Text style={styles.detailText}>Nội dung: {room.notes}</Text>
-                  )}
-                  <EvidenceGallery
-                    api={api}
-                    contractId={contractId}
-                    ids={room?.evidenceIds}
-                    label="Ảnh hiện trạng"
-                  />
-                </>
-              )}
-              {detail?.section === 'meters' && (
-                <>
-                  {(['electricity', 'water'] as const).map((kind) => {
-                    const reading = observed[kind];
-                    return (
-                      <View key={kind} style={styles.detailBlock}>
-                        <Text style={styles.detailLabel}>
-                          {kind === 'electricity' ? 'Điện' : 'Nước'}
-                        </Text>
-                        <Text style={styles.detailText}>
-                          {meterNumber(reading?.value)} {kind === 'electricity' ? 'kWh' : 'm³'}
-                        </Text>
-                        {!!reading?.id && (
-                          <ContractEvidence
-                            api={api}
-                            contractId={contractId}
-                            readingId={reading.id}
-                            finalMeterReading
-                            thumbnail
-                            thumbnailHeight={205}
-                            label="Ảnh công tơ đã chốt"
-                          />
-                        )}
-                      </View>
-                    );
-                  })}
-                </>
-              )}
-              {detail?.section === 'assets' && !asset && (
-                <>
-                  {observed.assets.map((item) => {
-                    return (
-                      <View key={item.id}>
-                        <DetailRow
-                          label={item.name}
-                          detail={`${item.observedQuantity ?? 'Chưa kiểm kê'} ${item.unit ?? 'chiếc'} · ${statusText(item.observedCondition)}`}
-                          icon="package-variant-closed"
-                          warning={assetIssue(item)}
-                          onPress={() => setDetail({ section: 'assets', item: item.id })}
-                        />
-                        <View style={styles.divider} />
-                      </View>
-                    );
-                  })}
-                  {!observed.assets.length && (
-                    <Text style={styles.subtle}>
-                      Không có tài sản được ghi nhận trong lần kiểm kê.
-                    </Text>
-                  )}
-                </>
-              )}
-              {detail?.section === 'assets' && asset && (
-                <>
-                  <View style={styles.detailBlock}>
-                    <Text style={styles.detailLabel}>Số lượng hiện tại</Text>
-                    <Text style={styles.detailText}>
-                      {asset.observedQuantity ?? 'Chưa kiểm kê'} {asset.unit ?? 'chiếc'}
-                    </Text>
-                  </View>
-                  <Text style={styles.detailText}>
-                    Tình trạng: {statusText(asset.observedCondition)}
-                  </Text>
-                  {!!asset.notes?.trim() && (
-                    <Text style={styles.detailText}>Nội dung: {asset.notes}</Text>
-                  )}
-                  <EvidenceGallery
-                    api={api}
-                    contractId={contractId}
-                    ids={asset.evidenceIds}
-                    label="Ảnh tài sản"
-                  />
-                  {physicalAssetEvidence.map((item, index) => (
-                    <View key={`${item.physicalAssetId}-${index}`} style={styles.detailBlock}>
-                      <Text style={styles.detailLabel}>Ảnh kiểm kê tài sản riêng {index + 1}</Text>
-                      {!!item.notes?.trim() && <Text style={styles.detailText}>{item.notes}</Text>}
-                      <EvidenceGallery
-                        api={api}
-                        contractId={contractId}
-                        ids={item.evidenceIds}
-                        label={`Ảnh hiện trạng tài sản riêng ${index + 1}`}
-                      />
-                    </View>
-                  ))}
-                </>
-              )}
-              {detail?.section === 'keys' && (
-                <>
-                  <Text style={styles.detailText}>
-                    Số chìa khóa hiện tại: {newKeys ?? 'Chưa kiểm đếm'}
-                  </Text>
-                  <EvidenceGallery
-                    api={api}
-                    contractId={contractId}
-                    ids={observed.keyEvidenceIds}
-                    label="Ảnh chìa khóa"
-                  />
-                </>
-              )}
-            </ScrollView>
-          </View>
+        <View style={{ flex: 1 }}>
+          {detail && renderPanel({ section: detail.section }, !!detail.item)}
+          {detail?.item && renderPanel(detail, false, true)}
         </View>
       </Modal>
     </View>

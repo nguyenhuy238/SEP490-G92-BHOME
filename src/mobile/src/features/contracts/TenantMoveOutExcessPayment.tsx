@@ -11,10 +11,12 @@ export function TenantMoveOutExcessPayment({
   contractId,
   chargeId,
   payableAmount,
+  name,
 }: {
   contractId: string;
   chargeId: string;
   payableAmount: string;
+  name?: string;
 }) {
   const { go } = useWorkspace();
   return (
@@ -28,7 +30,9 @@ export function TenantMoveOutExcessPayment({
         backgroundColor: colors.white,
       }}
     >
-      <Text style={{ fontWeight: '700', color: colors.navy }}>Thanh toán phần vượt cọc</Text>
+      <Text style={{ fontWeight: '700', color: colors.navy }}>
+        {name ?? 'Thanh toán phần vượt cọc'}
+      </Text>
       <Text>
         Khoản phải thu sau khi cấn trừ cọc: {formatContractMoney(payableAmount)}. Xem trạng thái
         thanh toán và thông tin chuyển khoản tại chi tiết khoản phải thu.

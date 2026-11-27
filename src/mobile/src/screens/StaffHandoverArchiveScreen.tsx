@@ -71,7 +71,7 @@ function ArchiveCard({
           </Text>
         )}
         <Text variant="bodySmall" style={ui.muted}>
-          Phiên bản {report.revision} · {report.totalItems} nhóm tài sản
+          {report.totalItems} nhóm tài sản
         </Text>
         <Text variant="bodySmall" style={ui.muted}>
           {formatInstant(report.approvedAt)} · {report.directItems} mục Staff kiểm tra ·{' '}
@@ -169,9 +169,7 @@ export function StaffHandoverArchiveScreen() {
                   detail={report.address || 'Biên bản bàn giao tài sản cơ sở'}
                 />
                 <Pill tone="green">Đã ký đầy đủ</Pill>
-                <Text>
-                  Phiên bản {report.revision} · {report.totalItems} nhóm tài sản
-                </Text>
+                <Text>{report.totalItems} nhóm tài sản</Text>
                 <Text style={ui.muted}>
                   Owner ký: {formatInstant(report.ownerSignature.signedAt)}
                 </Text>

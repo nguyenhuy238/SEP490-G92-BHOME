@@ -105,7 +105,10 @@ describe('signing certificate selection and transport', () => {
 describe('contract role and state actions', () => {
   it('excludes Owner decisions and signing from Staff, and exposes preparation only for valid state', () => {
     expect(operations(draft, null, 'Staff')).toEqual([]);
-    expect(operations({ ...draft, status: 'Active' }, null, 'Staff')).toEqual(['renewals']);
+    expect(operations({ ...draft, status: 'Active' }, null, 'Staff')).toEqual([
+      'renewals',
+      'forced-move-out',
+    ]);
     expect(operations({ ...draft, status: 'Active' }, move('Approved'), 'Staff')).toEqual([
       'move-out/schedule',
     ]);
@@ -125,9 +128,10 @@ describe('contract role and state actions', () => {
       [],
     );
   });
-  it('lets Owner and Tenant reopen rejected requests but never restores the old Staff inspection form', () => {
+  it('lets Tenant reopen rejected requests without allowing Owner to initiate ordinary early move-out or restoring the old Staff inspection form', () => {
     const active = { ...draft, status: 'Active' };
-    expect(operations(active, move('Rejected'), 'Owner')).toContain('expiry-move-out');
+    expect(operations(active, move('Rejected'), 'Owner')).not.toContain('expiry-move-out');
+    expect(operations(active, move('Rejected'), 'Owner')).not.toContain('termination-requests');
     expect(operations(active, move('Rejected'), 'Tenant', tenant)).toContain(
       'termination-requests',
     );

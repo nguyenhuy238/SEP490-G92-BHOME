@@ -285,7 +285,9 @@ it('shows the early termination form directly in the Tenant lifecycle section', 
   expect(screen.queryByRole('button', { name: 'Yêu cầu chấm dứt trước hạn' })).toBeNull();
 
   fireEvent.click(screen.getByRole('button', { name: 'Gửi yêu cầu' }));
-  expect(screen.getByText('Yêu cầu đang chờ chủ trọ duyệt.')).toBeTruthy();
+  expect(
+    screen.getByText('Yêu cầu cần đủ đồng thuận của các thành viên trước khi chủ trọ duyệt.'),
+  ).toBeTruthy();
   expect(screen.queryByRole('button', { name: 'Gửi yêu cầu' })).toBeNull();
 });
 

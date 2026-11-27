@@ -1,4 +1,4 @@
-﻿import React, { useState } from 'react';
+import React, { useState } from 'react';
 import { View } from 'react-native';
 import { Button, Icon, Text, TouchableRipple } from 'react-native-paper';
 import {
@@ -43,6 +43,7 @@ export function TenantInvoiceSummary({
     positiveAmount(state.outstandingAmount) &&
     state.overdueDays > 0;
   const canPay = state?.paymentStatus === 'Unpaid' && positiveAmount(state.outstandingAmount);
+  const settled = state?.paymentStatus === 'Paid' && /^0+(?:\.0+)?$/.test(state.outstandingAmount);
   return (
     <View style={invoiceUi.card}>
       <Text style={invoiceUi.heading}>Hóa đơn tháng {period}</Text>
@@ -57,20 +58,26 @@ export function TenantInvoiceSummary({
       <View>
         <Text style={invoiceUi.secondary}>
           {state
-            ? 'Còn phải thanh toán'
+            ? settled
+              ? 'Số tiền đã thanh toán'
+              : 'Còn phải thanh toán'
             : invoice.status === 'Draft'
               ? 'Tổng tạm tính'
               : 'Tổng hóa đơn'}
         </Text>
         <Text style={invoiceUi.hero}>
-          {formatContractMoney(state?.outstandingAmount ?? invoice.total)}
+          {formatContractMoney(
+            settled ? state.paidAmount : (state?.outstandingAmount ?? invoice.total),
+          )}
         </Text>
       </View>
       {state && (
         <View style={invoiceUi.row}>
-          <Text style={invoiceUi.secondary}>
-            Đã thanh toán: {formatContractMoney(state.paidAmount)}
-          </Text>
+          {!settled && (
+            <Text style={invoiceUi.secondary}>
+              Đã thanh toán: {formatContractMoney(state.paidAmount)}
+            </Text>
+          )}
           <Text style={invoiceUi.secondary}>
             Tổng phải thu: {formatContractMoney(state.payableAmount)}
           </Text>

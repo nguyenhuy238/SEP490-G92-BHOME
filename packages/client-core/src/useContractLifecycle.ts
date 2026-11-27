@@ -32,7 +32,12 @@ const emptyLifecycle: LifecycleState = {
   sectionErrors: {},
 };
 
-export function useContractLifecycle(api: ContractClient, id: string, role: string) {
+export function useContractLifecycle(
+  api: ContractClient,
+  id: string,
+  role: string,
+  inspectionOnly = false,
+) {
   const [revision, setRevision] = useState(0);
   const reload = useCallback(() => setRevision((v) => v + 1), []);
   const [snapshot, setSnapshot] = useState<{
@@ -48,7 +53,9 @@ export function useContractLifecycle(api: ContractClient, id: string, role: stri
     void Promise.allSettled([
       api.inspections(id, c.signal),
       role !== 'Tenant' ? api.inspectionPreparation(id, c.signal) : Promise.resolve(null),
-      role !== 'Staff' ? api.settlementSummary(id, c.signal) : Promise.resolve(null),
+      role !== 'Staff' && !inspectionOnly
+        ? api.settlementSummary(id, c.signal)
+        : Promise.resolve(null),
       api.moveOutHistory(id, c.signal),
     ])
       .then(([inspections, preparation, summary, history]) => {
@@ -100,7 +107,7 @@ export function useContractLifecycle(api: ContractClient, id: string, role: stri
           });
       });
     return () => c.abort();
-  }, [api, id, role, revision]);
+  }, [api, id, role, revision, inspectionOnly]);
   const current =
     snapshot?.api === api &&
     snapshot.id === id &&

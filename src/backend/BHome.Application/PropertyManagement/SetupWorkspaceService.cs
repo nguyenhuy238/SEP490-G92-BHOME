@@ -38,7 +38,7 @@ public abstract class SetupWorkspaceService(ISetupWorkspaceStore store, ICurrent
     protected static string Text(string value, int max = 4000) => !string.IsNullOrWhiteSpace(value) && value.Trim().Length <= max ? value.Trim() : throw new PropertyException(400, "invalid_setup_text");
     protected async Task Evidence(Guid location, string key, CancellationToken t)
     {
-        if (key is null || !key.StartsWith($"setup/{location:N}/evidence/", StringComparison.Ordinal) || await store.EvidenceHashAsync(key, t) is null)
+        if (key is null || !BHome.Application.Storage.PrivateImageKeys.IsSetup(location, key) || await store.EvidenceHashAsync(key, t) is null)
             throw new PropertyException(400, "verified_private_evidence_required");
     }
 }

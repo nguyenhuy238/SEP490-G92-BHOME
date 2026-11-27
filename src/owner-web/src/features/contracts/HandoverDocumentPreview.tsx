@@ -36,7 +36,6 @@ export function HandoverDocumentPreview({ record }: { record: HandoverView }) {
               color={confirmed ? 'success' : 'default'}
               variant="outlined"
             />
-            <Chip size="small" label={`Phiên bản ${record.version}`} variant="outlined" />
           </Stack>
         </Box>
         <Divider />

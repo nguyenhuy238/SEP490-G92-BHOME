@@ -448,7 +448,8 @@ export function TenantMoveOutProposalPanel({
     reconcileState.proposalId === proposalId
       ? reconcileState
       : null;
-  const canRespond = !!proposal && current?.view?.status === 'PendingTenant';
+  const canRespond =
+    !!proposal && current?.view?.status === 'PendingTenant' && !current.view.forced;
   const detailItem =
     detail && detail.proposalId === proposal?.id ? proposal?.items[detail.index] : null;
   // A superseded proposal must never borrow inspection details from the newer source.
@@ -616,6 +617,25 @@ export function TenantMoveOutProposalPanel({
                 </View>
               )}
             </View>
+            {proposal.automaticCharges?.map((charge) => (
+              <View key={`${charge.kind}:${charge.code}`} style={styles.listRow}>
+                <View style={{ flex: 1 }}>
+                  <Text style={styles.note}>{charge.name}</Text>
+                  {charge.previousReading != null && charge.confirmedReading != null && (
+                    <Text style={styles.subtle}>
+                      Chỉ số: {charge.previousReading} → {charge.confirmedReading}
+                      {charge.quantity != null ? ` · Tiêu thụ: ${charge.quantity}` : ''}
+                    </Text>
+                  )}
+                  {charge.existingReceivableId && (
+                    <Text style={styles.subtle}>Đã ghi nhận trong khoản phải thu</Text>
+                  )}
+                </View>
+                <Text style={styles.note}>
+                  {charge.amount == null ? 'Chưa xác minh' : formatContractMoney(charge.amount)}
+                </Text>
+              </View>
+            ))}
             {!!proposal.note && (
               <Text style={styles.subtle}>Ghi chú từ Owner: {proposal.note}</Text>
             )}
@@ -725,6 +745,28 @@ export function TenantMoveOutProposalPanel({
 
           {!completed &&
             current.view.status === 'Accepted' &&
+            proposal.tenantFeedback?.settlement?.status === 'Payable' &&
+            !current.view.forced &&
+            (proposal.tenantFeedback.settlement.payableReceivables?.length ?? 0) > 1 && (
+              <View style={styles.section}>
+                <MoneyLine
+                  label="Tổng cần thanh toán"
+                  amount={proposal.tenantFeedback.settlement.payableAmount}
+                />
+                {proposal.tenantFeedback.settlement.payableReceivables?.map((charge) => (
+                  <TenantMoveOutExcessPayment
+                    key={charge.id}
+                    contractId={contractId}
+                    chargeId={charge.id}
+                    payableAmount={charge.amount}
+                    name={charge.name}
+                  />
+                ))}
+              </View>
+            )}
+          {!completed &&
+            current.view.status === 'Accepted' &&
+            !current.view.forced &&
             proposal.tenantFeedback?.settlement?.status === 'Payable' &&
             proposal.tenantFeedback.settlement.payableReceivableId &&
             /^[1-9]\d*(?:\.0+)?$/.test(proposal.tenantFeedback.settlement.payableAmount) && (

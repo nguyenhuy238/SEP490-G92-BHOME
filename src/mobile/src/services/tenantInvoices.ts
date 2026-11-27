@@ -36,6 +36,43 @@ function pageValue(v: unknown): v is Obj & { items: Obj[] } {
     (v.pageSize as number) > 0
   );
 }
+export interface TenantInvoicePeriod {
+  billingPeriod: string;
+  businessDate: string;
+  hasInvoice: boolean;
+  draftDates: string[];
+}
+export function tenantInvoiceScheduleMessage(period?: TenantInvoicePeriod | null): string {
+  if (!period || period.hasInvoice) return 'Chưa có thông tin lịch phát hành hóa đơn.';
+  const dates = [...new Set(period.draftDates)].sort();
+  if (!dates.length) return 'Chưa có lịch phát hành hóa đơn nháp.';
+  const dateLabel = dates
+    .map((date) => `${Number(date.slice(8, 10))}/${Number(date.slice(5, 7))}`)
+    .join(', ');
+  return dates.some((date) => date < period.businessDate)
+    ? `Ngày phát hành hóa đơn theo lịch: ${dateLabel}.`
+    : `Hóa đơn sẽ được phát hành trong ${dates.length === 1 ? 'ngày' : 'các ngày'} ${dateLabel}.`;
+}
+export async function loadTenantInvoicePeriod(
+  api: MobileApi,
+  path: string,
+  signal: AbortSignal,
+): Promise<TenantInvoicePeriod> {
+  const value = await api.request<unknown>(path, { signal });
+  if (
+    !obj(value) ||
+    typeof value.billingPeriod !== 'string' ||
+    typeof value.businessDate !== 'string' ||
+    !day(value.billingPeriod) ||
+    !day(value.businessDate) ||
+    value.billingPeriod !== value.businessDate.slice(0, 7) + '-01' ||
+    typeof value.hasInvoice !== 'boolean' ||
+    !Array.isArray(value.draftDates) ||
+    !value.draftDates.every(day)
+  )
+    invalid();
+  return value as unknown as TenantInvoicePeriod;
+}
 export async function loadInvoiceList(
   api: MobileApi,
   path: string,

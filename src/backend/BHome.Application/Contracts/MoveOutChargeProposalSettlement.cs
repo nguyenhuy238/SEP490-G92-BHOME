@@ -1,5 +1,6 @@
 using System.Text.Json;
 using BHome.Domain.PaymentsDebt;
+using BHome.Domain.Billing;
 
 namespace BHome.Application.Contracts;
 
@@ -11,19 +12,54 @@ public static class MoveOutProposalSettlementRules
         context.View.Receivables.All(r => r.Outstanding == 0) &&
         context.View.Invoices?.All(i => i.Outstanding == 0) != false;
 
-    // A single bank transfer can be assigned to one settlement receivable in the
-    // existing verified payment ledger. Apply the deposit to the smallest fees
-    // first, leaving at most one net payable fee for one SePay QR.
-    public static bool OnePayableAfterDeposit(IEnumerable<decimal> charges, decimal deposit)
-    {
-        var amounts = charges.Order().ToArray();
-        if (deposit < 0 || amounts.Any(a => !PaymentRules.ValidMoney(a))) return false;
-        return amounts.Length <= 1 || deposit >= amounts.Take(amounts.Length - 1).Sum();
-    }
+    // Each outstanding obligation has its own verified transfer reference.
+    // Preserve compatibility with accepted quotes recorded before multiple QR support.
+    public static bool IsQuotedPayable(MoveOutProposalSettlement settlement, Guid receivableId) =>
+        settlement.Status == "Payable" && settlement.CreatedReceivableIds.Contains(receivableId) &&
+        (settlement.PayableReceivableId == receivableId ||
+            settlement.PayableReceivables?.Any(row => row.Id == receivableId) == true);
 }
 
 public sealed partial class SettlementReceivablesService
 {
+    private sealed record AutomaticChargePlan(MoveOutAutomaticCharge Line,
+        UtilityType? Type = null, FinalUtilityPreview? Utility = null, FinalFixedChargePreview? Fixed = null);
+
+    private async Task<AutomaticChargePlan[]> AutomaticChargePlansAsync(Guid id, CancellationToken token)
+    {
+        var result = new List<AutomaticChargePlan>();
+        foreach (var type in new[] { UtilityType.Electricity, UtilityType.Water })
+        {
+            var preview = await UtilityPreviewAsync(id, type, token, staffProposal: true);
+            var line = new MoveOutAutomaticCharge("FinalUtility", type.ToString(),
+                type == UtilityType.Electricity ? "Điện chốt khi trả phòng" : "Nước chốt khi trả phòng",
+                preview.ExistingReceivableId is null ? preview.Amount : 0, preview.Reference,
+                preview.MissingInputs, preview.ExistingReceivableId, preview.Quantity,
+                preview.Baseline?.Value, preview.Final?.Value);
+            result.Add(new(line, type, preview));
+        }
+        foreach (var preview in await FixedPreviewAsync(id, token, staffProposal: true, servicesOnly: true))
+        {
+            var line = new MoveOutAutomaticCharge("FinalFixed", preview.ChargeCode, preview.Name,
+                preview.ExistingReceivableId is null ? preview.Amount : 0, preview.Reference,
+                preview.MissingInputs, preview.ExistingReceivableId);
+            result.Add(new(line, Fixed: preview));
+        }
+        return result.ToArray();
+    }
+
+    private async Task<MoveOutChargeProposalSource> ProposalSourceWithChargesAsync(Guid id, CancellationToken token)
+    {
+        var source = await repository.ProposalSourceAsync(id, token);
+        if (!source.StaffInspectionReady || source.Forced) return source;
+        var lines = (await AutomaticChargePlansAsync(id, token)).Select(plan => plan.Line).ToArray();
+        return source with
+        {
+            AutomaticCharges = lines,
+            Reference = "PROPOSAL-" + ProposalFingerprint(id, new { source.Reference, AutomaticCharges = lines })
+        };
+    }
+
     private static MoveOutProposalSettlement NeedsReview(string reason) =>
         new("PendingOwnerReview", 0, 0, null, [], [], reason);
 
@@ -31,7 +67,7 @@ public sealed partial class SettlementReceivablesService
         MoveOutChargeProposal proposal, MoveOutChargeProposalSource source, CancellationToken token)
     {
         var context = source.Context;
-        if (!source.StaffInspectionReady || context.HasLegacyDeductions ||
+        if (source.Forced || !source.StaffInspectionReady || context.HasLegacyDeductions ||
             proposal.InspectionId != context.InspectionId || proposal.InspectionVersion != context.InspectionVersion ||
             (context.NoAdditionalCharges && proposal.Items.Length > 0))
             return NeedsReview("verified_staff_final_inspection_required");
@@ -42,9 +78,14 @@ public sealed partial class SettlementReceivablesService
             context.View.Invoices?.Any(i => i.Outstanding > 0) == true ||
             proposal.ExistingOutstanding != 0 || proposal.AvailableDeposit != context.View.AvailableDeposit)
             return NeedsReview("existing_obligations_require_owner_review");
-        if (!MoveOutProposalSettlementRules.OnePayableAfterDeposit(
-                proposal.Items.Select(item => item.Amount), context.View.AvailableDeposit))
-            return NeedsReview("multiple_payable_obligations_require_review");
+        // The automatic charges are part of the approved quote, not mutable
+        // client-entered fees. Revalidate before creating any financial record.
+        var automaticPlans = await AutomaticChargePlansAsync(id, token);
+        var automaticLines = automaticPlans.Select(plan => plan.Line).ToArray();
+        if (proposal.AutomaticCharges is null ||
+            ProposalFingerprint(id, proposal.AutomaticCharges) != ProposalFingerprint(id, automaticLines) ||
+            automaticLines.Any(row => row.Amount is null || row.MissingInputs.Count > 0))
+            return NeedsReview("move_out_automatic_charge_inputs_changed");
 
         var offered = source.Items.ToDictionary(item =>
             ProposalItemKey(item.Kind, item.AssetId, item.RoomCheckCode, item.AccessType));
@@ -74,6 +115,15 @@ public sealed partial class SettlementReceivablesService
         // Owner-approved charges and verified deposit allocations.
         var created = new List<SettlementReceivable>();
         var channel = await NewPaymentModeAsync(id, token);
+        foreach (var plan in automaticPlans.Where(p => p.Line.ExistingReceivableId is null))
+        {
+            var key = SettlementFinancialCloseRules.ChildKey(proposal.OperationKey, proposal.Id, "automatic:" + plan.Line.Kind + ":" + plan.Line.Code);
+            var fingerprint = ProposalFingerprint(id, new { proposal.Id, plan.Line });
+            var charge = plan.Utility is { } utility && plan.Type is { } type
+                ? await BuildFinalUtilityChargeAsync(id, type, utility, proposal.OwnerUserId, key, fingerprint, channel, token)
+                : await BuildFinalFixedChargeAsync(id, plan.Fixed!, proposal.OwnerUserId, key, fingerprint, channel, token);
+            created.Add(charge);
+        }
         foreach (var plan in proofPlans)
         {
             var proofs = await evidence.CaptureAsync(id, plan.Evidence, token);
@@ -87,9 +137,9 @@ public sealed partial class SettlementReceivablesService
                 SettlementFinancialCloseRules.ChildKey(proposal.OperationKey, proposal.Id, "charge:" + sourceKey),
                 ProposalFingerprint(id, new { proposal.Id, sourceKey, plan.Item }), channel is null ? context.IsDevelopmentDemo : channel == "Test",
                 RoomCheckCode: plan.RoomCheckCode, PaymentMode: channel);
-            await repository.SaveChargeAsync(record, token);
             created.Add(record);
         }
+        foreach (var record in created) await repository.SaveChargeAsync(record, token);
 
         var offsets = new List<Guid>();
         foreach (var charge in created.OrderBy(c => c.Amount).ThenBy(c => c.Id))
@@ -117,11 +167,13 @@ public sealed partial class SettlementReceivablesService
 
         var result = await repository.ContextAsync(id, token);
         var remaining = result.View.Receivables.Where(r => r.Outstanding > 0).ToArray();
-        if (remaining.Length > 1 || result.View.Invoices?.Any(i => i.Outstanding > 0) == true)
+        if (result.View.Invoices?.Any(i => i.Outstanding > 0) == true)
             throw ContractException.Conflict("move_out_net_settlement_integrity_failed");
-        var payable = remaining.SingleOrDefault();
-        return new(payable is not null ? "Payable" : result.View.AvailableDeposit > 0 ? "RefundEligible" : "Settled",
-            payable?.Outstanding ?? 0, payable is null ? result.View.AvailableDeposit : 0,
-            payable?.Charge.Id, created.Select(c => c.Id).ToArray(), offsets.ToArray());
+        var payables = remaining.OrderBy(r => r.Charge.Id).Select(r =>
+            new MoveOutPayableReceivable(r.Charge.Id, r.Outstanding, r.Charge.Description)).ToArray();
+        return new(payables.Length > 0 ? "Payable" : result.View.AvailableDeposit > 0 ? "RefundEligible" : "Settled",
+            payables.Sum(row => row.Amount), payables.Length == 0 ? result.View.AvailableDeposit : 0,
+            payables.Length == 1 ? payables[0].Id : null, created.Select(c => c.Id).ToArray(), offsets.ToArray(),
+            PayableReceivables: payables);
     }
 }

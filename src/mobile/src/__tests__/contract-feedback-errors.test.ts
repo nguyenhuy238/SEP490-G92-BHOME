@@ -32,3 +32,12 @@ it('does not treat a native/provider Error as approved validation text', () => {
     /secret|IOException|cache/,
   );
 });
+
+it('explains a move-out roster blocked by the current business date instead of a generic conflict', () => {
+  expect(contractError({ status: 409, code: 'move_out_residence_not_started' })).toContain(
+    'Demo Clock',
+  );
+  expect(contractError({ status: 409, code: 'move_out_roster_unavailable' })).toContain(
+    'thành viên đang cư trú',
+  );
+});

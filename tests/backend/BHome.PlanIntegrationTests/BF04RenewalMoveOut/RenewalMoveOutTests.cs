@@ -126,6 +126,16 @@ public sealed class RenewalMoveOutTests(PlanSessions sessions)
         var finalElectricity = await _flow.ConfirmedReadingAsync(lease.ElectricityMeterId, 2, "100", c);
         var finalWater = await _flow.ConfirmedReadingAsync(lease.WaterMeterId, 2, "100", c);
         var photo = ContractFlow.Id(await _flow.UploadPngOkAsync(HttpMethod.Post, $"api/v1/contracts/{c}/move-out/evidence", "staff", "upload inspection photo"), "inspection photo");
+        var roomChecks = new List<object>();
+        foreach (var code in new[] { "walls_ceiling_floor", "doors_windows_locks", "electrical_lighting_outlets",
+                     "water_plumbing_drainage", "bathroom_toilet", "cleanliness", "safety_equipment" })
+        {
+            var proof = ContractFlow.Id(await _flow.UploadPngOkAsync(HttpMethod.Post,
+                $"api/v1/contracts/{c}/move-out/evidence", "staff", "upload room-check photo"), "room-check photo");
+            roomChecks.Add(new { code, status = "Passed", evidenceIds = new[] { proof } });
+        }
+        var keyPhoto = ContractFlow.Id(await _flow.UploadPngOkAsync(HttpMethod.Post,
+            $"api/v1/contracts/{c}/move-out/evidence", "staff", "upload keys photo"), "keys photo");
         await _flow.PostKeyedOkAsync(
             $"api/v1/contracts/{c}/move-out/inspection",
             new
@@ -137,6 +147,9 @@ public sealed class RenewalMoveOutTests(PlanSessions sessions)
                 assets = Array.Empty<object>(),
                 roomCondition = "Room checked (synthetic)",
                 keysAndAccess = "Keys returned (synthetic)",
+                roomChecks,
+                accessItems = new[] { new { type = "RoomKey", quantity = 0, notes = "" } },
+                keyEvidenceIds = new[] { keyPhoto },
                 expectedVersion = version,
             },
             "staff",

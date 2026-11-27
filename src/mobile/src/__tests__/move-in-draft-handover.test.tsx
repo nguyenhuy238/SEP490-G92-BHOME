@@ -45,10 +45,14 @@ vi.mock('react-native', () => ({
   View: ({
     children,
     testID,
+    style,
+    accessibilityElementsHidden,
     onLayout,
   }: {
     children: React.ReactNode;
     testID?: string;
+    style?: unknown;
+    accessibilityElementsHidden?: boolean;
     onLayout?: (event: { nativeEvent: { layout: { y: number } } }) => void;
   }) => {
     React.useEffect(() => {
@@ -56,7 +60,17 @@ vi.mock('react-native', () => ({
         nativeEvent: { layout: { y: testID === 'inspection-photo-field' ? 360 : 200 } },
       });
     }, [onLayout, testID]);
-    return <div data-testid={testID}>{children}</div>;
+    return (
+      <div
+        data-testid={testID}
+        aria-hidden={accessibilityElementsHidden}
+        data-rn-style={JSON.stringify(
+          Array.isArray(style) ? Object.assign({}, ...style.filter(Boolean)) : style,
+        )}
+      >
+        {children}
+      </div>
+    );
   },
   ScrollView: React.forwardRef(({ children }: { children: React.ReactNode }, ref) => {
     React.useImperativeHandle(ref, () => ({ scrollTo: state.modalScrollTo }));
@@ -877,16 +891,41 @@ it('Tenant sees integer-only meter values and verified canonical asset counts in
   render(<MoveInDraftHandoverPanel api={api} contract={contract} role="Tenant" />);
   expect(await screen.findByText('Sẵn sàng bàn giao')).toBeTruthy();
   expect(screen.getByText(/Điện: 2\.000 kWh · Nước: 2 m³/)).toBeTruthy();
+  expect(screen.queryByText(/Biên bản phiên bản/)).toBeNull();
   expect(screen.getByText(/3 tài sản đã kiểm kê/)).toBeTruthy();
   fireEvent.click(screen.getByRole('button', { name: 'Điện và nước' }));
+  const listPanel = screen.getByTestId('handover-list-panel');
+  expect(JSON.parse(listPanel.parentElement?.getAttribute('data-rn-style') ?? '{}')).toMatchObject({
+    justifyContent: 'center',
+    alignItems: 'center',
+    padding: 16,
+  });
+  fireEvent.click(screen.getByRole('button', { name: 'Điện' }));
+  expect(screen.getAllByRole('dialog')).toHaveLength(1);
+  expect(screen.getByTestId('handover-list-panel')).toBe(listPanel);
+  expect(listPanel.parentElement?.getAttribute('aria-hidden')).toBe('true');
+  expect(
+    JSON.parse(
+      screen.getByTestId('handover-detail-panel').parentElement?.getAttribute('data-rn-style') ??
+        '{}',
+    ),
+  ).toMatchObject({ position: 'absolute', justifyContent: 'center', padding: 24 });
   expect(screen.getByText('Điện: 2.000 kWh')).toBeTruthy();
+  expect(screen.queryByText('Nước: 2 m³')).toBeNull();
+  fireEvent.click(screen.getByRole('button', { name: 'Quay lại danh sách' }));
+  fireEvent.click(screen.getByRole('button', { name: 'Nước' }));
   expect(screen.getByText('Nước: 2 m³')).toBeTruthy();
+  fireEvent.click(screen.getByRole('button', { name: 'Đóng' }));
+  expect(screen.queryByTestId('handover-detail-panel')).toBeNull();
+  expect(screen.getByTestId('handover-list-panel')).toBe(listPanel);
   fireEvent.click(screen.getByRole('button', { name: 'Đóng' }));
   fireEvent.click(screen.getByRole('button', { name: 'Tài sản' }));
   expect(screen.getByText(/kiểm kê 3 \/ dự kiến 4/)).toBeTruthy();
   expect(screen.queryByText(/Dữ liệu cũ chưa có số lượng/)).toBeNull();
   fireEvent.click(screen.getByRole('button', { name: 'Quạt' }));
-  expect(screen.getByText(/kiểm kê 3 \/ dự kiến 4/)).toBeTruthy();
+  expect(
+    within(screen.getByTestId('handover-detail-panel')).getByText(/kiểm kê 3 \/ dự kiến 4/),
+  ).toBeTruthy();
 });
 
 it('Tenant may request correction while activation is pending but cannot confirm occupancy', async () => {
@@ -1978,12 +2017,16 @@ it('Tenant can review seven room inspections, attached Issue image, access items
   }
   expect(screen.getByText(/Sửa ổ điện/)).toBeTruthy();
   fireEvent.click(screen.getByRole('button', { name: 'Hệ thống điện, đèn và ổ cắm' }));
-  expect(screen.getByText(/Ổ điện bị hỏng/)).toBeTruthy();
+  expect(
+    within(screen.getByTestId('handover-detail-panel')).getByText(/Ổ điện bị hỏng/),
+  ).toBeTruthy();
   expect(screen.getAllByTestId('private-photo-thumbnail')).toHaveLength(1);
   fireEvent.click(screen.getByRole('button', { name: 'Ảnh sau' }));
   expect(screen.getByText('Ảnh kiểm tra 2')).toBeTruthy();
   expect(screen.getAllByTestId('private-photo-thumbnail')).toHaveLength(1);
   expect(screen.queryByText('Tải ảnh')).toBeNull();
+  fireEvent.click(screen.getByRole('button', { name: 'Đóng' }));
+  expect(screen.queryByTestId('handover-detail-panel')).toBeNull();
   fireEvent.click(screen.getByRole('button', { name: 'Đóng' }));
   fireEvent.click(screen.getByRole('button', { name: 'Chìa khóa' }));
   expect(screen.getByText('2 chìa khóa phòng')).toBeTruthy();

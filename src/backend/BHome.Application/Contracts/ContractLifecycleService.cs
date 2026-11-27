@@ -32,7 +32,7 @@ public sealed partial class ContractService
         await Load(id, [Roles.Owner, Roles.Staff, Roles.Tenant], t);
         var owner = user.IsInRole(Roles.Owner);
         return (await repository.MoveOutHistoryAsync(id, t)).Select(h => new MoveOutHistoryView(
-            h.Version, h.Action, h.ActorId, h.OccurredAt, !owner && h.Action == "Rejected" ? "{}" : h.Snapshot)).ToArray();
+            h.Version, h.Action, h.ActorId, h.OccurredAt, !owner && (h.Action == "Rejected" || h.Action.StartsWith("Consent", StringComparison.Ordinal)) ? "{}" : h.Snapshot)).ToArray();
     }
 
     public async Task<TerminationReview> GetTerminationReviewAsync(Guid id, CancellationToken t)
@@ -44,7 +44,7 @@ public sealed partial class ContractService
             ? (await repository.MoveOutHistoryAsync(id, t)).FirstOrDefault(h => h.Action == "Rejected" && h.Version == move.Version)
             : null;
         var actor = rejected?.ActorId ?? move.ApprovedByUserId;
-        var status = move.Status is MoveOutStatus.Requested or MoveOutStatus.Rejected ? move.Status.ToString() : "Approved";
+        var status = move.Status is MoveOutStatus.Requested or MoveOutStatus.Rejected or MoveOutStatus.AwaitingConsent ? move.Status.ToString() : "Approved";
         return new(status, move.Version, contract.Room.Location.Name, contract.Room.RoomNumber, tenant, contract.StartDate, contract.EndDate,
             move.ProposedDate, move.Reason, rejected?.OccurredAt ?? move.ApprovedAt,
             actor is { } actorId ? await repository.DecisionActorNameAsync(actorId, t) : null,
@@ -64,12 +64,30 @@ public sealed partial class ContractService
             if (contract.Status != ContractStatus.Active || move.Status != MoveOutStatus.Requested ||
                 input.ExpectedVersion is { } version && move.Version != version)
                 throw ContractException.Conflict("move_out_not_pending_approval");
-            move.Status = MoveOutStatus.Rejected;
+            var consent = await ReadConsent(id, t);
+            var linkedMoves = new List<ContractMoveOut> { move };
+            if (consent is not null)
+            {
+                if (consent.PrimaryContractId != id || !consent.Unanimous)
+                    throw ContractException.Conflict("move_out_consent_required");
+                foreach (var contractId in consent.ContractIds.Where(contractId => contractId != id))
+                {
+                    var linked = await repository.MoveOutAsync(contractId, t);
+                    if (linked?.Status != MoveOutStatus.AwaitingConsent ||
+                        (await ReadConsent(contractId, t))?.RequestId != consent.RequestId)
+                        throw ContractException.Conflict("move_out_group_changed");
+                    linkedMoves.Add(linked);
+                }
+            }
             // Tenant-facing status keeps the decision reason; the immutable audit
             // snapshot retains the original text even after a later resubmission.
-            move.PendingReason = reason;
-            move.Version++;
-            MoveOutEvent(move, "Rejected", reason);
+            foreach (var linked in linkedMoves)
+            {
+                linked.Status = MoveOutStatus.Rejected;
+                linked.PendingReason = reason;
+                linked.Version++;
+                MoveOutEvent(linked, "Rejected", reason);
+            }
             Audit("ContractMoveOutRejected", id);
             Remember(key, "terminate-reject", fingerprint, move.Id);
             return View(move);

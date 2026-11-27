@@ -25,10 +25,12 @@ import {
   type HandoverSnapshot,
   type HandoverAsset,
   type InspectionPreparation,
+  type MoveOutAutomaticCharge,
 } from '../../../../../packages/client-core/src/contracts';
 import { ConfirmActionButton } from '../../components/common/ConfirmActionButton';
 import { MoneyField } from '../../components/common/MoneyField';
 import { PrivateEvidenceViewer } from '../../components/common/PrivateEvidenceViewer';
+import { TerminationReviewPanel } from '../contracts/pages/TerminationReviewPage';
 
 type ItemKind = 'Asset' | 'RoomCheck' | 'Access';
 interface ProposalItem {
@@ -62,6 +64,7 @@ interface FinancialProposal {
   id: string;
   sourceReference: string;
   items: ProposalItem[];
+  automaticCharges?: MoveOutAutomaticCharge[] | null;
   totalCharges: string;
   existingOutstanding?: string;
   signedBalance: string;
@@ -93,6 +96,7 @@ interface ProposalPreview {
   availableDeposit: string;
   existingOutstanding?: string;
   items: ProposalSource[];
+  automaticCharges?: MoveOutAutomaticCharge[] | null;
   latestProposal: FinancialProposal | null;
   status: 'None' | 'PendingTenant' | 'Accepted' | 'Disputed' | 'Outdated';
 }
@@ -674,10 +678,12 @@ function WorkingInspectionDetails({
 export function OwnerMoveOutReviewPanel({
   api,
   id,
+  ownerId,
   onChanged,
 }: {
   api: ContractClient;
   id: string;
+  ownerId?: string;
   onChanged: () => void;
 }) {
   const moveOut = useQuery({
@@ -686,9 +692,13 @@ export function OwnerMoveOutReviewPanel({
     refetchInterval: (query) =>
       (query.state.data as { status?: string } | undefined)?.status === 'Completed' ? false : 5000,
   });
+  const awaitingConsent = moveOut.data?.status === 'AwaitingConsent';
+  const reviewingRequest =
+    moveOut.data?.status === 'Requested' || moveOut.data?.status === 'Rejected';
   const inspection = useQuery({
     queryKey: ['owner-move-out-inspections', id],
     queryFn: ({ signal }) => api.inspections(id, signal),
+    enabled: !!moveOut.data && !awaitingConsent && !reviewingRequest,
     refetchInterval: moveOut.data?.status === 'Completed' ? false : 5000,
   });
   const working = moveOut.data?.status === 'Approved';
@@ -723,10 +733,11 @@ export function OwnerMoveOutReviewPanel({
     !!latest &&
     latest.ownerDecision !== 'Reinspection' &&
     ['Inspected', 'PendingSettlement', 'Settled', 'Completed'].includes(moveOut.data?.status ?? '');
-  const canPriceInspection = inspectionReady && moveOut.data?.status === 'Inspected';
+  const forced = moveOut.data?.isForced === true;
+  const canPriceInspection = inspectionReady && !forced && moveOut.data?.status === 'Inspected';
   const preview = useQuery({
     queryKey: ['owner-move-out-financial-proposal', id, latest?.id, latest?.version],
-    enabled: inspectionReady,
+    enabled: inspectionReady && !forced,
     retry: false,
     queryFn: ({ signal }) =>
       api.transport<ProposalPreview>(
@@ -734,9 +745,14 @@ export function OwnerMoveOutReviewPanel({
         { signal },
       ),
   });
-  const data = preview.data;
+  const data = forced ? undefined : preview.data;
   const completed = moveOut.data?.status === 'Completed';
-  const progress = moveOutProgress(inspectionReady, data, moveOut.data?.status);
+  const progress = forced
+    ? {
+        label: completed ? 'Đã trả phòng bắt buộc' : 'Trả phòng bắt buộc',
+        color: 'warning' as const,
+      }
+    : moveOutProgress(inspectionReady, data, moveOut.data?.status);
   const disputedItems =
     data?.status === 'Disputed' ? (data.latestProposal?.tenantFeedback?.disputedItems ?? []) : [];
   const disputedByKey = new Map(disputedItems.map((item) => [sourceKey(item), item.reason]));
@@ -852,18 +868,30 @@ export function OwnerMoveOutReviewPanel({
     .map((item) =>
       entryFor(item, charges[sourceKey(item)].amount, charges[sourceKey(item)].reason),
     );
-  const amountTotal = entries.reduce((sum, entry) => sum + BigInt(entry.amount), 0n);
+  const automatic = data?.automaticCharges ?? [];
+  const automaticReady = automatic.every(
+    (item) => vndInteger(item.amount) !== null && item.missingInputs.length === 0,
+  );
+  const amountTotal =
+    entries.reduce((sum, entry) => sum + BigInt(entry.amount), 0n) +
+    automatic.reduce((sum, item) => sum + (vndInteger(item.amount) ?? 0n), 0n);
   const availableDeposit = vndInteger(data?.availableDeposit);
   const existingOutstanding = vndInteger(data?.existingOutstanding);
   const projectedBalance =
-    availableDeposit === null || existingOutstanding === null
+    availableDeposit === null || existingOutstanding === null || !automaticReady
       ? null
       : availableDeposit - amountTotal - existingOutstanding;
   const locked =
     completed ||
+    forced ||
     data?.status === 'PendingTenant' ||
     data?.latestProposal?.tenantFeedback?.confirmed === true;
-  const shownTotal = locked ? vndInteger(data?.latestProposal?.totalCharges) : amountTotal;
+  const shownTotal = locked
+    ? vndInteger(data?.latestProposal?.totalCharges)
+    : automaticReady
+      ? amountTotal
+      : null;
+  const shownAutomatic = locked ? (data?.latestProposal?.automaticCharges ?? []) : automatic;
   const shownNet = locked
     ? (() => {
         const value = data?.latestProposal?.signedBalance;
@@ -880,10 +908,15 @@ export function OwnerMoveOutReviewPanel({
     !locked &&
     availableDeposit !== null &&
     existingOutstanding !== null &&
+    automaticReady &&
     !hasUnpricedReason;
 
   async function refresh() {
-    await Promise.all([moveOut.refetch(), inspection.refetch(), preview.refetch()]);
+    await Promise.all([
+      moveOut.refetch(),
+      inspection.refetch(),
+      ...(!forced ? [preview.refetch()] : []),
+    ]);
     onChanged();
   }
 
@@ -927,9 +960,46 @@ export function OwnerMoveOutReviewPanel({
     setChargeReason(existing?.reason ?? '');
   }
 
+  if (awaitingConsent) {
+    return (
+      <Alert severity="info">
+        Yêu cầu cần đủ đồng thuận của các thành viên trước khi chủ trọ duyệt.
+      </Alert>
+    );
+  }
+  if (reviewingRequest) {
+    const request = moveOut.data;
+    if (
+      request?.status === 'Requested' &&
+      (request.isGroupPrimary === false ||
+        (request.requiredConsents != null && request.receivedConsents !== request.requiredConsents))
+    ) {
+      return <Alert severity="info">Yêu cầu chưa đủ điều kiện để chủ trọ duyệt.</Alert>;
+    }
+    return (
+      <Stack spacing={2}>
+        {request?.status === 'Requested' && request.requiredConsents != null && (
+          <Alert severity="success">
+            Đã đồng thuận: {request.receivedConsents}/{request.requiredConsents} thành viên.
+          </Alert>
+        )}
+        <TerminationReviewPanel
+          id={id}
+          api={api}
+          ownerId={ownerId}
+          embedded
+          onChanged={() => {
+            void moveOut.refetch();
+            onChanged();
+          }}
+        />
+      </Stack>
+    );
+  }
+
   return (
     <Stack spacing={2}>
-      {(moveOut.isPending || inspection.isPending) && (
+      {(moveOut.isPending || (!!moveOut.data && inspection.isPending)) && (
         <Alert severity="info">Đang tải kết quả kiểm tra...</Alert>
       )}
       {(moveOut.error || inspection.error) && (
@@ -976,6 +1046,9 @@ export function OwnerMoveOutReviewPanel({
         )}
       {working && (
         <>
+          <Alert severity="info">
+            Đã duyệt yêu cầu trả phòng. Đang chờ nhân viên hoàn thành kiểm tra.
+          </Alert>
           {(workingDraft.error || preparation.error) && (
             <Alert severity="error">
               Không tải được dữ liệu đang kiểm tra:{' '}
@@ -1037,29 +1110,31 @@ export function OwnerMoveOutReviewPanel({
                 <Typography variant="h6" sx={{ fontSize: 18, fontWeight: 750 }}>
                   Các hạng mục kiểm kê
                 </Typography>
-                <Chip
-                  size="small"
-                  variant="outlined"
-                  color={
-                    data?.status === 'PendingTenant'
-                      ? 'info'
-                      : data?.status === 'Accepted'
-                        ? 'success'
-                        : 'default'
-                  }
-                  label={
-                    inspectionReady
-                      ? data
-                        ? statusLabels[data.status]
-                        : 'Đang tải'
-                      : 'Chờ nhân viên hoàn tất'
-                  }
-                />
+                {!forced && (
+                  <Chip
+                    size="small"
+                    variant="outlined"
+                    color={
+                      data?.status === 'PendingTenant'
+                        ? 'info'
+                        : data?.status === 'Accepted'
+                          ? 'success'
+                          : 'default'
+                    }
+                    label={
+                      inspectionReady
+                        ? data
+                          ? statusLabels[data.status]
+                          : 'Đang tải'
+                        : 'Chờ nhân viên hoàn tất'
+                    }
+                  />
+                )}
               </Stack>
-              {inspectionReady && preview.isPending && (
+              {!forced && inspectionReady && preview.isPending && (
                 <Alert severity="info">Đang tải dữ liệu đối chiếu khoản thu...</Alert>
               )}
-              {inspectionReady && preview.error && (
+              {!forced && inspectionReady && preview.error && (
                 <Alert
                   severity="error"
                   action={<Button onClick={() => void preview.refetch()}>Thử lại</Button>}
@@ -1193,7 +1268,7 @@ export function OwnerMoveOutReviewPanel({
                                   {current ? 'Sửa phí' : 'Nhập phí'}
                                 </Button>
                               )}
-                              {current && vndInteger(current.amount) !== null && (
+                              {!forced && current && vndInteger(current.amount) !== null && (
                                 <Stack
                                   spacing={0.25}
                                   sx={{ alignItems: 'flex-end', maxWidth: 220 }}
@@ -1226,6 +1301,40 @@ export function OwnerMoveOutReviewPanel({
                         Tổng kết tiền cọc và khoản thu
                       </Typography>
                     </Stack>
+                    {shownAutomatic.map((item) => (
+                      <Stack
+                        key={item.kind + ':' + item.code}
+                        direction="row"
+                        spacing={1}
+                        sx={{ justifyContent: 'space-between' }}
+                      >
+                        <Box>
+                          <Typography>{item.name}</Typography>
+                          {item.previousReading != null && item.confirmedReading != null && (
+                            <Typography variant="caption" color="text.secondary">
+                              Chỉ số: {item.previousReading} → {item.confirmedReading}
+                              {item.quantity != null ? ' · Tiêu thụ: ' + item.quantity : ''}
+                            </Typography>
+                          )}
+                          {item.existingReceivableId && (
+                            <Typography variant="caption" color="text.secondary">
+                              Đã ghi nhận trong khoản phải thu
+                            </Typography>
+                          )}
+                        </Box>
+                        <Typography sx={{ fontWeight: 700 }}>
+                          {item.amount === null
+                            ? 'Chưa xác minh'
+                            : formatContractMoney(item.amount)}
+                        </Typography>
+                      </Stack>
+                    ))}
+                    {!locked && !automaticReady && (
+                      <Alert severity="warning">
+                        Chưa đủ dữ liệu điện, nước hoặc dịch vụ để gửi đề xuất. Kiểm tra chỉ số và
+                        lịch tính phí.
+                      </Alert>
+                    )}
                     <Stack direction="row" spacing={1} sx={{ justifyContent: 'space-between' }}>
                       <Typography color="text.secondary">Cọc hợp đồng đã xác minh</Typography>
                       <Typography sx={{ fontWeight: 700 }}>
@@ -1280,8 +1389,8 @@ export function OwnerMoveOutReviewPanel({
                     {!completed && (
                       <Typography variant="caption" color="text.secondary">
                         Dương: dự kiến còn tiền cọc hoàn lại. Âm: dự kiến khách thuê cần trả thêm.
-                        Đã trừ các khoản thu hiện có trong sổ; nợ hóa đơn khác được đối chiếu riêng.
-                        Chưa phải giao dịch thanh toán hay quyết toán chính thức.
+                        Đã tính cả các khoản thu hiện có và nợ hóa đơn; các khoản nợ cần được đối
+                        chiếu. Chưa phải giao dịch thanh toán hay quyết toán chính thức.
                       </Typography>
                     )}
                     {data.latestProposal?.tenantFeedback && (

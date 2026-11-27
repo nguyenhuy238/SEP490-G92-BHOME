@@ -105,6 +105,7 @@ internal sealed class SePayRepository(BHomePersistenceContext db, IPaymentReposi
             ORDER BY h.pos DESC LIMIT 1
             """).SingleOrDefaultAsync(token);
         var allowed = false;
+        MoveOutProposalSettlement? accepted = null;
         var blocker = "owner_approved_move_out_settlement_required";
         if (latest is not null)
         {
@@ -117,9 +118,9 @@ internal sealed class SePayRepository(BHomePersistenceContext db, IPaymentReposi
             var feedback = settlementRecords is null ? null :
                 await settlementRecords.ProposalFeedbackAsync(source.ContractId, proposal.Id, token);
             var settlement = feedback?.Settlement;
-            allowed = feedback?.Confirmed == true && settlement?.Status == "Payable" &&
-                settlement.PayableReceivableId == receivableId &&
-                settlement.CreatedReceivableIds.Contains(receivableId) &&
+            accepted = settlement;
+            allowed = feedback?.Confirmed == true && settlement is not null &&
+                MoveOutProposalSettlementRules.IsQuotedPayable(settlement, receivableId) &&
                 settlementRecords is not null &&
                 (string.IsNullOrWhiteSpace(proposal.PhysicalReference)
                     ? feedback.VerifiedPhysicalReference : proposal.PhysicalReference) is { Length: > 0 } physicalReference &&
@@ -140,7 +141,8 @@ internal sealed class SePayRepository(BHomePersistenceContext db, IPaymentReposi
         {
             var context = await settlementRecords.ContextAsync(source.ContractId, token);
             allowed = context.View.AvailableDeposit == 0 &&
-                context.View.Receivables.Count(r => r.Outstanding > 0) == 1 &&
+                (accepted is null ? context.View.Receivables.Count(r => r.Outstanding > 0) == 1 :
+                    context.View.Receivables.All(r => r.Outstanding <= 0 || MoveOutProposalSettlementRules.IsQuotedPayable(accepted, r.Charge.Id))) &&
                 context.View.Invoices?.Any(i => i.Outstanding > 0) != true;
             if (!allowed) blocker = "move_out_settlement_balance_changed";
         }

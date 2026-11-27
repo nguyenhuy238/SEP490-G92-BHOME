@@ -283,6 +283,13 @@ const page = <T,>(items: T[], totalCount = items.length, pageNumber = 1, pageSiz
   pageSize,
 });
 
+const currentPeriod = (hasInvoice: boolean, draftDates: string[] = []) => ({
+  billingPeriod: '2026-11-01',
+  businessDate: '2026-11-26',
+  hasInvoice,
+  draftDates,
+});
+
 function setApi(fetcher: Mock<Transport>) {
   const api = new MobileApi(
     'https://api.example.invalid',
@@ -833,7 +840,7 @@ describe('Tenant Invoice, VietQR Payment & Notification Flow', () => {
     await screen.findByText('Chưa đọc (0)');
   });
 
-  it('Test 6: reflects verified full payment, hides active VietQR, and filters multi-invoice list by status', async () => {
+  it('Test 6: shows compact invoice rows with verified status and total', async () => {
     const first = { ...baseInvoice, id: invoiceId, status: 'Final' as const, roomNumber: 'P202' };
     const second = {
       ...baseInvoice,
@@ -866,31 +873,28 @@ describe('Tenant Invoice, VietQR Payment & Notification Flow', () => {
             },
           ]),
         );
+      if (path.endsWith('/invoices/current-period')) return json(currentPeriod(true));
       return json(page([first, second]));
     });
     setApi(fetcher);
     render(<TenantInvoicesScreen />);
 
-    await screen.findByText('Hóa đơn tháng này');
-    expect(screen.getByText('120 kWh')).toBeTruthy();
-    expect(screen.getByText('8 m³')).toBeTruthy();
-    expect(screen.getByText('Phí Internet & vệ sinh')).toBeTruthy();
-    expect(await screen.findByText(/1 hóa đơn còn số dư phải thanh toán/)).toBeTruthy();
-    expect(screen.getByText('Tổng hóa đơn: 4.290.000 ₫')).toBeTruthy();
-    expect(screen.queryByText('Kỳ 10/2026')).toBeNull();
-    fireEvent.click(screen.getByRole('button', { name: 'Hóa đơn các kỳ trước' }));
-
-    // Filter by Paid
-    fireEvent.click(await screen.findByRole('tab', { name: 'Lọc hóa đơn: Đã thanh toán' }));
-    expect(await screen.findByText('Kỳ 10/2026')).toBeTruthy();
-    // The featured current-month bill stays in place; filters apply to history only.
-    expect(screen.getAllByText('Kỳ 11/2026')).toHaveLength(1);
-
-    // Filter by Unpaid
-    fireEvent.click(screen.getByRole('tab', { name: 'Lọc hóa đơn: Chưa thanh toán' }));
-    expect(screen.getAllByText('Kỳ 11/2026')).toHaveLength(1);
-    expect(screen.queryByText('Kỳ 10/2026')).toBeNull();
-    expect(screen.getByText('Chưa có hóa đơn phù hợp.')).toBeTruthy();
+    expect(await screen.findByText('Hóa đơn tháng 11/2026')).toBeTruthy();
+    expect(screen.getByText('Hóa đơn tháng 10/2026')).toBeTruthy();
+    expect(await screen.findByText('Đã thanh toán một phần')).toBeTruthy();
+    expect(screen.getByText('Đã thanh toán')).toBeTruthy();
+    expect(screen.getByText('4.290.000 ₫')).toBeTruthy();
+    expect(screen.getByText('3.500.000 ₫')).toBeTruthy();
+    expect(screen.queryByText('1.290.000 ₫')).toBeNull();
+    expect(screen.queryByText('120 kWh')).toBeNull();
+    expect(screen.queryByText('Phí Internet & vệ sinh')).toBeNull();
+    expect(screen.queryByRole('tab')).toBeNull();
+    expect(screen.queryByText('Khoản phải thu khi trả phòng')).toBeNull();
+    expect(
+      screen.queryByText('Xem từng hóa đơn các kỳ trước và trạng thái thanh toán.'),
+    ).toBeNull();
+    fireEvent.click(screen.getByRole('button', { name: 'Xem hóa đơn phòng P202, kỳ 2026-10' }));
+    expect(mocks.go).toHaveBeenCalledWith('invoice', { invoiceId: secondInvoiceId });
   });
 
   it("does not mistake last month's invoice for a new bill, but keeps history accessible", async () => {
@@ -902,20 +906,76 @@ describe('Tenant Invoice, VietQR Payment & Notification Flow', () => {
     };
     const fetcher = vi.fn<Transport>().mockImplementation(async (url) => {
       const path = String(url);
-      if (path.includes('billingPeriod=')) return json(page([]));
+      if (path.endsWith('/invoices/current-period'))
+        return json(currentPeriod(false, ['2026-11-27']));
       if (path.includes('/payment-invoices?')) return json(page([]));
       return json(page([oldInvoice]));
     });
     setApi(fetcher);
     render(<TenantInvoicesScreen />);
 
-    expect(await screen.findByText('Tháng này chưa có hóa đơn')).toBeTruthy();
-    expect(screen.queryByText('Kỳ 10/2026')).toBeNull();
-    fireEvent.click(screen.getByRole('button', { name: 'Hóa đơn các kỳ trước' }));
-    expect(await screen.findByText('Kỳ 10/2026')).toBeTruthy();
+    expect(await screen.findByText('Chưa có hóa đơn kỳ này')).toBeTruthy();
+    expect(await screen.findByText('Hóa đơn sẽ được phát hành trong ngày 27/11.')).toBeTruthy();
+    expect(await screen.findByText('Hóa đơn tháng 10/2026')).toBeTruthy();
     expect(
-      fetcher.mock.calls.some(([url]) => String(url).includes('billingPeriod=2026-11-01')),
+      fetcher.mock.calls.some(([url]) => String(url).endsWith('/invoices/current-period')),
     ).toBe(true);
+  });
+
+  it.each([
+    {
+      date: '2027-01-27',
+      today: '2026-12-31',
+      expected: 'Hóa đơn sẽ được phát hành trong ngày 27/1.',
+    },
+    {
+      date: '2026-12-25',
+      today: '2026-12-27',
+      expected: 'Ngày phát hành hóa đơn theo lịch: 25/12.',
+    },
+    { date: null, today: '2026-12-27', expected: 'Chưa có lịch phát hành hóa đơn nháp.' },
+  ])(
+    'uses the server business date and configured draft date ($date)',
+    async ({ date, today, expected }) => {
+      setApi(
+        vi.fn<Transport>().mockImplementation(async (url) =>
+          String(url).endsWith('/invoices/current-period')
+            ? json({
+                billingPeriod: today.slice(0, 7) + '-01',
+                businessDate: today,
+                hasInvoice: false,
+                draftDates: date ? [date] : [],
+              })
+            : json(page([])),
+        ),
+      );
+      render(<TenantInvoicesScreen />);
+      expect(await screen.findByText(expected)).toBeTruthy();
+    },
+  );
+
+  it('pages the invoice list inside the box without showing stale payment status', async () => {
+    const first = { ...baseInvoice, status: 'Final' as const };
+    const second = { ...first, id: secondInvoiceId, billingPeriod: '2026-10-01' };
+    const fetcher = vi.fn<Transport>().mockImplementation(async (url) => {
+      const path = String(url);
+      if (path.endsWith('/invoices/current-period')) return json(currentPeriod(true));
+      if (path.includes('/payment-invoices?')) return json(page([]));
+      if (path.includes('page=2&')) return json(page([second], 21, 2));
+      return json(page([first], 21));
+    });
+    setApi(fetcher);
+    render(<TenantInvoicesScreen />);
+    expect(await screen.findByText('Hóa đơn tháng 11/2026')).toBeTruthy();
+    expect(screen.getByText('Chưa xác định thanh toán')).toBeTruthy();
+    expect(screen.queryByText('Đã thanh toán')).toBeNull();
+    fireEvent.click(screen.getByRole('button', { name: 'Trang sau' }));
+    expect(await screen.findByText('Hóa đơn tháng 10/2026')).toBeTruthy();
+    expect(screen.queryByText('Hóa đơn tháng 11/2026')).toBeNull();
+    expect(screen.queryByText('Chưa có hóa đơn kỳ này')).toBeNull();
+    expect(screen.getByText('Trang 2 / 2')).toBeTruthy();
+    fireEvent.click(screen.getByRole('button', { name: 'Trang trước' }));
+    expect(await screen.findByText('Hóa đơn tháng 11/2026')).toBeTruthy();
   });
 
   it('Test 7: enforces Tenant access control on 403/404 without leaking unauthorized invoice data', async () => {
@@ -1065,6 +1125,36 @@ describe('Compact invoice detail navigation and financial safety', () => {
       expect(!!screen.queryByRole('button', { name: 'Gửi yêu cầu điều chỉnh' })).toBe(!paid);
     },
   );
+  it('promotes verified paid amount and hides the zero outstanding summary for a settled invoice', async () => {
+    mocks.invoiceId = invoiceId;
+    setApi(
+      redesignApi({
+        ...finalPayment,
+        paymentStatus: 'Paid',
+        paidAmount: finalPayment.payableAmount,
+        outstandingAmount: '0',
+      }),
+    );
+    render(<TenantInvoicesScreen />);
+    expect(await screen.findByText('Số tiền đã thanh toán')).toBeTruthy();
+    expect(screen.getByText('4.280.000 ₫')).toBeTruthy();
+    expect(screen.queryByText('Còn phải thanh toán', { exact: true })).toBeNull();
+    expect(screen.queryByText('0 ₫', { exact: true })).toBeNull();
+    expect(screen.queryByText(/^Đã thanh toán:/)).toBeNull();
+    expect(screen.getByText('Đã thanh toán', { exact: true })).toBeTruthy();
+  });
+
+  it('keeps the outstanding amount prominent when the invoice is partially paid', async () => {
+    mocks.invoiceId = invoiceId;
+    setApi(redesignApi());
+    render(<TenantInvoicesScreen />);
+    expect(await screen.findByText('Còn phải thanh toán', { exact: true })).toBeTruthy();
+    expect(screen.getByText('3.280.000 ₫')).toBeTruthy();
+    expect(screen.getByText('Đã thanh toán: 1.000.000 ₫')).toBeTruthy();
+    expect(screen.queryByText('Số tiền đã thanh toán')).toBeNull();
+    expect(screen.getByText('Xem mã QR thanh toán')).toBeTruthy();
+  });
+
   it('keeps issued invoice visible without inventing payment state after a payment API failure', async () => {
     mocks.invoiceId = invoiceId;
     setApi(redesignApi({ code: 'forbidden' }, 403));

@@ -1186,7 +1186,6 @@ function DraftDocument({ draft, api }: { draft: OwnerHandoverDraft; api: Contrac
               : draft.status === 'Ready'
                 ? 'Bản tóm tắt sau khi chủ trọ ký'
                 : 'Bản nháp tự động cập nhật theo nhiệm vụ của nhân viên'}
-            {' · '}Phiên bản {draft.version}
           </Typography>
         </Box>
         <Divider />
@@ -2096,7 +2095,7 @@ export function OwnerHandoverDraftPanel({
                           }
                         />
                         <Typography variant="caption">
-                          Phiên bản {request.version} · {formatInstant(request.createdAt)}
+                          {formatInstant(request.createdAt)}
                         </Typography>
                       </Stack>
                       <Typography

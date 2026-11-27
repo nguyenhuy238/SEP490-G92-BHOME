@@ -103,7 +103,11 @@ export function useContractDetail(
             : Promise.resolve([]),
         ]);
         if (!signal.aborted) {
-          pollingEligible = shouldPoll;
+          pollingEligible =
+            shouldPoll ||
+            (role === 'Tenant' &&
+              !!moveOut &&
+              ['AwaitingConsent', 'Requested'].includes(moveOut.status));
           setRefreshError('');
           const data = { contract, moveOut, readiness, history, historyError };
           cached.current = { client, id, role, data };

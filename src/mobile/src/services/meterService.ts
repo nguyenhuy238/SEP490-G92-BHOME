@@ -17,5 +17,22 @@ export function meterService(api: MobileApi) {
         { humanConfirmed: true, confirmedValue: value, evidenceId },
         signal,
       ),
+    correct: (
+      taskId: string,
+      value: string,
+      evidenceId: string,
+      expectedVersion: number,
+      signal?: AbortSignal,
+    ) =>
+      api.json<ConfirmedReading>(
+        `/api/v1/capture/meter-tasks/${encodeURIComponent(taskId)}/confirm`,
+        {
+          humanConfirmed: true,
+          confirmedValue: value,
+          evidenceId,
+          expectedVersion,
+        },
+        signal,
+      ),
   };
 }

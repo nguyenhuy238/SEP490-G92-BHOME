@@ -165,7 +165,7 @@ internal sealed class ContractExpiryProcessor(BHomePersistenceContext db, TimePr
                     if (handoverTasks is not null)
                     {
                         openedMoveOut ??= await db.Set<ContractMoveOut>().SingleOrDefaultAsync(m => m.ContractId == c.Id, t);
-                        if (openedMoveOut is { Status: not MoveOutStatus.Requested })
+                        if (openedMoveOut is { Status: not (MoveOutStatus.Requested or MoveOutStatus.AwaitingConsent or MoveOutStatus.Rejected) })
                             await handoverTasks.EnsureMoveOutTaskAsync(c, openedMoveOut, c.OwnerSignerId, now, t);
                     }
                     await db.SaveChangesAsync(t);

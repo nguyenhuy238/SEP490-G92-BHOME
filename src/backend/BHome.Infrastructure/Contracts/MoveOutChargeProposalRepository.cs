@@ -24,7 +24,7 @@ internal sealed partial class SettlementReceivablesRepository
             Status: MoveOutStatus.Inspected,
             InspectedAt: not null,
             InspectedByUserId: not null
-        } && inspection.StaffId == move.InspectedByUserId &&
+        } && move.PendingReason != "forced_move_out_inspected" && inspection.StaffId == move.InspectedByUserId &&
             inspection.InspectedAt >= move.InspectedAt;
         var baseline = inspection is null ? null : JsonSerializer.Deserialize<HandoverSnapshot>(inspection.BaselineSnapshot);
         var observed = inspection is null ? null : JsonSerializer.Deserialize<HandoverSnapshot>(inspection.ObservedSnapshot);
@@ -123,7 +123,8 @@ internal sealed partial class SettlementReceivablesRepository
             inspection?.ObservedSnapshot
         }));
         return new(context, items.ToArray(), "PROPOSAL-" + Convert.ToHexString(hash),
-            staffInspectionReady, openingPhotos is null ? null : openingHandover!.ContractId, physicalReference);
+            staffInspectionReady, openingPhotos is null ? null : openingHandover!.ContractId, physicalReference,
+            Forced: move?.PendingReason == "forced_move_out_inspected");
     }
 
     private static string DescribeAsset(HandoverAsset asset) =>

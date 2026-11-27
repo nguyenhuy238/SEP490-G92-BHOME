@@ -99,6 +99,29 @@ it.each([
   },
 );
 
+it('opens the drawer from an actionable request instead of labeling it as inspection results', async () => {
+  mocks.transport.mockResolvedValue({
+    items: [
+      {
+        contractId: 'contract-1',
+        roomNumber: 'P.103',
+        locationId: 'location-1',
+        locationName: 'Cơ sở Trường Vũ',
+        proposedDate: '2027-04-08',
+        status: 'Requested',
+      },
+    ],
+    page: 1,
+    pageSize: 20,
+    totalCount: 1,
+  });
+  mount();
+  const buttons = await screen.findAllByRole('button', { name: 'Xét duyệt yêu cầu' });
+  expect(screen.queryByRole('button', { name: 'Xem kết quả' })).not.toBeInTheDocument();
+  fireEvent.click(buttons[0]);
+  expect(await screen.findByText('Kết quả kiểm kê contract-1')).toBeInTheDocument();
+});
+
 it('recovers the accepted fee status from the existing proposal API while the inbox API is still old', async () => {
   const oldInbox = {
     items: [

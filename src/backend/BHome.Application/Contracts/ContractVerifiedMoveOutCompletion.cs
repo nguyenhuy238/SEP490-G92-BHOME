@@ -68,8 +68,7 @@ public sealed partial class ContractService
                 ? feedback?.VerifiedPhysicalReference : proposal.PhysicalReference;
             if (feedback?.Confirmed != true || feedback.ContractId != contractId ||
                 !proposal.RecipientUserIds.Contains(feedback.TenantUserId) ||
-                settlement?.Status != "Payable" || settlement.PayableReceivableId != receivableId ||
-                !settlement.CreatedReceivableIds.Contains(receivableId) ||
+                settlement is null || !MoveOutProposalSettlementRules.IsQuotedPayable(settlement, receivableId) ||
                 source.Context.View.Receivables.All(row => row.Charge.Id != receivableId) ||
                 string.IsNullOrWhiteSpace(pinnedPhysical) || pinnedPhysical != source.PhysicalReference)
                 return false;

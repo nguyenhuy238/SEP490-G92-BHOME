@@ -265,9 +265,11 @@ function IncidentInboxLink({ onPress }: { onPress: () => void }) {
 export function IncidentListScreen({
   emergency = false,
   embedded = false,
+  sentOnly = false,
 }: {
   emergency?: boolean;
   embedded?: boolean;
+  sentOnly?: boolean;
 }) {
   const { role, preview, go, staffLocationId } = useWorkspace();
   const { session } = useSession();
@@ -288,7 +290,13 @@ export function IncidentListScreen({
       ) : (
         <Heading
           title={
-            emergency ? 'Sự cố khẩn cấp' : role === 'Tenant' ? 'Yêu cầu của tôi' : 'Sự cố tại cơ sở'
+            sentOnly
+              ? 'Báo cáo sự cố đã gửi'
+              : emergency
+                ? 'Sự cố khẩn cấp'
+                : role === 'Tenant'
+                  ? 'Yêu cầu của tôi'
+                  : 'Sự cố tại cơ sở'
           }
           detail="Dữ liệu theo quyền tài khoản và phân công hiện hành"
         />
@@ -299,7 +307,9 @@ export function IncidentListScreen({
       )}
       {active && (
         <>
-          {role !== 'Staff' && <IncidentInboxLink onPress={() => go('incident-inbox')} />}
+          {role !== 'Staff' && !sentOnly && (
+            <IncidentInboxLink onPress={() => go('incident-inbox')} />
+          )}
           <View style={incidentStyles.filterPanel}>
             <IncidentFilterRow
               label="Trạng thái báo cáo"
@@ -380,7 +390,12 @@ export function IncidentListScreen({
               key={report.id}
               report={report}
               role={role}
-              onPress={() => go('incident-detail', { incidentId: report.id })}
+              onPress={() =>
+                go('incident-detail', {
+                  incidentId: report.id,
+                  ...(sentOnly ? { returnTo: 'incident-history' } : {}),
+                })
+              }
             />
           ))}
           <Pager query={query} page={page} setPage={setPage} />
@@ -397,7 +412,7 @@ export function IncidentListScreen({
           </Action>
         </View>
       )}
-      {role === 'Tenant' && (
+      {role === 'Tenant' && !sentOnly && (
         <>
           <Action onPress={() => go('incidents')}>Báo cáo sự cố mới</Action>
           <Action secondary onPress={() => go('invoice', { focus: 'adjustment' })}>
@@ -485,15 +500,28 @@ const incidentStyles = StyleSheet.create({
 });
 
 export function IncidentDetailScreen() {
-  const { incidentId } = useLocalSearchParams<{ incidentId?: string }>();
+  const { incidentId, returnTo } = useLocalSearchParams<{
+    incidentId?: string;
+    returnTo?: string;
+  }>();
   const { session } = useSession();
   return incidentId && idPattern.test(incidentId) ? (
-    <IncidentDetail key={`${session?.userId}:${incidentId}`} id={incidentId} />
+    <IncidentDetail
+      key={`${session?.userId}:${incidentId}`}
+      id={incidentId}
+      fromSentHistory={returnTo === 'incident-history'}
+    />
   ) : (
     <Text>Không có mã báo cáo hợp lệ.</Text>
   );
 }
-function IncidentDetail({ id }: { id: string }) {
+function IncidentDetail({
+  id,
+  fromSentHistory = false,
+}: {
+  id: string;
+  fromSentHistory?: boolean;
+}) {
   const { role, preview, go, staffLocationId } = useWorkspace();
   const { session } = useSession();
   const enabled = !!session && !preview && !!role && session.roles.includes(role);
@@ -572,7 +600,9 @@ function IncidentDetail({ id }: { id: string }) {
         onPress={() =>
           go(
             role === 'Tenant'
-              ? 'tenant-requests'
+              ? fromSentHistory
+                ? 'incident-history'
+                : 'tenant-requests'
               : role === 'Owner'
                 ? 'owner-incidents'
                 : query.data?.severity === 'Emergency'

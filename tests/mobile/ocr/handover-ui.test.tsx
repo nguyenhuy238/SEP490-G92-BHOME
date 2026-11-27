@@ -259,14 +259,17 @@ function setup() {
 it('requires new consent when the server returns a newer handover version', async () => {
   const api = setup();
   render(<ContractHandoverPanel api={api} contract={contract} role="Tenant" autoRefreshMs={30} />);
-  await screen.findByLabelText('Tôi đã kiểm tra nội dung phiên bản 1');
+  await screen.findByLabelText('Tôi đã kiểm tra nội dung biên bản');
   fireEvent.click(screen.getByRole('checkbox'));
   expect(
     (screen.getByRole('button', { name: 'Xác nhận nhận phòng' }) as HTMLButtonElement).disabled,
   ).toBe(false);
   vi.mocked(api.handover).mockResolvedValue(record(2));
   expect(screen.queryByRole('button', { name: 'Tải lại bàn giao' })).toBeNull();
-  await screen.findByLabelText('Tôi đã kiểm tra nội dung phiên bản 2');
+  await screen.findByText('Phòng SYNTHETIC: Hiện trạng phiên bản 2');
+  await waitFor(() =>
+    expect((screen.getByRole('checkbox') as HTMLInputElement).checked).toBe(false),
+  );
   expect((screen.getByRole('checkbox') as HTMLInputElement).checked).toBe(false);
   expect(
     (screen.getByRole('button', { name: 'Xác nhận nhận phòng' }) as HTMLButtonElement).disabled,

@@ -327,7 +327,7 @@ export interface HandoverChoices {
   noAssetsConfirmed?: boolean;
 }
 export interface TerminationReview {
-  status: 'Requested' | 'Approved' | 'Rejected';
+  status: 'Requested' | 'Approved' | 'Rejected' | 'AwaitingConsent';
   version: number;
   locationName: string;
   roomNumber: string;
@@ -356,6 +356,12 @@ export interface MoveOut {
   inspectionStaffId?: string | null;
   version?: number;
   ownerConfirmedInspection?: boolean;
+  isForced?: boolean;
+  requiredConsents?: number;
+  receivedConsents?: number;
+  canConfirm?: boolean;
+  canReject?: boolean;
+  isGroupPrimary?: boolean;
   financialReviewStatus?: 'PendingReview' | 'OwnerReviewed';
 }
 export interface ContractExpiryNotice {
@@ -630,11 +636,24 @@ export interface MoveOutProposalFeedbackInput {
 export interface MoveOutProposalReconcileInput {
   proposalId: string;
 }
+export interface MoveOutAutomaticCharge {
+  kind: 'FinalUtility' | 'FinalFixed';
+  code: string;
+  name: string;
+  amount: string | null;
+  reference: string;
+  missingInputs: string[];
+  existingReceivableId?: string | null;
+  quantity?: string | null;
+  previousReading?: string | null;
+  confirmedReading?: string | null;
+}
 export interface MoveOutProposalSettlement {
   status: 'Payable' | 'RefundEligible' | 'Settled' | 'PendingOwnerReview';
   payableAmount: string;
   refundAmount: string;
   payableReceivableId: string | null;
+  payableReceivables?: { id: string; amount: string; name: string }[] | null;
   createdReceivableIds: string[];
   depositOffsetIds: string[];
   reason?: string | null;
@@ -652,10 +671,13 @@ export interface MoveOutProposalPreview {
   verifiedDeposit: string;
   availableDeposit: string;
   existingOutstanding: string;
+  automaticCharges?: MoveOutAutomaticCharge[] | null;
+  forced?: boolean;
   status: 'None' | 'PendingTenant' | 'Accepted' | 'Disputed' | 'Outdated';
   latestProposal: {
     id: string;
     items: MoveOutProposalCharge[];
+    automaticCharges?: MoveOutAutomaticCharge[] | null;
     verifiedDeposit: string;
     availableDeposit: string;
     existingOutstanding: string;
@@ -1362,6 +1384,21 @@ export const labels: Record<string, string> = {
   Failed: 'Ký thất bại',
   ManualReview: 'Cần kiểm tra tại nhà cung cấp',
   Requested: 'Chờ Owner duyệt',
+  AwaitingConsent: 'Chờ các thành viên đồng thuận',
+  move_out_waiting_members: 'Chờ tất cả thành viên đồng thuận',
+  move_out_member_rejected: 'Có thành viên từ chối yêu cầu trả phòng',
+  forced_move_out_inspection: 'Chờ kiểm tra trả phòng bắt buộc',
+  forced_move_out_inspected: 'Đã lưu kết quả kiểm tra trả phòng bắt buộc',
+  move_out_member_account_required: 'Mỗi thành viên cần có tài khoản khách thuê riêng để xác nhận.',
+  move_out_residence_not_started:
+    'Ngày nghiệp vụ hiện tại chưa tới ngày bắt đầu cư trú. Hãy kiểm tra ngày trên Demo Clock hoặc liên hệ chủ trọ.',
+  move_out_roster_unavailable:
+    'Không tìm thấy đầy đủ thành viên đang cư trú theo ngày nghiệp vụ. Hãy kiểm tra ngày và hồ sơ cư trú.',
+  move_out_already_requested: 'Phòng đã có yêu cầu trả phòng đang xử lý.',
+  invalid_move_out_date:
+    'Ngày dự kiến trả phòng phải không trước ngày nghiệp vụ và nằm trong thời hạn của các hợp đồng liên quan.',
+  move_out_members_changed: 'Danh sách thành viên đã thay đổi. Cần tạo lại yêu cầu.',
+  move_out_consent_required: 'Chưa đủ đồng thuận của các thành viên.',
   Approved: 'Đã duyệt trả phòng',
   Inspected: 'Đã kiểm tra',
   PendingSettlement: 'Chờ quyết toán',
@@ -1809,19 +1846,19 @@ export function contractActions(
         'termination-requests',
         'Yêu cầu chấm dứt trước hạn',
         proposedFields,
-        'Owner cần duyệt yêu cầu. Gửi yêu cầu chưa kết thúc hợp đồng hoặc giải phóng phòng.',
+        'Tất cả thành viên phải đồng thuận trước khi gửi chủ trọ duyệt. Chưa kết thúc hợp đồng hoặc giải phóng phòng.',
       ),
     );
-  if (active && (!m || m.status === 'Rejected') && owner && c.kind !== 'Holding')
+  if (active && (!m || m.status === 'Rejected') && staff && c.kind !== 'Holding')
     result.push(
       action(
-        'expiry-move-out',
-        'Lập yêu cầu trả phòng',
+        'forced-move-out',
+        'Trả phòng bắt buộc',
         proposedFields,
-        'Owner mở hồ sơ và giao công việc kiểm tra trả phòng cho Staff của cơ sở ngay khi xác nhận. Có thể chọn ngày trước hoặc sau ngày hết hạn hợp đồng. Chỉ hoàn tất bàn giao khi đã đủ điều kiện kiểm tra thực tế.',
+        'Chỉ sử dụng khi xác minh tất cả khách thuê đã bỏ phòng. Chọn ngày hiện tại và ghi rõ lý do. Chỉ lưu kết quả kiểm tra, không tự quyết toán hoặc hoàn cọc.',
       ),
     );
-  if (owner && m?.status === 'Requested') {
+  if (owner && m?.status === 'Requested' && m.isGroupPrimary !== false) {
     result.push(action('move-out/approve', 'Duyệt yêu cầu trả phòng'));
     result.push(
       action(
@@ -1842,7 +1879,12 @@ export function contractActions(
   // four independently persisted sections, private images, confirmed Final
   // meter readings and explicit submission. Do not offer the obsolete generic
   // contract form that bypasses the optimized checklist.
-  if (owner && m && ['Inspected', 'PendingSettlement', 'Settled', 'Completed'].includes(m.status))
+  if (
+    owner &&
+    m &&
+    !m.isForced &&
+    ['Inspected', 'PendingSettlement', 'Settled', 'Completed'].includes(m.status)
+  )
     result.push(
       action(
         'move-out/settlement',
@@ -1862,6 +1904,7 @@ export function contractActions(
     owner &&
     active &&
     m &&
+    !m.isForced &&
     ['Inspected', 'PendingSettlement', 'Settled'].includes(m.status) &&
     (m.ownerConfirmedInspection || m.status === 'Settled')
   )

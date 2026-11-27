@@ -439,7 +439,7 @@ internal sealed class SetupWorkspaceStore(Compact24DbContext db, CompactNotifica
             """, t, ("location", locationId), ("key", objectKey));
     public async Task<SetupEvidenceUpload> UploadEvidenceAsync(Guid locationId, byte[] bytes, string contentType, Guid actor, CancellationToken t)
     {
-        var id = Guid.NewGuid(); var key = $"setup/{locationId:N}/evidence/{id:N}";
+        var id = Guid.NewGuid(); var key = PrivateImageKeys.Setup(locationId, id);
         using var stream = new MemoryStream(bytes); await storage.PutAsync(key, stream, bytes.Length, contentType, t);
         try
         {

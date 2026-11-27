@@ -73,7 +73,7 @@ public sealed class CommonAssetInventoryReviewService(ISetupWorkspaceStore store
             !document.Data.TryGetProperty("length", out var length) || !length.TryGetInt32(out var bytes) ||
             !document.Data.TryGetProperty("hash", out var hash) || hash.ValueKind != JsonValueKind.String)
             return false;
-        return key.GetString()?.StartsWith($"setup/{location:N}/evidence/", StringComparison.Ordinal) == true &&
+        return BHome.Application.Storage.PrivateImageKeys.IsSetup(location, key.GetString()) &&
             type.GetString() is "image/png" or "image/jpeg" && bytes is > 0 and <= 5 * 1024 * 1024 &&
             hash.GetString() is { Length: 64 } digest && digest.All(Uri.IsHexDigit);
     }
