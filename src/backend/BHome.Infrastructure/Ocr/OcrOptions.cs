@@ -9,7 +9,7 @@ public sealed class OcrOptions
     public int MaxImageBytes { get; set; } = 5 * 1024 * 1024;
     public int MaxPixels { get; set; } = 12_000_000;
     public int MaxDimension { get; set; } = 1600;
-    public int TimeoutMilliseconds { get; set; } = 8000;
+    public int TimeoutMilliseconds { get; set; } = 9000;
     public int MaxConcurrency { get; set; } = 1;
     public int InferenceThreads { get; set; } = 2;
     public int MaxTextRegions { get; set; } = 48;

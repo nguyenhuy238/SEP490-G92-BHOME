@@ -219,7 +219,11 @@ export function CameraCapture({
         saved = await prepareCapture(
           picture,
           () => alive.current && epoch === generation.current,
-          presentation === 'evidence',
+          presentation === 'evidence'
+            ? 'evidence'
+            : presentation === 'document' || documentSide
+              ? 'identity'
+              : 'ocr',
         );
         files.current.add(saved);
       } finally {

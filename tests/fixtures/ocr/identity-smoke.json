@@ -1,0 +1,45 @@
+{
+  "dataset": "synthetic",
+  "cases": [
+    {
+      "file": "identity-front.png",
+      "kind": "IdentityFront",
+      "expectedFields": {
+        "citizenIdentityNumber": "000000000000",
+        "fullName": "NGƯỜI KIỂM THỬ",
+        "dateOfBirth": "2000-01-01"
+      }
+    },
+    {
+      "file": "identity-back.png",
+      "kind": "IdentityBack",
+      "expectedFields": { "dateOfIssue": "2020-01-01" }
+    },
+    {
+      "file": "identity-back-layout.png",
+      "kind": "IdentityBack",
+      "expectedFields": { "dateOfIssue": "2020-02-01" }
+    },
+    {
+      "file": "identity-back-2024.png",
+      "kind": "IdentityBack",
+      "expectedFields": { "dateOfIssue": "2024-07-01" }
+    },
+    {
+      "file": "identity-front-layout.png",
+      "kind": "IdentityFront",
+      "expectedFields": {
+        "citizenIdentityNumber": "000000000000",
+        "fullName": "NGƯỜI KIỂM THỬ",
+        "dateOfBirth": "2000-01-01"
+      }
+    },
+    {
+      "file": "identity-back-residence.png",
+      "kind": "IdentityBack",
+      "expectedFields": {
+        "residentialAddress": "THÔN GIẢ LẬP XÃ KIỂM THỬ, TỈNH MÔ PHỎNG"
+      }
+    }
+  ]
+}

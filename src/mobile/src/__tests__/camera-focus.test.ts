@@ -100,6 +100,6 @@ describe('native focus feedback', () => {
       expect(cameraFocusMessage(event(state), true)).not.toBe('Đã lấy nét');
     }
     expect(cameraFocusMessage(null, true)).not.toBe('Đã lấy nét');
-    expect(cameraFocusMessage(null, false)).toContain('cần bản ứng dụng hỗ trợ');
+    expect(cameraFocusMessage(null, false)).toBe('');
   });
 });
