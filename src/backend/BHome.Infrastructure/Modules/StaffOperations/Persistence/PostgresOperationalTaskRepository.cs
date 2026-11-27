@@ -63,7 +63,12 @@ internal sealed class PostgresOperationalTaskRepository(BHomePersistenceContext 
             .Select(x => new TaskTargetOption(x.Id, x.Name, x.RoomId, x.CommonArea)).ToArrayAsync(t);
         return new(items, page, pageSize, total);
     }
-    public Task<OperationalTask?> FindAsync(Guid id, CancellationToken t) => db.Set<OperationalTask>().AsNoTracking().SingleOrDefaultAsync(x => x.Id == id, t);
+    private IQueryable<OperationalTask> EligibleMoveInTasks(IQueryable<OperationalTask> rows) => rows.Where(task =>
+        task.ContractId == null || task.Status == MeterTaskStatus.Completed || task.Status == MeterTaskStatus.Cancelled ||
+        !(task.Kind == OperationalTaskKind.MoveInInventory || task.Kind == OperationalTaskKind.AdHoc && task.Title.StartsWith("Bàn giao vào phòng")) ||
+        db.Set<Contract>().Any(c => c.Id == task.ContractId && c.Status == ContractStatus.Active));
+
+    public Task<OperationalTask?> FindAsync(Guid id, CancellationToken t) => EligibleMoveInTasks(db.Set<OperationalTask>().AsNoTracking()).SingleOrDefaultAsync(x => x.Id == id, t);
     public Task<MeterTaskStatus?> MoveInMainTaskStatusAsync(Guid contractId, CancellationToken t) =>
         db.Set<OperationalTask>().AsNoTracking()
             .Where(task => task.ContractId == contractId && task.Kind == OperationalTaskKind.AdHoc &&
@@ -201,7 +206,7 @@ internal sealed class PostgresOperationalTaskRepository(BHomePersistenceContext 
 
     private IQueryable<OperationalTask> Visible(Guid? staffId, DateOnly date)
     {
-        var rows = db.Set<OperationalTask>().AsNoTracking();
+        var rows = EligibleMoveInTasks(db.Set<OperationalTask>().AsNoTracking());
         if (staffId is { } staff) rows = rows.Where(task => task.Location.IsActive && EligibleStaff(date).Contains(staff) &&
             db.StaffLocationAssignments.Any(a => a.LocationId == task.LocationId && a.StaffUserId == staff && a.StartDate <= date && a.EndDate >= date) &&
             db.Users.Any(u => u.Id == staff && u.IsActive && db.UserRoles.Any(ur => ur.UserId == staff && db.Roles.Any(r => r.Id == ur.RoleId && r.Name == Roles.Staff))));

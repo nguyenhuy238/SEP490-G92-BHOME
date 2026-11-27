@@ -10,6 +10,7 @@ using BHome.Domain.TenantContracts;
 using BHome.Infrastructure.Development;
 using BHome.Infrastructure.Persistence.Compact24;
 using Microsoft.AspNetCore.Hosting;
+using Microsoft.AspNetCore.TestHost;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
@@ -43,6 +44,11 @@ public sealed partial class Compact24OwnerSetupTests
         using var host = Host().WithWebHostBuilder(builder =>
         {
             builder.UseEnvironment("Development");
+            builder.ConfigureTestServices(services =>
+            {
+                services.AddScoped<DevelopmentOnboardingSeedService>();
+                services.AddControllers().AddApplicationPart(typeof(DevelopmentOnboardingSeedService).Assembly);
+            });
             builder.ConfigureAppConfiguration((_, config) => config.AddInMemoryCollection(
                 new Dictionary<string, string?>
                 {
@@ -162,7 +168,9 @@ public sealed partial class Compact24OwnerSetupTests
         var inventoryTask = Assert.Single(await stored.Set<OperationalTask>().Where(task =>
             task.ContractId == created.ContractId && task.Kind == BHome.Domain.StaffOperations.OperationalTaskKind.MoveInInventory).ToArrayAsync());
         var inventorySnapshot = JsonSerializer.Deserialize<MoveInInventorySnapshot>(inventoryTask.MoveInInventoryJson)!;
-        Assert.Equal(draft.InventoryToken, inventorySnapshot.SourceToken);
+        var currentInventory = await check.ServiceProvider.GetRequiredService<RoomInventoryReviewService>()
+            .PrepareForMoveInTaskAsync(w.Room, default);
+        Assert.True(currentInventory.MatchesMoveInSourceToken(inventorySnapshot.SourceToken));
         Assert.Equal(2, inventorySnapshot.Items.Length);
         var inventoryItem = Assert.Single(inventorySnapshot.Items, item => item.Id == configuredItem.Id);
         Assert.Equal(existingAsset.Id, inventoryItem.AssetId);

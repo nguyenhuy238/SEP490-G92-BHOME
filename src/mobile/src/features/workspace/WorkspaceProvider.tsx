@@ -151,7 +151,7 @@ function WorkspaceSessionProvider({ children }: { children: React.ReactNode }) {
         selectStaffLocation: (id) =>
           requestNavigation(() => {
             staffLocation.selectLocation(id);
-          }),
+          }, true),
         navigateInStaffLocation,
         reloadStaffLocations: staffLocation.reload,
         role,

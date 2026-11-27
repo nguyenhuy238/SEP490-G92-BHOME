@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { ScrollView, StyleSheet, View } from 'react-native';
+import { StyleSheet, View } from 'react-native';
 import { Button, Dialog, Portal, Text, TouchableRipple } from 'react-native-paper';
 import { DashboardHeading, dashboardStyles } from '../components/DashboardKit';
 import { StaffFeatureDirectory } from '../components/StaffFeatureDirectory';
@@ -24,12 +24,10 @@ export function StaffDashboard() {
     staffLocations,
     staffLocationsLoading,
     staffLocationsError,
-    selectStaffLocation,
     reloadStaffLocations,
   } = useWorkspace();
   const data = useStaffDashboard();
   const [contracts, setContracts] = useState(false);
-  const [locationPickerOpen, setLocationPickerOpen] = useState(false);
   const availableLocations = staffLocations ?? data.locations.data ?? [];
   const activeLocation = availableLocations.find(
     (item) => item.id === (staffLocationId ?? availableLocations[0]?.id),
@@ -121,16 +119,6 @@ export function StaffDashboard() {
             Làm mới
           </Button>
         </View>
-        {!preview && availableLocations.length > 1 && (
-          <Button
-            mode="outlined"
-            icon="map-marker-multiple-outline"
-            onPress={() => setLocationPickerOpen(true)}
-            accessibilityLabel="Chuyển cơ sở"
-          >
-            Cơ sở hiện tại: {activeLocation?.label ?? 'Chọn cơ sở'} · Đổi cơ sở
-          </Button>
-        )}
         <View style={styles.metrics}>
           {[
             { label: 'Hạn hôm nay', value: taskValue, screen: 'work-orders' as const },
@@ -266,28 +254,6 @@ export function StaffDashboard() {
               Xem hợp đồng
             </Button>
             <Button onPress={() => setContracts(false)}>Đóng</Button>
-          </Dialog.Actions>
-        </Dialog>
-        <Dialog visible={locationPickerOpen} onDismiss={() => setLocationPickerOpen(false)}>
-          <Dialog.Title>Chuyển cơ sở</Dialog.Title>
-          <Dialog.ScrollArea>
-            <ScrollView style={{ maxHeight: 360 }}>
-              {availableLocations.map((location) => (
-                <Button
-                  key={location.id}
-                  mode={location.id === scopedLocationId ? 'contained-tonal' : 'text'}
-                  onPress={() => {
-                    setLocationPickerOpen(false);
-                    selectStaffLocation?.(location.id);
-                  }}
-                >
-                  {location.label}
-                </Button>
-              ))}
-            </ScrollView>
-          </Dialog.ScrollArea>
-          <Dialog.Actions>
-            <Button onPress={() => setLocationPickerOpen(false)}>Đóng</Button>
           </Dialog.Actions>
         </Dialog>
       </Portal>

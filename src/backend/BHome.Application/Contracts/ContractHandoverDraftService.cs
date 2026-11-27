@@ -8,16 +8,25 @@ public sealed partial class ContractService
 {
     private IHandoverDraftRepository Drafts => handoverDrafts ?? throw new ContractException(503, "handover_draft_unavailable");
 
+    public Task<IReadOnlyList<ContractChoice>> HandoverInboxRoomsAsync(Guid locationId, CancellationToken token)
+    {
+        Role(Roles.Owner);
+        if (locationId == Guid.Empty) throw ContractException.Invalid("invalid_handover_inbox_filter");
+        return Drafts.RoomsAsync(locationId, token);
+    }
+
     public Task<HandoverInboxPage> ListHandoverInboxAsync(int page, int pageSize,
-        Guid? locationId, string? status, string? roomSearch, CancellationToken token)
+        Guid? locationId, string? status, string? roomSearch, CancellationToken token,
+        Guid? roomId = null, string? stage = null)
     {
         Role(Roles.Owner);
         if (page < 1 || page > 100_000 || pageSize < 1 || pageSize > 50 ||
             (status is not null && status.Length > 64) ||
-            (roomSearch is not null && roomSearch.Length > 80))
+            (roomSearch is not null && roomSearch.Length > 80) || roomId == Guid.Empty ||
+            (roomId.HasValue && !locationId.HasValue) || !InboxStage.Valid(stage))
             throw ContractException.Invalid("invalid_handover_inbox_filter");
         return Drafts.ListAsync(page, pageSize, locationId, string.IsNullOrWhiteSpace(status) ? null : status,
-            roomSearch?.Trim() ?? "", token);
+            roomSearch?.Trim() ?? "", token, roomId, stage);
     }
 
     private static void RequireMainHandover(Contract contract)
@@ -29,6 +38,8 @@ public sealed partial class ContractService
 
     private async Task RequireStartedMoveInWork(Contract contract, CancellationToken token)
     {
+        if (contract.Status != ContractStatus.Active)
+            throw ContractException.Conflict("active_contract_initial_required");
         // Contract access is authorized by Load/Mutate. A contract-scoped
         // draft is not itself proof that the assigned Staff started work.
         var task = await Handovers.MoveInTaskAsync(contract.Id, contract.RoomId, Actor, false, token);

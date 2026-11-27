@@ -1,4 +1,4 @@
-import { fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { MemoryRouter } from 'react-router';
 import { afterEach, beforeEach, expect, it, vi } from 'vitest';
@@ -45,6 +45,11 @@ async function fill(days: number[]) {
 it('saves only the five recurring dates and version tokens without a selectable starting period or calculation rules', async () => {
   mount();
   await fill([24, 26, 27, 28, 5]);
+  expect(
+    within(screen.getByRole('region', { name: 'Lịch kỳ hiện tại' })).getByText(
+      /Chưa có lịch điện nước/,
+    ),
+  ).toBeInTheDocument();
   expect(screen.getAllByRole('spinbutton')).toHaveLength(5);
   expect(screen.queryByLabelText(/Kỳ bắt đầu áp dụng|Mốc tham chiếu kỳ|Làm tròn/)).toBeNull();
   fireEvent.click(screen.getByRole('button', { name: 'Lưu cấu hình lịch' }));
@@ -134,11 +139,26 @@ it('keeps an inherited current plan immutable and previews the already scheduled
   ]);
   mount();
   expect(await screen.findByRole('spinbutton', { name: labels[0] })).toHaveValue(23);
+  const current = within(screen.getByRole('region', { name: 'Lịch kỳ hiện tại' }));
+  expect(
+    current.getByText(`Lịch kỳ hiện tại ${period(0).slice(5, 7)}/${period(0).slice(0, 4)}`),
+  ).toBeInTheDocument();
+  expect(current.queryByText(/Trong kỳ|Kỳ kế tiếp/)).not.toBeInTheDocument();
+  expect(
+    current.getByText(`24/${period(0).slice(5, 7)}/${period(0).slice(0, 4)}`),
+  ).toBeInTheDocument();
+  expect(
+    current.getByText(`05/${period(1).slice(5, 7)}/${period(1).slice(0, 4)}`),
+  ).toBeInTheDocument();
+  expect(current.queryByRole('spinbutton')).not.toBeInTheDocument();
   expect(screen.getByText(/Lịch tháng đang chạy được giữ nguyên/)).toBeInTheDocument();
   expect(screen.getByText(/Có lịch đã lên trước từ kỳ/)).toBeInTheDocument();
   fireEvent.change(screen.getByRole('spinbutton', { name: labels[0] }), {
     target: { value: '21' },
   });
+  expect(
+    current.getByText(`24/${period(0).slice(5, 7)}/${period(0).slice(0, 4)}`),
+  ).toBeInTheDocument();
   fireEvent.click(screen.getByRole('button', { name: 'Lưu cấu hình lịch' }));
   await waitFor(() =>
     expect(mocks.request.mock.calls.some(([, init]) => init?.method === 'PUT')).toBe(true),

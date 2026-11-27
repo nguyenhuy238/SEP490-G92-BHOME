@@ -652,12 +652,22 @@ public sealed partial class Compact24OwnerSetupTests
         var requested = await Read<MoveOutView>(await HandoverPost(tenant, seeded.Contract,
             "termination-requests", new TerminationInput(Today, "Synthetic shared departure")));
         Assert.Equal("AwaitingConsent", requested.Status);
+        var tenantInbox = await owner.GetFromJsonAsync<OwnerMoveOutInboxPage>($"/api/v1/contracts/move-out-inbox?locationId={w.Location}&roomId={w.Room}&stage=Tenant");
+        Assert.Contains(tenantInbox!.Items, row => row.ContractId == seeded.Contract);
+        var ownerInbox = await owner.GetFromJsonAsync<OwnerMoveOutInboxPage>($"/api/v1/contracts/move-out-inbox?locationId={w.Location}&roomId={w.Room}&stage=Owner");
+        Assert.DoesNotContain(ownerInbox!.Items, row => row.ContractId == seeded.Contract);
         Assert.Equal(HttpStatusCode.Conflict, (await HandoverPost(owner, seeded.Contract, "move-out/approve", new { })).StatusCode);
         var linked = await Read<MoveOutView>(await secondTenant.GetAsync($"/api/v1/contracts/{secondId}/move-out"));
         Assert.True(linked.CanConfirm);
         await Read<MoveOutView>(await HandoverPost(secondTenant, secondId, "move-out/consent", new MoveOutConsentInput(true, linked.Version)));
         Assert.Equal(HttpStatusCode.Conflict, (await HandoverPost(owner, secondId, "move-out/approve", new { })).StatusCode);
         await Read<MoveOutView>(await HandoverPost(owner, seeded.Contract, "move-out/approve", new { }));
+        var staffInbox = await owner.GetFromJsonAsync<OwnerMoveOutInboxPage>($"/api/v1/contracts/move-out-inbox?pageSize=1&locationId={w.Location}&roomId={w.Room}&stage=Staff");
+        Assert.Equal(2, staffInbox!.TotalCount);
+        Assert.Single(staffInbox.Items);
+        var roomOptions = await owner.GetFromJsonAsync<ContractChoice[]>($"/api/v1/contracts/move-out-inbox/rooms?locationId={w.Location}");
+        Assert.Equal(w.Room, Assert.Single(roomOptions!).Id);
+        Assert.Empty((await owner.GetFromJsonAsync<ContractChoice[]>($"/api/v1/contracts/move-out-inbox/rooms?locationId={Guid.NewGuid()}"))!);
         foreach (var party in parties)
         {
             Assert.Equal("Approved", (await Read<MoveOutView>(await owner.GetAsync($"/api/v1/contracts/{party.Id}/move-out"))).Status);

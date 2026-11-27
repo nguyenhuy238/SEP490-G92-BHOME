@@ -122,18 +122,14 @@ it('shows the distinct overdue-room count on the meter workspace tile and opens 
   fireEvent.click(tile);
   expect(state.go).toHaveBeenCalledWith('meter-reading');
 });
-it('lets Staff choose between two assigned Locations directly on Home', () => {
+it('leaves location switching to the shared header instead of duplicating the Home control', () => {
   state.locations = [
     { id: 'loc', label: 'Cơ sở kiểm thử' },
     { id: 'loc-2', label: 'Cơ sở thứ hai' },
   ];
   render(<StaffDashboard />);
-  fireEvent.click(screen.getByRole('button', { name: 'Chuyển cơ sở' }));
-  const dialog = screen.getByRole('dialog');
-  expect(within(dialog).getByRole('button', { name: 'Cơ sở kiểm thử' })).toBeTruthy();
-  fireEvent.click(within(dialog).getByRole('button', { name: 'Cơ sở thứ hai' }));
-  expect(state.selectLocation).toHaveBeenCalledWith('loc-2');
-  expect(screen.queryByRole('dialog')).toBeNull();
+  expect(screen.queryByRole('button', { name: 'Chuyển cơ sở' })).toBeNull();
+  expect(screen.getByText('Cơ sở kiểm thử')).toBeTruthy();
 });
 it('does not show a sample name, shift status or manufactured counts in authenticated mode', () => {
   render(<StaffDashboard />);

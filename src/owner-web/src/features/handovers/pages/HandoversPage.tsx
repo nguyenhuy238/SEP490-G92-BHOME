@@ -1,5 +1,5 @@
 import { TextField } from '../../../components/common/ValidatedForm';
-import { useEffect, useState } from 'react';
+import { useState } from 'react';
 import { useSearchParams } from 'react-router';
 import { useQuery } from '@tanstack/react-query';
 import {
@@ -37,6 +37,8 @@ import { isMockMode } from '../../../services/config';
 import { useContractsApi } from '../../contracts/useContractsApi';
 import { OwnerHandoverDraftPanel } from '../../contracts/OwnerHandoverDraftPanel';
 import { OwnerMoveOutInbox } from '../OwnerMoveOutInbox';
+import { InboxRoomError, InboxRoomFilter } from '../InboxFilters';
+import { inboxStages, useInboxRooms } from '../useInboxFilters';
 
 interface HandoverInboxItem {
   contractId: string;
@@ -122,42 +124,43 @@ function LiveHandoversPage() {
   const api = useContractsApi();
   const [location, setLocation] = useState('');
   const [status, setStatus] = useState('');
-  const [roomSearch, setRoomSearch] = useState('');
-  const [roomFilter, setRoomFilter] = useState('');
+  const [room, setRoom] = useState('');
   const [page, setPage] = useState(1);
   const selected = params.get('contractId') ?? '';
-
-  useEffect(() => {
-    const timer = window.setTimeout(() => {
-      setRoomFilter(roomSearch.trim());
-      setPage(1);
-    }, 300);
-    return () => window.clearTimeout(timer);
-  }, [roomSearch]);
 
   const locations = useQuery({
     queryKey: ['handover-inbox-locations', session?.userId],
     enabled: !!session?.roles?.includes('Owner'),
     queryFn: ({ signal }) => api.locations(signal),
   });
+  const rooms = useInboxRooms(api, session?.userId, location, 'handovers');
+  if (room && rooms.data && !rooms.data.some((option) => option.id === room)) {
+    setRoom('');
+    setPage(1);
+  }
 
   const inbox = useQuery({
-    queryKey: ['handover-inbox', session?.userId, page, location, status, roomFilter],
+    queryKey: ['handover-inbox', session?.userId, page, location, status, room],
     enabled: !!session?.roles?.includes('Owner'),
     queryFn: ({ signal }) =>
       api.transport<HandoverInboxPage>(
         `/api/v1/contracts/handovers?${new URLSearchParams({
           page: String(page),
-          pageSize: '20',
+          pageSize: '10',
           ...(location ? { locationId: location } : {}),
-          ...(status ? { status } : {}),
-          ...(roomFilter ? { room: roomFilter } : {}),
+          ...(status ? { stage: status } : {}),
+          ...(room ? { roomId: room } : {}),
         })}`,
         { signal },
       ),
   });
 
   const visible = inbox.data?.items ?? [];
+  const pageCount = Math.max(
+    1,
+    Math.ceil((inbox.data?.totalCount ?? 0) / (inbox.data?.pageSize || 10)),
+  );
+  if (inbox.data && page > pageCount) setPage(pageCount);
   const selectedItem = inbox.data?.items.find((item) => item.contractId === selected);
 
   function selectHandover(contractId: string) {
@@ -171,15 +174,6 @@ function LiveHandoversPage() {
 
   return (
     <Stack spacing={2}>
-      <Box sx={{ display: 'flex', justifyContent: 'flex-end' }}>
-        <Button
-          startIcon={<RefreshCw size={16} />}
-          disabled={inbox.isFetching}
-          onClick={() => void inbox.refetch()}
-        >
-          Tải lại
-        </Button>
-      </Box>
       <Paper variant="outlined" sx={{ p: { xs: 1.5, md: 2 }, borderRadius: 2 }}>
         <Stack spacing={1.5}>
           <FilterToolbar>
@@ -190,6 +184,7 @@ function LiveHandoversPage() {
               value={location}
               onChange={(event) => {
                 setLocation(event.target.value);
+                setRoom('');
                 setPage(1);
               }}
               sx={{ maxWidth: { sm: 260 } }}
@@ -201,6 +196,15 @@ function LiveHandoversPage() {
                 </MenuItem>
               ))}
             </TextField>
+            <InboxRoomFilter
+              location={location}
+              room={room}
+              rooms={rooms}
+              onChange={(value) => {
+                setRoom(value);
+                setPage(1);
+              }}
+            />
             <TextField
               select
               size="small"
@@ -213,34 +217,39 @@ function LiveHandoversPage() {
               sx={{ maxWidth: { sm: 240 } }}
             >
               <MenuItem value="">Tất cả trạng thái</MenuItem>
-              {handoverStates.map((option) => (
+              {inboxStages.map((option) => (
                 <MenuItem key={option.value} value={option.value}>
                   {option.label}
                 </MenuItem>
               ))}
             </TextField>
-            <TextField
-              size="small"
-              label="Tìm phòng"
-              placeholder="Ví dụ: P.102"
-              value={roomSearch}
-              onChange={(event) => setRoomSearch(event.target.value)}
-              sx={{ flex: { sm: '1 1 240px' }, maxWidth: { sm: 340 } }}
-            />
-            {(location || status || roomSearch) && (
+            {(location || status || room) && (
               <Button
                 variant="text"
                 onClick={() => {
                   setLocation('');
                   setStatus('');
-                  setRoomSearch('');
+                  setRoom('');
                   setPage(1);
                 }}
               >
                 Xóa bộ lọc
               </Button>
             )}
+            <Button
+              size="small"
+              sx={{ ml: { sm: 'auto' } }}
+              startIcon={<RefreshCw size={16} />}
+              disabled={inbox.isFetching}
+              onClick={() => {
+                void inbox.refetch();
+                if (location) void rooms.refetch();
+              }}
+            >
+              Tải lại
+            </Button>
           </FilterToolbar>
+          <InboxRoomError rooms={rooms} />
           {locations.error && (
             <Alert severity="warning">
               Không tải được danh sách cơ sở.{' '}
@@ -272,11 +281,11 @@ function LiveHandoversPage() {
             <Stack spacing={1} sx={{ py: 5, textAlign: 'center', alignItems: 'center' }}>
               <FileText size={32} color="#64748b" strokeWidth={1.5} />
               <Typography sx={{ fontWeight: 700 }}>
-                {roomFilter ? 'Không tìm thấy biên bản của phòng' : 'Chưa có biên bản phù hợp'}
+                {room ? 'Không tìm thấy biên bản của phòng' : 'Chưa có biên bản phù hợp'}
               </Typography>
               <Typography variant="body2" color="text.secondary">
-                {roomFilter
-                  ? 'Thử tên hoặc số phòng khác, hoặc xóa từ khóa.'
+                {room
+                  ? 'Thử chọn phòng khác hoặc xóa bộ lọc.'
                   : 'Đổi bộ lọc để xem những biên bản khác.'}
               </Typography>
             </Stack>
@@ -357,20 +366,21 @@ function LiveHandoversPage() {
               </Stack>
             </>
           )}
-          {inbox.data && inbox.data.totalCount > inbox.data.pageSize && (
+          {inbox.data && !inbox.error && inbox.data.totalCount > 0 && (
             <Stack
               direction={{ xs: 'column', sm: 'row' }}
               spacing={1}
               sx={{ alignItems: 'center', justifyContent: 'space-between' }}
             >
               <Typography variant="caption" color="text.secondary">
-                Trang {page} / {Math.ceil(inbox.data.totalCount / inbox.data.pageSize)}
+                Trang {page} / {pageCount}
               </Typography>
               <Pagination
                 page={page}
                 disabled={inbox.isFetching}
-                count={Math.ceil(inbox.data.totalCount / inbox.data.pageSize)}
+                count={pageCount}
                 onChange={(_, nextPage) => setPage(nextPage)}
+                size="small"
                 shape="rounded"
                 color="primary"
               />
@@ -440,7 +450,10 @@ function LiveHandoversPage() {
                   api={api}
                   id={selected}
                   compact
-                  onChanged={() => void inbox.refetch()}
+                  onChanged={() => {
+                    void inbox.refetch();
+                    if (location) void rooms.refetch();
+                  }}
                 />
               </Stack>
             )}

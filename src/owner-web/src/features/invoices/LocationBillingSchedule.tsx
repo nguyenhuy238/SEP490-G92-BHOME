@@ -5,7 +5,6 @@ import {
   Button,
   Divider,
   LinearProgress,
-  InputAdornment,
   MenuItem,
   Paper,
   Stack,
@@ -65,7 +64,16 @@ function useSchedule(location: string) {
       const effective = plan ? automationCalendar(plan) : calendar;
       if (plan && !effective) throw new Error('Không đọc được lịch đã lưu.');
       const latestVersion = Math.max(0, ...history.map((p) => p.version));
-      return { plan, calendar, effective, currentPlan, previewPeriod, latestVersion, laterPlan };
+      return {
+        plan,
+        calendar,
+        effective,
+        currentPlan,
+        currentPeriod: period,
+        previewPeriod,
+        latestVersion,
+        laterPlan,
+      };
     },
   });
 }
@@ -86,16 +94,74 @@ function scheduleValues(plan?: AutomationPlan, calendar?: BillingSchedule | null
 
 type Values = ReturnType<typeof scheduleValues>;
 
-function datesFor(period: string, values: Values) {
+function datesFor(period: string, values: Values, maxOffset = 1) {
   const [year, month] = period.split('-').map(Number);
   return milestones.map(({ day, offset }) => {
     const d = Number(values[day]);
     const o = offset ? Number(values[offset]) : 0;
-    if (!Number.isInteger(d) || d < 1 || d > 31 || !Number.isInteger(o) || o < 0 || o > 1)
+    if (!Number.isInteger(d) || d < 1 || d > 31 || !Number.isInteger(o) || o < 0 || o > maxOffset)
       return null;
     const last = new Date(Date.UTC(year!, month! + o, 0)).getUTCDate();
     return new Date(Date.UTC(year!, month! - 1 + o, Math.min(d, last)));
   });
+}
+
+function formatScheduleDate(date: Date | null | undefined) {
+  return date?.toLocaleDateString('vi-VN', {
+    timeZone: 'UTC',
+    day: '2-digit',
+    month: '2-digit',
+    year: 'numeric',
+  });
+}
+
+function CurrentSchedule({ period, plan }: { period: string; plan?: AutomationPlan }) {
+  const calendar = plan ? automationCalendar(plan) : null;
+  const values = scheduleValues(plan, calendar);
+  const dates = datesFor(period, values, 2);
+  return (
+    <Stack
+      component="section"
+      aria-label="Lịch kỳ hiện tại"
+      spacing={0.5}
+      sx={{ p: 1.25, bgcolor: 'action.hover', borderRadius: 1.5, maxWidth: 460 }}
+    >
+      <Typography component="h3" variant="subtitle2" sx={{ fontWeight: 750 }}>
+        Lịch kỳ hiện tại {period.slice(5)}/{period.slice(0, 4)}
+      </Typography>
+      {!plan ? (
+        <Typography variant="body2" color="text.secondary">
+          Chưa có lịch điện nước & hóa đơn áp dụng cho kỳ hiện tại.
+        </Typography>
+      ) : !calendar ? (
+        <Alert severity="error">Không đọc được lịch đã lưu của kỳ hiện tại.</Alert>
+      ) : (
+        <>
+          {milestones.map(({ label, day }, i) => (
+            <Box
+              key={day}
+              sx={{
+                display: 'grid',
+                gridTemplateColumns: 'minmax(0, 1fr) auto',
+                alignItems: 'center',
+                gap: 1,
+              }}
+            >
+              <Typography variant="caption" sx={{ fontWeight: 600 }}>
+                {label}
+              </Typography>
+              <Typography
+                variant="caption"
+                sx={{ textAlign: 'right', fontVariantNumeric: 'tabular-nums' }}
+              >
+                {formatScheduleDate(dates[i]) ?? 'Chưa có'}
+              </Typography>
+            </Box>
+          ))}
+        </>
+      )}
+    </Stack>
+  );
 }
 
 function ordered(dates: (Date | null)[]) {
@@ -113,8 +179,8 @@ export function LocationBillingSchedule({
   const cache = useQueryClient();
   const [notice, setNotice] = useState('');
   return (
-    <Paper variant="outlined" sx={{ p: { xs: 2, md: 3 } }}>
-      <Stack spacing={2}>
+    <Paper variant="outlined" sx={{ p: 2 }}>
+      <Stack spacing={1.25}>
         <Typography component="h2" variant="h6" sx={{ fontWeight: 800 }}>
           Cấu hình lịch điện nước & hóa đơn
         </Typography>
@@ -128,6 +194,18 @@ export function LocationBillingSchedule({
           </Alert>
         )}
         {notice && <Alert severity="success">{notice}</Alert>}
+        {settings.data && !settings.error && (
+          <>
+            <CurrentSchedule
+              period={settings.data.currentPeriod}
+              plan={settings.data.currentPlan}
+            />
+            <Divider />
+            <Typography component="h3" variant="subtitle2" sx={{ fontWeight: 750 }}>
+              {settings.data.currentPlan ? 'Cấu hình lịch kỳ tiếp theo' : 'Thiết lập lịch'}
+            </Typography>
+          </>
+        )}
         {settings.data && !settings.error && (
           <ScheduleEditor
             key={`${settings.data.latestVersion}:${settings.data.calendar?.version ?? 0}:${settings.data.previewPeriod}`}
@@ -228,7 +306,7 @@ function ScheduleEditor({
   return (
     <Stack
       component={ValidatedForm}
-      spacing={1.5}
+      spacing={0.75}
       onSubmit={(event) => {
         event.preventDefault();
         if (disabled || lock.current || !valid) return;
@@ -274,29 +352,31 @@ function ScheduleEditor({
           key={day}
           sx={{
             display: 'grid',
-            gridTemplateColumns: { xs: '1fr 1fr', sm: 'minmax(0, 1fr) 116px 144px 98px' },
+            gridTemplateColumns: {
+              xs: '68px minmax(0, 1fr) auto',
+              sm: 'minmax(0, 1fr) 68px 120px 90px',
+            },
             alignItems: 'center',
-            gap: 1.25,
+            gap: 0.75,
           }}
         >
           <Typography
             component="span"
-            variant="body2"
+            variant="caption"
             sx={{ gridColumn: { xs: '1 / -1', sm: 'auto' }, fontWeight: 600 }}
           >
             {label}
           </Typography>
           <TextField
             type="number"
-
             value={values[day]}
             onChange={(e) => update(day, e.target.value)}
             required
             size="small"
             disabled={disabled || busy}
+            sx={{ '& .MuiInputBase-input': { py: 0.75, fontSize: '0.875rem' } }}
             slotProps={{
               htmlInput: { min: 1, max: 31, 'aria-label': 'Ngày ' + label.toLocaleLowerCase('vi') },
-              input: { startAdornment: <InputAdornment position="start">Ngày</InputAdornment> },
             }}
           />
           {offset ? (
@@ -307,6 +387,7 @@ function ScheduleEditor({
 
               onChange={(e) => update(offset, e.target.value)}
               disabled={disabled || busy}
+              sx={{ '& .MuiSelect-select': { py: 0.75, fontSize: '0.875rem' } }}
               slotProps={{
                 select: {
                   displayEmpty: true,
@@ -326,7 +407,7 @@ function ScheduleEditor({
               ))}
             </TextField>
           ) : (
-            <Typography variant="body2" color="text.secondary">
+            <Typography variant="caption" color="text.secondary">
               Trong kỳ
             </Typography>
           )}
@@ -334,17 +415,11 @@ function ScheduleEditor({
             variant="caption"
             color="text.secondary"
             sx={{
-              gridColumn: { xs: '1 / -1', sm: 'auto' },
               textAlign: 'right',
               fontVariantNumeric: 'tabular-nums',
             }}
           >
-            {dates[i]?.toLocaleDateString('vi-VN', {
-              timeZone: 'UTC',
-              day: '2-digit',
-              month: '2-digit',
-              year: 'numeric',
-            }) ?? 'Chưa chọn ngày'}
+            {formatScheduleDate(dates[i]) ?? 'Chưa chọn ngày'}
           </Typography>
         </Box>
       ))}

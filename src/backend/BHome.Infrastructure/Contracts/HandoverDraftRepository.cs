@@ -9,8 +9,28 @@ internal sealed class HandoverDraftRepository(BHomePersistenceContext db) : IHan
 {
     private static readonly JsonSerializerOptions Json = new(JsonSerializerDefaults.Web);
 
+    public async Task<IReadOnlyList<ContractChoice>> RoomsAsync(Guid locationId, CancellationToken token)
+    {
+        if (db is not BHome.Infrastructure.Persistence.Compact24.Compact24DbContext)
+            throw new ContractException(503, "handover_draft_storage_unavailable");
+        // Same eligibility as the unfiltered inbox, including completed reports.
+        return await db.Database.SqlQuery<ContractChoice>($"""
+            SELECT DISTINCT r.id AS "Id", r.room_number AS "Label"
+            FROM contracts c JOIN rooms r ON r.id = c.room_id
+            WHERE r.location_id = {locationId}
+              AND c.contract_type = 'MAIN'
+              AND (c.status = {(int)BHome.Domain.TenantContracts.ContractStatus.Active} OR c.activated_at IS NOT NULL)
+              AND COALESCE(c.handover->>'roomMoveInSuppressed','false') <> 'true'
+              AND (c.handover->'preparation'->>'status' IS NOT NULL OR EXISTS (
+                  SELECT 1 FROM operational_tasks task
+                  WHERE task.contract_id = c.id AND task.task_type = 'GENERAL'
+                    AND task.title = 'Bàn giao vào phòng ' || r.room_number))
+            ORDER BY "Label", "Id"
+            """).ToArrayAsync(token);
+    }
+
     public async Task<HandoverInboxPage> ListAsync(int page, int pageSize, Guid? locationId,
-        string? status, string roomSearch, CancellationToken token)
+        string? status, string roomSearch, CancellationToken token, Guid? roomId = null, string? stage = null)
     {
         if (db is not BHome.Infrastructure.Persistence.Compact24.Compact24DbContext)
             throw new ContractException(503, "handover_draft_storage_unavailable");
@@ -21,12 +41,18 @@ internal sealed class HandoverDraftRepository(BHomePersistenceContext db) : IHan
             SELECT COUNT(*)::integer AS "Value"
             FROM contracts c JOIN rooms r ON r.id = c.room_id
             WHERE c.contract_type = 'MAIN'
+              AND (c.status = {(int)BHome.Domain.TenantContracts.ContractStatus.Active} OR c.activated_at IS NOT NULL)
               AND COALESCE(c.handover->>'roomMoveInSuppressed','false') <> 'true'
               AND (c.handover->'preparation'->>'status' IS NOT NULL OR EXISTS (
                   SELECT 1 FROM operational_tasks task
                   WHERE task.contract_id = c.id AND task.task_type = 'GENERAL'
                     AND task.title = 'Bàn giao vào phòng ' || r.room_number))
               AND ({locationId}::uuid IS NULL OR r.location_id = {locationId}::uuid)
+              AND ({roomId}::uuid IS NULL OR r.id = {roomId}::uuid)
+              AND ({stage}::text IS NULL OR CASE COALESCE(c.handover->'preparation'->>'status','Draft')
+                  WHEN 'Draft' THEN 'Staff' WHEN 'ReinspectionRequested' THEN 'Staff'
+                  WHEN 'PendingOwnerReview' THEN 'Owner' WHEN 'ChangesRequested' THEN 'Owner'
+                  WHEN 'Ready' THEN 'Tenant' WHEN 'Confirmed' THEN 'Completed' END = {stage}::text)
               AND ({status}::text IS NULL OR COALESCE(c.handover->'preparation'->>'status','Draft') = {status}::text)
               AND ({roomSearch}::text = '' OR r.room_number ILIKE '%' || {roomSearch}::text || '%')
             """).SingleAsync(token);
@@ -42,12 +68,18 @@ internal sealed class HandoverDraftRepository(BHomePersistenceContext db) : IHan
             FROM contracts c JOIN rooms r ON r.id = c.room_id
                              JOIN locations l ON l.id = r.location_id
             WHERE c.contract_type = 'MAIN'
+              AND (c.status = {(int)BHome.Domain.TenantContracts.ContractStatus.Active} OR c.activated_at IS NOT NULL)
               AND COALESCE(c.handover->>'roomMoveInSuppressed','false') <> 'true'
               AND (c.handover->'preparation'->>'status' IS NOT NULL OR EXISTS (
                   SELECT 1 FROM operational_tasks task
                   WHERE task.contract_id = c.id AND task.task_type = 'GENERAL'
                     AND task.title = 'Bàn giao vào phòng ' || r.room_number))
               AND ({locationId}::uuid IS NULL OR r.location_id = {locationId}::uuid)
+              AND ({roomId}::uuid IS NULL OR r.id = {roomId}::uuid)
+              AND ({stage}::text IS NULL OR CASE COALESCE(c.handover->'preparation'->>'status','Draft')
+                  WHEN 'Draft' THEN 'Staff' WHEN 'ReinspectionRequested' THEN 'Staff'
+                  WHEN 'PendingOwnerReview' THEN 'Owner' WHEN 'ChangesRequested' THEN 'Owner'
+                  WHEN 'Ready' THEN 'Tenant' WHEN 'Confirmed' THEN 'Completed' END = {stage}::text)
               AND ({status}::text IS NULL OR COALESCE(c.handover->'preparation'->>'status','Draft') = {status}::text)
               AND ({roomSearch}::text = '' OR r.room_number ILIKE '%' || {roomSearch}::text || '%')
             ORDER BY CASE COALESCE(c.handover->'preparation'->>'status','Draft')

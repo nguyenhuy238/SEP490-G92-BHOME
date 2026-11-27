@@ -3,6 +3,26 @@ import { getFieldErrors } from '../../../../packages/client-core/src/api';
 import { MobileApiError, mobileResponse, errorMessage } from '../lib/api';
 import { incidentError } from '../services/incidents';
 
+it.each([
+  ['active_contract_initial_required', 'hợp đồng chính đang hoạt động'],
+  ['task_closed', 'Nhiệm vụ ghi chỉ số đã hoàn thành'],
+  ['baseline_already_confirmed', 'Công tơ đã có chỉ số ban đầu'],
+  ['reading_period_out_of_order', 'Ngày ghi không hợp lệ'],
+  ['evidence_not_available', 'Ảnh minh chứng không còn hợp lệ'],
+])('shows the specific capture refusal %s from a real problem response', async (code, expected) => {
+  const transport = vi
+    .fn()
+    .mockResolvedValue(new Response(JSON.stringify({ code }), { status: 409 }));
+  const error = await mobileResponse(
+    'https://api.example.invalid',
+    '/api/v1/capture/meter-tasks/test/confirm',
+    { method: 'POST' },
+    transport,
+    (response) => response.json(),
+  ).catch((cause: unknown) => cause);
+  expect(errorMessage(error)).toContain(expected);
+});
+
 it('preserves structured and legacy server errors for inline Mobile feedback', async () => {
   const transport = vi.fn().mockResolvedValue(
     new Response(

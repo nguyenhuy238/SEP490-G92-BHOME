@@ -927,6 +927,44 @@ public sealed class ContractServiceTests
         }
     }
     [Theory]
+    [InlineData("", true, null)]
+    [InlineData("   ", true, null)]
+    [InlineData(null, true, null)]
+    [InlineData("", false, "room_summary_evidence_required")]
+    [InlineData(null, false, "room_summary_evidence_required")]
+    public async Task MoveOutDraftRoomSummaryRequiresPhotoButNotNotes(string? notes, bool withPhoto, string? expectedError)
+    {
+        var r = new Rig();
+        var c = await r.Ready();
+        c.Status = ContractStatus.Active;
+        r.User.Role = Roles.Staff;
+        r.User.UserId = Guid.NewGuid();
+        r.Staff.IsAssignedAsync(default, default, default).ReturnsForAnyArgs(true);
+        r.Moves.Add(new() { ContractId = c.Id, Status = MoveOutStatus.Approved, ProposedDate = Today });
+        r.Repo.FinalReadingsAsync(c.Id, c.RoomId, Today, default).Returns(Array.Empty<HandoverReading>());
+        var photo = new ContractInspectionEvidence { ContractId = c.Id, UploadedByUserId = r.User.UserId.Value };
+        r.Repo.InspectionEvidenceAsync(c.Id, default).Returns(new[] { photo });
+        r.Repo.InTransactionAsync(default, default(Func<Task<MoveOutInspectionDraftView>>)!, default)
+            .ReturnsForAnyArgs(call => call.Arg<Func<Task<MoveOutInspectionDraftView>>>()());
+        r.Handovers.ReplaceMoveOutInspectionDraftAsync(default, default, default!, default)
+            .ReturnsForAnyArgs(true);
+        var input = new MoveOutInspectionDraftWrite(0, RoomCondition: notes, EvidenceIds: withPhoto ? [photo.Id] : []);
+        if (expectedError is not null)
+        {
+            var error = await Assert.ThrowsAsync<ContractException>(() =>
+                r.Service.SaveMoveOutInspectionDraftAsync(c.Id, input, Guid.NewGuid(), default));
+            Assert.Equal(expectedError, error.Code);
+            await r.Handovers.DidNotReceiveWithAnyArgs().ReplaceMoveOutInspectionDraftAsync(default, default, default!, default);
+        }
+        else
+        {
+            var saved = await r.Service.SaveMoveOutInspectionDraftAsync(c.Id, input, Guid.NewGuid(), default);
+            Assert.Equal("", saved.RoomCondition);
+            Assert.Equal(photo.Id, Assert.Single(saved.EvidenceIds));
+        }
+    }
+
+    [Theory]
     [InlineData(0)]
     [InlineData(30)]
     [InlineData(45)]

@@ -1,7 +1,7 @@
 // @vitest-environment jsdom
 import React, { useEffect } from 'react';
 import { afterEach, beforeEach, expect, it, vi } from 'vitest';
-import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import { roomHandoverChecks } from '../services/moveInHandover';
 import { businessToday } from '../../../../packages/client-core/src/contracts';
 
@@ -142,7 +142,9 @@ vi.mock('react-native', () => ({
     source: { uri: string };
     accessibilityLabel: string;
   }) => <img src={source.uri} alt={accessibilityLabel} />,
-  View: ({ children }: Children) => <div>{children}</div>,
+  View: ({ children, testID }: Children & { testID?: string }) => (
+    <div data-testid={testID}>{children}</div>
+  ),
   KeyboardAvoidingView: ({ children }: Children) => <div>{children}</div>,
   ScrollView: ({ children }: Children) => <div>{children}</div>,
   Modal: ({ children, visible }: Children & { visible: boolean }) =>
@@ -286,6 +288,7 @@ vi.mock('../components/CameraCapture', () => ({
   ),
 }));
 vi.mock('../app/meter', () => ({
+  MeterProcessingOverlay: () => <div data-testid="meter-processing-overlay">Đang xử lý…</div>,
   MeterTaskScreen: ({
     taskId,
     embedded,
@@ -325,18 +328,24 @@ vi.mock('../components/WorkflowControls', () => ({
     value,
     onChange,
     disabled,
+    error,
   }: {
     label: string;
     value: string;
     onChange: (s: string) => void;
     disabled?: boolean;
+    error?: string;
   }) => (
-    <input
-      aria-label={label}
-      value={value}
-      disabled={disabled}
-      onChange={(event) => onChange(event.target.value)}
-    />
+    <div>
+      <input
+        aria-label={label}
+        aria-invalid={!!error}
+        value={value}
+        disabled={disabled}
+        onChange={(event) => onChange(event.target.value)}
+      />
+      {error && <span role="alert">{error}</span>}
+    </div>
   ),
   ChoiceField: ({
     label,
@@ -857,9 +866,13 @@ it('requires photo evidence but not notes for a room issue', async () => {
   await screen.findByText('4 phần kiểm tra trả phòng');
   fireEvent.click(screen.getByRole('button', { name: /2\. Hiện trạng phòng/ }));
   fireEvent.click(screen.getByRole('button', { name: label }));
-  fireEvent.click(screen.getByRole('button', { name: 'Có vấn đề' }));
   fireEvent.click(screen.getByText('Lưu tiến độ'));
-  expect(await screen.findByText(/Chụp ít nhất một ảnh/)).toBeTruthy();
+  const statusField = within(screen.getByTestId('move-out-status-field'));
+  const photoField = within(screen.getByTestId('move-out-photo-field'));
+  expect(await statusField.findByText(/Hãy chọn kết quả kiểm tra/)).toBeTruthy();
+  fireEvent.click(screen.getByRole('button', { name: 'Có vấn đề' }));
+  expect(statusField.queryByText(/Hãy chọn kết quả kiểm tra/)).toBeNull();
+  expect(await photoField.findByText(/Chụp ít nhất một ảnh/)).toBeTruthy();
   fireEvent.click(screen.getByText('Chụp ảnh'));
   await screen.findByRole('img', { name: 'Ảnh minh chứng 1' });
   await saveCurrentItem();
@@ -901,10 +914,16 @@ it('compares opening asset quantity with actual count, requiring matching condit
   fireEvent.change(screen.getByLabelText('Số lượng lúc trả'), { target: { value: '1' } });
   fireEvent.click(screen.getByRole('button', { name: 'Đủ' }));
   fireEvent.click(screen.getByText('Lưu tiến độ'));
-  expect(await screen.findByText(/Tài sản Đạt phải đủ 2/)).toBeTruthy();
+  const quantityField = within(screen.getByLabelText('Số lượng lúc trả').parentElement!);
+  expect(await quantityField.findByText(/Tài sản Đạt phải đủ 2/)).toBeTruthy();
   fireEvent.click(screen.getByRole('button', { name: 'Thiếu' }));
   fireEvent.click(screen.getByText('Lưu tiến độ'));
-  expect(await screen.findByText(/Chụp ít nhất một ảnh tài sản/)).toBeTruthy();
+  expect(quantityField.queryByText(/Tài sản Đạt phải đủ 2/)).toBeNull();
+  expect(
+    await within(screen.getByTestId('move-out-photo-field')).findByText(
+      /Chụp ít nhất một ảnh tài sản/,
+    ),
+  ).toBeTruthy();
   fireEvent.change(screen.getByLabelText('Ghi chú (không bắt buộc)'), {
     target: { value: 'Thiếu một giường so với khi nhận' },
   });
@@ -980,12 +999,18 @@ it('records four factual sections and submits authenticated versioned inspection
   fireEvent.click(screen.getByRole('button', { name: /2\. Hiện trạng phòng/ }));
   fireEvent.click(screen.getByRole('button', { name: 'Hiện trạng chung' }));
   fireEvent.click(screen.getByText('Lưu tiến độ'));
+  expect(screen.getByLabelText('Ghi chú (không bắt buộc)').getAttribute('aria-invalid')).toBe(
+    'false',
+  );
   expect(
-    await screen.findByText(/Nhập ghi chú và chụp ít nhất một ảnh hiện trạng chung/),
+    await within(screen.getByTestId('move-out-photo-field')).findByText(
+      'Chụp ít nhất một ảnh hiện trạng chung.',
+    ),
   ).toBeTruthy();
-  fireEvent.change(screen.getByLabelText('Ghi chú'), { target: { value: 'Phòng sạch khi trả' } });
   await captureCurrentPhoto();
   await saveCurrentItem();
+  expect(state.draft?.roomCondition).toBe('');
+  expect(state.draft?.evidenceIds).toHaveLength(1);
   expect(screen.queryByText('Xác nhận hoàn thành')).toBeNull();
   for (const { label } of roomHandoverChecks) {
     fireEvent.click(screen.getByRole('button', { name: label }));
@@ -1012,7 +1037,12 @@ it('records four factual sections and submits authenticated versioned inspection
     target: { value: '2' },
   });
   fireEvent.click(screen.getByText('Lưu tiến độ'));
-  expect(await screen.findByText(/Nhập số chìa khóa đã nhận và chụp ít nhất một ảnh/)).toBeTruthy();
+  expect(
+    await within(screen.getByTestId('move-out-photo-field')).findByText(
+      'Chụp ít nhất một ảnh chìa khóa.',
+    ),
+  ).toBeTruthy();
+  expect(screen.getByLabelText('Số chìa khóa lúc trả').getAttribute('aria-invalid')).toBe('false');
   fireEvent.click(screen.getByText('Chụp ảnh'));
   await screen.findByRole('img', { name: 'Ảnh minh chứng 1' });
   await saveCurrentItem();
@@ -1037,7 +1067,7 @@ it('records four factual sections and submits authenticated versioned inspection
     waterReadingId: '88888888-8888-4888-8888-888888888888',
     accessItems: [{ type: 'RoomKey', quantity: 2, notes: '' }],
   });
-  expect(body.roomCondition).toBe('Phòng sạch khi trả');
+  expect(body.roomCondition).toBe('');
   expect(body.roomChecks).toHaveLength(7);
   expect(body.roomChecks.every((item: { status: string }) => item.status === 'Passed')).toBe(true);
   expect(body.assets[0]).toMatchObject({

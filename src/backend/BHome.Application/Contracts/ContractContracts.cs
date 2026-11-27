@@ -272,7 +272,9 @@ public interface IContractRepository
     Task<HandoverReading?> ConfirmedFinalInspectionReadingAsync(Guid contractId, Guid roomId, Guid readingId, CancellationToken t);
     Task<IReadOnlyList<MoveOutAssignment>> AssignmentsAsync(Guid staffId, DateOnly today, CancellationToken t);
     Task<OwnerMoveOutInboxPage> OwnerMoveOutInboxAsync(int page, int pageSize,
-        Guid? locationId, MoveOutStatus? status, string? room, CancellationToken t);
+        Guid? locationId, MoveOutStatus? status, string? room, CancellationToken t,
+        Guid? roomId = null, string? stage = null);
+    Task<IReadOnlyList<ContractChoice>> MoveOutInboxRoomsAsync(Guid locationId, CancellationToken t);
     Task<decimal> DepositTotalAsync(Guid contractId, CancellationToken t);
     Task<DepositVerification?> BankReferenceAsync(string reference, CancellationToken t);
     Task<ResolvedPrices> ResolvePricesAsync(Guid roomId, DateOnly effectiveOn, CancellationToken t);

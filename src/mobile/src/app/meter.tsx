@@ -206,24 +206,7 @@ function RoomMeterScreen({ taskId, staffLocationId }: { taskId: string; staffLoc
                 />
               </ScrollView>
             </View>
-            {modalBusy && (
-              <View
-                style={meterModalStyles.processingOverlay}
-                testID="periodic-meter-processing-overlay"
-                accessibilityViewIsModal
-              >
-                <View style={meterModalStyles.processingCard}>
-                  <ActivityIndicator
-                    size="large"
-                    color={c.primary}
-                    accessibilityLabel="Đang xử lý chỉ số"
-                  />
-                  <Text variant="titleMedium" accessibilityLiveRegion="polite">
-                    Đang xử lý…
-                  </Text>
-                </View>
-              </View>
-            )}
+            {modalBusy && <MeterProcessingOverlay testID="periodic-meter-processing-overlay" />}
           </KeyboardAvoidingView>
         </Modal>
       )}
@@ -280,6 +263,23 @@ const meterModalStyles = StyleSheet.create({
     gap: 12,
   },
 });
+
+export function MeterProcessingOverlay({
+  testID = 'meter-processing-overlay',
+}: {
+  testID?: string;
+}) {
+  return (
+    <View style={meterModalStyles.processingOverlay} testID={testID} accessibilityViewIsModal>
+      <View style={meterModalStyles.processingCard}>
+        <ActivityIndicator size="large" color={c.primary} accessibilityLabel="Đang xử lý chỉ số" />
+        <Text variant="titleMedium" accessibilityLiveRegion="polite">
+          Đang xử lý…
+        </Text>
+      </View>
+    </View>
+  );
+}
 
 export function MeterTaskScreen({
   taskId,

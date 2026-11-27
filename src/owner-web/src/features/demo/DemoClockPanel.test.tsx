@@ -111,70 +111,48 @@ it('keeps the page mounted while expanding and minimizing the floating controls'
   expect(mocks.request).toHaveBeenCalledTimes(1);
 });
 
-it('creates a test contract only in the selected vacant room and retries with the same key', async () => {
-  const mutations: RequestInit[] = [];
-  mocks.request.mockImplementation(async (path: string, init?: RequestInit) => {
-    if (path === '/api/v1/demo-clock') return { ...clock, canChange: true };
-    if (path === '/api/v1/capture/locations') return [{ id: 'location', label: 'Cơ sở A' }];
-    if (path === '/api/v1/capture/locations/location/rooms')
-      return [
-        { id: 'free', label: 'P.101', status: 'Available' },
-        { id: 'taken', label: 'P.102', status: 'Occupied' },
-        { id: 'pending', label: 'P.103', status: 'Available', waitingForOwnerSignature: true },
-      ];
-    if (path === '/api/v1/development/onboarding-seed' && init) {
-      mutations.push(init);
-      if (mutations.length === 1) throw new ApiError(0);
-      return {
-        contractId: 'contract',
-        roomId: 'free',
-        locationName: 'Cơ sở A',
-        roomNumber: 'P.101',
-        tenantEmail: 'synthetic@example.invalid',
-        tenantPassword: 'test-password',
-        tenantName: 'Tenant test',
-      };
-    }
-    throw new Error('Unexpected route');
-  });
+it('does not expose test contract creation even for the designated Owner', async () => {
+  mocks.request.mockResolvedValue({ ...clock, canChange: true });
   mount('Production');
-  fireEvent.click(await screen.findByRole('button', { name: 'Tạo HĐ test' }));
-  await waitFor(() =>
-    expect(screen.getByRole('combobox', { name: 'Cơ sở' })).not.toHaveAttribute(
-      'aria-disabled',
-      'true',
-    ),
-  );
-  fireEvent.mouseDown(screen.getByRole('combobox', { name: 'Cơ sở' }));
-  fireEvent.click(await screen.findByRole('option', { name: 'Cơ sở A' }));
-  await waitFor(() =>
-    expect(screen.getByRole('combobox', { name: 'Phòng trống' })).not.toHaveAttribute(
-      'aria-disabled',
-      'true',
-    ),
-  );
-  fireEvent.mouseDown(screen.getByRole('combobox', { name: 'Phòng trống' }));
-  expect(await screen.findByRole('option', { name: 'P.101' })).toBeInTheDocument();
-  expect(screen.queryByRole('option', { name: 'P.102' })).not.toBeInTheDocument();
-  expect(screen.queryByRole('option', { name: 'P.103' })).not.toBeInTheDocument();
-  fireEvent.click(screen.getByRole('option', { name: 'P.101' }));
-  fireEvent.click(screen.getByRole('button', { name: 'Tạo hợp đồng test' }));
-  await waitFor(() => expect(mutations).toHaveLength(1));
-  await waitFor(() =>
-    expect(screen.getByRole('button', { name: 'Tạo hợp đồng test' })).toBeEnabled(),
-  );
-  fireEvent.click(screen.getByRole('button', { name: 'Tạo hợp đồng test' }));
-  expect(
-    await screen.findByText('Đã tạo hợp đồng và nhiệm vụ bàn giao phòng.'),
-  ).toBeInTheDocument();
-  expect(mutations).toHaveLength(2);
-  expect(mutations[0]?.headers).toEqual(mutations[1]?.headers);
-  expect(mutations[1]?.body).toBe(
-    JSON.stringify({ locationId: 'location', roomId: 'free', expectedBusinessDate: '2026-11-24' }),
-  );
-  expect(screen.getByDisplayValue('synthetic@example.invalid')).toBeInTheDocument();
+  await screen.findByText('Workspace content');
+  expect(screen.queryByRole('button', { name: 'Tạo HĐ test' })).not.toBeInTheDocument();
+  expect(mocks.request).toHaveBeenCalledTimes(1);
 });
 
+it('drags the floating clock within the viewport without opening it and still opens on click', async () => {
+  mocks.request.mockResolvedValue({ ...clock, canChange: true });
+  mount();
+  await screen.findByText('Workspace content');
+  const toggle = screen.getByRole('button', { name: 'Mở Demo Clock' });
+  const floating = toggle.parentElement!.parentElement!;
+  vi.spyOn(floating, 'getBoundingClientRect').mockReturnValue({
+    x: 700,
+    y: 700,
+    left: 700,
+    top: 700,
+    right: 1000,
+    bottom: 744,
+    width: 300,
+    height: 44,
+    toJSON: () => ({}),
+  });
+  const pointer = (type: string, x: number, y: number) => {
+    const event = new MouseEvent(type, { bubbles: true, button: 0, clientX: x, clientY: y });
+    Object.defineProperty(event, 'pointerId', { value: 1 });
+    fireEvent(toggle, event);
+  };
+  pointer('pointerdown', 850, 720);
+  pointer('pointermove', 650, 520);
+  pointer('pointerup', 650, 520);
+  fireEvent.click(toggle, { detail: 1 });
+  expect(getComputedStyle(floating).right).toBe(window.innerWidth - 1000 + 200 + 'px');
+  expect(getComputedStyle(floating).bottom).toBe(window.innerHeight - 744 + 200 + 'px');
+  expect(toggle).toHaveAttribute('aria-expanded', 'false');
+  pointer('pointerdown', 650, 520);
+  pointer('pointerup', 650, 520);
+  fireEvent.click(toggle, { detail: 1 });
+  expect(screen.getByRole('region', { name: 'Điều khiển Demo Clock' })).toBeInTheDocument();
+});
 it('displays the real and business times and applies an exact time without an automation switch', async () => {
   const original = {
     ...clock,

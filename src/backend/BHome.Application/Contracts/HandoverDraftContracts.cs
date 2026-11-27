@@ -135,8 +135,9 @@ public sealed record HandoverDraftTenantSessionSign(int Version, bool Consent,
 
 public interface IHandoverDraftRepository
 {
+    Task<IReadOnlyList<ContractChoice>> RoomsAsync(Guid locationId, CancellationToken token);
     Task<HandoverInboxPage> ListAsync(int page, int pageSize, Guid? locationId,
-        string? status, string roomSearch, CancellationToken token);
+        string? status, string roomSearch, CancellationToken token, Guid? roomId = null, string? stage = null);
     Task<HandoverDraftState?> GetAsync(Guid contractId, CancellationToken token);
     Task<bool> ReplaceAsync(Guid contractId, int previousVersion, HandoverDraftState next,
         CancellationToken token);

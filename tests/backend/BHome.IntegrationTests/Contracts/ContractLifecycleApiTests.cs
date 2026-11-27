@@ -662,6 +662,7 @@ public sealed partial class ContractLifecycleApiTests(ContractFixture fixture) :
         using var development = fixture.Factory.WithWebHostBuilder(builder =>
         {
             builder.UseEnvironment("Development");
+            builder.ConfigureTestServices(services => services.AddScoped<DevelopmentOnboardingSeedService>());
             builder.ConfigureAppConfiguration((_, config) =>
                 config.AddInMemoryCollection(new Dictionary<string, string?>
                 {
@@ -1215,7 +1216,7 @@ public sealed partial class ContractLifecycleApiTests(ContractFixture fixture) :
             (await w.Tenant.Client.GetAsync($"/api/v1/capture/readings/{electricity}/evidence")).StatusCode);
         var inspectedRooms = await PassedMoveOutRoomChecks(w.Staff, id, "cleanliness");
         var inspect = new InspectionInput(electricity, water, "Synthetic room and asset condition", [evidence],
-            [], "Synthetic final room", "Synthetic returned keys", InventoryToken: preparation.Inventory?.StateToken,
+            [], "", "Synthetic returned keys", InventoryToken: preparation.Inventory?.StateToken,
             RoomChecks: inspectedRooms, AccessItems: [new HandoverAccessItem("RoomKey", 0, "")],
             KeyEvidenceIds: [await MoveOutPhoto(w.Staff, id)]);
         if (moveOutTask is not null)
@@ -1235,7 +1236,9 @@ public sealed partial class ContractLifecycleApiTests(ContractFixture fixture) :
             Assert.Equal(1, saved.Version);
             Assert.Equal(electricity, saved.ElectricityReadingId);
             Assert.Contains(evidence, saved.EvidenceIds);
+            Assert.Equal("", saved.RoomCondition);
         }
+        Assert.Equal(HttpStatusCode.BadRequest, (await Post(w.Staff, Path(id, "move-out/inspection"), inspect with { EvidenceIds = [] })).StatusCode);
         Assert.Equal(HttpStatusCode.Conflict, (await Post(w.Staff, Path(id, "move-out/inspection"), inspect with { WaterReadingId = electricity })).StatusCode);
         await Success<MoveOutView>(await Post(w.Staff, Path(id, "move-out/inspection"), inspect));
         foreach (var path in new[] { electricityPhotoPath, waterPhotoPath })

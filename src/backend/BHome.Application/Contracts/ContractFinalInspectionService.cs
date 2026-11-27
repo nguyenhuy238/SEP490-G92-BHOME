@@ -260,8 +260,6 @@ public sealed partial class ContractService
             throw ContractException.Invalid("invalid_move_out_key_evidence");
         if (keyEvidence.Length == 0)
             throw ContractException.Invalid("key_evidence_required");
-        if (string.IsNullOrWhiteSpace(x.RoomCondition))
-            throw ContractException.Invalid("room_summary_required");
         var inventory = handoverInventory is null ? null : await handoverInventory.PrepareAsync(c.RoomId, t);
         if (inventory is not null && inventory.StateToken != x.InventoryToken) throw ContractException.Conflict("handover_asset_inventory_changed");
         if (inventory is { Groups.Length: 0, NoAssetsConfirmed: false }) throw ContractException.Conflict("owner_no_assets_confirmation_required");
@@ -338,7 +336,7 @@ public sealed partial class ContractService
         var hashes = verified.Where(item => item.PhotoId is not null)
             .ToDictionary(item => item.PhotoId!.Value, item => item.Hash);
         foreach (var item in photosToLink) item.IsLinked = true;
-        var roomCondition = HandoverText(x.RoomCondition, 2000);
+        var roomCondition = HandoverText(x.RoomCondition, 2000, false);
         var keysAndAccess = string.IsNullOrWhiteSpace(x.KeysAndAccess)
             ? $"Đã nhận lại {accessItems[0].Quantity} chìa khóa phòng."
             : HandoverText(x.KeysAndAccess, 2000);

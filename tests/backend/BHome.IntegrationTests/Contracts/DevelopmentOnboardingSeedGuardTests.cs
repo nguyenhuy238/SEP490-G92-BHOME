@@ -50,6 +50,7 @@ public sealed class DevelopmentOnboardingSeedGuardTests
     [Fact]
     public void DevelopmentSeedIsOwnerOnlyAndDoesNotExposeDatabaseToController()
     {
+        Assert.DoesNotContain(typeof(Program).Assembly.GetTypes(), type => type.Name == nameof(DevelopmentOnboardingSeedController));
         var authorization = Assert.Single(typeof(DevelopmentOnboardingSeedController)
             .GetCustomAttributes(typeof(AuthorizeAttribute), true).Cast<AuthorizeAttribute>());
         Assert.Equal(Roles.Owner, authorization.Roles);

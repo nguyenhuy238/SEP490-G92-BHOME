@@ -7,11 +7,16 @@ import HandoversPage from './pages/HandoversPage';
 const mocks = vi.hoisted(() => ({
   transport: vi.fn(),
   locations: vi.fn(),
+  rooms: vi.fn(),
   action: vi.fn(),
 }));
 
 vi.mock('../contracts/useContractsApi', () => ({
-  useContractsApi: () => ({ transport: mocks.transport, locations: mocks.locations }),
+  useContractsApi: () => ({
+    transport: mocks.transport,
+    locations: mocks.locations,
+    rooms: mocks.rooms,
+  }),
 }));
 vi.mock('../contracts/OwnerHandoverDraftPanel', () => ({
   OwnerHandoverDraftPanel: ({
@@ -78,24 +83,39 @@ function mount(path = '/handovers') {
 }
 
 beforeEach(() => {
-  mocks.transport.mockReset().mockImplementation(async () => ({
-    items: entries,
-    page: 1,
-    pageSize: 20,
-    totalCount: entries.length,
-  }));
-  mocks.locations.mockReset().mockResolvedValue([{ id: 'location-1', label: 'Cơ sở Trường Vũ' }]);
+  mocks.transport.mockReset().mockImplementation(async (path: string) => {
+    if (path.startsWith('/api/v1/contracts/handovers/rooms?'))
+      return path.includes('location-1')
+        ? [{ id: 'room-2', label: 'P.102' }]
+        : [{ id: 'room-3', label: 'P.201' }];
+    return { items: entries, page: 1, pageSize: 10, totalCount: entries.length };
+  });
+  mocks.locations.mockReset().mockResolvedValue([
+    { id: 'location-1', label: 'Cơ sở Trường Vũ' },
+    { id: 'location-2', label: 'Cơ sở khác' },
+  ]);
+  mocks.rooms
+    .mockReset()
+    .mockImplementation(async (location: string) =>
+      location === 'location-1'
+        ? [{ id: 'room-2', label: 'P.102' }]
+        : [{ id: 'room-3', label: 'P.201' }],
+    );
   mocks.action.mockReset();
 });
 
 it('loads move-in handover list immediately, opens a compact right Drawer, and keeps contract deep link', async () => {
   mount();
   expect(await screen.findByText('2 biên bản phù hợp')).toBeInTheDocument();
+  expect(screen.getByRole('group', { name: 'Bộ lọc' })).toContainElement(
+    screen.getByRole('button', { name: 'Tải lại' }),
+  );
+  expect(screen.getByText('Trang 1 / 1')).toBeInTheDocument();
   expect(screen.getByRole('table', { name: 'Danh sách biên bản bàn giao' })).toBeInTheDocument();
   expect(screen.getAllByText('Phòng P.101').length).toBeGreaterThan(0);
   expect(screen.getAllByText('Phòng P.102').length).toBeGreaterThan(0);
   expect(screen.getAllByText(/Kỳ thuê từ 19\/11\/2026/).length).toBeGreaterThan(0);
-  expect(mocks.transport).toHaveBeenCalledWith('/api/v1/contracts/handovers?page=1&pageSize=20', {
+  expect(mocks.transport).toHaveBeenCalledWith('/api/v1/contracts/handovers?page=1&pageSize=10', {
     signal: expect.any(AbortSignal),
   });
 
@@ -110,7 +130,7 @@ it('shows a handover task to Owner before Staff has completed any draft', async 
   mocks.transport.mockResolvedValue({
     items: [{ ...entries[0], status: 'Draft', staffSubmittedAt: null }],
     page: 1,
-    pageSize: 20,
+    pageSize: 10,
     totalCount: 1,
   });
   mount();
@@ -137,7 +157,7 @@ it('shows confirmed handovers as green success instead of neutral gray', async (
     status: 'Confirmed',
     tenantConfirmedAt: '2026-11-21T09:00:00Z',
   };
-  mocks.transport.mockResolvedValue({ items: [confirmed], page: 1, pageSize: 20, totalCount: 1 });
+  mocks.transport.mockResolvedValue({ items: [confirmed], page: 1, pageSize: 10, totalCount: 1 });
   mount();
   expect(await screen.findByText('1 biên bản phù hợp')).toBeInTheDocument();
   expect(screen.getAllByText('Hoàn tất')).toHaveLength(2);
@@ -150,11 +170,12 @@ it('filters status, location and room on the backend instead of filtering only o
   mount();
   await screen.findByText('2 biên bản phù hợp');
 
+  expect(screen.getByRole('combobox', { name: 'Phòng' })).toHaveAttribute('aria-disabled', 'true');
   fireEvent.mouseDown(screen.getByRole('combobox', { name: 'Trạng thái biên bản' }));
-  fireEvent.click(screen.getByRole('option', { name: 'Chờ chủ trọ duyệt' }));
+  fireEvent.click(screen.getByRole('option', { name: 'Chờ chủ trọ xử lý' }));
   await waitFor(() =>
     expect(mocks.transport).toHaveBeenCalledWith(
-      '/api/v1/contracts/handovers?page=1&pageSize=20&status=PendingOwnerReview',
+      '/api/v1/contracts/handovers?page=1&pageSize=10&stage=Owner',
       { signal: expect.any(AbortSignal) },
     ),
   );
@@ -163,20 +184,48 @@ it('filters status, location and room on the backend instead of filtering only o
   fireEvent.click(screen.getByRole('option', { name: 'Cơ sở Trường Vũ' }));
   await waitFor(() =>
     expect(mocks.transport).toHaveBeenCalledWith(
-      '/api/v1/contracts/handovers?page=1&pageSize=20&locationId=location-1&status=PendingOwnerReview',
+      '/api/v1/contracts/handovers?page=1&pageSize=10&locationId=location-1&stage=Owner',
       { signal: expect.any(AbortSignal) },
     ),
   );
 
-  fireEvent.change(screen.getByRole('textbox', { name: 'Tìm phòng' }), {
-    target: { value: 'P.102' },
-  });
+  await waitFor(() =>
+    expect(screen.getByRole('combobox', { name: 'Phòng' })).not.toHaveAttribute(
+      'aria-disabled',
+      'true',
+    ),
+  );
+  fireEvent.mouseDown(screen.getByRole('combobox', { name: 'Phòng' }));
+  expect(screen.queryByRole('option', { name: 'P.101' })).not.toBeInTheDocument();
+  expect(mocks.transport).toHaveBeenCalledWith(
+    '/api/v1/contracts/handovers/rooms?locationId=location-1',
+    { signal: expect.any(AbortSignal) },
+  );
+  expect(mocks.rooms).not.toHaveBeenCalled();
+  fireEvent.click(screen.getByRole('option', { name: 'P.102' }));
   await waitFor(() =>
     expect(mocks.transport).toHaveBeenCalledWith(
-      '/api/v1/contracts/handovers?page=1&pageSize=20&locationId=location-1&status=PendingOwnerReview&room=P.102',
+      '/api/v1/contracts/handovers?page=1&pageSize=10&locationId=location-1&stage=Owner&roomId=room-2',
       { signal: expect.any(AbortSignal) },
     ),
   );
+  fireEvent.mouseDown(screen.getByRole('combobox', { name: 'Cơ sở' }));
+  fireEvent.click(screen.getByRole('option', { name: 'Cơ sở khác' }));
+  await waitFor(() =>
+    expect(mocks.transport).toHaveBeenCalledWith(
+      '/api/v1/contracts/handovers?page=1&pageSize=10&locationId=location-2&stage=Owner',
+      { signal: expect.any(AbortSignal) },
+    ),
+  );
+  await waitFor(() =>
+    expect(screen.getByRole('combobox', { name: 'Phòng' })).not.toHaveAttribute(
+      'aria-disabled',
+      'true',
+    ),
+  );
+  fireEvent.mouseDown(screen.getByRole('combobox', { name: 'Phòng' }));
+  expect(screen.getByRole('option', { name: 'P.201' })).toBeInTheDocument();
+  expect(screen.queryByRole('option', { name: 'P.102' })).not.toBeInTheDocument();
 });
 
 it('supports deep-linked report without selecting a location or room, and refreshes the inbox after detail action', async () => {
@@ -198,22 +247,25 @@ it('paginates handovers from the server and resets to the first page for a chang
   mocks.transport.mockImplementation(async (path: string) => ({
     items: path.includes('page=2') ? [entries[1]] : [entries[0]],
     page: path.includes('page=2') ? 2 : 1,
-    pageSize: 20,
-    totalCount: 21,
+    pageSize: 10,
+    totalCount: 15,
   }));
   mount();
-  expect(await screen.findByText('21 biên bản phù hợp')).toBeInTheDocument();
+  expect(await screen.findByText('15 biên bản phù hợp')).toBeInTheDocument();
+  expect(screen.getByText('Trang 1 / 2')).toBeInTheDocument();
   fireEvent.click(screen.getByRole('button', { name: 'Go to page 2' }));
   await waitFor(() =>
-    expect(mocks.transport).toHaveBeenCalledWith('/api/v1/contracts/handovers?page=2&pageSize=20', {
+    expect(mocks.transport).toHaveBeenCalledWith('/api/v1/contracts/handovers?page=2&pageSize=10', {
       signal: expect.any(AbortSignal),
     }),
   );
+  expect(await screen.findByText('Trang 2 / 2')).toBeInTheDocument();
+  expect(screen.getAllByText('Phòng P.102').length).toBeGreaterThan(0);
   fireEvent.mouseDown(screen.getByRole('combobox', { name: 'Trạng thái biên bản' }));
-  fireEvent.click(screen.getByRole('option', { name: 'Chờ chủ trọ duyệt' }));
+  fireEvent.click(screen.getByRole('option', { name: 'Chờ chủ trọ xử lý' }));
   await waitFor(() =>
     expect(mocks.transport).toHaveBeenCalledWith(
-      '/api/v1/contracts/handovers?page=1&pageSize=20&status=PendingOwnerReview',
+      '/api/v1/contracts/handovers?page=1&pageSize=10&stage=Owner',
       { signal: expect.any(AbortSignal) },
     ),
   );

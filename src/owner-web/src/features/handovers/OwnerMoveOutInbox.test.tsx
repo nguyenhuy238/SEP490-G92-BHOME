@@ -7,10 +7,15 @@ import { OwnerMoveOutInbox } from './OwnerMoveOutInbox';
 const mocks = vi.hoisted(() => ({
   transport: vi.fn(),
   locations: vi.fn(),
+  rooms: vi.fn(),
 }));
 
 vi.mock('../contracts/useContractsApi', () => ({
-  useContractsApi: () => ({ transport: mocks.transport, locations: mocks.locations }),
+  useContractsApi: () => ({
+    transport: mocks.transport,
+    locations: mocks.locations,
+    rooms: mocks.rooms,
+  }),
 }));
 vi.mock('./OwnerMoveOutReviewPanel', () => ({
   OwnerMoveOutReviewPanel: ({ id }: { id: string }) => <div>Kết quả kiểm kê {id}</div>,
@@ -45,17 +50,22 @@ beforeEach(() => {
       },
     ],
     page: 1,
-    pageSize: 20,
+    pageSize: 10,
     totalCount: 1,
   });
   mocks.locations.mockReset().mockResolvedValue([{ id: 'location-1', label: 'Trường Vũ' }]);
+  mocks.rooms.mockReset().mockResolvedValue([{ id: 'room-1', label: 'P.101' }]);
 });
 
 it('loads the authorized MoveOut queue, opens its detail and preserves the contract link', async () => {
   mount();
   expect(await screen.findByText('1 yêu cầu trả phòng phù hợp')).toBeInTheDocument();
+  expect(screen.getByRole('group', { name: 'Bộ lọc' })).toContainElement(
+    screen.getByRole('button', { name: 'Tải lại' }),
+  );
+  expect(screen.getByText('Trang 1 / 1')).toBeInTheDocument();
   expect(mocks.transport).toHaveBeenCalledWith(
-    '/api/v1/contracts/move-out-inbox?page=1&pageSize=20',
+    '/api/v1/contracts/move-out-inbox?page=1&pageSize=10',
     { signal: expect.any(AbortSignal) },
   );
   expect((await screen.findAllByText('Chờ chủ trọ gửi phí')).length).toBeGreaterThan(0);
@@ -90,7 +100,7 @@ it.each([
         },
       ],
       page: 1,
-      pageSize: 20,
+      pageSize: 10,
       totalCount: 1,
     });
     mount();
@@ -112,7 +122,7 @@ it('opens the drawer from an actionable request instead of labeling it as inspec
       },
     ],
     page: 1,
-    pageSize: 20,
+    pageSize: 10,
     totalCount: 1,
   });
   mount();
@@ -135,7 +145,7 @@ it('recovers the accepted fee status from the existing proposal API while the in
       },
     ],
     page: 1,
-    pageSize: 20,
+    pageSize: 10,
     totalCount: 1,
   };
   mocks.transport.mockImplementation(async (path: string) =>
@@ -169,13 +179,19 @@ it('opens an authorized contract deep link even when that contract is outside th
 });
 
 it('filters the server-side queue by location/status and exposes location-load failure', async () => {
+  const defaultPage = await mocks.transport();
+  mocks.transport.mockImplementation(async (path: string) =>
+    path.startsWith('/api/v1/contracts/move-out-inbox/rooms?')
+      ? [{ id: 'room-1', label: 'P.101' }]
+      : defaultPage,
+  );
   mount();
   await screen.findByText('1 yêu cầu trả phòng phù hợp');
   fireEvent.mouseDown(screen.getByRole('combobox', { name: 'Trạng thái trả phòng' }));
-  fireEvent.click(screen.getByRole('option', { name: 'Đã có kết quả nhân viên' }));
+  fireEvent.click(screen.getByRole('option', { name: 'Chờ chủ trọ xử lý' }));
   await waitFor(() =>
     expect(mocks.transport).toHaveBeenCalledWith(
-      '/api/v1/contracts/move-out-inbox?page=1&pageSize=20&status=Inspected',
+      '/api/v1/contracts/move-out-inbox?page=1&pageSize=10&stage=Owner',
       { signal: expect.any(AbortSignal) },
     ),
   );
@@ -183,10 +199,70 @@ it('filters the server-side queue by location/status and exposes location-load f
   fireEvent.click(screen.getByRole('option', { name: 'Trường Vũ' }));
   await waitFor(() =>
     expect(mocks.transport).toHaveBeenCalledWith(
-      '/api/v1/contracts/move-out-inbox?page=1&pageSize=20&locationId=location-1&status=Inspected',
+      '/api/v1/contracts/move-out-inbox?page=1&pageSize=10&locationId=location-1&stage=Owner',
       { signal: expect.any(AbortSignal) },
     ),
   );
+});
+
+it('paginates move-out records on the server and resets page when filtering', async () => {
+  mocks.transport.mockImplementation(async (path: string) => {
+    if (path.startsWith('/api/v1/contracts/move-out-inbox/rooms?'))
+      return [
+        { id: 'room-1', label: 'P.101' },
+        { id: 'room-2', label: 'P.102' },
+      ];
+    const page = path.includes('page=2') ? 2 : 1;
+    return {
+      items: [
+        {
+          contractId: `contract-${page}`,
+          roomNumber: `P.10${page}`,
+          locationId: 'location-1',
+          locationName: 'Cơ sở Trường Vũ',
+          proposedDate: '2026-11-30',
+          status: 'Inspected',
+          proposalStatus: null,
+        },
+      ],
+      page,
+      pageSize: 10,
+      totalCount: 15,
+    };
+  });
+  mount();
+  expect(await screen.findByText('Trang 1 / 2')).toBeInTheDocument();
+  fireEvent.click(screen.getByRole('button', { name: 'Go to page 2' }));
+  expect(await screen.findByText('Trang 2 / 2')).toBeInTheDocument();
+  expect(screen.getAllByText('Phòng P.102').length).toBeGreaterThan(0);
+  expect(mocks.transport).toHaveBeenCalledWith(
+    '/api/v1/contracts/move-out-inbox?page=2&pageSize=10',
+    { signal: expect.any(AbortSignal) },
+  );
+  fireEvent.mouseDown(screen.getByRole('combobox', { name: 'Cơ sở' }));
+  fireEvent.click(screen.getByRole('option', { name: 'Trường Vũ' }));
+  await waitFor(() =>
+    expect(screen.getByRole('combobox', { name: 'Phòng' })).not.toHaveAttribute(
+      'aria-disabled',
+      'true',
+    ),
+  );
+  fireEvent.mouseDown(screen.getByRole('combobox', { name: 'Phòng' }));
+  expect(screen.getByRole('option', { name: 'P.102' })).toBeInTheDocument();
+  expect(screen.queryByRole('option', { name: 'P.103' })).not.toBeInTheDocument();
+  expect(mocks.transport).toHaveBeenCalledWith(
+    '/api/v1/contracts/move-out-inbox/rooms?locationId=location-1',
+    { signal: expect.any(AbortSignal) },
+  );
+  expect(mocks.rooms).not.toHaveBeenCalled();
+  fireEvent.click(screen.getByRole('option', { name: 'P.101' }));
+  await waitFor(() =>
+    expect(mocks.transport).toHaveBeenCalledWith(
+      '/api/v1/contracts/move-out-inbox?page=1&pageSize=10&locationId=location-1&roomId=room-1',
+      { signal: expect.any(AbortSignal) },
+    ),
+  );
+  expect(await screen.findByText('Trang 1 / 2')).toBeInTheDocument();
 });
 
 it('explains failed location loading instead of silently hiding location filter options', async () => {

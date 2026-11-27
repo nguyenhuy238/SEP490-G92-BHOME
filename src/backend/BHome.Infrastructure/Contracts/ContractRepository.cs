@@ -17,11 +17,8 @@ using BHome.Application.Ocr;
 namespace BHome.Infrastructure.Contracts;
 
 internal sealed class ContractRepository(BHomePersistenceContext db, ILogger<ContractRepository> logger,
-    ISetupWorkspaceStore? setup = null, IContractHandoverRepository? handoverTasks = null, TimeProvider? clock = null, IIdentityProtection? identityProtection = null) : IContractRepository
+    ISetupWorkspaceStore? setup = null, IIdentityProtection? identityProtection = null) : IContractRepository
 {
-    // Sidecar Draft initialization is deliberately attached to persistence, not to
-    // any particular contract-creation API (direct draft, Holding conversion, etc.).
-    private readonly Dictionary<Guid, Contract> handoverDraftCandidates = new();
     private IQueryable<Guid> EligibleStaff(DateOnly date) => db is Compact24DbContext compact
         ? StaffEmploymentEligibility.EligibleIds(compact, date)
         : db.Users.Where(user => user.IsActive).Select(user => user.Id);
@@ -110,13 +107,69 @@ internal sealed class ContractRepository(BHomePersistenceContext db, ILogger<Con
            db.StaffLocationAssignments.Any(a => a.StaffUserId == staffId && a.LocationId == c.Room.LocationId && a.StartDate <= today && a.EndDate >= today)
          orderby m.ProposedDate, m.ContractId
          select new MoveOutAssignment(c.Id, c.RoomId, c.Room.RoomNumber, c.Room.Location.Name, m.Status.ToString(), m.ProposedDate, m.InspectionScheduledAt, m.Version)).Take(100).ToArrayAsync(t);
-    public async Task<OwnerMoveOutInboxPage> OwnerMoveOutInboxAsync(int page, int pageSize,
-        Guid? locationId, MoveOutStatus? status, string? room, CancellationToken t)
+    public async Task<IReadOnlyList<ContractChoice>> MoveOutInboxRoomsAsync(Guid locationId, CancellationToken t)
     {
-        var moves = db.Set<ContractMoveOut>().AsNoTracking().Where(move => move.Status != MoveOutStatus.AwaitingConsent);
+        var rows = await (from move in db.Set<ContractMoveOut>().AsNoTracking()
+                          join contract in db.Set<Contract>().AsNoTracking() on move.ContractId equals contract.Id
+                          where contract.Room.LocationId == locationId
+                          select new { contract.RoomId, contract.Room.RoomNumber })
+            .Distinct().OrderBy(room => room.RoomNumber).ThenBy(room => room.RoomId).ToArrayAsync(t);
+        return rows.Select(room => new ContractChoice(room.RoomId, room.RoomNumber)).ToArray();
+    }
+
+    public async Task<OwnerMoveOutInboxPage> OwnerMoveOutInboxAsync(int page, int pageSize,
+        Guid? locationId, MoveOutStatus? status, string? room, CancellationToken t,
+        Guid? roomId = null, string? stage = null)
+    {
+        var moves = db.Set<ContractMoveOut>().AsNoTracking().AsQueryable();
         if (status is { } state) moves = moves.Where(move => move.Status == state);
+        if (stage == "Staff") moves = moves.Where(move => move.Status == MoveOutStatus.Approved);
+        else if (stage == "Completed") moves = moves.Where(move => move.Status == MoveOutStatus.Completed);
+        else if (stage is "Owner" or "Tenant")
+        {
+            // Filter the same persisted proposal/feedback events used by the inbox
+            // before counting and paging, not just the currently displayed page.
+            var tenantPending = db.Set<Contract>().Where(c => false).Select(c => c.Id);
+            if (db is Compact24DbContext)
+                tenantPending = db.Database.SqlQuery<Guid>($"""
+                    SELECT c.id AS "Value"
+                    FROM contracts c
+                    JOIN LATERAL (
+                        SELECT entry.value FROM jsonb_array_elements(c.history) WITH ORDINALITY entry(value, position)
+                        WHERE entry.value->>'recordType'='MoveOutChargeProposalV1'
+                        ORDER BY entry.position DESC LIMIT 1
+                    ) proposal ON true
+                    LEFT JOIN LATERAL (
+                        SELECT entry.value FROM jsonb_array_elements(c.history) WITH ORDINALITY entry(value, position)
+                        WHERE entry.value->>'recordType'='MoveOutChargeProposalFeedbackV1'
+                          AND entry.value->'state'->>'proposalId'=proposal.value->'state'->>'id'
+                        ORDER BY entry.position DESC LIMIT 1
+                    ) feedback ON true
+                    LEFT JOIN LATERAL (
+                        SELECT entry.value FROM jsonb_array_elements(c.history) WITH ORDINALITY entry(value, position)
+                        WHERE entry.value->>'recordType'='MoveOutChargeProposalSettlementV1'
+                          AND entry.value->'state'->>'proposalId'=proposal.value->'state'->>'id'
+                          AND entry.value->'state'->>'feedbackId'=feedback.value->'state'->>'id'
+                        ORDER BY entry.position DESC LIMIT 1
+                    ) resolution ON true
+                    WHERE ({locationId}::uuid IS NULL OR EXISTS (SELECT 1 FROM rooms r WHERE r.id=c.room_id AND r.location_id={locationId}::uuid))
+                      AND ({roomId}::uuid IS NULL OR c.room_id={roomId}::uuid)
+                      AND (feedback.value IS NULL OR (feedback.value->'state'->>'confirmed'='true' AND (
+                          COALESCE(resolution.value->'state'->'settlement'->>'status', feedback.value->'state'->'settlement'->>'status')='Payable'
+                          OR (COALESCE(resolution.value->'state'->'settlement'->>'status', feedback.value->'state'->'settlement'->>'status')='RefundEligible'
+                              AND NOT EXISTS (SELECT 1 FROM refund_requests rr WHERE rr.source_deposit_contract_id=c.id AND rr.status IN ('REQUESTED','APPROVED','COMPLETED')))
+                      )))
+                    """);
+            if (stage == "Tenant")
+                moves = moves.Where(move => move.Status == MoveOutStatus.AwaitingConsent ||
+                    (move.Status == MoveOutStatus.Inspected || move.Status == MoveOutStatus.PendingSettlement) && tenantPending.Contains(move.ContractId));
+            else
+                moves = moves.Where(move => move.Status == MoveOutStatus.Requested || move.Status == MoveOutStatus.Settled ||
+                    (move.Status == MoveOutStatus.Inspected || move.Status == MoveOutStatus.PendingSettlement) && !tenantPending.Contains(move.ContractId));
+        }
         var contracts = db.Set<Contract>().AsNoTracking().AsQueryable();
         if (locationId is { } location) contracts = contracts.Where(c => c.Room.LocationId == location);
+        if (roomId is { } exactRoom) contracts = contracts.Where(c => c.RoomId == exactRoom);
         if (!string.IsNullOrWhiteSpace(room)) contracts = contracts.Where(c => EF.Functions.ILike(c.Room.RoomNumber, "%" + room + "%"));
         var query = from move in moves
                     join contract in contracts on move.ContractId equals contract.Id
@@ -201,7 +254,6 @@ internal sealed class ContractRepository(BHomePersistenceContext db, ILogger<Con
         // Order: payment ledger -> Location advisory -> Room row. Property and Invoice start at
         // Location and never acquire the ledger afterward. Re-read domain state only after locking.
         db.ChangeTracker.Clear();
-        handoverDraftCandidates.Clear();
         await using var transaction = await db.Database.BeginTransactionAsync(t);
         try
         {
@@ -214,20 +266,6 @@ internal sealed class ContractRepository(BHomePersistenceContext db, ILogger<Con
                 throw ContractException.Missing();
             var value = await work();
             await db.SaveChangesAsync(t);
-            if (db is BHome.Infrastructure.Persistence.Compact24.Compact24DbContext)
-                foreach (var c in handoverDraftCandidates.Values)
-                {
-                    // Creation and activation use the same room-cycle decision
-                    // under this transaction's Location/Room locks. The service
-                    // initializes preparation only for the canonical physical job.
-                    if (handoverTasks is not null)
-                    {
-                        var loaded = await FindAsync(c.Id, t) ?? throw ContractException.Missing();
-                        await handoverTasks.EnsureMoveInTaskAsync(loaded, c.OwnerSignerId,
-                            (clock ?? TimeProvider.System).BusinessUtcNow(), t);
-                    }
-                }
-            if (handoverDraftCandidates.Count != 0) await db.SaveChangesAsync(t);
             await transaction.CommitAsync(t); return value;
         }
         catch (DbUpdateConcurrencyException)
@@ -376,8 +414,6 @@ internal sealed class ContractRepository(BHomePersistenceContext db, ILogger<Con
     public void Add(object entity)
     {
         db.Add(entity);
-        if (entity is Contract { Kind: ContractKind.Main, PreviousContractId: null } c)
-            handoverDraftCandidates[c.Id] = c;
     }
     public async Task<IReadOnlyList<ContractOccupantView>> OccupantsAsync(Guid contractId, CancellationToken t)
     {

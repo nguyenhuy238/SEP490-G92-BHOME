@@ -1,10 +1,12 @@
 // @vitest-environment jsdom
 import React, { forwardRef, useEffect, useImperativeHandle, useMemo } from 'react';
 import { afterEach, beforeEach, expect, it, vi } from 'vitest';
-import { cleanup, fireEvent, render, screen } from '@testing-library/react';
+import { cleanup, fireEvent, render, screen, within, waitFor } from '@testing-library/react';
 import type { BottomTabBarProps } from 'expo-router/js-tabs';
 const state = vi.hoisted(() => ({
   push: vi.fn(),
+  locationRequest: vi.fn(),
+  locationsEnabled: false,
   navigate: vi.fn(),
   dismissTo: vi.fn(),
   segments: ['workspace', '[screen]'],
@@ -75,8 +77,10 @@ vi.mock('../features/workspace/WorkspaceScreenView', () => ({
     <div data-testid="screen-view">{screen}</div>
   ),
 }));
+const staffLocationApi = { request: state.locationRequest };
 vi.mock('../lib/SessionProvider', () => ({
   useSession: () => ({
+    api: state.locationsEnabled ? staffLocationApi : undefined,
     session: state.signedIn ? { userId: state.userId, roles: state.roles } : null,
   }),
 }));
@@ -226,10 +230,53 @@ beforeEach(() => {
   state.params = {};
   state.renderTabBar = false;
   state.viewportWidth = 390;
+  state.locationsEnabled = false;
   vi.clearAllMocks();
   state.canGoBack.mockReturnValue(false);
   state.navigation.isFocused.mockReturnValue(true);
 });
+function LocationContentProbe() {
+  const { staffLocationId } = useWorkspace();
+  return <span>Dữ liệu {staffLocationId}</span>;
+}
+it.each([
+  'staff-home',
+  'work-orders',
+  'meter-reading',
+  'staff-handovers',
+  'rooms',
+  'staff-incidents',
+  'profile',
+] as const)(
+  'opens the shared location modal from the brand header and keeps %s open',
+  async (page) => {
+    state.locationsEnabled = true;
+    state.locationRequest.mockResolvedValue([
+      { id: 'loc-a', label: 'Cơ sở A' },
+      { id: 'loc-b', label: 'Cơ sở B' },
+    ]);
+    render(
+      <WorkspaceProvider>
+        <WorkspaceShell screen={page}>
+          <LocationContentProbe />
+        </WorkspaceShell>
+      </WorkspaceProvider>,
+    );
+    await screen.findByText('Dữ liệu loc-a');
+    fireEvent.click(screen.getByText('BHome Nhân viên'));
+    const dialog = screen.getByRole('dialog');
+    expect(within(dialog).getByText('Đổi cơ sở')).toBeTruthy();
+    fireEvent.click(within(dialog).getByRole('button', { name: 'Cơ sở B' }));
+    await waitFor(() => expect(screen.getByText('Dữ liệu loc-b')).toBeTruthy());
+    expect(screen.getByText('Cơ sở B')).toBeTruthy();
+    expect(screen.queryByText('Dữ liệu loc-a')).toBeNull();
+    expect(screen.queryByRole('dialog')).toBeNull();
+    expect(state.push).not.toHaveBeenCalled();
+    expect(state.navigate).not.toHaveBeenCalled();
+    expect(state.dismissTo).not.toHaveBeenCalled();
+    expect(state.replace).not.toHaveBeenCalled();
+  },
+);
 it('restricts the feature catalog to Tenant and returns to Home through normal back navigation', () => {
   expect(canOpenScreen('Tenant', 'tenant-features')).toBe(true);
   expect(canOpenScreen('Staff', 'tenant-features')).toBe(false);

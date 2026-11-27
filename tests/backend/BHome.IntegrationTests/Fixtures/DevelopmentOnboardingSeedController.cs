@@ -6,8 +6,8 @@ using Microsoft.AspNetCore.RateLimiting;
 
 namespace BHome.Api.Controllers;
 
-// Owner-only demo endpoint; all persistence, scope, and transaction checks
-// live in DevelopmentOnboardingSeedService, not in the API controller.
+// Test-only fixture endpoint, absent from the deployed API assembly.
+// Registered only by integration test hosts.
 [ApiController, Route("api/v1/development/onboarding-seed"), Authorize(Roles = Roles.Owner)]
 [ResponseCache(NoStore = true, Location = ResponseCacheLocation.None)]
 [EnableRateLimiting("Auth")]

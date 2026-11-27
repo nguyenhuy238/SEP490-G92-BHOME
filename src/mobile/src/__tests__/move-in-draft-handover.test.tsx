@@ -323,6 +323,7 @@ vi.mock('../features/contracts/ContractInitialMeterTasks', () => ({
   ),
 }));
 vi.mock('../app/meter', () => ({
+  MeterProcessingOverlay: () => <div data-testid="meter-processing-overlay">Đang xử lý…</div>,
   MeterTaskScreen: ({ onReturn }: { onReturn: () => void }) => (
     <>
       <span>Biểu mẫu OCR điện nước</span>

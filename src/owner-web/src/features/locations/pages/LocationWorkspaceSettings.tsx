@@ -446,7 +446,7 @@ export function LocationWorkspaceSettings({ location }: { location: LocationConf
         </Box>
       )}
       {canManage && (
-        <Box sx={{ gridColumn: '1 / -1', width: '100%', maxWidth: 960 }}>
+        <Box sx={{ gridColumn: '1 / -1', width: '100%', maxWidth: 640 }}>
           <LocationBillingSchedule
             key={location.id}
             location={location.id}

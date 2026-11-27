@@ -1,4 +1,12 @@
-import { useEffect, useId, useState, useSyncExternalStore, type ReactNode } from 'react';
+import {
+  useEffect,
+  useId,
+  useRef,
+  useState,
+  useSyncExternalStore,
+  type PointerEvent,
+  type ReactNode,
+} from 'react';
 import {
   Alert,
   Box,
@@ -13,7 +21,6 @@ import {
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { Clock, Minus } from 'lucide-react';
 import { useMeterApi } from '../meters/useMeterApi';
-import { QuickContractPanel } from './QuickContractPanel';
 import { ApiError } from '../../../../../packages/client-core/src/api';
 import { useAuth } from '../../../../../packages/client-core/src/auth';
 import {
@@ -38,6 +45,74 @@ export function DemoClockWorkspace({ children }: { children: ReactNode }) {
   });
   const disabled = query.error instanceof ApiError && query.error.status === 404;
   const [expanded, setExpanded] = useState(false);
+  const floating = useRef<HTMLDivElement>(null);
+  const [position, setPosition] = useState<{ right: number; bottom: number } | null>(null);
+  const drag = useRef<{
+    id: number;
+    x: number;
+    y: number;
+    right: number;
+    bottom: number;
+    moved: boolean;
+  } | null>(null);
+  const suppressClick = useRef(false);
+  const clamp = (value: number, available: number) =>
+    Math.min(Math.max(12, value), Math.max(12, available - 12));
+  useEffect(() => {
+    function keepVisible() {
+      const rect = floating.current?.getBoundingClientRect();
+      if (!rect) return;
+      setPosition((previous) => {
+        if (!previous) return previous;
+        const right = clamp(previous.right, window.innerWidth - rect.width);
+        const bottom = clamp(previous.bottom, window.innerHeight - rect.height);
+        return right === previous.right && bottom === previous.bottom
+          ? previous
+          : { right, bottom };
+      });
+    }
+    keepVisible();
+    window.addEventListener('resize', keepVisible);
+    return () => window.removeEventListener('resize', keepVisible);
+  }, [expanded]);
+
+  function startDrag(event: PointerEvent<HTMLButtonElement>) {
+    if (event.button !== 0 || drag.current) return;
+    const rect = floating.current?.getBoundingClientRect();
+    if (!rect) return;
+    suppressClick.current = false;
+    drag.current = {
+      id: event.pointerId,
+      x: event.clientX,
+      y: event.clientY,
+      right: window.innerWidth - rect.right,
+      bottom: window.innerHeight - rect.bottom,
+      moved: false,
+    };
+    event.currentTarget.setPointerCapture?.(event.pointerId);
+  }
+
+  function moveDrag(event: PointerEvent<HTMLButtonElement>) {
+    const active = drag.current;
+    const rect = floating.current?.getBoundingClientRect();
+    if (!active || active.id !== event.pointerId || !rect) return;
+    const dx = event.clientX - active.x;
+    const dy = event.clientY - active.y;
+    if (!active.moved && Math.hypot(dx, dy) < 5) return;
+    active.moved = true;
+    suppressClick.current = true;
+    setPosition({
+      right: clamp(active.right - dx, window.innerWidth - rect.width),
+      bottom: clamp(active.bottom - dy, window.innerHeight - rect.height),
+    });
+  }
+
+  function finishDrag(event: PointerEvent<HTMLButtonElement>) {
+    if (drag.current?.id !== event.pointerId) return;
+    drag.current = null;
+    if (event.currentTarget.hasPointerCapture?.(event.pointerId))
+      event.currentTarget.releasePointerCapture(event.pointerId);
+  }
   const panelId = useId();
   const [chosen, setChosen] = useState<string | null>(null);
   const [tick, setTick] = useState(() => Date.now());
@@ -139,10 +214,13 @@ export function DemoClockWorkspace({ children }: { children: ReactNode }) {
       {synced && <Box key={`${applied.version}:${applied.businessDate}`}>{children}</Box>}
       <Portal>
         <Box
+          ref={floating}
           sx={{
             position: 'fixed',
-            right: { xs: 12, sm: 20 },
-            bottom: { xs: 'max(12px, env(safe-area-inset-bottom))', sm: 20 },
+            right: position ? `${position.right}px` : { xs: 12, sm: 20 },
+            bottom: position
+              ? `${position.bottom}px`
+              : { xs: 'max(12px, env(safe-area-inset-bottom))', sm: 20 },
             zIndex: (theme) => theme.zIndex.drawer + 1,
             maxWidth: 'calc(100vw - 24px)',
           }}
@@ -288,9 +366,6 @@ export function DemoClockWorkspace({ children }: { children: ReactNode }) {
             </Paper>
           )}
           <Stack direction="row" spacing={1} sx={{ justifyContent: 'flex-end', flexWrap: 'wrap' }}>
-            {synced && applied.canChange && (
-              <QuickContractPanel businessDate={applied.businessDate} />
-            )}
             <Button
               id={`${panelId}-toggle`}
               variant="contained"
@@ -299,7 +374,19 @@ export function DemoClockWorkspace({ children }: { children: ReactNode }) {
               aria-label={expanded ? 'Thu gọn bảng Demo Clock' : 'Mở Demo Clock'}
               aria-expanded={expanded}
               aria-controls={expanded ? panelId : undefined}
-              onClick={() => setExpanded((previous) => !previous)}
+              onPointerDown={startDrag}
+              onPointerMove={moveDrag}
+              onPointerUp={finishDrag}
+              onPointerCancel={finishDrag}
+              onLostPointerCapture={finishDrag}
+              onClick={(event) => {
+                if (suppressClick.current && event.detail !== 0) {
+                  suppressClick.current = false;
+                  return;
+                }
+                suppressClick.current = false;
+                setExpanded((previous) => !previous);
+              }}
               sx={{
                 display: 'flex',
                 ml: 'auto',
@@ -308,6 +395,10 @@ export function DemoClockWorkspace({ children }: { children: ReactNode }) {
                 borderRadius: 2,
                 fontVariantNumeric: 'tabular-nums',
                 boxShadow: 3,
+                cursor: 'grab',
+                touchAction: 'none',
+                userSelect: 'none',
+                '&:active': { cursor: 'grabbing' },
               }}
             >
               Demo Clock{dateLabel ? ' · ' + dateLabel + (timeLabel ? ' ' + timeLabel : '') : ''}

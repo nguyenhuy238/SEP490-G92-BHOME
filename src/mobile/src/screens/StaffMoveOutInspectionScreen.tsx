@@ -44,7 +44,7 @@ import { Input } from '../components/WorkflowControls';
 import { canUseLocalMeterDemo, meterDemoJpegBytes } from '../lib/meterDemoCapture';
 import { ContractInitialMeterTasks } from '../features/contracts/ContractInitialMeterTasks';
 import { ContractEvidence } from '../features/contracts/ContractEvidence';
-import { MeterTaskScreen } from '../app/meter';
+import { MeterProcessingOverlay, MeterTaskScreen } from '../app/meter';
 import { roomHandoverChecks, type MoveInRoomCheckStatus } from '../services/moveInHandover';
 import { useWorkspace } from '../features/workspace/WorkspaceProvider';
 import { useWorkspaceQuery } from '../features/workspace/useWorkspaceQuery';
@@ -169,6 +169,18 @@ type DraftPatch = {
   waterReadingId?: string;
   inventoryToken?: string;
 };
+type InspectionErrorField = 'status' | 'notes' | 'quantity' | 'photo';
+type InspectionErrors = Partial<Record<InspectionErrorField, string>>;
+
+class InspectionFieldError extends Error {
+  constructor(
+    readonly field: InspectionErrorField,
+    message: string,
+  ) {
+    super(message);
+  }
+}
+
 type LocalInspection = {
   values: Record<string, string>;
   photos: Record<string, string[]>;
@@ -215,6 +227,10 @@ const wizardStyles = StyleSheet.create({
   header: { gap: 9 },
   section: { gap: 12 },
   workList: { gap: 8 },
+  conditionField: { gap: 4 },
+  conditionOptions: { gap: 0 },
+  conditionOption: { paddingVertical: 2, paddingHorizontal: 8, minHeight: 44 },
+  photoField: { gap: 6 },
   workRow: {
     borderWidth: 1,
     borderColor: colors.border,
@@ -604,6 +620,7 @@ function InspectionForm({
     utilityType: 0 | 1;
   } | null>(null);
   const [meterRevision, setMeterRevision] = useState(0);
+  const [meterBusy, setMeterBusy] = useState(false);
   const [meterReady, setMeterReady] = useState(false);
   const [meterProvisionError, setMeterProvisionError] = useState('');
   const [latestFinalReadings, setLatestFinalReadings] = useState<
@@ -667,6 +684,8 @@ function InspectionForm({
   }, []);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
+  const [showItemErrors, setShowItemErrors] = useState(false);
+  const [photoError, setPhotoError] = useState('');
   const [notice, setNotice] = useState('');
   const lock = useRef(false);
   const meterReturnLock = useRef(false);
@@ -740,19 +759,34 @@ function InspectionForm({
   function assetResult(asset: HandoverAsset) {
     const condition = values[`asset-${asset.id}`]?.trim() ?? '';
     if (!assetStatuses.some((entry) => entry.value === condition))
-      throw new Error(`Chọn tình trạng của tài sản: ${asset.name}.`);
+      throw new InspectionFieldError('status', `Chọn tình trạng của tài sản: ${asset.name}.`);
     const current = values[`${asset.id}.observedQuantity`] ?? '';
     const openingQuantity = openingAsset(asset.id)?.handedOverQuantity;
     const expected = expectedAssetQuantity(asset);
     const hasCount = expected != null;
     const result = hasCount
       ? (() => {
-          const count = handoverQuantity(current.trim(), `${asset.name} · Số lượng hiện tại`);
-          if (count > expected) throw new Error(`Số lượng thực tế không được vượt ${expected}.`);
+          let count: number;
+          try {
+            count = handoverQuantity(current.trim(), `${asset.name} · Số lượng lúc trả`);
+          } catch (cause) {
+            throw new InspectionFieldError(
+              'quantity',
+              cause instanceof Error ? cause.message : 'Nhập số lượng lúc trả hợp lệ.',
+            );
+          }
+          if (count > expected)
+            throw new InspectionFieldError(
+              'quantity',
+              `Số lượng thực tế không được vượt ${expected}.`,
+            );
           if (condition === 'Good' && count !== expected)
-            throw new Error(`Tài sản Đạt phải đủ ${expected}.`);
+            throw new InspectionFieldError('quantity', `Tài sản Đạt phải đủ ${expected}.`);
           if (condition === 'Missing' && count >= expected)
-            throw new Error('Chọn Thiếu khi số lượng thực tế ít hơn số dự kiến.');
+            throw new InspectionFieldError(
+              'quantity',
+              'Chọn Thiếu khi số lượng thực tế ít hơn số dự kiến.',
+            );
           return {
             id: asset.id,
             condition,
@@ -771,8 +805,7 @@ function InspectionForm({
   };
   const readingId = (type: 0 | 1) =>
     values[type === 0 ? 'electricityReadingId' : 'waterReadingId'] ?? '';
-  const generalCompleted =
-    !!confirmedValues.roomCondition?.trim() && confirmedPhotos('general').length > 0;
+  const generalCompleted = confirmedPhotos('general').length > 0;
   const roomCheckCompleted = (code: string) => {
     const status = confirmedValues[`room.${code}.status`];
     return (
@@ -857,7 +890,7 @@ function InspectionForm({
     if (bytes.byteLength > 5 * 1024 * 1024) throw new Error('Ảnh vượt quá 5 MB.');
     if (getPhotos(bucket).length >= 5) throw new Error('Đã đạt giới hạn ảnh cho hạng mục này.');
     setBusy(true);
-    setError('');
+    setPhotoError('');
     try {
       const file = await client.upload(contract.id, bytes, 'image/jpeg');
       try {
@@ -890,7 +923,7 @@ function InspectionForm({
       setNotice('');
     } catch (cause) {
       const message = contractError(cause);
-      setError(message);
+      setPhotoError(message);
       throw new Error(message, { cause });
     } finally {
       setBusy(false);
@@ -902,10 +935,19 @@ function InspectionForm({
     globalThis.location?.hostname,
     globalThis.location?.port,
   );
+  const fieldErrors = showItemErrors && activeItem ? validateItem(activeItem) : {};
+  function inlineError(field: InspectionErrorField) {
+    const message = fieldErrors[field];
+    return message ? (
+      <Text accessibilityRole="alert" style={ui.red}>
+        {message}
+      </Text>
+    ) : null;
+  }
   function photoSection(bucket: string, label: string) {
     const count = getPhotos(bucket).length;
     return (
-      <View style={wizardStyles.section}>
+      <View testID="move-out-photo-field" style={wizardStyles.photoField}>
         <Text variant="labelMedium">
           {label}
           {count > 0 ? ` · ${count} ảnh` : ''}
@@ -918,6 +960,12 @@ function InspectionForm({
           disabled={busy || !editable || count >= 5}
           onCapture={(bytes) => upload(bytes, bucket)}
         />
+        {inlineError('photo')}
+        {!!photoError && (
+          <Text accessibilityRole="alert" style={ui.red}>
+            {photoError}
+          </Text>
+        )}
         {count > 0 && (
           <View style={wizardStyles.photoGrid}>
             {getPhotos(bucket).map((id, index) => (
@@ -987,8 +1035,7 @@ function InspectionForm({
     const quantity = Number(keyCount);
     if (!keysCompleted) throw new Error('Nhập số chìa khóa thực nhận và chụp ảnh chìa khóa.');
     const evidenceIds = getPhotos('general');
-    if (!roomCondition || !evidenceIds.length)
-      throw new Error('Nhập ghi chú và chụp ít nhất một ảnh hiện trạng chung.');
+    if (!evidenceIds.length) throw new Error('Chụp ít nhất một ảnh hiện trạng chung.');
     const assets = groups.map((item: HandoverAsset) => {
       const result = assetResult(item);
       if (
@@ -1041,17 +1088,58 @@ function InspectionForm({
       );
     }
     setError('');
+    setShowItemErrors(false);
+    setPhotoError('');
     setActiveItem(null);
     setMeterTask(null);
+  }
+  function validateItem(item: string): InspectionErrors {
+    const errors: InspectionErrors = {};
+    if (item === 'general') {
+      const notes = values.roomCondition?.trim() ?? '';
+      if (notes.length > 2000) errors.notes = 'Ghi chú không quá 2000 ký tự.';
+      if (!getPhotos(item).length) errors.photo = 'Chụp ít nhất một ảnh hiện trạng chung.';
+    } else if (item.startsWith('room:')) {
+      const code = item.slice(5);
+      const check = roomHandoverChecks.find((entry) => entry.code === code);
+      if (!check) return errors;
+      const status = values[`room.${code}.status`];
+      if (!statuses.some((entry) => entry.id === status))
+        errors.status = `Hãy chọn kết quả kiểm tra: ${check.label}.`;
+      else if (status !== 'NotApplicable' && !getPhotos(item).length)
+        errors.photo = `Chụp ít nhất một ảnh: ${check.label}.`;
+      if ((values[`room.${code}.notes`]?.trim().length ?? 0) > 2000)
+        errors.notes = 'Ghi chú không quá 2000 ký tự.';
+    } else if (item.startsWith('asset:')) {
+      const asset = groups.find((entry) => entry.id === item.slice(6));
+      if (!asset) return errors;
+      try {
+        const result = assetResult(asset);
+        if (
+          (!('observedQuantity' in result) || result.observedQuantity !== 0) &&
+          !getPhotos(item).length
+        )
+          errors.photo = 'Chụp ít nhất một ảnh tài sản.';
+      } catch (cause) {
+        if (cause instanceof InspectionFieldError) errors[cause.field] = cause.message;
+        else throw cause;
+      }
+      if ((values[`${asset.id}.notes`]?.trim().length ?? 0) > 2000)
+        errors.notes = 'Ghi chú không quá 2000 ký tự.';
+    } else if (item === 'keys') {
+      if (!/^\d+$/.test(keyCount) || Number(keyCount) > 100)
+        errors.quantity = 'Nhập số chìa khóa lúc trả từ 0 đến 100 (số nguyên).';
+      if (!getPhotos(item).length) errors.photo = 'Chụp ít nhất một ảnh chìa khóa.';
+      if ((values.keyNotes?.trim().length ?? 0) > 500)
+        errors.notes = 'Ghi chú chìa khóa không quá 500 ký tự.';
+    }
+    return errors;
   }
   function patchForItem(item: string, version: number): DraftPatch {
     if (!editable) throw new Error('Chưa đủ điều kiện kiểm tra trả phòng.');
     if (item === 'general') {
       const roomCondition = values.roomCondition?.trim() ?? '';
       const evidenceIds = getPhotos(item);
-      if (!roomCondition || !evidenceIds.length)
-        throw new Error('Nhập ghi chú và chụp ít nhất một ảnh hiện trạng chung.');
-      if (roomCondition.length > 2000) throw new Error('Ghi chú không quá 2000 ký tự.');
       return { version, roomCondition, evidenceIds };
     }
     if (item.startsWith('room:')) {
@@ -1059,13 +1147,10 @@ function InspectionForm({
       const check = roomHandoverChecks.find((entry) => entry.code === code);
       if (!check) throw new Error('Hạng mục hiện trạng phòng không hợp lệ.');
       const status = values[`room.${code}.status`] as MoveInRoomCheckStatus | undefined;
+      if (status !== 'Passed' && status !== 'Issue' && status !== 'NotApplicable')
+        throw new InspectionFieldError('status', `Hãy chọn kết quả kiểm tra: ${check.label}.`);
       const notes = values[`room.${code}.notes`]?.trim() ?? '';
       const evidenceIds = getPhotos(item);
-      if (status !== 'Passed' && status !== 'Issue' && status !== 'NotApplicable')
-        throw new Error(`Hãy chọn kết quả kiểm tra: ${check.label}.`);
-      if (status !== 'NotApplicable' && !evidenceIds.length)
-        throw new Error(`Chụp ít nhất một ảnh: ${check.label}.`);
-      if (notes.length > 2000) throw new Error('Ghi chú không quá 2000 ký tự.');
       return {
         version,
         roomChecks: [{ code, status, notes: notes || null, evidenceIds }],
@@ -1077,9 +1162,6 @@ function InspectionForm({
       const evidenceIds = getPhotos(item);
       const result = assetResult(asset);
       const notes = values[`${asset.id}.notes`]?.trim() ?? '';
-      if (notes.length > 2000) throw new Error('Ghi chú không quá 2000 ký tự.');
-      if ((!('observedQuantity' in result) || result.observedQuantity !== 0) && !evidenceIds.length)
-        throw new Error('Chụp ít nhất một ảnh tài sản.');
       return {
         version,
         assets: [{ ...result, checked: true, notes, evidenceIds }],
@@ -1090,10 +1172,6 @@ function InspectionForm({
     }
     if (item === 'keys') {
       const quantity = Number(keyCount);
-      if (!/^\d+$/.test(keyCount) || quantity > 100 || !getPhotos('keys').length)
-        throw new Error('Nhập số chìa khóa đã nhận và chụp ít nhất một ảnh.');
-      if ((values.keyNotes?.trim().length ?? 0) > 500)
-        throw new Error('Ghi chú chìa khóa không quá 500 ký tự.');
       return {
         version,
         accessItems: [{ type: 'RoomKey', quantity, notes: values.keyNotes?.trim() ?? '' }],
@@ -1141,6 +1219,8 @@ function InspectionForm({
       setDraft(result);
       setValues(confirmed.values);
       setPhotos(confirmed.photos);
+      setShowItemErrors(false);
+      setPhotoError('');
       setActiveItem(null);
       setMeterTask(null);
       setNotice('');
@@ -1171,6 +1251,11 @@ function InspectionForm({
   async function saveItem() {
     if (!draft || draftLoading || !activeItem || lock.current || busy) return;
     try {
+      setError('');
+      if (Object.keys(validateItem(activeItem)).length) {
+        setShowItemErrors(true);
+        return;
+      }
       await writeDraftPatch(patchForItem(activeItem, draft.version));
     } catch (cause) {
       setError(cause instanceof Error ? cause.message : 'Cần hoàn thiện mục trước khi lưu.');
@@ -1240,6 +1325,7 @@ function InspectionForm({
     }
   }
   function closeInspectionItem() {
+    if (meterBusy) return;
     if (activeItem === 'meter' && meterTask) {
       void finishMeterTask(meterTask);
     } else {
@@ -1634,7 +1720,7 @@ function InspectionForm({
                 <Text variant="titleMedium" style={wizardStyles.rowTitle}>
                   {modalTitle}
                 </Text>
-                <Button mode="text" disabled={busy} onPress={closeInspectionItem}>
+                <Button mode="text" disabled={busy || meterBusy} onPress={closeInspectionItem}>
                   Đóng
                 </Button>
               </Row>
@@ -1648,18 +1734,28 @@ function InspectionForm({
                 ]}
                 keyboardShouldPersistTaps="handled"
               >
+                {!!error && (
+                  <Text accessibilityRole="alert" style={ui.red}>
+                    {error}
+                  </Text>
+                )}
                 {activeItem === 'meter' && meterTask && (
                   <MeterTaskScreen
                     embedded
                     key={meterTask.id}
                     taskId={meterTask.id}
-                    onReturn={() => void finishMeterTask(meterTask)}
+                    onBusyChange={setMeterBusy}
+                    onReturn={() => {
+                      setMeterBusy(false);
+                      void finishMeterTask(meterTask);
+                    }}
                   />
                 )}
                 {activeItem === 'general' && (
                   <>
                     <Input
-                      label="Ghi chú"
+                      label="Ghi chú (không bắt buộc)"
+                      error={fieldErrors.notes}
                       value={values.roomCondition ?? ''}
                       onChange={(value) => set('roomCondition', value)}
                       multiline
@@ -1680,40 +1776,45 @@ function InspectionForm({
                         : 'Chưa có ghi nhận'}
                       {openingRoomCheck?.notes ? ` · ${openingRoomCheck.notes}` : ''}
                     </Text>
-                    <Text variant="labelMedium">Tình trạng · {selectedRoomCheck.label}</Text>
-                    {compactPhone ? (
-                      <View style={wizardStyles.section}>
-                        {statuses.map((status) => (
-                          <RadioButton.Item
-                            key={status.id}
-                            label={status.label}
-                            value={status.id}
-                            status={
-                              values[`room.${selectedRoomCode}.status`] === status.id
-                                ? 'checked'
-                                : 'unchecked'
-                            }
-                            onPress={() => set(`room.${selectedRoomCode}.status`, status.id)}
-                            disabled={busy || !editable}
-                            mode="android"
-                            color={colors.blue}
-                          />
-                        ))}
-                      </View>
-                    ) : (
-                      <SegmentedButtons
-                        value={values[`room.${selectedRoomCode}.status`] ?? ''}
-                        onValueChange={(status) => set(`room.${selectedRoomCode}.status`, status)}
-                        density="small"
-                        buttons={statuses.map((status) => ({
-                          value: status.id,
-                          label: status.label,
-                          disabled: busy || !editable,
-                        }))}
-                      />
-                    )}
+                    <View testID="move-out-status-field" style={wizardStyles.conditionField}>
+                      <Text variant="labelMedium">Tình trạng · {selectedRoomCheck.label}</Text>
+                      {compactPhone ? (
+                        <View style={wizardStyles.conditionOptions}>
+                          {statuses.map((status) => (
+                            <RadioButton.Item
+                              key={status.id}
+                              label={status.label}
+                              value={status.id}
+                              status={
+                                values[`room.${selectedRoomCode}.status`] === status.id
+                                  ? 'checked'
+                                  : 'unchecked'
+                              }
+                              onPress={() => set(`room.${selectedRoomCode}.status`, status.id)}
+                              disabled={busy || !editable}
+                              mode="android"
+                              color={colors.blue}
+                              style={wizardStyles.conditionOption}
+                            />
+                          ))}
+                        </View>
+                      ) : (
+                        <SegmentedButtons
+                          value={values[`room.${selectedRoomCode}.status`] ?? ''}
+                          onValueChange={(status) => set(`room.${selectedRoomCode}.status`, status)}
+                          density="small"
+                          buttons={statuses.map((status) => ({
+                            value: status.id,
+                            label: status.label,
+                            disabled: busy || !editable,
+                          }))}
+                        />
+                      )}
+                      {inlineError('status')}
+                    </View>
                     <Input
                       label="Ghi chú (không bắt buộc)"
+                      error={fieldErrors.notes}
                       value={values[`room.${selectedRoomCode}.notes`] ?? ''}
                       onChange={(value) => set(`room.${selectedRoomCode}.notes`, value)}
                       disabled={busy || !editable}
@@ -1740,6 +1841,7 @@ function InspectionForm({
                         </Text>
                         <Input
                           label="Số lượng lúc trả"
+                          error={fieldErrors.quantity}
                           value={values[`${selectedAsset.id}.observedQuantity`] ?? ''}
                           onChange={(value) => set(`${selectedAsset.id}.observedQuantity`, value)}
                           numeric
@@ -1747,18 +1849,22 @@ function InspectionForm({
                         />
                       </>
                     )}
-                    <Text variant="labelMedium">Tình trạng hiện tại</Text>
-                    <SegmentedButtons
-                      density="small"
-                      value={values[`asset-${selectedAsset.id}`] ?? ''}
-                      onValueChange={(value) => set(`asset-${selectedAsset.id}`, value)}
-                      buttons={assetStatuses.map((status) => ({
-                        ...status,
-                        disabled: busy || !editable,
-                      }))}
-                    />
+                    <View testID="move-out-status-field" style={wizardStyles.conditionField}>
+                      <Text variant="labelMedium">Tình trạng hiện tại</Text>
+                      <SegmentedButtons
+                        density="small"
+                        value={values[`asset-${selectedAsset.id}`] ?? ''}
+                        onValueChange={(value) => set(`asset-${selectedAsset.id}`, value)}
+                        buttons={assetStatuses.map((status) => ({
+                          ...status,
+                          disabled: busy || !editable,
+                        }))}
+                      />
+                      {inlineError('status')}
+                    </View>
                     <Input
                       label="Ghi chú (không bắt buộc)"
+                      error={fieldErrors.notes}
                       value={values[`${selectedAsset.id}.notes`] ?? ''}
                       onChange={(value) => set(`${selectedAsset.id}.notes`, value)}
                       multiline
@@ -1774,6 +1880,7 @@ function InspectionForm({
                     </Text>
                     <Input
                       label="Số chìa khóa lúc trả"
+                      error={fieldErrors.quantity}
                       value={keyCount}
                       onChange={(value) => set('keyQuantity', value)}
                       numeric
@@ -1781,6 +1888,7 @@ function InspectionForm({
                     />
                     <Input
                       label="Ghi chú chìa khóa (nếu có)"
+                      error={fieldErrors.notes}
                       multiline
                       value={values.keyNotes ?? ''}
                       onChange={(value) => set('keyNotes', value)}
@@ -1788,11 +1896,6 @@ function InspectionForm({
                     />
                     {photoSection('keys', 'Ảnh chìa khóa thu lại')}
                   </>
-                )}
-                {!!error && (
-                  <Text accessibilityRole="alert" style={ui.red}>
-                    {error}
-                  </Text>
                 )}
                 {!!notice && (
                   <Text accessibilityRole="status" style={ui.green}>
@@ -1812,7 +1915,7 @@ function InspectionForm({
                         .catch(() => undefined)
                         .finally(() => bytes.fill(0));
                     } catch {
-                      setError('Không tạo được ảnh mẫu DEV. Hãy thử lại trên web local.');
+                      setPhotoError('Không tạo được ảnh mẫu DEV. Hãy thử lại trên web local.');
                     }
                   }}
                 />
@@ -1840,6 +1943,7 @@ function InspectionForm({
               </View>
             )}
           </View>
+          {activeItem === 'meter' && (meterBusy || busy) && <MeterProcessingOverlay />}
         </KeyboardAvoidingView>
       </Modal>
     </Box>

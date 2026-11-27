@@ -21,14 +21,24 @@ public sealed class ContractsController(ContractService service, ContractExpiryS
     [HttpGet("handovers"), Authorize(Roles = Roles.Owner)]
     public Task<HandoverInboxPage> HandoverInbox(CancellationToken t, [FromQuery] int page = 1,
         [FromQuery] int pageSize = 20, [FromQuery] Guid? locationId = null,
-        [FromQuery] string? status = null, [FromQuery] string? room = null)
-        => service.ListHandoverInboxAsync(page, pageSize, locationId, status, room, t);
+        [FromQuery] string? status = null, [FromQuery] string? room = null,
+        [FromQuery] Guid? roomId = null, [FromQuery] string? stage = null)
+        => service.ListHandoverInboxAsync(page, pageSize, locationId, status, room, t, roomId, stage);
 
     [HttpGet("move-out-inbox"), Authorize(Roles = Roles.Owner)]
     public Task<OwnerMoveOutInboxPage> MoveOutInbox(CancellationToken t, [FromQuery] int page = 1,
         [FromQuery] int pageSize = 20, [FromQuery] Guid? locationId = null,
-        [FromQuery] string? status = null, [FromQuery] string? room = null) =>
-        service.OwnerMoveOutInboxAsync(page, pageSize, locationId, status, room, t);
+        [FromQuery] string? status = null, [FromQuery] string? room = null,
+        [FromQuery] Guid? roomId = null, [FromQuery] string? stage = null) =>
+        service.OwnerMoveOutInboxAsync(page, pageSize, locationId, status, room, t, roomId, stage);
+
+    [HttpGet("handovers/rooms"), Authorize(Roles = Roles.Owner)]
+    public Task<IReadOnlyList<ContractChoice>> HandoverRooms([FromQuery] Guid locationId, CancellationToken t) =>
+        service.HandoverInboxRoomsAsync(locationId, t);
+
+    [HttpGet("move-out-inbox/rooms"), Authorize(Roles = Roles.Owner)]
+    public Task<IReadOnlyList<ContractChoice>> MoveOutRooms([FromQuery] Guid locationId, CancellationToken t) =>
+        service.MoveOutInboxRoomsAsync(locationId, t);
 
     [HttpGet("configuration")]
     public Task<ContractWorkflowConfiguration> Configuration(CancellationToken t) => service.ConfigurationAsync(t);

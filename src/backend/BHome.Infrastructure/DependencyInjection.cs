@@ -223,7 +223,6 @@ public static class DependencyInjection
             BHome.Infrastructure.Modules.PropertyManagement.Persistence.SetupWorkspaceStore>();
         // Staff-scoped synthetic onboarding fixture; its service rejects every
         // environment other than explicitly enabled loopback Development.
-        services.AddScoped<BHome.Infrastructure.Development.DevelopmentOnboardingSeedService>();
         services.AddScoped<BHome.Application.PropertyManagement.ISharedConfigurationStore,
             BHome.Infrastructure.Modules.PropertyManagement.Persistence.SharedConfigurationStore>();
         services.AddScoped<BHome.Application.PropertyManagement.ISharedDataValidator, BHome.Application.PropertyManagement.SharedDataValidator>();

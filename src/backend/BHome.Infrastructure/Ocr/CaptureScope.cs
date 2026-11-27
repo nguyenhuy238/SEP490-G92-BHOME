@@ -27,6 +27,8 @@ internal sealed class CaptureScope(BHomePersistenceContext db, ICurrentUser user
     public IQueryable<Room> VisibleRooms => db.Set<Room>().Where(r => VisibleLocations.Any(l => l.Id == r.LocationId));
     public IQueryable<OperationalTask> VisibleTasks => db.Set<OperationalTask>()
         .Where(t => t.Kind == BHome.Domain.StaffOperations.OperationalTaskKind.MeterReading && VisibleRooms.Any(r => r.Id == t.Meter.RoomId) &&
+            (t.Purpose != ReadingPurpose.Initial || t.ContractId == null || t.Status == MeterTaskStatus.Completed ||
+                db.Set<Contract>().Any(c => c.Id == t.ContractId && c.Status == ContractStatus.Active)) &&
             (t.Purpose == ReadingPurpose.Periodic || t.AutomationPlanId == null || user.IsInRole(Roles.Owner) || t.AssignedStaffUserId == UserId));
     internal async Task<bool> CanCorrectAsync(OperationalTask task, Meter meter, MeterReading reading, CancellationToken t)
     {

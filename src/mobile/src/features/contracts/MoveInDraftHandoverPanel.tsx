@@ -61,7 +61,7 @@ import { ContractEvidence } from './ContractEvidence';
 import { TenantMoveInHandoverSummary } from './TenantMoveInHandoverSummary';
 import { SignaturePad } from './SignaturePad';
 import { HandoverAssetFields } from './HandoverAssetFields';
-import { MeterTaskScreen } from '../../app/meter';
+import { MeterProcessingOverlay, MeterTaskScreen } from '../../app/meter';
 import { StaffMoveInInventoryScreen } from '../../screens/StaffMoveInInventoryScreen';
 import {
   inventoryStatusLabels,
@@ -323,6 +323,7 @@ export function MoveInDraftHandoverPanel({
   const [activeItem, setActiveItem] = useState<string | null>(null);
   const [inventoryBusy, setInventoryBusy] = useState(false);
   const [meterTask, setMeterTask] = useState<{ id: string; label: string } | null>(null);
+  const [meterBusy, setMeterBusy] = useState(false);
   const modalScroll = useRef<React.ComponentRef<typeof ScrollView>>(null);
   const fieldOffsets = useRef<Record<string, number>>({});
   const visibleItemError = itemError?.item === activeItem ? itemError : null;
@@ -844,7 +845,7 @@ export function MoveInDraftHandoverPanel({
     if (compactPhone) resetScroll?.();
   }
   function closeItem() {
-    if (busy || inventoryBusy) return;
+    if (busy || inventoryBusy || meterBusy) return;
     setItemError(null);
     setActionError('');
     setNotice('');
@@ -1492,7 +1493,11 @@ export function MoveInDraftHandoverPanel({
                       {modalTitle}
                     </Text>
                   </View>
-                  <Button mode="text" disabled={busy || inventoryBusy} onPress={closeItem}>
+                  <Button
+                    mode="text"
+                    disabled={busy || inventoryBusy || meterBusy}
+                    onPress={closeItem}
+                  >
                     Đóng
                   </Button>
                 </Row>
@@ -1512,7 +1517,9 @@ export function MoveInDraftHandoverPanel({
                     <MeterTaskScreen
                       embedded
                       taskId={meterTask.id}
+                      onBusyChange={setMeterBusy}
                       onReturn={() => {
+                        setMeterBusy(false);
                         setActiveItem(null);
                         setMeterTask(null);
                         setRevision((value) => value + 1);
@@ -1719,6 +1726,7 @@ export function MoveInDraftHandoverPanel({
                 </View>
               )}
             </View>
+            {activeItem === 'meter' && meterBusy && <MeterProcessingOverlay />}
           </KeyboardAvoidingView>
         </Modal>
       )}

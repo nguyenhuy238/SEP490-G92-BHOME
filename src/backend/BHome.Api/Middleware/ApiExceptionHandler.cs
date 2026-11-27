@@ -125,6 +125,27 @@ internal sealed class ApiExceptionHandler(IProblemDetailsService problems, ILogg
         };
         if (exception is DigitalSigningException readableSigning && status is not (401 or 403 or 404))
             problem.ProblemDetails.Title = readableSigning.Message;
+        if (exception is CaptureConflictException or CaptureValidationException)
+        {
+            var captureTitle = code switch
+            {
+                "active_contract_initial_required" => "Chỉ được xác nhận chỉ số bàn giao khi hợp đồng chính đã kích hoạt, đúng phòng và đã đến ngày bắt đầu thuê.",
+                "reading_period_out_of_order" => "Ngày hoặc kỳ ghi chỉ số không đúng thứ tự so với lần ghi trước.",
+                "meter_reset_or_rollover_requires_review" => "Chỉ số mới thấp hơn chỉ số trước. Cần chủ trọ kiểm tra nếu công tơ đã được thay hoặc quay vòng.",
+                "evidence_not_available" => "Ảnh minh chứng không còn hợp lệ. Hãy chụp ảnh mới.",
+                "task_already_confirmed" => "Nhiệm vụ đã xác nhận chỉ số. Hãy tải lại để xem kết quả.",
+                "task_closed" => "Nhiệm vụ đã kết thúc hoặc công tơ không còn hoạt động.",
+                "baseline_already_confirmed" => "Công tơ đã có chỉ số đầu kỳ.",
+                "confirmed_baseline_required" => "Chưa có chỉ số đầu kỳ đã xác nhận.",
+                "reading_correction_not_allowed" => "Chỉ số đã bị khóa hoặc không còn đủ điều kiện sửa.",
+                "task_version_changed" => "Phiên bản nhiệm vụ đã thay đổi. Hãy tải lại trước khi sửa.",
+                "reading_date_in_future" => "Chưa đến ngày ghi chỉ số theo lịch.",
+                "reading_integer_required" => "Chỉ số phải là số nguyên không âm.",
+                "invalid_reading_value" => "Chỉ số hoặc xác nhận đối chiếu ảnh không hợp lệ.",
+                _ => null
+            };
+            if (captureTitle is not null) problem.ProblemDetails.Title = captureTitle;
+        }
         if (exception is BHome.Application.Common.InputValidationException fields)
         {
             var validation = new ValidationProblemDetails(fields.Errors.ToDictionary(x => x.Key, x => x.Value)) { Status = status };

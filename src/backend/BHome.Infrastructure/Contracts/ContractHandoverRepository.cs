@@ -195,14 +195,15 @@ internal sealed class ContractHandoverRepository(BHomePersistenceContext db, IOp
                 x.Kind == OperationalTaskKind.MoveInInventory && x.ContractId == contractId, t)
             : null;
         return new HandoverMoveInTask(task.Id, task.Status.ToString(), task.Version,
-            task.Status == MeterTaskStatus.InProgress && isResponsibleStaff,
+            task.Status == MeterTaskStatus.InProgress && isResponsibleStaff &&
+            await db.Set<Contract>().AnyAsync(c => c.Id == contractId && c.Status == ContractStatus.Active, t),
             inventoryTask?.Id, inventoryTask?.Status.ToString());
     }
     public async Task EnsureMoveInTaskAsync(Contract c, Guid actor, DateTimeOffset now, CancellationToken t)
     {
         if (db is not BHome.Infrastructure.Persistence.Compact24.Compact24DbContext) return;
         if (c.Kind != ContractKind.Main || c.PreviousContractId is not null ||
-            c.Status is ContractStatus.Cancelled or ContractStatus.Terminated or ContractStatus.Expired or ContractStatus.Superseded) return;
+            c.Status != ContractStatus.Active || c.Room.Status != RoomStatus.Occupied) return;
         if (!await PrepareRoomMoveInAsync(c, actor, now, t)) return;
         var id = Key($"contract-move-in:{c.Id:N}");
         var prior = db.Set<OperationalTask>().Local.FirstOrDefault(x => x.Id == id) ??
@@ -313,13 +314,11 @@ internal sealed class ContractHandoverRepository(BHomePersistenceContext db, IOp
             if (await IsPristineMoveInAsync(contractId, all.Where(x => x.ContractId == contractId).ToArray(), t))
                 pristine.Add(task.Id);
         }
-        // Existing inspected/signed history wins; otherwise keep the first
-        // task of an occupied contract, then the first planned task. If a
-        // different pending draft won the race but has no progress, promote
-        // the actual activated contract so its initial readings can be saved.
-        var canonical = main.FirstOrDefault(x => !pristine.Contains(x.Id)) ??
-            main.FirstOrDefault(x => occupiedRoots.Contains(x.ContractId!.Value)) ??
-            (c.Status == ContractStatus.Active ? null : main.FirstOrDefault());
+        // Only an actual occupancy can own the physical handover. Preserve
+        // premature tasks with evidence, but do not let them block activation.
+        var occupiedTasks = main.Where(x => occupiedRoots.Contains(x.ContractId!.Value)).ToArray();
+        var canonical = occupiedTasks.FirstOrDefault(x => !pristine.Contains(x.Id)) ??
+            occupiedTasks.FirstOrDefault();
         var canonicalId = canonical?.ContractId ?? c.Id;
         var historical = await db.Set<ContractHandover>().Where(h => occupiedRoots.Contains(h.ContractId) && h.Status == ContractHandoverStatus.Confirmed)
             .Select(h => h.ContractId).ToArrayAsync(t);
@@ -412,9 +411,7 @@ internal sealed class ContractHandoverRepository(BHomePersistenceContext db, IOp
             throw ContractException.Conflict("move_in_baselines_unavailable");
         var contract = await db.Set<Contract>().Include(c => c.Room).ThenInclude(r => r.Location)
             .SingleOrDefaultAsync(c => c.Id == contractId && c.Kind == ContractKind.Main &&
-                c.PreviousContractId == null && c.Status != ContractStatus.Cancelled &&
-                c.Status != ContractStatus.Terminated && c.Status != ContractStatus.Expired &&
-                c.Status != ContractStatus.Superseded, t)
+                c.PreviousContractId == null && c.Status == ContractStatus.Active && c.Room.Status == RoomStatus.Occupied, t)
             ?? throw ContractException.Conflict("main_move_in_handover_required");
         var date = DateOnly.FromDateTime(TimeZoneInfo.ConvertTimeBySystemTimeZoneId(now, "Asia/Ho_Chi_Minh").DateTime);
         var responsible = await tasks.ResponsibilityAsync(contract.Room.LocationId, date, t);

@@ -124,13 +124,7 @@ public sealed partial class Compact24OwnerSetupTests
         var jobs = await readDb.Set<OperationalTask>().AsNoTracking()
             .Where(x => x.ContractId != null && ids.Contains(x.ContractId.Value) && x.Status != MeterTaskStatus.Cancelled)
             .ToArrayAsync();
-        Assert.Single(jobs, x => x.Kind == OperationalTaskKind.AdHoc);
-        Assert.Single(jobs, x => x.Kind == OperationalTaskKind.MoveInInventory);
-        Assert.Single(jobs.Select(x => x.ContractId).Distinct());
-        var canonical = jobs[0].ContractId!.Value;
-        using var owner = await Client(w.Owner, host);
-        Assert.Equal(HttpStatusCode.OK, (await owner.GetAsync($"/api/v1/contracts/{canonical}/handover/draft")).StatusCode);
-        Assert.Equal(HttpStatusCode.NotFound, (await owner.GetAsync($"/api/v1/contracts/{ids.Single(x => x != canonical)}/handover/draft")).StatusCode);
+        Assert.Empty(jobs);
     }
 
     [CompactPostgresFact]
@@ -196,6 +190,23 @@ public sealed partial class Compact24OwnerSetupTests
                 });
                 return Task.FromResult(contract.Id);
             }, default);
+            Assert.Empty(await db.Set<OperationalTask>().Where(task => task.ContractId == contract.Id).ToArrayAsync());
+            Assert.False(await db.Database.SqlQuery<bool>($"SELECT handover->'preparation' IS NOT NULL AS \"Value\" FROM contracts WHERE id={contract.Id}").SingleAsync());
+            // Simulate the persisted state reached by the independently tested activation service.
+            var loaded = await repository.FindAsync(contract.Id, default) ?? throw new InvalidOperationException();
+            loaded.Status = ContractStatus.Active;
+            loaded.StartDate = Today;
+            loaded.ActivatedAt = DateTimeOffset.UtcNow;
+            loaded.ActivatedByUserId = w.Owner.Id;
+            loaded.Room.Status = RoomStatus.Occupied;
+            await db.SaveChangesAsync();
+            var handovers = scope.ServiceProvider.GetRequiredService<IContractHandoverRepository>();
+            await repository.InTransactionAsync(w.Room, async () =>
+            {
+                var active = await repository.FindAsync(contract.Id, default) ?? throw new InvalidOperationException();
+                await handovers.EnsureMoveInTaskAsync(active, w.Owner.Id, DateTimeOffset.UtcNow, default);
+                return true;
+            }, default);
             var json = await db.Database.SqlQuery<string>($"""
                 SELECT (handover->'preparation')::text AS "Value"
                 FROM contracts WHERE id={contract.Id}
@@ -219,7 +230,7 @@ public sealed partial class Compact24OwnerSetupTests
         Assert.Equal(contract.MonthlyRent, read.MonthlyRent);
         Assert.Equal(contract.RequiredDeposit, read.RequiredDeposit);
         Assert.Equal(contract.Terms, read.Terms);
-        Assert.Contains("contract_active", read.Missing);
+        Assert.DoesNotContain("contract_active", read.Missing);
         // The Owner inbox lists actual persisted handover preparations without
         // forcing a Location -> Room -> Contract drilldown. Filters apply before
         // pagination and a tenant cannot browse the Owner's workspace.
@@ -233,8 +244,19 @@ public sealed partial class Compact24OwnerSetupTests
         var inboxFiltered = await owner.GetFromJsonAsync<HandoverInboxPage>(
             $"/api/v1/contracts/handovers?room={Uri.EscapeDataString(read.RoomNumber)}&status=Ready");
         Assert.DoesNotContain(inboxFiltered!.Items, row => row.ContractId == contract.Id);
+        var staffStage = await owner.GetFromJsonAsync<HandoverInboxPage>(
+            $"/api/v1/contracts/handovers?pageSize=1&locationId={w.Location}&roomId={w.Room}&stage=Staff");
+        Assert.Contains(staffStage!.Items, row => row.ContractId == contract.Id);
+        var tenantStage = await owner.GetFromJsonAsync<HandoverInboxPage>(
+            $"/api/v1/contracts/handovers?locationId={w.Location}&roomId={w.Room}&stage=Tenant");
+        Assert.Equal(0, tenantStage!.TotalCount);
+        var roomOptions = await owner.GetFromJsonAsync<ContractChoice[]>($"/api/v1/contracts/handovers/rooms?locationId={w.Location}");
+        Assert.Contains(roomOptions!, room => room.Id == w.Room && room.Label == read.RoomNumber);
+        Assert.Empty((await owner.GetFromJsonAsync<ContractChoice[]>($"/api/v1/contracts/handovers/rooms?locationId={Guid.NewGuid()}"))!);
+        Assert.Equal(HttpStatusCode.BadRequest, (await owner.GetAsync($"/api/v1/contracts/handovers?roomId={w.Room}&stage=Staff")).StatusCode);
         using var staff = await Client(w.Staff, host);
         using var tenantForInbox = await Client(w.Tenant, host);
+        Assert.Equal(HttpStatusCode.Forbidden, (await tenantForInbox.GetAsync($"/api/v1/contracts/handovers/rooms?locationId={w.Location}")).StatusCode);
         Assert.Equal(HttpStatusCode.Forbidden,
             (await tenantForInbox.GetAsync("/api/v1/contracts/handovers")).StatusCode);
         var beforeStart = (await staff.GetFromJsonAsync<HandoverDraftView>(

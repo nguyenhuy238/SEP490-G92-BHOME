@@ -134,13 +134,8 @@ public sealed partial class ContractService
                 NormalizeMoveOutKeys(input.AccessItems);
             var overall = input.EvidenceIds ?? prior.EvidenceIds;
             var keys = input.KeyEvidenceIds ?? prior.KeyEvidenceIds;
-            if (input.RoomCondition is not null)
-            {
-                if (string.IsNullOrWhiteSpace(input.RoomCondition))
-                    throw ContractException.Invalid("room_summary_required");
-                if (overall.Length == 0)
-                    throw ContractException.Invalid("room_summary_evidence_required");
-            }
+            if ((input.RoomCondition is not null || input.EvidenceIds is not null) && overall.Length == 0)
+                throw ContractException.Invalid("room_summary_evidence_required");
             if (input.AccessItems is not null && keys.Length == 0)
                 throw ContractException.Invalid("key_evidence_required");
             var allEvidence = overall.Concat(keys)

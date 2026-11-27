@@ -25,7 +25,7 @@ public sealed record DevelopmentOnboardingSeedResult(Guid ContractId, Guid RoomI
     string LocationName, string TenantEmail, string? TenantPassword, string TenantName,
     bool DevelopmentOnly = true);
 
-// The explicitly approved demo shortcut does not change the normal contract workflow.
+// Integration-test fixture only; never registered by the deployed application.
 public sealed class DevelopmentOnboardingSeedService(
     BHomePersistenceContext db, ICurrentUser actor, UserManager<ApplicationUser> users,
     IIdentityProtection identities, IContractRepository contracts, IPropertyLifecycleChecks lifecycle,

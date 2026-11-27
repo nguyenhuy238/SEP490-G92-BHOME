@@ -96,11 +96,12 @@ public sealed partial class ContractService
     public Task<IReadOnlyList<MoveOutAssignment>> AssignmentsAsync(CancellationToken t)
     { Role(Roles.Staff); return repository.AssignmentsAsync(Actor, Today, t); }
     public Task<OwnerMoveOutInboxPage> OwnerMoveOutInboxAsync(int page, int pageSize,
-        Guid? locationId, string? status, string? room, CancellationToken t)
+        Guid? locationId, string? status, string? room, CancellationToken t,
+        Guid? roomId = null, string? stage = null)
     {
         Role(Roles.Owner);
         if (page is < 1 or > 100000 || pageSize is < 1 or > 100 || room?.Length > 100 ||
-            locationId == Guid.Empty)
+            locationId == Guid.Empty || roomId == Guid.Empty || (roomId.HasValue && !locationId.HasValue) || !InboxStage.Valid(stage))
             throw ContractException.Invalid("invalid_pagination");
         MoveOutStatus? state = null;
         if (!string.IsNullOrWhiteSpace(status))
@@ -109,7 +110,13 @@ public sealed partial class ContractService
                 throw ContractException.Invalid("invalid_move_out_status");
             state = parsed;
         }
-        return repository.OwnerMoveOutInboxAsync(page, pageSize, locationId, state, room?.Trim(), t);
+        return repository.OwnerMoveOutInboxAsync(page, pageSize, locationId, state, room?.Trim(), t, roomId, stage);
+    }
+    public Task<IReadOnlyList<ContractChoice>> MoveOutInboxRoomsAsync(Guid locationId, CancellationToken t)
+    {
+        Role(Roles.Owner);
+        if (locationId == Guid.Empty) throw ContractException.Invalid("invalid_pagination");
+        return repository.MoveOutInboxRoomsAsync(locationId, t);
     }
     public async Task<IReadOnlyList<ContractVersionView>> VersionsAsync(Guid id, CancellationToken t)
     {

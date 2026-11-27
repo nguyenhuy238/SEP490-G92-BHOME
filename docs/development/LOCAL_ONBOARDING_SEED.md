@@ -1,6 +1,8 @@
-# Owner quick-create demo contract (BF-03 / UC-13–17, GBR-01/04/18, DBR-02)
+# Retired Owner quick-create demo contract (BF-03 / UC-13–17, GBR-01/04/18, DBR-02)
 
-Owner Web shows **Tạo HĐ test** beside Demo Clock when the server reports that the Owner may control that clock. Staff Mobile no longer provides the generator.
+The Owner Web shortcut **Tạo HĐ test** and the deployed onboarding-seed API have been removed. Create contracts through the ordinary contract workflow. Demo Clock remains available independently. Existing synthetic contracts and their history are not deleted.
+
+The following describes the historical behavior retained exclusively in integration-test fixtures; it is not an available application feature. The fixture controller and service are compiled only into the integration-test assembly.
 
 ## Server guard
 

@@ -14,7 +14,10 @@ import {
   ActivityIndicator,
   Badge,
   Button,
+  Dialog,
+  Icon,
   IconButton,
+  Portal,
   Text,
   TouchableRipple,
 } from 'react-native-paper';
@@ -54,15 +57,22 @@ function StaffLocationSubtitle() {
     useWorkspace();
   const selected = staffLocations.find((location) => location.id === staffLocationId);
   return (
-    <Text variant="labelSmall" numberOfLines={2} style={styles.staffSubtitle}>
-      {staffLocationsLoading
-        ? 'Đang tải cơ sở…'
-        : selected
-          ? selected.label + (staffLocationsError ? ' · Chưa cập nhật được' : '')
-          : staffLocationsError
-            ? 'Chưa tải được cơ sở'
-            : 'Chưa có cơ sở được phân công'}
-    </Text>
+    <View style={styles.locationSubtitleRow}>
+      <Text
+        variant="labelSmall"
+        numberOfLines={1}
+        style={[styles.staffSubtitle, styles.locationSubtitleText]}
+      >
+        {staffLocationsLoading
+          ? 'Đang tải cơ sở…'
+          : selected
+            ? selected.label + (staffLocationsError ? ' · Chưa cập nhật được' : '')
+            : staffLocationsError
+              ? 'Chưa tải được cơ sở'
+              : 'Chưa có cơ sở được phân công'}
+      </Text>
+      <Icon source="chevron-down" size={14} color="#d5e4ff" />
+    </View>
   );
 }
 function TenantLocationSubtitle() {
@@ -96,7 +106,21 @@ export function WorkspaceShell({
   backDisabled?: boolean;
   contentRevision?: number;
 }) {
-  const { role, preview, go, leavePreview, scrollRevision, requestNavigation } = useWorkspace();
+  const {
+    role,
+    preview,
+    go,
+    leavePreview,
+    scrollRevision,
+    requestNavigation,
+    staffLocationId,
+    staffLocations,
+    staffLocationsLoading,
+    staffLocationsError,
+    selectStaffLocation,
+    reloadStaffLocations,
+  } = useWorkspace();
+  const [locationPickerOpen, setLocationPickerOpen] = useState(false);
   const { width } = useWindowDimensions();
   const narrowStaff = role === 'Staff' && width <= 360;
   const insideTabs = useContext(WorkspaceTabsContext);
@@ -215,19 +239,21 @@ export function WorkspaceShell({
         ]}
       >
         <TouchableRipple
-          onPress={() =>
-            go(
-              preview
-                ? homeScreen[role]
-                : role === 'Owner'
-                  ? 'operations'
-                  : role === 'Staff'
-                    ? 'rooms'
-                    : 'contract',
-            )
-          }
+          onPress={() => {
+            if (staff && !preview) {
+              setLocationPickerOpen(true);
+              return;
+            }
+            go(preview ? homeScreen[role] : role === 'Owner' ? 'operations' : 'contract');
+          }}
           accessibilityRole="button"
-          accessibilityLabel={role === 'Tenant' ? 'Xem hợp đồng của bạn' : 'Xem cơ sở được phép'}
+          accessibilityLabel={
+            staff && !preview
+              ? 'Đổi cơ sở'
+              : role === 'Tenant'
+                ? 'Xem hợp đồng của bạn'
+                : 'Xem cơ sở được phép'
+          }
           style={ui.grow}
         >
           <View style={ui.row}>
@@ -529,6 +555,44 @@ export function WorkspaceShell({
         {workflowFooter?.screen === screen && workflowFooter.content}
       </KeyboardAvoidingView>
       {!insideTabs && <WorkspaceTabBar role={role} screen={screen} active={active} onSelect={go} />}
+      {staff && !preview && locationPickerOpen && (
+        <Portal>
+          <Dialog visible onDismiss={() => setLocationPickerOpen(false)}>
+            <Dialog.Title>Đổi cơ sở</Dialog.Title>
+            <Dialog.Content>
+              {staffLocationsLoading ? (
+                <Text>Đang tải cơ sở…</Text>
+              ) : staffLocationsError ? (
+                <View style={{ gap: 8 }}>
+                  <Text accessibilityRole="alert">{staffLocationsError}</Text>
+                  <Button onPress={reloadStaffLocations}>Tải lại cơ sở</Button>
+                </View>
+              ) : staffLocations.length === 0 ? (
+                <Text>Chưa có cơ sở được phân công.</Text>
+              ) : (
+                <ScrollView style={{ maxHeight: 360 }}>
+                  {staffLocations.map((location) => (
+                    <Button
+                      key={location.id}
+                      mode={location.id === staffLocationId ? 'contained-tonal' : 'text'}
+                      icon={location.id === staffLocationId ? 'check' : undefined}
+                      onPress={() => {
+                        setLocationPickerOpen(false);
+                        if (location.id !== staffLocationId) selectStaffLocation(location.id);
+                      }}
+                    >
+                      {location.label}
+                    </Button>
+                  ))}
+                </ScrollView>
+              )}
+            </Dialog.Content>
+            <Dialog.Actions>
+              <Button onPress={() => setLocationPickerOpen(false)}>Đóng</Button>
+            </Dialog.Actions>
+          </Dialog>
+        </Portal>
+      )}
     </SafeAreaView>
   );
 }
@@ -540,6 +604,8 @@ const styles = StyleSheet.create({
   narrowHeaderButton: { margin: 0 },
   root: { flex: 1, backgroundColor: s.navy },
   staffSubtitle: { color: '#d5e4ff', marginTop: 3 },
+  locationSubtitleRow: { flexDirection: 'row', alignItems: 'center', gap: 3 },
+  locationSubtitleText: { flexShrink: 1 },
   staffBody: {
     backgroundColor: s.background,
     borderTopLeftRadius: 26,

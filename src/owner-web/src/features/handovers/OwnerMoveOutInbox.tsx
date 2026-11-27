@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useState } from 'react';
 import { useSearchParams } from 'react-router';
 import { useQuery } from '@tanstack/react-query';
 import {
@@ -31,6 +31,8 @@ import {
 import { FilterToolbar, StatusChip } from '../../components/common/PortalUI';
 import { useContractsApi } from '../contracts/useContractsApi';
 import { OwnerMoveOutReviewPanel } from './OwnerMoveOutReviewPanel';
+import { InboxRoomError, InboxRoomFilter } from './InboxFilters';
+import { inboxStages, useInboxRooms } from './useInboxFilters';
 
 interface MoveOutInboxItem {
   contractId: string;
@@ -61,6 +63,7 @@ interface MoveOutProposalProgress {
 }
 
 const moveOutStates = [
+  { value: 'AwaitingConsent', label: 'Chờ khách thuê đồng ý trả phòng' },
   { value: 'Requested', label: 'Chờ duyệt yêu cầu' },
   { value: 'Approved', label: 'Nhân viên đang xử lý' },
   { value: 'Inspected', label: 'Đã có kết quả nhân viên' },
@@ -78,7 +81,12 @@ function progressFor(item: MoveOutInboxItem) {
   // Contract move-out and Tenant's fee decision advance independently. Show
   // the latest verified financial step instead of the earlier Staff handoff.
   if (item.status === 'Completed' || item.status === 'Settled') return labelFor(item.status);
-  if (item.status === 'Requested' || item.status === 'Approved' || item.status === 'Rejected')
+  if (
+    item.status === 'Requested' ||
+    item.status === 'Approved' ||
+    item.status === 'Rejected' ||
+    item.status === 'AwaitingConsent'
+  )
     return labelFor(item.status);
   if (item.proposalStatus === 'Accepted') {
     if (item.proposalSettlementStatus === 'Payable')
@@ -101,23 +109,19 @@ export function OwnerMoveOutInbox() {
   const selected = params.get('contractId') ?? '';
   const [location, setLocation] = useState('');
   const [status, setStatus] = useState('');
-  const [roomSearch, setRoomSearch] = useState('');
   const [room, setRoom] = useState('');
   const [page, setPage] = useState(1);
-
-  useEffect(() => {
-    const timer = window.setTimeout(() => {
-      setRoom(roomSearch.trim());
-      setPage(1);
-    }, 300);
-    return () => window.clearTimeout(timer);
-  }, [roomSearch]);
 
   const locations = useQuery({
     queryKey: ['move-out-inbox-locations', session?.userId],
     enabled: !!session?.roles?.includes('Owner'),
     queryFn: ({ signal }) => api.locations(signal),
   });
+  const rooms = useInboxRooms(api, session?.userId, location, 'move-out-inbox');
+  if (room && rooms.data && !rooms.data.some((option) => option.id === room)) {
+    setRoom('');
+    setPage(1);
+  }
   const inbox = useQuery({
     queryKey: ['move-out-inbox', session?.userId, page, location, status, room],
     enabled: !!session?.roles?.includes('Owner'),
@@ -125,15 +129,20 @@ export function OwnerMoveOutInbox() {
       api.transport<MoveOutInboxPage>(
         `/api/v1/contracts/move-out-inbox?${new URLSearchParams({
           page: String(page),
-          pageSize: '20',
+          pageSize: '10',
           ...(location ? { locationId: location } : {}),
-          ...(status ? { status } : {}),
-          ...(room ? { room } : {}),
+          ...(status ? { stage: status } : {}),
+          ...(room ? { roomId: room } : {}),
         })}`,
         { signal },
       ),
   });
   const visible = inbox.data?.items ?? [];
+  const pageCount = Math.max(
+    1,
+    Math.ceil((inbox.data?.totalCount ?? 0) / (inbox.data?.pageSize || 10)),
+  );
+  if (inbox.data && page > pageCount) setPage(pageCount);
   // A running older API may not yet include the new summary fields. Fetch the
   // existing authenticated proposal endpoint only for those legacy rows, with
   // bounded concurrency. Once the new API is deployed this makes zero calls.
@@ -203,18 +212,6 @@ export function OwnerMoveOutInbox() {
 
   return (
     <Stack spacing={2}>
-      <Stack direction="row" sx={{ alignItems: 'center', justifyContent: 'flex-end' }}>
-        <Button
-          startIcon={<RefreshCw size={16} />}
-          disabled={inbox.isFetching}
-          onClick={() => {
-            void inbox.refetch();
-            if (legacyIds.length) void legacyProgress.refetch();
-          }}
-        >
-          Tải lại
-        </Button>
-      </Stack>
       <Paper variant="outlined" sx={{ p: { xs: 1.5, md: 2 }, borderRadius: 2 }}>
         <Stack spacing={1.5}>
           <FilterToolbar>
@@ -225,6 +222,7 @@ export function OwnerMoveOutInbox() {
               value={location}
               onChange={(event) => {
                 setLocation(event.target.value);
+                setRoom('');
                 setPage(1);
               }}
               sx={{ maxWidth: { sm: 260 } }}
@@ -236,6 +234,15 @@ export function OwnerMoveOutInbox() {
                 </MenuItem>
               ))}
             </TextField>
+            <InboxRoomFilter
+              location={location}
+              room={room}
+              rooms={rooms}
+              onChange={(value) => {
+                setRoom(value);
+                setPage(1);
+              }}
+            />
             <TextField
               size="small"
               select
@@ -248,33 +255,39 @@ export function OwnerMoveOutInbox() {
               sx={{ maxWidth: { sm: 230 } }}
             >
               <MenuItem value="">Tất cả trạng thái</MenuItem>
-              {moveOutStates.map((option) => (
+              {inboxStages.map((option) => (
                 <MenuItem key={option.value} value={option.value}>
                   {option.label}
                 </MenuItem>
               ))}
             </TextField>
-            <TextField
-              size="small"
-              label="Tìm phòng"
-              placeholder="Ví dụ: P.102"
-              value={roomSearch}
-              onChange={(event) => setRoomSearch(event.target.value)}
-              sx={{ flex: { sm: '1 1 220px' }, maxWidth: { sm: 340 } }}
-            />
-            {(location || status || roomSearch) && (
+            {(location || status || room) && (
               <Button
                 onClick={() => {
                   setLocation('');
                   setStatus('');
-                  setRoomSearch('');
+                  setRoom('');
                   setPage(1);
                 }}
               >
                 Xóa bộ lọc
               </Button>
             )}
+            <Button
+              size="small"
+              sx={{ ml: { sm: 'auto' } }}
+              startIcon={<RefreshCw size={16} />}
+              disabled={inbox.isFetching}
+              onClick={() => {
+                void inbox.refetch();
+                if (location) void rooms.refetch();
+                if (legacyIds.length) void legacyProgress.refetch();
+              }}
+            >
+              Tải lại
+            </Button>
           </FilterToolbar>
+          <InboxRoomError rooms={rooms} />
           {locations.error && (
             <Alert severity="warning">
               Không tải được danh sách cơ sở.{' '}
@@ -379,16 +392,23 @@ export function OwnerMoveOutInbox() {
               </Stack>
             </>
           )}
-          {!!inbox.data && inbox.data.totalCount > inbox.data.pageSize && (
-            <Stack direction="row" sx={{ alignItems: 'center', justifyContent: 'space-between' }}>
-              <Typography variant="caption">
-                Trang {page} / {Math.ceil(inbox.data.totalCount / inbox.data.pageSize)}
+          {!!inbox.data && !inbox.error && inbox.data.totalCount > 0 && (
+            <Stack
+              direction={{ xs: 'column', sm: 'row' }}
+              spacing={1}
+              sx={{ alignItems: 'center', justifyContent: 'space-between' }}
+            >
+              <Typography variant="caption" color="text.secondary">
+                Trang {page} / {pageCount}
               </Typography>
               <Pagination
                 page={page}
-                count={Math.ceil(inbox.data.totalCount / inbox.data.pageSize)}
+                count={pageCount}
                 disabled={inbox.isFetching}
                 onChange={(_, p) => setPage(p)}
+                size="small"
+                shape="rounded"
+                color="primary"
               />
             </Stack>
           )}
@@ -453,6 +473,7 @@ export function OwnerMoveOutInbox() {
                   ownerId={session?.userId}
                   onChanged={() => {
                     void inbox.refetch();
+                    if (location) void rooms.refetch();
                     if (legacyIds.length) void legacyProgress.refetch();
                   }}
                 />
