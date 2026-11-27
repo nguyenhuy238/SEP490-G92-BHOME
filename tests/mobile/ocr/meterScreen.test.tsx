@@ -186,9 +186,7 @@ it('shows the server meter-type mismatch and never fills or confirms an electric
     .mockResolvedValueOnce({ id: 'evidence' });
   render(<MeterScreen />);
   await capture();
-  expect(
-    await screen.findByText(/Loại đồng hồ hoặc đơn vị trong ảnh không khớp tác vụ/),
-  ).toBeTruthy();
+  expect(await screen.findByText(/Ảnh không đúng loại công tơ/)).toBeTruthy();
   expect(screen.getByLabelText(valueLabel)).toHaveValue('');
   expect(screen.getByText(saveLabel)).toBeDisabled();
   expect(mocks.json).not.toHaveBeenCalled();
@@ -238,6 +236,11 @@ it('shows OCR progress, warnings, explicit correction and only one pending confi
   expect(screen.getByText(/Ảnh có thể mờ hoặc lóa/)).toBeTruthy();
   fireEvent.change(screen.getByLabelText(valueLabel), { target: { value: '123.5' } });
   fireEvent.click(screen.getByLabelText(confirmLabel));
+  expect(screen.getByText(saveLabel)).toBeDisabled();
+  expect(mocks.json).not.toHaveBeenCalled();
+  fireEvent.change(screen.getByLabelText(valueLabel), { target: { value: '124' } });
+  if (!(screen.getByLabelText(confirmLabel) as HTMLInputElement).checked)
+    fireEvent.click(screen.getByLabelText(confirmLabel));
   const save = screen.getByRole('button', { name: saveLabel });
   fireEvent.click(save);
   fireEvent.click(save);
@@ -245,15 +248,15 @@ it('shows OCR progress, warnings, explicit correction and only one pending confi
   await waitFor(() => expect(mocks.json).toHaveBeenCalledTimes(1));
   expect(mocks.json.mock.calls[0][1]).toEqual({
     humanConfirmed: true,
-    confirmedValue: '123.5',
+    confirmedValue: '124',
     evidenceId: 'evidence',
   });
   await act(async () =>
     finishSave({
       id: 'reading',
-      confirmedValue: '123.5',
+      confirmedValue: '124',
       previousValue: '100',
-      consumption: '23.5',
+      consumption: '24',
     }),
   );
   await waitFor(() => expect(mocks.success).toHaveBeenCalledWith('Đã lưu chỉ số.'));
@@ -272,7 +275,7 @@ it('clears the old proposal on retake and keeps manual entry when OCR fails', as
   await waitFor(() => expect(screen.getByText('Chụp ảnh thử')).not.toBeDisabled());
   fireEvent.click(screen.getByLabelText(confirmLabel));
   await capture();
-  await screen.findByText('Không nhận diện được chỉ số. Hãy thử lại hoặc nhập tay.');
+  await screen.findByText('Không nhận diện được chỉ số. Hãy nhập thủ công hoặc thử lại OCR.');
   expect(screen.getByLabelText(valueLabel)).toHaveValue('');
   expect(screen.getByLabelText(confirmLabel)).not.toBeChecked();
   fireEvent.change(screen.getByLabelText(valueLabel), { target: { value: '125' } });
