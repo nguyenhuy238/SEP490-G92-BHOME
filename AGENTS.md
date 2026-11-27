@@ -251,3 +251,13 @@ Also verify the conflicting UC-18/JOB-08 and UC-37 text described in section 3. 
 13. Hard exclusions — do not add without approved scope change (SRS §V.3.3)
 No Guest enquiry/online reservation/payment/contract on Public Website; no cash-payment recording; no full IoT/smart-lock/meter hardware integration; no statutory accounting/payroll/tax filing or e-invoice compliance; no direct government residence submission; no BHOME CA/digital certificate/private signing keys; no autonomous AI pricing, forecasting, report classification, chatbot or biometric camera recognition; no advanced cross-Location tenant/contract-holder transfer. Internal assisted OCR with human confirmation is in scope.
 Final rule: When requirements, design, and code disagree, show the discrepancy and preserve data/security; never quietly adjust the business requirement merely to match existing code or a generated guess. An implementation is not Done without traceability, authorization, meaningful tests, review-ready changes and an honest verification report.
+
+## 14. Student-friendly code and safe refactoring
+
+- Prefer changing existing files. Justify every new service, interface, adapter, helper, dependency, or duplicate API by a concrete responsibility.
+- Keep one clear business workflow entry point. Preserve historical read paths when required; do not retain obsolete write paths without a verified consumer or compatibility need.
+- Group closely related DTOs and small helpers when it improves navigation; do not build oversized classes merely to reduce file count.
+- Before removal, check references, DI, routes, reflection, dynamic imports, jobs, scripts, tests, and persisted data where relevant.
+- Explain each module from actor to endpoint, method, state transition, database, and client screen. Maintain a concise current code map rather than duplicating historical reports.
+- Keep behavior-preserving refactors separate from feature fixes. Preserve API contracts, permissions, evidence integrity, concurrency, transactions, idempotency, and verified financial rules.
+- Report measured before/after results, executed checks, and remaining risks. A smaller file count alone is not acceptance.

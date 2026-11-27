@@ -45,6 +45,17 @@ public sealed record HandoverHistoryView(int Version, string Action, Guid ActorI
 public sealed record HandoverChoices(IReadOnlyList<HandoverAsset> Assets, IReadOnlyList<HandoverReading> Readings, IReadOnlyList<ContractDocumentView> Evidence,
     string? InventoryToken = null, string? InventoryState = null, bool NoAssetsConfirmed = false);
 
+// PDF report inputs and rendering boundary for the same handover snapshot.
+public sealed record HandoverDocumentPhoto(Guid Id, string Caption, byte[] Bytes);
+public sealed record HandoverDocumentReport(Guid DocumentId, Guid ContractId, string Type, int Version,
+    string LocationName, string Address, Guid OwnerId, Guid? TenantId, Guid StaffId,
+    DateTimeOffset? TenantConfirmedAt, DateTimeOffset ConfirmedAt, HandoverSnapshot Snapshot,
+    HandoverSnapshot? Baseline, string[] References, string[] Decisions, HandoverDocumentPhoto[] Photos);
+public interface IHandoverDocumentRenderer
+{
+    Task<byte[]> RenderAsync(HandoverDocumentReport report, CancellationToken t);
+}
+
 public interface IHandoverInventory
 {
     Task<HandoverInventory> PrepareAsync(Guid roomId, CancellationToken t);
