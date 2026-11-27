@@ -45,6 +45,7 @@ export function CameraCapture({
   captureInstruction,
   retryOnly = false,
   uploadError = '',
+  lensPreferenceRef,
 }: {
   label: string;
   buttonMode?: 'outlined' | 'contained';
@@ -58,6 +59,7 @@ export function CameraCapture({
   presentation?: 'inline' | 'document' | 'meter' | 'evidence';
   retryOnly?: boolean;
   uploadError?: string;
+  lensPreferenceRef?: { current: string };
   meterStep?: number;
   meterCompact?: boolean;
   meterRetryResets?: boolean;
@@ -69,6 +71,7 @@ export function CameraCapture({
 }) {
   const [permission, requestPermission] = useCameraPermissions();
   const camera = useRef<CameraView>(null);
+  const localLensPreferenceRef = useRef('');
   const [open, setOpen] = useState(false);
   const [session, setSession] = useState(0);
   const [evidenceVisible, setEvidenceVisible] = useState(false);
@@ -326,6 +329,7 @@ export function CameraCapture({
         disabled={disabled || working}
         dark={presentation === 'document'}
         showControls={presentation !== 'evidence'}
+        lensPreferenceRef={lensPreferenceRef ?? localLensPreferenceRef}
         onReady={(value) => {
           if (!alive.current || generation.current !== session) return;
           readyAccess.current = value;

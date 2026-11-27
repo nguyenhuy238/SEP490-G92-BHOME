@@ -25,6 +25,7 @@ export function WorkspaceTabBar({
     <View
       style={[
         styles.tabs,
+        role === 'Staff' && styles.staffTabs,
         tenantHomeLayout && { boxShadow: 'none' },
         { paddingBottom: insets.bottom, minHeight: 60 + insets.bottom },
       ]}
@@ -42,6 +43,7 @@ export function WorkspaceTabBar({
             <View
               style={[
                 styles.indicator,
+                role === 'Staff' && styles.staffIndicator,
                 tenantHomeLayout && { borderRadius: 10, paddingHorizontal: 12 },
                 active === tab.screen && { backgroundColor: s.blueSoft },
               ]}
@@ -79,6 +81,14 @@ const styles = StyleSheet.create({
     borderTopRightRadius: 16,
     boxShadow: '0 -3px 16px rgba(25, 52, 82, 0.06)',
   },
+  staffTabs: {
+    borderTopLeftRadius: 0,
+    borderTopRightRadius: 0,
+    borderTopWidth: StyleSheet.hairlineWidth,
+    borderTopColor: c.border,
+    boxShadow: 'none',
+  },
+  staffIndicator: { borderRadius: 14, paddingHorizontal: 13, paddingVertical: 3 },
   tab: {
     alignItems: 'center',
     justifyContent: 'center',

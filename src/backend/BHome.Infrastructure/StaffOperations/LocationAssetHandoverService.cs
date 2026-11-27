@@ -43,7 +43,8 @@ public sealed class LocationAssetHandoverService(
         string SnapshotSha256, string SnapshotObjectKey, string PdfSha256, string PdfObjectKey,
         DateTimeOffset ApprovedAt, string? ExceptionDecision,
         string? OwnerDisplayName = null, string? StaffDisplayName = null,
-        DateOnly? AssignmentStart = null, DateOnly? AssignmentEnd = null);
+        DateOnly? AssignmentStart = null, DateOnly? AssignmentEnd = null,
+        int? PdfLayoutVersion = null);
 
     private sealed record ReportEvent(string Action, Guid TaskId, int Revision, DateTimeOffset OccurredAt,
         ReportManifest? Report = null, LocationAssetHandoverAcceptance? Signature = null,
@@ -777,7 +778,7 @@ public sealed class LocationAssetHandoverService(
             task.StaffId.Value, Actor, task.Version, revision, task.LocationName, task.Address,
             items.Count, items.Count(x => !x.Inherited), items.Count(x => x.Inherited),
             hash, snapshotKey, Hash(pdf), pdfKey, approvedAt, exception, ownerName, staffName,
-            assignmentPeriod.Start, assignmentPeriod.End);
+            assignmentPeriod.Start, assignmentPeriod.End, PdfLayoutVersion: 2);
         // Object keys are server generated and scoped to the specific task/revision.
         // Their integrity digests are stored in the append-only manifest.
         await using (var memory = new MemoryStream(snapshotBytes, writable: false))
@@ -958,7 +959,7 @@ public sealed class LocationAssetHandoverService(
                 report.ApprovedAt, report.SnapshotSha256, report.ExceptionDecision,
                 items, signature, null, report.OwnerDisplayName, report.StaffDisplayName,
                 OwnerInkPng: png, AssignmentStart: report.AssignmentStart,
-                AssignmentEnd: report.AssignmentEnd), token);
+                AssignmentEnd: report.AssignmentEnd, LayoutVersion: report.PdfLayoutVersion ?? 1), token);
             var ownerPdfKey = $"location-asset-handovers/{taskId:N}/v{report.Revision}/owner-signed.pdf";
             var ownerPdfHash = Hash(ownerPdf);
             await using (var memory = new MemoryStream(png, writable: false))
@@ -996,7 +997,7 @@ public sealed class LocationAssetHandoverService(
             report.ApprovedAt, report.SnapshotSha256, report.ExceptionDecision,
             items, state.OwnerSignature, signature,
             report.OwnerDisplayName, report.StaffDisplayName, ownerInk, png,
-            report.AssignmentStart, report.AssignmentEnd), token);
+            report.AssignmentStart, report.AssignmentEnd, LayoutVersion: report.PdfLayoutVersion ?? 1), token);
         var finalKey = $"location-asset-handovers/{taskId:N}/v{report.Revision}/signed.pdf";
         await using (var memory = new MemoryStream(png, writable: false))
             await storage.PutAsync(inkKey, memory, png.Length, "image/png", token);

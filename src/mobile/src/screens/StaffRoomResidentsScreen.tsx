@@ -111,7 +111,7 @@ function roomStatus(value?: string | null) {
 }
 
 function RoomDirectory() {
-  const { go } = useWorkspace();
+  const { go, staffLocationId, preview } = useWorkspace();
   const scope = useRoomScope();
   const { width } = useWindowDimensions();
   const columns = width >= 360 ? 2 : 1;
@@ -199,11 +199,11 @@ function RoomDirectory() {
             onChange={(id) => { scope.selectLocation(id); changePage(1); }}
             placeholder="Chọn cơ sở được phân công"
           />
-        ) : (
+        ) : preview || scope.location !== staffLocationId || !staffLocationId ? (
           <Text numberOfLines={1} style={styles.muted}>
             {scope.locations.find((l) => l.id === scope.location)?.label ?? 'Cơ sở được phân công'}
           </Text>
-        )}
+        ) : null}
         <View style={styles.summary}>
           {[
             [ready ? rooms.length : '—', 'phòng'],

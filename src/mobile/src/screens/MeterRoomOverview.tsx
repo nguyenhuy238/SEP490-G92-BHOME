@@ -42,7 +42,7 @@ export function MeterRoomOverview({
         </Box>
       ) : first ? (
         <>
-          <Box style={{ padding: 14, gap: 8 }}>
+          <Box style={{ padding: 12, gap: 8 }}>
             <Row spread>
               <View style={{ flex: 1, minWidth: 0, gap: 2 }}>
                 <Heading title={`Phòng ${first.room}`} detail={meterRoundLabel(first)} />
@@ -95,12 +95,25 @@ export function MeterRoomOverview({
                 const previous = saved?.previousValue ?? task.previousValue;
                 const isInitial = task.purpose === 0;
                 return (
-                  <Box key={task.id} style={{ padding: 14, gap: 10 }}>
+                  <Box key={task.id} style={{ padding: 12, gap: 8 }}>
                     <Row spread>
-                      <Row>
+                      <View
+                        style={{
+                          flexDirection: 'row',
+                          flex: 1,
+                          minWidth: 0,
+                          alignItems: 'center',
+                          gap: 8,
+                        }}
+                      >
                         <Icon source={icon} size={22} color={utility === 0 ? c.amber : c.blue} />
-                        <Text variant="titleMedium">{title}</Text>
-                      </Row>
+                        <View style={{ flex: 1, minWidth: 0, gap: 2 }}>
+                          <Text variant="titleMedium">{title}</Text>
+                          <Text variant="labelSmall" style={ui.muted}>
+                            {task.meterCode}
+                          </Text>
+                        </View>
+                      </View>
                       <Pill
                         tone={
                           done
@@ -121,9 +134,6 @@ export function MeterRoomOverview({
                               : 'Chưa ghi'}
                       </Pill>
                     </Row>
-                    <Text variant="labelSmall" style={ui.muted}>
-                      {task.meterCode}
-                    </Text>
                     <Text style={ui.muted}>
                       Chỉ số trước:{' '}
                       {previous === null ? 'Chưa có' : formatMeterReading(previous, unit)}

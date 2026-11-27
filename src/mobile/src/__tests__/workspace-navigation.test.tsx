@@ -351,6 +351,26 @@ it('keeps the Staff task title, refresh, back and four bottom tabs in the shell'
   expect(refresh).toHaveBeenCalledOnce();
   expect(screen.getAllByRole('tab')).toHaveLength(4);
 });
+it('keeps the Staff work queue scroll wrapper mounted while tabs replace their header action', () => {
+  const refresh = vi.fn();
+  const tree = (operational: boolean) => (
+    <WorkspaceProvider>
+      <WorkspaceShell screen="work-orders">
+        {operational ? <ContractHeaderProbe refresh={refresh} /> : <span>Bảo trì</span>}
+      </WorkspaceShell>
+    </WorkspaceProvider>
+  );
+  const view = render(tree(false));
+  expect(screen.getByRole('button', { name: 'Kéo để tải lại' })).toBeTruthy();
+  view.rerender(tree(true));
+  fireEvent.click(screen.getByRole('button', { name: 'Kéo để tải lại' }));
+  expect(refresh).toHaveBeenCalledOnce();
+  view.rerender(tree(false));
+  expect(screen.getByText('Bảo trì')).toBeTruthy();
+  expect(screen.getByRole('button', { name: 'Kéo để tải lại' })).toBeTruthy();
+  fireEvent.click(screen.getByRole('button', { name: 'Kéo để tải lại' }));
+  expect(refresh).toHaveBeenCalledOnce();
+});
 it('shows a contextual add action at the top right of the Staff report tab', () => {
   const create = vi.fn();
   render(
@@ -632,7 +652,11 @@ it.each([
   );
   expect(tabs[0].parentElement?.style.paddingBottom).toBe('24px');
   expect(view.container.querySelector('main')?.style.backgroundColor).toBe(
-    role === 'Tenant' ? 'rgb(23, 54, 84)' : 'rgb(25, 54, 83)',
+    role === 'Staff'
+      ? 'rgb(239, 245, 253)'
+      : role === 'Tenant'
+        ? 'rgb(23, 54, 84)'
+        : 'rgb(25, 54, 83)',
   );
   fireEvent.click(screen.getByRole('button', { name: 'Thông báo' }));
   expect(state.push).toHaveBeenLastCalledWith({

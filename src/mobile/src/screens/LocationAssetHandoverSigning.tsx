@@ -317,12 +317,22 @@ export function LocationAssetHandoverSigning({
 
   return (
     <Box>
-      <Text variant="titleMedium">Biên bản bàn giao</Text>
-      {(data || taskStatus === 'PendingVerification' || query.error) && (
-        <Button mode="text" icon="refresh" onPress={reload} disabled={query.fetching || busy}>
-          Tải lại
-        </Button>
-      )}
+      <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+        <Text variant="titleMedium" style={{ flex: 1, minWidth: 0 }}>
+          Biên bản bàn giao
+        </Text>
+        {!query.error && (data || taskStatus === 'PendingVerification') && (
+          <Button
+            compact
+            mode="text"
+            icon="refresh"
+            onPress={reload}
+            disabled={query.fetching || busy}
+          >
+            Tải lại
+          </Button>
+        )}
+      </View>
       {query.loading && taskStatus === 'PendingVerification' && (
         <ActivityIndicator accessibilityLabel="Đang tải biên bản bàn giao" />
       )}
@@ -343,8 +353,8 @@ export function LocationAssetHandoverSigning({
         <Text style={ui.muted}>Đã gửi kiểm kê. Đang chờ Owner đối soát và lập biên bản.</Text>
       )}
       {data && (
-        <View style={{ gap: 10 }}>
-          <View style={{ gap: 3 }}>
+        <View style={{ gap: 8 }}>
+          <View style={{ gap: 4 }}>
             <Text>{data.totalItems} mục tài sản</Text>
             <Text style={ui.muted}>
               {data.directItems} Staff kiểm tra · {data.inheritedItems} kế thừa Tenant

@@ -8,16 +8,12 @@ export function StaffNotificationScreen() {
   const { go } = useWorkspace();
   return (
     <>
-      <Heading title="Gửi thông báo" detail="Thông báo đến người thuê" />
-      <Box>
-        <Icon source="bullhorn-outline" size={40} color={staffColors.purple} />
+      <Heading title="Gửi thông báo" />
+      <Box style={{ padding: 16, gap: 8 }}>
+        <Icon source="bullhorn-outline" size={28} color={staffColors.navy} />
         <Text variant="titleMedium">Chức năng chưa triển khai</Text>
         <Text style={ui.muted}>
           Ứng dụng chưa hỗ trợ gửi thông báo đến người thuê. Chưa có thông báo nào được gửi.
-        </Text>
-        <Text style={ui.muted}>
-          Khi được triển khai, người nhận phải nằm trong cơ sở được phân công và theo quyền của tài
-          khoản.
         </Text>
         <Action secondary onPress={() => go('notifications')}>
           Xem thông báo của tôi

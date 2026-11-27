@@ -18,26 +18,16 @@ internal static class IdentityCardCropper
         Cv2.Canny(gray, edges, 40, 120);
         using var kernel = Cv2.GetStructuringElement(MorphShapes.Rect, new Size(3, 3));
         Cv2.MorphologyEx(edges, edges, MorphTypes.Close, kernel);
-        Cv2.FindContours(edges, out Point[][] contours, out _, RetrievalModes.List, ContourApproximationModes.ApproxSimple);
-        var area = (double)small.Width * small.Height;
-        var candidates = new List<(Point[] Points, double Area, RotatedRect Box)>();
-        foreach (var contour in contours.OrderByDescending(c => Math.Abs(Cv2.ContourArea(c))).Take(64))
+        var candidates = Candidates(edges, small.Size());
+        if (candidates.Count == 0)
         {
-            var contourArea = Math.Abs(Cv2.ContourArea(contour));
-            if (contourArea < area * .12 || contourArea > area * .92) continue;
-            var polygon = Cv2.ApproxPolyDP(contour, Cv2.ArcLength(contour, true) * .02, true);
-            if (polygon.Length != 4 || !Cv2.IsContourConvex(polygon)) continue;
-            // A portrait inset on a tightly framed landscape card is not its
-            // boundary. A portrait-oriented photograph can still contain a whole
-            // rotated card and must be localized before the image is reduced.
-            var bounds = Cv2.BoundingRect(polygon);
-            var frameRatio = small.Width / (double)small.Height;
-            if (frameRatio is >= 1.35 and <= 1.9 && bounds.Width < bounds.Height * 1.2 && contourArea < area * .5) continue;
-            if (polygon.Any(p => p.X <= 2 || p.Y <= 2 || p.X >= small.Width - 3 || p.Y >= small.Height - 3)) continue;
-            var box = Cv2.MinAreaRect(polygon);
-            var ratio = Math.Max(box.Size.Width, box.Size.Height) / Math.Min(box.Size.Width, box.Size.Height);
-            if (ratio is < 1.35f or > 1.9f || contourArea / (box.Size.Width * box.Size.Height) < .8) continue;
-            candidates.Add((polygon, contourArea, box));
+            // Desk grain may join the card boundary into one frame-sized edge
+            // contour. A low-frequency brightness mask gives an independent
+            // boundary proposal, still subject to the same geometric checks.
+            using var foreground = new Mat();
+            Cv2.GaussianBlur(gray, foreground, new Size(15, 15), 0);
+            Cv2.Threshold(foreground, foreground, 0, 255, ThresholdTypes.Binary | ThresholdTypes.Otsu);
+            candidates = Candidates(foreground, small.Size());
         }
         if (candidates.Count == 0) return false;
         var best = candidates[0];
@@ -68,6 +58,32 @@ internal static class IdentityCardCropper
         using var transform = Cv2.GetPerspectiveTransform(corners, target);
         Cv2.WarpPerspective(source, destination, transform, new Size(width, height), InterpolationFlags.Linear, BorderTypes.Replicate);
         return true;
+    }
+
+    private static List<(Point[] Points, double Area, RotatedRect Box)> Candidates(Mat mask, Size frame)
+    {
+        Cv2.FindContours(mask, out Point[][] contours, out _, RetrievalModes.List, ContourApproximationModes.ApproxSimple);
+        var area = (double)frame.Width * frame.Height;
+        var candidates = new List<(Point[] Points, double Area, RotatedRect Box)>();
+        foreach (var contour in contours.OrderByDescending(c => Math.Abs(Cv2.ContourArea(c))).Take(64))
+        {
+            var contourArea = Math.Abs(Cv2.ContourArea(contour));
+            if (contourArea < area * .12 || contourArea > area * .92) continue;
+            var polygon = Cv2.ApproxPolyDP(contour, Cv2.ArcLength(contour, true) * .02, true);
+            if (polygon.Length != 4 || !Cv2.IsContourConvex(polygon)) continue;
+            // A portrait inset on a tightly framed landscape card is not its
+            // boundary. A portrait-oriented photograph can still contain a whole
+            // rotated card and must be localized before the image is reduced.
+            var bounds = Cv2.BoundingRect(polygon);
+            var frameRatio = frame.Width / (double)frame.Height;
+            if (frameRatio is >= 1.35 and <= 1.9 && bounds.Width < bounds.Height * 1.2 && contourArea < area * .5) continue;
+            if (polygon.Any(p => p.X <= 2 || p.Y <= 2 || p.X >= frame.Width - 3 || p.Y >= frame.Height - 3)) continue;
+            var box = Cv2.MinAreaRect(polygon);
+            var ratio = Math.Max(box.Size.Width, box.Size.Height) / Math.Min(box.Size.Width, box.Size.Height);
+            if (ratio is < 1.35f or > 1.9f || contourArea / (box.Size.Width * box.Size.Height) < .8) continue;
+            candidates.Add((polygon, contourArea, box));
+        }
+        return candidates;
     }
 
     internal static Point2f[] OrderCorners(IReadOnlyList<Point2f> points)
