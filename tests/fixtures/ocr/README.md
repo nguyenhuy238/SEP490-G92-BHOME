@@ -38,3 +38,10 @@ dotnet run --project tools/BHome.OcrSmoke -c Release -- .tools/ocr-models --eval
 
 Lệnh trả mã lỗi nếu thiếu trường kỳ vọng hoặc OCR timeout. Không dùng ảnh CCCD thật.
 Xem [đợt sửa staging 27/11/2026](../../../docs/testing/IDENTITY_OCR_STAGING_2026-11-27.md).
+
+`identity-chip/manifest.json` bổ sung bố cục tổng hợp có nền, nhãn song ngữ,
+chữ lớn và chuỗi giống MRZ. Hai mẫu dương kiểm đủ số/tên/ngày sinh hoặc ngày cấp;
+một mẫu chỉ có nhãn phải trả fallback. Sinh ảnh trên Windows bằng
+`scripts/New-IdentityChipFixtures.ps1`. Không có danh tính, chân dung hoặc vân tay thật.
+Chạy bằng `BHome.OcrSmoke <model-directory> --evaluate tests/fixtures/ocr/identity-chip/manifest.json`.
+Xem [kết quả và giới hạn](../../../docs/testing/IDENTITY_OCR_CHIP_LAYOUT_2026-11-27.md).

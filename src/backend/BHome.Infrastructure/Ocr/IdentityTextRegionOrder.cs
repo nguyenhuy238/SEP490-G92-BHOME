@@ -14,7 +14,12 @@ internal static class IdentityTextRegionOrder
         var seen = new HashSet<RotatedRect>();
         // Large printed values are useful first, together with the nearest label
         // above them. No field values or card identity are inferred from geometry.
-        foreach (var value in regions.OrderByDescending(r => Math.Min(r.Size.Width, r.Size.Height)))
+        // On chip cards the large MRZ/signatory text and the national heading can
+        // otherwise exhaust the deadline before any labelled personal fields.
+        // This is only a scheduling hint: still read every region when time allows,
+        // and let the label-based parser decide what each observed value means.
+        foreach (var value in regions.OrderBy(r => FieldBand(r, image, kind) ? 0 : 1)
+            .ThenByDescending(r => Math.Min(r.Size.Width, r.Size.Height)))
         {
             var bounds = value.BoundingRect();
             var label = regions.Where(r => r != value).Select(r => (Region: r, Bounds: r.BoundingRect()))
@@ -22,9 +27,23 @@ internal static class IdentityTextRegionOrder
                     bounds.Y - r.Bounds.Bottom <= bounds.Height * 2 &&
                     Math.Min(r.Bounds.Right, bounds.Right) - Math.Max(r.Bounds.X, bounds.X) > Math.Min(r.Bounds.Width, bounds.Width) * .25)
                 .OrderBy(r => bounds.Y - r.Bounds.Bottom).FirstOrDefault();
-            if (label.Bounds.Width > 0 && seen.Add(label.Region)) ordered.Add(label.Region);
+            // Read the upper number-sized value before its small label. The
+            // parser can recognize an observed 12-digit number without a label;
+            // name/date labels still travel with their values below this band.
+            var deferLabel = kind == OcrDocumentKind.IdentityFront && value.Center.Y < image.Height * .36;
+            if (!deferLabel && label.Bounds.Width > 0 && FieldBand(label.Region, image, kind) == FieldBand(value, image, kind) &&
+                seen.Add(label.Region)) ordered.Add(label.Region);
             if (seen.Add(value)) ordered.Add(value);
         }
         return ordered;
     }
+
+    private static bool FieldBand(RotatedRect region, Size image, OcrDocumentKind? kind) => kind switch
+    {
+        OcrDocumentKind.IdentityFront => region.Center.X >= image.Width * .25 &&
+            region.Center.Y >= image.Height * .25 && region.Center.Y <= image.Height * .72,
+        OcrDocumentKind.IdentityBack => region.Center.X <= image.Width * .8 &&
+            region.Center.Y >= image.Height * .18 && region.Center.Y <= image.Height * .55,
+        _ => false
+    };
 }

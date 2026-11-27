@@ -14,6 +14,7 @@ export default tseslint.config(
       // part of the primary workspace (their TSConfig roots are ambiguous).
       '.worktrees/**',
       '.tools/**',
+      '.artifacts/**',
       '.tmp/**',
       '.codex/skills/impeccable/**',
     ],

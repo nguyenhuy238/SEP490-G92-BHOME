@@ -1,0 +1,25 @@
+{
+  "dataset": "synthetic",
+  "cases": [
+    {
+      "file": "front.jpg",
+      "kind": "IdentityFront",
+      "expectedFields": {
+        "citizenIdentityNumber": "000000000000",
+        "fullName": "NGƯỜI KIỂM THỬ",
+        "dateOfBirth": "2000-01-01"
+      }
+    },
+    {
+      "file": "back.jpg",
+      "kind": "IdentityBack",
+      "expectedFields": { "dateOfIssue": "2024-07-01" }
+    },
+    {
+      "file": "blank-front.jpg",
+      "kind": "IdentityFront",
+      "expectedFields": {},
+      "expectFallback": true
+    }
+  ]
+}
