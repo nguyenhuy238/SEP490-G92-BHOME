@@ -26,7 +26,7 @@ REQUIRED = {
     'BHome.IntegrationTests.Compact24.Compact24OwnerSetupTests.TenantSessionSignatureCompletesOwnerSignedMoveInWithoutOtpAndCannotBeReplayedOrSpoofed': 2,
     'BHome.IntegrationTests.Compact24.Compact24OwnerSetupTests.StaffSubmitOwnerSignedPdfAndTenantOtpProduceVerifiedTwoSignatureHandover': 2,
     'BHome.IntegrationTests.Compact24.Compact24BillingManualActionsTests.': 2,
-    'BHome.IntegrationTests.Compact24.MainDraftDocumentRegressionTests.DemoTemplateIsAvailableWithRealPersistence': 2,
+    'BHome.IntegrationTests.Compact24.MainDraftDocumentRegressionTests.DemoTemplateIsAvailableWithRealPersistence': 3,
 }
 
 

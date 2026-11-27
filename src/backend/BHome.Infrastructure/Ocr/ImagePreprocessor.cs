@@ -22,12 +22,12 @@ public sealed class ImagePreprocessor(OcrOptions options) : IImagePreprocessor
     public PreparedImage Prepare(ReadOnlyMemory<byte> bytes, OcrDocumentKind kind)
     {
         if (!Enum.IsDefined(kind)) throw new OcrInputException("unsupported_profile");
-        return Prepare(bytes, options.Profiles[kind]);
+        return Prepare(bytes, options.Profiles[kind], kind is OcrDocumentKind.IdentityFront or OcrDocumentKind.IdentityBack);
     }
 
     public PreparedImage PrepareUnclassified(ReadOnlyMemory<byte> bytes) => Prepare(bytes, options.AutomaticProfile);
 
-    private PreparedImage Prepare(ReadOnlyMemory<byte> bytes, ImageProfile profile)
+    private PreparedImage Prepare(ReadOnlyMemory<byte> bytes, ImageProfile profile, bool identity = false)
     {
         ValidateHeader(bytes.Span, options.MaxImageBytes, options.MaxPixels);
         using var source = Cv2.ImDecode(bytes.Span, ImreadModes.Color);
@@ -43,6 +43,13 @@ public sealed class ImagePreprocessor(OcrOptions options) : IImagePreprocessor
                 2 => RotateFlags.Rotate180,
                 _ => RotateFlags.Rotate90Counterclockwise
             });
+            // Locate the card before downscaling so background text cannot consume
+            // the identity recognition budget and small card text keeps its detail.
+            if (identity)
+            {
+                using var card = new Mat();
+                if (IdentityCardCropper.TryCrop(result, card)) card.CopyTo(result);
+            }
             var ratio = Math.Min(1d, (double)options.MaxDimension / Math.Max(result.Width, result.Height));
             if (ratio < 1) Cv2.Resize(result, result, new Size(Math.Max(1, (int)(result.Width * ratio)),
                 Math.Max(1, (int)(result.Height * ratio))), 0, 0, InterpolationFlags.Area);

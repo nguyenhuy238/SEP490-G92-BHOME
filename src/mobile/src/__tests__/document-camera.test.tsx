@@ -432,7 +432,7 @@ it('unmounts the camera for an undistorted preview and deletes a rejected image 
   expect(screen.getByAltText('Ảnh CCCD vừa chụp').getAttribute('data-resize')).toBe('contain');
   expect(capture).not.toHaveBeenCalled();
   expect(native.files.size).toBe(1);
-  expect(native.resized).toHaveBeenCalledExactlyOnceWith({ width: 1600, height: 960 });
+  expect(native.resized).not.toHaveBeenCalled();
   expect(native.save).toHaveBeenCalledWith({ format: 'jpeg', compress: 0.95 });
   expect(native.release).toHaveBeenCalledTimes(3);
   fireEvent.click(screen.getByRole('button', { name: 'Chụp lại' }));

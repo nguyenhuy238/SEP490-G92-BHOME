@@ -103,7 +103,11 @@ public static class OcrFieldParser
                     confidence[key] = score;
                 }
             }
-            if (fields.Count == 0) warnings.Add("unsupported_or_unreadable_layout");
+            if (fields.Count == 0)
+            {
+                warnings.RemoveAll(warning => warning == "ocr_partial");
+                warnings.Add("unsupported_or_unreadable_layout");
+            }
         }
         if (confidence.Values.Any(x => x < .8f)) warnings.Add("low_confidence");
         var required = kind switch

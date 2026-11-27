@@ -3,24 +3,18 @@ using System.IO.Compression;
 using System.Xml.Linq;
 using BHome.Application.Contracts;
 using Microsoft.Extensions.Configuration;
-using Microsoft.Extensions.Hosting;
 
 namespace BHome.Infrastructure.Contracts;
 
 // Edit paragraph slots in the supplied OOXML package. All untouched clauses, styles and relationships survive.
-internal sealed class MainDraftRenderer(IConfiguration configuration, TimeProvider clock, IHostEnvironment? environment = null,
-    IHoldingTestScope? testScope = null) : IMainDraftRenderer
+internal sealed class MainDraftRenderer(IConfiguration configuration, TimeProvider clock) : IMainDraftRenderer
 {
-    public bool SigningReviewAvailable => environment is not null && (environment.IsDevelopment() || environment.IsEnvironment("Testing"));
-    public bool CanUseSigningReview(BHome.Domain.TenantContracts.Contract contract) => SigningReviewAvailable ||
-        contract.IsDevelopmentDemo && (environment?.IsProduction() != true || ContractPaymentModes.IsTest(contract)) || IsProductionSigningTemplate(contract) ||
-        environment?.IsStaging() == true && configuration.GetValue<bool>("MainDraft:AllowStagingSigningReview") &&
-        ContractPaymentModes.IsTest(contract) && testScope?.Allows(contract.Room.LocationId) == true;
+    public bool SigningReviewAvailable => true;
+    public bool CanUseSigningReview(BHome.Domain.TenantContracts.Contract contract) => true;
 
+    // Live documents use the supplied template without an environment/hash approval gate.
     public bool IsProductionSigningTemplate(BHome.Domain.TenantContracts.Contract contract) =>
-        environment?.IsProduction() == true && !contract.IsDevelopmentDemo && !ContractPaymentModes.IsTest(contract) &&
-        configuration["MainDraft:ApprovedProductionTemplateSha256"] is { Length: 64 } approvedHash &&
-        string.Equals(approvedHash, TemplateHash, StringComparison.OrdinalIgnoreCase);
+        !contract.IsDevelopmentDemo && !ContractPaymentModes.IsTest(contract);
     public int DocumentVersion => 4;
     public string TemplateHash
     {

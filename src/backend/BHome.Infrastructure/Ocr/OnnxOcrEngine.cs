@@ -11,7 +11,7 @@ namespace BHome.Infrastructure.Ocr;
 // One detector + recognizer per process. No network, file writes or image logging.
 public sealed class OnnxOcrEngine : IOcrEngine, IOcrAnalysisEngine, IExperimentalMeterAnalysisEngine, IDisposable
 {
-    public const string Version = "ocrdoc-ppocrv6-vi-run6-9b534643-yolo2-cache1-category2";
+    public const string Version = "ocrdoc-ppocrv6-vi-run6-9b534643-yolo2-cache1-category2-identity-card1";
     private readonly OcrOptions options;
     private readonly IImagePreprocessor preprocessor;
     private readonly InferenceSession detector;
@@ -334,6 +334,7 @@ public sealed class OnnxOcrEngine : IOcrEngine, IOcrAnalysisEngine, IExperimenta
             OcrDocumentKind.MechanicalWater or OcrDocumentKind.DigitalWater;
         var profile = kind.GetValueOrDefault(); // used only inside a known-meter branch
         var longestLineMilliseconds = 0L;
+        if (identityClock is not null) regions = IdentityTextRegionOrder.Prioritize(regions, source.Size(), kind);
         if (regions.Count > options.MaxTextRegions) warnings.Add("text_region_limit");
         foreach (var region in regions.Take(options.MaxTextRegions))
         {

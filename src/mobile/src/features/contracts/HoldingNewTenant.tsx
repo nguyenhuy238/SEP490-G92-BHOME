@@ -10,7 +10,11 @@ import { Action, Heading } from '../../components/WorkspaceKit';
 import { Input } from '../../components/WorkflowControls';
 import { IdentityWizard } from '../onboarding/IdentityWizard';
 import { IdentityPersonCard } from '../onboarding/IdentityPersonCard';
-import { type CaptureProgress, type IdentityStatus } from '../onboarding/onboarding';
+import {
+  type CaptureProgress,
+  type IdentityCaptureRequest,
+  type IdentityStatus,
+} from '../onboarding/onboarding';
 import { WorkspaceFooter } from '../../components/WorkspaceFooter';
 import { staffColors } from '../../theme/theme';
 
@@ -63,6 +67,7 @@ export function HoldingNewTenant({
   const [error, setError] = useState('');
   const [identityStatus, setIdentityStatus] = useState<IdentityStatus>('unscanned');
   const [captureProgress, setCaptureProgress] = useState<CaptureProgress>();
+  const [captureRequest, setCaptureRequest] = useState<IdentityCaptureRequest>();
   const lock = useRef(false);
   async function enter(next: 'capture' | 'verify') {
     if (lock.current || uncertain || disabled || !['Owner', 'Staff'].includes(role)) return;
@@ -160,14 +165,18 @@ export function HoldingNewTenant({
             }}
             label={name}
             role="Người giữ chỗ"
-            disabled={busy || uncertain || disabled}
-            onScan={() =>
+            disabled={busy || uncertain || disabled || identityStatus === 'recognizing'}
+            onScan={(side) => {
+              if (side) setCaptureRequest((before) => ({ side, id: (before?.id ?? 0) + 1 }));
               void enter(
-                captureProgress?.front === 'recognized' && captureProgress?.back === 'recognized'
-                  ? 'verify'
-                  : 'capture',
-              )
-            }
+                side
+                  ? 'capture'
+                  : captureProgress?.front === 'recognized' &&
+                      captureProgress?.back === 'recognized'
+                    ? 'verify'
+                    : 'capture',
+              );
+            }}
             onManual={() => void enter('verify')}
           />
           {(confirmed || initialConfirmed) && (
@@ -237,6 +246,7 @@ export function HoldingNewTenant({
           modal
           visible={open}
           mode={mode}
+          captureRequest={captureRequest}
           onModeChange={setMode}
           onConfirmed={() => {
             setConfirmed(true);

@@ -952,13 +952,70 @@ it('keeps OCR suggestions and Staff edits in memory without confirming them when
     state.listeners.forEach((listener) => listener('background'));
   });
   expect(screen.queryByRole('dialog')).toBeNull();
-  await openIdentity();
+  fireEvent.click(screen.getByRole('button', { name: 'Nhập thủ công' }));
+  await screen.findByRole('dialog');
   expect((screen.getByRole('textbox', { name: 'Họ và tên' }) as HTMLInputElement).value).toBe(
     'TÊN ĐÃ SỬA',
   );
   expect(screen.getByRole('checkbox').getAttribute('aria-checked')).toBe('false');
   expect(state.json).toHaveBeenCalledTimes(1);
 });
+it('selects either side from the person card and retains per-side progress and manual edits on retry', async () => {
+  const proposal = (proposedFields: Record<string, string>) => ({
+    proposedFields,
+    warnings: [],
+    missingFields: [],
+    confidence: {},
+    isFallback: false,
+  });
+  state.image
+    .mockResolvedValueOnce(proposal({ dateOfIssue: '2024-07-01' }))
+    .mockResolvedValueOnce(
+      proposal({
+        citizenIdentityNumber: '000000000001',
+        fullName: 'NGƯỜI MẪU',
+        dateOfBirth: '2000-01-01',
+      }),
+    )
+    .mockResolvedValueOnce({
+      ...proposal({}),
+      isFallback: true,
+      warnings: ['ocr_partial', 'unsupported_or_unreadable_layout'],
+    });
+  render(<OnboardingScreen />);
+  selectRoom();
+  fireEvent.click(screen.getByRole('button', { name: 'Quét mặt sau' }));
+  fireEvent.click(await screen.findByRole('button', { name: 'Chụp ảnh mặt sau' }));
+  await screen.findByRole('textbox', { name: 'Ngày cấp (dd/MM/yyyy)' });
+  closeIdentity();
+  expect(screen.getByText('Đã nhận diện')).toBeTruthy();
+  expect(screen.getByText('Chưa quét')).toBeTruthy();
+  fireEvent.click(screen.getByRole('button', { name: 'Quét mặt trước' }));
+  fireEvent.click(await screen.findByRole('button', { name: 'Chụp ảnh mặt trước' }));
+  await screen.findByDisplayValue('NGƯỜI MẪU');
+  fireEvent.change(screen.getByRole('textbox', { name: 'Họ và tên' }), {
+    target: { value: 'TÊN ĐÃ SỬA' },
+  });
+  closeIdentity();
+  fireEvent.click(screen.getByRole('button', { name: 'Quét lại mặt sau' }));
+  fireEvent.click(await screen.findByRole('button', { name: 'Chụp ảnh mặt sau' }));
+  expect(await screen.findByDisplayValue('TÊN ĐÃ SỬA')).toBeTruthy();
+  expect(screen.getByDisplayValue('01/01/2000')).toBeTruthy();
+  expect(screen.getAllByText(/Chưa trích xuất được thông tin từ bố cục/)).toHaveLength(1);
+  expect(screen.queryByText(/\(ocr_partial\)/)).toBeNull();
+  expect(screen.queryByText(/OCR đã đọc được một phần thông tin/)).toBeNull();
+  closeIdentity();
+  expect(screen.getByText('Chưa đọc được')).toBeTruthy();
+  expect(state.image.mock.calls.map(([path]) => path.split('/').at(-1))).toEqual([
+    'back',
+    'front',
+    'back',
+  ]);
+  expect(state.json).toHaveBeenCalledTimes(1);
+  fireEvent.click(screen.getByRole('button', { name: 'Quét lại mặt trước' }));
+  await screen.findByRole('button', { name: 'Chụp ảnh mặt trước' });
+});
+
 it('scans both existing endpoints and uses the back-side issue date in confirmation', async () => {
   state.image.mockResolvedValue({
     proposedFields: {
@@ -1075,8 +1132,8 @@ it('retries the back side independently and preserves Staff edits and front fiel
 });
 it.each([
   ['ocr_timeout', 'Xử lý OCR vượt thời gian cho phép.'],
-  ['ocr_unavailable', 'Engine/model OCR chưa sẵn sàng trên máy chủ.'],
-  ['ocr_busy', 'Engine đang xử lý ảnh khác. Hãy thử lại.'],
+  ['ocr_unavailable', 'Dịch vụ đọc ảnh tạm thời chưa sẵn sàng. Hãy thử lại hoặc nhập thủ công.'],
+  ['ocr_busy', 'Máy chủ đang xử lý ảnh khác. Hãy thử lại.'],
   ['no_text', 'Không phát hiện được chữ trong ảnh.'],
 ])('preserves front fields and explains %s when the back scan fails', async (code, message) => {
   state.image
@@ -1102,7 +1159,7 @@ it.each([
   await screen.findByRole('button', { name: 'Chụp ảnh mặt sau' });
   closeIdentity();
   expect(screen.getByRole('button', { name: 'Tiếp tục quét' })).toBeTruthy();
-  expect(screen.getAllByText('Đã nhận diện')).toHaveLength(1);
+  expect(screen.getAllByText('Đọc được một phần')).toHaveLength(1);
   await openIdentity();
   fireEvent.click(screen.getByRole('button', { name: 'Chụp ảnh mặt sau' }));
   await screen.findByRole('textbox', { name: 'Ngày cấp (dd/MM/yyyy)' });
@@ -1115,8 +1172,8 @@ it.each([
     message: expect.stringContaining(message),
   });
   closeIdentity();
-  expect(screen.getAllByText('Đã nhận diện')).toHaveLength(1);
-  expect(screen.getByText('Đã chụp')).toBeTruthy();
+  expect(screen.getAllByText('Đọc được một phần')).toHaveLength(1);
+  expect(screen.getByText('Chưa đọc được')).toBeTruthy();
 });
 it('does not mark a person confirmed when the response lacks a verified status', async () => {
   render(<OnboardingScreen />);

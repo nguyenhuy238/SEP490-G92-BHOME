@@ -128,15 +128,18 @@ it.each([
   [4000, 3000],
   [3000, 4000],
   [8000, 6000],
-])('bounds identity uploads to the server OCR resolution for %s x %s', async (width, height) => {
-  await prepareCapture(picture(width, height), () => true, 'identity');
-  const resized = native.resize.mock.calls[0][0];
-  expect(Math.max(resized.width, resized.height)).toBe(identityCaptureMaxDimension);
-  expect(Math.abs(resized.width / resized.height - width / height)).toBeLessThan(0.001);
-  expect(native.save).toHaveBeenCalledExactlyOnceWith({ format: 'jpeg', compress: 0.95 });
-  expect(native.releaseImage).toHaveBeenCalledOnce();
-  expect(native.releaseContext).toHaveBeenCalledOnce();
-});
+])(
+  'bounds identity uploads while preserving detail for localization for %s x %s',
+  async (width, height) => {
+    await prepareCapture(picture(width, height), () => true, 'identity');
+    const resized = native.resize.mock.calls[0][0];
+    expect(Math.max(resized.width, resized.height)).toBe(identityCaptureMaxDimension);
+    expect(Math.abs(resized.width / resized.height - width / height)).toBeLessThan(0.001);
+    expect(native.save).toHaveBeenCalledExactlyOnceWith({ format: 'jpeg', compress: 0.95 });
+    expect(native.releaseImage).toHaveBeenCalledOnce();
+    expect(native.releaseContext).toHaveBeenCalledOnce();
+  },
+);
 it('does not upscale a smaller identity photo', async () => {
   await prepareCapture(picture(1000, 600), () => true, 'identity');
   expect(native.resize).not.toHaveBeenCalled();
