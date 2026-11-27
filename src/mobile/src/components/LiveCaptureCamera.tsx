@@ -32,6 +32,7 @@ export function LiveCaptureCamera({
   onError,
   dark = false,
   showControls = true,
+  lensPreferenceRef,
   children,
 }: {
   camera: React.RefObject<CameraView | null>;
@@ -40,6 +41,7 @@ export function LiveCaptureCamera({
   onError: () => void;
   dark?: boolean;
   showControls?: boolean;
+  lensPreferenceRef?: { current: string };
   children?: React.ReactNode;
 }) {
   const [lens, setLens] = useState('');
@@ -52,6 +54,7 @@ export function LiveCaptureCamera({
   const started = useRef(false);
   const timer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const selected = useRef('');
+  const preferenceRestored = useRef(false);
   const switching = useRef(false);
   const focusRequest = useRef(-1);
   const focusFloor = useRef(0);
@@ -87,15 +90,30 @@ export function LiveCaptureCamera({
       if (!mounted.current) return;
       const options = captureLensOptions(reported);
       setLenses(options);
-      if (selected.current && !options.some((option) => option.id === selected.current)) {
+      if (!preferenceRestored.current && options.length > 0) {
+        preferenceRestored.current = true;
+        const preferred = lensPreferenceRef?.current ?? '';
+        // Restore only an actually discovered physical lens, including Expo Go.
+        // Keep the user's close-focus choice across preview/retake/front-back.
+        if (preferred && options.some((option) => option.id === preferred)) {
+          selected.current = preferred;
+          setLens(preferred);
+        } else if (lensPreferenceRef) lensPreferenceRef.current = '';
+      }
+      if (
+        options.length > 0 &&
+        selected.current &&
+        !options.some((option) => option.id === selected.current)
+      ) {
         selected.current = '';
         setLens('');
         setZoom(0);
+        if (lensPreferenceRef) lensPreferenceRef.current = '';
       }
       // SDK 58 emits discovery again after committing an iOS lens switch.
       if (started.current) settle();
     },
-    [settle],
+    [settle, lensPreferenceRef],
   );
   const handleReady = useCallback(() => {
     if (!mounted.current) return;
@@ -201,6 +219,7 @@ export function LiveCaptureCamera({
                     if (switching.current || blocked || selected.current === option.id) return;
                     switching.current = true;
                     selected.current = option.id;
+                    if (lensPreferenceRef) lensPreferenceRef.current = option.id;
                     settle();
                     setZoom(0);
                     setLens(option.id);
