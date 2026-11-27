@@ -13,9 +13,7 @@ export function meterOcrFeedback(proposal: Proposal): string {
       (code) => warnings.has(code),
     )
   )
-    messages.push(
-      'Thông tin cấu hình đồng hồ chưa hợp lệ. Hãy báo Owner kiểm tra loại đồng hồ, độ chính xác và chỉ số trước.',
-    );
+    messages.push('Cấu hình công tơ chưa hợp lệ. Hãy báo chủ trọ kiểm tra.');
   if (warnings.has('meter_not_detected'))
     messages.push('Chưa tìm thấy đồng hồ trong ảnh. Hãy chụp lại đúng đồng hồ của tác vụ.');
   if (
@@ -47,7 +45,7 @@ export function meterOcrFeedback(proposal: Proposal): string {
       (code) => warnings.has(code),
     )
   )
-    messages.push('Hãy kiểm tra kỹ vị trí dấu thập phân và các chữ số phần lẻ.');
+    messages.push('Hãy đối chiếu ảnh và nhập chỉ số nguyên.');
   if (warnings.has('billing_register_unverified'))
     messages.push('Hãy bảo đảm màn hình đang hiển thị tổng chỉ số dùng tính tiền.');
   if (warnings.size > 0 && messages.length === 1)

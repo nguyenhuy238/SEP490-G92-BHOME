@@ -29,6 +29,21 @@ public interface IDepositDeductionEvidence
     Task VerifyAsync(DepositDeductionPlan plan, CancellationToken token);
 }
 
+public static class SettlementInspectionEvidence
+{
+    // A fixed fee is backed by the entire validated inspection, not one damage
+    // item. Keep the five-photo limit on individual evidence captures and verify
+    // every linked photo of the authoritative inspection in bounded batches.
+    public static async Task<IReadOnlyList<DeductionEvidence>> CaptureAsync(
+        IDepositDeductionEvidence evidence, Guid contractId, IEnumerable<Guid> ids, CancellationToken token)
+    {
+        var result = new List<DeductionEvidence>();
+        foreach (var batch in ids.Order().Chunk(5))
+            result.AddRange(await evidence.CaptureAsync(contractId, batch, token));
+        return result;
+    }
+}
+
 public static class DepositDeductionPolicy
 {
     public static DepositDeductionItem[] Normalize(DepositDeductionInput input, decimal budget, Guid[] assets, Guid[] evidence)

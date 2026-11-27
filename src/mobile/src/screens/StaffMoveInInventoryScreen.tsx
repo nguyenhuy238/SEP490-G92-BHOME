@@ -1,5 +1,5 @@
 import { UserFeedbackError } from '../../../../packages/client-core/src/api';
-import React, { useCallback, useRef, useState } from 'react';
+import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { useFocusEffect, useLocalSearchParams } from 'expo-router';
 import { Button, Checkbox, SegmentedButtons, Text, TextInput } from 'react-native-paper';
 import { formatInstant } from '../../../../packages/client-core/src/localization';
@@ -190,6 +190,7 @@ function InventoryDetail({
   const [error, setError] = useState('');
   const [notice, setNotice] = useState('');
   const [completionSyncFailed, setCompletionSyncFailed] = useState(false);
+  const startAttempt = useRef('');
   const [keys] = useState(() => mutationKeys(randomUUID));
   const query = useWorkspaceQuery<MoveInInventory>(
     `/api/v1/operational-tasks/${taskId}/move-in-inventory`,
@@ -202,10 +203,13 @@ function InventoryDetail({
     if (embedded) onPaneChange?.();
     else resetScroll?.();
   }
-  function saving(next: boolean) {
-    setBusy(next);
-    onBusyChange?.(next);
-  }
+  const saving = useCallback(
+    (next: boolean) => {
+      setBusy(next);
+      onBusyChange?.(next);
+    },
+    [onBusyChange],
+  );
   useFocusEffect(
     useCallback(() => {
       reload();
@@ -460,7 +464,7 @@ function InventoryDetail({
       saving(false);
     }
   }
-  async function start() {
+  const start = useCallback(async () => {
     if (!api || !data || data.status !== 'Assigned' || busyRef.current) return;
     busyRef.current = true;
     saving(true);
@@ -470,7 +474,6 @@ function InventoryDetail({
       const body = { version: data.version, note: '', evidenceIds: [] as string[] };
       await operationalTasks(api).act(taskId, 'start', data.version, '', [], keys.get(scope, body));
       keys.confirmed(scope, body);
-      showSuccess('Đã bắt đầu công việc kiểm kê.');
       reload();
     } catch (failure) {
       setError(errorMessage(failure));
@@ -479,7 +482,16 @@ function InventoryDetail({
       busyRef.current = false;
       saving(false);
     }
-  }
+  }, [api, data, keys, taskId, reload, saving]);
+  // Opening an item starts the assigned inventory on the server exactly once.
+  // Keep all inputs locked until the refreshed task is InProgress.
+  useEffect(() => {
+    if (!api || data?.status !== 'Assigned' || (!selectedItemId && data.items.length > 0)) return;
+    const attempt = `${taskId}:${data.version}`;
+    if (startAttempt.current === attempt) return;
+    startAttempt.current = attempt;
+    void start();
+  }, [api, data, selectedItemId, taskId, start]);
   async function confirmEmptyInventory() {
     if (!api || !data || data.status !== 'InProgress' || data.items.length || busyRef.current)
       return;
@@ -536,6 +548,15 @@ function InventoryDetail({
           {error}
         </Text>
       )}
+      {data?.status === 'Assigned' &&
+        (selectedItemId || !data.items.length) &&
+        (busy ? (
+          <Text style={ui.muted}>Đang mở kiểm kê…</Text>
+        ) : error ? (
+          <Action secondary onPress={() => void start()}>
+            Thử lại
+          </Action>
+        ) : null)}
       {completionSyncFailed && (!selectedItem || embeddedItemId) && (
         <Action secondary disabled={busy} onPress={() => void retryCompletionSync()}>
           Thử gửi lại kết quả đã lưu
@@ -583,11 +604,6 @@ function InventoryDetail({
                   ? 'Phòng đã sẵn sàng về tài sản'
                   : 'Có tài sản cần chủ trọ xem xét và quyết định phương án xử lý'}
               </Text>
-            )}
-            {data.status === 'Assigned' && (
-              <Action disabled={busy} onPress={() => void start()}>
-                Bắt đầu kiểm kê
-              </Action>
             )}
           </Box>
           {data.items.map((item) => {
@@ -678,11 +694,6 @@ function InventoryDetail({
             <Box style={embedded ? inventoryStyles.embeddedSection : undefined}>
               {!embeddedItemId && <Text variant="titleMedium">{item.name}</Text>}
               <Text style={ui.muted}>Dự kiến {item.expectedQuantity}</Text>
-              {embeddedItemId && data.status === 'Assigned' && (
-                <Action disabled={busy} onPress={() => void start()}>
-                  Bắt đầu kiểm kê
-                </Action>
-              )}
               {reinspectionSelected && (
                 <Text style={ui.red}>
                   Chủ trọ yêu cầu kiểm tra lại tài sản này. Sau khi sửa chữa, chỉ chọn Đạt khi thực

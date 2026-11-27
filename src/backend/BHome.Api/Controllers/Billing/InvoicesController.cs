@@ -16,6 +16,8 @@ public sealed class InvoicesController(InvoiceService service) : ControllerBase
     public Task<PagedResult<InvoiceView>> List([FromQuery] int page = 1, [FromQuery] int pageSize = 20,
         [FromQuery] Guid? roomId = null, [FromQuery] Guid? locationId = null, [FromQuery] DateOnly? billingPeriod = null,
         [FromQuery] InvoiceStatus? status = null, CancellationToken t = default) => service.ListAsync(page, pageSize, roomId, t, new(locationId, billingPeriod, status));
+    [HttpGet("current-period"), Authorize(Roles = Roles.Tenant)]
+    public Task<TenantInvoicePeriodView> CurrentPeriod(CancellationToken t) => service.CurrentTenantPeriodAsync(t);
     [HttpGet("{id:guid}")] public Task<InvoiceView> Get(Guid id, CancellationToken t) => service.GetAsync(id, t);
     [HttpPost("drafts"), Authorize(Roles = Roles.Owner)] public Task<InvoiceView> Draft(DraftInvoiceInput x, CancellationToken t) => service.GenerateAsync(x, t);
     [HttpPost("{id:guid}/refresh"), Authorize(Roles = Roles.Owner)] public Task<InvoiceView> Refresh(Guid id, InvoiceFinalizeInput x, CancellationToken t) => service.RefreshAsync(id, x.ExpectedVersion, t);

@@ -89,7 +89,7 @@ public sealed partial class RoomInventoryReviewService(ISetupWorkspaceStore stor
         var objectKey = key.GetString();
         var contentType = type.GetString();
         var hashValue = hash.GetString();
-        return objectKey is not null && objectKey.StartsWith($"setup/{location:N}/evidence/", StringComparison.Ordinal) &&
+        return BHome.Application.Storage.PrivateImageKeys.IsSetup(location, objectKey) &&
             contentType is "image/png" or "image/jpeg" && bytes is > 0 and <= 5 * 1024 * 1024 &&
             hashValue is { Length: 64 } && hashValue.All(Uri.IsHexDigit);
     }

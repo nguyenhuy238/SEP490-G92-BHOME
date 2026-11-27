@@ -23,6 +23,7 @@ import { useAuth } from '../../../../../../packages/client-core/src/auth';
 import {
   contractError,
   displayContractDate,
+  type ContractClient,
   type MoveOut,
 } from '../../../../../../packages/client-core/src/contracts';
 import { formatInstant } from '../../../../../../packages/client-core/src/localization';
@@ -33,21 +34,41 @@ const labels = {
   Requested: 'Chờ phê duyệt',
   Approved: 'Đã chấp nhận',
   Rejected: 'Đã từ chối',
+  AwaitingConsent: 'Chờ đồng thuận thành viên',
 } as const;
-const colors = { Requested: 'warning', Approved: 'success', Rejected: 'error' } as const;
+const colors = {
+  Requested: 'warning',
+  Approved: 'success',
+  Rejected: 'error',
+  AwaitingConsent: 'warning',
+} as const;
 
 export default function TerminationReviewPage() {
   const { contractId = '' } = useParams();
-  return <TerminationReview key={contractId} id={contractId} />;
-}
-
-function TerminationReview({ id }: { id: string }) {
   const api = useContractsApi();
   const { session } = useAuth();
+  return (
+    <TerminationReviewPanel key={contractId} id={contractId} api={api} ownerId={session?.userId} />
+  );
+}
+
+export function TerminationReviewPanel({
+  id,
+  api,
+  ownerId,
+  embedded = false,
+  onChanged,
+}: {
+  id: string;
+  api: ContractClient;
+  ownerId?: string;
+  embedded?: boolean;
+  onChanged?: () => void;
+}) {
   const cache = useQueryClient();
   const theme = useTheme();
   const narrow = useMediaQuery(theme.breakpoints.down('sm'));
-  const queryKey = ['contract-termination-review', session?.userId, id];
+  const queryKey = ['contract-termination-review', ownerId, id];
   const query = useQuery({
     queryKey,
     queryFn: ({ signal }) => api.terminationReview(id, signal),
@@ -117,7 +138,9 @@ function TerminationReview({ id }: { id: string }) {
         cache.invalidateQueries({ queryKey: ['contract-workflow', id] }),
         cache.invalidateQueries({ queryKey: ['contract-expiry-reminders'] }),
         cache.invalidateQueries({ queryKey: ['notification-list'] }),
+        cache.invalidateQueries({ queryKey: ['move-out-inbox'] }),
       ]);
+      onChanged?.();
     } catch (error) {
       if (
         typeof error === 'object' &&
@@ -131,6 +154,7 @@ function TerminationReview({ id }: { id: string }) {
           severity: 'error',
           text: 'Yêu cầu đã thay đổi. Vui lòng kiểm tra trạng thái mới trước khi tiếp tục.',
         });
+        onChanged?.();
       } else {
         setMessage({ severity: 'error', text: contractError(error) });
       }
@@ -143,15 +167,17 @@ function TerminationReview({ id }: { id: string }) {
   return (
     <Stack spacing={2} sx={{ width: '100%', maxWidth: 820, mx: 'auto', minWidth: 0 }}>
       <Box>
-        <Button
-          component={Link}
-          to={`/contracts?contractId=${encodeURIComponent(id)}`}
-          sx={{ mb: 1 }}
-        >
-          Về chi tiết hợp đồng
-        </Button>
-        <Typography component="h1" variant="h4">
-          {title}
+        {!embedded && (
+          <Button
+            component={Link}
+            to={`/contracts?contractId=${encodeURIComponent(id)}`}
+            sx={{ mb: 1 }}
+          >
+            Về chi tiết hợp đồng
+          </Button>
+        )}
+        <Typography component={embedded ? 'h2' : 'h1'} variant={embedded ? 'h6' : 'h4'}>
+          {embedded ? 'Xét duyệt yêu cầu trả phòng' : title}
         </Typography>
       </Box>
       {query.isPending && <LinearProgress aria-label="Đang tải yêu cầu" />}
@@ -181,7 +207,7 @@ function TerminationReview({ id }: { id: string }) {
                 ],
                 ['Ngày đề xuất kết thúc', displayContractDate(review.proposedDate)],
                 ['Lý do kết thúc', review.reason],
-                ...(!pending
+                ...(!pending && review.status !== 'AwaitingConsent'
                   ? [
                       ['Người xét duyệt', review.decidedBy || 'Chưa có thông tin'],
                       [
@@ -242,7 +268,7 @@ function TerminationReview({ id }: { id: string }) {
                     disabled={busy || query.isError}
                     onClick={() => openDecision('approve')}
                   >
-                    Chấp nhận yêu cầu
+                    {embedded ? 'Duyệt yêu cầu trả phòng' : 'Chấp nhận yêu cầu'}
                   </Button>
                 </Stack>
               </>
@@ -280,8 +306,9 @@ function TerminationReview({ id }: { id: string }) {
             />
           ) : (
             <DialogContentText>
-              Yêu cầu sẽ được phê duyệt và chuyển sang quy trình xử lý trả phòng. Hợp đồng vẫn còn
-              hiệu lực cho đến khi hoàn tất các thủ tục liên quan.
+              Yêu cầu sẽ được phê duyệt và chuyển sang quy trình xử lý trả phòng.
+              {embedded && ' Hệ thống sẽ tự tạo nhiệm vụ kiểm tra trả phòng cho nhân viên.'} Hợp
+              đồng vẫn còn hiệu lực cho đến khi hoàn tất các thủ tục liên quan.
             </DialogContentText>
           )}
           {message?.severity === 'error' && (

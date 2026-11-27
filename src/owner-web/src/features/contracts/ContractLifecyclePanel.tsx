@@ -70,7 +70,7 @@ export function ContractLifecyclePanel({
   moveOut: MoveOut;
   onChanged: () => void;
 }) {
-  const q = useContractLifecycle(api, contract.id, 'Owner');
+  const q = useContractLifecycle(api, contract.id, 'Owner', !!moveOut.isForced);
   const cache = useQueryClient();
   async function reload() {
     await cache.invalidateQueries({
@@ -146,7 +146,7 @@ export function ContractLifecyclePanel({
     }
   }
   const inspection = q.inspections[0],
-    summary = q.summary;
+    summary = moveOut.isForced ? null : q.summary;
   const inspectionKey = inspection ? `${contract.id}:${inspection.id}:${inspection.version}` : null;
   const noCharges = !!inspectionKey && noChargesInspection === inspectionKey;
   const checked = !!summary && reviewedReference === summary.reference;
@@ -763,7 +763,7 @@ export function ContractLifecyclePanel({
             )}
           </>
         )}
-        {!q.loading && (q.summary || q.inspections.length > 0) && (
+        {!moveOut.isForced && !q.loading && (q.summary || q.inspections.length > 0) && (
           <>
             <TextField
               label="Lý do / căn cứ của Owner"

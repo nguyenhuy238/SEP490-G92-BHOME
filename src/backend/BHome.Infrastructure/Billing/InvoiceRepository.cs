@@ -16,6 +16,10 @@ internal sealed class InvoiceRepository(BHomePersistenceContext db) : IInvoiceRe
     public Task<BillingSchedule?> ScheduleAsync(Guid locationId, CancellationToken t) => db.Set<BillingSchedule>().SingleOrDefaultAsync(s => s.LocationId == locationId, t);
     public Task<BillingSchedule?> ScheduleForPeriodAsync(Guid locationId, DateOnly period, CancellationToken t) =>
         BillingAutomationSchedules.ResolveCalendarAsync(db, locationId, period, t);
+    public async Task<IReadOnlyList<Guid>> TenantBillingLocationIdsAsync(Guid tenantId, CancellationToken t) =>
+        await db.Set<Contract>().AsNoTracking().Where(c => c.TenantUserId == tenantId && c.Status == ContractStatus.Active &&
+            (c.Kind == ContractKind.Main || c.Kind == ContractKind.Renewal) && c.ActivatedAt != null && c.Room.Location.IsActive)
+            .Select(c => c.Room.LocationId).Distinct().ToArrayAsync(t);
     public Task<Room?> RoomAsync(Guid roomId, CancellationToken t) => db.Set<Room>().Include(r => r.Location).SingleOrDefaultAsync(r => r.Id == roomId, t);
     public async Task<T> WithRoomLockAsync<T>(Guid roomId, Func<Task<T>> action, CancellationToken t)
     {

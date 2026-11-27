@@ -54,7 +54,7 @@ public sealed partial class Compact24OwnerSetupTests
         Assert.Equal("no_asset_requirements", noConfiguration.BlockedReason);
         var evidence = await UploadReviewEvidence(owner, location);
         Assert.NotEqual(Guid.Empty, evidence.EvidenceId);
-        Assert.StartsWith($"setup/{location:N}/evidence/", evidence.ObjectKey);
+        Assert.StartsWith($"images/locations/{location:N}/setup/", evidence.ObjectKey);
 
         var inputRoom = ReviewRoom(configured, new RoomInventoryReviewInputItem(
             configured.Items[0].Id, true, [evidence.EvidenceId]));

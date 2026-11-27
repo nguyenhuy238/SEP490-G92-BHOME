@@ -30,6 +30,7 @@ import { useWorkspace } from '../features/workspace/WorkspaceProvider';
 import { colors as c } from '../theme/theme';
 import {
   estimatedConsumption,
+  integerReadingInput,
   normalizedReading,
   readingDecreased,
   readingError,
@@ -43,7 +44,7 @@ export default function MeterScreen() {
   if (!session.roles.includes('Staff'))
     return (
       <Page>
-        <Text>Chỉ Staff được giao cơ sở mới có thể ghi chỉ số.</Text>
+        <Text>Chỉ nhân viên được phân công tại cơ sở mới có thể ghi chỉ số.</Text>
       </Page>
     );
   if (!staffLocationId)
@@ -157,7 +158,6 @@ function RoomMeterScreen({ taskId, staffLocationId }: { taskId: string; staffLoc
     if (!modalBusy) returnToOverview();
   };
   const meterName = selectedTask?.utilityType === 0 ? 'điện' : 'nước';
-  const unit = selectedTask?.utilityType === 0 ? 'kWh' : 'm³';
   return (
     <>
       <MeterRoomOverview
@@ -196,27 +196,14 @@ function RoomMeterScreen({ taskId, staffLocationId }: { taskId: string; staffLoc
                 contentContainerStyle={meterModalStyles.body}
                 keyboardShouldPersistTaps="handled"
               >
-                {selectedReading ? (
-                  <>
-                    <Text variant="labelLarge">Chỉ số đã xác nhận</Text>
-                    <Text variant="headlineMedium" style={ui.money}>
-                      {formatMeterReading(selectedReading.confirmedValue, unit)}
-                    </Text>
-                    <StaffMeterReadingEvidence
-                      key={selectedReading.id}
-                      id={selectedReading.id}
-                      label={`Ảnh minh chứng ${meterName}`}
-                    />
-                  </>
-                ) : (
-                  <MeterTaskScreen
-                    key={selectedTask.id}
-                    embedded
-                    taskId={selectedTask.id}
-                    onReturn={returnToOverview}
-                    onBusyChange={setModalBusy}
-                  />
-                )}
+                <MeterTaskScreen
+                  key={selectedTask.id}
+                  embedded
+                  confirmedDetail={!!selectedReading}
+                  taskId={selectedTask.id}
+                  onReturn={returnToOverview}
+                  onBusyChange={setModalBusy}
+                />
               </ScrollView>
             </View>
             {modalBusy && (
@@ -298,11 +285,13 @@ export function MeterTaskScreen({
   taskId,
   onReturn,
   embedded = false,
+  confirmedDetail = false,
   onBusyChange,
 }: {
   taskId: string;
   onReturn: () => void;
   embedded?: boolean;
+  confirmedDetail?: boolean;
   onBusyChange?: (busy: boolean) => void;
 }) {
   const { api } = useSession();
@@ -312,13 +301,14 @@ export function MeterTaskScreen({
   const [proposal, setProposal] = useState<Proposal | null>(null);
   const [checked, setChecked] = useState(false);
   const [step, setStep] = useState(1);
-  const [error, setError] = useFeedbackState();
-  const [notice, setNotice] = useFeedbackState('info');
+  const [error, setError] = useFeedbackState('error', false);
+  const [notice, setNotice] = useFeedbackState('info', false);
   const [operation, setOperation] = useState<'recognize' | 'save' | null>(null);
   const busy = operation !== null;
   const [loading, setLoading] = useState(true);
   const [revision, setRevision] = useState(0);
   const [saved, setSaved] = useState<ConfirmedReading | null>(null);
+  const [correcting, setCorrecting] = useState(false);
   const lock = useRef(false);
   const abort = useRef<AbortController | null>(null);
   const mounted = useRef(true);
@@ -329,7 +319,7 @@ export function MeterTaskScreen({
     setChecked(false);
     setStep(1);
     setNotice('');
-    if (onBusyChange) setError('');
+    setError('');
   };
   useEffect(() => {
     mounted.current = true;
@@ -385,11 +375,15 @@ export function MeterTaskScreen({
   const meterLabel = task?.utilityType === 0 ? 'Điện' : 'Nước';
   const captureLabel = task?.utilityType === 0 ? 'Chụp công tơ điện' : 'Chụp đồng hồ nước';
   const isInitial = task?.purpose === 0;
-  const validation = task ? readingError(reading, task.decimalPlaces) : '';
+  const validation = task ? readingError(reading) : '';
   // A new contract baseline on a reused physical meter must also be monotonic.
   const decreased = readingDecreased(reading, task?.previousValue ?? null);
-  const consumption = isInitial ? null : estimatedConsumption(reading, task?.previousValue ?? null);
-  const editable = !!task && task.status < 2;
+  const consumption =
+    isInitial || validation ? null : estimatedConsumption(reading, task?.previousValue ?? null);
+  const editable =
+    !!task &&
+    (task.status < 2 ||
+      (correcting && !!saved && task.canCorrect === true && task.version != null));
 
   async function recognize(bytes: Uint8Array<ArrayBuffer>) {
     if (lock.current || !api || !editable) return;
@@ -419,10 +413,10 @@ export function MeterTaskScreen({
         );
         if (controller.signal.aborted) return;
         setProposal(result);
-        setReading(result.proposedFields.reading || '');
+        setReading(integerReadingInput(result.proposedFields.reading || ''));
         setNotice(
           result.isFallback || !result.proposedFields.reading
-            ? 'Không nhận diện được chỉ số. Hãy thử lại hoặc nhập tay.'
+            ? 'Không nhận diện được chỉ số. Hãy nhập thủ công hoặc thử lại OCR.'
             : '',
         );
       } catch (e) {
@@ -434,7 +428,7 @@ export function MeterTaskScreen({
           [401, 403, 404].includes(Number(e.status))
         )
           throw e;
-        setNotice('Không nhận diện được chỉ số. Hãy thử lại hoặc nhập tay.');
+        setNotice('Không nhận diện được chỉ số. Hãy nhập thủ công hoặc thử lại OCR.');
       }
       const file = await api.image<{ id: string }>(
         `/api/v1/capture/meter-tasks/${encodeURIComponent(taskId)}/evidence`,
@@ -457,10 +451,7 @@ export function MeterTaskScreen({
   }
   async function confirm() {
     if (lock.current || !api || !task || !editable || !checked || !evidence || step !== 2) return;
-    if (validation || decreased) {
-      setError(validation || 'Chỉ số nhỏ hơn kỳ trước. Kiểm tra lại hoặc liên hệ Owner.');
-      return;
-    }
+    if (validation || decreased) return;
     lock.current = true;
     setOperation('save');
     setError('');
@@ -470,13 +461,25 @@ export function MeterTaskScreen({
     const timeout = setTimeout(() => controller.abort(), 45000);
     try {
       const client = meterService(api);
-      const current = await client.task(taskId, controller.signal);
-      const result = current.confirmedReadingId
-        ? await client.reading(current.confirmedReadingId, controller.signal)
-        : await client.confirm(taskId, normalizedReading(reading), evidence, controller.signal);
+      const result =
+        correcting && task.version != null
+          ? await client.correct(
+              taskId,
+              normalizedReading(reading),
+              evidence,
+              task.version,
+              controller.signal,
+            )
+          : await (async () => {
+              const current = await client.task(taskId, controller.signal);
+              return current.confirmedReadingId
+                ? client.reading(current.confirmedReadingId, controller.signal)
+                : client.confirm(taskId, normalizedReading(reading), evidence, controller.signal);
+            })();
       if (!controller.signal.aborted) {
         setSaved(result);
-        showSuccess('Đã lưu chỉ số.');
+        showSuccess(correcting ? 'Đã sửa chỉ số.' : 'Đã lưu chỉ số.');
+        setCorrecting(false);
         onReturn();
       }
     } catch (e) {
@@ -494,6 +497,23 @@ export function MeterTaskScreen({
         onBusyChange?.(false);
       }
     }
+  }
+  const correctionForm = task?.canCorrect && task.version != null && saved && (
+    <Button
+      mode="outlined"
+      disabled={busy}
+      onPress={() => {
+        clearPhoto();
+        setCorrecting(true);
+      }}
+    >
+      Sửa chỉ số
+    </Button>
+  );
+  function cancelCorrection() {
+    if (lock.current) return;
+    clearPhoto();
+    setCorrecting(false);
   }
   const content = (
     <>
@@ -515,6 +535,7 @@ export function MeterTaskScreen({
         </Button>
       )}
       {task &&
+        (!confirmedDetail || correcting) &&
         (embedded ? (
           <View style={{ paddingHorizontal: 2, paddingVertical: 2, gap: 4 }}>
             <Text variant="titleMedium" style={{ fontWeight: '700' }}>
@@ -544,18 +565,35 @@ export function MeterTaskScreen({
             )}
           </Box>
         ))}
-      {saved && embedded ? (
+      {saved && !correcting && embedded ? (
         <>
-          <Text variant="titleMedium">
-            Đã chốt: {formatMeterReading(saved.confirmedValue, unit)}
-          </Text>
+          {confirmedDetail ? (
+            <>
+              <Text variant="labelLarge">Chỉ số đã xác nhận</Text>
+              <Text variant="headlineMedium" style={ui.money}>
+                {formatMeterReading(saved.confirmedValue, unit)}
+              </Text>
+            </>
+          ) : (
+            <Text variant="titleMedium">
+              Đã chốt: {formatMeterReading(saved.confirmedValue, unit)}
+            </Text>
+          )}
           <StaffMeterReadingEvidence
             key={saved.id}
             id={saved.id}
             label={`Ảnh minh chứng ${meterLabel.toLowerCase()}`}
           />
+          {correctionForm}
+          {confirmedDetail && !correctionForm && (
+            <Text style={ui.muted}>
+              {task?.canCorrect === undefined
+                ? 'Chưa xác định được quyền sửa chỉ số. Hãy tải lại hoặc kiểm tra phiên bản máy chủ.'
+                : 'Chỉ số đã khóa, không thể sửa trực tiếp.'}
+            </Text>
+          )}
         </>
-      ) : saved ? (
+      ) : saved && !correcting ? (
         <Box style={{ padding: 14, gap: 10 }}>
           <Pill tone="green">Đã lưu chỉ số</Pill>
           {isInitial && <Pill tone="blue">Đã lưu chỉ số ban đầu</Pill>}
@@ -579,12 +617,14 @@ export function MeterTaskScreen({
                 : 'Giá trị này được lưu làm mốc chỉ số ban đầu cho phòng, không tính tiền tiêu thụ định kỳ.'
               : 'Chỉ số và mức tiêu thụ đã lưu vào hệ thống để tổng hợp vào hóa đơn kỳ theo lịch cấu hình.'}
           </Text>
+          {correctionForm}
           <Button mode="contained" contentStyle={{ minHeight: 48 }} onPress={onReturn}>
             Về tổng quan phòng
           </Button>
         </Box>
       ) : (
-        task && (
+        task &&
+        (!confirmedDetail || correcting) && (
           <>
             {!editable && <Text>Tác vụ đã đóng.</Text>}
             <CameraCapture
@@ -637,25 +677,28 @@ export function MeterTaskScreen({
                   <Text style={ui.muted}>{meterOcrFeedback(proposal)}</Text>
                 )}
                 {proposal?.isFallback && proposal.warnings.includes('meter_type_mismatch') && (
-                  <Text style={ui.red}>
-                    Loại đồng hồ hoặc đơn vị trong ảnh không khớp tác vụ. Hãy kiểm tra lại đồng hồ.
-                  </Text>
+                  <Text style={ui.red}>Ảnh không đúng loại công tơ. Hãy kiểm tra và chụp lại.</Text>
                 )}
                 <Field
                   label={`Chỉ số xác nhận (${unit})`}
                   value={reading}
-                  numeric
+                  integer
                   onChange={(v) => {
                     if (!lock.current) {
                       setReading(v);
                       setChecked(false);
+                      setError('');
                     }
                   }}
                 />
-                {!!validation && !busy && <Text style={ui.red}>{validation}</Text>}
-                {decreased && (
-                  <Text style={ui.red}>
-                    Chỉ số nhỏ hơn kỳ trước. Kiểm tra lại hoặc liên hệ Owner.
+                {!!validation && !busy && !!reading.trim() && (
+                  <Text accessibilityRole="alert" style={ui.red}>
+                    {validation}
+                  </Text>
+                )}
+                {!validation && decreased && (
+                  <Text accessibilityRole="alert" style={ui.red}>
+                    Chỉ số không được nhỏ hơn lần ghi trước.
                   </Text>
                 )}
                 {consumption !== null && (
@@ -676,9 +719,18 @@ export function MeterTaskScreen({
                   disabled={busy || !evidence || !checked || !!validation || decreased}
                   onPress={() => void confirm()}
                 >
-                  {operation === 'save' ? 'Đang lưu chỉ số…' : 'Xác nhận chỉ số'}
+                  {operation === 'save'
+                    ? 'Đang lưu chỉ số…'
+                    : correcting
+                      ? 'Lưu chỉ số đã sửa'
+                      : 'Xác nhận chỉ số'}
                 </Button>
               </Box>
+            )}
+            {correcting && (
+              <Button mode="outlined" disabled={busy} onPress={cancelCorrection}>
+                Hủy sửa
+              </Button>
             )}
             {busy && !onBusyChange && (
               <Button onPress={() => abort.current?.abort()}>Hủy yêu cầu</Button>

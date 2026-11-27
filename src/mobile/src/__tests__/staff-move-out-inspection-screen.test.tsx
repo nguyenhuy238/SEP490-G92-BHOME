@@ -547,8 +547,12 @@ beforeEach(() => {
 });
 afterEach(cleanup);
 async function saveCurrentItem() {
-  fireEvent.click(screen.getByText('Xong'));
+  fireEvent.click(screen.getByText('Lưu tiến độ'));
   await waitFor(() => expect(screen.queryByTestId('work-modal')).toBeNull());
+}
+async function captureCurrentPhoto() {
+  fireEvent.click(screen.getByText('Chụp ảnh'));
+  await screen.findByRole('img', { name: 'Ảnh minh chứng 1' });
 }
 
 it('refuses opening a contract that is no longer a Location move-out task', () => {
@@ -649,7 +653,7 @@ it('previews and removes a photo attached only to the selected room check', asyn
     expect(screen.queryByRole('img', { name: 'Ảnh minh chứng 1' })).toBeNull();
     expect(URL.revokeObjectURL).toHaveBeenCalledWith('blob:private-preview');
   });
-  expect(screen.getByText('Ảnh kiểm tra khu vực (tùy chọn)')).toBeTruthy();
+  expect(screen.getByText('Ảnh kiểm tra khu vực (bắt buộc)')).toBeTruthy();
   expect(state.request.mock.calls.some(([path]) => path.endsWith('/move-out/inspection'))).toBe(
     false,
   );
@@ -661,12 +665,17 @@ it('saves a single room check with version and restores it after reopening the s
   await screen.findByText('4 phần kiểm tra trả phòng');
   fireEvent.click(screen.getByRole('button', { name: /2\. Hiện trạng phòng/ }));
   fireEvent.click(screen.getByRole('button', { name: label }));
-  fireEvent.click(screen.getByRole('button', { name: 'Tốt' }));
+  fireEvent.click(screen.getByRole('button', { name: 'Đạt' }));
+  await captureCurrentPhoto();
   expect(state.draft?.version).toBe(0);
   await saveCurrentItem();
   expect(state.draft?.version).toBe(1);
   expect(state.draft?.roomChecks).toMatchObject([
-    { code: roomHandoverChecks[0]!.code, status: 'Passed', evidenceIds: [] },
+    {
+      code: roomHandoverChecks[0]!.code,
+      status: 'Passed',
+      evidenceIds: ['66666666-6666-4666-8666-000000000001'],
+    },
   ]);
   expect(
     state.request.mock.calls.some(
@@ -682,7 +691,7 @@ it('saves a single room check with version and restores it after reopening the s
   fireEvent.click(screen.getByRole('button', { name: /2\. Hiện trạng phòng/ }));
   expect(screen.getByRole('button', { name: label }).textContent).toContain('Đã lưu');
   fireEvent.click(screen.getByRole('button', { name: label }));
-  expect(screen.getByRole('button', { name: 'Tốt' }).getAttribute('disabled')).toBeNull();
+  expect(screen.getByRole('button', { name: 'Đạt' }).getAttribute('disabled')).toBeNull();
 });
 
 it('loads a saved room-check photo through the private evidence API after remount', async () => {
@@ -722,14 +731,14 @@ it('discards unsaved item changes on Để sau without sending a draft PATCH', a
   fireEvent.click(screen.getByRole('button', { name: /2\. Hiện trạng phòng/ }));
   fireEvent.click(screen.getByRole('button', { name: roomHandoverChecks[0]!.label }));
   fireEvent.click(screen.getByRole('button', { name: 'Có vấn đề' }));
-  fireEvent.change(screen.getByLabelText('Lý do có vấn đề'), {
+  fireEvent.change(screen.getByLabelText('Ghi chú (không bắt buộc)'), {
     target: { value: 'Ghi chú chưa lưu' },
   });
   fireEvent.click(screen.getByText('Để sau'));
   fireEvent.click(screen.getByRole('button', { name: roomHandoverChecks[0]!.label }));
-  expect(screen.queryByLabelText('Lý do có vấn đề')).toBeNull();
-  fireEvent.click(screen.getByText('Xong'));
-  expect(await screen.findByText(new RegExp('Chọn Tốt hoặc Có vấn đề'))).toBeTruthy();
+  expect((screen.getByLabelText('Ghi chú (không bắt buộc)') as HTMLInputElement).value).toBe('');
+  fireEvent.click(screen.getByText('Lưu tiến độ'));
+  expect(await screen.findByText(/Hãy chọn kết quả kiểm tra/)).toBeTruthy();
   expect(state.draft?.version).toBe(0);
   expect(
     state.request.mock.calls.filter(
@@ -750,11 +759,11 @@ it('does not show saved progress on timeout and retries the same draft idempoten
   await screen.findByText('4 phần kiểm tra trả phòng');
   fireEvent.click(screen.getByRole('button', { name: /2\. Hiện trạng phòng/ }));
   fireEvent.click(screen.getByRole('button', { name: roomHandoverChecks[0]!.label }));
-  fireEvent.click(screen.getByRole('button', { name: 'Tốt' }));
-  fireEvent.click(screen.getByText('Xong'));
+  fireEvent.click(screen.getByRole('button', { name: 'Không áp dụng' }));
+  fireEvent.click(screen.getByText('Lưu tiến độ'));
   await screen.findByText(/Không kết nối được máy chủ/);
   expect(state.draft?.version).toBe(0);
-  fireEvent.click(screen.getByText('Xong'));
+  fireEvent.click(screen.getByText('Lưu tiến độ'));
   await waitFor(() => expect(state.draft?.version).toBe(1));
   const requests = state.request.mock.calls.filter(
     ([path, init]) => path.endsWith('/move-out/inspection-draft') && init?.method === 'PATCH',
@@ -781,15 +790,16 @@ it('reloads latest draft version after conflict and preserves local changes for 
   fireEvent.click(screen.getByRole('button', { name: /2\. Hiện trạng phòng/ }));
   fireEvent.click(screen.getByRole('button', { name: roomHandoverChecks[0]!.label }));
   fireEvent.click(screen.getByRole('button', { name: 'Có vấn đề' }));
-  fireEvent.change(screen.getByLabelText('Lý do có vấn đề'), {
+  fireEvent.change(screen.getByLabelText('Ghi chú (không bắt buộc)'), {
     target: { value: 'Vết ẩm đã được ghi nhận' },
   });
-  fireEvent.click(screen.getByText('Xong'));
+  await captureCurrentPhoto();
+  fireEvent.click(screen.getByText('Lưu tiến độ'));
   await screen.findByText(/Phiếu đã thay đổi trên máy chủ/);
-  expect((screen.getByLabelText('Lý do có vấn đề') as HTMLInputElement).value).toBe(
+  expect((screen.getByLabelText('Ghi chú (không bắt buộc)') as HTMLInputElement).value).toBe(
     'Vết ẩm đã được ghi nhận',
   );
-  fireEvent.click(screen.getByText('Xong'));
+  fireEvent.click(screen.getByText('Lưu tiến độ'));
   await waitFor(() => expect(state.draft?.version).toBe(3));
   const requests = state.request.mock.calls.filter(
     ([path, init]) => path.endsWith('/move-out/inspection-draft') && init?.method === 'PATCH',
@@ -826,7 +836,7 @@ it('inspects MoveOut independently without any MoveIn handover or asset baseline
       ),
   ).toHaveLength(7);
   fireEvent.click(screen.getByRole('button', { name: roomHandoverChecks[0]!.label }));
-  fireEvent.click(screen.getByRole('button', { name: 'Tốt' }));
+  fireEvent.click(screen.getByRole('button', { name: 'Đạt' }));
   fireEvent.click(screen.getByText('Chụp ảnh'));
   await screen.findByRole('img', { name: 'Ảnh minh chứng 1' });
   await saveCurrentItem();
@@ -841,18 +851,15 @@ it('inspects MoveOut independently without any MoveIn handover or asset baseline
   expect(screen.queryByText('Đã xác nhận phòng không có tài sản cần kiểm kê.')).toBeNull();
 });
 
-it('requires a reason for a room issue and saves its private evidence only on that check', async () => {
+it('requires photo evidence but not notes for a room issue', async () => {
   const { code, label } = roomHandoverChecks[0]!;
   render(<StaffMoveOutInspectionScreen />);
   await screen.findByText('4 phần kiểm tra trả phòng');
   fireEvent.click(screen.getByRole('button', { name: /2\. Hiện trạng phòng/ }));
   fireEvent.click(screen.getByRole('button', { name: label }));
   fireEvent.click(screen.getByRole('button', { name: 'Có vấn đề' }));
-  fireEvent.click(screen.getByText('Xong'));
-  expect(await screen.findByText(new RegExp('Nhập lý do:'))).toBeTruthy();
-  fireEvent.change(screen.getByLabelText('Lý do có vấn đề'), {
-    target: { value: 'Trần có vết ẩm' },
-  });
+  fireEvent.click(screen.getByText('Lưu tiến độ'));
+  expect(await screen.findByText(/Chụp ít nhất một ảnh/)).toBeTruthy();
   fireEvent.click(screen.getByText('Chụp ảnh'));
   await screen.findByRole('img', { name: 'Ảnh minh chứng 1' });
   await saveCurrentItem();
@@ -860,13 +867,13 @@ it('requires a reason for a room issue and saves its private evidence only on th
     {
       code,
       status: 'Issue',
-      notes: 'Trần có vết ẩm',
+      notes: null,
       evidenceIds: ['66666666-6666-4666-8666-000000000001'],
     },
   ]);
   expect(screen.getByRole('button', { name: label }).textContent).toContain('Có vấn đề · đã lưu');
   fireEvent.click(screen.getByText('Về 4 mục trả phòng'));
-  expect(screen.getByText('1/7 đã kiểm tra')).toBeTruthy();
+  expect(screen.getByText('1/8 đã kiểm tra')).toBeTruthy();
 });
 
 it('shows the verified handover room condition next to the current inspection without changing the draft', async () => {
@@ -884,24 +891,28 @@ it('shows the verified handover room condition next to the current inspection wi
   expect(state.draft?.roomChecks).toHaveLength(0);
 });
 
-it('compares opening asset quantity with actual count, requiring a reason for a difference', async () => {
+it('compares opening asset quantity with actual count, requiring matching condition and photo', async () => {
   render(<StaffMoveOutInspectionScreen />);
   await screen.findByText('4 phần kiểm tra trả phòng');
   fireEvent.click(screen.getByRole('button', { name: /3\. Kiểm kê tài sản/ }));
   fireEvent.click(screen.getByRole('button', { name: 'Giường đơn' }));
   expect(screen.getByText(/Số lượng lúc nhận: 2/)).toBeTruthy();
-  expect(screen.queryByLabelText('Nội dung vấn đề')).toBeNull();
+  expect(screen.getByLabelText('Ghi chú (không bắt buộc)')).toBeTruthy();
   fireEvent.change(screen.getByLabelText('Số lượng lúc trả'), { target: { value: '1' } });
-  fireEvent.click(screen.getByRole('button', { name: 'Tốt' }));
-  fireEvent.click(screen.getByText('Xong'));
-  expect(await screen.findByText(/Cần ghi chú tài sản có vấn đề/)).toBeTruthy();
-  fireEvent.change(screen.getByLabelText('Nội dung vấn đề'), {
+  fireEvent.click(screen.getByRole('button', { name: 'Đủ' }));
+  fireEvent.click(screen.getByText('Lưu tiến độ'));
+  expect(await screen.findByText(/Tài sản Đạt phải đủ 2/)).toBeTruthy();
+  fireEvent.click(screen.getByRole('button', { name: 'Thiếu' }));
+  fireEvent.click(screen.getByText('Lưu tiến độ'));
+  expect(await screen.findByText(/Chụp ít nhất một ảnh tài sản/)).toBeTruthy();
+  fireEvent.change(screen.getByLabelText('Ghi chú (không bắt buộc)'), {
     target: { value: 'Thiếu một giường so với khi nhận' },
   });
+  await captureCurrentPhoto();
   await saveCurrentItem();
   expect(state.draft?.assets[0]).toMatchObject({
     id: assetId,
-    condition: 'Tốt',
+    condition: 'Missing',
     checked: true,
     observedQuantity: 1,
     missingQuantity: 1,
@@ -954,7 +965,7 @@ it('records four factual sections and submits authenticated versioned inspection
   await screen.findByText('Chụp chỉ số điện');
   fireEvent.click(screen.getByText('Chụp chỉ số điện'));
   expect(screen.getByTestId('embedded-meter').textContent).toContain('Chỉ số trước');
-  expect(screen.queryByText('Xong')).toBeNull();
+  expect(screen.queryByText('Lưu tiến độ')).toBeNull();
   fireEvent.click(screen.getByText('Xác nhận chỉ số'));
   await waitFor(() =>
     expect(state.draft?.electricityReadingId).toBe('77777777-7777-4777-8777-777777777777'),
@@ -967,11 +978,19 @@ it('records four factual sections and submits authenticated versioned inspection
   );
   fireEvent.click(screen.getByText('Về 4 mục trả phòng'));
   fireEvent.click(screen.getByRole('button', { name: /2\. Hiện trạng phòng/ }));
-  expect(screen.queryByRole('button', { name: 'Hiện trạng tổng quan' })).toBeNull();
+  fireEvent.click(screen.getByRole('button', { name: 'Hiện trạng chung' }));
+  fireEvent.click(screen.getByText('Lưu tiến độ'));
+  expect(
+    await screen.findByText(/Nhập ghi chú và chụp ít nhất một ảnh hiện trạng chung/),
+  ).toBeTruthy();
+  fireEvent.change(screen.getByLabelText('Ghi chú'), { target: { value: 'Phòng sạch khi trả' } });
+  await captureCurrentPhoto();
+  await saveCurrentItem();
   expect(screen.queryByText('Xác nhận hoàn thành')).toBeNull();
   for (const { label } of roomHandoverChecks) {
     fireEvent.click(screen.getByRole('button', { name: label }));
-    fireEvent.click(screen.getByRole('button', { name: 'Tốt' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Đạt' }));
+    await captureCurrentPhoto();
     await saveCurrentItem();
   }
   expect(state.draft?.roomChecks).toHaveLength(7);
@@ -982,7 +1001,7 @@ it('records four factual sections and submits authenticated versioned inspection
   fireEvent.change(screen.getByLabelText('Số lượng lúc trả'), {
     target: { value: '2' },
   });
-  fireEvent.click(screen.getByRole('button', { name: 'Tốt' }));
+  fireEvent.click(screen.getByRole('button', { name: 'Đủ' }));
   fireEvent.click(screen.getByText('Chụp ảnh'));
   await screen.findByRole('img', { name: 'Ảnh minh chứng 1' });
   await saveCurrentItem();
@@ -992,7 +1011,7 @@ it('records four factual sections and submits authenticated versioned inspection
   fireEvent.change(screen.getByLabelText('Số chìa khóa lúc trả'), {
     target: { value: '2' },
   });
-  fireEvent.click(screen.getByText('Xong'));
+  fireEvent.click(screen.getByText('Lưu tiến độ'));
   expect(await screen.findByText(/Nhập số chìa khóa đã nhận và chụp ít nhất một ảnh/)).toBeTruthy();
   fireEvent.click(screen.getByText('Chụp ảnh'));
   await screen.findByRole('img', { name: 'Ảnh minh chứng 1' });
@@ -1018,17 +1037,17 @@ it('records four factual sections and submits authenticated versioned inspection
     waterReadingId: '88888888-8888-4888-8888-888888888888',
     accessItems: [{ type: 'RoomKey', quantity: 2, notes: '' }],
   });
-  expect(body.roomCondition).toContain('Tốt');
+  expect(body.roomCondition).toBe('Phòng sạch khi trả');
   expect(body.roomChecks).toHaveLength(7);
   expect(body.roomChecks.every((item: { status: string }) => item.status === 'Passed')).toBe(true);
   expect(body.assets[0]).toMatchObject({
     id: assetId,
-    condition: 'Tốt',
+    condition: 'Good',
     checked: true,
     observedQuantity: 2,
   });
   expect(body.assets[0].evidenceIds).toHaveLength(1);
   expect(body.keyEvidenceIds).toHaveLength(1);
-  expect(body.evidenceIds).toHaveLength(0);
+  expect(body.evidenceIds).toHaveLength(1);
   expect(request[1].headers['Idempotency-Key']).toBeTruthy();
 });

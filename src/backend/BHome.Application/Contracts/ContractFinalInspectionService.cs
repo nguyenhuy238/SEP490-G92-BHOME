@@ -75,8 +75,8 @@ public sealed partial class ContractService
     private static bool HasVerifiedOpeningQuantity(HandoverSnapshot? baseline, Guid groupId) =>
         baseline?.Assets.Any(a => a.Id == groupId && a.HandedOverQuantity is not null) == true;
 
-    // Move-Out has its own checklist rules. Keep Move-In validation (including
-    // its signed handover requirements) unchanged.
+    // Both inspections record the same physical checklist. Move-Out still
+    // has its own settlement and review workflow.
     private static HandoverRoomCheck[] MergeMoveOutRoomChecks(
         HandoverRoomCheck[]? prior, HandoverRoomCheck[]? input)
     {
@@ -88,14 +88,15 @@ public sealed partial class ContractService
             throw ContractException.Invalid("invalid_move_out_room_checks");
         var normalized = input.Select(item =>
         {
-            if (!codes.Contains(item.Code) || item.Status is not ("Passed" or "Issue") ||
+            if (!codes.Contains(item.Code) || item.Status is not ("Passed" or "Issue" or "NotApplicable") ||
                 item.Notes?.Length > 2000 ||
-                item.Status == "Issue" && string.IsNullOrWhiteSpace(item.Notes) ||
                 item.EvidenceIds is null or { Length: > 5 } ||
                 item.EvidenceIds.Contains(Guid.Empty) ||
                 item.EvidenceIds.Distinct().Count() != item.EvidenceIds.Length)
                 throw ContractException.Invalid("invalid_move_out_room_checks");
-            return item with { Notes = item.Status == "Issue" ? item.Notes!.Trim() : null };
+            if (item.Status != "NotApplicable" && item.EvidenceIds.Length == 0)
+                throw ContractException.Invalid("room_check_evidence_required");
+            return item with { Notes = item.Notes?.Trim() };
         }).ToArray();
         return previous.Where(item => !normalized.Any(next => next.Code == item.Code))
             .Concat(normalized).OrderBy(item => Array.IndexOf(codes, item.Code)).ToArray();
@@ -110,10 +111,25 @@ public sealed partial class ContractService
         return [input[0] with { Notes = input[0].Notes?.Trim() ?? "" }];
     }
 
-    private static bool IsMoveOutGood(string condition) =>
-        condition.Equals("Tốt", StringComparison.OrdinalIgnoreCase) ||
-        condition.Equals("Passed", StringComparison.OrdinalIgnoreCase) ||
-        condition.Equals("Good", StringComparison.OrdinalIgnoreCase);
+    private static void ValidateMoveOutAssetObservation(HandoverAsset group, HandoverAssetInput input)
+    {
+        if (!input.Checked) return;
+        var condition = input.Condition?.Trim();
+        if (condition is not ("Good" or "Missing" or "Damaged" or "Tốt" or "Passed" or "Issue" or "Có vấn đề"))
+            throw ContractException.Invalid("invalid_move_out_asset");
+        var actual = input.ObservedQuantity ?? input.PhysicalObservations?.Sum(p => p.Quantity);
+        // The current configured inventory is usable for checklist validation,
+        // but only a confirmed opening quantity establishes financial liability.
+        var expected = group.HandedOverQuantity ?? group.ConfiguredQuantity ??
+            (group.PhysicalAssets is { Length: > 0 } physical ? physical.Sum(p => p.Quantity) : (int?)null);
+        if (actual is < 0 or > 10000 || expected is { } quantity &&
+            (actual is null || actual > quantity ||
+             (condition is "Good" or "Tốt" or "Passed") && actual != quantity ||
+             condition == "Missing" && actual >= quantity))
+            throw ContractException.Invalid("invalid_move_out_asset_quantities");
+        if (actual != 0 && input.EvidenceIds is not { Length: > 0 })
+            throw ContractException.Invalid("asset_evidence_required");
+    }
 
     // Verified per-physical-item notes/photos belong to the Move-Out observation
     // only; the signed Move-In asset/physical-observation schema is untouched.
@@ -187,12 +203,7 @@ public sealed partial class ContractService
             if (known && observedQuantity is null || known && input.MissingQuantity is { } clientMissing &&
                 clientMissing != missing)
                 throw ContractException.Invalid("invalid_move_out_asset_quantities");
-            var issue = !IsMoveOutGood(input.Condition.Trim()) ||
-                known && observedQuantity != opening!.HandedOverQuantity ||
-                input.HandedOverQuantity is { } handedOver && handedOver != observedQuantity ||
-                input.WornQuantity > 0 || input.DamagedQuantity > 0;
-            if (issue && string.IsNullOrWhiteSpace(input.Notes))
-                throw ContractException.Invalid("move_out_asset_issue_reason_required");
+            ValidateMoveOutAssetObservation(group, input);
             return group with
             {
                 ObservedCondition = input.Condition.Trim(),
@@ -212,27 +223,6 @@ public sealed partial class ContractService
         }).ToArray();
     }
 
-    private static void RequireMoveOutPhysicalReasons(HandoverAsset[] inspected,
-        HandoverSnapshot? baseline, MoveOutPhysicalItemEvidence[] evidence)
-    {
-        foreach (var group in inspected)
-        {
-            var openingGroup = baseline?.Assets.FirstOrDefault(asset => asset.Id == group.Id);
-            foreach (var item in group.PhysicalObservations ?? [])
-            {
-                var openingPhysical = openingGroup?.PhysicalObservations?.FirstOrDefault(p => p.Id == item.Id);
-                var received = openingGroup?.HandedOverQuantity is not null
-                    ? openingPhysical?.HandedOverQuantity ?? openingPhysical?.Quantity ??
-                      openingGroup.PhysicalAssets?.FirstOrDefault(p => p.Id == item.Id)?.Quantity
-                    : null;
-                if ((!IsMoveOutGood(item.Condition.Trim()) ||
-                     received is { } initial && item.Quantity != initial) &&
-                    !evidence.Any(p => p.AssetId == group.Id && p.PhysicalAssetId == item.Id &&
-                        !string.IsNullOrWhiteSpace(p.Notes)))
-                    throw ContractException.Invalid("move_out_physical_issue_reason_required");
-            }
-        }
-    }
     public async Task<InspectionPreparation> InspectionPreparationAsync(Guid id, CancellationToken t)
     {
         var c = await Load(id, [Roles.Owner, Roles.Staff], t); var (root, h) = await Baseline(c, t);
@@ -268,16 +258,21 @@ public sealed partial class ContractService
         if (keyEvidence.Length > 5 || keyEvidence.Contains(Guid.Empty) ||
             keyEvidence.Distinct().Count() != keyEvidence.Length)
             throw ContractException.Invalid("invalid_move_out_key_evidence");
+        if (keyEvidence.Length == 0)
+            throw ContractException.Invalid("key_evidence_required");
+        if (string.IsNullOrWhiteSpace(x.RoomCondition))
+            throw ContractException.Invalid("room_summary_required");
         var inventory = handoverInventory is null ? null : await handoverInventory.PrepareAsync(c.RoomId, t);
         if (inventory is not null && inventory.StateToken != x.InventoryToken) throw ContractException.Conflict("handover_asset_inventory_changed");
         if (inventory is { Groups.Length: 0, NoAssetsConfirmed: false }) throw ContractException.Conflict("owner_no_assets_confirmation_required");
         var groups = await MoveOutInspectionGroups(c, baseline, inventory, t);
         var inspected = InspectMoveOutAssets(groups, x.Assets, baseline, inventory is not null);
         var physicalItemEvidence = NormalizeMoveOutPhysicalItemEvidence(inspected, x.PhysicalItemEvidence);
-        RequireMoveOutPhysicalReasons(inspected, baseline, physicalItemEvidence);
         var unknownOpeningQuantities = missingQuantities ||
             groups.Any(group => !HasVerifiedOpeningQuantity(baseline, group.Id));
         var overallEvidence = x.EvidenceIds ?? [];
+        if (overallEvidence.Length == 0)
+            throw ContractException.Invalid("room_summary_evidence_required");
         HandoverChecklist.RequireSeparateEvidence(overallEvidence, inspected);
         if (inspected.Any(a => !a.Checked)) throw ContractException.Invalid("handover_checklist_incomplete");
         HandoverRoomChecklist.RequireSeparateKeyEvidence(keyEvidence, overallEvidence, roomChecks, x.Assets);
@@ -343,9 +338,7 @@ public sealed partial class ContractService
         var hashes = verified.Where(item => item.PhotoId is not null)
             .ToDictionary(item => item.PhotoId!.Value, item => item.Hash);
         foreach (var item in photosToLink) item.IsLinked = true;
-        var roomCondition = string.IsNullOrWhiteSpace(x.RoomCondition)
-            ? $"{roomChecks.Count(check => check.Status == "Passed")} mục tốt, {roomChecks.Count(check => check.Status == "Issue")} mục có vấn đề."
-            : HandoverText(x.RoomCondition, 2000);
+        var roomCondition = HandoverText(x.RoomCondition, 2000);
         var keysAndAccess = string.IsNullOrWhiteSpace(x.KeysAndAccess)
             ? $"Đã nhận lại {accessItems[0].Quantity} chìa khóa phòng."
             : HandoverText(x.KeysAndAccess, 2000);
@@ -417,6 +410,7 @@ public sealed partial class ContractService
     public Task<MoveOutView> RespondToInspectionAsync(Guid id, InspectionTenantFeedback x, Guid key, CancellationToken t) => Mutate(id, [Roles.Tenant], async c =>
     {
         var m = await repository.MoveOutAsync(id, t) ?? throw ContractException.Missing();
+        if (Forced(m)) throw ContractException.Conflict("forced_move_out_read_only");
         if (await Replay(key, "inspection-tenant-feedback", new { id, x }, t) is not null) return View(m);
         var inspection = (await repository.FinalInspectionsAsync(id, t)).FirstOrDefault() ?? throw ContractException.Missing();
         if (inspection.Version != x.Version || inspection.OwnerDecision is not null || m.Status != MoveOutStatus.Inspected) throw ContractException.Conflict("inspection_changed_or_reviewed");
@@ -430,6 +424,7 @@ public sealed partial class ContractService
     public Task<MoveOutView> ReviewInspectionAsync(Guid id, InspectionReviewInput x, Guid key, CancellationToken t) => Mutate(id, [Roles.Owner], async c =>
     {
         var m = await repository.MoveOutAsync(id, t) ?? throw ContractException.Missing();
+        if (Forced(m)) throw ContractException.Conflict("forced_move_out_read_only");
         if (await Replay(key, "inspection-review", new { id, x }, t) is not null) return View(m);
         var inspection = (await repository.FinalInspectionsAsync(id, t)).FirstOrDefault() ?? throw ContractException.Conflict("move_out_inspection_required");
         if (inspection.Version != x.Version || inspection.OwnerDecision != null || m.Status != MoveOutStatus.Inspected) throw ContractException.Conflict("inspection_changed_or_reviewed");

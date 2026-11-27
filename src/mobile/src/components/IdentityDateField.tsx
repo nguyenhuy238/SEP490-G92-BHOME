@@ -38,6 +38,7 @@ export function IdentityDateField({
   error,
   hyphenated = false,
   compactCalendar = false,
+  calendarDate,
 }: {
   label: string;
   accessibilityLabel: string;
@@ -48,6 +49,7 @@ export function IdentityDateField({
   error?: boolean;
   hyphenated?: boolean;
   compactCalendar?: boolean;
+  calendarDate?: string;
 }) {
   const [open, setOpen] = useState(false);
   useEffect(() => {
@@ -64,6 +66,11 @@ export function IdentityDateField({
     date = new Date(year, month - 1, day, 12);
   } catch {
     // An empty/invalid manual value must not silently roll over to another day.
+  }
+  // Use a server-derived business date as the calendar's initial selection only.
+  if (!date && calendarDate && /^\d{4}-\d{2}-\d{2}$/.test(calendarDate)) {
+    const [year, month, day] = calendarDate.split('-').map(Number);
+    date = new Date(year, month - 1, day, 12);
   }
   const picker: Omit<DatePickerModalSingleProps, 'visible'> = {
     locale: 'vi',

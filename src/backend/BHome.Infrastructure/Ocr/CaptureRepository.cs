@@ -12,6 +12,8 @@ using BHome.Domain.IdentityAccess;
 using BHome.Domain.PropertyManagement;
 using BHome.Domain.Locations;
 using BHome.Domain.TenantContracts;
+using BHome.Domain.StaffOperations;
+using BHome.Infrastructure.Persistence.Compact24;
 using BHome.Infrastructure.IdentityAccess;
 using BHome.Infrastructure.Persistence;
 using Microsoft.AspNetCore.Identity;
@@ -284,7 +286,7 @@ internal sealed class CaptureRepository(BHomePersistenceContext db, CaptureScope
                     .Select(a => (Guid?)a.StaffUserId).FirstOrDefault()
                 : x.AssignedStaffUserId,
             x.AutomationPlanId, x.Version, x.LocationId, x.Meter.RoomId,
-            x.Purpose == ReadingPurpose.Periodic && x.BillingPeriod != null && x.DueAt.HasValue && x.DueAt.Value < now && x.Status != MeterTaskStatus.Completed && x.Status != MeterTaskStatus.Cancelled));
+            x.Purpose == ReadingPurpose.Periodic && x.BillingPeriod != null && x.DueAt.HasValue && x.DueAt.Value < now && x.Status != MeterTaskStatus.Completed && x.Status != MeterTaskStatus.Cancelled, false));
     }
     public async Task<IReadOnlyList<MeterTaskSummary>> TasksAsync(CancellationToken t, MeterTaskQuery? q = null)
     {
@@ -300,8 +302,16 @@ internal sealed class CaptureRepository(BHomePersistenceContext db, CaptureScope
         }
         return await TaskSummaries(rows.OrderByDescending(x => x.ReadingDate).ThenBy(x => x.Id).Skip(((q?.Page ?? 1) - 1) * 100).Take(100)).ToListAsync(t);
     }
-    public async Task<MeterTaskSummary> TaskAsync(Guid id, CancellationToken t) =>
-        await TaskSummaries(scope.VisibleTasks.AsNoTracking().Where(x => x.Id == id)).SingleOrDefaultAsync(t) ?? throw new OcrAccessException();
+    public async Task<MeterTaskSummary> TaskAsync(Guid id, CancellationToken t)
+    {
+        var summary = await TaskSummaries(scope.VisibleTasks.AsNoTracking().Where(x => x.Id == id)).SingleOrDefaultAsync(t) ?? throw new OcrAccessException();
+        if (summary.ConfirmedReadingId is null) return summary;
+        var task = await scope.VisibleTasks.AsNoTracking().SingleAsync(x => x.Id == id, t);
+        var reading = await db.Set<MeterReading>().AsNoTracking().SingleAsync(r => r.TaskId == id, t);
+        var meter = await db.Set<Meter>().AsNoTracking().SingleAsync(m => m.Id == task.MeterId, t);
+        return summary with { CanCorrect = await scope.CanCorrectAsync(task, meter, reading, t) };
+    }
+
     public async Task<ConfirmedReading> ReadingAsync(Guid id, CancellationToken t)
     {
         var row = await db.Set<MeterReading>().AsNoTracking()
@@ -312,7 +322,8 @@ internal sealed class CaptureRepository(BHomePersistenceContext db, CaptureScope
 
     public async Task<IdResult> UploadEvidenceAsync(Guid taskId, Stream input, CancellationToken t)
     {
-        if (!await scope.VisibleTasks.AnyAsync(x => x.Id == taskId && x.Meter.IsActive && x.Status != MeterTaskStatus.Completed && x.Status != MeterTaskStatus.Cancelled, t)) throw new OcrAccessException();
+        var target = await scope.VisibleTasks.Where(x => x.Id == taskId && x.Meter.IsActive && x.Status != MeterTaskStatus.Cancelled)
+            .Select(x => new { x.LocationId, x.Meter.RoomId }).SingleOrDefaultAsync(t) ?? throw new OcrAccessException();
         var buffer = new byte[5 * 1024 * 1024 + 1]; var length = 0;
         try
         {
@@ -327,10 +338,26 @@ internal sealed class CaptureRepository(BHomePersistenceContext db, CaptureScope
                 ImageHash = Convert.ToHexString(SHA256.HashData(buffer.AsSpan(0, length))),
                 ContentType = contentType,
                 Length = length,
-                ObjectKey = "meter-evidence/" + Guid.NewGuid().ToString("N"),
+                ObjectKey = PrivateImageKeys.Evidence(target.LocationId, target.RoomId, "meters", taskId, Guid.NewGuid()),
                 CleanupAfter = clock.GetUtcNow().AddMinutes(30)
             };
-            db.Add(evidence); await Save(t); // durable cleanup intent BEFORE the external write
+            // Serialize the durable upload intent with room-cycle deduplication.
+            // No object is written until the intent has committed.
+            await using (var intent = await db.Database.BeginTransactionAsync(t))
+            {
+                var locationId = await scope.VisibleTasks.Where(x => x.Id == taskId).Select(x => (Guid?)x.LocationId).SingleOrDefaultAsync(t) ?? throw new OcrAccessException();
+                await db.Database.ExecuteSqlInterpolatedAsync($"SELECT pg_advisory_xact_lock(hashtextextended({locationId.ToString()}, 0))", t);
+                var task = await scope.VisibleTasks.AsNoTracking().SingleOrDefaultAsync(x => x.Id == taskId && x.Meter.IsActive && x.Status != MeterTaskStatus.Cancelled, t) ?? throw new OcrAccessException();
+                if (task.Status == MeterTaskStatus.Completed)
+                {
+                    var meter = await db.Set<Meter>().AsNoTracking().SingleAsync(m => m.Id == task.MeterId, t);
+                    var reading = await db.Set<MeterReading>().AsNoTracking().SingleOrDefaultAsync(r => r.TaskId == task.Id, t);
+                    if (reading is null || !await scope.CanCorrectAsync(task, meter, reading, t))
+                        throw new CaptureConflictException("reading_correction_not_allowed");
+                }
+                db.Add(evidence); await Save(t);
+                await intent.CommitAsync(t);
+            }
             await using var transaction = await db.Database.BeginTransactionAsync(t);
             await db.Locked<MeterEvidence>(evidence.Id).SingleAsync(t);
             using var deadline = CancellationTokenSource.CreateLinkedTokenSource(t); deadline.CancelAfter(TimeSpan.FromSeconds(30));
@@ -345,6 +372,8 @@ internal sealed class CaptureRepository(BHomePersistenceContext db, CaptureScope
     {
         if (!x.HumanConfirmed || x.ConfirmedValue < 0 || x.ConfirmedValue >= 100_000_000_000_000m) throw new CaptureValidationException("invalid_reading_value");
         await using var tx = await db.Database.BeginTransactionAsync(t);
+        var locationId = await scope.VisibleTasks.Where(task => task.Id == taskId).Select(task => (Guid?)task.LocationId).SingleOrDefaultAsync(t) ?? throw new OcrAccessException();
+        await db.Database.ExecuteSqlInterpolatedAsync($"SELECT pg_advisory_xact_lock(hashtextextended({locationId.ToString()}, 0))", t);
         var meterId = await scope.VisibleTasks.Where(task => task.Id == taskId).Select(task => (Guid?)task.MeterId).SingleOrDefaultAsync(t) ?? throw new OcrAccessException();
         var meter = await db.Locked<Meter>(meterId).SingleAsync(t);
         var task = await db.Locked<OperationalTask>(taskId).SingleAsync(t);
@@ -352,11 +381,40 @@ internal sealed class CaptureRepository(BHomePersistenceContext db, CaptureScope
         var existing = await db.Set<MeterReading>().SingleOrDefaultAsync(r => r.TaskId == taskId, t);
         if (existing is not null)
         {
+            if (x.ExpectedVersion is { } version)
+            {
+                if (existing.ConfirmedValue == x.ConfirmedValue && existing.EvidenceId == x.EvidenceId && task.Version == version + 1)
+                { await tx.CommitAsync(t); return Reading(existing); }
+                if (task.Version != version) throw new CaptureConflictException("task_version_changed");
+                if (!await scope.CanCorrectAsync(task, meter, existing, t)) throw new CaptureConflictException("reading_correction_not_allowed");
+                if (decimal.Truncate(x.ConfirmedValue) != x.ConfirmedValue) throw new CaptureValidationException("reading_integer_required");
+                if (existing.PreviousValue is { } prior && x.ConfirmedValue < prior) throw new CaptureConflictException("meter_reset_or_rollover_requires_review");
+                var proof = await db.Locked<MeterEvidence>(x.EvidenceId).SingleOrDefaultAsync(t);
+                if (proof is null || proof.TaskId != taskId || proof.UploadedByUserId != Actor || !proof.IsUploaded || proof.IsLinked || proof.CleanupAfter <= clock.GetUtcNow())
+                    throw new CaptureConflictException("evidence_not_available");
+                await storage.CopyToAsync(proof.ObjectKey, Stream.Null, t);
+                var now = clock.GetUtcNow();
+                proof.IsLinked = true;
+                // Persist the new evidence envelope before the reading snapshot references it.
+                await Save(t);
+                existing.EvidenceId = proof.Id;
+                existing.OcrProposedValue = null;
+                existing.ConfirmedValue = x.ConfirmedValue;
+                existing.Consumption = task.Purpose == ReadingPurpose.Initial || existing.PreviousValue is null ? null : x.ConfirmedValue - existing.PreviousValue;
+                existing.Status = MeterReadingStatus.Corrected;
+                existing.ConfirmedByUserId = Actor;
+                existing.ConfirmedAt = now.AddTicks(-(now.Ticks % 10));
+                task.Version++;
+                Audit("MeterReadingCorrected", "MeterReading", existing.Id);
+                await Save(t); await tx.CommitAsync(t); return Reading(existing);
+            }
             if (existing.ConfirmedValue != x.ConfirmedValue || existing.EvidenceId != x.EvidenceId) throw new CaptureConflictException("task_already_confirmed");
             await tx.CommitAsync(t); return Reading(existing);
         }
+        if (x.ExpectedVersion is not null) throw new CaptureConflictException("reading_correction_not_allowed");
         if (!meter.IsActive || task.Status is MeterTaskStatus.Completed or MeterTaskStatus.Cancelled) throw new CaptureConflictException("task_closed");
-        if (task.ReadingDate > scope.Today || decimal.Round(x.ConfirmedValue, meter.DecimalPlaces) != x.ConfirmedValue) throw new CaptureValidationException("reading_date_or_precision");
+        if (decimal.Truncate(x.ConfirmedValue) != x.ConfirmedValue) throw new CaptureValidationException("reading_integer_required");
+        if (task.ReadingDate > scope.Today) throw new CaptureValidationException("reading_date_in_future");
         var evidence = await db.Locked<MeterEvidence>(x.EvidenceId).SingleOrDefaultAsync(t);
         if (evidence is null || evidence.TaskId != taskId || evidence.UploadedByUserId != Actor || !evidence.IsUploaded || evidence.IsLinked || evidence.CleanupAfter <= clock.GetUtcNow()) throw new CaptureConflictException("evidence_not_available");
         var previous = await db.Set<MeterReading>().Where(r => r.MeterId == meter.Id).OrderByDescending(r => r.ConfirmedAt).FirstOrDefaultAsync(t);

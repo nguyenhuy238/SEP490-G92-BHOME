@@ -121,7 +121,7 @@ public sealed partial class PaymentService(IPaymentRepository repository, ICurre
                 // MinIO work happens BEFORE the global payment-ledger advisory lock.
                 // Unique attempt keys prevent another concurrent retry from losing its proof
                 // if this attempt fails and compensates the remote upload.
-                uploadedKey = $"payments/manual-statements/{Actor:N}/{Guid.NewGuid():N}/{evidence.Sha256}";
+                uploadedKey = PrivateImageKeys.Entity("payment-statements", Actor, Guid.NewGuid());
                 try { await PrivateImageEvidence.PutVerifiedAsync(storage!, uploadedKey, evidence, t); }
                 catch (PrivateImageIntegrityException) { throw new PaymentException(409, "bank_statement_image_integrity_failed"); }
             }

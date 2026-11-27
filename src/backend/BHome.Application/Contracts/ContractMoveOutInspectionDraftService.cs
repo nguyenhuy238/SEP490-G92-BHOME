@@ -112,6 +112,7 @@ public sealed partial class ContractService
                             observations.Any(p => !physical.Any(item => item.Id == p.Id)))
                             throw ContractException.Conflict("handover_asset_inventory_changed");
                     }
+                    ValidateMoveOutAssetObservation(source.Single(group => group.Id == asset.Id), asset);
                 }
                 // Id-specific merge is essential for auto-save on each group.
                 assets = prior.Assets.Where(asset => !input.Assets.Any(next => next.Id == asset.Id))
@@ -133,6 +134,15 @@ public sealed partial class ContractService
                 NormalizeMoveOutKeys(input.AccessItems);
             var overall = input.EvidenceIds ?? prior.EvidenceIds;
             var keys = input.KeyEvidenceIds ?? prior.KeyEvidenceIds;
+            if (input.RoomCondition is not null)
+            {
+                if (string.IsNullOrWhiteSpace(input.RoomCondition))
+                    throw ContractException.Invalid("room_summary_required");
+                if (overall.Length == 0)
+                    throw ContractException.Invalid("room_summary_evidence_required");
+            }
+            if (input.AccessItems is not null && keys.Length == 0)
+                throw ContractException.Invalid("key_evidence_required");
             var allEvidence = overall.Concat(keys)
                 .Concat(roomChecks.SelectMany(check => check.EvidenceIds))
                 .Concat(assets.SelectMany(asset => asset.EvidenceIds ?? []))
@@ -161,7 +171,9 @@ public sealed partial class ContractService
                 Version = prior.Version + 1,
                 UpdatedAt = clock.GetUtcNow(),
                 RoomCondition = input.RoomCondition?.Trim() ?? prior.RoomCondition,
-                KeysAndAccess = input.KeysAndAccess?.Trim() ?? prior.KeysAndAccess,
+                KeysAndAccess = input.AccessItems is { Length: 1 }
+                    ? $"Đã nhận lại {access[0].Quantity} chìa khóa phòng."
+                    : input.KeysAndAccess?.Trim() ?? prior.KeysAndAccess,
                 Notes = input.Notes?.Trim() ?? prior.Notes,
                 Assets = assets,
                 RoomChecks = roomChecks,

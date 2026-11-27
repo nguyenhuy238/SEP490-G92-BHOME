@@ -135,11 +135,12 @@ public sealed partial class InvoiceApiTests(CaptureFixture fixture) : IClassFixt
                 var date = purpose == ReadingPurpose.Initial ? w.Period.AddDays(-1) : w.Period.AddMonths(1).AddDays(-1);
                 var task = await Success<IdResult>(await w.Owner.Client.PostAsJsonAsync("/api/v1/capture/meter-tasks", new MeterTaskInput(meter.Id, purpose, date, purpose == ReadingPurpose.Periodic ? w.Period : null)));
                 using var image = new Mat(120, 300, MatType.CV_8UC3, Scalar.White);
-                Cv2.PutText(image, "SYNTHETIC 125.5", new(10, 70), HersheyFonts.HersheySimplex, .6, Scalar.Black, 1);
+                var value = purpose == ReadingPurpose.Initial ? 100 : utility == UtilityType.Electricity ? 126 : 102;
+                Cv2.PutText(image, $"SYNTHETIC {value}", new(10, 70), HersheyFonts.HersheySimplex, .6, Scalar.Black, 1);
                 using var content = new ByteArrayContent(image.ImEncode(".png")); content.Headers.ContentType = new("image/png");
                 var evidence = await Success<IdResult>(await w.Staff.Client.PutAsync($"/api/v1/capture/meter-tasks/{task.Id}/evidence", content));
                 await Success<ConfirmedReading>(await w.Staff.Client.PostAsJsonAsync($"/api/v1/capture/meter-tasks/{task.Id}/confirm", new MeterConfirmation(true,
-                    purpose == ReadingPurpose.Initial ? 100 : utility == UtilityType.Electricity ? 125.5m : 102m, evidence.Id)));
+                    value, evidence.Id)));
             }
         }
     }
@@ -160,8 +161,8 @@ public sealed partial class InvoiceApiTests(CaptureFixture fixture) : IClassFixt
         Assert.Null(ready.FinalizedAt);
         Assert.Equal(draft.Version + 1, ready.Version);
         Assert.Equal(HttpStatusCode.Conflict, (await w.Owner.Client.PostAsJsonAsync(path + "/refresh", new InvoiceFinalizeInput(draft.Version))).StatusCode);
-        Assert.Empty(ready.MissingInputs); Assert.Equal(3119250m, ready.Total);
-        Assert.Equal(25.5m, ready.Lines.Single(l => l.Category == "Electricity").Quantity);
+        Assert.Empty(ready.MissingInputs); Assert.Equal(3121000m, ready.Total);
+        Assert.Equal(26m, ready.Lines.Single(l => l.Category == "Electricity").Quantity);
         Assert.Equal(HttpStatusCode.Conflict, (await w.Owner.Client.PostAsJsonAsync(path + "/finalize", new InvoiceFinalizeInput(draft.Version))).StatusCode);
         var finals = await Task.WhenAll(Enumerable.Range(0, 3).Select(_ => w.Owner.Client.PostAsJsonAsync(path + "/finalize", new InvoiceFinalizeInput(ready.Version))));
         foreach (var response in finals)
@@ -251,6 +252,30 @@ public sealed partial class InvoiceApiTests(CaptureFixture fixture) : IClassFixt
         Assert.Equal(HttpStatusCode.Forbidden, (await w.Tenant.Client.PutAsJsonAsync("/api/v1/billing-schedules", Schedule(w))).StatusCode);
         await Success<BillingSchedule>(await w.Owner.Client.PutAsJsonAsync("/api/v1/billing-schedules", Schedule(w)));
         Assert.Equal(HttpStatusCode.Conflict, (await w.Owner.Client.PutAsJsonAsync("/api/v1/billing-schedules", Schedule(w))).StatusCode);
+    }
+
+    [Fact]
+    public async Task TenantCurrentInvoicePeriodUsesConfiguredDraftDateAndOwnContract()
+    {
+        var w = await Setup();
+        const string path = "/api/v1/invoices/current-period";
+        var before = await Success<TenantInvoicePeriodView>(await w.Tenant.Client.GetAsync(path));
+        Assert.False(before.HasInvoice);
+        Assert.Empty(before.DraftDates);
+        await Success<BillingSchedule>(await w.Owner.Client.PutAsJsonAsync("/api/v1/billing-schedules",
+            Schedule(w) with { DraftDay = 27, DraftMonthOffset = 1, FinalDay = 28, DueMonthOffset = 2 }));
+        var result = await Success<TenantInvoicePeriodView>(await w.Tenant.Client.GetAsync(path));
+        Assert.Equal(new DateOnly(result.BusinessDate.Year, result.BusinessDate.Month, 1), result.BillingPeriod);
+        Assert.False(result.HasInvoice);
+        Assert.Equal(new[] { InvoiceMath.CalendarDate(result.BillingPeriod, 27, 1) }, result.DraftDates);
+        var other = await User(Roles.Tenant);
+        var outsider = await Success<TenantInvoicePeriodView>(await other.Client.GetAsync(path));
+        Assert.False(outsider.HasInvoice);
+        Assert.Empty(outsider.DraftDates);
+        Assert.Equal(HttpStatusCode.Forbidden, (await w.Staff.Client.GetAsync(path)).StatusCode);
+        Assert.Equal(HttpStatusCode.Forbidden, (await w.Owner.Client.GetAsync(path)).StatusCode);
+        using var anonymous = fixture.Factory.CreateClient();
+        Assert.Equal(HttpStatusCode.Unauthorized, (await anonymous.GetAsync(path)).StatusCode);
     }
 
     [Fact]

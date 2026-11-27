@@ -9,17 +9,22 @@ function scaled(input: string) {
   const [whole, fraction = ''] = normalizedReading(input).split('.');
   return BigInt(whole) * 10000n + BigInt(fraction.padEnd(4, '0'));
 }
-export function readingError(input: string, decimalPlaces: number) {
-  const value = normalizedReading(input);
-  if (!value) return 'Vui lòng nhập chỉ số xác nhận.';
-  if (!/^\d{1,14}(\.\d{1,4})?$/.test(value))
-    return 'Nhập số không âm, tối đa 14 chữ số nguyên và 4 chữ số thập phân.';
-  if ((value.split('.')[1] ?? '').slice(decimalPlaces).replace(/0/g, ''))
-    return `Công tơ này cho phép tối đa ${decimalPlaces} chữ số thập phân.`;
+// Stored historical readings can still contain fractions; only new input is integer.
+function validStoredReading(input: string) {
+  return /^\d{1,14}(\.\d{1,4})?$/.test(normalizedReading(input));
+}
+export function integerReadingInput(input: string) {
+  return normalizedReading(input).replace(/^(\d+)\.0+$/, '$1');
+}
+export function readingError(input: string) {
+  const value = input.trim();
+  if (!value) return 'Vui lòng nhập chỉ số.';
+  if (!/^\d+$/.test(value)) return 'Chỉ số phải là số nguyên không âm.';
+  if (value.length > 14) return 'Chỉ số không được vượt quá 14 chữ số.';
   return '';
 }
 export function estimatedConsumption(input: string, previous: string | null) {
-  if (previous === null || readingError(input, 4) || readingError(previous, 4)) return null;
+  if (previous === null || !validStoredReading(input) || !validStoredReading(previous)) return null;
   const delta = scaled(input) - scaled(previous);
   if (delta < 0n) return null;
   const fraction = (delta % 10000n).toString().padStart(4, '0').replace(/0+$/, '');
@@ -28,8 +33,8 @@ export function estimatedConsumption(input: string, previous: string | null) {
 export function readingDecreased(input: string, previous: string | null) {
   return (
     previous !== null &&
-    !readingError(input, 4) &&
-    !readingError(previous, 4) &&
+    validStoredReading(input) &&
+    validStoredReading(previous) &&
     scaled(input) < scaled(previous)
   );
 }

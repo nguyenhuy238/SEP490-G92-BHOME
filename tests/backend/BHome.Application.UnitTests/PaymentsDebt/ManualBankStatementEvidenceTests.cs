@@ -104,7 +104,7 @@ public sealed class ManualBankStatementEvidenceTests
         Assert.Equal("MANUAL_IMAGE/" + hash, result.StatementReference);
         Assert.Equal(new BankStatementEvidenceView("image/png", bytes.Length, hash), result.StatementEvidence);
         Assert.Single(w.Transfers);
-        Assert.StartsWith("payments/manual-statements/", w.Transfers[0].StatementEvidenceObjectKey);
+        Assert.StartsWith("images/payment-statements/", w.Transfers[0].StatementEvidenceObjectKey);
         Assert.Single(w.Files.Files);
         using var destination = new MemoryStream();
         Assert.Equal("image/png", await w.Service.CopyStatementEvidenceAsync(result.Id, destination, default));

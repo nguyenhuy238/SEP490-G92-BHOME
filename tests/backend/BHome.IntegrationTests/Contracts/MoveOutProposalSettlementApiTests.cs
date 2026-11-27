@@ -4,6 +4,7 @@ using System.Security.Cryptography;
 using System.Text;
 using System.Text.Json;
 using BHome.Application.Contracts;
+using BHome.Application.Billing;
 using BHome.Application.Finance;
 using BHome.Application.PaymentsDebt.SePay;
 using BHome.Application.Storage;
@@ -30,7 +31,24 @@ public sealed partial class ContractLifecycleApiTests
         if (!await UsesCompact24()) return;
         const string account = "123456789012";
         const string secret = "SYNTHETIC-BHOME-SEPAY-TEST-SIGNING-KEY-12345678";
-        var w = await Setup(); var contractId = await Active(w);
+        var w = await Setup();
+        await ConfigureMoveOutBillingAsync(w);
+        await using (var scope = fixture.Factory.Services.CreateAsyncScope())
+        {
+            var db = scope.ServiceProvider.GetRequiredService<BHomePersistenceContext>();
+            db.Add(new BillingPolicy
+            {
+                LocationId = w.Location,
+                Category = ChargeCategory.ServiceFee,
+                ChargeCode = "CLEANING",
+                Name = "Synthetic monthly service",
+                Method = ChargingMethod.FixedPerRoomPerMonth,
+                Rate = 30000,
+                EffectiveFrom = Today.AddMonths(-1)
+            });
+            await db.SaveChangesAsync();
+        }
+        var contractId = await Active(w);
         // A testing bank account and a marked synthetic contract keep every
         // test webhook out of the real/Live SePay payment environment.
         await using (var scope = fixture.Factory.Services.CreateAsyncScope())
@@ -87,13 +105,13 @@ public sealed partial class ContractLifecycleApiTests
             Path(contractId, "move-out/evidence"), roomProofPhoto))).Id;
         var preparation = await Success<InspectionPreparation>(await w.Staff.Client.GetAsync(
             Path(contractId, "move-out/inspection-preparation")));
-        var roomChecks = HandoverRoomChecklist.RequiredCodes.Select(code =>
-            new HandoverRoomCheck(code, code == "cleanliness" ? "Issue" : "Passed",
-                code == "cleanliness" ? "Synthetic cleaning damage" : null,
-                code == "cleanliness" ? [roomProof] : [])).ToArray();
+        var roomChecks = await PassedMoveOutRoomChecks(w.Staff, contractId, "cleanliness");
+        roomChecks = roomChecks.Select(check => check.Code == "cleanliness"
+            ? check with { Notes = "Synthetic cleaning damage", EvidenceIds = [roomProof] } : check).ToArray();
         var inspection = new InspectionInput(electricity, water, "Synthetic final condition", [proof], [],
             "Synthetic room final", "Synthetic returned keys", InventoryToken: preparation.Inventory?.StateToken,
-            RoomChecks: roomChecks, AccessItems: [new HandoverAccessItem("RoomKey", 0, "")]);
+            RoomChecks: roomChecks, AccessItems: [new HandoverAccessItem("RoomKey", 0, "")],
+            KeyEvidenceIds: [await MoveOutPhoto(w.Staff, contractId)]);
         var draft = await Success<MoveOutInspectionDraftView>(await w.Staff.Client.GetAsync(
             Path(contractId, "move-out/inspection-draft")));
         using (var request = new HttpRequestMessage(HttpMethod.Patch,
@@ -110,11 +128,17 @@ public sealed partial class ContractLifecycleApiTests
         await Success<MoveOutView>(await Post(w.Staff, Path(contractId, "move-out/inspection"), inspection));
         var path = Path(contractId, "move-out/receivables/proposal");
         var preview = await Success<MoveOutChargeProposalPreview>(await w.Owner.Client.GetAsync(path));
+        var automatic = Assert.IsType<MoveOutAutomaticCharge[]>(preview.AutomaticCharges);
+        Assert.All(automatic, row => Assert.Empty(row.MissingInputs));
+        Assert.Equal(70000m, Assert.Single(automatic, row => row.Code == "Electricity").Amount);
+        Assert.Equal(300000m, Assert.Single(automatic, row => row.Code == "Water").Amount);
+        Assert.Equal(30000m, Assert.Single(automatic, row => row.Code == "CLEANING").Amount);
+        var manualFee = proposedFee - automatic.Sum(row => row.Amount!.Value);
         var cleaning = Assert.Single(preview.Items, i => i.Kind == "RoomCheck" && i.RoomCheckCode == "cleanliness");
         Assert.Contains(roomProof, cleaning.EvidenceIds);
         var quoteInput = new MoveOutChargeProposalInput(preview.Reference, preview.InspectionId,
             preview.InspectionVersion,
-            [new MoveOutProposedCharge("RoomCheck", null, "cleanliness", null, proposedFee,
+            [new MoveOutProposedCharge("RoomCheck", null, "cleanliness", null, manualFee,
                 "Synthetic Owner verified cleaning loss")]);
         MoveOutChargeProposal proposal;
         if (recoverPreviousConsent)
@@ -127,7 +151,7 @@ public sealed partial class ContractLifecycleApiTests
                 preview.AvailableDeposit - proposedFee - preview.ExistingOutstanding,
                 null, w.Owner.Id, DateTimeOffset.UtcNow, [w.Tenant.Id], Guid.NewGuid(),
                 "synthetic-original-owner-financial-approval", true,
-                ExistingOutstanding: preview.ExistingOutstanding, PhysicalReference: "");
+                ExistingOutstanding: preview.ExistingOutstanding, PhysicalReference: "", AutomaticCharges: automatic);
             await using var scope = fixture.Factory.Services.CreateAsyncScope();
             var db = scope.ServiceProvider.GetRequiredService<BHomePersistenceContext>();
             var json = JsonSerializer.Serialize(new
@@ -144,6 +168,7 @@ public sealed partial class ContractLifecycleApiTests
         }
         else
             proposal = await Success<MoveOutChargeProposal>(await Post(w.Owner, path, quoteInput));
+        Assert.Equal(proposedFee, proposal.TotalCharges);
         var feedbackInput = new MoveOutChargeProposalFeedbackInput(proposal.Id, preview.Reference, true);
         var key = Guid.NewGuid();
         MoveOutChargeProposalFeedback accepted;
@@ -213,10 +238,17 @@ public sealed partial class ContractLifecycleApiTests
             await w.Tenant.Client.GetAsync(path))).Status);
         var view = await Success<SettlementReceivablesView>(await w.Owner.Client.GetAsync(
             Path(contractId, "move-out/receivables")));
-        var charge = Assert.Single(view.Receivables);
-        Assert.Equal(proposedFee, charge.Charge.Amount);
+        Assert.Equal(2, view.Receivables.Count(row => row.Charge.Kind == "FinalUtility"));
+        var fixedCharge = Assert.Single(view.Receivables, row => row.Charge.Kind == "FinalFixed").Charge;
+        Assert.Equal(30000m, fixedCharge.Amount);
+        Assert.True(fixedCharge.Evidence.Count > 5);
+        Assert.Contains(fixedCharge.Evidence, file => file.Id == proof);
+        Assert.Contains(fixedCharge.Evidence, file => file.Id == roomProof);
+        var charge = Assert.Single(view.Receivables, row => row.Charge.Kind == "TenantDamage");
+        Assert.Equal(manualFee, charge.Charge.Amount);
+        Assert.Equal(proposedFee, view.Receivables.Sum(row => row.Charge.Amount));
         Assert.Equal(expectedStatus == "Payable" ? expectedAmount : 0, charge.Outstanding);
-        Assert.Equal(Math.Min(3000000, proposedFee), Assert.Single(view.Offsets).Amount);
+        Assert.Equal(Math.Min(3000000, proposedFee), view.Offsets.Sum(row => row.Amount));
 
         if (expectedStatus == "RefundEligible")
         {
@@ -299,7 +331,7 @@ public sealed partial class ContractLifecycleApiTests
         Assert.Equal(HttpStatusCode.OK, (await SendWebhook()).StatusCode);
         view = await Success<SettlementReceivablesView>(await w.Owner.Client.GetAsync(
             Path(contractId, "move-out/receivables")));
-        Assert.Equal(0, Assert.Single(view.Receivables).Outstanding);
+        Assert.All(view.Receivables, row => Assert.Equal(0, row.Outstanding));
         await using var verification = sepayHost.Services.CreateAsyncScope();
         var dbVerified = verification.ServiceProvider.GetRequiredService<BHomePersistenceContext>();
         Assert.Equal(2, await dbVerified.Set<PaymentAllocation>().CountAsync(a =>
@@ -319,4 +351,8 @@ public sealed partial class ContractLifecycleApiTests
         Assert.Single(await dbVerified.Set<ContractMoveOutHistory>().AsNoTracking().Where(h =>
             h.ContractId == contractId && h.Action == "Completed").ToArrayAsync());
     }
+    private async Task ConfigureMoveOutBillingAsync(Workspace w) =>
+        _ = await Success<BillingSchedule>(await w.Owner.Client.PutAsJsonAsync("/api/v1/billing-schedules",
+            new BillingScheduleWrite(w.Location, BillingRateDate.PeriodStart, BillingRentSource.RepresentativeContract,
+                PartialMonthRule.FullMonth, VndRounding.AwayFromZero, 1, 0, 1, 1, 10, 1, 0)));
 }

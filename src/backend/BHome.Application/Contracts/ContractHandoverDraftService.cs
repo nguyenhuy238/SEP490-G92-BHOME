@@ -879,7 +879,7 @@ public sealed partial class ContractService
                 RecordedByUserId = Actor,
                 RecordedAt = clock.GetUtcNow()
             };
-            file.ObjectKey = $"contracts/{id:N}/handover/{file.Id:N}";
+            file.ObjectKey = BHome.Application.Storage.PrivateImageKeys.Evidence(current.Room.LocationId, current.RoomId, "move-in", id, file.Id);
             await files.PutAsync(current.RoomId, file.ObjectKey, bytes, contentType, token);
             repository.Add(file);
             Audit("ContractHandoverDraftEvidenceAdded", id);

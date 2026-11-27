@@ -5,6 +5,7 @@ import React, { useMemo, useRef, useState } from 'react';
 import { Button, Checkbox, HelperText, Text } from 'react-native-paper';
 import {
   actionPayload,
+  businessToday,
   canUseCertificate,
   contractError,
   earlyTerminationDate,
@@ -166,6 +167,7 @@ export function ContractActionForm({
               disabled={busy}
               hyphenated
               compactCalendar
+              calendarDate={businessToday()}
               error={showDateError || !!fieldErrors[f.name]}
               onBlur={() => setDateTouched(true)}
               onChange={(v) => {

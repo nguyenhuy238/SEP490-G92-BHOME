@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Modal, ScrollView, StyleSheet, View, useWindowDimensions } from 'react-native';
+import { Modal, ScrollView, StyleSheet, View } from 'react-native';
 import { Button, Icon, Text, TouchableRipple } from 'react-native-paper';
 import {
   displayContractDate,
@@ -74,19 +74,27 @@ const styles = StyleSheet.create({
     flex: 1,
     justifyContent: 'center',
     alignItems: 'center',
-    padding: 12,
+    padding: 16,
     backgroundColor: 'rgba(14, 27, 47, 0.65)',
   },
   modalSheet: {
     backgroundColor: '#fff',
     borderRadius: 16,
     overflow: 'hidden',
-    maxHeight: '88%',
+    maxHeight: '80%',
     width: '100%',
     maxWidth: 520,
   },
-  phoneSheet: { borderBottomLeftRadius: 0, borderBottomRightRadius: 0, maxHeight: '92%' },
-  phoneOverlay: { paddingHorizontal: 0, paddingBottom: 0, justifyContent: 'flex-end' },
+  childOverlay: {
+    position: 'absolute',
+    top: 0,
+    right: 0,
+    bottom: 0,
+    left: 0,
+    padding: 24,
+    backgroundColor: 'rgba(14, 27, 47, 0.45)',
+  },
+  childPanel: { maxHeight: '75%' },
   modalHeader: {
     paddingHorizontal: 16,
     paddingVertical: 12,
@@ -237,8 +245,6 @@ export function TenantMoveInHandoverSummary({
   documentsLoading?: boolean;
 }) {
   const [detail, setDetail] = useState<Detail>(null);
-  const { width } = useWindowDimensions();
-  const phone = width < 540;
   const roomIssues = (draft.roomChecks ?? []).filter((item) => item.status === 'Issue');
   const roomPassed = (draft.roomChecks ?? []).filter((item) => item.status === 'Passed').length;
   const keys = (draft.accessItems ?? []).find((item) => item.type === 'RoomKey');
@@ -252,27 +258,6 @@ export function TenantMoveInHandoverSummary({
       return `${item.name}: dự kiến ${item.configuredQuantity} ${item.unit ?? 'đơn vị'} · Chưa ghi nhận số lượng thực tế`;
     return `${item.name}: Chưa có số liệu kiểm kê`;
   };
-  const check =
-    detail?.section === 'room' && detail.item && detail.item !== 'overall'
-      ? (draft.roomChecks ?? []).find((item) => item.code === detail.item)
-      : null;
-  const asset =
-    detail?.section === 'assets' && detail.item
-      ? draft.assets.find((item) => item.id === detail.item)
-      : null;
-  const roomName = roomHandoverChecks.find((item) => item.code === detail?.item)?.label;
-  const title =
-    detail?.section === 'room'
-      ? (roomName ?? (detail.item === 'overall' ? 'Ảnh hiện trạng chung' : 'Hiện trạng phòng'))
-      : detail?.section === 'meters'
-        ? 'Chỉ số điện, nước ban đầu'
-        : detail?.section === 'assets'
-          ? (asset?.name ?? 'Tài sản bàn giao')
-          : detail?.section === 'keys'
-            ? 'Chìa khóa và quyền ra vào'
-            : detail?.section === 'contract'
-              ? 'Thông tin hợp đồng'
-              : 'Tài liệu và xác nhận';
 
   const entry = (label: string, text: string, section: Section, icon: string, problem = false) =>
     compactRow({
@@ -283,6 +268,318 @@ export function TenantMoveInHandoverSummary({
       onPress: () => setDetail({ section }),
     });
   const goBack = () => setDetail((current) => (current ? { section: current.section } : null));
+
+  function renderPanel(detail: NonNullable<Detail>, covered = false, child = false) {
+    const check =
+      detail?.section === 'room' && detail.item && detail.item !== 'overall'
+        ? (draft.roomChecks ?? []).find((item) => item.code === detail.item)
+        : null;
+    const asset =
+      detail?.section === 'assets' && detail.item
+        ? draft.assets.find((item) => item.id === detail.item)
+        : null;
+    const roomName = roomHandoverChecks.find((item) => item.code === detail?.item)?.label;
+    const title =
+      detail?.section === 'room'
+        ? (roomName ?? (detail.item === 'overall' ? 'Hiện trạng chung' : 'Hiện trạng phòng'))
+        : detail?.section === 'meters'
+          ? detail.item === 'electricity'
+            ? 'Chỉ số điện ban đầu'
+            : detail.item === 'water'
+              ? 'Chỉ số nước ban đầu'
+              : 'Điện và nước'
+          : detail?.section === 'assets'
+            ? (asset?.name ?? 'Tài sản bàn giao')
+            : detail?.section === 'keys'
+              ? 'Chìa khóa và quyền ra vào'
+              : detail?.section === 'contract'
+                ? 'Thông tin hợp đồng'
+                : 'Tài liệu và xác nhận';
+    return (
+      <View
+        style={[styles.modalOverlay, child && styles.childOverlay]}
+        pointerEvents={covered ? 'none' : 'auto'}
+        accessibilityElementsHidden={covered}
+        importantForAccessibility={covered ? 'no-hide-descendants' : 'auto'}
+      >
+        <View
+          testID={child ? 'handover-detail-panel' : 'handover-list-panel'}
+          style={[styles.modalSheet, child && styles.childPanel]}
+        >
+          <View style={styles.modalHeader}>
+            {!!detail?.item && (
+              <Button compact onPress={goBack} accessibilityLabel="Quay lại danh sách">
+                Quay lại
+              </Button>
+            )}
+            <Text numberOfLines={2} style={styles.modalHeading}>
+              {title}
+            </Text>
+            <Button compact onPress={child ? goBack : () => setDetail(null)}>
+              Đóng
+            </Button>
+          </View>
+          <ScrollView
+            style={{ flexShrink: 1 }}
+            keyboardShouldPersistTaps="handled"
+            contentContainerStyle={styles.modalBody}
+          >
+            {detail?.section === 'room' && !detail.item && (
+              <>
+                {compactRow({
+                  label: 'Hiện trạng chung',
+                  detail: `${draft.roomCondition ? 'Đã ghi nhận' : 'Chưa ghi nhận'} · ${draft.evidenceIds.length} ảnh`,
+                  icon: 'home-outline',
+                  onPress: () => setDetail({ section: 'room', item: 'overall' }),
+                })}
+                <View style={styles.separator} />
+                {roomHandoverChecks.map(({ code, label }) => {
+                  const observed = (draft.roomChecks ?? []).find((item) => item.code === code);
+                  const state = checkState(observed?.status);
+                  return (
+                    <View key={code}>
+                      {compactRow({
+                        label,
+                        detail: `${state.label}${observed?.status !== 'Passed' && observed?.notes ? ` · ${observed.notes}` : ''}${observed?.evidenceIds?.length ? ` · ${observed.evidenceIds.length} ảnh` : ''}`,
+                        status: observed?.status === 'Issue' ? 'issue' : 'success',
+                        icon: state.icon,
+                        onPress: () => setDetail({ section: 'room', item: code }),
+                      })}
+                      <View style={styles.separator} />
+                    </View>
+                  );
+                })}
+                {(draft.outstandingIssues ?? []).map((issue, index) => (
+                  <Text key={`${issue.code}-${index}`} style={styles.warning}>
+                    {issue.description}
+                  </Text>
+                ))}
+              </>
+            )}
+            {detail?.section === 'room' && detail.item === 'overall' && (
+              <>
+                <Text style={styles.sectionSubtitle}>
+                  {draft.roomCondition || 'Không có ghi chú'}
+                </Text>
+                <EvidenceGallery
+                  api={api}
+                  contractId={contractId}
+                  ids={draft.evidenceIds}
+                  label="Ảnh hiện trạng chung"
+                />
+              </>
+            )}
+            {detail?.section === 'room' && check && (
+              <>
+                <Pill
+                  tone={
+                    check.status === 'Passed'
+                      ? 'green'
+                      : check.status === 'Issue'
+                        ? 'red'
+                        : 'neutral'
+                  }
+                >
+                  {checkState(check.status).label}
+                </Pill>
+                {!!check.notes?.trim() && <Text>{check.notes}</Text>}
+                <EvidenceGallery
+                  api={api}
+                  contractId={contractId}
+                  ids={check.evidenceIds}
+                  label="Ảnh kiểm tra"
+                />
+                {!check.evidenceIds?.length && (
+                  <Text style={styles.subtle}>Không có ảnh đính kèm cho mục này.</Text>
+                )}
+              </>
+            )}
+            {detail?.section === 'room' && detail.item && detail.item !== 'overall' && !check && (
+              <Text>Chưa kiểm tra mục này.</Text>
+            )}
+            {detail?.section === 'meters' && !detail.item && (
+              <>
+                {compactRow({
+                  label: 'Điện',
+                  detail: draft.electricity
+                    ? `${displayMeterReading(draft.electricity.value)} kWh`
+                    : 'Chưa xác nhận',
+                  icon: 'lightning-bolt-outline',
+                  onPress: () => setDetail({ section: 'meters', item: 'electricity' }),
+                })}
+                <View style={styles.separator} />
+                {compactRow({
+                  label: 'Nước',
+                  detail: draft.water
+                    ? `${displayMeterReading(draft.water.value)} m³`
+                    : 'Chưa xác nhận',
+                  icon: 'water-outline',
+                  onPress: () => setDetail({ section: 'meters', item: 'water' }),
+                })}
+              </>
+            )}
+            {detail?.section === 'meters' && detail.item && (
+              <>
+                {detail.item === 'electricity' && (
+                  <View style={styles.detailLine}>
+                    <Text style={styles.rowLabel}>
+                      Điện:{' '}
+                      {draft.electricity
+                        ? `${displayMeterReading(draft.electricity.value)} kWh`
+                        : 'Chưa xác nhận'}
+                    </Text>
+                    <EvidenceGallery
+                      api={api}
+                      contractId={contractId}
+                      readingId={draft.electricity?.id}
+                      label="Ảnh công tơ điện"
+                    />
+                  </View>
+                )}
+                {detail.item === 'water' && (
+                  <View style={styles.detailLine}>
+                    <Text style={styles.rowLabel}>
+                      Nước:{' '}
+                      {draft.water
+                        ? `${displayMeterReading(draft.water.value)} m³`
+                        : 'Chưa xác nhận'}
+                    </Text>
+                    <EvidenceGallery
+                      api={api}
+                      contractId={contractId}
+                      readingId={draft.water?.id}
+                      label="Ảnh công tơ nước"
+                    />
+                  </View>
+                )}
+              </>
+            )}
+            {detail?.section === 'assets' && !asset && (
+              <>
+                {draft.assets.map((item: HandoverAsset) => (
+                  <View key={item.id}>
+                    {compactRow({
+                      label: item.name,
+                      detail: quantityText(item),
+                      icon: 'package-variant-closed',
+                      onPress: () => setDetail({ section: 'assets', item: item.id }),
+                    })}
+                  </View>
+                ))}
+                {!draft.assets.length && (
+                  <Text>
+                    {draft.noAssetsConfirmed
+                      ? 'Phòng được xác nhận không có tài sản bàn giao.'
+                      : 'Chưa có kết quả kiểm kê tài sản.'}
+                  </Text>
+                )}
+              </>
+            )}
+            {detail?.section === 'assets' && asset && (
+              <>
+                <Text style={styles.sectionSubtitle}>{quantityText(asset)}</Text>
+                {!!asset.notes?.trim() && <Text>{asset.notes}</Text>}
+                <EvidenceGallery
+                  api={api}
+                  contractId={contractId}
+                  ids={asset.evidenceIds}
+                  label="Ảnh tài sản"
+                />
+              </>
+            )}
+            {detail?.section === 'keys' && (
+              <>
+                <Text style={styles.rowLabel}>
+                  {keys ? `${keys.quantity} chìa khóa phòng` : 'Chưa kiểm đếm chìa khóa'}
+                </Text>
+                {!!keys?.notes?.trim() && <Text>{keys.notes}</Text>}
+                <EvidenceGallery
+                  api={api}
+                  contractId={contractId}
+                  ids={draft.keyEvidenceIds}
+                  label="Ảnh chìa khóa"
+                />
+              </>
+            )}
+            {detail?.section === 'contract' && (
+              <>
+                <Text style={styles.rowLabel}>
+                  Phòng {draft.roomNumber} · {draft.locationName}
+                </Text>
+                {!!draft.locationAddress && (
+                  <Text style={styles.sectionSubtitle}>{draft.locationAddress}</Text>
+                )}
+                <Text>
+                  Thời hạn: {displayContractDate(draft.startDate)} –{' '}
+                  {displayContractDate(draft.endDate)}
+                </Text>
+                <Text>Giá thuê: {formatContractMoney(String(draft.monthlyRent))} / tháng</Text>
+                <Text>Tiền cọc: {formatContractMoney(String(draft.requiredDeposit))}</Text>
+                {!!draft.terms && <Text>Điều khoản: {draft.terms}</Text>}
+                {!!draft.notes && <Text>Ghi chú chung: {draft.notes}</Text>}
+              </>
+            )}
+            {detail?.section === 'documents' && (
+              <>
+                {documentsLoading && (
+                  <Text style={styles.sectionSubtitle}>Đang tải biên bản PDF đã ký…</Text>
+                )}
+                {!!draft.ownerReadyAt && (
+                  <Text style={styles.sectionSubtitle}>
+                    Chủ trọ xác nhận: {formatInstant(draft.ownerReadyAt)}
+                  </Text>
+                )}
+                {!!draft.tenantConfirmedAt && (
+                  <Text style={styles.sectionSubtitle}>
+                    Khách thuê xác nhận: {formatInstant(draft.tenantConfirmedAt)}
+                  </Text>
+                )}
+                {draft.status === 'Ready' && (
+                  <ContractEvidence
+                    api={api}
+                    contractId={contractId}
+                    draftHandoverPdf
+                    label="Xem PDF chủ trọ đã ký"
+                  />
+                )}
+                {documents.map((document) => (
+                  <ContractEvidence
+                    key={document.id}
+                    api={api}
+                    contractId={contractId}
+                    handoverDocumentId={document.id}
+                    label="Mở biên bản cuối cùng"
+                  />
+                ))}
+                {draft.status === 'Confirmed' && !!documentsError && (
+                  <Text accessibilityRole="alert" style={styles.warning}>
+                    Không tải được PDF: {documentsError}
+                  </Text>
+                )}
+                {draft.status === 'Confirmed' &&
+                  !documentsLoading &&
+                  !documents.length &&
+                  !documentsError && (
+                    <Text style={styles.subtle}>
+                      Biên bản đã ký chưa có PDF cuối cùng. Hãy tải lại hoặc liên hệ chủ trọ.
+                    </Text>
+                  )}
+                {draft.requests.map((request) => (
+                  <View key={request.id} style={styles.detailLine}>
+                    <Text style={styles.rowLabel}>Yêu cầu chỉnh sửa · {request.status}</Text>
+                    <Text>{request.reason}</Text>
+                    {!!request.decisionReason && (
+                      <Text>Phản hồi chủ trọ: {request.decisionReason}</Text>
+                    )}
+                  </View>
+                ))}
+              </>
+            )}
+          </ScrollView>
+        </View>
+      </View>
+    );
+  }
 
   return (
     <View style={styles.root}>
@@ -295,7 +592,6 @@ export function TenantMoveInHandoverSummary({
           >
             {statusLabels[draft.status]}
           </Pill>
-          <Text style={styles.subtle}>Biên bản phiên bản {draft.version}</Text>
         </View>
         <Text style={styles.heading}>Phòng {draft.roomNumber}</Text>
         <Text style={styles.summaryText}>{draft.locationName}</Text>
@@ -377,252 +673,12 @@ export function TenantMoveInHandoverSummary({
       <Modal
         visible={!!detail}
         transparent
-        animationType="slide"
-        onRequestClose={() => setDetail(null)}
+        animationType="fade"
+        onRequestClose={detail?.item ? goBack : () => setDetail(null)}
       >
-        <View style={[styles.modalOverlay, phone && styles.phoneOverlay]}>
-          <View style={[styles.modalSheet, phone && styles.phoneSheet]}>
-            <View style={styles.modalHeader}>
-              {!!detail?.item && detail.section !== 'meters' && (
-                <Button compact onPress={goBack} accessibilityLabel="Quay lại danh sách">
-                  Quay lại
-                </Button>
-              )}
-              <Text numberOfLines={2} style={styles.modalHeading}>
-                {title}
-              </Text>
-              <Button compact onPress={() => setDetail(null)}>
-                Đóng
-              </Button>
-            </View>
-            <ScrollView
-              keyboardShouldPersistTaps="handled"
-              contentContainerStyle={styles.modalBody}
-            >
-              {detail?.section === 'room' && !detail.item && (
-                <>
-                  <Text style={styles.sectionSubtitle}>
-                    Ghi chú hiện trạng: {draft.roomCondition || 'Không có ghi chú'}
-                  </Text>
-                  {roomHandoverChecks.map(({ code, label }) => {
-                    const observed = (draft.roomChecks ?? []).find((item) => item.code === code);
-                    const state = checkState(observed?.status);
-                    return (
-                      <View key={code}>
-                        {compactRow({
-                          label,
-                          detail: `${state.label}${observed?.status !== 'Passed' && observed?.notes ? ` · ${observed.notes}` : ''}${observed?.evidenceIds?.length ? ` · ${observed.evidenceIds.length} ảnh` : ''}`,
-                          status: observed?.status === 'Issue' ? 'issue' : 'success',
-                          icon: state.icon,
-                          onPress: () => setDetail({ section: 'room', item: code }),
-                        })}
-                        <View style={styles.separator} />
-                      </View>
-                    );
-                  })}
-                  {draft.evidenceIds.length > 0 && (
-                    <Button
-                      mode="outlined"
-                      onPress={() => setDetail({ section: 'room', item: 'overall' })}
-                    >
-                      Xem {draft.evidenceIds.length} ảnh tổng quan
-                    </Button>
-                  )}
-                  {(draft.outstandingIssues ?? []).map((issue, index) => (
-                    <Text key={`${issue.code}-${index}`} style={styles.warning}>
-                      {issue.description}
-                    </Text>
-                  ))}
-                </>
-              )}
-              {detail?.section === 'room' && detail.item === 'overall' && (
-                <EvidenceGallery
-                  api={api}
-                  contractId={contractId}
-                  ids={draft.evidenceIds}
-                  label="Ảnh hiện trạng chung"
-                />
-              )}
-              {detail?.section === 'room' && check && (
-                <>
-                  <Pill
-                    tone={
-                      check.status === 'Passed'
-                        ? 'green'
-                        : check.status === 'Issue'
-                          ? 'red'
-                          : 'neutral'
-                    }
-                  >
-                    {checkState(check.status).label}
-                  </Pill>
-                  {check.status !== 'Passed' && !!check.notes?.trim() && <Text>{check.notes}</Text>}
-                  <EvidenceGallery
-                    api={api}
-                    contractId={contractId}
-                    ids={check.evidenceIds}
-                    label="Ảnh kiểm tra"
-                  />
-                  {!check.evidenceIds?.length && (
-                    <Text style={styles.subtle}>Không có ảnh đính kèm cho mục này.</Text>
-                  )}
-                </>
-              )}
-              {detail?.section === 'meters' && (
-                <>
-                  <View style={styles.detailLine}>
-                    <Text style={styles.rowLabel}>
-                      Điện:{' '}
-                      {draft.electricity
-                        ? `${displayMeterReading(draft.electricity.value)} kWh`
-                        : 'Chưa xác nhận'}
-                    </Text>
-                    <EvidenceGallery
-                      api={api}
-                      contractId={contractId}
-                      readingId={draft.electricity?.id}
-                      label="Ảnh công tơ điện"
-                    />
-                  </View>
-                  <View style={styles.detailLine}>
-                    <Text style={styles.rowLabel}>
-                      Nước:{' '}
-                      {draft.water
-                        ? `${displayMeterReading(draft.water.value)} m³`
-                        : 'Chưa xác nhận'}
-                    </Text>
-                    <EvidenceGallery
-                      api={api}
-                      contractId={contractId}
-                      readingId={draft.water?.id}
-                      label="Ảnh công tơ nước"
-                    />
-                  </View>
-                </>
-              )}
-              {detail?.section === 'assets' && !asset && (
-                <>
-                  {draft.assets.map((item: HandoverAsset) => (
-                    <View key={item.id}>
-                      {compactRow({
-                        label: item.name,
-                        detail: quantityText(item),
-                        icon: 'package-variant-closed',
-                        onPress: () => setDetail({ section: 'assets', item: item.id }),
-                      })}
-                    </View>
-                  ))}
-                  {!draft.assets.length && (
-                    <Text>
-                      {draft.noAssetsConfirmed
-                        ? 'Phòng được xác nhận không có tài sản bàn giao.'
-                        : 'Chưa có kết quả kiểm kê tài sản.'}
-                    </Text>
-                  )}
-                </>
-              )}
-              {detail?.section === 'assets' && asset && (
-                <>
-                  <Text style={styles.sectionSubtitle}>{quantityText(asset)}</Text>
-                  {!!asset.notes?.trim() && <Text>{asset.notes}</Text>}
-                  <EvidenceGallery
-                    api={api}
-                    contractId={contractId}
-                    ids={asset.evidenceIds}
-                    label="Ảnh tài sản"
-                  />
-                </>
-              )}
-              {detail?.section === 'keys' && (
-                <>
-                  <Text style={styles.rowLabel}>
-                    {keys ? `${keys.quantity} chìa khóa phòng` : 'Chưa kiểm đếm chìa khóa'}
-                  </Text>
-                  {!!keys?.notes?.trim() && <Text>{keys.notes}</Text>}
-                  <EvidenceGallery
-                    api={api}
-                    contractId={contractId}
-                    ids={draft.keyEvidenceIds}
-                    label="Ảnh chìa khóa"
-                  />
-                </>
-              )}
-              {detail?.section === 'contract' && (
-                <>
-                  <Text style={styles.rowLabel}>
-                    Phòng {draft.roomNumber} · {draft.locationName}
-                  </Text>
-                  {!!draft.locationAddress && (
-                    <Text style={styles.sectionSubtitle}>{draft.locationAddress}</Text>
-                  )}
-                  <Text>
-                    Thời hạn: {displayContractDate(draft.startDate)} –{' '}
-                    {displayContractDate(draft.endDate)}
-                  </Text>
-                  <Text>Giá thuê: {formatContractMoney(String(draft.monthlyRent))} / tháng</Text>
-                  <Text>Tiền cọc: {formatContractMoney(String(draft.requiredDeposit))}</Text>
-                  {!!draft.terms && <Text>Điều khoản: {draft.terms}</Text>}
-                  {!!draft.notes && <Text>Ghi chú chung: {draft.notes}</Text>}
-                </>
-              )}
-              {detail?.section === 'documents' && (
-                <>
-                  {documentsLoading && (
-                    <Text style={styles.sectionSubtitle}>Đang tải biên bản PDF đã ký…</Text>
-                  )}
-                  {!!draft.ownerReadyAt && (
-                    <Text style={styles.sectionSubtitle}>
-                      Chủ trọ xác nhận: {formatInstant(draft.ownerReadyAt)}
-                    </Text>
-                  )}
-                  {!!draft.tenantConfirmedAt && (
-                    <Text style={styles.sectionSubtitle}>
-                      Khách thuê xác nhận: {formatInstant(draft.tenantConfirmedAt)}
-                    </Text>
-                  )}
-                  {draft.status === 'Ready' && (
-                    <ContractEvidence
-                      api={api}
-                      contractId={contractId}
-                      draftHandoverPdf
-                      label="Xem PDF chủ trọ đã ký"
-                    />
-                  )}
-                  {documents.map((document) => (
-                    <ContractEvidence
-                      key={document.id}
-                      api={api}
-                      contractId={contractId}
-                      handoverDocumentId={document.id}
-                      label="Mở biên bản cuối cùng"
-                    />
-                  ))}
-                  {draft.status === 'Confirmed' && !!documentsError && (
-                    <Text accessibilityRole="alert" style={styles.warning}>
-                      Không tải được PDF: {documentsError}
-                    </Text>
-                  )}
-                  {draft.status === 'Confirmed' &&
-                    !documentsLoading &&
-                    !documents.length &&
-                    !documentsError && (
-                      <Text style={styles.subtle}>
-                        Biên bản đã ký chưa có PDF cuối cùng. Hãy tải lại hoặc liên hệ chủ trọ.
-                      </Text>
-                    )}
-                  {draft.requests.map((request) => (
-                    <View key={request.id} style={styles.detailLine}>
-                      <Text style={styles.rowLabel}>Yêu cầu chỉnh sửa · {request.status}</Text>
-                      <Text>{request.reason}</Text>
-                      {!!request.decisionReason && (
-                        <Text>Phản hồi chủ trọ: {request.decisionReason}</Text>
-                      )}
-                    </View>
-                  ))}
-                </>
-              )}
-            </ScrollView>
-          </View>
+        <View style={{ flex: 1 }}>
+          {detail && renderPanel({ section: detail.section }, !!detail.item)}
+          {detail?.item && renderPanel(detail, false, true)}
         </View>
       </Modal>
     </View>

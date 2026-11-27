@@ -58,14 +58,20 @@ import { operationalTasks, type OperationalTask } from '../services/operationalT
 const guidPattern = /^[\da-f]{8}-(?:[\da-f]{4}-){3}[\da-f]{12}$/i;
 const sections = [
   'Ghi chỉ số điện nước',
-  'Hiện trạng phòng · 7 mục',
+  'Hiện trạng phòng',
   'Kiểm kê tài sản',
   'Chìa khóa và quyền truy cập',
 ] as const;
 const statuses = [
-  { id: 'Passed', label: 'Tốt' },
+  { id: 'Passed', label: 'Đạt' },
   { id: 'Issue', label: 'Có vấn đề' },
+  { id: 'NotApplicable', label: 'Không áp dụng' },
 ];
+const assetStatuses = [
+  { value: 'Good', label: 'Đủ' },
+  { value: 'Missing', label: 'Thiếu' },
+  { value: 'Damaged', label: 'Hỏng' },
+] as const;
 
 // Local-development artwork only; it must never be presented as real evidence.
 function moveOutDemoJpeg(): Uint8Array<ArrayBuffer> {
@@ -185,8 +191,10 @@ function draftToLocal(draft: InspectionDraft): LocalInspection {
   }
   for (const asset of draft.assets ?? []) {
     values[`asset-${asset.id}`] = ['Tốt', 'Good', 'Passed'].includes(asset.condition)
-      ? 'Tốt'
-      : 'Có vấn đề';
+      ? 'Good'
+      : asset.condition === 'Missing'
+        ? 'Missing'
+        : 'Damaged';
     values[`${asset.id}.checked`] = asset.checked === false ? 'false' : 'true';
     values[`${asset.id}.notes`] = asset.notes ?? '';
     photos[`asset:${asset.id}`] = asset.evidenceIds ?? [];
@@ -722,20 +730,29 @@ function InspectionForm({
   const confirmedValues = confirmed.values;
   const confirmedPhotos = (bucket: string) => confirmed.photos[bucket] ?? [];
   const getPhotos = (bucket: string) => photos[bucket] ?? [];
+  const expectedAssetQuantity = (asset: HandoverAsset) =>
+    openingAsset(asset.id)?.handedOverQuantity ??
+    asset.handedOverQuantity ??
+    asset.configuredQuantity ??
+    (asset.physicalAssets?.length
+      ? asset.physicalAssets.reduce((sum, part) => sum + part.quantity, 0)
+      : undefined);
   function assetResult(asset: HandoverAsset) {
     const condition = values[`asset-${asset.id}`]?.trim() ?? '';
-    if (condition !== 'Tốt' && condition !== 'Có vấn đề')
-      throw new Error(`Chọn Tốt hoặc Có vấn đề cho ${asset.name}.`);
+    if (!assetStatuses.some((entry) => entry.value === condition))
+      throw new Error(`Chọn tình trạng của tài sản: ${asset.name}.`);
     const current = values[`${asset.id}.observedQuantity`] ?? '';
     const openingQuantity = openingAsset(asset.id)?.handedOverQuantity;
-    const hasCount =
-      openingQuantity != null ||
-      asset.configuredQuantity != null ||
-      asset.handedOverQuantity != null ||
-      !!asset.physicalAssets?.length;
+    const expected = expectedAssetQuantity(asset);
+    const hasCount = expected != null;
     const result = hasCount
       ? (() => {
-          const count = handoverQuantity(current, `${asset.name} · Số lượng hiện tại`);
+          const count = handoverQuantity(current.trim(), `${asset.name} · Số lượng hiện tại`);
+          if (count > expected) throw new Error(`Số lượng thực tế không được vượt ${expected}.`);
+          if (condition === 'Good' && count !== expected)
+            throw new Error(`Tài sản Đạt phải đủ ${expected}.`);
+          if (condition === 'Missing' && count >= expected)
+            throw new Error('Chọn Thiếu khi số lượng thực tế ít hơn số dự kiến.');
           return {
             id: asset.id,
             condition,
@@ -754,16 +771,22 @@ function InspectionForm({
   };
   const readingId = (type: 0 | 1) =>
     values[type === 0 ? 'electricityReadingId' : 'waterReadingId'] ?? '';
-  const roomCompleted = roomHandoverChecks.every(({ code }) => {
+  const generalCompleted =
+    !!confirmedValues.roomCondition?.trim() && confirmedPhotos('general').length > 0;
+  const roomCheckCompleted = (code: string) => {
     const status = confirmedValues[`room.${code}.status`];
     return (
-      status === 'Passed' || (status === 'Issue' && !!confirmedValues[`room.${code}.notes`]?.trim())
+      status === 'NotApplicable' ||
+      ((status === 'Passed' || status === 'Issue') && confirmedPhotos(`room:${code}`).length > 0)
     );
-  });
+  };
+  const roomCompleted =
+    generalCompleted && roomHandoverChecks.every(({ code }) => roomCheckCompleted(code));
   const assetIssue = (asset: HandoverAsset, condition: string, actual: number | undefined) => {
     const expected = openingAsset(asset.id)?.handedOverQuantity;
     return (
-      condition === 'Có vấn đề' || (actual !== undefined && expected != null && actual !== expected)
+      !['Tốt', 'Good', 'Passed'].includes(condition) ||
+      (actual !== undefined && expected != null && actual !== expected)
     );
   };
   const assetCompleted = groups.length
@@ -772,9 +795,7 @@ function InspectionForm({
         try {
           const observed = draft?.assets.find((asset) => asset.id === item.id);
           if (!observed || observed.checked === false || !observed.condition) return false;
-          const hasIssue = assetIssue(item, observed.condition, observed.observedQuantity);
-          if (hasIssue && !observed.notes?.trim()) return false;
-          return !hasIssue || !!confirmedValues[`${item.id}.notes`]?.trim();
+          return observed.observedQuantity === 0 || confirmedPhotos(`asset:${item.id}`).length > 0;
         } catch {
           return false;
         }
@@ -807,9 +828,9 @@ function InspectionForm({
     assetCompleted,
     keysCompleted,
   ];
-  const inspectedRooms = roomHandoverChecks.filter(
-    ({ code }) => confirmedValues[`room.${code}.status`],
-  ).length;
+  const inspectedRooms =
+    Number(generalCompleted) +
+    roomHandoverChecks.filter(({ code }) => roomCheckCompleted(code)).length;
   const inspectedAssets = groups.filter(
     (item) => confirmedValues[`${item.id}.checked`] === 'true',
   ).length;
@@ -827,7 +848,9 @@ function InspectionForm({
       ? `Ghi chỉ số ${meterTask?.label.toLocaleLowerCase('vi') ?? 'chốt trả phòng'}`
       : activeItem === 'keys'
         ? 'Chìa khóa thu lại'
-        : (selectedRoomCheck?.label ?? selectedAsset?.name ?? '');
+        : activeItem === 'general'
+          ? 'Hiện trạng chung'
+          : (selectedRoomCheck?.label ?? selectedAsset?.name ?? '');
   const isSubmitted = moveOut.status !== 'Approved';
   async function upload(bytes: Uint8Array<ArrayBuffer>, bucket: string) {
     if (busy || !editable || isSubmitted) throw new Error('Nhiệm vụ hiện không cho phép tải ảnh.');
@@ -954,28 +977,25 @@ function InspectionForm({
       const status = values[`room.${code}.status`] as MoveInRoomCheckStatus | undefined;
       const notes = values[`room.${code}.notes`]?.trim() ?? '';
       const evidenceIds = getPhotos(`room:${code}`);
-      if (status !== 'Passed' && status !== 'Issue') throw new Error(`Chưa kiểm tra: ${label}.`);
-      if (status === 'Issue' && !notes) throw new Error(`Cần ghi lý do: ${label}.`);
+      if (status !== 'Passed' && status !== 'Issue' && status !== 'NotApplicable')
+        throw new Error(`Chưa kiểm tra: ${label}.`);
+      if (status !== 'NotApplicable' && !evidenceIds.length)
+        throw new Error(`Chụp ít nhất một ảnh: ${label}.`);
       return { code, status, notes, evidenceIds };
     });
-    const roomCondition = roomHandoverChecks
-      .map(
-        ({ code, label }) =>
-          `${label}: ${values[`room.${code}.status`] === 'Passed' ? 'Tốt' : 'Có vấn đề'}`,
-      )
-      .join('; ');
+    const roomCondition = values.roomCondition?.trim() ?? '';
     const quantity = Number(keyCount);
     if (!keysCompleted) throw new Error('Nhập số chìa khóa thực nhận và chụp ảnh chìa khóa.');
     const evidenceIds = getPhotos('general');
+    if (!roomCondition || !evidenceIds.length)
+      throw new Error('Nhập ghi chú và chụp ít nhất một ảnh hiện trạng chung.');
     const assets = groups.map((item: HandoverAsset) => {
       const result = assetResult(item);
-      const issue = assetIssue(
-        item,
-        result.condition,
-        'observedQuantity' in result ? result.observedQuantity : undefined,
-      );
-      if (issue && !values[`${item.id}.notes`]?.trim())
-        throw new Error(`Cần ghi nguyên nhân khi tài sản có vấn đề: ${item.name}.`);
+      if (
+        (!('observedQuantity' in result) || result.observedQuantity !== 0) &&
+        !getPhotos(`asset:${item.id}`).length
+      )
+        throw new Error(`Chụp ít nhất một ảnh tài sản: ${item.name}.`);
       return {
         ...result,
         checked: true,
@@ -994,7 +1014,7 @@ function InspectionForm({
     ];
     if (new Set(allIds).size !== allIds.length)
       throw new Error('Một ảnh bằng chứng chỉ được gắn vào một hạng mục.');
-    const accessItems = [{ type: 'RoomKey', quantity, notes: '' }];
+    const accessItems = [{ type: 'RoomKey', quantity, notes: values.keyNotes?.trim() ?? '' }];
     return {
       electricityReadingId: electricity.id,
       waterReadingId: water.id,
@@ -1026,6 +1046,14 @@ function InspectionForm({
   }
   function patchForItem(item: string, version: number): DraftPatch {
     if (!editable) throw new Error('Chưa đủ điều kiện kiểm tra trả phòng.');
+    if (item === 'general') {
+      const roomCondition = values.roomCondition?.trim() ?? '';
+      const evidenceIds = getPhotos(item);
+      if (!roomCondition || !evidenceIds.length)
+        throw new Error('Nhập ghi chú và chụp ít nhất một ảnh hiện trạng chung.');
+      if (roomCondition.length > 2000) throw new Error('Ghi chú không quá 2000 ký tự.');
+      return { version, roomCondition, evidenceIds };
+    }
     if (item.startsWith('room:')) {
       const code = item.slice(5);
       const check = roomHandoverChecks.find((entry) => entry.code === code);
@@ -1033,12 +1061,14 @@ function InspectionForm({
       const status = values[`room.${code}.status`] as MoveInRoomCheckStatus | undefined;
       const notes = values[`room.${code}.notes`]?.trim() ?? '';
       const evidenceIds = getPhotos(item);
-      if (status !== 'Passed' && status !== 'Issue')
-        throw new Error(`Chọn Tốt hoặc Có vấn đề: ${check.label}.`);
-      if (status === 'Issue' && !notes) throw new Error(`Nhập lý do: ${check.label}.`);
+      if (status !== 'Passed' && status !== 'Issue' && status !== 'NotApplicable')
+        throw new Error(`Hãy chọn kết quả kiểm tra: ${check.label}.`);
+      if (status !== 'NotApplicable' && !evidenceIds.length)
+        throw new Error(`Chụp ít nhất một ảnh: ${check.label}.`);
+      if (notes.length > 2000) throw new Error('Ghi chú không quá 2000 ký tự.');
       return {
         version,
-        roomChecks: [{ code, status, notes: status === 'Passed' ? null : notes, evidenceIds }],
+        roomChecks: [{ code, status, notes: notes || null, evidenceIds }],
       };
     }
     if (item.startsWith('asset:')) {
@@ -1046,13 +1076,10 @@ function InspectionForm({
       if (!asset) throw new Error('Hạng mục kiểm kê tài sản không hợp lệ.');
       const evidenceIds = getPhotos(item);
       const result = assetResult(asset);
-      const issue = assetIssue(
-        asset,
-        result.condition,
-        'observedQuantity' in result ? result.observedQuantity : undefined,
-      );
       const notes = values[`${asset.id}.notes`]?.trim() ?? '';
-      if (issue && !notes) throw new Error(`Cần ghi chú tài sản có vấn đề: ${asset.name}.`);
+      if (notes.length > 2000) throw new Error('Ghi chú không quá 2000 ký tự.');
+      if ((!('observedQuantity' in result) || result.observedQuantity !== 0) && !evidenceIds.length)
+        throw new Error('Chụp ít nhất một ảnh tài sản.');
       return {
         version,
         assets: [{ ...result, checked: true, notes, evidenceIds }],
@@ -1065,9 +1092,11 @@ function InspectionForm({
       const quantity = Number(keyCount);
       if (!/^\d+$/.test(keyCount) || quantity > 100 || !getPhotos('keys').length)
         throw new Error('Nhập số chìa khóa đã nhận và chụp ít nhất một ảnh.');
+      if ((values.keyNotes?.trim().length ?? 0) > 500)
+        throw new Error('Ghi chú chìa khóa không quá 500 ký tự.');
       return {
         version,
-        accessItems: [{ type: 'RoomKey', quantity, notes: '' }],
+        accessItems: [{ type: 'RoomKey', quantity, notes: values.keyNotes?.trim() ?? '' }],
         keyEvidenceIds: getPhotos('keys'),
       };
     }
@@ -1126,7 +1155,7 @@ function InspectionForm({
             setError(
               activeItem === 'meter'
                 ? 'Dữ liệu đã thay đổi. Đóng mục này và mở lại để thử lưu chỉ số.'
-                : 'Phiếu đã thay đổi trên máy chủ. Kiểm tra lại mục đang nhập và bấm Xong để lưu với phiên bản mới.',
+                : 'Phiếu đã thay đổi trên máy chủ. Kiểm tra lại mục đang nhập và bấm Lưu tiến độ để lưu với phiên bản mới.',
             );
           }
         } catch {
@@ -1368,7 +1397,11 @@ function InspectionForm({
         )}
         <View style={wizardStyles.compactSummary}>
           <Pill tone={isSubmitted ? 'green' : 'blue'}>
-            {moveOut.status === 'Inspected' ? 'Đã gửi chủ trọ duyệt' : 'Đang kiểm tra'}
+            {moveOut.status === 'Inspected'
+              ? moveOut.isForced
+                ? 'Đã lưu đối soát'
+                : 'Đã gửi chủ trọ duyệt'
+              : 'Đang kiểm tra'}
           </Pill>
         </View>
         <Text variant="bodySmall" style={ui.muted}>
@@ -1437,7 +1470,7 @@ function InspectionForm({
                   index === 0
                     ? `${Number(!!confirmedValues.electricityReadingId) + Number(!!confirmedValues.waterReadingId)}/2 công tơ đã lưu`
                     : index === 1
-                      ? `${inspectedRooms}/7 đã kiểm tra`
+                      ? `${inspectedRooms}/8 đã kiểm tra`
                       : index === 2
                         ? groups.length
                           ? `${inspectedAssets}/${groups.length} đã kiểm tra`
@@ -1499,10 +1532,17 @@ function InspectionForm({
               )}
               {step === 1 && (
                 <>
+                  {workEntry(
+                    'general',
+                    'Hiện trạng chung',
+                    '',
+                    generalCompleted ? 'Đã lưu' : 'Chưa kiểm tra',
+                    () => setActiveItem('general'),
+                    generalCompleted,
+                  )}
                   {roomHandoverChecks.map(({ code, label }) => {
                     const status = confirmedValues[`room.${code}.status`];
-                    const notes = confirmedValues[`room.${code}.notes`];
-                    const done = !!status && (status === 'Passed' || !!notes?.trim());
+                    const done = roomCheckCompleted(code);
                     return workEntry(
                       code,
                       label,
@@ -1510,7 +1550,9 @@ function InspectionForm({
                       done
                         ? status === 'Issue'
                           ? 'Có vấn đề · đã lưu'
-                          : 'Đã lưu'
+                          : status === 'NotApplicable'
+                            ? 'Không áp dụng · đã lưu'
+                            : 'Đã lưu'
                         : 'Chưa kiểm tra',
                       () => setActiveItem(`room:${code}`),
                       done,
@@ -1614,6 +1656,18 @@ function InspectionForm({
                     onReturn={() => void finishMeterTask(meterTask)}
                   />
                 )}
+                {activeItem === 'general' && (
+                  <>
+                    <Input
+                      label="Ghi chú"
+                      value={values.roomCondition ?? ''}
+                      onChange={(value) => set('roomCondition', value)}
+                      multiline
+                      disabled={busy || !editable}
+                    />
+                    {photoSection('general', 'Ảnh hiện trạng chung (bắt buộc)')}
+                  </>
+                )}
                 {selectedRoomCheck && (
                   <>
                     <Text variant="bodySmall" style={ui.muted}>
@@ -1658,16 +1712,19 @@ function InspectionForm({
                         }))}
                       />
                     )}
-                    {values[`room.${selectedRoomCode}.status`] === 'Issue' && (
-                      <Input
-                        label="Lý do có vấn đề"
-                        value={values[`room.${selectedRoomCode}.notes`] ?? ''}
-                        onChange={(value) => set(`room.${selectedRoomCode}.notes`, value)}
-                        disabled={busy || !editable}
-                        multiline
-                      />
+                    <Input
+                      label="Ghi chú (không bắt buộc)"
+                      value={values[`room.${selectedRoomCode}.notes`] ?? ''}
+                      onChange={(value) => set(`room.${selectedRoomCode}.notes`, value)}
+                      disabled={busy || !editable}
+                      multiline
+                    />
+                    {photoSection(
+                      `room:${selectedRoomCode}`,
+                      values[`room.${selectedRoomCode}.status`] === 'NotApplicable'
+                        ? 'Ảnh kiểm tra khu vực (tùy chọn)'
+                        : 'Ảnh kiểm tra khu vực (bắt buộc)',
                     )}
-                    {photoSection(`room:${selectedRoomCode}`, 'Ảnh kiểm tra khu vực (tùy chọn)')}
                   </>
                 )}
                 {selectedAsset && (
@@ -1695,24 +1752,18 @@ function InspectionForm({
                       density="small"
                       value={values[`asset-${selectedAsset.id}`] ?? ''}
                       onValueChange={(value) => set(`asset-${selectedAsset.id}`, value)}
-                      buttons={[
-                        { value: 'Tốt', label: 'Tốt', disabled: busy || !editable },
-                        { value: 'Có vấn đề', label: 'Có vấn đề', disabled: busy || !editable },
-                      ]}
+                      buttons={assetStatuses.map((status) => ({
+                        ...status,
+                        disabled: busy || !editable,
+                      }))}
                     />
-                    {(values[`asset-${selectedAsset.id}`] === 'Có vấn đề' ||
-                      (openingAsset(selectedAsset.id)?.handedOverQuantity != null &&
-                        /^\d+$/.test(values[`${selectedAsset.id}.observedQuantity`] ?? '') &&
-                        Number(values[`${selectedAsset.id}.observedQuantity`]) !==
-                          openingAsset(selectedAsset.id)?.handedOverQuantity)) && (
-                      <Input
-                        label="Nội dung vấn đề"
-                        value={values[`${selectedAsset.id}.notes`] ?? ''}
-                        onChange={(value) => set(`${selectedAsset.id}.notes`, value)}
-                        multiline
-                        disabled={busy || !editable}
-                      />
-                    )}
+                    <Input
+                      label="Ghi chú (không bắt buộc)"
+                      value={values[`${selectedAsset.id}.notes`] ?? ''}
+                      onChange={(value) => set(`${selectedAsset.id}.notes`, value)}
+                      multiline
+                      disabled={busy || !editable}
+                    />
                     {photoSection(`asset:${selectedAsset.id}`, 'Ảnh tài sản')}
                   </>
                 )}
@@ -1726,6 +1777,13 @@ function InspectionForm({
                       value={keyCount}
                       onChange={(value) => set('keyQuantity', value)}
                       numeric
+                      disabled={busy || !editable}
+                    />
+                    <Input
+                      label="Ghi chú chìa khóa (nếu có)"
+                      multiline
+                      value={values.keyNotes ?? ''}
+                      onChange={(value) => set('keyNotes', value)}
                       disabled={busy || !editable}
                     />
                     {photoSection('keys', 'Ảnh chìa khóa thu lại')}
@@ -1776,7 +1834,7 @@ function InspectionForm({
                     disabled={busy}
                     onPress={() => void saveItem()}
                   >
-                    Xong
+                    Lưu tiến độ
                   </Button>
                 </View>
               </View>

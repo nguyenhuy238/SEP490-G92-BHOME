@@ -29,7 +29,10 @@ internal sealed class ContractRepository(BHomePersistenceContext db, ILogger<Con
     public async Task<ContractPage> ListAsync(ContractListScope scope, int page, int pageSize, Guid? locationId, ContractStatus? status, CancellationToken t)
     {
         var query = db.Set<Contract>().AsNoTracking().Where(c => scope.Owner ||
-            (scope.Tenant && c.TenantUserId == scope.ActorId) ||
+            (scope.Tenant && (c.TenantUserId == scope.ActorId ||
+                (c.Status == ContractStatus.Active && (c.Kind == ContractKind.Main || c.Kind == ContractKind.Renewal) &&
+                 c.Residents.Any(m => m.ResidenceFrom <= scope.Today && (m.ResidenceTo == null || m.ResidenceTo >= scope.Today) &&
+                     db.Set<Resident>().Any(r => r.Id == m.ResidentId && r.RoomId == c.RoomId && r.TenantUserId == scope.ActorId))))) ||
             (scope.Staff && EligibleStaff(scope.Today).Contains(scope.ActorId) &&
                 db.StaffLocationAssignments.Any(a => a.StaffUserId == scope.ActorId &&
                 a.LocationId == c.Room.LocationId && a.StartDate <= scope.Today && a.EndDate >= scope.Today)));
@@ -89,12 +92,19 @@ internal sealed class ContractRepository(BHomePersistenceContext db, ILogger<Con
     public Task<bool> StaffAssignedAsync(Guid staffId, Guid locationId, DateOnly today, CancellationToken t) =>
         db.StaffLocationAssignments.AnyAsync(a => a.StaffUserId == staffId && a.LocationId == locationId &&
             a.StartDate <= today && a.EndDate >= today && EligibleStaff(today).Contains(staffId), t);
+    public async Task<IReadOnlyList<Contract>> RoomActiveContractsAsync(Guid roomId, CancellationToken t) =>
+        await db.Set<Contract>().Include(c => c.Room).ThenInclude(r => r.Location)
+            .Include(c => c.Room).ThenInclude(r => r.RoomType).Include(c => c.Residents)
+            .Where(c => c.RoomId == roomId && c.Status == ContractStatus.Active &&
+                (c.Kind == ContractKind.Main || c.Kind == ContractKind.Renewal))
+            .OrderBy(c => c.Id).AsSplitQuery().ToArrayAsync(t);
     public async Task<IReadOnlyList<ContractMoveOutHistory>> MoveOutHistoryAsync(Guid contractId, CancellationToken t) => await db.Set<ContractMoveOutHistory>().AsNoTracking().Where(h => h.ContractId == contractId).OrderByDescending(h => h.Version).Take(100).ToArrayAsync(t);
     public async Task<IReadOnlyList<MoveOutAssignment>> AssignmentsAsync(Guid staffId, DateOnly today, CancellationToken t) => await
         (from m in db.Set<ContractMoveOut>().AsNoTracking()
          join c in db.Set<Contract>() on m.ContractId equals c.Id
          where (m.InspectionStaffId == null || m.InspectionStaffId == staffId) &&
-           m.Status != MoveOutStatus.Requested && m.Status != MoveOutStatus.Completed &&
+           m.Status != MoveOutStatus.Requested && m.Status != MoveOutStatus.AwaitingConsent &&
+           m.Status != MoveOutStatus.Completed && m.Status != MoveOutStatus.Rejected &&
            c.Status == ContractStatus.Active && c.Room.Location.IsActive &&
            EligibleStaff(today).Contains(staffId) &&
            db.StaffLocationAssignments.Any(a => a.StaffUserId == staffId && a.LocationId == c.Room.LocationId && a.StartDate <= today && a.EndDate >= today)
@@ -103,7 +113,7 @@ internal sealed class ContractRepository(BHomePersistenceContext db, ILogger<Con
     public async Task<OwnerMoveOutInboxPage> OwnerMoveOutInboxAsync(int page, int pageSize,
         Guid? locationId, MoveOutStatus? status, string? room, CancellationToken t)
     {
-        var moves = db.Set<ContractMoveOut>().AsNoTracking().AsQueryable();
+        var moves = db.Set<ContractMoveOut>().AsNoTracking().Where(move => move.Status != MoveOutStatus.AwaitingConsent);
         if (status is { } state) moves = moves.Where(move => move.Status == state);
         var contracts = db.Set<Contract>().AsNoTracking().AsQueryable();
         if (locationId is { } location) contracts = contracts.Where(c => c.Room.LocationId == location);
@@ -207,19 +217,9 @@ internal sealed class ContractRepository(BHomePersistenceContext db, ILogger<Con
             if (db is BHome.Infrastructure.Persistence.Compact24.Compact24DbContext)
                 foreach (var c in handoverDraftCandidates.Values)
                 {
-                    var json = JsonSerializer.Serialize(HandoverDraftState.Create(c, (clock ?? TimeProvider.System).BusinessUtcNow()),
-                        new JsonSerializerOptions(JsonSerializerDefaults.Web));
-                    // Never replace the immutable confirmed `current` baseline or an
-                    // existing draft when a caller retries a contract creation.
-                    await db.Database.ExecuteSqlInterpolatedAsync($"""
-                        UPDATE contracts SET handover=jsonb_set(COALESCE(handover,jsonb_build_object()),
-                          ARRAY['preparation'],{json}::jsonb,true)
-                        WHERE id={c.Id} AND handover->'preparation' IS NULL
-                        """, t);
-                    // The move-in and contract-specific initial meter tasks are
-                    // generated by the existing, deterministic task service.
-                    // Activation invokes the same method safely again, so direct
-                    // creation and Holding conversion remain idempotent.
+                    // Creation and activation use the same room-cycle decision
+                    // under this transaction's Location/Room locks. The service
+                    // initializes preparation only for the canonical physical job.
                     if (handoverTasks is not null)
                     {
                         var loaded = await FindAsync(c.Id, t) ?? throw ContractException.Missing();

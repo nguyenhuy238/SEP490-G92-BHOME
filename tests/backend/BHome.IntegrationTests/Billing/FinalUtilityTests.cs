@@ -59,7 +59,7 @@ public sealed partial class InvoiceApiTests
                 new MeterInput(w.Room, "SYN-FINAL-" + type, type, MeterDisplay.Digital, 2, w.Period.AddMonths(-1))));
             meterIds[type] = meter.Id;
             await CaptureFinalFixtureReading(w, meter.Id, ReadingPurpose.Initial, w.Period.AddDays(-1), 100);
-            await CaptureFinalFixtureReading(w, meter.Id, ReadingPurpose.Periodic, finalDate.AddDays(-2), type == UtilityType.Electricity ? 125.5m : 102);
+            await CaptureFinalFixtureReading(w, meter.Id, ReadingPurpose.Periodic, finalDate.AddDays(-2), type == UtilityType.Electricity ? 126 : 102);
         }
         // Simulate a later Room-level price version in the disposable database. Neither
         // the periodic invoice nor the final settlement may use the new price.
@@ -89,7 +89,7 @@ public sealed partial class InvoiceApiTests
             var db = scope.ServiceProvider.GetRequiredService<BHomePersistenceContext>();
             Assert.NotEqual(w.Contract, (await db.Set<Invoice>().SingleAsync(i => i.Id == invoice.Id)).RepresentativeContractId);
         }
-        Assert.Equal(89250, invoice.Lines.Single(l => l.Category == "Electricity").Amount);
+        Assert.Equal(91000, invoice.Lines.Single(l => l.Category == "Electricity").Amount);
         var original = await w.Owner.Client.GetStringAsync($"/api/v1/invoices/{invoice.Id}");
         Guid otherContract;
         await using (var scope = fixture.Factory.Services.CreateAsyncScope())
@@ -169,9 +169,9 @@ public sealed partial class InvoiceApiTests
         Assert.Equal(HttpStatusCode.Forbidden, (await w.Tenant.Client.GetAsync(route)).StatusCode);
         var previews = await Success<FinalUtilityPreview[]>(await w.Owner.Client.GetAsync(route));
         var electricityPreview = previews.Single(p => p.UtilityType == "Electricity");
-        Assert.Empty(electricityPreview.MissingInputs); Assert.Equal(settlementFirst ? 100 : 125.5m, electricityPreview.Baseline!.Value);
-        Assert.Equal(settlementFirst ? 40 : 14.5m, electricityPreview.Quantity); Assert.Equal(settlementFirst ? 0 : 25.5m, electricityPreview.AlreadyBilledQuantity);
-        Assert.Equal(settlementFirst ? 140000 : 50750, electricityPreview.Amount);
+        Assert.Empty(electricityPreview.MissingInputs); Assert.Equal(settlementFirst ? 100 : 126, electricityPreview.Baseline!.Value);
+        Assert.Equal(settlementFirst ? 40 : 14, electricityPreview.Quantity); Assert.Equal(settlementFirst ? 0 : 26, electricityPreview.AlreadyBilledQuantity);
+        Assert.Equal(settlementFirst ? 140000 : 49000, electricityPreview.Amount);
         var waterPreview = previews.Single(p => p.UtilityType == "Water"); Assert.Empty(waterPreview.MissingInputs); Assert.Equal(settlementFirst ? 75000 : 45000, waterPreview.Amount);
         var input = new FinalUtilityApprovalInput(UtilityType.Electricity, electricityPreview.Reference, true); var key = Guid.NewGuid();
         if (failuresOnly)
@@ -217,7 +217,7 @@ public sealed partial class InvoiceApiTests
             var results = await Task.WhenAll(UtilityPost(w.Owner.Client, route, input, key), UtilityPost(w.Owner.Client, route, input, key));
             charge = await Success<SettlementReceivable>(results[0]); Assert.Equal(charge.Id, (await Success<SettlementReceivable>(results[1])).Id);
         }
-        Assert.Equal(settlementFirst ? 140000 : 50750, charge.Amount); Assert.Equal(settlementFirst ? 40 : 14.5m, charge.Utility!.Quantity); Assert.Equal(2, charge.Evidence.Count);
+        Assert.Equal(settlementFirst ? 140000 : 49000, charge.Amount); Assert.Equal(settlementFirst ? 40 : 14, charge.Utility!.Quantity); Assert.Equal(2, charge.Evidence.Count);
         Assert.Contains(w.OtherTenant.Id, charge.RecipientUserIds); // responsible during the measured interval, despite already leaving.
         if (settlementFirst)
         {
@@ -236,7 +236,7 @@ public sealed partial class InvoiceApiTests
         var tenantView = await Success<SettlementReceivablesView>(await w.OtherTenant.Client.GetAsync($"/api/v1/contracts/{w.Contract}/move-out/receivables"));
         Assert.Equal(charge.Id, Assert.Single(tenantView.Receivables).Charge.Id);
         var receivablesRoute = $"/api/v1/contracts/{w.Contract}/move-out/receivables";
-        if (reviewRefund) { await ReviewChargesOffsetAndRefundRemainder(w, charge, finalDate, offsetAllDeposit ? invoice.Total + 3000000 + 95750 : 7000000, autoFinancialClose, autoFinancialClose && offsetAllDeposit); return; }
+        if (reviewRefund) { await ReviewChargesOffsetAndRefundRemainder(w, charge, finalDate, offsetAllDeposit ? invoice.Total + 3000000 + 94000 : 7000000, autoFinancialClose, autoFinancialClose && offsetAllDeposit); return; }
         var instructions = await Success<SettlementTransferInstructions>(await w.OtherTenant.Client.GetAsync(receivablesRoute + $"/{charge.Id}/transfer-instructions"));
         var receipt = await Success<TransferView>(await UtilityPost(w.Owner.Client, "/api/v1/payment-transactions",
             new PaymentTransferInput("SYNTHETIC-UTILITY", "SYN-UTILITY-" + Guid.NewGuid(), charge.Amount, "VND", DateTimeOffset.UtcNow.AddSeconds(-1),

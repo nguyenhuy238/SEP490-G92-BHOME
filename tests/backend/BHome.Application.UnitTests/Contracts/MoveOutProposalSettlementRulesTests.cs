@@ -4,28 +4,19 @@ namespace BHome.Application.UnitTests.Contracts;
 
 public sealed class MoveOutProposalSettlementRulesTests
 {
-    [Theory]
-    [InlineData(1_000_000, true, 1_500_000)]
-    [InlineData(1_000_000, true, 800_000)]
-    [InlineData(1_000_000, true, 1_000_000)]
-    [InlineData(1_000_000, true, 300_000, 1_200_000)]
-    [InlineData(1_000_000, false, 750_000, 750_000, 750_000)]
-    [InlineData(0, true, 500_000)]
-    [InlineData(0, false, 500_000, 500_000)]
-    public void BankTransferNeedsAtMostOneRemainingReceivable(decimal deposit,
-        bool expected, params int[] chargeAmounts)
-    {
-        Assert.Equal(expected, MoveOutProposalSettlementRules.OnePayableAfterDeposit(
-            chargeAmounts.Select(amount => (decimal)amount), deposit));
-    }
-
     [Fact]
-    public void InvalidDepositOrChargeNeverAllowsAutomaticAllocation()
+    public void VerifiedCompletionAcceptsEachQuotedPayableButNeverAnUnrelatedReceivable()
     {
-        Assert.False(MoveOutProposalSettlementRules.OnePayableAfterDeposit([100_000m], -1));
-        Assert.False(MoveOutProposalSettlementRules.OnePayableAfterDeposit([0m], 0));
-        Assert.False(MoveOutProposalSettlementRules.OnePayableAfterDeposit([10.5m], 50));
-        Assert.False(MoveOutProposalSettlementRules.OnePayableAfterDeposit([100m, -10m], 50));
+        var electricity = Guid.NewGuid(); var water = Guid.NewGuid(); var covered = Guid.NewGuid();
+        var settlement = new MoveOutProposalSettlement("Payable", 400_000, 0, null, [electricity, water, covered], [],
+            PayableReceivables: [new(electricity, 100_000, "Electricity"), new(water, 300_000, "Water")]);
+        Assert.True(MoveOutProposalSettlementRules.IsQuotedPayable(settlement, electricity));
+        Assert.True(MoveOutProposalSettlementRules.IsQuotedPayable(settlement, water));
+        Assert.False(MoveOutProposalSettlementRules.IsQuotedPayable(settlement, covered));
+        Assert.False(MoveOutProposalSettlementRules.IsQuotedPayable(settlement, Guid.NewGuid()));
+        Assert.False(MoveOutProposalSettlementRules.IsQuotedPayable(settlement with { Status = "Settled" }, water));
+        Assert.False(MoveOutProposalSettlementRules.IsQuotedPayable(settlement with { CreatedReceivableIds = [electricity] }, water));
+        Assert.True(MoveOutProposalSettlementRules.IsQuotedPayable(settlement with { PayableReceivables = null, PayableReceivableId = electricity }, electricity));
     }
 
     [Fact]

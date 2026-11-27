@@ -144,11 +144,10 @@ export function TenantIncidentReportForm() {
           <Text accessibilityRole="header" style={[s.pageTitle, s.grow]}>
             Báo cáo sự cố
           </Text>
-          <Button compact icon="history" disabled={busy} onPress={() => go('tenant-requests')}>
+          <Button compact icon="history" disabled={busy} onPress={() => go('incident-history')}>
             Đã gửi
           </Button>
         </View>
-        <Text style={s.helper}>Báo vấn đề trong phòng hoặc khu vực chung</Text>
       </View>
       {!enabled && (
         <Text style={s.helper}>

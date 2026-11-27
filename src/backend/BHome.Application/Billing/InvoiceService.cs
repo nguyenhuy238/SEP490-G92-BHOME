@@ -74,6 +74,23 @@ public sealed class InvoiceService(IInvoiceRepository repository, ICurrentUser u
         var result = await repository.ListAsync(scope, page, pageSize, roomId, t, filter);
         return new(result.Items.Select(View).ToArray(), page, pageSize, result.TotalCount);
     }
+    public async Task<TenantInvoicePeriodView> CurrentTenantPeriodAsync(CancellationToken t)
+    {
+        var actor = Actor;
+        if (!user.IsInRole(Roles.Tenant)) throw new InvoiceException(403, "invoice_role_forbidden");
+        var today = Today;
+        var period = new DateOnly(today.Year, today.Month, 1);
+        var current = await repository.ListAsync(new(actor, false, true), 1, 1, null, t, new(BillingPeriod: period));
+        if (current.TotalCount > 0) return new(period, today, true, []);
+        var dates = new SortedSet<DateOnly>();
+        foreach (var location in await repository.TenantBillingLocationIdsAsync(actor, t))
+        {
+            var schedule = await repository.ScheduleForPeriodAsync(location, period, t);
+            if (schedule is not null)
+                dates.Add(InvoiceMath.CalendarDate(period, schedule.DraftDay, schedule.DraftMonthOffset));
+        }
+        return new(period, today, false, dates.ToArray());
+    }
     public Task<InvoiceView> GenerateAsync(DraftInvoiceInput x, CancellationToken t, Guid? expectedAutomationPlanId = null)
     {
         RequireOwner();

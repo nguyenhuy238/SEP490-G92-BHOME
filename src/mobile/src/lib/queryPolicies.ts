@@ -37,7 +37,7 @@ export function mutationTags(path: string): QueryTag[] {
     if (path.includes('/handover'))
       return ['contracts', 'rooms', 'meters', 'tasks', 'notifications'];
     if (
-      /\/(?:activate|holding-activation|holding-cancellation|holding-conversion|deposit-verifications|renewals|move-out|expiry-move-out)(?:\/|$)/.test(
+      /\/(?:activate|holding-activation|holding-cancellation|holding-conversion|deposit-verifications|renewals|move-out|expiry-move-out|termination-requests|forced-move-out)(?:\/|$)/.test(
         path,
       )
     )

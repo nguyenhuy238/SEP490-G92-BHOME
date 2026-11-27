@@ -67,6 +67,7 @@ const moveOutStates = [
   { value: 'PendingSettlement', label: 'Đang quyết toán' },
   { value: 'Settled', label: 'Đã quyết toán' },
   { value: 'Completed', label: 'Đã trả phòng' },
+  { value: 'Rejected', label: 'Đã từ chối' },
 ];
 
 function labelFor(status: string) {
@@ -77,7 +78,8 @@ function progressFor(item: MoveOutInboxItem) {
   // Contract move-out and Tenant's fee decision advance independently. Show
   // the latest verified financial step instead of the earlier Staff handoff.
   if (item.status === 'Completed' || item.status === 'Settled') return labelFor(item.status);
-  if (item.status === 'Requested' || item.status === 'Approved') return labelFor(item.status);
+  if (item.status === 'Requested' || item.status === 'Approved' || item.status === 'Rejected')
+    return labelFor(item.status);
   if (item.proposalStatus === 'Accepted') {
     if (item.proposalSettlementStatus === 'Payable')
       return 'Khách thuê đã đồng ý · Đã tạo khoản phải thu';
@@ -333,7 +335,11 @@ export function OwnerMoveOutInbox() {
                         </TableCell>
                         <TableCell align="right">
                           <Button size="small" onClick={() => setSelected(item.contractId)}>
-                            Xem kết quả
+                            {item.status === 'Requested'
+                              ? 'Xét duyệt yêu cầu'
+                              : item.status === 'Rejected'
+                                ? 'Xem yêu cầu'
+                                : 'Xem kết quả'}
                           </Button>
                         </TableCell>
                       </TableRow>
@@ -362,7 +368,11 @@ export function OwnerMoveOutInbox() {
                       size="small"
                       onClick={() => setSelected(item.contractId)}
                     >
-                      Xem kết quả
+                      {item.status === 'Requested'
+                        ? 'Xét duyệt yêu cầu'
+                        : item.status === 'Rejected'
+                          ? 'Xem yêu cầu'
+                          : 'Xem kết quả'}
                     </Button>
                   </Box>
                 ))}
@@ -440,6 +450,7 @@ export function OwnerMoveOutInbox() {
                   key={selected}
                   api={api}
                   id={selected}
+                  ownerId={session?.userId}
                   onChanged={() => {
                     void inbox.refetch();
                     if (legacyIds.length) void legacyProgress.refetch();

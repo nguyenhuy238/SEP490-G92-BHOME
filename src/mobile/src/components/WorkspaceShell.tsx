@@ -150,6 +150,8 @@ export function WorkspaceShell({
   const tenantResidence = role === 'Tenant' && screen === 'residence' && !preview;
   const tenantLedger = role === 'Tenant' && screen === 'billing-history' && !preview;
   const tenantIncidentForm = role === 'Tenant' && screen === 'incidents';
+  const tenantRefundForm = role === 'Tenant' && screen === 'refund-requests';
+  const tenantHandovers = role === 'Tenant' && screen === 'tenant-handovers';
   const dashboard =
     !preview &&
     (screen === 'tenant-home' ||
@@ -374,6 +376,7 @@ export function WorkspaceShell({
             }
           >
             {!tenantIncidentForm &&
+              !tenantRefundForm &&
               (profileEdit ||
                 (owner && !visibleTabs.some((tab) => tab.screen === screen)) ||
                 tenantInvoice ||
@@ -399,6 +402,7 @@ export function WorkspaceShell({
                       tenantResidence ||
                       tenantInvoice ||
                       tenantFeatures ||
+                      tenantHandovers ||
                       profileEdit
                         ? 'titleMedium'
                         : 'labelSmall'
@@ -412,6 +416,7 @@ export function WorkspaceShell({
                       tenantResidence ||
                       tenantInvoice ||
                       tenantFeatures ||
+                      tenantHandovers ||
                       profileEdit
                         ? [
                             ui.grow,
@@ -425,23 +430,25 @@ export function WorkspaceShell({
                       ? 'Chỉnh sửa hồ sơ'
                       : tenantResidence
                         ? 'Đăng ký tạm trú'
-                        : tenantFeatures
-                          ? 'Tất cả chức năng'
-                          : tenantInvoice
-                            ? (headerAction?.title ?? 'Hóa đơn của tôi')
-                            : staffIncidentList
-                              ? (headerAction?.title ?? 'Báo cáo sự cố')
-                              : compactTasks
-                                ? compactTaskDetail
-                                  ? 'Chi tiết công việc'
-                                  : screen === 'staff-handovers'
-                                    ? 'Bàn giao / Trả phòng'
-                                    : (headerAction?.title ?? 'Công việc vận hành')
-                                : compactContracts
-                                  ? (headerAction?.title ?? 'Hợp đồng')
-                                  : compactMeter
-                                    ? 'Ghi chỉ số điện nước'
-                                    : (headerAction?.title ?? 'Quay lại')}
+                        : tenantHandovers
+                          ? 'Bàn giao / Trả phòng'
+                          : tenantFeatures
+                            ? 'Tất cả chức năng'
+                            : tenantInvoice
+                              ? (headerAction?.title ?? 'Hóa đơn của tôi')
+                              : staffIncidentList
+                                ? (headerAction?.title ?? 'Báo cáo sự cố')
+                                : compactTasks
+                                  ? compactTaskDetail
+                                    ? 'Chi tiết công việc'
+                                    : screen === 'staff-handovers'
+                                      ? 'Bàn giao / Trả phòng'
+                                      : (headerAction?.title ?? 'Công việc vận hành')
+                                  : compactContracts
+                                    ? (headerAction?.title ?? 'Hợp đồng')
+                                    : compactMeter
+                                      ? 'Ghi chỉ số điện nước'
+                                      : (headerAction?.title ?? 'Quay lại')}
                   </Text>
                   {(compactContracts ||
                     compactTasks ||

@@ -764,7 +764,8 @@ public sealed partial class IncidentService(IIncidentRepository repository, ICur
             Length = bytes.Length,
             ContentType = type,
             Sha256 = hash,
-            ObjectKey = "incident-evidence/" + (report.IncidentId ?? work ?? throw IncidentException.Missing()).ToString("N") + "/" + Guid.NewGuid().ToString("N")
+            ObjectKey = BHome.Application.Storage.PrivateImageKeys.Evidence(report.LocationId, report.RoomId,
+                "incidents", report.IncidentId ?? work ?? throw IncidentException.Missing(), Guid.NewGuid())
         };
         await files.PutAsync(report.LocationId, evidence.ObjectKey, bytes, type, t); repository.Add(evidence); return evidence;
     }

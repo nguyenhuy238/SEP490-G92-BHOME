@@ -197,7 +197,8 @@ public sealed partial class OperationsService(IOperationsRepository repository, 
         var current = await repository.ResidenceAsync(contractId, residentId, Actor, t) ?? throw OperationsException.Missing();
         var content = await ReadImageAsync(input, t);
         var type = files.ValidateImage(content);
-        var key = $"residence/{contractId:N}/{residentId:N}/{Guid.NewGuid():N}";
+        var key = BHome.Application.Storage.PrivateImageKeys.Evidence(current.LocationId, current.RoomId,
+            "residence", contractId, Guid.NewGuid());
         await files.PutAsync(key, content, type, t);
         try
         {
@@ -345,7 +346,10 @@ public sealed partial class OperationsService(IOperationsRepository repository, 
         Func<OperationsFile, CancellationToken, Task<T>> attach, CancellationToken t)
     {
         var content = await ReadImageAsync(input, t); var type = files.ValidateImage(content);
-        var key = $"public/{target}/{id:N}/{Guid.NewGuid():N}";
+        var location = target == "location" ? id :
+            (await repository.RoomContentAsync(id, false, t) ?? throw OperationsException.Missing()).LocationId;
+        var key = BHome.Application.Storage.PrivateImageKeys.Evidence(location, target == "room" ? id : null,
+            "public-photos", id, Guid.NewGuid());
         await files.PutAsync(key, content, type, t);
         try { return await attach(new(key, type, content.LongLength), t); }
         catch { await files.DeleteAsync(key, CancellationToken.None); throw; }
