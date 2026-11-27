@@ -1,4 +1,6 @@
 using System.ComponentModel.DataAnnotations;
+using System.Security.Cryptography;
+using System.Text;
 using System.Text.Json;
 using System.Text.Json.Serialization;
 using BHome.Domain.Billing;
@@ -26,6 +28,16 @@ public sealed record TaskUpdate(int Version, TaskWrite Work, [Required, StringLe
 public sealed record TaskAction(int Version, [StringLength(8000)] string? Note = null, [MaxLength(50)] Guid[]? EvidenceIds = null);
 public sealed record TaskPage<T>(IReadOnlyList<T> Items, int Page, int PageSize, int TotalCount);
 public enum TaskCategory { Operational, MoveIn, MoveOut }
+
+// Both task creation and task authorization must use these persisted identities.
+public static class ContractHandoverTaskIds
+{
+    public static Guid MoveIn(Guid contractId) => FromKey($"contract-move-in:{contractId:N}");
+    public static Guid MoveOut(Guid contractId) => FromKey($"contract-move-out:{contractId:N}");
+
+    private static Guid FromKey(string key) => new(SHA256.HashData(Encoding.UTF8.GetBytes(key)).AsSpan(0, 16));
+}
+
 public sealed class TaskQuery
 {
     [Range(1, 1000000)] public int Page { get; set; } = 1;

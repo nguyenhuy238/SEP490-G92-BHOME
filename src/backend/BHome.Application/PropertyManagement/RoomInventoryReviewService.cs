@@ -59,7 +59,6 @@ public sealed partial class RoomInventoryReviewService(ISetupWorkspaceStore stor
     private static Guid CommandKey(Guid location, Guid actor, Guid request) => Key($"room-inventory-checklist-command:{location:N}:{actor:N}:{request:N}");
     private static Guid AttestationKey(Guid room, Guid template, Guid item, Guid asset) =>
         Key($"owner-attestation:{room:N}:{template:N}:{item:N}:{asset:N}");
-    private static bool EqualText(string? a, string? b) => string.Equals(a?.Trim(), b?.Trim(), StringComparison.OrdinalIgnoreCase);
     private static bool Compatible(Physical physical, AssetTemplateItem item) =>
         EqualText(physical.Asset.Name, item.Name) && EqualText(physical.Asset.Category, item.Category) &&
         (item.Unit is null || EqualText(physical.Metadata.Unit, item.Unit));
@@ -77,21 +76,6 @@ public sealed partial class RoomInventoryReviewService(ISetupWorkspaceStore stor
             ? staff.EnumerateArray().Where(value => value.ValueKind == JsonValueKind.String).Select(value => value.GetGuid())
             : [];
         return ownerIds.Concat(staffIds).Distinct().ToArray();
-    }
-    private static bool IsValidEvidence(SetupDocument document, Guid location)
-    {
-        if (document.Kind != "Evidence" || document.LocationId != location ||
-            !document.Data.TryGetProperty("objectKey", out var key) || key.ValueKind != JsonValueKind.String ||
-            !document.Data.TryGetProperty("contentType", out var type) || type.ValueKind != JsonValueKind.String ||
-            !document.Data.TryGetProperty("length", out var length) || !length.TryGetInt32(out var bytes) ||
-            !document.Data.TryGetProperty("hash", out var hash) || hash.ValueKind != JsonValueKind.String)
-            return false;
-        var objectKey = key.GetString();
-        var contentType = type.GetString();
-        var hashValue = hash.GetString();
-        return BHome.Application.Storage.PrivateImageKeys.IsSetup(location, objectKey) &&
-            contentType is "image/png" or "image/jpeg" && bytes is > 0 and <= 5 * 1024 * 1024 &&
-            hashValue is { Length: 64 } && hashValue.All(Uri.IsHexDigit);
     }
 
     private static string Baseline(Room room, bool active, bool invalid, SetupDocument? assignment,
@@ -260,11 +244,6 @@ public sealed partial class RoomInventoryReviewService(ISetupWorkspaceStore stor
         return new(result.ToArray(), evidence, metadataDocuments, evidenceIds.Length > 0);
     }
 
-    private static RoomInventoryReviewEvidence EvidenceView(SetupDocument document) => new(
-        document.Id,
-        document.Data.GetProperty("contentType").GetString() ?? "image/jpeg",
-        document.RecordedAt,
-        document.RecordedBy);
 
     private static RoomInventoryReviewView View(SnapshotData snapshot) => new(snapshot.Rooms.Select(r => r.View).ToArray());
 

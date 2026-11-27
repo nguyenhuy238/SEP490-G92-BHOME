@@ -23,10 +23,10 @@ public sealed partial class OperationalTaskService(IOperationalTaskRepository re
     private Guid? StaffFilter => Owner ? null : Actor;
     private static bool IsMoveOutTask(OperationalTask task) =>
         task.Kind == OperationalTaskKind.AdHoc && task.ContractId is { } contract &&
-        task.Id == new Guid(SHA256.HashData(Encoding.UTF8.GetBytes($"contract-move-out:{contract:N}")).AsSpan(0, 16));
+        task.Id == ContractHandoverTaskIds.MoveOut(contract);
     private static bool IsMoveInTask(OperationalTask task) =>
         task.Kind == OperationalTaskKind.AdHoc && task.ContractId is { } contract &&
-        task.Id == new Guid(SHA256.HashData(Encoding.UTF8.GetBytes($"contract-move-in:{contract:N}")).AsSpan(0, 16));
+        task.Id == ContractHandoverTaskIds.MoveIn(contract);
     private void Permit(string permission)
     {
         _ = Actor;

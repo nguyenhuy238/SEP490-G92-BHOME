@@ -249,34 +249,14 @@ export function WorkspaceScreenView({
         case 'adjustment':
           content = <TenantInvoicesScreen intent="adjustment" />;
           break;
-        case 'incidents':
-          content = <TenantIncidentScreen />;
-          break;
         case 'residence':
           content = role === 'Staff' ? <StaffResidenceScreen /> : <TenantResidenceScreen />;
-          break;
-        case 'tenant-room':
-        case 'tenant-handovers':
-        case 'tenant-features':
-        case 'tenant-requests':
-        case 'tenant-meters':
-          content = <Screen />;
           break;
         case 'billing-history':
           content = <TenantPaymentHistoryScreen />;
           break;
-        case 'refund-requests':
-          content = <TenantRefundRequestsScreen />;
-          break;
-        case 'refund-history':
-        case 'incident-history':
-          content = <Screen />;
-          break;
         case 'owner-home':
           content = <OwnerOverviewScreen />;
-          break;
-        case 'staff-home':
-          content = <StaffHome />;
           break;
         case 'tenant-home':
           content = <TenantHomeScreen />;
@@ -310,12 +290,19 @@ export function WorkspaceScreenView({
         case 'security':
           content = <AccountSecurityScreen />;
           break;
+        // Live screens whose component is the same as the preview registry.
+        case 'incidents':
+        case 'tenant-room':
+        case 'tenant-handovers':
+        case 'tenant-features':
+        case 'tenant-requests':
+        case 'tenant-meters':
+        case 'refund-requests':
+        case 'refund-history':
+        case 'incident-history':
+        case 'staff-home':
         case 'profile':
-          content = <Profile />;
-          break;
         case 'profile-edit':
-          content = <ProfileEditScreen />;
-          break;
         case 'owner-adjustments':
         case 'owner-adjustment-detail':
         case 'owner-payments':
@@ -326,8 +313,6 @@ export function WorkspaceScreenView({
         case 'owner-location-records':
         case 'owner-tax-records':
         case 'personal-data-requests':
-          content = <Screen />;
-          break;
         case 'incident-detail':
         case 'incident-inbox':
         case 'maintenance-detail':

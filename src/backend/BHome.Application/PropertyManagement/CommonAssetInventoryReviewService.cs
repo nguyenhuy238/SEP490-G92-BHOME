@@ -57,29 +57,12 @@ public sealed class CommonAssetInventoryReviewService(ISetupWorkspaceStore store
         item.Quantity,
         item.Unit
     });
-    private static bool Equal(string? a, string? b) =>
-        string.Equals(a?.Trim(), b?.Trim(), StringComparison.OrdinalIgnoreCase);
     private static bool SameDescription(Physical physical, SetupCommonAssetRequirement item) =>
-        Equal(physical.Asset.Name, item.Name) && Equal(physical.Asset.Category, item.Category) &&
-        Equal(physical.Asset.CommonArea, item.CommonArea);
+        EqualText(physical.Asset.Name, item.Name) && EqualText(physical.Asset.Category, item.Category) &&
+        EqualText(physical.Asset.CommonArea, item.CommonArea);
     private static bool SameInventory(Physical physical, SetupCommonAssetRequirement item) =>
         SameDescription(physical, item) && physical.Asset.Status == AssetStatus.Active &&
-        physical.Metadata.Quantity == item.Quantity && Equal(physical.Metadata.Unit, item.Unit);
-    private static bool IsValidEvidence(SetupDocument document, Guid location)
-    {
-        if (document.Kind != "Evidence" || document.LocationId != location ||
-            !document.Data.TryGetProperty("objectKey", out var key) || key.ValueKind != JsonValueKind.String ||
-            !document.Data.TryGetProperty("contentType", out var type) || type.ValueKind != JsonValueKind.String ||
-            !document.Data.TryGetProperty("length", out var length) || !length.TryGetInt32(out var bytes) ||
-            !document.Data.TryGetProperty("hash", out var hash) || hash.ValueKind != JsonValueKind.String)
-            return false;
-        return BHome.Application.Storage.PrivateImageKeys.IsSetup(location, key.GetString()) &&
-            type.GetString() is "image/png" or "image/jpeg" && bytes is > 0 and <= 5 * 1024 * 1024 &&
-            hash.GetString() is { Length: 64 } digest && digest.All(Uri.IsHexDigit);
-    }
-    private static RoomInventoryReviewEvidence EvidenceView(SetupDocument document) => new(
-        document.Id, document.Data.GetProperty("contentType").GetString() ?? "image/jpeg",
-        document.RecordedAt, document.RecordedBy);
+        physical.Metadata.Quantity == item.Quantity && EqualText(physical.Metadata.Unit, item.Unit);
 
     private async Task<Snapshot> SnapshotAsync(Guid location, Guid[] additionalEvidenceIds, CancellationToken t)
     {
@@ -108,8 +91,8 @@ public sealed class CommonAssetInventoryReviewService(ISetupWorkspaceStore store
             var candidates = physical.Where(row => SameDescription(row, item)).ToArray();
             var linked = data?.AssetId is { } assetId ? physical.SingleOrDefault(row => row.Asset.Id == assetId) : null;
             var duplicatedConfiguration = items.Any(other => other.Id != item.Id &&
-                Equal(other.Name, item.Name) && Equal(other.Category, item.Category) &&
-                Equal(other.CommonArea, item.CommonArea));
+                EqualText(other.Name, item.Name) && EqualText(other.Category, item.Category) &&
+                EqualText(other.CommonArea, item.CommonArea));
             var conflict = duplicatedConfiguration || candidates.Length > 1 ||
                 candidates.Length == 1 && !SameInventory(candidates[0], item) ||
                 linked is not null && !SameInventory(linked, item) ||

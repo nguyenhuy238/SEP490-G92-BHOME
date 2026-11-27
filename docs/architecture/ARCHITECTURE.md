@@ -1,15 +1,16 @@
 # BHOME architecture
 
-This foundation implements the BHOME architecture described in Report 4 and the initialization
-requirements. It is a single modular layered application. The finalized SRS and data model will
-determine business entities and workflows. No business integration or OCR engine is simulated.
+This document retains the original foundation design and decisions from October 2026. Later
+implementations may differ (including authentication, Compact24, OCR, background jobs and mobile).
+For the current source navigation, start with [the business-flow map](../business-flows/README.md).
+The core architecture remains a single modular layered application, not microservices.
 
 ## System boundaries
 
 ```mermaid
 flowchart TB
-  Owner[Owner Web Portal<br/>React · TypeScript · Vite · Ant Design]
-  Mobile[BHOME Mobile App<br/>React · TypeScript · Capacitor]
+  Owner[Owner Web Portal<br/>React · TypeScript · Vite · Material UI]
+  Mobile[BHOME Mobile App<br/>Expo · React Native · TypeScript]
   Public[Public Website<br/>React · TypeScript · Vite]
   Owner -->|HTTPS / REST / JSON| Auth
   Mobile -->|HTTPS / REST / JSON| Auth
@@ -238,7 +239,7 @@ applies real migrations to isolated PostgreSQL and exercises readiness/durable e
 Vitest/Testing Library cover client startup, API failures/config and route guards. CI builds/tests
 all layers and validates formatting/Compose, without deployment.
 
-Additional decisions and reasons:
+Original foundation decisions and reasons (historical; use the current code map for today's behavior):
 
 | Decision                             | Reason                                                                                                                                                   |
 | ------------------------------------ | -------------------------------------------------------------------------------------------------------------------------------------------------------- |

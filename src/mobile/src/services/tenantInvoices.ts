@@ -5,24 +5,17 @@ import type {
   DebtInvoice,
 } from '../../../../packages/client-core/src/payments';
 import type { Adjustment } from '../../../../packages/client-core/src/adjustments';
-import { dateOnly } from '../../../../packages/client-core/src/contracts';
-import { MobileApiError, type MobileApi } from '../lib/api';
+import {
+  isResponseRecord as obj,
+  isResponseMoney as money,
+  isResponseInstant as instant,
+  isResponseDate as day,
+  invalidResponse as invalid,
+  type MobileApi,
+} from '../lib/api';
 type Obj = Record<string, unknown>;
-const obj = (v: unknown): v is Obj => !!v && typeof v === 'object' && !Array.isArray(v);
-const money = (v: unknown) => typeof v === 'string' && /^\d+$/.test(v);
 const decimal = (v: unknown) => typeof v === 'string' && /^\d+(?:\.\d{1,4})?$/.test(v);
 const fields = (v: Obj, keys: string[]) => keys.every((k) => typeof v[k] === 'string');
-const instant = (v: unknown) => typeof v === 'string' && Number.isFinite(Date.parse(v));
-const day = (v: unknown) => {
-  try {
-    return typeof v === 'string' && dateOnly(v) === v;
-  } catch {
-    return false;
-  }
-};
-function invalid(): never {
-  throw new MobileApiError(502, 'invalid_response');
-}
 function pageValue(v: unknown): v is Obj & { items: Obj[] } {
   return (
     obj(v) &&

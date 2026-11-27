@@ -22,9 +22,6 @@ internal sealed class ContractRepository(BHomePersistenceContext db, ILogger<Con
     // Sidecar Draft initialization is deliberately attached to persistence, not to
     // any particular contract-creation API (direct draft, Holding conversion, etc.).
     private readonly Dictionary<Guid, Contract> handoverDraftCandidates = new();
-    private IQueryable<Guid> EligibleStaff(DateOnly date) => db is Compact24DbContext compact
-        ? StaffEmploymentEligibility.EligibleIds(compact, date)
-        : db.Users.Where(user => user.IsActive).Select(user => user.Id);
 
     public async Task<ContractPage> ListAsync(ContractListScope scope, int page, int pageSize, Guid? locationId, ContractStatus? status, CancellationToken t)
     {
@@ -33,7 +30,7 @@ internal sealed class ContractRepository(BHomePersistenceContext db, ILogger<Con
                 (c.Status == ContractStatus.Active && (c.Kind == ContractKind.Main || c.Kind == ContractKind.Renewal) &&
                  c.Residents.Any(m => m.ResidenceFrom <= scope.Today && (m.ResidenceTo == null || m.ResidenceTo >= scope.Today) &&
                      db.Set<Resident>().Any(r => r.Id == m.ResidentId && r.RoomId == c.RoomId && r.TenantUserId == scope.ActorId))))) ||
-            (scope.Staff && EligibleStaff(scope.Today).Contains(scope.ActorId) &&
+            (scope.Staff && db.EligibleStaffIds(scope.Today).Contains(scope.ActorId) &&
                 db.StaffLocationAssignments.Any(a => a.StaffUserId == scope.ActorId &&
                 a.LocationId == c.Room.LocationId && a.StartDate <= scope.Today && a.EndDate >= scope.Today)));
         if (locationId is { } location) query = query.Where(c => c.Room.LocationId == location);
@@ -91,7 +88,7 @@ internal sealed class ContractRepository(BHomePersistenceContext db, ILogger<Con
              reading.ConfirmedValue, evidence.Id, evidence.ObjectKey, evidence.ImageHash)).SingleOrDefaultAsync(t);
     public Task<bool> StaffAssignedAsync(Guid staffId, Guid locationId, DateOnly today, CancellationToken t) =>
         db.StaffLocationAssignments.AnyAsync(a => a.StaffUserId == staffId && a.LocationId == locationId &&
-            a.StartDate <= today && a.EndDate >= today && EligibleStaff(today).Contains(staffId), t);
+            a.StartDate <= today && a.EndDate >= today && db.EligibleStaffIds(today).Contains(staffId), t);
     public async Task<IReadOnlyList<Contract>> RoomActiveContractsAsync(Guid roomId, CancellationToken t) =>
         await db.Set<Contract>().Include(c => c.Room).ThenInclude(r => r.Location)
             .Include(c => c.Room).ThenInclude(r => r.RoomType).Include(c => c.Residents)
@@ -106,7 +103,7 @@ internal sealed class ContractRepository(BHomePersistenceContext db, ILogger<Con
            m.Status != MoveOutStatus.Requested && m.Status != MoveOutStatus.AwaitingConsent &&
            m.Status != MoveOutStatus.Completed && m.Status != MoveOutStatus.Rejected &&
            c.Status == ContractStatus.Active && c.Room.Location.IsActive &&
-           EligibleStaff(today).Contains(staffId) &&
+           db.EligibleStaffIds(today).Contains(staffId) &&
            db.StaffLocationAssignments.Any(a => a.StaffUserId == staffId && a.LocationId == c.Room.LocationId && a.StartDate <= today && a.EndDate >= today)
          orderby m.ProposedDate, m.ContractId
          select new MoveOutAssignment(c.Id, c.RoomId, c.Room.RoomNumber, c.Room.Location.Name, m.Status.ToString(), m.ProposedDate, m.InspectionScheduledAt, m.Version)).Take(100).ToArrayAsync(t);

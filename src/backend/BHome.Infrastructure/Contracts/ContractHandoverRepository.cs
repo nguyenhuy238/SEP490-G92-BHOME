@@ -20,7 +20,6 @@ internal sealed class ContractHandoverRepository(BHomePersistenceContext db, IOp
     CompactNotificationWriter? inbox = null, RoomInventoryReviewService? inventory = null, TimeProvider? clock = null) : IContractHandoverRepository
 {
     private static Guid Key(string value) => new(SHA256.HashData(Encoding.UTF8.GetBytes(value)).AsSpan(0, 16));
-    internal static Guid MoveOutTaskId(Guid contractId) => Key($"contract-move-out:{contractId:N}");
     private static readonly JsonSerializerOptions MoveOutDraftJson = new(JsonSerializerDefaults.Web);
     public async Task<MoveOutInspectionDraftState?> MoveOutInspectionDraftAsync(Guid contractId, CancellationToken t)
     {
@@ -65,7 +64,7 @@ internal sealed class ContractHandoverRepository(BHomePersistenceContext db, IOp
         if (db is not BHome.Infrastructure.Persistence.Compact24.Compact24DbContext) return;
         if (moveOut.ContractId != contract.Id || moveOut.Status is MoveOutStatus.Requested or MoveOutStatus.AwaitingConsent or MoveOutStatus.Rejected)
             throw ContractException.Conflict("move_out_not_approved");
-        var id = MoveOutTaskId(contract.Id);
+        var id = ContractHandoverTaskIds.MoveOut(contract.Id);
         if (await db.Set<OperationalTask>().AnyAsync(task => task.Id == id, t)) return;
         // A Location work item begins unclaimed. The first currently assigned Staff
         // member to start it becomes its worker under the Location transaction lock.
@@ -104,7 +103,7 @@ internal sealed class ContractHandoverRepository(BHomePersistenceContext db, IOp
     }
     private async Task<OperationalTask> MoveOutTaskAsync(Guid contractId, CancellationToken t) =>
         await db.Set<OperationalTask>().SingleOrDefaultAsync(task =>
-            task.Id == MoveOutTaskId(contractId) && task.ContractId == contractId &&
+            task.Id == ContractHandoverTaskIds.MoveOut(contractId) && task.ContractId == contractId &&
             task.Kind == OperationalTaskKind.AdHoc, t)
         ?? throw ContractException.Conflict("move_out_task_required");
     public async Task RequireMoveOutTaskStartedAsync(Guid contractId, Guid staffId, CancellationToken t)
@@ -181,7 +180,7 @@ internal sealed class ContractHandoverRepository(BHomePersistenceContext db, IOp
         // updates the task in this same transaction and the response must show
         // the resulting state before the outer transaction commits.
         var task = await db.Set<OperationalTask>().SingleOrDefaultAsync(x =>
-            x.Id == Key($"contract-move-in:{contractId:N}") && x.ContractId == contractId &&
+            x.Id == ContractHandoverTaskIds.MoveIn(contractId) && x.ContractId == contractId &&
             x.TargetRoomId == roomId && x.Kind == OperationalTaskKind.AdHoc, t);
         if (task is null) return null;
         // Expose the native task status, with a separate permission-safe
@@ -204,7 +203,7 @@ internal sealed class ContractHandoverRepository(BHomePersistenceContext db, IOp
         if (c.Kind != ContractKind.Main || c.PreviousContractId is not null ||
             c.Status is ContractStatus.Cancelled or ContractStatus.Terminated or ContractStatus.Expired or ContractStatus.Superseded) return;
         if (!await PrepareRoomMoveInAsync(c, actor, now, t)) return;
-        var id = Key($"contract-move-in:{c.Id:N}");
+        var id = ContractHandoverTaskIds.MoveIn(c.Id);
         var prior = db.Set<OperationalTask>().Local.FirstOrDefault(x => x.Id == id) ??
             await db.Set<OperationalTask>().SingleOrDefaultAsync(x => x.Id == id, t);
         if (prior?.Status == MeterTaskStatus.Completed) return;
@@ -657,7 +656,7 @@ internal sealed class ContractHandoverRepository(BHomePersistenceContext db, IOp
     public async Task SubmitMoveInTaskAsync(Guid contractId, Guid actor, DateTimeOffset now, CancellationToken t)
     {
         if (db is not BHome.Infrastructure.Persistence.Compact24.Compact24DbContext) return;
-        var task = await db.Set<OperationalTask>().SingleOrDefaultAsync(x => x.Id == Key($"contract-move-in:{contractId:N}"), t)
+        var task = await db.Set<OperationalTask>().SingleOrDefaultAsync(x => x.Id == ContractHandoverTaskIds.MoveIn(contractId), t)
             ?? throw ContractException.Conflict("move_in_task_required");
         if (task.AssignedStaffUserId != actor || task.Status != MeterTaskStatus.InProgress)
             throw ContractException.Conflict("move_in_task_not_started");
@@ -669,7 +668,7 @@ internal sealed class ContractHandoverRepository(BHomePersistenceContext db, IOp
     public async Task ReopenMoveInTaskAsync(Guid contractId, Guid actor, DateTimeOffset now, CancellationToken t)
     {
         if (db is not BHome.Infrastructure.Persistence.Compact24.Compact24DbContext) return;
-        var task = await db.Set<OperationalTask>().SingleOrDefaultAsync(x => x.Id == Key($"contract-move-in:{contractId:N}"), t)
+        var task = await db.Set<OperationalTask>().SingleOrDefaultAsync(x => x.Id == ContractHandoverTaskIds.MoveIn(contractId), t)
             ?? throw ContractException.Conflict("move_in_task_required");
         if (task.Status != MeterTaskStatus.PendingVerification)
             throw ContractException.Conflict("move_in_task_not_submitted");
@@ -680,7 +679,7 @@ internal sealed class ContractHandoverRepository(BHomePersistenceContext db, IOp
     public async Task CompleteMoveInTaskAsync(Guid contractId, Guid actor, DateTimeOffset now, CancellationToken t)
     {
         if (db is not BHome.Infrastructure.Persistence.Compact24.Compact24DbContext) return;
-        var task = await db.Set<OperationalTask>().SingleOrDefaultAsync(x => x.Id == Key($"contract-move-in:{contractId:N}"), t);
+        var task = await db.Set<OperationalTask>().SingleOrDefaultAsync(x => x.Id == ContractHandoverTaskIds.MoveIn(contractId), t);
         if (task is null || task.Status == MeterTaskStatus.Completed) return;
         if (task.Status != MeterTaskStatus.PendingVerification) throw ContractException.Conflict("move_in_task_not_submitted");
         task.ApplyAction("verify", now, actor); task.Version++;
@@ -691,7 +690,7 @@ internal sealed class ContractHandoverRepository(BHomePersistenceContext db, IOp
     {
         if (db is not BHome.Infrastructure.Persistence.Compact24.Compact24DbContext) return;
         // Existing persistent notifications are committed with the workflow; external delivery is independent.
-        var taskId = Key($"contract-move-in:{c.Id:N}");
+        var taskId = ContractHandoverTaskIds.MoveIn(c.Id);
         var recipients = await tasks.OwnersAsync(t);
         if (inbox is not null)
         {

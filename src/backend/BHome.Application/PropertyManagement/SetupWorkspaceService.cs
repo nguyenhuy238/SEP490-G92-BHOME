@@ -35,6 +35,22 @@ public abstract class SetupWorkspaceService(ISetupWorkspaceStore store, ICurrent
     protected static T Read<T>(SetupDocument doc) => doc.Data.Deserialize<T>(Json) ?? throw new PropertyException(409, "invalid_setup_document");
     protected static Guid Key(string value) => new(SHA256.HashData(Encoding.UTF8.GetBytes(value)).AsSpan(0, 16));
     protected static string Hash(object value) => Convert.ToHexString(SHA256.HashData(JsonSerializer.SerializeToUtf8Bytes(value, Json)));
+    protected static bool EqualText(string? a, string? b) => string.Equals(a?.Trim(), b?.Trim(), StringComparison.OrdinalIgnoreCase);
+    protected static bool IsValidEvidence(SetupDocument document, Guid location)
+    {
+        if (document.Kind != "Evidence" || document.LocationId != location ||
+            !document.Data.TryGetProperty("objectKey", out var key) || key.ValueKind != JsonValueKind.String ||
+            !document.Data.TryGetProperty("contentType", out var type) || type.ValueKind != JsonValueKind.String ||
+            !document.Data.TryGetProperty("length", out var length) || !length.TryGetInt32(out var bytes) ||
+            !document.Data.TryGetProperty("hash", out var hash) || hash.ValueKind != JsonValueKind.String)
+            return false;
+        return BHome.Application.Storage.PrivateImageKeys.IsSetup(location, key.GetString()) &&
+            type.GetString() is "image/png" or "image/jpeg" && bytes is > 0 and <= 5 * 1024 * 1024 &&
+            hash.GetString() is { Length: 64 } digest && digest.All(Uri.IsHexDigit);
+    }
+    protected static RoomInventoryReviewEvidence EvidenceView(SetupDocument document) => new(
+        document.Id, document.Data.GetProperty("contentType").GetString() ?? "image/jpeg",
+        document.RecordedAt, document.RecordedBy);
     protected static string Text(string value, int max = 4000) => !string.IsNullOrWhiteSpace(value) && value.Trim().Length <= max ? value.Trim() : throw new PropertyException(400, "invalid_setup_text");
     protected async Task Evidence(Guid location, string key, CancellationToken t)
     {

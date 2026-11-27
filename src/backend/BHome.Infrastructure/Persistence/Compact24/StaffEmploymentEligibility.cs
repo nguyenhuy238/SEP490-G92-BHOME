@@ -1,4 +1,5 @@
 using Microsoft.EntityFrameworkCore;
+using BHome.Infrastructure.Persistence;
 
 namespace BHome.Infrastructure.Persistence.Compact24;
 
@@ -10,6 +11,11 @@ namespace BHome.Infrastructure.Persistence.Compact24;
 /// </summary>
 internal static class StaffEmploymentEligibility
 {
+    // These access queries already apply role checks at their own boundary.
+    // Preserve their legacy fallback (active users), not the stricter assignment query.
+    internal static IQueryable<Guid> EligibleStaffIds(this BHomePersistenceContext db, DateOnly date) =>
+        db is Compact24DbContext compact ? EligibleIds(compact, date) : db.Users.Where(user => user.IsActive).Select(user => user.Id);
+
     internal static IQueryable<Guid> EligibleIds(Compact24DbContext db, DateOnly date) =>
         db.Database.SqlQuery<Guid>($"""
             SELECT u.id AS "Value" FROM users u

@@ -16,9 +16,6 @@ namespace BHome.Infrastructure.PaymentsDebt;
 
 internal sealed partial class PaymentRepository(BHomePersistenceContext db) : IPaymentRepository
 {
-    private IQueryable<Guid> EligibleStaff(DateOnly date) => db is Compact24DbContext compact
-        ? StaffEmploymentEligibility.EligibleIds(compact, date)
-        : db.Users.Where(user => user.IsActive).Select(user => user.Id);
     public Task<bool> ProviderReferenceReceivedAsync(string reference, CancellationToken token) => db is not BHome.Infrastructure.Persistence.Compact24.Compact24DbContext
         ? Task.FromResult(false) : db.Database.SqlQuery<bool>($"""
             SELECT EXISTS(SELECT 1 FROM payments WHERE provider_code IN ('SEPAY:TEST','SEPAY:LIVE') AND verification_method='AUTO'
@@ -311,7 +308,7 @@ internal sealed partial class PaymentRepository(BHomePersistenceContext db) : IP
     public void Add(object entity) => db.Add(entity);
     private IQueryable<Invoice> VisibleInvoices(PaymentScope scope) => db.Set<Invoice>().AsNoTracking().Where(i => i.Status == InvoiceStatus.Final &&
         (scope.Owner || scope.Tenant && i.Recipients.Any(r => r.TenantUserId == scope.ActorId) ||
-            scope.Staff && EligibleStaff(scope.Today).Contains(scope.ActorId) &&
+            scope.Staff && db.EligibleStaffIds(scope.Today).Contains(scope.ActorId) &&
             db.Locations.Any(l => l.Id == i.LocationId && l.IsActive) && db.StaffLocationAssignments.Any(a => a.LocationId == i.LocationId &&
                 a.StaffUserId == scope.ActorId && a.StartDate <= scope.Today && a.EndDate >= scope.Today)));
     private IQueryable<InvoiceFinancialRow> FilteredDebt(PaymentScope scope, PaymentQuery query)

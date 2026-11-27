@@ -8,15 +8,15 @@ Giữ nghiệp vụ, API, dữ liệu và các kiểm soát an toàn. Giảm cod
 
 ## Lộ trình
 
-| Giai đoạn       | Đầu ra                                                       | Trạng thái                                                    |
-| --------------- | ------------------------------------------------------------ | ------------------------------------------------------------- |
-| P0 - Baseline   | Build, typecheck, test và mốc đối chứng                      | Build BE và typecheck Owner/Mobile đã pass; chưa chạy full CI |
-| P1 - Audit      | Danh mục KEEP/DELETE/MERGE/SIMPLIFY/ARCHIVE/REVIEW có căn cứ | Bắt đầu với cấu trúc, hợp đồng và bàn giao                    |
-| P2 - Dọn dẹp    | Loại bỏ phần không sử dụng, giữ chức năng                    | Lô đầu đã thực hiện                                           |
-| P3 - Backend    | Từng module có điểm xử lý và quy tắc rõ ràng                 | Bắt đầu gom kiểu dữ liệu bàn giao                             |
-| P4 - Frontend   | Component và API client dễ đọc                               | Đã loại bỏ component và helper không có consumer              |
-| P5 - Tài liệu   | Sơ đồ, API, method, bảng và ngoại lệ theo code               | Bản đồ đọc code ban đầu bên dưới                              |
-| P6 - Nghiệm thu | Regression, CI và review nhóm                                | Chưa hoàn thành                                               |
+| Giai đoạn       | Đầu ra                                                       | Trạng thái                                                                     |
+| --------------- | ------------------------------------------------------------ | ------------------------------------------------------------------------------ |
+| P0 - Baseline   | Build, typecheck, test và mốc đối chứng                      | Build BE và typecheck Owner/Mobile đã pass; chưa chạy full CI                  |
+| P1 - Audit      | Danh mục KEEP/DELETE/MERGE/SIMPLIFY/ARCHIVE/REVIEW có căn cứ | Đã quét tham chiếu và trùng lặp theo module; chưa chứng minh toàn bộ semantics |
+| P2 - Dọn dẹp    | Loại bỏ phần không sử dụng, giữ chức năng                    | Đã loại bỏ ứng viên có căn cứ, giữ phần còn test/API/legacy consumer           |
+| P3 - Backend    | Từng module có điểm xử lý và quy tắc rõ ràng                 | Đã gom logic ID, evidence, eligibility và tách điểm đọc ký/trả phòng           |
+| P4 - Frontend   | Component và API client dễ đọc                               | Đã bỏ màn hình cũ, scaffold, gom nhánh route và validation                     |
+| P5 - Tài liệu   | Sơ đồ, API, method, bảng và ngoại lệ theo code               | Có mục lục, bản đồ Backend/Frontend và đối chiếu 38 UC                         |
+| P6 - Nghiệm thu | Regression, CI và review nhóm                                | Chưa hoàn thành                                                                |
 
 ## Audit ban đầu
 
@@ -35,8 +35,26 @@ Git quản lý 3.300 file ở mốc gốc: Backend C# 681, Owner Web TS/TSX 450,
 
 - Mobile: xóa `HoldingTenantLink.tsx` và `HouseholdMemberEditor.tsx` (kể cả các export phụ không có consumer); không thay đổi luồng hiện tại.
 - Owner Web: xóa `UnavailableFeaturePage.tsx`, `StaffWorkspace.tsx`, `LiveStaffPage.tsx` (router hiện dùng `StaffPage.tsx`) và `ownerDownloads.ts`. Không xóa endpoint hay client API.
-- Giữ `TenantEvidenceDraft.tsx` vì còn test sử dụng hàm validation. Giữ `SignatureImagePanel.tsx`, `ViettelSettingsPanel.tsx` và `MeterAssignment.tsx` trong nhóm REVIEW: chưa có consumer UI nhưng cần xác minh phạm vi nghiệp vụ trước khi bỏ.
+- Giữ `TenantEvidenceDraft.tsx` vì còn test sử dụng hàm validation. Các panel ký, Viettel và phân công công tơ được chuyển từ REVIEW sang DELETE ở đợt sau khi kiểm tra toàn repo; không xóa API tương ứng.
 - Giữ nguyên tài liệu lịch sử có nhắc tới các đường dẫn đã xóa; bản đồ này là chỉ dẫn hiện hành cho đợt refactor.
+
+### Đợt tinh giản và kiểm tra sâu
+
+- Backend: quét 451 file Application/Infrastructure (không bao gồm toàn bộ migration sinh tự động) để tìm clone, tham chiếu kiểu và đường gọi. `ContractHandoverTaskIds` dùng chung ID move-in/out giữ đúng SHA-256 và chuỗi key cũ. `SetupWorkspaceService` dùng chung so sánh tên và xác minh ảnh kiểm kê; `StaffEmploymentEligibility` dùng chung đúng năm nhánh query trùng nhau, giữ nhánh legacy có lọc role riêng. Xóa extension đăng ký Compact24 cho test không còn caller, giữ nguyên claims factory đang chạy.
+- Tách phần ký hợp đồng vào `ContractSigningService.cs`, chuyển phần kết thúc hợp đồng/trả phòng vào `ContractLifecycleService.cs` hiện có. So sánh raw byte hai block trước/sau giống hệt nhau. File `ContractService.cs` từ 1.250 xuống 539 dòng vật lý; vẫn cùng partial class và DI, không thay đổi API hoặc trạng thái. Một file mới có trách nhiệm rõ ràng, không thêm lớp trung gian.
+- Frontend: kiểm tra import tĩnh/động, mock, route, script, config và test ngoài `src`. Bỏ `IncidentWorkspace.tsx` cũ (1.392 dòng), `SignatureImagePanel.tsx`, `ViettelSettingsPanel.tsx`, `MeterAssignment.tsx`, scaffold Vite không được import và tài nguyên của nó. Gom nhánh route Mobile cùng component và tập trung validation phản hồi JSON của năm service Tenant, không bỏ validation DTO, phạm vi dữ liệu hay điều kiện thanh toán.
+- Repository: bỏ track `.expo/README.md` và `.expo/devices.json`; file local vẫn giữ và được ignore. Giữ migrations, seed/demo có consumer, các API và lịch sử. Sửa stack lỗi thời trong README và đánh dấu thiết kế foundation cũ là lịch sử.
+- Hướng dẫn nhóm: [Mục lục đọc mã nguồn](../business-flows/README.md), [Backend](../business-flows/BACKEND.md), [Frontend](../business-flows/FRONTEND.md). Đối chiếu các UC-01–38 và JOB-01–09 với Report 3 hiện lưu trong repo; đây là chỉ mục, không phải báo cáo đạt tất cả UC.
+
+### Các ứng viên còn giữ có lý do
+
+| Nhóm                                                                                                                                                                          | Lý do không xóa hoặc hợp nhất vội                                                                                              |
+| ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------ |
+| `TasksApiPage.tsx`, `HoldingDepositAllocation`, `InitialMeterTask`, `TenantSettlementReceivables`, `SigningCertificates`, `TenantEvidenceDraft` và component chỉ còn test gọi | Phải chuyển các assertion hữu ích sang luồng đang chạy trước khi xóa component và test cũ; không giảm coverage để đạt số file. |
+| `ErrorBoundary.tsx`, `useSmsRecovery.ts` của client-core                                                                                                                      | Có wildcard export package; chưa chứng minh không có consumer ngoài repo.                                                      |
+| Legacy persistence và các đường đọc dữ liệu đã ký                                                                                                                             | Có fixture/test, API hoặc dữ liệu lịch sử cần bảo toàn.                                                                        |
+| Validation khác null/role/annotation/mã lỗi; ledger, chế độ ký và thanh toán                                                                                                  | Không đồng nhất về semantics dù code nhìn giống nhau.                                                                          |
+| Hơn 550 tài liệu lịch sử                                                                                                                                                      | Phân loại bằng mục lục thay vì xóa bằng chứng hoặc sửa báo cáo lịch sử.                                                        |
 
 ## Bản đồ đọc code ban đầu: hợp đồng và bàn giao
 

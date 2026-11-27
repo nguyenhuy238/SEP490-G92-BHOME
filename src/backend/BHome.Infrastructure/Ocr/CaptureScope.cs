@@ -17,9 +17,7 @@ internal sealed class CaptureScope(BHomePersistenceContext db, ICurrentUser user
     public Guid UserId => user.UserId ?? Guid.Empty;
     public bool IsStaff => user.IsInRole(Roles.Staff);
     public DateOnly Today => clock.BusinessToday();
-    internal IQueryable<Guid> EligibleStaff => db is Compact24DbContext compact
-        ? StaffEmploymentEligibility.EligibleIds(compact, Today)
-        : db.Users.Where(u => u.IsActive).Select(u => u.Id);
+    internal IQueryable<Guid> EligibleStaff => db.EligibleStaffIds(Today);
     public IQueryable<Location> VisibleLocations => db.Locations.Where(l => l.IsActive &&
         (user.IsInRole(Roles.Owner) ||
         (user.IsInRole(Roles.Staff) && EligibleStaff.Contains(UserId) && db.StaffLocationAssignments.Any(a => a.LocationId == l.Id && a.StaffUserId == UserId &&
