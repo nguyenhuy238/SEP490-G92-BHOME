@@ -70,8 +70,8 @@ internal sealed class HoldingSettingsData(BHomePersistenceContext db) : IHolding
         var policy = JsonSerializer.Serialize(new { current = settings, versions = history }, JsonOptions);
         var legacy = JsonSerializer.Serialize(new { recordType = "GlobalHoldingPolicyConfigured", recordedAt = now, actorId = actor, state = settings }, JsonOptions);
         await db.Database.ExecuteSqlInterpolatedAsync($"UPDATE public.users SET business_profile=jsonb_set(COALESCE(business_profile,'{{}}'::jsonb), '{{holdingContractPolicy}}', CAST({policy} AS jsonb), true), history=history||jsonb_build_array(CAST({legacy} AS jsonb)) WHERE id={ownerUserId}", t);
-        db.SecurityAudit.Add(new SecurityAuditRecord { UserId = actor, Event = "GlobalHoldingPolicyConfigured", TargetType = "Owner", TargetId = ownerUserId, Succeeded = true, OccurredAt = now });
-        await db.SaveChangesAsync(t);
+        await SecurityAuditWrites.AppendAsync(db, new(Guid.NewGuid(), actor, null, null,
+            "GlobalHoldingPolicyConfigured", true, now, "Owner", ownerUserId), t);
         await tx.CommitAsync(t);
     }
 }
