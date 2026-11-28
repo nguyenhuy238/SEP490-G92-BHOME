@@ -218,3 +218,20 @@ Cờ Staging cũ vẫn chỉ dùng cho Staging.
 Production retry và đối chiếu trực tiếp tên artifact/cờ verify trong workflow.
 Prettier workflow và git diff --check PASS. Rerun workflow cũ của #194 không nhận
 source fix này; cần release main mới sau khi tích hợp #193 và hoàn tất migration/config.
+
+### Đồng bộ Node gate và ổn định Mobile test
+
+Commit `7f42cc2d` trên nhánh đã cập nhật Node deployment test theo producer attempt
+Production mới; giữ kiểm tra manifest checksum/output và run ID triển khai. Đã chạy
+đủ 26 Node deployment tests: PASS.
+
+Lượt `46122614126` có một Mobile test chờ navigation sau refresh phân công bị timeout;
+cùng ca đó đã PASS ở các lượt trước và lần chạy độc lập. Test nay reset request mock
+giữa các ca, giữ phản hồi refresh bằng promise điều khiển được, kiểm không điều hướng
+trước khi API xác nhận phân công, rồi flush React updates bằng act và kiểm đúng Location
+đã commit trước callback. Giữ assertion callback đúng một lần, hai request và các ca
+từ chối Location không được giao/đã thu hồi. Không sửa WorkspaceProvider hoặc quyền.
+
+Kiểm chứng local sau sửa: 10 ca staff-location-context PASS; toàn bộ Mobile
+1.837 tests / 167 files PASS; Mobile typecheck, lint và Prettier PASS. CI đầy đủ vẫn
+cần chạy trên head chứa các sửa lỗi cuối; các lượt bị cancel không được coi là pass.
