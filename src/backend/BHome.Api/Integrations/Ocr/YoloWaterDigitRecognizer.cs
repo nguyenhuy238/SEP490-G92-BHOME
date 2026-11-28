@@ -16,7 +16,7 @@ public sealed class YoloWaterDigitRecognizer : IDisposable
 {
     public const string FileName = "water-stage2.onnx";
     public const string Sha256 = "2100d78ae1d762327cb871ee521a8dd9e84afc34de1cd8cf58876332e5834006";
-    private readonly Lazy<InferenceSession> session;
+    private readonly Lazy<InferenceSession?> session;
     public YoloWaterDigitRecognizer(OcrOptions options)
     {
         session = new(() =>
@@ -24,6 +24,9 @@ public sealed class YoloWaterDigitRecognizer : IDisposable
             var directory = string.IsNullOrWhiteSpace(options.MeterDetector.ModelDirectory)
                 ? Path.GetFullPath(Path.Combine(options.ModelDirectory, "..", "meter-detection-models")) : options.MeterDetector.ModelDirectory;
             var path = Path.Combine(directory, FileName);
+            // Optional models can be absent on a fresh Development checkout.
+            // Preserve the existing explicit unavailable result without throwing on warmup.
+            if (!File.Exists(path)) return null;
             using var file = File.OpenRead(path);
             if (!Convert.ToHexString(SHA256.HashData(file)).Equals(Sha256, StringComparison.OrdinalIgnoreCase)) throw new InvalidDataException("Digit model checksum mismatch.");
             using var config = YoloMeterSceneDetector.CreateSessionOptions(options);
@@ -40,6 +43,7 @@ public sealed class YoloWaterDigitRecognizer : IDisposable
         try
         {
             var model = session.Value;
+            if (model is null) return new(null, null, ["digit_model_unavailable"]);
             var input = YoloMeterSceneDetector.Letterbox(crop, out var scale, out var left, out var top, token, 416);
             try
             {
@@ -87,5 +91,5 @@ public sealed class YoloWaterDigitRecognizer : IDisposable
         }
         return new(string.Concat(boxes.Select(b => b.ClassId.ToString(System.Globalization.CultureInfo.InvariantCulture))), boxes.Min(b => b.Confidence), []);
     }
-    public void Dispose() { if (session.IsValueCreated) session.Value.Dispose(); }
+    public void Dispose() { if (session.IsValueCreated) session.Value?.Dispose(); }
 }

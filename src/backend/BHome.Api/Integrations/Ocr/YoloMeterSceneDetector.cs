@@ -14,15 +14,18 @@ public sealed class YoloMeterSceneDetector : IMeterSceneDetector, IDisposable
     public const string FileName = "water-stage1.onnx";
     public const string Sha256 = "5311b093b39a2ef752c2052e2755ab8f595613d37d612e48c10dc26f6ecb9d44";
     private readonly OcrOptions options;
-    private readonly Lazy<InferenceSession> session;
+    private readonly Lazy<InferenceSession?> session;
     public YoloMeterSceneDetector(OcrOptions options)
     {
         this.options = options;
-        session = new Lazy<InferenceSession>(() =>
+        session = new Lazy<InferenceSession?>(() =>
         {
             var directory = string.IsNullOrWhiteSpace(options.MeterDetector.ModelDirectory)
                 ? Path.GetFullPath(Path.Combine(options.ModelDirectory, "..", "meter-detection-models")) : options.MeterDetector.ModelDirectory;
             var path = Path.Combine(directory, FileName);
+            // Optional models can be absent on a fresh Development checkout.
+            // Preserve the existing explicit unavailable result without throwing on warmup.
+            if (!File.Exists(path)) return null;
             using var file = File.OpenRead(path);
             if (!Convert.ToHexString(SHA256.HashData(file)).Equals(Sha256, StringComparison.OrdinalIgnoreCase))
                 throw new InvalidDataException("Meter detector checksum mismatch.");
@@ -64,6 +67,7 @@ public sealed class YoloMeterSceneDetector : IMeterSceneDetector, IDisposable
         try
         {
             var model = session.Value;
+            if (model is null) return new(false, []) { Warnings = ["meter_detector_unavailable"] };
             var input = Letterbox(image, out var scale, out var left, out var top, token);
             try
             {
@@ -178,5 +182,5 @@ public sealed class YoloMeterSceneDetector : IMeterSceneDetector, IDisposable
     }
 
     private static Rect ClippedBounds(RotatedRect box, Size image) => box.BoundingRect().Intersect(new(0, 0, image.Width, image.Height));
-    public void Dispose() { if (session.IsValueCreated) session.Value.Dispose(); }
+    public void Dispose() { if (session.IsValueCreated) session.Value?.Dispose(); }
 }
