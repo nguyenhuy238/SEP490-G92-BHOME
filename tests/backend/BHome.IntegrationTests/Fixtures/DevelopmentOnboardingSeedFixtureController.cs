@@ -4,14 +4,14 @@ using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.RateLimiting;
 
-namespace BHome.Api.Controllers;
+namespace BHome.IntegrationTests.Fixtures;
 
 // Owner-only demo endpoint; all persistence, scope, and transaction checks
 // live in DevelopmentOnboardingSeedService, not in the API controller.
-[ApiController, Route("api/v1/development/onboarding-seed"), Authorize(Roles = Roles.Owner)]
+[ApiController, Route("test-probe/onboarding-seed"), Authorize(Roles = Roles.Owner)]
 [ResponseCache(NoStore = true, Location = ResponseCacheLocation.None)]
 [EnableRateLimiting("Auth")]
-public sealed class DevelopmentOnboardingSeedController(DevelopmentOnboardingSeedService seed) : ControllerBase
+public sealed class DevelopmentOnboardingSeedFixtureController(DevelopmentOnboardingSeedService seed) : ControllerBase
 {
     public static bool Allowed(string environmentName, bool enabled, string? connectionString) =>
         DevelopmentOnboardingSeedService.Allowed(environmentName, enabled, connectionString);

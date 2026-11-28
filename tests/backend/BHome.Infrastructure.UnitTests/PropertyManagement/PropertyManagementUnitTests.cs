@@ -381,26 +381,25 @@ public sealed class PropertyManagementUnitTests(PostgresContainerFixture postgre
 
     #endregion
 
-    #region CaptureController.Room(...) [HttpPost("rooms"), Authorize(Roles = Owner)]
+    #region PropertyService.SaveRoomAsync(...) [HttpPost("rooms"), Authorize(Roles = Owner)]
 
-    // The action delegates to CaptureService.CreateRoomAsync (same input); that method is called here.
-    // RoomInput has no RoomTypeId field, so the sheet's RoomTypeId cannot be sent; the link is checked afterwards.
+    // The current room creation service does not infer historical room types.
 
-    [Fact(DisplayName = "UTC08 - CaptureController.Room: Owner tao phong 103 loai Standard suc chua 2 -> phong moi (Standard, 2)")]
-    [Trait("Function", "CaptureController.Room")]
+    [Fact(DisplayName = "UTC08 - PropertyService.SaveRoomAsync: Owner tao phong 103 loai Standard suc chua 2 -> phong moi (Standard, 2)")]
+    [Trait("Function", "PropertyService.SaveRoomAsync")]
     public async Task UTC08()
     {
         await StartAsync();
         await AddLocationAsync(Sample1Id, "BHOME SAMPLE 1");
-        var result = await Capture.CreateRoomAsync(new RoomInput(Sample1Id, "103", 2), default);
+        var result = await Properties.SaveRoomAsync(null, new RoomWrite(Sample1Id, "103", null, 2), default);
 
         Assert.Equal(2, await world.ScalarAsync<short>("select capacity from rooms where id = @id and room_number = '103'", ("id", result.Id)));
         var provenance = await SetupStore.GetAsync(RoomProvenanceKey(result.Id), "RoomProvenance", default);
-        Assert.Null(provenance); // OCR quick-create has no RoomTypeId input; it must not guess a type.
+        Assert.Null(provenance); // A room created without defaults must not guess historical provenance.
     }
 
-    [Fact(DisplayName = "UTC09 - CaptureController.Room: phong 101 da ton tai -> tu choi trung so phong, van mot phong 101")]
-    [Trait("Function", "CaptureController.Room")]
+    [Fact(DisplayName = "UTC09 - PropertyService.SaveRoomAsync: phong 101 da ton tai -> tu choi trung so phong, van mot phong 101")]
+    [Trait("Function", "PropertyService.SaveRoomAsync")]
     public async Task UTC09()
     {
         await StartAsync();
@@ -408,7 +407,7 @@ public sealed class PropertyManagementUnitTests(PostgresContainerFixture postgre
         await AddRoomTypeAsync(Sample1Id, "Standard", 2);
         await AddRoomAsync(Sample1Id, "101");
 
-        await Assert.ThrowsAnyAsync<Exception>(() => Capture.CreateRoomAsync(new RoomInput(Sample1Id, "101", 2), default));
+        await Assert.ThrowsAnyAsync<Exception>(() => Properties.SaveRoomAsync(null, new RoomWrite(Sample1Id, "101", null, 2), default));
 
         Assert.Equal(1, await world.ScalarAsync<long>("select count(*) from rooms where location_id = @l and room_number = '101'", ("l", Sample1Id)));
     }

@@ -176,32 +176,6 @@ internal sealed class CompactSignatureImageStore(BHomePersistenceContext db, IOb
     }
 }
 
-// The single saved Viettel account, in the Owner's users.business_profile.digitalSigning.viettel. The client secret
-// arrives here already encrypted by SigningAccountService.
-internal sealed class CompactSigningSettingsStore(BHomePersistenceContext db) : ISigningSettingsStore
-{
-    private static readonly JsonSerializerOptions Json = new(JsonSerializerDefaults.Web);
-
-    public async Task<ViettelSettingsRow?> FindAsync(CancellationToken t)
-    {
-        if (db is not Compact24DbContext) return null;
-        var json = await db.Database.SqlQuery<string?>(
-            $"SELECT (business_profile->'digitalSigning'->'viettel')::text AS \"Value\" FROM users WHERE 'Owner' = ANY(roles) ORDER BY id LIMIT 1").SingleOrDefaultAsync(t);
-        return string.IsNullOrEmpty(json) || json == "null" ? null : JsonSerializer.Deserialize<ViettelSettingsRow>(json, Json);
-    }
-
-    public async Task SaveAsync(ViettelSettingsRow row, CancellationToken t)
-    {
-        if (db is not Compact24DbContext) throw new IntegrationUnavailableException("signing settings storage (Compact24 database)");
-        var value = JsonSerializer.Serialize(row, Json);
-        var changed = await db.Database.ExecuteSqlInterpolatedAsync(
-            $"UPDATE users SET business_profile = jsonb_set(jsonb_set(COALESCE(business_profile,'{{}}'::jsonb), '{{digitalSigning}}', COALESCE(business_profile->'digitalSigning','{{}}'::jsonb)), '{{digitalSigning,viettel}}', {value}::jsonb) WHERE id = (SELECT id FROM users WHERE 'Owner' = ANY(roles) ORDER BY id LIMIT 1)", t);
-        if (changed != 1) throw new IntegrationUnavailableException("Owner account for signing settings");
-    }
-}
-
-// "Tạo từ họ tên": a transparent PNG with the name in a slanted serif (the font the contract uses), so a signer
-// without a scanned signature still gets a picture. The result goes through SignatureImageService's checks like an upload.
 public sealed class SignaturePictureGenerator : IHandoverSignatureInkRenderer
 {
     public byte[] Render(HandoverInkInput drawing)

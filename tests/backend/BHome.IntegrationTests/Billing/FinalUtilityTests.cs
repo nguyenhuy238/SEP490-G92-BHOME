@@ -79,7 +79,7 @@ public sealed partial class InvoiceApiTests
             });
             await db.SaveChangesAsync();
         }
-        await Success<BillingSchedule>(await w.Owner.Client.PutAsJsonAsync("/api/v1/billing-schedules", Schedule(w) with { FinalMonthOffset = 0 }));
+        await Success<BillingSchedule>(await w.Owner.Client.PutAsJsonAsync("/test-probe/billing-schedules", Schedule(w) with { FinalMonthOffset = 0 }));
         var draft = await Success<InvoiceView>(await w.Owner.Client.PostAsJsonAsync("/api/v1/invoices/drafts", new DraftInvoiceInput(w.Room, w.Period, w.Contract)));
         Assert.Empty(draft.MissingInputs);
         var invoice = settlementFirst ? draft : await Success<InvoiceView>(await w.Owner.Client.PostAsJsonAsync($"/api/v1/invoices/{draft.Id}/finalize", new InvoiceFinalizeInput(draft.Version)));

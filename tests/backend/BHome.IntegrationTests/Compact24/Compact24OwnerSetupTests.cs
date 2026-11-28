@@ -423,7 +423,7 @@ public sealed partial class Compact24OwnerSetupTests(Compact24Fixture fixture) :
         using var host = fixture.Factory!.WithWebHostBuilder(b =>
         {
             b.ConfigureAppConfiguration((_, c) => c.AddInMemoryCollection(new Dictionary<string, string?> { ["ContractWorkflow:SimulatedSigningEnabled"] = "true", ["ContractPdf:TemplateId"] = "main-contract-development-v1" }));
-            b.ConfigureServices(s => { s.AddSingleton<IObjectStorage>(new Files()); s.RemoveAll<IContractSigningProvider>(); s.AddScoped(typeof(IContractSigningProvider), typeof(BHome.Infrastructure.Contracts.ViettelMySignContractAdapter).Assembly.GetType("BHome.Infrastructure.Contracts.DevelopmentContractSigningAdapter", true)!); });
+            b.ConfigureServices(s => { s.AddSingleton<IObjectStorage>(new Files()); s.RemoveAll<IContractSigningProvider>(); s.AddScoped(typeof(IContractSigningProvider), typeof(BHome.Infrastructure.Contracts.ContractSigningRouter).Assembly.GetType("BHome.Infrastructure.Contracts.DevelopmentContractSigningAdapter", true)!); });
         });
         using var owner = await Client(w.Owner, host); using var tenant = await Client(w.Tenant, host); Guid parentId;
         await using (var scope = host.Services.CreateAsyncScope())

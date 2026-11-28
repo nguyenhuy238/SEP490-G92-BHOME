@@ -232,6 +232,8 @@ public sealed partial class Compact24OwnerSetupTests
         var bulk = $"/api/v1/locations/{location}/configured-rooms";
         Assert.Equal(HttpStatusCode.Conflict, (await Keyed(owner, bulk, rooms, Guid.NewGuid())).StatusCode);
         var currentRooms = rooms with { Rooms = [rooms.Rooms[0] with { ExpectedVersion = updated.Version }] };
+        var duplicate = currentRooms with { Rooms = [currentRooms.Rooms[0], currentRooms.Rooms[0] with { RoomNumber = " 301 " }] };
+        Assert.Equal(HttpStatusCode.Conflict, (await Keyed(owner, bulk, duplicate, Guid.NewGuid())).StatusCode);
         var roomKey = Guid.NewGuid(); var created = await Read<BulkRoomResult>(await Keyed(owner, bulk, currentRooms, roomKey));
         Assert.Equal(3, Assert.Single(created.Rooms).Capacity);
         Assert.Equal(created.Rooms[0].Id, Assert.Single((await Read<BulkRoomResult>(await Keyed(owner, bulk, currentRooms, roomKey))).Rooms).Id);

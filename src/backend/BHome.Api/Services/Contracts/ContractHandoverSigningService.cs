@@ -12,26 +12,6 @@ public sealed partial class ContractService
     private static ContractDocument TenantHandoverDocument(Contract contract) =>
         Document(contract) with { TenantUserId = RequireTenant(contract) };
 
-    private static ContractSigning ToSignature(Guid contractId, HandoverPendingSignature input)
-    {
-        var signature = ContractSigning.RestoreDetachedAttempt(input.Id);
-        signature.ContractId = contractId;
-        signature.SignerUserId = input.SignerId;
-        signature.SnapshotHash = input.SourceHash;
-        signature.SourceHashOrEmpty = input.SourceHash;
-        signature.PreparedHashOrEmpty = input.PreparedHash;
-        signature.PreparedObjectKeyOrEmpty = input.PreparedObjectKey;
-        signature.FieldName = input.FieldName;
-        signature.DocumentDigest = input.DocumentDigest;
-        signature.DataToSignDigest = input.DataToSignDigest;
-        signature.CertificateChain = input.CertificateChain;
-        signature.ProviderUserId = input.ProviderUserId;
-        signature.CredentialId = input.CredentialId;
-        signature.ExpiresAt = input.ExpiresAt;
-        signature.Status = SignatureStatus.Pending;
-        return signature;
-    }
-
     private async Task<byte[]> VerifiedHandoverPdf(Contract contract,
         HandoverSignatureDocument source, CancellationToken token)
     {
@@ -166,81 +146,6 @@ public sealed partial class ContractService
         return await VerifiedHandoverPdf(contract, doc, token);
     }
 
-    public async Task<HandoverDraftView> RequestTenantHandoverSigningAsync(Guid id,
-        HandoverDraftTenantSign input, Guid key, CancellationToken token)
-    {
-        HandoverPendingSignature? created = null;
-        var view = await Mutate(id, [Roles.Tenant], async contract =>
-        {
-            RequireMainHandover(contract);
-            if (contract.TenantUserId != Actor)
-                throw new ContractException(403, "contract_tenant_required");
-            var prior = await DraftState(contract, token);
-            if (await Replay(key, "handover-tenant-sign-request", new { id, input }, token) is not null)
-                return await DraftView(contract, prior, token);
-            if (prior.Status != "Ready" || prior.Version != input.Version ||
-                prior.OwnerSignature is null || prior.TenantSigning is not null ||
-                prior.Requests.Any(request => request.Status == "Pending"))
-                throw ContractException.Conflict("handover_not_ready_for_tenant_signing");
-            if (!input.Signature.Consent || !SigningMethods.IsOtp(input.Signature.Method) ||
-                input.Signature.CertificateId != Guid.Empty ||
-                input.Signature.Placement is { IsValid: false })
-                throw ContractException.Invalid("handover_tenant_otp_required");
-            if (signingMethods?.IsEnabled(SigningMethods.Otp) != true)
-                throw new ContractException(503, "signing_method_disabled");
-            var current = await DraftView(contract, prior, token);
-            if (current.Missing.Length != 0 || current.Electricity?.Id != prior.ApprovedElectricityReadingId ||
-                current.Water?.Id != prior.ApprovedWaterReadingId ||
-                !await Handovers.InventoryReadyAsync(id, token))
-                throw ContractException.Conflict("handover_changed_since_owner_signature");
-            var ownerPdf = await VerifiedHandoverPdf(contract, prior.OwnerSignature, token);
-            var prepared = await signing.PrepareAsync(TenantHandoverDocument(contract), Guid.Empty, ownerPdf,
-                new SigningAppearance(input.Signature.Placement, input.Signature.UsePicture ?? true,
-                    SigningMethods.Otp), token);
-            if (FileHash(prepared.SourcePdf) != prior.OwnerSignature.FileHash)
-                throw ContractException.Conflict("handover_signing_source_changed");
-            var signatureId = Guid.NewGuid();
-            var preparedKey = $"contracts/{id:N}/handover-signatures/{signatureId:N}/tenant-prepared.pdf";
-            await files.PutAsync(contract.RoomId, preparedKey, prepared.PreparedPdf, "application/pdf", token);
-            created = new HandoverPendingSignature(signatureId, Actor, FileHash(prepared.SourcePdf),
-                FileHash(prepared.PreparedPdf), preparedKey, prepared.FieldName,
-                prepared.DocumentDigest, prepared.DataToSignDigest, prepared.CertificateChain,
-                prepared.ProviderUserId, prepared.CredentialId, clock.GetUtcNow().AddMinutes(5));
-            var next = prior with { Version = prior.Version + 1, TenantSigning = created };
-            await SaveDraftState(contract, prior, next, "TenantSignatureRequested", token);
-            Remember(key, "handover-tenant-sign-request", new { id, input }, id);
-            return await DraftView(contract, next, token);
-        }, token);
-        if (created is not null)
-            await signing.RequestAsync(ToSignature(id, created), token);
-        return view;
-    }
-
-    public async Task<SigningOtpView> TenantHandoverSigningOtpAsync(Guid id, CancellationToken token)
-    {
-        var contract = await Load(id, [Roles.Tenant], token);
-        RequireMainHandover(contract);
-        if (contract.TenantUserId != Actor) throw new ContractException(403, "contract_tenant_required");
-        var state = await DraftState(contract, token);
-        if (state.Status != "Ready" || state.TenantSigning is not { } pending ||
-            state.OwnerSignature?.FileHash != pending.SourceHash)
-            throw ContractException.Conflict("handover_tenant_signature_not_pending");
-        return await signing.ChallengeAsync(ToSignature(id, pending), token)
-            ?? throw ContractException.Conflict("otp_expired");
-    }
-
-    public Task<SigningOtpView> ResendTenantHandoverSigningOtpAsync(Guid id, CancellationToken token) =>
-        Mutate(id, [Roles.Tenant], async contract =>
-    {
-        RequireMainHandover(contract);
-        if (contract.TenantUserId != Actor) throw new ContractException(403, "contract_tenant_required");
-        var state = await DraftState(contract, token);
-        if (state.Status != "Ready" || state.TenantSigning is not { } pending ||
-            state.OwnerSignature?.FileHash != pending.SourceHash)
-            throw ContractException.Conflict("handover_tenant_signature_not_pending");
-        return await signing.ResendAsync(ToSignature(id, pending), token);
-    }, token);
-
     // A one-action handover signature using the authenticated Tenant session.
     // This is intentionally restricted to the Move-In report; it does not
     // change the regular contract signing/OTP policy or allow plain approval.
@@ -308,41 +213,6 @@ public sealed partial class ContractService
         // fully authenticated PDF is committed. It cannot complete afterward.
         return await CompleteTenantSignedHandoverAsync(contract, prior, current, ownerSigned,
             finalDocument, tenantPdf, input.Note, key, "handover-tenant-session-sign",
-            new { id, input }, token);
-    }, token);
-
-    public Task<HandoverDraftView> ConfirmTenantHandoverSigningAsync(Guid id,
-        HandoverDraftTenantSignOtp input, Guid key, CancellationToken token) =>
-        Mutate(id, [Roles.Tenant], async contract =>
-    {
-        RequireMainHandover(contract);
-        if (contract.TenantUserId != Actor) throw new ContractException(403, "contract_tenant_required");
-        var prior = await DraftState(contract, token);
-        if (await Replay(key, "handover-tenant-sign-confirm", new { id, input }, token) is not null)
-            return await DraftView(contract, prior, token);
-        if (prior.Status != "Ready" || prior.Version != input.Version ||
-            prior.OwnerSignature is not { } ownerSigned || prior.TenantSigning is not { } pending ||
-            pending.SignerId != Actor || pending.SourceHash != ownerSigned.FileHash)
-            throw ContractException.Conflict("handover_tenant_signature_not_pending");
-        var current = await DraftView(contract, prior, token);
-        if (current.Missing.Length != 0 || current.Electricity?.Id != prior.ApprovedElectricityReadingId ||
-            current.Water?.Id != prior.ApprovedWaterReadingId ||
-            !await Handovers.InventoryReadyAsync(id, token))
-            throw ContractException.Conflict("handover_changed_since_owner_signature");
-        using var preparedPdf = new MemoryStream();
-        await storage.CopyToAsync(pending.PreparedObjectKey, preparedPdf, token);
-        var bytes = preparedPdf.ToArray();
-        if (FileHash(bytes) != pending.PreparedHash)
-            throw ContractException.Conflict("handover_signing_prepared_integrity_failed");
-        var signed = await signing.ConfirmAsync(ToSignature(id, pending), bytes, input.Code, token);
-        if (signed.State != "Signed" || signed.SignedPdf is not { Length: > 0 } tenantPdf)
-            throw ContractException.Conflict("handover_tenant_signature_failed");
-        var completedAt = clock.GetUtcNow();
-        var finalDocument = new HandoverSignatureDocument(pending.Id, Actor, completedAt,
-            $"contracts/{id:N}/handover-signatures/{pending.Id:N}/final.pdf",
-            FileHash(tenantPdf), SigningMethods.Otp);
-        return await CompleteTenantSignedHandoverAsync(contract, prior, current, ownerSigned,
-            finalDocument, tenantPdf, input.Note, key, "handover-tenant-sign-confirm",
             new { id, input }, token);
     }, token);
 

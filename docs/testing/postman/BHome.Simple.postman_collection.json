@@ -7676,68 +7676,6 @@
           }
         },
         {
-          "name": "POST /api/v1/capture/assignments — Gán Staff cho cơ sở qua wrapper capture dùng chung nghiệp vụ Location assignment",
-          "request": {
-            "method": "POST",
-            "header": [
-              {
-                "key": "Content-Type",
-                "value": "application/json"
-              },
-              {
-                "key": "Idempotency-Key",
-                "value": "{{requestIdempotencyKey}}"
-              }
-            ],
-            "auth": {
-              "type": "bearer",
-              "bearer": [
-                {
-                  "key": "token",
-                  "value": "{{ownerAccessToken}}",
-                  "type": "string"
-                }
-              ]
-            },
-            "url": {
-              "raw": "{{baseUrl}}/api/v1/capture/assignments",
-              "host": ["{{baseUrl}}"],
-              "path": ["api", "v1", "capture", "assignments"]
-            },
-            "body": {
-              "mode": "raw",
-              "raw": "{\n  \"locationId\": \"{{locationId}}\",\n  \"staffUserId\": \"{{staffUserId}}\",\n  \"effectiveFrom\": \"{{dateD0}}\"\n}",
-              "options": {
-                "raw": {
-                  "language": "json"
-                }
-              }
-            },
-            "description": "Gán Staff cho cơ sở qua wrapper capture dùng chung nghiệp vụ Location assignment.\n\nRole mặc định: owner. Có thể đổi Bearer token để test quyền. ID còn trống phải tạo/lấy từ dữ liệu test; sample không phải dữ liệu đã tồn tại. GET lại để cập nhật version sau mutation. Provider/file upload cần cấu hình hoặc chọn file riêng."
-          },
-          "event": [
-            {
-              "listen": "test",
-              "script": {
-                "type": "text/javascript",
-                "exec": [
-                  "pm.test(\"Không có lỗi server\", () => pm.expect(pm.response.code).to.be.below(500));",
-                  "pm.test(\"Kịch bản hợp lệ trả 2xx\", () => pm.expect(pm.response.code).to.be.within(200, 299));",
-                  "if (pm.response.code >= 200 && pm.response.code < 300) {",
-                  "  let data; try { data = pm.response.json(); } catch (_) {}",
-                  "  if (data && typeof data === \"object\" && !Array.isArray(data)) {",
-                  "    const savedId = data.id; if (typeof savedId === \"string\") pm.environment.set(\"assignmentId\", savedId);",
-                  "  }",
-                  "}"
-                ]
-              }
-            }
-          ],
-          "protocolProfileBehavior": {
-            "disableCookies": true
-          }
-        },
-        {
           "name": "POST /api/v1/capture/locations — Tạo cơ sở qua wrapper capture sử dụng PropertyService",
           "request": {
             "method": "POST",
@@ -8099,68 +8037,6 @@
                   "  let data; try { data = pm.response.json(); } catch (_) {}",
                   "  if (data && typeof data === \"object\" && !Array.isArray(data)) {",
                   "    const savedId = data.id; if (typeof savedId === \"string\") pm.environment.set(\"residentId\", savedId);",
-                  "  }",
-                  "}"
-                ]
-              }
-            }
-          ],
-          "protocolProfileBehavior": {
-            "disableCookies": true
-          }
-        },
-        {
-          "name": "POST /api/v1/capture/rooms — Tạo phòng qua wrapper capture sử dụng PropertyService",
-          "request": {
-            "method": "POST",
-            "header": [
-              {
-                "key": "Content-Type",
-                "value": "application/json"
-              },
-              {
-                "key": "Idempotency-Key",
-                "value": "{{requestIdempotencyKey}}"
-              }
-            ],
-            "auth": {
-              "type": "bearer",
-              "bearer": [
-                {
-                  "key": "token",
-                  "value": "{{ownerAccessToken}}",
-                  "type": "string"
-                }
-              ]
-            },
-            "url": {
-              "raw": "{{baseUrl}}/api/v1/capture/rooms",
-              "host": ["{{baseUrl}}"],
-              "path": ["api", "v1", "capture", "rooms"]
-            },
-            "body": {
-              "mode": "raw",
-              "raw": "{\n  \"locationId\": \"{{locationId}}\",\n  \"roomNumber\": \"{{roomNumber}}\",\n  \"capacity\": 2\n}",
-              "options": {
-                "raw": {
-                  "language": "json"
-                }
-              }
-            },
-            "description": "Tạo phòng qua wrapper capture sử dụng PropertyService.\n\nRole mặc định: owner. Có thể đổi Bearer token để test quyền. ID còn trống phải tạo/lấy từ dữ liệu test; sample không phải dữ liệu đã tồn tại. GET lại để cập nhật version sau mutation. Provider/file upload cần cấu hình hoặc chọn file riêng."
-          },
-          "event": [
-            {
-              "listen": "test",
-              "script": {
-                "type": "text/javascript",
-                "exec": [
-                  "pm.test(\"Không có lỗi server\", () => pm.expect(pm.response.code).to.be.below(500));",
-                  "pm.test(\"Kịch bản hợp lệ trả 2xx\", () => pm.expect(pm.response.code).to.be.within(200, 299));",
-                  "if (pm.response.code >= 200 && pm.response.code < 300) {",
-                  "  let data; try { data = pm.response.json(); } catch (_) {}",
-                  "  if (data && typeof data === \"object\" && !Array.isArray(data)) {",
-                  "    const savedId = data.id; if (typeof savedId === \"string\") pm.environment.set(\"roomId\", savedId);",
                   "  }",
                   "}"
                 ]
@@ -14624,7 +14500,7 @@
             },
             "body": {
               "mode": "raw",
-              "raw": "{\n  \"locationId\": \"{{locationId}}\",\n  \"effectiveFrom\": \"{{period}}\",\n  \"enabled\": false,\n  \"authorizeAutomaticFinalization\": false,\n  \"meterDay\": 5,\n  \"meterDueDay\": 8,\n  \"meterDueMonthOffset\": 0,\n  \"timeZone\": \"Asia/Ho_Chi_Minh\",\n  \"expectedVersion\": {{billingAutomationVersion}},\n  \"expectedBillingScheduleVersion\": {{billingScheduleVersion}}\n}",
+              "raw": "{\n  \"locationId\": \"{{locationId}}\",\n  \"effectiveFrom\": \"{{period}}\",\n  \"enabled\": false,\n  \"authorizeAutomaticFinalization\": false,\n  \"meterDay\": 5,\n  \"meterDueDay\": 8,\n  \"meterDueMonthOffset\": 0,\n  \"timeZone\": \"Asia/Ho_Chi_Minh\",\n  \"expectedVersion\": {{billingAutomationVersion}},\n  \"expectedBillingScheduleVersion\": {{billingScheduleVersion}},\n  \"draftDay\": 10,\n  \"draftMonthOffset\": 0,\n  \"finalDay\": 15,\n  \"finalMonthOffset\": 0,\n  \"dueDay\": 25,\n  \"dueMonthOffset\": 0,\n  \"initialSchedule\": { \"rateDate\": 0, \"partialMonth\": 0, \"rounding\": 0 }\n}",
               "options": {
                 "raw": {
                   "language": "json"
@@ -14709,69 +14585,6 @@
                   "  if (data && typeof data === \"object\" && !Array.isArray(data)) {",
                   "    const savedId = data.id; if (typeof savedId === \"string\") pm.environment.set(\"billingAutomationId\", savedId);",
                   "    const savedVersion = data.accountVersion ?? data.version ?? data.draftVersion; if (savedVersion !== undefined && savedVersion !== null) pm.environment.set(\"billingAutomationVersion\", savedVersion);",
-                  "  }",
-                  "}"
-                ]
-              }
-            }
-          ],
-          "protocolProfileBehavior": {
-            "disableCookies": true
-          }
-        },
-        {
-          "name": "PUT /api/v1/billing-schedules — Lưu lịch/quy tắc tính hóa đơn của cơ sở với kiểm version và thứ tự ngày hợp lệ",
-          "request": {
-            "method": "PUT",
-            "header": [
-              {
-                "key": "Content-Type",
-                "value": "application/json"
-              },
-              {
-                "key": "Idempotency-Key",
-                "value": "{{requestIdempotencyKey}}"
-              }
-            ],
-            "auth": {
-              "type": "bearer",
-              "bearer": [
-                {
-                  "key": "token",
-                  "value": "{{ownerAccessToken}}",
-                  "type": "string"
-                }
-              ]
-            },
-            "url": {
-              "raw": "{{baseUrl}}/api/v1/billing-schedules",
-              "host": ["{{baseUrl}}"],
-              "path": ["api", "v1", "billing-schedules"]
-            },
-            "body": {
-              "mode": "raw",
-              "raw": "{\n  \"locationId\": \"{{locationId}}\",\n  \"rateDate\": 0,\n  \"rentSource\": 0,\n  \"partialMonth\": 0,\n  \"rounding\": 0,\n  \"draftDay\": 10,\n  \"draftMonthOffset\": 0,\n  \"finalDay\": 15,\n  \"finalMonthOffset\": 0,\n  \"dueDay\": 20,\n  \"dueMonthOffset\": 0,\n  \"expectedVersion\": {{billingScheduleVersion}}\n}",
-              "options": {
-                "raw": {
-                  "language": "json"
-                }
-              }
-            },
-            "description": "Lưu lịch/quy tắc tính hóa đơn của cơ sở với kiểm version và thứ tự ngày hợp lệ.\n\nRole mặc định: owner. Có thể đổi Bearer token để test quyền. ID còn trống phải tạo/lấy từ dữ liệu test; sample không phải dữ liệu đã tồn tại. GET lại để cập nhật version sau mutation. Provider/file upload cần cấu hình hoặc chọn file riêng."
-          },
-          "event": [
-            {
-              "listen": "test",
-              "script": {
-                "type": "text/javascript",
-                "exec": [
-                  "pm.test(\"Không có lỗi server\", () => pm.expect(pm.response.code).to.be.below(500));",
-                  "pm.test(\"Kịch bản hợp lệ trả 2xx\", () => pm.expect(pm.response.code).to.be.within(200, 299));",
-                  "if (pm.response.code >= 200 && pm.response.code < 300) {",
-                  "  let data; try { data = pm.response.json(); } catch (_) {}",
-                  "  if (data && typeof data === \"object\" && !Array.isArray(data)) {",
-                  "    const savedId = data.id; if (typeof savedId === \"string\") pm.environment.set(\"billingSchedulesId\", savedId);",
-                  "    const savedVersion = data.accountVersion ?? data.version ?? data.draftVersion; if (savedVersion !== undefined && savedVersion !== null) pm.environment.set(\"billingScheduleVersion\", savedVersion);",
                   "  }",
                   "}"
                 ]

@@ -120,7 +120,7 @@ public sealed partial class InvoiceApiTests(CaptureFixture fixture) : IClassFixt
         PartialMonthRule.FullMonth, VndRounding.AwayFromZero, 1, 0, 1, 1, 10, 1, 0);
     private async Task<InvoiceView> Draft(Workspace w)
     {
-        await Success<BillingSchedule>(await w.Owner.Client.PutAsJsonAsync("/api/v1/billing-schedules", Schedule(w)));
+        await Success<BillingSchedule>(await w.Owner.Client.PutAsJsonAsync("/test-probe/billing-schedules", Schedule(w)));
         return await Success<InvoiceView>(await w.Owner.Client.PostAsJsonAsync("/api/v1/invoices/drafts", new DraftInvoiceInput(w.Room, w.Period, w.Contract)));
     }
 
@@ -247,11 +247,12 @@ public sealed partial class InvoiceApiTests(CaptureFixture fixture) : IClassFixt
     {
         var w = await Setup();
         Assert.Equal(HttpStatusCode.Conflict, (await w.Owner.Client.PostAsJsonAsync("/api/v1/invoices/drafts", new DraftInvoiceInput(w.Room, w.Period, w.Contract))).StatusCode);
-        Assert.Equal(HttpStatusCode.BadRequest, (await w.Owner.Client.PutAsJsonAsync("/api/v1/billing-schedules", Schedule(w) with { FinalDay = 0 })).StatusCode);
-        Assert.Equal(HttpStatusCode.BadRequest, (await w.Owner.Client.PutAsJsonAsync("/api/v1/billing-schedules", Schedule(w) with { DueMonthOffset = 0 })).StatusCode);
-        Assert.Equal(HttpStatusCode.Forbidden, (await w.Tenant.Client.PutAsJsonAsync("/api/v1/billing-schedules", Schedule(w))).StatusCode);
-        await Success<BillingSchedule>(await w.Owner.Client.PutAsJsonAsync("/api/v1/billing-schedules", Schedule(w)));
-        Assert.Equal(HttpStatusCode.Conflict, (await w.Owner.Client.PutAsJsonAsync("/api/v1/billing-schedules", Schedule(w))).StatusCode);
+        Assert.Equal(HttpStatusCode.NotFound, (await w.Owner.Client.PutAsJsonAsync("/api/v1/billing-schedules", Schedule(w))).StatusCode);
+        Assert.Equal(HttpStatusCode.BadRequest, (await w.Owner.Client.PutAsJsonAsync("/test-probe/billing-schedules", Schedule(w) with { FinalDay = 0 })).StatusCode);
+        Assert.Equal(HttpStatusCode.BadRequest, (await w.Owner.Client.PutAsJsonAsync("/test-probe/billing-schedules", Schedule(w) with { DueMonthOffset = 0 })).StatusCode);
+        Assert.Equal(HttpStatusCode.Forbidden, (await w.Tenant.Client.PutAsJsonAsync("/test-probe/billing-schedules", Schedule(w))).StatusCode);
+        await Success<BillingSchedule>(await w.Owner.Client.PutAsJsonAsync("/test-probe/billing-schedules", Schedule(w)));
+        Assert.Equal(HttpStatusCode.Conflict, (await w.Owner.Client.PutAsJsonAsync("/test-probe/billing-schedules", Schedule(w))).StatusCode);
     }
 
     [Fact]
@@ -262,7 +263,7 @@ public sealed partial class InvoiceApiTests(CaptureFixture fixture) : IClassFixt
         var before = await Success<TenantInvoicePeriodView>(await w.Tenant.Client.GetAsync(path));
         Assert.False(before.HasInvoice);
         Assert.Empty(before.DraftDates);
-        await Success<BillingSchedule>(await w.Owner.Client.PutAsJsonAsync("/api/v1/billing-schedules",
+        await Success<BillingSchedule>(await w.Owner.Client.PutAsJsonAsync("/test-probe/billing-schedules",
             Schedule(w) with { DraftDay = 27, DraftMonthOffset = 1, FinalDay = 28, DueMonthOffset = 2 }));
         var result = await Success<TenantInvoicePeriodView>(await w.Tenant.Client.GetAsync(path));
         Assert.Equal(new DateOnly(result.BusinessDate.Year, result.BusinessDate.Month, 1), result.BillingPeriod);

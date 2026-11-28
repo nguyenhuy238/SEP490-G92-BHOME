@@ -313,10 +313,9 @@ internal sealed class OtpContractSigningAdapter(ICurrentUser user, IPdfSigner pd
         if (email is null) throw ContractException.Conflict("signer_email_required");
         var (code, challenge) = await challenges.IssueAsync(signature.Id, email, t);
         var minutes = Math.Max(1, options.Value.Otp.TtlSeconds / 60);
-        var handover = signature.PreparedObjectKeyOrEmpty.Contains("/handover-signatures/", StringComparison.Ordinal);
-        var subject = handover ? "biên bản bàn giao phòng" : "hợp đồng";
+        const string subject = "hợp đồng";
         var receipt = await channel.SendAsync(new ChannelMessage($"contract-otp:{signature.Id:N}:{challenge.Issues}", "EMAIL", email,
-            handover ? "HANDOVER_SIGNING_OTP" : "CONTRACT_SIGNING_OTP", $"[BHOME] Mã xác nhận ký {subject}: {code}",
+            "CONTRACT_SIGNING_OTP", $"[BHOME] Mã xác nhận ký {subject}: {code}",
             $"Mã xác nhận ký {subject} của bạn là: {code}\n\nMã có hiệu lực {minutes} phút và chỉ dùng được một lần.\n" +
             $"Không chia sẻ mã này với bất kỳ ai, kể cả nhân viên BHOME.\nNếu bạn không yêu cầu ký {subject}, hãy bỏ qua email này."), t);
         // Sandbox email (Development) delivers nothing; an explicit Development-only switch prints the code to test locally.

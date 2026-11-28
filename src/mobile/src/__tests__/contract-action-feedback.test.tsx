@@ -9,9 +9,6 @@ import {
   type ContractClient,
   type ContractView,
 } from '../../../../packages/client-core/src/contracts';
-vi.mock('../../../../packages/client-core/src/useSigningCertificates', () => ({
-  useSigningCertificates: () => ({ certificates: [], loading: false, reload: vi.fn() }),
-}));
 vi.mock('../features/contracts/signing/SigningSetup', () => ({
   SignatureImageSection: () => null,
   SignaturePlacementField: () => null,

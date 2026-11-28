@@ -20,17 +20,6 @@ export interface LocationDto {
   isActive: boolean;
   version: number;
 }
-export interface RoomTypeDto {
-  id: string;
-  locationId: string;
-  name: string;
-  description: string | null;
-  defaultCapacity: number;
-  areaM2: number | null;
-  amenities: string[];
-  isActive: boolean;
-  version: number;
-}
 export interface RoomDto {
   id: string;
   locationId: string;
@@ -108,18 +97,6 @@ export function usePropertyApi() {
         request<OccupancySummary>(`/api/v1/locations/${encodeURIComponent(id)}/occupancy-summary`, {
           signal,
         }),
-      roomTypes: (locationId?: string, signal?: AbortSignal) =>
-        request<Page<RoomTypeDto>>(
-          `/api/v1/room-types?page=1&pageSize=100${locationId ? `&locationId=${encodeURIComponent(locationId)}` : ''}`,
-          { signal },
-        ),
-      saveRoomType: (value: Omit<RoomTypeDto, 'id'> & { reason: string }, id?: string) =>
-        json<RoomTypeDto>(
-          request,
-          id ? `/api/v1/room-types/${encodeURIComponent(id)}` : '/api/v1/room-types',
-          value,
-          id ? 'PUT' : 'POST',
-        ),
       rooms: (locationId?: string, signal?: AbortSignal) =>
         request<Page<RoomDto>>(
           `/api/v1/rooms?page=1&pageSize=100${locationId ? `&locationId=${encodeURIComponent(locationId)}` : ''}`,

@@ -242,8 +242,6 @@ public sealed class EnvironmentConfigurationTests
             FromEmail = "sender@example.invalid",
             AppPassword = "synthetic",
             AllowAnyRecipientInDevelopment = legacyOverride,
-            TestEnabled = true,
-            TestRecipient = "diagnostic@example.invalid"
         };
         foreach (var recipients in new string[][] { [], ["old@example.invalid"], ["stale-invalid-entry"] })
         {

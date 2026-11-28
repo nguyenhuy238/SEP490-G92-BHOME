@@ -260,36 +260,29 @@ public sealed class MeterInvoiceTests(PlanSessions sessions)
         using var current = await _api.GetAsync($"api/v1/billing-schedules/{locationId}", owner);
         var saved = current.StatusCode == HttpStatusCode.OK ? (JsonElement?)await current.JsonAsync() : null;
         int Value(string name, int fallback) => saved?.Str(name) is { } s ? int.Parse(s, System.Globalization.CultureInfo.InvariantCulture) : fallback;
-        object Schedule(int expectedVersion, int draftDay, int finalDay, int dueDay) => new
+        using var history = await _api.GetAsync($"api/v1/billing-automation/{locationId}/history", owner);
+        await PlanAssert.SuccessAsync(history, "read automation history");
+        var plans = (await history.JsonAsync()).Items();
+        var version = plans.Count == 0 ? 0 : plans.Max(p => int.Parse(p.Str("version")!));
+        var today = PlanData.TodayVietnam;
+        var period = new DateOnly(today.Year, today.Month, 1).AddMonths(1);
+        object Schedule(int draftDay, int finalDay, int dueDay, int? offset = null) => new
         {
-            locationId,
-            rateDate = Value("rateDate", 0),
-            rentSource = Value("rentSource", 0),
-            partialMonth = Value("partialMonth", 0),
-            rounding = Value("rounding", 0),
-            draftDay,
-            draftMonthOffset = Value("draftMonthOffset", 1),
-            finalDay,
-            finalMonthOffset = Value("finalMonthOffset", 1),
-            dueDay,
-            dueMonthOffset = Value("dueMonthOffset", 1),
-            expectedVersion,
+            locationId, effectiveFrom = PlanData.Iso(period), enabled = false, authorizeAutomaticFinalization = false,
+            meterDay = 1, meterDueDay = 1, meterDueMonthOffset = 0, timeZone = "Asia/Ho_Chi_Minh",
+            expectedVersion = version, expectedBillingScheduleVersion = Value("version", 0),
+            initialSchedule = new { rateDate = Value("rateDate", 0), partialMonth = Value("partialMonth", 0), rounding = Value("rounding", 0) },
+            draftDay, draftMonthOffset = offset ?? Value("draftMonthOffset", 1),
+            finalDay, finalMonthOffset = offset ?? Value("finalMonthOffset", 1),
+            dueDay, dueMonthOffset = offset ?? Value("dueMonthOffset", 1)
         };
-        var version = Value("version", 0);
-        var valid = Schedule(version, Value("draftDay", 1), Value("finalDay", 3), Value("dueDay", 10));
-
-        // 1. Save the billing schedule as Staff.  Only the Owner can save it.
-        await PlanAssert.RefusedAsync(await _api.PutAsync("api/v1/billing-schedules", valid, staff), "step 1 Staff save");
-
-        // 2. Save it as Owner with invalid dates.  Invalid dates are refused.
-        await PlanAssert.RefusedAsync(await _api.PutAsync("api/v1/billing-schedules", Schedule(version, 32, 3, 10), owner), "step 2 day 32");
-        await PlanAssert.RefusedAsync(
-            await _api.PutAsync("api/v1/billing-schedules", new { locationId, rateDate = 0, rentSource = 0, partialMonth = 0, rounding = 0, draftDay = 20, draftMonthOffset = 0, finalDay = 10, finalMonthOffset = 0, dueDay = 5, dueMonthOffset = 0, expectedVersion = version }, owner),
-            "step 2 Draft after Final after Due");
-
-        // 3. Save it with an old version.  An old version gets a conflict.
-        await PlanAssert.SuccessAsync(await _api.PutAsync("api/v1/billing-schedules", valid, owner), "Owner saves the current version");
-        await PlanAssert.StatusAsync(await _api.PutAsync("api/v1/billing-schedules", valid, owner), HttpStatusCode.Conflict, "step 3 old version");
+        var valid = Schedule(Value("draftDay", 1), Value("finalDay", 3), Value("dueDay", 10));
+        const string route = "api/v1/billing-automation";
+        await PlanAssert.RefusedAsync(await _api.PutAsync(route, valid, staff), "step 1 Staff save");
+        await PlanAssert.RefusedAsync(await _api.PutAsync(route, Schedule(32, 3, 10), owner), "step 2 day 32");
+        await PlanAssert.RefusedAsync(await _api.PutAsync(route, Schedule(20, 10, 5, 0), owner), "step 2 Draft after Final after Due");
+        await PlanAssert.SuccessAsync(await _api.PutAsync(route, valid, owner), "Owner saves the current version");
+        await PlanAssert.StatusAsync(await _api.PutAsync(route, valid, owner), HttpStatusCode.Conflict, "step 3 old version");
     }
 
     [SkippableFact(DisplayName = "ITC-BF05-008 Test the scheduled finalization.")]

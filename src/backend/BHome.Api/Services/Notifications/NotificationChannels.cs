@@ -30,11 +30,6 @@ public static class NotificationEmailPolicy
         ? channels.Append("EMAIL").Distinct().ToArray() : channels;
 }
 
-public sealed record EmailTestResult(string Status, string ProviderReference, bool InboxDeliveryConfirmed);
-public interface IDevelopmentEmailTest
-{
-    Task<EmailTestResult> SendAsync(CancellationToken t);
-}
 public sealed record EmailAttachment(string FileName, string ContentType, byte[] Content);
 // Delivery-only data: never include credentials in an API response, inbox or audit.
 public sealed record EmailCredentials(string Account, string Password)

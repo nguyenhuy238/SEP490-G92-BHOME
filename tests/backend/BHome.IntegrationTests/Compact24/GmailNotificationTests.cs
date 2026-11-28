@@ -283,17 +283,16 @@ public sealed partial class Compact24NotificationMvpTests
     }
 
     [CompactPostgresFact]
-    public async Task GmailDevelopmentTestRequiresOwnerUsesConfiguredRecipientAndRateLimits()
+    public async Task RetiredGmailTestRouteDoesNotSendForAnyRole()
     {
         var w = await Seed(); var probe = new SmtpProbe(); using var host = EmailHost(probe, "Development", true);
-        using var anonymous = host.CreateClient(); Assert.Equal(HttpStatusCode.Unauthorized, (await anonymous.PostAsync("/api/v1/notifications/email-test", null)).StatusCode);
-        using var staff = await Client(w.Staff, host); Assert.Equal(HttpStatusCode.Forbidden, (await staff.PostAsync("/api/v1/notifications/email-test", null)).StatusCode);
-        using var tenant = await Client(w.Tenants[0], host); Assert.Equal(HttpStatusCode.Forbidden, (await tenant.PostAsync("/api/v1/notifications/email-test", null)).StatusCode);
-        using var owner = await Client(w.Owner, host); var response = await owner.PostAsync("/api/v1/notifications/email-test", null); response.EnsureSuccessStatusCode();
-        Assert.False((await response.Content.ReadFromJsonAsync<EmailTestResult>())!.InboxDeliveryConfirmed);
-        Assert.Equal("configured@example.invalid", Assert.Single(probe.Messages).Destination);
-        Assert.Equal(HttpStatusCode.TooManyRequests, (await owner.PostAsync("/api/v1/notifications/email-test", null)).StatusCode);
-        Assert.Single(probe.Messages);
+        using var anonymous = host.CreateClient();
+        using var staff = await Client(w.Staff, host);
+        using var tenant = await Client(w.Tenants[0], host);
+        using var owner = await Client(w.Owner, host);
+        foreach (var client in new[] { anonymous, staff, tenant, owner })
+            Assert.Equal(HttpStatusCode.NotFound, (await client.PostAsync("/api/v1/notifications/email-test", null)).StatusCode);
+        Assert.Empty(probe.Messages);
     }
 
     [CompactPostgresFact]

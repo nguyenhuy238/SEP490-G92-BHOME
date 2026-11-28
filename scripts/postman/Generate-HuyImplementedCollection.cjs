@@ -506,26 +506,10 @@ request('Giao Staff trong khoảng test', 'POST', '/api/v1/staff-location-assign
   },
   expected: [201],
 });
-request('Tạo RoomType test', 'POST', '/api/v1/room-types', {
-  write: true,
-  body: {
-    locationId: v('locationId'),
-    name: v('roomTypeName'),
-    description: 'Synthetic only',
-    defaultCapacity: n('roomCapacity'),
-    areaM2: n('roomAreaM2'),
-    amenities: [],
-    isActive: true,
-    version: 0,
-  },
-  expected: [201],
-  saves: { roomTypeId: 'id' },
-});
 request('Tạo Room test', 'POST', '/api/v1/rooms', {
   write: true,
   body: {
     locationId: v('locationId'),
-    roomTypeId: v('roomTypeId'),
     roomNumber: v('roomNumber'),
     floor: v('roomFloor'),
     capacity: n('roomCapacity'),
@@ -970,25 +954,31 @@ request('GET calendar đang lưu', 'GET', '/api/v1/billing-schedules/{{locationI
   saves: { billingScheduleVersion: 'version' },
   emptyDefaults: { billingScheduleVersion: 0 },
 });
+request('Read automation history before calendar save', 'GET', '/api/v1/billing-automation/{{locationId}}/history', {
+  ...array, saves: { automationVersion: '0.version' }, emptyDefaults: { automationVersion: 0 },
+});
 const calendar = {
   locationId: v('locationId'),
-  rateDate: n('rateDateRule'),
-  rentSource: n('rentSourceRule'),
-  partialMonth: n('partialMonthRule'),
-  rounding: n('roundingRule'),
+  effectiveFrom: v('billingPeriod'),
+  enabled: false,
+  authorizeAutomaticFinalization: false,
+  meterDay: 1, meterDueDay: 1, meterDueMonthOffset: 0,
+  timeZone: 'Asia/Ho_Chi_Minh',
+  initialSchedule: { rateDate: n('rateDateRule'), partialMonth: n('partialMonthRule'), rounding: n('roundingRule') },
   draftDay: n('draftDay'),
   draftMonthOffset: n('draftMonthOffset'),
   finalDay: n('finalDay'),
   finalMonthOffset: n('finalMonthOffset'),
   dueDay: n('dueDay'),
   dueMonthOffset: n('dueMonthOffset'),
-  expectedVersion: n('billingScheduleVersion'),
+  expectedVersion: n('automationVersion'),
+  expectedBillingScheduleVersion: n('billingScheduleVersion'),
 };
-request('Owner lưu calendar được chọn', 'PUT', '/api/v1/billing-schedules', {
+request('Owner saves manual billing calendar', 'PUT', '/api/v1/billing-automation', {
   write: true,
   body: calendar,
-  fields: ['version'],
-  saves: { billingScheduleVersion: 'version' },
+  fields: ['version', 'billingScheduleVersion'],
+  saves: { automationVersion: 'version', billingScheduleVersion: 'billingScheduleVersion' },
 });
 request(
   'Invoice Owner page theo Room',
@@ -1573,9 +1563,13 @@ request('Save plan với calendar version Owner chọn', 'PUT', '/api/v1/billing
     timeZone: v('timeZone'),
     expectedVersion: n('automationVersion'),
     expectedBillingScheduleVersion: n('billingScheduleVersion'),
+    draftDay: n('draftDay'), draftMonthOffset: n('draftMonthOffset'),
+    finalDay: n('finalDay'), finalMonthOffset: n('finalMonthOffset'),
+    dueDay: n('dueDay'), dueMonthOffset: n('dueMonthOffset'),
+    initialSchedule: { rateDate: n('rateDateRule'), partialMonth: n('partialMonthRule'), rounding: n('roundingRule') },
   },
   fields: ['id', 'version', 'billingScheduleVersion'],
-  saves: { automationPlanId: 'id', automationVersion: 'version' },
+  saves: { automationPlanId: 'id', automationVersion: 'version', billingScheduleVersion: 'billingScheduleVersion' },
 });
 request(
   'Preview thực tế - ngày VN và runtime flags',

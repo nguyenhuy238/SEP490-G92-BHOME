@@ -34,7 +34,7 @@ public sealed partial class MainDraftApiTests
             b.ConfigureTestServices(s =>
             {
                 s.RemoveAll<IContractSigningProvider>();
-                s.AddScoped(typeof(IContractSigningProvider), typeof(ViettelMySignContractAdapter).Assembly.GetType("BHome.Infrastructure.Contracts.DevelopmentContractSigningAdapter", true)!);
+                s.AddScoped(typeof(IContractSigningProvider), typeof(ContractSigningRouter).Assembly.GetType("BHome.Infrastructure.Contracts.DevelopmentContractSigningAdapter", true)!);
             });
         });
     }

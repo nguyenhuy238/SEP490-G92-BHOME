@@ -44,7 +44,7 @@ public sealed partial class PaymentLedgerTests
     private async Task<(Workspace W, BillingAutomationPlan Plan, InvoiceView Draft)> FinalWorkspace(bool readings = true, bool authorize = true)
     {
         var (w, _, _) = await MeterWorkspace(); await AddAutomationRates(w); using var owner = await Client(w.Owner);
-        (await owner.PutAsJsonAsync("/api/v1/billing-schedules", Calendar(w) with { ExpectedVersion = 1, FinalDay = 1 })).EnsureSuccessStatusCode();
+        (await owner.PutAsJsonAsync("/test-probe/billing-schedules", Calendar(w) with { ExpectedVersion = 1, FinalDay = 1 })).EnsureSuccessStatusCode();
         var planResponse = await owner.PutAsJsonAsync("/api/v1/billing-automation", Plan(w) with { MeterDay = 1, ExpectedVersion = 1, ExpectedBillingScheduleVersion = 2, AuthorizeAutomaticFinalization = authorize }); planResponse.EnsureSuccessStatusCode(); var p = (await planResponse.Content.ReadFromJsonAsync<BillingAutomationPlan>())!;
         (await owner.PutAsJsonAsync("/api/v1/billing-automation/representative", new BillingRepresentativeInput(w.Room, CurrentPeriod(), w.Contract, 0))).EnsureSuccessStatusCode();
         if (readings)

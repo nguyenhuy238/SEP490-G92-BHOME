@@ -23,7 +23,7 @@ public sealed partial class InvoiceApiTests
     internal async Task NativeScheduleAndExecutionPreserveVersionsAndLease()
     {
         var w = await Setup();
-        const string path = "/api/v1/billing-schedules";
+        const string path = "/test-probe/billing-schedules";
         var input = Schedule(w);
         await Success<BillingSchedule>(await w.Owner.Client.PutAsJsonAsync(path, input));
         await Success<BillingSchedule>(await w.Owner.Client.PutAsJsonAsync(path, input with { ExpectedVersion = 1, DueDay = 15 }));

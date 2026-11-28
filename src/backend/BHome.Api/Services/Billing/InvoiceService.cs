@@ -27,38 +27,6 @@ public sealed class InvoiceService(IInvoiceRepository repository, ICurrentUser u
     public async Task<BillingSchedule?> ScheduleAsync(Guid locationId, CancellationToken t)
     { RequireOwner(); return await repository.ScheduleAsync(locationId, t); }
 
-    private static void ValidateSchedule(BillingScheduleWrite x)
-    {
-        if (x.LocationId == Guid.Empty || x.ExpectedVersion < 0 || !Enum.IsDefined(x.RateDate) || !Enum.IsDefined(x.RentSource) ||
-            !Enum.IsDefined(x.PartialMonth) || !Enum.IsDefined(x.Rounding)) throw new InvoiceException(400, "invalid_billing_schedule");
-        try
-        {
-            // Check both short and long months; day 29–31 clamps to the month's last day.
-            foreach (var period in new[] { new DateOnly(2027, 2, 1), new DateOnly(2028, 2, 1), new DateOnly(2026, 12, 1) })
-                if (InvoiceMath.CalendarDate(period, x.DraftDay, x.DraftMonthOffset) > InvoiceMath.CalendarDate(period, x.FinalDay, x.FinalMonthOffset) ||
-                    InvoiceMath.CalendarDate(period, x.FinalDay, x.FinalMonthOffset) > InvoiceMath.CalendarDate(period, x.DueDay, x.DueMonthOffset))
-                    throw new InvoiceException(400, "invalid_billing_calendar_order");
-        }
-        catch (ArgumentOutOfRangeException) { throw new InvoiceException(400, "invalid_billing_schedule"); }
-    }
-    public Task<BillingSchedule> SaveScheduleAsync(BillingScheduleWrite x, CancellationToken t)
-    {
-        RequireOwner(); ValidateSchedule(x);
-        return repository.WithLocationLockAsync(x.LocationId, async () =>
-        {
-            var s = await repository.ScheduleAsync(x.LocationId, t);
-            if ((s?.Version ?? 0) != x.ExpectedVersion) throw new InvoiceException(409, "billing_schedule_changed");
-            if (s is null) { s = new BillingSchedule { LocationId = x.LocationId }; repository.Add(s); }
-            else s.Version++;
-            s.RateDate = x.RateDate; s.RentSource = BillingRentSource.RepresentativeContract; s.PartialMonth = x.PartialMonth; s.Rounding = x.Rounding;
-            s.DraftDay = x.DraftDay; s.DraftMonthOffset = x.DraftMonthOffset;
-            s.FinalDay = x.FinalDay; s.FinalMonthOffset = x.FinalMonthOffset;
-            s.DueDay = x.DueDay; s.DueMonthOffset = x.DueMonthOffset;
-            repository.Audit(Actor, "BillingScheduleConfigured", s.Id, clock.GetUtcNow());
-            return s;
-        }, t);
-    }
-
     public async Task<InvoiceView> GetAsync(Guid id, CancellationToken t) => View(await repository.FindAsync(id, Scope, t) ?? throw new InvoiceException(404, "invoice_not_found"));
     public async Task<PagedResult<InvoiceView>> ListAsync(int page, int pageSize, Guid? roomId, CancellationToken t, InvoiceListFilter? filter = null)
     {

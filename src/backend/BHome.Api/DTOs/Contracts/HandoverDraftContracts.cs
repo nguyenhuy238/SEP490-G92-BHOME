@@ -126,9 +126,6 @@ public sealed record HandoverDraftReady(int Version, string? Reason = null, stri
     SigningInput? Signature = null, HandoverInkInput? Ink = null);
 public sealed record HandoverDraftCorrection(int Version, string Reason);
 public sealed record HandoverDraftCorrectionDecision(int Version, bool Accepted, string Reason);
-public sealed record HandoverDraftTenantConfirmation(int Version, string? Note = null);
-public sealed record HandoverDraftTenantSign(int Version, SigningInput Signature);
-public sealed record HandoverDraftTenantSignOtp(int Version, string Code, string? Note = null);
 // Explicit account-session consent + freshly drawn signature, never generated from typed text.
 public sealed record HandoverDraftTenantSessionSign(int Version, bool Consent,
     HandoverInkInput? Ink, string? Note = null);

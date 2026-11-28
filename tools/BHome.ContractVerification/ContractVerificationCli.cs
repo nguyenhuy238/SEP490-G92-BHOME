@@ -53,7 +53,7 @@ internal static class ContractVerificationCli
                     "IdentityProtection:ActiveHmacVersion", "IdentityProtection:EncryptionKeys:test", "IdentityProtection:HmacKeys:test" })
                     settings[key] = config[key];
                 // Record that this harness is using the actual fail-closed integrations, not test replacements.
-                if (scope.ServiceProvider.GetRequiredService<IContractSigningProvider>().GetType().Name != "ViettelMySignContractAdapter" ||
+                if (scope.ServiceProvider.GetRequiredService<IContractSigningProvider>().GetType().Name != "ContractSigningRouter" ||
                     scope.ServiceProvider.GetRequiredService<IContractSettlementLedger>().GetType().Name != "PendingContractSettlementLedger" ||
                     scope.ServiceProvider.GetRequiredService<IContractHoldingLedger>().GetType().Name != "UnconfiguredContractHoldingLedger")
                     throw new InvalidOperationException("Unexpected provider replacement: live verification refused.");

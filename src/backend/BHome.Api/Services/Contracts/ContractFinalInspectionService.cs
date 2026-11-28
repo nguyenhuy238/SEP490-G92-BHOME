@@ -30,18 +30,6 @@ public sealed partial class ContractService
         var doc = await HandoverSetup.GetAsync(HandoverKey($"legacy-handover-exception:{c.Id:N}"), "LegacyHandoverException", t);
         return doc?.Data.GetProperty("reason").GetString();
     }
-    public Task<ContractId> ApproveLegacyHandoverAsync(Guid id, LegacyHandoverException x, Guid key, CancellationToken t) => Mutate(id, [Roles.Owner], async c =>
-    {
-        HandoverActive(c);
-        if (await Replay(key, "legacy-handover", new { id, x }, t) is { } replay) return new ContractId(replay);
-        var baseline = (await Baseline(c, t)).Handover;
-        if (HasQuantityBaseline(baseline)) throw ContractException.Conflict("handover_baseline_exists");
-        var docId = HandoverKey($"legacy-handover-exception:{id:N}");
-        var prior = await HandoverSetup.GetAsync(docId, "LegacyHandoverException", t);
-        if (prior is not null) throw ContractException.Conflict("legacy_handover_exception_already_recorded");
-        await HandoverSetup.SaveAsync(docId, c.Room.LocationId, "LegacyHandoverException", "Approved", new { contractId = id, reason = HandoverText(x.Reason, 2000) }, 0, Actor, t);
-        Audit("ContractLegacyHandoverExceptionApproved", id); Remember(key, "legacy-handover", new { id, x }, docId); return new ContractId(docId);
-    }, t);
     private static HandoverAsset[] InspectionGroups(HandoverSnapshot? baseline, HandoverInventory inventory)
     {
         var physical = inventory.Groups.SelectMany(a => a.PhysicalAssets ?? []).DistinctBy(p => p.Id).ToDictionary(p => p.Id);

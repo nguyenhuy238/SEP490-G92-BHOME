@@ -30,5 +30,4 @@ public sealed class InvoicesController(InvoiceService service) : ControllerBase
 public sealed class BillingSchedulesController(InvoiceService service) : ControllerBase
 {
     [HttpGet("{locationId:guid}")] public Task<BillingSchedule?> Get(Guid locationId, CancellationToken t) => service.ScheduleAsync(locationId, t);
-    [HttpPut] public Task<BillingSchedule> Save(BillingScheduleWrite x, CancellationToken t) => service.SaveScheduleAsync(x, t);
 }

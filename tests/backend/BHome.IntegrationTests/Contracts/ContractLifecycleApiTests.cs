@@ -662,6 +662,7 @@ public sealed partial class ContractLifecycleApiTests(ContractFixture fixture) :
         using var development = fixture.Factory.WithWebHostBuilder(builder =>
         {
             builder.UseEnvironment("Development");
+            builder.ConfigureServices(services => services.AddScoped<DevelopmentOnboardingSeedService>());
             builder.ConfigureAppConfiguration((_, config) =>
                 config.AddInMemoryCollection(new Dictionary<string, string?>
                 {
@@ -689,12 +690,12 @@ public sealed partial class ContractLifecycleApiTests(ContractFixture fixture) :
         var owner = new Actor(ownerClient, w.Owner.Id);
         var key = Guid.NewGuid();
         var input = new DevelopmentOnboardingSeedInput(w.Location, w.Room);
-        Assert.Equal(HttpStatusCode.Forbidden, (await Post(staff, "/api/v1/development/onboarding-seed", input)).StatusCode);
+        Assert.Equal(HttpStatusCode.Forbidden, (await Post(staff, "/test-probe/onboarding-seed", input)).StatusCode);
         var created = await Success<DevelopmentOnboardingSeedResult>(await Post(owner,
-            "/api/v1/development/onboarding-seed", input, key));
+            "/test-probe/onboarding-seed", input, key));
         Assert.Equal(w.Room, created.RoomId);
         Assert.Equal(created.ContractId, (await Success<DevelopmentOnboardingSeedResult>(await Post(owner,
-            "/api/v1/development/onboarding-seed", input, key))).ContractId);
+            "/test-probe/onboarding-seed", input, key))).ContractId);
         await using (var before = development.Services.CreateAsyncScope())
         {
             var store = before.ServiceProvider.GetFixturePersistence();
@@ -783,7 +784,7 @@ public sealed partial class ContractLifecycleApiTests(ContractFixture fixture) :
             b.ConfigureTestServices(s =>
             {
                 s.RemoveAll<IContractSigningProvider>();
-                s.AddScoped(typeof(IContractSigningProvider), typeof(ViettelMySignContractAdapter).Assembly
+                s.AddScoped(typeof(IContractSigningProvider), typeof(ContractSigningRouter).Assembly
                     .GetType("BHome.Infrastructure.Contracts.DevelopmentContractSigningAdapter", true)!);
             });
         });
@@ -1868,7 +1869,7 @@ public sealed class ContractFixture : IAsyncLifetime
             b.ConfigureAppConfiguration((_, c) => c.AddInMemoryCollection(new Dictionary<string, string?> { ["Jwt:SigningKey"] = testSigningKey }));
             b.ConfigureTestServices(s =>
         {
-            ProductionSigningProviderType = typeof(ViettelMySignContractAdapter);
+            ProductionSigningProviderType = typeof(ContractSigningRouter);
             s.RemoveAll<IContractSigningProvider>(); s.AddSingleton<IContractSigningProvider, TestOnlySigningProvider>();
             s.RemoveAll<IContractSettlementLedger>(); s.AddSingleton<IContractSettlementLedger>(Ledger);
         });

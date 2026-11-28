@@ -27,7 +27,7 @@ public sealed class ContractWorkflowGuardTests
     {
         using var backend = ContractPdfRendererTests.Backend(environment, simulation: true);
         using var scope = backend.CreateScope();
-        var type = typeof(BHome.Infrastructure.Contracts.ViettelMySignContractAdapter).Assembly.GetType("BHome.Infrastructure.Contracts.DevelopmentContractSigningAdapter", true)!;
+        var type = typeof(BHome.Infrastructure.Contracts.ContractSigningRouter).Assembly.GetType("BHome.Infrastructure.Contracts.DevelopmentContractSigningAdapter", true)!;
         var adapter = (IContractSigningProvider)ActivatorUtilities.CreateInstance(scope.ServiceProvider, type, new Actor(), new GenericDocumentSource());
         var input = ContractPdfRendererTests.Snapshot();
         var result = await adapter.PrepareAsync(input, Guid.Empty, null, default);

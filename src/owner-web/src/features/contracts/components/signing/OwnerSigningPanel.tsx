@@ -1,6 +1,6 @@
 import { ValidatedInput } from '../../../../components/common/ValidatedForm';
 import { TextField } from '../../../../components/common/ValidatedForm';
-import { useEffect, useRef, useState, type DragEvent } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import {
   Alert,
@@ -20,30 +20,22 @@ import type {
   Signature,
 } from '../../../../../../../packages/client-core/src/contracts';
 import {
-  failedUploadCheck,
   mmss,
   secondsUntil,
   signingError,
   signingErrorCode,
-  UPLOAD_CHECKS,
   type DrawnSignature,
   type SigningClient,
   type SigningMethods,
   type SigningOtpView,
 } from '../../../../../../../packages/client-core/src/signing';
-import { formatInstant } from '../../../../../../../packages/client-core/src/localization';
 import { useSigningApi } from '../../hooks/useContractsApi';
 import { SignaturePlacementPicker, type PlacementChoice } from './SignaturePlacementPicker';
-import { downloadBlob as download } from '../../../../utils/downloadBlob';
 
 const DONE = ['Signed', 'Simulated'];
 const OPEN = (s: Signature) => !['Signed', 'Simulated', 'Failed'].includes(s.status);
-const MAX_BYTES = 10 * 1024 * 1024;
 
-// The Owner's part of "Chữ ký số" for the in-app methods (mockups 3.2.2 web):
-// UPLOAD_PROOF – download the issued PDF, sign it with MySign (certificate registered through VNeID), upload it back;
-// OTP – the box on the page, a drawn signature, then the 6-digit code from email.
-// Remote MySign signing keeps using the "Ký số" action of "Việc cần làm".
+// In-app Owner signature: direct consent or email OTP.
 export function OwnerSigningPanel({
   api,
   contract: c,
@@ -62,18 +54,13 @@ export function OwnerSigningPanel({
   const mine = c.signatures.filter((s) => s.signerUserId === actorId);
   const current = [...mine].reverse().find((s) => s.status !== 'Failed') ?? null;
   const inApp = (methods?.methods ?? []).filter(
-    (m): m is 'OTP' | 'UPLOAD_PROOF' | 'OWNER_SESSION' =>
-      m === 'UPLOAD_PROOF' || m === 'OTP' || m === 'OWNER_SESSION',
+    (m): m is 'OTP' | 'OWNER_SESSION' => m === 'OTP' || m === 'OWNER_SESSION',
   );
   if (c.ownerSignerId !== actorId || c.isDevelopmentDemo || !methods) return null;
   if (current && DONE.includes(current.status)) return null;
   const replacesOtp = current?.method === 'OTP' && OPEN(current) && inApp.includes('OWNER_SESSION');
   if (current?.method === 'OTP' && OPEN(current) && !replacesOtp)
     return <OtpStep signing={signing} contractId={c.id} onDone={onChanged} />;
-  if (current?.method === 'UPLOAD_PROOF' && OPEN(current))
-    return (
-      <UploadStep signing={signing} contractId={c.id} signature={current} onDone={onChanged} />
-    );
   if ((current && !replacesOtp) || !['Draft', 'PendingSigning'].includes(c.status) || !inApp.length)
     return null;
   const preferred = inApp.includes('OWNER_SESSION')
@@ -96,256 +83,23 @@ export function OwnerSigningPanel({
           >
             {inApp.map((m) => (
               <ToggleButton key={m} value={m}>
-                {m === 'OWNER_SESSION'
-                  ? 'Ký trực tiếp'
-                  : m === 'UPLOAD_PROOF'
-                    ? 'Tải về & ký số bên ngoài'
-                    : 'Ký điện tử bằng OTP'}
+                {m === 'OWNER_SESSION' ? 'Ký trực tiếp' : 'Ký điện tử bằng OTP'}
               </ToggleButton>
             ))}
           </ToggleButtonGroup>
         )}
-        {chosen === 'UPLOAD_PROOF' ? (
-          <UploadStart signing={signing} contractId={c.id} onStarted={onChanged} />
-        ) : (
-          <OtpStart
-            key={c.id}
-            signing={signing}
-            contractId={c.id}
-            onStarted={onChanged}
-            session={chosen === 'OWNER_SESSION'}
-          />
-        )}
+        <OtpStart
+          key={c.id}
+          signing={signing}
+          contractId={c.id}
+          onStarted={onChanged}
+          session={chosen === 'OWNER_SESSION'}
+        />
       </Stack>
     </Paper>
   );
 }
 
-function UploadStart({
-  signing,
-  contractId,
-  onStarted,
-}: {
-  signing: SigningClient;
-  contractId: string;
-  onStarted: () => void;
-}) {
-  const [busy, setBusy] = useState(false),
-    [error, setError] = useState('');
-  const [key] = useState(() => crypto.randomUUID());
-  async function start() {
-    if (busy) return;
-    setBusy(true);
-    setError('');
-    try {
-      await signing.start(contractId, 'UPLOAD_PROOF', key);
-      onStarted();
-    } catch (e) {
-      setError(signingError(e));
-    } finally {
-      setBusy(false);
-    }
-  }
-  return (
-    <Stack spacing={1.5}>
-      <Typography variant="body2">
-        Dùng chứng thư MySign của bạn (đăng ký qua VNeID). BHOME chuẩn bị bản hợp đồng để ký; bạn
-        tải về, ký bằng MySign Desktop hoặc app MySign rồi tải bản đã ký lên. Chữ ký số có giá trị
-        như chữ ký tay.
-      </Typography>
-      {!!error && <Alert severity="error">{error}</Alert>}
-      <Box>
-        <Button variant="contained" disabled={busy} onClick={() => void start()}>
-          {busy ? 'Đang chuẩn bị…' : 'Bắt đầu ký'}
-        </Button>
-      </Box>
-    </Stack>
-  );
-}
-
-// UPLOAD_PROOF pending: download the issued PDF, then drop / choose the MySign-signed file; BHOME checks it.
-function UploadStep({
-  signing,
-  contractId,
-  signature,
-  onDone,
-}: {
-  signing: SigningClient;
-  contractId: string;
-  signature: Signature;
-  onDone: () => void;
-}) {
-  const [busy, setBusy] = useState(false),
-    [error, setError] = useState(''),
-    [failed, setFailed] = useState(-1),
-    [file, setFile] = useState<File | null>(null),
-    [over, setOver] = useState(false);
-  const [key, setKey] = useState(() => crypto.randomUUID());
-  const input = useRef<HTMLInputElement>(null);
-
-  async function fetchSource() {
-    if (busy) return;
-    setBusy(true);
-    setError('');
-    try {
-      download(
-        await signing.uploadSourceBlob(contractId),
-        `hop-dong-${contractId.slice(0, 8)}-ban-ky.pdf`,
-      );
-    } catch (e) {
-      setError(signingError(e));
-    } finally {
-      setBusy(false);
-    }
-  }
-  function choose(next: File | undefined) {
-    setError('');
-    setFailed(-1);
-    if (!next) return;
-    if (next.type && next.type !== 'application/pdf' && !/\.pdf$/i.test(next.name)) {
-      setError('Chỉ nhận file PDF.');
-      return;
-    }
-    if (next.size > MAX_BYTES) {
-      setError('File lớn hơn 10 MB.');
-      return;
-    }
-    setFile(next);
-    setKey(crypto.randomUUID());
-  }
-  async function upload() {
-    if (busy || !file) return;
-    setBusy(true);
-    setError('');
-    setFailed(-1);
-    try {
-      await signing.uploadSigned(contractId, file, key);
-      onDone();
-    } catch (e) {
-      setError(signingError(e));
-      setFailed(failedUploadCheck(e));
-    } finally {
-      setBusy(false);
-    }
-  }
-  const drop = (e: DragEvent) => {
-    e.preventDefault();
-    setOver(false);
-    if (!busy) choose(e.dataTransfer.files?.[0]);
-  };
-  return (
-    <Paper variant="outlined" sx={{ p: 2 }}>
-      <Stack spacing={1.5}>
-        <Typography variant="subtitle1" sx={{ fontWeight: 700 }}>
-          Ký hợp đồng · Tải về & ký bằng MySign
-        </Typography>
-        <Box
-          component="ol"
-          sx={{ m: 0, pl: 2.5, '& li': { mb: 0.5 }, typography: 'body2' }}
-          aria-label="Các bước ký"
-        >
-          <li>
-            Tải bản hợp đồng để ký (PDF).{' '}
-            <Button size="small" disabled={busy} onClick={() => void fetchSource()}>
-              Tải hợp đồng để ký
-            </Button>
-          </li>
-          <li>
-            Mở file bằng MySign Desktop (hoặc app MySign), chọn chứng thư của bạn (đăng ký qua
-            VNeID), đặt chữ ký vào ô &quot;Bên A – Chủ trọ&quot; rồi xác nhận ký.
-          </li>
-          <li>
-            Lưu file đã ký, rồi kéo thả hoặc chọn file đó ở dưới và bấm &quot;Gửi bản đã ký&quot;.
-          </li>
-        </Box>
-        <Alert severity="warning" variant="outlined">
-          Không sửa nội dung file: BHOME chỉ nhận đúng bản đã phát cộng chữ ký số.
-        </Alert>
-        {signature.expiresAt && (
-          <Typography variant="caption" color="text.secondary">
-            Hạn tải lên: {formatInstant(signature.expiresAt)}
-          </Typography>
-        )}
-        <Box
-          role="button"
-          tabIndex={0}
-          aria-label="Chọn hoặc kéo thả file PDF đã ký"
-          onClick={() => !busy && input.current?.click()}
-          onKeyDown={(e) => {
-            if (!busy && (e.key === 'Enter' || e.key === ' ')) {
-              e.preventDefault();
-              input.current?.click();
-            }
-          }}
-          onDragOver={(e) => {
-            e.preventDefault();
-            setOver(true);
-          }}
-          onDragLeave={() => setOver(false)}
-          onDrop={drop}
-          sx={{
-            border: '2px dashed',
-            borderColor: over ? 'primary.main' : 'divider',
-            borderRadius: 2,
-            p: 3,
-            textAlign: 'center',
-            cursor: busy ? 'default' : 'pointer',
-            bgcolor: over ? 'action.hover' : undefined,
-          }}
-        >
-          <Typography sx={{ fontWeight: 600 }}>
-            {file
-              ? `${file.name} · ${Math.max(1, Math.round(file.size / 1024))} KB`
-              : 'Kéo thả file PDF đã ký vào đây'}
-          </Typography>
-          <Typography variant="caption" color="text.secondary">
-            {file ? 'Bấm để đổi file' : 'hoặc bấm để chọn file · PDF, tối đa 10 MB'}
-          </Typography>
-          <ValidatedInput
-            ref={input}
-            hidden
-            type="file"
-            accept="application/pdf,.pdf"
-            data-testid="signed-pdf-input"
-            onChange={(e) => {
-              choose(e.target.files?.[0]);
-              e.target.value = '';
-            }}
-          />
-        </Box>
-        <Alert severity="info">
-          Kiểm tra tên bên cấp và tính toàn vẹn PDF chưa bao gồm xác minh đầy đủ chuỗi tin cậy CA
-          hoặc trạng thái thu hồi chứng thư.
-        </Alert>
-        {(file || failed >= 0) && (
-          <Box>
-            <Typography variant="subtitle2">BHOME kiểm tra khi bạn gửi</Typography>
-            <Box component="ul" sx={{ m: 0, pl: 0, listStyle: 'none' }}>
-              {UPLOAD_CHECKS.map((label, i) => (
-                <Typography
-                  component="li"
-                  variant="body2"
-                  key={label}
-                  color={i === failed ? 'error' : undefined}
-                >
-                  {i === failed ? '✕' : failed >= 0 && i < failed ? '✓' : '•'} {label}
-                </Typography>
-              ))}
-            </Box>
-          </Box>
-        )}
-        {!!error && <Alert severity="error">{error}</Alert>}
-        <Box>
-          <Button variant="contained" disabled={busy || !file} onClick={() => void upload()}>
-            {busy ? 'Đang kiểm tra…' : 'Gửi bản đã ký'}
-          </Button>
-        </Box>
-      </Stack>
-    </Paper>
-  );
-}
-
-// OTP (optional for the Owner): box on the page, drawn signature, consent, then the emailed code.
 function OtpStart({
   signing,
   contractId,

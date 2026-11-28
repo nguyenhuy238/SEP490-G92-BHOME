@@ -203,8 +203,8 @@ public sealed class PropertyApiTests(AuthenticationDatabaseFixture fixture) : IC
         var other = await Workspace(); using var otherOwner = other.Owner;
         Assert.Equal(HttpStatusCode.NotFound, (await owner.PostAsJsonAsync("/api/v1/rooms",
             new RoomWrite(Guid.NewGuid(), "BAD", null, 1))).StatusCode);
-        Assert.Equal(HttpStatusCode.OK, (await owner.PostAsJsonAsync("/api/v1/capture/rooms",
-            new RoomInput(other.Location.Id, "NO-TYPE"))).StatusCode);
+        Assert.Equal(HttpStatusCode.Created, (await owner.PostAsJsonAsync("/api/v1/rooms",
+            new RoomWrite(other.Location.Id, "NO-TYPE", null, 1))).StatusCode);
         Assert.Equal(HttpStatusCode.Conflict, (await owner.PutAsJsonAsync($"/api/v1/rooms/{w.Room.Id}",
             new RoomWrite(w.Location.Id, "A-01", "1", 2, RoomStatus.Occupied, 1))).StatusCode);
         Assert.Equal(HttpStatusCode.Conflict, (await owner.PutAsJsonAsync($"/api/v1/locations/{w.Location.Id}",

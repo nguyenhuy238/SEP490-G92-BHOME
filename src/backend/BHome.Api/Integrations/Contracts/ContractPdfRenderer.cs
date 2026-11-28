@@ -120,7 +120,7 @@ internal sealed class ContractPdfRenderer(IOptions<ContractPdfOptions> options)
                      (ContractSignatureSlots.Tenant, "ĐẠI DIỆN BÊN B (NGƯỜI THUÊ)", Margin + column + Gap)
                  })
         {
-            layout.Add(new Paragraph(title + "\nKý số từ xa qua Viettel MySign").SetFontSize(10)
+            layout.Add(new Paragraph(title + "\nKý điện tử").SetFontSize(10)
                 .SetTextAlignment(TextAlignment.CENTER).SetFixedPosition(page, left, headingBottom, column));
             var box = new iText.Kernel.Pdf.Canvas.PdfCanvas(pdf.GetPage(page));
             box.SaveState().SetLineWidth(0.5f).SetStrokeColorGray(0.75f).SetLineDash(3, 3)

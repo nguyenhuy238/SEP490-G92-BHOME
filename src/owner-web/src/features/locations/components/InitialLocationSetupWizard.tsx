@@ -476,7 +476,9 @@ export function InitialLocationSetupWizard({
     try {
       const [sourceTypes, sourceRooms, sourceTemplates, sourcePolicies, billingPage] =
         await Promise.all([
-          setupApi.roomTypes(sourceLocationId, 1),
+          setupApi.request<{ id: string; status: string; data: { name: string; description?: string; defaults: { capacity: number; area: number; amenities: string[]; referenceRent?: number | string } } }[]>(
+            '/api/v1/locations/' + encodeURIComponent(sourceLocationId) + '/room-defaults',
+          ),
           (async () => {
             const first = await setupApi.rooms(sourceLocationId, 1);
             const items = [...first.items];
@@ -506,12 +508,12 @@ export function InitialLocationSetupWizard({
             `/api/v1/billing-policies?locationId=${encodeURIComponent(sourceLocationId)}&page=1&pageSize=100`,
           ),
         ]);
-      const mappedTypes: RoomTypeDraft[] = sourceTypes.items.map((item) => ({
+      const mappedTypes: RoomTypeDraft[] = sourceTypes.map((item) => ({
         id: item.id,
-        name: item.name,
+        name: item.data.name,
         code: `RT-${item.id.slice(0, 6).toUpperCase()}`,
-        area: Number(item.areaM2 ?? 1),
-        maxOccupants: item.defaultCapacity,
+        area: Number(item.data.defaults.area ?? 1),
+        maxOccupants: item.data.defaults.capacity,
         defaultRate: copyGroups.includes('RENT')
           ? Number(
               billingPage.items.find(
@@ -519,9 +521,9 @@ export function InitialLocationSetupWizard({
               )?.rate ?? 0,
             )
           : 0,
-        description: item.description ?? '',
-        facilities: item.amenities,
-        status: item.isActive ? 'ACTIVE' : 'DRAFT',
+        description: item.data.description ?? '',
+        facilities: item.data.defaults.amenities,
+        status: item.status === 'Archived' ? 'DRAFT' : 'ACTIVE',
       }));
       if (copyGroups.includes('ROOM_TYPES')) {
         setRoomTypes(mappedTypes);

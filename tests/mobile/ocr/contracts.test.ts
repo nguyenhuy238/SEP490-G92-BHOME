@@ -82,16 +82,11 @@ describe('signing certificate selection and transport', () => {
     expect(canUseCertificate({ ...certificate, validTo: 'invalid' })).toBe(false);
     expect(canUseCertificate({ ...certificate, usable: false })).toBe(false);
   });
-  it('uses the existing owner-scoped lock endpoint and never sends subscriber data', async () => {
-    const request = vi.fn<ContractRequest>().mockResolvedValue(undefined);
-    const api = contractClient(request);
-    await api.lockCertificate(id, true);
-    expect(request).toHaveBeenCalledWith(`/api/v1/digital-signing/certificates/${id}/lock`, {
-      method: 'POST',
-      body: JSON.stringify({ locked: true }),
-    });
-    expect(() => api.lockCertificate('../another', false)).toThrow();
-    expect(request).toHaveBeenCalledTimes(1);
+  it('does not expose retired certificate endpoints', () => {
+    const api = contractClient(vi.fn<ContractRequest>());
+    expect(api).not.toHaveProperty('certificates');
+    expect(api).not.toHaveProperty('declareCertificate');
+    expect(api).not.toHaveProperty('lockCertificate');
   });
   it('explains missing approved templates and invalid certificates without reporting success', () => {
     expect(contractError({ status: 503, code: 'contract_template_not_configured' })).toContain(

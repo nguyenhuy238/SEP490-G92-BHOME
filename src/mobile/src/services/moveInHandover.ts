@@ -4,7 +4,6 @@ import {
   type HandoverAsset,
   type HandoverReading,
 } from '../../../../packages/client-core/src/contracts';
-import { NO_CERTIFICATE, type SigningOtpView } from '../../../../packages/client-core/src/signing';
 import type { MoveInInventory, MoveInInventoryItem } from './moveInInventory';
 
 export type MoveInDraftStatus =
@@ -203,16 +202,6 @@ export function moveInHandover(api: ContractClient) {
     submit: (id: string, version: number, key: string) => mutate(id, '/submit', { version }, key),
     resubmit: (id: string, version: number, key: string) =>
       mutate(id, '/resubmit', { version }, key),
-    startTenantSigning: (id: string, version: number, key: string) =>
-      mutate(
-        id,
-        '/tenant-sign',
-        {
-          version,
-          signature: { certificateId: NO_CERTIFICATE, method: 'OTP', usePicture: true },
-        },
-        key,
-      ),
     signTenantInSession: (
       id: string,
       version: number,
@@ -221,21 +210,8 @@ export function moveInHandover(api: ContractClient) {
       key: string,
     ) =>
       mutate(id, '/tenant-sign/session', { version, consent: true, ink, note: note.trim() }, key),
-    tenantSigningOtp: (id: string, signal?: AbortSignal) =>
-      request<SigningOtpView>(`${endpoint(id)}/tenant-sign/otp`, { signal }),
-    resendTenantSigningOtp: (id: string) =>
-      request<SigningOtpView>(`${endpoint(id)}/tenant-sign/otp/resend`, { method: 'POST' }),
-    confirmTenantSigning: (id: string, version: number, code: string, note: string, key: string) =>
-      mutate(
-        id,
-        '/tenant-sign/otp/confirm',
-        { version, code: code.trim(), note: note.trim() },
-        key,
-      ),
     requestCorrection: (id: string, version: number, reason: string, key: string) =>
       mutate(id, '/requests', { version, reason: reason.trim() }, key),
-    confirm: (id: string, version: number, note: string, key: string) =>
-      mutate(id, '/tenant-confirmation', { version, note: note.trim() }, key),
   };
 }
 

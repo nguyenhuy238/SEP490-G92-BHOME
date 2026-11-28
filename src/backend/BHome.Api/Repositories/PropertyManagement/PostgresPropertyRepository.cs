@@ -149,11 +149,6 @@ internal sealed class PostgresPropertyRepository(BHomePersistenceContext db) : I
             ? compact.Set<BHome.Domain.PropertyManagement.Room>().AsNoTracking().AnyAsync(r => r.LocationId == locationId && r.Status != RoomStatus.Unavailable, token)
             : AnyAsync<Room>(r => r.LocationId == locationId && r.Status != RoomStatus.Unavailable, token);
 
-    public Task<bool> RoomNumberExistsAsync(Guid locationId, string number, CancellationToken token) =>
-        db is Compact24DbContext compact
-            ? compact.Set<BHome.Domain.PropertyManagement.Room>().AsNoTracking().AnyAsync(r => r.LocationId == locationId && r.RoomNumber.ToUpper() == number.ToUpper(), token)
-            : AnyAsync<Room>(r => r.LocationId == locationId && r.RoomNumber.ToUpper() == number.ToUpper(), token);
-
     public Task<bool> ActiveRoomTypeExistsAsync(Guid locationId, Guid roomTypeId, CancellationToken token) =>
         db is Compact24DbContext compact
             ? compact.Database.SqlQuery<bool>($"""
@@ -163,28 +158,6 @@ internal sealed class PostgresPropertyRepository(BHomePersistenceContext db) : I
                       AND COALESCE((rt->>'isActive')::bool,false)) AS "Value"
                 """).SingleAsync(token)
             : AnyAsync<RoomType>(r => r.Id == roomTypeId && r.LocationId == locationId && r.IsActive, token);
-
-    public Task<bool> RoomTypeNameExistsAsync(Guid locationId, Guid exceptId, string name, CancellationToken token) =>
-        db is Compact24DbContext compact
-            ? compact.Database.SqlQuery<bool>($"""
-                SELECT EXISTS(SELECT 1 FROM locations l
-                    CROSS JOIN LATERAL jsonb_array_elements(COALESCE(l.operating_settings->'legacyRoomTypes','[]'::jsonb)) rt
-                    WHERE (rt->>'locationId')::uuid={locationId} AND (rt->>'id')::uuid<>{exceptId}
-                      AND upper(COALESCE(rt->>'name',''))={name.ToUpper()}) AS "Value"
-                """).SingleAsync(token)
-            : AnyAsync<RoomType>(r => r.LocationId == locationId && r.Id != exceptId && r.Name.ToUpper() == name.ToUpper(), token);
-
-    public Task<bool> RoomTypeInUseAsync(Guid locationId, Guid roomTypeId, CancellationToken token) =>
-        db is Compact24DbContext compact
-            ? compact.Database.SqlQuery<bool>($"""
-                SELECT EXISTS(SELECT 1 FROM rooms r
-                    LEFT JOIN LATERAL (
-                        SELECT h.value->'state' AS data FROM jsonb_array_elements(r.history) WITH ORDINALITY h(value,n)
-                        WHERE h.value->>'recordType'='Room' ORDER BY h.n DESC LIMIT 1
-                    ) s ON TRUE
-                    WHERE r.location_id={locationId} AND (s.data->>'roomTypeId')::uuid={roomTypeId}) AS "Value"
-                """).SingleAsync(token)
-            : AnyAsync<Room>(r => r.LocationId == locationId && r.RoomTypeId == roomTypeId, token);
 
     public Task<bool> HasOpenAssetWorkAsync(Guid assetId, CancellationToken token) =>
         db is Compact24DbContext compact

@@ -67,8 +67,6 @@ public sealed class ContractsController(ContractService service, ContractExpiryS
     public Task<IReadOnlyList<MoveOutHistoryView>> MoveHistory(Guid id, CancellationToken t) => service.MoveOutHistoryAsync(id, t);
     [HttpGet("{id:guid}/move-out/inspection-preparation"), Authorize(Roles = Roles.Owner + "," + Roles.Staff)]
     public Task<InspectionPreparation> InspectionPreparation(Guid id, CancellationToken t) => service.InspectionPreparationAsync(id, t);
-    [HttpPost("{id:guid}/move-out/legacy-baseline-exception"), Authorize(Roles = Roles.Owner)]
-    public Task<ContractId> LegacyBaseline(Guid id, LegacyHandoverException x, CancellationToken t) => service.ApproveLegacyHandoverAsync(id, x, Key(), t);
     [HttpPost("{id:guid}/move-out/tenant-feedback"), Authorize(Roles = Roles.Tenant)]
     public Task<MoveOutView> InspectionFeedback(Guid id, InspectionTenantFeedback x, CancellationToken t) => service.RespondToInspectionAsync(id, x, Key(), t);
     [HttpGet("{id:guid}/move-out/inspections")]
@@ -129,21 +127,6 @@ public sealed class ContractsController(ContractService service, ContractExpiryS
     public Task<ContractView> ConfirmSigningOtp(Guid id, SigningOtpConfirmation x, CancellationToken t) => service.ConfirmSigningAsync(id, x, Key(), t);
     [HttpPost("{id:guid}/signing/otp/resend"), Authorize(Roles = Roles.Owner + "," + Roles.Tenant)]
     public Task<SigningOtpView> ResendSigningOtp(Guid id, CancellationToken t) => service.ResendSigningCodeAsync(id, t);
-    // UPLOAD_PROOF (Owner): download the exact PDF to sign with MySign, then upload the signed file.
-    [HttpGet("{id:guid}/signing/upload-source"), Authorize(Roles = Roles.Owner)]
-    public async Task<IActionResult> SigningUploadSource(Guid id, CancellationToken t)
-    {
-        using var buffer = new MemoryStream();
-        var name = await service.CopyUploadSourceAsync(id, buffer, t);
-        return File(buffer.ToArray(), "application/pdf", name);
-    }
-    [HttpPut("{id:guid}/signing/upload"), Authorize(Roles = Roles.Owner), Consumes("application/pdf"), RequestSizeLimit(11 * 1024 * 1024)]
-    public async Task<ContractView> UploadSignedDocument(Guid id, CancellationToken t)
-    {
-        using var upload = new MemoryStream();
-        await Request.Body.CopyToAsync(upload, t);
-        return await service.UploadSignedDocumentAsync(id, upload.ToArray(), Key(), t);
-    }
     [HttpPost("{id:guid}/signing/sync"), Authorize(Roles = Roles.Owner + "," + Roles.Tenant)]
     public Task<ContractView> Sync(Guid id, CancellationToken t) => service.SyncSigningAsync(id, t);
     [HttpPost("{id:guid}/signing/recover"), Authorize(Roles = Roles.Owner + "," + Roles.Tenant)]
@@ -191,27 +174,11 @@ public sealed class ContractsController(ContractService service, ContractExpiryS
     public Task<HandoverDraftView> DecideHandoverDraftCorrection(Guid id, Guid requestId,
         HandoverDraftCorrectionDecision input, CancellationToken t)
         => service.DecideHandoverDraftChangeAsync(id, requestId, input, Key(), t);
-    [HttpPost("{id:guid}/handover/draft/tenant-confirmation"), Authorize(Roles = Roles.Tenant)]
-    public Task<HandoverDraftView> ConfirmHandoverDraft(Guid id, HandoverDraftTenantConfirmation input, CancellationToken t)
-        => service.ConfirmHandoverDraftAsync(id, input, Key(), t);
-    [HttpPost("{id:guid}/handover/draft/tenant-sign"), Authorize(Roles = Roles.Tenant)]
-    public Task<HandoverDraftView> RequestTenantHandoverSigning(Guid id, HandoverDraftTenantSign input, CancellationToken t)
-        => service.RequestTenantHandoverSigningAsync(id, input, Key(), t);
     [HttpPost("{id:guid}/handover/draft/tenant-sign/session"), Authorize(Roles = Roles.Tenant),
      RequestSizeLimit(512 * 1024)]
     public Task<HandoverDraftView> SignTenantHandoverInSession(Guid id,
         HandoverDraftTenantSessionSign input, CancellationToken t)
         => service.SignTenantHandoverInSessionAsync(id, input, Key(), t);
-    [HttpGet("{id:guid}/handover/draft/tenant-sign/otp"), Authorize(Roles = Roles.Tenant)]
-    public Task<SigningOtpView> TenantHandoverSigningOtp(Guid id, CancellationToken t)
-        => service.TenantHandoverSigningOtpAsync(id, t);
-    [HttpPost("{id:guid}/handover/draft/tenant-sign/otp/resend"), Authorize(Roles = Roles.Tenant)]
-    public Task<SigningOtpView> ResendTenantHandoverSigningOtp(Guid id, CancellationToken t)
-        => service.ResendTenantHandoverSigningOtpAsync(id, t);
-    [HttpPost("{id:guid}/handover/draft/tenant-sign/otp/confirm"), Authorize(Roles = Roles.Tenant)]
-    public Task<HandoverDraftView> ConfirmTenantHandoverSigning(Guid id,
-        HandoverDraftTenantSignOtp input, CancellationToken t)
-        => service.ConfirmTenantHandoverSigningAsync(id, input, Key(), t);
     [HttpGet("{id:guid}/handover/history")]
     public Task<IReadOnlyList<HandoverHistoryView>> HandoverHistory(Guid id, CancellationToken t) => service.HandoverHistoryAsync(id, t);
     [HttpGet("{id:guid}/handover/choices"), Authorize(Roles = Roles.Staff)]
@@ -233,8 +200,6 @@ public sealed class ContractsController(ContractService service, ContractExpiryS
     { var buffer = new MemoryStream(); await service.CopyAssetChangeEvidenceAsync(id, eventId, evidenceId, buffer, t); buffer.Position = 0; return File(buffer, "application/octet-stream"); }
     [HttpGet("{id:guid}/handover/documents")]
     public Task<IReadOnlyList<ContractDocumentView>> HandoverDocuments(Guid id, CancellationToken t) => service.HandoverDocumentsAsync(id, t);
-    [HttpPost("{id:guid}/handover/documents/retry"), Authorize(Roles = Roles.Owner + "," + Roles.Staff)]
-    public Task<ContractDocumentView> RetryHandoverDocument(Guid id, CancellationToken t) => service.RetryMoveInDocumentAsync(id, Key(), t);
     [HttpGet("{id:guid}/handover/documents/{documentId:guid}")]
     public async Task<IActionResult> HandoverDocument(Guid id, Guid documentId, CancellationToken t)
     { var buffer = new MemoryStream(); await service.CopyHandoverDocumentAsync(id, documentId, buffer, t); buffer.Position = 0; return File(buffer, "application/pdf", "bien-ban-ban-giao.pdf"); }

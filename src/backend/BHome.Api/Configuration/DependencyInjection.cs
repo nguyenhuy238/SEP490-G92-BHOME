@@ -166,7 +166,6 @@ public static class DependencyInjection
         services.AddHttpClient<BHome.Infrastructure.Modules.Notifications.ExpoPushSender>()
             .ConfigurePrimaryHttpMessageHandler(() => new HttpClientHandler { AllowAutoRedirect = false });
         services.AddScoped<BHome.Infrastructure.Modules.Notifications.NotificationEmailContent>();
-        services.AddScoped<BHome.Application.Notifications.IDevelopmentEmailTest, BHome.Infrastructure.Modules.Notifications.DevelopmentEmailTest>();
         services.AddScoped<BHome.Application.Notifications.INotificationChannelProvider, BHome.Infrastructure.Modules.Notifications.NotificationChannelProvider>();
         services.AddScoped<BHome.Infrastructure.Modules.Notifications.NotificationChannelWorker>();
         services.AddHostedService<BHome.Infrastructure.Modules.Notifications.NotificationAutomationWorker>();
@@ -223,7 +222,6 @@ public static class DependencyInjection
             BHome.Infrastructure.Modules.PropertyManagement.Persistence.SetupWorkspaceStore>();
         // Staff-scoped synthetic onboarding fixture; its service rejects every
         // environment other than explicitly enabled loopback Development.
-        services.AddScoped<BHome.Infrastructure.Development.DevelopmentOnboardingSeedService>();
         services.AddScoped<BHome.Application.PropertyManagement.ISharedConfigurationStore,
             BHome.Infrastructure.Modules.PropertyManagement.Persistence.SharedConfigurationStore>();
         services.AddScoped<BHome.Application.PropertyManagement.ISharedDataValidator, BHome.Application.PropertyManagement.SharedDataValidator>();
@@ -359,11 +357,10 @@ public static class DependencyInjection
         services.AddOptions<BHome.Infrastructure.Contracts.ContractWorkflowOptions>().Bind(configuration.GetSection("ContractWorkflow")).ValidateOnStart();
         services.AddSingleton<IValidateOptions<BHome.Infrastructure.Contracts.ContractWorkflowOptions>, BHome.Infrastructure.Contracts.ContractWorkflowOptionsValidator>();
         services.AddSingleton<BHome.Application.Contracts.IContractWorkflowMode, BHome.Infrastructure.Contracts.ContractWorkflowMode>();
-        services.AddScoped<BHome.Infrastructure.Contracts.ViettelMySignContractAdapter>();
         services.AddScoped<BHome.Application.Contracts.IContractSigningDocumentSource, BHome.Infrastructure.Contracts.ContractSigningDocumentSource>();
         services.AddScoped<BHome.Infrastructure.Contracts.HoldingDepositRenderer>();
         services.AddScoped<BHome.Infrastructure.Contracts.DevelopmentContractSigningAdapter>();
-        // Signing methods (OTP email / Viettel MySign / Development simulation) are chosen per signature by the router.
+        // Signing methods (OTP email / session / Development simulation) are chosen per signature by the router.
         services.AddOptions<BHome.Application.Contracts.ContractSigningOptions>().Bind(configuration.GetSection(BHome.Application.Contracts.ContractSigningOptions.Section))
             .Validate(o => o.Otp.IsValid(), "ContractSigning:Otp is outside supported bounds.").ValidateOnStart();
         services.AddSingleton<BHome.Application.Contracts.IContractSigningMethods, BHome.Infrastructure.Contracts.ContractSigningMethods>();
@@ -372,8 +369,6 @@ public static class DependencyInjection
         services.AddSingleton<BHome.Infrastructure.Contracts.SigningOtpChallenges>();
         services.AddScoped<BHome.Infrastructure.Contracts.SigningPartyDirectory>();
         services.AddScoped<BHome.Infrastructure.Contracts.OtpContractSigningAdapter>();
-        services.AddSingleton<BHome.Infrastructure.Contracts.UploadedSignatureVerifier>();
-        services.AddScoped<BHome.Infrastructure.Contracts.UploadProofContractSigningAdapter>();
         services.AddScoped<BHome.Application.Contracts.IContractSigningNotifier, BHome.Infrastructure.Contracts.ContractSigningNotifier>();
         services.AddScoped<BHome.Application.Contracts.IContractSigningProvider, BHome.Infrastructure.Contracts.ContractSigningRouter>();
         services.AddScoped<BHome.Application.Contracts.IContractWorkflowRepository, BHome.Infrastructure.Contracts.ContractWorkflowRepository>();
@@ -396,17 +391,12 @@ public static class DependencyInjection
         services.AddHostedService<BHome.Infrastructure.Contracts.ContractFileCleanup>();
         BHome.Api.Configuration.ApiFoundation.AddSigningIdentity(services);
         BHome.DigitalSigning.Infrastructure.DependencyInjection.AddContractPdfSigning(services);
-        // Viettel account: configuration (DigitalSigning:Viettel), overridden by what the Owner saved on the settings screen.
-        services.AddScoped<BHome.DigitalSigning.Application.ISigningSettingsStore, BHome.Infrastructure.Contracts.CompactSigningSettingsStore>();
         services.AddScoped<BHome.DigitalSigning.Application.ISignatureImageStore, BHome.Infrastructure.Contracts.CompactSignatureImageStore>();
-        BHome.DigitalSigning.Infrastructure.DependencyInjection.AddContractSigningAccounts(services, configuration);
+        services.AddScoped<BHome.DigitalSigning.Application.Services.SignatureImageService>();
         services.AddSingleton<BHome.Infrastructure.Contracts.SignaturePictureGenerator>();
         services.AddSingleton<BHome.Application.Contracts.IHandoverSignatureInkRenderer>(
             provider => provider.GetRequiredService<BHome.Infrastructure.Contracts.SignaturePictureGenerator>());
         services.AddSingleton<BHome.Application.Contracts.IContractSigningPages, BHome.Infrastructure.Contracts.ContractSigningPages>();
-        BHome.DigitalSigning.MySign.MySignRegistration.AddMySignClient(services);
-        services.AddScoped<BHome.DigitalSigning.Application.ISigningCertificateStore, BHome.Infrastructure.Contracts.ContractSigningCertificateStore>();
-        services.AddScoped<BHome.DigitalSigning.Application.Services.SigningCertificateService>();
         services.AddOptions<OcrOptions>().Bind(configuration.GetSection("Ocr"))
             .Validate(o => o.IsValid(), "OCR limits or profiles are outside supported bounds.").ValidateOnStart();
         services.AddSingleton(provider => provider.GetRequiredService<IOptions<OcrOptions>>().Value);

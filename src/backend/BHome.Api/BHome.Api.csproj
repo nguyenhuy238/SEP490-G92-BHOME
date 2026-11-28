@@ -36,7 +36,6 @@
     <PackageReference Include="QRCoder" Version="1.8.1" />
     <PackageReference Include="MailKit" Version="4.17.0" />
     <ProjectReference Include="../../digital-signing/BHome.DigitalSigning.Infrastructure/BHome.DigitalSigning.Infrastructure.csproj" />
-    <ProjectReference Include="../../digital-signing/BHome.DigitalSigning.MySign/BHome.DigitalSigning.MySign.csproj" />
     <PackageReference Include="Microsoft.AspNetCore.Authentication.JwtBearer" Version="8.0.32" />
     <PackageReference Include="Microsoft.AspNetCore.Identity.EntityFrameworkCore" Version="8.0.32" />
     <PackageReference Include="Npgsql.EntityFrameworkCore.PostgreSQL" Version="8.0.11" />

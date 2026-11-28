@@ -5,7 +5,6 @@ using System.Text;
 using System.Text.Json;
 using BHome.Application.Ocr;
 using BHome.Application.IdentityAccess;
-using BHome.Application.Locations;
 using BHome.Application.Storage;
 using BHome.Domain.Billing;
 using BHome.Domain.IdentityAccess;
@@ -27,7 +26,6 @@ namespace BHome.Infrastructure.Ocr;
 
 internal sealed class CaptureRepository(BHomePersistenceContext db, CaptureScope scope, IIdentityProtection protection,
     IObjectStorage storage, UserManager<User> users, TimeProvider clock,
-    ILocationAssignments locationAssignments,
     BHome.Application.PropertyManagement.IPropertyRepository properties,
     BHome.Application.Contracts.IContractRepository contracts) : ICaptureRepository
 {
@@ -175,16 +173,6 @@ internal sealed class CaptureRepository(BHomePersistenceContext db, CaptureScope
         }
         return errors.Count == 0 ? new CaptureValidationException("staff_account_invalid") :
             new BHome.Application.Common.InputValidationException(errors.ToDictionary(x => x.Key, x => x.Value.ToArray()));
-    }
-    public async Task<IdResult> AssignStaffAsync(AssignmentInput x, CancellationToken t)
-    {
-        if (x.EffectiveFrom == default || x.EffectiveTo is null || x.EffectiveTo < x.EffectiveFrom)
-            throw new CaptureValidationException("invalid_assignment_dates");
-        var result = await locationAssignments.CreateAssignmentAsync(Actor, x.LocationId, x.StaffUserId,
-            x.EffectiveFrom, x.EffectiveTo.Value, t);
-        if (result.Status == CreateAssignmentStatus.DateRangeOverlaps) throw new CaptureConflictException("duplicate_or_conflicting_record");
-        if (result.Status != CreateAssignmentStatus.Created || result.Assignment is null) throw new OcrAccessException();
-        await Audit("StaffAssigned", "Assignment", result.Assignment.Id, t); await Save(t); return new(result.Assignment.Id);
     }
     public async Task<IdResult> CreateResidentAsync(ResidentInput x, CancellationToken t)
     {

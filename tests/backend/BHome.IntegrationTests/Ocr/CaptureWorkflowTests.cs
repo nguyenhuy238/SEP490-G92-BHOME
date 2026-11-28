@@ -59,7 +59,7 @@ public sealed class CaptureWorkflowTests : IClassFixture<CaptureFixture>
             (UtilityType.Electricity, MeterDisplay.Digital, OcrDocumentKind.DigitalElectricity) };
         foreach (var (utility, display, expected) in profiles)
         {
-            var room = await Create(w.Owner, "rooms", new RoomInput(w.Location, "SYN-" + expected, 2));
+            var room = await CreateRoom(w.Owner, w.Location, "SYN-" + expected);
             var meter = await Create(w.Owner, "meters", new MeterInput(room, "SYN-" + expected, utility, display, 2, Today.AddDays(-10)));
             var task = await Create(w.Owner, "meter-tasks", new MeterTaskInput(meter, ReadingPurpose.Initial, Today, null));
             using var image = new ByteArrayContent(Image()); image.Headers.ContentType = new("image/png");
@@ -182,7 +182,7 @@ public sealed class CaptureWorkflowTests : IClassFixture<CaptureFixture>
         Cv2.Resize(frame, resized, new((int)(frame.Width * ratio), (int)(frame.Height * ratio)), 0, 0, InterpolationFlags.Area);
         var bytes = resized.ImEncode(".jpg", new ImageEncodingParam(ImwriteFlags.JpegQuality, 85));
         var w = await Workspace();
-        var room = await Create(w.Owner, "rooms", new RoomInput(w.Location, "SYN-REAL-MODEL", 2));
+        var room = await CreateRoom(w.Owner, w.Location, "SYN-REAL-MODEL");
         var meter = await Create(w.Owner, "meters", new MeterInput(room, "SYN-REAL-WATER", UtilityType.Water, MeterDisplay.Mechanical, 2, Today.AddDays(-10)));
         var task = await Create(w.Owner, "meter-tasks", new MeterTaskInput(meter, ReadingPurpose.Initial, Today, null));
         var options = new OcrOptions
@@ -336,6 +336,12 @@ public sealed class CaptureWorkflowTests : IClassFixture<CaptureFixture>
         client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", session!.AccessToken);
         return (client, id);
     }
+    private static async Task<Guid> CreateRoom(HttpClient c, Guid location, string number)
+    {
+        var response = await c.PostAsJsonAsync("/api/v1/rooms", new { locationId = location, roomNumber = number, capacity = 2 });
+        response.EnsureSuccessStatusCode();
+        return (await response.Content.ReadFromJsonAsync<IdResult>())!.Id;
+    }
     private static async Task<Guid> Create(HttpClient c, string path, object data)
     {
         var response = await c.PostAsJsonAsync("/api/v1/capture/" + path, data);
@@ -346,8 +352,8 @@ public sealed class CaptureWorkflowTests : IClassFixture<CaptureFixture>
     {
         var owner = await User(Roles.Owner); var staff = await User(Roles.Staff);
         var location = await Create(owner.Client, "locations", new LocationInput("Synthetic Location", "Synthetic Address"));
-        var room = await Create(owner.Client, "rooms", new RoomInput(location, "TEST-01", 2));
-        await Create(owner.Client, "assignments", new AssignmentInput(location, staff.UserId, Today.AddDays(-20), Today.AddDays(365)));
+        var room = await CreateRoom(owner.Client, location, "TEST-01");
+        (await owner.Client.PostAsJsonAsync("/api/v1/staff-location-assignments", new { locationId = location, staffUserId = staff.UserId, startDate = Today.AddDays(-20), endDate = Today.AddDays(365) })).EnsureSuccessStatusCode();
         var resident = await Create(staff.Client, "residents", new ResidentInput(room, "Hồ sơ kiểm thử", ResidentType.CoOccupant, $"capture-{Guid.NewGuid():N}@example.invalid"));
         await using (var scope = fixture.Factory.Services.CreateAsyncScope())
         {

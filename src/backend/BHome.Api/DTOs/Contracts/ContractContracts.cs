@@ -111,7 +111,6 @@ public sealed record FinalInspectionView(Guid Id, int Version, Guid BaselineCont
     HandoverSnapshot Observed, Guid StaffId, DateTimeOffset InspectedAt, string? OwnerDecision, string? OwnerReason, DateTimeOffset? ReviewedAt);
 public sealed record InspectionPreparation(HandoverView? Baseline, Guid? BaselineContractId, IReadOnlyList<HandoverReading> FinalReadings, bool OtherTenantsRemain,
     HandoverInventory? Inventory = null, HandoverAsset[]? InspectionGroups = null, string? LegacyExceptionReason = null, bool LegacyExceptionRequired = false);
-public sealed record LegacyHandoverException(string Reason);
 public sealed record SettlementInput([Required, StringLength(2000, MinimumLength = 1)] string Decision, string? ExpectedReference = null);
 public sealed record CompletionInput(DateOnly ActualEndDate, string? RoomDisposition = null);
 public sealed record SigningRecoveryInput([Required, StringLength(200, MinimumLength = 1)] string ProviderReference);
@@ -196,9 +195,6 @@ public interface IContractSigningProvider
         => throw ContractException.Conflict("signing_confirmation_not_supported");
     // OTP only: where the code was sent and until when it is valid, for the confirmation screen.
     Task<SigningOtpView?> ChallengeAsync(ContractSigning signature, CancellationToken t) => Task.FromResult<SigningOtpView?>(null);
-    // UPLOAD_PROOF only: the issued PDF signed outside BHOME. Throws ContractException (400) naming the failed check.
-    Task<SigningOutcome> CompleteUploadAsync(ContractSigning signature, byte[] issuedPdf, byte[] uploadedPdf, CancellationToken t)
-        => throw ContractException.Conflict("signing_upload_not_supported");
 }
 public interface IContractDocumentRenderer
 {

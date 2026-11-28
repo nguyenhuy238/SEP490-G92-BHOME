@@ -7,11 +7,6 @@ using BHome.Domain.TenantContracts;
 
 namespace BHome.Application.Billing;
 
-public sealed record BillingScheduleWrite([property: JsonRequired] Guid LocationId, [property: JsonRequired] BillingRateDate RateDate,
-    [property: JsonRequired] BillingRentSource RentSource, [property: JsonRequired] PartialMonthRule PartialMonth,
-    [property: JsonRequired] VndRounding Rounding, [property: JsonRequired] int DraftDay, [property: JsonRequired] int DraftMonthOffset,
-    [property: JsonRequired] int FinalDay, [property: JsonRequired] int FinalMonthOffset,
-    [property: JsonRequired] int DueDay, [property: JsonRequired] int DueMonthOffset, [property: JsonRequired] int ExpectedVersion);
 // Legacy client argument retained for compatibility; the reference contract is always
 // selected by the server under the room billing lock.
 public sealed record DraftInvoiceInput(Guid RoomId, DateOnly BillingPeriod, Guid? RepresentativeContractId = null);

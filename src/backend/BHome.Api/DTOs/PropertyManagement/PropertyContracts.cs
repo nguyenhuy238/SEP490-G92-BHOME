@@ -51,20 +51,6 @@ public sealed record RoomWrite(Guid LocationId,
     [Range(1, 32767)] int Capacity, RoomStatus Status = RoomStatus.Available,
     int Version = 0, [StringLength(500)] string Reason = "",
     [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] Guid? RoomTypeId = null);
-public sealed record RoomTypeWrite(Guid LocationId,
-    [Required, StringLength(150, MinimumLength = 2)] string Name,
-    [StringLength(1000)] string? Description,
-    [Range(1, 32767)] int DefaultCapacity,
-    [Range(typeof(decimal), "0.01", "999999.99")] decimal? AreaM2,
-    [MaxLength(100)] string[] Amenities,
-    bool IsActive = true, int Version = 0, [StringLength(500)] string Reason = "");
-public sealed record BulkRoomItem(
-    [Required, StringLength(50)] string RoomNumber,
-    [StringLength(30)] string? Floor,
-    Guid RoomTypeId,
-    [Range(1, 32767)] int? Capacity = null);
-public sealed record BulkRoomWrite(Guid LocationId, [MinLength(1), MaxLength(200)] BulkRoomItem[] Rooms,
-    [StringLength(500)] string Reason = "");
 public sealed record AssetWrite(Guid LocationId, Guid? RoomId, [StringLength(200)] string? CommonArea,
     [StringLength(80)] string? Code, [Required, StringLength(150)] string Name,
     [Required, StringLength(80)] string Category, [Required, StringLength(1000)] string Condition,
@@ -90,8 +76,6 @@ public sealed record LocationDto(Guid Id, string Name, string Address, bool IsAc
 public sealed record RoomDto(Guid Id, Guid LocationId, string RoomNumber,
     string? Floor, int Capacity, RoomStatus Status, int Version,
     [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] Guid? RoomTypeId = null);
-public sealed record RoomTypeDto(Guid Id, Guid LocationId, string Name, string? Description,
-    int DefaultCapacity, decimal? AreaM2, string[] Amenities, bool IsActive, int Version);
 public sealed record BulkRoomResult(IReadOnlyList<RoomDto> Rooms);
 public sealed record AssetDto(Guid Id, Guid LocationId, Guid? RoomId, string? CommonArea,
     string? Code, string Name, string Category, string Condition, AssetStatus Status, int Version,
@@ -126,10 +110,7 @@ public interface IPropertyRepository
     Task<bool> AnyAsync<T>(Expression<Func<T, bool>> predicate, CancellationToken token) where T : class;
     Task<bool> RoomInLocationAsync(Guid roomId, Guid locationId, CancellationToken token);
     Task<bool> LocationHasOperationalRoomsAsync(Guid locationId, CancellationToken token);
-    Task<bool> RoomNumberExistsAsync(Guid locationId, string number, CancellationToken token);
     Task<bool> ActiveRoomTypeExistsAsync(Guid locationId, Guid roomTypeId, CancellationToken token);
-    Task<bool> RoomTypeNameExistsAsync(Guid locationId, Guid exceptId, string name, CancellationToken token);
-    Task<bool> RoomTypeInUseAsync(Guid locationId, Guid roomTypeId, CancellationToken token);
     Task<bool> HasOpenAssetWorkAsync(Guid assetId, CancellationToken token);
     Task<bool> HasBindingPriceContractAsync(Guid roomId, CancellationToken token);
     Task<IReadOnlyList<Contract>> BindingPriceContractsAsync(Guid roomId, CancellationToken token);

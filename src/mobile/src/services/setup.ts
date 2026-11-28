@@ -20,7 +20,9 @@ export async function loadSetup(api: SetupApi, signal?: AbortSignal) {
 }
 
 export const setupWritePath = (resource: string) =>
-  resource === 'locations' || resource === 'rooms'
+  resource === 'assignments'
+    ? '/api/v1/staff-location-assignments'
+    : resource === 'locations' || resource === 'rooms'
     ? `/api/v1/${resource}`
     : `/api/v1/capture/${resource}`;
 

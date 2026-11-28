@@ -1,6 +1,5 @@
 import { TextField } from '../../../../components/common/ValidatedForm';
 import { useRef, useState } from 'react';
-import { useQuery } from '@tanstack/react-query';
 import {
   Alert,
   Button,
@@ -16,27 +15,19 @@ import {
 } from '@mui/material';
 import {
   actionPayload,
-  canUseCertificate,
   contractError,
   type ContractAction,
   type ContractClient,
   type ContractView,
   type mutationKeys,
 } from '../../../../../../../packages/client-core/src/contracts';
-import { signingPayload } from '../../../../../../../packages/client-core/src/signing';
-import { useSigningApi } from '../../hooks/useContractsApi';
 import { MoneyField } from '../../../../components/common/MoneyField';
-import {
-  SignaturePlacementPicker,
-  type PlacementChoice,
-} from '../signing/SignaturePlacementPicker';
 
 export function ContractActionDialog({
   api,
   contract,
   action,
   keys,
-  actorId,
   onClose,
   onSuccess,
   onConflict,
@@ -55,32 +46,11 @@ export function ContractActionDialog({
     [error, setError] = useState('');
   const lock = useRef(false);
   const [conflicted, setConflicted] = useState(false);
-  const signing = useSigningApi(api);
-  const remoteSigning = action.operation === 'signing' && !contract.isDevelopmentDemo;
-  const [choice, setChoice] = useState<PlacementChoice>({ placement: null, usePicture: true });
-  const certs = useQuery({
-    staleTime: 0,
-    queryKey: ['contract-certificates', actorId],
-    queryFn: ({ signal }) => api.certificates(signal),
-    enabled: action.operation === 'signing' && !contract.isDevelopmentDemo,
-  });
   async function submit() {
     if (lock.current || conflicted) return;
-    if (
-      action.operation === 'signing' &&
-      !contract.isDevelopmentDemo &&
-      (certs.isFetching ||
-        !!certs.error ||
-        !certs.data?.some((c) => c.id === values.certificateId && canUseCertificate(c)))
-    ) {
-      setError('Chọn chứng thư còn hiệu lực, không khóa và tải lại trước khi ký.');
-      return;
-    }
     let body;
     try {
-      body = remoteSigning
-        ? signingPayload(values.certificateId ?? '', choice.placement, choice.usePicture)
-        : actionPayload(action, values, contract);
+      body = actionPayload(action, values, contract);
     } catch (e) {
       setError((e as Error).message);
       return;
@@ -118,7 +88,7 @@ export function ContractActionDialog({
     <Dialog
       open
       fullWidth
-      maxWidth={remoteSigning ? 'md' : 'sm'}
+      maxWidth="sm"
       onClose={() => !busy && onClose()}
     >
       <DialogTitle>{action.label}</DialogTitle>
@@ -129,29 +99,7 @@ export function ContractActionDialog({
           </Typography>
           {!!action.warning && <Alert severity="warning">{action.warning}</Alert>}
           {action.fields.map((field) =>
-            field.type === 'certificate' ? (
-              <TextField
-                key={field.name}
-                select
-                label={field.label}
-                value={values[field.name] ?? ''}
-                disabled={busy || certs.isFetching}
-                onChange={(e) =>
-                  setValues((v) => ({
-                    ...v,
-                    [field.name]: e.target.value,
-                    humanConfirmed:
-                      action.operation === 'holding-cancellation' ? '' : v.humanConfirmed,
-                  }))
-                }
-              >
-                {(certs.data ?? []).filter(canUseCertificate).map((c) => (
-                  <MenuItem key={c.id} value={c.id}>
-                    {c.provider} · {c.serialNumber} · {c.providerUserIdHint}
-                  </MenuItem>
-                ))}
-              </TextField>
-            ) : field.type === 'money' ? (
+            field.type === 'money' ? (
               <MoneyField
                 key={field.name}
                 label={field.label}
@@ -228,39 +176,6 @@ export function ContractActionDialog({
               />
             </>
           )}
-          {action.operation === 'signing' &&
-            !contract.isDevelopmentDemo &&
-            !certs.isFetching &&
-            !certs.error &&
-            !certs.data?.some(canUseCertificate) && (
-              <Alert severity="info">Chưa có chứng thư dùng được cho yêu cầu ký này.</Alert>
-            )}
-          {certs.error && (
-            <Alert severity="error">
-              {contractError(certs.error)}
-              <Button onClick={() => void certs.refetch()}>Tải lại chứng thư</Button>
-            </Alert>
-          )}
-          {action.operation === 'signing' && !contract.isDevelopmentDemo && !certs.error && (
-            <Button
-              disabled={busy || certs.isFetching}
-              onClick={() => {
-                setValues({});
-                void certs.refetch();
-              }}
-            >
-              Tải lại chứng thư
-            </Button>
-          )}
-          {remoteSigning && (
-            <SignaturePlacementPicker
-              signing={signing}
-              contractId={contract.id}
-              value={choice}
-              onChange={setChoice}
-              disabled={busy}
-            />
-          )}
           {!!error && <Alert severity="error">{error}</Alert>}
           {conflicted && (
             <Alert severity="warning">
@@ -275,15 +190,7 @@ export function ContractActionDialog({
         </Button>
         <Button
           variant="contained"
-          disabled={
-            busy ||
-            conflicted ||
-            (action.operation === 'signing' &&
-              !contract.isDevelopmentDemo &&
-              (certs.isFetching ||
-                !!certs.error ||
-                !certs.data?.some((c) => c.id === values.certificateId && canUseCertificate(c))))
-          }
+          disabled={busy || conflicted}
           onClick={() => void submit()}
         >
           {busy ? 'Đang xử lý…' : 'Xác nhận'}

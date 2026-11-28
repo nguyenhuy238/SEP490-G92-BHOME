@@ -43,6 +43,7 @@ public sealed partial class Compact24OwnerSetupTests
         using var host = Host().WithWebHostBuilder(builder =>
         {
             builder.UseEnvironment("Development");
+            builder.ConfigureServices(services => services.AddScoped<DevelopmentOnboardingSeedService>());
             builder.ConfigureAppConfiguration((_, config) => config.AddInMemoryCollection(
                 new Dictionary<string, string?>
                 {
@@ -59,7 +60,8 @@ public sealed partial class Compact24OwnerSetupTests
         using var owner = await Client(w.Owner, host);
         using var staff = await Client(w.Staff, host);
         using var tenant = await Client(w.Tenant, host);
-        const string endpoint = "/api/v1/development/onboarding-seed";
+        Assert.Equal(HttpStatusCode.NotFound, (await owner.PostAsJsonAsync("/api/v1/development/onboarding-seed", new { locationId = w.Location, roomId = w.Room })).StatusCode);
+        const string endpoint = "/test-probe/onboarding-seed";
         var key = Guid.NewGuid();
 
         async Task<HttpResponseMessage> Send(HttpClient client, Guid location, Guid room, Guid requestKey)

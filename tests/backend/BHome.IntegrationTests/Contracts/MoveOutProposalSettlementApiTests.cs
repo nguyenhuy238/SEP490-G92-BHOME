@@ -352,7 +352,7 @@ public sealed partial class ContractLifecycleApiTests
             h.ContractId == contractId && h.Action == "Completed").ToArrayAsync());
     }
     private async Task ConfigureMoveOutBillingAsync(Workspace w) =>
-        _ = await Success<BillingSchedule>(await w.Owner.Client.PutAsJsonAsync("/api/v1/billing-schedules",
+        _ = await Success<BillingSchedule>(await w.Owner.Client.PutAsJsonAsync("/test-probe/billing-schedules",
             new BillingScheduleWrite(w.Location, BillingRateDate.PeriodStart, BillingRentSource.RepresentativeContract,
                 PartialMonthRule.FullMonth, VndRounding.AwayFromZero, 1, 0, 1, 1, 10, 1, 0)));
 }

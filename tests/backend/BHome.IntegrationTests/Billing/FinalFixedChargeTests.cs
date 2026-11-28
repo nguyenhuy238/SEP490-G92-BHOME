@@ -101,7 +101,7 @@ public sealed partial class InvoiceApiTests
             await db.SaveChangesAsync();
         }
         await ConfirmUtilities(w);
-        await Success<BillingSchedule>(await w.Owner.Client.PutAsJsonAsync("/api/v1/billing-schedules", Schedule(w) with { PartialMonth = PartialMonthRule.OccupiedCalendarDays }));
+        await Success<BillingSchedule>(await w.Owner.Client.PutAsJsonAsync("/test-probe/billing-schedules", Schedule(w) with { PartialMonth = PartialMonthRule.OccupiedCalendarDays }));
         var draft = await Success<InvoiceView>(await w.Owner.Client.PostAsJsonAsync("/api/v1/invoices/drafts", new DraftInvoiceInput(w.Room, w.Period)));
         Assert.Empty(draft.MissingInputs);
         var rent = Assert.Single(draft.Lines, l => l.ChargeCode == "RENT");
@@ -219,7 +219,7 @@ public sealed partial class InvoiceApiTests
         }
         var missingSchedule = Assert.Single(await Success<FinalFixedChargePreview[]>(await w.Owner.Client.GetAsync(route)));
         Assert.Null(missingSchedule.Amount); Assert.Contains("billing_schedule_required", missingSchedule.MissingInputs);
-        var schedule = await Success<BillingSchedule>(await w.Owner.Client.PutAsJsonAsync("/api/v1/billing-schedules", Schedule(w) with
+        var schedule = await Success<BillingSchedule>(await w.Owner.Client.PutAsJsonAsync("/test-probe/billing-schedules", Schedule(w) with
         { PartialMonth = fullMonth ? PartialMonthRule.FullMonth : PartialMonthRule.OccupiedCalendarDays }));
         await using (var scope = fixture.Factory.Services.CreateAsyncScope())
         {

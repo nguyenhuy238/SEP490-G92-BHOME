@@ -281,7 +281,8 @@ public sealed partial class Compact24OwnerSetupTests
         Assert.Equal("Confirmed", (await Read<HandoverView>(await HandoverPost(staff, id, "handover/staff-confirmation", decision, key))).Status);
         await Read<HandoverView>(await HandoverPost(staff, id, "handover/staff-confirmation", decision, key));
         var document = Assert.Single((await tenant.GetFromJsonAsync<ContractDocumentView[]>(route + "/documents"))!);
-        var retried = await Read<ContractDocumentView>(await HandoverPost(owner, id, "handover/documents/retry", new { })); Assert.Equal(document.Id, retried.Id);
+        Assert.Equal(HttpStatusCode.NotFound, (await HandoverPost(owner, id, "handover/documents/retry", new { })).StatusCode);
+        Assert.Equal(document.Id, Assert.Single((await tenant.GetFromJsonAsync<ContractDocumentView[]>(route + "/documents"))!).Id);
         await using var check = host.Services.CreateAsyncScope(); var db = check.ServiceProvider.GetRequiredService<Compact24ArchiveContext>();
         var stored = await db.Set<ContractDocumentFile>().SingleAsync(f => f.Id == document.Id);
         files.Corrupt(stored.ObjectKey);
@@ -484,7 +485,8 @@ public sealed partial class Compact24OwnerSetupTests
             KeyEvidenceIds: [await HandoverPhoto(staff, id, true)]);
         Assert.Equal(HttpStatusCode.BadRequest, (await HandoverPost(staff, id, "move-out/inspection",
             input with { RoomChecks = null })).StatusCode);
-        Assert.Equal(HttpStatusCode.Forbidden, (await HandoverPost(staff, id, "move-out/legacy-baseline-exception", new LegacyHandoverException("Not permitted"))).StatusCode);
+        Assert.Equal(HttpStatusCode.NotFound, (await HandoverPost(staff, id, "move-out/legacy-baseline-exception", new { reason = "Not permitted" })).StatusCode);
+        Assert.Equal(HttpStatusCode.NotFound, (await HandoverPost(owner, id, "move-out/legacy-baseline-exception", new { reason = "Retired" })).StatusCode);
         await Read<MoveOutView>(await HandoverPost(staff, id, "move-out/inspection", input));
         var inspection = Assert.Single((await tenant.GetFromJsonAsync<FinalInspectionView[]>(route + "/move-out/inspections"))!);
         if (textOnly) Assert.Null(inspection.Baseline!.Assets[0].HandedOverQuantity); else Assert.Null(inspection.Baseline);

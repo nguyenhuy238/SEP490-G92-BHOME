@@ -187,24 +187,6 @@ public sealed class PropertyServiceTests
         repository.Received(1).Add(Arg.Is<Room>(room => room.RoomTypeId == roomType.Id));
     }
 
-    [Fact]
-    public async Task BulkRoomCreationRejectsDuplicateNumbersBeforeAddingRows()
-    {
-        var (service, repository) = Create(Roles.Owner, BeforeVietnamMidnight);
-        repository.WithLocationLockAsync(Arg.Any<Guid>(), Arg.Any<Func<Task<BulkRoomResult>>>(), default)
-            .Returns(call => call.Arg<Func<Task<BulkRoomResult>>>()());
-        var location = new Location("Synthetic") { Address = "Synthetic Address", IsActive = true };
-        var locationId = location.Id;
-        var typeId = Guid.NewGuid();
-        repository.FindAsync<Location>(locationId, default).Returns(location);
-
-        var error = await Assert.ThrowsAsync<PropertyException>(() => service.BulkCreateRoomsAsync(
-            new BulkRoomWrite(locationId,
-            [new("A-01", "1", typeId), new(" a-01 ", "1", typeId)]), default));
-
-        Assert.Equal("duplicate_room_number", error.Code);
-        repository.DidNotReceive().Add(Arg.Any<Room>());
-    }
     [Theory]
     [InlineData(0, 20)]
     [InlineData(1, 101)]

@@ -17,7 +17,7 @@ public sealed partial class PaymentLedgerTests
         var w = await Setup(sharedContract: true);
         using var owner = await Client(w.Owner);
         using var tenant = await Client(w.Tenants[0]);
-        (await owner.PutAsJsonAsync("/api/v1/billing-schedules", Calendar(w))).EnsureSuccessStatusCode();
+        (await owner.PutAsJsonAsync("/test-probe/billing-schedules", Calendar(w))).EnsureSuccessStatusCode();
         var input = new DraftInvoiceInput(w.Room, CurrentPeriod());
         Assert.Equal(HttpStatusCode.Forbidden, (await tenant.PostAsJsonAsync("/api/v1/invoices/drafts", input)).StatusCode);
         var first = await owner.PostAsJsonAsync("/api/v1/invoices/drafts", input); first.EnsureSuccessStatusCode();
@@ -36,7 +36,7 @@ public sealed partial class PaymentLedgerTests
     public async Task ManualDraftRequiresExplicitSavedSelectionForMultipleEligibleContracts()
     {
         var w = await Setup(); using var owner = await Client(w.Owner);
-        (await owner.PutAsJsonAsync("/api/v1/billing-schedules", Calendar(w))).EnsureSuccessStatusCode();
+        (await owner.PutAsJsonAsync("/test-probe/billing-schedules", Calendar(w))).EnsureSuccessStatusCode();
         var input = new DraftInvoiceInput(w.Room, CurrentPeriod());
         var created = await owner.PostAsJsonAsync("/api/v1/invoices/drafts", input); created.EnsureSuccessStatusCode();
         var invoice = (await created.Content.ReadFromJsonAsync<InvoiceView>())!;

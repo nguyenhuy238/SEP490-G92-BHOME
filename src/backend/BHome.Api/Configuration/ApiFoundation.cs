@@ -65,10 +65,6 @@ public static class ApiFoundation
                         Window = TimeSpan.FromSeconds(context.RequestServices.GetRequiredService<IOptions<AuthRateLimitOptions>>().Value.WindowSeconds),
                         QueueLimit = 0
                     }));
-            options.AddPolicy("EmailTest", context => context.User.IsInRole("Owner")
-                ? RateLimitPartition.GetFixedWindowLimiter("development-email-test", _ => new FixedWindowRateLimiterOptions
-                { PermitLimit = 1, Window = TimeSpan.FromMinutes(10), QueueLimit = 0 })
-                : RateLimitPartition.GetNoLimiter("email-test-unauthorized"));
             options.AddPolicy("Auth", context => RateLimitPartition.GetFixedWindowLimiter(
                 context.Connection.RemoteIpAddress?.ToString() ?? "unknown",
                 _ => new FixedWindowRateLimiterOptions

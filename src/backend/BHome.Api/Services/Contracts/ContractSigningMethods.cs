@@ -21,10 +21,7 @@ public static class ContractPaymentModes
     }
 }
 
-// The ways a contract party can sign. OTP is the in-app electronic signature (drawn or uploaded picture, a one-time
-// code sent by email, BHOME seals the PDF); VIETTEL_MYSIGN is remote digital signing with the signer's own certificate;
-// SIMULATED is the labelled Development/Testing simulation. SRS v1.3 keeps certified digital signature outside the
-// MVP, so MySign stays available behind a switch instead of being removed.
+// Active methods and historical signature labels.
 public static class SigningMethods
 {
     public const string Otp = "OTP";
@@ -42,18 +39,15 @@ public static class SigningMethods
     public static bool IsOtp(string? method) => string.Equals(method?.Trim(), Otp, StringComparison.OrdinalIgnoreCase);
     public static bool IsOwnerSession(string? method) => string.Equals(method?.Trim(), OwnerSession, StringComparison.OrdinalIgnoreCase);
     public static bool IsTenantSession(string? method) => string.Equals(method?.Trim(), TenantSession, StringComparison.OrdinalIgnoreCase);
-    public static bool IsUploadProof(string? method) => string.Equals(method?.Trim(), UploadProof, StringComparison.OrdinalIgnoreCase);
 }
 
-// Configuration section "ContractSigning". Defaults keep the previous behaviour (MySign on, OTP off) so existing
-// deployments and tests are unchanged until a deployment opts in.
+// Configuration section "ContractSigning".
 public sealed class ContractSigningOptions
 {
     public const string Section = "ContractSigning";
     public SigningMethodSwitches Methods { get; set; } = new();
     public OtpSigningOptions Otp { get; set; } = new();
     public SigningSealOptions Seal { get; set; } = new();
-    public UploadProofOptions UploadProof { get; set; } = new();
     public SigningInvitationLinkOptions InvitationLink { get; set; } = new();
 }
 
@@ -83,19 +77,7 @@ public sealed class SigningInvitationLinkOptions
 
 public sealed class SigningMethodSwitches
 {
-    public bool Otp { get; set; }
-    public bool ViettelMySign { get; set; } = true;
-    public bool UploadProof { get; set; }
-}
-
-// AllowedIssuers: words that must appear in the signing certificate's issuer (default "Viettel"). BHOME does not hold
-// the CA root bundle, so this is an issuer check, not a full chain validation (documented limitation).
-public sealed class UploadProofOptions
-{
-    public string[]? AllowedIssuers { get; set; }
-    public int MaxMegabytes { get; set; } = 10;
-    public int HoursToSign { get; set; } = 72;
-    public IReadOnlyList<string> Issuers => AllowedIssuers is { Length: > 0 } ? AllowedIssuers : ["Viettel"];
+    public bool Otp { get; set; } = true;
 }
 
 // Proposed values (decisions D5/D6 of BHOME_OTP_Signing_Plan.md); SRS v1.3 does not fix them, so they are configuration.

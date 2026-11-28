@@ -30,7 +30,7 @@ public sealed class GmailSmokeFactAttribute : FactAttribute
 public sealed class GmailSmtpSmokeTests(Compact24Fixture fixture, ITestOutputHelper output) : IClassFixture<Compact24Fixture>
 {
     [GmailSmokeFact]
-    public async Task OneDevelopmentOwnerTestMessageIsAcceptedAndOptionallyFoundInTestInbox()
+    public async Task OneOfflineTestMessageIsAcceptedAndOptionallyFoundInTestInbox()
     {
         var secrets = new ConfigurationBuilder().AddUserSecrets("bhome-api-development").Build();
         var settings = new Dictionary<string, string?>
@@ -57,18 +57,10 @@ public sealed class GmailSmtpSmokeTests(Compact24Fixture fixture, ITestOutputHel
             b.UseEnvironment("Development"); b.ConfigureAppConfiguration((_, c) => c.AddInMemoryCollection(settings));
         });
         await using var scope = host.Services.CreateAsyncScope();
-        const string password = "Synthetic!Smoke-Owner-827";
-        var owner = await WorkflowTestUsers.CreateAsync(scope.ServiceProvider,
-            new User { Id = Guid.NewGuid(), UserName = Guid.NewGuid().ToString("N"), Email = Guid.NewGuid().ToString("N") + "@example.invalid", EmailConfirmed = true }, "Owner", password);
-        using var client = host.CreateClient();
-        (await client.GetAsync("/health/live")).EnsureSuccessStatusCode();
-        (await client.GetAsync("/health/ready")).EnsureSuccessStatusCode();
-        var login = await client.PostAsJsonAsync("/api/v1/auth/login", new { email = owner.Email, password }); login.EnsureSuccessStatusCode();
-        client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", (await login.Content.ReadFromJsonAsync<LoginResult>())!.AccessToken);
-        var response = await client.PostAsync("/api/v1/notifications/email-test", null); response.EnsureSuccessStatusCode();
-        var result = (await response.Content.ReadFromJsonAsync<EmailTestResult>())!;
-        Assert.Equal("SmtpAccepted", result.Status); Assert.False(result.InboxDeliveryConfirmed);
-        Assert.StartsWith("smtp-accepted:", result.ProviderReference);
+        var provider = scope.ServiceProvider.GetRequiredService<INotificationChannelProvider>();
+        var reference = await provider.SendAsync(new("offline-smtp-test/" + Guid.NewGuid().ToString("N"), "EMAIL",
+            settings["Email:TestRecipient"]!, "TEST", "BHOME SMTP smoke", "Synthetic smoke test; no business data."), default);
+        Assert.StartsWith("smtp-accepted:", reference);
         output.WriteLine("SMTP_ACCEPTED: Gmail accepted one Development test message; no business-channel worker was enabled.");
         if (Environment.GetEnvironmentVariable("BHOME_GMAIL_VERIFY_INBOX") != "1")
         { output.WriteLine("INBOX_NOT_VERIFIED: opt in with BHOME_GMAIL_VERIFY_INBOX=1 to check only this test Message-Id through read-only IMAP."); return; }
@@ -80,7 +72,7 @@ public sealed class GmailSmtpSmokeTests(Compact24Fixture fixture, ITestOutputHel
             await imap.ConnectAsync("imap.gmail.com", 993, SecureSocketOptions.SslOnConnect, deadline.Token);
             await imap.AuthenticateAsync(settings["Email:Username"]!, settings["Email:AppPassword"]!.Replace(" ", ""), deadline.Token);
             await imap.Inbox.OpenAsync(FolderAccess.ReadOnly, deadline.Token);
-            var id = result.ProviderReference["smtp-accepted:".Length..] + "@bhome.notification";
+            var id = reference["smtp-accepted:".Length..] + "@bhome.notification";
             for (var attempt = 0; attempt < 10; attempt++)
             {
                 var found = await imap.Inbox.SearchAsync(SearchQuery.HeaderContains("Message-Id", id), deadline.Token);

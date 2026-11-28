@@ -104,15 +104,6 @@ public sealed partial class ContractService
         if (file.Kind is not (ContractFileKind.MoveInReport or ContractFileKind.AssetChangeReport or ContractFileKind.MoveOutReport)) throw ContractException.Missing();
         await CopyVerifiedFile(file, output, t);
     }
-    public Task<ContractDocumentView> RetryMoveInDocumentAsync(Guid id, Guid key, CancellationToken t) => Mutate(id, [Roles.Owner, Roles.Staff], async c =>
-    {
-        var h = await Handovers.GetAsync(id, t) ?? throw ContractException.Missing();
-        if (h.Status != ContractHandoverStatus.Confirmed) throw ContractException.Conflict("confirmed_handover_required");
-        var result = await PersistReport(c, "MoveIn", h.Version, Snapshot(h), null, h.StaffConfirmedBy!.Value, h.TenantConfirmedAt, h.StaffConfirmedAt!.Value, [], [], t);
-        if (await Replay(key, "handover-document", id, t) is null) Remember(key, "handover-document", id, result.Id);
-        return result;
-    }, t);
-
     public async Task<byte[]> HandoverDraftPdfAsync(Guid id, CancellationToken token)
     {
         var view = await GetHandoverDraftAsync(id, token);

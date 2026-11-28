@@ -17,8 +17,6 @@ internal sealed class ContractSigningMethods(IOptions<ContractSigningOptions> op
             var methods = new List<string>();
             methods.Add(SigningMethods.OwnerSession);
             if (options.Value.Methods.Otp) methods.Add(SigningMethods.Otp);
-            if (options.Value.Methods.ViettelMySign) methods.Add(SigningMethods.ViettelMySign);
-            if (options.Value.Methods.UploadProof) methods.Add(SigningMethods.UploadProof);
             return methods;
         }
     }
@@ -27,46 +25,39 @@ internal sealed class ContractSigningMethods(IOptions<ContractSigningOptions> op
 }
 
 // Chooses the provider per signature instead of one provider for the whole deployment: an OTP signature is marked by
-// its credential, every other one goes to the simulation or Viettel MySign as before.
+// its credential; only explicit demo credentials may reach simulation.
 internal sealed class ContractSigningRouter(IContractSigningMethods methods, IContractWorkflowMode mode, IServiceProvider services)
     : IContractSigningProvider
 {
     internal const string OtpCredential = "BHOME-OTP";
     internal const string OwnerSessionCredential = "BHOME-OWNER-SESSION";
     internal const string TenantSessionCredential = "BHOME-TENANT-SESSION";
-    internal const string UploadCredential = "BHOME-UPLOAD-PROOF";
 
     private IContractSigningProvider Otp() => methods.IsEnabled(SigningMethods.Otp)
         ? services.GetRequiredService<OtpContractSigningAdapter>()
         : throw new ContractException(503, "signing_method_disabled");
 
-    private IContractSigningProvider Upload() => methods.IsEnabled(SigningMethods.UploadProof)
-        ? services.GetRequiredService<UploadProofContractSigningAdapter>()
+    private IContractSigningProvider Simulation() => mode.SimulatedSigningEnabled
+        ? services.GetRequiredService<DevelopmentContractSigningAdapter>()
         : throw new ContractException(503, "signing_method_disabled");
-
-    private IContractSigningProvider Certificate()
-    {
-        if (mode.SimulatedSigningEnabled) return services.GetRequiredService<DevelopmentContractSigningAdapter>();
-        return methods.IsEnabled(SigningMethods.ViettelMySign)
-            ? services.GetRequiredService<ViettelMySignContractAdapter>()
-            : throw new ContractException(503, "signing_method_disabled");
-    }
 
     private IContractSigningProvider For(ContractSigning signature) => signature.CredentialId switch
     {
         OtpCredential => Otp(),
         OwnerSessionCredential => services.GetRequiredService<OtpContractSigningAdapter>(),
         TenantSessionCredential => services.GetRequiredService<OtpContractSigningAdapter>(),
-        UploadCredential => Upload(),
-        _ => Certificate()
+        "SIMULATED-NO-CERTIFICATE" => Simulation(),
+        _ => throw ContractException.Conflict("signing_method_retired")
     };
     private IContractSigningProvider For(SigningAppearance appearance) =>
         SigningMethods.IsOwnerSession(appearance.Method) || SigningMethods.IsTenantSession(appearance.Method)
             ? services.GetRequiredService<OtpContractSigningAdapter>() :
-        SigningMethods.IsOtp(appearance.Method) ? Otp() : SigningMethods.IsUploadProof(appearance.Method) ? Upload() : Certificate();
+        SigningMethods.IsOtp(appearance.Method) ? Otp() :
+        appearance.Method is null || string.Equals(appearance.Method, SigningMethods.Simulated, StringComparison.OrdinalIgnoreCase)
+            ? Simulation() : throw ContractException.Conflict("signing_method_retired");
 
     public Task<SigningPreparation> PrepareAsync(ContractDocument document, Guid certificateId, byte[]? previousPdf, CancellationToken t)
-        => Certificate().PrepareAsync(document, certificateId, previousPdf, t);
+        => Simulation().PrepareAsync(document, certificateId, previousPdf, t);
 
     public Task<SigningPreparation> PrepareAsync(ContractDocument document, Guid certificateId, byte[]? previousPdf,
         SigningAppearance appearance, CancellationToken t) => For(appearance).PrepareAsync(document, certificateId, previousPdf, appearance, t);
@@ -77,7 +68,7 @@ internal sealed class ContractSigningRouter(IContractSigningMethods methods, ICo
         if (methods.IsEnabled(SigningMethods.OwnerSession) || methods.IsEnabled(SigningMethods.Otp))
             return services.GetRequiredService<OtpContractSigningAdapter>().SignerAsync(t);
         if (methods.Enabled.Count == 0) return Task.FromResult((false, ""));
-        return Certificate().SignerAsync(t);
+        return Simulation().SignerAsync(t);
     }
 
     public Task<string> RequestAsync(ContractSigning signature, CancellationToken t) => For(signature).RequestAsync(signature, t);
@@ -86,6 +77,4 @@ internal sealed class ContractSigningRouter(IContractSigningMethods methods, ICo
         => For(signature).ConfirmAsync(signature, preparedPdf, code, t);
     public Task<SigningOtpView> ResendAsync(ContractSigning signature, CancellationToken t) => For(signature).ResendAsync(signature, t);
     public Task<SigningOtpView?> ChallengeAsync(ContractSigning signature, CancellationToken t) => For(signature).ChallengeAsync(signature, t);
-    public Task<SigningOutcome> CompleteUploadAsync(ContractSigning signature, byte[] issuedPdf, byte[] uploadedPdf, CancellationToken t)
-        => For(signature).CompleteUploadAsync(signature, issuedPdf, uploadedPdf, t);
 }

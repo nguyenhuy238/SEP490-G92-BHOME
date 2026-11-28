@@ -44,31 +44,3 @@ public sealed class ContractSignatureImageController(SignatureImageService image
     public async Task<IActionResult> Remove(CancellationToken t) { await images.RemoveAsync(t); return NoContent(); }
 }
 public sealed record GenerateSignatureInput([Required, StringLength(60, MinimumLength = 2)] string Name);
-
-// "Tài khoản ký số Viettel MySign" of the deployment, saved by the Owner over the server configuration.
-// The client secret is stored encrypted (AES-256-GCM) and only its last four characters are ever returned.
-[ApiController, Route("api/v1/digital-signing/settings/viettel"), Authorize(Roles = Roles.Owner)]
-[ResponseCache(NoStore = true, Location = ResponseCacheLocation.None), RequestSizeLimit(8192), ViettelMySignEnabled]
-public sealed class ContractSigningSettingsController(SigningAccountService accounts, ISigningProvider provider) : ControllerBase
-{
-    [HttpGet] public Task<ViettelSettingsView> View(CancellationToken t) => accounts.ViewAsync(t);
-
-    [HttpPut]
-    public async Task<ViettelSettingsView> Save(SaveViettelSettings x, CancellationToken t)
-    {
-        try { return await accounts.SaveAsync(x, t); }
-        catch (InvalidOperationException e) when (e.Message.Contains("SecretKey", StringComparison.Ordinal))
-        {
-            throw new DigitalSigningException(DigitalSigningError.ProviderUnavailable,
-                "Máy chủ chưa cấu hình DigitalSigning__SecretKey (ít nhất 32 ký tự) nên chưa lưu được client secret.");
-        }
-    }
-
-    // "Dùng cấu hình của máy chủ": forget the saved values.
-    [HttpDelete] public Task<ViettelSettingsView> Reset(CancellationToken t) => accounts.ResetAsync(t);
-
-    // Logs in to Viettel as one subscriber; signs nothing and sends nothing to the phone.
-    [HttpPost("test")]
-    public Task<ConnectionTestResult> Test(SigningConnectionTestInput x, CancellationToken t) => accounts.TestAsync(provider, x.UserId, t);
-}
-public sealed record SigningConnectionTestInput([StringLength(100)] string? UserId);

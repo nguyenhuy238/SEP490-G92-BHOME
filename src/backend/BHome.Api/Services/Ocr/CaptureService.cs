@@ -19,10 +19,6 @@ public sealed class CaptureService(ICaptureRepository repository, ICurrentUser u
     public Task<IdResult> CreateStaffAsync(StaffInput x, CancellationToken t) => Allow([Roles.Owner], () => repository.CreateStaffAsync(x, t));
     public Task<IdResult> CreateLocationAsync(LocationInput x, CancellationToken t) => Allow([Roles.Owner], async () =>
         new IdResult((await properties.SaveLocationAsync(null, new(x.Name, x.Address), t)).Id));
-    public Task<IdResult> CreateRoomAsync(RoomInput x, CancellationToken t) => Allow([Roles.Owner], async () =>
-        new IdResult((await properties.SaveRoomAsync(null,
-            new(x.LocationId, x.RoomNumber, null, x.Capacity), t)).Id));
-    public Task<IdResult> AssignStaffAsync(AssignmentInput x, CancellationToken t) => Allow([Roles.Owner], () => repository.AssignStaffAsync(x, t));
     public Task<IdResult> CreateResidentAsync(ResidentInput x, CancellationToken t) => Allow(Operators, () => repository.CreateResidentAsync(x, t));
     public Task<IReadOnlyList<ResidentSummary>> ResidentsAsync(Guid id, CancellationToken t) => Allow(Operators, () => repository.ResidentsAsync(id, t));
     public Task<IdentityConfirmationResult> ConfirmIdentityAsync(Guid id, IdentityConfirmation x, CancellationToken t)

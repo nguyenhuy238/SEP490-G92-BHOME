@@ -16,8 +16,6 @@ public sealed class EmailOptions
     public string FromName { get; set; } = "BHOME";
     public bool UseStartTls { get; set; } = true;
     public int TimeoutSeconds { get; set; } = 30;
-    public bool TestEnabled { get; set; }
-    public string TestRecipient { get; set; } = "";
     // Legacy configuration keys are ignored in every environment. Existing private
     // profiles must not restrict recipients or prevent startup after pulling updates.
     public string[] AllowedRecipients { get; set; } = [];
@@ -41,8 +39,7 @@ public sealed class EmailOptions
     public bool Valid(string environment = "Production") => !Enabled || (!string.IsNullOrWhiteSpace(Host) && Port is >= 1 and <= 65535 &&
         ValidAddress(FromEmail) &&
         (LocalCapture || DeliveryMode == "Smtp" && ValidAddress(Username) && !string.IsNullOrWhiteSpace(AppPassword) && UseStartTls) &&
-        TimeoutSeconds is >= 1 and <= 45 && !FromName.Contains('\r') && !FromName.Contains('\n') &&
-        (!TestEnabled || ValidAddress(TestRecipient)));
+        TimeoutSeconds is >= 1 and <= 45 && !FromName.Contains('\r') && !FromName.Contains('\n'));
 
     public static bool ValidAddress(string? value) => !string.IsNullOrWhiteSpace(value) && value.Length <= 254 &&
         !value.Contains('\r') && !value.Contains('\n') && MailAddress.TryCreate(value, out var address) &&

@@ -157,7 +157,7 @@ public sealed partial class PaymentLedgerTests
         var path = $"/api/v1/billing-automation/preview?locationId={w.Location}&period={CurrentPeriod():yyyy-MM-dd}";
         Assert.Equal(HttpStatusCode.Forbidden, (await tenant.GetAsync(path)).StatusCode);
         var missing = (await owner.GetFromJsonAsync<BillingAutomationPreview>(path))!; Assert.Empty(missing.Phases);
-        (await owner.PutAsJsonAsync("/api/v1/billing-schedules", Calendar(w))).EnsureSuccessStatusCode();
+        (await owner.PutAsJsonAsync("/test-probe/billing-schedules", Calendar(w))).EnsureSuccessStatusCode();
         (await owner.PutAsJsonAsync("/api/v1/billing-automation", Plan(w))).EnsureSuccessStatusCode();
         var preview = (await owner.GetFromJsonAsync<BillingAutomationPreview>(path))!;
         Assert.True(preview.DeveloperActionsEnabled); Assert.Equal("Asia/Ho_Chi_Minh", preview.TimeZone);
@@ -170,12 +170,12 @@ public sealed partial class PaymentLedgerTests
     public async Task AutomationCalendarIsOwnerAuthorizedEffectiveDatedAndImmutable()
     {
         var w = await Setup(); using var owner = await Client(w.Owner); using var tenant = await Client(w.Tenants[0]); using var staff = await Client(w.Staff);
-        (await owner.PutAsJsonAsync("/api/v1/billing-schedules", Calendar(w))).EnsureSuccessStatusCode();
+        (await owner.PutAsJsonAsync("/test-probe/billing-schedules", Calendar(w))).EnsureSuccessStatusCode();
         Assert.Equal(HttpStatusCode.Forbidden, (await staff.PutAsJsonAsync("/api/v1/billing-automation", Plan(w))).StatusCode);
         Assert.Equal(HttpStatusCode.Forbidden, (await tenant.GetAsync($"/api/v1/billing-automation/{w.Location}?period={CurrentPeriod():yyyy-MM-dd}")).StatusCode);
         var first = await owner.PutAsJsonAsync("/api/v1/billing-automation", Plan(w)); first.EnsureSuccessStatusCode(); var p = (await first.Content.ReadFromJsonAsync<BillingAutomationPlan>())!; Assert.False(p.AuthorizeAutomaticFinalization);
         Assert.Equal(HttpStatusCode.Conflict, (await owner.PutAsJsonAsync("/api/v1/billing-automation", Plan(w))).StatusCode);
-        (await owner.PutAsJsonAsync("/api/v1/billing-schedules", Calendar(w) with { ExpectedVersion = 1, DueDay = 25 })).EnsureSuccessStatusCode();
+        (await owner.PutAsJsonAsync("/test-probe/billing-schedules", Calendar(w) with { ExpectedVersion = 1, DueDay = 25 })).EnsureSuccessStatusCode();
         (await owner.PutAsJsonAsync("/api/v1/billing-automation", Plan(w) with { EffectiveFrom = CurrentPeriod().AddMonths(1), ExpectedVersion = 1, ExpectedBillingScheduleVersion = 2, AuthorizeAutomaticFinalization = true })).EnsureSuccessStatusCode();
         var current = (await owner.GetFromJsonAsync<BillingAutomationPlan>($"/api/v1/billing-automation/{w.Location}?period={CurrentPeriod():yyyy-MM-dd}"))!;
         var future = (await owner.GetFromJsonAsync<BillingAutomationPlan>($"/api/v1/billing-automation/{w.Location}?period={CurrentPeriod().AddMonths(1):yyyy-MM-dd}"))!;
@@ -189,7 +189,7 @@ public sealed partial class PaymentLedgerTests
     public async Task ManualOnlyEffectiveCalendarOverridesPreserveFallbackAndEarlierPeriods()
     {
         var w = await Setup(); using var owner = await Client(w.Owner);
-        (await owner.PutAsJsonAsync("/api/v1/billing-schedules", Calendar(w))).EnsureSuccessStatusCode();
+        (await owner.PutAsJsonAsync("/test-probe/billing-schedules", Calendar(w))).EnsureSuccessStatusCode();
         var from = CurrentPeriod().AddMonths(1);
         var configured = Plan(w) with
         {
@@ -241,7 +241,7 @@ public sealed partial class PaymentLedgerTests
         var period = CurrentPeriod();
         var from = period.AddMonths(2);
         var original = Calendar(w);
-        (await owner.PutAsJsonAsync("/api/v1/billing-schedules", original)).EnsureSuccessStatusCode();
+        (await owner.PutAsJsonAsync("/test-probe/billing-schedules", original)).EnsureSuccessStatusCode();
         var input = Plan(w) with
         {
             EffectiveFrom = from,
@@ -319,7 +319,7 @@ public sealed partial class PaymentLedgerTests
         Assert.Equal(winner.Id, future.Id);
         // Legacy PUT continues to be an explicit fallback update; effective
         // automation plans and existing invoice snapshots are still immutable.
-        (await owner.PutAsJsonAsync("/api/v1/billing-schedules", original with { ExpectedVersion = 2, DueDay = 30 })).EnsureSuccessStatusCode();
+        (await owner.PutAsJsonAsync("/test-probe/billing-schedules", original with { ExpectedVersion = 2, DueDay = 30 })).EnsureSuccessStatusCode();
         await using (var scope = fixture.Factory.Services.CreateAsyncScope())
         {
             var repository = scope.ServiceProvider.GetRequiredService<IInvoiceRepository>();
@@ -339,7 +339,7 @@ public sealed partial class PaymentLedgerTests
     public async Task EffectiveCalendarRejectsInvalidOrMisorderedDayOverrides(int draft, int final, int due)
     {
         var w = await Setup(); using var owner = await Client(w.Owner);
-        (await owner.PutAsJsonAsync("/api/v1/billing-schedules", Calendar(w))).EnsureSuccessStatusCode();
+        (await owner.PutAsJsonAsync("/test-probe/billing-schedules", Calendar(w))).EnsureSuccessStatusCode();
         var response = await owner.PutAsJsonAsync("/api/v1/billing-automation", Plan(w) with
         {
             Enabled = false,
@@ -354,7 +354,7 @@ public sealed partial class PaymentLedgerTests
     public async Task BillingSchedulerAndPreexistingQueuedHandlersAreDisabledWithoutExplicitOptIn()
     {
         var w = await Setup(); using var owner = await Client(w.Owner);
-        (await owner.PutAsJsonAsync("/api/v1/billing-schedules", Calendar(w))).EnsureSuccessStatusCode();
+        (await owner.PutAsJsonAsync("/test-probe/billing-schedules", Calendar(w))).EnsureSuccessStatusCode();
         (await owner.PutAsJsonAsync("/api/v1/billing-automation", Plan(w))).EnsureSuccessStatusCode();
         await using var scope = fixture.Factory.Services.CreateAsyncScope();
         var handlers = scope.ServiceProvider.GetServices<BHome.Application.Jobs.IBackgroundJobHandler>()
@@ -377,7 +377,7 @@ public sealed partial class PaymentLedgerTests
     public async Task AutomationCalendarRejectsInvalidTimezoneDatesAndUnapprovedFinalization(string zone, int meter, int due, int offset, bool enabled, bool final)
     {
         var w = await Setup(); using var owner = await Client(w.Owner);
-        (await owner.PutAsJsonAsync("/api/v1/billing-schedules", Calendar(w))).EnsureSuccessStatusCode();
+        (await owner.PutAsJsonAsync("/test-probe/billing-schedules", Calendar(w))).EnsureSuccessStatusCode();
         Assert.Equal(HttpStatusCode.BadRequest, (await owner.PutAsJsonAsync("/api/v1/billing-automation", Plan(w) with { TimeZone = zone, MeterDay = meter, MeterDueDay = due, MeterDueMonthOffset = offset, Enabled = enabled, AuthorizeAutomaticFinalization = final })).StatusCode);
     }
 }

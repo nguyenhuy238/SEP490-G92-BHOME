@@ -22,7 +22,7 @@ public sealed partial class PaymentLedgerTests
     private async Task<(Workspace W, BillingAutomationPlan Plan, Guid[] Meters)> MeterWorkspace(bool withStaff = true, bool water = true)
     {
         var w = await Setup(); using var owner = await Client(w.Owner);
-        (await owner.PutAsJsonAsync("/api/v1/billing-schedules", Calendar(w))).EnsureSuccessStatusCode();
+        (await owner.PutAsJsonAsync("/test-probe/billing-schedules", Calendar(w))).EnsureSuccessStatusCode();
         var response = await owner.PutAsJsonAsync("/api/v1/billing-automation", Plan(w) with { MeterDay = 1, MeterDueDay = 10 }); response.EnsureSuccessStatusCode(); var plan = (await response.Content.ReadFromJsonAsync<BillingAutomationPlan>())!;
         await using var scope = fixture.Factory.Services.CreateAsyncScope(); var db = scope.ServiceProvider.GetFixturePersistence();
         if (withStaff) db.Add(new StaffLocationAssignment(w.Location, w.Staff, w.Owner, CurrentPeriod().AddYears(-1), CurrentPeriod().AddYears(1)));

@@ -4,14 +4,12 @@ import { Platform, Pressable, TextInput, View } from 'react-native';
 import { Checkbox, Text } from 'react-native-paper';
 import type { ContractView, Signature } from '../../../../../../packages/client-core/src/contracts';
 import {
-  failedUploadCheck,
   mmss,
   secondsUntil,
   signingClient,
   signingError,
   signingErrorCode,
   signingMethodLabel,
-  UPLOAD_CHECKS,
   type DrawnSignature,
   type SigningClient,
   type SigningMethods,
@@ -49,10 +47,7 @@ export function useSigningMethods(api: Api, enabled = true) {
   return enabled ? value : null;
 }
 
-// The signer's part of the "Ký" section for the two in-app methods (mockups 3.2.2):
-// Tenant – look at the contract, draw the signature, agree, Ký → type the emailed OTP;
-// Owner – download the issued PDF, sign it with MySign (certificate registered through VNeID), upload it.
-// Remote MySign signing keeps using the existing "Yêu cầu ký MySign" action.
+// In-app signing: Owner consents directly; Tenant confirms using email OTP.
 export function ContractSigningPanel({
   api,
   contract: c,
@@ -73,7 +68,7 @@ export function ContractSigningPanel({
   const current = [...mine].reverse().find((s) => s.status !== 'Failed') ?? null;
   const otherOpen = c.signatures.some((s) => s.signerUserId !== actorId && OPEN(s));
   const inApp = (methods?.methods ?? []).filter(
-    (m) => m === 'OTP' || (owner && (m === 'UPLOAD_PROOF' || m === 'OWNER_SESSION')),
+    (m) => m === 'OTP' || (owner && m === 'OWNER_SESSION'),
   );
   const preferred =
     owner && inApp.includes('OWNER_SESSION')
@@ -90,10 +85,6 @@ export function ContractSigningPanel({
     owner && current?.method === 'OTP' && OPEN(current) && inApp.includes('OWNER_SESSION');
   if (current?.method === 'OTP' && OPEN(current) && !replacesOtp)
     return <OtpStep signing={signing} contractId={c.id} onDone={onChanged} />;
-  if (current?.method === 'UPLOAD_PROOF' && OPEN(current))
-    return (
-      <UploadStep signing={signing} contractId={c.id} signature={current} onDone={onChanged} />
-    );
   if ((current && !replacesOtp) || !['Draft', 'PendingSigning'].includes(c.status)) return null;
   if (otherOpen)
     return (
@@ -113,27 +104,18 @@ export function ContractSigningPanel({
             onChange={setMethod}
             options={inApp.map((m) => ({
               id: m,
-              label:
-                m === 'OWNER_SESSION'
-                  ? 'Ký trực tiếp'
-                  : m === 'UPLOAD_PROOF'
-                    ? 'Tải về & ký số bên ngoài'
-                    : 'Ký điện tử bằng mã OTP',
+              label: m === 'OWNER_SESSION' ? 'Ký trực tiếp' : 'Ký điện tử bằng mã OTP',
             }))}
           />
         </Box>
       )}
-      {chosen === 'UPLOAD_PROOF' ? (
-        <UploadStart signing={signing} contractId={c.id} onStarted={onChanged} />
-      ) : (
-        <OtpStart
-          signing={signing}
-          contract={c}
-          owner={owner}
-          session={chosen === 'OWNER_SESSION'}
-          onStarted={onChanged}
-        />
-      )}
+      <OtpStart
+        signing={signing}
+        contract={c}
+        owner={owner}
+        session={chosen === 'OWNER_SESSION'}
+        onStarted={onChanged}
+      />
     </>
   );
 }
@@ -405,200 +387,6 @@ function OtpStep({
 }
 
 // Owner, UPLOAD_PROOF: start keeps the exact PDF to sign on the server (72 hours).
-function UploadStart({
-  signing,
-  contractId,
-  onStarted,
-}: {
-  signing: SigningClient;
-  contractId: string;
-  onStarted: () => void;
-}) {
-  const [busy, setBusy] = useState(false);
-  const [error, setError] = useState('');
-  const [key] = useState(randomUUID);
-  async function start() {
-    if (busy) return;
-    setBusy(true);
-    setError('');
-    try {
-      await signing.start(contractId, 'UPLOAD_PROOF', key);
-      onStarted();
-    } catch (e) {
-      setError(signingError(e));
-    } finally {
-      setBusy(false);
-    }
-  }
-  return (
-    <Box>
-      <Heading title="Ký hợp đồng" detail="Tải về & ký bằng MySign" />
-      <Text>
-        Dùng chứng thư MySign của bạn (đăng ký qua VNeID). Ký bằng app MySign hoặc MySign Desktop,
-        rồi tải bản đã ký lên. Chữ ký số có giá trị như chữ ký tay.
-      </Text>
-      {!!error && <ContractNotice message={error} />}
-      <Action disabled={busy} onPress={() => void start()}>
-        {busy ? 'Đang chuẩn bị…' : 'Bắt đầu ký'}
-      </Action>
-    </Box>
-  );
-}
-
-// Owner, UPLOAD_PROOF pending: open the issued PDF in MySign, then pick the signed file; BHOME checks it.
-function UploadStep({
-  signing,
-  contractId,
-  signature,
-  onDone,
-}: {
-  signing: SigningClient;
-  contractId: string;
-  signature: Signature;
-  onDone: () => void;
-}) {
-  const [busy, setBusy] = useState(false);
-  const [error, setError] = useState('');
-  const [failed, setFailed] = useState(-1);
-  const [file, setFile] = useState<{ name: string; size: number; bytes: Uint8Array } | null>(null);
-  const [key, setKey] = useState(randomUUID);
-
-  async function download() {
-    if (busy) return;
-    setBusy(true);
-    setError('');
-    let temporary: import('expo-file-system').File | null = null;
-    try {
-      if (Platform.OS === 'web') {
-        const blob = await signing.uploadSourceBlob(contractId);
-        const url = URL.createObjectURL(blob);
-        const link = document.createElement('a');
-        link.href = url;
-        link.download = `hop-dong-${contractId.slice(0, 8)}-ban-ky.pdf`;
-        link.click();
-        setTimeout(() => URL.revokeObjectURL(url), 1000);
-        return;
-      }
-      // Native file and share modules are loaded on demand (as in TenantIncidentPhotos).
-      const { Directory, File, Paths } = await import('expo-file-system');
-      const Sharing = await import('expo-sharing');
-      if (!(await Sharing.isAvailableAsync())) {
-        setError('Thiết bị chưa hỗ trợ mở tài liệu bằng ứng dụng khác.');
-        return;
-      }
-      const bytes = await signing.uploadSourceBytes(contractId);
-      const directory = new Directory(Paths.cache, 'bhome-contract-downloads');
-      directory.create({ idempotent: true, intermediates: true });
-      temporary = new File(directory, `hop-dong-${contractId.slice(0, 8)}-ban-ky.pdf`);
-      if (temporary.exists) temporary.delete();
-      temporary.create();
-      temporary.write(bytes);
-      await Sharing.shareAsync(temporary.uri, {
-        mimeType: 'application/pdf',
-        UTI: 'com.adobe.pdf',
-        dialogTitle: 'Mở bằng MySign để ký',
-      });
-    } catch (e) {
-      setError(signingError(e));
-    } finally {
-      if (temporary?.exists) temporary.delete();
-      setBusy(false);
-    }
-  }
-  async function pick() {
-    if (busy) return;
-    setError('');
-    setFailed(-1);
-    // Loaded on demand: the picker's native module is only needed when the Owner chooses a file.
-    const DocumentPicker = await import('expo-document-picker');
-    const result = await DocumentPicker.getDocumentAsync({
-      type: 'application/pdf',
-      copyToCacheDirectory: true,
-      multiple: false,
-    });
-    if (result.canceled || !result.assets?.length) return;
-    const asset = result.assets[0];
-    try {
-      const bytes = asset.file
-        ? new Uint8Array(await asset.file.arrayBuffer())
-        : await new (await import('expo-file-system')).File(asset.uri).bytes();
-      if (bytes.length > 10 * 1024 * 1024) {
-        setError('File lớn hơn 10 MB.');
-        return;
-      }
-      setFile({ name: asset.name, size: bytes.length, bytes });
-      setKey(randomUUID());
-    } catch {
-      setError('Không đọc được file đã chọn.');
-    }
-  }
-  async function upload() {
-    if (busy || !file) return;
-    setBusy(true);
-    setError('');
-    setFailed(-1);
-    try {
-      await signing.uploadSigned(contractId, file.bytes as unknown as BodyInit, key);
-      onDone();
-    } catch (e) {
-      setError(signingError(e));
-      setFailed(failedUploadCheck(e));
-    } finally {
-      setBusy(false);
-    }
-  }
-  return (
-    <Box>
-      <Heading title="Ký hợp đồng" detail="Tải về & ký bằng MySign" />
-      <Action secondary disabled={busy} onPress={() => void download()}>
-        {Platform.OS === 'web' ? 'Tải hợp đồng để ký (PDF)' : 'Tải về / Mở bằng MySign'}
-      </Action>
-      <View style={ui.soft}>
-        <Text variant="titleSmall">Ký bằng MySign</Text>
-        <Text>1. Bấm "{Platform.OS === 'web' ? 'Tải hợp đồng để ký' : 'Mở bằng MySign'}".</Text>
-        <Text>
-          2. Chọn chứng thư của bạn (đăng ký qua VNeID), đặt chữ ký vào ô "Bên A – Chủ trọ".
-        </Text>
-        <Text>
-          3. Xác nhận ký, lưu file đã ký{Platform.OS === 'web' ? '' : ' vào Tệp (Files)'}.
-        </Text>
-        <Text>4. Quay lại đây, chọn file đã ký rồi gửi.</Text>
-      </View>
-      <Pill tone="amber">Không sửa nội dung file: BHOME chỉ nhận đúng bản này cộng chữ ký số.</Pill>
-      {signature.expiresAt && (
-        <Text style={ui.muted}>Hạn tải lên: {formatInstant(signature.expiresAt)}</Text>
-      )}
-      <Action secondary disabled={busy} onPress={() => void pick()}>
-        {file ? 'Đổi file' : 'Chọn file PDF đã ký'}
-      </Action>
-      {file && (
-        <Text>
-          {file.name} · {Math.round(file.size / 1024)} KB
-        </Text>
-      )}
-      {(file || failed >= 0) && (
-        <View style={ui.soft}>
-          <Text variant="titleSmall">BHOME kiểm tra khi bạn gửi</Text>
-          {UPLOAD_CHECKS.map((label, i) => (
-            <Text key={label} style={i === failed ? ui.red : undefined}>
-              {i === failed ? '✕' : failed >= 0 && i < failed ? '✓' : '•'} {label}
-            </Text>
-          ))}
-        </View>
-      )}
-      {!!error && <ContractNotice message={error} />}
-      <Text style={ui.muted}>
-        Kiểm tra PDF và tên bên cấp chứng thư chưa bao gồm xác minh đầy đủ chuỗi tin cậy CA hoặc
-        trạng thái thu hồi.
-      </Text>
-      <Action disabled={busy || !file} onPress={() => void upload()}>
-        {busy ? 'Đang kiểm tra…' : 'Gửi bản đã ký'}
-      </Action>
-    </Box>
-  );
-}
-
-/** One line per signature: status, method, and who signed with which certificate. */
 export function signatureLine(s: Signature, status: (value: string) => string) {
   const parts = [status(s.status), signingMethodLabel(s.method)];
   if (s.signedAt) parts.push(formatInstant(s.signedAt));

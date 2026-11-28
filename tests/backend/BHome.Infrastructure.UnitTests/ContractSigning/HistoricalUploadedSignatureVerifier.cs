@@ -11,53 +11,18 @@ using Microsoft.Extensions.Options;
 
 namespace BHome.Infrastructure.Contracts;
 
-// UPLOAD_PROOF: the Owner downloads the issued PDF, signs it outside BHOME with their own certificate (Viettel MySign
-// registered through VNeID needs no BHOME integration account) and uploads the result. Prepare keeps the issued PDF as
-// the prepared document, so the upload is compared with the exact bytes the Owner received.
-internal sealed class UploadProofContractSigningAdapter(ICurrentUser user, IContractDocumentRenderer renderer,
-    IContractSigningDocumentSource documents, UploadedSignatureVerifier verifier) : IContractSigningProvider
-{
-    private Guid Actor => user.UserId ?? throw new ContractException(401, "authentication_required");
-
-    public Task<SigningPreparation> PrepareAsync(ContractDocument document, Guid certificateId, byte[]? previousPdf, CancellationToken t)
-        => PrepareAsync(document, certificateId, previousPdf, new SigningAppearance(null, false, SigningMethods.UploadProof), t);
-
-    public async Task<SigningPreparation> PrepareAsync(ContractDocument document, Guid certificateId, byte[]? previousPdf,
-        SigningAppearance appearance, CancellationToken t)
-    {
-        var reviewed = await documents.ReadAsync(document, t);
-        if (reviewed is null) await renderer.ValidateAsync(document, t);
-        var source = previousPdf ?? reviewed ?? await renderer.RenderAsync(document, t);
-        if (source.Length > 10 * 1024 * 1024 || source.Length < 5 || !source.AsSpan(0, 5).SequenceEqual("%PDF-"u8))
-            throw ContractException.Invalid("contract_pdf_invalid");
-        return new(source, source, "", "", "", "", Actor.ToString(), ContractSigningRouter.UploadCredential);
-    }
-
-    // Nothing is sent anywhere: the signature stays Pending until the signed PDF is uploaded.
-    public Task<string> RequestAsync(ContractSigning signature, CancellationToken t) => Task.FromResult("upload:" + signature.Id.ToString("N"));
-    public Task<SigningOutcome> PollAsync(ContractSigning signature, byte[] preparedPdf, CancellationToken t) => Task.FromResult(new SigningOutcome("Pending"));
-
-    public Task<SigningOutcome> CompleteUploadAsync(ContractSigning signature, byte[] issuedPdf, byte[] uploadedPdf, CancellationToken t)
-    {
-        if (signature.SignerUserId != Actor) throw new ContractException(403, "contract_signer_required");
-        var certificate = verifier.Verify(issuedPdf, uploadedPdf);
-        return Task.FromResult(new SigningOutcome("Signed", uploadedPdf, certificate));
-    }
-}
-
 // Accepts an uploaded PDF only when it is the issued PDF plus a valid digital signature and nothing else:
 // 1. the issued bytes are unchanged at the start of the file (the signer appended an incremental revision);
 // 2. at least one new signature, every signature intact, and the newest one covers the whole file;
 // 3. the new signing certificate was issued by an allowed CA (default "Viettel") and was valid when it signed;
 // 4. the same pages with the same page content; new annotations are signature widgets and new form fields are
 //    signature fields, so text cannot be added or changed in the signer's revision.
-internal sealed class UploadedSignatureVerifier(IOptions<ContractSigningOptions> options)
+internal sealed class UploadedSignatureVerifier
 {
     // Returns the newest signer certificate (base64 DER) so the signature records who signed and which CA issued it.
     public string Verify(byte[] issued, byte[] uploaded)
     {
-        var settings = options.Value.UploadProof;
-        if (uploaded.Length > settings.MaxMegabytes * 1024 * 1024) throw new ContractException(413, "signed_pdf_too_large");
+        if (uploaded.Length > 10 * 1024 * 1024) throw new ContractException(413, "signed_pdf_too_large");
         if (uploaded.Length < 5 || !uploaded.AsSpan(0, 5).SequenceEqual("%PDF-"u8)) throw ContractException.Invalid("signed_pdf_invalid");
         // The issued file sent back unchanged was simply not signed yet.
         if (uploaded.AsSpan().SequenceEqual(issued)) throw ContractException.Invalid("signed_pdf_has_no_new_signature");
@@ -78,7 +43,7 @@ internal sealed class UploadedSignatureVerifier(IOptions<ContractSigningOptions>
                     throw ContractException.Invalid("signed_pdf_signature_invalid");
             }
             if (!signatures.SignatureCoversWholeDocument(names[^1])) throw ContractException.Invalid("signed_pdf_changed_after_signing");
-            foreach (var name in added) CheckCertificate(signatures.ReadSignatureData(name), settings.Issuers);
+            foreach (var name in added) CheckCertificate(signatures.ReadSignatureData(name), ["Viettel"]);
             CheckOnlySignaturesWereAdded(before, after);
             return Convert.ToBase64String(signatures.ReadSignatureData(added[^1]).GetSigningCertificate().GetEncoded());
         }
