@@ -25,7 +25,6 @@ type RoomOption = {
   capacity?: number;
 };
 
-const fieldLabel = 'Phòng giữ chỗ *';
 const capacities = [0, 1, 2, 3, 4, 'custom'] as const;
 const floorOf = (room: RoomOption) => room.floor?.trim() || '';
 const surface = '#F8FAFC';
@@ -39,6 +38,8 @@ export function HoldingRoomPicker({
   error = '',
   onRetry,
   onChange,
+  fieldLabel = 'Phòng giữ chỗ *',
+  title = 'Chọn phòng giữ chỗ',
 }: {
   rooms: RoomOption[];
   value: string;
@@ -47,6 +48,8 @@ export function HoldingRoomPicker({
   error?: string;
   onRetry?: () => void;
   onChange: (id: string) => void;
+  fieldLabel?: string;
+  title?: string;
 }) {
   const [open, setOpen] = useState(false);
   const [search, setSearch] = useState('');
@@ -176,7 +179,7 @@ export function HoldingRoomPicker({
               <View style={styles.header}>
                 <View style={styles.heading}>
                   <Text accessibilityRole="header" style={styles.title}>
-                    Chọn phòng giữ chỗ
+                    {title}
                   </Text>
                   <Text style={styles.secondary}>Tìm kiếm và lựa chọn phòng phù hợp</Text>
                 </View>

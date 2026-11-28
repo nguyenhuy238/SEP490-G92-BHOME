@@ -38,38 +38,36 @@ export function OnboardingPeopleStep(props: Props) {
   return (
     <View style={styles.content}>
       <View style={styles.section}>
-        {!individual && (
-          <>
-            <Text style={styles.modeLabel}>Hình thức thuê</Text>
-            <View style={styles.modeCards}>
-              {([
-                ['family', 'Hộ gia đình', 'account-group-outline'],
-                ['individual', 'Cá nhân', 'account-outline'],
-              ] as const).map(([value, label, icon]) => {
-                const selected = props.mode === value;
-                return (
-                  <TouchableRipple
-                    key={value}
-                    accessibilityRole="radio"
-                    accessibilityState={{ checked: selected, disabled: props.created }}
-                    accessibilityLabel={label}
-                    disabled={props.created}
-                    onPress={() => props.onModeChange(value)}
-                    style={[styles.modeCard, selected && styles.modeCardSelected]}
-                  >
-                    <View style={styles.modeCardContent}>
-                      <Icon source={icon} size={22} color={selected ? s.blue : '#64748B'} />
-                      <Text style={[styles.modeCardLabel, selected && styles.modeCardLabelSelected]}>
-                        {label}
-                      </Text>
-                      {selected && <Icon source="check-circle" size={20} color={s.blue} />}
-                    </View>
-                  </TouchableRipple>
-                );
-              })}
-            </View>
-          </>
-        )}
+        <>
+          <Text style={styles.modeLabel}>Hình thức thuê</Text>
+          <View style={styles.modeCards}>
+            {([
+              ['family', 'Hộ gia đình', 'account-group-outline'],
+              ['individual', 'Cá nhân', 'account-outline'],
+            ] as const).map(([value, label, icon]) => {
+              const selected = props.mode === value;
+              return (
+                <TouchableRipple
+                  key={value}
+                  accessibilityRole="radio"
+                  accessibilityState={{ checked: selected, disabled: props.created }}
+                  accessibilityLabel={label}
+                  disabled={props.created}
+                  onPress={() => props.onModeChange(value)}
+                  style={[styles.modeCard, selected && styles.modeCardSelected]}
+                >
+                  <View style={styles.modeCardContent}>
+                    <Icon source={icon} size={22} color={selected ? s.blue : '#64748B'} />
+                    <Text style={[styles.modeCardLabel, selected && styles.modeCardLabelSelected]}>
+                      {label}
+                    </Text>
+                    {selected && <Icon source="check-circle" size={20} color={s.blue} />}
+                  </View>
+                </TouchableRipple>
+              );
+            })}
+          </View>
+        </>
       </View>
 
       <View style={styles.section}>

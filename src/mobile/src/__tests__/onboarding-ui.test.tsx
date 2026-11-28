@@ -364,6 +364,24 @@ vi.mock('../features/onboarding/useCaptureScope', () => ({
     };
   },
 }));
+vi.mock('../features/contracts/holding/HoldingRoomPicker', () => ({
+  HoldingRoomPicker: ({
+    rooms,
+    value,
+    onChange,
+    fieldLabel,
+  }: {
+    rooms: { id: string; label: string }[];
+    value: string;
+    onChange: (id: string) => void;
+    fieldLabel: string;
+  }) => (
+    <select aria-label={fieldLabel} value={value} onChange={(event) => onChange(event.target.value)}>
+      <option value="" />
+      {rooms.map((room) => <option key={room.id} value={room.id}>{room.label}</option>)}
+    </select>
+  ),
+}));
 import { OnboardingScreen } from '../screens/OnboardingScreen';
 import { MobileApiError } from '../lib/api';
 import { ContractProgress, signerState } from '../features/contracts/ContractProgress';
@@ -393,7 +411,7 @@ it('shows empty and occupied rooms together without a reception-type selector', 
     false,
   );
   fireEvent.click(screen.getByRole('button', { name: 'Tiếp tục' }));
-  expect(screen.getByText('CCCD của người ở')).toBeTruthy();
+  expect(screen.getByRole('button', { name: 'Bắt đầu quét CCCD' })).toBeTruthy();
 });
 beforeEach(() => {
   vi.stubGlobal('__DEV__', true);
@@ -482,6 +500,8 @@ async function openMemberEditor() {
 it('limits a family to room capacity and never renders an inline member form', async () => {
   render(<OnboardingScreen />);
   selectRoom();
+  expect(screen.getByRole('radio', { name: 'Cá nhân' })).toBeTruthy();
+  expect(screen.getByRole('radio', { name: 'Hộ gia đình' })).toBeTruthy();
   addFamilyMember();
   expect(screen.getByText('2/2 người')).toBeTruthy();
   expect(screen.getByRole('button', { name: 'Thêm người ở' })).toHaveProperty('disabled', true);
@@ -552,10 +572,12 @@ it('keeps native screen-capture protection on Android', async () => {
 });
 async function openIdentity(index = 0) {
   if (screen.queryByRole('dialog')) closeIdentity();
+  const personToOpen = screen.queryByRole('button', { name: `Xác minh Người ở ${index + 1}` });
+  if (personToOpen) fireEvent.click(personToOpen);
   fireEvent.click(
     screen.getAllByRole('button', {
       name: /^(Bắt đầu quét CCCD|Tiếp tục quét|Kiểm tra thông tin|Xem thông tin)$/,
-    })[index],
+    })[0],
   );
   await screen.findByRole('dialog');
 }
@@ -599,25 +621,24 @@ it('opens CCCD directly with Individual selected and forbids a second person', (
   selectRoom();
   expect(screen.queryByLabelText('Tên gọi hồ sơ')).toBeNull();
   expect(screen.getByRole('radio', { name: 'Cá nhân' }).getAttribute('aria-checked')).toBe('true');
-  const add = screen.getByRole('button', { name: 'Thêm người ở' }) as HTMLButtonElement;
-  expect(add.disabled).toBe(true);
-  fireEvent.click(add);
+  expect(screen.queryByRole('button', { name: 'Thêm người ở' })).toBeNull();
   expect(screen.getAllByRole('button', { name: 'Bắt đầu quét CCCD' })).toHaveLength(1);
+  expect(screen.queryByText('CCCD của người ở')).toBeNull();
   expect(state.json).not.toHaveBeenCalled();
 });
 it('retains a family selection through Back and keeps draft members separate', () => {
   render(<OnboardingScreen />);
   selectRoom();
   addFamilyMember();
-  expect(screen.getAllByRole('button', { name: 'Bắt đầu quét CCCD' })).toHaveLength(2);
+  expect(screen.getAllByRole('button', { name: 'Bắt đầu quét CCCD' })).toHaveLength(1);
   fireEvent.click(screen.getByRole('button', { name: 'Quay lại' }));
   expect((screen.getByRole('combobox', { name: 'Phòng *' }) as HTMLSelectElement).value).toBe(
     'room',
   );
   fireEvent.click(screen.getByRole('button', { name: 'Tiếp tục' }));
-  expect(screen.getAllByRole('button', { name: 'Bắt đầu quét CCCD' })).toHaveLength(2);
-  fireEvent.click(screen.getByRole('button', { name: 'Chọn Người ở 2 làm đại diện' }));
-  expect(screen.queryByRole('button', { name: 'Chọn Người ở 2 làm đại diện' })).toBeNull();
+  expect(screen.getAllByRole('button', { name: 'Bắt đầu quét CCCD' })).toHaveLength(1);
+  fireEvent.click(screen.getByRole('button', { name: 'Chọn Người ở 2 làm người đại diện' }));
+  expect(screen.queryByRole('button', { name: 'Chọn Người ở 2 làm người đại diện' })).toBeNull();
   fireEvent.click(screen.getByRole('button', { name: 'Xóa Người ở 2' }));
   expect(screen.getAllByRole('button', { name: 'Bắt đầu quét CCCD' })).toHaveLength(1);
   expect(state.json).not.toHaveBeenCalled();
@@ -1220,8 +1241,10 @@ it('requires the server to confirm every selected identity before opening the co
   expect(state.request).not.toHaveBeenCalled();
 });
 async function openMemberOrRepresentative(index: number) {
+  const personToOpen = screen.queryByRole('button', { name: `Xác minh Người ở ${index + 1}` });
+  if (personToOpen) fireEvent.click(personToOpen);
   const actions = screen.getAllByRole('button', { name: /^(Nhập thủ công|Xem \/ sửa thông tin)$/ });
-  fireEvent.click(actions[index]);
+  fireEvent.click(actions[0]);
   await screen.findByRole('dialog');
 }
 

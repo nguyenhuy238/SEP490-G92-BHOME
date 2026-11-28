@@ -12,12 +12,12 @@ import { useSession } from '../lib/SessionProvider';
 import { captureService } from '../services/captureService';
 import { errorMessage, MobileApiError } from '../lib/api';
 import { useCaptureScope } from '../features/onboarding/useCaptureScope';
-import { IdentityPersonCard } from '../features/onboarding/IdentityPersonCard';
 import { WorkspaceFooter } from '../components/WorkspaceFooter';
 import { IdentityWizard } from '../features/onboarding/IdentityWizard';
 import { ResidentProfile } from '../features/onboarding/ResidentProfile';
 import { OnboardingPeopleStep } from '../features/onboarding/OnboardingPeopleStep';
 import { HoldingMainStart } from '../features/contracts/holding/HoldingMainStart';
+import { HoldingRoomPicker } from '../features/contracts/holding/HoldingRoomPicker';
 import { contractClient } from '../../../../packages/client-core/src/contracts';
 import {
   allIdentitiesConfirmed,
@@ -347,17 +347,19 @@ function NewResidentOnboarding() {
                 onChange={scope.selectLocation}
               />
             )}
-            <ChoiceField
-              label="Phòng *"
+            <HoldingRoomPicker
+              key={scope.location}
               value={scope.room}
-              options={selectableRooms.map((room) => ({
+              rooms={selectableRooms.map((room) => ({
                 ...room,
-                label:
-                  room.remainingCapacity == null
-                    ? room.label
-                    : `${room.label} · ${room.remainingCapacity === 0 ? 'Đã đủ người' : `Còn ${room.remainingCapacity} chỗ`}`,
+                capacity: room.capacity ?? undefined,
               }))}
+              loading={scope.loading}
+              error={scope.error}
+              onRetry={scope.reload}
               disabled={created || !scope.location || scope.loading}
+              fieldLabel="Phòng *"
+              title="Chọn phòng"
               onChange={scope.setRoom}
             />
             {scope.rooms.find((room) => room.id === scope.room)?.remainingCapacity === 0 && (
@@ -496,55 +498,16 @@ function NewResidentOnboarding() {
             onContinue={() => move(2)}
           />
         )}
+        {step === 2 && created && !allConfirmed && !preview && (
+          <Button disabled={busy || recognizing} onPress={() => void checkSavedIdentities()}>
+            Kiểm tra trạng thái đã lưu
+          </Button>
+        )}
         <View
-          style={step === 2 ? [styles.identity, styles.identityWithFooter] : styles.hidden}
+          style={step === 2 ? undefined : styles.hidden}
           accessibilityElementsHidden={step !== 2}
           importantForAccessibility={step === 2 ? 'auto' : 'no-hide-descendants'}
         >
-          <Heading
-            title="CCCD của người ở"
-            detail={`Đã xác nhận ${confirmedCount}/${people.length} người ở`}
-          />
-          {people.map((person) => (
-            <IdentityPersonCard
-              key={person.key}
-              person={person}
-              label={personLabel(person)}
-              role={
-                person.key === representative
-                  ? mode === 'family'
-                    ? 'Người đại diện'
-                    : 'Người thuê'
-                  : 'Thành viên'
-              }
-              disabled={busy || recognizing || !!person.creationUncertain}
-              onScan={(side) => {
-                if (side)
-                  setCaptureRequest((before) => ({
-                    side,
-                    personKey: person.key,
-                    id: (before?.id ?? 0) + 1,
-                  }));
-                const progress = person.captureProgress;
-                const both = progress?.front === 'recognized' && progress?.back === 'recognized';
-                const started =
-                  progress && (progress.front !== 'unscanned' || progress.back !== 'unscanned');
-                if (person.status === 'confirmed') return;
-                void openIdentity(
-                  person,
-                  side
-                    ? 'capture'
-                    : both || (!started && person.status === 'pending')
-                      ? 'verify'
-                      : 'capture',
-                );
-              }}
-              onManual={() => {
-                void openIdentity(person, 'verify');
-              }}
-            />
-          ))}
-          {busy && <ActivityIndicator accessibilityLabel="Đang tạo hồ sơ người ở" />}
           {people
             .filter((p) => !!p.residentId)
             .map((person) => (
@@ -584,25 +547,6 @@ function NewResidentOnboarding() {
                 onCancel={() => move(0)}
               />
             ))}
-          {!allConfirmed && (
-            <Text variant="bodySmall" style={ui.muted}>
-              Xác nhận thông tin của từng người ở trước khi hoàn tất tiếp nhận.
-            </Text>
-          )}
-          {created && !allConfirmed && !preview && (
-            <Button disabled={busy || recognizing} onPress={() => void checkSavedIdentities()}>
-              Kiểm tra trạng thái đã lưu
-            </Button>
-          )}
-          {mode === 'individual' && people.length > 1 && (
-            <ChoiceField
-              label="Người thuê tạo hợp đồng"
-              value={representative}
-              options={people.map((p) => ({ id: p.key, label: p.label }))}
-              onChange={setRepresentative}
-              disabled={!allConfirmed || busy}
-            />
-          )}
         </View>
         {!!error && (
           <Text accessibilityRole="alert" style={ui.red}>
@@ -727,7 +671,6 @@ const styles = StyleSheet.create({
   summary: { padding: 12, borderRadius: 12, backgroundColor: s.blueSoft, gap: 4 },
   empty: { alignItems: 'center', gap: 12, paddingVertical: 24 },
   identity: { gap: 16 },
-  identityWithFooter: { paddingBottom: 118 },
   footerContent: { gap: 8, paddingHorizontal: 16, paddingTop: 8 },
   footerHint: { color: '#475569', fontSize: 12, lineHeight: 17 },
   footerButton: { borderRadius: 12 },
