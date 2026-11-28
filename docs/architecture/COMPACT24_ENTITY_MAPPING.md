@@ -11,56 +11,56 @@ Database giữ nguyên schema vật lý Compact24 đã duyệt. BHome.Api là pr
 
 ## Bản đồ 24 bảng
 
-| Module | Bảng | Entity |
-| --- | --- | --- |
-| IdentityAccess | `users` | `ApplicationUser` |
-| IdentityAccess | `refresh_tokens` | `CompactRefreshRow` |
-| IdentityAccess | `staff_employments` | `StaffEmployment` |
-| PropertyManagement | `locations` | `Location` |
-| PropertyManagement | `rooms` | `Room` |
-| PropertyManagement | `assets` | `Asset` |
-| TenantContracts | `residents` | `Resident` |
-| TenantContracts | `contracts` | `Contract` |
-| TenantContracts | `contract_signings` | `ContractSignature` |
-| TenantContracts | `contract_residents` | `ContractResident` |
-| IncidentMaintenance | `incident_reports` | `IncidentReport` |
-| StaffOperations | `operational_tasks` | `OperationalTask` |
-| Billing | `meters` | `Meter` |
-| Billing | `meter_readings` | `MeterReading` |
-| Billing | `billing_policies` | `BillingPolicy` |
-| Billing | `invoices` | `Invoice` |
-| Billing | `invoice_items` | `InvoiceLine` |
-| Billing | `invoice_adjustments` | `InvoiceAdjustmentRequest` |
-| PaymentsDebt | `payments` | `PaymentTransfer` |
-| PaymentsDebt | `payment_allocations` | `PaymentAllocation` |
-| PaymentsDebt | `refund_requests` | `RefundRequest` |
-| Finance | `expenses` | `Expense` |
-| Finance | `financial_scenarios` | `FinancialScenario` |
-| Notifications | `notifications` | `Notification` |
+| Module              | Bảng                  | Entity                     |
+| ------------------- | --------------------- | -------------------------- |
+| IdentityAccess      | `users`               | `ApplicationUser`          |
+| IdentityAccess      | `refresh_tokens`      | `CompactRefreshRow`        |
+| IdentityAccess      | `staff_employments`   | `StaffEmployment`          |
+| PropertyManagement  | `locations`           | `Location`                 |
+| PropertyManagement  | `rooms`               | `Room`                     |
+| PropertyManagement  | `assets`              | `Asset`                    |
+| TenantContracts     | `residents`           | `Resident`                 |
+| TenantContracts     | `contracts`           | `Contract`                 |
+| TenantContracts     | `contract_signings`   | `ContractSignature`        |
+| TenantContracts     | `contract_residents`  | `ContractResident`         |
+| IncidentMaintenance | `incident_reports`    | `IncidentReport`           |
+| StaffOperations     | `operational_tasks`   | `OperationalTask`          |
+| Billing             | `meters`              | `Meter`                    |
+| Billing             | `meter_readings`      | `MeterReading`             |
+| Billing             | `billing_policies`    | `BillingPolicy`            |
+| Billing             | `invoices`            | `Invoice`                  |
+| Billing             | `invoice_items`       | `InvoiceLine`              |
+| Billing             | `invoice_adjustments` | `InvoiceAdjustmentRequest` |
+| PaymentsDebt        | `payments`            | `PaymentTransfer`          |
+| PaymentsDebt        | `payment_allocations` | `PaymentAllocation`        |
+| PaymentsDebt        | `refund_requests`     | `RefundRequest`            |
+| Finance             | `expenses`            | `Expense`                  |
+| Finance             | `financial_scenarios` | `FinancialScenario`        |
+| Notifications       | `notifications`       | `Notification`             |
 
 Entity chuẩn giữ namespace CLR hiện hữu (`BHome.Domain.*`). Các trường chỉ phục vụ lưu trữ không xuất hiện trong snapshot nghiệp vụ cũ; EF mapping tường minh quy định tên cột, kiểu, nullable và khóa. Đã bỏ 17 kiểu entity trùng lặp cùng các bước sao chép toàn bộ bản ghi tương ứng. Các kiểu lưu trữ còn lại (StaffEmployment, RefundRequest, Expense, FinancialScenario, Notification và hai entity Identity) không có entity nghiệp vụ thứ hai tương đương.
 
 ## Các luồng đọc/ghi đã chuyển
 
-| Repository | Luồng | Nguồn dữ liệu native |
-| --- | --- | --- |
-| `SetupWorkspaceStore` | Guard cơ sở hoạt động sau khi khóa; tra cơ sở của phòng; danh sách ID phòng; phạm vi công tơ | `locations`, `rooms`, `meters` |
-| `SharedConfigurationStore` | Kiểm tra cơ sở hoạt động sau advisory lock | `locations` |
-| `InvoiceRepository` | Danh sách cơ sở tính phí của Tenant; xác định cơ sở trước khóa phòng; kiểm tra tồn tại cơ sở sau khóa | `contracts`, `rooms`, `locations` |
-| `FinancialScenarioRepository` | Lưu kịch bản, danh sách, xem, replay theo actor/key, giữ nguyên snapshot và công thức | `financial_scenarios` |
-| `ExpenseRepository` | CRUD không xóa, chi phí, đầu tư hàng loạt, phân trang, phạm vi và tham chiếu; lưu history qua EF | `expenses`, `locations`, `rooms`, `assets`, `operational_tasks`, `incident_reports` |
-| `CompactOperationsRepository` | Đọc lịch sử, kiểm tra trùng kỳ, tạo và cập nhật kỳ lao động; giữ khóa account và audit | `staff_employments` |
-| `CompactTenantContractAccess` | Quyền truy cập giữa các thành viên khác nhau trong cùng hợp đồng, theo phạm vi cơ sở | `contracts`, `contract_residents`, `residents`, `rooms` |
-| `PostgresPropertyRepository`, `PropertyLifecycleChecks`, `PostgresRoomInsightsRepository` | Nghĩa vụ phòng, kiểm tra đóng cơ sở/phòng, lịch sử, tình trạng sẵn sàng và tỷ lệ sử dụng | `locations`, `rooms`, `contracts`, `residents`, `assets`, `incident_reports`, `meters`, `notifications` và bảng liên quan |
-| `SharedConfigurationOperationsStore`, `SetupWorkspaceStore` | Đọc/copy biểu phí, kiểm tra công việc mở và tài sản trùng | `billing_policies`, `operational_tasks`, `assets` |
-| `ExpensePaymentRepository`, `DepreciationRepository`, `ExpenseEvidenceRepository` | Ghi nối lịch sử thanh toán, khấu hao, chứng từ và bảo toàn JSON trong transaction | `expenses` |
-| `InvoiceFinancialQueries`, các repository báo cáo và kịch bản tài chính | Tổng hợp hóa đơn, khoản phân bổ, quyết định điều chỉnh và dòng hóa đơn theo snapshot | `invoices`, `invoice_items`, `invoice_adjustments`, `payment_allocations` |
-| `NotificationPublications`, `NotificationInboxWrites`, các job phát thông báo | Kiểm tra và lưu inbox, marker chống phát trùng; giữ key, ID xác định và payload lịch sử | `notifications` |
-| `ContractRepository`, `NativeContractMutation`, `NativeContractSidecars`, repository bàn giao và quyết toán | Hợp đồng, chữ ký, bàn giao/trả phòng, lịch sử, khóa và idempotency | `contracts`, `contract_signings`, `contract_residents`, `residents`, `rooms`, `operational_tasks` |
-| `PaymentRepository`, `PaymentLedgerWrites`, `MainInitialPaymentLedger`, `RefundRepository` | Đối soát, phân bổ, nghĩa vụ tiền cọc, thanh toán lần đầu, hoàn tiền | `payments`, `payment_allocations`, `refund_requests`, `invoices`, `contracts` |
-| `NativeInvoicePersistence`, `NativeAdjustmentPersistence`, `NativeBillingJobPersistence` | Ghi hóa đơn/điều chỉnh, automation và công tơ | `invoices`, `invoice_items`, `invoice_adjustments`, `meter_readings`, `operational_tasks` |
-| `NativeOperationalTaskPersistence`, `NativeIncidentSession`, `NativeIncidentWrites` | Nhiệm vụ, sự cố, bảo trì, chứng từ và lịch sử | `operational_tasks`, `incident_reports`, `assets`, `expenses` |
-| `NativeCaptureWrites`, `NativeHouseholdPersistence`, `NativeIdentityPersistence` | OCR, hộ gia đình, tài khoản và audit | `meters`, `meter_readings`, `residents`, `users`, `refresh_tokens` và bảng liên quan |
+| Repository                                                                                                  | Luồng                                                                                                 | Nguồn dữ liệu native                                                                                                      |
+| ----------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------- |
+| `SetupWorkspaceStore`                                                                                       | Guard cơ sở hoạt động sau khi khóa; tra cơ sở của phòng; danh sách ID phòng; phạm vi công tơ          | `locations`, `rooms`, `meters`                                                                                            |
+| `SharedConfigurationStore`                                                                                  | Kiểm tra cơ sở hoạt động sau advisory lock                                                            | `locations`                                                                                                               |
+| `InvoiceRepository`                                                                                         | Danh sách cơ sở tính phí của Tenant; xác định cơ sở trước khóa phòng; kiểm tra tồn tại cơ sở sau khóa | `contracts`, `rooms`, `locations`                                                                                         |
+| `FinancialScenarioRepository`                                                                               | Lưu kịch bản, danh sách, xem, replay theo actor/key, giữ nguyên snapshot và công thức                 | `financial_scenarios`                                                                                                     |
+| `ExpenseRepository`                                                                                         | CRUD không xóa, chi phí, đầu tư hàng loạt, phân trang, phạm vi và tham chiếu; lưu history qua EF      | `expenses`, `locations`, `rooms`, `assets`, `operational_tasks`, `incident_reports`                                       |
+| `CompactOperationsRepository`                                                                               | Đọc lịch sử, kiểm tra trùng kỳ, tạo và cập nhật kỳ lao động; giữ khóa account và audit                | `staff_employments`                                                                                                       |
+| `CompactTenantContractAccess`                                                                               | Quyền truy cập giữa các thành viên khác nhau trong cùng hợp đồng, theo phạm vi cơ sở                  | `contracts`, `contract_residents`, `residents`, `rooms`                                                                   |
+| `PostgresPropertyRepository`, `PropertyLifecycleChecks`, `PostgresRoomInsightsRepository`                   | Nghĩa vụ phòng, kiểm tra đóng cơ sở/phòng, lịch sử, tình trạng sẵn sàng và tỷ lệ sử dụng              | `locations`, `rooms`, `contracts`, `residents`, `assets`, `incident_reports`, `meters`, `notifications` và bảng liên quan |
+| `SharedConfigurationOperationsStore`, `SetupWorkspaceStore`                                                 | Đọc/copy biểu phí, kiểm tra công việc mở và tài sản trùng                                             | `billing_policies`, `operational_tasks`, `assets`                                                                         |
+| `ExpensePaymentRepository`, `DepreciationRepository`, `ExpenseEvidenceRepository`                           | Ghi nối lịch sử thanh toán, khấu hao, chứng từ và bảo toàn JSON trong transaction                     | `expenses`                                                                                                                |
+| `InvoiceFinancialQueries`, các repository báo cáo và kịch bản tài chính                                     | Tổng hợp hóa đơn, khoản phân bổ, quyết định điều chỉnh và dòng hóa đơn theo snapshot                  | `invoices`, `invoice_items`, `invoice_adjustments`, `payment_allocations`                                                 |
+| `NotificationPublications`, `NotificationInboxWrites`, các job phát thông báo                               | Kiểm tra và lưu inbox, marker chống phát trùng; giữ key, ID xác định và payload lịch sử               | `notifications`                                                                                                           |
+| `ContractRepository`, `NativeContractMutation`, `NativeContractSidecars`, repository bàn giao và quyết toán | Hợp đồng, chữ ký, bàn giao/trả phòng, lịch sử, khóa và idempotency                                    | `contracts`, `contract_signings`, `contract_residents`, `residents`, `rooms`, `operational_tasks`                         |
+| `PaymentRepository`, `PaymentLedgerWrites`, `MainInitialPaymentLedger`, `RefundRepository`                  | Đối soát, phân bổ, nghĩa vụ tiền cọc, thanh toán lần đầu, hoàn tiền                                   | `payments`, `payment_allocations`, `refund_requests`, `invoices`, `contracts`                                             |
+| `NativeInvoicePersistence`, `NativeAdjustmentPersistence`, `NativeBillingJobPersistence`                    | Ghi hóa đơn/điều chỉnh, automation và công tơ                                                         | `invoices`, `invoice_items`, `invoice_adjustments`, `meter_readings`, `operational_tasks`                                 |
+| `NativeOperationalTaskPersistence`, `NativeIncidentSession`, `NativeIncidentWrites`                         | Nhiệm vụ, sự cố, bảo trì, chứng từ và lịch sử                                                         | `operational_tasks`, `incident_reports`, `assets`, `expenses`                                                             |
+| `NativeCaptureWrites`, `NativeHouseholdPersistence`, `NativeIdentityPersistence`                            | OCR, hộ gia đình, tài khoản và audit                                                                  | `meters`, `meter_readings`, `residents`, `users`, `refresh_tokens` và bảng liên quan                                      |
 
 Công thức, snapshot biểu phí, quyền theo người thuê, predicate hợp đồng Main/Renewal đã kích hoạt, advisory lock và transaction phải được giữ nguyên. Chi phí và kịch bản dùng DTO hiện có; `ExpenseDtos.cs`, `FinancialScenarioDtos.cs` và các interface Repository tách khỏi Service, giữ namespace và hợp đồng API. Chỉ công cụ/fixture offline còn dùng projection cũ.
 

@@ -24,23 +24,23 @@ Assets and effective-dated BillingPolicies. See [its API and approved decisions]
 Application owns the business rules; `Repositories/PropertyManagement/` supplies EF queries,
 transaction/Location locking and audit persistence. Legacy OCR configuration creates use the same service.
 
-| Artifact                              | Location pattern                                                      |
-| ------------------------------------- | --------------------------------------------------------------------- |
-| Domain entity/value/rule              | `src/backend/BHome.Api/Entities/<Module>/`, `Enums/`, `Models/`, `Services/`                              |
-| Application service/use-case          | `src/backend/BHome.Api/Services/<Module>/`                            |
-| Input/output DTO                      | `src/backend/BHome.Api/DTOs/<Module>/`                                |
-| Persistence query/command interface   | `src/backend/BHome.Api/Interfaces/<Module>/` or related contract file |
-| Application authorization rule        | `src/backend/BHome.Api/Services/IdentityAccess/`                      |
-| Controller/HTTP contract mapping      | `src/backend/BHome.Api/Controllers/<Module>/`                         |
-| EF entity configuration               | `src/backend/BHome.Api/Data/`                                         |
-| EF data-access implementation         | `src/backend/BHome.Api/Repositories/<Module>/`                        |
-| Provider adapter/client/options       | `src/backend/BHome.Api/Integrations/<Provider>/`                      |
-| Job handler using application service | `src/backend/BHome.Api/BackgroundJobs/<Module>/` or existing service  |
-| Domain unit tests                     | `tests/backend/BHome.Domain.UnitTests/<Module>/`                      |
-| Application unit tests                | `tests/backend/BHome.Application.UnitTests/<Module>/`                 |
-| API/PostgreSQL tests                  | `tests/backend/BHome.IntegrationTests/<Module>/`                      |
-| Owner/mobile/public frontend          | `src/<client>/src/features/<feature>/`                                |
-| Client tests                          | `tests/<client>/<feature>/`                                           |
+| Artifact                              | Location pattern                                                             |
+| ------------------------------------- | ---------------------------------------------------------------------------- |
+| Domain entity/value/rule              | `src/backend/BHome.Api/Entities/<Module>/`, `Enums/`, `Models/`, `Services/` |
+| Application service/use-case          | `src/backend/BHome.Api/Services/<Module>/`                                   |
+| Input/output DTO                      | `src/backend/BHome.Api/DTOs/<Module>/`                                       |
+| Persistence query/command interface   | `src/backend/BHome.Api/Interfaces/<Module>/` or related contract file        |
+| Application authorization rule        | `src/backend/BHome.Api/Services/IdentityAccess/`                             |
+| Controller/HTTP contract mapping      | `src/backend/BHome.Api/Controllers/<Module>/`                                |
+| EF entity configuration               | `src/backend/BHome.Api/Data/`                                                |
+| EF data-access implementation         | `src/backend/BHome.Api/Repositories/<Module>/`                               |
+| Provider adapter/client/options       | `src/backend/BHome.Api/Integrations/<Provider>/`                             |
+| Job handler using application service | `src/backend/BHome.Api/BackgroundJobs/<Module>/` or existing service         |
+| Domain unit tests                     | `tests/backend/BHome.Domain.UnitTests/<Module>/`                             |
+| Application unit tests                | `tests/backend/BHome.Application.UnitTests/<Module>/`                        |
+| API/PostgreSQL tests                  | `tests/backend/BHome.IntegrationTests/<Module>/`                             |
+| Owner/mobile/public frontend          | `src/<client>/src/features/<feature>/`                                       |
+| Client tests                          | `tests/<client>/<feature>/`                                                  |
 
 ## Adding a feature
 

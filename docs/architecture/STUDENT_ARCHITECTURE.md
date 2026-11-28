@@ -6,15 +6,15 @@ Mục tiêu: mỗi thành viên tự tìm được code xử lý một nghiệp 
 
 Giữ Modular Monolith .NET 8 + PostgreSQL. Bốn project backend trước đây được hợp nhất thành `src/backend/BHome.Api/BHome.Api.csproj`; namespace CLR cũ vẫn giữ để không đổi hợp đồng kiểu. DigitalSigning vẫn là subsystem riêng. Không tạo thêm project, microservice, framework hoặc tầng điều phối chỉ để chuyển tiếp.
 
-| Tầng                               | Đọc và sửa ở đây                                                                  | Không đặt ở đây                      |
-| ---------------------------------- | --------------------------------------------------------------------------------- | ------------------------------------ |
-| `Controllers/<Nghiệp vụ>`          | HTTP route, binding DTO, policy, gọi service                                      | Tự tính tiền hoặc truy vấn DB        |
-| `Services/<Nghiệp vụ>`             | Use case, quyền tài nguyên, trạng thái, transaction qua repository, calculator    | EF mapping, SQL, giao diện           |
-| `DTOs/`, `Interfaces/`             | DTO/contract types và interface riêng; một số kiểu liên quan vẫn nằm cùng service | Logic HTTP hoặc persistence          |
-| `Entities/<Nghiệp vụ>`, `Enums/`, `Models/`, `Common/` | Entity chuẩn của 24 bảng, bản ghi JSONB có kiểu, trạng thái và giá trị dùng chung | HTTP, SQL, dependency injection |
-| `Repositories/`, `Data/`           | Repository thực, EF mapping, Compact24, migrations                                | Tự thay đổi giá hoặc quy tắc đã chốt |
-| `Integrations/`, `BackgroundJobs/` | Adapter OCR/storage/provider, worker và lịch nền                                  | Thay đổi nghiệp vụ qua đường tắt     |
-| `Configuration/`                   | Đăng ký DI, cấu hình ứng dụng                                                     | Nghiệp vụ trong composition root     |
+| Tầng                                                   | Đọc và sửa ở đây                                                                  | Không đặt ở đây                      |
+| ------------------------------------------------------ | --------------------------------------------------------------------------------- | ------------------------------------ |
+| `Controllers/<Nghiệp vụ>`                              | HTTP route, binding DTO, policy, gọi service                                      | Tự tính tiền hoặc truy vấn DB        |
+| `Services/<Nghiệp vụ>`                                 | Use case, quyền tài nguyên, trạng thái, transaction qua repository, calculator    | EF mapping, SQL, giao diện           |
+| `DTOs/`, `Interfaces/`                                 | DTO/contract types và interface riêng; một số kiểu liên quan vẫn nằm cùng service | Logic HTTP hoặc persistence          |
+| `Entities/<Nghiệp vụ>`, `Enums/`, `Models/`, `Common/` | Entity chuẩn của 24 bảng, bản ghi JSONB có kiểu, trạng thái và giá trị dùng chung | HTTP, SQL, dependency injection      |
+| `Repositories/`, `Data/`                               | Repository thực, EF mapping, Compact24, migrations                                | Tự thay đổi giá hoặc quy tắc đã chốt |
+| `Integrations/`, `BackgroundJobs/`                     | Adapter OCR/storage/provider, worker và lịch nền                                  | Thay đổi nghiệp vụ qua đường tắt     |
+| `Configuration/`                                       | Đăng ký DI, cấu hình ứng dụng                                                     | Nghiệp vụ trong composition root     |
 
 Đường dẫn trong bảng tính từ `src/backend/BHome.Api/`. Luồng chạy: Controller → Service → Domain (quy tắc) và repository interface → Repository/Data → PostgreSQL. Hướng phụ thuộc logic giữ nguyên; `Configuration/` đăng ký implementation. Vì cùng assembly, kiểm tra ranh giới namespace trong `ArchitectureTests` thay thế kiểm tra phụ thuộc assembly trước đây. Không chuyển kiểm soát giao dịch, tính nhất quán và bảo vệ dữ liệu lên controller.
 

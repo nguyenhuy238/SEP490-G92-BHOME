@@ -99,7 +99,7 @@ Muốn hiểu cách tính hóa đơn tháng, bắt đầu tại `Services/Billin
 | Đơn giá hợp đồng đã ký?                     | `Services/Billing/ContractBillingPrices.cs` (`Read`)                                                                                                                           |
 | Phí theo người, phí cố định và phần đã thu? | `Services/Billing/FixedChargeCalculation.cs`, `PersonMonthOccupancy.cs`, `Repositories/Billing/FixedChargeCoverage.cs`                                                         |
 | Điện nước được xác nhận và đã tính trước?   | `Repositories/Billing/InvoiceRepository.cs` (`ReadingAsync`), `MeterBillingCoverage.cs`                                                                                        |
-| Công thức số tiền và làm tròn?              | `Services/Billing/InvoiceMath.cs` (`Amount`, `CalendarDate`)                                                                                                                     |
+| Công thức số tiền và làm tròn?              | `Services/Billing/InvoiceMath.cs` (`Amount`, `CalendarDate`)                                                                                                                   |
 | Cấu hình lịch và chạy thủ công?             | `Services/Billing/BillingAutomationService.cs`, `BillingAutomationOperations.cs`; DTO và interface trong `BillingAutomationContracts.cs`, job trong `BillingAutomationJobs.cs` |
 
 Không sửa giá hợp đồng đã chốt bằng cách đọc giá phòng mới một cách tùy tiện. Kiểm thử: `InvoiceMathTests`, `ContractBillingPricesTests`, `PersonMonthOccupancyTests`, `InvoiceApiTests`, `UtilityTariffInvoiceTests`, `BillingDraftAutomationTests`, `BillingFinalAutomationTests`.
