@@ -18,7 +18,7 @@ internal static class IdentityTextRegionOrder
         // otherwise exhaust the deadline before any labelled personal fields.
         // This is only a scheduling hint: still read every region when time allows,
         // and let the label-based parser decide what each observed value means.
-        foreach (var value in regions.OrderBy(r => FieldBand(r, image, kind) ? 0 : 1)
+        foreach (var value in regions.OrderBy(r => PriorityBand(r, image, kind))
             .ThenByDescending(r => Math.Min(r.Size.Width, r.Size.Height)))
         {
             var bounds = value.BoundingRect();
@@ -31,19 +31,21 @@ internal static class IdentityTextRegionOrder
             // parser can recognize an observed 12-digit number without a label;
             // name/date labels still travel with their values below this band.
             var deferLabel = kind == OcrDocumentKind.IdentityFront && value.Center.Y < image.Height * .36;
-            if (!deferLabel && label.Bounds.Width > 0 && FieldBand(label.Region, image, kind) == FieldBand(value, image, kind) &&
+            if (!deferLabel && label.Bounds.Width > 0 && PriorityBand(label.Region, image, kind) == PriorityBand(value, image, kind) &&
                 seen.Add(label.Region)) ordered.Add(label.Region);
             if (seen.Add(value)) ordered.Add(value);
         }
         return ordered;
     }
 
-    private static bool FieldBand(RotatedRect region, Size image, OcrDocumentKind? kind) => kind switch
+    private static int PriorityBand(RotatedRect region, Size image, OcrDocumentKind? kind) => kind switch
     {
         OcrDocumentKind.IdentityFront => region.Center.X >= image.Width * .25 &&
-            region.Center.Y >= image.Height * .25 && region.Center.Y <= image.Height * .72,
+            region.Center.Y >= image.Height * .25 && region.Center.Y <= image.Height * .72 &&
+            (region.Center.Y >= image.Height * .38 || Math.Max(region.Size.Width, region.Size.Height) <= image.Width * .48) ? 0 :
+            region.Center.Y > image.Height * .72 && region.Center.Y <= image.Height * .98 ? 1 : 2,
         OcrDocumentKind.IdentityBack => region.Center.X <= image.Width * .8 &&
-            region.Center.Y >= image.Height * .18 && region.Center.Y <= image.Height * .55,
-        _ => false
+            region.Center.Y >= image.Height * .03 && region.Center.Y <= image.Height * .55 ? 0 : 2,
+        _ => 2
     };
 }

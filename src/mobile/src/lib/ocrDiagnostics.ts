@@ -36,6 +36,17 @@ const warnings: Record<string, string> = {
     'Ảnh có nhiều chỉ số chưa phân biệt được. Hãy chụp gần vùng chỉ số cần ghi hoặc nhập thủ công.',
   conflicting_identity_numbers: 'Các số CCCD đọc được không khớp. Hãy kiểm tra và nhập lại.',
   low_confidence: 'Kết quả OCR có độ tin cậy thấp. Hãy đối chiếu với ảnh trước khi xác nhận.',
+  identity_small_card: 'Thẻ còn nhỏ trong ảnh. Hãy để thẻ gần kín khung và giữ đủ bốn góc.',
+  identity_low_light: 'Vùng chữ thiếu sáng. Đổi vị trí đèn, giữ máy yên và tránh bóng đổ lên thẻ.',
+  identity_card_not_found:
+    'Chưa xác định được đầy đủ viền thẻ. Chụp đủ bốn góc trên nền tương phản.',
+  identity_qr_read: 'Đã đọc thêm thông tin từ QR trên thẻ; vẫn cần đối chiếu và xác nhận.',
+  identity_qr_unavailable: 'Chưa đọc được QR. Các trường đọc từ chữ vẫn được giữ lại.',
+  mrz_unreadable: 'Chưa đối chiếu được dòng mã ở cuối mặt sau. Kiểm tra thông tin trên thẻ.',
+  mrz_checked: 'Đã đối chiếu cấu trúc và số kiểm tra của dòng mã; vẫn cần xác nhận giấy tờ.',
+  mrz_name_unaccented:
+    'Tên trong dòng mã không có dấu. Đọc mặt trước hoặc bổ sung dấu theo giấy tờ; không tự suy đoán dấu.',
+  identity_region_retry: 'Đã đọc lại vùng thông tin còn thiếu hoặc chưa chắc chắn.',
   orientation_corrected: 'Ảnh đã được xoay để nhận dạng. Hãy kiểm tra lại kết quả.',
   orientation_uncertain: 'Chiều đọc ảnh chưa chắc chắn. Hãy chụp đúng chiều hoặc nhập thủ công.',
   reading_preprocessed: 'Vùng chỉ số đã được tăng tương phản để đọc. Hãy đối chiếu với công tơ.',

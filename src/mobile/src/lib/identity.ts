@@ -29,17 +29,56 @@ export function inputDate(value: string): string | null {
 export function mergeIdentity(
   current: IdentityFields,
   proposal: Proposal,
+  options: { unaccentedName?: boolean } = {},
 ): { fields: IdentityFields; conflicts: string[] } {
   const fields = { ...current };
   const conflicts: string[] = [];
+  const incomingIdentity = proposal.proposedFields.citizenIdentityNumber;
+  const identityDisagrees =
+    !!fields.citizenIdentityNumber &&
+    !!incomingIdentity &&
+    fields.citizenIdentityNumber !== incomingIdentity;
+  if (identityDisagrees)
+    return {
+      fields,
+      conflicts: identityFields
+        .filter(([key]) => !!proposal.proposedFields[key])
+        .map(([key]) => key),
+    };
   for (const [key] of identityFields) {
     const raw = proposal.proposedFields[key];
     if (!raw) continue;
     const value = key.startsWith('dateOf') ? displayDate(raw) : raw;
-    if (fields[key] && fields[key] !== value) conflicts.push(key);
+    if (
+      key === 'fullName' &&
+      !identityDisagrees &&
+      fields.fullName &&
+      foldIdentityName(fields.fullName) === foldIdentityName(value) &&
+      (options.unaccentedName || proposal.warnings.includes('mrz_name_unaccented'))
+    ) {
+      if (options.unaccentedName && !proposal.warnings.includes('mrz_name_unaccented'))
+        fields.fullName = value;
+    } else if (
+      (key === 'residentialAddress' || key === 'placeOfOrigin') &&
+      fields[key] &&
+      incomingIdentity &&
+      incomingIdentity === current.citizenIdentityNumber &&
+      value.startsWith(fields[key].trim() + ' ')
+    )
+      fields[key] = value;
+    else if (fields[key] && fields[key] !== value) conflicts.push(key);
     else fields[key] = value;
   }
   return { fields, conflicts };
+}
+export function foldIdentityName(value: string): string {
+  return value
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .replace(/[đĐ]/g, 'D')
+    .toUpperCase()
+    .replace(/\s+/g, ' ')
+    .trim();
 }
 export function confirmedIdentity(fields: IdentityFields) {
   if (!/^[0-9]{12}$/.test(fields.citizenIdentityNumber.trim()) || !fields.fullName.trim())

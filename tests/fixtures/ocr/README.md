@@ -1,5 +1,11 @@
 # Ảnh OCR tổng hợp
 
+Đợt 28/11 bổ sung script `scripts/New-IdentityChipCameraLayout.ps1` và lệnh
+`--generate-identity-chip-camera` trong `BHome.OcrSmoke`. Bộ này kiểm đủ 8 trường
+mặt trước và ngày cấp mặt sau trên 7 điều kiện chụp mỗi mẫu; địa chỉ bắt đầu cạnh
+nhãn rồi xuống dòng. Ảnh sinh vào `.tools/identity-chip-camera`, không lưu CCCD
+thật. Xem [cách chạy, kết quả và giới hạn](../../../docs/testing/IDENTITY_OCR_CHIP_CAMERA_2026-11-28.md).
+
 Các PNG được tạo bằng `scripts/New-SyntheticOcrFixtures.ps1` (Arial/Windows GDI+).
 Không phải ảnh CCCD hoặc đồng hồ thật; không chứa danh tính có thật. Chuỗi 12 chữ số toàn 0
 là dữ liệu kiểm thử, chỉ kiểm tra format và không chứng minh CCCD hợp lệ.

@@ -12,7 +12,7 @@ namespace BHome.Infrastructure.Ocr;
 // One detector + recognizer per process. No network, file writes or image logging.
 public sealed class OnnxOcrEngine : IOcrEngine, IOcrAnalysisEngine, IExperimentalMeterAnalysisEngine, IDisposable
 {
-    public const string Version = "ocrdoc-ppocrv6-vi-run6-9b534643-yolo2-cache1-category2-identity-desk1";
+    public const string Version = "ocrdoc-ppocrv6-vi-run6-9b534643-yolo2-cache1-category2-identity-regions7";
     private readonly OcrOptions options;
     private readonly IImagePreprocessor preprocessor;
     private readonly InferenceSession detector;
@@ -344,7 +344,11 @@ public sealed class OnnxOcrEngine : IOcrEngine, IOcrAnalysisEngine, IExperimenta
                     var alternativeProposal = OcrFieldParser.Parse(alternative, kind);
                     var conflicting = proposal.ProposedFields.Any(field => alternativeProposal.ProposedFields.TryGetValue(field.Key, out var value) && value != field.Value);
                     if (!conflicting && alternativeProposal.ProposedFields.Count > proposal.ProposedFields.Count)
+                    {
                         text = alternative with { Warnings = [.. alternative.Warnings, "orientation_corrected"] };
+                        source = reversed;
+                        regions = flipped;
+                    }
                     else if (conflicting && !alternativeProposal.IsFallback)
                         text = text with { Warnings = [.. text.Warnings, "orientation_uncertain"] };
                 }
@@ -352,6 +356,8 @@ public sealed class OnnxOcrEngine : IOcrEngine, IOcrAnalysisEngine, IExperimenta
                     retry.IsCancellationRequested && !token.IsCancellationRequested)
                 { text = text with { Warnings = [.. text.Warnings, "orientation_uncertain"] }; }
             }
+            if (kind is OcrDocumentKind.IdentityFront or OcrDocumentKind.IdentityBack)
+                text = RecoverIdentityFields(source, regions, text, kind, clock, token);
             token.ThrowIfCancellationRequested();
             return text with
             {
@@ -362,6 +368,76 @@ public sealed class OnnxOcrEngine : IOcrEngine, IOcrAnalysisEngine, IExperimenta
             };
         }
         catch (OnnxRuntimeException) when (token.IsCancellationRequested) { throw new OperationCanceledException(token); }
+    }
+
+    private OcrText RecoverIdentityFields(Mat source, List<RotatedRect> regions, OcrText text, OcrDocumentKind kind, Stopwatch clock, CancellationToken token)
+    {
+        var observations = new List<IdentityFieldObservation>();
+        var warnings = text.Warnings.ToList();
+        if (kind == OcrDocumentKind.IdentityFront && clock.ElapsedMilliseconds < options.TimeoutMilliseconds - 2000)
+        {
+            try
+            {
+                observations.AddRange(IdentityQrReader.Read(source));
+                if (observations.Count > 0) warnings.Add("identity_qr_read");
+            }
+            catch (OpenCVException) { warnings.Add("identity_qr_unavailable"); }
+        }
+        text = text with { IdentityObservations = observations };
+        var proposal = OcrFieldParser.Parse(text, kind);
+        foreach (var target in IdentityFieldRegions.MissingOrUncertain(proposal, source.Size(), kind)
+            .Where(target => !proposal.IsFallback || target.Field == "citizenIdentityNumber").Take(3))
+        {
+            token.ThrowIfCancellationRequested();
+            var remaining = options.TimeoutMilliseconds - clock.ElapsedMilliseconds - 1200;
+            if (remaining < 500) break;
+            using var retry = CancellationTokenSource.CreateLinkedTokenSource(token);
+            retry.CancelAfter((int)Math.Min(1500, remaining));
+            using var run = new RunOptions { LogSeverityLevel = OrtLoggingLevel.ORT_LOGGING_LEVEL_FATAL };
+            using var registration = retry.Token.Register(() => run.Terminate = true);
+            using var roi = new Mat(source, target.Region);
+            using var enhanced = new Mat();
+            try
+            {
+                Cv2.CvtColor(roi, enhanced, ColorConversionCodes.BGR2GRAY);
+                using (var clahe = Cv2.CreateCLAHE(1.5, new Size(8, 8))) clahe.Apply(enhanced, enhanced);
+                Cv2.CvtColor(enhanced, enhanced, ColorConversionCodes.GRAY2BGR);
+                var recovered = ReadPage(enhanced, Detect(enhanced, run, retry.Token), kind, run, retry.Token, identityClock: clock);
+                var candidate = OcrFieldParser.Parse(recovered, kind);
+                if (candidate.ProposedFields.TryGetValue(target.Field, out var value))
+                    observations.Add(new(target.Field, value, candidate.Confidence.GetValueOrDefault(target.Field), "region"));
+                warnings.Add("identity_region_retry");
+            }
+            catch (Exception exception) when (exception is OperationCanceledException or OnnxRuntimeException && retry.IsCancellationRequested && !token.IsCancellationRequested)
+            { warnings.Add("ocr_partial"); break; }
+            finally { if (!enhanced.Empty()) enhanced.SetTo(Scalar.All(0)); }
+        }
+        var mrzRows = kind == OcrDocumentKind.IdentityBack ? IdentityFieldRegions.MrzRows(regions, text.Lines, source.Size()) : [];
+        if (mrzRows.Count >= 2 && text.Lines.Count(line => line.Text.Contains('<')) < 2 &&
+            clock.ElapsedMilliseconds < options.TimeoutMilliseconds - 3000)
+        {
+            using var retry = CancellationTokenSource.CreateLinkedTokenSource(token);
+            retry.CancelAfter(1800);
+            using var run = new RunOptions { LogSeverityLevel = OrtLoggingLevel.ORT_LOGGING_LEVEL_FATAL };
+            using var registration = retry.Token.Register(() => run.Terminate = true);
+            var read = new List<OcrLine>();
+            try
+            {
+                // The first two TD1 rows carry document/date/composite checks.
+                // The unaccented name row cannot reconstruct Vietnamese accents.
+                foreach (var region in mrzRows)
+                {
+                    retry.Token.ThrowIfCancellationRequested();
+                    using var crop = Crop(source, region);
+                    try { read.Add(ReadLine(crop, run, wideLine: true) with { Bounds = OcrImageGeometry.LayoutBounds(region, OcrImageGeometry.PageAngle(regions)) }); }
+                    finally { crop.SetTo(Scalar.All(0)); }
+                }
+            }
+            catch (Exception exception) when (exception is OperationCanceledException or OnnxRuntimeException && retry.IsCancellationRequested && !token.IsCancellationRequested)
+            { warnings.Add("mrz_unreadable"); }
+            if (read.Count > 0) text = text with { Lines = [.. text.Lines, .. read] };
+        }
+        return text with { IdentityObservations = observations, Warnings = warnings.Distinct().ToArray() };
     }
 
     private OcrText ReadPage(Mat source, List<RotatedRect> regions, OcrDocumentKind? kind, RunOptions run, CancellationToken token,
@@ -437,6 +513,7 @@ public sealed class OnnxOcrEngine : IOcrEngine, IOcrAnalysisEngine, IExperimenta
             {
                 lines.Add(line with { Bounds = OcrImageGeometry.LayoutBounds(region, pageAngle) });
                 lineRegions.Add(region);
+                if (identityClock is not null && IdentityFieldRegions.Complete(kind!.Value, source.Size(), regions, lines)) break;
             }
         }
         if (meter)

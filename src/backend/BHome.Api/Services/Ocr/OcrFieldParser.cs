@@ -31,7 +31,8 @@ public static class OcrFieldParser
         else
         {
             var lines = IdentityOcrLayout.SplitRows(text.Lines.Select(x => x with { Text = x.Text.Normalize(NormalizationForm.FormC).Trim() }), Labels);
-            var identities = lines.SelectMany(x => Matches(x.Text, @"(?<!\d)[0-9]{12}(?!\d)").Cast<Match>()
+            var identities = lines.Where(x => !x.Text.Contains('<') && !x.Text.StartsWith("IDVNM", StringComparison.OrdinalIgnoreCase))
+                .SelectMany(x => Matches(x.Text, @"(?<!\d)[0-9]{12}(?!\d)").Cast<Match>()
                 .Select(m => (m.Value, x.Confidence))).ToArray();
             if (identities.Select(x => x.Value).Distinct().Count() == 1)
             {
@@ -67,8 +68,11 @@ public static class OcrFieldParser
                         var used = new HashSet<int> { i, valueIndex };
                         for (var continuation = 0; continuation < 2; continuation++)
                         {
-                            var next = IdentityOcrLayout.Following(lines, valueIndex, IsLabel).FirstOrDefault(next => !used.Contains(next), -1);
-                            if (next < 0 || IsLabel(lines[next].Text) || !IdentityOcrLayout.Continuation(lines[valueIndex], lines[next])) break;
+                            var next = IdentityOcrLayout.Following(lines, valueIndex, IsLabel)
+                                .Concat(IdentityOcrLayout.Following(lines, i, IsLabel)).Distinct()
+                                .FirstOrDefault(next => !used.Contains(next) && !IsLabel(lines[next].Text) &&
+                                    IdentityOcrLayout.Continuation(lines[valueIndex], lines[next], lines[i]), -1);
+                            if (next < 0) break;
                             candidate += " " + lines[next].Text;
                             score = Math.Min(score, lines[next].Confidence);
                             used.Add(next); valueIndex = next;
@@ -106,6 +110,8 @@ public static class OcrFieldParser
                     confidence[key] = score;
                 }
             }
+            IdentityOcrEvidence.Apply(fields, confidence, warnings, text.IdentityObservations);
+            IdentityOcrEvidence.CheckMrz(lines, fields, confidence, warnings);
             if (fields.Count == 0)
             {
                 warnings.RemoveAll(warning => warning == "ocr_partial");

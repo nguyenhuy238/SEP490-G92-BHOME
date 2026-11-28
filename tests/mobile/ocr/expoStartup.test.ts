@@ -6,26 +6,44 @@ const { supportedNode, selectRuntime, checkExpoOnline, main } = createRequire(im
 const { STAGING_API_URL, startStagingMobile } = createRequire(import.meta.url)(
   '../../../scripts/Start-StagingMobile.cjs',
 );
+const { PRODUCT_API_URL, startProductMobile } = createRequire(import.meta.url)(
+  '../../../scripts/Start-ProductMobile.cjs',
+);
 const supportedRuntime = {
   nodeVersion: '22.23.4',
   nodeExecutable: 'supported-node22',
   nodeCandidates: [],
 };
 
-describe('Staging mobile launch', () => {
-  it('uses the staging HTTPS API, ignores local API settings and bypasses the local supervisor', async () => {
+describe.each([
+  ['Staging', STAGING_API_URL, startStagingMobile, 'EXPO_PUBLIC_STAGING_WEB_PROXY', 'true'],
+  ['Product', PRODUCT_API_URL, startProductMobile, 'EXPO_PUBLIC_PRODUCT_WEB_PROXY', 'false'],
+])('%s mobile launch', (_name, apiUrl, startMobile, proxyFlag, demoClock) => {
+  it('uses the selected HTTPS API, ignores local API settings and bypasses the local supervisor', async () => {
     vi.stubEnv('EXPO_PUBLIC_API_BASE_URL', 'https://localhost:7240');
     vi.stubEnv('EXPO_PUBLIC_DEV_API_BASE_URL', 'https://192.168.2.102:7240');
-    vi.stubEnv('EXPO_PUBLIC_STAGING_WEB_PROXY', undefined);
+    vi.stubEnv('EXPO_PUBLIC_STAGING_WEB_PROXY', '1');
+    vi.stubEnv('EXPO_PUBLIC_PRODUCT_WEB_PROXY', '1');
+    vi.stubEnv('EXPO_PUBLIC_DEMO_CLOCK_ENABLED', 'true');
+    vi.stubEnv('EXPO_PUBLIC_SMS_DEMO_ENABLED', 'true');
     vi.stubEnv('EXPO_NO_DOTENV', undefined);
     vi.stubEnv('EXPO_PUBLIC_DEV_SERVER_ID', 'old-local-server');
     try {
       const launch = vi.fn().mockResolvedValue(0);
-      await expect(startStagingMobile(['--port', '8082'], launch)).resolves.toBe(0);
-      expect(process.env.EXPO_PUBLIC_API_BASE_URL).toBe(STAGING_API_URL);
+      await expect(startMobile(['--port', '8082'], launch)).resolves.toBe(0);
+      expect(process.env.EXPO_PUBLIC_API_BASE_URL).toBe(apiUrl);
       expect(process.env.EXPO_PUBLIC_DEV_API_BASE_URL).toBeUndefined();
       expect(process.env.EXPO_PUBLIC_DEV_SERVER_ID).toBeUndefined();
-      expect(process.env.EXPO_PUBLIC_STAGING_WEB_PROXY).toBe('1');
+      expect(process.env[proxyFlag]).toBe('1');
+      expect(
+        process.env[
+          proxyFlag === 'EXPO_PUBLIC_PRODUCT_WEB_PROXY'
+            ? 'EXPO_PUBLIC_STAGING_WEB_PROXY'
+            : 'EXPO_PUBLIC_PRODUCT_WEB_PROXY'
+        ],
+      ).toBeUndefined();
+      expect(process.env.EXPO_PUBLIC_DEMO_CLOCK_ENABLED).toBe(demoClock);
+      if (demoClock === 'false') expect(process.env.EXPO_PUBLIC_SMS_DEMO_ENABLED).toBe('false');
       expect(process.env.EXPO_NO_DOTENV).toBe('1');
       expect(launch).toHaveBeenCalledExactlyOnceWith([
         '--metro-only',

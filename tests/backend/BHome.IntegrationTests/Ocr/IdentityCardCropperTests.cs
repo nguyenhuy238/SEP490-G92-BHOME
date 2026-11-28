@@ -7,6 +7,105 @@ namespace BHome.IntegrationTests.Ocr;
 public sealed class IdentityCardCropperTests
 {
     [Fact]
+    public void ACenteredDistantCardInALandscapeFrameIsStillLocalized()
+    {
+        using var image = new Mat(1000, 1600, MatType.CV_8UC3, Scalar.All(50));
+        Cv2.Rectangle(image, new Rect(500, 300, 600, 375), Scalar.All(180), -1);
+        using var crop = new Mat();
+        Assert.True(IdentityCardCropper.TryCrop(image, crop));
+        Assert.InRange(crop.Width, 570, 630);
+        Assert.InRange(crop.Height, 345, 405);
+    }
+
+    [Fact]
+    public void FingerprintPanelInsideAnAlreadyFramedCardMustNotReplaceTheWholeCard()
+    {
+        using var image = new Mat(1000, 1600, MatType.CV_8UC3, new Scalar(199, 227, 213));
+        Cv2.Rectangle(image, new Rect(880, 25, 650, 400), Scalar.All(70), -1);
+        using var crop = new Mat();
+        Assert.False(IdentityCardCropper.TryCrop(image, crop));
+        using var prepared = new ImagePreprocessor(new OcrOptions()).Prepare(image.ImEncode(".png"), OcrDocumentKind.IdentityBack);
+        Assert.Equal(1600, prepared.Image.Width);
+        Assert.Equal(1000, prepared.Image.Height);
+    }
+
+    [Theory]
+    [InlineData(0)]
+    [InlineData(17)]
+    [InlineData(-25)]
+    public void DistantCardBelowTwelvePercentOfFrameIsLocalized(float angle)
+    {
+        using var scene = new Mat(1280, 960, MatType.CV_8UC3, Scalar.All(50));
+        var card = new RotatedRect(new(480, 600), new(420, 265), angle);
+        Cv2.FillConvexPoly(scene, card.Points().Select(p => new Point((int)p.X, (int)p.Y)), Scalar.All(180));
+        using var crop = new Mat();
+        Assert.True(IdentityCardCropper.TryCrop(scene, crop));
+        Assert.InRange(crop.Width, 400, 440);
+        Assert.InRange(crop.Height, 245, 285);
+    }
+
+    [Fact]
+    public void DistantCardsRemainAmbiguousAndTinyShapesAreNotEnlargedAsCards()
+    {
+        using var scene = new Mat(1280, 960, MatType.CV_8UC3, Scalar.All(50));
+        Cv2.Rectangle(scene, new Rect(70, 350, 350, 220), Scalar.All(180), -1);
+        Cv2.Rectangle(scene, new Rect(540, 350, 350, 220), Scalar.All(180), -1);
+        using var crop = new Mat();
+        Assert.False(IdentityCardCropper.TryCrop(scene, crop));
+        scene.SetTo(Scalar.All(50));
+        Cv2.Rectangle(scene, new Rect(400, 500, 180, 110), Scalar.All(180), -1);
+        Assert.False(IdentityCardCropper.TryCrop(scene, crop));
+    }
+
+    [Fact]
+    public void DeskTextureAndAnInsetDoNotHideTheLargerCardProposal()
+    {
+        using var scene = new Mat(1600, 1200, MatType.CV_8UC3, Scalar.All(65));
+        for (var y = -1200; y < 1600; y += 8)
+            Cv2.Line(scene, new Point(0, y), new Point(1200, y + 1200), Scalar.All(100), 2);
+        Cv2.Rectangle(scene, new Rect(100, 400, 1000, 630), Scalar.All(190), -1);
+        Cv2.Rectangle(scene, new Rect(140, 550, 260, 400), Scalar.All(30), -1);
+        using var crop = new Mat();
+        Assert.True(IdentityCardCropper.TryCrop(scene, crop));
+        Assert.InRange(crop.Width, 960, 1040);
+        Assert.InRange(crop.Height, 590, 670);
+    }
+
+    [Fact]
+    public void SupplementaryFieldsPrecedeDecorationAndBackIssueDateNearTopIsPrioritized()
+    {
+        var header = new RotatedRect(new(850, 100), new(900, 65), 0);
+        var expiry = new RotatedRect(new(160, 780), new(250, 30), 0);
+        var address = new RotatedRect(new(800, 760), new(800, 55), 0);
+        var name = new RotatedRect(new(750, 400), new(500, 40), 0);
+        var front = IdentityTextRegionOrder.Prioritize([header, address, expiry, name], new(1400, 880), OcrDocumentKind.IdentityFront);
+        Assert.Equal(name, front[0]);
+        Assert.Equal(header, front[^1]);
+        Assert.Contains(expiry, front.Take(3));
+        var issue = new RotatedRect(new(600, 130), new(180, 24), 0);
+        var mrz = new RotatedRect(new(700, 780), new(1250, 65), 0);
+        Assert.Equal(issue, IdentityTextRegionOrder.Prioritize([mrz, issue], new(1400, 880), OcrDocumentKind.IdentityBack)[0]);
+    }
+
+    [Fact]
+    public void DarkCardIsLiftedWithoutChangingBrightCardsOrMeters()
+    {
+        using var dark = new Mat(500, 800, MatType.CV_8UC3, new Scalar(45, 60, 75));
+        using var bright = new Mat(500, 800, MatType.CV_8UC3, new Scalar(160, 180, 200));
+        var processor = new ImagePreprocessor(new OcrOptions());
+        using var identity = processor.Prepare(dark.ImEncode(".png"), OcrDocumentKind.IdentityFront);
+        using var back = processor.Prepare(dark.ImEncode(".png"), OcrDocumentKind.IdentityBack);
+        using var unchanged = processor.Prepare(bright.ImEncode(".png"), OcrDocumentKind.IdentityFront);
+        using var meter = processor.Prepare(dark.ImEncode(".png"), OcrDocumentKind.DigitalWater);
+        Assert.True(Cv2.Mean(identity.Image).Val1 > 70);
+        Assert.True(Cv2.Mean(back.Image).Val1 > 70);
+        var pixel = identity.Image.At<Vec3b>(100, 100);
+        Assert.True(pixel.Item0 < pixel.Item1 && pixel.Item1 < pixel.Item2);
+        Assert.Equal(180, Cv2.Mean(unchanged.Image).Val1, 1);
+        Assert.Equal(60, Cv2.Mean(meter.Image).Val1, 1);
+    }
+
+    [Fact]
     public void LowContrastCardCanBeLocalizedWithoutAStrongCannyBoundary()
     {
         using var source = new Mat(1280, 960, MatType.CV_8UC3, Scalar.All(100));

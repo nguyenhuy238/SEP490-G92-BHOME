@@ -3,6 +3,7 @@ import { Platform, View } from 'react-native';
 import { CameraView, type CameraViewProps } from 'expo-camera';
 import { Button, Text } from 'react-native-paper';
 import { captureLensOptions } from '../lib/captureLenses';
+import { identityPictureSize } from '../lib/identityPictureSize';
 import {
   acceptCameraFocusEvent,
   cameraFocusMessage,
@@ -33,6 +34,7 @@ export function LiveCaptureCamera({
   dark = false,
   showControls = true,
   lensPreferenceRef,
+  preserveIdentityDetail = false,
   children,
 }: {
   camera: React.RefObject<CameraView | null>;
@@ -42,6 +44,7 @@ export function LiveCaptureCamera({
   dark?: boolean;
   showControls?: boolean;
   lensPreferenceRef?: { current: string };
+  preserveIdentityDetail?: boolean;
   children?: React.ReactNode;
 }) {
   const [lens, setLens] = useState('');
@@ -132,6 +135,26 @@ export function LiveCaptureCamera({
     ({ lenses: reported }: { lenses: unknown }) => reportLenses(reported),
     [reportLenses],
   );
+  const [resolution, setResolution] = useState<{ lens: string; value?: string }>({ lens: '' });
+  useEffect(() => {
+    if (!preserveIdentityDetail || !camera.current) return;
+    let active = true;
+    void camera.current
+      .getAvailablePictureSizesAsync?.()
+      .then((sizes) => {
+        const next = identityPictureSize(sizes);
+        if (active && (resolution.lens !== lens || resolution.value !== next)) {
+          settle();
+          setResolution({ lens, value: next });
+        }
+      })
+      .catch(() => {
+        /* The device's native default remains available. */
+      });
+    return () => {
+      active = false;
+    };
+  }, [camera, preserveIdentityDetail, lens, settling, resolution, settle]);
   const blocked = disabled || settling;
   const textColor = dark ? '#CBD5E1' : undefined;
   const focusMessage = settling ? 'Đang mở camera…' : cameraFocusMessage(focus, nativeFocus);
@@ -143,6 +166,9 @@ export function LiveCaptureCamera({
           style={{ flex: 1 }}
           facing="back"
           mode="picture"
+          pictureSize={
+            preserveIdentityDetail && resolution.lens === lens ? resolution.value : undefined
+          }
           // SDK 58 maps off to continuousAutoFocus on iOS. Android uses CameraX AF.
           autofocus="off"
           bhomeFocusEnabled={nativeFocus ? !disabled && !settling : undefined}

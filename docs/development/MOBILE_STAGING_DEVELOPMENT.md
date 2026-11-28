@@ -1,4 +1,41 @@
-# Mobile local kết nối Staging
+# Mobile local kết nối Staging hoặc Production
+
+## Production
+
+Dừng Metro cũ (Ctrl+C), rồi từ thư mục gốc repository chạy:
+
+```powershell
+npm run mobile:product
+```
+
+Nếu PowerShell chặn `npm.ps1`, dùng `npm.cmd run mobile:product`.
+Lệnh này kết nối API `https://api.103.146.23.157.sslip.io`, bỏ qua `.env.local`
+và các cấu hình API local/Staging, tắt đồng hồ demo và SMS demo.
+Không cần chạy Docker, PostgreSQL hay API local.
+
+Nhấn `w` để mở Mobile Web trên localhost, hoặc quét QR bằng Expo Go.
+Mobile Web dùng proxy Metro riêng `/__bhome_product`, chỉ nhận kết nối loopback;
+Expo Go gọi trực tiếp API Production qua HTTPS. Proxy dùng cùng cơ chế xác thực TLS,
+lọc header và chặn redirect như Staging; không thay đổi CORS hay cấu hình trên VPS.
+Nếu cổng mặc định bận, có thể chạy `npm run mobile:product -- --port 8082`.
+Lệnh luôn xóa cache Metro khi khởi động để nạp đúng môi trường.
+
+Các thao tác trên ứng dụng kết nối dữ liệu Production thật.
+
+Phạm vi thay đổi: cấu hình chạy mobile theo yêu cầu trực tiếp của người dùng;
+không thay đổi BF/UC/GBR/DBR/JOB, API contract hoặc schema. Kiểm tra hồi quy gồm
+chọn đúng API, bỏ cấu hình local/Staging, tắt demo trên Product, giới hạn proxy,
+giữ kết nối trực tiếp trên native/release và kiểm tra kết nối qua API công khai.
+
+Đã xác minh ngày 28/11/2026: 85 kiểm thử trong `expoStartup.test.ts`,
+`stagingMobileProxy.test.ts`, `connectivity.test.ts` đạt; ESLint cho toàn bộ
+`src/mobile/src`, các script/config/test liên quan, TypeScript mobile và Prettier
+cho các file thay đổi đều đạt. Chạy thực tế `npm.cmd run mobile:product -- --port 8094`
+khởi động Metro thành công; `/status` và proxy `/__bhome_product/api/v1/public/locations`
+đều trả HTTP 200 với định dạng mong đợi. API công khai Production qua HTTPS trực tiếp
+cũng trả HTTP 200. Chưa kiểm tra giao diện hoặc Expo Go trên thiết bị thật.
+
+## Staging
 
 Từ thư mục gốc repository, dừng Metro cũ (Ctrl+C) rồi chạy:
 
