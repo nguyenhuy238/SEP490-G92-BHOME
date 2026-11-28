@@ -128,10 +128,15 @@ internal sealed class CaptureRepository(BHomePersistenceContext db, CaptureScope
             return "Chưa có tên xác minh";
         }
     }
-    public async Task<IReadOnlyList<NamedResource>> StaffAsync(CancellationToken t) => await db.Users.AsNoTracking()
-        .Where(u => u.IsActive && db.UserRoles.Any(ur => ur.UserId == u.Id &&
-            db.Roles.Any(r => r.Id == ur.RoleId && r.Name == Roles.Staff))).OrderBy(u => u.UserName).Take(100)
-        .Select(u => new NamedResource(u.Id, u.UserName!, null, null, null, null)).ToListAsync(t);
+    public async Task<IReadOnlyList<NamedResource>> StaffAsync(CancellationToken t)
+    {
+        var staff = db is Compact24DbContext
+            ? db.Users.AsNoTracking().Where(u => u.IsActive && EF.Property<string[]>(u, "roles").Contains(Roles.Staff))
+            : db.Users.AsNoTracking().Where(u => u.IsActive && db.UserRoles.Any(ur => ur.UserId == u.Id &&
+                db.Roles.Any(r => r.Id == ur.RoleId && r.Name == Roles.Staff)));
+        return await staff.OrderBy(u => u.UserName).Take(100)
+            .Select(u => new NamedResource(u.Id, u.UserName!, null, null, null, null)).ToListAsync(t);
+    }
     public async Task<IdResult> CreateStaffAsync(StaffInput x, CancellationToken t)
     {
         Validate(x);

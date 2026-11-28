@@ -546,14 +546,14 @@ internal sealed partial class PaymentRepository(BHomePersistenceContext db) : IP
                        Entry = new PaymentHistoryEntry(allocation.Id, invoice.Id, invoice.LocationId, invoice.RoomId,
                            invoice.BillingSnapshot.GetProperty("compactState").GetProperty("locationName").GetString() ?? "",
                            invoice.BillingSnapshot.GetProperty("compactState").GetProperty("roomNumber").GetString() ?? "", invoice.BillingPeriod,
-                           allocation.Amount, transfer.OccurredAt, allocation.PaidByUserId == scope.ActorId ? "B?n" : allocation.PaidByUserId != null ? "Kh?ch thu? kh?c trong h?a ??n" : "Ch?a x?c ??nh ng??i tr?",
+                           allocation.Amount, transfer.OccurredAt, allocation.PaidByUserId == scope.ActorId ? "Bạn" : allocation.PaidByUserId != null ? "Khách thuê khác trong hóa đơn" : "Chưa xác định người trả",
                            transfer.VerificationData.GetProperty("compactState").GetProperty("verificationSource").GetString() ?? "",
                            scope.Owner ? transfer.BankReference : null, scope.Owner ? (Guid?)(allocation.CreatedByUserId ?? Guid.Empty) : null),
                        ReceiptId = transfer.Id
                    };
         var page = await rows.Skip((query.Page - 1) * query.PageSize).Take(query.PageSize).ToArrayAsync(t);
         var external = await ExternalReceiptIdsAsync(page.Select(row => row.ReceiptId).Distinct().ToArray(), t);
-        return new(page.Select(row => external.Contains(row.ReceiptId) ? row.Entry with { PaidBy = "Ng??i tr? b?n ngo?i (?? x?c minh)" } : row.Entry).ToArray(),
+        return new(page.Select(row => external.Contains(row.ReceiptId) ? row.Entry with { PaidBy = "Người trả bên ngoài (đã xác minh)" } : row.Entry).ToArray(),
             query.Page, query.PageSize, await rows.CountAsync(t));
     }
     public void Audit(Guid actor, string action, Guid target, DateTimeOffset at) => db.SecurityAudit.Add(new SecurityAuditRecord
