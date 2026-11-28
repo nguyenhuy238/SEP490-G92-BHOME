@@ -53,9 +53,9 @@ internal sealed class MainInitialPayments(BHomePersistenceContext db, ContractSe
             var reconcile = order is { SharedDepositContractId: null, SharedRentContractId: null, SharedInvoiceId: null } &&
                 (!order.RoomScopeResolved || untaggedSandbox && order.RoomScopeMode != roomScopeMode) &&
                 !legacyPaymentCode &&
-                !await db.Set<BHome.Domain.PaymentsDebt.PaymentAllocation>().AnyAsync(a =>
+                !await PaymentLedgerWrites.Allocations(db).AnyAsync(a =>
                     a.TargetInitialContractId == id || a.TargetDepositContractId == id, token);
-            var legacyAllocations = order is { CalculationVersion: < 2 } && await db.Set<BHome.Domain.PaymentsDebt.PaymentAllocation>()
+            var legacyAllocations = order is { CalculationVersion: < 2 } && await PaymentLedgerWrites.Allocations(db)
                 .AnyAsync(a => a.TargetInitialContractId == id || a.TargetDepositContractId == id, token);
             var replaceLegacyQuote = order is { CalculationVersion: < 2 } && !legacyAllocations && !legacyPaymentCode;
             if (order is null || reconcile || replaceLegacyQuote)
@@ -171,12 +171,15 @@ internal sealed class MainInitialPayments(BHomePersistenceContext db, ContractSe
                 // Resolve legacy, untagged Staging contracts only on an explicit QR
                 // request with a verified provider/account binding. Never reclassify
                 // an explicit Live contract or one that already has allocations.
-                if (await db.Set<BHome.Domain.PaymentsDebt.PaymentAllocation>().AnyAsync(a =>
+                if (await PaymentLedgerWrites.Allocations(db).AnyAsync(a =>
                     a.TargetInitialContractId == id || a.TargetDepositContractId == id, token))
                     throw new PaymentException(409, "sepay_environment_mismatch");
                 c.PaymentMode = "Test";
-                payments.Audit(user.UserId ?? throw new PaymentException(401, "authentication_required"),
-                    "MainInitialSandboxPaymentModeResolved", id, clock.GetUtcNow());
+                await payments.AuditAsync(user.UserId ?? throw new PaymentException(401, "authentication_required"),
+                    "MainInitialSandboxPaymentModeResolved", id, clock.GetUtcNow(), token);
+                // Payment-code generation now reads persisted contract history rather
+                // than a tracked projection. Publish the explicit mode in this same transaction.
+                await db.SaveChangesAsync(token);
             }
             // IssueAsync joins this transaction; it must not clear tracked state or create nested transactions.
             var paymentKind = invoicePayable ? "Invoice" : "MainInitial";

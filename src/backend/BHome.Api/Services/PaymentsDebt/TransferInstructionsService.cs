@@ -59,7 +59,7 @@ public sealed class TransferInstructionsService(IPaymentRepository repository, P
             var previous = await repository.OwnerPaymentModeAsync(Actor, t);
             if ((await GetPaymentModeAsync(t)).Mode != input.ExpectedMode) throw new PaymentException(409, "payment_mode_changed");
             await repository.SetOwnerPaymentModeAsync(Actor, input.Mode, previous, t);
-            repository.Audit(Actor, "SePayPaymentMode" + input.Mode, Actor, clock.GetUtcNow());
+            await repository.AuditAsync(Actor, "SePayPaymentMode" + input.Mode, Actor, clock.GetUtcNow(), t);
             return await GetPaymentModeAsync(t);
         }, t);
     }
@@ -92,7 +92,7 @@ public sealed class TransferInstructionsService(IPaymentRepository repository, P
                 ConfirmedAt = PaymentRules.Timestamp(clock.GetUtcNow())
             };
             await repository.SaveOwnerReceivingAccountAsync(Actor, account, x.ExpectedVersion, t);
-            repository.Audit(Actor, "OwnerReceivingBankAccountConfigured", account.Id, account.ConfirmedAt);
+            await repository.AuditAsync(Actor, "OwnerReceivingBankAccountConfigured", account.Id, account.ConfirmedAt, t);
             return account;
         }, t);
     }
@@ -127,7 +127,7 @@ public sealed class TransferInstructionsService(IPaymentRepository repository, P
                 ConfirmedByUserId = Actor,
                 ConfirmedAt = PaymentRules.Timestamp(clock.GetUtcNow())
             };
-            repository.Add(account); repository.Audit(Actor, "ReceivingBankAccountConfigured", account.Id, account.ConfirmedAt); return account;
+            await repository.AddAsync(account, t); await repository.AuditAsync(Actor, "ReceivingBankAccountConfigured", account.Id, account.ConfirmedAt, t); return account;
         }, t);
     }
     public async Task<TransferInstructions> GetAsync(Guid invoiceId, CancellationToken t)

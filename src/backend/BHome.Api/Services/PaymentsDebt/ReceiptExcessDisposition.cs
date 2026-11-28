@@ -25,18 +25,23 @@ public sealed record ReceiptExcessConfirmation(ReceiptExcessTarget Target, strin
 public static class ReceiptExcessRules
 {
     public static string Hash<T>(T value) => Convert.ToHexString(SHA256.HashData(JsonSerializer.SerializeToUtf8Bytes(value)));
-    public static string TransferFingerprint(PaymentTransfer transfer) => Hash(new
+    public static string TransferFingerprint(PaymentTransfer transfer) => TransferFingerprint(transfer.Id,
+        transfer.NormalizedReference, transfer.Amount, transfer.Currency, transfer.OccurredAt, transfer.TransferDescription,
+        transfer.StatementReference, transfer.VerifiedByUserId, transfer.VerifiedAt, transfer.IsDevelopmentDemo);
+    public static string TransferFingerprint(Guid id, string normalizedReference, decimal amount, string currency,
+        DateTimeOffset occurredAt, string transferDescription, string statementReference, Guid verifiedByUserId,
+        DateTimeOffset verifiedAt, bool isDevelopmentDemo) => Hash(new
     {
-        transfer.Id,
-        transfer.NormalizedReference,
-        Amount = transfer.Amount.ToString("G29", System.Globalization.CultureInfo.InvariantCulture),
-        transfer.Currency,
-        transfer.OccurredAt,
-        transfer.TransferDescription,
-        transfer.StatementReference,
-        transfer.VerifiedByUserId,
-        transfer.VerifiedAt,
-        transfer.IsDevelopmentDemo
+        Id = id,
+        NormalizedReference = normalizedReference,
+        Amount = amount.ToString("G29", System.Globalization.CultureInfo.InvariantCulture),
+        Currency = currency,
+        OccurredAt = occurredAt,
+        TransferDescription = transferDescription,
+        StatementReference = statementReference,
+        VerifiedByUserId = verifiedByUserId,
+        VerifiedAt = verifiedAt,
+        IsDevelopmentDemo = isDevelopmentDemo
     });
     public static void Validate(ReceiptExcessTarget target)
     {

@@ -12,6 +12,8 @@ public enum VndRounding { AwayFromZero, ToEven }
 // Explicit Owner selections; no implicit financial defaults when configuration is missing.
 public sealed class BillingSchedule : AuditableEntity
 {
+    internal static BillingSchedule Rehydrate(Guid id, DateTimeOffset createdAt, DateTimeOffset updatedAt) =>
+        new() { Id = id, CreatedAt = createdAt, UpdatedAt = updatedAt };
     public Guid LocationId { get; set; }
     public BillingRateDate RateDate { get; set; }
     public BillingRentSource RentSource { get; set; }
@@ -28,6 +30,8 @@ public sealed class BillingSchedule : AuditableEntity
 
 public sealed class Invoice : AuditableEntity
 {
+    internal static Invoice RestoreIdentity(Guid id, DateTimeOffset createdAt, DateTimeOffset updatedAt) =>
+        new() { Id = id, CreatedAt = createdAt, UpdatedAt = updatedAt };
     [System.ComponentModel.DataAnnotations.Schema.NotMapped] public string Type { get; set; } = "PERIODIC";
     public Guid? AutomationPlanId { get; set; }
     public Guid? AutomationFinalizationPlanId { get; set; }

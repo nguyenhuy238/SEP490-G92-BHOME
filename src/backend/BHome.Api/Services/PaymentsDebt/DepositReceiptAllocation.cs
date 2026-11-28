@@ -100,9 +100,9 @@ public sealed partial class PaymentService
             await repository.RecordDepositReceiptAsync(new(Guid.NewGuid(), transferId, contract.Id, allocation.Id, payer?.ResidentId,
                 payer?.UserId, context.ExternalPayer?.Id, ReceiptExcessRules.TransferFingerprint(transfer), transfer.NormalizedReference,
                 transfer.Amount.ToString("0", CultureInfo.InvariantCulture), context.ProposedAllocation, Actor, Now, key), t);
-            repository.Add(allocation);
+            await repository.AddAsync(allocation, t);
             var reason = transfer.Amount > amount ? "verified_deposit_excess_refund_required" : amount < decimal.Parse(context.Remaining, CultureInfo.InvariantCulture) ? "verified_partial_deposit" : "verified_deposit";
-            repository.Add(new PaymentReconciliation
+            await repository.AddAsync(new PaymentReconciliation
             {
                 TransferId = transferId,
                 DepositContractId = contract.Id,
@@ -110,9 +110,9 @@ public sealed partial class PaymentService
                 OccurredAt = Now,
                 Decision = "Allocated",
                 Reason = reason
-            });
-            repository.Audit(Actor, "ContractDepositReceiptAllocated", allocation.Id, Now);
-            Remember(key, "allocate-deposit", new { transferId, x }, allocation.Id);
+            }, t);
+            await repository.AuditAsync(Actor, "ContractDepositReceiptAllocated", allocation.Id, Now, t);
+            await RememberAsync(key, "allocate-deposit", new { transferId, x }, allocation.Id, t);
             return new("Allocated", reason, transferId, null, contract.Id);
         }, t);
     }

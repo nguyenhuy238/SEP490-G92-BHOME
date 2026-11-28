@@ -129,7 +129,7 @@ public sealed class SePayService(ISePayRepository repository, IPaymentRepository
         if (prior is null) await repository.AddReceiptAsync(received, receipt, token);
         async Task<bool> Review(string reason)
         {
-            if (received.Reason != reason || received.TransferId != receipt.Id) payments.Add(new PaymentReconciliation
+            if (received.Reason != reason || received.TransferId != receipt.Id) await payments.AddAsync(new PaymentReconciliation
             {
                 TransferId = receipt.Id,
                 InvoiceId = receipt.ProposedInvoiceId,
@@ -137,7 +137,7 @@ public sealed class SePayService(ISePayRepository repository, IPaymentRepository
                 Decision = "PendingReview",
                 Reason = reason,
                 OccurredAt = receipt.VerifiedAt
-            });
+            }, token);
             return await Finish("ManualReview", reason, receipt.Id);
         }
         if (target is null) return await Review("unknown_or_ambiguous_payment_code");
@@ -151,7 +151,7 @@ public sealed class SePayService(ISePayRepository repository, IPaymentRepository
             if (initialPayments is null) return await Review("initial_payment_workflow_unavailable");
             try { await initialPayments.AllocateAsync(target.ObligationId, receipt, token); }
             catch (PaymentException e) when (e.Status == 409) { return await Review(e.Code); }
-            payments.Add(new PaymentReconciliation { TransferId = receipt.Id, DepositContractId = target.ObligationId, Decision = "Allocated", Reason = "verified_main_initial_payment", OccurredAt = receipt.VerifiedAt });
+            await payments.AddAsync(new PaymentReconciliation { TransferId = receipt.Id, DepositContractId = target.ObligationId, Decision = "Allocated", Reason = "verified_main_initial_payment", OccurredAt = receipt.VerifiedAt }, token);
             return await Finish("Completed", "verified_main_initial_payment", receipt.Id);
         }
         decimal outstanding;
@@ -223,9 +223,10 @@ public sealed class SePayService(ISePayRepository repository, IPaymentRepository
             Amount = receipt.Amount,
             AllocatedAt = receipt.VerifiedAt
         };
-        payments.Add(allocation);
+        var priorFinancial = invoice is null ? null : await payments.FinancialsAsync(invoice.Id, token);
+        await payments.AddAsync(allocation, token);
         var reason = receipt.Amount < outstanding ? "verified_partial_payment" : "verified_full_payment";
-        payments.Add(new PaymentReconciliation
+        await payments.AddAsync(new PaymentReconciliation
         {
             TransferId = receipt.Id,
             InvoiceId = invoice?.Id,
@@ -233,18 +234,18 @@ public sealed class SePayService(ISePayRepository repository, IPaymentRepository
             Decision = "Allocated",
             Reason = reason,
             OccurredAt = receipt.VerifiedAt
-        });
+        }, token);
         if (invoice is not null)
         {
-            var financial = await payments.FinancialsAsync(invoice.Id, token);
-            payments.Add(new PaymentConfirmedEvent
+            var financial = priorFinancial!;
+            await payments.AddAsync(new PaymentConfirmedEvent
             {
                 AllocationId = allocation.Id,
                 InvoiceId = invoice.Id,
                 OccurredAt = receipt.VerifiedAt,
                 PaidAmount = financial.AllocatedPayments + allocation.Amount,
                 OutstandingAmount = outstanding - allocation.Amount
-            });
+            }, token);
         }
         return await Finish("Completed", reason, receipt.Id);
     }, token);

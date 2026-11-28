@@ -99,7 +99,7 @@ internal sealed class MainInitialPaymentLedger(BHomePersistenceContext db, IPaym
                 other.Status == ContractStatus.Expired || other.Status == ContractStatus.Terminated &&
                 other.StartDate >= period && other.StartDate < period.AddMonths(1))).ToArrayAsync(token);
             if (otherMain.Any(other => ContractPaymentModes.Of(other) == ContractPaymentModes.Of(c)) &&
-                !await db.Set<PaymentAllocation>().AnyAsync(a => a.TargetInitialContractId == id || a.TargetDepositContractId == id, token))
+                !await PaymentLedgerWrites.Allocations(db).AnyAsync(a => a.TargetInitialContractId == id || a.TargetDepositContractId == id, token))
                 throw new PaymentException(409, "initial_room_payment_refresh_required");
         }
         if (await PendingSharedContractAsync(order, token) is not null ||
@@ -109,9 +109,9 @@ internal sealed class MainInitialPaymentLedger(BHomePersistenceContext db, IPaym
         if (deposit + rent <= 0) throw new PaymentException(409, "initial_payment_already_settled");
         // No implicit allocation priority for partial/excess receipts: preserve for review.
         if (receipt.Amount != deposit + rent) throw new PaymentException(409, "initial_payment_amount_requires_review");
-        if (await db.Set<PaymentAllocation>().AnyAsync(a => a.TransferId == receipt.Id, token)) throw new PaymentException(409, "receipt_already_allocated");
-        if (deposit > 0) db.Add(new PaymentAllocation { TransferId = receipt.Id, TargetDepositContractId = id, Amount = deposit, AllocatedAt = receipt.VerifiedAt });
-        if (rent > 0) db.Add(new PaymentAllocation { TransferId = receipt.Id, TargetInitialContractId = id, Amount = rent, AllocatedAt = receipt.VerifiedAt });
+        if (await PaymentLedgerWrites.Allocations(db).AnyAsync(a => a.SourcePaymentId == receipt.Id, token)) throw new PaymentException(409, "receipt_already_allocated");
+        if (deposit > 0) await payments.AddAsync(new PaymentAllocation { TransferId = receipt.Id, TargetDepositContractId = id, Amount = deposit, AllocatedAt = receipt.VerifiedAt }, token);
+        if (rent > 0) await payments.AddAsync(new PaymentAllocation { TransferId = receipt.Id, TargetInitialContractId = id, Amount = rent, AllocatedAt = receipt.VerifiedAt }, token);
         // The common scheduler enqueues only after signatures, payment and effective-date checks pass.
     }
 }

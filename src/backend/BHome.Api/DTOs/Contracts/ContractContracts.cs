@@ -247,6 +247,7 @@ public interface IContractHoldingLedger
 {
     Task<HoldingDepositApplication> ApplyAsync(Guid holdingContractId, Guid mainContractId, Guid roomId,
         Guid? tenantUserId, decimal requiredDeposit, CancellationToken t);
+    Task PersistAsync(HoldingDepositApplication application, Guid mainContractId, CancellationToken t) => Task.CompletedTask;
 }
 
 public interface IContractRepository

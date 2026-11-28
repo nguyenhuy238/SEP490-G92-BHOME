@@ -39,8 +39,8 @@ public sealed partial class PaymentService(IPaymentRepository repository, ICurre
         if (command.Fingerprint != Fingerprint(input)) throw new PaymentException(409, "payment_idempotency_key_reused");
         return command.ResultId;
     }
-    private void Remember(Guid key, string operation, object input, Guid result) => repository.Add(new PaymentCommand
-    { ActorId = Actor, Key = key, Operation = operation, Fingerprint = Fingerprint(input), ResultId = result, CreatedAt = Now });
+    private Task RememberAsync(Guid key, string operation, object input, Guid result, CancellationToken token) => repository.AddAsync(new PaymentCommand
+    { ActorId = Actor, Key = key, Operation = operation, Fingerprint = Fingerprint(input), ResultId = result, CreatedAt = Now }, token);
     private async Task<Invoice> Invoice(Guid id, CancellationToken t)
     {
         var scope = Scope;
@@ -143,7 +143,7 @@ public sealed partial class PaymentService(IPaymentRepository repository, ICurre
                     evidence is not null && (existing.StatementEvidenceSha256 != evidence.Sha256 || existing.StatementEvidenceContentType != evidence.ContentType ||
                         existing.StatementEvidenceLength != evidence.Bytes.Length || existing.VerifiedByUserId != Actor))
                     throw new PaymentException(409, "bank_transaction_identity_conflict");
-                Remember(key, "register", identity, existing.Id); return await TransferAsync(existing.Id, t);
+                await RememberAsync(key, "register", identity, existing.Id, t); return await TransferAsync(existing.Id, t);
             }
             if (x.ProposedInvoiceId is { } invoiceId && (await Invoice(invoiceId, t)).Status != InvoiceStatus.Final)
                 throw new PaymentException(409, "final_invoice_required");
@@ -178,7 +178,7 @@ public sealed partial class PaymentService(IPaymentRepository repository, ICurre
                 transfer.StatementEvidenceLength = evidence.Bytes.Length;
             }
             createdTransferId = transfer.Id;
-            repository.Add(transfer);
+            await repository.AddAsync(transfer, t);
             var review = new PaymentReconciliation
             {
                 TransferId = transfer.Id,
@@ -189,8 +189,8 @@ public sealed partial class PaymentService(IPaymentRepository repository, ICurre
                 ActorId = Actor,
                 OccurredAt = Now
             };
-            repository.Add(review); Remember(key, "register", identity, transfer.Id);
-            repository.Audit(Actor, "BankTransferManuallyVerified", transfer.Id, Now);
+            await repository.AddAsync(review, t); await RememberAsync(key, "register", identity, transfer.Id, t);
+            await repository.AuditAsync(Actor, "BankTransferManuallyVerified", transfer.Id, Now, t);
             return View(transfer, null, review);
         }, t);
             linked = createdTransferId == result.Id;
@@ -247,7 +247,7 @@ public sealed partial class PaymentService(IPaymentRepository repository, ICurre
             if (allocated is not null)
             {
                 if (allocated.InvoiceId != x.InvoiceId || allocated.PaidByUserId != x.PaidByUserId) throw new PaymentException(409, "bank_transaction_already_allocated");
-                Remember(key, "allocate", new { transferId, x }, allocated.Id); return await Outcome(transferId, t);
+                await RememberAsync(key, "allocate", new { transferId, x }, allocated.Id, t); return await Outcome(transferId, t);
             }
             var invoice = await Invoice(x.InvoiceId, t);
             if (invoice.Status != InvoiceStatus.Final) throw new PaymentException(409, "final_invoice_required");
@@ -271,7 +271,7 @@ public sealed partial class PaymentService(IPaymentRepository repository, ICurre
                 Decision = reason is null ? "Allocated" : "PendingReview",
                 Reason = reason ?? (transfer.Amount < outstanding ? "verified_partial_payment" : transfer.Amount > outstanding ? "verified_excess_payment_pending_review" : "verified_full_payment")
             };
-            repository.Add(review);
+            await repository.AddAsync(review, t);
             if (reason is null)
             {
                 var allocation = new PaymentAllocation
@@ -283,12 +283,12 @@ public sealed partial class PaymentService(IPaymentRepository repository, ICurre
                     VerifiedByUserId = Actor,
                     AllocatedAt = Now
                 };
-                repository.Add(allocation);
-                repository.Add(new PaymentConfirmedEvent { AllocationId = allocation.Id, InvoiceId = invoice.Id, OccurredAt = Now, PaidAmount = financial.AllocatedPayments + allocation.Amount, OutstandingAmount = Math.Max(0, outstanding - allocation.Amount) });
-                repository.Audit(Actor, "InvoicePaymentAllocated", allocation.Id, Now);
-                Remember(key, "allocate", new { transferId, x }, allocation.Id);
+                await repository.AddAsync(allocation, t);
+                await repository.AddAsync(new PaymentConfirmedEvent { AllocationId = allocation.Id, InvoiceId = invoice.Id, OccurredAt = Now, PaidAmount = financial.AllocatedPayments + allocation.Amount, OutstandingAmount = Math.Max(0, outstanding - allocation.Amount) }, t);
+                await repository.AuditAsync(Actor, "InvoicePaymentAllocated", allocation.Id, Now, t);
+                await RememberAsync(key, "allocate", new { transferId, x }, allocation.Id, t);
             }
-            else Remember(key, "allocate", new { transferId, x }, review.Id);
+            else await RememberAsync(key, "allocate", new { transferId, x }, review.Id, t);
             return new PaymentReviewResult(review.Decision, review.Reason, transferId, invoice.Id);
         }, t);
     }
@@ -335,10 +335,10 @@ public sealed partial class PaymentService(IPaymentRepository repository, ICurre
             if (latest?.Decision == "Rejected" && latest.Reason != reason) throw new PaymentException(409, "bank_transfer_rejected");
             if (latest?.Decision != "Rejected")
             {
-                repository.Add(new PaymentReconciliation { TransferId = transferId, InvoiceId = latest?.InvoiceId, Decision = "Rejected", Reason = reason, ActorId = Actor, OccurredAt = Now });
-                repository.Audit(Actor, "BankTransferAllocationRejected", transferId, Now);
+                await repository.AddAsync(new PaymentReconciliation { TransferId = transferId, InvoiceId = latest?.InvoiceId, Decision = "Rejected", Reason = reason, ActorId = Actor, OccurredAt = Now }, t);
+                await repository.AuditAsync(Actor, "BankTransferAllocationRejected", transferId, Now, t);
             }
-            Remember(key, "reject", new { transferId, reason }, transferId);
+            await RememberAsync(key, "reject", new { transferId, reason }, transferId, t);
             return new("Rejected", reason, transferId, latest?.InvoiceId);
         }, t);
     }

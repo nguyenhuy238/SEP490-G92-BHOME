@@ -92,6 +92,7 @@ public sealed class Compact24InvoiceRegressionTests
 [Trait("Category", "CompactPostgres")]
 public sealed class Compact24PaymentRegressionTests
 {
+    [CompactPostgresFact] public Task NativeLedgerWrites() => Run(t => t.NativeLedgerWritesPreserveAtomicityAndSnapshots());
     [CompactPostgresFact] public Task DebtSummary() => Run(t => t.OwnerDebtSummaryCoversAllPagesAndExcludesSettledInvoicesWithoutExposingStaffFinance());
     [CompactPostgresFact] public Task DebtNotificationStops() => Run(t => t.DebtRemindersDeduplicateAndStopAfterVerifiedPayment());
     [CompactPostgresFact] public Task PartialAndPaidNotifications() => Run(t => t.DelayedNotificationWorkerPreservesPartialSnapshotAndOnePaidTransitionForAllThreeTenants());

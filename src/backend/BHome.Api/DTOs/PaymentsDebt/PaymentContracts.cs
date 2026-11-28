@@ -124,5 +124,7 @@ public interface IPaymentRepository
     Task<DebtSummary> DebtSummaryAsync(PaymentScope scope, PaymentQuery query, CancellationToken t);
     Task<PagedResult<PaymentHistoryEntry>> PaymentHistoryAsync(PaymentScope scope, PaymentQuery query, CancellationToken t);
     void Add(object entity);
+    Task AddAsync(object entity, CancellationToken token);
+    Task AuditAsync(Guid actor, string action, Guid target, DateTimeOffset at, CancellationToken token);
     void Audit(Guid actor, string action, Guid target, DateTimeOffset at);
 }

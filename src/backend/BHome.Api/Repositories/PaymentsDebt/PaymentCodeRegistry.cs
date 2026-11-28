@@ -7,6 +7,7 @@ using BHome.Domain.Billing;
 using BHome.Infrastructure.Persistence;
 using BHome.Infrastructure.Persistence.Compact24;
 using Microsoft.EntityFrameworkCore;
+using Native = BHome.Domain.Entities;
 
 namespace BHome.Infrastructure.PaymentsDebt;
 
@@ -56,6 +57,12 @@ internal sealed class PaymentCodeRegistry(BHomePersistenceContext db, IPaymentRe
             return frozen.Mode is "Test" or "Live" ? frozen.Mode : throw new PaymentException(409, "legacy_payment_mode_ambiguous");
         if (kind is "Deposit" or "MainInitial")
         {
+            if (db is Compact24DbContext)
+            {
+                var source = await PaymentObligationQueries.ContractModes(db).SingleOrDefaultAsync(c => c.Id == id, token)
+                    ?? throw new PaymentException(404, "contract_not_found");
+                return source.PaymentMode ?? (!options.DualMode ? options.Mode : source.EffectiveMode);
+            }
             var contract = await payments.HoldingAsync(id, token) ?? throw new PaymentException(404, "contract_not_found");
             return contract.PaymentMode ?? (!options.DualMode ? options.Mode : BHome.Application.Contracts.ContractPaymentModes.Of(contract));
         }
@@ -72,9 +79,18 @@ internal sealed class PaymentCodeRegistry(BHomePersistenceContext db, IPaymentRe
         if (owner is not null && await payments.OwnerPaymentModeAsync(owner.Value, token) is { } selected) return selected;
         if (kind == "Invoice")
         {
-            var contract = await db.Set<Invoice>().Where(i => i.Id == id).Select(i => i.RepresentativeContractId).SingleAsync(token);
-            var source = await payments.HoldingAsync(contract, token);
-            if (source is not null && (source.PaymentMode is not null || source.IsDevelopmentDemo)) return BHome.Application.Contracts.ContractPaymentModes.Of(source);
+            if (db is Compact24DbContext)
+            {
+                var contractId = await db.Set<Native.Invoice>().AsNoTracking().Where(i => i.Id == id).Select(i => i.ContractId).SingleAsync(token);
+                var source = await PaymentObligationQueries.ContractModes(db).SingleOrDefaultAsync(c => c.Id == contractId, token);
+                if (source is not null && (source.PaymentMode is not null || source.IsDevelopmentDemo)) return source.EffectiveMode;
+            }
+            else
+            {
+                var contract = await db.Set<Invoice>().Where(i => i.Id == id).Select(i => i.RepresentativeContractId).SingleAsync(token);
+                var source = await payments.HoldingAsync(contract, token);
+                if (source is not null && (source.PaymentMode is not null || source.IsDevelopmentDemo)) return BHome.Application.Contracts.ContractPaymentModes.Of(source);
+            }
         }
         return options.Enabled ? options.Mode : (await payments.ReceivingAccountAsync(locationId, token))?.IsDevelopmentDemo == true ? "Test" : "Live";
     }

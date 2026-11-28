@@ -132,13 +132,13 @@ public sealed partial class SettlementReceivablesService
                     VerifiedByUserId = Actor,
                     AllocatedAt = clock.GetUtcNow()
                 };
-                payments.Add(allocation);
+                await payments.AddAsync(allocation, token);
             }
             var outcome = reason ?? (transfer.Amount < balance.Outstanding ? "verified_partial_settlement_payment" :
                 transfer.Amount > balance.Outstanding ? "verified_excess_payment_pending_refund" : "verified_full_settlement_payment");
             var result = new SettlementBankAllocationResult(Guid.NewGuid(), id, chargeId, transfer.Id, allocation is null ? "PendingReview" : "Allocated", outcome,
                 allocation?.Amount ?? 0, transfer.Amount - (allocation?.Amount ?? 0), allocation?.Id, input.PaidByUserId, Actor, key, fingerprint, clock.GetUtcNow(), transfer.IsDevelopmentDemo);
-            payments.Add(new PaymentReconciliation { TransferId = transfer.Id, Decision = result.Status, Reason = outcome, ActorId = Actor, OccurredAt = result.ApprovedAt });
+            await payments.AddAsync(new PaymentReconciliation { TransferId = transfer.Id, Decision = result.Status, Reason = outcome, ActorId = Actor, OccurredAt = result.ApprovedAt }, token);
             await repository.SaveBankResultAsync(result, token); return result;
         }, token);
     }

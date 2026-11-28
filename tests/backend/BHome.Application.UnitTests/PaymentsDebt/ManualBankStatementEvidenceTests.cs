@@ -79,13 +79,14 @@ public sealed class ManualBankStatementEvidenceTests
                 .Returns(call => Task.FromResult<PaymentTransfer?>(Transfers.FirstOrDefault(p => p.Id == call.ArgAt<Guid>(0))));
             Repository.ProviderReferenceReceivedAsync(Arg.Any<string>(), Arg.Any<CancellationToken>())
                 .Returns(Task.FromResult(false));
-            Repository.When(r => r.Add(Arg.Any<object>())).Do(call =>
+            Repository.AddAsync(Arg.Any<object>(), Arg.Any<CancellationToken>()).Returns(call =>
             {
                 switch (call.ArgAt<object>(0))
                 {
                     case PaymentTransfer transfer: Transfers.Add(transfer); break;
                     case PaymentCommand command: Commands.Add(command); break;
                 }
+                return Task.CompletedTask;
             });
             Service = new PaymentService(Repository, User, TimeProvider.System, storage: Files, images: Validator);
         }

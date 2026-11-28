@@ -9,6 +9,8 @@ using BHome.Infrastructure.IdentityAccess;
 using BHome.Infrastructure.Persistence;
 using BHome.Infrastructure.Persistence.Compact24;
 using Microsoft.EntityFrameworkCore;
+using BHome.Infrastructure.PaymentsDebt;
+using Native = BHome.Domain.Entities;
 
 namespace BHome.Infrastructure.Contracts;
 
@@ -65,7 +67,7 @@ internal sealed partial class SettlementReceivablesRepository(BHomePersistenceCo
         }
         return chain;
     }
-    private IQueryable<Invoice> OffsetInvoices(List<Contract> chain, DateOnly incurred)
+    private IQueryable<Native.Invoice> OffsetInvoices(List<Contract> chain, DateOnly incurred)
     {
         var contract = chain[0];
         var chainIds = chain.Select(c => c.Id).ToArray();
@@ -74,9 +76,9 @@ internal sealed partial class SettlementReceivablesRepository(BHomePersistenceCo
         // The billing reference may be another tenancy in the same room. Match
         // shared periodic debt by the issued recipient snapshot and tenancy dates,
         // while retaining contract-specific invoices from this contract chain.
-        return db.Set<Invoice>().AsNoTracking().Where(i => i.RoomId == contract.RoomId && i.Status == InvoiceStatus.Final &&
-            (chainIds.Contains(i.RepresentativeContractId) || i.Type == "PERIODIC" && i.BillingPeriod >= firstPeriod && i.BillingPeriod <= lastPeriod &&
-                db.Set<InvoiceRecipient>().Any(r => r.InvoiceId == i.Id && r.TenantUserId == contract.TenantUserId)));
+        return db.Set<Native.Invoice>().AsNoTracking().Where(i => i.RoomId == contract.RoomId && i.Status == (short)InvoiceStatus.Final &&
+            (chainIds.Contains(i.ContractId) || i.InvoiceType == "PERIODIC" && i.BillingPeriod >= firstPeriod && i.BillingPeriod <= lastPeriod &&
+                contract.TenantUserId.HasValue && i.RecipientUserIds.Contains(contract.TenantUserId.Value)));
     }
     public async Task<(Guid[] Ids, int Total)> TenantContractsAsync(Guid userId, int page, int pageSize, CancellationToken token)
     {
@@ -98,7 +100,7 @@ internal sealed partial class SettlementReceivablesRepository(BHomePersistenceCo
         var baseline = inspection is null ? null : JsonSerializer.Deserialize<HandoverSnapshot>(inspection.BaselineSnapshot);
         var charges = await SettlementChargeRecords.ReadAsync<SettlementReceivable>(db, id, SettlementChargeRecords.ChargeKind, token);
         var offsets = await SettlementChargeRecords.ReadAsync<DepositOffsetApproval>(db, id, SettlementChargeRecords.OffsetKind, token);
-        var totals = await db.Set<PaymentAllocation>().AsNoTracking().Where(a => a.TargetSettlementContractId == id)
+        var totals = await db.Set<Native.PaymentAllocation>().AsNoTracking().Where(a => a.TargetSettlementContractId == id)
             .GroupBy(a => a.SettlementReceivableId).Select(g => new { Id = g.Key, Amount = g.Sum(a => a.Amount) }).ToArrayAsync(token);
         var balances = charges.Select(c =>
         {
@@ -246,15 +248,8 @@ internal sealed partial class SettlementReceivablesRepository(BHomePersistenceCo
     {
         var json = JsonSerializer.Serialize(new { schemaVersion = 1, recordType = kind, recordKey = id, state = record }, SettlementChargeRecords.Json);
         await db.Database.ExecuteSqlInterpolatedAsync($"UPDATE contracts SET history=history||jsonb_build_array({json}::jsonb) WHERE id={contractId}", token);
-        db.SecurityAudit.Add(new SecurityAuditRecord
-        {
-            UserId = actor,
-            TargetId = id,
-            TargetType = kind,
-            Event = auditEvent ?? kind + "Approved",
-            Succeeded = true,
-            OccurredAt = at
-        });
+        await SecurityAuditWrites.AppendAsync(db, new(Guid.NewGuid(), actor, null, null, auditEvent ?? kind + "Approved",
+            true, at, kind, id), token);
     }
     public async Task SaveChargeAsync(SettlementReceivable charge, CancellationToken token)
     {
@@ -271,19 +266,16 @@ internal sealed partial class SettlementReceivablesRepository(BHomePersistenceCo
     public async Task SaveOffsetAsync(DepositOffsetApproval approval, CancellationToken token)
     {
         await AppendAsync(approval.ContractId, approval.Id, SettlementChargeRecords.OffsetKind, approval, approval.ApprovedByUserId, approval.ApprovedAt, token);
-        var allocation = new PaymentAllocation
-        {
-            SourceDepositContractId = approval.SourceDepositContractId,
-            TargetSettlementContractId = approval.ReceivableId is null ? null : approval.ContractId,
-            SettlementReceivableId = approval.ReceivableId,
-            InvoiceId = approval.InvoiceId,
-            DepositOffsetApprovalId = approval.Id,
-            Amount = approval.Amount,
-            VerifiedByUserId = approval.ApprovedByUserId,
-            AllocatedAt = approval.ApprovedAt
-        };
-        db.Entry(allocation).Property(a => a.Id).CurrentValue = approval.AllocationId;
-        db.Add(allocation);
+        var allocation = PaymentAllocation.RestoreIdentity(approval.AllocationId, default, default);
+        allocation.SourceDepositContractId = approval.SourceDepositContractId;
+        allocation.TargetSettlementContractId = approval.ReceivableId is null ? null : approval.ContractId;
+        allocation.SettlementReceivableId = approval.ReceivableId;
+        allocation.InvoiceId = approval.InvoiceId;
+        allocation.DepositOffsetApprovalId = approval.Id;
+        allocation.Amount = approval.Amount;
+        allocation.VerifiedByUserId = approval.ApprovedByUserId;
+        allocation.AllocatedAt = approval.ApprovedAt;
+        await PaymentLedgerWrites.AddAllocationAsync(db, allocation, token);
         await db.SaveChangesAsync(token);
         if (approval.ReceivableId is { } chargeId)
         {

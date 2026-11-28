@@ -18,12 +18,13 @@ public sealed record HoldingDispositionView(string Cause, string Status, decimal
 public static class HoldingCancellationRules
 {
     public const string Kind = "HoldingCancellation/v1";
-    public static HoldingCancellationDisposition? Decode(ContractSettlementReview? review)
+    public static HoldingCancellationDisposition? Decode(ContractSettlementReview? review) => DecodeSnapshot(review?.FinancialSnapshot);
+    public static HoldingCancellationDisposition? DecodeSnapshot(string? snapshot)
     {
-        if (review is null) return null;
+        if (snapshot is null) return null;
         try
         {
-            var result = JsonSerializer.Deserialize<HoldingCancellationDisposition>(review.FinancialSnapshot);
+            var result = JsonSerializer.Deserialize<HoldingCancellationDisposition>(snapshot);
             if (result?.Kind != Kind || !Enum.IsDefined(result.Cause) || result.OwnerId == Guid.Empty || string.IsNullOrWhiteSpace(result.Reason) ||
                 result.VerifiedDeposit < 0 || result.VerifiedDeposit >= 1_000_000_000_000_000_000m || decimal.Truncate(result.VerifiedDeposit) != result.VerifiedDeposit)
                 return null;
@@ -33,16 +34,18 @@ public static class HoldingCancellationRules
         }
         catch (JsonException) { return null; }
     }
-    public static string Reference(Guid contractId, ContractSettlementReview review)
+    public static string Reference(Guid contractId, ContractSettlementReview review) =>
+        Reference(contractId, review.Id, review.Decision, review.FinancialSnapshot);
+    public static string Reference(Guid contractId, Guid reviewId, string decision, string snapshot)
     {
         // FinancialSnapshot is jsonb: key order and whitespace can change at
         // persistence. Bind the typed v1 values, not the raw JSON spelling.
-        var value = Decode(review);
+        var value = DecodeSnapshot(snapshot);
         return "HOLDING-" + Convert.ToHexString(SHA256.HashData(JsonSerializer.SerializeToUtf8Bytes(new
         {
             contractId,
-            review.Id,
-            review.Decision,
+            Id = reviewId,
+            Decision = decision,
             value?.Kind,
             value?.Cause,
             value?.VerifiedDeposit,

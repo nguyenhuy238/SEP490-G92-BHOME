@@ -5,6 +5,8 @@ namespace BHome.Domain.PaymentsDebt;
 // Immutable configuration versions keep historical instructions auditable.
 public sealed class ReceivingBankAccount : AuditableEntity
 {
+    internal static ReceivingBankAccount RestoreIdentity(Guid id, DateTimeOffset createdAt, DateTimeOffset updatedAt) =>
+        new() { Id = id, CreatedAt = createdAt, UpdatedAt = updatedAt };
     // Owner-wide configurations are stored in the Owner's private business_profile
     // history, not in a Location row. Legacy location versions remain immutable.
     [System.ComponentModel.DataAnnotations.Schema.NotMapped]

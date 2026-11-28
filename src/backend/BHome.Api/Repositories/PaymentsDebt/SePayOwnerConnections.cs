@@ -112,7 +112,7 @@ internal sealed class SePayOwnerConnections(BHomePersistenceContext db, IPayment
             var state = new Stored(input.ExpectedVersion + 1, Protector(ownerId, mode).Protect(JsonSerializer.Serialize(secrets, Json)),
                 !string.IsNullOrEmpty(secrets.ApiToken), !string.IsNullOrEmpty(secrets.WebhookSecret), input.Gateway!, verified, bindings);
             await Write(ownerId, mode, state, input.ExpectedVersion, token);
-            payments.Audit(ownerId, "SePayConnectionConfigured" + mode, ownerId, clock.GetUtcNow()); return true;
+            await payments.AuditAsync(ownerId, "SePayConnectionConfigured" + mode, ownerId, clock.GetUtcNow(), token); return true;
         }, token);
         await ApplyOwnerAsync(ownerId, token);
         return await GetAsync(ownerId, mode, token);
@@ -140,7 +140,7 @@ internal sealed class SePayOwnerConnections(BHomePersistenceContext db, IPayment
                     Bindings = stored.Bindings.Append(binding)
                         .DistinctBy(b => (b.OwnerUserId, b.LocationId, b.BankIdentifier, b.Gateway.ToUpperInvariant(), b.AccountNumber)).ToArray()
                 }, stored.Version, token);
-                payments.Audit(ownerId, "SePayConnectionVerified" + mode, ownerId, clock.GetUtcNow()); return true;
+                await payments.AuditAsync(ownerId, "SePayConnectionVerified" + mode, ownerId, clock.GetUtcNow(), token); return true;
             }, token);
         await ApplyOwnerAsync(ownerId, token); return new(true, "sepay_connection_verified");
     }

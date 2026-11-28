@@ -5,6 +5,7 @@ using BHome.Domain.TenantContracts;
 using BHome.Infrastructure.Persistence;
 using BHome.Infrastructure.Persistence.Compact24;
 using Microsoft.EntityFrameworkCore;
+using Native = BHome.Domain.Entities;
 
 namespace BHome.Infrastructure.PaymentsDebt;
 
@@ -26,7 +27,14 @@ internal sealed partial class PaymentRepository
 {
     public Task<bool> VerifiedReceiptAsync(Guid transferId, CancellationToken token) => db.Database.SqlQuery<bool>($"SELECT EXISTS(SELECT 1 FROM payments WHERE id={transferId} AND status='VERIFIED') AS \"Value\"").SingleAsync(token);
     public Task<ExternalPaymentPayer?> ExternalPayerAsync(Guid transferId, CancellationToken token) => ExternalPaymentPayerRecords.ReadAsync(db, transferId, token);
-    public async Task<IReadOnlyList<DepositPayerChoice>> DepositPayersAsync(Guid contractId, CancellationToken token) => await db.Set<Resident>().AsNoTracking()
+    public async Task<IReadOnlyList<DepositPayerChoice>> DepositPayersAsync(Guid contractId, CancellationToken token) => db is Compact24DbContext
+        ? await db.Set<Native.Resident>().AsNoTracking()
+            .Where(r => r.VerificationStatus == (short)IdentityVerificationStatus.Verified &&
+                db.Set<Native.ContractResident>().Any(cr => cr.ContractId == contractId && cr.ResidentId == r.Id) &&
+                (r.UserId == null || db.Users.Any(u => u.Id == r.UserId && u.IsActive) &&
+                    (from ur in db.UserRoles join role in db.Roles on ur.RoleId equals role.Id where ur.UserId == r.UserId && role.Name == "Tenant" select ur.UserId).Any()))
+            .OrderBy(r => r.Id).Select(r => new DepositPayerChoice(r.Id, r.UserId, r.DisplayLabel)).ToArrayAsync(token)
+        : await db.Set<Resident>().AsNoTracking()
         .Where(r => r.VerificationStatus == IdentityVerificationStatus.Verified && db.Set<ContractResident>().Any(cr => cr.ContractId == contractId && cr.ResidentId == r.Id) &&
             (r.TenantUserId == null || db.Users.Any(u => u.Id == r.TenantUserId && u.IsActive) &&
                 (from ur in db.UserRoles join role in db.Roles on ur.RoleId equals role.Id where ur.UserId == r.TenantUserId && role.Name == "Tenant" select ur.UserId).Any()))

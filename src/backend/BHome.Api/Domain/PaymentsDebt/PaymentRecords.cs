@@ -7,6 +7,9 @@ namespace BHome.Domain.PaymentsDebt;
 
 public sealed class PaymentTransfer : AuditableEntity
 {
+    // Restored business value, independent of EF tracking/projection metadata.
+    internal static PaymentTransfer RestoreIdentity(Guid id, DateTimeOffset createdAt, DateTimeOffset updatedAt) =>
+        new() { Id = id, CreatedAt = createdAt, UpdatedAt = updatedAt };
     public string ProviderIdentity { get; set; } = "";
     public string BankReference { get; set; } = "";
     public string NormalizedReference { get; set; } = "";
@@ -31,6 +34,8 @@ public sealed class PaymentTransfer : AuditableEntity
 }
 public sealed class PaymentAllocation : AuditableEntity
 {
+    internal static PaymentAllocation RestoreIdentity(Guid id, DateTimeOffset createdAt, DateTimeOffset updatedAt) =>
+        new() { Id = id, CreatedAt = createdAt, UpdatedAt = updatedAt };
     public Guid? TransferId { get; set; }
     public Guid? SourceDepositContractId { get; set; }
     public Guid? InvoiceId { get; set; }
@@ -46,6 +51,8 @@ public sealed class PaymentAllocation : AuditableEntity
 }
 public sealed class PaymentReconciliation : AuditableEntity
 {
+    internal static PaymentReconciliation RestoreIdentity(Guid id, DateTimeOffset createdAt, DateTimeOffset updatedAt) =>
+        new() { Id = id, CreatedAt = createdAt, UpdatedAt = updatedAt };
     public long Sequence { get; set; }
     public Guid TransferId { get; set; }
     public Guid? InvoiceId { get; set; }

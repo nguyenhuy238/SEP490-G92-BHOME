@@ -340,7 +340,9 @@ public sealed partial class ContractService
             main.AppliedHoldingDeposit = application.AppliedAmount; main.HoldingAllocationReference = application.AllocationReference;
             main.Residents = holding.Residents.Select(r => new ContractResident
             { ContractId = main.Id, ResidentId = r.ResidentId, Role = r.Role, ResidenceFrom = main.StartDate }).ToList();
-            Seal(main); repository.Add(main); Audit("HoldingConversionPrepared", id); Audit("ContractDraftCreated", main.Id);
+            Seal(main); repository.Add(main);
+            await holdings.PersistAsync(application, main.Id, token);
+            Audit("HoldingConversionPrepared", id); Audit("ContractDraftCreated", main.Id);
             Remember(key, "holding-convert", new { id, input }, main.Id); return new ContractId(main.Id);
         }, token);
     }

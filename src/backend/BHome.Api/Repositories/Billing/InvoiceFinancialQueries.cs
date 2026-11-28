@@ -72,12 +72,9 @@ internal static class InvoiceFinancialQueries
         });
     }
 
-    // Existing callers can keep their scope query until that workflow is migrated.
-    // The offline source-schema fixtures still require the original domain query.
+    // Only the offline source-schema fixture uses the original domain query.
     public static IQueryable<InvoiceFinancialRow> Financials(this BHomePersistenceContext db, IQueryable<Invoice> invoices) =>
-        db is Compact24DbContext
-            ? db.Financials(db.Set<Native.Invoice>().AsNoTracking().Where(i => invoices.Any(scoped => scoped.Id == i.Id)))
-            : LegacyFinancials(db, invoices);
+        LegacyFinancials(db, invoices);
 
     private static IQueryable<InvoiceFinancialRow> LegacyFinancials(BHomePersistenceContext db, IQueryable<Invoice> invoices) => invoices.Select(i => new InvoiceFinancialRow
     {
