@@ -74,7 +74,7 @@ internal sealed class SePayRepository(BHomePersistenceContext db, IPaymentReposi
     public Task<Invoice?> InvoiceAsync(Guid id, CancellationToken token) => PaymentObligationQueries.InvoiceAsync(db, id, null, token);
     public Task<bool> DemoInvoiceAsync(Guid id, CancellationToken token) =>
         (from i in db.Set<BHome.Domain.Billing.Invoice>().AsNoTracking()
-         join c in PaymentObligationQueries.ContractModes(db) on i.RepresentativeContractId equals c.Id
+         join c in PaymentObligationQueries.ContractModes(db) on i.ContractId equals c.Id
          where i.Id == id
          select c.PaymentMode == "Test" || c.PaymentMode == null && c.IsDevelopmentDemo).SingleAsync(token);
     private sealed record SePaySettlementRow(Guid ContractId, Guid LocationId, SettlementReceivable Charge);
@@ -150,18 +150,18 @@ internal sealed class SePayRepository(BHomePersistenceContext db, IPaymentReposi
         return new(source.ContractId, source.LocationId, source.Charge, source.Charge.Amount - paid,
             allowed, allowed ? null : blocker);
     }
-    public async Task AddReceiptAsync(SePayEvent received, PaymentTransfer receipt, CancellationToken token)
+    public async Task AddReceiptAsync(SePayEvent received, Payment receipt, CancellationToken token)
     {
         receipt.Stamp(clock.GetUtcNow(), true);
         var snapshot = JsonSerializer.Serialize(receipt, Json);
         var proof = JsonSerializer.Serialize(new { eventId = received.Id, mode = received.Mode, providerTransactionId = received.Transaction.Id, bankReference = received.Transaction.ReferenceCode }, Json);
-        var history = JsonSerializer.Serialize(new[] { new { schemaVersion = 1, recordType = "SePayVerificationV1", state = new { eventId = received.Id, mode = received.Mode, verifiedAt = receipt.VerifiedAt } } }, Json);
+        var history = JsonSerializer.Serialize(new[] { new { schemaVersion = 1, recordType = "SePayVerificationV1", state = new { eventId = received.Id, mode = received.Mode, verifiedAt = receipt.ReceiptVerifiedAt } } }, Json);
         await db.Database.ExecuteSqlInterpolatedAsync($"""
             INSERT INTO payments(id,provider_code,receiving_account_key,transaction_reference,effect_key,received_at,amount,currency,status,
               verification_method,verified_at,remittance_info,verification_data,history)
             VALUES({receipt.Id},{receipt.ProviderIdentity},{received.Mode + ":" + received.Transaction.Gateway.ToUpperInvariant() + ":" + received.Transaction.AccountNumber},
               {receipt.BankReference},{"receipt:" + receipt.ProviderIdentity + ":" + receipt.NormalizedReference},{receipt.OccurredAt},{receipt.Amount},'VND','VERIFIED',
-              'AUTO',{receipt.VerifiedAt},{receipt.TransferDescription},jsonb_build_object('schemaVersion',1,'compactState',CAST({snapshot} AS jsonb),'sepay',CAST({proof} AS jsonb)),CAST({history} AS jsonb))
+              'AUTO',{receipt.ReceiptVerifiedAt},{receipt.TransferDescription},jsonb_build_object('schemaVersion',1,'compactState',CAST({snapshot} AS jsonb),'sepay',CAST({proof} AS jsonb)),CAST({history} AS jsonb))
             """, token);
     }
     public Task FinishAsync(SePayEvent received, string status, string reason, Guid? receipt, CancellationToken token)

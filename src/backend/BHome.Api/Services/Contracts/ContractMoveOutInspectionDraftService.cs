@@ -19,9 +19,9 @@ public sealed partial class ContractService
         await handoverRepository.RequireMoveOutTaskStartedAsync(contract.Id, Actor, token);
         var prior = await handoverRepository.MoveOutInspectionDraftAsync(contract.Id, token);
         if (prior is null)
-            return MoveOutInspectionDraftState.Empty(contract.Id, Actor, contract.SnapshotHash, clock.GetUtcNow());
+            return MoveOutInspectionDraftState.Empty(contract.Id, Actor, contract.SnapshotHashOrEmpty, clock.GetUtcNow());
         if (prior.ContractId != contract.Id || prior.StaffUserId != Actor ||
-            prior.ContractSnapshotHash != contract.SnapshotHash || prior.Version < 1)
+            prior.ContractSnapshotHash != contract.SnapshotHashOrEmpty || prior.Version < 1)
             throw ContractException.Conflict("move_out_draft_integrity_failed");
         return prior;
     }
@@ -54,7 +54,7 @@ public sealed partial class ContractService
         if (move?.Status != MoveOutStatus.Approved) return null;
         var draft = await handoverRepository.MoveOutInspectionDraftAsync(contract.Id, token);
         return draft is not null && draft.ContractId == contract.Id &&
-            draft.ContractSnapshotHash == contract.SnapshotHash && draft.Version > 0 &&
+            draft.ContractSnapshotHash == contract.SnapshotHashOrEmpty && draft.Version > 0 &&
             (move.InspectionStaffId is null || move.InspectionStaffId == draft.StaffUserId)
             ? draft : null;
     }

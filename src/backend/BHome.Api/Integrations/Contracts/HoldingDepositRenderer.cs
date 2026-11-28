@@ -65,7 +65,7 @@ internal sealed class HoldingDepositRenderer(IConfiguration configuration)
                 [31] = $"Bên A đồng ý cho Bên B thuê phòng {contract.Room.RoomNumber}, cơ sở {contract.Room.Location.Name}, tại địa chỉ: {Provided(address)}.",
                 [32] = "",
                 [33] = contract.Room.RoomType?.AreaM2 is { } area ? $"- Diện tích cho thuê: {area.ToString("0.##", Vietnamese)} m²." : "",
-                [34] = $"- Giá cho thuê / tháng: {Money(contract.MonthlyRent)}.",
+                [34] = $"- Giá cho thuê / tháng: {Money(contract.RentAmount)}.",
                 [35] = $"- Thời hạn thuê dự kiến từ ngày {Date(contract.StartDate)} đến ngày {Date(contract.EndDate)}.",
                 [38] = $"2.1 Bên B có nghĩa vụ thanh toán tiền giữ chỗ là {Money(contract.RequiredDeposit)}. " +
                     "Khoản tiền giữ chỗ chỉ được ghi nhận đã thanh toán sau khi giao dịch được xác minh. " +

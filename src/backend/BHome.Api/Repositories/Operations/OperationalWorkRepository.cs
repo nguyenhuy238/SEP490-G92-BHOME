@@ -59,9 +59,9 @@ internal sealed class OperationalWorkRepository(Compact24DbContext db) : IOperat
     private static State TaskState(OperationalTask task, Guid? responsible, ILookup<Guid, HandoverEvent> events,
         MoveInPreparation? moveIn)
     {
-        if (task.Status == MeterTaskStatus.Completed) return new("Đã hoàn thành", Closed, "Xem kết quả");
-        if (task.Status == MeterTaskStatus.Cancelled) return new("Đã hủy", Closed, "Xem lịch sử");
-        if (moveIn is not null && task.Kind == OperationalTaskKind.AdHoc && task.Title.StartsWith("Bàn giao vào phòng"))
+        if (task.MeterStatus == MeterTaskStatus.Completed) return new("Đã hoàn thành", Closed, "Xem kết quả");
+        if (task.MeterStatus == MeterTaskStatus.Cancelled) return new("Đã hủy", Closed, "Xem lịch sử");
+        if (moveIn is not null && task.Kind == OperationalTaskKind.AdHoc && task.TaskTitle.StartsWith("Bàn giao vào phòng"))
         {
             if (moveIn.Status == "PendingOwnerReview") return new("Chờ Owner duyệt và ký", Owner, "Duyệt và ký biên bản", true);
             if (moveIn.Status == "ChangesRequested") return new("Chờ duyệt yêu cầu chỉnh sửa", Owner, "Xem yêu cầu của Tenant");
@@ -71,7 +71,7 @@ internal sealed class OperationalWorkRepository(Compact24DbContext db) : IOperat
         }
         if (task.Kind == OperationalTaskKind.LocationAssetHandover)
         {
-            if (task.Status == MeterTaskStatus.PendingVerification)
+            if (task.MeterStatus == MeterTaskStatus.PendingVerification)
             {
                 var approval = events[task.Id].LastOrDefault(x => x.Action == "LocationAssetHandoverApproved")?.Report;
                 if (approval is not null && approval.TaskVersion == task.Version &&
@@ -92,11 +92,11 @@ internal sealed class OperationalWorkRepository(Compact24DbContext db) : IOperat
                     return new("Chờ Owner xác nhận tài sản", Owner, "Xác nhận tài sản và đối soát danh sách");
             }
         }
-        if (task.Status == MeterTaskStatus.PendingVerification)
+        if (task.MeterStatus == MeterTaskStatus.PendingVerification)
             return new("Chờ xác minh", Owner, "Xác minh kết quả", true);
         if (responsible is null)
             return new("Chưa có Staff phụ trách", Owner, "Phân công Staff");
-        if (task.Status == MeterTaskStatus.Assigned)
+        if (task.MeterStatus == MeterTaskStatus.Assigned)
             return new("Chờ thực hiện", Active, "Staff bắt đầu công việc");
         return new("Đang thực hiện", Active, "Staff cập nhật tiến độ");
     }
@@ -133,9 +133,9 @@ internal sealed class OperationalWorkRepository(Compact24DbContext db) : IOperat
         var ordersQuery = db.Set<BHome.Domain.Billing.OperationalTask>().AsNoTracking().Where(x => x.TaskType == "WORK_ORDER");
         if (query.LocationId is { } location)
         {
-            tasksQuery = tasksQuery.Where(x => x.StoredLocationId == location);
+            tasksQuery = tasksQuery.Where(x => x.LocationId == location);
             incidentsQuery = incidentsQuery.Where(x => x.LocationId == location);
-            ordersQuery = ordersQuery.Where(x => x.StoredLocationId == location);
+            ordersQuery = ordersQuery.Where(x => x.LocationId == location);
         }
         var reportsOnly = query.View == "reports";
         var workOnly = query.View == "work";
@@ -165,8 +165,8 @@ internal sealed class OperationalWorkRepository(Compact24DbContext db) : IOperat
             """)
             .Where(x => taskIds.Contains(x)).ToArrayAsync(token)).ToHashSet();
         var handoverIds = tasks.Where(x => x.Kind == OperationalTaskKind.LocationAssetHandover &&
-            x.Status == MeterTaskStatus.PendingVerification).Select(x => x.Id).ToHashSet();
-        var handoverLocations = tasks.Where(x => handoverIds.Contains(x.Id)).Select(x => x.LocationId).Distinct().ToArray();
+            x.MeterStatus == MeterTaskStatus.PendingVerification).Select(x => x.Id).ToHashSet();
+        var handoverLocations = tasks.Where(x => handoverIds.Contains(x.Id)).Select(x => x.RequiredLocationId).Distinct().ToArray();
         var history = handoverLocations.Length == 0 ? [] : await db.Database.SqlQuery<string>($"""
             SELECT entry.value::text AS "Value" FROM locations l
             CROSS JOIN LATERAL jsonb_array_elements(COALESCE(l.history,'[]'::jsonb)) WITH ORDINALITY AS entry(value,ordinality)
@@ -188,7 +188,7 @@ internal sealed class OperationalWorkRepository(Compact24DbContext db) : IOperat
             FROM contracts WHERE id=ANY({contractIds}) AND move_out->'current'->>'inspectionStaffId' IS NOT NULL
             """).ToDictionaryAsync(x => x.ContractId, x => x.InspectionStaffId, token);
 
-        var locationsIds = tasks.Select(x => x.LocationId).Concat(incidents.Select(x => x.LocationId))
+        var locationsIds = tasks.Select(x => x.RequiredLocationId).Concat(incidents.Select(x => x.LocationId))
             .Concat(orders.Select(x => x.LocationId)).Distinct().ToArray();
         var locations = await db.Set<BHome.Domain.Locations.Location>().AsNoTracking().Where(x => locationsIds.Contains(x.Id))
             .Select(x => new { x.Id, x.Name, x.IsActive }).ToDictionaryAsync(x => x.Id, token);
@@ -220,23 +220,23 @@ internal sealed class OperationalWorkRepository(Compact24DbContext db) : IOperat
         var rows = new List<Row>(tasks.Length + incidents.Length + orders.Length);
         foreach (var task in tasks)
         {
-            Guid? responsible = responsibleByLocation.TryGetValue(task.LocationId, out var id) ? id : null;
-            if (task.Kind == OperationalTaskKind.AdHoc && task.ContractId is { } contract && task.Title.StartsWith("Kiểm tra trả phòng"))
+            Guid? responsible = responsibleByLocation.TryGetValue(task.RequiredLocationId, out var id) ? id : null;
+            if (task.Kind == OperationalTaskKind.AdHoc && task.ContractId is { } contract && task.TaskTitle.StartsWith("Kiểm tra trả phòng"))
             {
-                var worker = task.Status == MeterTaskStatus.Assigned ? moveOutStaff.GetValueOrDefault(contract) : task.AssignedStaffUserId;
+                var worker = task.MeterStatus == MeterTaskStatus.Assigned ? moveOutStaff.GetValueOrDefault(contract) : task.AssignedStaffUserId;
                 if (worker is not null && worker != responsible) responsible = null;
             }
             var state = TaskState(task, responsible, signatures, task.ContractId is { } key ? moveIn.GetValueOrDefault(key) : null);
-            var assigned = task.Status is MeterTaskStatus.Completed or MeterTaskStatus.Cancelled
+            var assigned = task.MeterStatus is MeterTaskStatus.Completed or MeterTaskStatus.Cancelled
                 ? task.AssignedStaffUserId : responsible;
             var source = recurring.Contains(task.Id) ? "Recurring" :
                 task.Kind is OperationalTaskKind.LocationAssetHandover or OperationalTaskKind.MoveInInventory ? "Inventory" :
                 task.ContractId is not null ? "System" : "Owner";
-            rows.Add(new(new(task.Id, "task", task.Title, source, task.Kind.ToString(), task.LocationId,
-                locations.GetValueOrDefault(task.LocationId)?.Name, task.TargetRoomId, RoomName(task.TargetRoomId),
-                task.TargetCommonArea, AssetName(task.TargetAssetId), task.Priority.ToString(), state.Status, state.Phase,
+            rows.Add(new(new(task.Id, "task", task.TaskTitle, source, task.Kind.ToString(), task.RequiredLocationId,
+                locations.GetValueOrDefault(task.RequiredLocationId)?.Name, task.TargetRoomId, RoomName(task.TargetRoomId),
+                task.TargetCommonArea, AssetName(task.TargetAssetId), task.TaskPriority.ToString(), state.Status, state.Phase,
                 state.Action, Name(staff, assigned), task.DueAt, task.CreatedAt, task.IsOverdue(now), null, 0),
-                task.Status.ToString(), task.TargetAssetId, [], state.Verification, task.TargetLabel, responsible, task.AssignedStaffUserId));
+                task.MeterStatus.ToString(), task.TargetAssetId, [], state.Verification, task.TargetLabel, responsible, task.AssignedStaffUserId));
         }
         foreach (var report in incidents.Where(_ => !workOnly))
         {

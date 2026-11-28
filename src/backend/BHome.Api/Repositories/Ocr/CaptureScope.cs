@@ -63,8 +63,8 @@ internal sealed class CaptureScope(BHomePersistenceContext db, ICurrentUser user
     internal Task<bool> LocationVisibleAsync(Guid id, CancellationToken t) => db is Compact24DbContext
         ? NativeLocations.AnyAsync(l => l.Id == id, t) : VisibleLocations.AnyAsync(l => l.Id == id, t);
     internal Task<Guid?> TaskLocationAsync(Guid id, CancellationToken t) => db is Compact24DbContext
-        ? NativeTasks.Where(x => x.Id == id).Select(x => x.StoredLocationId).SingleOrDefaultAsync(t)
-        : VisibleTasks.Where(x => x.Id == id).Select(x => (Guid?)x.LocationId).SingleOrDefaultAsync(t);
+        ? NativeTasks.Where(x => x.Id == id).Select(x => x.LocationId).SingleOrDefaultAsync(t)
+        : VisibleTasks.Where(x => x.Id == id).Select(x => (Guid?)x.RequiredLocationId).SingleOrDefaultAsync(t);
     internal Task<Guid?> TaskMeterAsync(Guid id, CancellationToken t) => db is Compact24DbContext
         ? NativeTasks.Where(x => x.Id == id).Select(x => x.MeterId).SingleOrDefaultAsync(t)
         : VisibleTasks.Where(x => x.Id == id).Select(x => x.MeterId).SingleOrDefaultAsync(t);
@@ -90,7 +90,7 @@ internal sealed class CaptureScope(BHomePersistenceContext db, ICurrentUser user
     internal async Task<MeterReading?> TaskReadingAsync(Guid id, CancellationToken t)
     {
         if (db is not Compact24DbContext compact) return await db.Set<MeterReading>().SingleOrDefaultAsync(r => r.TaskId == id, t);
-        return await compact.Set<BHome.Domain.Billing.MeterReading>().AsNoTracking().SingleOrDefaultAsync(r => r.TaskId == id, t);
+        return await compact.Set<BHome.Domain.Billing.MeterReading>().AsNoTracking().SingleOrDefaultAsync(r => r.OperationalTaskId == id, t);
     }
     internal async Task<MeterReading?> LatestReadingAsync(Guid id, CancellationToken t)
     {
@@ -101,7 +101,7 @@ internal sealed class CaptureScope(BHomePersistenceContext db, ICurrentUser user
         ? NativeCaptureReads.LockedEvidenceAsync(compact, id, t) : db.Locked<MeterEvidence>(id).SingleOrDefaultAsync(t);
     internal async Task<bool> CanCorrectAsync(OperationalTask task, Meter meter, MeterReading reading, CancellationToken t)
     {
-        if (!IsStaff || !meter.IsActive || task.Status != MeterTaskStatus.Completed || task.ReadingDate > Today) return false;
+        if (!IsStaff || !meter.IsActive || task.MeterStatus != MeterTaskStatus.Completed || task.ReadingDate > Today) return false;
         if (db is Compact24DbContext compact) return await CanCorrectNativeAsync(compact, task, meter, reading, t);
         // Changing a reading already used as a subsequent physical baseline would
         // invalidate that reading's previous value and its audit evidence.
@@ -109,7 +109,7 @@ internal sealed class CaptureScope(BHomePersistenceContext db, ICurrentUser user
             r.ConfirmedAt >= reading.ConfirmedAt, t)) return false;
         if (task.BillingPeriod != null && await db.Set<Invoice>().AnyAsync(i => i.Status == InvoiceStatus.Final &&
             i.RoomId == meter.RoomId && i.BillingPeriod == task.BillingPeriod, t)) return false;
-        if (await (from line in db.Set<InvoiceLine>()
+        if (await (from line in db.Set<InvoiceItem>()
                    join invoice in db.Set<Invoice>() on line.InvoiceId equals invoice.Id
                    where invoice.Status == InvoiceStatus.Final && line.MeterReadingId == reading.Id
                    select line.Id).AnyAsync(t)) return false;
@@ -127,7 +127,7 @@ internal sealed class CaptureScope(BHomePersistenceContext db, ICurrentUser user
         {
             if (!await db.Set<Contract>().AnyAsync(c => c.Id == initialContract && c.Status == ContractStatus.Active, t)) return false;
             if (await db.Set<OperationalTask>().AnyAsync(a => a.ContractId == initialContract && a.Kind == OperationalTaskKind.AdHoc &&
-                a.Title.StartsWith("Bàn giao vào phòng") && (a.Status != MeterTaskStatus.InProgress || a.AssignedStaffUserId != UserId), t)) return false;
+                a.TaskTitle.StartsWith("Bàn giao vào phòng") && (a.MeterStatus != MeterTaskStatus.InProgress || a.AssignedStaffUserId != UserId), t)) return false;
             if (await db.Set<ContractHandover>().AnyAsync(h => h.ContractId == initialContract &&
                 h.Status == ContractHandoverStatus.Confirmed, t)) return false;
             if (db is Compact24DbContext && await db.Database.SqlQuery<bool>($"""
@@ -148,7 +148,7 @@ internal sealed class CaptureScope(BHomePersistenceContext db, ICurrentUser user
         if (await compact.Set<BHome.Domain.Billing.MeterReading>().AnyAsync(r => r.MeterId == meter.Id && r.Id != reading.Id && r.ConfirmedAt >= reading.ConfirmedAt, t)) return false;
         if (task.BillingPeriod != null && await compact.Set<BHome.Domain.Billing.Invoice>().AnyAsync(i => i.Status == InvoiceStatus.Final &&
             i.RoomId == meter.RoomId && i.BillingPeriod == task.BillingPeriod, t)) return false;
-        if (await (from line in compact.Set<BHome.Domain.Billing.InvoiceLine>()
+        if (await (from line in compact.Set<BHome.Domain.Billing.InvoiceItem>()
                    join invoice in compact.Set<BHome.Domain.Billing.Invoice>() on line.InvoiceId equals invoice.Id
                    where invoice.Status == InvoiceStatus.Final && line.MeterReadingId == reading.Id
                    select line.Id).AnyAsync(t)) return false;

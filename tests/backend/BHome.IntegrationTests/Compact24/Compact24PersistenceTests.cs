@@ -20,7 +20,7 @@ public sealed class Compact24PersistenceTests(Compact24Fixture fixture) : IClass
         await isolated.InitializeAsync();
         try
         {
-            var owner = new ApplicationUser
+            var owner = new User
             {
                 Id = Guid.NewGuid(),
                 UserName = "sequence-owner",
@@ -30,7 +30,7 @@ public sealed class Compact24PersistenceTests(Compact24Fixture fixture) : IClass
                 ConcurrencyStamp = Guid.NewGuid().ToString()
             };
             var now = DateTimeOffset.UtcNow;
-            var transfers = Enumerable.Range(1, 16).Select(i => new BHome.Domain.PaymentsDebt.PaymentTransfer
+            var transfers = Enumerable.Range(1, 16).Select(i => new BHome.Domain.PaymentsDebt.Payment
             {
                 ProviderIdentity = "SyntheticBank",
                 BankReference = "SEQ-" + i,
@@ -93,7 +93,7 @@ public sealed class Compact24PersistenceTests(Compact24Fixture fixture) : IClass
     [CompactPostgresFact]
     public async Task PropertyAndEncryptedResidentRoundTripWithoutLegacyTables()
     {
-        var owner = new ApplicationUser
+        var owner = new User
         {
             Id = Guid.NewGuid(),
             UserName = "compact-owner",
@@ -102,7 +102,7 @@ public sealed class Compact24PersistenceTests(Compact24Fixture fixture) : IClass
             ConcurrencyStamp = Guid.NewGuid().ToString(),
             IsActive = true
         };
-        owner.PasswordHash = new PasswordHasher<ApplicationUser>().HashPassword(owner, "Synthetic!Password-493");
+        owner.PasswordHash = new PasswordHasher<User>().HashPassword(owner, "Synthetic!Password-493");
         var chain = new Chain { Name = "Synthetic chain" };
         var location = new Location("Synthetic location") { ChainId = chain.Id, Address = "Synthetic address", IsActive = true };
         var type = new RoomType { LocationId = location.Id, Name = "Synthetic catalog", DefaultCapacity = 2, Amenities = ["wifi"] };

@@ -185,19 +185,19 @@ public interface IContractSigningProvider
         SigningAppearance appearance, CancellationToken t) => PrepareAsync(document, certificateId, previousPdf, t);
     // Signer display data for the layout screen: whether a picture is saved, and the name the box will show.
     Task<(bool HasPicture, string SignerName)> SignerAsync(CancellationToken t) => Task.FromResult((false, ""));
-    Task<string> RequestAsync(ContractSignature signature, CancellationToken t);
-    Task<SigningOutcome> PollAsync(ContractSignature signature, byte[] preparedPdf, CancellationToken t);
+    Task<string> RequestAsync(ContractSigning signature, CancellationToken t);
+    Task<SigningOutcome> PollAsync(ContractSigning signature, byte[] preparedPdf, CancellationToken t);
     // OTP only: the signer types the code that RequestAsync sent. A wrong code throws; too many wrong codes or an
     // expired code returns "Failed" so the signer starts again.
-    Task<SigningOutcome> ConfirmAsync(ContractSignature signature, byte[] preparedPdf, string code, CancellationToken t)
+    Task<SigningOutcome> ConfirmAsync(ContractSigning signature, byte[] preparedPdf, string code, CancellationToken t)
         => throw ContractException.Conflict("signing_confirmation_not_supported");
     // OTP only: a new code (after the resend delay); returns when the next resend is allowed.
-    Task<SigningOtpView> ResendAsync(ContractSignature signature, CancellationToken t)
+    Task<SigningOtpView> ResendAsync(ContractSigning signature, CancellationToken t)
         => throw ContractException.Conflict("signing_confirmation_not_supported");
     // OTP only: where the code was sent and until when it is valid, for the confirmation screen.
-    Task<SigningOtpView?> ChallengeAsync(ContractSignature signature, CancellationToken t) => Task.FromResult<SigningOtpView?>(null);
+    Task<SigningOtpView?> ChallengeAsync(ContractSigning signature, CancellationToken t) => Task.FromResult<SigningOtpView?>(null);
     // UPLOAD_PROOF only: the issued PDF signed outside BHOME. Throws ContractException (400) naming the failed check.
-    Task<SigningOutcome> CompleteUploadAsync(ContractSignature signature, byte[] issuedPdf, byte[] uploadedPdf, CancellationToken t)
+    Task<SigningOutcome> CompleteUploadAsync(ContractSigning signature, byte[] issuedPdf, byte[] uploadedPdf, CancellationToken t)
         => throw ContractException.Conflict("signing_upload_not_supported");
 }
 public interface IContractDocumentRenderer

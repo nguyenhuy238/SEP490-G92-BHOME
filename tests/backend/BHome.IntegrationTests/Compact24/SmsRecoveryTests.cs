@@ -111,7 +111,7 @@ public sealed partial class Compact24NotificationMvpTests
         // The fixture's sole Owner is reused by other tests. Restore its synthetic password through Identity.
         if (role == "Owner")
         {
-            db.ChangeTracker.Clear(); var manager = s.ServiceProvider.GetRequiredService<Microsoft.AspNetCore.Identity.UserManager<BHome.Infrastructure.Persistence.ApplicationUser>>();
+            db.ChangeTracker.Clear(); var manager = s.ServiceProvider.GetRequiredService<Microsoft.AspNetCore.Identity.UserManager<BHome.Infrastructure.Persistence.User>>();
             var user = (await manager.FindByIdAsync(account.Id.ToString()))!;
             Assert.True((await manager.ResetPasswordAsync(user, await manager.GeneratePasswordResetTokenAsync(user), Password)).Succeeded);
         }

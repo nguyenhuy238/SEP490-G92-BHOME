@@ -162,7 +162,7 @@ internal sealed class ReceiptExcessRepository(BHomePersistenceContext db, IContr
         if (codes is not null && obligation is { } obligationId && await codes.MatchesAsync(codeKind, obligationId, transfer.TransferDescription, token))
             reference = transfer.TransferDescription.Trim();
         if (!string.Equals(transfer.TransferDescription.Trim(), reference, StringComparison.OrdinalIgnoreCase)) problems.Add("invoice_transfer_reference_mismatch");
-        if (await PaymentLedgerWrites.Allocations(db).AnyAsync(a => a.TransferId == id, token)) problems.Add("bank_transaction_already_allocated");
+        if (await PaymentLedgerWrites.Allocations(db).AnyAsync(a => a.SourcePaymentId == id, token)) problems.Add("bank_transaction_already_allocated");
         if (await payments.ReferenceClaimedAsync(transfer.NormalizedReference, token)) problems.Add("bank_reference_already_credited");
         if ((await payments.LatestReviewAsync(id, token))?.Decision == "Rejected") problems.Add("bank_transfer_rejected");
         if (await db.Database.SqlQuery<bool>($"SELECT EXISTS(SELECT 1 FROM refund_requests WHERE source_payment_id={id} AND status IN ('REQUESTED','APPROVED','COMPLETED')) AS \"Value\"").SingleAsync(token))

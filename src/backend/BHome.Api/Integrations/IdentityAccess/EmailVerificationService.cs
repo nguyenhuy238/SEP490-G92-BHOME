@@ -12,7 +12,7 @@ namespace BHome.Infrastructure.IdentityAccess;
 
 // Verification has its own outbox grant; it never replaces a password-reset or invitation grant.
 internal sealed class EmailVerificationService(IIdentityPersistence identity, IdentitySecurityStore security,
-    UserManager<ApplicationUser> users, AuthenticationEmailDelivery delivery, CompactNotificationWriter sql,
+    UserManager<User> users, AuthenticationEmailDelivery delivery, CompactNotificationWriter sql,
     IOptions<AuthenticationEmailOptions> options, IOptions<SessionOptions> sessions) : IEmailVerification
 {
     public async Task RequestAsync(string userName, CancellationToken t)

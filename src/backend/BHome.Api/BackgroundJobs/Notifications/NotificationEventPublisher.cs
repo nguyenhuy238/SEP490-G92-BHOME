@@ -156,13 +156,13 @@ internal sealed partial class NotificationEventPublisher(BHomePersistenceContext
         // Never disclose another tenant's adjustment reason or evidence.
         var today = clock.BusinessToday();
         var held = db is Compact24DbContext heldDb
-            ? await (from r in heldDb.Set<InvoiceAdjustmentRequest>().AsNoTracking()
+            ? await (from r in heldDb.Set<InvoiceAdjustment>().AsNoTracking()
                      join i in heldDb.Set<BHome.Domain.Billing.Invoice>() on r.InvoiceId equals i.Id
                      where r.DecisionSnapshot == null && i.Status == InvoiceStatus.Draft && i.ScheduledFinalDate <= today &&
                         !publicationKeys.Contains("invoice-finalization-held:" + r.InvoiceId.ToString())
-                     orderby r.SubmittedAt, r.Id
+                     orderby r.RequestedAt, r.Id
                      select new { r.Id, r.InvoiceId }).Take(50).ToArrayAsync(t)
-            : await db.Set<InvoiceAdjustmentRequest>().AsNoTracking()
+            : await db.Set<InvoiceAdjustment>().AsNoTracking()
             .Where(r => r.Decision == null && r.Invoice.Status == InvoiceStatus.Draft &&
                 r.Invoice.ScheduledFinalDate <= today &&
                 !publicationKeys.Contains("invoice-finalization-held:" + r.InvoiceId.ToString()))
@@ -201,12 +201,12 @@ internal sealed partial class NotificationEventPublisher(BHomePersistenceContext
                 var blockedDrafts = db is Compact24DbContext blockedDb
                     ? await blockedDb.Set<BHome.Domain.Billing.Invoice>().AsNoTracking().Where(i => invoiceIds.Contains(i.Id) &&
                         i.LocationId == execution.LocationId && i.BillingPeriod == execution.BillingPeriod && i.Status == InvoiceStatus.Draft &&
-                        i.ScheduledFinalDate <= today && !blockedDb.Set<InvoiceAdjustmentRequest>().Any(r => r.InvoiceId == i.Id && r.DecisionSnapshot == null) &&
+                        i.ScheduledFinalDate <= today && !blockedDb.Set<InvoiceAdjustment>().Any(r => r.InvoiceId == i.Id && r.DecisionSnapshot == null) &&
                         !publicationKeys.Contains("invoice-finalization-inputs:" + i.Id.ToString()))
                         .OrderBy(i => i.ScheduledFinalDate).ThenBy(i => i.Id).Select(i => i.Id).ToArrayAsync(t)
                     : await db.Set<Invoice>().AsNoTracking().Where(i => invoiceIds.Contains(i.Id) &&
                     i.LocationId == execution.LocationId && i.BillingPeriod == execution.BillingPeriod && i.Status == InvoiceStatus.Draft &&
-                    i.ScheduledFinalDate <= today && !db.Set<InvoiceAdjustmentRequest>().Any(r => r.InvoiceId == i.Id && r.Decision == null) &&
+                    i.ScheduledFinalDate <= today && !db.Set<InvoiceAdjustment>().Any(r => r.InvoiceId == i.Id && r.Decision == null) &&
                     !publicationKeys.Contains("invoice-finalization-inputs:" + i.Id.ToString()))
                     .OrderBy(i => i.ScheduledFinalDate).ThenBy(i => i.Id).Select(i => i.Id).ToArrayAsync(t);
                 foreach (var blockedId in blockedDrafts)
@@ -228,7 +228,7 @@ internal sealed partial class NotificationEventPublisher(BHomePersistenceContext
         foreach (var e in payments) count += await Publish("payment:" + e.AllocationId, async () =>
         {
             var allocation = db is Compact24DbContext allocationDb
-                ? await allocationDb.Set<BHome.Domain.PaymentsDebt.PaymentAllocation>().AsNoTracking().Where(a => a.Id == e.AllocationId && a.InvoiceId == e.InvoiceId).Select(a => new { a.Amount, VerifiedByUserId = a.CreatedByUserId ?? Guid.Empty }).SingleAsync(t)
+                ? await allocationDb.Set<BHome.Domain.PaymentsDebt.PaymentAllocation>().AsNoTracking().Where(a => a.Id == e.AllocationId && a.TargetInvoiceId == e.InvoiceId).Select(a => new { a.Amount, VerifiedByUserId = a.CreatedByUserId ?? Guid.Empty }).SingleAsync(t)
                 : await db.Set<PaymentAllocation>().AsNoTracking().Where(a => a.Id == e.AllocationId && a.InvoiceId == e.InvoiceId).Select(a => new { a.Amount, a.VerifiedByUserId }).SingleAsync(t);
             var i = await LoadInvoice(e.InvoiceId, t);
             if (i.Status != InvoiceStatus.Final) return [];
@@ -256,7 +256,7 @@ internal sealed partial class NotificationEventPublisher(BHomePersistenceContext
             else if (e.Name == "invoice.adjustment.decided.v1")
             {
                 var decision = db is Compact24DbContext decisionDb
-                    ? NativeAdjustmentPersistence.ReadDecision(await decisionDb.Set<InvoiceAdjustmentRequest>().AsNoTracking().SingleAsync(r => r.Id == e.RequestId, t)) ?? throw new InvalidOperationException("Notification adjustment decision missing.")
+                    ? NativeAdjustmentPersistence.ReadDecision(await decisionDb.Set<InvoiceAdjustment>().AsNoTracking().SingleAsync(r => r.Id == e.RequestId, t)) ?? throw new InvalidOperationException("Notification adjustment decision missing.")
                     : await db.Set<InvoiceAdjustmentDecision>().AsNoTracking().SingleAsync(d => d.RequestId == e.RequestId, t);
                 var approved = decision.Outcome == "Approved";
                 list.Add(new(e.RequesterId, Roles.Tenant, i.LocationId, "Adjustment", approved ? "Yêu cầu điều chỉnh đã được duyệt" : "Yêu cầu điều chỉnh đã bị từ chối", "Mở yêu cầu của bạn để xem kết quả được phép truy cập.", "Adjustment", e.RequestId));
@@ -290,12 +290,12 @@ internal sealed partial class NotificationEventPublisher(BHomePersistenceContext
                 task.Purpose == ReadingPurpose.Periodic && task.BillingPeriod is { } period &&
                 e.Event is "assigned" or "assign" or "created" or "scheduled_meter_created" or "scheduled_meter_assigned" or "responsibility_changed")
             {
-                var key = $"periodic-meter-assigned:{e.RecipientUserId:N}:{task.LocationId:N}:{period:yyyyMM}";
-                if (task.Status != MeterTaskStatus.Completed && task.Status != MeterTaskStatus.Cancelled &&
-                    await HasAssignment(e.RecipientUserId, task.LocationId, today, t) &&
+                var key = $"periodic-meter-assigned:{e.RecipientUserId:N}:{task.RequiredLocationId:N}:{period:yyyyMM}";
+                if (task.MeterStatus != MeterTaskStatus.Completed && task.MeterStatus != MeterTaskStatus.Cancelled &&
+                    await HasAssignment(e.RecipientUserId, task.RequiredLocationId, today, t) &&
                     (db is not Compact24DbContext compact || await StaffEmploymentEligibility.IsEligibleAsync(compact, e.RecipientUserId, today, t)))
                     count += await Publish(key, () => Task.FromResult<IReadOnlyList<Intent>>([
-                        new(e.RecipientUserId, role, task.LocationId, "Task", $"Có nhiệm vụ ghi chỉ số kỳ {period:MM/yyyy}",
+                        new(e.RecipientUserId, role, task.RequiredLocationId, "Task", $"Có nhiệm vụ ghi chỉ số kỳ {period:MM/yyyy}",
                             "Mở danh sách phòng được phân công để ghi chỉ số điện nước.", "MeterTask", task.Id, EventType: "TASK_ASSIGNED")
                     ]), t);
                 // Consume each original outbox event, retaining its publication audit.
@@ -305,8 +305,8 @@ internal sealed partial class NotificationEventPublisher(BHomePersistenceContext
             count += await Publish("task:" + e.Id, async () =>
             {
                 var assignmentDate = task.AutomationPlanId is not null ? clock.BusinessToday() : BillingAutomationDates.BusinessDate(clock.GetUtcNow());
-                if (role == Roles.Staff && (!await HasAssignment(e.RecipientUserId, task.LocationId, assignmentDate, t) || task.Purpose != ReadingPurpose.Periodic && task.AutomationPlanId != null && task.AssignedStaffUserId != e.RecipientUserId)) return [];
-                return [new Intent(e.RecipientUserId, role, task.LocationId, "Task", task.Kind == OperationalTaskKind.MeterReading ? "Công việc ghi chỉ số định kỳ" : "Công việc có cập nhật", "Mở công việc để xem yêu cầu và thời hạn trong phạm vi được phân công.", task.Kind == OperationalTaskKind.MeterReading ? "MeterTask" : "OperationalTask", task.Id, e.Id, e.ReadAt, EventType: e.Event switch { "assigned" or "assign" or "created" or "scheduled_meter_created" or "scheduled_meter_assigned" or "responsibility_changed" => "TASK_ASSIGNED", "submit" or "submitted" => "TASK_COMPLETION_SUBMITTED", "rework" => "TASK_REWORK_REQUIRED", _ => "TASK_UPDATED" })];
+                if (role == Roles.Staff && (!await HasAssignment(e.RecipientUserId, task.RequiredLocationId, assignmentDate, t) || task.Purpose != ReadingPurpose.Periodic && task.AutomationPlanId != null && task.AssignedStaffUserId != e.RecipientUserId)) return [];
+                return [new Intent(e.RecipientUserId, role, task.RequiredLocationId, "Task", task.Kind == OperationalTaskKind.MeterReading ? "Công việc ghi chỉ số định kỳ" : "Công việc có cập nhật", "Mở công việc để xem yêu cầu và thời hạn trong phạm vi được phân công.", task.Kind == OperationalTaskKind.MeterReading ? "MeterTask" : "OperationalTask", task.Id, e.Id, e.ReadAt, EventType: e.Event switch { "assigned" or "assign" or "created" or "scheduled_meter_created" or "scheduled_meter_assigned" or "responsibility_changed" => "TASK_ASSIGNED", "submit" or "submitted" => "TASK_COMPLETION_SUBMITTED", "rework" => "TASK_REWORK_REQUIRED", _ => "TASK_UPDATED" })];
             }, t);
         }
         var issues = await PendingExecutions(false, t);

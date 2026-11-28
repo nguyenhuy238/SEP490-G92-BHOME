@@ -23,8 +23,8 @@ internal sealed class IncidentReportConfiguration
         b.HasOne<Room>().WithMany().HasForeignKey(r => new { r.RoomId, r.LocationId }).HasPrincipalKey(r => new { r.Id, r.LocationId }).OnDelete(DeleteBehavior.Restrict);
         b.HasOne<Asset>().WithMany().HasForeignKey(r => r.AssetId).OnDelete(DeleteBehavior.Restrict);
         b.HasOne<Contract>().WithMany().HasForeignKey(r => r.ContractId).OnDelete(DeleteBehavior.Restrict);
-        b.HasOne<ApplicationUser>().WithMany().HasForeignKey(r => r.ReporterId).OnDelete(DeleteBehavior.Restrict);
-        b.HasOne<ApplicationUser>().WithMany().HasForeignKey(r => r.AcknowledgedById).OnDelete(DeleteBehavior.Restrict);
+        b.HasOne<User>().WithMany().HasForeignKey(r => r.ReporterId).OnDelete(DeleteBehavior.Restrict);
+        b.HasOne<User>().WithMany().HasForeignKey(r => r.AcknowledgedById).OnDelete(DeleteBehavior.Restrict);
         b.HasOne<IncidentReport>().WithMany().HasForeignKey(r => r.DuplicateOfId).OnDelete(DeleteBehavior.Restrict);
         b.Property(r => r.Description).HasMaxLength(8000); b.Property(r => r.CommonArea).HasMaxLength(200);
         b.Property(r => r.Type).HasMaxLength(100); b.Property(r => r.Category).HasMaxLength(100);
@@ -48,9 +48,9 @@ internal sealed class WorkOrderConfiguration
         b.HasOne<Location>().WithMany().HasForeignKey(w => w.LocationId).OnDelete(DeleteBehavior.Restrict);
         b.HasOne<Room>().WithMany().HasForeignKey(w => w.RoomId).OnDelete(DeleteBehavior.Restrict);
         b.HasOne<Asset>().WithMany().HasForeignKey(w => w.AssetId).OnDelete(DeleteBehavior.Restrict);
-        b.HasOne<ApplicationUser>().WithMany().HasForeignKey(w => w.AssignedStaffId).OnDelete(DeleteBehavior.Restrict);
-        b.HasOne<ApplicationUser>().WithMany().HasForeignKey(w => w.ApprovedById).OnDelete(DeleteBehavior.Restrict);
-        b.HasOne<ApplicationUser>().WithMany().HasForeignKey(w => w.VerifiedById).OnDelete(DeleteBehavior.Restrict);
+        b.HasOne<User>().WithMany().HasForeignKey(w => w.AssignedStaffId).OnDelete(DeleteBehavior.Restrict);
+        b.HasOne<User>().WithMany().HasForeignKey(w => w.ApprovedById).OnDelete(DeleteBehavior.Restrict);
+        b.HasOne<User>().WithMany().HasForeignKey(w => w.VerifiedById).OnDelete(DeleteBehavior.Restrict);
         // CompletionActivityId is an immutable history reference, not an FK cycle with Activity.WorkOrderId.
         b.Property(w => w.ExpectedOutcome).HasMaxLength(4000); b.Property(w => w.InspectionResult).HasMaxLength(8000);
         b.Property(w => w.ProposedSolution).HasMaxLength(8000); b.Property(w => w.Result).HasMaxLength(8000);
@@ -66,7 +66,7 @@ internal sealed class IncidentActivityConfiguration
         b.ToTable("IncidentActivities");
         b.HasOne<IncidentReport>().WithMany().HasForeignKey(a => a.IncidentId).OnDelete(DeleteBehavior.Restrict);
         b.HasOne<MaintenanceWorkOrder>().WithMany().HasForeignKey(a => a.WorkOrderId).OnDelete(DeleteBehavior.Restrict);
-        b.HasOne<ApplicationUser>().WithMany().HasForeignKey(a => a.ActorId).OnDelete(DeleteBehavior.Restrict);
+        b.HasOne<User>().WithMany().HasForeignKey(a => a.ActorId).OnDelete(DeleteBehavior.Restrict);
         b.Property(a => a.Action).HasMaxLength(60); b.Property(a => a.Note).HasMaxLength(8000); b.Property(a => a.DataJson).HasColumnType("jsonb");
         b.HasIndex(a => new { a.IncidentId, a.OccurredAt });
     }
@@ -79,7 +79,7 @@ internal sealed class IncidentEvidenceConfiguration
         b.HasOne<IncidentReport>().WithMany().HasForeignKey(e => e.IncidentId).OnDelete(DeleteBehavior.Restrict);
         b.HasOne<MaintenanceWorkOrder>().WithMany().HasForeignKey(e => e.WorkOrderId).OnDelete(DeleteBehavior.Restrict);
         b.HasOne<IncidentActivity>().WithMany().HasForeignKey(e => e.ActivityId).OnDelete(DeleteBehavior.Restrict);
-        b.HasOne<ApplicationUser>().WithMany().HasForeignKey(e => e.UploadedById).OnDelete(DeleteBehavior.Restrict);
+        b.HasOne<User>().WithMany().HasForeignKey(e => e.UploadedById).OnDelete(DeleteBehavior.Restrict);
         b.Property(e => e.ObjectKey).HasMaxLength(250); b.Property(e => e.ContentType).HasMaxLength(30); b.Property(e => e.Sha256).HasMaxLength(64);
         b.HasIndex(e => e.ObjectKey).IsUnique(); b.HasIndex(e => new { e.IncidentId, e.Kind, e.WorkOrderId });
     }
@@ -95,8 +95,8 @@ internal sealed class EmergencyActionConfiguration
         });
         b.HasOne<IncidentReport>().WithMany().HasForeignKey(a => a.IncidentId).OnDelete(DeleteBehavior.Restrict);
         b.HasOne<IncidentActivity>().WithMany().HasForeignKey(a => a.ActivityId).OnDelete(DeleteBehavior.Restrict);
-        b.HasOne<ApplicationUser>().WithMany().HasForeignKey(a => a.ActorId).OnDelete(DeleteBehavior.Restrict);
-        b.HasOne<ApplicationUser>().WithMany().HasForeignKey(a => a.CostDecidedById).OnDelete(DeleteBehavior.Restrict);
+        b.HasOne<User>().WithMany().HasForeignKey(a => a.ActorId).OnDelete(DeleteBehavior.Restrict);
+        b.HasOne<User>().WithMany().HasForeignKey(a => a.CostDecidedById).OnDelete(DeleteBehavior.Restrict);
         b.Property(a => a.RequestedCost).HasPrecision(18, 0); b.HasIndex(a => a.ActivityId).IsUnique();
     }
 }
@@ -115,7 +115,7 @@ internal sealed class MaintenanceExpenseConfiguration
         b.HasOne<Asset>().WithMany().HasForeignKey(e => e.AssetId).OnDelete(DeleteBehavior.Restrict);
         b.HasOne<MaintenanceWorkOrder>().WithMany().HasForeignKey(e => e.WorkOrderId).OnDelete(DeleteBehavior.Restrict);
         b.HasOne<EmergencyAction>().WithMany().HasForeignKey(e => e.EmergencyActionId).OnDelete(DeleteBehavior.Restrict);
-        b.HasOne<ApplicationUser>().WithMany().HasForeignKey(e => e.ConfirmedById).OnDelete(DeleteBehavior.Restrict);
+        b.HasOne<User>().WithMany().HasForeignKey(e => e.ConfirmedById).OnDelete(DeleteBehavior.Restrict);
         b.Property(e => e.Amount).HasPrecision(18, 0); b.Property(e => e.Category).HasMaxLength(50); b.Property(e => e.SourceType).HasMaxLength(30);
         b.HasIndex(e => new { e.SourceType, e.SourceId }).IsUnique(); b.HasIndex(e => new { e.LocationId, e.ExpenseDate });
     }
@@ -142,7 +142,7 @@ internal sealed class IncidentCommandConfiguration
     {
         b.ToTable("IncidentCommands"); b.HasIndex(c => new { c.ActorId, c.Key }).IsUnique();
         b.HasOne<IncidentReport>().WithMany().HasForeignKey(c => c.IncidentId).OnDelete(DeleteBehavior.Restrict);
-        b.HasOne<ApplicationUser>().WithMany().HasForeignKey(c => c.ActorId).OnDelete(DeleteBehavior.Restrict);
+        b.HasOne<User>().WithMany().HasForeignKey(c => c.ActorId).OnDelete(DeleteBehavior.Restrict);
         b.Property(c => c.Fingerprint).HasMaxLength(64); b.Property(c => c.ResponseJson).HasColumnType("jsonb");
     }
 }
@@ -153,7 +153,7 @@ internal sealed class IncidentNotificationConfiguration
         b.ToTable("IncidentNotifications");
         b.HasOne<IncidentReport>().WithMany().HasForeignKey(n => n.IncidentId).OnDelete(DeleteBehavior.Restrict);
         b.HasOne<IncidentActivity>().WithMany().HasForeignKey(n => n.ActivityId).OnDelete(DeleteBehavior.Restrict);
-        b.HasOne<ApplicationUser>().WithMany().HasForeignKey(n => n.RecipientId).OnDelete(DeleteBehavior.Restrict);
+        b.HasOne<User>().WithMany().HasForeignKey(n => n.RecipientId).OnDelete(DeleteBehavior.Restrict);
         b.Property(n => n.Event).HasMaxLength(60); b.Property(n => n.DeliveryState).HasMaxLength(30);
         b.Property(n => n.DeliveryReference).HasMaxLength(200); b.Property(n => n.DeliveryError).HasMaxLength(60);
         b.HasIndex(n => new { n.ActivityId, n.RecipientId }).IsUnique(); b.HasIndex(n => new { n.RecipientId, n.CreatedAt });

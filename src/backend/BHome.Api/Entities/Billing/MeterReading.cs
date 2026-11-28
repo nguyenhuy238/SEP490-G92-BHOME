@@ -8,7 +8,8 @@ namespace BHome.Domain.Billing;
 // The confirmed reading and its persisted evidence reference are the same entity.
 public sealed class MeterReading : AuditableEntity
 {
-    public Guid TaskId { get; set; }
+    [NotMapped, JsonIgnore] public Guid OperationalTaskId { get; set; }
+    public Guid TaskId { get => OperationalTaskId; set => OperationalTaskId = value; }
     public Guid MeterId { get; set; }
     public Guid EvidenceId { get; set; }
     public decimal? PreviousValue { get; set; }

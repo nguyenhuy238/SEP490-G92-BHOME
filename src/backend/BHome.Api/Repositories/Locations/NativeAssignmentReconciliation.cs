@@ -22,8 +22,8 @@ internal static class NativeAssignmentReconciliation
 
     internal static async Task<TaskResponsibility[]> TasksAsync(Compact24DbContext db, Guid location, CancellationToken t)
     {
-        var rows = await db.Set<BHome.Domain.Billing.OperationalTask>().AsNoTracking().Where(row => row.StoredLocationId == location &&
-            (row.TaskType == "GENERAL" || row.TaskType == "METER_READ") && row.StoredStatus != "2" && row.StoredStatus != "3").ToArrayAsync(t);
+        var rows = await db.Set<BHome.Domain.Billing.OperationalTask>().AsNoTracking().Where(row => row.LocationId == location &&
+            (row.TaskType == "GENERAL" || row.TaskType == "METER_READ") && row.Status != "2" && row.Status != "3").ToArrayAsync(t);
         return rows.Select(row =>
         {
             var state = row.TaskData.ValueKind == JsonValueKind.Object && row.TaskData.TryGetProperty("state", out var snapshot) &&
@@ -31,14 +31,14 @@ internal static class NativeAssignmentReconciliation
             var kind = state.Kind is OperationalTaskKind.MoveInInventory or OperationalTaskKind.LocationAssetHandover
                 ? state.Kind : row.TaskType == "GENERAL" ? OperationalTaskKind.AdHoc : OperationalTaskKind.MeterReading;
             return new TaskResponsibility(row.Id, kind, state.Purpose, row.AssignedUserId, state.AssignmentId, row.AssignedAt,
-                row.DueAt, row.Version, (MeterTaskStatus)int.Parse(row.StoredStatus, CultureInfo.InvariantCulture),
+                row.DueAt, row.Version, (MeterTaskStatus)int.Parse(row.Status, CultureInfo.InvariantCulture),
                 state.Result, state.LocationAssetInventoryJson ?? "");
         }).ToArray();
     }
 
     internal static async Task<BHome.Domain.IncidentMaintenance.MaintenanceWorkOrder[]> OrdersAsync(Compact24DbContext db, Guid location, CancellationToken t) =>
-        (await db.Set<BHome.Domain.Billing.OperationalTask>().AsNoTracking().Where(row => row.StoredLocationId == location && row.TaskType == "WORK_ORDER" &&
-            row.StoredStatus != "Verified" && row.StoredStatus != "Cancelled").ToArrayAsync(t)).Select(NativeIncidentSession.Read).ToArray();
+        (await db.Set<BHome.Domain.Billing.OperationalTask>().AsNoTracking().Where(row => row.LocationId == location && row.TaskType == "WORK_ORDER" &&
+            row.Status != "Verified" && row.Status != "Cancelled").ToArrayAsync(t)).Select(NativeIncidentSession.Read).ToArray();
 
     internal static Task<InspectionResponsibility[]> InspectionsAsync(Compact24DbContext db, Guid location, CancellationToken t) =>
         db.Database.SqlQuery<InspectionResponsibility>($"""

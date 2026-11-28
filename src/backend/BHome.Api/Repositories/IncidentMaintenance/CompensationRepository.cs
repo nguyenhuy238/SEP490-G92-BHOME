@@ -73,7 +73,7 @@ internal sealed class CompensationRepository(BHomePersistenceContext db, IIncide
     public Task<IReadOnlyList<IncidentEvidence>> EvidenceAsync(Guid workOrder, CancellationToken t) => native is not null
         ? native.EvidenceAsync(null, workOrder, t) : incidents.WorkEvidenceAsync(workOrder, t);
     public Task<bool> InvoiceHasMoneyAsync(Guid invoice, CancellationToken t) => native is not null
-        ? db.Set<BHome.Domain.PaymentsDebt.PaymentAllocation>().AsNoTracking().AnyAsync(a => a.InvoiceId == invoice, t)
+        ? db.Set<BHome.Domain.PaymentsDebt.PaymentAllocation>().AsNoTracking().AnyAsync(a => a.TargetInvoiceId == invoice, t)
         : db.Set<BHome.Domain.PaymentsDebt.PaymentAllocation>().AnyAsync(a => a.InvoiceId == invoice, t);
     public async Task IssueInvoiceAsync(Invoice invoice, InvoiceIssuedEvent issued, CancellationToken t)
     {

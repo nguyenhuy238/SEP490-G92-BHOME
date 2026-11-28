@@ -34,10 +34,10 @@ internal sealed class UploadProofContractSigningAdapter(ICurrentUser user, ICont
     }
 
     // Nothing is sent anywhere: the signature stays Pending until the signed PDF is uploaded.
-    public Task<string> RequestAsync(ContractSignature signature, CancellationToken t) => Task.FromResult("upload:" + signature.Id.ToString("N"));
-    public Task<SigningOutcome> PollAsync(ContractSignature signature, byte[] preparedPdf, CancellationToken t) => Task.FromResult(new SigningOutcome("Pending"));
+    public Task<string> RequestAsync(ContractSigning signature, CancellationToken t) => Task.FromResult("upload:" + signature.Id.ToString("N"));
+    public Task<SigningOutcome> PollAsync(ContractSigning signature, byte[] preparedPdf, CancellationToken t) => Task.FromResult(new SigningOutcome("Pending"));
 
-    public Task<SigningOutcome> CompleteUploadAsync(ContractSignature signature, byte[] issuedPdf, byte[] uploadedPdf, CancellationToken t)
+    public Task<SigningOutcome> CompleteUploadAsync(ContractSigning signature, byte[] issuedPdf, byte[] uploadedPdf, CancellationToken t)
     {
         if (signature.SignerUserId != Actor) throw new ContractException(403, "contract_signer_required");
         var certificate = verifier.Verify(issuedPdf, uploadedPdf);

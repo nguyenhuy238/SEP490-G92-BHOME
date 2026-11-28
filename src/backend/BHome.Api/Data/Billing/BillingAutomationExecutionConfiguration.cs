@@ -34,7 +34,7 @@ internal sealed class BillingRepresentativeConfiguration : IEntityTypeConfigurat
         e.ToTable("BillingRepresentativeSelections"); e.HasKey(r => r.Id); e.HasIndex(r => new { r.RoomId, r.BillingPeriod, r.Version }).IsUnique();
         e.HasOne<BHome.Domain.PropertyManagement.Room>().WithMany().HasForeignKey(r => r.RoomId).OnDelete(DeleteBehavior.Restrict);
         e.HasOne<BHome.Domain.TenantContracts.Contract>().WithMany().HasForeignKey(r => r.ContractId).OnDelete(DeleteBehavior.Restrict);
-        e.HasOne<BHome.Infrastructure.Persistence.ApplicationUser>().WithMany().HasForeignKey(r => r.SelectedByUserId).OnDelete(DeleteBehavior.Restrict);
+        e.HasOne<BHome.Infrastructure.Persistence.User>().WithMany().HasForeignKey(r => r.SelectedByUserId).OnDelete(DeleteBehavior.Restrict);
     }
 }
 internal sealed class InvoiceAutomationConfiguration : IEntityTypeConfiguration<Invoice>
@@ -44,7 +44,7 @@ internal sealed class InvoiceIssuedEventConfiguration : IEntityTypeConfiguration
     public void Configure(EntityTypeBuilder<InvoiceIssuedEvent> e)
     {
         e.ToTable("InvoiceIssuedEvents"); e.HasKey(r => r.InvoiceId); e.HasIndex(r => r.OccurredAt); e.HasOne<Invoice>().WithMany().HasForeignKey(r => r.InvoiceId).OnDelete(DeleteBehavior.Restrict);
-        e.HasOne<BHome.Infrastructure.Persistence.ApplicationUser>().WithMany().HasForeignKey(r => r.OwnerUserId).OnDelete(DeleteBehavior.Restrict);
+        e.HasOne<BHome.Infrastructure.Persistence.User>().WithMany().HasForeignKey(r => r.OwnerUserId).OnDelete(DeleteBehavior.Restrict);
         e.HasOne<BillingAutomationPlan>().WithMany().HasForeignKey(r => r.AutomationPlanId).OnDelete(DeleteBehavior.Restrict);
     }
 }

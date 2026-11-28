@@ -32,8 +32,8 @@ public sealed class OperationalTaskApiTests(CaptureFixture fixture) : IClassFixt
         var id = Guid.NewGuid();
         await using (var scope = fixture.Factory.Services.CreateAsyncScope())
         {
-            var users = scope.ServiceProvider.GetRequiredService<Microsoft.AspNetCore.Identity.UserManager<ApplicationUser>>();
-            var user = new ApplicationUser { Id = id, UserName = name, Email = name, LockoutEnabled = true };
+            var users = scope.ServiceProvider.GetRequiredService<Microsoft.AspNetCore.Identity.UserManager<User>>();
+            var user = new User { Id = id, UserName = name, Email = name, LockoutEnabled = true };
             user = await BHome.IntegrationTests.Compact24.WorkflowTestUsers.CreateAsync(scope.ServiceProvider, user, role, "Synthetic-Task!539");
             id = user.Id; name = user.Email!;
         }
@@ -204,7 +204,7 @@ public sealed class OperationalTaskApiTests(CaptureFixture fixture) : IClassFixt
         var page = await w.Owner.Client.GetFromJsonAsync<TaskPage<TaskView>>($"{Base}?locationId={w.Location}&pageSize=1&priority=High");
         Assert.Equal(1, page!.TotalCount); Assert.Single(page.Items);
         await using var scope = fixture.Factory.Services.CreateAsyncScope(); var db = scope.ServiceProvider.GetFixturePersistence();
-        Assert.Equal(1, await db.Set<OperationalTask>().CountAsync(x => x.LocationId == w.Location));
+        Assert.Equal(1, await db.Set<OperationalTask>().CountAsync(x => x.RequiredLocationId == w.Location));
         Assert.Equal(1, await db.Set<OperationalTaskHistory>().CountAsync(x => x.TaskId == task.Id && x.Action == "created"));
         Assert.Equal(1, await db.Set<OperationalTaskHistory>().CountAsync(x => x.TaskId == task.Id && x.Action == "updated"));
         var history = await db.Set<OperationalTaskHistory>().FirstAsync(x => x.TaskId == task.Id);

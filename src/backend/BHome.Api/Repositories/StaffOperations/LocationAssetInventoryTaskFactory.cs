@@ -104,9 +104,9 @@ internal static class LocationAssetInventoryTaskFactory
     {
         // There is one open handover task per Location. Assignment changes transfer
         // responsibility on that task; they must never manufacture a second task ID.
-        var locationTasks = (await NativeOperationalTaskPersistence.Roots(db).Where(x => x.StoredLocationId == locationId && x.TaskType == "GENERAL")
+        var locationTasks = (await NativeOperationalTaskPersistence.Roots(db).Where(x => x.LocationId == locationId && x.TaskType == "GENERAL")
             .ToArrayAsync(token)).Select(NativeCaptureReads.Task).Where(x => x.Kind == OperationalTaskKind.LocationAssetHandover).ToArray();
-        var openTasks = locationTasks.Where(task => task.Status is not (MeterTaskStatus.Completed or MeterTaskStatus.Cancelled))
+        var openTasks = locationTasks.Where(task => task.MeterStatus is not (MeterTaskStatus.Completed or MeterTaskStatus.Cancelled))
             .Select(task => task.Id).Take(2).ToArray();
         if (openTasks.Length > 1)
             throw new InvalidOperationException("A Location has more than one open asset handover task.");
@@ -120,7 +120,7 @@ internal static class LocationAssetInventoryTaskFactory
         if (await NativeOperationalTaskPersistence.Roots(db).AnyAsync(t => t.Id == taskId, token)) return;
         var baseline = await BuildConfirmedSnapshotAsync(db, workspace, locationId, assignmentId, effectiveFrom, now, token);
         OperationalTask? prior = null;
-        foreach (var candidate in locationTasks.Where(t => t.AssignmentId != assignmentId && t.Status == MeterTaskStatus.Cancelled)
+        foreach (var candidate in locationTasks.Where(t => t.AssignmentId != assignmentId && t.MeterStatus == MeterTaskStatus.Cancelled)
             .OrderByDescending(t => t.AssignedAt).ThenByDescending(t => t.Id))
         {
             if ((await NativeOperationalTaskPersistence.HistoryAsync(db, candidate.Id, token)).Any(h => h.Action == "responsibility_superseded"))
@@ -173,16 +173,16 @@ internal static class LocationAssetInventoryTaskFactory
         var task = new OperationalTask(taskId)
         {
             Kind = OperationalTaskKind.LocationAssetHandover,
-            LocationId = locationId,
-            Title = "Kiểm tra tài sản toàn cơ sở",
+            RequiredLocationId = locationId,
+            TaskTitle = "Kiểm tra tài sản toàn cơ sở",
             TargetLabel = "Toàn bộ cơ sở · phòng và khu vực chung",
             Requirements = "Kiểm tra tài sản đã được Owner kiểm kê và xác nhận tại các phòng/khu vực chung. Phòng có bàn giao Tenant hợp lệ được kế thừa. Ghi tiến độ và vướng mắc trước khi trình Owner ký biên bản bàn giao.",
             AssignedStaffUserId = staffId,
             AssignmentId = assignmentId,
             AssignedAt = now,
             ReadingDate = effectiveFrom,
-            Status = MeterTaskStatus.Assigned,
-            Priority = OperationalTaskPriority.Normal,
+            MeterStatus = MeterTaskStatus.Assigned,
+            TaskPriority = OperationalTaskPriority.Normal,
             EvidenceRequired = false,
             LocationAssetInventoryJson = JsonSerializer.Serialize(baseline)
         };
@@ -243,8 +243,8 @@ internal static class LocationAssetInventoryTaskFactory
         Guid locationId, Guid actor, DateTimeOffset now, CancellationToken token)
     {
         if (workspace is null) return;
-        var task = (await NativeOperationalTaskPersistence.Roots(db).Where(x => x.StoredLocationId == locationId && x.TaskType == "GENERAL" &&
-            (x.StoredStatus == "0" || x.StoredStatus == "1")).ToArrayAsync(token)).Select(NativeCaptureReads.Task)
+        var task = (await NativeOperationalTaskPersistence.Roots(db).Where(x => x.LocationId == locationId && x.TaskType == "GENERAL" &&
+            (x.Status == "0" || x.Status == "1")).ToArrayAsync(token)).Select(NativeCaptureReads.Task)
             .SingleOrDefault(x => x.Kind == OperationalTaskKind.LocationAssetHandover);
         if (task?.AssignmentId is not { } assignment || task.AssignedStaffUserId is not { } staff ||
             string.IsNullOrWhiteSpace(task.LocationAssetInventoryJson)) return;
@@ -308,7 +308,7 @@ internal static class LocationAssetInventoryTaskFactory
                 OccurredAt = now,
                 TaskVersion = task.Version,
                 WasOverdue = task.IsOverdue(now),
-                ChangesJson = JsonSerializer.Serialize(new { task.Status, Automatic = true })
+                ChangesJson = JsonSerializer.Serialize(new { Status = task.MeterStatus, Automatic = true })
             };
             events.Add(history);
             var owners = await db.Users.AsNoTracking().Where(u => u.IsActive &&
@@ -381,7 +381,7 @@ internal static class LocationAssetInventoryTaskFactory
                 a.Name,
                 a.Category,
                 Status = (AssetStatus)a.Status,
-                PurchaseInfo = a.PurchaseMetadata.GetRawText()
+                PurchaseInfo = a.PurchaseInfo.GetRawText()
             }).ToArray();
         // Query Owner's durable inventory verification documents once per Location.
         var setup = await workspace.ReviewDocumentsAsync(locationId,

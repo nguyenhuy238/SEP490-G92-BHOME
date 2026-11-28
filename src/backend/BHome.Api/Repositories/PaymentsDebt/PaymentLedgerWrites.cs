@@ -34,7 +34,7 @@ internal static class PaymentLedgerWrites
 
     private static Guid StableId(string value) => new(SHA256.HashData(Encoding.UTF8.GetBytes(value)).AsSpan(0, 16));
 
-    internal static async Task AddReceiptAsync(BHomePersistenceContext db, PaymentTransfer value, CancellationToken token)
+    internal static async Task AddReceiptAsync(BHomePersistenceContext db, Payment value, CancellationToken token)
     {
         RequireTransaction(db);
         value.Stamp(DateTimeOffset.UtcNow, true);
@@ -45,7 +45,7 @@ internal static class PaymentLedgerWrites
               amount,currency,remittance_info,status,verification_method,verified_by_user_id,verified_at,verification_data,history)
             VALUES({value.Id},{value.ProviderIdentity},'legacy-unscoped',{value.BankReference},
               {"receipt:" + value.ProviderIdentity + ":" + value.NormalizedReference},{value.OccurredAt},{value.Amount},
-              {value.Currency},{value.TransferDescription},'VERIFIED','MANUAL',{value.VerifiedByUserId},{value.VerifiedAt},
+              {value.Currency},{value.TransferDescription},'VERIFIED','MANUAL',{value.ReceiptVerifiedByUserId},{value.ReceiptVerifiedAt},
               jsonb_build_object('schemaVersion',1,'compactState',CAST({state} AS jsonb)),jsonb_build_array(CAST({envelope} AS jsonb)))
             """, token);
     }
@@ -104,7 +104,7 @@ internal static class PaymentLedgerWrites
     }
 
     internal static IQueryable<BHome.Domain.PaymentsDebt.PaymentAllocation> Allocations(BHomePersistenceContext db) =>
-        db.Set<BHome.Domain.PaymentsDebt.PaymentAllocation>().AsNoTracking().Where(a => a.InvoiceId != null ||
+        db.Set<BHome.Domain.PaymentsDebt.PaymentAllocation>().AsNoTracking().Where(a => a.TargetInvoiceId != null ||
             a.TargetDepositContractId != null || a.TargetSettlementContractId != null || a.TargetInitialContractId != null);
 
     internal static IQueryable<string> ClaimedReferences(BHomePersistenceContext db) => db.Database.SqlQueryRaw<string>("""
@@ -193,7 +193,7 @@ internal static class PaymentLedgerWrites
         }
         if (a.SourceDepositContractId is not null ||
             (a.TargetDepositContractId is null ? 0 : 1) + (a.InvoiceId is null ? 0 : 1) + (a.TargetSettlementContractId is null ? 0 : 1) != 1 ||
-            await allocations.AnyAsync(x => x.TransferId == receipt, token)) throw Conflict();
+            await allocations.AnyAsync(x => x.SourcePaymentId == receipt, token)) throw Conflict();
         var transfer = await PaymentLedgerQueries.ReceiptEntities(db).Where(p => p.Id == receipt)
             .Select(p => new { p.Amount, Reference = p.VerificationData.GetProperty("compactState").GetProperty("normalizedReference").GetString() ?? "" })
             .SingleAsync(token);

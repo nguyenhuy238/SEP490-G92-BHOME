@@ -20,9 +20,9 @@ public static class ContractChargeSnapshot
             snapshot.Charges.Any(c => c is null || string.IsNullOrWhiteSpace(c.ChargeCode) || c.Rate < 0 ||
                 !Enum.IsDefined((ChargeCategory)c.Category) || !Enum.IsDefined((ChargingMethod)c.Method)) ||
             snapshot.Charges.Select(c => c.ChargeCode).Distinct(StringComparer.Ordinal).Count() != snapshot.Charges.Count ||
-            snapshot.AgreedRent != contract.MonthlyRent ||
+            snapshot.AgreedRent != contract.RentAmount ||
             snapshot.Charges.SingleOrDefault(c => c.ChargeCode == "RENT") is not { } rent ||
-            rent.Rate != contract.MonthlyRent || rent.Category != (int)ChargeCategory.Rent ||
+            rent.Rate != contract.RentAmount || rent.Category != (int)ChargeCategory.Rent ||
             rent.Method != (int)ChargingMethod.FixedPerRoomPerMonth)
             throw ContractException.Conflict("contract_price_snapshot_invalid");
         return snapshot;
@@ -37,7 +37,7 @@ public static class ContractChargeSnapshot
 
     public static bool IsIntact(Contract contract)
     {
-        try { return contract.SnapshotHash == ContractDocumentSnapshot.Hash(ContractService.Document(contract)); }
+        try { return contract.SnapshotHashOrEmpty == ContractDocumentSnapshot.Hash(ContractService.Document(contract)); }
         catch (ContractException) { return false; }
     }
 
@@ -62,13 +62,13 @@ public static class ContractChargeSnapshot
     internal static IReadOnlyList<HoldingPriceCharge> FromPolicies(Contract contract, IReadOnlyList<PolicyDto> policies)
     {
         var charges = policies.Select(p => new HoldingPriceCharge(p.Id, p.ChargeCode, (int)p.Category, (int)p.Method,
-            p.ChargeCode == "RENT" ? contract.MonthlyRent : p.Rate, p.EffectiveFrom, p.EffectiveTo, p.Version)
+            p.ChargeCode == "RENT" ? contract.RentAmount : p.Rate, p.EffectiveFrom, p.EffectiveTo, p.Version)
         { Name = p.Name, PolicyLocationId = p.LocationId, PolicyRoomId = p.RoomId, PolicyRoomTypeId = p.RoomTypeId }).ToList();
         // The direct contract/renewal API already accepts an agreed rent explicitly.
         // It may have no RENT policy; the contract itself is then the rate source.
         if (!charges.Any(p => p.ChargeCode == "RENT"))
             charges.Add(new(Guid.Empty, "RENT", (int)ChargeCategory.Rent, (int)ChargingMethod.FixedPerRoomPerMonth,
-                contract.MonthlyRent, contract.StartDate, null, 0)
+                contract.RentAmount, contract.StartDate, null, 0)
             { Name = "Tiền thuê phòng" });
         return charges.OrderBy(p => p.ChargeCode, StringComparer.Ordinal).ToArray();
     }
@@ -87,7 +87,7 @@ public static class ContractChargeSnapshot
         if (contract.Kind == ContractKind.Holding && holdingSettingsVersion is null && !string.IsNullOrWhiteSpace(contract.AgreedPriceSnapshot) &&
             contract.AgreedPriceSnapshot != "{}")
             holdingSettingsVersion = Read(contract).HoldingSettingsVersion;
-        contract.AgreedPriceSnapshot = JsonSerializer.Serialize(new HoldingPriceSnapshot(contract.MonthlyRent,
+        contract.AgreedPriceSnapshot = JsonSerializer.Serialize(new HoldingPriceSnapshot(contract.RentAmount,
             contract.RequiredDeposit, contract.StartDate, contract.EndDate, contract.HoldingExpiryAt ?? default,
             trigger, at.ToUniversalTime(), charges)
         { SnapshotVersion = 1, HoldingSettingsVersion = holdingSettingsVersion });

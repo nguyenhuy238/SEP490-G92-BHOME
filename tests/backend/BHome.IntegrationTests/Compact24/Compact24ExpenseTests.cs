@@ -22,7 +22,7 @@ public sealed partial class Compact24ExpenseTests(Compact24Fixture fixture) : IC
         await using (var scope = fixture.Factory!.Services.CreateAsyncScope())
         {
             var user = await WorkflowTestUsers.CreateAsync(scope.ServiceProvider,
-                new ApplicationUser { Id = id, UserName = email, Email = email, IsActive = true }, role, password);
+                new User { Id = id, UserName = email, Email = email, IsActive = true }, role, password);
             email = user.Email!;
         }
         var client = fixture.Factory!.CreateClient();

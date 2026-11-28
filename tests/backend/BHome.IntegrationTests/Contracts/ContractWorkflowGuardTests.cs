@@ -35,7 +35,7 @@ public sealed class ContractWorkflowGuardTests
         Assert.Empty(new SignatureUtil(pdf).GetSignatureNames());
         Assert.DoesNotContain("SIMULATED SIGNING - NOT LEGALLY SIGNED", ContractPdfRendererTests.Text(pdf));
         Assert.Equal("SIMULATED SIGNING - NO LEGAL SIGNATURE", pdf.GetDocumentInfo().GetMoreInfo("BHomeSigningMode"));
-        var signature = new ContractSignature { ContractId = input.ContractId, SignerUserId = Actor.Id };
+        var signature = new ContractSigning { ContractId = input.ContractId, SignerUserId = Actor.Id };
         signature.ProviderReference = await adapter.RequestAsync(signature, default);
         Assert.Equal("Simulated", (await adapter.PollAsync(signature, result.PreparedPdf, default)).State);
     }

@@ -98,16 +98,16 @@ public sealed class StaffOperationsUnitTests(PostgresContainerFixture postgres) 
         var task = new OperationalTask
         {
             Kind = OperationalTaskKind.AdHoc,
-            LocationId = locationId,
-            Title = title,
+            RequiredLocationId = locationId,
+            TaskTitle = title,
             Requirements = title,
-            Priority = priority,
+            TaskPriority = priority,
             DueAt = (due ?? Nov13At17).ToUniversalTime(),
             EvidenceRequired = evidenceRequired,
             AssignedStaffUserId = staffId,
             AssignmentId = assignmentId,
             AssignedAt = Today.ToUniversalTime(),
-            Status = status,
+            MeterStatus = status,
         };
         await world.ReadAsync(async db => { db.Add(task); return await db.SaveChangesAsync(); });
         return task.Id;
@@ -284,8 +284,8 @@ public sealed class StaffOperationsUnitTests(PostgresContainerFixture postgres) 
         await AssertForbidden(() => Property.StaffChangePreviewAsync(Sample2Id, default));
 
         Assert.Equal(Staff1Id, await ResponsibleAsync(Sample2Id));
-        Assert.Equal(MeterTaskStatus.InProgress, (await StoredTaskAsync(corridor)).Status);
-        Assert.Equal(MeterTaskStatus.Assigned, (await StoredTaskAsync(pump)).Status);
+        Assert.Equal(MeterTaskStatus.InProgress, (await StoredTaskAsync(corridor)).MeterStatus);
+        Assert.Equal(MeterTaskStatus.Assigned, (await StoredTaskAsync(pump)).MeterStatus);
     }
 
     #endregion
@@ -298,7 +298,7 @@ public sealed class StaffOperationsUnitTests(PostgresContainerFixture postgres) 
     {
         var (corridor, pump, gateLock) = await Sample2TasksOfStaff1Async(withCompleted: true);
         var inventoryTask = await world.ReadAsync(db => db.Set<OperationalTask>().AsNoTracking()
-            .SingleAsync(task => task.LocationId == Sample2Id && task.Kind == OperationalTaskKind.LocationAssetHandover));
+            .SingleAsync(task => task.RequiredLocationId == Sample2Id && task.Kind == OperationalTaskKind.LocationAssetHandover));
         await AddBinhLeAsync();
         world.SignInAsOwner();
 
@@ -314,7 +314,7 @@ public sealed class StaffOperationsUnitTests(PostgresContainerFixture postgres) 
         var transferredInventory = await StoredTaskAsync(inventoryTask.Id);
         Assert.Equal(BinhLeId, transferredInventory.AssignedStaffUserId);
         Assert.Equal(result.Assignment!.Id, transferredInventory.AssignmentId);
-        Assert.Equal(MeterTaskStatus.Assigned, transferredInventory.Status);
+        Assert.Equal(MeterTaskStatus.Assigned, transferredInventory.MeterStatus);
         Assert.Contains((await TaskRepository.HistoryAsync(inventoryTask.Id, 1, 20, default)).Items,
             h => h.Action == "responsibility_changed" && h.ResponsibleStaffUserId == BinhLeId);
         foreach (var id in new[] { corridor, pump })
@@ -352,7 +352,7 @@ public sealed class StaffOperationsUnitTests(PostgresContainerFixture postgres) 
         await world.AddStaffSampleAsync();
         var assignment = await AssignAsync(Sample1Id, StaffSampleId);
         var inventoryTask = await world.ReadAsync(db => db.Set<OperationalTask>().AsNoTracking()
-            .SingleAsync(task => task.LocationId == Sample1Id && task.Kind == OperationalTaskKind.LocationAssetHandover));
+            .SingleAsync(task => task.RequiredLocationId == Sample1Id && task.Kind == OperationalTaskKind.LocationAssetHandover));
         world.SignInAsOwner();
         var auditBefore = await LocationAuditCountAsync(Sample1Id, OwnerId);
 
@@ -363,7 +363,7 @@ public sealed class StaffOperationsUnitTests(PostgresContainerFixture postgres) 
         Assert.Null(await ResponsibleAsync(Sample1Id));
         Assert.False(await world.Get<IStaffLocationAccess>().IsAssignedAsync(StaffSampleId, Sample1Id, default));
         var retainedInventory = await StoredTaskAsync(inventoryTask.Id);
-        Assert.Equal(MeterTaskStatus.Assigned, retainedInventory.Status);
+        Assert.Equal(MeterTaskStatus.Assigned, retainedInventory.MeterStatus);
         Assert.Equal(assignment, retainedInventory.AssignmentId);
         Assert.Equal(StaffSampleId, retainedInventory.AssignedStaffUserId);
         Assert.True(await LocationAuditCountAsync(Sample1Id, OwnerId) > auditBefore);
@@ -383,7 +383,7 @@ public sealed class StaffOperationsUnitTests(PostgresContainerFixture postgres) 
 
         Assert.Equal(Staff1Id, await ResponsibleAsync(Sample2Id));
         var task = await StoredTaskAsync(corridor);
-        Assert.Equal((MeterTaskStatus.InProgress, (Guid?)Staff1Id), (task.Status, task.AssignedStaffUserId));
+        Assert.Equal((MeterTaskStatus.InProgress, (Guid?)Staff1Id), (task.MeterStatus, task.AssignedStaffUserId));
     }
 
     #endregion
@@ -462,7 +462,7 @@ public sealed class StaffOperationsUnitTests(PostgresContainerFixture postgres) 
             Guid.Parse("5e1f0c3a-0000-4000-8000-000000000001"), default);
 
         Assert.Equal(nameof(MeterTaskStatus.InProgress), view.Status);
-        Assert.Equal(MeterTaskStatus.InProgress, (await StoredTaskAsync(id)).Status);
+        Assert.Equal(MeterTaskStatus.InProgress, (await StoredTaskAsync(id)).MeterStatus);
     }
 
     [Fact(DisplayName = "UTC15 - ActAsync: Staff Submit 'Cleaning done' kem 1 anh -> Pending Verification, Owner duoc thong bao")]
@@ -478,7 +478,7 @@ public sealed class StaffOperationsUnitTests(PostgresContainerFixture postgres) 
 
         Assert.Equal(nameof(MeterTaskStatus.PendingVerification), view.Status);
         var stored = await StoredTaskAsync(id);
-        Assert.Equal((MeterTaskStatus.PendingVerification, "Cleaning done"), (stored.Status, stored.Result));
+        Assert.Equal((MeterTaskStatus.PendingVerification, "Cleaning done"), (stored.MeterStatus, stored.Result));
         Assert.Contains(await TaskRepository.EvidenceAsync(id, default), e => e.Id == photo && e.SubmissionId != null);
         Assert.Equal(1, await TaskNoticeCountAsync(OwnerId, "submit"));
     }
@@ -496,7 +496,7 @@ public sealed class StaffOperationsUnitTests(PostgresContainerFixture postgres) 
 
         Assert.Equal(nameof(MeterTaskStatus.Completed), view.Status);
         var stored = await StoredTaskAsync(id);
-        Assert.Equal((MeterTaskStatus.Completed, (Guid?)OwnerId, (DateTimeOffset?)now), (stored.Status, stored.VerifiedByUserId, stored.VerifiedAt));
+        Assert.Equal((MeterTaskStatus.Completed, (Guid?)OwnerId, (DateTimeOffset?)now), (stored.MeterStatus, stored.VerifiedByUserId, stored.VerifiedAt));
         Assert.Equal(StaffSampleId, stored.AssignedStaffUserId);
         var history = (await TaskRepository.HistoryAsync(id, 1, 20, default)).Items.Select(h => h.Action).ToArray();
         Assert.Contains("evidence_uploaded", history);
@@ -530,7 +530,7 @@ public sealed class StaffOperationsUnitTests(PostgresContainerFixture postgres) 
         await Assert.ThrowsAnyAsync<Exception>(async () => await Tasks.ActAsync(id, Action["Submit"],
             new TaskAction(await VersionAsync(id), "Cleaning done", []), Guid.Parse("5e1f0c3a-0000-4000-8000-000000000020"), default));
 
-        Assert.Equal(MeterTaskStatus.InProgress, (await StoredTaskAsync(id)).Status);
+        Assert.Equal(MeterTaskStatus.InProgress, (await StoredTaskAsync(id)).MeterStatus);
         Assert.Equal(0, await TaskNoticeCountAsync(OwnerId, "submit"));
     }
 
@@ -544,7 +544,7 @@ public sealed class StaffOperationsUnitTests(PostgresContainerFixture postgres) 
         await AssertForbidden(async () => await Tasks.ActAsync(id, Action["Accept"], new TaskAction(await VersionAsync(id)),
             Guid.Parse("5e1f0c3a-0000-4000-8000-000000000021"), default));
 
-        Assert.Equal(MeterTaskStatus.InProgress, (await StoredTaskAsync(id)).Status);
+        Assert.Equal(MeterTaskStatus.InProgress, (await StoredTaskAsync(id)).MeterStatus);
     }
 
     [Fact(DisplayName = "UTC20 - ActAsync: Owner Rework voi ly do rong -> tu choi, van Pending Verification, Staff khong duoc thong bao")]
@@ -556,7 +556,7 @@ public sealed class StaffOperationsUnitTests(PostgresContainerFixture postgres) 
         await Assert.ThrowsAnyAsync<Exception>(async () => await Tasks.ActAsync(id, Action["Rework"], new TaskAction(await VersionAsync(id), ""),
             Guid.Parse("5e1f0c3a-0000-4000-8000-000000000022"), default));
 
-        Assert.Equal(MeterTaskStatus.PendingVerification, (await StoredTaskAsync(id)).Status);
+        Assert.Equal(MeterTaskStatus.PendingVerification, (await StoredTaskAsync(id)).MeterStatus);
         Assert.Equal(0, await TaskNoticeCountAsync(StaffSampleId, "rework"));
     }
 
@@ -591,7 +591,7 @@ public sealed class StaffOperationsUnitTests(PostgresContainerFixture postgres) 
 
         Assert.Equal((nameof(OperationalTaskPriority.High), (DateTimeOffset?)target), (view.Priority, view.DueAt));
         var stored = await StoredTaskAsync(id);
-        Assert.Equal((OperationalTaskPriority.High, (DateTimeOffset?)target), (stored.Priority, stored.DueAt));
+        Assert.Equal((OperationalTaskPriority.High, (DateTimeOffset?)target), (stored.TaskPriority, stored.DueAt));
         var updated = Assert.Single((await TaskRepository.HistoryAsync(id, 1, 20, default)).Items, h => h.Action == "updated");
         using var changes = JsonDocument.Parse(updated.ChangesJson);
         var before = changes.RootElement.GetProperty("Before");
@@ -611,7 +611,7 @@ public sealed class StaffOperationsUnitTests(PostgresContainerFixture postgres) 
         await AssertForbidden(() => Tasks.UpdateAsync(id, update, Guid.Parse("5e1f0c3a-0000-4000-8000-000000000023"), default));
 
         var stored = await StoredTaskAsync(id);
-        Assert.Equal((OperationalTaskPriority.Normal, (DateTimeOffset?)Nov14At17), (stored.Priority, stored.DueAt));
+        Assert.Equal((OperationalTaskPriority.Normal, (DateTimeOffset?)Nov14At17), (stored.TaskPriority, stored.DueAt));
     }
 
     #endregion

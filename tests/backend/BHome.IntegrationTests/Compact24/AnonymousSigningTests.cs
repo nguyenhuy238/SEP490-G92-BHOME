@@ -428,7 +428,7 @@ public sealed class AnonymousSigningTests(Compact24Fixture fixture) : IClassFixt
             Assert.NotNull(people.Single(p => p.Id == representative).TenantUserId);
             Assert.Null(people.Single(p => p.Id == coOccupant).TenantUserId);
             Assert.False(string.IsNullOrWhiteSpace(people.Single(p => p.Id == representative).ContactEmail));
-            Assert.Equal(view.SnapshotHash, (await db.Set<Contract>().SingleAsync(c => c.Id == draft.Id)).SnapshotHash);
+            Assert.Equal(view.SnapshotHash, (await db.Set<Contract>().SingleAsync(c => c.Id == draft.Id)).SnapshotHashOrEmpty);
             var stored = await db.Set<ContractSigningInvitation>().SingleAsync(i => i.Id == invite.Id);
             Assert.Null(stored.OtpHash); Assert.NotEqual(invite.Token, stored.TokenHash); Assert.NotEqual(access.Session, stored.SessionHash);
             var rows = await db.Database.SqlQueryRaw<DispatchRow>("SELECT id AS \"Id\",task_data->>'idempotencyKey' AS \"Key\",(task_data->'payload')::text AS \"Payload\" FROM operational_tasks WHERE task_type='SYSTEM_JOB' AND task_data->>'name'='post-activation-account-invitation'").ToArrayAsync();

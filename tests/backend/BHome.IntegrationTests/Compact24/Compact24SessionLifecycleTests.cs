@@ -17,13 +17,13 @@ public sealed class Compact24SessionLifecycleTests(Compact24Fixture fixture) : I
         public DateTimeOffset Now { get; set; } = DateTimeOffset.UtcNow;
         public override DateTimeOffset GetUtcNow() => Now;
     }
-    private async Task<ApplicationUser> User()
+    private async Task<User> User()
     {
         await using var scope = fixture.Factory!.Services.CreateAsyncScope();
         var email = Guid.NewGuid().ToString("N") + "@example.invalid";
-        return await WorkflowTestUsers.CreateAsync(scope.ServiceProvider, new ApplicationUser { Id = Guid.NewGuid(), UserName = email, Email = email, EmailConfirmed = true }, "Tenant", WorkflowTestUsers.Password);
+        return await WorkflowTestUsers.CreateAsync(scope.ServiceProvider, new User { Id = Guid.NewGuid(), UserName = email, Email = email, EmailConfirmed = true }, "Tenant", WorkflowTestUsers.Password);
     }
-    private static async Task<LoginResult> Login(HttpClient client, ApplicationUser user)
+    private static async Task<LoginResult> Login(HttpClient client, User user)
     {
         var response = await client.PostAsJsonAsync("/api/v1/auth/login", new { email = user.Email, password = WorkflowTestUsers.Password });
         response.EnsureSuccessStatusCode(); return await TestAuthResponse.ReadAsync(response.Content);

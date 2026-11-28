@@ -27,7 +27,7 @@ public sealed class Compact24InboxTests(Compact24Fixture fixture) : IClassFixtur
             var db = scope.ServiceProvider.GetRequiredService<Compact24ArchiveContext>();
             foreach (var actor in new[] { id, other })
             {
-                var user = new ApplicationUser
+                var user = new User
                 {
                     Id = actor,
                     UserName = actor.ToString(),
@@ -37,7 +37,7 @@ public sealed class Compact24InboxTests(Compact24Fixture fixture) : IClassFixtur
                     SecurityStamp = Guid.NewGuid().ToString(),
                     ConcurrencyStamp = Guid.NewGuid().ToString()
                 };
-                user.PasswordHash = scope.ServiceProvider.GetRequiredService<IPasswordHasher<ApplicationUser>>().HashPassword(user, password);
+                user.PasswordHash = scope.ServiceProvider.GetRequiredService<IPasswordHasher<User>>().HashPassword(user, password);
                 db.Users.Add(user); db.Entry(user).Property("roles").CurrentValue = new[] { "Tenant" };
             }
             await db.SaveChangesAsync();

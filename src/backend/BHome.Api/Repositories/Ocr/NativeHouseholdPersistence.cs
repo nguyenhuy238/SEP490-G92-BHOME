@@ -65,7 +65,7 @@ internal static class NativeHouseholdPersistence
         var ids = rows.Select(c => c.Id).ToArray();
         var roster = (await db.Set<BHome.Domain.TenantContracts.ContractResident>().AsNoTracking().Where(r => ids.Contains(r.ContractId)).ToArrayAsync(t))
             .ToLookup(r => r.ContractId);
-        var signatures = (await db.Set<BHome.Domain.TenantContracts.ContractSignature>().AsNoTracking().Where(s => ids.Contains(s.ContractId)).ToArrayAsync(t))
+        var signatures = (await db.Set<BHome.Domain.TenantContracts.ContractSigning>().AsNoTracking().Where(s => ids.Contains(s.ContractId)).ToArrayAsync(t))
             .ToLookup(s => s.ContractId, NativeContractSnapshot.Read);
         return rows.Select(row =>
         {
@@ -90,12 +90,12 @@ internal static class NativeHouseholdPersistence
         draft.Stamp(DateTimeOffset.UtcNow, false);
         var oldVersion = draft.DraftVersion - 1;
         var changed = await db.Database.ExecuteSqlInterpolatedAsync($"""
-            UPDATE contracts c SET draft_metadata=CAST({draft.DraftMetadata} AS jsonb), snapshot_hash={draft.SnapshotHash},version={draft.DraftVersion},
+            UPDATE contracts c SET draft_metadata=CAST({draft.DraftMetadata} AS jsonb), snapshot_hash={draft.SnapshotHashOrEmpty},version={draft.DraftVersion},
                 history=c.history||jsonb_build_array(jsonb_build_object('schemaVersion',1,'recordType','Contract',
                     'recordKey',c.id::text,'deleted',false,'state',
                     COALESCE((SELECT h->'state' FROM jsonb_array_elements(c.history) WITH ORDINALITY a(h,n)
                         WHERE h->>'recordType'='Contract' ORDER BY n DESC LIMIT 1),jsonb_build_object())||
-                    jsonb_build_object('draftMetadata',{draft.DraftMetadata},'snapshotHash',{draft.SnapshotHash},
+                    jsonb_build_object('draftMetadata',{draft.DraftMetadata},'snapshotHash',{draft.SnapshotHashOrEmpty},
                         'draftVersion',{draft.DraftVersion},'updatedAt',{draft.UpdatedAt})))
             WHERE c.id={draft.Id} AND c.contract_type='MAIN' AND c.status=0 AND c.version={oldVersion}
                 AND NOT EXISTS(SELECT 1 FROM contract_signings s WHERE s.contract_id=c.id)

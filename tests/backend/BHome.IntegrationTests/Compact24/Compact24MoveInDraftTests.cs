@@ -32,13 +32,13 @@ public sealed partial class Compact24OwnerSetupTests
             var task = new OperationalTask
             {
                 Kind = OperationalTaskKind.AdHoc,
-                LocationId = contract.Room.LocationId,
+                RequiredLocationId = contract.Room.LocationId,
                 ContractId = id,
                 TargetRoomId = contract.RoomId,
                 TargetLabel = contract.Room.RoomNumber,
-                Title = "Kiểm tra bàn giao test",
+                TaskTitle = "Kiểm tra bàn giao test",
                 Requirements = "Staff kiểm tra hiện trạng và ảnh thật",
-                Status = MeterTaskStatus.Assigned,
+                MeterStatus = MeterTaskStatus.Assigned,
                 AssignedStaffUserId = assignedStaff,
                 AssignedAt = DateTimeOffset.UtcNow
             };
@@ -100,10 +100,10 @@ public sealed partial class Compact24OwnerSetupTests
                 Status = ContractStatus.Draft,
                 StartDate = Today.AddDays(2),
                 EndDate = Today.AddYears(1),
-                MonthlyRent = 2000000,
+                RentAmount = 2000000,
                 RequiredDeposit = 3000000,
                 Terms = "Synthetic move-in dedup test",
-                SnapshotHash = Guid.NewGuid().ToString("N")
+                SnapshotHashOrEmpty = Guid.NewGuid().ToString("N")
             };
             return await repository.InTransactionAsync(w.Room, () =>
             {
@@ -122,7 +122,7 @@ public sealed partial class Compact24OwnerSetupTests
         await using var check = host.Services.CreateAsyncScope();
         var readDb = check.ServiceProvider.GetRequiredService<Compact24ArchiveContext>();
         var jobs = await readDb.Set<OperationalTask>().AsNoTracking()
-            .Where(x => x.ContractId != null && ids.Contains(x.ContractId.Value) && x.Status != MeterTaskStatus.Cancelled)
+            .Where(x => x.ContractId != null && ids.Contains(x.ContractId.Value) && x.MeterStatus != MeterTaskStatus.Cancelled)
             .ToArrayAsync();
         Assert.Single(jobs, x => x.Kind == OperationalTaskKind.AdHoc);
         Assert.Single(jobs, x => x.Kind == OperationalTaskKind.MoveInInventory);
@@ -165,10 +165,10 @@ public sealed partial class Compact24OwnerSetupTests
             Status = ContractStatus.Draft,
             StartDate = Today.AddDays(2),
             EndDate = Today.AddYears(1),
-            MonthlyRent = 2000000,
+            RentAmount = 2000000,
             RequiredDeposit = 3000000,
             Terms = "Synthetic contract used only for draft handover integration test",
-            SnapshotHash = "synthetic-signed-terms-hash"
+            SnapshotHashOrEmpty = "synthetic-signed-terms-hash"
         };
         await using (var scope = host.Services.CreateAsyncScope())
         {
@@ -216,7 +216,7 @@ public sealed partial class Compact24OwnerSetupTests
         Assert.NotNull(read);
         Assert.Equal(1, read.Version);
         Assert.Equal("Draft", read.Status);
-        Assert.Equal(contract.MonthlyRent, read.MonthlyRent);
+        Assert.Equal(contract.RentAmount, read.MonthlyRent);
         Assert.Equal(contract.RequiredDeposit, read.RequiredDeposit);
         Assert.Equal(contract.Terms, read.Terms);
         Assert.Contains("contract_active", read.Missing);

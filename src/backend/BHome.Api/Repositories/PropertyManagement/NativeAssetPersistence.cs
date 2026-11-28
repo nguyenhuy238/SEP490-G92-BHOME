@@ -33,8 +33,8 @@ internal static class NativeAssetPersistence
     }
 
     internal static AssetMetadata Metadata(BHome.Domain.PropertyManagement.Asset row) =>
-        row.PurchaseMetadata.TryGetProperty("trackingMode", out _)
-            ? row.PurchaseMetadata.Deserialize<AssetMetadata>(Json)!
+        row.PurchaseInfo.TryGetProperty("trackingMode", out _)
+            ? row.PurchaseInfo.Deserialize<AssetMetadata>(Json)!
             : new("Serialized", 1, null, null, null);
 
     internal static async Task StageAsync(Compact24DbContext db, Asset asset, int? expectedVersion,
@@ -46,7 +46,7 @@ internal static class NativeAssetPersistence
         {
             row = asset;
             if (initialMetadata is not null)
-                row.PurchaseMetadata = JsonSerializer.SerializeToElement(initialMetadata, Json);
+                row.PurchaseInfo = JsonSerializer.SerializeToElement(initialMetadata, Json);
             purchaseInfo = initialMetadata is null ? null : JsonSerializer.Serialize(initialMetadata, Json);
             db.Add(row);
         }
@@ -67,7 +67,7 @@ internal static class NativeAssetPersistence
                 db.Entry(row).State = EntityState.Detached;
                 return;
             }
-            purchaseInfo = row.PurchaseMetadata.GetRawText();
+            purchaseInfo = row.PurchaseInfo.GetRawText();
         }
         asset.Stamp(now, expectedVersion is null);
         row.LocationId = asset.LocationId;

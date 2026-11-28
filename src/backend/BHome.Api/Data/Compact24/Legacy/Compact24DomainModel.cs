@@ -24,7 +24,7 @@ internal static class Compact24DomainModel
         model.ApplyConfigurationsFromAssembly(typeof(Compact24DomainModel).Assembly);
         // Compact24 stores asset quantities and tracking details in its existing JSONB column.
         // Keep this runtime-only shadow property out of the frozen legacy source model.
-        model.Entity<Asset>().Property<string>("PurchaseInfo")
+        model.Entity<Asset>().Property<string>("ArchivePurchaseInfo")
             .HasColumnName("purchase_info")
             .HasColumnType("jsonb")
             .HasDefaultValueSql("'{}'::jsonb");
@@ -64,14 +64,14 @@ internal static class Compact24DomainModel
         contract.Property(x => x.InitialPaymentRequired);
         contract.Property(x => x.PaymentMode);
         model.Entity<ContractSigningInvitation>().HasKey(x => x.Id);
-        model.Entity<BHome.Domain.Billing.InvoiceLine>().Property(x => x.UtilityCalculationSnapshot);
+        model.Entity<BHome.Domain.Billing.InvoiceItem>().Property(x => x.UtilityCalculationSnapshot);
         contract.Property(x => x.ParentContractId); contract.Property(x => x.OperatingPolicySnapshot);
         contract.Property(x => x.HoldingExpiryAt); contract.Property(x => x.ReservedCapacity);
         contract.Property(x => x.ApprovedByUserId); contract.Property(x => x.ApprovedAt); contract.Property(x => x.ApprovalReason);
         contract.Property(x => x.AgreedPriceSnapshot); contract.Property(x => x.PriceLockTrigger); contract.Property(x => x.PriceLockedAt);
         contract.Property(x => x.ConvertedMainContractId);
         contract.Property(x => x.LifecycleActorId); contract.Property(x => x.LifecycleAt); contract.Property(x => x.LifecycleReason);
-        var transfer = model.Entity<BHome.Domain.PaymentsDebt.PaymentTransfer>();
+        var transfer = model.Entity<BHome.Domain.PaymentsDebt.Payment>();
         transfer.Property(x => x.ProposedDepositContractId);
         var allocation = model.Entity<BHome.Domain.PaymentsDebt.PaymentAllocation>();
         allocation.Property(x => x.TransferId).IsRequired(false); allocation.Property(x => x.InvoiceId).IsRequired(false);
@@ -86,7 +86,7 @@ internal static class Compact24DomainModel
 
         foreach (var entity in model.Model.GetEntityTypes().ToArray())
         {
-            if (entity.ClrType == typeof(ApplicationUser) || entity.ClrType == typeof(CompactRefreshRow)) continue;
+            if (entity.ClrType == typeof(User) || entity.ClrType == typeof(RefreshToken)) continue;
             var spec = Compact24Records.For(entity.ClrType);
             var builder = model.Entity(entity.ClrType);
             // These entities are SQL projections, not physical tables. Table-only

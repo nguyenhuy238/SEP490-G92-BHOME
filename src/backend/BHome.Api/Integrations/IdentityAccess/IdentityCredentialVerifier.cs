@@ -5,14 +5,14 @@ using Microsoft.EntityFrameworkCore;
 
 namespace BHome.Infrastructure.IdentityAccess;
 
-internal sealed class IdentityCredentialVerifier(UserManager<ApplicationUser> users, SignInManager<ApplicationUser> signIn, IIdentityPersistence persistence)
+internal sealed class IdentityCredentialVerifier(UserManager<User> users, SignInManager<User> signIn, IIdentityPersistence persistence)
     : ICredentialVerifier
 {
     public async Task<VerifiedIdentity?> VerifyAsync(string identifier, string password, CancellationToken cancellationToken)
     {
         cancellationToken.ThrowIfCancellationRequested();
         if (string.IsNullOrWhiteSpace(identifier) || string.IsNullOrEmpty(password)) return null;
-        ApplicationUser[] matches;
+        User[] matches;
         if (LoginIdentifier.IsEmail(identifier))
         {
             var normalizedEmail = users.NormalizeEmail(identifier);

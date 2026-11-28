@@ -59,7 +59,7 @@ public sealed class GmailSmtpSmokeTests(Compact24Fixture fixture, ITestOutputHel
         await using var scope = host.Services.CreateAsyncScope();
         const string password = "Synthetic!Smoke-Owner-827";
         var owner = await WorkflowTestUsers.CreateAsync(scope.ServiceProvider,
-            new ApplicationUser { Id = Guid.NewGuid(), UserName = Guid.NewGuid().ToString("N"), Email = Guid.NewGuid().ToString("N") + "@example.invalid", EmailConfirmed = true }, "Owner", password);
+            new User { Id = Guid.NewGuid(), UserName = Guid.NewGuid().ToString("N"), Email = Guid.NewGuid().ToString("N") + "@example.invalid", EmailConfirmed = true }, "Owner", password);
         using var client = host.CreateClient();
         (await client.GetAsync("/health/live")).EnsureSuccessStatusCode();
         (await client.GetAsync("/health/ready")).EnsureSuccessStatusCode();

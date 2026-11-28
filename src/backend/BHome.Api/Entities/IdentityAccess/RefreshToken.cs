@@ -1,6 +1,6 @@
 namespace BHome.Infrastructure.Persistence.Compact24;
 
-internal sealed class CompactRefreshRow
+internal sealed class RefreshToken
 {
     public Guid Id { get; set; }
     public Guid UserId { get; set; }

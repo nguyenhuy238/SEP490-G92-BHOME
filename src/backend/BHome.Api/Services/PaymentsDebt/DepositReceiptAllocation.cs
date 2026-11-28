@@ -86,7 +86,7 @@ public sealed partial class PaymentService
             {
                 if (contracts is null) throw new PaymentException(503, "holding_deposit_verification_unavailable");
                 if (!await contracts.CanAcceptHoldingDepositAsync(contract.Id, t)) throw new PaymentException(409, "holding_room_commitment_requires_manual_review");
-                await contracts.ConfirmHoldingDepositAllocationAsync(contract.Id, amount, transfer.VerifiedAt, t);
+                await contracts.ConfirmHoldingDepositAllocationAsync(contract.Id, amount, transfer.ReceiptVerifiedAt, t);
             }
             var allocation = new PaymentAllocation
             {

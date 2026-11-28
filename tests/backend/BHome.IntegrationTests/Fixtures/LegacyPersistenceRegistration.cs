@@ -143,10 +143,10 @@ internal static class LegacyPersistenceRegistration
         services.RemoveAll<OperationalWorkService>();
         services.AddDbContext<BHomeDbContext>((p, o) => o.UseNpgsql(p.GetRequiredService<IOptions<DatabaseOptions>>().Value.Database));
         services.Replace(ServiceDescriptor.Scoped<BHomePersistenceContext>(p => p.GetRequiredService<BHomeDbContext>()));
-        services.RemoveAll<IUserStore<ApplicationUser>>(); services.RemoveAll<IRoleStore<IdentityRole<Guid>>>();
-        services.AddIdentityCore<ApplicationUser>().AddRoles<IdentityRole<Guid>>().AddEntityFrameworkStores<BHomeDbContext>();
-        services.RemoveAll<IUserClaimsPrincipalFactory<ApplicationUser>>();
-        services.AddScoped<IUserClaimsPrincipalFactory<ApplicationUser>, UserClaimsPrincipalFactory<ApplicationUser, IdentityRole<Guid>>>();
+        services.RemoveAll<IUserStore<User>>(); services.RemoveAll<IRoleStore<IdentityRole<Guid>>>();
+        services.AddIdentityCore<User>().AddRoles<IdentityRole<Guid>>().AddEntityFrameworkStores<BHomeDbContext>();
+        services.RemoveAll<IUserClaimsPrincipalFactory<User>>();
+        services.AddScoped<IUserClaimsPrincipalFactory<User>, UserClaimsPrincipalFactory<User, IdentityRole<Guid>>>();
         services.Replace(ServiceDescriptor.Scoped<IIdentityPersistence, LegacyIdentityPersistence>());
         services.Replace(ServiceDescriptor.Scoped<IBackgroundJobQueue, PostgresJobQueue>());
         services.Replace(ServiceDescriptor.Scoped<IJobPersistence, LegacyJobPersistence>());

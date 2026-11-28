@@ -36,7 +36,7 @@ internal sealed class SettlementChargeEvidence(BHomePersistenceContext db, IObje
                      join meter in db.Set<Meter>() on reading.MeterId equals meter.Id
                      join proof in db.Set<MeterEvidence>() on reading.EvidenceId equals proof.Id
                      where ids.Contains(reading.Id) && reading.MeterId == source.MeterId && meter.RoomId == roomId &&
-                       task.Status == MeterTaskStatus.Completed && proof.IsLinked && proof.IsUploaded
+                       task.MeterStatus == MeterTaskStatus.Completed && proof.IsLinked && proof.IsUploaded
                      select new
                      {
                          reading.Id,

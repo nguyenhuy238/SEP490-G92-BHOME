@@ -77,7 +77,7 @@ internal sealed partial class BillingAutomationEngine(BHomePersistenceContext db
             while (true)
             {
                 var rooms = native is not null ? await native.Set<BHome.Domain.PropertyManagement.Room>().AsNoTracking().Where(r => r.LocationId == p.LocationId && (after == null || r.Id.CompareTo(after.Value) > 0) &&
-                    (phase == "Meter" || native.Set<BHome.Domain.Billing.Invoice>().Any(i => i.Type == "PERIODIC" && i.RoomId == r.Id && i.BillingPeriod == x.BillingPeriod) ||
+                    (phase == "Meter" || native.Set<BHome.Domain.Billing.Invoice>().Any(i => i.InvoiceType == "PERIODIC" && i.RoomId == r.Id && i.BillingPeriod == x.BillingPeriod) ||
                         native.Set<BHome.Domain.TenantContracts.Contract>().Any(c => c.RoomId == r.Id && c.ActivatedAt != null &&
                         (c.Kind == BHome.Domain.TenantContracts.ContractKind.Main || c.Kind == BHome.Domain.TenantContracts.ContractKind.Renewal) &&
                         (c.Status == ContractStatus.Active || c.Status == ContractStatus.Superseded || c.Status == ContractStatus.Terminated || c.Status == ContractStatus.Expired) &&
@@ -152,9 +152,9 @@ internal sealed partial class BillingAutomationEngine(BHomePersistenceContext db
             if (previous is not null)
             {
                 existing++;
-                if (previous.Status == MeterTaskStatus.Cancelled) errors.Add(new { roomId = room, utilityType = type, code = "cancelled_period_requires_review" });
+                if (previous.MeterStatus == MeterTaskStatus.Cancelled) errors.Add(new { roomId = room, utilityType = type, code = "cancelled_period_requires_review" });
                 if (meters.Length != 1 || previous.MeterId != meters[0].Id) errors.Add(new { roomId = room, utilityType = type, code = "meter_replacement_review_required" });
-                if (previous.AutomationPlanId is not null && previous.Status is not (MeterTaskStatus.Completed or MeterTaskStatus.Cancelled))
+                if (previous.AutomationPlanId is not null && previous.MeterStatus is not (MeterTaskStatus.Completed or MeterTaskStatus.Cancelled))
                 {
                     // The recorded Staff is a routing snapshot, not an access grant.
                     // Refresh it from the effective Location responsibility on retries.
@@ -183,7 +183,7 @@ internal sealed partial class BillingAutomationEngine(BHomePersistenceContext db
             var task = new OperationalTask
             {
                 Kind = OperationalTaskKind.MeterReading,
-                LocationId = plan.LocationId,
+                RequiredLocationId = plan.LocationId,
                 MeterId = meters[0].Id,
                 BillingRoomId = room,
                 BillingUtilityType = type,
@@ -192,7 +192,7 @@ internal sealed partial class BillingAutomationEngine(BHomePersistenceContext db
                 BillingPeriod = period,
                 ReadingDate = readingDate,
                 DueAt = due,
-                Title = type == UtilityType.Electricity ? "Ghi chỉ số điện định kỳ" : "Ghi chỉ số nước định kỳ",
+                TaskTitle = type == UtilityType.Electricity ? "Ghi chỉ số điện định kỳ" : "Ghi chỉ số nước định kỳ",
                 Requirements = "Đối chiếu ảnh và xác nhận chỉ số thực tế trước khi lưu.",
                 EvidenceRequired = true,
                 AssignedStaffUserId = assignment?.StaffUserId,
@@ -228,10 +228,10 @@ internal sealed partial class BillingAutomationEngine(BHomePersistenceContext db
         var native = db as Compact24DbContext;
         var task = (native is not null ? await NativeBillingJobPersistence.LockedMeterTaskAsync(native, taskId, t)
             : await db.Locked<OperationalTask>(taskId).SingleOrDefaultAsync(t)) ?? throw new InvoiceException(404, "meter_task_not_found");
-        if (task.AutomationPlanId == null || task.Version != x.ExpectedVersion || task.Status is MeterTaskStatus.Completed or MeterTaskStatus.Cancelled) throw new InvoiceException(409, "meter_task_changed_or_closed");
+        if (task.AutomationPlanId == null || task.Version != x.ExpectedVersion || task.MeterStatus is MeterTaskStatus.Completed or MeterTaskStatus.Cancelled) throw new InvoiceException(409, "meter_task_changed_or_closed");
         var assignmentId = native is not null
-            ? (await NativeBillingJobPersistence.AssignmentsAsync(native, task.LocationId, Today, t)).SingleOrDefault(a => a.StaffUserId == x.StaffUserId)?.Id
-            : await db.StaffLocationAssignments.Where(a => a.LocationId == task.LocationId && a.StaffUserId == x.StaffUserId && a.StartDate <= Today && a.EndDate >= Today).Select(a => (Guid?)a.Id).SingleOrDefaultAsync(t);
+            ? (await NativeBillingJobPersistence.AssignmentsAsync(native, task.RequiredLocationId, Today, t)).SingleOrDefault(a => a.StaffUserId == x.StaffUserId)?.Id
+            : await db.StaffLocationAssignments.Where(a => a.LocationId == task.RequiredLocationId && a.StaffUserId == x.StaffUserId && a.StartDate <= Today && a.EndDate >= Today).Select(a => (Guid?)a.Id).SingleOrDefaultAsync(t);
         if (assignmentId is null || !await ActiveRole(x.StaffUserId, Roles.Staff, t) || native is not null && !await StaffEmploymentEligibility.IsEligibleAsync(native, x.StaffUserId, Today, t)) throw new InvoiceException(400, "staff_assignment_required");
         var originalVersion = task.Version;
         task.AssignedStaffUserId = x.StaffUserId; task.AssignmentId = assignmentId; task.AssignedAt = clock.GetUtcNow(); task.Version++;

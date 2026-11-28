@@ -29,11 +29,11 @@ public sealed partial class PaymentLedgerTests(CaptureFixture fixture) : IClassF
     private async Task<Workspace> Setup(bool sharedContract = false, decimal rent = 100000)
     {
         await using var scope = fixture.Factory.Services.CreateAsyncScope(); var db = scope.ServiceProvider.GetFixturePersistence();
-        var manager = scope.ServiceProvider.GetRequiredService<UserManager<ApplicationUser>>();
+        var manager = scope.ServiceProvider.GetRequiredService<UserManager<BHome.Infrastructure.Persistence.User>>();
         async Task<Guid> Account(string role)
         {
             var email = Guid.NewGuid() + "@example.invalid";
-            var account = new ApplicationUser { UserName = email, Email = email };
+            var account = new BHome.Infrastructure.Persistence.User { UserName = email, Email = email };
             account = await BHome.IntegrationTests.Compact24.WorkflowTestUsers.CreateAsync(scope.ServiceProvider, account, role, BHome.IntegrationTests.Compact24.WorkflowTestUsers.Password);
             return account.Id;
         }
@@ -62,7 +62,7 @@ public sealed partial class PaymentLedgerTests(CaptureFixture fixture) : IClassF
                 RepresentativeResidentId = resident.Id,
                 StartDate = period.AddMonths(-1),
                 EndDate = period.AddMonths(12),
-                MonthlyRent = rent,
+                RentAmount = rent,
                 RequiredDeposit = 0,
                 Status = ContractStatus.Active,
                 ActivatedAt = DateTimeOffset.UtcNow,
@@ -86,7 +86,7 @@ public sealed partial class PaymentLedgerTests(CaptureFixture fixture) : IClassF
             ScheduledFinalDate = period,
             DueDate = today.AddDays(-1),
             ScheduleSnapshot = "{}",
-            Lines = [new InvoiceLine { Category = ChargeCategory.Rent, ChargeCode = "RENT", Name = "Synthetic rent", Rate = rent, Quantity = 1, Amount = rent,
+            Lines = [new InvoiceItem { Category = ChargeCategory.Rent, ChargeCode = "RENT", Name = "Synthetic rent", Rate = rent, Quantity = 1, Amount = rent,
                 OccupiedDays = 30, PeriodDays = 30, RateDate = period }],
             Recipients = tenants.Select(t => new InvoiceRecipient { TenantUserId = t }).ToList()
         };
@@ -145,7 +145,7 @@ public sealed partial class PaymentLedgerTests(CaptureFixture fixture) : IClassF
         Assert.Single(replies, r => r.Status == "Allocated"); Assert.Equal("invoice_already_settled", Assert.Single(replies, r => r.Status == "PendingReview").Reason);
         Assert.Equal("Paid", (await As(w.Tenants[2], Roles.Tenant, s => s.InvoicePaymentAsync(w.Invoice, default))).PaymentStatus);
         await using var scope = fixture.Factory.Services.CreateAsyncScope(); var db = scope.ServiceProvider.GetFixturePersistence();
-        Assert.Equal(2, await db.Set<PaymentTransfer>().CountAsync(p => p.ProposedInvoiceId == w.Invoice));
+        Assert.Equal(2, await db.Set<Payment>().CountAsync(p => p.ProposedInvoiceId == w.Invoice));
         Assert.Equal(1, await db.Set<PaymentAllocation>().CountAsync(p => p.InvoiceId == w.Invoice));
     }
     [Theory]

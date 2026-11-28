@@ -34,7 +34,7 @@ internal sealed class CompactRecordSql(string name, string table, CompactRecordK
         var (from, state) = Source();
         return "SELECT " + string.Join(",", entity.GetProperties().Select(p =>
         {
-            var value = Read.TryGetValue(p.Name, out var native) ? native : Value(state, p);
+            var value = Read.TryGetValue(p.Name, out var native) || Read.TryGetValue(HistoricalName(p.Name), out native) ? native : Value(state, p);
             return $"({value})::{SqlType(p)} AS \"{p.Name}\"";
         })) + " FROM " + from + " WHERE " + Where;
     }
@@ -55,7 +55,23 @@ internal sealed class CompactRecordSql(string name, string table, CompactRecordK
         };
     }
 
-    internal static string Camel(string value) => JsonNamingPolicy.CamelCase.ConvertName(value);
+    internal static string HistoricalName(string value) => value switch
+    {
+        "ArchivePurchaseInfo" => "PurchaseInfo",
+        "ReceiptVerifiedByUserId" => "VerifiedByUserId",
+        "ReceiptVerifiedAt" => "VerifiedAt",
+        "RentAmount" => "MonthlyRent",
+        "SnapshotHashOrEmpty" => "SnapshotHash",
+        "SourceHashOrEmpty" => "SourceHash",
+        "PreparedHashOrEmpty" => "PreparedHash",
+        "PreparedObjectKeyOrEmpty" => "PreparedObjectKey",
+        "RequiredLocationId" => "LocationId",
+        "TaskTitle" => "Title",
+        "TaskPriority" => "Priority",
+        "MeterStatus" => "Status",
+        _ => value
+    };
+    internal static string Camel(string value) => JsonNamingPolicy.CamelCase.ConvertName(HistoricalName(value));
     internal static string JsonValue(string state, string property) => $"({state}->>'{Camel(property)}')";
     private static string Value(string state, IReadOnlyProperty property)
     {

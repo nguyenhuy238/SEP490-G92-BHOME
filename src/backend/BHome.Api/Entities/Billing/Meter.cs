@@ -11,9 +11,11 @@ public sealed class Meter : AuditableEntity
 {
     public Guid RoomId { get; set; }
     public Room Room { get; set; } = null!;
-    public string Code { get; set; } = "";
+    [NotMapped, JsonIgnore] public string MeterCode { get; set; } = "";
+    public string Code { get => MeterCode; set => MeterCode = value; }
     public UtilityType UtilityType { get; set; }
-    public MeterDisplay Display { get; set; }
+    [NotMapped, JsonIgnore] public MeterDisplay DisplayType { get; set; }
+    public MeterDisplay Display { get => DisplayType; set => DisplayType = value; }
     public int DecimalPlaces { get; set; }
     public bool IsActive { get; set; } = true;
     public DateOnly InstalledOn { get; set; }

@@ -34,7 +34,7 @@ public sealed partial class PaymentLedgerTests
                 ScheduledFinalDate = original.ScheduledFinalDate,
                 DueDate = original.DueDate.AddDays(7),
                 ScheduleSnapshot = "{}",
-                Lines = [new BHome.Domain.Billing.InvoiceLine { Category = BHome.Domain.PropertyManagement.ChargeCategory.Rent, ChargeCode = "RENT", Name = "Synthetic rent", Rate = 100000, Quantity = 1, Amount = 100000, OccupiedDays = 30, PeriodDays = 30, RateDate = original.BillingPeriod.AddMonths(1) }],
+                Lines = [new BHome.Domain.Billing.InvoiceItem { Category = BHome.Domain.PropertyManagement.ChargeCategory.Rent, ChargeCode = "RENT", Name = "Synthetic rent", Rate = 100000, Quantity = 1, Amount = 100000, OccupiedDays = 30, PeriodDays = 30, RateDate = original.BillingPeriod.AddMonths(1) }],
                 Recipients = w.Tenants.Select(t => new BHome.Domain.Billing.InvoiceRecipient { TenantUserId = t }).ToList()
             };
             db.Add(second); await db.SaveChangesAsync(); second.Status = BHome.Domain.Billing.InvoiceStatus.Final; second.FinalizedByUserId = w.Owner; second.FinalizedAt = DateTimeOffset.UtcNow; await db.SaveChangesAsync();
@@ -64,7 +64,7 @@ public sealed partial class PaymentLedgerTests
         var own = await Setup(); var outside = await Setup();
         await using (var scope = fixture.Factory.Services.CreateAsyncScope())
         {
-            var db = scope.ServiceProvider.GetFixturePersistence(); var users = scope.ServiceProvider.GetRequiredService<Microsoft.AspNetCore.Identity.UserManager<ApplicationUser>>();
+            var db = scope.ServiceProvider.GetFixturePersistence(); var users = scope.ServiceProvider.GetRequiredService<Microsoft.AspNetCore.Identity.UserManager<BHome.Infrastructure.Persistence.User>>();
             var actor = (await users.FindByIdAsync(own.Tenants[0].ToString()))!; Assert.True((await users.AddToRoleAsync(actor, Roles.Staff)).Succeeded);
             var today = DateOnly.FromDateTime(TimeZoneInfo.ConvertTimeBySystemTimeZoneId(DateTimeOffset.UtcNow, "Asia/Ho_Chi_Minh").DateTime);
             db.Add(new StaffLocationAssignment(outside.Location, actor.Id, own.Owner, today.AddDays(-1), today.AddDays(1))); await db.SaveChangesAsync();

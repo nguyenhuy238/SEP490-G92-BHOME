@@ -26,9 +26,9 @@ internal sealed class StaffLocationAssignmentConfiguration : IEntityTypeConfigur
         builder.HasIndex(x => new { x.StaffUserId, x.StartDate, x.EndDate });
         builder.HasOne<Location>().WithMany().HasForeignKey(x => x.LocationId)
             .OnDelete(DeleteBehavior.Restrict);
-        builder.HasOne<ApplicationUser>().WithMany().HasForeignKey(x => x.StaffUserId)
+        builder.HasOne<User>().WithMany().HasForeignKey(x => x.StaffUserId)
             .OnDelete(DeleteBehavior.Restrict);
-        builder.HasOne<ApplicationUser>().WithMany().HasForeignKey(x => x.CreatedByUserId)
+        builder.HasOne<User>().WithMany().HasForeignKey(x => x.CreatedByUserId)
             .OnDelete(DeleteBehavior.Restrict);
     }
 }

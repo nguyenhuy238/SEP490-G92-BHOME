@@ -75,21 +75,21 @@ internal sealed class MainInitialPaymentLedger(BHomePersistenceContext db, IPaym
     {
         var c = await ContractAsync(id, token);
         var order = await ReadAsync(id, token); if (order is null) return c is not null && !c.InitialPaymentRequired;
-        return c is not null && order.SnapshotHash == c.SnapshotHash &&
+        return c is not null && order.SnapshotHash == c.SnapshotHashOrEmpty &&
             (order.RoomScopeMode != "Test" || ContractPaymentModes.IsTest(c) ||
                 c.PaymentMode is null && testScope.Allows(order.LocationId)) &&
             await PendingSharedContractAsync(order, token) is null &&
             (order.SharedInvoiceId is not { } invoiceId || (await payments.FinancialsAsync(invoiceId, token)).OutstandingAmount == 0) &&
             await OutstandingAsync(order, token) == (0m, 0m);
     }
-    public async Task AllocateAsync(Guid id, PaymentTransfer receipt, CancellationToken token)
+    public async Task AllocateAsync(Guid id, Payment receipt, CancellationToken token)
     {
         var order = await ReadAsync(id, token) ?? throw new PaymentException(409, "initial_payment_order_required");
         var c = await ContractAsync(id, token) ?? throw new PaymentException(404, "contract_not_found");
         if (MainSandboxAcceptance.Read(c) is not null && !AnonymousContractSigningService.Complete(c))
             throw new PaymentException(409, "initial_payment_signatures_required");
         if (c.Kind != ContractKind.Main || c.PreviousContractId is not null || c.Status != ContractStatus.PendingActivation ||
-            c.SnapshotHash != order.SnapshotHash || ContractPaymentModes.IsTest(c) != receipt.IsDevelopmentDemo)
+            c.SnapshotHashOrEmpty != order.SnapshotHash || ContractPaymentModes.IsTest(c) != receipt.IsDevelopmentDemo)
             throw new PaymentException(409, "initial_contract_not_payable");
         if (!order.RoomScopeResolved && order.SharedDepositContractId is null && order.SharedRentContractId is null &&
             order.SharedInvoiceId is null)
@@ -115,9 +115,9 @@ internal sealed class MainInitialPaymentLedger(BHomePersistenceContext db, IPaym
         if (deposit + rent <= 0) throw new PaymentException(409, "initial_payment_already_settled");
         // No implicit allocation priority for partial/excess receipts: preserve for review.
         if (receipt.Amount != deposit + rent) throw new PaymentException(409, "initial_payment_amount_requires_review");
-        if (await PaymentLedgerWrites.Allocations(db).AnyAsync(a => a.TransferId == receipt.Id, token)) throw new PaymentException(409, "receipt_already_allocated");
-        if (deposit > 0) await payments.AddAsync(new PaymentAllocation { TransferId = receipt.Id, TargetDepositContractId = id, Amount = deposit, AllocatedAt = receipt.VerifiedAt }, token);
-        if (rent > 0) await payments.AddAsync(new PaymentAllocation { TransferId = receipt.Id, TargetInitialContractId = id, Amount = rent, AllocatedAt = receipt.VerifiedAt }, token);
+        if (await PaymentLedgerWrites.Allocations(db).AnyAsync(a => a.SourcePaymentId == receipt.Id, token)) throw new PaymentException(409, "receipt_already_allocated");
+        if (deposit > 0) await payments.AddAsync(new PaymentAllocation { TransferId = receipt.Id, TargetDepositContractId = id, Amount = deposit, AllocatedAt = receipt.ReceiptVerifiedAt }, token);
+        if (rent > 0) await payments.AddAsync(new PaymentAllocation { TransferId = receipt.Id, TargetInitialContractId = id, Amount = rent, AllocatedAt = receipt.ReceiptVerifiedAt }, token);
         // The common scheduler enqueues only after signatures, payment and effective-date checks pass.
     }
     private async Task<Contract?> ContractAsync(Guid id, CancellationToken t)

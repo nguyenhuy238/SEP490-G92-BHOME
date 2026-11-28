@@ -155,7 +155,7 @@ public sealed partial class Compact24OwnerSetupTests
         var contract = await stored.Set<Contract>().SingleAsync(c => c.Id == created.ContractId);
         Assert.Equal(w.Owner.Id, contract.OwnerSignerId);
         Assert.Equal(ContractStatus.Active, contract.Status);
-        Assert.Equal(3200000m, contract.MonthlyRent);
+        Assert.Equal(3200000m, contract.RentAmount);
         Assert.Equal(0m, contract.RequiredDeposit);
         Assert.Equal(2, await stored.Set<Meter>().CountAsync(m => m.RoomId == w.Room));
         Assert.Equal(existingAsset.Id, Assert.Single(await stored.Set<Asset>().Where(a => a.RoomId == w.Room).ToArrayAsync()).Id);

@@ -107,7 +107,7 @@ internal sealed class ViettelMySignContractAdapter(BHomePersistenceContext db, I
         return name.Length > 60 ? name[..60] : name;
     }
 
-    public async Task<string> RequestAsync(ContractSignature signature, CancellationToken t)
+    public async Task<string> RequestAsync(ContractSigning signature, CancellationToken t)
     {
         try
         {
@@ -116,7 +116,7 @@ internal sealed class ViettelMySignContractAdapter(BHomePersistenceContext db, I
         }
         catch (SigningProviderException) { throw new IntegrationUnavailableException("Viettel MySign"); }
     }
-    public async Task<SigningOutcome> PollAsync(ContractSignature signature, byte[] preparedPdf, CancellationToken t)
+    public async Task<SigningOutcome> PollAsync(ContractSigning signature, byte[] preparedPdf, CancellationToken t)
     {
         try
         {

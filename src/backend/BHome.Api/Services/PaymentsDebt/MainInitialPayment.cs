@@ -34,5 +34,5 @@ public interface IMainInitialPaymentLedger
     Task<(decimal Deposit, decimal RentAndFees)> OutstandingAsync(MainInitialOrder order, CancellationToken token);
     Task<Guid?> PendingSharedContractAsync(MainInitialOrder order, CancellationToken token);
     Task<bool> SatisfiedAsync(Guid contractId, CancellationToken token);
-    Task AllocateAsync(Guid contractId, BHome.Domain.PaymentsDebt.PaymentTransfer receipt, CancellationToken token);
+    Task AllocateAsync(Guid contractId, BHome.Domain.PaymentsDebt.Payment receipt, CancellationToken token);
 }

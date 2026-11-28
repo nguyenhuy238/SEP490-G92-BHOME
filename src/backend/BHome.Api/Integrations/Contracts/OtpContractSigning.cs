@@ -243,14 +243,14 @@ internal sealed class OtpContractSigningAdapter(ICurrentUser user, IPdfSigner pd
                 ownerSession ? ContractSigningRouter.OwnerSessionCredential : ContractSigningRouter.OtpCredential);
     }
 
-    public async Task<string> RequestAsync(ContractSignature signature, CancellationToken t)
+    public async Task<string> RequestAsync(ContractSigning signature, CancellationToken t)
     {
         await SendCodeAsync(signature, t);
         return "otp:" + signature.Id.ToString("N");
     }
 
     // The code only arrives by email; until it is typed the signature stays Pending. Too many wrong codes fail it.
-    public async Task<SigningOutcome> PollAsync(ContractSignature signature, byte[] preparedPdf, CancellationToken t)
+    public async Task<SigningOutcome> PollAsync(ContractSigning signature, byte[] preparedPdf, CancellationToken t)
     {
         if (signature.CredentialId == ContractSigningRouter.OwnerSessionCredential)
         {
@@ -267,7 +267,7 @@ internal sealed class OtpContractSigningAdapter(ICurrentUser user, IPdfSigner pd
         return (await challenges.ReadAsync(signature.Id, t)) is { Locked: true } ? new("Failed") : new("Pending");
     }
 
-    public async Task<SigningOutcome> ConfirmAsync(ContractSignature signature, byte[] preparedPdf, string code, CancellationToken t)
+    public async Task<SigningOutcome> ConfirmAsync(ContractSigning signature, byte[] preparedPdf, string code, CancellationToken t)
     {
         if (signature.SignerUserId != Actor) throw new ContractException(403, "contract_signer_required");
         if (string.IsNullOrWhiteSpace(code) || code.Trim().Length != options.Value.Otp.Length || !code.Trim().All(char.IsAsciiDigit))
@@ -281,7 +281,7 @@ internal sealed class OtpContractSigningAdapter(ICurrentUser user, IPdfSigner pd
         return Seal(signature, preparedPdf);
     }
 
-    private SigningOutcome Seal(ContractSignature signature, byte[] preparedPdf)
+    private SigningOutcome Seal(ContractSigning signature, byte[] preparedPdf)
     {
         var raw = seal.Sign(Convert.FromBase64String(signature.DataToSignDigest));
         try
@@ -295,25 +295,25 @@ internal sealed class OtpContractSigningAdapter(ICurrentUser user, IPdfSigner pd
         }
     }
 
-    public async Task<SigningOtpView> ResendAsync(ContractSignature signature, CancellationToken t)
+    public async Task<SigningOtpView> ResendAsync(ContractSigning signature, CancellationToken t)
     {
         if (signature.SignerUserId != Actor) throw new ContractException(403, "contract_signer_required");
         return await SendCodeAsync(signature, t);
     }
 
-    public async Task<SigningOtpView?> ChallengeAsync(ContractSignature signature, CancellationToken t)
+    public async Task<SigningOtpView?> ChallengeAsync(ContractSigning signature, CancellationToken t)
     {
         var challenge = await challenges.ReadAsync(signature.Id, t);
         return challenge is null ? null : View(signature, challenge);
     }
 
-    private async Task<SigningOtpView> SendCodeAsync(ContractSignature signature, CancellationToken t)
+    private async Task<SigningOtpView> SendCodeAsync(ContractSigning signature, CancellationToken t)
     {
         var (email, _) = await parties.FindAsync(signature.SignerUserId, t);
         if (email is null) throw ContractException.Conflict("signer_email_required");
         var (code, challenge) = await challenges.IssueAsync(signature.Id, email, t);
         var minutes = Math.Max(1, options.Value.Otp.TtlSeconds / 60);
-        var handover = signature.PreparedObjectKey.Contains("/handover-signatures/", StringComparison.Ordinal);
+        var handover = signature.PreparedObjectKeyOrEmpty.Contains("/handover-signatures/", StringComparison.Ordinal);
         var subject = handover ? "biên bản bàn giao phòng" : "hợp đồng";
         var receipt = await channel.SendAsync(new ChannelMessage($"contract-otp:{signature.Id:N}:{challenge.Issues}", "EMAIL", email,
             handover ? "HANDOVER_SIGNING_OTP" : "CONTRACT_SIGNING_OTP", $"[BHOME] Mã xác nhận ký {subject}: {code}",
@@ -325,7 +325,7 @@ internal sealed class OtpContractSigningAdapter(ICurrentUser user, IPdfSigner pd
         return View(signature, challenge);
     }
 
-    private SigningOtpView View(ContractSignature signature, SigningOtpChallenges.Challenge challenge) =>
+    private SigningOtpView View(ContractSigning signature, SigningOtpChallenges.Challenge challenge) =>
         new(signature.Id, challenge.Locked ? "Locked" : "Sent", challenge.MaskedEmail, challenge.ExpiresAt, challenges.ResendAfterSeconds(challenge));
 }
 

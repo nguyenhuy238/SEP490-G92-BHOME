@@ -74,7 +74,7 @@ public sealed class FinancialScenarioRepository(BHomePersistenceContext db) : IF
         var invoices = db.Set<BHome.Domain.Billing.Invoice>().AsNoTracking().Where(i =>
             i.Status == InvoiceStatus.Final && i.BillingPeriod >= baseline.From && i.BillingPeriod <= baseline.To &&
             (locationId == null || i.LocationId == locationId));
-        var invoiceTotals = await invoices.Select(i => new { i.Id, Total = i.Total }).ToArrayAsync(token);
+        var invoiceTotals = await invoices.Select(i => new { i.Id, Total = i.BaseTotalAmount }).ToArrayAsync(token);
         var lines = await db.FinancialItems().Where(l => invoices.Any(i => i.Id == l.InvoiceId))
             .GroupBy(l => new { l.InvoiceId, l.ChargeCode, l.Category })
             .Select(g => new { g.Key.InvoiceId, g.Key.ChargeCode, g.Key.Category, Amount = g.Sum(l => l.Amount) }).ToArrayAsync(token);

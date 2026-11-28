@@ -161,7 +161,7 @@ public sealed partial class ContractService
         if (state.StaffPreparedBy is null) missing.Add("staff_inspection");
         if (state.Status == "Draft" && state.StaffPreparedBy is null && moveInTask?.CanInspect != true &&
             user.IsInRole(Roles.Staff)) missing.Add("move_in_task_not_started");
-        if (state.ContractSnapshotHash != contract.SnapshotHash) missing.Add("contract_changed");
+        if (state.ContractSnapshotHash != contract.SnapshotHashOrEmpty) missing.Add("contract_changed");
         // Recorded defects are disclosed in the signed report, not missing data.
         var selectedReinspection = state.ReinspectionItems ?? [];
         var latestRequestAt = state.ReinspectionHistory?.LastOrDefault()?.RequestedAt;
@@ -179,7 +179,7 @@ public sealed partial class ContractService
         }
         return new(state.Version, state.Status, contract.Id, contract.Room.RoomNumber,
             contract.Room.Location.Name, contract.Room.Location.Address,
-            contract.StartDate, contract.EndDate, contract.MonthlyRent, contract.RequiredDeposit,
+            contract.StartDate, contract.EndDate, contract.RentAmount, contract.RequiredDeposit,
             contract.Terms, electricity, water, assets, state.RoomCondition, state.KeysAndAccess,
             state.Notes, state.EvidenceIds, inventory?.StateToken,
             canonical?.Items.Length == 0 || (inventory?.NoAssetsConfirmed ?? false),
@@ -321,7 +321,7 @@ public sealed partial class ContractService
         var next = prior with
         {
             Version = prior.Version + 1,
-            ContractSnapshotHash = contract.SnapshotHash,
+            ContractSnapshotHash = contract.SnapshotHashOrEmpty,
             RoomCondition = input.RoomCondition is null ? prior.RoomCondition : DraftText(input.RoomCondition, 2000),
             KeysAndAccess = input.AccessItems is { Length: 1 } && accessItems[0].Type == "RoomKey"
                 ? $"Bàn giao {accessItems[0].Quantity} chìa khóa"

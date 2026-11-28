@@ -133,7 +133,7 @@ public sealed partial class PaymentLedgerTests
             inspectionId = inspection.Id; inspectionVersion = inspection.Version;
             originalInvoiceCount = await db.Set<BHome.Domain.Billing.Invoice>().CountAsync(i => i.RoomId == w.Room);
             outsiderId = (await BHome.IntegrationTests.Compact24.WorkflowTestUsers.CreateAsync(scope.ServiceProvider,
-                new ApplicationUser { UserName = Guid.NewGuid() + "@example.invalid", Email = Guid.NewGuid() + "@example.invalid" },
+                new BHome.Infrastructure.Persistence.User { UserName = Guid.NewGuid() + "@example.invalid", Email = Guid.NewGuid() + "@example.invalid" },
                 BHome.Domain.IdentityAccess.Roles.Tenant, BHome.IntegrationTests.Compact24.WorkflowTestUsers.Password)).Id;
             // A replacement arrives on the same calendar day, after the final inspection.
             // Capacity remains three; the replacement must never inherit this damage debt.
@@ -259,7 +259,7 @@ public sealed partial class PaymentLedgerTests
         Assert.Equal(HttpStatusCode.Conflict, (await Post(owner, route + "/deposit-offsets", new DepositOffsetInput(view.Reference, charge.Id, null, 1, "Tampered proof", true))).StatusCode);
         using (var content = new MemoryStream(photo)) await storage.PutAsync(evidence.ObjectKey, content, photo.Length, "image/png", default);
         // An approved post-finalization adjustment creates a real remaining invoice balance.
-        var adjustment = await db.Set<BHome.Domain.Billing.InvoiceAdjustmentRequest>().SingleAsync(r => r.InvoiceId == w.Invoice);
+        var adjustment = await db.Set<BHome.Domain.Billing.InvoiceAdjustment>().SingleAsync(r => r.InvoiceId == w.Invoice);
         (await Post(owner, $"/api/v1/invoice-adjustments/{adjustment.Id}/approve",
             new BHome.Application.Billing.AdjustmentDecisionInput(1, 1, 0, 150000, null, "Synthetic additional approved rent", true))).EnsureSuccessStatusCode();
         view = await RefundValue<SettlementReceivablesView>(await owner.GetAsync(route));

@@ -60,12 +60,12 @@ public sealed class PropertyServiceTests
             Status = ContractStatus.Active,
             StartDate = new(2026, 1, 1),
             EndDate = new(2026, 12, 31),
-            MonthlyRent = 3000000,
+            RentAmount = 3000000,
             Terms = "Synthetic"
         };
         HoldingPriceCharge Charge(Guid id, ChargeCategory category, string code, ChargingMethod method, decimal rate) =>
             new(id, code, (int)category, (int)method, rate, contract.StartDate, null, 1) { Name = code };
-        HoldingPriceCharge[] defaults = [Charge(Guid.NewGuid(), ChargeCategory.Rent, "RENT", ChargingMethod.FixedPerRoomPerMonth, contract.MonthlyRent),
+        HoldingPriceCharge[] defaults = [Charge(Guid.NewGuid(), ChargeCategory.Rent, "RENT", ChargingMethod.FixedPerRoomPerMonth, contract.RentAmount),
             Charge(Guid.NewGuid(), ChargeCategory.Electricity, "ELECTRICITY", ChargingMethod.Metered, 3500),
             Charge(Guid.NewGuid(), ChargeCategory.Water, "WATER", ChargingMethod.Metered, 15000),
             Charge(Guid.NewGuid(), ChargeCategory.ServiceFee, "INTERNET", ChargingMethod.FixedPerRoomPerMonth, 100000)];
@@ -74,9 +74,9 @@ public sealed class PropertyServiceTests
             : c).ToArray();
         if (intact)
         {
-            contract.AgreedPriceSnapshot = System.Text.Json.JsonSerializer.Serialize(new HoldingPriceSnapshot(contract.MonthlyRent, 0, contract.StartDate, contract.EndDate, default, "Synthetic", BeforeVietnamMidnight, charges) { SnapshotVersion = 1 });
-            contract.SnapshotHash = ContractDocumentSnapshot.Hash(new ContractDocument(contract.Id, room.Id, contract.OwnerSignerId, contract.TenantUserId.Value,
-                contract.RepresentativeResidentId, [], contract.StartDate, contract.EndDate, contract.MonthlyRent, 0, null, 0, contract.Terms, "")
+            contract.AgreedPriceSnapshot = System.Text.Json.JsonSerializer.Serialize(new HoldingPriceSnapshot(contract.RentAmount, 0, contract.StartDate, contract.EndDate, default, "Synthetic", BeforeVietnamMidnight, charges) { SnapshotVersion = 1 });
+            contract.SnapshotHashOrEmpty = ContractDocumentSnapshot.Hash(new ContractDocument(contract.Id, room.Id, contract.OwnerSignerId, contract.TenantUserId.Value,
+                contract.RepresentativeResidentId, [], contract.StartDate, contract.EndDate, contract.RentAmount, 0, null, 0, contract.Terms, "")
             { AgreedCharges = charges });
         }
         var snapshot = contract.AgreedPriceSnapshot;

@@ -25,9 +25,9 @@ public sealed record ReceiptExcessConfirmation(ReceiptExcessTarget Target, strin
 public static class ReceiptExcessRules
 {
     public static string Hash<T>(T value) => Convert.ToHexString(SHA256.HashData(JsonSerializer.SerializeToUtf8Bytes(value)));
-    public static string TransferFingerprint(PaymentTransfer transfer) => TransferFingerprint(transfer.Id,
+    public static string TransferFingerprint(Payment transfer) => TransferFingerprint(transfer.Id,
         transfer.NormalizedReference, transfer.Amount, transfer.Currency, transfer.OccurredAt, transfer.TransferDescription,
-        transfer.StatementReference, transfer.VerifiedByUserId, transfer.VerifiedAt, transfer.IsDevelopmentDemo);
+        transfer.StatementReference, transfer.ReceiptVerifiedByUserId, transfer.ReceiptVerifiedAt, transfer.IsDevelopmentDemo);
     public static string TransferFingerprint(Guid id, string normalizedReference, decimal amount, string currency,
         DateTimeOffset occurredAt, string transferDescription, string statementReference, Guid verifiedByUserId,
         DateTimeOffset verifiedAt, bool isDevelopmentDemo) => Hash(new

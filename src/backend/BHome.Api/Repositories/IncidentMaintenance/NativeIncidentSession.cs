@@ -99,7 +99,7 @@ internal sealed class NativeIncidentSession(Compact24DbContext db)
             ? state.Deserialize<IncidentSnapshots.MaintenanceWorkOrderState>(Json)!.ToDomain()
             : MaintenanceWorkOrder.Rehydrate(row.Id, DateTimeOffset.UnixEpoch, DateTimeOffset.UnixEpoch);
         work.IncidentId = row.IncidentReportId;
-        work.LocationId = row.StoredLocationId ?? Guid.Empty;
+        work.LocationId = row.LocationId ?? Guid.Empty;
         work.RoomId = row.RoomId;
         work.AssetId = row.AssetId;
         work.AssignedStaffId = row.AssignedUserId ?? Guid.Empty;
@@ -109,7 +109,7 @@ internal sealed class NativeIncidentSession(Compact24DbContext db)
         work.ApprovedAt = row.CostApprovedAt;
         work.VerifiedById = row.VerifiedByUserId;
         work.VerifiedAt = row.VerifiedAt;
-        work.Status = Enum.Parse<WorkOrderStatus>(row.StoredStatus);
+        work.Status = Enum.Parse<WorkOrderStatus>(row.Status);
         work.Version = row.Version;
         work.Source ??= "Incident";
         work.Description ??= "";

@@ -25,7 +25,7 @@ internal static class NotificationInboxSeed
         var identity = scope.ServiceProvider.GetRequiredService<BHome.Infrastructure.Persistence.Compact24.Compact24DbContext>();
         await using var db = OfflineFixturePersistence.Open(scope.ServiceProvider);
         if (!await db.IsSchemaReadyAsync()) throw new LocalTestAccountException("Local Compact24 schema is not ready; no writes performed.");
-        var manager = scope.ServiceProvider.GetRequiredService<UserManager<ApplicationUser>>();
+        var manager = scope.ServiceProvider.GetRequiredService<UserManager<User>>();
         var names = new[] { "owner.dev", "staff.dev", "tenant.dev", "owner.mobile.test", "staff.mobile.test", "tenant.mobile.test", "owner.sample", "staff.sample", "tenant.sample", "tenant.other.sample" };
         var emails = names.Select(n => n + "@example.invalid").ToArray();
         var accounts = await identity.Users.Where(u => u.IsActive && emails.Contains(u.Email!)).OrderBy(u => u.Email).ToListAsync();
@@ -49,7 +49,7 @@ internal static class NotificationInboxSeed
                                         select new { l.Id }).FirstOrDefaultAsync();
                 if (assignment is null) { Console.WriteLine($"SKIP {account.Email}: no current synthetic location assignment."); continue; }
                 location = assignment.Id;
-                taskId = await db.Set<OperationalTask>().Where(t => t.Kind == OperationalTaskKind.AdHoc && t.LocationId == location && t.AssignedStaffUserId == account.Id)
+                taskId = await db.Set<OperationalTask>().Where(t => t.Kind == OperationalTaskKind.AdHoc && t.RequiredLocationId == location && t.AssignedStaffUserId == account.Id)
                     .Select(t => t.Id).FirstOrDefaultAsync();
             }
             var contract = await db.Set<Contract>().Where(c => c.IsDevelopmentDemo &&

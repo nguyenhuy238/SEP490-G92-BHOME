@@ -5,11 +5,12 @@ using System.Text.Json.Serialization;
 
 namespace BHome.Domain.Billing;
 
-public sealed class InvoiceAdjustmentRequest : AuditableEntity
+public sealed class InvoiceAdjustment : AuditableEntity
 {
     public Guid InvoiceId { get; set; }
     public Invoice Invoice { get; set; } = null!;
-    public Guid RequesterId { get; set; }
+    [NotMapped, JsonIgnore] public Guid RequestedByUserId { get; set; }
+    public Guid RequesterId { get => RequestedByUserId; set => RequestedByUserId = value; }
     public Guid? InvoiceLineId { get; set; }
     public string? ChargeCode { get; set; }
     public decimal CurrentAmount { get; set; }
@@ -19,15 +20,16 @@ public sealed class InvoiceAdjustmentRequest : AuditableEntity
     public InvoiceStatus InvoiceStatus { get; set; }
     public int InvoiceVersion { get; set; }
     public int FinancialVersion { get; set; }
-    public DateTimeOffset SubmittedAt { get; set; }
-    public List<InvoiceAdjustmentEvidence> Evidence { get; set; } = [];
+    [NotMapped, JsonIgnore] public DateTimeOffset RequestedAt { get; set; }
+    public DateTimeOffset SubmittedAt { get => RequestedAt; set => RequestedAt = value; }
+    [JsonPropertyName("evidence")] public List<InvoiceAdjustmentEvidence> EvidenceItems { get; set; } = [];
     public InvoiceAdjustmentDecision? Decision { get; set; }
 
     // Physical request metadata is excluded from the archive projection and
     // existing business snapshot shape. Decision identity remains independent.
     [NotMapped, JsonIgnore] public JsonElement RequestSnapshot { get; set; } = JsonSerializer.SerializeToElement(new { });
     [NotMapped, JsonIgnore] public JsonElement ProposedChanges { get; set; } = JsonSerializer.SerializeToElement(new { });
-    [NotMapped, JsonIgnore] public JsonElement StoredEvidence { get; set; } = JsonSerializer.SerializeToElement(Array.Empty<object>());
+    [NotMapped, JsonIgnore] public JsonElement Evidence { get; set; } = JsonSerializer.SerializeToElement(Array.Empty<object>());
     [NotMapped, JsonIgnore] public string Status { get; set; } = "REQUESTED";
     [NotMapped, JsonIgnore] public decimal? ApprovedDeltaAmount { get; set; }
     [NotMapped, JsonIgnore] public Guid? DecidedByUserId { get; set; }

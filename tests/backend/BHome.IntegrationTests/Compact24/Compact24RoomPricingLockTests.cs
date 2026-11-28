@@ -193,7 +193,7 @@ public sealed partial class Compact24OwnerSetupTests
         }
         var sealedAfter = await LoadContract(holding.Id);
         Assert.Equal(sealedBefore.AgreedPriceSnapshot, sealedAfter.AgreedPriceSnapshot);
-        Assert.Equal(sealedBefore.SnapshotHash, sealedAfter.SnapshotHash);
+        Assert.Equal(sealedBefore.SnapshotHashOrEmpty, sealedAfter.SnapshotHashOrEmpty);
         var missing = new List<string>();
         var billed = ContractBillingPrices.Read(sealedAfter, w.Location, missing);
         Assert.Empty(missing);

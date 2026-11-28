@@ -24,15 +24,15 @@ internal static class NativeAdjustmentPersistence
         decimal EffectiveBefore, decimal EffectiveAfter, decimal PaidAtDecision, string SourceFingerprint,
         string Reason, Guid OwnerId, DateTimeOffset DecidedAt);
 
-    internal static IQueryable<InvoiceAdjustmentRequest> Visible(Compact24DbContext db, InvoiceScope scope)
+    internal static IQueryable<InvoiceAdjustment> Visible(Compact24DbContext db, InvoiceScope scope)
     {
         var invoices = NativeInvoicePersistence.Visible(db, scope);
-        return db.Set<InvoiceAdjustmentRequest>().AsNoTracking().Where(r => invoices.Any(i => i.Id == r.InvoiceId)
-            && (scope.Owner || scope.Tenant && r.RequesterId == scope.Actor));
+        return db.Set<InvoiceAdjustment>().AsNoTracking().Where(r => invoices.Any(i => i.Id == r.InvoiceId)
+            && (scope.Owner || scope.Tenant && r.RequestedByUserId == scope.Actor));
     }
 
-    internal static async Task<InvoiceAdjustmentRequest[]> ReadAsync(Compact24DbContext db,
-        IQueryable<InvoiceAdjustmentRequest> query, CancellationToken t)
+    internal static async Task<InvoiceAdjustment[]> ReadAsync(Compact24DbContext db,
+        IQueryable<InvoiceAdjustment> query, CancellationToken t)
     {
         var rows = await query.ToArrayAsync(t);
         if (rows.Length == 0) return [];
@@ -62,12 +62,12 @@ internal static class NativeAdjustmentPersistence
             row.InvoiceVersion = state.InvoiceVersion;
             row.FinancialVersion = state.FinancialVersion;
             row.Decision = ReadDecision(row);
-            row.Evidence = evidence[row.Id].ToList();
+            row.EvidenceItems = evidence[row.Id].ToList();
             return row;
         }).ToArray();
     }
 
-    internal static InvoiceAdjustmentDecision? ReadDecision(InvoiceAdjustmentRequest row)
+    internal static InvoiceAdjustmentDecision? ReadDecision(InvoiceAdjustment row)
     {
         if (row.DecisionSnapshot is not { } snapshot) return null;
         var state = snapshot.Deserialize<DecisionState>(Json)
@@ -115,7 +115,7 @@ internal static class NativeAdjustmentPersistence
     private static string History<T>(string kind, string key, T state, bool deleted = false) =>
         JsonSerializer.Serialize(new { schemaVersion = 1, recordType = kind, recordKey = key, deleted, state }, Json);
 
-    internal static async Task InsertRequestAsync(Compact24DbContext db, InvoiceAdjustmentRequest r, CancellationToken t)
+    internal static async Task InsertRequestAsync(Compact24DbContext db, InvoiceAdjustment r, CancellationToken t)
     {
         RequireTransaction(db);
         r.Stamp(DateTimeOffset.UtcNow, true);

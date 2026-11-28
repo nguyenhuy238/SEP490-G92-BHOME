@@ -135,15 +135,15 @@ public sealed class MainDraftReleaseBeforeAccountsTests
         await using var check = host.Services.CreateAsyncScope(); var savedDb = check.ServiceProvider.GetRequiredService<Compact24ArchiveContext>();
         var c = await savedDb.Set<Contract>().Include(c => c.Residents).SingleAsync(c => c.Id == draft.Id);
         Assert.Equal(ContractStatus.PendingSigning, c.Status); Assert.Null(c.TenantUserId); Assert.Equal(ContractSigningModes.Internal, c.SigningMode);
-        var document = new ContractDocument(c.Id, c.RoomId, c.OwnerSignerId, Guid.Empty, c.RepresentativeResidentId, c.Residents.Select(r => r.ResidentId).Order().ToArray(), c.StartDate, c.EndDate, c.MonthlyRent, c.RequiredDeposit, c.HoldingContractId, c.AppliedHoldingDeposit, c.Terms, "") { IsInternalResidentAcceptance = true, AgreedCharges = ContractChargeSnapshot.Read(c).Charges };
-        Assert.Equal(ContractDocumentSnapshot.Hash(document), c.SnapshotHash);
-        var pdf = await check.ServiceProvider.GetRequiredService<IContractSigningDocumentSource>().ReadAsync(document with { SnapshotHash = c.SnapshotHash }, default);
+        var document = new ContractDocument(c.Id, c.RoomId, c.OwnerSignerId, Guid.Empty, c.RepresentativeResidentId, c.Residents.Select(r => r.ResidentId).Order().ToArray(), c.StartDate, c.EndDate, c.RentAmount, c.RequiredDeposit, c.HoldingContractId, c.AppliedHoldingDeposit, c.Terms, "") { IsInternalResidentAcceptance = true, AgreedCharges = ContractChargeSnapshot.Read(c).Charges };
+        Assert.Equal(ContractDocumentSnapshot.Hash(document), c.SnapshotHashOrEmpty);
+        var pdf = await check.ServiceProvider.GetRequiredService<IContractSigningDocumentSource>().ReadAsync(document with { SnapshotHash = c.SnapshotHashOrEmpty }, default);
         Assert.NotNull(pdf); Assert.True(pdf!.AsSpan(0, 5).SequenceEqual("%PDF-"u8)); Assert.Equal(beforeUsers, await savedDb.Users.CountAsync());
         Assert.Null((await savedDb.Set<Resident>().SingleAsync(r => r.Id == resident)).TenantUserId);
         var signingRoot = $"/api/v1/contracts/{draft.Id}/internal-signing";
         var status = (await owner.GetFromJsonAsync<InternalSigningStatus>(signingRoot))!;
         Assert.Equal(sandbox, status.SandboxAvailable);
-        var confirmation = new InternalOwnerAcceptance(c.SnapshotHash, ContractSigningModes.InternalConsent, true);
+        var confirmation = new InternalOwnerAcceptance(c.SnapshotHashOrEmpty, ContractSigningModes.InternalConsent, true);
         Assert.Equal(HttpStatusCode.Forbidden, (await staff.PostAsJsonAsync(signingRoot + "/owner-confirmation", confirmation)).StatusCode);
         if (!sandbox)
         {
@@ -154,19 +154,19 @@ public sealed class MainDraftReleaseBeforeAccountsTests
         Assert.Equal(HttpStatusCode.BadRequest, (await owner.PostAsJsonAsync(signingRoot + "/owner-confirmation", confirmation with { Consent = false })).StatusCode);
         Assert.Equal(HttpStatusCode.BadRequest, (await owner.PostAsJsonAsync(signingRoot + "/owner-confirmation", confirmation with { DocumentHash = "stale" })).StatusCode);
         Assert.Equal(HttpStatusCode.Forbidden, (await owner.PostAsJsonAsync(signingRoot + "/owner-simulation", confirmation)).StatusCode);
-        var pendingInvite = new ContractSigningInvitation { ContractId = c.Id, ResidentId = resident, ApprovedByUserId = ownerId, TokenHash = new string('A', 64), SnapshotHash = c.SnapshotHash, DocumentObjectKey = "synthetic-review.pdf", DocumentHash = "synthetic-hash", RecipientEmail = "synthetic@example.invalid", ExpiresAt = DateTimeOffset.UtcNow.AddDays(1), OtpHash = "synthetic-otp", SessionHash = "synthetic-session" };
+        var pendingInvite = new ContractSigningInvitation { ContractId = c.Id, ResidentId = resident, ApprovedByUserId = ownerId, TokenHash = new string('A', 64), SnapshotHash = c.SnapshotHashOrEmpty, DocumentObjectKey = "synthetic-review.pdf", DocumentHash = "synthetic-hash", RecipientEmail = "synthetic@example.invalid", ExpiresAt = DateTimeOffset.UtcNow.AddDays(1), OtpHash = "synthetic-otp", SessionHash = "synthetic-session" };
         savedDb.Add(pendingInvite); await savedDb.SaveChangesAsync();
         var pendingStatus = (await staff.GetFromJsonAsync<InternalSigningStatus>(signingRoot))!;
         Assert.Equal(pendingInvite.Id, Assert.Single(pendingStatus.Invitations).Id);
         var canonical = await savedDb.Set<ContractDocumentFile>().SingleAsync(f => f.ContractId == c.Id && f.Kind == ContractFileKind.Preview && f.TemplateId == "main-tenancy-docx-v1");
         var objectStorage = check.ServiceProvider.GetRequiredService<IObjectStorage>();
         await objectStorage.DeleteAsync(canonical.ObjectKey, default);
-        var missing = await Assert.ThrowsAsync<ContractException>(() => check.ServiceProvider.GetRequiredService<IContractSigningDocumentSource>().ReadAsync(document with { SnapshotHash = c.SnapshotHash }, default));
+        var missing = await Assert.ThrowsAsync<ContractException>(() => check.ServiceProvider.GetRequiredService<IContractSigningDocumentSource>().ReadAsync(document with { SnapshotHash = c.SnapshotHashOrEmpty }, default));
         Assert.Equal("signing_source_document_required", missing.Code);
         pendingInvite.DocumentHash = canonical.FileHash;
         await savedDb.SaveChangesAsync();
         using (var copy = new MemoryStream(pdf)) await objectStorage.PutAsync(pendingInvite.DocumentObjectKey, copy, pdf.Length, "application/pdf", default);
-        Assert.Equal(pdf, await check.ServiceProvider.GetRequiredService<IContractSigningDocumentSource>().ReadAsync(document with { SnapshotHash = c.SnapshotHash }, default));
+        Assert.Equal(pdf, await check.ServiceProvider.GetRequiredService<IContractSigningDocumentSource>().ReadAsync(document with { SnapshotHash = c.SnapshotHashOrEmpty }, default));
         await objectStorage.DeleteAsync(pendingInvite.DocumentObjectKey, default);
         Assert.True((await staff.GetFromJsonAsync<InternalSigningStatus>(signingRoot))!.SandboxAvailable);
         if (staffSimulation)
@@ -206,7 +206,7 @@ public sealed class MainDraftReleaseBeforeAccountsTests
         Assert.True(AnonymousContractSigningService.Complete(simulated));
         Assert.Null(AnonymousContractSigningService.AcceptedEvidence(simulated));
         Assert.Equal(beforeUsers, await savedDb.Users.CountAsync());
-        Assert.Empty(await savedDb.Set<ContractSignature>().Where(x => x.ContractId == c.Id).ToArrayAsync());
+        Assert.Empty(await savedDb.Set<ContractSigning>().Where(x => x.ContractId == c.Id).ToArrayAsync());
         using var disabledHost = host.WithWebHostBuilder(b => b.ConfigureTestServices(s =>
         {
             s.RemoveAll<IHoldingTestScope>(); s.AddSingleton<IHoldingTestScope>(new SandboxScope(false));
@@ -223,7 +223,7 @@ public sealed class MainDraftReleaseBeforeAccountsTests
         await Assert.ThrowsAsync<ContractException>(() => automatic.AutoActivatePaidMainAsync(c.Id, default));
         var paymentDb = automaticScope.ServiceProvider.GetRequiredService<Compact24DbContext>();
         var at = DateTimeOffset.UtcNow;
-        var verifiedReceipt = new BHome.Domain.PaymentsDebt.PaymentTransfer { Amount = quote.OutstandingAmount, IsDevelopmentDemo = true, VerifiedAt = at, ProviderIdentity = "SEPAY:TEST", BankReference = "SYNTHETIC-AUTO", NormalizedReference = "SYNTHETIC-AUTO", TransferDescription = "BH12345678", OccurredAt = at };
+        var verifiedReceipt = new BHome.Domain.PaymentsDebt.Payment { Amount = quote.OutstandingAmount, IsDevelopmentDemo = true, VerifiedAt = at, ProviderIdentity = "SEPAY:TEST", BankReference = "SYNTHETIC-AUTO", NormalizedReference = "SYNTHETIC-AUTO", TransferDescription = "BH12345678", OccurredAt = at };
         var eventId = Guid.NewGuid();
         var receiptId = verifiedReceipt.Id;
         var providerEvent = JsonSerializer.Serialize(new { recordType = "SePayEventV1", mode = "Test", transaction = new { referenceCode = "SYNTHETIC-AUTO", transferType = "in", transferAmount = quote.OutstandingAmount, gateway = "MBBank", accountNumber = "0000000001" } });

@@ -28,7 +28,7 @@ internal static class Job09Seed
         if (!await db.IsSchemaReadyAsync()) throw new LocalTestAccountException("Schema is not ready; no migrations applied.");
         var plans = await db.Set<BillingAutomationPlan>().AsNoTracking().Where(p => p.Enabled).Select(p => new { p.LocationId, p.Version, p.AuthorizeAutomaticFinalization }).ToArrayAsync();
         Console.WriteLine("Enabled automation plan versions: " + System.Text.Json.JsonSerializer.Serialize(plans));
-        var fixtureTasks = await db.Set<OperationalTask>().AsNoTracking().Where(x => x.LocationId == Id(10)).Select(x => new { x.Id, x.Status, x.Purpose, x.MeterId }).ToArrayAsync();
+        var fixtureTasks = await db.Set<OperationalTask>().AsNoTracking().Where(x => x.RequiredLocationId == Id(10)).Select(x => new { x.Id, Status = x.MeterStatus, x.Purpose, x.MeterId }).ToArrayAsync();
         Console.WriteLine("JOB09_TASKS " + System.Text.Json.JsonSerializer.Serialize(fixtureTasks));
         if (mode == "--inspect")
         {
@@ -57,13 +57,13 @@ internal static class Job09Seed
             Console.WriteLine("JOB09 fixture already exists; all existing records preserved.");
             return;
         }
-        var users = scope.ServiceProvider.GetRequiredService<UserManager<ApplicationUser>>();
+        var users = scope.ServiceProvider.GetRequiredService<UserManager<User>>();
         var credentials = new List<object>();
-        async Task<ApplicationUser> Account(int n, string name, string role, string fullName)
+        async Task<User> Account(int n, string name, string role, string fullName)
         {
             if (await db.Users.AnyAsync(u => u.Id == Id(n) || u.UserName == name)) throw new LocalTestAccountException("Dedicated fixture account conflict; no existing credentials changed.");
             var password = "Aa1!" + Convert.ToHexString(RandomNumberGenerator.GetBytes(16));
-            var user = new ApplicationUser { Id = Id(n), UserName = name, Email = name, EmailConfirmed = true, IsActive = true, LockoutEnabled = true };
+            var user = new User { Id = Id(n), UserName = name, Email = name, EmailConfirmed = true, IsActive = true, LockoutEnabled = true };
             identity.Entry(user).Property("full_name").CurrentValue = fullName;
             identity.PrepareUserRole(user, role);
             var result = await users.CreateAsync(user, password);
@@ -86,7 +86,7 @@ internal static class Job09Seed
                 Add(60 + i * 2 + utility, new Meter { RoomId = Id(20 + i), Code = $"JOB09-{101 + i}-{utility}", UtilityType = (UtilityType)utility, Display = MeterDisplay.Digital, InstalledOn = period.AddMonths(-1), IsActive = true });
             if (i == 2) continue;
             Add(30 + i, new Resident { RoomId = Id(20 + i), TenantUserId = i == 0 ? tenant.Id : null, OwnerUserId = owner.Id, DisplayLabel = $"SYNTHETIC JOB09 TENANT {i + 1}", ResidentType = ResidentType.Representative, VerificationStatus = IdentityVerificationStatus.Verified, ConfirmedByUserId = staff.Id, ConfirmedAt = now });
-            Add(40 + i, new Contract { RoomId = Id(20 + i), OwnerSignerId = owner.Id, TenantUserId = i == 0 ? tenant.Id : null, RepresentativeResidentId = Id(30 + i), Kind = ContractKind.Main, Status = ContractStatus.Active, StartDate = period, EndDate = period.AddYears(1).AddDays(-1), MonthlyRent = 3000000m, Terms = "SYNTHETIC JOB09 ELIGIBILITY FIXTURE ONLY; no real signing/payment", SnapshotHash = new string('0', 64), IsDevelopmentDemo = true, ActivatedByUserId = owner.Id, ActivatedAt = now, Residents = [new ContractResident { ContractId = Id(40 + i), ResidentId = Id(30 + i), Role = ResidentType.Representative, ResidenceFrom = period }] });
+            Add(40 + i, new Contract { RoomId = Id(20 + i), OwnerSignerId = owner.Id, TenantUserId = i == 0 ? tenant.Id : null, RepresentativeResidentId = Id(30 + i), Kind = ContractKind.Main, Status = ContractStatus.Active, StartDate = period, EndDate = period.AddYears(1).AddDays(-1), RentAmount = 3000000m, Terms = "SYNTHETIC JOB09 ELIGIBILITY FIXTURE ONLY; no real signing/payment", SnapshotHashOrEmpty = new string('0', 64), IsDevelopmentDemo = true, ActivatedByUserId = owner.Id, ActivatedAt = now, Residents = [new ContractResident { ContractId = Id(40 + i), ResidentId = Id(30 + i), Role = ResidentType.Representative, ResidenceFrom = period }] });
         }
         await db.SaveChangesAsync();
         var credentialPath = Path.GetFullPath(".tools/job09/credentials.json");

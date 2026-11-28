@@ -5,7 +5,14 @@ namespace BHome.Infrastructure.Persistence.Compact24;
 internal static class Compact24Records
 {
     private static readonly IReadOnlyDictionary<string, CompactRecordSql> Records = Build();
-    internal static CompactRecordSql For(Type type) => Records.TryGetValue(type.Name, out var value)
+    internal static CompactRecordSql For(Type type) => Records.TryGetValue(type.Name switch
+    {
+        "ContractSigning" => "ContractSignature",
+        "InvoiceItem" => "InvoiceLine",
+        "InvoiceAdjustment" => "InvoiceAdjustmentRequest",
+        "Payment" => "PaymentTransfer",
+        _ => type.Name
+    }, out var value)
         ? value : throw new InvalidOperationException("Unmapped Compact24 domain record: " + type.Name);
 
     private static IReadOnlyDictionary<string, CompactRecordSql> Build()
@@ -61,7 +68,7 @@ internal static class Compact24Records
         Root("Room", "rooms", "LocationId:location_id RoomNumber:room_number Floor:floor Capacity:capacity Status:status Version:version");
         var asset = Root("Asset", "assets", "LocationId:location_id RoomId:room_id CommonArea:common_area Code:asset_code Name:name Category:category Condition:condition Status:status Version:version");
         // The physical JSONB column is authoritative; metadata edits do not rewrite the asset's history envelope.
-        asset.Read["PurchaseInfo"] = "t.purchase_info";
+        asset.Read["ArchivePurchaseInfo"] = "t.purchase_info";
         Root("Resident", "residents", "TenantUserId:user_id RoomId:current_room_id OwnerUserId:identity_owner_scope_id DisplayLabel:display_label IdentityHmac:identity_hmac HmacKeyVersion:hmac_key_version VerificationStatus:verification_status ConfirmedByUserId:verified_by_user_id ConfirmedAt:verified_at")
             .Map("IdentityData", "identity_data", write: "COALESCE((@state::jsonb->>'identityData')::jsonb,'{}'::jsonb)")
             .Map("ContactEmail", "contact_email");
@@ -142,10 +149,10 @@ internal static class Compact24Records
         Technical("InvoiceAdjustmentEvidence"); Technical("InvoiceAdjustmentCommand", true).AppendOnly = true;
         Notification("InvoiceAdjustmentEvent"); Notification("InvoiceIssuedEvent");
 
-        var payment = Root("PaymentTransfer", "payments", "ProviderIdentity:provider_code BankReference:transaction_reference OccurredAt:received_at Amount:amount Currency:currency TransferDescription:remittance_info VerifiedByUserId:verified_by_user_id VerifiedAt:verified_at");
+        var payment = Root("PaymentTransfer", "payments", "ProviderIdentity:provider_code BankReference:transaction_reference OccurredAt:received_at Amount:amount Currency:currency TransferDescription:remittance_info ReceiptVerifiedByUserId:verified_by_user_id ReceiptVerifiedAt:verified_at");
         payment.CustomFrom = "payments t"; payment.CustomState = "t.verification_data->'compactState'";
         payment.Where = "t.verification_data ? 'compactState'";
-        payment.Read["VerifiedByUserId"] = "COALESCE(t.verified_by_user_id,'00000000-0000-0000-0000-000000000000'::uuid)";
+        payment.Read["ReceiptVerifiedByUserId"] = "COALESCE(t.verified_by_user_id,'00000000-0000-0000-0000-000000000000'::uuid)";
         payment.Write["receiving_account_key"] = "'legacy-unscoped'";
         payment.Write["status"] = "'VERIFIED'"; payment.Write["verification_method"] = "'MANUAL'";
         payment.Write["effect_key"] = "'receipt:'||(@state::jsonb->>'providerIdentity')||':'||(@state::jsonb->>'normalizedReference')";

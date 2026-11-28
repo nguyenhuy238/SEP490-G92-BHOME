@@ -26,12 +26,12 @@ internal sealed partial class NotificationEventPublisher
 
     private Task<bool> PendingAdjustment(Guid id, CancellationToken t) =>
         db is Compact24DbContext compact
-            ? compact.Set<InvoiceAdjustmentRequest>().AnyAsync(r => r.InvoiceId == id && r.DecisionSnapshot == null, t)
-            : db.Set<InvoiceAdjustmentRequest>().AnyAsync(r => r.InvoiceId == id && r.Decision == null, t);
+            ? compact.Set<InvoiceAdjustment>().AnyAsync(r => r.InvoiceId == id && r.DecisionSnapshot == null, t)
+            : db.Set<InvoiceAdjustment>().AnyAsync(r => r.InvoiceId == id && r.Decision == null, t);
 
     private Task<bool> HasPeriodicInvoice(Guid room, DateOnly period, CancellationToken t) =>
         db is Compact24DbContext compact
-            ? compact.Set<BHome.Domain.Billing.Invoice>().AnyAsync(i => i.RoomId == room && i.BillingPeriod == period && i.Type == "PERIODIC", t)
+            ? compact.Set<BHome.Domain.Billing.Invoice>().AnyAsync(i => i.RoomId == room && i.BillingPeriod == period && i.InvoiceType == "PERIODIC", t)
             : db.PeriodicInvoices().AnyAsync(i => i.RoomId == room && i.BillingPeriod == period, t);
 
     private async Task<Room?> LoadRoom(Guid room, Guid location, CancellationToken t)

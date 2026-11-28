@@ -54,8 +54,8 @@ public interface IAdjustmentRepository
 {
     Task<T> TransactionAsync<T>(Guid invoiceId, Func<Task<T>> work, CancellationToken t);
     Task<Invoice?> InvoiceAsync(Guid id, InvoiceScope scope, CancellationToken t);
-    Task<InvoiceAdjustmentRequest?> RequestAsync(Guid id, InvoiceScope scope, CancellationToken t);
-    Task<PagedResult<InvoiceAdjustmentRequest>> ListAsync(AdjustmentQuery query, InvoiceScope scope, CancellationToken t);
+    Task<InvoiceAdjustment?> RequestAsync(Guid id, InvoiceScope scope, CancellationToken t);
+    Task<PagedResult<InvoiceAdjustment>> ListAsync(AdjustmentQuery query, InvoiceScope scope, CancellationToken t);
     Task<InvoiceAdjustmentCommand?> CommandAsync(Guid actor, Guid key, string operation, CancellationToken t);
     Task<InvoiceAdjustmentEvidence[]> EvidenceAsync(Guid[] ids, CancellationToken t);
     Task<InvoiceFinancialView> FinancialsAsync(Guid invoiceId, CancellationToken t);

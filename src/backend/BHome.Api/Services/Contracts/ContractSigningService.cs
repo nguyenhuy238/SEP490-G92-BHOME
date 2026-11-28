@@ -78,15 +78,15 @@ public sealed partial class ContractService
                 ? await signing.PrepareAsync(Document(c), x.CertificateId, previous, t)
                 : await signing.PrepareAsync(Document(c), x.CertificateId, previous,
                     new SigningAppearance(x.Placement, x.UsePicture ?? true, session ? SigningMethods.OwnerSession : otp ? SigningMethods.Otp : upload ? SigningMethods.UploadProof : null), t);
-            var s = new ContractSignature
+            var s = new ContractSigning
             {
                 ContractId = id,
                 SignerUserId = Actor,
                 CertificateId = session || otp || upload ? Guid.Empty : x.CertificateId,
-                SnapshotHash = c.SnapshotHash,
-                SourceHash = FileHash(prepared.SourcePdf),
+                SnapshotHash = c.SnapshotHashOrEmpty,
+                SourceHashOrEmpty = FileHash(prepared.SourcePdf),
                 FieldName = prepared.FieldName,
-                PreparedHash = FileHash(prepared.PreparedPdf),
+                PreparedHashOrEmpty = FileHash(prepared.PreparedPdf),
                 DocumentDigest = prepared.DocumentDigest,
                 DataToSignDigest = prepared.DataToSignDigest,
                 CertificateChain = prepared.CertificateChain,
@@ -95,10 +95,10 @@ public sealed partial class ContractService
                 // Signing outside BHOME takes longer than confirming on a phone (decision D5 proposes 72 hours).
                 ExpiresAt = clock.GetUtcNow().Add(upload ? TimeSpan.FromHours(72) : TimeSpan.FromMinutes(5))
             };
-            s.PreparedObjectKey = $"contracts/{id:N}/signatures/{s.Id:N}/prepared.pdf";
+            s.PreparedObjectKeyOrEmpty = $"contracts/{id:N}/signatures/{s.Id:N}/prepared.pdf";
             if (AnonymousContractSigningService.AllowsEitherSigningOrder(c) && c.SigningMode == ContractSigningModes.Internal)
                 await files.PutAsync(c.RoomId, $"contracts/{id:N}/signatures/{s.Id:N}/source.pdf", prepared.SourcePdf, "application/pdf", t);
-            await files.PutAsync(c.RoomId, s.PreparedObjectKey, prepared.PreparedPdf, "application/pdf", t);
+            await files.PutAsync(c.RoomId, s.PreparedObjectKeyOrEmpty, prepared.PreparedPdf, "application/pdf", t);
             repository.Add(s); c.Status = ContractStatus.PendingSigning; Audit("ContractSigningPrepared", id);
             if (session)
             {
@@ -189,7 +189,7 @@ public sealed partial class ContractService
         if (Actor != c.OwnerSignerId && Actor != c.TenantUserId) throw new ContractException(403, "contract_signer_required");
         var s = PendingOtpSignature(c);
         if (s.Status is not (SignatureStatus.Pending or SignatureStatus.Dispatching or SignatureStatus.ManualReview)) throw ContractException.Conflict("signing_not_pending");
-        if (!Intact(c) || s.SnapshotHash != c.SnapshotHash) throw ContractException.Conflict("signed_terms_changed");
+        if (!Intact(c) || s.SnapshotHash != c.SnapshotHashOrEmpty) throw ContractException.Conflict("signed_terms_changed");
         var sent = await signing.ResendAsync(s, t);
         if (s.Status != SignatureStatus.Pending) { s.ProviderReference = "otp:" + s.Id.ToString("N"); s.Status = SignatureStatus.Pending; }
         s.ExpiresAt = sent.ExpiresAt;
@@ -239,7 +239,7 @@ public sealed partial class ContractService
         return view;
     }
 
-    private ContractSignature PendingUploadSignature(Contract c) =>
+    private ContractSigning PendingUploadSignature(Contract c) =>
         c.Signatures.Where(s => s.SignerUserId == Actor && s.CredentialId == UploadCredential && s.Status != SignatureStatus.Failed)
             .OrderBy(s => s.CreatedAt).ThenBy(s => s.Id).LastOrDefault() ?? throw ContractException.Missing();
 
@@ -260,7 +260,7 @@ public sealed partial class ContractService
         return new(mine, preference.FirstOrDefault(mine.Contains));
     }
 
-    private ContractSignature PendingOtpSignature(Contract c) =>
+    private ContractSigning PendingOtpSignature(Contract c) =>
         c.Signatures.Where(s => s.SignerUserId == Actor && s.CredentialId == OtpCredential && s.Status != SignatureStatus.Failed)
             .OrderBy(s => s.CreatedAt).ThenBy(s => s.Id).LastOrDefault() ?? throw ContractException.Missing();
 
@@ -268,16 +268,16 @@ public sealed partial class ContractService
     private const string OtpCredential = "BHOME-OTP";
     private const string OwnerSessionCredential = "BHOME-OWNER-SESSION";
 
-    private async Task<byte[]> PreparedPdfAsync(Contract c, ContractSignature s, CancellationToken t)
+    private async Task<byte[]> PreparedPdfAsync(Contract c, ContractSigning s, CancellationToken t)
     {
-        if (!Intact(c) || s.SnapshotHash != c.SnapshotHash) throw ContractException.Conflict("signed_terms_changed");
-        using var prepared = new MemoryStream(); await storage.CopyToAsync(s.PreparedObjectKey, prepared, t);
-        if (FileHash(prepared.ToArray()) != s.PreparedHash) throw ContractException.Conflict("prepared_document_integrity_failed");
+        if (!Intact(c) || s.SnapshotHash != c.SnapshotHashOrEmpty) throw ContractException.Conflict("signed_terms_changed");
+        using var prepared = new MemoryStream(); await storage.CopyToAsync(s.PreparedObjectKeyOrEmpty, prepared, t);
+        if (FileHash(prepared.ToArray()) != s.PreparedHashOrEmpty) throw ContractException.Conflict("prepared_document_integrity_failed");
         return prepared.ToArray();
     }
 
     // Stores a verified signed PDF and moves the contract on when every party has signed. True when a signature completed.
-    private async Task<bool> ApplyOutcomeAsync(Contract c, ContractSignature s, SigningOutcome answer, CancellationToken t)
+    private async Task<bool> ApplyOutcomeAsync(Contract c, ContractSigning s, SigningOutcome answer, CancellationToken t)
     {
         if (answer.State is "Signed" or "Simulated" && answer.SignedPdf is { Length: > 0 } pdf)
         {
@@ -298,19 +298,19 @@ public sealed partial class ContractService
                 }
                 if (evidence is null) throw ContractException.Conflict("tenant_acceptance_required");
                 if (s.SignerUserId != c.OwnerSignerId || s.Status != SignatureStatus.Signed ||
-                    evidence.SnapshotHash != c.SnapshotHash)
+                    evidence.SnapshotHash != c.SnapshotHashOrEmpty)
                     throw ContractException.Conflict("signing_evidence_integrity_failed");
                 var finalKey = s.SignedObjectKey;
                 var finalHash = s.SignedHash;
-                if (s.SourceHash != evidence.TenantDocumentHash)
+                if (s.SourceHashOrEmpty != evidence.TenantDocumentHash)
                 {
                     // Owner may have started signing the same review PDF before Tenant accepted.
                     // Retain that verified signature and append the already recorded Tenant evidence.
-                    if (!AnonymousContractSigningService.AllowsEitherSigningOrder(c) || s.SourceHash != evidence.SourceHash)
+                    if (!AnonymousContractSigningService.AllowsEitherSigningOrder(c) || s.SourceHashOrEmpty != evidence.SourceHash)
                         throw ContractException.Conflict("signing_evidence_integrity_failed");
                     var invitation = signingInvitations is null ? null : await signingInvitations.FindAsync(evidence.InvitationId, t);
                     if (invitation is null || invitation.AcceptedAt != evidence.AcceptedAt || invitation.RevokedAt is not null ||
-                        invitation.ContractId != c.Id || invitation.SnapshotHash != c.SnapshotHash || invitation.DocumentHash != evidence.SourceHash)
+                        invitation.ContractId != c.Id || invitation.SnapshotHash != c.SnapshotHashOrEmpty || invitation.DocumentHash != evidence.SourceHash)
                         throw ContractException.Conflict("signing_evidence_integrity_failed");
                     using var image = new MemoryStream();
                     await storage.CopyToAsync(invitation.SignatureObjectKey!, image, t);
@@ -394,7 +394,7 @@ public sealed partial class ContractService
             {
                 var invitation = AnonymousContractSigningService.AllowsEitherSigningOrder(c) && signingInvitations is not null
                     ? (await signingInvitations.ListAsync(c.Id, t)).FirstOrDefault(i => i.RevokedAt is null &&
-                        i.AcceptedAt is null && i.ExpiresAt > clock.GetUtcNow() && i.SnapshotHash == c.SnapshotHash) : null;
+                        i.AcceptedAt is null && i.ExpiresAt > clock.GetUtcNow() && i.SnapshotHash == c.SnapshotHashOrEmpty) : null;
                 if (invitation is null) return null;
                 using var reviewed = new MemoryStream();
                 await storage.CopyToAsync(invitation.DocumentObjectKey, reviewed, t);
@@ -402,7 +402,7 @@ public sealed partial class ContractService
                 if (FileHash(reviewedBytes) != invitation.DocumentHash) throw ContractException.Conflict("signing_evidence_integrity_failed");
                 return reviewedBytes;
             }
-            if (evidence.SnapshotHash != c.SnapshotHash) throw ContractException.Conflict("signed_terms_changed");
+            if (evidence.SnapshotHash != c.SnapshotHashOrEmpty) throw ContractException.Conflict("signed_terms_changed");
             using var accepted = new MemoryStream();
             await storage.CopyToAsync(evidence.TenantDocumentKey, accepted, t);
             var bytes = accepted.ToArray();
@@ -466,7 +466,7 @@ public sealed partial class ContractService
             // Owner-first Holding can expose its verified Owner PDF while awaiting Tenant acceptance.
         }
         var s = c.Signatures.Where(s => CompleteSignature(s, c)).OrderBy(s => s.SignedAt).LastOrDefault() ?? throw ContractException.Conflict("signed_document_not_available");
-        if (!Intact(c) || s.SnapshotHash != c.SnapshotHash || string.IsNullOrWhiteSpace(s.SignedObjectKey) || string.IsNullOrWhiteSpace(s.SignedHash))
+        if (!Intact(c) || s.SnapshotHash != c.SnapshotHashOrEmpty || string.IsNullOrWhiteSpace(s.SignedObjectKey) || string.IsNullOrWhiteSpace(s.SignedHash))
             throw ContractException.Conflict("signing_evidence_integrity_failed");
         using var buffer = new MemoryStream();
         await storage.CopyToAsync(s.SignedObjectKey, buffer, t);

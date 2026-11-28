@@ -131,7 +131,7 @@ public sealed class LocationAssetHandoverSigningTests(Compact24Fixture fixture) 
         {
             var db = scope.ServiceProvider.GetRequiredService<Compact24ArchiveContext>();
             taskId = await db.Set<OperationalTask>().AsNoTracking()
-                .Where(t => t.LocationId == locationId && t.Kind == OperationalTaskKind.LocationAssetHandover)
+                .Where(t => t.RequiredLocationId == locationId && t.Kind == OperationalTaskKind.LocationAssetHandover)
                 .Select(t => t.Id).SingleAsync();
         }
         using var ownerClient = await Login(host.CreateClient(), owner);
@@ -345,7 +345,7 @@ public sealed class LocationAssetHandoverSigningTests(Compact24Fixture fixture) 
         {
             var db = scope.ServiceProvider.GetRequiredService<Compact24ArchiveContext>();
             formerTaskId = await db.Set<OperationalTask>().AsNoTracking()
-                .Where(task => task.LocationId == locationId && task.Kind == OperationalTaskKind.LocationAssetHandover)
+                .Where(task => task.RequiredLocationId == locationId && task.Kind == OperationalTaskKind.LocationAssetHandover)
                 .Select(task => task.Id).SingleAsync();
         }
         using var ownerClient = await Login(host.CreateClient(), owner);
@@ -438,7 +438,7 @@ public sealed class LocationAssetHandoverSigningTests(Compact24Fixture fixture) 
                 WHERE staff_user_id={formerStaff.Id}
                 """);
             successorTaskId = await db.Set<OperationalTask>().AsNoTracking()
-                .Where(task => task.LocationId == locationId && task.Kind == OperationalTaskKind.LocationAssetHandover &&
+                .Where(task => task.RequiredLocationId == locationId && task.Kind == OperationalTaskKind.LocationAssetHandover &&
                     task.AssignedStaffUserId == successor.Id)
                 .Select(task => task.Id).SingleAsync();
         }
@@ -633,7 +633,7 @@ public sealed class LocationAssetHandoverSigningTests(Compact24Fixture fixture) 
         {
             var db = scope.ServiceProvider.GetRequiredService<Compact24ArchiveContext>();
             taskId = await db.Set<OperationalTask>().AsNoTracking()
-                .Where(t => t.LocationId == locationId && t.Kind == OperationalTaskKind.LocationAssetHandover)
+                .Where(t => t.RequiredLocationId == locationId && t.Kind == OperationalTaskKind.LocationAssetHandover)
                 .Select(t => t.Id).SingleAsync();
         }
         using var ownerClient = await Login(host.CreateClient(), owner);
@@ -787,7 +787,7 @@ public sealed class LocationAssetHandoverSigningTests(Compact24Fixture fixture) 
         {
             var db = scope.ServiceProvider.GetRequiredService<Compact24ArchiveContext>();
             Assert.Equal(1, await db.Set<OperationalTask>().CountAsync(t =>
-                t.LocationId == locationId && t.Kind == OperationalTaskKind.LocationAssetHandover));
+                t.RequiredLocationId == locationId && t.Kind == OperationalTaskKind.LocationAssetHandover));
         }
 
         // A former Staff signer keeps read-only access to their own completed report.
@@ -897,7 +897,7 @@ public sealed class LocationAssetHandoverSigningTests(Compact24Fixture fixture) 
         {
             var db = scope.ServiceProvider.GetRequiredService<Compact24ArchiveContext>();
             taskId = await db.Set<OperationalTask>().AsNoTracking()
-                .Where(task => task.LocationId == locationId && task.Kind == OperationalTaskKind.LocationAssetHandover)
+                .Where(task => task.RequiredLocationId == locationId && task.Kind == OperationalTaskKind.LocationAssetHandover)
                 .Select(task => task.Id).SingleAsync();
         }
         using var ownerClient = await Login(host.CreateClient(), owner);
@@ -1049,7 +1049,7 @@ public sealed class LocationAssetHandoverSigningTests(Compact24Fixture fixture) 
             Assert.Equal(successor.Id, transferred.AssignedStaffUserId);
             Assert.Equal(successorAssignmentId, transferred.AssignmentId);
             Assert.Equal(1, await db.Set<OperationalTask>().CountAsync(item =>
-                item.LocationId == locationId && item.Kind == OperationalTaskKind.LocationAssetHandover));
+                item.RequiredLocationId == locationId && item.Kind == OperationalTaskKind.LocationAssetHandover));
         }
 
         // The Location keeps one task ID. The successor inherits checked-item provenance
@@ -1158,14 +1158,14 @@ public sealed class LocationAssetHandoverSigningTests(Compact24Fixture fixture) 
         {
             var db = scope.ServiceProvider.GetRequiredService<Compact24ArchiveContext>();
             Assert.Equal(1, await db.Set<OperationalTask>().CountAsync(item =>
-                item.LocationId == locationId && item.Kind == OperationalTaskKind.LocationAssetHandover));
+                item.RequiredLocationId == locationId && item.Kind == OperationalTaskKind.LocationAssetHandover));
             Assert.Equal(taskId, await db.Set<OperationalTask>().AsNoTracking()
-                .Where(item => item.LocationId == locationId && item.Kind == OperationalTaskKind.LocationAssetHandover)
+                .Where(item => item.RequiredLocationId == locationId && item.Kind == OperationalTaskKind.LocationAssetHandover)
                 .Select(item => item.Id).SingleAsync());
         }
     }
 
-    private static async Task<ApplicationUser> Seed(IServiceProvider provider, string role)
+    private static async Task<User> Seed(IServiceProvider provider, string role)
     {
         await using var scope = provider.CreateAsyncScope();
         var db = scope.ServiceProvider.GetRequiredService<Compact24ArchiveContext>();
@@ -1173,7 +1173,7 @@ public sealed class LocationAssetHandoverSigningTests(Compact24Fixture fixture) 
             EF.Property<string[]>(user, "roles").Contains(role)) is { } existingOwner)
             return existingOwner;
         var id = Guid.NewGuid();
-        var user = new ApplicationUser
+        var user = new User
         {
             Id = id,
             UserName = id.ToString(),
@@ -1185,7 +1185,7 @@ public sealed class LocationAssetHandoverSigningTests(Compact24Fixture fixture) 
             LockoutEnabled = true,
             IsActive = true
         };
-        user.PasswordHash = scope.ServiceProvider.GetRequiredService<IPasswordHasher<ApplicationUser>>()
+        user.PasswordHash = scope.ServiceProvider.GetRequiredService<IPasswordHasher<User>>()
             .HashPassword(user, Password);
         db.Users.Add(user);
         db.Entry(user).Property("roles").CurrentValue = new[] { role };
@@ -1193,7 +1193,7 @@ public sealed class LocationAssetHandoverSigningTests(Compact24Fixture fixture) 
         return user;
     }
 
-    private static async Task<HttpClient> Login(HttpClient client, ApplicationUser account)
+    private static async Task<HttpClient> Login(HttpClient client, User account)
     {
         var login = await client.PostAsJsonAsync("/api/v1/auth/login",
             new { email = account.Email, password = Password });

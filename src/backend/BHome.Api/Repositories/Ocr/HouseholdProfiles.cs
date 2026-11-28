@@ -104,7 +104,7 @@ internal sealed class HouseholdProfiles(Compact24DbContext db, CaptureScope scop
         await db.Database.ExecuteSqlInterpolatedAsync($"SELECT pg_advisory_xact_lock(hashtextextended({location.ToString()},0))", t);
         // Same room lock as contract creation serializes capacity and contract/household changes.
         await db.Database.ExecuteSqlInterpolatedAsync($"SELECT id FROM rooms WHERE id={before.RoomId} FOR UPDATE", t);
-        await db.Locked<ApplicationUser>(before.OwnerUserId).SingleAsync(t);
+        await db.Locked<User>(before.OwnerUserId).SingleAsync(t);
         var representative = await NativeHouseholdPersistence.ResidentAsync(db, id, t, locked: true) ?? throw ContractException.Missing();
         if (representative.RoomId != before.RoomId || representative.OwnerUserId != before.OwnerUserId || representative.VerificationStatus != IdentityVerificationStatus.Verified)
             throw ContractException.Conflict("household_representative_not_verified");
@@ -194,7 +194,7 @@ internal sealed class HouseholdProfiles(Compact24DbContext db, CaptureScope scop
                 });
             draft.DraftVersion++;
             draft.DraftMetadata = drafts.Protect(draft, state);
-            draft.SnapshotHash = MainDraftService.Snapshot(draft, state);
+            draft.SnapshotHashOrEmpty = MainDraftService.Snapshot(draft, state);
             await NativeHouseholdPersistence.SaveDraftAsync(db, draft, previousIds, t);
         }
         representative.HouseholdVersion++; representative.HouseholdRequestKey = key; representative.HouseholdRequestHash = hash;

@@ -139,10 +139,10 @@ internal static class NativeCaptureWrites
         {
             task.Id,
             task.Kind,
-            task.LocationId,
-            task.Title,
+            LocationId = task.RequiredLocationId,
+            Title = task.TaskTitle,
             task.Requirements,
-            task.Priority,
+            Priority = task.TaskPriority,
             task.DueAt,
             task.EvidenceRequired,
             task.AssignedStaffUserId,
@@ -166,7 +166,7 @@ internal static class NativeCaptureWrites
             task.Purpose,
             task.ReadingDate,
             task.BillingPeriod,
-            task.Status,
+            Status = task.MeterStatus,
             task.OcrProposedValue,
             task.OcrImageHash,
             task.OcrEngineVersion,
@@ -176,10 +176,10 @@ internal static class NativeCaptureWrites
         };
         var data = JsonSerializer.Serialize(new { schemaVersion = 1, recordType = "OperationalTask", state }, Json);
         var history = Envelope("OperationalTask", task.Id, state);
-        var status = ((int)task.Status).ToString(CultureInfo.InvariantCulture);
-        var priority = ((int)task.Priority).ToString(CultureInfo.InvariantCulture);
+        var status = ((int)task.MeterStatus).ToString(CultureInfo.InvariantCulture);
+        var priority = ((int)task.TaskPriority).ToString(CultureInfo.InvariantCulture);
         var taskType = task.Kind == BHome.Domain.StaffOperations.OperationalTaskKind.MeterReading ? "METER_READ" : "GENERAL";
-        var source = taskType != "METER_READ" || task.Status == MeterTaskStatus.Cancelled ? null : task.Purpose switch
+        var source = taskType != "METER_READ" || task.MeterStatus == MeterTaskStatus.Cancelled ? null : task.Purpose switch
         {
             ReadingPurpose.Initial when task.ContractId is not null => $"meter-contract-initial:{task.MeterId}:{task.ContractId}",
             ReadingPurpose.Initial => $"meter-initial:{task.MeterId}",
@@ -191,14 +191,14 @@ internal static class NativeCaptureWrites
             ? await ExecuteAsync(db, $"""
                 INSERT INTO operational_tasks(id,task_type,location_id,room_id,meter_id,contract_id,assigned_user_id,billing_period,
                     title,description,assigned_at,due_at,verified_by_user_id,verified_at,version,status,priority,source_key,task_data,history)
-                VALUES({task.Id},{taskType},{task.LocationId},{meter?.RoomId},{task.MeterId},{task.ContractId},{task.AssignedStaffUserId},{task.BillingPeriod},
-                    {task.Title},{task.Requirements},{task.AssignedAt},{task.DueAt},{task.VerifiedByUserId},{task.VerifiedAt},{task.Version},
+                VALUES({task.Id},{taskType},{task.RequiredLocationId},{meter?.RoomId},{task.MeterId},{task.ContractId},{task.AssignedStaffUserId},{task.BillingPeriod},
+                    {task.TaskTitle},{task.Requirements},{task.AssignedAt},{task.DueAt},{task.VerifiedByUserId},{task.VerifiedAt},{task.Version},
                     {status},{priority},{source},CAST({data} AS jsonb),jsonb_build_array(CAST({history} AS jsonb)))
                 """, t)
             : await ExecuteAsync(db, $"""
-                UPDATE operational_tasks SET location_id={task.LocationId},room_id={meter?.RoomId},meter_id={task.MeterId},
+                UPDATE operational_tasks SET location_id={task.RequiredLocationId},room_id={meter?.RoomId},meter_id={task.MeterId},
                     contract_id={task.ContractId},assigned_user_id={task.AssignedStaffUserId},billing_period={task.BillingPeriod},
-                    title={task.Title},description={task.Requirements},assigned_at={task.AssignedAt},due_at={task.DueAt},
+                    title={task.TaskTitle},description={task.Requirements},assigned_at={task.AssignedAt},due_at={task.DueAt},
                     verified_by_user_id={task.VerifiedByUserId},verified_at={task.VerifiedAt},priority={priority},
                     status={status},version={task.Version},source_key={source},task_data=CAST({data} AS jsonb),
                     history=history||jsonb_build_array(CAST({history} AS jsonb)) WHERE id={task.Id} AND task_type={taskType} AND version={originalVersion}

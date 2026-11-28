@@ -9,9 +9,11 @@ public sealed class PaymentAllocation : AuditableEntity
     internal static PaymentAllocation RestoreIdentity(Guid id, DateTimeOffset createdAt, DateTimeOffset updatedAt) =>
         new() { Id = id, CreatedAt = createdAt, UpdatedAt = updatedAt };
 
-    public Guid? TransferId { get; set; }
+    [NotMapped, JsonIgnore] public Guid? SourcePaymentId { get; set; }
+    public Guid? TransferId { get => SourcePaymentId; set => SourcePaymentId = value; }
     public Guid? SourceDepositContractId { get; set; }
-    public Guid? InvoiceId { get; set; }
+    [NotMapped, JsonIgnore] public Guid? TargetInvoiceId { get; set; }
+    public Guid? InvoiceId { get => TargetInvoiceId; set => TargetInvoiceId = value; }
     public Guid? TargetDepositContractId { get; set; }
     [NotMapped] public Guid? TargetInitialContractId { get; set; }
     [NotMapped] public Guid? TargetSettlementContractId { get; set; }

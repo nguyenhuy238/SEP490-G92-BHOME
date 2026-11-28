@@ -71,14 +71,14 @@ internal static class InvoiceCalculator
                 if (prior.Count > 0 || perPerson || policy.Category == ChargeCategory.Rent)
                 {
                     FixedChargeResult fixedResult;
-                    try { fixedResult = FixedChargeCalculation.Calculate(chargePeriod, policy, schedule, representative.Contract.SnapshotHash, DateTime.DaysInMonth(chargePeriod.Year, chargePeriod.Month), prior, people); }
+                    try { fixedResult = FixedChargeCalculation.Calculate(chargePeriod, policy, schedule, representative.Contract.SnapshotHashOrEmpty, DateTime.DaysInMonth(chargePeriod.Year, chargePeriod.Month), prior, people); }
                     catch (Exception error) when (error is OverflowException or ArgumentOutOfRangeException) { throw new InvoiceException(400, "invoice_amount_out_of_range"); }
                     missing.AddRange(fixedResult.MissingInputs);
                     amount = fixedResult.Amount ?? 0;
                     utility = new(amount, JsonSerializer.Serialize(new { kind = "FixedChargeCoverage/v1", source = fixedResult.Source }), fixedResult.MissingInputs);
                 }
             }
-            invoice.Lines.Add(new InvoiceLine
+            invoice.Lines.Add(new InvoiceItem
             {
                 InvoiceId = invoice.Id,
                 Category = policy.Category,

@@ -57,11 +57,11 @@ public sealed class EquipmentInspectionScheduler(ISetupWorkspaceStore store, IOp
                     var task = new OperationalTask(taskId)
                     {
                         Kind = OperationalTaskKind.AdHoc,
-                        LocationId = asset.LocationId,
+                        RequiredLocationId = asset.LocationId,
                         AssignedStaffUserId = responsible?.StaffUserId,
                         AssignmentId = responsible?.AssignmentId,
                         AssignedAt = clock.GetUtcNow(),
-                        Title = "Kiểm tra thiết bị · " + asset.Name,
+                        TaskTitle = "Kiểm tra thiết bị · " + asset.Name,
                         Requirements = policyData.Name,
                         EvidenceRequired = policyData.EvidenceRequired,
                         DueAt = new DateTimeOffset(date.AddDays(input.CompletionWindowDays).ToDateTime(TimeOnly.MinValue), TimeSpan.FromHours(7)).ToUniversalTime(),
@@ -69,7 +69,7 @@ public sealed class EquipmentInspectionScheduler(ISetupWorkspaceStore store, IOp
                         TargetRoomId = asset.RoomId,
                         TargetCommonArea = asset.CommonArea,
                         TargetLabel = asset.Name,
-                        Status = MeterTaskStatus.Assigned
+                        MeterStatus = MeterTaskStatus.Assigned
                     };
                     tasks.Add(task);
                     tasks.Add(new OperationalTaskHistory { TaskId = taskId, ActorId = schedule.RecordedBy!.Value, Action = "created", Note = "Equipment inspection scheduled", OccurredAt = clock.GetUtcNow(), TaskVersion = 1, ResponsibleStaffUserId = responsible?.StaffUserId });

@@ -41,7 +41,7 @@ public sealed class Compact24AssignmentTests(Compact24Fixture fixture) : IClassF
         public override DateTimeOffset GetUtcNow() => Now;
     }
     private const string Password = "Synthetic!Password-493";
-    private async Task<ApplicationUser> User(string role)
+    private async Task<User> User(string role)
     {
         await using var scope = fixture.Factory!.Services.CreateAsyncScope(); var db = scope.ServiceProvider.GetRequiredService<Compact24DbContext>();
         if (role == "Owner")
@@ -49,7 +49,7 @@ public sealed class Compact24AssignmentTests(Compact24Fixture fixture) : IClassF
             var owner = await db.Users.SingleOrDefaultAsync(u => EF.Property<string[]>(u, "roles").Contains("Owner"));
             if (owner is not null) return owner;
         }
-        var id = Guid.NewGuid(); var user = new ApplicationUser
+        var id = Guid.NewGuid(); var user = new User
         {
             Id = id,
             UserName = id.ToString(),
@@ -60,7 +60,7 @@ public sealed class Compact24AssignmentTests(Compact24Fixture fixture) : IClassF
             ConcurrencyStamp = Guid.NewGuid().ToString(),
             LockoutEnabled = true
         };
-        user.PasswordHash = scope.ServiceProvider.GetRequiredService<IPasswordHasher<ApplicationUser>>().HashPassword(user, Password);
+        user.PasswordHash = scope.ServiceProvider.GetRequiredService<IPasswordHasher<User>>().HashPassword(user, Password);
         db.Users.Add(user); db.Entry(user).Property("roles").CurrentValue = new[] { role }; await db.SaveChangesAsync(); return user;
     }
     private async Task<Guid> Location()
@@ -79,7 +79,7 @@ public sealed class Compact24AssignmentTests(Compact24Fixture fixture) : IClassF
     {
         var owner = await User("Owner"); var staff = await User("Staff"); var location = await Location();
         using var client = fixture.Factory!.CreateClient();
-        async Task Login(ApplicationUser user)
+        async Task Login(User user)
         {
             client.DefaultRequestHeaders.Authorization = null;
             var response = await client.PostAsJsonAsync("/api/v1/auth/login", new { email = user.Email, password = Password });
@@ -271,9 +271,9 @@ public sealed class Compact24AssignmentTests(Compact24Fixture fixture) : IClassF
         var inspection = new ContractMoveOut { ContractId = contract.Id, Status = MoveOutStatus.Approved, ProposedDate = today.AddDays(5), InspectionStaffId = first.Id, RequestedByUserId = tenant.Id };
         var incident = new IncidentReport { LocationId = location, RoomId = room.Id, ReporterId = first.Id, ReporterRole = "Staff", Description = "Synthetic repair" };
         var order = new MaintenanceWorkOrder { LocationId = location, RoomId = room.Id, IncidentId = incident.Id, AssignedStaffId = first.Id, ExpectedOutcome = "Synthetic repair", TargetCompletionAt = clock.Now.AddDays(4) };
-        var task = new OperationalTask { LocationId = location, Kind = OperationalTaskKind.AdHoc, AssignedStaffUserId = first.Id, AssignmentId = initial.Assignment!.Id, Title = "Synthetic task", Status = MeterTaskStatus.InProgress };
-        var reading = new OperationalTask { LocationId = location, MeterId = meter.Id, AssignedStaffUserId = first.Id, AssignmentId = initial.Assignment.Id, Purpose = ReadingPurpose.Initial, ReadingDate = today };
-        var done = new OperationalTask { LocationId = location, Kind = OperationalTaskKind.AdHoc, AssignedStaffUserId = first.Id, AssignmentId = initial.Assignment.Id, Title = "Synthetic completed", Status = MeterTaskStatus.Completed };
+        var task = new OperationalTask { RequiredLocationId = location, Kind = OperationalTaskKind.AdHoc, AssignedStaffUserId = first.Id, AssignmentId = initial.Assignment!.Id, TaskTitle = "Synthetic task", MeterStatus = MeterTaskStatus.InProgress };
+        var reading = new OperationalTask { RequiredLocationId = location, MeterId = meter.Id, AssignedStaffUserId = first.Id, AssignmentId = initial.Assignment.Id, Purpose = ReadingPurpose.Initial, ReadingDate = today };
+        var done = new OperationalTask { RequiredLocationId = location, Kind = OperationalTaskKind.AdHoc, AssignedStaffUserId = first.Id, AssignmentId = initial.Assignment.Id, TaskTitle = "Synthetic completed", MeterStatus = MeterTaskStatus.Completed };
         var archive = scope.ServiceProvider.GetRequiredService<Compact24ArchiveContext>();
         archive.AddRange(room, meter, resident, contract, inspection, incident, order, task, reading, done);
         await archive.SaveChangesAsync();
@@ -310,7 +310,7 @@ public sealed class Compact24AssignmentTests(Compact24Fixture fixture) : IClassF
             Assert.Equal(3, current.Version);
             Assert.Equal(2, await archive.Set<OperationalTaskHistory>().CountAsync(h => h.TaskId == id && h.Action == "responsibility_changed"));
         }
-        Assert.Equal(MeterTaskStatus.InProgress, (await archive.Set<OperationalTask>().AsNoTracking().SingleAsync(t => t.Id == task.Id)).Status);
+        Assert.Equal(MeterTaskStatus.InProgress, (await archive.Set<OperationalTask>().AsNoTracking().SingleAsync(t => t.Id == task.Id)).MeterStatus);
         Assert.Equal(next.Id, (await archive.Set<MaintenanceWorkOrder>().AsNoTracking().SingleAsync(t => t.Id == order.Id)).AssignedStaffId);
         Assert.Equal(next.Id, (await archive.Set<ContractMoveOut>().AsNoTracking().SingleAsync(t => t.ContractId == contract.Id)).InspectionStaffId);
         Assert.Equal(first.Id, (await archive.Set<OperationalTask>().AsNoTracking().SingleAsync(t => t.Id == done.Id)).AssignedStaffUserId);
@@ -475,13 +475,13 @@ public sealed class Compact24AssignmentTests(Compact24Fixture fixture) : IClassF
         Assert.Equal(1, await archive.Set<OperationalTaskHistory>().CountAsync(h =>
             h.TaskId == taskId && h.Action == "responsibility_changed"));
         Assert.Equal(MeterTaskStatus.Assigned, (await archive.Set<OperationalTask>().AsNoTracking()
-            .SingleAsync(t => t.Id == initialHandoverId)).Status);
+            .SingleAsync(t => t.Id == initialHandoverId)).MeterStatus);
         // Restoring the SAME still-current assignment after a short employment gap must
         // not strand a deterministic, immutable handover task in Cancelled state.
         await db.Database.ExecuteSqlInterpolatedAsync($"UPDATE staff_employments SET status='Active' WHERE id={firstPeriod}");
         Assert.True(await access.IsAssignedAsync(staff.Id, location, default));
         Assert.Equal(MeterTaskStatus.Assigned, (await archive.Set<OperationalTask>().AsNoTracking()
-            .SingleAsync(t => t.Id == initialHandoverId)).Status);
+            .SingleAsync(t => t.Id == initialHandoverId)).MeterStatus);
         await db.Database.ExecuteSqlInterpolatedAsync($"UPDATE staff_employments SET status='Ended' WHERE id={firstPeriod}");
 
         var version = await db.Set<BHome.Domain.Locations.Location>().Where(x => x.Id == location).Select(x => x.Version).SingleAsync();

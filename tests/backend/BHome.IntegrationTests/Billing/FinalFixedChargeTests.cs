@@ -144,9 +144,9 @@ public sealed partial class InvoiceApiTests
         foreach (var policy in policies.Where(p => p.Method != BHome.Domain.PropertyManagement.ChargingMethod.Metered))
         {
             var people = PersonMonthOccupancy.ForRoomCapacity(room.Capacity, occupiedDays);
-            var result = FixedChargeCalculation.Calculate(w.Period, policy, schedule, contract.SnapshotHash, occupiedDays, [], people);
+            var result = FixedChargeCalculation.Calculate(w.Period, policy, schedule, contract.SnapshotHashOrEmpty, occupiedDays, [], people);
             Assert.Empty(result.MissingInputs);
-            invoice.Lines.Add(new InvoiceLine
+            invoice.Lines.Add(new InvoiceItem
             {
                 InvoiceId = invoice.Id,
                 Category = policy.Category,

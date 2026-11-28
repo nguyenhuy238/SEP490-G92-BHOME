@@ -24,7 +24,7 @@ internal static class NativeCaptureReads
         // Keep physical columns authoritative and apply the old projection's defaults.
         var s = row.TaskData.ValueKind == JsonValueKind.Object && row.TaskData.TryGetProperty("state", out var state) &&
             state.ValueKind == JsonValueKind.Object ? state.Deserialize<TaskState>(Json)! : JsonSerializer.Deserialize<TaskState>("{}", Json)!;
-        if (row.StoredLocationId is null)
+        if (row.LocationId is null)
             throw new InvalidOperationException("Staff and meter tasks require a location.");
         row.Kind = s.Kind is OperationalTaskKind.MoveInInventory or OperationalTaskKind.LocationAssetHandover
             ? s.Kind : row.TaskType == "GENERAL" ? OperationalTaskKind.AdHoc : OperationalTaskKind.MeterReading;

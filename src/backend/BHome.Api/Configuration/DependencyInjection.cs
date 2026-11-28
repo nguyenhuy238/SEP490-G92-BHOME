@@ -42,14 +42,14 @@ public static class DependencyInjection
         services.AddDbContext<Compact24DbContext>((provider, options) =>
             options.UseNpgsql(provider.GetRequiredService<IOptions<DatabaseOptions>>().Value.Database));
         services.AddScoped<BHomePersistenceContext>(p => p.GetRequiredService<Compact24DbContext>());
-        services.AddIdentityCore<ApplicationUser>(options =>
+        services.AddIdentityCore<User>(options =>
         {
             options.Password.RequiredLength = 12;
             options.User.RequireUniqueEmail = true;
             options.Lockout.MaxFailedAccessAttempts = 5;
             options.Lockout.DefaultLockoutTimeSpan = TimeSpan.FromMinutes(15);
         }).AddRoles<IdentityRole<Guid>>().AddUserStore<CompactUserStore>().AddRoleStore<CompactRoleStore>().AddSignInManager().AddDefaultTokenProviders();
-        services.AddScoped<IUserClaimsPrincipalFactory<ApplicationUser>, CompactClaimsPrincipalFactory>();
+        services.AddScoped<IUserClaimsPrincipalFactory<User>, CompactClaimsPrincipalFactory>();
         services.AddSingleton<TimeProvider>(p => BHome.Infrastructure.Development.DemoClockGuard.Enabled(
             p.GetRequiredService<IConfiguration>(), p.GetService<IHostEnvironment>()?.EnvironmentName)
             ? new BHome.Application.Common.DemoBusinessClock(TimeProvider.System) : TimeProvider.System);

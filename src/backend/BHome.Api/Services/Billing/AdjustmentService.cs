@@ -33,7 +33,7 @@ public sealed partial class AdjustmentService(IAdjustmentRepository repository, 
             throw new AdjustmentException(403, "adjustment_role_forbidden");
         return invoice;
     }
-    private async Task<InvoiceAdjustmentRequest> Request(Guid id, CancellationToken t) =>
+    private async Task<InvoiceAdjustment> Request(Guid id, CancellationToken t) =>
         await repository.RequestAsync(id, Scope, t) ?? throw new AdjustmentException(404, "adjustment_not_found");
     private static string Fingerprint(object value) => CommandFingerprint.ForInput(value);
     private async Task<Guid?> Replay(Guid key, string operation, object input, CancellationToken t)
@@ -69,7 +69,7 @@ public sealed partial class AdjustmentService(IAdjustmentRepository repository, 
             var evidence = await repository.EvidenceAsync(x.EvidenceIds, t);
             if (evidence.Length != x.EvidenceIds.Length || evidence.Any(e => e.InvoiceId != invoiceId || e.UploaderId != Actor || e.RequestId != null || !e.Uploaded || e.CleanupAfter <= Now))
                 throw new AdjustmentException(400, "adjustment_evidence_invalid");
-            var request = new InvoiceAdjustmentRequest
+            var request = new InvoiceAdjustment
             {
                 InvoiceId = invoiceId,
                 RequesterId = Actor,
@@ -83,7 +83,7 @@ public sealed partial class AdjustmentService(IAdjustmentRepository repository, 
                 InvoiceVersion = invoice.Version,
                 FinancialVersion = financial.FinancialVersion,
                 SubmittedAt = Now,
-                Evidence = evidence.ToList()
+                EvidenceItems = evidence.ToList()
             };
             foreach (var file in evidence) file.RequestId = request.Id;
             repository.Add(request); Remember(key, "submit", command, request.Id);
@@ -116,10 +116,10 @@ public sealed partial class AdjustmentService(IAdjustmentRepository repository, 
         foreach (var request in result.Items) views.Add(View(request, request.Invoice));
         return new(views, q.Page, q.PageSize, result.TotalCount);
     }
-    private static AdjustmentView View(InvoiceAdjustmentRequest r, Invoice i, InvoiceFinancialView? financial = null) => new(r.Id, r.InvoiceId, i.LocationName, i.RoomNumber, i.BillingPeriod,
+    private static AdjustmentView View(InvoiceAdjustment r, Invoice i, InvoiceFinancialView? financial = null) => new(r.Id, r.InvoiceId, i.LocationName, i.RoomNumber, i.BillingPeriod,
         r.RequesterId, r.InvoiceLineId, r.ChargeCode, r.CurrentAmount, r.ProposedAmount, r.Reason, r.InvoiceSnapshot,
         r.InvoiceStatus.ToString(), r.InvoiceVersion, r.FinancialVersion, r.Decision?.Outcome ?? "Pending", r.Decision is null ? 1 : 2, r.SubmittedAt,
-        r.Evidence.Select(e => new AdjustmentEvidenceView(e.Id, e.ContentType, e.Length)).ToArray(), InvoiceService.View(i),
+        r.EvidenceItems.Select(e => new AdjustmentEvidenceView(e.Id, e.ContentType, e.Length)).ToArray(), InvoiceService.View(i),
         r.Decision is { } d ? new(d.Outcome, d.InvoiceStatus.ToString(), d.ChargeCode, d.BeforeAmount, d.CorrectedAmount, d.Delta,
             d.EffectiveBefore, d.EffectiveAfter, d.PaidAtDecision, d.Reason, d.OwnerId, d.DecidedAt) : null, financial?.FinancialVersion ?? 0, financial);
     public async Task<AdjustmentEvidenceView> UploadAsync(Guid invoiceId, Stream input, CancellationToken t)
@@ -139,7 +139,7 @@ public sealed partial class AdjustmentService(IAdjustmentRepository repository, 
     public async Task<string> CopyEvidenceAsync(Guid id, Guid evidenceId, Stream target, CancellationToken t)
     {
         var request = await Request(id, t); _ = await Invoice(request.InvoiceId, t);
-        var file = request.Evidence.SingleOrDefault(e => e.Id == evidenceId && e.Uploaded)
+        var file = request.EvidenceItems.SingleOrDefault(e => e.Id == evidenceId && e.Uploaded)
             ?? throw new AdjustmentException(404, "adjustment_evidence_not_found");
         await files.CopyAsync(file.ObjectKey, target, t); return file.ContentType;
     }

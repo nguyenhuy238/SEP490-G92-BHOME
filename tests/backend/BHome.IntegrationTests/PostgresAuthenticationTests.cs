@@ -60,7 +60,7 @@ public sealed class PostgresAuthenticationTests(AuthenticationDatabaseFixture fi
         var user = await CreateUserAsync(scenario == "no-role" ? null : Roles.Staff);
         await using (var scope = fixture.Factory.Services.CreateAsyncScope())
         {
-            var users = scope.ServiceProvider.GetRequiredService<UserManager<ApplicationUser>>();
+            var users = scope.ServiceProvider.GetRequiredService<UserManager<User>>();
             var stored = await users.FindByIdAsync(user.Id.ToString());
             Assert.NotNull(stored);
             if (scenario == "locked")
@@ -109,7 +109,7 @@ public sealed class PostgresAuthenticationTests(AuthenticationDatabaseFixture fi
         var correctPassword = await client.PostAsJsonAsync("/api/v1/auth/login", new { email = user.Email, password = TestPassword });
         Assert.Equal(HttpStatusCode.Unauthorized, correctPassword.StatusCode);
         await using var scope = fixture.Factory.Services.CreateAsyncScope();
-        var users = scope.ServiceProvider.GetRequiredService<UserManager<ApplicationUser>>();
+        var users = scope.ServiceProvider.GetRequiredService<UserManager<User>>();
         var stored = await users.FindByIdAsync(user.Id.ToString());
         Assert.NotNull(stored);
         Assert.True(await users.IsLockedOutAsync(stored));
@@ -126,7 +126,7 @@ public sealed class PostgresAuthenticationTests(AuthenticationDatabaseFixture fi
         Assert.Equal(user.Id, (await TestAuthResponse.ReadAsync(response.Content)).UserId);
 
         await using var scope = fixture.Factory.Services.CreateAsyncScope();
-        var users = scope.ServiceProvider.GetRequiredService<UserManager<ApplicationUser>>();
+        var users = scope.ServiceProvider.GetRequiredService<UserManager<User>>();
         var misleadingName = $"{Guid.NewGuid():N}@example.invalid";
         var stored = (await users.FindByIdAsync(user.Id.ToString()))!;
         Assert.True((await users.SetUserNameAsync(stored, misleadingName)).Succeeded);
@@ -153,12 +153,12 @@ public sealed class PostgresAuthenticationTests(AuthenticationDatabaseFixture fi
         Assert.False(await db.AuthenticationSessions.AnyAsync(x => x.UserId == first.Id || x.UserId == second.Id));
     }
 
-    private async Task<ApplicationUser> CreateUserAsync(string? role)
+    private async Task<User> CreateUserAsync(string? role)
     {
         await using var scope = fixture.Factory.Services.CreateAsyncScope();
-        var users = scope.ServiceProvider.GetRequiredService<UserManager<ApplicationUser>>();
+        var users = scope.ServiceProvider.GetRequiredService<UserManager<User>>();
         var id = Guid.NewGuid();
-        var user = new ApplicationUser { Id = id, UserName = id.ToString(), Email = $"{id:N}@example.invalid", LockoutEnabled = true };
+        var user = new User { Id = id, UserName = id.ToString(), Email = $"{id:N}@example.invalid", LockoutEnabled = true };
         var created = await users.CreateAsync(user, TestPassword);
         Assert.True(created.Succeeded, string.Join(", ", created.Errors.Select(error => error.Code)));
         if (role is not null) Assert.True((await users.AddToRoleAsync(user, role)).Succeeded);

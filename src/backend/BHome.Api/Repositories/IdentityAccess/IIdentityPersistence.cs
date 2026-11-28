@@ -9,7 +9,7 @@ internal interface IIdentityPersistence
 {
     Task<IDbContextTransaction> BeginTransactionAsync(CancellationToken token);
     Task<int> SaveChangesAsync(CancellationToken token);
-    Task<ApplicationUser?> LockUserAsync(Guid userId, CancellationToken token);
+    Task<User?> LockUserAsync(Guid userId, CancellationToken token);
     Task<string[]> RolesAsync(Guid userId, CancellationToken token);
     void Audit(SecurityAuditRecord record);
     Task RevokeAllAsync(Guid userId, string reason, DateTimeOffset now, CancellationToken token);

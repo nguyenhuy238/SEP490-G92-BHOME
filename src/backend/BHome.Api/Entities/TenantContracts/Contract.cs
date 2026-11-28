@@ -20,10 +20,12 @@ public sealed class Contract : AuditableEntity
     public Guid? TenantUserId { get; set; }
     // Draft-only metadata is encrypted by the existing identity protection service.
     public string DraftMetadata { get; set; } = "{}";
-    public int DraftVersion { get; set; } = 1;
+    [NotMapped, JsonIgnore] public int Version { get; set; } = 1;
+    public int DraftVersion { get => Version; set => Version = value; }
     public Guid RepresentativeResidentId { get; set; }
     public Guid? PreviousContractId { get; set; }
-    public Guid? HoldingContractId { get; set; }
+    [NotMapped, JsonIgnore] public Guid? SourceHoldingContractId { get; set; }
+    public Guid? HoldingContractId { get => SourceHoldingContractId; set => SourceHoldingContractId = value; }
     public decimal AppliedHoldingDeposit { get; set; }
     public string? HoldingAllocationReference { get; set; }
     public DateTimeOffset? HoldingExpiryAt { get; set; }
@@ -38,21 +40,23 @@ public sealed class Contract : AuditableEntity
     public Guid? LifecycleActorId { get; set; }
     public DateTimeOffset? LifecycleAt { get; set; }
     public string? LifecycleReason { get; set; }
-    public ContractKind Kind { get; set; }
+    [NotMapped, JsonIgnore] public ContractKind ContractType { get; set; }
+    public ContractKind Kind { get => ContractType; set => ContractType = value; }
     public ContractStatus Status { get; set; }
     public DateOnly StartDate { get; set; }
     public DateOnly EndDate { get; set; }
-    [NotMapped, JsonIgnore] internal decimal? StoredMonthlyRent { get; set; }
-    public decimal MonthlyRent { get => StoredMonthlyRent ?? 0; set => StoredMonthlyRent = value; }
-    public decimal RequiredDeposit { get; set; }
+    [NotMapped, JsonConverter(typeof(LegacyDecimalJsonConverter))] public decimal? MonthlyRent { get; set; }
+    [JsonIgnore] public decimal RentAmount { get => MonthlyRent ?? 0; set => MonthlyRent = value; }
+    [NotMapped, JsonIgnore] public decimal DepositRequired { get; set; }
+    public decimal RequiredDeposit { get => DepositRequired; set => DepositRequired = value; }
     public string Terms { get; set; } = "";
-    [NotMapped, JsonIgnore] internal string? StoredSnapshotHash { get; set; }
-    public string SnapshotHash { get => StoredSnapshotHash ?? ""; set => StoredSnapshotHash = value; }
+    [NotMapped, JsonConverter(typeof(LegacyStringJsonConverter))] public string? SnapshotHash { get; set; }
+    [JsonIgnore] public string SnapshotHashOrEmpty { get => SnapshotHash ?? ""; set => SnapshotHash = value; }
     public bool IsDevelopmentDemo { get; set; }
     // Payment data environment is independent of genuine versus simulated signatures.
     [System.ComponentModel.DataAnnotations.Schema.NotMapped] public string? PaymentMode { get; set; }
     public List<ContractResident> Residents { get; set; } = [];
-    public List<ContractSignature> Signatures { get; set; } = [];
+    public List<ContractSigning> Signatures { get; set; } = [];
     public Guid? ActivatedByUserId { get; set; }
     public DateTimeOffset? ActivatedAt { get; set; }
     public DateOnly? ActualEndDate { get; set; }

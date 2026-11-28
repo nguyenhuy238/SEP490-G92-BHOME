@@ -8,14 +8,17 @@ namespace BHome.Domain.TenantContracts;
 
 public sealed class Resident : AuditableEntity
 {
-    public Guid? RoomId { get; set; }
+    [NotMapped, JsonIgnore] public Guid? CurrentRoomId { get; set; }
+    public Guid? RoomId { get => CurrentRoomId; set => CurrentRoomId = value; }
     public Room Room { get; set; } = null!;
     // Non-sensitive workspace label. Actual name/DOB/address live only in the encrypted envelope.
     public string DisplayLabel { get; set; } = "";
     public ResidentType ResidentType { get; set; }
     public IdentityVerificationStatus VerificationStatus { get; set; }
-    public Guid OwnerUserId { get; set; }
-    public Guid? TenantUserId { get; set; }
+    [NotMapped, JsonIgnore] public Guid IdentityOwnerScopeId { get; set; }
+    public Guid OwnerUserId { get => IdentityOwnerScopeId; set => IdentityOwnerScopeId = value; }
+    [NotMapped, JsonIgnore] public Guid? UserId { get; set; }
+    public Guid? TenantUserId { get => UserId; set => UserId = value; }
     [System.ComponentModel.DataAnnotations.Schema.NotMapped] public Guid? HouseholdRepresentativeId { get; set; }
     [System.ComponentModel.DataAnnotations.Schema.NotMapped] public string? HouseholdClientKey { get; set; }
     [System.ComponentModel.DataAnnotations.Schema.NotMapped] public string HouseholdProfile { get; set; } = "{}";
@@ -30,7 +33,9 @@ public sealed class Resident : AuditableEntity
     public string IdentityData { get; set; } = "{}";
     public string? IdentityHmac { get; set; }
     public string? HmacKeyVersion { get; set; }
-    public Guid? ConfirmedByUserId { get; set; }
-    public DateTimeOffset? ConfirmedAt { get; set; }
+    [NotMapped, JsonIgnore] public Guid? VerifiedByUserId { get; set; }
+    public Guid? ConfirmedByUserId { get => VerifiedByUserId; set => VerifiedByUserId = value; }
+    [NotMapped, JsonIgnore] public DateTimeOffset? VerifiedAt { get; set; }
+    public DateTimeOffset? ConfirmedAt { get => VerifiedAt; set => VerifiedAt = value; }
     [NotMapped, JsonIgnore] public JsonElement History { get; set; } = JsonSerializer.SerializeToElement(Array.Empty<object>());
 }

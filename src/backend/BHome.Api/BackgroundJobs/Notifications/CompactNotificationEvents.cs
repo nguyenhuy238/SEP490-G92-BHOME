@@ -174,7 +174,7 @@ internal sealed partial class CompactNotificationEvents(Compact24DbContext db, C
                 if (holding is not null && holding.Kind is not (ContractKind.Holding or ContractKind.Main)) holding = null;
                 if (holding is not null && e.Event is "HoldingSigningSubmitted" or "MainSigningSubmitted")
                     count += await sql.Emit(holding.OwnerSignerId, "Owner", holding.Room.LocationId,
-                        $"{(holding.Kind == ContractKind.Holding ? "holding" : "main")}-owner-signing:{holding.Id}:{holding.SnapshotHash}",
+                        $"{(holding.Kind == ContractKind.Holding ? "holding" : "main")}-owner-signing:{holding.Id}:{holding.SnapshotHashOrEmpty}",
                         holding.Kind == ContractKind.Holding ? "HOLDING_OWNER_SIGNING_REQUIRED" : "MAIN_OWNER_SIGNING_REQUIRED", "Contract",
                         holding.Kind == ContractKind.Holding ? "Hợp đồng giữ chỗ cần ký" : "Hợp đồng thuê cần ký",
                         $"Bạn có hợp đồng {(holding.Kind == ContractKind.Holding ? "giữ chỗ" : "thuê")} phòng {holding.Room.RoomNumber} tại {holding.Room.Location.Name} đang chờ ký.",
@@ -269,7 +269,7 @@ internal sealed partial class CompactNotificationEvents(Compact24DbContext db, C
             if (n is null) continue;
             var report = await db.Set<IncidentReport>().AsNoTracking().SingleOrDefaultAsync(r => r.Id == n.IncidentId, t);
             var work = n.WorkOrderId is { } workId ? await db.Set<BHome.Domain.Billing.OperationalTask>().AsNoTracking().SingleOrDefaultAsync(w => w.Id == workId && w.TaskType == "WORK_ORDER", t) : null;
-            var location = report?.LocationId ?? work?.StoredLocationId ?? throw new InvalidOperationException("missing_maintenance_notification_scope");
+            var location = report?.LocationId ?? work?.LocationId ?? throw new InvalidOperationException("missing_maintenance_notification_scope");
             foreach (var r in await Roles([n.RecipientId], t))
             {
                 if (r.Role == "Staff" && !(await Staff(location, t)).Contains(r.Id))
@@ -327,8 +327,8 @@ internal sealed partial class CompactNotificationEvents(Compact24DbContext db, C
     {
         var publicationKeys = NotificationPublications.Keys(db);
         var rows = await BHome.Infrastructure.PaymentsDebt.PaymentLedgerQueries.ReceiptEntities(db)
-            .Where(x => !db.Set<BHome.Domain.PaymentsDebt.PaymentAllocation>().Any(a => a.TransferId == x.Id &&
-                (a.InvoiceId != null || a.TargetDepositContractId != null || a.TargetSettlementContractId != null || a.TargetInitialContractId != null)) &&
+            .Where(x => !db.Set<BHome.Domain.PaymentsDebt.PaymentAllocation>().Any(a => a.SourcePaymentId == x.Id &&
+                (a.TargetInvoiceId != null || a.TargetDepositContractId != null || a.TargetSettlementContractId != null || a.TargetInitialContractId != null)) &&
                 !publicationKeys.Contains("unmatched:" + x.Id.ToString()))
             .OrderBy(x => x.Id).Take(25).ToArrayAsync(t); var count = 0;
         foreach (var transfer in rows)
@@ -346,16 +346,16 @@ internal sealed partial class CompactNotificationEvents(Compact24DbContext db, C
         var assignments = CurrentAssignments();
         var eligible = StaffEmploymentEligibility.EligibleIds(db, Today);
         var periodic = db.Set<BHome.Domain.Billing.OperationalTask>().FromSqlRaw("SELECT * FROM operational_tasks WHERE task_type='METER_READ' AND task_data->'state'->>'purpose'='1'").Select(x => x.Id);
-        var tasks = await NativeOperationalTaskPersistence.Roots(db).Where(x => x.StoredStatus != "2" && x.StoredStatus != "3" &&
+        var tasks = await NativeOperationalTaskPersistence.Roots(db).Where(x => x.Status != "2" && x.Status != "3" &&
             (periodic.Contains(x.Id)
-                ? !assignments.Any(a => a.LocationId == x.StoredLocationId && eligible.Contains(a.StaffUserId))
-                : x.AssignedUserId == null || !assignments.Any(a => a.LocationId == x.StoredLocationId && a.StaffUserId == x.AssignedUserId)) &&
+                ? !assignments.Any(a => a.LocationId == x.LocationId && eligible.Contains(a.StaffUserId))
+                : x.AssignedUserId == null || !assignments.Any(a => a.LocationId == x.LocationId && a.StaffUserId == x.AssignedUserId)) &&
             !publicationKeys.Contains("task-unassigned:" + x.Id.ToString() + ":" + x.Version.ToString())).OrderBy(x => x.Id).Take(25).ToArrayAsync(t);
         foreach (var row in tasks)
         {
             var task = NativeCaptureReads.Task(row);
             var key = $"task-unassigned:{task.Id}:{task.Version}";
-            foreach (var owner in await Owners(t)) count += await sql.Emit(owner, "Owner", task.LocationId, key, "TASK_UNASSIGNED", "Task",
+            foreach (var owner in await Owners(t)) count += await sql.Emit(owner, "Owner", task.RequiredLocationId, key, "TASK_UNASSIGNED", "Task",
                 "Công việc chưa có Staff hợp lệ", "Owner cần kiểm tra phân công tại cơ sở. Công việc được giữ lại để xử lý.", task.Kind == BHome.Domain.StaffOperations.OperationalTaskKind.MeterReading ? "MeterTask" : "OperationalTask", task.Id, t);
             await Mark(key, t);
         }

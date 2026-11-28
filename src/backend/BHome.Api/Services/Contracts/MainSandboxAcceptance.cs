@@ -17,7 +17,7 @@ public sealed record MainSandboxAcceptance(string RecordType, Guid OwnerId, stri
         {
             var value = JsonSerializer.Deserialize<MainSandboxAcceptance>(contract.InternalAcceptance);
             return value?.RecordType == Kind && value.OwnerId == contract.OwnerSignerId &&
-                value.SnapshotHash == contract.SnapshotHash && !string.IsNullOrWhiteSpace(value.DocumentKey) &&
+                value.SnapshotHash == contract.SnapshotHashOrEmpty && !string.IsNullOrWhiteSpace(value.DocumentKey) &&
                 !string.IsNullOrWhiteSpace(value.DocumentHash) ? value : null;
         }
         catch (JsonException) { return null; }

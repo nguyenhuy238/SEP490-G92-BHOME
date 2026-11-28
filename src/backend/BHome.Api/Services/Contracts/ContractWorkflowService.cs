@@ -10,7 +10,7 @@ public sealed partial class ContractService
         ContractPaymentModes.ConfiguredAsync(paymentOptions, paymentAccounts, locationId, ownerId, token, paymentConnections);
     private IContractWorkflowRepository Workflow => workflowRepository ?? throw new ContractException(503, "contract_workflow_unavailable");
     private IContractDocumentRenderer Renderer => renderer ?? throw new ContractException(503, "contract_template_not_configured");
-    private bool CompleteSignature(ContractSignature signature, Contract contract) => contract.IsDevelopmentDemo
+    private bool CompleteSignature(ContractSigning signature, Contract contract) => contract.IsDevelopmentDemo
         ? DemoEnabled && signature.Status == SignatureStatus.Simulated : signature.Status == SignatureStatus.Signed;
     private void RequireSigningMode(Contract contract)
     {
@@ -62,7 +62,7 @@ public sealed partial class ContractService
                 return DocumentView(await Workflow.FileAsync(id, prior, t) ?? throw ContractException.Missing());
             if (c.Kind == ContractKind.Main && c.DraftMetadata != "{}")
             {
-                var reviewed = (await Workflow.FilesAsync(id, ContractFileKind.Preview, t)).SingleOrDefault(f => f.SnapshotHash == c.SnapshotHash && f.TemplateId == "main-tenancy-docx-v1")
+                var reviewed = (await Workflow.FilesAsync(id, ContractFileKind.Preview, t)).SingleOrDefault(f => f.SnapshotHash == c.SnapshotHashOrEmpty && f.TemplateId == "main-tenancy-docx-v1")
                     ?? throw ContractException.Conflict("signing_source_document_required");
                 await CopyVerifiedFile(reviewed, Stream.Null, t);
                 Remember(key, "preview", id, reviewed.Id); return DocumentView(reviewed);
@@ -71,7 +71,7 @@ public sealed partial class ContractService
                 await signingDocuments.ReadAsync(Document(c), t) is { } canonical)
             {
                 var hash = FileHash(canonical);
-                var sourceFile = (await Workflow.FilesAsync(id, ContractFileKind.Preview, t)).FirstOrDefault(f => f.SnapshotHash == c.SnapshotHash &&
+                var sourceFile = (await Workflow.FilesAsync(id, ContractFileKind.Preview, t)).FirstOrDefault(f => f.SnapshotHash == c.SnapshotHashOrEmpty &&
                     f.FileHash == hash);
                 if (sourceFile is not null)
                 {
@@ -84,7 +84,7 @@ public sealed partial class ContractService
                 {
                     ContractId = id,
                     Kind = ContractFileKind.Preview,
-                    SnapshotHash = c.SnapshotHash,
+                    SnapshotHash = c.SnapshotHashOrEmpty,
                     FileHash = hash,
                     ContentType = "application/pdf",
                     Length = canonical.Length,
@@ -100,7 +100,7 @@ public sealed partial class ContractService
             }
             var template = await Renderer.ConfigurationAsync(t);
             await Renderer.ValidateAsync(Document(c), t);
-            var existing = await Workflow.PreviewAsync(id, c.SnapshotHash, template.Id, template.Version, t);
+            var existing = await Workflow.PreviewAsync(id, c.SnapshotHashOrEmpty, template.Id, template.Version, t);
             if (existing is not null)
             {
                 Remember(key, "preview", id, existing.Id);
@@ -111,7 +111,7 @@ public sealed partial class ContractService
             {
                 ContractId = id,
                 Kind = ContractFileKind.Preview,
-                SnapshotHash = c.SnapshotHash,
+                SnapshotHash = c.SnapshotHashOrEmpty,
                 TemplateId = template.Id,
                 TemplateVersion = template.Version,
                 DevelopmentOnly = template.DevelopmentOnly,
@@ -132,7 +132,7 @@ public sealed partial class ContractService
         var c = await Load(id, [Roles.Owner, Roles.Staff, Roles.Tenant], t);
         RequirePreviewAccess(c);
         return (await Workflow.FilesAsync(id, ContractFileKind.Preview, t))
-            .Where(f => !StaffPreviewOnly(c) || f.SnapshotHash == c.SnapshotHash).Select(DocumentView).ToArray();
+            .Where(f => !StaffPreviewOnly(c) || f.SnapshotHash == c.SnapshotHashOrEmpty).Select(DocumentView).ToArray();
     }
 
     public async Task<string> CopyPreviewAsync(Guid id, Guid fileId, Stream output, CancellationToken t)
@@ -141,7 +141,7 @@ public sealed partial class ContractService
         RequirePreviewAccess(c);
         var file = await Workflow.FileAsync(id, fileId, t) ?? throw ContractException.Missing();
         if (file.Kind != ContractFileKind.Preview) throw ContractException.Missing();
-        if (StaffPreviewOnly(c) && file.SnapshotHash != c.SnapshotHash)
+        if (StaffPreviewOnly(c) && file.SnapshotHash != c.SnapshotHashOrEmpty)
             throw ContractException.Conflict("signed_terms_changed");
         await CopyVerifiedFile(file, output, t);
         return ContractDownloadName.For(c.Kind, c.Id);

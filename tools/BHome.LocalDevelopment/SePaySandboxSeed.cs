@@ -46,7 +46,7 @@ public static class SePaySandboxSeed
         await using var db = OfflineFixturePersistence.Open(sp, identity);
         if (!await db.IsSchemaReadyAsync(token)) throw new LocalTestAccountException("Prepare the reviewed Sandbox schema first; this seed never migrates or resets data.");
         var account = options.ReceivingAccounts.Single();
-        var users = sp.GetRequiredService<UserManager<ApplicationUser>>();
+        var users = sp.GetRequiredService<UserManager<User>>();
         await using var tx = await OfflineFixturePersistence.BeginAsync(db, identity, token);
         await db.Database.ExecuteSqlInterpolatedAsync($"SELECT pg_advisory_xact_lock(hashtextextended({"sepay-sandbox-fixture-v1"},0))", token);
         var existing = await db.Locations.AsNoTracking().SingleOrDefaultAsync(x => x.Id == account.LocationId, token);
@@ -57,7 +57,7 @@ public static class SePaySandboxSeed
                 throw new LocalTestAccountException("Initial SePay fixture requires an empty dedicated Sandbox database. Existing accounts and business data are preserved.");
             foreach (var (number, name, role) in Accounts)
             {
-                var user = new ApplicationUser { Id = Id(number), UserName = name + ".sepay.test", Email = name + ".sepay.test@example.invalid", EmailConfirmed = true, IsActive = true, LockoutEnabled = true };
+                var user = new User { Id = Id(number), UserName = name + ".sepay.test", Email = name + ".sepay.test@example.invalid", EmailConfirmed = true, IsActive = true, LockoutEnabled = true };
                 identity.PrepareUserRole(user, role);
                 if (!(await users.CreateAsync(user, password)).Succeeded)
                     throw new LocalTestAccountException("Synthetic account creation failed; check the local password policy. The transaction was not committed.");
@@ -76,7 +76,7 @@ public static class SePaySandboxSeed
                 Kind = ContractKind.Main,
                 StartDate = period.AddMonths(-1),
                 EndDate = period.AddYears(1),
-                MonthlyRent = 2500000,
+                RentAmount = 2500000,
                 RequiredDeposit = 0,
                 IsDevelopmentDemo = true,
                 Status = ContractStatus.Active,

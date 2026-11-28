@@ -126,13 +126,13 @@ public sealed partial class ContractService
         var contract = await Load(id, [Roles.Owner, Roles.Staff, Roles.Tenant], t);
         if (contract.TenantUserId is null)
             return [new(contract.Id, contract.PreviousContractId, contract.Kind.ToString(), contract.Status.ToString(),
-                contract.StartDate, contract.EndDate, contract.MonthlyRent, contract.Terms)];
+                contract.StartDate, contract.EndDate, contract.RentAmount, contract.Terms)];
         var all = await repository.VersionsAsync(contract.RoomId, contract.TenantUserId.Value, t);
         if (all.Count > 500) throw ContractException.Conflict("contract_version_review_required");
         var chain = new HashSet<Guid> { id }; bool changed;
         do { changed = false; foreach (var row in all) if (chain.Contains(row.Id) && row.PreviousContractId is { } parent) changed |= chain.Add(parent); else if (row.PreviousContractId is { } p && chain.Contains(p)) changed |= chain.Add(row.Id); } while (changed);
         return all.Where(c => chain.Contains(c.Id)).Select(c => new ContractVersionView(c.Id, c.PreviousContractId, c.Kind.ToString(), c.Status.ToString(), c.StartDate, c.EndDate,
-            user.IsInRole(Roles.Owner) || user.IsInRole(Roles.Tenant) && Actor == c.TenantUserId ? c.MonthlyRent : null,
+            user.IsInRole(Roles.Owner) || user.IsInRole(Roles.Tenant) && Actor == c.TenantUserId ? c.RentAmount : null,
             user.IsInRole(Roles.Owner) || user.IsInRole(Roles.Tenant) && Actor == c.TenantUserId ? c.Terms : "")).ToArray();
     }
 

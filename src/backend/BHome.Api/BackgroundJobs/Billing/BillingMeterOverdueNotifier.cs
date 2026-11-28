@@ -23,7 +23,7 @@ internal sealed class BillingMeterOverdueNotifier(BHomePersistenceContext db, Ti
                 AND task_data->'state'->>'purpose'='1' AND status NOT IN ('2','3')
             """).AsNoTracking();
         var tasks = await (from task in periodic
-                           join location in compact.Set<BHome.Domain.Locations.Location>().AsNoTracking() on task.StoredLocationId equals location.Id
+                           join location in compact.Set<BHome.Domain.Locations.Location>().AsNoTracking() on task.LocationId equals location.Id
                            join meter in compact.Set<BHome.Domain.Billing.Meter>().AsNoTracking() on task.MeterId equals meter.Id
                            join room in compact.Set<BHome.Domain.PropertyManagement.Room>().AsNoTracking() on meter.RoomId equals room.Id
                            where location.IsActive && task.BillingPeriod != null && task.DueAt < now
@@ -44,7 +44,7 @@ internal sealed class BillingMeterOverdueNotifier(BHomePersistenceContext db, Ti
             if (staff is { } staffId)
             {
                 var users = db.Users.AsNoTracking().Where(user => user.Id == staffId);
-                staffName = db.Model.FindEntityType(typeof(ApplicationUser))?.FindProperty("full_name") is not null
+                staffName = db.Model.FindEntityType(typeof(User))?.FindProperty("full_name") is not null
                     ? await users.Select(user => EF.Property<string>(user, "full_name") ?? user.UserName).SingleOrDefaultAsync(t) ?? "Nhân viên"
                     : await users.Select(user => user.UserName).SingleOrDefaultAsync(t) ?? "Nhân viên";
             }

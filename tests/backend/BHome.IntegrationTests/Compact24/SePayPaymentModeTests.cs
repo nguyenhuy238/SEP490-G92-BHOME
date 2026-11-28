@@ -46,7 +46,7 @@ public sealed partial class SePayIntegrationTests
             registry.ContextAsync("Invoice", scenario.Invoice, default))).Code);
         (await scenario.Send(100000)).EnsureSuccessStatusCode();
         Assert.Empty(await db.Set<PaymentAllocation>().Where(a => a.InvoiceId == scenario.Invoice).ToArrayAsync());
-        Assert.Empty(await db.Set<PaymentTransfer>().Where(p => p.TransferDescription.Contains(scenario.Code)).ToArrayAsync());
+        Assert.Empty(await db.Set<Payment>().Where(p => p.TransferDescription.Contains(scenario.Code)).ToArrayAsync());
     }
 
     [CompactPostgresFact]
@@ -241,7 +241,7 @@ public sealed partial class SePayIntegrationTests
             DueDate = original.DueDate.AddMonths(1),
             ScheduleSnapshot = "{}",
             Recipients = scenario.Tenants.Select(id => new InvoiceRecipient { TenantUserId = id }).ToList(),
-            Lines = [new InvoiceLine { Category = ChargeCategory.Rent, ChargeCode = "RENT", Name = "Synthetic Live", Rate = 100000, Quantity = 1, Amount = 100000, OccupiedDays = 30, PeriodDays = 30, RateDate = original.BillingPeriod.AddMonths(1) }]
+            Lines = [new InvoiceItem { Category = ChargeCategory.Rent, ChargeCode = "RENT", Name = "Synthetic Live", Rate = 100000, Quantity = 1, Amount = 100000, OccupiedDays = 30, PeriodDays = 30, RateDate = original.BillingPeriod.AddMonths(1) }]
         };
         db.Add(invoice); await db.SaveChangesAsync();
         invoice.Status = InvoiceStatus.Final; invoice.FinalizedByUserId = scenario.Owner; invoice.FinalizedAt = DateTimeOffset.UtcNow; await db.SaveChangesAsync();
@@ -277,6 +277,6 @@ public sealed partial class SePayIntegrationTests
         await using var scope = scenario.Host.Services.CreateAsyncScope();
         var db = scope.ServiceProvider.GetRequiredService<Compact24ArchiveContext>();
         Assert.Empty(await db.Set<PaymentAllocation>().Where(a => a.InvoiceId == scenario.Invoice).ToArrayAsync());
-        Assert.Empty(await db.Set<PaymentTransfer>().Where(p => p.TransferDescription.Contains("BHPRODL")).ToArrayAsync());
+        Assert.Empty(await db.Set<Payment>().Where(p => p.TransferDescription.Contains("BHPRODL")).ToArrayAsync());
     }
 }

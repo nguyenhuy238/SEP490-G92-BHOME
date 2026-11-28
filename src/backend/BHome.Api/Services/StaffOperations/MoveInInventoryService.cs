@@ -40,10 +40,10 @@ public sealed partial class OperationalTaskService
         var unresolved = snapshot.Items.Any(i => (i.Condition is "Missing" or "Damaged") && i.IncidentId is null);
         var ids = snapshot.Items.Where(i => (i.Condition is "Missing" or "Damaged") && i.IncidentId.HasValue)
             .Select(i => i.IncidentId!.Value).ToArray();
-        var ready = task.Status == MeterTaskStatus.Completed && !unresolved &&
+        var ready = task.MeterStatus == MeterTaskStatus.Completed && !unresolved &&
             await repository.IncidentsResolvedAsync(ids, t);
-        return new(task.Id, task.ContractId!.Value, task.TargetRoomId!.Value, task.LocationId,
-            task.Status.ToString(), Outcome(snapshot.Items), task.Version, task.DueAt, task.CompletedAt,
+        return new(task.Id, task.ContractId!.Value, task.TargetRoomId!.Value, task.RequiredLocationId,
+            task.MeterStatus.ToString(), Outcome(snapshot.Items), task.Version, task.DueAt, task.CompletedAt,
             ready, snapshot.Items, snapshot.ReinspectionItemIds, snapshot.ReinspectionRequestedAt);
     }
 
@@ -71,7 +71,7 @@ public sealed partial class OperationalTaskService
         var initial = await repository.FindAsync(taskId, t) ?? throw OperationalTaskException.Missing();
         await AccessAsync(initial, t, true);
         if (initial.Kind != OperationalTaskKind.MoveInInventory) throw OperationalTaskException.Missing();
-        return await CommandAsync(initial.LocationId, key, "move-in-inventory-item:" + taskId + ":" + itemId,
+        return await CommandAsync(initial.RequiredLocationId, key, "move-in-inventory-item:" + taskId + ":" + itemId,
             new { taskId, itemId, input }, async () =>
             {
                 var task = await repository.FindAsync(taskId, t) ?? throw OperationalTaskException.Missing();
@@ -79,7 +79,7 @@ public sealed partial class OperationalTaskService
                 if (task.Kind != OperationalTaskKind.MoveInInventory) throw OperationalTaskException.Missing();
                 await EnsureMoveInMainWorkStartedAsync(task, t);
                 if (task.Version != input.Version) throw OperationalTaskException.Conflict("stale_version");
-                if (task.Status != MeterTaskStatus.InProgress)
+                if (task.MeterStatus != MeterTaskStatus.InProgress)
                     throw OperationalTaskException.Conflict("move_in_inventory_not_in_progress");
                 var snapshot = Inventory(task);
                 var index = Array.FindIndex(snapshot.Items, x => x.Id == itemId);
@@ -95,7 +95,7 @@ public sealed partial class OperationalTaskService
                 if (input.IncidentId is { } incidentId)
                 {
                     var incident = (await repository.IncidentTargetsAsync([incidentId], t)).SingleOrDefault();
-                    if (incident is null || incident.LocationId != task.LocationId ||
+                    if (incident is null || incident.LocationId != task.RequiredLocationId ||
                         incident.RoomId != task.TargetRoomId || incident.AssetId != previous.AssetId ||
                         (previous.IncidentId != incidentId && incident.ReporterId != Actor) || !incident.IsValidReport)
                         throw OperationalTaskException.Invalid("invalid_move_in_inventory_incident");
@@ -108,7 +108,7 @@ public sealed partial class OperationalTaskService
                 // The upload path already validated and saved every private object.
                 // Re-streaming large images during each checklist save is unnecessary.
                 repository.Track(task);
-                var responsible = await repository.ResponsibilityAsync(task.LocationId, Today, t);
+                var responsible = await repository.ResponsibilityAsync(task.RequiredLocationId, Today, t);
                 await SynchronizeResponsibilityAsync(task, responsible, t);
                 snapshot.Items[index] = previous with
                 {
@@ -134,7 +134,7 @@ public sealed partial class OperationalTaskService
         var initial = await repository.FindAsync(taskId, t) ?? throw OperationalTaskException.Missing();
         await AccessAsync(initial, t, true);
         if (initial.Kind != OperationalTaskKind.MoveInInventory) throw OperationalTaskException.Missing();
-        return await CommandAsync(initial.LocationId, key, "move-in-inventory-complete:" + taskId,
+        return await CommandAsync(initial.RequiredLocationId, key, "move-in-inventory-complete:" + taskId,
             new { taskId, input }, async () =>
             {
                 var task = await repository.FindAsync(taskId, t) ?? throw OperationalTaskException.Missing();
@@ -142,7 +142,7 @@ public sealed partial class OperationalTaskService
                 if (task.Kind != OperationalTaskKind.MoveInInventory) throw OperationalTaskException.Missing();
                 await EnsureMoveInMainWorkStartedAsync(task, t);
                 if (task.Version != input.Version) throw OperationalTaskException.Conflict("stale_version");
-                if (task.Status != MeterTaskStatus.InProgress)
+                if (task.MeterStatus != MeterTaskStatus.InProgress)
                     throw OperationalTaskException.Conflict("move_in_inventory_not_in_progress");
                 var snapshot = Inventory(task);
                 if (snapshot.Items.Length == 0 && !input.ConfirmNoAssets)
@@ -175,15 +175,15 @@ public sealed partial class OperationalTaskService
                 foreach (var item in snapshot.Items.Where(i => i.IncidentId.HasValue))
                 {
                     if (!incidents.TryGetValue(item.IncidentId!.Value, out var incident) ||
-                        incident.LocationId != task.LocationId ||
+                        incident.LocationId != task.RequiredLocationId ||
                         incident.RoomId != task.TargetRoomId || incident.AssetId != item.AssetId ||
                         !incident.IsValidReport)
                         throw OperationalTaskException.Conflict("move_in_inventory_incident_invalid");
                 }
                 repository.Track(task);
-                var responsible = await repository.ResponsibilityAsync(task.LocationId, Today, t);
+                var responsible = await repository.ResponsibilityAsync(task.RequiredLocationId, Today, t);
                 await SynchronizeResponsibilityAsync(task, responsible, t);
-                task.Status = MeterTaskStatus.Completed;
+                task.MeterStatus = MeterTaskStatus.Completed;
                 task.CompletedAt = Now;
                 task.Result = $"Đã kiểm kê {snapshot.Items.Length} mục: {snapshot.Items.Count(x => x.Condition == "Good")} đạt, " +
                     $"{snapshot.Items.Count(x => x.Condition == "Missing")} thiếu, {snapshot.Items.Count(x => x.Condition == "Damaged")} hư hỏng. " +

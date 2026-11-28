@@ -147,7 +147,7 @@ internal sealed class InvoiceRepository(BHomePersistenceContext db) : IInvoiceRe
     {
         if (db is Compact24DbContext compact)
             return TrackNative((await NativeInvoicePersistence.ReadAsync(compact, compact.Set<BHome.Domain.Billing.Invoice>().AsNoTracking()
-                .Where(i => i.Type == "PERIODIC" && i.RoomId == roomId && i.BillingPeriod == period), t)).SingleOrDefault());
+                .Where(i => i.InvoiceType == "PERIODIC" && i.RoomId == roomId && i.BillingPeriod == period), t)).SingleOrDefault());
         var invoices = db.PeriodicInvoices().Where(i => i.RoomId == roomId && i.BillingPeriod == period);
         return await Detail(invoices).SingleOrDefaultAsync(t);
     }
@@ -216,7 +216,7 @@ internal sealed class InvoiceRepository(BHomePersistenceContext db) : IInvoiceRe
         if (db is Compact24DbContext compact)
         {
             var rows = await (from reading in NativeBillingMeterQueries.Confirmed(compact)
-                              join task in compact.Set<BHome.Domain.Billing.OperationalTask>().AsNoTracking() on reading.TaskId equals task.Id
+                              join task in compact.Set<BHome.Domain.Billing.OperationalTask>().AsNoTracking() on reading.OperationalTaskId equals task.Id
                               join meter in compact.Set<BHome.Domain.Billing.Meter>().AsNoTracking() on reading.MeterId equals meter.Id
                               where meter.RoomId == roomId && meter.UtilityType == type &&
                                 reading.ReadingPurpose == ReadingPurpose.Periodic && task.BillingPeriod == period
@@ -243,7 +243,7 @@ internal sealed class InvoiceRepository(BHomePersistenceContext db) : IInvoiceRe
                          join meter in db.Set<Meter>() on reading.MeterId equals meter.Id
                          join evidence in db.Set<MeterEvidence>() on reading.EvidenceId equals evidence.Id
                          where meter.RoomId == roomId && meter.UtilityType == type && task.Purpose == ReadingPurpose.Periodic &&
-                             task.BillingPeriod == period && task.Status == MeterTaskStatus.Completed && evidence.IsLinked && evidence.IsUploaded
+                             task.BillingPeriod == period && task.MeterStatus == MeterTaskStatus.Completed && evidence.IsLinked && evidence.IsUploaded
                          select new BillingReading(reading, task.ReadingDate, null, null, 0, null, false, null, null)).ToArrayAsync(t);
         // Replaced meters/multiple readings require an approved replacement allocation; never guess.
         if (row.Length != 1) return null;
@@ -283,19 +283,19 @@ internal sealed class InvoiceRepository(BHomePersistenceContext db) : IInvoiceRe
             if (entity is BillingSchedule schedule) { nativeSchedules.Add(schedule.LocationId, (schedule, null)); return; }
             if (entity is InvoiceIssuedEvent issued) { nativeIssued.Add(issued); return; }
             // Lines are persisted as the complete draft calculation from the aggregate.
-            if (entity is InvoiceLine) return;
+            if (entity is InvoiceItem) return;
         }
         db.Add(entity);
     }
     public Task<bool> HasPendingAdjustmentsAsync(Guid invoiceId, CancellationToken t) =>
         db is Compact24DbContext compact
-            ? compact.Set<InvoiceAdjustmentRequest>().AsNoTracking().AnyAsync(r => r.InvoiceId == invoiceId && r.DecisionSnapshot == null, t)
-            : db.Set<InvoiceAdjustmentRequest>().AnyAsync(r => r.InvoiceId == invoiceId && r.Decision == null, t);
+            ? compact.Set<InvoiceAdjustment>().AsNoTracking().AnyAsync(r => r.InvoiceId == invoiceId && r.DecisionSnapshot == null, t)
+            : db.Set<InvoiceAdjustment>().AnyAsync(r => r.InvoiceId == invoiceId && r.Decision == null, t);
     public async Task<IReadOnlyList<InvoiceAdjustmentDecision>> DraftCorrectionsAsync(Guid invoiceId, CancellationToken t)
     {
         if (db is Compact24DbContext compact)
         {
-            var rows = await compact.Set<InvoiceAdjustmentRequest>().FromSqlInterpolated($"""
+            var rows = await compact.Set<InvoiceAdjustment>().FromSqlInterpolated($"""
                 SELECT * FROM invoice_adjustments WHERE invoice_id={invoiceId} AND decision_snapshot->>'outcome'='Approved'
                     AND COALESCE((decision_snapshot->>'invoiceStatus')::integer,0)=0
                 """).AsNoTracking().ToArrayAsync(t);

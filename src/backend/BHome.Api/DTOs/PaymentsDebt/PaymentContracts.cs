@@ -60,7 +60,7 @@ public sealed record TransferView(Guid Id, string ProviderIdentity, string BankR
     Guid? AllocatedDepositContractId = null, Guid? AllocatedSettlementContractId = null, Guid? AllocatedSettlementReceivableId = null,
     BankStatementEvidenceView? StatementEvidence = null);
 public sealed record BankStatementEvidenceView(string ContentType, long Length, string Sha256);
-public sealed record PaymentLedgerEntry(PaymentAllocation Allocation, PaymentTransfer Transfer, bool ExternalPayerVerified = false);
+public sealed record PaymentLedgerEntry(PaymentAllocation Allocation, Payment Transfer, bool ExternalPayerVerified = false);
 public sealed record PaymentReviewResult(string Status, string Reason, Guid TransferId, Guid? InvoiceId, Guid? DepositContractId = null);
 public sealed record ReconciliationView(long Sequence, Guid? InvoiceId, string Decision, string Reason, Guid ActorId, DateTimeOffset OccurredAt);
 public sealed record PayerChoice(Guid UserId, string DisplayLabel);
@@ -94,8 +94,8 @@ public interface IPaymentRepository
     Task<T> TransactionAsync<T>(Guid? transferId, Guid? invoiceId, Func<Task<T>> work, CancellationToken t);
     Task<T> DepositTransactionAsync<T>(Guid transferId, Guid contractId, Func<Task<T>> work, CancellationToken t);
     Task<Invoice?> InvoiceAsync(Guid id, PaymentScope scope, CancellationToken t);
-    Task<PaymentTransfer?> TransferAsync(Guid id, CancellationToken t);
-    Task<PaymentTransfer?> TransferReferenceAsync(string provider, string reference, CancellationToken t);
+    Task<Payment?> TransferAsync(Guid id, CancellationToken t);
+    Task<Payment?> TransferReferenceAsync(string provider, string reference, CancellationToken t);
     Task<PaymentAllocation?> AllocationAsync(Guid transferId, CancellationToken t);
     Task<PaymentReconciliation?> LatestReviewAsync(Guid transferId, CancellationToken t);
     Task<IReadOnlyList<PaymentLedgerEntry>> HistoryAsync(Guid invoiceId, CancellationToken t);

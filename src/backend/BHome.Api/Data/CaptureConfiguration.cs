@@ -21,10 +21,10 @@ internal static class CaptureConfiguration
         b.Entity<Room>(e => { e.HasOne(x => x.Location).WithMany().HasForeignKey(x => x.LocationId).OnDelete(DeleteBehavior.Restrict); e.Property(x => x.RoomNumber).HasMaxLength(50); e.HasIndex(x => new { x.LocationId, x.RoomNumber }).IsUnique(); });
         b.Entity<Resident>(e =>
         {
-            e.HasOne<ApplicationUser>().WithMany().HasForeignKey(x => x.TenantUserId).OnDelete(DeleteBehavior.Restrict);
+            e.HasOne<User>().WithMany().HasForeignKey(x => x.TenantUserId).OnDelete(DeleteBehavior.Restrict);
             e.HasOne(x => x.Room).WithMany().HasForeignKey(x => x.RoomId).OnDelete(DeleteBehavior.Restrict);
-            e.HasOne<ApplicationUser>().WithMany().HasForeignKey(x => x.OwnerUserId).OnDelete(DeleteBehavior.Restrict);
-            e.HasOne<ApplicationUser>().WithMany().HasForeignKey(x => x.ConfirmedByUserId).OnDelete(DeleteBehavior.Restrict);
+            e.HasOne<User>().WithMany().HasForeignKey(x => x.OwnerUserId).OnDelete(DeleteBehavior.Restrict);
+            e.HasOne<User>().WithMany().HasForeignKey(x => x.ConfirmedByUserId).OnDelete(DeleteBehavior.Restrict);
             e.Property(x => x.DisplayLabel).HasMaxLength(150); e.Property(x => x.IdentityData).HasColumnType("jsonb");
             e.Property(x => x.IdentityHmac).HasMaxLength(64); e.Property(x => x.HmacKeyVersion).HasMaxLength(32);
             e.HasIndex(x => new { x.OwnerUserId, x.HmacKeyVersion, x.IdentityHmac }).IsUnique().HasFilter("\"IdentityHmac\" IS NOT NULL");
@@ -38,17 +38,20 @@ internal static class CaptureConfiguration
         });
         b.Entity<OperationalTask>(e =>
         {
-            e.HasOne(x => x.Location).WithMany().HasForeignKey(x => x.LocationId).OnDelete(DeleteBehavior.Restrict);
-            e.HasOne<ApplicationUser>().WithMany().HasForeignKey(x => x.AssignedStaffUserId).OnDelete(DeleteBehavior.Restrict);
+            e.HasOne(x => x.Location).WithMany().HasForeignKey(x => x.RequiredLocationId).OnDelete(DeleteBehavior.Restrict);
+            e.HasOne<User>().WithMany().HasForeignKey(x => x.AssignedStaffUserId).OnDelete(DeleteBehavior.Restrict);
             e.HasOne<StaffLocationAssignment>().WithMany().HasForeignKey(x => x.AssignmentId).OnDelete(DeleteBehavior.Restrict);
-            e.HasOne<ApplicationUser>().WithMany().HasForeignKey(x => x.VerifiedByUserId).OnDelete(DeleteBehavior.Restrict);
-            e.Property(x => x.Title).HasMaxLength(200);
+            e.HasOne<User>().WithMany().HasForeignKey(x => x.VerifiedByUserId).OnDelete(DeleteBehavior.Restrict);
+            e.Property(x => x.RequiredLocationId).HasColumnName("LocationId");
+            e.Property(x => x.TaskTitle).HasColumnName("Title").HasMaxLength(200);
+            e.Property(x => x.TaskPriority).HasColumnName("Priority");
+            e.Property(x => x.MeterStatus).HasColumnName("Status");
             e.Property(x => x.Requirements).HasMaxLength(8000);
             e.Property(x => x.Result).HasMaxLength(8000);
             e.Property(x => x.TargetCommonArea).HasMaxLength(200);
             e.Property(x => x.TargetLabel).HasMaxLength(400);
             e.Property(x => x.Version).IsConcurrencyToken();
-            e.HasIndex(x => new { x.LocationId, x.Status, x.DueAt });
+            e.HasIndex(x => new { LocationId = x.RequiredLocationId, Status = x.MeterStatus, x.DueAt });
             e.ToTable("OperationalTasks", t =>
             {
                 t.HasCheckConstraint("CK_Task_Kind", "\"Kind\" IN (0,1) AND ((\"Kind\" = 0 AND \"MeterId\" IS NOT NULL AND \"Status\" IN (0,1,2,3)) OR (\"Kind\" = 1 AND \"MeterId\" IS NULL AND \"ContractId\" IS NULL AND \"BillingPeriod\" IS NULL AND \"DueAt\" IS NOT NULL AND length(trim(\"Title\")) > 0 AND length(trim(\"Requirements\")) > 0))");
@@ -60,7 +63,7 @@ internal static class CaptureConfiguration
             e.Property(x => x.OcrProposedValue).HasPrecision(18, 4); e.Property(x => x.OcrImageHash).HasMaxLength(64); e.Property(x => x.OcrEngineVersion).HasMaxLength(150);
             e.HasIndex(x => new { x.MeterId, x.BillingPeriod }).IsUnique().HasFilter("\"Purpose\" = 1 AND \"Status\" <> 3");
             e.HasIndex(x => x.MeterId).IsUnique().HasFilter("\"Purpose\" = 0 AND \"Status\" <> 3");
-            e.HasIndex(x => x.Status);
+            e.HasIndex(x => x.MeterStatus);
             e.HasIndex(x => new { x.MeterId, x.ContractId }).IsUnique().HasFilter("\"Purpose\" = 2 AND \"Status\" <> 3");
             e.ToTable("OperationalTasks", t => t.HasCheckConstraint("CK_Task_Period", "(\"Purpose\" IN (0,2) AND \"BillingPeriod\" IS NULL) OR (\"Purpose\" = 1 AND \"BillingPeriod\" IS NOT NULL AND EXTRACT(DAY FROM \"BillingPeriod\") = 1)"));
             e.ToTable("OperationalTasks", t => t.HasCheckConstraint("CK_Task_FinalContract", "(\"Purpose\" = 2 AND \"ContractId\" IS NOT NULL) OR (\"Purpose\" <> 2 AND \"ContractId\" IS NULL)"));
@@ -68,7 +71,7 @@ internal static class CaptureConfiguration
         b.Entity<MeterEvidence>(e =>
         {
             e.HasOne<OperationalTask>().WithMany().HasForeignKey(x => x.TaskId).OnDelete(DeleteBehavior.Restrict);
-            e.HasOne<ApplicationUser>().WithMany().HasForeignKey(x => x.UploadedByUserId).OnDelete(DeleteBehavior.Restrict);
+            e.HasOne<User>().WithMany().HasForeignKey(x => x.UploadedByUserId).OnDelete(DeleteBehavior.Restrict);
             e.Property(x => x.ObjectKey).HasMaxLength(250); e.HasIndex(x => x.ObjectKey).IsUnique();
             e.Property(x => x.ImageHash).HasMaxLength(64); e.Property(x => x.ContentType).HasMaxLength(30);
             e.HasIndex(x => new { x.IsLinked, x.CleanupAfter });
@@ -78,7 +81,7 @@ internal static class CaptureConfiguration
             e.HasOne<OperationalTask>().WithMany().HasForeignKey(x => x.TaskId).OnDelete(DeleteBehavior.Restrict);
             e.HasOne<Meter>().WithMany().HasForeignKey(x => x.MeterId).OnDelete(DeleteBehavior.Restrict);
             e.HasOne<MeterEvidence>().WithMany().HasForeignKey(x => x.EvidenceId).OnDelete(DeleteBehavior.Restrict);
-            e.HasOne<ApplicationUser>().WithMany().HasForeignKey(x => x.ConfirmedByUserId).OnDelete(DeleteBehavior.Restrict);
+            e.HasOne<User>().WithMany().HasForeignKey(x => x.ConfirmedByUserId).OnDelete(DeleteBehavior.Restrict);
             e.HasIndex(x => x.TaskId).IsUnique(); e.HasIndex(x => x.EvidenceId).IsUnique();
             e.Property(x => x.PreviousValue).HasPrecision(18, 4); e.Property(x => x.ConfirmedValue).HasPrecision(18, 4);
             e.Property(x => x.OcrProposedValue).HasPrecision(18, 4); e.Property(x => x.Consumption).HasPrecision(18, 4);

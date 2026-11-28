@@ -78,7 +78,7 @@ public sealed partial class Compact24OwnerSetupTests
             Status = ContractStatus.Active,
             StartDate = Today.AddDays(-10),
             EndDate = Today.AddMonths(6),
-            MonthlyRent = 1000000,
+            RentAmount = 1000000,
             RequiredDeposit = 0,
             Terms = "Synthetic approved fixture",
             ActivatedByUserId = w.Owner.Id,
@@ -90,7 +90,7 @@ public sealed partial class Compact24OwnerSetupTests
         foreach (var utility in new[] { UtilityType.Electricity, UtilityType.Water })
         {
             var meter = new Meter { RoomId = w.Room, Code = "SYN-" + utility, UtilityType = utility, InstalledOn = Today.AddDays(-20) }; db.Add(meter); await db.SaveChangesAsync();
-            var task = new OperationalTask { LocationId = w.Location, ContractId = c.Id, MeterId = meter.Id, Kind = BHome.Domain.StaffOperations.OperationalTaskKind.MeterReading, ReadingDate = Today, Purpose = ReadingPurpose.Initial, Status = MeterTaskStatus.Completed, CompletedAt = DateTimeOffset.UtcNow };
+            var task = new OperationalTask { RequiredLocationId = w.Location, ContractId = c.Id, MeterId = meter.Id, Kind = BHome.Domain.StaffOperations.OperationalTaskKind.MeterReading, ReadingDate = Today, Purpose = ReadingPurpose.Initial, MeterStatus = MeterTaskStatus.Completed, CompletedAt = DateTimeOffset.UtcNow };
             db.Add(task); await db.SaveChangesAsync();
             var evidence = new MeterEvidence { TaskId = task.Id, UploadedByUserId = w.Staff.Id, ContentType = "image/png", Length = image.Length, ObjectKey = $"synthetic/{Guid.NewGuid():N}.png", ImageHash = Convert.ToHexString(SHA256.HashData(image)), IsUploaded = true, IsLinked = true };
             using var bytes = new MemoryStream(image); await storage.PutAsync(evidence.ObjectKey, bytes, bytes.Length, "image/png", default);
@@ -111,13 +111,13 @@ public sealed partial class Compact24OwnerSetupTests
         {
             var task = new OperationalTask
             {
-                LocationId = w.Location,
+                RequiredLocationId = w.Location,
                 ContractId = contractId,
                 MeterId = meter.Id,
                 Kind = BHome.Domain.StaffOperations.OperationalTaskKind.MeterReading,
                 ReadingDate = Today,
                 Purpose = ReadingPurpose.Initial,
-                Status = MeterTaskStatus.Completed,
+                MeterStatus = MeterTaskStatus.Completed,
                 CompletedAt = DateTimeOffset.UtcNow
             };
             db.Add(task); await db.SaveChangesAsync();
@@ -380,7 +380,7 @@ public sealed partial class Compact24OwnerSetupTests
 
         await using var scope = host.Services.CreateAsyncScope();
         var otherStaff = await WorkflowTestUsers.CreateAsync(scope.ServiceProvider,
-            new BHome.Infrastructure.Persistence.ApplicationUser
+            new BHome.Infrastructure.Persistence.User
             {
                 Id = Guid.NewGuid(),
                 UserName = Guid.NewGuid().ToString("N"),
@@ -397,7 +397,7 @@ public sealed partial class Compact24OwnerSetupTests
         Assert.DoesNotContain(notices, n => n.AudienceRole == "Staff" ||
             n.RecipientUserId == w.Tenant.Id || n.RecipientUserId == otherStaff.Id);
         Assert.False(await db.Set<OperationalTask>().AnyAsync(t => t.ContractId == id &&
-            t.Title.StartsWith("Kiểm tra trả phòng")));
+            t.TaskTitle.StartsWith("Kiểm tra trả phòng")));
         Assert.All(notices, n =>
         {
             Assert.Equal(w.Location, n.LocationId);
@@ -407,9 +407,9 @@ public sealed partial class Compact24OwnerSetupTests
         Assert.Equal("Approved", (await Read<MoveOutView>(await HandoverPost(owner, id, "move-out/approve", new { }))).Status);
         await StartMoveOutTask(staff, id);
         var task = await db.Set<OperationalTask>().AsNoTracking().SingleAsync(t => t.ContractId == id &&
-            t.Title.StartsWith("Kiểm tra trả phòng"));
+            t.TaskTitle.StartsWith("Kiểm tra trả phòng"));
         Assert.Equal(w.Staff.Id, task.AssignedStaffUserId);
-        Assert.Equal(MeterTaskStatus.InProgress, task.Status);
+        Assert.Equal(MeterTaskStatus.InProgress, task.MeterStatus);
     }
 
     [CompactPostgresTheory]
@@ -534,7 +534,7 @@ public sealed partial class Compact24OwnerSetupTests
             PreviousContractId = previous,
             StartDate = Today,
             EndDate = Today.AddYears(1),
-            MonthlyRent = prior.MonthlyRent,
+            RentAmount = prior.RentAmount,
             ActivatedAt = DateTimeOffset.UtcNow,
             ActivatedByUserId = w.Owner.Id,
             Terms = "Synthetic renewal precondition; signing lifecycle covered by contract regression suite"
@@ -609,7 +609,7 @@ public sealed partial class Compact24OwnerSetupTests
                 Status = ContractStatus.Active,
                 StartDate = Today.AddDays(-10),
                 EndDate = Today.AddMonths(6),
-                MonthlyRent = 1000000,
+                RentAmount = 1000000,
                 ActivatedAt = DateTimeOffset.UtcNow,
                 ActivatedByUserId = w.Owner.Id,
                 Terms = "Synthetic shared contract"
@@ -779,7 +779,7 @@ public sealed partial class Compact24OwnerSetupTests
                 Status = ContractStatus.Active,
                 StartDate = Today.AddDays(-9),
                 EndDate = Today.AddMonths(6),
-                MonthlyRent = 1000000,
+                RentAmount = 1000000,
                 ActivatedAt = DateTimeOffset.UtcNow,
                 ActivatedByUserId = w.Owner.Id,
                 Terms = "Synthetic shared tenancy"

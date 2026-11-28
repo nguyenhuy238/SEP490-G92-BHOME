@@ -164,7 +164,7 @@ public sealed class CompensationService(ICompensationRepository repository, ICur
                     ScheduleSnapshot = JsonSerializer.Serialize(new { CompensationId = row.Id, WorkOrderId = id }),
                     Recipients = source.Recipients.Select(r => new InvoiceRecipient { TenantUserId = r }).ToList()
                 };
-                invoice.Lines.Add(new InvoiceLine
+                invoice.Lines.Add(new InvoiceItem
                 {
                     InvoiceId = invoice.Id,
                     Category = ChargeCategory.ServiceFee,

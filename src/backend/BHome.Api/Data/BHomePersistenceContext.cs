@@ -10,7 +10,7 @@ namespace BHome.Infrastructure.Persistence;
 // Persistence contract used by the existing repositories. The offline legacy context and
 // Compact24 share domain queries, never a database connection or runtime fallback.
 public abstract class BHomePersistenceContext(DbContextOptions options)
-    : IdentityDbContext<ApplicationUser, IdentityRole<Guid>, Guid>(options)
+    : IdentityDbContext<User, IdentityRole<Guid>, Guid>(options)
 {
     internal DbSet<BackgroundJobRecord> BackgroundJobs => Set<BackgroundJobRecord>();
     public DbSet<AuthenticationSession> AuthenticationSessions => Set<AuthenticationSession>();
@@ -22,7 +22,7 @@ public abstract class BHomePersistenceContext(DbContextOptions options)
 
     public abstract BHomePersistenceContext CreateIndependentContext();
     public abstract Task<bool> IsSchemaReadyAsync(CancellationToken token = default);
-    public virtual void PrepareUserRole(ApplicationUser user, string role) { }
+    public virtual void PrepareUserRole(User user, string role) { }
     internal abstract Task<IReadOnlyList<BHome.Application.Billing.BillingQueueView>> BillingQueueAsync(Guid location, DateOnly period, CancellationToken token);
 
     public virtual IQueryable<T> Locked<T>(Guid id, bool skipLocked = false, bool shared = false) where T : class

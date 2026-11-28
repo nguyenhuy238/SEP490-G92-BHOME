@@ -81,7 +81,7 @@ public sealed class TaskEvidenceCleanup(IServiceScopeFactory scopes, TimeProvide
             foreach (var candidate in nativeCandidates)
             {
                 var location = await NativeOperationalTaskPersistence.Roots(compact).Where(x => x.Id == candidate.TaskId)
-                    .Select(x => x.StoredLocationId).SingleAsync(t);
+                    .Select(x => x.LocationId).SingleAsync(t);
                 await using var transaction = await db.Database.BeginTransactionAsync(t);
                 await db.Database.ExecuteSqlInterpolatedAsync($"SELECT pg_advisory_xact_lock(hashtextextended({location!.Value.ToString()}, 0))", t);
                 var json = await compact.Database.SqlQuery<string>($"""
@@ -110,7 +110,7 @@ public sealed class TaskEvidenceCleanup(IServiceScopeFactory scopes, TimeProvide
         foreach (var candidate in candidates)
         {
             db.ChangeTracker.Clear();
-            var location = await db.Set<BHome.Domain.Billing.OperationalTask>().Where(x => x.Id == candidate.TaskId).Select(x => x.LocationId).SingleAsync(t);
+            var location = await db.Set<BHome.Domain.Billing.OperationalTask>().Where(x => x.Id == candidate.TaskId).Select(x => x.RequiredLocationId).SingleAsync(t);
             await using var transaction = await db.Database.BeginTransactionAsync(t);
             await db.Database.ExecuteSqlInterpolatedAsync($"SELECT pg_advisory_xact_lock(hashtextextended({location.ToString()}, 0))", t);
             var row = await db.Set<OperationalTaskFileUpload>().SingleOrDefaultAsync(x => x.Id == candidate.Id, t);

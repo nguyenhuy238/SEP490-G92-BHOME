@@ -22,13 +22,13 @@ internal static class ContractConfiguration
             e.HasOne(c => c.Room).WithMany().HasForeignKey(c => c.RoomId).OnDelete(DeleteBehavior.Restrict);
             e.HasOne<Contract>().WithMany().HasForeignKey(c => c.PreviousContractId).OnDelete(DeleteBehavior.Restrict);
             e.HasOne<Resident>().WithMany().HasForeignKey(c => c.RepresentativeResidentId).OnDelete(DeleteBehavior.Restrict);
-            e.HasOne<ApplicationUser>().WithMany().HasForeignKey(c => c.OwnerSignerId).OnDelete(DeleteBehavior.Restrict);
-            e.HasOne<ApplicationUser>().WithMany().HasForeignKey(c => c.TenantUserId).OnDelete(DeleteBehavior.Restrict);
-            e.Property(c => c.MonthlyRent).HasPrecision(18, 0); e.Property(c => c.RequiredDeposit).HasPrecision(18, 0);
+            e.HasOne<User>().WithMany().HasForeignKey(c => c.OwnerSignerId).OnDelete(DeleteBehavior.Restrict);
+            e.HasOne<User>().WithMany().HasForeignKey(c => c.TenantUserId).OnDelete(DeleteBehavior.Restrict);
+            e.Property(c => c.RentAmount).HasColumnName("MonthlyRent").HasPrecision(18, 0); e.Property(c => c.RequiredDeposit).HasPrecision(18, 0);
             e.Property(c => c.AppliedHoldingDeposit).HasPrecision(18, 0); e.Property(c => c.HoldingAllocationReference).HasMaxLength(200);
             e.HasIndex(c => c.HoldingContractId).IsUnique().HasFilter("\"HoldingContractId\" IS NOT NULL");
             e.HasIndex(c => c.HoldingAllocationReference).IsUnique().HasFilter("\"HoldingAllocationReference\" IS NOT NULL");
-            e.Property(c => c.Terms).HasMaxLength(12000); e.Property(c => c.SnapshotHash).HasMaxLength(64);
+            e.Property(c => c.Terms).HasMaxLength(12000); e.Property(c => c.SnapshotHashOrEmpty).HasColumnName("SnapshotHash").HasMaxLength(64);
             e.Property(c => c.DraftMetadata).HasColumnType("jsonb").HasDefaultValue("{}");
             e.Property(c => c.DraftVersion).HasDefaultValue(1).IsConcurrencyToken();
             e.Ignore(c => c.HoldingExpiryAt); e.Ignore(c => c.ReservedCapacity);
@@ -48,13 +48,13 @@ internal static class ContractConfiguration
             e.ToTable("ContractResidents"); e.HasKey(r => new { r.ContractId, r.ResidentId });
             e.HasOne<Resident>().WithMany().HasForeignKey(r => r.ResidentId).OnDelete(DeleteBehavior.Restrict);
         });
-        b.Entity<ContractSignature>(e =>
+        b.Entity<ContractSigning>(e =>
         {
             e.ToTable("ContractSignatures"); e.HasIndex(s => new { s.ContractId, s.SignerUserId }).IsUnique().HasFilter("\"Status\" <> 4");
             e.HasIndex(s => s.ProviderReference).IsUnique().HasFilter("\"ProviderReference\" IS NOT NULL");
-            e.Property(s => s.SnapshotHash).HasMaxLength(64); e.Property(s => s.SourceHash).HasMaxLength(64);
-            e.Property(s => s.PreparedHash).HasMaxLength(64);
-            e.Property(s => s.SignedHash).HasMaxLength(64); e.Property(s => s.PreparedObjectKey).HasMaxLength(250);
+            e.Property(s => s.SnapshotHash).HasMaxLength(64); e.Property(s => s.SourceHashOrEmpty).HasColumnName("SourceHash").HasMaxLength(64);
+            e.Property(s => s.PreparedHashOrEmpty).HasColumnName("PreparedHash").HasMaxLength(64);
+            e.Property(s => s.SignedHash).HasMaxLength(64); e.Property(s => s.PreparedObjectKeyOrEmpty).HasColumnName("PreparedObjectKey").HasMaxLength(250);
             e.Property(s => s.SignedObjectKey).HasMaxLength(250); e.Property(s => s.ProviderReference).HasMaxLength(200);
             e.Property(s => s.ProviderUserId).HasMaxLength(100); e.Property(s => s.CredentialId).HasMaxLength(200);
         });
@@ -62,7 +62,7 @@ internal static class ContractConfiguration
         {
             e.ToTable("ContractDepositVerifications", t => t.HasCheckConstraint("CK_Deposit_Positive", "\"Amount\" > 0"));
             e.HasOne<Contract>().WithMany().HasForeignKey(d => d.ContractId).OnDelete(DeleteBehavior.Restrict);
-            e.HasOne<ApplicationUser>().WithMany().HasForeignKey(d => d.VerifiedByUserId).OnDelete(DeleteBehavior.Restrict);
+            e.HasOne<User>().WithMany().HasForeignKey(d => d.VerifiedByUserId).OnDelete(DeleteBehavior.Restrict);
             e.Property(d => d.Amount).HasPrecision(18, 0); e.Property(d => d.BankTransactionReference).HasMaxLength(150);
             e.Property(d => d.VerificationReason).HasMaxLength(2000); e.HasIndex(d => d.BankTransactionReference).IsUnique();
         });
@@ -70,7 +70,7 @@ internal static class ContractConfiguration
         {
             e.ToTable("ContractMoveOuts"); e.HasIndex(m => m.ContractId).IsUnique();
             e.Property(m => m.Version).IsConcurrencyToken(); e.HasIndex(m => new { m.InspectionStaffId, m.InspectionScheduledAt });
-            e.HasOne<ApplicationUser>().WithMany().HasForeignKey(m => m.InspectionStaffId).OnDelete(DeleteBehavior.Restrict);
+            e.HasOne<User>().WithMany().HasForeignKey(m => m.InspectionStaffId).OnDelete(DeleteBehavior.Restrict);
             e.HasOne<Contract>().WithMany().HasForeignKey(m => m.ContractId).OnDelete(DeleteBehavior.Restrict);
             e.HasOne<MeterReading>().WithMany().HasForeignKey(m => m.ElectricityReadingId).OnDelete(DeleteBehavior.Restrict);
             e.HasOne<MeterReading>().WithMany().HasForeignKey(m => m.WaterReadingId).OnDelete(DeleteBehavior.Restrict);

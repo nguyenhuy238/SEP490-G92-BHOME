@@ -141,7 +141,7 @@ public sealed partial class PaymentService(IPaymentRepository repository, ICurre
                 if (existing.Amount != x.Amount || existing.OccurredAt != x.OccurredAt || existing.TransferDescription.ToUpperInvariant() != x.TransferDescription.ToUpperInvariant() ||
                     existing.ProposedInvoiceId != x.ProposedInvoiceId || existing.ProposedDepositContractId != x.ProposedDepositContractId ||
                     evidence is not null && (existing.StatementEvidenceSha256 != evidence.Sha256 || existing.StatementEvidenceContentType != evidence.ContentType ||
-                        existing.StatementEvidenceLength != evidence.Bytes.Length || existing.VerifiedByUserId != Actor))
+                        existing.StatementEvidenceLength != evidence.Bytes.Length || existing.ReceiptVerifiedByUserId != Actor))
                     throw new PaymentException(409, "bank_transaction_identity_conflict");
                 await RememberAsync(key, "register", identity, existing.Id, t); return await TransferAsync(existing.Id, t);
             }
@@ -153,7 +153,7 @@ public sealed partial class PaymentService(IPaymentRepository repository, ICurre
                 if (target.Kind is not (BHome.Domain.TenantContracts.ContractKind.Main or BHome.Domain.TenantContracts.ContractKind.Holding))
                     throw new PaymentException(400, "deposit_contract_required");
             }
-            var transfer = new PaymentTransfer
+            var transfer = new Payment
             {
                 ProviderIdentity = x.ProviderIdentity,
                 BankReference = x.BankReference,
@@ -213,7 +213,7 @@ public sealed partial class PaymentService(IPaymentRepository repository, ICurre
         Owner();
         var transfer = await repository.TransferAsync(transferId, t) ?? throw new PaymentException(404, "bank_statement_image_not_found");
         // Restrict the private screenshot to the Owner who verified this manual receipt.
-        if (transfer.VerificationSource != "OwnerBankStatement" || transfer.VerifiedByUserId != Actor ||
+        if (transfer.VerificationSource != "OwnerBankStatement" || transfer.ReceiptVerifiedByUserId != Actor ||
             string.IsNullOrWhiteSpace(transfer.StatementEvidenceObjectKey) ||
             string.IsNullOrWhiteSpace(transfer.StatementEvidenceSha256) ||
             transfer.StatementEvidenceContentType is not ("image/png" or "image/jpeg") ||
@@ -342,9 +342,9 @@ public sealed partial class PaymentService(IPaymentRepository repository, ICurre
             return new("Rejected", reason, transferId, latest?.InvoiceId);
         }, t);
     }
-    private static TransferView View(PaymentTransfer transfer, PaymentAllocation? allocation, PaymentReconciliation? review) =>
+    private static TransferView View(Payment transfer, PaymentAllocation? allocation, PaymentReconciliation? review) =>
         new(transfer.Id, transfer.ProviderIdentity, transfer.BankReference, transfer.Amount, transfer.Currency, transfer.OccurredAt,
-            transfer.TransferDescription, transfer.StatementReference, transfer.VerificationReason, transfer.VerifiedByUserId, transfer.VerifiedAt,
+            transfer.TransferDescription, transfer.StatementReference, transfer.VerificationReason, transfer.ReceiptVerifiedByUserId, transfer.ReceiptVerifiedAt,
             transfer.ProposedInvoiceId, allocation is not null ? "Allocated" : review?.Decision ?? "PendingReview",
             review?.Reason ?? (allocation is not null ? "verified_full_payment" : "owner_allocation_confirmation_required"), allocation?.InvoiceId, transfer.IsDevelopmentDemo,
             allocation?.Amount ?? 0, transfer.Amount - (allocation?.Amount ?? 0), allocation?.TargetDepositContractId,

@@ -26,7 +26,7 @@ public sealed class OwnerResidentAdministrationTests(Compact24WorkflowFixture fi
         await using (var scope = fixture.Capture.Factory.Services.CreateAsyncScope())
         {
             secondId = (await WorkflowTestUsers.CreateAsync(scope.ServiceProvider,
-                new ApplicationUser { Id = Guid.NewGuid(), UserName = email, Email = email }, "Staff", WorkflowTestUsers.Password)).Id;
+                new User { Id = Guid.NewGuid(), UserName = email, Email = email }, "Staff", WorkflowTestUsers.Password)).Id;
         }
         using var second = await Login(email);
         var ids = new[] { await Create(owner, "Owner label"), await Create(first, "First staff label"), Guid.Empty };

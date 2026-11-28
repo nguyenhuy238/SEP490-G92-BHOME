@@ -30,11 +30,11 @@ public sealed partial class Compact24NotificationMvpTests
             ["IdentityProtection:HmacKeys:family-test"] = Convert.ToBase64String(RandomNumberGenerator.GetBytes(32)),
         })));
         int usersBefore;
-        ApplicationUser unassignedStaff;
+        User unassignedStaff;
         await using (var scope = host.Services.CreateAsyncScope())
         {
             var db = scope.ServiceProvider.GetRequiredService<Compact24ArchiveContext>();
-            unassignedStaff = await WorkflowTestUsers.CreateAsync(scope.ServiceProvider, new ApplicationUser { Id = Guid.NewGuid(), UserName = Guid.NewGuid().ToString("N"), Email = Guid.NewGuid().ToString("N") + "@example.invalid", EmailConfirmed = true }, "Staff", Password);
+            unassignedStaff = await WorkflowTestUsers.CreateAsync(scope.ServiceProvider, new User { Id = Guid.NewGuid(), UserName = Guid.NewGuid().ToString("N"), Email = Guid.NewGuid().ToString("N") + "@example.invalid", EmailConfirmed = true }, "Staff", Password);
             usersBefore = await db.Users.CountAsync();
             foreach (var c in await db.Set<Contract>().Where(c => w.Contracts.Contains(c.Id)).ToArrayAsync()) c.Status = ContractStatus.Cancelled;
             var room = await db.Set<Room>().SingleAsync(r => r.Id == w.Room); room.Capacity = 3;
@@ -134,14 +134,14 @@ public sealed partial class Compact24NotificationMvpTests
                 RepresentativeResidentId = w.Residents[0],
                 StartDate = Today,
                 EndDate = Today.AddMonths(6),
-                MonthlyRent = 100_000m,
+                RentAmount = 100_000m,
                 RequiredDeposit = 100_000m
             };
             draft.Residents.Add(new ContractResident { ContractId = draft.Id, ResidentId = w.Residents[0], ResidenceFrom = Today });
             var state = new MainDraftState(new(w.Room, w.Residents[0], [w.Residents[0]], draft.StartDate, draft.EndDate,
                 "", null, ""), [], 1, "synthetic-settings", "synthetic-template");
             draft.DraftMetadata = scope.ServiceProvider.GetRequiredService<IMainDraftData>().Protect(draft, state);
-            oldHash = draft.SnapshotHash = MainDraftService.Snapshot(draft, state);
+            oldHash = draft.SnapshotHashOrEmpty = MainDraftService.Snapshot(draft, state);
             db.Add(draft); await db.SaveChangesAsync(); draftId = draft.Id;
         }
         using var staff = await Client(w.Staff, host);
@@ -164,8 +164,8 @@ public sealed partial class Compact24NotificationMvpTests
             var db = scope.ServiceProvider.GetRequiredService<Compact24ArchiveContext>();
             var runtime = scope.ServiceProvider.GetRequiredService<Compact24DbContext>();
             var physical = await runtime.Set<BHome.Domain.TenantContracts.Contract>().AsNoTracking().SingleAsync(c => c.Id == draftId);
-            Assert.Equal(2, physical.DraftVersion); Assert.NotEqual(oldHash, physical.SnapshotHash);
-            newHash = physical.SnapshotHash!;
+            Assert.Equal(2, physical.DraftVersion); Assert.NotEqual(oldHash, physical.SnapshotHashOrEmpty);
+            newHash = physical.SnapshotHashOrEmpty!;
             var history = physical.History.EnumerateArray().Where(h => h.GetProperty("recordType").GetString() == "Contract").ToArray();
             Assert.Equal(2, history.Length);
             Assert.Equal(oldHash, history[0].GetProperty("state").GetProperty("snapshotHash").GetString());
@@ -191,7 +191,7 @@ public sealed partial class Compact24NotificationMvpTests
         {
             var runtime = scope.ServiceProvider.GetRequiredService<Compact24DbContext>();
             var physical = await runtime.Set<BHome.Domain.TenantContracts.Contract>().AsNoTracking().SingleAsync(c => c.Id == draftId);
-            Assert.Equal(2, physical.DraftVersion); Assert.Equal(newHash, physical.SnapshotHash);
+            Assert.Equal(2, physical.DraftVersion); Assert.Equal(newHash, physical.SnapshotHashOrEmpty);
             Assert.Equal(2, await runtime.Set<BHome.Domain.TenantContracts.ContractResident>().CountAsync(r => r.ContractId == draftId));
         }
         var reloaded = (await staff.GetFromJsonAsync<HouseholdView>($"/api/v1/capture/residents/{w.Residents[0]}/household"))!;

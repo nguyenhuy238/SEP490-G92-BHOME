@@ -44,8 +44,8 @@ public sealed partial class IncidentApiTests(IncidentFixture fixture) : IClassFi
         var id = Guid.NewGuid(); var email = id.ToString("N") + "@example.invalid";
         await using (var scope = fixture.Factory.Services.CreateAsyncScope())
         {
-            var manager = scope.ServiceProvider.GetRequiredService<UserManager<ApplicationUser>>();
-            var user = new ApplicationUser { Id = id, Email = email, UserName = email, LockoutEnabled = true };
+            var manager = scope.ServiceProvider.GetRequiredService<UserManager<User>>();
+            var user = new User { Id = id, Email = email, UserName = email, LockoutEnabled = true };
             user = await WorkflowTestUsers.CreateAsync(scope.ServiceProvider, user, role, Password);
             id = user.Id; email = user.Email!;
         }
@@ -70,7 +70,7 @@ public sealed partial class IncidentApiTests(IncidentFixture fixture) : IClassFi
             RepresentativeResidentId = resident.Id,
             StartDate = Today.AddDays(-10),
             EndDate = Today.AddDays(100),
-            MonthlyRent = 1000000,
+            RentAmount = 1000000,
             RequiredDeposit = requiredDeposit,
             Status = ContractStatus.Active,
             ActivatedByUserId = owner.Id,
@@ -239,7 +239,7 @@ public sealed partial class IncidentApiTests(IncidentFixture fixture) : IClassFi
         Assert.Equal("Resolved", await physicalDb.Database.SqlQuery<string>(
             $"SELECT status AS \"Value\" FROM incident_reports WHERE id={incident}").SingleAsync());
         var workRow = await physicalDb.Set<BHome.Domain.Billing.OperationalTask>().AsNoTracking().SingleAsync(r => r.Id == work);
-        Assert.Equal("Verified", workRow.StoredStatus);
+        Assert.Equal("Verified", workRow.Status);
         Assert.Equal("MaintenanceWorkOrder", workRow.TaskData.GetProperty("recordType").GetString());
         Assert.Equal((int)WorkOrderStatus.Verified, workRow.TaskData.GetProperty("state").GetProperty("status").GetInt32());
         Assert.Contains(physical.History.EnumerateArray(), h => h.GetProperty("recordType").GetString() == "MaintenanceHistory" &&
@@ -507,7 +507,7 @@ public sealed partial class IncidentApiTests(IncidentFixture fixture) : IClassFi
         var internalPhoto = await Upload(w.Staff, incident, IncidentEvidenceKind.Inspection, work);
         await using (var scope = fixture.Factory.Services.CreateAsyncScope())
         {
-            var users = scope.ServiceProvider.GetRequiredService<UserManager<ApplicationUser>>();
+            var users = scope.ServiceProvider.GetRequiredService<UserManager<User>>();
             var tenant = (await users.FindByIdAsync(w.Tenant.Id.ToString()))!;
             Assert.True((await users.AddToRoleAsync(tenant, Roles.Staff)).Succeeded);
         }
@@ -649,7 +649,7 @@ public sealed partial class IncidentApiTests(IncidentFixture fixture) : IClassFi
         await using (var scope = fixture.Factory.Services.CreateAsyncScope())
         {
             var db = scope.ServiceProvider.GetFixturePersistence();
-            var users = scope.ServiceProvider.GetRequiredService<UserManager<ApplicationUser>>();
+            var users = scope.ServiceProvider.GetRequiredService<UserManager<User>>();
             Assert.True((await users.AddToRoleAsync((await users.FindByIdAsync(w.Staff.Id.ToString()))!, Roles.Tenant)).Succeeded);
             notification = await db.Set<IncidentNotification>().Where(n => n.IncidentId == incident && n.RecipientId == w.Staff.Id).Select(n => n.Id).SingleAsync();
             foreach (var assignment in await db.StaffLocationAssignments.Where(a => a.LocationId == w.Location).ToArrayAsync())

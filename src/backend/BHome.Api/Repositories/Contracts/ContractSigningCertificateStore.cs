@@ -66,7 +66,7 @@ internal sealed class ContractSigningCertificateStore(BHomePersistenceContext db
             var existing = await CertificateAsync(id, t) ?? throw ContractException.Missing();
             await LockOwnerAsync(existing.OwnerUserId, t);
             existing = await CertificateAsync(id, t) ?? throw ContractException.Missing();
-            if (await db.Set<BHome.Domain.TenantContracts.ContractSignature>().AsNoTracking().AnyAsync(s => s.CertificateId == id, t))
+            if (await db.Set<BHome.Domain.TenantContracts.ContractSigning>().AsNoTracking().AnyAsync(s => s.CertificateId == id, t))
                 throw ContractException.Conflict("certificate_has_contract_history");
             await ReplaceAsync(existing.OwnerUserId, id, null, t);
             await AuditNativeAsync("ContractCertificateRemoved", id, t);
@@ -74,7 +74,7 @@ internal sealed class ContractSigningCertificateStore(BHomePersistenceContext db
             return;
         }
         var certificate = await db.Set<SigningCertificate>().SingleOrDefaultAsync(c => c.Id == id && c.OwnerUserId == user.UserId, t) ?? throw ContractException.Missing();
-        if (await db.Set<BHome.Domain.TenantContracts.ContractSignature>().AnyAsync(s => s.CertificateId == id, t)) throw ContractException.Conflict("certificate_has_contract_history");
+        if (await db.Set<BHome.Domain.TenantContracts.ContractSigning>().AnyAsync(s => s.CertificateId == id, t)) throw ContractException.Conflict("certificate_has_contract_history");
         db.Remove(certificate); Audit("ContractCertificateRemoved", id); await db.SaveChangesAsync(t);
     }
     public async Task SetLockedAsync(Guid id, bool locked, CancellationToken t)

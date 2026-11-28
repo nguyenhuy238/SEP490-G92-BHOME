@@ -72,7 +72,7 @@ public sealed partial class PaymentLedgerTests
         {
             var db = scope.ServiceProvider.GetFixturePersistence();
             var contract = await db.Set<Contract>().Where(c => c.RoomId == w.Room).OrderBy(c => c.Id).FirstAsync();
-            contract.MonthlyRent = 3200000;
+            contract.RentAmount = 3200000;
             await db.SaveChangesAsync();
         }
         var conflict = (await owner.GetFromJsonAsync<ScenarioDefaults>(path))!;
@@ -167,9 +167,9 @@ public sealed partial class PaymentLedgerTests
                 DueDate = period.AddDays(-1),
                 ScheduleSnapshot = "{}",
                 Recipients = w.Tenants.Select(t => new InvoiceRecipient { TenantUserId = t }).ToList(),
-                Lines = [new InvoiceLine { Category = ChargeCategory.Rent, ChargeCode = "RENT", Name = "Synthetic rent",
+                Lines = [new InvoiceItem { Category = ChargeCategory.Rent, ChargeCode = "RENT", Name = "Synthetic rent",
                     Rate = rent - 1_000_000, Quantity = 1, Amount = rent - 1_000_000, OccupiedDays = 30, PeriodDays = 30, RateDate = period.AddMonths(-1) },
-                    new InvoiceLine { Category = ChargeCategory.ServiceFee, ChargeCode = "SERVICE-INTERNET", Name = "Synthetic internet",
+                    new InvoiceItem { Category = ChargeCategory.ServiceFee, ChargeCode = "SERVICE-INTERNET", Name = "Synthetic internet",
                         Rate = 1_000_000, Quantity = 1, Amount = 1_000_000, OccupiedDays = 30, PeriodDays = 30, RateDate = period.AddMonths(-1) }]
             };
             db.Add(previous); await db.SaveChangesAsync();

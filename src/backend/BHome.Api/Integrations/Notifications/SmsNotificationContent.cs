@@ -53,10 +53,10 @@ internal sealed class SmsNotificationContent(Compact24DbContext db, TimeProvider
                 if (contract.Status != ContractStatus.PendingSigning) return null;
                 var external = (recipient == contract.OwnerSignerId || recipient == contract.TenantUserId) &&
                     contract.Signatures.Any(s => s.SignerUserId == recipient && s.Status == SignatureStatus.Pending &&
-                        s.ProviderReference != null && s.SnapshotHash == contract.SnapshotHash);
+                        s.ProviderReference != null && s.SnapshotHash == contract.SnapshotHashOrEmpty);
                 var email = await db.Users.Where(u => u.Id == recipient && u.EmailConfirmed).Select(u => u.Email).SingleOrDefaultAsync(t);
                 var invitation = email is not null && (await NativeInvitationPersistence.ForContractAsync(db, contract.Id, t)).Any(i =>
-                    i.RecipientEmail == email && i.SnapshotHash == contract.SnapshotHash && i.RevokedAt == null && i.AcceptedAt == null && i.ExpiresAt > clock.GetUtcNow());
+                    i.RecipientEmail == email && i.SnapshotHash == contract.SnapshotHashOrEmpty && i.RevokedAt == null && i.AcceptedAt == null && i.ExpiresAt > clock.GetUtcNow());
                 if (!external && !invitation) return null;
             }
             return new Dictionary<string, string> { ["CONTRACT_CODE"] = contract.Id.ToString("N")[..8].ToUpperInvariant(), ["EXPIRY_DATE"] = contract.EndDate.ToString("dd/MM/yyyy", System.Globalization.CultureInfo.InvariantCulture) };

@@ -82,14 +82,14 @@ internal sealed class ContractHandoverRepository(BHomePersistenceContext db, IOp
         var task = new OperationalTask(id)
         {
             Kind = OperationalTaskKind.AdHoc,
-            LocationId = contract.Room.LocationId,
+            RequiredLocationId = contract.Room.LocationId,
             ContractId = contract.Id,
             TargetRoomId = contract.RoomId,
             TargetLabel = contract.Room.RoomNumber,
-            Title = $"Kiểm tra trả phòng {contract.Room.RoomNumber}",
+            TaskTitle = $"Kiểm tra trả phòng {contract.Room.RoomNumber}",
             Requirements = "Kiểm tra hiện trạng phòng, tài sản, chìa khóa và quyền ra vào; có thể đính kèm ảnh, xác nhận chỉ số điện nước cuối kỳ và gửi kết quả cho Owner xem xét.",
-            Priority = OperationalTaskPriority.Normal,
-            Status = MeterTaskStatus.Assigned,
+            TaskPriority = OperationalTaskPriority.Normal,
+            MeterStatus = MeterTaskStatus.Assigned,
             ReadingDate = moveOut.ProposedDate,
             EvidenceRequired = false
         };
@@ -118,14 +118,14 @@ internal sealed class ContractHandoverRepository(BHomePersistenceContext db, IOp
     {
         if (db is not BHome.Infrastructure.Persistence.Compact24.Compact24DbContext) return;
         var task = await MoveOutTaskAsync(contractId, t);
-        if (task.Status != MeterTaskStatus.InProgress || task.AssignedStaffUserId != staffId)
+        if (task.MeterStatus != MeterTaskStatus.InProgress || task.AssignedStaffUserId != staffId)
             throw ContractException.Conflict("move_out_task_not_started");
     }
     public async Task EnsureMoveOutTaskAssigneeAsync(Guid contractId, Guid? staffId, CancellationToken t)
     {
         if (db is not BHome.Infrastructure.Persistence.Compact24.Compact24DbContext) return;
         var task = await MoveOutTaskAsync(contractId, t);
-        if (task.Status != MeterTaskStatus.Assigned && staffId is { } assignee &&
+        if (task.MeterStatus != MeterTaskStatus.Assigned && staffId is { } assignee &&
             assignee != task.AssignedStaffUserId)
             throw ContractException.Conflict("move_out_task_already_claimed");
     }
@@ -149,7 +149,7 @@ internal sealed class ContractHandoverRepository(BHomePersistenceContext db, IOp
     {
         if (db is not BHome.Infrastructure.Persistence.Compact24.Compact24DbContext) return;
         var task = await MoveOutTaskAsync(contractId, t);
-        if (task.Status != MeterTaskStatus.PendingVerification)
+        if (task.MeterStatus != MeterTaskStatus.PendingVerification)
             throw ContractException.Conflict("move_out_task_not_submitted");
         task.ApplyAction(confirmed ? "verify" : "rework", now, ownerId); task.Version++;
         task.Result = confirmed ? "Owner đã xác nhận kết quả kiểm tra trả phòng." : "Owner yêu cầu Staff kiểm tra lại.";
@@ -167,7 +167,7 @@ internal sealed class ContractHandoverRepository(BHomePersistenceContext db, IOp
         if (db is not BHome.Infrastructure.Persistence.Compact24.Compact24DbContext) return;
         await RequireMoveOutTaskStartedAsync(contractId, staffId, t);
         var task = await MoveOutTaskAsync(contractId, t);
-        task.Status = MeterTaskStatus.Completed;
+        task.MeterStatus = MeterTaskStatus.Completed;
         task.CompletedAt = now;
         task.Version++;
         task.Result = "Nhân viên đã lưu kết quả kiểm tra trả phòng bắt buộc. Chưa có quyết định tài chính.";
@@ -196,9 +196,9 @@ internal sealed class ContractHandoverRepository(BHomePersistenceContext db, IOp
             ? await FindTaskAsync(Key($"contract-pre-move-in-inventory:{contractId:N}"), t)
             : null;
         if (inventoryTask is not null && (inventoryTask.Kind != OperationalTaskKind.MoveInInventory || inventoryTask.ContractId != contractId)) inventoryTask = null;
-        return new HandoverMoveInTask(task.Id, task.Status.ToString(), task.Version,
-            task.Status == MeterTaskStatus.InProgress && isResponsibleStaff,
-            inventoryTask?.Id, inventoryTask?.Status.ToString());
+        return new HandoverMoveInTask(task.Id, task.MeterStatus.ToString(), task.Version,
+            task.MeterStatus == MeterTaskStatus.InProgress && isResponsibleStaff,
+            inventoryTask?.Id, inventoryTask?.MeterStatus.ToString());
     }
     public async Task EnsureMoveInTaskAsync(Contract c, Guid actor, DateTimeOffset now, CancellationToken t)
     {
@@ -208,7 +208,7 @@ internal sealed class ContractHandoverRepository(BHomePersistenceContext db, IOp
         if (!await PrepareRoomMoveInAsync(c, actor, now, t)) return;
         var id = ContractHandoverTaskIds.MoveIn(c.Id);
         var prior = await FindTaskAsync(id, t);
-        if (prior?.Status == MeterTaskStatus.Completed) return;
+        if (prior?.MeterStatus == MeterTaskStatus.Completed) return;
         // Never replace a legacy confirmed baseline or a saved preparation.
         var json = JsonSerializer.Serialize(HandoverDraftState.Create(c, now), new JsonSerializerOptions(JsonSerializerDefaults.Web));
         await db.Database.ExecuteSqlInterpolatedAsync($"""
@@ -224,17 +224,17 @@ internal sealed class ContractHandoverRepository(BHomePersistenceContext db, IOp
         var task = new OperationalTask(id)
         {
             Kind = OperationalTaskKind.AdHoc,
-            LocationId = c.Room.LocationId,
+            RequiredLocationId = c.Room.LocationId,
             ContractId = c.Id,
             TargetRoomId = c.RoomId,
             TargetLabel = c.Room.RoomNumber,
-            Title = $"Bàn giao vào phòng {c.Room.RoomNumber}",
+            TaskTitle = $"Bàn giao vào phòng {c.Room.RoomNumber}",
             Requirements = "Kiểm tra hiện trạng phòng, tài sản và chụp xác nhận chỉ số điện nước đầu kỳ. Staff gửi biên bản để Owner duyệt và ký; Tenant ký sau cùng.",
             AssignedStaffUserId = responsible?.StaffUserId,
             AssignmentId = responsible?.AssignmentId,
             AssignedAt = responsible is null ? null : now,
             EvidenceRequired = true,
-            Status = MeterTaskStatus.Assigned,
+            MeterStatus = MeterTaskStatus.Assigned,
             ReadingDate = c.StartDate
         };
         await WriteTaskAsync(task, true, new OperationalTaskHistory
@@ -298,8 +298,8 @@ internal sealed class ContractHandoverRepository(BHomePersistenceContext db, IOp
             .Select(x => Root(x.Id)).Concat(occupiedRoots).Append(c.Id).Distinct().ToArray();
         var all = (await NativeHandoverTaskPersistence.ForContractsAsync(NativeDb, cycleRoots, t))
             .Where(x => x.Kind == OperationalTaskKind.MoveInInventory || x.Kind == OperationalTaskKind.MeterReading && x.Purpose == ReadingPurpose.Initial ||
-                x.Kind == OperationalTaskKind.AdHoc && x.TargetRoomId == c.RoomId && x.Title.StartsWith("Bàn giao vào phòng")).ToArray();
-        var main = all.Where(x => x.Kind == OperationalTaskKind.AdHoc && x.Status != MeterTaskStatus.Cancelled)
+                x.Kind == OperationalTaskKind.AdHoc && x.TargetRoomId == c.RoomId && x.TaskTitle.StartsWith("Bàn giao vào phòng")).ToArray();
+        var main = all.Where(x => x.Kind == OperationalTaskKind.AdHoc && x.MeterStatus != MeterTaskStatus.Cancelled)
             .OrderBy(x => x.CreatedAt).ThenBy(x => x.Id).ToArray();
         var pristine = new HashSet<Guid>();
         foreach (var task in main)
@@ -324,9 +324,9 @@ internal sealed class ContractHandoverRepository(BHomePersistenceContext db, IOp
         if ((canonical is null || pristine.Contains(canonical.Id)) && historical.Length != 0) canonicalId = historical.Order().First();
         foreach (var duplicate in main.Where(x => x.ContractId != canonicalId && pristine.Contains(x.Id)))
         {
-            foreach (var child in all.Where(x => x.ContractId == duplicate.ContractId && x.Status == MeterTaskStatus.Assigned))
+            foreach (var child in all.Where(x => x.ContractId == duplicate.ContractId && x.MeterStatus == MeterTaskStatus.Assigned))
             {
-                child.Status = MeterTaskStatus.Cancelled; child.Version++; child.Result = DuplicateMoveInResult;
+                child.MeterStatus = MeterTaskStatus.Cancelled; child.Version++; child.Result = DuplicateMoveInResult;
                 await WriteTaskAsync(child, false, new OperationalTaskHistory
                 {
                     TaskId = child.Id,
@@ -354,9 +354,9 @@ internal sealed class ContractHandoverRepository(BHomePersistenceContext db, IOp
         // A pristine duplicate may later become the first actual occupant
         // after the earlier candidate was cancelled. Resume the same IDs and
         // preserve the cancellation in their history instead of inserting again.
-        foreach (var child in all.Where(x => x.ContractId == c.Id && x.Status == MeterTaskStatus.Cancelled && x.Result == DuplicateMoveInResult))
+        foreach (var child in all.Where(x => x.ContractId == c.Id && x.MeterStatus == MeterTaskStatus.Cancelled && x.Result == DuplicateMoveInResult))
         {
-            child.Status = MeterTaskStatus.Assigned; child.Version++; child.Result = null;
+            child.MeterStatus = MeterTaskStatus.Assigned; child.Version++; child.Result = null;
             if (child.Kind == OperationalTaskKind.MeterReading && child.ReadingDate < today) child.ReadingDate = today;
             await WriteTaskAsync(child, false, new OperationalTaskHistory
             {
@@ -372,7 +372,7 @@ internal sealed class ContractHandoverRepository(BHomePersistenceContext db, IOp
 
     private async Task<bool> IsPristineMoveInAsync(Guid contractId, OperationalTask[] related, CancellationToken t)
     {
-        if (related.Any(x => x.Status != MeterTaskStatus.Assigned || x.CompletedAt != null || x.Result != null || x.OcrImageHash != null)) return false;
+        if (related.Any(x => x.MeterStatus != MeterTaskStatus.Assigned || x.CompletedAt != null || x.Result != null || x.OcrImageHash != null)) return false;
         var ids = related.Select(x => x.Id).ToArray();
         if (await NativeHandoverTaskPersistence.HasProgressAsync(NativeDb, ids, t) ||
             (await ContractDocumentPersistence.ListAsync(db, contractId, t)).Any(x =>
@@ -428,7 +428,7 @@ internal sealed class ContractHandoverRepository(BHomePersistenceContext db, IOp
             // completed checkpoints whose confirmed readings must be retained.
             var existing = (await NativeHandoverTaskPersistence.ForContractsAsync(NativeDb, [c.Id], t)).SingleOrDefault(x =>
                 x.Kind == OperationalTaskKind.MeterReading && x.MeterId == meter.Id &&
-                x.Purpose == ReadingPurpose.Initial && x.Status != MeterTaskStatus.Cancelled);
+                x.Purpose == ReadingPurpose.Initial && x.MeterStatus != MeterTaskStatus.Cancelled);
             if (existing is not null)
             {
                 ids.Add(existing.Id);
@@ -440,10 +440,10 @@ internal sealed class ContractHandoverRepository(BHomePersistenceContext db, IOp
             var meterTask = new OperationalTask(meterTaskId)
             {
                 Kind = OperationalTaskKind.MeterReading,
-                LocationId = c.Room.LocationId,
+                RequiredLocationId = c.Room.LocationId,
                 MeterId = meter.Id,
                 ContractId = c.Id,
-                Title = $"Chụp chỉ số {(meter.UtilityType == UtilityType.Electricity ? "điện" : "nước")} khi nhận phòng {c.Room.RoomNumber}",
+                TaskTitle = $"Chụp chỉ số {(meter.UtilityType == UtilityType.Electricity ? "điện" : "nước")} khi nhận phòng {c.Room.RoomNumber}",
                 Requirements = "Chụp ảnh thực tế, đối chiếu và xác nhận chỉ số đầu kỳ cho hợp đồng nhận phòng này. Tiếp tục sử dụng công tơ hiện có, không tạo công tơ mới hay kế thừa chỉ số/ảnh của người thuê trước.",
                 Purpose = ReadingPurpose.Initial,
                 ReadingDate = new[] { c.StartDate, date, meter.InstalledOn }.Max(),
@@ -451,7 +451,7 @@ internal sealed class ContractHandoverRepository(BHomePersistenceContext db, IOp
                 AssignmentId = responsible?.AssignmentId,
                 AssignedAt = responsible is null ? null : now,
                 EvidenceRequired = true,
-                Status = MeterTaskStatus.Assigned
+                MeterStatus = MeterTaskStatus.Assigned
             };
             await WriteTaskAsync(meterTask, true, null, t);
         }
@@ -483,18 +483,18 @@ internal sealed class ContractHandoverRepository(BHomePersistenceContext db, IOp
         var task = new OperationalTask(id)
         {
             Kind = OperationalTaskKind.MoveInInventory,
-            LocationId = c.Room.LocationId,
+            RequiredLocationId = c.Room.LocationId,
             ContractId = c.Id,
             TargetRoomId = c.RoomId,
             TargetLabel = c.Room.RoomNumber,
-            Title = $"Kiểm kê trước nhận phòng {c.Room.RoomNumber}",
+            TaskTitle = $"Kiểm kê trước nhận phòng {c.Room.RoomNumber}",
             Requirements = "Kiểm tra từng nhóm tài sản trước khi Tenant nhận phòng. Nếu thiếu hoặc hỏng, gửi báo cáo BF-07 và liên kết sự cố trước khi hoàn thành.",
             AssignedStaffUserId = responsible?.StaffUserId,
             AssignmentId = responsible?.AssignmentId,
             AssignedAt = responsible is null ? null : now,
             DueAt = due,
             EvidenceRequired = false,
-            Status = MeterTaskStatus.Assigned,
+            MeterStatus = MeterTaskStatus.Assigned,
             ReadingDate = c.StartDate,
             MoveInInventoryJson = JsonSerializer.Serialize(new MoveInInventorySnapshot(source.StateToken, items))
         };
@@ -533,7 +533,7 @@ internal sealed class ContractHandoverRepository(BHomePersistenceContext db, IOp
         // New Main activations are always provisioned together with this task.
         var task = await FindTaskAsync(Key($"contract-pre-move-in-inventory:{contractId:N}"), t);
         if (task is null) return true;
-        if (task.Kind != OperationalTaskKind.MoveInInventory || task.Status != MeterTaskStatus.Completed)
+        if (task.Kind != OperationalTaskKind.MoveInInventory || task.MeterStatus != MeterTaskStatus.Completed)
             return false;
         MoveInInventorySnapshot? snapshot;
         try { snapshot = JsonSerializer.Deserialize<MoveInInventorySnapshot>(task.MoveInInventoryJson); }
@@ -556,7 +556,7 @@ internal sealed class ContractHandoverRepository(BHomePersistenceContext db, IOp
         // evidence of new configuration changes.
         var task = await FindTaskAsync(Key($"contract-pre-move-in-inventory:{contractId:N}"), t);
         if (task is null || task.ContractId != contractId || task.Kind != OperationalTaskKind.MoveInInventory ||
-            task.Status != MeterTaskStatus.Completed) return null;
+            task.MeterStatus != MeterTaskStatus.Completed) return null;
         try
         {
             var snapshot = JsonSerializer.Deserialize<MoveInInventorySnapshot>(task.MoveInInventoryJson);
@@ -604,7 +604,7 @@ internal sealed class ContractHandoverRepository(BHomePersistenceContext db, IOp
         MoveInInventorySnapshot? source;
         try { source = JsonSerializer.Deserialize<MoveInInventorySnapshot>(inventoryTask.MoveInInventoryJson); }
         catch (JsonException) { throw ContractException.Conflict("move_in_inventory_required"); }
-        if (inventoryTask.Status != MeterTaskStatus.Completed || !CompletedInventoryValid(source) ||
+        if (inventoryTask.MeterStatus != MeterTaskStatus.Completed || !CompletedInventoryValid(source) ||
             selectedAssetIds.Length == 0 ||
             selectedAssetIds.Distinct().Count() != selectedAssetIds.Length ||
             selectedAssetIds.Any(id => source!.Items.All(item => item.Id != id)))
@@ -612,7 +612,7 @@ internal sealed class ContractHandoverRepository(BHomePersistenceContext db, IOp
         // Domain ApplyAction disallows generic rework for MoveInInventory.
         // Owner-only handover reinspection supplies that explicit transition,
         // retaining the existing version, evidence and task history.
-        inventoryTask.Status = MeterTaskStatus.InProgress;
+        inventoryTask.MeterStatus = MeterTaskStatus.InProgress;
         inventoryTask.CompletedAt = null;
         inventoryTask.Result = "Owner yêu cầu Staff kiểm kê lại tài sản đã chọn.";
         inventoryTask.MoveInInventoryJson = JsonSerializer.Serialize(source! with
@@ -638,7 +638,7 @@ internal sealed class ContractHandoverRepository(BHomePersistenceContext db, IOp
         if (db is not BHome.Infrastructure.Persistence.Compact24.Compact24DbContext) return;
         var task = await FindMoveInTaskForUpdateAsync(contractId, t)
             ?? throw ContractException.Conflict("move_in_task_required");
-        if (task.AssignedStaffUserId != actor || task.Status != MeterTaskStatus.InProgress)
+        if (task.AssignedStaffUserId != actor || task.MeterStatus != MeterTaskStatus.InProgress)
             throw ContractException.Conflict("move_in_task_not_started");
         task.ApplyAction("submit", now, actor);
         task.Version++;
@@ -650,7 +650,7 @@ internal sealed class ContractHandoverRepository(BHomePersistenceContext db, IOp
         if (db is not BHome.Infrastructure.Persistence.Compact24.Compact24DbContext) return;
         var task = await FindMoveInTaskForUpdateAsync(contractId, t)
             ?? throw ContractException.Conflict("move_in_task_required");
-        if (task.Status != MeterTaskStatus.PendingVerification)
+        if (task.MeterStatus != MeterTaskStatus.PendingVerification)
             throw ContractException.Conflict("move_in_task_not_submitted");
         task.ApplyAction("rework", now, actor);
         task.Version++;
@@ -660,8 +660,8 @@ internal sealed class ContractHandoverRepository(BHomePersistenceContext db, IOp
     {
         if (db is not BHome.Infrastructure.Persistence.Compact24.Compact24DbContext) return;
         var task = await FindMoveInTaskForUpdateAsync(contractId, t);
-        if (task is null || task.Status == MeterTaskStatus.Completed) return;
-        if (task.Status != MeterTaskStatus.PendingVerification) throw ContractException.Conflict("move_in_task_not_submitted");
+        if (task is null || task.MeterStatus == MeterTaskStatus.Completed) return;
+        if (task.MeterStatus != MeterTaskStatus.PendingVerification) throw ContractException.Conflict("move_in_task_not_submitted");
         task.ApplyAction("verify", now, actor); task.Version++;
         task.Result = "Biên bản đã được Owner và Tenant ký điện tử.";
         await WriteTaskAsync(task, false, new OperationalTaskHistory { TaskId = task.Id, ActorId = actor, Action = "MoveInCompleted", OccurredAt = now, TaskVersion = task.Version }, t);
@@ -719,7 +719,7 @@ internal sealed class ContractHandoverRepository(BHomePersistenceContext db, IOp
                 ORDER BY n.event_at DESC LIMIT 200
                 """).ToArrayAsync(t);
             var nativeOrders = (await compact.Set<BHome.Domain.Billing.OperationalTask>().AsNoTracking()
-                .Where(w => w.RoomId == roomId && w.TaskType == "WORK_ORDER" && w.StoredStatus == "Verified" && w.AssetId != null)
+                .Where(w => w.RoomId == roomId && w.TaskType == "WORK_ORDER" && w.Status == "Verified" && w.AssetId != null)
                 .Take(200).ToArrayAsync(t)).Select(NativeIncidentSession.Read)
                 .Select(w => new AssetChangeSource(w.Id, w.AssetId!.Value, w.Description, w.Id));
             return nativeOrders.Concat(nativeHistory).ToArray();
@@ -756,7 +756,7 @@ internal sealed class ContractHandoverRepository(BHomePersistenceContext db, IOp
             join meter in db.Set<Meter>() on r.MeterId equals meter.Id
             join evidence in db.Set<MeterEvidence>() on r.EvidenceId equals evidence.Id
             where meter.RoomId == roomId && meter.IsActive && task.ReadingDate >= startDate &&
-                task.Status == MeterTaskStatus.Completed && evidence.IsUploaded && evidence.IsLinked &&
+                task.MeterStatus == MeterTaskStatus.Completed && evidence.IsUploaded && evidence.IsLinked &&
                 (task.Purpose == ReadingPurpose.Initial || task.Purpose == ReadingPurpose.Periodic)
             orderby task.ReadingDate descending
             select new HandoverReading(r.Id, meter.Code, (int)meter.UtilityType, task.ReadingDate, r.ConfirmedValue, evidence.Id, evidence.ObjectKey, evidence.ImageHash))

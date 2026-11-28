@@ -29,7 +29,7 @@ public sealed partial class Compact24ArchiveContext
             }
             // Certificate declarations were not relational FKs in the source model. Persist
             // their embedded directory entry before capturing its immutable signing snapshot.
-            if (entry.Entity is BHome.Domain.TenantContracts.ContractSignature signature && certificates.TryGetValue(signature.CertificateId, out var certificate))
+            if (entry.Entity is BHome.Domain.TenantContracts.ContractSigning signature && certificates.TryGetValue(signature.CertificateId, out var certificate))
                 dependencies[entry].Add(certificate);
             foreach (var parent in dependencies[entry]) dependents[parent].Add(entry);
         }

@@ -154,7 +154,7 @@ public sealed class CaptureWorkflowTests : IClassFixture<CaptureFixture>
         {
             var db = scope.ServiceProvider.GetFixturePersistence(); var saved = await db.Set<OperationalTask>().SingleAsync(t => t.Id == task);
             Assert.Equal(17.25m, saved.OcrProposedValue); Assert.Equal(new string('a', 64), saved.OcrImageHash); Assert.Equal("prior-proposal", saved.OcrEngineVersion);
-            Assert.NotEqual(MeterTaskStatus.Completed, saved.Status); Assert.False(await db.Set<MeterReading>().AnyAsync(r => r.TaskId == task));
+            Assert.NotEqual(MeterTaskStatus.Completed, saved.MeterStatus); Assert.False(await db.Set<MeterReading>().AnyAsync(r => r.TaskId == task));
             var assignment = await db.Set<StaffLocationAssignment>().SingleAsync(a => a.LocationId == w.Location && a.StaffUserId == w.StaffId);
             db.Entry(assignment).Property(a => a.EndDate).CurrentValue = Today.AddDays(-1);
             await db.SaveChangesAsync();
@@ -319,14 +319,14 @@ public sealed class CaptureWorkflowTests : IClassFixture<CaptureFixture>
         Assert.False(await db.Set<MeterReading>().AnyAsync(reading => reading.TaskId == task));
         var stored = await db.Set<OperationalTask>().SingleAsync(value => value.Id == task);
         Assert.Equal(123.45m, stored.OcrProposedValue);
-        Assert.Equal(MeterTaskStatus.Assigned, stored.Status);
+        Assert.Equal(MeterTaskStatus.Assigned, stored.MeterStatus);
     }
     private async Task<(HttpClient Client, Guid UserId)> User(string role)
     {
         var name = Guid.NewGuid().ToString(); var id = Guid.NewGuid();
         await using (var scope = fixture.Factory.Services.CreateAsyncScope())
         {
-            var u = new ApplicationUser { Id = id, UserName = name, Email = name + "@example.invalid", LockoutEnabled = true };
+            var u = new User { Id = id, UserName = name, Email = name + "@example.invalid", LockoutEnabled = true };
             u = await BHome.IntegrationTests.Compact24.WorkflowTestUsers.CreateAsync(scope.ServiceProvider, u, role, Password, reuseOwner: true);
             id = u.Id; name = u.Email!;
         }
@@ -458,7 +458,7 @@ public sealed class CaptureWorkflowTests : IClassFixture<CaptureFixture>
         var otherOwner = await User(Roles.Owner); Assert.Equal(HttpStatusCode.OK, (await otherOwner.Client.GetAsync($"/api/v1/capture/readings/{reading.Id}/evidence")).StatusCode);
         await using var scope = fixture.Factory.Services.CreateAsyncScope(); var db = scope.ServiceProvider.GetFixturePersistence();
         Assert.Equal(1, await db.Set<MeterReading>().CountAsync(r => r.TaskId == periodic));
-        Assert.Equal(MeterTaskStatus.Completed, (await db.Set<OperationalTask>().SingleAsync(a => a.Id == periodic)).Status);
+        Assert.Equal(MeterTaskStatus.Completed, (await db.Set<OperationalTask>().SingleAsync(a => a.Id == periodic)).MeterStatus);
         var stored = await db.Set<MeterEvidence>().SingleAsync(a => a.Id == evidence); Assert.True(stored.IsLinked); Assert.DoesNotContain("http", stored.ObjectKey);
         if (verifyMinioObject)
         {
@@ -555,7 +555,7 @@ public sealed class CaptureWorkflowTests : IClassFixture<CaptureFixture>
         await using var scope = fixture.Factory.Services.CreateAsyncScope();
         var db = scope.ServiceProvider.GetFixturePersistence();
         Assert.Equal(1, await db.Set<MeterReading>().CountAsync(r => r.TaskId == periodic));
-        Assert.Equal(MeterTaskStatus.Completed, (await db.Set<OperationalTask>().SingleAsync(t => t.Id == periodic)).Status);
+        Assert.Equal(MeterTaskStatus.Completed, (await db.Set<OperationalTask>().SingleAsync(t => t.Id == periodic)).MeterStatus);
     }
     [Fact]
     public async Task MeterConfirmationSeparatesFutureDateAndFractionalValueAndAcceptsZero()
@@ -589,7 +589,7 @@ public sealed class CaptureWorkflowTests : IClassFixture<CaptureFixture>
         Assert.Equal(HttpStatusCode.Conflict, (await w.Staff.PostAsJsonAsync(route, new MeterConfirmation(true, 10, evidence))).StatusCode);
         await using var scope = fixture.Factory.Services.CreateAsyncScope(); var db = scope.ServiceProvider.GetFixturePersistence();
         Assert.False(await db.Set<MeterReading>().AnyAsync(r => r.TaskId == task));
-        Assert.Equal(MeterTaskStatus.Assigned, (await db.Set<OperationalTask>().SingleAsync(a => a.Id == task)).Status);
+        Assert.Equal(MeterTaskStatus.Assigned, (await db.Set<OperationalTask>().SingleAsync(a => a.Id == task)).MeterStatus);
     }
     [Fact]
     public async Task PartialStorageFailureLeavesDurableCleanupIntentAndCannotCreateConfirmedReading()

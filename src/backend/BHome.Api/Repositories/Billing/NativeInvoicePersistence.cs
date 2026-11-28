@@ -24,8 +24,8 @@ internal static class NativeInvoicePersistence
         if (rows.Length == 0) return [];
         var ids = rows.Select(r => r.Id).ToArray();
         var items = includeLines
-            ? await db.Set<InvoiceLine>().AsNoTracking().Where(l => ids.Contains(l.InvoiceId)).ToArrayAsync(t)
-            : Array.Empty<InvoiceLine>();
+            ? await db.Set<InvoiceItem>().AsNoTracking().Where(l => ids.Contains(l.InvoiceId)).ToArrayAsync(t)
+            : Array.Empty<InvoiceItem>();
         var lines = items.ToLookup(l => l.InvoiceId);
         foreach (var invoice in rows)
         {
@@ -114,7 +114,7 @@ internal static class NativeInvoicePersistence
                 await InsertLineAsync(db, line, t);
     }
 
-    private static string LineSnapshot(InvoiceLine line)
+    private static string LineSnapshot(InvoiceItem line)
     {
         return JsonSerializer.Serialize(new
         {
@@ -144,7 +144,7 @@ internal static class NativeInvoicePersistence
         }, Json);
     }
 
-    private static Task<int> InsertLineAsync(Compact24DbContext db, InvoiceLine line, CancellationToken t)
+    private static Task<int> InsertLineAsync(Compact24DbContext db, InvoiceItem line, CancellationToken t)
     {
         var snapshot = LineSnapshot(line);
         return db.Database.ExecuteSqlInterpolatedAsync($"""
@@ -157,7 +157,7 @@ internal static class NativeInvoicePersistence
 
     // An approved draft correction retains the original line identity, policy,
     // rate and evidence. The immutable-item trigger still protects final rows.
-    internal static async Task CorrectDraftLineAsync(Compact24DbContext db, InvoiceLine line, CancellationToken t)
+    internal static async Task CorrectDraftLineAsync(Compact24DbContext db, InvoiceItem line, CancellationToken t)
     {
         if (db.Database.CurrentTransaction is null)
             throw new InvalidOperationException("Draft correction requires the adjustment transaction.");

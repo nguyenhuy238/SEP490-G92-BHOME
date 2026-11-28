@@ -26,9 +26,9 @@ public sealed class PropertyApiTests(AuthenticationDatabaseFixture fixture) : IC
     private async Task<(HttpClient Client, Guid UserId)> Client(string role)
     {
         await using var scope = fixture.Factory.Services.CreateAsyncScope();
-        var users = scope.ServiceProvider.GetRequiredService<UserManager<ApplicationUser>>();
+        var users = scope.ServiceProvider.GetRequiredService<UserManager<User>>();
         var id = Guid.NewGuid();
-        var user = new ApplicationUser { Id = id, UserName = id.ToString(), Email = $"{id:N}@example.invalid" };
+        var user = new User { Id = id, UserName = id.ToString(), Email = $"{id:N}@example.invalid" };
         user = await BHome.IntegrationTests.Compact24.WorkflowTestUsers.CreateAsync(scope.ServiceProvider, user, role, Password, reuseOwner: true);
         id = user.Id;
         var client = fixture.Factory.CreateClient();

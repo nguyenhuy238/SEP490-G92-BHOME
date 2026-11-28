@@ -52,7 +52,7 @@ internal sealed class ContractSigningRouter(IContractSigningMethods methods, ICo
             : throw new ContractException(503, "signing_method_disabled");
     }
 
-    private IContractSigningProvider For(ContractSignature signature) => signature.CredentialId switch
+    private IContractSigningProvider For(ContractSigning signature) => signature.CredentialId switch
     {
         OtpCredential => Otp(),
         OwnerSessionCredential => services.GetRequiredService<OtpContractSigningAdapter>(),
@@ -80,12 +80,12 @@ internal sealed class ContractSigningRouter(IContractSigningMethods methods, ICo
         return Certificate().SignerAsync(t);
     }
 
-    public Task<string> RequestAsync(ContractSignature signature, CancellationToken t) => For(signature).RequestAsync(signature, t);
-    public Task<SigningOutcome> PollAsync(ContractSignature signature, byte[] preparedPdf, CancellationToken t) => For(signature).PollAsync(signature, preparedPdf, t);
-    public Task<SigningOutcome> ConfirmAsync(ContractSignature signature, byte[] preparedPdf, string code, CancellationToken t)
+    public Task<string> RequestAsync(ContractSigning signature, CancellationToken t) => For(signature).RequestAsync(signature, t);
+    public Task<SigningOutcome> PollAsync(ContractSigning signature, byte[] preparedPdf, CancellationToken t) => For(signature).PollAsync(signature, preparedPdf, t);
+    public Task<SigningOutcome> ConfirmAsync(ContractSigning signature, byte[] preparedPdf, string code, CancellationToken t)
         => For(signature).ConfirmAsync(signature, preparedPdf, code, t);
-    public Task<SigningOtpView> ResendAsync(ContractSignature signature, CancellationToken t) => For(signature).ResendAsync(signature, t);
-    public Task<SigningOtpView?> ChallengeAsync(ContractSignature signature, CancellationToken t) => For(signature).ChallengeAsync(signature, t);
-    public Task<SigningOutcome> CompleteUploadAsync(ContractSignature signature, byte[] issuedPdf, byte[] uploadedPdf, CancellationToken t)
+    public Task<SigningOtpView> ResendAsync(ContractSigning signature, CancellationToken t) => For(signature).ResendAsync(signature, t);
+    public Task<SigningOtpView?> ChallengeAsync(ContractSigning signature, CancellationToken t) => For(signature).ChallengeAsync(signature, t);
+    public Task<SigningOutcome> CompleteUploadAsync(ContractSigning signature, byte[] issuedPdf, byte[] uploadedPdf, CancellationToken t)
         => For(signature).CompleteUploadAsync(signature, issuedPdf, uploadedPdf, t);
 }

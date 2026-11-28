@@ -134,7 +134,7 @@ public sealed class Compact24FixtureMigration(BHomeDbContext source, Compact24Db
                 target.Entry(user).Property("business_profile").CurrentValue = JsonSerializer.Serialize(new { schemaVersion = 1, chain = chains[0], identityRoles = roles }, new JsonSerializerOptions(JsonSerializerDefaults.Web));
         }
         foreach (var s in sessions)
-            target.Refresh.Add(new CompactRefreshRow
+            target.Refresh.Add(new RefreshToken
             {
                 Id = s.Id,
                 UserId = s.UserId,
@@ -149,7 +149,7 @@ public sealed class Compact24FixtureMigration(BHomeDbContext source, Compact24Db
             });
         await target.SaveChangesAsync(token);
         foreach (var r in refresh)
-            target.Refresh.Add(new CompactRefreshRow
+            target.Refresh.Add(new RefreshToken
             {
                 Id = r.Id,
                 UserId = sessions.Single(s => s.Id == r.SessionId).UserId,

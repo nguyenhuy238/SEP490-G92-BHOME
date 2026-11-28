@@ -138,7 +138,7 @@ internal sealed class ContractSettlementLedger(BHomePersistenceContext db, ICont
         var invoiceEntities = db is Compact24DbContext native
             ? await NativeInvoicePersistence.ReadAsync(native, native.Set<BHome.Domain.Billing.Invoice>().AsNoTracking()
                 .Where(i => i.RoomId == c.RoomId && i.BillingPeriod >= start && i.BillingPeriod <= through &&
-                    (i.Type == "PERIODIC" || chainIds.Contains(i.RepresentativeContractId))).OrderBy(i => i.BillingPeriod).ThenBy(i => i.Id).Take(251), t)
+                    (i.InvoiceType == "PERIODIC" || chainIds.Contains(i.ContractId))).OrderBy(i => i.BillingPeriod).ThenBy(i => i.Id).Take(251), t)
             : await db.Set<Invoice>().AsNoTracking().Include(i => i.Lines).Where(i => i.RoomId == c.RoomId && i.BillingPeriod >= start && i.BillingPeriod <= through).OrderBy(i => i.BillingPeriod).ToArrayAsync(t);
         if (invoiceEntities.Length > 250) throw ContractException.Conflict("settlement_period_review_required");
         var ids = invoiceEntities.Select(i => i.Id).ToArray();
@@ -159,15 +159,15 @@ internal sealed class ContractSettlementLedger(BHomePersistenceContext db, ICont
         }
         if (db is Compact24DbContext)
         {
-            if (await db.Set<InvoiceAdjustmentRequest>().AnyAsync(r => ids.Contains(r.InvoiceId) && r.DecisionSnapshot == null, t)) blockers.Add("invoice_adjustment_pending");
+            if (await db.Set<InvoiceAdjustment>().AnyAsync(r => ids.Contains(r.InvoiceId) && r.DecisionSnapshot == null, t)) blockers.Add("invoice_adjustment_pending");
             var reviews = PaymentLedgerQueries.Reviews(db);
             if (await reviews.AnyAsync(r => r.InvoiceId != null && ids.Contains(r.InvoiceId.Value) && r.Decision == "PendingReview" &&
                 !reviews.Any(n => n.TransferId == r.TransferId && n.Sequence > r.Sequence) &&
-                !db.Set<BHome.Domain.PaymentsDebt.PaymentAllocation>().Any(a => a.TransferId == r.TransferId), t)) blockers.Add("bank_transfer_pending_review");
+                !db.Set<BHome.Domain.PaymentsDebt.PaymentAllocation>().Any(a => a.SourcePaymentId == r.TransferId), t)) blockers.Add("bank_transfer_pending_review");
         }
         else
         {
-            if (await db.Set<InvoiceAdjustmentRequest>().AnyAsync(r => ids.Contains(r.InvoiceId) && r.Decision == null, t)) blockers.Add("invoice_adjustment_pending");
+            if (await db.Set<InvoiceAdjustment>().AnyAsync(r => ids.Contains(r.InvoiceId) && r.Decision == null, t)) blockers.Add("invoice_adjustment_pending");
             if (await db.Set<PaymentReconciliation>().AnyAsync(r => r.InvoiceId != null && ids.Contains(r.InvoiceId.Value) && r.Decision == "PendingReview" &&
                 !db.Set<PaymentReconciliation>().Any(n => n.TransferId == r.TransferId && n.Sequence > r.Sequence) && !db.Set<PaymentAllocation>().Any(a => a.TransferId == r.TransferId), t)) blockers.Add("bank_transfer_pending_review");
         }

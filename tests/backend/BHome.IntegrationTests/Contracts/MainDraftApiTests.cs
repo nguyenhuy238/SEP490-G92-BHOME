@@ -35,10 +35,10 @@ public sealed partial class MainDraftApiTests(ContractFixture fixture) : IClassF
         var id = Guid.NewGuid(); var email = $"{id:N}@example.invalid"; const string password = BHome.IntegrationTests.Compact24.WorkflowTestUsers.Password;
         await using (var scope = fixture.Factory.Services.CreateAsyncScope())
         {
-            var users = scope.ServiceProvider.GetRequiredService<UserManager<ApplicationUser>>();
+            var users = scope.ServiceProvider.GetRequiredService<UserManager<User>>();
             // These signing actors represent established accounts; pending invitation
             // setup is covered by the dedicated onboarding/authentication regressions.
-            var user = new ApplicationUser { Id = id, UserName = email, Email = email, EmailConfirmed = true, IsActive = true };
+            var user = new User { Id = id, UserName = email, Email = email, EmailConfirmed = true, IsActive = true };
             user = await BHome.IntegrationTests.Compact24.WorkflowTestUsers.CreateAsync(scope.ServiceProvider, user, role, password);
             id = user.Id; email = user.Email!;
         }
@@ -88,7 +88,7 @@ public sealed partial class MainDraftApiTests(ContractFixture fixture) : IClassF
         Assert.Equal("********0123", draft.Preparation.Residents.Single().MaskedCitizenNumber);
         var contract = await db.Set<Contract>().AsNoTracking().SingleAsync(c => c.Id == draft.Id);
         Assert.Null(contract.TenantUserId); Assert.Equal(ContractStatus.Draft, contract.Status); Assert.Null(contract.ActivatedAt); Assert.Equal(0, contract.AppliedHoldingDeposit);
-        Assert.Empty(await db.Set<ContractSignature>().Where(s => s.ContractId == draft.Id).ToArrayAsync());
+        Assert.Empty(await db.Set<ContractSigning>().Where(s => s.ContractId == draft.Id).ToArrayAsync());
         Assert.Equal(RoomStatus.Available, (await db.Set<Room>().FindAsync(w.Room))!.Status); Assert.Equal(beforeUsers, await db.Users.CountAsync());
         var generated = await w.Staff.PostAsync($"{Root}/{draft.Id}/documents", null); await Success(generated);
         var docs = (await generated.Content.ReadFromJsonAsync<MainDraftFiles>())!;
@@ -218,7 +218,7 @@ public sealed partial class MainDraftApiTests(ContractFixture fixture) : IClassF
         var context = verification.ServiceProvider.GetFixturePersistence();
         var stored = await context.Set<Contract>().Include(c => c.Signatures).SingleAsync(c => c.Id == updated.Id);
         Assert.Equal(ContractStatus.Draft, stored.Status); Assert.Empty(stored.Signatures);
-        Assert.Equal(stored.SnapshotHash, (await context.Set<ContractDocumentFile>().SingleAsync(f => f.Id == updatedFiles.Pdf.Id)).SnapshotHash);
+        Assert.Equal(stored.SnapshotHashOrEmpty, (await context.Set<ContractDocumentFile>().SingleAsync(f => f.Id == updatedFiles.Pdf.Id)).SnapshotHash);
         Assert.Equal(RoomStatus.Available, (await context.Set<Room>().FindAsync(w.Room))!.Status);
     }
     [Fact]
@@ -295,7 +295,7 @@ public sealed partial class MainDraftApiTests(ContractFixture fixture) : IClassF
         var context = verify.ServiceProvider.GetFixturePersistence();
         Assert.Equal(6, await context.Set<ContractDocumentFile>().CountAsync(f => f.ContractId == draft.Id));
         Assert.Equal(ContractStatus.Draft, (await context.Set<Contract>().SingleAsync(c => c.Id == draft.Id)).Status);
-        Assert.Empty(await context.Set<ContractSignature>().Where(s => s.ContractId == draft.Id).ToArrayAsync());
+        Assert.Empty(await context.Set<ContractSigning>().Where(s => s.ContractId == draft.Id).ToArrayAsync());
     }
     [Fact]
     public async Task RejectsDuplicateInvalidPeriodUnassignedStaffAndNonDraftEdits()

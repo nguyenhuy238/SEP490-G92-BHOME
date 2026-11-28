@@ -96,11 +96,11 @@ public sealed partial class Compact24OwnerSetupTests
             {
                 Kind = OperationalTaskKind.MoveInInventory,
                 ContractId = contractId,
-                LocationId = w.Location,
+                RequiredLocationId = w.Location,
                 TargetRoomId = w.Room,
-                Title = "Kiểm kê tài sản trước bàn giao",
+                TaskTitle = "Kiểm kê tài sản trước bàn giao",
                 Requirements = "Ghi nhận thiếu/hỏng kèm ảnh",
-                Status = MeterTaskStatus.Assigned,
+                MeterStatus = MeterTaskStatus.Assigned,
                 AssignedStaffUserId = w.Staff.Id,
                 AssignedAt = DateTimeOffset.UtcNow,
                 MoveInInventoryJson = JsonSerializer.Serialize(new MoveInInventorySnapshot(

@@ -9,10 +9,10 @@ namespace BHome.Infrastructure.IdentityAccess;
 // This works across API instances; there is no in-process rotation lock or revocation cache.
 internal sealed class IdentitySecurityStore(IIdentityPersistence db, TimeProvider clock)
 {
-    public async Task<ApplicationUser?> LockUserAsync(Guid userId, CancellationToken cancellationToken)
+    public async Task<User?> LockUserAsync(Guid userId, CancellationToken cancellationToken)
         => await db.LockUserAsync(userId, cancellationToken);
 
-    public bool IsEligible(ApplicationUser user) => user.IsActive && !user.TwoFactorEnabled &&
+    public bool IsEligible(User user) => user.IsActive && !user.TwoFactorEnabled &&
         (!user.LockoutEnabled || user.LockoutEnd is null || user.LockoutEnd <= clock.GetUtcNow()) &&
         !string.IsNullOrWhiteSpace(user.SecurityStamp);
 

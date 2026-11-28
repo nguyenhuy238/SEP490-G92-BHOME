@@ -20,7 +20,7 @@ namespace BHome.Infrastructure.IdentityAccess;
 internal sealed class AuthenticationEmailDelivery(Compact24DbContext db, CompactNotificationWriter sql,
     IDataProtectionProvider protection, IOptions<AuthenticationEmailOptions> options,
     IHostEnvironment environment, IOptions<SessionOptions> sessions, IOptions<NotificationChannelOptions> channels,
-    UserManager<ApplicationUser> users, NotificationEmailContent contractEmail,
+    UserManager<User> users, NotificationEmailContent contractEmail,
     IOptions<EmailOptions> email) : IPasswordResetDelivery
 {
     public void ValidateInvitationRecipient(string destination, bool automaticTenantSetup = false)

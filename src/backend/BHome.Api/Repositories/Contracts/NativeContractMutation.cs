@@ -83,7 +83,7 @@ internal sealed class NativeContractMutation(Compact24DbContext db)
         contracts.Add(c.Id, new(c, true));
     }
 
-    internal void Add(ContractSignature s)
+    internal void Add(ContractSigning s)
     {
         if (!contracts.TryGetValue(s.ContractId, out var contract))
             throw new InvalidOperationException("Signature requires the loaded contract.");

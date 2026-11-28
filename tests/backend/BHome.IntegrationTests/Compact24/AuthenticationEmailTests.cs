@@ -117,7 +117,7 @@ public sealed partial class Compact24NotificationMvpTests
         await using var scope = host.Services.CreateAsyncScope();
         var db = scope.ServiceProvider.GetRequiredService<Compact24ArchiveContext>();
         // Updating the current password invalidates a pending credential message.
-        var manager = scope.ServiceProvider.GetRequiredService<Microsoft.AspNetCore.Identity.UserManager<BHome.Infrastructure.Persistence.ApplicationUser>>();
+        var manager = scope.ServiceProvider.GetRequiredService<Microsoft.AspNetCore.Identity.UserManager<BHome.Infrastructure.Persistence.User>>();
         var staff = (await manager.FindByIdAsync(w.Staff.Id.ToString()))!;
         var resetToken = await manager.GeneratePasswordResetTokenAsync(staff);
         Assert.True((await manager.ResetPasswordAsync(staff, resetToken, "Synthetic!Replaced-825")).Succeeded);
@@ -396,7 +396,7 @@ public sealed partial class Compact24NotificationMvpTests
         // Compatibility fixture for invitations issued before direct active Staff provisioning.
         await using var legacyScope = host.Services.CreateAsyncScope();
         var legacyDb = legacyScope.ServiceProvider.GetRequiredService<Compact24DbContext>();
-        var legacyUser = new BHome.Infrastructure.Persistence.ApplicationUser { Id = Guid.NewGuid(), UserName = email, Email = email, EmailConfirmed = false };
+        var legacyUser = new BHome.Infrastructure.Persistence.User { Id = Guid.NewGuid(), UserName = email, Email = email, EmailConfirmed = false };
         AccountInvitations.MarkPendingSetup(legacyDb, legacyUser, DateTimeOffset.UtcNow);
         await WorkflowTestUsers.CreateAsync(legacyScope.ServiceProvider, legacyUser, "Staff", Password);
         var staff = new { UserId = legacyUser.Id };

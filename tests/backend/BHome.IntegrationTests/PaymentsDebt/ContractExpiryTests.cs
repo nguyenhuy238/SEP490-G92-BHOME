@@ -32,7 +32,7 @@ public sealed partial class PaymentLedgerTests
                 PreviousContractId = main.Id,
                 StartDate = today,
                 EndDate = today.AddYears(1),
-                MonthlyRent = main.MonthlyRent,
+                RentAmount = main.RentAmount,
                 Terms = "Synthetic pending renewal"
             });
             await db.SaveChangesAsync();

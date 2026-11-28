@@ -21,7 +21,7 @@ public sealed class ExpenseRepository(BHomePersistenceContext db) : IExpenseRepo
         select new ExpenseView(expense.Id, expense.LocationId, expense.RoomId, expense.ExpenseType, expense.Category,
             expense.Amount, expense.OccurredOn, expense.Note, expense.History.GetArrayLength(),
             expense.SourceKey != null && expense.SourceKey.StartsWith("expense:"), expense.AssetId, expense.TaskId,
-            asset == null ? null : asset.Name, task == null ? null : task.StoredTitle);
+            asset == null ? null : asset.Name, task == null ? null : task.Title);
 
     public async Task<bool> ValidScopeAsync(Guid locationId, Guid? roomId, CancellationToken token)
     {
@@ -209,8 +209,8 @@ public sealed class ExpenseRepository(BHomePersistenceContext db) : IExpenseRepo
         if (input.TaskId is null) return true;
         return await (from task in compact.Set<BHome.Domain.Billing.OperationalTask>().AsNoTracking()
                       join incident in compact.Set<BHome.Domain.IncidentMaintenance.IncidentReport>().AsNoTracking() on task.IncidentReportId equals incident.Id
-                      where task.Id == input.TaskId && task.TaskType == "WORK_ORDER" && task.StoredLocationId == input.LocationId &&
-                            task.RoomId == input.RoomId && incident.LocationId == task.StoredLocationId &&
+                      where task.Id == input.TaskId && task.TaskType == "WORK_ORDER" && task.LocationId == input.LocationId &&
+                            task.RoomId == input.RoomId && incident.LocationId == task.LocationId &&
                             (incident.RoomId == null || incident.RoomId == task.RoomId) &&
                             (task.AssetId == null || task.AssetId == input.AssetId)
                       select task.Id).AnyAsync(t);
@@ -225,10 +225,10 @@ public sealed class ExpenseRepository(BHomePersistenceContext db) : IExpenseRepo
             .Select(a => new ExpenseReference(a.Id, a.Name, a.RoomId, a.Id)).Take(501).ToArrayAsync(t);
         var tasks = await (from task in compact.Set<BHome.Domain.Billing.OperationalTask>().AsNoTracking()
                            join incident in compact.Set<BHome.Domain.IncidentMaintenance.IncidentReport>().AsNoTracking() on task.IncidentReportId equals incident.Id
-                           where task.TaskType == "WORK_ORDER" && task.StoredLocationId == locationId && task.RoomId == roomId &&
-                                 incident.LocationId == task.StoredLocationId && (incident.RoomId == null || incident.RoomId == task.RoomId)
-                           orderby task.StoredTitle, task.Id
-                           select new ExpenseReference(task.Id, task.StoredTitle == null || task.StoredTitle == "" ? "Work Order chưa có tên" : task.StoredTitle,
+                           where task.TaskType == "WORK_ORDER" && task.LocationId == locationId && task.RoomId == roomId &&
+                                 incident.LocationId == task.LocationId && (incident.RoomId == null || incident.RoomId == task.RoomId)
+                           orderby task.Title, task.Id
+                           select new ExpenseReference(task.Id, task.Title == null || task.Title == "" ? "Work Order chưa có tên" : task.Title,
                                task.RoomId, task.AssetId)).Take(501).ToArrayAsync(t);
         return new(rooms.Take(500).ToArray(), assets.Take(500).ToArray(), tasks.Take(500).ToArray(), rooms.Length > 500 || assets.Length > 500 || tasks.Length > 500);
     }

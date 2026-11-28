@@ -326,7 +326,7 @@ internal sealed class SetupWorkspaceStore(Compact24DbContext db, CompactNotifica
     }
     public Task<bool> HasOpenAssetWorkAsync(Guid id, CancellationToken t) =>
         db.Set<BHome.Domain.Billing.OperationalTask>().AsNoTracking().AnyAsync(w => w.TaskType == "WORK_ORDER" && w.AssetId == id &&
-            w.StoredStatus != "Verified" && w.StoredStatus != "Cancelled", t);
+            w.Status != "Verified" && w.Status != "Cancelled", t);
     public async Task<IReadOnlyList<AssetHistoryEntry>> AssetHistoryAsync(Guid assetId, CancellationToken t)
     {
         var changes = await db.Database.SqlQuery<AssetHistoryEntry>($"""
@@ -376,16 +376,16 @@ internal sealed class SetupWorkspaceStore(Compact24DbContext db, CompactNotifica
         var tracked = db.ChangeTracker.Entries<Asset>().SingleOrDefault(e => e.Entity.Id == assetId);
         if (tracked is not null)
         {
-            if (tracked.Metadata.FindProperty(nameof(Asset.PurchaseMetadata)) is not null)
+            if (tracked.Metadata.FindProperty(nameof(Asset.PurchaseInfo)) is not null)
             {
                 using var document = JsonDocument.Parse(merged);
                 var value = document.RootElement.Clone();
-                var property = tracked.Property(a => a.PurchaseMetadata);
+                var property = tracked.Property(a => a.PurchaseInfo);
                 property.CurrentValue = value; property.OriginalValue = value; property.IsModified = false;
             }
             else
             {
-                var property = tracked.Property<string>("PurchaseInfo");
+                var property = tracked.Property<string>("ArchivePurchaseInfo");
                 property.CurrentValue = merged; property.OriginalValue = merged; property.IsModified = false;
             }
         }

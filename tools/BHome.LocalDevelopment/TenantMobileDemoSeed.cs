@@ -42,7 +42,7 @@ internal static partial class TenantMobileDemoSeed
         var identity = sp.GetRequiredService<BHome.Infrastructure.Persistence.Compact24.Compact24DbContext>();
         await using var db = OfflineFixturePersistence.Open(sp);
         if (!await db.IsSchemaReadyAsync()) throw new LocalTestAccountException("Compact24 schema not ready; no writes.");
-        var users = sp.GetRequiredService<UserManager<ApplicationUser>>();
+        var users = sp.GetRequiredService<UserManager<User>>();
         var tenant = await users.FindByEmailAsync(email);
         if (tenant is null || !tenant.IsActive || !(await users.GetRolesAsync(tenant)).SequenceEqual([Roles.Tenant]))
             throw new LocalTestAccountException("Active sample Tenant not found; credentials and roles will not be changed.");
@@ -128,7 +128,7 @@ internal static partial class TenantMobileDemoSeed
                 Status = i == 1 ? ContractStatus.Terminated : i == 2 ? ContractStatus.PendingSigning : ContractStatus.Active,
                 StartDate = from,
                 EndDate = to,
-                MonthlyRent = 3_000_000,
+                RentAmount = 3_000_000,
                 RequiredDeposit = 0,
                 IsDevelopmentDemo = true,
                 Terms = "[TEST] Hợp đồng tổng hợp kiểm tra UI Tenant. Không phải hợp đồng thật; không chứng minh chữ ký, xác minh danh tính, giao dịch ngân hàng. Phòng 3.000.000 VND; điện 3.500 VND/kWh, nước 15.000 VND/m3, Internet 100.000 VND/tháng. Không chuyển tiền theo dữ liệu mẫu.",
@@ -137,8 +137,8 @@ internal static partial class TenantMobileDemoSeed
                 ActualEndDate = i == 1 ? to : null,
                 Residents = [new ContractResident { ContractId = Id(40 + i), ResidentId = Id(30 + i), Role = ResidentType.Representative, ResidenceFrom = from, ResidenceTo = i == 1 ? to : null }]
             };
-            contract.SnapshotHash = ContractDocumentSnapshot.Hash(new(Id(40 + i), contract.RoomId, owner, tenant, contract.RepresentativeResidentId,
-                [contract.RepresentativeResidentId], from, to, contract.MonthlyRent, 0, null, 0, contract.Terms, ""));
+            contract.SnapshotHashOrEmpty = ContractDocumentSnapshot.Hash(new(Id(40 + i), contract.RoomId, owner, tenant, contract.RepresentativeResidentId,
+                [contract.RepresentativeResidentId], from, to, contract.RentAmount, 0, null, 0, contract.Terms, ""));
             await EnsureAsync(db, 40 + i, contract);
         }
         await EnsureAsync(db, 45, new Asset { LocationId = Id(10), RoomId = Id(20), Name = "[TEST] Máy lạnh", Category = "Thiết bị", Condition = "Tốt — mẫu", Status = AssetStatus.Active });
@@ -175,17 +175,17 @@ internal static partial class TenantMobileDemoSeed
                 await EnsureAsync(db, n, new OperationalTask
                 {
                     Kind = OperationalTaskKind.MeterReading,
-                    LocationId = Id(10),
+                    RequiredLocationId = Id(10),
                     MeterId = Id(50 + utility),
                     ContractId = Id(40),
                     AssignedStaffUserId = staff,
                     AssignmentId = Id(12),
                     AssignedAt = now,
-                    Title = "[TEST] Chỉ số điện nước Tenant",
+                    TaskTitle = "[TEST] Chỉ số điện nước Tenant",
                     Purpose = i == 5 ? ReadingPurpose.Initial : ReadingPurpose.Periodic,
                     ReadingDate = date,
                     BillingPeriod = i == 5 ? null : period.AddMonths(-i),
-                    Status = MeterTaskStatus.Completed,
+                    MeterStatus = MeterTaskStatus.Completed,
                     CompletedAt = now
                 });
                 await EnsureAsync(db, n + 100, new MeterEvidence
@@ -236,7 +236,7 @@ internal static partial class TenantMobileDemoSeed
             };
             var charges = new[] { (ChargeCategory.Rent, "RENT", "Tiền phòng", 3_000_000m, 1m), (ChargeCategory.Electricity, "ELECTRICITY", "Điện", 3_500m, 100m),
                 (ChargeCategory.Water, "WATER", "Nước", 15_000m, 10m), (ChargeCategory.ServiceFee, "INTERNET", "Internet", 100_000m, 1m) };
-            invoice.Lines = charges.Select((x, j) => new InvoiceLine
+            invoice.Lines = charges.Select((x, j) => new InvoiceItem
             {
                 Id = Id(500 + i * 10 + j),
                 InvoiceId = invoiceId,

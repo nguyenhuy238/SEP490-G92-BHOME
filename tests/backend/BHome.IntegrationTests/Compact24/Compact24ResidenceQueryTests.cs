@@ -41,7 +41,7 @@ public sealed class Compact24ResidenceQueryTests(Compact24Fixture fixture) : ICl
             EndDate = from.AddMonths(12),
             Status = ContractStatus.Active,
             Terms = "Synthetic family",
-            SnapshotHash = new string('0', 64),
+            SnapshotHashOrEmpty = new string('0', 64),
             ActivatedByUserId = ownerId,
             ActivatedAt = DateTimeOffset.UtcNow,
             Residents = [new() { ResidentId = adult.Id, Role = ResidentType.Representative, ResidenceFrom = from }, new() { ResidentId = child.Id, Role = ResidentType.CoOccupant, ResidenceFrom = from }]
@@ -117,7 +117,7 @@ public sealed class Compact24ResidenceQueryTests(Compact24Fixture fixture) : ICl
             RepresentativeResidentId = arrival.Id,
             StartDate = today,
             EndDate = today.AddMonths(6),
-            MonthlyRent = 3000000,
+            RentAmount = 3000000,
             RequiredDeposit = 3000000,
             InitialPaymentRequired = true,
             Status = ContractStatus.PendingActivation,
@@ -125,8 +125,8 @@ public sealed class Compact24ResidenceQueryTests(Compact24Fixture fixture) : ICl
             Residents = [new() { ResidentId = arrival.Id, Role = ResidentType.Representative, ResidenceFrom = today }]
         };
         joining.Residents[0].ContractId = joining.Id;
-        joining.SnapshotHash = BHome.Application.Contracts.ContractDocumentSnapshot.Hash(new(joining.Id, room.Id, ownerId, arrivalUser,
-            arrival.Id, [arrival.Id], joining.StartDate, joining.EndDate, joining.MonthlyRent, joining.RequiredDeposit, null, 0, joining.Terms, ""));
+        joining.SnapshotHashOrEmpty = BHome.Application.Contracts.ContractDocumentSnapshot.Hash(new(joining.Id, room.Id, ownerId, arrivalUser,
+            arrival.Id, [arrival.Id], joining.StartDate, joining.EndDate, joining.RentAmount, joining.RequiredDeposit, null, 0, joining.Terms, ""));
         foreach (var signer in new[] { ownerId, arrivalUser }) joining.Signatures.Add(new()
         {
             ContractId = joining.Id,
@@ -134,7 +134,7 @@ public sealed class Compact24ResidenceQueryTests(Compact24Fixture fixture) : ICl
             Status = SignatureStatus.Signed,
             SignedAt = DateTimeOffset.UtcNow,
             ExpiresAt = DateTimeOffset.UtcNow.AddHours(1),
-            SnapshotHash = joining.SnapshotHash,
+            SnapshotHash = joining.SnapshotHashOrEmpty,
             SignedObjectKey = "synthetic-only",
             ProviderReference = "synthetic-reference-" + signer
         });
@@ -156,7 +156,7 @@ public sealed class Compact24ResidenceQueryTests(Compact24Fixture fixture) : ICl
             var existingOwner = role == Roles.Owner ? await db.Users.FirstOrDefaultAsync(u => EF.Property<string[]>(u, "roles").Contains(Roles.Owner)) : null;
             if (existingOwner is not null) email = existingOwner.Email!;
             else await WorkflowTestUsers.CreateAsync(scope.ServiceProvider,
-                new ApplicationUser { Id = Guid.NewGuid(), UserName = email, Email = email }, role, password);
+                new User { Id = Guid.NewGuid(), UserName = email, Email = email }, role, password);
         }
         var client = fixture.Factory!.CreateClient();
         var response = await client.PostAsJsonAsync("/api/v1/auth/login", new { email, password });
@@ -197,7 +197,7 @@ public sealed class Compact24ResidenceQueryTests(Compact24Fixture fixture) : ICl
             Status = ContractStatus.Active,
             IsDevelopmentDemo = true,
             Terms = "Synthetic SQL regression fixture",
-            SnapshotHash = new string('0', 64),
+            SnapshotHashOrEmpty = new string('0', 64),
             ActivatedByUserId = owner.Id,
             ActivatedAt = DateTimeOffset.UtcNow,
             Residents = [new ContractResident { ResidentId = resident.Id, Role = ResidentType.Representative, ResidenceFrom = from }]
@@ -261,7 +261,7 @@ public sealed class Compact24ResidenceQueryTests(Compact24Fixture fixture) : ICl
             EndDate = start.AddMonths(12),
             Status = ContractStatus.Active,
             Terms = "Synthetic active residence contract",
-            SnapshotHash = new string('0', 64),
+            SnapshotHashOrEmpty = new string('0', 64),
             ActivatedByUserId = ownerId,
             ActivatedAt = DateTimeOffset.UtcNow,
             Residents = [new ContractResident { ResidentId = resident.Id, Role = ResidentType.Representative, ResidenceFrom = start }]

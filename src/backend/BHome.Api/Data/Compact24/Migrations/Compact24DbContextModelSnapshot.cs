@@ -29,6 +29,10 @@ namespace BHome.Infrastructure.Persistence.Compact24.Migrations
                         .HasColumnType("uuid")
                         .HasColumnName("id");
 
+                    b.Property<decimal>("BaseTotalAmount")
+                        .HasColumnType("numeric(18,0)")
+                        .HasColumnName("base_total_amount");
+
                     b.Property<DateOnly>("BillingPeriod")
                         .HasColumnType("date")
                         .HasColumnName("billing_period");
@@ -36,6 +40,10 @@ namespace BHome.Infrastructure.Persistence.Compact24.Migrations
                     b.Property<JsonElement>("BillingSnapshot")
                         .HasColumnType("jsonb")
                         .HasColumnName("billing_snapshot");
+
+                    b.Property<Guid>("ContractId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("contract_id");
 
                     b.Property<DateOnly>("DueDate")
                         .HasColumnType("date")
@@ -52,6 +60,11 @@ namespace BHome.Infrastructure.Persistence.Compact24.Migrations
                     b.Property<JsonElement>("History")
                         .HasColumnType("jsonb")
                         .HasColumnName("history");
+
+                    b.Property<string>("InvoiceType")
+                        .IsRequired()
+                        .HasColumnType("varchar(12)")
+                        .HasColumnName("invoice_type");
 
                     b.Property<Guid>("LocationId")
                         .HasColumnType("uuid")
@@ -71,10 +84,6 @@ namespace BHome.Infrastructure.Persistence.Compact24.Migrations
                         .HasColumnType("uuid[]")
                         .HasColumnName("recipient_user_ids");
 
-                    b.Property<Guid>("RepresentativeContractId")
-                        .HasColumnType("uuid")
-                        .HasColumnName("contract_id");
-
                     b.Property<Guid>("RepresentativeTenantUserId")
                         .HasColumnType("uuid")
                         .HasColumnName("representative_tenant_user_id");
@@ -91,15 +100,6 @@ namespace BHome.Infrastructure.Persistence.Compact24.Migrations
                         .HasColumnType("smallint")
                         .HasColumnName("status");
 
-                    b.Property<decimal>("Total")
-                        .HasColumnType("numeric(18,0)")
-                        .HasColumnName("base_total_amount");
-
-                    b.Property<string>("Type")
-                        .IsRequired()
-                        .HasColumnType("varchar(12)")
-                        .HasColumnName("invoice_type");
-
                     b.Property<int>("Version")
                         .IsConcurrencyToken()
                         .HasColumnType("integer")
@@ -107,11 +107,11 @@ namespace BHome.Infrastructure.Persistence.Compact24.Migrations
 
                     b.HasKey("Id");
 
+                    b.HasIndex("ContractId");
+
                     b.HasIndex("FinalizedByUserId");
 
                     b.HasIndex("LocationId");
-
-                    b.HasIndex("RepresentativeContractId");
 
                     b.HasIndex("RepresentativeTenantUserId");
 
@@ -123,7 +123,7 @@ namespace BHome.Infrastructure.Persistence.Compact24.Migrations
                         });
                 });
 
-            modelBuilder.Entity("BHome.Domain.Billing.InvoiceAdjustmentRequest", b =>
+            modelBuilder.Entity("BHome.Domain.Billing.InvoiceAdjustment", b =>
                 {
                     b.Property<Guid>("Id")
                         .HasColumnType("uuid")
@@ -149,6 +149,10 @@ namespace BHome.Infrastructure.Persistence.Compact24.Migrations
                         .HasColumnType("jsonb")
                         .HasColumnName("decision_snapshot");
 
+                    b.Property<JsonElement>("Evidence")
+                        .HasColumnType("jsonb")
+                        .HasColumnName("evidence");
+
                     b.Property<JsonElement>("History")
                         .HasColumnType("jsonb")
                         .HasColumnName("history");
@@ -170,7 +174,11 @@ namespace BHome.Infrastructure.Persistence.Compact24.Migrations
                         .HasColumnType("jsonb")
                         .HasColumnName("request_snapshot");
 
-                    b.Property<Guid>("RequesterId")
+                    b.Property<DateTimeOffset>("RequestedAt")
+                        .HasColumnType("timestamptz")
+                        .HasColumnName("requested_at");
+
+                    b.Property<Guid>("RequestedByUserId")
                         .HasColumnType("uuid")
                         .HasColumnName("requested_by_user_id");
 
@@ -178,14 +186,6 @@ namespace BHome.Infrastructure.Persistence.Compact24.Migrations
                         .IsRequired()
                         .HasColumnType("varchar(12)")
                         .HasColumnName("status");
-
-                    b.Property<JsonElement>("StoredEvidence")
-                        .HasColumnType("jsonb")
-                        .HasColumnName("evidence");
-
-                    b.Property<DateTimeOffset>("SubmittedAt")
-                        .HasColumnType("timestamptz")
-                        .HasColumnName("requested_at");
 
                     b.Property<int>("Version")
                         .HasColumnType("integer")
@@ -197,7 +197,7 @@ namespace BHome.Infrastructure.Persistence.Compact24.Migrations
 
                     b.HasIndex("InvoiceId");
 
-                    b.HasIndex("RequesterId");
+                    b.HasIndex("RequestedByUserId");
 
                     b.ToTable("invoice_adjustments", "public", t =>
                         {
@@ -205,7 +205,7 @@ namespace BHome.Infrastructure.Persistence.Compact24.Migrations
                         });
                 });
 
-            modelBuilder.Entity("BHome.Domain.Billing.InvoiceLine", b =>
+            modelBuilder.Entity("BHome.Domain.Billing.InvoiceItem", b =>
                 {
                     b.Property<Guid>("Id")
                         .HasColumnType("uuid")
@@ -214,6 +214,10 @@ namespace BHome.Infrastructure.Persistence.Compact24.Migrations
                     b.Property<decimal>("Amount")
                         .HasColumnType("numeric(18,0)")
                         .HasColumnName("amount");
+
+                    b.Property<Guid?>("BillingPolicyId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("billing_policy_id");
 
                     b.Property<JsonElement>("CalculationSnapshot")
                         .HasColumnType("jsonb")
@@ -224,6 +228,11 @@ namespace BHome.Infrastructure.Persistence.Compact24.Migrations
                         .HasColumnType("varchar(80)")
                         .HasColumnName("charge_code");
 
+                    b.Property<string>("Description")
+                        .IsRequired()
+                        .HasColumnType("varchar(255)")
+                        .HasColumnName("description");
+
                     b.Property<Guid>("InvoiceId")
                         .HasColumnType("uuid")
                         .HasColumnName("invoice_id");
@@ -232,30 +241,21 @@ namespace BHome.Infrastructure.Persistence.Compact24.Migrations
                         .HasColumnType("uuid")
                         .HasColumnName("meter_reading_id");
 
-                    b.Property<string>("Name")
-                        .IsRequired()
-                        .HasColumnType("varchar(255)")
-                        .HasColumnName("description");
-
-                    b.Property<Guid?>("PolicyId")
-                        .HasColumnType("uuid")
-                        .HasColumnName("billing_policy_id");
-
                     b.Property<decimal>("Quantity")
                         .HasColumnType("numeric(18,4)")
                         .HasColumnName("quantity");
 
-                    b.Property<decimal>("Rate")
+                    b.Property<decimal>("UnitPrice")
                         .HasColumnType("numeric(18,4)")
                         .HasColumnName("unit_price");
 
                     b.HasKey("Id");
 
+                    b.HasIndex("BillingPolicyId");
+
                     b.HasIndex("InvoiceId");
 
                     b.HasIndex("MeterReadingId");
-
-                    b.HasIndex("PolicyId");
 
                     b.ToTable("invoice_items", "public", t =>
                         {
@@ -269,16 +269,11 @@ namespace BHome.Infrastructure.Persistence.Compact24.Migrations
                         .HasColumnType("uuid")
                         .HasColumnName("id");
 
-                    b.Property<string>("Code")
-                        .IsRequired()
-                        .HasColumnType("varchar(80)")
-                        .HasColumnName("meter_code");
-
                     b.Property<short>("DecimalPlaces")
                         .HasColumnType("smallint")
                         .HasColumnName("decimal_places");
 
-                    b.Property<short>("Display")
+                    b.Property<short>("DisplayType")
                         .HasColumnType("smallint")
                         .HasColumnName("display_type");
 
@@ -293,6 +288,11 @@ namespace BHome.Infrastructure.Persistence.Compact24.Migrations
                     b.Property<bool>("IsActive")
                         .HasColumnType("boolean")
                         .HasColumnName("is_active");
+
+                    b.Property<string>("MeterCode")
+                        .IsRequired()
+                        .HasColumnType("varchar(80)")
+                        .HasColumnName("meter_code");
 
                     b.Property<Guid?>("PreviousMeterId")
                         .HasColumnType("uuid")
@@ -364,6 +364,10 @@ namespace BHome.Infrastructure.Persistence.Compact24.Migrations
                         .HasColumnType("numeric(18,4)")
                         .HasColumnName("ocr_proposed_value");
 
+                    b.Property<Guid>("OperationalTaskId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("operational_task_id");
+
                     b.Property<decimal?>("PreviousValue")
                         .HasColumnType("numeric(18,4)")
                         .HasColumnName("previous_value");
@@ -380,17 +384,13 @@ namespace BHome.Infrastructure.Persistence.Compact24.Migrations
                         .HasColumnType("smallint")
                         .HasColumnName("status");
 
-                    b.Property<Guid>("TaskId")
-                        .HasColumnType("uuid")
-                        .HasColumnName("operational_task_id");
-
                     b.HasKey("Id");
 
                     b.HasIndex("ConfirmedByUserId");
 
                     b.HasIndex("MeterId");
 
-                    b.HasIndex("TaskId")
+                    b.HasIndex("OperationalTaskId")
                         .IsUnique();
 
                     b.ToTable("meter_readings", "public", t =>
@@ -473,6 +473,10 @@ namespace BHome.Infrastructure.Persistence.Compact24.Migrations
                         .HasColumnType("uuid")
                         .HasColumnName("lease_token");
 
+                    b.Property<Guid?>("LocationId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("location_id");
+
                     b.Property<DateTimeOffset?>("LockedUntil")
                         .HasColumnType("timestamptz")
                         .HasColumnName("locked_until");
@@ -484,6 +488,10 @@ namespace BHome.Infrastructure.Persistence.Compact24.Migrations
                     b.Property<DateTimeOffset?>("NextRunAt")
                         .HasColumnType("timestamptz")
                         .HasColumnName("next_run_at");
+
+                    b.Property<string>("Priority")
+                        .HasColumnType("varchar(12)")
+                        .HasColumnName("priority");
 
                     b.Property<Guid?>("RoomId")
                         .HasColumnType("uuid")
@@ -497,22 +505,10 @@ namespace BHome.Infrastructure.Persistence.Compact24.Migrations
                         .HasColumnType("timestamptz")
                         .HasColumnName("starts_at");
 
-                    b.Property<Guid?>("StoredLocationId")
-                        .HasColumnType("uuid")
-                        .HasColumnName("location_id");
-
-                    b.Property<string>("StoredPriority")
-                        .HasColumnType("varchar(12)")
-                        .HasColumnName("priority");
-
-                    b.Property<string>("StoredStatus")
+                    b.Property<string>("Status")
                         .IsRequired()
                         .HasColumnType("varchar(30)")
                         .HasColumnName("status");
-
-                    b.Property<string>("StoredTitle")
-                        .HasColumnType("varchar(200)")
-                        .HasColumnName("title");
 
                     b.Property<JsonElement>("TaskData")
                         .HasColumnType("jsonb")
@@ -522,6 +518,10 @@ namespace BHome.Infrastructure.Persistence.Compact24.Migrations
                         .IsRequired()
                         .HasColumnType("varchar(20)")
                         .HasColumnName("task_type");
+
+                    b.Property<string>("Title")
+                        .HasColumnType("varchar(200)")
+                        .HasColumnName("title");
 
                     b.Property<DateTimeOffset?>("VerifiedAt")
                         .HasColumnType("timestamptz")
@@ -545,15 +545,15 @@ namespace BHome.Infrastructure.Persistence.Compact24.Migrations
 
                     b.HasIndex("IncidentReportId");
 
-                    b.HasIndex("MeterId");
+                    b.HasIndex("LocationId");
 
-                    b.HasIndex("StoredLocationId");
+                    b.HasIndex("MeterId");
 
                     b.HasIndex("VerifiedByUserId");
 
-                    b.HasIndex("AssetId", "StoredLocationId");
+                    b.HasIndex("AssetId", "LocationId");
 
-                    b.HasIndex("RoomId", "StoredLocationId");
+                    b.HasIndex("RoomId", "LocationId");
 
                     b.ToTable("operational_tasks", "public", t =>
                         {
@@ -971,16 +971,12 @@ namespace BHome.Infrastructure.Persistence.Compact24.Migrations
                         .HasColumnType("uuid")
                         .HasColumnName("asset_id");
 
-                    b.Property<DateTimeOffset>("CreatedAt")
-                        .HasColumnType("timestamptz")
-                        .HasColumnName("reported_at");
-
                     b.Property<string>("Description")
                         .IsRequired()
                         .HasColumnType("text")
                         .HasColumnName("description");
 
-                    b.Property<Guid?>("DuplicateOfId")
+                    b.Property<Guid?>("DuplicateOfReportId")
                         .HasColumnType("uuid")
                         .HasColumnName("duplicate_of_report_id");
 
@@ -1004,7 +1000,11 @@ namespace BHome.Infrastructure.Persistence.Compact24.Migrations
                         .HasColumnType("jsonb")
                         .HasColumnName("owner_decision");
 
-                    b.Property<Guid>("ReporterId")
+                    b.Property<DateTimeOffset>("ReportedAt")
+                        .HasColumnType("timestamptz")
+                        .HasColumnName("reported_at");
+
+                    b.Property<Guid>("ReporterUserId")
                         .HasColumnType("uuid")
                         .HasColumnName("reporter_user_id");
 
@@ -1038,11 +1038,11 @@ namespace BHome.Infrastructure.Persistence.Compact24.Migrations
 
                     b.HasKey("Id");
 
-                    b.HasIndex("DuplicateOfId");
+                    b.HasIndex("DuplicateOfReportId");
 
                     b.HasIndex("LocationId");
 
-                    b.HasIndex("ReporterId");
+                    b.HasIndex("ReporterUserId");
 
                     b.HasIndex("AssetId", "LocationId");
 
@@ -1113,6 +1113,89 @@ namespace BHome.Infrastructure.Persistence.Compact24.Migrations
                         });
                 });
 
+            modelBuilder.Entity("BHome.Domain.PaymentsDebt.Payment", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .HasColumnType("uuid")
+                        .HasColumnName("id");
+
+                    b.Property<decimal>("Amount")
+                        .HasColumnType("numeric(18,0)")
+                        .HasColumnName("amount");
+
+                    b.Property<Guid?>("BeneficiaryResidentId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("beneficiary_resident_id");
+
+                    b.Property<string>("Currency")
+                        .IsRequired()
+                        .HasColumnType("varchar(3)")
+                        .HasColumnName("currency");
+
+                    b.Property<string>("EffectKey")
+                        .HasColumnType("varchar(250)")
+                        .HasColumnName("effect_key");
+
+                    b.Property<JsonElement>("History")
+                        .HasColumnType("jsonb")
+                        .HasColumnName("history");
+
+                    b.Property<string>("ProviderCode")
+                        .IsRequired()
+                        .HasColumnType("varchar(80)")
+                        .HasColumnName("provider_code");
+
+                    b.Property<DateTimeOffset>("ReceivedAt")
+                        .HasColumnType("timestamptz")
+                        .HasColumnName("received_at");
+
+                    b.Property<string>("ReceivingAccountKey")
+                        .IsRequired()
+                        .HasColumnType("varchar(200)")
+                        .HasColumnName("receiving_account_key");
+
+                    b.Property<string>("RemittanceInfo")
+                        .HasColumnType("text")
+                        .HasColumnName("remittance_info");
+
+                    b.Property<string>("Status")
+                        .IsRequired()
+                        .HasColumnType("varchar(12)")
+                        .HasColumnName("status");
+
+                    b.Property<string>("TransactionReference")
+                        .IsRequired()
+                        .HasColumnType("varchar(150)")
+                        .HasColumnName("transaction_reference");
+
+                    b.Property<JsonElement>("VerificationData")
+                        .HasColumnType("jsonb")
+                        .HasColumnName("verification_data");
+
+                    b.Property<string>("VerificationMethod")
+                        .HasColumnType("varchar(10)")
+                        .HasColumnName("verification_method");
+
+                    b.Property<DateTimeOffset?>("VerifiedAt")
+                        .HasColumnType("timestamptz")
+                        .HasColumnName("verified_at");
+
+                    b.Property<Guid?>("VerifiedByUserId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("verified_by_user_id");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("BeneficiaryResidentId");
+
+                    b.HasIndex("VerifiedByUserId");
+
+                    b.ToTable("payments", "public", t =>
+                        {
+                            t.ExcludeFromMigrations();
+                        });
+                });
+
             modelBuilder.Entity("BHome.Domain.PaymentsDebt.PaymentAllocation", b =>
                 {
                     b.Property<Guid>("Id")
@@ -1134,10 +1217,6 @@ namespace BHome.Infrastructure.Persistence.Compact24.Migrations
                     b.Property<Guid?>("DepositOffsetApprovalId")
                         .HasColumnType("uuid")
                         .HasColumnName("deposit_offset_approval_id");
-
-                    b.Property<Guid?>("InvoiceId")
-                        .HasColumnType("uuid")
-                        .HasColumnName("target_invoice_id");
 
                     b.Property<short>("LineNumber")
                         .HasColumnType("smallint")
@@ -1168,6 +1247,10 @@ namespace BHome.Infrastructure.Persistence.Compact24.Migrations
                         .HasColumnType("uuid")
                         .HasColumnName("source_deposit_contract_id");
 
+                    b.Property<Guid?>("SourcePaymentId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("source_payment_id");
+
                     b.Property<Guid?>("TargetDepositContractId")
                         .HasColumnType("uuid")
                         .HasColumnName("target_deposit_contract_id");
@@ -1176,19 +1259,17 @@ namespace BHome.Infrastructure.Persistence.Compact24.Migrations
                         .HasColumnType("uuid")
                         .HasColumnName("target_initial_contract_id");
 
+                    b.Property<Guid?>("TargetInvoiceId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("target_invoice_id");
+
                     b.Property<Guid?>("TargetSettlementContractId")
                         .HasColumnType("uuid")
                         .HasColumnName("target_settlement_contract_id");
 
-                    b.Property<Guid?>("TransferId")
-                        .HasColumnType("uuid")
-                        .HasColumnName("source_payment_id");
-
                     b.HasKey("Id");
 
                     b.HasIndex("CreatedByUserId");
-
-                    b.HasIndex("InvoiceId");
 
                     b.HasIndex("PaidByUserId");
 
@@ -1197,98 +1278,17 @@ namespace BHome.Infrastructure.Persistence.Compact24.Migrations
 
                     b.HasIndex("SourceDepositContractId");
 
+                    b.HasIndex("SourcePaymentId");
+
                     b.HasIndex("TargetDepositContractId");
 
                     b.HasIndex("TargetInitialContractId");
 
+                    b.HasIndex("TargetInvoiceId");
+
                     b.HasIndex("TargetSettlementContractId");
 
-                    b.HasIndex("TransferId");
-
                     b.ToTable("payment_allocations", "public", t =>
-                        {
-                            t.ExcludeFromMigrations();
-                        });
-                });
-
-            modelBuilder.Entity("BHome.Domain.PaymentsDebt.PaymentTransfer", b =>
-                {
-                    b.Property<Guid>("Id")
-                        .HasColumnType("uuid")
-                        .HasColumnName("id");
-
-                    b.Property<decimal>("Amount")
-                        .HasColumnType("numeric(18,0)")
-                        .HasColumnName("amount");
-
-                    b.Property<string>("BankReference")
-                        .IsRequired()
-                        .HasColumnType("varchar(150)")
-                        .HasColumnName("transaction_reference");
-
-                    b.Property<Guid?>("BeneficiaryResidentId")
-                        .HasColumnType("uuid")
-                        .HasColumnName("beneficiary_resident_id");
-
-                    b.Property<string>("Currency")
-                        .IsRequired()
-                        .HasColumnType("varchar(3)")
-                        .HasColumnName("currency");
-
-                    b.Property<string>("EffectKey")
-                        .HasColumnType("varchar(250)")
-                        .HasColumnName("effect_key");
-
-                    b.Property<JsonElement>("History")
-                        .HasColumnType("jsonb")
-                        .HasColumnName("history");
-
-                    b.Property<DateTimeOffset>("OccurredAt")
-                        .HasColumnType("timestamptz")
-                        .HasColumnName("received_at");
-
-                    b.Property<string>("ProviderIdentity")
-                        .IsRequired()
-                        .HasColumnType("varchar(80)")
-                        .HasColumnName("provider_code");
-
-                    b.Property<string>("ReceivingAccountKey")
-                        .IsRequired()
-                        .HasColumnType("varchar(200)")
-                        .HasColumnName("receiving_account_key");
-
-                    b.Property<string>("Status")
-                        .IsRequired()
-                        .HasColumnType("varchar(12)")
-                        .HasColumnName("status");
-
-                    b.Property<string>("StoredRemittanceInfo")
-                        .HasColumnType("text")
-                        .HasColumnName("remittance_info");
-
-                    b.Property<DateTimeOffset?>("StoredVerifiedAt")
-                        .HasColumnType("timestamptz")
-                        .HasColumnName("verified_at");
-
-                    b.Property<Guid?>("StoredVerifiedByUserId")
-                        .HasColumnType("uuid")
-                        .HasColumnName("verified_by_user_id");
-
-                    b.Property<JsonElement>("VerificationData")
-                        .HasColumnType("jsonb")
-                        .HasColumnName("verification_data");
-
-                    b.Property<string>("VerificationMethod")
-                        .HasColumnType("varchar(10)")
-                        .HasColumnName("verification_method");
-
-                    b.HasKey("Id");
-
-                    b.HasIndex("BeneficiaryResidentId");
-
-                    b.HasIndex("StoredVerifiedByUserId");
-
-                    b.ToTable("payments", "public", t =>
                         {
                             t.ExcludeFromMigrations();
                         });
@@ -1300,14 +1300,14 @@ namespace BHome.Infrastructure.Persistence.Compact24.Migrations
                         .HasColumnType("uuid")
                         .HasColumnName("id");
 
+                    b.Property<string>("AssetCode")
+                        .HasColumnType("varchar(80)")
+                        .HasColumnName("asset_code");
+
                     b.Property<string>("Category")
                         .IsRequired()
                         .HasColumnType("varchar(80)")
                         .HasColumnName("category");
-
-                    b.Property<string>("Code")
-                        .HasColumnType("varchar(80)")
-                        .HasColumnName("asset_code");
 
                     b.Property<string>("CommonArea")
                         .HasColumnType("varchar(200)")
@@ -1331,7 +1331,7 @@ namespace BHome.Infrastructure.Persistence.Compact24.Migrations
                         .HasColumnType("varchar(150)")
                         .HasColumnName("name");
 
-                    b.Property<JsonElement>("PurchaseMetadata")
+                    b.Property<JsonElement>("PurchaseInfo")
                         .HasColumnType("jsonb")
                         .HasColumnName("purchase_info");
 
@@ -1366,6 +1366,11 @@ namespace BHome.Infrastructure.Persistence.Compact24.Migrations
                         .HasColumnType("uuid")
                         .HasColumnName("id");
 
+                    b.Property<string>("CalculationMethod")
+                        .IsRequired()
+                        .HasColumnType("varchar(30)")
+                        .HasColumnName("calculation_method");
+
                     b.Property<short>("Category")
                         .HasColumnType("smallint")
                         .HasColumnName("category");
@@ -1394,11 +1399,6 @@ namespace BHome.Infrastructure.Persistence.Compact24.Migrations
                     b.Property<Guid>("LocationId")
                         .HasColumnType("uuid")
                         .HasColumnName("location_id");
-
-                    b.Property<string>("Method")
-                        .IsRequired()
-                        .HasColumnType("varchar(30)")
-                        .HasColumnName("calculation_method");
 
                     b.Property<JsonElement>("Parameters")
                         .HasColumnType("jsonb")
@@ -1515,6 +1515,15 @@ namespace BHome.Infrastructure.Persistence.Compact24.Migrations
                         .HasColumnType("numeric(18,0)")
                         .HasColumnName("applied_holding_deposit");
 
+                    b.Property<string>("ContractType")
+                        .IsRequired()
+                        .HasColumnType("varchar(12)")
+                        .HasColumnName("contract_type");
+
+                    b.Property<decimal>("DepositRequired")
+                        .HasColumnType("numeric(18,0)")
+                        .HasColumnName("deposit_required");
+
                     b.Property<JsonElement>("Documents")
                         .HasColumnType("jsonb")
                         .HasColumnName("documents");
@@ -1523,10 +1532,6 @@ namespace BHome.Infrastructure.Persistence.Compact24.Migrations
                         .IsRequired()
                         .HasColumnType("jsonb")
                         .HasColumnName("draft_metadata");
-
-                    b.Property<int>("DraftVersion")
-                        .HasColumnType("integer")
-                        .HasColumnName("version");
 
                     b.Property<DateOnly>("EndDate")
                         .HasColumnType("date")
@@ -1540,18 +1545,13 @@ namespace BHome.Infrastructure.Persistence.Compact24.Migrations
                         .HasColumnType("jsonb")
                         .HasColumnName("history");
 
-                    b.Property<Guid?>("HoldingContractId")
-                        .HasColumnType("uuid")
-                        .HasColumnName("source_holding_contract_id");
-
                     b.Property<DateTimeOffset?>("HoldingExpiryAt")
                         .HasColumnType("timestamptz")
                         .HasColumnName("holding_expiry_at");
 
-                    b.Property<string>("Kind")
-                        .IsRequired()
-                        .HasColumnType("varchar(12)")
-                        .HasColumnName("contract_type");
+                    b.Property<decimal?>("MonthlyRent")
+                        .HasColumnType("numeric(18,0)")
+                        .HasColumnName("monthly_rent");
 
                     b.Property<JsonElement>("MoveOut")
                         .HasColumnType("jsonb")
@@ -1573,10 +1573,6 @@ namespace BHome.Infrastructure.Persistence.Compact24.Migrations
                         .HasColumnType("uuid")
                         .HasColumnName("representative_resident_id");
 
-                    b.Property<decimal>("RequiredDeposit")
-                        .HasColumnType("numeric(18,0)")
-                        .HasColumnName("deposit_required");
-
                     b.Property<short?>("ReservedCapacity")
                         .HasColumnType("smallint")
                         .HasColumnName("reserved_capacity");
@@ -1589,6 +1585,14 @@ namespace BHome.Infrastructure.Persistence.Compact24.Migrations
                         .HasColumnType("jsonb")
                         .HasColumnName("settlement");
 
+                    b.Property<string>("SnapshotHash")
+                        .HasColumnType("varchar(64)")
+                        .HasColumnName("snapshot_hash");
+
+                    b.Property<Guid?>("SourceHoldingContractId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("source_holding_contract_id");
+
                     b.Property<DateOnly>("StartDate")
                         .HasColumnType("date")
                         .HasColumnName("start_date");
@@ -1596,14 +1600,6 @@ namespace BHome.Infrastructure.Persistence.Compact24.Migrations
                     b.Property<short>("Status")
                         .HasColumnType("smallint")
                         .HasColumnName("status");
-
-                    b.Property<decimal?>("StoredMonthlyRent")
-                        .HasColumnType("numeric(18,0)")
-                        .HasColumnName("monthly_rent");
-
-                    b.Property<string>("StoredSnapshotHash")
-                        .HasColumnType("varchar(64)")
-                        .HasColumnName("snapshot_hash");
 
                     b.Property<Guid?>("TenantUserId")
                         .HasColumnType("uuid")
@@ -1614,11 +1610,13 @@ namespace BHome.Infrastructure.Persistence.Compact24.Migrations
                         .HasColumnType("text")
                         .HasColumnName("terms");
 
+                    b.Property<int>("Version")
+                        .HasColumnType("integer")
+                        .HasColumnName("version");
+
                     b.HasKey("Id");
 
                     b.HasIndex("ActivatedByUserId");
-
-                    b.HasIndex("HoldingContractId");
 
                     b.HasIndex("OwnerSignerId");
 
@@ -1629,6 +1627,8 @@ namespace BHome.Infrastructure.Persistence.Compact24.Migrations
                     b.HasIndex("RepresentativeResidentId");
 
                     b.HasIndex("RoomId");
+
+                    b.HasIndex("SourceHoldingContractId");
 
                     b.HasIndex("TenantUserId");
 
@@ -1688,7 +1688,7 @@ namespace BHome.Infrastructure.Persistence.Compact24.Migrations
                         .HasColumnType("date")
                         .HasColumnName("residence_to");
 
-                    b.Property<short>("Role")
+                    b.Property<short>("ResidentRole")
                         .HasColumnType("smallint")
                         .HasColumnName("resident_role");
 
@@ -1704,7 +1704,7 @@ namespace BHome.Infrastructure.Persistence.Compact24.Migrations
                         });
                 });
 
-            modelBuilder.Entity("BHome.Domain.TenantContracts.ContractSignature", b =>
+            modelBuilder.Entity("BHome.Domain.TenantContracts.ContractSigning", b =>
                 {
                     b.Property<Guid>("Id")
                         .HasColumnType("uuid")
@@ -1722,10 +1722,6 @@ namespace BHome.Infrastructure.Persistence.Compact24.Migrations
                         .HasColumnType("uuid")
                         .HasColumnName("contract_id");
 
-                    b.Property<DateTimeOffset>("CreatedAt")
-                        .HasColumnType("timestamptz")
-                        .HasColumnName("requested_at");
-
                     b.Property<DateTimeOffset>("ExpiresAt")
                         .HasColumnType("timestamptz")
                         .HasColumnName("expires_at");
@@ -1733,6 +1729,14 @@ namespace BHome.Infrastructure.Persistence.Compact24.Migrations
                     b.Property<JsonElement>("History")
                         .HasColumnType("jsonb")
                         .HasColumnName("history");
+
+                    b.Property<string>("PreparedHash")
+                        .HasColumnType("varchar(64)")
+                        .HasColumnName("prepared_hash");
+
+                    b.Property<string>("PreparedObjectKey")
+                        .HasColumnType("varchar(250)")
+                        .HasColumnName("prepared_object_key");
 
                     b.Property<string>("ProviderCode")
                         .IsRequired()
@@ -1742,6 +1746,10 @@ namespace BHome.Infrastructure.Persistence.Compact24.Migrations
                     b.Property<string>("ProviderReference")
                         .HasColumnType("varchar(200)")
                         .HasColumnName("provider_reference");
+
+                    b.Property<DateTimeOffset>("RequestedAt")
+                        .HasColumnType("timestamptz")
+                        .HasColumnName("requested_at");
 
                     b.Property<DateTimeOffset?>("SignedAt")
                         .HasColumnType("timestamptz")
@@ -1763,24 +1771,16 @@ namespace BHome.Infrastructure.Persistence.Compact24.Migrations
                         .HasColumnType("jsonb")
                         .HasColumnName("signing_data");
 
+                    b.Property<short>("SigningStatus")
+                        .HasColumnType("smallint")
+                        .HasColumnName("signing_status");
+
                     b.Property<string>("SnapshotHash")
                         .IsRequired()
                         .HasColumnType("varchar(64)")
                         .HasColumnName("snapshot_hash");
 
-                    b.Property<short>("Status")
-                        .HasColumnType("smallint")
-                        .HasColumnName("signing_status");
-
-                    b.Property<string>("StoredPreparedHash")
-                        .HasColumnType("varchar(64)")
-                        .HasColumnName("prepared_hash");
-
-                    b.Property<string>("StoredPreparedObjectKey")
-                        .HasColumnType("varchar(250)")
-                        .HasColumnName("prepared_object_key");
-
-                    b.Property<string>("StoredSourceHash")
+                    b.Property<string>("SourceHash")
                         .HasColumnType("varchar(64)")
                         .HasColumnName("source_hash");
 
@@ -1802,17 +1802,13 @@ namespace BHome.Infrastructure.Persistence.Compact24.Migrations
                         .HasColumnType("uuid")
                         .HasColumnName("id");
 
-                    b.Property<DateTimeOffset?>("ConfirmedAt")
-                        .HasColumnType("timestamptz")
-                        .HasColumnName("verified_at");
-
-                    b.Property<Guid?>("ConfirmedByUserId")
-                        .HasColumnType("uuid")
-                        .HasColumnName("verified_by_user_id");
-
                     b.Property<string>("ContactEmail")
                         .HasColumnType("varchar(256)")
                         .HasColumnName("contact_email");
+
+                    b.Property<Guid?>("CurrentRoomId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("current_room_id");
 
                     b.Property<string>("DisplayLabel")
                         .IsRequired()
@@ -1836,15 +1832,11 @@ namespace BHome.Infrastructure.Persistence.Compact24.Migrations
                         .HasColumnType("varchar(64)")
                         .HasColumnName("identity_hmac");
 
-                    b.Property<Guid>("OwnerUserId")
+                    b.Property<Guid>("IdentityOwnerScopeId")
                         .HasColumnType("uuid")
                         .HasColumnName("identity_owner_scope_id");
 
-                    b.Property<Guid?>("RoomId")
-                        .HasColumnType("uuid")
-                        .HasColumnName("current_room_id");
-
-                    b.Property<Guid?>("TenantUserId")
+                    b.Property<Guid?>("UserId")
                         .HasColumnType("uuid")
                         .HasColumnName("user_id");
 
@@ -1852,15 +1844,23 @@ namespace BHome.Infrastructure.Persistence.Compact24.Migrations
                         .HasColumnType("smallint")
                         .HasColumnName("verification_status");
 
+                    b.Property<DateTimeOffset?>("VerifiedAt")
+                        .HasColumnType("timestamptz")
+                        .HasColumnName("verified_at");
+
+                    b.Property<Guid?>("VerifiedByUserId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("verified_by_user_id");
+
                     b.HasKey("Id");
 
-                    b.HasIndex("ConfirmedByUserId");
+                    b.HasIndex("CurrentRoomId");
 
-                    b.HasIndex("OwnerUserId");
+                    b.HasIndex("IdentityOwnerScopeId");
 
-                    b.HasIndex("RoomId");
+                    b.HasIndex("UserId");
 
-                    b.HasIndex("TenantUserId");
+                    b.HasIndex("VerifiedByUserId");
 
                     b.ToTable("residents", "public", t =>
                         {
@@ -1868,7 +1868,85 @@ namespace BHome.Infrastructure.Persistence.Compact24.Migrations
                         });
                 });
 
-            modelBuilder.Entity("BHome.Infrastructure.Persistence.ApplicationUser", b =>
+            modelBuilder.Entity("BHome.Infrastructure.Persistence.Compact24.RefreshToken", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .HasColumnType("uuid")
+                        .HasColumnName("id");
+
+                    b.Property<DateTimeOffset?>("ConsumedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("consumed_at");
+
+                    b.Property<string>("DeviceLabel")
+                        .HasMaxLength(256)
+                        .HasColumnType("character varying(256)")
+                        .HasColumnName("device_label");
+
+                    b.Property<DateTimeOffset>("ExpiresAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("expires_at");
+
+                    b.Property<DateTimeOffset>("IssuedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("issued_at");
+
+                    b.Property<DateTimeOffset?>("LastActivityAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("last_activity_at");
+
+                    b.Property<string>("RecordKind")
+                        .IsRequired()
+                        .HasMaxLength(10)
+                        .HasColumnType("character varying(10)")
+                        .HasColumnName("record_kind");
+
+                    b.Property<Guid?>("ReplacedByTokenId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("replaced_by_token_id");
+
+                    b.Property<string>("RevocationReason")
+                        .HasMaxLength(50)
+                        .HasColumnType("character varying(50)")
+                        .HasColumnName("revocation_reason");
+
+                    b.Property<DateTimeOffset?>("RevokedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("revoked_at");
+
+                    b.Property<string>("SecurityStamp")
+                        .HasMaxLength(256)
+                        .HasColumnType("character varying(256)")
+                        .HasColumnName("security_stamp");
+
+                    b.Property<Guid?>("SessionId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("session_id");
+
+                    b.Property<string>("TokenHash")
+                        .HasMaxLength(64)
+                        .HasColumnType("character varying(64)")
+                        .HasColumnName("token_hash");
+
+                    b.Property<Guid>("UserId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("user_id");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("ReplacedByTokenId");
+
+                    b.HasIndex("SessionId");
+
+                    b.HasIndex("UserId");
+
+                    b.ToTable("refresh_tokens", null, t =>
+                        {
+                            t.ExcludeFromMigrations();
+                        });
+                });
+
+            modelBuilder.Entity("BHome.Infrastructure.Persistence.User", b =>
                 {
                     b.Property<Guid>("Id")
                         .HasColumnType("uuid")
@@ -1991,87 +2069,15 @@ namespace BHome.Infrastructure.Persistence.Compact24.Migrations
                         });
                 });
 
-            modelBuilder.Entity("BHome.Infrastructure.Persistence.Compact24.CompactRefreshRow", b =>
-                {
-                    b.Property<Guid>("Id")
-                        .HasColumnType("uuid")
-                        .HasColumnName("id");
-
-                    b.Property<DateTimeOffset?>("ConsumedAt")
-                        .HasColumnType("timestamp with time zone")
-                        .HasColumnName("consumed_at");
-
-                    b.Property<string>("DeviceLabel")
-                        .HasMaxLength(256)
-                        .HasColumnType("character varying(256)")
-                        .HasColumnName("device_label");
-
-                    b.Property<DateTimeOffset>("ExpiresAt")
-                        .HasColumnType("timestamp with time zone")
-                        .HasColumnName("expires_at");
-
-                    b.Property<DateTimeOffset>("IssuedAt")
-                        .HasColumnType("timestamp with time zone")
-                        .HasColumnName("issued_at");
-
-                    b.Property<DateTimeOffset?>("LastActivityAt")
-                        .HasColumnType("timestamp with time zone")
-                        .HasColumnName("last_activity_at");
-
-                    b.Property<string>("RecordKind")
-                        .IsRequired()
-                        .HasMaxLength(10)
-                        .HasColumnType("character varying(10)")
-                        .HasColumnName("record_kind");
-
-                    b.Property<Guid?>("ReplacedByTokenId")
-                        .HasColumnType("uuid")
-                        .HasColumnName("replaced_by_token_id");
-
-                    b.Property<string>("RevocationReason")
-                        .HasMaxLength(50)
-                        .HasColumnType("character varying(50)")
-                        .HasColumnName("revocation_reason");
-
-                    b.Property<DateTimeOffset?>("RevokedAt")
-                        .HasColumnType("timestamp with time zone")
-                        .HasColumnName("revoked_at");
-
-                    b.Property<string>("SecurityStamp")
-                        .HasMaxLength(256)
-                        .HasColumnType("character varying(256)")
-                        .HasColumnName("security_stamp");
-
-                    b.Property<Guid?>("SessionId")
-                        .HasColumnType("uuid")
-                        .HasColumnName("session_id");
-
-                    b.Property<string>("TokenHash")
-                        .HasMaxLength(64)
-                        .HasColumnType("character varying(64)")
-                        .HasColumnName("token_hash");
-
-                    b.Property<Guid>("UserId")
-                        .HasColumnType("uuid")
-                        .HasColumnName("user_id");
-
-                    b.HasKey("Id");
-
-                    b.HasIndex("ReplacedByTokenId");
-
-                    b.HasIndex("SessionId");
-
-                    b.HasIndex("UserId");
-
-                    b.ToTable("refresh_tokens", null, t =>
-                        {
-                            t.ExcludeFromMigrations();
-                        });
-                });
-
             modelBuilder.Entity("BHome.Domain.Billing.Invoice", b =>
                 {
-                    b.HasOne("BHome.Infrastructure.Persistence.ApplicationUser", null)
+                    b.HasOne("BHome.Domain.TenantContracts.Contract", null)
+                        .WithMany()
+                        .HasForeignKey("ContractId")
+                        .OnDelete(DeleteBehavior.NoAction)
+                        .IsRequired();
+
+                    b.HasOne("BHome.Infrastructure.Persistence.User", null)
                         .WithMany()
                         .HasForeignKey("FinalizedByUserId")
                         .OnDelete(DeleteBehavior.NoAction);
@@ -2082,13 +2088,7 @@ namespace BHome.Infrastructure.Persistence.Compact24.Migrations
                         .OnDelete(DeleteBehavior.NoAction)
                         .IsRequired();
 
-                    b.HasOne("BHome.Domain.TenantContracts.Contract", null)
-                        .WithMany()
-                        .HasForeignKey("RepresentativeContractId")
-                        .OnDelete(DeleteBehavior.NoAction)
-                        .IsRequired();
-
-                    b.HasOne("BHome.Infrastructure.Persistence.ApplicationUser", null)
+                    b.HasOne("BHome.Infrastructure.Persistence.User", null)
                         .WithMany()
                         .HasForeignKey("RepresentativeTenantUserId")
                         .OnDelete(DeleteBehavior.NoAction)
@@ -2102,9 +2102,9 @@ namespace BHome.Infrastructure.Persistence.Compact24.Migrations
                         .IsRequired();
                 });
 
-            modelBuilder.Entity("BHome.Domain.Billing.InvoiceAdjustmentRequest", b =>
+            modelBuilder.Entity("BHome.Domain.Billing.InvoiceAdjustment", b =>
                 {
-                    b.HasOne("BHome.Infrastructure.Persistence.ApplicationUser", null)
+                    b.HasOne("BHome.Infrastructure.Persistence.User", null)
                         .WithMany()
                         .HasForeignKey("DecidedByUserId")
                         .OnDelete(DeleteBehavior.NoAction);
@@ -2115,15 +2115,20 @@ namespace BHome.Infrastructure.Persistence.Compact24.Migrations
                         .OnDelete(DeleteBehavior.NoAction)
                         .IsRequired();
 
-                    b.HasOne("BHome.Infrastructure.Persistence.ApplicationUser", null)
+                    b.HasOne("BHome.Infrastructure.Persistence.User", null)
                         .WithMany()
-                        .HasForeignKey("RequesterId")
+                        .HasForeignKey("RequestedByUserId")
                         .OnDelete(DeleteBehavior.NoAction)
                         .IsRequired();
                 });
 
-            modelBuilder.Entity("BHome.Domain.Billing.InvoiceLine", b =>
+            modelBuilder.Entity("BHome.Domain.Billing.InvoiceItem", b =>
                 {
+                    b.HasOne("BHome.Domain.PropertyManagement.BillingPolicy", null)
+                        .WithMany()
+                        .HasForeignKey("BillingPolicyId")
+                        .OnDelete(DeleteBehavior.NoAction);
+
                     b.HasOne("BHome.Domain.Billing.Invoice", null)
                         .WithMany()
                         .HasForeignKey("InvoiceId")
@@ -2133,11 +2138,6 @@ namespace BHome.Infrastructure.Persistence.Compact24.Migrations
                     b.HasOne("BHome.Domain.Billing.MeterReading", null)
                         .WithMany()
                         .HasForeignKey("MeterReadingId")
-                        .OnDelete(DeleteBehavior.NoAction);
-
-                    b.HasOne("BHome.Domain.PropertyManagement.BillingPolicy", null)
-                        .WithMany()
-                        .HasForeignKey("PolicyId")
                         .OnDelete(DeleteBehavior.NoAction);
                 });
 
@@ -2157,7 +2157,7 @@ namespace BHome.Infrastructure.Persistence.Compact24.Migrations
 
             modelBuilder.Entity("BHome.Domain.Billing.MeterReading", b =>
                 {
-                    b.HasOne("BHome.Infrastructure.Persistence.ApplicationUser", null)
+                    b.HasOne("BHome.Infrastructure.Persistence.User", null)
                         .WithMany()
                         .HasForeignKey("ConfirmedByUserId")
                         .OnDelete(DeleteBehavior.NoAction)
@@ -2171,14 +2171,14 @@ namespace BHome.Infrastructure.Persistence.Compact24.Migrations
 
                     b.HasOne("BHome.Domain.Billing.OperationalTask", null)
                         .WithOne()
-                        .HasForeignKey("BHome.Domain.Billing.MeterReading", "TaskId")
+                        .HasForeignKey("BHome.Domain.Billing.MeterReading", "OperationalTaskId")
                         .OnDelete(DeleteBehavior.NoAction)
                         .IsRequired();
                 });
 
             modelBuilder.Entity("BHome.Domain.Billing.OperationalTask", b =>
                 {
-                    b.HasOne("BHome.Infrastructure.Persistence.ApplicationUser", null)
+                    b.HasOne("BHome.Infrastructure.Persistence.User", null)
                         .WithMany()
                         .HasForeignKey("AssignedUserId")
                         .OnDelete(DeleteBehavior.NoAction);
@@ -2188,7 +2188,7 @@ namespace BHome.Infrastructure.Persistence.Compact24.Migrations
                         .HasForeignKey("ContractId")
                         .OnDelete(DeleteBehavior.NoAction);
 
-                    b.HasOne("BHome.Infrastructure.Persistence.ApplicationUser", null)
+                    b.HasOne("BHome.Infrastructure.Persistence.User", null)
                         .WithMany()
                         .HasForeignKey("CostApprovedByUserId")
                         .OnDelete(DeleteBehavior.NoAction);
@@ -2198,30 +2198,30 @@ namespace BHome.Infrastructure.Persistence.Compact24.Migrations
                         .HasForeignKey("IncidentReportId")
                         .OnDelete(DeleteBehavior.NoAction);
 
+                    b.HasOne("BHome.Domain.Locations.Location", null)
+                        .WithMany()
+                        .HasForeignKey("LocationId")
+                        .OnDelete(DeleteBehavior.NoAction);
+
                     b.HasOne("BHome.Domain.Billing.Meter", null)
                         .WithMany()
                         .HasForeignKey("MeterId")
                         .OnDelete(DeleteBehavior.NoAction);
 
-                    b.HasOne("BHome.Domain.Locations.Location", null)
-                        .WithMany()
-                        .HasForeignKey("StoredLocationId")
-                        .OnDelete(DeleteBehavior.NoAction);
-
-                    b.HasOne("BHome.Infrastructure.Persistence.ApplicationUser", null)
+                    b.HasOne("BHome.Infrastructure.Persistence.User", null)
                         .WithMany()
                         .HasForeignKey("VerifiedByUserId")
                         .OnDelete(DeleteBehavior.NoAction);
 
                     b.HasOne("BHome.Domain.PropertyManagement.Asset", null)
                         .WithMany()
-                        .HasForeignKey("AssetId", "StoredLocationId")
+                        .HasForeignKey("AssetId", "LocationId")
                         .HasPrincipalKey("Id", "LocationId")
                         .OnDelete(DeleteBehavior.NoAction);
 
                     b.HasOne("BHome.Domain.PropertyManagement.Room", null)
                         .WithMany()
-                        .HasForeignKey("RoomId", "StoredLocationId")
+                        .HasForeignKey("RoomId", "LocationId")
                         .HasPrincipalKey("Id", "LocationId")
                         .OnDelete(DeleteBehavior.NoAction);
                 });
@@ -2239,7 +2239,7 @@ namespace BHome.Infrastructure.Persistence.Compact24.Migrations
                         .OnDelete(DeleteBehavior.NoAction)
                         .IsRequired();
 
-                    b.HasOne("BHome.Infrastructure.Persistence.ApplicationUser", null)
+                    b.HasOne("BHome.Infrastructure.Persistence.User", null)
                         .WithMany()
                         .HasForeignKey("RecordedByUserId")
                         .OnDelete(DeleteBehavior.NoAction)
@@ -2265,7 +2265,7 @@ namespace BHome.Infrastructure.Persistence.Compact24.Migrations
 
             modelBuilder.Entity("BHome.Domain.Entities.FinancialScenario", b =>
                 {
-                    b.HasOne("BHome.Infrastructure.Persistence.ApplicationUser", null)
+                    b.HasOne("BHome.Infrastructure.Persistence.User", null)
                         .WithMany()
                         .HasForeignKey("CreatedByUserId")
                         .OnDelete(DeleteBehavior.NoAction)
@@ -2279,7 +2279,7 @@ namespace BHome.Infrastructure.Persistence.Compact24.Migrations
 
             modelBuilder.Entity("BHome.Domain.Entities.Notification", b =>
                 {
-                    b.HasOne("BHome.Infrastructure.Persistence.ApplicationUser", null)
+                    b.HasOne("BHome.Infrastructure.Persistence.User", null)
                         .WithMany()
                         .HasForeignKey("ActorUserId")
                         .OnDelete(DeleteBehavior.NoAction);
@@ -2289,7 +2289,7 @@ namespace BHome.Infrastructure.Persistence.Compact24.Migrations
                         .HasForeignKey("LocationId")
                         .OnDelete(DeleteBehavior.NoAction);
 
-                    b.HasOne("BHome.Infrastructure.Persistence.ApplicationUser", null)
+                    b.HasOne("BHome.Infrastructure.Persistence.User", null)
                         .WithMany()
                         .HasForeignKey("RecipientUserId")
                         .OnDelete(DeleteBehavior.NoAction);
@@ -2302,12 +2302,12 @@ namespace BHome.Infrastructure.Persistence.Compact24.Migrations
                         .HasForeignKey("BeneficiaryResidentId")
                         .OnDelete(DeleteBehavior.NoAction);
 
-                    b.HasOne("BHome.Infrastructure.Persistence.ApplicationUser", null)
+                    b.HasOne("BHome.Infrastructure.Persistence.User", null)
                         .WithMany()
                         .HasForeignKey("DecidedByUserId")
                         .OnDelete(DeleteBehavior.NoAction);
 
-                    b.HasOne("BHome.Infrastructure.Persistence.ApplicationUser", null)
+                    b.HasOne("BHome.Infrastructure.Persistence.User", null)
                         .WithMany()
                         .HasForeignKey("RequestedByUserId")
                         .OnDelete(DeleteBehavior.NoAction)
@@ -2318,7 +2318,7 @@ namespace BHome.Infrastructure.Persistence.Compact24.Migrations
                         .HasForeignKey("SourceDepositContractId")
                         .OnDelete(DeleteBehavior.NoAction);
 
-                    b.HasOne("BHome.Domain.PaymentsDebt.PaymentTransfer", null)
+                    b.HasOne("BHome.Domain.PaymentsDebt.Payment", null)
                         .WithMany()
                         .HasForeignKey("SourcePaymentId")
                         .OnDelete(DeleteBehavior.NoAction);
@@ -2326,7 +2326,7 @@ namespace BHome.Infrastructure.Persistence.Compact24.Migrations
 
             modelBuilder.Entity("BHome.Domain.Entities.StaffEmployment", b =>
                 {
-                    b.HasOne("BHome.Infrastructure.Persistence.ApplicationUser", null)
+                    b.HasOne("BHome.Infrastructure.Persistence.User", null)
                         .WithMany()
                         .HasForeignKey("StaffUserId")
                         .OnDelete(DeleteBehavior.NoAction)
@@ -2337,7 +2337,7 @@ namespace BHome.Infrastructure.Persistence.Compact24.Migrations
                 {
                     b.HasOne("BHome.Domain.IncidentMaintenance.IncidentReport", null)
                         .WithMany()
-                        .HasForeignKey("DuplicateOfId")
+                        .HasForeignKey("DuplicateOfReportId")
                         .OnDelete(DeleteBehavior.NoAction);
 
                     b.HasOne("BHome.Domain.Locations.Location", null)
@@ -2346,9 +2346,9 @@ namespace BHome.Infrastructure.Persistence.Compact24.Migrations
                         .OnDelete(DeleteBehavior.NoAction)
                         .IsRequired();
 
-                    b.HasOne("BHome.Infrastructure.Persistence.ApplicationUser", null)
+                    b.HasOne("BHome.Infrastructure.Persistence.User", null)
                         .WithMany()
-                        .HasForeignKey("ReporterId")
+                        .HasForeignKey("ReporterUserId")
                         .OnDelete(DeleteBehavior.NoAction)
                         .IsRequired();
 
@@ -2367,25 +2367,33 @@ namespace BHome.Infrastructure.Persistence.Compact24.Migrations
 
             modelBuilder.Entity("BHome.Domain.Locations.Location", b =>
                 {
-                    b.HasOne("BHome.Infrastructure.Persistence.ApplicationUser", null)
+                    b.HasOne("BHome.Infrastructure.Persistence.User", null)
                         .WithMany()
                         .HasForeignKey("PublishedByUserId")
                         .OnDelete(DeleteBehavior.NoAction);
                 });
 
+            modelBuilder.Entity("BHome.Domain.PaymentsDebt.Payment", b =>
+                {
+                    b.HasOne("BHome.Domain.TenantContracts.Resident", null)
+                        .WithMany()
+                        .HasForeignKey("BeneficiaryResidentId")
+                        .OnDelete(DeleteBehavior.NoAction);
+
+                    b.HasOne("BHome.Infrastructure.Persistence.User", null)
+                        .WithMany()
+                        .HasForeignKey("VerifiedByUserId")
+                        .OnDelete(DeleteBehavior.NoAction);
+                });
+
             modelBuilder.Entity("BHome.Domain.PaymentsDebt.PaymentAllocation", b =>
                 {
-                    b.HasOne("BHome.Infrastructure.Persistence.ApplicationUser", null)
+                    b.HasOne("BHome.Infrastructure.Persistence.User", null)
                         .WithMany()
                         .HasForeignKey("CreatedByUserId")
                         .OnDelete(DeleteBehavior.NoAction);
 
-                    b.HasOne("BHome.Domain.Billing.Invoice", null)
-                        .WithMany()
-                        .HasForeignKey("InvoiceId")
-                        .OnDelete(DeleteBehavior.NoAction);
-
-                    b.HasOne("BHome.Infrastructure.Persistence.ApplicationUser", null)
+                    b.HasOne("BHome.Infrastructure.Persistence.User", null)
                         .WithMany()
                         .HasForeignKey("PaidByUserId")
                         .OnDelete(DeleteBehavior.NoAction);
@@ -2400,6 +2408,11 @@ namespace BHome.Infrastructure.Persistence.Compact24.Migrations
                         .HasForeignKey("SourceDepositContractId")
                         .OnDelete(DeleteBehavior.NoAction);
 
+                    b.HasOne("BHome.Domain.PaymentsDebt.Payment", null)
+                        .WithMany()
+                        .HasForeignKey("SourcePaymentId")
+                        .OnDelete(DeleteBehavior.NoAction);
+
                     b.HasOne("BHome.Domain.TenantContracts.Contract", null)
                         .WithMany()
                         .HasForeignKey("TargetDepositContractId")
@@ -2410,27 +2423,14 @@ namespace BHome.Infrastructure.Persistence.Compact24.Migrations
                         .HasForeignKey("TargetInitialContractId")
                         .OnDelete(DeleteBehavior.NoAction);
 
+                    b.HasOne("BHome.Domain.Billing.Invoice", null)
+                        .WithMany()
+                        .HasForeignKey("TargetInvoiceId")
+                        .OnDelete(DeleteBehavior.NoAction);
+
                     b.HasOne("BHome.Domain.TenantContracts.Contract", null)
                         .WithMany()
                         .HasForeignKey("TargetSettlementContractId")
-                        .OnDelete(DeleteBehavior.NoAction);
-
-                    b.HasOne("BHome.Domain.PaymentsDebt.PaymentTransfer", null)
-                        .WithMany()
-                        .HasForeignKey("TransferId")
-                        .OnDelete(DeleteBehavior.NoAction);
-                });
-
-            modelBuilder.Entity("BHome.Domain.PaymentsDebt.PaymentTransfer", b =>
-                {
-                    b.HasOne("BHome.Domain.TenantContracts.Resident", null)
-                        .WithMany()
-                        .HasForeignKey("BeneficiaryResidentId")
-                        .OnDelete(DeleteBehavior.NoAction);
-
-                    b.HasOne("BHome.Infrastructure.Persistence.ApplicationUser", null)
-                        .WithMany()
-                        .HasForeignKey("StoredVerifiedByUserId")
                         .OnDelete(DeleteBehavior.NoAction);
                 });
 
@@ -2472,7 +2472,7 @@ namespace BHome.Infrastructure.Persistence.Compact24.Migrations
                         .OnDelete(DeleteBehavior.NoAction)
                         .IsRequired();
 
-                    b.HasOne("BHome.Infrastructure.Persistence.ApplicationUser", null)
+                    b.HasOne("BHome.Infrastructure.Persistence.User", null)
                         .WithMany()
                         .HasForeignKey("PublishedByUserId")
                         .OnDelete(DeleteBehavior.NoAction);
@@ -2480,17 +2480,12 @@ namespace BHome.Infrastructure.Persistence.Compact24.Migrations
 
             modelBuilder.Entity("BHome.Domain.TenantContracts.Contract", b =>
                 {
-                    b.HasOne("BHome.Infrastructure.Persistence.ApplicationUser", null)
+                    b.HasOne("BHome.Infrastructure.Persistence.User", null)
                         .WithMany()
                         .HasForeignKey("ActivatedByUserId")
                         .OnDelete(DeleteBehavior.NoAction);
 
-                    b.HasOne("BHome.Domain.TenantContracts.Contract", null)
-                        .WithMany()
-                        .HasForeignKey("HoldingContractId")
-                        .OnDelete(DeleteBehavior.NoAction);
-
-                    b.HasOne("BHome.Infrastructure.Persistence.ApplicationUser", null)
+                    b.HasOne("BHome.Infrastructure.Persistence.User", null)
                         .WithMany()
                         .HasForeignKey("OwnerSignerId")
                         .OnDelete(DeleteBehavior.NoAction)
@@ -2518,7 +2513,12 @@ namespace BHome.Infrastructure.Persistence.Compact24.Migrations
                         .OnDelete(DeleteBehavior.NoAction)
                         .IsRequired();
 
-                    b.HasOne("BHome.Infrastructure.Persistence.ApplicationUser", null)
+                    b.HasOne("BHome.Domain.TenantContracts.Contract", null)
+                        .WithMany()
+                        .HasForeignKey("SourceHoldingContractId")
+                        .OnDelete(DeleteBehavior.NoAction);
+
+                    b.HasOne("BHome.Infrastructure.Persistence.User", null)
                         .WithMany()
                         .HasForeignKey("TenantUserId")
                         .OnDelete(DeleteBehavior.NoAction);
@@ -2532,7 +2532,7 @@ namespace BHome.Infrastructure.Persistence.Compact24.Migrations
                         .OnDelete(DeleteBehavior.NoAction)
                         .IsRequired();
 
-                    b.HasOne("BHome.Infrastructure.Persistence.ApplicationUser", null)
+                    b.HasOne("BHome.Infrastructure.Persistence.User", null)
                         .WithMany()
                         .HasForeignKey("OwnerConfirmedByUserId")
                         .OnDelete(DeleteBehavior.NoAction);
@@ -2544,7 +2544,7 @@ namespace BHome.Infrastructure.Persistence.Compact24.Migrations
                         .IsRequired();
                 });
 
-            modelBuilder.Entity("BHome.Domain.TenantContracts.ContractSignature", b =>
+            modelBuilder.Entity("BHome.Domain.TenantContracts.ContractSigning", b =>
                 {
                     b.HasOne("BHome.Domain.TenantContracts.Contract", null)
                         .WithMany()
@@ -2552,7 +2552,7 @@ namespace BHome.Infrastructure.Persistence.Compact24.Migrations
                         .OnDelete(DeleteBehavior.NoAction)
                         .IsRequired();
 
-                    b.HasOne("BHome.Infrastructure.Persistence.ApplicationUser", null)
+                    b.HasOne("BHome.Infrastructure.Persistence.User", null)
                         .WithMany()
                         .HasForeignKey("SignerUserId")
                         .OnDelete(DeleteBehavior.NoAction)
@@ -2561,41 +2561,41 @@ namespace BHome.Infrastructure.Persistence.Compact24.Migrations
 
             modelBuilder.Entity("BHome.Domain.TenantContracts.Resident", b =>
                 {
-                    b.HasOne("BHome.Infrastructure.Persistence.ApplicationUser", null)
+                    b.HasOne("BHome.Domain.PropertyManagement.Room", null)
                         .WithMany()
-                        .HasForeignKey("ConfirmedByUserId")
+                        .HasForeignKey("CurrentRoomId")
                         .OnDelete(DeleteBehavior.NoAction);
 
-                    b.HasOne("BHome.Infrastructure.Persistence.ApplicationUser", null)
+                    b.HasOne("BHome.Infrastructure.Persistence.User", null)
                         .WithMany()
-                        .HasForeignKey("OwnerUserId")
+                        .HasForeignKey("IdentityOwnerScopeId")
                         .OnDelete(DeleteBehavior.NoAction)
                         .IsRequired();
 
-                    b.HasOne("BHome.Domain.PropertyManagement.Room", null)
+                    b.HasOne("BHome.Infrastructure.Persistence.User", null)
                         .WithMany()
-                        .HasForeignKey("RoomId")
+                        .HasForeignKey("UserId")
                         .OnDelete(DeleteBehavior.NoAction);
 
-                    b.HasOne("BHome.Infrastructure.Persistence.ApplicationUser", null)
+                    b.HasOne("BHome.Infrastructure.Persistence.User", null)
                         .WithMany()
-                        .HasForeignKey("TenantUserId")
+                        .HasForeignKey("VerifiedByUserId")
                         .OnDelete(DeleteBehavior.NoAction);
                 });
 
-            modelBuilder.Entity("BHome.Infrastructure.Persistence.Compact24.CompactRefreshRow", b =>
+            modelBuilder.Entity("BHome.Infrastructure.Persistence.Compact24.RefreshToken", b =>
                 {
-                    b.HasOne("BHome.Infrastructure.Persistence.Compact24.CompactRefreshRow", null)
+                    b.HasOne("BHome.Infrastructure.Persistence.Compact24.RefreshToken", null)
                         .WithMany()
                         .HasForeignKey("ReplacedByTokenId")
                         .OnDelete(DeleteBehavior.NoAction);
 
-                    b.HasOne("BHome.Infrastructure.Persistence.Compact24.CompactRefreshRow", null)
+                    b.HasOne("BHome.Infrastructure.Persistence.Compact24.RefreshToken", null)
                         .WithMany()
                         .HasForeignKey("SessionId")
                         .OnDelete(DeleteBehavior.Restrict);
 
-                    b.HasOne("BHome.Infrastructure.Persistence.ApplicationUser", null)
+                    b.HasOne("BHome.Infrastructure.Persistence.User", null)
                         .WithMany()
                         .HasForeignKey("UserId")
                         .OnDelete(DeleteBehavior.Restrict)

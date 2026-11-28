@@ -311,7 +311,7 @@ public sealed class AuthenticationIntegrationPlanTests(AuthenticationDatabaseFix
         var session = await Login(client, user);
         await using (var scope = fixture.Factory.Services.CreateAsyncScope())
         {
-            var users = scope.ServiceProvider.GetRequiredService<UserManager<ApplicationUser>>();
+            var users = scope.ServiceProvider.GetRequiredService<UserManager<User>>();
             Assert.True((await users.UpdateSecurityStampAsync((await users.FindByIdAsync(user.Id.ToString()))!)).Succeeded);
         }
         Bearer(client, session);
@@ -585,7 +585,7 @@ public sealed class AuthenticationIntegrationPlanTests(AuthenticationDatabaseFix
         var response = await client.PutAsJsonAsync("/api/v1/profile", new { role = Roles.Owner, assignedLocationId = Guid.NewGuid() });
         Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
         await using var scope = fixture.Factory.Services.CreateAsyncScope();
-        var users = scope.ServiceProvider.GetRequiredService<UserManager<ApplicationUser>>();
+        var users = scope.ServiceProvider.GetRequiredService<UserManager<User>>();
         Assert.Equal([Roles.Staff], await users.GetRolesAsync((await users.FindByIdAsync(user.Id.ToString()))!));
     }
 
@@ -602,12 +602,12 @@ public sealed class AuthenticationIntegrationPlanTests(AuthenticationDatabaseFix
 
     // ───────────── Helpers ─────────────
 
-    private async Task<ApplicationUser> CreateUser(string? role)
+    private async Task<User> CreateUser(string? role)
     {
         await using var scope = fixture.Factory.Services.CreateAsyncScope();
-        var users = scope.ServiceProvider.GetRequiredService<UserManager<ApplicationUser>>();
+        var users = scope.ServiceProvider.GetRequiredService<UserManager<User>>();
         var id = Guid.NewGuid();
-        var user = new ApplicationUser { Id = id, UserName = id.ToString(), Email = $"{id:N}@example.invalid", EmailConfirmed = true, LockoutEnabled = true };
+        var user = new User { Id = id, UserName = id.ToString(), Email = $"{id:N}@example.invalid", EmailConfirmed = true, LockoutEnabled = true };
         var created = await users.CreateAsync(user, Password);
         Assert.True(created.Succeeded, string.Join(", ", created.Errors.Select(e => e.Code)));
         if (role is not null) Assert.True((await users.AddToRoleAsync(user, role)).Succeeded);
@@ -620,7 +620,7 @@ public sealed class AuthenticationIntegrationPlanTests(AuthenticationDatabaseFix
     private static Task<HttpResponseMessage> PostRefresh(HttpClient client, string? token) =>
         client.PostAsJsonAsync("/api/v1/auth/refresh", new { refreshToken = token });
 
-    private static async Task<LoginResult> Login(HttpClient client, ApplicationUser user)
+    private static async Task<LoginResult> Login(HttpClient client, User user)
     {
         var response = await PostLogin(client, user.Email!, Password);
         Assert.Equal(HttpStatusCode.OK, response.StatusCode);

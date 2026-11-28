@@ -138,12 +138,12 @@ internal sealed class AccountProvisioningWorld : IAsyncDisposable
         "select count(*) from users where normalized_email = upper(@e)", ("e", email));
 
     // Precondition helper: an account stored the way the system stores it (UserManager + role).
-    public async Task<ApplicationUser> AddUserAsync(Guid id, string email, string role, string password,
+    public async Task<User> AddUserAsync(Guid id, string email, string role, string password,
         string? phone = null, bool active = true, bool emailConfirmed = true)
     {
         await using var setup = root!.CreateAsyncScope();
         var db = setup.ServiceProvider.GetRequiredService<Compact24DbContext>();
-        var user = new ApplicationUser
+        var user = new User
         {
             Id = id,
             UserName = email,
@@ -154,7 +154,7 @@ internal sealed class AccountProvisioningWorld : IAsyncDisposable
             LockoutEnabled = true,
         };
         db.PrepareUserRole(user, role);
-        var result = await setup.ServiceProvider.GetRequiredService<UserManager<ApplicationUser>>().CreateAsync(user, password);
+        var result = await setup.ServiceProvider.GetRequiredService<UserManager<User>>().CreateAsync(user, password);
         Assert.True(result.Succeeded, string.Join("; ", result.Errors.Select(e => e.Code)));
         return user;
     }

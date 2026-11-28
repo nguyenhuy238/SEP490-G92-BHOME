@@ -41,7 +41,7 @@ internal sealed partial class PaymentRepository(BHomePersistenceContext db) : IP
         // Short manual reconciliation transactions. One lock order also protects references across rooms.
         await db.Database.ExecuteSqlRawAsync("SELECT pg_advisory_xact_lock(hashtextextended('bhome-payment-ledger-v1', 0))", t);
         if (transferId is { } transfer)
-            if (!(db is Compact24DbContext ? await PaymentLedgerWrites.LockReceiptAsync(db, transfer, t) : await db.Locked<PaymentTransfer>(transfer).AnyAsync(t)))
+            if (!(db is Compact24DbContext ? await PaymentLedgerWrites.LockReceiptAsync(db, transfer, t) : await db.Locked<Payment>(transfer).AnyAsync(t)))
                 throw new PaymentException(404, "bank_transfer_not_found");
         if (invoiceId is { } invoice)
         {
@@ -66,7 +66,7 @@ internal sealed partial class PaymentRepository(BHomePersistenceContext db) : IP
         db.ChangeTracker.Clear();
         await using var transaction = await db.Database.BeginTransactionAsync(t);
         await db.Database.ExecuteSqlRawAsync("SELECT pg_advisory_xact_lock(hashtextextended('bhome-payment-ledger-v1',0))", t);
-        if (!(db is Compact24DbContext ? await PaymentLedgerWrites.LockReceiptAsync(db, transferId, t) : await db.Locked<PaymentTransfer>(transferId).AnyAsync(t))) throw new PaymentException(404, "bank_transfer_not_found");
+        if (!(db is Compact24DbContext ? await PaymentLedgerWrites.LockReceiptAsync(db, transferId, t) : await db.Locked<Payment>(transferId).AnyAsync(t))) throw new PaymentException(404, "bank_transfer_not_found");
         var room = (db is Compact24DbContext
             ? await (from c in PaymentObligationQueries.Contracts(db)
                      join r in db.Set<BHome.Domain.PropertyManagement.Room>().AsNoTracking() on c.RoomId equals r.Id
@@ -91,18 +91,18 @@ internal sealed partial class PaymentRepository(BHomePersistenceContext db) : IP
         ? scope.Owner || scope.Tenant ? PaymentObligationQueries.InvoiceAsync(db, id, scope.Owner ? null : scope.ActorId, t) : Task.FromResult<Invoice?>(null)
         : db.Set<Invoice>().AsNoTracking().SingleOrDefaultAsync(i => i.Id == id &&
             (scope.Owner || scope.Tenant && i.Recipients.Any(r => r.TenantUserId == scope.ActorId)), t);
-    public async Task<PaymentTransfer?> TransferAsync(Guid id, CancellationToken t)
+    public async Task<Payment?> TransferAsync(Guid id, CancellationToken t)
     {
         if (db is not Compact24DbContext)
-            return await db.Set<PaymentTransfer>().AsNoTracking().SingleOrDefaultAsync(x => x.Id == id, t);
+            return await db.Set<Payment>().AsNoTracking().SingleOrDefaultAsync(x => x.Id == id, t);
         var payment = await PaymentLedgerQueries.ReceiptEntities(db).SingleOrDefaultAsync(x => x.Id == id, t);
         return payment is null ? null : PaymentLedgerQueries.HydrateReceipt(payment);
     }
-    public async Task<PaymentTransfer?> TransferReferenceAsync(string provider, string reference, CancellationToken t)
+    public async Task<Payment?> TransferReferenceAsync(string provider, string reference, CancellationToken t)
     {
         if (db is not Compact24DbContext)
-            return await db.Set<PaymentTransfer>().AsNoTracking().SingleOrDefaultAsync(x => x.ProviderIdentity == provider && x.NormalizedReference == reference, t);
-        var payment = await PaymentLedgerQueries.ReceiptEntities(db).SingleOrDefaultAsync(x => x.ProviderIdentity == provider &&
+            return await db.Set<Payment>().AsNoTracking().SingleOrDefaultAsync(x => x.ProviderIdentity == provider && x.NormalizedReference == reference, t);
+        var payment = await PaymentLedgerQueries.ReceiptEntities(db).SingleOrDefaultAsync(x => x.ProviderCode == provider &&
             (x.VerificationData.GetProperty("compactState").GetProperty("normalizedReference").GetString() ?? "") == reference, t);
         return payment is null ? null : PaymentLedgerQueries.HydrateReceipt(payment);
     }
@@ -110,7 +110,7 @@ internal sealed partial class PaymentRepository(BHomePersistenceContext db) : IP
     {
         if (db is not Compact24DbContext)
             return await db.Set<PaymentAllocation>().AsNoTracking().SingleOrDefaultAsync(a => a.TransferId == id, t);
-        var allocation = await PaymentLedgerWrites.Allocations(db).SingleOrDefaultAsync(a => a.TransferId == id, t);
+        var allocation = await PaymentLedgerWrites.Allocations(db).SingleOrDefaultAsync(a => a.SourcePaymentId == id, t);
         if (allocation is not null) await PaymentLedgerQueries.HydrateAllocationAuditAsync(db, [allocation], t);
         return allocation;
     }
@@ -122,8 +122,8 @@ internal sealed partial class PaymentRepository(BHomePersistenceContext db) : IP
         if (db is Compact24DbContext)
         {
             var native = await (from allocation in PaymentLedgerWrites.Allocations(db)
-                                join transfer in PaymentLedgerQueries.ReceiptEntities(db) on allocation.TransferId equals transfer.Id
-                                where allocation.InvoiceId == invoiceId
+                                join transfer in PaymentLedgerQueries.ReceiptEntities(db) on allocation.SourcePaymentId equals transfer.Id
+                                where allocation.TargetInvoiceId == invoiceId
                                 orderby allocation.AllocatedAt descending, allocation.Id
                                 select new { allocation, transfer }).ToArrayAsync(t);
             var verified = await ExternalReceiptIdsAsync(native.Select(r => r.transfer.Id).Distinct().ToArray(), t);
@@ -132,7 +132,7 @@ internal sealed partial class PaymentRepository(BHomePersistenceContext db) : IP
         }
         var rows = await
         (from allocation in db.Set<PaymentAllocation>().AsNoTracking()
-         join transfer in db.Set<PaymentTransfer>() on allocation.TransferId equals transfer.Id
+         join transfer in db.Set<Payment>() on allocation.TransferId equals transfer.Id
          where allocation.InvoiceId == invoiceId
          orderby allocation.AllocatedAt descending, allocation.Id
          select new PaymentLedgerEntry(allocation, transfer, false)).ToArrayAsync(t);
@@ -147,7 +147,7 @@ internal sealed partial class PaymentRepository(BHomePersistenceContext db) : IP
               WHERE h->>'recordType'={ExternalPaymentPayerRecords.Kind})
             """).ToArrayAsync(token)).ToHashSet();
     }
-    public async Task<decimal> AllocatedAsync(Guid invoiceId, CancellationToken t) => (db is Compact24DbContext ? await PaymentLedgerWrites.Allocations(db).Where(a => a.InvoiceId == invoiceId).SumAsync(a => (decimal?)a.Amount, t)
+    public async Task<decimal> AllocatedAsync(Guid invoiceId, CancellationToken t) => (db is Compact24DbContext ? await PaymentLedgerWrites.Allocations(db).Where(a => a.TargetInvoiceId == invoiceId).SumAsync(a => (decimal?)a.Amount, t)
         : await db.Set<PaymentAllocation>().Where(a => a.InvoiceId == invoiceId).SumAsync(a => (decimal?)a.Amount, t)) ?? 0m;
     public async Task<decimal> DepositAllocatedAsync(Guid contractId, CancellationToken t) => (db is Compact24DbContext ? await PaymentLedgerWrites.Allocations(db).Where(a => a.TargetDepositContractId == contractId).SumAsync(a => (decimal?)a.Amount, t)
         : await db.Set<PaymentAllocation>().Where(a => a.TargetDepositContractId == contractId).SumAsync(a => (decimal?)a.Amount, t)) ?? 0m;
@@ -298,7 +298,7 @@ internal sealed partial class PaymentRepository(BHomePersistenceContext db) : IP
     public async Task<PagedResult<TransferView>> TransfersAsync(PaymentQuery query, CancellationToken t)
     {
         if (db is Compact24DbContext) return await NativeTransfersAsync(query, t);
-        var source = db.Set<PaymentTransfer>().AsNoTracking().Where(x =>
+        var source = db.Set<Payment>().AsNoTracking().Where(x =>
             (query.LocationId == null && query.RoomId == null && query.BillingPeriod == null) || db.Set<Invoice>().Any(i => i.Id ==
                 (db.Set<PaymentAllocation>().Where(a => a.TransferId == x.Id).Select(a => (Guid?)a.InvoiceId).FirstOrDefault() ??
                  db.Set<PaymentReconciliation>().Where(r => r.TransferId == x.Id).OrderByDescending(r => r.Sequence).Select(r => r.InvoiceId).FirstOrDefault() ?? x.ProposedInvoiceId) &&
@@ -341,9 +341,9 @@ internal sealed partial class PaymentRepository(BHomePersistenceContext db) : IP
                         .Select(r => r.Decision).FirstOrDefault() == query.PaymentStatus),
                 _ => source.Where(_ => false)
             };
-        var views = source.OrderByDescending(x => x.VerifiedAt).ThenBy(x => x.Id).Skip((query.Page - 1) * query.PageSize).Take(query.PageSize)
+        var views = source.OrderByDescending(x => x.ReceiptVerifiedAt).ThenBy(x => x.Id).Skip((query.Page - 1) * query.PageSize).Take(query.PageSize)
             .Select(x => new TransferView(x.Id, x.ProviderIdentity, x.BankReference, x.Amount, x.Currency, x.OccurredAt, x.TransferDescription,
-                x.StatementReference, x.VerificationReason, x.VerifiedByUserId, x.VerifiedAt, x.ProposedInvoiceId,
+                x.StatementReference, x.VerificationReason, x.ReceiptVerifiedByUserId, x.ReceiptVerifiedAt, x.ProposedInvoiceId,
                 db.Set<PaymentAllocation>().Any(a => a.TransferId == x.Id) ? "Allocated" : db.Set<PaymentReconciliation>().Where(r => r.TransferId == x.Id).OrderByDescending(r => r.Sequence).Select(r => r.Decision).FirstOrDefault() ?? "PendingReview",
                 db.Set<PaymentReconciliation>().Where(r => r.TransferId == x.Id).OrderByDescending(r => r.Sequence).Select(r => r.Reason).FirstOrDefault() ?? (db.Set<PaymentAllocation>().Any(a => a.TransferId == x.Id) ? "verified_full_payment" : "owner_allocation_confirmation_required"),
                 db.Set<PaymentAllocation>().Where(a => a.TransferId == x.Id).Select(a => a.InvoiceId).FirstOrDefault(), x.IsDevelopmentDemo,
@@ -363,7 +363,7 @@ internal sealed partial class PaymentRepository(BHomePersistenceContext db) : IP
         var reviews = PaymentLedgerQueries.Reviews(db);
         var source = PaymentLedgerQueries.ReceiptList(db).Where(x =>
             (query.LocationId == null && query.RoomId == null && query.BillingPeriod == null) || db.Set<BHome.Domain.Billing.Invoice>().AsNoTracking().Any(i => i.Id ==
-                (allocations.Where(a => a.TransferId == x.Id).Select(a => (Guid?)a.InvoiceId).FirstOrDefault() ??
+                (allocations.Where(a => a.SourcePaymentId == x.Id).Select(a => (Guid?)a.TargetInvoiceId).FirstOrDefault() ??
                  reviews.Where(r => r.TransferId == x.Id).OrderByDescending(r => r.Sequence).Select(r => r.InvoiceId).FirstOrDefault() ?? x.ProposedInvoiceId) &&
                 (query.LocationId == null || i.LocationId == query.LocationId) && (query.RoomId == null || i.RoomId == query.RoomId) && (query.BillingPeriod == null || i.BillingPeriod == query.BillingPeriod)));
         if (query.DepositContractId is { } deposit)
@@ -373,7 +373,7 @@ internal sealed partial class PaymentRepository(BHomePersistenceContext db) : IP
                   WHERE h->>'recordType'={ReceiptExcessRecords.Kind} AND (h->'state'->'target'->>'depositContractId'={deposit.ToString()}
                     OR h->'state'->'target'->>'holdingContractId'={deposit.ToString()}))
                 """);
-            source = source.Where(p => allocations.Any(a => a.TransferId == p.Id && a.TargetDepositContractId == deposit) || excess.Contains(p.Id));
+            source = source.Where(p => allocations.Any(a => a.SourcePaymentId == p.Id && a.TargetDepositContractId == deposit) || excess.Contains(p.Id));
         }
         if (query.SettlementContractId is { } settlement)
         {
@@ -381,21 +381,21 @@ internal sealed partial class PaymentRepository(BHomePersistenceContext db) : IP
                 SELECT p.id AS "Value" FROM payments p WHERE EXISTS(SELECT 1 FROM jsonb_array_elements(p.history) h
                   WHERE h->>'recordType'={ReceiptExcessRecords.Kind} AND h->'state'->'target'->>'settlementContractId'={settlement.ToString()})
                 """);
-            source = source.Where(p => allocations.Any(a => a.TransferId == p.Id && a.TargetSettlementContractId == settlement) || excess.Contains(p.Id));
+            source = source.Where(p => allocations.Any(a => a.SourcePaymentId == p.Id && a.TargetSettlementContractId == settlement) || excess.Contains(p.Id));
         }
         if (!string.IsNullOrWhiteSpace(query.PaymentStatus))
             source = query.PaymentStatus switch
             {
-                "Allocated" => source.Where(x => allocations.Any(a => a.TransferId == x.Id)),
-                "PendingReview" => source.Where(x => !allocations.Any(a => a.TransferId == x.Id) &&
+                "Allocated" => source.Where(x => allocations.Any(a => a.SourcePaymentId == x.Id)),
+                "PendingReview" => source.Where(x => !allocations.Any(a => a.SourcePaymentId == x.Id) &&
                     (reviews.Where(r => r.TransferId == x.Id).OrderByDescending(r => r.Sequence)
                         .Select(r => r.Decision).FirstOrDefault() == null ||
                      reviews.Where(r => r.TransferId == x.Id).OrderByDescending(r => r.Sequence)
                         .Select(r => r.Decision).FirstOrDefault() == "PendingReview")),
-                "Rejected" => source.Where(x => !allocations.Any(a => a.TransferId == x.Id) &&
+                "Rejected" => source.Where(x => !allocations.Any(a => a.SourcePaymentId == x.Id) &&
                     reviews.Where(r => r.TransferId == x.Id).OrderByDescending(r => r.Sequence)
                         .Select(r => r.Decision).FirstOrDefault() == "Rejected"),
-                "ExcessRefundPending" or "ExcessRefundCompleted" => source.Where(x => !allocations.Any(a => a.TransferId == x.Id) &&
+                "ExcessRefundPending" or "ExcessRefundCompleted" => source.Where(x => !allocations.Any(a => a.SourcePaymentId == x.Id) &&
                     reviews.Where(r => r.TransferId == x.Id).OrderByDescending(r => r.Sequence)
                         .Select(r => r.Decision).FirstOrDefault() == query.PaymentStatus),
                 _ => source.Where(_ => false)
@@ -403,14 +403,14 @@ internal sealed partial class PaymentRepository(BHomePersistenceContext db) : IP
         var views = source.OrderByDescending(x => x.VerifiedAt).ThenBy(x => x.Id).Skip((query.Page - 1) * query.PageSize).Take(query.PageSize)
             .Select(x => new TransferView(x.Id, x.ProviderIdentity, x.BankReference, x.Amount, x.Currency, x.OccurredAt, x.TransferDescription,
                 x.StatementReference, x.VerificationReason, x.VerifiedByUserId, x.VerifiedAt, x.ProposedInvoiceId,
-                allocations.Any(a => a.TransferId == x.Id) ? "Allocated" : reviews.Where(r => r.TransferId == x.Id).OrderByDescending(r => r.Sequence).Select(r => r.Decision).FirstOrDefault() ?? "PendingReview",
-                reviews.Where(r => r.TransferId == x.Id).OrderByDescending(r => r.Sequence).Select(r => r.Reason).FirstOrDefault() ?? (allocations.Any(a => a.TransferId == x.Id) ? "verified_full_payment" : "owner_allocation_confirmation_required"),
-                allocations.Where(a => a.TransferId == x.Id).Select(a => a.InvoiceId).FirstOrDefault(), x.IsDevelopmentDemo,
-                allocations.Where(a => a.TransferId == x.Id).Sum(a => (decimal?)a.Amount) ?? 0,
-                x.Amount - (allocations.Where(a => a.TransferId == x.Id).Sum(a => (decimal?)a.Amount) ?? 0),
-                allocations.Where(a => a.TransferId == x.Id).Select(a => a.TargetDepositContractId).FirstOrDefault(),
-                allocations.Where(a => a.TransferId == x.Id).Select(a => a.TargetSettlementContractId).FirstOrDefault(),
-                allocations.Where(a => a.TransferId == x.Id).Select(a => a.SettlementReceivableId).FirstOrDefault(),
+                allocations.Any(a => a.SourcePaymentId == x.Id) ? "Allocated" : reviews.Where(r => r.TransferId == x.Id).OrderByDescending(r => r.Sequence).Select(r => r.Decision).FirstOrDefault() ?? "PendingReview",
+                reviews.Where(r => r.TransferId == x.Id).OrderByDescending(r => r.Sequence).Select(r => r.Reason).FirstOrDefault() ?? (allocations.Any(a => a.SourcePaymentId == x.Id) ? "verified_full_payment" : "owner_allocation_confirmation_required"),
+                allocations.Where(a => a.SourcePaymentId == x.Id).Select(a => a.TargetInvoiceId).FirstOrDefault(), x.IsDevelopmentDemo,
+                allocations.Where(a => a.SourcePaymentId == x.Id).Sum(a => (decimal?)a.Amount) ?? 0,
+                x.Amount - (allocations.Where(a => a.SourcePaymentId == x.Id).Sum(a => (decimal?)a.Amount) ?? 0),
+                allocations.Where(a => a.SourcePaymentId == x.Id).Select(a => a.TargetDepositContractId).FirstOrDefault(),
+                allocations.Where(a => a.SourcePaymentId == x.Id).Select(a => a.TargetSettlementContractId).FirstOrDefault(),
+                allocations.Where(a => a.SourcePaymentId == x.Id).Select(a => a.SettlementReceivableId).FirstOrDefault(),
                 x.StatementEvidenceSha256 != null && x.StatementEvidenceContentType != null && x.StatementEvidenceLength != null
                     ? new BankStatementEvidenceView(x.StatementEvidenceContentType, x.StatementEvidenceLength.Value, x.StatementEvidenceSha256) : null));
         return new(await views.ToArrayAsync(t),
@@ -434,7 +434,7 @@ internal sealed partial class PaymentRepository(BHomePersistenceContext db) : IP
         if (db is not Compact24DbContext) { Add(entity); return Task.CompletedTask; }
         return entity switch
         {
-            PaymentTransfer receipt => PaymentLedgerWrites.AddReceiptAsync(db, receipt, token),
+            Payment receipt => PaymentLedgerWrites.AddReceiptAsync(db, receipt, token),
             PaymentCommand command => PaymentLedgerWrites.AddCommandAsync(db, command, token),
             PaymentReconciliation review => PaymentLedgerWrites.AppendReviewAsync(db, review, token),
             PaymentAllocation allocation => PaymentLedgerWrites.AddAllocationAsync(db, allocation, token),
@@ -518,7 +518,7 @@ internal sealed partial class PaymentRepository(BHomePersistenceContext db) : IP
         if (db is Compact24DbContext) return await NativePaymentHistoryAsync(scope, query, t);
         var rows = from allocation in db.Set<PaymentAllocation>().AsNoTracking()
                    join invoice in VisibleInvoices(scope) on allocation.InvoiceId equals invoice.Id
-                   join transfer in db.Set<PaymentTransfer>() on allocation.TransferId equals transfer.Id
+                   join transfer in db.Set<Payment>() on allocation.TransferId equals transfer.Id
                    where (query.LocationId == null || invoice.LocationId == query.LocationId) && (query.RoomId == null || invoice.RoomId == query.RoomId) &&
                        (query.BillingPeriod == null || invoice.BillingPeriod == query.BillingPeriod)
                    orderby allocation.AllocatedAt descending, allocation.Id
@@ -535,8 +535,8 @@ internal sealed partial class PaymentRepository(BHomePersistenceContext db) : IP
     private async Task<PagedResult<PaymentHistoryEntry>> NativePaymentHistoryAsync(PaymentScope scope, PaymentQuery query, CancellationToken t)
     {
         var rows = from allocation in db.Set<BHome.Domain.PaymentsDebt.PaymentAllocation>().AsNoTracking()
-                   join invoice in NativeVisibleInvoices(scope) on allocation.InvoiceId equals invoice.Id
-                   join transfer in PaymentLedgerQueries.ReceiptEntities(db) on allocation.TransferId equals transfer.Id
+                   join invoice in NativeVisibleInvoices(scope) on allocation.TargetInvoiceId equals invoice.Id
+                   join transfer in PaymentLedgerQueries.ReceiptEntities(db) on allocation.SourcePaymentId equals transfer.Id
                    where
                        (query.LocationId == null || invoice.LocationId == query.LocationId) && (query.RoomId == null || invoice.RoomId == query.RoomId) &&
                        (query.BillingPeriod == null || invoice.BillingPeriod == query.BillingPeriod)
@@ -546,9 +546,9 @@ internal sealed partial class PaymentRepository(BHomePersistenceContext db) : IP
                        Entry = new PaymentHistoryEntry(allocation.Id, invoice.Id, invoice.LocationId, invoice.RoomId,
                            invoice.BillingSnapshot.GetProperty("compactState").GetProperty("locationName").GetString() ?? "",
                            invoice.BillingSnapshot.GetProperty("compactState").GetProperty("roomNumber").GetString() ?? "", invoice.BillingPeriod,
-                           allocation.Amount, transfer.OccurredAt, allocation.PaidByUserId == scope.ActorId ? "Bạn" : allocation.PaidByUserId != null ? "Khách thuê khác trong hóa đơn" : "Chưa xác định người trả",
+                           allocation.Amount, transfer.ReceivedAt, allocation.PaidByUserId == scope.ActorId ? "Bạn" : allocation.PaidByUserId != null ? "Khách thuê khác trong hóa đơn" : "Chưa xác định người trả",
                            transfer.VerificationData.GetProperty("compactState").GetProperty("verificationSource").GetString() ?? "",
-                           scope.Owner ? transfer.BankReference : null, scope.Owner ? (Guid?)(allocation.CreatedByUserId ?? Guid.Empty) : null),
+                           scope.Owner ? transfer.TransactionReference : null, scope.Owner ? (Guid?)(allocation.CreatedByUserId ?? Guid.Empty) : null),
                        ReceiptId = transfer.Id
                    };
         var page = await rows.Skip((query.Page - 1) * query.PageSize).Take(query.PageSize).ToArrayAsync(t);

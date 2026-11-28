@@ -31,7 +31,7 @@ internal static class MobileContractOverviewSeed
         var identity = scope.ServiceProvider.GetRequiredService<BHome.Infrastructure.Persistence.Compact24.Compact24DbContext>();
         await using var db = OfflineFixturePersistence.Open(scope.ServiceProvider, identity);
         if (!await db.IsSchemaReadyAsync(t)) throw new LocalTestAccountException("Compact24 chưa sẵn sàng.");
-        var users = scope.ServiceProvider.GetRequiredService<UserManager<ApplicationUser>>();
+        var users = scope.ServiceProvider.GetRequiredService<UserManager<User>>();
         var today = DateOnly.FromDateTime(TimeZoneInfo.ConvertTimeBySystemTimeZoneId(DateTimeOffset.UtcNow, "Asia/Ho_Chi_Minh").DateTime);
         var now = DateTimeOffset.UtcNow;
         await using var tx = await OfflineFixturePersistence.BeginAsync(db, identity, t);
@@ -70,7 +70,7 @@ internal static class MobileContractOverviewSeed
             var username = $"tenant.contract.overview.{i + 1:00}";
             if (await users.FindByNameAsync(username) is not null || await db.Users.AnyAsync(u => u.Id == Id(1000 + i), t))
                 throw new LocalTestAccountException("Trùng tài khoản ngoài fixture; không đổi mật khẩu/quyền.");
-            var tenant = new ApplicationUser { Id = Id(1000 + i), UserName = username, Email = username + "@example.invalid", IsActive = true, LockoutEnabled = true };
+            var tenant = new User { Id = Id(1000 + i), UserName = username, Email = username + "@example.invalid", IsActive = true, LockoutEnabled = true };
             identity.PrepareUserRole(tenant, Roles.Tenant);
             var result = await users.CreateAsync(tenant, "Fixture!9aA" + Convert.ToBase64String(RandomNumberGenerator.GetBytes(24)));
             if (!result.Succeeded) throw new LocalTestAccountException("Không tạo được Tenant tổng hợp: " + string.Join(",", result.Errors.Select(e => e.Code)));
@@ -110,10 +110,10 @@ internal static class MobileContractOverviewSeed
                     Status = status,
                     StartDate = from,
                     EndDate = to,
-                    MonthlyRent = rent,
+                    RentAmount = rent,
                     RequiredDeposit = status == ContractStatus.PendingActivation ? rent : 0,
                     Terms = $"DỮ LIỆU MINH HỌA TEST {roomName} – không phải hợp đồng thật.\n1. Các bên: Owner và Tenant tổng hợp trong BHOME MOBILE TEST.\n2. Phòng thuê: {roomName}; tối đa 1 người.\n3. Thời hạn: {from:dd/MM/yyyy} – {to:dd/MM/yyyy}.\n4. Tiền thuê mẫu: {rent} VND/tháng; điện, nước theo biểu phí cơ sở.\n5. Bàn giao: ghi nhận hiện trạng, chìa khóa, tài sản và chỉ số xác nhận bằng luồng thật trên ứng dụng.\n6. Gia hạn/trả phòng: gửi yêu cầu, kiểm tra và chờ Owner xử lý theo quy trình.\nTrạng thái được seed để kiểm tra UI; không chứng minh đã ký, đã trả tiền hoặc đã xác minh danh tính.",
-                    SnapshotHash = Convert.ToHexString(SHA256.HashData(System.Text.Encoding.UTF8.GetBytes($"mobile-contract-overview/{number}"))),
+                    SnapshotHashOrEmpty = Convert.ToHexString(SHA256.HashData(System.Text.Encoding.UTF8.GetBytes($"mobile-contract-overview/{number}"))),
                     IsDevelopmentDemo = true,
                     PreviousContractId = previous,
                     ActivatedByUserId = status is ContractStatus.Active or ContractStatus.Superseded or ContractStatus.Terminated ? Mobile(1) : null,
@@ -169,15 +169,15 @@ internal static class MobileContractOverviewSeed
                     Add(db, 7000 + i * 2 + utility, new OperationalTask
                     {
                         Kind = OperationalTaskKind.MeterReading,
-                        LocationId = location.Id,
+                        RequiredLocationId = location.Id,
                         MeterId = Id(6000 + i * 2 + utility),
                         AssignedStaffUserId = Mobile(2),
                         AssignmentId = assignment.Id,
                         AssignedAt = now,
-                        Title = $"Ghi số ban đầu {roomName} (dữ liệu test)",
+                        TaskTitle = $"Ghi số ban đầu {roomName} (dữ liệu test)",
                         ReadingDate = today,
                         Purpose = ReadingPurpose.Initial,
-                        Status = MeterTaskStatus.Assigned,
+                        MeterStatus = MeterTaskStatus.Assigned,
                         DueAt = now.AddDays(7)
                     });
                 }

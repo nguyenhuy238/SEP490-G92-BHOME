@@ -138,7 +138,7 @@ public sealed class OperatingPolicyService(ISetupWorkspaceStore store, ICurrentU
         var binding = JsonSerializer.Deserialize<OperatingPolicyBinding>(c.OperatingPolicySnapshot, Json);
         if (binding is null || !c.Terms.Contains(binding.ContentHash, StringComparison.Ordinal) || !c.Terms.Contains(binding.Content, StringComparison.Ordinal))
             return new(contractId, "NeedsReview", null, null);
-        var signed = new[] { c.OwnerSignerId, c.TenantUserId }.All(id => c.Signatures.Any(s => s.SignerUserId == id && s.SnapshotHash == c.SnapshotHash &&
+        var signed = new[] { c.OwnerSignerId, c.TenantUserId }.All(id => c.Signatures.Any(s => s.SignerUserId == id && s.SnapshotHash == c.SnapshotHashOrEmpty &&
             s.SignedAt != null && (s.Status == SignatureStatus.Signed || c.IsDevelopmentDemo && s.Status == SignatureStatus.Simulated)));
         return new(contractId, signed ? "Accepted" : "PendingSignatures", binding, null);
     }
@@ -179,16 +179,16 @@ public sealed class OperatingPolicyService(ISetupWorkspaceStore store, ICurrentU
                 Kind = ContractKind.Addendum,
                 StartDate = input.EffectiveFrom,
                 EndDate = c.EndDate,
-                MonthlyRent = c.MonthlyRent,
+                RentAmount = c.RentAmount,
                 RequiredDeposit = 0,
                 IsDevelopmentDemo = c.IsDevelopmentDemo,
                 OperatingPolicySnapshot = JsonSerializer.Serialize(binding, Json),
                 Terms = $"PHỤ LỤC THAY ĐỔI NỘI QUY CỦA HỢP ĐỒNG {c.Id}\nNgày hiệu lực: {input.EffectiveFrom:yyyy-MM-dd}\nLý do: {input.Reason.Trim()}\nNội quy {binding.PolicyId} phiên bản {binding.Version} SHA256 {binding.ContentHash}\n{binding.Title}\n{binding.Content}\nPhụ lục này chỉ thay đổi nội quy nêu trên; các điều khoản khác của hợp đồng gốc được giữ nguyên.",
                 Residents = c.Residents.Select(r => new ContractResident { ResidentId = r.ResidentId, Role = r.Role, ResidenceFrom = input.EffectiveFrom }).ToList()
             };
-            amendment.SnapshotHash = ContractDocumentSnapshot.Hash(new(amendment.Id, amendment.RoomId, amendment.OwnerSignerId, amendment.TenantUserId!.Value,
+            amendment.SnapshotHashOrEmpty = ContractDocumentSnapshot.Hash(new(amendment.Id, amendment.RoomId, amendment.OwnerSignerId, amendment.TenantUserId!.Value,
                 amendment.RepresentativeResidentId, amendment.Residents.Select(r => r.ResidentId).Order().ToArray(), amendment.StartDate, amendment.EndDate,
-                amendment.MonthlyRent, 0, null, 0, amendment.Terms, ""));
+                amendment.RentAmount, 0, null, 0, amendment.Terms, ""));
             if (amendment.Terms.Length > 12000) throw new PropertyException(400, "contract_and_policy_terms_too_long");
             await Store.SaveContractAsync(amendment, Actor, "OperatingPolicyAmendmentPrepared", t);
             await Store.SaveAsync(operationId, c.Room.LocationId, "PolicyAmendmentCommand", "Completed", new { contractId, policyId = input.PolicyId, effectiveFrom = input.EffectiveFrom, amendmentId = amendment.Id, fingerprint = Hash(new { contractId, input }) }, 0, Actor, t);
@@ -211,7 +211,7 @@ public sealed class OperatingPolicyService(ISetupWorkspaceStore store, ICurrentU
             amendmentId = amendment.Id,
             effectiveFrom = amendment.StartDate,
             policy = JsonSerializer.Deserialize<OperatingPolicyBinding>(amendment.OperatingPolicySnapshot, Json),
-            signedDocumentHash = amendment.SnapshotHash,
+            signedDocumentHash = amendment.SnapshotHashOrEmpty,
             signerEvidence = amendment.Signatures.Select(s => new { s.Id, s.SignerUserId, s.SignedAt, s.SignedHash, s.ProviderReference })
         }, 0, Actor, t);
     }

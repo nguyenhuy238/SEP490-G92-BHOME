@@ -27,7 +27,7 @@ internal static class MobileTestSeed
         var identity = scope.ServiceProvider.GetRequiredService<BHome.Infrastructure.Persistence.Compact24.Compact24DbContext>();
         await using var db = OfflineFixturePersistence.Open(scope.ServiceProvider, identity);
         if (!await db.IsSchemaReadyAsync()) throw new LocalTestAccountException("Compact24 chưa sẵn sàng.");
-        var users = scope.ServiceProvider.GetRequiredService<UserManager<ApplicationUser>>();
+        var users = scope.ServiceProvider.GetRequiredService<UserManager<User>>();
         var today = DateOnly.FromDateTime(TimeZoneInfo.ConvertTimeBySystemTimeZoneId(DateTimeOffset.UtcNow, "Asia/Ho_Chi_Minh").DateTime);
         var now = DateTimeOffset.UtcNow;
         await using var tx = await OfflineFixturePersistence.BeginAsync(db, identity);
@@ -44,7 +44,7 @@ internal static class MobileTestSeed
                 continue;
             }
             if (await db.Users.AnyAsync(u => u.Id == Id(n))) throw new LocalTestAccountException("Trùng ID tài khoản fixture.");
-            var user = new ApplicationUser { Id = Id(n), UserName = name, Email = name + "@example.invalid", IsActive = true, LockoutEnabled = true };
+            var user = new User { Id = Id(n), UserName = name, Email = name + "@example.invalid", IsActive = true, LockoutEnabled = true };
             identity.PrepareUserRole(user, role);
             var result = await users.CreateAsync(user, password);
             if (!result.Succeeded) throw new LocalTestAccountException("Không tạo được tài khoản fixture: " + string.Join(",", result.Errors.Select(e => e.Code)));
@@ -81,10 +81,10 @@ internal static class MobileTestSeed
             Status = ContractStatus.Active,
             StartDate = today.AddMonths(-3),
             EndDate = today.AddMonths(9),
-            MonthlyRent = 3000000,
+            RentAmount = 3000000,
             RequiredDeposit = 0,
             Terms = "SYNTHETIC UI FIXTURE: không phải hợp đồng/ký/giao dịch thật.",
-            SnapshotHash = new string('0', 64),
+            SnapshotHashOrEmpty = new string('0', 64),
             IsDevelopmentDemo = true,
             ActivatedByUserId = Id(1),
             ActivatedAt = now,
@@ -94,11 +94,11 @@ internal static class MobileTestSeed
         for (var utility = 0; utility < 2; utility++)
         {
             Add(50 + utility, new Meter { RoomId = Id(20), Code = "MOBILE-TEST-" + (utility == 0 ? "ELEC" : "WATER"), UtilityType = (UtilityType)utility, Display = MeterDisplay.Digital, InstalledOn = today.AddMonths(-4) });
-            Add(60 + utility, new OperationalTask { Kind = OperationalTaskKind.MeterReading, LocationId = Id(10), MeterId = Id(50 + utility), AssignedStaffUserId = Id(2), AssignmentId = Id(12), AssignedAt = now, Title = "Ghi số " + (utility == 0 ? "điện" : "nước") + " M101 (test)", ReadingDate = today, Purpose = ReadingPurpose.Initial, Status = MeterTaskStatus.Assigned, DueAt = now.AddHours(6) });
+            Add(60 + utility, new OperationalTask { Kind = OperationalTaskKind.MeterReading, RequiredLocationId = Id(10), MeterId = Id(50 + utility), AssignedStaffUserId = Id(2), AssignmentId = Id(12), AssignedAt = now, TaskTitle = "Ghi số " + (utility == 0 ? "điện" : "nước") + " M101 (test)", ReadingDate = today, Purpose = ReadingPurpose.Initial, MeterStatus = MeterTaskStatus.Assigned, DueAt = now.AddHours(6) });
         }
         for (var i = 0; i < 3; i++)
         {
-            var task = new OperationalTask { Kind = OperationalTaskKind.AdHoc, LocationId = Id(10), Title = new[] { "Kiểm tra phòng M102 (test)", "Kiểm tra khu vực chung (test)", "Xác minh vệ sinh (test)" }[i], Requirements = "Dữ liệu tổng hợp. Có thể thao tác để test; không liên quan công việc thật.", AssignedStaffUserId = Id(2), AssignmentId = Id(12), AssignedAt = now, Status = i == 2 ? MeterTaskStatus.PendingVerification : MeterTaskStatus.Assigned, DueAt = i == 1 ? now.AddDays(-1) : now.AddHours(4), EvidenceRequired = false, Result = i == 2 ? "Kết quả mẫu chờ Owner xác minh" : null };
+            var task = new OperationalTask { Kind = OperationalTaskKind.AdHoc, RequiredLocationId = Id(10), TaskTitle = new[] { "Kiểm tra phòng M102 (test)", "Kiểm tra khu vực chung (test)", "Xác minh vệ sinh (test)" }[i], Requirements = "Dữ liệu tổng hợp. Có thể thao tác để test; không liên quan công việc thật.", AssignedStaffUserId = Id(2), AssignmentId = Id(12), AssignedAt = now, MeterStatus = i == 2 ? MeterTaskStatus.PendingVerification : MeterTaskStatus.Assigned, DueAt = i == 1 ? now.AddDays(-1) : now.AddHours(4), EvidenceRequired = false, Result = i == 2 ? "Kết quả mẫu chờ Owner xác minh" : null };
             Add(70 + i, task);
             Add(80 + i, new OperationalTaskHistory { TaskId = Id(70 + i), ActorId = Id(1), Action = "created", Note = "Synthetic mobile test fixture", ResponsibleStaffUserId = Id(2), OccurredAt = now, TaskVersion = 1 });
         }
@@ -108,7 +108,7 @@ internal static class MobileTestSeed
         {
             var period = new DateOnly(today.Year, today.Month, 1).AddMonths(-i);
             var invoice = new Invoice { RoomId = Id(20), LocationId = Id(10), RoomNumber = "M101", LocationName = "BHOME MOBILE TEST", BillingPeriod = period, RepresentativeContractId = Id(40), RepresentativeTenantUserId = Id(3), Status = InvoiceStatus.Draft, Total = 3450000, CreatedByUserId = Id(1), ScheduledFinalDate = period, DueDate = i == 0 ? today.AddDays(7) : today.AddDays(-10 * i), ScheduleSnapshot = JsonSerializer.Serialize(new { syntheticFixture = true }), Recipients = [new InvoiceRecipient { InvoiceId = Id(100 + i), TenantUserId = Id(3) }] };
-            invoice.Lines = [new InvoiceLine { InvoiceId = Id(100 + i), Category = ChargeCategory.Rent, ChargeCode = "RENT", Name = "Tiền phòng mẫu (không thu tiền)", RateDate = period, Rate = 3000000, Quantity = 1, OccupiedDays = DateTime.DaysInMonth(period.Year, period.Month), PeriodDays = DateTime.DaysInMonth(period.Year, period.Month), Amount = 3000000 }, new InvoiceLine { InvoiceId = Id(100 + i), Category = ChargeCategory.Electricity, ChargeCode = "ELECTRICITY", Name = "Điện mẫu", RateDate = period, Rate = 3500, Quantity = 100, Amount = 350000, PreviousReading = 1000, ConfirmedReading = 1100 }, new InvoiceLine { InvoiceId = Id(100 + i), Category = ChargeCategory.Water, ChargeCode = "WATER", Name = "Nước mẫu", RateDate = period, Rate = 10000, Quantity = 10, Amount = 100000, PreviousReading = 100, ConfirmedReading = 110 }];
+            invoice.Lines = [new InvoiceItem { InvoiceId = Id(100 + i), Category = ChargeCategory.Rent, ChargeCode = "RENT", Name = "Tiền phòng mẫu (không thu tiền)", RateDate = period, Rate = 3000000, Quantity = 1, OccupiedDays = DateTime.DaysInMonth(period.Year, period.Month), PeriodDays = DateTime.DaysInMonth(period.Year, period.Month), Amount = 3000000 }, new InvoiceItem { InvoiceId = Id(100 + i), Category = ChargeCategory.Electricity, ChargeCode = "ELECTRICITY", Name = "Điện mẫu", RateDate = period, Rate = 3500, Quantity = 100, Amount = 350000, PreviousReading = 1000, ConfirmedReading = 1100 }, new InvoiceItem { InvoiceId = Id(100 + i), Category = ChargeCategory.Water, ChargeCode = "WATER", Name = "Nước mẫu", RateDate = period, Rate = 10000, Quantity = 10, Amount = 100000, PreviousReading = 100, ConfirmedReading = 110 }];
             Add(100 + i, invoice); invoices.Add(invoice);
         }
         foreach (var (n, category, code, rate) in new[] { (110, ChargeCategory.Rent, "RENT", 3000000m), (111, ChargeCategory.Electricity, "ELECTRICITY", 3500m), (112, ChargeCategory.Water, "WATER", 10000m) })

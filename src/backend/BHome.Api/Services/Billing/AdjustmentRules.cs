@@ -10,7 +10,7 @@ public static class AdjustmentRules
         if (!Money(issued) || !Money(payable) || paid < 0 || decimal.Truncate(paid) != paid) throw new ArgumentOutOfRangeException(nameof(issued));
         return (decimal.Truncate(payable), decimal.Truncate(Math.Max(0, payable - paid)), decimal.Truncate(Math.Max(0, paid - payable)));
     }
-    public static string SourceFingerprint(InvoiceLine line)
+    public static string SourceFingerprint(InvoiceItem line)
     {
         static string D(decimal value) => value.ToString("G29", System.Globalization.CultureInfo.InvariantCulture);
         var value = new

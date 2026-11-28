@@ -27,10 +27,10 @@ public sealed partial class Compact24NotificationMvpTests
         {
             var task = new OperationalTask
             {
-                LocationId = location,
+                RequiredLocationId = location,
                 Kind = OperationalTaskKind.AdHoc,
-                Title = "Synthetic priority task",
-                Status = status,
+                TaskTitle = "Synthetic priority task",
+                MeterStatus = status,
                 DueAt = now.AddHours(dueInHours)
             };
             db.Add(task);

@@ -318,18 +318,18 @@ internal sealed class NotificationChannelWorker(Compact24DbContext db, CompactNo
                 if (parts is { Length: 3 } && parts[0] == "invoice-finalization-no-draft" && Guid.TryParse(parts[1], out var room) &&
                     DateOnly.TryParseExact(parts[2] + "01", "yyyyMMdd", System.Globalization.CultureInfo.InvariantCulture,
                         System.Globalization.DateTimeStyles.None, out var period))
-                    return !await db.Set<BHome.Domain.Billing.Invoice>().AnyAsync(i => i.Type == "PERIODIC" && i.RoomId == room && i.BillingPeriod == period, t);
+                    return !await db.Set<BHome.Domain.Billing.Invoice>().AnyAsync(i => i.InvoiceType == "PERIODIC" && i.RoomId == room && i.BillingPeriod == period, t);
             }
             if (n.RelatedObjectType == "Adjustment")
-                return await db.Set<InvoiceAdjustmentRequest>().AnyAsync(r => r.Id == n.RelatedObjectId &&
+                return await db.Set<InvoiceAdjustment>().AnyAsync(r => r.Id == n.RelatedObjectId &&
                     db.Set<BHome.Domain.Billing.Invoice>().Any(i => i.Id == r.InvoiceId && i.Status == InvoiceStatus.Draft && i.ScheduledFinalDate <= today) &&
-                    db.Set<InvoiceAdjustmentRequest>().Any(pending => pending.InvoiceId == r.InvoiceId && pending.DecisionSnapshot == null), t);
+                    db.Set<InvoiceAdjustment>().Any(pending => pending.InvoiceId == r.InvoiceId && pending.DecisionSnapshot == null), t);
             if (n.RelatedObjectType == "Invoice")
             {
                 var heldForAdjustment = await db.Set<Native.Notification>()
                     .AnyAsync(notice => notice.Id == n.Id && notice.RecordKind == "INBOX" && notice.EventKey.StartsWith("invoice-finalization-held:"), t);
                 return await db.Set<BHome.Domain.Billing.Invoice>().AnyAsync(i => i.Id == n.RelatedObjectId && i.Status == InvoiceStatus.Draft &&
-                    i.ScheduledFinalDate <= today && (!heldForAdjustment || db.Set<InvoiceAdjustmentRequest>().Any(r => r.InvoiceId == i.Id && r.DecisionSnapshot == null)), t);
+                    i.ScheduledFinalDate <= today && (!heldForAdjustment || db.Set<InvoiceAdjustment>().Any(r => r.InvoiceId == i.Id && r.DecisionSnapshot == null)), t);
             }
         }
         if (n.EventType == "EXCESS_PAYMENT_OR_REFUND_STATUS")
@@ -365,11 +365,11 @@ internal sealed class NotificationChannelWorker(Compact24DbContext db, CompactNo
             var currentStaff = NativeOperationalTaskPersistence.Assignments(db, today).Where(a => a.LocationId == location);
             if (staff is { } recipient ? !await currentStaff.AnyAsync(a => a.StaffUserId == recipient, t) : await currentStaff.AnyAsync(t)) return false;
             return await db.Set<BHome.Domain.Billing.OperationalTask>().FromSqlRaw("SELECT * FROM operational_tasks WHERE task_type='METER_READ' AND task_data->'state'->>'purpose'='1'")
-                .AnyAsync(x => x.StoredLocationId == location && x.BillingPeriod == period &&
-                    db.Set<BHome.Domain.Locations.Location>().Any(l => l.Id == x.StoredLocationId && l.IsActive) &&
-                    x.DueAt < now && x.StoredStatus != "2" && x.StoredStatus != "3", t);
+                .AnyAsync(x => x.LocationId == location && x.BillingPeriod == period &&
+                    db.Set<BHome.Domain.Locations.Location>().Any(l => l.Id == x.LocationId && l.IsActive) &&
+                    x.DueAt < now && x.Status != "2" && x.Status != "3", t);
         }
-        if (n.EventType == "TASK_DUE_OR_OVERDUE") return await NativeOperationalTaskPersistence.Roots(db).AnyAsync(x => x.Id == n.RelatedObjectId && x.StoredStatus != "2" && x.StoredStatus != "3", t);
+        if (n.EventType == "TASK_DUE_OR_OVERDUE") return await NativeOperationalTaskPersistence.Roots(db).AnyAsync(x => x.Id == n.RelatedObjectId && x.Status != "2" && x.Status != "3", t);
         if (n.EventType.StartsWith("EMERGENCY_ACK_"))
         {
             var row = await db.Set<BHome.Domain.IncidentMaintenance.IncidentReport>().AsNoTracking().SingleOrDefaultAsync(x => x.Id == n.RelatedObjectId &&

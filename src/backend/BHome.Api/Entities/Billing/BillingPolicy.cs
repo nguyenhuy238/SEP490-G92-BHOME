@@ -13,7 +13,8 @@ public sealed class BillingPolicy : AuditableEntity
     public ChargeCategory Category { get; set; }
     public string ChargeCode { get; set; } = "";
     public string Name { get; set; } = "";
-    public ChargingMethod Method { get; set; }
+    [NotMapped, JsonIgnore] public ChargingMethod CalculationMethod { get; set; }
+    public ChargingMethod Method { get => CalculationMethod; set => CalculationMethod = value; }
     public decimal Rate { get; set; }
     public DateOnly EffectiveFrom { get; set; }
     public DateOnly? EffectiveTo { get; set; }

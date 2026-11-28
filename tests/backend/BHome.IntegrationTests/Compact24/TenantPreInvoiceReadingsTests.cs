@@ -37,7 +37,7 @@ public sealed class TenantPreInvoiceReadingsTests(Compact24WorkflowFixture fixtu
         {
             var db = scope.ServiceProvider.GetRequiredService<Compact24ArchiveContext>();
             familyId = (await WorkflowTestUsers.CreateAsync(scope.ServiceProvider,
-                new ApplicationUser { UserName = familyEmail, Email = familyEmail }, "Tenant", WorkflowTestUsers.Password)).Id;
+                new User { UserName = familyEmail, Email = familyEmail }, "Tenant", WorkflowTestUsers.Password)).Id;
             var family = new Resident
             {
                 RoomId = Compact24SampleSeed.Id(40),
@@ -59,7 +59,7 @@ public sealed class TenantPreInvoiceReadingsTests(Compact24WorkflowFixture fixtu
                 ActivatedAt = DateTimeOffset.UtcNow,
                 ActivatedByUserId = Compact24SampleSeed.Id(1),
                 Status = ContractStatus.Active,
-                MonthlyRent = 3000000,
+                RentAmount = 3000000,
                 Terms = "Synthetic active occupancy fixture"
             };
             c.Residents.Add(new() { ContractId = c.Id, ResidentId = c.RepresentativeResidentId, ResidenceFrom = c.StartDate });

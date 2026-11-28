@@ -17,7 +17,7 @@ public partial class Compact24DbContext(DbContextOptions<Compact24DbContext> opt
     public override BHomePersistenceContext CreateIndependentContext() => new Compact24DbContext(options, compatibility, clock);
     public override async Task<bool> IsSchemaReadyAsync(CancellationToken token = default) =>
         await Database.CanConnectAsync(token) && await Compact24Schema.VerifyAsync(this, token);
-    internal DbSet<CompactRefreshRow> Refresh => Set<CompactRefreshRow>();
+    internal DbSet<RefreshToken> Refresh => Set<RefreshToken>();
     protected TimeProvider PersistenceClock => clock ?? TimeProvider.System;
     protected DbContextOptions<Compact24DbContext> ContextOptions => options;
     protected Compact24Compatibility? Compatibility => compatibility;
@@ -31,14 +31,14 @@ public partial class Compact24DbContext(DbContextOptions<Compact24DbContext> opt
         // EF conventions discover them before OnModelCreating; explicitly remove
         // them from the runtime model before installing the 24 physical mappings.
         foreach (var type in model.Model.GetEntityTypes().Select(e => e.ClrType).Distinct().ToArray())
-            if (type != typeof(ApplicationUser) && type != typeof(CompactRefreshRow) && !Compact24NativeModel.IsNative(type))
+            if (type != typeof(User) && type != typeof(RefreshToken) && !Compact24NativeModel.IsNative(type))
                 model.Ignore(type);
         ConfigurePhysicalModel(model);
     }
 
     protected static void ConfigurePhysicalModel(ModelBuilder model, bool archive = false)
     {
-        var user = model.Entity<ApplicationUser>();
+        var user = model.Entity<User>();
         user.ToTable("users", t => t.ExcludeFromMigrations()); user.HasKey(x => x.Id);
         user.Property(x => x.Id).HasColumnName("id").ValueGeneratedNever();
         user.Property(x => x.UserName).HasColumnName("username").HasMaxLength(256).IsRequired();
@@ -65,11 +65,11 @@ public partial class Compact24DbContext(DbContextOptions<Compact24DbContext> opt
         user.Property<string>("signing_credentials").HasColumnType("jsonb").HasDefaultValue("[]").IsRequired();
         user.Property<string>("history").HasColumnType("jsonb").HasDefaultValue("[]").IsRequired();
 
-        var refresh = model.Entity<CompactRefreshRow>();
+        var refresh = model.Entity<RefreshToken>();
         refresh.ToTable("refresh_tokens", t => t.ExcludeFromMigrations()); refresh.HasKey(x => x.Id);
         refresh.Property(x => x.Id).ValueGeneratedNever();
-        refresh.HasOne<CompactRefreshRow>().WithMany().HasForeignKey(x => x.SessionId).OnDelete(DeleteBehavior.Restrict);
-        refresh.HasOne<ApplicationUser>().WithMany().HasForeignKey(x => x.UserId).OnDelete(DeleteBehavior.Restrict);
+        refresh.HasOne<RefreshToken>().WithMany().HasForeignKey(x => x.SessionId).OnDelete(DeleteBehavior.Restrict);
+        refresh.HasOne<User>().WithMany().HasForeignKey(x => x.UserId).OnDelete(DeleteBehavior.Restrict);
         foreach (var property in refresh.Metadata.GetProperties())
             property.SetColumnName(ToSnakeCase(property.Name));
         refresh.Property(x => x.RecordKind).HasMaxLength(10).IsRequired();
@@ -80,7 +80,7 @@ public partial class Compact24DbContext(DbContextOptions<Compact24DbContext> opt
         Compact24NativeModel.Configure(model, archive);
     }
 
-    public override void PrepareUserRole(ApplicationUser user, string role)
+    public override void PrepareUserRole(User user, string role)
     {
         if (Entry(user).State is not (EntityState.Detached or EntityState.Added) || !BHome.Domain.IdentityAccess.Roles.All.Contains(role))
             throw new InvalidOperationException("Prepare a supported role only for a new account.");
@@ -120,7 +120,7 @@ public partial class Compact24DbContext(DbContextOptions<Compact24DbContext> opt
             e.State is EntityState.Added or EntityState.Modified or EntityState.Deleted))
             return await SaveNativeChangesAsync(acceptAllChangesOnSuccess, cancellationToken);
         if (ChangeTracker.Entries().Any(e => e.State is EntityState.Added or EntityState.Modified or EntityState.Deleted &&
-            e.Entity is not ApplicationUser && e.Entity is not CompactRefreshRow))
+            e.Entity is not User && e.Entity is not RefreshToken))
             throw new InvalidOperationException("Runtime writes require a physical entity or its explicit repository.");
         return await base.SaveChangesAsync(acceptAllChangesOnSuccess, cancellationToken);
     }

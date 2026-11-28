@@ -5,10 +5,10 @@ using System.Security.Claims;
 
 namespace BHome.Infrastructure.Persistence.Compact24;
 
-internal sealed class CompactClaimsPrincipalFactory(UserManager<ApplicationUser> users, IOptions<IdentityOptions> options)
-    : UserClaimsPrincipalFactory<ApplicationUser>(users, options)
+internal sealed class CompactClaimsPrincipalFactory(UserManager<User> users, IOptions<IdentityOptions> options)
+    : UserClaimsPrincipalFactory<User>(users, options)
 {
-    protected override async Task<ClaimsIdentity> GenerateClaimsAsync(ApplicationUser user)
+    protected override async Task<ClaimsIdentity> GenerateClaimsAsync(User user)
     {
         var identity = await base.GenerateClaimsAsync(user);
         foreach (var role in await UserManager.GetRolesAsync(user))

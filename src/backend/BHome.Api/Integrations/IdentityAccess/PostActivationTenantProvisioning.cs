@@ -14,7 +14,7 @@ using Microsoft.EntityFrameworkCore;
 namespace BHome.Infrastructure.IdentityAccess;
 
 internal sealed record ApprovedTenantInvitation(Guid OwnerId, Guid ResidentId, Guid ContractId);
-internal sealed class PostActivationTenantProvisioning(BHomePersistenceContext db, UserManager<ApplicationUser> users,
+internal sealed class PostActivationTenantProvisioning(BHomePersistenceContext db, UserManager<User> users,
     IBackgroundJobQueue jobs, IdentitySecurityStore security, IContractRepository contractData) : IPostActivationTenantProvisioning
 {
     public async Task ProvisionAsync(Contract contract, Guid ownerId, CancellationToken t)
@@ -38,7 +38,7 @@ internal sealed class PostActivationTenantProvisioning(BHomePersistenceContext d
         var contacts = SigningContacts.Read(invitation);
         foreach (var resident in residents.Where(r => r.Id == contract.RepresentativeResidentId))
         {
-            ApplicationUser account;
+            User account;
             var existingLink = resident.TenantUserId ?? (resident.Id == contract.RepresentativeResidentId ? contract.TenantUserId : null);
             if (existingLink is { } linked)
             {
@@ -54,7 +54,7 @@ internal sealed class PostActivationTenantProvisioning(BHomePersistenceContext d
                 var email = (contacts.TryGetValue(resident.Id, out var pendingEmail) ? pendingEmail : resident.ContactEmail)?.Trim().ToLowerInvariant();
                 if (email is null || email.Length > 256 || !new EmailAddressAttribute().IsValid(email)) throw ContractException.Conflict("resident_email_required");
                 if (await users.FindByEmailAsync(email) is not null) throw ContractException.Conflict("email_requires_explicit_account_link");
-                account = new ApplicationUser
+                account = new User
                 {
                     Id = Guid.NewGuid(),
                     Email = email,

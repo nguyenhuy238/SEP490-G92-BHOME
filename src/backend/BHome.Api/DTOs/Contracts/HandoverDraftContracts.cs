@@ -64,7 +64,7 @@ public sealed record HandoverDraftState(
     HandoverSignatureDocument? TenantSignature = null)
 {
     public static HandoverDraftState Create(Contract contract, DateTimeOffset at) =>
-        new(1, "Draft", contract.SnapshotHash, at, "", "", "", [], [], null,
+        new(1, "Draft", contract.SnapshotHashOrEmpty, at, "", "", "", [], [], null,
             null, null, null, null, null, null, []);
 }
 

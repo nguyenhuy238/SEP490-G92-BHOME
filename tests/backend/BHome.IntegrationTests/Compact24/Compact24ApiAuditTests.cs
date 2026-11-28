@@ -187,9 +187,9 @@ public sealed class Compact24ApiAuditTests
             await using var scope = fixture.Factory!.Services.CreateAsyncScope();
             var db = scope.ServiceProvider.GetRequiredService<Compact24DbContext>();
             Assert.Equal(0, await db.Users.CountAsync()); Assert.Equal(0, await db.Locations.CountAsync());
-            var existing = new BHome.Infrastructure.Persistence.ApplicationUser { Id = Guid.NewGuid(), UserName = "existing-owner", Email = "existing-owner@example.invalid", IsActive = true };
+            var existing = new BHome.Infrastructure.Persistence.User { Id = Guid.NewGuid(), UserName = "existing-owner", Email = "existing-owner@example.invalid", IsActive = true };
             db.PrepareUserRole(existing, "Owner");
-            Assert.True((await scope.ServiceProvider.GetRequiredService<Microsoft.AspNetCore.Identity.UserManager<BHome.Infrastructure.Persistence.ApplicationUser>>()
+            Assert.True((await scope.ServiceProvider.GetRequiredService<Microsoft.AspNetCore.Identity.UserManager<BHome.Infrastructure.Persistence.User>>()
                 .CreateAsync(existing, Password)).Succeeded);
             await Assert.ThrowsAsync<LocalTestAccountException>(() => Compact24SampleSeed.RunAsync(fixture.Factory.Services, "Development", Password));
             Assert.Equal(1, await db.Users.CountAsync()); Assert.Equal(0, await db.Locations.CountAsync());

@@ -47,13 +47,13 @@ public sealed partial class OperationalTaskService(IOperationalTaskRepository re
     { if (page is < 1 or > 1000000 || size is < 1 or > 100) throw OperationalTaskException.Invalid("invalid_pagination"); }
     private async Task<TaskResponsibility?> AccessAsync(OperationalTask task, CancellationToken t, bool requireAssigned = false)
     {
-        var location = await repository.LocationAsync(task.LocationId, t) ?? throw OperationalTaskException.Missing();
+        var location = await repository.LocationAsync(task.RequiredLocationId, t) ?? throw OperationalTaskException.Missing();
         if (IsMoveOutTask(task))
         {
             if (Owner) return null;
-            var assigned = location.IsActive ? await repository.StaffAtLocationAsync(task.LocationId, Actor, Today, t) : null;
+            var assigned = location.IsActive ? await repository.StaffAtLocationAsync(task.RequiredLocationId, Actor, Today, t) : null;
             if (assigned is null) throw OperationalTaskException.Missing();
-            if (task.Status == MeterTaskStatus.Assigned)
+            if (task.MeterStatus == MeterTaskStatus.Assigned)
             {
                 var scheduled = await repository.MoveOutInspectionStaffAsync(task.ContractId!.Value, t);
                 if (scheduled is { } staff && staff != Actor)
@@ -66,13 +66,13 @@ public sealed partial class OperationalTaskService(IOperationalTaskRepository re
             if (requireAssigned && task.AssignedStaffUserId != Actor) throw OperationalTaskException.Missing();
             return task.AssignedStaffUserId == Actor ? assigned : null;
         }
-        var responsible = location.IsActive ? await repository.ResponsibilityAsync(task.LocationId, Today, t) : null;
+        var responsible = location.IsActive ? await repository.ResponsibilityAsync(task.RequiredLocationId, Today, t) : null;
         if ((!Owner || requireAssigned) && (responsible is null || responsible.StaffUserId != Actor)) throw OperationalTaskException.Missing();
         // Successors may audit a closed predecessor checklist at the same Location,
         // but only the Staff owning a live assignment may mutate a handover task.
         if (task.Kind == OperationalTaskKind.LocationAssetHandover && (!Owner || requireAssigned) &&
             task.AssignmentId != responsible?.AssignmentId &&
-            (requireAssigned || task.Status != MeterTaskStatus.Cancelled))
+            (requireAssigned || task.MeterStatus != MeterTaskStatus.Cancelled))
             throw OperationalTaskException.Missing();
         return responsible;
     }
@@ -86,9 +86,9 @@ public sealed partial class OperationalTaskService(IOperationalTaskRepository re
         if (mainStatus is not null && mainStatus != MeterTaskStatus.InProgress)
             throw OperationalTaskException.Conflict("move_in_handover_task_not_started");
     }
-    private static TaskView View(OperationalTask task, TaskResponsibility? responsible) => new(task.Id, task.LocationId,
-        task.Kind.ToString(), task.Title, task.Requirements, task.Priority.ToString(), task.DueAt, task.EvidenceRequired,
-        task.Status.ToString(), false, IsMoveOutTask(task) && task.Status != MeterTaskStatus.Assigned
+    private static TaskView View(OperationalTask task, TaskResponsibility? responsible) => new(task.Id, task.RequiredLocationId,
+        task.Kind.ToString(), task.TaskTitle, task.Requirements, task.TaskPriority.ToString(), task.DueAt, task.EvidenceRequired,
+        task.MeterStatus.ToString(), false, IsMoveOutTask(task) && task.MeterStatus != MeterTaskStatus.Assigned
             ? task.AssignedStaffUserId : responsible?.StaffUserId,
         task.AssignedStaffUserId, responsible is not null,
         task.Result, task.Version, task.VerifiedByUserId, task.VerifiedAt, task.CreatedAt, task.UpdatedAt,
@@ -140,7 +140,7 @@ public sealed partial class OperationalTaskService(IOperationalTaskRepository re
             var task = new OperationalTask
             {
                 Kind = OperationalTaskKind.AdHoc,
-                LocationId = location.Id,
+                RequiredLocationId = location.Id,
                 AssignedStaffUserId = responsible.StaffUserId,
                 AssignmentId = responsible.AssignmentId,
                 AssignedAt = Now
@@ -158,7 +158,7 @@ public sealed partial class OperationalTaskService(IOperationalTaskRepository re
         Validate(work);
         if (string.IsNullOrWhiteSpace(work.Title) || string.IsNullOrWhiteSpace(work.Requirements) || !Enum.IsDefined(work.Priority) ||
             work.DueAt == default || (work.DueAt != task.DueAt && work.DueAt <= Now)) throw OperationalTaskException.Invalid("invalid_task_work_or_deadline");
-        task.Title = work.Title.Trim(); task.Requirements = work.Requirements.Trim(); task.Priority = work.Priority;
+        task.TaskTitle = work.Title.Trim(); task.Requirements = work.Requirements.Trim(); task.TaskPriority = work.Priority;
         task.DueAt = work.DueAt.ToUniversalTime(); task.EvidenceRequired = work.EvidenceRequired;
     }
     private async Task SetTargetAsync(OperationalTask task, TaskTarget? target, CancellationToken t)
@@ -173,18 +173,18 @@ public sealed partial class OperationalTaskService(IOperationalTaskRepository re
         string? label = null;
         if (target.RoomId is { } room)
         {
-            label = await repository.TargetRoomNameAsync(task.LocationId, room, t);
+            label = await repository.TargetRoomNameAsync(task.RequiredLocationId, room, t);
             if (string.IsNullOrWhiteSpace(label)) throw OperationalTaskException.Invalid("invalid_task_target");
         }
         if (area is not null)
         {
-            area = (await repository.CommonAreasAsync(task.LocationId, t)).SingleOrDefault(x => string.Equals(x, area, StringComparison.Ordinal))
+            area = (await repository.CommonAreasAsync(task.RequiredLocationId, t)).SingleOrDefault(x => string.Equals(x, area, StringComparison.Ordinal))
                 ?? throw OperationalTaskException.Invalid("invalid_task_target");
             label = area;
         }
         if (target.AssetId is { } assetId)
         {
-            var asset = await repository.TargetAssetAsync(task.LocationId, assetId, t);
+            var asset = await repository.TargetAssetAsync(task.RequiredLocationId, assetId, t);
             if (asset is null || asset.RoomId != target.RoomId || !string.Equals(asset.CommonArea, area, StringComparison.Ordinal))
                 throw OperationalTaskException.Invalid("invalid_task_target");
             label += " · " + asset.Name;
@@ -213,8 +213,8 @@ public sealed partial class OperationalTaskService(IOperationalTaskRepository re
         return MutateAsync(id, input.Version, key, "update", input, async (task, responsible) =>
         {
             if (IsMoveOutTask(task)) throw OperationalTaskException.Conflict("contract_handover_workflow_required");
-            if (task.Status is not (MeterTaskStatus.Assigned or MeterTaskStatus.InProgress)) throw OperationalTaskException.Conflict("task_not_editable");
-            var before = new { task.Title, task.Requirements, task.Priority, task.DueAt, task.EvidenceRequired, Target = TargetView(task) };
+            if (task.MeterStatus is not (MeterTaskStatus.Assigned or MeterTaskStatus.InProgress)) throw OperationalTaskException.Conflict("task_not_editable");
+            var before = new { Title = task.TaskTitle, task.Requirements, Priority = task.TaskPriority, task.DueAt, task.EvidenceRequired, Target = TargetView(task) };
             var wasOverdue = task.IsOverdue(Now);
             SetWork(task, input.Work);
             await SetTargetAsync(task, input.Work.Target, t);
@@ -250,7 +250,7 @@ public sealed partial class OperationalTaskService(IOperationalTaskRepository re
                 throw OperationalTaskException.Conflict("contract_handover_workflow_required");
             if (action == "assign")
             {
-                if (task.Status is MeterTaskStatus.Completed or MeterTaskStatus.Cancelled) throw OperationalTaskException.Conflict("task_closed");
+                if (task.MeterStatus is MeterTaskStatus.Completed or MeterTaskStatus.Cancelled) throw OperationalTaskException.Conflict("task_closed");
                 if (responsible is null) throw OperationalTaskException.Conflict("no_responsible_staff");
                 return; // Routing synchronization is performed centrally below, with history only on change.
             }
@@ -285,7 +285,7 @@ public sealed partial class OperationalTaskService(IOperationalTaskRepository re
                 foreach (var image in evidence) image.SubmissionId = null;
             }
             var recipients = action is "submit" or "blockers" ? await repository.OwnersAsync(t) : Recipients(responsible);
-            await RecordAsync(task, action, input.Note?.Trim() ?? "", new { EvidenceIds = ids, task.Status }, recipients, t, wasOverdue);
+            await RecordAsync(task, action, input.Note?.Trim() ?? "", new { EvidenceIds = ids, Status = task.MeterStatus }, recipients, t, wasOverdue);
         }, t);
     }
     public async Task<Guid[]> EnsureMoveOutFinalMeterTasksAsync(Guid taskId, Guid key, CancellationToken t)
@@ -294,12 +294,12 @@ public sealed partial class OperationalTaskService(IOperationalTaskRepository re
         var initial = await repository.FindAsync(taskId, t) ?? throw OperationalTaskException.Missing();
         if (!IsMoveOutTask(initial)) throw OperationalTaskException.Missing();
         await AccessAsync(initial, t, true);
-        return await CommandAsync(initial.LocationId, key, "move-out-final-meter-tasks:" + taskId,
+        return await CommandAsync(initial.RequiredLocationId, key, "move-out-final-meter-tasks:" + taskId,
             new { taskId, Date = Today }, async () =>
             {
                 var task = await repository.FindAsync(taskId, t) ?? throw OperationalTaskException.Missing();
                 await AccessAsync(task, t, true);
-                if (!IsMoveOutTask(task) || task.Status != MeterTaskStatus.InProgress ||
+                if (!IsMoveOutTask(task) || task.MeterStatus != MeterTaskStatus.InProgress ||
                     task.AssignedStaffUserId != Actor)
                     throw OperationalTaskException.Conflict("move_out_task_not_started");
                 return await repository.EnsureMoveOutFinalMeterTasksAsync(task, Actor, Today, t);
@@ -311,12 +311,12 @@ public sealed partial class OperationalTaskService(IOperationalTaskRepository re
         var initial = await repository.FindAsync(taskId, t) ?? throw OperationalTaskException.Missing();
         if (!IsMoveInTask(initial)) throw OperationalTaskException.Missing();
         await AccessAsync(initial, t, true);
-        return await CommandAsync(initial.LocationId, key, "move-in-initial-meter-tasks:" + taskId,
+        return await CommandAsync(initial.RequiredLocationId, key, "move-in-initial-meter-tasks:" + taskId,
             new { taskId }, async () =>
             {
                 var task = await repository.FindAsync(taskId, t) ?? throw OperationalTaskException.Missing();
                 await AccessAsync(task, t, true);
-                if (!IsMoveInTask(task) || task.Status != MeterTaskStatus.InProgress)
+                if (!IsMoveInTask(task) || task.MeterStatus != MeterTaskStatus.InProgress)
                     throw OperationalTaskException.Conflict("move_in_task_not_started");
                 return await (handovers ?? throw OperationalTaskException.Conflict("handover_service_unavailable"))
                     .EnsureMoveInMeterBaselinesAsync(task.ContractId!.Value, Actor, Now, t);
@@ -329,7 +329,7 @@ public sealed partial class OperationalTaskService(IOperationalTaskRepository re
         var initial = await repository.FindAsync(id, t) ?? throw OperationalTaskException.Missing();
         var executing = action is "start" or "progress" or "blockers" or "submit";
         await AccessAsync(initial, t, executing);
-        return await CommandAsync(initial.LocationId, key, action + ":" + id, input, async () =>
+        return await CommandAsync(initial.RequiredLocationId, key, action + ":" + id, input, async () =>
         {
             var task = await repository.FindAsync(id, t) ?? throw OperationalTaskException.Missing();
             var responsible = await AccessAsync(task, t, executing);
@@ -343,7 +343,7 @@ public sealed partial class OperationalTaskService(IOperationalTaskRepository re
                 throw OperationalTaskException.Conflict("meter_workflow_required");
             if (task.Version != version) throw OperationalTaskException.Conflict("stale_version");
             if (task.Kind == OperationalTaskKind.LocationAssetHandover && action == "submit" &&
-                task.Status == MeterTaskStatus.PendingVerification && task.Result == LocationAssetInventorySync.Result)
+                task.MeterStatus == MeterTaskStatus.PendingVerification && task.Result == LocationAssetInventorySync.Result)
             {
                 await ValidateLocationAssetInventorySubmissionAsync(task, t);
                 if (input is TaskAction legacy && legacy.EvidenceIds is { Length: > 0 } ids)
@@ -382,7 +382,7 @@ public sealed partial class OperationalTaskService(IOperationalTaskRepository re
     private async Task<bool> SynchronizeResponsibilityAsync(OperationalTask task, TaskResponsibility? responsible, CancellationToken t)
     {
         var changed = task.AssignmentId != responsible?.AssignmentId || task.AssignedStaffUserId != responsible?.StaffUserId;
-        if (!changed || task.Status is MeterTaskStatus.Completed or MeterTaskStatus.Cancelled) return false;
+        if (!changed || task.MeterStatus is MeterTaskStatus.Completed or MeterTaskStatus.Cancelled) return false;
         var previous = new { task.AssignedStaffUserId, task.AssignmentId };
         task.AssignedStaffUserId = responsible?.StaffUserId; task.AssignmentId = responsible?.AssignmentId; task.AssignedAt = Now;
         await RecordAsync(task, "responsibility_changed", "", new { Before = previous, After = responsible }, Recipients(responsible), t);
@@ -460,16 +460,16 @@ public sealed partial class OperationalTaskService(IOperationalTaskRepository re
             {
                 var type = files.Validate(content, limits.MaximumFileBytes);
                 var hash = Convert.ToHexString(SHA256.HashData(content));
-                return await CommandAsync(initial.LocationId, key, "evidence:" + id, new { Hash = hash, Type = type }, async () =>
+                return await CommandAsync(initial.RequiredLocationId, key, "evidence:" + id, new { Hash = hash, Type = type }, async () =>
                 {
                     var task = await repository.FindAsync(id, t) ?? throw OperationalTaskException.Missing();
                     var responsible = await AccessAsync(task, t, true);
                     if (task.Kind is not (OperationalTaskKind.AdHoc or OperationalTaskKind.MoveInInventory or OperationalTaskKind.LocationAssetHandover))
                         throw OperationalTaskException.Conflict("meter_workflow_required");
                     var autoSubmittedDraft = task.Kind == OperationalTaskKind.LocationAssetHandover &&
-                        task.Status == MeterTaskStatus.PendingVerification && task.Result == LocationAssetInventorySync.Result &&
+                        task.MeterStatus == MeterTaskStatus.PendingVerification && task.Result == LocationAssetInventorySync.Result &&
                         !await repository.HasLocationHandoverApprovalAsync(task.Id, task.Version, t);
-                    if (task.Status != MeterTaskStatus.InProgress && !autoSubmittedDraft)
+                    if (task.MeterStatus != MeterTaskStatus.InProgress && !autoSubmittedDraft)
                         throw OperationalTaskException.Conflict("task_not_in_progress");
                     // Every inventory group may attach up to five photos. The general
                     // task limit (often 10) is too small for rooms with many assets.
@@ -490,7 +490,7 @@ public sealed partial class OperationalTaskService(IOperationalTaskRepository re
                         ContentType = type,
                         Length = length,
                         Sha256 = hash,
-                        ObjectKey = BHome.Application.Storage.PrivateImageKeys.Evidence(task.LocationId, task.TargetRoomId, "tasks", id, Guid.NewGuid())
+                        ObjectKey = BHome.Application.Storage.PrivateImageKeys.Evidence(task.RequiredLocationId, task.TargetRoomId, "tasks", id, Guid.NewGuid())
                     };
                     await files.PutAsync(id, evidence.ObjectKey, content, type, t);
                     repository.Add(evidence);

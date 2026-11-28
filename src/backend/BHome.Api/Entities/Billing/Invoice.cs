@@ -7,7 +7,8 @@ namespace BHome.Domain.Billing;
 
 public sealed class Invoice : AuditableEntity
 {
-    [System.ComponentModel.DataAnnotations.Schema.NotMapped] public string Type { get; set; } = "PERIODIC";
+    [NotMapped, JsonIgnore] public string InvoiceType { get; set; } = "PERIODIC";
+    [NotMapped] public string Type { get => InvoiceType; set => InvoiceType = value; }
     public Guid? AutomationPlanId { get; set; }
     public Guid? AutomationFinalizationPlanId { get; set; }
     public Guid RoomId { get; set; }
@@ -15,11 +16,13 @@ public sealed class Invoice : AuditableEntity
     public string RoomNumber { get; set; } = "";
     public string LocationName { get; set; } = "";
     public DateOnly BillingPeriod { get; set; }
-    public Guid RepresentativeContractId { get; set; }
+    [NotMapped, JsonIgnore] public Guid ContractId { get; set; }
+    public Guid RepresentativeContractId { get => ContractId; set => ContractId = value; }
     public Guid RepresentativeTenantUserId { get; set; }
     public InvoiceStatus Status { get; set; }
     public int Version { get; set; } = 1;
-    public decimal Total { get; set; }
+    [NotMapped, JsonIgnore] public decimal BaseTotalAmount { get; set; }
+    public decimal Total { get => BaseTotalAmount; set => BaseTotalAmount = value; }
     public string[] MissingInputs { get; set; } = [];
     public string ScheduleSnapshot { get; set; } = "";
     public DateOnly ScheduledFinalDate { get; set; }
@@ -27,7 +30,7 @@ public sealed class Invoice : AuditableEntity
     public Guid CreatedByUserId { get; set; }
     public Guid? FinalizedByUserId { get; set; }
     public DateTimeOffset? FinalizedAt { get; set; }
-    public List<InvoiceLine> Lines { get; set; } = [];
+    public List<InvoiceItem> Lines { get; set; } = [];
     public List<InvoiceRecipient> Recipients { get; set; } = [];
 
     [NotMapped, JsonIgnore] public Guid[] RecipientUserIds { get; set; } = [];

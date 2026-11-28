@@ -12,6 +12,6 @@ internal sealed class BillingAutomationPlanConfiguration : IEntityTypeConfigurat
         e.HasKey(p => p.Id); e.HasIndex(p => new { p.LocationId, p.Version }).IsUnique(); e.HasIndex(p => new { p.LocationId, p.EffectiveFrom, p.Version });
         e.Property(p => p.BillingSnapshot).HasColumnType("jsonb"); e.Property(p => p.TimeZone).HasMaxLength(50);
         e.HasOne<Location>().WithMany().HasForeignKey(p => p.LocationId).OnDelete(DeleteBehavior.Restrict);
-        e.HasOne<ApplicationUser>().WithMany().HasForeignKey(p => p.AuthorizedByUserId).OnDelete(DeleteBehavior.Restrict);
+        e.HasOne<User>().WithMany().HasForeignKey(p => p.AuthorizedByUserId).OnDelete(DeleteBehavior.Restrict);
     }
 }

@@ -39,21 +39,21 @@ internal sealed class NotificationRepository(BHomePersistenceContext db) : INoti
         if (s.Staff && n.RelatedObjectType == "MeterTask" && (n.EventType is "TASK_ASSIGNED" or "PERIODIC_METER_OVERDUE") && n.LocationId is { } location)
         {
             var meterPeriod = await db.Set<OperationalTask>().Where(task => task.Id == n.RelatedObjectId &&
-                task.LocationId == location && task.Kind == OperationalTaskKind.MeterReading && task.Purpose == ReadingPurpose.Periodic)
+                task.RequiredLocationId == location && task.Kind == OperationalTaskKind.MeterReading && task.Purpose == ReadingPurpose.Periodic)
                 .Select(task => task.BillingPeriod).SingleOrDefaultAsync(t);
             if (meterPeriod is { } assignedPeriod)
-                return await db.Set<OperationalTask>().AnyAsync(task => task.LocationId == location &&
+                return await db.Set<OperationalTask>().AnyAsync(task => task.RequiredLocationId == location &&
                     task.Kind == OperationalTaskKind.MeterReading && task.Purpose == ReadingPurpose.Periodic &&
-                    task.BillingPeriod == assignedPeriod && task.Status != MeterTaskStatus.Cancelled, t)
+                    task.BillingPeriod == assignedPeriod && task.MeterStatus != MeterTaskStatus.Cancelled, t)
                     ? new("MeterPeriod", location, location, assignedPeriod) : null;
         }
         var allowed = n.RelatedObjectType switch
         {
             "Invoice" => await db.Set<Invoice>().AnyAsync(i => i.Id == n.RelatedObjectId && (s.Owner || s.Tenant && i.Recipients.Any(r => r.TenantUserId == s.Actor)), t),
-            "Adjustment" => await db.Set<InvoiceAdjustmentRequest>().AnyAsync(r => r.Id == n.RelatedObjectId && (s.Owner || s.Tenant && r.RequesterId == s.Actor && r.Invoice.Recipients.Any(v => v.TenantUserId == s.Actor)), t),
+            "Adjustment" => await db.Set<InvoiceAdjustment>().AnyAsync(r => r.Id == n.RelatedObjectId && (s.Owner || s.Tenant && r.RequesterId == s.Actor && r.Invoice.Recipients.Any(v => v.TenantUserId == s.Actor)), t),
             "Contract" => await db.Set<Contract>().AnyAsync(c => c.Id == n.RelatedObjectId && (s.Owner || s.Tenant && c.TenantUserId == s.Actor), t),
             "MeterTask" => await db.Set<OperationalTask>().AnyAsync(task => task.Id == n.RelatedObjectId && task.Kind == OperationalTaskKind.MeterReading && (s.Owner || s.Staff && task.Meter.Room.Location.IsActive && (task.Purpose == ReadingPurpose.Periodic || task.AutomationPlanId == null || task.AssignedStaffUserId == s.Actor) && db.StaffLocationAssignments.Any(a => a.LocationId == task.Meter.Room.LocationId && a.StaffUserId == s.Actor && a.StartDate <= s.Today && a.EndDate >= s.Today)), t),
-            "OperationalTask" => await db.Set<OperationalTask>().AnyAsync(task => task.Id == n.RelatedObjectId && (task.Kind == OperationalTaskKind.AdHoc || task.Kind == OperationalTaskKind.MoveInInventory) && (s.Owner || s.Staff && task.Location.IsActive && db.StaffLocationAssignments.Any(a => a.LocationId == task.LocationId && a.StaffUserId == s.Actor && a.StartDate <= s.Today && a.EndDate >= s.Today)), t),
+            "OperationalTask" => await db.Set<OperationalTask>().AnyAsync(task => task.Id == n.RelatedObjectId && (task.Kind == OperationalTaskKind.AdHoc || task.Kind == OperationalTaskKind.MoveInInventory) && (s.Owner || s.Staff && task.Location.IsActive && db.StaffLocationAssignments.Any(a => a.LocationId == task.RequiredLocationId && a.StaffUserId == s.Actor && a.StartDate <= s.Today && a.EndDate >= s.Today)), t),
             "Incident" => await db.Set<BHome.Domain.IncidentMaintenance.IncidentReport>().AnyAsync(r => r.Id == n.RelatedObjectId &&
                 (s.Owner || s.Tenant && r.ReporterRole == "Tenant" && r.ReporterId == s.Actor || s.Staff &&
                     db.Locations.Any(l => l.Id == r.LocationId && l.IsActive) && db.StaffLocationAssignments.Any(a =>
@@ -71,13 +71,13 @@ internal sealed class NotificationRepository(BHomePersistenceContext db) : INoti
             // first request. A different request may remain pending after it is decided.
             // Keep the established Owner Adjustment deep link, but resolve a currently
             // pending request within that same invoice after the normal access check.
-            var invoiceId = await db.Set<InvoiceAdjustmentRequest>().AsNoTracking()
+            var invoiceId = await db.Set<InvoiceAdjustment>().AsNoTracking()
                 .Where(r => r.Id == n.RelatedObjectId).Select(r => (Guid?)r.InvoiceId)
                 .SingleOrDefaultAsync(t);
             if (invoiceId is { } sourceInvoice)
             {
                 var pendingId = await HeldInvoiceFinalNotifications.PendingForInvoice(
-                        db.Set<InvoiceAdjustmentRequest>().AsNoTracking(), sourceInvoice)
+                        db.Set<InvoiceAdjustment>().AsNoTracking(), sourceInvoice)
                     .Select(r => (Guid?)r.Id).FirstOrDefaultAsync(t);
                 if (pendingId is { } current) return new("Adjustment", current, n.LocationId);
             }

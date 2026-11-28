@@ -12,15 +12,15 @@ public sealed partial class ContractService
     private static ContractDocument TenantHandoverDocument(Contract contract) =>
         Document(contract) with { TenantUserId = RequireTenant(contract) };
 
-    private static ContractSignature ToSignature(Guid contractId, HandoverPendingSignature input)
+    private static ContractSigning ToSignature(Guid contractId, HandoverPendingSignature input)
     {
-        var signature = ContractSignature.RestoreDetachedAttempt(input.Id);
+        var signature = ContractSigning.RestoreDetachedAttempt(input.Id);
         signature.ContractId = contractId;
         signature.SignerUserId = input.SignerId;
         signature.SnapshotHash = input.SourceHash;
-        signature.SourceHash = input.SourceHash;
-        signature.PreparedHash = input.PreparedHash;
-        signature.PreparedObjectKey = input.PreparedObjectKey;
+        signature.SourceHashOrEmpty = input.SourceHash;
+        signature.PreparedHashOrEmpty = input.PreparedHash;
+        signature.PreparedObjectKeyOrEmpty = input.PreparedObjectKey;
         signature.FieldName = input.FieldName;
         signature.DocumentDigest = input.DocumentDigest;
         signature.DataToSignDigest = input.DataToSignDigest;
@@ -75,12 +75,12 @@ public sealed partial class ContractService
             new SigningAppearance(input.Placement, true, SigningMethods.OwnerSession, inkPng), token);
         if (FileHash(prepared.SourcePdf) != FileHash(unsignedPdf))
             throw ContractException.Conflict("handover_signing_source_changed");
-        var signature = new ContractSignature
+        var signature = new ContractSigning
         {
             ContractId = contract.Id,
             SignerUserId = Actor,
-            SourceHash = FileHash(prepared.SourcePdf),
-            PreparedHash = FileHash(prepared.PreparedPdf),
+            SourceHashOrEmpty = FileHash(prepared.SourcePdf),
+            PreparedHashOrEmpty = FileHash(prepared.PreparedPdf),
             FieldName = prepared.FieldName,
             DocumentDigest = prepared.DocumentDigest,
             DataToSignDigest = prepared.DataToSignDigest,
@@ -283,12 +283,12 @@ public sealed partial class ContractService
             new SigningAppearance(null, true, SigningMethods.TenantSession, inkPng), token);
         if (FileHash(prepared.SourcePdf) != ownerSigned.FileHash)
             throw ContractException.Conflict("handover_signing_source_changed");
-        var signature = new ContractSignature
+        var signature = new ContractSigning
         {
             ContractId = id,
             SignerUserId = Actor,
-            SourceHash = FileHash(prepared.SourcePdf),
-            PreparedHash = FileHash(prepared.PreparedPdf),
+            SourceHashOrEmpty = FileHash(prepared.SourcePdf),
+            PreparedHashOrEmpty = FileHash(prepared.PreparedPdf),
             FieldName = prepared.FieldName,
             DocumentDigest = prepared.DocumentDigest,
             DataToSignDigest = prepared.DataToSignDigest,

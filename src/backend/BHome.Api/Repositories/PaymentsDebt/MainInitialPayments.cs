@@ -36,13 +36,13 @@ internal sealed class MainInitialPayments(BHomePersistenceContext db, ContractSe
                 !testScope.Allows(c.Room.LocationId))
                 throw new PaymentException(403, "sandbox_signing_not_available");
             var signed = c.SigningMode == ContractSigningModes.Internal ? AnonymousContractSigningService.Complete(c) :
-                new[] { c.OwnerSignerId, c.TenantUserId }.All(id => id is not null && c.Signatures.Any(s => s.SignerUserId == id && (c.IsDevelopmentDemo ? sepay.Mode == "Test" && workflowMode.SimulatedSigningEnabled && s.Status == SignatureStatus.Simulated : s.Status == SignatureStatus.Signed) && s.SignedAt is not null && s.SnapshotHash == c.SnapshotHash && !string.IsNullOrWhiteSpace(s.SignedObjectKey) && !string.IsNullOrWhiteSpace(s.ProviderReference)));
+                new[] { c.OwnerSignerId, c.TenantUserId }.All(id => id is not null && c.Signatures.Any(s => s.SignerUserId == id && (c.IsDevelopmentDemo ? sepay.Mode == "Test" && workflowMode.SimulatedSigningEnabled && s.Status == SignatureStatus.Simulated : s.Status == SignatureStatus.Signed) && s.SignedAt is not null && s.SnapshotHash == c.SnapshotHashOrEmpty && !string.IsNullOrWhiteSpace(s.SignedObjectKey) && !string.IsNullOrWhiteSpace(s.ProviderReference)));
             if (!signed || c.Status is not (ContractStatus.PendingActivation or ContractStatus.Active)) throw new PaymentException(409, "initial_payment_signatures_required");
             if (!ContractChargeSnapshot.IsIntact(c)) throw new PaymentException(409, "signed_terms_changed");
             var signedCharges = string.IsNullOrWhiteSpace(c.AgreedPriceSnapshot) || c.AgreedPriceSnapshot == "{}"
                 ? null : ContractChargeSnapshot.Read(c).Charges;
             var order = await orders.ReadAsync(id, token);
-            if (order is not null && order.SnapshotHash != c.SnapshotHash)
+            if (order is not null && order.SnapshotHash != c.SnapshotHashOrEmpty)
                 throw new PaymentException(409, "initial_payment_snapshot_changed");
             var untaggedSandbox = c.PaymentMode is null && !ContractPaymentModes.IsTest(c) && sepay.Enabled &&
                 sepay.Mode == "Test" && testScope.Allows(c.Room.LocationId);
@@ -113,10 +113,10 @@ internal sealed class MainInitialPayments(BHomePersistenceContext db, ContractSe
                     }
                 }
                 var invoices = await (from invoice in db.Set<BHome.Domain.Billing.Invoice>().AsNoTracking()
-                                      join representative in PaymentObligationQueries.Contracts(db) on invoice.RepresentativeContractId equals representative.Id
-                                      where invoice.RoomId == c.RoomId && invoice.BillingPeriod == period && invoice.Type == "PERIODIC" &&
+                                      join representative in PaymentObligationQueries.Contracts(db) on invoice.ContractId equals representative.Id
+                                      where invoice.RoomId == c.RoomId && invoice.BillingPeriod == period && invoice.InvoiceType == "PERIODIC" &&
                                           invoice.Status == BHome.Domain.Billing.InvoiceStatus.Final &&
-                                          db.Set<BHome.Domain.Billing.InvoiceLine>().Any(line => line.InvoiceId == invoice.Id && line.ChargeCode == "RENT")
+                                          db.Set<BHome.Domain.Billing.InvoiceItem>().Any(line => line.InvoiceId == invoice.Id && line.ChargeCode == "RENT")
                                       select new { invoice.Id, Representative = representative }).ToArrayAsync(token);
                 var invoiceId = rentSource is null
                     ? invoiceSource ?? invoices.Where(invoice => ContractPaymentModes.Of(NativeContractSnapshot.Read(invoice.Representative)) == roomScopeMode)
@@ -124,7 +124,7 @@ internal sealed class MainInitialPayments(BHomePersistenceContext db, ContractSe
                     : null;
                 // The initial activation transfer contains only the remaining deposit and first rent.
                 // Contract charge snapshots remain intact and continue to feed periodic invoices.
-                order = new(c.Id, c.Room.LocationId, c.SnapshotHash, c.RequiredDeposit, c.MonthlyRent, [], order?.CreatedAt ?? clock.GetUtcNow(),
+                order = new(c.Id, c.Room.LocationId, c.SnapshotHashOrEmpty, c.RequiredDeposit, c.RentAmount, [], order?.CreatedAt ?? clock.GetUtcNow(),
                     depositSource, rentSource, invoiceId, RoomScopeResolved: true, RoomScopeMode: roomScopeMode, CalculationVersion: 2);
                 var raw = JsonSerializer.Serialize(order, MainInitialPaymentLedger.Json);
                 var sourceKey = (reconcile ? untaggedSandbox ? "main-initial-sandbox-room-v2:" : "main-initial-room-v2:" : "main-initial-v2:") + id;

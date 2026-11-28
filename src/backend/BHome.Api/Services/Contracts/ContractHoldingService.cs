@@ -20,13 +20,13 @@ public sealed partial class ContractService
         if (AnonymousContractSigningService.HoldingOwnerHasSigned(c) || c.ApprovedAt is not null) return;
         if (c.Room.Status != RoomStatus.Available) throw ContractException.Conflict("room_not_available_for_holding");
         var prices = await repository.ResolvePricesAsync(c.RoomId, c.StartDate, t);
-        if (prices.Charges.SingleOrDefault(x => x.ChargeCode == "RENT")?.Rate != c.MonthlyRent ||
+        if (prices.Charges.SingleOrDefault(x => x.ChargeCode == "RENT")?.Rate != c.RentAmount ||
             !ContractChargeSnapshot.Read(c).Charges.SequenceEqual(ContractChargeSnapshot.FromPolicies(c, prices.Charges)))
             throw ContractException.Conflict("holding_approved_price_changed");
     }
     private bool HoldingSigned(Contract c) => c.SigningMode == ContractSigningModes.Internal ? AnonymousContractSigningService.Complete(c) : new[] { c.OwnerSignerId, c.TenantUserId }.All(signer =>
         c.Signatures.Any(s => s.SignerUserId == signer && CompleteSignature(s, c) && s.SignedAt is not null &&
-            s.SnapshotHash == c.SnapshotHash && !string.IsNullOrWhiteSpace(s.SignedObjectKey) &&
+            s.SnapshotHash == c.SnapshotHashOrEmpty && !string.IsNullOrWhiteSpace(s.SignedObjectKey) &&
             !string.IsNullOrWhiteSpace(s.SignedHash) && !string.IsNullOrWhiteSpace(s.ProviderReference)));
 
     private async Task LockHoldingPriceAsync(Contract c, string trigger, DateTimeOffset at, CancellationToken token, decimal incomingAmount = 0, bool providerVerified = false)
@@ -39,7 +39,7 @@ public sealed partial class ContractService
             throw ContractException.Conflict("room_contract_conflict");
         var approved = ContractChargeSnapshot.Read(c);
         var charges = approved.Charges;
-        if (charges.SingleOrDefault(x => x.ChargeCode == "RENT")?.Rate != c.MonthlyRent)
+        if (charges.SingleOrDefault(x => x.ChargeCode == "RENT")?.Rate != c.RentAmount)
             throw ContractException.Conflict("holding_approved_price_changed");
         var signedAt = c.SigningMode == ContractSigningModes.Internal ? AnonymousContractSigningService.AcceptedEvidence(c)!.OwnerAcceptedAt!.Value :
             c.Signatures.Where(s => CompleteSignature(s, c)).Max(s => s.SignedAt)!.Value;
@@ -107,7 +107,7 @@ public sealed partial class ContractService
                 ReservedCapacity = input.ReservedCapacity ?? checked((short)input.ResidentIds.Length),
                 // Policy rates have decimal scale, while contract VND columns use numeric(18,0).
                 // Seal the representation that survives persistence so signing can verify it.
-                MonthlyRent = configured.MonthlyRent,
+                RentAmount = configured.MonthlyRent,
                 RequiredDeposit = configured.HoldingDeposit,
                 Terms = configured.Terms,
                 IsDevelopmentDemo = DemoEnabled,
@@ -140,7 +140,7 @@ public sealed partial class ContractService
             if (await repository.HoldingConflictAsync(c.RoomId, c.Id, c.StartDate, c.EndDate, token))
                 throw ContractException.Conflict("room_contract_conflict");
             var prices = await repository.ResolvePricesAsync(c.RoomId, c.StartDate, token);
-            if (prices.Charges.SingleOrDefault(x => x.ChargeCode == "RENT")?.Rate != c.MonthlyRent)
+            if (prices.Charges.SingleOrDefault(x => x.ChargeCode == "RENT")?.Rate != c.RentAmount)
                 throw ContractException.Conflict("holding_approved_price_changed");
             var charges = ContractChargeSnapshot.FromPolicies(c, prices.Charges);
             if (!string.IsNullOrWhiteSpace(c.AgreedPriceSnapshot) && c.AgreedPriceSnapshot != "{}" &&
@@ -327,8 +327,8 @@ public sealed partial class ContractService
                 InitialPaymentRequired = input.RequireInitialPayment,
                 StartDate = holding.StartDate,
                 EndDate = holding.EndDate,
-                MonthlyRent = holding.MonthlyRent,
-                RequiredDeposit = Math.Max(holding.MonthlyRent, holding.RequiredDeposit),
+                RentAmount = holding.RentAmount,
+                RequiredDeposit = Math.Max(holding.RentAmount, holding.RequiredDeposit),
                 Terms = holding.Terms,
                 IsDevelopmentDemo = holding.IsDevelopmentDemo,
                 PaymentMode = holding.PaymentMode

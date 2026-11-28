@@ -18,13 +18,13 @@ internal sealed class FixedChargeCoverageRepository(BHomePersistenceContext db) 
     {
         var result = new List<FixedChargeCoverage>();
         if (db is not Compact24DbContext compact) return result;
-        var nativeLines = await (from line in compact.Set<BHome.Domain.Billing.InvoiceLine>().AsNoTracking()
+        var nativeLines = await (from line in compact.Set<BHome.Domain.Billing.InvoiceItem>().AsNoTracking()
                                  join invoice in compact.Set<BHome.Domain.Billing.Invoice>().AsNoTracking() on line.InvoiceId equals invoice.Id
-                                 join contract in compact.Set<BHome.Domain.TenantContracts.Contract>().AsNoTracking() on invoice.RepresentativeContractId equals contract.Id
+                                 join contract in compact.Set<BHome.Domain.TenantContracts.Contract>().AsNoTracking() on invoice.ContractId equals contract.Id
                                  where invoice.RoomId == roomId && (invoice.BillingPeriod == period ||
                                      code == "RENT" && invoice.BillingPeriod == period.AddMonths(-1)) &&
                                      invoice.Status == InvoiceStatus.Final && line.ChargeCode == code
-                                 select new { line, invoice.BillingPeriod, invoice.BillingSnapshot, SnapshotHash = contract.StoredSnapshotHash }).ToArrayAsync(token);
+                                 select new { line, invoice.BillingPeriod, invoice.BillingSnapshot, SnapshotHash = contract.SnapshotHash }).ToArrayAsync(token);
         var lines = nativeLines.Select(r => new
         {
             line = r.line,
@@ -34,7 +34,7 @@ internal sealed class FixedChargeCoverageRepository(BHomePersistenceContext db) 
                 state.TryGetProperty("scheduleSnapshot", out var snapshot) ? snapshot.GetString() ?? "" : ""
         }).ToArray();
         var invoiceIds = lines.Select(r => r.line.InvoiceId).Distinct().ToArray();
-        var adjustmentRows = await compact.Set<InvoiceAdjustmentRequest>().FromSqlInterpolated($"""
+        var adjustmentRows = await compact.Set<InvoiceAdjustment>().FromSqlInterpolated($"""
             SELECT * FROM invoice_adjustments WHERE decision_snapshot->>'chargeCode'={code}
                 AND COALESCE((decision_snapshot->>'invoiceStatus')::integer,0)=1 AND decision_snapshot->>'outcome'='Approved'
             """).AsNoTracking().Where(d => invoiceIds.Contains(d.InvoiceId)).Take(501).ToArrayAsync(token);

@@ -18,8 +18,8 @@ using NativeStaffEmployment = BHome.Domain.Entities.StaffEmployment;
 
 namespace BHome.Infrastructure.Modules.Operations;
 
-internal sealed partial class CompactOperationsRepository(Compact24DbContext db, UserManager<ApplicationUser> users,
-    SignInManager<ApplicationUser> signIn, IIdentityProtection? identityProtection = null)
+internal sealed partial class CompactOperationsRepository(Compact24DbContext db, UserManager<User> users,
+    SignInManager<User> signIn, IIdentityProtection? identityProtection = null)
     : IOperationsRepository
 {
     private static readonly JsonSerializerOptions Json = new(JsonSerializerDefaults.Web);
@@ -122,7 +122,7 @@ internal sealed partial class CompactOperationsRepository(Compact24DbContext db,
             throw OperationsException.Invalid("new_employment_must_be_active");
         await using var tx = await db.Database.BeginTransactionAsync(t);
         await Open(t); await EnsurePhoneAvailable(Guid.Empty, input.Phone, t);
-        var user = new ApplicationUser
+        var user = new User
         {
             Id = Guid.NewGuid(),
             UserName = input.Email,

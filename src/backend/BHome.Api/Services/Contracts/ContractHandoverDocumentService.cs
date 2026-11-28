@@ -191,7 +191,7 @@ public sealed partial class ContractService
             {
                 ContractId = id,
                 Kind = ContractFileKind.HandoverEvidence,
-                SnapshotHash = current.SnapshotHash,
+                SnapshotHash = current.SnapshotHashOrEmpty,
                 DevelopmentOnly = current.IsDevelopmentDemo,
                 ContentType = contentType,
                 Length = bytes.Length,

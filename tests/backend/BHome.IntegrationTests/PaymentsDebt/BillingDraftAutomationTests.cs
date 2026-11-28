@@ -22,9 +22,9 @@ public sealed partial class PaymentLedgerTests
         db.AddRange(policies);
         foreach (var c in await db.Set<Contract>().Include(c => c.Residents).Where(c => c.RoomId == w.Room).ToArrayAsync())
         {
-            var charges = policies.Select(p => new HoldingPriceCharge(p.Id, p.ChargeCode, (int)p.Category, (int)p.Method, p.Category == ChargeCategory.Rent ? c.MonthlyRent : p.Rate, p.EffectiveFrom, p.EffectiveTo, p.Version) { Name = p.Name }).ToArray();
-            c.AgreedPriceSnapshot = JsonSerializer.Serialize(new HoldingPriceSnapshot(c.MonthlyRent, c.RequiredDeposit, c.StartDate, c.EndDate, default, "SyntheticSigned", DateTimeOffset.UtcNow, charges) { SnapshotVersion = 1 });
-            c.SnapshotHash = ContractDocumentSnapshot.Hash(new ContractDocument(c.Id, c.RoomId, c.OwnerSignerId, c.TenantUserId!.Value, c.RepresentativeResidentId, c.Residents.Select(r => r.ResidentId).Order().ToArray(), c.StartDate, c.EndDate, c.MonthlyRent, c.RequiredDeposit, c.HoldingContractId, c.AppliedHoldingDeposit, c.Terms, c.SnapshotHash) { AgreedCharges = charges });
+            var charges = policies.Select(p => new HoldingPriceCharge(p.Id, p.ChargeCode, (int)p.Category, (int)p.Method, p.Category == ChargeCategory.Rent ? c.RentAmount : p.Rate, p.EffectiveFrom, p.EffectiveTo, p.Version) { Name = p.Name }).ToArray();
+            c.AgreedPriceSnapshot = JsonSerializer.Serialize(new HoldingPriceSnapshot(c.RentAmount, c.RequiredDeposit, c.StartDate, c.EndDate, default, "SyntheticSigned", DateTimeOffset.UtcNow, charges) { SnapshotVersion = 1 });
+            c.SnapshotHashOrEmpty = ContractDocumentSnapshot.Hash(new ContractDocument(c.Id, c.RoomId, c.OwnerSignerId, c.TenantUserId!.Value, c.RepresentativeResidentId, c.Residents.Select(r => r.ResidentId).Order().ToArray(), c.StartDate, c.EndDate, c.RentAmount, c.RequiredDeposit, c.HoldingContractId, c.AppliedHoldingDeposit, c.Terms, c.SnapshotHashOrEmpty) { AgreedCharges = charges });
         }
         await db.SaveChangesAsync();
     }

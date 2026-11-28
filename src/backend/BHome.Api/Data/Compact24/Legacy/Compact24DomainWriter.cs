@@ -43,7 +43,7 @@ public sealed partial class Compact24ArchiveContext
             e.State is EntityState.Added or EntityState.Modified or EntityState.Deleted))
             return await base.SaveChangesAsync(acceptAllChangesOnSuccess, cancellationToken);
         var domain = ChangeTracker.Entries().Where(e => e.State is EntityState.Added or EntityState.Modified or EntityState.Deleted &&
-            e.Entity is not ApplicationUser && e.Entity is not CompactRefreshRow).ToArray();
+            e.Entity is not User && e.Entity is not RefreshToken).ToArray();
         if (domain.Length == 0) return await base.SaveChangesAsync(acceptAllChangesOnSuccess, cancellationToken);
         var snapshots = domain.Select(e => (Entry: e, State: e.State, Original: e.OriginalValues.Clone())).ToArray();
         void RestorePendingState()
@@ -143,7 +143,7 @@ public sealed partial class Compact24ArchiveContext
         if (entry.State == EntityState.Deleted)
         {
             // Draft invoice lines are a replaceable calculation. Final lines are protected by SQL.
-            if (entry.Entity is not InvoiceLine) throw new InvalidOperationException("Business record retention requires an explicit transition.");
+            if (entry.Entity is not InvoiceItem) throw new InvalidOperationException("Business record retention requires an explicit transition.");
             await CommandAsync("DELETE FROM invoice_items WHERE id=(@state::jsonb->>'id')::uuid", state, envelope, key, token);
             return;
         }

@@ -50,17 +50,17 @@ internal sealed class CaptureWorkflowResources(BHomePersistenceContext db, Captu
                 };
                 var latest = await compact.Set<BHome.Domain.Billing.MeterReading>().Where(r => r.MeterId == device.Id).OrderByDescending(r => r.ConfirmedAt)
                     .ThenBy(r => r.Id).Select(r => (decimal?)r.ConfirmedValue).FirstOrDefaultAsync(token);
-                var result = new OcrWorkflowResource(new ResourceScope(current.LocationId, null),
-                    device.IsActive && current.Status is MeterTaskStatus.Assigned or MeterTaskStatus.InProgress,
+                var result = new OcrWorkflowResource(new ResourceScope(current.RequiredLocationId, null),
+                    device.IsActive && current.MeterStatus is MeterTaskStatus.Assigned or MeterTaskStatus.InProgress,
                     kind, device.DecimalPlaces, latest);
-                if (current.Status != MeterTaskStatus.Completed) return result;
+                if (current.MeterStatus != MeterTaskStatus.Completed) return result;
                 var confirmed = await scope.TaskReadingAsync(id, token);
                 return confirmed is not null && await scope.CanCorrectAsync(current, device, confirmed, token)
                     ? result with { CanCapture = true, PreviousConfirmedValue = confirmed.PreviousValue } : result;
             }
             var resource = await scope.VisibleTasks.Where(t => t.Id == id).Select(t => new OcrWorkflowResource(
             new ResourceScope(t.Meter.Room.LocationId, null),
-            t.Meter.IsActive && (t.Status == MeterTaskStatus.Assigned || t.Status == MeterTaskStatus.InProgress),
+            t.Meter.IsActive && (t.MeterStatus == MeterTaskStatus.Assigned || t.MeterStatus == MeterTaskStatus.InProgress),
             t.Meter.UtilityType == UtilityType.Water && t.Meter.Display == MeterDisplay.Mechanical ? OcrDocumentKind.MechanicalWater :
                 t.Meter.UtilityType == UtilityType.Water && t.Meter.Display == MeterDisplay.Digital ? OcrDocumentKind.DigitalWater :
                 t.Meter.UtilityType == UtilityType.Electricity && t.Meter.Display == MeterDisplay.Mechanical ? OcrDocumentKind.MechanicalElectricity :
@@ -71,7 +71,7 @@ internal sealed class CaptureWorkflowResources(BHomePersistenceContext db, Captu
                 .Select(reading => (decimal?)reading.ConfirmedValue).FirstOrDefault())).SingleOrDefaultAsync(token);
             if (resource is null) return null;
             var task = await scope.VisibleTasks.AsNoTracking().SingleAsync(t => t.Id == id, token);
-            if (task.Status != MeterTaskStatus.Completed) return resource;
+            if (task.MeterStatus != MeterTaskStatus.Completed) return resource;
             var meter = await db.Set<Meter>().AsNoTracking().SingleAsync(m => m.Id == task.MeterId, token);
             var reading = await db.Set<MeterReading>().AsNoTracking().SingleOrDefaultAsync(r => r.TaskId == id, token);
             return reading is not null && await scope.CanCorrectAsync(task, meter, reading, token)
@@ -90,7 +90,7 @@ internal sealed class CaptureWorkflowResources(BHomePersistenceContext db, Captu
         if (locationId is null) return;
         await db.Database.ExecuteSqlInterpolatedAsync($"SELECT pg_advisory_xact_lock(hashtextextended({locationId.Value.ToString()}, 0))", token);
         var task = await scope.LockTaskAsync(id, token);
-        if (task is not null && await scope.TaskLocationAsync(id, token) is not null && task.Status is not (MeterTaskStatus.Completed or MeterTaskStatus.Cancelled))
+        if (task is not null && await scope.TaskLocationAsync(id, token) is not null && task.MeterStatus is not (MeterTaskStatus.Completed or MeterTaskStatus.Cancelled))
         {
             task.OcrProposedValue = value; task.OcrImageHash = proposal.SourceImageHash; task.OcrEngineVersion = proposal.EngineVersion;
             if (db is Compact24DbContext compact) await NativeCaptureWrites.TaskAsync(compact, task, false, task.Version, token);

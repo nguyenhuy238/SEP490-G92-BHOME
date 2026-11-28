@@ -80,7 +80,7 @@ internal sealed partial class SettlementReceivablesRepository(BHomePersistenceCo
         // shared periodic debt by the issued recipient snapshot and tenancy dates,
         // while retaining contract-specific invoices from this contract chain.
         return db.Set<BHome.Domain.Billing.Invoice>().AsNoTracking().Where(i => i.RoomId == contract.RoomId && i.Status == InvoiceStatus.Final &&
-            (chainIds.Contains(i.RepresentativeContractId) || i.Type == "PERIODIC" && i.BillingPeriod >= firstPeriod && i.BillingPeriod <= lastPeriod &&
+            (chainIds.Contains(i.ContractId) || i.InvoiceType == "PERIODIC" && i.BillingPeriod >= firstPeriod && i.BillingPeriod <= lastPeriod &&
                 contract.TenantUserId.HasValue && i.RecipientUserIds.Contains(contract.TenantUserId.Value)));
     }
     public async Task<(Guid[] Ids, int Total)> TenantContractsAsync(Guid userId, int page, int pageSize, CancellationToken token)

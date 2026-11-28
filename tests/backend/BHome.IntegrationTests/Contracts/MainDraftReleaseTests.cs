@@ -148,7 +148,7 @@ public sealed partial class MainDraftApiTests
         Assert.All(active.Signatures, s => Assert.Equal("Simulated", s.Status));
         await using var verify = host.Services.CreateAsyncScope(); var db = verify.ServiceProvider.GetFixturePersistence();
         var persisted = await db.Set<Contract>().SingleAsync(c => c.Id == draft.Id); Assert.NotEqual("{}", persisted.DraftMetadata);
-        Assert.Equal(Convert.ToHexString(System.Security.Cryptography.SHA256.HashData(reviewedBytes)), (await db.Set<ContractSignature>().SingleAsync(s => s.ContractId == draft.Id && s.SignerUserId == w.OwnerId)).SourceHash);
+        Assert.Equal(Convert.ToHexString(System.Security.Cryptography.SHA256.HashData(reviewedBytes)), (await db.Set<ContractSigning>().SingleAsync(s => s.ContractId == draft.Id && s.SignerUserId == w.OwnerId)).SourceHashOrEmpty);
         Assert.Equal(1, await db.Set<ContractDocumentFile>().CountAsync(f => f.ContractId == draft.Id && f.Kind == ContractFileKind.Preview));
         Assert.Equal(tenant.Id, (await db.Set<Resident>().SingleAsync(r => r.Id == w.Resident)).TenantUserId);
     }
@@ -296,8 +296,8 @@ public sealed partial class MainDraftApiTests
         Assert.Empty(contract.Signatures); Assert.Null(contract.ActivatedAt);
         var document = new ContractDocument(contract.Id, contract.RoomId, contract.OwnerSignerId, Guid.Empty,
             contract.RepresentativeResidentId, contract.Residents.Select(r => r.ResidentId).Order().ToArray(),
-            contract.StartDate, contract.EndDate, contract.MonthlyRent, contract.RequiredDeposit,
-            contract.HoldingContractId, contract.AppliedHoldingDeposit, contract.Terms, contract.SnapshotHash)
+            contract.StartDate, contract.EndDate, contract.RentAmount, contract.RequiredDeposit,
+            contract.HoldingContractId, contract.AppliedHoldingDeposit, contract.Terms, contract.SnapshotHashOrEmpty)
         { IsInternalResidentAcceptance = true, AgreedCharges = ContractChargeSnapshot.Read(contract).Charges };
         Assert.Equal(bytes, await scope.ServiceProvider.GetRequiredService<IContractSigningDocumentSource>().ReadAsync(document, default));
         Assert.Single(await db.Set<ContractDocumentFile>().Where(f => f.ContractId == draft.Id && f.Kind == ContractFileKind.Preview).ToArrayAsync());

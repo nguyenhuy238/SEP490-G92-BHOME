@@ -44,7 +44,7 @@ public sealed class LocationAssetInventoryAssignmentTests(Compact24Fixture fixtu
             0, ownerId, default);
     }
 
-    private async Task<ApplicationUser> User(string role)
+    private async Task<User> User(string role)
     {
         await using var scope = fixture.Factory!.Services.CreateAsyncScope();
         var db = scope.ServiceProvider.GetRequiredService<Compact24ArchiveContext>();
@@ -57,7 +57,7 @@ public sealed class LocationAssetInventoryAssignmentTests(Compact24Fixture fixtu
             if (existing is not null) return existing;
         }
         var id = Guid.NewGuid();
-        var user = new ApplicationUser
+        var user = new User
         {
             Id = id,
             UserName = id.ToString(),
@@ -68,7 +68,7 @@ public sealed class LocationAssetInventoryAssignmentTests(Compact24Fixture fixtu
             ConcurrencyStamp = Guid.NewGuid().ToString(),
             LockoutEnabled = true
         };
-        user.PasswordHash = scope.ServiceProvider.GetRequiredService<IPasswordHasher<ApplicationUser>>()
+        user.PasswordHash = scope.ServiceProvider.GetRequiredService<IPasswordHasher<User>>()
             .HashPassword(user, Password);
         db.Users.Add(user);
         db.Entry(user).Property("roles").CurrentValue = new[] { role };
@@ -85,7 +85,7 @@ public sealed class LocationAssetInventoryAssignmentTests(Compact24Fixture fixtu
         return id;
     }
 
-    private async Task<HttpClient> Client(ApplicationUser account)
+    private async Task<HttpClient> Client(User account)
     {
         var client = fixture.Factory!.CreateClient();
         var response = await client.PostAsJsonAsync("/api/v1/auth/login", new { email = account.Email, password = Password });
@@ -185,12 +185,12 @@ public sealed class LocationAssetInventoryAssignmentTests(Compact24Fixture fixtu
                 await db.SaveChangesAsync();
                 var capture = new OperationalTask
                 {
-                    LocationId = location,
+                    RequiredLocationId = location,
                     MeterId = meter.Id,
                     Kind = OperationalTaskKind.MeterReading,
                     ReadingDate = Today.AddDays(-3),
                     Purpose = ReadingPurpose.Initial,
-                    Status = MeterTaskStatus.Completed,
+                    MeterStatus = MeterTaskStatus.Completed,
                     CompletedAt = DateTimeOffset.UtcNow
                 };
                 db.Add(capture);
@@ -318,7 +318,7 @@ public sealed class LocationAssetInventoryAssignmentTests(Compact24Fixture fixtu
         await using (var scope = fixture.Factory!.Services.CreateAsyncScope())
         {
             var db = scope.ServiceProvider.GetRequiredService<Compact24ArchiveContext>();
-            var tasks = await db.Set<OperationalTask>().AsNoTracking().Where(t => t.LocationId == location &&
+            var tasks = await db.Set<OperationalTask>().AsNoTracking().Where(t => t.RequiredLocationId == location &&
                 t.Kind == OperationalTaskKind.LocationAssetHandover).ToArrayAsync();
             taskId = Assert.Single(tasks).Id;
             Assert.Equal(staff.Id, tasks[0].AssignedStaffUserId);
@@ -510,12 +510,12 @@ public sealed class LocationAssetInventoryAssignmentTests(Compact24Fixture fixtu
                 await db.SaveChangesAsync();
                 var capture = new OperationalTask
                 {
-                    LocationId = location,
+                    RequiredLocationId = location,
                     MeterId = meter.Id,
                     Kind = OperationalTaskKind.MeterReading,
                     ReadingDate = Today.AddDays(-3),
                     Purpose = ReadingPurpose.Initial,
-                    Status = MeterTaskStatus.Completed,
+                    MeterStatus = MeterTaskStatus.Completed,
                     CompletedAt = DateTimeOffset.UtcNow
                 };
                 db.Add(capture);
@@ -614,7 +614,7 @@ public sealed class LocationAssetInventoryAssignmentTests(Compact24Fixture fixtu
         {
             var db = scope.ServiceProvider.GetRequiredService<Compact24ArchiveContext>();
             taskId = await db.Set<OperationalTask>().AsNoTracking()
-                .Where(task => task.LocationId == location && task.Kind == OperationalTaskKind.LocationAssetHandover)
+                .Where(task => task.RequiredLocationId == location && task.Kind == OperationalTaskKind.LocationAssetHandover)
                 .Select(task => task.Id).SingleAsync();
         }
         using var staffClient = await Client(staff);
@@ -753,7 +753,7 @@ public sealed class LocationAssetInventoryAssignmentTests(Compact24Fixture fixtu
                 var snapshot = JsonSerializer.Deserialize<LocationAssetInventorySnapshot>(task.LocationAssetInventoryJson)!;
                 // Persist a synthetic pre-release task that Staff already checked, but
                 // whose Owner scope flag was never refreshed and still waits for submit.
-                task.Status = MeterTaskStatus.InProgress;
+                task.MeterStatus = MeterTaskStatus.InProgress;
                 task.LocationAssetInventoryJson = JsonSerializer.Serialize(snapshot with
                 {
                     Items = snapshot.Items.Select(item => item with { Checked = true, Condition = "Intact" }).ToArray(),
@@ -964,8 +964,8 @@ public sealed class LocationAssetInventoryAssignmentTests(Compact24Fixture fixtu
             Assert.Equal(25, await db.Set<OperationalTaskHistory>().CountAsync(h =>
                 h.TaskId == oldTaskId && h.Action == "location_asset_inventory_item_checked" && h.ActorId == first.Id));
             Assert.Equal(1, await db.Set<OperationalTask>().CountAsync(t =>
-                t.LocationId == location && t.Kind == OperationalTaskKind.LocationAssetHandover &&
-                t.Status == MeterTaskStatus.InProgress && t.Id == oldTaskId &&
+                t.RequiredLocationId == location && t.Kind == OperationalTaskKind.LocationAssetHandover &&
+                t.MeterStatus == MeterTaskStatus.InProgress && t.Id == oldTaskId &&
                 t.AssignedStaffUserId == successor.Id && t.AssignmentId == successorAssignment));
             Assert.False(await db.Set<OperationalTask>().AnyAsync(t => t.Id == successorTaskId));
         }
@@ -1083,7 +1083,7 @@ public sealed class LocationAssetInventoryAssignmentTests(Compact24Fixture fixtu
             Assert.Equal(CreateAssignmentStatus.Created, created.Status);
             var db = scope.ServiceProvider.GetRequiredService<Compact24ArchiveContext>();
             var task = await db.Set<OperationalTask>().AsNoTracking().SingleAsync(item =>
-                item.LocationId == location && item.Kind == OperationalTaskKind.LocationAssetHandover);
+                item.RequiredLocationId == location && item.Kind == OperationalTaskKind.LocationAssetHandover);
             taskId = task.Id;
             var snapshot = JsonSerializer.Deserialize<LocationAssetInventorySnapshot>(task.LocationAssetInventoryJson, Json)!;
             var only = Assert.Single(snapshot.Items);

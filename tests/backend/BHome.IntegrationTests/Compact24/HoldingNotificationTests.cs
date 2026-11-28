@@ -179,7 +179,7 @@ public sealed partial class Compact24NotificationMvpTests
             OwnerSignerId = w.Owner.Id,
             RepresentativeResidentId = resident.Id,
             SigningMode = ContractSigningModes.Internal,
-            SnapshotHash = new string('A', 64),
+            SnapshotHashOrEmpty = new string('A', 64),
             StartDate = Today,
             EndDate = Today.AddMonths(1),
             HoldingExpiryAt = DateTimeOffset.UtcNow.AddDays(2),
@@ -197,7 +197,7 @@ public sealed partial class Compact24NotificationMvpTests
                 ContractId = c.Id,
                 ResidentId = resident.Id,
                 ApprovedByUserId = w.Owner.Id,
-                SnapshotHash = c.SnapshotHash,
+                SnapshotHash = c.SnapshotHashOrEmpty,
                 TokenHash = new string('B', 64),
                 DocumentHash = new string('C', 64),
                 RecipientEmail = "staff-entered@example.invalid",
@@ -210,7 +210,7 @@ public sealed partial class Compact24NotificationMvpTests
             var hash = Convert.ToHexString(SHA256.HashData(signed));
             using var bytes = new MemoryStream(signed);
             await storage!.PutAsync(signedKey, bytes, bytes.Length, "application/pdf", default);
-            c.InternalAcceptance = JsonSerializer.Serialize(new InternalAcceptanceEvidence(invitation.Id, resident.Id, c.SnapshotHash,
+            c.InternalAcceptance = JsonSerializer.Serialize(new InternalAcceptanceEvidence(invitation.Id, resident.Id, c.SnapshotHashOrEmpty,
                 invitation.DocumentHash, "synthetic-stroke", signedKey, hash, DateTimeOffset.UtcNow,
                 w.Owner.Id, DateTimeOffset.UtcNow, signedKey, hash));
             db.Add(invitation);

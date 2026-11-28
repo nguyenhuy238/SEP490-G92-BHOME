@@ -28,7 +28,7 @@ internal sealed partial class SettlementReceivablesRepository
         { schedule = null; missing.Add("billing_schedule_snapshot_invalid"); }
         var pricingContract = invoice?.RepresentativeContractId is { } representative ?
             (await NativeSettlementReads.ContractAsync(db, representative, token) ?? throw new InvalidOperationException("Missing invoice representative contract.")) : contract;
-        if (string.IsNullOrWhiteSpace(pricingContract.SnapshotHash)) missing.Add("signed_contract_snapshot_required");
+        if (string.IsNullOrWhiteSpace(pricingContract.SnapshotHashOrEmpty)) missing.Add("signed_contract_snapshot_required");
         var occupancies = await new InvoiceRepository(db).OccupanciesAsync(contract.RoomId, period, through, token);
         foreach (var occupancy in occupancies.Where(o => o.Contract.Id == id)) occupancy.Contract.ActualEndDate = end;
         // Do not invent a personal share of the Room rent while other tenancies
@@ -46,7 +46,7 @@ internal sealed partial class SettlementReceivablesRepository
             var other = ContractBillingPrices.Read(occupancy.Contract, contract.Room.LocationId, missing);
             if (!ContractBillingPrices.Equivalent(charges, other)) missing.Add("room_contract_price_conflict");
         }
-        return new(context, contract.Room.LocationId, period, end, schedule, pricingContract.MonthlyRent, pricingContract.SnapshotHash,
+        return new(context, contract.Room.LocationId, period, end, schedule, pricingContract.RentAmount, pricingContract.SnapshotHashOrEmpty,
             occupiedDays, recipients, missing.Distinct().ToArray(), charges,
             PersonMonthOccupancy.ForRoomCapacity(contract.Room.Capacity, occupiedDays));
     }

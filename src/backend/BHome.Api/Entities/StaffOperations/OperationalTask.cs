@@ -16,11 +16,14 @@ public sealed class OperationalTask : AuditableEntity
         Id = id;
     }
     public OperationalTaskKind Kind { get; set; }
-    public Guid LocationId { get => StoredLocationId.GetValueOrDefault(); set => StoredLocationId = value; }
+    [NotMapped, JsonConverter(typeof(LegacyGuidJsonConverter))] public Guid? LocationId { get; set; }
+    [JsonIgnore] public Guid RequiredLocationId { get => LocationId.GetValueOrDefault(); set => LocationId = value; }
     public BHome.Domain.Locations.Location Location { get; set; } = null!;
-    public string Title { get => StoredTitle ?? ""; set => StoredTitle = value; }
+    [NotMapped, JsonConverter(typeof(LegacyStringJsonConverter))] public string? Title { get; set; }
+    [JsonIgnore] public string TaskTitle { get => Title ?? ""; set => Title = value; }
     public string Requirements { get => Description ?? ""; set => Description = value; }
-    public OperationalTaskPriority Priority { get => (OperationalTaskPriority)int.Parse(StoredPriority ?? "0", CultureInfo.InvariantCulture); set => StoredPriority = ((int)value).ToString(CultureInfo.InvariantCulture); }
+    [NotMapped, JsonConverter(typeof(LegacyNumericEnumJsonConverter<OperationalTaskPriority>))] public string? Priority { get; set; }
+    [JsonIgnore] public OperationalTaskPriority TaskPriority { get => (OperationalTaskPriority)int.Parse(Priority ?? "0", CultureInfo.InvariantCulture); set => Priority = ((int)value).ToString(CultureInfo.InvariantCulture); }
     public DateTimeOffset? DueAt { get; set; }
     public bool EvidenceRequired { get; set; }
     public Guid? AssignedStaffUserId { get => AssignedUserId; set => AssignedUserId = value; }
@@ -53,7 +56,8 @@ public sealed class OperationalTask : AuditableEntity
     public ReadingPurpose Purpose { get; set; }
     public DateOnly ReadingDate { get; set; }
     public DateOnly? BillingPeriod { get; set; }
-    public MeterTaskStatus Status { get => (MeterTaskStatus)int.Parse(StoredStatus, CultureInfo.InvariantCulture); set => StoredStatus = ((int)value).ToString(CultureInfo.InvariantCulture); }
+    [NotMapped, JsonConverter(typeof(LegacyNumericEnumJsonConverter<MeterTaskStatus>))] public string Status { get; set; } = "0";
+    [JsonIgnore] public MeterTaskStatus MeterStatus { get => (MeterTaskStatus)int.Parse(Status, CultureInfo.InvariantCulture); set => Status = ((int)value).ToString(CultureInfo.InvariantCulture); }
     public decimal? OcrProposedValue { get; set; }
     public string? OcrImageHash { get; set; }
     public string? OcrEngineVersion { get; set; }
@@ -61,16 +65,12 @@ public sealed class OperationalTask : AuditableEntity
 
     // Storage fields cover every task discriminator. Staff/meter accessors retain their original typed contract.
     [NotMapped, JsonIgnore] public string TaskType { get; set; } = "";
-    [NotMapped, JsonIgnore] public Guid? StoredLocationId { get; set; }
     [NotMapped, JsonIgnore] public Guid? RoomId { get; set; }
     [NotMapped, JsonIgnore] public Guid? AssetId { get; set; }
     [NotMapped, JsonIgnore] public Guid? AssignedUserId { get; set; }
     [NotMapped, JsonIgnore] public Guid? IncidentReportId { get; set; }
     [NotMapped, JsonIgnore] public string? SourceKey { get; set; }
-    [NotMapped, JsonIgnore] public string? StoredTitle { get; set; }
     [NotMapped, JsonIgnore] public string? Description { get; set; }
-    [NotMapped, JsonIgnore] public string? StoredPriority { get; set; }
-    [NotMapped, JsonIgnore] public string StoredStatus { get; set; } = "0";
     [NotMapped, JsonIgnore] public DateTimeOffset? StartsAt { get; set; }
     [NotMapped, JsonIgnore] public DateTimeOffset? EndsAt { get; set; }
     [NotMapped, JsonIgnore] public DateTimeOffset? NextRunAt { get; set; }
@@ -85,7 +85,7 @@ public sealed class OperationalTask : AuditableEntity
     [NotMapped, JsonIgnore] public DateTimeOffset? CostApprovedAt { get; set; }
     [NotMapped, JsonIgnore] public JsonElement History { get; set; } = JsonSerializer.SerializeToElement(Array.Empty<object>());
 
-    public bool IsOverdue(DateTimeOffset now) => DueAt < now && Status is not (MeterTaskStatus.Completed or MeterTaskStatus.Cancelled);
+    public bool IsOverdue(DateTimeOffset now) => DueAt < now && MeterStatus is not (MeterTaskStatus.Completed or MeterTaskStatus.Cancelled);
 
     public void ApplyAction(string action, DateTimeOffset now, Guid actor)
     {
@@ -95,11 +95,11 @@ public sealed class OperationalTask : AuditableEntity
             throw new InvalidOperationException("location_asset_handover_workflow_required");
         if (Kind is not (OperationalTaskKind.AdHoc or OperationalTaskKind.MoveInInventory or OperationalTaskKind.LocationAssetHandover))
             throw new InvalidOperationException("meter_workflow_required");
-        Status = (action, Status) switch
+        MeterStatus = (action, MeterStatus) switch
         {
             ("start", MeterTaskStatus.Assigned) => MeterTaskStatus.InProgress,
             ("progress" or "blockers", MeterTaskStatus.InProgress) => MeterTaskStatus.InProgress,
-            ("coordinate", MeterTaskStatus.Assigned or MeterTaskStatus.InProgress or MeterTaskStatus.PendingVerification) => Status,
+            ("coordinate", MeterTaskStatus.Assigned or MeterTaskStatus.InProgress or MeterTaskStatus.PendingVerification) => MeterStatus,
             ("submit", MeterTaskStatus.InProgress) => MeterTaskStatus.PendingVerification,
             ("verify", MeterTaskStatus.PendingVerification) => MeterTaskStatus.Completed,
             ("rework", MeterTaskStatus.PendingVerification) => MeterTaskStatus.InProgress,

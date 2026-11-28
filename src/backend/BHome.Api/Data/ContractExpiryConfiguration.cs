@@ -10,7 +10,7 @@ internal sealed class ContractExpiryConfiguration : IEntityTypeConfiguration<Con
         e.HasIndex(n => new { n.ContractId, n.EndDate, n.Stage, n.RecipientId }).IsUnique(); e.HasIndex(n => new { n.RecipientId, n.CreatedAt });
         e.Property(n => n.Stage).HasMaxLength(30);
         e.HasOne<Contract>().WithMany().HasForeignKey(n => n.ContractId).OnDelete(DeleteBehavior.Restrict);
-        e.HasOne<ApplicationUser>().WithMany().HasForeignKey(n => n.RecipientId).OnDelete(DeleteBehavior.Restrict);
+        e.HasOne<User>().WithMany().HasForeignKey(n => n.RecipientId).OnDelete(DeleteBehavior.Restrict);
     }
 }
 internal sealed class ContractExpiryScanConfiguration : IEntityTypeConfiguration<Contract>

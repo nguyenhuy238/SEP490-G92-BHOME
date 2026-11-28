@@ -59,7 +59,7 @@ public static class LocationAssetInventorySync
         JsonSerializer.Serialize(current) != JsonSerializer.Serialize(merged);
 
     public static bool Ready(OperationalTask task, LocationAssetInventorySnapshot snapshot) =>
-        task.Status == MeterTaskStatus.InProgress && !task.EvidenceRequired &&
+        task.MeterStatus == MeterTaskStatus.InProgress && !task.EvidenceRequired &&
         snapshot.Items.Length > 0 && (snapshot.PendingOwnerRooms?.Length ?? 0) == 0 &&
         !snapshot.PendingOwnerCommonAssets && snapshot.Items.All(item => item.Checked &&
             (item.Condition is "Unassessed" or "Intact" or "Missing" or "Damaged" or "NotAccessible") &&

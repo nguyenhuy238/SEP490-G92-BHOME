@@ -87,7 +87,7 @@ internal sealed class NativeIncidentReads(Compact24DbContext db)
     private IQueryable<BHome.Domain.Billing.OperationalTask> VisibleWork(IncidentScope scope)
     {
         var locations = StaffLocations(scope);
-        return scope.Owner ? Work : Work.Where(w => w.StoredLocationId != null && locations.Contains(w.StoredLocationId.Value));
+        return scope.Owner ? Work : Work.Where(w => w.LocationId != null && locations.Contains(w.LocationId.Value));
     }
     private IQueryable<IncidentReport> Filter(IQueryable<IncidentReport> rows, IncidentQuery q, bool includeWorkOrderAssets = false)
     {
@@ -111,7 +111,7 @@ internal sealed class NativeIncidentReads(Compact24DbContext db)
             WHERE l.is_active AND u.is_active AND 'Staff'=ANY(u.roles)
                 AND (a->>'startDate')::date<={scope.Today} AND (a->>'endDate')::date>={scope.Today}
             """);
-        var items = await rows.OrderByDescending(r => r.CreatedAt).ThenBy(r => r.Id).Skip((query.Page - 1) * query.PageSize).Take(query.PageSize)
+        var items = await rows.OrderByDescending(r => r.ReportedAt).ThenBy(r => r.Id).Skip((query.Page - 1) * query.PageSize).Take(query.PageSize)
             .Select(r => new
             {
                 Report = r,
@@ -122,7 +122,7 @@ internal sealed class NativeIncidentReads(Compact24DbContext db)
             }).ToArrayAsync(t);
         var ids = items.Select(x => x.Report.Id).ToArray();
         var open = (await Work.Where(w => w.IncidentReportId != null && ids.Contains(w.IncidentReportId.Value) &&
-            w.StoredStatus != "Verified" && w.StoredStatus != "Cancelled").ToArrayAsync(t)).Select(NativeIncidentSession.Read)
+            w.Status != "Verified" && w.Status != "Cancelled").ToArrayAsync(t)).Select(NativeIncidentSession.Read)
             .GroupBy(w => w.IncidentId!.Value).ToDictionary(g => g.Key, g => g.OrderByDescending(w => w.CreatedAt).ThenBy(w => w.Id).First());
         var staffIds = open.Values.Select(w => w.AssignedStaffId).Distinct().ToArray();
         var names = await db.Users.AsNoTracking().Where(u => staffIds.Contains(u.Id))
@@ -143,17 +143,17 @@ internal sealed class NativeIncidentReads(Compact24DbContext db)
         var rows = VisibleWork(scope);
         if (query.WorkOrderId is { } workOrder) rows = rows.Where(w => w.Id == workOrder);
         if (query.IncidentId is { } incident) rows = rows.Where(w => w.IncidentReportId == incident);
-        if (query.LocationId is { } location) rows = rows.Where(w => w.StoredLocationId == location);
+        if (query.LocationId is { } location) rows = rows.Where(w => w.LocationId == location);
         if (query.RoomId is { } room) rows = rows.Where(w => w.RoomId == room);
         if (query.AssetId is { } asset) rows = rows.Where(w => w.AssetId == asset);
         if (query.Status.HasValue || query.Severity.HasValue) rows = rows.Where(w => w.IncidentReportId != null && reports.Contains(w.IncidentReportId.Value));
-        if (query.WorkOrderStatus is { } status) { var key = status.ToString(); rows = rows.Where(w => w.StoredStatus == key); }
+        if (query.WorkOrderStatus is { } status) { var key = status.ToString(); rows = rows.Where(w => w.Status == key); }
         var count = await rows.CountAsync(t);
         var items = await rows.OrderBy(w => w.DueAt).ThenBy(w => w.Id).Skip((query.Page - 1) * query.PageSize).Take(query.PageSize)
             .Select(w => new
             {
                 Work = w,
-                LocationName = Locations.Where(l => l.Id == w.StoredLocationId).Select(l => l.Name).FirstOrDefault(),
+                LocationName = Locations.Where(l => l.Id == w.LocationId).Select(l => l.Name).FirstOrDefault(),
                 RoomNumber = Rooms.Where(room => room.Id == w.RoomId).Select(room => room.RoomNumber).FirstOrDefault(),
                 AssetName = Assets.Where(asset => asset.Id == w.AssetId).Select(asset => asset.Name).FirstOrDefault(),
                 AssignedStaffName = db.Users.Where(u => u.Id == w.AssignedUserId)

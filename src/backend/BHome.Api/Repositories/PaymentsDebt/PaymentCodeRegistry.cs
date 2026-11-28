@@ -81,7 +81,7 @@ internal sealed class PaymentCodeRegistry(BHomePersistenceContext db, IPaymentRe
         {
             if (db is Compact24DbContext)
             {
-                var contractId = await db.Set<BHome.Domain.Billing.Invoice>().AsNoTracking().Where(i => i.Id == id).Select(i => i.RepresentativeContractId).SingleAsync(token);
+                var contractId = await db.Set<BHome.Domain.Billing.Invoice>().AsNoTracking().Where(i => i.Id == id).Select(i => i.ContractId).SingleAsync(token);
                 var source = await PaymentObligationQueries.ContractModes(db).SingleOrDefaultAsync(c => c.Id == contractId, token);
                 if (source is not null && (source.PaymentMode is not null || source.IsDevelopmentDemo)) return source.EffectiveMode;
             }

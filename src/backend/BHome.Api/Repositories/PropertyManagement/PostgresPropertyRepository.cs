@@ -71,7 +71,7 @@ internal sealed class PostgresPropertyRepository(BHomePersistenceContext db) : I
         var occupancy = await contracts.AnyAsync(c => c.Kind != BHome.Domain.TenantContracts.ContractKind.Holding && c.Status == ContractStatus.Active &&
             members.Any(r => r.ContractId == c.Id && r.ResidenceFrom <= today && (r.ResidenceTo == null || r.ResidenceTo >= today)), token);
         var active = await contracts.AnyAsync(c => c.Status == ContractStatus.Active, token);
-        var signatures = context.Set<BHome.Domain.TenantContracts.ContractSignature>().AsNoTracking();
+        var signatures = context.Set<BHome.Domain.TenantContracts.ContractSigning>().AsNoTracking();
         var allocations = context.Set<BHome.Domain.PaymentsDebt.PaymentAllocation>().AsNoTracking();
         var pending = await contracts.AnyAsync(c => (c.Status == ContractStatus.Draft ||
             c.Status == ContractStatus.PendingSigning || c.Status == ContractStatus.PendingActivation) &&
@@ -189,7 +189,7 @@ internal sealed class PostgresPropertyRepository(BHomePersistenceContext db) : I
     public Task<bool> HasOpenAssetWorkAsync(Guid assetId, CancellationToken token) =>
         db is Compact24DbContext compact
             ? compact.Set<BHome.Domain.Billing.OperationalTask>().AsNoTracking().AnyAsync(w => w.TaskType == "WORK_ORDER" &&
-                w.AssetId == assetId && w.StoredStatus != "Verified" && w.StoredStatus != "Cancelled", token)
+                w.AssetId == assetId && w.Status != "Verified" && w.Status != "Cancelled", token)
             : AnyAsync<BHome.Domain.IncidentMaintenance.MaintenanceWorkOrder>(w => w.AssetId == assetId &&
                 w.Status != BHome.Domain.IncidentMaintenance.WorkOrderStatus.Verified &&
                 w.Status != BHome.Domain.IncidentMaintenance.WorkOrderStatus.Cancelled, token);

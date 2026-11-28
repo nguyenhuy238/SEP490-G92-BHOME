@@ -15,12 +15,12 @@ using Microsoft.Extensions.Options;
 namespace BHome.Infrastructure.IdentityAccess;
 
 internal sealed class AccountInvitations(Compact24DbContext db, IIdentityPersistence identity, IdentitySecurityStore security,
-    UserManager<ApplicationUser> users, IPasswordResetDelivery delivery, ICurrentUser actor, CompactNotificationWriter sql,
+    UserManager<User> users, IPasswordResetDelivery delivery, ICurrentUser actor, CompactNotificationWriter sql,
     IOptions<SessionOptions> options, IOptions<AuthenticationEmailOptions> emailOptions) : IAccountInvitations
 {
     // Existing grant state represents pending setup before an invitation is requested.
     // An expired random hash is unusable and does not start the invitation cooldown.
-    internal static void MarkPendingSetup(Compact24DbContext context, ApplicationUser user, DateTimeOffset now)
+    internal static void MarkPendingSetup(Compact24DbContext context, User user, DateTimeOffset now)
     {
         context.Entry(user).Property("reset_token_hash").CurrentValue = Convert.ToHexString(RandomNumberGenerator.GetBytes(32));
         context.Entry(user).Property("reset_expires_at").CurrentValue = now.AddSeconds(-1);
@@ -145,7 +145,7 @@ internal sealed class AccountInvitations(Compact24DbContext db, IIdentityPersist
         var contact = await sql.Scalar<string?>("SELECT contact_email FROM residents WHERE id=@id", t, ("id", residentId));
         if (contact is not null && !string.Equals(contact.Trim(), request.Email.Trim(), StringComparison.OrdinalIgnoreCase))
             throw new NotificationException(409, "resident_invitation_email_mismatch");
-        ApplicationUser user;
+        User user;
         if (userId is { } linked)
         {
             user = await security.LockUserAsync(linked, t) ?? throw new NotificationException(404, "account_not_found");
@@ -157,7 +157,7 @@ internal sealed class AccountInvitations(Compact24DbContext db, IIdentityPersist
         else
         {
             if (await users.FindByEmailAsync(request.Email) is not null) throw new NotificationException(409, "email_requires_explicit_account_link");
-            var id = Guid.NewGuid(); user = new ApplicationUser
+            var id = Guid.NewGuid(); user = new User
             {
                 Id = id,
                 UserName = request.Email,
@@ -237,7 +237,7 @@ internal sealed class AccountInvitations(Compact24DbContext db, IIdentityPersist
         await identity.SaveChangesAsync(t); await tx.CommitAsync(t); return true;
     }
 
-    private Task<ApplicationUser?> InvitationUserAsync(string token, CancellationToken t)
+    private Task<User?> InvitationUserAsync(string token, CancellationToken t)
     {
         var hash = IdentitySecurityStore.Hash(token);
         return db.Users.AsNoTracking().SingleOrDefaultAsync(u => EF.Property<string>(u, "reset_token_hash") == hash, t);
@@ -265,7 +265,7 @@ internal sealed class AccountInvitations(Compact24DbContext db, IIdentityPersist
     private bool CoolingDown(PasswordResetGrant? grant) => grant is { ConsumedAt: null } && grant.ExpiresAt > sql.Now &&
         grant.ExpiresAt.AddMinutes(-options.Value.PasswordResetMinutes).AddSeconds(emailOptions.Value.ResendCooldownSeconds) > sql.Now;
 
-    private async Task<string> InvitationToken(ApplicationUser user, CancellationToken t)
+    private async Task<string> InvitationToken(User user, CancellationToken t)
     {
         if (!(await users.UpdateSecurityStampAsync(user)).Succeeded) throw new NotificationException(409, "invitation_account_changed");
         await security.RevokeAllAsync(user.Id, "InvitationIssued", t);

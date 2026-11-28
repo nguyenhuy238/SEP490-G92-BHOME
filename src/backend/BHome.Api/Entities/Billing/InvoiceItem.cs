@@ -5,18 +5,21 @@ using BHome.Domain.PropertyManagement;
 
 namespace BHome.Domain.Billing;
 
-public sealed class InvoiceLine
+public sealed class InvoiceItem
 {
     [System.ComponentModel.DataAnnotations.Schema.NotMapped] public string? UtilityCalculationSnapshot { get; set; }
     public Guid Id { get; set; } = Guid.NewGuid();
     public Guid InvoiceId { get; set; }
     public ChargeCategory Category { get; set; }
     public string ChargeCode { get; set; } = "";
-    public string Name { get; set; } = "";
-    public Guid? PolicyId { get; set; }
+    [NotMapped, JsonIgnore] public string Description { get; set; } = "";
+    public string Name { get => Description; set => Description = value; }
+    [NotMapped, JsonIgnore] public Guid? BillingPolicyId { get; set; }
+    public Guid? PolicyId { get => BillingPolicyId; set => BillingPolicyId = value; }
     public int? PolicyVersion { get; set; }
     public DateOnly RateDate { get; set; }
-    public decimal Rate { get; set; }
+    [NotMapped, JsonIgnore] public decimal UnitPrice { get; set; }
+    public decimal Rate { get => UnitPrice; set => UnitPrice = value; }
     public decimal Quantity { get; set; }
     public int OccupiedDays { get; set; }
     public int PeriodDays { get; set; }

@@ -29,15 +29,15 @@ public sealed partial class Compact24NotificationMvpTests(Compact24Fixture fixtu
 {
     private const string Password = "Synthetic!Notification-927";
     private readonly Compact24WorkflowFixture.TestObjectStorage confirmationStorage = new();
-    private sealed record Workspace(ApplicationUser Owner, ApplicationUser Staff, ApplicationUser[] Tenants, Guid Location, Guid Room, Guid[] Contracts, Guid[] Residents);
+    private sealed record Workspace(User Owner, User Staff, User[] Tenants, Guid Location, Guid Room, Guid[] Contracts, Guid[] Residents);
     private static DateOnly Today => BHome.Application.Billing.BillingAutomationDates.BusinessDate(DateTimeOffset.UtcNow);
     private async Task<Workspace> Seed()
     {
         await using var scope = fixture.Factory!.Services.CreateAsyncScope(); var db = scope.ServiceProvider.GetRequiredService<Compact24ArchiveContext>();
-        async Task<ApplicationUser> Account(string role)
+        async Task<User> Account(string role)
         {
             if (role == "Owner" && await db.Users.FirstOrDefaultAsync(u => EF.Property<string[]>(u, "roles").Contains("Owner")) is { } existing) return existing;
-            var user = new ApplicationUser { Id = Guid.NewGuid(), UserName = Guid.NewGuid().ToString("N"), Email = Guid.NewGuid().ToString("N") + "@example.invalid", EmailConfirmed = true };
+            var user = new User { Id = Guid.NewGuid(), UserName = Guid.NewGuid().ToString("N"), Email = Guid.NewGuid().ToString("N") + "@example.invalid", EmailConfirmed = true };
             return await WorkflowTestUsers.CreateAsync(scope.ServiceProvider, user, role, Password);
         }
         var owner = await Account("Owner"); var staff = await Account("Staff");
@@ -77,7 +77,7 @@ public sealed partial class Compact24NotificationMvpTests(Compact24Fixture fixtu
                 ResidentId = resident.Id,
                 ApprovedByUserId = owner.Id,
                 TokenHash = Guid.NewGuid().ToString("N"),
-                SnapshotHash = c.SnapshotHash,
+                SnapshotHash = c.SnapshotHashOrEmpty,
                 RecipientEmail = user.Email!,
                 ExpiresAt = DateTimeOffset.UtcNow.AddHours(1),
                 AcceptedAt = DateTimeOffset.UtcNow,
@@ -87,7 +87,7 @@ public sealed partial class Compact24NotificationMvpTests(Compact24Fixture fixtu
             };
             signingInvitations.Add(invitation);
             c.InternalAcceptance = JsonSerializer.Serialize(new BHome.Application.Contracts.InternalAcceptanceEvidence(invitation.Id, resident.Id,
-                c.SnapshotHash, "synthetic-source", "synthetic-stroke", key, hash, DateTimeOffset.UtcNow,
+                c.SnapshotHashOrEmpty, "synthetic-source", "synthetic-stroke", key, hash, DateTimeOffset.UtcNow,
                 owner.Id, DateTimeOffset.UtcNow, key, hash));
             db.Add(c); contracts.Add(c.Id); residents.Add(resident.Id);
         }
@@ -96,7 +96,7 @@ public sealed partial class Compact24NotificationMvpTests(Compact24Fixture fixtu
         await db.SaveChangesAsync();
         return new(owner, staff, tenants, location.Id, room.Id, contracts.ToArray(), residents.ToArray());
     }
-    private async Task<HttpClient> Client(ApplicationUser user, WebApplicationFactory<Program>? host = null)
+    private async Task<HttpClient> Client(User user, WebApplicationFactory<Program>? host = null)
     {
         var client = (host ?? fixture.Factory!).CreateClient();
         var response = await client.PostAsJsonAsync("/api/v1/auth/login", new { email = user.Email, password = Password }); response.EnsureSuccessStatusCode();

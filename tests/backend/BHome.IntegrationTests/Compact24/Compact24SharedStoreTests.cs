@@ -24,7 +24,7 @@ public sealed class Compact24SharedStoreTests(Compact24Fixture fixture) : IClass
         await using var scope = fixture.Factory!.Services.CreateAsyncScope();
         var db = scope.ServiceProvider.GetRequiredService<Compact24ArchiveContext>();
         var actor = await db.Users.FirstOrDefaultAsync(u => EF.Property<string[]>(u, "roles").Contains(Roles.Owner));
-        actor ??= await WorkflowTestUsers.CreateAsync(scope.ServiceProvider, new ApplicationUser { Id = Guid.NewGuid(), UserName = Guid.NewGuid().ToString("N"), Email = Guid.NewGuid().ToString("N") + "@example.invalid", EmailConfirmed = true }, Roles.Owner, "Synthetic!Shared-9273");
+        actor ??= await WorkflowTestUsers.CreateAsync(scope.ServiceProvider, new BHome.Infrastructure.Persistence.User { Id = Guid.NewGuid(), UserName = Guid.NewGuid().ToString("N"), Email = Guid.NewGuid().ToString("N") + "@example.invalid", EmailConfirmed = true }, Roles.Owner, "Synthetic!Shared-9273");
         var store = scope.ServiceProvider.GetRequiredService<ISharedConfigurationStore>(); var now = DateTimeOffset.UtcNow;
         var document = new SharedDocument(Guid.NewGuid(), "store-test", Guid.NewGuid(), 1, 1, Guid.NewGuid().ToString("N"), "Synthetic", "Draft", "BHOME", actor.Id, now, actor.Id, now, JsonSerializer.SerializeToElement(new { capacity = 3 }));
         await store.TransactionAsync([], async () => { await store.SaveAsync(document, 0, default); return true; }, default);

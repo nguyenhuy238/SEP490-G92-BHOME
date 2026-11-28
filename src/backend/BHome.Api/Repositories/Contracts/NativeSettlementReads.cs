@@ -37,7 +37,7 @@ internal static class NativeSettlementReads
     {
         if (db is Compact24DbContext native)
             return (await NativeInvoicePersistence.ReadAsync(native, native.Set<BHome.Domain.Billing.Invoice>().AsNoTracking()
-                .Where(i => i.Type == "PERIODIC" && i.RoomId == room && i.BillingPeriod == period), t)).SingleOrDefault();
+                .Where(i => i.InvoiceType == "PERIODIC" && i.RoomId == room && i.BillingPeriod == period), t)).SingleOrDefault();
         return await db.PeriodicInvoices().AsNoTracking().SingleOrDefaultAsync(i => i.RoomId == room && i.BillingPeriod == period, t);
     }
 
@@ -94,7 +94,7 @@ internal static class NativeSettlementReads
     internal static async Task<MeterProof[]> MeterProofsAsync(BHomePersistenceContext db, Guid room, Guid[] ids, CancellationToken t)
     {
         var rows = await (from reading in db.Set<BHome.Domain.Billing.MeterReading>().AsNoTracking()
-                          join task in db.Set<BHome.Domain.Billing.OperationalTask>() on reading.TaskId equals task.Id
+                          join task in db.Set<BHome.Domain.Billing.OperationalTask>() on reading.OperationalTaskId equals task.Id
                           join meter in db.Set<BHome.Domain.Billing.Meter>() on reading.MeterId equals meter.Id
                           where ids.Contains(reading.Id) && meter.RoomId == room && task.TaskType == "METER_READ"
                           select new { reading, task, meter.UtilityType }).ToArrayAsync(t);
@@ -104,7 +104,7 @@ internal static class NativeSettlementReads
             var reading = row.reading;
             var task = NativeCaptureReads.Task(row.task);
             var evidence = NativeCaptureReads.Evidence(row.task, reading.EvidenceId);
-            if (task.Status == MeterTaskStatus.Completed && evidence is { IsLinked: true, IsUploaded: true })
+            if (task.MeterStatus == MeterTaskStatus.Completed && evidence is { IsLinked: true, IsUploaded: true })
                 result.Add(new(reading, task, evidence, (UtilityType)row.UtilityType));
         }
         return result.ToArray();

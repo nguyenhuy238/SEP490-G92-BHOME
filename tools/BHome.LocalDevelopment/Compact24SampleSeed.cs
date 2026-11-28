@@ -65,7 +65,7 @@ public static class Compact24SampleSeed
         var identity = scope.ServiceProvider.GetRequiredService<BHome.Infrastructure.Persistence.Compact24.Compact24DbContext>();
         await using var db = OfflineFixturePersistence.Open(scope.ServiceProvider, identity);
         if (!await db.IsSchemaReadyAsync(token)) throw new LocalTestAccountException("Compact24 schema is not ready.");
-        var users = scope.ServiceProvider.GetRequiredService<UserManager<ApplicationUser>>();
+        var users = scope.ServiceProvider.GetRequiredService<UserManager<User>>();
         await using var transaction = await OfflineFixturePersistence.BeginAsync(db, identity, token);
         await db.Database.ExecuteSqlRawAsync("SELECT pg_advisory_xact_lock(hashtextextended('compact24-development-sample-v1',0))", token);
         // The reviewed Compact24 chain adapter supports one Owner container. A fixture
@@ -81,7 +81,7 @@ public static class Compact24SampleSeed
                 throw new LocalTestAccountException("Sample name belongs to another account or its role/state changed; nothing was overwritten.");
             if (account is null)
             {
-                account = new ApplicationUser { Id = Id(n + 1), UserName = AccountNames[n], Email = AccountNames[n] + "@example.invalid", IsActive = true, LockoutEnabled = true };
+                account = new User { Id = Id(n + 1), UserName = AccountNames[n], Email = AccountNames[n] + "@example.invalid", IsActive = true, LockoutEnabled = true };
                 identity.PrepareUserRole(account, roleNames[n]);
                 Check(await users.CreateAsync(account, password ?? ("Sample!" + Convert.ToHexString(RandomNumberGenerator.GetBytes(32)))));
             }
@@ -128,7 +128,7 @@ public static class Compact24SampleSeed
             {
                 var meterTask = task < 2;
                 Add(db, 110 + task, new OperationalTask
-                { LocationId = Id(10), Kind = meterTask ? OperationalTaskKind.MeterReading : OperationalTaskKind.AdHoc, Title = meterTask ? $"Ghi chỉ số ban đầu mẫu {task + 1}" : $"Kiểm tra phòng mẫu {task - 1}", Requirements = "Dữ liệu mẫu; nhập kết quả và xác nhận thực tế trước khi hoàn tất.", AssignedStaffUserId = Id(2), AssignmentId = Id(30), AssignedAt = now, DueAt = now.AddDays(3), MeterId = meterTask ? Id(60 + task) : null, Purpose = ReadingPurpose.Initial, ReadingDate = today, Status = MeterTaskStatus.Assigned });
+                { RequiredLocationId = Id(10), Kind = meterTask ? OperationalTaskKind.MeterReading : OperationalTaskKind.AdHoc, TaskTitle = meterTask ? $"Ghi chỉ số ban đầu mẫu {task + 1}" : $"Kiểm tra phòng mẫu {task - 1}", Requirements = "Dữ liệu mẫu; nhập kết quả và xác nhận thực tế trước khi hoàn tất.", AssignedStaffUserId = Id(2), AssignmentId = Id(30), AssignedAt = now, DueAt = now.AddDays(3), MeterId = meterTask ? Id(60 + task) : null, Purpose = ReadingPurpose.Initial, ReadingDate = today, MeterStatus = MeterTaskStatus.Assigned });
                 Add(db, 120 + task, new OperationalTaskHistory { TaskId = Id(110 + task), ActorId = Id(1), ResponsibleStaffUserId = Id(2), Action = "created", Note = "Khởi tạo dữ liệu mẫu local", OccurredAt = now, TaskVersion = 1 });
             }
             Add(db, 130, new UserNotification { RecipientUserId = Id(2), AudienceRole = Roles.Staff, LocationId = Id(10), Category = "Task", Title = "Công việc mẫu", Summary = "Kiểm tra công việc được giao tại cơ sở mẫu.", RelatedObjectType = "OperationalTask", RelatedObjectId = Id(112), EventKey = marker + ":staff", CreatedAt = now });

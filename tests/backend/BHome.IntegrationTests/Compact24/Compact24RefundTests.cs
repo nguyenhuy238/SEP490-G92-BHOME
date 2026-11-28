@@ -29,7 +29,7 @@ public sealed partial class Compact24RefundTests
         await using var scope = fixture.Capture.Factory.Services.CreateAsyncScope();
         var db = scope.ServiceProvider.GetRequiredService<Compact24ArchiveContext>();
         var owner = await db.Users.SingleAsync(u => EF.Property<string[]>(u, "roles").Contains("Owner"));
-        var source = await db.Set<PaymentTransfer>().Select(p => p.Id).SingleAsync();
+        var source = await db.Set<Payment>().Select(p => p.Id).SingleAsync();
         var client = fixture.Capture.Factory.CreateClient();
         var login = await client.PostAsJsonAsync("/api/v1/auth/login", new { email = owner.Email, password = WorkflowTestUsers.Password });
         login.EnsureSuccessStatusCode(); client.DefaultRequestHeaders.Authorization = new("Bearer", (await login.Content.ReadFromJsonAsync<LoginResult>())!.AccessToken);
@@ -312,7 +312,7 @@ public sealed partial class Compact24RefundTests
         {
             await new PaymentLedgerTests(unknown.Capture).OwnerConfirmedAmountPolicyPreservesPartialDebtAndUnallocatedExcess(120000, "verified_excess_payment_pending_review");
             await using var scope = unknown.Capture.Factory.Services.CreateAsyncScope(); var db = scope.ServiceProvider.GetRequiredService<Compact24ArchiveContext>();
-            var sourceId = await db.Set<PaymentTransfer>().Select(p => p.Id).SingleAsync();
+            var sourceId = await db.Set<Payment>().Select(p => p.Id).SingleAsync();
             var user = new TestOwner(await db.Users.Where(u => EF.Property<string[]>(u, "roles").Contains("Owner")).Select(u => u.Id).SingleAsync());
             var service = new RefundService(scope.ServiceProvider.GetRequiredService<IRefundRepository>(), scope.ServiceProvider.GetRequiredService<IObjectStorage>(),
                 scope.ServiceProvider.GetRequiredService<BHome.Application.Contracts.IContractImageValidator>(), user, TimeProvider.System);

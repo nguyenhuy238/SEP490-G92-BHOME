@@ -27,7 +27,7 @@ public sealed partial class PaymentLedgerTests
             foreach (var other in await db.Set<Contract>().Where(c => c.RoomId == w.Room && c.Id != w.Contract).ToArrayAsync())
                 other.Status = ContractStatus.Terminated;
         var today = DateOnly.FromDateTime(TimeZoneInfo.ConvertTimeBySystemTimeZoneId(DateTimeOffset.UtcNow, "Asia/Ho_Chi_Minh").DateTime); var period = new DateOnly(today.Year, today.Month, 1);
-        var lines = new List<InvoiceLine> { new() { Category = ChargeCategory.Rent, ChargeCode = "RENT", Name = "Synthetic rent", Rate = 100000, Quantity = 1, Amount = 100000, RateDate = period, OccupiedDays = 1, PeriodDays = DateTime.DaysInMonth(period.Year, period.Month) } };
+        var lines = new List<InvoiceItem> { new() { Category = ChargeCategory.Rent, ChargeCode = "RENT", Name = "Synthetic rent", Rate = 100000, Quantity = 1, Amount = 100000, RateDate = period, OccupiedDays = 1, PeriodDays = DateTime.DaysInMonth(period.Year, period.Month) } };
         var readings = new List<HandoverReading>();
         foreach (var type in new[] { UtilityType.Electricity, UtilityType.Water })
         {
@@ -35,7 +35,7 @@ public sealed partial class PaymentLedgerTests
             MeterReading? periodic = null;
             foreach (var purpose in new[] { ReadingPurpose.Periodic, ReadingPurpose.Final })
             {
-                var task = new OperationalTask { LocationId = w.Location, MeterId = meter.Id, ContractId = purpose == ReadingPurpose.Final ? w.Contract : null, Purpose = purpose, ReadingDate = today, BillingPeriod = purpose == ReadingPurpose.Periodic ? period : null, Status = MeterTaskStatus.Completed };
+                var task = new OperationalTask { RequiredLocationId = w.Location, MeterId = meter.Id, ContractId = purpose == ReadingPurpose.Final ? w.Contract : null, Purpose = purpose, ReadingDate = today, BillingPeriod = purpose == ReadingPurpose.Periodic ? period : null, MeterStatus = MeterTaskStatus.Completed };
                 using var image = new Mat(60, 120, MatType.CV_8UC3, Scalar.White);
                 var photo = image.ImEncode(".png");
                 var evidence = new MeterEvidence

@@ -26,7 +26,7 @@ using Native = BHome.Domain.Entities;
 namespace BHome.Infrastructure.Ocr;
 
 internal sealed class CaptureRepository(BHomePersistenceContext db, CaptureScope scope, IIdentityProtection protection,
-    IObjectStorage storage, UserManager<ApplicationUser> users, TimeProvider clock,
+    IObjectStorage storage, UserManager<User> users, TimeProvider clock,
     ILocationAssignments locationAssignments,
     BHome.Application.PropertyManagement.IPropertyRepository properties,
     BHome.Application.Contracts.IContractRepository contracts) : ICaptureRepository
@@ -141,7 +141,7 @@ internal sealed class CaptureRepository(BHomePersistenceContext db, CaptureScope
     {
         Validate(x);
         await using var tx = await db.Database.BeginTransactionAsync(t);
-        var u = new ApplicationUser { UserName = x.UserName.Trim(), Email = x.Email.Trim(), LockoutEnabled = true };
+        var u = new User { UserName = x.UserName.Trim(), Email = x.Email.Trim(), LockoutEnabled = true };
         db.PrepareUserRole(u, Roles.Staff);
         var identityResult = await users.CreateAsync(u, x.Password);
         if (!identityResult.Succeeded)
@@ -241,7 +241,7 @@ internal sealed class CaptureRepository(BHomePersistenceContext db, CaptureScope
             : await db.Set<Resident>().AnyAsync(r => r.Id == id && scope.VisibleRooms.Any(room => room.Id == r.RoomId), t))) throw new OcrAccessException();
         var identityOwner = await IdentityOwnerAsync(t);
         // One authoritative chain lock serializes all creators, including legacy Staff-scoped records.
-        await db.Locked<ApplicationUser>(identityOwner).SingleAsync(t);
+        await db.Locked<User>(identityOwner).SingleAsync(t);
         Resident resident;
         if (db is Compact24DbContext compact)
         {
@@ -319,7 +319,7 @@ internal sealed class CaptureRepository(BHomePersistenceContext db, CaptureScope
                           join r in scope.NativeRooms on m.RoomId equals r.Id
                           where r.LocationId == id
                           orderby r.RoomNumber
-                          select new NamedResource(m.Id, r.RoomNumber + " · " + m.Code, m.RoomId, null, null, null)
+                          select new NamedResource(m.Id, r.RoomNumber + " · " + m.MeterCode, m.RoomId, null, null, null)
                           { InstalledOn = m.InstalledOn, IsActive = m.IsActive }).Take(100).ToListAsync(t);
         }
         if (!await scope.VisibleLocations.AnyAsync(l => l.Id == id, t)) throw new OcrAccessException();
@@ -358,7 +358,7 @@ internal sealed class CaptureRepository(BHomePersistenceContext db, CaptureScope
             if (!await InitialContractActiveAsync(x.ContractId, meter.RoomId, x.ReadingDate, t))
                 throw new CaptureConflictException("active_contract_initial_required");
         }
-        var task = new OperationalTask { LocationId = meter.LocationId, Title = "Meter reading", MeterId = x.MeterId, Purpose = x.Purpose, ReadingDate = x.ReadingDate, BillingPeriod = x.BillingPeriod, ContractId = x.ContractId };
+        var task = new OperationalTask { RequiredLocationId = meter.LocationId, TaskTitle = "Meter reading", MeterId = x.MeterId, Purpose = x.Purpose, ReadingDate = x.ReadingDate, BillingPeriod = x.BillingPeriod, ContractId = x.ContractId };
         if (db is Compact24DbContext compact)
         {
             await using var tx = await db.Database.BeginTransactionAsync(t);
@@ -413,8 +413,8 @@ internal sealed class CaptureRepository(BHomePersistenceContext db, CaptureScope
         var now = clock.BusinessUtcNow();
         return tasks
         .Select(x => new MeterTaskSummary(x.Id, x.MeterId!.Value, x.Meter.Room.Location.Name, x.Meter.Room.RoomNumber, x.Meter.Code,
-            x.Meter.UtilityType, x.Meter.Display, x.Meter.DecimalPlaces, x.Purpose, x.ReadingDate, x.BillingPeriod, x.Status,
-            x.Status == MeterTaskStatus.Completed
+            x.Meter.UtilityType, x.Meter.Display, x.Meter.DecimalPlaces, x.Purpose, x.ReadingDate, x.BillingPeriod, x.MeterStatus,
+            x.MeterStatus == MeterTaskStatus.Completed
                 ? db.Set<MeterReading>().Where(r => r.TaskId == x.Id).Select(r => r.PreviousValue).FirstOrDefault()
                 : db.Set<MeterReading>().Where(r => r.MeterId == x.MeterId &&
                     db.Set<OperationalTask>().Any(previous => previous.Id == r.TaskId &&
@@ -425,12 +425,12 @@ internal sealed class CaptureRepository(BHomePersistenceContext db, CaptureScope
                             (previous.Purpose != ReadingPurpose.Final || previous.ContractId != x.ContractId)))))
                     .OrderByDescending(r => r.ConfirmedAt).ThenBy(r => r.Id).Select(r => (decimal?)r.ConfirmedValue).FirstOrDefault(),
             x.ContractId, db.Set<MeterReading>().Where(r => r.TaskId == x.Id).Select(r => (Guid?)r.Id).FirstOrDefault(), x.DueAt,
-            x.Purpose == ReadingPurpose.Periodic && x.Status != MeterTaskStatus.Completed && x.Status != MeterTaskStatus.Cancelled
-                ? db.StaffLocationAssignments.Where(a => a.LocationId == x.LocationId && a.StartDate <= scope.Today && a.EndDate >= scope.Today && scope.EligibleStaff.Contains(a.StaffUserId))
+            x.Purpose == ReadingPurpose.Periodic && x.MeterStatus != MeterTaskStatus.Completed && x.MeterStatus != MeterTaskStatus.Cancelled
+                ? db.StaffLocationAssignments.Where(a => a.LocationId == x.RequiredLocationId && a.StartDate <= scope.Today && a.EndDate >= scope.Today && scope.EligibleStaff.Contains(a.StaffUserId))
                     .Select(a => (Guid?)a.StaffUserId).FirstOrDefault()
                 : x.AssignedStaffUserId,
-            x.AutomationPlanId, x.Version, x.LocationId, x.Meter.RoomId,
-            x.Purpose == ReadingPurpose.Periodic && x.BillingPeriod != null && x.DueAt.HasValue && x.DueAt.Value < now && x.Status != MeterTaskStatus.Completed && x.Status != MeterTaskStatus.Cancelled, false));
+            x.AutomationPlanId, x.Version, x.RequiredLocationId, x.Meter.RoomId,
+            x.Purpose == ReadingPurpose.Periodic && x.BillingPeriod != null && x.DueAt.HasValue && x.DueAt.Value < now && x.MeterStatus != MeterTaskStatus.Completed && x.MeterStatus != MeterTaskStatus.Cancelled, false));
     }
     public async Task<IReadOnlyList<MeterTaskSummary>> TasksAsync(CancellationToken t, MeterTaskQuery? q = null)
     {
@@ -449,9 +449,9 @@ internal sealed class CaptureRepository(BHomePersistenceContext db, CaptureScope
             return await native.OrderByDescending(x => x.ReadingDate).ThenBy(x => x.Id).Skip(((q?.Page ?? 1) - 1) * 100).Take(100).ToListAsync(t);
         }
         var rows = scope.VisibleTasks.AsNoTracking();
-        if (q?.LocationId is { } location) rows = rows.Where(x => x.LocationId == location);
+        if (q?.LocationId is { } location) rows = rows.Where(x => x.RequiredLocationId == location);
         if (q?.RoomId is { } room) rows = rows.Where(x => x.Meter.RoomId == room);
-        if (q?.Status is { } status) rows = rows.Where(x => x.Status == status);
+        if (q?.Status is { } status) rows = rows.Where(x => x.MeterStatus == status);
         if (q?.DueDate is { } date)
         {
             var zone = TimeZoneInfo.FindSystemTimeZoneById("Asia/Ho_Chi_Minh");
@@ -484,7 +484,7 @@ internal sealed class CaptureRepository(BHomePersistenceContext db, CaptureScope
         if (db is Compact24DbContext compact)
         {
             var physical = await compact.Set<BHome.Domain.Billing.MeterReading>().AsNoTracking().SingleOrDefaultAsync(r => r.Id == id &&
-                scope.NativeTasks.Any(task => task.Id == r.TaskId), t) ?? throw new OcrAccessException();
+                scope.NativeTasks.Any(task => task.Id == r.OperationalTaskId), t) ?? throw new OcrAccessException();
             return Reading(physical);
         }
         var row = await db.Set<MeterReading>().AsNoTracking()
@@ -498,10 +498,10 @@ internal sealed class CaptureRepository(BHomePersistenceContext db, CaptureScope
         var target = (db is Compact24DbContext nativeDb
             ? await (from task in scope.NativeTasks
                      join meter in nativeDb.Set<BHome.Domain.Billing.Meter>() on task.MeterId equals (Guid?)meter.Id
-                     where task.Id == taskId && meter.IsActive && task.StoredStatus != "3"
-                     select new { LocationId = task.StoredLocationId!.Value, meter.RoomId }).SingleOrDefaultAsync(t)
-            : await scope.VisibleTasks.Where(x => x.Id == taskId && x.Meter.IsActive && x.Status != MeterTaskStatus.Cancelled)
-                .Select(x => new { x.LocationId, x.Meter.RoomId }).SingleOrDefaultAsync(t)) ?? throw new OcrAccessException();
+                     where task.Id == taskId && meter.IsActive && task.Status != "3"
+                     select new { LocationId = task.LocationId!.Value, meter.RoomId }).SingleOrDefaultAsync(t)
+            : await scope.VisibleTasks.Where(x => x.Id == taskId && x.Meter.IsActive && x.MeterStatus != MeterTaskStatus.Cancelled)
+                .Select(x => new { LocationId = x.RequiredLocationId, x.Meter.RoomId }).SingleOrDefaultAsync(t)) ?? throw new OcrAccessException();
         var buffer = new byte[5 * 1024 * 1024 + 1]; var length = 0;
         try
         {
@@ -527,8 +527,8 @@ internal sealed class CaptureRepository(BHomePersistenceContext db, CaptureScope
                 await db.Database.ExecuteSqlInterpolatedAsync($"SELECT pg_advisory_xact_lock(hashtextextended({locationId.ToString()}, 0))", t);
                 var task = await scope.ReadTaskAsync(taskId, t) ?? throw new OcrAccessException();
                 var meter = await scope.MeterAsync(task.MeterId, t);
-                if (!meter.IsActive || task.Status == MeterTaskStatus.Cancelled) throw new OcrAccessException();
-                if (task.Status == MeterTaskStatus.Completed)
+                if (!meter.IsActive || task.MeterStatus == MeterTaskStatus.Cancelled) throw new OcrAccessException();
+                if (task.MeterStatus == MeterTaskStatus.Completed)
                 {
                     var reading = await scope.TaskReadingAsync(task.Id, t);
                     if (reading is null || !await scope.CanCorrectAsync(task, meter, reading, t))
@@ -601,7 +601,7 @@ internal sealed class CaptureRepository(BHomePersistenceContext db, CaptureScope
             await tx.CommitAsync(t); return Reading(existing);
         }
         if (x.ExpectedVersion is not null) throw new CaptureConflictException("reading_correction_not_allowed");
-        if (!meter.IsActive || task.Status is MeterTaskStatus.Completed or MeterTaskStatus.Cancelled) throw new CaptureConflictException("task_closed");
+        if (!meter.IsActive || task.MeterStatus is MeterTaskStatus.Completed or MeterTaskStatus.Cancelled) throw new CaptureConflictException("task_closed");
         if (decimal.Truncate(x.ConfirmedValue) != x.ConfirmedValue) throw new CaptureValidationException("reading_integer_required");
         if (task.ReadingDate > scope.Today) throw new CaptureValidationException("reading_date_in_future");
         var evidence = await scope.LockEvidenceAsync(x.EvidenceId, t);
@@ -665,7 +665,7 @@ internal sealed class CaptureRepository(BHomePersistenceContext db, CaptureScope
             ConfirmedByUserId = Actor,
             ConfirmedAt = confirmedAt
         };
-        task.Status = MeterTaskStatus.Completed; task.CompletedAt = row.ConfirmedAt; evidence.IsLinked = true;
+        task.MeterStatus = MeterTaskStatus.Completed; task.CompletedAt = row.ConfirmedAt; evidence.IsLinked = true;
         if (db is Compact24DbContext physicalDb)
         {
             await NativeCaptureWrites.EvidenceAsync(physicalDb, evidence, false, t);
@@ -681,7 +681,7 @@ internal sealed class CaptureRepository(BHomePersistenceContext db, CaptureScope
         if (db is Compact24DbContext compact)
         {
             var row = await compact.Set<BHome.Domain.Billing.MeterReading>().AsNoTracking().SingleOrDefaultAsync(r => r.Id == readingId &&
-                scope.NativeTasks.Any(task => task.Id == r.TaskId), t) ?? throw new OcrAccessException();
+                scope.NativeTasks.Any(task => task.Id == r.OperationalTaskId), t) ?? throw new OcrAccessException();
             var task = await scope.NativeTasks.SingleOrDefaultAsync(x => x.Id == row.TaskId, t) ?? throw new OcrAccessException();
             var proof = NativeCaptureReads.Evidence(task, row.EvidenceId) ?? throw new OcrAccessException();
             await storage.CopyToAsync(proof.ObjectKey, output, t);

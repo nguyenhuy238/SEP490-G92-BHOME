@@ -49,13 +49,13 @@ internal sealed class DevelopmentContractSigningAdapter(IContractDocumentRendere
         return new(source, output.ToArray(), "SIMULATED", "", "", "", user.UserId!.Value.ToString(), "SIMULATED-NO-CERTIFICATE");
     }
 
-    public Task<string> RequestAsync(ContractSignature signature, CancellationToken t)
+    public Task<string> RequestAsync(ContractSigning signature, CancellationToken t)
     {
         RequireDemo(); t.ThrowIfCancellationRequested();
         return Task.FromResult("SIMULATED-" + signature.Id.ToString("N"));
     }
 
-    public Task<SigningOutcome> PollAsync(ContractSignature signature, byte[] preparedPdf, CancellationToken t)
+    public Task<SigningOutcome> PollAsync(ContractSigning signature, byte[] preparedPdf, CancellationToken t)
     {
         RequireDemo(); t.ThrowIfCancellationRequested();
         if (signature.ProviderReference != "SIMULATED-" + signature.Id.ToString("N") || signature.SignerUserId != user.UserId)

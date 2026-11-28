@@ -44,10 +44,10 @@ public sealed partial class ContractLifecycleApiTests(ContractFixture fixture) :
         const string password = BHome.IntegrationTests.Compact24.WorkflowTestUsers.Password;
         await using (var scope = fixture.Factory.Services.CreateAsyncScope())
         {
-            var users = scope.ServiceProvider.GetRequiredService<UserManager<ApplicationUser>>();
+            var users = scope.ServiceProvider.GetRequiredService<UserManager<User>>();
             // These actors model established accounts that already completed setup.
             // Pending/unconfirmed onboarding is exercised separately by authentication tests.
-            var user = new ApplicationUser { Id = id, UserName = name, Email = name, EmailConfirmed = true, LockoutEnabled = true };
+            var user = new User { Id = id, UserName = name, Email = name, EmailConfirmed = true, LockoutEnabled = true };
             user = await BHome.IntegrationTests.Compact24.WorkflowTestUsers.CreateAsync(scope.ServiceProvider, user, role, password);
             id = user.Id; name = user.Email!;
         }
@@ -439,16 +439,16 @@ public sealed partial class ContractLifecycleApiTests(ContractFixture fixture) :
         Assert.All(initialTasks, meterTask =>
         {
             Assert.Equal(ReadingPurpose.Initial, meterTask.Purpose);
-            Assert.Equal(w.Location, meterTask.LocationId);
+            Assert.Equal(w.Location, meterTask.RequiredLocationId);
             Assert.Equal(assigned ? w.Staff.Id : (Guid?)null, meterTask.AssignedStaffUserId);
-            Assert.Equal(MeterTaskStatus.Assigned, meterTask.Status);
+            Assert.Equal(MeterTaskStatus.Assigned, meterTask.MeterStatus);
         });
         var inventory = Assert.Single(await store.Set<OperationalTask>().Where(task => task.ContractId == id &&
             task.Kind == BHome.Domain.StaffOperations.OperationalTaskKind.MoveInInventory).ToArrayAsync());
         Assert.Equal(w.Room, inventory.TargetRoomId);
         Assert.Equal(assigned ? w.Staff.Id : (Guid?)null, inventory.AssignedStaffUserId);
         Assert.NotNull(inventory.DueAt);
-        Assert.Equal(BHome.Domain.Billing.MeterTaskStatus.Assigned, inventory.Status);
+        Assert.Equal(BHome.Domain.Billing.MeterTaskStatus.Assigned, inventory.MeterStatus);
         var checklist = System.Text.Json.JsonSerializer.Deserialize<BHome.Application.StaffOperations.MoveInInventorySnapshot>(
             inventory.MoveInInventoryJson);
         Assert.NotNull(checklist);
@@ -948,7 +948,7 @@ public sealed partial class ContractLifecycleApiTests(ContractFixture fixture) :
         {
             var moveInTask = await stored.Set<OperationalTask>().SingleAsync(task =>
                 task.ContractId == id && task.Kind == BHome.Domain.StaffOperations.OperationalTaskKind.AdHoc);
-            Assert.Equal(MeterTaskStatus.Completed, moveInTask.Status);
+            Assert.Equal(MeterTaskStatus.Completed, moveInTask.MeterStatus);
             var transitions = await stored.Set<BHome.Domain.StaffOperations.OperationalTaskHistory>()
                 .Where(entry => entry.TaskId == moveInTask.Id &&
                     (entry.Action == "MoveInSubmitted" || entry.Action == "MoveInCompleted"))
@@ -1022,7 +1022,7 @@ public sealed partial class ContractLifecycleApiTests(ContractFixture fixture) :
         await using var scope = fixture.Factory.Services.CreateAsyncScope(); var db = scope.ServiceProvider.GetFixturePersistence();
         Assert.Equal(ContractStatus.Active, (await db.Set<Contract>().SingleAsync(c => c.Id == id)).Status);
         Assert.Equal(RoomStatus.Occupied, (await db.Set<Room>().SingleAsync(c => c.Id == w.Room)).Status);
-        Assert.Equal(2, await db.Set<ContractSignature>().CountAsync(s => s.ContractId == id));
+        Assert.Equal(2, await db.Set<ContractSigning>().CountAsync(s => s.ContractId == id));
         Assert.Equal(1, await db.SecurityAudit.CountAsync(a => a.TargetId == id && a.Event == "ContractActivated"));
         var file = await w.Tenant.Client.GetAsync(Path(id, "document")); Assert.Equal(HttpStatusCode.OK, file.StatusCode);
         Assert.Contains("TEST ONLY", Encoding.UTF8.GetString(await file.Content.ReadAsByteArrayAsync()));
@@ -1084,8 +1084,8 @@ public sealed partial class ContractLifecycleApiTests(ContractFixture fixture) :
         await Success<ContractView>(await Post(advancedOwner, Path(next, "activate")));
         await using var scope = fixture.Factory.Services.CreateAsyncScope(); var db = scope.ServiceProvider.GetFixturePersistence();
         var original = await db.Set<Contract>().SingleAsync(c => c.Id == id); var renewal = await db.Set<Contract>().SingleAsync(c => c.Id == next);
-        Assert.Equal(ContractStatus.Superseded, original.Status); Assert.Equal(3000000, original.MonthlyRent); Assert.Equal(ContractStatus.Active, renewal.Status);
-        Assert.Equal(4000000, renewal.MonthlyRent); Assert.Equal(2, await db.Set<ContractSignature>().CountAsync(s => s.ContractId == id));
+        Assert.Equal(ContractStatus.Superseded, original.Status); Assert.Equal(3000000, original.RentAmount); Assert.Equal(ContractStatus.Active, renewal.Status);
+        Assert.Equal(4000000, renewal.RentAmount); Assert.Equal(2, await db.Set<ContractSigning>().CountAsync(s => s.ContractId == id));
         var versions = (await w.Tenant.Client.GetFromJsonAsync<ContractVersionView[]>(Path(next, "versions")))!;
         Assert.Equal(2, versions.Length); Assert.Contains(versions, c => c.Id == id && c.Status == "Superseded" && c.MonthlyRent == 3000000);
         Assert.Contains(versions, c => c.Id == next && c.PreviousContractId == id && c.Terms == "NEW TEST TERMS");
@@ -1497,8 +1497,8 @@ public sealed partial class ContractLifecycleApiTests(ContractFixture fixture) :
     private sealed class UnavailableSigning : IContractSigningProvider
     {
         public Task<SigningPreparation> PrepareAsync(ContractDocument d, Guid c, byte[]? p, CancellationToken t) => throw new IntegrationUnavailableException("TEST ONLY unavailable");
-        public Task<string> RequestAsync(ContractSignature s, CancellationToken t) => throw new IntegrationUnavailableException("TEST ONLY unavailable");
-        public Task<SigningOutcome> PollAsync(ContractSignature s, byte[] p, CancellationToken t) => throw new IntegrationUnavailableException("TEST ONLY unavailable");
+        public Task<string> RequestAsync(ContractSigning s, CancellationToken t) => throw new IntegrationUnavailableException("TEST ONLY unavailable");
+        public Task<SigningOutcome> PollAsync(ContractSigning s, byte[] p, CancellationToken t) => throw new IntegrationUnavailableException("TEST ONLY unavailable");
     }
 
     [Fact]
@@ -1507,7 +1507,7 @@ public sealed partial class ContractLifecycleApiTests(ContractFixture fixture) :
         var w = await Setup(); var id = await Draft(w); await Signed(w, id); await Deposit(w, id);
         await using var scope = fixture.Factory.Services.CreateAsyncScope(); var db = scope.ServiceProvider.GetFixturePersistence();
         var storage = scope.ServiceProvider.GetRequiredService<IObjectStorage>();
-        var signature = await db.Set<ContractSignature>().FirstAsync(s => s.ContractId == id);
+        var signature = await db.Set<ContractSigning>().FirstAsync(s => s.ContractId == id);
         using var altered = new MemoryStream("TEST ONLY altered private object"u8.ToArray());
         await storage.PutAsync(signature.SignedObjectKey!, altered, altered.Length, "application/pdf", default);
         Assert.Equal(HttpStatusCode.Conflict, (await Post(w.Owner, Path(id, "activate"))).StatusCode);
@@ -1623,8 +1623,8 @@ public sealed partial class ContractLifecycleApiTests(ContractFixture fixture) :
     {
         private readonly TestOnlySigningProvider inner = new(); public int Requests;
         public Task<SigningPreparation> PrepareAsync(ContractDocument d, Guid c, byte[]? p, CancellationToken t) => inner.PrepareAsync(d, c, p, t);
-        public Task<string> RequestAsync(ContractSignature s, CancellationToken t) { Interlocked.Increment(ref Requests); throw new IntegrationUnavailableException("TEST ONLY ambiguous response"); }
-        public Task<SigningOutcome> PollAsync(ContractSignature s, byte[] p, CancellationToken t) => inner.PollAsync(s, p, t);
+        public Task<string> RequestAsync(ContractSigning s, CancellationToken t) { Interlocked.Increment(ref Requests); throw new IntegrationUnavailableException("TEST ONLY ambiguous response"); }
+        public Task<SigningOutcome> PollAsync(ContractSigning s, byte[] p, CancellationToken t) => inner.PollAsync(s, p, t);
     }
 
     [Fact]
@@ -1638,15 +1638,15 @@ public sealed partial class ContractLifecycleApiTests(ContractFixture fixture) :
         await Success<SignatureView>(await Post(w.Owner, Path(id, "signing"), new SigningInput(Guid.NewGuid())));
         await Success<ContractView>(await Post(w.Owner, Path(id, "signing/sync")));
         await using var scope = fixture.Factory.Services.CreateAsyncScope(); var db = scope.ServiceProvider.GetFixturePersistence();
-        var attempts = await db.Set<ContractSignature>().Where(s => s.ContractId == id).ToArrayAsync();
+        var attempts = await db.Set<ContractSigning>().Where(s => s.ContractId == id).ToArrayAsync();
         Assert.Single(attempts, s => s.Status == SignatureStatus.Failed); Assert.Single(attempts, s => s.Status == SignatureStatus.Signed);
     }
     private sealed class RejectedSigning : IContractSigningProvider
     {
         private readonly TestOnlySigningProvider inner = new();
         public Task<SigningPreparation> PrepareAsync(ContractDocument d, Guid c, byte[]? p, CancellationToken t) => inner.PrepareAsync(d, c, p, t);
-        public Task<string> RequestAsync(ContractSignature s, CancellationToken t) => inner.RequestAsync(s, t);
-        public Task<SigningOutcome> PollAsync(ContractSignature s, byte[] p, CancellationToken t) => Task.FromResult(new SigningOutcome("Failed"));
+        public Task<string> RequestAsync(ContractSigning s, CancellationToken t) => inner.RequestAsync(s, t);
+        public Task<SigningOutcome> PollAsync(ContractSigning s, byte[] p, CancellationToken t) => Task.FromResult(new SigningOutcome("Failed"));
     }
 
     [Fact]
@@ -1658,7 +1658,7 @@ public sealed partial class ContractLifecycleApiTests(ContractFixture fixture) :
         await using var host = fixture.Factory.WithWebHostBuilder(b => b.ConfigureTestServices(s => s.AddScoped<IObjectStorage>(_ => new FailingStorage(realStorage))));
         var actor = new Actor(host.CreateClient(), w.Owner.Id); actor.Client.DefaultRequestHeaders.Authorization = w.Owner.Client.DefaultRequestHeaders.Authorization;
         Assert.Equal(HttpStatusCode.InternalServerError, (await Post(actor, Path(id, "signing"), new SigningInput(Guid.NewGuid()))).StatusCode);
-        Assert.Empty(await db.Set<ContractSignature>().Where(s => s.ContractId == id).ToArrayAsync());
+        Assert.Empty(await db.Set<ContractSigning>().Where(s => s.ContractId == id).ToArrayAsync());
         var intent = await db.Set<ContractFileUpload>().SingleAsync(f => f.RoomId == w.Room);
         await realStorage.CopyToAsync(intent.ObjectKey, Stream.Null, default);
         // The production cleanup processes 100 intents per pass. Shared test
@@ -1727,7 +1727,7 @@ public sealed partial class ContractLifecycleApiTests(ContractFixture fixture) :
             {
                 await using var diagnosticScope = host.Services.CreateAsyncScope();
                 var diagnosticDb = diagnosticScope.ServiceProvider.GetFixturePersistence();
-                var stored = await diagnosticDb.Set<ContractSignature>().AsNoTracking().SingleAsync(s => s.Id == requested.Id);
+                var stored = await diagnosticDb.Set<ContractSigning>().AsNoTracking().SingleAsync(s => s.Id == requested.Id);
                 throw new Xunit.Sdk.XunitException($"Expected Pending; response={requested.Status}; stored={stored.Status}; providerReferencePresent={stored.ProviderReference is not null}; {string.Join(Environment.NewLine, ApiFactory.Diagnostics.TakeLast(2))}");
             }
             var replay = await Success<SignatureView>(await Post(actor, Path(id, "signing"), input, key));
@@ -1845,7 +1845,7 @@ public sealed partial class ContractLifecycleApiTests(ContractFixture fixture) :
         Assert.Equal("PendingSigning", (await w.Owner.Client.GetFromJsonAsync<ContractView>(Path(id)))!.Status);
         await using var verification = fixture.Factory.Services.CreateAsyncScope();
         var persisted = verification.ServiceProvider.GetFixturePersistence();
-        Assert.False(await persisted.Set<ContractSignature>().AnyAsync(s => s.ContractId == id));
+        Assert.False(await persisted.Set<ContractSigning>().AnyAsync(s => s.ContractId == id));
         Assert.Equal(1, await persisted.SecurityAudit.CountAsync(a => a.TargetId == ownerCert && a.UserId == w.Owner.Id && a.Event == "ContractCertificateLocked"));
         Assert.Equal(1, await persisted.SecurityAudit.CountAsync(a => a.TargetId == ownerCert && a.UserId == w.Owner.Id && a.Event == "ContractCertificateUnlocked"));
     }
@@ -1885,8 +1885,8 @@ internal sealed class TestOnlySigningProvider : IContractSigningProvider
         var source = previous ?? Encoding.UTF8.GetBytes("TEST ONLY contract " + d.SnapshotHash);
         return Task.FromResult(new SigningPreparation(source, source.Concat(" TEST ONLY prepared"u8.ToArray()).ToArray(), "test-field", "test-digest", "test-hash", "test-chain", "test-subscriber", "test-credential"));
     }
-    public Task<string> RequestAsync(ContractSignature s, CancellationToken t) => Task.FromResult("TEST-ONLY-" + s.Id);
-    public Task<SigningOutcome> PollAsync(ContractSignature s, byte[] prepared, CancellationToken t)
+    public Task<string> RequestAsync(ContractSigning s, CancellationToken t) => Task.FromResult("TEST-ONLY-" + s.Id);
+    public Task<SigningOutcome> PollAsync(ContractSigning s, byte[] prepared, CancellationToken t)
         => Task.FromResult(new SigningOutcome("Signed", prepared.Concat(" TEST ONLY verified boundary"u8.ToArray()).ToArray()));
 }
 public sealed class TestSettlementLedger : IContractSettlementLedger

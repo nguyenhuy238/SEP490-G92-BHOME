@@ -58,7 +58,7 @@ public sealed partial class PaymentLedgerTests
                 Kind = holding ? ContractKind.Holding : ContractKind.Main,
                 Status = ContractStatus.PendingSigning,
                 RequiredDeposit = 100000,
-                MonthlyRent = 100000,
+                RentAmount = 100000,
                 Terms = "Synthetic agreed deposit",
                 StartDate = today,
                 EndDate = today.AddMonths(12),

@@ -13,8 +13,8 @@ internal sealed class ContractHandoverConfiguration : IEntityTypeConfiguration<C
         b.HasOne<Contract>().WithMany().HasForeignKey(h => h.ContractId).OnDelete(DeleteBehavior.Restrict);
         b.HasOne<MeterReading>().WithMany().HasForeignKey(h => h.ElectricityReadingId).OnDelete(DeleteBehavior.Restrict);
         b.HasOne<MeterReading>().WithMany().HasForeignKey(h => h.WaterReadingId).OnDelete(DeleteBehavior.Restrict);
-        b.HasOne<ApplicationUser>().WithMany().HasForeignKey(h => h.TenantConfirmedBy).OnDelete(DeleteBehavior.Restrict);
-        b.HasOne<ApplicationUser>().WithMany().HasForeignKey(h => h.StaffConfirmedBy).OnDelete(DeleteBehavior.Restrict);
+        b.HasOne<User>().WithMany().HasForeignKey(h => h.TenantConfirmedBy).OnDelete(DeleteBehavior.Restrict);
+        b.HasOne<User>().WithMany().HasForeignKey(h => h.StaffConfirmedBy).OnDelete(DeleteBehavior.Restrict);
     }
     public void Configure(EntityTypeBuilder<ContractHandoverHistory> b)
     {
@@ -22,7 +22,7 @@ internal sealed class ContractHandoverConfiguration : IEntityTypeConfiguration<C
         b.HasOne<Contract>().WithMany().HasForeignKey(h => h.ContractId).OnDelete(DeleteBehavior.Restrict);
         b.HasOne<MeterReading>().WithMany().HasForeignKey(h => h.ElectricityReadingId).OnDelete(DeleteBehavior.Restrict);
         b.HasOne<MeterReading>().WithMany().HasForeignKey(h => h.WaterReadingId).OnDelete(DeleteBehavior.Restrict);
-        b.HasOne<ApplicationUser>().WithMany().HasForeignKey(h => h.ActorId).OnDelete(DeleteBehavior.Restrict);
+        b.HasOne<User>().WithMany().HasForeignKey(h => h.ActorId).OnDelete(DeleteBehavior.Restrict);
         b.HasIndex(h => new { h.ContractId, h.OccurredAt });
     }
 }

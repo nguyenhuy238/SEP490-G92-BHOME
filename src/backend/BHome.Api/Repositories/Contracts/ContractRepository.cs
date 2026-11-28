@@ -95,7 +95,7 @@ internal sealed class ContractRepository(BHomePersistenceContext db, ILogger<Con
             .Select(c => new
             {
                 Summary = new ContractSummary(c.Id, c.RoomId, c.Room.LocationId, c.Room.Location.Name, c.Room.RoomNumber,
-                c.Kind.ToString(), c.Status.ToString(), c.StartDate, c.EndDate, c.MonthlyRent,
+                c.Kind.ToString(), c.Status.ToString(), c.StartDate, c.EndDate, c.RentAmount,
                 c.Kind == ContractKind.Main && c.DraftMetadata != "{}" && c.Status == ContractStatus.Draft,
                 c.RequiredDeposit, c.HoldingExpiryAt, null, null),
                 c.AgreedPriceSnapshot,
@@ -153,7 +153,7 @@ internal sealed class ContractRepository(BHomePersistenceContext db, ILogger<Con
         {
             var c = row.Contract;
             var summary = new ContractSummary(c.Id, c.RoomId, row.LocationId, row.LocationName, row.RoomNumber,
-                c.Kind.ToString(), c.Status.ToString(), c.StartDate, c.EndDate, c.MonthlyRent,
+                c.Kind.ToString(), c.Status.ToString(), c.StartDate, c.EndDate, c.RentAmount,
                 c.Kind == BHome.Domain.TenantContracts.ContractKind.Main && c.DraftMetadata != "{}" && c.Status == ContractStatus.Draft,
                 c.RequiredDeposit, c.HoldingExpiryAt);
             if (customers.TryGetValue(c.RepresentativeResidentId, out var resident))
@@ -204,7 +204,7 @@ internal sealed class ContractRepository(BHomePersistenceContext db, ILogger<Con
          join task in db.Set<OperationalTask>() on r.TaskId equals task.Id
          join meter in db.Set<Meter>() on r.MeterId equals meter.Id
          join e in db.Set<MeterEvidence>() on r.EvidenceId equals e.Id
-         where task.ContractId == contractId && meter.RoomId == roomId && meter.IsActive && task.Purpose == ReadingPurpose.Final && task.ReadingDate == today && task.Status == MeterTaskStatus.Completed && e.IsUploaded && e.IsLinked
+         where task.ContractId == contractId && meter.RoomId == roomId && meter.IsActive && task.Purpose == ReadingPurpose.Final && task.ReadingDate == today && task.MeterStatus == MeterTaskStatus.Completed && e.IsUploaded && e.IsLinked
          select new HandoverReading(r.Id, meter.Code, (int)meter.UtilityType, task.ReadingDate, r.ConfirmedValue, e.Id, e.ObjectKey, e.ImageHash)).ToArrayAsync(t);
     public Task<HandoverReading?> ConfirmedFinalInspectionReadingAsync(Guid contractId, Guid roomId, Guid readingId, CancellationToken t) =>
         db is Compact24DbContext compact
@@ -215,7 +215,7 @@ internal sealed class ContractRepository(BHomePersistenceContext db, ILogger<Con
          join meter in db.Set<Meter>().AsNoTracking() on reading.MeterId equals meter.Id
          join evidence in db.Set<MeterEvidence>().AsNoTracking() on reading.EvidenceId equals evidence.Id
          where reading.Id == readingId && task.ContractId == contractId && meter.RoomId == roomId &&
-               task.Purpose == ReadingPurpose.Final && task.Status == MeterTaskStatus.Completed &&
+               task.Purpose == ReadingPurpose.Final && task.MeterStatus == MeterTaskStatus.Completed &&
                task.MeterId == reading.MeterId && evidence.TaskId == task.Id &&
                evidence.IsUploaded && evidence.IsLinked
          select new HandoverReading(reading.Id, meter.Code, (int)meter.UtilityType, task.ReadingDate,
@@ -491,7 +491,7 @@ internal sealed class ContractRepository(BHomePersistenceContext db, ILogger<Con
     public Task<string?> DecisionActorNameAsync(Guid userId, CancellationToken t)
     {
         var users = db.Users.AsNoTracking().Where(u => u.Id == userId);
-        return db.Model.FindEntityType(typeof(ApplicationUser))?.FindProperty("full_name") is not null
+        return db.Model.FindEntityType(typeof(User))?.FindProperty("full_name") is not null
             ? users.Select(u => EF.Property<string?>(u, "full_name") ?? u.UserName).SingleOrDefaultAsync(t)
             : users.Select(u => u.UserName).SingleOrDefaultAsync(t);
     }
@@ -517,7 +517,7 @@ internal sealed class ContractRepository(BHomePersistenceContext db, ILogger<Con
                 c.Kind == BHome.Domain.TenantContracts.ContractKind.Main && c.Status == ContractStatus.PendingSigning).ToArrayAsync(t))
                 .Select(NativeContractSnapshot.Read).ToArray();
             var ids = nativePending.Select(c => c.Id).ToArray();
-            var signatures = (await db.Set<BHome.Domain.TenantContracts.ContractSignature>().AsNoTracking().Where(s => ids.Contains(s.ContractId)).ToArrayAsync(t))
+            var signatures = (await db.Set<BHome.Domain.TenantContracts.ContractSigning>().AsNoTracking().Where(s => ids.Contains(s.ContractId)).ToArrayAsync(t))
                 .Select(NativeContractSnapshot.Read).ToLookup(s => s.ContractId);
             foreach (var c in nativePending) c.Signatures = signatures[c.Id].ToList();
             return nativePending.Where(AnonymousContractSigningService.MainAwaitsOwnerSignature).Select(c => c.RoomId).ToHashSet();
@@ -626,7 +626,7 @@ internal sealed class ContractRepository(BHomePersistenceContext db, ILogger<Con
             return NativeContracts().AnyAsync(c => c.RoomId == roomId && c.Id != exceptId && c.StartDate <= to && c.EndDate >= from &&
                 (c.Status == ContractStatus.Active || c.Kind != BHome.Domain.TenantContracts.ContractKind.Addendum &&
                 (c.Status == ContractStatus.PendingSigning || c.Status == ContractStatus.PendingActivation || c.Status == ContractStatus.Draft) &&
-                (db.Set<BHome.Domain.TenantContracts.ContractSignature>().Any(s => s.ContractId == c.Id && s.Status != SignatureStatus.Failed) ||
+                (db.Set<BHome.Domain.TenantContracts.ContractSigning>().Any(s => s.ContractId == c.Id && s.Status != SignatureStatus.Failed) ||
                  db.Set<BHome.Domain.PaymentsDebt.PaymentAllocation>().Any(a => a.TargetDepositContractId == c.Id && a.Amount > 0))), t);
         var candidates = db.Set<Contract>().AsNoTracking().Where(c => c.RoomId == roomId && c.Id != exceptId && c.StartDate <= to && c.EndDate >= from);
         return candidates.AnyAsync(c => c.Status == ContractStatus.Active ||
@@ -668,7 +668,7 @@ internal sealed class ContractRepository(BHomePersistenceContext db, ILogger<Con
          join meter in db.Set<Meter>() on r.MeterId equals meter.Id
          join evidence in db.Set<MeterEvidence>() on r.EvidenceId equals evidence.Id
          where r.Id == readingId && task.ContractId == contractId && meter.RoomId == roomId && meter.IsActive && meter.UtilityType == type &&
-             task.ReadingDate == readingDate && task.Status == MeterTaskStatus.Completed && task.Purpose == ReadingPurpose.Final &&
+             task.ReadingDate == readingDate && task.MeterStatus == MeterTaskStatus.Completed && task.Purpose == ReadingPurpose.Final &&
              evidence.IsUploaded && evidence.IsLinked && r.ConfirmedAt != default
          select r.Id).AnyAsync(t);
     public Task<ContractOperation?> OperationAsync(Guid actorId, Guid key, string operation, CancellationToken t) =>
@@ -702,7 +702,7 @@ internal sealed class ContractRepository(BHomePersistenceContext db, ILogger<Con
                     if (root.Kind == ContractKind.Main && root.PreviousContractId is null) handoverDraftCandidates[root.Id] = root;
                     return;
                 }
-                if (entity is ContractSignature signature) { mutation.Add(signature); return; }
+                if (entity is ContractSigning signature) { mutation.Add(signature); return; }
                 if (entity is ContractResident member) { mutation.Add(member); return; }
                 if (entity is PropertyChange change) { mutation.Audit(change); return; }
             }

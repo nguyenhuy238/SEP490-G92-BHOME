@@ -43,7 +43,7 @@ internal sealed class PostgresRoomInsightsRepository(BHomePersistenceContext db)
         var baselines = await (from reading in db.Set<MeterReading>().AsNoTracking()
                                join task in db.Set<OperationalTask>().AsNoTracking() on reading.TaskId equals task.Id
                                where ids.Contains(reading.MeterId) && task.Purpose == ReadingPurpose.Initial &&
-                                     task.Status == MeterTaskStatus.Completed && reading.ConfirmedAt != default
+                                     task.MeterStatus == MeterTaskStatus.Completed && reading.ConfirmedAt != default
                                select reading.MeterId).Distinct().ToArrayAsync(token);
         var currentOccupants = await (from c in db.Set<Contract>().AsNoTracking()
                                       from cr in c.Residents

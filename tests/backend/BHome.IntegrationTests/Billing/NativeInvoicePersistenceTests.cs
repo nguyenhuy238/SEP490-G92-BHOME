@@ -28,7 +28,7 @@ public sealed partial class InvoiceApiTests
         var request = await Request(w, draft);
         await using var scope = fixture.Factory.Services.CreateAsyncScope();
         var db = scope.ServiceProvider.GetRequiredService<Compact24DbContext>();
-        var pending = await db.Set<InvoiceAdjustmentRequest>().AsNoTracking().SingleAsync(r => r.Id == request.Id);
+        var pending = await db.Set<InvoiceAdjustment>().AsNoTracking().SingleAsync(r => r.Id == request.Id);
         Assert.Equal(draft.Id, pending.InvoiceId);
         Assert.Equal(w.Tenant.Id, pending.RequesterId);
         Assert.Equal("REQUESTED", pending.Status);
@@ -84,12 +84,12 @@ public sealed partial class InvoiceApiTests
             Assert.True(reading.CreatedAt > DateTimeOffset.UnixEpoch);
             Assert.Equal(w.Staff.Id, reading.ConfirmedByUserId);
         }
-        var corrected = await db.Set<BHome.Domain.Billing.InvoiceLine>().AsNoTracking().SingleAsync(i => i.Id == rentId);
+        var corrected = await db.Set<BHome.Domain.Billing.InvoiceItem>().AsNoTracking().SingleAsync(i => i.Id == rentId);
         var correction = corrected.CalculationSnapshot.GetProperty("compactState");
         Assert.Equal(2990000m, corrected.Amount);
         Assert.Equal(3000000m, correction.GetProperty("calculatedAmount").GetDecimal());
         Assert.Equal(request.Id, correction.GetProperty("correctionRequestId").GetGuid());
-        var decision = await db.Set<InvoiceAdjustmentRequest>().AsNoTracking().SingleAsync(r => r.Id == request.Id);
+        var decision = await db.Set<InvoiceAdjustment>().AsNoTracking().SingleAsync(r => r.Id == request.Id);
         Assert.Equal("APPROVED", decision.Status);
         Assert.Equal(-10000m, decision.ApprovedDeltaAmount);
         Assert.Equal(2, decision.History.GetArrayLength());

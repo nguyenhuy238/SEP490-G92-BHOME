@@ -9,7 +9,7 @@ internal sealed class LegacyIdentityPersistence(BHomeDbContext db) : IIdentityPe
 {
     public Task<IDbContextTransaction> BeginTransactionAsync(CancellationToken token) => db.Database.BeginTransactionAsync(token);
     public Task<int> SaveChangesAsync(CancellationToken token) => db.SaveChangesAsync(token);
-    public async Task<ApplicationUser?> LockUserAsync(Guid userId, CancellationToken token)
+    public async Task<User?> LockUserAsync(Guid userId, CancellationToken token)
     {
         if (db.Database.CurrentTransaction is null) throw new InvalidOperationException("An auth transaction is required.");
         var current = await db.Users.FromSqlInterpolated($"SELECT * FROM \"AspNetUsers\" WHERE \"Id\" = {userId} FOR UPDATE")

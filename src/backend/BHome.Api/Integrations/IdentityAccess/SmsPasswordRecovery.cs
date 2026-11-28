@@ -19,7 +19,7 @@ namespace BHome.Infrastructure.IdentityAccess;
 // Recovery evidence uses the existing technical OUTBOX container, never the user inbox.
 // Immutable initial payload + append-only state history, serialized by the same user-row lock as Identity sessions.
 internal sealed class SmsPasswordRecovery(CompactNotificationWriter sql, IIdentityPersistence persistence,
-    IdentitySecurityStore security, UserManager<ApplicationUser> users, ISmsSender sms, IOptions<SmsOptions> smsOptions,
+    IdentitySecurityStore security, UserManager<User> users, ISmsSender sms, IOptions<SmsOptions> smsOptions,
     IOptions<SmsRecoveryOptions> options, TimeProvider clock, IBackgroundJobQueue queue, IDataProtectionProvider protection) : ISmsPasswordRecovery, IBackgroundJobHandler
 {
     internal const string JobName = "sms-recovery-delivery";
@@ -31,7 +31,7 @@ internal sealed class SmsPasswordRecovery(CompactNotificationWriter sql, IIdenti
         int Attempts = 0, DateTimeOffset? VerifiedAt = null, string? AuthorizationHash = null,
         DateTimeOffset? AuthorizationExpiresAt = null, DateTimeOffset? ConsumedAt = null);
     private string Mac(string value) => Convert.ToHexString(HMACSHA256.HashData(Convert.FromBase64String(Config.HashKey), Encoding.UTF8.GetBytes("bhome-sms-password-recovery-v1:" + value)));
-    private string Binding(ApplicationUser user) => Mac($"binding:{user.Id}:{user.SecurityStamp}:{VietnameseSmsPhone.Normalize(user.PhoneNumber)}");
+    private string Binding(User user) => Mac($"binding:{user.Id}:{user.SecurityStamp}:{VietnameseSmsPhone.Normalize(user.PhoneNumber)}");
     private static bool Equal(string a, string b) => a.Length == b.Length && CryptographicOperations.FixedTimeEquals(Encoding.UTF8.GetBytes(a), Encoding.UTF8.GetBytes(b));
     private void RequireAvailable()
     {
@@ -40,7 +40,7 @@ internal sealed class SmsPasswordRecovery(CompactNotificationWriter sql, IIdenti
             (!smsOptions.Value.ProductionEnabled || !smsOptions.Value.ApprovedTemplates.Contains("SMS-01") || string.IsNullOrWhiteSpace(smsOptions.Value.Brandname)))
             throw new IntegrationUnavailableException("SMS password recovery is unavailable.");
     }
-    private async Task<ApplicationUser?> Find(string identifier, CancellationToken t)
+    private async Task<User?> Find(string identifier, CancellationToken t)
     {
         if (string.IsNullOrWhiteSpace(identifier) || identifier.Length > LoginService.MaxUserNameLength) return null;
         var value = identifier.Trim(); var phone = VietnameseSmsPhone.Normalize(value);
@@ -55,7 +55,7 @@ internal sealed class SmsPasswordRecovery(CompactNotificationWriter sql, IIdenti
         var found = await users.Users.Where(u => u.NormalizedUserName == normalized || u.NormalizedEmail == normalized).Take(2).ToArrayAsync(t);
         return found.Length == 1 ? found[0] : null;
     }
-    private async Task<bool> Eligible(ApplicationUser user, CancellationToken t) => security.IsEligible(user) && user.PhoneNumberConfirmed &&
+    private async Task<bool> Eligible(User user, CancellationToken t) => security.IsEligible(user) && user.PhoneNumberConfirmed &&
         VietnameseSmsPhone.Normalize(user.PhoneNumber) is not null && IdentitySecurityStore.SupportedRoles(await security.RolesAsync(user.Id, t)) &&
         !await sql.Scalar<bool>("SELECT EXISTS(SELECT 1 FROM users WHERE id=@id AND NOT email_confirmed AND reset_token_hash IS NOT NULL AND reset_consumed_at IS NULL)", t, ("id", user.Id));
 
@@ -112,7 +112,7 @@ internal sealed class SmsPasswordRecovery(CompactNotificationWriter sql, IIdenti
         Delivery payload;
         try { payload = JsonSerializer.Deserialize<Delivery>(protection.CreateProtector("BHOME.SmsRecovery.Delivery.v1").Unprotect(JsonSerializer.Deserialize<string>(job.PayloadJson)!))!; }
         catch (Exception e) when (e is CryptographicException or JsonException) { throw new InvalidOperationException("sms_recovery_delivery_invalid"); }
-        ApplicationUser? recipient; Challenge? challenge;
+        User? recipient; Challenge? challenge;
         await using (var tx = await persistence.BeginTransactionAsync(t))
         {
             recipient = await security.LockUserAsync(payload.UserId, t); challenge = await Load(payload.UserId, payload.ChallengeId, t);

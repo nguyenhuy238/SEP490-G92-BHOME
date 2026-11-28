@@ -67,7 +67,7 @@ internal sealed class MainDraftRenderer(IConfiguration configuration, TimeProvid
                 else if (original.StartsWith("CMND số:") || original.StartsWith("Số CMND:")) replacement = side == 1 ? $"CCCD số: {owner.CitizenNumber}; cấp ngày {Date(owner.DateOfIssue)} tại: {owner.PlaceOfIssue}" : $"CCCD số: {tenant.CitizenIdentityNumber}; cấp ngày {Date(tenant.DateOfIssue.Value)}" + (string.IsNullOrWhiteSpace(data.State.Input.TenantPlaceOfIssue) ? "" : $" tại: {data.State.Input.TenantPlaceOfIssue}");
                 else if (original.StartsWith("Số điện thoại:")) replacement = $"Số điện thoại: {(side == 1 ? owner.Phone : data.State.Input.TenantPhone)}";
                 else if (original.StartsWith("Bên A đồng ý")) replacement = $"Bên A đồng ý cho bên B thuê 01 phòng {data.RoomNumber}, cơ sở {data.LocationName}, tại địa chỉ: {data.Address}";
-                else if (original.StartsWith("Giá thuê:")) replacement = $"Giá thuê: {Money(data.Contract.MonthlyRent)} đ/tháng";
+                else if (original.StartsWith("Giá thuê:")) replacement = $"Giá thuê: {Money(data.Contract.RentAmount)} đ/tháng";
                 else if (original.StartsWith("Hình thức thanh toán:")) replacement = $"Hình thức thanh toán: {data.Settings.PaymentTerms}";
                 else if (original.StartsWith("Tiền điện")) replacement = $"Tiền điện: {Money(Rate("ELECTRICITY"))} đ/kWh tính theo chỉ số công tơ, thanh toán vào cuối các tháng.";
                 else if (original.StartsWith("Tiền nước:")) replacement = $"Tiền nước: {Money(Rate("WATER"))} đ/m³ theo chỉ số đồng hồ, thanh toán vào đầu các tháng.";

@@ -9,10 +9,10 @@ namespace BHome.Infrastructure.PaymentsDebt;
 // projections retain server-side filtering of history fields.
 internal static class PaymentLedgerQueries
 {
-    internal static IQueryable<PaymentTransfer> ReceiptEntities(BHomePersistenceContext db) =>
-        db.Set<PaymentTransfer>().AsNoTracking().Where(p => EF.Functions.JsonExists(p.VerificationData, "compactState"));
+    internal static IQueryable<Payment> ReceiptEntities(BHomePersistenceContext db) =>
+        db.Set<Payment>().AsNoTracking().Where(p => EF.Functions.JsonExists(p.VerificationData, "compactState"));
 
-    internal static PaymentTransfer HydrateReceipt(PaymentTransfer payment)
+    internal static Payment HydrateReceipt(Payment payment)
     {
         // Physical columns remain authoritative, including nullable provider
         // metadata; only the business extras come from the v1 receipt snapshot.
@@ -23,7 +23,7 @@ internal static class PaymentLedgerQueries
         Guid? Id(string name) => Field(name) is { ValueKind: JsonValueKind.String } value ? value.GetGuid() : null;
         DateTimeOffset Timestamp(string name) => Field(name) is { ValueKind: JsonValueKind.String } value
             ? value.GetDateTimeOffset() : DateTimeOffset.UnixEpoch;
-        if (payment.StoredVerifiedAt is null)
+        if (payment.VerifiedAt is null)
             throw new InvalidOperationException("Receipt verification timestamp is missing.");
         payment.NormalizedReference = Text("normalizedReference") ?? "";
         payment.StatementReference = Text("statementReference") ?? "";

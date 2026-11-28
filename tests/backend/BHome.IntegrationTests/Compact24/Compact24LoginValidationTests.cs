@@ -12,10 +12,10 @@ namespace BHome.IntegrationTests.Compact24;
 public sealed class Compact24LoginValidationTests(Compact24Fixture fixture) : IClassFixture<Compact24Fixture>
 {
     private const string Password = "Synthetic!Login-795";
-    private async Task<ApplicationUser> User(string? phone = null)
+    private async Task<User> User(string? phone = null)
     {
         await using var scope = fixture.Factory!.Services.CreateAsyncScope();
-        return await WorkflowTestUsers.CreateAsync(scope.ServiceProvider, new ApplicationUser
+        return await WorkflowTestUsers.CreateAsync(scope.ServiceProvider, new User
         { Id = Guid.NewGuid(), UserName = Guid.NewGuid().ToString("N"), Email = Guid.NewGuid().ToString("N") + "@example.invalid", EmailConfirmed = true, PhoneNumber = phone }, "Tenant", Password);
     }
 

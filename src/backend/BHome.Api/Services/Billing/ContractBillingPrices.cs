@@ -17,9 +17,9 @@ public static class ContractBillingPrices
         try { snapshot = ContractChargeSnapshot.Read(contract); }
         catch (ContractException e) { missing.Add(e.Code); return []; }
         catch (JsonException) { missing.Add("contract_price_snapshot_invalid"); return []; }
-        if (snapshot is null || snapshot.SnapshotVersion != 1 || string.IsNullOrWhiteSpace(contract.SnapshotHash))
+        if (snapshot is null || snapshot.SnapshotVersion != 1 || string.IsNullOrWhiteSpace(contract.SnapshotHashOrEmpty))
         { missing.Add("contract_price_snapshot_missing"); return []; }
-        if (!ContractChargeSnapshot.IsIntact(contract) || snapshot.AgreedRent != contract.MonthlyRent || snapshot.Charges is null)
+        if (!ContractChargeSnapshot.IsIntact(contract) || snapshot.AgreedRent != contract.RentAmount || snapshot.Charges is null)
         { missing.Add("contract_price_snapshot_invalid"); return []; }
 
         var charges = new List<PolicyDto>();

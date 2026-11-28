@@ -33,7 +33,7 @@ public sealed partial class Compact24NotificationMvpTests
     {
         var probe = new SmtpProbe(); using var host = RecoveryHost(probe);
         await using var scope = host.Services.CreateAsyncScope();
-        var user = new BHome.Infrastructure.Persistence.ApplicationUser
+        var user = new BHome.Infrastructure.Persistence.User
         {
             Id = Guid.NewGuid(),
             UserName = Guid.NewGuid().ToString("N"),

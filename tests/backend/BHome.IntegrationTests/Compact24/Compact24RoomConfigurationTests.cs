@@ -117,7 +117,7 @@ public sealed partial class Compact24OwnerSetupTests
                     Status = states[i],
                     StartDate = Today,
                     EndDate = Today.AddMonths(6),
-                    MonthlyRent = 2700000m,
+                    RentAmount = 2700000m,
                     Terms = "Synthetic protected contract",
                     Residents = [new ContractResident { ResidentId = resident.Id, Role = ResidentType.Representative, ResidenceFrom = Today }]
                 };

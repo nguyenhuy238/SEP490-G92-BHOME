@@ -114,7 +114,7 @@ public sealed partial class ContractService(IContractRepository repository, ICur
     private static Guid RequireTenant(Contract c) => c.TenantUserId ?? throw ContractException.Conflict("tenant_account_required_for_lifecycle");
     internal static ContractDocument Document(Contract c) => new(c.Id, c.RoomId, c.OwnerSignerId, c.SigningMode == ContractSigningModes.Internal ? Guid.Empty : RequireTenant(c),
         c.RepresentativeResidentId, c.Residents.Select(x => x.ResidentId).Order().ToArray(), c.StartDate, c.EndDate,
-        c.MonthlyRent, c.RequiredDeposit, c.HoldingContractId, c.AppliedHoldingDeposit, c.Terms, c.SnapshotHash)
+        c.RentAmount, c.RequiredDeposit, c.HoldingContractId, c.AppliedHoldingDeposit, c.Terms, c.SnapshotHashOrEmpty)
     {
         IsOperatingPolicyAmendment = c.Kind == ContractKind.Addendum,
         IsInternalResidentAcceptance = c.SigningMode == ContractSigningModes.Internal,
@@ -123,20 +123,20 @@ public sealed partial class ContractService(IContractRepository repository, ICur
     private static void Seal(Contract c)
     {
         // Native VND columns have scale 0; hash the exact values that survive a database round-trip.
-        c.MonthlyRent = decimal.Truncate(c.MonthlyRent); c.RequiredDeposit = decimal.Truncate(c.RequiredDeposit);
+        c.RentAmount = decimal.Truncate(c.RentAmount); c.RequiredDeposit = decimal.Truncate(c.RequiredDeposit);
         c.AppliedHoldingDeposit = decimal.Truncate(c.AppliedHoldingDeposit);
-        c.SnapshotHash = ContractDocumentSnapshot.Hash(Document(c));
+        c.SnapshotHashOrEmpty = ContractDocumentSnapshot.Hash(Document(c));
     }
     private static bool Intact(Contract c) => ContractChargeSnapshot.IsIntact(c);
     private static ContractView View(Contract c) => new(c.Id, c.RoomId, c.Kind.ToString(), c.Status.ToString(), c.StartDate,
-        c.EndDate, c.MonthlyRent, c.RequiredDeposit, c.Terms, c.PreviousContractId,
+        c.EndDate, c.RentAmount, c.RequiredDeposit, c.Terms, c.PreviousContractId,
         c.Residents.Select(r => r.ResidentId).ToArray(), c.Signatures.Select(SignatureOf).ToArray(), c.ActivatedAt,
         c.OwnerSignerId, c.TenantUserId, c.RepresentativeResidentId, c.HoldingContractId, c.AppliedHoldingDeposit, c.Room.LocationId, c.IsDevelopmentDemo, c.Room.RoomNumber, c.Room.Location?.Name ?? "", ActualEndDate: c.ActualEndDate, OnboardingDraft: c.Kind == ContractKind.Main && c.DraftMetadata != "{}" && c.Status == ContractStatus.Draft,
         HoldingExpiresAt: c.HoldingExpiryAt, ReservedCapacity: c.ReservedCapacity, ApprovedAt: c.ApprovedAt,
         PriceLockedAt: c.PriceLockedAt, PriceLockTrigger: c.PriceLockTrigger, ConvertedMainContractId: c.ConvertedMainContractId,
-        SigningMode: c.SigningMode, SnapshotHash: c.SnapshotHash, AgreedCharges: ContractChargeSnapshot.ViewCharges(c), InitialPaymentRequired: c.InitialPaymentRequired, OwnerOnlySandboxConfirmed: MainSandboxAcceptance.Read(c)?.ConfirmedAt is not null, SandboxTenantSimulated: MainSandboxAcceptance.Read(c)?.TenantSimulatedAt is not null, PaymentMode: ContractPaymentModes.Of(c));
+        SigningMode: c.SigningMode, SnapshotHash: c.SnapshotHashOrEmpty, AgreedCharges: ContractChargeSnapshot.ViewCharges(c), InitialPaymentRequired: c.InitialPaymentRequired, OwnerOnlySandboxConfirmed: MainSandboxAcceptance.Read(c)?.ConfirmedAt is not null, SandboxTenantSimulated: MainSandboxAcceptance.Read(c)?.TenantSimulatedAt is not null, PaymentMode: ContractPaymentModes.Of(c));
     // What a signing screen shows: the method (from the provider credential), the deadline and the signing certificate.
-    private static SignatureView SignatureOf(ContractSignature s)
+    private static SignatureView SignatureOf(ContractSigning s)
     {
         var method = s.CredentialId switch
         {
@@ -205,7 +205,7 @@ public sealed partial class ContractService(IContractRepository repository, ICur
         {
             var source = await Load(sourceId, [Roles.Owner, Roles.Staff], t);
             if (source.RoomId != x.RoomId || source.OwnerSignerId != x.OwnerSignerId || source.TenantUserId != x.TenantUserId ||
-                source.RepresentativeResidentId != x.RepresentativeResidentId || source.MonthlyRent != x.MonthlyRent ||
+                source.RepresentativeResidentId != x.RepresentativeResidentId || source.RentAmount != x.MonthlyRent ||
                 source.StartDate != x.StartDate || source.EndDate != x.EndDate || source.Terms != x.Terms.Trim() ||
                 !source.Residents.Select(r => r.ResidentId).Order().SequenceEqual(x.ResidentIds.Order()))
                 throw ContractException.Conflict("holding_conversion_terms_mismatch");
@@ -237,7 +237,7 @@ public sealed partial class ContractService(IContractRepository repository, ICur
                 RepresentativeResidentId = x.RepresentativeResidentId,
                 StartDate = x.StartDate,
                 EndDate = x.EndDate,
-                MonthlyRent = x.MonthlyRent,
+                RentAmount = x.MonthlyRent,
                 RequiredDeposit = x.MonthlyRent,
                 IsDevelopmentDemo = DemoEnabled,
                 PaymentMode = await ConfiguredPaymentModeAsync((await repository.RoomAsync(x.RoomId, t))!.LocationId, x.OwnerSignerId, t),
@@ -280,7 +280,7 @@ public sealed partial class ContractService(IContractRepository repository, ICur
                 PreviousContractId = c.Id,
                 StartDate = c.EndDate.AddDays(1),
                 EndDate = x.EndDate,
-                MonthlyRent = x.MonthlyRent,
+                RentAmount = x.MonthlyRent,
                 RequiredDeposit = c.RequiredDeposit,
                 Terms = x.Terms.Trim()
             };
@@ -379,7 +379,7 @@ public sealed partial class ContractService(IContractRepository repository, ICur
             var holding = await repository.FindAsync(holdingId, t);
             if (holding is null || holding.Kind != ContractKind.Holding || holding.Status != ContractStatus.Active ||
                 holding.HoldingExpiryAt <= clock.BusinessUtcNow() || holding.RoomId != c.RoomId || holding.TenantUserId != c.TenantUserId ||
-                holding.ConvertedMainContractId is not null || holding.AgreedPriceSnapshot == "{}" || holding.MonthlyRent != c.MonthlyRent ||
+                holding.ConvertedMainContractId is not null || holding.AgreedPriceSnapshot == "{}" || holding.RentAmount != c.RentAmount ||
                 holding.StartDate != c.StartDate || holding.EndDate != c.EndDate || holding.Terms != c.Terms ||
                 !ContractChargeSnapshot.SameChargeTerms(holding, c))
                 blockers.Add("source_holding_not_convertible");
@@ -392,7 +392,7 @@ public sealed partial class ContractService(IContractRepository repository, ICur
         }
         else foreach (var signer in new[] { c.OwnerSignerId, c.TenantUserId })
                 if (!c.Signatures.Any(s => s.SignerUserId == signer && CompleteSignature(s, c) && s.SignedAt is not null &&
-                    s.SnapshotHash == c.SnapshotHash && !string.IsNullOrWhiteSpace(s.SignedObjectKey) && !string.IsNullOrWhiteSpace(s.ProviderReference)))
+                    s.SnapshotHash == c.SnapshotHashOrEmpty && !string.IsNullOrWhiteSpace(s.SignedObjectKey) && !string.IsNullOrWhiteSpace(s.ProviderReference)))
                     blockers.Add("verified_signature_evidence_required");
         var residents = await repository.ResidentsAsync(c.RoomId, c.Residents.Select(r => r.ResidentId).ToArray(), t);
         if (residents.Count != c.Residents.Count || residents.Any(r => !BHome.Application.Ocr.ContractResidentEligibility.Ready(r, c.RepresentativeResidentId)) ||

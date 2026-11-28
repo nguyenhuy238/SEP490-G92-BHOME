@@ -12,14 +12,16 @@ public sealed class IncidentReport : AuditableEntity
     public string? CommonArea { get; set; }
     public Guid? AssetId { get; set; }
     public Guid? ContractId { get; set; }
-    public Guid ReporterId { get; set; }
+    [NotMapped, JsonIgnore] public Guid ReporterUserId { get; set; }
+    public Guid ReporterId { get => ReporterUserId; set => ReporterUserId = value; }
     public string ReporterRole { get; set; } = "";
     public string Description { get; set; } = "";
     public IncidentSeverity Severity { get; set; }
     public IncidentStatus Status { get; set; }
     public string? Type { get; set; }
     public string? Category { get; set; }
-    public Guid? DuplicateOfId { get; set; }
+    [NotMapped, JsonIgnore] public Guid? DuplicateOfReportId { get; set; }
+    public Guid? DuplicateOfId { get => DuplicateOfReportId; set => DuplicateOfReportId = value; }
     public Guid? AcknowledgedById { get; set; }
     public DateTimeOffset? AcknowledgedAt { get; set; }
     public DateTimeOffset? OwnerDecisionAt { get; set; }
@@ -29,6 +31,7 @@ public sealed class IncidentReport : AuditableEntity
     public bool IsOpen => Status is IncidentStatus.Submitted or IncidentStatus.InProgress;
 
     // Physical report metadata, excluded from historical business snapshots.
+    [NotMapped, JsonIgnore] public DateTimeOffset ReportedAt { get => CreatedAt; set => CreatedAt = value; }
     [NotMapped, JsonIgnore] public string Summary { get; set; } = "";
     [NotMapped, JsonIgnore] public JsonElement Evidence { get; set; } = JsonSerializer.SerializeToElement(Array.Empty<object>());
     [NotMapped, JsonIgnore] public JsonElement EmergencyActions { get; set; } = JsonSerializer.SerializeToElement(Array.Empty<object>());

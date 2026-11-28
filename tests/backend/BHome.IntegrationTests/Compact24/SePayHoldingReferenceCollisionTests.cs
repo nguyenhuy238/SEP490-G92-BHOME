@@ -45,23 +45,23 @@ public sealed partial class SePayIntegrationTests
             StartDate = today.AddDays(1),
             EndDate = today.AddMonths(6),
             HoldingExpiryAt = now.AddDays(1),
-            MonthlyRent = 100000,
+            RentAmount = 100000,
             RequiredDeposit = 100000,
             IsDevelopmentDemo = true,
             Terms = "Synthetic signed holding",
             Residents = [new ContractResident { ResidentId = resident.Id, Role = ResidentType.Representative, ResidenceFrom = today.AddDays(1) }]
         };
-        holding.AgreedPriceSnapshot = JsonSerializer.Serialize(new HoldingPriceSnapshot(holding.MonthlyRent,
+        holding.AgreedPriceSnapshot = JsonSerializer.Serialize(new HoldingPriceSnapshot(holding.RentAmount,
             holding.RequiredDeposit, holding.StartDate, holding.EndDate, holding.HoldingExpiryAt.Value,
             "OwnerApproved", now.AddMinutes(-2),
             [new HoldingPriceCharge(Guid.Empty, "RENT", (int)ChargeCategory.Rent, (int)ChargingMethod.FixedPerRoomPerMonth,
-                holding.MonthlyRent, holding.StartDate, null, 0)]));
-        holding.SnapshotHash = ContractDocumentSnapshot.Hash(new ContractDocument(holding.Id, holding.RoomId, holding.OwnerSignerId,
+                holding.RentAmount, holding.StartDate, null, 0)]));
+        holding.SnapshotHashOrEmpty = ContractDocumentSnapshot.Hash(new ContractDocument(holding.Id, holding.RoomId, holding.OwnerSignerId,
             Guid.Empty, holding.RepresentativeResidentId, [resident.Id], holding.StartDate, holding.EndDate,
-            holding.MonthlyRent, holding.RequiredDeposit, null, 0, holding.Terms, "")
+            holding.RentAmount, holding.RequiredDeposit, null, 0, holding.Terms, "")
         { IsInternalResidentAcceptance = true });
         holding.InternalAcceptance = JsonSerializer.Serialize(new InternalAcceptanceEvidence(Guid.NewGuid(), resident.Id,
-            holding.SnapshotHash, "synthetic-source", "synthetic-stroke", "synthetic-tenant.pdf", "synthetic-tenant-hash",
+            holding.SnapshotHashOrEmpty, "synthetic-source", "synthetic-stroke", "synthetic-tenant.pdf", "synthetic-tenant-hash",
             now.AddMinutes(-2), scenario.Owner, now.AddMinutes(-1), "synthetic-final.pdf", "synthetic-final-hash"));
         archive.AddRange(room, resident, holding);
         await archive.SaveChangesAsync();

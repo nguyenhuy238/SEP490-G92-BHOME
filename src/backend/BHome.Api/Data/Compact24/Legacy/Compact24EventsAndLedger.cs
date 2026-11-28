@@ -85,7 +85,7 @@ public sealed partial class Compact24ArchiveContext
     private async Task AssignSequenceAsync(EntityEntry entry, CancellationToken token)
     {
         if (entry.State != EntityState.Added || entry.Metadata.FindProperty("Sequence") is null || Convert.ToInt64(entry.Property("Sequence").CurrentValue) != 0) return;
-        var name = entry.Metadata.ClrType.Name;
+        var name = Compact24Records.For(entry.Metadata.ClrType).Name;
         // Source identity sequences were global per record type. A parent-row lock alone
         // permits two different receipts/requests to choose the same next sequence.
         await Database.ExecuteSqlInterpolatedAsync($"SELECT pg_advisory_xact_lock(hashtextextended({"compact24-sequence:" + name},0))", token);
@@ -128,7 +128,7 @@ public sealed partial class Compact24ArchiveContext
             if (allocation.SourceDepositContractId is not null ||
                 (allocation.TargetDepositContractId is null ? 0 : 1) + (allocation.InvoiceId is null ? 0 : 1) + (allocation.TargetSettlementContractId is null ? 0 : 1) != 1 ||
                 await Set<PaymentAllocation>().AnyAsync(a => a.TransferId == transferId, token)) throw LedgerConflict();
-            var transfer = await Set<PaymentTransfer>().SingleAsync(p => p.Id == transferId, token);
+            var transfer = await Set<Payment>().SingleAsync(p => p.Id == transferId, token);
             if (allocation.TargetSettlementContractId is { } settlementContract)
             {
                 var charges = await BHome.Infrastructure.Contracts.SettlementChargeRecords.ReadAsync<BHome.Application.Contracts.SettlementReceivable>(this,

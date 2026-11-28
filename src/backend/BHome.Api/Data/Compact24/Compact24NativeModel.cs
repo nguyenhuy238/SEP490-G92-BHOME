@@ -12,23 +12,23 @@ internal static class Compact24NativeModel
         type == typeof(Native.FinancialScenario) ||
         type == typeof(Native.Notification) ||
         type == typeof(Native.RefundRequest) ||
-        type == typeof(BHome.Domain.Billing.InvoiceAdjustmentRequest) ||
+        type == typeof(BHome.Domain.Billing.InvoiceAdjustment) ||
         type == typeof(BHome.Domain.Billing.OperationalTask) ||
         type == typeof(BHome.Domain.IncidentMaintenance.IncidentReport) ||
         type == typeof(BHome.Domain.PaymentsDebt.PaymentAllocation) ||
-        type == typeof(BHome.Domain.PaymentsDebt.PaymentTransfer) ||
+        type == typeof(BHome.Domain.PaymentsDebt.Payment) ||
         type == typeof(BHome.Domain.TenantContracts.ContractResident) ||
         type == typeof(BHome.Domain.Locations.Location) ||
         type == typeof(BHome.Domain.PropertyManagement.Room) ||
         type == typeof(BHome.Domain.PropertyManagement.Asset) ||
         type == typeof(BHome.Domain.PropertyManagement.BillingPolicy) ||
         type == typeof(BHome.Domain.TenantContracts.Resident) ||
-        type == typeof(BHome.Domain.TenantContracts.ContractSignature) ||
+        type == typeof(BHome.Domain.TenantContracts.ContractSigning) ||
         type == typeof(BHome.Domain.TenantContracts.Contract) ||
         type == typeof(BHome.Domain.Billing.Meter) ||
         type == typeof(BHome.Domain.Billing.MeterReading) ||
         type == typeof(BHome.Domain.Billing.Invoice) ||
-        type == typeof(BHome.Domain.Billing.InvoiceLine);
+        type == typeof(BHome.Domain.Billing.InvoiceItem);
 
     internal static void Configure(ModelBuilder model, bool archive = false)
     {
@@ -84,12 +84,13 @@ internal static class Compact24NativeModel
             asset.Property(x => x.LocationId).HasColumnName("location_id").HasColumnType("uuid");
             asset.Property(x => x.RoomId).HasColumnName("room_id").HasColumnType("uuid");
             asset.Property(x => x.CommonArea).HasColumnName("common_area").HasColumnType("varchar(200)");
-            asset.Property(x => x.Code).HasColumnName("asset_code").HasColumnType("varchar(80)");
+            asset.Ignore(x => x.Code);
+            asset.Property(x => x.AssetCode).HasColumnName("asset_code").HasColumnType("varchar(80)");
             asset.Property(x => x.Name).HasColumnName("name").HasColumnType("varchar(150)").IsRequired();
             asset.Property(x => x.Category).HasColumnName("category").HasColumnType("varchar(80)").IsRequired();
             asset.Property(x => x.Condition).HasColumnName("condition").HasColumnType("text").IsRequired();
             asset.Property(x => x.Status).HasConversion<short>().HasColumnName("status").HasColumnType("smallint");
-            asset.Property(x => x.PurchaseMetadata).HasColumnName("purchase_info").HasColumnType("jsonb");
+            asset.Property(x => x.PurchaseInfo).HasColumnName("purchase_info").HasColumnType("jsonb");
             asset.Property(x => x.Version).HasColumnName("version").HasColumnType("integer").IsConcurrencyToken();
             asset.Property(x => x.History).HasColumnName("history").HasColumnType("jsonb");
         }
@@ -102,17 +103,22 @@ internal static class Compact24NativeModel
             resident.Ignore(x => x.CreatedAt);
             resident.Ignore(x => x.UpdatedAt);
             resident.Property(x => x.Id).HasColumnName("id").HasColumnType("uuid");
-            resident.Property(x => x.TenantUserId).HasColumnName("user_id").HasColumnType("uuid");
+            resident.Ignore(x => x.TenantUserId);
+            resident.Property(x => x.UserId).HasColumnName("user_id").HasColumnType("uuid");
             resident.Property(x => x.ContactEmail).HasColumnName("contact_email").HasColumnType("varchar(256)");
-            resident.Property(x => x.RoomId).HasColumnName("current_room_id").HasColumnType("uuid");
-            resident.Property(x => x.OwnerUserId).HasColumnName("identity_owner_scope_id").HasColumnType("uuid");
+            resident.Ignore(x => x.RoomId);
+            resident.Ignore(x => x.OwnerUserId);
+            resident.Property(x => x.CurrentRoomId).HasColumnName("current_room_id").HasColumnType("uuid");
+            resident.Property(x => x.IdentityOwnerScopeId).HasColumnName("identity_owner_scope_id").HasColumnType("uuid");
             resident.Property(x => x.DisplayLabel).HasColumnName("display_label").HasColumnType("varchar(150)").IsRequired();
             resident.Property(x => x.IdentityData).HasColumnName("identity_data").HasColumnType("jsonb").IsRequired();
             resident.Property(x => x.IdentityHmac).HasColumnName("identity_hmac").HasColumnType("varchar(64)");
             resident.Property(x => x.HmacKeyVersion).HasColumnName("hmac_key_version").HasColumnType("varchar(32)");
             resident.Property(x => x.VerificationStatus).HasConversion<short>().HasColumnName("verification_status").HasColumnType("smallint");
-            resident.Property(x => x.ConfirmedByUserId).HasColumnName("verified_by_user_id").HasColumnType("uuid");
-            resident.Property(x => x.ConfirmedAt).HasColumnName("verified_at").HasColumnType("timestamptz");
+            resident.Ignore(x => x.ConfirmedByUserId);
+            resident.Ignore(x => x.ConfirmedAt);
+            resident.Property(x => x.VerifiedByUserId).HasColumnName("verified_by_user_id").HasColumnType("uuid");
+            resident.Property(x => x.VerifiedAt).HasColumnName("verified_at").HasColumnType("timestamptz");
             resident.Property(x => x.History).HasColumnName("history").HasColumnType("jsonb");
         }
         if (!archive)
@@ -124,8 +130,8 @@ internal static class Compact24NativeModel
             contract.Ignore(x => x.Signatures);
             contract.Ignore(x => x.CreatedAt);
             contract.Ignore(x => x.UpdatedAt);
-            contract.Ignore(x => x.MonthlyRent);
-            contract.Ignore(x => x.SnapshotHash);
+            contract.Ignore(x => x.RentAmount);
+            contract.Ignore(x => x.SnapshotHashOrEmpty);
             contract.Ignore(x => x.HoldingAllocationReference);
             contract.Ignore(x => x.ApprovedByUserId);
             contract.Ignore(x => x.ApprovedAt);
@@ -143,7 +149,8 @@ internal static class Compact24NativeModel
             contract.Property(x => x.RepresentativeResidentId).HasColumnName("representative_resident_id").HasColumnType("uuid");
             contract.Property(x => x.TenantUserId).HasColumnName("tenant_user_id").HasColumnType("uuid");
             contract.Property(x => x.OwnerSignerId).HasColumnName("owner_signer_id").HasColumnType("uuid");
-            contract.Property(x => x.Kind).HasConversion(
+            contract.Ignore(x => x.Kind);
+            contract.Property(x => x.ContractType).HasConversion(
                 value => value == BHome.Domain.TenantContracts.ContractKind.Main ? "MAIN" :
                     value == BHome.Domain.TenantContracts.ContractKind.Renewal ? "RENEWAL" :
                     value == BHome.Domain.TenantContracts.ContractKind.Holding ? "HOLDING" :
@@ -155,16 +162,18 @@ internal static class Compact24NativeModel
                     (BHome.Domain.TenantContracts.ContractKind)(-1)).HasColumnName("contract_type").HasColumnType("varchar(12)");
             contract.Property(x => x.PreviousContractId).HasColumnName("previous_contract_id").HasColumnType("uuid");
             contract.Property(x => x.ParentContractId).HasColumnName("parent_contract_id").HasColumnType("uuid");
-            contract.Property(x => x.HoldingContractId).HasColumnName("source_holding_contract_id").HasColumnType("uuid");
+            contract.Ignore(x => x.HoldingContractId);
+            contract.Property(x => x.SourceHoldingContractId).HasColumnName("source_holding_contract_id").HasColumnType("uuid");
             contract.Property(x => x.StartDate).HasColumnName("start_date").HasColumnType("date");
             contract.Property(x => x.EndDate).HasColumnName("end_date").HasColumnType("date");
             contract.Property(x => x.HoldingExpiryAt).HasColumnName("holding_expiry_at").HasColumnType("timestamptz");
-            contract.Property(x => x.StoredMonthlyRent).HasColumnName("monthly_rent").HasColumnType("numeric(18,0)");
-            contract.Property(x => x.RequiredDeposit).HasColumnName("deposit_required").HasColumnType("numeric(18,0)");
+            contract.Property(x => x.MonthlyRent).HasColumnName("monthly_rent").HasColumnType("numeric(18,0)");
+            contract.Ignore(x => x.RequiredDeposit);
+            contract.Property(x => x.DepositRequired).HasColumnName("deposit_required").HasColumnType("numeric(18,0)");
             contract.Property(x => x.AppliedHoldingDeposit).HasColumnName("applied_holding_deposit").HasColumnType("numeric(18,0)");
             contract.Property(x => x.ReservedCapacity).HasColumnName("reserved_capacity").HasColumnType("smallint");
             contract.Property(x => x.Terms).HasColumnName("terms").HasColumnType("text").IsRequired();
-            contract.Property(x => x.StoredSnapshotHash).HasColumnName("snapshot_hash").HasColumnType("varchar(64)");
+            contract.Property(x => x.SnapshotHash).HasColumnName("snapshot_hash").HasColumnType("varchar(64)");
             contract.Property(x => x.DraftMetadata).HasColumnName("draft_metadata").HasColumnType("jsonb").IsRequired();
             contract.Property(x => x.Documents).HasColumnName("documents").HasColumnType("jsonb");
             contract.Property(x => x.Handover).HasColumnName("handover").HasColumnType("jsonb");
@@ -174,17 +183,18 @@ internal static class Compact24NativeModel
             contract.Property(x => x.ActivatedAt).HasColumnName("activated_at").HasColumnType("timestamptz");
             contract.Property(x => x.ActivatedByUserId).HasColumnName("activated_by_user_id").HasColumnType("uuid");
             contract.Property(x => x.ActualEndDate).HasColumnName("actual_end_date").HasColumnType("date");
-            contract.Property(x => x.DraftVersion).HasColumnName("version").HasColumnType("integer");
+            contract.Ignore(x => x.DraftVersion);
+            contract.Property(x => x.Version).HasColumnName("version").HasColumnType("integer");
             contract.Property(x => x.History).HasColumnName("history").HasColumnType("jsonb");
         }
         if (!archive)
         {
-            var signature = model.Entity<BHome.Domain.TenantContracts.ContractSignature>();
+            var signature = model.Entity<BHome.Domain.TenantContracts.ContractSigning>();
             signature.ToTable("contract_signings", "public", t => t.ExcludeFromMigrations());
             signature.Ignore(x => x.UpdatedAt);
-            signature.Ignore(x => x.SourceHash);
-            signature.Ignore(x => x.PreparedHash);
-            signature.Ignore(x => x.PreparedObjectKey);
+            signature.Ignore(x => x.SourceHashOrEmpty);
+            signature.Ignore(x => x.PreparedHashOrEmpty);
+            signature.Ignore(x => x.PreparedObjectKeyOrEmpty);
             signature.Ignore(x => x.FieldName);
             signature.Ignore(x => x.DocumentDigest);
             signature.Ignore(x => x.DataToSignDigest);
@@ -198,15 +208,17 @@ internal static class Compact24NativeModel
             signature.Property(x => x.CertificateSnapshot).HasColumnName("certificate_snapshot").HasColumnType("jsonb");
             signature.Property(x => x.ProviderCode).HasColumnName("provider_code").HasColumnType("varchar(50)").IsRequired();
             signature.Property(x => x.ProviderReference).HasColumnName("provider_reference").HasColumnType("varchar(200)");
-            signature.Property(x => x.Status).HasConversion<short>().HasColumnName("signing_status").HasColumnType("smallint");
+            signature.Ignore(x => x.Status);
+            signature.Property(x => x.SigningStatus).HasConversion<short>().HasColumnName("signing_status").HasColumnType("smallint");
             signature.Property(x => x.SnapshotHash).HasColumnName("snapshot_hash").HasColumnType("varchar(64)").IsRequired();
-            signature.Property(x => x.StoredSourceHash).HasColumnName("source_hash").HasColumnType("varchar(64)");
-            signature.Property(x => x.StoredPreparedHash).HasColumnName("prepared_hash").HasColumnType("varchar(64)");
-            signature.Property(x => x.StoredPreparedObjectKey).HasColumnName("prepared_object_key").HasColumnType("varchar(250)");
+            signature.Property(x => x.SourceHash).HasColumnName("source_hash").HasColumnType("varchar(64)");
+            signature.Property(x => x.PreparedHash).HasColumnName("prepared_hash").HasColumnType("varchar(64)");
+            signature.Property(x => x.PreparedObjectKey).HasColumnName("prepared_object_key").HasColumnType("varchar(250)");
             signature.Property(x => x.SignedObjectKey).HasColumnName("signed_object_key").HasColumnType("varchar(250)");
             signature.Property(x => x.SignedHash).HasColumnName("signed_hash").HasColumnType("varchar(64)");
             signature.Property(x => x.SigningData).HasColumnName("signing_data").HasColumnType("jsonb");
-            signature.Property(x => x.CreatedAt).HasColumnName("requested_at").HasColumnType("timestamptz");
+            signature.Ignore(x => x.CreatedAt);
+            signature.Property(x => x.RequestedAt).HasColumnName("requested_at").HasColumnType("timestamptz");
             signature.Property(x => x.ExpiresAt).HasColumnName("expires_at").HasColumnType("timestamptz");
             signature.Property(x => x.SignedAt).HasColumnName("signed_at").HasColumnType("timestamptz");
             signature.Property(x => x.History).HasColumnName("history").HasColumnType("jsonb");
@@ -216,7 +228,8 @@ internal static class Compact24NativeModel
             var members = model.Entity<BHome.Domain.TenantContracts.ContractResident>();
             members.ToTable("contract_residents", "public", t => t.ExcludeFromMigrations());
             members.HasKey(x => new { x.ContractId, x.ResidentId });
-            members.Property(x => x.Role).HasConversion<short>().HasColumnName("resident_role").HasColumnType("smallint");
+            members.Ignore(x => x.Role);
+            members.Property(x => x.ResidentRole).HasConversion<short>().HasColumnName("resident_role").HasColumnType("smallint");
             members.Property(x => x.ActualResidenceFrom).HasColumnName("actual_residence_from").HasColumnType("date");
             members.Property(x => x.ActualMoveOutDate).HasColumnName("actual_move_out_date").HasColumnType("date");
             members.Property(x => x.RegistrationStatus).HasColumnName("registration_status").HasColumnType("varchar(25)");
@@ -249,7 +262,8 @@ internal static class Compact24NativeModel
             incident.Property(x => x.LocationId).HasColumnName("location_id").HasColumnType("uuid");
             incident.Property(x => x.RoomId).HasColumnName("room_id").HasColumnType("uuid");
             incident.Property(x => x.AssetId).HasColumnName("asset_id").HasColumnType("uuid");
-            incident.Property(x => x.ReporterId).HasColumnName("reporter_user_id").HasColumnType("uuid");
+            incident.Ignore(x => x.ReporterId);
+            incident.Property(x => x.ReporterUserId).HasColumnName("reporter_user_id").HasColumnType("uuid");
             incident.Property(x => x.Severity).HasConversion(
                 x => x == BHome.Domain.IncidentMaintenance.IncidentSeverity.Emergency ? "EMERGENCY" : "NORMAL",
                 x => x == "EMERGENCY" ? BHome.Domain.IncidentMaintenance.IncidentSeverity.Emergency : BHome.Domain.IncidentMaintenance.IncidentSeverity.Normal)
@@ -259,9 +273,11 @@ internal static class Compact24NativeModel
             incident.Property(x => x.Status).HasConversion<string>().HasColumnName("status").HasColumnType("varchar(30)");
             incident.Property(x => x.Evidence).HasColumnName("evidence").HasColumnType("jsonb");
             incident.Property(x => x.EmergencyActions).HasColumnName("emergency_actions").HasColumnType("jsonb");
-            incident.Property(x => x.DuplicateOfId).HasColumnName("duplicate_of_report_id").HasColumnType("uuid");
+            incident.Ignore(x => x.DuplicateOfId);
+            incident.Property(x => x.DuplicateOfReportId).HasColumnName("duplicate_of_report_id").HasColumnType("uuid");
             incident.Property(x => x.OwnerDecision).HasColumnName("owner_decision").HasColumnType("jsonb");
-            incident.Property(x => x.CreatedAt).HasColumnName("reported_at").HasColumnType("timestamptz");
+            incident.Ignore(x => x.CreatedAt);
+            incident.Property(x => x.ReportedAt).HasColumnName("reported_at").HasColumnType("timestamptz");
             incident.Property(x => x.ResolvedAt).HasColumnName("resolved_at").HasColumnType("timestamptz");
             incident.Property(x => x.Version).HasColumnName("version").HasColumnType("integer").IsConcurrencyToken();
             incident.Property(x => x.History).HasColumnName("history").HasColumnType("jsonb");
@@ -271,12 +287,12 @@ internal static class Compact24NativeModel
             var task = model.Entity<BHome.Domain.Billing.OperationalTask>();
             task.ToTable("operational_tasks", "public", t => t.ExcludeFromMigrations());
             task.Ignore(x => x.Kind);
-            task.Ignore(x => x.LocationId);
+            task.Ignore(x => x.RequiredLocationId);
             task.Ignore(x => x.Location);
-            task.Ignore(x => x.Title);
+            task.Ignore(x => x.TaskTitle);
             task.Ignore(x => x.Requirements);
-            task.Ignore(x => x.Priority);
-            task.Ignore(x => x.Status);
+            task.Ignore(x => x.TaskPriority);
+            task.Ignore(x => x.MeterStatus);
             task.Ignore(x => x.AssignedStaffUserId);
             task.Ignore(x => x.EvidenceRequired);
             task.Ignore(x => x.AssignmentId);
@@ -301,7 +317,7 @@ internal static class Compact24NativeModel
             task.Ignore(x => x.UpdatedAt);
             task.Property(x => x.Id).HasColumnName("id").HasColumnType("uuid");
             task.Property(x => x.TaskType).HasColumnName("task_type").HasColumnType("varchar(20)").IsRequired();
-            task.Property(x => x.StoredLocationId).HasColumnName("location_id").HasColumnType("uuid");
+            task.Property(x => x.LocationId).HasColumnName("location_id").HasColumnType("uuid");
             task.Property(x => x.RoomId).HasColumnName("room_id").HasColumnType("uuid");
             task.Property(x => x.AssetId).HasColumnName("asset_id").HasColumnType("uuid");
             task.Property(x => x.AssignedUserId).HasColumnName("assigned_user_id").HasColumnType("uuid");
@@ -310,10 +326,10 @@ internal static class Compact24NativeModel
             task.Property(x => x.MeterId).HasColumnName("meter_id").HasColumnType("uuid");
             task.Property(x => x.BillingPeriod).HasColumnName("billing_period").HasColumnType("date");
             task.Property(x => x.SourceKey).HasColumnName("source_key").HasColumnType("varchar(250)");
-            task.Property(x => x.StoredTitle).HasColumnName("title").HasColumnType("varchar(200)");
+            task.Property(x => x.Title).HasColumnName("title").HasColumnType("varchar(200)");
             task.Property(x => x.Description).HasColumnName("description").HasColumnType("text");
-            task.Property(x => x.StoredPriority).HasColumnName("priority").HasColumnType("varchar(12)");
-            task.Property(x => x.StoredStatus).HasColumnName("status").HasColumnType("varchar(30)").IsRequired();
+            task.Property(x => x.Priority).HasColumnName("priority").HasColumnType("varchar(12)");
+            task.Property(x => x.Status).HasColumnName("status").HasColumnType("varchar(30)").IsRequired();
             task.Property(x => x.AssignedAt).HasColumnName("assigned_at").HasColumnType("timestamptz");
             task.Property(x => x.StartsAt).HasColumnName("starts_at").HasColumnType("timestamptz");
             task.Property(x => x.EndsAt).HasColumnName("ends_at").HasColumnType("timestamptz");
@@ -343,8 +359,10 @@ internal static class Compact24NativeModel
             meter.Property(x => x.Id).HasColumnName("id").HasColumnType("uuid");
             meter.Property(x => x.RoomId).HasColumnName("room_id").HasColumnType("uuid");
             meter.Property(x => x.UtilityType).HasConversion<short>().HasColumnName("utility_type").HasColumnType("smallint");
-            meter.Property(x => x.Code).HasColumnName("meter_code").HasColumnType("varchar(80)").IsRequired();
-            meter.Property(x => x.Display).HasConversion<short>().HasColumnName("display_type").HasColumnType("smallint");
+            meter.Ignore(x => x.Code);
+            meter.Property(x => x.MeterCode).HasColumnName("meter_code").HasColumnType("varchar(80)").IsRequired();
+            meter.Ignore(x => x.Display);
+            meter.Property(x => x.DisplayType).HasConversion<short>().HasColumnName("display_type").HasColumnType("smallint");
             meter.Property(x => x.DecimalPlaces).HasConversion<short>().HasColumnName("decimal_places").HasColumnType("smallint");
             meter.Property(x => x.InstalledOn).HasColumnName("installed_on").HasColumnType("date");
             meter.Property(x => x.RemovedOn).HasColumnName("removed_on").HasColumnType("date");
@@ -359,7 +377,8 @@ internal static class Compact24NativeModel
             reading.Ignore(x => x.EvidenceId);
             reading.Property(x => x.Id).HasColumnName("id").HasColumnType("uuid");
             reading.Property(x => x.MeterId).HasColumnName("meter_id").HasColumnType("uuid");
-            reading.Property(x => x.TaskId).HasColumnName("operational_task_id").HasColumnType("uuid");
+            reading.Ignore(x => x.TaskId);
+            reading.Property(x => x.OperationalTaskId).HasColumnName("operational_task_id").HasColumnType("uuid");
             reading.Property(x => x.ReadingPurpose).HasConversion<short>().HasColumnName("reading_purpose").HasColumnType("smallint");
             reading.Property(x => x.BillingPeriod).HasColumnName("billing_period").HasColumnType("date");
             reading.Property(x => x.ReadingAt).HasColumnName("reading_at").HasColumnType("timestamptz");
@@ -386,7 +405,8 @@ internal static class Compact24NativeModel
             policy.Property(x => x.RoomId).HasColumnName("room_id").HasColumnType("uuid");
             policy.Property(x => x.ChargeCode).HasColumnName("charge_code").HasColumnType("varchar(80)").IsRequired();
             policy.Property(x => x.Category).HasConversion<short>().HasColumnName("category").HasColumnType("smallint");
-            policy.Property(x => x.Method).HasConversion(
+            policy.Ignore(x => x.Method);
+            policy.Property(x => x.CalculationMethod).HasConversion(
                 method => method == BHome.Domain.PropertyManagement.ChargingMethod.Metered ? "METERED" :
                     method == BHome.Domain.PropertyManagement.ChargingMethod.FixedPerPersonPerMonth ? "FIXED_PER_PERSON_PER_MONTH" :
                     method == BHome.Domain.PropertyManagement.ChargingMethod.FixedPerRoomPerMonth ? "FIXED_PER_ROOM_PER_MONTH" : "INVALID",
@@ -419,12 +439,15 @@ internal static class Compact24NativeModel
             invoice.Property(x => x.Id).HasColumnName("id").HasColumnType("uuid");
             invoice.Property(x => x.LocationId).HasColumnName("location_id").HasColumnType("uuid");
             invoice.Property(x => x.RoomId).HasColumnName("room_id").HasColumnType("uuid");
-            invoice.Property(x => x.RepresentativeContractId).HasColumnName("contract_id").HasColumnType("uuid");
+            invoice.Ignore(x => x.RepresentativeContractId);
+            invoice.Property(x => x.ContractId).HasColumnName("contract_id").HasColumnType("uuid");
             invoice.Property(x => x.RepresentativeTenantUserId).HasColumnName("representative_tenant_user_id").HasColumnType("uuid");
-            invoice.Property(x => x.Type).HasColumnName("invoice_type").HasColumnType("varchar(12)").IsRequired();
+            invoice.Ignore(x => x.Type);
+            invoice.Property(x => x.InvoiceType).HasColumnName("invoice_type").HasColumnType("varchar(12)").IsRequired();
             invoice.Property(x => x.BillingPeriod).HasColumnName("billing_period").HasColumnType("date");
             invoice.Property(x => x.RecipientUserIds).HasColumnName("recipient_user_ids").HasColumnType("uuid[]").IsRequired();
-            invoice.Property(x => x.Total).HasColumnName("base_total_amount").HasColumnType("numeric(18,0)");
+            invoice.Ignore(x => x.Total);
+            invoice.Property(x => x.BaseTotalAmount).HasColumnName("base_total_amount").HasColumnType("numeric(18,0)");
             invoice.Property(x => x.Status).HasConversion<short>().HasColumnName("status").HasColumnType("smallint");
             invoice.Property(x => x.MissingInputs).HasColumnName("missing_inputs").HasColumnType("text[]").IsRequired();
             invoice.Property(x => x.BillingSnapshot).HasColumnName("billing_snapshot").HasColumnType("jsonb").UsePropertyAccessMode(PropertyAccessMode.Property);
@@ -436,7 +459,7 @@ internal static class Compact24NativeModel
             invoice.Property(x => x.Version).HasColumnName("version").HasColumnType("integer").IsConcurrencyToken();
             invoice.Property(x => x.History).HasColumnName("history").HasColumnType("jsonb");
 
-            var item = model.Entity<BHome.Domain.Billing.InvoiceLine>();
+            var item = model.Entity<BHome.Domain.Billing.InvoiceItem>();
             item.ToTable("invoice_items", "public", t => t.ExcludeFromMigrations());
             item.Ignore(x => x.Category);
             item.Ignore(x => x.PolicyVersion);
@@ -451,17 +474,20 @@ internal static class Compact24NativeModel
             item.Property(x => x.Id).HasColumnName("id").HasColumnType("uuid");
             item.Property(x => x.InvoiceId).HasColumnName("invoice_id").HasColumnType("uuid");
             item.Property(x => x.ChargeCode).HasColumnName("charge_code").HasColumnType("varchar(80)").IsRequired();
-            item.Property(x => x.Name).HasColumnName("description").HasColumnType("varchar(255)").IsRequired();
-            item.Property(x => x.PolicyId).HasColumnName("billing_policy_id").HasColumnType("uuid");
+            item.Ignore(x => x.Name);
+            item.Property(x => x.Description).HasColumnName("description").HasColumnType("varchar(255)").IsRequired();
+            item.Ignore(x => x.PolicyId);
+            item.Property(x => x.BillingPolicyId).HasColumnName("billing_policy_id").HasColumnType("uuid");
             item.Property(x => x.MeterReadingId).HasColumnName("meter_reading_id").HasColumnType("uuid");
             item.Property(x => x.Quantity).HasColumnName("quantity").HasColumnType("numeric(18,4)");
-            item.Property(x => x.Rate).HasColumnName("unit_price").HasColumnType("numeric(18,4)");
+            item.Ignore(x => x.Rate);
+            item.Property(x => x.UnitPrice).HasColumnName("unit_price").HasColumnType("numeric(18,4)");
             item.Property(x => x.Amount).HasColumnName("amount").HasColumnType("numeric(18,0)");
             item.Property(x => x.CalculationSnapshot).HasColumnName("calculation_snapshot").HasColumnType("jsonb").UsePropertyAccessMode(PropertyAccessMode.Property);
         }
         if (!archive)
         {
-            var adjustment = model.Entity<BHome.Domain.Billing.InvoiceAdjustmentRequest>();
+            var adjustment = model.Entity<BHome.Domain.Billing.InvoiceAdjustment>();
             adjustment.ToTable("invoice_adjustments", "public", t => t.ExcludeFromMigrations());
             adjustment.Ignore(x => x.Invoice);
             adjustment.Ignore(x => x.InvoiceLineId);
@@ -474,16 +500,18 @@ internal static class Compact24NativeModel
             adjustment.Ignore(x => x.FinancialVersion);
             adjustment.Ignore(x => x.CreatedAt);
             adjustment.Ignore(x => x.UpdatedAt);
-            adjustment.Ignore(x => x.Evidence);
+            adjustment.Ignore(x => x.EvidenceItems);
             adjustment.Ignore(x => x.Decision);
             adjustment.Property(x => x.Id).HasColumnName("id").HasColumnType("uuid");
             adjustment.Property(x => x.InvoiceId).HasColumnName("invoice_id").HasColumnType("uuid");
-            adjustment.Property(x => x.RequesterId).HasColumnName("requested_by_user_id").HasColumnType("uuid");
-            adjustment.Property(x => x.SubmittedAt).HasColumnName("requested_at").HasColumnType("timestamptz");
+            adjustment.Ignore(x => x.RequesterId);
+            adjustment.Property(x => x.RequestedByUserId).HasColumnName("requested_by_user_id").HasColumnType("uuid");
+            adjustment.Ignore(x => x.SubmittedAt);
+            adjustment.Property(x => x.RequestedAt).HasColumnName("requested_at").HasColumnType("timestamptz");
             adjustment.Property(x => x.Reason).HasColumnName("reason").HasColumnType("text").IsRequired();
             adjustment.Property(x => x.RequestSnapshot).HasColumnName("request_snapshot").HasColumnType("jsonb");
             adjustment.Property(x => x.ProposedChanges).HasColumnName("proposed_changes").HasColumnType("jsonb");
-            adjustment.Property(x => x.StoredEvidence).HasColumnName("evidence").HasColumnType("jsonb");
+            adjustment.Property(x => x.Evidence).HasColumnName("evidence").HasColumnType("jsonb");
             adjustment.Property(x => x.Status).HasColumnName("status").HasColumnType("varchar(12)").IsRequired();
             adjustment.Property(x => x.ApprovedDeltaAmount).HasColumnName("approved_delta_amount").HasColumnType("numeric(18,0)");
             adjustment.Property(x => x.DecidedByUserId).HasColumnName("decided_by_user_id").HasColumnType("uuid");
@@ -495,7 +523,7 @@ internal static class Compact24NativeModel
         }
         if (!archive)
         {
-            var payment = model.Entity<BHome.Domain.PaymentsDebt.PaymentTransfer>();
+            var payment = model.Entity<BHome.Domain.PaymentsDebt.Payment>();
             payment.ToTable("payments", "public", t => t.ExcludeFromMigrations());
             payment.Ignore(x => x.NormalizedReference);
             payment.Ignore(x => x.TransferDescription);
@@ -506,27 +534,30 @@ internal static class Compact24NativeModel
             payment.Ignore(x => x.StatementEvidenceLength);
             payment.Ignore(x => x.VerificationReason);
             payment.Ignore(x => x.VerificationSource);
-            payment.Ignore(x => x.VerifiedByUserId);
-            payment.Ignore(x => x.VerifiedAt);
+            payment.Ignore(x => x.ReceiptVerifiedByUserId);
+            payment.Ignore(x => x.ReceiptVerifiedAt);
             payment.Ignore(x => x.ProposedInvoiceId);
             payment.Ignore(x => x.ProposedDepositContractId);
             payment.Ignore(x => x.IsDevelopmentDemo);
             payment.Ignore(x => x.CreatedAt);
             payment.Ignore(x => x.UpdatedAt);
             payment.Property(x => x.Id).HasColumnName("id").HasColumnType("uuid");
-            payment.Property(x => x.ProviderIdentity).HasColumnName("provider_code").HasColumnType("varchar(80)").IsRequired();
+            payment.Ignore(x => x.ProviderIdentity);
+            payment.Property(x => x.ProviderCode).HasColumnName("provider_code").HasColumnType("varchar(80)").IsRequired();
             payment.Property(x => x.ReceivingAccountKey).HasColumnName("receiving_account_key").HasColumnType("varchar(200)").IsRequired();
-            payment.Property(x => x.BankReference).HasColumnName("transaction_reference").HasColumnType("varchar(150)").IsRequired();
+            payment.Ignore(x => x.BankReference);
+            payment.Property(x => x.TransactionReference).HasColumnName("transaction_reference").HasColumnType("varchar(150)").IsRequired();
             payment.Property(x => x.EffectKey).HasColumnName("effect_key").HasColumnType("varchar(250)");
-            payment.Property(x => x.OccurredAt).HasColumnName("received_at").HasColumnType("timestamptz");
+            payment.Ignore(x => x.OccurredAt);
+            payment.Property(x => x.ReceivedAt).HasColumnName("received_at").HasColumnType("timestamptz");
             payment.Property(x => x.Amount).HasColumnName("amount").HasColumnType("numeric(18,0)");
             payment.Property(x => x.Currency).HasColumnName("currency").HasColumnType("varchar(3)").IsRequired();
-            payment.Property(x => x.StoredRemittanceInfo).HasColumnName("remittance_info").HasColumnType("text");
+            payment.Property(x => x.RemittanceInfo).HasColumnName("remittance_info").HasColumnType("text");
             payment.Property(x => x.BeneficiaryResidentId).HasColumnName("beneficiary_resident_id").HasColumnType("uuid");
             payment.Property(x => x.Status).HasColumnName("status").HasColumnType("varchar(12)").IsRequired();
             payment.Property(x => x.VerificationMethod).HasColumnName("verification_method").HasColumnType("varchar(10)");
-            payment.Property(x => x.StoredVerifiedByUserId).HasColumnName("verified_by_user_id").HasColumnType("uuid");
-            payment.Property(x => x.StoredVerifiedAt).HasColumnName("verified_at").HasColumnType("timestamptz");
+            payment.Property(x => x.VerifiedByUserId).HasColumnName("verified_by_user_id").HasColumnType("uuid");
+            payment.Property(x => x.VerifiedAt).HasColumnName("verified_at").HasColumnType("timestamptz");
             payment.Property(x => x.VerificationData).HasColumnName("verification_data").HasColumnType("jsonb");
             payment.Property(x => x.History).HasColumnName("history").HasColumnType("jsonb");
         }
@@ -538,9 +569,11 @@ internal static class Compact24NativeModel
             allocation.Ignore(x => x.UpdatedAt);
             allocation.Ignore(x => x.VerifiedByUserId);
             allocation.Property(x => x.Id).HasColumnName("id").HasColumnType("uuid");
-            allocation.Property(x => x.TransferId).HasColumnName("source_payment_id").HasColumnType("uuid");
+            allocation.Ignore(x => x.TransferId);
+            allocation.Property(x => x.SourcePaymentId).HasColumnName("source_payment_id").HasColumnType("uuid");
             allocation.Property(x => x.SourceDepositContractId).HasColumnName("source_deposit_contract_id").HasColumnType("uuid");
-            allocation.Property(x => x.InvoiceId).HasColumnName("target_invoice_id").HasColumnType("uuid");
+            allocation.Ignore(x => x.InvoiceId);
+            allocation.Property(x => x.TargetInvoiceId).HasColumnName("target_invoice_id").HasColumnType("uuid");
             allocation.Property(x => x.TargetDepositContractId).HasColumnName("target_deposit_contract_id").HasColumnType("uuid");
             allocation.Property(x => x.TargetInitialContractId).HasColumnName("target_initial_contract_id").HasColumnType("uuid");
             allocation.Property(x => x.TargetSettlementContractId).HasColumnName("target_settlement_contract_id").HasColumnType("uuid");
@@ -569,111 +602,111 @@ internal static class Compact24NativeModel
     // constraints, indexes and deferred checks. No cascade writes from this read model.
     private static void ConfigureRelationships(ModelBuilder model, bool archive)
     {
-        model.Entity<CompactRefreshRow>().HasOne<ApplicationUser>().WithMany().HasForeignKey(x => x.UserId).OnDelete(DeleteBehavior.Restrict);
-        model.Entity<CompactRefreshRow>().HasOne<CompactRefreshRow>().WithMany().HasForeignKey(x => x.SessionId).OnDelete(DeleteBehavior.Restrict);
-        model.Entity<CompactRefreshRow>().HasOne<CompactRefreshRow>().WithMany().HasForeignKey(x => x.ReplacedByTokenId).OnDelete(DeleteBehavior.NoAction);
-        model.Entity<Native.StaffEmployment>().HasOne<ApplicationUser>().WithMany().HasForeignKey(x => x.StaffUserId).OnDelete(DeleteBehavior.NoAction);
-        if (!archive) model.Entity<BHome.Domain.Locations.Location>().HasOne<ApplicationUser>().WithMany().HasForeignKey(x => x.PublishedByUserId).OnDelete(DeleteBehavior.NoAction);
+        model.Entity<RefreshToken>().HasOne<User>().WithMany().HasForeignKey(x => x.UserId).OnDelete(DeleteBehavior.Restrict);
+        model.Entity<RefreshToken>().HasOne<RefreshToken>().WithMany().HasForeignKey(x => x.SessionId).OnDelete(DeleteBehavior.Restrict);
+        model.Entity<RefreshToken>().HasOne<RefreshToken>().WithMany().HasForeignKey(x => x.ReplacedByTokenId).OnDelete(DeleteBehavior.NoAction);
+        model.Entity<Native.StaffEmployment>().HasOne<User>().WithMany().HasForeignKey(x => x.StaffUserId).OnDelete(DeleteBehavior.NoAction);
+        if (!archive) model.Entity<BHome.Domain.Locations.Location>().HasOne<User>().WithMany().HasForeignKey(x => x.PublishedByUserId).OnDelete(DeleteBehavior.NoAction);
         if (!archive) model.Entity<BHome.Domain.PropertyManagement.Room>().HasOne<BHome.Domain.Locations.Location>().WithMany().HasForeignKey(x => x.LocationId).OnDelete(DeleteBehavior.NoAction);
-        if (!archive) model.Entity<BHome.Domain.PropertyManagement.Room>().HasOne<ApplicationUser>().WithMany().HasForeignKey(x => x.PublishedByUserId).OnDelete(DeleteBehavior.NoAction);
+        if (!archive) model.Entity<BHome.Domain.PropertyManagement.Room>().HasOne<User>().WithMany().HasForeignKey(x => x.PublishedByUserId).OnDelete(DeleteBehavior.NoAction);
         if (!archive) model.Entity<BHome.Domain.PropertyManagement.Asset>().HasOne<BHome.Domain.Locations.Location>().WithMany().HasForeignKey(x => x.LocationId).OnDelete(DeleteBehavior.NoAction);
         if (!archive) model.Entity<BHome.Domain.PropertyManagement.Asset>().HasOne<BHome.Domain.PropertyManagement.Room>().WithMany().HasForeignKey(x => new { x.RoomId, x.LocationId }).HasPrincipalKey(x => new { x.Id, x.LocationId }).OnDelete(DeleteBehavior.NoAction);
-        if (!archive) model.Entity<BHome.Domain.TenantContracts.Resident>().HasOne<ApplicationUser>().WithMany().HasForeignKey(x => x.TenantUserId).OnDelete(DeleteBehavior.NoAction);
-        if (!archive) model.Entity<BHome.Domain.TenantContracts.Resident>().HasOne<BHome.Domain.PropertyManagement.Room>().WithMany().HasForeignKey(x => x.RoomId).OnDelete(DeleteBehavior.NoAction);
-        if (!archive) model.Entity<BHome.Domain.TenantContracts.Resident>().HasOne<ApplicationUser>().WithMany().HasForeignKey(x => x.OwnerUserId).OnDelete(DeleteBehavior.NoAction);
-        if (!archive) model.Entity<BHome.Domain.TenantContracts.Resident>().HasOne<ApplicationUser>().WithMany().HasForeignKey(x => x.ConfirmedByUserId).OnDelete(DeleteBehavior.NoAction);
+        if (!archive) model.Entity<BHome.Domain.TenantContracts.Resident>().HasOne<User>().WithMany().HasForeignKey(x => x.UserId).OnDelete(DeleteBehavior.NoAction);
+        if (!archive) model.Entity<BHome.Domain.TenantContracts.Resident>().HasOne<BHome.Domain.PropertyManagement.Room>().WithMany().HasForeignKey(x => x.CurrentRoomId).OnDelete(DeleteBehavior.NoAction);
+        if (!archive) model.Entity<BHome.Domain.TenantContracts.Resident>().HasOne<User>().WithMany().HasForeignKey(x => x.IdentityOwnerScopeId).OnDelete(DeleteBehavior.NoAction);
+        if (!archive) model.Entity<BHome.Domain.TenantContracts.Resident>().HasOne<User>().WithMany().HasForeignKey(x => x.VerifiedByUserId).OnDelete(DeleteBehavior.NoAction);
         if (!archive) model.Entity<BHome.Domain.TenantContracts.Contract>().HasOne<BHome.Domain.PropertyManagement.Room>().WithMany().HasForeignKey(x => x.RoomId).OnDelete(DeleteBehavior.NoAction);
         if (!archive) model.Entity<BHome.Domain.TenantContracts.Contract>().HasOne<BHome.Domain.TenantContracts.Resident>().WithMany().HasForeignKey(x => x.RepresentativeResidentId).OnDelete(DeleteBehavior.NoAction);
-        if (!archive) model.Entity<BHome.Domain.TenantContracts.Contract>().HasOne<ApplicationUser>().WithMany().HasForeignKey(x => x.TenantUserId).OnDelete(DeleteBehavior.NoAction);
-        if (!archive) model.Entity<BHome.Domain.TenantContracts.Contract>().HasOne<ApplicationUser>().WithMany().HasForeignKey(x => x.OwnerSignerId).OnDelete(DeleteBehavior.NoAction);
+        if (!archive) model.Entity<BHome.Domain.TenantContracts.Contract>().HasOne<User>().WithMany().HasForeignKey(x => x.TenantUserId).OnDelete(DeleteBehavior.NoAction);
+        if (!archive) model.Entity<BHome.Domain.TenantContracts.Contract>().HasOne<User>().WithMany().HasForeignKey(x => x.OwnerSignerId).OnDelete(DeleteBehavior.NoAction);
         if (!archive) model.Entity<BHome.Domain.TenantContracts.Contract>().HasOne<BHome.Domain.TenantContracts.Contract>().WithMany().HasForeignKey(x => x.PreviousContractId).OnDelete(DeleteBehavior.NoAction);
         if (!archive) model.Entity<BHome.Domain.TenantContracts.Contract>().HasOne<BHome.Domain.TenantContracts.Contract>().WithMany().HasForeignKey(x => x.ParentContractId).OnDelete(DeleteBehavior.NoAction);
-        if (!archive) model.Entity<BHome.Domain.TenantContracts.Contract>().HasOne<BHome.Domain.TenantContracts.Contract>().WithMany().HasForeignKey(x => x.HoldingContractId).OnDelete(DeleteBehavior.NoAction);
-        if (!archive) model.Entity<BHome.Domain.TenantContracts.Contract>().HasOne<ApplicationUser>().WithMany().HasForeignKey(x => x.ActivatedByUserId).OnDelete(DeleteBehavior.NoAction);
-        if (!archive) model.Entity<BHome.Domain.TenantContracts.ContractSignature>().HasOne<BHome.Domain.TenantContracts.Contract>().WithMany().HasForeignKey(x => x.ContractId).OnDelete(DeleteBehavior.NoAction);
-        if (!archive) model.Entity<BHome.Domain.TenantContracts.ContractSignature>().HasOne<ApplicationUser>().WithMany().HasForeignKey(x => x.SignerUserId).OnDelete(DeleteBehavior.NoAction);
+        if (!archive) model.Entity<BHome.Domain.TenantContracts.Contract>().HasOne<BHome.Domain.TenantContracts.Contract>().WithMany().HasForeignKey(x => x.SourceHoldingContractId).OnDelete(DeleteBehavior.NoAction);
+        if (!archive) model.Entity<BHome.Domain.TenantContracts.Contract>().HasOne<User>().WithMany().HasForeignKey(x => x.ActivatedByUserId).OnDelete(DeleteBehavior.NoAction);
+        if (!archive) model.Entity<BHome.Domain.TenantContracts.ContractSigning>().HasOne<BHome.Domain.TenantContracts.Contract>().WithMany().HasForeignKey(x => x.ContractId).OnDelete(DeleteBehavior.NoAction);
+        if (!archive) model.Entity<BHome.Domain.TenantContracts.ContractSigning>().HasOne<User>().WithMany().HasForeignKey(x => x.SignerUserId).OnDelete(DeleteBehavior.NoAction);
         if (!archive)
         {
             model.Entity<BHome.Domain.TenantContracts.ContractResident>().HasOne<BHome.Domain.TenantContracts.Contract>().WithMany().HasForeignKey(x => x.ContractId).OnDelete(DeleteBehavior.NoAction);
             model.Entity<BHome.Domain.TenantContracts.ContractResident>().HasOne<BHome.Domain.TenantContracts.Resident>().WithMany().HasForeignKey(x => x.ResidentId).OnDelete(DeleteBehavior.NoAction);
-            model.Entity<BHome.Domain.TenantContracts.ContractResident>().HasOne<ApplicationUser>().WithMany().HasForeignKey(x => x.OwnerConfirmedByUserId).OnDelete(DeleteBehavior.NoAction);
+            model.Entity<BHome.Domain.TenantContracts.ContractResident>().HasOne<User>().WithMany().HasForeignKey(x => x.OwnerConfirmedByUserId).OnDelete(DeleteBehavior.NoAction);
         }
         if (!archive)
         {
             var incident = model.Entity<BHome.Domain.IncidentMaintenance.IncidentReport>();
             incident.HasOne<BHome.Domain.Locations.Location>().WithMany().HasForeignKey(x => x.LocationId).OnDelete(DeleteBehavior.NoAction);
-            incident.HasOne<ApplicationUser>().WithMany().HasForeignKey(x => x.ReporterId).OnDelete(DeleteBehavior.NoAction);
-            incident.HasOne<BHome.Domain.IncidentMaintenance.IncidentReport>().WithMany().HasForeignKey(x => x.DuplicateOfId).OnDelete(DeleteBehavior.NoAction);
+            incident.HasOne<User>().WithMany().HasForeignKey(x => x.ReporterUserId).OnDelete(DeleteBehavior.NoAction);
+            incident.HasOne<BHome.Domain.IncidentMaintenance.IncidentReport>().WithMany().HasForeignKey(x => x.DuplicateOfReportId).OnDelete(DeleteBehavior.NoAction);
             incident.HasOne<BHome.Domain.PropertyManagement.Room>().WithMany().HasForeignKey(x => new { x.RoomId, x.LocationId }).HasPrincipalKey(x => new { x.Id, x.LocationId }).OnDelete(DeleteBehavior.NoAction);
             incident.HasOne<BHome.Domain.PropertyManagement.Asset>().WithMany().HasForeignKey(x => new { x.AssetId, x.LocationId }).HasPrincipalKey(x => new { x.Id, x.LocationId }).OnDelete(DeleteBehavior.NoAction);
         }
-        if (!archive) model.Entity<BHome.Domain.Billing.OperationalTask>().HasOne<BHome.Domain.Locations.Location>().WithMany().HasForeignKey(x => x.StoredLocationId).OnDelete(DeleteBehavior.NoAction);
-        if (!archive) model.Entity<BHome.Domain.Billing.OperationalTask>().HasOne<ApplicationUser>().WithMany().HasForeignKey(x => x.AssignedUserId).OnDelete(DeleteBehavior.NoAction);
+        if (!archive) model.Entity<BHome.Domain.Billing.OperationalTask>().HasOne<BHome.Domain.Locations.Location>().WithMany().HasForeignKey(x => x.LocationId).OnDelete(DeleteBehavior.NoAction);
+        if (!archive) model.Entity<BHome.Domain.Billing.OperationalTask>().HasOne<User>().WithMany().HasForeignKey(x => x.AssignedUserId).OnDelete(DeleteBehavior.NoAction);
         if (!archive) model.Entity<BHome.Domain.Billing.OperationalTask>().HasOne<BHome.Domain.TenantContracts.Contract>().WithMany().HasForeignKey(x => x.ContractId).OnDelete(DeleteBehavior.NoAction);
         if (!archive) model.Entity<BHome.Domain.Billing.OperationalTask>().HasOne<BHome.Domain.IncidentMaintenance.IncidentReport>().WithMany().HasForeignKey(x => x.IncidentReportId).OnDelete(DeleteBehavior.NoAction);
-        if (!archive) model.Entity<BHome.Domain.Billing.OperationalTask>().HasOne<ApplicationUser>().WithMany().HasForeignKey(x => x.CostApprovedByUserId).OnDelete(DeleteBehavior.NoAction);
-        if (!archive) model.Entity<BHome.Domain.Billing.OperationalTask>().HasOne<ApplicationUser>().WithMany().HasForeignKey(x => x.VerifiedByUserId).OnDelete(DeleteBehavior.NoAction);
-        if (!archive) model.Entity<BHome.Domain.Billing.OperationalTask>().HasOne<BHome.Domain.PropertyManagement.Room>().WithMany().HasForeignKey(x => new { x.RoomId, x.StoredLocationId }).HasPrincipalKey(x => new { x.Id, x.LocationId }).OnDelete(DeleteBehavior.NoAction);
-        if (!archive) model.Entity<BHome.Domain.Billing.OperationalTask>().HasOne<BHome.Domain.PropertyManagement.Asset>().WithMany().HasForeignKey(x => new { x.AssetId, x.StoredLocationId }).HasPrincipalKey(x => new { x.Id, x.LocationId }).OnDelete(DeleteBehavior.NoAction);
+        if (!archive) model.Entity<BHome.Domain.Billing.OperationalTask>().HasOne<User>().WithMany().HasForeignKey(x => x.CostApprovedByUserId).OnDelete(DeleteBehavior.NoAction);
+        if (!archive) model.Entity<BHome.Domain.Billing.OperationalTask>().HasOne<User>().WithMany().HasForeignKey(x => x.VerifiedByUserId).OnDelete(DeleteBehavior.NoAction);
+        if (!archive) model.Entity<BHome.Domain.Billing.OperationalTask>().HasOne<BHome.Domain.PropertyManagement.Room>().WithMany().HasForeignKey(x => new { x.RoomId, x.LocationId }).HasPrincipalKey(x => new { x.Id, x.LocationId }).OnDelete(DeleteBehavior.NoAction);
+        if (!archive) model.Entity<BHome.Domain.Billing.OperationalTask>().HasOne<BHome.Domain.PropertyManagement.Asset>().WithMany().HasForeignKey(x => new { x.AssetId, x.LocationId }).HasPrincipalKey(x => new { x.Id, x.LocationId }).OnDelete(DeleteBehavior.NoAction);
         if (!archive)
         {
             model.Entity<BHome.Domain.Billing.Meter>().HasOne<BHome.Domain.PropertyManagement.Room>().WithMany().HasForeignKey(x => x.RoomId).OnDelete(DeleteBehavior.NoAction);
             model.Entity<BHome.Domain.Billing.Meter>().HasOne<BHome.Domain.Billing.Meter>().WithMany().HasForeignKey(x => x.PreviousMeterId).OnDelete(DeleteBehavior.NoAction);
             model.Entity<BHome.Domain.Billing.MeterReading>().HasOne<BHome.Domain.Billing.Meter>().WithMany().HasForeignKey(x => x.MeterId).OnDelete(DeleteBehavior.NoAction);
-            model.Entity<BHome.Domain.Billing.MeterReading>().HasOne<BHome.Domain.Billing.OperationalTask>().WithOne().HasForeignKey<BHome.Domain.Billing.MeterReading>(x => x.TaskId).OnDelete(DeleteBehavior.NoAction);
-            model.Entity<BHome.Domain.Billing.MeterReading>().HasOne<ApplicationUser>().WithMany().HasForeignKey(x => x.ConfirmedByUserId).OnDelete(DeleteBehavior.NoAction);
+            model.Entity<BHome.Domain.Billing.MeterReading>().HasOne<BHome.Domain.Billing.OperationalTask>().WithOne().HasForeignKey<BHome.Domain.Billing.MeterReading>(x => x.OperationalTaskId).OnDelete(DeleteBehavior.NoAction);
+            model.Entity<BHome.Domain.Billing.MeterReading>().HasOne<User>().WithMany().HasForeignKey(x => x.ConfirmedByUserId).OnDelete(DeleteBehavior.NoAction);
         }
         if (!archive) model.Entity<BHome.Domain.PropertyManagement.BillingPolicy>().HasOne<BHome.Domain.Locations.Location>().WithMany().HasForeignKey(x => x.LocationId).OnDelete(DeleteBehavior.NoAction);
         if (!archive) model.Entity<BHome.Domain.PropertyManagement.BillingPolicy>().HasOne<BHome.Domain.PropertyManagement.Room>().WithMany().HasForeignKey(x => new { x.RoomId, x.LocationId }).HasPrincipalKey(x => new { x.Id, x.LocationId }).OnDelete(DeleteBehavior.NoAction);
         if (!archive) model.Entity<BHome.Domain.Billing.Invoice>().HasOne<BHome.Domain.Locations.Location>().WithMany().HasForeignKey(x => x.LocationId).OnDelete(DeleteBehavior.NoAction);
-        if (!archive) model.Entity<BHome.Domain.Billing.Invoice>().HasOne<BHome.Domain.TenantContracts.Contract>().WithMany().HasForeignKey(x => x.RepresentativeContractId).OnDelete(DeleteBehavior.NoAction);
-        if (!archive) model.Entity<BHome.Domain.Billing.Invoice>().HasOne<ApplicationUser>().WithMany().HasForeignKey(x => x.RepresentativeTenantUserId).OnDelete(DeleteBehavior.NoAction);
-        if (!archive) model.Entity<BHome.Domain.Billing.Invoice>().HasOne<ApplicationUser>().WithMany().HasForeignKey(x => x.FinalizedByUserId).OnDelete(DeleteBehavior.NoAction);
+        if (!archive) model.Entity<BHome.Domain.Billing.Invoice>().HasOne<BHome.Domain.TenantContracts.Contract>().WithMany().HasForeignKey(x => x.ContractId).OnDelete(DeleteBehavior.NoAction);
+        if (!archive) model.Entity<BHome.Domain.Billing.Invoice>().HasOne<User>().WithMany().HasForeignKey(x => x.RepresentativeTenantUserId).OnDelete(DeleteBehavior.NoAction);
+        if (!archive) model.Entity<BHome.Domain.Billing.Invoice>().HasOne<User>().WithMany().HasForeignKey(x => x.FinalizedByUserId).OnDelete(DeleteBehavior.NoAction);
         if (!archive) model.Entity<BHome.Domain.Billing.Invoice>().HasOne<BHome.Domain.PropertyManagement.Room>().WithMany().HasForeignKey(x => new { x.RoomId, x.LocationId }).HasPrincipalKey(x => new { x.Id, x.LocationId }).OnDelete(DeleteBehavior.NoAction);
-        if (!archive) model.Entity<BHome.Domain.Billing.InvoiceLine>().HasOne<BHome.Domain.Billing.Invoice>().WithMany().HasForeignKey(x => x.InvoiceId).OnDelete(DeleteBehavior.NoAction);
-        if (!archive) model.Entity<BHome.Domain.Billing.InvoiceLine>().HasOne<BHome.Domain.PropertyManagement.BillingPolicy>().WithMany().HasForeignKey(x => x.PolicyId).OnDelete(DeleteBehavior.NoAction);
-        if (!archive) model.Entity<BHome.Domain.Billing.InvoiceLine>().HasOne<BHome.Domain.Billing.MeterReading>().WithMany().HasForeignKey(x => x.MeterReadingId).OnDelete(DeleteBehavior.NoAction);
+        if (!archive) model.Entity<BHome.Domain.Billing.InvoiceItem>().HasOne<BHome.Domain.Billing.Invoice>().WithMany().HasForeignKey(x => x.InvoiceId).OnDelete(DeleteBehavior.NoAction);
+        if (!archive) model.Entity<BHome.Domain.Billing.InvoiceItem>().HasOne<BHome.Domain.PropertyManagement.BillingPolicy>().WithMany().HasForeignKey(x => x.BillingPolicyId).OnDelete(DeleteBehavior.NoAction);
+        if (!archive) model.Entity<BHome.Domain.Billing.InvoiceItem>().HasOne<BHome.Domain.Billing.MeterReading>().WithMany().HasForeignKey(x => x.MeterReadingId).OnDelete(DeleteBehavior.NoAction);
         if (!archive)
         {
-            var adjustment = model.Entity<BHome.Domain.Billing.InvoiceAdjustmentRequest>();
+            var adjustment = model.Entity<BHome.Domain.Billing.InvoiceAdjustment>();
             adjustment.HasOne<BHome.Domain.Billing.Invoice>().WithMany().HasForeignKey(x => x.InvoiceId).OnDelete(DeleteBehavior.NoAction);
-            adjustment.HasOne<ApplicationUser>().WithMany().HasForeignKey(x => x.RequesterId).OnDelete(DeleteBehavior.NoAction);
-            adjustment.HasOne<ApplicationUser>().WithMany().HasForeignKey(x => x.DecidedByUserId).OnDelete(DeleteBehavior.NoAction);
+            adjustment.HasOne<User>().WithMany().HasForeignKey(x => x.RequestedByUserId).OnDelete(DeleteBehavior.NoAction);
+            adjustment.HasOne<User>().WithMany().HasForeignKey(x => x.DecidedByUserId).OnDelete(DeleteBehavior.NoAction);
         }
         if (!archive)
         {
-            var payment = model.Entity<BHome.Domain.PaymentsDebt.PaymentTransfer>();
+            var payment = model.Entity<BHome.Domain.PaymentsDebt.Payment>();
             payment.HasOne<BHome.Domain.TenantContracts.Resident>().WithMany().HasForeignKey(x => x.BeneficiaryResidentId).OnDelete(DeleteBehavior.NoAction);
-            payment.HasOne<ApplicationUser>().WithMany().HasForeignKey(x => x.StoredVerifiedByUserId).OnDelete(DeleteBehavior.NoAction);
+            payment.HasOne<User>().WithMany().HasForeignKey(x => x.VerifiedByUserId).OnDelete(DeleteBehavior.NoAction);
         }
         if (!archive)
         {
             var allocation = model.Entity<BHome.Domain.PaymentsDebt.PaymentAllocation>();
-            allocation.HasOne<BHome.Domain.PaymentsDebt.PaymentTransfer>().WithMany().HasForeignKey(x => x.TransferId).OnDelete(DeleteBehavior.NoAction);
+            allocation.HasOne<BHome.Domain.PaymentsDebt.Payment>().WithMany().HasForeignKey(x => x.SourcePaymentId).OnDelete(DeleteBehavior.NoAction);
             allocation.HasOne<BHome.Domain.TenantContracts.Contract>().WithMany().HasForeignKey(x => x.SourceDepositContractId).OnDelete(DeleteBehavior.NoAction);
-            allocation.HasOne<BHome.Domain.Billing.Invoice>().WithMany().HasForeignKey(x => x.InvoiceId).OnDelete(DeleteBehavior.NoAction);
+            allocation.HasOne<BHome.Domain.Billing.Invoice>().WithMany().HasForeignKey(x => x.TargetInvoiceId).OnDelete(DeleteBehavior.NoAction);
             allocation.HasOne<BHome.Domain.TenantContracts.Contract>().WithMany().HasForeignKey(x => x.TargetDepositContractId).OnDelete(DeleteBehavior.NoAction);
             allocation.HasOne<BHome.Domain.TenantContracts.Contract>().WithMany().HasForeignKey(x => x.TargetInitialContractId).OnDelete(DeleteBehavior.NoAction);
             allocation.HasOne<BHome.Domain.TenantContracts.Contract>().WithMany().HasForeignKey(x => x.TargetSettlementContractId).OnDelete(DeleteBehavior.NoAction);
             allocation.HasOne<BHome.Domain.PaymentsDebt.PaymentAllocation>().WithOne().HasForeignKey<BHome.Domain.PaymentsDebt.PaymentAllocation>(x => x.ReversalOfAllocationId).OnDelete(DeleteBehavior.NoAction);
-            allocation.HasOne<ApplicationUser>().WithMany().HasForeignKey(x => x.PaidByUserId).OnDelete(DeleteBehavior.NoAction);
-            allocation.HasOne<ApplicationUser>().WithMany().HasForeignKey(x => x.CreatedByUserId).OnDelete(DeleteBehavior.NoAction);
+            allocation.HasOne<User>().WithMany().HasForeignKey(x => x.PaidByUserId).OnDelete(DeleteBehavior.NoAction);
+            allocation.HasOne<User>().WithMany().HasForeignKey(x => x.CreatedByUserId).OnDelete(DeleteBehavior.NoAction);
         }
-        if (!archive) model.Entity<Native.RefundRequest>().HasOne<BHome.Domain.PaymentsDebt.PaymentTransfer>().WithMany().HasForeignKey(x => x.SourcePaymentId).OnDelete(DeleteBehavior.NoAction);
+        if (!archive) model.Entity<Native.RefundRequest>().HasOne<BHome.Domain.PaymentsDebt.Payment>().WithMany().HasForeignKey(x => x.SourcePaymentId).OnDelete(DeleteBehavior.NoAction);
         if (!archive) model.Entity<Native.RefundRequest>().HasOne<BHome.Domain.TenantContracts.Contract>().WithMany().HasForeignKey(x => x.SourceDepositContractId).OnDelete(DeleteBehavior.NoAction);
         if (!archive) model.Entity<Native.RefundRequest>().HasOne<BHome.Domain.TenantContracts.Resident>().WithMany().HasForeignKey(x => x.BeneficiaryResidentId).OnDelete(DeleteBehavior.NoAction);
-        model.Entity<Native.RefundRequest>().HasOne<ApplicationUser>().WithMany().HasForeignKey(x => x.RequestedByUserId).OnDelete(DeleteBehavior.NoAction);
-        model.Entity<Native.RefundRequest>().HasOne<ApplicationUser>().WithMany().HasForeignKey(x => x.DecidedByUserId).OnDelete(DeleteBehavior.NoAction);
+        model.Entity<Native.RefundRequest>().HasOne<User>().WithMany().HasForeignKey(x => x.RequestedByUserId).OnDelete(DeleteBehavior.NoAction);
+        model.Entity<Native.RefundRequest>().HasOne<User>().WithMany().HasForeignKey(x => x.DecidedByUserId).OnDelete(DeleteBehavior.NoAction);
         if (!archive) model.Entity<Native.Expense>().HasOne<BHome.Domain.Locations.Location>().WithMany().HasForeignKey(x => x.LocationId).OnDelete(DeleteBehavior.NoAction);
         if (!archive) model.Entity<Native.Expense>().HasOne<BHome.Domain.IncidentMaintenance.IncidentReport>().WithMany().HasForeignKey(x => x.IncidentReportId).OnDelete(DeleteBehavior.NoAction);
         if (!archive) model.Entity<Native.Expense>().HasOne<BHome.Domain.Billing.OperationalTask>().WithMany().HasForeignKey(x => x.TaskId).OnDelete(DeleteBehavior.NoAction);
-        model.Entity<Native.Expense>().HasOne<ApplicationUser>().WithMany().HasForeignKey(x => x.RecordedByUserId).OnDelete(DeleteBehavior.NoAction);
+        model.Entity<Native.Expense>().HasOne<User>().WithMany().HasForeignKey(x => x.RecordedByUserId).OnDelete(DeleteBehavior.NoAction);
         if (!archive) model.Entity<Native.Expense>().HasOne<BHome.Domain.PropertyManagement.Room>().WithMany().HasForeignKey(x => new { x.RoomId, x.LocationId }).HasPrincipalKey(x => new { x.Id, x.LocationId }).OnDelete(DeleteBehavior.NoAction);
         if (!archive) model.Entity<Native.Expense>().HasOne<BHome.Domain.PropertyManagement.Asset>().WithMany().HasForeignKey(x => new { x.AssetId, x.LocationId }).HasPrincipalKey(x => new { x.Id, x.LocationId }).OnDelete(DeleteBehavior.NoAction);
         if (!archive) model.Entity<Native.FinancialScenario>().HasOne<BHome.Domain.Locations.Location>().WithMany().HasForeignKey(x => x.LocationId).OnDelete(DeleteBehavior.NoAction);
-        model.Entity<Native.FinancialScenario>().HasOne<ApplicationUser>().WithMany().HasForeignKey(x => x.CreatedByUserId).OnDelete(DeleteBehavior.NoAction);
-        model.Entity<Native.Notification>().HasOne<ApplicationUser>().WithMany().HasForeignKey(x => x.RecipientUserId).OnDelete(DeleteBehavior.NoAction);
-        model.Entity<Native.Notification>().HasOne<ApplicationUser>().WithMany().HasForeignKey(x => x.ActorUserId).OnDelete(DeleteBehavior.NoAction);
+        model.Entity<Native.FinancialScenario>().HasOne<User>().WithMany().HasForeignKey(x => x.CreatedByUserId).OnDelete(DeleteBehavior.NoAction);
+        model.Entity<Native.Notification>().HasOne<User>().WithMany().HasForeignKey(x => x.RecipientUserId).OnDelete(DeleteBehavior.NoAction);
+        model.Entity<Native.Notification>().HasOne<User>().WithMany().HasForeignKey(x => x.ActorUserId).OnDelete(DeleteBehavior.NoAction);
         if (!archive) model.Entity<Native.Notification>().HasOne<BHome.Domain.Locations.Location>().WithMany().HasForeignKey(x => x.LocationId).OnDelete(DeleteBehavior.NoAction);
         if (!archive) model.Entity<BHome.Domain.Billing.OperationalTask>().HasOne<BHome.Domain.Billing.Meter>().WithMany().HasForeignKey(x => x.MeterId).OnDelete(DeleteBehavior.NoAction);
     }

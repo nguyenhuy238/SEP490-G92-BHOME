@@ -80,8 +80,8 @@ internal sealed partial class RefundRepository(BHomePersistenceContext db, BHome
                 verified_at AS "VerifiedAt",COALESCE((verification_data->'compactState'->>'isDevelopmentDemo')::boolean,false) AS "IsDevelopmentDemo"
             FROM payments WHERE id={id} AND verification_data ? 'compactState'
             """).SingleOrDefaultAsync(t) ?? throw new FinanceException(404, "bank_transfer_not_found");
-        var allocation = await db.Set<BHome.Domain.PaymentsDebt.PaymentAllocation>().AsNoTracking().SingleOrDefaultAsync(a => a.TransferId == id &&
-            (a.InvoiceId != null || a.TargetDepositContractId != null || a.TargetSettlementContractId != null || a.TargetInitialContractId != null), t);
+        var allocation = await db.Set<BHome.Domain.PaymentsDebt.PaymentAllocation>().AsNoTracking().SingleOrDefaultAsync(a => a.SourcePaymentId == id &&
+            (a.TargetInvoiceId != null || a.TargetDepositContractId != null || a.TargetSettlementContractId != null || a.TargetInitialContractId != null), t);
         var whole = allocation is null ? await BHome.Infrastructure.PaymentsDebt.ReceiptExcessRecords.ReadAsync(db, id, t) : null;
         var external = await BHome.Infrastructure.PaymentsDebt.ExternalPaymentPayerRecords.ReadAsync(db, id, t);
         if (external is not null && (external.TransferFingerprint != payment.Fingerprint() || allocation?.PaidByUserId is not null ||

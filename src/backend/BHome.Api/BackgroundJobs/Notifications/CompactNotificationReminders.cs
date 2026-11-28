@@ -56,8 +56,8 @@ internal sealed partial class CompactNotificationEvents
             if (policy.TaskEnabled && policy.TaskWindowHours is > 0)
             {
                 var window = sql.Now.ToUnixTimeSeconds() / (policy.TaskWindowHours.Value * 3600L);
-                var tasks = await NativeOperationalTaskPersistence.Roots(db).Where(x => x.StoredLocationId == location &&
-                    x.DueAt <= sql.Now && x.StoredStatus != "2" && x.StoredStatus != "3").ToArrayAsync(t);
+                var tasks = await NativeOperationalTaskPersistence.Roots(db).Where(x => x.LocationId == location &&
+                    x.DueAt <= sql.Now && x.Status != "2" && x.Status != "3").ToArrayAsync(t);
                 foreach (var row in tasks)
                 {
                     var task = NativeCaptureReads.Task(row);

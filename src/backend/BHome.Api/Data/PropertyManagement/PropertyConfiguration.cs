@@ -70,7 +70,7 @@ internal sealed class PropertyChangeConfiguration : IEntityTypeConfiguration<Pro
     public void Configure(EntityTypeBuilder<PropertyChange> b)
     {
         b.ToTable("PropertyChanges"); b.HasKey(x => x.Id);
-        b.HasOne<ApplicationUser>().WithMany().HasForeignKey(x => x.ActorId).OnDelete(DeleteBehavior.Restrict);
+        b.HasOne<User>().WithMany().HasForeignKey(x => x.ActorId).OnDelete(DeleteBehavior.Restrict);
         b.HasOne<Location>().WithMany().HasForeignKey(x => x.LocationId).OnDelete(DeleteBehavior.Restrict);
         b.Property(x => x.TargetType).HasMaxLength(100); b.Property(x => x.Action).HasMaxLength(50);
         b.Property(x => x.Reason).HasMaxLength(500); b.Property(x => x.Before).HasColumnType("jsonb"); b.Property(x => x.After).HasColumnType("jsonb");

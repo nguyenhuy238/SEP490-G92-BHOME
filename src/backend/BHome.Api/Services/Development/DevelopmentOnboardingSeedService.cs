@@ -28,7 +28,7 @@ public sealed record DevelopmentOnboardingSeedResult(Guid ContractId, Guid RoomI
 
 // The explicitly approved demo shortcut does not change the normal contract workflow.
 public sealed class DevelopmentOnboardingSeedService(
-    BHomePersistenceContext db, ICurrentUser actor, UserManager<ApplicationUser> users,
+    BHomePersistenceContext db, ICurrentUser actor, UserManager<User> users,
     IIdentityProtection identities, IContractRepository contracts, IPropertyLifecycleChecks lifecycle,
     RoomInventoryReviewService inventory, TimeProvider clock,
     IHostEnvironment environment, IConfiguration configuration)
@@ -124,7 +124,7 @@ public sealed class DevelopmentOnboardingSeedService(
             var nameLabel = $"Khách thuê TEST {suffix.ToUpperInvariant()}";
             var tenantPassword = string.IsNullOrEmpty(configuredPassword)
                 ? "Bhome!9a-" + Convert.ToHexString(RandomNumberGenerator.GetBytes(18)) : configuredPassword;
-            var tenant = new ApplicationUser
+            var tenant = new User
             {
                 UserName = emailAddress,
                 Email = emailAddress,
@@ -171,7 +171,7 @@ public sealed class DevelopmentOnboardingSeedService(
                 EndDate = endDate,
                 Kind = ContractKind.Main,
                 Status = ContractStatus.Active,
-                MonthlyRent = rent.Rate,
+                RentAmount = rent.Rate,
                 // Demo contract explicitly has no deposit or initial payment obligation.
                 // There is no simulated verification, signature, or payment record.
                 RequiredDeposit = 0,
@@ -189,11 +189,11 @@ public sealed class DevelopmentOnboardingSeedService(
             var charges = prices.Charges.Select(p => new HoldingPriceCharge(p.Id, p.ChargeCode, (int)p.Category,
                 (int)p.Method, p.Rate, p.EffectiveFrom, p.EffectiveTo, p.Version)
             { Name = p.Name, PolicyLocationId = p.LocationId, PolicyRoomId = p.RoomId, PolicyRoomTypeId = p.RoomTypeId }).ToArray();
-            contract.AgreedPriceSnapshot = JsonSerializer.Serialize(new HoldingPriceSnapshot(contract.MonthlyRent,
+            contract.AgreedPriceSnapshot = JsonSerializer.Serialize(new HoldingPriceSnapshot(contract.RentAmount,
                 contract.RequiredDeposit, today, endDate, default, "DevelopmentSyntheticFixture", now, charges)
             { SnapshotVersion = 1 });
-            contract.SnapshotHash = ContractDocumentSnapshot.Hash(new ContractDocument(contract.Id, room.Id,
-                ownerId, tenant.Id, resident.Id, [resident.Id], today, endDate, contract.MonthlyRent,
+            contract.SnapshotHashOrEmpty = ContractDocumentSnapshot.Hash(new ContractDocument(contract.Id, room.Id,
+                ownerId, tenant.Id, resident.Id, [resident.Id], today, endDate, contract.RentAmount,
                 contract.RequiredDeposit, null, 0, contract.Terms, "")
             { AgreedCharges = charges });
             room.Status = RoomStatus.Occupied;

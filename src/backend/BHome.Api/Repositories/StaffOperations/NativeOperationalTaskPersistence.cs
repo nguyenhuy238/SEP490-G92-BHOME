@@ -45,7 +45,7 @@ internal static class NativeOperationalTaskPersistence
         if (staffId is { } staff)
         {
             var allowed = Assignments(db, date).Where(a => a.IsActive && a.StaffUserId == staff).Select(a => a.LocationId);
-            rows = rows.Where(x => x.StoredLocationId != null && allowed.Contains(x.StoredLocationId.Value));
+            rows = rows.Where(x => x.LocationId != null && allowed.Contains(x.LocationId.Value));
         }
         return rows;
     }
@@ -116,8 +116,8 @@ internal static class NativeOperationalTaskPersistence
         return new(page.Where(x => tasks.ContainsKey(x.Id)).Select(x =>
         {
             var task = tasks[x.Id];
-            return new TaskView(task.Id, task.LocationId, task.Kind.ToString(), task.Title, task.Requirements, task.Priority.ToString(),
-                task.DueAt, task.EvidenceRequired, task.Status.ToString(), task.IsOverdue(now), x.Responsible, task.AssignedStaffUserId,
+            return new TaskView(task.Id, task.RequiredLocationId, task.Kind.ToString(), task.TaskTitle, task.Requirements, task.TaskPriority.ToString(),
+                task.DueAt, task.EvidenceRequired, task.MeterStatus.ToString(), task.IsOverdue(now), x.Responsible, task.AssignedStaffUserId,
                 x.Responsible != null, task.Result, task.Version, task.VerifiedByUserId, task.VerifiedAt, task.CreatedAt, task.UpdatedAt,
                 OperationalTaskService.TargetView(task));
         }).ToArray(), query.Page, query.PageSize, count);

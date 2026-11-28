@@ -12,7 +12,7 @@ namespace BHome.Infrastructure.Billing;
 internal sealed class AdjustmentRepository(BHomePersistenceContext db) : IAdjustmentRepository
 {
     private Dictionary<Guid, (Invoice Invoice, int Version)>? nativeInvoices;
-    private readonly List<InvoiceAdjustmentRequest> nativeRequests = [];
+    private readonly List<InvoiceAdjustment> nativeRequests = [];
     private readonly List<InvoiceAdjustmentDecision> nativeDecisions = [];
     private readonly List<InvoiceAdjustmentCommand> nativeCommands = [];
     private readonly List<InvoiceAdjustmentEvent> nativeEvents = [];
@@ -46,7 +46,7 @@ internal sealed class AdjustmentRepository(BHomePersistenceContext db) : IAdjust
                 foreach (var request in nativeRequests)
                 {
                     await NativeAdjustmentPersistence.InsertRequestAsync(context, request, t);
-                    foreach (var evidence in request.Evidence)
+                    foreach (var evidence in request.EvidenceItems)
                         if (await NativeAdjustmentPersistence.SaveEvidenceAsync(context, evidence, false, t) != 1)
                             throw new DbUpdateConcurrencyException("Adjustment evidence could not be linked.");
                 }
@@ -88,17 +88,17 @@ internal sealed class AdjustmentRepository(BHomePersistenceContext db) : IAdjust
         return await db.Set<Invoice>().Include(i => i.Lines).Include(i => i.Recipients).AsSplitQuery()
             .SingleOrDefaultAsync(i => i.Id == id && (scope.Owner || scope.Tenant && i.Recipients.Any(r => r.TenantUserId == scope.Actor)), t);
     }
-    private IQueryable<InvoiceAdjustmentRequest> Visible(InvoiceScope scope) => db.Set<InvoiceAdjustmentRequest>().Where(r =>
+    private IQueryable<InvoiceAdjustment> Visible(InvoiceScope scope) => db.Set<InvoiceAdjustment>().Where(r =>
         scope.Owner || scope.Tenant && r.RequesterId == scope.Actor && r.Invoice.Recipients.Any(v => v.TenantUserId == scope.Actor));
-    private static IQueryable<InvoiceAdjustmentRequest> Detail(IQueryable<InvoiceAdjustmentRequest> query) => query.Include(r => r.Evidence).Include(r => r.Invoice).Include(r => r.Decision).AsSplitQuery();
-    public async Task<InvoiceAdjustmentRequest?> RequestAsync(Guid id, InvoiceScope scope, CancellationToken t)
+    private static IQueryable<InvoiceAdjustment> Detail(IQueryable<InvoiceAdjustment> query) => query.Include(r => r.EvidenceItems).Include(r => r.Invoice).Include(r => r.Decision).AsSplitQuery();
+    public async Task<InvoiceAdjustment?> RequestAsync(Guid id, InvoiceScope scope, CancellationToken t)
     {
         if (db is Compact24DbContext compact)
             return (await NativeAdjustmentPersistence.ReadAsync(compact,
                 NativeAdjustmentPersistence.Visible(compact, scope).Where(r => r.Id == id), t)).SingleOrDefault();
         return await Detail(Visible(scope)).SingleOrDefaultAsync(r => r.Id == id, t);
     }
-    public async Task<PagedResult<InvoiceAdjustmentRequest>> ListAsync(AdjustmentQuery q, InvoiceScope scope, CancellationToken t)
+    public async Task<PagedResult<InvoiceAdjustment>> ListAsync(AdjustmentQuery q, InvoiceScope scope, CancellationToken t)
     {
         if (db is Compact24DbContext compact)
         {
@@ -111,7 +111,7 @@ internal sealed class AdjustmentRepository(BHomePersistenceContext db) : IAdjust
             else if (q.Status is { } outcome)
                 rows = rows.Where(r => r.DecisionSnapshot != null && r.DecisionSnapshot.Value.GetProperty("outcome").GetString() == outcome);
             var total = await rows.CountAsync(t);
-            var items = await NativeAdjustmentPersistence.ReadAsync(compact, rows.OrderByDescending(r => r.SubmittedAt)
+            var items = await NativeAdjustmentPersistence.ReadAsync(compact, rows.OrderByDescending(r => r.RequestedAt)
                 .ThenBy(r => r.Id).Skip((q.Page - 1) * q.PageSize).Take(q.PageSize), t);
             return new(items, q.Page, q.PageSize, total);
         }
@@ -140,7 +140,7 @@ internal sealed class AdjustmentRepository(BHomePersistenceContext db) : IAdjust
     {
         if (db is Compact24DbContext compact)
         {
-            var rows = compact.Set<InvoiceAdjustmentRequest>().AsNoTracking().Where(r => r.InvoiceId == invoiceId &&
+            var rows = compact.Set<InvoiceAdjustment>().AsNoTracking().Where(r => r.InvoiceId == invoiceId &&
                 r.DecisionSnapshot != null && r.DecisionSnapshot.Value.GetProperty("outcome").GetString() == "Approved");
             var total = await rows.CountAsync(t);
             var selected = await rows.OrderByDescending(r => r.DecisionSnapshot!.Value.GetProperty("sequence").GetInt64())
@@ -159,7 +159,7 @@ internal sealed class AdjustmentRepository(BHomePersistenceContext db) : IAdjust
         {
             switch (entity)
             {
-                case InvoiceAdjustmentRequest request: nativeRequests.Add(request); return;
+                case InvoiceAdjustment request: nativeRequests.Add(request); return;
                 case InvoiceAdjustmentDecision decision: nativeDecisions.Add(decision); return;
                 case InvoiceAdjustmentCommand command: nativeCommands.Add(command); return;
                 case InvoiceAdjustmentEvent @event: nativeEvents.Add(@event); return;

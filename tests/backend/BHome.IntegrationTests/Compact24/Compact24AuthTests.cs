@@ -207,7 +207,7 @@ public sealed class Compact24AuthTests(Compact24Fixture fixture) : IClassFixture
         var session = await Login(client, user.Email!);
         await using (var scope = fixture.Factory.Services.CreateAsyncScope())
         {
-            var users = scope.ServiceProvider.GetRequiredService<UserManager<ApplicationUser>>();
+            var users = scope.ServiceProvider.GetRequiredService<UserManager<User>>();
             var stored = (await users.FindByIdAsync(user.Id.ToString()))!;
             Assert.True((await users.AddToRoleAsync(stored, "Staff")).Succeeded);
             Assert.True((await users.RemoveFromRoleAsync(stored, "Staff")).Succeeded);
@@ -302,24 +302,24 @@ public sealed class Compact24AuthTests(Compact24Fixture fixture) : IClassFixture
         var user = await Seed();
         await using var left = fixture.Factory!.Services.CreateAsyncScope();
         await using var right = fixture.Factory.Services.CreateAsyncScope();
-        var manager1 = left.ServiceProvider.GetRequiredService<UserManager<ApplicationUser>>();
-        var manager2 = right.ServiceProvider.GetRequiredService<UserManager<ApplicationUser>>();
+        var manager1 = left.ServiceProvider.GetRequiredService<UserManager<User>>();
+        var manager2 = right.ServiceProvider.GetRequiredService<UserManager<User>>();
         var first = (await manager1.FindByIdAsync(user.Id.ToString()))!;
         var stale = (await manager2.FindByIdAsync(user.Id.ToString()))!;
         first.PhoneNumber = "SYNTHETIC"; Assert.True((await manager1.UpdateAsync(first)).Succeeded);
         stale.PhoneNumber = "STALE"; Assert.False((await manager2.UpdateAsync(stale)).Succeeded);
-        var blank = new ApplicationUser { Id = Guid.NewGuid(), UserName = Guid.NewGuid().ToString(), Email = $"{Guid.NewGuid():N}@example.invalid" };
+        var blank = new User { Id = Guid.NewGuid(), UserName = Guid.NewGuid().ToString(), Email = $"{Guid.NewGuid():N}@example.invalid" };
         var result = await manager1.CreateAsync(blank, Password);
         Assert.False(result.Succeeded);
         Assert.Contains(result.Errors, x => x.Code == "CompactRoleRequired");
     }
 
-    private async Task<ApplicationUser> Seed()
+    private async Task<User> Seed()
     {
         await using var scope = fixture.Factory!.Services.CreateAsyncScope();
         var db = scope.ServiceProvider.GetRequiredService<Compact24DbContext>();
         var id = Guid.NewGuid();
-        var user = new ApplicationUser
+        var user = new User
         {
             Id = id,
             UserName = id.ToString(),
@@ -331,7 +331,7 @@ public sealed class Compact24AuthTests(Compact24Fixture fixture) : IClassFixture
             ConcurrencyStamp = Guid.NewGuid().ToString(),
             LockoutEnabled = true
         };
-        user.PasswordHash = scope.ServiceProvider.GetRequiredService<IPasswordHasher<ApplicationUser>>().HashPassword(user, Password);
+        user.PasswordHash = scope.ServiceProvider.GetRequiredService<IPasswordHasher<User>>().HashPassword(user, Password);
         db.Users.Add(user); db.Entry(user).Property("roles").CurrentValue = new[] { "Tenant" };
         await db.SaveChangesAsync();
         return user;

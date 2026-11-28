@@ -44,7 +44,7 @@ BHome.Api/Services/Billing/
 BHome.Api/DTOs/Billing/InvoiceContracts.cs # Request/response + repository interface
 BHome.Api/Entities/Billing/
   Invoice.cs                        # Entity hóa đơn chuẩn
-  InvoiceLine.cs                    # Entity dòng hóa đơn chuẩn
+  InvoiceItem.cs                    # Entity dòng hóa đơn chuẩn
 BHome.Api/Services/Billing/InvoiceMath.cs # Công thức thuần
 BHome.Api/Repositories/Billing/
   InvoiceRepository.cs              # Đọc/ghi và khóa dữ liệu

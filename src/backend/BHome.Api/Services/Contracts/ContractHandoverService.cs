@@ -211,7 +211,7 @@ public sealed partial class ContractService
             HandoverActive(c);
             await RequireLegacyHandoverCompatibility(c, t);
             if ((await Workflow.FilesAsync(id, ContractFileKind.HandoverEvidence, t)).Count >= 200) throw ContractException.Conflict("handover_evidence_limit");
-            var f = new ContractDocumentFile { ContractId = id, Kind = ContractFileKind.HandoverEvidence, SnapshotHash = c.SnapshotHash, DevelopmentOnly = c.IsDevelopmentDemo, ContentType = type, Length = bytes.Length, FileHash = FileHash(bytes), RecordedByUserId = Actor, RecordedAt = clock.GetUtcNow() };
+            var f = new ContractDocumentFile { ContractId = id, Kind = ContractFileKind.HandoverEvidence, SnapshotHash = c.SnapshotHashOrEmpty, DevelopmentOnly = c.IsDevelopmentDemo, ContentType = type, Length = bytes.Length, FileHash = FileHash(bytes), RecordedByUserId = Actor, RecordedAt = clock.GetUtcNow() };
             f.ObjectKey = BHome.Application.Storage.PrivateImageKeys.Evidence(c.Room.LocationId, c.RoomId, "move-in", id, f.Id); await files.PutAsync(c.RoomId, f.ObjectKey, bytes, type, t); repository.Add(f); Audit("ContractHandoverEvidenceAdded", id); return new ContractId(f.Id);
         }, t);
     }

@@ -451,7 +451,7 @@ public sealed partial class ContractService
         // so linked evidence cannot be silently reused as a fresh observation.
         if (!x.Confirmed && handoverRepository is not null && m.InspectedByUserId is { } staffId)
             await handoverRepository.ResetMoveOutInspectionDraftAsync(id, staffId,
-                c.SnapshotHash, clock.GetUtcNow(), t);
+                c.SnapshotHashOrEmpty, clock.GetUtcNow(), t);
         if (!x.Confirmed) m.Status = MoveOutStatus.Approved;
         m.Version++; MoveOutEvent(m, x.Confirmed ? "InspectionConfirmed" : "ReinspectionRequired"); Audit("ContractInspectionReviewed", id); Remember(key, "inspection-review", new { id, x }, m.Id); return View(m);
     }, t);

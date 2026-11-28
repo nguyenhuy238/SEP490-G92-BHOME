@@ -129,12 +129,12 @@ internal sealed class IncidentRepository(BHomePersistenceContext db,
     public Task<bool> OtherAssetWorkAsync(Guid asset, Guid? exceptWorkOrder, CancellationToken t) => db is Compact24DbContext compact
         ? compact.Set<BHome.Domain.Billing.OperationalTask>().AsNoTracking()
             .AnyAsync(w => w.TaskType == "WORK_ORDER" && w.AssetId == asset && w.Id != exceptWorkOrder &&
-                w.StoredStatus != "Verified" && w.StoredStatus != "Cancelled", t) : db.Set<MaintenanceWorkOrder>()
+                w.Status != "Verified" && w.Status != "Cancelled", t) : db.Set<MaintenanceWorkOrder>()
         .AnyAsync(w => w.AssetId == asset && w.Id != exceptWorkOrder && w.Status != WorkOrderStatus.Verified && w.Status != WorkOrderStatus.Cancelled, t);
     public Task<bool> OtherAssetExecutionAsync(Guid asset, Guid? exceptWorkOrder, CancellationToken t) => db is Compact24DbContext compact
         ? compact.Set<BHome.Domain.Billing.OperationalTask>().AsNoTracking()
             .AnyAsync(w => w.TaskType == "WORK_ORDER" && w.AssetId == asset && w.Id != exceptWorkOrder &&
-                (w.StoredStatus == "InProgress" || w.StoredStatus == "PendingVerification"), t) : db.Set<MaintenanceWorkOrder>()
+                (w.Status == "InProgress" || w.Status == "PendingVerification"), t) : db.Set<MaintenanceWorkOrder>()
         .AnyAsync(w => w.AssetId == asset && w.Id != exceptWorkOrder &&
             (w.Status == WorkOrderStatus.InProgress || w.Status == WorkOrderStatus.PendingVerification), t);
     public Task<IncidentCommand?> CommandAsync(Guid actor, Guid key, CancellationToken t) => native is not null

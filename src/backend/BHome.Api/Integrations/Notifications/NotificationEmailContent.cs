@@ -63,11 +63,11 @@ internal sealed class NotificationEmailContent(Compact24DbContext db,
         var evidence = AnonymousContractSigningService.AcceptedEvidence(c);
         if (evidence is not null)
         {
-            if (!AnonymousContractSigningService.Complete(c) || evidence.SnapshotHash != c.SnapshotHash || evidence.OwnerId != c.OwnerSignerId)
+            if (!AnonymousContractSigningService.Complete(c) || evidence.SnapshotHash != c.SnapshotHashOrEmpty || evidence.OwnerId != c.OwnerSignerId)
                 throw new ChannelDeliveryException("main_confirmation_document_invalid");
             var signedEmail = (await NativeInvitationPersistence.ForContractAsync(db, c.Id, t))
                 .Where(i => i.Id == evidence.InvitationId && i.ContractId == c.Id && i.ResidentId == c.RepresentativeResidentId &&
-                    i.SnapshotHash == c.SnapshotHash && i.AcceptedAt != null && i.RevokedAt == null)
+                    i.SnapshotHash == c.SnapshotHashOrEmpty && i.AcceptedAt != null && i.RevokedAt == null)
                 .Select(i => i.RecipientEmail).SingleOrDefault();
             if (!string.Equals(signedEmail, destination, StringComparison.OrdinalIgnoreCase))
                 throw new ChannelDeliveryException("main_confirmation_recipient_mismatch");
@@ -75,7 +75,7 @@ internal sealed class NotificationEmailContent(Compact24DbContext db,
         }
         else
         {
-            var signed = c.Signatures.Where(s => s.Status == SignatureStatus.Signed && s.SnapshotHash == c.SnapshotHash &&
+            var signed = c.Signatures.Where(s => s.Status == SignatureStatus.Signed && s.SnapshotHash == c.SnapshotHashOrEmpty &&
                 s.SignedAt != null && s.SignedObjectKey != null && s.SignedHash != null && s.ProviderReference != null).ToArray();
             if (!new[] { c.OwnerSignerId, tenant }.All(party => signed.Any(s => s.SignerUserId == party)))
                 throw new ChannelDeliveryException("main_confirmation_document_invalid");
@@ -126,7 +126,7 @@ internal sealed class NotificationEmailContent(Compact24DbContext db,
             c.Status is not (ContractStatus.Active or ContractStatus.Converted) || c.Status == ContractStatus.Active && c.Room.Status != BHome.Domain.PropertyManagement.RoomStatus.OnHold ||
             !BHome.Application.Contracts.AnonymousContractSigningService.HoldingOwnerHasSigned(c)) return null;
         var invitation = (await NativeInvitationPersistence.ForContractAsync(db, id, t))
-            .Where(i => i.ContractId == id && i.ResidentId == c.RepresentativeResidentId && i.SnapshotHash == c.SnapshotHash &&
+            .Where(i => i.ContractId == id && i.ResidentId == c.RepresentativeResidentId && i.SnapshotHash == c.SnapshotHashOrEmpty &&
                 i.AcceptedAt != null && i.RevokedAt == null).OrderByDescending(i => i.AcceptedAt).FirstOrDefault();
         if (invitation is null || !EmailOptions.ValidAddress(invitation.RecipientEmail)) return null;
         var amount = await db.Database.SqlQuery<decimal>($"""
@@ -135,7 +135,7 @@ internal sealed class NotificationEmailContent(Compact24DbContext db,
             """).SingleAsync(t);
         if (amount != c.RequiredDeposit || !BHome.Application.Contracts.AnonymousContractSigningService.Complete(c)) return null;
         var evidence = AnonymousContractSigningService.AcceptedEvidence(c)!;
-        if (evidence.InvitationId != invitation.Id || evidence.SnapshotHash != c.SnapshotHash || evidence.OwnerId != owner ||
+        if (evidence.InvitationId != invitation.Id || evidence.SnapshotHash != c.SnapshotHashOrEmpty || evidence.OwnerId != owner ||
             evidence.FinalDocumentKey is not { } key || !key.StartsWith($"contracts/{id:N}/", StringComparison.Ordinal))
             throw new ChannelDeliveryException("holding_confirmation_document_invalid");
         if (storage is null) throw new ChannelDeliveryException("holding_confirmation_storage_unavailable", retryable: true);
@@ -202,12 +202,12 @@ internal sealed class NotificationEmailContent(Compact24DbContext db,
                 };
                 var row = await (from reading in db.Set<BHome.Domain.Billing.MeterReading>().AsNoTracking()
                                  join meter in db.Set<BHome.Domain.Billing.Meter>() on reading.MeterId equals meter.Id
-                                 join task in db.Set<BHome.Domain.Billing.OperationalTask>() on reading.TaskId equals task.Id
+                                 join task in db.Set<BHome.Domain.Billing.OperationalTask>() on reading.OperationalTaskId equals task.Id
                                  where reading.Id == readingId && meter.RoomId == invoice.RoomId && meter.UtilityType == type &&
-                                     task.MeterId == meter.Id && task.StoredLocationId == invoice.LocationId && task.TaskType == "METER_READ" &&
+                                     task.MeterId == meter.Id && task.LocationId == invoice.LocationId && task.TaskType == "METER_READ" &&
                                      task.BillingPeriod == invoice.BillingPeriod && reading.ConfirmedValue == line.ConfirmedReading
                                  select new { Reading = reading, Task = task }).SingleOrDefaultAsync(t);
-                var proof = row is not null && NativeCaptureReads.Task(row.Task) is { Purpose: ReadingPurpose.Periodic, Status: MeterTaskStatus.Completed }
+                var proof = row is not null && NativeCaptureReads.Task(row.Task) is { Purpose: ReadingPurpose.Periodic, MeterStatus: MeterTaskStatus.Completed }
                     ? NativeCaptureReads.Evidence(row.Task, row.Reading.EvidenceId) : null;
                 if (proof is not null && (proof.TaskId != row!.Task.Id || !proof.IsUploaded || !proof.IsLinked)) proof = null;
                 // A reading correction can temporarily make a draft stale. Retry after
@@ -315,8 +315,8 @@ internal sealed class NotificationEmailContent(Compact24DbContext db,
         var invoiceId = notice.RelatedObjectType switch
         {
             "Invoice" => notice.RelatedObjectId,
-            "Adjustment" => await db.Set<InvoiceAdjustmentRequest>().AsNoTracking()
-                .Where(r => r.Id == notice.RelatedObjectId && r.RequesterId == tenant).Select(r => r.InvoiceId).SingleOrDefaultAsync(t),
+            "Adjustment" => await db.Set<InvoiceAdjustment>().AsNoTracking()
+                .Where(r => r.Id == notice.RelatedObjectId && r.RequestedByUserId == tenant).Select(r => r.InvoiceId).SingleOrDefaultAsync(t),
             _ => Guid.Empty
         };
         if (invoiceId == Guid.Empty || !await db.Set<BHome.Domain.Billing.Invoice>().AnyAsync(i => i.Id == invoiceId && i.RecipientUserIds.Contains(tenant), t)) return null;

@@ -34,7 +34,7 @@ internal sealed class BillingAutomationSchedules(BHomePersistenceContext db) : I
         if (native is not null) await native.Set<BHome.Domain.PropertyManagement.Room>().FromSqlInterpolated($"SELECT * FROM rooms WHERE id={x.RoomId} FOR UPDATE").AsNoTracking().SingleAsync(t);
         else await db.Locked<Room>(x.RoomId).SingleAsync(t);
         if (native is not null
-            ? await native.Set<BHome.Domain.Billing.Invoice>().AnyAsync(i => i.Type == "PERIODIC" && i.RoomId == x.RoomId && i.BillingPeriod == x.BillingPeriod, t)
+            ? await native.Set<BHome.Domain.Billing.Invoice>().AnyAsync(i => i.InvoiceType == "PERIODIC" && i.RoomId == x.RoomId && i.BillingPeriod == x.BillingPeriod, t)
             : await db.PeriodicInvoices().AnyAsync(i => i.RoomId == x.RoomId && i.BillingPeriod == x.BillingPeriod, t)) throw new InvoiceException(409, "invoice_period_already_exists");
         var old = await RepresentativeAsync(x.RoomId, x.BillingPeriod, t); if ((old?.Version ?? 0) != x.ExpectedVersion) throw new InvoiceException(409, "billing_representative_changed");
         var end = x.BillingPeriod.AddMonths(1).AddDays(-1);

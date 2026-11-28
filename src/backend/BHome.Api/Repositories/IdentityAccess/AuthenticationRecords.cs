@@ -58,7 +58,7 @@ internal sealed class AuthenticationSessionConfiguration : IEntityTypeConfigurat
         builder.Property(x => x.Device).HasMaxLength(256);
         builder.Property(x => x.RevocationReason).HasMaxLength(50);
         builder.HasIndex(x => new { x.UserId, x.RevokedAt });
-        builder.HasOne<ApplicationUser>().WithMany().HasForeignKey(x => x.UserId).OnDelete(DeleteBehavior.Restrict);
+        builder.HasOne<User>().WithMany().HasForeignKey(x => x.UserId).OnDelete(DeleteBehavior.Restrict);
     }
 }
 
@@ -81,7 +81,7 @@ internal sealed class PasswordResetGrantConfiguration : IEntityTypeConfiguration
         builder.HasKey(x => x.UserId);
         builder.Property(x => x.TokenHash).HasMaxLength(64).IsRequired();
         builder.HasIndex(x => x.TokenHash).IsUnique();
-        builder.HasOne<ApplicationUser>().WithMany().HasForeignKey(x => x.UserId).OnDelete(DeleteBehavior.Restrict);
+        builder.HasOne<User>().WithMany().HasForeignKey(x => x.UserId).OnDelete(DeleteBehavior.Restrict);
     }
 }
 

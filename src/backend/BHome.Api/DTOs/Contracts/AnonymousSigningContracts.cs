@@ -51,10 +51,10 @@ public sealed record SandboxSignatures(bool SandboxOnly, string SnapshotHash, Da
         try
         {
             var value = System.Text.Json.JsonSerializer.Deserialize<SandboxSignatures>(c.DraftMetadata);
-            if (value?.SandboxOnly == true && value.SnapshotHash == c.SnapshotHash) return value;
+            if (value?.SandboxOnly == true && value.SnapshotHash == c.SnapshotHashOrEmpty) return value;
         }
         catch (System.Text.Json.JsonException) { }
-        return new(true, c.SnapshotHash, null, null);
+        return new(true, c.SnapshotHashOrEmpty, null, null);
     }
     public bool OwnerConfirmed(Contract c) => OwnerConfirmedBy == c.OwnerSignerId && OwnerConfirmedAt is not null;
 }

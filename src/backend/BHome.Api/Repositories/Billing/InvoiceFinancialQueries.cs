@@ -61,14 +61,14 @@ internal static class InvoiceFinancialQueries
             Id = i.Id,
             LocationId = i.LocationId,
             RoomId = i.RoomId,
-            ContractId = i.RepresentativeContractId,
+            ContractId = i.ContractId,
             LocationName = i.BillingSnapshot.GetProperty("compactState").GetProperty("locationName").GetString() ?? "",
             RoomNumber = i.BillingSnapshot.GetProperty("compactState").GetProperty("roomNumber").GetString() ?? "",
             BillingPeriod = i.BillingPeriod,
             DueDate = i.DueDate,
-            Original = i.Total,
+            Original = i.BaseTotalAmount,
             Adjustments = decisions.Where(d => d.InvoiceId == i.Id).Sum(d => (decimal?)d.Delta) ?? 0m,
-            Paid = allocations.Where(a => a.InvoiceId == i.Id).Sum(a => (decimal?)a.Amount) ?? 0m,
+            Paid = allocations.Where(a => a.TargetInvoiceId == i.Id).Sum(a => (decimal?)a.Amount) ?? 0m,
             Version = decisions.Count(d => d.InvoiceId == i.Id)
         });
     }

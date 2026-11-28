@@ -26,7 +26,7 @@ public sealed partial class OperationalTaskService
     }
 
     private static LocationAssetInventoryView LocationInventoryView(OperationalTask task, LocationAssetInventorySnapshot snapshot) =>
-        new(task.Id, task.LocationId, snapshot.AssignmentId, task.Status.ToString(), task.Version,
+        new(task.Id, task.RequiredLocationId, snapshot.AssignmentId, task.MeterStatus.ToString(), task.Version,
             snapshot.Items.Length, snapshot.Items.Count(item => item.Checked), snapshot.Items,
             snapshot.PendingOwnerRooms, snapshot.PendingOwnerCommonAssets);
 
@@ -48,7 +48,7 @@ public sealed partial class OperationalTaskService
         var confirmedIds = confirmed.Items.Select(item => item.Id).ToHashSet();
         var removed = current.Items.Where(item => !confirmedIds.Contains(item.Id)).ToArray();
         var conflict = !LocationAssetInventorySync.TryMerge(current, confirmed, out _);
-        var reason = task.Status is not (MeterTaskStatus.Assigned or MeterTaskStatus.InProgress)
+        var reason = task.MeterStatus is not (MeterTaskStatus.Assigned or MeterTaskStatus.InProgress)
             ? "location_asset_inventory_reconciliation_locked"
             : confirmed.Items.Length == 0 ? "location_asset_inventory_owner_confirmation_required"
             : conflict ? "location_asset_inventory_staff_work_conflict" : null;
@@ -63,7 +63,7 @@ public sealed partial class OperationalTaskService
 
     private async Task<bool> SynchronizeLocationInventoryAsync(OperationalTask task, CancellationToken t)
     {
-        if (task.Status is not (MeterTaskStatus.Assigned or MeterTaskStatus.InProgress)) return false;
+        if (task.MeterStatus is not (MeterTaskStatus.Assigned or MeterTaskStatus.InProgress)) return false;
         var current = LocationInventory(task);
         var confirmed = await repository.OwnerConfirmedInventoryAsync(task, t);
         if (!LocationAssetInventorySync.TryMerge(current, confirmed, out var merged)) return false;
@@ -92,7 +92,7 @@ public sealed partial class OperationalTaskService
         if (!LocationAssetInventorySync.Ready(task, snapshot)) return;
         task.Result = LocationAssetInventorySync.Result;
         task.ApplyAction("submit", Now, Actor);
-        await RecordAsync(task, "submit", task.Result, new { task.Status, Automatic = true },
+        await RecordAsync(task, "submit", task.Result, new { Status = task.MeterStatus, Automatic = true },
             await repository.OwnersAsync(t), t);
     }
 
@@ -120,7 +120,7 @@ public sealed partial class OperationalTaskService
         var initial = await repository.FindAsync(taskId, t) ?? throw OperationalTaskException.Missing();
         await AccessAsync(initial, t);
         _ = LocationInventory(initial);
-        return await CommandAsync(initial.LocationId, key, $"location-asset-inventory-reconcile:{taskId}",
+        return await CommandAsync(initial.RequiredLocationId, key, $"location-asset-inventory-reconcile:{taskId}",
             new { taskId, input }, async () =>
             {
                 var task = await repository.FindAsync(taskId, t) ?? throw OperationalTaskException.Missing();
@@ -167,14 +167,14 @@ public sealed partial class OperationalTaskService
         var initial = await repository.FindAsync(taskId, t) ?? throw OperationalTaskException.Missing();
         await AccessAsync(initial, t, true);
         if (initial.Kind != OperationalTaskKind.LocationAssetHandover) throw OperationalTaskException.Missing();
-        return await CommandAsync(initial.LocationId, key, $"location-asset-inventory-item:{taskId}:{itemId}",
+        return await CommandAsync(initial.RequiredLocationId, key, $"location-asset-inventory-item:{taskId}:{itemId}",
             new { taskId, itemId, input }, async () =>
             {
                 var task = await repository.FindAsync(taskId, t) ?? throw OperationalTaskException.Missing();
                 await AccessAsync(task, t, true);
                 if (task.Kind != OperationalTaskKind.LocationAssetHandover) throw OperationalTaskException.Missing();
                 if (task.Version != input.Version) throw OperationalTaskException.Conflict("stale_version");
-                if (task.Status != MeterTaskStatus.InProgress)
+                if (task.MeterStatus != MeterTaskStatus.InProgress)
                     throw OperationalTaskException.Conflict("location_asset_inventory_not_in_progress");
                 var current = LocationInventory(task);
                 var confirmed = await repository.OwnerConfirmedInventoryAsync(task, t);
@@ -201,7 +201,7 @@ public sealed partial class OperationalTaskService
                 if (input.IncidentId is { } incidentId)
                 {
                     var report = (await repository.IncidentTargetsAsync([incidentId], t)).SingleOrDefault();
-                    if (report is null || report.LocationId != task.LocationId || report.RoomId != previous.RoomId ||
+                    if (report is null || report.LocationId != task.RequiredLocationId || report.RoomId != previous.RoomId ||
                         report.AssetId != previous.AssetId || !report.IsValidReport ||
                         (previous.IncidentId != incidentId && report.ReporterId != Actor))
                         throw OperationalTaskException.Invalid("invalid_location_asset_inventory_incident");

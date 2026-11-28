@@ -33,7 +33,7 @@ public interface ISePayRepository
     Task<Invoice?> InvoiceAsync(Guid id, CancellationToken token);
     Task<bool> DemoInvoiceAsync(Guid id, CancellationToken token);
     Task<SePaySettlementTarget?> SettlementAsync(Guid receivableId, CancellationToken token);
-    Task AddReceiptAsync(SePayEvent received, PaymentTransfer receipt, CancellationToken token);
+    Task AddReceiptAsync(SePayEvent received, Payment receipt, CancellationToken token);
     Task FinishAsync(SePayEvent received, string status, string reason, Guid? receipt, CancellationToken token);
     Task<PagedResult<SePayEventView>> EventsAsync(int page, int pageSize, CancellationToken token);
     Task<IReadOnlyList<SePayVerifiedMoveOutCandidate>> VerifiedMoveOutCandidatesAsync(CancellationToken token);

@@ -9,7 +9,7 @@ using Microsoft.Extensions.Options;
 namespace BHome.Infrastructure.IdentityAccess;
 
 internal sealed class IdentityPasswordService(IIdentityPersistence db, IdentitySecurityStore security,
-    UserManager<ApplicationUser> users, IPasswordResetDelivery delivery, IOptions<SessionOptions> options,
+    UserManager<User> users, IPasswordResetDelivery delivery, IOptions<SessionOptions> options,
     TimeProvider clock, IOptions<AuthenticationEmailOptions> emailOptions) : IPasswordService
 {
     public async Task<bool> ChangeAsync(Guid userId, Guid sessionId, string currentPassword, string newPassword,

@@ -88,7 +88,7 @@ internal static class StaffInventoryActiveSeed
     }
 
     private static async Task<(Guid Owner, bool Complete, bool Existing)> InspectAsync(
-        BHomePersistenceContext db, UserManager<ApplicationUser> users, CancellationToken t)
+        BHomePersistenceContext db, UserManager<User> users, CancellationToken t)
     {
         if (!await db.IsSchemaReadyAsync(t))
             throw new LocalTestAccountException("Compact24 schema chưa sẵn sàng; không tạo fixture.");
@@ -134,7 +134,7 @@ internal static class StaffInventoryActiveSeed
         var contracts = await db.Set<Contract>().AsNoTracking()
             .Where(c => new[] { Id(20), Id(21), Id(22) }.Contains(c.RoomId)).ToArrayAsync(t);
         var tasks = await db.Set<OperationalTask>().AsNoTracking()
-            .Where(task => task.Kind == OperationalTaskKind.MoveInInventory && task.LocationId == Id(10)).ToArrayAsync(t);
+            .Where(task => task.Kind == OperationalTaskKind.MoveInInventory && task.RequiredLocationId == Id(10)).ToArrayAsync(t);
         var complete = contracts.Length == 3 && tasks.Length == 3 &&
             Enumerable.Range(0, 3).All(i => contracts.Count(c => c.RoomId == Id(20 + i) &&
                 c.Kind == ContractKind.Main && c.Status == ContractStatus.Active &&
@@ -166,7 +166,7 @@ internal static class StaffInventoryActiveSeed
         var sp = scope.ServiceProvider;
         var identity = sp.GetRequiredService<BHome.Infrastructure.Persistence.Compact24.Compact24DbContext>();
         await using var db = OfflineFixturePersistence.Open(sp, identity);
-        var users = sp.GetRequiredService<UserManager<ApplicationUser>>();
+        var users = sp.GetRequiredService<UserManager<User>>();
         var (owner, complete, existing) = await InspectAsync(db, users, t);
         if (mode == "--inspect") return;
         if (complete)
@@ -188,7 +188,7 @@ internal static class StaffInventoryActiveSeed
                 for (var i = 0; i < UserNames.Length; i++)
                 {
                     var role = i == 0 ? Roles.Staff : Roles.Tenant;
-                    var account = new ApplicationUser
+                    var account = new User
                     {
                         Id = Id(i + 2),
                         UserName = UserNames[i],
@@ -339,7 +339,7 @@ internal static class StaffInventoryActiveSeed
                     (currentContract.Kind != ContractKind.Main || currentContract.OwnerSignerId != owner ||
                      currentContract.TenantUserId != Id(3 + i) || currentContract.RepresentativeResidentId != Id(30 + i) ||
                      currentContract.Terms != Terms || !currentContract.IsDevelopmentDemo ||
-                     currentContract.RequiredDeposit != 0 || currentContract.MonthlyRent != 3_000_000 ||
+                     currentContract.RequiredDeposit != 0 || currentContract.RentAmount != 3_000_000 ||
                      currentContract.StartDate > today || currentContract.StartDate < today.AddDays(-31) ||
                      currentContract.EndDate < today ||
                      currentContract.Status is not (ContractStatus.Draft or ContractStatus.PendingSigning or

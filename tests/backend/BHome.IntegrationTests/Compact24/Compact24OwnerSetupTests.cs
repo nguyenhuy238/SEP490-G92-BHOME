@@ -47,15 +47,15 @@ public sealed partial class Compact24OwnerSetupTests(Compact24Fixture fixture) :
         public Task CopyToAsync(string key, Stream destination, CancellationToken t) => destination.WriteAsync(data[key], t).AsTask();
         public Task DeleteAsync(string key, CancellationToken t) { data.Remove(key); return Task.CompletedTask; }
     }
-    private sealed record Workspace(ApplicationUser Owner, ApplicationUser Staff, ApplicationUser Tenant, Guid Location, Guid Room);
+    private sealed record Workspace(User Owner, User Staff, User Tenant, Guid Location, Guid Room);
     private static DateOnly Today => BHome.Application.Billing.BillingAutomationDates.BusinessDate(DateTimeOffset.UtcNow);
     private async Task<Workspace> Seed()
     {
         await using var scope = fixture.Factory!.Services.CreateAsyncScope(); var db = scope.ServiceProvider.GetRequiredService<Compact24ArchiveContext>();
-        async Task<ApplicationUser> Account(string role)
+        async Task<User> Account(string role)
         {
             if (role == Roles.Owner && await db.Users.FirstOrDefaultAsync(u => EF.Property<string[]>(u, "roles").Contains(Roles.Owner)) is { } prior) return prior;
-            return await WorkflowTestUsers.CreateAsync(scope.ServiceProvider, new ApplicationUser
+            return await WorkflowTestUsers.CreateAsync(scope.ServiceProvider, new User
             {
                 Id = Guid.NewGuid(),
                 UserName = Guid.NewGuid().ToString("N"),
@@ -70,7 +70,7 @@ public sealed partial class Compact24OwnerSetupTests(Compact24Fixture fixture) :
         await db.SaveChangesAsync(); return new(owner, staff, tenant, location.Id, room.Id);
     }
     private WebApplicationFactory<Program> Host(Files? files = null) => fixture.Factory!.WithWebHostBuilder(builder => builder.ConfigureServices(s => s.AddSingleton<IObjectStorage>(files ?? new Files())));
-    private async Task<HttpClient> Client(ApplicationUser account, WebApplicationFactory<Program>? host = null)
+    private async Task<HttpClient> Client(User account, WebApplicationFactory<Program>? host = null)
     {
         var client = (host ?? fixture.Factory!).CreateClient();
         var response = await client.PostAsJsonAsync("/api/v1/auth/login", new { email = account.Email, password = Password }); response.EnsureSuccessStatusCode();
@@ -438,7 +438,7 @@ public sealed partial class Compact24OwnerSetupTests(Compact24Fixture fixture) :
                 RepresentativeResidentId = resident.Id,
                 StartDate = Today.AddDays(-10),
                 EndDate = Today.AddYears(1),
-                MonthlyRent = 1000000,
+                RentAmount = 1000000,
                 Terms = "Original immutable synthetic terms",
                 Status = ContractStatus.Active,
                 Residents = [new ContractResident { ResidentId = resident.Id, Role = ResidentType.Representative, ResidenceFrom = Today.AddDays(-10) }],
@@ -517,9 +517,9 @@ public sealed partial class Compact24OwnerSetupTests(Compact24Fixture fixture) :
     public async Task ReplacingStaffMovesMeterAndWorkOrderAndFailedRemovalRollsBackResponsibility()
     {
         var w = await Seed(); await using var scope = fixture.Factory!.Services.CreateAsyncScope(); var db = scope.ServiceProvider.GetRequiredService<Compact24ArchiveContext>();
-        var next = await WorkflowTestUsers.CreateAsync(scope.ServiceProvider, new ApplicationUser { Id = Guid.NewGuid(), UserName = Guid.NewGuid().ToString("N"), Email = Guid.NewGuid().ToString("N") + "@example.invalid", EmailConfirmed = true }, Roles.Staff, Password);
+        var next = await WorkflowTestUsers.CreateAsync(scope.ServiceProvider, new User { Id = Guid.NewGuid(), UserName = Guid.NewGuid().ToString("N"), Email = Guid.NewGuid().ToString("N") + "@example.invalid", EmailConfirmed = true }, Roles.Staff, Password);
         var meter = new Meter { RoomId = w.Room, Code = "SYN-METER", UtilityType = UtilityType.Electricity, InstalledOn = Today }; db.Add(meter);
-        var task = new OperationalTask { LocationId = w.Location, MeterId = meter.Id, AssignedStaffUserId = w.Staff.Id, Purpose = ReadingPurpose.Initial, ReadingDate = Today }; db.Add(task);
+        var task = new OperationalTask { RequiredLocationId = w.Location, MeterId = meter.Id, AssignedStaffUserId = w.Staff.Id, Purpose = ReadingPurpose.Initial, ReadingDate = Today }; db.Add(task);
         var incident = new IncidentReport { LocationId = w.Location, RoomId = w.Room, ReporterId = w.Staff.Id, ReporterRole = Roles.Staff, Description = "Synthetic repair" }; db.Add(incident);
         var order = new MaintenanceWorkOrder { LocationId = w.Location, RoomId = w.Room, IncidentId = incident.Id, AssignedStaffId = w.Staff.Id, ExpectedOutcome = "Synthetic repair", TargetCompletionAt = DateTimeOffset.UtcNow.AddDays(1) }; db.Add(order); await db.SaveChangesAsync();
         var assignments = scope.ServiceProvider.GetRequiredService<ILocationAssignments>(); var version = await db.Locations.Where(l => l.Id == w.Location).Select(l => l.Version).SingleAsync();

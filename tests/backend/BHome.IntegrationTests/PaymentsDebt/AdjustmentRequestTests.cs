@@ -36,7 +36,7 @@ public sealed partial class PaymentLedgerTests
         var outside = await Setup(); using var stranger = await Client(outside.Tenants[0]);
         Assert.Equal(HttpStatusCode.NotFound, (await Post(stranger, route, input)).StatusCode);
         await using var scope = fixture.Factory.Services.CreateAsyncScope(); var db = scope.ServiceProvider.GetFixturePersistence();
-        Assert.Equal(1, await db.Set<InvoiceAdjustmentRequest>().CountAsync(r => r.InvoiceId == w.Invoice));
+        Assert.Equal(1, await db.Set<InvoiceAdjustment>().CountAsync(r => r.InvoiceId == w.Invoice));
         Assert.Equal(1, await db.Set<InvoiceAdjustmentEvent>().CountAsync(r => r.InvoiceId == w.Invoice));
         foreach (var contract in await db.Set<BHome.Domain.TenantContracts.Contract>().Where(c => c.RoomId == w.Room).ToArrayAsync()) contract.Status = BHome.Domain.TenantContracts.ContractStatus.Terminated;
         await db.SaveChangesAsync();

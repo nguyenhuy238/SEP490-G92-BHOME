@@ -40,7 +40,7 @@ public sealed class Compact24DigitalSigningTests(Compact24Fixture fixture) : ICl
         var id = Guid.NewGuid(); var email = $"{id:N}@example.invalid";
         await using (var scope = host.Services.CreateAsyncScope())
             email = (await WorkflowTestUsers.CreateAsync(scope.ServiceProvider,
-                new ApplicationUser { Id = id, UserName = email, Email = email, IsActive = true }, role, password)).Email!;
+                new User { Id = id, UserName = email, Email = email, IsActive = true }, role, password)).Email!;
         var client = host.CreateClient();
         var login = await client.PostAsJsonAsync("/api/v1/auth/login", new { email, password }); login.EnsureSuccessStatusCode();
         client.DefaultRequestHeaders.Authorization = new("Bearer", (await login.Content.ReadFromJsonAsync<LoginResult>())!.AccessToken);

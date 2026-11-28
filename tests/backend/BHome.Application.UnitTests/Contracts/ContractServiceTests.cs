@@ -47,7 +47,7 @@ public sealed class ContractServiceTests
         var id = kind == ContractKind.Holding
             ? await r.Service.CreateHoldingAsync(r.HoldingDraft with { TenantUserId = null }, Guid.NewGuid(), default)
             : await r.Service.CreateAsync(r.Draft with { TenantUserId = null }, Guid.NewGuid(), default);
-        var c = r.Contracts.Single(); var snapshot = c.SnapshotHash;
+        var c = r.Contracts.Single(); var snapshot = c.SnapshotHashOrEmpty;
         var security = Substitute.For<IAnonymousSigningSecurity>();
         var renderer = Substitute.For<IContractDocumentRenderer>();
         var source = Substitute.For<IContractSigningDocumentSource>();
@@ -213,7 +213,7 @@ public sealed class ContractServiceTests
         Assert.Equal(tokenHash, invite.TokenHash);
         Assert.Equal(ContractStatus.PendingActivation, c.Status);
         Assert.True(AnonymousContractSigningService.Complete(c));
-        Assert.Equal(snapshot, c.SnapshotHash); Assert.Null(c.ApprovedAt); Assert.Null(c.ApprovedByUserId);
+        Assert.Equal(snapshot, c.SnapshotHashOrEmpty); Assert.Null(c.ApprovedAt); Assert.Null(c.ApprovedByUserId);
         Assert.Equal(ContractSigningModes.Internal, c.SigningMode);
         var accepted = AnonymousContractSigningService.AcceptedEvidence(c)!;
         Assert.Equal(c.OwnerSignerId, accepted.OwnerId);
@@ -243,7 +243,7 @@ public sealed class ContractServiceTests
         var r = new Rig();
         var id = await r.Service.CreateHoldingAsync(r.HoldingDraft, Guid.NewGuid(), default);
         var c = r.Contracts.Single();
-        var snapshot = c.SnapshotHash;
+        var snapshot = c.SnapshotHashOrEmpty;
         var mode = c.SigningMode;
         r.User.Role = role; r.User.UserId = role == Roles.Owner ? c.OwnerSignerId : r.Tenant;
         var pdf = "%PDF-1.7 SYNTHETIC HOLDING"u8.ToArray();
@@ -260,10 +260,10 @@ public sealed class ContractServiceTests
         Assert.Single(c.Signatures);
         Assert.Equal(SignatureStatus.Signed, c.Signatures.Single().Status);
         Assert.Null(c.ApprovedAt); Assert.Null(c.ApprovedByUserId);
-        Assert.Equal(snapshot, c.SnapshotHash); Assert.Equal(mode, c.SigningMode);
+        Assert.Equal(snapshot, c.SnapshotHashOrEmpty); Assert.Equal(mode, c.SigningMode);
         Assert.Equal(ContractStatus.PendingSigning, c.Status);
         Assert.Equal(RoomStatus.Available, r.Room.Status);
-        await r.Signing.Received(1).RequestAsync(Arg.Any<ContractSignature>(), default);
+        await r.Signing.Received(1).RequestAsync(Arg.Any<ContractSigning>(), default);
         r.User.Role = role == Roles.Owner ? Roles.Tenant : Roles.Owner;
         r.User.UserId = role == Roles.Owner ? r.Tenant : c.OwnerSignerId;
         await r.Service.RequestSigningAsync(id.Id, new(Guid.NewGuid()), Guid.NewGuid(), default);
@@ -271,7 +271,7 @@ public sealed class ContractServiceTests
         Assert.Equal(2, c.Signatures.Count);
         Assert.All(c.Signatures, s => Assert.Equal(SignatureStatus.Signed, s.Status));
         Assert.Equal(ContractStatus.PendingActivation, c.Status);
-        Assert.Equal(snapshot, c.SnapshotHash); Assert.Equal(mode, c.SigningMode);
+        Assert.Equal(snapshot, c.SnapshotHashOrEmpty); Assert.Equal(mode, c.SigningMode);
         Assert.Null(c.ApprovedAt); Assert.Equal(RoomStatus.Available, r.Room.Status);
     }
 
@@ -283,12 +283,12 @@ public sealed class ContractServiceTests
         var c = r.Contracts.Single(); c.Status = ContractStatus.PendingActivation;
         var pdf = "%PDF-1.7 SYNTHETIC SIGNED"u8.ToArray();
         var hash = Convert.ToHexString(SHA256.HashData(pdf));
-        foreach (var signer in new[] { c.OwnerSignerId, c.TenantUserId!.Value }) c.Signatures.Add(new ContractSignature
+        foreach (var signer in new[] { c.OwnerSignerId, c.TenantUserId!.Value }) c.Signatures.Add(new ContractSigning
         {
             ContractId = id.Id,
             SignerUserId = signer,
             Status = SignatureStatus.Signed,
-            SnapshotHash = c.SnapshotHash,
+            SnapshotHash = c.SnapshotHashOrEmpty,
             SignedObjectKey = "synthetic-signed",
             SignedHash = hash,
             ProviderReference = "synthetic",
@@ -433,7 +433,7 @@ public sealed class ContractServiceTests
                     case ContractMoveOutHistory x: MoveHistory.Add(x); break;
                     case ContractOperation x: Operations.Add(x); break;
                     case DepositVerification x: Deposits.Add(x); break;
-                    case ContractSignature x: Contracts.Single(a => a.Id == x.ContractId).Signatures.Add(x); break;
+                    case ContractSigning x: Contracts.Single(a => a.Id == x.ContractId).Signatures.Add(x); break;
                 }
             });
             Holdings.ApplyAsync(default, default, default, default, default, default).ReturnsForAnyArgs(Task.FromException<HoldingDepositApplication>(new IntegrationUnavailableException("holding ledger")));
@@ -450,12 +450,12 @@ public sealed class ContractServiceTests
         {
             var c = await Create(); c.Status = ContractStatus.PendingActivation;
             var bytes = Encoding.UTF8.GetBytes("TEST ONLY verified PDF boundary"); var hash = Convert.ToHexString(SHA256.HashData(bytes));
-            foreach (var signer in new[] { c.OwnerSignerId, c.TenantUserId ?? throw new InvalidOperationException("Signing fixture requires an existing Tenant account.") }) c.Signatures.Add(new ContractSignature
+            foreach (var signer in new[] { c.OwnerSignerId, c.TenantUserId ?? throw new InvalidOperationException("Signing fixture requires an existing Tenant account.") }) c.Signatures.Add(new ContractSigning
             {
                 ContractId = c.Id,
                 SignerUserId = signer,
                 Status = SignatureStatus.Signed,
-                SnapshotHash = c.SnapshotHash,
+                SnapshotHash = c.SnapshotHashOrEmpty,
                 SignedObjectKey = "test-private-key",
                 SignedHash = hash,
                 ProviderReference = Guid.NewGuid().ToString(),
@@ -486,7 +486,7 @@ public sealed class ContractServiceTests
         {
             ContractId = c.Id,
             Kind = ContractFileKind.Preview,
-            SnapshotHash = c.SnapshotHash,
+            SnapshotHash = c.SnapshotHashOrEmpty,
             ObjectKey = "synthetic-preview",
             Length = bytes.Length,
             FileHash = Convert.ToHexString(SHA256.HashData(bytes))
@@ -573,16 +573,16 @@ public sealed class ContractServiceTests
         var id = await r.Service.CreateHoldingAsync(r.HoldingDraft, Guid.NewGuid(), default);
         var holding = Assert.Single(r.Contracts, c => c.Id == id.Id);
         Assert.Equal(ContractKind.Holding, holding.Kind);
-        Assert.Equal(3000000, holding.MonthlyRent);
+        Assert.Equal(3000000, holding.RentAmount);
         Assert.Equal(ContractStatus.Draft, holding.Status);
         Assert.Equal(RoomStatus.Available, r.Room.Status);
         Assert.Null(holding.ApprovedAt);
         var persistedDocument = new ContractDocument(holding.Id, holding.RoomId, holding.OwnerSignerId, holding.TenantUserId!.Value,
             holding.RepresentativeResidentId, holding.Residents.Select(x => x.ResidentId).Order().ToArray(), holding.StartDate, holding.EndDate,
-            decimal.Truncate(holding.MonthlyRent), decimal.Truncate(holding.RequiredDeposit), holding.HoldingContractId,
-            holding.AppliedHoldingDeposit, holding.Terms, holding.SnapshotHash)
+            decimal.Truncate(holding.RentAmount), decimal.Truncate(holding.RequiredDeposit), holding.HoldingContractId,
+            holding.AppliedHoldingDeposit, holding.Terms, holding.SnapshotHashOrEmpty)
         { AgreedCharges = ContractChargeSnapshot.Read(holding).Charges };
-        Assert.Equal(holding.SnapshotHash, ContractDocumentSnapshot.Hash(persistedDocument));
+        Assert.Equal(holding.SnapshotHashOrEmpty, ContractDocumentSnapshot.Hash(persistedDocument));
     }
 
     [Theory]
@@ -608,12 +608,12 @@ public sealed class ContractServiceTests
         await r.Service.ApproveHoldingAsync(id.Id, new("Owner approved reviewed terms"), Guid.NewGuid(), default);
         await r.Service.VerifyDepositAsync(id.Id, new("HOLD-ONE", 1000000, "Verified bank statement"), Guid.NewGuid(), default);
         var holding = r.Contracts.Single(); Assert.Null(holding.PriceLockedAt);
-        foreach (var signer in new[] { holding.OwnerSignerId, holding.TenantUserId!.Value }) holding.Signatures.Add(new ContractSignature
+        foreach (var signer in new[] { holding.OwnerSignerId, holding.TenantUserId!.Value }) holding.Signatures.Add(new ContractSigning
         {
             ContractId = holding.Id,
             SignerUserId = signer,
             Status = SignatureStatus.Signed,
-            SnapshotHash = holding.SnapshotHash,
+            SnapshotHash = holding.SnapshotHashOrEmpty,
             SignedObjectKey = "synthetic-signed",
             SignedHash = "synthetic-hash",
             ProviderReference = "synthetic-provider",
@@ -636,12 +636,12 @@ public sealed class ContractServiceTests
         await r.Service.ApproveHoldingAsync(id.Id, new("Owner approved reviewed terms"), Guid.NewGuid(), default);
         var holding = r.Contracts.Single(); holding.Status = ContractStatus.PendingActivation;
         var bytes = Encoding.UTF8.GetBytes("TEST ONLY signed Holding PDF"); var hash = Convert.ToHexString(SHA256.HashData(bytes));
-        foreach (var signer in new[] { holding.OwnerSignerId, holding.TenantUserId!.Value }) holding.Signatures.Add(new ContractSignature
+        foreach (var signer in new[] { holding.OwnerSignerId, holding.TenantUserId!.Value }) holding.Signatures.Add(new ContractSigning
         {
             ContractId = holding.Id,
             SignerUserId = signer,
             Status = SignatureStatus.Signed,
-            SnapshotHash = holding.SnapshotHash,
+            SnapshotHash = holding.SnapshotHashOrEmpty,
             SignedObjectKey = "holding-signed",
             SignedHash = hash,
             ProviderReference = Guid.NewGuid().ToString(),
@@ -793,7 +793,7 @@ public sealed class ContractServiceTests
         var r = new Rig(); var holdingId = (await r.Service.CreateHoldingAsync(r.HoldingDraft, Guid.NewGuid(), default)).Id;
         var holding = r.Contracts.Single(); holding.Status = ContractStatus.Active; holding.PriceLockedAt = new Clock().GetUtcNow(); r.Room.Status = RoomStatus.OnHold;
         r.Holdings.ApplyAsync(default, default, default, default, default, default).ReturnsForAnyArgs(new HoldingDepositApplication(holdingId, r.Room.Id, r.Tenant, 1000000, "synthetic-allocation"));
-        var key = Guid.NewGuid(); var input = r.Draft with { HoldingContractId = holdingId, StartDate = holding.StartDate, EndDate = holding.EndDate, Terms = holding.Terms, MonthlyRent = holding.MonthlyRent };
+        var key = Guid.NewGuid(); var input = r.Draft with { HoldingContractId = holdingId, StartDate = holding.StartDate, EndDate = holding.EndDate, Terms = holding.Terms, MonthlyRent = holding.RentAmount };
         var one = await r.Service.CreateAsync(input, key, default); var two = await r.Service.CreateAsync(input, key, default);
         Assert.Equal(one, two);
         var ready = await r.Service.ReadinessAsync(one.Id, default);
@@ -864,7 +864,7 @@ public sealed class ContractServiceTests
         await Assert.ThrowsAsync<ContractException>(() => r.Service.RenewAsync(c.Id, new(c.EndDate, 1, "terms"), Guid.NewGuid(), default));
         var next = await r.Service.RenewAsync(c.Id, new(c.EndDate.AddYears(1), 4000000, "new terms"), Guid.NewGuid(), default);
         await Assert.ThrowsAsync<ContractException>(() => r.Service.ActivateAsync(next.Id, Guid.NewGuid(), default));
-        Assert.Equal(ContractStatus.Active, c.Status); Assert.Equal(3000000, c.MonthlyRent);
+        Assert.Equal(ContractStatus.Active, c.Status); Assert.Equal(3000000, c.RentAmount);
     }
     [Fact]
     public async Task T10_T11_RequestPreservesActiveContractOwnerApprovesAndStaffCannotApprove()
@@ -1139,7 +1139,7 @@ public sealed class ContractServiceTests
         var replay = await r.Service.RequestSigningAsync(c.Id, input, key, default);
         Assert.Equal(signature.Id, replay.Id); Assert.Equal("ManualReview", replay.Status);
         await r.Signing.Received(1).PrepareAsync(Arg.Any<ContractDocument>(), input.CertificateId, null, Arg.Any<CancellationToken>());
-        await r.Signing.Received(1).RequestAsync(Arg.Any<ContractSignature>(), Arg.Any<CancellationToken>());
+        await r.Signing.Received(1).RequestAsync(Arg.Any<ContractSigning>(), Arg.Any<CancellationToken>());
         Assert.Equal(ContractStatus.PendingSigning, c.Status); Assert.Equal(RoomStatus.Available, r.Room.Status);
     }
     [Fact]

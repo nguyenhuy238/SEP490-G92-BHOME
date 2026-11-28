@@ -26,7 +26,7 @@ public sealed partial class PaymentLedgerTests
         var allocated = await service.AllocateAsync(receipt.Id, request, allocationKey, default);
         Assert.Equal("Allocated", allocated.Status);
         Assert.Equal(allocated, await service.AllocateAsync(receipt.Id, request, allocationKey, default));
-        Assert.DoesNotContain(db.ChangeTracker.Entries(), e => e.Entity is PaymentTransfer or PaymentAllocation or
+        Assert.DoesNotContain(db.ChangeTracker.Entries(), e => e.Entity is Payment or PaymentAllocation or
             PaymentCommand or PaymentReconciliation or PaymentConfirmedEvent);
         var allocation = (await repository.AllocationAsync(receipt.Id, default))!;
         var review = (await repository.LatestReviewAsync(receipt.Id, default))!;
@@ -54,11 +54,11 @@ public sealed partial class PaymentLedgerTests
                 AND (SELECT count(*) FROM jsonb_array_elements(p.history) h WHERE h->>'recordType'='PaymentReconciliation')=2)
               AS "Value"
             """).SingleAsync());
-        var physical = await db.Set<PaymentTransfer>().AsNoTracking().SingleAsync(p => p.Id == receipt.Id);
+        var physical = await db.Set<Payment>().AsNoTracking().SingleAsync(p => p.Id == receipt.Id);
         Assert.Equal("VERIFIED", physical.Status);
         Assert.Equal("MANUAL", physical.VerificationMethod);
-        Assert.Equal((Guid?)w.Owner, physical.StoredVerifiedByUserId);
-        Assert.NotNull(physical.StoredVerifiedAt);
+        Assert.Equal((Guid?)w.Owner, physical.VerifiedByUserId);
+        Assert.NotNull(physical.VerifiedAt);
         var snapshot = physical.VerificationData.GetProperty("compactState");
         string[] expectedReceiptFields =
         [
@@ -73,8 +73,8 @@ public sealed partial class PaymentLedgerTests
         Assert.Equal(physical.BankReference, hydrated.BankReference);
         Assert.Equal(snapshot.GetProperty("normalizedReference").GetString(), hydrated.NormalizedReference);
         Assert.Equal(snapshot.GetProperty("proposedInvoiceId").GetGuid(), hydrated.ProposedInvoiceId);
-        Assert.Equal(physical.StoredVerifiedAt, hydrated.StoredVerifiedAt);
-        Assert.Equal(physical.StoredVerifiedByUserId, hydrated.StoredVerifiedByUserId);
+        Assert.Equal(physical.VerifiedAt, hydrated.VerifiedAt);
+        Assert.Equal(physical.VerifiedByUserId, hydrated.VerifiedByUserId);
 
         // A physical payment without a receipt snapshot must never enter the
         // verified receipt lookup, even though the canonical type maps all rows.
@@ -86,10 +86,10 @@ public sealed partial class PaymentLedgerTests
                 INSERT INTO payments(id,provider_code,receiving_account_key,transaction_reference,received_at,amount,currency,status)
                 VALUES({pendingId},'SYNTHETIC-PENDING','test',{pendingReference},now(),1,'VND','PENDING')
                 """);
-            var pending = await db.Set<PaymentTransfer>().AsNoTracking().SingleAsync(p => p.Id == pendingId);
-            Assert.Null(pending.StoredRemittanceInfo);
-            Assert.Null(pending.StoredVerifiedByUserId);
-            Assert.Null(pending.StoredVerifiedAt);
+            var pending = await db.Set<Payment>().AsNoTracking().SingleAsync(p => p.Id == pendingId);
+            Assert.Null(pending.RemittanceInfo);
+            Assert.Null(pending.VerifiedByUserId);
+            Assert.Null(pending.VerifiedAt);
             Assert.Null(await repository.TransferAsync(pendingId, default));
             Assert.Null(await repository.TransferReferenceAsync("SYNTHETIC-PENDING", pendingReference, default));
             await pendingTx.RollbackAsync();
@@ -105,7 +105,7 @@ public sealed partial class PaymentLedgerTests
               AND notification_type='InvoicePaymentAllocated' AND related_entity_id={allocation.Id}
             """).SingleAsync());
 
-        var failed = new PaymentTransfer
+        var failed = new Payment
         {
             ProviderIdentity = "SYNTHETIC-BANK",
             BankReference = "ROLLBACK-" + Guid.NewGuid(),
@@ -123,7 +123,7 @@ public sealed partial class PaymentLedgerTests
             {
                 TransferId = failed.Id,
                 ActorId = w.Owner,
-                OccurredAt = failed.VerifiedAt
+                OccurredAt = failed.ReceiptVerifiedAt
             }, default);
             await repository.AddAsync(new PaymentCommand
             {
@@ -132,13 +132,13 @@ public sealed partial class PaymentLedgerTests
                 Operation = "register",
                 ResultId = failed.Id,
                 Fingerprint = new string('A', 64),
-                CreatedAt = failed.VerifiedAt
+                CreatedAt = failed.ReceiptVerifiedAt
             }, default);
             throw new InvalidOperationException("Synthetic transaction rollback");
         }, default));
         Assert.Null(await repository.TransferAsync(failed.Id, default));
         Assert.Null(await repository.CommandAsync(w.Owner, failedKey, "register", default));
         Assert.Null(db.Database.CurrentTransaction);
-        Assert.DoesNotContain(db.ChangeTracker.Entries(), e => e.Entity is PaymentTransfer or PaymentAllocation or PaymentReconciliation or PaymentCommand);
+        Assert.DoesNotContain(db.ChangeTracker.Entries(), e => e.Entity is Payment or PaymentAllocation or PaymentReconciliation or PaymentCommand);
     }
 }

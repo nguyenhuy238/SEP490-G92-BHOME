@@ -73,7 +73,7 @@ internal static class NativeContractSnapshot
         return contract;
     }
 
-    internal static ContractSignature Read(ContractSignature row)
+    internal static ContractSigning Read(ContractSigning row)
     {
         var state = row.SigningData.TryGetProperty("compactState", out var value) ? value : default;
         string Text(string key) => state.ValueKind == JsonValueKind.Object && state.TryGetProperty(key, out var field) &&
@@ -102,7 +102,7 @@ internal static class NativeContractSnapshot
         RestoreRoomType(contract.Room, location.OperatingSettings);
         contract.Residents = (await db.Set<BHome.Domain.TenantContracts.ContractResident>().AsNoTracking().Where(r => r.ContractId == id)
             .ToArrayAsync(token)).ToList();
-        contract.Signatures = (await db.Set<BHome.Domain.TenantContracts.ContractSignature>().AsNoTracking().Where(s => s.ContractId == id)
+        contract.Signatures = (await db.Set<BHome.Domain.TenantContracts.ContractSigning>().AsNoTracking().Where(s => s.ContractId == id)
             .ToArrayAsync(token)).Select(Read).ToList();
         return contract;
     }
@@ -125,13 +125,13 @@ internal static class NativeContractSnapshot
         c.HoldingContractId, c.AppliedHoldingDeposit, c.HoldingAllocationReference, c.HoldingExpiryAt,
         c.ReservedCapacity, c.ApprovedByUserId, c.ApprovedAt, c.ApprovalReason, c.AgreedPriceSnapshot,
         c.PriceLockTrigger, c.PriceLockedAt, c.ConvertedMainContractId, c.LifecycleActorId, c.LifecycleAt,
-        c.LifecycleReason, c.Kind, c.Status, c.StartDate, c.EndDate, c.MonthlyRent, c.RequiredDeposit,
-        c.Terms, c.SnapshotHash, c.IsDevelopmentDemo, c.SigningMode, c.InternalAcceptance,
+        c.LifecycleReason, c.Kind, c.Status, c.StartDate, c.EndDate, c.RentAmount, c.RequiredDeposit,
+        c.Terms, c.SnapshotHashOrEmpty, c.IsDevelopmentDemo, c.SigningMode, c.InternalAcceptance,
         c.InitialPaymentRequired, c.PaymentMode, c.OperatingPolicySnapshot, c.ActivatedByUserId, c.ActivatedAt, c.ActualEndDate);
 
     internal static ResidentState Snapshot(ContractResident r) => new(r.ContractId, r.ResidentId, r.Role, r.ResidenceFrom, r.ResidenceTo);
-    internal static SignatureState Snapshot(ContractSignature s) => new(s.Id, s.ContractId, s.SignerUserId, s.CertificateId,
-        s.Status, s.SnapshotHash, s.SourceHash, s.PreparedHash, s.PreparedObjectKey, s.FieldName, s.DocumentDigest,
+    internal static SignatureState Snapshot(ContractSigning s) => new(s.Id, s.ContractId, s.SignerUserId, s.CertificateId,
+        s.Status, s.SnapshotHash, s.SourceHashOrEmpty, s.PreparedHashOrEmpty, s.PreparedObjectKeyOrEmpty, s.FieldName, s.DocumentDigest,
         s.DataToSignDigest, s.CertificateChain, s.ProviderUserId, s.CredentialId, s.ProviderReference, s.SignedObjectKey,
         s.SignedHash, s.SignedAt, s.ExpiresAt, s.CreatedAt, s.UpdatedAt);
 
@@ -162,7 +162,7 @@ internal static class NativeContractSnapshot
                 status,activated_at,activated_by_user_id,actual_end_date,version,history)
             VALUES ({c.Id},{c.RoomId},{c.RepresentativeResidentId},{c.TenantUserId},{c.OwnerSignerId},{kind},
                 {c.PreviousContractId},{c.ParentContractId},{c.HoldingContractId},{c.StartDate},{c.EndDate},{c.HoldingExpiryAt},
-                {c.MonthlyRent},{c.RequiredDeposit},{c.AppliedHoldingDeposit},{c.ReservedCapacity},{c.Terms},{c.SnapshotHash},
+                {c.RentAmount},{c.RequiredDeposit},{c.AppliedHoldingDeposit},{c.ReservedCapacity},{c.Terms},{c.SnapshotHashOrEmpty},
                 CAST({c.DraftMetadata} AS jsonb),{(short)c.Status},{c.ActivatedAt},{c.ActivatedByUserId},{c.ActualEndDate},
                 {c.DraftVersion},CAST({history} AS jsonb))
             """, token)
@@ -170,9 +170,9 @@ internal static class NativeContractSnapshot
                 UPDATE contracts SET room_id={c.RoomId},representative_resident_id={c.RepresentativeResidentId},
                     tenant_user_id={c.TenantUserId},owner_signer_id={c.OwnerSignerId},contract_type={kind},
                     previous_contract_id={c.PreviousContractId},parent_contract_id={c.ParentContractId},source_holding_contract_id={c.HoldingContractId},
-                    start_date={c.StartDate},end_date={c.EndDate},holding_expiry_at={c.HoldingExpiryAt},monthly_rent={c.MonthlyRent},
+                    start_date={c.StartDate},end_date={c.EndDate},holding_expiry_at={c.HoldingExpiryAt},monthly_rent={c.RentAmount},
                     deposit_required={c.RequiredDeposit},applied_holding_deposit={c.AppliedHoldingDeposit},reserved_capacity={c.ReservedCapacity},
-                    terms={c.Terms},snapshot_hash={c.SnapshotHash},draft_metadata=CAST({c.DraftMetadata} AS jsonb),status={(short)c.Status},
+                    terms={c.Terms},snapshot_hash={c.SnapshotHashOrEmpty},draft_metadata=CAST({c.DraftMetadata} AS jsonb),status={(short)c.Status},
                     activated_at={c.ActivatedAt},activated_by_user_id={c.ActivatedByUserId},actual_end_date={c.ActualEndDate},
                     version={c.DraftVersion},history=history||CAST({history} AS jsonb)
                 WHERE id={c.Id} AND version={originalVersion.Value}
@@ -197,7 +197,7 @@ internal static class NativeContractSnapshot
         if (affected != 1) throw new DbUpdateConcurrencyException("Contract member changed or no longer exists.");
     }
 
-    internal static async Task SaveSignatureAsync(Compact24DbContext db, ContractSignature s, bool added, DateTimeOffset at, CancellationToken token)
+    internal static async Task SaveSignatureAsync(Compact24DbContext db, ContractSigning s, bool added, DateTimeOffset at, CancellationToken token)
     {
         s.Stamp(at, added);
         var state = JsonSerializer.Serialize(Snapshot(s), Json);
@@ -212,7 +212,7 @@ internal static class NativeContractSnapshot
                         ELSE COALESCE(e.value->>'provider','EVIDENCE_WITHOUT_DIRECTORY') END,
                     COALESCE(e.value,jsonb_build_object('id',{s.CertificateId},'unresolvedDirectoryReference',true,'certificateChain',{s.CertificateChain},
                         'providerUserId',{s.ProviderUserId},'credentialId',{s.CredentialId})),
-                    {s.ProviderReference},{(short)s.Status},{s.SnapshotHash},{s.SourceHash},{s.PreparedHash},{s.PreparedObjectKey},
+                    {s.ProviderReference},{(short)s.Status},{s.SnapshotHash},{s.SourceHashOrEmpty},{s.PreparedHashOrEmpty},{s.PreparedObjectKeyOrEmpty},
                     {s.SignedObjectKey},{s.SignedHash},{s.CreatedAt},{s.ExpiresAt},{s.SignedAt},
                     jsonb_build_object('schemaVersion',1,'compactState',CAST({state} AS jsonb)),CAST({history} AS jsonb)
                 FROM (SELECT 1) v LEFT JOIN LATERAL (
@@ -223,7 +223,7 @@ internal static class NativeContractSnapshot
             : await db.Database.ExecuteSqlInterpolatedAsync($"""
                 UPDATE contract_signings SET contract_id={s.ContractId},signer_user_id={s.SignerUserId},certificate_id={s.CertificateId},
                     provider_reference={s.ProviderReference},signing_status={(short)s.Status},snapshot_hash={s.SnapshotHash},
-                    source_hash={s.SourceHash},prepared_hash={s.PreparedHash},prepared_object_key={s.PreparedObjectKey},
+                    source_hash={s.SourceHashOrEmpty},prepared_hash={s.PreparedHashOrEmpty},prepared_object_key={s.PreparedObjectKeyOrEmpty},
                     signed_object_key={s.SignedObjectKey},signed_hash={s.SignedHash},requested_at={s.CreatedAt},
                     expires_at={s.ExpiresAt},signed_at={s.SignedAt},signing_data=jsonb_build_object('schemaVersion',1,'compactState',CAST({state} AS jsonb)),
                     history=history||CAST({history} AS jsonb)

@@ -12,7 +12,8 @@ public sealed class ContractResident
 
     public Guid ResidentId { get; set; }
 
-    public ResidentType Role { get; set; }
+    [NotMapped, JsonIgnore] public ResidentType ResidentRole { get; set; }
+    public ResidentType Role { get => ResidentRole; set => ResidentRole = value; }
 
     public DateOnly ResidenceFrom { get; set; }
 

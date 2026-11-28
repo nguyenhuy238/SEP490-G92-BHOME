@@ -28,7 +28,7 @@ public sealed class CapitalAssetRepository(BHomePersistenceContext db, ISetupWor
                 a.Name,
                 a.Category,
                 a.Status,
-                a.PurchaseMetadata
+                a.PurchaseInfo
             }).ToArrayAsync(token);
         var names = await db.Set<BHome.Domain.PropertyManagement.Room>().AsNoTracking().Where(r => r.LocationId == id)
             .ToDictionaryAsync(r => r.Id, r => r.RoomNumber, token);
@@ -122,7 +122,7 @@ public sealed class CapitalAssetRepository(BHomePersistenceContext db, ISetupWor
         var result = new List<CapitalAssetEntry>(assets.Length);
         foreach (var a in assets)
         {
-            var data = a.PurchaseMetadata;
+            var data = a.PurchaseInfo;
             var quantity = data.TryGetProperty("quantity", out var qty) && qty.TryGetInt32(out var count) && count > 0 ? count : 1;
             decimal? purchase = null;
             if (data.TryGetProperty("purchaseCost", out var price) && price.ValueKind is JsonValueKind.Number or JsonValueKind.String &&

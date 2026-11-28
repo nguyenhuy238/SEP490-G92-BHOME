@@ -34,7 +34,7 @@ public sealed partial class InvoiceApiTests(CaptureFixture fixture) : IClassFixt
         await using (var scope = fixture.Factory.Services.CreateAsyncScope())
         {
             var account = await BHome.IntegrationTests.Compact24.WorkflowTestUsers.CreateAsync(scope.ServiceProvider,
-                new ApplicationUser { Id = id, UserName = email, Email = email }, role, password);
+                new User { Id = id, UserName = email, Email = email }, role, password);
             id = account.Id; email = account.Email!;
         }
         var client = fixture.Factory.CreateClient();
@@ -66,7 +66,7 @@ public sealed partial class InvoiceApiTests(CaptureFixture fixture) : IClassFixt
             Status = ContractStatus.Active,
             StartDate = primary ? primaryStart ?? period.AddMonths(-1) : period.AddMonths(-1),
             EndDate = period.AddMonths(4),
-            MonthlyRent = 3000000,
+            RentAmount = 3000000,
             RequiredDeposit = primary ? primaryDeposit : 0,
             Terms = "SYNTHETIC TEST",
             ActivatedAt = activatedAt ?? DateTimeOffset.UtcNow,
@@ -97,7 +97,7 @@ public sealed partial class InvoiceApiTests(CaptureFixture fixture) : IClassFixt
         }
         foreach (var tenancy in new[] { contract, secondContract })
         {
-            tenancy.AgreedPriceSnapshot = JsonSerializer.Serialize(new HoldingPriceSnapshot(tenancy.MonthlyRent, tenancy.RequiredDeposit,
+            tenancy.AgreedPriceSnapshot = JsonSerializer.Serialize(new HoldingPriceSnapshot(tenancy.RentAmount, tenancy.RequiredDeposit,
                 tenancy.StartDate, tenancy.EndDate, default, "SyntheticSigned", DateTimeOffset.UtcNow,
                 policies.Select(p => new HoldingPriceCharge(p.Id, p.ChargeCode, (int)p.Category, (int)p.Method,
                     p.Rate, p.EffectiveFrom, p.EffectiveTo, p.Version)
@@ -111,10 +111,10 @@ public sealed partial class InvoiceApiTests(CaptureFixture fixture) : IClassFixt
     private static void SealFixture(Contract c)
     {
         var document = new ContractDocument(c.Id, c.RoomId, c.OwnerSignerId, c.TenantUserId!.Value, c.RepresentativeResidentId,
-            c.Residents.Select(r => r.ResidentId).Order().ToArray(), c.StartDate, c.EndDate, c.MonthlyRent, c.RequiredDeposit,
-            c.HoldingContractId, c.AppliedHoldingDeposit, c.Terms, c.SnapshotHash)
+            c.Residents.Select(r => r.ResidentId).Order().ToArray(), c.StartDate, c.EndDate, c.RentAmount, c.RequiredDeposit,
+            c.HoldingContractId, c.AppliedHoldingDeposit, c.Terms, c.SnapshotHashOrEmpty)
         { AgreedCharges = ContractChargeSnapshot.Read(c).Charges };
-        c.SnapshotHash = ContractDocumentSnapshot.Hash(document);
+        c.SnapshotHashOrEmpty = ContractDocumentSnapshot.Hash(document);
     }
     private static BillingScheduleWrite Schedule(Workspace w) => new(w.Location, BillingRateDate.PeriodStart, BillingRentSource.RoomPolicy,
         PartialMonthRule.FullMonth, VndRounding.AwayFromZero, 1, 0, 1, 1, 10, 1, 0);
@@ -292,7 +292,7 @@ public sealed partial class InvoiceApiTests(CaptureFixture fixture) : IClassFixt
             RepresentativeResidentId = existing.RepresentativeResidentId,
             StartDate = existing.StartDate,
             EndDate = existing.EndDate,
-            MonthlyRent = existing.MonthlyRent,
+            RentAmount = existing.RentAmount,
             RequiredDeposit = 0,
             Status = ContractStatus.Active,
             ActivatedAt = DateTimeOffset.UtcNow,
