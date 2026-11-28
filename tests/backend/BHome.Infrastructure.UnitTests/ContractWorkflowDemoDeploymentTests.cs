@@ -19,7 +19,9 @@ public sealed class ContractWorkflowDemoDeploymentTests
         var staging = environment == "Staging";
         var builder = Host.CreateApplicationBuilder(new HostApplicationBuilderSettings
         {
-            DisableDefaults = true, EnvironmentName = environment, ContentRootPath = AppContext.BaseDirectory
+            DisableDefaults = true,
+            EnvironmentName = environment,
+            ContentRootPath = AppContext.BaseDirectory
         });
         builder.Configuration.AddInMemoryCollection(new Dictionary<string, string?>
         {

@@ -148,6 +148,20 @@ TRX/log local ở `.tools/production-demo-20261128/`, evidence private trên VPS
    xóa runtime approval/plaintext transfer files sau khi kết nối đã lưu mã hóa.
    Trả clock về ngày thực khi kết thúc demo.
 
-Chưa merge main, chưa migrate/recreate Production, chưa áp cấu hình hoặc xác nhận
-demo end-to-end Production. Hai báo cáo vận hành chưa commit có sẵn được giữ nguyên,
-không đưa vào commit release.
+Tại checkpoint chuẩn bị ban đầu chưa merge main, migrate/recreate Production hoặc
+áp cấu hình. Hai báo cáo vận hành chưa commit có sẵn được giữ nguyên, không đưa
+vào commit release.
+
+## Cập nhật sau khi PR #194 đã merge
+
+Người dùng đã merge #194 trước #193; main hiện là
+`28d007634dee14f4964a46d34f5091cce48586d8`, chưa chứa các sửa lỗi demo trong #193.
+CI #400 của #193 dừng tại `dotnet format`: object initializer trong
+`ContractWorkflowDemoDeploymentTests.cs` cần mỗi property một dòng. Các bước test
+và discovery chưa chạy, nên thiếu TRX và các gate phụ thuộc thất bại; không phải
+bằng chứng business test fail. Đã sửa định dạng, giữ nguyên toàn bộ assertion/gate.
+Kiểm tra whitespace của project với file này đã PASS.
+
+Probe VPS sau merge xác nhận Production vẫn chạy main cũ `70406ecf` cùng hotfix
+email; chưa áp migration/config hoặc release mới. Sau khi #193 được tích hợp vào
+develop cần PR bổ sung develop → main; #194 đã merge không tự nhận các commit sau đó.
