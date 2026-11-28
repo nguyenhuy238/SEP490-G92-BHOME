@@ -34,7 +34,7 @@ quy trình phát hành chính thức (mặc định `false`). Cờ này không t
 các phân hệ khác. Plan cũ vẫn có history; không thay hoặc xóa dữ liệu hóa đơn.
 
 **Chạy thử** cho phép thao tác có ghi dữ liệu trong Development/Testing, hoặc
-Staging được bật rõ bằng `BillingAutomation:ManualActionsEnabled=true`, và
+Staging/Production được bật rõ bằng `BillingAutomation:ManualActionsEnabled=true`, và
 gọi các API Owner thực, theo một phòng/kỳ/công tơ được chọn:
 
 - Giao nhiệm vụ ghi số **ban đầu**: `POST /api/v1/billing-automation/manual-meter-tasks`, `purpose=Initial`, `meterId` và `billingPeriod` để xác định lịch hiệu lực. Backend tạo Capture task Initial không có billingPeriod.
@@ -43,15 +43,15 @@ gọi các API Owner thực, theo một phòng/kỳ/công tơ được chọn:
 - Phát hành **Final**: `POST /api/v1/invoices/{id}/finalize` với `expectedVersion` và xác nhận Owner rõ ràng.
 
 Endpoint thử nhiệm vụ công tơ yêu cầu Owner có quyền quản lý Location và chỉ bật
-trong Development/Testing hoặc Staging có cờ opt-in trên; việc cấu hình lịch không tự phát hành hoặc tự giao việc.
+trong Development/Testing hoặc Staging/Production có cờ opt-in trên; việc cấu hình lịch không tự phát hành hoặc tự giao việc.
 Đây là thao tác ghi nghiệp vụ vào database môi trường đang chạy **thật**, không
 phải nút xem giả; những ràng buộc ngày, hợp đồng, chỉ số Staff-confirmed,
 idempotency, phân quyền và bằng chứng vẫn được backend áp dụng. Nhiệm vụ chụp
 ban đầu và định kỳ tạo qua Capture API thủ công có thể được Staff đang phụ trách
 Location nhìn thấy; không được nhầm với tác vụ JOB-09 tự phân công từng Staff.
 
-Cập nhật 24/11/2026: cờ manual mặc định `false`, chỉ được áp dụng khi môi trường
-là `Staging`; Production không được mở bởi cờ này. Preview giữ nguyên tên trường
+Cập nhật theo yêu cầu demo ngày 28/11/2026: cờ manual mặc định `false`, có hiệu lực
+trên `Staging` và `Production` khi được bật rõ. Preview giữ nguyên tên trường
 `developerActionsEnabled` để tương thích client và trả `true` khi Owner có thể
 chạy thử. Cờ không mở thao tác thử của phân hệ thông báo hoặc bật worker;
 `Jobs:Enabled` và `BillingAutomation:AutomaticJobsEnabled` vẫn độc lập. Owner
