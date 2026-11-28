@@ -17,6 +17,7 @@ describe('Staging mobile launch', () => {
     vi.stubEnv('EXPO_PUBLIC_API_BASE_URL', 'https://localhost:7240');
     vi.stubEnv('EXPO_PUBLIC_DEV_API_BASE_URL', 'https://192.168.2.102:7240');
     vi.stubEnv('EXPO_PUBLIC_STAGING_WEB_PROXY', undefined);
+    vi.stubEnv('EXPO_PUBLIC_PRODUCTION_WEB_PROXY', '1');
     vi.stubEnv('EXPO_NO_DOTENV', undefined);
     vi.stubEnv('EXPO_PUBLIC_DEV_SERVER_ID', 'old-local-server');
     try {
@@ -26,6 +27,7 @@ describe('Staging mobile launch', () => {
       expect(process.env.EXPO_PUBLIC_DEV_API_BASE_URL).toBeUndefined();
       expect(process.env.EXPO_PUBLIC_DEV_SERVER_ID).toBeUndefined();
       expect(process.env.EXPO_PUBLIC_STAGING_WEB_PROXY).toBe('1');
+      expect(process.env.EXPO_PUBLIC_PRODUCTION_WEB_PROXY).toBe('0');
       expect(process.env.EXPO_NO_DOTENV).toBe('1');
       expect(launch).toHaveBeenCalledExactlyOnceWith([
         '--metro-only',
@@ -33,6 +35,49 @@ describe('Staging mobile launch', () => {
         '--clear',
         '--port',
         '8082',
+      ]);
+    } finally {
+      vi.unstubAllEnvs();
+    }
+  });
+});
+
+describe('Production mobile launch', () => {
+  it('uses the live HTTPS API without Staging proxy, local supervisor or demo flags', async () => {
+    const { PRODUCTION_API_URL, startProductionMobile } = createRequire(import.meta.url)(
+      '../../../scripts/Start-ProductionMobile.cjs',
+    );
+    const previous = {
+      EXPO_PUBLIC_API_BASE_URL: 'https://api-staging.103.146.23.157.sslip.io',
+      EXPO_PUBLIC_DEV_API_BASE_URL: 'https://192.168.2.102:7240',
+      EXPO_PUBLIC_DEV_SERVER_ID: 'old-local-server',
+      EXPO_PUBLIC_STAGING_WEB_PROXY: '1',
+      EXPO_PUBLIC_PRODUCTION_WEB_PROXY: '0',
+      EXPO_PUBLIC_DEMO_CLOCK_ENABLED: 'true',
+      EXPO_PUBLIC_SMS_DEMO_ENABLED: 'true',
+      EXPO_NO_DOTENV: undefined,
+      EXPO_PACKAGER_PROXY_URL: 'http://localhost:8081',
+    };
+    for (const [name, value] of Object.entries(previous)) vi.stubEnv(name, value);
+    try {
+      const launch = vi.fn().mockResolvedValue(0);
+      await expect(startProductionMobile(['--port', '8083'], launch)).resolves.toBe(0);
+      expect(PRODUCTION_API_URL).toBe('https://api.103.146.23.157.sslip.io');
+      expect(process.env.EXPO_PUBLIC_API_BASE_URL).toBe(PRODUCTION_API_URL);
+      expect(process.env.EXPO_PUBLIC_DEV_API_BASE_URL).toBeUndefined();
+      expect(process.env.EXPO_PUBLIC_DEV_SERVER_ID).toBe('bhome-production');
+      expect(process.env.EXPO_PUBLIC_STAGING_WEB_PROXY).toBe('0');
+      expect(process.env.EXPO_PUBLIC_PRODUCTION_WEB_PROXY).toBe('1');
+      expect(process.env.EXPO_PUBLIC_DEMO_CLOCK_ENABLED).toBe('false');
+      expect(process.env.EXPO_PUBLIC_SMS_DEMO_ENABLED).toBe('false');
+      expect(process.env.EXPO_NO_DOTENV).toBe('1');
+      expect(process.env.EXPO_PACKAGER_PROXY_URL).toBeUndefined();
+      expect(launch).toHaveBeenCalledExactlyOnceWith([
+        '--metro-only',
+        '--lan',
+        '--clear',
+        '--port',
+        '8083',
       ]);
     } finally {
       vi.unstubAllEnvs();

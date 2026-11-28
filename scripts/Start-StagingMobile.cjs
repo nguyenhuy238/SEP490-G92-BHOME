@@ -9,6 +9,7 @@ async function startStagingMobile(args = process.argv.slice(2), launch = main) {
   delete process.env.EXPO_PUBLIC_DEV_SERVER_ID;
   process.env.EXPO_NO_DOTENV = '1';
   process.env.EXPO_PUBLIC_STAGING_WEB_PROXY = '1';
+  process.env.EXPO_PUBLIC_PRODUCTION_WEB_PROXY = '0';
   process.env.EXPO_PUBLIC_DEMO_CLOCK_ENABLED = 'true';
 
   console.log(`BHOME Mobile (Web + Expo Go) -> ${STAGING_API_URL}`);

@@ -58,7 +58,10 @@ export class MobileApiError extends Error {
   }
 }
 
-const stagingOrigin = 'https://api-staging.103.146.23.157.sslip.io';
+const deployedOrigins = new Set([
+  'https://api-staging.103.146.23.157.sslip.io',
+  'https://api.103.146.23.157.sslip.io',
+]);
 
 export async function mobileResponse<T>(
   base: string,
@@ -138,9 +141,9 @@ export async function checkApiConnection(input: string, transport: typeof fetch 
       if (!Array.isArray(locations)) throw new MobileApiError(502, 'invalid_response', path);
     });
   };
-  // Staging intentionally blocks /health/* at its public edge. Browsers can
+  // Deployed BHOME environments block /health/* at their public edge. Browsers can
   // hide that 404 as a network error because the edge does not emit CORS headers.
-  if (base === stagingOrigin) return checkPublic();
+  if (deployedOrigins.has(base)) return checkPublic();
   try {
     await mobileResponse(base, '/health/ready', {}, transport, async (response) => {
       if ((await response.text()).trim() !== 'Healthy')
