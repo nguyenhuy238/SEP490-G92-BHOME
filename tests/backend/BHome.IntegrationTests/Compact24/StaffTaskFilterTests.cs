@@ -20,7 +20,7 @@ public sealed partial class Compact24NotificationMvpTests
         var other = await Seed();
         using var staff = await Client(selected.Staff);
         await using var scope = fixture.Factory!.Services.CreateAsyncScope();
-        var db = scope.ServiceProvider.GetRequiredService<Compact24DbContext>();
+        var db = scope.ServiceProvider.GetRequiredService<Compact24ArchiveContext>();
         var now = DateTimeOffset.UtcNow;
 
         async Task<Guid> AddTask(Guid location, MeterTaskStatus status, int dueInHours)
@@ -59,7 +59,7 @@ public sealed partial class Compact24NotificationMvpTests
         using var owner = await Client(first.Owner);
         using var staff = await Client(first.Staff);
         await using var scope = fixture.Factory!.Services.CreateAsyncScope();
-        var db = scope.ServiceProvider.GetRequiredService<Compact24DbContext>();
+        var db = scope.ServiceProvider.GetRequiredService<Compact24ArchiveContext>();
         var roomAsset = new Asset { LocationId = first.Location, RoomId = first.Room, Name = "Synthetic bed", Category = "Furniture", Condition = "Good" };
         var commonAsset = new Asset { LocationId = first.Location, CommonArea = "Synthetic hallway", Name = "Synthetic lamp", Category = "Equipment", Condition = "Good" };
         db.AddRange(roomAsset, commonAsset);
@@ -122,7 +122,7 @@ public sealed partial class Compact24NotificationMvpTests
         var otherStaffTask = Guid.NewGuid();
         var now = DateTimeOffset.UtcNow;
         await using var scope = fixture.Factory!.Services.CreateAsyncScope();
-        var db = scope.ServiceProvider.GetRequiredService<Compact24DbContext>();
+        var db = scope.ServiceProvider.GetRequiredService<Compact24ArchiveContext>();
         await db.Database.ExecuteSqlInterpolatedAsync($"""
             INSERT INTO locations(id,name,address,is_active,staff_assignments) VALUES
             ({expiredLocation},'Synthetic expired','Synthetic address',true,jsonb_build_array(jsonb_build_object(
@@ -190,7 +190,7 @@ public sealed partial class Compact24NotificationMvpTests
         var now = new DateTimeOffset(2035, 1, 1, 17, 0, 0, TimeSpan.Zero);
         var today = new DateOnly(2035, 1, 2);
         await using var scope = fixture.Factory!.Services.CreateAsyncScope();
-        var db = scope.ServiceProvider.GetRequiredService<Compact24DbContext>();
+        var db = scope.ServiceProvider.GetRequiredService<Compact24ArchiveContext>();
         var repository = scope.ServiceProvider.GetRequiredService<IOperationsRepository>();
         await db.Database.ExecuteSqlInterpolatedAsync($"""
             INSERT INTO locations(id,name,address,staff_assignments) VALUES

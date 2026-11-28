@@ -5,6 +5,9 @@ namespace BHome.Domain.TenantContracts;
 // Resident-scoped acceptance, never a manufactured Identity user or CA signature.
 public sealed class ContractSigningInvitation : AuditableEntity
 {
+    internal static ContractSigningInvitation Rehydrate(Guid id, DateTimeOffset createdAt, DateTimeOffset updatedAt) =>
+        new() { Id = id, CreatedAt = createdAt, UpdatedAt = updatedAt };
+
     public Guid ContractId { get; set; }
     public Guid ResidentId { get; set; }
     public Guid ApprovedByUserId { get; set; }

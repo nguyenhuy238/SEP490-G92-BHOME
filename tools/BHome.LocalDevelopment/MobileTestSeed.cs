@@ -24,12 +24,13 @@ internal static class MobileTestSeed
         LocalTestAccounts.ValidateTarget(Environment.GetEnvironmentVariable("DOTNET_ENVIRONMENT"),
             config.GetConnectionString("Database") ?? "");
         await using var scope = provider.CreateAsyncScope();
-        var db = scope.ServiceProvider.GetRequiredService<BHomePersistenceContext>();
+        var identity = scope.ServiceProvider.GetRequiredService<BHome.Infrastructure.Persistence.Compact24.Compact24DbContext>();
+        await using var db = OfflineFixturePersistence.Open(scope.ServiceProvider, identity);
         if (!await db.IsSchemaReadyAsync()) throw new LocalTestAccountException("Compact24 chưa sẵn sàng.");
         var users = scope.ServiceProvider.GetRequiredService<UserManager<ApplicationUser>>();
         var today = DateOnly.FromDateTime(TimeZoneInfo.ConvertTimeBySystemTimeZoneId(DateTimeOffset.UtcNow, "Asia/Ho_Chi_Minh").DateTime);
         var now = DateTimeOffset.UtcNow;
-        await using var tx = await db.Database.BeginTransactionAsync();
+        await using var tx = await OfflineFixturePersistence.BeginAsync(db, identity);
         await db.Database.ExecuteSqlInterpolatedAsync($"SELECT pg_advisory_xact_lock(hashtextextended({"mobile-test-fixture-v1"}, 0))");
         foreach (var (n, role) in new[] { (1, Roles.Owner), (2, Roles.Staff), (3, Roles.Tenant) })
         {
@@ -44,7 +45,7 @@ internal static class MobileTestSeed
             }
             if (await db.Users.AnyAsync(u => u.Id == Id(n))) throw new LocalTestAccountException("Trùng ID tài khoản fixture.");
             var user = new ApplicationUser { Id = Id(n), UserName = name, Email = name + "@example.invalid", IsActive = true, LockoutEnabled = true };
-            db.PrepareUserRole(user, role);
+            identity.PrepareUserRole(user, role);
             var result = await users.CreateAsync(user, password);
             if (!result.Succeeded) throw new LocalTestAccountException("Không tạo được tài khoản fixture: " + string.Join(",", result.Errors.Select(e => e.Code)));
         }

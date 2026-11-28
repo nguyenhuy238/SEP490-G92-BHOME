@@ -105,8 +105,10 @@ internal static class NativePropertyPageQueries
         IQueryable<OrderRow> order, PropertyQuery q, Func<TRow, TDto> map, CancellationToken token) where TRow : class
     {
         var count = await rows.CountAsync(token);
-        var page = await (from row in rows join sort in order on EF.Property<Guid>(row, "Id") equals sort.Id
-                          orderby sort.CreatedAt, sort.Id select row)
+        var page = await (from row in rows
+                          join sort in order on EF.Property<Guid>(row, "Id") equals sort.Id
+                          orderby sort.CreatedAt, sort.Id
+                          select row)
             .Skip(checked((q.Page - 1) * q.PageSize)).Take(q.PageSize).ToArrayAsync(token);
         return new(page.Select(map).ToArray(), q.Page, q.PageSize, count);
     }

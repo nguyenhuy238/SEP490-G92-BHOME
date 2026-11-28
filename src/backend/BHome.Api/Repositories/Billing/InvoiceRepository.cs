@@ -57,7 +57,8 @@ internal sealed class InvoiceRepository(BHomePersistenceContext db) : IInvoiceRe
         {
             var pair = await (from room in compact.Set<Native.Room>().AsNoTracking()
                               join location in compact.Set<Native.Location>().AsNoTracking() on room.LocationId equals location.Id
-                              where room.Id == roomId select new { room, location }).SingleOrDefaultAsync(t);
+                              where room.Id == roomId
+                              select new { room, location }).SingleOrDefaultAsync(t);
             if (pair is null) return null;
             var result = NativeRoomLocationPersistence.Read(pair.room);
             result.Location = NativeRoomLocationPersistence.Read(pair.location);

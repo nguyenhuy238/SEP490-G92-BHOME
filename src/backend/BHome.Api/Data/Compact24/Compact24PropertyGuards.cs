@@ -7,24 +7,9 @@ using Native = BHome.Domain.Entities;
 
 namespace BHome.Infrastructure.Persistence.Compact24;
 
-public sealed partial class Compact24DbContext
+public partial class Compact24DbContext
 {
-    // Preserve the normalized indexes and deferred policy exclusion of the source schema.
-    // JSON catalogs cannot use the source's relational FK/index; the same Location lock used
-    // by PropertyService now also protects direct repository writes and imported catalogs.
-    private async Task<Guid[]> LockPropertyConfigurationAsync(EntityEntry[] entries, CancellationToken token)
-    {
-        if (Importing) return [];
-        var relevant = entries.Where(e => e.Entity is RoomType or Asset or BillingPolicy || e.Entity is Room &&
-            (e.State == EntityState.Added || new[] { "RoomNumber", "LocationId", "RoomTypeId" }.Any(p => e.Property(p).IsModified))).ToArray();
-        var locations = relevant.Select(e => (Guid)e.Property("LocationId").CurrentValue!).Distinct().Order().ToArray();
-        foreach (var location in locations)
-            await Database.ExecuteSqlInterpolatedAsync($"SELECT pg_advisory_xact_lock(hashtextextended({location.ToString()},0))", token);
-        foreach (var entry in relevant.Where(e => e.Entity is BillingPolicy && e.State == EntityState.Modified)) ValidatePolicyHistory(entry);
-        return locations;
-    }
-
-    private async Task ValidatePropertyConfigurationAsync(Guid[] locations, CancellationToken token)
+    protected async Task ValidatePropertyConfigurationAsync(Guid[] locations, CancellationToken token)
     {
         if (locations.Length == 0) return;
         if (await Set<Native.Room>().AsNoTracking().Where(r => locations.Contains(r.LocationId))
@@ -39,35 +24,13 @@ public sealed partial class Compact24DbContext
             throw new PostgresException("Overlapping effective policy versions.", "ERROR", "ERROR", "23P01");
     }
 
-    private void ValidatePolicyHistory(EntityEntry entry)
-    {
-        var policy = (BillingPolicy)entry.Entity;
-        var oldFrom = entry.Property(nameof(BillingPolicy.EffectiveFrom)).OriginalValue;
-        var oldUsed = entry.Property(nameof(BillingPolicy.FirstUsedAt)).OriginalValue;
-        var today = (clock ?? TimeProvider.System).BusinessToday();
-        var immutable = new[] { "LocationId", "RoomId", "RoomTypeId", "ChargeCode", "Category", "Method" };
-        bool Changed(string name) => !Equals(entry.Property(name).OriginalValue, entry.Property(name).CurrentValue);
-        var invalid = immutable.Any(Changed) || oldUsed is not null && Changed("FirstUsedAt");
-        if (oldUsed is null && policy.FirstUsedAt is not null)
-            invalid |= entry.Properties.Any(p => p.IsModified && p.Metadata.Name is not ("FirstUsedAt" or "Version" or "UpdatedAt"));
-        else if ((DateOnly)oldFrom! > today && oldUsed is null)
-            invalid |= policy.EffectiveFrom <= today;
-        else
-        {
-            var oldTo = (DateOnly?)entry.Property(nameof(BillingPolicy.EffectiveTo)).OriginalValue;
-            invalid |= entry.Properties.Any(p => p.IsModified && p.Metadata.Name is not ("EffectiveTo" or "Version" or "UpdatedAt")) ||
-                policy.EffectiveTo is null || policy.EffectiveTo < today || oldTo is not null && policy.EffectiveTo > oldTo;
-        }
-        if (invalid) throw new PostgresException("Historical policy terms cannot be rewritten.", "ERROR", "ERROR", "23514");
-    }
-
     private void ValidateNativePolicyHistory(EntityEntry entry)
     {
         var policy = (Native.BillingPolicy)entry.Entity;
         var oldFrom = (DateOnly)entry.Property(nameof(Native.BillingPolicy.EffectiveFrom)).OriginalValue!;
         var oldUsed = (DateTimeOffset?)entry.Property(nameof(Native.BillingPolicy.FirstUsedAt)).OriginalValue;
         var oldTo = (DateOnly?)entry.Property(nameof(Native.BillingPolicy.EffectiveTo)).OriginalValue;
-        var today = (clock ?? TimeProvider.System).BusinessToday();
+        var today = PersistenceClock.BusinessToday();
         static string? HistoricalField(System.Text.Json.JsonElement history, string field)
         {
             foreach (var item in history.EnumerateArray().Reverse())

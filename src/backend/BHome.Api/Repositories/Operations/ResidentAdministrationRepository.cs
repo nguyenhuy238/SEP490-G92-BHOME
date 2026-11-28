@@ -88,8 +88,9 @@ internal sealed class ResidentAdministrationRepository(Compact24DbContext db) : 
         command.Parameters.AddWithValue("id", id); command.Parameters.AddWithValue("actor", actor); command.Parameters.AddWithValue("label", input.DisplayLabel);
         command.Parameters.AddWithValue("reason", input.Reason); command.Parameters.AddWithValue("now", now);
         await command.ExecuteNonQueryAsync(t);
-        db.SecurityAudit.Add(new() { UserId = actor, Event = "ResidentWorkspaceLabelUpdated", TargetType = "Resident", TargetId = id, Succeeded = true, OccurredAt = now });
-        await db.SaveChangesAsync(t); await tx.CommitAsync(t);
+        await BHome.Infrastructure.IdentityAccess.SecurityAuditWrites.AppendAsync(db,
+            new(Guid.NewGuid(), actor, null, null, "ResidentWorkspaceLabelUpdated", true, now, "Resident", id), t);
+        await tx.CommitAsync(t);
         return (await GetAsync(id, t))!;
     }
     private static ResidentAdministrationView Read(NpgsqlDataReader r)

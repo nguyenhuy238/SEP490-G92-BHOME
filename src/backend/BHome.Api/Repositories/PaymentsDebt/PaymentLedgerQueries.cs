@@ -76,8 +76,15 @@ internal static class PaymentLedgerQueries
             FROM operational_tasks WHERE task_type='COMMAND' AND task_data->>'recordType'='PaymentCommand'
               AND COALESCE(task_data->>'deleted','false')<>'true'
             """).Where(c => c.ActorId == actor && c.Key == key && c.Operation == operation).SingleOrDefaultAsync(token);
-        return row is null ? null : new PaymentCommand { ActorId = row.ActorId, Key = row.Key, Operation = row.Operation,
-            Fingerprint = row.Fingerprint, ResultId = row.ResultId, CreatedAt = row.CreatedAt };
+        return row is null ? null : new PaymentCommand
+        {
+            ActorId = row.ActorId,
+            Key = row.Key,
+            Operation = row.Operation,
+            Fingerprint = row.Fingerprint,
+            ResultId = row.ResultId,
+            CreatedAt = row.CreatedAt
+        };
     }
 }
 

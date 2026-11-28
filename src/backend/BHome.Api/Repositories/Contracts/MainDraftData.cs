@@ -6,7 +6,9 @@ using BHome.Application.Contracts;
 using BHome.Application.Ocr;
 using BHome.Domain.TenantContracts;
 using BHome.Infrastructure.Persistence;
+using BHome.Infrastructure.Persistence.Compact24;
 using Microsoft.EntityFrameworkCore;
+using Native = BHome.Domain.Entities;
 
 namespace BHome.Infrastructure.Contracts;
 
@@ -87,12 +89,13 @@ internal sealed class MainDraftData(BHomePersistenceContext db, IIdentityProtect
         var policy = JsonSerializer.Serialize(new { current = saved.MaxBy(s => s.Version), versions = saved });
         var historyEntry = JsonSerializer.Serialize(new { recordType = "OwnerContractSettingsConfigured", recordedAt = DateTimeOffset.UtcNow, actorId = actor, state = saved.MaxBy(s => s.Version) });
         await db.Database.ExecuteSqlInterpolatedAsync($"UPDATE public.users SET business_profile=jsonb_set(COALESCE(business_profile,'{{}}'::jsonb), '{{mainContractPolicy}}', CAST({policy} AS jsonb), true), history=COALESCE(history,'[]'::jsonb)||jsonb_build_array(CAST({historyEntry} AS jsonb)) WHERE id={ownerId}", t);
-        db.SecurityAudit.Add(new SecurityAuditRecord { UserId = actor, Event = "OwnerContractSettingsConfigured", TargetType = "Owner", TargetId = ownerId, Succeeded = true, OccurredAt = DateTimeOffset.UtcNow });
-        await db.SaveChangesAsync(t); await transaction.CommitAsync(t);
+        await SecurityAuditWrites.AppendAsync(db, new(Guid.NewGuid(), actor, null, null,
+            "OwnerContractSettingsConfigured", true, DateTimeOffset.UtcNow, "Owner", ownerId), t);
+        await transaction.CommitAsync(t);
     }
     public async Task<IdentityConfirmation> IdentityAsync(Guid roomId, Guid residentId, CancellationToken t)
     {
-        var r = await db.Set<Resident>().AsNoTracking().SingleOrDefaultAsync(r => r.Id == residentId && r.RoomId == roomId, t) ?? throw ContractException.Invalid("verified_residents_required");
+        var r = await ResidentAsync(roomId, residentId, t) ?? throw ContractException.Invalid("verified_residents_required");
         if (r.ResidentType == ResidentType.CoOccupant && r.HouseholdRepresentativeId != null && r.HouseholdConfirmedAt != null && !string.IsNullOrWhiteSpace(r.HouseholdProfile) && r.HouseholdProfile != "{}")
         {
             var p = Decode<HouseholdMemberInput>(JsonSerializer.Deserialize<EncryptedIdentity>(r.HouseholdProfile)!, new(r.OwnerUserId, r.Id));
@@ -102,28 +105,54 @@ internal sealed class MainDraftData(BHomePersistenceContext db, IIdentityProtect
         if (string.IsNullOrWhiteSpace(r.IdentityData) || r.IdentityData == "{}") throw ContractException.Invalid("confirmed_identity_required");
         return Decode<IdentityConfirmation>(JsonSerializer.Deserialize<EncryptedIdentity>(r.IdentityData)!, new(r.OwnerUserId, r.Id));
     }
-    public Task<bool> DuplicateAsync(Guid roomId, Guid except, Guid[] people, DateOnly from, DateOnly to, CancellationToken t) => db.Set<Contract>().AnyAsync(c => c.RoomId == roomId && c.Id != except &&
+    public Task<bool> DuplicateAsync(Guid roomId, Guid except, Guid[] people, DateOnly from, DateOnly to, CancellationToken t) =>
+        db is Compact24DbContext
+        ? db.Set<Native.Contract>().AsNoTracking().AnyAsync(c => c.RoomId == roomId && c.Id != except &&
+            (c.ContractType == "MAIN" || c.ContractType == "RENEWAL" || c.ContractType == "HOLDING" || c.ContractType == "ADDENDUM") &&
+            (c.Status == (short)ContractStatus.Draft || c.Status == (short)ContractStatus.PendingSigning ||
+             c.Status == (short)ContractStatus.PendingActivation || c.Status == (short)ContractStatus.Active) &&
+            c.StartDate <= to && c.EndDate >= from && db.Set<Native.ContractResident>().Any(r => r.ContractId == c.Id && people.Contains(r.ResidentId)), t)
+        : db.Set<Contract>().AnyAsync(c => c.RoomId == roomId && c.Id != except &&
         (c.Status == ContractStatus.Draft || c.Status == ContractStatus.PendingSigning || c.Status == ContractStatus.PendingActivation || c.Status == ContractStatus.Active) && c.StartDate <= to && c.EndDate >= from && c.Residents.Any(r => people.Contains(r.ResidentId)), t);
     public Task<string?> PhoneAsync(Guid roomId, Guid residentId, CancellationToken t) =>
-        (from r in db.Set<Resident>().AsNoTracking()
-         join account in db.Users.AsNoTracking() on r.TenantUserId equals (Guid?)account.Id
-         where r.RoomId == roomId && r.Id == residentId && r.VerificationStatus == IdentityVerificationStatus.Verified
-         select account.PhoneNumber).SingleOrDefaultAsync(t);
+        db is Compact24DbContext
+        ? (from r in db.Set<Native.Resident>().AsNoTracking()
+           join account in db.Users.AsNoTracking() on r.UserId equals (Guid?)account.Id
+           where r.CurrentRoomId == roomId && r.Id == residentId && r.VerificationStatus == (short)IdentityVerificationStatus.Verified
+           select account.PhoneNumber).SingleOrDefaultAsync(t)
+        : (from r in db.Set<Resident>().AsNoTracking()
+           join account in db.Users.AsNoTracking() on r.TenantUserId equals (Guid?)account.Id
+           where r.RoomId == roomId && r.Id == residentId && r.VerificationStatus == IdentityVerificationStatus.Verified
+           select account.PhoneNumber).SingleOrDefaultAsync(t);
     public async Task<HouseholdMemberInput?> HouseholdMemberAsync(Guid roomId, Guid residentId, CancellationToken t)
     {
-        var r = await db.Set<Resident>().AsNoTracking().SingleOrDefaultAsync(r => r.Id == residentId && r.RoomId == roomId, t);
+        var r = await ResidentAsync(roomId, residentId, t);
         return r?.HouseholdRepresentativeId is null || string.IsNullOrWhiteSpace(r.HouseholdProfile) || r.HouseholdProfile == "{}" ? null :
             Decode<HouseholdMemberInput>(JsonSerializer.Deserialize<EncryptedIdentity>(r.HouseholdProfile)!, new(r.OwnerUserId, r.Id));
     }
     public string Protect(Contract c, MainDraftState state) => JsonSerializer.Serialize(Encode(state, new(c.OwnerSignerId, c.Id)));
     public Task<string?> EmailAsync(Guid roomId, Guid residentId, CancellationToken t) =>
-        (from r in db.Set<Resident>().AsNoTracking()
-         join account in db.Users.AsNoTracking() on r.TenantUserId equals (Guid?)account.Id
-         where r.RoomId == roomId && r.Id == residentId && r.VerificationStatus == IdentityVerificationStatus.Verified
-         select account.Email).SingleOrDefaultAsync(t);
+        db is Compact24DbContext
+        ? (from r in db.Set<Native.Resident>().AsNoTracking()
+           join account in db.Users.AsNoTracking() on r.UserId equals (Guid?)account.Id
+           where r.CurrentRoomId == roomId && r.Id == residentId && r.VerificationStatus == (short)IdentityVerificationStatus.Verified
+           select account.Email).SingleOrDefaultAsync(t)
+        : (from r in db.Set<Resident>().AsNoTracking()
+           join account in db.Users.AsNoTracking() on r.TenantUserId equals (Guid?)account.Id
+           where r.RoomId == roomId && r.Id == residentId && r.VerificationStatus == IdentityVerificationStatus.Verified
+           select account.Email).SingleOrDefaultAsync(t);
+    private async Task<Resident?> ResidentAsync(Guid roomId, Guid residentId, CancellationToken t)
+    {
+        if (db is not Compact24DbContext)
+            return await db.Set<Resident>().AsNoTracking().SingleOrDefaultAsync(r => r.Id == residentId && r.RoomId == roomId, t);
+        var row = await db.Set<Native.Resident>().AsNoTracking().SingleOrDefaultAsync(r => r.Id == residentId && r.CurrentRoomId == roomId, t);
+        return row is null ? null : NativeResidentPersistence.Read(row);
+    }
     public MainDraftState Unprotect(Contract c) => Decode<MainDraftState>(JsonSerializer.Deserialize<EncryptedIdentity>(c.DraftMetadata)!, new(c.OwnerSignerId, c.Id));
-    public Task<ContractDocumentFile?> FileAsync(Guid id, Guid fileId, CancellationToken t) => db.Set<ContractDocumentFile>().AsNoTracking().SingleOrDefaultAsync(f => f.Id == fileId && f.ContractId == id, t);
-    public async Task<IReadOnlyList<ContractDocumentFile>> FilesAsync(Guid id, string hash, CancellationToken t) => await db.Set<ContractDocumentFile>().AsNoTracking().Where(f => f.ContractId == id && f.SnapshotHash == hash).OrderByDescending(f => f.RecordedAt).ToArrayAsync(t);
+    public async Task<ContractDocumentFile?> FileAsync(Guid id, Guid fileId, CancellationToken t) =>
+        (await ContractDocumentPersistence.ListAsync(db, id, t)).SingleOrDefault(f => f.Id == fileId);
+    public async Task<IReadOnlyList<ContractDocumentFile>> FilesAsync(Guid id, string hash, CancellationToken t) =>
+        (await ContractDocumentPersistence.ListAsync(db, id, t)).Where(f => f.SnapshotHash == hash).OrderByDescending(f => f.RecordedAt).ToArray();
     public async Task LockConfigurationAsync(Guid id, CancellationToken t)
     {
         await db.Database.ExecuteSqlInterpolatedAsync($"SELECT pg_advisory_xact_lock_shared(hashtextextended({id.ToString()},0))", t);

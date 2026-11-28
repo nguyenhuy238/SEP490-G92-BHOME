@@ -55,7 +55,8 @@ internal static class NativePolicyPersistence
         {
             row = new Native.BillingPolicy
             {
-                Id = policy.Id, LocationId = policy.LocationId,
+                Id = policy.Id,
+                LocationId = policy.LocationId,
                 History = JsonSerializer.SerializeToElement(Array.Empty<JsonElement>(), Json),
                 Parameters = JsonSerializer.SerializeToElement(new { }, Json)
             };

@@ -3,6 +3,7 @@ using System.Text;
 using BHome.Application.IdentityAccess;
 using BHome.Application.Notifications;
 using BHome.Domain.IdentityAccess;
+using BHome.Infrastructure.Contracts;
 using BHome.Infrastructure.Modules.Notifications;
 using BHome.Infrastructure.Persistence;
 using BHome.Infrastructure.Persistence.Compact24;
@@ -175,7 +176,8 @@ internal sealed class AccountInvitations(Compact24DbContext db, IIdentityPersist
             user.PasswordHash = users.PasswordHasher.HashPassword(user, Convert.ToBase64String(RandomNumberGenerator.GetBytes(48)) + "!aA1");
             user.NormalizedUserName = users.NormalizeName(user.UserName); user.NormalizedEmail = users.NormalizeEmail(user.Email);
             await db.SaveChangesAsync(t);
-            await sql.Execute("UPDATE residents SET user_id=@user WHERE id=@resident AND user_id IS NULL", t, ("user", id), ("resident", residentId));
+            var resident = await db.Set<BHome.Domain.Entities.Resident>().AsNoTracking().SingleAsync(r => r.Id == residentId, t);
+            await NativeResidentPersistence.LinkAsync(db, NativeResidentPersistence.Read(resident), id, t);
         }
         delivery.ValidateInvitationRecipient(request.Email, automaticTenantSetup: dispatchJob is not null);
         var grant = await identity.ResetGrantAsync(user.Id, t);

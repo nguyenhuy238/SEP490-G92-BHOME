@@ -20,11 +20,14 @@ public sealed class Compact24TableModelTests(Compact24Fixture fixture) : IClassF
         using var reader = new StreamReader(stream);
         var schema = reader.ReadToEnd();
         var expected = Compact24Schema.ExpectedColumns(schema);
-        var entities = db.GetService<IDesignTimeModel>().Model.GetEntityTypes().Where(e => e.GetTableName() is not null).ToArray();
+        var entities = db.GetService<IDesignTimeModel>().Model.GetEntityTypes().ToArray();
         Assert.Equal(24, entities.Length);
+        Assert.Equal(24, db.Model.GetEntityTypes().Count());
+        Assert.All(db.Model.GetEntityTypes(), entity => Assert.Null(entity.GetSqlQuery()));
         var actual = new List<string>();
         foreach (var entity in entities)
         {
+            Assert.NotNull(entity.GetTableName());
             Assert.Equal("public", entity.GetSchema() ?? "public");
             Assert.Null(entity.GetSqlQuery());
             Assert.True(entity.IsTableExcludedFromMigrations());

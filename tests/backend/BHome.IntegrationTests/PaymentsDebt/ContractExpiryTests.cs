@@ -18,7 +18,7 @@ public sealed partial class PaymentLedgerTests
             DateTimeOffset.UtcNow, "Asia/Ho_Chi_Minh").DateTime);
         await using (var scope = fixture.Factory.Services.CreateAsyncScope())
         {
-            var db = scope.ServiceProvider.GetRequiredService<BHomePersistenceContext>();
+            var db = scope.ServiceProvider.GetFixturePersistence();
             var main = await db.Set<Contract>().SingleAsync(c => c.Id == w.Contract);
             main.EndDate = today.AddDays(-1);
             db.Add(new Contract
@@ -45,7 +45,7 @@ public sealed partial class PaymentLedgerTests
         }
         await using (var scope = fixture.Factory.Services.CreateAsyncScope())
         {
-            var db = scope.ServiceProvider.GetRequiredService<BHomePersistenceContext>();
+            var db = scope.ServiceProvider.GetFixturePersistence();
             Assert.False(await db.Set<ContractMoveOut>().AnyAsync(m => m.ContractId == w.Contract));
             Assert.Equal(ContractStatus.Active, (await db.Set<Contract>()
                 .SingleAsync(c => c.Id == w.Contract)).Status);
@@ -59,7 +59,7 @@ public sealed partial class PaymentLedgerTests
         Guid future, expired;
         await using (var scope = fixture.Factory.Services.CreateAsyncScope())
         {
-            var db = scope.ServiceProvider.GetRequiredService<BHomePersistenceContext>();
+            var db = scope.ServiceProvider.GetFixturePersistence();
             var contracts = await db.Set<Contract>().Where(c => c.RoomId == w.Room).ToArrayAsync();
             future = contracts.Single(c => c.TenantUserId == w.Tenants[1]).Id; expired = contracts.Single(c => c.TenantUserId == w.Tenants[2]).Id;
             contracts.Single(c => c.Id == w.Contract).EndDate = today.AddDays(30); contracts.Single(c => c.Id == future).EndDate = today.AddDays(31); contracts.Single(c => c.Id == expired).EndDate = today.AddDays(-1);
@@ -80,7 +80,7 @@ public sealed partial class PaymentLedgerTests
         Assert.Single(owners, n => n.ContractId == w.Contract); Assert.Single(owners, n => n.ContractId == expired); Assert.DoesNotContain(owners, n => n.ContractId == future);
         await using (var scope = fixture.Factory.Services.CreateAsyncScope())
         {
-            var db = scope.ServiceProvider.GetRequiredService<BHomePersistenceContext>();
+            var db = scope.ServiceProvider.GetFixturePersistence();
             Assert.Equal(4, await db.Set<ContractExpiryNotice>().CountAsync(n => n.ContractId == w.Contract || n.ContractId == expired || n.ContractId == future));
             var expiryMoveOut = Assert.Single(await db.Set<ContractMoveOut>()
                 .Where(m => m.ContractId == expired).ToArrayAsync());
@@ -101,7 +101,7 @@ public sealed partial class PaymentLedgerTests
         await Run();
         await using (var scope = fixture.Factory.Services.CreateAsyncScope())
         {
-            var db = scope.ServiceProvider.GetRequiredService<BHomePersistenceContext>(); Assert.Equal(4, await db.Set<ContractExpiryNotice>().CountAsync(n => n.ContractId == w.Contract));
+            var db = scope.ServiceProvider.GetFixturePersistence(); Assert.Equal(4, await db.Set<ContractExpiryNotice>().CountAsync(n => n.ContractId == w.Contract));
             Assert.Equal(1, await db.Set<ContractMoveOut>().CountAsync(m => m.ContractId == expired));
             Assert.Single((await tenant.GetFromJsonAsync<ContractExpiryNoticeView[]>("/api/v1/contracts/expiry-reminders"))!);
             await db.Set<Contract>().Where(c => c.Id == w.Contract).ExecuteUpdateAsync(s => s.SetProperty(c => c.Status, ContractStatus.Terminated));

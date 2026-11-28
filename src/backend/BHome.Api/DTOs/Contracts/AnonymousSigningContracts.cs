@@ -67,6 +67,7 @@ public interface IAnonymousSigningRepository
     Task<IReadOnlyList<ContractSigningInvitation>> ListAsync(Guid contractId, CancellationToken t);
     Task<bool> IsEmailInUseAsync(Guid contractId, Guid residentId, string email, CancellationToken t);
     void Add(ContractSigningInvitation invitation);
+    Task SaveAsync(ContractSigningInvitation invitation, CancellationToken t) => Task.CompletedTask;
 }
 public interface IAnonymousSigningSecurity
 {

@@ -42,8 +42,10 @@ internal static class NativePolicyQueries
                 WHERE h.value->>'recordType'='BillingPolicy' ORDER BY h.n DESC LIMIT 1
             ) s ON TRUE
             """);
-        var page = await (from row in rows join order in sort on row.Id equals order.Id
-                          orderby order.CreatedAt, row.Id select row)
+        var page = await (from row in rows
+                          join order in sort on row.Id equals order.Id
+                          orderby order.CreatedAt, row.Id
+                          select row)
             .Skip(checked((q.Page - 1) * q.PageSize)).Take(q.PageSize).ToArrayAsync(token);
         return new(page.Select(p => PropertyService.Map(NativePolicyPersistence.Read(p))).ToArray(), q.Page, q.PageSize, count);
     }

@@ -4,6 +4,9 @@ using BHome.Application.Storage;
 using BHome.Domain.StaffOperations;
 using BHome.Infrastructure.Ocr;
 using BHome.Infrastructure.Persistence;
+using BHome.Infrastructure.Persistence.Compact24;
+using BHome.Infrastructure.Modules.StaffOperations.Persistence;
+using Native = BHome.Domain.Entities;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
@@ -29,8 +32,10 @@ internal sealed class TaskEvidenceFiles(BHomePersistenceContext context, IObject
     public async Task PutAsync(Guid taskId, string key, byte[] content, string contentType, CancellationToken t)
     {
         await using var intent = context.CreateIndependentContext();
-        intent.Add(new OperationalTaskFileUpload { TaskId = taskId, ObjectKey = key, CleanupAfter = clock.GetUtcNow().AddHours(1) });
-        await intent.SaveChangesAsync(t);
+        var upload = new OperationalTaskFileUpload { TaskId = taskId, ObjectKey = key, CleanupAfter = clock.GetUtcNow().AddHours(1) };
+        if (intent is Compact24DbContext compact)
+            await NativeOperationalTaskPersistence.WriteTechnicalAsync(compact, upload, false, t);
+        else { intent.Add(upload); await intent.SaveChangesAsync(t); }
         using var deadline = CancellationTokenSource.CreateLinkedTokenSource(t); deadline.CancelAfter(TimeSpan.FromSeconds(30));
         using var data = new MemoryStream(content, false);
         await storage.PutAsync(key, data, content.Length, contentType, deadline.Token);
@@ -65,6 +70,41 @@ public sealed class TaskEvidenceCleanup(IServiceScopeFactory scopes, TimeProvide
     }
     public static async Task CleanupAsync(BHomePersistenceContext db, IObjectStorage storage, DateTimeOffset now, CancellationToken t)
     {
+        if (db is Compact24DbContext compact)
+        {
+            var nativeCandidates = (await compact.Database.SqlQuery<string>($"""
+                SELECT (task_data->'state')::text AS "Value" FROM operational_tasks
+                WHERE task_type='SYSTEM_JOB' AND task_data->>'recordType'='OperationalTaskFileUpload'
+                    AND COALESCE(task_data->>'deleted','false')<>'true' AND (task_data->'state'->>'cleanupAfter')::timestamptz<={now}
+                ORDER BY (task_data->'state'->>'cleanupAfter')::timestamptz LIMIT 50
+                """).ToArrayAsync(t)).Select(NativeOperationalTaskPersistence.Upload).ToArray();
+            foreach (var candidate in nativeCandidates)
+            {
+                var location = await NativeOperationalTaskPersistence.Roots(compact).Where(x => x.Id == candidate.TaskId)
+                    .Select(x => x.LocationId).SingleAsync(t);
+                await using var transaction = await db.Database.BeginTransactionAsync(t);
+                await db.Database.ExecuteSqlInterpolatedAsync($"SELECT pg_advisory_xact_lock(hashtextextended({location!.Value.ToString()}, 0))", t);
+                var json = await compact.Database.SqlQuery<string>($"""
+                    SELECT (task_data->'state')::text AS "Value" FROM operational_tasks WHERE id={candidate.Id}
+                    AND task_type='SYSTEM_JOB' AND task_data->>'recordType'='OperationalTaskFileUpload'
+                    AND COALESCE(task_data->>'deleted','false')<>'true'
+                    """).SingleOrDefaultAsync(t);
+                if (json is null) continue;
+                var row = NativeOperationalTaskPersistence.Upload(json);
+                var linked = await compact.Database.SqlQuery<bool>($"""
+                    SELECT EXISTS(SELECT 1 FROM operational_tasks o CROSS JOIN LATERAL jsonb_array_elements(o.evidence) e
+                        WHERE e->>'recordType'='OperationalTaskEvidence' AND e->>'objectKey'={row.ObjectKey}) AS "Value"
+                    """).SingleAsync(t);
+                if (!linked)
+                {
+                    using var deadline = CancellationTokenSource.CreateLinkedTokenSource(t); deadline.CancelAfter(TimeSpan.FromSeconds(30));
+                    await storage.DeleteAsync(row.ObjectKey, deadline.Token);
+                }
+                await NativeOperationalTaskPersistence.WriteTechnicalAsync(compact, row, true, t);
+                await transaction.CommitAsync(t);
+            }
+            return;
+        }
         var candidates = await db.Set<OperationalTaskFileUpload>().AsNoTracking().Where(x => x.CleanupAfter <= now)
             .OrderBy(x => x.CleanupAfter).Take(50).Select(x => new { x.Id, x.TaskId }).ToArrayAsync(t);
         foreach (var candidate in candidates)

@@ -10,6 +10,9 @@ using BHome.Domain.PropertyManagement;
 using BHome.Domain.StaffOperations;
 using BHome.Domain.TenantContracts;
 using Microsoft.EntityFrameworkCore;
+using BHome.Infrastructure.Ocr;
+using BHome.Infrastructure.Modules.StaffOperations.Persistence;
+using Native = BHome.Domain.Entities;
 
 namespace BHome.Infrastructure.Persistence.Compact24;
 
@@ -101,10 +104,10 @@ internal static class LocationAssetInventoryTaskFactory
     {
         // There is one open handover task per Location. Assignment changes transfer
         // responsibility on that task; they must never manufacture a second task ID.
-        var openTasks = await db.Set<OperationalTask>().AsNoTracking()
-            .Where(task => task.LocationId == locationId && task.Kind == OperationalTaskKind.LocationAssetHandover &&
-                task.Status != MeterTaskStatus.Completed && task.Status != MeterTaskStatus.Cancelled)
-            .Select(task => task.Id).Take(2).ToArrayAsync(token);
+        var locationTasks = (await NativeOperationalTaskPersistence.Roots(db).Where(x => x.LocationId == locationId && x.TaskType == "GENERAL")
+            .ToArrayAsync(token)).Select(NativeCaptureReads.Task).Where(x => x.Kind == OperationalTaskKind.LocationAssetHandover).ToArray();
+        var openTasks = locationTasks.Where(task => task.Status is not (MeterTaskStatus.Completed or MeterTaskStatus.Cancelled))
+            .Select(task => task.Id).Take(2).ToArray();
         if (openTasks.Length > 1)
             throw new InvalidOperationException("A Location has more than one open asset handover task.");
         if (openTasks.Length == 1)
@@ -114,13 +117,15 @@ internal static class LocationAssetInventoryTaskFactory
         }
 
         var taskId = TaskId(assignmentId);
-        if (await db.Set<OperationalTask>().AsNoTracking().AnyAsync(t => t.Id == taskId, token)) return;
+        if (await NativeOperationalTaskPersistence.Roots(db).AnyAsync(t => t.Id == taskId, token)) return;
         var baseline = await BuildConfirmedSnapshotAsync(db, workspace, locationId, assignmentId, effectiveFrom, now, token);
-        var prior = await db.Set<OperationalTask>().AsNoTracking()
-            .Where(t => t.LocationId == locationId && t.Kind == OperationalTaskKind.LocationAssetHandover &&
-                t.AssignmentId != assignmentId && t.Status == MeterTaskStatus.Cancelled &&
-                db.Set<OperationalTaskHistory>().Any(h => h.TaskId == t.Id && h.Action == "responsibility_superseded"))
-            .OrderByDescending(t => t.AssignedAt).ThenByDescending(t => t.Id).FirstOrDefaultAsync(token);
+        OperationalTask? prior = null;
+        foreach (var candidate in locationTasks.Where(t => t.AssignmentId != assignmentId && t.Status == MeterTaskStatus.Cancelled)
+            .OrderByDescending(t => t.AssignedAt).ThenByDescending(t => t.Id))
+        {
+            if ((await NativeOperationalTaskPersistence.HistoryAsync(db, candidate.Id, token)).Any(h => h.Action == "responsibility_superseded"))
+            { prior = candidate; break; }
+        }
         var carried = 0;
         if (prior is not null && !string.IsNullOrWhiteSpace(prior.LocationAssetInventoryJson))
         {
@@ -165,7 +170,7 @@ internal static class LocationAssetInventoryTaskFactory
                 baseline = baseline with { Items = updated };
             }
         }
-        var task = new OperationalTask
+        var task = new OperationalTask(taskId)
         {
             Kind = OperationalTaskKind.LocationAssetHandover,
             LocationId = locationId,
@@ -181,8 +186,7 @@ internal static class LocationAssetInventoryTaskFactory
             EvidenceRequired = false,
             LocationAssetInventoryJson = JsonSerializer.Serialize(baseline)
         };
-        db.Entry(task).Property(t => t.Id).CurrentValue = taskId;
-        db.Add(task);
+        await NativeCaptureWrites.TaskAsync(db, task, true, 0, token);
         var history = new OperationalTaskHistory
         {
             TaskId = taskId,
@@ -200,9 +204,9 @@ internal static class LocationAssetInventoryTaskFactory
                 source = "OwnerConfirmedInventory"
             })
         };
-        db.Add(history);
+        await NativeAssignmentReconciliation.TaskHistoryAsync(db, history, token);
         if (carried > 0 && prior is not null)
-            db.Add(new OperationalTaskHistory
+            await NativeAssignmentReconciliation.TaskHistoryAsync(db, new OperationalTaskHistory
             {
                 TaskId = taskId,
                 ActorId = actor,
@@ -220,18 +224,17 @@ internal static class LocationAssetInventoryTaskFactory
                     checkedTotal = baseline.Items.Count(item => item.Checked),
                     total = baseline.Items.Length
                 })
-            });
+            }, token);
         var ownerIds = await db.Users.AsNoTracking().Where(u => u.IsActive &&
             EF.Property<string[]>(u, "roles").Contains("Owner")).Select(u => u.Id).ToArrayAsync(token);
         foreach (var recipient in ownerIds.Append(staffId).Distinct())
-            db.Add(new OperationalTaskNotification
+            await NativeAssignmentReconciliation.TaskNoticeAsync(db, new OperationalTaskNotification
             {
                 TaskId = taskId,
                 RecipientUserId = recipient,
                 EventId = history.Id,
                 Event = "location_asset_inventory_created"
-            });
-        await db.SaveChangesAsync(token);
+            }, token);
     }
 
     // Call only under the Location advisory lock, after Owner confirmations or
@@ -240,16 +243,14 @@ internal static class LocationAssetInventoryTaskFactory
         Guid locationId, Guid actor, DateTimeOffset now, CancellationToken token)
     {
         if (workspace is null) return;
-        var task = await db.Set<OperationalTask>().AsNoTracking().SingleOrDefaultAsync(x =>
-            x.LocationId == locationId && x.Kind == OperationalTaskKind.LocationAssetHandover &&
-            (x.Status == MeterTaskStatus.Assigned || x.Status == MeterTaskStatus.InProgress), token);
+        var task = (await NativeOperationalTaskPersistence.Roots(db).Where(x => x.LocationId == locationId && x.TaskType == "GENERAL" &&
+            (x.Status == "0" || x.Status == "1")).ToArrayAsync(token)).Select(NativeCaptureReads.Task)
+            .SingleOrDefault(x => x.Kind == OperationalTaskKind.LocationAssetHandover);
         if (task?.AssignmentId is not { } assignment || task.AssignedStaffUserId is not { } staff ||
             string.IsNullOrWhiteSpace(task.LocationAssetInventoryJson)) return;
         var today = DateOnly.FromDateTime(TimeZoneInfo.ConvertTimeBySystemTimeZoneId(now, "Asia/Ho_Chi_Minh").DateTime);
-        if (!await db.StaffLocationAssignments.AsNoTracking().AnyAsync(a =>
-                a.Id == assignment && a.LocationId == locationId && a.StaffUserId == staff &&
-                a.StartDate <= today && a.EndDate >= today, token) ||
-            !await StaffEmploymentEligibility.IsEligibleAsync(db, staff, today, token)) return;
+        if (!await NativeOperationalTaskPersistence.Assignments(db, today).AnyAsync(a =>
+                a.AssignmentId == assignment && a.LocationId == locationId && a.StaffUserId == staff, token)) return;
         LocationAssetInventorySnapshot? current;
         try { current = JsonSerializer.Deserialize<LocationAssetInventorySnapshot>(task.LocationAssetInventoryJson, Json); }
         catch (JsonException) { return; } // Do not overwrite an invalid historical snapshot.
@@ -265,14 +266,9 @@ internal static class LocationAssetInventoryTaskFactory
         var ready = LocationAssetInventorySync.Ready(task, merged) &&
             !merged.Items.Any(i => i.PriorStaffUserId is { } prior && prior != staff);
         if (!changed && !ready) return;
-        var tracked = db.ChangeTracker.Entries<OperationalTask>().SingleOrDefault(e => e.Entity.Id == task.Id);
-        if (tracked is not null)
-        {
-            if (tracked.State != EntityState.Unchanged)
-                throw new DbUpdateConcurrencyException("Location asset inventory has unflushed changes.");
-            tracked.State = EntityState.Detached;
-        }
-        db.Attach(task);
+        var originalVersion = task.Version;
+        var events = new List<OperationalTaskHistory>();
+        var notices = new List<OperationalTaskNotification>();
         task.LocationAssetInventoryJson = JsonSerializer.Serialize(merged);
         task.Version++;
         if (changed)
@@ -289,8 +285,8 @@ internal static class LocationAssetInventoryTaskFactory
                 WasOverdue = task.IsOverdue(now),
                 ChangesJson = JsonSerializer.Serialize(new { previousCount = current.Items.Length, ownerConfirmedCount = merged.Items.Length, Automatic = true })
             };
-            db.Add(history);
-            db.Add(new OperationalTaskNotification
+            events.Add(history);
+            notices.Add(new OperationalTaskNotification
             {
                 TaskId = task.Id,
                 RecipientUserId = staff,
@@ -314,11 +310,11 @@ internal static class LocationAssetInventoryTaskFactory
                 WasOverdue = task.IsOverdue(now),
                 ChangesJson = JsonSerializer.Serialize(new { task.Status, Automatic = true })
             };
-            db.Add(history);
+            events.Add(history);
             var owners = await db.Users.AsNoTracking().Where(u => u.IsActive &&
                 EF.Property<string[]>(u, "roles").Contains("Owner")).Select(u => u.Id).ToArrayAsync(token);
             foreach (var owner in owners.Where(id => id != actor))
-                db.Add(new OperationalTaskNotification
+                notices.Add(new OperationalTaskNotification
                 {
                     TaskId = task.Id,
                     RecipientUserId = owner,
@@ -326,7 +322,9 @@ internal static class LocationAssetInventoryTaskFactory
                     Event = history.Action
                 });
         }
-        await db.SaveChangesAsync(token);
+        await NativeCaptureWrites.TaskAsync(db, task, false, originalVersion, token);
+        foreach (var history in events) await NativeAssignmentReconciliation.TaskHistoryAsync(db, history, token);
+        foreach (var notice in notices) await NativeAssignmentReconciliation.TaskNoticeAsync(db, notice, token);
     }
 
     // Item IDs are initially assignment-scoped for compatibility with existing snapshots.
@@ -371,20 +369,20 @@ internal static class LocationAssetInventoryTaskFactory
         DateOnly effectiveFrom, DateTimeOffset now, CancellationToken token)
     {
         if (workspace is null) throw new InvalidOperationException("Owner inventory workspace is not available.");
-        var rooms = await db.Set<Room>().AsNoTracking().Where(r => r.LocationId == locationId)
+        var rooms = await db.Set<Native.Room>().AsNoTracking().Where(r => r.LocationId == locationId)
             .OrderBy(r => r.RoomNumber).ThenBy(r => r.Id)
-            .Select(r => new { r.Id, r.RoomNumber, r.Status }).ToArrayAsync(token);
-        var assets = await db.Set<Asset>().AsNoTracking().Where(a => a.LocationId == locationId && a.Status != AssetStatus.Retired)
-            .Select(a => new
+            .Select(r => new { r.Id, r.RoomNumber, Status = (RoomStatus)r.Status }).ToArrayAsync(token);
+        var assets = (await db.Set<Native.Asset>().AsNoTracking().Where(a => a.LocationId == locationId && a.Status != (short)AssetStatus.Retired)
+            .ToArrayAsync(token)).Select(a => new
             {
                 a.Id,
                 a.RoomId,
                 a.CommonArea,
                 a.Name,
                 a.Category,
-                a.Status,
-                PurchaseInfo = EF.Property<string>(a, "PurchaseInfo")
-            }).ToArrayAsync(token);
+                Status = (AssetStatus)a.Status,
+                PurchaseInfo = a.PurchaseInfo.GetRawText()
+            }).ToArray();
         // Query Owner's durable inventory verification documents once per Location.
         var setup = await workspace.ReviewDocumentsAsync(locationId,
             assets.Select(asset => asset.Id).ToArray(), token);
@@ -426,13 +424,14 @@ internal static class LocationAssetInventoryTaskFactory
             .Where(document => document.Status == "Verified").ToArray();
         // Restrict inherited evidence to the ACTIVE Tenant's contract chain. A previous unrelated
         // occupant's signed handover must never automatically confirm the new Staff's checklist.
-        var contracts = await db.Set<Contract>().AsNoTracking().Where(c => c.Room.LocationId == locationId &&
-                (c.Kind == ContractKind.Main || c.Kind == ContractKind.Renewal))
+        var roomIds = rooms.Select(r => r.Id).ToArray();
+        var contracts = await db.Set<Native.Contract>().AsNoTracking().Where(c => roomIds.Contains(c.RoomId) &&
+                (c.ContractType == "MAIN" || c.ContractType == "RENEWAL"))
             .Select(c => new
             {
                 c.Id,
                 c.RoomId,
-                c.Status,
+                Status = (ContractStatus)c.Status,
                 c.TenantUserId,
                 c.PreviousContractId,
                 c.StartDate,
@@ -451,12 +450,8 @@ internal static class LocationAssetInventoryTaskFactory
                 EF.Property<string[]>(u, "roles").Contains(Roles.Tenant))
             .Select(u => u.Id).ToArrayAsync(token)).ToHashSet();
         var contractIds = contracts.Select(c => c.Id).ToArray();
-        var handovers = (await db.Set<ContractHandover>().AsNoTracking()
-            .Where(h => contractIds.Contains(h.ContractId) &&
-                        h.Status == ContractHandoverStatus.Confirmed && h.TenantConfirmedAt != null &&
-                        h.StaffConfirmedAt != null && h.TenantConfirmedBy != null && h.StaffConfirmedBy != null &&
-                        h.TenantConfirmedVersion == h.Version)
-            .ToArrayAsync(token)).ToDictionary(h => h.ContractId);
+        var handovers = (await NativeOperationalTaskPersistence.ConfirmedHandoversAsync(db, contractIds, token))
+            .ToDictionary(h => h.ContractId);
         var contractIndex = contracts.ToDictionary(c => c.Id);
         var inherited = new Dictionary<Guid, (Guid ContractId, HandoverSnapshot Snapshot)>();
         foreach (var group in contracts.Where(c => c.Status == ContractStatus.Active &&

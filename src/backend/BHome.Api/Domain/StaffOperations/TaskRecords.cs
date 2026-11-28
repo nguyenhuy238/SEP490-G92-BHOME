@@ -20,6 +20,7 @@ public sealed class OperationalTaskHistory : AuditableEntity
 
 public sealed class OperationalTaskEvidence : AuditableEntity
 {
+    internal static OperationalTaskEvidence Rehydrate(Guid id) => new() { Id = id };
     public Guid TaskId { get; set; }
     public Guid UploadedByUserId { get; set; }
     public string ObjectKey { get; set; } = "";
@@ -32,6 +33,7 @@ public sealed class OperationalTaskEvidence : AuditableEntity
 
 public sealed class OperationalTaskCommand : AuditableEntity
 {
+    internal static OperationalTaskCommand Rehydrate(Guid id) => new() { Id = id };
     public Guid ActorId { get; set; }
     public Guid Key { get; set; }
     public Guid TaskId { get; set; }
@@ -41,6 +43,7 @@ public sealed class OperationalTaskCommand : AuditableEntity
 
 public sealed class OperationalTaskNotification : AuditableEntity
 {
+    internal static OperationalTaskNotification Rehydrate(Guid id) => new() { Id = id };
     public Guid TaskId { get; set; }
     public Guid RecipientUserId { get; set; }
     public Guid EventId { get; set; }
@@ -51,6 +54,7 @@ public sealed class OperationalTaskNotification : AuditableEntity
 // Durable staging lease, independent from a rolled-back business transaction.
 public sealed class OperationalTaskFileUpload : AuditableEntity
 {
+    internal static OperationalTaskFileUpload Rehydrate(Guid id) => new() { Id = id };
     public Guid TaskId { get; set; }
     public string ObjectKey { get; set; } = "";
     public DateTimeOffset CleanupAfter { get; set; }

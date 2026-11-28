@@ -5,8 +5,11 @@ using BHome.Application.Notifications;
 using BHome.Domain.Billing;
 using BHome.Infrastructure.Billing;
 using BHome.Infrastructure.Persistence.Compact24;
+using BHome.Infrastructure.Modules.StaffOperations.Persistence;
+using BHome.Infrastructure.Modules.IncidentMaintenance.Persistence;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Options;
+using Native = BHome.Domain.Entities;
 
 namespace BHome.Infrastructure.Modules.Notifications;
 
@@ -309,37 +312,43 @@ internal sealed class NotificationChannelWorker(Compact24DbContext db, CompactNo
             var today = sql.BusinessToday;
             if (n.RelatedObjectType is "Room" or "AutomationExecution")
             {
-                var key = await db.Set<BHome.Domain.Notifications.UserNotification>().Where(notice => notice.Id == n.Id)
+                var key = await db.Set<Native.Notification>().Where(notice => notice.Id == n.Id && notice.RecordKind == "INBOX")
                     .Select(notice => notice.EventKey).SingleOrDefaultAsync(t);
                 var parts = key?.Split(':');
                 if (parts is { Length: 3 } && parts[0] == "invoice-finalization-no-draft" && Guid.TryParse(parts[1], out var room) &&
                     DateOnly.TryParseExact(parts[2] + "01", "yyyyMMdd", System.Globalization.CultureInfo.InvariantCulture,
                         System.Globalization.DateTimeStyles.None, out var period))
-                    return !await db.PeriodicInvoices().AnyAsync(i => i.RoomId == room && i.BillingPeriod == period, t);
+                    return !await db.Set<Native.Invoice>().AnyAsync(i => i.InvoiceType == "PERIODIC" && i.RoomId == room && i.BillingPeriod == period, t);
             }
             if (n.RelatedObjectType == "Adjustment")
-                return await HeldInvoiceFinalNotifications.StillHeldForOriginal(
-                    db.Set<InvoiceAdjustmentRequest>(), n.RelatedObjectId, today).AnyAsync(t);
+                return await db.Set<Native.InvoiceAdjustment>().AnyAsync(r => r.Id == n.RelatedObjectId &&
+                    db.Set<Native.Invoice>().Any(i => i.Id == r.InvoiceId && i.Status == (short)InvoiceStatus.Draft && i.ScheduledFinalDate <= today) &&
+                    db.Set<Native.InvoiceAdjustment>().Any(pending => pending.InvoiceId == r.InvoiceId && pending.DecisionSnapshot == null), t);
             if (n.RelatedObjectType == "Invoice")
             {
-                var heldForAdjustment = await db.Set<BHome.Domain.Notifications.UserNotification>()
-                    .AnyAsync(notice => notice.Id == n.Id && notice.EventKey.StartsWith("invoice-finalization-held:"), t);
-                return await db.Set<Invoice>().AnyAsync(i => i.Id == n.RelatedObjectId && i.Status == InvoiceStatus.Draft &&
-                    i.ScheduledFinalDate <= today && (!heldForAdjustment || db.Set<InvoiceAdjustmentRequest>().Any(r => r.InvoiceId == i.Id && r.Decision == null)), t);
+                var heldForAdjustment = await db.Set<Native.Notification>()
+                    .AnyAsync(notice => notice.Id == n.Id && notice.RecordKind == "INBOX" && notice.EventKey.StartsWith("invoice-finalization-held:"), t);
+                return await db.Set<Native.Invoice>().AnyAsync(i => i.Id == n.RelatedObjectId && i.Status == (short)InvoiceStatus.Draft &&
+                    i.ScheduledFinalDate <= today && (!heldForAdjustment || db.Set<Native.InvoiceAdjustment>().Any(r => r.InvoiceId == i.Id && r.DecisionSnapshot == null)), t);
             }
         }
-        if (n.EventType == "EXCESS_PAYMENT_OR_REFUND_STATUS" && await db.Set<BHome.Domain.Notifications.UserNotification>()
-            .AnyAsync(notice => notice.Id == n.Id && notice.EventKey.StartsWith("deposit-refund:"), t))
-            return await NotificationEventPublisher.DepositRefundNotices(db).AnyAsync(r =>
-                db.Set<BHome.Domain.Notifications.UserNotification>().Any(notice => notice.Id == n.Id && notice.EventKey == r.EventKey &&
-                    (notice.AudienceRole == "Owner" && notice.RecipientUserId == r.OwnerId || notice.AudienceRole == "Tenant" && notice.RecipientUserId == r.BeneficiaryUserId)), t);
+        if (n.EventType == "EXCESS_PAYMENT_OR_REFUND_STATUS")
+        {
+            var notice = await db.Set<Native.Notification>().AsNoTracking().SingleOrDefaultAsync(row => row.Id == n.Id && row.RecordKind == "INBOX", t);
+            if (notice is not null && notice.EventKey.StartsWith("deposit-refund:", StringComparison.Ordinal))
+            {
+                var role = notice.EventData.GetProperty("audienceRole").GetString();
+                return await NotificationEventPublisher.DepositRefundNotices(db).AnyAsync(r => notice.EventKey == r.EventKey &&
+                    (role == "Owner" && notice.RecipientUserId == r.OwnerId || role == "Tenant" && notice.RecipientUserId == r.BeneficiaryUserId), t);
+            }
+        }
         if (n.RelatedObjectType == "Refund" && n.EventType == "EXCESS_PAYMENT_OR_REFUND_STATUS")
             return await NotificationEventPublisher.ReceiptRefundNotices(db).AnyAsync(r => r.RefundId == n.RelatedObjectId &&
-                db.Set<BHome.Domain.Notifications.UserNotification>().Any(notice => notice.Id == n.Id && notice.EventKey == r.EventKey), t);
+                db.Set<Native.Notification>().Any(notice => notice.Id == n.Id && notice.RecordKind == "INBOX" && notice.EventKey == r.EventKey), t);
         if (n.EventType is "INVOICE_OVERDUE" or "INVOICE_DUE_SOON") return (await db.FinancialsAsync(n.RelatedObjectId, t)).OutstandingAmount > 0;
         if (n.EventType == "PERIODIC_METER_OVERDUE")
         {
-            var key = await db.Set<BHome.Domain.Notifications.UserNotification>().Where(notice => notice.Id == n.Id)
+            var key = await db.Set<Native.Notification>().Where(notice => notice.Id == n.Id && notice.RecordKind == "INBOX")
                 .Select(notice => notice.EventKey).SingleOrDefaultAsync(t);
             var parts = key?.Split(':');
             if (parts is not { Length: 4 } || !Guid.TryParseExact(parts[1], "N", out var location) ||
@@ -353,15 +362,20 @@ internal sealed class NotificationChannelWorker(Compact24DbContext db, CompactNo
             }
             var now = sql.BusinessNow;
             var today = sql.BusinessToday;
-            var currentStaff = db.StaffLocationAssignments.Where(a => a.LocationId == location &&
-                a.StartDate <= today && a.EndDate >= today && StaffEmploymentEligibility.EligibleIds(db, today).Contains(a.StaffUserId));
+            var currentStaff = NativeOperationalTaskPersistence.Assignments(db, today).Where(a => a.LocationId == location);
             if (staff is { } recipient ? !await currentStaff.AnyAsync(a => a.StaffUserId == recipient, t) : await currentStaff.AnyAsync(t)) return false;
-            return await db.Set<OperationalTask>().AnyAsync(x => x.LocationId == location && x.BillingPeriod == period &&
-                x.Purpose == ReadingPurpose.Periodic && x.Location.IsActive &&
-                x.DueAt < now && x.Status != MeterTaskStatus.Completed && x.Status != MeterTaskStatus.Cancelled, t);
+            return await db.Set<Native.OperationalTask>().FromSqlRaw("SELECT * FROM operational_tasks WHERE task_type='METER_READ' AND task_data->'state'->>'purpose'='1'")
+                .AnyAsync(x => x.LocationId == location && x.BillingPeriod == period &&
+                    db.Set<Native.Location>().Any(l => l.Id == x.LocationId && l.IsActive) &&
+                    x.DueAt < now && x.Status != "2" && x.Status != "3", t);
         }
-        if (n.EventType == "TASK_DUE_OR_OVERDUE") return await db.Set<OperationalTask>().AnyAsync(x => x.Id == n.RelatedObjectId && x.Status != MeterTaskStatus.Completed && x.Status != MeterTaskStatus.Cancelled, t);
-        if (n.EventType.StartsWith("EMERGENCY_ACK_")) return await db.Set<BHome.Domain.IncidentMaintenance.IncidentReport>().AnyAsync(x => x.Id == n.RelatedObjectId && x.AcknowledgedAt == null && (x.Status == BHome.Domain.IncidentMaintenance.IncidentStatus.Submitted || x.Status == BHome.Domain.IncidentMaintenance.IncidentStatus.InProgress), t);
+        if (n.EventType == "TASK_DUE_OR_OVERDUE") return await NativeOperationalTaskPersistence.Roots(db).AnyAsync(x => x.Id == n.RelatedObjectId && x.Status != "2" && x.Status != "3", t);
+        if (n.EventType.StartsWith("EMERGENCY_ACK_"))
+        {
+            var row = await db.Set<Native.IncidentReport>().AsNoTracking().SingleOrDefaultAsync(x => x.Id == n.RelatedObjectId &&
+                (x.Status == "Submitted" || x.Status == "InProgress"), t);
+            return row is not null && NativeIncidentSession.Read(row).AcknowledgedAt == null;
+        }
         if (n.EventType == "TEMPORARY_RESIDENCE_ACTION") return await sql.Scalar<bool>("""
             SELECT EXISTS(SELECT 1 FROM notifications notice JOIN contract_residents cr ON cr.resident_id=notice.related_entity_id
               AND cr.contract_id::text=split_part(notice.event_key,':',2)

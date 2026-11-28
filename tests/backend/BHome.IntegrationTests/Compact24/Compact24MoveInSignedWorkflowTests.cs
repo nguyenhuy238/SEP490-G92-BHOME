@@ -69,7 +69,7 @@ public sealed partial class Compact24OwnerSetupTests
     {
         if (!internalContract) return;
         await using var scope = services.CreateAsyncScope();
-        var db = scope.ServiceProvider.GetRequiredService<Compact24DbContext>();
+        var db = scope.ServiceProvider.GetRequiredService<Compact24ArchiveContext>();
         var contract = await db.Set<Contract>().SingleAsync(c => c.Id == id);
         contract.SigningMode = ContractSigningModes.Internal;
         await db.SaveChangesAsync();
@@ -91,7 +91,7 @@ public sealed partial class Compact24OwnerSetupTests
             $"contract-pre-move-in-inventory:{contractId:N}")).AsSpan(0, 16));
         await using (var scope = host.Services.CreateAsyncScope())
         {
-            var db = scope.ServiceProvider.GetRequiredService<Compact24DbContext>();
+            var db = scope.ServiceProvider.GetRequiredService<Compact24ArchiveContext>();
             var task = new OperationalTask
             {
                 Kind = OperationalTaskKind.MoveInInventory,

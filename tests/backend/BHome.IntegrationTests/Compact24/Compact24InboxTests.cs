@@ -24,7 +24,7 @@ public sealed class Compact24InboxTests(Compact24Fixture fixture) : IClassFixtur
         var email = $"{id:N}@example.invalid";
         await using (var scope = fixture.Factory!.Services.CreateAsyncScope())
         {
-            var db = scope.ServiceProvider.GetRequiredService<Compact24DbContext>();
+            var db = scope.ServiceProvider.GetRequiredService<Compact24ArchiveContext>();
             foreach (var actor in new[] { id, other })
             {
                 var user = new ApplicationUser

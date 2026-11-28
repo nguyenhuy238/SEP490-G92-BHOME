@@ -214,8 +214,11 @@ internal sealed partial class BillingAutomationEngine(BHomePersistenceContext db
     private async Task<NativeBillingJobPersistence.StaffAssignment[]> CurrentAssignmentsAsync(Guid location, CancellationToken t)
     {
         if (db is Compact24DbContext compact) return await NativeBillingJobPersistence.AssignmentsAsync(compact, location, Today, t);
-        var eligibleStaff = from u in db.Users join grant in db.UserRoles on u.Id equals grant.UserId join role in db.Roles on grant.RoleId equals role.Id
-            where u.IsActive && role.Name == Roles.Staff select u.Id;
+        var eligibleStaff = from u in db.Users
+                            join grant in db.UserRoles on u.Id equals grant.UserId
+                            join role in db.Roles on grant.RoleId equals role.Id
+                            where u.IsActive && role.Name == Roles.Staff
+                            select u.Id;
         return await db.StaffLocationAssignments.AsNoTracking().Where(a => a.LocationId == location && a.StartDate <= Today && a.EndDate >= Today && eligibleStaff.Contains(a.StaffUserId))
             .Select(a => new NativeBillingJobPersistence.StaffAssignment(a.Id, a.StaffUserId, a.StartDate, a.EndDate)).ToArrayAsync(t);
     }

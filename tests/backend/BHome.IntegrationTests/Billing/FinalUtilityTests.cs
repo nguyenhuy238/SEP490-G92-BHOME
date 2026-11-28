@@ -47,7 +47,7 @@ public sealed partial class InvoiceApiTests
         if (reviewRefund)
         {
             await using var scope = fixture.Factory.Services.CreateAsyncScope();
-            var db = scope.ServiceProvider.GetRequiredService<BHomePersistenceContext>();
+            var db = scope.ServiceProvider.GetFixturePersistence();
             foreach (var tenancy in await db.Set<Contract>().Where(c => c.RoomId == w.Room).ToArrayAsync())
                 tenancy.Stamp(activatedAt.AddDays(tenancy.Id == w.Contract ? 1 : 0), true);
             await db.SaveChangesAsync();
@@ -65,7 +65,7 @@ public sealed partial class InvoiceApiTests
         // the periodic invoice nor the final settlement may use the new price.
         await using (var scope = fixture.Factory.Services.CreateAsyncScope())
         {
-            var db = scope.ServiceProvider.GetRequiredService<BHomePersistenceContext>();
+            var db = scope.ServiceProvider.GetFixturePersistence();
             db.Add(new BillingPolicy
             {
                 LocationId = w.Location,
@@ -86,7 +86,7 @@ public sealed partial class InvoiceApiTests
         if (reviewRefund)
         {
             await using var scope = fixture.Factory.Services.CreateAsyncScope();
-            var db = scope.ServiceProvider.GetRequiredService<BHomePersistenceContext>();
+            var db = scope.ServiceProvider.GetFixturePersistence();
             Assert.NotEqual(w.Contract, (await db.Set<Invoice>().SingleAsync(i => i.Id == invoice.Id)).RepresentativeContractId);
         }
         Assert.Equal(91000, invoice.Lines.Single(l => l.Category == "Electricity").Amount);
@@ -94,7 +94,7 @@ public sealed partial class InvoiceApiTests
         Guid otherContract;
         await using (var scope = fixture.Factory.Services.CreateAsyncScope())
         {
-            var db = scope.ServiceProvider.GetRequiredService<BHomePersistenceContext>();
+            var db = scope.ServiceProvider.GetFixturePersistence();
             otherContract = await db.Set<Contract>().Where(c => c.RoomId == w.Room && c.Id != w.Contract).Select(c => c.Id).SingleAsync();
             foreach (var contract in new[] { w.Contract, otherContract }) db.Add(new ContractMoveOut
             {
@@ -117,7 +117,7 @@ public sealed partial class InvoiceApiTests
         Assert.Equal(10, finalElectricity.Consumption);
         await using (var scope = fixture.Factory.Services.CreateAsyncScope())
         {
-            var db = scope.ServiceProvider.GetRequiredService<BHomePersistenceContext>();
+            var db = scope.ServiceProvider.GetFixturePersistence();
             async Task<HandoverReading> Point(Guid readingId)
             {
                 var reading = await db.Set<MeterReading>().SingleAsync(r => r.Id == readingId);
@@ -176,7 +176,7 @@ public sealed partial class InvoiceApiTests
         var input = new FinalUtilityApprovalInput(UtilityType.Electricity, electricityPreview.Reference, true); var key = Guid.NewGuid();
         if (failuresOnly)
         {
-            await using var scope = fixture.Factory.Services.CreateAsyncScope(); var db = scope.ServiceProvider.GetRequiredService<BHomePersistenceContext>();
+            await using var scope = fixture.Factory.Services.CreateAsyncScope(); var db = scope.ServiceProvider.GetFixturePersistence();
             var proof = await db.Set<MeterEvidence>().SingleAsync(e => db.Set<MeterReading>().Any(r => r.Id == finalElectricity.Id && r.EvidenceId == e.Id));
             var storage = scope.ServiceProvider.GetRequiredService<IObjectStorage>();
             using var originalPhoto = new MemoryStream(); await storage.CopyToAsync(proof.ObjectKey, originalPhoto, default);
@@ -248,7 +248,7 @@ public sealed partial class InvoiceApiTests
         Assert.Equal("Paid", Assert.Single((await Success<SettlementReceivablesView>(await w.OtherTenant.Client.GetAsync(receivablesRoute))).Receivables).Status);
         var finalInvoice = await Success<InvoiceView>(await w.Owner.Client.GetAsync($"/api/v1/invoices/{invoice.Id}"));
         Assert.Equal(140000, charge.Amount + finalInvoice.Lines.Single(l => l.Category == "Electricity").Amount);
-        await using var finalScope = fixture.Factory.Services.CreateAsyncScope(); var finalDb = finalScope.ServiceProvider.GetRequiredService<BHomePersistenceContext>();
+        await using var finalScope = fixture.Factory.Services.CreateAsyncScope(); var finalDb = finalScope.ServiceProvider.GetFixturePersistence();
         Assert.Equal(1, await finalDb.Set<Invoice>().CountAsync(i => i.RoomId == w.Room));
     }
 }

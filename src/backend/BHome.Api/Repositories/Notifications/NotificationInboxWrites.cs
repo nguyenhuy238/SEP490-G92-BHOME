@@ -34,16 +34,30 @@ internal static class NotificationInboxWrites
             // Only the archived-schema integration host uses the former table mapping.
             db.Add(new UserNotification
             {
-                Id = state.Id, RecipientUserId = state.RecipientUserId, AudienceRole = state.AudienceRole,
-                LocationId = state.LocationId, Category = state.Category, EventType = state.EventType,
-                Priority = state.Priority, Source = state.Source, Channels = state.Channels,
-                Title = state.Title, Summary = state.Summary, RelatedObjectType = state.RelatedObjectType,
-                RelatedObjectId = state.RelatedObjectId, EventKey = state.EventKey,
-                SourceTaskNotificationId = state.SourceTaskNotificationId, CreatedAt = state.CreatedAt,
-                ReadAt = state.ReadAt, DeliveryState = state.DeliveryState,
-                DeliveryAttempts = state.DeliveryAttempts, NextDeliveryAt = state.NextDeliveryAt,
-                DeliveryLockedUntil = state.DeliveryLockedUntil, DeliveryLeaseToken = state.DeliveryLeaseToken,
-                DeliveryLastAttemptAt = state.DeliveryLastAttemptAt, DeliveryLastErrorCode = state.DeliveryLastErrorCode,
+                Id = state.Id,
+                RecipientUserId = state.RecipientUserId,
+                AudienceRole = state.AudienceRole,
+                LocationId = state.LocationId,
+                Category = state.Category,
+                EventType = state.EventType,
+                Priority = state.Priority,
+                Source = state.Source,
+                Channels = state.Channels,
+                Title = state.Title,
+                Summary = state.Summary,
+                RelatedObjectType = state.RelatedObjectType,
+                RelatedObjectId = state.RelatedObjectId,
+                EventKey = state.EventKey,
+                SourceTaskNotificationId = state.SourceTaskNotificationId,
+                CreatedAt = state.CreatedAt,
+                ReadAt = state.ReadAt,
+                DeliveryState = state.DeliveryState,
+                DeliveryAttempts = state.DeliveryAttempts,
+                NextDeliveryAt = state.NextDeliveryAt,
+                DeliveryLockedUntil = state.DeliveryLockedUntil,
+                DeliveryLeaseToken = state.DeliveryLeaseToken,
+                DeliveryLastAttemptAt = state.DeliveryLastAttemptAt,
+                DeliveryLastErrorCode = state.DeliveryLastErrorCode,
                 DeliveryProviderReference = state.DeliveryProviderReference
             });
             return;
@@ -52,20 +66,35 @@ internal static class NotificationInboxWrites
             throw new InvalidOperationException("Inbox publication requires the existing notification transaction.");
         db.Add(new Native.Notification
         {
-            Id = state.Id, RecordKind = "INBOX", RecipientUserId = state.RecipientUserId,
-            LocationId = state.LocationId, EventKey = state.EventKey,
+            Id = state.Id,
+            RecordKind = "INBOX",
+            RecipientUserId = state.RecipientUserId,
+            LocationId = state.LocationId,
+            EventKey = state.EventKey,
             // Historical v1 publishers persisted the category here (eventType is in JSON).
-            NotificationType = state.Category, Title = state.Title, Message = state.Summary,
-            RelatedEntityType = state.RelatedObjectType, RelatedEntityId = state.RelatedObjectId,
+            NotificationType = state.Category,
+            Title = state.Title,
+            Message = state.Summary,
+            RelatedEntityType = state.RelatedObjectType,
+            RelatedEntityId = state.RelatedObjectId,
             EventData = JsonSerializer.SerializeToElement(new
             {
-                schemaVersion = 1, recordType = "UserNotification", state,
-                audienceRole = state.AudienceRole, category = state.Category, succeeded = (bool?)null,
-                sessionId = (Guid?)null, targetUserId = (Guid?)null
+                schemaVersion = 1,
+                recordType = "UserNotification",
+                state,
+                audienceRole = state.AudienceRole,
+                category = state.Category,
+                succeeded = (bool?)null,
+                sessionId = (Guid?)null,
+                targetUserId = (Guid?)null
             }, Json),
-            EventAt = state.CreatedAt, ReadAt = state.ReadAt, DeliveryStatus = state.DeliveryState,
-            NextDeliveryAt = state.NextDeliveryAt, LockedUntil = state.DeliveryLockedUntil,
-            LeaseToken = state.DeliveryLeaseToken, DeliveryHistory = JsonSerializer.SerializeToElement(Array.Empty<object>())
+            EventAt = state.CreatedAt,
+            ReadAt = state.ReadAt,
+            DeliveryStatus = state.DeliveryState,
+            NextDeliveryAt = state.NextDeliveryAt,
+            LockedUntil = state.DeliveryLockedUntil,
+            LeaseToken = state.DeliveryLeaseToken,
+            DeliveryHistory = JsonSerializer.SerializeToElement(Array.Empty<object>())
         });
     }
 }

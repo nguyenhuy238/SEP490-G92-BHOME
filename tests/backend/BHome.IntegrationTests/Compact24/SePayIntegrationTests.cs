@@ -46,7 +46,7 @@ public sealed partial class SePayIntegrationTests(Compact24Fixture fixture) : IC
         Assert.Equal(HttpStatusCode.Conflict, (await owner.PutAsJsonAsync(route, input)).StatusCode);
 
         await using var scope = scenario.Host.Services.CreateAsyncScope();
-        var db = scope.ServiceProvider.GetRequiredService<Compact24DbContext>();
+        var db = scope.ServiceProvider.GetRequiredService<Compact24ArchiveContext>();
         var otherLocation = new Location("SYNTHETIC SECOND LOCATION") { Address = "SYNTHETIC" };
         var secondRoom = new Room { LocationId = otherLocation.Id, RoomNumber = "A01", Status = RoomStatus.Available };
         var secondResident = new Resident
@@ -110,7 +110,7 @@ public sealed partial class SePayIntegrationTests(Compact24Fixture fixture) : IC
     public async Task MainInitialQrUsesOneReceiptForDepositAndRentFeesAndRejectsPartialOrDuplicateEffects(bool simulatedSigning)
     {
         await using var scenario = await Create();
-        await using var scope = scenario.Host.Services.CreateAsyncScope(); var db = scope.ServiceProvider.GetRequiredService<Compact24DbContext>();
+        await using var scope = scenario.Host.Services.CreateAsyncScope(); var db = scope.ServiceProvider.GetRequiredService<Compact24ArchiveContext>();
         var today = DateOnly.FromDateTime(DateTime.UtcNow.AddHours(7));
         var room = new Room { LocationId = scenario.Location, RoomNumber = "INITIAL-QR", Capacity = 2, Status = RoomStatus.Available };
         var person = new Resident { RoomId = room.Id, OwnerUserId = scenario.Owner, TenantUserId = scenario.Tenants[0], DisplayLabel = "SYNTHETIC INITIAL", ContactEmail = $"initial-{Guid.NewGuid():N}@example.invalid", VerificationStatus = IdentityVerificationStatus.Verified };
@@ -305,7 +305,7 @@ public sealed partial class SePayIntegrationTests(Compact24Fixture fixture) : IC
     {
         await using var scenario = await Create();
         await using var scope = scenario.Host.Services.CreateAsyncScope();
-        var db = scope.ServiceProvider.GetRequiredService<Compact24DbContext>();
+        var db = scope.ServiceProvider.GetRequiredService<Compact24ArchiveContext>();
         var today = DateOnly.FromDateTime(DateTime.UtcNow.AddHours(7));
         var room = new Room { LocationId = scenario.Location, RoomNumber = "PREVIEW-ONLY", Capacity = 1, Status = RoomStatus.Available };
         var resident = new Resident { RoomId = room.Id, OwnerUserId = scenario.Owner, DisplayLabel = "Synthetic preview", VerificationStatus = IdentityVerificationStatus.Verified };
@@ -410,7 +410,7 @@ public sealed partial class SePayIntegrationTests(Compact24Fixture fixture) : IC
         })));
         host = host.WithWebHostBuilder(b => b.ConfigureTestServices(s => s.Insert(0, ServiceDescriptor.Singleton<Microsoft.AspNetCore.Diagnostics.IExceptionHandler, InitialDiagnostic>())));
         await using var scope = host.Services.CreateAsyncScope();
-        var db = scope.ServiceProvider.GetRequiredService<BHomePersistenceContext>();
+        var db = scope.ServiceProvider.GetFixturePersistence();
         async Task<Guid> User(string role)
         {
             var email = Guid.NewGuid() + "@example.invalid";
@@ -507,7 +507,7 @@ public sealed partial class SePayIntegrationTests(Compact24Fixture fixture) : IC
     {
         await using var scenario = await Create();
         await using var scope = scenario.Host.Services.CreateAsyncScope();
-        var db = scope.ServiceProvider.GetRequiredService<Compact24DbContext>();
+        var db = scope.ServiceProvider.GetRequiredService<Compact24ArchiveContext>();
         var contract = await db.Set<Contract>().SingleAsync(c => c.Id == scenario.Contract);
         contract.IsDevelopmentDemo = false; contract.PaymentMode = null;
         await db.SaveChangesAsync();
@@ -549,7 +549,7 @@ public sealed partial class SePayIntegrationTests(Compact24Fixture fixture) : IC
             { ["AllowedHosts"] = "localhost;127.0.0.1;configured.ngrok-free.dev" })));
         using var client = host.CreateClient();
         await using var scope = host.Services.CreateAsyncScope();
-        var db = scope.ServiceProvider.GetRequiredService<BHomePersistenceContext>();
+        var db = scope.ServiceProvider.GetFixturePersistence();
         var paymentsBefore = await db.Set<PaymentTransfer>().CountAsync();
         var repository = scope.ServiceProvider.GetRequiredService<ISePayRepository>();
         var eventsBefore = (await repository.EventsAsync(1, 20, default)).TotalCount;
@@ -659,7 +659,7 @@ public sealed partial class SePayIntegrationTests(Compact24Fixture fixture) : IC
         using var owner = await scenario.Client(scenario.Owner);
         var paid = (await owner.GetFromJsonAsync<InvoicePaymentView>($"/api/v1/invoices/{scenario.Invoice}/payment"))!;
         Assert.Equal("Paid", paid.PaymentStatus); Assert.Equal(100000, paid.PaidAmount); Assert.True(paid.PendingReview);
-        await using var scope = scenario.Host.Services.CreateAsyncScope(); var db = scope.ServiceProvider.GetRequiredService<Compact24DbContext>();
+        await using var scope = scenario.Host.Services.CreateAsyncScope(); var db = scope.ServiceProvider.GetRequiredService<Compact24ArchiveContext>();
         Assert.Equal(3, await db.Set<PaymentAllocation>().CountAsync(a => a.InvoiceId == scenario.Invoice));
         Assert.True(await db.Database.SqlQuery<bool>($"SELECT bool_and(created_by_user_id IS NULL AND paid_by_user_id IS NULL) AS \"Value\" FROM payment_allocations WHERE target_invoice_id={scenario.Invoice}").SingleAsync());
         Assert.Equal(3, await db.Set<PaymentConfirmedEvent>().CountAsync(e => e.InvoiceId == scenario.Invoice));
@@ -690,7 +690,7 @@ public sealed partial class SePayIntegrationTests(Compact24Fixture fixture) : IC
         var results = await Task.WhenAll(scenario.Send(100000, reference, eventId: eventId), scenario.Send(100000, reference, eventId: eventId));
         foreach (var result in results) result.EnsureSuccessStatusCode();
         (await scenario.Send(100000, reference)).EnsureSuccessStatusCode();
-        await using var scope = scenario.Host.Services.CreateAsyncScope(); var db = scope.ServiceProvider.GetRequiredService<Compact24DbContext>();
+        await using var scope = scenario.Host.Services.CreateAsyncScope(); var db = scope.ServiceProvider.GetRequiredService<Compact24ArchiveContext>();
         Assert.Single(await db.Set<PaymentAllocation>().Where(a => a.InvoiceId == scenario.Invoice).ToArrayAsync());
         Assert.Single(await db.Set<PaymentTransfer>().Where(p => p.ProposedInvoiceId == scenario.Invoice).ToArrayAsync());
     }
@@ -702,7 +702,7 @@ public sealed partial class SePayIntegrationTests(Compact24Fixture fixture) : IC
         (await scenario.Send(100000, direction: "out")).EnsureSuccessStatusCode();
         (await scenario.Send(100000, code: "BH00000000")).EnsureSuccessStatusCode();
         (await scenario.Send(100000, code: PaymentRules.InvoiceReference(scenario.Invoice))).EnsureSuccessStatusCode();
-        await using var scope = scenario.Host.Services.CreateAsyncScope(); var db = scope.ServiceProvider.GetRequiredService<Compact24DbContext>();
+        await using var scope = scenario.Host.Services.CreateAsyncScope(); var db = scope.ServiceProvider.GetRequiredService<Compact24ArchiveContext>();
         Assert.Empty(await db.Set<PaymentAllocation>().Where(a => a.InvoiceId == scenario.Invoice).ToArrayAsync());
         using var owner = await scenario.Client(scenario.Owner);
         var events = await owner.GetFromJsonAsync<BHome.Application.PropertyManagement.PagedResult<SePayEventView>>("/api/v1/integrations/sepay/events");
@@ -718,7 +718,7 @@ public sealed partial class SePayIntegrationTests(Compact24Fixture fixture) : IC
         Assert.All(duplicates, code => Assert.Equal(scenario.Code, code)); Assert.Matches("^BH[0-9]{8}$", scenario.Code);
         var deposit = await Issue("Deposit", scenario.Contract); Assert.NotEqual(scenario.Code, deposit);
         (await scenario.Send(75000, code: deposit)).EnsureSuccessStatusCode();
-        await using var scope = scenario.Host.Services.CreateAsyncScope(); var db = scope.ServiceProvider.GetRequiredService<Compact24DbContext>();
+        await using var scope = scenario.Host.Services.CreateAsyncScope(); var db = scope.ServiceProvider.GetRequiredService<Compact24ArchiveContext>();
         Assert.Empty(await db.Set<PaymentAllocation>().Where(a => a.TargetDepositContractId == scenario.Contract).ToArrayAsync());
         using var owner = await scenario.Client(scenario.Owner);
         var reviews = (await owner.GetFromJsonAsync<BHome.Application.PropertyManagement.PagedResult<SePayEventView>>("/api/v1/integrations/sepay/events"))!;
@@ -749,7 +749,7 @@ public sealed partial class SePayIntegrationTests(Compact24Fixture fixture) : IC
         Assert.Equal(HttpStatusCode.InternalServerError, (await scenario.Send(100000, eventId: eventId)).StatusCode);
         await using (var scope = scenario.Host.Services.CreateAsyncScope())
         {
-            var db = scope.ServiceProvider.GetRequiredService<Compact24DbContext>();
+            var db = scope.ServiceProvider.GetRequiredService<Compact24ArchiveContext>();
             Assert.Empty(await db.Set<PaymentTransfer>().Where(p => p.ProposedInvoiceId == scenario.Invoice).ToArrayAsync());
             await db.Database.ExecuteSqlRawAsync("DROP TRIGGER synthetic_sepay_failure ON payment_allocations; DROP FUNCTION synthetic_sepay_failure()");
             var inbox = await db.Database.SqlQuery<Guid>($"SELECT id AS \"Value\" FROM operational_tasks WHERE task_data->>'recordType'='SePayEventV1' AND status='Pending' AND task_data->'transaction'->>'id'={eventId}").SingleAsync();
@@ -791,8 +791,8 @@ public sealed partial class SePayIntegrationTests(Compact24Fixture fixture) : IC
         await Assert.ThrowsAsync<HttpRequestException>(() => job.ExecuteAsync(execution, default)); Assert.Equal(2, (await Cursor()).Page);
         failSecond = false; await job.ExecuteAsync(execution, default);
         var completed = await Cursor(); Assert.Equal(second.Id, completed.SinceId); Assert.Equal(1, completed.Page); Assert.NotNull(completed.SynchronizedAt);
-        Assert.Equal(2, await db.Set<PaymentAllocation>().CountAsync(a => a.InvoiceId == scenario.Invoice));
-        Assert.Equal(100000, await db.Set<PaymentAllocation>().Where(a => a.InvoiceId == scenario.Invoice).SumAsync(a => a.Amount));
+        Assert.Equal(2, await db.Set<BHome.Domain.Entities.PaymentAllocation>().CountAsync(a => a.TargetInvoiceId == scenario.Invoice));
+        Assert.Equal(100000, await db.Set<BHome.Domain.Entities.PaymentAllocation>().Where(a => a.TargetInvoiceId == scenario.Invoice).SumAsync(a => a.Amount));
     }
 
     [CompactPostgresFact]
@@ -828,7 +828,7 @@ public sealed partial class SePayIntegrationTests(Compact24Fixture fixture) : IC
     {
         await using var scenario = await Create();
         await using var scope = scenario.Host.Services.CreateAsyncScope();
-        var db = scope.ServiceProvider.GetRequiredService<Compact24DbContext>();
+        var db = scope.ServiceProvider.GetRequiredService<Compact24ArchiveContext>();
         var today = DateOnly.FromDateTime(DateTime.UtcNow);
         var room = new Room { LocationId = scenario.Location, RoomNumber = "QR-TEST", Capacity = 1, Status = RoomStatus.Available };
         var resident = new Resident { RoomId = room.Id, OwnerUserId = scenario.Owner, DisplayLabel = "Synthetic QR payer", VerificationStatus = IdentityVerificationStatus.Verified };
@@ -880,7 +880,7 @@ public sealed partial class SePayIntegrationTests(Compact24Fixture fixture) : IC
     {
         await using var scenario = await Create();
         await using var scope = scenario.Host.Services.CreateAsyncScope();
-        var db = scope.ServiceProvider.GetRequiredService<Compact24DbContext>();
+        var db = scope.ServiceProvider.GetRequiredService<Compact24ArchiveContext>();
         var today = DateOnly.FromDateTime(DateTime.UtcNow);
         async Task<Guid> Staff()
         {
@@ -975,7 +975,7 @@ public sealed partial class SePayIntegrationTests(Compact24Fixture fixture) : IC
     private async Task HoldingDepositPreservesApprovalExpiryAndOwnerActivationRules(bool ownerSigned)
     {
         await using var scenario = await Create();
-        await using var scope = scenario.Host.Services.CreateAsyncScope(); var db = scope.ServiceProvider.GetRequiredService<Compact24DbContext>();
+        await using var scope = scenario.Host.Services.CreateAsyncScope(); var db = scope.ServiceProvider.GetRequiredService<Compact24ArchiveContext>();
         var today = DateOnly.FromDateTime(DateTime.UtcNow);
         var room = new Room { LocationId = scenario.Location, RoomNumber = "HOLD-" + Guid.NewGuid().ToString("N")[..6], Capacity = 1, Status = RoomStatus.Available };
         var resident = new Resident { RoomId = room.Id, OwnerUserId = scenario.Owner, DisplayLabel = "Synthetic pre-account occupant", VerificationStatus = IdentityVerificationStatus.Verified };
@@ -1054,7 +1054,7 @@ public sealed partial class SePayIntegrationTests(Compact24Fixture fixture) : IC
         await using var scenario = await Create();
         (await scenario.Send(40000)).EnsureSuccessStatusCode();
         await using var scope = scenario.Host.Services.CreateAsyncScope();
-        var db = scope.ServiceProvider.GetRequiredService<Compact24DbContext>();
+        var db = scope.ServiceProvider.GetRequiredService<Compact24ArchiveContext>();
         var contract = await db.Set<Contract>().SingleAsync(c => c.Id == scenario.Contract);
         contract.PaymentMode = "Live"; contract.IsDevelopmentDemo = false; await db.SaveChangesAsync();
         using var owner = await scenario.Client(scenario.Owner);
@@ -1092,7 +1092,7 @@ public sealed partial class SePayIntegrationTests(Compact24Fixture fixture) : IC
         (await first.Send(100000, reference)).EnsureSuccessStatusCode();
         await using (var scope = first.Host.Services.CreateAsyncScope())
         {
-            var db = scope.ServiceProvider.GetRequiredService<Compact24DbContext>();
+            var db = scope.ServiceProvider.GetRequiredService<Compact24ArchiveContext>();
             Assert.Single(await db.Set<PaymentTransfer>().Where(p => p.ProposedInvoiceId == first.Invoice).ToArrayAsync());
             Assert.Empty(await db.Set<PaymentAllocation>().Where(a => a.InvoiceId == first.Invoice).ToArrayAsync());
             var events = await scope.ServiceProvider.GetRequiredService<ISePayRepository>().EventsAsync(1, 100, default);

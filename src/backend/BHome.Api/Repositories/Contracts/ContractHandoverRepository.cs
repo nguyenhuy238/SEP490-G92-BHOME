@@ -14,11 +14,22 @@ using BHome.Infrastructure.Modules.Notifications;
 using BHome.Domain.IdentityAccess;
 using BHome.Domain.IncidentMaintenance;
 using BHome.Application.PropertyManagement;
+using BHome.Infrastructure.Persistence.Compact24;
+using BHome.Infrastructure.Modules.StaffOperations.Persistence;
+using BHome.Infrastructure.Modules.PropertyManagement.Persistence;
+using BHome.Infrastructure.Modules.IncidentMaintenance.Persistence;
+using BHome.Infrastructure.Ocr;
+using Native = BHome.Domain.Entities;
 namespace BHome.Infrastructure.Contracts;
 
 internal sealed class ContractHandoverRepository(BHomePersistenceContext db, IOperationalTaskRepository tasks,
-    CompactNotificationWriter? inbox = null, RoomInventoryReviewService? inventory = null, TimeProvider? clock = null) : IContractHandoverRepository
+    CompactNotificationWriter? inbox = null, RoomInventoryReviewService? inventory = null, TimeProvider? clock = null,
+    NativeContractSidecars? sidecars = null) : IContractHandoverRepository
 {
+    private Compact24DbContext NativeDb => (Compact24DbContext)db;
+    private Task<OperationalTask?> FindTaskAsync(Guid id, CancellationToken t) => NativeHandoverTaskPersistence.FindAsync(NativeDb, id, t);
+    private Task WriteTaskAsync(OperationalTask task, bool added, OperationalTaskHistory? history, CancellationToken t) =>
+        NativeHandoverTaskPersistence.WriteAsync(NativeDb, task, added, history, t);
     private static Guid Key(string value) => new(SHA256.HashData(Encoding.UTF8.GetBytes(value)).AsSpan(0, 16));
     private static readonly JsonSerializerOptions MoveOutDraftJson = new(JsonSerializerDefaults.Web);
     public async Task<MoveOutInspectionDraftState?> MoveOutInspectionDraftAsync(Guid contractId, CancellationToken t)
@@ -65,7 +76,7 @@ internal sealed class ContractHandoverRepository(BHomePersistenceContext db, IOp
         if (moveOut.ContractId != contract.Id || moveOut.Status is MoveOutStatus.Requested or MoveOutStatus.AwaitingConsent or MoveOutStatus.Rejected)
             throw ContractException.Conflict("move_out_not_approved");
         var id = ContractHandoverTaskIds.MoveOut(contract.Id);
-        if (await db.Set<OperationalTask>().AnyAsync(task => task.Id == id, t)) return;
+        if (await FindTaskAsync(id, t) is not null) return;
         // A Location work item begins unclaimed. The first currently assigned Staff
         // member to start it becomes its worker under the Location transaction lock.
         var task = new OperationalTask(id)
@@ -82,8 +93,7 @@ internal sealed class ContractHandoverRepository(BHomePersistenceContext db, IOp
             ReadingDate = moveOut.ProposedDate,
             EvidenceRequired = false
         };
-        db.Add(task);
-        db.Add(new OperationalTaskHistory
+        await WriteTaskAsync(task, true, new OperationalTaskHistory
         {
             TaskId = id,
             ActorId = actor,
@@ -91,21 +101,19 @@ internal sealed class ContractHandoverRepository(BHomePersistenceContext db, IOp
             OccurredAt = now,
             TaskVersion = task.Version,
             Note = "Chờ nhân viên cơ sở bắt đầu kiểm tra."
-        });
+        }, t);
         foreach (var owner in await tasks.OwnersAsync(t))
-            AddNotice(Key($"move-out-notice:{id:N}:{owner:N}"), new OperationalTaskNotification
+            await AddNoticeAsync(Key($"move-out-notice:{id:N}:{owner:N}"), new OperationalTaskNotification
             {
                 TaskId = id,
                 RecipientUserId = owner,
                 EventId = id,
                 Event = "MoveOutAssigned"
-            });
+            }, t);
     }
     private async Task<OperationalTask> MoveOutTaskAsync(Guid contractId, CancellationToken t) =>
-        await db.Set<OperationalTask>().SingleOrDefaultAsync(task =>
-            task.Id == ContractHandoverTaskIds.MoveOut(contractId) && task.ContractId == contractId &&
-            task.Kind == OperationalTaskKind.AdHoc, t)
-        ?? throw ContractException.Conflict("move_out_task_required");
+        await FindTaskAsync(ContractHandoverTaskIds.MoveOut(contractId), t) is { Kind: OperationalTaskKind.AdHoc } task &&
+            task.ContractId == contractId ? task : throw ContractException.Conflict("move_out_task_required");
     public async Task RequireMoveOutTaskStartedAsync(Guid contractId, Guid staffId, CancellationToken t)
     {
         if (db is not BHome.Infrastructure.Persistence.Compact24.Compact24DbContext) return;
@@ -128,14 +136,14 @@ internal sealed class ContractHandoverRepository(BHomePersistenceContext db, IOp
         var task = await MoveOutTaskAsync(contractId, t);
         task.ApplyAction("submit", now, staffId); task.Version++;
         task.Result = "Staff đã gửi kết quả kiểm tra trả phòng cho Owner xem xét.";
-        db.Add(new OperationalTaskHistory
+        await WriteTaskAsync(task, false, new OperationalTaskHistory
         {
             TaskId = task.Id,
             ActorId = staffId,
             Action = "MoveOutSubmitted",
             OccurredAt = now,
             TaskVersion = task.Version
-        });
+        }, t);
     }
     public async Task ReviewMoveOutTaskAsync(Guid contractId, Guid ownerId, bool confirmed, DateTimeOffset now, CancellationToken t)
     {
@@ -145,14 +153,14 @@ internal sealed class ContractHandoverRepository(BHomePersistenceContext db, IOp
             throw ContractException.Conflict("move_out_task_not_submitted");
         task.ApplyAction(confirmed ? "verify" : "rework", now, ownerId); task.Version++;
         task.Result = confirmed ? "Owner đã xác nhận kết quả kiểm tra trả phòng." : "Owner yêu cầu Staff kiểm tra lại.";
-        db.Add(new OperationalTaskHistory
+        await WriteTaskAsync(task, false, new OperationalTaskHistory
         {
             TaskId = task.Id,
             ActorId = ownerId,
             Action = confirmed ? "MoveOutVerified" : "MoveOutReinspection",
             OccurredAt = now,
             TaskVersion = task.Version
-        });
+        }, t);
     }
     public async Task SubmitForcedMoveOutTaskAsync(Guid contractId, Guid staffId, DateTimeOffset now, CancellationToken t)
     {
@@ -163,36 +171,31 @@ internal sealed class ContractHandoverRepository(BHomePersistenceContext db, IOp
         task.CompletedAt = now;
         task.Version++;
         task.Result = "Nhân viên đã lưu kết quả kiểm tra trả phòng bắt buộc. Chưa có quyết định tài chính.";
-        db.Add(new OperationalTaskHistory
+        await WriteTaskAsync(task, false, new OperationalTaskHistory
         {
             TaskId = task.Id,
             ActorId = staffId,
             Action = "ForcedMoveOutRecorded",
             OccurredAt = now,
             TaskVersion = task.Version
-        });
+        }, t);
     }
     public async Task<HandoverMoveInTask?> MoveInTaskAsync(Guid contractId, Guid roomId,
         Guid? staffUserId, bool includeOwnerInventory, CancellationToken t)
     {
         if (db is not BHome.Infrastructure.Persistence.Compact24.Compact24DbContext) return null;
-        // Use the transaction's tracked entity, if present: Submit/Reopen/Verify
-        // updates the task in this same transaction and the response must show
-        // the resulting state before the outer transaction commits.
-        var task = await db.Set<OperationalTask>().SingleOrDefaultAsync(x =>
-            x.Id == ContractHandoverTaskIds.MoveIn(contractId) && x.ContractId == contractId &&
-            x.TargetRoomId == roomId && x.Kind == OperationalTaskKind.AdHoc, t);
-        if (task is null) return null;
+        // Physical writes are visible within the enclosing transaction.
+        var task = await FindTaskAsync(ContractHandoverTaskIds.MoveIn(contractId), t);
+        if (task is null || task.ContractId != contractId || task.TargetRoomId != roomId || task.Kind != OperationalTaskKind.AdHoc) return null;
         // Expose the native task status, with a separate permission-safe
         // indication of whether this Staff actor may inspect at this moment.
         var isResponsibleStaff = staffUserId is not null && task.AssignedStaffUserId == staffUserId;
         // Only the authorized Owner or assigned Staff receives the operational
         // inventory-task reference in the contract draft. Tenant gets no ID.
         var inventoryTask = (isResponsibleStaff || includeOwnerInventory)
-            ? await db.Set<OperationalTask>().SingleOrDefaultAsync(x =>
-                x.Id == Key($"contract-pre-move-in-inventory:{contractId:N}") &&
-                x.Kind == OperationalTaskKind.MoveInInventory && x.ContractId == contractId, t)
+            ? await FindTaskAsync(Key($"contract-pre-move-in-inventory:{contractId:N}"), t)
             : null;
+        if (inventoryTask is not null && (inventoryTask.Kind != OperationalTaskKind.MoveInInventory || inventoryTask.ContractId != contractId)) inventoryTask = null;
         return new HandoverMoveInTask(task.Id, task.Status.ToString(), task.Version,
             task.Status == MeterTaskStatus.InProgress && isResponsibleStaff,
             inventoryTask?.Id, inventoryTask?.Status.ToString());
@@ -204,8 +207,7 @@ internal sealed class ContractHandoverRepository(BHomePersistenceContext db, IOp
             c.Status is ContractStatus.Cancelled or ContractStatus.Terminated or ContractStatus.Expired or ContractStatus.Superseded) return;
         if (!await PrepareRoomMoveInAsync(c, actor, now, t)) return;
         var id = ContractHandoverTaskIds.MoveIn(c.Id);
-        var prior = db.Set<OperationalTask>().Local.FirstOrDefault(x => x.Id == id) ??
-            await db.Set<OperationalTask>().SingleOrDefaultAsync(x => x.Id == id, t);
+        var prior = await FindTaskAsync(id, t);
         if (prior?.Status == MeterTaskStatus.Completed) return;
         // Never replace a legacy confirmed baseline or a saved preparation.
         var json = JsonSerializer.Serialize(HandoverDraftState.Create(c, now), new JsonSerializerOptions(JsonSerializerDefaults.Web));
@@ -219,7 +221,7 @@ internal sealed class ContractHandoverRepository(BHomePersistenceContext db, IOp
         var responsible = await tasks.ResponsibilityAsync(c.Room.LocationId, date, t);
         await EnsureMeterBaselinesAsync(c, now, responsible, t);
         if (prior is not null) return;
-        var task = new OperationalTask
+        var task = new OperationalTask(id)
         {
             Kind = OperationalTaskKind.AdHoc,
             LocationId = c.Room.LocationId,
@@ -235,8 +237,7 @@ internal sealed class ContractHandoverRepository(BHomePersistenceContext db, IOp
             Status = MeterTaskStatus.Assigned,
             ReadingDate = c.StartDate
         };
-        db.Entry(task).Property(x => x.Id).CurrentValue = id; db.Add(task);
-        db.Add(new OperationalTaskHistory
+        await WriteTaskAsync(task, true, new OperationalTaskHistory
         {
             TaskId = id,
             ActorId = actor,
@@ -245,15 +246,15 @@ internal sealed class ContractHandoverRepository(BHomePersistenceContext db, IOp
             TaskVersion = 1,
             ResponsibleStaffUserId = responsible?.StaffUserId,
             Note = responsible is null ? "AwaitingAssignment" : ""
-        });
+        }, t);
         foreach (var recipient in (await tasks.OwnersAsync(t)).Concat(responsible is null ? [] : new[] { responsible.StaffUserId }).Distinct())
-            AddNotice(Key($"move-in-notice:{id:N}:{recipient:N}"), new OperationalTaskNotification
+            await AddNoticeAsync(Key($"move-in-notice:{id:N}:{recipient:N}"), new OperationalTaskNotification
             {
                 TaskId = id,
                 RecipientUserId = recipient,
                 EventId = id,
                 Event = responsible is null ? "MoveInAwaitingAssignment" : "MoveInAssigned"
-            });
+            }, t);
         if (inbox is not null)
             foreach (var party in new[] { (c.TenantUserId, Roles.Tenant), (responsible?.StaffUserId, Roles.Staff), ((Guid?)c.OwnerSignerId, Roles.Owner) }.Where(p => p.Item1 is not null).Distinct())
                 await inbox.Emit(party.Item1!.Value, party.Item2, c.Room.LocationId, $"move-in:{c.Id:N}:{party.Item1:N}", "MOVE_IN_PENDING", "Contract",
@@ -272,9 +273,9 @@ internal sealed class ContractHandoverRepository(BHomePersistenceContext db, IOp
     // task belonging only to an ended tenancy is considered for a new cycle.
     private async Task<bool> PrepareRoomMoveInAsync(Contract c, Guid actor, DateTimeOffset now, CancellationToken t)
     {
-        var contracts = await db.Set<Contract>().AsNoTracking().Where(x => x.RoomId == c.RoomId &&
-            (x.Kind == ContractKind.Main || x.Kind == ContractKind.Renewal))
-            .Select(x => new { x.Id, x.PreviousContractId, x.Status, x.StartDate, x.EndDate }).ToArrayAsync(t);
+        var contracts = await db.Set<Native.Contract>().AsNoTracking().Where(x => x.RoomId == c.RoomId &&
+            (x.ContractType == "MAIN" || x.ContractType == "RENEWAL"))
+            .Select(x => new { x.Id, x.PreviousContractId, Status = (ContractStatus)x.Status, x.StartDate, x.EndDate }).ToArrayAsync(t);
         var byId = contracts.ToDictionary(x => x.Id);
         Guid Root(Guid id)
         {
@@ -295,14 +296,9 @@ internal sealed class ContractHandoverRepository(BHomePersistenceContext db, IOp
                 (x.Status is ContractStatus.Draft or ContractStatus.PendingSigning or ContractStatus.PendingActivation) &&
                 x.StartDate <= c.EndDate && x.EndDate >= c.StartDate)
             .Select(x => Root(x.Id)).Concat(occupiedRoots).Append(c.Id).Distinct().ToArray();
-        var rows = await db.Set<OperationalTask>().Where(x => x.ContractId != null && cycleRoots.Contains(x.ContractId.Value) &&
-            (x.Kind == OperationalTaskKind.MoveInInventory || x.Kind == OperationalTaskKind.MeterReading && x.Purpose == ReadingPurpose.Initial ||
-                x.Kind == OperationalTaskKind.AdHoc && x.TargetRoomId == c.RoomId && x.Title.StartsWith("Bàn giao vào phòng")))
-            .ToArrayAsync(t);
-        var all = rows.Concat(db.Set<OperationalTask>().Local.Where(x => x.ContractId != null && cycleRoots.Contains(x.ContractId.Value) &&
-                (x.Kind == OperationalTaskKind.MoveInInventory || x.Kind == OperationalTaskKind.MeterReading && x.Purpose == ReadingPurpose.Initial ||
-                    x.Kind == OperationalTaskKind.AdHoc && x.TargetRoomId == c.RoomId && x.Title.StartsWith("Bàn giao vào phòng"))))
-            .DistinctBy(x => x.Id).ToArray();
+        var all = (await NativeHandoverTaskPersistence.ForContractsAsync(NativeDb, cycleRoots, t))
+            .Where(x => x.Kind == OperationalTaskKind.MoveInInventory || x.Kind == OperationalTaskKind.MeterReading && x.Purpose == ReadingPurpose.Initial ||
+                x.Kind == OperationalTaskKind.AdHoc && x.TargetRoomId == c.RoomId && x.Title.StartsWith("Bàn giao vào phòng")).ToArray();
         var main = all.Where(x => x.Kind == OperationalTaskKind.AdHoc && x.Status != MeterTaskStatus.Cancelled)
             .OrderBy(x => x.CreatedAt).ThenBy(x => x.Id).ToArray();
         var pristine = new HashSet<Guid>();
@@ -320,15 +316,18 @@ internal sealed class ContractHandoverRepository(BHomePersistenceContext db, IOp
             main.FirstOrDefault(x => occupiedRoots.Contains(x.ContractId!.Value)) ??
             (c.Status == ContractStatus.Active ? null : main.FirstOrDefault());
         var canonicalId = canonical?.ContractId ?? c.Id;
-        var historical = await db.Set<ContractHandover>().Where(h => occupiedRoots.Contains(h.ContractId) && h.Status == ContractHandoverStatus.Confirmed)
-            .Select(h => h.ContractId).ToArrayAsync(t);
+        var occupiedIds = occupiedRoots.ToArray();
+        var historical = await db.Database.SqlQuery<Guid>($"""
+            SELECT id AS "Value" FROM contracts WHERE id=ANY({occupiedIds})
+                AND (handover->'current'->>'status')::int={(int)ContractHandoverStatus.Confirmed}
+            """).ToArrayAsync(t);
         if ((canonical is null || pristine.Contains(canonical.Id)) && historical.Length != 0) canonicalId = historical.Order().First();
         foreach (var duplicate in main.Where(x => x.ContractId != canonicalId && pristine.Contains(x.Id)))
         {
             foreach (var child in all.Where(x => x.ContractId == duplicate.ContractId && x.Status == MeterTaskStatus.Assigned))
             {
                 child.Status = MeterTaskStatus.Cancelled; child.Version++; child.Result = DuplicateMoveInResult;
-                db.Add(new OperationalTaskHistory
+                await WriteTaskAsync(child, false, new OperationalTaskHistory
                 {
                     TaskId = child.Id,
                     ActorId = actor,
@@ -336,12 +335,12 @@ internal sealed class ContractHandoverRepository(BHomePersistenceContext db, IOp
                     TaskVersion = child.Version,
                     OccurredAt = now,
                     Note = DuplicateMoveInResult
-                });
+                }, t);
             }
             await MarkMoveInSuppressedAsync(duplicate.ContractId!.Value, true, t);
         }
         var own = main.FirstOrDefault(x => x.ContractId == c.Id);
-        if (own is null && await db.Set<ContractHandover>().AnyAsync(h => h.ContractId == c.Id, t))
+        if (own is null && await NativeHandoverTaskPersistence.HasCurrentAsync(NativeDb, c.Id, t))
             return false;
         // Never suppress existing work that already has observations/evidence,
         // even if it was created by the old per-contract generator.
@@ -359,14 +358,14 @@ internal sealed class ContractHandoverRepository(BHomePersistenceContext db, IOp
         {
             child.Status = MeterTaskStatus.Assigned; child.Version++; child.Result = null;
             if (child.Kind == OperationalTaskKind.MeterReading && child.ReadingDate < today) child.ReadingDate = today;
-            db.Add(new OperationalTaskHistory
+            await WriteTaskAsync(child, false, new OperationalTaskHistory
             {
                 TaskId = child.Id,
                 ActorId = actor,
                 Action = "MoveInDuplicateResumed",
                 TaskVersion = child.Version,
                 OccurredAt = now
-            });
+            }, t);
         }
         return true;
     }
@@ -375,16 +374,10 @@ internal sealed class ContractHandoverRepository(BHomePersistenceContext db, IOp
     {
         if (related.Any(x => x.Status != MeterTaskStatus.Assigned || x.CompletedAt != null || x.Result != null || x.OcrImageHash != null)) return false;
         var ids = related.Select(x => x.Id).ToArray();
-        if (await db.Set<OperationalTaskEvidence>().AnyAsync(x => ids.Contains(x.TaskId), t) ||
-            await db.Set<OperationalTaskFileUpload>().AnyAsync(x => ids.Contains(x.TaskId), t) ||
-            await db.Set<MeterEvidence>().AnyAsync(x => ids.Contains(x.TaskId), t) ||
-            await db.Set<MeterReading>().AnyAsync(x => ids.Contains(x.TaskId), t) ||
-            await db.Set<ContractDocumentFile>().AnyAsync(x => x.ContractId == contractId &&
-                (x.Kind == ContractFileKind.HandoverEvidence || x.Kind == ContractFileKind.MoveInReport), t) ||
-            await db.Set<ContractHandover>().AnyAsync(x => x.ContractId == contractId, t) ||
-            await db.Set<OperationalTaskHistory>().AnyAsync(x => ids.Contains(x.TaskId) &&
-                x.Action != "MoveInCreated" && x.Action != "MoveInInventoryCreated" && x.Action != "responsibility_changed" &&
-                x.Action != "MoveInDuplicateCancelled" && x.Action != "MoveInDuplicateResumed", t)) return false;
+        if (await NativeHandoverTaskPersistence.HasProgressAsync(NativeDb, ids, t) ||
+            (await ContractDocumentPersistence.ListAsync(db, contractId, t)).Any(x =>
+                x.Kind == ContractFileKind.HandoverEvidence || x.Kind == ContractFileKind.MoveInReport) ||
+            await NativeHandoverTaskPersistence.HasCurrentAsync(NativeDb, contractId, t)) return false;
         return !await db.Database.SqlQuery<bool>($"""
             SELECT EXISTS(SELECT 1 FROM contracts WHERE id={contractId}
                 AND (COALESCE((handover->'preparation'->>'version')::integer,0)>1
@@ -409,12 +402,10 @@ internal sealed class ContractHandoverRepository(BHomePersistenceContext db, IOp
     {
         if (db is not BHome.Infrastructure.Persistence.Compact24.Compact24DbContext)
             throw ContractException.Conflict("move_in_baselines_unavailable");
-        var contract = await db.Set<Contract>().Include(c => c.Room).ThenInclude(r => r.Location)
-            .SingleOrDefaultAsync(c => c.Id == contractId && c.Kind == ContractKind.Main &&
-                c.PreviousContractId == null && c.Status != ContractStatus.Cancelled &&
-                c.Status != ContractStatus.Terminated && c.Status != ContractStatus.Expired &&
-                c.Status != ContractStatus.Superseded, t)
-            ?? throw ContractException.Conflict("main_move_in_handover_required");
+        var contract = await NativeContractSnapshot.LoadAsync(NativeDb, contractId, t);
+        if (contract is null || contract.Kind != ContractKind.Main || contract.PreviousContractId != null ||
+            contract.Status is ContractStatus.Cancelled or ContractStatus.Terminated or ContractStatus.Expired or ContractStatus.Superseded)
+            throw ContractException.Conflict("main_move_in_handover_required");
         var date = DateOnly.FromDateTime(TimeZoneInfo.ConvertTimeBySystemTimeZoneId(now, "Asia/Ho_Chi_Minh").DateTime);
         var responsible = await tasks.ResponsibilityAsync(contract.Room.LocationId, date, t);
         return await EnsureMeterBaselinesAsync(contract, now, responsible, t);
@@ -427,7 +418,7 @@ internal sealed class ContractHandoverRepository(BHomePersistenceContext db, IOp
         // Every tenancy starts with its own photographed electricity/water baseline.
         // A physical meter may have confirmed readings from previous occupants, so
         // these tasks are keyed by Contract + Meter instead of Meter alone.
-        var meters = await db.Set<Meter>().AsNoTracking().Where(m => m.RoomId == c.RoomId && m.IsActive)
+        var meters = await db.Set<Native.Meter>().AsNoTracking().Where(m => m.RoomId == c.RoomId && m.IsActive)
             .OrderBy(m => m.UtilityType).ThenBy(m => m.Id).ToArrayAsync(t);
         var ids = new List<Guid>(meters.Length);
         foreach (var meter in meters)
@@ -435,12 +426,9 @@ internal sealed class ContractHandoverRepository(BHomePersistenceContext db, IOp
             // Manual capture and historical imports may use a different task ID.
             // Reuse the same business key enforced by ux_task_source, including
             // completed checkpoints whose confirmed readings must be retained.
-            var existing = db.Set<OperationalTask>().Local.SingleOrDefault(x =>
+            var existing = (await NativeHandoverTaskPersistence.ForContractsAsync(NativeDb, [c.Id], t)).SingleOrDefault(x =>
                 x.Kind == OperationalTaskKind.MeterReading && x.MeterId == meter.Id &&
-                x.ContractId == c.Id && x.Purpose == ReadingPurpose.Initial && x.Status != MeterTaskStatus.Cancelled)
-                ?? await db.Set<OperationalTask>().SingleOrDefaultAsync(x =>
-                    x.Kind == OperationalTaskKind.MeterReading && x.MeterId == meter.Id &&
-                    x.ContractId == c.Id && x.Purpose == ReadingPurpose.Initial && x.Status != MeterTaskStatus.Cancelled, t);
+                x.Purpose == ReadingPurpose.Initial && x.Status != MeterTaskStatus.Cancelled);
             if (existing is not null)
             {
                 ids.Add(existing.Id);
@@ -448,15 +436,14 @@ internal sealed class ContractHandoverRepository(BHomePersistenceContext db, IOp
             }
             var meterTaskId = Key($"contract-meter-initial:{c.Id:N}:{meter.Id:N}");
             ids.Add(meterTaskId);
-            if (db.Set<OperationalTask>().Local.Any(x => x.Id == meterTaskId) ||
-                await db.Set<OperationalTask>().AnyAsync(x => x.Id == meterTaskId, t)) continue;
-            var meterTask = new OperationalTask
+            if (await FindTaskAsync(meterTaskId, t) is not null) continue;
+            var meterTask = new OperationalTask(meterTaskId)
             {
                 Kind = OperationalTaskKind.MeterReading,
                 LocationId = c.Room.LocationId,
                 MeterId = meter.Id,
                 ContractId = c.Id,
-                Title = $"Chụp chỉ số {(meter.UtilityType == UtilityType.Electricity ? "điện" : "nước")} khi nhận phòng {c.Room.RoomNumber}",
+                Title = $"Chụp chỉ số {(meter.UtilityType == (short)UtilityType.Electricity ? "điện" : "nước")} khi nhận phòng {c.Room.RoomNumber}",
                 Requirements = "Chụp ảnh thực tế, đối chiếu và xác nhận chỉ số đầu kỳ cho hợp đồng nhận phòng này. Tiếp tục sử dụng công tơ hiện có, không tạo công tơ mới hay kế thừa chỉ số/ảnh của người thuê trước.",
                 Purpose = ReadingPurpose.Initial,
                 ReadingDate = new[] { c.StartDate, date, meter.InstalledOn }.Max(),
@@ -466,8 +453,7 @@ internal sealed class ContractHandoverRepository(BHomePersistenceContext db, IOp
                 EvidenceRequired = true,
                 Status = MeterTaskStatus.Assigned
             };
-            db.Entry(meterTask).Property(x => x.Id).CurrentValue = meterTaskId;
-            db.Add(meterTask);
+            await WriteTaskAsync(meterTask, true, null, t);
         }
         return ids.ToArray();
     }
@@ -475,7 +461,7 @@ internal sealed class ContractHandoverRepository(BHomePersistenceContext db, IOp
     private async Task EnsureInventoryTaskAsync(Contract c, Guid actor, DateTimeOffset now, CancellationToken t)
     {
         var id = Key($"contract-pre-move-in-inventory:{c.Id:N}");
-        if (db.Set<OperationalTask>().Local.Any(x => x.Id == id) || await db.Set<OperationalTask>().AnyAsync(x => x.Id == id, t)) return;
+        if (await FindTaskAsync(id, t) is not null) return;
         var source = inventory is null ? throw ContractException.Conflict("move_in_inventory_unavailable") :
             await inventory.PrepareForMoveInTaskAsync(c.RoomId, t);
         var items = source.Groups.Select(group =>
@@ -494,7 +480,7 @@ internal sealed class ContractHandoverRepository(BHomePersistenceContext db, IOp
         var localBoundary = c.StartDate.ToDateTime(TimeOnly.MinValue);
         var tz = TimeZoneInfo.FindSystemTimeZoneById("Asia/Ho_Chi_Minh");
         var due = new DateTimeOffset(localBoundary, tz.GetUtcOffset(localBoundary)).AddTicks(-1).ToUniversalTime();
-        var task = new OperationalTask
+        var task = new OperationalTask(id)
         {
             Kind = OperationalTaskKind.MoveInInventory,
             LocationId = c.Room.LocationId,
@@ -512,8 +498,6 @@ internal sealed class ContractHandoverRepository(BHomePersistenceContext db, IOp
             ReadingDate = c.StartDate,
             MoveInInventoryJson = JsonSerializer.Serialize(new MoveInInventorySnapshot(source.StateToken, items))
         };
-        db.Entry(task).Property(x => x.Id).CurrentValue = id;
-        db.Add(task);
         var history = new OperationalTaskHistory
         {
             TaskId = id,
@@ -524,15 +508,15 @@ internal sealed class ContractHandoverRepository(BHomePersistenceContext db, IOp
             ResponsibleStaffUserId = responsible?.StaffUserId,
             Note = responsible is null ? "AwaitingAssignment" : ""
         };
-        db.Add(history);
+        await WriteTaskAsync(task, true, history, t);
         foreach (var owner in (await tasks.OwnersAsync(t)).Concat(responsible is null ? [] : [responsible.StaffUserId]).Distinct())
-            db.Add(new OperationalTaskNotification
+            await NativeAssignmentReconciliation.TaskNoticeAsync(NativeDb, new OperationalTaskNotification
             {
                 TaskId = id,
                 RecipientUserId = owner,
                 EventId = history.Id,
                 Event = responsible is null ? "MoveInInventoryAwaitingAssignment" : "MoveInInventoryAssigned"
-            });
+            }, t);
         if (inbox is not null)
             foreach (var party in new[] { (Id: (Guid?)c.OwnerSignerId, Role: Roles.Owner), (Id: responsible?.StaffUserId, Role: Roles.Staff) }.Where(x => x.Id.HasValue))
                 await inbox.Emit(party.Id!.Value, party.Role, c.Room.LocationId,
@@ -547,8 +531,7 @@ internal sealed class ContractHandoverRepository(BHomePersistenceContext db, IOp
         if (db is not BHome.Infrastructure.Persistence.Compact24.Compact24DbContext) return true;
         // Existing activated contracts with no generated inventory keep their historic handover.
         // New Main activations are always provisioned together with this task.
-        var task = await db.Set<OperationalTask>().AsNoTracking()
-            .SingleOrDefaultAsync(x => x.Id == Key($"contract-pre-move-in-inventory:{contractId:N}"), t);
+        var task = await FindTaskAsync(Key($"contract-pre-move-in-inventory:{contractId:N}"), t);
         if (task is null) return true;
         if (task.Kind != OperationalTaskKind.MoveInInventory || task.Status != MeterTaskStatus.Completed)
             return false;
@@ -571,11 +554,9 @@ internal sealed class ContractHandoverRepository(BHomePersistenceContext db, IOp
         // The completed task is the source of factual observations and its
         // original configuration token. A stale draft.inventoryToken is not
         // evidence of new configuration changes.
-        var task = await db.Set<OperationalTask>().AsNoTracking()
-            .SingleOrDefaultAsync(x => x.Id == Key($"contract-pre-move-in-inventory:{contractId:N}") &&
-                x.ContractId == contractId && x.Kind == OperationalTaskKind.MoveInInventory &&
-                x.Status == MeterTaskStatus.Completed, t);
-        if (task is null) return null; // Legacy contract without an inventory task.
+        var task = await FindTaskAsync(Key($"contract-pre-move-in-inventory:{contractId:N}"), t);
+        if (task is null || task.ContractId != contractId || task.Kind != OperationalTaskKind.MoveInInventory ||
+            task.Status != MeterTaskStatus.Completed) return null;
         try
         {
             var snapshot = JsonSerializer.Deserialize<MoveInInventorySnapshot>(task.MoveInInventoryJson);
@@ -585,10 +566,8 @@ internal sealed class ContractHandoverRepository(BHomePersistenceContext db, IOp
             if (task.CompletedAt is null) return null;
             var evidenceIds = snapshot.Items.SelectMany(item => item.EvidenceIds ?? [])
                 .Distinct().ToArray();
-            var evidenceById = await db.Set<OperationalTaskEvidence>().AsNoTracking()
-                .Where(file => file.TaskId == task.Id && evidenceIds.Contains(file.Id))
-                .Select(file => new { file.Id, file.CreatedAt })
-                .ToDictionaryAsync(file => file.Id, file => file.CreatedAt, t);
+            var evidenceById = (await NativeOperationalTaskPersistence.EvidenceAsync(NativeDb, task.Id, t))
+                .Where(file => evidenceIds.Contains(file.Id)).ToDictionary(file => file.Id, file => file.CreatedAt);
             var latestEvidence = snapshot.Items.ToDictionary(item => item.Id, item =>
                 (item.EvidenceIds ?? [])
                     .Where(id => evidenceById.ContainsKey(id))
@@ -604,8 +583,7 @@ internal sealed class ContractHandoverRepository(BHomePersistenceContext db, IOp
     public async Task<bool> InventoryHasIssuesAsync(Guid contractId, CancellationToken t)
     {
         if (db is not BHome.Infrastructure.Persistence.Compact24.Compact24DbContext) return false;
-        var task = await db.Set<OperationalTask>().AsNoTracking()
-            .SingleOrDefaultAsync(x => x.Id == Key($"contract-pre-move-in-inventory:{contractId:N}"), t);
+        var task = await FindTaskAsync(Key($"contract-pre-move-in-inventory:{contractId:N}"), t);
         if (task?.Kind != OperationalTaskKind.MoveInInventory ||
             string.IsNullOrWhiteSpace(task.MoveInInventoryJson)) return false;
         try
@@ -620,10 +598,9 @@ internal sealed class ContractHandoverRepository(BHomePersistenceContext db, IOp
         DateTimeOffset now, Guid[] selectedAssetIds, CancellationToken t)
     {
         if (db is not BHome.Infrastructure.Persistence.Compact24.Compact24DbContext) return;
-        var inventoryTask = await db.Set<OperationalTask>().SingleOrDefaultAsync(x =>
-            x.Id == Key($"contract-pre-move-in-inventory:{contractId:N}") &&
-            x.ContractId == contractId && x.Kind == OperationalTaskKind.MoveInInventory, t)
-            ?? throw ContractException.Conflict("move_in_inventory_required");
+        var inventoryTask = await FindTaskAsync(Key($"contract-pre-move-in-inventory:{contractId:N}"), t);
+        if (inventoryTask is null || inventoryTask.ContractId != contractId || inventoryTask.Kind != OperationalTaskKind.MoveInInventory)
+            throw ContractException.Conflict("move_in_inventory_required");
         MoveInInventorySnapshot? source;
         try { source = JsonSerializer.Deserialize<MoveInInventorySnapshot>(inventoryTask.MoveInInventoryJson); }
         catch (JsonException) { throw ContractException.Conflict("move_in_inventory_required"); }
@@ -644,17 +621,17 @@ internal sealed class ContractHandoverRepository(BHomePersistenceContext db, IOp
             ReinspectionRequestedAt = now
         });
         inventoryTask.Version++;
-        db.Add(new OperationalTaskHistory
+        await WriteTaskAsync(inventoryTask, false, new OperationalTaskHistory
         {
             TaskId = inventoryTask.Id,
             ActorId = actor,
             Action = "MoveInInventoryReinspection",
             OccurredAt = now,
             TaskVersion = inventoryTask.Version
-        });
+        }, t);
     }
     private Task<OperationalTask?> FindMoveInTaskForUpdateAsync(Guid contractId, CancellationToken t) =>
-        db.Set<OperationalTask>().SingleOrDefaultAsync(x => x.Id == ContractHandoverTaskIds.MoveIn(contractId), t);
+        FindTaskAsync(ContractHandoverTaskIds.MoveIn(contractId), t);
 
     public async Task SubmitMoveInTaskAsync(Guid contractId, Guid actor, DateTimeOffset now, CancellationToken t)
     {
@@ -666,7 +643,7 @@ internal sealed class ContractHandoverRepository(BHomePersistenceContext db, IOp
         task.ApplyAction("submit", now, actor);
         task.Version++;
         task.Result = "Staff đã hoàn tất kiểm tra, chuyển biên bản cho Owner duyệt.";
-        db.Add(new OperationalTaskHistory { TaskId = task.Id, ActorId = actor, Action = "MoveInSubmitted", OccurredAt = now, TaskVersion = task.Version });
+        await WriteTaskAsync(task, false, new OperationalTaskHistory { TaskId = task.Id, ActorId = actor, Action = "MoveInSubmitted", OccurredAt = now, TaskVersion = task.Version }, t);
     }
     public async Task ReopenMoveInTaskAsync(Guid contractId, Guid actor, DateTimeOffset now, CancellationToken t)
     {
@@ -677,7 +654,7 @@ internal sealed class ContractHandoverRepository(BHomePersistenceContext db, IOp
             throw ContractException.Conflict("move_in_task_not_submitted");
         task.ApplyAction("rework", now, actor);
         task.Version++;
-        db.Add(new OperationalTaskHistory { TaskId = task.Id, ActorId = actor, Action = "MoveInReinspection", OccurredAt = now, TaskVersion = task.Version });
+        await WriteTaskAsync(task, false, new OperationalTaskHistory { TaskId = task.Id, ActorId = actor, Action = "MoveInReinspection", OccurredAt = now, TaskVersion = task.Version }, t);
     }
     public async Task CompleteMoveInTaskAsync(Guid contractId, Guid actor, DateTimeOffset now, CancellationToken t)
     {
@@ -687,7 +664,7 @@ internal sealed class ContractHandoverRepository(BHomePersistenceContext db, IOp
         if (task.Status != MeterTaskStatus.PendingVerification) throw ContractException.Conflict("move_in_task_not_submitted");
         task.ApplyAction("verify", now, actor); task.Version++;
         task.Result = "Biên bản đã được Owner và Tenant ký điện tử.";
-        db.Add(new OperationalTaskHistory { TaskId = task.Id, ActorId = actor, Action = "MoveInCompleted", OccurredAt = now, TaskVersion = task.Version });
+        await WriteTaskAsync(task, false, new OperationalTaskHistory { TaskId = task.Id, ActorId = actor, Action = "MoveInCompleted", OccurredAt = now, TaskVersion = task.Version }, t);
     }
     public async Task NotifyAsync(Contract c, string action, Guid actor, int version, CancellationToken t)
     {
@@ -703,27 +680,50 @@ internal sealed class ContractHandoverRepository(BHomePersistenceContext db, IOp
                 await inbox.Emit(party.Item1!.Value, party.Item2, c.Room.LocationId, $"handover:{c.Id:N}:{version}:{action}:{party.Item1:N}", "HANDOVER_UPDATED", "Contract",
                     "Bàn giao có cập nhật", "Mở hợp đồng để xem phiên bản và thao tác đang chờ xử lý.", "Contract", c.Id, t);
         }
-        if (!await db.Set<OperationalTask>().AnyAsync(x => x.Id == taskId, t)) return;
+        if (await FindTaskAsync(taskId, t) is null) return;
         foreach (var recipient in recipients.Concat(c.TenantUserId is { } tenant ? new[] { tenant } : []).Where(r => r != actor).Distinct())
         {
             var id = Key($"handover-notice:{c.Id:N}:{version}:{action}:{recipient:N}");
-            if (!await db.Set<OperationalTaskNotification>().AnyAsync(n => n.Id == id, t))
-                AddNotice(id, new OperationalTaskNotification
+            if (!await NativeDb.Set<Native.Notification>().AsNoTracking().AnyAsync(n => n.Id == id, t))
+                await AddNoticeAsync(id, new OperationalTaskNotification
                 {
                     TaskId = taskId,
                     EventId = Key($"handover-event:{c.Id:N}:{version}:{action}"),
                     RecipientUserId = recipient,
                     Event = action
-                });
+                }, t);
         }
     }
-    private void AddNotice(Guid id, OperationalTaskNotification notice)
-    { db.Entry(notice).Property(n => n.Id).CurrentValue = id; db.Add(notice); }
+    private Task AddNoticeAsync(Guid id, OperationalTaskNotification notice, CancellationToken t)
+    {
+        var value = OperationalTaskNotification.Rehydrate(id);
+        value.TaskId = notice.TaskId; value.RecipientUserId = notice.RecipientUserId; value.EventId = notice.EventId; value.Event = notice.Event;
+        return NativeAssignmentReconciliation.TaskNoticeAsync(NativeDb, value, t);
+    }
     public async Task<IReadOnlyList<AssetChangeParty>> ActivePartiesAsync(Guid roomId, CancellationToken t) =>
-        await db.Set<Contract>().AsNoTracking().Where(c => c.RoomId == roomId && (c.Kind == ContractKind.Main || c.Kind == ContractKind.Renewal) && c.Status == ContractStatus.Active)
+        db is Compact24DbContext compact
+        ? await compact.Set<Native.Contract>().AsNoTracking().Where(c => c.RoomId == roomId && (c.ContractType == "MAIN" || c.ContractType == "RENEWAL") && c.Status == (short)ContractStatus.Active)
+            .Select(c => new AssetChangeParty(c.Id, c.TenantUserId)).ToArrayAsync(t)
+        : await db.Set<Contract>().AsNoTracking().Where(c => c.RoomId == roomId && (c.Kind == ContractKind.Main || c.Kind == ContractKind.Renewal) && c.Status == ContractStatus.Active)
             .Select(c => new AssetChangeParty(c.Id, c.TenantUserId)).ToArrayAsync(t);
     public async Task<IReadOnlyList<AssetChangeSource>> ChangeSourcesAsync(Guid roomId, CancellationToken t)
     {
+        if (db is Compact24DbContext compact)
+        {
+            var nativeHistory = await compact.Database.SqlQuery<AssetChangeSource>($"""
+                SELECT n.id AS "Id",n.related_entity_id AS "AssetId",COALESCE(n.event_data->'state'->>'reason','') AS "Label",
+                    NULL::uuid AS "WorkOrderId"
+                FROM notifications n JOIN assets a ON a.id=n.related_entity_id
+                WHERE n.record_kind='AUDIT' AND n.event_data->>'recordType'='PropertyChange'
+                    AND n.related_entity_type='Asset' AND a.room_id={roomId}
+                ORDER BY n.event_at DESC LIMIT 200
+                """).ToArrayAsync(t);
+            var nativeOrders = (await compact.Set<Native.OperationalTask>().AsNoTracking()
+                .Where(w => w.RoomId == roomId && w.TaskType == "WORK_ORDER" && w.Status == "Verified" && w.AssetId != null)
+                .Take(200).ToArrayAsync(t)).Select(NativeIncidentSession.Read)
+                .Select(w => new AssetChangeSource(w.Id, w.AssetId!.Value, w.Description, w.Id));
+            return nativeOrders.Concat(nativeHistory).ToArray();
+        }
         var assetIds = db.Set<Asset>().Where(a => a.RoomId == roomId).Select(a => a.Id);
         var history = await db.Set<PropertyChange>().AsNoTracking().Where(h => h.TargetType == nameof(Asset) && assetIds.Contains(h.TargetId))
             .OrderByDescending(h => h.OccurredAt).Take(200).Select(h => new AssetChangeSource(h.Id, h.TargetId, h.Reason, null)).ToArrayAsync(t);
@@ -732,10 +732,15 @@ internal sealed class ContractHandoverRepository(BHomePersistenceContext db, IOp
             .Select(w => new AssetChangeSource(w.Id, w.AssetId!.Value, w.Description, w.Id)).Take(200).ToArrayAsync(t);
         return maintenance.Concat(history).ToArray();
     }
-    public Task<ContractHandover?> GetAsync(Guid id, CancellationToken t) => db.Set<ContractHandover>().SingleOrDefaultAsync(h => h.ContractId == id, t);
+    public Task<ContractHandover?> GetAsync(Guid id, CancellationToken t) =>
+        sidecars?.Active == true ? sidecars.HandoverAsync(id, t) :
+        db is Compact24DbContext compact ? NativeContractMoveOutPersistence.HandoverAsync(compact, id, t)
+        : db.Set<ContractHandover>().SingleOrDefaultAsync(h => h.ContractId == id, t);
     public async Task<IReadOnlyList<Asset>> AssetsAsync(Guid roomId, CancellationToken t)
     {
-        var assets = await db.Set<Asset>().AsNoTracking().Where(a => a.RoomId == roomId && a.Status != AssetStatus.Retired).OrderBy(a => a.Name).Take(201).ToArrayAsync(t);
+        var assets = db is Compact24DbContext compact
+            ? (await compact.Set<Native.Asset>().AsNoTracking().Where(a => a.RoomId == roomId && a.Status != (short)AssetStatus.Retired).OrderBy(a => a.Name).Take(201).ToArrayAsync(t)).Select(NativeAssetPersistence.Read).ToArray()
+            : await db.Set<Asset>().AsNoTracking().Where(a => a.RoomId == roomId && a.Status != AssetStatus.Retired).OrderBy(a => a.Name).Take(201).ToArrayAsync(t);
         if (assets.Length > 200) throw new ContractException(503, "handover_inventory_limit");
         return assets;
     }
@@ -744,7 +749,7 @@ internal sealed class ContractHandoverRepository(BHomePersistenceContext db, IOp
         // Compact24 is the production path and must never recycle an older
         // tenant's initial/periodic photo. Legacy source-schema test fixtures
         // still validate their original room-based behavior independently.
-        var contractScoped = db is BHome.Infrastructure.Persistence.Compact24.Compact24DbContext;
+        if (db is Compact24DbContext compact) return await NativeHandoverTaskPersistence.ReadingsAsync(compact, contractId, roomId, startDate, t);
         return await (
             from r in db.Set<MeterReading>().AsNoTracking()
             join task in db.Set<OperationalTask>() on r.TaskId equals task.Id
@@ -752,15 +757,17 @@ internal sealed class ContractHandoverRepository(BHomePersistenceContext db, IOp
             join evidence in db.Set<MeterEvidence>() on r.EvidenceId equals evidence.Id
             where meter.RoomId == roomId && meter.IsActive && task.ReadingDate >= startDate &&
                 task.Status == MeterTaskStatus.Completed && evidence.IsUploaded && evidence.IsLinked &&
-                (contractScoped
-                    ? task.ContractId == contractId && task.Purpose == ReadingPurpose.Initial
-                    : task.Purpose == ReadingPurpose.Initial || task.Purpose == ReadingPurpose.Periodic)
+                (task.Purpose == ReadingPurpose.Initial || task.Purpose == ReadingPurpose.Periodic)
             orderby task.ReadingDate descending
             select new HandoverReading(r.Id, meter.Code, (int)meter.UtilityType, task.ReadingDate, r.ConfirmedValue, evidence.Id, evidence.ObjectKey, evidence.ImageHash))
             .Take(100).ToArrayAsync(t);
     }
-    public async Task<IReadOnlyList<ContractHandoverHistory>> HistoryAsync(Guid id, CancellationToken t) => await db.Set<ContractHandoverHistory>().AsNoTracking().Where(h => h.ContractId == id).OrderByDescending(h => h.OccurredAt).Take(100).ToArrayAsync(t);
-    public Task<HandoverReading?> ReadingAsync(Guid roomId, Guid readingId, CancellationToken t) => (
+    public async Task<IReadOnlyList<ContractHandoverHistory>> HistoryAsync(Guid id, CancellationToken t) =>
+        db is Compact24DbContext compact ? await NativeHandoverTaskPersistence.HistoryAsync(compact, id, t)
+        : await db.Set<ContractHandoverHistory>().AsNoTracking().Where(h => h.ContractId == id).OrderByDescending(h => h.OccurredAt).Take(100).ToArrayAsync(t);
+    public Task<HandoverReading?> ReadingAsync(Guid roomId, Guid readingId, CancellationToken t) => db is Compact24DbContext compact
+        ? NativeHandoverTaskPersistence.ReadingAsync(compact, roomId, readingId, t)
+        : (
         from reading in db.Set<MeterReading>().AsNoTracking()
         join task in db.Set<OperationalTask>() on reading.TaskId equals task.Id
         join meter in db.Set<Meter>() on reading.MeterId equals meter.Id
@@ -770,8 +777,21 @@ internal sealed class ContractHandoverRepository(BHomePersistenceContext db, IOp
     public Task<bool> HistoryContainsEvidenceAsync(Guid id, Guid fileId, CancellationToken t)
     {
         var fragment = JsonSerializer.Serialize(new { EvidenceIds = new[] { fileId } });
+        if (db is Compact24DbContext compact)
+            return compact.Database.SqlQuery<bool>($"""
+                SELECT EXISTS(SELECT 1 FROM contracts c CROSS JOIN LATERAL jsonb_array_elements(c.history) h
+                    WHERE c.id={id} AND h->>'recordType'='ContractHandoverHistory' AND COALESCE(h->>'deleted','false')<>'true'
+                    AND (h->'state'->>'snapshot')::jsonb @> CAST({fragment} AS jsonb)) AS "Value"
+                """).SingleAsync(t);
         return db.Set<ContractHandoverHistory>().AnyAsync(h => h.ContractId == id && EF.Functions.JsonContains(h.Snapshot, fragment), t);
     }
-    public Task<string?> HistoryForReadingAsync(Guid id, Guid readingId, CancellationToken t) => db.Set<ContractHandoverHistory>().AsNoTracking()
+    public Task<string?> HistoryForReadingAsync(Guid id, Guid readingId, CancellationToken t) => db is Compact24DbContext compact
+        ? compact.Database.SqlQuery<string>($"""
+            SELECT h->'state'->>'snapshot' AS "Value" FROM contracts c CROSS JOIN LATERAL jsonb_array_elements(c.history) h
+            WHERE c.id={id} AND h->>'recordType'='ContractHandoverHistory' AND COALESCE(h->>'deleted','false')<>'true'
+                AND (h->'state'->>'electricityReadingId'={readingId.ToString()} OR h->'state'->>'waterReadingId'={readingId.ToString()})
+            ORDER BY (h->'state'->>'occurredAt')::timestamptz DESC LIMIT 1
+            """).FirstOrDefaultAsync(t)
+        : db.Set<ContractHandoverHistory>().AsNoTracking()
         .Where(h => h.ContractId == id && (h.ElectricityReadingId == readingId || h.WaterReadingId == readingId)).OrderByDescending(h => h.OccurredAt).Select(h => h.Snapshot).FirstOrDefaultAsync(t);
 }

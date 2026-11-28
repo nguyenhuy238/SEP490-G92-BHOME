@@ -37,7 +37,7 @@ try
     var limit = string.IsNullOrWhiteSpace(limitText) ? 10000 : int.TryParse(limitText, out var supplied) && supplied > 0
         ? supplied : throw new Compact24MigrationException("positive_copy_limit_required");
     await using var source = new BHomeDbContext(new DbContextOptionsBuilder<BHomeDbContext>().UseNpgsql(from).Options);
-    await using var target = new Compact24DbContext(new DbContextOptionsBuilder<Compact24DbContext>().UseNpgsql(to).Options);
+    await using var target = new Compact24ArchiveContext(new DbContextOptionsBuilder<Compact24DbContext>().UseNpgsql(to).Options);
     if (args[0] == "--copy-identity-fixture")
     {
         var copied = await new Compact24FixtureMigration(source, target).CopyIdentityFixtureAsync(); committed = true;

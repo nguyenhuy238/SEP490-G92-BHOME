@@ -221,8 +221,14 @@ internal static class NativeAdjustmentPersistence
         var eventKey = kind + ":" + key;
         var data = JsonSerializer.Serialize(new
         {
-            schemaVersion = 1, recordType = kind, state = e, audienceRole = (string?)null,
-            category = (string?)null, succeeded = (bool?)null, sessionId = (Guid?)null, targetUserId = (Guid?)null
+            schemaVersion = 1,
+            recordType = kind,
+            state = e,
+            audienceRole = (string?)null,
+            category = (string?)null,
+            succeeded = (bool?)null,
+            sessionId = (Guid?)null,
+            targetUserId = (Guid?)null
         }, Json);
         return db.Database.ExecuteSqlInterpolatedAsync($"""
             INSERT INTO notifications(id,record_kind,event_key,notification_type,event_data,event_at)
@@ -237,8 +243,14 @@ internal static class NativeAdjustmentPersistence
         var key = kind + ":" + a.Id;
         var data = JsonSerializer.Serialize(new
         {
-            schemaVersion = 1, recordType = kind, state = a, audienceRole = (string?)null,
-            category = (string?)null, succeeded = a.Succeeded, sessionId = a.SessionId, targetUserId = a.TargetUserId
+            schemaVersion = 1,
+            recordType = kind,
+            state = a,
+            audienceRole = (string?)null,
+            category = (string?)null,
+            succeeded = a.Succeeded,
+            sessionId = a.SessionId,
+            targetUserId = a.TargetUserId
         }, Json);
         return db.Database.ExecuteSqlInterpolatedAsync($"""
             INSERT INTO notifications(id,record_kind,actor_user_id,event_key,notification_type,related_entity_type,

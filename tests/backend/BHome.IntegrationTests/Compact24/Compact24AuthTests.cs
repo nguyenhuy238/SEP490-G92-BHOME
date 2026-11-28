@@ -2,6 +2,7 @@ using System.Net;
 using System.Net.Http.Headers;
 using System.Net.Http.Json;
 using BHome.Application.IdentityAccess;
+using BHome.Infrastructure.IdentityAccess;
 using BHome.Infrastructure.Persistence;
 using BHome.Infrastructure.Persistence.Compact24;
 using Microsoft.AspNetCore.Hosting;
@@ -250,6 +251,49 @@ public sealed class Compact24AuthTests(Compact24Fixture fixture) : IClassFixture
         await using var command = new NpgsqlCommand("SELECT count(*) FROM notifications WHERE record_kind='AUDIT' AND related_entity_id=@id AND recipient_user_id IS NULL", connection);
         command.Parameters.AddWithValue("id", user.Id);
         Assert.True((long)(await command.ExecuteScalarAsync())! > 0);
+    }
+
+    [CompactPostgresFact]
+    public async Task ReadOnlyPendingSetupLookupCannotOverwriteAConsumedGrantWhenAuditing()
+    {
+        var user = await Seed();
+        var hash = IdentitySecurityStore.Hash(Guid.NewGuid().ToString("N"));
+        var now = DateTimeOffset.UtcNow;
+        var consumed = now.AddTicks(-(now.Ticks % 10));
+        await using var readScope = fixture.Factory!.Services.CreateAsyncScope();
+        await using var writeScope = fixture.Factory.Services.CreateAsyncScope();
+        var readDb = readScope.ServiceProvider.GetRequiredService<Compact24DbContext>();
+        var writeDb = writeScope.ServiceProvider.GetRequiredService<Compact24DbContext>();
+        await writeDb.Database.ExecuteSqlInterpolatedAsync($"""
+            UPDATE users SET reset_token_hash={hash},reset_expires_at={now.AddMinutes(10)},reset_consumed_at=NULL WHERE id={user.Id}
+            """);
+        var repository = readScope.ServiceProvider.GetRequiredService<IIdentityPersistence>();
+        Assert.IsType<NativeIdentityPersistence>(repository);
+        // The credential verifier can read a pending setup grant before taking
+        // a user lock. Another scope may consume it before the failure audit.
+        var before = await repository.ResetGrantAsync(user.Id, default);
+        Assert.NotNull(before); Assert.Null(before.ConsumedAt);
+        await writeDb.Database.ExecuteSqlInterpolatedAsync($"""
+            UPDATE users SET reset_consumed_at={consumed} WHERE id={user.Id}
+            """);
+        var audit = new SecurityAuditRecord
+        {
+            UserId = user.Id,
+            TargetUserId = user.Id,
+            Event = "LoginFailed",
+            Succeeded = false,
+            OccurredAt = now
+        };
+        repository.Audit(audit);
+        await repository.SaveChangesAsync(default);
+        var after = await repository.ResetGrantAsync(user.Id, default);
+        Assert.NotNull(after); Assert.Equal(consumed, after.ConsumedAt);
+        Assert.Equal(hash, after.TokenHash);
+        Assert.True(await readDb.Database.SqlQuery<bool>($"""
+            SELECT EXISTS(SELECT 1 FROM notifications WHERE id={audit.Id} AND record_kind='AUDIT'
+                AND recipient_user_id IS NULL AND event_key={"auth:" + audit.Id.ToString("N")}
+                AND notification_type='LoginFailed') AS "Value"
+            """).SingleAsync());
     }
 
     [CompactPostgresFact]

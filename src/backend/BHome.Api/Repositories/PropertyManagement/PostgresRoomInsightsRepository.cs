@@ -227,9 +227,9 @@ internal sealed class PostgresRoomInsightsRepository(BHomePersistenceContext db)
                      where c.RoomId == roomId
                      select new { c.Id, r.ResidentId, r.ResidenceFrom, r.ResidenceTo }).ToArrayAsync(token)
             : await (from c in db.Set<Contract>().AsNoTracking()
-                               from r in c.Residents
-                               where c.RoomId == roomId
-                               select new { c.Id, r.ResidentId, r.ResidenceFrom, r.ResidenceTo }).ToArrayAsync(token);
+                     from r in c.Residents
+                     where c.RoomId == roomId
+                     select new { c.Id, r.ResidentId, r.ResidenceFrom, r.ResidenceTo }).ToArrayAsync(token);
         List<RoomHistoryEvent> events = [.. property];
         foreach (var c in contracts)
         {
@@ -287,12 +287,12 @@ internal sealed class PostgresRoomInsightsRepository(BHomePersistenceContext db)
                            resident.VerificationStatus == (short)IdentityVerificationStatus.Verified
                      select c.RoomId).Distinct().CountAsync(token)
             : await (from c in db.Set<Contract>().AsNoTracking()
-                                   from cr in c.Residents
-                                   join resident in db.Set<Resident>().AsNoTracking() on cr.ResidentId equals resident.Id
-                                   where roomIds.Contains(c.RoomId) && c.Kind != ContractKind.Holding && c.Status == ContractStatus.Active && cr.ResidenceFrom <= today &&
-                                         (cr.ResidenceTo == null || cr.ResidenceTo >= today) &&
-                                         resident.VerificationStatus == IdentityVerificationStatus.Verified
-                                   select c.RoomId).Distinct().CountAsync(token);
+                     from cr in c.Residents
+                     join resident in db.Set<Resident>().AsNoTracking() on cr.ResidentId equals resident.Id
+                     where roomIds.Contains(c.RoomId) && c.Kind != ContractKind.Holding && c.Status == ContractStatus.Active && cr.ResidenceFrom <= today &&
+                           (cr.ResidenceTo == null || cr.ResidenceTo >= today) &&
+                           resident.VerificationStatus == IdentityVerificationStatus.Verified
+                     select c.RoomId).Distinct().CountAsync(token);
         var activeRooms = db is Compact24DbContext nativeContracts
             ? await nativeContracts.Set<Native.Contract>().AsNoTracking().Where(x => roomIds.Contains(x.RoomId) &&
                 x.ContractType != "HOLDING" && x.Status == (short)ContractStatus.Active).Select(x => x.RoomId).Distinct().CountAsync(token)
@@ -326,14 +326,14 @@ internal sealed class PostgresRoomInsightsRepository(BHomePersistenceContext db)
                          cr.ResidenceTo != null && cr.ResidenceTo < (c.ActualEndDate ?? c.EndDate)
                              ? cr.ResidenceTo.Value : c.ActualEndDate ?? c.EndDate)).ToArrayAsync(token)
             : await (from c in db.Set<Contract>().AsNoTracking()
-                               from cr in c.Residents
-                               where roomIds.Contains(c.RoomId) && c.Kind != ContractKind.Holding && c.ActivatedAt != null &&
-                                     c.Status != ContractStatus.Draft && c.Status != ContractStatus.PendingSigning &&
-                                     c.Status != ContractStatus.PendingActivation && c.Status != ContractStatus.Cancelled
-                               select new OccupancyInterval(c.RoomId,
-                                   cr.ResidenceFrom < c.StartDate ? c.StartDate : cr.ResidenceFrom,
-                                   cr.ResidenceTo != null && cr.ResidenceTo < (c.ActualEndDate ?? c.EndDate)
-                                       ? cr.ResidenceTo.Value : c.ActualEndDate ?? c.EndDate)).ToArrayAsync(token);
+                     from cr in c.Residents
+                     where roomIds.Contains(c.RoomId) && c.Kind != ContractKind.Holding && c.ActivatedAt != null &&
+                           c.Status != ContractStatus.Draft && c.Status != ContractStatus.PendingSigning &&
+                           c.Status != ContractStatus.PendingActivation && c.Status != ContractStatus.Cancelled
+                     select new OccupancyInterval(c.RoomId,
+                         cr.ResidenceFrom < c.StartDate ? c.StartDate : cr.ResidenceFrom,
+                         cr.ResidenceTo != null && cr.ResidenceTo < (c.ActualEndDate ?? c.EndDate)
+                             ? cr.ResidenceTo.Value : c.ActualEndDate ?? c.EndDate)).ToArrayAsync(token);
         var complete = propertyChanges.Any(x => x.TargetId == locationId && x.TargetType == "Location" &&
             x.Action == "Created" && VietnamDate(x.OccurredAt) <= from) && roomIds.All(id =>
             propertyChanges.Any(x => x.TargetId == id && x.TargetType == nameof(Room) && x.Action == "Created" &&
@@ -365,8 +365,12 @@ internal sealed class PostgresRoomInsightsRepository(BHomePersistenceContext db)
             """)
         : db.Set<PropertyChange>().AsNoTracking().Select(x => new PropertyAuditRow
         {
-            Id = x.Id, TargetId = x.TargetId, TargetType = x.TargetType, Action = x.Action,
-            After = x.After, OccurredAt = x.OccurredAt
+            Id = x.Id,
+            TargetId = x.TargetId,
+            TargetType = x.TargetType,
+            Action = x.Action,
+            After = x.After,
+            OccurredAt = x.OccurredAt
         });
 
     private static bool InRange(DateTimeOffset value, DateTimeOffset? from, DateTimeOffset? to) =>

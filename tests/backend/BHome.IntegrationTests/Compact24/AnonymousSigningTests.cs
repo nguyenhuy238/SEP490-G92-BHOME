@@ -234,11 +234,11 @@ public sealed class AnonymousSigningTests(Compact24Fixture fixture) : IClassFixt
             await Result<BHome.Application.Ocr.IdResult>(await Post(staff, "/api/v1/capture/residents", profile));
             await Result<BHome.Application.Ocr.IdResult>(await Post(staff, "/api/v1/capture/residents", profile));
             await using var scope = host.Services.CreateAsyncScope();
-            Assert.False(await scope.ServiceProvider.GetRequiredService<Compact24DbContext>().Set<Resident>().AnyAsync(r => r.ContactEmail == email));
+            Assert.False(await scope.ServiceProvider.GetRequiredService<Compact24ArchiveContext>().Set<Resident>().AnyAsync(r => r.ContactEmail == email));
         }
         await using (var scope = host.Services.CreateAsyncScope())
         {
-            var db = scope.ServiceProvider.GetRequiredService<Compact24DbContext>(); usersBefore = await db.Users.CountAsync();
+            var db = scope.ServiceProvider.GetRequiredService<Compact24ArchiveContext>(); usersBefore = await db.Users.CountAsync();
             var first = new Resident { RoomId = Compact24SampleSeed.Id(41), OwnerUserId = Compact24SampleSeed.Id(1), DisplayLabel = "Synthetic representative", ContactEmail = deferredContacts ? null : email, VerificationStatus = IdentityVerificationStatus.Verified };
             var second = new Resident { RoomId = first.RoomId, OwnerUserId = first.OwnerUserId, DisplayLabel = "Synthetic family", ContactEmail = deferredContacts ? null : familyEmail, ResidentType = ResidentType.CoOccupant, VerificationStatus = IdentityVerificationStatus.Verified };
             foreach (var person in new[] { first, second })
@@ -274,7 +274,7 @@ public sealed class AnonymousSigningTests(Compact24Fixture fixture) : IClassFixt
             var reload = await staff.GetFromJsonAsync<BHome.Application.Ocr.HouseholdView>($"/api/v1/capture/residents/{representative}/household");
             Assert.Equal("Con", Assert.Single(reload!.Members).Relationship);
             await using var check = host.Services.CreateAsyncScope();
-            var db = check.ServiceProvider.GetRequiredService<Compact24DbContext>();
+            var db = check.ServiceProvider.GetRequiredService<Compact24ArchiveContext>();
             var savedMember = await db.Set<Resident>().AsNoTracking().SingleAsync(r => r.Id == coOccupant);
             Assert.Equal(representative, savedMember.HouseholdRepresentativeId);
             Assert.DoesNotContain("SYNTHETIC HOUSEHOLD CHILD", savedMember.HouseholdProfile);
@@ -300,7 +300,7 @@ public sealed class AnonymousSigningTests(Compact24Fixture fixture) : IClassFixt
         firstInvite = firstInvite with { Token = Regex.Match(delivery.Messages.Last().Body, @"\b[A-F0-9]{64}\b").Value };
         await using (var scope = host.Services.CreateAsyncScope())
         {
-            var db = scope.ServiceProvider.GetRequiredService<Compact24DbContext>();
+            var db = scope.ServiceProvider.GetRequiredService<Compact24ArchiveContext>();
             var expired = await db.Set<ContractSigningInvitation>().SingleAsync(i => i.Id == firstInvite.Id);
             expired.ExpiresAt = DateTimeOffset.UtcNow.AddMinutes(-1);
             await db.SaveChangesAsync();
@@ -313,7 +313,7 @@ public sealed class AnonymousSigningTests(Compact24Fixture fixture) : IClassFixt
         DateTimeOffset storedExpiry;
         await using (var scope = host.Services.CreateAsyncScope())
         {
-            var db = scope.ServiceProvider.GetRequiredService<Compact24DbContext>();
+            var db = scope.ServiceProvider.GetRequiredService<Compact24ArchiveContext>();
             var previous = await db.Set<ContractSigningInvitation>().SingleAsync(i => i.Id == firstInvite.Id);
             var current = await db.Set<ContractSigningInvitation>().SingleAsync(i => i.Id == invite.Id);
             storedExpiry = current.ExpiresAt;
@@ -324,7 +324,7 @@ public sealed class AnonymousSigningTests(Compact24Fixture fixture) : IClassFixt
         Assert.Equal(HttpStatusCode.TooManyRequests, (await Post(owner, root + "/signing-invitations", resendInput)).StatusCode);
         await using (var scope = host.Services.CreateAsyncScope())
         {
-            var db = scope.ServiceProvider.GetRequiredService<Compact24DbContext>();
+            var db = scope.ServiceProvider.GetRequiredService<Compact24ArchiveContext>();
             var previous = await db.Set<ContractSigningInvitation>().SingleAsync(i => i.Id == firstInvite.Id);
             previous.OtpSendCount = 1;
             await db.SaveChangesAsync();
@@ -340,7 +340,7 @@ public sealed class AnonymousSigningTests(Compact24Fixture fixture) : IClassFixt
         var otp = Regex.Match(delivery.Messages.Last().Body, @"\b[0-9]{6}\b").Value;
         await using (var scope = host.Services.CreateAsyncScope())
         {
-            var db = scope.ServiceProvider.GetRequiredService<Compact24DbContext>();
+            var db = scope.ServiceProvider.GetRequiredService<Compact24ArchiveContext>();
             var expired = await db.Set<ContractSigningInvitation>().SingleAsync(i => i.Id == invite.Id);
             Assert.Equal(2, expired.OtpSendCount);
             Assert.NotEqual(otp, expired.OtpHash);
@@ -353,7 +353,7 @@ public sealed class AnonymousSigningTests(Compact24Fixture fixture) : IClassFixt
         invite = (await Result<SigningInvitationResult>(await Post(owner, root + "/signing-invitations", invitationInput))) with { Token = currentToken };
         await using (var scope = host.Services.CreateAsyncScope())
         {
-            var db = scope.ServiceProvider.GetRequiredService<Compact24DbContext>();
+            var db = scope.ServiceProvider.GetRequiredService<Compact24ArchiveContext>();
             var pending = await db.Set<ContractSigningInvitation>().SingleAsync(i => i.Id == invite.Id);
             pending.OtpSentAt = DateTimeOffset.UtcNow.AddMinutes(-2);
             await db.SaveChangesAsync();
@@ -378,7 +378,7 @@ public sealed class AnonymousSigningTests(Compact24Fixture fixture) : IClassFixt
         if (deferredContacts)
         {
             await using var scope = host.Services.CreateAsyncScope();
-            var db = scope.ServiceProvider.GetRequiredService<Compact24DbContext>();
+            var db = scope.ServiceProvider.GetRequiredService<Compact24ArchiveContext>();
             var unrelated = new Resident
             {
                 OwnerUserId = Compact24SampleSeed.Id(1),
@@ -408,21 +408,21 @@ public sealed class AnonymousSigningTests(Compact24Fixture fixture) : IClassFixt
         if (deferredContacts)
         {
             await using var scope = host.Services.CreateAsyncScope();
-            var db = scope.ServiceProvider.GetRequiredService<Compact24DbContext>();
+            var db = scope.ServiceProvider.GetRequiredService<Compact24ArchiveContext>();
             Assert.Equal(email, (await db.Set<Resident>().SingleAsync(r => r.Id == representative)).ContactEmail);
             Assert.Null((await db.Set<Resident>().SingleAsync(r => r.Id == coOccupant)).ContactEmail);
             Assert.Equal(usersBefore, await db.Users.CountAsync());
         }
         Assert.Equal(HttpStatusCode.Conflict, (await Post(owner, root + "/activate", new { })).StatusCode);
         await using (var scope = host.Services.CreateAsyncScope())
-            Assert.Equal(usersBefore, await scope.ServiceProvider.GetRequiredService<Compact24DbContext>().Users.CountAsync());
+            Assert.Equal(usersBefore, await scope.ServiceProvider.GetRequiredService<Compact24ArchiveContext>().Users.CountAsync());
         (await Post(owner, root + "/deposit-verifications", new DepositInput("SYNTHETIC-" + Guid.NewGuid(), view.RequiredDeposit, "Synthetic bank statement verified"))).EnsureSuccessStatusCode();
         var active = await Result<ContractView>(await Post(owner, root + "/activate", new { }));
         Assert.Equal("Active", active.Status); Assert.NotNull(active.TenantUserId);
         var dispatches = new List<(Guid Id, string Key, string Payload)>();
         await using (var scope = host.Services.CreateAsyncScope())
         {
-            var db = scope.ServiceProvider.GetRequiredService<Compact24DbContext>();
+            var db = scope.ServiceProvider.GetRequiredService<Compact24ArchiveContext>();
             Assert.Equal(usersBefore + 1, await db.Users.CountAsync());
             var people = await db.Set<Resident>().Where(r => r.Id == representative || r.Id == coOccupant).ToArrayAsync();
             Assert.NotNull(people.Single(p => p.Id == representative).TenantUserId);
@@ -461,14 +461,14 @@ public sealed class AnonymousSigningTests(Compact24Fixture fixture) : IClassFixt
         }
         await using (var cleanup = host.Services.CreateAsyncScope())
             await BHome.Infrastructure.Contracts.ContractFileCleanup.CleanupAsync(
-                cleanup.ServiceProvider.GetRequiredService<Compact24DbContext>(), cleanup.ServiceProvider.GetRequiredService<IObjectStorage>(),
+                cleanup.ServiceProvider.GetRequiredService<Compact24ArchiveContext>(), cleanup.ServiceProvider.GetRequiredService<IObjectStorage>(),
                 DateTimeOffset.UtcNow.AddDays(2), default);
         // Technical orphan cleanup must retain every linked acceptance artifact.
         (await anonymous.GetAsync(root + "/document")).EnsureSuccessStatusCode();
         // Repeated activation cannot duplicate Users or dispatch intents.
         Assert.Equal(HttpStatusCode.Conflict, (await Post(owner, root + "/activate", new { })).StatusCode);
         await using var final = host.Services.CreateAsyncScope();
-        Assert.Equal(usersBefore + 1, await final.ServiceProvider.GetRequiredService<Compact24DbContext>().Users.CountAsync());
+        Assert.Equal(usersBefore + 1, await final.ServiceProvider.GetRequiredService<Compact24ArchiveContext>().Users.CountAsync());
     }
     public sealed class DispatchRow { public Guid Id { get; set; } public string Key { get; set; } = ""; public string Payload { get; set; } = ""; }
 
@@ -567,7 +567,7 @@ public sealed class AnonymousSigningTests(Compact24Fixture fixture) : IClassFixt
             await using var retry = host.Services.CreateAsyncScope();
             var service = retry.ServiceProvider.GetRequiredService<ContractService>();
             await service.AutoActivatePaidMainAsync(id, default);
-            var db = retry.ServiceProvider.GetRequiredService<Compact24DbContext>();
+            var db = retry.ServiceProvider.GetRequiredService<Compact24ArchiveContext>();
             var contract = await db.Set<Contract>().AsNoTracking().SingleAsync(c => c.Id == id);
             var activatedAt = contract.ActivatedAt;
             var roomVersion = (await db.Set<BHome.Domain.PropertyManagement.Room>().AsNoTracking().SingleAsync(r => r.Id == contract.RoomId)).Version;
@@ -602,7 +602,7 @@ public sealed class AnonymousSigningTests(Compact24Fixture fixture) : IClassFixt
         if (LiveRecipient is not null)
         {
             await using var scope = host.Services.CreateAsyncScope();
-            var db = scope.ServiceProvider.GetRequiredService<Compact24DbContext>();
+            var db = scope.ServiceProvider.GetRequiredService<Compact24ArchiveContext>();
             var user = await db.Users.SingleAsync(u => u.Id == Compact24SampleSeed.Id(1));
             user.Email = LiveRecipient; user.NormalizedEmail = LiveRecipient.ToUpperInvariant();
             user.UserName = LiveRecipient; user.NormalizedUserName = LiveRecipient.ToUpperInvariant();
@@ -621,7 +621,7 @@ public sealed class AnonymousSigningTests(Compact24Fixture fixture) : IClassFixt
         var deliveryEmail = LiveRecipient ?? $"holding-{Guid.NewGuid():N}@example.invalid";
         await using (var scope = host.Services.CreateAsyncScope())
         {
-            var db = scope.ServiceProvider.GetRequiredService<Compact24DbContext>(); usersBefore = await db.Users.CountAsync();
+            var db = scope.ServiceProvider.GetRequiredService<Compact24ArchiveContext>(); usersBefore = await db.Users.CountAsync();
             var person = new Resident
             {
                 RoomId = Compact24SampleSeed.Id(40),
@@ -663,7 +663,7 @@ public sealed class AnonymousSigningTests(Compact24Fixture fixture) : IClassFixt
             // so later requests observe enablement without sharing mutable selected credentials.
             host.Services.GetRequiredService<Microsoft.Extensions.Options.IOptions<BHome.Application.PaymentsDebt.SePay.SePayOptions>>().Value.Enabled = true;
             await using var scope = host.Services.CreateAsyncScope();
-            var db = scope.ServiceProvider.GetRequiredService<Compact24DbContext>();
+            var db = scope.ServiceProvider.GetRequiredService<Compact24ArchiveContext>();
             (await db.Set<Contract>().SingleAsync(c => c.Id == holding.Id)).PaymentMode = "Test";
             db.Add(new BHome.Domain.PaymentsDebt.ReceivingBankAccount { LocationId = Compact24SampleSeed.Id(10), BankIdentifier = "970416", AccountNumber = "12345678", AccountHolder = "SYNTHETIC TEST", Enabled = true, IsDevelopmentDemo = true, Version = 1, ConfirmedByUserId = Compact24SampleSeed.Id(1), ConfirmedAt = DateTimeOffset.UtcNow });
             await db.SaveChangesAsync();
@@ -707,7 +707,7 @@ public sealed class AnonymousSigningTests(Compact24Fixture fixture) : IClassFixt
                 {
                     // Older invitations can have a reviewed PDF without a matching preview row.
                     await using var legacyScope = host.Services.CreateAsyncScope();
-                    var legacyDb = legacyScope.ServiceProvider.GetRequiredService<Compact24DbContext>();
+                    var legacyDb = legacyScope.ServiceProvider.GetRequiredService<Compact24ArchiveContext>();
                     var stored = await legacyDb.Set<ContractDocumentFile>().SingleAsync(f => f.ContractId == holding.Id &&
                         f.Kind == ContractFileKind.Preview && f.TemplateId == HoldingDepositRenderer.TemplateId);
                     legacyDb.Remove(stored);
@@ -781,7 +781,7 @@ public sealed class AnonymousSigningTests(Compact24Fixture fixture) : IClassFixt
         await RunAutomaticActivation(holding.Id);
         await using (var scope = host.Services.CreateAsyncScope())
         {
-            var db = scope.ServiceProvider.GetRequiredService<Compact24DbContext>();
+            var db = scope.ServiceProvider.GetRequiredService<Compact24ArchiveContext>();
             Assert.Equal(ContractStatus.Active, (await db.Set<Contract>().SingleAsync(c => c.Id == holding.Id)).Status);
             Assert.Equal(BHome.Domain.PropertyManagement.RoomStatus.OnHold,
                 (await db.Set<BHome.Domain.PropertyManagement.Room>().SingleAsync(r => r.Id == Compact24SampleSeed.Id(40))).Status);
@@ -810,7 +810,7 @@ public sealed class AnonymousSigningTests(Compact24Fixture fixture) : IClassFixt
             Assert.Equal(cause == HoldingCancellationCause.TenantVoluntary ? holdingDeposit : 0, status.Disposition.ForfeitedAmount);
             await using (var savedScope = host.Services.CreateAsyncScope())
             {
-                var savedReview = await savedScope.ServiceProvider.GetRequiredService<Compact24DbContext>().Set<ContractSettlementReview>().SingleAsync(r => r.ContractId == holding.Id);
+                var savedReview = await savedScope.ServiceProvider.GetRequiredService<Compact24ArchiveContext>().Set<ContractSettlementReview>().SingleAsync(r => r.ContractId == holding.Id);
                 Assert.Equal(status.Disposition.FinancialReference, savedReview.LedgerReference);
                 Assert.Equal(HoldingCancellationRules.Reference(holding.Id, savedReview), savedReview.LedgerReference);
             }
@@ -841,7 +841,7 @@ public sealed class AnonymousSigningTests(Compact24Fixture fixture) : IClassFixt
                 Assert.Equal("RefundCompleted", (await owner.GetFromJsonAsync<HoldingDepositStatus>(root + "/holding-deposit"))!.Disposition!.Status);
                 Assert.Equal(0, (await Result<BHome.Application.Finance.RefundSource>(await owner.GetAsync(root + "/deposit-refunds"))).AvailableAmount);
             }
-            await using var cancellationScope = host.Services.CreateAsyncScope(); var cancelledDb = cancellationScope.ServiceProvider.GetRequiredService<Compact24DbContext>();
+            await using var cancellationScope = host.Services.CreateAsyncScope(); var cancelledDb = cancellationScope.ServiceProvider.GetRequiredService<Compact24ArchiveContext>();
             Assert.Equal(usersBefore, await cancelledDb.Users.CountAsync()); Assert.Null((await cancelledDb.Set<Resident>().SingleAsync(r => r.Id == residentId)).TenantUserId);
             Assert.Equal(BHome.Domain.PropertyManagement.RoomStatus.Available, (await cancelledDb.Set<BHome.Domain.PropertyManagement.Room>().SingleAsync(r => r.Id == cancelled.RoomId)).Status);
             Assert.Equal(1, await cancelledDb.Set<ContractSettlementReview>().CountAsync(r => r.ContractId == holding.Id));
@@ -870,7 +870,7 @@ public sealed class AnonymousSigningTests(Compact24Fixture fixture) : IClassFixt
         if (deferredContacts)
         {
             await using var scope = host.Services.CreateAsyncScope();
-            var db = scope.ServiceProvider.GetRequiredService<Compact24DbContext>();
+            var db = scope.ServiceProvider.GetRequiredService<Compact24ArchiveContext>();
             var resident = await db.Set<Resident>().SingleAsync(r => r.Id == residentId);
             resident.ContactEmail = "updated-profile@example.invalid";
             await db.SaveChangesAsync();
@@ -903,7 +903,7 @@ public sealed class AnonymousSigningTests(Compact24Fixture fixture) : IClassFixt
             var activated = (await owner.GetFromJsonAsync<ContractView>(mainRoot))!;
             Assert.Equal("Active", activated.Status);
             await using var scope = host.Services.CreateAsyncScope();
-            var db = scope.ServiceProvider.GetRequiredService<Compact24DbContext>();
+            var db = scope.ServiceProvider.GetRequiredService<Compact24ArchiveContext>();
             Assert.Equal(usersBefore + 1, await db.Users.CountAsync());
             Assert.Equal(ContractStatus.Converted, (await db.Set<Contract>().SingleAsync(c => c.Id == holding.Id)).Status);
             Assert.Equal(BHome.Domain.PropertyManagement.RoomStatus.Occupied, (await db.Set<BHome.Domain.PropertyManagement.Room>().SingleAsync(r => r.Id == activated.RoomId)).Status);
@@ -953,7 +953,7 @@ public sealed class AnonymousSigningTests(Compact24Fixture fixture) : IClassFixt
         Assert.Equal(holdingDeposit, active.RequiredDeposit);
         Assert.Equal("Active", active.Status); Assert.Equal(holdingDeposit, active.AppliedHoldingDeposit);
         await using var final = host.Services.CreateAsyncScope();
-        var context = final.ServiceProvider.GetRequiredService<Compact24DbContext>();
+        var context = final.ServiceProvider.GetRequiredService<Compact24ArchiveContext>();
         Assert.Equal(usersBefore + 1, await context.Users.CountAsync());
         Assert.Equal(1, await context.Set<BHome.Domain.PaymentsDebt.PaymentAllocation>().CountAsync(a => a.SourceDepositContractId == holding.Id));
         Assert.Equal(ContractStatus.Converted, (await context.Set<Contract>().SingleAsync(c => c.Id == holding.Id)).Status);

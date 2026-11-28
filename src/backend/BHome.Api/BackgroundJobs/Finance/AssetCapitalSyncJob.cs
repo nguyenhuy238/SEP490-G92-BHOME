@@ -3,6 +3,7 @@ using BHome.Application.Finance;
 using BHome.Application.Jobs;
 using BHome.Domain.Locations;
 using BHome.Infrastructure.Persistence;
+using BHome.Infrastructure.Persistence.Compact24;
 using Microsoft.EntityFrameworkCore;
 
 namespace BHome.Infrastructure.Finance;
@@ -24,7 +25,9 @@ internal sealed class AssetCapitalSyncJob(BHomePersistenceContext db, ICapitalAs
 
     public async Task ExecuteAsync(JobExecution job, CancellationToken token)
     {
-        var locations = await db.Set<Location>().AsNoTracking().Select(location => location.Id).ToArrayAsync(token);
+        var locations = db is Compact24DbContext
+            ? await db.Set<BHome.Domain.Entities.Location>().AsNoTracking().Select(location => location.Id).ToArrayAsync(token)
+            : await db.Set<Location>().AsNoTracking().Select(location => location.Id).ToArrayAsync(token);
         foreach (var location in locations)
         {
             await using var transaction = await db.Database.BeginTransactionAsync(token);

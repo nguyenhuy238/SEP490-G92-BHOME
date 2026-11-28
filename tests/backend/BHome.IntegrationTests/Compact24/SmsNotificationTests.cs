@@ -28,7 +28,7 @@ public sealed partial class Compact24NotificationMvpTests
         };
         var accounts = new[] { w.Owner, w.Staff }.Concat(w.Tenants).ToArray();
         var phonePrefix = "09" + System.Security.Cryptography.RandomNumberGenerator.GetInt32(1000000, 9999999).ToString();
-        await using var scope = fixture.Factory!.Services.CreateAsyncScope(); var db = scope.ServiceProvider.GetRequiredService<Compact24DbContext>();
+        await using var scope = fixture.Factory!.Services.CreateAsyncScope(); var db = scope.ServiceProvider.GetRequiredService<Compact24ArchiveContext>();
         for (var index = 0; index < accounts.Length; index++)
         {
             var account = accounts[index]; var name = account.Id.ToString("N") + ".sms-demo";
@@ -61,7 +61,7 @@ public sealed partial class Compact24NotificationMvpTests
             Recipients = [new() { TenantUserId = w.Tenants[0].Id }, new() { TenantUserId = w.Tenants[1].Id }],
             Lines = [new() { Category = BHome.Domain.PropertyManagement.ChargeCategory.Rent, ChargeCode = "RENT", Name = "Synthetic rent", Amount = total, Rate = total, Quantity = 1, RateDate = Today, OccupiedDays = 30, PeriodDays = 30 }]
         };
-        await using var s = fixture.Factory!.Services.CreateAsyncScope(); var db = s.ServiceProvider.GetRequiredService<Compact24DbContext>();
+        await using var s = fixture.Factory!.Services.CreateAsyncScope(); var db = s.ServiceProvider.GetRequiredService<Compact24ArchiveContext>();
         db.Add(invoice); await db.SaveChangesAsync();
         invoice.Status = InvoiceStatus.Final; invoice.FinalizedAt = DateTimeOffset.UtcNow; invoice.FinalizedByUserId = w.Owner.Id;
         db.Add(new InvoiceIssuedEvent { InvoiceId = invoice.Id, OwnerUserId = w.Owner.Id, OccurredAt = DateTimeOffset.UtcNow });
@@ -70,7 +70,7 @@ public sealed partial class Compact24NotificationMvpTests
     private static async Task DispatchSms(WebApplicationFactory<Program> host)
     {
         await using var scope = host.Services.CreateAsyncScope(); var worker = scope.ServiceProvider.GetRequiredService<NotificationChannelWorker>();
-        await worker.EnqueueDueAsync(default); var db = scope.ServiceProvider.GetRequiredService<Compact24DbContext>();
+        await worker.EnqueueDueAsync(default); var db = scope.ServiceProvider.GetRequiredService<Compact24ArchiveContext>();
         var recipients = scope.ServiceProvider.GetRequiredService<Microsoft.Extensions.Options.IOptions<SmsOptions>>().Value.DemoAccounts.Keys.ToArray();
         var ids = await db.Database.SqlQuery<Guid>($"SELECT id AS \"Value\" FROM notifications WHERE record_kind='OUTBOX' AND event_data->>'channel'='SMS' AND event_data->>'recipient'=ANY({recipients}) AND delivery_status='Pending'").ToArrayAsync();
         Assert.True(scope.ServiceProvider.GetRequiredService<ISmsSender>().IsConfigured, "SMS gateway not configured in fixture");
@@ -86,7 +86,7 @@ public sealed partial class Compact24NotificationMvpTests
     {
         var w = await Seed(); using var host = await SmsHost(w);
         // Two eligible occupants share one normalized contact. One SMS per invoice/phone.
-        await using var scope = host.Services.CreateAsyncScope(); var db = scope.ServiceProvider.GetRequiredService<Compact24DbContext>();
+        await using var scope = host.Services.CreateAsyncScope(); var db = scope.ServiceProvider.GetRequiredService<Compact24ArchiveContext>();
         var sharedPhone = (await db.Users.AsNoTracking().SingleAsync(u => u.Id == w.Tenants[0].Id)).PhoneNumber!;
         await db.Database.ExecuteSqlInterpolatedAsync($"UPDATE users SET phone={"+84 " + sharedPhone[1..]} WHERE id={w.Tenants[1].Id}");
         host.Services.GetRequiredService<Microsoft.Extensions.Options.IOptions<SmsOptions>>().Value.DemoAccounts[w.Tenants[1].Id.ToString()] = sharedPhone;
@@ -110,7 +110,7 @@ public sealed partial class Compact24NotificationMvpTests
         await using var s = host.Services.CreateAsyncScope(); var sql = s.ServiceProvider.GetRequiredService<CompactNotificationWriter>();
         foreach (var invoice in new[] { paid, unpaid })
             await sql.Emit(w.Tenants[0].Id, "Tenant", w.Location, "synthetic-debt:" + invoice.Id, "INVOICE_OVERDUE", "Invoice", "Debt", "Debt", "Invoice", invoice.Id, default);
-        var db = s.ServiceProvider.GetRequiredService<Compact24DbContext>();
+        var db = s.ServiceProvider.GetRequiredService<Compact24ArchiveContext>();
         await DispatchSms(host); Assert.Empty(host.Services.GetRequiredService<DemoSmsInbox>().List());
         var invoiceIds = new[] { paid.Id, unpaid.Id };
         Assert.Equal(2, await db.Database.SqlQuery<int>($"SELECT count(*)::int AS \"Value\" FROM notifications d JOIN notifications n ON n.id=(d.event_data->>'notificationId')::uuid WHERE d.event_data->>'channel'='SMS' AND d.delivery_status='Suppressed' AND n.related_entity_id=ANY({invoiceIds})").SingleAsync());
@@ -120,7 +120,7 @@ public sealed partial class Compact24NotificationMvpTests
     public async Task ExpiryUsesThirtyDayWindowAndDoesNotRepeatAcrossDailyPublication()
     {
         var w = await Seed(); using var host = await SmsHost(w);
-        await using var s = host.Services.CreateAsyncScope(); var db = s.ServiceProvider.GetRequiredService<Compact24DbContext>();
+        await using var s = host.Services.CreateAsyncScope(); var db = s.ServiceProvider.GetRequiredService<Compact24ArchiveContext>();
         await db.Database.ExecuteSqlInterpolatedAsync($"UPDATE contracts SET end_date={Today.AddDays(20)} WHERE id={w.Contracts[0]}");
         await Pump(host); await Pump(host); await DispatchSms(host); await Pump(host); await DispatchSms(host);
         Assert.Single(host.Services.GetRequiredService<DemoSmsInbox>().List(), m => m.TemplateId == "SMS-05" && m.RecipientId == w.Tenants[0].Id);
@@ -139,7 +139,7 @@ public sealed partial class Compact24NotificationMvpTests
         using var request = new HttpRequestMessage(HttpMethod.Post, "/api/v1/incidents") { Content = form };
         request.Headers.Add("Idempotency-Key", Guid.NewGuid().ToString());
         var response = await tenant.SendAsync(request); response.EnsureSuccessStatusCode();
-        await using var scope = host.Services.CreateAsyncScope(); var db = scope.ServiceProvider.GetRequiredService<Compact24DbContext>();
+        await using var scope = host.Services.CreateAsyncScope(); var db = scope.ServiceProvider.GetRequiredService<Compact24ArchiveContext>();
         var notices = await db.Set<UserNotification>().Where(n => n.LocationId == w.Location && n.EventType == "INCIDENT_EMERGENCY_SUBMITTED").ToArrayAsync();
         Assert.Equal(2, notices.Length);
         Assert.All(notices, n =>
@@ -155,7 +155,7 @@ public sealed partial class Compact24NotificationMvpTests
     public async Task SigningSmsRequiresAnActualInvitationAndEmergencyUsesResponsibleRecipients()
     {
         var w = await Seed(); using var host = await SmsHost(w);
-        await using var s = host.Services.CreateAsyncScope(); var db = s.ServiceProvider.GetRequiredService<Compact24DbContext>();
+        await using var s = host.Services.CreateAsyncScope(); var db = s.ServiceProvider.GetRequiredService<Compact24ArchiveContext>();
         var sql = s.ServiceProvider.GetRequiredService<CompactNotificationWriter>();
         await sql.Emit(w.Tenants[0].Id, "Tenant", w.Location, "draft-signing", "CONTRACT_SIGNING_INVITATION", "Contract", "Signing", "Signing", "Contract", w.Contracts[0], default);
         await DispatchSms(host); Assert.Empty(host.Services.GetRequiredService<DemoSmsInbox>().List());

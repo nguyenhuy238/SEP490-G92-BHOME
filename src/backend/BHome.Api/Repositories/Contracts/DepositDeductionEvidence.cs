@@ -13,8 +13,10 @@ internal sealed class DepositDeductionEvidence(BHomePersistenceContext db, IObje
     public async Task<IReadOnlyList<DeductionEvidence>> CaptureAsync(Guid contractId, Guid[] ids, CancellationToken token)
     {
         if (ids.Length > 5) throw ContractException.Invalid("deduction_evidence_limit");
-        var files = await db.Set<ContractInspectionEvidence>().AsNoTracking().Where(e => e.ContractId == contractId && e.IsLinked && ids.Contains(e.Id))
-            .OrderBy(e => e.Id).ToArrayAsync(token);
+        var files = db is BHome.Infrastructure.Persistence.Compact24.Compact24DbContext native
+            ? (await NativeContractMoveOutPersistence.EvidenceAsync(native, contractId, token)).Where(e => e.ContractId == contractId && e.IsLinked && ids.Contains(e.Id)).OrderBy(e => e.Id).ToArray()
+            : await db.Set<ContractInspectionEvidence>().AsNoTracking().Where(e => e.ContractId == contractId && e.IsLinked && ids.Contains(e.Id))
+                .OrderBy(e => e.Id).ToArrayAsync(token);
         if (files.Length != ids.Length) throw ContractException.Conflict("deduction_evidence_not_available");
         var result = new List<DeductionEvidence>();
         using var deadline = CancellationTokenSource.CreateLinkedTokenSource(token); deadline.CancelAfter(TimeSpan.FromSeconds(30));

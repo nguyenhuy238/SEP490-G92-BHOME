@@ -26,7 +26,7 @@ public sealed partial class SePayIntegrationTests
     {
         await using var scenario = await Create(dualMode: true);
         await using var scope = scenario.Host.Services.CreateAsyncScope();
-        var db = scope.ServiceProvider.GetRequiredService<Compact24DbContext>();
+        var db = scope.ServiceProvider.GetRequiredService<Compact24ArchiveContext>();
         var legacy = JsonSerializer.Serialize(new PaymentCode("BH11223344", "Live", "Invoice", scenario.Invoice, scenario.Location),
             new JsonSerializerOptions(JsonSerializerDefaults.Web));
         // Reproduce data allowed before the one-obligation guard, in this disposable database only.
@@ -55,7 +55,7 @@ public sealed partial class SePayIntegrationTests
         await using var scenario = await Create(dualMode: true);
         var legacy = await NewModeInvoice(scenario, issueCode: false);
         await using var scope = scenario.Host.Services.CreateAsyncScope();
-        var db = scope.ServiceProvider.GetRequiredService<Compact24DbContext>();
+        var db = scope.ServiceProvider.GetRequiredService<Compact24ArchiveContext>();
         var codes = scope.ServiceProvider.GetRequiredService<IPaymentCodeRegistry>();
         var original = (await codes.ContextAsync("Invoice", scenario.Invoice, default))!;
         var oldCode = legacy with { Code = "BH76543210", Mode = "Test", AccountSnapshot = original.AccountSnapshot };
@@ -91,7 +91,7 @@ public sealed partial class SePayIntegrationTests
         await using var scenario = await Create(dualMode: true);
         var legacy = await NewModeInvoice(scenario, issueCode: false);
         await using var scope = scenario.Host.Services.CreateAsyncScope();
-        var db = scope.ServiceProvider.GetRequiredService<Compact24DbContext>();
+        var db = scope.ServiceProvider.GetRequiredService<Compact24ArchiveContext>();
         await using var stream = typeof(Compact24DbContext).Assembly.GetManifestResourceStream("BHome.Compact24.SePayPaymentModes.sql")!;
         using var reader = new StreamReader(stream);
         await db.Database.OpenConnectionAsync();
@@ -136,7 +136,7 @@ public sealed partial class SePayIntegrationTests
             for (var repeat = 0; repeat < 2; repeat++)
                 await handler.ExecuteAsync(new JobExecution(Guid.NewGuid(), "synthetic-mode-poll", "{}"), default);
         }
-        var db = scope.ServiceProvider.GetRequiredService<Compact24DbContext>();
+        var db = scope.ServiceProvider.GetRequiredService<Compact24ArchiveContext>();
         Assert.Equal(2, await db.Database.SqlQuery<int>($"""
             SELECT count(*)::int AS "Value" FROM operational_tasks WHERE source_key IN ('sepay-sync:Test','sepay-sync:Live')
             """).SingleAsync());
@@ -183,14 +183,14 @@ public sealed partial class SePayIntegrationTests
         {
             polling.ServiceProvider.GetRequiredService<SePayOptions>().Select("Live");
             await polling.ServiceProvider.GetRequiredService<SePayService>().ReceiveAsync(tx with { Id = Guid.NewGuid().ToString() }, default);
-            var store = polling.ServiceProvider.GetRequiredService<Compact24DbContext>();
+            var store = polling.ServiceProvider.GetRequiredService<Compact24ArchiveContext>();
             Assert.Equal(100000m, await store.Set<PaymentAllocation>().Where(a => a.InvoiceId == live.ObligationId).SumAsync(a => a.Amount));
         }
         Assert.Equal(HttpStatusCode.Conflict, (await owner.PutAsJsonAsync(modeRoute, new PaymentModeInput("Test", "Test"))).StatusCode);
         // The old Test receipt remains collectible while new obligations use Live.
         (await scenario.Send(40000)).EnsureSuccessStatusCode();
         await using var scope = scenario.Host.Services.CreateAsyncScope();
-        var db = scope.ServiceProvider.GetRequiredService<Compact24DbContext>();
+        var db = scope.ServiceProvider.GetRequiredService<Compact24ArchiveContext>();
         Assert.Equal(40000m, await db.Set<PaymentAllocation>().Where(a => a.InvoiceId == scenario.Invoice).SumAsync(a => a.Amount));
         using var manual = new HttpRequestMessage(HttpMethod.Post, "/api/v1/payment-transactions")
         {
@@ -224,7 +224,7 @@ public sealed partial class SePayIntegrationTests
     private static async Task<PaymentCode> NewModeInvoice(Scenario scenario, bool issueCode = true)
     {
         await using var scope = scenario.Host.Services.CreateAsyncScope();
-        var db = scope.ServiceProvider.GetRequiredService<Compact24DbContext>();
+        var db = scope.ServiceProvider.GetRequiredService<Compact24ArchiveContext>();
         var original = await db.Set<Invoice>().AsNoTracking().SingleAsync(i => i.Id == scenario.Invoice);
         var invoice = new Invoice
         {
@@ -275,7 +275,7 @@ public sealed partial class SePayIntegrationTests
         Assert.Equal(HttpStatusCode.Unauthorized, (await client.SendAsync(request)).StatusCode);
         (await scenario.Send(100000, code: "BHPRODL0123456789ABCDEF")).EnsureSuccessStatusCode();
         await using var scope = scenario.Host.Services.CreateAsyncScope();
-        var db = scope.ServiceProvider.GetRequiredService<Compact24DbContext>();
+        var db = scope.ServiceProvider.GetRequiredService<Compact24ArchiveContext>();
         Assert.Empty(await db.Set<PaymentAllocation>().Where(a => a.InvoiceId == scenario.Invoice).ToArrayAsync());
         Assert.Empty(await db.Set<PaymentTransfer>().Where(p => p.TransferDescription.Contains("BHPRODL")).ToArrayAsync());
     }

@@ -22,12 +22,13 @@ internal static class NotificationInboxSeed
         LocalTestAccounts.ValidateTarget(Environment.GetEnvironmentVariable("DOTNET_ENVIRONMENT"),
             config.GetConnectionString("Database") ?? "");
         await using var scope = services.CreateAsyncScope();
-        var db = scope.ServiceProvider.GetRequiredService<BHomePersistenceContext>();
+        var identity = scope.ServiceProvider.GetRequiredService<BHome.Infrastructure.Persistence.Compact24.Compact24DbContext>();
+        await using var db = OfflineFixturePersistence.Open(scope.ServiceProvider);
         if (!await db.IsSchemaReadyAsync()) throw new LocalTestAccountException("Local Compact24 schema is not ready; no writes performed.");
         var manager = scope.ServiceProvider.GetRequiredService<UserManager<ApplicationUser>>();
         var names = new[] { "owner.dev", "staff.dev", "tenant.dev", "owner.mobile.test", "staff.mobile.test", "tenant.mobile.test", "owner.sample", "staff.sample", "tenant.sample", "tenant.other.sample" };
         var emails = names.Select(n => n + "@example.invalid").ToArray();
-        var accounts = await db.Users.Where(u => u.IsActive && emails.Contains(u.Email!)).OrderBy(u => u.Email).ToListAsync();
+        var accounts = await identity.Users.Where(u => u.IsActive && emails.Contains(u.Email!)).OrderBy(u => u.Email).ToListAsync();
         if (accounts.Count == 0) throw new LocalTestAccountException("No known synthetic test accounts found; no writes performed.");
         var now = DateTimeOffset.UtcNow;
         var today = DateOnly.FromDateTime(TimeZoneInfo.ConvertTimeBySystemTimeZoneId(now, "Asia/Ho_Chi_Minh").DateTime);

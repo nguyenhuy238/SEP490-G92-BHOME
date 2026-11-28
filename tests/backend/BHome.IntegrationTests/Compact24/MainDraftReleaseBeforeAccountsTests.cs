@@ -82,7 +82,7 @@ public sealed class MainDraftReleaseBeforeAccountsTests
         Guid resident; Guid location; int beforeUsers;
         await using (var scope = host.Services.CreateAsyncScope())
         {
-            var db = scope.ServiceProvider.GetRequiredService<Compact24DbContext>(); beforeUsers = await db.Users.CountAsync();
+            var db = scope.ServiceProvider.GetRequiredService<Compact24ArchiveContext>(); beforeUsers = await db.Users.CountAsync();
             location = await db.Set<BHome.Domain.PropertyManagement.Room>().Where(r => r.Id == room).Select(r => r.LocationId).SingleAsync();
             var person = new Resident { RoomId = room, OwnerUserId = ownerId, DisplayLabel = "SYNTHETIC", ContactEmail = $"{Guid.NewGuid():N}@example.invalid", VerificationStatus = IdentityVerificationStatus.Verified };
             var identity = new IdentityConfirmation(true, "000000000123", "SYNTHETIC", new(2000, 1, 1), "Synthetic address", "VN", null, null, new(2020, 1, 1), new(2030, 1, 1));
@@ -132,7 +132,7 @@ public sealed class MainDraftReleaseBeforeAccountsTests
         var input = new MainDraftReleaseInput(null, draft.Version, review.Id, true, EmailSigning: true); var key = Guid.NewGuid();
         (await Post(staff, $"{root}/{draft.Id}/release", input, key)).EnsureSuccessStatusCode();
         (await Post(staff, $"{root}/{draft.Id}/release", input, key)).EnsureSuccessStatusCode();
-        await using var check = host.Services.CreateAsyncScope(); var savedDb = check.ServiceProvider.GetRequiredService<Compact24DbContext>();
+        await using var check = host.Services.CreateAsyncScope(); var savedDb = check.ServiceProvider.GetRequiredService<Compact24ArchiveContext>();
         var c = await savedDb.Set<Contract>().Include(c => c.Residents).SingleAsync(c => c.Id == draft.Id);
         Assert.Equal(ContractStatus.PendingSigning, c.Status); Assert.Null(c.TenantUserId); Assert.Equal(ContractSigningModes.Internal, c.SigningMode);
         var document = new ContractDocument(c.Id, c.RoomId, c.OwnerSignerId, Guid.Empty, c.RepresentativeResidentId, c.Residents.Select(r => r.ResidentId).Order().ToArray(), c.StartDate, c.EndDate, c.MonthlyRent, c.RequiredDeposit, c.HoldingContractId, c.AppliedHoldingDeposit, c.Terms, "") { IsInternalResidentAcceptance = true, AgreedCharges = ContractChargeSnapshot.Read(c).Charges };
@@ -250,7 +250,7 @@ public sealed class MainDraftReleaseBeforeAccountsTests
             .ProcessAllowedAsync(default, ["activate-paid-main-contract"]));
         await automatic.AutoActivatePaidMainAsync(c.Id, default);
         paymentDb.ChangeTracker.Clear();
-        var activated = await paymentDb.Set<Contract>().SingleAsync(x => x.Id == c.Id);
+        var activated = (await BHome.Infrastructure.Modules.PropertyManagement.Persistence.NativeContractSnapshot.LoadAsync(paymentDb, c.Id, default))!;
         Assert.Equal(ContractStatus.Active, activated.Status); Assert.NotNull(activated.TenantUserId);
         Assert.Equal(ownerId, activated.ActivatedByUserId); Assert.NotNull(activated.ActivatedAt);
         Assert.Equal(beforeUsers + 1, await paymentDb.Users.CountAsync());

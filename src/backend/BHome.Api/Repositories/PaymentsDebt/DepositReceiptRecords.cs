@@ -31,8 +31,7 @@ internal sealed partial class PaymentRepository
         ? await db.Set<Native.Resident>().AsNoTracking()
             .Where(r => r.VerificationStatus == (short)IdentityVerificationStatus.Verified &&
                 db.Set<Native.ContractResident>().Any(cr => cr.ContractId == contractId && cr.ResidentId == r.Id) &&
-                (r.UserId == null || db.Users.Any(u => u.Id == r.UserId && u.IsActive) &&
-                    (from ur in db.UserRoles join role in db.Roles on ur.RoleId equals role.Id where ur.UserId == r.UserId && role.Name == "Tenant" select ur.UserId).Any()))
+                (r.UserId == null || db.Users.Any(u => u.Id == r.UserId && u.IsActive && EF.Property<string[]>(u, "roles").Contains("Tenant"))))
             .OrderBy(r => r.Id).Select(r => new DepositPayerChoice(r.Id, r.UserId, r.DisplayLabel)).ToArrayAsync(token)
         : await db.Set<Resident>().AsNoTracking()
         .Where(r => r.VerificationStatus == IdentityVerificationStatus.Verified && db.Set<ContractResident>().Any(cr => cr.ContractId == contractId && cr.ResidentId == r.Id) &&

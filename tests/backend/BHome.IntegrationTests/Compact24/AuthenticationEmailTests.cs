@@ -30,7 +30,7 @@ public sealed partial class Compact24NotificationMvpTests
         Assert.True(staff.IsActive);
         await using (var scope = host.Services.CreateAsyncScope())
         {
-            var db = scope.ServiceProvider.GetRequiredService<Compact24DbContext>();
+            var db = scope.ServiceProvider.GetRequiredService<Compact24ArchiveContext>();
             var user = await db.Users.AsNoTracking().SingleAsync(u => u.Id == staff.UserId);
             Assert.True(user.EmailConfirmed);
             Assert.Null(await db.Database.SqlQuery<string?>(
@@ -98,7 +98,7 @@ public sealed partial class Compact24NotificationMvpTests
         Assert.Contains(password, char.IsDigit);
         Assert.Contains(password, c => !char.IsLetterOrDigit(c));
         await using var scope = host.Services.CreateAsyncScope();
-        var db = scope.ServiceProvider.GetRequiredService<Compact24DbContext>();
+        var db = scope.ServiceProvider.GetRequiredService<Compact24ArchiveContext>();
         var outbox = await db.Database.SqlQuery<string>($"SELECT event_data::text AS \"Value\" FROM notifications WHERE id={delivery}").SingleAsync();
         Assert.DoesNotContain(password, outbox);
         Assert.False(await db.Database.SqlQuery<bool>($"SELECT EXISTS(SELECT 1 FROM notifications WHERE record_kind='INBOX' AND position({password} in message)>0) AS \"Value\"").SingleAsync());
@@ -115,7 +115,7 @@ public sealed partial class Compact24NotificationMvpTests
         (await owner.PostAsync(path, null)).EnsureSuccessStatusCode();
         var oldDelivery = await AuthenticationDelivery(host, w.Staff.Id);
         await using var scope = host.Services.CreateAsyncScope();
-        var db = scope.ServiceProvider.GetRequiredService<Compact24DbContext>();
+        var db = scope.ServiceProvider.GetRequiredService<Compact24ArchiveContext>();
         // Updating the current password invalidates a pending credential message.
         var manager = scope.ServiceProvider.GetRequiredService<Microsoft.AspNetCore.Identity.UserManager<BHome.Infrastructure.Persistence.ApplicationUser>>();
         var staff = (await manager.FindByIdAsync(w.Staff.Id.ToString()))!;
@@ -141,7 +141,7 @@ public sealed partial class Compact24NotificationMvpTests
             "Synthetic allowlist staff", null, Password, new(null, "PartTime", Today, null, null, null, "Active")));
         created.EnsureSuccessStatusCode(); var staff = (await created.Content.ReadFromJsonAsync<BHome.Application.Operations.StaffView>())!;
         await using var scope = host.Services.CreateAsyncScope();
-        var db = scope.ServiceProvider.GetRequiredService<Compact24DbContext>();
+        var db = scope.ServiceProvider.GetRequiredService<Compact24ArchiveContext>();
         var path = $"/api/v1/staff/{staff.UserId}/invitation";
         using var anonymous = host.CreateClient();
         Assert.Equal(HttpStatusCode.Unauthorized, (await anonymous.PostAsync(path, null)).StatusCode);
@@ -192,7 +192,7 @@ public sealed partial class Compact24NotificationMvpTests
         var w = await Seed(); var probe = new SmtpProbe(); using var host = AuthenticationHost(probe);
         using var owner = await Client(w.Owner, host);
         await using var scope = host.Services.CreateAsyncScope();
-        var db = scope.ServiceProvider.GetRequiredService<Compact24DbContext>();
+        var db = scope.ServiceProvider.GetRequiredService<Compact24ArchiveContext>();
         var originalHash = await db.Users.Where(u => u.Id == w.Staff.Id).Select(u => u.PasswordHash).SingleAsync();
         var originalEmail = await db.Users.AsNoTracking().Where(u => u.Id == w.Staff.Id).Select(u => u.Email).SingleAsync();
         await db.Database.ExecuteSqlInterpolatedAsync($"UPDATE users SET email={"invalid-address"} WHERE id={w.Staff.Id}");
@@ -231,7 +231,7 @@ public sealed partial class Compact24NotificationMvpTests
     private static async Task<Guid> AuthenticationDelivery(WebApplicationFactory<Program> host, Guid user)
     {
         await using var s = host.Services.CreateAsyncScope();
-        var db = s.ServiceProvider.GetRequiredService<Compact24DbContext>();
+        var db = s.ServiceProvider.GetRequiredService<Compact24ArchiveContext>();
         return await db.Database.SqlQuery<Guid>($"SELECT id AS \"Value\" FROM notifications WHERE record_kind='OUTBOX' AND event_data->>'protectedAuthenticationEmail' IS NOT NULL AND event_data->>'recipient'={user.ToString()} ORDER BY event_at DESC LIMIT 1").SingleAsync();
     }
 
@@ -257,7 +257,7 @@ public sealed partial class Compact24NotificationMvpTests
         var nativeQuery = Microsoft.AspNetCore.WebUtilities.QueryHelpers.ParseQuery(new Uri(mail.MobileActionUrl!).Query);
         Assert.Equal(token, nativeQuery["token"].ToString());
         Assert.Equal(query["userName"].ToString(), nativeQuery["userName"].ToString());
-        await using var scope = host.Services.CreateAsyncScope(); var db = scope.ServiceProvider.GetRequiredService<Compact24DbContext>();
+        await using var scope = host.Services.CreateAsyncScope(); var db = scope.ServiceProvider.GetRequiredService<Compact24ArchiveContext>();
         var stored = await db.Database.SqlQuery<string>($"SELECT event_data::text AS \"Value\" FROM notifications WHERE id={delivery}").SingleAsync();
         Assert.DoesNotContain(token, stored); Assert.DoesNotContain(mail.ActionUrl!, stored); Assert.DoesNotContain(w.Tenants[0].Email!, stored);
         Assert.Equal(1, await db.Database.SqlQuery<int>($"SELECT count(*)::int AS \"Value\" FROM notifications WHERE record_kind='OUTBOX' AND event_data->>'protectedAuthenticationEmail' IS NOT NULL AND event_data->>'recipient'={w.Tenants[0].Id.ToString()}").SingleAsync());
@@ -283,7 +283,7 @@ public sealed partial class Compact24NotificationMvpTests
         (await client.PostAsJsonAsync("/api/v1/auth/forgot-password", new { userName = w.Tenants[1].Email })).EnsureSuccessStatusCode();
         var delivery = await AuthenticationDelivery(host, w.Tenants[1].Id); await SendEmail(host, delivery);
         var first = Assert.Single(probe.Messages);
-        await using var scope = host.Services.CreateAsyncScope(); var db = scope.ServiceProvider.GetRequiredService<Compact24DbContext>();
+        await using var scope = host.Services.CreateAsyncScope(); var db = scope.ServiceProvider.GetRequiredService<Compact24ArchiveContext>();
         await db.Database.ExecuteSqlInterpolatedAsync($"UPDATE notifications SET next_delivery_at={DateTimeOffset.UtcNow.AddSeconds(-1)} WHERE id={delivery}");
         probe.Failure = null; await SendEmail(host, delivery);
         Assert.Equal(first.ActionUrl, probe.Messages[1].ActionUrl); Assert.Equal(first.IdempotencyKey, probe.Messages[1].IdempotencyKey);
@@ -336,7 +336,7 @@ public sealed partial class Compact24NotificationMvpTests
         while (!probe.Messages.Any(m => m.Destination == w.Tenants[0].Email && m.EventType == "PASSWORD_RESET_REQUESTED")) await Task.Delay(100, deadline.Token);
         Assert.Single(probe.Messages, m => m.Destination == w.Tenants[0].Email && m.EventType == "PASSWORD_RESET_REQUESTED");
         Assert.DoesNotContain(probe.Messages, m => m.EventType.StartsWith("INVOICE_") || m.EventType.StartsWith("INCIDENT_") || m.EventType.StartsWith("CONTRACT_"));
-        await using var scope = host.Services.CreateAsyncScope(); var db = scope.ServiceProvider.GetRequiredService<Compact24DbContext>();
+        await using var scope = host.Services.CreateAsyncScope(); var db = scope.ServiceProvider.GetRequiredService<Compact24ArchiveContext>();
         Assert.Equal(3, await db.Database.SqlQuery<int>($"SELECT count(*)::int AS \"Value\" FROM contracts WHERE room_id={w.Room} AND status=3").SingleAsync());
     }
 
@@ -353,7 +353,7 @@ public sealed partial class Compact24NotificationMvpTests
         var staff = (await created.Content.ReadFromJsonAsync<BHome.Application.Operations.StaffView>())!;
         Assert.True(staff.IsActive);
         await using var scope = host.Services.CreateAsyncScope();
-        var db = scope.ServiceProvider.GetRequiredService<Compact24DbContext>();
+        var db = scope.ServiceProvider.GetRequiredService<Compact24ArchiveContext>();
         var account = await db.Users.AsNoTracking().SingleAsync(u => u.Id == staff.UserId);
         Assert.True(account.EmailConfirmed);
         Assert.Null(await db.Database.SqlQuery<string?>($"SELECT reset_token_hash AS \"Value\" FROM users WHERE id={staff.UserId}").SingleAsync());
@@ -404,7 +404,7 @@ public sealed partial class Compact24NotificationMvpTests
         Assert.Equal(HttpStatusCode.Unauthorized, (await beforeInvitation.PostAsJsonAsync("/api/v1/auth/login", new { email, password = Password })).StatusCode);
         Assert.Equal(HttpStatusCode.Accepted, (await beforeInvitation.PostAsJsonAsync("/api/v1/auth/request-email-verification", new { userName = email })).StatusCode);
         await using var pendingScope = host.Services.CreateAsyncScope();
-        var pendingDb = pendingScope.ServiceProvider.GetRequiredService<Compact24DbContext>();
+        var pendingDb = pendingScope.ServiceProvider.GetRequiredService<Compact24ArchiveContext>();
         Assert.False(await pendingDb.Database.SqlQuery<bool>($"SELECT EXISTS(SELECT 1 FROM notifications WHERE event_data->>'recipient'={staff.UserId.ToString()} AND event_data->>'authenticationKind'='EmailConfirmation') AS \"Value\"").SingleAsync());
         Assert.Equal(1, await pendingDb.Users.CountAsync(u => u.NormalizedEmail == email.ToUpperInvariant()));
         var response = await owner.PostAsync($"/api/v1/staff/{staff.UserId}/invitation", null); response.EnsureSuccessStatusCode();
@@ -472,7 +472,7 @@ public sealed partial class Compact24NotificationMvpTests
     public async Task AuthenticationTenantProvisionIsOwnerScopedAndSmtpFailureKeepsAccountAndEncryptedGrant()
     {
         var w = await Seed(); var probe = new SmtpProbe { Failure = new("email_smtp_450", retryable: true) }; using var host = AuthenticationHost(probe);
-        await using var scope = host.Services.CreateAsyncScope(); var db = scope.ServiceProvider.GetRequiredService<Compact24DbContext>();
+        await using var scope = host.Services.CreateAsyncScope(); var db = scope.ServiceProvider.GetRequiredService<Compact24ArchiveContext>();
         await db.Database.ExecuteSqlInterpolatedAsync($"UPDATE residents SET user_id=NULL,contact_email={"invited-" + Guid.NewGuid().ToString("N") + "@example.invalid"} WHERE id={w.Residents[0]}");
         var email = await db.Set<BHome.Domain.TenantContracts.Resident>().Where(r => r.Id == w.Residents[0]).Select(r => r.ContactEmail).SingleAsync();
         host.Services.GetRequiredService<IOptions<EmailOptions>>().Value.AllowedRecipients = [email!];
@@ -510,7 +510,7 @@ public sealed partial class Compact24NotificationMvpTests
         var email = "invited-" + Guid.NewGuid().ToString("N") + "@example.invalid";
         if (environment != "Development") host.Services.GetRequiredService<IOptions<EmailOptions>>().Value.AllowedRecipients = [email];
         await using var scope = host.Services.CreateAsyncScope();
-        var db = scope.ServiceProvider.GetRequiredService<Compact24DbContext>();
+        var db = scope.ServiceProvider.GetRequiredService<Compact24ArchiveContext>();
         await db.Database.ExecuteSqlInterpolatedAsync($"UPDATE residents SET user_id=NULL,contact_email={email} WHERE id={w.Residents[0]}");
         using var owner = await Client(w.Owner, host); using var anonymous = host.CreateClient();
         var created = await owner.PostAsJsonAsync($"/api/v1/residents/{w.Residents[0]}/invitation", new TenantInvitationRequest(email));
@@ -538,7 +538,7 @@ public sealed partial class Compact24NotificationMvpTests
         Assert.Equal(HttpStatusCode.BadRequest, (await client.PostAsJsonAsync("/api/v1/auth/change-password", new { currentPassword = "Wrong!Password-725", newPassword = "Synthetic!Changed-725" })).StatusCode);
         await using var scope = host.Services.CreateAsyncScope(); var publisher = scope.ServiceProvider.GetRequiredService<CompactNotificationEvents>();
         await publisher.PublishAuthenticationAsync(default);
-        var db = scope.ServiceProvider.GetRequiredService<Compact24DbContext>();
+        var db = scope.ServiceProvider.GetRequiredService<Compact24ArchiveContext>();
         Assert.False(await db.Set<BHome.Domain.Notifications.UserNotification>().AnyAsync(n => n.RecipientUserId == w.Tenants[0].Id && n.EventType == "PASSWORD_CHANGED"));
         (await client.PostAsJsonAsync("/api/v1/auth/change-password", new { currentPassword = Password, newPassword = "Synthetic!Changed-725" })).EnsureSuccessStatusCode();
         await publisher.PublishAuthenticationAsync(default); await publisher.PublishAuthenticationAsync(default);
@@ -558,7 +558,7 @@ public sealed partial class Compact24NotificationMvpTests
         using var anonymous = host.CreateClient();
         for (var n = 0; n < 5; n++)
             Assert.Equal(HttpStatusCode.Unauthorized, (await anonymous.PostAsJsonAsync("/api/v1/auth/login", new { email = w.Tenants[0].Email, password = "Wrong!Password-725" })).StatusCode);
-        await using var scope = host.Services.CreateAsyncScope(); var db = scope.ServiceProvider.GetRequiredService<Compact24DbContext>();
+        await using var scope = host.Services.CreateAsyncScope(); var db = scope.ServiceProvider.GetRequiredService<Compact24ArchiveContext>();
         await db.Database.ExecuteSqlInterpolatedAsync($"UPDATE users SET is_active=false WHERE id={w.Tenants[1].Id}");
         var publisher = scope.ServiceProvider.GetRequiredService<CompactNotificationEvents>();
         await publisher.PublishAuthenticationAsync(default); await publisher.PublishAuthenticationAsync(default);
@@ -579,13 +579,13 @@ public sealed partial class Compact24NotificationMvpTests
     {
         var w = await Seed(); var probe = new SmtpProbe(); using var configured = AuthenticationHost(probe);
         await using (var scope = configured.Services.CreateAsyncScope())
-            await scope.ServiceProvider.GetRequiredService<Compact24DbContext>().Users.Where(u => u.Id == w.Tenants[0].Id).ExecuteUpdateAsync(x => x.SetProperty(u => u.EmailConfirmed, false));
+            await scope.ServiceProvider.GetRequiredService<Compact24ArchiveContext>().Users.Where(u => u.Id == w.Tenants[0].Id).ExecuteUpdateAsync(x => x.SetProperty(u => u.EmailConfirmed, false));
         using var host = configured.WithWebHostBuilder(b => b.ConfigureAppConfiguration((_, c) => c.AddInMemoryCollection(new Dictionary<string, string?> { ["AuthRateLimit:PermitLimit"] = "2" })));
         using var anonymous = host.CreateClient();
         foreach (var identifier in new[] { w.Tenants[0].Email!, "invalid-email" })
             Assert.Equal(HttpStatusCode.Accepted, (await anonymous.PostAsJsonAsync("/api/v1/auth/forgot-password", new { userName = identifier })).StatusCode);
         Assert.Equal(HttpStatusCode.TooManyRequests, (await anonymous.PostAsJsonAsync("/api/v1/auth/forgot-password", new { userName = "unknown@example.invalid" })).StatusCode);
-        await using var check = host.Services.CreateAsyncScope(); var db = check.ServiceProvider.GetRequiredService<Compact24DbContext>();
+        await using var check = host.Services.CreateAsyncScope(); var db = check.ServiceProvider.GetRequiredService<Compact24ArchiveContext>();
         Assert.False(await db.Database.SqlQuery<bool>($"SELECT EXISTS(SELECT 1 FROM notifications WHERE event_data->>'protectedAuthenticationEmail' IS NOT NULL AND event_data->>'recipient'={w.Tenants[0].Id.ToString()}) AS \"Value\"").SingleAsync());
         Assert.Empty(probe.Messages);
     }

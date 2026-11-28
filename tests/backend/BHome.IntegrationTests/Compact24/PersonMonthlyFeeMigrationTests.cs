@@ -34,7 +34,8 @@ public sealed class PersonMonthlyFeeMigrationTests
                 """);
             await db.Database.MigrateAsync();
             Assert.True(await db.IsSchemaReadyAsync());
-            var before = await db.Set<BillingPolicy>().AsNoTracking().SingleAsync(p => p.Id == old);
+            await using var archive = new Compact24ArchiveContext(new DbContextOptionsBuilder<Compact24DbContext>().UseNpgsql(target.ConnectionString).Options);
+            var before = await archive.Set<BillingPolicy>().AsNoTracking().SingleAsync(p => p.Id == old);
             Assert.Equal(ChargingMethod.FixedPerRoomPerMonth, before.Method);
             Assert.Equal(100000m, before.Rate);
             Assert.Equal("UNKNOWN_LEGACY_METHOD", await db.Database.SqlQuery<string>($"SELECT calculation_method AS \"Value\" FROM billing_policies WHERE id={historical}").SingleAsync());
@@ -48,9 +49,9 @@ public sealed class PersonMonthlyFeeMigrationTests
                 Rate = 125000.1234m,
                 EffectiveFrom = today
             };
-            db.Add(fee); await db.SaveChangesAsync();
-            db.ChangeTracker.Clear();
-            var saved = await db.Set<BillingPolicy>().AsNoTracking().SingleAsync(p => p.Id == fee.Id);
+            archive.Add(fee); await archive.SaveChangesAsync();
+            archive.ChangeTracker.Clear();
+            var saved = await archive.Set<BillingPolicy>().AsNoTracking().SingleAsync(p => p.Id == fee.Id);
             Assert.Equal(ChargingMethod.FixedPerPersonPerMonth, saved.Method); Assert.Equal(fee.Rate, saved.Rate);
             var rejected = await Assert.ThrowsAsync<PostgresException>(() => db.Database.ExecuteSqlInterpolatedAsync($"""
                 INSERT INTO billing_policies(id,location_id,charge_code,category,calculation_method,rate,effective_from)

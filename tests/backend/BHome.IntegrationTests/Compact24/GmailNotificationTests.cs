@@ -21,7 +21,7 @@ public sealed partial class Compact24NotificationMvpTests
     public async Task GmailContractExpiryAndEmergencyReusePartiesAndRecheckStaffLocationBeforeSend()
     {
         var w = await Seed(); var other = await Seed(); var probe = new SmtpProbe(); using var host = EmailHost(probe);
-        await using var scope = host.Services.CreateAsyncScope(); var db = scope.ServiceProvider.GetRequiredService<Compact24DbContext>();
+        await using var scope = host.Services.CreateAsyncScope(); var db = scope.ServiceProvider.GetRequiredService<Compact24ArchiveContext>();
         var contract = await db.Set<BHome.Domain.TenantContracts.Contract>().SingleAsync(c => c.Id == w.Contracts[0]);
         contract.EndDate = Today.AddDays(7); await db.SaveChangesAsync();
         using var tenant = await Client(w.Tenants[0], host);
@@ -79,7 +79,7 @@ public sealed partial class Compact24NotificationMvpTests
         };
         await using (var s = host.Services.CreateAsyncScope())
         {
-            var db = s.ServiceProvider.GetRequiredService<Compact24DbContext>(); db.Add(invoice); await db.SaveChangesAsync();
+            var db = s.ServiceProvider.GetRequiredService<Compact24ArchiveContext>(); db.Add(invoice); await db.SaveChangesAsync();
             invoice.Status = InvoiceStatus.Final; invoice.FinalizedAt = DateTimeOffset.UtcNow; invoice.FinalizedByUserId = w.Owner.Id;
             db.Add(new InvoiceIssuedEvent { InvoiceId = invoice.Id, OwnerUserId = w.Owner.Id, OccurredAt = DateTimeOffset.UtcNow }); await db.SaveChangesAsync();
         }
@@ -99,7 +99,7 @@ public sealed partial class Compact24NotificationMvpTests
             (await Command($"/api/v1/payment-transactions/{transfer.Id}/allocate", new PaymentMatchInput(invoice.Id, null, true))).EnsureSuccessStatusCode();
         }
         await Pump(host); await Pump(host);
-        await using var scope = host.Services.CreateAsyncScope(); var data = scope.ServiceProvider.GetRequiredService<Compact24DbContext>();
+        await using var scope = host.Services.CreateAsyncScope(); var data = scope.ServiceProvider.GetRequiredService<Compact24ArchiveContext>();
         var notices = await data.Set<UserNotification>().Where(n => n.RelatedObjectId == invoice.Id).ToArrayAsync();
         Assert.DoesNotContain(notices, n => other.Tenants.Any(u => u.Id == n.RecipientUserId));
         foreach (var eventType in new[] { "INVOICE_FINALIZED", "INVOICE_OVERDUE", "PAYMENT_PARTIALLY_CONFIRMED", "INVOICE_FULLY_PAID" })
@@ -155,7 +155,7 @@ public sealed partial class Compact24NotificationMvpTests
     {
         var w = await Seed(); var probe = new SmtpProbe(); using var host = EmailHost(probe);
         var (notice, delivery) = await EmailNotice(w, host);
-        await using var scope = host.Services.CreateAsyncScope(); var db = scope.ServiceProvider.GetRequiredService<Compact24DbContext>();
+        await using var scope = host.Services.CreateAsyncScope(); var db = scope.ServiceProvider.GetRequiredService<Compact24ArchiveContext>();
         await db.Database.ExecuteSqlInterpolatedAsync($"UPDATE notifications SET delivery_status='Processing',lease_token={Guid.NewGuid()},locked_until={DateTimeOffset.UtcNow.AddSeconds(-1)} WHERE id={delivery}");
         await SendEmail(host, delivery); Assert.Empty(probe.Messages);
         Assert.Equal("PendingReview", await db.Database.SqlQuery<string>($"SELECT delivery_status AS \"Value\" FROM notifications WHERE id={delivery}").SingleAsync());
@@ -213,7 +213,7 @@ public sealed partial class Compact24NotificationMvpTests
         var created = await owner.PostAsJsonAsync("/api/v1/announcements", Announcement(w.Location) with { Channels = ["IN_APP", "EMAIL"] });
         created.EnsureSuccessStatusCode(); var draft = (await created.Content.ReadFromJsonAsync<AnnouncementView>())!;
         (await owner.PostAsync($"/api/v1/announcements/{draft.Id}/send", null)).EnsureSuccessStatusCode();
-        await using var scope = host.Services.CreateAsyncScope(); var db = scope.ServiceProvider.GetRequiredService<Compact24DbContext>();
+        await using var scope = host.Services.CreateAsyncScope(); var db = scope.ServiceProvider.GetRequiredService<Compact24ArchiveContext>();
         var notice = await db.Set<UserNotification>().Where(n => n.RelatedObjectId == draft.Id && n.RecipientUserId == w.Tenants[0].Id).Select(n => n.Id).SingleAsync();
         await scope.ServiceProvider.GetRequiredService<NotificationChannelWorker>().EnqueueDueAsync(default);
         await scope.ServiceProvider.GetRequiredService<NotificationChannelWorker>().EnqueueDueAsync(default);
@@ -233,7 +233,7 @@ public sealed partial class Compact24NotificationMvpTests
         (await tenant.PatchAsync($"/api/v1/notifications/{notice}/read", null)).EnsureSuccessStatusCode();
         var states = await tenant.GetFromJsonAsync<NotificationChannelStatus[]>($"/api/v1/notifications/{notice}/deliveries");
         Assert.Equal("Pending", Assert.Single(states!).Status); Assert.NotNull(states![0].NextRetryAt);
-        await using var scope = host.Services.CreateAsyncScope(); var db = scope.ServiceProvider.GetRequiredService<Compact24DbContext>();
+        await using var scope = host.Services.CreateAsyncScope(); var db = scope.ServiceProvider.GetRequiredService<Compact24ArchiveContext>();
         await db.Database.ExecuteSqlInterpolatedAsync($"UPDATE notifications SET next_delivery_at={DateTimeOffset.UtcNow.AddSeconds(-1)} WHERE id={delivery}");
         probe.Failure = null;
         await Task.WhenAll(SendEmail(host, delivery), SendEmail(host, delivery)); Assert.Equal(2, probe.Messages.Count);
@@ -252,7 +252,7 @@ public sealed partial class Compact24NotificationMvpTests
         foreach (var failure in new[] { new ChannelDeliveryException("email_authentication_failed"), new("email_submission_outcome_unknown", outcomeUnknown: true), new("email_smtp_450", retryable: true) })
         {
             probe.Failure = failure; var (notice, delivery) = await EmailNotice(w, host);
-            await using var scope = host.Services.CreateAsyncScope(); var db = scope.ServiceProvider.GetRequiredService<Compact24DbContext>();
+            await using var scope = host.Services.CreateAsyncScope(); var db = scope.ServiceProvider.GetRequiredService<Compact24ArchiveContext>();
             var start = probe.Messages.Count; var attempts = failure.Retryable ? 4 : 1;
             for (var n = 0; n < attempts; n++)
             {
@@ -270,7 +270,7 @@ public sealed partial class Compact24NotificationMvpTests
     {
         var w = await Seed(); var probe = new SmtpProbe(); using var host = EmailHost(probe);
         var (notice, delivery) = await EmailNotice(w, host);
-        await using var scope = host.Services.CreateAsyncScope(); var db = scope.ServiceProvider.GetRequiredService<Compact24DbContext>();
+        await using var scope = host.Services.CreateAsyncScope(); var db = scope.ServiceProvider.GetRequiredService<Compact24ArchiveContext>();
         await db.Database.ExecuteSqlInterpolatedAsync($"UPDATE users SET email_confirmed=false WHERE id={w.Tenants[0].Id}");
         await SendEmail(host, delivery); Assert.Empty(probe.Messages);
         Assert.Equal("PermanentlyFailed", await db.Database.SqlQuery<string>($"SELECT delivery_status AS \"Value\" FROM notifications WHERE id={delivery}").SingleAsync());

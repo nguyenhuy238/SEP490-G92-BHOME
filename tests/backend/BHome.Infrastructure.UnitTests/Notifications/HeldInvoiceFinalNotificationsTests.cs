@@ -14,7 +14,7 @@ public sealed class HeldInvoiceFinalNotificationsTests
         var options = new DbContextOptionsBuilder<Compact24DbContext>()
             .UseNpgsql("Host=127.0.0.1;Database=unused;Username=unused;Password=unused")
             .Options;
-        using var db = new Compact24DbContext(options);
+        using var db = new Compact24ArchiveContext(options);
         var original = Guid.NewGuid();
         var heldSql = HeldInvoiceFinalNotifications.StillHeldForOriginal(
             db.Set<InvoiceAdjustmentRequest>(), original, new DateOnly(2026, 11, 16))

@@ -66,7 +66,7 @@ public sealed class Compact24DigitalSigningTests(Compact24Fixture fixture) : ICl
         var me = (await tenant.GetFromJsonAsync<SessionIdentity>("/api/v1/auth/me"))!;
         await using (var missingImageScope = host.Services.CreateAsyncScope())
         {
-            var context = missingImageScope.ServiceProvider.GetRequiredService<Compact24DbContext>();
+            var context = missingImageScope.ServiceProvider.GetRequiredService<Compact24ArchiveContext>();
             var objectKey = await context.Database.SqlQuery<string>(
                 $"SELECT business_profile->'signatureImage'->>'objectKey' AS \"Value\" FROM users WHERE id={me.UserId}").SingleAsync();
             await storage.DeleteAsync(objectKey, default);
@@ -87,7 +87,7 @@ public sealed class Compact24DigitalSigningTests(Compact24Fixture fixture) : ICl
         Assert.Equal(HttpStatusCode.NotFound, (await tenant.GetAsync(Image + "/content")).StatusCode);
 
         await using var scope = host.Services.CreateAsyncScope();
-        var db = scope.ServiceProvider.GetRequiredService<Compact24DbContext>();
+        var db = scope.ServiceProvider.GetRequiredService<Compact24ArchiveContext>();
         Assert.True(await db.IsSchemaReadyAsync());
     }
 
@@ -111,7 +111,7 @@ public sealed class Compact24DigitalSigningTests(Compact24Fixture fixture) : ICl
 
         await using (var scope = host.Services.CreateAsyncScope())
         {
-            var db = scope.ServiceProvider.GetRequiredService<BHomePersistenceContext>();
+            var db = scope.ServiceProvider.GetFixturePersistence();
             var stored = await db.Database.SqlQuery<string>(
                 $"SELECT (business_profile->'digitalSigning'->'viettel')::text AS \"Value\" FROM users WHERE 'Owner' = ANY(roles)").SingleAsync();
             Assert.Contains("synthetic-client", stored);

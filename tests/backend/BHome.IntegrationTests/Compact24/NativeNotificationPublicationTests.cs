@@ -26,17 +26,35 @@ public sealed class NativeNotificationPublicationTests(Compact24Fixture fixture)
             """);
         db.Add(new UserNotification
         {
-            Id = oldId, RecipientUserId = recipient, AudienceRole = "Tenant", Category = "Payment",
-            EventType = "INVOICE_FULLY_PAID", EventKey = oldKey, Title = "Synthetic", Summary = "Synthetic payment",
-            RelatedObjectType = "Invoice", RelatedObjectId = target, CreatedAt = at, ReadAt = at,
+            Id = oldId,
+            RecipientUserId = recipient,
+            AudienceRole = "Tenant",
+            Category = "Payment",
+            EventType = "INVOICE_FULLY_PAID",
+            EventKey = oldKey,
+            Title = "Synthetic",
+            Summary = "Synthetic payment",
+            RelatedObjectType = "Invoice",
+            RelatedObjectId = target,
+            CreatedAt = at,
+            ReadAt = at,
             Channels = ["IN_APP", "EMAIL"]
         });
         await db.SaveChangesAsync();
         NotificationInboxWrites.Add(db, new NotificationInboxState
         {
-            Id = newId, RecipientUserId = recipient, AudienceRole = "Tenant", Category = "Payment",
-            EventType = "INVOICE_FULLY_PAID", EventKey = newKey, Title = "Synthetic", Summary = "Synthetic payment",
-            RelatedObjectType = "Invoice", RelatedObjectId = target, CreatedAt = at, ReadAt = at,
+            Id = newId,
+            RecipientUserId = recipient,
+            AudienceRole = "Tenant",
+            Category = "Payment",
+            EventType = "INVOICE_FULLY_PAID",
+            EventKey = newKey,
+            Title = "Synthetic",
+            Summary = "Synthetic payment",
+            RelatedObjectType = "Invoice",
+            RelatedObjectId = target,
+            CreatedAt = at,
+            ReadAt = at,
             Channels = ["IN_APP", "EMAIL"]
         });
         await NotificationPublications.SaveAsync(db, newKey, at, 1, default);

@@ -5,6 +5,7 @@ using BHome.Domain.PaymentsDebt;
 using BHome.Domain.TenantContracts;
 using BHome.Infrastructure.Persistence;
 using BHome.Infrastructure.Persistence.Compact24;
+using BHome.Infrastructure.Modules.PropertyManagement.Persistence;
 using Microsoft.EntityFrameworkCore;
 
 namespace BHome.Infrastructure.PaymentsDebt;
@@ -54,7 +55,7 @@ internal sealed class MainInitialPaymentLedger(BHomePersistenceContext db, IPaym
     {
         if (order.SharedDepositContractId is { } depositId)
         {
-            var contract = await db.Set<Contract>().AsNoTracking().SingleAsync(c => c.Id == depositId, t);
+            var contract = await ContractAsync(depositId, t) ?? throw new InvalidOperationException("Shared deposit contract missing.");
             var legacyActive = contract.Status == ContractStatus.Active && contract.ActivatedAt is not null && !contract.InitialPaymentRequired;
             if (!legacyActive && await DepositAsync(depositId, t) < contract.RequiredDeposit) return depositId;
         }
@@ -63,7 +64,7 @@ internal sealed class MainInitialPaymentLedger(BHomePersistenceContext db, IPaym
             var source = await ReadAsync(rentId, t);
             if (source is null)
             {
-                var contract = await db.Set<Contract>().AsNoTracking().SingleAsync(c => c.Id == rentId, t);
+                var contract = await ContractAsync(rentId, t) ?? throw new InvalidOperationException("Shared rent contract missing.");
                 if (contract.Status != ContractStatus.Active || contract.ActivatedAt is null || contract.InitialPaymentRequired) return rentId;
             }
             else if ((await OutstandingAsync(source, t)).RentAndFees != 0) return rentId;
@@ -72,7 +73,7 @@ internal sealed class MainInitialPaymentLedger(BHomePersistenceContext db, IPaym
     }
     public async Task<bool> SatisfiedAsync(Guid id, CancellationToken token)
     {
-        var c = await db.Set<Contract>().AsNoTracking().SingleOrDefaultAsync(c => c.Id == id, token);
+        var c = await ContractAsync(id, token);
         var order = await ReadAsync(id, token); if (order is null) return c is not null && !c.InitialPaymentRequired;
         return c is not null && order.SnapshotHash == c.SnapshotHash &&
             (order.RoomScopeMode != "Test" || ContractPaymentModes.IsTest(c) ||
@@ -84,7 +85,7 @@ internal sealed class MainInitialPaymentLedger(BHomePersistenceContext db, IPaym
     public async Task AllocateAsync(Guid id, PaymentTransfer receipt, CancellationToken token)
     {
         var order = await ReadAsync(id, token) ?? throw new PaymentException(409, "initial_payment_order_required");
-        var c = await db.Set<Contract>().AsNoTracking().SingleAsync(c => c.Id == id, token);
+        var c = await ContractAsync(id, token) ?? throw new PaymentException(404, "contract_not_found");
         if (MainSandboxAcceptance.Read(c) is not null && !AnonymousContractSigningService.Complete(c))
             throw new PaymentException(409, "initial_payment_signatures_required");
         if (c.Kind != ContractKind.Main || c.PreviousContractId is not null || c.Status != ContractStatus.PendingActivation ||
@@ -94,10 +95,15 @@ internal sealed class MainInitialPaymentLedger(BHomePersistenceContext db, IPaym
             order.SharedInvoiceId is null)
         {
             var period = new DateOnly(c.StartDate.Year, c.StartDate.Month, 1);
-            var otherMain = await db.Set<Contract>().AsNoTracking().Where(other => other.RoomId == c.RoomId && other.Id != id &&
-                other.Kind == ContractKind.Main && (other.Status == ContractStatus.Active || other.Status == ContractStatus.PendingActivation ||
-                other.Status == ContractStatus.Expired || other.Status == ContractStatus.Terminated &&
-                other.StartDate >= period && other.StartDate < period.AddMonths(1))).ToArrayAsync(token);
+            var otherMain = db is Compact24DbContext
+                ? (await PaymentObligationQueries.Contracts(db).Where(other => other.RoomId == c.RoomId && other.Id != id &&
+                    other.ContractType == "MAIN" && (other.Status == (short)ContractStatus.Active || other.Status == (short)ContractStatus.PendingActivation ||
+                    other.Status == (short)ContractStatus.Expired || other.Status == (short)ContractStatus.Terminated &&
+                    other.StartDate >= period && other.StartDate < period.AddMonths(1))).ToArrayAsync(token)).Select(NativeContractSnapshot.Read).ToArray()
+                : await db.Set<Contract>().AsNoTracking().Where(other => other.RoomId == c.RoomId && other.Id != id &&
+                    other.Kind == ContractKind.Main && (other.Status == ContractStatus.Active || other.Status == ContractStatus.PendingActivation ||
+                    other.Status == ContractStatus.Expired || other.Status == ContractStatus.Terminated &&
+                    other.StartDate >= period && other.StartDate < period.AddMonths(1))).ToArrayAsync(token);
             if (otherMain.Any(other => ContractPaymentModes.Of(other) == ContractPaymentModes.Of(c)) &&
                 !await PaymentLedgerWrites.Allocations(db).AnyAsync(a => a.TargetInitialContractId == id || a.TargetDepositContractId == id, token))
                 throw new PaymentException(409, "initial_room_payment_refresh_required");
@@ -113,5 +119,11 @@ internal sealed class MainInitialPaymentLedger(BHomePersistenceContext db, IPaym
         if (deposit > 0) await payments.AddAsync(new PaymentAllocation { TransferId = receipt.Id, TargetDepositContractId = id, Amount = deposit, AllocatedAt = receipt.VerifiedAt }, token);
         if (rent > 0) await payments.AddAsync(new PaymentAllocation { TransferId = receipt.Id, TargetInitialContractId = id, Amount = rent, AllocatedAt = receipt.VerifiedAt }, token);
         // The common scheduler enqueues only after signatures, payment and effective-date checks pass.
+    }
+    private async Task<Contract?> ContractAsync(Guid id, CancellationToken t)
+    {
+        if (db is not Compact24DbContext) return await db.Set<Contract>().AsNoTracking().SingleOrDefaultAsync(c => c.Id == id, t);
+        var row = await PaymentObligationQueries.Contracts(db).SingleOrDefaultAsync(c => c.Id == id, t);
+        return row is null ? null : NativeContractSnapshot.Read(row);
     }
 }

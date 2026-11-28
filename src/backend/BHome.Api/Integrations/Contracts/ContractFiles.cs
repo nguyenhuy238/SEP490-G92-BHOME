@@ -5,6 +5,7 @@ using BHome.Domain.PropertyManagement;
 using BHome.Domain.TenantContracts;
 using BHome.Infrastructure.Ocr;
 using BHome.Infrastructure.Persistence;
+using BHome.Infrastructure.Persistence.Compact24;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
@@ -19,7 +20,12 @@ internal sealed class ContractFileStore(BHomePersistenceContext context, IObject
     {
         // Independent context: this intent survives a rolled-back contract transaction or a process crash.
         await using var intent = context.CreateIndependentContext();
-        if (!await intent.Set<ContractFileUpload>().AnyAsync(f => f.ObjectKey == key, t))
+        if (intent is Compact24DbContext compact)
+        {
+            if (await ContractFilePersistence.FindAsync(compact, key, t) is null)
+                await ContractFilePersistence.WriteAsync(compact, new ContractFileUpload { ObjectKey = key, RoomId = roomId, CleanupAfter = clock.GetUtcNow().AddDays(1) }, false, t);
+        }
+        else if (!await intent.Set<ContractFileUpload>().AnyAsync(f => f.ObjectKey == key, t))
         {
             intent.Add(new ContractFileUpload { ObjectKey = key, RoomId = roomId, CleanupAfter = clock.GetUtcNow().AddDays(1) });
             await intent.SaveChangesAsync(t);
@@ -58,21 +64,25 @@ public sealed class ContractFileCleanup(IServiceScopeFactory scopes, TimeProvide
     }
     public static async Task CleanupAsync(BHomePersistenceContext db, IObjectStorage storage, DateTimeOffset now, CancellationToken t)
     {
-        var candidates = await db.Set<ContractFileUpload>().AsNoTracking().Where(f => f.CleanupAfter <= now).OrderBy(f => f.CleanupAfter).Take(100).ToArrayAsync(t);
+        var candidates = db is Compact24DbContext native ? await ContractFilePersistence.DueAsync(native, now, t) :
+            await db.Set<ContractFileUpload>().AsNoTracking().Where(f => f.CleanupAfter <= now).OrderBy(f => f.CleanupAfter).Take(100).ToArrayAsync(t);
         foreach (var item in candidates)
         {
             db.ChangeTracker.Clear();
             await using var tx = await db.Database.BeginTransactionAsync(t);
-            await db.Locked<Room>(item.RoomId).SingleOrDefaultAsync(t);
-            var file = await db.Set<ContractFileUpload>().SingleOrDefaultAsync(f => f.ObjectKey == item.ObjectKey, t);
+            if (db is Compact24DbContext)
+                await db.Database.SqlQuery<Guid>($"SELECT id AS \"Value\" FROM rooms WHERE id={item.RoomId} FOR UPDATE").ToArrayAsync(t);
+            else await db.Locked<Room>(item.RoomId).SingleOrDefaultAsync(t);
+            var file = db is Compact24DbContext physical ? await ContractFilePersistence.FindAsync(physical, item.ObjectKey, t) :
+                await db.Set<ContractFileUpload>().SingleOrDefaultAsync(f => f.ObjectKey == item.ObjectKey, t);
             if (file is null) continue;
-            var linked = await db.Set<ContractSignature>().AnyAsync(s => s.PreparedObjectKey == file.ObjectKey || s.SignedObjectKey == file.ObjectKey, t) ||
-                await db.Set<ContractInspectionEvidence>().AnyAsync(e => e.ObjectKey == file.ObjectKey, t) ||
-                await db.Set<ContractDocumentFile>().AnyAsync(e => e.ObjectKey == file.ObjectKey, t);
-            if (!linked && db is BHome.Infrastructure.Persistence.Compact24.Compact24DbContext)
-                linked = await db.Set<ContractSigningInvitation>().AnyAsync(i => i.DocumentObjectKey == file.ObjectKey ||
-                    i.SignatureObjectKey == file.ObjectKey || i.AcceptedDocumentObjectKey == file.ObjectKey, t) ||
-                    await db.Set<Contract>().AnyAsync(c => c.SigningMode == ContractSigningModes.Internal && c.InternalAcceptance.Contains(file.ObjectKey), t);
+            var linked = (db is Compact24DbContext physicalDb
+                ? await ContractFilePersistence.LinkedAsync(physicalDb, file.ObjectKey, t)
+                : await db.Set<ContractSignature>().AnyAsync(s => s.PreparedObjectKey == file.ObjectKey || s.SignedObjectKey == file.ObjectKey, t) ||
+                    await db.Set<ContractInspectionEvidence>().AnyAsync(e => e.ObjectKey == file.ObjectKey, t)) ||
+                await ContractDocumentPersistence.LinkedAsync(db, file.ObjectKey, t);
+            if (!linked && db is Compact24DbContext compact)
+                linked = await NativeInvitationPersistence.LinkedAsync(compact, file.ObjectKey, t);
             if (!linked && db is BHome.Infrastructure.Persistence.Compact24.Compact24DbContext)
             {
                 // Handover-signing attempts and Owner-signed revisions live in
@@ -89,7 +99,9 @@ public sealed class ContractFileCleanup(IServiceScopeFactory scopes, TimeProvide
                     """).SingleAsync(t);
             }
             if (!linked) await storage.DeleteAsync(file.ObjectKey, t);
-            db.Remove(file); await db.SaveChangesAsync(t); await tx.CommitAsync(t);
+            if (db is Compact24DbContext nativeDb) await ContractFilePersistence.WriteAsync(nativeDb, file, true, t);
+            else { db.Remove(file); await db.SaveChangesAsync(t); }
+            await tx.CommitAsync(t);
         }
     }
 }

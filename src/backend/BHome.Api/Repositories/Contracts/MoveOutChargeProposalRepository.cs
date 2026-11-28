@@ -12,10 +12,8 @@ internal sealed partial class SettlementReceivablesRepository
     public async Task<MoveOutChargeProposalSource> ProposalSourceAsync(Guid id, CancellationToken token)
     {
         var context = await ContextAsync(id, token);
-        var inspection = await db.Set<ContractFinalInspection>().AsNoTracking()
-            .Where(i => i.ContractId == id).OrderByDescending(i => i.Version).FirstOrDefaultAsync(token);
-        var move = await db.Set<ContractMoveOut>().AsNoTracking()
-            .SingleOrDefaultAsync(m => m.ContractId == id, token);
+        var inspection = await NativeSettlementReads.InspectionAsync(db, id, token);
+        var move = await NativeSettlementReads.MoveAsync(db, id, token);
         // Staff's successful final submission atomically moves the request to
         // Inspected and persists the matching inspection. An Owner review is
         // a separate financial gate and is NOT required to send a proposal.
@@ -31,9 +29,7 @@ internal sealed partial class SettlementReceivablesRepository
         // The comparison snapshot may include later accepted asset changes. Photos
         // labeled as Move-In must instead come from the actual confirmed Move-In
         // handover, never a fabricated or unverified opening attachment.
-        var openingHandover = baseline is null ? null : await db.Set<ContractHandover>().AsNoTracking()
-            .SingleOrDefaultAsync(h => h.ContractId == inspection!.BaselineContractId &&
-                h.Status == ContractHandoverStatus.Confirmed, token);
+        var openingHandover = baseline is null ? null : await NativeSettlementReads.ConfirmedHandoverAsync(db, inspection!.BaselineContractId, token);
         var openingPhotos = openingHandover is null ? null :
             JsonSerializer.Deserialize<HandoverSnapshot>(openingHandover.Snapshot);
         var existing = context.View.Receivables.Select(row => row.Charge.SourceKey).ToHashSet(StringComparer.Ordinal);
@@ -229,8 +225,10 @@ internal sealed partial class SettlementReceivablesRepository
             feedback, feedback.TenantUserId, feedback.RespondedAt, token,
             feedback.Confirmed ? "MoveOutChargeProposalAccepted" : "MoveOutChargeProposalDisputed");
         await db.SaveChangesAsync(token);
-        var contract = await db.Set<Contract>().AsNoTracking().Where(c => c.Id == feedback.ContractId)
-            .Select(c => new { c.OwnerSignerId, c.Room.LocationId }).SingleAsync(token);
+        var contract = await (from c in db.Set<BHome.Domain.Entities.Contract>().AsNoTracking()
+                              join r in db.Set<BHome.Domain.Entities.Room>() on c.RoomId equals r.Id
+                              where c.Id == feedback.ContractId
+                              select new { c.OwnerSignerId, r.LocationId }).SingleAsync(token);
         var writer = new BHome.Infrastructure.Modules.Notifications.CompactNotificationWriter((Compact24DbContext)db, clock);
         await writer.Emit(contract.OwnerSignerId, "Owner", contract.LocationId,
             "move-out-proposal-response:" + feedback.Id, "CONTRACT_STATUS_CHANGED", "Contract",

@@ -6,6 +6,7 @@ using BHome.Infrastructure.Modules.Notifications;
 using BHome.Infrastructure.Modules.PropertyManagement.Persistence;
 using BHome.Infrastructure.Persistence.Compact24;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.EntityFrameworkCore.Storage;
 
 namespace BHome.IntegrationTests.Compact24;
 
@@ -35,18 +36,25 @@ public sealed class NativePropertyBillingReadTests(Compact24Fixture fixture) : I
             """);
         var store = new SetupWorkspaceStore(db, new CompactNotificationWriter(db, TimeProvider.System),
             new Compact24WorkflowFixture.TestObjectStorage());
-        var expectedRooms = await db.Set<Room>().Where(r => r.LocationId == location).OrderBy(r => r.Id).Select(r => r.Id).ToArrayAsync();
-        Assert.Equal(expectedRooms, await store.RoomsAsync(location, default));
-        Assert.Equal(new[] { otherRoom }, await store.RoomsAsync(otherLocation, default));
-        Assert.Empty(await store.RoomsAsync(Guid.NewGuid(), default));
-        Assert.Equal(location, await store.RoomLocationAsync(room, default));
-        Assert.Equal(otherLocation, await store.RoomLocationAsync(otherRoom, default));
-        Assert.Null(await store.RoomLocationAsync(Guid.NewGuid(), default));
-        foreach (var id in new[] { meter, inactiveMeter })
+        // Compare against the independent archive projections without giving the
+        // runtime repository access to them. Both contexts see the uncommitted fixture.
+        await using (var archive = new Compact24ArchiveContext(new DbContextOptionsBuilder<Compact24DbContext>()
+            .UseNpgsql(db.Database.GetDbConnection()).Options))
         {
-            var expectedMeter = await db.Set<Meter>().Where(m => m.Id == id).Select(m => new { m.RoomId, m.UtilityType }).SingleAsync();
-            var expectedLocation = await db.Set<Room>().Where(r => r.Id == expectedMeter.RoomId).Select(r => r.LocationId).SingleAsync();
-            Assert.Equal<(Guid LocationId, UtilityType Type)?>((expectedLocation, expectedMeter.UtilityType), await store.MeterScopeAsync(id, default));
+            await archive.Database.UseTransactionAsync(transaction.GetDbTransaction());
+            var expectedRooms = await archive.Set<Room>().Where(r => r.LocationId == location).OrderBy(r => r.Id).Select(r => r.Id).ToArrayAsync();
+            Assert.Equal(expectedRooms, await store.RoomsAsync(location, default));
+            Assert.Equal(new[] { otherRoom }, await store.RoomsAsync(otherLocation, default));
+            Assert.Empty(await store.RoomsAsync(Guid.NewGuid(), default));
+            Assert.Equal(location, await store.RoomLocationAsync(room, default));
+            Assert.Equal(otherLocation, await store.RoomLocationAsync(otherRoom, default));
+            Assert.Null(await store.RoomLocationAsync(Guid.NewGuid(), default));
+            foreach (var id in new[] { meter, inactiveMeter })
+            {
+                var expectedMeter = await archive.Set<Meter>().Where(m => m.Id == id).Select(m => new { m.RoomId, m.UtilityType }).SingleAsync();
+                var expectedLocation = await archive.Set<Room>().Where(r => r.Id == expectedMeter.RoomId).Select(r => r.LocationId).SingleAsync();
+                Assert.Equal<(Guid LocationId, UtilityType Type)?>((expectedLocation, expectedMeter.UtilityType), await store.MeterScopeAsync(id, default));
+            }
         }
         Assert.Null(await store.MeterScopeAsync(Guid.NewGuid(), default));
         await transaction.RollbackAsync();
@@ -94,11 +102,16 @@ public sealed class NativePropertyBillingReadTests(Compact24Fixture fixture) : I
         await AddContract(excluded, tenant, resident, "MAIN", ContractStatus.Terminated);
         await AddContract(excluded, otherTenant, otherResident, "MAIN", ContractStatus.Active);
         var repository = new InvoiceRepository(db);
-        var expected = await db.Set<Contract>().AsNoTracking().Where(c => c.TenantUserId == tenant && c.Status == ContractStatus.Active &&
-            (c.Kind == ContractKind.Main || c.Kind == ContractKind.Renewal) && c.ActivatedAt != null && c.Room.Location.IsActive)
-            .Select(c => c.Room.LocationId).Distinct().ToArrayAsync();
-        Assert.Equal(new[] { active }, expected);
-        Assert.Equal(expected, await repository.TenantBillingLocationIdsAsync(tenant, default));
+        await using (var archive = new Compact24ArchiveContext(new DbContextOptionsBuilder<Compact24DbContext>()
+            .UseNpgsql(db.Database.GetDbConnection()).Options))
+        {
+            await archive.Database.UseTransactionAsync(transaction.GetDbTransaction());
+            var expected = await archive.Set<Contract>().AsNoTracking().Where(c => c.TenantUserId == tenant && c.Status == ContractStatus.Active &&
+                (c.Kind == ContractKind.Main || c.Kind == ContractKind.Renewal) && c.ActivatedAt != null && c.Room.Location.IsActive)
+                .Select(c => c.Room.LocationId).Distinct().ToArrayAsync();
+            Assert.Equal(new[] { active }, expected);
+            Assert.Equal(expected, await repository.TenantBillingLocationIdsAsync(tenant, default));
+        }
         Assert.Equal(new[] { excluded }, await repository.TenantBillingLocationIdsAsync(otherTenant, default));
         Assert.Empty(await repository.TenantBillingLocationIdsAsync(Guid.NewGuid(), default));
         await transaction.RollbackAsync();

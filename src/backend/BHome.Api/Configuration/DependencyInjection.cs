@@ -109,7 +109,7 @@ public static class DependencyInjection
         services.AddScoped<ICredentialVerifier, IdentityCredentialVerifier>();
         services.AddScoped<LoginService>();
         services.AddScoped<IdentitySecurityStore>();
-        services.AddScoped<IIdentityPersistence, CompactIdentityPersistence>();
+        services.AddScoped<IIdentityPersistence, NativeIdentityPersistence>();
         services.AddScoped<IAuthenticationSessions, IdentitySessionService>();
         services.AddScoped<IPasswordService, IdentityPasswordService>();
         services.AddOptions<SmsRecoveryOptions>().BindConfiguration("SmsRecovery")
@@ -308,6 +308,7 @@ public static class DependencyInjection
         services.AddHostedService<BHome.Infrastructure.PaymentsDebt.SePayAutomationWorker>();
         services.AddScoped<INotificationProvider, UnconfiguredNotificationProvider>();
         services.AddScoped<IElectronicContractProvider, UnconfiguredElectronicContractProvider>();
+        services.AddScoped<BHome.Infrastructure.Contracts.NativeContractSidecars>();
         services.AddScoped<BHome.Application.Contracts.IContractRepository, BHome.Infrastructure.Contracts.ContractRepository>();
         services.AddScoped<BHome.Application.Contracts.IHandoverDraftRepository, BHome.Infrastructure.Contracts.HandoverDraftRepository>();
         services.AddScoped<BHome.Application.Contracts.IHandoverDraftPdfRenderer, BHome.Infrastructure.Contracts.HandoverPdfRenderer>();

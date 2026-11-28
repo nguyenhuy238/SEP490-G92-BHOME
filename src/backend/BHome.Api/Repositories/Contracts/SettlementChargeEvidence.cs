@@ -13,26 +13,41 @@ internal sealed class SettlementChargeEvidence(BHomePersistenceContext db, IObje
 {
     public async Task<IReadOnlyList<DeductionEvidence>> CaptureUtilityAsync(Guid contractId, SettlementUtilitySource source, CancellationToken token)
     {
-        var roomId = await db.Set<Contract>().AsNoTracking().Where(c => c.Id == contractId).Select(c => c.RoomId).SingleAsync(token);
+        var roomId = db is BHome.Infrastructure.Persistence.Compact24.Compact24DbContext
+            ? await db.Set<BHome.Domain.Entities.Contract>().AsNoTracking().Where(c => c.Id == contractId).Select(c => c.RoomId).SingleAsync(token)
+            : await db.Set<Contract>().AsNoTracking().Where(c => c.Id == contractId).Select(c => c.RoomId).SingleAsync(token);
         var points = new[] { source.Baseline, source.Final }.DistinctBy(p => p.ReadingId).ToArray();
         var ids = points.Select(p => p.ReadingId).ToArray();
-        var files = await (from reading in db.Set<MeterReading>().AsNoTracking()
-                           join task in db.Set<OperationalTask>() on reading.TaskId equals task.Id
-                           join meter in db.Set<Meter>() on reading.MeterId equals meter.Id
-                           join proof in db.Set<MeterEvidence>() on reading.EvidenceId equals proof.Id
-                           where ids.Contains(reading.Id) && reading.MeterId == source.MeterId && meter.RoomId == roomId &&
-                             task.Status == MeterTaskStatus.Completed && proof.IsLinked && proof.IsUploaded
-                           select new
-                           {
-                               reading.Id,
-                               reading.ConfirmedValue,
-                               task.ReadingDate,
-                               ProofId = proof.Id,
-                               proof.ObjectKey,
-                               proof.ImageHash,
-                               proof.Length,
-                               proof.ContentType
-                           }).ToArrayAsync(token);
+        var files = db is BHome.Infrastructure.Persistence.Compact24.Compact24DbContext
+            ? (await NativeSettlementReads.MeterProofsAsync(db, roomId, ids, token)).Where(p => p.Reading.MeterId == source.MeterId)
+                .Select(p => new
+                {
+                    p.Reading.Id,
+                    p.Reading.ConfirmedValue,
+                    p.Task.ReadingDate,
+                    ProofId = p.Evidence.Id,
+                    p.Evidence.ObjectKey,
+                    p.Evidence.ImageHash,
+                    p.Evidence.Length,
+                    p.Evidence.ContentType
+                }).ToArray()
+            : await (from reading in db.Set<MeterReading>().AsNoTracking()
+                     join task in db.Set<OperationalTask>() on reading.TaskId equals task.Id
+                     join meter in db.Set<Meter>() on reading.MeterId equals meter.Id
+                     join proof in db.Set<MeterEvidence>() on reading.EvidenceId equals proof.Id
+                     where ids.Contains(reading.Id) && reading.MeterId == source.MeterId && meter.RoomId == roomId &&
+                       task.Status == MeterTaskStatus.Completed && proof.IsLinked && proof.IsUploaded
+                     select new
+                     {
+                         reading.Id,
+                         reading.ConfirmedValue,
+                         task.ReadingDate,
+                         ProofId = proof.Id,
+                         proof.ObjectKey,
+                         proof.ImageHash,
+                         proof.Length,
+                         proof.ContentType
+                     }).ToArrayAsync(token);
         if (files.Length != points.Length) throw ContractException.Conflict("settlement_evidence_integrity_failed");
         using var deadline = CancellationTokenSource.CreateLinkedTokenSource(token); deadline.CancelAfter(TimeSpan.FromSeconds(30));
         var captured = new List<DeductionEvidence>();

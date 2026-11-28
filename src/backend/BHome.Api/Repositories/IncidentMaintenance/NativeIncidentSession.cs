@@ -40,8 +40,18 @@ internal sealed class NativeIncidentSession(Compact24DbContext db)
     private static string Snapshot(AuditableEntity entity) => entity is Asset asset
         ? JsonSerializer.Serialize(new
         {
-            asset.Id, asset.LocationId, asset.RoomId, asset.CommonArea, asset.Code, asset.Name,
-            asset.Category, asset.Condition, asset.Status, asset.Version, asset.CreatedAt, asset.UpdatedAt
+            asset.Id,
+            asset.LocationId,
+            asset.RoomId,
+            asset.CommonArea,
+            asset.Code,
+            asset.Name,
+            asset.Category,
+            asset.Condition,
+            asset.Status,
+            asset.Version,
+            asset.CreatedAt,
+            asset.UpdatedAt
         }, Json)
         : IncidentSnapshots.State(entity).GetRawText();
     private T Track<T>(T entity) where T : AuditableEntity
@@ -219,8 +229,13 @@ internal sealed class NativeIncidentSession(Compact24DbContext db)
             {
                 var previous = JsonSerializer.Deserialize<IncidentSnapshots.IncidentNotificationState>(change.Original, Json)!;
                 var current = IncidentSnapshots.IncidentNotificationState.From(notice);
-                if (previous != (current with { ReadAt = previous.ReadAt, DeliveryState = previous.DeliveryState,
-                    DeliveryReference = previous.DeliveryReference, DeliveryError = previous.DeliveryError }))
+                if (previous != (current with
+                {
+                    ReadAt = previous.ReadAt,
+                    DeliveryState = previous.DeliveryState,
+                    DeliveryReference = previous.DeliveryReference,
+                    DeliveryError = previous.DeliveryError
+                }))
                     throw new InvalidOperationException("Incident notification event is immutable.");
             }
             await NativeIncidentWrites.WriteAsync(db, change.Entity, change.Original is null, change.Version, token);

@@ -179,7 +179,11 @@ public sealed class AnonymousContractSigningService(IContractRepository contract
                 pdf = await Read($"contracts/{id:N}/signatures/{pendingOwner.Id:N}/source.pdf", pendingOwner.SourceHash!, t);
             if (pdf.Length < 5 || !pdf.AsSpan(0, 5).SequenceEqual("%PDF-"u8)) throw ContractException.Conflict("contract_document_integrity_failed");
             var changingEmail = pending is not null && !string.Equals(pending.RecipientEmail, recipient, StringComparison.OrdinalIgnoreCase);
-            foreach (var old in invitationHistory.Where(i => changingEmail || i.Id != pending?.Id)) { old.RevokedAt ??= Now; old.OtpHash = null; old.SessionHash = null; }
+            foreach (var old in invitationHistory.Where(i => changingEmail || i.Id != pending?.Id))
+            {
+                old.RevokedAt ??= Now; old.OtpHash = null; old.SessionHash = null;
+                await invitations.SaveAsync(old, t);
+            }
             if (changingEmail) await contracts.FlushAsync(t);
             var invite = changingEmail || pending is null ? new ContractSigningInvitation() : pending;
             if (changingEmail) invite.OtpSendCount = emailHistory.Select(i => i.OtpSendCount).DefaultIfEmpty(0).Max();
@@ -198,6 +202,7 @@ public sealed class AnonymousContractSigningService(IContractRepository contract
             invite.DocumentObjectKey = $"contracts/{id:N}/internal/{invite.Id:N}/review.pdf";
             await files.PutAsync(c.RoomId, invite.DocumentObjectKey, pdf, "application/pdf", t);
             if (pending is null || changingEmail) invitations.Add(invite);
+            await invitations.SaveAsync(invite, t);
             c.Status = ContractStatus.PendingSigning;
             if (!input.Resend && AllowsEitherSigningOrder(c)) contracts.Audit(actor.UserId!.Value, c.Kind == ContractKind.Holding ? "HoldingSigningSubmitted" : "MainSigningSubmitted", id, Now);
             contracts.Audit(actor.UserId!.Value, input.Resend ? "InternalSigningInvitationResent" : "InternalSigningInvitationApproved", id, Now);
@@ -257,6 +262,7 @@ public sealed class AnonymousContractSigningService(IContractRepository contract
             var invite = (await invitations.ListAsync(id, t)).SingleOrDefault(i => i.Id == invitationId) ?? throw ContractException.Missing();
             if (invite.AcceptedAt is not null || Evidence(c) is not null) throw ContractException.Conflict("accepted_invitation_cannot_be_revoked");
             invite.RevokedAt ??= Now; invite.OtpHash = null; invite.SessionHash = null;
+            await invitations.SaveAsync(invite, t);
             contracts.Audit(actor.UserId!.Value, "InternalSigningInvitationRevoked", id, Now); return true;
         }, t);
     }
@@ -280,7 +286,9 @@ public sealed class AnonymousContractSigningService(IContractRepository contract
             var c = await contracts.FindAsync(invite.ContractId, t) ?? throw ContractException.Missing();
             Intact(c);
             if (invite.SnapshotHash != c.SnapshotHash) throw ContractException.Conflict("signed_terms_changed");
-            return await work(invite, c);
+            var result = await work(invite, c);
+            await invitations.SaveAsync(invite, t);
+            return result;
         }, t);
     }
     public Task<AnonymousSigningInfo> InfoAsync(string token, CancellationToken t) => WithToken(token, (i, _) =>
@@ -477,6 +485,7 @@ public sealed class AnonymousContractSigningService(IContractRepository contract
                     foreach (var invite in previousInvitations.Where(i => i.RevokedAt is null))
                     {
                         invite.RevokedAt = Now; invite.OtpHash = null; invite.SessionHash = null;
+                        await invitations.SaveAsync(invite, t);
                         contracts.Audit(actor.UserId!.Value, simulation ? "SandboxTransitionSigningInvitationRevokedByStaff" : "SandboxTransitionSigningInvitationRevokedByOwner", id, Now);
                     }
                     byte[] sandboxPdf;

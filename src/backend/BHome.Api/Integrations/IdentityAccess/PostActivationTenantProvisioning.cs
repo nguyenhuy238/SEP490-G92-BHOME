@@ -5,6 +5,7 @@ using BHome.Application.Contracts;
 using BHome.Application.Jobs;
 using BHome.Domain.IdentityAccess;
 using BHome.Domain.TenantContracts;
+using BHome.Infrastructure.Contracts;
 using BHome.Infrastructure.Persistence.Compact24;
 using BHome.Infrastructure.Persistence;
 using Microsoft.AspNetCore.Identity;
@@ -14,19 +15,26 @@ namespace BHome.Infrastructure.IdentityAccess;
 
 internal sealed record ApprovedTenantInvitation(Guid OwnerId, Guid ResidentId, Guid ContractId);
 internal sealed class PostActivationTenantProvisioning(BHomePersistenceContext db, UserManager<ApplicationUser> users,
-    IBackgroundJobQueue jobs, IdentitySecurityStore security) : IPostActivationTenantProvisioning
+    IBackgroundJobQueue jobs, IdentitySecurityStore security, IContractRepository contractData) : IPostActivationTenantProvisioning
 {
     public async Task ProvisionAsync(Contract contract, Guid ownerId, CancellationToken t)
+    {
+        if (contractData is ContractRepository repository)
+            await repository.WithProvisioningMutationAsync(contract, current => ProvisionCoreAsync(current, ownerId, t), t);
+        else await ProvisionCoreAsync(contract, ownerId, t);
+    }
+
+    private async Task ProvisionCoreAsync(Contract contract, Guid ownerId, CancellationToken t)
     {
         if (db is not Compact24DbContext compact) return; // Offline legacy regression schema has no lifecycle extension.
         if (contract.Status != ContractStatus.Active || contract.Kind == ContractKind.Holding || contract.OwnerSignerId != ownerId ||
             db.Database.CurrentTransaction is null) throw ContractException.Conflict("active_main_contract_required_for_accounts");
         var ids = contract.Residents.Select(r => r.ResidentId).ToArray();
-        var residents = await db.Set<Resident>().Where(r => ids.Contains(r.Id) && r.RoomId == contract.RoomId && r.OwnerUserId == ownerId).ToArrayAsync(t);
+        var residents = (await contractData.ResidentsAsync(contract.RoomId, ids, t)).Where(r => r.OwnerUserId == ownerId).ToArray();
         if (residents.Length != ids.Length) throw ContractException.Conflict("contract_residents_changed");
         var evidence = AnonymousContractSigningService.AcceptedEvidence(contract);
-        var invitation = evidence is null ? null : await db.Set<ContractSigningInvitation>()
-            .SingleOrDefaultAsync(i => i.Id == evidence.InvitationId && i.ContractId == contract.Id && i.AcceptedAt != null, t);
+        var invitation = evidence is null ? null : (await NativeInvitationPersistence.ListAsync(compact, contract.Id, evidence.InvitationId, null, t))
+            .SingleOrDefault(i => i.AcceptedAt != null);
         var contacts = SigningContacts.Read(invitation);
         foreach (var resident in residents.Where(r => r.Id == contract.RepresentativeResidentId))
         {
@@ -88,6 +96,6 @@ internal sealed class PostActivationTenantProvisioning(BHomePersistenceContext d
             }
         }
         // One transaction persists occupancy, accounts, resident links and dispatch intents.
-        await db.SaveChangesAsync(t);
+        await contractData.FlushAsync(t);
     }
 }

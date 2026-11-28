@@ -17,6 +17,7 @@ using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.Hosting;
 using Npgsql;
+using Native = BHome.Domain.Entities;
 
 namespace BHome.Infrastructure.Development;
 
@@ -66,9 +67,8 @@ public sealed class DevelopmentOnboardingSeedService(
 
         return await contracts.InTransactionAsync(input.RoomId, async () =>
         {
-            var room = await db.Set<Room>().Include(r => r.Location).Include(r => r.RoomType)
-                .SingleOrDefaultAsync(r => r.Id == input.RoomId && r.LocationId == input.LocationId && r.Location.IsActive, t)
-                ?? throw ContractException.Missing();
+            var room = await contracts.RoomAsync(input.RoomId, t) ?? throw ContractException.Missing();
+            if (room.LocationId != input.LocationId || !room.Location.IsActive) throw ContractException.Missing();
             if (!await contracts.ActiveUserInRoleAsync(ownerId, Roles.Owner, t))
                 throw new ContractException(403, "contract_role_forbidden");
             var previous = await contracts.OperationAsync(ownerId, key, "dev-onboarding-seed", t);
@@ -77,7 +77,7 @@ public sealed class DevelopmentOnboardingSeedService(
                 if (previous.Fingerprint != fingerprint) throw ContractException.Conflict("idempotency_key_reused");
                 var existing = await contracts.FindAsync(previous.ResultId, t) ?? throw ContractException.Missing();
                 var email = await db.Users.Where(u => u.Id == existing.TenantUserId).Select(u => u.Email).SingleAsync(t);
-                var name = await db.Set<Resident>().Where(r => r.Id == existing.RepresentativeResidentId)
+                var name = await db.Set<Native.Resident>().Where(r => r.Id == existing.RepresentativeResidentId)
                     .Select(r => r.DisplayLabel).SingleAsync(t);
                 return new DevelopmentOnboardingSeedResult(existing.Id, room.Id, room.RoomNumber, room.Location.Name,
                     email!, null, name);
@@ -91,10 +91,11 @@ public sealed class DevelopmentOnboardingSeedService(
             // Re-read status and all overlapping live/draft obligations under the canonical
             // payment ledger, location advisory and room locks used by contract creation.
             if (room.Status != RoomStatus.Available || room.Capacity < 1 || room.RoomType is { IsActive: false } ||
-                await db.Set<Contract>().AnyAsync(c => c.RoomId == room.Id &&
-                    (c.Status == ContractStatus.Active || c.Status == ContractStatus.Expired ||
-                     (c.Status == ContractStatus.Draft || c.Status == ContractStatus.PendingSigning ||
-                      c.Status == ContractStatus.PendingActivation) && c.StartDate <= endDate && c.EndDate >= today), t))
+                await db.Set<Native.Contract>().AnyAsync(c => c.RoomId == room.Id &&
+                    (c.ContractType == "MAIN" || c.ContractType == "RENEWAL" || c.ContractType == "HOLDING" || c.ContractType == "ADDENDUM") &&
+                    (c.Status == (short)ContractStatus.Active || c.Status == (short)ContractStatus.Expired ||
+                     (c.Status == (short)ContractStatus.Draft || c.Status == (short)ContractStatus.PendingSigning ||
+                      c.Status == (short)ContractStatus.PendingActivation) && c.StartDate <= endDate && c.EndDate >= today), t))
                 throw ContractException.Conflict("room_not_available");
             var blockers = await lifecycle.RoomBlockersAsync(room.Id, t);
             if (blockers.Count > 0) throw ContractException.Conflict(blockers[0]);
@@ -106,10 +107,10 @@ public sealed class DevelopmentOnboardingSeedService(
                 rent.Category != ChargeCategory.Rent || rent.Method != ChargingMethod.FixedPerRoomPerMonth ||
                 prices.Charges.Any(p => p.Rate < 0 || !PropertyRules.ValidCharge(p.Category, p.Method, p.ChargeCode)))
                 throw ContractException.Conflict("development_seed_pricing_required");
-            var meters = await db.Set<Meter>().Where(m => m.RoomId == room.Id && m.IsActive)
+            var meters = await db.Set<Native.Meter>().Where(m => m.RoomId == room.Id && m.IsActive)
                 .Select(m => new { m.UtilityType, m.InstalledOn }).ToArrayAsync(t);
             if (meters.Length != 2 || meters.Any(m => m.InstalledOn > today) ||
-                meters.Count(m => m.UtilityType == UtilityType.Electricity) != 1 || meters.Count(m => m.UtilityType == UtilityType.Water) != 1)
+                meters.Count(m => m.UtilityType == (short)UtilityType.Electricity) != 1 || meters.Count(m => m.UtilityType == (short)UtilityType.Water) != 1)
                 throw ContractException.Conflict("development_seed_meters_required");
             // Demo handover must exercise the actual room inventory. Resolve the same
             // canonical source used by EnsureMoveInTaskAsync under the Location lock;
@@ -197,7 +198,9 @@ public sealed class DevelopmentOnboardingSeedService(
             { AgreedCharges = charges });
             room.Status = RoomStatus.Occupied;
             room.Version++;
-            db.Add(resident);
+            if (db is BHome.Infrastructure.Persistence.Compact24.Compact24DbContext native)
+                await BHome.Infrastructure.Ocr.NativeCaptureWrites.ResidentAsync(native, resident, true, t);
+            else db.Add(resident);
             // The repository generates the handover draft and deterministic initial
             // meter/inventory tasks in the same transaction using existing room assets.
             contracts.Add(contract);
@@ -210,15 +213,7 @@ public sealed class DevelopmentOnboardingSeedService(
                 ResultId = contract.Id,
                 CreatedAt = now
             });
-            db.SecurityAudit.Add(new SecurityAuditRecord
-            {
-                UserId = ownerId,
-                Event = "DevelopmentContractFixtureCreated",
-                TargetType = "Contract",
-                TargetId = contract.Id,
-                Succeeded = true,
-                OccurredAt = now
-            });
+            contracts.Audit(ownerId, "DevelopmentContractFixtureCreated", contract.Id, now);
             return new DevelopmentOnboardingSeedResult(contract.Id, room.Id, room.RoomNumber, room.Location.Name,
                 emailAddress, tenantPassword, nameLabel);
         }, t);

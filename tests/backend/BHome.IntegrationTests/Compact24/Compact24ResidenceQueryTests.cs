@@ -24,7 +24,7 @@ public sealed class Compact24ResidenceQueryTests(Compact24Fixture fixture) : ICl
         var tenantId = (await tenant.GetFromJsonAsync<SessionIdentity>("/api/v1/auth/me"))!.UserId;
         var ownerId = (await owner.GetFromJsonAsync<SessionIdentity>("/api/v1/auth/me"))!.UserId;
         await using var scope = fixture.Factory!.Services.CreateAsyncScope();
-        var db = scope.ServiceProvider.GetRequiredService<BHomePersistenceContext>();
+        var db = scope.ServiceProvider.GetFixturePersistence();
         var chain = new Chain { Name = "Synthetic family residence" };
         var location = new Location("Synthetic family residence") { ChainId = chain.Id };
         var room = new Room { LocationId = location.Id, RoomNumber = "FAMILY-SYN", Capacity = 3, Status = RoomStatus.Occupied };
@@ -152,7 +152,7 @@ public sealed class Compact24ResidenceQueryTests(Compact24Fixture fixture) : ICl
         var email = $"{Guid.NewGuid():N}@example.invalid";
         await using (var scope = fixture.Factory!.Services.CreateAsyncScope())
         {
-            var db = scope.ServiceProvider.GetRequiredService<BHomePersistenceContext>();
+            var db = scope.ServiceProvider.GetFixturePersistence();
             var existingOwner = role == Roles.Owner ? await db.Users.FirstOrDefaultAsync(u => EF.Property<string[]>(u, "roles").Contains(Roles.Owner)) : null;
             if (existingOwner is not null) email = existingOwner.Email!;
             else await WorkflowTestUsers.CreateAsync(scope.ServiceProvider,
@@ -172,7 +172,7 @@ public sealed class Compact24ResidenceQueryTests(Compact24Fixture fixture) : ICl
         using var client = await User(Roles.Tenant);
         var identity = (await client.GetFromJsonAsync<SessionIdentity>("/api/v1/auth/me"))!;
         await using var scope = fixture.Factory!.Services.CreateAsyncScope();
-        var db = scope.ServiceProvider.GetRequiredService<BHomePersistenceContext>();
+        var db = scope.ServiceProvider.GetFixturePersistence();
         var owner = await db.Users.FirstOrDefaultAsync(u => EF.Property<string[]>(u, "roles").Contains(Roles.Owner));
         if (owner is null)
         {
@@ -245,7 +245,7 @@ public sealed class Compact24ResidenceQueryTests(Compact24Fixture fixture) : ICl
             ownerId = (await owner.GetFromJsonAsync<SessionIdentity>("/api/v1/auth/me"))!.UserId;
 
         await using var scope = fixture.Factory!.Services.CreateAsyncScope();
-        var db = scope.ServiceProvider.GetRequiredService<BHomePersistenceContext>();
+        var db = scope.ServiceProvider.GetFixturePersistence();
         var chain = new Chain { Name = "Synthetic residence onboarding" };
         var location = new Location("Synthetic residence onboarding") { ChainId = chain.Id };
         var room = new Room { LocationId = location.Id, RoomNumber = "RES-START", Capacity = 1, Status = RoomStatus.Occupied };

@@ -43,13 +43,15 @@ public static class AssetHandoverDemoSeed
         if (!await minio.BucketExistsAsync(new BucketExistsArgs().WithBucket("handover-demo"))) await minio.MakeBucketAsync(new MakeBucketArgs().WithBucket("handover-demo"));
         await Compact24SampleSeed.RunAsync(provider, environment, password);
         await using var scope = provider.CreateAsyncScope(); var services = scope.ServiceProvider;
-        var db = services.GetRequiredService<Compact24DbContext>(); var store = services.GetRequiredService<ISetupWorkspaceStore>();
+        var identity = services.GetRequiredService<Compact24DbContext>();
+        await using var db = OfflineFixturePersistence.Open(services);
+        var store = services.GetRequiredService<ISetupWorkspaceStore>();
         var actor = services.GetRequiredService<LifecycleSeedActor>(); var users = services.GetRequiredService<UserManager<ApplicationUser>>();
         foreach (var n in new[] { 1, 2, 3, 4 })
         {
             var account = await users.FindByIdAsync(Compact24SampleSeed.Id(n).ToString()) ?? throw new LocalTestAccountException("Synthetic account missing.");
             account.EmailConfirmed = true;
-            db.Entry(account).Property("full_name").CurrentValue = $"Tài khoản demo bàn giao {n}";
+            identity.Entry(account).Property("full_name").CurrentValue = $"Tài khoản demo bàn giao {n}";
             account.PhoneNumber = $"+1555000100{n}";
             var result = await users.UpdateAsync(account);
             if (!result.Succeeded) throw new LocalTestAccountException("Cannot prepare synthetic account profile.");

@@ -17,9 +17,11 @@ internal sealed class CaptureWorkflowResources(BHomePersistenceContext db, Captu
         try
         {
             if (db is Compact24DbContext compact)
-                return await (from r in compact.Set<Native.Resident>() join room in scope.NativeRooms on r.CurrentRoomId equals (Guid?)room.Id
-                    where r.Id == id select new OcrWorkflowResource(new ResourceScope(room.LocationId, null),
-                        r.VerificationStatus == (short)IdentityVerificationStatus.Pending, OcrDocumentKind.IdentityFront, null, null)).SingleOrDefaultAsync(token);
+                return await (from r in compact.Set<Native.Resident>()
+                              join room in scope.NativeRooms on r.CurrentRoomId equals (Guid?)room.Id
+                              where r.Id == id
+                              select new OcrWorkflowResource(new ResourceScope(room.LocationId, null),
+                                  r.VerificationStatus == (short)IdentityVerificationStatus.Pending, OcrDocumentKind.IdentityFront, null, null)).SingleOrDefaultAsync(token);
             return await db.Set<Resident>().Where(r => r.Id == id && scope.VisibleRooms.Any(room => room.Id == r.RoomId))
             .Select(r => new OcrWorkflowResource(new ResourceScope(r.Room.LocationId, null),
                 r.VerificationStatus == IdentityVerificationStatus.Pending, OcrDocumentKind.IdentityFront, null, null)).SingleOrDefaultAsync(token);

@@ -417,7 +417,7 @@ public sealed class Compact24MigrationTests
         private string sourceName = "";
         public Compact24Fixture Fixture { get; } = new();
         public BHomeDbContext Source { get; private set; } = null!;
-        public Compact24DbContext Target { get; private set; } = null!;
+        public Compact24ArchiveContext Target { get; private set; } = null!;
         public static async Task<Pair> Create()
         {
             var pair = new Pair { admin = Environment.GetEnvironmentVariable("BHOME_COMPACT24_TEST_ADMIN")! };
@@ -433,7 +433,7 @@ public sealed class Compact24MigrationTests
                 settings.Database = pair.sourceName;
                 pair.Source = new BHomeDbContext(new DbContextOptionsBuilder<BHomeDbContext>().UseNpgsql(settings.ConnectionString).Options);
                 await pair.Source.Database.MigrateAsync();
-                pair.Target = new Compact24DbContext(new DbContextOptionsBuilder<Compact24DbContext>().UseNpgsql(pair.Fixture.Connection).Options);
+                pair.Target = new Compact24ArchiveContext(new DbContextOptionsBuilder<Compact24DbContext>().UseNpgsql(pair.Fixture.Connection).Options);
                 return pair;
             }
             catch { await pair.DisposeAsync(); throw; }

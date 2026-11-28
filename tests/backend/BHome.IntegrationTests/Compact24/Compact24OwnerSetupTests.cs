@@ -51,7 +51,7 @@ public sealed partial class Compact24OwnerSetupTests(Compact24Fixture fixture) :
     private static DateOnly Today => BHome.Application.Billing.BillingAutomationDates.BusinessDate(DateTimeOffset.UtcNow);
     private async Task<Workspace> Seed()
     {
-        await using var scope = fixture.Factory!.Services.CreateAsyncScope(); var db = scope.ServiceProvider.GetRequiredService<Compact24DbContext>();
+        await using var scope = fixture.Factory!.Services.CreateAsyncScope(); var db = scope.ServiceProvider.GetRequiredService<Compact24ArchiveContext>();
         async Task<ApplicationUser> Account(string role)
         {
             if (role == Roles.Owner && await db.Users.FirstOrDefaultAsync(u => EF.Property<string[]>(u, "roles").Contains(Roles.Owner)) is { } prior) return prior;
@@ -154,7 +154,7 @@ public sealed partial class Compact24OwnerSetupTests(Compact24Fixture fixture) :
     public async Task ClosureShowsOpenWorkAndEmergencyReadinessAndDoesNotLeakToTenant()
     {
         var w = await Seed(); using var owner = await Client(w.Owner); using var tenant = await Client(w.Tenant);
-        await using var scope = fixture.Factory!.Services.CreateAsyncScope(); var db = scope.ServiceProvider.GetRequiredService<Compact24DbContext>();
+        await using var scope = fixture.Factory!.Services.CreateAsyncScope(); var db = scope.ServiceProvider.GetRequiredService<Compact24ArchiveContext>();
         var vacant = await owner.GetFromJsonAsync<LocationClosureCheck>($"/api/v1/locations/{w.Location}/closure-check");
         Assert.True(vacant!.CanClose);
         Assert.DoesNotContain(vacant.Blockers, b => b.Code == "operational_rooms");
@@ -187,28 +187,37 @@ public sealed partial class Compact24OwnerSetupTests(Compact24Fixture fixture) :
         Guid contractId;
         await using (var seed = fixture.Factory!.Services.CreateAsyncScope())
         {
-            var db = seed.ServiceProvider.GetRequiredService<Compact24DbContext>();
+            var db = seed.ServiceProvider.GetRequiredService<Compact24ArchiveContext>();
             var person = new Resident
             {
-                RoomId = room.Id, OwnerUserId = w.Owner.Id, DisplayLabel = "Synthetic resident",
+                RoomId = room.Id,
+                OwnerUserId = w.Owner.Id,
+                DisplayLabel = "Synthetic resident",
                 VerificationStatus = IdentityVerificationStatus.Verified
             };
             db.Add(person);
             var contract = new Contract
             {
-                RoomId = room.Id, OwnerSignerId = w.Owner.Id, RepresentativeResidentId = person.Id,
-                StartDate = Today, EndDate = Today.AddYears(1), Terms = "Synthetic draft"
+                RoomId = room.Id,
+                OwnerSignerId = w.Owner.Id,
+                RepresentativeResidentId = person.Id,
+                StartDate = Today,
+                EndDate = Today.AddYears(1),
+                Terms = "Synthetic draft"
             };
             contract.Residents.Add(new ContractResident
             {
-                ContractId = contract.Id, ResidentId = person.Id, Role = ResidentType.Representative, ResidenceFrom = Today
+                ContractId = contract.Id,
+                ResidentId = person.Id,
+                Role = ResidentType.Representative,
+                ResidenceFrom = Today
             });
             db.Add(contract);
             await db.SaveChangesAsync();
             contractId = contract.Id;
         }
         await using var scope = fixture.Factory!.Services.CreateAsyncScope();
-        var readDb = scope.ServiceProvider.GetRequiredService<Compact24DbContext>();
+        var readDb = scope.ServiceProvider.GetRequiredService<Compact24ArchiveContext>();
         var insights = scope.ServiceProvider.GetRequiredService<IRoomInsightsRepository>();
         var evidence = await insights.ReadinessAsync(room.Id, contractId, Today, default);
         Assert.True(evidence.LocationActive);
@@ -364,7 +373,7 @@ public sealed partial class Compact24OwnerSetupTests(Compact24Fixture fixture) :
         Guid contractId;
         await using (var scope = fixture.Factory!.Services.CreateAsyncScope())
         {
-            var db = scope.ServiceProvider.GetRequiredService<Compact24DbContext>();
+            var db = scope.ServiceProvider.GetRequiredService<Compact24ArchiveContext>();
             var resident = new Resident { RoomId = w.Room, OwnerUserId = w.Owner.Id, TenantUserId = w.Tenant.Id, DisplayLabel = "Synthetic occupant" }; db.Add(resident);
             var c = new Contract { RoomId = w.Room, OwnerSignerId = w.Owner.Id, TenantUserId = w.Tenant.Id, RepresentativeResidentId = resident.Id, StartDate = Today.AddDays(-10), EndDate = Today.AddYears(1), Terms = "Synthetic contract" };
             await scope.ServiceProvider.GetRequiredService<IOperatingPolicyWorkflow>().BindDraftAsync(c, default); db.Add(c); await db.SaveChangesAsync(); contractId = c.Id;
@@ -380,7 +389,7 @@ public sealed partial class Compact24OwnerSetupTests(Compact24Fixture fixture) :
     [CompactPostgresFact]
     public async Task CanonicalDepositReaderAndProjectionSeeLegacyAndBankAllocationsExactlyOnce()
     {
-        var w = await Seed(); await using var scope = fixture.Factory!.Services.CreateAsyncScope(); var db = scope.ServiceProvider.GetRequiredService<Compact24DbContext>();
+        var w = await Seed(); await using var scope = fixture.Factory!.Services.CreateAsyncScope(); var db = scope.ServiceProvider.GetRequiredService<Compact24ArchiveContext>();
         var resident = new Resident { RoomId = w.Room, OwnerUserId = w.Owner.Id, DisplayLabel = "Synthetic depositor" }; db.Add(resident);
         var c = new Contract
         {
@@ -419,7 +428,7 @@ public sealed partial class Compact24OwnerSetupTests(Compact24Fixture fixture) :
         using var owner = await Client(w.Owner, host); using var tenant = await Client(w.Tenant, host); Guid parentId;
         await using (var scope = host.Services.CreateAsyncScope())
         {
-            var db = scope.ServiceProvider.GetRequiredService<Compact24DbContext>();
+            var db = scope.ServiceProvider.GetRequiredService<Compact24ArchiveContext>();
             var resident = new Resident { RoomId = w.Room, OwnerUserId = w.Owner.Id, TenantUserId = w.Tenant.Id, DisplayLabel = "Synthetic amendment signer" }; db.Add(resident);
             var parent = new Contract
             {
@@ -444,7 +453,7 @@ public sealed partial class Compact24OwnerSetupTests(Compact24Fixture fixture) :
         var amendment = (await Read<JsonElement>(await owner.PostAsJsonAsync($"/api/v1/contracts/{parentId}/operating-policy-amendments", new PolicyAmendmentInput(policy.Id, Today, "Synthetic approved change")))).GetProperty("contractId").GetGuid();
         await using (var persisted = host.Services.CreateAsyncScope())
         {
-            var db = persisted.ServiceProvider.GetRequiredService<Compact24DbContext>();
+            var db = persisted.ServiceProvider.GetRequiredService<Compact24ArchiveContext>();
             var row = await db.Set<BHome.Domain.Entities.Contract>().AsNoTracking().SingleAsync(c => c.Id == amendment);
             Assert.Equal("ADDENDUM", row.ContractType);
             Assert.Equal(parentId, row.ParentContractId);
@@ -483,7 +492,7 @@ public sealed partial class Compact24OwnerSetupTests(Compact24Fixture fixture) :
         owner.DefaultRequestHeaders.Remove("Idempotency-Key"); owner.DefaultRequestHeaders.Add("Idempotency-Key", Guid.NewGuid().ToString());
         var recreated = (await Read<JsonElement>(await owner.PostAsJsonAsync($"/api/v1/contracts/{parentId}/operating-policy-amendments", nextInput))).GetProperty("contractId").GetGuid();
         Assert.NotEqual(next, recreated);
-        await using var check = host.Services.CreateAsyncScope(); var context = check.ServiceProvider.GetRequiredService<Compact24DbContext>();
+        await using var check = host.Services.CreateAsyncScope(); var context = check.ServiceProvider.GetRequiredService<Compact24ArchiveContext>();
         Assert.Equal("Original immutable synthetic terms", await context.Set<Contract>().Where(c => c.Id == parentId).Select(c => c.Terms).SingleAsync());
         Assert.Equal(1, await context.Set<Contract>().CountAsync(c => c.RoomId == w.Room && c.Status == ContractStatus.Active));
     }
@@ -506,7 +515,7 @@ public sealed partial class Compact24OwnerSetupTests(Compact24Fixture fixture) :
     [CompactPostgresFact]
     public async Task ReplacingStaffMovesMeterAndWorkOrderAndFailedRemovalRollsBackResponsibility()
     {
-        var w = await Seed(); await using var scope = fixture.Factory!.Services.CreateAsyncScope(); var db = scope.ServiceProvider.GetRequiredService<Compact24DbContext>();
+        var w = await Seed(); await using var scope = fixture.Factory!.Services.CreateAsyncScope(); var db = scope.ServiceProvider.GetRequiredService<Compact24ArchiveContext>();
         var next = await WorkflowTestUsers.CreateAsync(scope.ServiceProvider, new ApplicationUser { Id = Guid.NewGuid(), UserName = Guid.NewGuid().ToString("N"), Email = Guid.NewGuid().ToString("N") + "@example.invalid", EmailConfirmed = true }, Roles.Staff, Password);
         var meter = new Meter { RoomId = w.Room, Code = "SYN-METER", UtilityType = UtilityType.Electricity, InstalledOn = Today }; db.Add(meter);
         var task = new OperationalTask { LocationId = w.Location, MeterId = meter.Id, AssignedStaffUserId = w.Staff.Id, Purpose = ReadingPurpose.Initial, ReadingDate = Today }; db.Add(task);
@@ -525,10 +534,10 @@ public sealed partial class Compact24OwnerSetupTests(Compact24Fixture fixture) :
     {
         var w = await Seed(); using var owner = await Client(w.Owner);
         await using (var s = fixture.Factory!.Services.CreateAsyncScope())
-        { var db = s.ServiceProvider.GetRequiredService<Compact24DbContext>(); var room = await db.Set<Room>().SingleAsync(r => r.Id == w.Room); room.Status = RoomStatus.Occupied; await db.SaveChangesAsync(); }
+        { var db = s.ServiceProvider.GetRequiredService<Compact24ArchiveContext>(); var room = await db.Set<Room>().SingleAsync(r => r.Id == w.Room); room.Status = RoomStatus.Occupied; await db.SaveChangesAsync(); }
         var template = await Read<SetupDocument>(await owner.PostAsJsonAsync("/api/v1/asset-templates", new AssetTemplateWrite(w.Location, "Synthetic returning room", [new(Guid.NewGuid(), "Chair", "Furniture", "Serialized", 1)])));
         var run = await Read<AssetSyncRun>(await owner.PostAsJsonAsync($"/api/v1/asset-templates/{template.Id}/publish", new TemplatePublish(1))); Assert.Equal("SkippedNotEligible", Assert.Single(run.Rooms).Status);
-        await using var scope = fixture.Factory!.Services.CreateAsyncScope(); var context = scope.ServiceProvider.GetRequiredService<Compact24DbContext>();
+        await using var scope = fixture.Factory!.Services.CreateAsyncScope(); var context = scope.ServiceProvider.GetRequiredService<Compact24ArchiveContext>();
         var vacant = await context.Set<Room>().SingleAsync(r => r.Id == w.Room); vacant.Status = RoomStatus.Available; await context.SaveChangesAsync();
         var worker = scope.ServiceProvider.GetServices<IBackgroundJobHandler>().Single(j => j.Name == "asset-template-sync"); await worker.ExecuteAsync(new(Guid.NewGuid(), "synthetic-sync", "{}"), default); await worker.ExecuteAsync(new(Guid.NewGuid(), "synthetic-retry", "{}"), default);
         var inventory = await owner.GetFromJsonAsync<AssetInventory>($"/api/v1/rooms/{w.Room}/asset-inventory"); Assert.Single(inventory!.Desired); Assert.Empty(inventory.Physical);
@@ -539,7 +548,7 @@ public sealed partial class Compact24OwnerSetupTests(Compact24Fixture fixture) :
         var w = await Seed(); Guid residentId;
         await using (var s = fixture.Factory!.Services.CreateAsyncScope())
         {
-            var db = s.ServiceProvider.GetRequiredService<Compact24DbContext>(); var resident = new Resident { RoomId = w.Room, OwnerUserId = w.Owner.Id, DisplayLabel = "Synthetic former occupant" }; db.Add(resident); residentId = resident.Id;
+            var db = s.ServiceProvider.GetRequiredService<Compact24ArchiveContext>(); var resident = new Resident { RoomId = w.Room, OwnerUserId = w.Owner.Id, DisplayLabel = "Synthetic former occupant" }; db.Add(resident); residentId = resident.Id;
             db.Add(new Contract
             {
                 RoomId = w.Room,
@@ -556,7 +565,7 @@ public sealed partial class Compact24OwnerSetupTests(Compact24Fixture fixture) :
         }
         using var owner = await Client(w.Owner); var closure = await owner.GetFromJsonAsync<LocationClosureCheck>($"/api/v1/locations/{w.Location}/closure-check"); Assert.True(closure!.CanClose);
         var location = await owner.GetFromJsonAsync<LocationDto>($"/api/v1/locations/{w.Location}"); await Read<LocationDto>(await owner.PutAsJsonAsync($"/api/v1/locations/{w.Location}", new LocationWrite(location!.Name, location.Address, false, location.Version, "Synthetic closure")));
-        await using var check = fixture.Factory!.Services.CreateAsyncScope(); Assert.True(await check.ServiceProvider.GetRequiredService<Compact24DbContext>().Set<Resident>().AnyAsync(r => r.Id == residentId));
+        await using var check = fixture.Factory!.Services.CreateAsyncScope(); Assert.True(await check.ServiceProvider.GetRequiredService<Compact24ArchiveContext>().Set<Resident>().AnyAsync(r => r.Id == residentId));
     }
     [CompactPostgresFact]
     public async Task HoldingNeedsBothSignaturesAndFullDepositAndProtectsTheWholeRoomBeforeDispatch()
@@ -565,7 +574,7 @@ public sealed partial class Compact24OwnerSetupTests(Compact24Fixture fixture) :
         using var owner = await Client(w.Owner, host); using var tenant = await Client(w.Tenant, host); Guid resident;
         await using (var scope = host.Services.CreateAsyncScope())
         {
-            var db = scope.ServiceProvider.GetRequiredService<Compact24DbContext>(); var person = new Resident { RoomId = w.Room, OwnerUserId = w.Owner.Id, TenantUserId = w.Tenant.Id, DisplayLabel = "Synthetic Holding Tenant", VerificationStatus = IdentityVerificationStatus.Verified }; db.Add(person); resident = person.Id;
+            var db = scope.ServiceProvider.GetRequiredService<Compact24ArchiveContext>(); var person = new Resident { RoomId = w.Room, OwnerUserId = w.Owner.Id, TenantUserId = w.Tenant.Id, DisplayLabel = "Synthetic Holding Tenant", VerificationStatus = IdentityVerificationStatus.Verified }; db.Add(person); resident = person.Id;
             db.AddRange(
                 new BillingPolicy { LocationId = w.Location, Category = ChargeCategory.Rent, ChargeCode = "RENT", Name = "Synthetic rent", Method = ChargingMethod.FixedPerRoomPerMonth, Rate = 3000000, EffectiveFrom = Today },
                 new BillingPolicy { LocationId = w.Location, Category = ChargeCategory.Electricity, ChargeCode = "ELECTRICITY", Name = "Synthetic electricity", Method = ChargingMethod.Metered, Rate = 3500, EffectiveFrom = Today },

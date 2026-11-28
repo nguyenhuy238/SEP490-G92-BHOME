@@ -35,7 +35,7 @@ public sealed class TenantPreInvoiceReadingsTests(Compact24WorkflowFixture fixtu
         Guid noticeId;
         await using (var scope = factory.Services.CreateAsyncScope())
         {
-            var db = scope.ServiceProvider.GetRequiredService<Compact24DbContext>();
+            var db = scope.ServiceProvider.GetRequiredService<Compact24ArchiveContext>();
             familyId = (await WorkflowTestUsers.CreateAsync(scope.ServiceProvider,
                 new ApplicationUser { UserName = familyEmail, Email = familyEmail }, "Tenant", WorkflowTestUsers.Password)).Id;
             var family = new Resident
@@ -98,7 +98,7 @@ public sealed class TenantPreInvoiceReadingsTests(Compact24WorkflowFixture fixtu
         created.EnsureSuccessStatusCode(); var taskId = (await created.Content.ReadFromJsonAsync<IdResult>())!.Id;
         await using (var scope = factory.Services.CreateAsyncScope())
         {
-            var db = scope.ServiceProvider.GetRequiredService<Compact24DbContext>();
+            var db = scope.ServiceProvider.GetRequiredService<Compact24ArchiveContext>();
             var task = await db.Set<OperationalTask>().SingleAsync(x => x.Id == taskId);
             task.OcrProposedValue = 999; await db.SaveChangesAsync();
         }
@@ -119,7 +119,7 @@ public sealed class TenantPreInvoiceReadingsTests(Compact24WorkflowFixture fixtu
         Assert.Equal(HttpStatusCode.BadRequest, (await tenant.GetAsync(route + "?pageSize=101")).StatusCode);
         await using (var scope = factory.Services.CreateAsyncScope())
         {
-            var db = scope.ServiceProvider.GetRequiredService<Compact24DbContext>();
+            var db = scope.ServiceProvider.GetRequiredService<Compact24ArchiveContext>();
             Assert.Equal(0, await db.Set<Invoice>().CountAsync());
             await scope.ServiceProvider.GetRequiredService<INotificationEventPublisher>().PublishPendingAsync(default);
             await scope.ServiceProvider.GetRequiredService<INotificationEventPublisher>().PublishPendingAsync(default);

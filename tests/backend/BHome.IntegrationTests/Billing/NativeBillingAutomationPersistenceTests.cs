@@ -38,9 +38,15 @@ public sealed partial class InvoiceApiTests
         var token = Guid.NewGuid();
         var execution = new BillingAutomationExecution
         {
-            LocationId = w.Location, PlanId = Guid.NewGuid(), BillingPeriod = w.Period, Phase = "Meter",
-            Status = "Processing", Attempts = 1, LastStartedAt = DateTimeOffset.UtcNow,
-            LockToken = token, LockedUntil = DateTimeOffset.UtcNow.AddMinutes(2)
+            LocationId = w.Location,
+            PlanId = Guid.NewGuid(),
+            BillingPeriod = w.Period,
+            Phase = "Meter",
+            Status = "Processing",
+            Attempts = 1,
+            LastStartedAt = DateTimeOffset.UtcNow,
+            LockToken = token,
+            LockedUntil = DateTimeOffset.UtcNow.AddMinutes(2)
         };
         await using (var tx = await db.Database.BeginTransactionAsync())
         {
@@ -60,8 +66,11 @@ public sealed partial class InvoiceApiTests
             await NativeBillingJobPersistence.SaveAsync(db, execution, false, token, default);
             await NativeBillingJobPersistence.AppendAttemptAsync(db, new BillingAutomationAttempt
             {
-                ExecutionId = execution.Id, Sequence = 1, Status = "Completed",
-                StartedAt = execution.LastStartedAt, FinishedAt = DateTimeOffset.UtcNow
+                ExecutionId = execution.Id,
+                Sequence = 1,
+                Status = "Completed",
+                StartedAt = execution.LastStartedAt,
+                FinishedAt = DateTimeOffset.UtcNow
             }, default);
             await tx.CommitAsync();
         }

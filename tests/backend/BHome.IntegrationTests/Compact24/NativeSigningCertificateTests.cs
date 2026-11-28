@@ -32,8 +32,17 @@ public sealed class NativeSigningCertificateTests(Compact24Fixture fixture) : IC
         var now = DateTimeOffset.Parse("2026-11-28T07:00:00Z");
         var certificate = new SigningCertificate
         {
-            Id = id, OwnerUserId = owner, Provider = "Synthetic", ProviderUserId = "subscriber", CredentialId = "handle",
-            SerialNumber = id.ToString("N"), Subject = "Subject", Issuer = "Issuer", ValidFrom = now, ValidTo = now.AddYears(1), CreatedAt = now
+            Id = id,
+            OwnerUserId = owner,
+            Provider = "Synthetic",
+            ProviderUserId = "subscriber",
+            CredentialId = "handle",
+            SerialNumber = id.ToString("N"),
+            Subject = "Subject",
+            Issuer = "Issuer",
+            ValidFrom = now,
+            ValidTo = now.AddYears(1),
+            CreatedAt = now
         };
         var store = new ContractSigningCertificateStore(db, new Actor(owner), TimeProvider.System);
         var outsider = new ContractSigningCertificateStore(db, new Actor(other), TimeProvider.System);
@@ -54,7 +63,8 @@ public sealed class NativeSigningCertificateTests(Compact24Fixture fixture) : IC
         Assert.Equal(409, (await Assert.ThrowsAsync<ContractException>(() => store.AddCertificateAsync(certificate, default))).Status);
         await store.SetLockedAsync(id, true, default);
         Assert.True((await store.CertificateAsync(id, default))!.Locked);
-        var previous = await db.Set<SigningCertificate>().AsNoTracking().SingleAsync(c => c.Id == id);
+        var archive = scope.ServiceProvider.GetRequiredService<Compact24ArchiveContext>();
+        var previous = await archive.Set<SigningCertificate>().AsNoTracking().SingleAsync(c => c.Id == id);
         Assert.Equal(certificate.CredentialId, previous.CredentialId);
         Assert.True(previous.Locked);
         await store.RemoveCertificateAsync(id, default);

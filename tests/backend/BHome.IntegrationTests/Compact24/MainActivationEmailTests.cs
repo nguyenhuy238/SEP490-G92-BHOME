@@ -22,7 +22,7 @@ public sealed partial class Compact24NotificationMvpTests
     {
         var w = await Seed(); var probe = new SmtpProbe(); using var host = EmailHost(probe);
         await using var scope = host.Services.CreateAsyncScope();
-        var db = scope.ServiceProvider.GetRequiredService<Compact24DbContext>();
+        var db = scope.ServiceProvider.GetRequiredService<Compact24ArchiveContext>();
         var c = await db.Set<Contract>().SingleAsync(c => c.Id == w.Contracts[0]);
         var evidence = AnonymousContractSigningService.AcceptedEvidence(c)!;
         if (scenario == "missing") await confirmationStorage.DeleteAsync(evidence.FinalDocumentKey!, default);

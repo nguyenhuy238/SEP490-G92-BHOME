@@ -18,7 +18,7 @@ public sealed record Compact24DataCopyResult(IReadOnlyList<Compact24Reconciliati
 
 // Offline only: both connections must identify explicitly named, disposable/authorized databases.
 // Uses the same typed serialization and native columns as runtime, with historical timestamps preserved.
-public sealed class Compact24DataMigration(BHomeDbContext source, Compact24DbContext target, int maximumRowsPerTable = 10000)
+public sealed class Compact24DataMigration(BHomeDbContext source, Compact24ArchiveContext target, int maximumRowsPerTable = 10000)
 {
     private static readonly HashSet<string> IdentityTables = new(StringComparer.Ordinal)
     { "AspNetUsers", "AspNetRoles", "AspNetUserRoles", "AuthenticationSessions", "RefreshTokens", "PasswordResetGrants", "SecurityAudit", "Chains" };

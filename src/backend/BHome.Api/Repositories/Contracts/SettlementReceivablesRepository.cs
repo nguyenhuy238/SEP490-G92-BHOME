@@ -10,6 +10,7 @@ using BHome.Infrastructure.Persistence;
 using BHome.Infrastructure.Persistence.Compact24;
 using Microsoft.EntityFrameworkCore;
 using BHome.Infrastructure.PaymentsDebt;
+using BHome.Infrastructure.Modules.PropertyManagement.Persistence;
 using Native = BHome.Domain.Entities;
 
 namespace BHome.Infrastructure.Contracts;
@@ -40,13 +41,15 @@ internal sealed partial class SettlementReceivablesRepository(BHomePersistenceCo
         // A financial closing orchestrator already holds the payment-ledger,
         // Location and Room locks. Never begin a nested EF transaction.
         if (db.Database.CurrentTransaction is not null && SettlementFinancialCloseTransactionContext.Active) return await work();
-        var room = await db.Set<Contract>().AsNoTracking().Where(c => c.Id == id).Select(c => (Guid?)c.RoomId).SingleOrDefaultAsync(token)
+        var room = await db.Set<Native.Contract>().AsNoTracking().Where(c => c.Id == id).Select(c => (Guid?)c.RoomId).SingleOrDefaultAsync(token)
             ?? throw ContractException.Missing();
         return await contracts.InTransactionAsync(room, work, token);
     }
     public async Task<bool> CanReadAsync(Guid id, Guid userId, bool owner, CancellationToken token)
     {
-        if (await db.Set<Contract>().AnyAsync(c => c.Id == id && (owner || c.TenantUserId == userId ||
+        if (db is Compact24DbContext && await db.Set<Native.Contract>().AnyAsync(c => c.Id == id && (owner || c.TenantUserId == userId ||
+            db.Set<Native.ContractResident>().Any(cr => cr.ContractId == id && db.Set<Native.Resident>().Any(r => r.Id == cr.ResidentId && r.UserId == userId))), token)) return true;
+        if (db is not Compact24DbContext && await db.Set<Contract>().AnyAsync(c => c.Id == id && (owner || c.TenantUserId == userId ||
             db.Set<ContractResident>().Any(cr => cr.ContractId == id && db.Set<Resident>().Any(r => r.Id == cr.ResidentId && r.TenantUserId == userId))), token)) return true;
         return db is Compact24DbContext && await db.Database.SqlQuery<bool>($"""
             SELECT EXISTS(SELECT 1 FROM contracts c CROSS JOIN LATERAL jsonb_array_elements(c.history) h
@@ -56,12 +59,12 @@ internal sealed partial class SettlementReceivablesRepository(BHomePersistenceCo
     }
     private async Task<List<Contract>> ChainAsync(Guid id, CancellationToken token)
     {
-        var c = await db.Set<Contract>().AsNoTracking().Include(c => c.Room).SingleOrDefaultAsync(c => c.Id == id, token) ?? throw ContractException.Missing();
+        var c = await NativeSettlementReads.ContractAsync(db, id, token) ?? throw ContractException.Missing();
         var chain = new List<Contract> { c };
         while (chain[^1].PreviousContractId is { } previous)
         {
             if (chain.Count >= 100 || chain.Any(v => v.Id == previous)) throw ContractException.Conflict("contract_version_integrity_failed");
-            var parent = await db.Set<Contract>().AsNoTracking().SingleAsync(v => v.Id == previous, token);
+            var parent = await NativeSettlementReads.ContractAsync(db, previous, token) ?? throw new InvalidOperationException("Missing previous contract.");
             if (parent.RoomId != c.RoomId || parent.TenantUserId != c.TenantUserId) throw ContractException.Conflict("contract_version_integrity_failed");
             chain.Add(parent);
         }
@@ -94,8 +97,8 @@ internal sealed partial class SettlementReceivablesRepository(BHomePersistenceCo
     {
         if (db is not Compact24DbContext) throw new ContractException(503, "settlement_receivables_unavailable");
         var chain = await ChainAsync(id, token); var contract = chain[0];
-        var inspection = await db.Set<ContractFinalInspection>().AsNoTracking().Where(i => i.ContractId == id).OrderByDescending(i => i.Version).FirstOrDefaultAsync(token);
-        var move = await db.Set<ContractMoveOut>().AsNoTracking().SingleOrDefaultAsync(m => m.ContractId == id, token);
+        var inspection = await NativeSettlementReads.InspectionAsync(db, id, token);
+        var move = await NativeSettlementReads.MoveAsync(db, id, token);
         var observed = inspection is null ? null : JsonSerializer.Deserialize<HandoverSnapshot>(inspection.ObservedSnapshot);
         var baseline = inspection is null ? null : JsonSerializer.Deserialize<HandoverSnapshot>(inspection.BaselineSnapshot);
         var charges = await SettlementChargeRecords.ReadAsync<SettlementReceivable>(db, id, SettlementChargeRecords.ChargeKind, token);
@@ -111,24 +114,23 @@ internal sealed partial class SettlementReceivablesRepository(BHomePersistenceCo
         var position = await deposits.ReadAsync([chain[^1].Id], token) ?? throw new ContractException(503, "deposit_position_unavailable");
         var available = position.Received - position.Allocated - position.Refunded - position.Reserved;
         var depositRoot = chain[^1].Id;
-        available -= await db.Set<BHome.Domain.IncidentMaintenance.MaintenanceCompensation>().Where(c => c.DepositContractId == depositRoot &&
-            (c.Status == "DepositPending" || c.Status == "Deducted")).SumAsync(c => (decimal?)c.Amount, token) ?? 0;
+        available -= (await NativeSettlementReads.CompensationsAsync(db, depositRoot, token)).Sum(c => c.Amount);
         if (available < 0) throw ContractException.Conflict("deposit_ledger_reconciliation_required");
         var incurred = observed?.Date ?? contract.ActualEndDate ?? contract.EndDate;
         var capturedAt = inspection?.InspectedAt ?? DateTimeOffset.MinValue;
-        var recipients = await (from cr in db.Set<ContractResident>().AsNoTracking()
-                                join tenancy in db.Set<Contract>() on cr.ContractId equals tenancy.Id
-                                join r in db.Set<Resident>() on cr.ResidentId equals r.Id
+        var recipients = await (from cr in db.Set<Native.ContractResident>().AsNoTracking()
+                                join tenancy in db.Set<Native.Contract>() on cr.ContractId equals tenancy.Id
+                                join r in db.Set<Native.Resident>() on cr.ResidentId equals r.Id
                                 where tenancy.RoomId == contract.RoomId && tenancy.ActivatedAt != null && tenancy.ActivatedAt <= capturedAt &&
                                     tenancy.StartDate <= incurred && (tenancy.ActualEndDate ?? tenancy.EndDate) >= incurred &&
-                                    (tenancy.Status == ContractStatus.Active || tenancy.Id == id ||
-                                        tenancy.Status == ContractStatus.Terminated && tenancy.ActualEndDate >= incurred || tenancy.Status == ContractStatus.Superseded) &&
-                                    cr.ResidenceFrom <= incurred && (cr.ResidenceTo == null || cr.ResidenceTo >= incurred) && r.TenantUserId != null
-                                select r.TenantUserId!.Value).Distinct().ToArrayAsync(token);
+                                    (tenancy.Status == (short)ContractStatus.Active || tenancy.Id == id ||
+                                        tenancy.Status == (short)ContractStatus.Terminated && tenancy.ActualEndDate >= incurred || tenancy.Status == (short)ContractStatus.Superseded) &&
+                                    cr.ResidenceFrom <= incurred && (cr.ResidenceTo == null || cr.ResidenceTo >= incurred) && r.UserId != null
+                                select r.UserId!.Value).Distinct().ToArrayAsync(token);
         var legacy = await DepositDeductionRecords.LatestAsync(db, id, token);
         var payerIds = charges.SelectMany(c => c.RecipientUserIds).Distinct().ToArray();
-        var payerRows = await db.Set<Resident>().AsNoTracking().Where(r => r.TenantUserId != null && payerIds.Contains(r.TenantUserId.Value))
-            .OrderBy(r => r.Id).Select(r => new { Id = r.TenantUserId!.Value, r.DisplayLabel }).ToArrayAsync(token);
+        var payerRows = await db.Set<Native.Resident>().AsNoTracking().Where(r => r.UserId != null && payerIds.Contains(r.UserId.Value))
+            .OrderBy(r => r.Id).Select(r => new { Id = r.UserId!.Value, r.DisplayLabel }).ToArrayAsync(token);
         var payers = payerRows.DistinctBy(r => r.Id).Select(r => new BHome.Application.PaymentsDebt.PayerChoice(r.Id, r.DisplayLabel)).ToArray();
         var invoiceRows = await db.Financials(OffsetInvoices(chain, incurred))
             .OrderBy(i => i.BillingPeriod).ThenBy(i => i.Id).Take(251).ToArrayAsync(token);
@@ -200,7 +202,7 @@ internal sealed partial class SettlementReceivablesRepository(BHomePersistenceCo
     public async Task<SettlementChargeReviewContext> ChargeReviewAsync(Guid id, CancellationToken token)
     {
         var context = await ContextAsync(id, token);
-        var inspection = await db.Set<ContractFinalInspection>().AsNoTracking().Where(i => i.ContractId == id).OrderByDescending(i => i.Version).FirstOrDefaultAsync(token);
+        var inspection = await NativeSettlementReads.InspectionAsync(db, id, token);
         var reference = SettlementChargeReviewRules.Reference(id, inspection, context.View.Receivables.Select(r => r.Charge));
         var latest = (await SettlementChargeRecords.ReadAsync<SettlementChargeReview>(db, id, SettlementChargeRecords.ReviewKind, token)).OrderByDescending(r => r.ApprovedAt).FirstOrDefault();
         return new(context, reference, latest);
@@ -216,7 +218,7 @@ internal sealed partial class SettlementReceivablesRepository(BHomePersistenceCo
             result.ApprovedByUserId, result.ApprovedAt, token);
         await db.SaveChangesAsync(token);
     }
-    public Task<Guid> LocationAsync(Guid id, CancellationToken token) => db.Set<Contract>().Where(c => c.Id == id).Select(c => c.Room.LocationId).SingleAsync(token);
+    public Task<Guid> LocationAsync(Guid id, CancellationToken token) => NativeSettlementReads.LocationAsync(db, id, token);
     public async Task SaveBankResultAsync(SettlementBankAllocationResult result, CancellationToken token)
     {
         await AppendAsync(result.ContractId, result.Id, SettlementChargeRecords.BankKind, result, result.ApprovedByUserId, result.ApprovedAt, token);
@@ -229,7 +231,7 @@ internal sealed partial class SettlementReceivablesRepository(BHomePersistenceCo
     }
     private async Task NotifyAsync(SettlementReceivable charge, string key, string title, string message, CancellationToken token)
     {
-        var location = await db.Set<Contract>().Where(c => c.Id == charge.ContractId).Select(c => c.Room.LocationId).SingleAsync(token);
+        var location = await LocationAsync(charge.ContractId, token);
         var writer = new BHome.Infrastructure.Modules.Notifications.CompactNotificationWriter((Compact24DbContext)db, clock);
         foreach (var recipient in charge.RecipientUserIds)
             await writer.Emit(recipient, "Tenant", location, key, "PAYMENT_STATUS_UPDATED", "Invoice", title, message, "SettlementReceivable", charge.Id, token, channels: ["IN_APP", "EMAIL"]);
@@ -237,8 +239,7 @@ internal sealed partial class SettlementReceivablesRepository(BHomePersistenceCo
     public async Task<decimal?> InvoiceOutstandingAsync(Guid id, Guid invoiceId, CancellationToken token)
     {
         var chain = await ChainAsync(id, token);
-        var snapshot = await db.Set<ContractFinalInspection>().AsNoTracking().Where(i => i.ContractId == id)
-            .OrderByDescending(i => i.Version).Select(i => i.ObservedSnapshot).FirstOrDefaultAsync(token);
+        var snapshot = (await NativeSettlementReads.InspectionAsync(db, id, token))?.ObservedSnapshot;
         var incurred = snapshot is null ? chain[0].ActualEndDate ?? chain[0].EndDate : JsonSerializer.Deserialize<HandoverSnapshot>(snapshot)!.Date;
         if (!await OffsetInvoices(chain, incurred).AnyAsync(i => i.Id == invoiceId, token)) return null;
         return (await db.FinancialsAsync(invoiceId, token)).OutstandingAmount;
@@ -246,8 +247,10 @@ internal sealed partial class SettlementReceivablesRepository(BHomePersistenceCo
     private async Task AppendAsync<T>(Guid contractId, Guid id, string kind, T record, Guid actor, DateTimeOffset at,
         CancellationToken token, string? auditEvent = null)
     {
+        if (db.Database.CurrentTransaction is null) throw new InvalidOperationException("Settlement writes require the existing room and ledger transaction.");
         var json = JsonSerializer.Serialize(new { schemaVersion = 1, recordType = kind, recordKey = id, state = record }, SettlementChargeRecords.Json);
-        await db.Database.ExecuteSqlInterpolatedAsync($"UPDATE contracts SET history=history||jsonb_build_array({json}::jsonb) WHERE id={contractId}", token);
+        var affected = await db.Database.ExecuteSqlInterpolatedAsync($"UPDATE contracts SET history=history||jsonb_build_array({json}::jsonb) WHERE id={contractId}", token);
+        if (affected != 1) throw new DbUpdateConcurrencyException("Settlement contract changed.");
         await SecurityAuditWrites.AppendAsync(db, new(Guid.NewGuid(), actor, null, null, auditEvent ?? kind + "Approved",
             true, at, kind, id), token);
     }
@@ -255,9 +258,15 @@ internal sealed partial class SettlementReceivablesRepository(BHomePersistenceCo
     {
         if ((charge.Utility?.PricePolicyId ?? charge.FixedCharge?.PolicyId) is { } policyId)
         {
-            var policy = await db.Set<BHome.Domain.PropertyManagement.BillingPolicy>().SingleAsync(p => p.Id == policyId, token);
-            if (policy.Version != (charge.Utility?.PricePolicyVersion ?? charge.FixedCharge?.PolicyVersion)) throw ContractException.Conflict("settlement_policy_changed");
-            policy.RecordUsage(clock.GetUtcNow());
+            var native = (Compact24DbContext)db;
+            var row = await native.Set<Native.BillingPolicy>().AsNoTracking().SingleAsync(p => p.Id == policyId, token);
+            if (row.Version != (charge.Utility?.PricePolicyVersion ?? charge.FixedCharge?.PolicyVersion)) throw ContractException.Conflict("settlement_policy_changed");
+            if (row.FirstUsedAt is null)
+            {
+                var policy = NativePolicyPersistence.Read(row);
+                policy.RecordUsage(clock.GetUtcNow());
+                await NativePolicyPersistence.StageAsync(native, policy, row.Version, DateTimeOffset.UtcNow, token);
+            }
         }
         await AppendAsync(charge.ContractId, charge.Id, SettlementChargeRecords.ChargeKind, charge, charge.ApprovedByUserId, charge.ApprovedAt, token);
         await db.SaveChangesAsync(token);
@@ -275,7 +284,12 @@ internal sealed partial class SettlementReceivablesRepository(BHomePersistenceCo
         allocation.Amount = approval.Amount;
         allocation.VerifiedByUserId = approval.ApprovedByUserId;
         allocation.AllocatedAt = approval.ApprovedAt;
-        await PaymentLedgerWrites.AddAllocationAsync(db, allocation, token);
+        try { await PaymentLedgerWrites.AddAllocationAsync(db, allocation, token); }
+        catch (Npgsql.PostgresException error)
+        {
+            // Preserve the repository's persistence-error contract for database guards.
+            throw new DbUpdateException("Deposit allocation rejected by the database.", error);
+        }
         await db.SaveChangesAsync(token);
         if (approval.ReceivableId is { } chargeId)
         {

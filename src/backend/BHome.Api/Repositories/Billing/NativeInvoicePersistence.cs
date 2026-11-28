@@ -77,23 +77,53 @@ internal static class NativeInvoicePersistence
             ? data.Deserialize<LineMetadata>(Json) : null;
         return new InvoiceLine
         {
-            Id = row.Id, InvoiceId = row.InvoiceId, ChargeCode = row.ChargeCode, Name = row.Description,
-            PolicyId = row.BillingPolicyId, MeterReadingId = row.MeterReadingId, Quantity = row.Quantity,
-            Rate = row.UnitPrice, Amount = row.Amount, Category = state?.Category ?? default,
-            PolicyVersion = state?.PolicyVersion, RateDate = state?.RateDate ?? default,
-            OccupiedDays = state?.OccupiedDays ?? 0, PeriodDays = state?.PeriodDays ?? 0,
-            CalculatedAmount = state?.CalculatedAmount, CorrectionRequestId = state?.CorrectionRequestId,
-            PreviousReading = state?.PreviousReading, ConfirmedReading = state?.ConfirmedReading,
+            Id = row.Id,
+            InvoiceId = row.InvoiceId,
+            ChargeCode = row.ChargeCode,
+            Name = row.Description,
+            PolicyId = row.BillingPolicyId,
+            MeterReadingId = row.MeterReadingId,
+            Quantity = row.Quantity,
+            Rate = row.UnitPrice,
+            Amount = row.Amount,
+            Category = state?.Category ?? default,
+            PolicyVersion = state?.PolicyVersion,
+            RateDate = state?.RateDate ?? default,
+            OccupiedDays = state?.OccupiedDays ?? 0,
+            PeriodDays = state?.PeriodDays ?? 0,
+            CalculatedAmount = state?.CalculatedAmount,
+            CorrectionRequestId = state?.CorrectionRequestId,
+            PreviousReading = state?.PreviousReading,
+            ConfirmedReading = state?.ConfirmedReading,
             UtilityCalculationSnapshot = state?.UtilityCalculationSnapshot
         };
     }
 
     private static JsonElement State(Invoice i) => JsonSerializer.SerializeToElement(new
     {
-        i.Id, i.CreatedAt, i.UpdatedAt, i.Type, i.AutomationPlanId, i.AutomationFinalizationPlanId,
-        i.RoomId, i.LocationId, i.RoomNumber, i.LocationName, i.BillingPeriod, i.RepresentativeContractId,
-        i.RepresentativeTenantUserId, i.Status, i.Version, i.Total, i.MissingInputs, i.ScheduleSnapshot,
-        i.ScheduledFinalDate, i.DueDate, i.CreatedByUserId, i.FinalizedByUserId, i.FinalizedAt
+        i.Id,
+        i.CreatedAt,
+        i.UpdatedAt,
+        i.Type,
+        i.AutomationPlanId,
+        i.AutomationFinalizationPlanId,
+        i.RoomId,
+        i.LocationId,
+        i.RoomNumber,
+        i.LocationName,
+        i.BillingPeriod,
+        i.RepresentativeContractId,
+        i.RepresentativeTenantUserId,
+        i.Status,
+        i.Version,
+        i.Total,
+        i.MissingInputs,
+        i.ScheduleSnapshot,
+        i.ScheduledFinalDate,
+        i.DueDate,
+        i.CreatedByUserId,
+        i.FinalizedByUserId,
+        i.FinalizedAt
     }, Json);
 
     internal static async Task SaveAsync(Compact24DbContext db, Invoice i, int? expectedVersion,
@@ -151,12 +181,28 @@ internal static class NativeInvoicePersistence
     {
         return JsonSerializer.Serialize(new
         {
-            schemaVersion = 1, compactState = new
+            schemaVersion = 1,
+            compactState = new
             {
-                line.Id, line.InvoiceId, line.Category, line.ChargeCode, line.Name, line.PolicyId,
-                line.PolicyVersion, line.RateDate, line.Rate, line.Quantity, line.OccupiedDays, line.PeriodDays,
-                line.Amount, line.CalculatedAmount, line.CorrectionRequestId, line.MeterReadingId,
-                line.PreviousReading, line.ConfirmedReading, line.UtilityCalculationSnapshot
+                line.Id,
+                line.InvoiceId,
+                line.Category,
+                line.ChargeCode,
+                line.Name,
+                line.PolicyId,
+                line.PolicyVersion,
+                line.RateDate,
+                line.Rate,
+                line.Quantity,
+                line.OccupiedDays,
+                line.PeriodDays,
+                line.Amount,
+                line.CalculatedAmount,
+                line.CorrectionRequestId,
+                line.MeterReadingId,
+                line.PreviousReading,
+                line.ConfirmedReading,
+                line.UtilityCalculationSnapshot
             }
         }, Json);
     }
@@ -194,9 +240,14 @@ internal static class NativeInvoicePersistence
         var id = Compact24DbContext.DeterministicId("InvoiceIssuedEvent/" + issued.InvoiceId);
         var data = JsonSerializer.Serialize(new
         {
-            schemaVersion = 1, recordType = "InvoiceIssuedEvent", state = issued,
-            audienceRole = (string?)null, category = (string?)null, succeeded = (bool?)null,
-            sessionId = (Guid?)null, targetUserId = (Guid?)null
+            schemaVersion = 1,
+            recordType = "InvoiceIssuedEvent",
+            state = issued,
+            audienceRole = (string?)null,
+            category = (string?)null,
+            succeeded = (bool?)null,
+            sessionId = (Guid?)null,
+            targetUserId = (Guid?)null
         }, Json);
         return db.Database.ExecuteSqlInterpolatedAsync($"""
             INSERT INTO notifications(id,record_kind,event_key,notification_type,event_data,event_at)

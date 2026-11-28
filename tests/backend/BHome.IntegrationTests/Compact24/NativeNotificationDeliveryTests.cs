@@ -42,9 +42,10 @@ public sealed class NativeNotificationDeliveryTests(Compact24Fixture fixture) : 
         Assert.Equal(now.AddSeconds(1), row.ReadAt);
         Assert.Equal("Unconfigured", row.EventData.GetProperty("state").GetProperty("deliveryState").GetString());
         Assert.Equal(6, row.DeliveryHistory.GetArrayLength());
-        var attempts = await db.Set<NotificationDeliveryAttempt>().AsNoTracking().Where(a => a.NotificationId == id).OrderBy(a => a.Sequence).ToArrayAsync();
+        var archive = check.ServiceProvider.GetRequiredService<Compact24ArchiveContext>();
+        var attempts = await archive.Set<NotificationDeliveryAttempt>().AsNoTracking().Where(a => a.NotificationId == id).OrderBy(a => a.Sequence).ToArrayAsync();
         Assert.Equal(new[] { "Pending", "Delivered" }, attempts.Select(a => a.Outcome));
-        var historical = await db.Set<UserNotification>().AsNoTracking().SingleAsync(n => n.Id == id);
+        var historical = await archive.Set<UserNotification>().AsNoTracking().SingleAsync(n => n.Id == id);
         Assert.Equal("Delivered", historical.DeliveryState);
         Assert.Equal("receipt", historical.DeliveryProviderReference);
         Assert.Equal(2, historical.DeliveryAttempts);
@@ -79,7 +80,8 @@ public sealed class NativeNotificationDeliveryTests(Compact24Fixture fixture) : 
         Assert.Empty(rows.Single(n => n.Id == v2).DeliveryHistory.EnumerateArray());
         Assert.Equal("Suppressed", rows.Single(n => n.Id == revoked).DeliveryStatus);
         Assert.Equal("PendingReview", rows.Single(n => n.Id == id).DeliveryStatus);
-        Assert.Equal("delivery_lease_expired", (await checkDb.Set<NotificationDeliveryAttempt>().AsNoTracking()
+        var archive = check.ServiceProvider.GetRequiredService<Compact24ArchiveContext>();
+        Assert.Equal("delivery_lease_expired", (await archive.Set<NotificationDeliveryAttempt>().AsNoTracking()
             .SingleAsync(a => a.NotificationId == id)).ErrorCode);
     }
 
@@ -102,10 +104,18 @@ public sealed class NativeNotificationDeliveryTests(Compact24Fixture fixture) : 
             """);
         NotificationInboxWrites.Add(db, new NotificationInboxState
         {
-            Id = id, RecipientUserId = recipient, AudienceRole = "Tenant", Category = "Account",
-            EventType = "TEST_ACCOUNT", EventKey = "native-delivery:" + id,
-            Title = "Synthetic", Summary = "Synthetic", RelatedObjectType = "Account", RelatedObjectId = recipient,
-            CreatedAt = now, Channels = channels ?? []
+            Id = id,
+            RecipientUserId = recipient,
+            AudienceRole = "Tenant",
+            Category = "Account",
+            EventType = "TEST_ACCOUNT",
+            EventKey = "native-delivery:" + id,
+            Title = "Synthetic",
+            Summary = "Synthetic",
+            RelatedObjectType = "Account",
+            RelatedObjectId = recipient,
+            CreatedAt = now,
+            Channels = channels ?? []
         });
         await db.SaveChangesAsync();
         await tx.CommitAsync();

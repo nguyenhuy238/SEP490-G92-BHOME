@@ -13,12 +13,12 @@ internal sealed partial class SettlementReceivablesRepository
     public async Task<FinalFixedChargeContext> FinalFixedAsync(Guid id, CancellationToken token)
     {
         var context = await ContextAsync(id, token); var missing = new List<string>();
-        var contract = await db.Set<Contract>().AsNoTracking().Include(c => c.Room).Include(c => c.Residents).SingleAsync(c => c.Id == id, token);
-        var inspection = await db.Set<ContractFinalInspection>().AsNoTracking().Where(i => i.ContractId == id).OrderByDescending(i => i.Version).FirstOrDefaultAsync(token);
+        var contract = await NativeSettlementReads.ContractAsync(db, id, token) ?? throw ContractException.Missing();
+        var inspection = await NativeSettlementReads.InspectionAsync(db, id, token);
         var snapshot = inspection is null ? null : JsonSerializer.Deserialize<HandoverSnapshot>(inspection.ObservedSnapshot);
         var end = snapshot?.Date ?? contract.ActualEndDate ?? contract.EndDate;
         var period = new DateOnly(end.Year, end.Month, 1); var through = period.AddMonths(1).AddDays(-1);
-        var invoice = await db.PeriodicInvoices().AsNoTracking().SingleOrDefaultAsync(i => i.RoomId == contract.RoomId && i.BillingPeriod == period, token);
+        var invoice = await NativeSettlementReads.PeriodicInvoiceAsync(db, contract.RoomId, period, token);
         BillingSchedule? schedule = null;
         if (!string.IsNullOrWhiteSpace(invoice?.ScheduleSnapshot))
             try { schedule = JsonSerializer.Deserialize<BillingSchedule>(invoice.ScheduleSnapshot); } catch (JsonException) { missing.Add("billing_schedule_snapshot_invalid"); }
@@ -27,7 +27,7 @@ internal sealed partial class SettlementReceivablesRepository
             !Enum.IsDefined(schedule.RentSource) || !Enum.IsDefined(schedule.RateDate) || !Enum.IsDefined(schedule.PartialMonth) || !Enum.IsDefined(schedule.Rounding)))
         { schedule = null; missing.Add("billing_schedule_snapshot_invalid"); }
         var pricingContract = invoice?.RepresentativeContractId is { } representative ?
-            await db.Set<Contract>().AsNoTracking().Include(c => c.Residents).SingleAsync(c => c.Id == representative, token) : contract;
+            (await NativeSettlementReads.ContractAsync(db, representative, token) ?? throw new InvalidOperationException("Missing invoice representative contract.")) : contract;
         if (string.IsNullOrWhiteSpace(pricingContract.SnapshotHash)) missing.Add("signed_contract_snapshot_required");
         var occupancies = await new InvoiceRepository(db).OccupanciesAsync(contract.RoomId, period, through, token);
         foreach (var occupancy in occupancies.Where(o => o.Contract.Id == id)) occupancy.Contract.ActualEndDate = end;

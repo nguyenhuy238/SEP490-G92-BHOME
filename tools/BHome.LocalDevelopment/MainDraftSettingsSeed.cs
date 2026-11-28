@@ -25,7 +25,7 @@ internal static class MainDraftSettingsSeed
 
         await using var scope = provider.CreateAsyncScope();
         var services = scope.ServiceProvider;
-        var db = services.GetRequiredService<BHomePersistenceContext>();
+        await using var db = OfflineFixturePersistence.Open(services);
         if (!await db.IsSchemaReadyAsync())
             throw new InvalidOperationException("Apply pending migrations before seeding.");
         var location = await db.Locations.SingleAsync(l => l.Name == "BHOME TEST - Cơ sở Staff" && l.IsActive);

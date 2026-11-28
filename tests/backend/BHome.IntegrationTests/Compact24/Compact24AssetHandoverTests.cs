@@ -29,7 +29,7 @@ public sealed partial class Compact24OwnerSetupTests
     }
     private async Task<(Guid Contract, Guid[] Readings)> SeedAssetHandover(Workspace w, IServiceProvider services, int configured = 9, int checkedGroups = 7, bool withPartyIdentity = false)
     {
-        await using var scope = services.CreateAsyncScope(); var db = scope.ServiceProvider.GetRequiredService<Compact24DbContext>();
+        await using var scope = services.CreateAsyncScope(); var db = scope.ServiceProvider.GetRequiredService<Compact24ArchiveContext>();
         var store = scope.ServiceProvider.GetRequiredService<ISetupWorkspaceStore>(); var storage = scope.ServiceProvider.GetRequiredService<IObjectStorage>();
         var resident = new Resident { RoomId = w.Room, TenantUserId = w.Tenant.Id, OwnerUserId = w.Owner.Id, DisplayLabel = "Synthetic handover Tenant", VerificationStatus = IdentityVerificationStatus.Verified };
         db.Add(resident); await db.SaveChangesAsync();
@@ -103,7 +103,7 @@ public sealed partial class Compact24OwnerSetupTests
     private static async Task<Guid[]> SeedAdditionalContractOpeningReadings(Workspace w, IServiceProvider services, Guid contractId)
     {
         await using var scope = services.CreateAsyncScope();
-        var db = scope.ServiceProvider.GetRequiredService<Compact24DbContext>();
+        var db = scope.ServiceProvider.GetRequiredService<Compact24ArchiveContext>();
         var storage = scope.ServiceProvider.GetRequiredService<IObjectStorage>();
         var readings = new List<Guid>();
         var bytes = ReviewEvidenceImage();
@@ -220,7 +220,7 @@ public sealed partial class Compact24OwnerSetupTests
         Assert.Equal(HttpStatusCode.NotFound, (await otherTenant.GetAsync(route + "/documents/" + document.Id)).StatusCode);
         Assert.Equal(HttpStatusCode.NotFound, (await stranger.GetAsync(route + "/documents/" + document.Id)).StatusCode);
         Assert.Equal(HttpStatusCode.Conflict, (await HandoverPost(staff, id, "handover", input with { Version = h.Version })).StatusCode);
-        await using var check = host.Services.CreateAsyncScope(); var db = check.ServiceProvider.GetRequiredService<Compact24DbContext>();
+        await using var check = host.Services.CreateAsyncScope(); var db = check.ServiceProvider.GetRequiredService<Compact24ArchiveContext>();
         Assert.Equal(7, await db.Set<Asset>().CountAsync(a => a.RoomId == w.Room)); Assert.Equal(ContractStatus.Active, (await db.Set<Contract>().SingleAsync(c => c.Id == id)).Status);
         var asset = await db.Set<Asset>().FirstAsync(a => a.RoomId == w.Room); asset.Condition = "Đổi sau bàn giao"; asset.Version++; await db.SaveChangesAsync();
         Assert.Equal(pdf, await tenant.GetByteArrayAsync(route + "/documents/" + document.Id));
@@ -245,7 +245,7 @@ public sealed partial class Compact24OwnerSetupTests
     private static async Task<Guid[]> FinalHandoverReadings(IServiceProvider services, HttpClient owner, HttpClient staff, Guid contract, Guid room)
     {
         var result = new List<Guid>();
-        await using var scope = services.CreateAsyncScope(); var db = scope.ServiceProvider.GetRequiredService<Compact24DbContext>();
+        await using var scope = services.CreateAsyncScope(); var db = scope.ServiceProvider.GetRequiredService<Compact24ArchiveContext>();
         foreach (var meter in await db.Set<Meter>().Where(m => m.RoomId == room).OrderBy(m => m.UtilityType).ToArrayAsync())
         {
             var task = await Read<ContractId>(await owner.PostAsJsonAsync("/api/v1/capture/meter-tasks", new { meterId = meter.Id, purpose = 2, readingDate = Today, contractId = contract }));
@@ -282,7 +282,7 @@ public sealed partial class Compact24OwnerSetupTests
         await Read<HandoverView>(await HandoverPost(staff, id, "handover/staff-confirmation", decision, key));
         var document = Assert.Single((await tenant.GetFromJsonAsync<ContractDocumentView[]>(route + "/documents"))!);
         var retried = await Read<ContractDocumentView>(await HandoverPost(owner, id, "handover/documents/retry", new { })); Assert.Equal(document.Id, retried.Id);
-        await using var check = host.Services.CreateAsyncScope(); var db = check.ServiceProvider.GetRequiredService<Compact24DbContext>();
+        await using var check = host.Services.CreateAsyncScope(); var db = check.ServiceProvider.GetRequiredService<Compact24ArchiveContext>();
         var stored = await db.Set<ContractDocumentFile>().SingleAsync(f => f.Id == document.Id);
         files.Corrupt(stored.ObjectKey);
         Assert.Equal(HttpStatusCode.Conflict, (await tenant.GetAsync(route + "/documents/" + document.Id)).StatusCode);
@@ -390,7 +390,7 @@ public sealed partial class Compact24OwnerSetupTests
         var publisher = scope.ServiceProvider.GetRequiredService<INotificationEventPublisher>();
         await publisher.PublishPendingAsync(default);
         await publisher.PublishPendingAsync(default);
-        var db = scope.ServiceProvider.GetRequiredService<Compact24DbContext>();
+        var db = scope.ServiceProvider.GetRequiredService<Compact24ArchiveContext>();
         var notices = await db.Set<UserNotification>().AsNoTracking()
             .Where(n => n.RelatedObjectId == id && n.EventType == "MOVE_OUT_STATUS_CHANGED").ToArrayAsync();
         Assert.Single(notices, n => n.RecipientUserId == w.Owner.Id && n.AudienceRole == "Owner");
@@ -428,7 +428,7 @@ public sealed partial class Compact24OwnerSetupTests
             var snapshot = new HandoverSnapshot(Today, "S101", "Legacy condition only", "Keys", "Historical snapshot without quantities",
                 [old.Assets[0] with { HandedOverQuantity = null, ObservedQuantity = null, ConfiguredQuantity = null }], old.Readings.Single(r => r.UtilityType == 0), old.Readings.Single(r => r.UtilityType == 1), []);
             var json = JsonSerializer.Serialize(snapshot); var at = DateTimeOffset.UtcNow;
-            await using var scope = host.Services.CreateAsyncScope(); var db = scope.ServiceProvider.GetRequiredService<Compact24DbContext>();
+            await using var scope = host.Services.CreateAsyncScope(); var db = scope.ServiceProvider.GetRequiredService<Compact24ArchiveContext>();
             db.Add(new ContractHandover
             {
                 ContractId = id,
@@ -452,7 +452,7 @@ public sealed partial class Compact24OwnerSetupTests
         var readings = await FinalHandoverReadings(host.Services, owner, staff, id, w.Room);
         if (assetState != "Active")
         {
-            await using var scope = host.Services.CreateAsyncScope(); var db = scope.ServiceProvider.GetRequiredService<Compact24DbContext>();
+            await using var scope = host.Services.CreateAsyncScope(); var db = scope.ServiceProvider.GetRequiredService<Compact24ArchiveContext>();
             var asset = await db.Set<Asset>().SingleAsync(a => a.RoomId == w.Room);
             if (assetState == "UnderRepair") { asset.Status = AssetStatus.UnderRepair; asset.Version++; }
             else db.Add(new BHome.Domain.IncidentMaintenance.MaintenanceWorkOrder
@@ -498,7 +498,7 @@ public sealed partial class Compact24OwnerSetupTests
         }
         await using (var scope = host.Services.CreateAsyncScope())
         {
-            var db = scope.ServiceProvider.GetRequiredService<Compact24DbContext>(); var asset = await db.Set<Asset>().SingleAsync(a => a.RoomId == w.Room);
+            var db = scope.ServiceProvider.GetRequiredService<Compact24ArchiveContext>(); var asset = await db.Set<Asset>().SingleAsync(a => a.RoomId == w.Room);
             asset.Condition = "Owner edited concurrently"; asset.Version++; await db.SaveChangesAsync();
         }
         Assert.Equal(HttpStatusCode.Conflict, (await HandoverPost(owner, id, "move-out/inspection-review", new InspectionReviewInput(1, true, "Review stale data", false, true, "Tenant absent"))).StatusCode);
@@ -521,7 +521,7 @@ public sealed partial class Compact24OwnerSetupTests
 
     private static async Task<Guid> SeedHandoverRenewal(Workspace w, IServiceProvider services, Guid previous)
     {
-        await using var scope = services.CreateAsyncScope(); var db = scope.ServiceProvider.GetRequiredService<Compact24DbContext>();
+        await using var scope = services.CreateAsyncScope(); var db = scope.ServiceProvider.GetRequiredService<Compact24ArchiveContext>();
         var prior = await db.Set<Contract>().SingleAsync(c => c.Id == previous); prior.Status = ContractStatus.Superseded;
         var renewal = new Contract
         {
@@ -573,7 +573,7 @@ public sealed partial class Compact24OwnerSetupTests
         Assert.Equal(4, (await staff.GetFromJsonAsync<InspectionPreparation>(confirmationRoute + "/move-out/inspection-preparation"))!.Baseline!.Snapshot.Assets[0].HandedOverQuantity);
         Assert.Equal(3, (await tenant.GetFromJsonAsync<HandoverView>(route + "/handover"))!.Snapshot.Assets[0].HandedOverQuantity);
         Assert.Single((await tenant.GetFromJsonAsync<ContractDocumentView[]>(confirmationRoute + "/handover/documents"))!, d => d.Kind == "AssetChangeReport");
-        await using var check = host.Services.CreateAsyncScope(); Assert.Equal(1, await check.ServiceProvider.GetRequiredService<Compact24DbContext>().Set<Asset>().CountAsync(a => a.RoomId == w.Room));
+        await using var check = host.Services.CreateAsyncScope(); Assert.Equal(1, await check.ServiceProvider.GetRequiredService<Compact24ArchiveContext>().Set<Asset>().CountAsync(a => a.RoomId == w.Room));
         var renewal = await SeedHandoverRenewal(w, host.Services, confirmationContract);
         var inherited = (await tenant.GetFromJsonAsync<HandoverView>($"/api/v1/contracts/{renewal}/handover"))!;
         Assert.Equal(id, inherited.SourceContractId); Assert.Equal(3, inherited.Snapshot.Assets[0].HandedOverQuantity);
@@ -596,7 +596,7 @@ public sealed partial class Compact24OwnerSetupTests
         Guid secondId;
         await using (var scope = host.Services.CreateAsyncScope())
         {
-            var db = scope.ServiceProvider.GetRequiredService<Compact24DbContext>();
+            var db = scope.ServiceProvider.GetRequiredService<Compact24ArchiveContext>();
             var resident = new Resident { RoomId = w.Room, TenantUserId = other.Tenant.Id, OwnerUserId = w.Owner.Id, DisplayLabel = "Synthetic shared Tenant", VerificationStatus = IdentityVerificationStatus.Verified };
             db.Add(resident); await db.SaveChangesAsync();
             var c = new Contract
@@ -680,7 +680,7 @@ public sealed partial class Compact24OwnerSetupTests
         Assert.DoesNotContain(secondDocuments, document => document.Kind == "MoveOutReport");
         Assert.Equal(HttpStatusCode.NotFound, (await tenant.GetAsync($"/api/v1/contracts/{secondId}/handover/documents")).StatusCode);
         Assert.Equal(HttpStatusCode.NotFound, (await tenant.GetAsync($"/api/v1/contracts/{secondId}/move-out/settlement-summary")).StatusCode);
-        await using var verify = host.Services.CreateAsyncScope(); var final = verify.ServiceProvider.GetRequiredService<Compact24DbContext>();
+        await using var verify = host.Services.CreateAsyncScope(); var final = verify.ServiceProvider.GetRequiredService<Compact24ArchiveContext>();
         Assert.Equal(1, await final.Set<Asset>().CountAsync(a => a.RoomId == w.Room));
         Assert.Equal(RoomStatus.Available, (await final.Set<Room>().SingleAsync(r => r.Id == w.Room)).Status);
         Assert.False(await final.Set<Contract>().AnyAsync(c => c.RoomId == w.Room && c.Status == ContractStatus.Active));
@@ -704,7 +704,7 @@ public sealed partial class Compact24OwnerSetupTests
         {
             var response = await owner.PostAsJsonAsync($"/api/v1/assets/{old.Id}/replace", new AssetReplacement("SYN-REPLACED-" + Guid.NewGuid().ToString("N"), "Tốt", "Synthetic verified BF-07 replacement", old.Version));
             response.EnsureSuccessStatusCode(); added = (await response.Content.ReadFromJsonAsync<JsonElement>()).GetProperty("assetId").GetGuid();
-            await using var scope = host.Services.CreateAsyncScope(); var db = scope.ServiceProvider.GetRequiredService<Compact24DbContext>();
+            await using var scope = host.Services.CreateAsyncScope(); var db = scope.ServiceProvider.GetRequiredService<Compact24ArchiveContext>();
             var source = new BHome.Domain.IncidentMaintenance.MaintenanceWorkOrder
             {
                 Source = "Proactive",
@@ -767,7 +767,7 @@ public sealed partial class Compact24OwnerSetupTests
         Guid? secondId = null;
         if (sharedRoom)
         {
-            await using var scope = host.Services.CreateAsyncScope(); var db = scope.ServiceProvider.GetRequiredService<Compact24DbContext>();
+            await using var scope = host.Services.CreateAsyncScope(); var db = scope.ServiceProvider.GetRequiredService<Compact24ArchiveContext>();
             var resident = new Resident { RoomId = w.Room, TenantUserId = second.Tenant.Id, OwnerUserId = w.Owner.Id, DisplayLabel = "Synthetic second tenant", VerificationStatus = IdentityVerificationStatus.Verified }; db.Add(resident); await db.SaveChangesAsync();
             var other = new Contract
             {
@@ -862,7 +862,7 @@ public sealed partial class Compact24OwnerSetupTests
         Assert.Equal("Terminated", result.Status);
         var documents = (await tenant.GetFromJsonAsync<ContractDocumentView[]>(route + "/handover/documents"))!;
         Assert.DoesNotContain(documents, document => document.Kind == "MoveOutReport");
-        await using var verify = host.Services.CreateAsyncScope(); var finalDb = verify.ServiceProvider.GetRequiredService<Compact24DbContext>();
+        await using var verify = host.Services.CreateAsyncScope(); var finalDb = verify.ServiceProvider.GetRequiredService<Compact24ArchiveContext>();
         Assert.Equal(sharedRoom ? RoomStatus.Occupied : RoomStatus.Unavailable, (await finalDb.Set<Room>().SingleAsync(r => r.Id == w.Room)).Status);
         if (secondId is { } otherId) Assert.Equal(ContractStatus.Active, (await finalDb.Set<Contract>().SingleAsync(c => c.Id == otherId)).Status);
         Assert.Null((await finalDb.Set<ContractMoveOut>().SingleAsync(m => m.ContractId == id)).SettlementApprovedAt);

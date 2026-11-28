@@ -27,7 +27,7 @@ public sealed partial class Compact24RefundTests
         await new PaymentLedgerTests(fixture.Capture).OwnerConfirmedAmountPolicyPreservesPartialDebtAndUnallocatedExcess(120000,
             "verified_excess_payment_pending_review", verifiedPayer: verifiedPayer);
         await using var scope = fixture.Capture.Factory.Services.CreateAsyncScope();
-        var db = scope.ServiceProvider.GetRequiredService<Compact24DbContext>();
+        var db = scope.ServiceProvider.GetRequiredService<Compact24ArchiveContext>();
         var owner = await db.Users.SingleAsync(u => EF.Property<string[]>(u, "roles").Contains("Owner"));
         var source = await db.Set<PaymentTransfer>().Select(p => p.Id).SingleAsync();
         var client = fixture.Capture.Factory.CreateClient();
@@ -72,7 +72,7 @@ public sealed partial class Compact24RefundTests
                 new RefundDecision(row.Version, true, "Synthetic verified payee", true), Guid.NewGuid()));
             row = await Value<RefundView>(await Execute(owner, row, Guid.NewGuid(), DateTimeOffset.UtcNow, "SYN-GUARD", Photo()));
             await using var scope = fixture.Capture.Factory.Services.CreateAsyncScope();
-            var db = scope.ServiceProvider.GetRequiredService<Compact24DbContext>();
+            var db = scope.ServiceProvider.GetRequiredService<Compact24ArchiveContext>();
             var invoice = await db.Set<Invoice>().Select(i => i.Id).SingleAsync();
             async Task<bool> Pending() => (await Value<InvoicePaymentView>(await owner.GetAsync($"/api/v1/invoices/{invoice}/payment"))).PendingReview;
             Assert.False(await Pending());
@@ -106,7 +106,7 @@ public sealed partial class Compact24RefundTests
             var (owner, sourceId) = await Setup(fixture); using var client = owner;
             var source = await Value<RefundSource>(await owner.GetAsync($"/api/v1/payment-transactions/{sourceId}/refunds"));
             await using var scope = fixture.Capture.Factory.Services.CreateAsyncScope();
-            var db = scope.ServiceProvider.GetRequiredService<Compact24DbContext>();
+            var db = scope.ServiceProvider.GetRequiredService<Compact24ArchiveContext>();
             var actor = await db.Users.Where(u => EF.Property<string[]>(u, "roles").Contains("Owner")).Select(u => u.Id).SingleAsync();
             var beneficiary = source.Beneficiaries[0].Id; var at = DateTimeOffset.UtcNow;
             await db.Database.ExecuteSqlInterpolatedAsync($"""
@@ -196,7 +196,7 @@ public sealed partial class Compact24RefundTests
             Assert.Equal(20000, after.RefundedAmount); Assert.Equal(0, after.ReservedAmount); Assert.Equal(0, after.AvailableAmount);
             Assert.Equal(0, after.EligibleReceiptRefundAmount);
             await AssertReconciliation("20000");
-            await using var scope = fixture.Capture.Factory.Services.CreateAsyncScope(); var db = scope.ServiceProvider.GetRequiredService<Compact24DbContext>();
+            await using var scope = fixture.Capture.Factory.Services.CreateAsyncScope(); var db = scope.ServiceProvider.GetRequiredService<Compact24ArchiveContext>();
             Assert.Equal(100000, (await db.Set<Invoice>().SingleAsync()).Total);
             Assert.Equal(100000, (await db.Set<PaymentAllocation>().SingleAsync()).Amount);
             var invoiceId = await db.Set<Invoice>().Select(i => i.Id).SingleAsync();
@@ -226,7 +226,7 @@ public sealed partial class Compact24RefundTests
             var replies = await Task.WhenAll(Post(owner, route, input, Guid.NewGuid()), Post(owner, route, input, Guid.NewGuid()));
             Assert.Single(replies, r => r.StatusCode == HttpStatusCode.OK); Assert.Single(replies, r => r.StatusCode == HttpStatusCode.Conflict);
             using var anonymous = fixture.Capture.Factory.CreateClient(); Assert.Equal(HttpStatusCode.Unauthorized, (await anonymous.GetAsync(route)).StatusCode);
-            await using var scope = fixture.Capture.Factory.Services.CreateAsyncScope(); var db = scope.ServiceProvider.GetRequiredService<Compact24DbContext>();
+            await using var scope = fixture.Capture.Factory.Services.CreateAsyncScope(); var db = scope.ServiceProvider.GetRequiredService<Compact24ArchiveContext>();
             foreach (var role in new[] { "Staff", "Tenant" })
             {
                 var account = await db.Users.FirstAsync(u => EF.Property<string[]>(u, "roles").Contains(role));
@@ -291,7 +291,7 @@ public sealed partial class Compact24RefundTests
             Assert.Equal(HttpStatusCode.RequestEntityTooLarge, (await Execute(owner, next, Guid.NewGuid(), DateTimeOffset.UtcNow, "SYN-NEW", new byte[5 * 1024 * 1024 + 1])).StatusCode);
             await Value<RefundView>(await Execute(owner, next, Guid.NewGuid(), DateTimeOffset.UtcNow, "SYN-NEW", bytes));
             Assert.Equal(20000, (await Value<RefundSource>(await owner.GetAsync(route))).RefundedAmount);
-            await using var scope = fixture.Capture.Factory.Services.CreateAsyncScope(); var db = scope.ServiceProvider.GetRequiredService<Compact24DbContext>();
+            await using var scope = fixture.Capture.Factory.Services.CreateAsyncScope(); var db = scope.ServiceProvider.GetRequiredService<Compact24ArchiveContext>();
             var actor = await db.Users.Where(u => EF.Property<string[]>(u, "roles").Contains("Owner")).Select(u => u.Id).SingleAsync();
             var now = DateTimeOffset.UtcNow; var legacy = Guid.NewGuid(); var operation = Guid.NewGuid(); var beneficiary = source.Beneficiaries[0].Id;
             // Explicit unknown imported refund boundary: reporting must retain its uncertainty guard.
@@ -311,7 +311,7 @@ public sealed partial class Compact24RefundTests
         try
         {
             await new PaymentLedgerTests(unknown.Capture).OwnerConfirmedAmountPolicyPreservesPartialDebtAndUnallocatedExcess(120000, "verified_excess_payment_pending_review");
-            await using var scope = unknown.Capture.Factory.Services.CreateAsyncScope(); var db = scope.ServiceProvider.GetRequiredService<Compact24DbContext>();
+            await using var scope = unknown.Capture.Factory.Services.CreateAsyncScope(); var db = scope.ServiceProvider.GetRequiredService<Compact24ArchiveContext>();
             var sourceId = await db.Set<PaymentTransfer>().Select(p => p.Id).SingleAsync();
             var user = new TestOwner(await db.Users.Where(u => EF.Property<string[]>(u, "roles").Contains("Owner")).Select(u => u.Id).SingleAsync());
             var service = new RefundService(scope.ServiceProvider.GetRequiredService<IRefundRepository>(), scope.ServiceProvider.GetRequiredService<IObjectStorage>(),

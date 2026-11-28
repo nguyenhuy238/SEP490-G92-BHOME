@@ -24,7 +24,7 @@ public sealed class Compact24FinanceLedgerTests
             string email;
             await using (var scope = fixture.Capture.Factory.Services.CreateAsyncScope())
             {
-                var db = scope.ServiceProvider.GetRequiredService<Compact24DbContext>();
+                var db = scope.ServiceProvider.GetRequiredService<Compact24ArchiveContext>();
                 var owner = await db.Users.SingleAsync(u => EF.Property<string[]>(u, "roles").Contains("Owner")); email = owner.Email!;
                 // Verified, unallocated cash and explicitly simulated receipts must never become revenue.
                 foreach (var demo in new[] { false, true }) db.Add(new PaymentTransfer

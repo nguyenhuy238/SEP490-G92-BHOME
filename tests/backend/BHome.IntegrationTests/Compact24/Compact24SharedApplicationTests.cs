@@ -66,7 +66,7 @@ public sealed partial class Compact24OwnerSetupTests
         var usage = await owner.GetFromJsonAsync<SharedUsage>(route + "/applications"); Assert.Equal(0, usage!.Total);
         await using (var scope = fixture.Factory!.Services.CreateAsyncScope())
         {
-            var db = scope.ServiceProvider.GetRequiredService<Compact24DbContext>();
+            var db = scope.ServiceProvider.GetRequiredService<Compact24ArchiveContext>();
             Assert.False(await db.Set<BHome.Domain.PropertyManagement.BillingPolicy>().AnyAsync(p => p.LocationId == w.Location));
             Assert.Empty(await scope.ServiceProvider.GetRequiredService<ISetupWorkspaceStore>().ListAsync(w.Location, kind, default));
         }
@@ -79,7 +79,7 @@ public sealed partial class Compact24OwnerSetupTests
         Assert.Equal(doc.Version, usage.Items[0].SourceVersion); Assert.Equal(w.Owner.Id, usage.Items[0].ActorId); Assert.Single(applied.CreatedReferences);
         var next = await Read<SharedDocument>(await owner.PostAsJsonAsync(route + "/versions", new SharedVersion(doc.Version)));
         await owner.PutAsJsonAsync($"/api/v1/shared-configuration/{resource}/{next.Id}", new SharedWrite(next.Name, "Source changed independently", next.Data, 1));
-        await using var verify = fixture.Factory!.Services.CreateAsyncScope(); var targetDb = verify.ServiceProvider.GetRequiredService<Compact24DbContext>();
+        await using var verify = fixture.Factory!.Services.CreateAsyncScope(); var targetDb = verify.ServiceProvider.GetRequiredService<Compact24ArchiveContext>();
         Assert.Equal(1, await targetDb.Set<BHome.Domain.PropertyManagement.Room>().CountAsync(r => r.LocationId == w.Location));
         Assert.False(await targetDb.Set<BHome.Domain.PropertyManagement.Asset>().AnyAsync(a => a.LocationId == w.Location));
         if (kind == "BillingPolicy") Assert.Equal(3500000.0001m, (await targetDb.Set<BHome.Domain.PropertyManagement.BillingPolicy>().SingleAsync(p => p.LocationId == w.Location)).Rate);
@@ -95,7 +95,7 @@ public sealed partial class Compact24OwnerSetupTests
     public async Task NativeFeeWritesParticipateInSharedTransactionRollback()
     {
         var w = await Seed();
-        await using var scope = fixture.Factory!.Services.CreateAsyncScope(); var store = scope.ServiceProvider.GetRequiredService<ISharedConfigurationStore>(); var db = scope.ServiceProvider.GetRequiredService<Compact24DbContext>();
+        await using var scope = fixture.Factory!.Services.CreateAsyncScope(); var store = scope.ServiceProvider.GetRequiredService<ISharedConfigurationStore>(); var db = scope.ServiceProvider.GetRequiredService<Compact24ArchiveContext>();
         await Assert.ThrowsAsync<InvalidOperationException>(() => store.TransactionAsync<bool>([w.Location], async () =>
         {
             var repository = scope.ServiceProvider.GetRequiredService<IPropertyRepository>();

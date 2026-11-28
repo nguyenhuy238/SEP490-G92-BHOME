@@ -104,6 +104,20 @@ public sealed class ContractSignature : AuditableEntity
 // A durable bank verification, not a screenshot or a client-supplied paid flag.
 public sealed class DepositVerification : AuditableEntity
 {
+    internal static DepositVerification Rehydrate(Guid id, DateTimeOffset createdAt, DateTimeOffset updatedAt,
+        Guid contractId, string reference, decimal amount, string reason, Guid verifier, DateTimeOffset verifiedAt) =>
+        new()
+        {
+            Id = id,
+            CreatedAt = createdAt,
+            UpdatedAt = updatedAt,
+            ContractId = contractId,
+            BankTransactionReference = reference,
+            Amount = amount,
+            VerificationReason = reason,
+            VerifiedByUserId = verifier,
+            VerifiedAt = verifiedAt
+        };
     public Guid ContractId { get; set; }
     public string BankTransactionReference { get; set; } = "";
     public decimal Amount { get; set; }
@@ -114,6 +128,8 @@ public sealed class DepositVerification : AuditableEntity
 
 public sealed class ContractMoveOut : AuditableEntity
 {
+    internal static ContractMoveOut Rehydrate(Guid id, DateTimeOffset createdAt, DateTimeOffset updatedAt) =>
+        new() { Id = id, CreatedAt = createdAt, UpdatedAt = updatedAt };
     public Guid ContractId { get; set; }
     public MoveOutStatus Status { get; set; }
     public DateOnly ProposedDate { get; set; }
@@ -139,6 +155,8 @@ public sealed class ContractMoveOut : AuditableEntity
 
 public sealed class ContractInspectionEvidence : AuditableEntity
 {
+    internal static ContractInspectionEvidence Rehydrate(Guid id, DateTimeOffset createdAt, DateTimeOffset updatedAt) =>
+        new() { Id = id, CreatedAt = createdAt, UpdatedAt = updatedAt };
     public Guid ContractId { get; set; }
     public Guid UploadedByUserId { get; set; }
     public string ObjectKey { get; set; } = "";
@@ -148,6 +166,8 @@ public sealed class ContractInspectionEvidence : AuditableEntity
 
 public sealed class ContractSettlementReview : AuditableEntity
 {
+    internal static ContractSettlementReview Rehydrate(Guid id, DateTimeOffset createdAt, DateTimeOffset updatedAt) =>
+        new() { Id = id, CreatedAt = createdAt, UpdatedAt = updatedAt };
     public Guid ContractId { get; set; }
     public string Decision { get; set; } = "";
     public string? LedgerReference { get; set; }
@@ -158,6 +178,8 @@ public sealed class ContractSettlementReview : AuditableEntity
 }
 public sealed class ContractMoveOutHistory : AuditableEntity
 {
+    internal static ContractMoveOutHistory Rehydrate(Guid id, DateTimeOffset createdAt, DateTimeOffset updatedAt) =>
+        new() { Id = id, CreatedAt = createdAt, UpdatedAt = updatedAt };
     public Guid ContractId { get; set; }
     public int Version { get; set; }
     public string Action { get; set; } = "";
@@ -167,6 +189,8 @@ public sealed class ContractMoveOutHistory : AuditableEntity
 }
 public sealed class ContractFinalInspection : AuditableEntity
 {
+    internal static ContractFinalInspection Rehydrate(Guid id, DateTimeOffset createdAt, DateTimeOffset updatedAt) =>
+        new() { Id = id, CreatedAt = createdAt, UpdatedAt = updatedAt };
     public Guid ContractId { get; set; }
     public int Version { get; set; }
     public Guid BaselineContractId { get; set; }

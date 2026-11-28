@@ -149,6 +149,7 @@ public sealed class SePayService(ISePayRepository repository, IPaymentRepository
         if (target.Kind == "MainInitial")
         {
             if (initialPayments is null) return await Review("initial_payment_workflow_unavailable");
+            if (await payments.ReferenceClaimedAsync(reference, token)) return await Review("bank_reference_already_credited");
             try { await initialPayments.AllocateAsync(target.ObligationId, receipt, token); }
             catch (PaymentException e) when (e.Status == 409) { return await Review(e.Code); }
             await payments.AddAsync(new PaymentReconciliation { TransferId = receipt.Id, DepositContractId = target.ObligationId, Decision = "Allocated", Reason = "verified_main_initial_payment", OccurredAt = receipt.VerifiedAt }, token);
@@ -193,6 +194,9 @@ public sealed class SePayService(ISePayRepository repository, IPaymentRepository
             {
                 if ((contract.ApprovedAt is null && !BHome.Application.Contracts.AnonymousContractSigningService.HoldingOwnerHasSigned(contract)) || contract.HoldingExpiryAt is null || contract.HoldingExpiryAt <= clock.GetUtcNow())
                     return await Review("holding_deposit_requires_manual_review");
+                // The native contract mutation flushes inside this ledger transaction.
+                // Reject a previously credited bank reference before locking the Holding price.
+                if (await payments.ReferenceClaimedAsync(reference, token)) return await Review("bank_reference_already_credited");
                 try
                 {
                     if (!await contracts.ConfirmProviderHoldingDepositAsync(contract.Id, receipt.Amount, receipt.VerifiedAt, token))

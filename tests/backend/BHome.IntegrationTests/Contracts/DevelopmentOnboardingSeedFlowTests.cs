@@ -25,7 +25,7 @@ public sealed partial class Compact24OwnerSetupTests
         var outside = await Seed();
         await using (var scope = fixture.Factory!.Services.CreateAsyncScope())
         {
-            var db = scope.ServiceProvider.GetRequiredService<Compact24DbContext>();
+            var db = scope.ServiceProvider.GetRequiredService<Compact24ArchiveContext>();
             db.AddRange(
                 new BillingPolicy { LocationId = w.Location, ChargeCode = "RENT", Name = "Rent", Category = ChargeCategory.Rent, Method = ChargingMethod.FixedPerRoomPerMonth, Rate = 3200000, EffectiveFrom = Today.AddDays(-1) },
                 new BillingPolicy { LocationId = w.Location, ChargeCode = "ELECTRICITY", Name = "Electricity", Category = ChargeCategory.Electricity, Method = ChargingMethod.Metered, Rate = 3500, EffectiveFrom = Today.AddDays(-1) },
@@ -94,7 +94,7 @@ public sealed partial class Compact24OwnerSetupTests
             "Serialized", 1, "cái");
         await using (var scope = host.Services.CreateAsyncScope())
         {
-            var db = scope.ServiceProvider.GetRequiredService<Compact24DbContext>();
+            var db = scope.ServiceProvider.GetRequiredService<Compact24ArchiveContext>();
             var store = scope.ServiceProvider.GetRequiredService<ISetupWorkspaceStore>();
             db.Add(existingAsset);
             await db.SaveChangesAsync();
@@ -149,7 +149,7 @@ public sealed partial class Compact24OwnerSetupTests
         Assert.Contains(workPage.Items, item => item.Target?.ContractId == created.ContractId && item.Kind == "AdHoc");
 
         await using var check = host.Services.CreateAsyncScope();
-        var stored = check.ServiceProvider.GetRequiredService<Compact24DbContext>();
+        var stored = check.ServiceProvider.GetRequiredService<Compact24ArchiveContext>();
         Assert.Equal(1, await stored.Set<Room>().CountAsync(room => room.LocationId == w.Location));
         Assert.Equal(RoomStatus.Occupied, (await stored.Set<Room>().SingleAsync(room => room.Id == w.Room)).Status);
         var contract = await stored.Set<Contract>().SingleAsync(c => c.Id == created.ContractId);

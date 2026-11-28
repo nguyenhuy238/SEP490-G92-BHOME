@@ -47,7 +47,7 @@ public sealed class CaptureWorkflowTests : IClassFixture<CaptureFixture>
         using var client = host.CreateClient();
         await using (var loginScope = host.Services.CreateAsyncScope())
         {
-            var email = (await loginScope.ServiceProvider.GetRequiredService<BHomePersistenceContext>().Users.SingleAsync(u => u.Id == w.StaffId)).Email;
+            var email = (await loginScope.ServiceProvider.GetFixturePersistence().Users.SingleAsync(u => u.Id == w.StaffId)).Email;
             var login = await client.PostAsJsonAsync("/api/v1/auth/login", new { email, password = Password });
             login.EnsureSuccessStatusCode();
             client.DefaultRequestHeaders.Authorization = new("Bearer", (await login.Content.ReadFromJsonAsync<LoginResult>())!.AccessToken);
@@ -70,7 +70,7 @@ public sealed class CaptureWorkflowTests : IClassFixture<CaptureFixture>
             Assert.Equal("000123.45", proposal.ProposedFields["reading"]);
             Assert.True(proposal.RequiresConfirmation);
             await using var scope = fixture.Factory.Services.CreateAsyncScope();
-            var db = scope.ServiceProvider.GetRequiredService<BHomePersistenceContext>();
+            var db = scope.ServiceProvider.GetFixturePersistence();
             Assert.Equal(123.45m, (await db.Set<OperationalTask>().SingleAsync(t => t.Id == task)).OcrProposedValue);
             Assert.False(await db.Set<MeterReading>().AnyAsync(r => r.TaskId == task));
         }
@@ -81,7 +81,7 @@ public sealed class CaptureWorkflowTests : IClassFixture<CaptureFixture>
         Assert.Equal(HttpStatusCode.NotFound, (await client.PostAsync($"/api/v1/ocr/meter-tasks/{foreignTask}", rejectedImage)).StatusCode);
         Assert.Equal(4, engine.Kinds.Count);
         await using var finalScope = fixture.Factory.Services.CreateAsyncScope();
-        Assert.Null((await finalScope.ServiceProvider.GetRequiredService<BHomePersistenceContext>().Set<OperationalTask>().SingleAsync(t => t.Id == foreignTask)).OcrProposedValue);
+        Assert.Null((await finalScope.ServiceProvider.GetFixturePersistence().Set<OperationalTask>().SingleAsync(t => t.Id == foreignTask)).OcrProposedValue);
         var bad = await w.Owner.PostAsJsonAsync("/api/v1/capture/meters", new MeterInput(w.Room, "SYN-INVALID", UtilityType.Water, (MeterDisplay)99, 2, Today));
         Assert.Equal(HttpStatusCode.BadRequest, bad.StatusCode);
     }
@@ -115,7 +115,7 @@ public sealed class CaptureWorkflowTests : IClassFixture<CaptureFixture>
         using var client = host.CreateClient();
         await using (var scope = host.Services.CreateAsyncScope())
         {
-            var db = scope.ServiceProvider.GetRequiredService<BHomePersistenceContext>();
+            var db = scope.ServiceProvider.GetFixturePersistence();
             var email = (await db.Users.SingleAsync(u => u.Id == w.StaffId)).Email;
             var login = await client.PostAsJsonAsync("/api/v1/auth/login", new { email, password = Password }); login.EnsureSuccessStatusCode();
             client.DefaultRequestHeaders.Authorization = new("Bearer", (await login.Content.ReadFromJsonAsync<LoginResult>())!.AccessToken);
@@ -152,7 +152,7 @@ public sealed class CaptureWorkflowTests : IClassFixture<CaptureFixture>
         }
         await using (var scope = host.Services.CreateAsyncScope())
         {
-            var db = scope.ServiceProvider.GetRequiredService<BHomePersistenceContext>(); var saved = await db.Set<OperationalTask>().SingleAsync(t => t.Id == task);
+            var db = scope.ServiceProvider.GetFixturePersistence(); var saved = await db.Set<OperationalTask>().SingleAsync(t => t.Id == task);
             Assert.Equal(17.25m, saved.OcrProposedValue); Assert.Equal(new string('a', 64), saved.OcrImageHash); Assert.Equal("prior-proposal", saved.OcrEngineVersion);
             Assert.NotEqual(MeterTaskStatus.Completed, saved.Status); Assert.False(await db.Set<MeterReading>().AnyAsync(r => r.TaskId == task));
             var assignment = await db.Set<StaffLocationAssignment>().SingleAsync(a => a.LocationId == w.Location && a.StaffUserId == w.StaffId);
@@ -206,7 +206,7 @@ public sealed class CaptureWorkflowTests : IClassFixture<CaptureFixture>
         // Each test host has its own signing key; authenticate on this host.
         await using (var loginScope = host.Services.CreateAsyncScope())
         {
-            var email = (await loginScope.ServiceProvider.GetRequiredService<BHomePersistenceContext>().Users.SingleAsync(u => u.Id == w.StaffId)).Email;
+            var email = (await loginScope.ServiceProvider.GetFixturePersistence().Users.SingleAsync(u => u.Id == w.StaffId)).Email;
             var login = await client.PostAsJsonAsync("/api/v1/auth/login", new { email, password = Password }); login.EnsureSuccessStatusCode();
             client.DefaultRequestHeaders.Authorization = new("Bearer", (await login.Content.ReadFromJsonAsync<LoginResult>())!.AccessToken);
         }
@@ -218,7 +218,7 @@ public sealed class CaptureWorkflowTests : IClassFixture<CaptureFixture>
         Assert.True(proposal.RequiresConfirmation);
         await using (var scope = host.Services.CreateAsyncScope())
         {
-            var db = scope.ServiceProvider.GetRequiredService<BHomePersistenceContext>();
+            var db = scope.ServiceProvider.GetFixturePersistence();
             Assert.False(await db.Set<MeterReading>().AnyAsync(r => r.TaskId == task));
             Assert.Equal(4314.69m, (await db.Set<OperationalTask>().SingleAsync(t => t.Id == task)).OcrProposedValue);
         }
@@ -231,7 +231,7 @@ public sealed class CaptureWorkflowTests : IClassFixture<CaptureFixture>
         var replay = await client.PostAsJsonAsync($"/api/v1/capture/meter-tasks/{task}/confirm", confirmation); replay.EnsureSuccessStatusCode();
         Assert.Equal(result.Id, (await replay.Content.ReadFromJsonAsync<ConfirmedReading>())!.Id);
         await using var finalScope = host.Services.CreateAsyncScope();
-        var storedDb = finalScope.ServiceProvider.GetRequiredService<BHomePersistenceContext>();
+        var storedDb = finalScope.ServiceProvider.GetFixturePersistence();
         var stored = await storedDb.Set<MeterReading>().SingleAsync(r => r.TaskId == task);
         Assert.Equal(MeterReadingStatus.Corrected, stored.Status);
         Assert.Equal(4314.69m, stored.OcrProposedValue);
@@ -254,7 +254,7 @@ public sealed class CaptureWorkflowTests : IClassFixture<CaptureFixture>
                 new Lazy<IOcrEngine>(() => new DigitsEngine()), NullLogger<LocalOcrService>.Instance))));
         using var client = host.CreateClient();
         await using var loginScope = host.Services.CreateAsyncScope();
-        var loginDb = loginScope.ServiceProvider.GetRequiredService<BHomePersistenceContext>();
+        var loginDb = loginScope.ServiceProvider.GetFixturePersistence();
         var email = (await loginDb.Users.SingleAsync(user => user.Id == w.StaffId)).Email;
         var login = await client.PostAsJsonAsync("/api/v1/auth/login", new { email, password = Password });
         login.EnsureSuccessStatusCode();
@@ -268,7 +268,7 @@ public sealed class CaptureWorkflowTests : IClassFixture<CaptureFixture>
         Assert.Equal("000123.45", proposal.ProposedFields["reading"]);
         Assert.True(proposal.RequiresConfirmation);
         await using var scope = fixture.Factory.Services.CreateAsyncScope();
-        var db = scope.ServiceProvider.GetRequiredService<BHomePersistenceContext>();
+        var db = scope.ServiceProvider.GetFixturePersistence();
         var stored = await db.Set<OperationalTask>().SingleAsync(value => value.Id == task);
         Assert.Equal(123.45m, stored.OcrProposedValue);
         Assert.False(await db.Set<MeterReading>().AnyAsync(value => value.TaskId == task));
@@ -296,7 +296,7 @@ public sealed class CaptureWorkflowTests : IClassFixture<CaptureFixture>
                 new Lazy<IOcrEngine>(() => new DigitsEngine()), NullLogger<LocalOcrService>.Instance))));
         using var client = host.CreateClient();
         await using var loginScope = host.Services.CreateAsyncScope();
-        var loginDb = loginScope.ServiceProvider.GetRequiredService<BHomePersistenceContext>();
+        var loginDb = loginScope.ServiceProvider.GetFixturePersistence();
         var email = (await loginDb.Users.SingleAsync(user => user.Id == w.StaffId)).Email;
         var login = await client.PostAsJsonAsync("/api/v1/auth/login", new { email, password = Password });
         login.EnsureSuccessStatusCode();
@@ -315,7 +315,7 @@ public sealed class CaptureWorkflowTests : IClassFixture<CaptureFixture>
         Assert.Equal(HttpStatusCode.Conflict, lowerConfirmation.StatusCode);
         Assert.Contains("meter_reset_or_rollover_requires_review", await lowerConfirmation.Content.ReadAsStringAsync());
         await using var scope = fixture.Factory.Services.CreateAsyncScope();
-        var db = scope.ServiceProvider.GetRequiredService<BHomePersistenceContext>();
+        var db = scope.ServiceProvider.GetFixturePersistence();
         Assert.False(await db.Set<MeterReading>().AnyAsync(reading => reading.TaskId == task));
         var stored = await db.Set<OperationalTask>().SingleAsync(value => value.Id == task);
         Assert.Equal(123.45m, stored.OcrProposedValue);
@@ -351,7 +351,7 @@ public sealed class CaptureWorkflowTests : IClassFixture<CaptureFixture>
         var resident = await Create(staff.Client, "residents", new ResidentInput(room, "Hồ sơ kiểm thử", ResidentType.CoOccupant, $"capture-{Guid.NewGuid():N}@example.invalid"));
         await using (var scope = fixture.Factory.Services.CreateAsyncScope())
         {
-            var db = scope.ServiceProvider.GetRequiredService<BHomePersistenceContext>();
+            var db = scope.ServiceProvider.GetFixturePersistence();
             Assert.Equal(owner.UserId, (await db.Set<Resident>().SingleAsync(r => r.Id == resident)).OwnerUserId);
             Assert.Equal(staff.UserId, (await db.SecurityAudit.SingleAsync(a => a.Event == "ResidentCreated" && a.TargetId == resident)).UserId);
         }
@@ -367,7 +367,7 @@ public sealed class CaptureWorkflowTests : IClassFixture<CaptureFixture>
         var second = await Create(w.Staff, "residents", new ResidentInput(w.Room, "Hồ sơ độc lập", ResidentType.CoOccupant, $"capture-{Guid.NewGuid():N}@example.invalid"));
         var replies = await Task.WhenAll(new[] { w.Resident, second }.Select(id => w.Staff.PostAsJsonAsync($"/api/v1/capture/residents/{id}/confirm", Identity())));
         Assert.Single(replies, r => r.StatusCode == HttpStatusCode.OK); Assert.Single(replies, r => r.StatusCode == HttpStatusCode.Conflict);
-        await using var scope = fixture.Factory.Services.CreateAsyncScope(); var db = scope.ServiceProvider.GetRequiredService<BHomePersistenceContext>();
+        await using var scope = fixture.Factory.Services.CreateAsyncScope(); var db = scope.ServiceProvider.GetFixturePersistence();
         Assert.Equal(2, await db.Set<Resident>().CountAsync(r => r.RoomId == w.Room));
         Assert.Equal(1, await db.Set<Resident>().CountAsync(r => r.RoomId == w.Room && r.VerificationStatus == IdentityVerificationStatus.Verified));
     }
@@ -384,7 +384,7 @@ public sealed class CaptureWorkflowTests : IClassFixture<CaptureFixture>
         var dup = await w.Staff.PostAsJsonAsync($"/api/v1/capture/residents/{duplicate}/confirm", Identity());
         Assert.Equal(HttpStatusCode.Conflict, dup.StatusCode);
         Assert.DoesNotContain(w.Resident.ToString(), await dup.Content.ReadAsStringAsync());
-        await using var scope = fixture.Factory.Services.CreateAsyncScope(); var db = scope.ServiceProvider.GetRequiredService<BHomePersistenceContext>();
+        await using var scope = fixture.Factory.Services.CreateAsyncScope(); var db = scope.ServiceProvider.GetFixturePersistence();
         var saved = await db.Set<Resident>().SingleAsync(r => r.Id == w.Resident);
         Assert.Equal(IdentityVerificationStatus.Verified, saved.VerificationStatus);
         Assert.DoesNotContain(identityNumber, saved.IdentityData); Assert.DoesNotContain("2000-01-01", saved.IdentityData);
@@ -405,7 +405,7 @@ public sealed class CaptureWorkflowTests : IClassFixture<CaptureFixture>
         Assert.Equal(HttpStatusCode.OK, (await otherOwner.Client.GetAsync($"/api/v1/capture/locations/{w.Location}/residents")).StatusCode);
         await using (var scope = fixture.Factory.Services.CreateAsyncScope())
         {
-            var db = scope.ServiceProvider.GetRequiredService<BHomePersistenceContext>();
+            var db = scope.ServiceProvider.GetFixturePersistence();
             await db.Set<StaffLocationAssignment>().Where(a => a.LocationId == w.Location && a.StaffUserId == w.StaffId)
                 .ExecuteUpdateAsync(s => s.SetProperty(a => a.EndDate, Today.AddDays(-1)));
         }
@@ -456,7 +456,7 @@ public sealed class CaptureWorkflowTests : IClassFixture<CaptureFixture>
         var file = await w.Staff.GetAsync($"/api/v1/capture/readings/{reading.Id}/evidence"); Assert.Equal(Image(), await file.Content.ReadAsByteArrayAsync());
         // Every Owner has chain-wide access, including private evidence through the authorized API.
         var otherOwner = await User(Roles.Owner); Assert.Equal(HttpStatusCode.OK, (await otherOwner.Client.GetAsync($"/api/v1/capture/readings/{reading.Id}/evidence")).StatusCode);
-        await using var scope = fixture.Factory.Services.CreateAsyncScope(); var db = scope.ServiceProvider.GetRequiredService<BHomePersistenceContext>();
+        await using var scope = fixture.Factory.Services.CreateAsyncScope(); var db = scope.ServiceProvider.GetFixturePersistence();
         Assert.Equal(1, await db.Set<MeterReading>().CountAsync(r => r.TaskId == periodic));
         Assert.Equal(MeterTaskStatus.Completed, (await db.Set<OperationalTask>().SingleAsync(a => a.Id == periodic)).Status);
         var stored = await db.Set<MeterEvidence>().SingleAsync(a => a.Id == evidence); Assert.True(stored.IsLinked); Assert.DoesNotContain("http", stored.ObjectKey);
@@ -553,7 +553,7 @@ public sealed class CaptureWorkflowTests : IClassFixture<CaptureFixture>
         replay.EnsureSuccessStatusCode();
         Assert.Equal(saved.Id, (await replay.Content.ReadFromJsonAsync<ConfirmedReading>())!.Id);
         await using var scope = fixture.Factory.Services.CreateAsyncScope();
-        var db = scope.ServiceProvider.GetRequiredService<BHomePersistenceContext>();
+        var db = scope.ServiceProvider.GetFixturePersistence();
         Assert.Equal(1, await db.Set<MeterReading>().CountAsync(r => r.TaskId == periodic));
         Assert.Equal(MeterTaskStatus.Completed, (await db.Set<OperationalTask>().SingleAsync(t => t.Id == periodic)).Status);
     }
@@ -587,7 +587,7 @@ public sealed class CaptureWorkflowTests : IClassFixture<CaptureFixture>
         Assert.Equal(HttpStatusCode.BadRequest, (await w.Staff.PostAsJsonAsync(route, new MeterConfirmation(true, -1, evidence))).StatusCode);
         Assert.Equal(HttpStatusCode.Conflict, (await w.Staff.PostAsJsonAsync(route, new MeterConfirmation(true, 10, Guid.NewGuid()))).StatusCode);
         Assert.Equal(HttpStatusCode.Conflict, (await w.Staff.PostAsJsonAsync(route, new MeterConfirmation(true, 10, evidence))).StatusCode);
-        await using var scope = fixture.Factory.Services.CreateAsyncScope(); var db = scope.ServiceProvider.GetRequiredService<BHomePersistenceContext>();
+        await using var scope = fixture.Factory.Services.CreateAsyncScope(); var db = scope.ServiceProvider.GetFixturePersistence();
         Assert.False(await db.Set<MeterReading>().AnyAsync(r => r.TaskId == task));
         Assert.Equal(MeterTaskStatus.Assigned, (await db.Set<OperationalTask>().SingleAsync(a => a.Id == task)).Status);
     }
@@ -597,7 +597,7 @@ public sealed class CaptureWorkflowTests : IClassFixture<CaptureFixture>
         var w = await Workspace();
         var task = await Create(w.Owner, "meter-tasks", new MeterTaskInput(w.Meter, ReadingPurpose.Initial, Today, null));
         await using var services = fixture.Factory.Services.CreateAsyncScope();
-        var db = services.ServiceProvider.GetRequiredService<BHomePersistenceContext>();
+        var db = services.ServiceProvider.GetFixturePersistence();
         var realStorage = services.ServiceProvider.GetRequiredService<IObjectStorage>();
         // Simulate a provider accepting bytes, then losing its response. The intent must still recover it.
         var failing = new FailingPutStorage(realStorage);
@@ -614,7 +614,7 @@ public sealed class CaptureWorkflowTests : IClassFixture<CaptureFixture>
         var confirm = await w.Staff.PostAsJsonAsync($"/api/v1/capture/meter-tasks/{task}/confirm", new MeterConfirmation(true, 10, intent.Id));
         Assert.Equal(HttpStatusCode.Conflict, confirm.StatusCode);
         intent.CleanupAfter = DateTimeOffset.UtcNow.AddMinutes(-1); await db.SaveChangesAsync();
-        await MeterEvidenceCleanup.CleanupAsync(db, realStorage, default);
+        await MeterEvidenceCleanup.CleanupAsync(services.ServiceProvider.GetRequiredService<BHomePersistenceContext>(), realStorage, default);
         Assert.False(await db.Set<MeterEvidence>().AnyAsync(e => e.Id == intent.Id));
         await Assert.ThrowsAnyAsync<Exception>(() => realStorage.CopyToAsync(intent.ObjectKey, Stream.Null, default));
     }

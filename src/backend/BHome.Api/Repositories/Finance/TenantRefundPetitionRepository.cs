@@ -139,10 +139,17 @@ internal sealed class TenantRefundPetitionRepository(BHomePersistenceContext db)
             if (!ready) throw new FinanceException(409, "tenant_refund_schema_upgrade_required");
             db.Add(new Native.RefundRequest
             {
-                Id = row.Id, BeneficiaryResidentId = row.BeneficiaryResidentId, BeneficiaryKind = "RESIDENT",
-                RequestedByUserId = actor, RequestedAt = row.CreatedAt, RequestedAmount = row.Amount,
-                Reason = row.Reason, Status = row.Status, OperationKey = row.OperationKey,
-                Version = row.Version, History = history
+                Id = row.Id,
+                BeneficiaryResidentId = row.BeneficiaryResidentId,
+                BeneficiaryKind = "RESIDENT",
+                RequestedByUserId = actor,
+                RequestedAt = row.CreatedAt,
+                RequestedAmount = row.Amount,
+                Reason = row.Reason,
+                Status = row.Status,
+                OperationKey = row.OperationKey,
+                Version = row.Version,
+                History = history
             });
         }
         else

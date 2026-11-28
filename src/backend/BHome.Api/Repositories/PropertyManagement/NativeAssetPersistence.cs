@@ -114,9 +114,14 @@ internal static class NativeAssetPersistence
             EventAt = change.OccurredAt,
             EventData = JsonSerializer.SerializeToElement(new
             {
-                schemaVersion = 1, recordType = "PropertyChange", state = change,
-                audienceRole = (string?)null, category = (string?)null, succeeded = (bool?)null,
-                sessionId = (Guid?)null, targetUserId = (Guid?)null
+                schemaVersion = 1,
+                recordType = "PropertyChange",
+                state = change,
+                audienceRole = (string?)null,
+                category = (string?)null,
+                succeeded = (bool?)null,
+                sessionId = (Guid?)null,
+                targetUserId = (Guid?)null
             }, Json),
             DeliveryHistory = JsonSerializer.SerializeToElement(Array.Empty<JsonElement>(), Json)
         });
@@ -136,9 +141,14 @@ internal static class NativeAssetPersistence
             EventAt = audit.OccurredAt,
             EventData = JsonSerializer.SerializeToElement(new
             {
-                schemaVersion = 1, recordType = "SecurityAuditRecord", state = audit,
-                audienceRole = (string?)null, category = (string?)null, succeeded = audit.Succeeded,
-                sessionId = audit.SessionId, targetUserId = audit.TargetUserId
+                schemaVersion = 1,
+                recordType = "SecurityAuditRecord",
+                state = audit,
+                audienceRole = (string?)null,
+                category = (string?)null,
+                succeeded = audit.Succeeded,
+                sessionId = audit.SessionId,
+                targetUserId = audit.TargetUserId
             }, Json),
             DeliveryHistory = JsonSerializer.SerializeToElement(Array.Empty<JsonElement>(), Json)
         });

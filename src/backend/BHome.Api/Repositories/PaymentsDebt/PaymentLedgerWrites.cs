@@ -87,9 +87,14 @@ internal static class PaymentLedgerWrites
         var key = value.AllocationId.ToString();
         var data = JsonSerializer.Serialize(new
         {
-            schemaVersion = 1, recordType = "PaymentConfirmedEvent", state = value,
-            audienceRole = (string?)null, category = (string?)null,
-            succeeded = (bool?)null, sessionId = (Guid?)null, targetUserId = (Guid?)null
+            schemaVersion = 1,
+            recordType = "PaymentConfirmedEvent",
+            state = value,
+            audienceRole = (string?)null,
+            category = (string?)null,
+            succeeded = (bool?)null,
+            sessionId = (Guid?)null,
+            targetUserId = (Guid?)null
         }, Json);
         await db.Database.ExecuteSqlInterpolatedAsync($"""
             INSERT INTO notifications(id,record_kind,event_key,notification_type,event_data,event_at)

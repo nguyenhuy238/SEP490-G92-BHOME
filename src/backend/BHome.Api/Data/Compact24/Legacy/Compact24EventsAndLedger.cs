@@ -11,7 +11,7 @@ using Npgsql;
 
 namespace BHome.Infrastructure.Persistence.Compact24;
 
-public sealed partial class Compact24DbContext
+public sealed partial class Compact24ArchiveContext
 {
     private async Task WriteNotificationAsync(EntityEntry entry, CompactRecordSql spec, string state, string envelope, string key, CancellationToken token)
     {

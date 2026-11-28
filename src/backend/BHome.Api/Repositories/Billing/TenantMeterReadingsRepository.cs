@@ -81,7 +81,8 @@ internal sealed class TenantMeterReadingsRepository(BHomePersistenceContext db) 
         {
             var row = await (from reading in NativeBillingMeterQueries.TenantVisible(compact, actor)
                              join task in compact.Set<Native.OperationalTask>().AsNoTracking() on reading.OperationalTaskId equals task.Id
-                             where reading.Id == id select new { reading, task }).SingleOrDefaultAsync(t);
+                             where reading.Id == id
+                             select new { reading, task }).SingleOrDefaultAsync(t);
             if (row is null) return null;
             var evidence = NativeBillingMeterQueries.Read(row.reading, row.task).Evidence;
             return new(evidence.ObjectKey, evidence.ContentType);

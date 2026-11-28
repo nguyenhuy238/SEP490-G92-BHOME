@@ -82,7 +82,7 @@ public sealed partial class Compact24OwnerSetupTests
         var location = result.Location.Id;
         Assert.True(result.Location.IsActive);
         await using var scope = fixture.Factory!.Services.CreateAsyncScope();
-        var db = scope.ServiceProvider.GetRequiredService<Compact24DbContext>();
+        var db = scope.ServiceProvider.GetRequiredService<Compact24ArchiveContext>();
         var store = scope.ServiceProvider.GetRequiredService<ISetupWorkspaceStore>();
         Assert.Equal(draft.Location.Name, (await db.Locations.AsNoTracking().SingleAsync(l => l.Id == location)).Name);
         var rooms = await db.Set<Room>().AsNoTracking().Where(r => r.LocationId == location).OrderBy(r => r.RoomNumber).ToArrayAsync();
@@ -124,7 +124,7 @@ public sealed partial class Compact24OwnerSetupTests
     {
         var w = await Seed(); using var owner = await Client(w.Owner); var draft = SetupDraft(); var key = Guid.NewGuid();
         await using var scope = fixture.Factory!.Services.CreateAsyncScope();
-        var db = scope.ServiceProvider.GetRequiredService<Compact24DbContext>();
+        var db = scope.ServiceProvider.GetRequiredService<Compact24ArchiveContext>();
         var name = "test_setup_failure_" + Guid.NewGuid().ToString("N");
         var beforeLocations = await db.Locations.CountAsync();
         var beforeRooms = await db.Set<Room>().CountAsync();
@@ -160,7 +160,7 @@ public sealed partial class Compact24OwnerSetupTests
         Guid sourceRoom;
         await using (var sourceScope = fixture.Factory!.Services.CreateAsyncScope())
         {
-            var sourceDb = sourceScope.ServiceProvider.GetRequiredService<Compact24DbContext>();
+            var sourceDb = sourceScope.ServiceProvider.GetRequiredService<Compact24ArchiveContext>();
             sourceRoom = await sourceDb.Set<Room>().Where(r => r.LocationId == location && r.RoomNumber == "101").Select(r => r.Id).SingleAsync();
             sourceDb.Add(new Asset { LocationId = location, RoomId = sourceRoom, Name = "Source physical chair", Category = "Furniture", Code = "SRC-CHAIR", Condition = "Good" });
             await sourceDb.SaveChangesAsync();
@@ -194,7 +194,7 @@ public sealed partial class Compact24OwnerSetupTests
         Assert.Equal(HttpStatusCode.Conflict, (await Keyed(owner, SetupRoute, staleVersion, Guid.NewGuid())).StatusCode);
         await using var scope = fixture.Factory!.Services.CreateAsyncScope();
         var store = scope.ServiceProvider.GetRequiredService<ISetupWorkspaceStore>();
-        var db = scope.ServiceProvider.GetRequiredService<Compact24DbContext>();
+        var db = scope.ServiceProvider.GetRequiredService<Compact24ArchiveContext>();
         var targetRoom = await db.Set<Room>().Where(r => r.LocationId == copy.Location.Id && r.RoomNumber == "201").Select(r => r.Id).SingleAsync();
         var targetFee = await db.Set<BillingPolicy>().SingleAsync(p => p.LocationId == copy.Location.Id && p.ChargeCode == "CLEANING");
         Assert.Equal(targetRoom, targetFee.RoomId); Assert.NotEqual(sourceRoom, targetFee.RoomId); Assert.NotEqual(sourceFee.Id, targetFee.Id);
@@ -256,7 +256,7 @@ public sealed partial class Compact24OwnerSetupTests
         var result = await Read<LocationSetupResult>(await Keyed(owner, SetupRoute, SetupDraft(false), Guid.NewGuid()));
         Assert.False(result.Location.IsActive);
         await using var scope = fixture.Factory!.Services.CreateAsyncScope();
-        var db = scope.ServiceProvider.GetRequiredService<Compact24DbContext>();
+        var db = scope.ServiceProvider.GetRequiredService<Compact24ArchiveContext>();
         var rooms = await db.Set<Room>().AsNoTracking().Where(r => r.LocationId == result.Location.Id).ToArrayAsync();
         Assert.Equal(2, rooms.Length); Assert.All(rooms, r => Assert.Equal(RoomStatus.Unavailable, r.Status));
         var source = (await owner.GetFromJsonAsync<LocationSetupSource>($"{SetupRoute}/source/{result.Location.Id}"))!;
@@ -280,7 +280,7 @@ public sealed partial class Compact24OwnerSetupTests
         Assert.Equal(HttpStatusCode.Conflict, (await Keyed(owner, SetupRoute, different with { Location = different.Location with { Code = draft.Location.Code.ToLowerInvariant() } }, Guid.NewGuid())).StatusCode);
         Assert.Equal(HttpStatusCode.BadRequest, (await Keyed(owner, SetupRoute, SetupDraft() with { RentEffectiveFrom = Today.AddDays(-1) }, Guid.NewGuid())).StatusCode);
         await using var scope = fixture.Factory!.Services.CreateAsyncScope();
-        var db = scope.ServiceProvider.GetRequiredService<Compact24DbContext>();
+        var db = scope.ServiceProvider.GetRequiredService<Compact24ArchiveContext>();
         Assert.Equal(1, await db.Locations.CountAsync(l => l.Name == draft.Location.Name));
         Assert.Equal(2, await db.Set<Room>().CountAsync(r => r.LocationId == first.Location.Id));
         Assert.Equal(3, await db.Set<BillingPolicy>().CountAsync(p => p.LocationId == first.Location.Id));
@@ -345,7 +345,7 @@ public sealed partial class Compact24OwnerSetupTests
         await Read<AssetSyncRun>(await owner.PostAsJsonAsync($"/api/v1/asset-templates/{draftTemplate.Id}/publish", new TemplatePublish(draftTemplate.Version)));
         await Read<SetupDocument>(await owner.PostAsJsonAsync(localRoute, defaults));
         await using var scope = host.Services.CreateAsyncScope();
-        var db = scope.ServiceProvider.GetRequiredService<Compact24DbContext>();
+        var db = scope.ServiceProvider.GetRequiredService<Compact24ArchiveContext>();
         var room = await db.Set<Room>().Where(r => r.LocationId == location && r.RoomNumber == "101").Select(r => r.Id).SingleAsync();
         var unassignedRoom = await db.Set<Room>().Where(r => r.LocationId == location && r.RoomNumber == "201").Select(r => r.Id).SingleAsync();
         var inventoryRoute = $"/api/v1/rooms/{room}/asset-inventory";

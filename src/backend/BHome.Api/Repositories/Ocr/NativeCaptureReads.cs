@@ -43,23 +43,44 @@ internal static class NativeCaptureReads
     {
         // Old physically imported tasks can contain {} rather than a domain snapshot.
         // Keep physical columns authoritative and apply the old projection's defaults.
-        var s = row.TaskData.ValueKind==JsonValueKind.Object && row.TaskData.TryGetProperty("state",out var state) &&
-            state.ValueKind==JsonValueKind.Object ? state.Deserialize<TaskState>(Json)! : JsonSerializer.Deserialize<TaskState>("{}",Json)!;
+        var s = row.TaskData.ValueKind == JsonValueKind.Object && row.TaskData.TryGetProperty("state", out var state) &&
+            state.ValueKind == JsonValueKind.Object ? state.Deserialize<TaskState>(Json)! : JsonSerializer.Deserialize<TaskState>("{}", Json)!;
         return new OperationalTask(row.Id)
         {
             Kind = s.Kind is OperationalTaskKind.MoveInInventory or OperationalTaskKind.LocationAssetHandover
                 ? s.Kind : row.TaskType == "GENERAL" ? OperationalTaskKind.AdHoc : OperationalTaskKind.MeterReading,
-            LocationId = row.LocationId!.Value, Title = row.Title ?? "", Requirements = row.Description ?? "",
-            Priority = (OperationalTaskPriority)int.Parse(row.Priority ?? "0", CultureInfo.InvariantCulture), DueAt = row.DueAt,
-            EvidenceRequired = s.EvidenceRequired, AssignedStaffUserId = row.AssignedUserId, AssignmentId = s.AssignmentId,
-            AssignedAt = row.AssignedAt, Result = s.Result, VerifiedByUserId = row.VerifiedByUserId, VerifiedAt = row.VerifiedAt,
-            Version = row.Version, TargetRoomId = s.TargetRoomId, TargetAssetId = s.TargetAssetId, TargetCommonArea = s.TargetCommonArea,
-            TargetLabel = s.TargetLabel, ContractId = row.ContractId, MoveInInventoryJson = s.MoveInInventoryJson ?? "",
-            LocationAssetInventoryJson = s.LocationAssetInventoryJson ?? "", BillingRoomId = s.BillingRoomId,
-            BillingUtilityType = s.BillingUtilityType, AutomationPlanId = s.AutomationPlanId, MeterId = row.MeterId,
-            Purpose = s.Purpose, ReadingDate = s.ReadingDate == default ? new DateOnly(1970,1,1) : s.ReadingDate, BillingPeriod = row.BillingPeriod,
-            Status = (MeterTaskStatus)int.Parse(row.Status, CultureInfo.InvariantCulture), OcrProposedValue = s.OcrProposedValue,
-            OcrImageHash = s.OcrImageHash, OcrEngineVersion = s.OcrEngineVersion, CompletedAt = s.CompletedAt,
+            LocationId = row.LocationId!.Value,
+            Title = row.Title ?? "",
+            Requirements = row.Description ?? "",
+            Priority = (OperationalTaskPriority)int.Parse(row.Priority ?? "0", CultureInfo.InvariantCulture),
+            DueAt = row.DueAt,
+            EvidenceRequired = s.EvidenceRequired,
+            AssignedStaffUserId = row.AssignedUserId,
+            AssignmentId = s.AssignmentId,
+            AssignedAt = row.AssignedAt,
+            Result = s.Result,
+            VerifiedByUserId = row.VerifiedByUserId,
+            VerifiedAt = row.VerifiedAt,
+            Version = row.Version,
+            TargetRoomId = s.TargetRoomId,
+            TargetAssetId = s.TargetAssetId,
+            TargetCommonArea = s.TargetCommonArea,
+            TargetLabel = s.TargetLabel,
+            ContractId = row.ContractId,
+            MoveInInventoryJson = s.MoveInInventoryJson ?? "",
+            LocationAssetInventoryJson = s.LocationAssetInventoryJson ?? "",
+            BillingRoomId = s.BillingRoomId,
+            BillingUtilityType = s.BillingUtilityType,
+            AutomationPlanId = s.AutomationPlanId,
+            MeterId = row.MeterId,
+            Purpose = s.Purpose,
+            ReadingDate = s.ReadingDate == default ? new DateOnly(1970, 1, 1) : s.ReadingDate,
+            BillingPeriod = row.BillingPeriod,
+            Status = (MeterTaskStatus)int.Parse(row.Status, CultureInfo.InvariantCulture),
+            OcrProposedValue = s.OcrProposedValue,
+            OcrImageHash = s.OcrImageHash,
+            OcrEngineVersion = s.OcrEngineVersion,
+            CompletedAt = s.CompletedAt,
             CreatedAt = s.CreatedAt == default ? DateTimeOffset.UnixEpoch : s.CreatedAt,
             UpdatedAt = s.UpdatedAt == default ? DateTimeOffset.UnixEpoch : s.UpdatedAt
         };

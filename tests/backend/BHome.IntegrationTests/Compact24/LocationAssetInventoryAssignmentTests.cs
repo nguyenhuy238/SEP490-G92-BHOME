@@ -47,7 +47,7 @@ public sealed class LocationAssetInventoryAssignmentTests(Compact24Fixture fixtu
     private async Task<ApplicationUser> User(string role)
     {
         await using var scope = fixture.Factory!.Services.CreateAsyncScope();
-        var db = scope.ServiceProvider.GetRequiredService<Compact24DbContext>();
+        var db = scope.ServiceProvider.GetRequiredService<Compact24ArchiveContext>();
         // Compact24 enforces a single Owner per tenant database. Both test methods
         // share one disposable class fixture, so reuse its synthetic Owner.
         if (role == "Owner")
@@ -79,7 +79,7 @@ public sealed class LocationAssetInventoryAssignmentTests(Compact24Fixture fixtu
     private async Task<Guid> Location()
     {
         await using var scope = fixture.Factory!.Services.CreateAsyncScope();
-        var db = scope.ServiceProvider.GetRequiredService<Compact24DbContext>();
+        var db = scope.ServiceProvider.GetRequiredService<Compact24ArchiveContext>();
         var id = Guid.NewGuid();
         await db.Database.ExecuteSqlInterpolatedAsync($"INSERT INTO locations(id,name,address) VALUES ({id},{"Synthetic assets " + id},'Synthetic address')");
         return id;
@@ -124,7 +124,7 @@ public sealed class LocationAssetInventoryAssignmentTests(Compact24Fixture fixtu
         Guid roomId, assetId, commonAssetId;
         await using (var scope = fixture.Factory!.Services.CreateAsyncScope())
         {
-            var db = scope.ServiceProvider.GetRequiredService<Compact24DbContext>();
+            var db = scope.ServiceProvider.GetRequiredService<Compact24ArchiveContext>();
             var room = new Room { LocationId = location, RoomNumber = "Synthetic-101", Status = RoomStatus.Occupied };
             db.Add(room);
             await db.SaveChangesAsync();
@@ -317,7 +317,7 @@ public sealed class LocationAssetInventoryAssignmentTests(Compact24Fixture fixtu
         Guid taskId;
         await using (var scope = fixture.Factory!.Services.CreateAsyncScope())
         {
-            var db = scope.ServiceProvider.GetRequiredService<Compact24DbContext>();
+            var db = scope.ServiceProvider.GetRequiredService<Compact24ArchiveContext>();
             var tasks = await db.Set<OperationalTask>().AsNoTracking().Where(t => t.LocationId == location &&
                 t.Kind == OperationalTaskKind.LocationAssetHandover).ToArrayAsync();
             taskId = Assert.Single(tasks).Id;
@@ -353,7 +353,7 @@ public sealed class LocationAssetInventoryAssignmentTests(Compact24Fixture fixtu
         // group. The explicit Owner reconcile must remove only this untouched item.
         await using (var scope = fixture.Factory!.Services.CreateAsyncScope())
         {
-            var db = scope.ServiceProvider.GetRequiredService<Compact24DbContext>();
+            var db = scope.ServiceProvider.GetRequiredService<Compact24ArchiveContext>();
             var tracked = await db.Set<OperationalTask>().SingleAsync(entry => entry.Id == taskId);
             var previous = JsonSerializer.Deserialize<LocationAssetInventorySnapshot>(tracked.LocationAssetInventoryJson)!;
             tracked.LocationAssetInventoryJson = JsonSerializer.Serialize(previous with
@@ -381,7 +381,7 @@ public sealed class LocationAssetInventoryAssignmentTests(Compact24Fixture fixtu
         task = (await staffClient.GetFromJsonAsync<TaskView>(route))!;
         using (var scope = fixture.Factory!.Services.CreateScope())
         {
-            var db = scope.ServiceProvider.GetRequiredService<Compact24DbContext>();
+            var db = scope.ServiceProvider.GetRequiredService<Compact24ArchiveContext>();
             Assert.Contains(await db.Set<OperationalTaskHistory>().AsNoTracking().Where(h => h.TaskId == taskId).ToArrayAsync(),
                 h => h.Action == "location_asset_inventory_owner_reconciled");
         }
@@ -441,7 +441,7 @@ public sealed class LocationAssetInventoryAssignmentTests(Compact24Fixture fixtu
         BHome.Application.Contracts.HandoverSnapshot tenantSnapshot;
         await using (var scope = fixture.Factory!.Services.CreateAsyncScope())
         {
-            var db = scope.ServiceProvider.GetRequiredService<Compact24DbContext>();
+            var db = scope.ServiceProvider.GetRequiredService<Compact24ArchiveContext>();
             var room = new Room { LocationId = location, RoomNumber = "Synthetic-102", Status = RoomStatus.Occupied };
             db.Add(room);
             await db.SaveChangesAsync();
@@ -612,7 +612,7 @@ public sealed class LocationAssetInventoryAssignmentTests(Compact24Fixture fixtu
         Guid taskId;
         await using (var scope = fixture.Factory!.Services.CreateAsyncScope())
         {
-            var db = scope.ServiceProvider.GetRequiredService<Compact24DbContext>();
+            var db = scope.ServiceProvider.GetRequiredService<Compact24ArchiveContext>();
             taskId = await db.Set<OperationalTask>().AsNoTracking()
                 .Where(task => task.LocationId == location && task.Kind == OperationalTaskKind.LocationAssetHandover)
                 .Select(task => task.Id).SingleAsync();
@@ -647,7 +647,7 @@ public sealed class LocationAssetInventoryAssignmentTests(Compact24Fixture fixtu
         // rewriting the original signed snapshot after the Staff checklist is submitted.
         await using (var scope = fixture.Factory!.Services.CreateAsyncScope())
         {
-            var db = scope.ServiceProvider.GetRequiredService<Compact24DbContext>();
+            var db = scope.ServiceProvider.GetRequiredService<Compact24ArchiveContext>();
             var handover = await db.Set<ContractHandover>().SingleAsync(item => item.ContractId == contractId);
             var changedSnapshot = tenantSnapshot with
             {
@@ -674,7 +674,7 @@ public sealed class LocationAssetInventoryAssignmentTests(Compact24Fixture fixtu
         Guid emptyRoomId;
         await using (var scope = fixture.Factory!.Services.CreateAsyncScope())
         {
-            var db = scope.ServiceProvider.GetRequiredService<Compact24DbContext>();
+            var db = scope.ServiceProvider.GetRequiredService<Compact24ArchiveContext>();
             var empty = new Room { LocationId = location, RoomNumber = "Empty-confirmed" };
             var unreviewed = new Room { LocationId = location, RoomNumber = "Not-owner-reviewed" };
             db.AddRange(empty, unreviewed);
@@ -734,7 +734,7 @@ public sealed class LocationAssetInventoryAssignmentTests(Compact24Fixture fixtu
             int version;
             await using (var scope = fixture.Factory!.Services.CreateAsyncScope())
             {
-                var db = scope.ServiceProvider.GetRequiredService<Compact24DbContext>();
+                var db = scope.ServiceProvider.GetRequiredService<Compact24ArchiveContext>();
                 db.Add(room);
                 await db.SaveChangesAsync();
                 var store = scope.ServiceProvider.GetRequiredService<ISetupWorkspaceStore>();
@@ -748,7 +748,7 @@ public sealed class LocationAssetInventoryAssignmentTests(Compact24Fixture fixtu
             }
             await using (var scope = fixture.Factory!.Services.CreateAsyncScope())
             {
-                var db = scope.ServiceProvider.GetRequiredService<Compact24DbContext>();
+                var db = scope.ServiceProvider.GetRequiredService<Compact24ArchiveContext>();
                 var task = await db.Set<OperationalTask>().SingleAsync(x => x.Id == taskId);
                 var snapshot = JsonSerializer.Deserialize<LocationAssetInventorySnapshot>(task.LocationAssetInventoryJson)!;
                 // Persist a synthetic pre-release task that Staff already checked, but
@@ -806,7 +806,7 @@ public sealed class LocationAssetInventoryAssignmentTests(Compact24Fixture fixtu
             Assert.Equal(completed.Version, (await legacySubmit.Content.ReadFromJsonAsync<TaskView>())!.Version);
             await using (var scope = fixture.Factory!.Services.CreateAsyncScope())
             {
-                var db = scope.ServiceProvider.GetRequiredService<Compact24DbContext>();
+                var db = scope.ServiceProvider.GetRequiredService<Compact24ArchiveContext>();
                 Assert.Equal(1, await db.Set<OperationalTaskHistory>().CountAsync(h => h.TaskId == taskId && h.Action == "submit"));
             }
         }
@@ -821,7 +821,7 @@ public sealed class LocationAssetInventoryAssignmentTests(Compact24Fixture fixtu
         var location = await Location();
         await using (var scope = fixture.Factory!.Services.CreateAsyncScope())
         {
-            var db = scope.ServiceProvider.GetRequiredService<Compact24DbContext>();
+            var db = scope.ServiceProvider.GetRequiredService<Compact24ArchiveContext>();
             var room = new Room { LocationId = location, RoomNumber = "TRANSFER-42" };
             db.Add(room);
             await db.SaveChangesAsync();
@@ -899,7 +899,7 @@ public sealed class LocationAssetInventoryAssignmentTests(Compact24Fixture fixtu
         Guid successorAssignment;
         await using (var scope = fixture.Factory!.Services.CreateAsyncScope())
         {
-            var db = scope.ServiceProvider.GetRequiredService<Compact24DbContext>();
+            var db = scope.ServiceProvider.GetRequiredService<Compact24ArchiveContext>();
             var versionBefore = await db.Locations.Where(x => x.Id == location).Select(x => x.Version).SingleAsync();
             var change = await scope.ServiceProvider.GetRequiredService<ILocationAssignments>()
                 .ReplaceAssignmentAsync(owner.Id, location, successor.Id, Today, versionBefore,
@@ -958,7 +958,7 @@ public sealed class LocationAssetInventoryAssignmentTests(Compact24Fixture fixtu
         Assert.Equal(26, continued.CheckedCount);
         await using (var scope = fixture.Factory!.Services.CreateAsyncScope())
         {
-            var db = scope.ServiceProvider.GetRequiredService<Compact24DbContext>();
+            var db = scope.ServiceProvider.GetRequiredService<Compact24ArchiveContext>();
             Assert.Equal(1, await db.Set<OperationalTaskHistory>().CountAsync(h =>
                 h.TaskId == oldTaskId && h.Action == "responsibility_changed"));
             Assert.Equal(25, await db.Set<OperationalTaskHistory>().CountAsync(h =>
@@ -1003,7 +1003,7 @@ public sealed class LocationAssetInventoryAssignmentTests(Compact24Fixture fixtu
         };
         await using (var scope = fixture.Factory!.Services.CreateAsyncScope())
         {
-            var db = scope.ServiceProvider.GetRequiredService<Compact24DbContext>();
+            var db = scope.ServiceProvider.GetRequiredService<Compact24ArchiveContext>();
             db.AddRange(validRoom, changedRoom, removedRoom, archivedRoom, malformedRoom);
             db.AddRange(assets);
             db.Entry(assets[0]).Property<string>("PurchaseInfo").CurrentValue = JsonSerializer.Serialize(
@@ -1081,7 +1081,7 @@ public sealed class LocationAssetInventoryAssignmentTests(Compact24Fixture fixtu
             var created = await assignments.CreateAssignmentAsync(owner.Id, location, staff.Id,
                 Today, Today.AddDays(14), default);
             Assert.Equal(CreateAssignmentStatus.Created, created.Status);
-            var db = scope.ServiceProvider.GetRequiredService<Compact24DbContext>();
+            var db = scope.ServiceProvider.GetRequiredService<Compact24ArchiveContext>();
             var task = await db.Set<OperationalTask>().AsNoTracking().SingleAsync(item =>
                 item.LocationId == location && item.Kind == OperationalTaskKind.LocationAssetHandover);
             taskId = task.Id;

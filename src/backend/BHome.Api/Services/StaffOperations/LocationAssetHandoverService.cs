@@ -13,6 +13,8 @@ using BHome.Domain.PropertyManagement;
 using BHome.Domain.TenantContracts;
 using BHome.Infrastructure.Modules.Notifications;
 using BHome.Infrastructure.Persistence.Compact24;
+using BHome.Infrastructure.Modules.StaffOperations.Persistence;
+using Native = BHome.Domain.Entities;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Storage;
 using Npgsql;
@@ -592,28 +594,23 @@ public sealed class LocationAssetHandoverService(
         if (inherited.Any(x => x.RoomId is null || x.SourceHandoverContractId is null))
             throw OperationalTaskException.Conflict("location_handover_inherited_evidence_changed");
         var sources = inherited.Select(x => x.SourceHandoverContractId!.Value).Distinct().ToArray();
-        var contracts = await db.Set<Contract>().AsNoTracking()
-            .Where(c => c.Room.LocationId == task.LocationId)
+        var roomIds = db.Set<Native.Room>().AsNoTracking().Where(r => r.LocationId == task.LocationId).Select(r => r.Id);
+        var contracts = await db.Set<Native.Contract>().AsNoTracking()
+            .Where(c => roomIds.Contains(c.RoomId))
             .Select(c => new
             {
                 c.Id,
                 c.RoomId,
-                c.Kind,
-                c.Status,
+                Kind = c.ContractType == "RENEWAL" ? ContractKind.Renewal : c.ContractType == "HOLDING" ? ContractKind.Holding :
+                    c.ContractType == "ADDENDUM" ? ContractKind.Addendum : ContractKind.Main,
+                Status = (ContractStatus)c.Status,
                 c.StartDate,
                 c.EndDate,
                 c.PreviousContractId,
                 c.TenantUserId
             }).ToArrayAsync(token);
         var index = contracts.ToDictionary(x => x.Id);
-        var handovers = await db.Set<ContractHandover>().AsNoTracking()
-            .Where(h => sources.Contains(h.ContractId) &&
-                h.Status == ContractHandoverStatus.Confirmed &&
-                h.TenantConfirmedAt != null && h.StaffConfirmedAt != null &&
-                h.TenantConfirmedBy != null && h.StaffConfirmedBy != null &&
-                h.TenantConfirmedVersion == h.Version)
-            .Select(h => new { h.ContractId, h.TenantConfirmedBy, h.Snapshot })
-            .ToDictionaryAsync(h => h.ContractId, token);
+        var handovers = (await NativeOperationalTaskPersistence.ConfirmedHandoversAsync(db, sources, token)).ToDictionary(h => h.ContractId);
         if (handovers.Count != sources.Length)
             throw OperationalTaskException.Conflict("location_handover_inherited_evidence_changed");
         var active = contracts.Where(c => c.Status == ContractStatus.Active &&
@@ -675,9 +672,9 @@ public sealed class LocationAssetHandoverService(
         // Asset identity still matters after Tenant evidence was inherited.
         var assets = inherited.Where(x => x.AssetId.HasValue).Select(x => x.AssetId!.Value).Distinct().ToArray();
         if (assets.Length == 0) return;
-        var live = (await db.Set<Asset>().AsNoTracking()
+        var live = (await db.Set<Native.Asset>().AsNoTracking()
             .Where(a => assets.Contains(a.Id) && a.LocationId == task.LocationId &&
-                a.Status != AssetStatus.Retired)
+                a.Status != (short)AssetStatus.Retired)
             .Select(a => new { a.Id, a.RoomId }).ToArrayAsync(token))
             .ToDictionary(x => x.Id);
         if (inherited.Where(x => x.AssetId.HasValue)
@@ -755,9 +752,9 @@ public sealed class LocationAssetHandoverService(
         var incidentIds = items.Where(x => x.IncidentId.HasValue).Select(x => x.IncidentId!.Value).Distinct().ToArray();
         if (incidentIds.Length > 0)
         {
-            var resolved = await db.Set<BHome.Domain.IncidentMaintenance.IncidentReport>().AsNoTracking()
+            var resolved = await db.Set<Native.IncidentReport>().AsNoTracking()
                 .Where(x => incidentIds.Contains(x.Id) && x.LocationId == task.LocationId &&
-                    x.Status == BHome.Domain.IncidentMaintenance.IncidentStatus.Resolved)
+                    x.Status == "Resolved")
                 .Select(x => x.Id).ToArrayAsync(token);
             if (resolved.Length != incidentIds.Length && (exception?.Length ?? 0) < 10)
                 throw OperationalTaskException.Conflict("location_handover_unresolved_incident_requires_owner_decision");

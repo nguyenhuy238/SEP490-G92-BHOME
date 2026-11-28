@@ -27,7 +27,7 @@ public sealed partial class Compact24OwnerSetupTests
             // Legacy synthetic helper seeds an Active contract without a move-in
             // task. Add only its AdHoc task, then start through the REAL API.
             await using var scope = services.CreateAsyncScope();
-            var db = scope.ServiceProvider.GetRequiredService<Compact24DbContext>();
+            var db = scope.ServiceProvider.GetRequiredService<Compact24ArchiveContext>();
             var contract = await db.Set<Contract>().Include(c => c.Room).SingleAsync(c => c.Id == id);
             var task = new OperationalTask
             {
@@ -72,7 +72,7 @@ public sealed partial class Compact24OwnerSetupTests
         var residentIds = new[] { Guid.NewGuid(), Guid.NewGuid() };
         await using (var setup = host.Services.CreateAsyncScope())
         {
-            var db = setup.ServiceProvider.GetRequiredService<Compact24DbContext>();
+            var db = setup.ServiceProvider.GetRequiredService<Compact24ArchiveContext>();
             foreach (var id in residentIds)
             {
                 var resident = new Resident
@@ -120,7 +120,7 @@ public sealed partial class Compact24OwnerSetupTests
         }
         var ids = await Task.WhenAll(residentIds.Select(Create));
         await using var check = host.Services.CreateAsyncScope();
-        var readDb = check.ServiceProvider.GetRequiredService<Compact24DbContext>();
+        var readDb = check.ServiceProvider.GetRequiredService<Compact24ArchiveContext>();
         var jobs = await readDb.Set<OperationalTask>().AsNoTracking()
             .Where(x => x.ContractId != null && ids.Contains(x.ContractId.Value) && x.Status != MeterTaskStatus.Cancelled)
             .ToArrayAsync();
@@ -139,7 +139,7 @@ public sealed partial class Compact24OwnerSetupTests
         var w = await Seed(); using var host = Host();
         await using (var setup = host.Services.CreateAsyncScope())
         {
-            var db = setup.ServiceProvider.GetRequiredService<Compact24DbContext>();
+            var db = setup.ServiceProvider.GetRequiredService<Compact24ArchiveContext>();
             db.Add(new Meter
             {
                 RoomId = w.Room,
@@ -172,7 +172,7 @@ public sealed partial class Compact24OwnerSetupTests
         };
         await using (var scope = host.Services.CreateAsyncScope())
         {
-            var db = scope.ServiceProvider.GetRequiredService<Compact24DbContext>();
+            var db = scope.ServiceProvider.GetRequiredService<Compact24ArchiveContext>();
             var resident = new Resident
             {
                 RoomId = w.Room,
@@ -289,7 +289,7 @@ public sealed partial class Compact24OwnerSetupTests
         // handover POST cannot skip the new Owner Ready and Tenant approval.
         await using (var scope = host.Services.CreateAsyncScope())
         {
-            var db = scope.ServiceProvider.GetRequiredService<Compact24DbContext>();
+            var db = scope.ServiceProvider.GetRequiredService<Compact24ArchiveContext>();
             var activated = await db.Set<Contract>().SingleAsync(c => c.Id == contract.Id);
             activated.Status = ContractStatus.Active;
             activated.ActivatedByUserId = w.Owner.Id;
@@ -309,7 +309,7 @@ public sealed partial class Compact24OwnerSetupTests
         var seeded = await SeedAssetHandover(w, host.Services, configured: 0, checkedGroups: 0);
         await using (var scope = host.Services.CreateAsyncScope())
         {
-            var db = scope.ServiceProvider.GetRequiredService<Compact24DbContext>();
+            var db = scope.ServiceProvider.GetRequiredService<Compact24ArchiveContext>();
             var handover = scope.ServiceProvider.GetRequiredService<IContractHandoverRepository>();
             var contract = await db.Set<Contract>().Include(c => c.Room)
                 .SingleAsync(c => c.Id == seeded.Contract);

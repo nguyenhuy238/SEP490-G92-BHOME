@@ -178,7 +178,7 @@ public sealed class CompensationService(ICompensationRepository repository, ICur
                 });
                 foreach (var recipient in invoice.Recipients) recipient.InvoiceId = invoice.Id;
                 await repository.IssueInvoiceAsync(invoice, new InvoiceIssuedEvent
-                    { InvoiceId = invoice.Id, OwnerUserId = Actor, OccurredAt = Now }, t);
+                { InvoiceId = invoice.Id, OwnerUserId = Actor, OccurredAt = Now }, t);
                 row.InvoiceId = invoice.Id;
             }
             repository.Add(row); return row;

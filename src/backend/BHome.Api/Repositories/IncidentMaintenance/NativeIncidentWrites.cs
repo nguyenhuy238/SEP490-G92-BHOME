@@ -18,9 +18,14 @@ internal static class NativeIncidentWrites
     {
         var data = JsonSerializer.Serialize(new
         {
-            schemaVersion = 1, recordType = "UserNotification", state = notice,
-            audienceRole = notice.AudienceRole, category = notice.Category, succeeded = (bool?)null,
-            sessionId = (Guid?)null, targetUserId = (Guid?)null
+            schemaVersion = 1,
+            recordType = "UserNotification",
+            state = notice,
+            audienceRole = notice.AudienceRole,
+            category = notice.Category,
+            succeeded = (bool?)null,
+            sessionId = (Guid?)null,
+            targetUserId = (Guid?)null
         }, Json);
         await db.Database.ExecuteSqlInterpolatedAsync($"""
             INSERT INTO notifications(id,record_kind,recipient_user_id,location_id,event_key,notification_type,
@@ -47,7 +52,10 @@ internal static class NativeIncidentWrites
             case IncidentReport report:
                 var decision = JsonSerializer.Serialize(new
                 {
-                    report.Type, report.Category, DecidedAt = report.OwnerDecisionAt, report.ResolutionNote
+                    report.Type,
+                    report.Category,
+                    DecidedAt = report.OwnerDecisionAt,
+                    report.ResolutionNote
                 }, Json);
                 var severity = report.Severity == IncidentSeverity.Emergency ? "EMERGENCY" : "NORMAL";
                 var summary = string.Concat(report.Description.EnumerateRunes().Take(250).Select(r => r.ToString()));
@@ -156,9 +164,14 @@ internal static class NativeIncidentWrites
             case IncidentNotification notice when added:
                 var eventData = JsonSerializer.Serialize(new
                 {
-                    schemaVersion = 1, recordType = "IncidentNotification", state,
-                    audienceRole = (string?)null, category = (string?)null, succeeded = (bool?)null,
-                    sessionId = (Guid?)null, targetUserId = (Guid?)null
+                    schemaVersion = 1,
+                    recordType = "IncidentNotification",
+                    state,
+                    audienceRole = (string?)null,
+                    category = (string?)null,
+                    succeeded = (bool?)null,
+                    sessionId = (Guid?)null,
+                    targetUserId = (Guid?)null
                 }, Json);
                 affected = await db.Database.ExecuteSqlInterpolatedAsync($"""
                     INSERT INTO notifications(id,record_kind,event_key,notification_type,event_data,event_at)

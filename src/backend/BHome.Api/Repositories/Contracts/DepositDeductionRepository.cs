@@ -1,6 +1,5 @@
 using System.Text.Json;
 using BHome.Application.Contracts;
-using BHome.Domain.TenantContracts;
 using BHome.Infrastructure.Persistence;
 using BHome.Infrastructure.Persistence.Compact24;
 using Microsoft.EntityFrameworkCore;
@@ -29,7 +28,7 @@ internal sealed class DepositDeductionRepository(BHomePersistenceContext db, ICo
     public async Task<T> TransactionAsync<T>(Guid contractId, Func<Task<T>> work, CancellationToken token)
     {
         if (db is not Compact24DbContext) throw new ContractException(503, "deposit_deduction_unavailable");
-        var room = await db.Set<Contract>().AsNoTracking().Where(c => c.Id == contractId).Select(c => (Guid?)c.RoomId).SingleOrDefaultAsync(token)
+        var room = await db.Set<BHome.Domain.Entities.Contract>().AsNoTracking().Where(c => c.Id == contractId).Select(c => (Guid?)c.RoomId).SingleOrDefaultAsync(token)
             ?? throw ContractException.Missing();
         return await contracts.InTransactionAsync(room, work, token);
     }

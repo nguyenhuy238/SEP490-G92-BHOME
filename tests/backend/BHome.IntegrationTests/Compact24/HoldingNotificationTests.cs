@@ -24,7 +24,7 @@ public sealed partial class Compact24NotificationMvpTests
     {
         var w = await Seed(); var probe = new SmtpProbe(); using var host = EmailHost(probe);
         await using var scope = host.Services.CreateAsyncScope();
-        var db = scope.ServiceProvider.GetRequiredService<Compact24DbContext>();
+        var db = scope.ServiceProvider.GetRequiredService<Compact24ArchiveContext>();
         var contract = await AddSyntheticHolding(db, w, active: false);
         contract.Kind = kind;
         var action = kind == ContractKind.Holding ? "HoldingSigningSubmitted" : "MainSigningSubmitted";
@@ -80,7 +80,7 @@ public sealed partial class Compact24NotificationMvpTests
         Guid id, delivery;
         await using (var scope = host.Services.CreateAsyncScope())
         {
-            var db = scope.ServiceProvider.GetRequiredService<Compact24DbContext>();
+            var db = scope.ServiceProvider.GetRequiredService<Compact24ArchiveContext>();
             var c = await AddSyntheticHolding(db, w, active: true, storage); id = c.Id;
             if (corruptDocument)
             {
@@ -160,7 +160,7 @@ public sealed partial class Compact24NotificationMvpTests
         }
         else Assert.Empty(probe.Messages);
         await using var check = host.Services.CreateAsyncScope();
-        var data = check.ServiceProvider.GetRequiredService<Compact24DbContext>();
+        var data = check.ServiceProvider.GetRequiredService<Compact24ArchiveContext>();
         var state = await data.Database.SqlQuery<string>($"SELECT delivery_status AS \"Value\" FROM notifications WHERE id={delivery}").SingleAsync();
         Assert.Equal(corruptDocument ? "PermanentlyFailed" : missingDocument ? "Pending" : smtpUnknown ? "PendingReview" : "Sent", state);
         var held = await data.Set<Contract>().Include(c => c.Room).SingleAsync(c => c.Id == id);

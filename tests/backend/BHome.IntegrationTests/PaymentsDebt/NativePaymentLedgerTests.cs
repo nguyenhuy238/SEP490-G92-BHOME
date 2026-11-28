@@ -67,9 +67,12 @@ public sealed partial class PaymentLedgerTests
 
         var failed = new PaymentTransfer
         {
-            ProviderIdentity = "SYNTHETIC-BANK", BankReference = "ROLLBACK-" + Guid.NewGuid(),
-            Amount = 1, OccurredAt = PaymentRules.Timestamp(DateTimeOffset.UtcNow),
-            VerifiedAt = PaymentRules.Timestamp(DateTimeOffset.UtcNow), VerifiedByUserId = w.Owner
+            ProviderIdentity = "SYNTHETIC-BANK",
+            BankReference = "ROLLBACK-" + Guid.NewGuid(),
+            Amount = 1,
+            OccurredAt = PaymentRules.Timestamp(DateTimeOffset.UtcNow),
+            VerifiedAt = PaymentRules.Timestamp(DateTimeOffset.UtcNow),
+            VerifiedByUserId = w.Owner
         };
         failed.NormalizedReference = PaymentRules.NormalizeReference(failed.BankReference);
         var failedKey = Guid.NewGuid();
@@ -78,12 +81,18 @@ public sealed partial class PaymentLedgerTests
             await repository.AddAsync(failed, default);
             await repository.AddAsync(new PaymentReconciliation
             {
-                TransferId = failed.Id, ActorId = w.Owner, OccurredAt = failed.VerifiedAt
+                TransferId = failed.Id,
+                ActorId = w.Owner,
+                OccurredAt = failed.VerifiedAt
             }, default);
             await repository.AddAsync(new PaymentCommand
             {
-                ActorId = w.Owner, Key = failedKey, Operation = "register", ResultId = failed.Id,
-                Fingerprint = new string('A', 64), CreatedAt = failed.VerifiedAt
+                ActorId = w.Owner,
+                Key = failedKey,
+                Operation = "register",
+                ResultId = failed.Id,
+                Fingerprint = new string('A', 64),
+                CreatedAt = failed.VerifiedAt
             }, default);
             throw new InvalidOperationException("Synthetic transaction rollback");
         }, default));

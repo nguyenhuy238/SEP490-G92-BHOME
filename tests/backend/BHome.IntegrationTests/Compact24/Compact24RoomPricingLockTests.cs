@@ -21,7 +21,7 @@ public sealed partial class Compact24OwnerSetupTests
         Guid residentId;
         await using (var scope = fixture.Factory!.Services.CreateAsyncScope())
         {
-            var db = scope.ServiceProvider.GetRequiredService<Compact24DbContext>();
+            var db = scope.ServiceProvider.GetRequiredService<Compact24ArchiveContext>();
             var person = new Resident
             {
                 RoomId = w.Room,
@@ -125,7 +125,7 @@ public sealed partial class Compact24OwnerSetupTests
         Guid residentId;
         await using (var scope = fixture.Factory!.Services.CreateAsyncScope())
         {
-            var db = scope.ServiceProvider.GetRequiredService<Compact24DbContext>();
+            var db = scope.ServiceProvider.GetRequiredService<Compact24ArchiveContext>();
             var resident = new Resident
             {
                 RoomId = w.Room,
@@ -155,7 +155,7 @@ public sealed partial class Compact24OwnerSetupTests
         async Task<Contract> LoadContract(Guid id)
         {
             await using var scope = fixture.Factory!.Services.CreateAsyncScope();
-            var db = scope.ServiceProvider.GetRequiredService<Compact24DbContext>();
+            var db = scope.ServiceProvider.GetRequiredService<Compact24ArchiveContext>();
             return await db.Set<Contract>().AsNoTracking().Include(c => c.Residents).SingleAsync(c => c.Id == id);
         }
         async Task<PolicyDto> LoadPolicy(Guid id) => await Read<PolicyDto>(await owner.GetAsync($"/api/v1/billing-policies/{id}"));

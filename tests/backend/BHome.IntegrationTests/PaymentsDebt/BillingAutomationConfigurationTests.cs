@@ -180,7 +180,7 @@ public sealed partial class PaymentLedgerTests
         var current = (await owner.GetFromJsonAsync<BillingAutomationPlan>($"/api/v1/billing-automation/{w.Location}?period={CurrentPeriod():yyyy-MM-dd}"))!;
         var future = (await owner.GetFromJsonAsync<BillingAutomationPlan>($"/api/v1/billing-automation/{w.Location}?period={CurrentPeriod().AddMonths(1):yyyy-MM-dd}"))!;
         Assert.Equal(1, current.Version); Assert.Equal(2, future.Version); Assert.Equal(31, BillingAutomationService.Calendar(current).DueDay); Assert.Equal(25, BillingAutomationService.Calendar(future).DueDay);
-        await using var scope = fixture.Factory.Services.CreateAsyncScope(); var db = scope.ServiceProvider.GetRequiredService<BHomePersistenceContext>();
+        await using var scope = fixture.Factory.Services.CreateAsyncScope(); var db = scope.ServiceProvider.GetFixturePersistence();
         await Assert.ThrowsAsync<PostgresException>(() => db.Database.ExecuteSqlInterpolatedAsync($"UPDATE \"BillingAutomationPlans\" SET \"Enabled\"=false WHERE \"Id\"={p.Id}"));
         var invoice = await owner.PostAsJsonAsync("/api/v1/invoices/drafts", new DraftInvoiceInput(w.Room, CurrentPeriod(), w.Contract)); invoice.EnsureSuccessStatusCode();
         Assert.Equal(InvoiceMath.CalendarDate(CurrentPeriod(), 31, 0), (await invoice.Content.ReadFromJsonAsync<InvoiceView>())!.DueDate);
@@ -291,7 +291,7 @@ public sealed partial class PaymentLedgerTests
         Assert.Equal(InvoiceMath.CalendarDate(period, original.DueDay, original.DueMonthOffset), draft.DueDate);
         await using (var scope = fixture.Factory.Services.CreateAsyncScope())
         {
-            var db = scope.ServiceProvider.GetRequiredService<BHomePersistenceContext>();
+            var db = scope.ServiceProvider.GetFixturePersistence();
             var invoice = await db.Set<Invoice>().AsNoTracking().SingleAsync(i => i.Id == draft.Id);
             var snapshot = JsonSerializer.Deserialize<BillingSchedule>(invoice.ScheduleSnapshot)!;
             Assert.Equal(BillingRateDate.PeriodStart, snapshot.RateDate);
@@ -326,7 +326,7 @@ public sealed partial class PaymentLedgerTests
             Assert.Equal(30, (await repository.ScheduleForPeriodAsync(w.Location, period, default))!.DueDay);
             Assert.Equal(BillingAutomationService.Calendar(winner).DueDay,
                 (await repository.ScheduleForPeriodAsync(w.Location, from, default))!.DueDay);
-            var db = scope.ServiceProvider.GetRequiredService<BHomePersistenceContext>();
+            var db = scope.ServiceProvider.GetFixturePersistence();
             var persisted = await db.Set<Invoice>().AsNoTracking().SingleAsync(i => i.Id == draft.Id);
             Assert.Equal(original.DueDay, JsonSerializer.Deserialize<BillingSchedule>(persisted.ScheduleSnapshot)!.DueDay);
         }
@@ -362,7 +362,7 @@ public sealed partial class PaymentLedgerTests
         Assert.Equal(3, handlers.Length); Assert.All(handlers, handler => Assert.False(handler.Enabled));
         var scheduler = scope.ServiceProvider.GetServices<BHome.Application.Jobs.IJobScheduleContributor>()
             .Single(x => x.GetType().Name == "BillingAutomationScheduling");
-        var db = scope.ServiceProvider.GetRequiredService<BHomePersistenceContext>();
+        var db = scope.ServiceProvider.GetFixturePersistence();
         static Task<int> BillingJobCount(BHomePersistenceContext context) => context.Database.SqlQueryRaw<int>(
             "SELECT COUNT(*)::int AS \"Value\" FROM \"BackgroundJobs\" WHERE \"Name\" IN ('billing-meter','billing-draft','billing-final')").SingleAsync();
         var before = await BillingJobCount(db);

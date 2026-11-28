@@ -5,7 +5,11 @@ using BHome.Domain.Billing;
 using BHome.Domain.IncidentMaintenance;
 using BHome.Domain.TenantContracts;
 using BHome.Infrastructure.Billing;
+using BHome.Infrastructure.Ocr;
+using BHome.Infrastructure.Modules.IncidentMaintenance.Persistence;
+using BHome.Infrastructure.Modules.StaffOperations.Persistence;
 using Microsoft.EntityFrameworkCore;
+using Native = BHome.Domain.Entities;
 
 namespace BHome.Infrastructure.Modules.Notifications;
 
@@ -23,25 +27,26 @@ internal sealed partial class CompactNotificationEvents
             if (policy.InvoiceDueSoonDays is >= 1 and <= 30)
             {
                 var until = billingToday.AddDays(policy.InvoiceDueSoonDays.Value);
-                var invoices = await db.Set<Invoice>().AsNoTracking().Where(i => i.LocationId == location && i.Status == InvoiceStatus.Final && i.DueDate >= billingToday && i.DueDate <= until).ToArrayAsync(t);
+                var invoices = await db.Set<Native.Invoice>().AsNoTracking().Where(i => i.LocationId == location && i.Status == (short)InvoiceStatus.Final && i.DueDate >= billingToday && i.DueDate <= until).ToArrayAsync(t);
                 foreach (var invoice in invoices)
                 {
                     var key = $"invoice-due-soon:{invoice.Id}:{invoice.DueDate:yyyyMMdd}";
                     if (await Done(key, t) || (await db.FinancialsAsync(invoice.Id, t)).OutstandingAmount <= 0) continue;
-                    foreach (var recipient in await db.Set<InvoiceRecipient>().Where(r => r.InvoiceId == invoice.Id).Select(r => r.TenantUserId).ToArrayAsync(t))
+                    foreach (var recipient in invoice.RecipientUserIds)
                         count += await sql.Emit(recipient, "Tenant", location, key, "INVOICE_DUE_SOON", "Invoice", "Hóa đơn sắp đến hạn", "Hóa đơn còn nghĩa vụ thanh toán. Mở hóa đơn để kiểm tra số dư hiện tại.", "Invoice", invoice.Id, t);
                     await Mark(key, t);
                 }
             }
             if (policy.DebtEnabled && policy.DebtWindowDays is > 0)
             {
-                var invoices = await db.Set<Invoice>().AsNoTracking().Where(i => i.LocationId == location && i.Status == InvoiceStatus.Final && i.DueDate < billingToday).OrderBy(i => i.Id).ToArrayAsync(t);
+                var invoices = await NativeInvoicePersistence.ReadAsync(db, db.Set<Native.Invoice>().AsNoTracking()
+                    .Where(i => i.LocationId == location && i.Status == (short)InvoiceStatus.Final && i.DueDate < billingToday).OrderBy(i => i.Id), t, false);
                 foreach (var invoice in invoices)
                 {
                     var key = $"overdue:{invoice.Id}:{billingToday.DayNumber / policy.DebtWindowDays}";
                     if (await Done(key, t)) continue;
                     var balance = await db.FinancialsAsync(invoice.Id, t); if (balance.OutstandingAmount <= 0) continue;
-                    var audience = (await db.Set<InvoiceRecipient>().Where(r => r.InvoiceId == invoice.Id).Select(r => r.TenantUserId).ToArrayAsync(t)).Concat(await Staff(location, t)).Concat(await Owners(t));
+                    var audience = invoice.Recipients.Select(r => r.TenantUserId).Concat(await Staff(location, t)).Concat(await Owners(t));
                     foreach (var r in await Roles(audience, t)) count += await sql.Emit(r.Id, r.Role, location, key, "INVOICE_OVERDUE", "Invoice", "Hóa đơn còn dư nợ quá hạn",
                         r.Role == "Staff" ? $"Phòng {invoice.RoomNumber} cần theo dõi công nợ trong phạm vi cơ sở." : $"Phòng {invoice.RoomNumber}, kỳ {invoice.BillingPeriod:MM/yyyy} còn phải trả {balance.OutstandingAmount:N0} VND.", r.Role == "Staff" ? "Debt" : "Invoice", invoice.Id, t);
                     await Mark(key, t);
@@ -51,10 +56,13 @@ internal sealed partial class CompactNotificationEvents
             if (policy.TaskEnabled && policy.TaskWindowHours is > 0)
             {
                 var window = sql.Now.ToUnixTimeSeconds() / (policy.TaskWindowHours.Value * 3600L);
-                var tasks = await db.Set<OperationalTask>().AsNoTracking().Where(x => x.LocationId == location && x.DueAt <= sql.Now && x.Status != MeterTaskStatus.Completed && x.Status != MeterTaskStatus.Cancelled &&
-                    !(x.Kind == BHome.Domain.StaffOperations.OperationalTaskKind.MeterReading && x.Purpose == ReadingPurpose.Periodic && x.BillingPeriod != null)).ToArrayAsync(t);
-                foreach (var task in tasks)
+                var tasks = await NativeOperationalTaskPersistence.Roots(db).Where(x => x.LocationId == location &&
+                    x.DueAt <= sql.Now && x.Status != "2" && x.Status != "3").ToArrayAsync(t);
+                foreach (var row in tasks)
                 {
+                    var task = NativeCaptureReads.Task(row);
+                    if (task.Kind == BHome.Domain.StaffOperations.OperationalTaskKind.MeterReading &&
+                        task.Purpose == ReadingPurpose.Periodic && task.BillingPeriod != null) continue;
                     var key = $"task-overdue:{task.Id}:{window}"; if (await Done(key, t)) continue;
                     var audience = (await Owners(t)).Concat(task.AssignedStaffUserId is { } staff && (await Staff(location, t)).Contains(staff) ? [staff] : Array.Empty<Guid>());
                     foreach (var r in await Roles(audience, t)) count += await sql.Emit(r.Id, r.Role, location, key, "TASK_DUE_OR_OVERDUE", "Task", "Công việc đã đến hạn",
@@ -89,9 +97,12 @@ internal sealed partial class CompactNotificationEvents
             }
             if (policy.EmergencyEnabled && policy.EmergencyFirstEscalationMinutes is > 0 && policy.EmergencyOverdueMinutes > policy.EmergencyFirstEscalationMinutes)
             {
-                var incidents = await db.Set<IncidentReport>().AsNoTracking().Where(r => r.LocationId == location && r.Severity == IncidentSeverity.Emergency && r.AcknowledgedAt == null && (r.Status == IncidentStatus.Submitted || r.Status == IncidentStatus.InProgress)).ToArrayAsync(t);
-                foreach (var incident in incidents)
+                var incidents = await db.Set<Native.IncidentReport>().AsNoTracking()
+                    .Where(r => r.LocationId == location && r.Severity == "EMERGENCY" && (r.Status == "Submitted" || r.Status == "InProgress")).ToArrayAsync(t);
+                foreach (var row in incidents)
                 {
+                    var incident = NativeIncidentSession.Read(row);
+                    if (incident.AcknowledgedAt != null) continue;
                     var age = (sql.Now - incident.CreatedAt).TotalMinutes;
                     if (age < policy.EmergencyFirstEscalationMinutes) continue;
                     var stage = age >= policy.EmergencyOverdueMinutes ? "overdue" : "escalation"; var key = $"emergency:{incident.Id}:{stage}";

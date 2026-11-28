@@ -14,6 +14,7 @@ using BHome.Domain.Locations;
 using BHome.Application.PropertyManagement;
 using BHome.Application.StaffOperations;
 using BHome.Infrastructure.Modules.Notifications;
+using BHome.Infrastructure.Modules.IncidentMaintenance.Persistence;
 
 namespace BHome.Infrastructure.Persistence.Compact24;
 
@@ -305,27 +306,9 @@ internal sealed class CompactLocationAssignments(Compact24DbContext db, TimeProv
         DateTimeOffset now, string reason, CancellationToken token, Guid? previousStaff = null,
         bool blockSpecialists = false, Assignment[]? effectiveAssignments = null)
     {
-        var tasks = await db.Set<OperationalTask>().Where(task => task.LocationId == locationId &&
-            task.Status != MeterTaskStatus.Completed && task.Status != MeterTaskStatus.Cancelled)
-            .Select(task => new
-            {
-                task.Id,
-                task.Kind,
-                task.Purpose,
-                task.AssignedStaffUserId,
-                task.AssignmentId,
-                task.AssignedAt,
-                task.DueAt,
-                task.Version,
-                task.Status,
-                task.Result,
-                task.LocationAssetInventoryJson
-            }).ToArrayAsync(token);
-        var orders = await db.Set<MaintenanceWorkOrder>().Where(w => w.LocationId == locationId &&
-            w.Status != WorkOrderStatus.Verified && w.Status != WorkOrderStatus.Cancelled).ToArrayAsync(token);
-        var inspections = await db.Set<ContractMoveOut>().Where(m => m.InspectionStaffId != null &&
-            m.Status != MoveOutStatus.Completed && m.InspectedAt == null &&
-            db.Set<Contract>().Any(c => c.Id == m.ContractId && c.Room.LocationId == locationId)).ToArrayAsync(token);
+        var tasks = await NativeAssignmentReconciliation.TasksAsync(db, locationId, token);
+        var orders = await NativeAssignmentReconciliation.OrdersAsync(db, locationId, token);
+        var inspections = await NativeAssignmentReconciliation.InspectionsAsync(db, locationId, token);
         // Manual removal still requires Owner resolution for unfinished AdHoc/meter work.
         // The automatically-created Location handover is different: it remains open and
         // Location-owned during a responsibility gap, ready for the next eligible Staff.
@@ -423,14 +406,14 @@ internal sealed class CompactLocationAssignments(Compact24DbContext db, TimeProv
                         reason
                     }, Json)
                 };
-                db.Add(handoverHistory);
-                db.Add(new OperationalTaskNotification
+                await NativeAssignmentReconciliation.TaskHistoryAsync(db, handoverHistory, token);
+                await NativeAssignmentReconciliation.TaskNoticeAsync(db, new OperationalTaskNotification
                 {
                     TaskId = task.Id,
                     RecipientUserId = nextStaff!.Value,
                     EventId = handoverHistory.Id,
                     Event = "responsibility_changed"
-                });
+                }, token);
                 continue;
             }
 
@@ -459,14 +442,16 @@ internal sealed class CompactLocationAssignments(Compact24DbContext db, TimeProv
                 TaskVersion = task.Version + 1,
                 ChangesJson = JsonSerializer.Serialize(new { previous = task.AssignedStaffUserId, next = nextStaff, previousAssignmentId = task.AssignmentId, previousAssignedAt = task.AssignedAt, assignmentId = nextAssignment }, Json)
             };
-            db.Add(history);
-            if (next is not null) db.Add(new OperationalTaskNotification { TaskId = task.Id, RecipientUserId = next.StaffUserId, EventId = history.Id, Event = "responsibility_changed" });
+            await NativeAssignmentReconciliation.TaskHistoryAsync(db, history, token);
+            if (next is not null) await NativeAssignmentReconciliation.TaskNoticeAsync(db, new OperationalTaskNotification { TaskId = task.Id, RecipientUserId = next.StaffUserId, EventId = history.Id, Event = "responsibility_changed" }, token);
         }
         foreach (var order in orders.Where(o => nextStaff.HasValue && o.AssignedStaffId != nextStaff))
         {
             var oldStaff = order.AssignedStaffId;
+            var oldVersion = order.Version;
             order.AssignedStaffId = nextStaff!.Value; order.Version++;
-            db.Add(new IncidentActivity
+            await NativeIncidentWrites.WriteAsync(db, order, false, oldVersion, token);
+            await NativeIncidentWrites.WriteAsync(db, new IncidentActivity
             {
                 IncidentId = order.IncidentId,
                 WorkOrderId = order.Id,
@@ -475,23 +460,12 @@ internal sealed class CompactLocationAssignments(Compact24DbContext db, TimeProv
                 Note = reason,
                 OccurredAt = now,
                 DataJson = JsonSerializer.Serialize(new { previous = oldStaff, assignedStaffId = nextStaff }, Json)
-            });
+            }, true, null, token);
         }
         foreach (var inspection in inspections.Where(i => nextStaff.HasValue && i.InspectionStaffId != nextStaff))
         {
-            var oldStaff = inspection.InspectionStaffId;
-            inspection.InspectionStaffId = nextStaff; inspection.Version++;
-            db.Add(new ContractMoveOutHistory
-            {
-                ContractId = inspection.ContractId,
-                ActorId = actor,
-                Action = "InspectionResponsibilityChanged",
-                OccurredAt = now,
-                Version = inspection.Version,
-                Snapshot = JsonSerializer.Serialize(new { previous = oldStaff, inspection.InspectionStaffId, inspection.Version, reason }, Json)
-            });
+            await NativeAssignmentReconciliation.InspectionAsync(db, inspection, nextStaff!.Value, actor, now, reason, token);
         }
-        await db.SaveChangesAsync(token);
         if (next is not null)
             await LocationAssetInventoryTaskFactory.EnsureAsync(db, workspace, locationId, next.Id,
                 next.StaffUserId, next.StartDate, actor == Guid.Empty ? next.ActorId : actor, now, token);
@@ -546,7 +520,7 @@ internal sealed class CompactLocationAssignments(Compact24DbContext db, TimeProv
     private async Task NotifyAssignmentAsync(Guid locationId, Assignment assignment, string eventType,
         CancellationToken token, int? locationVersion = null, Guid? reconciliationEventId = null)
     {
-        var location = await db.Set<Location>().AsNoTracking().Where(l => l.Id == locationId)
+        var location = await db.Set<BHome.Domain.Entities.Location>().AsNoTracking().Where(l => l.Id == locationId)
             .Select(l => new { l.Name, l.Address }).SingleAsync(token);
         var staff = await db.Users.AsNoTracking().Where(u => u.Id == assignment.StaffUserId)
             .Select(u => new { u.Email, Name = EF.Property<string>(u, "full_name") }).SingleAsync(token);

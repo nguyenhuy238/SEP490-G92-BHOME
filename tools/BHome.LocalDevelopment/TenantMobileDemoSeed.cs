@@ -39,7 +39,8 @@ internal static partial class TenantMobileDemoSeed
             throw new LocalTestAccountException("Use only the verified Neon development branch and the requested synthetic Tenant account.");
         await using var scope = provider.CreateAsyncScope();
         var sp = scope.ServiceProvider;
-        var db = sp.GetRequiredService<BHomePersistenceContext>();
+        var identity = sp.GetRequiredService<BHome.Infrastructure.Persistence.Compact24.Compact24DbContext>();
+        await using var db = OfflineFixturePersistence.Open(sp);
         if (!await db.IsSchemaReadyAsync()) throw new LocalTestAccountException("Compact24 schema not ready; no writes.");
         var users = sp.GetRequiredService<UserManager<ApplicationUser>>();
         var tenant = await users.FindByEmailAsync(email);
@@ -60,7 +61,7 @@ internal static partial class TenantMobileDemoSeed
             await SeedCoreAsync(sp, db, tenant.Id, owner.Id, staff.Id);
             await SeedWorkflowsAsync(sp, db, tenant.Id, owner.Id);
         }
-        await db.Entry(tenant).ReloadAsync();
+        await identity.Entry(tenant).ReloadAsync();
         if (tenant.PasswordHash != passwordHash || tenant.SecurityStamp != stamp || !(await users.GetRolesAsync(tenant)).SequenceEqual([Roles.Tenant]))
             throw new LocalTestAccountException("Credential/role preservation check failed.");
         await VerifyApiAsync(sp, db, tenant);

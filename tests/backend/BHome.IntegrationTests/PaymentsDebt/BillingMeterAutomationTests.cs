@@ -24,7 +24,7 @@ public sealed partial class PaymentLedgerTests
         var w = await Setup(); using var owner = await Client(w.Owner);
         (await owner.PutAsJsonAsync("/api/v1/billing-schedules", Calendar(w))).EnsureSuccessStatusCode();
         var response = await owner.PutAsJsonAsync("/api/v1/billing-automation", Plan(w) with { MeterDay = 1, MeterDueDay = 10 }); response.EnsureSuccessStatusCode(); var plan = (await response.Content.ReadFromJsonAsync<BillingAutomationPlan>())!;
-        await using var scope = fixture.Factory.Services.CreateAsyncScope(); var db = scope.ServiceProvider.GetRequiredService<BHomePersistenceContext>();
+        await using var scope = fixture.Factory.Services.CreateAsyncScope(); var db = scope.ServiceProvider.GetFixturePersistence();
         if (withStaff) db.Add(new StaffLocationAssignment(w.Location, w.Staff, w.Owner, CurrentPeriod().AddYears(-1), CurrentPeriod().AddYears(1)));
         var meters = (water ? new[] { UtilityType.Electricity, UtilityType.Water } : new[] { UtilityType.Electricity }).Select(type => new Meter { RoomId = w.Room, Code = "SYN-JOB-" + type, UtilityType = type, InstalledOn = CurrentPeriod().AddMonths(-1) }).ToArray(); db.AddRange(meters); await db.SaveChangesAsync(); return (w, plan, meters.Select(m => m.Id).ToArray());
     }
@@ -89,13 +89,13 @@ public sealed partial class PaymentLedgerTests
             await ConfirmSyntheticTask(w, (await initial.Content.ReadFromJsonAsync<IdResult>())!.Id, 100);
             var reading = await ConfirmSyntheticTask(w, task.Id, 110); Assert.Equal(10, reading.Consumption);
         }
-        await RunMeter(w); await using var scope = fixture.Factory.Services.CreateAsyncScope(); var db = scope.ServiceProvider.GetRequiredService<BHomePersistenceContext>(); Assert.Equal(2, await db.Set<OperationalTask>().CountAsync(t => t.AutomationPlanId == p.Id)); Assert.Equal(2, await db.Set<MeterReading>().CountAsync(r => tasks.Select(t => t.Id).Contains(r.TaskId)));
+        await RunMeter(w); await using var scope = fixture.Factory.Services.CreateAsyncScope(); var db = scope.ServiceProvider.GetFixturePersistence(); Assert.Equal(2, await db.Set<OperationalTask>().CountAsync(t => t.AutomationPlanId == p.Id)); Assert.Equal(2, await db.Set<MeterReading>().CountAsync(r => tasks.Select(t => t.Id).Contains(r.TaskId)));
     }
     [Fact]
     public async Task MeterJobPreservesUnassignedWorkAndMakesItVisibleOnLocationAssignment()
     {
         var (w, p, _) = await MeterWorkspace(false, false); var result = (await RunMeter(w))!; Assert.Equal("PendingInputs", result.Status); Assert.Contains("staff_assignment_required", result.ExceptionsJson); Assert.Contains("active_meter_configuration_required", result.ExceptionsJson);
-        Guid taskId; await using (var s = fixture.Factory.Services.CreateAsyncScope()) { var db = s.ServiceProvider.GetRequiredService<BHomePersistenceContext>(); var task = await db.Set<OperationalTask>().SingleAsync(t => t.AutomationPlanId == p.Id); Assert.Null(task.AssignedStaffUserId); taskId = task.Id; db.Add(new StaffLocationAssignment(w.Location, w.Staff, w.Owner, CurrentPeriod().AddYears(-1), CurrentPeriod().AddYears(1))); await db.SaveChangesAsync(); }
+        Guid taskId; await using (var s = fixture.Factory.Services.CreateAsyncScope()) { var db = s.ServiceProvider.GetFixturePersistence(); var task = await db.Set<OperationalTask>().SingleAsync(t => t.AutomationPlanId == p.Id); Assert.Null(task.AssignedStaffUserId); taskId = task.Id; db.Add(new StaffLocationAssignment(w.Location, w.Staff, w.Owner, CurrentPeriod().AddYears(-1), CurrentPeriod().AddYears(1))); await db.SaveChangesAsync(); }
         using var staff = await Client(w.Staff);
         var visible = await staff.GetFromJsonAsync<MeterTaskSummary>($"/api/v1/capture/meter-tasks/{taskId}");
         Assert.NotNull(visible);
@@ -115,7 +115,7 @@ public sealed partial class PaymentLedgerTests
         Guid taskId;
         await using (var scope = fixture.Factory.Services.CreateAsyncScope())
         {
-            var db = scope.ServiceProvider.GetRequiredService<BHomePersistenceContext>();
+            var db = scope.ServiceProvider.GetFixturePersistence();
             var task = await db.Set<OperationalTask>().SingleAsync(t => t.AutomationPlanId == p.Id && t.MeterId == meters[0]);
             taskId = task.Id;
             var assignment = await db.StaffLocationAssignments.SingleAsync(a => a.LocationId == w.Location);
@@ -133,7 +133,7 @@ public sealed partial class PaymentLedgerTests
         Assert.Equal(successor.Staff, visible!.AssignedStaffUserId);
         Assert.Equal(10, (await ConfirmSyntheticTask(w with { Staff = successor.Staff }, taskId, 110)).Consumption);
         await using var check = fixture.Factory.Services.CreateAsyncScope();
-        var store = check.ServiceProvider.GetRequiredService<BHomePersistenceContext>();
+        var store = check.ServiceProvider.GetFixturePersistence();
         Assert.Equal(successor.Staff, (await store.Set<MeterReading>().SingleAsync(r => r.TaskId == taskId)).ConfirmedByUserId);
     }
     [Fact]
@@ -143,7 +143,7 @@ public sealed partial class PaymentLedgerTests
         Guid vacantId, incompleteId;
         await using (var scope = fixture.Factory.Services.CreateAsyncScope())
         {
-            var db = scope.ServiceProvider.GetRequiredService<BHomePersistenceContext>();
+            var db = scope.ServiceProvider.GetFixturePersistence();
             var vacant = new Room { LocationId = w.Location, RoomNumber = "SYN-VACANT", Capacity = 2, Status = RoomStatus.Available };
             var incomplete = new Room { LocationId = w.Location, RoomNumber = "SYN-MISSING-METER", Capacity = 2, Status = RoomStatus.Available };
             vacantId = vacant.Id; incompleteId = incomplete.Id;
@@ -158,7 +158,7 @@ public sealed partial class PaymentLedgerTests
         Assert.Contains("active_meter_configuration_required", result.ExceptionsJson); Assert.Contains(incompleteId.ToString(), result.ExceptionsJson);
         await RunMeter(w);
         await using var check = fixture.Factory.Services.CreateAsyncScope();
-        var tasks = await check.ServiceProvider.GetRequiredService<BHomePersistenceContext>().Set<OperationalTask>().Where(t => t.AutomationPlanId == p.Id).ToArrayAsync();
+        var tasks = await check.ServiceProvider.GetFixturePersistence().Set<OperationalTask>().Where(t => t.AutomationPlanId == p.Id).ToArrayAsync();
         Assert.Equal(5, tasks.Length); Assert.Equal(2, tasks.Count(t => t.BillingRoomId == vacantId)); Assert.Single(tasks, t => t.BillingRoomId == incompleteId);
         Assert.All(tasks, t => Assert.Equal(w.Staff, t.AssignedStaffUserId));
     }
@@ -166,7 +166,7 @@ public sealed partial class PaymentLedgerTests
     {
         var (w, p, _) = await MeterWorkspace();
         await using var scope = fixture.Factory.Services.CreateAsyncScope();
-        var db = scope.ServiceProvider.GetRequiredService<BHomePersistenceContext>();
+        var db = scope.ServiceProvider.GetFixturePersistence();
         var vacant = new Room { LocationId = w.Location, RoomNumber = "SYN-VACANT", Capacity = 2, Status = RoomStatus.Available };
         db.Add(vacant);
         db.AddRange(new Meter { RoomId = vacant.Id, Code = "SYN-VACANT-E", UtilityType = UtilityType.Electricity, InstalledOn = CurrentPeriod().AddMonths(-1) },
@@ -177,7 +177,7 @@ public sealed partial class PaymentLedgerTests
         Assert.Equal(4, tasks.Length);
         var due = tasks.First().DueAt!.Value;
         var clock = new DemoBusinessClock(TimeProvider.System);
-        var notifier = new BillingMeterOverdueNotifier(db, clock, scope.ServiceProvider.GetRequiredService<CompactNotificationWriter>());
+        var notifier = new BillingMeterOverdueNotifier(scope.ServiceProvider.GetRequiredService<BHomePersistenceContext>(), clock, scope.ServiceProvider.GetRequiredService<CompactNotificationWriter>());
         var notices = db.Set<UserNotification>().AsNoTracking().Where(n => n.LocationId == w.Location && n.EventType == "PERIODIC_METER_OVERDUE");
         Assert.NotNull(clock.ChangeTime(due.AddMinutes(-5), 0));
         await notifier.NotifyAsync(default);
@@ -205,11 +205,12 @@ public sealed partial class PaymentLedgerTests
         var (w, p, _) = await MeterWorkspace();
         await using var scope = fixture.Factory.Services.CreateAsyncScope();
         var services = scope.ServiceProvider;
-        var db = services.GetRequiredService<BHomePersistenceContext>();
+        var db = services.GetFixturePersistence();
         var clock = new DemoBusinessClock(TimeProvider.System);
-        var scheduler = new BillingAutomationScheduling(db, services.GetRequiredService<IBillingAutomationSchedules>(),
+        var runtime = services.GetRequiredService<BHomePersistenceContext>();
+        var scheduler = new BillingAutomationScheduling(runtime, services.GetRequiredService<IBillingAutomationSchedules>(),
             services.GetRequiredService<IBackgroundJobQueue>(), clock, new BillingAutomationRuntime(false, true),
-            new BillingMeterOverdueNotifier(db, clock));
+            new BillingMeterOverdueNotifier(runtime, clock));
         var start = new DateTimeOffset(CurrentPeriod().ToDateTime(TimeOnly.MinValue), TimeSpan.FromHours(7));
         Assert.NotNull(clock.ChangeTime(start.AddMinutes(-1), 0));
         await scheduler.EnqueueDueAsync(default);
@@ -234,7 +235,7 @@ public sealed partial class PaymentLedgerTests
     {
         var (w, p, meters) = await MeterWorkspace(); await RunMeter(w);
         Guid replacement; await using (var scope = fixture.Factory.Services.CreateAsyncScope())
-        { var db = scope.ServiceProvider.GetRequiredService<BHomePersistenceContext>(); (await db.Set<Meter>().SingleAsync(m => m.Id == meters[0])).IsActive = false; await db.SaveChangesAsync(); var meter = new Meter { RoomId = w.Room, Code = "SYN-REPLACEMENT", UtilityType = UtilityType.Electricity, InstalledOn = CurrentPeriod() }; db.Add(meter); await db.SaveChangesAsync(); replacement = meter.Id; }
+        { var db = scope.ServiceProvider.GetFixturePersistence(); (await db.Set<Meter>().SingleAsync(m => m.Id == meters[0])).IsActive = false; await db.SaveChangesAsync(); var meter = new Meter { RoomId = w.Room, Code = "SYN-REPLACEMENT", UtilityType = UtilityType.Electricity, InstalledOn = CurrentPeriod() }; db.Add(meter); await db.SaveChangesAsync(); replacement = meter.Id; }
         var result = (await RunMeter(w))!; Assert.Contains("meter_replacement_review_required", result.ExceptionsJson); Assert.Equal(2, result.CreatedCount);
         using var owner = await Client(w.Owner); Assert.Equal(HttpStatusCode.Conflict, (await owner.PostAsJsonAsync("/api/v1/capture/meter-tasks", new MeterTaskInput(replacement, ReadingPurpose.Periodic, CurrentPeriod(), CurrentPeriod()))).StatusCode);
         var next = await owner.PutAsJsonAsync("/api/v1/billing-automation", Plan(w) with { ExpectedVersion = 1, EffectiveFrom = CurrentPeriod().AddMonths(1) }); next.EnsureSuccessStatusCode();
@@ -256,7 +257,7 @@ public sealed partial class PaymentLedgerTests
             Assert.Single(calls, response => response.StatusCode == HttpStatusCode.Conflict);
         }
         await using var scope = fixture.Factory.Services.CreateAsyncScope();
-        var db = scope.ServiceProvider.GetRequiredService<BHomePersistenceContext>();
+        var db = scope.ServiceProvider.GetFixturePersistence();
         Assert.Equal(1, await db.Set<OperationalTask>().CountAsync(task => task.MeterId == meters[0] && task.Purpose == ReadingPurpose.Initial));
         Assert.Equal(1, await db.Set<OperationalTask>().CountAsync(task => task.MeterId == meters[0] && task.Purpose == ReadingPurpose.Periodic && task.BillingPeriod == CurrentPeriod()));
     }

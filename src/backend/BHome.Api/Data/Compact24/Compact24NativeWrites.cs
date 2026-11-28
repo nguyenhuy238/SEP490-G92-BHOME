@@ -4,7 +4,7 @@ using Native = BHome.Domain.Entities;
 
 namespace BHome.Infrastructure.Persistence.Compact24;
 
-public sealed partial class Compact24DbContext
+public partial class Compact24DbContext
 {
     // The normal SaveChanges path selects this branch only for native entity changes.
     // Repositories save only after their existing lock, authorization, history and
@@ -42,7 +42,7 @@ public sealed partial class Compact24DbContext
                 _ => false
             };
             if (!allowed)
-                throw new InvalidOperationException("Use the guarded Compact24 writer for unmigrated records or deletions.");
+                throw new InvalidOperationException("Use the explicit repository for this record; physical deletions are not allowed.");
         }
         var propertyLocations = entries.Select(e => e.Entity).OfType<Native.Asset>()
             .Select(a => a.LocationId).Concat(entries.Where(e => e.Entity is Native.Room &&

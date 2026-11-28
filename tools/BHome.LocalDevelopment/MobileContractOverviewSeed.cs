@@ -28,12 +28,13 @@ internal static class MobileContractOverviewSeed
         var config = provider.GetRequiredService<IConfiguration>();
         LocalTestAccounts.ValidateTarget(Environment.GetEnvironmentVariable("DOTNET_ENVIRONMENT"), config.GetConnectionString("Database") ?? "");
         await using var scope = provider.CreateAsyncScope();
-        var db = scope.ServiceProvider.GetRequiredService<BHomePersistenceContext>();
+        var identity = scope.ServiceProvider.GetRequiredService<BHome.Infrastructure.Persistence.Compact24.Compact24DbContext>();
+        await using var db = OfflineFixturePersistence.Open(scope.ServiceProvider, identity);
         if (!await db.IsSchemaReadyAsync(t)) throw new LocalTestAccountException("Compact24 chưa sẵn sàng.");
         var users = scope.ServiceProvider.GetRequiredService<UserManager<ApplicationUser>>();
         var today = DateOnly.FromDateTime(TimeZoneInfo.ConvertTimeBySystemTimeZoneId(DateTimeOffset.UtcNow, "Asia/Ho_Chi_Minh").DateTime);
         var now = DateTimeOffset.UtcNow;
-        await using var tx = await db.Database.BeginTransactionAsync(t);
+        await using var tx = await OfflineFixturePersistence.BeginAsync(db, identity, t);
         await db.Database.ExecuteSqlInterpolatedAsync($"SELECT pg_advisory_xact_lock(hashtextextended({"mobile-contract-overview-v1"},0))", t);
         var location = await db.Locations.SingleOrDefaultAsync(l => l.Id == Mobile(10), t);
         if (location?.Name != "BHOME MOBILE TEST" || !await db.Set<RoomType>().AnyAsync(r => r.Id == Mobile(11) && r.LocationId == location.Id, t))
@@ -70,7 +71,7 @@ internal static class MobileContractOverviewSeed
             if (await users.FindByNameAsync(username) is not null || await db.Users.AnyAsync(u => u.Id == Id(1000 + i), t))
                 throw new LocalTestAccountException("Trùng tài khoản ngoài fixture; không đổi mật khẩu/quyền.");
             var tenant = new ApplicationUser { Id = Id(1000 + i), UserName = username, Email = username + "@example.invalid", IsActive = true, LockoutEnabled = true };
-            db.PrepareUserRole(tenant, Roles.Tenant);
+            identity.PrepareUserRole(tenant, Roles.Tenant);
             var result = await users.CreateAsync(tenant, "Fixture!9aA" + Convert.ToBase64String(RandomNumberGenerator.GetBytes(24)));
             if (!result.Succeeded) throw new LocalTestAccountException("Không tạo được Tenant tổng hợp: " + string.Join(",", result.Errors.Select(e => e.Code)));
             var state = states[i];

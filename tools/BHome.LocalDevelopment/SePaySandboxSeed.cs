@@ -42,11 +42,12 @@ public static class SePaySandboxSeed
         var options = sp.GetRequiredService<SePayOptions>();
         var holder = config["SePaySandbox:AccountHolder"] ?? "";
         ValidateTarget(environment, config.GetConnectionString("Database") ?? "", options, holder);
-        var db = sp.GetRequiredService<BHomePersistenceContext>();
+        var identity = sp.GetRequiredService<BHome.Infrastructure.Persistence.Compact24.Compact24DbContext>();
+        await using var db = OfflineFixturePersistence.Open(sp, identity);
         if (!await db.IsSchemaReadyAsync(token)) throw new LocalTestAccountException("Prepare the reviewed Sandbox schema first; this seed never migrates or resets data.");
         var account = options.ReceivingAccounts.Single();
         var users = sp.GetRequiredService<UserManager<ApplicationUser>>();
-        await using var tx = await db.Database.BeginTransactionAsync(token);
+        await using var tx = await OfflineFixturePersistence.BeginAsync(db, identity, token);
         await db.Database.ExecuteSqlInterpolatedAsync($"SELECT pg_advisory_xact_lock(hashtextextended({"sepay-sandbox-fixture-v1"},0))", token);
         var existing = await db.Locations.AsNoTracking().SingleOrDefaultAsync(x => x.Id == account.LocationId, token);
         var created = existing is null;
@@ -57,7 +58,7 @@ public static class SePaySandboxSeed
             foreach (var (number, name, role) in Accounts)
             {
                 var user = new ApplicationUser { Id = Id(number), UserName = name + ".sepay.test", Email = name + ".sepay.test@example.invalid", EmailConfirmed = true, IsActive = true, LockoutEnabled = true };
-                db.PrepareUserRole(user, role);
+                identity.PrepareUserRole(user, role);
                 if (!(await users.CreateAsync(user, password)).Succeeded)
                     throw new LocalTestAccountException("Synthetic account creation failed; check the local password policy. The transaction was not committed.");
             }

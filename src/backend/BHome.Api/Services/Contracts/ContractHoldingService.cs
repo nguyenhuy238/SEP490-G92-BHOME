@@ -184,11 +184,15 @@ public sealed partial class ContractService
     public async Task ConfirmHoldingDepositAllocationAsync(Guid id, decimal amount, DateTimeOffset verifiedAt, CancellationToken token)
     {
         Role(Roles.Owner); Money(amount, false);
-        var c = await Load(id, [Roles.Owner], token);
-        if (c.Kind != ContractKind.Holding || c.ApprovedAt is null && !AnonymousContractSigningService.HoldingOwnerHasSigned(c) || c.Status is ContractStatus.Expired or ContractStatus.Cancelled or ContractStatus.Converted ||
-            c.HoldingExpiryAt <= verifiedAt) throw ContractException.Conflict("holding_deposit_requires_manual_review");
-        if (await repository.HoldingConflictAsync(c.RoomId, c.Id, c.StartDate, c.EndDate, token)) throw ContractException.Conflict("room_contract_conflict");
-        await LockHoldingPriceAsync(c, "VerifiedDeposit", verifiedAt, token, amount);
+        await repository.WithLockedContractAsync(id, async _ =>
+        {
+            var c = await Load(id, [Roles.Owner], token);
+            if (c.Kind != ContractKind.Holding || c.ApprovedAt is null && !AnonymousContractSigningService.HoldingOwnerHasSigned(c) || c.Status is ContractStatus.Expired or ContractStatus.Cancelled or ContractStatus.Converted ||
+                c.HoldingExpiryAt <= verifiedAt) throw ContractException.Conflict("holding_deposit_requires_manual_review");
+            if (await repository.HoldingConflictAsync(c.RoomId, c.Id, c.StartDate, c.EndDate, token)) throw ContractException.Conflict("room_contract_conflict");
+            await LockHoldingPriceAsync(c, "VerifiedDeposit", verifiedAt, token, amount);
+            return true;
+        }, token);
     }
     public async Task<bool> CanAcceptHoldingDepositAsync(Guid id, CancellationToken t)
     {
@@ -200,11 +204,13 @@ public sealed partial class ContractService
     internal async Task<bool> ConfirmProviderHoldingDepositAsync(Guid id, decimal amount, DateTimeOffset verifiedAt, CancellationToken token)
     {
         Money(amount, false);
-        var contract = await repository.FindAsync(id, token) ?? throw ContractException.Missing();
-        if (contract.Kind != ContractKind.Holding || contract.ApprovedAt is null && !AnonymousContractSigningService.HoldingOwnerHasSigned(contract) || contract.HoldingExpiryAt <= verifiedAt ||
-            await repository.HoldingConflictAsync(contract.RoomId, id, contract.StartDate, contract.EndDate, token)) return false;
-        await LockHoldingPriceAsync(contract, "VerifiedDeposit", verifiedAt, token, amount, providerVerified: true);
-        return true;
+        return await repository.WithLockedContractAsync(id, async contract =>
+        {
+            if (contract.Kind != ContractKind.Holding || contract.ApprovedAt is null && !AnonymousContractSigningService.HoldingOwnerHasSigned(contract) || contract.HoldingExpiryAt <= verifiedAt ||
+                await repository.HoldingConflictAsync(contract.RoomId, id, contract.StartDate, contract.EndDate, token)) return false;
+            await LockHoldingPriceAsync(contract, "VerifiedDeposit", verifiedAt, token, amount, providerVerified: true);
+            return true;
+        }, token);
     }
 
     private async Task<ActivationReadiness> HoldingReadiness(Contract c, CancellationToken token)
@@ -341,6 +347,7 @@ public sealed partial class ContractService
             main.Residents = holding.Residents.Select(r => new ContractResident
             { ContractId = main.Id, ResidentId = r.ResidentId, Role = r.Role, ResidenceFrom = main.StartDate }).ToList();
             Seal(main); repository.Add(main);
+            await repository.FlushAsync(token);
             await holdings.PersistAsync(application, main.Id, token);
             Audit("HoldingConversionPrepared", id); Audit("ContractDraftCreated", main.Id);
             Remember(key, "holding-convert", new { id, input }, main.Id); return new ContractId(main.Id);

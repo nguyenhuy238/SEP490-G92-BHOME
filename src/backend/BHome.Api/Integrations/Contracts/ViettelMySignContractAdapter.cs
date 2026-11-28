@@ -7,6 +7,7 @@ using BHome.DigitalSigning.Application;
 using BHome.DigitalSigning.Domain;
 using BHome.Domain.TenantContracts;
 using BHome.Infrastructure.Persistence;
+using BHome.Infrastructure.Persistence.Compact24;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Configuration;
 
@@ -25,7 +26,17 @@ internal sealed class ViettelMySignContractAdapter(BHomePersistenceContext db, I
     {
         var id = user.UserId ?? throw ContractException.Missing();
         var picture = pictures is null ? null : await pictures.FindAsync(id, t);
-        var certificate = await db.Set<SigningCertificate>().AsNoTracking().Where(c => c.OwnerUserId == id && !c.Locked)
+        SigningCertificate? certificate;
+        if (db is Compact24DbContext)
+        {
+            var raw = await db.Database.SqlQuery<string>($"""
+                SELECT e::text AS "Value" FROM users u CROSS JOIN LATERAL jsonb_array_elements(u.signing_credentials) e
+                WHERE u.id={id} AND (e->>'ownerUserId')::uuid={id} AND NOT COALESCE((e->>'locked')::bool,false)
+                ORDER BY (e->>'createdAt')::timestamptz DESC LIMIT 1
+                """).FirstOrDefaultAsync(t);
+            certificate = ReadCertificate(raw);
+        }
+        else certificate = await db.Set<SigningCertificate>().AsNoTracking().Where(c => c.OwnerUserId == id && !c.Locked)
             .OrderByDescending(c => c.CreatedAt).FirstOrDefaultAsync(t);
         return (picture is not null, certificate is null ? "" : CommonName(certificate.Subject));
     }
@@ -33,7 +44,12 @@ internal sealed class ViettelMySignContractAdapter(BHomePersistenceContext db, I
     public async Task<SigningPreparation> PrepareAsync(ContractDocument document, Guid certificateId, byte[]? previousPdf,
         SigningAppearance appearance, CancellationToken t)
     {
-        var certificate = await db.Set<SigningCertificate>().AsNoTracking().SingleOrDefaultAsync(c => c.Id == certificateId, t);
+        var certificate = db is Compact24DbContext
+            ? ReadCertificate(await db.Database.SqlQuery<string>($"""
+                SELECT e::text AS "Value" FROM users u CROSS JOIN LATERAL jsonb_array_elements(u.signing_credentials) e
+                WHERE (e->>'id')::uuid={certificateId} AND u.id={user.UserId} AND (e->>'ownerUserId')::uuid={user.UserId}
+                """).SingleOrDefaultAsync(t))
+            : await db.Set<SigningCertificate>().AsNoTracking().SingleOrDefaultAsync(c => c.Id == certificateId, t);
         if (certificate is null || certificate.OwnerUserId != user.UserId || certificate.Provider != SigningProviders.ViettelMySign)
             throw ContractException.Missing();
         if (certificate.Locked || !certificate.IsValidAt(clock.GetUtcNow())) throw ContractException.Conflict("signing_certificate_not_valid");
@@ -59,6 +75,9 @@ internal sealed class ViettelMySignContractAdapter(BHomePersistenceContext db, I
         }
         catch (SigningProviderException) { throw new IntegrationUnavailableException("Viettel MySign"); }
     }
+    private static SigningCertificate? ReadCertificate(string? raw) => raw is null ? null :
+        System.Text.Json.JsonSerializer.Deserialize<SigningCertificate>(raw, new System.Text.Json.JsonSerializerOptions(System.Text.Json.JsonSerializerDefaults.Web))
+        ?? throw ContractException.Conflict("certificate_directory_invalid");
     // The box shows "Ký bởi: <certificate name> / Ngày ký: <Vietnam time>", under the signer's picture when they saved one.
     // Without a chosen placement it goes in the signer's own box of the signature block; a PDF without that block
     // (rendered before it existed) is signed invisibly, as before.

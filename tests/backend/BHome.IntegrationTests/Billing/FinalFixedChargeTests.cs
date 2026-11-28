@@ -21,7 +21,7 @@ public sealed partial class InvoiceApiTests
         Guid[] excluded;
         await using (var scope = fixture.Factory.Services.CreateAsyncScope())
         {
-            var db = scope.ServiceProvider.GetRequiredService<BHomePersistenceContext>();
+            var db = scope.ServiceProvider.GetFixturePersistence();
             var contract = await db.Set<Contract>().SingleAsync(c => c.Id == w.Contract);
             contract.ActualEndDate = w.Period.AddMonths(1).AddDays(-1);
             var other = await db.Set<Contract>().SingleAsync(c => c.RoomId == w.Room && c.Id != w.Contract);
@@ -96,7 +96,7 @@ public sealed partial class InvoiceApiTests
         var w = await Setup(DateTimeOffset.UtcNow.AddYears(-1), primaryStart: new DateOnly(Today.Year, Today.Month, 1).AddMonths(-1).AddDays(14), personFee: true);
         await using (var scope = fixture.Factory.Services.CreateAsyncScope())
         {
-            var db = scope.ServiceProvider.GetRequiredService<BHomePersistenceContext>();
+            var db = scope.ServiceProvider.GetFixturePersistence();
             (await db.Set<BHome.Domain.PropertyManagement.Room>().SingleAsync(r => r.Id == w.Room)).Capacity = 3;
             await db.SaveChangesAsync();
         }
@@ -120,7 +120,7 @@ public sealed partial class InvoiceApiTests
     private async Task<InvoiceView> HistoricalFixedInvoice(Workspace w, BillingSchedule schedule, int occupiedDays)
     {
         await using var scope = fixture.Factory.Services.CreateAsyncScope();
-        var db = scope.ServiceProvider.GetRequiredService<BHomePersistenceContext>();
+        var db = scope.ServiceProvider.GetFixturePersistence();
         var contract = await db.Set<Contract>().Include(c => c.Residents).SingleAsync(c => c.Id == w.Contract);
         var room = await db.Set<BHome.Domain.PropertyManagement.Room>().SingleAsync(r => r.Id == w.Room);
         var invoice = new Invoice
@@ -180,7 +180,7 @@ public sealed partial class InvoiceApiTests
         // synthetic approved fixture; live inspection UI/storage is not asserted.
         await using (var scope = fixture.Factory.Services.CreateAsyncScope())
         {
-            var db = scope.ServiceProvider.GetRequiredService<BHomePersistenceContext>();
+            var db = scope.ServiceProvider.GetFixturePersistence();
             if (personFee) (await db.Set<BHome.Domain.PropertyManagement.Room>().SingleAsync(r => r.Id == w.Room)).Capacity = 3;
             var contracts = await db.Set<Contract>().Where(c => c.RoomId == w.Room).ToArrayAsync();
             foreach (var c in contracts)
@@ -223,7 +223,7 @@ public sealed partial class InvoiceApiTests
         { PartialMonth = fullMonth ? PartialMonthRule.FullMonth : PartialMonthRule.OccupiedCalendarDays }));
         await using (var scope = fixture.Factory.Services.CreateAsyncScope())
         {
-            var db = scope.ServiceProvider.GetRequiredService<BHomePersistenceContext>();
+            var db = scope.ServiceProvider.GetFixturePersistence();
             var other = await db.Set<Contract>().SingleAsync(c => c.RoomId == w.Room && c.Id != w.Contract);
             other.ActualEndDate = null; await db.SaveChangesAsync();
             var openRoom = Assert.Single(await Success<FinalFixedChargePreview[]>(await w.Owner.Client.GetAsync(route)));
@@ -232,7 +232,7 @@ public sealed partial class InvoiceApiTests
         }
         if (correctedDeparture)
         {
-            await using var scope = fixture.Factory.Services.CreateAsyncScope(); var db = scope.ServiceProvider.GetRequiredService<BHomePersistenceContext>();
+            await using var scope = fixture.Factory.Services.CreateAsyncScope(); var db = scope.ServiceProvider.GetFixturePersistence();
             foreach (var tenancy in await db.Set<Contract>().Where(c => c.RoomId == w.Room).ToArrayAsync()) tenancy.ActualEndDate = w.Period.AddMonths(1).AddDays(-1);
             await db.SaveChangesAsync();
         }
@@ -253,7 +253,7 @@ public sealed partial class InvoiceApiTests
         {
             await using (var scope = fixture.Factory.Services.CreateAsyncScope())
             {
-                var db = scope.ServiceProvider.GetRequiredService<BHomePersistenceContext>();
+                var db = scope.ServiceProvider.GetFixturePersistence();
                 foreach (var tenancy in await db.Set<Contract>().Where(c => c.RoomId == w.Room).ToArrayAsync()) tenancy.ActualEndDate = finalDate;
                 await db.SaveChangesAsync();
             }
@@ -302,7 +302,7 @@ public sealed partial class InvoiceApiTests
         }
         else Assert.Equal(original, await w.Owner.Client.GetStringAsync($"/api/v1/invoices/{draft!.Id}"));
         await using var verification = fixture.Factory.Services.CreateAsyncScope();
-        var verifiedDb = verification.ServiceProvider.GetRequiredService<BHomePersistenceContext>();
+        var verifiedDb = verification.ServiceProvider.GetFixturePersistence();
         Assert.Equal(invoiceFirst ? 1 : 0, await verifiedDb.Set<Invoice>().CountAsync(i => i.RoomId == w.Room));
     }
 }

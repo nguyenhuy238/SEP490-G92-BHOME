@@ -37,7 +37,7 @@ public sealed class OwnerResidentAdministrationTests(Compact24WorkflowFixture fi
         ids[2] = await Create(second, "Second staff label");
         await using (var scope = fixture.Capture.Factory.Services.CreateAsyncScope())
         {
-            var db = scope.ServiceProvider.GetRequiredService<BHomePersistenceContext>();
+            var db = scope.ServiceProvider.GetFixturePersistence();
             var people = await db.Set<Resident>().Where(r => ids.Contains(r.Id)).ToArrayAsync();
             Assert.Equal(3, people.Length);
             Assert.All(people, p => Assert.Equal(Compact24SampleSeed.Id(1), p.OwnerUserId));
@@ -48,7 +48,7 @@ public sealed class OwnerResidentAdministrationTests(Compact24WorkflowFixture fi
         // A previously confirmed Staff-scoped envelope must remain readable without a data migration.
         await using (var scope = fixture.Capture.Factory.Services.CreateAsyncScope())
         {
-            var db = scope.ServiceProvider.GetRequiredService<BHomePersistenceContext>();
+            var db = scope.ServiceProvider.GetFixturePersistence();
             var protection = scope.ServiceProvider.GetRequiredService<IIdentityProtection>();
             var legacy = await db.Set<Resident>().SingleAsync(r => r.Id == ids[0]);
             legacy.OwnerUserId = Compact24SampleSeed.Id(2);

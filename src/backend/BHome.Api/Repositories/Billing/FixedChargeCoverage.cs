@@ -20,15 +20,17 @@ internal sealed class FixedChargeCoverageRepository(BHomePersistenceContext db) 
         var result = new List<FixedChargeCoverage>();
         if (db is not Compact24DbContext compact) return result;
         var nativeLines = await (from line in compact.Set<Native.InvoiceItem>().AsNoTracking()
-                           join invoice in compact.Set<Native.Invoice>().AsNoTracking() on line.InvoiceId equals invoice.Id
-                           join contract in compact.Set<Native.Contract>().AsNoTracking() on invoice.ContractId equals contract.Id
-                           where invoice.RoomId == roomId && (invoice.BillingPeriod == period ||
-                               code == "RENT" && invoice.BillingPeriod == period.AddMonths(-1)) &&
-                               invoice.Status == (short)InvoiceStatus.Final && line.ChargeCode == code
-                           select new { line, invoice.BillingPeriod, invoice.BillingSnapshot, contract.SnapshotHash }).ToArrayAsync(token);
+                                 join invoice in compact.Set<Native.Invoice>().AsNoTracking() on line.InvoiceId equals invoice.Id
+                                 join contract in compact.Set<Native.Contract>().AsNoTracking() on invoice.ContractId equals contract.Id
+                                 where invoice.RoomId == roomId && (invoice.BillingPeriod == period ||
+                                     code == "RENT" && invoice.BillingPeriod == period.AddMonths(-1)) &&
+                                     invoice.Status == (short)InvoiceStatus.Final && line.ChargeCode == code
+                                 select new { line, invoice.BillingPeriod, invoice.BillingSnapshot, contract.SnapshotHash }).ToArrayAsync(token);
         var lines = nativeLines.Select(r => new
         {
-            line = NativeInvoicePersistence.ReadLine(r.line), r.BillingPeriod, SnapshotHash = r.SnapshotHash ?? "",
+            line = NativeInvoicePersistence.ReadLine(r.line),
+            r.BillingPeriod,
+            SnapshotHash = r.SnapshotHash ?? "",
             ScheduleSnapshot = r.BillingSnapshot.TryGetProperty("compactState", out var state) &&
                 state.TryGetProperty("scheduleSnapshot", out var snapshot) ? snapshot.GetString() ?? "" : ""
         }).ToArray();

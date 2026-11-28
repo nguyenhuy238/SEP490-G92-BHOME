@@ -70,7 +70,8 @@ internal sealed partial class PaymentRepository(BHomePersistenceContext db) : IP
         var room = (db is Compact24DbContext
             ? await (from c in PaymentObligationQueries.Contracts(db)
                      join r in db.Set<Native.Room>().AsNoTracking() on c.RoomId equals r.Id
-                     where c.Id == contractId select new { c.RoomId, r.LocationId }).SingleOrDefaultAsync(t)
+                     where c.Id == contractId
+                     select new { c.RoomId, r.LocationId }).SingleOrDefaultAsync(t)
             : await db.Set<BHome.Domain.TenantContracts.Contract>().AsNoTracking().Where(c => c.Id == contractId)
                 .Select(c => new { c.RoomId, c.Room.LocationId }).SingleOrDefaultAsync(t))
             ?? throw new PaymentException(404, "holding_contract_not_found");

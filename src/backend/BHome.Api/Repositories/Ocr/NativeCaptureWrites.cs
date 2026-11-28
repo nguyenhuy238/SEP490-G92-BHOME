@@ -38,9 +38,17 @@ internal static class NativeCaptureWrites
     internal static async Task AuditAsync(Compact24DbContext db, SecurityAuditRecord audit, CancellationToken t)
     {
         RequireTransaction(db);
-        var data = JsonSerializer.Serialize(new { schemaVersion = 1, recordType = "SecurityAuditRecord", state = audit,
-            audienceRole = (string?)null, category = (string?)null, succeeded = audit.Succeeded,
-            sessionId = audit.SessionId, targetUserId = audit.TargetUserId }, Json);
+        var data = JsonSerializer.Serialize(new
+        {
+            schemaVersion = 1,
+            recordType = "SecurityAuditRecord",
+            state = audit,
+            audienceRole = (string?)null,
+            category = (string?)null,
+            succeeded = audit.Succeeded,
+            sessionId = audit.SessionId,
+            targetUserId = audit.TargetUserId
+        }, Json);
         await ExecuteAsync(db, $"""
             INSERT INTO notifications(id,record_kind,actor_user_id,event_key,notification_type,related_entity_type,related_entity_id,event_data,event_at)
             VALUES({audit.Id},'AUDIT',{audit.UserId},{"SecurityAuditRecord:" + audit.Id},{audit.Event},{audit.TargetType},{audit.TargetId},CAST({data} AS jsonb),{audit.OccurredAt})
@@ -51,10 +59,32 @@ internal static class NativeCaptureWrites
     {
         RequireTransaction(db);
         r.Stamp(DateTimeOffset.UtcNow, added);
-        var state = new { r.Id, r.RoomId, r.DisplayLabel, r.ResidentType, r.VerificationStatus, r.OwnerUserId,
-            r.TenantUserId, r.HouseholdRepresentativeId, r.HouseholdClientKey, r.HouseholdProfile, r.HouseholdConfirmedAt,
-            r.HouseholdConfirmedByUserId, r.HouseholdVersion, r.HouseholdRequestKey, r.HouseholdRequestHash,
-            r.ContactEmail, r.IdentityData, r.IdentityHmac, r.HmacKeyVersion, r.ConfirmedByUserId, r.ConfirmedAt, r.CreatedAt, r.UpdatedAt };
+        var state = new
+        {
+            r.Id,
+            r.RoomId,
+            r.DisplayLabel,
+            r.ResidentType,
+            r.VerificationStatus,
+            r.OwnerUserId,
+            r.TenantUserId,
+            r.HouseholdRepresentativeId,
+            r.HouseholdClientKey,
+            r.HouseholdProfile,
+            r.HouseholdConfirmedAt,
+            r.HouseholdConfirmedByUserId,
+            r.HouseholdVersion,
+            r.HouseholdRequestKey,
+            r.HouseholdRequestHash,
+            r.ContactEmail,
+            r.IdentityData,
+            r.IdentityHmac,
+            r.HmacKeyVersion,
+            r.ConfirmedByUserId,
+            r.ConfirmedAt,
+            r.CreatedAt,
+            r.UpdatedAt
+        };
         var history = Envelope("Resident", r.Id, state);
         Ensure(added
             ? await ExecuteAsync(db, $"""
@@ -75,8 +105,19 @@ internal static class NativeCaptureWrites
     {
         RequireTransaction(db);
         m.Stamp(DateTimeOffset.UtcNow, true);
-        var history = Envelope("Meter", m.Id, new { m.Id, m.RoomId, m.Code, m.UtilityType, m.Display, m.DecimalPlaces,
-            m.IsActive, m.InstalledOn, m.CreatedAt, m.UpdatedAt });
+        var history = Envelope("Meter", m.Id, new
+        {
+            m.Id,
+            m.RoomId,
+            m.Code,
+            m.UtilityType,
+            m.Display,
+            m.DecimalPlaces,
+            m.IsActive,
+            m.InstalledOn,
+            m.CreatedAt,
+            m.UpdatedAt
+        });
         Ensure(await ExecuteAsync(db, $"""
             INSERT INTO meters(id,room_id,meter_code,utility_type,display_type,decimal_places,installed_on,is_active,history)
             VALUES({m.Id},{m.RoomId},{m.Code},{(short)m.UtilityType},{(short)m.Display},{(short)m.DecimalPlaces},{m.InstalledOn},{m.IsActive},jsonb_build_array(CAST({history} AS jsonb)))
@@ -94,12 +135,45 @@ internal static class NativeCaptureWrites
             task.BillingUtilityType = (UtilityType)meter.UtilityType;
         }
         task.Stamp(DateTimeOffset.UtcNow, added);
-        var state = new { task.Id, task.Kind, task.LocationId, task.Title, task.Requirements, task.Priority, task.DueAt,
-            task.EvidenceRequired, task.AssignedStaffUserId, task.AssignmentId, task.AssignedAt, task.Result, task.VerifiedByUserId,
-            task.VerifiedAt, task.Version, task.TargetRoomId, task.TargetAssetId, task.TargetCommonArea, task.TargetLabel,
-            task.ContractId, task.MoveInInventoryJson, task.LocationAssetInventoryJson, task.BillingRoomId, task.BillingUtilityType,
-            task.AutomationPlanId, task.MeterId, task.Purpose, task.ReadingDate, task.BillingPeriod, task.Status, task.OcrProposedValue,
-            task.OcrImageHash, task.OcrEngineVersion, task.CompletedAt, task.CreatedAt, task.UpdatedAt };
+        var state = new
+        {
+            task.Id,
+            task.Kind,
+            task.LocationId,
+            task.Title,
+            task.Requirements,
+            task.Priority,
+            task.DueAt,
+            task.EvidenceRequired,
+            task.AssignedStaffUserId,
+            task.AssignmentId,
+            task.AssignedAt,
+            task.Result,
+            task.VerifiedByUserId,
+            task.VerifiedAt,
+            task.Version,
+            task.TargetRoomId,
+            task.TargetAssetId,
+            task.TargetCommonArea,
+            task.TargetLabel,
+            task.ContractId,
+            task.MoveInInventoryJson,
+            task.LocationAssetInventoryJson,
+            task.BillingRoomId,
+            task.BillingUtilityType,
+            task.AutomationPlanId,
+            task.MeterId,
+            task.Purpose,
+            task.ReadingDate,
+            task.BillingPeriod,
+            task.Status,
+            task.OcrProposedValue,
+            task.OcrImageHash,
+            task.OcrEngineVersion,
+            task.CompletedAt,
+            task.CreatedAt,
+            task.UpdatedAt
+        };
         var data = JsonSerializer.Serialize(new { schemaVersion = 1, recordType = "OperationalTask", state }, Json);
         var history = Envelope("OperationalTask", task.Id, state);
         var status = ((int)task.Status).ToString(CultureInfo.InvariantCulture);

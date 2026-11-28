@@ -5,7 +5,7 @@ using Microsoft.EntityFrameworkCore.Metadata;
 
 namespace BHome.Infrastructure.Persistence.Compact24;
 
-public sealed partial class Compact24DbContext
+public sealed partial class Compact24ArchiveContext
 {
     private static IReadOnlyList<EntityEntry> OrderWrites(EntityEntry[] entries)
     {

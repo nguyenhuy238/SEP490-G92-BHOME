@@ -22,7 +22,7 @@ public sealed class Compact24SharedStoreTests(Compact24Fixture fixture) : IClass
     public async Task GlobalDocumentsPersistHistoryAndRollbackWithoutFabricatedLocation()
     {
         await using var scope = fixture.Factory!.Services.CreateAsyncScope();
-        var db = scope.ServiceProvider.GetRequiredService<Compact24DbContext>();
+        var db = scope.ServiceProvider.GetRequiredService<Compact24ArchiveContext>();
         var actor = await db.Users.FirstOrDefaultAsync(u => EF.Property<string[]>(u, "roles").Contains(Roles.Owner));
         actor ??= await WorkflowTestUsers.CreateAsync(scope.ServiceProvider, new ApplicationUser { Id = Guid.NewGuid(), UserName = Guid.NewGuid().ToString("N"), Email = Guid.NewGuid().ToString("N") + "@example.invalid", EmailConfirmed = true }, Roles.Owner, "Synthetic!Shared-9273");
         var store = scope.ServiceProvider.GetRequiredService<ISharedConfigurationStore>(); var now = DateTimeOffset.UtcNow;

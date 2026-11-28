@@ -8,11 +8,13 @@ using BHome.Domain.PropertyManagement;
 using BHome.Domain.TenantContracts;
 using BHome.Infrastructure.Persistence;
 using BHome.Infrastructure.Persistence.Compact24;
+using BHome.Infrastructure.Modules.PropertyManagement.Persistence;
 using Microsoft.EntityFrameworkCore;
+using Native = BHome.Domain.Entities;
 
 namespace BHome.Infrastructure.PaymentsDebt;
 
-internal sealed class MainInitialPayments(BHomePersistenceContext db, ContractService contracts, IContractRepository contractData,
+internal sealed class MainInitialPayments(BHomePersistenceContext db, ContractService contracts,
     IPaymentRepository payments, IPaymentCodeRegistry codes,
     ITransferQrGenerator qr, IMainInitialPaymentLedger orders, SePayOptions sepay, TimeProvider clock, IContractWorkflowMode workflowMode, IHoldingTestScope testScope, ICurrentUser user,
     ISePayOwnerConnections connections) : IMainInitialPayments
@@ -20,13 +22,14 @@ internal sealed class MainInitialPayments(BHomePersistenceContext db, ContractSe
     public async Task<MainInitialPaymentView> GetAsync(Guid id, bool issueQr, CancellationToken token)
     {
         await contracts.GetAsync(id, token); // Existing role and effective Location assignment.
-        if (db is not Compact24DbContext) throw new PaymentException(503, "initial_payment_runtime_unavailable");
+        if (db is not Compact24DbContext compact) throw new PaymentException(503, "initial_payment_runtime_unavailable");
         return await payments.TransactionAsync(null, null, async () =>
         {
-            var c = await contractData.FindAsync(id, token) ?? throw new PaymentException(404, "contract_not_found");
+            var c = await NativeContractSnapshot.LoadAsync(compact, id, token) ?? throw new PaymentException(404, "contract_not_found");
             await connections.ApplyOwnerAsync(c.OwnerSignerId, token);
             await db.Database.ExecuteSqlInterpolatedAsync($"SELECT pg_advisory_xact_lock(hashtextextended({c.Room.LocationId.ToString()},0))", token);
-            await db.Locked<Room>(c.RoomId).SingleAsync(token);
+            await PaymentLedgerWrites.LockRoomAsync(db, c.RoomId, token);
+            c = await NativeContractSnapshot.LoadAsync(compact, id, token) ?? throw new PaymentException(404, "contract_not_found");
             if (c.Kind != ContractKind.Main || c.PreviousContractId is not null) throw new PaymentException(409, "initial_main_contract_required");
             if (!c.InitialPaymentRequired) throw new PaymentException(409, "initial_payment_not_enabled_for_contract");
             if (MainSandboxAcceptance.Read(c) is not null &&
@@ -61,11 +64,11 @@ internal sealed class MainInitialPayments(BHomePersistenceContext db, ContractSe
             if (order is null || reconcile || replaceLegacyQuote)
             {
                 var period = new DateOnly(c.StartDate.Year, c.StartDate.Month, 1);
-                var candidates = await db.Set<Contract>().AsNoTracking()
-                    .Where(other => other.RoomId == c.RoomId && other.Id != id && other.Kind == ContractKind.Main &&
-                        (other.Status == ContractStatus.Active || other.Status == ContractStatus.PendingActivation || other.Status == ContractStatus.Expired ||
-                         other.Status == ContractStatus.Terminated && other.StartDate >= period && other.StartDate < period.AddMonths(1)))
-                    .OrderBy(other => other.StartDate).ThenBy(other => other.Id).ToArrayAsync(token);
+                var candidates = (await PaymentObligationQueries.Contracts(db)
+                    .Where(other => other.RoomId == c.RoomId && other.Id != id && other.ContractType == "MAIN" &&
+                        (other.Status == (short)ContractStatus.Active || other.Status == (short)ContractStatus.PendingActivation || other.Status == (short)ContractStatus.Expired ||
+                         other.Status == (short)ContractStatus.Terminated && other.StartDate >= period && other.StartDate < period.AddMonths(1)))
+                    .OrderBy(other => other.StartDate).ThenBy(other => other.Id).ToArrayAsync(token)).Select(NativeContractSnapshot.Read).ToArray();
                 Guid? depositSource = null;
                 Guid? rentSource = null;
                 Guid? invoiceSource = null;
@@ -73,7 +76,7 @@ internal sealed class MainInitialPayments(BHomePersistenceContext db, ContractSe
                 {
                     var root = candidate;
                     while (root.PreviousContractId is { } previous)
-                        root = await db.Set<Contract>().AsNoTracking().SingleAsync(other => other.Id == previous, token);
+                        root = NativeContractSnapshot.Read(await PaymentObligationQueries.Contracts(db).SingleAsync(other => other.Id == previous, token));
                     var previousOrder = await orders.ReadAsync(root.Id, token);
                     // An arrival into an already occupied Room does not buy another
                     // first month or another set of capacity-based service charges.
@@ -109,13 +112,14 @@ internal sealed class MainInitialPayments(BHomePersistenceContext db, ContractSe
                             rentSource = previousOrder.SharedRentContractId ?? root.Id;
                     }
                 }
-                var invoices = await (from invoice in db.Set<BHome.Domain.Billing.Invoice>()
-                                      join representative in db.Set<Contract>() on invoice.RepresentativeContractId equals representative.Id
-                                      where invoice.RoomId == c.RoomId && invoice.BillingPeriod == period && invoice.Type == "PERIODIC" &&
-                                          invoice.Status == BHome.Domain.Billing.InvoiceStatus.Final && invoice.Lines.Any(line => line.ChargeCode == "RENT")
+                var invoices = await (from invoice in db.Set<Native.Invoice>().AsNoTracking()
+                                      join representative in PaymentObligationQueries.Contracts(db) on invoice.ContractId equals representative.Id
+                                      where invoice.RoomId == c.RoomId && invoice.BillingPeriod == period && invoice.InvoiceType == "PERIODIC" &&
+                                          invoice.Status == (short)BHome.Domain.Billing.InvoiceStatus.Final &&
+                                          db.Set<Native.InvoiceItem>().Any(line => line.InvoiceId == invoice.Id && line.ChargeCode == "RENT")
                                       select new { invoice.Id, Representative = representative }).ToArrayAsync(token);
                 var invoiceId = rentSource is null
-                    ? invoiceSource ?? invoices.Where(invoice => ContractPaymentModes.Of(invoice.Representative) == roomScopeMode)
+                    ? invoiceSource ?? invoices.Where(invoice => ContractPaymentModes.Of(NativeContractSnapshot.Read(invoice.Representative)) == roomScopeMode)
                         .Select(invoice => (Guid?)invoice.Id).SingleOrDefault()
                     : null;
                 // The initial activation transfer contains only the remaining deposit and first rent.
@@ -161,7 +165,7 @@ internal sealed class MainInitialPayments(BHomePersistenceContext db, ContractSe
             var payableId = invoicePayable ? order.SharedInvoiceId!.Value : payable.ContractId;
             var payableMode = await codes.PersistedModeAsync(payableKind, payableId, token) ??
                 (payable.ContractId == c.Id ? roomScopeMode : ContractPaymentModes.Of(
-                    await contractData.FindAsync(payable.ContractId, token) ?? throw new PaymentException(404, "contract_not_found")));
+                    await NativeContractSnapshot.LoadAsync(compact, payable.ContractId, token) ?? throw new PaymentException(404, "contract_not_found")));
             var account = await codes.AccountAsync(payableKind, payableId, order.LocationId, token) ??
                 await payments.ReceivingAccountForModeAsync(order.LocationId, payableMode, token);
             var bound = account is not null && account.Enabled && account.IsDevelopmentDemo == (payableMode == "Test") &&
@@ -179,7 +183,7 @@ internal sealed class MainInitialPayments(BHomePersistenceContext db, ContractSe
                     "MainInitialSandboxPaymentModeResolved", id, clock.GetUtcNow(), token);
                 // Payment-code generation now reads persisted contract history rather
                 // than a tracked projection. Publish the explicit mode in this same transaction.
-                await db.SaveChangesAsync(token);
+                await NativeContractSnapshot.SaveRootAsync(compact, c, c.DraftVersion, DateTimeOffset.UtcNow, token);
             }
             // IssueAsync joins this transaction; it must not clear tracked state or create nested transactions.
             var paymentKind = invoicePayable ? "Invoice" : "MainInitial";

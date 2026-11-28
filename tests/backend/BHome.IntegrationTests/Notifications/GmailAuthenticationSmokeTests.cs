@@ -53,7 +53,7 @@ public sealed class GmailAuthenticationSmokeTests(Compact24Fixture fixture, ITes
         };
         using var host = fixture.Factory!.WithWebHostBuilder(b =>
         { b.UseEnvironment("Development"); b.ConfigureAppConfiguration((_, c) => c.AddInMemoryCollection(settings)); });
-        await using var scope = host.Services.CreateAsyncScope(); var db = scope.ServiceProvider.GetRequiredService<Compact24DbContext>();
+        await using var scope = host.Services.CreateAsyncScope(); var db = scope.ServiceProvider.GetRequiredService<Compact24ArchiveContext>();
         var user = await WorkflowTestUsers.CreateAsync(scope.ServiceProvider, new ApplicationUser
         { Id = Guid.NewGuid(), UserName = Guid.NewGuid().ToString("N"), Email = secrets["Email:TestRecipient"], EmailConfirmed = false }, "Tenant", "Synthetic!Original-725");
         using var client = host.CreateClient();

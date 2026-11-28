@@ -50,7 +50,7 @@ internal sealed class ExternalPaymentPayerRepository(BHomePersistenceContext db,
     {
         var json = JsonSerializer.Serialize(new { recordType = ExternalPaymentPayerRecords.Kind, schemaVersion = 1, recordKey = payer.Id, state = payer }, ExternalPaymentPayerRecords.Json);
         await db.Database.ExecuteSqlInterpolatedAsync($"UPDATE payments SET history=history||jsonb_build_array({json}::jsonb) WHERE id={payer.TransferId}", token);
-        db.SecurityAudit.Add(new SecurityAuditRecord { UserId = payer.VerifiedByUserId, Event = "ExternalPaymentPayerConfirmed", TargetType = "PaymentTransfer", TargetId = payer.TransferId, Succeeded = true, OccurredAt = payer.VerifiedAt });
-        await db.SaveChangesAsync(token);
+        await SecurityAuditWrites.AppendAsync(db, new(Guid.NewGuid(), payer.VerifiedByUserId, null, null,
+            "ExternalPaymentPayerConfirmed", true, payer.VerifiedAt, "PaymentTransfer", payer.TransferId), token);
     }
 }

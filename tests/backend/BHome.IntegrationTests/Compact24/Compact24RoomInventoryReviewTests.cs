@@ -68,7 +68,7 @@ public sealed partial class Compact24OwnerSetupTests
         var nullItem = command with { Rooms = [inputRoom with { Items = [null!] }] };
         Assert.Equal(HttpStatusCode.BadRequest, (await owner.PostAsJsonAsync(route + "/confirm", nullItem)).StatusCode);
         await using (var check = fixture.Factory!.Services.CreateAsyncScope())
-            Assert.False(await check.ServiceProvider.GetRequiredService<Compact24DbContext>().Set<Asset>().AnyAsync(a => a.LocationId == location));
+            Assert.False(await check.ServiceProvider.GetRequiredService<Compact24ArchiveContext>().Set<Asset>().AnyAsync(a => a.LocationId == location));
 
         var confirmed = await Read<RoomInventoryReviewView>(await owner.PostAsJsonAsync(route + "/confirm", command));
         var confirmedRoom = confirmed.Rooms.Single(r => r.RoomId == configured.RoomId);
@@ -94,7 +94,7 @@ public sealed partial class Compact24OwnerSetupTests
         Assert.Equal("Matched", repeated.Rooms.Single(r => r.RoomId == configured.RoomId).State);
 
         await using var scope = fixture.Factory!.Services.CreateAsyncScope();
-        var db = scope.ServiceProvider.GetRequiredService<Compact24DbContext>();
+        var db = scope.ServiceProvider.GetRequiredService<Compact24ArchiveContext>();
         var assets = await db.Set<Asset>().Where(a => a.LocationId == location).ToArrayAsync();
         var asset = Assert.Single(assets);
         var store = scope.ServiceProvider.GetRequiredService<ISetupWorkspaceStore>();
@@ -128,7 +128,7 @@ public sealed partial class Compact24OwnerSetupTests
         var route = ReviewRoute(location);
         await using (var assignmentScope = host.Services.CreateAsyncScope())
         {
-            var assignmentDb = assignmentScope.ServiceProvider.GetRequiredService<Compact24DbContext>();
+            var assignmentDb = assignmentScope.ServiceProvider.GetRequiredService<Compact24ArchiveContext>();
             assignmentDb.Add(new StaffLocationAssignment(location, w.Staff.Id, w.Owner.Id, Today.AddYears(-1), Today.AddYears(1)));
             await assignmentDb.SaveChangesAsync();
         }
@@ -205,7 +205,7 @@ public sealed partial class Compact24OwnerSetupTests
         Assert.Equal(ownerEvidence.EvidenceId, mapping.Data.GetProperty("evidenceIds")[0].GetGuid());
         Assert.Equal(staffEvidence.EvidenceId, mapping.Data.GetProperty("staffEvidenceIds")[0].GetGuid());
         Assert.Equal(2, (await store.HistoryAsync(mapping.Id, "AssetVerification", default)).Count);
-        var db = scope.ServiceProvider.GetRequiredService<Compact24DbContext>();
+        var db = scope.ServiceProvider.GetRequiredService<Compact24ArchiveContext>();
         Assert.Single(await db.Set<Asset>().Where(a => a.LocationId == location).ToArrayAsync());
     }
 

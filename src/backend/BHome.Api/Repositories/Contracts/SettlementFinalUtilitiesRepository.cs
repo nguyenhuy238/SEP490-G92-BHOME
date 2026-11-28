@@ -7,6 +7,7 @@ using BHome.Domain.Billing;
 using BHome.Domain.TenantContracts;
 using BHome.Infrastructure.Billing;
 using Microsoft.EntityFrameworkCore;
+using Native = BHome.Domain.Entities;
 
 namespace BHome.Infrastructure.Contracts;
 
@@ -15,8 +16,7 @@ internal sealed partial class SettlementReceivablesRepository
     public async Task<FinalUtilityContext> FinalUtilityAsync(Guid id, UtilityType type, CancellationToken token)
     {
         var context = await ContextAsync(id, token);
-        var inspection = await db.Set<ContractFinalInspection>().AsNoTracking().Where(i => i.ContractId == id)
-            .OrderByDescending(i => i.Version).FirstOrDefaultAsync(token);
+        var inspection = await NativeSettlementReads.InspectionAsync(db, id, token);
         var snapshot = inspection is null ? null : JsonSerializer.Deserialize<HandoverSnapshot>(inspection.ObservedSnapshot);
         var observed = type == UtilityType.Electricity ? snapshot?.Electricity : snapshot?.Water;
         var effectiveDate = observed?.Date ?? clock.BusinessToday();
@@ -26,14 +26,9 @@ internal sealed partial class SettlementReceivablesRepository
         if (observed is null) missing.Add("final_meter_readings_required");
         else
         {
-            var row = await (from reading in db.Set<MeterReading>().AsNoTracking()
-                             join task in db.Set<OperationalTask>() on reading.TaskId equals task.Id
-                             join meter in db.Set<Meter>() on reading.MeterId equals meter.Id
-                             join proof in db.Set<MeterEvidence>() on reading.EvidenceId equals proof.Id
-                             where reading.Id == observed.Id && task.ContractId == id && task.Purpose == ReadingPurpose.Final &&
-                               task.Status == MeterTaskStatus.Completed && task.ReadingDate == observed.Date && meter.RoomId == context.View.RoomId &&
-                               meter.UtilityType == type && proof.IsLinked && proof.IsUploaded
-                             select new { reading, task.ReadingDate, proof.Id, proof.ImageHash, proof.Length }).SingleOrDefaultAsync(token);
+            var row = (await NativeSettlementReads.MeterProofsAsync(db, context.View.RoomId, [observed.Id], token))
+                .Where(p => p.Task.ContractId == id && p.Task.Purpose == ReadingPurpose.Final && p.Task.ReadingDate == observed.Date && p.UtilityType == type)
+                .Select(p => new { reading = p.Reading, p.Task.ReadingDate, p.Evidence.Id, p.Evidence.ImageHash, p.Evidence.Length }).SingleOrDefault();
             if (row is null || row.reading.ConfirmedValue != observed.Value || row.Id != observed.EvidenceId || row.ImageHash != observed.EvidenceHash)
                 missing.Add("inspection_snapshot_invalid");
             else
@@ -51,23 +46,23 @@ internal sealed partial class SettlementReceivablesRepository
             // Utility liability follows the measured interval. Someone who left
             // during that interval retains the historical Room entitlement; a new
             // arrival after the inspection must not inherit it.
-            var roster = await (from member in db.Set<ContractResident>().AsNoTracking()
-                                join tenancy in db.Set<Contract>() on member.ContractId equals tenancy.Id
-                                join resident in db.Set<Resident>() on member.ResidentId equals resident.Id
-                                join account in db.Users on resident.TenantUserId equals (Guid?)account.Id into accounts
+            var roster = await (from member in db.Set<Native.ContractResident>().AsNoTracking()
+                                join tenancy in db.Set<Native.Contract>() on member.ContractId equals tenancy.Id
+                                join resident in db.Set<Native.Resident>() on member.ResidentId equals resident.Id
+                                join account in db.Users on resident.UserId equals (Guid?)account.Id into accounts
                                 from account in accounts.DefaultIfEmpty()
                                 where tenancy.RoomId == context.View.RoomId && tenancy.ActivatedAt != null && tenancy.ActivatedAt <= inspection.InspectedAt &&
                                   tenancy.StartDate <= liabilityEnd.Date && (tenancy.ActualEndDate ?? tenancy.EndDate) >= liabilityStart.Date &&
-                                  (tenancy.Status == ContractStatus.Active || tenancy.Id == id || tenancy.Status == ContractStatus.Superseded ||
-                                    tenancy.Status == ContractStatus.Terminated && tenancy.ActualEndDate >= liabilityStart.Date) &&
+                                  (tenancy.Status == (short)ContractStatus.Active || tenancy.Id == id || tenancy.Status == (short)ContractStatus.Superseded ||
+                                    tenancy.Status == (short)ContractStatus.Terminated && tenancy.ActualEndDate >= liabilityStart.Date) &&
                                   member.ResidenceFrom <= liabilityEnd.Date && (member.ResidenceTo == null || member.ResidenceTo >= liabilityStart.Date)
-                                select new { ContractId = tenancy.Id, resident.TenantUserId, Email = account == null ? null : account.Email }).ToArrayAsync(token);
+                                select new { ContractId = tenancy.Id, TenantUserId = resident.UserId, Email = account == null ? null : account.Email }).ToArrayAsync(token);
             liabilityContracts = roster.Select(r => r.ContractId).Append(id).Distinct().ToArray();
             if (roster.Length == 0 || roster.Any(r => r.TenantUserId is null || string.IsNullOrWhiteSpace(r.Email) ||
                 !new System.ComponentModel.DataAnnotations.EmailAddressAttribute().IsValid(r.Email))) missing.Add("occupant_account_email_required");
             context = context with { RecipientUserIds = roster.Where(r => r.TenantUserId != null).Select(r => r.TenantUserId!.Value).Distinct().Order().ToArray() };
         }
-        var invoice = await db.PeriodicInvoices().AsNoTracking().SingleOrDefaultAsync(i => i.RoomId == context.View.RoomId && i.BillingPeriod == period, token);
+        var invoice = await NativeSettlementReads.PeriodicInvoiceAsync(db, context.View.RoomId, period, token);
         var invoiceSchedule = invoice?.ScheduleSnapshot;
         BillingSchedule? schedule = null;
         if (!string.IsNullOrWhiteSpace(invoiceSchedule))
@@ -84,12 +79,13 @@ internal sealed partial class SettlementReceivablesRepository
         IReadOnlyList<PolicyDto>? charges = null;
         if (!position.FullyCovered)
         {
-            var pricingContract = await db.Set<Contract>().AsNoTracking().Include(c => c.Residents).SingleAsync(c => c.Id == (invoice == null ? id : invoice.RepresentativeContractId), token);
+            var pricingContract = await NativeSettlementReads.ContractAsync(db, invoice == null ? id : invoice.RepresentativeContractId, token) ?? throw ContractException.Missing();
             var locationId = await LocationAsync(id, token);
             charges = ContractBillingPrices.Read(pricingContract, locationId, missing);
             var otherIds = liabilityContracts.Where(contractId => contractId != pricingContract.Id).ToArray();
-            foreach (var otherContract in await db.Set<Contract>().AsNoTracking().Include(c => c.Residents).Where(c => otherIds.Contains(c.Id)).ToArrayAsync(token))
+            foreach (var otherId in otherIds)
             {
+                var otherContract = await NativeSettlementReads.ContractAsync(db, otherId, token) ?? throw ContractException.Missing();
                 var otherCharges = ContractBillingPrices.Read(otherContract, locationId, missing);
                 if (!ContractBillingPrices.Equivalent(charges, otherCharges)) missing.Add("room_contract_price_conflict");
             }

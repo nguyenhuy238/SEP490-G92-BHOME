@@ -57,7 +57,7 @@ public sealed partial class IncidentApiTests(IncidentFixture fixture) : IClassFi
     private async Task<Workspace> Setup(bool assigned = true, decimal requiredDeposit = 0)
     {
         var owner = await User(Roles.Owner); var staff = await User(Roles.Staff); var tenant = await User(Roles.Tenant);
-        await using var scope = fixture.Factory.Services.CreateAsyncScope(); var db = scope.ServiceProvider.GetRequiredService<BHomePersistenceContext>();
+        await using var scope = fixture.Factory.Services.CreateAsyncScope(); var db = scope.ServiceProvider.GetFixturePersistence();
         var location = new Location("Synthetic incident location") { Address = "Synthetic address" };
         var room = new Room { LocationId = location.Id, RoomNumber = "SYNTHETIC-01", Status = RoomStatus.Occupied };
         var resident = new Resident { RoomId = room.Id, OwnerUserId = owner.Id, DisplayLabel = "Synthetic representative" };
@@ -214,7 +214,7 @@ public sealed partial class IncidentApiTests(IncidentFixture fixture) : IClassFi
         Assert.Equal("InProgress", (await Report(w.Owner, incident))!.Status);
         await using (var scope = fixture.Factory.Services.CreateAsyncScope())
         {
-            var db = scope.ServiceProvider.GetRequiredService<BHomePersistenceContext>();
+            var db = scope.ServiceProvider.GetFixturePersistence();
             Assert.Equal(AssetStatus.NeedsRepair, (await db.Set<Asset>().SingleAsync(a => a.Id == w.Asset)).Status);
             Assert.Single(await db.Set<MaintenanceExpense>().Where(e => e.IncidentId == incident).ToArrayAsync());
         }
@@ -226,7 +226,7 @@ public sealed partial class IncidentApiTests(IncidentFixture fixture) : IClassFi
         Assert.DoesNotContain(history.Items, a => a.Action is "proposal_submitted" or "plan_approved" or "verified");
         var notification = (await w.Tenant.Client.GetFromJsonAsync<IncidentPage<IncidentNotificationView>>($"{Base}/notifications"))!;
         Assert.Contains(notification.Items, n => n.IncidentId == incident && n.Event == "resolved" && n.DeliveryState == "Pending");
-        await using var finalScope = fixture.Factory.Services.CreateAsyncScope(); var finalDb = finalScope.ServiceProvider.GetRequiredService<BHomePersistenceContext>();
+        await using var finalScope = fixture.Factory.Services.CreateAsyncScope(); var finalDb = finalScope.ServiceProvider.GetFixturePersistence();
         Assert.Equal(AssetStatus.Active, (await finalDb.Set<Asset>().SingleAsync(a => a.Id == w.Asset)).Status);
         Assert.Single(await finalDb.Set<MaintenanceHistory>().Where(h => h.WorkOrderId == work).ToArrayAsync());
         var maintenance = (await w.Owner.Client.GetFromJsonAsync<IncidentPage<MaintenanceHistoryView>>($"{Orders}/maintenance-history?locationId={w.Location}"))!;
@@ -259,7 +259,7 @@ public sealed partial class IncidentApiTests(IncidentFixture fixture) : IClassFi
         await Ok<IncidentCommandResult>(await Send(w.Owner, $"{Orders}/{work}/verify", verification, key));
         await Ok<IncidentCommandResult>(await Send(w.Owner, $"{Orders}/{work}/verify", verification, key));
         await using var scope = fixture.Factory.Services.CreateAsyncScope();
-        var db = scope.ServiceProvider.GetRequiredService<BHomePersistenceContext>();
+        var db = scope.ServiceProvider.GetFixturePersistence();
         Assert.Empty(await db.Set<MaintenanceExpense>().Where(e => e.IncidentId == incident).ToArrayAsync());
         var report = await Ok<FinancialReport>(await w.Owner.Client.GetAsync($"/api/v1/financial-reports?from={Today.AddDays(-1):yyyy-MM-dd}&to={Today.AddDays(1):yyyy-MM-dd}&locationId={w.Location}"));
         Assert.Equal("0", report.Total.OperatingExpenses);
@@ -285,7 +285,7 @@ public sealed partial class IncidentApiTests(IncidentFixture fixture) : IClassFi
         Assert.Equal(0, page.TotalCount); Assert.Empty(page.Items);
         await using (var scope = fixture.Factory.Services.CreateAsyncScope())
         {
-            var db = scope.ServiceProvider.GetRequiredService<BHomePersistenceContext>();
+            var db = scope.ServiceProvider.GetFixturePersistence();
             (await db.Set<Contract>().SingleAsync(c => c.Id == w.Contract)).Status = ContractStatus.Terminated;
             await db.SaveChangesAsync();
         }
@@ -302,7 +302,7 @@ public sealed partial class IncidentApiTests(IncidentFixture fixture) : IClassFi
         await Review(w, incident); var work = await Assign(w, incident); var next = await User(Roles.Staff);
         await using (var scope = fixture.Factory.Services.CreateAsyncScope())
         {
-            var db = scope.ServiceProvider.GetRequiredService<BHomePersistenceContext>();
+            var db = scope.ServiceProvider.GetFixturePersistence();
             foreach (var assignment in await db.StaffLocationAssignments.Where(a => a.LocationId == w.Location).ToArrayAsync())
                 db.Entry(assignment).Property(a => a.EndDate).CurrentValue = Today.AddDays(-1);
             await db.SaveChangesAsync();
@@ -373,12 +373,12 @@ public sealed partial class IncidentApiTests(IncidentFixture fixture) : IClassFi
         await Ok<IncidentCommandResult>(await Send(w.Owner, $"{Orders}/{secondWork}/cancel", new IncidentDecision(secondState.Version, "Owner cancelled", AssetStatus: AssetStatus.Active, AssetCondition: "Still other repair")));
         Assert.Equal("InProgress", (await Report(w.Owner, second))!.Status);
         await using (var scope = fixture.Factory.Services.CreateAsyncScope())
-            Assert.Equal(AssetStatus.UnderRepair, (await scope.ServiceProvider.GetRequiredService<BHomePersistenceContext>().Set<Asset>().SingleAsync(a => a.Id == w.Asset)).Status);
+            Assert.Equal(AssetStatus.UnderRepair, (await scope.ServiceProvider.GetFixturePersistence().Set<Asset>().SingleAsync(a => a.Id == w.Asset)).Status);
         var report = (await Report(w.Owner, second))!;
         await Ok<IncidentCommandResult>(await Send(w.Owner, $"{Base}/{second}/resolve", new IncidentDecision(report.Version, "Handled by original incident")));
         await Complete(w, first, work); await Ok<IncidentCommandResult>(await Verify(w, work));
         await using var final = fixture.Factory.Services.CreateAsyncScope();
-        Assert.Equal(AssetStatus.Active, (await final.ServiceProvider.GetRequiredService<BHomePersistenceContext>().Set<Asset>().SingleAsync(a => a.Id == w.Asset)).Status);
+        Assert.Equal(AssetStatus.Active, (await final.ServiceProvider.GetFixturePersistence().Set<Asset>().SingleAsync(a => a.Id == w.Asset)).Status);
     }
 
     [CompactPostgresFact]
@@ -387,17 +387,18 @@ public sealed partial class IncidentApiTests(IncidentFixture fixture) : IClassFi
         var w = await Setup(); fixture.Storage.FailWrites = true;
         try { Assert.Equal(HttpStatusCode.InternalServerError, (await Submit(w.Tenant, w, photo: Image())).StatusCode); }
         finally { fixture.Storage.FailWrites = false; }
-        await using var scope = fixture.Factory.Services.CreateAsyncScope(); var db = scope.ServiceProvider.GetRequiredService<BHomePersistenceContext>();
+        await using var scope = fixture.Factory.Services.CreateAsyncScope(); var db = scope.ServiceProvider.GetFixturePersistence();
         Assert.False(await db.Set<IncidentReport>().AnyAsync(r => r.LocationId == w.Location));
         var upload = Assert.Single(await db.Set<IncidentFileUpload>().Where(u => u.LocationId == w.Location).ToArrayAsync());
         Assert.True(fixture.Storage.Objects.ContainsKey(upload.ObjectKey));
-        await IncidentFileCleanup.CleanupAsync(db, fixture.Storage, DateTimeOffset.UtcNow.AddHours(2), default);
+        var runtime = scope.ServiceProvider.GetRequiredService<BHomePersistenceContext>();
+        await IncidentFileCleanup.CleanupAsync(runtime, fixture.Storage, DateTimeOffset.UtcNow.AddHours(2), default);
         Assert.False(fixture.Storage.Objects.ContainsKey(upload.ObjectKey));
-        var deletedIntent = await db.Set<BHome.Domain.Entities.OperationalTask>().AsNoTracking().SingleAsync(r => r.Id == upload.Id);
+        var deletedIntent = await runtime.Set<BHome.Domain.Entities.OperationalTask>().AsNoTracking().SingleAsync(r => r.Id == upload.Id);
         Assert.True(deletedIntent.TaskData.GetProperty("deleted").GetBoolean());
         Assert.True(deletedIntent.History.EnumerateArray().Last().GetProperty("deleted").GetBoolean());
         var incident = await Create(w); var photo = await Upload(w.Tenant, incident, IncidentEvidenceKind.Report);
-        await IncidentFileCleanup.CleanupAsync(db, fixture.Storage, DateTimeOffset.UtcNow.AddHours(2), default);
+        await IncidentFileCleanup.CleanupAsync(runtime, fixture.Storage, DateTimeOffset.UtcNow.AddHours(2), default);
         Assert.Equal(HttpStatusCode.OK, (await w.Tenant.Client.GetAsync($"{Base}/{incident}/evidence/{photo}")).StatusCode);
     }
 
@@ -445,7 +446,7 @@ public sealed partial class IncidentApiTests(IncidentFixture fixture) : IClassFi
     public async Task DatabaseGuardsHistoryAndRejectsInvalidWorkState()
     {
         var w = await Setup(); var incident = await Create(w);
-        await using var scope = fixture.Factory.Services.CreateAsyncScope(); var db = scope.ServiceProvider.GetRequiredService<BHomePersistenceContext>();
+        await using var scope = fixture.Factory.Services.CreateAsyncScope(); var db = scope.ServiceProvider.GetFixturePersistence();
         await using var connection = new NpgsqlConnection(fixture.ConnectionString); await connection.OpenAsync();
         await using (var command = new NpgsqlCommand("UPDATE incident_reports SET history='[]'::jsonb WHERE id=@id", connection))
         { command.Parameters.AddWithValue("id", incident); Assert.Equal("P0001", (await Assert.ThrowsAsync<PostgresException>(() => command.ExecuteNonQueryAsync())).SqlState); }
@@ -472,7 +473,7 @@ public sealed partial class IncidentApiTests(IncidentFixture fixture) : IClassFi
         var w = await Setup(); var incident = await Create(w, emergency: true); Guid notification;
         await using (var scope = fixture.Factory.Services.CreateAsyncScope())
         {
-            var db = scope.ServiceProvider.GetRequiredService<BHomePersistenceContext>();
+            var db = scope.ServiceProvider.GetFixturePersistence();
             notification = await db.Set<IncidentNotification>().Where(n => n.IncidentId == incident && n.RecipientId == w.Owner.Id).Select(n => n.Id).SingleAsync();
             var handler = scope.ServiceProvider.GetServices<IBackgroundJobHandler>().Single(h => h.Name == "incident.notification");
             await Assert.ThrowsAsync<IntegrationUnavailableException>(() => handler.ExecuteAsync(new(Guid.NewGuid(), notification.ToString("N"), JsonSerializer.Serialize(new { NotificationId = notification })), default));
@@ -529,7 +530,7 @@ public sealed partial class IncidentApiTests(IncidentFixture fixture) : IClassFi
         var w = await Setup(); var foreign = await Setup(); Guid otherRoomId; Guid commonAssetId;
         await using (var scope = fixture.Factory.Services.CreateAsyncScope())
         {
-            var db = scope.ServiceProvider.GetRequiredService<BHomePersistenceContext>();
+            var db = scope.ServiceProvider.GetFixturePersistence();
             var other = new Room { LocationId = w.Location, RoomNumber = "SYNTHETIC-OTHER" };
             var privateAsset = new Asset { LocationId = w.Location, RoomId = other.Id, Name = "Other Tenant asset", Category = "Synthetic", Condition = "Synthetic" };
             var common = new Asset { LocationId = w.Location, CommonArea = "Synthetic corridor", Name = "Common light", Category = "Synthetic", Condition = "Synthetic" };
@@ -604,7 +605,7 @@ public sealed partial class IncidentApiTests(IncidentFixture fixture) : IClassFi
         Assert.Null(report.RoomId); Assert.False(report.StaffAvailable); await Review(w, report.Id);
         report = (await Report(w.Owner, report.Id))!;
         Assert.Equal(HttpStatusCode.Conflict, (await Send(w.Owner, $"{Base}/{report.Id}/work-orders", new WorkOrderAssign(report.Version, w.Staff.Id, "Expected", DateTimeOffset.UtcNow.AddDays(1)))).StatusCode);
-        await using var scope = fixture.Factory.Services.CreateAsyncScope(); var db = scope.ServiceProvider.GetRequiredService<BHomePersistenceContext>();
+        await using var scope = fixture.Factory.Services.CreateAsyncScope(); var db = scope.ServiceProvider.GetFixturePersistence();
         (await db.Set<ContractResident>().SingleAsync(r => r.ContractId == w.Contract)).ResidenceFrom = Today.AddDays(1);
         await db.SaveChangesAsync();
         Assert.Equal(HttpStatusCode.NotFound, (await CommonArea()).StatusCode);
@@ -623,7 +624,7 @@ public sealed partial class IncidentApiTests(IncidentFixture fixture) : IClassFi
         Assert.True(results[0].IsSuccessStatusCode);
         Assert.True(results[1].IsSuccessStatusCode || results[1].StatusCode == HttpStatusCode.Conflict);
         report = (await Report(w.Owner, incident))!;
-        await using var scope = fixture.Factory.Services.CreateAsyncScope(); var db = scope.ServiceProvider.GetRequiredService<BHomePersistenceContext>();
+        await using var scope = fixture.Factory.Services.CreateAsyncScope(); var db = scope.ServiceProvider.GetFixturePersistence();
         var open = await db.Set<MaintenanceWorkOrder>().AnyAsync(w => w.IncidentId == incident && w.Status != WorkOrderStatus.Verified && w.Status != WorkOrderStatus.Cancelled);
         Assert.Equal(open ? "InProgress" : "Resolved", report.Status);
     }
@@ -644,7 +645,7 @@ public sealed partial class IncidentApiTests(IncidentFixture fixture) : IClassFi
         var w = await Setup(); var incident = await Create(w, w.Staff, true); Guid notification;
         await using (var scope = fixture.Factory.Services.CreateAsyncScope())
         {
-            var db = scope.ServiceProvider.GetRequiredService<BHomePersistenceContext>();
+            var db = scope.ServiceProvider.GetFixturePersistence();
             var users = scope.ServiceProvider.GetRequiredService<UserManager<ApplicationUser>>();
             Assert.True((await users.AddToRoleAsync((await users.FindByIdAsync(w.Staff.Id.ToString()))!, Roles.Tenant)).Succeeded);
             notification = await db.Set<IncidentNotification>().Where(n => n.IncidentId == incident && n.RecipientId == w.Staff.Id).Select(n => n.Id).SingleAsync();

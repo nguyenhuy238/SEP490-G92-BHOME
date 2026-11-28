@@ -41,12 +41,28 @@ internal static class NativeCompensationInvoice
         {
             var snapshot = JsonSerializer.Serialize(new
             {
-                schemaVersion = 1, compactState = new
+                schemaVersion = 1,
+                compactState = new
                 {
-                    line.Id, line.InvoiceId, line.Category, line.ChargeCode, line.Name, line.PolicyId,
-                    line.PolicyVersion, line.RateDate, line.Rate, line.Quantity, line.OccupiedDays, line.PeriodDays,
-                    line.Amount, line.CalculatedAmount, line.CorrectionRequestId, line.MeterReadingId,
-                    line.PreviousReading, line.ConfirmedReading, line.UtilityCalculationSnapshot
+                    line.Id,
+                    line.InvoiceId,
+                    line.Category,
+                    line.ChargeCode,
+                    line.Name,
+                    line.PolicyId,
+                    line.PolicyVersion,
+                    line.RateDate,
+                    line.Rate,
+                    line.Quantity,
+                    line.OccupiedDays,
+                    line.PeriodDays,
+                    line.Amount,
+                    line.CalculatedAmount,
+                    line.CorrectionRequestId,
+                    line.MeterReadingId,
+                    line.PreviousReading,
+                    line.ConfirmedReading,
+                    line.UtilityCalculationSnapshot
                 }
             }, Json);
             await db.Database.ExecuteSqlInterpolatedAsync($"""
@@ -73,9 +89,14 @@ internal static class NativeCompensationInvoice
         var id = new Guid(SHA256.HashData(Encoding.UTF8.GetBytes("InvoiceIssuedEvent/" + issued.InvoiceId)).AsSpan(0, 16));
         var eventData = JsonSerializer.Serialize(new
         {
-            schemaVersion = 1, recordType = "InvoiceIssuedEvent", state = issued,
-            audienceRole = (string?)null, category = (string?)null, succeeded = (bool?)null,
-            sessionId = (Guid?)null, targetUserId = (Guid?)null
+            schemaVersion = 1,
+            recordType = "InvoiceIssuedEvent",
+            state = issued,
+            audienceRole = (string?)null,
+            category = (string?)null,
+            succeeded = (bool?)null,
+            sessionId = (Guid?)null,
+            targetUserId = (Guid?)null
         }, Json);
         await db.Database.ExecuteSqlInterpolatedAsync($"""
             INSERT INTO notifications(id,record_kind,event_key,notification_type,event_data,event_at)
@@ -85,15 +106,36 @@ internal static class NativeCompensationInvoice
 
     private static JsonElement State(Invoice invoice) => JsonSerializer.SerializeToElement(new
     {
-        invoice.Id, invoice.CreatedAt, invoice.UpdatedAt, invoice.Type, invoice.AutomationPlanId,
-        invoice.AutomationFinalizationPlanId, invoice.RoomId, invoice.LocationId, invoice.RoomNumber,
-        invoice.LocationName, invoice.BillingPeriod, invoice.RepresentativeContractId,
-        invoice.RepresentativeTenantUserId, invoice.Status, invoice.Version, invoice.Total,
-        invoice.MissingInputs, invoice.ScheduleSnapshot, invoice.ScheduledFinalDate, invoice.DueDate,
-        invoice.CreatedByUserId, invoice.FinalizedByUserId, invoice.FinalizedAt
+        invoice.Id,
+        invoice.CreatedAt,
+        invoice.UpdatedAt,
+        invoice.Type,
+        invoice.AutomationPlanId,
+        invoice.AutomationFinalizationPlanId,
+        invoice.RoomId,
+        invoice.LocationId,
+        invoice.RoomNumber,
+        invoice.LocationName,
+        invoice.BillingPeriod,
+        invoice.RepresentativeContractId,
+        invoice.RepresentativeTenantUserId,
+        invoice.Status,
+        invoice.Version,
+        invoice.Total,
+        invoice.MissingInputs,
+        invoice.ScheduleSnapshot,
+        invoice.ScheduledFinalDate,
+        invoice.DueDate,
+        invoice.CreatedByUserId,
+        invoice.FinalizedByUserId,
+        invoice.FinalizedAt
     }, Json);
     private static string History(Invoice invoice, JsonElement state) => JsonSerializer.Serialize(new
     {
-        schemaVersion = 1, recordType = "Invoice", recordKey = invoice.Id.ToString(), deleted = false, state
+        schemaVersion = 1,
+        recordType = "Invoice",
+        recordKey = invoice.Id.ToString(),
+        deleted = false,
+        state
     }, Json);
 }

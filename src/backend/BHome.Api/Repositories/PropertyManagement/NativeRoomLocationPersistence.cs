@@ -69,8 +69,11 @@ internal static class NativeRoomLocationPersistence
         {
             row = new Native.Location
             {
-                Id = location.Id, StaffAssignments = EmptyArray(), OperatingSettings = EmptyObject(),
-                PublicProfile = EmptyObject(), History = EmptyArray()
+                Id = location.Id,
+                StaffAssignments = EmptyArray(),
+                OperatingSettings = EmptyObject(),
+                PublicProfile = EmptyObject(),
+                History = EmptyArray()
             };
             db.Add(row);
         }
@@ -105,8 +108,11 @@ internal static class NativeRoomLocationPersistence
         {
             row = new Native.Room
             {
-                Id = room.Id, LocationId = room.LocationId, BillingRepresentatives = EmptyArray(),
-                PublicProfile = EmptyObject(), History = EmptyArray()
+                Id = room.Id,
+                LocationId = room.LocationId,
+                BillingRepresentatives = EmptyArray(),
+                PublicProfile = EmptyObject(),
+                History = EmptyArray()
             };
             db.Add(row);
         }

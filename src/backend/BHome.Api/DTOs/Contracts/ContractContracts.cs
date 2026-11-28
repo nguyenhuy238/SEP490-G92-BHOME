@@ -254,6 +254,8 @@ public interface IContractRepository
 {
     Task<ContractPage> ListAsync(ContractListScope scope, int page, int pageSize, Guid? locationId, ContractStatus? status, CancellationToken t);
     Task<T> InTransactionAsync<T>(Guid roomId, Func<Task<T>> work, CancellationToken t);
+    async Task<T> WithLockedContractAsync<T>(Guid id, Func<Contract, Task<T>> work, CancellationToken t)
+        => await work(await FindAsync(id, t) ?? throw ContractException.Missing());
     Task FlushAsync(CancellationToken t);
     Task<Contract?> FindAsync(Guid id, CancellationToken t);
     Task<Room?> RoomAsync(Guid id, CancellationToken t);

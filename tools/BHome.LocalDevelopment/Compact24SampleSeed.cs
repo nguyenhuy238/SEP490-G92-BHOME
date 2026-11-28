@@ -62,10 +62,11 @@ public static class Compact24SampleSeed
         if (setSamplePasswords && string.IsNullOrWhiteSpace(password))
             throw new LocalTestAccountException("Enter a password explicitly before updating sample accounts.");
         await using var scope = services.CreateAsyncScope();
-        var db = scope.ServiceProvider.GetRequiredService<Compact24DbContext>();
+        var identity = scope.ServiceProvider.GetRequiredService<BHome.Infrastructure.Persistence.Compact24.Compact24DbContext>();
+        await using var db = OfflineFixturePersistence.Open(scope.ServiceProvider, identity);
         if (!await db.IsSchemaReadyAsync(token)) throw new LocalTestAccountException("Compact24 schema is not ready.");
         var users = scope.ServiceProvider.GetRequiredService<UserManager<ApplicationUser>>();
-        await using var transaction = await db.Database.BeginTransactionAsync(token);
+        await using var transaction = await OfflineFixturePersistence.BeginAsync(db, identity, token);
         await db.Database.ExecuteSqlRawAsync("SELECT pg_advisory_xact_lock(hashtextextended('compact24-development-sample-v1',0))", token);
         // The reviewed Compact24 chain adapter supports one Owner container. A fixture
         // must not introduce another Owner or take over an existing person's account.
@@ -81,7 +82,7 @@ public static class Compact24SampleSeed
             if (account is null)
             {
                 account = new ApplicationUser { Id = Id(n + 1), UserName = AccountNames[n], Email = AccountNames[n] + "@example.invalid", IsActive = true, LockoutEnabled = true };
-                db.PrepareUserRole(account, roleNames[n]);
+                identity.PrepareUserRole(account, roleNames[n]);
                 Check(await users.CreateAsync(account, password ?? ("Sample!" + Convert.ToHexString(RandomNumberGenerator.GetBytes(32)))));
             }
             else if (setSamplePasswords)

@@ -164,7 +164,8 @@ internal static class StaffInventoryActiveSeed
         }
         await using var scope = provider.CreateAsyncScope();
         var sp = scope.ServiceProvider;
-        var db = sp.GetRequiredService<BHomePersistenceContext>();
+        var identity = sp.GetRequiredService<BHome.Infrastructure.Persistence.Compact24.Compact24DbContext>();
+        await using var db = OfflineFixturePersistence.Open(sp, identity);
         var users = sp.GetRequiredService<UserManager<ApplicationUser>>();
         var (owner, complete, existing) = await InspectAsync(db, users, t);
         if (mode == "--inspect") return;
@@ -178,7 +179,7 @@ internal static class StaffInventoryActiveSeed
         if (!existing)
         {
             var credentials = await CredentialsAsync(t);
-            await using (var tx = await db.Database.BeginTransactionAsync(t))
+            await using (var tx = await OfflineFixturePersistence.BeginAsync(db, identity, t))
             {
                 await db.Database.ExecuteSqlRawAsync("SELECT pg_advisory_xact_lock(hashtextextended('staff-inventory-active-v1',0))", t);
                 // Recheck the name under the lock, before the first write.
@@ -196,7 +197,7 @@ internal static class StaffInventoryActiveSeed
                         LockoutEnabled = true,
                         EmailConfirmed = true
                     };
-                    db.PrepareUserRole(account, role);
+                    identity.PrepareUserRole(account, role);
                     var result = await users.CreateAsync(account, credentials[UserNames[i]]);
                     if (!result.Succeeded)
                         throw new LocalTestAccountException("Không thể tạo tài khoản tổng hợp: " + string.Join(",", result.Errors.Select(e => e.Code)));

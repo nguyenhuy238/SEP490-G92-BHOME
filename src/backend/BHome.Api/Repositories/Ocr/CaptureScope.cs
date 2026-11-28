@@ -150,8 +150,10 @@ internal sealed class CaptureScope(BHomePersistenceContext db, ICurrentUser user
         if (await compact.Set<Native.MeterReading>().AnyAsync(r => r.MeterId == meter.Id && r.Id != reading.Id && r.ConfirmedAt >= reading.ConfirmedAt, t)) return false;
         if (task.BillingPeriod != null && await compact.Set<Native.Invoice>().AnyAsync(i => i.Status == (short)InvoiceStatus.Final &&
             i.RoomId == meter.RoomId && i.BillingPeriod == task.BillingPeriod, t)) return false;
-        if (await (from line in compact.Set<Native.InvoiceItem>() join invoice in compact.Set<Native.Invoice>() on line.InvoiceId equals invoice.Id
-            where invoice.Status == (short)InvoiceStatus.Final && line.MeterReadingId == reading.Id select line.Id).AnyAsync(t)) return false;
+        if (await (from line in compact.Set<Native.InvoiceItem>()
+                   join invoice in compact.Set<Native.Invoice>() on line.InvoiceId equals invoice.Id
+                   where invoice.Status == (short)InvoiceStatus.Final && line.MeterReadingId == reading.Id
+                   select line.Id).AnyAsync(t)) return false;
         var id = reading.Id.ToString();
         if (await db.Database.SqlQuery<bool>($"""
             SELECT EXISTS(SELECT 1 FROM contracts WHERE

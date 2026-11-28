@@ -7,6 +7,7 @@ using BHome.Application.Notifications;
 using BHome.Infrastructure.Modules.Notifications;
 using BHome.Infrastructure.Persistence.Compact24;
 using BHome.Infrastructure.Persistence;
+using BHome.Infrastructure.Modules.PropertyManagement.Persistence;
 using Microsoft.AspNetCore.DataProtection;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Hosting;
@@ -168,17 +169,15 @@ internal sealed class AuthenticationEmailDelivery(Compact24DbContext db, Compact
         IReadOnlyList<EmailAttachment>? attachments = null;
         if (tenantInvitation)
         {
-            var contract = await db.Set<BHome.Domain.TenantContracts.Contract>().AsNoTracking()
-                .Where(c => c.TenantUserId == recipient && c.Kind == BHome.Domain.TenantContracts.ContractKind.Main &&
-                    c.Status == BHome.Domain.TenantContracts.ContractStatus.Active)
+            var row = await db.Set<BHome.Domain.Entities.Contract>().AsNoTracking()
+                .Where(c => c.TenantUserId == recipient && c.ContractType == "MAIN" &&
+                    c.Status == (short)BHome.Domain.TenantContracts.ContractStatus.Active)
                 .OrderByDescending(c => c.ActivatedAt)
-                .Select(c => new
-                {
-                    c.Id,
-                    SeparateConfirmation = c.InitialPaymentRequired &&
-                    c.SigningMode == BHome.Application.Contracts.ContractSigningModes.Internal
-                }).FirstOrDefaultAsync(t);
-            if (contract is { SeparateConfirmation: false } && await contractEmail.MainConfirmationAsync(contract.Id, recipient, t) is { } confirmed)
+                .FirstOrDefaultAsync(t);
+            var contract = row is null ? null : NativeContractSnapshot.Read(row);
+            if (contract is not null && !(contract.InitialPaymentRequired &&
+                contract.SigningMode == BHome.Application.Contracts.ContractSigningModes.Internal) &&
+                await contractEmail.MainConfirmationAsync(contract.Id, recipient, t) is { } confirmed)
             {
                 title = confirmed.Title;
                 attachments = await contractEmail.MainAttachmentsAsync(contract.Id, recipient, request.Destination, t);

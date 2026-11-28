@@ -95,7 +95,8 @@ public static class E2eMeterWorkflowSeed
         Console.WriteLine($"Dataset Prefix   : {Namespace}");
 
         await using var scope = provider.CreateAsyncScope();
-        var db = scope.ServiceProvider.GetRequiredService<BHomePersistenceContext>();
+        var identity = scope.ServiceProvider.GetRequiredService<BHome.Infrastructure.Persistence.Compact24.Compact24DbContext>();
+        await using var db = OfflineFixturePersistence.Open(scope.ServiceProvider, identity);
         if (!await db.IsSchemaReadyAsync(t))
             throw new LocalTestAccountException("Schema Compact24 chưa sẵn sàng hoặc không tương thích.");
 
@@ -193,7 +194,7 @@ public static class E2eMeterWorkflowSeed
             }
         }
 
-        await using var tx = await db.Database.BeginTransactionAsync(t);
+        await using var tx = await OfflineFixturePersistence.BeginAsync(db, identity, t);
         await db.Database.ExecuteSqlInterpolatedAsync($"SELECT pg_advisory_xact_lock(hashtextextended({Namespace}, 0))", t);
 
         // 1. Verify Location & Staff Assignment
@@ -221,7 +222,7 @@ public static class E2eMeterWorkflowSeed
                 LockoutEnabled = true
             };
             db.Entry(tenantUser).Property("full_name").CurrentValue = TenantDisplayName;
-            db.PrepareUserRole(tenantUser, Roles.Tenant);
+            identity.PrepareUserRole(tenantUser, Roles.Tenant);
             var created = await users.CreateAsync(tenantUser, password);
             if (!created.Succeeded)
                 throw new LocalTestAccountException("Không thể tạo tài khoản Tenant E2E: " + string.Join(", ", created.Errors.Select(e => e.Code)));

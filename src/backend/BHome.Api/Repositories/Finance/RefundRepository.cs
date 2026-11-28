@@ -161,11 +161,20 @@ internal sealed partial class RefundRepository(BHomePersistenceContext db, BHome
         if (create)
             db.Add(new Native.RefundRequest
             {
-                Id = row.Id, SourcePaymentId = row.SourcePaymentId, SourceDepositContractId = row.SourceDepositContractId,
-                BeneficiaryResidentId = row.BeneficiaryResidentId, BeneficiaryKind = row.BeneficiaryKind,
-                ExternalPayerAttestationId = row.ExternalPayerAttestationId, RequestedByUserId = row.RequestedBy,
-                RequestedAt = row.RequestedAt, RequestedAmount = row.Amount, Reason = row.Reason, Status = row.Status,
-                OperationKey = row.OperationKey, Version = row.Version, History = json
+                Id = row.Id,
+                SourcePaymentId = row.SourcePaymentId,
+                SourceDepositContractId = row.SourceDepositContractId,
+                BeneficiaryResidentId = row.BeneficiaryResidentId,
+                BeneficiaryKind = row.BeneficiaryKind,
+                ExternalPayerAttestationId = row.ExternalPayerAttestationId,
+                RequestedByUserId = row.RequestedBy,
+                RequestedAt = row.RequestedAt,
+                RequestedAmount = row.Amount,
+                Reason = row.Reason,
+                Status = row.Status,
+                OperationKey = row.OperationKey,
+                Version = row.Version,
+                History = json
             });
         else
             await RefundRequestWrites.UpdateAsync(db, row.Id, row.Status, row.Version, row.DecidedBy, row.DecidedAt,
@@ -203,9 +212,24 @@ internal sealed partial class RefundRepository(BHomePersistenceContext db, BHome
         var id = Guid.NewGuid();
         var envelope = JsonSerializer.Serialize(new
         {
-            schemaVersion = 1, recordType = "PaymentReconciliation", recordKey = id.ToString(), deleted = false,
-            state = new { id, sequence, transferId = receipt, invoiceId = invoice, depositContractId = deposit,
-                decision, reason, actorId = actor, occurredAt, createdAt = at, updatedAt = at }
+            schemaVersion = 1,
+            recordType = "PaymentReconciliation",
+            recordKey = id.ToString(),
+            deleted = false,
+            state = new
+            {
+                id,
+                sequence,
+                transferId = receipt,
+                invoiceId = invoice,
+                depositContractId = deposit,
+                decision,
+                reason,
+                actorId = actor,
+                occurredAt,
+                createdAt = at,
+                updatedAt = at
+            }
         }, Json);
         var changed = await db.Database.ExecuteSqlInterpolatedAsync($"UPDATE payments SET history=history||jsonb_build_array({envelope}::jsonb) WHERE id={receipt}", token);
         if (changed != 1) throw new DbUpdateConcurrencyException("Compact24 containing record is unavailable.");

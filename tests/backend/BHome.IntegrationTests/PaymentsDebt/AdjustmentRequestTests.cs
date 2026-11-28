@@ -35,7 +35,7 @@ public sealed partial class PaymentLedgerTests
         Assert.Empty((await b.GetFromJsonAsync<PagedResult<AdjustmentView>>($"/api/v1/invoice-adjustments?invoiceId={w.Invoice}"))!.Items);
         var outside = await Setup(); using var stranger = await Client(outside.Tenants[0]);
         Assert.Equal(HttpStatusCode.NotFound, (await Post(stranger, route, input)).StatusCode);
-        await using var scope = fixture.Factory.Services.CreateAsyncScope(); var db = scope.ServiceProvider.GetRequiredService<BHomePersistenceContext>();
+        await using var scope = fixture.Factory.Services.CreateAsyncScope(); var db = scope.ServiceProvider.GetFixturePersistence();
         Assert.Equal(1, await db.Set<InvoiceAdjustmentRequest>().CountAsync(r => r.InvoiceId == w.Invoice));
         Assert.Equal(1, await db.Set<InvoiceAdjustmentEvent>().CountAsync(r => r.InvoiceId == w.Invoice));
         foreach (var contract in await db.Set<BHome.Domain.TenantContracts.Contract>().Where(c => c.RoomId == w.Room).ToArrayAsync()) contract.Status = BHome.Domain.TenantContracts.ContractStatus.Terminated;
@@ -73,14 +73,15 @@ public sealed partial class PaymentLedgerTests
     public async Task FailedEvidenceUploadLeavesOnlyRecoverableIntentAndCannotBeSubmitted()
     {
         var w = await Setup(); using var tenant = await Client(w.Tenants[0]);
-        await using var scope = fixture.Factory.Services.CreateAsyncScope(); var db = scope.ServiceProvider.GetRequiredService<BHomePersistenceContext>();
+        await using var scope = fixture.Factory.Services.CreateAsyncScope(); var db = scope.ServiceProvider.GetFixturePersistence();
         var storage = new FailingAdjustmentStorage();
-        var files = new BHome.Infrastructure.Billing.AdjustmentEvidenceFiles(db, storage, TimeProvider.System);
+        var runtime = scope.ServiceProvider.GetRequiredService<BHomePersistenceContext>();
+        var files = new BHome.Infrastructure.Billing.AdjustmentEvidenceFiles(runtime, storage, TimeProvider.System);
         await Assert.ThrowsAsync<IOException>(() => files.UploadAsync(w.Invoice, w.Tenants[0], [137, 80, 78, 71], "image/png", default));
         var orphan = await db.Set<InvoiceAdjustmentEvidence>().AsNoTracking().SingleAsync(e => e.InvoiceId == w.Invoice); Assert.False(orphan.Uploaded);
         var input = new AdjustmentSubmit(null, 90000, "Synthetic failed upload", [orphan.Id], 1);
         Assert.Equal(HttpStatusCode.BadRequest, (await Post(tenant, $"/api/v1/invoices/{w.Invoice}/adjustment-requests", input)).StatusCode);
-        await BHome.Infrastructure.Billing.AdjustmentEvidenceCleanup.CleanupAsync(db, storage, DateTimeOffset.UtcNow.AddDays(2), default);
+        await BHome.Infrastructure.Billing.AdjustmentEvidenceCleanup.CleanupAsync(runtime, storage, DateTimeOffset.UtcNow.AddDays(2), default);
         Assert.Equal(1, storage.Deletes); Assert.False(await db.Set<InvoiceAdjustmentEvidence>().AnyAsync(e => e.Id == orphan.Id));
     }
 }

@@ -15,9 +15,15 @@ internal static class SecurityAuditWrites
         {
             db.SecurityAudit.Add(new SecurityAuditRecord
             {
-                Id = state.Id, UserId = state.UserId, TargetUserId = state.TargetUserId, SessionId = state.SessionId,
-                Event = state.Event, Succeeded = state.Succeeded, OccurredAt = state.OccurredAt,
-                TargetType = state.TargetType, TargetId = state.TargetId
+                Id = state.Id,
+                UserId = state.UserId,
+                TargetUserId = state.TargetUserId,
+                SessionId = state.SessionId,
+                Event = state.Event,
+                Succeeded = state.Succeeded,
+                OccurredAt = state.OccurredAt,
+                TargetType = state.TargetType,
+                TargetId = state.TargetId
             });
             await db.SaveChangesAsync(token);
             return;
@@ -26,9 +32,14 @@ internal static class SecurityAuditWrites
             throw new InvalidOperationException("Security audit must share the protected operation transaction.");
         var payload = JsonSerializer.Serialize(new
         {
-            schemaVersion = 1, recordType = "SecurityAuditRecord", state,
-            audienceRole = (string?)null, category = (string?)null,
-            succeeded = state.Succeeded, sessionId = state.SessionId, targetUserId = state.TargetUserId
+            schemaVersion = 1,
+            recordType = "SecurityAuditRecord",
+            state,
+            audienceRole = (string?)null,
+            category = (string?)null,
+            succeeded = state.Succeeded,
+            sessionId = state.SessionId,
+            targetUserId = state.TargetUserId
         }, Json);
         await db.Database.ExecuteSqlInterpolatedAsync($"""
             INSERT INTO notifications(id,record_kind,actor_user_id,event_key,notification_type,

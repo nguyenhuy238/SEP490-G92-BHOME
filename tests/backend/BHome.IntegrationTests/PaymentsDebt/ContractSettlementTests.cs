@@ -25,7 +25,7 @@ public sealed partial class PaymentLedgerTests
         var paid = (await tenant.GetFromJsonAsync<ContractSettlementSummary>(path))!; Assert.DoesNotContain("invoice_outstanding", paid.UnresolvedItems); Assert.False(paid.Resolved); Assert.Equal(90000, Assert.Single(paid.Invoices).Financials.AllocatedPayments);
         await using (var scope = fixture.Factory.Services.CreateAsyncScope())
         {
-            var db = scope.ServiceProvider.GetRequiredService<BHomePersistenceContext>();
+            var db = scope.ServiceProvider.GetFixturePersistence();
             (await db.Set<Contract>().SingleAsync(c => c.Id == w.Contract)).RequiredDeposit = 20000; await db.SaveChangesAsync();
             db.Add(new DepositVerification { ContractId = w.Contract, Amount = 20000, BankTransactionReference = "SYN-BH40-" + Guid.NewGuid(), VerificationReason = "Synthetic deposit", VerifiedByUserId = w.Owner, VerifiedAt = DateTimeOffset.UtcNow }); await db.SaveChangesAsync();
         }
@@ -38,7 +38,7 @@ public sealed partial class PaymentLedgerTests
     {
         var w = await Setup(); using var owner = await Client(w.Owner); using var tenant = await Client(w.Tenants[0]);
         var path = $"/api/v1/contracts/{w.Contract}/move-out/settlement-summary";
-        await using var scope = fixture.Factory.Services.CreateAsyncScope(); var db = scope.ServiceProvider.GetRequiredService<BHomePersistenceContext>();
+        await using var scope = fixture.Factory.Services.CreateAsyncScope(); var db = scope.ServiceProvider.GetFixturePersistence();
         (await db.Set<Contract>().SingleAsync(c => c.Id == w.Contract)).RequiredDeposit = 400000;
         var otherTarget = await db.Set<Contract>().Where(c => c.RoomId == w.Room && c.Id != w.Contract).FirstAsync(); otherTarget.RequiredDeposit = 50000;
         await db.SaveChangesAsync();

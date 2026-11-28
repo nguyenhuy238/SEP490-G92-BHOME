@@ -188,8 +188,14 @@ internal static class NativeBillingJobPersistence
     {
         RequireTransaction(db);
         task.Stamp(DateTimeOffset.UtcNow, false);
-        var changedState = JsonSerializer.Serialize(new { task.AssignedStaffUserId, task.AssignmentId,
-            task.AssignedAt, task.Version, task.UpdatedAt }, Json);
+        var changedState = JsonSerializer.Serialize(new
+        {
+            task.AssignedStaffUserId,
+            task.AssignmentId,
+            task.AssignedAt,
+            task.Version,
+            task.UpdatedAt
+        }, Json);
         var count = await db.Database.ExecuteSqlInterpolatedAsync($"""
             UPDATE operational_tasks SET assigned_user_id={task.AssignedStaffUserId},assigned_at={task.AssignedAt},version={task.Version},
               task_data=task_data||jsonb_build_object('state',task_data->'state'||CAST({changedState} AS jsonb)),
@@ -213,9 +219,17 @@ internal static class NativeBillingJobPersistence
         if (notice is null) return;
         notice.Stamp(DateTimeOffset.UtcNow, true);
         const string kind = "OperationalTaskNotification";
-        var eventData = JsonSerializer.Serialize(new { schemaVersion = 1, recordType = kind, state = notice,
-            audienceRole = (string?)null, category = (string?)null, succeeded = (bool?)null,
-            sessionId = (Guid?)null, targetUserId = (Guid?)null }, Json);
+        var eventData = JsonSerializer.Serialize(new
+        {
+            schemaVersion = 1,
+            recordType = kind,
+            state = notice,
+            audienceRole = (string?)null,
+            category = (string?)null,
+            succeeded = (bool?)null,
+            sessionId = (Guid?)null,
+            targetUserId = (Guid?)null
+        }, Json);
         await db.Database.ExecuteSqlInterpolatedAsync($"""
             INSERT INTO notifications(id,record_kind,event_key,notification_type,event_data,event_at,read_at)
             VALUES({notice.Id},'OUTBOX',{kind + ":" + notice.Id},{kind},CAST({eventData} AS jsonb),{notice.CreatedAt},{notice.ReadAt})

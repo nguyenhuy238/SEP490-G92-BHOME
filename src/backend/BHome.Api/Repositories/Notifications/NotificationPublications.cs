@@ -36,13 +36,20 @@ internal static class NotificationPublications
         db.Add(new Native.Notification
         {
             Id = new Guid(SHA256.HashData(Encoding.UTF8.GetBytes("NotificationPublication/" + key)).AsSpan(0, 16)),
-            RecordKind = "OUTBOX", EventKey = "NotificationPublication:" + key,
-            NotificationType = "NotificationPublication", EventAt = at,
+            RecordKind = "OUTBOX",
+            EventKey = "NotificationPublication:" + key,
+            NotificationType = "NotificationPublication",
+            EventAt = at,
             EventData = JsonSerializer.SerializeToElement(new
             {
-                schemaVersion = 1, recordType = "NotificationPublication", state,
-                audienceRole = (string?)null, category = (string?)null, succeeded = (bool?)null,
-                sessionId = (Guid?)null, targetUserId = (Guid?)null
+                schemaVersion = 1,
+                recordType = "NotificationPublication",
+                state,
+                audienceRole = (string?)null,
+                category = (string?)null,
+                succeeded = (bool?)null,
+                sessionId = (Guid?)null,
+                targetUserId = (Guid?)null
             }),
             DeliveryHistory = JsonSerializer.SerializeToElement(Array.Empty<object>())
         });

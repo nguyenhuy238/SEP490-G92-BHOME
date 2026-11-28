@@ -5,8 +5,13 @@ using BHome.Domain.Locations;
 using BHome.Domain.TenantContracts;
 using BHome.Infrastructure.Persistence.Compact24;
 using BHome.Infrastructure.IdentityAccess;
+using BHome.Infrastructure.Contracts;
 using BHome.Infrastructure.Branding;
 using Microsoft.EntityFrameworkCore;
+using BHome.Infrastructure.Billing;
+using BHome.Infrastructure.Ocr;
+using BHome.Infrastructure.Modules.PropertyManagement.Persistence;
+using Native = BHome.Domain.Entities;
 using BHome.Application.Contracts;
 using BHome.Application.Storage;
 using System.Security.Cryptography;
@@ -31,10 +36,9 @@ internal sealed class NotificationEmailContent(Compact24DbContext db,
 {
     internal async Task<(string Title, string Body)?> MainConfirmationAsync(Guid id, Guid? tenant, CancellationToken t)
     {
-        var c = await db.Set<Contract>().AsNoTracking().Include(c => c.Room).ThenInclude(r => r.Location)
-            .SingleOrDefaultAsync(c => c.Id == id && c.Kind == ContractKind.Main && c.Status == ContractStatus.Active &&
-                (tenant == null || c.TenantUserId == tenant), t);
-        if (c is null || c.IsDevelopmentDemo || c.Room.Status != BHome.Domain.PropertyManagement.RoomStatus.Occupied ||
+        var c = await NativeContractSnapshot.LoadAsync(db, id, t);
+        if (c is null || c.Kind != ContractKind.Main || c.Status != ContractStatus.Active ||
+            tenant != null && c.TenantUserId != tenant || c.IsDevelopmentDemo || c.Room.Status != BHome.Domain.PropertyManagement.RoomStatus.Occupied ||
             c.TenantUserId is null || initialPayments is not null && !await initialPayments.SatisfiedAsync(c.Id, t)) return null;
         var account = await db.Users.AsNoTracking().SingleOrDefaultAsync(u => u.Id == c.TenantUserId && u.IsActive, t);
         if (account is null) return null;
@@ -52,20 +56,19 @@ internal sealed class NotificationEmailContent(Compact24DbContext db,
     }
     internal async Task<IReadOnlyList<EmailAttachment>> MainAttachmentsAsync(Guid id, Guid tenant, string destination, CancellationToken t)
     {
-        var c = await db.Set<Contract>().AsNoTracking().Include(c => c.Signatures).Include(c => c.Room).ThenInclude(r => r.Location)
-            .SingleOrDefaultAsync(c => c.Id == id && c.Kind == ContractKind.Main && c.Status == ContractStatus.Active &&
-                c.TenantUserId == tenant && !c.IsDevelopmentDemo, t)
-            ?? throw new ChannelDeliveryException("main_confirmation_document_invalid");
+        var c = await NativeContractSnapshot.LoadAsync(db, id, t);
+        if (c is null || c.Kind != ContractKind.Main || c.Status != ContractStatus.Active || c.TenantUserId != tenant || c.IsDevelopmentDemo)
+            throw new ChannelDeliveryException("main_confirmation_document_invalid");
         string? key, hash;
         var evidence = AnonymousContractSigningService.AcceptedEvidence(c);
         if (evidence is not null)
         {
             if (!AnonymousContractSigningService.Complete(c) || evidence.SnapshotHash != c.SnapshotHash || evidence.OwnerId != c.OwnerSignerId)
                 throw new ChannelDeliveryException("main_confirmation_document_invalid");
-            var signedEmail = await db.Set<ContractSigningInvitation>().AsNoTracking()
+            var signedEmail = (await NativeInvitationPersistence.ForContractAsync(db, c.Id, t))
                 .Where(i => i.Id == evidence.InvitationId && i.ContractId == c.Id && i.ResidentId == c.RepresentativeResidentId &&
                     i.SnapshotHash == c.SnapshotHash && i.AcceptedAt != null && i.RevokedAt == null)
-                .Select(i => i.RecipientEmail).SingleOrDefaultAsync(t);
+                .Select(i => i.RecipientEmail).SingleOrDefault();
             if (!string.Equals(signedEmail, destination, StringComparison.OrdinalIgnoreCase))
                 throw new ChannelDeliveryException("main_confirmation_recipient_mismatch");
             key = evidence.FinalDocumentKey; hash = evidence.FinalDocumentHash;
@@ -107,8 +110,9 @@ internal sealed class NotificationEmailContent(Compact24DbContext db,
     internal async Task<(string Destination, string Title, string Body, IReadOnlyList<EmailAttachment> Attachments)?> MainPaidConfirmationAsync(
         Guid id, Guid tenant, CancellationToken t)
     {
-        if (initialPayments is null || !await db.Set<Contract>().AnyAsync(c => c.Id == id && c.TenantUserId == tenant &&
-            c.InitialPaymentRequired && c.SigningMode == ContractSigningModes.Internal, t)) return null;
+        if (initialPayments is null) return null;
+        var c = await NativeContractSnapshot.LoadAsync(db, id, t);
+        if (c is null || c.TenantUserId != tenant || !c.InitialPaymentRequired || c.SigningMode != ContractSigningModes.Internal) return null;
         if (await MainConfirmationAsync(id, tenant, t) is not { } confirmation) return null;
         var destination = await db.Users.AsNoTracking().Where(u => u.Id == tenant && u.IsActive).Select(u => u.Email).SingleOrDefaultAsync(t);
         if (!EmailOptions.ValidAddress(destination)) throw new ChannelDeliveryException("email_recipient_unavailable");
@@ -117,14 +121,13 @@ internal sealed class NotificationEmailContent(Compact24DbContext db,
     }
     internal async Task<(string Destination, string Title, string Body, IReadOnlyList<EmailAttachment> Attachments)?> HoldingConfirmationAsync(Guid id, Guid owner, CancellationToken t)
     {
-        var c = await db.Set<Contract>().AsNoTracking().Include(c => c.Room).ThenInclude(r => r.Location)
-            .Include(c => c.Signatures).SingleOrDefaultAsync(c => c.Id == id && c.OwnerSignerId == owner &&
-                c.Kind == ContractKind.Holding && (c.Status == ContractStatus.Active || c.Status == ContractStatus.Converted), t);
-        if (c is null || c.Status == ContractStatus.Active && c.Room.Status != BHome.Domain.PropertyManagement.RoomStatus.OnHold ||
+        var c = await NativeContractSnapshot.LoadAsync(db, id, t);
+        if (c is null || c.OwnerSignerId != owner || c.Kind != ContractKind.Holding ||
+            c.Status is not (ContractStatus.Active or ContractStatus.Converted) || c.Status == ContractStatus.Active && c.Room.Status != BHome.Domain.PropertyManagement.RoomStatus.OnHold ||
             !BHome.Application.Contracts.AnonymousContractSigningService.HoldingOwnerHasSigned(c)) return null;
-        var invitation = await db.Set<ContractSigningInvitation>().AsNoTracking()
+        var invitation = (await NativeInvitationPersistence.ForContractAsync(db, id, t))
             .Where(i => i.ContractId == id && i.ResidentId == c.RepresentativeResidentId && i.SnapshotHash == c.SnapshotHash &&
-                i.AcceptedAt != null && i.RevokedAt == null).OrderByDescending(i => i.AcceptedAt).FirstOrDefaultAsync(t);
+                i.AcceptedAt != null && i.RevokedAt == null).OrderByDescending(i => i.AcceptedAt).FirstOrDefault();
         if (invitation is null || !EmailOptions.ValidAddress(invitation.RecipientEmail)) return null;
         var amount = await db.Database.SqlQuery<decimal>($"""
             SELECT COALESCE(sum(a.amount),0) AS "Value" FROM payment_allocations a JOIN payments p ON p.id=a.source_payment_id
@@ -144,7 +147,7 @@ internal sealed class NotificationEmailContent(Compact24DbContext db,
         if (signedPdf.Length is < 5 or > 10_485_760 || !signedPdf.AsSpan(0, 5).SequenceEqual("%PDF-"u8) ||
             !string.Equals(Convert.ToHexString(SHA256.HashData(signedPdf)), evidence.FinalDocumentHash, StringComparison.OrdinalIgnoreCase))
             throw new ChannelDeliveryException("holding_confirmation_document_invalid");
-        var resident = await db.Set<Resident>().AsNoTracking().SingleAsync(r => r.Id == c.RepresentativeResidentId, t);
+        var resident = NativeResidentPersistence.Read(await db.Set<Native.Resident>().AsNoTracking().SingleAsync(r => r.Id == c.RepresentativeResidentId, t));
         var tenant = resident.DisplayLabel;
         if (identity is not null && resident.IdentityData != "{}")
         {
@@ -174,9 +177,8 @@ internal sealed class NotificationEmailContent(Compact24DbContext db,
     internal async Task<(string Destination, string Title, string Body, IReadOnlyList<EmailAttachment> Attachments)?> DraftInvoiceEmailAsync(
         Guid id, Guid recipient, CancellationToken t)
     {
-        var invoice = await db.Set<Invoice>().AsNoTracking().Include(i => i.Lines)
-            .SingleOrDefaultAsync(i => i.Id == id && i.Status == InvoiceStatus.Draft &&
-                i.Recipients.Any(r => r.TenantUserId == recipient), t);
+        var invoice = (await NativeInvoicePersistence.ReadAsync(db, db.Set<Native.Invoice>().AsNoTracking()
+            .Where(i => i.Id == id && i.Status == (short)InvoiceStatus.Draft && i.RecipientUserIds.Contains(recipient)), t)).SingleOrDefault();
         if (invoice is null) return null;
         var destination = await db.Users.AsNoTracking().Where(u => u.Id == recipient && u.IsActive && u.EmailConfirmed)
             .Select(u => u.Email).SingleOrDefaultAsync(t);
@@ -198,16 +200,16 @@ internal sealed class NotificationEmailContent(Compact24DbContext db,
                     BHome.Domain.PropertyManagement.ChargeCategory.Water => UtilityType.Water,
                     _ => throw new ChannelDeliveryException("draft_invoice_evidence_invalid")
                 };
-                var proof = await (from reading in db.Set<MeterReading>().AsNoTracking()
-                                   join meter in db.Set<Meter>() on reading.MeterId equals meter.Id
-                                   join task in db.Set<OperationalTask>() on reading.TaskId equals task.Id
-                                   join image in db.Set<MeterEvidence>() on reading.EvidenceId equals image.Id
-                                   where reading.Id == readingId && meter.RoomId == invoice.RoomId && meter.UtilityType == type &&
-                                       task.MeterId == meter.Id && task.LocationId == invoice.LocationId &&
-                                       task.Purpose == ReadingPurpose.Periodic && task.BillingPeriod == invoice.BillingPeriod &&
-                                       task.Status == MeterTaskStatus.Completed && image.TaskId == task.Id &&
-                                       image.IsUploaded && image.IsLinked && reading.ConfirmedValue == line.ConfirmedReading
-                                   select image).SingleOrDefaultAsync(t);
+                var row = await (from reading in db.Set<Native.MeterReading>().AsNoTracking()
+                                 join meter in db.Set<Native.Meter>() on reading.MeterId equals meter.Id
+                                 join task in db.Set<Native.OperationalTask>() on reading.OperationalTaskId equals task.Id
+                                 where reading.Id == readingId && meter.RoomId == invoice.RoomId && meter.UtilityType == (short)type &&
+                                     task.MeterId == meter.Id && task.LocationId == invoice.LocationId && task.TaskType == "METER_READ" &&
+                                     task.BillingPeriod == invoice.BillingPeriod && reading.ConfirmedValue == line.ConfirmedReading
+                                 select new { Reading = reading, Task = task }).SingleOrDefaultAsync(t);
+                var proof = row is not null && NativeCaptureReads.Task(row.Task) is { Purpose: ReadingPurpose.Periodic, Status: MeterTaskStatus.Completed }
+                    ? NativeCaptureReads.Evidence(row.Task, NativeCaptureReads.Reading(row.Reading).EvidenceId) : null;
+                if (proof is not null && (proof.TaskId != row!.Task.Id || !proof.IsUploaded || !proof.IsLinked)) proof = null;
                 // A reading correction can temporarily make a draft stale. Retry after
                 // its normal refresh rather than attaching an image for a different reading.
                 if (proof is null || line.PreviousReading is null || line.ConfirmedReading is null)
@@ -234,8 +236,8 @@ internal sealed class NotificationEmailContent(Compact24DbContext db,
             lines.Add(detail);
         }
         // Recheck version and entitlement after reading private storage.
-        if (!await db.Set<Invoice>().AnyAsync(i => i.Id == id && i.Status == InvoiceStatus.Draft &&
-            i.Version == invoice.Version && i.Recipients.Any(r => r.TenantUserId == recipient), t))
+        if (!await db.Set<Native.Invoice>().AnyAsync(i => i.Id == id && i.Status == (short)InvoiceStatus.Draft &&
+            i.Version == invoice.Version && i.RecipientUserIds.Contains(recipient), t))
             throw new ChannelDeliveryException("draft_invoice_changed", retryable: true);
         var pending = invoice.MissingInputs.Length == 0 ? "" :
             "\nHóa đơn vẫn còn dữ liệu cần bổ sung hoặc xác minh; tổng tiền hiện tại chưa đầy đủ.";
@@ -249,9 +251,8 @@ internal sealed class NotificationEmailContent(Compact24DbContext db,
 
     internal async Task<IReadOnlyList<EmailAttachment>> PaidInvoiceAttachmentsAsync(Guid id, Guid recipient, CancellationToken t)
     {
-        var invoice = await db.Set<Invoice>().AsNoTracking().Include(i => i.Lines)
-            .SingleOrDefaultAsync(i => i.Id == id && i.Status == InvoiceStatus.Final &&
-                i.Recipients.Any(r => r.TenantUserId == recipient), t);
+        var invoice = (await NativeInvoicePersistence.ReadAsync(db, db.Set<Native.Invoice>().AsNoTracking()
+            .Where(i => i.Id == id && i.Status == (short)InvoiceStatus.Final && i.RecipientUserIds.Contains(recipient)), t)).SingleOrDefault();
         if (invoice is null) return [];
         var balance = await BHome.Infrastructure.Billing.InvoiceFinancialQueries.FinancialsAsync(db, id, t);
         if (balance.OutstandingAmount != 0) return [];
@@ -314,11 +315,11 @@ internal sealed class NotificationEmailContent(Compact24DbContext db,
         var invoiceId = notice.RelatedObjectType switch
         {
             "Invoice" => notice.RelatedObjectId,
-            "Adjustment" => await db.Set<InvoiceAdjustmentRequest>().AsNoTracking()
-                .Where(r => r.Id == notice.RelatedObjectId && r.RequesterId == tenant).Select(r => r.InvoiceId).SingleOrDefaultAsync(t),
+            "Adjustment" => await db.Set<Native.InvoiceAdjustment>().AsNoTracking()
+                .Where(r => r.Id == notice.RelatedObjectId && r.RequestedByUserId == tenant).Select(r => r.InvoiceId).SingleOrDefaultAsync(t),
             _ => Guid.Empty
         };
-        if (invoiceId == Guid.Empty || !await db.Set<InvoiceRecipient>().AnyAsync(r => r.InvoiceId == invoiceId && r.TenantUserId == tenant, t)) return null;
+        if (invoiceId == Guid.Empty || !await db.Set<Native.Invoice>().AnyAsync(i => i.Id == invoiceId && i.RecipientUserIds.Contains(tenant), t)) return null;
         return $"bhome://open-invoice?invoiceId={invoiceId:D}";
     }
 
@@ -350,7 +351,8 @@ internal sealed class NotificationEmailContent(Compact24DbContext db,
         if (notice.RelatedObjectType is "Invoice" or "Debt" && notice.EventType is
             "INVOICE_FINALIZED" or "INVOICE_DUE_SOON" or "INVOICE_OVERDUE" or "INVOICE_FULLY_PAID" or "PAYMENT_PARTIALLY_CONFIRMED")
         {
-            var invoice = await db.Set<Invoice>().AsNoTracking().SingleAsync(i => i.Id == notice.RelatedObjectId, t);
+            var invoice = (await NativeInvoicePersistence.ReadAsync(db, db.Set<Native.Invoice>().AsNoTracking()
+                .Where(i => i.Id == notice.RelatedObjectId), t, false)).Single();
             var message = notice.EventType switch
             {
                 "INVOICE_FINALIZED" => "Hóa đơn thuê phòng của bạn đã được phát hành.",
@@ -363,16 +365,17 @@ internal sealed class NotificationEmailContent(Compact24DbContext db,
         }
         if (notice.EventType == "CONTRACT_EXPIRY_REMINDER" && notice.RelatedObjectType == "Contract")
         {
-            var contract = await db.Set<Contract>().AsNoTracking().Include(c => c.Room).SingleAsync(c => c.Id == notice.RelatedObjectId, t);
-            var location = await db.Set<Location>().Where(l => l.Id == contract.Room.LocationId).Select(l => l.Name).SingleAsync(t);
+            var contract = await NativeContractSnapshot.LoadAsync(db, notice.RelatedObjectId, t)
+                ?? throw new InvalidOperationException("notification_contract_missing");
+            var location = contract.Room.Location.Name;
             return (notice.Title, $"Hợp đồng đến kỳ xử lý gia hạn hoặc trả phòng.\n\nCơ sở: {location}\nPhòng: {contract.Room.RoomNumber}\nNgày hết hạn: {contract.EndDate.ToString("dd/MM/yyyy", CultureInfo.InvariantCulture)}");
         }
         if (notice.EventType == "INCIDENT_EMERGENCY_SUBMITTED" && notice.RelatedObjectType == "Incident")
         {
-            var incident = await db.Set<BHome.Domain.IncidentMaintenance.IncidentReport>().AsNoTracking()
+            var incident = await db.Set<Native.IncidentReport>().AsNoTracking()
                 .Where(i => i.Id == notice.RelatedObjectId).Select(i => new { i.LocationId, i.RoomId }).SingleAsync(t);
-            var location = await db.Set<Location>().Where(l => l.Id == incident.LocationId).Select(l => l.Name).SingleAsync(t);
-            var room = await db.Set<BHome.Domain.PropertyManagement.Room>().Where(r => r.Id == incident.RoomId).Select(r => r.RoomNumber).SingleOrDefaultAsync(t);
+            var location = await db.Set<Native.Location>().Where(l => l.Id == incident.LocationId).Select(l => l.Name).SingleAsync(t);
+            var room = await db.Set<Native.Room>().Where(r => r.Id == incident.RoomId).Select(r => r.RoomNumber).SingleOrDefaultAsync(t);
             return (notice.Title, $"Có sự cố khẩn cấp cần tiếp nhận.\n\nCơ sở: {location}\nPhòng: {room ?? "Khu vực chung"}\n\n{notice.Summary}");
         }
         // Existing announcement/security content already respects the application's recipient scope.

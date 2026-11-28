@@ -115,7 +115,7 @@ public sealed class Compact24ApiAuditTests
                     .Count(d => d.ActionDescriptor is ControllerActionDescriptor c && c.ControllerTypeInfo.Assembly == typeof(BHome.Api.Controllers.ContractsController).Assembly);
                 Assert.Equal(describedMethods, swaggerMethods);
                 await using var evidenceScope = factory.Services.CreateAsyncScope();
-                var evidenceDb = evidenceScope.ServiceProvider.GetRequiredService<Compact24DbContext>();
+                var evidenceDb = evidenceScope.ServiceProvider.GetRequiredService<Compact24ArchiveContext>();
                 var tableCount = await evidenceDb.Database.SqlQueryRaw<int>("SELECT count(*)::integer AS \"Value\" FROM information_schema.tables WHERE table_schema='public' AND table_type='BASE TABLE'").SingleAsync();
                 Assert.True(await evidenceDb.IsSchemaReadyAsync()); Assert.Equal(24, tableCount);
                 await File.WriteAllTextAsync(Path.Combine(directory, "swagger.json"), swaggerText);
@@ -151,7 +151,7 @@ public sealed class Compact24ApiAuditTests
             client.DefaultRequestHeaders.Authorization = new("Bearer", session.AccessToken);
             await using (var scope = services.CreateAsyncScope())
             {
-                var db = scope.ServiceProvider.GetRequiredService<Compact24DbContext>();
+                var db = scope.ServiceProvider.GetRequiredService<Compact24ArchiveContext>();
                 var room = await db.Set<Room>().SingleAsync(r => r.Id == Compact24SampleSeed.Id(40));
                 room.RoomNumber = "S101-EDITED"; room.Version++; await db.SaveChangesAsync();
             }
@@ -185,7 +185,7 @@ public sealed class Compact24ApiAuditTests
         {
             await Assert.ThrowsAsync<LocalTestAccountException>(() => Compact24SampleSeed.RunAsync(fixture.Factory!.Services, "Development", "bad"));
             await using var scope = fixture.Factory!.Services.CreateAsyncScope();
-            var db = scope.ServiceProvider.GetRequiredService<Compact24DbContext>();
+            var db = scope.ServiceProvider.GetRequiredService<Compact24ArchiveContext>();
             Assert.Equal(0, await db.Users.CountAsync()); Assert.Equal(0, await db.Locations.CountAsync());
             var existing = new BHome.Infrastructure.Persistence.ApplicationUser { Id = Guid.NewGuid(), UserName = "existing-owner", Email = "existing-owner@example.invalid", IsActive = true };
             db.PrepareUserRole(existing, "Owner");

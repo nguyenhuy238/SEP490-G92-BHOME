@@ -13,37 +13,15 @@ using NpgsqlTypes;
 
 namespace BHome.Infrastructure.Persistence.Compact24;
 
-public sealed partial class Compact24DbContext
+public sealed partial class Compact24ArchiveContext
 {
     private static readonly JsonSerializerOptions RecordJson = new(JsonSerializerDefaults.Web);
     internal bool Importing { get; set; }
-    public override void PrepareUserRole(ApplicationUser user, string role)
-    {
-        if (Entry(user).State is not (EntityState.Detached or EntityState.Added) || !BHome.Domain.IdentityAccess.Roles.All.Contains(role))
-            throw new InvalidOperationException("Prepare a supported role only for a new account.");
-        Entry(user).Property<string[]>("roles").CurrentValue = [role];
-    }
-
-    internal override async Task<IReadOnlyList<BHome.Application.Billing.BillingQueueView>> BillingQueueAsync(Guid location, DateOnly period, CancellationToken token)
-    {
-        var key = period.ToString("yyyy-MM-dd", System.Globalization.CultureInfo.InvariantCulture);
-        return await Database.SqlQuery<BHome.Application.Billing.BillingQueueView>($"""
-            SELECT j.id AS "Id",j.task_data->>'name' AS "Name",j.status AS "State",j.attempt_count AS "Attempts",
-              j.next_run_at AS "AvailableAt",j.locked_until AS "LockedUntil",j.task_data->>'lastErrorCode' AS "LastErrorCode"
-            FROM operational_tasks j JOIN locations l ON l.id={location}
-            CROSS JOIN LATERAL jsonb_array_elements(COALESCE(l.operating_settings->'automationPlanVersions','[]'::jsonb)) p
-            WHERE j.task_type='SYSTEM_JOB' AND j.task_data->'payload'->>'PlanId'=p->>'id'
-              AND j.task_data->'payload'->>'BillingPeriod'={key}
-              AND j.task_data->>'name' IN ('billing-meter','billing-draft','billing-final')
-            ORDER BY j.next_run_at DESC LIMIT 30
-            """).ToArrayAsync(token);
-    }
-
     public override IQueryable<T> Locked<T>(Guid id, bool skipLocked = false, bool shared = false)
     {
         var suffix = shared ? " FOR SHARE" : " FOR UPDATE" + (skipLocked ? " SKIP LOCKED" : "");
-        if (typeof(T) == typeof(ApplicationUser))
-            return Set<T>().FromSqlRaw("SELECT * FROM users WHERE id={0}" + suffix, id);
+        if (typeof(T) == typeof(ApplicationUser) || typeof(T) == typeof(CompactRefreshRow) || Compact24NativeModel.IsNative(typeof(T)))
+            return base.Locked<T>(id, skipLocked, shared);
         var spec = Compact24Records.For(typeof(T));
         var predicate = spec.Kind is CompactRecordKind.Array or CompactRecordKind.History
             ? $"EXISTS(SELECT 1 FROM jsonb_array_elements({spec.Container}{(spec.Path is null ? "" : "->'" + spec.Path + "'")}) e WHERE COALESCE(e->>'id',e->'state'->>'id')={{0}}::text)"
@@ -63,7 +41,7 @@ public sealed partial class Compact24DbContext
         ChangeTracker.DetectChanges();
         if (ChangeTracker.Entries().Any(e => Compact24NativeModel.IsNative(e.Metadata.ClrType) &&
             e.State is EntityState.Added or EntityState.Modified or EntityState.Deleted))
-            return await SaveNativeChangesAsync(acceptAllChangesOnSuccess, cancellationToken);
+            return await base.SaveChangesAsync(acceptAllChangesOnSuccess, cancellationToken);
         var domain = ChangeTracker.Entries().Where(e => e.State is EntityState.Added or EntityState.Modified or EntityState.Deleted &&
             e.Entity is not ApplicationUser && e.Entity is not CompactRefreshRow).ToArray();
         if (domain.Length == 0) return await base.SaveChangesAsync(acceptAllChangesOnSuccess, cancellationToken);
@@ -303,10 +281,6 @@ public sealed partial class Compact24DbContext
         await ExecuteAsync("UPDATE invoices SET recipient_user_ids=array_append(recipient_user_ids,@user) WHERE id=@invoice AND NOT @user=ANY(recipient_user_ids)", token, ("invoice", invoice), ("user", user));
     }
 
-    internal static Guid DeterministicId(string key) => new(System.Security.Cryptography.SHA256.HashData(System.Text.Encoding.UTF8.GetBytes(key)).AsSpan(0, 16));
-
-    internal NpgsqlCommand CreateSqlCommand(string sql) => new(sql, (NpgsqlConnection)Database.GetDbConnection(),
-        (NpgsqlTransaction?)Database.CurrentTransaction?.GetDbTransaction());
 
     private async Task<int> ExecuteAsync(string sql, CancellationToken token, params (string Name, object? Value)[] parameters)
     {

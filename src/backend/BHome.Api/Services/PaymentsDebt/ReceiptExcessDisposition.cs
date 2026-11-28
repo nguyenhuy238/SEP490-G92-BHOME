@@ -31,18 +31,18 @@ public static class ReceiptExcessRules
     public static string TransferFingerprint(Guid id, string normalizedReference, decimal amount, string currency,
         DateTimeOffset occurredAt, string transferDescription, string statementReference, Guid verifiedByUserId,
         DateTimeOffset verifiedAt, bool isDevelopmentDemo) => Hash(new
-    {
-        Id = id,
-        NormalizedReference = normalizedReference,
-        Amount = amount.ToString("G29", System.Globalization.CultureInfo.InvariantCulture),
-        Currency = currency,
-        OccurredAt = occurredAt,
-        TransferDescription = transferDescription,
-        StatementReference = statementReference,
-        VerifiedByUserId = verifiedByUserId,
-        VerifiedAt = verifiedAt,
-        IsDevelopmentDemo = isDevelopmentDemo
-    });
+        {
+            Id = id,
+            NormalizedReference = normalizedReference,
+            Amount = amount.ToString("G29", System.Globalization.CultureInfo.InvariantCulture),
+            Currency = currency,
+            OccurredAt = occurredAt,
+            TransferDescription = transferDescription,
+            StatementReference = statementReference,
+            VerifiedByUserId = verifiedByUserId,
+            VerifiedAt = verifiedAt,
+            IsDevelopmentDemo = isDevelopmentDemo
+        });
     public static void Validate(ReceiptExcessTarget target)
     {
         if (target is null || target.InvoiceId == Guid.Empty || target.SettlementContractId == Guid.Empty || target.ReceivableId == Guid.Empty || target.HoldingContractId == Guid.Empty || target.DepositContractId == Guid.Empty ||

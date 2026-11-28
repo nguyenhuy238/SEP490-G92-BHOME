@@ -45,7 +45,7 @@ public sealed partial class PaymentLedgerTests
         var w = await Setup(); Guid contractId, payerId, representativeId;
         await using (var seed = fixture.Factory.Services.CreateAsyncScope())
         {
-            var db = seed.ServiceProvider.GetRequiredService<BHomePersistenceContext>();
+            var db = seed.ServiceProvider.GetFixturePersistence();
             var room = new Room { LocationId = w.Location, RoomNumber = "SYN-DEP-" + Guid.NewGuid().ToString("N")[..8], Capacity = 2, Status = RoomStatus.Available };
             var payer = new Resident { RoomId = room.Id, OwnerUserId = w.Owner, DisplayLabel = "SYNTHETIC ACTUAL DEPOSITOR", ContactEmail = Guid.NewGuid() + "@example.invalid", VerificationStatus = IdentityVerificationStatus.Verified };
             var representative = new Resident { RoomId = room.Id, OwnerUserId = w.Owner, DisplayLabel = "SYNTHETIC REPRESENTATIVE", ContactEmail = Guid.NewGuid() + "@example.invalid", VerificationStatus = IdentityVerificationStatus.Verified };
@@ -70,7 +70,7 @@ public sealed partial class PaymentLedgerTests
             db.AddRange(room, payer, representative, contract); await db.SaveChangesAsync(); contractId = contract.Id; payerId = payer.Id; representativeId = representative.Id;
         }
         using var owner = await Client(w.Owner); using var tenant = await Client(w.Tenants[0]); using var staff = await Client(w.Staff);
-        await using var scope = fixture.Factory.Services.CreateAsyncScope(); var check = scope.ServiceProvider.GetRequiredService<BHomePersistenceContext>();
+        await using var scope = fixture.Factory.Services.CreateAsyncScope(); var check = scope.ServiceProvider.GetFixturePersistence();
         var users = await check.Users.CountAsync(); var residents = await check.Set<Resident>().CountAsync();
         async Task<(TransferView Transfer, Guid? ExternalId)> Receipt(decimal amount)
         {

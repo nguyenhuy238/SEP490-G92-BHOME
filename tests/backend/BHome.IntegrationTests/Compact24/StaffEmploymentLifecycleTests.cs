@@ -57,7 +57,7 @@ public sealed partial class Compact24NotificationMvpTests
         Assert.Equal("Active", activeStaff.Employment!.Status);
         var employmentId = activeStaff.Employment.Id;
         await using var scope = fixture.Factory!.Services.CreateAsyncScope();
-        var db = scope.ServiceProvider.GetRequiredService<Compact24DbContext>();
+        var db = scope.ServiceProvider.GetRequiredService<Compact24ArchiveContext>();
         // Legacy JSON may contain fields unknown to the current DTO. Editing an employment
         // must merge metadata and append history without rewriting the existing entries.
         await db.Database.ExecuteSqlInterpolatedAsync($"""
@@ -135,7 +135,7 @@ public sealed partial class Compact24NotificationMvpTests
         Assert.Equal(HttpStatusCode.Conflict, (await owner.PostAsJsonAsync(employmentRoute, renewal)).StatusCode);
 
         await using var scope = fixture.Factory!.Services.CreateAsyncScope();
-        var db = scope.ServiceProvider.GetRequiredService<Compact24DbContext>();
+        var db = scope.ServiceProvider.GetRequiredService<Compact24ArchiveContext>();
         await db.Database.ExecuteSqlInterpolatedAsync($"""
             UPDATE staff_employments
             SET reward_penalty_policy=reward_penalty_policy||jsonb_build_object('LegacyPolicy',jsonb_build_object('amount',123))
@@ -225,7 +225,7 @@ public sealed partial class Compact24NotificationMvpTests
         var verifiedWorkOrder = Guid.NewGuid();
         var moveOut = w.Contracts[0];
         await using var scope = fixture.Factory!.Services.CreateAsyncScope();
-        var db = scope.ServiceProvider.GetRequiredService<Compact24DbContext>();
+        var db = scope.ServiceProvider.GetRequiredService<Compact24ArchiveContext>();
         await db.Database.ExecuteSqlInterpolatedAsync($"""
             INSERT INTO locations(id,name,address,staff_assignments)
             VALUES ({future},'Synthetic future','Synthetic address',jsonb_build_array(jsonb_build_object(

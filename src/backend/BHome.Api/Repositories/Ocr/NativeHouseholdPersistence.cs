@@ -51,7 +51,8 @@ internal static class NativeHouseholdPersistence
             """).FirstOrDefaultAsync(t);
 
     internal static Task<int> OccupancyAsync(Compact24DbContext db, Guid room, CancellationToken t) =>
-        (from c in db.Set<Native.Contract>() join r in db.Set<Native.ContractResident>() on c.Id equals r.ContractId
+        (from c in db.Set<Native.Contract>()
+         join r in db.Set<Native.ContractResident>() on c.Id equals r.ContractId
          where c.RoomId == room && c.Status == (short)ContractStatus.Active && c.ContractType != "HOLDING"
          select r.ResidentId).Distinct().CountAsync(t);
 
@@ -102,8 +103,14 @@ internal static class NativeHouseholdPersistence
         if (changed != 1) throw new DbUpdateConcurrencyException("Compact24 record changed or no longer exists.");
         foreach (var member in draft.Residents.Where(r => !previous.Contains(r.ResidentId)))
         {
-            var history = JsonSerializer.Serialize(new { schemaVersion = 1, recordType = "ContractResident",
-                recordKey = $"{member.ContractId}/{member.ResidentId}", deleted = false, state = member }, Json);
+            var history = JsonSerializer.Serialize(new
+            {
+                schemaVersion = 1,
+                recordType = "ContractResident",
+                recordKey = $"{member.ContractId}/{member.ResidentId}",
+                deleted = false,
+                state = member
+            }, Json);
             await db.Database.ExecuteSqlInterpolatedAsync($"""
                 INSERT INTO contract_residents(contract_id,resident_id,resident_role,residence_from,residence_to,history)
                 VALUES({member.ContractId},{member.ResidentId},{(short)member.Role},{member.ResidenceFrom},{member.ResidenceTo},

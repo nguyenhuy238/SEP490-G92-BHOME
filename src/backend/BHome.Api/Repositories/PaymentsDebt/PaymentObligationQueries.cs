@@ -100,14 +100,29 @@ internal static class PaymentObligationQueries
         value.Stamp(DateTimeOffset.UtcNow, true);
         var state = new
         {
-            value.Id, value.LocationId, value.BankIdentifier, value.AccountNumber, value.AccountHolder,
-            value.Enabled, value.IsDevelopmentDemo, value.Version, value.ConfirmedByUserId, value.ConfirmedAt,
-            value.CreatedAt, value.UpdatedAt
+            value.Id,
+            value.LocationId,
+            value.BankIdentifier,
+            value.AccountNumber,
+            value.AccountHolder,
+            value.Enabled,
+            value.IsDevelopmentDemo,
+            value.Version,
+            value.ConfirmedByUserId,
+            value.ConfirmedAt,
+            value.CreatedAt,
+            value.UpdatedAt
         };
         var json = new JsonSerializerOptions(JsonSerializerDefaults.Web);
         var payload = JsonSerializer.Serialize(state, json);
-        var envelope = JsonSerializer.Serialize(new { schemaVersion = 1, recordType = "ReceivingBankAccount",
-            recordKey = value.Id.ToString(), deleted = false, state }, json);
+        var envelope = JsonSerializer.Serialize(new
+        {
+            schemaVersion = 1,
+            recordType = "ReceivingBankAccount",
+            recordKey = value.Id.ToString(),
+            deleted = false,
+            state
+        }, json);
         var count = await db.Database.ExecuteSqlInterpolatedAsync($"""
             UPDATE locations SET operating_settings=jsonb_set(operating_settings,ARRAY['receivingBankAccounts'],
               COALESCE((SELECT jsonb_agg(e ORDER BY n) FROM jsonb_array_elements(

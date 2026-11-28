@@ -3,6 +3,8 @@ using BHome.Application.Contracts;
 using BHome.Application.Storage;
 using BHome.Domain.TenantContracts;
 using BHome.Infrastructure.Persistence;
+using BHome.Infrastructure.Persistence.Compact24;
+using BHome.Infrastructure.Modules.PropertyManagement.Persistence;
 using Microsoft.EntityFrameworkCore;
 using BHome.Application.IdentityAccess;
 using BHome.Application.PropertyManagement;
@@ -17,7 +19,8 @@ internal sealed class ContractSigningDocumentSource(BHomePersistenceContext db, 
 {
     public async Task<byte[]?> ReadAsync(ContractDocument document, CancellationToken t)
     {
-        var contract = await db.Set<Contract>().AsNoTracking().Include(c => c.Room).ThenInclude(r => r.Location).Include(c => c.Signatures)
+        var contract = db is Compact24DbContext compact ? await NativeContractSnapshot.LoadAsync(compact, document.ContractId, t) :
+            await db.Set<Contract>().AsNoTracking().Include(c => c.Room).ThenInclude(r => r.Location).Include(c => c.Signatures)
             .SingleOrDefaultAsync(c => c.Id == document.ContractId, t);
         if (contract is null) return null;
         if (contract.Kind == ContractKind.Holding)
@@ -25,23 +28,23 @@ internal sealed class ContractSigningDocumentSource(BHomePersistenceContext db, 
         if (contract.DraftMetadata == "{}")
         {
             if (contract.Kind != ContractKind.Main) return null;
-            var existing = await db.Set<ContractDocumentFile>().AsNoTracking().AnyAsync(f => f.ContractId == contract.Id &&
-                f.Kind == ContractFileKind.Preview && f.SnapshotHash == contract.SnapshotHash && f.TemplateId == "main-tenancy-docx-v1", t);
+            var existing = (await ContractDocumentPersistence.ListAsync(db, contract.Id, t)).Any(f =>
+                f.Kind == ContractFileKind.Preview && f.SnapshotHash == contract.SnapshotHash && f.TemplateId == "main-tenancy-docx-v1");
             if (!existing)
             {
                 // Reviewed Main drafts already persist their source; only Holding conversions need it generated here.
                 if (contract.HoldingContractId is null) return null;
                 // Never replace a document already handed to a signer or covered by signing evidence.
                 if (contract.Signatures.Any(s => s.Status != SignatureStatus.Failed) || contract.InternalAcceptance != "{}" ||
-                    await db.Set<ContractSigningInvitation>().AnyAsync(i => i.ContractId == contract.Id && i.SnapshotHash == contract.SnapshotHash &&
-                        i.RevokedAt == null && (i.AcceptedAt != null || i.ExpiresAt > (clock == null ? DateTimeOffset.UtcNow : clock.GetUtcNow())), t)) return null;
+                    (await NativeInvitationPersistence.ForContractAsync(db, contract.Id, t)).Any(i => i.SnapshotHash == contract.SnapshotHash &&
+                        i.RevokedAt == null && (i.AcceptedAt != null || i.ExpiresAt > (clock == null ? DateTimeOffset.UtcNow : clock.GetUtcNow())))) return null;
                 await CreateMainSourceAsync(contract, document, t);
             }
         }
         if (contract.DraftMetadata != "{}" && contract.Status == ContractStatus.Draft || contract.SnapshotHash != document.SnapshotHash || ContractDocumentSnapshot.Hash(document) != document.SnapshotHash)
             throw ContractException.Conflict("signed_terms_changed");
-        var file = await db.Set<ContractDocumentFile>().AsNoTracking().SingleOrDefaultAsync(f => f.ContractId == contract.Id &&
-            f.Kind == ContractFileKind.Preview && f.SnapshotHash == document.SnapshotHash && f.TemplateId == "main-tenancy-docx-v1", t)
+        var file = (await ContractDocumentPersistence.ListAsync(db, contract.Id, t)).SingleOrDefault(f =>
+            f.Kind == ContractFileKind.Preview && f.SnapshotHash == document.SnapshotHash && f.TemplateId == "main-tenancy-docx-v1")
             ?? throw ContractException.Conflict("signing_source_document_required");
         return await ReadFileAsync(file, t);
     }
@@ -50,15 +53,15 @@ internal sealed class ContractSigningDocumentSource(BHomePersistenceContext db, 
     {
         if (contract.SnapshotHash != document.SnapshotHash || ContractDocumentSnapshot.Hash(document) != document.SnapshotHash)
             throw ContractException.Conflict("signed_terms_changed");
-        var files = db.Set<ContractDocumentFile>();
-        var candidates = files.AsNoTracking().Where(f => f.ContractId == contract.Id && f.Kind == ContractFileKind.Preview &&
-            f.SnapshotHash == document.SnapshotHash && f.TemplateId == HoldingDepositRenderer.TemplateId);
-        var existing = await candidates.SingleOrDefaultAsync(t);
+        async Task<ContractDocumentFile?> FindAsync() =>
+            (await ContractDocumentPersistence.ListAsync(db, contract.Id, t)).SingleOrDefault(f => f.Kind == ContractFileKind.Preview &&
+                f.SnapshotHash == document.SnapshotHash && f.TemplateId == HoldingDepositRenderer.TemplateId);
+        var existing = await FindAsync();
         if (existing is not null) return await ReadFileAsync(existing, t);
 
         await using var transaction = db.Database.CurrentTransaction is null ? await db.Database.BeginTransactionAsync(t) : null;
         await db.Database.ExecuteSqlInterpolatedAsync($"SELECT pg_advisory_xact_lock(hashtextextended({"holding-docx-source:" + contract.Id},0))", t);
-        existing = await candidates.SingleOrDefaultAsync(t);
+        existing = await FindAsync();
         if (existing is not null)
         {
             if (transaction is not null) await transaction.CommitAsync(t);
@@ -66,9 +69,9 @@ internal sealed class ContractSigningDocumentSource(BHomePersistenceContext db, 
         }
 
         // Keep previously reviewed bytes and the existing signing evidence across a template rollout.
-        var invitation = await db.Set<ContractSigningInvitation>().AsNoTracking()
-            .Where(i => i.ContractId == contract.Id && i.SnapshotHash == document.SnapshotHash && i.RevokedAt == null)
-            .OrderByDescending(i => i.Id).FirstOrDefaultAsync(t);
+        var invitation = (await NativeInvitationPersistence.ForContractAsync(db, contract.Id, t))
+            .Where(i => i.SnapshotHash == document.SnapshotHash && i.RevokedAt == null)
+            .OrderByDescending(i => i.Id).FirstOrDefault();
         if (invitation is not null)
         {
             using var buffer = new MemoryStream();
@@ -105,8 +108,7 @@ internal sealed class ContractSigningDocumentSource(BHomePersistenceContext db, 
         };
         file.ObjectKey = $"contracts/{contract.Id:N}/preview/{file.Id:N}.pdf";
         await fileStore.PutAsync(contract.RoomId, file.ObjectKey, pdf, file.ContentType, t);
-        files.Add(file);
-        await db.SaveChangesAsync(t);
+        await ContractDocumentPersistence.AppendAsync(db, file, t);
         if (transaction is not null) await transaction.CommitAsync(t);
         return pdf;
     }
@@ -122,9 +124,9 @@ internal sealed class ContractSigningDocumentSource(BHomePersistenceContext db, 
         {
             // Invitations preserve copies of the reviewed bytes. Never render a replacement
             // or accept a different document under the original consent hash.
-            var copies = await db.Set<ContractSigningInvitation>().AsNoTracking()
-                .Where(i => i.ContractId == file.ContractId && i.SnapshotHash == file.SnapshotHash && i.DocumentHash == file.FileHash)
-                .Select(i => i.DocumentObjectKey).Distinct().ToArrayAsync(t);
+            var copies = (await NativeInvitationPersistence.ForContractAsync(db, file.ContractId, t))
+                .Where(i => i.SnapshotHash == file.SnapshotHash && i.DocumentHash == file.FileHash)
+                .Select(i => i.DocumentObjectKey).Distinct().ToArray();
             byte[]? recovered = null;
             foreach (var key in copies)
             {
@@ -157,14 +159,16 @@ internal sealed class ContractSigningDocumentSource(BHomePersistenceContext db, 
             throw ContractException.Conflict("signed_terms_changed");
         await using var ownTransaction = db.Database.CurrentTransaction is null ? await db.Database.BeginTransactionAsync(t) : null;
         await db.Database.ExecuteSqlInterpolatedAsync($"SELECT pg_advisory_xact_lock(hashtextextended({"main-docx-source:" + c.Id},0))", t);
-        if (!await db.Set<ContractDocumentFile>().AnyAsync(f => f.ContractId == c.Id && f.Kind == ContractFileKind.Preview &&
-            f.SnapshotHash == c.SnapshotHash && f.TemplateId == "main-tenancy-docx-v1", t))
+        if (!(await ContractDocumentPersistence.ListAsync(db, c.Id, t)).Any(f => f.Kind == ContractFileKind.Preview &&
+            f.SnapshotHash == c.SnapshotHash && f.TemplateId == "main-tenancy-docx-v1"))
         {
             var settings = await mainData.SettingsAsync(c.OwnerSignerId, c.StartDate, t)
                 ?? throw ContractException.Conflict("owner_contract_settings_required");
             if (settings.OwnerSignerId != c.OwnerSignerId) throw ContractException.Conflict("owner_contract_settings_required");
             var tenant = await mainData.IdentityAsync(c.RoomId, c.RepresentativeResidentId, t);
-            var ids = await db.Set<ContractResident>().Where(r => r.ContractId == c.Id).Select(r => r.ResidentId).ToArrayAsync(t);
+            var ids = db is Compact24DbContext
+                ? await db.Set<BHome.Domain.Entities.ContractResident>().AsNoTracking().Where(r => r.ContractId == c.Id).Select(r => r.ResidentId).ToArrayAsync(t)
+                : await db.Set<ContractResident>().Where(r => r.ContractId == c.Id).Select(r => r.ResidentId).ToArrayAsync(t);
             var occupants = new List<string>();
             foreach (var id in ids.Where(id => id != c.RepresentativeResidentId)) occupants.Add((await mainData.IdentityAsync(c.RoomId, id, t)).FullName);
             var charges = ContractChargeSnapshot.Read(c).Charges.Select(p => new PolicyDto(p.PolicyId, c.Room.LocationId, c.RoomId,
@@ -190,7 +194,7 @@ internal sealed class ContractSigningDocumentSource(BHomePersistenceContext db, 
             };
             file.ObjectKey = $"contracts/{c.Id:N}/preview/{file.Id:N}.pdf";
             await fileStore.PutAsync(c.RoomId, file.ObjectKey, bytes, file.ContentType, t);
-            db.Add(file); await db.SaveChangesAsync(t);
+            await ContractDocumentPersistence.AppendAsync(db, file, t);
         }
         if (ownTransaction is not null) await ownTransaction.CommitAsync(t);
     }

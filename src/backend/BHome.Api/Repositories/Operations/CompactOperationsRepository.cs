@@ -305,7 +305,7 @@ internal sealed partial class CompactOperationsRepository(Compact24DbContext db,
         ResidenceTaskView? result;
         await using (var reader = await command.ExecuteReaderAsync(t)) result = await reader.ReadAsync(t) ? Residence(reader) : null;
         if (result is null) return null;
-        var person = await db.Set<BHome.Domain.TenantContracts.Resident>().AsNoTracking().SingleAsync(r => r.Id == residentId, t);
+        var person = NativeResidentPersistence.Read(await db.Set<BHome.Domain.Entities.Resident>().AsNoTracking().SingleAsync(r => r.Id == residentId, t));
         return result with { ResidentLabel = ContractResidentDisplay.Read(person, identityProtection).Name };
     }
 
@@ -647,7 +647,8 @@ internal sealed partial class CompactOperationsRepository(Compact24DbContext db,
         var items = new List<ResidenceTaskView>();
         await using (var reader = await command.ExecuteReaderAsync(t)) while (await reader.ReadAsync(t)) items.Add(Residence(reader));
         var ids = items.Select(r => r.ResidentId).Distinct().ToArray();
-        var people = await db.Set<BHome.Domain.TenantContracts.Resident>().AsNoTracking().Where(r => ids.Contains(r.Id)).ToDictionaryAsync(r => r.Id, t);
+        var people = (await db.Set<BHome.Domain.Entities.Resident>().AsNoTracking().Where(r => ids.Contains(r.Id)).ToArrayAsync(t))
+            .ToDictionary(r => r.Id, NativeResidentPersistence.Read);
         items = items.Select(r => r with { ResidentLabel = ContractResidentDisplay.Read(people[r.ResidentId], identityProtection).Name }).ToList();
         return new(items, query.Page, query.PageSize, total);
     }

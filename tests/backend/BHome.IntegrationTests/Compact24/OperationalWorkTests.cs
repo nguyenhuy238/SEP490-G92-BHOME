@@ -20,7 +20,7 @@ public sealed partial class Compact24NotificationMvpTests
         using var staff = await Client(w.Staff);
         using var tenant = await Client(w.Tenants[0]);
         await using var scope = fixture.Factory!.Services.CreateAsyncScope();
-        var db = scope.ServiceProvider.GetRequiredService<Compact24DbContext>();
+        var db = scope.ServiceProvider.GetRequiredService<Compact24ArchiveContext>();
         var now = DateTimeOffset.UtcNow;
         var report = new IncidentReport
         {
@@ -106,7 +106,7 @@ public sealed partial class Compact24NotificationMvpTests
         var w = await Seed();
         using var owner = await Client(w.Owner);
         await using var scope = fixture.Factory!.Services.CreateAsyncScope();
-        var db = scope.ServiceProvider.GetRequiredService<Compact24DbContext>();
+        var db = scope.ServiceProvider.GetRequiredService<Compact24ArchiveContext>();
         var assignment = await db.StaffLocationAssignments.AsNoTracking().SingleAsync(x => x.LocationId == w.Location);
         var now = DateTimeOffset.UtcNow;
         var handover = new OperationalTask
@@ -189,7 +189,7 @@ public sealed partial class Compact24NotificationMvpTests
         using var owner = await Client(w.Owner);
         using var staff = await Client(w.Staff);
         await using var scope = fixture.Factory!.Services.CreateAsyncScope();
-        var db = scope.ServiceProvider.GetRequiredService<Compact24DbContext>();
+        var db = scope.ServiceProvider.GetRequiredService<Compact24ArchiveContext>();
         var now = DateTimeOffset.UtcNow;
         IncidentReport Report(string title, IncidentStatus status, string reporterRole) => new()
         {

@@ -35,7 +35,7 @@ public sealed class PreAccountOnboardingTests(Compact24Fixture fixture) : IClass
         Guid otherRoom;
         await using (var scope = factory.Services.CreateAsyncScope())
         {
-            var db = scope.ServiceProvider.GetRequiredService<Compact24DbContext>();
+            var db = scope.ServiceProvider.GetRequiredService<Compact24ArchiveContext>();
             usersBefore = await db.Users.CountAsync();
             otherRoom = await db.Set<BHome.Domain.PropertyManagement.Room>().Where(r => r.LocationId == Compact24SampleSeed.Id(11)).Select(r => r.Id).FirstAsync();
         }
@@ -48,7 +48,7 @@ public sealed class PreAccountOnboardingTests(Compact24Fixture fixture) : IClass
             deferred.EnsureSuccessStatusCode();
             var deferredId = (await deferred.Content.ReadFromJsonAsync<IdResult>())!.Id;
             await using var check = factory.Services.CreateAsyncScope();
-            Assert.Null((await check.ServiceProvider.GetRequiredService<Compact24DbContext>().Set<Resident>().AsNoTracking().SingleAsync(r => r.Id == deferredId)).ContactEmail);
+            Assert.Null((await check.ServiceProvider.GetRequiredService<Compact24ArchiveContext>().Set<Resident>().AsNoTracking().SingleAsync(r => r.Id == deferredId)).ContactEmail);
         }
         Assert.Equal(HttpStatusCode.NotFound, (await staff.PostAsJsonAsync("/api/v1/capture/residents", input with { RoomId = otherRoom })).StatusCode);
         var created = await staff.PostAsJsonAsync("/api/v1/capture/residents", input);
@@ -58,7 +58,7 @@ public sealed class PreAccountOnboardingTests(Compact24Fixture fixture) : IClass
             new IdentityConfirmation(true, "000000000001", "SYNTHETIC PERSON", new(2000, 1, 1), "Synthetic address", null, null, null, new(2020, 1, 1), null));
         confirmed.EnsureSuccessStatusCode();
         await using var read = factory.Services.CreateAsyncScope();
-        var context = read.ServiceProvider.GetRequiredService<Compact24DbContext>();
+        var context = read.ServiceProvider.GetRequiredService<Compact24ArchiveContext>();
         var resident = await context.Set<Resident>().AsNoTracking().SingleAsync(r => r.Id == id);
         Assert.Null(resident.ContactEmail);
         Assert.Equal(IdentityVerificationStatus.Verified, resident.VerificationStatus);

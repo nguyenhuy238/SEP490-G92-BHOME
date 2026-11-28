@@ -4,6 +4,8 @@ namespace BHome.Domain.TenantContracts;
 public enum ContractHandoverStatus { Draft, Disputed, Confirmed }
 public sealed class ContractHandover : AuditableEntity
 {
+    internal static ContractHandover Rehydrate(Guid id, DateTimeOffset createdAt, DateTimeOffset updatedAt) =>
+        new() { Id = id, CreatedAt = createdAt, UpdatedAt = updatedAt };
     public Guid ContractId { get; set; }
     public int Version { get; set; } = 1;
     public ContractHandoverStatus Status { get; set; }
@@ -18,6 +20,7 @@ public sealed class ContractHandover : AuditableEntity
 }
 public sealed class ContractHandoverHistory : AuditableEntity
 {
+    internal static ContractHandoverHistory Rehydrate(Guid id) => new() { Id = id };
     public Guid ContractId { get; set; }
     public int Version { get; set; }
     public string Action { get; set; } = "";

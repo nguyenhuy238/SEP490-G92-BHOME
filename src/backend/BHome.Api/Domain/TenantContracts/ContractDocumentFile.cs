@@ -6,6 +6,9 @@ public enum ContractFileKind { Preview, HandoverEvidence, DraftDocx, DraftPdf, S
 
 public sealed class ContractDocumentFile : AuditableEntity
 {
+    internal static ContractDocumentFile Rehydrate(Guid id, DateTimeOffset createdAt, DateTimeOffset updatedAt) =>
+        new() { Id = id, CreatedAt = createdAt, UpdatedAt = updatedAt };
+
     public Guid ContractId { get; set; }
     public ContractFileKind Kind { get; set; }
     public string SnapshotHash { get; set; } = "";

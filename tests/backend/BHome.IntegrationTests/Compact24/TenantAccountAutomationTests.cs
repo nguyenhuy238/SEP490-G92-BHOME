@@ -29,12 +29,12 @@ public sealed partial class Compact24NotificationMvpTests
         await db.Database.ExecuteSqlInterpolatedAsync($"UPDATE residents SET contact_email={w.Tenants[0].Email} WHERE id={w.Residents[0]}");
         await using (var tx = await db.Database.BeginTransactionAsync())
         {
-            var contract = await db.Set<Contract>().Include(c => c.Residents).SingleAsync(c => c.Id == w.Contracts[0]);
+            var contract = (await BHome.Infrastructure.Modules.PropertyManagement.Persistence.NativeContractSnapshot.LoadAsync(db, w.Contracts[0], default))!;
             await scope.ServiceProvider.GetRequiredService<IPostActivationTenantProvisioning>().ProvisionAsync(contract, w.Owner.Id, default);
             await tx.CommitAsync();
         }
         Assert.Equal(count, await db.Users.CountAsync());
-        Assert.Equal(w.Tenants[0].Id, (await db.Set<Resident>().SingleAsync(r => r.Id == w.Residents[0])).TenantUserId);
+        Assert.Equal(w.Tenants[0].Id, (await db.Set<BHome.Domain.Entities.Resident>().SingleAsync(r => r.Id == w.Residents[0])).UserId);
         Assert.Equal(HttpStatusCode.Unauthorized, (await previous.GetAsync("/api/v1/auth/me")).StatusCode);
         using var anonymous = fixture.Factory.CreateClient();
         Assert.Equal(HttpStatusCode.Unauthorized, (await anonymous.PostAsJsonAsync("/api/v1/auth/login", new { email = w.Tenants[0].Email, password = Password })).StatusCode);
@@ -49,7 +49,7 @@ public sealed partial class Compact24NotificationMvpTests
         await db.Database.ExecuteSqlInterpolatedAsync($"UPDATE contracts SET tenant_user_id=NULL WHERE id={w.Contracts[1]}");
         await using (var tx = await db.Database.BeginTransactionAsync())
         {
-            var contract = await db.Set<Contract>().Include(c => c.Residents).SingleAsync(c => c.Id == w.Contracts[1]);
+            var contract = (await BHome.Infrastructure.Modules.PropertyManagement.Persistence.NativeContractSnapshot.LoadAsync(db, w.Contracts[1], default))!;
             var failure = await Assert.ThrowsAsync<ContractException>(() => scope.ServiceProvider.GetRequiredService<IPostActivationTenantProvisioning>().ProvisionAsync(contract, w.Owner.Id, default));
             Assert.Equal("email_requires_explicit_account_link", failure.Code);
         }
@@ -81,7 +81,7 @@ public sealed partial class Compact24NotificationMvpTests
         var key = "auth-worker-tenant:" + w.Residents[0];
         await using (var scope = host.Services.CreateAsyncScope())
         {
-            var db = scope.ServiceProvider.GetRequiredService<Compact24DbContext>();
+            var db = scope.ServiceProvider.GetRequiredService<Compact24ArchiveContext>();
             var active = await db.Set<Contract>().SingleAsync(c => c.Id == w.Contracts[0]);
             active.InitialPaymentRequired = false; // This seeded legacy tenancy has no initial-payment order.
             active.RequiredDeposit = 1000000;

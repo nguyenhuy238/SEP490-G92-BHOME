@@ -68,7 +68,7 @@ public sealed partial class SePayIntegrationTests
         using var request = new HttpRequestMessage(HttpMethod.Post, connection.WebhookPath) { Content = new StringContent(body, Encoding.UTF8, "application/json") };
         request.Headers.Add("X-SePay-Timestamp", timestamp); request.Headers.Add("X-SePay-Signature", signature);
         using var anonymous = host.CreateClient(); (await anonymous.SendAsync(request)).EnsureSuccessStatusCode();
-        await using var scope = host.Services.CreateAsyncScope(); var db = scope.ServiceProvider.GetRequiredService<Compact24DbContext>();
+        await using var scope = host.Services.CreateAsyncScope(); var db = scope.ServiceProvider.GetRequiredService<Compact24ArchiveContext>();
         Assert.Equal(100000m, await db.Set<PaymentAllocation>().Where(a => a.InvoiceId == scenario.Invoice).SumAsync(a => a.Amount));
     }
 
@@ -131,7 +131,7 @@ public sealed partial class SePayIntegrationTests
         view = (await owner.GetFromJsonAsync<SePayConnectionView>(route))!;
         Assert.Equal("Connected", view.Status); Assert.Equal(2, view.Version);
         await using var fresh = host.Services.CreateAsyncScope();
-        var db = fresh.ServiceProvider.GetRequiredService<Compact24DbContext>();
+        var db = fresh.ServiceProvider.GetRequiredService<Compact24ArchiveContext>();
         var stored = await db.Database.SqlQuery<string>($"SELECT business_profile::text AS \"Value\" FROM users WHERE id={scenario.Owner}").SingleAsync();
         Assert.DoesNotContain(OwnerToken, stored); Assert.DoesNotContain(OwnerSecret, stored); Assert.Contains("protectedSecrets", stored);
         await fresh.ServiceProvider.GetRequiredService<ISePayOwnerConnections>().ApplyLocationAsync(scenario.Location, default);
@@ -188,7 +188,7 @@ public sealed partial class SePayIntegrationTests
         Assert.Equal(HttpStatusCode.BadRequest, (await owner.PutAsJsonAsync(route, OwnerInput() with { WebhookSecret = Secret })).StatusCode);
         Assert.Equal(HttpStatusCode.BadRequest, (await owner.PutAsJsonAsync(route, OwnerInput() with { ApiToken = "bad\r\nheader" })).StatusCode);
         await using var scope = scenario.Host.Services.CreateAsyncScope();
-        var db = scope.ServiceProvider.GetRequiredService<Compact24DbContext>();
+        var db = scope.ServiceProvider.GetRequiredService<Compact24ArchiveContext>();
         Assert.Null(await scope.ServiceProvider.GetRequiredService<IPaymentRepository>().OwnerReceivingAccountForModeAsync(scenario.Owner, "Live", default));
         Assert.False(await db.Database.SqlQuery<bool>($"SELECT business_profile ? 'sepayConnections' AS \"Value\" FROM users WHERE id={scenario.Owner}").SingleAsync());
     }
