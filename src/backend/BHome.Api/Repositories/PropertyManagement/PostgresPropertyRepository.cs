@@ -9,6 +9,7 @@ using BHome.Infrastructure.Persistence;
 using BHome.Infrastructure.Persistence.Compact24;
 using Microsoft.EntityFrameworkCore;
 using Npgsql;
+using Native = BHome.Domain.Entities;
 
 namespace BHome.Infrastructure.Modules.PropertyManagement.Persistence;
 
@@ -30,6 +31,12 @@ internal sealed class PostgresPropertyRepository(BHomePersistenceContext db) : I
     public async Task<RoomObligations> ObligationsAsync(Guid locationId, Guid? roomId, DateOnly today,
         CancellationToken token)
     {
+        if (db is Compact24DbContext compact)
+        {
+            var nativeRooms = compact.Set<Native.Room>().AsNoTracking().Where(r => r.LocationId == locationId &&
+                (!roomId.HasValue || r.Id == roomId)).Select(r => r.Id);
+            return await NativeObligationsAsync(compact, nativeRooms, today, token);
+        }
         var rooms = db.Set<Room>().Where(r => r.LocationId == locationId &&
             (!roomId.HasValue || r.Id == roomId)).Select(r => r.Id);
         var contracts = db.Set<Contract>().Where(c => rooms.Contains(c.RoomId));
@@ -40,6 +47,27 @@ internal sealed class PostgresPropertyRepository(BHomePersistenceContext db) : I
         // Status alone is not a reservation. Protect signed evidence or verified money;
         // do not infer a Holding Contract or replace activation's stricter readiness checks.
         var pending = await BindingPendingContractsAsync(db, contracts, token);
+        return new(residents, occupancy, active, pending);
+    }
+    internal static async Task<RoomObligations> NativeObligationsAsync(Compact24DbContext context,
+        IQueryable<Guid> rooms, DateOnly today, CancellationToken token, bool includeHistoricalResidents = false)
+    {
+        var contracts = context.Set<Native.Contract>().AsNoTracking().Where(c => rooms.Contains(c.RoomId));
+        var members = context.Set<Native.ContractResident>().AsNoTracking();
+        var residentQuery = includeHistoricalResidents
+            ? context.Set<Native.Resident>().AsNoTracking()
+            : NativeUnresolvedResidents(context);
+        var residents = await residentQuery.AnyAsync(r => r.CurrentRoomId != null && rooms.Contains(r.CurrentRoomId.Value), token);
+        var occupancy = await contracts.AnyAsync(c => c.ContractType != "HOLDING" && c.Status == (short)ContractStatus.Active &&
+            members.Any(r => r.ContractId == c.Id && r.ResidenceFrom <= today && (r.ResidenceTo == null || r.ResidenceTo >= today)), token);
+        var active = await contracts.AnyAsync(c => c.Status == (short)ContractStatus.Active, token);
+        var signatures = context.Set<Native.ContractSigning>().AsNoTracking();
+        var allocations = context.Set<Native.PaymentAllocation>().AsNoTracking();
+        var pending = await contracts.AnyAsync(c => (c.Status == (short)ContractStatus.Draft ||
+            c.Status == (short)ContractStatus.PendingSigning || c.Status == (short)ContractStatus.PendingActivation) &&
+            (signatures.Any(s => s.ContractId == c.Id && s.SigningStatus == (short)SignatureStatus.Signed &&
+                s.SignedAt != null && s.SignedObjectKey != null && s.SignedObjectKey != "" && s.SignedHash != null && s.SignedHash != "") ||
+                allocations.Any(a => a.TargetDepositContractId == c.Id && a.Amount > 0)), token);
         return new(residents, occupancy, active, pending);
     }
     internal static Task<bool> BindingPendingContractsAsync(BHomePersistenceContext context, IQueryable<Contract> contracts, CancellationToken token)
@@ -168,8 +196,20 @@ internal sealed class PostgresPropertyRepository(BHomePersistenceContext db) : I
         !context.Set<Contract>().Any(c => c.RoomId == r.RoomId && c.Residents.Any(cr => cr.ResidentId == r.Id)) ||
         context.Set<Contract>().Any(c => c.RoomId == r.RoomId && c.Residents.Any(cr => cr.ResidentId == r.Id) &&
             (c.Status == ContractStatus.Active || c.Status == ContractStatus.Draft || c.Status == ContractStatus.PendingSigning || c.Status == ContractStatus.PendingActivation)));
+    internal static IQueryable<Native.Resident> NativeUnresolvedResidents(Compact24DbContext context)
+    {
+        var contracts = context.Set<Native.Contract>().AsNoTracking();
+        var members = context.Set<Native.ContractResident>().AsNoTracking();
+        return context.Set<Native.Resident>().AsNoTracking().Where(r =>
+            !contracts.Any(c => c.RoomId == r.CurrentRoomId && members.Any(cr => cr.ContractId == c.Id && cr.ResidentId == r.Id)) ||
+            contracts.Any(c => c.RoomId == r.CurrentRoomId && members.Any(cr => cr.ContractId == c.Id && cr.ResidentId == r.Id) &&
+                (c.Status == (short)ContractStatus.Active || c.Status == (short)ContractStatus.Draft ||
+                 c.Status == (short)ContractStatus.PendingSigning || c.Status == (short)ContractStatus.PendingActivation)));
+    }
     public Task<bool> HasResidentsAsync(Guid roomId, CancellationToken token) =>
-        UnresolvedResidents(db).AnyAsync(x => x.RoomId == roomId, token);
+        db is Compact24DbContext compact
+            ? NativeUnresolvedResidents(compact).AnyAsync(x => x.CurrentRoomId == roomId, token)
+            : UnresolvedResidents(db).AnyAsync(x => x.RoomId == roomId, token);
     private void RequireSupportedCatalog<T>()
     {
         if (db is Compact24DbContext && typeof(T) == typeof(RoomType)) throw new PropertyException(404, "room_type_catalog_retired");

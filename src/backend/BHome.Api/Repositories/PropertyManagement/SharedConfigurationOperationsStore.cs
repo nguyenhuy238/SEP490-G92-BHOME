@@ -2,6 +2,7 @@ using System.Text.Json;
 using BHome.Application.PropertyManagement;
 using BHome.Domain.PropertyManagement;
 using Microsoft.EntityFrameworkCore;
+using Native = BHome.Domain.Entities;
 
 namespace BHome.Infrastructure.Modules.PropertyManagement.Persistence;
 
@@ -13,20 +14,50 @@ internal sealed partial class SharedConfigurationStore
     public Task<bool> HasApplicationAsync(Guid family, Guid location, CancellationToken t) => sql.Scalar<bool>("SELECT EXISTS(SELECT 1 FROM operational_tasks WHERE task_type='COMMAND' AND location_id=@location AND task_data->>'recordType'='SharedConfigurationOperation' AND task_data->'operation'->>'kind'='Apply' AND task_data->'operation'->>'familyId'=@family)", t, ("location", location), ("family", family.ToString()));
     public async Task<IReadOnlyList<PolicyDto>> PoliciesAsync(Guid location, CancellationToken t)
     {
-        var rows = await db.Set<BillingPolicy>().AsNoTracking().Where(p => p.LocationId == location).OrderBy(p => p.Id)
-            .Select(p => new PolicyDto(p.Id, p.LocationId, p.RoomId, p.Category, p.ChargeCode, p.Name, p.Method, p.Rate, p.EffectiveFrom, p.EffectiveTo, p.Version, p.FirstUsedAt, p.RoomTypeId, null)).Take(1001).ToArrayAsync(t);
-        if (rows.Length > 1000) throw new PropertyException(409, "configuration_copy_page_limit"); return rows;
+        var rows = await db.Set<Native.BillingPolicy>().AsNoTracking().Where(p => p.LocationId == location)
+            .OrderBy(p => p.Id).Take(1001).ToArrayAsync(t);
+        if (rows.Length > 1000) throw new PropertyException(409, "configuration_copy_page_limit");
+        return rows.Select(p => PolicyView(p, false)).ToArray();
     }
     public async Task<IReadOnlyList<PolicyDto>> SetupCopyPoliciesAsync(Guid location, CancellationToken t)
     {
         // Filter before the bounded read: per-room rent and legacy room-type pricing
         // are not copyable setup inputs, and must not exhaust the configuration limit.
-        var rows = await db.Set<BillingPolicy>().AsNoTracking()
-            .Where(p => p.LocationId == location && p.RoomTypeId == null && (p.RoomId == null || p.Category != ChargeCategory.Rent))
-            .OrderBy(p => p.Id)
-            .Select(p => new PolicyDto(p.Id, p.LocationId, p.RoomId, p.Category, p.ChargeCode, p.Name, p.Method, p.Rate,
-                p.EffectiveFrom, p.EffectiveTo, p.Version, null, null, null)).Take(1001).ToArrayAsync(t);
-        if (rows.Length > 1000) throw new PropertyException(409, "configuration_copy_page_limit"); return rows;
+        var rows = await db.Set<Native.BillingPolicy>().FromSqlInterpolated($"""
+            SELECT p.* FROM billing_policies p
+            LEFT JOIN LATERAL (
+                SELECT h.value->'state' AS data FROM jsonb_array_elements(p.history) WITH ORDINALITY h(value,n)
+                WHERE h.value->>'recordType'='BillingPolicy' ORDER BY h.n DESC LIMIT 1
+            ) s ON TRUE
+            WHERE p.location_id={location} AND (s.data->>'roomTypeId')::uuid IS NULL
+              AND (p.room_id IS NULL OR p.category<>{(short)ChargeCategory.Rent})
+            """).AsNoTracking().OrderBy(p => p.Id).Take(1001).ToArrayAsync(t);
+        if (rows.Length > 1000) throw new PropertyException(409, "configuration_copy_page_limit");
+        return rows.Select(p => PolicyView(p, true)).ToArray();
+    }
+    private static PolicyDto PolicyView(Native.BillingPolicy policy, bool forSetup)
+    {
+        // Name and retired room-type scope are stored in the last typed history entry.
+        var state = policy.History.EnumerateArray().Reverse().FirstOrDefault(h =>
+            h.ValueKind == JsonValueKind.Object && h.TryGetProperty("recordType", out var kind) &&
+            kind.ValueKind == JsonValueKind.String && kind.GetString() == "BillingPolicy");
+        var data = state.ValueKind == JsonValueKind.Object && state.TryGetProperty("state", out var value)
+            ? value : default;
+        var name = data.ValueKind == JsonValueKind.Object && data.TryGetProperty("name", out var n) &&
+            n.ValueKind != JsonValueKind.Null ? n.ValueKind == JsonValueKind.String ? n.GetString()! : n.GetRawText() : "";
+        Guid? roomType = !forSetup && data.ValueKind == JsonValueKind.Object &&
+            data.TryGetProperty("roomTypeId", out var r) && r.ValueKind == JsonValueKind.String
+            ? r.GetGuid() : null;
+        var method = policy.CalculationMethod switch
+        {
+            "METERED" => ChargingMethod.Metered,
+            "FIXED_PER_PERSON_PER_MONTH" => ChargingMethod.FixedPerPersonPerMonth,
+            "FIXED_PER_ROOM_PER_MONTH" => ChargingMethod.FixedPerRoomPerMonth,
+            _ => (ChargingMethod)(-1)
+        };
+        return new(policy.Id, policy.LocationId, policy.RoomId, (ChargeCategory)policy.Category, policy.ChargeCode,
+            name, method, policy.Rate, policy.EffectiveFrom, policy.EffectiveTo, policy.Version,
+            forSetup ? null : policy.FirstUsedAt, roomType, null);
     }
     public async Task<SharedOperation?> OperationAsync(Guid actor, string kind, Guid key, CancellationToken t)
     {

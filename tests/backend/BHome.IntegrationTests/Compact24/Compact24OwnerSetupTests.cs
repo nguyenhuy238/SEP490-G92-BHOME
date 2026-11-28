@@ -178,6 +178,56 @@ public sealed partial class Compact24OwnerSetupTests(Compact24Fixture fixture) :
         Assert.Contains((await owner.GetFromJsonAsync<LocationClosureCheck>($"/api/v1/locations/{w.Location}/closure-check"))!.Blockers, b => b.Code == "open_incidents");
     }
     [CompactPostgresFact]
+    public async Task NativeRoomInsightsRetainAuditAndDraftResidentEvidenceWithoutTracking()
+    {
+        var w = await Seed();
+        using var owner = await Client(w.Owner);
+        var room = await Read<RoomDto>(await owner.PostAsJsonAsync("/api/v1/rooms",
+            new RoomWrite(w.Location, "NATIVE-INSIGHT", "1", 2)));
+        Guid contractId;
+        await using (var seed = fixture.Factory!.Services.CreateAsyncScope())
+        {
+            var db = seed.ServiceProvider.GetRequiredService<Compact24DbContext>();
+            var person = new Resident
+            {
+                RoomId = room.Id, OwnerUserId = w.Owner.Id, DisplayLabel = "Synthetic resident",
+                VerificationStatus = IdentityVerificationStatus.Verified
+            };
+            db.Add(person);
+            var contract = new Contract
+            {
+                RoomId = room.Id, OwnerSignerId = w.Owner.Id, RepresentativeResidentId = person.Id,
+                StartDate = Today, EndDate = Today.AddYears(1), Terms = "Synthetic draft"
+            };
+            contract.Residents.Add(new ContractResident
+            {
+                ContractId = contract.Id, ResidentId = person.Id, Role = ResidentType.Representative, ResidenceFrom = Today
+            });
+            db.Add(contract);
+            await db.SaveChangesAsync();
+            contractId = contract.Id;
+        }
+        await using var scope = fixture.Factory!.Services.CreateAsyncScope();
+        var readDb = scope.ServiceProvider.GetRequiredService<Compact24DbContext>();
+        var insights = scope.ServiceProvider.GetRequiredService<IRoomInsightsRepository>();
+        var evidence = await insights.ReadinessAsync(room.Id, contractId, Today, default);
+        Assert.True(evidence.LocationActive);
+        Assert.True(evidence.Obligations.HasResidentRecords);
+        Assert.False(evidence.Obligations.HasBindingPendingContracts);
+        Assert.False(evidence.Obligations.HasActiveContracts);
+        Assert.False(evidence.HasElectricityBaseline);
+        var found = Assert.IsType<MoveInContractEvidence>(evidence.Contract);
+        Assert.True(found.Exists && found.BelongsToRoom && found.InEffectivePeriod && found.RepresentativeVerified);
+        Assert.Equal(1, found.ResidentCount);
+        Assert.Equal(1, found.VerifiedResidentCount);
+        Assert.False(found.PendingActivation || found.HasContractConflict || found.HasConfirmedHandover);
+        var history = await insights.HistoryAsync(room.Id, new RoomHistoryQuery(), null, null, default);
+        Assert.True(history.HasCompletePropertyAudit);
+        Assert.Contains(history.Items, e => e.Source == "PropertyAudit" && e.Summary == "Created");
+        Assert.Contains(history.Items, e => e.EventType == "OccupancyStarted" && e.RelatedId == contractId);
+        Assert.Empty(readDb.ChangeTracker.Entries());
+    }
+    [CompactPostgresFact]
     public async Task TemplatePublishAndRetryCreateOnlyDesiredInventoryAndCannotRewritePublished()
     {
         var w = await Seed(); using var owner = await Client(w.Owner); using var staff = await Client(w.Staff);

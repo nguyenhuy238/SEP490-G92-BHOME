@@ -4,6 +4,7 @@ using BHome.Domain.TenantContracts;
 using BHome.Domain.IncidentMaintenance;
 using BHome.Infrastructure.Persistence.Compact24;
 using Microsoft.EntityFrameworkCore;
+using Native = BHome.Domain.Entities;
 
 namespace BHome.Infrastructure.Modules.PropertyManagement.Persistence;
 
@@ -11,18 +12,21 @@ internal sealed class PropertyLifecycleChecks(Compact24DbContext db) : IProperty
 {
     public async Task<LocationClosureCheck> ClosureAsync(Guid locationId, CancellationToken t)
     {
-        if (!await db.Locations.AnyAsync(l => l.Id == locationId, t)) throw new PropertyException(404, "resource_not_found");
+        if (!await db.Set<Native.Location>().AsNoTracking().AnyAsync(l => l.Id == locationId, t)) throw new PropertyException(404, "resource_not_found");
         var result = new List<LifecycleBlocker>();
         void Add(string code, int count) { if (count > 0) result.Add(new(code, count)); }
         // Available rooms may remain configured when a Location is deactivated; only rooms
         // that are still occupied or held represent an active operational obligation.
-        Add("operational_rooms", await db.Set<Room>().CountAsync(r => r.LocationId == locationId &&
-            (r.Status == RoomStatus.Occupied || r.Status == RoomStatus.OnHold), t));
-        Add("unresolved_residents", await PostgresPropertyRepository.UnresolvedResidents(db).CountAsync(r => r.Room.LocationId == locationId, t));
-        Add("active_or_pending_contracts", await db.Set<Contract>().CountAsync(c => c.Room.LocationId == locationId &&
-            (c.Status == ContractStatus.Active || c.Status == ContractStatus.PendingSigning || c.Status == ContractStatus.PendingActivation), t));
-        Add("open_incidents", await db.Set<IncidentReport>().CountAsync(i => i.LocationId == locationId &&
-            (i.Status == IncidentStatus.Submitted || i.Status == IncidentStatus.InProgress), t));
+        var rooms = db.Set<Native.Room>().AsNoTracking().Where(r => r.LocationId == locationId);
+        var roomIds = rooms.Select(r => r.Id);
+        Add("operational_rooms", await rooms.CountAsync(r =>
+            r.Status == (short)RoomStatus.Occupied || r.Status == (short)RoomStatus.OnHold, t));
+        Add("unresolved_residents", await PostgresPropertyRepository.NativeUnresolvedResidents(db)
+            .CountAsync(r => r.CurrentRoomId != null && roomIds.Contains(r.CurrentRoomId.Value), t));
+        Add("active_or_pending_contracts", await db.Set<Native.Contract>().AsNoTracking().CountAsync(c => roomIds.Contains(c.RoomId) &&
+            (c.Status == (short)ContractStatus.Active || c.Status == (short)ContractStatus.PendingSigning || c.Status == (short)ContractStatus.PendingActivation), t));
+        Add("open_incidents", await db.Set<Native.IncidentReport>().AsNoTracking().CountAsync(i => i.LocationId == locationId &&
+            (i.Status == "Submitted" || i.Status == "InProgress"), t));
         Add("open_tasks", await db.Database.SqlQuery<int>($"""
             SELECT count(*)::int AS "Value" FROM operational_tasks WHERE location_id={locationId} AND
             ((task_type IN ('GENERAL','METER_READ') AND status NOT IN ('2','3')) OR
@@ -53,16 +57,16 @@ internal sealed class PropertyLifecycleChecks(Compact24DbContext db) : IProperty
     public async Task<IReadOnlyList<string>> RoomBlockersAsync(Guid roomId, CancellationToken t,
         Guid? exceptContractId = null, bool includeActiveContracts = true)
     {
-        var location = await db.Set<Room>().Where(r => r.Id == roomId).Select(r => r.LocationId).SingleAsync(t);
+        var location = await db.Set<Native.Room>().AsNoTracking().Where(r => r.Id == roomId).Select(r => r.LocationId).SingleAsync(t);
         var codes = new List<string>();
-        if (await db.Set<IncidentReport>().AnyAsync(i => i.LocationId == location && (i.RoomId == roomId || i.RoomId == null) &&
-            i.Severity == IncidentSeverity.Emergency && (i.Status == IncidentStatus.Submitted || i.Status == IncidentStatus.InProgress), t))
+        if (await db.Set<Native.IncidentReport>().AsNoTracking().AnyAsync(i => i.LocationId == location && (i.RoomId == roomId || i.RoomId == null) &&
+            i.Severity == "EMERGENCY" && (i.Status == "Submitted" || i.Status == "InProgress"), t))
             codes.Add("unresolved_emergency");
-        if (includeActiveContracts && await db.Set<Contract>().AnyAsync(c => c.RoomId == roomId && c.Id != exceptContractId &&
-            (c.Status == ContractStatus.Active || c.Status == ContractStatus.PendingSigning ||
-             c.Status == ContractStatus.PendingActivation), t))
+        if (includeActiveContracts && await db.Set<Native.Contract>().AsNoTracking().AnyAsync(c => c.RoomId == roomId && c.Id != exceptContractId &&
+            (c.Status == (short)ContractStatus.Active || c.Status == (short)ContractStatus.PendingSigning ||
+             c.Status == (short)ContractStatus.PendingActivation), t))
             codes.Add("active_or_pending_contracts");
-        if (await db.Set<Asset>().AnyAsync(a => a.RoomId == roomId && (a.Status == AssetStatus.NeedsRepair || a.Status == AssetStatus.UnderRepair), t))
+        if (await db.Set<Native.Asset>().AsNoTracking().AnyAsync(a => a.RoomId == roomId && (a.Status == (short)AssetStatus.NeedsRepair || a.Status == (short)AssetStatus.UnderRepair), t))
             codes.Add("asset_maintenance_required");
         return codes;
     }
@@ -77,8 +81,14 @@ internal sealed class PropertyLifecycleChecks(Compact24DbContext db) : IProperty
                 """).SingleAsync(t);
             if (count > 0) responsibilities.Add(new(type, count));
         }
-        var inspections = await db.Set<ContractMoveOut>().CountAsync(m => m.InspectionStaffId != null && m.InspectedAt == null &&
-            m.Status != MoveOutStatus.Completed && db.Set<Contract>().Any(c => c.Id == m.ContractId && c.Room.LocationId == locationId), t);
+        var inspections = await db.Database.SqlQuery<int>($"""
+            SELECT count(*)::int AS "Value" FROM contracts source
+            JOIN contracts c ON c.id=(source.move_out->'current'->>'contractId')::uuid
+            JOIN rooms r ON r.id=c.room_id
+            WHERE r.location_id={locationId} AND source.move_out->'current'->>'inspectionStaffId' IS NOT NULL
+              AND source.move_out->'current'->>'inspectedAt' IS NULL
+              AND COALESCE((source.move_out->'current'->>'status')::int,0)<>{(int)MoveOutStatus.Completed}
+            """).SingleAsync(t);
         if (inspections > 0) responsibilities.Add(new("MOVE_OUT_INSPECTION", inspections));
         return new(locationId, !responsibilities.Any(r => r.Code is "WORK_ORDER" or "MOVE_OUT_INSPECTION"), responsibilities);
     }

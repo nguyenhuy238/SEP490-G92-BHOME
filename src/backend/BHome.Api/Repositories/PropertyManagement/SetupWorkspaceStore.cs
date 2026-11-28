@@ -276,7 +276,7 @@ internal sealed class SetupWorkspaceStore(Compact24DbContext db, CompactNotifica
             assets.Select(x => x.Asset.Code!.Trim().ToUpperInvariant()).Distinct().Count() != assets.Count)
             throw new PropertyException(400, "invalid_inventory_asset_batch");
         var codes = assets.Select(x => x.Asset.Code!.Trim().ToUpper()).ToArray();
-        if (await db.Set<Asset>().AnyAsync(a => a.LocationId == locationId && a.Code != null && codes.Contains(a.Code.Trim().ToUpper()), t))
+        if (await db.Set<Native.Asset>().AsNoTracking().AnyAsync(a => a.LocationId == locationId && a.AssetCode != null && codes.Contains(a.AssetCode.Trim().ToUpper()), t))
             throw new PropertyException(409, "duplicate_asset_code");
         foreach (var entry in assets)
         {
@@ -298,22 +298,27 @@ internal sealed class SetupWorkspaceStore(Compact24DbContext db, CompactNotifica
     }
     public async Task<string?> RoomConfigurationLockReasonAsync(Guid roomId, CancellationToken t)
     {
-        var room = await db.Set<Room>().AsNoTracking().Where(r => r.Id == roomId)
-            .Select(r => new { r.Status, Active = r.Location.IsActive }).SingleOrDefaultAsync(t);
+        var room = await (from r in db.Set<Native.Room>().AsNoTracking()
+                          join l in db.Set<Native.Location>().AsNoTracking() on r.LocationId equals l.Id
+                          where r.Id == roomId
+                          select new { Status = (RoomStatus)r.Status, Active = l.IsActive }).SingleOrDefaultAsync(t);
         if (room is null) return "resource_not_found";
         if (!room.Active) return "location_inactive";
-        if (await db.Set<Contract>().AnyAsync(c => c.RoomId == roomId &&
-            (c.Status == ContractStatus.Draft || c.Status == ContractStatus.PendingSigning ||
-             c.Status == ContractStatus.PendingActivation || c.Status == ContractStatus.Active), t))
+        if (await db.Set<Native.Contract>().AsNoTracking().AnyAsync(c => c.RoomId == roomId &&
+            (c.Status == (short)ContractStatus.Draft || c.Status == (short)ContractStatus.PendingSigning ||
+             c.Status == (short)ContractStatus.PendingActivation || c.Status == (short)ContractStatus.Active), t))
             return "room_configuration_locked_by_contract";
         if (room.Status is RoomStatus.Occupied or RoomStatus.OnHold ||
-            await PostgresPropertyRepository.UnresolvedResidents(db).AnyAsync(r => r.RoomId == roomId, t))
+            await PostgresPropertyRepository.NativeUnresolvedResidents(db).AnyAsync(r => r.CurrentRoomId == roomId, t))
             return "room_has_obligations";
         return null;
     }
     public async Task<bool> EligibleRoomAsync(Guid roomId, CancellationToken t)
     {
-        if (!await db.Set<Room>().AnyAsync(r => r.Id == roomId && r.Status == RoomStatus.Available && r.Location.IsActive, t)) return false;
+        if (!await (from r in db.Set<Native.Room>().AsNoTracking()
+                    join l in db.Set<Native.Location>().AsNoTracking() on r.LocationId equals l.Id
+                    where r.Id == roomId && r.Status == (short)RoomStatus.Available && l.IsActive
+                    select r.Id).AnyAsync(t)) return false;
         if (await RoomConfigurationLockReasonAsync(roomId, t) is not null) return false;
         return (await new PropertyLifecycleChecks(db).RoomBlockersAsync(roomId, t)).Count == 0;
     }
@@ -328,9 +333,8 @@ internal sealed class SetupWorkspaceStore(Compact24DbContext db, CompactNotifica
         return await db.Set<Asset>().SingleOrDefaultAsync(a => a.Id == id, t);
     }
     public Task<bool> HasOpenAssetWorkAsync(Guid id, CancellationToken t) =>
-        db.Set<BHome.Domain.IncidentMaintenance.MaintenanceWorkOrder>().AnyAsync(w => w.AssetId == id &&
-            w.Status != BHome.Domain.IncidentMaintenance.WorkOrderStatus.Verified &&
-            w.Status != BHome.Domain.IncidentMaintenance.WorkOrderStatus.Cancelled, t);
+        db.Set<Native.OperationalTask>().AsNoTracking().AnyAsync(w => w.TaskType == "WORK_ORDER" && w.AssetId == id &&
+            w.Status != "Verified" && w.Status != "Cancelled", t);
     public async Task<IReadOnlyList<AssetHistoryEntry>> AssetHistoryAsync(Guid assetId, CancellationToken t)
     {
         var changes = await db.Set<PropertyChange>().AsNoTracking()
