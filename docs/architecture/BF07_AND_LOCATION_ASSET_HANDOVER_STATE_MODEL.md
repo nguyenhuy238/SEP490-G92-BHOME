@@ -241,8 +241,8 @@ stateDiagram-v2
 - `AGENTS.md` §4 (authorization), §BF-02, §BF-07, §testing/change control.
 - `docs/api/INCIDENT_MAINTENANCE.md` (API/state/permissions BF-07).
 - `docs/development/location-asset-inventory-task.md` (checklist và task factory; được cập nhật đồng bộ với tài liệu này).
-- `src/backend/BHome.Domain/IncidentMaintenance/IncidentRecords.cs`.
-- `src/backend/BHome.Application/IncidentMaintenance/IncidentService.cs`, `CompensationService.cs`, `FastRepairAndAssets.cs`.
-- `src/backend/BHome.Infrastructure/Persistence/Compact24/LocationAssetInventoryTaskFactory.cs`, `CompactLocationAssignments.cs`.
-- `src/backend/BHome.Infrastructure/StaffOperations/LocationAssetHandoverService.cs`.
+- `src/backend/BHome.Api/Domain/IncidentMaintenance/IncidentRecords.cs`.
+- `src/backend/BHome.Api/Services/IncidentMaintenance/IncidentService.cs`, `CompensationService.cs`, `FastRepairAndAssets.cs`.
+- `src/backend/BHome.Api/Data/Compact24/LocationAssetInventoryTaskFactory.cs`, `CompactLocationAssignments.cs`.
+- `src/backend/BHome.Api/Services/StaffOperations/LocationAssetHandoverService.cs`.
 - `src/mobile/src/services/locationAssetInventory.ts`, `locationAssetHandover.ts` và các màn hình Staff Mobile tương ứng.

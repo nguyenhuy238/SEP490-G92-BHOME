@@ -44,11 +44,12 @@ public static class ContractDemoSeed
         if (environment == "Development")
             await Compact24DevelopmentDatabase.PrepareAsync(environment, config.GetConnectionString("Database")!, token: t, contractDemo: true);
         await using var scope = services.CreateAsyncScope();
-        var db = scope.ServiceProvider.GetRequiredService<BHomePersistenceContext>();
+        var identity = scope.ServiceProvider.GetRequiredService<BHome.Infrastructure.Persistence.Compact24.Compact24DbContext>();
+        await using var db = OfflineFixturePersistence.Open(scope.ServiceProvider, identity);
         if (!await db.IsSchemaReadyAsync(t)) throw new LocalTestAccountException("Prepare the reviewed Compact24 schema before seeding; automatic schema migration is disabled.");
-        var users = scope.ServiceProvider.GetRequiredService<UserManager<ApplicationUser>>();
+        var users = scope.ServiceProvider.GetRequiredService<UserManager<User>>();
         var accounts = new[] { (1, "owner.contract.demo", Roles.Owner), (2, "staff.contract.demo", Roles.Staff), (3, "tenant1.contract.demo", Roles.Tenant), (4, "tenant2.contract.demo", Roles.Tenant), (5, "tenant3.contract.demo", Roles.Tenant) };
-        await using var tx = await db.Database.BeginTransactionAsync(t);
+        await using var tx = await OfflineFixturePersistence.BeginAsync(db, identity, t);
         foreach (var (number, name, role) in accounts)
         {
             var existing = await users.FindByNameAsync(name);
@@ -59,8 +60,8 @@ public static class ContractDemoSeed
                 continue;
             }
             if (await db.Users.AnyAsync(u => u.Id == Id(number), t)) throw new LocalTestAccountException("Trùng ID ngoài fixture.");
-            var user = new ApplicationUser { Id = Id(number), UserName = name, Email = name + "@example.invalid", IsActive = true, LockoutEnabled = true };
-            db.PrepareUserRole(user, role);
+            var user = new User { Id = Id(number), UserName = name, Email = name + "@example.invalid", IsActive = true, LockoutEnabled = true };
+            identity.PrepareUserRole(user, role);
             var created = await users.CreateAsync(user, password);
             if (!created.Succeeded || !await users.IsInRoleAsync(user, role) && !(await users.AddToRoleAsync(user, role)).Succeeded)
                 throw new LocalTestAccountException("Không thể tạo tài khoản demo; kiểm tra chính sách mật khẩu local.");

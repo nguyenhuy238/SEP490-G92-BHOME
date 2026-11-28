@@ -33,7 +33,7 @@ internal static partial class TenantMobileDemoSeed
         for (var i = 1; i <= 2; i++)
         {
             var reference = "BHOME-TEST-TENANT-V1-" + i;
-            var existing = await db.Set<PaymentTransfer>().SingleOrDefaultAsync(x => x.ProviderIdentity == "BHOME:TEST" && x.NormalizedReference == reference);
+            var existing = await db.Set<Payment>().SingleOrDefaultAsync(x => x.ProviderIdentity == "BHOME:TEST" && x.NormalizedReference == reference);
             var transfer = existing?.Id ?? (await payments.RegisterAsync(new("BHOME:TEST", reference, i == 1 ? 1_000_000 : 3_600_000,
                 "VND", DateTimeOffset.UtcNow.AddMinutes(-2), PaymentRules.InvoiceReference(Id(400 + i)), "[TEST] Synthetic statement, not a bank record",
                 "[TEST] UI fixture only; no real funds transferred", Id(400 + i), true, true), Id(800 + i), default)).Id;
@@ -69,8 +69,8 @@ internal static partial class TenantMobileDemoSeed
                 catch (Minio.Exceptions.ObjectNotFoundException) { }
                 if (buffer.Length == preview.Length && preview.FileHash == Convert.ToHexString(System.Security.Cryptography.SHA256.HashData(buffer.ToArray()))) continue;
                 var document = new ContractDocument(contract.Id, contract.RoomId, owner, tenant, contract.RepresentativeResidentId,
-                    contract.Residents.Select(r => r.ResidentId).Order().ToArray(), contract.StartDate, contract.EndDate, contract.MonthlyRent,
-                    contract.RequiredDeposit, contract.HoldingContractId, contract.AppliedHoldingDeposit, contract.Terms, contract.SnapshotHash);
+                    contract.Residents.Select(r => r.ResidentId).Order().ToArray(), contract.StartDate, contract.EndDate, contract.RentAmount,
+                    contract.RequiredDeposit, contract.HoldingContractId, contract.AppliedHoldingDeposit, contract.Terms, contract.SnapshotHashOrEmpty);
                 var bytes = await sp.GetRequiredService<IContractDocumentRenderer>().RenderAsync(document, default);
                 using var input = new MemoryStream(bytes); await storage.PutAsync(preview.ObjectKey, input, bytes.Length, "application/pdf", default);
                 if (!await ObjectMatchesAsync(storage, preview.ObjectKey, bytes)) throw new LocalTestAccountException("Demo PDF upload failed verification.");
@@ -104,13 +104,13 @@ internal static partial class TenantMobileDemoSeed
             var invoiceIndex = i == 2 ? 3 : i;
             var invoiceId = Id(400 + invoiceIndex);
             var reason = "[TEST-TENANT-V1-" + i + "] Đề nghị kiểm tra phí Internet tổng hợp, không phải khiếu nại thực tế.";
-            if (await db.Set<InvoiceAdjustmentRequest>().AnyAsync(r => r.RequesterId == tenant && r.InvoiceId == invoiceId && r.Reason == reason)) continue;
+            if (await db.Set<InvoiceAdjustment>().AnyAsync(r => r.RequesterId == tenant && r.InvoiceId == invoiceId && r.Reason == reason)) continue;
             var invoice = await db.Set<Invoice>().AsNoTracking().SingleAsync(x => x.Id == invoiceId);
             using var evidenceStream = new MemoryStream(TestImage("SYNTHETIC ADJUSTMENT EVIDENCE"));
             var evidence = await adjustments.UploadAsync(invoiceId, evidenceStream, default);
             await adjustments.SubmitAsync(invoiceId, new(Id(500 + invoiceIndex * 10 + 3), 80_000, reason, [evidence.Id], invoice.Version), Id(830 + i), default);
         }
-        var demoRequests = await db.Set<InvoiceAdjustmentRequest>().Where(r => r.RequesterId == tenant && r.Reason.StartsWith("[TEST-TENANT-V1-")).Select(r => r.Id).ToListAsync();
+        var demoRequests = await db.Set<InvoiceAdjustment>().Where(r => r.RequesterId == tenant && r.Reason.StartsWith("[TEST-TENANT-V1-")).Select(r => r.Id).ToListAsync();
         foreach (var image in await db.Set<InvoiceAdjustmentEvidence>().Where(e => e.RequestId != null && demoRequests.Contains(e.RequestId.Value)).ToListAsync())
         {
             var bytes = TestImage("SYNTHETIC ADJUSTMENT EVIDENCE");
@@ -122,7 +122,7 @@ internal static partial class TenantMobileDemoSeed
         for (var i = 1; i < 3; i++)
         {
             var reason = "[TEST-TENANT-V1-" + i + "] Đề nghị kiểm tra phí Internet tổng hợp, không phải khiếu nại thực tế.";
-            var request = await db.Set<InvoiceAdjustmentRequest>().SingleAsync(r => r.RequesterId == tenant && r.Reason == reason);
+            var request = await db.Set<InvoiceAdjustment>().SingleAsync(r => r.RequesterId == tenant && r.Reason == reason);
             var view = await adjustments.GetAsync(request.Id, default);
             if (view.Status == "Pending")
                 await adjustments.DecideAsync(request.Id, i == 1, new(1, view.CurrentInvoice?.Version ?? view.InvoiceVersion, view.CurrentFinancialVersion,
@@ -144,7 +144,7 @@ internal static partial class TenantMobileDemoSeed
         Console.WriteLine("WORKFLOWS_READY: demo QR; one partially allocated invoice and one fully paid invoice through normal payment services; 3 adjustment requests with PNGs; 3 incident reports with PNGs; residence InProgress. No real funds or official evidence.");
     }
 
-    private static async Task VerifyApiAsync(IServiceProvider sp, BHomePersistenceContext db, ApplicationUser tenant)
+    private static async Task VerifyApiAsync(IServiceProvider sp, BHomePersistenceContext db, User tenant)
     {
         // Normal credential verification using the existing local demo secret. Never reset or print credentials.
         var password = sp.GetRequiredService<IConfiguration>()["BHOME_DEV_TEST_PASSWORD"];
@@ -181,7 +181,7 @@ internal static partial class TenantMobileDemoSeed
             files.AddRange(previews.Select(f => $"/api/v1/contracts/{f.ContractId}/previews/{f.Id}"));
             var incidentImages = await db.Set<IncidentEvidence>().Where(e => e.IncidentId != null && demoIncidentIds.Contains(e.IncidentId.Value)).ToListAsync();
             files.AddRange(incidentImages.Select(e => $"/api/v1/incidents/{e.IncidentId}/evidence/{e.Id}"));
-            var requestIds = await db.Set<InvoiceAdjustmentRequest>().Where(r => r.RequesterId == tenant.Id && r.Reason.StartsWith("[TEST-TENANT-V1-")).Select(r => r.Id).ToListAsync();
+            var requestIds = await db.Set<InvoiceAdjustment>().Where(r => r.RequesterId == tenant.Id && r.Reason.StartsWith("[TEST-TENANT-V1-")).Select(r => r.Id).ToListAsync();
             var adjustmentImages = await db.Set<InvoiceAdjustmentEvidence>().Where(e => e.RequestId != null && requestIds.Contains(e.RequestId.Value)).ToListAsync();
             files.AddRange(adjustmentImages.Select(e => $"/api/v1/invoice-adjustments/{e.RequestId}/evidence/{e.Id}"));
             foreach (var path in files)

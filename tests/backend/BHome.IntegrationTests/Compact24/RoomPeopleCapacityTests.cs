@@ -14,7 +14,7 @@ public sealed partial class Compact24NotificationMvpTests
         var w = await Seed();
         await using (var scope = fixture.Factory!.Services.CreateAsyncScope())
         {
-            var db = scope.ServiceProvider.GetRequiredService<Compact24DbContext>();
+            var db = scope.ServiceProvider.GetRequiredService<Compact24ArchiveContext>();
             var room = await db.Set<Room>().SingleAsync(r => r.Id == w.Room);
             room.Capacity = 2; await db.SaveChangesAsync();
         }

@@ -70,7 +70,7 @@ public sealed class DepositAgreementBrowserTests
             Assert.True(child.ExitCode == 0, "Browser runner failed; inspect " + Path.Combine(directory, "runner.log") + "\n" + await errors);
             using var result = JsonDocument.Parse(await File.ReadAllTextAsync(Path.Combine(directory, "result.json")));
             var refundId = result.RootElement.GetProperty("refundId").GetGuid();
-            await using var scope = host.Services.CreateAsyncScope(); var db = scope.ServiceProvider.GetRequiredService<BHomePersistenceContext>();
+            await using var scope = host.Services.CreateAsyncScope(); var db = scope.ServiceProvider.GetFixturePersistence();
             var repository = scope.ServiceProvider.GetRequiredService<IRefundRepository>(); var refund = await repository.GetAsync(refundId, default);
             Assert.Equal("COMPLETED", refund.Status); Assert.Equal(400000, refund.Amount); Assert.Equal(scenario.BeneficiaryResidentId, refund.BeneficiaryResidentId);
             Assert.Equal("CONTRACT_AGREEMENT_OWNER_CONFIRMED", refund.State.BeneficiaryBasis);

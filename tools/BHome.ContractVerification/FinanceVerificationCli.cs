@@ -42,15 +42,15 @@ internal static class FinanceVerificationCli
             await using(var scope=fixture.Factory!.Services.CreateAsyncScope())
             {
                 var db=scope.ServiceProvider.GetRequiredService<Compact24DbContext>();
-                var user=new ApplicationUser{Id=Guid.NewGuid(),UserName=email,Email=email,IsActive=true};db.PrepareUserRole(user,"Owner");
-                var result=await scope.ServiceProvider.GetRequiredService<UserManager<ApplicationUser>>().CreateAsync(user,password);
+                var user=new User{Id=Guid.NewGuid(),UserName=email,Email=email,IsActive=true};db.PrepareUserRole(user,"Owner");
+                var result=await scope.ServiceProvider.GetRequiredService<UserManager<User>>().CreateAsync(user,password);
                 if(!result.Succeeded)throw new InvalidOperationException("Synthetic account creation failed.");
                 actors["owner"]=new{id=user.Id,email,password};
                 if(mainDraft)foreach(var (name,role) in new[]{("staff","Staff"),("otherStaff","Staff"),("tenant","Tenant"),("coTenant1","Tenant"),("coTenant2","Tenant"),("otherTenant","Tenant")})
                 {
-                    var account=new ApplicationUser{Id=Guid.NewGuid(),Email=$"draft-{Guid.NewGuid():N}@example.invalid",IsActive=true};account.UserName=account.Email;
+                    var account=new User{Id=Guid.NewGuid(),Email=$"draft-{Guid.NewGuid():N}@example.invalid",IsActive=true};account.UserName=account.Email;
                     db.PrepareUserRole(account,role);
-                    if(!(await scope.ServiceProvider.GetRequiredService<UserManager<ApplicationUser>>().CreateAsync(account,password)).Succeeded)throw new InvalidOperationException("Synthetic account creation failed.");
+                    if(!(await scope.ServiceProvider.GetRequiredService<UserManager<User>>().CreateAsync(account,password)).Succeeded)throw new InvalidOperationException("Synthetic account creation failed.");
                     actors[name]=new{id=account.Id,email=account.Email,password};
                 }
                 var chain=new Chain{Name="Synthetic Finance Chain"};db.Add(chain);await db.SaveChangesAsync();

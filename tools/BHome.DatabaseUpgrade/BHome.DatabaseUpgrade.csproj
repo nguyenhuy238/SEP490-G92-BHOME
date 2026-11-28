@@ -6,6 +6,6 @@
     <Nullable>enable</Nullable>
   </PropertyGroup>
   <ItemGroup>
-    <ProjectReference Include="../../src/backend/BHome.Infrastructure/BHome.Infrastructure.csproj" />
+    <ProjectReference Include="../../src/backend/BHome.Api/BHome.Api.csproj" />
   </ItemGroup>
 </Project>

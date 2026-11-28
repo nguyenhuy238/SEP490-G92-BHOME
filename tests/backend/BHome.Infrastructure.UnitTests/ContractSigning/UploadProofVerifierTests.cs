@@ -21,7 +21,7 @@ public sealed class UploadProofVerifierTests : IDisposable
 {
     private readonly ServiceProvider services;
     private readonly IPdfSigner pdf;
-    private readonly UploadedSignatureVerifier verifier = new(Options.Create(new ContractSigningOptions()));
+    private readonly UploadedSignatureVerifier verifier = new();
 
     public UploadProofVerifierTests()
     {

@@ -56,7 +56,7 @@ public sealed partial class Compact24OwnerSetupTests
         Assert.NotNull(attention);
         Assert.Equal(HttpStatusCode.Forbidden, (await staff.GetAsync("/api/v1/owner-attention/lifecycle")).StatusCode);
         await using var scope = fixture.Factory!.Services.CreateAsyncScope();
-        var db = scope.ServiceProvider.GetRequiredService<Compact24DbContext>();
+        var db = scope.ServiceProvider.GetRequiredService<Compact24ArchiveContext>();
         Assert.Equal(0, await db.Database.SqlQuery<int>($"SELECT count(*)::integer AS \"Value\" FROM expenses WHERE location_id={w.Location} OR location_id={second.Location}").SingleAsync());
     }
 
@@ -68,7 +68,7 @@ public sealed partial class Compact24OwnerSetupTests
         Guid contractId; Guid invoiceId; var paymentId = Guid.NewGuid();
         await using (var scope = fixture.Factory!.Services.CreateAsyncScope())
         {
-            var db = scope.ServiceProvider.GetRequiredService<Compact24DbContext>();
+            var db = scope.ServiceProvider.GetRequiredService<Compact24ArchiveContext>();
             var resident = new Resident { RoomId = w.Room, OwnerUserId = w.Owner.Id, TenantUserId = w.Tenant.Id, DisplayLabel = "Synthetic privacy subject" };
             db.Add(resident);
             var contract = new Contract
@@ -115,7 +115,7 @@ public sealed partial class Compact24OwnerSetupTests
         Assert.Equal(2, processed.History.Count);
         Assert.Equal(HttpStatusCode.Conflict, (await owner.PostAsJsonAsync(decisionRoute, decision)).StatusCode);
         await using var verify = fixture.Factory!.Services.CreateAsyncScope();
-        var context = verify.ServiceProvider.GetRequiredService<Compact24DbContext>();
+        var context = verify.ServiceProvider.GetRequiredService<Compact24ArchiveContext>();
         Assert.True(await context.Users.AnyAsync(user => user.Id == w.Tenant.Id));
         Assert.True(await context.Set<Contract>().AnyAsync(contract => contract.Id == contractId));
         Assert.True(await context.Set<Invoice>().AnyAsync(invoice => invoice.Id == invoiceId));

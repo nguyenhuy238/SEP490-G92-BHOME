@@ -155,7 +155,7 @@ RUN dotnet tool restore
 ENV BHOME_COMPACT24_DIRECT="Host=127.0.0.1;Database=bhome_compact24_00000000000000000000000000000000;Username=offline;Password=offline"
 RUN mkdir /out && dotnet ef migrations script 0 --no-transactions \
     --context Compact24DbContext \
-    --project src/backend/BHome.Infrastructure \
+    --project src/backend/BHome.Api \
     --startup-project src/backend/BHome.Api \
     --configuration Release --output /out/compact24.sql
 

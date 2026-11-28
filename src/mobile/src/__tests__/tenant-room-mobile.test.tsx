@@ -2,7 +2,7 @@
 import React from 'react';
 import { cleanup, fireEvent, render, screen } from '@testing-library/react';
 import { afterEach, beforeEach, expect, it, vi } from 'vitest';
-import { TenantRoomScreen } from '../screens/TenantRoomScreen';
+import { TenantRoomScreen } from '../features/tenant/room/TenantRoomScreen';
 
 const mocks = vi.hoisted(() => ({
   go: vi.fn(),
@@ -111,7 +111,9 @@ vi.mock('../components/WorkflowControls', () => ({
   ),
 }));
 vi.mock('../components/WorkspaceHeaderContext', () => ({ useWorkspaceHeaderRefresh: vi.fn() }));
-vi.mock('../features/tenant/useTenantTenancy', () => ({ useTenantTenancy: () => mocks.tenancy }));
+vi.mock('../features/tenant/room/useTenantTenancy', () => ({
+  useTenantTenancy: () => mocks.tenancy,
+}));
 vi.mock('../features/workspace/WorkspaceProvider', () => ({
   useWorkspace: () => ({ go: mocks.go }),
 }));

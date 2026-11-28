@@ -18,7 +18,7 @@ public sealed partial class Compact24NotificationMvpTests
     {
         var w = await Seed(); var probe = new SmtpProbe(); using var host = AuthenticationHost(probe);
         using var a = await Client(w.Tenants[0], host); using var b = await Client(w.Tenants[0], host);
-        await using var scope = host.Services.CreateAsyncScope(); var db = scope.ServiceProvider.GetRequiredService<Compact24DbContext>();
+        await using var scope = host.Services.CreateAsyncScope(); var db = scope.ServiceProvider.GetRequiredService<Compact24ArchiveContext>();
         var id = w.Tenants[0].Id; var before = await db.Users.AsNoTracking().SingleAsync(u => u.Id == id);
         var oldName = before.UserName;
         // A historical accepted setup must not block verification of a subsequently changed email.
@@ -63,7 +63,7 @@ public sealed partial class Compact24NotificationMvpTests
         Assert.Equal(HttpStatusCode.BadRequest, rejected.StatusCode);
         var fresh = (await client.GetFromJsonAsync<ProfileView>("/api/v1/account/profile"))!;
         Assert.Equal(p.Phone, fresh.Phone); Assert.Equal(p.FullName, fresh.FullName);
-        await using var scope = host.Services.CreateAsyncScope(); var db = scope.ServiceProvider.GetRequiredService<Compact24DbContext>();
+        await using var scope = host.Services.CreateAsyncScope(); var db = scope.ServiceProvider.GetRequiredService<Compact24ArchiveContext>();
         Assert.Equal(1, (await db.Users.AsNoTracking().SingleAsync(u => u.Id == p.UserId)).AccessFailedCount);
         Assert.Equal(HttpStatusCode.OK, (await client.PutAsJsonAsync("/api/v1/account/profile", input with { CurrentPassword = Password, Version = fresh.Version })).StatusCode);
         fresh = (await client.GetFromJsonAsync<ProfileView>("/api/v1/account/profile"))!;

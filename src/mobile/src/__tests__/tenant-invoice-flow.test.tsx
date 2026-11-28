@@ -4,8 +4,8 @@ import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/re
 import { afterEach, beforeEach, describe, expect, it, vi, type Mock } from 'vitest';
 import { MobileApi } from '../lib/api';
 import type { TenantMeterReading } from '../../../../packages/client-core/src/tenantReadings';
-import { TenantInvoicesScreen } from '../screens/TenantInvoicesScreen';
-import { TenantMeterHistoryScreen } from '../screens/TenantMeterHistoryScreen';
+import { TenantInvoicesScreen } from '../features/tenant/billing/TenantInvoicesScreen';
+import { TenantMeterHistoryScreen } from '../features/tenant/room/TenantMeterHistoryScreen';
 import { NotificationsScreen } from '../screens/NotificationsScreen';
 import { NotificationBadge } from '../components/NotificationBadge';
 

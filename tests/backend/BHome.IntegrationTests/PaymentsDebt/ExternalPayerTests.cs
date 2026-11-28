@@ -30,7 +30,7 @@ public sealed partial class PaymentLedgerTests
         var sourceRoute = $"/api/v1/payment-transactions/{incoming.Id}/refunds";
         var source = await RefundValue<RefundSource>(await owner.GetAsync(sourceRoute)); Assert.Empty(source.Beneficiaries); Assert.Equal(payer.Id, source.ExternalBeneficiary!.AttestationId); Assert.Equal(50000, source.AvailableAmount);
         Assert.Equal(HttpStatusCode.Conflict, (await Post(owner, sourceRoute, new RefundInput(null, 10000, "Synthetic wrong source payer", true, Guid.NewGuid()))).StatusCode);
-        await using var scope = fixture.Factory.Services.CreateAsyncScope(); var db = scope.ServiceProvider.GetRequiredService<BHomePersistenceContext>();
+        await using var scope = fixture.Factory.Services.CreateAsyncScope(); var db = scope.ServiceProvider.GetFixturePersistence();
         var people = await db.Set<Resident>().CountAsync(); var users = await db.Users.CountAsync();
         var attempts = await Task.WhenAll(Post(owner, sourceRoute, new RefundInput(null, 30000, "Synthetic actual external payer", true, payer.Id)), Post(owner, sourceRoute, new RefundInput(null, 30000, "Synthetic competing reservation", true, payer.Id)));
         Assert.Single(attempts, r => r.IsSuccessStatusCode); Assert.Single(attempts, r => r.StatusCode == HttpStatusCode.Conflict);

@@ -41,7 +41,7 @@ public sealed class Compact24AssignmentTests(Compact24Fixture fixture) : IClassF
         public override DateTimeOffset GetUtcNow() => Now;
     }
     private const string Password = "Synthetic!Password-493";
-    private async Task<ApplicationUser> User(string role)
+    private async Task<User> User(string role)
     {
         await using var scope = fixture.Factory!.Services.CreateAsyncScope(); var db = scope.ServiceProvider.GetRequiredService<Compact24DbContext>();
         if (role == "Owner")
@@ -49,7 +49,7 @@ public sealed class Compact24AssignmentTests(Compact24Fixture fixture) : IClassF
             var owner = await db.Users.SingleOrDefaultAsync(u => EF.Property<string[]>(u, "roles").Contains("Owner"));
             if (owner is not null) return owner;
         }
-        var id = Guid.NewGuid(); var user = new ApplicationUser
+        var id = Guid.NewGuid(); var user = new User
         {
             Id = id,
             UserName = id.ToString(),
@@ -60,7 +60,7 @@ public sealed class Compact24AssignmentTests(Compact24Fixture fixture) : IClassF
             ConcurrencyStamp = Guid.NewGuid().ToString(),
             LockoutEnabled = true
         };
-        user.PasswordHash = scope.ServiceProvider.GetRequiredService<IPasswordHasher<ApplicationUser>>().HashPassword(user, Password);
+        user.PasswordHash = scope.ServiceProvider.GetRequiredService<IPasswordHasher<User>>().HashPassword(user, Password);
         db.Users.Add(user); db.Entry(user).Property("roles").CurrentValue = new[] { role }; await db.SaveChangesAsync(); return user;
     }
     private async Task<Guid> Location()
@@ -79,7 +79,7 @@ public sealed class Compact24AssignmentTests(Compact24Fixture fixture) : IClassF
     {
         var owner = await User("Owner"); var staff = await User("Staff"); var location = await Location();
         using var client = fixture.Factory!.CreateClient();
-        async Task Login(ApplicationUser user)
+        async Task Login(User user)
         {
             client.DefaultRequestHeaders.Authorization = null;
             var response = await client.PostAsJsonAsync("/api/v1/auth/login", new { email = user.Email, password = Password });
@@ -208,11 +208,11 @@ public sealed class Compact24AssignmentTests(Compact24Fixture fixture) : IClassF
             VALUES ({task},'GENERAL',{location},{previous.Id},'0','Synthetic open task',
               jsonb_build_object('state',jsonb_build_object('assignedStaffUserId',{previous.Id})))
             """);
-        var version = await db.Locations.Where(x => x.Id == location).Select(x => x.Version).SingleAsync();
+        var version = await db.Set<BHome.Domain.Locations.Location>().Where(x => x.Id == location).Select(x => x.Version).SingleAsync();
 
         Assert.Equal(ChangeAssignmentStatus.Invalid, (await repository.ReplaceAssignmentAsync(owner.Id, location,
             previous.Id, today, version, "Synthetic same staff", default)).Status);
-        Assert.Equal(version, await db.Locations.Where(x => x.Id == location).Select(x => x.Version).SingleAsync());
+        Assert.Equal(version, await db.Set<BHome.Domain.Locations.Location>().Where(x => x.Id == location).Select(x => x.Version).SingleAsync());
         Assert.Equal(0, await EmailNotices(db, location, previous.Id, "STAFF_ASSIGNMENT_REMOVED"));
 
         var changed = await repository.ReplaceAssignmentAsync(owner.Id, location, replacement.Id, today, version,
@@ -271,12 +271,13 @@ public sealed class Compact24AssignmentTests(Compact24Fixture fixture) : IClassF
         var inspection = new ContractMoveOut { ContractId = contract.Id, Status = MoveOutStatus.Approved, ProposedDate = today.AddDays(5), InspectionStaffId = first.Id, RequestedByUserId = tenant.Id };
         var incident = new IncidentReport { LocationId = location, RoomId = room.Id, ReporterId = first.Id, ReporterRole = "Staff", Description = "Synthetic repair" };
         var order = new MaintenanceWorkOrder { LocationId = location, RoomId = room.Id, IncidentId = incident.Id, AssignedStaffId = first.Id, ExpectedOutcome = "Synthetic repair", TargetCompletionAt = clock.Now.AddDays(4) };
-        var task = new OperationalTask { LocationId = location, Kind = OperationalTaskKind.AdHoc, AssignedStaffUserId = first.Id, AssignmentId = initial.Assignment!.Id, Title = "Synthetic task", Status = MeterTaskStatus.InProgress };
-        var reading = new OperationalTask { LocationId = location, MeterId = meter.Id, AssignedStaffUserId = first.Id, AssignmentId = initial.Assignment.Id, Purpose = ReadingPurpose.Initial, ReadingDate = today };
-        var done = new OperationalTask { LocationId = location, Kind = OperationalTaskKind.AdHoc, AssignedStaffUserId = first.Id, AssignmentId = initial.Assignment.Id, Title = "Synthetic completed", Status = MeterTaskStatus.Completed };
-        db.AddRange(room, meter, resident, contract, inspection, incident, order, task, reading, done);
-        await db.SaveChangesAsync();
-        db.ChangeTracker.Clear();
+        var task = new OperationalTask { RequiredLocationId = location, Kind = OperationalTaskKind.AdHoc, AssignedStaffUserId = first.Id, AssignmentId = initial.Assignment!.Id, TaskTitle = "Synthetic task", MeterStatus = MeterTaskStatus.InProgress };
+        var reading = new OperationalTask { RequiredLocationId = location, MeterId = meter.Id, AssignedStaffUserId = first.Id, AssignmentId = initial.Assignment.Id, Purpose = ReadingPurpose.Initial, ReadingDate = today };
+        var done = new OperationalTask { RequiredLocationId = location, Kind = OperationalTaskKind.AdHoc, AssignedStaffUserId = first.Id, AssignmentId = initial.Assignment.Id, TaskTitle = "Synthetic completed", MeterStatus = MeterTaskStatus.Completed };
+        var archive = scope.ServiceProvider.GetRequiredService<Compact24ArchiveContext>();
+        archive.AddRange(room, meter, resident, contract, inspection, incident, order, task, reading, done);
+        await archive.SaveChangesAsync();
+        archive.ChangeTracker.Clear();
 
         await job.ExecuteAsync(run, default);
         Assert.True(await repository.IsAssignedAsync(first.Id, location, default));
@@ -288,12 +289,12 @@ public sealed class Compact24AssignmentTests(Compact24Fixture fixture) : IClassF
         await job.ExecuteAsync(run, default);
         Assert.False(await repository.IsAssignedAsync(first.Id, location, default));
         Assert.False(await repository.IsAssignedAsync(next.Id, location, default));
-        Assert.Null((await db.Set<OperationalTask>().AsNoTracking().SingleAsync(t => t.Id == task.Id)).AssignedStaffUserId);
-        Assert.Null((await db.Set<OperationalTask>().AsNoTracking().SingleAsync(t => t.Id == reading.Id)).AssignedStaffUserId);
-        Assert.Equal(first.Id, (await db.Set<MaintenanceWorkOrder>().AsNoTracking().SingleAsync(t => t.Id == order.Id)).AssignedStaffId);
-        Assert.Equal(first.Id, (await db.Set<ContractMoveOut>().AsNoTracking().SingleAsync(t => t.ContractId == contract.Id)).InspectionStaffId);
+        Assert.Null((await archive.Set<OperationalTask>().AsNoTracking().SingleAsync(t => t.Id == task.Id)).AssignedStaffUserId);
+        Assert.Null((await archive.Set<OperationalTask>().AsNoTracking().SingleAsync(t => t.Id == reading.Id)).AssignedStaffUserId);
+        Assert.Equal(first.Id, (await archive.Set<MaintenanceWorkOrder>().AsNoTracking().SingleAsync(t => t.Id == order.Id)).AssignedStaffId);
+        Assert.Equal(first.Id, (await archive.Set<ContractMoveOut>().AsNoTracking().SingleAsync(t => t.ContractId == contract.Id)).InspectionStaffId);
         Assert.Equal(1, await db.Database.SqlQuery<int>($"SELECT count(*)::int AS \"Value\" FROM notifications WHERE location_id={location} AND recipient_user_id={owner.Id} AND notification_type='STAFF_RESPONSIBILITY_UNRESOLVED'").SingleAsync());
-        Assert.Equal(1, await db.Set<OperationalTaskHistory>().CountAsync(h => h.TaskId == task.Id && h.Action == "responsibility_changed"));
+        Assert.Equal(1, await archive.Set<OperationalTaskHistory>().CountAsync(h => h.TaskId == task.Id && h.Action == "responsibility_changed"));
         Assert.Equal(1, await EmailNotices(db, location, first.Id, "STAFF_ASSIGNMENT_ENDED"));
         Assert.Equal(0, await EmailNotices(db, location, next.Id, "STAFF_ASSIGNMENT_ACTIVATED"));
 
@@ -303,18 +304,37 @@ public sealed class Compact24AssignmentTests(Compact24Fixture fixture) : IClassF
         Assert.True(await repository.IsAssignedAsync(next.Id, location, default));
         foreach (var id in new[] { task.Id, reading.Id })
         {
-            var current = await db.Set<OperationalTask>().AsNoTracking().SingleAsync(t => t.Id == id);
+            var current = await archive.Set<OperationalTask>().AsNoTracking().SingleAsync(t => t.Id == id);
             Assert.Equal(next.Id, current.AssignedStaffUserId);
             Assert.Equal(future.Assignment!.Id, current.AssignmentId);
             Assert.Equal(3, current.Version);
-            Assert.Equal(2, await db.Set<OperationalTaskHistory>().CountAsync(h => h.TaskId == id && h.Action == "responsibility_changed"));
+            Assert.Equal(2, await archive.Set<OperationalTaskHistory>().CountAsync(h => h.TaskId == id && h.Action == "responsibility_changed"));
         }
-        Assert.Equal(MeterTaskStatus.InProgress, (await db.Set<OperationalTask>().AsNoTracking().SingleAsync(t => t.Id == task.Id)).Status);
-        Assert.Equal(next.Id, (await db.Set<MaintenanceWorkOrder>().AsNoTracking().SingleAsync(t => t.Id == order.Id)).AssignedStaffId);
-        Assert.Equal(next.Id, (await db.Set<ContractMoveOut>().AsNoTracking().SingleAsync(t => t.ContractId == contract.Id)).InspectionStaffId);
-        Assert.Equal(first.Id, (await db.Set<OperationalTask>().AsNoTracking().SingleAsync(t => t.Id == done.Id)).AssignedStaffUserId);
-        Assert.Equal(1, await db.Set<IncidentActivity>().CountAsync(h => h.WorkOrderId == order.Id && h.Action == "reassigned"));
-        Assert.Equal(1, await db.Set<ContractMoveOutHistory>().CountAsync(h => h.ContractId == contract.Id && h.Action == "InspectionResponsibilityChanged"));
+        Assert.Equal(MeterTaskStatus.InProgress, (await archive.Set<OperationalTask>().AsNoTracking().SingleAsync(t => t.Id == task.Id)).MeterStatus);
+        Assert.Equal(next.Id, (await archive.Set<MaintenanceWorkOrder>().AsNoTracking().SingleAsync(t => t.Id == order.Id)).AssignedStaffId);
+        Assert.Equal(next.Id, (await archive.Set<ContractMoveOut>().AsNoTracking().SingleAsync(t => t.ContractId == contract.Id)).InspectionStaffId);
+        Assert.Equal(first.Id, (await archive.Set<OperationalTask>().AsNoTracking().SingleAsync(t => t.Id == done.Id)).AssignedStaffUserId);
+        Assert.Equal(1, await archive.Set<IncidentActivity>().CountAsync(h => h.WorkOrderId == order.Id && h.Action == "reassigned"));
+        Assert.Equal(1, await archive.Set<ContractMoveOutHistory>().CountAsync(h => h.ContractId == contract.Id && h.Action == "InspectionResponsibilityChanged"));
+        // The reconciliation is persisted directly in the physical aggregates:
+        // the old assignment, the gap and the successor keep their distinct history.
+        Assert.Equal(2, await db.Database.SqlQuery<int>($"""
+            SELECT count(*)::int AS "Value" FROM operational_tasks t
+            CROSS JOIN LATERAL jsonb_array_elements(t.history) h
+            WHERE t.id={task.Id} AND h->>'recordType'='OperationalTaskHistory'
+              AND h->'state'->>'action'='responsibility_changed'
+            """).SingleAsync());
+        Assert.Equal(next.Id, await db.Database.SqlQuery<Guid>($"""
+            SELECT (move_out->'current'->>'inspectionStaffId')::uuid AS "Value" FROM contracts WHERE id={contract.Id}
+            """).SingleAsync());
+        Assert.Equal(2, await db.Database.SqlQuery<int>($"""
+            SELECT (move_out->'current'->>'version')::int AS "Value" FROM contracts WHERE id={contract.Id}
+            """).SingleAsync());
+        Assert.Equal(1, await db.Database.SqlQuery<int>($"""
+            SELECT count(*)::int AS "Value" FROM contracts c CROSS JOIN LATERAL jsonb_array_elements(c.history) h
+            WHERE c.id={contract.Id} AND h->>'recordType'='ContractMoveOutHistory'
+              AND h->'state'->>'action'='InspectionResponsibilityChanged'
+            """).SingleAsync());
         Assert.Equal(1, await EmailNotices(db, location, first.Id, "STAFF_ASSIGNMENT_ENDED"));
         Assert.Equal(1, await EmailNotices(db, location, next.Id, "STAFF_ASSIGNMENT_ACTIVATED"));
     }
@@ -337,7 +357,7 @@ public sealed class Compact24AssignmentTests(Compact24Fixture fixture) : IClassF
                 THEN (a-'actorId'-'recordedAt')||jsonb_build_object('createdByUserId',{owner.Id},'createdAt',{clock.Now})
                 ELSE a END) FROM jsonb_array_elements(staff_assignments) a) WHERE id={location}
             """);
-        var version = await db.Locations.Where(l => l.Id == location).Select(l => l.Version).SingleAsync();
+        var version = await db.Set<BHome.Domain.Locations.Location>().Where(l => l.Id == location).Select(l => l.Version).SingleAsync();
         Assert.Equal(UpdateAssignmentPeriodStatus.Invalid, (await repository.CancelFutureAssignmentAsync(owner.Id, current.Id, version, "Cannot cancel current", default)).Status);
         Assert.Equal(UpdateAssignmentPeriodStatus.StaleVersion, (await repository.CancelFutureAssignmentAsync(owner.Id, future.Id, version - 1, "Stale request", default)).Status);
         await Assert.ThrowsAsync<UnauthorizedAccessException>(() => repository.CancelFutureAssignmentAsync(staff.Id, future.Id, version, "Unauthorized", default));
@@ -362,7 +382,7 @@ public sealed class Compact24AssignmentTests(Compact24Fixture fixture) : IClassF
         var repo = scope.ServiceProvider.GetRequiredService<ILocationAssignments>();
         var current = (await repo.CreateAssignmentAsync(owner.Id, location, employee.Id, today, today.AddDays(1), default)).Assignment!;
         var future = (await repo.CreateAssignmentAsync(owner.Id, location, employee.Id, today.AddDays(3), today.AddDays(5), default)).Assignment!;
-        var version = await db.Locations.Where(l => l.Id == location).Select(l => l.Version).SingleAsync();
+        var version = await db.Set<BHome.Domain.Locations.Location>().Where(l => l.Id == location).Select(l => l.Version).SingleAsync();
 
         Assert.Equal(UpdateAssignmentPeriodStatus.Changed,
             (await repo.UpdateAssignmentPeriodAsync(owner.Id, current.Id, today, today, version, "Current end amended", default)).Status);
@@ -394,7 +414,7 @@ public sealed class Compact24AssignmentTests(Compact24Fixture fixture) : IClassF
         var repo = scope.ServiceProvider.GetRequiredService<ILocationAssignments>();
         Assert.Equal(CreateAssignmentStatus.Created,
             (await repo.CreateAssignmentAsync(owner.Id, location, employee.Id, today, today.AddDays(4), default)).Status);
-        var version = await db.Locations.Where(l => l.Id == location).Select(l => l.Version).SingleAsync();
+        var version = await db.Set<BHome.Domain.Locations.Location>().Where(l => l.Id == location).Select(l => l.Version).SingleAsync();
 
         Assert.Equal(ChangeAssignmentStatus.Changed,
             (await repo.RemoveAssignmentAsync(owner.Id, location, today, version, "Staff removed", default)).Status);
@@ -450,20 +470,21 @@ public sealed class Compact24AssignmentTests(Compact24Fixture fixture) : IClassF
 
         await scope.ServiceProvider.GetRequiredService<AssignmentReconciliationJob>()
             .ExecuteAsync(new JobExecution(Guid.NewGuid(), "synthetic-ended-employment", "{}"), default);
+        var archive = scope.ServiceProvider.GetRequiredService<Compact24ArchiveContext>();
         Assert.Null(await db.Database.SqlQuery<Guid?>($"SELECT assigned_user_id AS \"Value\" FROM operational_tasks WHERE id={taskId}").SingleAsync());
-        Assert.Equal(1, await db.Set<OperationalTaskHistory>().CountAsync(h =>
+        Assert.Equal(1, await archive.Set<OperationalTaskHistory>().CountAsync(h =>
             h.TaskId == taskId && h.Action == "responsibility_changed"));
-        Assert.Equal(MeterTaskStatus.Assigned, (await db.Set<OperationalTask>().AsNoTracking()
-            .SingleAsync(t => t.Id == initialHandoverId)).Status);
+        Assert.Equal(MeterTaskStatus.Assigned, (await archive.Set<OperationalTask>().AsNoTracking()
+            .SingleAsync(t => t.Id == initialHandoverId)).MeterStatus);
         // Restoring the SAME still-current assignment after a short employment gap must
         // not strand a deterministic, immutable handover task in Cancelled state.
         await db.Database.ExecuteSqlInterpolatedAsync($"UPDATE staff_employments SET status='Active' WHERE id={firstPeriod}");
         Assert.True(await access.IsAssignedAsync(staff.Id, location, default));
-        Assert.Equal(MeterTaskStatus.Assigned, (await db.Set<OperationalTask>().AsNoTracking()
-            .SingleAsync(t => t.Id == initialHandoverId)).Status);
+        Assert.Equal(MeterTaskStatus.Assigned, (await archive.Set<OperationalTask>().AsNoTracking()
+            .SingleAsync(t => t.Id == initialHandoverId)).MeterStatus);
         await db.Database.ExecuteSqlInterpolatedAsync($"UPDATE staff_employments SET status='Ended' WHERE id={firstPeriod}");
 
-        var version = await db.Locations.Where(x => x.Id == location).Select(x => x.Version).SingleAsync();
+        var version = await db.Set<BHome.Domain.Locations.Location>().Where(x => x.Id == location).Select(x => x.Version).SingleAsync();
         var changed = await assignments.ReplaceAssignmentAsync(owner.Id, location, next.Id, today, version,
             "Ended employment successor", default);
         Assert.Equal(ChangeAssignmentStatus.Changed, changed.Status);

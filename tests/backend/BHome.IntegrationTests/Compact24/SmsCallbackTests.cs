@@ -14,7 +14,7 @@ public sealed partial class Compact24NotificationMvpTests
     {
         using var host = fixture.Factory!.WithWebHostBuilder(b => b.ConfigureAppConfiguration((_, c) => c.AddInMemoryCollection(new Dictionary<string, string?>
         { ["Sms:Enabled"] = "true", ["Sms:Mode"] = "Production", ["Sms:ProductionEnabled"] = "true", ["Sms:ApiKey"] = "synthetic-api", ["Sms:SecretKey"] = "synthetic-secret" })));
-        await using var scope = host.Services.CreateAsyncScope(); var db = scope.ServiceProvider.GetRequiredService<Compact24DbContext>();
+        await using var scope = host.Services.CreateAsyncScope(); var db = scope.ServiceProvider.GetRequiredService<Compact24ArchiveContext>();
         var id = Guid.NewGuid(); var request = SmsGateway.RequestId("synthetic-callback:" + id);
         var data = System.Text.Json.JsonSerializer.Serialize(new { recordType = "ChannelDelivery", channel = "SMS" });
         var history = System.Text.Json.JsonSerializer.Serialize(new object[]

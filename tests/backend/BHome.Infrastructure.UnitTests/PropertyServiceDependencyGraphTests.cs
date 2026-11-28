@@ -31,6 +31,10 @@ public sealed class PropertyServiceDependencyGraphTests
         using var host = builder.Build();
         using var scope = host.Services.CreateScope();
 
+        var signingUser = scope.ServiceProvider.GetRequiredService<BHome.DigitalSigning.Application.Identity.ISigningCurrentUser>();
+        Assert.Equal(scope.ServiceProvider.GetRequiredService<ICurrentUser>().UserId, signingUser.UserId);
+        Assert.True(signingUser.IsInRole("Owner"));
+        Assert.False(signingUser.IsInRole("Staff"));
         Assert.NotNull(scope.ServiceProvider.GetRequiredService<PropertyService>());
         Assert.NotNull(scope.ServiceProvider.GetRequiredService<ContractService>());
         Assert.NotNull(scope.ServiceProvider.GetRequiredService<IContractHandoverRepository>());

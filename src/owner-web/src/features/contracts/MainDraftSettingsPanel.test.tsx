@@ -1,7 +1,7 @@
 ﻿import { fireEvent, render, screen } from '@testing-library/react';
 import { beforeEach, expect, it, vi } from 'vitest';
 import type { MainContractSettings } from '../../../../../packages/client-core/src/mainDrafts';
-import { MainDraftSettingsPanel } from './MainDraftSettingsPanel';
+import { MainDraftSettingsPanel } from './components/drafts/MainDraftSettingsPanel';
 
 const mocks = vi.hoisted(() => ({
   settings: vi.fn(),
@@ -20,8 +20,8 @@ vi.mock('react-router', async () => ({
   ...(await vi.importActual('react-router')),
   useNavigate: () => mocks.navigate,
 }));
-vi.mock('./useContractsApi', () => ({ useContractsApi: () => ({}) }));
-vi.mock('./ContractWorkflowPanel', () => ({
+vi.mock('./hooks/useContractsApi', () => ({ useContractsApi: () => ({}) }));
+vi.mock('./components/detail/ContractWorkflowPanel', () => ({
   ContractConfigurationPanel: () => <div>Thông tin mẫu và quy trình ký</div>,
 }));
 const settings: MainContractSettings = {

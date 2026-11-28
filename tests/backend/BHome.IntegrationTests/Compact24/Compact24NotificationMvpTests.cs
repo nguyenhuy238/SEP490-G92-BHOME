@@ -29,15 +29,15 @@ public sealed partial class Compact24NotificationMvpTests(Compact24Fixture fixtu
 {
     private const string Password = "Synthetic!Notification-927";
     private readonly Compact24WorkflowFixture.TestObjectStorage confirmationStorage = new();
-    private sealed record Workspace(ApplicationUser Owner, ApplicationUser Staff, ApplicationUser[] Tenants, Guid Location, Guid Room, Guid[] Contracts, Guid[] Residents);
+    private sealed record Workspace(User Owner, User Staff, User[] Tenants, Guid Location, Guid Room, Guid[] Contracts, Guid[] Residents);
     private static DateOnly Today => BHome.Application.Billing.BillingAutomationDates.BusinessDate(DateTimeOffset.UtcNow);
     private async Task<Workspace> Seed()
     {
-        await using var scope = fixture.Factory!.Services.CreateAsyncScope(); var db = scope.ServiceProvider.GetRequiredService<Compact24DbContext>();
-        async Task<ApplicationUser> Account(string role)
+        await using var scope = fixture.Factory!.Services.CreateAsyncScope(); var db = scope.ServiceProvider.GetRequiredService<Compact24ArchiveContext>();
+        async Task<User> Account(string role)
         {
             if (role == "Owner" && await db.Users.FirstOrDefaultAsync(u => EF.Property<string[]>(u, "roles").Contains("Owner")) is { } existing) return existing;
-            var user = new ApplicationUser { Id = Guid.NewGuid(), UserName = Guid.NewGuid().ToString("N"), Email = Guid.NewGuid().ToString("N") + "@example.invalid", EmailConfirmed = true };
+            var user = new User { Id = Guid.NewGuid(), UserName = Guid.NewGuid().ToString("N"), Email = Guid.NewGuid().ToString("N") + "@example.invalid", EmailConfirmed = true };
             return await WorkflowTestUsers.CreateAsync(scope.ServiceProvider, user, role, Password);
         }
         var owner = await Account("Owner"); var staff = await Account("Staff");
@@ -77,7 +77,7 @@ public sealed partial class Compact24NotificationMvpTests(Compact24Fixture fixtu
                 ResidentId = resident.Id,
                 ApprovedByUserId = owner.Id,
                 TokenHash = Guid.NewGuid().ToString("N"),
-                SnapshotHash = c.SnapshotHash,
+                SnapshotHash = c.SnapshotHashOrEmpty,
                 RecipientEmail = user.Email!,
                 ExpiresAt = DateTimeOffset.UtcNow.AddHours(1),
                 AcceptedAt = DateTimeOffset.UtcNow,
@@ -87,7 +87,7 @@ public sealed partial class Compact24NotificationMvpTests(Compact24Fixture fixtu
             };
             signingInvitations.Add(invitation);
             c.InternalAcceptance = JsonSerializer.Serialize(new BHome.Application.Contracts.InternalAcceptanceEvidence(invitation.Id, resident.Id,
-                c.SnapshotHash, "synthetic-source", "synthetic-stroke", key, hash, DateTimeOffset.UtcNow,
+                c.SnapshotHashOrEmpty, "synthetic-source", "synthetic-stroke", key, hash, DateTimeOffset.UtcNow,
                 owner.Id, DateTimeOffset.UtcNow, key, hash));
             db.Add(c); contracts.Add(c.Id); residents.Add(resident.Id);
         }
@@ -96,7 +96,7 @@ public sealed partial class Compact24NotificationMvpTests(Compact24Fixture fixtu
         await db.SaveChangesAsync();
         return new(owner, staff, tenants, location.Id, room.Id, contracts.ToArray(), residents.ToArray());
     }
-    private async Task<HttpClient> Client(ApplicationUser user, WebApplicationFactory<Program>? host = null)
+    private async Task<HttpClient> Client(User user, WebApplicationFactory<Program>? host = null)
     {
         var client = (host ?? fixture.Factory!).CreateClient();
         var response = await client.PostAsJsonAsync("/api/v1/auth/login", new { email = user.Email, password = Password }); response.EnsureSuccessStatusCode();
@@ -112,7 +112,7 @@ public sealed partial class Compact24NotificationMvpTests(Compact24Fixture fixtu
     {
         var w = await Seed(); using var owner = await Client(w.Owner);
         (await owner.PutAsJsonAsync($"/api/v1/locations/{w.Location}/notification-policy", new NotificationReminderPolicy(ResidenceEnabled: true, ResidenceFrequency: "WEEKLY", LocalSendHour: 0))).EnsureSuccessStatusCode();
-        await using var check = fixture.Factory!.Services.CreateAsyncScope(); var data = check.ServiceProvider.GetRequiredService<Compact24DbContext>();
+        await using var check = fixture.Factory!.Services.CreateAsyncScope(); var data = check.ServiceProvider.GetRequiredService<Compact24ArchiveContext>();
         await data.Database.ExecuteSqlInterpolatedAsync($"UPDATE contract_residents SET actual_residence_from={Today.AddDays(-1)},registration_status='Pending' WHERE contract_id={w.Contracts[0]}");
         await Pump();
         var notice = await data.Set<UserNotification>().Where(n => n.RecipientUserId == w.Tenants[0].Id && n.EventType == "TEMPORARY_RESIDENCE_ACTION").Select(n => n.Id).SingleAsync();
@@ -126,7 +126,7 @@ public sealed partial class Compact24NotificationMvpTests(Compact24Fixture fixtu
         { b.ConfigureAppConfiguration((_, c) => c.AddInMemoryCollection(new Dictionary<string, string?> { ["NotificationChannels:Enabled"] = "true" })); b.ConfigureServices(s => s.AddSingleton<INotificationChannelProvider>(provider)); });
         await using var scope = host.Services.CreateAsyncScope(); var worker = scope.ServiceProvider.GetRequiredService<NotificationChannelWorker>();
         await worker.EnqueueDueAsync(default);
-        var db = scope.ServiceProvider.GetRequiredService<Compact24DbContext>();
+        var db = scope.ServiceProvider.GetRequiredService<Compact24ArchiveContext>();
         var delivery = await db.Database.SqlQuery<Guid>($"SELECT id AS \"Value\" FROM notifications WHERE event_data->>'recordType'='ChannelDelivery' AND event_data->>'notificationId'={notice.ToString()}").SingleAsync();
         await worker.DeliverAsync(delivery, default);
         Assert.Equal("Suppressed", await db.Database.SqlQuery<string>($"SELECT delivery_status AS \"Value\" FROM notifications WHERE id={delivery}").SingleAsync());
@@ -138,7 +138,7 @@ public sealed partial class Compact24NotificationMvpTests(Compact24Fixture fixtu
     {
         var w = await Seed(); using var owner = await Client(w.Owner);
         (await owner.PutAsJsonAsync($"/api/v1/locations/{w.Location}/notification-policy", new NotificationReminderPolicy(ResidenceEnabled: true, ResidenceFrequency: "WEEKLY", LocalSendHour: 0))).EnsureSuccessStatusCode();
-        await using var check = fixture.Factory!.Services.CreateAsyncScope(); var db = check.ServiceProvider.GetRequiredService<Compact24DbContext>();
+        await using var check = fixture.Factory!.Services.CreateAsyncScope(); var db = check.ServiceProvider.GetRequiredService<Compact24ArchiveContext>();
         await db.Database.ExecuteSqlInterpolatedAsync($"UPDATE contract_residents SET actual_residence_from={Today.AddDays(-1)},registration_status='Pending',owner_confirmed_at={DateTimeOffset.UtcNow} WHERE contract_id={w.Contracts[0]}"); // Legacy stamp is not Completed.
         await db.Database.ExecuteSqlInterpolatedAsync($"UPDATE contract_residents SET actual_residence_from={Today.AddDays(-1)},actual_move_out_date={Today},registration_status='InProgress' WHERE contract_id={w.Contracts[1]}");
         await db.Database.ExecuteSqlInterpolatedAsync($"UPDATE contract_residents SET actual_residence_from={Today.AddDays(-1)},registration_status='Completed' WHERE contract_id={w.Contracts[2]}");
@@ -201,7 +201,7 @@ public sealed partial class Compact24NotificationMvpTests(Compact24Fixture fixtu
         Assert.Equal(HttpStatusCode.NotFound, (await a.GetAsync($"/api/v1/contracts/{w.Contracts[1]}/activation-readiness")).StatusCode);
         var page = await a.GetFromJsonAsync<BHome.Application.Contracts.ContractPage>("/api/v1/contracts");
         Assert.All(page!.Items, c => Assert.Equal(w.Contracts[0], c.Id));
-        await using var scope = fixture.Factory!.Services.CreateAsyncScope(); var db = scope.ServiceProvider.GetRequiredService<Compact24DbContext>();
+        await using var scope = fixture.Factory!.Services.CreateAsyncScope(); var db = scope.ServiceProvider.GetRequiredService<Compact24ArchiveContext>();
         await db.Database.ExecuteSqlInterpolatedAsync($"UPDATE contract_residents SET residence_to={Today.AddDays(-1)} WHERE contract_id={w.Contracts[0]}");
         Assert.Empty((await a.GetFromJsonAsync<TenantRoomView[]>("/api/v1/tenant/rooms"))!);
     }
@@ -240,7 +240,7 @@ public sealed partial class Compact24NotificationMvpTests(Compact24Fixture fixtu
         var w = await Seed(); using var client = await Client(w.Tenants[0]);
         (await client.PostAsJsonAsync("/api/v1/auth/change-password", new { currentPassword = Password, newPassword = "Synthetic!Changed-Password-725" })).EnsureSuccessStatusCode();
         Assert.Equal(HttpStatusCode.Unauthorized, (await client.GetAsync("/api/v1/auth/me")).StatusCode); await Pump();
-        await using var scope = fixture.Factory!.Services.CreateAsyncScope(); var db = scope.ServiceProvider.GetRequiredService<Compact24DbContext>();
+        await using var scope = fixture.Factory!.Services.CreateAsyncScope(); var db = scope.ServiceProvider.GetRequiredService<Compact24ArchiveContext>();
         var notices = await db.Set<UserNotification>().Where(n => n.RecipientUserId == w.Tenants[0].Id && n.EventType == "PASSWORD_CHANGED").ToArrayAsync(); Assert.Single(notices);
         Assert.DoesNotContain("Password-725", JsonSerializer.Serialize(notices)); await Pump(); Assert.Equal(1, await db.Set<UserNotification>().CountAsync(n => n.RecipientUserId == w.Tenants[0].Id && n.EventType == "PASSWORD_CHANGED"));
     }
@@ -257,13 +257,13 @@ public sealed partial class Compact24NotificationMvpTests(Compact24Fixture fixtu
     {
         var w = await Seed(); using var owner = await Client(w.Owner);
         await using (var scope = fixture.Factory!.Services.CreateAsyncScope())
-        { var db = scope.ServiceProvider.GetRequiredService<Compact24DbContext>(); await db.Database.ExecuteSqlInterpolatedAsync($"UPDATE contract_residents SET actual_residence_from={Today.AddDays(-1)},registration_status='Pending' WHERE contract_id={w.Contracts[0]}"); }
+        { var db = scope.ServiceProvider.GetRequiredService<Compact24ArchiveContext>(); await db.Database.ExecuteSqlInterpolatedAsync($"UPDATE contract_residents SET actual_residence_from={Today.AddDays(-1)},registration_status='Pending' WHERE contract_id={w.Contracts[0]}"); }
         foreach (var frequency in new[] { "WEEKLY", "MONTHLY" })
         {
             (await owner.PutAsJsonAsync($"/api/v1/locations/{w.Location}/notification-policy", new NotificationReminderPolicy(ResidenceEnabled: true, ResidenceFrequency: frequency, LocalSendHour: 0))).EnsureSuccessStatusCode();
             await Pump(); await Pump();
         }
-        await using var check = fixture.Factory!.Services.CreateAsyncScope(); var data = check.ServiceProvider.GetRequiredService<Compact24DbContext>();
+        await using var check = fixture.Factory!.Services.CreateAsyncScope(); var data = check.ServiceProvider.GetRequiredService<Compact24ArchiveContext>();
         Assert.Equal(2, await data.Set<UserNotification>().CountAsync(n => n.RecipientUserId == w.Tenants[0].Id && n.EventType == "TEMPORARY_RESIDENCE_ACTION"));
         await data.Database.ExecuteSqlInterpolatedAsync($"UPDATE contract_residents SET registration_status='Completed',owner_confirmed_by_user_id={w.Owner.Id},owner_confirmed_at={DateTimeOffset.UtcNow} WHERE contract_id={w.Contracts[0]}");
         await Pump(); Assert.Equal(2, await data.Set<UserNotification>().CountAsync(n => n.RecipientUserId == w.Tenants[0].Id && n.EventType == "TEMPORARY_RESIDENCE_ACTION"));
@@ -273,7 +273,7 @@ public sealed partial class Compact24NotificationMvpTests(Compact24Fixture fixtu
         await using (var s = host.Services.CreateAsyncScope())
         {
             var worker = s.ServiceProvider.GetRequiredService<NotificationChannelWorker>(); await worker.EnqueueDueAsync(default);
-            var db = s.ServiceProvider.GetRequiredService<Compact24DbContext>();
+            var db = s.ServiceProvider.GetRequiredService<Compact24ArchiveContext>();
             var delivery = await db.Database.SqlQuery<Guid>($"SELECT id AS \"Value\" FROM notifications WHERE event_data->>'recordType'='ChannelDelivery' AND event_data->>'notificationId'={notice.ToString()}").SingleAsync();
             await worker.DeliverAsync(delivery, default);
             Assert.Equal("Suppressed", await db.Database.SqlQuery<string>($"SELECT delivery_status AS \"Value\" FROM notifications WHERE id={delivery}").SingleAsync());
@@ -285,12 +285,12 @@ public sealed partial class Compact24NotificationMvpTests(Compact24Fixture fixtu
     {
         var w = await Seed(); var other = await Seed(); using var owner = await Client(w.Owner);
         var incident = new IncidentReport { LocationId = w.Location, RoomId = w.Room, ReporterId = w.Tenants[0].Id, ReporterRole = "Tenant", Description = "Synthetic emergency", Severity = IncidentSeverity.Emergency };
-        await using (var s = fixture.Factory!.Services.CreateAsyncScope()) { var db = s.ServiceProvider.GetRequiredService<Compact24DbContext>(); db.Add(incident); await db.SaveChangesAsync(); await db.Database.ExecuteSqlInterpolatedAsync($"UPDATE incident_reports SET reported_at={DateTimeOffset.UtcNow.AddMinutes(-40)} WHERE id={incident.Id}"); }
+        await using (var s = fixture.Factory!.Services.CreateAsyncScope()) { var db = s.ServiceProvider.GetRequiredService<Compact24ArchiveContext>(); db.Add(incident); await db.SaveChangesAsync(); await db.Database.ExecuteSqlInterpolatedAsync($"UPDATE incident_reports SET reported_at={DateTimeOffset.UtcNow.AddMinutes(-40)} WHERE id={incident.Id}"); }
         (await owner.PutAsJsonAsync($"/api/v1/locations/{w.Location}/notification-policy", new NotificationReminderPolicy(EmergencyEnabled: true, EmergencyFirstEscalationMinutes: 10, EmergencyOverdueMinutes: 20))).EnsureSuccessStatusCode(); await Pump();
         using var staff = await Client(w.Staff); var page = await staff.GetFromJsonAsync<BHome.Application.PropertyManagement.PagedResult<NotificationView>>("/api/v1/notifications?category=Incident");
         var notice = Assert.Single(page!.Items, n => n.RelatedObjectId == incident.Id && n.EventType == "EMERGENCY_ACK_OVERDUE");
         (await staff.PatchAsync($"/api/v1/notifications/{notice.Id}/read", null)).EnsureSuccessStatusCode();
-        await using var check = fixture.Factory!.Services.CreateAsyncScope(); var data = check.ServiceProvider.GetRequiredService<Compact24DbContext>();
+        await using var check = fixture.Factory!.Services.CreateAsyncScope(); var data = check.ServiceProvider.GetRequiredService<Compact24ArchiveContext>();
         Assert.Null((await data.Set<IncidentReport>().SingleAsync(i => i.Id == incident.Id)).AcknowledgedAt);
         Assert.False(await data.Set<UserNotification>().AnyAsync(n => n.RelatedObjectId == incident.Id && n.RecipientUserId == other.Staff.Id));
         await Pump(); Assert.Equal(1, await data.Set<UserNotification>().CountAsync(n => n.RelatedObjectId == incident.Id && n.RecipientUserId == w.Staff.Id && n.EventType == "EMERGENCY_ACK_OVERDUE"));
@@ -321,7 +321,7 @@ public sealed partial class Compact24NotificationMvpTests(Compact24Fixture fixtu
         Assert.Equal("Queued", (await issued.Content.ReadFromJsonAsync<TenantInvitationResult>())!.DeliveryState);
         await SendEmail(host, await AuthenticationDelivery(host, staff.UserId));
         Assert.Equal("STAFF_PASSWORD_ISSUED", Assert.Single(probe.Messages).EventType);
-        await Pump(host); await using var scope = host.Services.CreateAsyncScope(); var db = scope.ServiceProvider.GetRequiredService<Compact24DbContext>();
+        await Pump(host); await using var scope = host.Services.CreateAsyncScope(); var db = scope.ServiceProvider.GetRequiredService<Compact24ArchiveContext>();
         Assert.True(await db.Set<UserNotification>().AnyAsync(n => n.RecipientUserId == staff.UserId && n.EventType == "STAFF_ACCOUNT_CREATED"));
     }
     [CompactPostgresFact]
@@ -337,7 +337,7 @@ public sealed partial class Compact24NotificationMvpTests(Compact24Fixture fixtu
         using var deadline = new CancellationTokenSource(TimeSpan.FromSeconds(20));
         while (provider.Messages.Count < 3) await Task.Delay(100, deadline.Token);
         await using var scope = host.Services.CreateAsyncScope(); var config = scope.ServiceProvider.GetRequiredService<IConfiguration>(); Assert.False(config.GetValue<bool>("Jobs:Enabled"));
-        var db = scope.ServiceProvider.GetRequiredService<Compact24DbContext>();
+        var db = scope.ServiceProvider.GetRequiredService<Compact24ArchiveContext>();
         Assert.Equal(3, await db.Database.SqlQuery<int>($"SELECT count(*)::int AS \"Value\" FROM contracts WHERE room_id={w.Room} AND status=3").SingleAsync());
         Assert.Equal(0, await db.Database.SqlQuery<int>($"SELECT count(*)::int AS \"Value\" FROM invoices WHERE room_id={w.Room}").SingleAsync());
     }
@@ -348,7 +348,7 @@ public sealed partial class Compact24NotificationMvpTests(Compact24Fixture fixtu
         Guid resident;
         await using (var s = host.Services.CreateAsyncScope())
         {
-            var db = s.ServiceProvider.GetRequiredService<Compact24DbContext>(); var person = new Resident { RoomId = w.Room, OwnerUserId = w.Owner.Id, DisplayLabel = "Synthetic co-occupant" }; resident = person.Id;
+            var db = s.ServiceProvider.GetRequiredService<Compact24ArchiveContext>(); var person = new Resident { RoomId = w.Room, OwnerUserId = w.Owner.Id, DisplayLabel = "Synthetic co-occupant" }; resident = person.Id;
             db.Add(person); db.Add(new ContractResident { ContractId = w.Contracts[0], ResidentId = resident, ResidenceFrom = Today.AddDays(-1), Role = ResidentType.CoOccupant }); await db.SaveChangesAsync();
             var repository = s.ServiceProvider.GetRequiredService<BHome.Application.Billing.IInvoiceRepository>();
             // A co-occupant without an account must not block billing through the representative.
@@ -362,7 +362,7 @@ public sealed partial class Compact24NotificationMvpTests(Compact24Fixture fixtu
         Assert.Equal(HttpStatusCode.NoContent, (await anonymous.PostAsJsonAsync("/api/v1/auth/accept-invitation", accept)).StatusCode);
         Assert.Equal(HttpStatusCode.BadRequest, (await anonymous.PostAsJsonAsync("/api/v1/auth/accept-invitation", accept)).StatusCode);
         Assert.Equal(HttpStatusCode.OK, (await anonymous.PostAsJsonAsync("/api/v1/auth/login", new { email, password = Password })).StatusCode);
-        await using var check = host.Services.CreateAsyncScope(); var data = check.ServiceProvider.GetRequiredService<Compact24DbContext>();
+        await using var check = host.Services.CreateAsyncScope(); var data = check.ServiceProvider.GetRequiredService<Compact24ArchiveContext>();
         Assert.False(await data.Database.SqlQuery<bool>($"SELECT EXISTS(SELECT 1 FROM notifications WHERE event_data::text LIKE {'%' + mailbox.Token + '%'}) AS \"Value\"").SingleAsync());
         Assert.All(await check.ServiceProvider.GetRequiredService<BHome.Application.Billing.IInvoiceRepository>().OccupanciesAsync(w.Room, Today, Today.AddDays(1), default), o => Assert.True(o.ContactsComplete));
     }
@@ -377,7 +377,7 @@ public sealed partial class Compact24NotificationMvpTests(Compact24Fixture fixtu
         Guid delivery; Guid notice;
         await using (var s = host.Services.CreateAsyncScope())
         {
-            var db = s.ServiceProvider.GetRequiredService<Compact24DbContext>(); notice = await db.Set<UserNotification>().Where(n => n.RelatedObjectId == draft.Id && n.RecipientUserId == w.Tenants[0].Id).Select(n => n.Id).SingleAsync();
+            var db = s.ServiceProvider.GetRequiredService<Compact24ArchiveContext>(); notice = await db.Set<UserNotification>().Where(n => n.RelatedObjectId == draft.Id && n.RecipientUserId == w.Tenants[0].Id).Select(n => n.Id).SingleAsync();
             delivery = await db.Database.SqlQuery<Guid>($"SELECT id AS \"Value\" FROM notifications WHERE event_data->>'recordType'='ChannelDelivery' AND event_data->>'notificationId'={notice.ToString()}").SingleAsync();
             await s.ServiceProvider.GetRequiredService<NotificationChannelWorker>().DeliverAsync(delivery, default);
             await db.Database.ExecuteSqlInterpolatedAsync($"UPDATE notifications SET next_delivery_at={DateTimeOffset.UtcNow.AddSeconds(-1)} WHERE id={delivery}");

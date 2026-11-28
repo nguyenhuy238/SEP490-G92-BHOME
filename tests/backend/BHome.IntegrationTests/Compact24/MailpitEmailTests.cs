@@ -70,7 +70,7 @@ public sealed partial class Compact24NotificationMvpTests
         host.Services.GetRequiredService<IOptions<EmailOptions>>().Value.AllowedRecipients = [address];
         await using var scope = host.Services.CreateAsyncScope();
         var staff = await WorkflowTestUsers.CreateAsync(scope.ServiceProvider,
-            new BHome.Infrastructure.Persistence.ApplicationUser { Id = Guid.NewGuid(), UserName = address, Email = address, EmailConfirmed = false }, "Staff", "Synthetic!LegacyBrowser937");
+            new BHome.Infrastructure.Persistence.User { Id = Guid.NewGuid(), UserName = address, Email = address, EmailConfirmed = false }, "Staff", "Synthetic!LegacyBrowser937");
         using var owner = await Client(w.Owner, host);
         (await owner.PostAsync($"/api/v1/staff/{staff.Id}/invitation", null)).EnsureSuccessStatusCode();
         await SendEmail(host, await AuthenticationDelivery(host, staff.Id));
@@ -151,7 +151,7 @@ public sealed partial class Compact24NotificationMvpTests
         var address = $"dev-invitation-{Guid.NewGuid():N}@example.invalid";
         await using var scope = host.Services.CreateAsyncScope();
         var staff = await WorkflowTestUsers.CreateAsync(scope.ServiceProvider,
-            new BHome.Infrastructure.Persistence.ApplicationUser { Id = Guid.NewGuid(), UserName = address, Email = address, EmailConfirmed = false }, "Staff", "Synthetic!LegacySetup937");
+            new BHome.Infrastructure.Persistence.User { Id = Guid.NewGuid(), UserName = address, Email = address, EmailConfirmed = false }, "Staff", "Synthetic!LegacySetup937");
         (await owner.PostAsync($"/api/v1/staff/{staff.Id}/invitation", null)).EnsureSuccessStatusCode();
         var invitation = await AuthenticationDelivery(host, staff.Id);
         await SendEmail(host, invitation); await SendEmail(host, invitation);
@@ -168,7 +168,7 @@ public sealed partial class Compact24NotificationMvpTests
         await SendEmail(host, noticeDelivery); await SendEmail(host, noticeDelivery);
         using var notice = Assert.Single(await ReceivedEmailsAsync(w.Tenants[0].Email!));
 
-        var db = scope.ServiceProvider.GetRequiredService<Compact24DbContext>();
+        var db = scope.ServiceProvider.GetRequiredService<Compact24ArchiveContext>();
         await db.Users.Where(u => u.Id == w.Tenants[0].Id).ExecuteUpdateAsync(s => s.SetProperty(u => u.EmailConfirmed, false));
         using var anonymous = host.CreateClient();
         (await anonymous.PostAsJsonAsync("/api/v1/auth/request-email-verification", new { userName = w.Tenants[0].Email })).EnsureSuccessStatusCode();
@@ -190,7 +190,7 @@ public sealed partial class Compact24NotificationMvpTests
         (await owner.PostAsync(path, null)).EnsureSuccessStatusCode();
         Assert.Equal("ExistingRequestPreserved", (await (await owner.PostAsync(path, null)).Content.ReadFromJsonAsync<TenantInvitationResult>())!.DeliveryState);
         var delivery = await AuthenticationDelivery(host, w.Staff.Id);
-        await using var scope = host.Services.CreateAsyncScope(); var db = scope.ServiceProvider.GetRequiredService<Compact24DbContext>();
+        await using var scope = host.Services.CreateAsyncScope(); var db = scope.ServiceProvider.GetRequiredService<Compact24ArchiveContext>();
         var passwordHash = await db.Users.Where(u => u.Id == w.Staff.Id).Select(u => u.PasswordHash).SingleAsync();
         // A real refused loopback connection is safe to retry before SMTP DATA submission.
         using (var unusedPort = new TcpListener(IPAddress.Loopback, 0))
@@ -241,7 +241,7 @@ public sealed partial class Compact24NotificationMvpTests
         host.Services.GetRequiredService<IOptions<EmailOptions>>().Value.AllowedRecipients = [address];
         await using var scope = host.Services.CreateAsyncScope();
         var staff = await WorkflowTestUsers.CreateAsync(scope.ServiceProvider,
-            new BHome.Infrastructure.Persistence.ApplicationUser { Id = Guid.NewGuid(), UserName = address, Email = address, EmailConfirmed = false }, "Staff", "Synthetic!LegacySetup937");
+            new BHome.Infrastructure.Persistence.User { Id = Guid.NewGuid(), UserName = address, Email = address, EmailConfirmed = false }, "Staff", "Synthetic!LegacySetup937");
         using var owner = await Client(w.Owner, host); using var anonymous = host.CreateClient();
         (await owner.PostAsync($"/api/v1/staff/{staff.Id}/invitation", null)).EnsureSuccessStatusCode();
         var invitationDelivery = await AuthenticationDelivery(host, staff.Id);

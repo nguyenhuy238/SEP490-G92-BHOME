@@ -18,17 +18,6 @@ export interface RoomConfiguration {
   /** Archived response compatibility; current Room writes do not accept this field. */
   roomTypeId?: string | null;
 }
-export interface RoomTypeConfiguration {
-  id: string;
-  locationId: string;
-  name: string;
-  description: string | null;
-  defaultCapacity: number;
-  areaM2: number | null;
-  amenities: string[];
-  isActive: boolean;
-  version: number;
-}
 export interface PhysicalAsset {
   id: string;
   locationId: string;
@@ -49,10 +38,6 @@ export type LocationInput = Omit<LocationConfiguration, 'id' | 'version'> & {
   reason: string;
 };
 export type RoomInput = Omit<RoomConfiguration, 'id' | 'version' | 'roomTypeId'> & {
-  version: number;
-  reason: string;
-};
-export type RoomTypeInput = Omit<RoomTypeConfiguration, 'id' | 'version'> & {
   version: number;
   reason: string;
 };
@@ -336,12 +321,6 @@ export function propertySetupClient(request: SetupRequest) {
       request<LocationConfiguration>(`/api/v1/locations/${encodeURIComponent(id)}`, { signal }),
     rooms: (locationId: string, page = 1, search = '', signal?: AbortSignal) =>
       paged<RoomConfiguration>('rooms', { locationId, page, pageSize: 20, search }, signal),
-    roomTypes: (locationId: string, page = 1, search = '', signal?: AbortSignal) =>
-      paged<RoomTypeConfiguration>(
-        'room-types',
-        { locationId, page, pageSize: 100, search },
-        signal,
-      ),
     assets: (locationId: string, page = 1, search = '', signal?: AbortSignal) =>
       paged<PhysicalAsset>('assets', { locationId, page, pageSize: 20, search }, signal),
     roomOptions: (locationId: string, signal?: AbortSignal) =>
@@ -396,28 +375,6 @@ export function propertySetupClient(request: SetupRequest) {
         `/api/v1/rooms${id ? '/' + encodeURIComponent(id) : ''}`,
         input,
         id ? 'PUT' : 'POST',
-      ),
-    saveRoomType: (id: string | null, input: RoomTypeInput) =>
-      write<RoomTypeConfiguration>(
-        `/api/v1/room-types${id ? '/' + encodeURIComponent(id) : ''}`,
-        input,
-        id ? 'PUT' : 'POST',
-      ),
-    bulkCreateRooms: (
-      locationId: string,
-      input: {
-        rooms: {
-          roomNumber: string;
-          floor: string | null;
-          roomTypeId: string;
-          capacity?: number;
-        }[];
-        reason: string;
-      },
-    ) =>
-      write<{ rooms: RoomConfiguration[] }>(
-        `/api/v1/locations/${encodeURIComponent(locationId)}/rooms/bulk-create`,
-        { locationId, ...input },
       ),
     saveAsset: (id: string | null, input: AssetInput) =>
       write<PhysicalAsset>(

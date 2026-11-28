@@ -68,7 +68,7 @@ public sealed class ReceivingAccountValidationTests
         Assert.Equal(1, result.Version);
         Assert.Equal(w.Owner, result.ConfirmedByUserId);
         await w.Repository.Received(1).SaveOwnerReceivingAccountAsync(w.Owner, result, 0, default);
-        w.Repository.Received(1).Audit(w.Owner, "OwnerReceivingBankAccountConfigured", result.Id, result.ConfirmedAt);
+        await w.Repository.Received(1).AuditAsync(w.Owner, "OwnerReceivingBankAccountConfigured", result.Id, result.ConfirmedAt, default);
     }
 
     [Fact]
@@ -80,7 +80,7 @@ public sealed class ReceivingAccountValidationTests
         Assert.Equal(w.Owner, result.OwnerUserId);
         Assert.Equal(1, result.Version);
         await w.Repository.Received(1).SaveOwnerReceivingAccountAsync(w.Owner, result, 0, default);
-        w.Repository.Received(1).Audit(w.Owner, "OwnerReceivingBankAccountConfigured", result.Id, result.ConfirmedAt);
+        await w.Repository.Received(1).AuditAsync(w.Owner, "OwnerReceivingBankAccountConfigured", result.Id, result.ConfirmedAt, default);
     }
 
     [Fact]
@@ -94,7 +94,7 @@ public sealed class ReceivingAccountValidationTests
             new(location, "970415", "000000000000", "SYNTHETIC OWNER", true, true, true, 0), default);
         Assert.True(result.IsDevelopmentDemo);
         Assert.Equal(location, result.LocationId);
-        w.Repository.Received(1).Add(result);
+        await w.Repository.Received(1).AddAsync(result, default);
         await w.Repository.Received(1).ReceivingOwnerAsync(location, default);
     }
 

@@ -43,12 +43,12 @@ vi.mock('react-native-paper', () => ({
     ),
   },
 }));
-vi.mock('../features/contracts/TenantMoveOutInspectionSummary', () => ({
+vi.mock('../features/contracts/moveOut/TenantMoveOutInspectionSummary', () => ({
   TenantMoveOutInspectionSummary: ({ inspection }: { inspection: { version: number } }) => (
     <div>Kết quả kiểm tra lần {inspection.version}</div>
   ),
 }));
-vi.mock('../features/contracts/TenantMoveOutProposalPanel', () => ({
+vi.mock('../features/contracts/moveOut/TenantMoveOutProposalPanel', () => ({
   TenantMoveOutProposalPanel: () => <div>Owner chưa gửi đề xuất quyết toán cho hợp đồng này.</div>,
 }));
 vi.mock('../components/WorkspaceKit', () => ({

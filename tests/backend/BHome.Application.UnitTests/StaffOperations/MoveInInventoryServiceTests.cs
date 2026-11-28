@@ -43,11 +43,11 @@ public sealed class MoveInInventoryServiceTests
                 new MoveInInventoryItem(Guid.NewGuid(), Asset, "Giường", 2)).ToArray();
             Task = new OperationalTask
             {
-                LocationId = Location,
+                RequiredLocationId = Location,
                 ContractId = Contract,
                 TargetRoomId = Room,
                 Kind = OperationalTaskKind.MoveInInventory,
-                Status = MeterTaskStatus.InProgress,
+                MeterStatus = MeterTaskStatus.InProgress,
                 AssignedStaffUserId = User.UserId,
                 Version = 1,
                 MoveInInventoryJson = JsonSerializer.Serialize(new MoveInInventorySnapshot("baseline", items))

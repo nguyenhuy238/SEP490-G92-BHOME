@@ -15,10 +15,10 @@ public sealed class Compact24PropertyShapeTests(Compact24Fixture fixture) : ICla
     public async Task FreshDatabaseSupportsLocationRoomAndPricesWithoutChainOrRoomType()
     {
         const string password = "Synthetic!Property-493";
-        ApplicationUser owner;
+        User owner;
         await using (var scope = fixture.Factory!.Services.CreateAsyncScope())
             owner = await WorkflowTestUsers.CreateAsync(scope.ServiceProvider,
-                new ApplicationUser { UserName = "synthetic-property", Email = "synthetic-property@example.invalid" }, "Owner", password);
+                new User { UserName = "synthetic-property", Email = "synthetic-property@example.invalid" }, "Owner", password);
         using var client = fixture.Factory!.CreateClient();
         var loginResponse = await client.PostAsJsonAsync("/api/v1/auth/login", new { owner.Email, password });
         loginResponse.EnsureSuccessStatusCode();

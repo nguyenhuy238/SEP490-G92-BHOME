@@ -1,0 +1,66 @@
+using System.Text.Json;
+using System.Text.Json.Nodes;
+using BHome.Application.Finance;
+using BHome.Infrastructure.IdentityAccess;
+using BHome.Infrastructure.Persistence;
+using Microsoft.EntityFrameworkCore;
+using Native = BHome.Domain.Entities;
+
+namespace BHome.Infrastructure.Finance;
+
+internal sealed class ExpenseEvidenceRepository(BHomePersistenceContext db) : IExpenseEvidenceRepository
+{
+    private static readonly JsonSerializerOptions Json = new(JsonSerializerDefaults.Web);
+    private async Task<JsonArray> ReadAsync(Guid id, CancellationToken t)
+    {
+        var value = await db.Set<Native.Expense>().AsNoTracking().Where(e => e.Id == id).Select(e => (JsonElement?)e.Evidence).SingleOrDefaultAsync(t)
+            ?? throw new FinanceException(404, "expense_not_found");
+        return JsonNode.Parse(value.GetRawText()) as JsonArray ?? throw new FinanceException(409, "expense_evidence_metadata_invalid");
+    }
+    private static ExpenseEvidenceFile? File(JsonNode? node) => node is JsonObject entry && entry["recordType"]?.GetValue<string>() == "ExpenseEvidence"
+        ? entry["state"]?.Deserialize<ExpenseEvidenceFile>(Json) : null;
+    public async Task<IReadOnlyList<ExpenseEvidenceFile>> ListAsync(Guid id, CancellationToken t) =>
+        (await ReadAsync(id, t)).Select(File).OfType<ExpenseEvidenceFile>().ToArray();
+    private Task LockAsync(Guid id, CancellationToken t) => db.Database.ExecuteSqlInterpolatedAsync($"SELECT id FROM expenses WHERE id={id} FOR UPDATE", t);
+    private async Task WriteAsync(Guid id, JsonArray files, CancellationToken t)
+    {
+        var expense = await db.Set<Native.Expense>().AsNoTracking().SingleAsync(e => e.Id == id, t);
+        var evidence = JsonSerializer.SerializeToElement(files);
+        db.Attach(expense);
+        expense.Evidence = evidence;
+        await db.SaveChangesAsync(t);
+    }
+    public async Task<ExpenseEvidenceFile> BeginAsync(Guid id, Guid key, Guid actor, string type, long length, string hash, DateTimeOffset now, CancellationToken t)
+    {
+        await using var transaction = await db.Database.BeginTransactionAsync(t); await LockAsync(id, t);
+        var nodes = await ReadAsync(id, t); var files = nodes.Select(File).OfType<ExpenseEvidenceFile>().ToArray();
+        if (files.SingleOrDefault(f => f.OperationKey == key) is { } existing)
+        {
+            if (existing.RecordedBy != actor || existing.ContentType != type || existing.Length != length || existing.Sha256 != hash)
+                throw new FinanceException(409, "expense_evidence_idempotency_conflict");
+            await transaction.CommitAsync(t); return existing;
+        }
+        // Bounded image evidence, matching the existing 5 MB private image pipeline.
+        if (nodes.Count >= 20) throw new FinanceException(409, "expense_evidence_limit");
+        var fileId = Guid.NewGuid();
+        var scope = await db.Set<Native.Expense>().AsNoTracking().Where(e => e.Id == id)
+            .Select(e => new { e.LocationId, e.RoomId }).SingleAsync(t);
+        var objectKey = BHome.Application.Storage.PrivateImageKeys.Evidence(scope.LocationId, scope.RoomId, "expenses", id, fileId);
+        var file = new ExpenseEvidenceFile(fileId, key, objectKey, type, length, hash, "PendingUpload", actor, now);
+        nodes.Add(new JsonObject { ["schemaVersion"] = 1, ["recordType"] = "ExpenseEvidence", ["state"] = JsonSerializer.SerializeToNode(file, Json) });
+        await WriteAsync(id, nodes, t); await transaction.CommitAsync(t); return file;
+    }
+    public async Task<ExpenseEvidenceFile> CompleteAsync(Guid id, Guid fileId, Guid actor, DateTimeOffset now, CancellationToken t)
+    {
+        await using var transaction = await db.Database.BeginTransactionAsync(t); await LockAsync(id, t);
+        var nodes = await ReadAsync(id, t); var index = Enumerable.Range(0, nodes.Count).FirstOrDefault(i => File(nodes[i])?.Id == fileId, -1);
+        if (index < 0) throw new FinanceException(404, "expense_evidence_not_found");
+        var file = File(nodes[index])!;
+        if (file.Status != "Uploaded")
+        {
+            file = file with { Status = "Uploaded" }; nodes[index]!["state"] = JsonSerializer.SerializeToNode(file, Json); await WriteAsync(id, nodes, t);
+            await SecurityAuditWrites.AppendAsync(db, new(Guid.NewGuid(), actor, null, null, "ExpenseEvidenceUploaded", true, now, "Expense", id), t);
+        }
+        await transaction.CommitAsync(t); return file;
+    }
+}

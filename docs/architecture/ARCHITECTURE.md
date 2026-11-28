@@ -1,15 +1,23 @@
 # BHOME architecture
 
-This foundation implements the BHOME architecture described in Report 4 and the initialization
-requirements. It is a single modular layered application. The finalized SRS and data model will
-determine business entities and workflows. No business integration or OCR engine is simulated.
+This document retains the original foundation design and decisions from October 2026. Later
+implementations may differ (including authentication, Compact24, OCR, background jobs and mobile).
+For the current source navigation, start with [the business-flow map](../business-flows/README.md).
+The core architecture remains a single modular layered application, not microservices.
+
+**Current project layout (single-project refactor):** the former `BHome.Api`, `BHome.Application`,
+`BHome.Domain` and `BHome.Infrastructure` projects compile together as
+`src/backend/BHome.Api/BHome.Api.csproj`. Logical dependency directions and CLR namespaces are retained.
+Use [STUDENT_ARCHITECTURE.md](STUDENT_ARCHITECTURE.md) and [MODULES.md](MODULES.md) for current paths.
+DigitalSigning remains a separate subsystem. The older project diagram and foundation decisions below
+are retained as historical design context, not instructions to recreate those projects.
 
 ## System boundaries
 
 ```mermaid
 flowchart TB
-  Owner[Owner Web Portal<br/>React · TypeScript · Vite · Ant Design]
-  Mobile[BHOME Mobile App<br/>React · TypeScript · Capacitor]
+  Owner[Owner Web Portal<br/>React · TypeScript · Vite · Material UI]
+  Mobile[BHOME Mobile App<br/>Expo · React Native · TypeScript]
   Public[Public Website<br/>React · TypeScript · Vite]
   Owner -->|HTTPS / REST / JSON| Auth
   Mobile -->|HTTPS / REST / JSON| Auth
@@ -34,7 +42,7 @@ information only; there is no Guest account, reservation, deposit, payment or si
 All clients are Vietnamese, format VND centrally and display business times in `Asia/Ho_Chi_Minh`.
 Display localization is outside the domain layer.
 
-## Backend dependency direction
+## Original backend dependency direction (historical project layout)
 
 ```mermaid
 flowchart LR
@@ -56,7 +64,7 @@ access interface when a feature requires persistence; implement its query/comman
 Do not add a generic repository, unit-of-work wrapper, mediator or CQRS layer without a demonstrated
 need. EF's scoped context already supplies tracking and transactional behavior.
 
-## Modules and team ownership
+## Original module placement (historical project layout)
 
 Use matching `<Module>/` paths in Domain/Application, `Modules/<Module>/` in Infrastructure and
 `Controllers/<Module>/` in API when new features arrive. The current infrastructure-wide boundaries
@@ -121,11 +129,11 @@ contract has no insecure persistence fallback. Keychain/Keystore integration rem
 
 ## Data storage
 
-`Infrastructure/Persistence/BHomeDbContext` is an Identity EF context with Npgsql. The migration
-baseline contains Identity and jobs; the auth migration adds sessions, refresh hashes, reset grants,
-append-only security audit and active-account status. `BHomeDbContextFactory` supports EF tooling
-without starting HTTP, jobs, or integrations. Use reviewed EF migrations; no `EnsureCreated` or
-automatic startup migration is used. Apply migrations explicitly during development/release.
+`BHome.Api/Data/Compact24/Compact24DbContext` is the runtime EF context with Npgsql and the reviewed
+24-table physical schema. The old `BHomeDbContext`, its design-time factory and historical migrations
+are isolated in `tools/BHome.LegacyPersistence` for explicit import and test fixtures, not API DI or
+deployment. Keep the current Compact24 migration IDs and SQL resources in BHome.Api. Follow the
+reviewed Compact24 schema verification and upgrade tooling; see [Compact24 entity mapping](COMPACT24_ENTITY_MAPPING.md).
 
 Use module-specific Fluent API configurations discovered through `ApplyConfigurationsFromAssembly`.
 Add explicit foreign keys, lengths, nullability, useful indexes and unique constraints. Use database
@@ -238,7 +246,7 @@ applies real migrations to isolated PostgreSQL and exercises readiness/durable e
 Vitest/Testing Library cover client startup, API failures/config and route guards. CI builds/tests
 all layers and validates formatting/Compose, without deployment.
 
-Additional decisions and reasons:
+Original foundation decisions and reasons (historical; use the current code map for today's behavior):
 
 | Decision                             | Reason                                                                                                                                                   |
 | ------------------------------------ | -------------------------------------------------------------------------------------------------------------------------------------------------------- |

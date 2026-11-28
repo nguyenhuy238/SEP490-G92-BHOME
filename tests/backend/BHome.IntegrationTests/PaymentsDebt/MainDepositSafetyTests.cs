@@ -14,7 +14,7 @@ public sealed partial class PaymentLedgerTests
         var w = await Setup();
         await using (var scope = fixture.Factory.Services.CreateAsyncScope())
         {
-            var db = scope.ServiceProvider.GetRequiredService<BHomePersistenceContext>();
+            var db = scope.ServiceProvider.GetFixturePersistence();
             (await db.Set<Contract>().SingleAsync(c => c.Id == w.Contract)).RequiredDeposit = 100000;
             await db.SaveChangesAsync();
         }
@@ -33,7 +33,7 @@ public sealed partial class PaymentLedgerTests
         Assert.Equal(HttpStatusCode.Conflict, (await Post(owner, route, remainder with { Amount = 39999 }, key)).StatusCode);
         Assert.Equal(HttpStatusCode.Conflict, (await Post(owner, route, first with { BankTransactionReference = "SYN-EXTRA-" + Guid.NewGuid(), Amount = 1 })).StatusCode);
         await using var finalScope = fixture.Factory.Services.CreateAsyncScope();
-        var finalDb = finalScope.ServiceProvider.GetRequiredService<BHomePersistenceContext>();
+        var finalDb = finalScope.ServiceProvider.GetFixturePersistence();
         Assert.Equal(100000, await finalDb.Database.SqlQuery<decimal>($"SELECT sum(amount) AS \"Value\" FROM payment_allocations WHERE target_deposit_contract_id={w.Contract}").SingleAsync());
         Assert.Equal(2, await finalDb.Set<DepositVerification>().CountAsync(d => d.ContractId == w.Contract));
         Assert.Equal(2, await finalDb.Database.SqlQuery<int>($"SELECT count(*)::integer AS \"Value\" FROM payments p JOIN payment_allocations a ON a.source_payment_id=p.id WHERE a.target_deposit_contract_id={w.Contract}").SingleAsync());

@@ -70,7 +70,7 @@ public sealed class LocationAssetHandoverSigningTests(Compact24Fixture fixture) 
         var locationId = Guid.NewGuid();
         await using (var scope = host.Services.CreateAsyncScope())
         {
-            var db = scope.ServiceProvider.GetRequiredService<Compact24DbContext>();
+            var db = scope.ServiceProvider.GetRequiredService<Compact24ArchiveContext>();
             await db.Database.ExecuteSqlInterpolatedAsync(
                 $"INSERT INTO locations(id,name,address) VALUES ({locationId},'Synthetic handover', 'Synthetic address')");
             // Create the same durable Owner attestation used in production.
@@ -129,9 +129,9 @@ public sealed class LocationAssetHandoverSigningTests(Compact24Fixture fixture) 
         Guid taskId;
         await using (var scope = host.Services.CreateAsyncScope())
         {
-            var db = scope.ServiceProvider.GetRequiredService<Compact24DbContext>();
+            var db = scope.ServiceProvider.GetRequiredService<Compact24ArchiveContext>();
             taskId = await db.Set<OperationalTask>().AsNoTracking()
-                .Where(t => t.LocationId == locationId && t.Kind == OperationalTaskKind.LocationAssetHandover)
+                .Where(t => t.RequiredLocationId == locationId && t.Kind == OperationalTaskKind.LocationAssetHandover)
                 .Select(t => t.Id).SingleAsync();
         }
         using var ownerClient = await Login(host.CreateClient(), owner);
@@ -287,7 +287,7 @@ public sealed class LocationAssetHandoverSigningTests(Compact24Fixture fixture) 
         var locationId = Guid.NewGuid();
         await using (var scope = host.Services.CreateAsyncScope())
         {
-            var db = scope.ServiceProvider.GetRequiredService<Compact24DbContext>();
+            var db = scope.ServiceProvider.GetRequiredService<Compact24ArchiveContext>();
             await db.Database.ExecuteSqlInterpolatedAsync(
                 $"INSERT INTO locations(id,name,address) VALUES ({locationId},'Synthetic archive Location', 'Synthetic archive address')");
             var room = new Room { LocationId = locationId, RoomNumber = "S-301" };
@@ -343,9 +343,9 @@ public sealed class LocationAssetHandoverSigningTests(Compact24Fixture fixture) 
         Guid formerTaskId;
         await using (var scope = host.Services.CreateAsyncScope())
         {
-            var db = scope.ServiceProvider.GetRequiredService<Compact24DbContext>();
+            var db = scope.ServiceProvider.GetRequiredService<Compact24ArchiveContext>();
             formerTaskId = await db.Set<OperationalTask>().AsNoTracking()
-                .Where(task => task.LocationId == locationId && task.Kind == OperationalTaskKind.LocationAssetHandover)
+                .Where(task => task.RequiredLocationId == locationId && task.Kind == OperationalTaskKind.LocationAssetHandover)
                 .Select(task => task.Id).SingleAsync();
         }
         using var ownerClient = await Login(host.CreateClient(), owner);
@@ -426,7 +426,7 @@ public sealed class LocationAssetHandoverSigningTests(Compact24Fixture fixture) 
         Guid successorTaskId;
         await using (var scope = host.Services.CreateAsyncScope())
         {
-            var db = scope.ServiceProvider.GetRequiredService<Compact24DbContext>();
+            var db = scope.ServiceProvider.GetRequiredService<Compact24ArchiveContext>();
             var locationVersion = await db.Locations.Where(location => location.Id == locationId)
                 .Select(location => location.Version).SingleAsync();
             var replaced = await scope.ServiceProvider.GetRequiredService<ILocationAssignments>()
@@ -438,7 +438,7 @@ public sealed class LocationAssetHandoverSigningTests(Compact24Fixture fixture) 
                 WHERE staff_user_id={formerStaff.Id}
                 """);
             successorTaskId = await db.Set<OperationalTask>().AsNoTracking()
-                .Where(task => task.LocationId == locationId && task.Kind == OperationalTaskKind.LocationAssetHandover &&
+                .Where(task => task.RequiredLocationId == locationId && task.Kind == OperationalTaskKind.LocationAssetHandover &&
                     task.AssignedStaffUserId == successor.Id)
                 .Select(task => task.Id).SingleAsync();
         }
@@ -575,7 +575,7 @@ public sealed class LocationAssetHandoverSigningTests(Compact24Fixture fixture) 
         Guid assetId;
         await using (var scope = host.Services.CreateAsyncScope())
         {
-            var db = scope.ServiceProvider.GetRequiredService<Compact24DbContext>();
+            var db = scope.ServiceProvider.GetRequiredService<Compact24ArchiveContext>();
             await db.Database.ExecuteSqlInterpolatedAsync(
                 $"INSERT INTO locations(id,name,address) VALUES ({locationId},'Synthetic employment handover', 'Synthetic address')");
             var room = new Room { LocationId = locationId, RoomNumber = "E-101" };
@@ -631,9 +631,9 @@ public sealed class LocationAssetHandoverSigningTests(Compact24Fixture fixture) 
         Guid taskId;
         await using (var scope = host.Services.CreateAsyncScope())
         {
-            var db = scope.ServiceProvider.GetRequiredService<Compact24DbContext>();
+            var db = scope.ServiceProvider.GetRequiredService<Compact24ArchiveContext>();
             taskId = await db.Set<OperationalTask>().AsNoTracking()
-                .Where(t => t.LocationId == locationId && t.Kind == OperationalTaskKind.LocationAssetHandover)
+                .Where(t => t.RequiredLocationId == locationId && t.Kind == OperationalTaskKind.LocationAssetHandover)
                 .Select(t => t.Id).SingleAsync();
         }
         using var ownerClient = await Login(host.CreateClient(), owner);
@@ -707,7 +707,7 @@ public sealed class LocationAssetHandoverSigningTests(Compact24Fixture fixture) 
         // historical Location assignment row still covers today's date.
         await using (var scope = host.Services.CreateAsyncScope())
         {
-            var db = scope.ServiceProvider.GetRequiredService<Compact24DbContext>();
+            var db = scope.ServiceProvider.GetRequiredService<Compact24ArchiveContext>();
             await db.Database.ExecuteSqlInterpolatedAsync($"""
                 UPDATE staff_employments SET start_date={Today.AddDays(-2)},end_date={Today.AddDays(-1)},status='Ended'
                 WHERE staff_user_id={staff.Id}
@@ -724,7 +724,7 @@ public sealed class LocationAssetHandoverSigningTests(Compact24Fixture fixture) 
         // it must not generate a duplicate LocationAssetHandover task.
         await using (var scope = host.Services.CreateAsyncScope())
         {
-            var db = scope.ServiceProvider.GetRequiredService<Compact24DbContext>();
+            var db = scope.ServiceProvider.GetRequiredService<Compact24ArchiveContext>();
             await db.Database.ExecuteSqlInterpolatedAsync($"""
                 UPDATE staff_employments SET start_date={Today},end_date=NULL,status='Active'
                 WHERE staff_user_id={staff.Id}
@@ -748,7 +748,7 @@ public sealed class LocationAssetHandoverSigningTests(Compact24Fixture fixture) 
         // download its document or add a signature; Owner's historical access remains.
         await using (var scope = host.Services.CreateAsyncScope())
         {
-            var db = scope.ServiceProvider.GetRequiredService<Compact24DbContext>();
+            var db = scope.ServiceProvider.GetRequiredService<Compact24ArchiveContext>();
             await db.Database.ExecuteSqlInterpolatedAsync($"""
                 UPDATE staff_employments SET start_date={Today.AddDays(-2)},end_date={Today.AddDays(-1)},status='Ended'
                 WHERE staff_user_id={staff.Id}
@@ -768,7 +768,7 @@ public sealed class LocationAssetHandoverSigningTests(Compact24Fixture fixture) 
 
         await using (var scope = host.Services.CreateAsyncScope())
         {
-            var db = scope.ServiceProvider.GetRequiredService<Compact24DbContext>();
+            var db = scope.ServiceProvider.GetRequiredService<Compact24ArchiveContext>();
             await db.Database.ExecuteSqlInterpolatedAsync($"""
                 UPDATE staff_employments SET start_date={Today},end_date=NULL,status='Active'
                 WHERE staff_user_id={staff.Id}
@@ -785,16 +785,16 @@ public sealed class LocationAssetHandoverSigningTests(Compact24Fixture fixture) 
         Assert.Equal("Completed", (await staffSigned.Content.ReadFromJsonAsync<LocationAssetHandoverReportView>())!.Status);
         await using (var scope = host.Services.CreateAsyncScope())
         {
-            var db = scope.ServiceProvider.GetRequiredService<Compact24DbContext>();
+            var db = scope.ServiceProvider.GetRequiredService<Compact24ArchiveContext>();
             Assert.Equal(1, await db.Set<OperationalTask>().CountAsync(t =>
-                t.LocationId == locationId && t.Kind == OperationalTaskKind.LocationAssetHandover));
+                t.RequiredLocationId == locationId && t.Kind == OperationalTaskKind.LocationAssetHandover));
         }
 
         // A former Staff signer keeps read-only access to their own completed report.
         // The idempotent signing endpoint is still an action and must reject them.
         await using (var scope = host.Services.CreateAsyncScope())
         {
-            var db = scope.ServiceProvider.GetRequiredService<Compact24DbContext>();
+            var db = scope.ServiceProvider.GetRequiredService<Compact24ArchiveContext>();
             await db.Database.ExecuteSqlInterpolatedAsync($"""
                 UPDATE staff_employments SET start_date={Today.AddDays(-2)},end_date={Today.AddDays(-1)},status='Ended'
                 WHERE staff_user_id={staff.Id}
@@ -831,7 +831,7 @@ public sealed class LocationAssetHandoverSigningTests(Compact24Fixture fixture) 
         var locationId = Guid.NewGuid();
         await using (var scope = host.Services.CreateAsyncScope())
         {
-            var db = scope.ServiceProvider.GetRequiredService<Compact24DbContext>();
+            var db = scope.ServiceProvider.GetRequiredService<Compact24ArchiveContext>();
             await db.Database.ExecuteSqlInterpolatedAsync(
                 $"INSERT INTO locations(id,name,address) VALUES ({locationId},'Synthetic successor handover', 'Synthetic address')");
             var room = new Room { LocationId = locationId, RoomNumber = "S-201" };
@@ -895,9 +895,9 @@ public sealed class LocationAssetHandoverSigningTests(Compact24Fixture fixture) 
         Guid taskId;
         await using (var scope = host.Services.CreateAsyncScope())
         {
-            var db = scope.ServiceProvider.GetRequiredService<Compact24DbContext>();
+            var db = scope.ServiceProvider.GetRequiredService<Compact24ArchiveContext>();
             taskId = await db.Set<OperationalTask>().AsNoTracking()
-                .Where(task => task.LocationId == locationId && task.Kind == OperationalTaskKind.LocationAssetHandover)
+                .Where(task => task.RequiredLocationId == locationId && task.Kind == OperationalTaskKind.LocationAssetHandover)
                 .Select(task => task.Id).SingleAsync();
         }
         using var ownerClient = await Login(host.CreateClient(), owner);
@@ -947,7 +947,7 @@ public sealed class LocationAssetHandoverSigningTests(Compact24Fixture fixture) 
         }
         await using (var scope = host.Services.CreateAsyncScope())
         {
-            var db = scope.ServiceProvider.GetRequiredService<Compact24DbContext>();
+            var db = scope.ServiceProvider.GetRequiredService<Compact24ArchiveContext>();
             var changes = await db.Set<OperationalTaskHistory>().AsNoTracking()
                 .Where(history => history.TaskId == taskId && history.Action == "location_asset_inventory_item_checked" &&
                     history.ActorId == formerStaff.Id).ToArrayAsync();
@@ -997,7 +997,7 @@ public sealed class LocationAssetHandoverSigningTests(Compact24Fixture fixture) 
         // from the former Staff while Owner can still read the Location-owned work.
         await using (var scope = host.Services.CreateAsyncScope())
         {
-            var db = scope.ServiceProvider.GetRequiredService<Compact24DbContext>();
+            var db = scope.ServiceProvider.GetRequiredService<Compact24ArchiveContext>();
             await db.Database.ExecuteSqlInterpolatedAsync($"""
                 UPDATE staff_employments SET start_date={Today.AddDays(-2)},end_date={Today.AddDays(-1)},status='Ended'
                 WHERE staff_user_id={formerStaff.Id}
@@ -1023,7 +1023,7 @@ public sealed class LocationAssetHandoverSigningTests(Compact24Fixture fixture) 
         // Restoring the same current assignment makes the same open task available again.
         await using (var scope = host.Services.CreateAsyncScope())
         {
-            var db = scope.ServiceProvider.GetRequiredService<Compact24DbContext>();
+            var db = scope.ServiceProvider.GetRequiredService<Compact24ArchiveContext>();
             await db.Database.ExecuteSqlInterpolatedAsync($"""
                 UPDATE staff_employments SET start_date={Today},end_date=NULL,status='Active'
                 WHERE staff_user_id={formerStaff.Id}
@@ -1037,7 +1037,7 @@ public sealed class LocationAssetHandoverSigningTests(Compact24Fixture fixture) 
         Guid successorAssignmentId;
         await using (var scope = host.Services.CreateAsyncScope())
         {
-            var db = scope.ServiceProvider.GetRequiredService<Compact24DbContext>();
+            var db = scope.ServiceProvider.GetRequiredService<Compact24ArchiveContext>();
             var locationVersion = await db.Locations.Where(location => location.Id == locationId)
                 .Select(location => location.Version).SingleAsync();
             var replaced = await scope.ServiceProvider.GetRequiredService<ILocationAssignments>()
@@ -1049,7 +1049,7 @@ public sealed class LocationAssetHandoverSigningTests(Compact24Fixture fixture) 
             Assert.Equal(successor.Id, transferred.AssignedStaffUserId);
             Assert.Equal(successorAssignmentId, transferred.AssignmentId);
             Assert.Equal(1, await db.Set<OperationalTask>().CountAsync(item =>
-                item.LocationId == locationId && item.Kind == OperationalTaskKind.LocationAssetHandover));
+                item.RequiredLocationId == locationId && item.Kind == OperationalTaskKind.LocationAssetHandover));
         }
 
         // The Location keeps one task ID. The successor inherits checked-item provenance
@@ -1156,24 +1156,24 @@ public sealed class LocationAssetHandoverSigningTests(Compact24Fixture fixture) 
         Assert.Equal(HttpStatusCode.NotFound, (await formerClient.GetAsync(route)).StatusCode);
         await using (var scope = host.Services.CreateAsyncScope())
         {
-            var db = scope.ServiceProvider.GetRequiredService<Compact24DbContext>();
+            var db = scope.ServiceProvider.GetRequiredService<Compact24ArchiveContext>();
             Assert.Equal(1, await db.Set<OperationalTask>().CountAsync(item =>
-                item.LocationId == locationId && item.Kind == OperationalTaskKind.LocationAssetHandover));
+                item.RequiredLocationId == locationId && item.Kind == OperationalTaskKind.LocationAssetHandover));
             Assert.Equal(taskId, await db.Set<OperationalTask>().AsNoTracking()
-                .Where(item => item.LocationId == locationId && item.Kind == OperationalTaskKind.LocationAssetHandover)
+                .Where(item => item.RequiredLocationId == locationId && item.Kind == OperationalTaskKind.LocationAssetHandover)
                 .Select(item => item.Id).SingleAsync());
         }
     }
 
-    private static async Task<ApplicationUser> Seed(IServiceProvider provider, string role)
+    private static async Task<User> Seed(IServiceProvider provider, string role)
     {
         await using var scope = provider.CreateAsyncScope();
-        var db = scope.ServiceProvider.GetRequiredService<Compact24DbContext>();
+        var db = scope.ServiceProvider.GetRequiredService<Compact24ArchiveContext>();
         if (role == "Owner" && await db.Users.FirstOrDefaultAsync(user =>
             EF.Property<string[]>(user, "roles").Contains(role)) is { } existingOwner)
             return existingOwner;
         var id = Guid.NewGuid();
-        var user = new ApplicationUser
+        var user = new User
         {
             Id = id,
             UserName = id.ToString(),
@@ -1185,7 +1185,7 @@ public sealed class LocationAssetHandoverSigningTests(Compact24Fixture fixture) 
             LockoutEnabled = true,
             IsActive = true
         };
-        user.PasswordHash = scope.ServiceProvider.GetRequiredService<IPasswordHasher<ApplicationUser>>()
+        user.PasswordHash = scope.ServiceProvider.GetRequiredService<IPasswordHasher<User>>()
             .HashPassword(user, Password);
         db.Users.Add(user);
         db.Entry(user).Property("roles").CurrentValue = new[] { role };
@@ -1193,7 +1193,7 @@ public sealed class LocationAssetHandoverSigningTests(Compact24Fixture fixture) 
         return user;
     }
 
-    private static async Task<HttpClient> Login(HttpClient client, ApplicationUser account)
+    private static async Task<HttpClient> Login(HttpClient client, User account)
     {
         var login = await client.PostAsJsonAsync("/api/v1/auth/login",
             new { email = account.Email, password = Password });

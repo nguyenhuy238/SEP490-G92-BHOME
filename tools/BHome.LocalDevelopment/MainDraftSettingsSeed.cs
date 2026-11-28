@@ -25,11 +25,11 @@ internal static class MainDraftSettingsSeed
 
         await using var scope = provider.CreateAsyncScope();
         var services = scope.ServiceProvider;
-        var db = services.GetRequiredService<BHomePersistenceContext>();
+        await using var db = OfflineFixturePersistence.Open(services);
         if (!await db.IsSchemaReadyAsync())
             throw new InvalidOperationException("Apply pending migrations before seeding.");
         var location = await db.Locations.SingleAsync(l => l.Name == "BHOME TEST - Cơ sở Staff" && l.IsActive);
-        var manager = services.GetRequiredService<UserManager<ApplicationUser>>();
+        var manager = services.GetRequiredService<UserManager<User>>();
         var owner = await manager.FindByNameAsync("owner.dev") ?? throw new InvalidOperationException("Missing local Owner.");
         var staff = await manager.FindByNameAsync("staff.dev") ?? throw new InvalidOperationException("Missing local Staff.");
         if (!owner.IsActive || !staff.IsActive || !await manager.IsInRoleAsync(owner, Roles.Owner) || !await manager.IsInRoleAsync(staff, Roles.Staff))

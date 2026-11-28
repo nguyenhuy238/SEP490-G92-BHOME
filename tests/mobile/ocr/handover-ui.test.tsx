@@ -79,11 +79,11 @@ vi.mock('../../../src/mobile/src/components/CameraCapture', () => ({ CameraCaptu
 vi.mock('../../../src/mobile/src/features/contracts/ContractEvidence', () => ({
   ContractEvidence: () => null,
 }));
-vi.mock('../../../src/mobile/src/features/contracts/ContractInitialMeterTasks', () => ({
+vi.mock('../../../src/mobile/src/features/contracts/handover/ContractInitialMeterTasks', () => ({
   ContractInitialMeterTasks: () => null,
 }));
-import { ContractHandoverPanel } from '../../../src/mobile/src/features/contracts/ContractHandoverPanel';
-import { ContractAssetChangesPanel } from '../../../src/mobile/src/features/contracts/ContractAssetChangesPanel';
+import { ContractHandoverPanel } from '../../../src/mobile/src/features/contracts/handover/ContractHandoverPanel';
+import { ContractAssetChangesPanel } from '../../../src/mobile/src/features/contracts/handover/ContractAssetChangesPanel';
 afterEach(cleanup);
 
 it('a renewal displays the original party acknowledgement and confirms a pending change under the current contract', async () => {

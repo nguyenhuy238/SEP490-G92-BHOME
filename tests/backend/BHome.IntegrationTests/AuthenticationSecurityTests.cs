@@ -28,9 +28,9 @@ public sealed class AuthenticationSecurityTests(AuthenticationDatabaseFixture fi
     public async Task AccountCreatedInactiveDoesNotAcquireDefaultActiveState()
     {
         await using var scope = fixture.Factory.Services.CreateAsyncScope();
-        var users = scope.ServiceProvider.GetRequiredService<UserManager<ApplicationUser>>();
+        var users = scope.ServiceProvider.GetRequiredService<UserManager<User>>();
         var id = Guid.NewGuid();
-        var user = new ApplicationUser { Id = id, UserName = id.ToString(), Email = $"{id:N}@example.invalid", IsActive = false };
+        var user = new User { Id = id, UserName = id.ToString(), Email = $"{id:N}@example.invalid", IsActive = false };
         Assert.True((await users.CreateAsync(user, Password)).Succeeded);
         Assert.True((await users.AddToRoleAsync(user, Roles.Owner)).Succeeded);
         using var client = fixture.Factory.CreateClient();
@@ -47,7 +47,7 @@ public sealed class AuthenticationSecurityTests(AuthenticationDatabaseFixture fi
         async Task RemoveRole()
         {
             await using var scope = fixture.Factory.Services.CreateAsyncScope();
-            var users = scope.ServiceProvider.GetRequiredService<UserManager<ApplicationUser>>();
+            var users = scope.ServiceProvider.GetRequiredService<UserManager<User>>();
             var stored = (await users.FindByIdAsync(user.Id.ToString()))!;
             Assert.True((await users.RemoveFromRoleAsync(stored, Roles.Owner)).Succeeded);
         }
@@ -133,7 +133,7 @@ public sealed class AuthenticationSecurityTests(AuthenticationDatabaseFixture fi
         var session = await Login(client, user);
         await using (var scope = fixture.Factory.Services.CreateAsyncScope())
         {
-            var users = scope.ServiceProvider.GetRequiredService<UserManager<ApplicationUser>>();
+            var users = scope.ServiceProvider.GetRequiredService<UserManager<User>>();
             var stored = (await users.FindByIdAsync(user.Id.ToString()))!;
             Assert.True((await users.RemoveFromRoleAsync(stored, Roles.Owner)).Succeeded);
             Assert.True((await users.AddToRoleAsync(stored, Roles.Owner)).Succeeded);
@@ -584,18 +584,18 @@ public sealed class AuthenticationSecurityTests(AuthenticationDatabaseFixture fi
         Assert.Equal(HttpStatusCode.Unauthorized, (await client.GetAsync("/api/v1/session")).StatusCode);
     }
 
-    private async Task<ApplicationUser> CreateUser()
+    private async Task<User> CreateUser()
     {
         await using var scope = fixture.Factory.Services.CreateAsyncScope();
-        var users = scope.ServiceProvider.GetRequiredService<UserManager<ApplicationUser>>();
+        var users = scope.ServiceProvider.GetRequiredService<UserManager<User>>();
         var id = Guid.NewGuid();
-        var user = new ApplicationUser { Id = id, UserName = id.ToString(), Email = $"{id:N}@example.invalid", EmailConfirmed = true, LockoutEnabled = true };
+        var user = new User { Id = id, UserName = id.ToString(), Email = $"{id:N}@example.invalid", EmailConfirmed = true, LockoutEnabled = true };
         Assert.True((await users.CreateAsync(user, Password)).Succeeded);
         Assert.True((await users.AddToRoleAsync(user, Roles.Owner)).Succeeded);
         return user;
     }
 
-    private async Task<LoginResult> Login(HttpClient client, ApplicationUser user)
+    private async Task<LoginResult> Login(HttpClient client, User user)
     {
         var response = await client.PostAsJsonAsync("/api/v1/auth/login", new { email = user.Email, password = Password });
         Assert.Equal(HttpStatusCode.OK, response.StatusCode);

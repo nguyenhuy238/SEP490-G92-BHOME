@@ -32,7 +32,7 @@ import type { Named } from '../lib/api';
 import { Action, Box, Heading, Metric, Pill, Row, ui } from '../components/WorkspaceKit';
 import { ChoiceField } from '../components/WorkflowControls';
 import { Pagination, QueryState } from '../components/WorkspaceQueryState';
-import { AdjustmentEvidenceImage } from './TenantAdjustmentPanel';
+import { AdjustmentEvidenceImage } from '../features/tenant/billing/TenantAdjustmentPanel';
 
 const idPattern = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 

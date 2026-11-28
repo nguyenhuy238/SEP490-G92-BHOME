@@ -48,15 +48,15 @@ public sealed class OperationalTaskMigrationTests : IAsyncLifetime
             """);
         await migrator.MigrateAsync();
         var migrated = await db.Set<OperationalTask>().AsNoTracking().SingleAsync(x => x.Id == task);
-        Assert.Equal(location, migrated.LocationId); Assert.Equal(1, migrated.Version);
+        Assert.Equal(location, migrated.RequiredLocationId); Assert.Equal(1, migrated.Version);
         Assert.Equal(OperationalTaskKind.MeterReading, migrated.Kind);
-        Assert.Equal(MeterTaskStatus.Completed, migrated.Status); Assert.Equal(100, migrated.OcrProposedValue);
+        Assert.Equal(MeterTaskStatus.Completed, migrated.MeterStatus); Assert.Equal(100, migrated.OcrProposedValue);
         Assert.Null(migrated.AssignedStaffUserId);
         Assert.Equal(evidence, (await db.Set<MeterReading>().AsNoTracking().SingleAsync(x => x.Id == reading)).EvidenceId);
         await migrator.MigrateAsync(previous);
         Assert.Equal(meter, await db.Database.SqlQuery<Guid>($"SELECT \"MeterId\" AS \"Value\" FROM \"OperationalTasks\" WHERE \"Id\" = {task}").SingleAsync());
         await migrator.MigrateAsync();
-        db.Add(new OperationalTask { Kind = OperationalTaskKind.AdHoc, LocationId = location, Title = "Synthetic task", Requirements = "Synthetic work", DueAt = DateTimeOffset.UtcNow.AddDays(1) });
+        db.Add(new OperationalTask { Kind = OperationalTaskKind.AdHoc, RequiredLocationId = location, TaskTitle = "Synthetic task", Requirements = "Synthetic work", DueAt = DateTimeOffset.UtcNow.AddDays(1) });
         await db.SaveChangesAsync(); db.ChangeTracker.Clear();
         var exception = await Assert.ThrowsAsync<PostgresException>(() => migrator.MigrateAsync(previous));
         Assert.Contains("Cannot downgrade", exception.MessageText);

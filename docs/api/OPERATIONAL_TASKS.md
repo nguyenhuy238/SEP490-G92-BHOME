@@ -50,8 +50,8 @@ Các record/history/evidence và service vận hành nằm trong StaffOperations
 - Meter Task: giữ ID, FK của MeterEvidence/MeterReading, purpose/period/final Contract và numeric status cũ. Staff xác nhận reading qua capture API vẫn hoàn thành theo UC-20; không qua Owner verify của generic Task.
 - AdHoc Task: Location bắt buộc, nội dung, priority, dueAt, evidence requirement, snapshot assignment, version và Owner verification. Không có MeterId/ContractId/BillingPeriod.
 - History/evidence nằm trong JSON của `operational_tasks`; command/file-upload intent là technical records;
-  Task notification và inbox được ánh xạ vào `notifications`. Source mapping ở
-  [Compact24Records.cs](../../src/backend/BHome.Infrastructure/Persistence/Compact24/Compact24Records.cs).
+  Task notification và inbox được ánh xạ vào `notifications`. Repository runtime dùng
+  [NativeOperationalTaskPersistence.cs](../../src/backend/BHome.Api/Repositories/StaffOperations/NativeOperationalTaskPersistence.cs) và adapter chuyên biệt theo nghiệp vụ.
 - `20261030074118_UnifiedOperationalTasks` và các tên bảng phụ OperationalTaskHistory/Commands/
   Evidence/Notifications/FileUploads là lịch sử EF persistence cũ, không phải bảng cần tạo thêm cho Compact24.
 

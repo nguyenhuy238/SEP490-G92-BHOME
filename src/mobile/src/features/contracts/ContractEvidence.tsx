@@ -10,7 +10,7 @@ import { ui } from '../../components/WorkspaceKit';
 import { randomUUID } from '../../lib/randomUUID';
 import { acquirePrivatePhotoThumbnail } from '../../lib/privatePhotoThumbnails';
 import { contractPdfName } from '../../../../../packages/client-core/src/contractPdfName';
-import { deliverWebDocument, openPdfWindow } from './webContractDocument';
+import { deliverWebDocument, openPdfWindow } from './signing/webContractDocument';
 import {
   contractError,
   type ContractClient,

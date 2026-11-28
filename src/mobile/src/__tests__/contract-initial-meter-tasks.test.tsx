@@ -48,7 +48,7 @@ vi.mock('../components/WorkspaceKit', () => ({
 }));
 
 import { router } from 'expo-router';
-import { ContractInitialMeterTasks } from '../features/contracts/ContractInitialMeterTasks';
+import { ContractInitialMeterTasks } from '../features/contracts/handover/ContractInitialMeterTasks';
 
 const contract = {
   id: 'contract-new',

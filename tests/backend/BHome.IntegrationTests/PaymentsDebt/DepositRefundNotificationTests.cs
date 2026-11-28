@@ -36,7 +36,7 @@ public sealed partial class PaymentLedgerTests
         await RefundValue<ContractId>(await Post(owner, contract + "/deposit-verifications",
             new DepositInput("SYN-AGREED-" + Guid.NewGuid(), 400000, "Synthetic verified principal")));
         var source = await RefundValue<RefundSource>(await owner.GetAsync(sourceRoute)); Assert.Equal(3, source.Beneficiaries.Count);
-        await using var scope = fixture.Factory.Services.CreateAsyncScope(); var db = scope.ServiceProvider.GetRequiredService<BHomePersistenceContext>();
+        await using var scope = fixture.Factory.Services.CreateAsyncScope(); var db = scope.ServiceProvider.GetFixturePersistence();
         var person = await db.Set<Resident>().SingleAsync(r => r.TenantUserId == w.Tenants[1]);
         var input = new DepositRefundInput(new(person.Id, 400000, "PRIVATE_AGREEMENT_REASON", true), source.FinancialReference!, true, true);
         Assert.Equal(HttpStatusCode.BadRequest, (await Post(owner, sourceRoute, input with { BeneficiaryVerified = false })).StatusCode);
@@ -96,7 +96,7 @@ public sealed partial class PaymentLedgerTests
             b.ConfigureAppConfiguration((_, c) => c.AddInMemoryCollection(new Dictionary<string, string?> { ["NotificationChannels:Enabled"] = "true" }));
             b.ConfigureServices(s => s.AddSingleton<INotificationChannelProvider>(provider));
         });
-        await using var deliveryScope = host.Services.CreateAsyncScope(); var deliveryDb = deliveryScope.ServiceProvider.GetRequiredService<BHomePersistenceContext>();
+        await using var deliveryScope = host.Services.CreateAsyncScope(); var deliveryDb = deliveryScope.ServiceProvider.GetFixturePersistence();
         var worker = deliveryScope.ServiceProvider.GetRequiredService<NotificationChannelWorker>(); await worker.EnqueueDueAsync(default);
         await db.Database.ExecuteSqlInterpolatedAsync($"UPDATE refund_requests SET history=history||jsonb_build_array({invalid}::jsonb) WHERE id={row.Id}");
         foreach (var notice in published)

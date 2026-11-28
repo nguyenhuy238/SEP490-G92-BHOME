@@ -47,7 +47,7 @@ public sealed class SePayHoldingPreviewController(IPaymentRepository repository,
         var signs = SandboxSignatures.Read(c);
         var evidence = AnonymousContractSigningService.AcceptedEvidence(c);
         var ownerConfirmed = AnonymousContractSigningService.Complete(c) || signs.OwnerConfirmed(c);
-        var tenantAccepted = evidence?.SnapshotHash == c.SnapshotHash || signs.TenantAt is not null;
+        var tenantAccepted = evidence?.SnapshotHash == c.SnapshotHashOrEmpty || signs.TenantAt is not null;
         var verified = await contractRepository.DepositTotalAsync(c.Id, token);
         return new("Test", c.Id, false, signs.TenantAt is not null,
             previewOnly || ownerConfirmed && tenantAccepted, c.RequiredDeposit > 0 && verified == c.RequiredDeposit,
@@ -60,7 +60,7 @@ public sealed class SePayHoldingPreviewController(IPaymentRepository repository,
         {
             using var json = JsonDocument.Parse(c.DraftMetadata);
             return json.RootElement.TryGetProperty("SandboxQrPreviewOnly", out var value) &&
-                value.GetProperty("SnapshotHash").GetString() == c.SnapshotHash &&
+                value.GetProperty("SnapshotHash").GetString() == c.SnapshotHashOrEmpty &&
                 value.GetProperty("RequestedBy").GetGuid() != Guid.Empty;
         }
         catch (Exception e) when (e is JsonException or KeyNotFoundException or InvalidOperationException or FormatException) { return false; }
@@ -78,7 +78,7 @@ public sealed class SePayHoldingPreviewController(IPaymentRepository repository,
             if (!PreviewOnly(c))
             {
                 var data = System.Text.Json.Nodes.JsonNode.Parse(c.DraftMetadata)!.AsObject();
-                data["SandboxQrPreviewOnly"] = JsonSerializer.SerializeToNode(new { c.SnapshotHash, RequestedBy = actor.UserId, RequestedAt = clock.GetUtcNow() });
+                data["SandboxQrPreviewOnly"] = JsonSerializer.SerializeToNode(new { SnapshotHash = c.SnapshotHashOrEmpty, RequestedBy = actor.UserId, RequestedAt = clock.GetUtcNow() });
                 c.DraftMetadata = data.ToJsonString();
                 contractRepository.Audit(actor.UserId!.Value, "SandboxHoldingQrPreviewWithoutSigning", id, clock.GetUtcNow());
             }
@@ -159,7 +159,7 @@ public sealed class SePayHoldingPreviewController(IPaymentRepository repository,
             throw new PaymentException(409, "holding_owner_signature_required");
         if (!contract.IsDevelopmentDemo && (!AnonymousContractSigningService.Complete(contract) &&
             !new[] { contract.OwnerSignerId, contract.TenantUserId }.All(signer => signer is not null &&
-                contract.Signatures.Any(s => s.SignerUserId == signer && s.Status == SignatureStatus.Signed && s.SnapshotHash == contract.SnapshotHash))))
+                contract.Signatures.Any(s => s.SignerUserId == signer && s.Status == SignatureStatus.Signed && s.SnapshotHash == contract.SnapshotHashOrEmpty))))
             throw new PaymentException(409, "verified_signature_evidence_required");
         if (!contract.IsDevelopmentDemo && !ContractChargeSnapshot.IsIntact(contract)) throw new PaymentException(409, "signed_terms_changed");
         if (contract.Status is not (ContractStatus.Draft or ContractStatus.PendingSigning or ContractStatus.PendingActivation) ||

@@ -47,7 +47,7 @@ vi.mock('react-native-paper', () => ({
   ),
 }));
 import { KeyboardFormScrollView } from '../components/KeyboardFormScrollView';
-import { SignaturePad } from '../features/contracts/SignaturePad';
+import { SignaturePad } from '../features/contracts/signing/SignaturePad';
 
 afterEach(cleanup);
 const at = (x: number, y: number) => ({ nativeEvent: { locationX: x, locationY: y } });

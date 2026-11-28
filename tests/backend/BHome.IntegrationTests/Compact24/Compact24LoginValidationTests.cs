@@ -12,10 +12,10 @@ namespace BHome.IntegrationTests.Compact24;
 public sealed class Compact24LoginValidationTests(Compact24Fixture fixture) : IClassFixture<Compact24Fixture>
 {
     private const string Password = "Synthetic!Login-795";
-    private async Task<ApplicationUser> User(string? phone = null)
+    private async Task<User> User(string? phone = null)
     {
         await using var scope = fixture.Factory!.Services.CreateAsyncScope();
-        return await WorkflowTestUsers.CreateAsync(scope.ServiceProvider, new ApplicationUser
+        return await WorkflowTestUsers.CreateAsync(scope.ServiceProvider, new User
         { Id = Guid.NewGuid(), UserName = Guid.NewGuid().ToString("N"), Email = Guid.NewGuid().ToString("N") + "@example.invalid", EmailConfirmed = true, PhoneNumber = phone }, "Tenant", Password);
     }
 
@@ -61,7 +61,7 @@ public sealed class Compact24LoginValidationTests(Compact24Fixture fixture) : IC
         var user = await User(); using var client = fixture.Factory!.CreateClient();
         var wrong = await client.PostAsJsonAsync("/api/v1/auth/login", new { email = user.Email, password = "Wrong!Password-795" });
         await using var scope = fixture.Factory.Services.CreateAsyncScope();
-        await scope.ServiceProvider.GetRequiredService<Compact24DbContext>().Users.Where(u => u.Id == user.Id).ExecuteUpdateAsync(s => s.SetProperty(u => u.IsActive, false));
+        await scope.ServiceProvider.GetRequiredService<Compact24ArchiveContext>().Users.Where(u => u.Id == user.Id).ExecuteUpdateAsync(s => s.SetProperty(u => u.IsActive, false));
         foreach (var response in new[] { wrong,
             await client.PostAsJsonAsync("/api/v1/auth/login", new { email = user.Email, password = Password }),
             await client.PostAsJsonAsync("/api/v1/auth/login", new { email = "unknown@example.invalid", password = Password }) })

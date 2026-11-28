@@ -29,7 +29,7 @@ public sealed partial class IncidentApiTests
         await Ok<IncidentCommandResult>(await Verify(w, id, cost: 0));
         work = (await Work(w.Owner, id))!; Assert.Equal("Verified", work.Status); Assert.Null(work.ApprovedById);
         Assert.NotNull(work.FastRepairPolicyVersion);
-        await using var scope = fixture.Factory.Services.CreateAsyncScope(); var db = scope.ServiceProvider.GetRequiredService<BHomePersistenceContext>();
+        await using var scope = fixture.Factory.Services.CreateAsyncScope(); var db = scope.ServiceProvider.GetFixturePersistence();
         Assert.False(await db.Set<MaintenanceExpense>().AnyAsync(e => e.WorkOrderId == id));
         Assert.Equal(0, (await db.Set<MaintenanceHistory>().SingleAsync(h => h.WorkOrderId == id)).ActualCost);
     }
@@ -43,7 +43,7 @@ public sealed partial class IncidentApiTests
         var work = (await Work(w.Owner, id))!; Assert.Null(work.AssetId);
         await Ok<IncidentCommandResult>(await Send(w.Owner, $"{Orders}/{id}/asset-decision", new AssetLinkDecision(work.Version, true, "Owner confirmed device")));
         work = (await Work(w.Owner, id))!; Assert.NotNull(work.AssetId);
-        await using var scope = fixture.Factory.Services.CreateAsyncScope(); var db = scope.ServiceProvider.GetRequiredService<BHomePersistenceContext>();
+        await using var scope = fixture.Factory.Services.CreateAsyncScope(); var db = scope.ServiceProvider.GetFixturePersistence();
         var asset = await db.Set<BHome.Domain.PropertyManagement.Asset>().SingleAsync(a => a.Id == work.AssetId);
         Assert.Equal(w.Room, asset.RoomId); Assert.Equal(w.Location, asset.LocationId); Assert.Equal("Synthetic new fan", asset.Name);
     }
@@ -91,7 +91,7 @@ public sealed partial class IncidentApiTests
         var w = await Setup(); var coTenant = await User(BHome.Domain.IdentityAccess.Roles.Tenant);
         await using (var scope = fixture.Factory.Services.CreateAsyncScope())
         {
-            var db = scope.ServiceProvider.GetRequiredService<BHomePersistenceContext>();
+            var db = scope.ServiceProvider.GetFixturePersistence();
             var room = await db.Set<BHome.Domain.PropertyManagement.Room>().SingleAsync(r => r.Id == w.Room); room.Capacity = 3;
             var resident = new BHome.Domain.TenantContracts.Resident
             {
@@ -179,7 +179,7 @@ public sealed partial class IncidentApiTests
         var timeline = await w.Owner.Client.GetFromJsonAsync<IncidentPage<IncidentActivityView>>($"{Orders}/{id}/history");
         Assert.Contains(timeline!.Items, a => a.Action == "verified");
         await using var scope = fixture.Factory.Services.CreateAsyncScope();
-        var db = scope.ServiceProvider.GetRequiredService<BHomePersistenceContext>();
+        var db = scope.ServiceProvider.GetFixturePersistence();
         Assert.False(await db.Set<IncidentReport>().AnyAsync(r => r.LocationId == w.Location));
         Assert.Single(await db.Set<MaintenanceExpense>().Where(e => e.WorkOrderId == id).ToArrayAsync());
         Assert.Single(await db.Set<MaintenanceHistory>().Where(h => h.WorkOrderId == id).ToArrayAsync());
@@ -209,7 +209,7 @@ public sealed partial class IncidentApiTests
         var created = await Ok<IncidentCommandResult>(await Send(w.Owner, Orders, common));
         Assert.Equal("Synthetic corridor", (await Work(w.Owner, created.WorkOrderId!.Value))!.CommonArea);
         await using var scope = fixture.Factory.Services.CreateAsyncScope();
-        var db = scope.ServiceProvider.GetRequiredService<BHomePersistenceContext>();
+        var db = scope.ServiceProvider.GetFixturePersistence();
         var room = new BHome.Domain.PropertyManagement.Room { LocationId = w.Location, RoomNumber = "SYNTHETIC-VACANT" };
         db.Add(room); await db.SaveChangesAsync();
         created = await Ok<IncidentCommandResult>(await Send(w.Owner, Orders, Proactive(w) with { RoomId = room.Id, AssetId = null }));

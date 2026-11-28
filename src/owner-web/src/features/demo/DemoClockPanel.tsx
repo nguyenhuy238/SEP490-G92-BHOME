@@ -13,7 +13,6 @@ import {
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { Clock, Minus } from 'lucide-react';
 import { useMeterApi } from '../meters/useMeterApi';
-import { QuickContractPanel } from './QuickContractPanel';
 import { ApiError } from '../../../../../packages/client-core/src/api';
 import { useAuth } from '../../../../../packages/client-core/src/auth';
 import {
@@ -288,9 +287,6 @@ export function DemoClockWorkspace({ children }: { children: ReactNode }) {
             </Paper>
           )}
           <Stack direction="row" spacing={1} sx={{ justifyContent: 'flex-end', flexWrap: 'wrap' }}>
-            {synced && applied.canChange && (
-              <QuickContractPanel businessDate={applied.businessDate} />
-            )}
             <Button
               id={`${panelId}-toggle`}
               variant="contained"

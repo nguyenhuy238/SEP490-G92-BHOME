@@ -9,7 +9,7 @@ const mocks = vi.hoisted(() => ({
   locations: vi.fn(),
 }));
 
-vi.mock('../contracts/useContractsApi', () => ({
+vi.mock('../contracts/hooks/useContractsApi', () => ({
   useContractsApi: () => ({ transport: mocks.transport, locations: mocks.locations }),
 }));
 vi.mock('./OwnerMoveOutReviewPanel', () => ({

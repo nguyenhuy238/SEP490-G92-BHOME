@@ -27,7 +27,7 @@ vi.mock('../components/WorkspaceKit', () => ({
   Action: ({ children }: { children: React.ReactNode }) => <button>{children}</button>,
   ui: {},
 }));
-vi.mock('../screens/TenantSettlementTransfer', () => ({
+vi.mock('../features/tenant/billing/TenantSettlementTransfer', () => ({
   TenantSettlementTransfer: () => <div data-testid="payment-qr">QR</div>,
 }));
 vi.mock('../features/workspace/useWorkspaceQuery', () => ({
@@ -54,7 +54,7 @@ vi.mock('../features/workspace/useWorkspaceQuery', () => ({
   },
 }));
 
-import { TenantSettlementReceivableDetail } from '../screens/TenantSettlementReceivableDetail';
+import { TenantSettlementReceivableDetail } from '../features/tenant/billing/TenantSettlementReceivableDetail';
 
 afterEach(() => {
   cleanup();

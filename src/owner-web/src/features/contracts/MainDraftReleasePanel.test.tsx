@@ -1,7 +1,7 @@
 import { act, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { beforeEach, afterEach, expect, it, vi } from 'vitest';
-import { MainDraftReleasePanel } from './MainDraftReleasePanel';
+import { MainDraftReleasePanel } from './components/drafts/MainDraftReleasePanel';
 import type { MainDraftView } from '../../../../../packages/client-core/src/mainDrafts';
 const mock = vi.hoisted(() => ({
   signingReview: vi.fn(),
@@ -9,7 +9,10 @@ const mock = vi.hoisted(() => ({
   release: vi.fn(),
   transport: vi.fn(),
 }));
-vi.mock('./useContractsApi', () => ({ useMainDraftApi: () => mock, useContractsApi: () => mock }));
+vi.mock('./hooks/useContractsApi', () => ({
+  useMainDraftApi: () => mock,
+  useContractsApi: () => mock,
+}));
 vi.mock('../../../../../packages/client-core/src/auth', () => ({
   useAuth: () => ({ session: { userId: 'owner' } }),
 }));

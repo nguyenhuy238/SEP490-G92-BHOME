@@ -12,7 +12,6 @@ import { ApiError } from '../../../../../packages/client-core/src/api';
 import { theme } from '../../theme/theme';
 import { ApiConfigurationLibraryPage } from './pages/ApiConfigurationLibraryPage';
 import { ApiConfigurationCopy } from './ApiConfigurationCopy';
-import { LocationRoomDefaultsPicker } from './LocationRoomDefaultsPicker';
 
 const state = vi.hoisted(() => ({ request: vi.fn(), roles: ['Owner'] }));
 vi.mock('./useSharedConfigurationApi', () => ({
@@ -225,16 +224,6 @@ it('shows duplicate name validation on the name field and keeps the draft editab
   expect(screen.getByLabelText(/Tên mẫu/)).toHaveAttribute('aria-invalid', 'false');
   fireEvent.click(screen.getByRole('button', { name: 'Lưu mẫu' }));
   await screen.findByText('Đã lưu mẫu. Có thể sử dụng ngay.');
-});
-it('loads persisted local defaults for explicit Room creation without writing a Room', async () => {
-  const choose = vi.fn();
-  state.request.mockResolvedValue([
-    { id: 'defaults', data: { name: doc.name, defaults: doc.data } },
-  ]);
-  mount(<LocationRoomDefaultsPicker location="location-b" choose={choose} />);
-  await select('Dùng cấu hình gợi ý', doc.name);
-  expect(choose).toHaveBeenCalledWith(3);
-  expect(state.request.mock.calls.every(([, init]) => !init?.method)).toBe(true);
 });
 function mount(element = <ApiConfigurationLibraryPage kind="room" />) {
   return render(

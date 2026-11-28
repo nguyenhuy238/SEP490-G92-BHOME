@@ -4,12 +4,12 @@ import { MemoryRouter, Route, Routes } from 'react-router';
 import { afterEach, expect, it, vi } from 'vitest';
 import { theme } from '../../theme/theme';
 import InvoicesPage from './pages/InvoicesPage';
-import AutomationPage from './AutomationPage';
-import { DemoBillingConfigurationGuide } from './BillingConfigurationPage';
+import AutomationPage from './pages/AutomationPage';
+import { DemoBillingConfigurationGuide } from './pages/BillingConfigurationPage';
 
 // These are the actual default route modules, not their explicitly exported live children.
 vi.mock('../../services/config', () => ({ isMockMode: true, apiBaseUrl: '' }));
-vi.mock('./useInvoiceApi', () => ({
+vi.mock('./hooks/useInvoiceApi', () => ({
   useInvoiceApi: () => {
     throw new Error('Demo must never instantiate the invoice API client');
   },

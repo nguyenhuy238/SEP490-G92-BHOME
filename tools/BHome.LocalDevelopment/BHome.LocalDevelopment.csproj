@@ -8,6 +8,7 @@
   </PropertyGroup>
   <ItemGroup>
     <InternalsVisibleTo Include="BHome.IntegrationTests" />
-    <ProjectReference Include="../../src/backend/BHome.Infrastructure/BHome.Infrastructure.csproj" />
+    <ProjectReference Include="../../src/backend/BHome.Api/BHome.Api.csproj" />
+    <ProjectReference Include="../BHome.LegacyPersistence/BHome.LegacyPersistence.csproj" />
   </ItemGroup>
 </Project>

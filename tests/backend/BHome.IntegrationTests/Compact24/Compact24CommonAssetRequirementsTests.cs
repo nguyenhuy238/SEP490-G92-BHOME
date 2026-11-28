@@ -47,7 +47,7 @@ public sealed partial class Compact24OwnerSetupTests
         var removed = await Read<SetupDocument>(await owner.PutAsJsonAsync(route, new CommonAssetRequirementsWrite([], updated.Version)));
         Assert.Equal(0, removed.Data.GetProperty("items").GetArrayLength());
         await using var scope = fixture.Factory!.Services.CreateAsyncScope();
-        var db = scope.ServiceProvider.GetRequiredService<Compact24DbContext>();
+        var db = scope.ServiceProvider.GetRequiredService<Compact24ArchiveContext>();
         Assert.False(await db.Set<Asset>().AnyAsync(a => a.LocationId == result.Location.Id || a.LocationId == copy.Location.Id));
         Assert.Equal(3, (await scope.ServiceProvider.GetRequiredService<ISetupWorkspaceStore>().HistoryAsync(document.Id, document.Kind, default)).Count);
     }

@@ -39,13 +39,13 @@ public sealed class AnonymousSigningSecurityTests
     public async Task HoldingTenantRejectsOwnerSignatureForDifferentReviewDocument()
     {
         var r = new Rig(); r.Contract.Kind = ContractKind.Holding;
-        r.Contract.Signatures.Add(new ContractSignature
+        r.Contract.Signatures.Add(new ContractSigning
         {
             SignerUserId = r.Contract.OwnerSignerId,
             Status = SignatureStatus.Signed,
-            SnapshotHash = r.Contract.SnapshotHash,
+            SnapshotHash = r.Contract.SnapshotHashOrEmpty,
             SignedAt = r.Time.Now,
-            SourceHash = "DIFFERENT",
+            SourceHashOrEmpty = "DIFFERENT",
             SignedHash = "OTHER",
             SignedObjectKey = "test",
             ProviderReference = "test"
@@ -62,11 +62,11 @@ public sealed class AnonymousSigningSecurityTests
     public void HoldingCannotTreatPendingOrWrongSnapshotAsOwnerSignature()
     {
         var r = new Rig(); r.Contract.Kind = ContractKind.Holding;
-        var s = new ContractSignature
+        var s = new ContractSigning
         {
             SignerUserId = r.Contract.OwnerSignerId,
             Status = SignatureStatus.Pending,
-            SnapshotHash = r.Contract.SnapshotHash,
+            SnapshotHash = r.Contract.SnapshotHashOrEmpty,
             SignedAt = r.Time.Now,
             SignedObjectKey = "test",
             SignedHash = "test",
@@ -76,7 +76,7 @@ public sealed class AnonymousSigningSecurityTests
         Assert.False(AnonymousContractSigningService.HoldingOwnerHasSigned(r.Contract));
         s.Status = SignatureStatus.Signed; s.SnapshotHash = "different";
         Assert.False(AnonymousContractSigningService.HoldingOwnerHasSigned(r.Contract));
-        s.SnapshotHash = r.Contract.SnapshotHash;
+        s.SnapshotHash = r.Contract.SnapshotHashOrEmpty;
         Assert.True(AnonymousContractSigningService.HoldingOwnerHasSigned(r.Contract));
     }
 
@@ -97,14 +97,14 @@ public sealed class AnonymousSigningSecurityTests
         public Rig()
         {
             Contract.Residents.Add(new ContractResident { ContractId = Contract.Id, ResidentId = Contract.RepresentativeResidentId });
-            Contract.SnapshotHash = ContractDocumentSnapshot.Hash(new(Contract.Id, Contract.RoomId, Contract.OwnerSignerId, Guid.Empty,
+            Contract.SnapshotHashOrEmpty = ContractDocumentSnapshot.Hash(new(Contract.Id, Contract.RoomId, Contract.OwnerSignerId, Guid.Empty,
                 Contract.RepresentativeResidentId, [Contract.RepresentativeResidentId], Contract.StartDate, Contract.EndDate,
-                Contract.MonthlyRent, Contract.RequiredDeposit, null, 0, Contract.Terms, ""));
+                Contract.RentAmount, Contract.RequiredDeposit, null, 0, Contract.Terms, ""));
             Invite = new()
             {
                 ContractId = Contract.Id,
                 ResidentId = Contract.RepresentativeResidentId,
-                SnapshotHash = Contract.SnapshotHash,
+                SnapshotHash = Contract.SnapshotHashOrEmpty,
                 TokenHash = Hash(Token),
                 SessionHash = Hash(Session),
                 SessionExpiresAt = Time.Now.AddMinutes(10),

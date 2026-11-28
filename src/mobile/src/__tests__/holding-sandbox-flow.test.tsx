@@ -37,10 +37,13 @@ vi.mock('../components/WorkspaceKit', () => ({
   Box: ({ children }: { children: React.ReactNode }) => <div>{children}</div>,
   Heading: ({ title }: { title: string }) => <h2>{title}</h2>,
 }));
-vi.mock('../features/contracts/HoldingProgress', () => ({
+vi.mock('../features/contracts/holding/HoldingProgress', () => ({
   HoldingProgress: () => <span>Tiến trình test</span>,
 }));
-import { HoldingSandboxFlow, useHoldingSandbox } from '../features/contracts/HoldingSandboxFlow';
+import {
+  HoldingSandboxFlow,
+  useHoldingSandbox,
+} from '../features/contracts/holding/HoldingSandboxFlow';
 const request = vi.fn();
 const api = contractClient(request as ContractRequest);
 const c = {

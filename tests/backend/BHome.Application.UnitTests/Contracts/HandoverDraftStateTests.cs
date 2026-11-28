@@ -10,7 +10,7 @@ public sealed class HandoverDraftStateTests
     public void NewMainStartsAsDraftWithContractSnapshotButNoInventedInspectionOrApproval()
     {
         var instant = new DateTimeOffset(2026, 11, 19, 5, 0, 0, TimeSpan.Zero);
-        var contract = new Contract { Kind = ContractKind.Main, SnapshotHash = "contract-sha256" };
+        var contract = new Contract { Kind = ContractKind.Main, SnapshotHashOrEmpty = "contract-sha256" };
         var result = HandoverDraftState.Create(contract, instant);
 
         Assert.Equal(1, result.Version);
@@ -32,7 +32,7 @@ public sealed class HandoverDraftStateTests
     public void SerializedPreparationIsIndependentOfExistingImmutableHandoverCurrent()
     {
         var keyPhoto = Guid.NewGuid();
-        var initial = HandoverDraftState.Create(new Contract { SnapshotHash = "first" },
+        var initial = HandoverDraftState.Create(new Contract { SnapshotHashOrEmpty = "first" },
             new DateTimeOffset(2026, 11, 19, 5, 0, 0, TimeSpan.Zero)) with
         { KeyEvidenceIds = [keyPhoto] };
         var options = new JsonSerializerOptions(JsonSerializerDefaults.Web);

@@ -14,15 +14,15 @@ public sealed class OperationalTaskRulesTests
         Assert.Throws<InvalidOperationException>(() => task.ApplyAction("verify", Now, owner));
         task.ApplyAction("start", Now, staff);
         task.ApplyAction("blockers", Now, staff);
-        Assert.Equal(MeterTaskStatus.InProgress, task.Status);
+        Assert.Equal(MeterTaskStatus.InProgress, task.MeterStatus);
         task.ApplyAction("submit", Now, staff);
-        Assert.Equal(MeterTaskStatus.PendingVerification, task.Status);
+        Assert.Equal(MeterTaskStatus.PendingVerification, task.MeterStatus);
         Assert.True(task.IsOverdue(Now));
         task.ApplyAction("rework", Now, owner);
         Assert.Null(task.VerifiedAt);
         task.ApplyAction("submit", Now, staff);
         task.ApplyAction("verify", Now, owner);
-        Assert.Equal(MeterTaskStatus.Completed, task.Status);
+        Assert.Equal(MeterTaskStatus.Completed, task.MeterStatus);
         Assert.Equal(owner, task.VerifiedByUserId);
         Assert.Equal(Now, task.CompletedAt);
         Assert.False(task.IsOverdue(Now));
@@ -35,7 +35,7 @@ public sealed class OperationalTaskRulesTests
     [InlineData(MeterTaskStatus.PendingVerification)]
     public void CancellationClosesEveryOpenState(MeterTaskStatus state)
     {
-        var task = new OperationalTask { Kind = OperationalTaskKind.AdHoc, Status = state, DueAt = Now.AddDays(-1) };
+        var task = new OperationalTask { Kind = OperationalTaskKind.AdHoc, MeterStatus = state, DueAt = Now.AddDays(-1) };
         task.ApplyAction("cancel", Now, Guid.NewGuid());
         Assert.False(task.IsOverdue(Now)); Assert.Null(task.VerifiedAt);
         Assert.Throws<InvalidOperationException>(() => task.ApplyAction("submit", Now, Guid.NewGuid()));
@@ -58,7 +58,7 @@ public sealed class OperationalTaskRulesTests
         task.ApplyAction("progress", Now, staff);
         task.ApplyAction("blockers", Now, staff);
         task.ApplyAction("submit", Now, staff);
-        Assert.Equal(MeterTaskStatus.PendingVerification, task.Status);
+        Assert.Equal(MeterTaskStatus.PendingVerification, task.MeterStatus);
         foreach (var action in new[] { "verify", "rework", "cancel" })
         {
             Assert.Equal("location_asset_handover_workflow_required",

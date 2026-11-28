@@ -14,7 +14,7 @@ import {
   type ContractRequest,
   type ContractView,
 } from '../../../../packages/client-core/src/contracts';
-import { ContractSigningStep } from '../features/contracts/ContractSigningStep';
+import { ContractSigningStep } from '../features/contracts/signing/ContractSigningStep';
 import { ContractNotice } from '../features/contracts/ContractNotice';
 
 vi.mock('react-native-paper', () => ({
@@ -85,14 +85,14 @@ vi.mock('../components/WorkspaceKit', () => ({
     </button>
   ),
 }));
-vi.mock('../features/contracts/ContractSigningPanel', () => ({
+vi.mock('../features/contracts/signing/ContractSigningPanel', () => ({
   ContractSigningPanel: () => <span>Real signing panel</span>,
 }));
 vi.mock('../features/contracts/ContractActionForm', () => ({
   ContractActionForm: () => null,
   SigningCertificates: () => null,
 }));
-vi.mock('../features/contracts/SigningSetup', () => ({
+vi.mock('../features/contracts/signing/SigningSetup', () => ({
   SignaturePlacementField: () => <span>PDF preview</span>,
 }));
 vi.mock('../features/contracts/ContractEvidence', () => ({ ContractEvidence: () => null }));

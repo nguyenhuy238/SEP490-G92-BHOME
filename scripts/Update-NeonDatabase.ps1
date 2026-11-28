@@ -16,9 +16,9 @@ try {
     try {
         if ($Apply) {
             # Only a designated operator with recorded schema approval uses -Apply.
-            dotnet ef database update --configuration $Configuration --context Compact24DbContext --project src/backend/BHome.Infrastructure --startup-project src/backend/BHome.Api
+            dotnet ef database update --configuration $Configuration --context Compact24DbContext --project src/backend/BHome.Api --startup-project src/backend/BHome.Api
         } else {
-            dotnet ef migrations list --configuration $Configuration --context Compact24DbContext --project src/backend/BHome.Infrastructure --startup-project src/backend/BHome.Api
+            dotnet ef migrations list --configuration $Configuration --context Compact24DbContext --project src/backend/BHome.Api --startup-project src/backend/BHome.Api
         }
         $result = $LASTEXITCODE
     } finally { Pop-Location }
