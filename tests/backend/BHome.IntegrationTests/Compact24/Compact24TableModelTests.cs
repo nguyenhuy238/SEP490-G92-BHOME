@@ -9,23 +9,23 @@ namespace BHome.IntegrationTests.Compact24;
 
 public sealed class Compact24TableModelTests(Compact24Fixture fixture) : IClassFixture<Compact24Fixture>
 {
-    private static Compact24TableContext CreateModel() => new(new DbContextOptionsBuilder<Compact24TableContext>()
+    private static Compact24DbContext CreateModel() => new(new DbContextOptionsBuilder<Compact24DbContext>()
         .UseNpgsql("Host=127.0.0.1;Database=offline_native_model;Username=unconfigured").Options);
 
     [Fact]
-    public void NativeEntitiesMatchEveryReviewedPhysicalColumnWithoutOwningMigrations()
+    public async Task NativeEntitiesMatchEveryReviewedPhysicalColumnWithoutOwningMigrations()
     {
         using var db = CreateModel();
         using var stream = typeof(Compact24DbContext).Assembly.GetManifestResourceStream("BHome.Compact24.Schema.sql")!;
         using var reader = new StreamReader(stream);
         var schema = reader.ReadToEnd();
         var expected = Compact24Schema.ExpectedColumns(schema);
-        var entities = db.GetService<IDesignTimeModel>().Model.GetEntityTypes().ToArray();
+        var entities = db.GetService<IDesignTimeModel>().Model.GetEntityTypes().Where(e => e.GetTableName() is not null).ToArray();
         Assert.Equal(24, entities.Length);
         var actual = new List<string>();
         foreach (var entity in entities)
         {
-            Assert.Equal("public", entity.GetSchema());
+            Assert.Equal("public", entity.GetSchema() ?? "public");
             Assert.Null(entity.GetSqlQuery());
             Assert.True(entity.IsTableExcludedFromMigrations());
             var table = StoreObjectIdentifier.Table(entity.GetTableName()!, entity.GetSchema());
@@ -39,17 +39,19 @@ public sealed class Compact24TableModelTests(Compact24Fixture fixture) : IClassF
             Assert.Equal(table.Name == "contract_residents" ? new[] { "contract_id", "resident_id" } : new[] { "id" }, key);
         }
         Assert.Equal(expected.Order(StringComparer.Ordinal), actual.Order(StringComparer.Ordinal));
-        var foreignKeys = entities.SelectMany(e => e.GetForeignKeys()).Select(f =>
+        var foreignKeys = entities.SelectMany(e => e.GetForeignKeys()).Where(f => f.PrincipalEntityType.GetTableName() is not null).Select(f =>
         {
-            var origin = StoreObjectIdentifier.Table(f.DeclaringEntityType.GetTableName()!, "public");
-            var destination = StoreObjectIdentifier.Table(f.PrincipalEntityType.GetTableName()!, "public");
+            var origin = StoreObjectIdentifier.Table(f.DeclaringEntityType.GetTableName()!, f.DeclaringEntityType.GetSchema());
+            var destination = StoreObjectIdentifier.Table(f.PrincipalEntityType.GetTableName()!, f.PrincipalEntityType.GetSchema());
             var from = string.Join(",", f.Properties.Select(p => p.GetColumnName(origin)));
             var to = string.Join(",", f.PrincipalKey.Properties.Select(p => p.GetColumnName(destination)));
             return $"{origin.Name}({from})->{destination.Name}({to})";
         });
         Assert.Equal(Compact24Schema.ExpectedForeignKeys(schema).Order(StringComparer.Ordinal), foreignKeys.Order(StringComparer.Ordinal));
+        Assert.False(db.Database.HasPendingModelChanges());
+        db.Add(new Native.Location { Id = Guid.NewGuid() });
         Assert.Throws<InvalidOperationException>(() => db.SaveChanges());
-        Assert.Throws<InvalidOperationException>(() => { _ = db.SaveChangesAsync(); });
+        await Assert.ThrowsAsync<InvalidOperationException>(() => db.SaveChangesAsync());
     }
 
     [CompactPostgresFact]
@@ -61,17 +63,14 @@ public sealed class Compact24TableModelTests(Compact24Fixture fixture) : IClassF
         await using (var transaction = await domain.Database.BeginTransactionAsync())
         {
             await domain.Database.ExecuteSqlInterpolatedAsync($"INSERT INTO locations(id,name,address,operating_settings) VALUES ({id},'Native model','Synthetic address','{{\"futureField\":{{\"amount\":123}}}}'::jsonb)");
-            await using var tables = await Compact24TableContext.OpenAsync(domain, default);
-            Assert.Same(domain.Database.GetDbConnection(), tables.Database.GetDbConnection());
-            Assert.Same(transaction.GetDbTransaction(), tables.Database.CurrentTransaction!.GetDbTransaction());
-            var row = await tables.Set<Native.Location>().SingleAsync(x => x.Id == id);
+            Assert.Same(transaction.GetDbTransaction(), domain.Database.CurrentTransaction!.GetDbTransaction());
+            var row = await domain.Set<Native.Location>().AsNoTracking().SingleAsync(x => x.Id == id);
             Assert.Equal("Native model", row.Name);
             Assert.Equal(123, row.OperatingSettings.GetProperty("futureField").GetProperty("amount").GetInt32());
-            Assert.Empty(tables.ChangeTracker.Entries());
+            Assert.Empty(domain.ChangeTracker.Entries());
             await transaction.RollbackAsync();
         }
-        await using var after = await Compact24TableContext.OpenAsync(domain, default);
-        Assert.False(await after.Set<Native.Location>().AnyAsync(x => x.Id == id));
+        Assert.False(await domain.Set<Native.Location>().AnyAsync(x => x.Id == id));
     }
 
     [CompactPostgresFact]
@@ -79,23 +78,19 @@ public sealed class Compact24TableModelTests(Compact24Fixture fixture) : IClassF
     {
         await using var domain = new Compact24DbContext(new DbContextOptionsBuilder<Compact24DbContext>()
             .UseNpgsql(fixture.Connection).Options);
-        await using (var tables = await Compact24TableContext.OpenAsync(domain, default))
-        {
-            tables.Add(new Native.FinancialScenario { Id = Guid.NewGuid() });
-            await Assert.ThrowsAsync<InvalidOperationException>(async () => await tables.SaveNativeAsync(default));
-        }
+        domain.Add(new Native.FinancialScenario { Id = Guid.NewGuid() });
+        await Assert.ThrowsAsync<InvalidOperationException>(() => domain.SaveChangesAsync(default));
+        domain.ChangeTracker.Clear();
         await using var transaction = await domain.Database.BeginTransactionAsync();
-        await using (var tables = await Compact24TableContext.OpenAsync(domain, default))
-        {
-            tables.Add(new Native.Location { Id = Guid.NewGuid() });
-            await Assert.ThrowsAsync<InvalidOperationException>(async () => await tables.SaveNativeAsync(default));
-            tables.ChangeTracker.Clear();
-            tables.Remove(new Native.StaffEmployment { Id = Guid.NewGuid() });
-            await Assert.ThrowsAsync<InvalidOperationException>(async () => await tables.SaveNativeAsync(default));
-            tables.ChangeTracker.Clear();
-            tables.Update(new Native.FinancialScenario { Id = Guid.NewGuid() });
-            await Assert.ThrowsAsync<InvalidOperationException>(async () => await tables.SaveNativeAsync(default));
-        }
+        domain.Add(new Native.Location { Id = Guid.NewGuid() });
+        await Assert.ThrowsAsync<InvalidOperationException>(() => domain.SaveChangesAsync(default));
+        domain.ChangeTracker.Clear();
+        domain.Remove(new Native.StaffEmployment { Id = Guid.NewGuid() });
+        await Assert.ThrowsAsync<InvalidOperationException>(() => domain.SaveChangesAsync(default));
+        domain.ChangeTracker.Clear();
+        domain.Update(new Native.FinancialScenario { Id = Guid.NewGuid() });
+        await Assert.ThrowsAsync<InvalidOperationException>(() => domain.SaveChangesAsync(default));
+        domain.ChangeTracker.Clear();
         await transaction.RollbackAsync();
     }
 }

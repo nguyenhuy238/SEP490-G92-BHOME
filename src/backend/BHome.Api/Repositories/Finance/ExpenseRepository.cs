@@ -10,14 +10,13 @@ namespace BHome.Infrastructure.Finance;
 
 public sealed class ExpenseRepository(BHomePersistenceContext db) : IExpenseRepository
 {
-    private Task<Compact24TableContext> TablesAsync(CancellationToken token) =>
-        Compact24TableContext.OpenAsync((Compact24DbContext)db, token);
+    private Compact24DbContext Context => (Compact24DbContext)db;
 
-    private static IQueryable<ExpenseView> Views(Compact24TableContext tables, IQueryable<Native.Expense> expenses) =>
+    private static IQueryable<ExpenseView> Views(Compact24DbContext compact, IQueryable<Native.Expense> expenses) =>
         from expense in expenses
-        join asset in tables.Set<Native.Asset>() on expense.AssetId equals asset.Id into assets
+        join asset in compact.Set<Native.Asset>().AsNoTracking() on expense.AssetId equals asset.Id into assets
         from asset in assets.DefaultIfEmpty()
-        join task in tables.Set<Native.OperationalTask>() on expense.TaskId equals task.Id into tasks
+        join task in compact.Set<Native.OperationalTask>().AsNoTracking() on expense.TaskId equals task.Id into tasks
         from task in tasks.DefaultIfEmpty()
         select new ExpenseView(expense.Id, expense.LocationId, expense.RoomId, expense.ExpenseType, expense.Category,
             expense.Amount, expense.OccurredOn, expense.Note, expense.History.GetArrayLength(),
@@ -26,17 +25,17 @@ public sealed class ExpenseRepository(BHomePersistenceContext db) : IExpenseRepo
 
     public async Task<bool> ValidScopeAsync(Guid locationId, Guid? roomId, CancellationToken token)
     {
-        await using var tables = await TablesAsync(token);
-        return await tables.Set<Native.Location>().AnyAsync(l => l.Id == locationId, token) &&
-            (roomId is null || await tables.Set<Native.Room>().AnyAsync(r => r.Id == roomId && r.LocationId == locationId, token));
+        var compact = Context;
+        return await compact.Set<Native.Location>().AsNoTracking().AnyAsync(l => l.Id == locationId, token) &&
+            (roomId is null || await compact.Set<Native.Room>().AsNoTracking().AnyAsync(r => r.Id == roomId && r.LocationId == locationId, token));
     }
 
     public async Task<ExpensePage> ListAsync(ExpenseFilter filter, CancellationToken token)
     {
         await using var snapshot = filter.IncludeTotalAmount
             ? await db.Database.BeginTransactionAsync(System.Data.IsolationLevel.RepeatableRead, token) : null;
-        await using var tables = await TablesAsync(token);
-        var query = tables.Set<Native.Expense>().AsQueryable();
+        var compact = Context;
+        var query = compact.Set<Native.Expense>().AsNoTracking();
         if (filter.LocationId is { } location) query = query.Where(e => e.LocationId == location);
         if (filter.RoomId is { } room) query = query.Where(e => e.RoomId == room);
         if (filter.From is { } from) query = query.Where(e => e.OccurredOn >= from);
@@ -50,20 +49,20 @@ public sealed class ExpenseRepository(BHomePersistenceContext db) : IExpenseRepo
         var total = await query.LongCountAsync(token);
         var page = query.OrderByDescending(e => e.OccurredOn).ThenBy(e => e.Id)
             .Skip(checked((filter.Page - 1) * filter.PageSize)).Take(filter.PageSize);
-        var rows = await Views(tables, page).ToArrayAsync(token);
+        var rows = await Views(compact, page).ToArrayAsync(token);
         var totalAmount = filter.IncludeTotalAmount
             ? (await query.SumAsync(e => e.Amount, token)).ToString("0.############################", System.Globalization.CultureInfo.InvariantCulture) : null;
         if (snapshot is not null) await snapshot.CommitAsync(token);
         return new(rows, total, filter.Page, filter.PageSize, totalAmount);
     }
 
-    private static Task<ExpenseView?> GetAsync(Compact24TableContext tables, Guid id, CancellationToken token) =>
-        Views(tables, tables.Set<Native.Expense>().Where(e => e.Id == id)).SingleOrDefaultAsync(token);
+    private static Task<ExpenseView?> GetAsync(Compact24DbContext compact, Guid id, CancellationToken token) =>
+        Views(compact, compact.Set<Native.Expense>().AsNoTracking().Where(e => e.Id == id)).SingleOrDefaultAsync(token);
 
     public async Task<ExpenseView?> GetAsync(Guid id, CancellationToken token)
     {
-        await using var tables = await TablesAsync(token);
-        return await GetAsync(tables, id, token);
+        var compact = Context;
+        return await GetAsync(compact, id, token);
     }
 
     private static string? Fingerprint(Native.Expense expense) =>
@@ -97,22 +96,22 @@ public sealed class ExpenseRepository(BHomePersistenceContext db) : IExpenseRepo
         var fingerprint = Convert.ToHexString(SHA256.HashData(JsonSerializer.SerializeToUtf8Bytes(input)));
         await using var tx = await db.Database.BeginTransactionAsync(token);
         await db.Database.ExecuteSqlInterpolatedAsync($"SELECT pg_advisory_xact_lock(hashtextextended({source},0))", token);
-        await using var tables = await TablesAsync(token);
-        if (await tables.Set<Native.Expense>().SingleOrDefaultAsync(e => e.SourceKey == source, token) is { } existing)
+        var compact = Context;
+        if (await compact.Set<Native.Expense>().AsNoTracking().SingleOrDefaultAsync(e => e.SourceKey == source, token) is { } existing)
         {
             if (Fingerprint(existing) != fingerprint) throw new FinanceException(409, "expense_idempotency_conflict");
-            var replay = (await GetAsync(tables, existing.Id, token))!;
+            var replay = (await GetAsync(compact, existing.Id, token))!;
             await tx.CommitAsync(token);
             return replay;
         }
         await db.Database.ExecuteSqlInterpolatedAsync($"SELECT pg_advisory_xact_lock(hashtextextended({input.LocationId.ToString()},0))", token);
-        if (!await ValidScopeAsync(input.LocationId, input.RoomId, token) || !await ValidReferencesAsync(tables, input, token))
+        if (!await ValidScopeAsync(input.LocationId, input.RoomId, token) || !await ValidReferencesAsync(compact, input, token))
             throw new FinanceException(404, "expense_reference_not_found");
-        var incidentId = await tables.Set<Native.OperationalTask>().Where(t => t.Id == input.TaskId)
+        var incidentId = await compact.Set<Native.OperationalTask>().AsNoTracking().Where(t => t.Id == input.TaskId)
             .Select(t => t.IncidentReportId).SingleOrDefaultAsync(token);
         var expense = NewExpense(input, actor, source, fingerprint, now, incidentId);
-        tables.Add(expense);
-        await tables.SaveNativeAsync(token);
+        compact.Add(expense);
+        await compact.SaveChangesAsync(token);
         await tx.CommitAsync(token);
         return (await GetAsync(expense.Id, token))!;
     }
@@ -124,14 +123,14 @@ public sealed class ExpenseRepository(BHomePersistenceContext db) : IExpenseRepo
         var fingerprint = Convert.ToHexString(SHA256.HashData(JsonSerializer.SerializeToUtf8Bytes(items)));
         await using var tx = await db.Database.BeginTransactionAsync(token);
         await db.Database.ExecuteSqlInterpolatedAsync($"SELECT pg_advisory_xact_lock(hashtextextended({prefix},0))", token);
-        await using var tables = await TablesAsync(token);
-        var existing = await tables.Set<Native.Expense>().Where(e => e.SourceKey != null && e.SourceKey.StartsWith(prefix))
+        var compact = Context;
+        var existing = await compact.Set<Native.Expense>().AsNoTracking().Where(e => e.SourceKey != null && e.SourceKey.StartsWith(prefix))
             .OrderBy(e => e.SourceKey).ToArrayAsync(token);
         if (existing.Length != 0)
         {
             if (existing.Length != items.Count || existing.Any(row => Fingerprint(row) != fingerprint))
                 throw new FinanceException(409, "expense_idempotency_conflict");
-            var replay = await BatchViewsAsync(tables, existing.Select(e => e.Id).ToArray(), token);
+            var replay = await BatchViewsAsync(compact, existing.Select(e => e.Id).ToArray(), token);
             await tx.CommitAsync(token);
             return replay;
         }
@@ -149,18 +148,17 @@ public sealed class ExpenseRepository(BHomePersistenceContext db) : IExpenseRepo
             expense.RoomId = null;
             expense.AssetId = null;
             expense.TaskId = null;
-            tables.Add(expense);
+            compact.Add(expense);
             results.Add(expense.Id);
         }
-        await tables.SaveNativeAsync(token);
+        await compact.SaveChangesAsync(token);
         await tx.CommitAsync(token);
-        await using var after = await TablesAsync(token);
-        return await BatchViewsAsync(after, results.ToArray(), token);
+        return await BatchViewsAsync(compact, results.ToArray(), token);
     }
 
-    private static async Task<ExpenseView[]> BatchViewsAsync(Compact24TableContext tables, Guid[] ids, CancellationToken token)
+    private static async Task<ExpenseView[]> BatchViewsAsync(Compact24DbContext compact, Guid[] ids, CancellationToken token)
     {
-        var rows = await Views(tables, tables.Set<Native.Expense>().Where(e => ids.Contains(e.Id))).ToArrayAsync(token);
+        var rows = await Views(compact, compact.Set<Native.Expense>().AsNoTracking().Where(e => ids.Contains(e.Id))).ToArrayAsync(token);
         var byId = rows.ToDictionary(e => e.Id);
         return ids.Select(id => byId[id]).ToArray();
     }
@@ -170,11 +168,11 @@ public sealed class ExpenseRepository(BHomePersistenceContext db) : IExpenseRepo
         await using var tx = await db.Database.BeginTransactionAsync(token);
         // Lock before reading the version/snapshot. Keep evidence and source links untouched.
         await db.Database.ExecuteSqlInterpolatedAsync($"SELECT id FROM expenses WHERE id={id} FOR UPDATE", token);
-        await using var tables = await TablesAsync(token);
-        var previous = await GetAsync(tables, id, token) ?? throw new FinanceException(404, "expense_not_found");
+        var compact = Context;
+        var previous = await GetAsync(compact, id, token) ?? throw new FinanceException(404, "expense_not_found");
         if (!previous.CanEdit) throw new FinanceException(409, "expense_source_managed");
         if (previous.Version != input.ExpectedVersion) throw new FinanceException(409, "expense_version_changed");
-        var expense = await tables.Set<Native.Expense>().AsTracking().SingleAsync(e => e.Id == id, token);
+        var expense = await compact.Set<Native.Expense>().AsNoTracking().SingleAsync(e => e.Id == id, token);
         if (expense.History.EnumerateArray().Any(h => h.ValueKind == JsonValueKind.Object &&
             h.TryGetProperty("recordType", out var type) && type.ValueKind == JsonValueKind.String &&
             type.GetString() is "ExpensePaymentV1" or "DepreciationPlanV1"))
@@ -193,22 +191,24 @@ public sealed class ExpenseRepository(BHomePersistenceContext db) : IExpenseRepo
             previous.AssetId != value.AssetId || previous.TaskId != value.TaskId)
             throw new FinanceException(409, "expense_scope_immutable");
         var entry = JsonSerializer.SerializeToElement(new { action = "Updated", actorId = actor, occurredAt = now, input.Reason, before = previous, after = value });
+        var history = JsonSerializer.SerializeToElement(expense.History.EnumerateArray().Append(entry));
+        compact.Attach(expense);
         expense.Category = value.Category;
         expense.Amount = value.Amount;
         expense.OccurredOn = value.OccurredOn;
         expense.Note = value.Note;
-        expense.History = JsonSerializer.SerializeToElement(expense.History.EnumerateArray().Append(entry));
-        await tables.SaveNativeAsync(token);
+        expense.History = history;
+        await compact.SaveChangesAsync(token);
         await tx.CommitAsync(token);
         return previous with { Category = value.Category, Amount = value.Amount, OccurredOn = value.OccurredOn, Note = value.Note, Version = previous.Version + 1 };
     }
 
-    private static async Task<bool> ValidReferencesAsync(Compact24TableContext tables, ExpenseInput input, CancellationToken t)
+    private static async Task<bool> ValidReferencesAsync(Compact24DbContext compact, ExpenseInput input, CancellationToken t)
     {
-        if (input.AssetId is { } asset && !await tables.Set<Native.Asset>().AnyAsync(a => a.Id == asset && a.LocationId == input.LocationId && a.RoomId == input.RoomId, t)) return false;
+        if (input.AssetId is { } asset && !await compact.Set<Native.Asset>().AsNoTracking().AnyAsync(a => a.Id == asset && a.LocationId == input.LocationId && a.RoomId == input.RoomId, t)) return false;
         if (input.TaskId is null) return true;
-        return await (from task in tables.Set<Native.OperationalTask>()
-                      join incident in tables.Set<Native.IncidentReport>() on task.IncidentReportId equals incident.Id
+        return await (from task in compact.Set<Native.OperationalTask>().AsNoTracking()
+                      join incident in compact.Set<Native.IncidentReport>().AsNoTracking() on task.IncidentReportId equals incident.Id
                       where task.Id == input.TaskId && task.TaskType == "WORK_ORDER" && task.LocationId == input.LocationId &&
                             task.RoomId == input.RoomId && incident.LocationId == task.LocationId &&
                             (incident.RoomId == null || incident.RoomId == task.RoomId) &&
@@ -218,13 +218,13 @@ public sealed class ExpenseRepository(BHomePersistenceContext db) : IExpenseRepo
 
     public async Task<ExpenseReferences> ReferencesAsync(Guid locationId, Guid? roomId, CancellationToken t)
     {
-        await using var tables = await TablesAsync(t);
-        var rooms = await tables.Set<Native.Room>().Where(r => r.LocationId == locationId).OrderBy(r => r.RoomNumber)
+        var compact = Context;
+        var rooms = await compact.Set<Native.Room>().AsNoTracking().Where(r => r.LocationId == locationId).OrderBy(r => r.RoomNumber)
             .Select(r => new ExpenseReference(r.Id, r.RoomNumber, r.Id, null)).Take(501).ToArrayAsync(t);
-        var assets = await tables.Set<Native.Asset>().Where(a => a.LocationId == locationId && a.RoomId == roomId).OrderBy(a => a.Name)
+        var assets = await compact.Set<Native.Asset>().AsNoTracking().Where(a => a.LocationId == locationId && a.RoomId == roomId).OrderBy(a => a.Name)
             .Select(a => new ExpenseReference(a.Id, a.Name, a.RoomId, a.Id)).Take(501).ToArrayAsync(t);
-        var tasks = await (from task in tables.Set<Native.OperationalTask>()
-                           join incident in tables.Set<Native.IncidentReport>() on task.IncidentReportId equals incident.Id
+        var tasks = await (from task in compact.Set<Native.OperationalTask>().AsNoTracking()
+                           join incident in compact.Set<Native.IncidentReport>().AsNoTracking() on task.IncidentReportId equals incident.Id
                            where task.TaskType == "WORK_ORDER" && task.LocationId == locationId && task.RoomId == roomId &&
                                  incident.LocationId == task.LocationId && (incident.RoomId == null || incident.RoomId == task.RoomId)
                            orderby task.Title, task.Id

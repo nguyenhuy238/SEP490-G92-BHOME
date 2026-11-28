@@ -88,7 +88,11 @@ public sealed class Compact24AuthTests(Compact24Fixture fixture) : IClassFixture
         var db = scope.ServiceProvider.GetRequiredService<Compact24DbContext>();
         var persisted = await db.Users.AsNoTracking().SingleAsync(x => x.Id == user.Id);
         Assert.Equal(user.PasswordHash, persisted.PasswordHash);
-        Assert.Equal(new[] { "refresh_tokens", "users" }, db.Model.GetRelationalModel().Tables.Select(x => x.Name).Order().ToArray());
+        // One runtime context now maps all reviewed physical tables, not just Identity.
+        using var schema = typeof(Compact24DbContext).Assembly.GetManifestResourceStream("BHome.Compact24.Schema.sql")!;
+        using var reader = new StreamReader(schema);
+        var expected = Compact24Schema.ExpectedColumns(reader.ReadToEnd()).Select(c => c.Split('.')[0]).Distinct().Order(StringComparer.Ordinal);
+        Assert.Equal(expected, db.Model.GetRelationalModel().Tables.Select(x => x.Name).Order(StringComparer.Ordinal));
         await using var connection = new NpgsqlConnection(fixture.Connection);
         await connection.OpenAsync();
         await using var command = new NpgsqlCommand("SELECT count(*) FROM information_schema.tables WHERE table_schema='public' AND table_type='BASE TABLE'", connection);

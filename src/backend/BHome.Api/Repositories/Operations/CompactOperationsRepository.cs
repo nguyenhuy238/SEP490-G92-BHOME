@@ -185,14 +185,10 @@ internal sealed partial class CompactOperationsRepository(Compact24DbContext db,
             try { if (await update.ExecuteNonQueryAsync(t) != 1) throw OperationsException.Conflict("stale_staff_version"); }
             catch (PostgresException e) when (e.SqlState == PostgresErrorCodes.UniqueViolation) { throw OperationsException.Conflict("email_already_used"); }
         }
-        Guid? employmentId;
-        await using (var tables = await Compact24TableContext.OpenAsync(db, t))
-        {
-            employmentId = await tables.Set<NativeStaffEmployment>()
-                .Where(e => e.StaffUserId == userId)
-                .OrderByDescending(e => e.StartDate).ThenBy(e => e.Id)
-                .Select(e => (Guid?)e.Id).FirstOrDefaultAsync(t);
-        }
+        var employmentId = await db.Set<NativeStaffEmployment>().AsNoTracking()
+            .Where(e => e.StaffUserId == userId)
+            .OrderByDescending(e => e.StartDate).ThenBy(e => e.Id)
+            .Select(e => (Guid?)e.Id).FirstOrDefaultAsync(t);
         if (employmentId is null && input.Employment.Status != "Active")
             throw OperationsException.Invalid("new_employment_must_be_active");
         await EnsureEmploymentPeriodAvailable(userId, employmentId, input.Employment.StartDate, t);
@@ -205,8 +201,7 @@ internal sealed partial class CompactOperationsRepository(Compact24DbContext db,
     {
         await Open(t);
         await EnsureStaffExists(userId, t);
-        await using var tables = await Compact24TableContext.OpenAsync(db, t);
-        var employments = await tables.Set<NativeStaffEmployment>()
+        var employments = await db.Set<NativeStaffEmployment>().AsNoTracking()
             .Where(e => e.StaffUserId == userId)
             .OrderByDescending(e => e.StartDate).ThenBy(e => e.Id).ToListAsync(t);
         return employments.Select(e =>
@@ -231,12 +226,9 @@ internal sealed partial class CompactOperationsRepository(Compact24DbContext db,
             if (version is null) throw OperationsException.Missing();
             if (!Equals(version, input.AccountVersion)) throw OperationsException.Conflict("stale_staff_version");
         }
-        await using (var tables = await Compact24TableContext.OpenAsync(db, t))
-        {
-            var hasHistory = await tables.Set<NativeStaffEmployment>().AnyAsync(e => e.StaffUserId == userId, t);
-            if (!hasHistory && input.Employment.Status != "Active")
-                throw OperationsException.Invalid("new_employment_must_be_active");
-        }
+        var hasHistory = await db.Set<NativeStaffEmployment>().AsNoTracking().AnyAsync(e => e.StaffUserId == userId, t);
+        if (!hasHistory && input.Employment.Status != "Active")
+            throw OperationsException.Invalid("new_employment_must_be_active");
         await EnsureEmploymentPeriodAvailable(userId, null, input.Employment.StartDate, t);
         await SaveEmployment(userId, null, input.Employment, actorId, now, input.Reason, t);
         await using (var update = Command("UPDATE users SET concurrency_stamp=@version WHERE id=@id"))
@@ -885,8 +877,7 @@ internal sealed partial class CompactOperationsRepository(Compact24DbContext db,
     {
         // Periods are inclusive; the latest period must begin strictly after every earlier period.
         // An open-ended prior period must be closed explicitly before a new period is recorded.
-        await using var tables = await Compact24TableContext.OpenAsync(db, t);
-        if (await tables.Set<NativeStaffEmployment>().AnyAsync(e =>
+        if (await db.Set<NativeStaffEmployment>().AsNoTracking().AnyAsync(e =>
             e.StaffUserId == staffId && (employmentId == null || e.Id != employmentId) &&
             (e.EndDate == null || e.EndDate >= start), t))
             throw OperationsException.Conflict("employment_period_overlap");
@@ -895,8 +886,6 @@ internal sealed partial class CompactOperationsRepository(Compact24DbContext db,
     private async Task SaveEmployment(Guid staffId, Guid? employmentId, EmploymentWrite input, Guid actor,
         DateTimeOffset now, string? reason, CancellationToken t)
     {
-        await using var tables = await Compact24TableContext.OpenAsync(db, t);
-        var employments = tables.Set<NativeStaffEmployment>();
         NativeStaffEmployment employment;
         EmploymentWrite? before = null;
         // The previous SQL timestamp parameter stored UTC with PostgreSQL's microsecond precision.
@@ -910,11 +899,11 @@ internal sealed partial class CompactOperationsRepository(Compact24DbContext db,
                 RewardPenaltyPolicy = JsonSerializer.SerializeToElement(new Dictionary<string, JsonElement>(), Json),
                 History = JsonSerializer.SerializeToElement(Array.Empty<JsonElement>(), Json)
             };
-            employments.Add(employment);
+            db.Add(employment);
         }
         else
         {
-            var existing = await employments.AsTracking()
+            var existing = await db.Set<NativeStaffEmployment>().AsTracking()
                 .SingleOrDefaultAsync(e => e.Id == employmentId.Value && e.StaffUserId == staffId, t);
             // The previous scoped UPDATE was a no-op when no matching row existed.
             if (existing is null) return;
@@ -938,7 +927,7 @@ internal sealed partial class CompactOperationsRepository(Compact24DbContext db,
         employment.SalaryType = input.SalaryType;
         employment.BaseRate = input.BaseRate;
         employment.Status = input.Status;
-        await tables.SaveNativeAsync(t);
+        await db.SaveChangesAsync(t);
     }
 
     // Match jsonb ->> semantics for older metadata, including absent and JSON-null values.

@@ -61,6 +61,9 @@ public sealed partial class Compact24DbContext
     public override async Task<int> SaveChangesAsync(bool acceptAllChangesOnSuccess, CancellationToken cancellationToken = default)
     {
         ChangeTracker.DetectChanges();
+        if (ChangeTracker.Entries().Any(e => Compact24NativeModel.IsNative(e.Metadata.ClrType) &&
+            e.State is EntityState.Added or EntityState.Modified or EntityState.Deleted))
+            return await SaveNativeChangesAsync(acceptAllChangesOnSuccess, cancellationToken);
         var domain = ChangeTracker.Entries().Where(e => e.State is EntityState.Added or EntityState.Modified or EntityState.Deleted &&
             e.Entity is not ApplicationUser && e.Entity is not CompactRefreshRow).ToArray();
         if (domain.Length == 0) return await base.SaveChangesAsync(acceptAllChangesOnSuccess, cancellationToken);

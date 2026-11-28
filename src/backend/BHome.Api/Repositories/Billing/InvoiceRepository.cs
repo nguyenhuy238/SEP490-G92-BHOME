@@ -22,10 +22,9 @@ internal sealed class InvoiceRepository(BHomePersistenceContext db) : IInvoiceRe
     {
         if (db is Compact24DbContext compact)
         {
-            await using var tables = await Compact24TableContext.OpenAsync(compact, t);
-            return await (from c in tables.Set<Native.Contract>()
-                          join r in tables.Set<Native.Room>() on c.RoomId equals r.Id
-                          join l in tables.Set<Native.Location>() on r.LocationId equals l.Id
+            return await (from c in compact.Set<Native.Contract>().AsNoTracking()
+                          join r in compact.Set<Native.Room>().AsNoTracking() on c.RoomId equals r.Id
+                          join l in compact.Set<Native.Location>().AsNoTracking() on r.LocationId equals l.Id
                           where c.TenantUserId == tenantId && c.Status == (short)ContractStatus.Active &&
                               (c.ContractType == "MAIN" || c.ContractType == "RENEWAL") && c.ActivatedAt != null && l.IsActive
                           select r.LocationId).Distinct().ToArrayAsync(t);
@@ -49,8 +48,7 @@ internal sealed class InvoiceRepository(BHomePersistenceContext db) : IInvoiceRe
     {
         if (db is Compact24DbContext compact)
         {
-            await using var tables = await Compact24TableContext.OpenAsync(compact, t);
-            return await tables.Set<Native.Room>().Where(r => r.Id == roomId).Select(r => (Guid?)r.LocationId).SingleOrDefaultAsync(t);
+            return await compact.Set<Native.Room>().AsNoTracking().Where(r => r.Id == roomId).Select(r => (Guid?)r.LocationId).SingleOrDefaultAsync(t);
         }
         return await db.Set<Room>().AsNoTracking().Where(r => r.Id == roomId).Select(r => (Guid?)r.LocationId).SingleOrDefaultAsync(t);
     }
@@ -72,8 +70,7 @@ internal sealed class InvoiceRepository(BHomePersistenceContext db) : IInvoiceRe
     {
         if (db is Compact24DbContext compact)
         {
-            await using var tables = await Compact24TableContext.OpenAsync(compact, t);
-            return await tables.Set<Native.Location>().AnyAsync(l => l.Id == locationId, t);
+            return await compact.Set<Native.Location>().AsNoTracking().AnyAsync(l => l.Id == locationId, t);
         }
         return await db.Locations.AnyAsync(l => l.Id == locationId, t);
     }

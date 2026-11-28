@@ -2,7 +2,7 @@ using Microsoft.EntityFrameworkCore;
 
 namespace BHome.Infrastructure.Persistence.Compact24;
 
-// Native Identity rows and domain query projections over the reviewed 24-table schema.
+// Native entities and remaining domain query projections over the reviewed 24-table schema.
 // Domain writes use the typed Compact24 writer. Never infer schema with EnsureCreated/Migrate.
 public sealed partial class Compact24DbContext(DbContextOptions<Compact24DbContext> options,
     Compact24Compatibility? compatibility = null, TimeProvider? clock = null) : BHomePersistenceContext(options)
@@ -21,7 +21,7 @@ public sealed partial class Compact24DbContext(DbContextOptions<Compact24DbConte
     {
         Compact24DomainModel.Configure(model);
         var user = model.Entity<ApplicationUser>();
-        user.ToTable("users"); user.HasKey(x => x.Id);
+        user.ToTable("users", t => t.ExcludeFromMigrations()); user.HasKey(x => x.Id);
         user.Property(x => x.Id).HasColumnName("id").ValueGeneratedNever();
         user.Property(x => x.UserName).HasColumnName("username").HasMaxLength(256).IsRequired();
         user.Property(x => x.NormalizedUserName).HasColumnName("normalized_username").HasMaxLength(256).IsRequired();
@@ -43,37 +43,25 @@ public sealed partial class Compact24DbContext(DbContextOptions<Compact24DbConte
         user.Property<string>("reset_token_hash").HasMaxLength(64);
         user.Property<DateTimeOffset?>("reset_expires_at");
         user.Property<DateTimeOffset?>("reset_consumed_at");
-        user.Property<string>("business_profile").HasColumnType("jsonb").HasDefaultValue("{}");
-        user.Property<string>("signing_credentials").HasColumnType("jsonb").HasDefaultValue("[]");
-        user.Property<string>("history").HasColumnType("jsonb").HasDefaultValue("[]");
+        user.Property<string>("business_profile").HasColumnType("jsonb").HasDefaultValue("{}").IsRequired();
+        user.Property<string>("signing_credentials").HasColumnType("jsonb").HasDefaultValue("[]").IsRequired();
+        user.Property<string>("history").HasColumnType("jsonb").HasDefaultValue("[]").IsRequired();
 
         var refresh = model.Entity<CompactRefreshRow>();
-        refresh.ToTable("refresh_tokens"); refresh.HasKey(x => x.Id);
+        refresh.ToTable("refresh_tokens", t => t.ExcludeFromMigrations()); refresh.HasKey(x => x.Id);
         refresh.Property(x => x.Id).ValueGeneratedNever();
         refresh.HasOne<CompactRefreshRow>().WithMany().HasForeignKey(x => x.SessionId).OnDelete(DeleteBehavior.Restrict);
         refresh.HasOne<ApplicationUser>().WithMany().HasForeignKey(x => x.UserId).OnDelete(DeleteBehavior.Restrict);
         foreach (var property in refresh.Metadata.GetProperties())
             property.SetColumnName(ToSnakeCase(property.Name));
+        refresh.Property(x => x.RecordKind).HasMaxLength(10).IsRequired();
+        refresh.Property(x => x.TokenHash).HasMaxLength(64);
+        refresh.Property(x => x.SecurityStamp).HasMaxLength(256);
+        refresh.Property(x => x.DeviceLabel).HasMaxLength(256);
+        refresh.Property(x => x.RevocationReason).HasMaxLength(50);
+        Compact24NativeModel.Configure(model);
     }
 
     private static string ToSnakeCase(string value) => string.Concat(value.Select((c, i) =>
         i > 0 && char.IsUpper(c) ? "_" + char.ToLowerInvariant(c) : char.ToLowerInvariant(c).ToString()));
-}
-
-internal sealed class CompactRefreshRow
-{
-    public Guid Id { get; set; }
-    public Guid UserId { get; set; }
-    public string RecordKind { get; set; } = "";
-    public Guid? SessionId { get; set; }
-    public string? TokenHash { get; set; }
-    public string? SecurityStamp { get; set; }
-    public string? DeviceLabel { get; set; }
-    public DateTimeOffset IssuedAt { get; set; }
-    public DateTimeOffset? LastActivityAt { get; set; }
-    public DateTimeOffset ExpiresAt { get; set; }
-    public DateTimeOffset? ConsumedAt { get; set; }
-    public DateTimeOffset? RevokedAt { get; set; }
-    public string? RevocationReason { get; set; }
-    public Guid? ReplacedByTokenId { get; set; }
 }

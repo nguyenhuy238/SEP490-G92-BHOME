@@ -43,8 +43,7 @@ internal sealed class SetupWorkspaceStore(Compact24DbContext db, CompactNotifica
         if (db.Database.CurrentTransaction is not null) return await work();
         await using var tx = await db.Database.BeginTransactionAsync(t);
         await db.Database.ExecuteSqlInterpolatedAsync($"SELECT pg_advisory_xact_lock(hashtextextended({locationId.ToString()},0))", t);
-        await using (var tables = await Compact24TableContext.OpenAsync(db, t))
-            if (!await tables.Set<Native.Location>().AnyAsync(l => l.Id == locationId && l.IsActive, t)) throw new PropertyException(409, "location_inactive_or_missing");
+        if (!await db.Set<Native.Location>().AsNoTracking().AnyAsync(l => l.Id == locationId && l.IsActive, t)) throw new PropertyException(409, "location_inactive_or_missing");
         try
         {
             var value = await work(); await db.SaveChangesAsync(t); await tx.CommitAsync(t); return value;
@@ -177,15 +176,13 @@ internal sealed class SetupWorkspaceStore(Compact24DbContext db, CompactNotifica
     }
     public async Task<Guid?> RoomLocationAsync(Guid roomId, CancellationToken t)
     {
-        await using var tables = await Compact24TableContext.OpenAsync(db, t);
-        return await tables.Set<Native.Room>().Where(r => r.Id == roomId).Select(r => (Guid?)r.LocationId).SingleOrDefaultAsync(t);
+        return await db.Set<Native.Room>().AsNoTracking().Where(r => r.Id == roomId).Select(r => (Guid?)r.LocationId).SingleOrDefaultAsync(t);
     }
     public async Task<(Guid LocationId, BHome.Domain.Billing.UtilityType Type)?> MeterScopeAsync(Guid meterId, CancellationToken t)
     {
-        await using var tables = await Compact24TableContext.OpenAsync(db, t);
         // The physical meters.room_id FK guarantees the room exists; one query retains the same scope.
-        var meter = await (from m in tables.Set<Native.Meter>()
-                           join r in tables.Set<Native.Room>() on m.RoomId equals r.Id
+        var meter = await (from m in db.Set<Native.Meter>().AsNoTracking()
+                           join r in db.Set<Native.Room>().AsNoTracking() on m.RoomId equals r.Id
                            where m.Id == meterId
                            select new { r.LocationId, m.UtilityType }).SingleOrDefaultAsync(t);
         return meter is null ? null : (meter.LocationId, (BHome.Domain.Billing.UtilityType)meter.UtilityType);
@@ -204,8 +201,7 @@ internal sealed class SetupWorkspaceStore(Compact24DbContext db, CompactNotifica
     }
     public async Task<IReadOnlyList<Guid>> RoomsAsync(Guid locationId, CancellationToken t)
     {
-        await using var tables = await Compact24TableContext.OpenAsync(db, t);
-        return await tables.Set<Native.Room>().Where(r => r.LocationId == locationId).OrderBy(r => r.Id).Select(r => r.Id).ToArrayAsync(t);
+        return await db.Set<Native.Room>().AsNoTracking().Where(r => r.LocationId == locationId).OrderBy(r => r.Id).Select(r => r.Id).ToArrayAsync(t);
     }
     public async Task<IReadOnlyList<Room>> ReviewRoomsAsync(Guid locationId, CancellationToken t) =>
         await db.Set<Room>().AsNoTracking().Where(r => r.LocationId == locationId).OrderBy(r => r.RoomNumber).ThenBy(r => r.Id).ToArrayAsync(t);

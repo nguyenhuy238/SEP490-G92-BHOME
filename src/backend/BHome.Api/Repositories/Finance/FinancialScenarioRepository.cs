@@ -168,14 +168,14 @@ public sealed class FinancialScenarioRepository(BHomePersistenceContext db) : IF
         row.BaselineSnapshot.Deserialize<FinancialReport>()!, row.ResultSnapshot.Deserialize<ScenarioResult>()!, row.CalculationVersion);
     public async Task<ScenarioView?> GetAsync(Guid id, Guid actor, CancellationToken token)
     {
-        await using var tables = await Compact24TableContext.OpenAsync((Compact24DbContext)db, token);
-        return await tables.Set<FinancialScenario>().SingleOrDefaultAsync(s => s.Id == id && s.CreatedByUserId == actor, token)
+        var compact = (Compact24DbContext)db;
+        return await compact.Set<FinancialScenario>().AsNoTracking().SingleOrDefaultAsync(s => s.Id == id && s.CreatedByUserId == actor, token)
             is { } row ? View(row) : null;
     }
     public async Task<IReadOnlyList<ScenarioSummary>> ListAsync(Guid actor, int page, int pageSize, CancellationToken token)
     {
-        await using var tables = await Compact24TableContext.OpenAsync((Compact24DbContext)db, token);
-        return await tables.Set<FinancialScenario>().Where(s => s.CreatedByUserId == actor)
+        var compact = (Compact24DbContext)db;
+        return await compact.Set<FinancialScenario>().AsNoTracking().Where(s => s.CreatedByUserId == actor)
             .OrderByDescending(s => s.CalculatedAt).ThenBy(s => s.Id).Skip((page - 1) * pageSize).Take(pageSize)
             .Select(s => new ScenarioSummary(s.Id, s.Name, s.LocationId, s.BaselineFrom, s.BaselineTo, s.ForecastMonths, s.CalculatedAt)).ToArrayAsync(token);
     }
@@ -184,14 +184,14 @@ public sealed class FinancialScenarioRepository(BHomePersistenceContext db) : IF
         await using var tx = await db.Database.BeginTransactionAsync(token);
         var source = "financial-scenario:" + key;
         await db.Database.ExecuteSqlInterpolatedAsync($"SELECT pg_advisory_xact_lock(hashtextextended({source},0))", token);
-        await using var tables = await Compact24TableContext.OpenAsync((Compact24DbContext)db, token);
-        if (await tables.Set<FinancialScenario>().SingleOrDefaultAsync(s => s.Id == key, token) is { } existing)
+        var compact = (Compact24DbContext)db;
+        if (await compact.Set<FinancialScenario>().AsNoTracking().SingleOrDefaultAsync(s => s.Id == key, token) is { } existing)
         {
             if (existing.CreatedByUserId != actor || View(existing).Input != view.Input) throw new FinanceException(409, "scenario_idempotency_conflict");
             await tx.CommitAsync(token); return View(existing);
         }
         var input = view.Input;
-        tables.Add(new FinancialScenario
+        compact.Add(new FinancialScenario
         {
             Id = key,
             LocationId = input.Baseline.LocationId,
@@ -206,7 +206,7 @@ public sealed class FinancialScenarioRepository(BHomePersistenceContext db) : IF
             CreatedByUserId = actor,
             CalculatedAt = view.Baseline.SnapshotAt
         });
-        await tables.SaveNativeAsync(token);
+        await compact.SaveChangesAsync(token);
         await tx.CommitAsync(token); return view with { Id = key };
     }
 }
