@@ -702,17 +702,11 @@ request('Chi tiết task và baseline', 'GET', '/api/v1/capture/meter-tasks/{{me
   fields: ['meterId', 'status', 'previousValue'],
   saves: { meterTaskVersion: 'version' },
 });
-request(
-  'OCR meter - chưa là chỉ số chính thức',
-  'POST',
-  '/api/v1/ocr/meter-tasks/{{meterTaskId}}',
-  {
-    role: 'staff',
-    binary: true,
-    fields: ['proposedFields', 'isFallback', 'requiresConfirmation'],
-    equals: { requiresConfirmation: true },
-  },
-);
+request('OCR công tơ tạm tắt -> 404', 'POST', '/api/v1/ocr/meter-tasks/{{meterTaskId}}', {
+  role: 'staff',
+  binary: true,
+  expected: [404],
+});
 request('Upload ảnh meter private', 'PUT', '/api/v1/capture/meter-tasks/{{meterTaskId}}/evidence', {
   role: 'staff',
   write: true,

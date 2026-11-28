@@ -203,7 +203,7 @@ it.each(['PendingTenant', 'Disputed'] as const)(
   async (status) => {
     const { mutate } = setup(true, false, {}, status);
     expect(
-      await screen.findByText(/Tenant chưa đồng ý với đề xuất phí trả phòng hiện tại/),
+      await screen.findByText(/Chưa phát hành hoặc chưa đối chiếu đầy đủ phí quyết toán/),
     ).toBeInTheDocument();
     fireEvent.change(screen.getByLabelText('Lý do chốt quyết toán / căn cứ miễn thu'), {
       target: { value: 'Đã đối chiếu các khoản thu.' },
@@ -220,7 +220,7 @@ it('blocks financial close even after Tenant accepts if materialization needs Ow
   const { mutate } = setup(true, false, {}, 'Accepted', 'PendingOwnerReview');
   expect(
     await screen.findByText(
-      /Tenant đã đồng ý nhưng các khoản thu và cấn cọc chưa được máy chủ xác minh/,
+      /Chưa phát hành hoặc chưa đối chiếu đầy đủ phí quyết toán/,
     ),
   ).toBeInTheDocument();
   fireEvent.change(screen.getByLabelText('Lý do chốt quyết toán / căn cứ miễn thu'), {

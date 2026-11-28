@@ -85,7 +85,7 @@ it('keeps every compact directory workflow and scopes contract-specific links to
   render(<TenantFeatureDirectory all contractId="selected-contract" />);
   fireEvent.click(screen.getByRole('button', { name: 'Hợp đồng' }));
   expect(go).toHaveBeenLastCalledWith('contract', { contractId: 'selected-contract' });
-  fireEvent.click(screen.getByRole('button', { name: 'Bàn giao / Trả phòng' }));
+  fireEvent.click(screen.getByRole('button', { name: 'Bàn giao / Chấm dứt hợp đồng' }));
   expect(go).toHaveBeenLastCalledWith('checklist', { contractId: 'selected-contract' });
   fireEvent.click(screen.getByRole('button', { name: 'Kết thúc hợp đồng sớm' }));
   expect(go).toHaveBeenLastCalledWith('contract', {
@@ -123,8 +123,13 @@ it('uses compact, full-width readable Tenant rows instead of large square icon t
     expect(styleOf(button).height).toBeUndefined();
     expect(row.flexDirection).toBe('row');
     expect(row.alignItems).toBe('center');
-    expect(iconStyle.width).toBeLessThanOrEqual(36);
-    expect(iconStyle.height).toBeLessThanOrEqual(36);
+    expect(iconStyle).toMatchObject({ width: 38, height: 38, borderRadius: 12 });
+    expect(styleOf(button)).toMatchObject({
+      borderRadius: 16,
+      borderWidth: 1,
+      borderColor: '#DCE6F2',
+      backgroundColor: '#ffffff',
+    });
     expect(styleOf(button.querySelector('span')).textAlign).toBe('left');
   }
   fireEvent.click(screen.getByRole('button', { name: 'Điều chỉnh hóa đơn' }));

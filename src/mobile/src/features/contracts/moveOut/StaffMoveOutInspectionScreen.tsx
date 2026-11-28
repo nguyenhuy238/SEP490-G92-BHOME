@@ -15,6 +15,7 @@ import {
   Button,
   Icon,
   IconButton,
+  ProgressBar,
   RadioButton,
   SegmentedButtons,
   Text,
@@ -33,7 +34,10 @@ import {
 } from '../../../../../../packages/client-core/src/contracts';
 import { handoverQuantity } from '../../../../../../packages/client-core/src/handoverForm';
 import type { MeterTask } from '../../../../../../packages/client-core/src/meter';
-import { formatInstant } from '../../../../../../packages/client-core/src/localization';
+import {
+  formatInstant,
+  formatMeterReading,
+} from '../../../../../../packages/client-core/src/localization';
 import { Action, Box, Heading, Pill, Row, ui } from '../../../components/WorkspaceKit';
 import { CameraCapture } from '../../../components/CameraCapture';
 import { FloatingDemoPhotoButton } from '../../../components/FloatingDemoPhotoButton';
@@ -52,13 +56,14 @@ import { showSuccess } from '../../../lib/toast';
 import { colors } from '../../../theme/theme';
 import { operationalTasks, type OperationalTask } from '../../../services/operationalTasks';
 import { draftToLocal, type InspectionDraft, type DraftPatch } from './moveOutInspectionDraft';
+import { StaffAbandonMoveOutButton } from './StaffAbandonMoveOutButton';
 
 const guidPattern = /^[\da-f]{8}-(?:[\da-f]{4}-){3}[\da-f]{12}$/i;
 const sections = [
   'Ghi chỉ số điện nước',
-  'Hiện trạng phòng',
+  'Kiểm tra hiện trạng phòng',
   'Kiểm kê tài sản',
-  'Chìa khóa và quyền truy cập',
+  'Chìa khóa thu lại',
 ] as const;
 const statuses = [
   { id: 'Passed', label: 'Đạt' },
@@ -120,24 +125,35 @@ const wizardStyles = StyleSheet.create({
   phoneRoot: { padding: 12, minWidth: 0, gap: 12 },
   header: { gap: 9 },
   section: { gap: 12 },
+  sectionPanel: {
+    gap: 12,
+    borderWidth: 1,
+    borderColor: colors.border,
+    borderRadius: 12,
+    padding: 12,
+    backgroundColor: '#f8fafc',
+    minWidth: 0,
+  },
   workList: { gap: 8 },
   conditionField: { gap: 4 },
-  conditionOptions: { gap: 0 },
-  conditionOption: { paddingVertical: 2, paddingHorizontal: 8, minHeight: 44 },
+  conditionOptions: { gap: 6 },
+  conditionOption: { borderWidth: 1, borderRadius: 10, borderColor: colors.border, minHeight: 44 },
+  conditionSelected: { backgroundColor: colors.tint, borderColor: colors.blue },
   photoField: { gap: 6 },
   workRow: {
     borderWidth: 1,
     borderColor: colors.border,
     backgroundColor: '#ffffff',
     borderRadius: 12,
-    padding: 12,
-    minHeight: 60,
+    padding: 14,
+    minHeight: 66,
+    flexShrink: 0,
   },
-  phoneWorkRow: { padding: 10, minHeight: 56 },
+  phoneWorkRow: { padding: 10, minHeight: 62 },
   rowContent: { flexDirection: 'row', alignItems: 'center', gap: 12, minWidth: 0 },
   rowText: { flex: 1, minWidth: 0, gap: 3 },
-  rowTitle: { fontWeight: '700', color: colors.primary },
-  rowDetail: { color: colors.muted, lineHeight: 18, flexShrink: 1 },
+  rowTitle: { fontWeight: '700', color: '#14213d' },
+  rowDetail: { color: '#5a6a84', lineHeight: 19, flexShrink: 1 },
   comparisonPair: { flexDirection: 'row', gap: 8, alignItems: 'stretch' },
   comparisonCell: {
     flex: 1,
@@ -157,7 +173,7 @@ const wizardStyles = StyleSheet.create({
     borderColor: colors.border,
   },
   progress: { height: 6, borderRadius: 6, backgroundColor: colors.tint },
-  compactTitle: { fontWeight: '700', color: colors.primary },
+  compactTitle: { fontWeight: '700', color: '#14213d' },
   compactSummary: { flexDirection: 'row', gap: 8, flexWrap: 'wrap', alignItems: 'flex-start' },
   compactSummaryTitle: { flex: 1, minWidth: 0 },
   modalOverlay: {
@@ -434,15 +450,25 @@ export function StaffMoveOutInspectionScreen() {
   if (workOrder.status !== 'InProgress')
     return (
       <Box>
-        <Heading title="Kiểm tra trả phòng" detail={`Phòng ${assigned.roomNumber}`} />
-        <Pill tone={workOrder.status === 'Assigned' ? 'amber' : 'neutral'}>
+        <Text variant="titleMedium" style={wizardStyles.compactTitle}>
+          Kiểm tra trả phòng · phòng {assigned.roomNumber}
+        </Text>
+        <Pill
+          tone={
+            workOrder.status === 'Assigned'
+              ? 'amber'
+              : workOrder.status === 'PendingVerification'
+                ? 'green'
+                : 'neutral'
+          }
+        >
           {workOrder.status === 'Assigned'
             ? 'Cần làm'
             : workOrder.status === 'PendingVerification'
-              ? 'Chờ duyệt'
+              ? 'Chờ chủ trọ duyệt'
               : 'Đã kết thúc'}
         </Pill>
-        <Text>
+        <Text style={workOrder.status === 'PendingVerification' ? ui.green : ui.muted}>
           {workOrder.status === 'Assigned'
             ? 'Hãy bấm Bắt đầu công việc trong nhiệm vụ để mở 4 phần kiểm tra.'
             : workOrder.status === 'PendingVerification'
@@ -453,6 +479,9 @@ export function StaffMoveOutInspectionScreen() {
           <Text accessibilityRole="alert" style={ui.red}>
             {startError}
           </Text>
+        )}
+        {workOrder.status !== 'Assigned' && (
+          <StaffAbandonMoveOutButton contractId={selectedId} onChanged={task.reload} />
         )}
         {workOrder.status === 'Assigned' ? (
           <Action disabled={startBusy} onPress={() => void beginWork()}>
@@ -504,6 +533,7 @@ function InspectionForm({
   refresh: () => void;
 }) {
   const { contract, moveOut, preparation } = data;
+  const { resetScroll } = useWorkspace();
   const { width } = useWindowDimensions();
   const compactPhone = width < 540;
   const [step, setStep] = useState<number | null>(null);
@@ -765,6 +795,14 @@ function InspectionForm({
     ({ code }) => confirmedValues[`room.${code}.status`] === 'Issue',
   ).length;
   const sectionHasIssue = [false, roomIssues > 0, assetIssues, keyCountChanged];
+  const recordedSteps = completedSteps.filter(Boolean).length;
+  const recommendedStep = completedSteps.findIndex((complete) => !complete);
+  const confirmedElectricity = finalReadings.find(
+    (reading) => reading.utilityType === 0 && reading.id === confirmedValues.electricityReadingId,
+  );
+  const confirmedWater = finalReadings.find(
+    (reading) => reading.utilityType === 1 && reading.id === confirmedValues.waterReadingId,
+  );
   const selectedRoomCode = activeItem?.startsWith('room:') ? activeItem.slice(5) : '';
   const selectedRoomCheck = roomHandoverChecks.find(({ code }) => code === selectedRoomCode);
   const openingRoomCheck = baseline?.roomChecks?.find((item) => item.code === selectedRoomCode);
@@ -1376,12 +1414,12 @@ function InspectionForm({
           <Heading title={`Kiểm tra trả phòng · phòng ${contract.roomNumber}`} />
         )}
         <View style={wizardStyles.compactSummary}>
-          <Pill tone={isSubmitted ? 'green' : 'blue'}>
+          <Pill tone={isSubmitted ? 'green' : 'amber'}>
             {moveOut.status === 'Inspected'
               ? moveOut.isForced
                 ? 'Đã lưu đối soát'
-                : 'Đã gửi chủ trọ duyệt'
-              : 'Đang kiểm tra'}
+                : 'Chờ chủ trọ duyệt'
+              : 'Đang kiểm tra trả phòng'}
           </Pill>
         </View>
         <Text variant="bodySmall" style={ui.muted}>
@@ -1408,16 +1446,20 @@ function InspectionForm({
         )}
       </View>
       {!isSubmitted && (
-        <View style={wizardStyles.section}>
+        <View
+          testID={step !== null ? 'move-out-section-panel' : undefined}
+          style={step !== null ? wizardStyles.sectionPanel : wizardStyles.section}
+        >
           {step !== null && (
             <Button
               icon="arrow-left"
-              mode="text"
+              mode="outlined"
               disabled={busy}
               style={{ alignSelf: 'flex-start' }}
               onPress={() => {
                 setActiveItem(null);
                 setStep(null);
+                resetScroll?.();
               }}
             >
               Về 4 mục trả phòng
@@ -1426,20 +1468,21 @@ function InspectionForm({
           <View style={wizardStyles.header}>
             <View style={wizardStyles.compactSummary}>
               <Text variant="titleMedium" style={wizardStyles.compactSummaryTitle}>
-                {step === null ? '4 phần kiểm tra trả phòng' : sections[step]}
+                {step === null ? '4 mục trả phòng' : sections[step]}
               </Text>
-              <Pill
-                tone={
-                  completedSteps.every(Boolean)
-                    ? sectionHasIssue.some(Boolean)
-                      ? 'amber'
-                      : 'green'
-                    : 'blue'
-                }
-              >
-                {completedSteps.filter(Boolean).length}/4 đã lưu
-              </Pill>
+              {step === null && (
+                <Pill tone={completedSteps.every(Boolean) ? 'green' : 'blue'}>
+                  {recordedSteps}/4 đã ghi nhận
+                </Pill>
+              )}
             </View>
+            {step === null && (
+              <ProgressBar
+                progress={recordedSteps / sections.length}
+                color={colors.blue}
+                style={wizardStyles.progress}
+              />
+            )}
           </View>
           {step === null ? (
             <View style={wizardStyles.workList}>
@@ -1448,12 +1491,12 @@ function InspectionForm({
                   `section-${index}`,
                   `${index + 1}. ${label}`,
                   index === 0
-                    ? `${Number(!!confirmedValues.electricityReadingId) + Number(!!confirmedValues.waterReadingId)}/2 công tơ đã lưu`
+                    ? `${Number(!!confirmedValues.electricityReadingId) + Number(!!confirmedValues.waterReadingId)}/2 công tơ đã xác nhận`
                     : index === 1
-                      ? `${inspectedRooms}/8 đã kiểm tra`
+                      ? `${inspectedRooms}/8 mục đã kiểm tra`
                       : index === 2
                         ? groups.length
-                          ? `${inspectedAssets}/${groups.length} đã kiểm tra`
+                          ? `${inspectedAssets}/${groups.length} nhóm tài sản đã kiểm tra`
                           : noAssetsConfirmed
                             ? 'Không có tài sản'
                             : 'Chưa có tài sản'
@@ -1462,10 +1505,19 @@ function InspectionForm({
                           : `${confirmedKeyCount || 'Chưa ghi'} chìa khóa`,
                   completedSteps[index]
                     ? sectionHasIssue[index]
-                      ? 'Có vấn đề'
-                      : 'Đã lưu'
-                    : 'Chưa hoàn tất',
-                  () => setStep(index),
+                      ? index === 1
+                        ? `Đã ghi nhận · ${roomIssues} khu vực có vấn đề`
+                        : 'Đã ghi nhận · Có vấn đề'
+                      : index === 3
+                        ? 'Đã ghi nhận'
+                        : 'Đã lưu đủ'
+                    : index === recommendedStep
+                      ? 'Nên làm tiếp'
+                      : 'Chưa hoàn tất',
+                  () => {
+                    setStep(index);
+                    resetScroll?.();
+                  },
                   completedSteps[index],
                   sectionHasIssue[index],
                 ),
@@ -1475,6 +1527,16 @@ function InspectionForm({
             <View style={wizardStyles.workList}>
               {step === 0 && (
                 <>
+                  <Text>
+                    Chỉ số công tơ điện:{' '}
+                    {confirmedElectricity
+                      ? formatMeterReading(confirmedElectricity.value, 'kWh')
+                      : 'Chưa ghi'}
+                  </Text>
+                  <Text>
+                    Chỉ số công tơ nước:{' '}
+                    {confirmedWater ? formatMeterReading(confirmedWater.value, 'm³') : 'Chưa ghi'}
+                  </Text>
                   {!meterReady && !meterProvisionError && (
                     <Text variant="bodySmall" style={ui.muted}>
                       Đang chuẩn bị nhiệm vụ chốt công tơ điện và nước…
@@ -1515,7 +1577,7 @@ function InspectionForm({
                   {workEntry(
                     'general',
                     'Hiện trạng chung',
-                    '',
+                    confirmedValues.roomCondition?.trim() || '',
                     generalCompleted ? 'Đã lưu' : 'Chưa kiểm tra',
                     () => setActiveItem('general'),
                     generalCompleted,
@@ -1526,13 +1588,13 @@ function InspectionForm({
                     return workEntry(
                       code,
                       label,
-                      '',
+                      confirmedValues[`room.${code}.notes`]?.trim() || '',
                       done
                         ? status === 'Issue'
-                          ? 'Có vấn đề · đã lưu'
+                          ? 'Có vấn đề'
                           : status === 'NotApplicable'
-                            ? 'Không áp dụng · đã lưu'
-                            : 'Đã lưu'
+                            ? 'Không áp dụng'
+                            : 'Đạt'
                         : 'Chưa kiểm tra',
                       () => setActiveItem(`room:${code}`),
                       done,
@@ -1556,7 +1618,9 @@ function InspectionForm({
                     return workEntry(
                       asset.id,
                       asset.name,
-                      '',
+                      expectedAssetQuantity(asset) == null
+                        ? ''
+                        : `Dự kiến ${expectedAssetQuantity(asset)} · Thực tế ${current?.observedQuantity ?? 'chưa ghi'}`,
                       checked
                         ? assetIssue(asset, current?.condition ?? '', current?.observedQuantity)
                           ? 'Có vấn đề'
@@ -1575,7 +1639,7 @@ function InspectionForm({
                 workEntry(
                   'keys',
                   'Chìa khóa thu lại',
-                  '',
+                  keysCompleted ? `${confirmedKeyCount} chìa khóa` : '',
                   keysCompleted ? (keyCountChanged ? 'Có vấn đề' : 'Đã lưu') : 'Chưa hoàn tất',
                   () => setActiveItem('keys'),
                   keysCompleted,
@@ -1587,6 +1651,10 @@ function InspectionForm({
       )}
       {!isSubmitted && step === null && (
         <View style={wizardStyles.section}>
+          <Text variant="titleMedium">Hoàn thành nhiệm vụ kiểm tra</Text>
+          {!completedSteps.every(Boolean) && (
+            <Text style={ui.muted}>{recordedSteps}/4 mục đã hoàn tất.</Text>
+          )}
           <Action
             disabled={busy || !!activeItem || !editable || !completedSteps.every(Boolean)}
             onPress={() => void submit()}
@@ -1595,7 +1663,7 @@ function InspectionForm({
           </Action>
         </View>
       )}
-      {isSubmitted && <Text style={ui.green}>Đã gửi kết quả kiểm tra.</Text>}
+      {isSubmitted && <Text style={ui.green}>Đã gửi kết quả kiểm tra cho chủ trọ xem xét.</Text>}
       <Modal
         visible={!!activeItem && !isSubmitted}
         transparent
@@ -1688,7 +1756,11 @@ function InspectionForm({
                               disabled={busy || !editable}
                               mode="android"
                               color={colors.blue}
-                              style={wizardStyles.conditionOption}
+                              style={[
+                                wizardStyles.conditionOption,
+                                values[`room.${selectedRoomCode}.status`] === status.id &&
+                                  wizardStyles.conditionSelected,
+                              ]}
                             />
                           ))}
                         </View>

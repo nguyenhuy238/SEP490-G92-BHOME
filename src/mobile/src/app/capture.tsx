@@ -103,7 +103,7 @@ export default function Home() {
       {session.roles.some((r) => r === 'Owner' || r === 'Staff') && (
         <View style={styles.card}>
           <Text variant="titleLarge">Kiểm tra nhận dạng OCR</Text>
-          <Text>Chụp CCCD mẫu hoặc đồng hồ và xem kết quả ngay. Không cần thiết lập cơ sở.</Text>
+          <Text>Chụp CCCD mẫu và xem kết quả ngay. Không cần thiết lập cơ sở.</Text>
           <Button mode="contained" icon="camera" onPress={() => router.push('/ocr-test')}>
             Thử OCR ngay
           </Button>

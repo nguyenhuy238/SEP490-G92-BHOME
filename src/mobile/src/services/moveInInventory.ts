@@ -28,6 +28,7 @@ export interface MoveInInventory {
   /** Present only when Owner has reopened selected asset groups for reinspection. */
   reinspectionItemIds?: string[] | null;
   reinspectionRequestedAt?: string | null;
+  recheckedItemIds?: string[] | null;
 }
 export interface InventoryItemUpdate {
   version: number;
@@ -63,14 +64,27 @@ export function validateInventoryItem(
   return '';
 }
 
-export function readyToComplete(items: MoveInInventoryItem[], reinspectionItemIds: string[] = []) {
+export function hasRecheckedInventoryItem(item: MoveInInventoryItem, recheckedItemIds: string[]) {
+  return (
+    recheckedItemIds.includes(item.id) &&
+    item.condition === 'Good' &&
+    item.actualQuantity === item.expectedQuantity &&
+    (item.actualQuantity === 0 || (item.evidenceIds ?? []).length > 0)
+  );
+}
+
+export function readyToComplete(
+  items: MoveInInventoryItem[],
+  reinspectionItemIds: string[] = [],
+  recheckedItemIds: string[] = [],
+) {
   return items.every(
     (item) =>
       item.actualQuantity !== null &&
       !!item.condition &&
       (item.actualQuantity === 0 || (item.evidenceIds ?? []).length > 0) &&
       (!reinspectionItemIds.includes(item.id) ||
-        (item.condition === 'Good' && item.actualQuantity === item.expectedQuantity)) &&
+        hasRecheckedInventoryItem(item, recheckedItemIds)) &&
       !validateInventoryItem(
         { actualQuantity: item.actualQuantity, condition: item.condition, notes: item.notes ?? '' },
         item.expectedQuantity,

@@ -1,6 +1,7 @@
 import { act, fireEvent, render, renderHook, screen, waitFor } from '@testing-library/react';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { ThemeProvider } from '@mui/material';
+import { MemoryRouter } from 'react-router';
 import { expect, it, vi } from 'vitest';
 import {
   contractActions,
@@ -76,7 +77,7 @@ const draft: ContractView = {
   appliedHoldingDeposit: '0',
 };
 
-it('only offers ordinary move-out to Tenant and forced move-out to Staff', () => {
+it('keeps shared Tenant and Staff move-out actions separate from the Owner Web initiation', () => {
   const active = { ...draft, status: 'Active', endDate: '2100-12-31' } as ContractView;
   const ownerAction = contractActions(active, null, 'Owner', owner).find(
     (a) => a.operation === 'expiry-move-out',
@@ -254,6 +255,39 @@ function setup(c = draft, ready = false, m: MoveOut | null = null) {
     ),
   };
 }
+it('opens the Owner return form from an active lease and creates the task with one request', async () => {
+  const { api, request } = setup({ ...draft, status: 'Active', endDate: '2100-12-31' });
+  const original = request.getMockImplementation()!;
+  request.mockImplementation(async (path, init, type) => {
+    if (path.endsWith('/owner-move-out') && init?.method === 'POST')
+      return { id, status: 'Approved' } as never;
+    return original(path, init, type);
+  });
+  mount(
+    <MemoryRouter>
+      <ContractDetailPanel api={api} id={id} actorId={owner} locationId={id} onChanged={vi.fn()} />
+    </MemoryRouter>,
+  );
+  fireEvent.click(await screen.findByRole('button', { name: /^Trả phòng$/ }));
+  const submit = screen.getByRole('button', { name: 'Tạo nhiệm vụ trả phòng' });
+  fireEvent.change(screen.getByLabelText('Ngày bàn giao trả phòng'), {
+    target: { value: '2099-11-24' },
+  });
+  fireEvent.click(submit);
+  expect(request.mock.calls.filter(([path]) => path.endsWith('/owner-move-out'))).toHaveLength(0);
+  fireEvent.change(screen.getByLabelText('Lý do'), { target: { value: '  Kiểm thử trả phòng  ' } });
+  fireEvent.click(submit);
+  fireEvent.click(submit);
+  expect(await screen.findByText('Đã tạo nhiệm vụ kiểm tra trả phòng.')).toBeInTheDocument();
+  const calls = request.mock.calls.filter(([path]) => path.endsWith('/owner-move-out'));
+  expect(calls).toHaveLength(1);
+  expect(JSON.parse(String(calls[0][1]?.body))).toEqual({
+    proposedDate: '2099-11-24',
+    reason: 'Kiểm thử trả phòng',
+  });
+  expect(new Headers(calls[0][1]?.headers).get('Idempotency-Key')).toBeTruthy();
+});
+
 it('shows frozen contract charges instead of fetching mutable room rates', async () => {
   const { api, request } = setup({
     ...draft,

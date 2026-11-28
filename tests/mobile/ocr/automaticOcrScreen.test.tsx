@@ -144,7 +144,7 @@ const front = (): AutomaticAnalysis => ({
 beforeEach(() => {
   vi.resetAllMocks();
   mocks.role = 'Staff';
-  mocks.request.mockResolvedValue({ available: true });
+  mocks.request.mockResolvedValue({ available: true, meterRecognitionEnabled: true });
 });
 afterEach(() => {
   cleanup();
@@ -166,6 +166,19 @@ it('starts with one prominent camera action and no six-profile selector', async 
   expect(screen.queryByRole('combobox')).toBeNull();
   expect(screen.queryByText('CCCD · Mặt trước')).toBeNull();
   expect(mocks.protect).toHaveBeenCalledWith('ocr-test');
+});
+it('offers only explicit identity OCR when meter recognition is disabled', async () => {
+  mocks.request.mockResolvedValue({ available: true, meterRecognitionEnabled: false });
+  mocks.image.mockResolvedValue({ proposal: proposal({ fullName: 'NGƯỜI KIỂM THỬ' }) });
+  render(<OcrTest />);
+  const side = await screen.findByLabelText('Mặt CCCD');
+  expect(screen.getByRole('button', { name: 'Chụp ảnh OCR' })).toBeDisabled();
+  expect(screen.queryByText('Điện · Điện tử')).toBeNull();
+  expect(screen.queryByText('Nước · Cơ khí')).toBeNull();
+  fireEvent.change(side, { target: { value: 'identity-front' } });
+  await capture();
+  expect(await screen.findByLabelText('Họ và tên')).toHaveValue('NGƯỜI KIỂM THỬ');
+  expect(mocks.image.mock.calls[0][0]).toBe('/api/v1/ocr/diagnostics/identity-front');
 });
 it('sends an untyped image, displays the detected side, preview and editable results', async () => {
   mocks.image.mockResolvedValue({ analysis: front() });

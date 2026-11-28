@@ -101,6 +101,7 @@ public sealed class TrainedMeterClassifierPilotTests
             .ConfigureAppConfiguration((_, config) => config.AddInMemoryCollection(new Dictionary<string, string?>
             {
                 ["Ocr:Enabled"] = "true",
+                ["Ocr:MeterRecognitionEnabled"] = "true",
                 ["Ocr:ModelDirectory"] = Path.Combine(repository.FullName, ".tools", "ocr-models"),
                 ["Ocr:TimeoutMilliseconds"] = "9000",
                 ["Ocr:VisualClassifier:Enabled"] = "true",

@@ -16,9 +16,10 @@ public sealed class OcrDiagnosticsController(
     IExperimentalMeterOcrService experimentalOcr, OcrWorkflowService workflow) : ControllerBase
 {
     private bool Enabled => environment.IsDevelopment() && configuration.GetValue<bool>("MobileDevelopment:Enabled");
+    private bool MeterRecognitionEnabled => configuration.GetValue<bool>("Ocr:MeterRecognitionEnabled");
 
     [HttpGet]
-    public IActionResult Availability() => Enabled ? Ok(new { available = true }) : NotFound();
+    public IActionResult Availability() => Enabled ? Ok(new { available = true, meterRecognitionEnabled = MeterRecognitionEnabled }) : NotFound();
 
     [HttpPost("auto")]
     [Consumes("image/jpeg", "image/png")]
@@ -26,7 +27,7 @@ public sealed class OcrDiagnosticsController(
     public async Task<IActionResult> Automatic(CancellationToken token, [FromQuery] bool experimental = false,
         [FromQuery] Guid? taskId = null)
     {
-        if (!Enabled) return NotFound();
+        if (!Enabled || !MeterRecognitionEnabled) return NotFound();
         if (Request.Query["experimental"].Count > 1) throw new OcrInputException("invalid_experimental_opt_in");
         if (Request.Query["taskId"].Count > 1 || (taskId is not null && !experimental)) throw new OcrInputException("invalid_experimental_task");
         if (experimental && !configuration.GetValue<bool>("Ocr:ExperimentalMeter:Enabled")) return NotFound();
@@ -61,6 +62,8 @@ public sealed class OcrDiagnosticsController(
             _ => (OcrDocumentKind?)null
         };
         if (kind is null) throw new OcrInputException("unsupported_profile");
+        if (!MeterRecognitionEnabled && kind is not (OcrDocumentKind.IdentityFront or OcrDocumentKind.IdentityBack))
+            return NotFound();
         if (decimalPlaces is not null && kind is OcrDocumentKind.IdentityFront or OcrDocumentKind.IdentityBack)
             throw new OcrInputException("invalid_meter_precision");
         var elapsed = Stopwatch.StartNew();

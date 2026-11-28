@@ -673,7 +673,7 @@ export interface MoveOutProposalPreview {
   existingOutstanding: string;
   automaticCharges?: MoveOutAutomaticCharge[] | null;
   forced?: boolean;
-  status: 'None' | 'PendingTenant' | 'Accepted' | 'Disputed' | 'Outdated';
+  status: 'None' | 'PendingTenant' | 'Accepted' | 'Disputed' | 'Outdated' | 'Issued';
   latestProposal: {
     id: string;
     items: MoveOutProposalCharge[];
@@ -685,6 +685,7 @@ export interface MoveOutProposalPreview {
     signedBalance: string;
     note: string | null;
     tenantFeedback?: MoveOutProposalFeedback | null;
+    issuedSettlement?: MoveOutProposalSettlement | null;
   } | null;
   items: {
     kind: string;
@@ -1372,7 +1373,10 @@ export const labels: Record<string, string> = {
   Failed: 'Ký thất bại',
   ManualReview: 'Cần kiểm tra tại nhà cung cấp',
   Requested: 'Chờ Owner duyệt',
-  AwaitingConsent: 'Chờ các thành viên đồng thuận',
+  AwaitingConsent: 'Yêu cầu cũ chưa duyệt',
+  personal_termination_requested: 'Chờ chủ trọ duyệt chấm dứt hợp đồng',
+  personal_termination_scheduled: 'Đã duyệt · Chờ ngày chấm dứt',
+  personal_termination_completed: 'Đã chấm dứt hợp đồng cá nhân',
   move_out_waiting_members: 'Chờ tất cả thành viên đồng thuận',
   move_out_member_rejected: 'Có thành viên từ chối yêu cầu trả phòng',
   forced_move_out_inspection: 'Chờ kiểm tra trả phòng bắt buộc',
@@ -1382,12 +1386,12 @@ export const labels: Record<string, string> = {
     'Ngày nghiệp vụ hiện tại chưa tới ngày bắt đầu cư trú. Hãy kiểm tra ngày trên Demo Clock hoặc liên hệ chủ trọ.',
   move_out_roster_unavailable:
     'Không tìm thấy đầy đủ thành viên đang cư trú theo ngày nghiệp vụ. Hãy kiểm tra ngày và hồ sơ cư trú.',
-  move_out_already_requested: 'Phòng đã có yêu cầu trả phòng đang xử lý.',
+  move_out_already_requested: 'Hợp đồng đã có yêu cầu chấm dứt đang xử lý.',
   invalid_move_out_date:
-    'Ngày dự kiến trả phòng phải không trước ngày nghiệp vụ và nằm trong thời hạn của các hợp đồng liên quan.',
+    'Ngày chấm dứt phải nằm trong thời hạn hợp đồng và đáp ứng thời gian báo trước.',
   move_out_members_changed: 'Danh sách thành viên đã thay đổi. Cần tạo lại yêu cầu.',
   move_out_consent_required: 'Chưa đủ đồng thuận của các thành viên.',
-  Approved: 'Đã duyệt trả phòng',
+  Approved: 'Đã duyệt',
   Inspected: 'Đã kiểm tra',
   PendingSettlement: 'Chờ quyết toán',
   Settled: 'Đã xác minh quyết toán',
@@ -1815,13 +1819,13 @@ export function contractActions(
         'Hủy bản gia hạn đang chờ; giữ nguyên hợp đồng gốc và lịch sử.',
       ),
     );
-  if (active && (!m || m.status === 'Rejected') && tenant)
+  if (active && (!m || ['Rejected', 'AwaitingConsent'].includes(m.status)) && tenant)
     result.push(
       action(
         'termination-requests',
         'Yêu cầu chấm dứt trước hạn',
         proposedFields,
-        'Tất cả thành viên phải đồng thuận trước khi gửi chủ trọ duyệt. Chưa kết thúc hợp đồng hoặc giải phóng phòng.',
+        'Gửi yêu cầu cho chủ trọ trước ít nhất 30 ngày. Yêu cầu chỉ áp dụng cho hợp đồng của bạn.',
       ),
     );
   if (active && (!m || m.status === 'Rejected') && staff && c.kind !== 'Holding')
@@ -1833,8 +1837,8 @@ export function contractActions(
         'Chỉ sử dụng khi xác minh tất cả khách thuê đã bỏ phòng. Chọn ngày hiện tại và ghi rõ lý do. Chỉ lưu kết quả kiểm tra, không tự quyết toán hoặc hoàn cọc.',
       ),
     );
-  if (owner && m?.status === 'Requested' && m.isGroupPrimary !== false) {
-    result.push(action('move-out/approve', 'Duyệt yêu cầu trả phòng'));
+  if (owner && m?.status === 'Requested') {
+    result.push(action('move-out/approve', 'Duyệt yêu cầu chấm dứt hợp đồng'));
     result.push(
       action(
         'move-out/reject',
@@ -1844,7 +1848,7 @@ export function contractActions(
       ),
     );
   }
-  if ((owner || staff) && m?.status === 'Approved')
+  if ((owner || staff) && m?.status === 'Approved' && m.pendingReason !== 'personal_termination_scheduled')
     result.push(
       action('move-out/schedule', 'Đặt lịch kiểm tra', [
         { name: 'scheduledAt', label: 'Lịch kiểm tra (giờ Việt Nam)', type: 'schedule' },
@@ -1898,8 +1902,10 @@ export function earlyTerminationDate(
   contract: Pick<ContractView, 'startDate' | 'endDate'>,
 ): string {
   const date = dateOnly(/^\d{2}-\d{2}-\d{4}$/.test(value) ? value.replaceAll('-', '/') : value);
-  if (date < businessToday())
-    throw new UserFeedbackError('Ngày trả phòng không được trong quá khứ.');
+  const minimum = new Date(businessToday() + 'T00:00:00Z');
+  minimum.setUTCDate(minimum.getUTCDate() + 30);
+  if (date < minimum.toISOString().slice(0, 10))
+    throw new UserFeedbackError('Ngày chấm dứt hợp đồng phải cách ngày gửi yêu cầu ít nhất 30 ngày.');
   if (date < contract.startDate)
     throw new UserFeedbackError('Ngày trả phòng phải từ ngày bắt đầu hợp đồng.');
   if (date >= contract.endDate)
@@ -1941,9 +1947,11 @@ export function actionPayload(
     body.cause = Number(values.cause);
     body.humanConfirmed = true;
   }
-  if (a.operation === 'expiry-move-out') {
+  if (a.operation === 'expiry-move-out' || a.operation === 'owner-move-out') {
     if (String(body.proposedDate) < businessToday())
       throw new UserFeedbackError('Ngày trả phòng không được trong quá khứ.');
+    if (a.operation === 'owner-move-out' && String(body.proposedDate) < c.startDate)
+      throw new UserFeedbackError('Ngày trả phòng phải từ ngày bắt đầu hợp đồng.');
   }
   return body;
 }

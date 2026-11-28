@@ -355,6 +355,22 @@ export function ContractDetailPanel({
             <ContractNavigation
               id={c.id}
               reviewRequest={m?.status === 'Requested' || m?.status === 'Rejected'}
+              onMoveOut={
+                c.status === 'Active' &&
+                (c.kind === 'Main' || c.kind === 'Renewal') &&
+                (!m || m.status === 'Rejected')
+                  ? () =>
+                      showAction({
+                        operation: 'owner-move-out',
+                        label: 'Trả phòng',
+                        fields: [
+                          { name: 'proposedDate', label: 'Ngày bàn giao trả phòng', type: 'date' },
+                          { name: 'reason', label: 'Lý do', type: 'multiline', max: 2000 },
+                        ],
+                        warning: '',
+                      })
+                  : undefined
+              }
             />
           </>
         )}
@@ -738,8 +754,16 @@ export function ContractDetailPanel({
             }}
             onSuccess={(next) => {
               void cache.invalidateQueries({ queryKey: ['contract-workflow', id] });
+              if (action.operation === 'owner-move-out') {
+                void cache.invalidateQueries({ queryKey: ['move-out-inbox'] });
+                void cache.invalidateQueries({ queryKey: ['move-out-inbox-locations'] });
+              }
               setAction(null);
-              setNotice('Máy chủ đã ghi nhận thao tác. Trạng thái đang được tải lại.');
+              setNotice(
+                action.operation === 'owner-move-out'
+                  ? 'Đã tạo nhiệm vụ kiểm tra trả phòng.'
+                  : 'Máy chủ đã ghi nhận thao tác. Trạng thái đang được tải lại.',
+              );
               detail.reload();
               onChanged(next);
             }}
@@ -806,7 +830,15 @@ export function ContractDetailPanel({
     </Stack>
   );
 }
-function ContractNavigation({ id, reviewRequest }: { id: string; reviewRequest: boolean }) {
+function ContractNavigation({
+  id,
+  reviewRequest,
+  onMoveOut,
+}: {
+  id: string;
+  reviewRequest: boolean;
+  onMoveOut?: () => void;
+}) {
   const routed = useInRouterContext();
   if (!routed) return null;
   return (
@@ -814,6 +846,11 @@ function ContractNavigation({ id, reviewRequest }: { id: string; reviewRequest: 
       <Button component={RouterLink} to={`/handovers?contractId=${encodeURIComponent(id)}`}>
         Mở biên bản bàn giao
       </Button>
+      {onMoveOut && (
+        <Button variant="outlined" onClick={onMoveOut}>
+          Trả phòng
+        </Button>
+      )}
       <Button
         component={RouterLink}
         to={`/handovers?tab=move-out&contractId=${encodeURIComponent(id)}`}

@@ -28,7 +28,7 @@ export function createMeterDemoJpeg(): string {
   context.font = 'bold 24px sans-serif';
   context.fillText('ANH GIA - KHONG PHAI CONG TO', 36, 188);
   context.font = '20px sans-serif';
-  context.fillText('Chi dung thu luong OCR / upload / xac nhan', 36, 245);
+  context.fillText('Chi dung thu luong upload / nhap chi so / xac nhan', 36, 245);
   const dataUrl = canvas.toDataURL('image/jpeg', 0.85);
   // The API accepts JPEG evidence. Never send a PNG or an empty Canvas fallback
   // under the image/jpeg Content-Type.

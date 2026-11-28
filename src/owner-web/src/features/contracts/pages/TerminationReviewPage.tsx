@@ -34,7 +34,7 @@ const labels = {
   Requested: 'Chờ phê duyệt',
   Approved: 'Đã chấp nhận',
   Rejected: 'Đã từ chối',
-  AwaitingConsent: 'Chờ đồng thuận thành viên',
+  AwaitingConsent: 'Yêu cầu cũ chưa duyệt',
 } as const;
 const colors = {
   Requested: 'warning',
@@ -177,7 +177,7 @@ export function TerminationReviewPanel({
           </Button>
         )}
         <Typography component={embedded ? 'h2' : 'h1'} variant={embedded ? 'h6' : 'h4'}>
-          {embedded ? 'Xét duyệt yêu cầu trả phòng' : title}
+          {embedded ? 'Xét duyệt yêu cầu chấm dứt hợp đồng' : title}
         </Typography>
       </Box>
       {query.isPending && <LinearProgress aria-label="Đang tải yêu cầu" />}
@@ -248,8 +248,7 @@ export function TerminationReviewPanel({
                   color="text.secondary"
                   sx={{ pt: 2, borderTop: 1, borderColor: 'divider' }}
                 >
-                  Vui lòng kiểm tra thông tin trước khi quyết định. Chấp nhận yêu cầu sẽ chuyển hồ
-                  sơ sang quy trình trả phòng tiếp theo, không kết thúc hợp đồng ngay lập tức.
+                  Hợp đồng cá nhân sẽ chấm dứt theo ngày được duyệt; nếu là khách thuê cuối cùng, hệ thống tạo nhiệm vụ trả phòng.
                 </Typography>
                 <Stack
                   direction={{ xs: 'column', sm: 'row' }}
@@ -268,7 +267,7 @@ export function TerminationReviewPanel({
                     disabled={busy || query.isError}
                     onClick={() => openDecision('approve')}
                   >
-                    {embedded ? 'Duyệt yêu cầu trả phòng' : 'Chấp nhận yêu cầu'}
+                    {embedded ? 'Duyệt yêu cầu chấm dứt hợp đồng' : 'Chấp nhận yêu cầu'}
                   </Button>
                 </Stack>
               </>
@@ -306,9 +305,7 @@ export function TerminationReviewPanel({
             />
           ) : (
             <DialogContentText>
-              Yêu cầu sẽ được phê duyệt và chuyển sang quy trình xử lý trả phòng.
-              {embedded && ' Hệ thống sẽ tự tạo nhiệm vụ kiểm tra trả phòng cho nhân viên.'} Hợp
-              đồng vẫn còn hiệu lực cho đến khi hoàn tất các thủ tục liên quan.
+              Hệ thống xử lý hợp đồng cá nhân theo ngày đề nghị. Nếu đây là khách thuê cuối cùng, hệ thống tạo nhiệm vụ kiểm tra trả phòng cho nhân viên.
             </DialogContentText>
           )}
           {message?.severity === 'error' && (

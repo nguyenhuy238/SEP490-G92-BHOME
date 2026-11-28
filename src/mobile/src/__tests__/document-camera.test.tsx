@@ -240,7 +240,7 @@ it('handles denied permission when opening the selected meter camera automatical
   expect(native.take).not.toHaveBeenCalled();
   expect(capture).not.toHaveBeenCalled();
 });
-it('uses a synthetic JPEG without camera permission only in local web meter testing', async () => {
+it('allows a visibly synthetic local web meter photo without camera permission, then reviews before upload', async () => {
   native.platform = 'web';
   native.granted = false;
   native.allowMeterDemo = true;
@@ -248,7 +248,7 @@ it('uses a synthetic JPEG without camera permission only in local web meter test
   const capture = vi.fn(async (bytes: Uint8Array) => {
     captured.push([...bytes]);
   });
-  const view = render(
+  render(
     <CameraCapture
       label="Chụp công tơ điện"
       disabled={false}
@@ -259,30 +259,16 @@ it('uses a synthetic JPEG without camera permission only in local web meter test
       onCapture={capture}
     />,
   );
-  const demo = screen.getByRole('button', { name: 'Dùng ảnh mẫu (test)' });
-  expect(demo).toBeTruthy();
-  fireEvent.click(demo);
+  fireEvent.click(screen.getByRole('button', { name: 'Tạo ảnh mẫu' }));
+  await screen.findByAltText('Ảnh công tơ đã chụp');
+  expect(native.take).not.toHaveBeenCalled();
+  expect(capture).not.toHaveBeenCalled();
+  fireEvent.click(screen.getByRole('button', { name: 'Dùng ảnh này' }));
   await waitFor(() => expect(capture).toHaveBeenCalledOnce());
   expect(captured).toEqual([[0xff, 0xd8, 0xff, 0, 1, 2, 3]]);
-  expect(native.take).not.toHaveBeenCalled();
-  expect(screen.getByAltText('Ảnh công tơ đã chụp')).toBeTruthy();
-  view.rerender(
-    <CameraCapture
-      label="Chụp công tơ điện"
-      disabled={false}
-      presentation="meter"
-      meterStep={2}
-      retainPreview
-      reviewBeforeSubmit
-      onCapture={capture}
-    />,
-  );
-  fireEvent.click(screen.getByRole('button', { name: 'Thử lại OCR' }));
-  await waitFor(() => expect(capture).toHaveBeenCalledTimes(2));
-  expect(captured[1]).toEqual(captured[0]);
   expect(native.files.size).toBe(0);
 });
-it('hides local meter demo on ordinary mobile capture and disables it while busy', async () => {
+it('only exposes local demo meter photos and disables the action while busy', async () => {
   native.allowMeterDemo = false;
   native.platform = 'android';
   const view = render(
@@ -293,15 +279,12 @@ it('hides local meter demo on ordinary mobile capture and disables it while busy
       onCapture={vi.fn()}
     />,
   );
-  expect(screen.queryByRole('button', { name: 'Dùng ảnh mẫu (test)' })).toBeNull();
+  expect(screen.queryByRole('button', { name: 'Tạo ảnh mẫu' })).toBeNull();
   native.allowMeterDemo = true;
   view.rerender(
     <CameraCapture label="Chụp công tơ" disabled presentation="meter" onCapture={vi.fn()} />,
   );
-  expect(screen.getByRole('button', { name: 'Dùng ảnh mẫu (test)' })).toHaveProperty(
-    'disabled',
-    true,
-  );
+  expect(screen.getByRole('button', { name: 'Tạo ảnh mẫu' })).toHaveProperty('disabled', true);
 });
 it('shares camera controls with meters and keeps a compact preview during review', async () => {
   const capture = vi.fn().mockResolvedValue(undefined);
@@ -341,9 +324,9 @@ it('shares camera controls with meters and keeps a compact preview during review
   await waitFor(() => expect(capture).toHaveBeenCalledOnce());
   view.rerender(<CameraCapture {...props} meterStep={2} />);
   await waitFor(() =>
-    expect(
-      (screen.getByRole('button', { name: 'Thử lại OCR' }) as HTMLButtonElement).disabled,
-    ).toBe(false),
+    expect((screen.getByRole('button', { name: 'Chụp lại' }) as HTMLButtonElement).disabled).toBe(
+      false,
+    ),
   );
   expect(screen.getAllByRole('button')).toHaveLength(1);
   view.rerender(<CameraCapture {...props} meterStep={3} />);
@@ -1133,14 +1116,13 @@ it.each([
   },
 );
 
-it('clears the retained meter photo and returns to capture choices on periodic OCR retry', async () => {
+it('clears the retained meter photo and opens the camera for a new evidence photo', async () => {
   const capture = vi.fn().mockResolvedValue(undefined);
   const clear = vi.fn();
   const props = {
     label: 'Chụp đồng hồ nước',
     disabled: false,
     presentation: 'meter' as const,
-    meterRetryResets: true,
     retainPreview: true,
     reviewBeforeSubmit: true,
     onCapture: capture,
@@ -1160,16 +1142,15 @@ it('clears the retained meter photo and returns to capture choices on periodic O
   await waitFor(() => expect(capture).toHaveBeenCalledOnce());
   view.rerender(<CameraCapture {...props} meterStep={2} />);
   await waitFor(() =>
-    expect(
-      (screen.getByRole('button', { name: 'Thử lại OCR' }) as HTMLButtonElement).disabled,
-    ).toBe(false),
+    expect((screen.getByRole('button', { name: 'Chụp lại' }) as HTMLButtonElement).disabled).toBe(
+      false,
+    ),
   );
   clear.mockClear();
-  fireEvent.click(screen.getByRole('button', { name: 'Thử lại OCR' }));
+  fireEvent.click(screen.getByRole('button', { name: 'Chụp lại' }));
   expect(clear).toHaveBeenCalledOnce();
   expect(native.files.size).toBe(0);
-  expect(screen.getByText('Chưa có ảnh công tơ')).toBeTruthy();
-  expect(screen.getByRole('button', { name: 'Chụp đồng hồ nước' })).toBeTruthy();
-  expect(screen.queryByTestId('native-camera')).toBeNull();
+  expect(await screen.findByTestId('native-camera')).toBeTruthy();
+  expect(screen.queryByAltText('Ảnh công tơ đã chụp')).toBeNull();
   expect(capture).toHaveBeenCalledOnce();
 });

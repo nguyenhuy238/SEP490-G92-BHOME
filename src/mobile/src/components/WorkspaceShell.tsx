@@ -83,7 +83,7 @@ function TenantLocationSubtitle() {
   }>('/api/v1/contracts?page=1&pageSize=20&status=Active', { cache: queryPolicies.contracts });
   const current = contracts.data?.items.find((item) => item.kind !== 'Holding');
   return (
-    <Text variant="labelSmall" numberOfLines={2} style={styles.staffSubtitle}>
+    <Text variant="labelSmall" numberOfLines={2} style={styles.staffLocationCaption}>
       {contracts.loading
         ? 'Đang tải phòng…'
         : current
@@ -124,7 +124,7 @@ export function WorkspaceShell({
   } = useWorkspace();
   const [locationPickerOpen, setLocationPickerOpen] = useState(false);
   const { width } = useWindowDimensions();
-  const narrowStaff = role === 'Staff' && width <= 360;
+  const narrowStaff = (role === 'Staff' || role === 'Tenant') && width <= 360;
   const insideTabs = useContext(WorkspaceTabsContext);
   const navigation = useNavigation();
   // Navigation focus is mutable external state. React warns when read during
@@ -165,10 +165,13 @@ export function WorkspaceShell({
   }, [screen, scrollRevision, contentRevision, navigation]);
   if (!role) return null;
   const staff = role === 'Staff';
+  const tenant = role === 'Tenant';
+  const lightWorkspace = staff || tenant;
+  const lightHome = (staff && screen === 'staff-home') || (tenant && screen === 'tenant-home');
+  const staffInspection = staff && ['move-in', 'move-out'].includes(screen) && !preview;
   const webStaffHome = staff && screen === 'staff-home' && !preview && Platform.OS === 'web';
   const owner = role === 'Owner' && !preview;
   const tenantFeatures = role === 'Tenant' && screen === 'tenant-features';
-  const tenantHomeLayout = role === 'Tenant' && ['tenant-home', 'tenant-features'].includes(screen);
   const compactContracts = staff && ['signing', 'contract'].includes(screen) && !preview;
   const compactTasks =
     staff &&
@@ -197,6 +200,9 @@ export function WorkspaceShell({
   const active = activeWorkspaceTab(role, screen);
   function back() {
     if (onBack) return onBack();
+    // The handover queue is a child of the staff dashboard, not of an inspection
+    // that may still be present in the navigation history.
+    if (staff && screen === 'staff-handovers') return go('staff-home');
     const fallback =
       screen === 'incident-inbox'
         ? role === 'Tenant'
@@ -234,22 +240,16 @@ export function WorkspaceShell({
     <SafeAreaView
       aria-hidden={owner ? !focused : undefined}
       importantForAccessibility={owner && !focused ? 'no-hide-descendants' : 'auto'}
-      style={[
-        styles.root,
-        tenantHomeLayout && { backgroundColor: '#173654' },
-        staff && styles.staffRoot,
-        staff && screen === 'staff-home' && styles.staffHomeRoot,
-      ]}
+      style={[styles.root, lightWorkspace && styles.staffRoot, lightHome && styles.staffHomeRoot]}
       edges={['top', 'left', 'right']}
     >
-      <StatusBar style={staff ? 'dark' : 'light'} />
+      <StatusBar style={lightWorkspace ? 'dark' : 'light'} />
       <View
         style={[
           styles.header,
-          tenantHomeLayout && styles.tenantHeader,
           narrowStaff && styles.narrowHeader,
-          staff && styles.compactStaffHeader,
-          staff && screen === 'staff-home' && styles.staffHomeHeader,
+          lightWorkspace && styles.compactStaffHeader,
+          lightHome && styles.staffHomeHeader,
         ]}
       >
         <TouchableRipple
@@ -268,15 +268,14 @@ export function WorkspaceShell({
                 ? 'Xem hợp đồng của bạn'
                 : 'Xem cơ sở được phép'
           }
-          style={[ui.grow, staff && styles.staffBrandAction]}
+          style={[ui.grow, lightWorkspace && styles.staffBrandAction]}
         >
-          <View style={[ui.row, staff && styles.staffBrandRow]}>
+          <View style={[ui.row, lightWorkspace && styles.staffBrandRow]}>
             <View
               style={[
                 styles.logo,
-                tenantHomeLayout && styles.tenantLogo,
                 narrowStaff && styles.narrowLogo,
-                staff && styles.compactStaffLogo,
+                lightWorkspace && styles.compactStaffLogo,
               ]}
             >
               <Image
@@ -284,30 +283,28 @@ export function WorkspaceShell({
                 resizeMode="contain"
                 accessible={false}
                 style={{
-                  width: staff ? 34 : tenantHomeLayout ? 26 : 30,
-                  height: staff ? 34 : tenantHomeLayout ? 26 : 30,
+                  width: lightWorkspace ? 34 : 30,
+                  height: lightWorkspace ? 34 : 30,
                 }}
               />
             </View>
             <View style={ui.grow}>
               <Text
-                variant={tenantHomeLayout || staff ? 'titleMedium' : 'titleLarge'}
+                variant={lightWorkspace ? 'titleMedium' : 'titleLarge'}
                 numberOfLines={1}
-                style={staff ? styles.staffBrandTitle : ui.white}
+                style={lightWorkspace ? styles.staffBrandTitle : ui.white}
               >
-                {tenantHomeLayout
-                  ? 'BHome'
-                  : `BHome ${staff ? 'Nhân viên' : role === 'Tenant' ? 'Khách thuê' : 'Chủ cơ sở'}`}
+                {`BHome ${staff ? 'Nhân viên' : tenant ? 'Khách thuê' : 'Chủ cơ sở'}`}
               </Text>
-              {tenantHomeLayout ? (
-                <Text variant="labelSmall" style={styles.staffSubtitle}>
-                  {tenantFeatures ? 'Tiện ích cư dân' : 'Chào mừng trở lại!'}
+              {lightHome ? null : tenantFeatures ? (
+                <Text variant="labelSmall" style={styles.staffLocationCaption}>
+                  Tiện ích cư dân
                 </Text>
-              ) : staff && screen === 'staff-home' ? null : staff && !preview ? (
+              ) : staff && !preview ? (
                 <StaffLocationSubtitle />
               ) : role === 'Tenant' && !preview ? (
                 tenantRoom || tenantInvoice || tenantIncidentForm || tenantResidence ? (
-                  <Text variant="labelSmall" style={styles.staffSubtitle}>
+                  <Text variant="labelSmall" style={styles.staffLocationCaption}>
                     {tenantResidence
                       ? 'Theo dõi tạm trú'
                       : tenantRoom
@@ -322,7 +319,7 @@ export function WorkspaceShell({
               ) : (
                 <Text
                   variant="labelSmall"
-                  style={staff ? styles.staffLocationCaption : styles.staffSubtitle}
+                  style={lightWorkspace ? styles.staffLocationCaption : styles.staffSubtitle}
                 >
                   {!preview
                     ? 'Theo dõi cơ sở của bạn'
@@ -336,19 +333,19 @@ export function WorkspaceShell({
             </View>
           </View>
         </TouchableRipple>
-        <View style={staff ? styles.staffNotificationAction : undefined}>
+        <View style={lightWorkspace ? styles.staffNotificationAction : undefined}>
           <IconButton
             icon="bell-outline"
-            iconColor={staff ? s.navy : c.white}
-            size={staff ? 23 : tenantHomeLayout || narrowStaff ? 20 : 22}
-            style={staff ? styles.compactStaffHeaderButton : undefined}
+            iconColor={lightWorkspace ? s.navy : c.white}
+            size={lightWorkspace ? 23 : 22}
+            style={lightWorkspace ? styles.compactStaffHeaderButton : undefined}
             onPress={() => go('notifications')}
             accessibilityLabel="Thông báo"
           />
           {preview && <Badge size={8} style={styles.badge} />}
           {!preview && <NotificationBadge />}
         </View>
-        {staff && (
+        {lightWorkspace && (
           <IconButton
             icon="account-circle-outline"
             iconColor={s.navy}
@@ -376,8 +373,8 @@ export function WorkspaceShell({
         style={[
           ui.grow,
           styles.staffBody,
-          staff && styles.compactStaffBody,
-          staff && screen === 'staff-home' && styles.staffHomeRoot,
+          lightWorkspace && styles.compactStaffBody,
+          lightHome && styles.staffHomeRoot,
         ]}
         behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
       >
@@ -390,21 +387,20 @@ export function WorkspaceShell({
             contentContainerStyle={[
               ui.page,
               styles.staffPage,
-              staff && styles.compactStaffPage,
-              staff && screen === 'staff-home' && styles.staffHomePage,
+              lightWorkspace && styles.compactStaffPage,
+              lightHome && styles.staffHomePage,
               (compactContracts || compactTasks) && { gap: 12, paddingTop: 8 },
               (profile || profileEdit) && { gap: 16 },
               tenantRoom && { gap: 12, paddingTop: 8 },
               tenantResidence && { gap: 12, paddingTop: 8 },
               tenantInvoice && { gap: 12, paddingTop: 8 },
-              tenantHomeLayout && { gap: 20, paddingTop: 12 },
+              tenantFeatures && { gap: 14, paddingTop: 8 },
               screen === 'meter-reading' && { gap: 12, paddingTop: 8 },
-              staff &&
-                screen === 'move-in' && {
-                  gap: 12,
-                  paddingTop: 12,
-                  paddingHorizontal: width <= 380 ? 10 : 16,
-                },
+              staffInspection && {
+                gap: 12,
+                paddingTop: 12,
+                paddingHorizontal: width <= 380 ? 10 : 16,
+              },
               screen === 'rooms' && { gap: 12, paddingTop: 8, paddingBottom: 100 },
             ]}
             keyboardShouldPersistTaps="handled"
@@ -480,6 +476,7 @@ export function WorkspaceShell({
           >
             {!tenantIncidentForm &&
               !tenantRefundForm &&
+              !staffInspection &&
               (profileEdit ||
                 (owner && !visibleTabs.some((tab) => tab.screen === screen)) ||
                 tenantInvoice ||
@@ -534,7 +531,7 @@ export function WorkspaceShell({
                       : tenantResidence
                         ? 'Đăng ký tạm trú'
                         : tenantHandovers
-                          ? 'Bàn giao / Trả phòng'
+                          ? 'Bàn giao / Chấm dứt hợp đồng'
                           : tenantFeatures
                             ? 'Tất cả chức năng'
                             : tenantInvoice
@@ -626,6 +623,15 @@ export function WorkspaceShell({
                 </WorkspaceFooterContext.Provider>
               </WorkspaceInlineHeaderContext.Provider>
             </WorkspaceHeaderContext.Provider>
+            {staffInspection && !inlineHeaderVisible && (
+              <IconButton
+                icon="arrow-left"
+                accessibilityLabel="Quay lại"
+                disabled={backDisabled}
+                onPress={headerAction?.onBack ?? back}
+                style={{ alignSelf: 'flex-start', margin: 0 }}
+              />
+            )}
           </KeyboardFormScrollView>
         )}
         {(profileEdit || compactTaskDetail) && headerAction?.footer}
@@ -674,8 +680,6 @@ export function WorkspaceShell({
   );
 }
 const styles = StyleSheet.create({
-  tenantHeader: { minHeight: 64, paddingLeft: 16 },
-  tenantLogo: { width: 32, height: 32, borderRadius: 10 },
   narrowHeader: { paddingLeft: 12, paddingRight: 0, minHeight: 64 },
   narrowLogo: { width: 34, height: 34, borderRadius: 10 },
   narrowHeaderButton: { margin: 0 },

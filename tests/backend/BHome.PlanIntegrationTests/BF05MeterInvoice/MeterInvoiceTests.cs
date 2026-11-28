@@ -85,15 +85,9 @@ public sealed class MeterInvoiceTests(PlanSessions sessions)
         // 2. Take the meter image.
         var evidenceId = await UploadEvidenceAsync(_api, staff, taskId);
 
-        // 3. Read the OCR proposal and correct it if needed.
-        var proposal = Parse(await PlanAssert.SuccessAsync(
-            await _api.SendBytesAsync(HttpMethod.Post, $"api/v1/ocr/meter-tasks/{taskId}", MeterImage, "image/png", staff),
-            "step 3 OCR proposal"));
-        var corrected = NextValue(task); // the synthetic image is not a real meter: the reviewer types the checked value.
-
-        // The proposal is saved only as a proposal (the task is still open, no reading).
-        await AssertTaskOpenAsync(_api, staff, taskId, "step 3 after OCR");
-        _ = proposal;
+        // 3. Staff enter the verified reading manually; OCR is temporarily disabled.
+        var corrected = NextValue(task); // synthetic image; reviewer types the checked value.
+        await AssertTaskOpenAsync(_api, staff, taskId, "step 3 after evidence upload");
 
         // 4. Confirm the reading.
         var confirmed = Parse(await PlanAssert.SuccessAsync(await ConfirmAsync(_api, staff, taskId, corrected, evidenceId), "step 4 confirm"));

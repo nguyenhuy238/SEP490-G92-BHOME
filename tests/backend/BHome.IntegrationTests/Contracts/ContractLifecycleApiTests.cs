@@ -139,6 +139,50 @@ public sealed partial class ContractLifecycleApiTests(ContractFixture fixture) :
     private async Task<Guid> Active(Workspace w)
     { var id = await Draft(w); await Signed(w, id); await Deposit(w, id); await Success<ContractView>(await Post(w.Owner, Path(id, "activate"))); return id; }
 
+    [Fact]
+    public async Task OwnerInitiatesMoveOutBeforeExpiryAndCreatesOneStaffTask()
+    {
+        var w = await Setup();
+        var outsider = await Setup();
+        var id = await Active(w);
+        var date = Today.AddDays(2);
+        var input = new TerminationInput(date, "Synthetic owner return");
+        var path = Path(id, "owner-move-out");
+        Assert.Equal(HttpStatusCode.Forbidden, (await Post(w.Tenant, path, input)).StatusCode);
+        Assert.Equal(HttpStatusCode.Forbidden, (await Post(w.Staff, path, input)).StatusCode);
+        Assert.Equal(HttpStatusCode.BadRequest, (await Post(w.Owner, path, new TerminationInput(Today.AddDays(-1), input.Reason))).StatusCode);
+        Assert.Equal(HttpStatusCode.BadRequest, (await Post(w.Owner, path, new TerminationInput(date, "   "))).StatusCode);
+        // A rejected tenant request must not attach stale consent to the new Owner request.
+        await Success<MoveOutView>(await Post(w.Tenant, Path(id, "termination-requests"), input));
+        await Success<MoveOutView>(await Post(w.Owner, Path(id, "move-out/reject"), new TerminationRejection("Synthetic rejection")));
+        var key = Guid.NewGuid();
+        var opened = await Success<MoveOutView>(await Post(w.Owner, path, input, key));
+        Assert.Equal("Approved", opened.Status);
+        Assert.Equal(date, opened.ProposedDate);
+        Assert.Equal(input.Reason, opened.Reason);
+        Assert.False(opened.IsForced);
+        Assert.Null(opened.RequiredConsents);
+        Assert.Equal(opened.Id, (await Success<MoveOutView>(await Post(w.Owner, path, input, key))).Id);
+        Assert.Equal(HttpStatusCode.Conflict, (await Post(w.Owner, path, input)).StatusCode);
+        var read = await Success<MoveOutView>(await w.Tenant.Client.GetAsync(Path(id, "move-out")));
+        Assert.Equal("Approved", read.Status);
+        Assert.Null(read.RequiredConsents);
+        if (await UsesCompact24())
+        {
+            var page = await w.Staff.Client.GetFromJsonAsync<TaskPage<TaskView>>($"/api/v1/operational-tasks?locationId={w.Location}");
+            var task = Assert.Single(page!.Items, t => t.Target?.ContractId == id && t.Title.StartsWith("Kiểm tra trả phòng"));
+            Assert.Equal("Assigned", task.Status);
+            Assert.Null(task.RecordedStaffUserId);
+            Assert.Equal(w.Staff.Id, task.CurrentResponsibleStaffUserId);
+            Assert.Equal(HttpStatusCode.NotFound, (await outsider.Staff.Client.GetAsync($"/api/v1/operational-tasks/{task.Id}")).StatusCode);
+        }
+        Assert.Equal("Active", (await w.Owner.Client.GetFromJsonAsync<ContractView>(Path(id)))!.Status);
+        await using var scope = fixture.Factory.Services.CreateAsyncScope();
+        var db = scope.ServiceProvider.GetFixturePersistence();
+        Assert.Equal(RoomStatus.Occupied, (await db.Set<Room>().SingleAsync(r => r.Id == w.Room)).Status);
+        Assert.Single((await w.Owner.Client.GetFromJsonAsync<MoveOutHistoryView[]>(Path(id, "move-out/history")))!, h => h.Action == "OwnerMoveOutOpened");
+    }
+
     [Theory]
     [InlineData(0)] // Before the lease end date.
     [InlineData(10)]
@@ -1124,7 +1168,18 @@ public sealed partial class ContractLifecycleApiTests(ContractFixture fixture) :
             new MeterTaskInput(meter, ReadingPurpose.Final, Today, null, contractId)))).Id;
         using var binary = new ByteArrayContent(Image()); binary.Headers.ContentType = new("image/png");
         var evidence = (await Success<IdResult>(await w.Staff.Client.PutAsync($"/api/v1/capture/meter-tasks/{taskId}/evidence", binary))).Id;
-        var readingResult = await Success<ConfirmedReading>(await w.Staff.Client.PostAsJsonAsync($"/api/v1/capture/meter-tasks/{taskId}/confirm", new MeterConfirmation(true, 120, evidence)));
+        var firstReading = await Success<ConfirmedReading>(await w.Staff.Client.PostAsJsonAsync($"/api/v1/capture/meter-tasks/{taskId}/confirm", new MeterConfirmation(true, 119, evidence)));
+        var detail = await Success<MeterTaskSummary>(await w.Staff.Client.GetAsync($"/api/v1/capture/meter-tasks/{taskId}"));
+        Assert.True(detail.CanCorrect);
+        Assert.Null(detail.CorrectionLockReason);
+        using var replacementPhoto = new ByteArrayContent(Image()); replacementPhoto.Headers.ContentType = new("image/png");
+        var replacement = (await Success<IdResult>(await w.Staff.Client.PutAsync($"/api/v1/capture/meter-tasks/{taskId}/evidence", replacementPhoto))).Id;
+        Assert.NotEqual(evidence, replacement);
+        var readingResult = await Success<ConfirmedReading>(await w.Staff.Client.PostAsJsonAsync($"/api/v1/capture/meter-tasks/{taskId}/confirm", new MeterConfirmation(true, 120, replacement, detail.Version)));
+        Assert.Equal(firstReading.Id, readingResult.Id);
+        Assert.Equal(120m, readingResult.ConfirmedValue);
+        Assert.Equal(20m, readingResult.Consumption);
+        Assert.Equal(MeterReadingStatus.Corrected, readingResult.Status);
         var tasks = (await w.Staff.Client.GetFromJsonAsync<MeterTaskSummary[]>("/api/v1/capture/meter-tasks"))!;
         var summary = Assert.Single(tasks, x => x.Id == taskId);
         Assert.Equal(contractId, summary.ContractId); Assert.Equal(readingResult.Id, summary.ConfirmedReadingId);

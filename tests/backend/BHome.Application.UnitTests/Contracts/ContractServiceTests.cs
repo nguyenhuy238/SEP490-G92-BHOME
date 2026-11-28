@@ -872,7 +872,9 @@ public sealed class ContractServiceTests
     public async Task T10_T11_RequestPreservesActiveContractOwnerApprovesAndStaffCannotApprove()
     {
         var r = new Rig(); var c = await r.Ready(); c.Status = ContractStatus.Active; r.User.Role = Roles.Tenant; r.User.UserId = c.TenantUserId;
-        await r.Service.RequestTerminationAsync(c.Id, new(Today, "Synthetic move out"), Guid.NewGuid(), false, default);
+        c.EndDate = Today.AddDays(60);
+        await Assert.ThrowsAsync<ContractException>(() => r.Service.RequestTerminationAsync(c.Id, new(Today.AddDays(29), "Synthetic move out"), Guid.NewGuid(), false, default));
+        await r.Service.RequestTerminationAsync(c.Id, new(Today.AddDays(30), "Synthetic move out"), Guid.NewGuid(), false, default);
         Assert.Equal(ContractStatus.Active, c.Status); Assert.Equal(MoveOutStatus.Requested, r.Moves.Single().Status);
         r.User.Role = Roles.Staff; await Assert.ThrowsAsync<ContractException>(() => r.Service.ApproveTerminationAsync(c.Id, Guid.NewGuid(), default));
         r.User.Role = Roles.Owner; r.User.UserId = c.OwnerSignerId;
@@ -990,7 +992,7 @@ public sealed class ContractServiceTests
         r.User.Role = Roles.Tenant; r.User.UserId = c.TenantUserId;
         r.Repo.ResidentsAsync(default, default!, default).ReturnsForAnyArgs(call => new[] { r.Resident }
             .Where(x => call.Arg<Guid[]>().Contains(x.Id)).ToArray());
-        var input = new TerminationInput(start.AddDays(4), "Room move-out");
+        var input = new TerminationInput(start.AddDays(31), "Personal termination");
         var error = await Assert.ThrowsAsync<ContractException>(() => r.Service.RequestTerminationAsync(c.Id, input, Guid.NewGuid(), false, default));
         Assert.Equal("move_out_residence_not_started", error.Code);
         Assert.Empty(r.Moves);
@@ -999,15 +1001,16 @@ public sealed class ContractServiceTests
         Assert.Equal("invalid_move_out_date", past.Code);
         var move = await r.Service.RequestTerminationAsync(c.Id, input, Guid.NewGuid(), false, default);
         Assert.Equal("Requested", move.Status);
-        Assert.Equal(1, move.RequiredConsents); Assert.Equal(1, move.ReceivedConsents);
+        Assert.Null(move.RequiredConsents); Assert.Null(move.ReceivedConsents);
         Assert.Equal(real.Now, demo.GetUtcNow());
         r.User.Role = Roles.Owner; r.User.UserId = c.OwnerSignerId;
         Assert.Equal("Approved", (await r.Service.ApproveTerminationAsync(c.Id, Guid.NewGuid(), default)).Status);
     }
     [Fact]
-    public async Task RoomMoveOutRequiresEveryTenantBeforeOwnerApproval()
+    public async Task PersonalTerminationDoesNotRequestConsentOrAffectOtherTenant()
     {
         var r = new Rig(); var c = await r.Ready(); c.Status = ContractStatus.Active;
+        c.EndDate = Today.AddDays(60);
         var member = new Resident { RoomId = c.RoomId, TenantUserId = Guid.NewGuid(), VerificationStatus = IdentityVerificationStatus.Verified };
         var second = new Contract
         {
@@ -1026,28 +1029,26 @@ public sealed class ContractServiceTests
         r.Repo.ResidentsAsync(default, default!, default).ReturnsForAnyArgs(call => new[] { r.Resident, member }
             .Where(x => call.Arg<Guid[]>().Contains(x.Id)).ToArray());
         r.User.Role = Roles.Tenant; r.User.UserId = c.TenantUserId;
-        var first = await r.Service.RequestTerminationAsync(c.Id, new(Today, "Room move-out"), Guid.NewGuid(), false, default);
-        Assert.Equal("AwaitingConsent", first.Status);
-        Assert.Equal(2, first.RequiredConsents); Assert.Equal(1, first.ReceivedConsents);
-        r.User.Role = Roles.Owner; r.User.UserId = c.OwnerSignerId;
-        await Assert.ThrowsAsync<ContractException>(() => r.Service.ApproveTerminationAsync(c.Id, Guid.NewGuid(), default));
-        await r.Handovers.DidNotReceiveWithAnyArgs().EnsureMoveOutTaskAsync(default!, default!, default, default, default);
+        var first = await r.Service.RequestTerminationAsync(c.Id, new(Today.AddDays(30), "Personal termination"), Guid.NewGuid(), false, default);
+        Assert.Equal("Requested", first.Status);
+        Assert.Null(first.RequiredConsents); Assert.Null(first.ReceivedConsents);
+        Assert.Single(r.Moves);
         r.User.Role = Roles.Tenant; r.User.UserId = second.TenantUserId;
-        var pending = await r.Service.GetMoveOutAsync(second.Id, default);
-        Assert.True(pending.CanConfirm);
-        var agreed = await r.Service.ConfirmRoomTerminationAsync(second.Id, new(true, pending.Version), Guid.NewGuid(), default);
-        Assert.Equal("Requested", agreed.Status); Assert.Equal(2, agreed.ReceivedConsents);
+        await Assert.ThrowsAsync<ContractException>(() => r.Service.GetMoveOutAsync(c.Id, default));
         r.User.Role = Roles.Owner; r.User.UserId = c.OwnerSignerId;
         var approved = await r.Service.ApproveTerminationAsync(c.Id, Guid.NewGuid(), default);
         Assert.Equal("Approved", approved.Status);
-        Assert.All(r.Moves, x => Assert.Equal(MoveOutStatus.Approved, x.Status));
+        Assert.Equal("personal_termination_scheduled", Assert.Single(r.Moves).PendingReason);
+        Assert.Equal(ContractStatus.Active, second.Status);
+        await r.Handovers.DidNotReceiveWithAnyArgs().EnsureMoveOutTaskAsync(default!, default!, default, default, default);
     }
     [Fact]
     public async Task TenantCanReopenRejectedRequestAndOwnerCanApprove()
     {
         var r = new Rig(); var c = await r.Ready(); c.Status = ContractStatus.Active;
+        c.EndDate = Today.AddDays(60);
         r.User.Role = Roles.Tenant; r.User.UserId = c.TenantUserId;
-        await r.Service.RequestTerminationAsync(c.Id, new(Today.AddDays(1), "Synthetic tenant request"), Guid.NewGuid(), false, default);
+        await r.Service.RequestTerminationAsync(c.Id, new(Today.AddDays(30), "Synthetic tenant request"), Guid.NewGuid(), false, default);
         r.User.Role = Roles.Owner; r.User.UserId = c.OwnerSignerId;
         await r.Service.RejectTerminationAsync(c.Id, new("Synthetic rejection"), Guid.NewGuid(), default);
         var rejected = Assert.Single(r.Moves);
@@ -1058,7 +1059,7 @@ public sealed class ContractServiceTests
             new(Today.AddDays(2), "Synthetic owner reopening"), Guid.NewGuid(), true, default));
         r.User.Role = Roles.Tenant; r.User.UserId = c.TenantUserId;
         var opened = await r.Service.RequestTerminationAsync(c.Id,
-            new(Today.AddDays(2), "Synthetic tenant reopening"), Guid.NewGuid(), false, default);
+            new(Today.AddDays(31), "Synthetic tenant reopening"), Guid.NewGuid(), false, default);
         Assert.Equal("Requested", opened.Status);
         Assert.Equal(rejectedVersion + 1, rejected.Version);
         r.User.Role = Roles.Owner; r.User.UserId = c.OwnerSignerId;
@@ -1066,7 +1067,7 @@ public sealed class ContractServiceTests
         Assert.Same(rejected, Assert.Single(r.Moves));
         Assert.Equal(c.OwnerSignerId, rejected.ApprovedByUserId);
         Assert.Null(rejected.InspectionStaffId);
-        Assert.Null(rejected.InspectionScheduledAt);
+        Assert.NotNull(rejected.InspectionScheduledAt);
         await r.Handovers.Received(1).EnsureMoveOutTaskAsync(c, rejected, c.OwnerSignerId,
             Arg.Any<DateTimeOffset>(), Arg.Any<CancellationToken>());
     }
@@ -1088,8 +1089,8 @@ public sealed class ContractServiceTests
         r.Moves.Add(move);
         r.User.Role = expiry ? Roles.Owner : Roles.Tenant;
         r.User.UserId = expiry ? c.OwnerSignerId : c.TenantUserId;
-        if (expiry) c.EndDate = Today;
-        var date = Today;
+        c.EndDate = expiry ? Today : Today.AddDays(60);
+        var date = expiry ? Today : Today.AddDays(30);
         var updated = await r.Service.RequestTerminationAsync(c.Id, new(date, "Revised request"), Guid.NewGuid(), expiry, default);
 
         Assert.Single(r.Moves);
@@ -1097,7 +1098,7 @@ public sealed class ContractServiceTests
         Assert.Equal(expiry ? "Approved" : "Requested", updated.Status);
         Assert.Equal(3, updated.Version);
         Assert.Equal("Revised request", move.Reason);
-        Assert.Equal("inspection_and_financial_dependencies", move.PendingReason);
+        Assert.Equal(expiry ? "inspection_and_financial_dependencies" : "personal_termination_requested", move.PendingReason);
         Assert.Equal(expiry, move.IsExpiry);
         Assert.Equal(expiry ? c.OwnerSignerId : null, move.ApprovedByUserId);
         Assert.Equal(ContractStatus.Active, c.Status);

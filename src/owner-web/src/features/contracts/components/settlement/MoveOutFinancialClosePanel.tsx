@@ -81,6 +81,7 @@ export function MoveOutFinancialClosePanel({
         status: string;
         latestProposal: {
           id: string;
+          issuedSettlement?: { status: string; reason?: string | null } | null;
           tenantFeedback?: {
             settlement?: { status: string; reason?: string | null } | null;
           } | null;
@@ -90,9 +91,9 @@ export function MoveOutFinancialClosePanel({
   });
   const tenantProposalUnresolved =
     !!tenantProposal.data?.latestProposal &&
-    (tenantProposal.data.status !== 'Accepted' ||
+    (!['Accepted', 'Issued'].includes(tenantProposal.data.status) ||
       !['Payable', 'RefundEligible', 'Settled'].includes(
-        tenantProposal.data.latestProposal.tenantFeedback?.settlement?.status ?? '',
+        (tenantProposal.data.latestProposal.issuedSettlement ?? tenantProposal.data.latestProposal.tenantFeedback?.settlement)?.status ?? '',
       ));
   const beneficiaries = Array.isArray(source.data?.beneficiaries) ? source.data.beneficiaries : [];
   const validReview =
@@ -232,16 +233,14 @@ export function MoveOutFinancialClosePanel({
         )}
         {tenantProposalUnresolved && (
           <Alert severity="warning">
-            {tenantProposal.data?.status === 'Accepted'
-              ? 'Tenant đã đồng ý nhưng các khoản thu và cấn cọc chưa được máy chủ xác minh đủ điều kiện. Owner cần kiểm tra bằng chứng, xác nhận kiểm kê hoặc giải quyết khoản nợ trước khi chốt tài chính.'
-              : 'Tenant chưa đồng ý với đề xuất phí trả phòng hiện tại. Hãy xem phản hồi của Tenant, chỉnh lại khoản thu bị phản đối và gửi lại đề xuất trước khi chốt quyết toán.'}
+            Chưa phát hành hoặc chưa đối chiếu đầy đủ phí quyết toán. Chủ trọ cần kiểm tra dữ liệu trước khi chốt.
           </Alert>
         )}
         {source.error && <Alert severity="error">{contractError(source.error)}</Alert>}
         {chargeReview.error && <Alert severity="error">{contractError(chargeReview.error)}</Alert>}
         {tenantProposal.error && (
           <Alert severity="error">
-            Không kiểm tra được xác nhận phí của Tenant: {contractError(tenantProposal.error)}
+            Không kiểm tra được phí quyết toán: {contractError(tenantProposal.error)}
           </Alert>
         )}
         {(unresolvedBlockers.length > 0 || hasLegacyDeductionPlan) && (

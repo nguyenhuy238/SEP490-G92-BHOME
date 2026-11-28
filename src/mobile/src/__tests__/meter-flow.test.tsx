@@ -186,7 +186,6 @@ vi.mock('../components/CameraCapture', () => ({
     retainPreview,
     label,
     meterStep,
-    meterRetryResets,
   }: {
     onCapture: (b: Uint8Array<ArrayBuffer>) => Promise<void>;
     onPhotoCleared: () => void;
@@ -195,7 +194,6 @@ vi.mock('../components/CameraCapture', () => ({
     retainPreview: boolean;
     label: string;
     meterStep: number;
-    meterRetryResets?: boolean;
   }) => {
     const [photo, setPhoto] = useState(false);
     return (
@@ -213,20 +211,15 @@ vi.mock('../components/CameraCapture', () => ({
         {photo && (
           <>
             <img alt="Ảnh công tơ" />
-            {meterStep < 3 && (
+            {meterStep === 1 && (
               <button
                 disabled={disabled}
                 onClick={() => {
-                  if (meterStep === 2 && meterRetryResets) {
-                    setPhoto(false);
-                    onPhotoCleared();
-                    return;
-                  }
                   void onCapture(new Uint8Array([1]));
                   if (!retainPreview) setPhoto(false);
                 }}
               >
-                {meterStep === 1 ? 'Dùng ảnh này' : 'Thử lại OCR'}
+                Dùng ảnh này
               </button>
             )}
             <button
@@ -272,12 +265,6 @@ const water: MeterTask = {
   utilityType: 1,
   previousValue: '10',
 };
-const proposal = {
-  proposedFields: { reading: '120' },
-  confidence: 0.94,
-  warnings: [],
-  isFallback: false,
-};
 let serverTasks: MeterTask[];
 let serverReadings: Record<string, ConfirmedReading>;
 beforeEach(() => {
@@ -295,11 +282,10 @@ beforeEach(() => {
     if (!found) throw Error('not found');
     return { ...found };
   });
-  state.image.mockImplementation(async (path: string) =>
-    path.includes('/ocr/')
-      ? { ...proposal, proposedFields: { reading: path.includes('task-water') ? '15' : '120' } }
-      : { id: path.includes('task-water') ? 'evidence-water' : 'evidence-electric' },
-  );
+  state.image.mockImplementation(async (path: string) => {
+    if (path.includes('/ocr/')) throw Error('Meter OCR is disabled');
+    return { id: path.includes('task-water') ? 'evidence-water' : 'evidence-electric' };
+  });
   state.json.mockImplementation(async (path: string, body: { confirmedValue: string }) => {
     const task = serverTasks.find((task) => path.includes('/' + task.id + '/confirm'))!;
     const result: ConfirmedReading = {
@@ -322,13 +308,18 @@ async function overview() {
   render(<MeterScreen />);
   await screen.findByText('0/2 đồng hồ đã ghi');
 }
-async function capture(utility: 'điện' | 'nước' = 'điện') {
+async function capture(utility: 'điện' | 'nước' = 'điện', fill = true) {
   fireEvent.click(screen.getByRole('button', { name: `Chụp ảnh đồng hồ ${utility}` }));
-  const label = utility === 'điện' ? 'Chụp công tơ điện' : 'Chụp đồng hồ nước';
+  const label = utility === 'điện' ? 'Chụp công tơ điện' : 'Chụp công tơ nước';
   fireEvent.click(await screen.findByRole('button', { name: label }));
   expect(state.image).not.toHaveBeenCalled();
   fireEvent.click(screen.getByRole('button', { name: 'Dùng ảnh này' }));
-  await screen.findByLabelText(`Chỉ số xác nhận (${utility === 'điện' ? 'kWh' : 'm³'})`);
+  const field = await screen.findByLabelText(
+    `Chỉ số công tơ ${utility} (${utility === 'điện' ? 'kWh' : 'm³'})`,
+  );
+  expect((field as HTMLInputElement).value).toBe('');
+  expect(state.image.mock.calls.every((call) => String(call[0]).endsWith('/evidence'))).toBe(true);
+  if (fill) fireEvent.change(field, { target: { value: utility === 'điện' ? '120' : '15' } });
 }
 function consent() {
   fireEvent.click(screen.getByRole('checkbox'));
@@ -390,7 +381,9 @@ it('sends the corrected reading with the selected task evidence and requires fre
   await overview();
   await capture();
   consent();
-  fireEvent.change(screen.getByLabelText('Chỉ số xác nhận (kWh)'), { target: { value: '121' } });
+  fireEvent.change(screen.getByLabelText('Chỉ số công tơ điện (kWh)'), {
+    target: { value: '121' },
+  });
   expect(
     (screen.getByRole('button', { name: 'Xác nhận chỉ số' }) as HTMLButtonElement).disabled,
   ).toBe(true);
@@ -402,43 +395,38 @@ it('sends the corrected reading with the selected task evidence and requires fre
   );
   expect(screen.getByText('121 kWh')).toBeTruthy();
 });
-it('clears OCR, evidence and entered value when retaking a photo', async () => {
+it('clears evidence and entered value when retaking a photo', async () => {
   await overview();
   await capture();
   fireEvent.click(screen.getByRole('button', { name: 'Chụp lại' }));
-  expect(screen.queryByLabelText('Chỉ số xác nhận (kWh)')).toBeNull();
+  expect(screen.queryByLabelText('Chỉ số công tơ điện (kWh)')).toBeNull();
   expect(screen.queryByText(/Chỉ số OCR/)).toBeNull();
   expect(state.json).not.toHaveBeenCalled();
 });
-it('allows manual correction after OCR failure when evidence was uploaded', async () => {
+it('allows manual entry without OCR when evidence was uploaded', async () => {
   state.image.mockImplementation(async (path: string) => {
     if (path.includes('/ocr/')) throw Error('OCR failed');
     return { id: 'evidence-electric' };
   });
   await overview();
-  await capture();
-  expect(screen.getByText(/Không nhận diện được chỉ số/)).toBeTruthy();
-  fireEvent.change(screen.getByLabelText('Chỉ số xác nhận (kWh)'), { target: { value: '121' } });
+  await capture('điện', false);
+  expect(screen.getByText(/Nhập chỉ số thực tế trên ảnh/)).toBeTruthy();
+  expect(state.image).toHaveBeenCalledTimes(1);
+  fireEvent.change(screen.getByLabelText('Chỉ số công tơ điện (kWh)'), {
+    target: { value: '121' },
+  });
   await save();
   expect(screen.getByText('121 kWh')).toBeTruthy();
 });
-it('shows only the concise OCR failure notice for a fallback proposal', async () => {
-  state.image.mockImplementation(async (path: string) =>
-    path.includes('/ocr/')
-      ? {
-          ...proposal,
-          isFallback: true,
-          proposedFields: { reading: '' },
-          warnings: ['ocr_unavailable'],
-        }
-      : { id: 'evidence-electric' },
-  );
+it('requires staff to enter a reading even after photo upload succeeds', async () => {
   await overview();
-  await capture();
-  expect(screen.getByText(/Không nhận diện được chỉ số/)).toBeTruthy();
-  expect(screen.queryByText(/OCR chưa đọc được/)).toBeNull();
-  expect(screen.queryByText(/Hãy kiểm tra đúng phòng, mã đồng hồ/)).toBeNull();
-  fireEvent.change(screen.getByLabelText('Chỉ số xác nhận (kWh)'), { target: { value: '121' } });
+  await capture('điện', false);
+  consent();
+  expect(screen.getByRole('button', { name: 'Xác nhận chỉ số' })).toHaveProperty('disabled', true);
+  expect(state.json).not.toHaveBeenCalled();
+  fireEvent.change(screen.getByLabelText('Chỉ số công tơ điện (kWh)'), {
+    target: { value: '121' },
+  });
   await save();
   expect(screen.getByText('121 kWh')).toBeTruthy();
 });
@@ -447,7 +435,7 @@ it.each(['', '-2', 'abc', '120.123', '120.5', '120,5', '120 5', '99'])(
   async (value) => {
     await overview();
     await capture();
-    fireEvent.change(screen.getByLabelText('Chỉ số xác nhận (kWh)'), { target: { value } });
+    fireEvent.change(screen.getByLabelText('Chỉ số công tơ điện (kWh)'), { target: { value } });
     consent();
     expect(
       (screen.getByRole('button', { name: 'Xác nhận chỉ số' }) as HTMLButtonElement).disabled,
@@ -456,20 +444,18 @@ it.each(['', '-2', 'abc', '120.123', '120.5', '120,5', '120 5', '99'])(
   },
 );
 it('does not allow confirmation when evidence upload fails', async () => {
-  state.image.mockImplementation(async (path: string) => {
-    if (path.includes('/ocr/')) return proposal;
-    throw Error('upload failed');
-  });
+  state.image.mockRejectedValue(Error('upload failed'));
   await overview();
-  await capture();
-  consent();
-  await waitFor(() => expect(state.image).toHaveBeenCalledTimes(2));
-  expect(
-    (screen.getByRole('button', { name: 'Xác nhận chỉ số' }) as HTMLButtonElement).disabled,
-  ).toBe(true);
+  fireEvent.click(screen.getByRole('button', { name: 'Chụp ảnh đồng hồ điện' }));
+  fireEvent.click(await screen.findByRole('button', { name: 'Chụp công tơ điện' }));
+  fireEvent.click(screen.getByRole('button', { name: 'Dùng ảnh này' }));
+  await waitFor(() => expect(state.image).toHaveBeenCalledTimes(1));
+  await screen.findByRole('button', { name: 'Dùng ảnh này' });
+  expect(screen.queryByRole('button', { name: 'Xác nhận chỉ số' })).toBeNull();
+  expect(screen.queryByLabelText('Chỉ số công tơ điện (kWh)')).toBeNull();
   expect(state.json).not.toHaveBeenCalled();
 });
-it('shows recognition progress until the meter OCR response arrives', async () => {
+it('shows upload progress until the meter evidence response arrives', async () => {
   let release!: () => void;
   const recognize = state.image.getMockImplementation()!;
   state.image.mockImplementationOnce(async (...args: unknown[]) => {
@@ -496,7 +482,9 @@ it('keeps correction and photo on save failure, locks double taps, and retries t
   );
   await overview();
   await capture();
-  fireEvent.change(screen.getByLabelText('Chỉ số xác nhận (kWh)'), { target: { value: '122' } });
+  fireEvent.change(screen.getByLabelText('Chỉ số công tơ điện (kWh)'), {
+    target: { value: '122' },
+  });
   consent();
   const confirm = screen.getByRole('button', { name: 'Xác nhận chỉ số' });
   fireEvent.click(confirm);
@@ -505,7 +493,9 @@ it('keeps correction and photo on save failure, locks double taps, and retries t
   expect(screen.getByRole('button', { name: 'Đang lưu chỉ số…' })).toHaveProperty('disabled', true);
   expect(screen.queryByText('Đang nhận dạng chỉ số…')).toBeNull();
   await act(async () => reject(Error('offline')));
-  expect((screen.getByLabelText('Chỉ số xác nhận (kWh)') as HTMLInputElement).value).toBe('122');
+  expect((screen.getByLabelText('Chỉ số công tơ điện (kWh)') as HTMLInputElement).value).toBe(
+    '122',
+  );
   expect(screen.getByAltText('Ảnh công tơ')).toBeTruthy();
   fireEvent.click(confirm);
   await screen.findByText('1/2 đồng hồ đã ghi');
@@ -557,7 +547,9 @@ it('shows persisted completed details as read-only and returns to the same overv
   const dialog = await screen.findByRole('dialog');
   expect(await within(dialog).findByText('Chỉ số đã xác nhận')).toBeTruthy();
   expect(within(dialog).getByText('120 kWh')).toBeTruthy();
-  expect(await within(dialog).findByRole('img', { name: 'Ảnh minh chứng điện' })).toBeTruthy();
+  expect(
+    await within(dialog).findByRole('img', { name: 'Ảnh minh chứng công tơ điện' }),
+  ).toBeTruthy();
   expect(within(dialog).queryByText(/Chỉ số trước:/)).toBeNull();
   expect(within(dialog).queryByRole('button', { name: 'Xác nhận chỉ số' })).toBeNull();
   expect(within(dialog).queryByRole('button', { name: 'Chụp công tơ điện' })).toBeNull();
@@ -601,24 +593,29 @@ it.each([electric, water])(
     fireEvent.click(await screen.findByRole('button', { name: 'Xem chi tiết đồng hồ ' + name }));
     const dialog = await screen.findByRole('dialog');
     fireEvent.click(await within(dialog).findByRole('button', { name: 'Sửa chỉ số' }));
-    const cameraLabel = meter.utilityType === 0 ? 'Chụp công tơ điện' : 'Chụp đồng hồ nước';
+    const cameraLabel = meter.utilityType === 0 ? 'Chụp công tơ điện' : 'Chụp công tơ nước';
     expect(await within(dialog).findByRole('button', { name: cameraLabel })).toBeTruthy();
-    fireEvent.click(within(dialog).getByRole('button', { name: 'Hủy sửa' }));
+    expect(within(dialog).queryByRole('button', { name: 'Hủy sửa' })).toBeNull();
+    fireEvent.click(within(dialog).getByRole('button', { name: 'Đóng' }));
+    await waitFor(() => expect(screen.queryByRole('dialog')).toBeNull());
+    expect(state.json).not.toHaveBeenCalled();
+    fireEvent.click(await screen.findByRole('button', { name: 'Xem chi tiết đồng hồ ' + name }));
+    const reopened = await screen.findByRole('dialog');
     expect(
-      await within(dialog).findByText(meter.utilityType === 0 ? '125 kWh' : '125 m³'),
+      await within(reopened).findByText(meter.utilityType === 0 ? '125 kWh' : '125 m³'),
     ).toBeTruthy();
     expect(state.json).not.toHaveBeenCalled();
-    fireEvent.click(within(dialog).getByRole('button', { name: 'Sửa chỉ số' }));
-    fireEvent.click(await within(dialog).findByRole('button', { name: cameraLabel }));
-    fireEvent.click(within(dialog).getByRole('button', { name: 'Dùng ảnh này' }));
+    fireEvent.click(within(reopened).getByRole('button', { name: 'Sửa chỉ số' }));
+    fireEvent.click(await within(reopened).findByRole('button', { name: cameraLabel }));
+    fireEvent.click(within(reopened).getByRole('button', { name: 'Dùng ảnh này' }));
     fireEvent.change(
-      await within(dialog).findByLabelText(
-        `Chỉ số xác nhận (${meter.utilityType === 0 ? 'kWh' : 'm³'})`,
+      await within(reopened).findByLabelText(
+        `Chỉ số công tơ ${meter.utilityType === 0 ? 'điện' : 'nước'} (${meter.utilityType === 0 ? 'kWh' : 'm³'})`,
       ),
       { target: { value: '130' } },
     );
-    fireEvent.click(within(dialog).getByRole('checkbox'));
-    fireEvent.click(within(dialog).getByRole('button', { name: 'Lưu chỉ số đã sửa' }));
+    fireEvent.click(within(reopened).getByRole('checkbox'));
+    fireEvent.click(within(reopened).getByRole('button', { name: 'Lưu chỉ số đã sửa' }));
     await waitFor(() =>
       expect(state.json).toHaveBeenCalledWith(
         '/api/v1/capture/meter-tasks/' + meter.id + '/confirm',
@@ -633,12 +630,12 @@ it.each([electric, water])(
     );
     await waitFor(() => expect(screen.queryByRole('dialog')).toBeNull());
     expect(await screen.findByText(meter.utilityType === 0 ? '130 kWh' : '130 m³')).toBeTruthy();
-    expect(state.image).toHaveBeenCalledTimes(2);
+    expect(state.image).toHaveBeenCalledTimes(1);
   },
 );
 it.each([
-  [electric, '22.0000', '22 kWh', 'Ảnh minh chứng điện'],
-  [water, '15.2500', '15,25 m³', 'Ảnh minh chứng nước'],
+  [electric, '22.0000', '22 kWh', 'Ảnh minh chứng công tơ điện'],
+  [water, '15.2500', '15,25 m³', 'Ảnh minh chứng công tơ nước'],
 ] as const)(
   'shows the captured evidence for a confirmed embedded utility',
   async (meter, value, display, label) => {
@@ -695,9 +692,9 @@ it('preserves the confirmed reading on evidence access failure and retries only 
   render(<MeterTaskScreen embedded taskId={electric.id} onReturn={vi.fn()} />);
   await screen.findByText('Đã chốt: 22 kWh');
   const retry = await screen.findByRole('button', { name: 'Thử tải lại ảnh' });
-  expect(screen.queryByRole('img', { name: 'Ảnh minh chứng điện' })).toBeNull();
+  expect(screen.queryByRole('img', { name: 'Ảnh minh chứng công tơ điện' })).toBeNull();
   fireEvent.click(retry);
-  const photo = await screen.findByRole('img', { name: 'Ảnh minh chứng điện' });
+  const photo = await screen.findByRole('img', { name: 'Ảnh minh chứng công tơ điện' });
   expect(photo.getAttribute('src')).toBe('data:image/jpeg;base64,/9j/');
   expect(photoRequest).toHaveBeenCalledTimes(2);
   expect(state.json).not.toHaveBeenCalled();
@@ -768,12 +765,12 @@ it('does not fetch Staff meter data for a Tenant', async () => {
   expect(state.request).not.toHaveBeenCalled();
 });
 
-it('shows only loading above the periodic meter modal until OCR finishes', async () => {
-  let finishOcr!: (value: typeof proposal) => void;
+it('shows only loading above the periodic meter modal until evidence upload finishes', async () => {
+  let finishUpload!: (value: { id: string }) => void;
   state.image.mockImplementationOnce(
     () =>
-      new Promise<typeof proposal>((resolve) => {
-        finishOcr = resolve;
+      new Promise<{ id: string }>((resolve) => {
+        finishUpload = resolve;
       }),
   );
   await overview();
@@ -787,21 +784,23 @@ it('shows only loading above the periodic meter modal until OCR finishes', async
   expect(within(overlay).getByText('Đang xử lý…')).toBeTruthy();
   expect(within(overlay).queryByRole('button')).toBeNull();
   expect(screen.queryByRole('button', { name: 'Hủy yêu cầu' })).toBeNull();
-  await act(async () => finishOcr(proposal));
+  await act(async () => finishUpload({ id: 'evidence-electric' }));
   await waitFor(() => expect(screen.queryByTestId('periodic-meter-processing-overlay')).toBeNull());
   expect(screen.getByTestId('periodic-meter-modal-card')).toBeTruthy();
 });
 
-it('returns to the capture choice when retrying periodic OCR, clearing the old photo and confirmation', async () => {
+it('returns to capture when retaking the photo, clearing the old evidence and confirmation', async () => {
   await overview();
   await capture();
-  fireEvent.change(screen.getByLabelText('Chỉ số xác nhận (kWh)'), { target: { value: '125' } });
+  fireEvent.change(screen.getByLabelText('Chỉ số công tơ điện (kWh)'), {
+    target: { value: '125' },
+  });
   consent();
   const previousCalls = state.image.mock.calls.length;
-  fireEvent.click(screen.getByRole('button', { name: 'Thử lại OCR' }));
+  fireEvent.click(screen.getByRole('button', { name: 'Chụp lại' }));
   expect(screen.getByRole('button', { name: 'Chụp công tơ điện' })).toBeTruthy();
   expect(screen.queryByAltText('Ảnh công tơ')).toBeNull();
-  expect(screen.queryByLabelText('Chỉ số xác nhận (kWh)')).toBeNull();
+  expect(screen.queryByLabelText('Chỉ số công tơ điện (kWh)')).toBeNull();
   expect(screen.queryByRole('checkbox')).toBeNull();
   expect(screen.queryByTestId('periodic-meter-processing-overlay')).toBeNull();
   expect(state.image).toHaveBeenCalledTimes(previousCalls);

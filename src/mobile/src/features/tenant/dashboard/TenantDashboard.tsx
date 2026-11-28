@@ -12,8 +12,8 @@ import { formatBillingDecimal } from '../../../../../../packages/client-core/src
 import type { InvoicePayment } from '../../../../../../packages/client-core/src/payments';
 import type { TenantMeterReading } from '../../../../../../packages/client-core/src/tenantReadings';
 import { TenantMeterReadingEvidence } from '../../../components/TenantMeterReadingEvidence';
-import { featureCardLayout } from '../../../components/FeatureCardLayout';
-import { typography } from '../../../theme/typography';
+import { fontStyle, typography } from '../../../theme/typography';
+import { staffHomePalette as h } from '../../../theme/staffLayout';
 import { positiveAmount, tenantPaymentLabel } from '../billing/paymentPresentation';
 import { isActiveRoomRental } from '../room/tenantContractEligibility';
 import { useWorkspace } from '../../workspace/WorkspaceProvider';
@@ -76,9 +76,12 @@ function Heading({
 }) {
   return (
     <View style={styles.sectionHeading}>
-      <Text accessibilityRole="header" style={styles.heading}>
-        {title}
-      </Text>
+      <View style={styles.headingLabel}>
+        <View style={styles.headingAccent} />
+        <Text accessibilityRole="header" style={styles.heading}>
+          {title}
+        </Text>
+      </View>
       {!!action && !!onPress && (
         <TouchableRipple onPress={onPress} accessibilityRole="button" accessibilityLabel={action}>
           <View style={styles.headingAction}>
@@ -118,7 +121,9 @@ function MonthlyInvoice({
     <View style={styles.bill}>
       <View style={styles.billHeader}>
         <Text style={styles.billTitle}>Hóa đơn tháng {periodLabel}</Text>
-        <Icon source="receipt-text-outline" size={23} color="#D5E6FF" />
+        <View style={styles.billIcon}>
+          <Icon source="receipt-text-outline" size={23} color={s.blue} />
+        </View>
       </View>
       {!invoice && !invoiceState?.loading && !invoiceState?.error ? (
         <>
@@ -151,7 +156,7 @@ function MonthlyInvoice({
                     : 'information-outline'
               }
               size={18}
-              color={paid ? '#B6F0CC' : overdue ? '#FFE0B8' : '#E0EEFF'}
+              color={paid ? c.green : overdue ? c.amber : s.blue}
             />
             <Text style={styles.billStatusText}>
               {invoice.status === 'Draft'
@@ -184,8 +189,8 @@ function MonthlyInvoice({
       {invoice?.status === 'Final' && <Feedback state={paymentState} />}
       <Button
         mode="contained"
-        buttonColor={c.white}
-        textColor={s.navy}
+        buttonColor={s.blue}
+        textColor={c.white}
         contentStyle={{ minHeight: 48 }}
         style={styles.billButton}
         onPress={open}
@@ -250,7 +255,7 @@ function UtilityCard({
           <Icon
             source={electricity ? 'lightning-bolt-outline' : 'water-outline'}
             size={19}
-            color={electricity ? '#9D550A' : '#1764AB'}
+            color={s.blue}
           />
         </View>
         <Text style={styles.utilityName}>{label}</Text>
@@ -407,7 +412,7 @@ export function TenantDashboard({
             />
             <Shortcut
               icon="key-outline"
-              title="Bàn giao / Trả phòng"
+              title="Bàn giao / Chấm dứt hợp đồng"
               onPress={() => go('tenant-handovers')}
             />
           </View>
@@ -418,49 +423,65 @@ export function TenantDashboard({
 }
 
 const styles = StyleSheet.create({
-  page: { width: '100%', minWidth: 0, gap: 18, paddingBottom: 18 },
+  page: { width: '100%', minWidth: 0, gap: 14, paddingBottom: 8 },
   grow: { flex: 1, minWidth: 0, gap: 3 },
-  secondary: { color: c.muted, fontSize: 12, lineHeight: 18, flexShrink: 1 },
+  secondary: { color: h.muted, fontSize: 12, lineHeight: 18, flexShrink: 1 },
   feedback: { flexDirection: 'row', gap: 4, alignItems: 'center', flexWrap: 'wrap' },
   error: { color: c.red, fontSize: 12, flexShrink: 1 },
   footnote: { color: c.muted, fontSize: 11, lineHeight: 16 },
-  roomBanner: { backgroundColor: c.white, borderRadius: 14 },
+  roomBanner: { backgroundColor: c.white, borderRadius: 16, borderWidth: 1, borderColor: h.border },
   roomBannerRow: {
-    paddingHorizontal: 16,
-    paddingVertical: 13,
+    paddingHorizontal: 12,
+    paddingVertical: 10,
     flexDirection: 'row',
     alignItems: 'center',
     gap: 8,
   },
-  roomKicker: { color: c.muted, fontSize: 11, fontWeight: '500' },
-  roomTitle: { color: s.navy, fontSize: 20, lineHeight: 26, fontWeight: '700' },
-  bill: { padding: 18, borderRadius: 16, backgroundColor: s.navy, gap: 9, minWidth: 0 },
+  roomKicker: { color: h.muted, fontSize: 12, fontWeight: '500' },
+  roomTitle: { ...fontStyle('bold', 18, 25), color: h.ink },
+  bill: {
+    padding: 14,
+    borderRadius: 16,
+    backgroundColor: c.white,
+    borderWidth: 1,
+    borderColor: h.border,
+    gap: 8,
+    minWidth: 0,
+  },
   billHeader: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
     gap: 8,
   },
-  billTitle: { color: '#E2EFFF', fontWeight: '600', fontSize: 14 },
-  billLabel: { color: '#CFDEF4', fontSize: 12, marginTop: 3 },
-  billAmount: { fontSize: 33, lineHeight: 43, color: c.white, fontWeight: '800', flexShrink: 1 },
-  billEmpty: { color: c.white, fontSize: 22, fontWeight: '700', marginTop: 8 },
-  billSupporting: { color: '#E4EEFF', fontSize: 12, lineHeight: 18, flexShrink: 1 },
+  billIcon: {
+    width: 38,
+    height: 38,
+    borderRadius: 12,
+    backgroundColor: h.iconSurface,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  billTitle: { ...typography.cardTitle, color: h.ink, flexShrink: 1 },
+  billLabel: { color: h.muted, fontSize: 12, marginTop: 3 },
+  billAmount: { ...fontStyle('bold', 28, 36), color: h.ink, flexShrink: 1 },
+  billEmpty: { ...fontStyle('bold', 18, 25), color: h.ink },
+  billSupporting: { color: h.muted, fontSize: 12, lineHeight: 18, flexShrink: 1 },
   billStatus: { flexDirection: 'row', alignItems: 'center', gap: 7, flexWrap: 'wrap' },
-  billStatusText: { color: '#EDF4FF', fontSize: 13, lineHeight: 19, flexShrink: 1 },
+  billStatusText: { color: h.ink, fontSize: 13, lineHeight: 19, flexShrink: 1 },
   billSummary: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
     gap: 8,
     borderTopWidth: 1,
-    borderTopColor: '#49617A',
+    borderTopColor: h.border,
     paddingTop: 9,
     flexWrap: 'wrap',
   },
-  billRemaining: { fontSize: 15, fontWeight: '700', color: c.white },
+  billRemaining: { fontSize: 15, fontWeight: '700', color: h.ink },
   billButton: { borderRadius: 10, marginTop: 5 },
-  section: { gap: 10, minWidth: 0 },
+  section: { gap: 8, minWidth: 0 },
   sectionHeading: {
     flexDirection: 'row',
     justifyContent: 'space-between',
@@ -468,28 +489,32 @@ const styles = StyleSheet.create({
     gap: 8,
     flexWrap: 'wrap',
   },
-  heading: { fontSize: 17, lineHeight: 24, fontWeight: '700', color: s.navy, flexShrink: 1 },
+  headingLabel: { flexDirection: 'row', alignItems: 'center', gap: 9, flexShrink: 1 },
+  headingAccent: { width: 4, height: 18, borderRadius: 2, backgroundColor: s.blue },
+  heading: { ...fontStyle('bold', 18, 25), color: h.ink, flexShrink: 1 },
   headingAction: { flexDirection: 'row', alignItems: 'center', gap: 2, minHeight: 40 },
   linkText: { color: s.blue, fontSize: 12, fontWeight: '600' },
   utilityRow: { flexDirection: 'row', alignItems: 'stretch', gap: 10, minWidth: 0 },
   utility: {
     backgroundColor: c.white,
-    borderRadius: 14,
-    padding: 13,
+    borderRadius: 16,
+    borderWidth: 1,
+    borderColor: h.border,
+    padding: 12,
     flex: 1,
     minWidth: 0,
     gap: 7,
   },
   utilityTop: { flexDirection: 'row', alignItems: 'center', gap: 7 },
   utilityIcon: {
-    width: 29,
-    height: 29,
-    borderRadius: 9,
-    backgroundColor: '#FFF0D5',
+    width: 38,
+    height: 38,
+    borderRadius: 12,
+    backgroundColor: h.iconSurface,
     alignItems: 'center',
     justifyContent: 'center',
   },
-  utilityIconWater: { backgroundColor: '#E8F3FF' },
+  utilityIconWater: { backgroundColor: h.iconSurface },
   utilityName: { color: s.navy, fontSize: 13, fontWeight: '700' },
   usage: { color: s.navy, fontSize: 23, lineHeight: 30, fontWeight: '800' },
   unit: { fontSize: 12, fontWeight: '500', color: c.muted },
@@ -502,36 +527,41 @@ const styles = StyleSheet.create({
   },
   utilityCaption: { color: c.muted, fontSize: 11, lineHeight: 16 },
   utilityCost: { fontSize: 12, lineHeight: 18, color: s.navy, fontWeight: '600' },
-  shortcutGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: 8, alignItems: 'stretch' },
+  shortcutGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: 10, alignItems: 'stretch' },
   shortcut: {
-    ...featureCardLayout.surface,
-    flex: undefined,
     flexBasis: '45%',
     flexGrow: 1,
-    maxWidth: '48%',
-    minHeight: 88,
-    borderRadius: 12,
+    maxWidth: '50%',
+    minWidth: 0,
+    minHeight: 80,
+    borderRadius: 16,
+    borderWidth: 1,
+    borderColor: h.border,
     backgroundColor: c.white,
     overflow: 'hidden',
   },
   shortcutBody: {
-    ...featureCardLayout.content,
-    justifyContent: 'center',
-    padding: 8,
-    gap: 4,
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingVertical: 10,
+    paddingHorizontal: 12,
+    gap: 10,
+    minHeight: 80,
   },
   shortcutIcon: {
-    ...featureCardLayout.icon,
-    width: 32,
-    height: 32,
-    borderRadius: 9,
+    width: 44,
+    height: 44,
+    borderRadius: 14,
+    alignItems: 'center',
+    justifyContent: 'center',
     backgroundColor: s.blueSoft,
   },
   shortcutTitle: {
     ...typography.cardTitle,
-    fontSize: 13,
-    lineHeight: 18,
-    color: s.navy,
-    textAlign: 'center',
+    color: h.ink,
+    textAlign: 'left',
+    flex: 1,
+    minWidth: 0,
   },
 });

@@ -237,6 +237,8 @@ public sealed class ContractsController(ContractService service, ContractExpiryS
     public Task<MoveOutView> ForcedMoveOut(Guid id, TerminationInput input, CancellationToken t) => service.RequestForcedMoveOutAsync(id, input, Key(), t);
     [HttpPost("{id:guid}/expiry-move-out"), Authorize(Roles = Roles.Owner)]
     public Task<MoveOutView> Expiry(Guid id, TerminationInput x, CancellationToken t) => service.RequestTerminationAsync(id, x, Key(), true, t);
+    [HttpPost("{id:guid}/owner-move-out"), Authorize(Roles = Roles.Owner)]
+    public Task<MoveOutView> OwnerMoveOut(Guid id, TerminationInput x, CancellationToken t) => service.RequestOwnerMoveOutAsync(id, x, Key(), t);
     [HttpGet("{id:guid}/move-out")]
     public Task<MoveOutView> MoveOut(Guid id, CancellationToken t) => service.GetMoveOutAsync(id, t);
     [HttpPost("{id:guid}/move-out/approve"), Authorize(Roles = Roles.Owner)]

@@ -1,5 +1,6 @@
 import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { EquipmentInspectionPanel } from '../features/workspace/EquipmentInspectionPanel';
+import { StaffAbandonMoveOutButton } from '../features/contracts/moveOut/StaffAbandonMoveOutButton';
 import {
   AppState,
   Image,
@@ -264,6 +265,9 @@ export function StaffTaskDetailScreen({ id }: { id: string }) {
             >
               {isMainMoveOutWork(task) ? 'Mở kiểm tra trả phòng' : 'Mở bàn giao nhận phòng'}
             </Button>
+          )}
+          {role === 'Staff' && inSelectedLocation && task.target?.contractId && isMainMoveOutWork(task) && (
+            <StaffAbandonMoveOutButton contractId={task.target.contractId} onChanged={refresh} />
           )}
           <View style={styles.row}>
             <View style={[styles.badge, pending && { backgroundColor: c.amberSoft }]}>

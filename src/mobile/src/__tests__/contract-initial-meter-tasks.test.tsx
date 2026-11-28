@@ -88,8 +88,8 @@ it('loads all room pages, shows only this contract’s fresh initial readings, a
       : [task('electric-new', 0), task('water-new', 1)],
   );
   render(<ContractInitialMeterTasks contract={contract} />);
-  const electricity = await screen.findByRole('button', { name: 'Chụp chỉ số điện' });
-  const water = screen.getByRole('button', { name: 'Chụp chỉ số nước' });
+  const electricity = await screen.findByRole('button', { name: 'Chụp chỉ số công tơ điện' });
+  const water = screen.getByRole('button', { name: 'Chụp chỉ số công tơ nước' });
   expect(screen.getByText(/Không dùng ảnh hoặc chỉ số của hợp đồng trước/)).toBeTruthy();
   expect(request).toHaveBeenCalledTimes(2);
   for (const [url] of request.mock.calls) {
@@ -116,8 +116,8 @@ it.each(['PendingSigning', 'PendingActivation'])(
       task('periodic', 0, { purpose: 1 }),
     ]);
     render(<ContractInitialMeterTasks contract={{ ...contract, status }} />);
-    const electricity = await screen.findByRole('button', { name: 'Chụp chỉ số điện' });
-    const water = screen.getByRole('button', { name: 'Chụp chỉ số nước' });
+    const electricity = await screen.findByRole('button', { name: 'Chụp chỉ số công tơ điện' });
+    const water = screen.getByRole('button', { name: 'Chụp chỉ số công tơ nước' });
     fireEvent.click(electricity);
     fireEvent.click(water);
     expect(router.push).toHaveBeenNthCalledWith(1, {
@@ -147,20 +147,20 @@ it('does not substitute periodic readings or old contract baselines for a missin
     task('new-water', 1, { status: 2 }),
   ]);
   render(<ContractInitialMeterTasks contract={contract} />);
-  await screen.findByRole('button', { name: 'Xem chỉ số nước' });
-  expect(screen.getByText('Chỉ số đầu kỳ điện')).toBeTruthy();
+  await screen.findByRole('button', { name: 'Xem chỉ số công tơ nước' });
+  expect(screen.getByText('Chỉ số đầu kỳ công tơ điện')).toBeTruthy();
   expect(screen.getAllByText('Chưa có bước xác nhận chỉ số đầu kỳ cho hợp đồng này.')).toHaveLength(
     1,
   );
-  expect(screen.queryByRole('button', { name: 'Chụp chỉ số điện' })).toBeNull();
+  expect(screen.queryByRole('button', { name: 'Chụp chỉ số công tơ điện' })).toBeNull();
 });
 
 it('does not open an ambiguous duplicate initial task for the same contract and utility', async () => {
   request.mockResolvedValue([task('electric-1', 0), task('electric-2', 0), task('water', 1)]);
   render(<ContractInitialMeterTasks contract={contract} />);
   await screen.findByText('Có nhiều nhiệm vụ cho cùng hợp đồng. Cần Owner kiểm tra.');
-  expect(screen.queryByRole('button', { name: 'Chụp chỉ số điện' })).toBeNull();
-  expect(screen.getByRole('button', { name: 'Chụp chỉ số nước' })).toBeTruthy();
+  expect(screen.queryByRole('button', { name: 'Chụp chỉ số công tơ điện' })).toBeNull();
+  expect(screen.getByRole('button', { name: 'Chụp chỉ số công tơ nước' })).toBeTruthy();
   await waitFor(() => expect(request).toHaveBeenCalledTimes(1));
 });
 
@@ -173,7 +173,7 @@ it('updates both meter statuses from the server after OCR returns without a manu
   const page = render(
     <ContractInitialMeterTasks contract={contract} integrated refreshRevision={0} />,
   );
-  expect(await screen.findByRole('button', { name: 'Chụp chỉ số điện' })).toBeTruthy();
+  expect(await screen.findByRole('button', { name: 'Chụp chỉ số công tơ điện' })).toBeTruthy();
   expect(screen.getAllByText('Chưa xác nhận')).toHaveLength(2);
   expect(
     screen.queryByRole('button', {
@@ -182,8 +182,8 @@ it('updates both meter statuses from the server after OCR returns without a manu
   ).toBeNull();
   confirmed = true;
   page.rerender(<ContractInitialMeterTasks contract={contract} integrated refreshRevision={1} />);
-  expect(await screen.findByRole('button', { name: 'Xem chỉ số điện' })).toBeTruthy();
-  expect(screen.getByRole('button', { name: 'Xem chỉ số nước' })).toBeTruthy();
+  expect(await screen.findByRole('button', { name: 'Xem chỉ số công tơ điện' })).toBeTruthy();
+  expect(screen.getByRole('button', { name: 'Xem chỉ số công tơ nước' })).toBeTruthy();
   expect(screen.getAllByText('Đã xác nhận')).toHaveLength(2);
   expect(request).toHaveBeenCalledTimes(2);
 });
@@ -210,8 +210,8 @@ it('repairs missing electricity and water baselines within the started move-in h
     2,
   );
   fireEvent.click(button);
-  expect(await screen.findByRole('button', { name: 'Chụp chỉ số điện' })).toBeTruthy();
-  expect(screen.getByRole('button', { name: 'Chụp chỉ số nước' })).toBeTruthy();
+  expect(await screen.findByRole('button', { name: 'Chụp chỉ số công tơ điện' })).toBeTruthy();
+  expect(screen.getByRole('button', { name: 'Chụp chỉ số công tơ nước' })).toBeTruthy();
   const ensureCall = request.mock.calls.find(([url]) =>
     url.includes('/initial-meter-baselines/ensure'),
   );

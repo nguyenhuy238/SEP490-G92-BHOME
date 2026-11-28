@@ -143,7 +143,9 @@ it('shows the four MoveIn-style result rows with whole-number final meters and n
 
   expect(screen.getByText('Nội dung trả phòng')).toBeTruthy();
   expect(screen.queryByText(/Kiểm kê lần/)).toBeNull();
-  expect(screen.getByText(/Điện: 100 kWh · Nước: 200 m³/)).toBeTruthy();
+  expect(
+    screen.getByText(/Chỉ số công tơ điện: 100 kWh · Chỉ số công tơ nước: 200 m³/),
+  ).toBeTruthy();
   expect(screen.getByRole('button', { name: 'Tài sản' })).toBeTruthy();
   expect(screen.getByRole('button', { name: 'Chìa khóa' })).toBeTruthy();
   expect(screen.getByText('5 chiếc đã nhận lại')).toBeTruthy();

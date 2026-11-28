@@ -80,7 +80,7 @@ Các route Expo Router độc lập ngoài workspace đều có file tương ứ
 
 - `/capture`, `/setup`, `/resident`: chọn cơ sở/phòng/công tơ, tải hoặc tạo cư dân qua `/api/v1/capture/*` và `services/setup.ts`, `services/captureService.ts`.
 - `/identity` → `features/onboarding/IdentityWizard.tsx` → `/api/v1/ocr/identity/{residentId}/{face}`, `/api/v1/capture/residents/{residentId}/confirm`.
-- `/meter` → `MeterTaskScreen` → `/api/v1/ocr/meter-tasks/{id}`, `/api/v1/capture/meter-tasks/{id}/evidence`; xác nhận số qua `services/meterService.ts`.
+- `/meter` → `MeterTaskScreen` → chụp ảnh thật và tải qua `/api/v1/capture/meter-tasks/{id}/evidence`; Staff nhập chỉ số thủ công và xác nhận qua `services/meterService.ts`. Dùng chung cho đầu kỳ, định kỳ và trả phòng; không gọi OCR công tơ.
 - `/open-invoice` và `/sign-contract` là liên kết từ email: kiểm tra ID, điều hướng vào workspace hoặc lưu đích trong `lib/pendingLink.ts` cho sau đăng nhập. `/contract-signing` mở `screens/AnonymousSigningScreen.tsx`.
 - `/`, `/forgot-password`, `/forgot-password-email`, `/reset-password`, `/confirm-email`, `/accept-invitation`: đăng nhập/khôi phục/xác nhận/lời mời qua `screens/`, `lib/SessionProvider.tsx`, `lib/sessions.ts` và client-core `sessionClient.ts`. `/ocr-test` là route kiểm tra OCR, không phải quy trình nghiệp vụ hàng tháng.
 

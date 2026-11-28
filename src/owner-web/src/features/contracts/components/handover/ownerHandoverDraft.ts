@@ -35,8 +35,8 @@ interface HandoverOutstandingIssue {
 type ReinspectionKind = 'Room' | 'RoomCheck' | 'Asset' | 'Access' | 'Meter';
 interface ReinspectionItem {
   kind: ReinspectionKind;
-  code?: string;
-  assetId?: string;
+  code?: string | null;
+  assetId?: string | null;
   rechecked?: boolean;
 }
 
@@ -191,16 +191,28 @@ export function reinspectionOptions(draft: OwnerHandoverDraft): ReinspectionOpti
 }
 
 export function reinspectionLabel(item: ReinspectionItem, draft: OwnerHandoverDraft): string {
-  return (
-    reinspectionOptions(draft).find(
-      (option) =>
-        option.item.kind === item.kind &&
-        option.item.code === item.code &&
-        option.item.assetId === item.assetId,
-    )?.label ??
-    item.code ??
-    (item.kind === 'Asset' ? 'Tài sản' : item.kind)
-  );
+  switch (item.kind) {
+    case 'Room':
+      return 'Hiện trạng chung và ảnh phòng';
+    case 'RoomCheck':
+      return roomCheckLabels[item.code ?? ''] ?? 'Hạng mục hiện trạng phòng';
+    case 'Asset': {
+      const asset =
+        draft.inspectedAssets?.find((entry) => entry.id === item.assetId) ??
+        draft.assets?.find((entry) => entry.id === item.assetId);
+      return asset ? `Tài sản: ${asset.name}` : 'Tài sản cần kiểm tra';
+    }
+    case 'Access':
+      return 'Chìa khóa và vật dụng ra vào';
+    case 'Meter':
+      return item.code?.toLowerCase() === 'electricity'
+        ? 'Chỉ số công tơ điện'
+        : item.code?.toLowerCase() === 'water'
+          ? 'Chỉ số công tơ nước'
+          : 'Chỉ số công tơ';
+    default:
+      return 'Hạng mục cần kiểm tra';
+  }
 }
 
 /** Whole-number meter display only; raw confirmed readings remain unchanged. */

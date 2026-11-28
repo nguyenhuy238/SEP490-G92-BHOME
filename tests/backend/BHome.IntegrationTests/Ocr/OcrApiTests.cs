@@ -175,6 +175,25 @@ public sealed class OcrApiTests
         Assert.Equal(HttpStatusCode.OK, response.StatusCode);
         using var json = System.Text.Json.JsonDocument.Parse(await response.Content.ReadAsStringAsync());
         Assert.Equal("0000000000.00", json.RootElement.GetProperty("proposedFields").GetProperty("reading").GetString());
+
+        // In normal runtime, no meter inference or resource lookup takes place.
+        var disabledResources = new TestResources();
+        var disabledEngine = new TestEngine();
+        using var disabled = Configure(root, disabledResources, new TestAssignments { Assigned = true },
+            "Development", true, disabledEngine, meterRecognitionEnabled: false);
+        using var manualClient = disabled.CreateClient();
+        using var disabledMeter = Request($"meter-tasks/{disabledResources.TaskId}", Roles.Staff, Image());
+        Assert.Equal(HttpStatusCode.NotFound, (await manualClient.SendAsync(disabledMeter)).StatusCode);
+        using var disabledAuto = Request("diagnostics/auto", Roles.Staff, Image());
+        Assert.Equal(HttpStatusCode.NotFound, (await manualClient.SendAsync(disabledAuto)).StatusCode);
+        using var disabledProfile = Request("diagnostics/water-digital", Roles.Staff, Image());
+        Assert.Equal(HttpStatusCode.NotFound, (await manualClient.SendAsync(disabledProfile)).StatusCode);
+        Assert.Equal(0, disabledResources.Lookups);
+        Assert.Null(disabledEngine.LastKind);
+        Assert.Equal(0, disabledEngine.AnalysisCalls);
+        using var identity = Request($"identity/{disabledResources.ResidentId}/front", Roles.Staff, Image());
+        Assert.Equal(HttpStatusCode.OK, (await manualClient.SendAsync(identity)).StatusCode);
+        Assert.Equal(OcrDocumentKind.IdentityFront, disabledEngine.LastKind);
     }
 
     [Fact]
@@ -346,7 +365,10 @@ public sealed class OcrApiTests
         {
             ConnectionString = "Host=127.0.0.1;Port=1;Database=bhome_tests;Username=unconfigured;Timeout=1;Pooling=false"
         };
-        using var factory = root.WithWebHostBuilder(builder => builder.ConfigureTestServices(AddTestAuthentication));
+        using var factory = root.WithWebHostBuilder(builder => builder
+            .ConfigureAppConfiguration((_, config) => config.AddInMemoryCollection(
+                new Dictionary<string, string?> { ["Ocr:MeterRecognitionEnabled"] = "true" }))
+            .ConfigureTestServices(AddTestAuthentication));
         using var client = factory.CreateClient();
         using var request = Request(string.Format(route, Guid.NewGuid()), Roles.Staff, []);
         var response = await client.SendAsync(request);
@@ -357,10 +379,14 @@ public sealed class OcrApiTests
     }
 
     private static Microsoft.AspNetCore.Mvc.Testing.WebApplicationFactory<Program> Configure(ApiFactory root, TestResources resources, TestAssignments assignments,
-        string environment = "Testing", bool diagnosticEnabled = false, IOcrEngine? engine = null)
+        string environment = "Testing", bool diagnosticEnabled = false, IOcrEngine? engine = null,
+        bool meterRecognitionEnabled = true)
         => root.WithWebHostBuilder(builder => builder.UseTestEnvironment(environment)
         .ConfigureAppConfiguration((_, config) => config.AddInMemoryCollection(new Dictionary<string, string?>
-        { ["MobileDevelopment:Enabled"] = diagnosticEnabled.ToString() }))
+        {
+            ["MobileDevelopment:Enabled"] = diagnosticEnabled.ToString(),
+            ["Ocr:MeterRecognitionEnabled"] = meterRecognitionEnabled.ToString()
+        }))
         .ConfigureTestServices(services =>
         {
             AddTestAuthentication(services);

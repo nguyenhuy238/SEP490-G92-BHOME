@@ -4,7 +4,8 @@ import { Icon, Text, TouchableRipple } from 'react-native-paper';
 import { useWorkspace } from '../features/workspace/WorkspaceProvider';
 import type { WorkspaceScreen } from '../features/workspace/navigation';
 import { colors as c, staffColors as s } from '../theme/theme';
-import { typography } from '../theme/typography';
+import { staffHomePalette as h } from '../theme/staffLayout';
+import { fontStyle, typography } from '../theme/typography';
 export const tenantFeatureGroups: {
   title: string;
   items: {
@@ -31,7 +32,7 @@ export const tenantFeatureGroups: {
         screen: 'contract',
       },
       {
-        title: 'Bàn giao / Trả phòng',
+        title: 'Bàn giao / Chấm dứt hợp đồng',
         detail: 'Biên bản & xác nhận',
         icon: 'key-outline',
         screen: 'checklist',
@@ -135,16 +136,19 @@ export function TenantFeatureDirectory({
     <View style={styles.directory}>
       {groups.map((group) => (
         <View key={group.title} style={styles.section}>
-          <Text accessibilityRole="header" style={styles.heading}>
-            {all
-              ? group.title.charAt(0) + group.title.slice(1).toLocaleLowerCase('vi-VN')
-              : group.title}
-          </Text>
+          <View style={styles.headingRow}>
+            <View style={styles.headingAccent} />
+            <Text accessibilityRole="header" style={styles.heading}>
+              {all
+                ? group.title.charAt(0) + group.title.slice(1).toLocaleLowerCase('vi-VN')
+                : group.title}
+            </Text>
+          </View>
           <View style={styles.list}>
-            {group.items.map((item, index) => (
+            {group.items.map((item) => (
               <TouchableRipple
                 key={item.title}
-                style={[styles.item, index < group.items.length - 1 && styles.itemDivider]}
+                style={styles.item}
                 accessibilityRole="button"
                 accessibilityLabel={item.title}
                 accessibilityHint={item.detail}
@@ -198,41 +202,44 @@ export function TenantFeatureDirectory({
   );
 }
 const styles = StyleSheet.create({
-  directory: { gap: 20 },
-  section: { gap: 10 },
-  heading: { ...typography.sectionHeading, color: s.navy, paddingHorizontal: 2 },
-  list: {
-    borderRadius: 14,
-    overflow: 'hidden',
+  directory: { gap: 14 },
+  section: { gap: 8 },
+  headingRow: { flexDirection: 'row', alignItems: 'center', gap: 9, paddingHorizontal: 3 },
+  headingAccent: { width: 4, height: 18, borderRadius: 2, backgroundColor: s.blue },
+  heading: { ...fontStyle('bold', 18, 25), color: h.ink, flexShrink: 1 },
+  list: { gap: 8 },
+  item: {
+    minHeight: 72,
+    justifyContent: 'center',
+    borderRadius: 16,
     backgroundColor: c.white,
     borderWidth: 1,
-    borderColor: c.border,
+    borderColor: h.border,
+    overflow: 'hidden',
   },
-  item: { minHeight: 64, justifyContent: 'center' },
-  itemDivider: { borderBottomWidth: 1, borderBottomColor: c.border },
   itemContent: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 12,
-    paddingHorizontal: 14,
-    paddingVertical: 11,
+    gap: 8,
+    paddingHorizontal: 12,
+    paddingVertical: 10,
   },
   iconBox: {
-    width: 34,
-    height: 34,
-    borderRadius: 10,
+    width: 38,
+    height: 38,
+    borderRadius: 12,
     alignItems: 'center',
     justifyContent: 'center',
-    backgroundColor: s.blueSoft,
+    backgroundColor: h.iconSurface,
   },
   itemText: { flex: 1, minWidth: 0, gap: 3 },
   title: {
     ...typography.cardTitle,
     textAlign: 'left',
-    color: s.navy,
+    color: h.ink,
     flexShrink: 1,
   },
-  detail: { ...typography.secondary, color: c.muted, flexShrink: 1 },
+  detail: { ...typography.secondary, color: h.muted, flexShrink: 1 },
   allLink: { borderRadius: 12 },
   linkRow: {
     minHeight: 52,

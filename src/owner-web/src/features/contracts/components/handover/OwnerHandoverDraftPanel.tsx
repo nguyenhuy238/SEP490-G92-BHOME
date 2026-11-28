@@ -286,7 +286,7 @@ function StaffWorkModules({
             >
               <Box sx={{ minWidth: 150, flex: '1 1 180px' }}>
                 <Typography variant="body2" sx={{ fontWeight: 650 }}>
-                  {label}:{' '}
+                  Chỉ số công tơ {label.toLowerCase()}:{' '}
                   {reading
                     ? `${displayMeterInteger(reading.value)} ${kind === 'electricity' ? 'kWh' : 'm³'}`
                     : 'Chưa xác nhận'}
@@ -997,13 +997,13 @@ function DraftDocument({ draft, api }: { draft: OwnerHandoverDraft; api: Contrac
         <Stack spacing={0.5}>
           <Typography variant="subtitle2">III. Chỉ số điện và nước ban đầu</Typography>
           <Typography variant="body2">
-            Điện:{' '}
+            Chỉ số công tơ điện:{' '}
             {draft.electricity
               ? `${displayMeterInteger(draft.electricity.value)} kWh`
               : 'Chờ nhân viên xác nhận'}
           </Typography>
           <Typography variant="body2">
-            Nước:{' '}
+            Chỉ số công tơ nước:{' '}
             {draft.water
               ? `${displayMeterInteger(draft.water.value)} m³`
               : 'Chờ nhân viên xác nhận'}
@@ -1688,11 +1688,15 @@ export function OwnerHandoverDraftPanel({
                 </Typography>
               )}
               {!!draft.reinspectionItems?.length && (
-                <Box component="ul" sx={{ pl: 3, mb: 0 }}>
+                <Box component="ul" sx={{ pl: 3, my: 1, '& li': { py: 0.5 } }}>
                   {draft.reinspectionItems.map((item, index) => (
                     <li key={`${item.kind}-${item.code ?? item.assetId ?? index}`}>
-                      {reinspectionLabel(item, draft)}{' '}
-                      {item.rechecked ? '· Đã kiểm tra lại' : '· Chờ nhân viên'}
+                      {reinspectionLabel(item, draft)}
+                      {item.rechecked && (
+                        <Typography component="span" color="success.main" variant="body2">
+                          {' · Đã kiểm tra lại'}
+                        </Typography>
+                      )}
                     </li>
                   ))}
                 </Box>

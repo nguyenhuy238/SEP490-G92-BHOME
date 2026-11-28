@@ -18,6 +18,7 @@ using BHome.Infrastructure.Contracts;
 using BHome.Infrastructure.Persistence;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Configuration;
 using Npgsql;
 using OpenCvSharp;
 using Native = BHome.Domain.Entities;
@@ -27,7 +28,7 @@ namespace BHome.Infrastructure.Ocr;
 internal sealed class CaptureRepository(BHomePersistenceContext db, CaptureScope scope, IIdentityProtection protection,
     IObjectStorage storage, UserManager<User> users, TimeProvider clock,
     BHome.Application.PropertyManagement.IPropertyRepository properties,
-    BHome.Application.Contracts.IContractRepository contracts) : ICaptureRepository
+    BHome.Application.Contracts.IContractRepository contracts, IConfiguration configuration) : ICaptureRepository
 {
     private Guid Actor => scope.UserId;
     private Task<Guid> IdentityOwnerAsync(CancellationToken t) => db is Compact24DbContext
@@ -391,7 +392,7 @@ internal sealed class CaptureRepository(BHomePersistenceContext db, CaptureScope
                     ELSE t.assigned_user_id END AS "AssignedStaffUserId",
                 (t.task_data->'state'->>'automationPlanId')::uuid AS "AutomationPlanId",t.version AS "Version",t.location_id AS "LocationId",m.room_id AS "RoomId",
                 ((t.task_data->'state'->>'purpose')::int=1 AND t.billing_period IS NOT NULL AND t.due_at IS NOT NULL AND t.due_at<{now} AND t.status NOT IN ('2','3')) AS "IsOverdue",
-                false AS "CanCorrect"
+                false AS "CanCorrect", NULL::text AS "CorrectionLockReason"
             FROM operational_tasks t JOIN meters m ON m.id=t.meter_id JOIN rooms r ON r.id=m.room_id JOIN locations l ON l.id=r.location_id
             LEFT JOIN meter_readings confirmed ON confirmed.operational_task_id=t.id WHERE t.task_type='METER_READ'
             """).Where(x => scope.NativeTasks.Any(task => task.Id == x.Id));
@@ -418,7 +419,7 @@ internal sealed class CaptureRepository(BHomePersistenceContext db, CaptureScope
                     .Select(a => (Guid?)a.StaffUserId).FirstOrDefault()
                 : x.AssignedStaffUserId,
             x.AutomationPlanId, x.Version, x.RequiredLocationId, x.Meter.RoomId,
-            x.Purpose == ReadingPurpose.Periodic && x.BillingPeriod != null && x.DueAt.HasValue && x.DueAt.Value < now && x.MeterStatus != MeterTaskStatus.Completed && x.MeterStatus != MeterTaskStatus.Cancelled, false));
+            x.Purpose == ReadingPurpose.Periodic && x.BillingPeriod != null && x.DueAt.HasValue && x.DueAt.Value < now && x.MeterStatus != MeterTaskStatus.Completed && x.MeterStatus != MeterTaskStatus.Cancelled, false, null));
     }
     public async Task<IReadOnlyList<MeterTaskSummary>> TasksAsync(CancellationToken t, MeterTaskQuery? q = null)
     {
@@ -457,14 +458,16 @@ internal sealed class CaptureRepository(BHomePersistenceContext db, CaptureScope
             var current = await scope.ReadTaskAsync(id, t) ?? throw new OcrAccessException();
             var previous = await scope.TaskReadingAsync(id, t) ?? throw new OcrAccessException();
             var device = await scope.MeterAsync(current.MeterId, t);
-            return native with { CanCorrect = await scope.CanCorrectAsync(current, device, previous, t) };
+            var canCorrect = await scope.CanCorrectAsync(current, device, previous, t);
+            return native with { CanCorrect = canCorrect, CorrectionLockReason = canCorrect ? null : await scope.CorrectionLockReasonAsync(current, device, previous, t) };
         }
         var summary = await TaskSummaries(scope.VisibleTasks.AsNoTracking().Where(x => x.Id == id)).SingleOrDefaultAsync(t) ?? throw new OcrAccessException();
         if (summary.ConfirmedReadingId is null) return summary;
         var task = await scope.VisibleTasks.AsNoTracking().SingleAsync(x => x.Id == id, t);
         var reading = await db.Set<MeterReading>().AsNoTracking().SingleAsync(r => r.TaskId == id, t);
         var meter = await db.Set<Meter>().AsNoTracking().SingleAsync(m => m.Id == task.MeterId, t);
-        return summary with { CanCorrect = await scope.CanCorrectAsync(task, meter, reading, t) };
+        var allowed = await scope.CanCorrectAsync(task, meter, reading, t);
+        return summary with { CanCorrect = allowed, CorrectionLockReason = allowed ? null : await scope.CorrectionLockReasonAsync(task, meter, reading, t) };
     }
 
     public async Task<ConfirmedReading> ReadingAsync(Guid id, CancellationToken t)
@@ -634,7 +637,9 @@ internal sealed class CaptureRepository(BHomePersistenceContext db, CaptureScope
         }
         // Verify the private object still exists before committing its reference.
         await storage.CopyToAsync(evidence.ObjectKey, Stream.Null, t);
-        var proposed = task.OcrImageHash == evidence.ImageHash ? task.OcrProposedValue : null;
+        // A historical proposal must not mark a new manual reading as an OCR correction.
+        var proposed = configuration.GetValue<bool>("Ocr:MeterRecognitionEnabled") &&
+            task.OcrImageHash == evidence.ImageHash ? task.OcrProposedValue : null;
         // PostgreSQL timestamptz stores microseconds. Match it before returning the first response.
         var confirmedAt = clock.GetUtcNow();
         confirmedAt = confirmedAt.AddTicks(-(confirmedAt.Ticks % 10));

@@ -22,7 +22,7 @@ public sealed class TestProbeController : ControllerBase
     public IActionResult ValidateStaff(BHome.Application.Operations.StaffCreate request) => Ok();
     [HttpPost("ocr-invalid-side"), AllowAnonymous]
     public Task<ActionResult<OcrProposal>> InvalidOcrSide(CancellationToken token) =>
-        new BHome.Api.Controllers.Ocr.OcrController(null!) { ControllerContext = ControllerContext }
+        new BHome.Api.Controllers.Ocr.OcrController(null!, new Microsoft.Extensions.Configuration.ConfigurationBuilder().Build()) { ControllerContext = ControllerContext }
             .Identity(Guid.NewGuid(), "unsupported", token);
     [HttpGet("ocr-input/{code}"), AllowAnonymous]
     public IActionResult OcrInput(string code) => throw new OcrInputException(code);

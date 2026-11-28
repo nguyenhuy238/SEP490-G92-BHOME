@@ -40,7 +40,6 @@ export function CameraCapture({
   onPhotoCleared,
   meterStep = 1,
   meterCompact = false,
-  meterRetryResets = false,
   autoOpen = false,
   captureInstruction,
   retryOnly = false,
@@ -62,7 +61,6 @@ export function CameraCapture({
   lensPreferenceRef?: { current: string };
   meterStep?: number;
   meterCompact?: boolean;
-  meterRetryResets?: boolean;
   autoOpen?: boolean;
   captureInstruction?: string;
   onManual?: () => void;
@@ -222,7 +220,7 @@ export function CameraCapture({
         saved = await prepareCapture(
           picture,
           () => alive.current && epoch === generation.current,
-          presentation === 'evidence'
+          presentation === 'evidence' || presentation === 'meter'
             ? 'evidence'
             : presentation === 'document' || documentSide
               ? 'identity'
@@ -329,6 +327,7 @@ export function CameraCapture({
         disabled={disabled || working}
         dark={presentation === 'document'}
         showControls={presentation !== 'evidence'}
+        previewHeight={presentation === 'meter' ? (meterCompact ? 300 : 460) : undefined}
         lensPreferenceRef={lensPreferenceRef ?? localLensPreferenceRef}
         onReady={(value) => {
           if (!alive.current || generation.current !== session) return;
@@ -358,31 +357,25 @@ export function CameraCapture({
     setError('');
   };
   const retake = () => {
+    if (pending.current.startsWith('data:image/jpeg;base64,')) {
+      resetCapture();
+      void openCamera();
+      return;
+    }
     resetCapture();
     setSession(generation.current);
     setOpen(true);
   };
-  const selectDemoMeterPhoto = async () => {
-    if (!localMeterDemo || disabled || workingLock.current) return;
-    workingLock.current = true;
-    setWorking(true);
-    setError('');
-    let bytes: Uint8Array<ArrayBuffer> | null = null;
+  const selectDemoMeterPhoto = () => {
+    if (!localMeterDemo || disabled || workingLock.current || permissionLock.current) return;
     try {
       const uri = createMeterDemoJpeg();
-      bytes = meterDemoJpegBytes(uri);
-      closeCamera();
-      clearFiles();
-      setPreview(uri);
+      resetCapture();
       pending.current = uri;
+      setPreview(uri);
       onPhotoCaptured?.();
-      await onCapture(bytes);
     } catch {
-      if (alive.current) setError('Không tạo hoặc xử lý được ảnh mẫu. Hãy thử lại.');
-    } finally {
-      bytes?.fill(0);
-      workingLock.current = false;
-      if (alive.current) setWorking(false);
+      setError('Không tạo được ảnh mẫu. Hãy thử lại.');
     }
   };
   if (presentation === 'evidence') {
@@ -441,8 +434,7 @@ export function CameraCapture({
         onClose={closeCamera}
         onUse={() => void submitPending()}
         onRetake={retake}
-        onRetry={meterRetryResets ? resetCapture : undefined}
-        onUseDemo={localMeterDemo && !preview ? () => void selectDemoMeterPhoto() : undefined}
+        onUseDemo={localMeterDemo && !preview ? selectDemoMeterPhoto : undefined}
       />
     );
   if (presentation === 'document')

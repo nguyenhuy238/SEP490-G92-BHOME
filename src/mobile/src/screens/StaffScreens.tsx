@@ -111,8 +111,7 @@ export function WorkOrders() {
 export function MeterReading() {
   const { preview, unavailable } = useWorkspace();
   const [filter, setFilter] = useState('Chưa ghi (4)');
-  const [reading, setReading] = useState('1525.8');
-  const [manual, setManual] = useState(false);
+  const [reading, setReading] = useState('');
   const [error, setError] = useFeedbackState();
   return (
     <>
@@ -137,48 +136,34 @@ export function MeterReading() {
         onChange={setFilter}
       />
       <Box>
-        <Heading title="Camera OCR Công tơ" detail="Nhận dạng là gợi ý • Staff cần đối chiếu ảnh" />
+        <Heading title="Ảnh minh chứng công tơ" detail="Chụp ảnh và nhập chỉ số thực tế" />
         <View style={{ borderRadius: 12, overflow: 'hidden', backgroundColor: c.navy }}>
           <Image
             source={require('../../assets/stitch/ghi_ch_s_i_n_n_c_ai_ocr_staff_meter_reading-0.jpg')}
             style={{ width: '100%', height: 190, opacity: 0.7 }}
             accessibilityLabel="Ảnh công tơ mẫu Stitch"
           />
-          <View
-            style={{
-              position: 'absolute',
-              top: 60,
-              left: 28,
-              right: 28,
-              padding: 16,
-              borderColor: '#94f5cf',
-              borderWidth: 2,
-              borderRadius: 8,
-            }}
-          >
-            <Text variant="headlineMedium" style={[ui.white, ui.money, { textAlign: 'center' }]}>
-              01525.8 kWh
-            </Text>
-          </View>
           <Text variant="labelSmall" style={[ui.white, { padding: 12 }]}>
             Ảnh minh họa • Camera chưa mở
           </Text>
         </View>
-        {manual && (
-          <TextInput
-            label="Chỉ số đề xuất (kWh)"
-            value={reading}
-            onChangeText={setReading}
-            keyboardType="decimal-pad"
-            mode="outlined"
-            error={!!error}
-          />
-        )}
+        <TextInput
+          label="Nhập chỉ số (kWh)"
+          value={reading}
+          onChangeText={setReading}
+          keyboardType="decimal-pad"
+          mode="outlined"
+          error={!!error}
+        />
         {!!error && <Text style={ui.red}>{error}</Text>}
         <View style={ui.wrap}>
           <View style={ui.half}>
-            <Action secondary icon="pencil-outline" onPress={() => setManual(!manual)}>
-              Sửa tay / Chụp lại
+            <Action
+              secondary
+              icon="camera-outline"
+              onPress={() => unavailable('Chụp lại ảnh cần tác vụ thật')}
+            >
+              Chụp lại
             </Action>
           </View>
           <View style={ui.half}>
@@ -202,11 +187,11 @@ export function MeterReading() {
           icon="camera-outline"
           onPress={() =>
             preview
-              ? unavailable('Camera OCR cần tài khoản Staff và tác vụ thật; đăng nhập để sử dụng')
+              ? unavailable('Chụp ảnh cần tài khoản Staff và tác vụ thật; đăng nhập để sử dụng')
               : router.push('/capture')
           }
         >
-          Bật Camera Quét OCR
+          Chụp ảnh công tơ
         </Action>
       </Box>
       <Heading
@@ -248,9 +233,9 @@ export function MeterReading() {
           <Action
             secondary
             icon="camera-outline"
-            onPress={() => unavailable(`Chụp OCR phòng ${room} cần tác vụ thật`)}
+            onPress={() => unavailable(`Chụp ảnh phòng ${room} cần tác vụ thật`)}
           >
-            {filter === 'Đã chốt (26)' ? 'Xem ảnh bằng chứng' : 'Chụp OCR Điện / Nước'}
+            {filter === 'Đã chốt (26)' ? 'Xem ảnh bằng chứng' : 'Chụp ảnh Điện / Nước'}
           </Action>
         </Box>
       ))}

@@ -172,7 +172,7 @@ export const INITIAL_FEE_POLICIES: FeePolicyItem[] = [
     unit: 'VND / kWh',
     applicationScope: 'PER_ROOM',
     effectiveDate: '2026-01-01',
-    description: 'Ghi nhận số điện theo công tơ phụ từng phòng bằng OCR và xác nhận hàng tháng.',
+    description: 'Chụp ảnh công tơ phụ từng phòng, nhập và xác nhận chỉ số hàng tháng.',
     isRegulatoryControlled: true,
   },
   {

@@ -13,9 +13,9 @@ internal sealed partial class NotificationEventPublisher
 {
     private static readonly IReadOnlyDictionary<string, string> SettlementTitles = new Dictionary<string, string>
     {
-        ["Requested"] = "Có yêu cầu trả phòng",
-        ["Approved"] = "Yêu cầu trả phòng đã được duyệt",
-        ["Rejected"] = "Yêu cầu trả phòng đã bị từ chối",
+        ["Requested"] = "Có yêu cầu chấm dứt hợp đồng",
+        ["Approved"] = "Yêu cầu chấm dứt hợp đồng đã được duyệt",
+        ["Rejected"] = "Yêu cầu chấm dứt hợp đồng đã bị từ chối",
         ["Scheduled"] = "Lịch kiểm tra trả phòng đã được cập nhật",
         ["Inspected"] = "Kết quả kiểm tra trả phòng đã được gửi",
         ["InspectionConfirmed"] = "Owner đã xác nhận kết quả kiểm tra trả phòng",
@@ -23,9 +23,9 @@ internal sealed partial class NotificationEventPublisher
         ["PendingSettlement"] = "Quyết toán trả phòng còn chờ xử lý",
         ["Settled"] = "Owner đã xác nhận quyết toán trả phòng",
         ["Completed"] = "Hợp đồng đã hoàn tất trả phòng",
-        ["ConsentOpened"] = "Cần xác nhận yêu cầu trả phòng",
-        ["ConsentReady"] = "Yêu cầu trả phòng đã đủ đồng thuận",
-        ["ConsentRejected"] = "Yêu cầu trả phòng không được đồng thuận",
+        ["PersonalTerminationCompletedBySystem"] = "Hợp đồng đã chấm dứt",
+        ["PersonalTerminationCompletedByOwner"] = "Hợp đồng đã chấm dứt",
+        ["LastLeaseInspectionRequiredBySystem"] = "Đến hạn kiểm tra trả phòng",
         ["ForcedOpened"] = "Có hồ sơ trả phòng bắt buộc",
         ["ForcedInspected"] = "Đã lưu kiểm tra trả phòng bắt buộc"
     };
@@ -43,33 +43,13 @@ internal sealed partial class NotificationEventPublisher
     private async Task<IReadOnlyList<Intent>> MoveOutAudience(ContractMoveOutHistory change, CancellationToken token)
     {
         var title = SettlementTitles[change.Action];
-        if (change.Action is "ConsentOpened" or "ConsentReady" or "ConsentRejected" or "ForcedOpened" or "ForcedInspected")
+        if (change.Action is "ForcedOpened" or "ForcedInspected")
         {
             var contract = await LoadNotificationContract(change.ContractId, token);
             if (contract is null) return [];
-            if (change.Action is "ForcedOpened" or "ForcedInspected" or "ConsentReady")
-                return [new(contract.OwnerSignerId, Roles.Owner, contract.Room.LocationId, "Contract", title,
-                    "Mở hồ sơ trả phòng để xem trạng thái và kết quả được lưu.", "Contract", contract.Id,
-                    EventType: "MOVE_OUT_STATUS_CHANGED", Channels: ["IN_APP", "PUSH"])];
-            var consent = JsonSerializer.Deserialize<RoomMoveOutConsent>(change.Snapshot);
-            if (consent is null) return [];
-            var intents = new List<Intent>();
-            foreach (var member in consent.Members.Where(m => m.UserId != change.ActorId).DistinctBy(m => m.UserId))
-            {
-                var linked = db is Compact24DbContext compact
-                    ? await compact.Set<BHome.Domain.TenantContracts.Contract>().AnyAsync(c => c.Id == member.ContractId && c.RoomId == contract.RoomId &&
-                        c.Status == ContractStatus.Active && compact.Set<BHome.Domain.TenantContracts.ContractResident>().Any(r => r.ContractId == c.Id && r.ResidentId == member.ResidentId), token)
-                    : await db.Set<Contract>().AsNoTracking().AnyAsync(c => c.Id == member.ContractId &&
-                    c.RoomId == contract.RoomId && c.Status == ContractStatus.Active &&
-                    c.Residents.Any(r => r.ResidentId == member.ResidentId), token);
-                if (!linked) continue;
-                intents.Add(new(member.UserId, Roles.Tenant, contract.Room.LocationId, "Contract", title,
-                    change.Action == "ConsentOpened" ? "Mở BHOME, vào Hợp đồng > Gia hạn & trả phòng để xác nhận yêu cầu của phòng." :
-                    "Yêu cầu trả phòng đã bị từ chối. Mở hợp đồng để xem trạng thái.", "Contract", member.ContractId,
-                    EventType: change.Action == "ConsentOpened" ? "MOVE_OUT_CONSENT_REQUIRED" : "MOVE_OUT_CONSENT_REJECTED",
-                    Channels: ["IN_APP", "EMAIL", "PUSH"]));
-            }
-            return intents;
+            return [new(contract.OwnerSignerId, Roles.Owner, contract.Room.LocationId, "Contract", title,
+                "Mở hồ sơ trả phòng để xem trạng thái và kết quả được lưu.", "Contract", contract.Id,
+                EventType: "MOVE_OUT_STATUS_CHANGED", Channels: ["IN_APP", "PUSH"])];
         }
         return (await SettlementAudience(change.ContractId, title, token)).Select(i => i with
         {

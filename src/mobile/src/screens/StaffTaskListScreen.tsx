@@ -548,7 +548,10 @@ export function TaskCard({
         : task.kind === 'LocationAssetHandover'
           ? 'Kiểm kê và nhận bàn giao cơ sở'
           : 'Công việc');
-  const status = taskStatusLabels[task.status] ?? task.status;
+  const status =
+    compactHandover && task.reinspectionRequestedAt
+      ? 'Kiểm tra lại'
+      : (taskStatusLabels[task.status] ?? task.status);
   const due =
     task.dueAt && Number.isFinite(Date.parse(task.dueAt)) ? formatInstant(task.dueAt) : null;
   if (compactHandover)

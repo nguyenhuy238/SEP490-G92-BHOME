@@ -20,7 +20,9 @@ vi.mock('../theme/theme', () => ({
 }));
 vi.mock('react-native', () => ({
   StyleSheet: { create: <T,>(value: T) => value },
-  View: ({ children }: { children: React.ReactNode }) => <div>{children}</div>,
+  View: ({ children, style }: { children: React.ReactNode; style?: unknown }) => (
+    <div data-rn-style={JSON.stringify(style)}>{children}</div>
+  ),
 }));
 vi.mock('react-native-paper', () => ({
   Text: ({
@@ -235,16 +237,27 @@ it('shows exactly four ordered shortcuts for a verified rental, opening dedicate
     <TenantDashboard month="2026-11" contracts={[room]} activeRental={room} invoice={invoice} />,
   );
   expect(screen.getByText('Chức năng')).toBeTruthy();
-  const labels = ['Lịch sử hóa đơn', 'Báo cáo sự cố', 'Yêu cầu hoàn tiền', 'Bàn giao / Trả phòng'];
+  const labels = ['Lịch sử hóa đơn', 'Báo cáo sự cố', 'Yêu cầu hoàn tiền', 'Bàn giao / Chấm dứt hợp đồng'];
   const buttons = screen
     .getAllByRole('button')
     .filter((button) => labels.includes(button.getAttribute('aria-label') ?? ''));
   expect(buttons.map((button) => button.getAttribute('aria-label'))).toEqual(labels);
   for (const button of buttons) {
     expect(JSON.parse(button.getAttribute('data-rn-style') ?? '{}')).toMatchObject({
-      minHeight: 88,
+      minHeight: 80,
       flexBasis: '45%',
-      maxWidth: '48%',
+      maxWidth: '50%',
+      backgroundColor: '#ffffff',
+      borderRadius: 16,
+      borderWidth: 1,
+      borderColor: '#DCE6F2',
+    });
+    expect(
+      JSON.parse(button.firstElementChild?.getAttribute('data-rn-style') ?? '{}'),
+    ).toMatchObject({
+      flexDirection: 'row',
+      alignItems: 'center',
+      minHeight: 80,
     });
   }
   for (const label of labels) fireEvent.click(screen.getByRole('button', { name: label }));
@@ -272,7 +285,7 @@ it('does not offer shortcuts without a verified active room rental', () => {
   view.rerender(
     <TenantDashboard month="2026-11" activeRental={{ ...room, status: 'Terminated' }} />,
   );
-  expect(screen.queryByText('Bàn giao / Trả phòng')).toBeNull();
+  expect(screen.queryByText('Bàn giao / Chấm dứt hợp đồng')).toBeNull();
 });
 
 it('uses only this period and room’s confirmed periodic readings, never missing-as-zero', () => {

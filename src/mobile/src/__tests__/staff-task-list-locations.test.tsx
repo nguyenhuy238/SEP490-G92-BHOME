@@ -289,6 +289,22 @@ beforeEach(() => {
 });
 afterEach(() => cleanup());
 
+it('labels a reopened handover as reinspection without changing its workflow status', () => {
+  render(
+    <TaskCard
+      compactHandover
+      task={{
+        ...task('recheck', loc1),
+        status: 'InProgress',
+        reinspectionRequestedAt: '2026-11-29T00:00:00Z',
+      }}
+      onPress={vi.fn()}
+    />,
+  );
+  expect(screen.getByText('Kiểm tra lại')).toBeTruthy();
+  expect(screen.queryByText('Đang xử lý')).toBeNull();
+});
+
 it('loads the Location directory once for all visible task kinds and preserves page navigation', async () => {
   const initial = Array.from({ length: 20 }, (_, i) =>
     task(String(i + 1), i % 2 === 0 ? loc1 : loc2, i === 0 ? 'LocationAssetHandover' : 'AdHoc'),

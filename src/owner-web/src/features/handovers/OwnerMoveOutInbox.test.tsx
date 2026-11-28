@@ -77,11 +77,11 @@ it('loads the authorized MoveOut queue, opens its detail and preserves the contr
 });
 
 it.each([
-  ['PendingTenant', null, 'Chờ khách thuê xác nhận phí'],
+  ['PendingTenant', null, 'Chưa phát hành phí'],
   ['Disputed', null, 'Khách thuê yêu cầu điều chỉnh phí'],
-  ['Accepted', 'PendingOwnerReview', 'Khách thuê đã đồng ý · Đang đối chiếu'],
-  ['Accepted', 'Payable', 'Khách thuê đã đồng ý · Đã tạo khoản phải thu'],
-  ['Accepted', 'RefundEligible', 'Khách thuê đã đồng ý · Có tiền cọc cần hoàn'],
+  ['Accepted', 'PendingOwnerReview', 'Đã gửi phí · Đang đối chiếu'],
+  ['Accepted', 'Payable', 'Đã gửi phí · Đã tạo khoản phải thu'],
+  ['Accepted', 'RefundEligible', 'Đã gửi phí · Có tiền cọc cần hoàn'],
   ['Accepted', 'Settled', 'Đã quyết toán phí trả phòng'],
 ] as const)(
   'shows the actual Tenant financial step in the inbox for %s / %s',
@@ -163,7 +163,7 @@ it('recovers the accepted fee status from the existing proposal API while the in
   );
   mount();
   expect(
-    (await screen.findAllByText('Khách thuê đã đồng ý · Đã tạo khoản phải thu')).length,
+    (await screen.findAllByText('Đã gửi phí · Đã tạo khoản phải thu')).length,
   ).toBeGreaterThan(0);
   expect(mocks.transport).toHaveBeenCalledWith(
     '/api/v1/contracts/contract-1/move-out/receivables/proposal',

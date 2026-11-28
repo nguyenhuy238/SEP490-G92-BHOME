@@ -204,6 +204,7 @@ import {
   activeWorkspaceTab,
   isWorkspaceTabDestination,
   tabs,
+  screenRoles,
   type WorkspaceScreen,
 } from '../features/workspace/navigation';
 import WorkspaceTabsLayout, { NavigatorTabBar } from '../app/(tabs)/_layout';
@@ -268,7 +269,10 @@ it.each([
     expect(within(dialog).getByText('Đổi cơ sở')).toBeTruthy();
     fireEvent.click(within(dialog).getByRole('button', { name: 'Cơ sở B' }));
     await waitFor(() => expect(screen.getByText('Dữ liệu loc-b')).toBeTruthy());
-    expect(screen.getByText('Cơ sở B')).toBeTruthy();
+    // Staff Home displays its location in the dashboard, not in the shell header.
+    // The probe above verifies that the dashboard receives the newly selected ID.
+    if (page === 'staff-home') expect(screen.queryByText('Cơ sở B')).toBeNull();
+    else expect(screen.getByText('Cơ sở B')).toBeTruthy();
     expect(screen.queryByText('Dữ liệu loc-a')).toBeNull();
     expect(screen.queryByRole('dialog')).toBeNull();
     expect(state.push).not.toHaveBeenCalled();
@@ -294,7 +298,7 @@ it('restricts the feature catalog to Tenant and returns to Home through normal b
   expect(screen.getByText('Tất cả chức năng')).toBeTruthy();
   expect(screen.getAllByRole('tab')).toHaveLength(4);
   expect((screen.getAllByRole('tab')[0].firstElementChild as HTMLElement).style.minHeight).toBe(
-    '54px',
+    '60px',
   );
   expect(view.container.querySelector('main')?.getAttribute('data-edges')).toBe('top,left,right');
   expect(screen.getAllByRole('tab')[0].parentElement?.style.paddingBottom).toBe('24px');
@@ -367,6 +371,17 @@ it('shows only the inline draft back button while the Staff contract form is vis
   rerender(view(false));
   expect(screen.getByRole('button', { name: 'Quay lại' })).toBeTruthy();
 });
+it('does not render an outer back button when the Staff move-in box owns navigation', () => {
+  render(
+    <WorkspaceProvider>
+      <WorkspaceShell screen="move-in">
+        <InlineContractHeader visible />
+      </WorkspaceShell>
+    </WorkspaceProvider>,
+  );
+  expect(screen.getByRole('button', { name: 'Quay lại: CCCD' })).toBeTruthy();
+  expect(screen.queryByRole('button', { name: 'Quay lại' })).toBeNull();
+});
 function ContractHeaderProbe({ refresh }: { refresh: () => void }) {
   useWorkspaceHeaderRefresh(refresh, false);
   return <span>Danh sách hợp đồng</span>;
@@ -434,21 +449,48 @@ it('shows a contextual add action at the top right of the Staff report tab', () 
 });
 it('keeps a compact Staff header and scrollable move-in content at 320px', () => {
   state.viewportWidth = 320;
+  const onBack = vi.fn();
   const view = render(
     <WorkspaceProvider>
-      <WorkspaceShell screen="move-in">
+      <WorkspaceShell screen="move-in" onBack={onBack}>
         <span>Đối chiếu kiểm kê đầu vào</span>
       </WorkspaceShell>
     </WorkspaceProvider>,
   );
   expect(screen.getByText('BHome Nhân viên')).toBeTruthy();
   expect(screen.getByText('Đối chiếu kiểm kê đầu vào')).toBeTruthy();
+  const backButton = screen.getByRole('button', { name: 'Quay lại' });
+  expect(
+    screen.getByText('Đối chiếu kiểm kê đầu vào').compareDocumentPosition(backButton) &
+      Node.DOCUMENT_POSITION_FOLLOWING,
+  ).toBeTruthy();
+  expect(screen.queryByText('Quay lại')).toBeNull();
+  fireEvent.click(backButton);
+  expect(onBack).toHaveBeenCalledOnce();
   expect(screen.getByTestId('shell-scroll')).toBeTruthy();
   expect(screen.getAllByRole('tab')).toHaveLength(4);
   expect(view.container.querySelector('main')?.getAttribute('data-edges')).toBe('top,left,right');
   expect(
     screen.getByText('BHome Nhân viên').parentElement?.parentElement?.parentElement?.style.width,
   ).not.toBe('0px');
+});
+it('places the Staff move-out back arrow below the inspection without visible text', () => {
+  const onBack = vi.fn();
+  render(
+    <WorkspaceProvider>
+      <WorkspaceShell screen="move-out" onBack={onBack}>
+        <span>Kiểm tra trả phòng</span>
+      </WorkspaceShell>
+    </WorkspaceProvider>,
+  );
+  const backButton = screen.getByRole('button', { name: 'Quay lại' });
+  expect(
+    screen.getByText('Kiểm tra trả phòng').compareDocumentPosition(backButton) &
+      Node.DOCUMENT_POSITION_FOLLOWING,
+  ).toBeTruthy();
+  expect(screen.queryByText('Quay lại')).toBeNull();
+  fireEvent.click(backButton);
+  expect(onBack).toHaveBeenCalledOnce();
 });
 function ProfileEditFooterProbe() {
   useWorkspaceHeaderRefresh(state.leave, false, {
@@ -694,16 +736,10 @@ it.each([
   const tabs = screen.getAllByRole('tab');
   expect(tabs.map((tab) => tab.getAttribute('aria-label'))).toEqual([...labels]);
   expect(tabs[0].getAttribute('aria-selected')).toBe('true');
-  expect((tabs[0].firstElementChild as HTMLElement).style.minHeight).toBe(
-    role === 'Tenant' ? '54px' : '60px',
-  );
+  expect((tabs[0].firstElementChild as HTMLElement).style.minHeight).toBe('60px');
   expect(tabs[0].parentElement?.style.paddingBottom).toBe('24px');
   expect(view.container.querySelector('main')?.style.backgroundColor).toBe(
-    role === 'Staff'
-      ? 'rgb(239, 245, 253)'
-      : role === 'Tenant'
-        ? 'rgb(23, 54, 84)'
-        : 'rgb(25, 54, 83)',
+    role === 'Staff' || role === 'Tenant' ? 'rgb(239, 245, 253)' : 'rgb(25, 54, 83)',
   );
   fireEvent.click(screen.getByRole('button', { name: 'Thông báo' }));
   expect(state.push).toHaveBeenLastCalledWith({
@@ -715,6 +751,59 @@ it.each([
     `/(tabs)/${role === 'Owner' ? 'approvals' : role === 'Staff' ? 'work-orders' : 'invoice'}`,
   );
 });
+it.each(
+  (Object.keys(screenRoles) as WorkspaceScreen[]).filter(
+    (page) => page !== 'tenant-home' && canOpenScreen('Tenant', page),
+  ),
+)(
+  'uses the light Staff-style workspace shell on Tenant %s without changing role destinations',
+  (page) => {
+    state.roles = ['Tenant'];
+    const view = render(
+      <WorkspaceProvider>
+        <WorkspaceShell screen={page}>
+          <span>Nội dung Tenant</span>
+        </WorkspaceShell>
+      </WorkspaceProvider>,
+    );
+    const root = view.container.querySelector('main')!;
+    expect(root.style.backgroundColor).toBe('rgb(255, 255, 255)');
+    const header = root.firstElementChild as HTMLElement;
+    expect(header.style.backgroundColor).toBe('rgb(255, 255, 255)');
+    expect(header.style.minHeight).toBe('64px');
+    expect(screen.getByText('BHome Khách thuê')).toBeTruthy();
+    expect(screen.getByRole('button', { name: 'Mở tài khoản cá nhân' })).toBeTruthy();
+    expect(screen.queryByRole('button', { name: 'Đổi cơ sở' })).toBeNull();
+    const tabBar = screen.getAllByRole('tab')[0].parentElement!;
+    expect(tabBar.style.borderTopLeftRadius).toMatch(/^0(?:px)?$/);
+    expect(tabBar.style.borderTopRightRadius).toMatch(/^0(?:px)?$/);
+    expect(screen.getAllByRole('tab').map((tab) => tab.getAttribute('aria-label'))).toEqual([
+      'Trang chủ',
+      'Hóa đơn',
+      'Yêu cầu',
+      'Cá nhân',
+    ]);
+    expect(screen.getByText('Nội dung Tenant')).toBeTruthy();
+  },
+);
+it.each(['MoveIn', 'MoveOut'])(
+  'returns from the %s handover queue to Staff home instead of reopening an inspection',
+  (tab) => {
+    state.params = { tab };
+    state.canGoBack.mockReturnValue(true);
+    render(
+      <WorkspaceProvider>
+        <WorkspaceShell screen="staff-handovers">
+          <span>Nội dung</span>
+        </WorkspaceShell>
+      </WorkspaceProvider>,
+    );
+    fireEvent.click(screen.getByRole('button', { name: 'Quay lại' }));
+    expect(state.dismissTo).toHaveBeenCalledWith('/(tabs)/staff-home');
+    expect(state.back).not.toHaveBeenCalled();
+    expect(state.push).not.toHaveBeenCalled();
+  },
+);
 it('returns to the preceding Staff screen when navigation history exists', () => {
   state.canGoBack.mockReturnValue(true);
   render(

@@ -35,6 +35,7 @@ export default function OcrTest() {
   const { api, session } = useSession();
   const allowed = !!session?.roles.some((role) => role === 'Owner' || role === 'Staff');
   const [available, setAvailable] = useState(false);
+  const [meterRecognitionEnabled, setMeterRecognitionEnabled] = useState(false);
   const [checking, setChecking] = useState(true);
   const [checkAttempt, setCheckAttempt] = useState(0);
   const [busy, setBusy] = useState(false);
@@ -89,9 +90,14 @@ export default function OcrTest() {
     let active = true;
     if (api && allowed)
       void api
-        .request('/api/v1/ocr/diagnostics', { signal: controller.signal })
-        .then(() => {
-          if (active) setAvailable(true);
+        .request<{ meterRecognitionEnabled?: boolean }>('/api/v1/ocr/diagnostics', {
+          signal: controller.signal,
+        })
+        .then((response) => {
+          if (active) {
+            setAvailable(true);
+            setMeterRecognitionEnabled(response.meterRecognitionEnabled === true);
+          }
         })
         .catch((e) => {
           if (active)
@@ -149,6 +155,7 @@ export default function OcrTest() {
   };
   const run = async (manual = false) => {
     if (!api || !image.current.bytes || lock.current) return;
+    if (!meterRecognitionEnabled && (!manual || !manualProfile.startsWith('identity-'))) return;
     lock.current = true;
     setBusy(true);
     setError('');
@@ -229,7 +236,11 @@ export default function OcrTest() {
   return (
     <Page>
       <Text variant="headlineMedium">Thử OCR trực tiếp</Text>
-      <Text>Chụp ảnh CCCD hoặc công tơ điện, nước. Hệ thống sẽ tự nhận diện và đọc thông tin.</Text>
+      <Text>
+        {meterRecognitionEnabled
+          ? 'Chụp ảnh CCCD hoặc công tơ điện, nước. Hệ thống sẽ tự nhận diện và đọc thông tin.'
+          : 'Chọn mặt CCCD và chụp ảnh để đọc thông tin. OCR công tơ đang tạm tắt.'}
+      </Text>
       <Text style={styles.note}>
         Dùng CCCD giả lập khi kiểm thử. Kết quả chỉ để xem và chỉnh sửa tạm thời.
       </Text>
@@ -247,19 +258,32 @@ export default function OcrTest() {
           Kiểm tra lại máy chủ
         </Button>
       )}
+      {available && !meterRecognitionEnabled && (
+        <Select
+          label="Mặt CCCD"
+          items={ocrProfiles.filter((item) => item.id.startsWith('identity-'))}
+          selected={manualProfile}
+          onSelect={(id) => {
+            if (!busy) setManualProfile(id);
+          }}
+        />
+      )}
       <CameraCapture
         label={preview ? 'Chụp lại' : 'Chụp ảnh OCR'}
         buttonMode="contained"
-        disabled={!available || busy}
+        disabled={
+          !available || busy || (!meterRecognitionEnabled && !manualProfile.startsWith('identity-'))
+        }
         onCapture={async (bytes) => {
           if (lock.current) return;
           clear();
+          if (!meterRecognitionEnabled) setManualProfile(manualProfile);
           image.current.replace(bytes);
           setPreview(ocrPreview(bytes));
           expiry.current = setTimeout(() => {
             if (mounted.current) clear();
           }, 60000);
-          await run();
+          await run(!meterRecognitionEnabled);
         }}
       />
       {busy && <Text>Đang phân tích loại ảnh và đọc thông tin…</Text>}
@@ -278,7 +302,11 @@ export default function OcrTest() {
           <Text>Chưa xác định được loại ảnh. Vui lòng kiểm tra và chọn loại phù hợp.</Text>
           <Select
             label="Loại ảnh sau khi kiểm tra"
-            items={ocrProfiles}
+            items={
+              meterRecognitionEnabled
+                ? ocrProfiles
+                : ocrProfiles.filter((item) => item.id.startsWith('identity-'))
+            }
             selected={manualProfile}
             onSelect={(id) => {
               if (!busy) setManualProfile(id);

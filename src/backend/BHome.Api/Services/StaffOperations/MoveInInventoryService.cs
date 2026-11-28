@@ -44,7 +44,9 @@ public sealed partial class OperationalTaskService
             await repository.IncidentsResolvedAsync(ids, t);
         return new(task.Id, task.ContractId!.Value, task.TargetRoomId!.Value, task.RequiredLocationId,
             task.MeterStatus.ToString(), Outcome(snapshot.Items), task.Version, task.DueAt, task.CompletedAt,
-            ready, snapshot.Items, snapshot.ReinspectionItemIds, snapshot.ReinspectionRequestedAt);
+            ready, snapshot.Items, snapshot.ReinspectionItemIds, snapshot.ReinspectionRequestedAt,
+            snapshot.ReinspectionItemIds is null ? null : snapshot.RecheckedItemIds ??
+                (task.MeterStatus == MeterTaskStatus.Completed ? snapshot.ReinspectionItemIds : []));
     }
 
     public async Task<MoveInInventoryView> MoveInInventoryAsync(Guid id, CancellationToken t)
@@ -118,6 +120,11 @@ public sealed partial class OperationalTaskService
                     EvidenceIds = input.EvidenceIds,
                     IncidentId = input.Condition == "Good" ? null : input.IncidentId
                 };
+                if (snapshot.ReinspectionItemIds?.Contains(itemId) == true)
+                    snapshot = snapshot with
+                    {
+                        RecheckedItemIds = (snapshot.RecheckedItemIds ?? []).Append(itemId).Distinct().ToArray()
+                    };
                 task.MoveInInventoryJson = JsonSerializer.Serialize(snapshot);
                 await RecordAsync(task, "move_in_inventory_item_checked", input.Notes?.Trim() ?? "",
                     new { itemId, input.ActualQuantity, input.Condition, input.EvidenceIds, input.IncidentId }, [], t);
@@ -153,15 +160,16 @@ public sealed partial class OperationalTaskService
                 var evidence = (await repository.EvidenceAsync(taskId, t)).ToArray();
                 if (snapshot.Items.SelectMany(i => i.EvidenceIds ?? []).Any(id => !evidence.Any(e => e.Id == id)))
                     throw OperationalTaskException.Conflict("move_in_inventory_evidence_missing");
-                // A reinspection cannot be completed by toggling an old
-                // Missing/Damaged result to Good without the requested recheck.
-                // Optional new photos are still bound to the specific task.
+                // Every selected item must have a new explicit observation;
+                // previously uploaded, task-scoped photos remain valid evidence.
                 if (snapshot.ReinspectionItemIds is { Length: > 0 } selected)
                 {
                     foreach (var selectedId in selected)
                     {
                         var item = snapshot.Items.Single(i => i.Id == selectedId);
                         if (item.Condition != "Good" || item.ActualQuantity != item.ExpectedQuantity)
+                            throw OperationalTaskException.Conflict("move_in_inventory_reinspection_not_passed");
+                        if (snapshot.RecheckedItemIds?.Contains(selectedId) != true)
                             throw OperationalTaskException.Conflict("move_in_inventory_reinspection_not_passed");
                     }
                 }

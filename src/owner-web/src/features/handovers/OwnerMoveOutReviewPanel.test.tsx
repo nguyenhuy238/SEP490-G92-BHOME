@@ -108,11 +108,11 @@ beforeEach(() => {
   mutation.mockReset().mockResolvedValue({ id: 'proposal-1' });
 });
 
-it('approves a unanimously consented request in place before staff inspection starts', async () => {
+it('approves an individual request in place before staff inspection starts', async () => {
   vi.mocked(api.moveOut).mockResolvedValue({
     status: 'Requested',
     requiredConsents: 2,
-    receivedConsents: 2,
+    receivedConsents: 1,
     isGroupPrimary: true,
   } as never);
   const request = {
@@ -134,8 +134,8 @@ it('approves a unanimously consented request in place before staff inspection st
   vi.mocked(api.transport).mockResolvedValue(null as never);
   const onChanged = vi.fn();
   mount(onChanged);
-  const approve = await screen.findByRole('button', { name: 'Duyệt yêu cầu trả phòng' });
-  expect(screen.getByText('Đã đồng thuận: 2/2 thành viên.')).toBeInTheDocument();
+  const approve = await screen.findByRole('button', { name: 'Duyệt yêu cầu chấm dứt hợp đồng' });
+  expect(screen.queryByText(/Đã đồng thuận/)).not.toBeInTheDocument();
   expect(screen.getByText('Chuyển nơi ở')).toBeInTheDocument();
   expect(screen.queryByText('Chưa có kết quả kiểm kê.')).not.toBeInTheDocument();
   expect(api.inspections).not.toHaveBeenCalled();
@@ -165,22 +165,19 @@ it('approves a unanimously consented request in place before staff inspection st
     expect.any(String),
   );
   expect(onChanged).toHaveBeenCalled();
-  expect(screen.queryByRole('button', { name: 'Duyệt yêu cầu trả phòng' })).not.toBeInTheDocument();
-  expect(screen.queryByRole('button', { name: 'Gửi khách thuê duyệt' })).not.toBeInTheDocument();
+  expect(screen.queryByRole('button', { name: 'Duyệt yêu cầu chấm dứt hợp đồng' })).not.toBeInTheDocument();
+  expect(screen.queryByRole('button', { name: 'Gửi phí quyết toán' })).not.toBeInTheDocument();
 });
 
-it.each([
-  { status: 'AwaitingConsent', requiredConsents: 2, receivedConsents: 1 },
-  { status: 'Requested', requiredConsents: 2, receivedConsents: 1 },
-  { status: 'Requested', requiredConsents: 2, receivedConsents: 2, isGroupPrimary: false },
-])('does not allow approval of an ineligible request: %j', async (request) => {
-  vi.mocked(api.moveOut).mockResolvedValue(request as never);
+it('does not open room inspection for a scheduled individual termination', async () => {
+  vi.mocked(api.moveOut).mockResolvedValue({ status: 'Approved', pendingReason: 'personal_termination_scheduled' } as never);
+  vi.mocked(api.terminationReview).mockResolvedValue({ status: 'Approved', proposedDate: '2027-04-08', startDate: '2027-02-27', endDate: '2028-02-26' } as never);
   mount();
   expect(
-    await screen.findByText(/Yêu cầu (cần đủ đồng thuận|chưa đủ điều kiện)/),
+    await screen.findByText(/Hợp đồng cá nhân sẽ chấm dứt vào ngày dự kiến/),
   ).toBeInTheDocument();
-  expect(screen.queryByRole('button', { name: 'Duyệt yêu cầu trả phòng' })).not.toBeInTheDocument();
-  expect(api.terminationReview).not.toHaveBeenCalled();
+  expect(screen.queryByRole('button', { name: 'Duyệt yêu cầu chấm dứt hợp đồng' })).not.toBeInTheDocument();
+  expect(api.inspections).not.toHaveBeenCalled();
   expect(mutation).not.toHaveBeenCalled();
 });
 
@@ -219,8 +216,8 @@ it('shows a completed move-out instead of the stale negative provisional balance
   vi.mocked(api.moveOut).mockResolvedValue({ status: 'Completed' } as never);
   vi.mocked(api.transport).mockResolvedValue({ ...review, status: 'Outdated' } as never);
   mount();
-  expect(await screen.findByText(/Máy chủ đã xác minh đủ khoản thanh toán/)).toBeInTheDocument();
-  expect(await screen.findByText('Số còn cần thu hoặc hoàn')).toBeInTheDocument();
+  expect(await screen.findByText(/Máy chủ đã kết thúc hợp đồng/)).toBeInTheDocument();
+  expect(await screen.findByText('Chênh lệch tại thời điểm phát hành')).toBeInTheDocument();
   expect(screen.getByText('Phí trả phòng đã chốt')).toBeInTheDocument();
   expect(screen.queryByText('Chênh lệch dự kiến')).not.toBeInTheDocument();
   expect(
@@ -365,7 +362,7 @@ it('allows pricing Staff-inspected items and sending fees without a second Owner
   fireEvent.change(screen.getByRole('textbox', { name: 'Mô tả bổ sung (nếu có)' }), {
     target: { value: 'Đề nghị người thuê xem chi tiết các khoản chi phí' },
   });
-  fireEvent.click(await screen.findByRole('button', { name: 'Gửi khách thuê duyệt' }));
+  fireEvent.click(await screen.findByRole('button', { name: 'Gửi phí quyết toán' }));
   fireEvent.click(await screen.findByRole('button', { name: 'Xác nhận thực hiện' }));
   await waitFor(() => expect(mutation).toHaveBeenCalledOnce());
   expect(mutation).toHaveBeenCalledWith(
@@ -437,7 +434,7 @@ it('shows the Tenant objection on the exact charge and lets Owner revise and res
     target: { value: 'Giảm phí sau khi xem bằng chứng khách thuê' },
   });
   fireEvent.click(screen.getByRole('button', { name: 'Xong' }));
-  fireEvent.click(await screen.findByRole('button', { name: 'Gửi lại khách thuê duyệt' }));
+  fireEvent.click(await screen.findByRole('button', { name: 'Gửi lại phí' }));
   fireEvent.click(await screen.findByRole('button', { name: 'Xác nhận thực hiện' }));
   await waitFor(() =>
     expect(mutation).toHaveBeenCalledWith(
@@ -460,7 +457,7 @@ it('shows the Tenant objection on the exact charge and lets Owner revise and res
 
 it('shows Staff final status and enables sending a proposal without redundant Owner confirmation', async () => {
   mount();
-  expect(await screen.findByRole('button', { name: 'Gửi khách thuê duyệt' })).toBeEnabled();
+  expect(await screen.findByRole('button', { name: 'Gửi phí quyết toán' })).toBeEnabled();
   expect(screen.getByText('Chờ chủ trọ gửi phí')).toBeInTheDocument();
   expect(screen.queryByText('Chờ chủ trọ xác nhận kiểm kê')).not.toBeInTheDocument();
   expect(
@@ -469,7 +466,7 @@ it('shows Staff final status and enables sending a proposal without redundant Ow
   expect(
     screen.queryByRole('button', { name: 'Xác nhận kết quả kiểm kê' }),
   ).not.toBeInTheDocument();
-  fireEvent.click(screen.getByRole('button', { name: 'Gửi khách thuê duyệt' }));
+  fireEvent.click(screen.getByRole('button', { name: 'Gửi phí quyết toán' }));
   fireEvent.click(screen.getByRole('button', { name: 'Xác nhận thực hiện' }));
   await waitFor(() =>
     expect(mutation).toHaveBeenCalledWith(
@@ -510,7 +507,7 @@ it('does not redirect a Tenant-accepted fee back to redundant Owner inspection r
   } as never);
   mount();
   expect(await screen.findByText('Khách thuê đã đồng ý đề xuất.')).toBeInTheDocument();
-  expect(screen.getByText('Khách thuê đã đồng ý · Đang đối chiếu')).toBeInTheDocument();
+  expect(screen.getByText('Đã gửi phí · Đang đối chiếu')).toBeInTheDocument();
   expect(screen.queryByText('Đã nhận kết quả nhân viên')).not.toBeInTheDocument();
   expect(
     screen.queryByText(/Chủ trọ chưa xác nhận kết quả kiểm kê thực tế của nhân viên/),
@@ -521,16 +518,16 @@ it('does not redirect a Tenant-accepted fee back to redundant Owner inspection r
   expect(
     screen.queryByRole('button', { name: 'Xác nhận kết quả kiểm kê' }),
   ).not.toBeInTheDocument();
-  expect(screen.queryByRole('button', { name: 'Gửi khách thuê duyệt' })).not.toBeInTheDocument();
+  expect(screen.queryByRole('button', { name: 'Gửi phí quyết toán' })).not.toBeInTheDocument();
 });
 
 it.each([
-  ['PendingTenant', null, 'Chờ khách thuê xác nhận phí'],
+  ['PendingTenant', null, 'Chưa phát hành phí'],
   ['Disputed', null, 'Khách thuê yêu cầu điều chỉnh phí'],
-  ['Accepted', 'Payable', 'Khách thuê đã đồng ý · Đã tạo khoản phải thu'],
-  ['Accepted', 'RefundEligible', 'Khách thuê đã đồng ý · Có tiền cọc cần hoàn'],
+  ['Accepted', 'Payable', 'Đã gửi phí · Đã tạo khoản phải thu'],
+  ['Accepted', 'RefundEligible', 'Đã gửi phí · Có tiền cọc cần hoàn'],
   ['Accepted', 'Settled', 'Đã quyết toán phí trả phòng'],
-  ['Outdated', null, 'Khách thuê đã đồng ý · Cần đối chiếu dữ liệu'],
+  ['Outdated', null, 'Cần đối chiếu dữ liệu phí'],
 ] as const)(
   'shows the actual move-out progress for %s / %s',
   async (status, settlement, expected) => {
@@ -559,7 +556,7 @@ it.each([
       },
     } as never);
     mount();
-    expect(await screen.findByText(expected)).toBeInTheDocument();
+    expect((await screen.findAllByText(expected)).length).toBeGreaterThan(0);
     expect(screen.queryByText('Đã nhận kết quả nhân viên')).not.toBeInTheDocument();
   },
 );

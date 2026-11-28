@@ -108,8 +108,9 @@ export function ContractLifecyclePanel({
             </Text>
           ))}
           <Text>
-            Điện: {i.baseline?.electricity.value ?? 'Chưa rõ'} → {i.observed.electricity.value} ·
-            Nước: {i.baseline?.water.value ?? 'Chưa rõ'} → {i.observed.water.value}
+            Chỉ số công tơ điện: {i.baseline?.electricity.value ?? 'Chưa rõ'} →{' '}
+            {i.observed.electricity.value} · Chỉ số công tơ nước:{' '}
+            {i.baseline?.water.value ?? 'Chưa rõ'} → {i.observed.water.value}
           </Text>
           <Text>{i.observed.notes}</Text>
           {!!i.observed.missingBaselineReason && (

@@ -173,6 +173,7 @@ public sealed class ExperimentalMeterRuntimeTests
             .ConfigureAppConfiguration((_, config) => config.AddInMemoryCollection(new Dictionary<string, string?>
             {
                 ["MobileDevelopment:Enabled"] = mobile.ToString(),
+                ["Ocr:MeterRecognitionEnabled"] = "true",
                 ["Ocr:Enabled"] = (environment == "Development" && mobile && experimental).ToString(),
                 ["Ocr:ModelDirectory"] = Path.Combine(directory, ".tools/ocr-models"),
                 ["Ocr:TimeoutMilliseconds"] = "9000",

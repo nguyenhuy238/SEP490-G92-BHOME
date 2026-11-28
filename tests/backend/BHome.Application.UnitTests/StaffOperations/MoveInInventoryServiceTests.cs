@@ -232,8 +232,50 @@ public sealed class MoveInInventoryServiceTests
         var view = await r.Service.MoveInInventoryAsync(r.Task.Id, default);
         Assert.Equal(damaged.Id, Assert.Single(Assert.IsType<Guid[]>(view.ReinspectionItemIds)));
         Assert.Equal(requestedAt, view.ReinspectionRequestedAt);
+        Assert.Empty(Assert.IsType<Guid[]>(view.RecheckedItemIds));
         Assert.Equal("Damaged", view.Items.Single(item => item.Id == damaged.Id).Condition);
         Assert.Equal("Good", view.Items.Single(item => item.Id != damaged.Id).Condition);
+    }
+
+    [Fact]
+    public async Task ReinspectionRequiresExplicitSaveButAcceptsTheSameScopedPhoto()
+    {
+        var r = new Rig(2);
+        foreach (var item in r.Items) r.Mark(item);
+        var snapshot = JsonSerializer.Deserialize<MoveInInventorySnapshot>(r.Task.MoveInInventoryJson)!;
+        var selected = snapshot.Items[0];
+        var other = snapshot.Items[1];
+        var oldPhoto = Assert.Single(selected.EvidenceIds!);
+        r.Task.MoveInInventoryJson = JsonSerializer.Serialize(snapshot with
+        {
+            ReinspectionItemIds = [selected.Id],
+            ReinspectionRequestedAt = new DateTimeOffset(2026, 11, 18, 7, 0, 0, TimeSpan.Zero),
+            RecheckedItemIds = []
+        });
+
+        var uncheckedResult = await Assert.ThrowsAsync<OperationalTaskException>(() =>
+            r.Service.CompleteMoveInInventoryAsync(r.Task.Id, new(r.Task.Version), Guid.NewGuid(), default));
+        Assert.Equal("move_in_inventory_reinspection_not_passed", uncheckedResult.Code);
+        var wrongItem = await Assert.ThrowsAsync<OperationalTaskException>(() =>
+            r.Service.UpdateInventoryItemAsync(r.Task.Id, other.Id,
+                new(r.Task.Version, 2, "Good", null, other.EvidenceIds), Guid.NewGuid(), default));
+        Assert.Equal("move_in_inventory_reinspection_item_not_selected", wrongItem.Code);
+        var wrongEvidence = await Assert.ThrowsAsync<OperationalTaskException>(() =>
+            r.Service.UpdateInventoryItemAsync(r.Task.Id, selected.Id,
+                new(r.Task.Version, 2, "Good", null, other.EvidenceIds), Guid.NewGuid(), default));
+        Assert.Equal("invalid_move_in_inventory_evidence", wrongEvidence.Code);
+        var missingPhoto = await Assert.ThrowsAsync<OperationalTaskException>(() =>
+            r.Service.UpdateInventoryItemAsync(r.Task.Id, selected.Id,
+                new(r.Task.Version, 2, "Good", null, []), Guid.NewGuid(), default));
+        Assert.Equal("invalid_move_in_inventory_item", missingPhoto.Code);
+        var saved = await r.Service.UpdateInventoryItemAsync(r.Task.Id, selected.Id,
+            new(r.Task.Version, 2, "Good", "Đã kiểm tra lại", [oldPhoto]), Guid.NewGuid(), default);
+        Assert.Equal(selected.Id, Assert.Single(Assert.IsType<Guid[]>(saved.RecheckedItemIds)));
+        Assert.Equal(oldPhoto, Assert.Single(saved.Items.Single(item => item.Id == selected.Id).EvidenceIds!));
+        var completed = await r.Service.CompleteMoveInInventoryAsync(r.Task.Id,
+            new(saved.Version), Guid.NewGuid(), default);
+        Assert.Equal("Completed", completed.Status);
+        Assert.Equal(oldPhoto, Assert.Single(completed.Items.Single(item => item.Id == selected.Id).EvidenceIds!));
     }
 
     [Fact]

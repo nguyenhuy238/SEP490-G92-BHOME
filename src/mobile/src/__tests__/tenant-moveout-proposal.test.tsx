@@ -153,7 +153,7 @@ it('switches the accepted 20k proposal to completed when the verified server mov
   );
   render(<TenantMoveOutProposalPanel api={api} contractId={contractId} onChanged={changed} />);
   expect((await screen.findAllByText('Trả phòng thành công')).length).toBeGreaterThanOrEqual(2);
-  expect(screen.getByText('Không còn phải thanh toán')).toBeTruthy();
+  expect(screen.getByText('Chênh lệch tại thời điểm phát hành')).toBeTruthy();
   expect(screen.getByText('Phí trả phòng đã chốt')).toBeTruthy();
   expect(screen.queryByTestId('excess-payment')).toBeNull();
   expect(screen.queryByText(/Dự kiến cần thanh toán thêm/)).toBeNull();
@@ -223,26 +223,36 @@ function proposal(
   };
 }
 
-it('Tenant sees itemized charges, signs off only after reviewing and sends idempotent proposal feedback', async () => {
-  let status: 'PendingTenant' | 'Accepted' = 'PendingTenant';
-  const sent: { path: string; init: RequestInit | undefined }[] = [];
-  const request = vi.fn<ContractRequest>(
-    async <T,>(path: string, init?: RequestInit): Promise<T> => {
-      if (path === proposalPath) return proposal(status) as T;
-      if (path === `${proposalPath}/tenant-feedback`) {
-        sent.push({ path, init });
-        status = 'Accepted';
-        return { id: 'feedback' } as T;
-      }
-      throw new Error(`Unexpected API: ${path}`);
+function issuedProposal(status: 'Payable' | 'RefundEligible' | 'PendingOwnerReview') {
+  const previous = proposal('Accepted');
+  const settlement: MoveOutProposalSettlement = {
+    status,
+    payableAmount: status === 'Payable' ? '900000' : '0',
+    refundAmount: status === 'RefundEligible' ? '150000' : '0',
+    payableReceivableId: status === 'Payable' ? 'a1111111-1111-4111-8111-111111111111' : null,
+    createdReceivableIds: [],
+    depositOffsetIds: [],
+  };
+  return {
+    ...previous,
+    status: 'Issued',
+    latestProposal: {
+      ...previous.latestProposal,
+      signedBalance: status === 'RefundEligible' ? '150000' : '-900000',
+      tenantFeedback: null,
+      issuedSettlement: settlement,
     },
-  );
-  const api = contractClient(
-    <T,>(path: string, init?: RequestInit) => request(path, init) as Promise<T>,
-  );
-  const changed = vi.fn();
-  render(<TenantMoveOutProposalPanel api={api} contractId={contractId} onChanged={changed} />);
+  };
+}
 
+it('shows issued charges and QR without Tenant approval or feedback mutation', async () => {
+  const request = vi.fn<ContractRequest>(async <T,>(path: string): Promise<T> => {
+    if (path === proposalPath) return issuedProposal('Payable') as T;
+    if (path.endsWith('/move-out')) return { status: 'PendingSettlement' } as T;
+    throw new Error('Unexpected request');
+  });
+  const api = contractClient(<T,>(path: string, init?: RequestInit) => request(path, init) as Promise<T>);
+  render(<TenantMoveOutProposalPanel api={api} contractId={contractId} onChanged={vi.fn()} />);
   expect(await screen.findByText('Tường phòng')).toBeTruthy();
   expect(screen.getByText('Sơn lại khu vực bị trầy')).toBeTruthy();
   expect(screen.getByText(/−900.000/)).toBeTruthy();
@@ -251,159 +261,45 @@ it('Tenant sees itemized charges, signs off only after reviewing and sends idemp
   fireEvent.click(screen.getByRole('button', { name: 'Xem chi tiết Tường phòng' }));
   expect(screen.getByRole('dialog')).toBeTruthy();
   expect(screen.queryByText('Lúc bàn giao')).toBeNull();
-  expect(screen.queryByText('Khi trả phòng')).toBeNull();
   expect(screen.getByText('Hiện tại')).toBeTruthy();
   expect(screen.getByTestId('private-evidence').textContent).toContain('Ảnh bằng chứng 1');
   fireEvent.click(screen.getByRole('button', { name: 'Đóng' }));
-  fireEvent.click(screen.getByRole('button', { name: 'Đồng ý với đề xuất' }));
-  expect(
-    (screen.getByRole('button', { name: 'Gửi xác nhận đồng ý' }) as HTMLButtonElement).disabled,
-  ).toBe(true);
-  fireEvent.click(screen.getByRole('checkbox', { name: 'Tôi đã xem các khoản thu và đồng ý' }));
-  fireEvent.click(screen.getByRole('button', { name: 'Gửi xác nhận đồng ý' }));
-  await waitFor(() => expect(changed).toHaveBeenCalledOnce());
-  expect(sent).toHaveLength(1);
-  expect(sent[0].init?.headers).toEqual({
-    'Idempotency-Key': 'c353627c-64f3-4961-b606-c16455c85369',
-  });
-  expect(JSON.parse(String(sent[0].init?.body))).toEqual({
-    proposalId,
-    expectedReference: 'inspect-source-v3',
-    confirmed: true,
-    reason: '',
-  });
-  expect(await screen.findByText('Bạn đã đồng ý')).toBeTruthy();
+  expect(screen.getByText('Đã gửi phí quyết toán')).toBeTruthy();
   expect(screen.queryByRole('button', { name: 'Đồng ý với đề xuất' })).toBeNull();
+  expect(screen.queryByRole('button', { name: 'Yêu cầu xem xét lại' })).toBeNull();
   expect(screen.getByTestId('excess-payment')).toBeTruthy();
+  expect(request.mock.calls.every(([, init]) => init?.method !== 'POST')).toBe(true);
 });
 
-it('Outdated proposal cannot be accepted, and disputing an active proposal requires a reason', async () => {
-  const sent: string[] = [];
-  let state: 'Outdated' | 'PendingTenant' = 'Outdated';
-  const api = contractClient(<T,>(path: string, init?: RequestInit) => {
-    if (path === proposalPath) return Promise.resolve(proposal(state) as T);
-    if (path.endsWith('/tenant-feedback')) {
-      sent.push(String(init?.body));
-      return Promise.resolve({} as T);
-    }
-    throw new Error('Unexpected request');
-  });
-  const { rerender } = render(
-    <TenantMoveOutProposalPanel
-      key="outdated"
-      api={api}
-      contractId={contractId}
-      onChanged={vi.fn()}
-    />,
-  );
+it('keeps outdated evidence isolated and never offers acceptance or dispute', async () => {
+  const api = contractClient(<T,>() => Promise.resolve(proposal('Outdated') as T));
+  render(<TenantMoveOutProposalPanel api={api} contractId={contractId} onChanged={vi.fn()} />);
   expect(await screen.findByText(/Đề xuất cũ đã thay đổi/)).toBeTruthy();
   expect(screen.queryByRole('button', { name: 'Đồng ý với đề xuất' })).toBeNull();
-  // Stale proposals must not pick the room/asset label or evidence from a newer inspection.
+  expect(screen.queryByRole('button', { name: 'Yêu cầu xem xét lại' })).toBeNull();
   fireEvent.click(screen.getByRole('button', { name: 'Xem chi tiết Tình trạng phòng' }));
-  expect(screen.queryByText('Lúc bàn giao')).toBeNull();
   expect(screen.queryByTestId('private-evidence')).toBeNull();
-  fireEvent.click(screen.getByRole('button', { name: 'Đóng' }));
-
-  state = 'PendingTenant';
-  rerender(
-    <TenantMoveOutProposalPanel
-      key="active"
-      api={api}
-      contractId={contractId}
-      onChanged={vi.fn()}
-    />,
-  );
-  expect(await screen.findByText('Chờ bạn phản hồi')).toBeTruthy();
-  expect(screen.queryByRole('button', { name: 'Tải lại đề xuất' })).toBeNull();
-  fireEvent.click(screen.getByRole('button', { name: 'Yêu cầu xem xét lại' }));
-  expect(
-    (screen.getByRole('button', { name: 'Gửi yêu cầu xem xét lại' }) as HTMLButtonElement).disabled,
-  ).toBe(true);
-  fireEvent.change(screen.getByLabelText('Lý do yêu cầu xem xét lại'), {
-    target: { value: 'Số tiền chưa phù hợp với tình trạng thực tế.' },
-  });
-  fireEvent.click(screen.getByRole('button', { name: 'Gửi yêu cầu xem xét lại' }));
-  await waitFor(() => expect(sent).toHaveLength(1));
-  expect(JSON.parse(sent[0])).toMatchObject({
-    proposalId,
-    confirmed: false,
-    reason: 'Số tiền chưa phù hợp với tình trạng thực tế.',
-  });
+  expect(screen.queryByTestId('excess-payment')).toBeNull();
 });
 
-it('submits line-specific objections to Owner and only shows refund navigation after accepted positive balance', async () => {
-  const sent: string[] = [];
-  let status: 'PendingTenant' | 'Accepted' = 'PendingTenant';
-  const api = contractClient(<T,>(path: string, init?: RequestInit) => {
-    if (path === proposalPath) {
-      const view = proposal(status);
-      view.latestProposal.signedBalance = '150000';
-      if (view.latestProposal.tenantFeedback)
-        view.latestProposal.tenantFeedback.settlement = {
-          status: 'RefundEligible',
-          payableAmount: '0',
-          refundAmount: '150000',
-          payableReceivableId: null,
-          createdReceivableIds: [],
-          depositOffsetIds: [],
-        };
-      return Promise.resolve(view as T);
-    }
-    if (path.endsWith('/tenant-feedback')) {
-      sent.push(String(init?.body));
-      return Promise.resolve({} as T);
-    }
-    throw new Error(`Unexpected request ${path}`);
-  });
-  const { rerender } = render(
-    <TenantMoveOutProposalPanel api={api} contractId={contractId} onChanged={vi.fn()} />,
+it('opens prefilled refund directly when Owner issues a refundable balance', async () => {
+  const api = contractClient(<T,>(path: string) =>
+    Promise.resolve((path === proposalPath ? issuedProposal('RefundEligible') : { status: 'PendingSettlement' }) as T),
   );
-  expect(await screen.findByText('Chờ bạn phản hồi')).toBeTruthy();
-  expect(screen.queryByRole('button', { name: 'Gửi đơn hoàn tiền' })).toBeNull();
-  fireEvent.click(screen.getByRole('button', { name: 'Yêu cầu xem xét lại' }));
-  fireEvent.click(screen.getByRole('checkbox', { name: /Tường phòng · 3.500.000/ }));
-  expect(
-    (screen.getByRole('button', { name: 'Gửi yêu cầu xem xét lại' }) as HTMLButtonElement).disabled,
-  ).toBe(true);
-  fireEvent.change(screen.getByLabelText('Lý do chưa đồng ý Tường phòng'), {
-    target: { value: 'Ảnh chưa thể hiện vết xước.' },
-  });
-  fireEvent.click(screen.getByRole('button', { name: 'Gửi yêu cầu xem xét lại' }));
-  await waitFor(() => expect(sent).toHaveLength(1));
-  expect(JSON.parse(sent[0])).toMatchObject({
-    reason: '',
-    disputedItems: [
-      {
-        kind: 'RoomCheck',
-        assetId: null,
-        roomCheckCode: 'Wall',
-        accessType: null,
-        reason: 'Ảnh chưa thể hiện vết xước.',
-      },
-    ],
-  });
-
-  status = 'Accepted';
-  rerender(
-    <TenantMoveOutProposalPanel
-      key="accepted"
-      api={api}
-      contractId={contractId}
-      onChanged={vi.fn()}
-    />,
-  );
-  const refund = await screen.findByRole('button', { name: 'Gửi đơn hoàn tiền' });
-  fireEvent.click(refund);
+  render(<TenantMoveOutProposalPanel api={api} contractId={contractId} onChanged={vi.fn()} />);
+  fireEvent.click(await screen.findByRole('button', { name: 'Gửi đơn hoàn tiền' }));
   expect(navigation.go).toHaveBeenCalledWith('refund-requests', {
     sourceContractId: contractId,
     amount: '150000',
     moveOutProposalId: proposalId,
-    reason: 'Đề nghị hoàn cọc sau khi xác nhận quyết toán trả phòng.',
+    reason: 'Đề nghị hoàn cọc theo quyết toán trả phòng.',
   });
+  expect(screen.queryByRole('button', { name: 'Đồng ý với đề xuất' })).toBeNull();
 });
 
 it('does not offer QR or refund when accepted proposal still needs Owner review', async () => {
   const api = contractClient(<T,>(path: string) => {
+    if (path.endsWith('/move-out')) return Promise.resolve({ status: 'Inspected' } as T);
     if (path !== proposalPath) throw new Error(`Unexpected request ${path}`);
     const view = proposal('Accepted');
     view.latestProposal.signedBalance = '150000';
@@ -426,67 +322,31 @@ it('does not offer QR or refund when accepted proposal still needs Owner review'
 });
 
 it.each(['Accepted', 'Outdated'] as const)(
-  'automatically reconciles a legacy confirmed proposal marked %s and reveals the server-issued QR obligation',
-  async (initialStatus) => {
-    let reconciled = false;
-    let getCount = 0;
-    const posts: { path: string; init?: RequestInit }[] = [];
-    const request = vi.fn<ContractRequest>(
-      async <T,>(path: string, init?: RequestInit): Promise<T> => {
-        if (path === proposalPath) {
-          getCount++;
-          const view = proposal(reconciled ? 'Accepted' : initialStatus);
-          if (!reconciled && view.latestProposal.tenantFeedback) {
-            view.latestProposal.tenantFeedback.confirmed = true;
-            view.latestProposal.tenantFeedback.settlement = {
-              status: 'PendingOwnerReview',
-              payableAmount: '0',
-              refundAmount: '0',
-              payableReceivableId: null,
-              createdReceivableIds: [],
-              depositOffsetIds: [],
-              reason: 'owner_confirmed_inspection_required',
-            };
-          }
-          return view as T;
-        }
-        if (path === `${proposalPath}/reconcile`) {
-          posts.push({ path, init });
-          reconciled = true;
-          return {
-            proposalId,
-            confirmed: true,
-            settlement: {
-              status: 'Payable',
-              payableAmount: '900000',
-              refundAmount: '0',
-              payableReceivableId: 'a1111111-1111-4111-8111-111111111111',
-            },
-          } as T;
-        }
-        throw new Error(`Unexpected API: ${path}`);
-      },
-    );
-    const api = contractClient(
-      <T,>(path: string, init?: RequestInit) => request(path, init) as Promise<T>,
-    );
-    const changed = vi.fn();
-    const { rerender } = render(
-      <TenantMoveOutProposalPanel api={api} contractId={contractId} onChanged={changed} />,
-    );
-
-    expect(await screen.findByTestId('excess-payment')).toBeTruthy();
-    expect(posts).toHaveLength(1);
-    expect(posts[0]).toMatchObject({
-      path: `${proposalPath}/reconcile`,
-      init: { method: 'POST', body: JSON.stringify({ proposalId }) },
+  'never auto-reconciles a historical proposal marked %s',
+  async (status) => {
+    const posts = vi.fn();
+    const api = contractClient(<T,>(path: string, init?: RequestInit) => {
+      if (init?.method === 'POST') posts();
+      if (path.endsWith('/move-out')) return Promise.resolve({ status: 'PendingSettlement' } as T);
+      const view = proposal(status);
+      if (view.latestProposal.tenantFeedback) {
+        view.latestProposal.tenantFeedback.confirmed = true;
+        view.latestProposal.tenantFeedback.settlement = {
+          status: 'PendingOwnerReview',
+          payableAmount: '0',
+          refundAmount: '0',
+          payableReceivableId: null,
+          createdReceivableIds: [],
+          depositOffsetIds: [],
+          reason: 'owner_confirmed_inspection_required',
+        };
+      }
+      return Promise.resolve(view as T);
     });
-    expect(posts[0].init?.headers).toBeUndefined();
-    expect(getCount).toBe(2);
-    expect(changed).toHaveBeenCalledOnce();
-    expect(screen.queryByRole('button', { name: 'Đồng ý với đề xuất' })).toBeNull();
-    rerender(<TenantMoveOutProposalPanel api={api} contractId={contractId} onChanged={changed} />);
-    expect(posts).toHaveLength(1);
+    render(<TenantMoveOutProposalPanel api={api} contractId={contractId} onChanged={vi.fn()} />);
+    expect(await screen.findByText(status === 'Accepted' ? 'Đang chờ đối chiếu quyết toán' : /Đề xuất cũ đã thay đổi/)).toBeTruthy();
+    expect(posts).not.toHaveBeenCalled();
+    expect(screen.queryByTestId('excess-payment')).toBeNull();
   },
 );
 
@@ -522,34 +382,19 @@ it.each([
   expect(screen.queryByTestId('excess-payment')).toBeNull();
 });
 
-it('attempts failed legacy reconciliation only once despite repeated renders', async () => {
+it('does not attempt legacy reconciliation on repeated renders', async () => {
   const attempts = vi.fn();
-  const api = contractClient(<T,>(path: string) => {
-    if (path === `${proposalPath}/reconcile`) {
-      attempts();
-      return Promise.reject(new Error('Temporary transport error'));
-    }
-    const view = proposal('Accepted');
-    if (view.latestProposal.tenantFeedback) {
-      view.latestProposal.tenantFeedback.settlement = {
-        status: 'PendingOwnerReview',
-        payableAmount: '0',
-        refundAmount: '0',
-        payableReceivableId: null,
-        createdReceivableIds: [],
-        depositOffsetIds: [],
-        reason: 'owner_confirmed_inspection_required',
-      };
-    }
-    return Promise.resolve(view as T);
+  const api = contractClient(<T,>(path: string, init?: RequestInit) => {
+    if (init?.method === 'POST') attempts();
+    if (path.endsWith('/move-out')) return Promise.resolve({ status: 'PendingSettlement' } as T);
+    return Promise.resolve(issuedProposal('PendingOwnerReview') as T);
   });
   const changed = vi.fn();
   const { rerender } = render(
     <TenantMoveOutProposalPanel api={api} contractId={contractId} onChanged={changed} />,
   );
-  expect(await screen.findByText(/Chưa thể hoàn tất đối chiếu tự động/)).toBeTruthy();
-  expect(attempts).toHaveBeenCalledOnce();
-  expect(changed).not.toHaveBeenCalled();
+  expect(await screen.findByText('Đang chờ đối chiếu quyết toán')).toBeTruthy();
   rerender(<TenantMoveOutProposalPanel api={api} contractId={contractId} onChanged={changed} />);
-  expect(attempts).toHaveBeenCalledOnce();
+  expect(attempts).not.toHaveBeenCalled();
+  expect(changed).not.toHaveBeenCalled();
 });

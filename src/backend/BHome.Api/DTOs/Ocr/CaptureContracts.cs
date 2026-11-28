@@ -32,7 +32,7 @@ public sealed record IdentityConfirmation(
 {
     public override string ToString() => "Identity confirmation (sensitive fields omitted)";
 }
-public sealed record MeterConfirmation(bool HumanConfirmed, [property: JsonNumberHandling(JsonNumberHandling.AllowReadingFromString)] decimal ConfirmedValue, Guid EvidenceId, int? ExpectedVersion = null);
+public sealed record MeterConfirmation(bool HumanConfirmed, [property: JsonRequired, JsonNumberHandling(JsonNumberHandling.AllowReadingFromString)] decimal ConfirmedValue, Guid EvidenceId, int? ExpectedVersion = null);
 public sealed record IdResult(Guid Id);
 public sealed record NamedResource(Guid Id, string Label, Guid? ParentId = null, string? Status = null, int? Capacity = null, int? RemainingCapacity = null)
 {
@@ -49,7 +49,7 @@ public sealed record IdentityConfirmationResult(Guid Id, IdentityVerificationSta
 public sealed record MeterTaskSummary(Guid Id, Guid MeterId, string Location, string Room, string MeterCode,
     UtilityType UtilityType, MeterDisplay Display, int DecimalPlaces, ReadingPurpose Purpose,
     DateOnly ReadingDate, DateOnly? BillingPeriod, MeterTaskStatus Status, [property: JsonNumberHandling(JsonNumberHandling.WriteAsString | JsonNumberHandling.AllowReadingFromString)] decimal? PreviousValue,
-    Guid? ContractId = null, Guid? ConfirmedReadingId = null, DateTimeOffset? DueAt = null, Guid? AssignedStaffUserId = null, Guid? AutomationPlanId = null, int Version = 1, Guid? LocationId = null, Guid? RoomId = null, bool IsOverdue = false, bool CanCorrect = false);
+    Guid? ContractId = null, Guid? ConfirmedReadingId = null, DateTimeOffset? DueAt = null, Guid? AssignedStaffUserId = null, Guid? AutomationPlanId = null, int Version = 1, Guid? LocationId = null, Guid? RoomId = null, bool IsOverdue = false, bool CanCorrect = false, string? CorrectionLockReason = null);
 public sealed record ConfirmedReading(Guid Id, Guid TaskId, [property: JsonNumberHandling(JsonNumberHandling.WriteAsString | JsonNumberHandling.AllowReadingFromString)] decimal ConfirmedValue,
     [property: JsonNumberHandling(JsonNumberHandling.WriteAsString | JsonNumberHandling.AllowReadingFromString)] decimal? PreviousValue,
     [property: JsonNumberHandling(JsonNumberHandling.WriteAsString | JsonNumberHandling.AllowReadingFromString)] decimal? Consumption, MeterReadingStatus Status, DateTimeOffset ConfirmedAt);

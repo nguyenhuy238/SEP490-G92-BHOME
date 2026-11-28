@@ -244,6 +244,13 @@ beforeEach(() => {
         state.data = {
           ...state.data!,
           version: state.data!.version + 1,
+          ...(changedItemId && state.data!.reinspectionItemIds?.includes(changedItemId)
+            ? {
+                recheckedItemIds: [
+                  ...new Set([...(state.data!.recheckedItemIds ?? []), changedItemId]),
+                ],
+              }
+            : {}),
           items: state.data!.items.map((item) =>
             item.id === changedItemId ? { ...item, ...body } : item,
           ),
@@ -668,7 +675,7 @@ it('preserves a saved asset and offers only an error retry if automatic completi
   expect(screen.queryByRole('button', { name: 'Hoàn thành kiểm kê' })).toBeNull();
 });
 
-it('requires a new photo when Owner-selected damaged inventory is saved as Good', async () => {
+it('allows the retained photo when Owner-selected damaged inventory is saved as Good', async () => {
   const previousPhoto = '77777777-7777-4777-8777-777777777777';
   state.data = {
     ...inventory('InProgress', 2, 'Damaged', [previousPhoto]),
@@ -680,13 +687,9 @@ it('requires a new photo when Owner-selected damaged inventory is saved as Good'
   expect(screen.getByText(/Chủ trọ yêu cầu kiểm tra lại · Cần đối chiếu thực tế/)).toBeTruthy();
   fireEvent.click(screen.getByText('Xem kiểm kê'));
   expect(screen.getByText(/Chủ trọ yêu cầu kiểm tra lại tài sản này/)).toBeTruthy();
-  expect(screen.getByText(/Ảnh cũ không thay thế lần kiểm tra lại/)).toBeTruthy();
+  expect(screen.getByText(/Có thể giữ ảnh minh chứng đã lưu/)).toBeTruthy();
   fireEvent.click(screen.getByRole('button', { name: 'Đạt' }));
   expect(screen.getByText('Chụp ảnh')).toBeTruthy();
-  fireEvent.click(screen.getByText('Lưu'));
-  expect(await screen.findByText(/Kiểm tra lại tài sản đã sửa cần chụp ảnh mới/)).toBeTruthy();
-  expect(state.request.mock.calls.some(([path]) => path.endsWith('/complete'))).toBe(false);
-  fireEvent.click(screen.getByText('Chụp ảnh'));
   fireEvent.click(screen.getByText('Lưu'));
   await waitFor(() =>
     expect(state.request.mock.calls.some(([path]) => path.endsWith('/complete'))).toBe(true),
@@ -694,7 +697,52 @@ it('requires a new photo when Owner-selected damaged inventory is saved as Good'
   const submitted = state.request.mock.calls.find(
     ([path, init]) => path.endsWith(`/items/${itemId}`) && init.method === 'PUT',
   );
-  expect(JSON.parse(submitted![1].body).evidenceIds).toContain(evidenceId);
+  expect(JSON.parse(submitted![1].body).evidenceIds).toEqual([previousPhoto]);
+});
+
+it('explicitly saves a selected Good observation again with existing evidence', async () => {
+  state.data = {
+    ...inventory('InProgress', 2, 'Good', [evidenceId]),
+    reinspectionItemIds: [itemId],
+    reinspectionRequestedAt: '2026-11-21T04:00:00Z',
+  };
+  render(<StaffMoveInInventoryScreen embeddedTaskId={taskId} />);
+  fireEvent.click(screen.getByText('Xem kiểm kê'));
+  expect(state.request.mock.calls.some(([path]) => path.endsWith(`/items/${itemId}`))).toBe(false);
+  fireEvent.click(screen.getByText('Lưu'));
+  await waitFor(() =>
+    expect(state.request.mock.calls.some(([path]) => path.endsWith('/complete'))).toBe(true),
+  );
+  const submitted = state.request.mock.calls.find(
+    ([path, init]) => path.endsWith(`/items/${itemId}`) && init.method === 'PUT',
+  );
+  expect(JSON.parse(submitted![1].body).evidenceIds).toEqual([evidenceId]);
+});
+
+it('waits for all selected Good items to be explicitly saved again before completing', async () => {
+  const secondId = '77777777-7777-4777-8777-777777777777';
+  state.data = {
+    ...inventory('InProgress', 2, 'Good', [evidenceId]),
+    reinspectionItemIds: [itemId, secondId],
+    recheckedItemIds: [],
+    reinspectionRequestedAt: '2026-11-21T04:00:00Z',
+  };
+  state.data.items.push({
+    ...state.data.items[0]!,
+    id: secondId,
+    name: 'Tủ',
+    evidenceIds: ['88888888-8888-4888-8888-888888888888'],
+  });
+  render(<StaffMoveInInventoryScreen embeddedTaskId={taskId} />);
+  fireEvent.click(screen.getAllByText('Xem kiểm kê')[0]!);
+  fireEvent.click(screen.getByText('Lưu'));
+  await screen.findByText('Đã lưu kết quả kiểm tra lại');
+  expect(state.data!.recheckedItemIds).toEqual([itemId]);
+  expect(state.request.mock.calls.some(([path]) => path.endsWith('/complete'))).toBe(false);
+  fireEvent.click(screen.getAllByText('Xem kiểm kê')[1]!);
+  fireEvent.click(screen.getByText('Lưu'));
+  await waitFor(() => expect(state.data!.status).toBe('Completed'));
+  expect(state.data!.recheckedItemIds).toEqual([itemId, secondId]);
 });
 
 it('hides historical Owner reinspection warnings once the server has completed the inventory', () => {

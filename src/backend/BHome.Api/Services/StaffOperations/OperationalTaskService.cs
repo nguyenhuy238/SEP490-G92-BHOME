@@ -248,6 +248,9 @@ public sealed partial class OperationalTaskService(IOperationalTaskRepository re
             if (IsMoveOutTask(task) && action is not ("start" or "progress" or "blockers" or "coordinate") ||
                 task.ContractId is not null && action is "submit" or "verify" or "cancel")
                 throw OperationalTaskException.Conflict("contract_handover_workflow_required");
+            if (IsMoveOutTask(task) && action == "start" && (Today < task.ReadingDate ||
+                handovers is not null && !await handovers.CanStartMoveOutTaskAsync(task.ContractId!.Value, t)))
+                throw OperationalTaskException.Conflict("move_out_inspection_not_due_or_room_still_occupied");
             if (action == "assign")
             {
                 if (task.MeterStatus is MeterTaskStatus.Completed or MeterTaskStatus.Cancelled) throw OperationalTaskException.Conflict("task_closed");

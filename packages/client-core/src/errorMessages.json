@@ -88,6 +88,7 @@
   "contract_not_renewable": "Hợp đồng chưa thể gia hạn hoặc đang có yêu cầu trả phòng.",
   "contract_not_signable": "Hợp đồng chưa đủ điều kiện ký. Kiểm tra thông tin hợp đồng và trạng thái ký hiện tại.",
   "contract_not_terminable": "Trạng thái hợp đồng chưa cho phép kết thúc. Kiểm tra các nghĩa vụ và bước xử lý còn chờ.",
+  "owner_move_out_multiple_active_contracts": "Phòng còn nhiều hợp đồng đang hiệu lực. Hãy xử lý yêu cầu trả phòng theo luồng đồng thuận của khách thuê.",
   "contract_owner_signer_required": "Tài khoản hiện tại không phải Owner được phép ký hợp đồng này.",
   "contract_pdf_conversion_failed": "Chuyển DOCX sang PDF chưa thành công. Bản nháp vẫn được giữ lại.",
   "contract_pdf_conversion_timeout": "Tạo PDF quá thời gian chờ. Bản nháp vẫn được giữ lại.",

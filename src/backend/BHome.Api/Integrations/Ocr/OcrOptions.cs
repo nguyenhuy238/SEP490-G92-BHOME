@@ -5,6 +5,8 @@ namespace BHome.Infrastructure.Ocr;
 public sealed class OcrOptions
 {
     public bool Enabled { get; set; }
+    // Temporarily disabled independently of identity card OCR.
+    public bool MeterRecognitionEnabled { get; set; }
     public string ModelDirectory { get; set; } = "/models";
     public int MaxImageBytes { get; set; } = 5 * 1024 * 1024;
     public int MaxPixels { get; set; } = 12_000_000;

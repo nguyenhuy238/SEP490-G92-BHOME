@@ -470,7 +470,7 @@ export function TenantMoveOutInspectionSummary({
           <View style={styles.divider} />
           <DetailRow
             label="Điện và nước"
-            detail={`Điện: ${meterNumber(observed.electricity?.value)} kWh · Nước: ${meterNumber(observed.water?.value)} m³`}
+            detail={`Chỉ số công tơ điện: ${meterNumber(observed.electricity?.value)} kWh · Chỉ số công tơ nước: ${meterNumber(observed.water?.value)} m³`}
             icon="lightning-bolt-outline"
             onPress={() => setDetail({ section: 'meters' })}
           />

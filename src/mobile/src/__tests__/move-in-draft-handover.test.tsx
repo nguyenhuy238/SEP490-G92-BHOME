@@ -100,7 +100,9 @@ vi.mock('../lib/randomUUID', () => ({
 }));
 vi.mock('../lib/toast', () => ({ conciseMessage: (message: string) => message }));
 vi.mock('../components/WorkspaceKit', () => ({
-  Box: ({ children }: { children: React.ReactNode }) => <div>{children}</div>,
+  Box: ({ children }: { children: React.ReactNode }) => (
+    <div data-testid="handover-box">{children}</div>
+  ),
   Heading: ({ title, detail }: { title: string; detail?: string }) => (
     <section>
       <h2>{title}</h2>
@@ -122,10 +124,12 @@ vi.mock('../components/WorkspaceKit', () => ({
       {children}
     </button>
   ),
-  ui: {},
+  ui: { green: { color: '#168565' } },
 }));
 vi.mock('react-native-paper', () => ({
-  Text: ({ children }: { children: React.ReactNode }) => <span>{children}</span>,
+  Text: ({ children, style }: { children: React.ReactNode; style?: unknown }) => (
+    <span data-rn-style={JSON.stringify(style)}>{children}</span>
+  ),
   Icon: ({ source, color }: { source: string; color: string }) => (
     <span data-testid="paper-icon" data-source={source} data-color={color} />
   ),
@@ -419,6 +423,7 @@ vi.mock('../features/contracts/handover/HandoverAssetFields', () => ({
 }));
 
 import { MoveInDraftHandoverPanel } from '../features/contracts/handover/MoveInDraftHandoverPanel';
+import { WorkspaceInlineHeaderContext } from '../components/WorkspaceHeaderContext';
 
 const contract = {
   id: '00000000-0000-4000-8000-000000000001',
@@ -561,6 +566,34 @@ function saveWork() {
   fireEvent.click(screen.getByRole('button', { name: 'Lưu tiến độ' }));
 }
 
+it('renders the icon-only back action inside the Staff inspection box and suppresses the outer header', async () => {
+  const onBack = vi.fn();
+  const unregister = vi.fn();
+  const register = vi.fn(() => unregister);
+  const page = render(
+    <WorkspaceInlineHeaderContext.Provider value={register}>
+      <MoveInDraftHandoverPanel api={api} contract={contract} role="Staff" onBack={onBack} />
+    </WorkspaceInlineHeaderContext.Provider>,
+  );
+  await screen.findByRole('button', { name: '1. Ghi chỉ số điện nước' });
+  const box = screen
+    .getByText(/Kiểm tra bàn giao · phòng/)
+    .closest('[data-testid="handover-box"]')!;
+  const back = within(box as HTMLElement).getByRole('button', { name: 'Quay lại' });
+  expect(screen.getAllByRole('button', { name: 'Quay lại' })).toHaveLength(1);
+  expect(screen.queryByText('Quay lại')).toBeNull();
+  expect(back.parentElement).toBe(screen.getByText(/Kiểm tra bàn giao · phòng/).parentElement);
+  expect(
+    back.compareDocumentPosition(screen.getByText(/Kiểm tra bàn giao · phòng/)) &
+      Node.DOCUMENT_POSITION_FOLLOWING,
+  ).toBeTruthy();
+  expect(register).toHaveBeenCalled();
+  fireEvent.click(back);
+  expect(onBack).toHaveBeenCalledOnce();
+  page.unmount();
+  expect(unregister).toHaveBeenCalled();
+});
+
 it('automatically refreshes the embedded meter list when the OCR task returns', async () => {
   render(<MoveInDraftHandoverPanel api={api} contract={contract} role="Staff" />);
   await screen.findByRole('button', { name: '1. Ghi chỉ số điện nước' });
@@ -588,6 +621,9 @@ it('at 320px selects room condition inline and resets outer scroll when switchin
   // The section has its own compact header: no duplicate progress/multi-line
   // explanation pushing the first work row under text at phone widths.
   expect(screen.queryByRole('progressbar')).toBeNull();
+  const panel = screen.getByTestId('handover-section-panel');
+  expect(within(panel).getByRole('button', { name: 'Về 4 mục bàn giao' })).toBeTruthy();
+  expect(JSON.parse(panel.getAttribute('data-rn-style')!).borderWidth).toBe(1);
   openWork('Tường, trần và sàn');
   const options = screen.getAllByRole('radio');
   expect(options).toHaveLength(3);
@@ -891,7 +927,9 @@ it('Tenant sees integer-only meter values and verified canonical asset counts in
   ];
   render(<MoveInDraftHandoverPanel api={api} contract={contract} role="Tenant" />);
   expect(await screen.findByText('Sẵn sàng bàn giao')).toBeTruthy();
-  expect(screen.getByText(/Điện: 2\.000 kWh · Nước: 2 m³/)).toBeTruthy();
+  expect(
+    screen.getByText(/Chỉ số công tơ điện: 2\.000 kWh · Chỉ số công tơ nước: 2 m³/),
+  ).toBeTruthy();
   expect(screen.queryByText(/Biên bản phiên bản/)).toBeNull();
   expect(screen.getByText(/3 tài sản đã kiểm kê/)).toBeTruthy();
   fireEvent.click(screen.getByRole('button', { name: 'Điện và nước' }));
@@ -911,11 +949,11 @@ it('Tenant sees integer-only meter values and verified canonical asset counts in
         '{}',
     ),
   ).toMatchObject({ position: 'absolute', justifyContent: 'center', padding: 24 });
-  expect(screen.getByText('Điện: 2.000 kWh')).toBeTruthy();
-  expect(screen.queryByText('Nước: 2 m³')).toBeNull();
+  expect(screen.getByText('Chỉ số công tơ điện: 2.000 kWh')).toBeTruthy();
+  expect(screen.queryByText('Chỉ số công tơ nước: 2 m³')).toBeNull();
   fireEvent.click(screen.getByRole('button', { name: 'Quay lại danh sách' }));
   fireEvent.click(screen.getByRole('button', { name: 'Nước' }));
-  expect(screen.getByText('Nước: 2 m³')).toBeTruthy();
+  expect(screen.getByText('Chỉ số công tơ nước: 2 m³')).toBeTruthy();
   fireEvent.click(screen.getByRole('button', { name: 'Đóng' }));
   expect(screen.queryByTestId('handover-detail-panel')).toBeNull();
   expect(screen.getByTestId('handover-list-panel')).toBe(listPanel);
@@ -1070,6 +1108,14 @@ it('Staff can submit only after the four saved inspections have been completed',
   );
 });
 
+it('shows the submitted message in green without a redundant success line', async () => {
+  state.draft = draft('PendingOwnerReview');
+  render(<MoveInDraftHandoverPanel api={api} contract={contract} role="Staff" />);
+  const submitted = await screen.findByText(/Đã gửi kết quả kiểm tra cho chủ trọ/);
+  expect(JSON.parse(submitted.getAttribute('data-rn-style')!).color).toBe('#168565');
+  expect(screen.queryByText(/Đã xác nhận hoàn thành kiểm tra/)).toBeNull();
+});
+
 it('Staff can complete all four sections with damaged assets and a reported room issue despite pending Owner conditions', async () => {
   state.draft = draft('Draft', ['asset_quantities_or_evidence', 'contract_active']);
   state.draft.electricity = {
@@ -1113,7 +1159,7 @@ it('Staff can complete all four sections with damaged assets and a reported room
   render(<MoveInDraftHandoverPanel api={api} contract={contract} role="Staff" />);
   const submit = await screen.findByRole('button', { name: 'Xác nhận hoàn thành' });
   expect(screen.getByText('4/4 đã ghi nhận')).toBeTruthy();
-  expect(screen.getByText('Sẵn sàng gửi chủ trọ duyệt.')).toBeTruthy();
+  expect(screen.queryByText('Sẵn sàng gửi chủ trọ duyệt.')).toBeNull();
   expect((submit as HTMLButtonElement).disabled).toBe(false);
   fireEvent.click(submit);
   await waitFor(() =>
@@ -1135,7 +1181,10 @@ it('Staff sees which room check needs reinspection and submits the correction to
       items: [{ kind: 'RoomCheck', code: 'doors_windows_locks' }],
     },
   ];
-  state.draft.reinspectionItems = [{ kind: 'RoomCheck', code: 'doors_windows_locks' }];
+  state.draft.reinspectionItems = [
+    { kind: 'RoomCheck', code: 'doors_windows_locks' },
+    { kind: 'RoomCheck', code: 'walls_ceiling_floor', rechecked: true },
+  ];
   state.draft.electricity = {
     id: 'reading-e',
     meterCode: 'E',
@@ -1174,12 +1223,33 @@ it('Staff sees which room check needs reinspection and submits the correction to
           code: 'doors_windows_locks',
           rechecked: true,
         },
+        { kind: 'RoomCheck', code: 'walls_ceiling_floor', rechecked: true },
       ];
     }
     return state.draft;
   });
   render(<MoveInDraftHandoverPanel api={api} contract={contract} role="Staff" />);
   expect(await screen.findByText('Ổ khóa vẫn kẹt, đề nghị thử lại')).toBeTruthy();
+  const pending = screen.getByTestId('reinspection-pending');
+  const completed = screen.getByTestId('reinspection-completed');
+  const reinspectionPanel = screen.getByTestId('handover-reinspection-panel');
+  expect(reinspectionPanel.contains(pending)).toBe(true);
+  expect(reinspectionPanel.contains(completed)).toBe(true);
+  expect(screen.queryByText(/^Chưa kiểm tra lại \(/)).toBeNull();
+  expect(screen.queryByText(/^Đã kiểm tra lại \(/)).toBeNull();
+  expect(reinspectionPanel.contains(screen.getByText('4 mục bàn giao phòng'))).toBe(false);
+  expect(JSON.parse(reinspectionPanel.getAttribute('data-rn-style')!).borderWidth).toBe(1);
+  expect(
+    within(pending).getByRole('button', { name: 'Cửa, cửa sổ và ổ khóa · Mở kiểm tra' }),
+  ).toBeTruthy();
+  expect(
+    within(completed).getByRole('button', { name: 'Tường, trần và sàn · Mở kiểm tra' }),
+  ).toBeTruthy();
+  expect(
+    JSON.parse(within(pending).getByTestId('reinspection-card').getAttribute('data-rn-style')!)
+      .borderColor,
+  ).toBe('#ba1a1a');
+  expect(screen.queryByText('Cần ghi nhận kiểm tra lại')).toBeNull();
   const resubmit = screen.getByRole('button', { name: 'Xác nhận hoàn thành kiểm tra lại' });
   expect((resubmit as HTMLButtonElement).disabled).toBe(true);
   fireEvent.click(screen.getByRole('button', { name: 'Cửa, cửa sổ và ổ khóa · Mở kiểm tra' }));
@@ -1190,6 +1260,13 @@ it('Staff sees which room check needs reinspection and submits the correction to
   fireEvent.click(screen.getByRole('radio', { name: 'Đạt' }));
   fireEvent.click(screen.getByRole('button', { name: 'Lưu tiến độ' }));
   await waitFor(() => expect(screen.queryByRole('dialog')).toBeNull());
+  await waitFor(() =>
+    expect(
+      within(screen.getByTestId('reinspection-completed')).getByRole('button', {
+        name: 'Cửa, cửa sổ và ổ khóa · Mở kiểm tra',
+      }),
+    ).toBeTruthy(),
+  );
   if (screen.queryByRole('button', { name: 'Về 4 mục bàn giao' })) home();
   await waitFor(() =>
     expect(
@@ -1278,8 +1355,8 @@ it('opens canonical asset inventory for reinspection and requires fresh complete
       ).disabled,
     ).toBe(true),
   );
-  // Even a freshly completed Good task cannot unlock submit until Backend
-  // verifies that the selected item has a genuinely new evidence image.
+  // Even a completed Good task cannot unlock submit until Backend
+  // verifies that the selected item has a saved reinspection observation.
   state.draft.reinspectionItems = [
     {
       kind: 'Asset',
@@ -1635,8 +1712,8 @@ it('counts saved NotApplicable checks without photos, shows saved labels and com
   expect(screen.queryByText('Không áp dụng · Thiếu ảnh')).toBeNull();
   home();
   openSection(1);
-  expect(screen.getByText('Điện: 22 kWh')).toBeTruthy();
-  expect(screen.getByText('Nước: 1 m³')).toBeTruthy();
+  expect(screen.getByText('Chỉ số công tơ điện: 22 kWh')).toBeTruthy();
+  expect(screen.getByText('Chỉ số công tơ nước: 1 m³')).toBeTruthy();
   home();
   openSection(4);
   expect(screen.getByText('2 chìa khóa')).toBeTruthy();

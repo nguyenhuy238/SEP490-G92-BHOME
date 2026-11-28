@@ -19,18 +19,16 @@ import { WorkspaceShell } from '../components/WorkspaceShell';
 import { useSession } from '../lib/SessionProvider';
 import { useFeedbackState } from '../lib/useFeedbackState';
 import { showSuccess } from '../lib/toast';
-import { errorMessage, type MeterTask, type Proposal } from '../lib/api';
+import { errorMessage, type MeterTask } from '../lib/api';
 import { formatMeterReading } from '../../../../packages/client-core/src/localization';
 import type { ConfirmedReading } from '../../../../packages/client-core/src/meter';
 import { meterService } from '../services/meterService';
-import { meterOcrFeedback } from '../services/meterOcrFeedback';
 import { MeterRoomOverview } from '../screens/MeterRoomOverview';
 import { meterRoundLabel, roomMeterTasks } from '../features/workspace/roomMeterTasks';
 import { useWorkspace } from '../features/workspace/WorkspaceProvider';
 import { colors as c } from '../theme/theme';
 import {
   estimatedConsumption,
-  integerReadingInput,
   normalizedReading,
   readingDecreased,
   readingError,
@@ -185,7 +183,7 @@ function RoomMeterScreen({ taskId, staffLocationId }: { taskId: string; staffLoc
             <View style={meterModalStyles.card} testID="periodic-meter-modal-card">
               <View style={meterModalStyles.header}>
                 <Text variant="titleMedium" style={meterModalStyles.title}>
-                  {selectedReading ? 'Chỉ số' : 'Ghi chỉ số'} {meterName}
+                  {selectedReading ? 'Chỉ số' : 'Ghi chỉ số'} công tơ {meterName}
                 </Text>
                 <Button mode="text" disabled={modalBusy} onPress={closeModal}>
                   Đóng
@@ -298,12 +296,10 @@ export function MeterTaskScreen({
   const [task, setTask] = useState<MeterTask | null>(null);
   const [reading, setReading] = useState('');
   const [evidence, setEvidence] = useState('');
-  const [proposal, setProposal] = useState<Proposal | null>(null);
   const [checked, setChecked] = useState(false);
   const [step, setStep] = useState(1);
   const [error, setError] = useFeedbackState('error', false);
-  const [notice, setNotice] = useFeedbackState('info', false);
-  const [operation, setOperation] = useState<'recognize' | 'save' | null>(null);
+  const [operation, setOperation] = useState<'upload' | 'save' | null>(null);
   const busy = operation !== null;
   const [loading, setLoading] = useState(true);
   const [revision, setRevision] = useState(0);
@@ -314,11 +310,9 @@ export function MeterTaskScreen({
   const mounted = useRef(true);
   const clearPhoto = () => {
     setEvidence('');
-    setProposal(null);
     setReading('');
     setChecked(false);
     setStep(1);
-    setNotice('');
     setError('');
   };
   useEffect(() => {
@@ -372,8 +366,8 @@ export function MeterTaskScreen({
     }, [onReturn]),
   );
   const unit = task?.utilityType === 0 ? 'kWh' : 'm³';
-  const meterLabel = task?.utilityType === 0 ? 'Điện' : 'Nước';
-  const captureLabel = task?.utilityType === 0 ? 'Chụp công tơ điện' : 'Chụp đồng hồ nước';
+  const meterLabel = task?.utilityType === 0 ? 'Công tơ điện' : 'Công tơ nước';
+  const captureLabel = task?.utilityType === 0 ? 'Chụp công tơ điện' : 'Chụp công tơ nước';
   const isInitial = task?.purpose === 0;
   const validation = task ? readingError(reading) : '';
   // A new contract baseline on a reused physical meter must also be monotonic.
@@ -385,7 +379,7 @@ export function MeterTaskScreen({
     (task.status < 2 ||
       (correcting && !!saved && task.canCorrect === true && task.version != null));
 
-  async function recognize(bytes: Uint8Array<ArrayBuffer>) {
+  async function uploadPhoto(bytes: Uint8Array<ArrayBuffer>) {
     if (lock.current || !api || !editable) return;
     // Back/forward through an unchanged photo preserves the Staff's correction.
     if (evidence && step === 1) {
@@ -394,10 +388,9 @@ export function MeterTaskScreen({
     }
     lock.current = true;
     setStep(2);
-    setOperation('recognize');
+    setOperation('upload');
     setError('');
     setEvidence('');
-    setProposal(null);
     setChecked(false);
     setReading('');
     const controller = new AbortController();
@@ -405,41 +398,20 @@ export function MeterTaskScreen({
     onBusyChange?.(true);
     const timeout = setTimeout(() => controller.abort(), 45000);
     try {
-      try {
-        const result = await api.image<Proposal>(
-          `/api/v1/ocr/meter-tasks/${encodeURIComponent(taskId)}`,
-          bytes,
-          controller.signal,
-        );
-        if (controller.signal.aborted) return;
-        setProposal(result);
-        setReading(integerReadingInput(result.proposedFields.reading || ''));
-        setNotice(
-          result.isFallback || !result.proposedFields.reading
-            ? 'Không nhận diện được chỉ số. Hãy nhập thủ công hoặc thử lại OCR.'
-            : '',
-        );
-      } catch (e) {
-        if (controller.signal.aborted) throw e;
-        if (
-          e &&
-          typeof e === 'object' &&
-          'status' in e &&
-          [401, 403, 404].includes(Number(e.status))
-        )
-          throw e;
-        setNotice('Không nhận diện được chỉ số. Hãy nhập thủ công hoặc thử lại OCR.');
-      }
       const file = await api.image<{ id: string }>(
         `/api/v1/capture/meter-tasks/${encodeURIComponent(taskId)}/evidence`,
         bytes,
         controller.signal,
         'PUT',
       );
-      if (!controller.signal.aborted) setEvidence(file.id);
+      if (controller.signal.aborted) throw new Error('Đã dừng tải ảnh.');
+      if (!file.id) throw new Error('Máy chủ chưa xác nhận ảnh minh chứng.');
+      setEvidence(file.id);
     } catch (e) {
-      if (mounted.current)
-        setError(controller.signal.aborted ? 'Đã dừng nhận diện. Hãy thử lại.' : errorMessage(e));
+      if (mounted.current) {
+        setStep(1);
+        setError(controller.signal.aborted ? 'Đã dừng tải ảnh. Hãy thử lại.' : errorMessage(e));
+      }
     } finally {
       clearTimeout(timeout);
       lock.current = false;
@@ -510,11 +482,19 @@ export function MeterTaskScreen({
       Sửa chỉ số
     </Button>
   );
-  function cancelCorrection() {
-    if (lock.current) return;
-    clearPhoto();
-    setCorrecting(false);
-  }
+  const correctionNotice = saved && !correctionForm && (
+    <View style={{ backgroundColor: '#FFF4D6', padding: 10, borderRadius: 8 }}>
+      <Text style={{ color: '#92400E' }}>
+        {task?.correctionLockReason === 'official_invoice'
+          ? 'Chỉ số đã được sử dụng để tính hóa đơn chính thức, không thể sửa.'
+          : task?.correctionLockReason === 'subsequent_reading'
+            ? 'Chỉ số đã được dùng làm mốc cho lần ghi tiếp theo, không thể sửa trực tiếp.'
+            : task?.canCorrect === undefined
+              ? 'Chưa xác định được quyền sửa chỉ số. Hãy tải lại hoặc kiểm tra phiên bản máy chủ.'
+              : 'Chỉ số đã khóa theo trạng thái nghiệp vụ, không thể sửa trực tiếp.'}
+      </Text>
+    </View>
+  );
   const content = (
     <>
       {loading && <ActivityIndicator accessibilityLabel="Đang tải tác vụ" />}
@@ -585,13 +565,7 @@ export function MeterTaskScreen({
             label={`Ảnh minh chứng ${meterLabel.toLowerCase()}`}
           />
           {correctionForm}
-          {confirmedDetail && !correctionForm && (
-            <Text style={ui.muted}>
-              {task?.canCorrect === undefined
-                ? 'Chưa xác định được quyền sửa chỉ số. Hãy tải lại hoặc kiểm tra phiên bản máy chủ.'
-                : 'Chỉ số đã khóa, không thể sửa trực tiếp.'}
-            </Text>
-          )}
+          {correctionNotice}
         </>
       ) : saved && !correcting ? (
         <Box style={{ padding: 14, gap: 10 }}>
@@ -618,6 +592,7 @@ export function MeterTaskScreen({
               : 'Chỉ số và mức tiêu thụ đã lưu vào hệ thống để tổng hợp vào hóa đơn kỳ theo lịch cấu hình.'}
           </Text>
           {correctionForm}
+          {correctionNotice}
           <Button mode="contained" contentStyle={{ minHeight: 48 }} onPress={onReturn}>
             Về tổng quan phòng
           </Button>
@@ -631,28 +606,27 @@ export function MeterTaskScreen({
               label={captureLabel}
               presentation="meter"
               meterCompact={embedded}
-              meterRetryResets={!!onBusyChange}
               meterStep={step}
               retainPreview
               reviewBeforeSubmit
               autoOpen={editable}
               disabled={busy || !editable}
               onPhotoCleared={clearPhoto}
-              onCapture={recognize}
+              onCapture={uploadPhoto}
             />
-            {operation === 'recognize' && !onBusyChange && (
+            {operation === 'upload' && !onBusyChange && (
               <View
                 style={{ gap: 8 }}
                 accessibilityRole="progressbar"
-                accessibilityLabel="Đang nhận dạng chỉ số"
+                accessibilityLabel="Đang tải ảnh minh chứng"
               >
                 <ActivityIndicator size="small" />
-                <Text>Đang nhận dạng chỉ số…</Text>
+                <Text>Đang tải ảnh minh chứng…</Text>
               </View>
             )}
-            {step >= 2 && (
+            {step >= 2 && !!evidence && (
               <Box style={{ padding: embedded ? 10 : 14, gap: embedded ? 8 : 10 }}>
-                {step === 2 && !!notice && <Text accessibilityLiveRegion="polite">{notice}</Text>}
+                <Text style={ui.muted}>Nhập chỉ số thực tế trên ảnh công tơ vừa chụp.</Text>
                 {!embedded && (
                   <Text>
                     Chỉ số trước:{' '}
@@ -668,19 +642,8 @@ export function MeterTaskScreen({
                       : 'Loại ghi: Chỉ số ban đầu (mốc khởi tạo, không tính tiêu thụ tháng)'}
                   </Text>
                 )}
-                {!!proposal?.proposedFields.reading && (
-                  <Text>
-                    Chỉ số OCR: {formatMeterReading(proposal.proposedFields.reading, unit)}
-                  </Text>
-                )}
-                {!!proposal?.warnings.length && !proposal.isFallback && (
-                  <Text style={ui.muted}>{meterOcrFeedback(proposal)}</Text>
-                )}
-                {proposal?.isFallback && proposal.warnings.includes('meter_type_mismatch') && (
-                  <Text style={ui.red}>Ảnh không đúng loại công tơ. Hãy kiểm tra và chụp lại.</Text>
-                )}
                 <Field
-                  label={`Chỉ số xác nhận (${unit})`}
+                  label={`Chỉ số ${meterLabel.toLowerCase()} (${unit})`}
                   value={reading}
                   integer
                   onChange={(v) => {
@@ -726,11 +689,6 @@ export function MeterTaskScreen({
                       : 'Xác nhận chỉ số'}
                 </Button>
               </Box>
-            )}
-            {correcting && (
-              <Button mode="outlined" disabled={busy} onPress={cancelCorrection}>
-                Hủy sửa
-              </Button>
             )}
             {busy && !onBusyChange && (
               <Button onPress={() => abort.current?.abort()}>Hủy yêu cầu</Button>

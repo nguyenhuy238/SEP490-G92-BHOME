@@ -59,7 +59,25 @@ const roomCheckResult: Record<string, string> = {
   NotApplicable: 'Cần xác minh',
 };
 
-export function ContractLifecyclePanel({
+export function ContractLifecyclePanel(props: {
+  api: ContractClient;
+  contract: ContractView;
+  moveOut: MoveOut;
+  onChanged: () => void;
+}) {
+  if (['personal_termination_scheduled', 'personal_termination_completed'].includes(props.moveOut.pendingReason)) {
+    return (
+      <Alert severity="success">
+        {props.moveOut.pendingReason === 'personal_termination_completed'
+          ? 'Đã chấm dứt hợp đồng cá nhân.'
+          : 'Đã duyệt yêu cầu. Hợp đồng cá nhân sẽ tự chấm dứt vào ngày dự kiến; các hợp đồng khác tiếp tục.'}
+      </Alert>
+    );
+  }
+  return <RoomSettlementPanel {...props} />;
+}
+
+function RoomSettlementPanel({
   api,
   contract,
   moveOut,

@@ -3,6 +3,7 @@
 BHOME - Nền tảng quản lý và vận hành chuỗi nhà trọ thông minh.
 
 **Dành cho thành viên đọc code và chuẩn bị bảo vệ:** bắt đầu tại
+[Kiến trúc hệ thống BHOME dành cho team](docs/architecture/TEAM_SYSTEM_ARCHITECTURE.md), sau đó xem
 [Bản đồ nghiệp vụ và mã nguồn](docs/business-flows/README.md). Tài liệu này chỉ đường từ
 màn hình đến API, service, repository và dữ liệu, đồng thời phân biệt tài liệu hiện hành với hồ sơ lịch sử.
 

@@ -184,8 +184,9 @@ public sealed partial class ContractService
                 Rechecked = item.Rechecked || item.Kind == "Asset" &&
                     canonical.Items.Any(asset => asset.Id == item.AssetId &&
                         asset.Condition == "Good" && asset.ActualQuantity == asset.ExpectedQuantity &&
-                        canonical.LatestEvidenceAt.TryGetValue(asset.Id, out var uploadedAt) &&
-                        uploadedAt > latestRequestAt)
+                        (canonical.RecheckedItemIds?.Contains(asset.Id) ??
+                            (canonical.LatestEvidenceAt.TryGetValue(asset.Id, out var uploadedAt) &&
+                             uploadedAt > latestRequestAt)))
             }).ToArray();
         }
         return new(state.Version, state.Status, contract.Id, contract.Room.RoomNumber,

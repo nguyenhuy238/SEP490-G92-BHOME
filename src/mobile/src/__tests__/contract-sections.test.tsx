@@ -1,5 +1,6 @@
 // @vitest-environment jsdom
 import { earlyTerminationDate } from '../../../../packages/client-core/src/contracts';
+import { setDemoBusinessDate } from '../../../../packages/client-core/src/demoClock';
 import React, { useEffect, useState } from 'react';
 import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { afterEach, beforeEach, expect, it, vi } from 'vitest';
@@ -286,7 +287,7 @@ it('shows the early termination form directly in the Tenant lifecycle section', 
 
   fireEvent.click(screen.getByRole('button', { name: 'Gửi yêu cầu' }));
   expect(
-    screen.getByText('Yêu cầu cần đủ đồng thuận của các thành viên trước khi chủ trọ duyệt.'),
+    screen.getByText('Yêu cầu của bạn đang chờ chủ trọ duyệt.'),
   ).toBeTruthy();
   expect(screen.queryByRole('button', { name: 'Gửi yêu cầu' })).toBeNull();
 });
@@ -655,8 +656,19 @@ it('validates the typed early termination date before it can be sent', () => {
   const contract = { startDate: '2099-01-01', endDate: '2099-12-31' };
   expect(() => earlyTerminationDate('05-11-', contract)).toThrow(/dd\/MM\/yyyy/);
   expect(() => earlyTerminationDate('31-02-2099', contract)).toThrow(/dd\/MM\/yyyy/);
-  expect(() => earlyTerminationDate('09-10-2024', contract)).toThrow(/quá khứ/);
+  expect(() => earlyTerminationDate('09-10-2024', contract)).toThrow(/30 ngày/);
   expect(() => earlyTerminationDate('31-12-2098', contract)).toThrow(/bắt đầu/);
   expect(() => earlyTerminationDate('31-12-2099', contract)).toThrow(/hết hạn/);
   expect(earlyTerminationDate('05-11-2099', contract)).toBe('2099-11-05');
+});
+
+it('requires 30 calendar days of notice using the business date', () => {
+  setDemoBusinessDate({ enabled: true, simulated: true, businessDate: '2027-02-01', version: 1 });
+  try {
+    const contract = { startDate: '2027-01-01', endDate: '2027-12-31' };
+    expect(() => earlyTerminationDate('02-03-2027', contract)).toThrow(/30 ngày/);
+    expect(earlyTerminationDate('03-03-2027', contract)).toBe('2027-03-03');
+  } finally {
+    setDemoBusinessDate(null);
+  }
 });

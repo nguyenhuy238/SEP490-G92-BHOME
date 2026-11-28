@@ -37,6 +37,7 @@ import {
   quantityFields,
 } from '../../../../../../packages/client-core/src/handoverForm';
 import { Action, Box, Heading, Pill, Row, ui } from '../../../components/WorkspaceKit';
+import { useWorkspaceInlineHeader } from '../../../components/WorkspaceHeaderContext';
 import { Input } from '../../../components/WorkflowControls';
 import { CameraCapture } from '../../../components/CameraCapture';
 import { FloatingDemoPhotoButton } from '../../../components/FloatingDemoPhotoButton';
@@ -67,7 +68,11 @@ import { SignaturePad } from '../signing/SignaturePad';
 import { HandoverAssetFields } from './HandoverAssetFields';
 import { MeterProcessingOverlay, MeterTaskScreen } from '../../../app/meter';
 import { StaffMoveInInventoryScreen } from '../../../screens/StaffMoveInInventoryScreen';
-import { inventoryStatusLabels, type MoveInInventory } from '../../../services/moveInInventory';
+import {
+  hasRecheckedInventoryItem,
+  inventoryStatusLabels,
+  type MoveInInventory,
+} from '../../../services/moveInInventory';
 import { colors } from '../../../theme/theme';
 
 const statusLabels = {
@@ -99,7 +104,7 @@ const roomStatusLabels: Record<MoveInRoomCheckStatus, string> = {
 const staffSteps = [
   {
     title: 'Ghi chỉ số điện nước',
-    detail: 'Chụp từng công tơ, kiểm tra OCR và xác nhận chỉ số thật.',
+    detail: 'Chụp ảnh từng công tơ, nhập và xác nhận chỉ số thực tế.',
   },
   {
     title: 'Kiểm tra hiện trạng phòng',
@@ -120,6 +125,24 @@ const wizardStyles = StyleSheet.create({
   header: { gap: 9 },
   step: { gap: 12 },
   section: { gap: 12 },
+  sectionPanel: {
+    gap: 12,
+    borderWidth: 1,
+    borderColor: colors.border,
+    borderRadius: 12,
+    padding: 12,
+    backgroundColor: '#f8fafc',
+    minWidth: 0,
+  },
+  reinspectionCard: {
+    gap: 6,
+    borderWidth: 1,
+    borderColor: colors.border,
+    borderRadius: 12,
+    padding: 8,
+    backgroundColor: '#ffffff',
+  },
+  pendingReinspectionCard: { borderColor: colors.red },
   actions: { flexDirection: 'row', gap: 8, flexWrap: 'wrap', alignItems: 'center' },
   progress: { height: 6, borderRadius: 6, backgroundColor: colors.tint },
   divider: { height: 1, backgroundColor: colors.border },
@@ -229,12 +252,14 @@ export function MoveInDraftHandoverPanel({
   api,
   contract,
   role,
+  onBack,
   onUpdated,
   legacyFallback,
 }: {
   api: ContractClient;
   contract: ContractView;
   role: string;
+  onBack?: () => void;
   onUpdated?: () => void;
   legacyFallback?: React.ReactNode;
 }) {
@@ -339,6 +364,11 @@ export function MoveInDraftHandoverPanel({
   const error = actionError || current?.error || '';
   const draft = allowed ? (current?.record ?? null) : null;
   const inventory = current?.inventory ?? null;
+  const isPendingInventoryReinspection = (assetId: string) => {
+    if (!inventory?.reinspectionItemIds?.includes(assetId)) return false;
+    const item = inventory.items.find((entry) => entry.id === assetId);
+    return !item || !hasRecheckedInventoryItem(item, inventory.recheckedItemIds ?? []);
+  };
   const started = canStaffEditMoveIn(draft);
   const checkedRooms =
     Number((draft?.evidenceIds ?? []).length > 0) +
@@ -349,7 +379,9 @@ export function MoveInDraftHandoverPanel({
     ? draft.assets.filter((asset) =>
         inventory?.items.some(
           (item) =>
-            item.id === asset.id && hasSavedInventoryItem(item, inventory.status === 'Completed'),
+            item.id === asset.id &&
+            !isPendingInventoryReinspection(item.id) &&
+            hasSavedInventoryItem(item, inventory.status === 'Completed'),
         ),
       ).length
     : (draft?.assets ?? []).filter((asset) => asset.checked && (asset.evidenceIds ?? []).length > 0)
@@ -367,12 +399,21 @@ export function MoveInDraftHandoverPanel({
     : [false, false, false, false];
   const recordedKeyQuantity = draft?.accessItems?.find((item) => item.type === 'RoomKey')?.quantity;
   const keyDetail = savedWizardSteps[3] ? `${recordedKeyQuantity} chìa khóa` : 'Chưa kiểm tra';
-  // A reinspection is complete only when the server has verified the newly
-  // saved observation AND, for canonical inventory assets, fresh photo proof.
-  // Rechecking timestamps/conditions on the client would allow old photos to
-  // appear sufficient. The server updates reinspectionItems[].rechecked.
+  // Only the server can confirm that the requested observation was saved.
+  // The server updates reinspectionItems[].rechecked.
   const isReinspectionItemComplete = (item: { rechecked?: boolean }): boolean =>
     item.rechecked === true;
+  const reinspectionItems = draft?.reinspectionItems ?? [];
+  const isReinspectionDisplayComplete = (item: (typeof reinspectionItems)[number]) =>
+    isReinspectionItemComplete(item) ||
+    (item.kind === 'Asset' &&
+      !!item.assetId &&
+      !!inventory?.reinspectionItemIds?.includes(item.assetId) &&
+      !isPendingInventoryReinspection(item.assetId));
+  const pendingReinspectionItems = reinspectionItems.filter(
+    (item) => !isReinspectionDisplayComplete(item),
+  );
+  const completedReinspectionItems = reinspectionItems.filter(isReinspectionDisplayComplete);
   const reinspectionReady =
     draft?.status !== 'ReinspectionRequested' ||
     ((draft.reinspectionItems?.length ?? 0) > 0 &&
@@ -778,7 +819,7 @@ export function MoveInDraftHandoverPanel({
     else if (kind === 'Access') setActiveItem('keys');
     else if (kind === 'Asset' && assetId && draft?.assets.some((asset) => asset.id === assetId))
       // A canonical inventory task, once reopened by Owner, is the only
-      // authoritative place to record a fresh asset condition and photo.
+      // authoritative place to record the updated asset condition.
       setActiveItem(`asset:${assetId}`);
     // A shortcut opens a single check from the overview; return there on close.
     if (kind !== 'Meter') setSectionOpen(false);
@@ -982,6 +1023,7 @@ export function MoveInDraftHandoverPanel({
     indicator: 'passed' | 'issue' | 'not-applicable' | 'unreviewed' = done
       ? 'passed'
       : 'unreviewed',
+    pendingReinspection = false,
   ) {
     const source =
       indicator === 'passed'
@@ -1006,7 +1048,11 @@ export function MoveInDraftHandoverPanel({
         accessibilityLabel={title}
         disabled={busy}
         onPress={onPress}
-        style={[wizardStyles.workRow, compactPhone && wizardStyles.phoneWorkRow]}
+        style={[
+          wizardStyles.workRow,
+          compactPhone && wizardStyles.phoneWorkRow,
+          pendingReinspection && wizardStyles.pendingReinspectionCard,
+        ]}
       >
         <View style={wizardStyles.rowContent}>
           <Icon source={source} size={23} color={color} />
@@ -1014,9 +1060,11 @@ export function MoveInDraftHandoverPanel({
             <Text variant="titleSmall" style={wizardStyles.rowTitle}>
               {title}
             </Text>
-            <Text variant="bodySmall" style={wizardStyles.rowDetail}>
-              {detail}
-            </Text>
+            {!!detail && (
+              <Text variant="bodySmall" style={wizardStyles.rowDetail}>
+                {detail}
+              </Text>
+            )}
             {!!status && (
               <Text
                 variant="labelSmall"
@@ -1057,12 +1105,27 @@ export function MoveInDraftHandoverPanel({
             selectedAsset?.name ??
             (activeItem === 'keys' ? 'Chìa khóa bàn giao' : ''));
 
+  const hasInlineBack = staff && allowed && !!onBack && !(current?.notFound && legacyFallback);
+  useWorkspaceInlineHeader(hasInlineBack);
   if (!allowed) return <Text>Không thể mở biên bản của cơ sở hoặc tài khoản này.</Text>;
   if (current?.notFound && legacyFallback) return <>{legacyFallback}</>;
 
   return (
     <Box style={compactPhone && staff ? wizardStyles.phoneRoot : undefined}>
-      {compactPhone && staff ? (
+      {hasInlineBack ? (
+        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+          <IconButton
+            icon="arrow-left"
+            accessibilityLabel="Quay lại"
+            disabled={busy || inventoryBusy || meterBusy}
+            onPress={onBack}
+            style={{ margin: 0 }}
+          />
+          <Text variant="titleMedium" style={[wizardStyles.compactTitle, { flex: 1 }]}>
+            Kiểm tra bàn giao · phòng {draft?.roomNumber ?? contract.roomNumber ?? ''}
+          </Text>
+        </View>
+      ) : compactPhone && staff ? (
         <View style={wizardStyles.section}>
           <Text variant="titleMedium" style={wizardStyles.compactTitle}>
             Kiểm tra bàn giao · phòng {draft?.roomNumber ?? contract.roomNumber ?? ''}
@@ -1086,7 +1149,11 @@ export function MoveInDraftHandoverPanel({
           <View style={wizardStyles.compactSummaryRow}>
             <Pill
               tone={
-                draft.status === 'Confirmed' ? 'green' : draft.status === 'Ready' ? 'blue' : 'amber'
+                draft.status === 'Confirmed' || draft.status === 'PendingOwnerReview'
+                  ? 'green'
+                  : draft.status === 'Ready'
+                    ? 'blue'
+                    : 'amber'
               }
             >
               {draft.status === 'Draft' && draft.moveInTask?.status === 'Assigned'
@@ -1115,42 +1182,46 @@ export function MoveInDraftHandoverPanel({
               </Text>
             )}
           {draft.status === 'PendingOwnerReview' && (
-            <Text style={ui.muted}>
+            <Text style={ui.green}>
               Đã gửi kết quả kiểm tra cho chủ trọ. Bạn sẽ nhận được yêu cầu cụ thể nếu cần kiểm tra
               lại.
             </Text>
           )}
-          {draft.status === 'ReinspectionRequested' && (
-            <View style={wizardStyles.section}>
+          {draft.status === 'ReinspectionRequested' && !sectionOpen && (
+            <View testID="handover-reinspection-panel" style={wizardStyles.sectionPanel}>
               <Text variant="titleMedium">Các mục chủ trọ yêu cầu kiểm tra lại</Text>
               {!!draft.reinspectionHistory?.length && (
                 <Text>
                   {draft.reinspectionHistory[draft.reinspectionHistory.length - 1]?.reason}
                 </Text>
               )}
-              {(draft.reinspectionItems ?? []).map((item, index) => (
-                <View key={`${item.kind}:${item.code ?? item.assetId ?? index}`}>
-                  <Button
-                    mode="outlined"
-                    disabled={busy || !started}
-                    onPress={() => openReinspectionItem(item.kind, item.code, item.assetId)}
-                  >
-                    {moveInReinspectionLabel(item, draft)} · Mở kiểm tra
-                  </Button>
-                  <Text
-                    variant="bodySmall"
-                    style={isReinspectionItemComplete(item) ? ui.green : ui.muted}
-                  >
-                    {isReinspectionItemComplete(item)
-                      ? 'Nhân viên đã lưu kết quả kiểm tra lại'
-                      : 'Cần ghi nhận kiểm tra lại'}
-                  </Text>
-                  {item.kind === 'Asset' && !!draft.moveInTask?.inventoryTaskId && (
-                    <Text variant="bodySmall" style={ui.muted}>
-                      Mở phiếu kiểm kê gốc, ghi nhận tình trạng Đạt và chụp ảnh minh chứng mới sau
-                      khi chủ trọ yêu cầu kiểm tra lại. Ảnh cũ không thay thế kết quả mới.
-                    </Text>
-                  )}
+              {[
+                { title: 'Chưa kiểm tra lại', items: pendingReinspectionItems, pending: true },
+                { title: 'Đã kiểm tra lại', items: completedReinspectionItems, pending: false },
+              ].map(({ title, items, pending }) => (
+                <View
+                  key={title}
+                  testID={pending ? 'reinspection-pending' : 'reinspection-completed'}
+                  style={[wizardStyles.workList, !items.length && { display: 'none' }]}
+                >
+                  {items.map((item, index) => (
+                    <View
+                      key={`${item.kind}:${item.code ?? item.assetId ?? index}`}
+                      testID="reinspection-card"
+                      style={[
+                        wizardStyles.reinspectionCard,
+                        pending && wizardStyles.pendingReinspectionCard,
+                      ]}
+                    >
+                      <Button
+                        mode="text"
+                        disabled={busy || !started}
+                        onPress={() => openReinspectionItem(item.kind, item.code, item.assetId)}
+                      >
+                        {moveInReinspectionLabel(item, draft)} · Mở kiểm tra
+                      </Button>
+                    </View>
+                  ))}
                 </View>
               ))}
             </View>
@@ -1162,16 +1233,19 @@ export function MoveInDraftHandoverPanel({
           )}
           {!!notice && !activeItem && <Text style={ui.green}>{notice}</Text>}
           {started && (
-            <View style={wizardStyles.step}>
+            <View
+              testID={sectionOpen ? 'handover-section-panel' : undefined}
+              style={sectionOpen ? wizardStyles.sectionPanel : wizardStyles.step}
+            >
               {sectionOpen && (
                 <Button
                   icon="arrow-left"
-                  mode="text"
+                  mode="outlined"
                   disabled={busy}
                   style={{ alignSelf: 'flex-start' }}
                   onPress={() => {
                     setSectionOpen(false);
-                    if (compactPhone) resetScroll?.();
+                    resetScroll?.();
                   }}
                 >
                   Về 4 mục bàn giao
@@ -1182,9 +1256,11 @@ export function MoveInDraftHandoverPanel({
                   <Text variant="titleMedium" style={wizardStyles.compactSummaryTitle}>
                     {sectionOpen ? staffSteps[wizardStep]!.title : '4 mục bàn giao phòng'}
                   </Text>
-                  <Pill tone={savedWizardSteps.every(Boolean) ? 'green' : 'blue'}>
-                    {savedWizardSteps.filter(Boolean).length}/4 đã ghi nhận
-                  </Pill>
+                  {!sectionOpen && (
+                    <Pill tone={savedWizardSteps.every(Boolean) ? 'green' : 'blue'}>
+                      {savedWizardSteps.filter(Boolean).length}/4 đã ghi nhận
+                    </Pill>
+                  )}
                 </View>
                 {!sectionOpen && (
                   <>
@@ -1233,13 +1309,13 @@ export function MoveInDraftHandoverPanel({
                   {wizardStep === 0 && (
                     <>
                       <Text>
-                        Điện:{' '}
+                        Chỉ số công tơ điện:{' '}
                         {draft.electricity
                           ? formatMeterReading(draft.electricity.value, 'kWh')
                           : 'Chưa ghi'}
                       </Text>
                       <Text>
-                        Nước:{' '}
+                        Chỉ số công tơ nước:{' '}
                         {draft.water ? formatMeterReading(draft.water.value, 'm³') : 'Chưa ghi'}
                       </Text>
                       <ContractInitialMeterTasks
@@ -1270,7 +1346,7 @@ export function MoveInDraftHandoverPanel({
                         return workEntry(
                           code,
                           label,
-                          check?.notes || 'Kiểm tra thực tế',
+                          check?.notes?.trim() || '',
                           check
                             ? `${roomStatusLabels[check.status]}${check.status === 'NotApplicable' || check.evidenceIds.length ? '' : ' · Thiếu ảnh'}`
                             : 'Chưa kiểm tra',
@@ -1321,8 +1397,10 @@ export function MoveInDraftHandoverPanel({
                       {draft.moveInTask?.inventoryTaskId
                         ? draft.assets.map((asset) => {
                             const item = inventory?.items.find((entry) => entry.id === asset.id);
+                            const pendingReinspection = isPendingInventoryReinspection(asset.id);
                             const saved =
                               !!item &&
+                              !pendingReinspection &&
                               hasSavedInventoryItem(item, inventory?.status === 'Completed');
                             const passed = saved && item?.condition === 'Good';
                             const problem =
@@ -1334,12 +1412,15 @@ export function MoveInDraftHandoverPanel({
                               item
                                 ? `Dự kiến ${item.expectedQuantity} · Thực tế ${item.actualQuantity ?? 'chưa ghi'}`
                                 : `Dự kiến ${asset.configuredQuantity ?? 'chưa rõ'} ${asset.unit ?? 'đơn vị'}`,
-                              saved
-                                ? `Đã kiểm kê · ${inventoryStatusLabels[item!.condition!]}`
-                                : 'Chưa kiểm kê',
+                              pendingReinspection
+                                ? 'Chưa kiểm tra lại'
+                                : saved
+                                  ? `Đã kiểm kê · ${inventoryStatusLabels[item!.condition!]}`
+                                  : 'Chưa kiểm kê',
                               () => setActiveItem(`asset:${asset.id}`),
                               saved,
                               passed ? 'passed' : problem ? 'issue' : 'unreviewed',
+                              pendingReinspection,
                             );
                           })
                         : draft.assets.map((asset) =>
@@ -1379,23 +1460,16 @@ export function MoveInDraftHandoverPanel({
                   ? 'Hoàn thành kiểm tra lại'
                   : 'Hoàn thành nhiệm vụ kiểm tra'}
               </Text>
-              <Text style={ui.muted}>
-                {inspectionReady
-                  ? 'Sẵn sàng gửi chủ trọ duyệt.'
-                  : draft.status === 'ReinspectionRequested' && !reinspectionReady
+              {!inspectionReady && (
+                <Text style={ui.muted}>
+                  {draft.status === 'ReinspectionRequested' && !reinspectionReady
                     ? 'Hoàn tất các mục cần kiểm tra lại.'
                     : `${savedWizardSteps.filter(Boolean).length}/4 mục đã hoàn tất.`}
-              </Text>
+                </Text>
+              )}
               <Action
                 disabled={busy || !inspectionReady || !!activeItem}
-                onPress={() =>
-                  void run(
-                    submitInspection,
-                    draft.status === 'ReinspectionRequested'
-                      ? 'Đã nộp kết quả kiểm tra lại cho chủ trọ.'
-                      : 'Đã xác nhận hoàn thành kiểm tra. Biên bản đang chờ chủ trọ duyệt.',
-                  )
-                }
+                onPress={() => void run(submitInspection, '')}
               >
                 {draft.status === 'ReinspectionRequested'
                   ? 'Xác nhận hoàn thành kiểm tra lại'

@@ -73,7 +73,7 @@ internal sealed class ContractHandoverRepository(BHomePersistenceContext db, IOp
     public async Task EnsureMoveOutTaskAsync(Contract contract, ContractMoveOut moveOut, Guid actor, DateTimeOffset now, CancellationToken t)
     {
         if (db is not BHome.Infrastructure.Persistence.Compact24.Compact24DbContext) return;
-        if (moveOut.ContractId != contract.Id || moveOut.Status is MoveOutStatus.Requested or MoveOutStatus.AwaitingConsent or MoveOutStatus.Rejected)
+        if (moveOut.ContractId != contract.Id || moveOut.Status is MoveOutStatus.Requested or MoveOutStatus.AwaitingConsent or MoveOutStatus.Rejected or MoveOutStatus.Completed || moveOut.PendingReason == ContractService.PersonalTerminationScheduled)
             throw ContractException.Conflict("move_out_not_approved");
         var id = ContractHandoverTaskIds.MoveOut(contract.Id);
         if (await FindTaskAsync(id, t) is not null) return;
@@ -91,6 +91,7 @@ internal sealed class ContractHandoverRepository(BHomePersistenceContext db, IOp
             TaskPriority = OperationalTaskPriority.Normal,
             MeterStatus = MeterTaskStatus.Assigned,
             ReadingDate = moveOut.ProposedDate,
+            DueAt = new DateTimeOffset(moveOut.ProposedDate.AddDays(1).ToDateTime(new TimeOnly(23, 59, 59)), TimeSpan.FromHours(7)).ToUniversalTime(),
             EvidenceRequired = false
         };
         await WriteTaskAsync(task, true, new OperationalTaskHistory
@@ -110,6 +111,30 @@ internal sealed class ContractHandoverRepository(BHomePersistenceContext db, IOp
                 EventId = id,
                 Event = "MoveOutAssigned"
             }, t);
+    }
+    public async Task<bool> CancelUnstartedMoveOutTaskAsync(Guid contractId, Guid actor, DateTimeOffset now, CancellationToken t)
+    {
+        if (db is not Compact24DbContext) return true;
+        var task = await FindTaskAsync(ContractHandoverTaskIds.MoveOut(contractId), t);
+        if (task is null || task.MeterStatus == MeterTaskStatus.Cancelled) return true;
+        if (task.MeterStatus != MeterTaskStatus.Assigned) return false;
+        task.MeterStatus = MeterTaskStatus.Cancelled;
+        task.Version++;
+        await WriteTaskAsync(task, false, new OperationalTaskHistory
+        {
+            TaskId = task.Id, ActorId = actor, Action = "MoveOutNoLongerLastLease", OccurredAt = now,
+            TaskVersion = task.Version, Note = "Phòng vẫn còn hợp đồng thuê khác."
+        }, t);
+        return true;
+    }
+    public async Task<bool> CanStartMoveOutTaskAsync(Guid contractId, CancellationToken t)
+    {
+        if (db is not Compact24DbContext compact) return true;
+        var move = await NativeContractMoveOutPersistence.MoveAsync(compact, contractId, t);
+        if (move is null || move.Status != MoveOutStatus.Approved || move.PendingReason == ContractService.PersonalTerminationScheduled) return false;
+        return !await compact.Set<Contract>().AnyAsync(c => c.Id != contractId && c.Status == ContractStatus.Active &&
+            (c.ContractType == ContractKind.Main || c.ContractType == ContractKind.Renewal) &&
+            compact.Set<Contract>().Any(target => target.Id == contractId && target.RoomId == c.RoomId), t);
     }
     private async Task<OperationalTask> MoveOutTaskAsync(Guid contractId, CancellationToken t) =>
         await FindTaskAsync(ContractHandoverTaskIds.MoveOut(contractId), t) is { Kind: OperationalTaskKind.AdHoc } task &&
@@ -575,7 +600,7 @@ internal sealed class ContractHandoverRepository(BHomePersistenceContext db, IOp
             return new HandoverCompletedInventory(snapshot.SourceToken, task.CompletedAt.Value,
                 snapshot.Items.Select(item => new HandoverInspectedAsset(item.Id, item.Name,
                     item.ExpectedQuantity, item.ActualQuantity!.Value, item.Condition!, item.Notes)).ToArray(),
-                latestEvidence);
+                latestEvidence, snapshot.RecheckedItemIds);
         }
         catch (JsonException) { return null; }
     }
@@ -617,7 +642,8 @@ internal sealed class ContractHandoverRepository(BHomePersistenceContext db, IOp
         inventoryTask.MoveInInventoryJson = JsonSerializer.Serialize(source! with
         {
             ReinspectionItemIds = selectedAssetIds,
-            ReinspectionRequestedAt = now
+            ReinspectionRequestedAt = now,
+            RecheckedItemIds = []
         });
         inventoryTask.Version++;
         await WriteTaskAsync(inventoryTask, false, new OperationalTaskHistory

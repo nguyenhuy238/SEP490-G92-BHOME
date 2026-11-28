@@ -2,7 +2,7 @@ import { StyleSheet } from 'react-native';
 import { colors, staffColors } from './theme';
 import { fontStyle } from './typography';
 
-// Staff-only visual tokens. Shared Tenant and Owner styles remain unchanged.
+// Staff visual reference, also reused by the Tenant workspace. Owner stays separate.
 export const staffLayout = {
   space: { xs: 4, sm: 8, md: 12, lg: 16, xl: 24 },
   radius: 12,

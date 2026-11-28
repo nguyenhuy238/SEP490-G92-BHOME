@@ -59,7 +59,7 @@ internal static class NativeOperationalTaskPersistence
         return rows;
     }
 
-    internal sealed record ListKey(Guid Id, Guid? Responsible, DateTimeOffset? DueAt, DateTimeOffset CreatedAt, int Status);
+    internal sealed record ListKey(Guid Id, Guid? Responsible, DateTimeOffset? DueAt, DateTimeOffset CreatedAt, int Status, DateTimeOffset? ReinspectionRequestedAt);
     internal static async Task<TaskPage<TaskView>> ListAsync(Compact24DbContext db, TaskQuery query, Guid? staffId,
         DateOnly date, DateTimeOffset now, CancellationToken t)
     {
@@ -77,8 +77,14 @@ internal static class NativeOperationalTaskPersistence
                     THEN CAST({staffId} AS uuid) END ELSE o.assigned_user_id END
                 ELSE a.staff_id END AS "Responsible",
                 o.due_at AS "DueAt",COALESCE((d.state->>'createdAt')::timestamptz,'1970-01-01T00:00:00Z') AS "CreatedAt",
-                o.status::int AS "Status"
+                o.status::int AS "Status",
+                CASE WHEN o.status IN ('0','1') AND o.title LIKE 'Bàn giao vào phòng%'
+                    AND c.handover->'preparation'->>'status'='ReinspectionRequested'
+                    THEN COALESCE((c.handover->'preparation'->'reinspectionHistory'->-1->>'requestedAt')::timestamptz,
+                        (d.state->>'updatedAt')::timestamptz, (d.state->>'createdAt')::timestamptz)
+                    END AS "ReinspectionRequestedAt"
             FROM operational_tasks o JOIN locations l ON l.id=o.location_id
+            LEFT JOIN contracts c ON c.id=o.contract_id
             CROSS JOIN LATERAL (SELECT o.task_data->'state' AS state) d
             CROSS JOIN LATERAL (SELECT CASE WHEN (d.state->>'kind')::int IN (2,3) THEN (d.state->>'kind')::int ELSE 1 END AS kind) k
             LEFT JOIN LATERAL (
@@ -119,7 +125,8 @@ internal static class NativeOperationalTaskPersistence
             """);
         var count = await rows.CountAsync(t);
         var ordered = query.LatestActionable ? rows.OrderByDescending(x => x.CreatedAt)
-            : query.ActionableOnly ? rows.OrderBy(x => x.Status == 1 ? 0 : 1).ThenBy(x => x.CreatedAt)
+            : query.ActionableOnly ? rows.OrderBy(x => x.ReinspectionRequestedAt == null ? 1 : 0)
+                .ThenBy(x => x.ReinspectionRequestedAt).ThenBy(x => x.Status == 1 ? 0 : 1).ThenBy(x => x.CreatedAt)
             : rows.OrderBy(x => x.DueAt);
         var page = await ordered.ThenBy(x => x.Id).Skip((query.Page - 1) * query.PageSize).Take(query.PageSize).ToArrayAsync(t);
         var ids = page.Select(x => x.Id).ToArray();
@@ -130,7 +137,7 @@ internal static class NativeOperationalTaskPersistence
             return new TaskView(task.Id, task.RequiredLocationId, task.Kind.ToString(), task.TaskTitle, task.Requirements, task.TaskPriority.ToString(),
                 task.DueAt, task.EvidenceRequired, task.MeterStatus.ToString(), task.IsOverdue(now), x.Responsible, task.AssignedStaffUserId,
                 x.Responsible != null, task.Result, task.Version, task.VerifiedByUserId, task.VerifiedAt, task.CreatedAt, task.UpdatedAt,
-                OperationalTaskService.TargetView(task));
+                OperationalTaskService.TargetView(task), x.ReinspectionRequestedAt);
         }).ToArray(), query.Page, query.PageSize, count);
     }
 

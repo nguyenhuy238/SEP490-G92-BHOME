@@ -38,7 +38,7 @@ internal sealed class ContractExpiryProcessor(BHomePersistenceContext db, TimePr
                            c.Status == ContractStatus.PendingActivation || c.Status == ContractStatus.Active) && c.HoldingExpiryAt <= now
                         : c.Status == ContractStatus.Active && c.EndDate <= through)
                 : db.Set<Contract>().AsNoTracking().Where(c =>
-                    c.Kind != ContractKind.Holding && c.Status == ContractStatus.Active && c.EndDate <= through);
+                    c.Kind != ContractKind.Holding && c.Status == ContractStatus.Active && (c.EndDate <= through || db.Set<ContractMoveOut>().Any(m => m.ContractId == c.Id && m.Status == MoveOutStatus.Approved && m.ProposedDate <= today)));
             var batch = await due.Where(c => after == null || c.Id.CompareTo(after.Value) > 0)
                 .OrderBy(c => c.Id).Select(c => new { c.Id, c.RoomId, c.Room.LocationId }).Take(100).ToArrayAsync(t);
             if (batch.Length == 0) break;
@@ -48,7 +48,7 @@ internal sealed class ContractExpiryProcessor(BHomePersistenceContext db, TimePr
                 await db.Database.ExecuteSqlRawAsync("SELECT pg_advisory_xact_lock(hashtextextended('bhome-payment-ledger-v1',0))", t);
                 await db.Database.ExecuteSqlInterpolatedAsync($"SELECT pg_advisory_xact_lock(hashtextextended({item.LocationId.ToString()},0))", t);
                 var room = await db.Locked<Room>(item.RoomId).SingleAsync(t);
-                var c = await db.Set<Contract>().Include(c => c.Room).SingleAsync(c => c.Id == item.Id, t);
+                var c = await db.Set<Contract>().Include(c => c.Room).Include(c => c.Residents).SingleAsync(c => c.Id == item.Id, t);
                 if (c.Kind == ContractKind.Holding && c.Status is ContractStatus.Draft or ContractStatus.PendingSigning or ContractStatus.PendingActivation or ContractStatus.Active && c.HoldingExpiryAt <= now)
                 {
                     c.Status = ContractStatus.Expired; c.ActualEndDate = today; c.LifecycleActorId = null;
@@ -96,11 +96,11 @@ internal sealed class ContractExpiryProcessor(BHomePersistenceContext db, TimePr
                     });
                     await db.SaveChangesAsync(t);
                 }
-                else if (c.Kind != ContractKind.Holding && c.Status == ContractStatus.Active && c.EndDate <= through)
+                else if (c.Kind != ContractKind.Holding && c.Status == ContractStatus.Active)
                 {
                     var stage = c.EndDate < today ? "Expired" : "Upcoming30";
                     foreach (var recipient in new[] { c.OwnerSignerId, c.TenantUserId }.Distinct())
-                        if (recipient is { } user && !await db.Set<ContractExpiryNotice>().AnyAsync(n => n.ContractId == c.Id && n.EndDate == c.EndDate && n.Stage == stage && n.RecipientId == user, t))
+                        if (c.EndDate <= through && recipient is { } user && !await db.Set<ContractExpiryNotice>().AnyAsync(n => n.ContractId == c.Id && n.EndDate == c.EndDate && n.Stage == stage && n.RecipientId == user, t))
                             db.Add(new ContractExpiryNotice
                             {
                                 Id = Guid.NewGuid(),
@@ -110,70 +110,68 @@ internal sealed class ContractExpiryProcessor(BHomePersistenceContext db, TimePr
                                 Stage = stage,
                                 CreatedAt = clock.GetUtcNow()
                             });
-                    // The Main contract stays Active until physical handover is
-                    // reviewed/completed. Starting a move-out only when it has
-                    // become Terminated would deadlock Staff inspection.
-                    //
-                    // Room + Location advisory locks above serialize concurrent
-                    // job replays with normal Owner/Tenant contract operations.
-                    // There is one ContractMoveOut per ContractId in both schemas.
-                    ContractMoveOut? openedMoveOut = null;
+                    var move = await db.Set<ContractMoveOut>().SingleOrDefaultAsync(m => m.ContractId == c.Id, t);
                     if (c.Kind is ContractKind.Main or ContractKind.Renewal &&
-                        c.EndDate < today &&
                         !await db.Set<Contract>().AnyAsync(next => next.PreviousContractId == c.Id &&
-                            (next.Status == ContractStatus.Draft ||
-                             next.Status == ContractStatus.PendingSigning ||
-                             next.Status == ContractStatus.PendingActivation ||
-                             next.Status == ContractStatus.Active), t) &&
-                        !await db.Set<ContractMoveOut>().AnyAsync(m => m.ContractId == c.Id, t))
+                            (next.Status == ContractStatus.Draft || next.Status == ContractStatus.PendingSigning ||
+                             next.Status == ContractStatus.PendingActivation || next.Status == ContractStatus.Active), t))
                     {
-                        var move = new ContractMoveOut
+                        if (c.EndDate <= today && (move is null || move.Status is MoveOutStatus.Requested or MoveOutStatus.AwaitingConsent or MoveOutStatus.Rejected))
                         {
-                            ContractId = c.Id,
-                            ProposedDate = c.EndDate,
-                            Reason = "Hợp đồng hết hạn; hệ thống mở quy trình kiểm tra trả phòng.",
-                            RequestedByUserId = c.OwnerSignerId, // Responsible owner; system origin below.
-                            IsExpiry = true,
-                            Status = MoveOutStatus.Approved,
-                            ApprovedAt = now,
-                            ApprovedByUserId = null, // NOT a human Owner approval.
-                            PendingReason = "inspection_and_financial_dependencies"
-                        };
-                        db.Add(move);
-                        openedMoveOut = move;
-                        db.Add(new ContractMoveOutHistory
-                        {
-                            ContractId = c.Id,
-                            Version = move.Version,
-                            Action = "ExpiryInspectionOpenedBySystem",
-                            ActorId = c.OwnerSignerId, // Historical schema requires a real user FK.
-                            OccurredAt = now,
-                            Snapshot = JsonSerializer.Serialize(new
+                            var prior = move;
+                            move ??= new ContractMoveOut { ContractId = c.Id };
+                            OpenNaturalExpiry(c, move, now);
+                            if (prior is null) db.Add(move); else move.Version++;
+                            db.Add(JobMoveEvent(c, move, "ExpiryInspectionOpenedBySystem", now));
+                            db.SecurityAudit.Add(new SecurityAuditRecord
                             {
-                                move.Id,
-                                move.ContractId,
-                                move.ProposedDate,
-                                Status = move.Status.ToString(),
-                                move.IsExpiry,
-                                Origin = "ContractExpiryJob",
-                                OwnerApproved = false
-                            })
-                        });
-                        db.SecurityAudit.Add(new SecurityAuditRecord
+                                UserId = c.OwnerSignerId, Event = "ContractExpiryInspectionOpenedBySystem",
+                                TargetId = c.Id, TargetType = "Contract", Succeeded = true, OccurredAt = now
+                            });
+                        }
+                        if (move is { Status: MoveOutStatus.Approved } && move.ProposedDate <= today &&
+                            !move.PendingReason.StartsWith("forced_move_out", StringComparison.Ordinal))
                         {
-                            UserId = c.OwnerSignerId,
-                            Event = "ContractExpiryInspectionOpenedBySystem",
-                            TargetId = c.Id,
-                            TargetType = "Contract",
-                            Succeeded = true,
-                            OccurredAt = now
-                        });
-                    }
-                    if (handoverTasks is not null)
-                    {
-                        openedMoveOut ??= await db.Set<ContractMoveOut>().SingleOrDefaultAsync(m => m.ContractId == c.Id, t);
-                        if (openedMoveOut is { Status: not (MoveOutStatus.Requested or MoveOutStatus.AwaitingConsent or MoveOutStatus.Rejected) })
-                            await handoverTasks.EnsureMoveOutTaskAsync(c, openedMoveOut, c.OwnerSignerId, now, t);
+                            var peers = await db.Set<Contract>().Where(other => other.RoomId == c.RoomId &&
+                                other.Id != c.Id && other.Status == ContractStatus.Active &&
+                                (other.Kind == ContractKind.Main || other.Kind == ContractKind.Renewal)).ToArrayAsync(t);
+                            var continuing = false;
+                            foreach (var other in peers)
+                            {
+                                if (other.StartDate > move.ProposedDate) continue;
+                                var otherMove = await db.Set<ContractMoveOut>().SingleOrDefaultAsync(m => m.ContractId == other.Id, t);
+                                var end = otherMove is { Status: MoveOutStatus.Approved } && otherMove.ProposedDate < other.EndDate
+                                    ? otherMove.ProposedDate : other.EndDate;
+                                if (end > move.ProposedDate || end == move.ProposedDate && other.Id.CompareTo(c.Id) > 0)
+                                { continuing = true; break; }
+                            }
+                            if (continuing)
+                            {
+                                CompletePersonal(c, move, now);
+                                db.Add(JobMoveEvent(c, move, "PersonalTerminationCompletedBySystem", now));
+                                db.SecurityAudit.Add(new SecurityAuditRecord
+                                {
+                                    UserId = c.OwnerSignerId, Event = "ContractPersonalTerminationCompletedBySystem",
+                                    TargetId = c.Id, TargetType = "Contract", Succeeded = true, OccurredAt = now
+                                });
+                            }
+                            else
+                            {
+                                if (move.PendingReason == ContractService.PersonalTerminationScheduled)
+                                {
+                                    MarkInspectionRequired(move);
+                                    move.Version++;
+                                    db.Add(JobMoveEvent(c, move, "LastLeaseInspectionRequiredBySystem", now));
+                                    db.SecurityAudit.Add(new SecurityAuditRecord
+                                    {
+                                        UserId = c.OwnerSignerId, Event = "ContractLastLeaseInspectionRequiredBySystem",
+                                        TargetId = c.Id, TargetType = "Contract", Succeeded = true, OccurredAt = now
+                                    });
+                                }
+                                if (handoverTasks is not null)
+                                    await handoverTasks.EnsureMoveOutTaskAsync(c, move, c.OwnerSignerId, now, t);
+                            }
+                        }
                     }
                     await db.SaveChangesAsync(t);
                 }
@@ -192,12 +190,17 @@ internal sealed class ContractExpiryProcessor(BHomePersistenceContext db, TimePr
         while (true)
         {
             var now = clock.BusinessUtcNow();
+            var dueMoveOutIds = compact.Database.SqlQuery<Guid>($"""
+                SELECT id AS "Value" FROM contracts
+                WHERE move_out->'current'->>'status' = {((int)MoveOutStatus.Approved).ToString()}
+                  AND (move_out->'current'->>'proposedDate')::date <= {today}
+                """);
             var batch = await compact.Set<BHome.Domain.TenantContracts.Contract>().AsNoTracking()
                 .Where(c => (c.ContractType == BHome.Domain.TenantContracts.ContractKind.Main || c.ContractType == BHome.Domain.TenantContracts.ContractKind.Renewal || c.ContractType == BHome.Domain.TenantContracts.ContractKind.Holding || c.ContractType == BHome.Domain.TenantContracts.ContractKind.Addendum)
                     && (c.ContractType == BHome.Domain.TenantContracts.ContractKind.Holding
                         ? (c.Status == ContractStatus.Draft || c.Status == ContractStatus.PendingSigning ||
                             c.Status == ContractStatus.PendingActivation || c.Status == ContractStatus.Active) && c.HoldingExpiryAt <= now
-                        : c.Status == ContractStatus.Active && c.EndDate <= through)
+                        : c.Status == ContractStatus.Active && (c.EndDate <= through || dueMoveOutIds.Contains(c.Id)))
                     && (after == null || c.Id.CompareTo(after.Value) > 0))
                 .OrderBy(c => c.Id).Select(c => new { c.Id, c.RoomId }).Take(100).ToArrayAsync(t);
             if (batch.Length == 0) break;
@@ -245,51 +248,51 @@ internal sealed class ContractExpiryProcessor(BHomePersistenceContext db, TimePr
                         }
                         repository.Audit(c.OwnerSignerId, "HoldingExpired", c.Id, now);
                     }
-                    else if (c.Kind != ContractKind.Holding && c.Status == ContractStatus.Active && c.EndDate <= through)
+                    else if (c.Kind != ContractKind.Holding && c.Status == ContractStatus.Active)
                     {
                         var stage = c.EndDate < today ? "Expired" : "Upcoming30";
                         foreach (var recipient in new[] { c.OwnerSignerId, c.TenantUserId }.Distinct())
-                            if (recipient is { } user)
+                            if (c.EndDate <= through && recipient is { } user)
                                 await AppendNoticeAsync(compact, c.Id, user, c.EndDate, stage, clock.GetUtcNow(), t);
                         var move = await repository.MoveOutAsync(c.Id, t);
-                        if (c.Kind is ContractKind.Main or ContractKind.Renewal && c.EndDate < today && move is null &&
-                            !await repository.OpenRenewalAsync(c.Id, t))
+                        if (c.Kind is ContractKind.Main or ContractKind.Renewal && !await repository.OpenRenewalAsync(c.Id, t))
                         {
-                            move = new ContractMoveOut
+                            if (c.EndDate <= today && (move is null || move.Status is MoveOutStatus.Requested or MoveOutStatus.AwaitingConsent or MoveOutStatus.Rejected))
                             {
-                                ContractId = c.Id,
-                                ProposedDate = c.EndDate,
-                                Reason = "Hợp đồng hết hạn; hệ thống mở quy trình kiểm tra trả phòng.",
-                                RequestedByUserId = c.OwnerSignerId,
-                                IsExpiry = true,
-                                Status = MoveOutStatus.Approved,
-                                ApprovedAt = now,
-                                ApprovedByUserId = null,
-                                PendingReason = "inspection_and_financial_dependencies"
-                            };
-                            repository.Add(move);
-                            repository.Add(new ContractMoveOutHistory
+                                var prior = move;
+                                move ??= new ContractMoveOut { ContractId = c.Id };
+                                OpenNaturalExpiry(c, move, now);
+                                if (prior is null) repository.Add(move); else move.Version++;
+                                repository.Add(JobMoveEvent(c, move, "ExpiryInspectionOpenedBySystem", now));
+                                repository.Audit(c.OwnerSignerId, "ContractExpiryInspectionOpenedBySystem", c.Id, now);
+                            }
+                            if (move is { Status: MoveOutStatus.Approved } && move.ProposedDate <= today &&
+                                !move.PendingReason.StartsWith("forced_move_out", StringComparison.Ordinal))
                             {
-                                ContractId = c.Id,
-                                Version = move.Version,
-                                Action = "ExpiryInspectionOpenedBySystem",
-                                ActorId = c.OwnerSignerId,
-                                OccurredAt = now,
-                                Snapshot = JsonSerializer.Serialize(new
+                                var continuing = await ContractService.HasContinuingLeaseAsync(repository, c, move.ProposedDate, t);
+                                if (continuing)
                                 {
-                                    move.Id,
-                                    move.ContractId,
-                                    move.ProposedDate,
-                                    Status = move.Status.ToString(),
-                                    move.IsExpiry,
-                                    Origin = "ContractExpiryJob",
-                                    OwnerApproved = false
-                                })
-                            });
-                            repository.Audit(c.OwnerSignerId, "ContractExpiryInspectionOpenedBySystem", c.Id, now);
+                                    if (handoverTasks is not null && !await handoverTasks.CancelUnstartedMoveOutTaskAsync(c.Id, c.OwnerSignerId, now, t))
+                                        return true; // A started physical inspection needs explicit resolution.
+                                    CompletePersonal(c, move, now);
+                                    repository.Add(JobMoveEvent(c, move, "PersonalTerminationCompletedBySystem", now));
+                                    await repository.CloseResidenceAsync(c, move.ProposedDate, c.OwnerSignerId, now, t);
+                                    repository.Audit(c.OwnerSignerId, "ContractPersonalTerminationCompletedBySystem", c.Id, now);
+                                }
+                                else
+                                {
+                                    if (move.PendingReason == ContractService.PersonalTerminationScheduled)
+                                    {
+                                        MarkInspectionRequired(move);
+                                        move.Version++;
+                                        repository.Add(JobMoveEvent(c, move, "LastLeaseInspectionRequiredBySystem", now));
+                                        repository.Audit(c.OwnerSignerId, "ContractLastLeaseInspectionRequiredBySystem", c.Id, now);
+                                    }
+                                    if (handoverTasks is not null)
+                                        await handoverTasks.EnsureMoveOutTaskAsync(c, move, c.OwnerSignerId, now, t);
+                                }
+                            }
                         }
-                        if (handoverTasks is not null && move is { Status: not (MoveOutStatus.Requested or MoveOutStatus.AwaitingConsent or MoveOutStatus.Rejected) })
-                            await handoverTasks.EnsureMoveOutTaskAsync(c, move, c.OwnerSignerId, now, t);
                     }
                     return true;
                 }, t);
@@ -297,6 +300,49 @@ internal sealed class ContractExpiryProcessor(BHomePersistenceContext db, TimePr
             after = batch[^1].Id;
         }
     }
+
+    private static void OpenNaturalExpiry(Contract contract, ContractMoveOut move, DateTimeOffset now)
+    {
+        move.ProposedDate = contract.EndDate;
+        move.Reason = "Hợp đồng hết hạn; hệ thống xử lý chấm dứt hợp đồng.";
+        move.RequestedByUserId = contract.OwnerSignerId;
+        move.IsExpiry = true;
+        move.Status = MoveOutStatus.Approved;
+        move.ApprovedAt = now;
+        move.ApprovedByUserId = null;
+        MarkInspectionRequired(move);
+    }
+
+    private static void MarkInspectionRequired(ContractMoveOut move)
+    {
+        move.PendingReason = "inspection_and_financial_dependencies";
+        move.InspectionScheduledAt = new DateTimeOffset(move.ProposedDate.ToDateTime(TimeOnly.MinValue), TimeSpan.FromHours(7)).ToUniversalTime();
+    }
+
+    private static void CompletePersonal(Contract contract, ContractMoveOut move, DateTimeOffset now)
+    {
+        contract.Status = ContractStatus.Terminated;
+        contract.ActualEndDate = move.ProposedDate;
+        contract.LifecycleActorId = move.ApprovedByUserId;
+        contract.LifecycleAt = now;
+        contract.LifecycleReason = ContractService.PersonalTerminationCompleted;
+        foreach (var resident in contract.Residents) resident.ResidenceTo = move.ProposedDate;
+        move.Status = MoveOutStatus.Completed;
+        move.PendingReason = ContractService.PersonalTerminationCompleted;
+        move.InspectionScheduledAt = null;
+        move.Version++;
+    }
+
+    private static ContractMoveOutHistory JobMoveEvent(Contract contract, ContractMoveOut move, string action, DateTimeOffset now) =>
+        new()
+        {
+            ContractId = contract.Id, Version = move.Version, Action = action, ActorId = contract.OwnerSignerId,
+            OccurredAt = now, Snapshot = JsonSerializer.Serialize(new
+            {
+                move.Id, move.ContractId, move.ProposedDate, Status = move.Status.ToString(), move.IsExpiry,
+                move.PendingReason, Origin = "ContractExpiryJob", OwnerApproved = move.ApprovedByUserId != null
+            })
+        };
 
     private static async Task AppendNoticeAsync(Compact24DbContext db, Guid contract, Guid recipient, DateOnly endDate,
         string stage, DateTimeOffset at, CancellationToken t)

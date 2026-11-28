@@ -9,7 +9,6 @@ import { ui } from './WorkspaceKit';
 
 export function WorkspaceTabBar({
   role,
-  screen,
   active,
   onSelect,
 }: {
@@ -20,13 +19,12 @@ export function WorkspaceTabBar({
 }) {
   const insets = useSafeAreaInsets();
   const visibleTabs = tabs[role];
-  const tenantHomeLayout = role === 'Tenant' && ['tenant-home', 'tenant-features'].includes(screen);
+  const lightWorkspace = role === 'Staff' || role === 'Tenant';
   return (
     <View
       style={[
         styles.tabs,
-        role === 'Staff' && styles.staffTabs,
-        tenantHomeLayout && { boxShadow: 'none' },
+        lightWorkspace && styles.staffTabs,
         { paddingBottom: insets.bottom, minHeight: 60 + insets.bottom },
       ]}
     >
@@ -39,20 +37,15 @@ export function WorkspaceTabBar({
           accessibilityState={{ selected: active === tab.screen }}
           accessibilityLabel={tab.title}
         >
-          <View style={[styles.tab, tenantHomeLayout && { minHeight: 54 }]}>
+          <View style={styles.tab}>
             <View
               style={[
                 styles.indicator,
-                role === 'Staff' && styles.staffIndicator,
-                tenantHomeLayout && { borderRadius: 10, paddingHorizontal: 12 },
+                lightWorkspace && styles.staffIndicator,
                 active === tab.screen && { backgroundColor: s.blueSoft },
               ]}
             >
-              <Icon
-                source={tab.icon}
-                size={tenantHomeLayout ? 20 : 22}
-                color={active === tab.screen ? s.blue : c.muted}
-              />
+              <Icon source={tab.icon} size={22} color={active === tab.screen ? s.blue : c.muted} />
             </View>
             <Text
               style={{

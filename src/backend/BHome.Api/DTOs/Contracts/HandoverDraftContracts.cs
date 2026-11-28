@@ -43,7 +43,8 @@ public sealed record HandoverInspectedAsset(Guid Id, string Name, int ExpectedQu
 // The task's initial inventory token distinguishes an actual change of room
 // assets from an obsolete draft.assets copy or draft.inventoryToken.
 public sealed record HandoverCompletedInventory(string SourceToken, DateTimeOffset CompletedAt,
-    HandoverInspectedAsset[] Items, IReadOnlyDictionary<Guid, DateTimeOffset?> LatestEvidenceAt);
+    HandoverInspectedAsset[] Items, IReadOnlyDictionary<Guid, DateTimeOffset?> LatestEvidenceAt,
+    Guid[]? RecheckedItemIds = null);
 
 public sealed record HandoverDraftState(
     int Version, string Status, string ContractSnapshotHash, DateTimeOffset CreatedAt,

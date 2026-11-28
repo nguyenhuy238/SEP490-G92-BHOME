@@ -74,7 +74,9 @@ export function ContractActionDialog({
       setError(contractError(e));
       if (
         (e as { status?: number })?.status === 409 &&
-        (action.operation.startsWith('move-out/') || action.operation === 'expiry-move-out')
+        (action.operation.startsWith('move-out/') ||
+          action.operation === 'expiry-move-out' ||
+          action.operation === 'owner-move-out')
       ) {
         setConflicted(true);
         onConflict?.();
@@ -184,7 +186,11 @@ export function ContractActionDialog({
           Đóng và tải lại
         </Button>
         <Button variant="contained" disabled={busy || conflicted} onClick={() => void submit()}>
-          {busy ? 'Đang xử lý…' : 'Xác nhận'}
+          {busy
+            ? 'Đang xử lý…'
+            : action.operation === 'owner-move-out'
+              ? 'Tạo nhiệm vụ trả phòng'
+              : 'Xác nhận'}
         </Button>
       </DialogActions>
     </Dialog>

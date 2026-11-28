@@ -74,30 +74,10 @@ public sealed partial class ContractService
             if (contract.Status != ContractStatus.Active || move.Status != MoveOutStatus.Requested ||
                 input.ExpectedVersion is { } version && move.Version != version)
                 throw ContractException.Conflict("move_out_not_pending_approval");
-            var consent = await ReadConsent(id, t);
-            var linkedMoves = new List<ContractMoveOut> { move };
-            if (consent is not null)
-            {
-                if (consent.PrimaryContractId != id || !consent.Unanimous)
-                    throw ContractException.Conflict("move_out_consent_required");
-                foreach (var contractId in consent.ContractIds.Where(contractId => contractId != id))
-                {
-                    var linked = await repository.MoveOutAsync(contractId, t);
-                    if (linked?.Status != MoveOutStatus.AwaitingConsent ||
-                        (await ReadConsent(contractId, t))?.RequestId != consent.RequestId)
-                        throw ContractException.Conflict("move_out_group_changed");
-                    linkedMoves.Add(linked);
-                }
-            }
-            // Tenant-facing status keeps the decision reason; the immutable audit
-            // snapshot retains the original text even after a later resubmission.
-            foreach (var linked in linkedMoves)
-            {
-                linked.Status = MoveOutStatus.Rejected;
-                linked.PendingReason = reason;
-                linked.Version++;
-                MoveOutEvent(linked, "Rejected", reason);
-            }
+            move.Status = MoveOutStatus.Rejected;
+            move.PendingReason = reason;
+            move.Version++;
+            MoveOutEvent(move, "Rejected", reason);
             Audit("ContractMoveOutRejected", id);
             Remember(key, "terminate-reject", fingerprint, move.Id);
             return View(move);
@@ -151,8 +131,8 @@ public sealed partial class ContractService
         {
             if (await Replay(key, expiry ? "expiry" : "terminate-request", new { id, x }, t) is not null) return View((await repository.MoveOutAsync(id, t))!);
             if (c.Status != ContractStatus.Active || await repository.OpenRenewalAsync(id, t)) throw ContractException.Conflict("contract_not_terminable");
-            // Owner may only recover an actual expired contract; ordinary
-            // early return always requires Tenant consensus.
+            // This legacy expiry route only recovers an actual expired contract.
+            // Owner-initiated early return uses the separate audited route.
             if (Today < c.EndDate) throw new ContractException(403, "owner_move_out_initiation_forbidden");
             if (x.ProposedDate < Today || x.ProposedDate < c.EndDate || x.ProposedDate < c.StartDate)
                 throw ContractException.Invalid("invalid_move_out_date");
@@ -172,24 +152,58 @@ public sealed partial class ContractService
             m.PendingReason = "inspection_and_financial_dependencies";
             if (previous is null) repository.Add(m);
             else m.Version++;
-            if (expiry && handoverRepository is not null)
-                await handoverRepository.EnsureMoveOutTaskAsync(c, m, Actor, clock.BusinessUtcNow(), t);
+            if (expiry) await SchedulePersonalTerminationAsync(c, m, t);
             MoveOutEvent(m, expiry ? "OwnerMoveOutOpened" : "Requested");
             Audit(expiry ? "ContractOwnerMoveOutOpened" : "ContractMoveOutRequested", id);
             Remember(key, expiry ? "expiry" : "terminate-request", new { id, x }, m.Id);
             return View(m);
         }, t);
     }
+    public Task<MoveOutView> RequestOwnerMoveOutAsync(Guid id, TerminationInput input, Guid key, CancellationToken t)
+    {
+        Validate(input);
+        if (string.IsNullOrWhiteSpace(input.Reason)) throw ContractException.Invalid("invalid_contract_input");
+        return Mutate(id, [Roles.Owner], async contract =>
+        {
+            var fingerprint = new { id, input };
+            if (await Replay(key, "owner-move-out", fingerprint, t) is not null)
+                return View(await repository.MoveOutAsync(id, t) ?? throw ContractException.Missing());
+            if (contract.Status != ContractStatus.Active || contract.Kind is not (ContractKind.Main or ContractKind.Renewal) ||
+                await repository.OpenRenewalAsync(id, t))
+                throw ContractException.Conflict("contract_not_terminable");
+            if (input.ProposedDate < Today || input.ProposedDate < contract.EndDate || input.ProposedDate < contract.StartDate)
+                throw ContractException.Invalid("invalid_move_out_date");
+            // Physical room inspection and settlement must not overlap another active lease.
+            var active = await repository.RoomActiveContractsAsync(contract.RoomId, t);
+            if (active.Any(c => c.Id != id))
+                throw ContractException.Conflict("owner_move_out_multiple_active_contracts");
+            var previous = await repository.MoveOutAsync(id, t);
+            if (previous is not null && previous.Status != MoveOutStatus.Rejected)
+                throw ContractException.Conflict("move_out_already_requested");
+            var move = previous ?? new ContractMoveOut { ContractId = id };
+            move.ProposedDate = input.ProposedDate;
+            move.Reason = input.Reason.Trim();
+            move.RequestedByUserId = Actor;
+            move.IsExpiry = input.ProposedDate >= contract.EndDate;
+            move.Status = MoveOutStatus.Approved;
+            move.ApprovedByUserId = Actor;
+            move.ApprovedAt = clock.GetUtcNow();
+            move.PendingReason = "inspection_and_financial_dependencies";
+            if (previous is null) repository.Add(move); else move.Version++;
+            await SchedulePersonalTerminationAsync(contract, move, t);
+            MoveOutEvent(move, "OwnerMoveOutOpened");
+            Audit("ContractOwnerMoveOutOpened", id);
+            Remember(key, "owner-move-out", fingerprint, move.Id);
+            return View(move);
+        }, t);
+    }
     public async Task<MoveOutView> GetMoveOutAsync(Guid id, CancellationToken t)
     {
         var contract = await Load(id, [Roles.Owner, Roles.Staff, Roles.Tenant], t);
         var move = await repository.MoveOutAsync(id, t) ?? throw ContractException.Missing();
-        var consent = await ReadConsent(id, t);
-        if (consent is not null && !Forced(move) && !move.IsExpiry && user.IsInRole(Roles.Tenant) &&
-            (!consent.Members.Any(m => m.ContractId == id && m.UserId == Actor) ||
-             (move.Status is MoveOutStatus.AwaitingConsent or MoveOutStatus.Requested && !await CurrentConsentMember(contract, Today, t))))
+        if (user.IsInRole(Roles.Tenant) && contract.TenantUserId != Actor)
             throw ContractException.Missing();
-        var view = ConsentView(move, consent);
+        var view = View(move);
         var inspection = (await repository.FinalInspectionsAsync(id, t)).FirstOrDefault();
         view = view with
         {
@@ -202,31 +216,24 @@ public sealed partial class ContractService
     {
         var m = await repository.MoveOutAsync(id, t) ?? throw ContractException.Missing();
         object fingerprint = expectedVersion is null ? id : new { id, expectedVersion };
-        var consent = await ReadConsent(id, t);
-        if (await Replay(key, "terminate-approve", fingerprint, t) is not null) return ConsentView(m, consent);
+        if (await Replay(key, "terminate-approve", fingerprint, t) is not null) return View(m);
         if (c.Status != ContractStatus.Active || m.Status != MoveOutStatus.Requested ||
-            expectedVersion is { } version && m.Version != version) throw ContractException.Conflict("move_out_not_pending_approval");
-        if (consent is not null)
-            await ApproveConsentedRoom(c, consent, t);
-        else
-        {
-            // A legacy request may only be approved without a recorded
-            // group snapshot when its sole member initiated it.
-            var contracts = await repository.RoomActiveContractsAsync(c.RoomId, t);
-            var roster = await ConsentRoster(contracts, Today, t);
-            if (contracts.Count != 1 || !roster.Select(r => r.UserId).Distinct().SequenceEqual([m.RequestedByUserId]))
-                throw ContractException.Conflict("move_out_consent_required");
-            m.Status = MoveOutStatus.Approved; m.ApprovedByUserId = Actor; m.ApprovedAt = clock.GetUtcNow(); m.Version++; MoveOutEvent(m, "Approved");
-            if (handoverRepository is not null)
-                await handoverRepository.EnsureMoveOutTaskAsync(c, m, Actor, clock.BusinessUtcNow(), t);
-        }
-        Audit("ContractMoveOutApproved", id); Remember(key, "terminate-approve", fingerprint, m.Id); return ConsentView(m, consent);
+            c.TenantUserId != m.RequestedByUserId || await repository.OpenRenewalAsync(c.Id, t) ||
+            expectedVersion is { } version && m.Version != version)
+            throw ContractException.Conflict("move_out_not_pending_approval");
+        m.Status = MoveOutStatus.Approved;
+        m.ApprovedByUserId = Actor;
+        m.ApprovedAt = clock.GetUtcNow();
+        m.Version++;
+        await SchedulePersonalTerminationAsync(c, m, t);
+        MoveOutEvent(m, m.Status == MoveOutStatus.Completed ? "PersonalTerminationCompletedByOwner" : "Approved");
+        Audit("ContractMoveOutApproved", id); Remember(key, "terminate-approve", fingerprint, m.Id); return View(m);
     }, t);
     public Task<MoveOutView> ScheduleInspectionAsync(Guid id, InspectionScheduleInput x, Guid key, CancellationToken t) => Mutate(id, [Roles.Owner, Roles.Staff], async c =>
     {
         var m = await repository.MoveOutAsync(id, t) ?? throw ContractException.Missing();
         if (await Replay(key, "inspection-schedule", new { id, x }, t) is not null) return View(m);
-        if (m.Status != MoveOutStatus.Approved || x.ScheduledAt < clock.BusinessUtcNow() || x.ScheduledAt.Offset != TimeSpan.Zero) throw ContractException.Invalid("invalid_inspection_schedule");
+        if (m.Status != MoveOutStatus.Approved || m.PendingReason == PersonalTerminationScheduled || x.ScheduledAt < clock.BusinessUtcNow() || x.ScheduledAt.Offset != TimeSpan.Zero) throw ContractException.Invalid("invalid_inspection_schedule");
         if (x.ExpectedVersion is { } version && version != m.Version) throw ContractException.Conflict("move_out_version_changed");
         var staff = x.StaffUserId ?? (user.IsInRole(Roles.Staff) ? Actor : (Guid?)null);
         if (staff == Guid.Empty || staff is { } assignee && (!await repository.ActiveUserInRoleAsync(assignee, Roles.Staff, t) || !await repository.StaffAssignedAsync(assignee, c.Room.LocationId, Today, t))) throw ContractException.Invalid("inspection_staff_not_assigned");
@@ -241,7 +248,7 @@ public sealed partial class ContractService
         {
             var m = await repository.MoveOutAsync(id, t) ?? throw ContractException.Missing();
             if (await Replay(key, "inspection", new { id, x }, t) is not null) return View(m);
-            if (m.Status != MoveOutStatus.Approved || Today < m.ProposedDate)
+            if (m.Status != MoveOutStatus.Approved || m.PendingReason == PersonalTerminationScheduled || Today < m.ProposedDate)
                 throw ContractException.Conflict("move_out_not_ready_for_inspection");
             if (m.InspectionStaffId is { } staff && staff != Actor) throw ContractException.Missing();
             if (x.ExpectedVersion is { } expected && expected != m.Version) throw ContractException.Conflict("move_out_version_changed");

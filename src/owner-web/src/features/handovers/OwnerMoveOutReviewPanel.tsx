@@ -26,6 +26,7 @@ import {
   type HandoverAsset,
   type InspectionPreparation,
   type MoveOutAutomaticCharge,
+  type MoveOutProposalSettlement,
 } from '../../../../../packages/client-core/src/contracts';
 import { ConfirmActionButton } from '../../components/common/ConfirmActionButton';
 import { MoneyField } from '../../components/common/MoneyField';
@@ -72,6 +73,7 @@ interface FinancialProposal {
   verifiedDeposit: string;
   sentAt: string;
   note?: string | null;
+  issuedSettlement?: MoveOutProposalSettlement | null;
   tenantFeedback?: {
     confirmed: boolean;
     reason: string;
@@ -98,7 +100,7 @@ interface ProposalPreview {
   items: ProposalSource[];
   automaticCharges?: MoveOutAutomaticCharge[] | null;
   latestProposal: FinancialProposal | null;
-  status: 'None' | 'PendingTenant' | 'Accepted' | 'Disputed' | 'Outdated';
+  status: 'None' | 'PendingTenant' | 'Accepted' | 'Disputed' | 'Outdated' | 'Issued';
 }
 
 /** Exact photo source rendered by /handovers?tab=handover; not a financial baseline. */
@@ -127,8 +129,9 @@ const roomCheckLabels: Record<string, string> = {
 };
 const statusLabels: Record<ProposalPreview['status'], string> = {
   None: 'Chưa gửi đề xuất',
-  PendingTenant: 'Đang chờ khách thuê duyệt',
-  Accepted: 'Khách thuê đã đồng ý',
+  PendingTenant: 'Chưa phát hành phí',
+  Accepted: 'Đã gửi phí',
+  Issued: 'Đã gửi phí',
   Disputed: 'Khách thuê yêu cầu xem xét lại',
   Outdated: 'Dữ liệu đã thay đổi',
 };
@@ -149,22 +152,23 @@ function moveOutProgress(
     case 'None':
       return { label: 'Chờ chủ trọ gửi phí', color: 'info' as const };
     case 'PendingTenant':
-      return { label: 'Chờ khách thuê xác nhận phí', color: 'info' as const };
+      return { label: 'Chưa phát hành phí', color: 'info' as const };
     case 'Disputed':
       return { label: 'Khách thuê yêu cầu điều chỉnh phí', color: 'warning' as const };
     case 'Outdated':
       if (proposal.latestProposal?.tenantFeedback?.confirmed)
-        return { label: 'Khách thuê đã đồng ý · Cần đối chiếu dữ liệu', color: 'warning' as const };
+        return { label: 'Cần đối chiếu dữ liệu phí', color: 'warning' as const };
       return { label: 'Cần đối chiếu dữ liệu phí', color: 'warning' as const };
+    case 'Issued':
     case 'Accepted': {
-      const settlement = proposal.latestProposal?.tenantFeedback?.settlement?.status;
+      const settlement = (proposal.latestProposal?.issuedSettlement ?? proposal.latestProposal?.tenantFeedback?.settlement)?.status;
       if (settlement === 'Payable')
-        return { label: 'Khách thuê đã đồng ý · Đã tạo khoản phải thu', color: 'success' as const };
+        return { label: 'Đã gửi phí · Đã tạo khoản phải thu', color: 'success' as const };
       if (settlement === 'RefundEligible')
-        return { label: 'Khách thuê đã đồng ý · Có tiền cọc cần hoàn', color: 'success' as const };
+        return { label: 'Đã gửi phí · Có tiền cọc cần hoàn', color: 'success' as const };
       if (settlement === 'Settled')
         return { label: 'Đã quyết toán phí trả phòng', color: 'success' as const };
-      return { label: 'Khách thuê đã đồng ý · Đang đối chiếu', color: 'info' as const };
+      return { label: 'Đã gửi phí · Đang đối chiếu', color: 'info' as const };
     }
   }
 }
@@ -692,16 +696,19 @@ export function OwnerMoveOutReviewPanel({
     refetchInterval: (query) =>
       (query.state.data as { status?: string } | undefined)?.status === 'Completed' ? false : 5000,
   });
-  const awaitingConsent = moveOut.data?.status === 'AwaitingConsent';
+
   const reviewingRequest =
-    moveOut.data?.status === 'Requested' || moveOut.data?.status === 'Rejected';
+    ['Requested', 'Rejected', 'AwaitingConsent'].includes(moveOut.data?.status ?? '');
+  const personalOnly = ['personal_termination_scheduled', 'personal_termination_completed'].includes(
+    moveOut.data?.pendingReason ?? '',
+  );
   const inspection = useQuery({
     queryKey: ['owner-move-out-inspections', id],
     queryFn: ({ signal }) => api.inspections(id, signal),
-    enabled: !!moveOut.data && !awaitingConsent && !reviewingRequest,
+    enabled: !!moveOut.data && !reviewingRequest && !personalOnly,
     refetchInterval: moveOut.data?.status === 'Completed' ? false : 5000,
   });
-  const working = moveOut.data?.status === 'Approved';
+  const working = moveOut.data?.status === 'Approved' && !personalOnly;
   const latest = working ? undefined : inspection.data?.[0];
   const workingDraft = useQuery({
     queryKey: ['owner-move-out-working-draft', id],
@@ -747,6 +754,8 @@ export function OwnerMoveOutReviewPanel({
   });
   const data = forced ? undefined : preview.data;
   const completed = moveOut.data?.status === 'Completed';
+  const issued = data?.status === 'Issued' || data?.status === 'Accepted';
+  const settlement = data?.latestProposal?.issuedSettlement ?? data?.latestProposal?.tenantFeedback?.settlement;
   const progress = forced
     ? {
         label: completed ? 'Đã trả phòng bắt buộc' : 'Trả phòng bắt buộc',
@@ -884,7 +893,7 @@ export function OwnerMoveOutReviewPanel({
   const locked =
     completed ||
     forced ||
-    data?.status === 'PendingTenant' ||
+    data?.status === 'Issued' || data?.status === 'Accepted' ||
     data?.latestProposal?.tenantFeedback?.confirmed === true;
   const shownTotal = locked
     ? vndInteger(data?.latestProposal?.totalCharges)
@@ -941,7 +950,7 @@ export function OwnerMoveOutReviewPanel({
         keys.get('financial-proposal', body),
       );
       keys.confirmed('financial-proposal', body);
-      setNotice('Đã gửi đề xuất khoản thu cho khách thuê xem và duyệt.');
+      setNotice('Đã gửi phí quyết toán cho khách thuê.');
       await refresh();
     } catch (cause) {
       setError(contractError(cause));
@@ -960,29 +969,21 @@ export function OwnerMoveOutReviewPanel({
     setChargeReason(existing?.reason ?? '');
   }
 
-  if (awaitingConsent) {
+  if (personalOnly) {
     return (
-      <Alert severity="info">
-        Yêu cầu cần đủ đồng thuận của các thành viên trước khi chủ trọ duyệt.
-      </Alert>
+      <Stack spacing={2}>
+        <Alert severity="success">
+          {moveOut.data?.pendingReason === 'personal_termination_completed'
+            ? 'Đã chấm dứt hợp đồng cá nhân.'
+            : 'Đã duyệt yêu cầu. Hợp đồng cá nhân sẽ chấm dứt vào ngày dự kiến; phòng vẫn còn hợp đồng thuê khác.'}
+        </Alert>
+        <TerminationReviewPanel id={id} api={api} ownerId={ownerId} embedded />
+      </Stack>
     );
   }
   if (reviewingRequest) {
-    const request = moveOut.data;
-    if (
-      request?.status === 'Requested' &&
-      (request.isGroupPrimary === false ||
-        (request.requiredConsents != null && request.receivedConsents !== request.requiredConsents))
-    ) {
-      return <Alert severity="info">Yêu cầu chưa đủ điều kiện để chủ trọ duyệt.</Alert>;
-    }
     return (
       <Stack spacing={2}>
-        {request?.status === 'Requested' && request.requiredConsents != null && (
-          <Alert severity="success">
-            Đã đồng thuận: {request.receivedConsents}/{request.requiredConsents} thành viên.
-          </Alert>
-        )}
         <TerminationReviewPanel
           id={id}
           api={api}
@@ -1011,14 +1012,14 @@ export function OwnerMoveOutReviewPanel({
       {notice && <Alert severity="success">{notice}</Alert>}
       {completed && (
         <Alert severity="success">
-          Trả phòng thành công. Máy chủ đã xác minh đủ khoản thanh toán, kết thúc hợp đồng và cập
-          nhật trạng thái phòng. Phòng không còn hợp đồng thuê khác sẽ chuyển sang Trống.
+          Trả phòng thành công. Máy chủ đã kết thúc hợp đồng và cập nhật trạng thái phòng.
+          Các nghĩa vụ tài chính chưa thanh toán vẫn được theo dõi.
         </Alert>
       )}
       {data?.status === 'Disputed' && (
         <Alert severity="warning">
           Khách thuê không đồng ý với đề xuất trước. Xem từng khoản có phản hồi bên dưới, kiểm tra
-          lại bằng chứng, sửa số tiền hoặc lý do thu rồi gửi một đề xuất mới để khách thuê xác nhận.
+          lại bằng chứng, sửa số tiền hoặc lý do thu rồi gửi phí đã cập nhật.
           {!!data.latestProposal?.tenantFeedback?.reason && (
             <Typography variant="body2" sx={{ mt: 0.5, whiteSpace: 'pre-wrap' }}>
               Phản hồi chung: {data.latestProposal.tenantFeedback.reason}
@@ -1027,20 +1028,20 @@ export function OwnerMoveOutReviewPanel({
         </Alert>
       )}
       {!completed &&
-        data?.status === 'Accepted' &&
-        data.latestProposal?.tenantFeedback?.settlement?.status === 'Payable' && (
+        issued &&
+        settlement?.status === 'Payable' && (
           <Alert severity="info">
-            Đã cấn trừ tiền cọc theo khoản phí hợp lệ. khách thuê được cấp thông tin thanh toán cho
+            Khách thuê được cấp thông tin thanh toán cho
             số còn phải trả{' '}
-            {formatContractMoney(data.latestProposal.tenantFeedback.settlement.payableAmount)}. Chỉ
+            {formatContractMoney(settlement.payableAmount)}. Chỉ
             chuyển sang đã thanh toán sau khi SePay xác minh giao dịch.
           </Alert>
         )}
-      {data?.status === 'Accepted' &&
-        data.latestProposal?.tenantFeedback?.settlement?.status === 'RefundEligible' && (
+      {issued &&
+        settlement?.status === 'RefundEligible' && (
           <Alert severity="info">
-            Khách thuê đã đồng ý và có thể gửi yêu cầu hoàn cọc{' '}
-            {formatContractMoney(data.latestProposal.tenantFeedback.settlement.refundAmount)}. chủ
+            Khách thuê có thể gửi yêu cầu hoàn cọc{' '}
+            {formatContractMoney(settlement.refundAmount)}. chủ
             trọ duyệt đơn và thực hiện hoàn từ sổ hoàn cọc đã đối chiếu, không chuyển khoản trùng.
           </Alert>
         )}
@@ -1376,14 +1377,14 @@ export function OwnerMoveOutReviewPanel({
                       sx={{ alignItems: 'center', justifyContent: 'space-between' }}
                     >
                       <Typography sx={{ fontWeight: 750 }}>
-                        {completed ? 'Số còn cần thu hoặc hoàn' : 'Chênh lệch dự kiến'}
+                        {completed ? 'Chênh lệch tại thời điểm phát hành' : 'Chênh lệch dự kiến'}
                       </Typography>
                       <Typography
                         variant="h6"
                         color={shownNet !== null && shownNet < 0n ? 'error.main' : 'success.main'}
                         sx={{ fontWeight: 800 }}
                       >
-                        {completed ? formatContractMoney('0') : signedMoney(shownNet)}
+                        {signedMoney(shownNet)}
                       </Typography>
                     </Stack>
                     {!completed && (
@@ -1429,8 +1430,8 @@ export function OwnerMoveOutReviewPanel({
                         />
                         <ConfirmActionButton
                           variant="contained"
-                          title="Gửi đề xuất cho khách thuê"
-                          description="Khách thuê sẽ xem từng khoản thu, lý do và chênh lệch sau khi chủ trọ rà soát. Khi khách thuê đã phản đối, đề xuất mới thay thế bản cũ để khách thuê phản hồi lại. Việc gửi không xác nhận tiền đã thanh toán hoặc hoàn tiền."
+                          title="Gửi phí quyết toán cho khách thuê"
+                          description="Phát hành phí quyết toán và các khoản cần thanh toán hoặc hoàn cọc theo kết quả máy chủ. Việc gửi không xác nhận tiền đã thanh toán hoặc hoàn tiền."
                           confirmationKey={
                             data.reference + ':' + JSON.stringify(entries) + ':' + note
                           }
@@ -1438,8 +1439,8 @@ export function OwnerMoveOutReviewPanel({
                           onConfirm={send}
                         >
                           {data.status === 'Disputed'
-                            ? 'Gửi lại khách thuê duyệt'
-                            : 'Gửi khách thuê duyệt'}
+                            ? 'Gửi lại phí'
+                            : 'Gửi phí quyết toán'}
                         </ConfirmActionButton>
                       </>
                     )}

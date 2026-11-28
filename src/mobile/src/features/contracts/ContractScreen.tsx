@@ -476,7 +476,7 @@ function LiveContractDetail({
   useWorkspaceHeaderRefresh(detail.reload, detail.loading, {
     onBack: (staffDraft || completedFlow) && onComplete ? onComplete : onBack,
     title: tenantHandoverOnly
-      ? 'Bàn giao / Trả phòng'
+      ? 'Bàn giao / Chấm dứt hợp đồng'
       : handoverOnly
         ? 'Bàn giao phòng'
         : detail.data?.contract.kind === 'Holding'
@@ -488,8 +488,6 @@ function LiveContractDetail({
   const signingMethods = useSigningMethods(api, role === 'Owner' || role === 'Tenant');
   const [selectedAction, setSelectedAction] = useState('');
   const [terminationRequested, setTerminationRequested] = useState(false);
-  const [consenting, setConsenting] = useState(false);
-  const consentLock = useRef(false);
   const [keys] = useState(() => mutationKeys(randomUUID));
   const [evidence, setEvidence] = useState<string[]>([]);
   const [evidenceText, setEvidenceText] = useState(''),
@@ -540,6 +538,7 @@ function LiveContractDetail({
           api={api}
           contract={c}
           role={role}
+          onBack={onBack}
           onUpdated={detail.reload}
           legacyFallback={
             ['Active', 'Terminated', 'Superseded'].includes(c.status) ? (
@@ -550,34 +549,13 @@ function LiveContractDetail({
       </>
     );
   }
+  const personalOnly = !!m && ['personal_termination_scheduled', 'personal_termination_completed'].includes(m.pendingReason);
   const tenantAwaitingMoveOutApproval =
     role === 'Tenant' &&
     !!m &&
-    (['Requested', 'AwaitingConsent', 'Rejected'].includes(m.status) || !!m.isForced);
-  async function submitConsent(confirmed: boolean) {
-    if (
-      !m ||
-      !(confirmed ? m.canConfirm : m.canReject) ||
-      m.version === undefined ||
-      consentLock.current
-    )
-      return;
-    consentLock.current = true;
-    setConsenting(true);
-    const body = { confirmed, expectedVersion: m.version };
-    const scope = id + '/move-out/consent';
-    try {
-      await api.mutate(id, 'move-out/consent', body, keys.get(scope, body));
-      keys.confirmed(scope, body);
-      detail.reload();
-    } catch (error) {
-      showError(contractError(error));
-      detail.reload();
-    } finally {
-      consentLock.current = false;
-      setConsenting(false);
-    }
-  }
+    (['Requested', 'AwaitingConsent', 'Rejected'].includes(m.status) ||
+      personalOnly ||
+      !!m.isForced);
   if (isMainOnboardingDraft(c) && ['Owner', 'Staff'].includes(role))
     return (
       <MainDraftScreen
@@ -670,7 +648,7 @@ function LiveContractDetail({
           {(
             [
               ['handover', 'Bàn giao'],
-              ['lifecycle', 'Trả phòng'],
+              ['lifecycle', 'Chấm dứt hợp đồng'],
             ] as const
           ).map(([key, label]) => (
             <Button
@@ -983,14 +961,14 @@ function LiveContractDetail({
       {section === 'lifecycle' && !m && terminationRequested && (
         <Box>
           <Heading title="Đã gửi yêu cầu chấm dứt trước hạn" />
-          <Text>Yêu cầu cần đủ đồng thuận của các thành viên trước khi chủ trọ duyệt.</Text>
+          <Text>Yêu cầu của bạn đang chờ chủ trọ duyệt.</Text>
         </Box>
       )}
       {section === 'lifecycle' && !m && !terminationAction && !terminationRequested && (
         <Box>
-          <Heading title={tenantHandoverOnly ? 'Trả phòng' : 'Gia hạn & trả phòng'} />
+          <Heading title={tenantHandoverOnly ? 'Chấm dứt hợp đồng' : 'Gia hạn & trả phòng'} />
           <Text>
-            Chưa có yêu cầu trả phòng. Các thao tác khả dụng hiển thị theo trạng thái và quyền tài
+            Chưa có yêu cầu chấm dứt hợp đồng. Các thao tác khả dụng hiển thị theo trạng thái và quyền tài
             khoản.
           </Text>
         </Box>
@@ -998,25 +976,13 @@ function LiveContractDetail({
       {section === 'lifecycle' && m && (
         <Box>
           <Heading
-            title={m.isForced ? 'Trả phòng bắt buộc' : 'Trả phòng'}
-            detail={text(m.status)}
+            title={m.isForced ? 'Trả phòng bắt buộc' : 'Chấm dứt hợp đồng'}
+            detail={m.pendingReason === 'personal_termination_scheduled' ? 'Đã duyệt · Chờ ngày chấm dứt' : text(m.status)}
           />
-          <Text>Ngày đề nghị: {displayContractDate(m.proposedDate)}</Text>
+          <Text>Ngày chấm dứt dự kiến: {displayContractDate(m.proposedDate)}</Text>
           {!!m.reason?.trim() && <Text>Lý do: {m.reason}</Text>}
-          {m.requiredConsents !== undefined && m.requiredConsents !== null && (
-            <Text>
-              Đã đồng thuận: {m.receivedConsents ?? 0}/{m.requiredConsents} thành viên
-            </Text>
-          )}
-          {role === 'Tenant' && m.canConfirm && (
-            <Action disabled={consenting} onPress={() => void submitConsent(true)}>
-              Đồng ý trả phòng
-            </Action>
-          )}
-          {role === 'Tenant' && m.canReject && (
-            <Button disabled={consenting} onPress={() => void submitConsent(false)}>
-              Hủy đồng thuận trả phòng
-            </Button>
+          {m.pendingReason === 'personal_termination_scheduled' && (
+            <Text>Hợp đồng sẽ tự chấm dứt vào ngày đã duyệt. Các hợp đồng khác trong phòng vẫn tiếp tục.</Text>
           )}
           {m.isForced && (
             <Text>Hồ sơ kiểm tra hiện trạng, không xác nhận quyết toán hoặc thanh toán.</Text>
@@ -1045,7 +1011,7 @@ function LiveContractDetail({
             ))}
         </Box>
       )}
-      {section === 'lifecycle' && role === 'Staff' && m?.status === 'Approved' && (
+      {section === 'lifecycle' && role === 'Staff' && m?.status === 'Approved' && !personalOnly && (
         <Box>
           <Heading
             title="Ảnh hiện trạng trả phòng"
@@ -1104,7 +1070,7 @@ function LiveContractDetail({
           </Text>
         </Box>
       )}
-      {section === 'lifecycle' && !tenantAwaitingMoveOutApproval && !!history.length && (
+      {section === 'lifecycle' && !personalOnly && !tenantAwaitingMoveOutApproval && !!history.length && (
         <Box>
           <Heading title="Lịch sử xem xét quyết toán" />
           {history.map((h) => (
@@ -1117,7 +1083,7 @@ function LiveContractDetail({
           ))}
         </Box>
       )}
-      {section === 'lifecycle' && m && !tenantAwaitingMoveOutApproval && (
+      {section === 'lifecycle' && m && !personalOnly && !tenantAwaitingMoveOutApproval && (
         <ContractLifecyclePanel
           api={api}
           id={id}

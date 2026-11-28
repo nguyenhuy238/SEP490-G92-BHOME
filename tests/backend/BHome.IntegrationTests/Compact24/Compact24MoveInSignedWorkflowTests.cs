@@ -241,19 +241,21 @@ public sealed partial class Compact24OwnerSetupTests
                  new HandoverReinspectionItem("Asset", AssetId: group.Id)])));
         Assert.Equal("ReinspectionRequested", inspection.Status);
         Assert.Equal("InProgress", inspection.MoveInTask!.Status);
+        var reinspectionQueue = await Read<TaskPage<TaskView>>(await staff.GetAsync(
+            "/api/v1/operational-tasks?category=MoveIn&actionableOnly=true&page=1&pageSize=100"));
+        var reinspectionTask = Assert.Single(reinspectionQueue.Items, item => item.Target?.ContractId == contractId);
+        Assert.Equal(inspection.ReinspectionHistory!.Last().RequestedAt, reinspectionTask.ReinspectionRequestedAt);
+        Assert.Equal(reinspectionTask.Id, reinspectionQueue.Items.First().Id);
         Assert.Equal("InProgress", inspection.MoveInTask.InventoryStatus);
         Assert.Equal(HttpStatusCode.Conflict, (await HandoverPost(staff, contractId,
             "handover/draft/resubmit", new HandoverDraftSubmit(inspection.Version))).StatusCode);
         // Reinspection belongs to the persisted Draft workflow; the legacy
         // evidence route must remain blocked once that workflow exists.
-        using var roomPhotoUpload = new ByteArrayContent(ReviewEvidenceImage());
-        roomPhotoUpload.Headers.ContentType = new("image/png");
-        var newRoomPhoto = (await Read<ContractId>(await staff.PostAsync(
-            $"/api/v1/contracts/{contractId}/handover/draft/evidence", roomPhotoUpload))).Id;
         var updatedRoom = await Read<HandoverDraftView>(await HandoverPost(staff, contractId,
             "handover/draft", new HandoverDraftWrite(inspection.Version,
                 RoomChecks: [new HandoverRoomCheck("doors_windows_locks", "Passed",
-                    "Đã xử lý và kiểm tra khóa", [newRoomPhoto])])));
+                    "Đã xử lý và kiểm tra khóa", [roomPhoto])])));
+        Assert.True(updatedRoom.ReinspectionItems!.Single(item => item.Kind == "RoomCheck").Rechecked);
         Assert.False(updatedRoom.ReinspectionItems!.Single(item => item.Kind == "Asset").Rechecked);
 
         var oldEvidenceVersion = (await staff.GetFromJsonAsync<MoveInInventoryView>(
@@ -262,36 +264,17 @@ public sealed partial class Compact24OwnerSetupTests
             taskRoute + $"/move-in-inventory/items/{group.Id}")
         {
             Content = JsonContent.Create(new MoveInInventoryItemWrite(oldEvidenceVersion,
-                4, "Good", "Đã đếm lại, nhưng chưa có ảnh mới", [proof.Id]))
+                4, "Good", "Đã đếm lại và dùng ảnh đã lưu", [proof.Id]))
         })
         {
             request.Headers.Add("Idempotency-Key", Guid.NewGuid().ToString());
             oldEvidenceVersion = (await Read<MoveInInventoryView>(
                 await staff.SendAsync(request))).Version;
         }
-        TaskEvidenceView replacementPhoto;
-        using (var upload = new HttpRequestMessage(HttpMethod.Put, taskRoute + "/evidence")
-        {
-            Content = new ByteArrayContent(ReviewEvidenceImage())
-        })
-        {
-            upload.Headers.Add("Idempotency-Key", Guid.NewGuid().ToString());
-            upload.Content.Headers.ContentType = new("image/png");
-            replacementPhoto = await Read<TaskEvidenceView>(await staff.SendAsync(upload));
-        }
-        Assert.NotEqual(proof.Id, replacementPhoto.Id);
         var inventoryAgain = (await staff.GetFromJsonAsync<MoveInInventoryView>(
             taskRoute + "/move-in-inventory"))!;
-        using (var request = new HttpRequestMessage(HttpMethod.Put,
-            taskRoute + $"/move-in-inventory/items/{group.Id}")
-        {
-            Content = JsonContent.Create(new MoveInInventoryItemWrite(inventoryAgain.Version,
-                4, "Good", "Kiểm tra lại đủ bốn ghế", [replacementPhoto.Id]))
-        })
-        {
-            request.Headers.Add("Idempotency-Key", Guid.NewGuid().ToString());
-            inventoryAgain = await Read<MoveInInventoryView>(await staff.SendAsync(request));
-        }
+        Assert.Equal(oldEvidenceVersion, inventoryAgain.Version);
+        Assert.Equal(proof.Id, Assert.Single(Assert.Single(inventoryAgain.Items).EvidenceIds!));
         using (var request = new HttpRequestMessage(HttpMethod.Post,
             taskRoute + "/move-in-inventory/complete")
         {
@@ -303,6 +286,7 @@ public sealed partial class Compact24OwnerSetupTests
         }
         Assert.Equal("Completed", inventoryAgain.Status);
         Assert.Equal("Good", inventoryAgain.Outcome);
+        Assert.Equal(proof.Id, Assert.Single(Assert.Single(inventoryAgain.Items).EvidenceIds!));
         var reconciled = (await staff.GetFromJsonAsync<HandoverDraftView>(
             $"/api/v1/contracts/{contractId}/handover/draft"))!;
         Assert.DoesNotContain("assets", reconciled.Missing);

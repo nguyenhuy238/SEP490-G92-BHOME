@@ -41,7 +41,8 @@ interface MoveOutInboxItem {
   locationName: string;
   status: string;
   proposedDate: string;
-  proposalStatus?: 'PendingTenant' | 'Accepted' | 'Disputed' | 'Outdated' | null;
+  pendingReason?: string | null;
+  proposalStatus?: 'PendingTenant' | 'Accepted' | 'Disputed' | 'Outdated' | 'Issued' | null;
   proposalSettlementStatus?: 'Payable' | 'RefundEligible' | 'Settled' | 'PendingOwnerReview' | null;
 }
 
@@ -53,8 +54,9 @@ interface MoveOutInboxPage {
 }
 
 interface MoveOutProposalProgress {
-  status: 'None' | 'PendingTenant' | 'Accepted' | 'Disputed' | 'Outdated';
+  status: 'None' | 'PendingTenant' | 'Accepted' | 'Disputed' | 'Outdated' | 'Issued';
   latestProposal?: {
+    issuedSettlement?: { status: MoveOutInboxItem['proposalSettlementStatus'] } | null;
     tenantFeedback?: {
       confirmed: boolean;
       settlement?: { status: MoveOutInboxItem['proposalSettlementStatus'] } | null;
@@ -63,7 +65,7 @@ interface MoveOutProposalProgress {
 }
 
 const moveOutStates = [
-  { value: 'AwaitingConsent', label: 'Chờ khách thuê đồng ý trả phòng' },
+
   { value: 'Requested', label: 'Chờ duyệt yêu cầu' },
   { value: 'Approved', label: 'Nhân viên đang xử lý' },
   { value: 'Inspected', label: 'Đã có kết quả nhân viên' },
@@ -78,6 +80,8 @@ function labelFor(status: string) {
 }
 
 function progressFor(item: MoveOutInboxItem) {
+  if (item.pendingReason === 'personal_termination_scheduled') return 'Đã duyệt · Chờ ngày chấm dứt';
+  if (item.pendingReason === 'personal_termination_completed') return 'Đã chấm dứt hợp đồng cá nhân';
   // Contract move-out and Tenant's fee decision advance independently. Show
   // the latest verified financial step instead of the earlier Staff handoff.
   if (item.status === 'Completed' || item.status === 'Settled') return labelFor(item.status);
@@ -88,16 +92,16 @@ function progressFor(item: MoveOutInboxItem) {
     item.status === 'AwaitingConsent'
   )
     return labelFor(item.status);
-  if (item.proposalStatus === 'Accepted') {
+  if (item.proposalStatus === 'Accepted' || item.proposalStatus === 'Issued') {
     if (item.proposalSettlementStatus === 'Payable')
-      return 'Khách thuê đã đồng ý · Đã tạo khoản phải thu';
+      return 'Đã gửi phí · Đã tạo khoản phải thu';
     if (item.proposalSettlementStatus === 'RefundEligible')
-      return 'Khách thuê đã đồng ý · Có tiền cọc cần hoàn';
+      return 'Đã gửi phí · Có tiền cọc cần hoàn';
     if (item.proposalSettlementStatus === 'Settled') return 'Đã quyết toán phí trả phòng';
-    return 'Khách thuê đã đồng ý · Đang đối chiếu';
+    return 'Đã gửi phí · Đang đối chiếu';
   }
   if (item.proposalStatus === 'Disputed') return 'Khách thuê yêu cầu điều chỉnh phí';
-  if (item.proposalStatus === 'PendingTenant') return 'Chờ khách thuê xác nhận phí';
+  if (item.proposalStatus === 'PendingTenant') return 'Chưa phát hành phí';
   if (item.proposalStatus === 'Outdated') return 'Cần đối chiếu dữ liệu phí';
   return item.status === 'Inspected' ? 'Chờ chủ trọ gửi phí' : labelFor(item.status);
 }
@@ -173,7 +177,7 @@ export function OwnerMoveOutInbox() {
                 { signal },
               );
               if (
-                !['None', 'PendingTenant', 'Accepted', 'Disputed', 'Outdated'].includes(
+                !['None', 'PendingTenant', 'Accepted', 'Disputed', 'Outdated', 'Issued'].includes(
                   proposal.status,
                 )
               )
@@ -181,7 +185,7 @@ export function OwnerMoveOutInbox() {
               results[contractId] = {
                 proposalStatus: proposal.status === 'None' ? null : proposal.status,
                 proposalSettlementStatus:
-                  proposal.latestProposal?.tenantFeedback?.settlement?.status ?? null,
+                  (proposal.latestProposal?.issuedSettlement ?? proposal.latestProposal?.tenantFeedback?.settlement)?.status ?? null,
               };
             } catch (cause) {
               if (signal.aborted) throw cause;

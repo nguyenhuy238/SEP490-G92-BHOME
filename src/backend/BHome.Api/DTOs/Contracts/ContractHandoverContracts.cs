@@ -92,6 +92,8 @@ public interface IContractHandoverRepository
     Task EnsureMoveInTaskAsync(Contract contract, Guid actor, DateTimeOffset now, CancellationToken t);
     Task<Guid[]> EnsureMoveInMeterBaselinesAsync(Guid contractId, Guid actor, DateTimeOffset now, CancellationToken t);
     Task EnsureMoveOutTaskAsync(Contract contract, ContractMoveOut moveOut, Guid actor, DateTimeOffset now, CancellationToken t);
+    Task<bool> CancelUnstartedMoveOutTaskAsync(Guid contractId, Guid actor, DateTimeOffset now, CancellationToken t) => Task.FromResult(true);
+    Task<bool> CanStartMoveOutTaskAsync(Guid contractId, CancellationToken t) => Task.FromResult(true);
     Task RequireMoveOutTaskStartedAsync(Guid contractId, Guid staffId, CancellationToken t);
     Task EnsureMoveOutTaskAssigneeAsync(Guid contractId, Guid? staffId, CancellationToken t);
     Task<MoveOutInspectionDraftState?> MoveOutInspectionDraftAsync(Guid contractId, CancellationToken t);

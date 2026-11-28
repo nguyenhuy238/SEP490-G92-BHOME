@@ -20,7 +20,6 @@ export function MeterCameraView({
   onClose,
   onUse,
   onRetake,
-  onRetry,
   onUseDemo,
 }: {
   camera: React.ReactNode;
@@ -38,7 +37,6 @@ export function MeterCameraView({
   onClose: () => void;
   onUse: () => void;
   onRetake: () => void;
-  onRetry?: () => void;
   onUseDemo?: () => void;
 }) {
   const blocked = disabled || working || requestingPermission;
@@ -48,7 +46,7 @@ export function MeterCameraView({
         <>
           <View
             style={{
-              height: compact ? 300 : 460,
+              width: '100%',
               borderRadius: 12,
               overflow: 'hidden',
               backgroundColor: c.ink,
@@ -102,8 +100,8 @@ export function MeterCameraView({
             </>
           )}
           {step === 2 && (
-            <Button disabled={blocked} onPress={onRetry ?? onUse}>
-              Thử lại OCR
+            <Button disabled={blocked} onPress={onRetake}>
+              Chụp lại
             </Button>
           )}
         </>
@@ -137,18 +135,12 @@ export function MeterCameraView({
         </>
       )}
       {onUseDemo && !preview && (
-        <View style={{ gap: 2 }}>
-          <Button
-            mode="outlined"
-            contentStyle={{ minHeight: 44 }}
-            disabled={blocked}
-            onPress={onUseDemo}
-          >
-            Dùng ảnh mẫu (test)
+        <View style={{ gap: 4 }}>
+          <Button mode="outlined" disabled={blocked} onPress={onUseDemo}>
+            Tạo ảnh mẫu
           </Button>
           <Text variant="bodySmall" style={{ color: c.muted }}>
-            Chỉ dùng trên web local. Ảnh mẫu không phải bằng chứng thật; phải kiểm tra chỉ số trước
-            khi xác nhận.
+            Chỉ kiểm thử trên web local. Ảnh mẫu có dấu DEMO, không phải ảnh công tơ thực tế.
           </Text>
         </View>
       )}

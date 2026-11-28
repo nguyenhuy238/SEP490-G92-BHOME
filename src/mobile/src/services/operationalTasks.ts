@@ -23,6 +23,7 @@ export interface OperationalTask {
   result: string | null;
   version: number;
   verifiedAt: string | null;
+  reinspectionRequestedAt?: string | null;
   target?: {
     roomId: string | null;
     assetId: string | null;

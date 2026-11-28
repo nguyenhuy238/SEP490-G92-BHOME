@@ -32,6 +32,7 @@ export function LiveCaptureCamera({
   onError,
   dark = false,
   showControls = true,
+  previewHeight,
   lensPreferenceRef,
   children,
 }: {
@@ -41,6 +42,7 @@ export function LiveCaptureCamera({
   onError: () => void;
   dark?: boolean;
   showControls?: boolean;
+  previewHeight?: number;
   lensPreferenceRef?: { current: string };
   children?: React.ReactNode;
 }) {
@@ -136,11 +138,17 @@ export function LiveCaptureCamera({
   const textColor = dark ? '#CBD5E1' : undefined;
   const focusMessage = settling ? 'Đang mở camera…' : cameraFocusMessage(focus, nativeFocus);
   return (
-    <View style={{ flex: 1 }}>
-      <View style={{ flex: 1, overflow: 'hidden' }}>
+    <View style={previewHeight ? { width: '100%' } : { flex: 1 }}>
+      <View
+        style={
+          previewHeight
+            ? { height: previewHeight, width: '100%', overflow: 'hidden' }
+            : { flex: 1, overflow: 'hidden' }
+        }
+      >
         <FocusCameraView
           ref={camera}
-          style={{ flex: 1 }}
+          style={{ flex: 1, width: '100%' }}
           facing="back"
           mode="picture"
           // SDK 58 maps off to continuousAutoFocus on iOS. Android uses CameraX AF.

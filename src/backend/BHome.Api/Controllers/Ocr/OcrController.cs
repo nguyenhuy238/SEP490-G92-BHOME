@@ -8,7 +8,7 @@ namespace BHome.Api.Controllers.Ocr;
 [ApiController]
 [Route("api/v1/ocr")]
 [ResponseCache(NoStore = true, Location = ResponseCacheLocation.None)]
-public sealed class OcrController(OcrWorkflowService workflow) : ControllerBase
+public sealed class OcrController(OcrWorkflowService workflow, IConfiguration configuration) : ControllerBase
 {
     // Binary body avoids ASP.NET multipart's automatic disk buffering of identity images.
     [HttpPost("identity/{residentId:guid}/{side}")]
@@ -28,5 +28,8 @@ public sealed class OcrController(OcrWorkflowService workflow) : ControllerBase
     [Consumes("image/jpeg", "image/png")]
     [RequestSizeLimit(5 * 1024 * 1024)]
     public async Task<ActionResult<OcrProposal>> Meter(Guid taskId, CancellationToken token)
-        => await workflow.MeterAsync(taskId, Request.Body, token);
+    {
+        if (!configuration.GetValue<bool>("Ocr:MeterRecognitionEnabled")) return NotFound();
+        return await workflow.MeterAsync(taskId, Request.Body, token);
+    }
 }

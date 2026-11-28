@@ -109,7 +109,8 @@ it('does not auto-complete an Owner-requested reinspection while the selected as
   };
   expect(readyToComplete([damaged])).toBe(true); // First-time inspection records issues.
   expect(readyToComplete([damaged], [item.id])).toBe(false); // Reinspection requires Good.
-  expect(readyToComplete([item], [item.id])).toBe(true); // Server still checks fresh proof.
+  expect(readyToComplete([item], [item.id])).toBe(false); // Old Good is not a saved recheck.
+  expect(readyToComplete([item], [item.id], [item.id])).toBe(true);
 });
 
 it('uses the Backend inventory routes, version and idempotency headers with zero-asset confirmation', async () => {

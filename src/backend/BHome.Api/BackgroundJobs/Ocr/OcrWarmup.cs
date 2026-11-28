@@ -11,10 +11,14 @@ internal sealed class OcrWarmup(OcrOptions options, Lazy<IOcrEngine> engine, IMe
     public Task StartAsync(CancellationToken cancellationToken)
     {
         cancellationToken.ThrowIfCancellationRequested();
-        if (options.Enabled) { _ = engine.Value; meterDetector.Warmup(cancellationToken); }
-        if (options.Enabled && options.MeterDetector.Enabled && options.MeterDetector.WaterDigitsEnabled) waterDigits.Warmup(cancellationToken);
-        if (options.Enabled) classifier.Warmup(cancellationToken);
-        if (options.Enabled) experimental.Warmup(cancellationToken);
+        if (options.Enabled) _ = engine.Value;
+        if (options.Enabled && options.MeterRecognitionEnabled)
+        {
+            meterDetector.Warmup(cancellationToken);
+            if (options.MeterDetector.Enabled && options.MeterDetector.WaterDigitsEnabled) waterDigits.Warmup(cancellationToken);
+            classifier.Warmup(cancellationToken);
+            experimental.Warmup(cancellationToken);
+        }
         return Task.CompletedTask;
     }
     public Task StopAsync(CancellationToken cancellationToken) => Task.CompletedTask;

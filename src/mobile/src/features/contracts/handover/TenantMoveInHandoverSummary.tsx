@@ -423,7 +423,7 @@ export function TenantMoveInHandoverSummary({
                 {detail.item === 'electricity' && (
                   <View style={styles.detailLine}>
                     <Text style={styles.rowLabel}>
-                      Điện:{' '}
+                      Chỉ số công tơ điện:{' '}
                       {draft.electricity
                         ? `${displayMeterReading(draft.electricity.value)} kWh`
                         : 'Chưa xác nhận'}
@@ -439,7 +439,7 @@ export function TenantMoveInHandoverSummary({
                 {detail.item === 'water' && (
                   <View style={styles.detailLine}>
                     <Text style={styles.rowLabel}>
-                      Nước:{' '}
+                      Chỉ số công tơ nước:{' '}
                       {draft.water
                         ? `${displayMeterReading(draft.water.value)} m³`
                         : 'Chưa xác nhận'}
@@ -613,7 +613,7 @@ export function TenantMoveInHandoverSummary({
           <View style={styles.separator} />
           {entry(
             'Điện và nước',
-            `Điện: ${displayMeterReading(draft.electricity?.value)} kWh · Nước: ${displayMeterReading(draft.water?.value)} m³`,
+            `Chỉ số công tơ điện: ${displayMeterReading(draft.electricity?.value)} kWh · Chỉ số công tơ nước: ${displayMeterReading(draft.water?.value)} m³`,
             'meters',
             'lightning-bolt-outline',
           )}

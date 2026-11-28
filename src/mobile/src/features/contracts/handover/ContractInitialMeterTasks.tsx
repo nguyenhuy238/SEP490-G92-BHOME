@@ -28,7 +28,7 @@ export function ContractInitialMeterTasks({
   contract: ContractView;
   integrated?: boolean;
   onOpenTask?: (taskId: string, label: string, utilityType: 0 | 1) => void;
-  /** Reload confirmed readings when a nested OCR task returns successfully. */
+  /** Reload confirmed readings when a nested meter task returns successfully. */
   refreshRevision?: number;
   /** Use the exact same meter capture UX for today's confirmed move-out Final readings. */
   purpose?: 0 | 2;
@@ -168,14 +168,14 @@ export function ContractInitialMeterTasks({
       {current &&
         !current.error &&
         ([0, 1] as const).map((type) => {
-          const label = type === 0 ? 'Điện' : 'Nước';
+          const label = type === 0 ? 'Công tơ điện' : 'Công tơ nước';
           const matches = current.tasks.filter((task) => task.utilityType === type);
           const task = matches.length === 1 ? matches[0] : null;
           return (
             <React.Fragment key={type}>
               {integrated ? (
                 <Row spread>
-                  <Text>{label}</Text>
+                  <Text>Chỉ số {label.toLowerCase()}</Text>
                   <Pill tone={task?.status === 2 ? 'green' : 'amber'}>
                     {task?.status === 2 ? 'Đã xác nhận' : 'Chưa xác nhận'}
                   </Pill>
@@ -189,7 +189,7 @@ export function ContractInitialMeterTasks({
               {matches.length === 0 && (
                 <Text>
                   {purpose === 2
-                    ? `Chưa có công tơ ${label.toLowerCase()} đang hoạt động hoặc nhiệm vụ Final hôm nay. Owner cần kiểm tra cấu hình công tơ nếu vẫn thiếu sau khi tải lại.`
+                    ? `Chưa có ${label.toLowerCase()} đang hoạt động hoặc nhiệm vụ Final hôm nay. Owner cần kiểm tra cấu hình công tơ nếu vẫn thiếu sau khi tải lại.`
                     : 'Chưa có bước xác nhận chỉ số đầu kỳ cho hợp đồng này.'}
                 </Text>
               )}

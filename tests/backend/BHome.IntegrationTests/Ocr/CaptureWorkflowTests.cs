@@ -41,7 +41,10 @@ public sealed class CaptureWorkflowTests : IClassFixture<CaptureFixture>
     {
         var w = await Workspace();
         var engine = new ProfileEngine();
-        using var host = fixture.Factory.WithWebHostBuilder(builder => builder.ConfigureTestServices(services =>
+        using var host = fixture.Factory.WithWebHostBuilder(builder => builder
+            .ConfigureAppConfiguration((_, config) => config.AddInMemoryCollection(
+                new Dictionary<string, string?> { ["Ocr:MeterRecognitionEnabled"] = "true" }))
+            .ConfigureTestServices(services =>
             services.AddSingleton<IOcrService>(_ => new LocalOcrService(new OcrOptions { Enabled = true },
                 new Lazy<IOcrEngine>(() => engine), NullLogger<LocalOcrService>.Instance))));
         using var client = host.CreateClient();
@@ -104,6 +107,7 @@ public sealed class CaptureWorkflowTests : IClassFixture<CaptureFixture>
             {
                 ["MobileDevelopment:Enabled"] = "true",
                 ["Ocr:Enabled"] = "true",
+                ["Ocr:MeterRecognitionEnabled"] = "true",
                 ["Ocr:TimeoutMilliseconds"] = "9000",
                 ["Ocr:ModelDirectory"] = Path.Combine(directory, ".tools/ocr-models"),
                 ["Ocr:ExperimentalMeter:Enabled"] = "true",
@@ -200,7 +204,10 @@ public sealed class CaptureWorkflowTests : IClassFixture<CaptureFixture>
         using var detector = new YoloMeterSceneDetector(options);
         using var digits = new YoloWaterDigitRecognizer(options);
         using var engine = new OnnxOcrEngine(options, new ImagePreprocessor(options), detector, waterDigits: digits);
-        using var host = fixture.Factory.WithWebHostBuilder(builder => builder.ConfigureTestServices(services =>
+        using var host = fixture.Factory.WithWebHostBuilder(builder => builder
+            .ConfigureAppConfiguration((_, config) => config.AddInMemoryCollection(
+                new Dictionary<string, string?> { ["Ocr:MeterRecognitionEnabled"] = "true" }))
+            .ConfigureTestServices(services =>
             services.AddSingleton<IOcrService>(_ => new LocalOcrService(options, new Lazy<IOcrEngine>(() => engine), NullLogger<LocalOcrService>.Instance))));
         using var client = host.CreateClient();
         // Each test host has its own signing key; authenticate on this host.
@@ -249,7 +256,10 @@ public sealed class CaptureWorkflowTests : IClassFixture<CaptureFixture>
     {
         var w = await Workspace();
         var task = await Create(w.Owner, "meter-tasks", new MeterTaskInput(w.Meter, ReadingPurpose.Initial, Today, null));
-        using var host = fixture.Factory.WithWebHostBuilder(builder => builder.ConfigureTestServices(services =>
+        using var host = fixture.Factory.WithWebHostBuilder(builder => builder
+            .ConfigureAppConfiguration((_, config) => config.AddInMemoryCollection(
+                new Dictionary<string, string?> { ["Ocr:MeterRecognitionEnabled"] = "true" }))
+            .ConfigureTestServices(services =>
             services.AddSingleton<IOcrService>(_ => new LocalOcrService(new OcrOptions { Enabled = true },
                 new Lazy<IOcrEngine>(() => new DigitsEngine()), NullLogger<LocalOcrService>.Instance))));
         using var client = host.CreateClient();
@@ -291,7 +301,10 @@ public sealed class CaptureWorkflowTests : IClassFixture<CaptureFixture>
         confirmation.EnsureSuccessStatusCode();
         var task = await Create(w.Owner, "meter-tasks", new MeterTaskInput(w.Meter, ReadingPurpose.Periodic,
             Today, new DateOnly(Today.Year, Today.Month, 1)));
-        using var host = fixture.Factory.WithWebHostBuilder(builder => builder.ConfigureTestServices(services =>
+        using var host = fixture.Factory.WithWebHostBuilder(builder => builder
+            .ConfigureAppConfiguration((_, config) => config.AddInMemoryCollection(
+                new Dictionary<string, string?> { ["Ocr:MeterRecognitionEnabled"] = "true" }))
+            .ConfigureTestServices(services =>
             services.AddSingleton<IOcrService>(_ => new LocalOcrService(new OcrOptions { Enabled = true },
                 new Lazy<IOcrEngine>(() => new DigitsEngine()), NullLogger<LocalOcrService>.Instance))));
         using var client = host.CreateClient();
@@ -435,6 +448,11 @@ public sealed class CaptureWorkflowTests : IClassFixture<CaptureFixture>
         var w = await Workspace();
         var initial = await Create(w.Owner, "meter-tasks", new MeterTaskInput(w.Meter, ReadingPurpose.Initial, Today.AddDays(-10), null));
         var initialEvidence = await Evidence(w.Staff, initial);
+        var confirmPath = $"/api/v1/capture/meter-tasks/{initial}/confirm";
+        Assert.Equal(HttpStatusCode.BadRequest, (await w.Staff.PostAsJsonAsync(confirmPath,
+            new { humanConfirmed = true, evidenceId = initialEvidence })).StatusCode);
+        Assert.Equal(HttpStatusCode.Conflict, (await w.Staff.PostAsJsonAsync(confirmPath,
+            new MeterConfirmation(true, 100m, Guid.Empty))).StatusCode);
         var response = await w.Staff.PostAsJsonAsync($"/api/v1/capture/meter-tasks/{initial}/confirm", new MeterConfirmation(true, 100, initialEvidence));
         Assert.Equal(HttpStatusCode.OK, response.StatusCode);
         var baseline = await response.Content.ReadFromJsonAsync<ConfirmedReading>(); Assert.Null(baseline!.Consumption);
@@ -491,17 +509,9 @@ public sealed class CaptureWorkflowTests : IClassFixture<CaptureFixture>
         var replacement = Image("128");
         using var ocr = new ByteArrayContent(replacement);
         ocr.Headers.ContentType = new("image/png");
-        // CI does not provision the optional real OCR models. Exercise the
-        // authorized retake endpoint with the same deterministic engine as
-        // the other OCR workflow tests instead of depending on local models.
-        using var host = fixture.Factory.WithWebHostBuilder(builder => builder.ConfigureTestServices(services =>
-            services.AddSingleton<IOcrService>(_ => new LocalOcrService(new OcrOptions { Enabled = true },
-                new Lazy<IOcrEngine>(() => new DigitsEngine()), NullLogger<LocalOcrService>.Instance))));
-        using var ocrClient = host.CreateClient();
-        ocrClient.DefaultRequestHeaders.Authorization = w.Staff.DefaultRequestHeaders.Authorization;
-        var recognized = await ocrClient.PostAsync($"/api/v1/ocr/meter-tasks/{periodic}", ocr);
-        Assert.True(recognized.IsSuccessStatusCode, await recognized.Content.ReadAsStringAsync());
-        Assert.True((await recognized.Content.ReadFromJsonAsync<OcrProposal>())!.RequiresConfirmation);
+        // Manual retake must remain available without OCR.
+        var recognized = await w.Staff.PostAsync($"/api/v1/ocr/meter-tasks/{periodic}", ocr);
+        Assert.Equal(HttpStatusCode.NotFound, recognized.StatusCode);
         var newProof = await Evidence(w.Staff, periodic, replacement);
         // Abandoning a retake leaves the original reading and image untouched.
         Assert.Equal(original, await w.Staff.GetFromJsonAsync<ConfirmedReading>($"/api/v1/capture/readings/{original.Id}"));
@@ -521,7 +531,9 @@ public sealed class CaptureWorkflowTests : IClassFixture<CaptureFixture>
         Assert.Equal(HttpStatusCode.Conflict, (await w.Staff.PostAsJsonAsync(route + "/confirm", request with { ConfirmedValue = 129m })).StatusCode);
         var after = (await w.Staff.GetFromJsonAsync<MeterTaskSummary>(route))!;
         Assert.Equal(task.Version + 1, after.Version);
-        Assert.False((await w.Staff.GetFromJsonAsync<MeterTaskSummary>($"/api/v1/capture/meter-tasks/{initial}"))!.CanCorrect);
+        var lockedBaseline = (await w.Staff.GetFromJsonAsync<MeterTaskSummary>($"/api/v1/capture/meter-tasks/{initial}"))!;
+        Assert.False(lockedBaseline.CanCorrect);
+        Assert.Equal("subsequent_reading", lockedBaseline.CorrectionLockReason);
         var image = await w.Staff.GetAsync($"/api/v1/capture/readings/{original.Id}/evidence");
         Assert.Equal(replacement, await image.Content.ReadAsByteArrayAsync());
     }

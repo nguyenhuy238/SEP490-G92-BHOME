@@ -174,8 +174,9 @@ export function ContractHandoverPanel({
             </Text>
           )}
           <Text>
-            Điện: {h.snapshot.electricity.value} · Nước: {h.snapshot.water.value} · chỉ số đã xác
-            nhận ngày {displayContractDate(h.snapshot.date)}
+            Chỉ số công tơ điện: {h.snapshot.electricity.value} · Chỉ số công tơ nước:{' '}
+            {h.snapshot.water.value} · chỉ số đã xác nhận ngày{' '}
+            {displayContractDate(h.snapshot.date)}
           </Text>
           <ContractEvidence api={api} contractId={sourceId} readingId={h.snapshot.electricity.id} />
           <ContractEvidence api={api} contractId={sourceId} readingId={h.snapshot.water.id} />

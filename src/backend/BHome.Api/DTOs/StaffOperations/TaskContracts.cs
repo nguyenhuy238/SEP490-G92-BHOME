@@ -62,7 +62,8 @@ public sealed record TaskView(Guid Id, Guid LocationId, string Kind, string Titl
     Guid? CurrentResponsibleStaffUserId, Guid? RecordedStaffUserId, bool ResponsibilityAvailable,
     string? Result, int Version, Guid? VerifiedByUserId, DateTimeOffset? VerifiedAt,
     DateTimeOffset CreatedAt, DateTimeOffset UpdatedAt,
-    [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] TaskTargetView? Target = null);
+    [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] TaskTargetView? Target = null,
+    [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] DateTimeOffset? ReinspectionRequestedAt = null);
 public sealed record TaskHistoryView(Guid Id, Guid ActorId, string Action, string Note, string ChangesJson,
     Guid? ResponsibleStaffUserId, DateTimeOffset OccurredAt, bool WasOverdue, int TaskVersion);
 public sealed record TaskActorView(Guid UserId, string DisplayName);

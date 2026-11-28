@@ -282,6 +282,31 @@ public sealed partial class Compact24OwnerSetupTests
         }
         var working = await StartRealMoveInTask(staff, host.Services, contract.Id, w.Staff.Id);
         Assert.Equal(read.Version, working.Version);
+        // Both contract opening values can be corrected during the working
+        // handover, with a fresh photograph and the exact current task version.
+        var meterTasks = (await staff.GetFromJsonAsync<BHome.Application.Ocr.MeterTaskSummary[]>(
+            "/api/v1/capture/meter-tasks"))!.Where(task => task.ContractId == contract.Id && task.Purpose == ReadingPurpose.Initial).ToArray();
+        Assert.Equal(2, meterTasks.Length);
+        foreach (var meterTask in meterTasks)
+        {
+            var path = $"/api/v1/capture/meter-tasks/{meterTask.Id}";
+            using var firstPhoto = new ByteArrayContent(ReviewEvidenceImage()); firstPhoto.Headers.ContentType = new("image/png");
+            var proof = await Read<BHome.Application.Ocr.IdResult>(await staff.PutAsync(path + "/evidence", firstPhoto));
+            var first = await Read<BHome.Application.Ocr.ConfirmedReading>(await staff.PostAsJsonAsync(path + "/confirm",
+                new BHome.Application.Ocr.MeterConfirmation(true, 100, proof.Id)));
+            var detail = (await staff.GetFromJsonAsync<BHome.Application.Ocr.MeterTaskSummary>(path))!;
+            Assert.True(detail.CanCorrect);
+            Assert.Null(detail.CorrectionLockReason);
+            using var replacementPhoto = new ByteArrayContent(ReviewEvidenceImage()); replacementPhoto.Headers.ContentType = new("image/png");
+            var replacement = await Read<BHome.Application.Ocr.IdResult>(await staff.PutAsync(path + "/evidence", replacementPhoto));
+            Assert.NotEqual(proof.Id, replacement.Id);
+            var corrected = await Read<BHome.Application.Ocr.ConfirmedReading>(await staff.PostAsJsonAsync(path + "/confirm",
+                new BHome.Application.Ocr.MeterConfirmation(true, 101, replacement.Id, detail.Version)));
+            Assert.Equal(first.Id, corrected.Id);
+            Assert.Equal(101, corrected.ConfirmedValue);
+            Assert.Null(corrected.Consumption);
+            Assert.Equal(MeterReadingStatus.Corrected, corrected.Status);
+        }
         foreach (var input in new[]
         {
             new HandoverDraftWrite(read.Version, RoomCondition: "Thiếu ảnh tổng quan"),

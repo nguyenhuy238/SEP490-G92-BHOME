@@ -1,17 +1,17 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { Modal, ScrollView, StyleSheet, View, useWindowDimensions } from 'react-native';
-import { Button, Checkbox, Icon, Text, TextInput, TouchableRipple } from 'react-native-paper';
+import { Button, Icon, Text, TouchableRipple } from 'react-native-paper';
 import {
   contractError,
   formatContractMoney,
-  mutationKeys,
+
   type ContractClient,
   type MoveOutProposalCharge,
-  type MoveOutProposalDisputedItem,
+
   type MoveOutProposalPreview,
 } from '../../../../../../packages/client-core/src/contracts';
 import { Action, Pill } from '../../../components/WorkspaceKit';
-import { randomUUID } from '../../../lib/randomUUID';
+
 import { roomHandoverChecks } from '../../../services/moveInHandover';
 import { colors } from '../../../theme/theme';
 import { useWorkspace } from '../../workspace/WorkspaceProvider';
@@ -19,7 +19,7 @@ import { ContractEvidence } from '../ContractEvidence';
 import { TenantMoveOutExcessPayment } from './TenantMoveOutExcessPayment';
 
 type ProposalItem = MoveOutProposalCharge;
-type DisputedItem = MoveOutProposalDisputedItem;
+
 type ProposalView = MoveOutProposalPreview;
 
 type DisplayState = {
@@ -30,12 +30,6 @@ type DisplayState = {
   error: string;
 };
 
-type ReconcileState = {
-  api: ContractClient;
-  contractId: string;
-  proposalId: string;
-  status: 'running' | 'failed';
-};
 
 const styles = StyleSheet.create({
   root: { gap: 14, minWidth: 0 },
@@ -315,27 +309,12 @@ export function TenantMoveOutProposalPanel({
 }) {
   const [revision, setRevision] = useState(0);
   const [snapshot, setSnapshot] = useState<DisplayState | null>(null);
-  const [selection, setSelection] = useState<{
-    proposalId: string;
-    reference: string;
-    kind: 'accept' | 'dispute';
-  } | null>(null);
-  const [reason, setReason] = useState('');
-  const [disputedItems, setDisputedItems] = useState<Record<number, string>>({});
-  const [confirmed, setConfirmed] = useState(false);
   const [detail, setDetail] = useState<{ proposalId: string; index: number } | null>(null);
-  const [error, setError] = useState('');
-  const [submitting, setSubmitting] = useState(false);
-  const [reconcileState, setReconcileState] = useState<ReconcileState | null>(null);
   const [moveOutProgress, setMoveOutProgress] = useState<{
     api: ContractClient;
     contractId: string;
     status: string;
   } | null>(null);
-  const lock = useRef(false);
-  const keys = useRef(mutationKeys(randomUUID));
-  const reconcileAttempts = useRef({ api, contractId, proposalIds: new Set<string>() });
-  const isMounted = useRef(false);
   const onChangedRef = useRef(onChanged);
   const completedRef = useRef<string | null>(null);
   const { width } = useWindowDimensions();
@@ -345,14 +324,12 @@ export function TenantMoveOutProposalPanel({
     onChangedRef.current = onChanged;
   }, [onChanged]);
   useEffect(() => {
-    isMounted.current = true;
-    return () => {
-      isMounted.current = false;
-    };
-  }, []);
-  useEffect(() => {
     const controller = new AbortController();
-    void api.moveOutProposal(contractId, controller.signal).then(
+    let loading = false;
+    const refresh = () => {
+      if (loading) return;
+      loading = true;
+      void api.moveOutProposal(contractId, controller.signal).then(
       (view) => {
         if (!controller.signal.aborted) setSnapshot({ api, contractId, revision, view, error: '' });
       },
@@ -360,8 +337,14 @@ export function TenantMoveOutProposalPanel({
         if (!controller.signal.aborted)
           setSnapshot({ api, contractId, revision, view: null, error: contractError(cause) });
       },
-    );
-    return () => controller.abort();
+      ).finally(() => { loading = false; });
+    };
+    refresh();
+    const timer = setInterval(refresh, 5000);
+    return () => {
+      controller.abort();
+      clearInterval(timer);
+    };
   }, [api, contractId, revision]);
 
   const current =
@@ -369,10 +352,10 @@ export function TenantMoveOutProposalPanel({
       ? snapshot
       : null;
   const proposal = current?.view?.latestProposal;
-  const proposalId = proposal?.id;
-  const viewStatus = current?.view?.status;
-  const feedbackConfirmed = proposal?.tenantFeedback?.confirmed;
-  const settlementStatus = proposal?.tenantFeedback?.settlement?.status;
+
+  const issued = current?.view?.status === 'Issued' || current?.view?.status === 'Accepted';
+  const settlement = proposal?.issuedSettlement ?? proposal?.tenantFeedback?.settlement;
+  const settlementStatus = settlement?.status;
   const completed =
     moveOutProgress?.api === api &&
     moveOutProgress.contractId === contractId &&
@@ -386,7 +369,7 @@ export function TenantMoveOutProposalPanel({
   // authoritative move-out status rather than continuing to display its
   // negative "expected balance" as though the Tenant still owes money.
   useEffect(() => {
-    if (feedbackConfirmed !== true || settlementStatus !== 'Payable' || completed) return;
+    if (!issued || completed) return;
     const controller = new AbortController();
     const refresh = () => {
       void api.moveOut(contractId, controller.signal).then(
@@ -405,51 +388,7 @@ export function TenantMoveOutProposalPanel({
       controller.abort();
       clearInterval(timer);
     };
-  }, [api, contractId, feedbackConfirmed, settlementStatus, completed]);
-  const settlementReason = proposal?.tenantFeedback?.settlement?.reason;
-  const legacyReconcileEligible =
-    !!proposalId &&
-    (viewStatus === 'Accepted' || viewStatus === 'Outdated') &&
-    feedbackConfirmed === true &&
-    settlementStatus === 'PendingOwnerReview' &&
-    settlementReason === 'owner_confirmed_inspection_required';
-  useEffect(() => {
-    if (
-      reconcileAttempts.current.api !== api ||
-      reconcileAttempts.current.contractId !== contractId
-    )
-      reconcileAttempts.current = { api, contractId, proposalIds: new Set<string>() };
-    if (!legacyReconcileEligible || !proposalId) return;
-    const attempts = reconcileAttempts.current;
-    // A legacy Owner-review gate can be recovered without asking the Tenant to
-    // consent again. Other financial/evidence blockers stay under Owner review.
-    if (attempts.proposalIds.has(proposalId)) return;
-    attempts.proposalIds.add(proposalId);
-    const body = { proposalId };
-    setReconcileState({ api, contractId, proposalId, status: 'running' });
-    // Do not cancel a financial POST on screen re-render/navigation. The server
-    // handles repeat calls atomically by contract and the accepted proposal ID.
-    void api.reconcileMoveOutProposal(contractId, body).then(
-      () => {
-        if (!isMounted.current || reconcileAttempts.current !== attempts) return;
-        setReconcileState(null);
-        setRevision((value) => value + 1);
-        onChangedRef.current();
-      },
-      () => {
-        if (!isMounted.current || reconcileAttempts.current !== attempts) return;
-        setReconcileState({ api, contractId, proposalId, status: 'failed' });
-      },
-    );
-  }, [api, contractId, legacyReconcileEligible, proposalId]);
-  const activeReconcile =
-    reconcileState?.api === api &&
-    reconcileState.contractId === contractId &&
-    reconcileState.proposalId === proposalId
-      ? reconcileState
-      : null;
-  const canRespond =
-    !!proposal && current?.view?.status === 'PendingTenant' && !current.view.forced;
+  }, [api, contractId, issued, settlementStatus, completed]);
   const detailItem =
     detail && detail.proposalId === proposal?.id ? proposal?.items[detail.index] : null;
   // A superseded proposal must never borrow inspection details from the newer source.
@@ -459,96 +398,17 @@ export function TenantMoveOutProposalPanel({
       : null;
   const currentItemLabels =
     current?.view?.status !== 'Outdated' ? (current?.view ?? undefined) : undefined;
-  const decision =
-    selection &&
-    selection.proposalId === proposal?.id &&
-    selection.reference === current?.view?.reference
-      ? selection.kind
-      : null;
-
-  function choose(kind: 'accept' | 'dispute') {
-    if (!canRespond || !proposal || !current?.view) return;
-    setSelection({ proposalId: proposal.id, reference: current.view.reference, kind });
-    setConfirmed(false);
-    setReason('');
-    setDisputedItems({});
-    setError('');
-  }
-
-  const disputedCharges: DisputedItem[] = Object.entries(disputedItems).flatMap(([index, note]) => {
-    const item = proposal?.items[Number(index)];
-    return item
-      ? [
-          {
-            kind: item.kind,
-            assetId: item.assetId ?? null,
-            roomCheckCode: item.roomCheckCode ?? null,
-            accessType: item.accessType ?? null,
-            reason: note.trim(),
-          },
-        ]
-      : [];
-  });
-  const disputeComplete =
-    Object.values(disputedItems).every((note) => !!note.trim()) &&
-    (disputedCharges.length > 0 || !!reason.trim()) &&
-    reason.trim().length <= 2000;
-
-  async function submit(accept: boolean) {
-    if (
-      lock.current ||
-      !canRespond ||
-      !current?.view ||
-      decision !== (accept ? 'accept' : 'dispute')
-    )
-      return;
-    if (accept && !confirmed) {
-      setError('Hãy xác nhận bạn đã đọc toàn bộ đề xuất trước khi đồng ý.');
-      return;
-    }
-    if (!accept && !disputeComplete) {
-      setError('Chọn khoản chưa đồng ý và ghi rõ lý do, tối đa 2.000 ký tự cho toàn bộ phản hồi.');
-      return;
-    }
-    const body = {
-      proposalId: proposal.id,
-      expectedReference: current.view.reference,
-      confirmed: accept,
-      reason: accept ? '' : reason.trim(),
-      ...(accept ? {} : { disputedItems: disputedCharges }),
-    };
-    const scope = `${contractId}/move-out/proposal/tenant-feedback`;
-    lock.current = true;
-    setSubmitting(true);
-    setError('');
-    try {
-      await api.respondMoveOutProposal(contractId, body, keys.current.get(scope, body));
-      keys.current.confirmed(scope, body);
-      setSelection(null);
-      setReason('');
-      setDisputedItems({});
-      setConfirmed(false);
-      setRevision((value) => value + 1);
-      onChanged();
-    } catch (cause) {
-      setError(contractError(cause));
-    } finally {
-      lock.current = false;
-      setSubmitting(false);
-    }
-  }
-
   const positive = !!proposal && /^\+?[1-9]/.test(proposal.signedBalance);
   const negative = !!proposal && /^-[1-9]/.test(proposal.signedBalance);
 
   return (
     <View style={styles.root}>
       <View style={styles.statusCard}>
-        <Text style={styles.title}>Đề xuất quyết toán</Text>
+        <Text style={styles.title}>Phí quyết toán</Text>
         <View style={styles.statusRow}>
           <Pill
             tone={
-              completed || current?.view?.status === 'Accepted'
+              completed || issued
                 ? 'green'
                 : current?.view?.status === 'PendingTenant'
                   ? 'amber'
@@ -562,20 +422,20 @@ export function TenantMoveOutProposalPanel({
                 : !proposal
                   ? 'Chưa có đề xuất'
                   : current.view?.status === 'PendingTenant'
-                    ? 'Chờ bạn phản hồi'
-                    : current.view?.status === 'Accepted'
-                      ? 'Bạn đã đồng ý'
+                    ? 'Chưa phát hành phí'
+                    : issued
+                      ? 'Đã gửi phí quyết toán'
                       : current.view?.status === 'Disputed'
-                        ? 'Đã yêu cầu xem lại'
+                        ? 'Cần cập nhật'
                         : 'Cần cập nhật'}
           </Pill>
-          {canRespond && <Text style={styles.subtle}>Xem từng khoản trước khi trả lời</Text>}
         </View>
         {!!current?.error && <Text style={styles.error}>{current.error}</Text>}
+        <Button compact onPress={() => setRevision((value) => value + 1)}>Tải lại phí quyết toán</Button>
         {current?.view && !proposal && (
           <Text style={styles.subtle}>Owner chưa gửi đề xuất quyết toán.</Text>
         )}
-        {!completed && current?.view?.status === 'Outdated' && !legacyReconcileEligible && (
+        {!completed && current?.view?.status === 'Outdated' && (
           <Text style={styles.error}>Đề xuất cũ đã thay đổi. Vui lòng chờ Owner gửi bản mới.</Text>
         )}
       </View>
@@ -584,8 +444,8 @@ export function TenantMoveOutProposalPanel({
         <View style={styles.statusCard}>
           <Text style={[styles.title, { color: colors.green }]}>Trả phòng thành công</Text>
           <Text style={styles.note}>
-            Khoản phải thu đã được máy chủ xác minh thanh toán đủ. Hợp đồng đã kết thúc; phòng không
-            có hợp đồng thuê khác được chuyển về trạng thái Trống.
+            Máy chủ đã xác nhận kết thúc hợp đồng và cập nhật trạng thái phòng. Các nghĩa vụ chưa
+            thanh toán vẫn được theo dõi theo kết quả quyết toán.
           </Text>
         </View>
       )}
@@ -653,16 +513,10 @@ export function TenantMoveOutProposalPanel({
                 label={completed ? 'Khoản phải thu khác lúc đề xuất' : 'Khoản phải thu còn nợ'}
                 amount={proposal.existingOutstanding}
               />
-              {completed && (
-                <MoneyLine
-                  label="Khoản đã xác minh thanh toán"
-                  amount={proposal.tenantFeedback?.settlement?.payableAmount ?? '0'}
-                />
-              )}
               <View style={styles.balance}>
                 <Text style={styles.balanceLabel}>
                   {completed
-                    ? 'Không còn phải thanh toán'
+                    ? 'Chênh lệch tại thời điểm phát hành'
                     : negative
                       ? 'Dự kiến cần thanh toán thêm'
                       : positive
@@ -679,7 +533,7 @@ export function TenantMoveOutProposalPanel({
                   adjustsFontSizeToFit
                   minimumFontScale={0.65}
                 >
-                  {completed ? formatContractMoney('0') : signedMoney(proposal.signedBalance)}
+                  {signedMoney(proposal.signedBalance)}
                 </Text>
                 <Text style={styles.subtle}>
                   Cọc đã xác minh: {formatContractMoney(proposal.verifiedDeposit)}
@@ -693,48 +547,27 @@ export function TenantMoveOutProposalPanel({
             )}
           </View>
 
-          {proposal.tenantFeedback && (
-            <View style={styles.statusCard}>
-              <Text style={styles.sectionTitle}>Phản hồi của bạn</Text>
-              <Text style={styles.note}>
-                {proposal.tenantFeedback.confirmed
-                  ? 'Đã đồng ý với đề xuất'
-                  : 'Đã yêu cầu Owner xem lại'}
-              </Text>
-              {!!proposal.tenantFeedback.reason && (
-                <Text style={styles.subtle}>{proposal.tenantFeedback.reason}</Text>
-              )}
-              {proposal.tenantFeedback.disputedItems?.map((item, index) => (
-                <Text
-                  key={`${item.kind}:${item.assetId ?? item.roomCheckCode ?? item.accessType}:${index}`}
-                  style={styles.subtle}
-                >
-                  {proposalItemName({ ...item, amount: '0' }, currentItemLabels)}: {item.reason}
-                </Text>
-              ))}
-            </View>
-          )}
 
-          {current.view.status === 'Accepted' &&
-            proposal.tenantFeedback?.settlement?.status === 'RefundEligible' &&
-            /^[1-9]\d*(?:\.0+)?$/.test(proposal.tenantFeedback.settlement.refundAmount) && (
+          {!completed && issued &&
+            settlement?.status === 'RefundEligible' &&
+            /^[1-9]\d*(?:\.0+)?$/.test(settlement.refundAmount) && (
               <View style={styles.statusCard}>
                 <Text style={styles.sectionTitle}>Đề nghị hoàn tiền cọc</Text>
                 <Text style={styles.note}>
-                  Bạn đã xác nhận đề xuất. Có thể gửi yêu cầu hoàn{' '}
-                  {formatContractMoney(proposal.tenantFeedback.settlement.refundAmount)} cho Owner
+                  Bạn có thể gửi yêu cầu hoàn{' '}
+                  {formatContractMoney(settlement.refundAmount)} cho Owner
                   xem xét.
                 </Text>
                 <Action
                   onPress={() =>
                     go('refund-requests', {
                       sourceContractId: contractId,
-                      amount: proposal.tenantFeedback!.settlement!.refundAmount.replace(
+                      amount: settlement!.refundAmount.replace(
                         /\.0+$/,
                         '',
                       ),
                       moveOutProposalId: proposal.id,
-                      reason: 'Đề nghị hoàn cọc sau khi xác nhận quyết toán trả phòng.',
+                      reason: 'Đề nghị hoàn cọc theo quyết toán trả phòng.',
                     })
                   }
                 >
@@ -744,16 +577,16 @@ export function TenantMoveOutProposalPanel({
             )}
 
           {!completed &&
-            current.view.status === 'Accepted' &&
-            proposal.tenantFeedback?.settlement?.status === 'Payable' &&
+            issued &&
+            settlement?.status === 'Payable' &&
             !current.view.forced &&
-            (proposal.tenantFeedback.settlement.payableReceivables?.length ?? 0) > 1 && (
+            (settlement.payableReceivables?.length ?? 0) > 0 && (
               <View style={styles.section}>
                 <MoneyLine
                   label="Tổng cần thanh toán"
-                  amount={proposal.tenantFeedback.settlement.payableAmount}
+                  amount={settlement.payableAmount}
                 />
-                {proposal.tenantFeedback.settlement.payableReceivables?.map((charge) => (
+                {settlement.payableReceivables?.map((charge) => (
                   <TenantMoveOutExcessPayment
                     key={charge.id}
                     contractId={contractId}
@@ -765,19 +598,26 @@ export function TenantMoveOutProposalPanel({
               </View>
             )}
           {!completed &&
-            current.view.status === 'Accepted' &&
+            issued &&
             !current.view.forced &&
-            proposal.tenantFeedback?.settlement?.status === 'Payable' &&
-            proposal.tenantFeedback.settlement.payableReceivableId &&
-            /^[1-9]\d*(?:\.0+)?$/.test(proposal.tenantFeedback.settlement.payableAmount) && (
+            settlement?.status === 'Payable' &&
+            !settlement.payableReceivables?.length &&
+            settlement.payableReceivableId &&
+            /^[1-9]\d*(?:\.0+)?$/.test(settlement.payableAmount) && (
               <TenantMoveOutExcessPayment
                 contractId={contractId}
-                chargeId={proposal.tenantFeedback.settlement.payableReceivableId}
-                payableAmount={proposal.tenantFeedback.settlement.payableAmount}
+                chargeId={settlement.payableReceivableId}
+                payableAmount={settlement.payableAmount}
               />
             )}
-          {current.view.status === 'Accepted' &&
-            proposal.tenantFeedback?.settlement?.status === 'Settled' && (
+          {issued && settlement?.status === 'PendingOwnerReview' && (
+            <View style={styles.statusCard}>
+              <Text style={styles.sectionTitle}>Đang chờ đối chiếu quyết toán</Text>
+              <Text style={styles.subtle}>Chủ trọ cần hoàn tất đối chiếu trước khi khoản thanh toán hoặc hoàn cọc xuất hiện.</Text>
+            </View>
+          )}
+          {issued &&
+            settlement?.status === 'Settled' && (
               <View style={styles.statusCard}>
                 <Text style={styles.note}>
                   Đã đối chiếu xong phí trả phòng và tiền cọc. Không còn khoản cần thanh toán hoặc
@@ -785,145 +625,9 @@ export function TenantMoveOutProposalPanel({
                 </Text>
               </View>
             )}
-          {(current.view.status === 'Accepted' || legacyReconcileEligible) &&
-            (!proposal.tenantFeedback?.settlement ||
-              proposal.tenantFeedback.settlement.status === 'PendingOwnerReview') && (
-              <View style={styles.statusCard}>
-                <Text style={styles.sectionTitle}>
-                  {legacyReconcileEligible && activeReconcile?.status === 'running'
-                    ? 'Đang tự động hoàn tất quyết toán'
-                    : 'Đang chờ đối chiếu quyết toán'}
-                </Text>
-                {legacyReconcileEligible && activeReconcile?.status === 'running' ? (
-                  <Text style={styles.subtle}>
-                    Hệ thống đang kiểm tra lại phí và cấn trừ cọc đã được xác nhận để cấp mã thanh
-                    toán chính xác.
-                  </Text>
-                ) : (
-                  <Text style={styles.subtle}>
-                    {legacyReconcileEligible && activeReconcile?.status === 'failed'
-                      ? 'Chưa thể hoàn tất đối chiếu tự động. Đề xuất đã đồng ý vẫn được lưu; khoản thanh toán sẽ chỉ xuất hiện khi máy chủ xác minh xong.'
-                      : 'Owner cần kiểm tra các khoản thu và cấn trừ cọc trước khi hệ thống có thể cấp mã thanh toán hoặc xác nhận số tiền hoàn.'}
-                  </Text>
-                )}
-              </View>
-            )}
-
-          {canRespond && (
-            <View style={styles.actions}>
-              {!decision && (
-                <>
-                  <Action disabled={submitting} onPress={() => choose('accept')}>
-                    Đồng ý với đề xuất
-                  </Action>
-                  <Action secondary disabled={submitting} onPress={() => choose('dispute')}>
-                    Yêu cầu xem xét lại
-                  </Action>
-                </>
-              )}
-              {decision === 'accept' && (
-                <View style={styles.feedbackForm}>
-                  <Text style={styles.sectionTitle}>Xác nhận ý kiến</Text>
-                  <Checkbox.Item
-                    label="Tôi đã xem các khoản thu và đồng ý"
-                    status={confirmed ? 'checked' : 'unchecked'}
-                    onPress={() => setConfirmed((value) => !value)}
-                    position="leading"
-                    style={styles.checkbox}
-                    labelStyle={styles.note}
-                    disabled={submitting}
-                  />
-                  <Action disabled={submitting || !confirmed} onPress={() => void submit(true)}>
-                    Gửi xác nhận đồng ý
-                  </Action>
-                  <Button
-                    disabled={submitting}
-                    onPress={() => {
-                      setSelection(null);
-                      setConfirmed(false);
-                    }}
-                  >
-                    Quay lại
-                  </Button>
-                </View>
-              )}
-              {decision === 'dispute' && (
-                <View style={styles.feedbackForm}>
-                  <Text style={styles.sectionTitle}>Yêu cầu Owner xem lại</Text>
-                  <Text style={styles.subtle}>
-                    Chọn từng khoản chưa đồng ý và ghi lý do để Owner kiểm tra, điều chỉnh rồi gửi
-                    lại.
-                  </Text>
-                  {proposal.items.map((item, index) => (
-                    <View key={`${proposal.id}:dispute:${index}`} style={styles.section}>
-                      <Checkbox.Item
-                        label={`${proposalItemName(item, currentItemLabels)} · ${formatContractMoney(item.amount)}`}
-                        status={Object.hasOwn(disputedItems, index) ? 'checked' : 'unchecked'}
-                        onPress={() =>
-                          setDisputedItems((currentItems) => {
-                            const next = { ...currentItems };
-                            if (Object.hasOwn(next, index)) delete next[index];
-                            else next[index] = '';
-                            return next;
-                          })
-                        }
-                        position="leading"
-                        style={styles.checkbox}
-                        labelStyle={styles.note}
-                        disabled={submitting}
-                      />
-                      {Object.hasOwn(disputedItems, index) && (
-                        <TextInput
-                          mode="outlined"
-                          multiline
-                          label={`Lý do chưa đồng ý ${proposalItemName(item, currentItemLabels)}`}
-                          value={disputedItems[index]}
-                          onChangeText={(value) =>
-                            setDisputedItems((currentItems) => ({
-                              ...currentItems,
-                              [index]: value,
-                            }))
-                          }
-                          maxLength={1000}
-                          disabled={submitting}
-                          style={styles.reasonInput}
-                        />
-                      )}
-                    </View>
-                  ))}
-                  <TextInput
-                    mode="outlined"
-                    multiline
-                    label="Lý do yêu cầu xem xét lại"
-                    value={reason}
-                    onChangeText={setReason}
-                    maxLength={2000}
-                    disabled={submitting}
-                    style={styles.reasonInput}
-                  />
-                  <Action
-                    disabled={submitting || !disputeComplete}
-                    onPress={() => void submit(false)}
-                  >
-                    Gửi yêu cầu xem xét lại
-                  </Action>
-                  <Button
-                    disabled={submitting}
-                    onPress={() => {
-                      setSelection(null);
-                      setReason('');
-                    }}
-                  >
-                    Quay lại
-                  </Button>
-                </View>
-              )}
-            </View>
-          )}
         </>
       )}
 
-      {!!error && <Text style={styles.error}>{error}</Text>}
       <Modal
         visible={!!detailItem}
         transparent

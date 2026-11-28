@@ -103,6 +103,23 @@ internal sealed class CaptureScope(BHomePersistenceContext db, ICurrentUser user
     }
     internal Task<MeterEvidence?> LockEvidenceAsync(Guid id, CancellationToken t) => db is Compact24DbContext compact
         ? NativeCaptureReads.LockedEvidenceAsync(compact, id, t) : db.Locked<MeterEvidence>(id).SingleOrDefaultAsync(t);
+    // Explain the existing correction guard without relaxing it. An opening
+    // value can be an indirect dependency of a later official invoice.
+    internal async Task<string> CorrectionLockReasonAsync(OperationalTask task, Meter meter, MeterReading reading, CancellationToken t)
+    {
+        if (!IsStaff) return "workflow_locked";
+        if (task.BillingPeriod != null && await db.Set<Invoice>().AnyAsync(i => i.Status == InvoiceStatus.Final &&
+            i.RoomId == meter.RoomId && i.BillingPeriod == task.BillingPeriod, t)) return "official_invoice";
+        if (await (from line in db.Set<InvoiceItem>()
+                   join invoice in db.Set<Invoice>() on line.InvoiceId equals invoice.Id
+                   join dependent in db.Set<MeterReading>() on line.MeterReadingId equals (Guid?)dependent.Id
+                   where invoice.Status == InvoiceStatus.Final && dependent.MeterId == meter.Id &&
+                       (dependent.Id == reading.Id || dependent.ConfirmedAt >= reading.ConfirmedAt)
+                   select line.Id).AnyAsync(t)) return "official_invoice";
+        if (await db.Set<MeterReading>().AnyAsync(r => r.MeterId == meter.Id && r.Id != reading.Id &&
+            r.ConfirmedAt >= reading.ConfirmedAt, t)) return "subsequent_reading";
+        return "workflow_locked";
+    }
     internal async Task<bool> CanCorrectAsync(OperationalTask task, Meter meter, MeterReading reading, CancellationToken t)
     {
         if (!IsStaff || !meter.IsActive || task.MeterStatus != MeterTaskStatus.Completed || task.ReadingDate > Today) return false;
