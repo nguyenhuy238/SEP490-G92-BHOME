@@ -9,23 +9,33 @@ namespace BHome.Infrastructure.Ocr;
 
 internal static class IdentityQrReader
 {
-    public static IReadOnlyList<IdentityFieldObservation> Read(Mat source)
+    public static IReadOnlyList<IdentityFieldObservation> Read(Mat source, CancellationToken token = default, bool cornerOnly = false)
     {
         // Both detection and decoding are local. Only supported structured values
         // leave this adapter; URLs, payloads and decoder errors are never logged.
-        var observations = Decode(source);
-        if (observations.Count > 0 || source.Width / (double)source.Height is < 1.35 or > 1.9) return observations;
+        token.ThrowIfCancellationRequested();
+        if (source.Width / (double)source.Height is < 1.35 or > 1.9)
+            return cornerOnly ? [] : Decode(source);
         using var corner = new Mat(source, new Rect((int)(source.Width * .72), 0, (int)(source.Width * .28), (int)(source.Height * .36)));
         using var enlarged = new Mat();
         try
         {
-            Cv2.Resize(corner, enlarged, new Size(), 3, 3, InterpolationFlags.Nearest);
+            var observations = Decode(corner);
+            if (observations.Count > 0 || cornerOnly) return observations;
+            token.ThrowIfCancellationRequested();
+            // Keep the retry bounded even for a high-resolution image.
+            var scale = Math.Min(3d, 768d / Math.Max(corner.Width, corner.Height));
+            Cv2.Resize(corner, enlarged, new Size(), scale, scale, InterpolationFlags.Nearest);
             Cv2.CopyMakeBorder(enlarged, enlarged, 16, 16, 16, 16, BorderTypes.Constant, Scalar.White);
             observations = Decode(enlarged);
             if (observations.Count > 0) return observations;
+            token.ThrowIfCancellationRequested();
             Cv2.CvtColor(enlarged, enlarged, ColorConversionCodes.BGR2GRAY);
             Cv2.AdaptiveThreshold(enlarged, enlarged, 255, AdaptiveThresholdTypes.GaussianC, ThresholdTypes.Binary, 31, 7);
-            return Decode(enlarged);
+            observations = Decode(enlarged);
+            if (observations.Count > 0) return observations;
+            token.ThrowIfCancellationRequested();
+            return Decode(source);
         }
         finally { if (!enlarged.Empty()) enlarged.SetTo(Scalar.All(0)); }
     }

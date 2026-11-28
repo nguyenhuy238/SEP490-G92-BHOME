@@ -44,6 +44,57 @@ public sealed class IdentityCardCropperTests
         Assert.InRange(crop.Height, 245, 285);
     }
 
+    [Theory]
+    [InlineData(0)]
+    [InlineData(22)]
+    [InlineData(-30)]
+    public void DistantDarkCardBelowFourPercentRemainsLocalizedAfterBlur(float angle)
+    {
+        using var scene = new Mat(1600, 1200, MatType.CV_8UC3, Scalar.All(45));
+        var card = new RotatedRect(new(600, 800), new(280, 175), angle);
+        Cv2.FillConvexPoly(scene, card.Points().Select(p => new Point((int)p.X, (int)p.Y)), Scalar.All(58));
+        Cv2.GaussianBlur(scene, scene, new Size(9, 9), 2);
+        using var crop = new Mat();
+        Assert.True(IdentityCardCropper.TryCrop(scene, crop));
+        Assert.InRange(crop.Width, 255, 310);
+        Assert.InRange(crop.Height, 150, 205);
+        Assert.True(Cv2.Mean(crop).Val0 > 55);
+    }
+
+    [Fact]
+    public void RectifiesAPerspectiveCardWithUnequalOppositeEdges()
+    {
+        using var scene = new Mat(1280, 960, MatType.CV_8UC3, Scalar.All(45));
+        Point[] card = [new(240, 390), new(690, 420), new(610, 630), new(340, 610)];
+        Cv2.FillConvexPoly(scene, card, Scalar.All(180));
+        using var crop = new Mat();
+        Assert.True(IdentityCardCropper.TryCrop(scene, crop));
+        Assert.InRange(crop.Width, 425, 475);
+        Assert.InRange(crop.Height, 220, 270);
+        Assert.True(Cv2.Mean(crop).Val0 > 170);
+    }
+
+    [Fact]
+    public void DoesNotChooseBetweenACloserCardAndASecondSmallerCard()
+    {
+        using var scene = new Mat(1280, 960, MatType.CV_8UC3, Scalar.All(45));
+        Cv2.Rectangle(scene, new Rect(100, 150, 480, 300), Scalar.All(180), -1);
+        Cv2.Rectangle(scene, new Rect(260, 700, 380, 238), new Scalar(70, 95, 75), -1);
+        using var crop = new Mat();
+        Assert.False(IdentityCardCropper.TryCrop(scene, crop));
+        Assert.True(crop.Empty());
+    }
+
+    [Fact]
+    public void DoesNotCropAPartiallyVisibleCardAtTheFrameBoundary()
+    {
+        using var scene = new Mat(1280, 960, MatType.CV_8UC3, Scalar.All(45));
+        Cv2.Rectangle(scene, new Rect(0, 350, 480, 300), Scalar.All(180), -1);
+        using var crop = new Mat();
+        Assert.False(IdentityCardCropper.TryCrop(scene, crop));
+        Assert.True(crop.Empty());
+    }
+
     [Fact]
     public void DistantCardsRemainAmbiguousAndTinyShapesAreNotEnlargedAsCards()
     {

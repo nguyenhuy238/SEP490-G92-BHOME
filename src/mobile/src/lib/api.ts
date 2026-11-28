@@ -311,7 +311,14 @@ function locationAssetHandoverDocumentTimeout(path: string): boolean {
     )
   );
 }
+// Identity OCR has a bounded server-side processing budget, but the client
+// also needs time to upload a full-detail (up to 5 MB) photo on mobile data.
+export const identityOcrRequestTimeoutMilliseconds = 45000;
+function identityOcrRequest(path: string): boolean {
+  return /^\/api\/v1\/ocr\/identity\/[a-f0-9-]{36}\/(?:front|back)$/i.test(path);
+}
 function requestTimeout(path: string): number {
+  if (identityOcrRequest(path)) return identityOcrRequestTimeoutMilliseconds;
   if (locationAssetHandoverDocumentTimeout(path)) return 60000;
   if (/^\/api\/v1\/contracts\/[a-f0-9-]{36}\/move-out\/inspection$/i.test(path)) return 60000;
   return contractDocumentTimeout(path);

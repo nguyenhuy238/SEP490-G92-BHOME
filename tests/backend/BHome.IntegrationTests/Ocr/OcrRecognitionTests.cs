@@ -11,7 +11,9 @@ public sealed class OcrRecognitionTests
     [InlineData(true)]
     public void TensorPreservesChannelOrderNormalizationAndPixelPositions(bool detection)
     {
-        using var image = new Mat(2, 2, MatType.CV_8UC3);
+        // A submatrix intentionally has a larger parent stride than its width.
+        using var canvas = new Mat(4, 5, MatType.CV_8UC3, Scalar.All(17));
+        using var image = new Mat(canvas, new Rect(1, 1, 2, 2));
         image.Set(0, 0, new Vec3b(0, 64, 255));
         image.Set(0, 1, new Vec3b(15, 100, 230));
         image.Set(1, 0, new Vec3b(30, 120, 200));
@@ -28,6 +30,15 @@ public sealed class OcrRecognitionTests
                     var expected = detection ? (pixel - means[channel]) / deviations[channel] : (pixel - .5f) / .5f;
                     Assert.Equal(expected, tensor[0, channel, y, x]);
                 }
+    }
+
+    [Fact]
+    public void TensorConversionHonorsCancellationBeforeReadingPixels()
+    {
+        using var image = new Mat(2, 2, MatType.CV_8UC3, Scalar.White);
+        using var cancellation = new CancellationTokenSource();
+        cancellation.Cancel();
+        Assert.Throws<OperationCanceledException>(() => OnnxOcrEngine.Tensor(image, 2, 2, true, cancellation.Token));
     }
 
     [Fact]
