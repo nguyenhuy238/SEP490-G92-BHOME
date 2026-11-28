@@ -6,7 +6,6 @@ import {
   contractActions,
   contractClient,
   mutationKeys,
-  type Certificate,
   type ContractView,
 } from '../../../packages/client-core/src/contracts';
 
@@ -114,119 +113,66 @@ import { ContractActionForm } from '../../../src/mobile/src/features/contracts/C
 
 afterEach(cleanup);
 const id = '00000000-0000-0000-0000-000000000003';
-const certificate: Certificate = {
-  id,
-  provider: 'MySign',
-  serialNumber: 'SYNTHETIC-CERT',
-  providerUserIdHint: '***001',
-  subject: 'Synthetic',
-  validFrom: '2020-01-01T00:00:00Z',
-  validTo: '2099-01-01T00:00:00Z',
-  locked: false,
-  usable: true,
-};
 const contract = {
   id,
   ownerSignerId: id,
   tenantUserId: 'tenant',
-  status: 'Draft',
+  status: 'PendingSigning',
   signatures: [],
 } as unknown as ContractView;
-const action = contractActions(contract, null, 'Owner', id).find(
-  (value) => value.operation === 'signing',
-)!;
+const demo = { ...contract, isDevelopmentDemo: true };
 function setup() {
   const api = contractClient(vi.fn());
-  api.certificates = vi.fn().mockResolvedValue([certificate]);
-  api.lockCertificate = vi.fn().mockResolvedValue(undefined);
-  api.declareCertificate = vi.fn().mockResolvedValue(certificate);
   api.mutate = vi.fn().mockRejectedValue({ status: 503 });
   return api;
 }
-function mountForm(api: ReturnType<typeof setup>) {
+function mountForm(api: ReturnType<typeof setup>, role = 'Owner') {
   const onSuccess = vi.fn();
+  const action = contractActions(demo, null, role, role === 'Owner' ? id : 'tenant', [
+    'SIMULATED',
+  ]).find((value) => value.operation === 'signing')!;
   render(
     <ContractActionForm
       api={api}
       action={action}
-      contract={contract}
+      contract={demo}
       keys={mutationKeys(() => id)}
-      evidenceIds={[]}
       onCancel={vi.fn()}
       onSuccess={onSuccess}
     />,
   );
   return onSuccess;
 }
-it('blocks signing during loading or failure, then requires a usable certificate and consent after retry', async () => {
+it('does not offer retired remote signing or certificate configuration for a real contract', () => {
   const api = setup();
-  let fail!: (error: unknown) => void;
-  vi.mocked(api.certificates).mockImplementationOnce(
-    () =>
-      new Promise((_, reject) => {
-        fail = reject;
-      }),
-  );
-  const success = mountForm(api);
-  fireEvent.click(screen.getByRole('checkbox'));
-  expect((screen.getByRole('button', { name: 'Xác nhận' }) as HTMLButtonElement).disabled).toBe(
-    true,
-  );
-  fail({ status: 503 });
-  await screen.findByText(/Dịch vụ ký hoặc thành phần xử lý chưa sẵn sàng/);
-  expect(screen.queryByText(/Chưa có chứng thư dùng được/)).toBeNull();
-  fireEvent.click(screen.getByRole('button', { name: 'Tải lại chứng thư' }));
-  await screen.findByRole('option', { name: /SYNTHETIC-CERT/ });
-  fireEvent.change(screen.getByRole('combobox'), { target: { value: id } });
-  expect((screen.getByRole('button', { name: 'Xác nhận' }) as HTMLButtonElement).disabled).toBe(
-    true,
-  );
-  fireEvent.click(screen.getByRole('checkbox'));
-  fireEvent.click(screen.getByRole('button', { name: 'Xác nhận' }));
-  await waitFor(() => expect(api.mutate).toHaveBeenCalledTimes(1));
-  expect(api.mutate).toHaveBeenCalledWith(id, 'signing', { certificateId: id }, id);
-  expect(success).not.toHaveBeenCalled();
-});
-it('clears the previous selection and consent when a refreshed certificate is locked', async () => {
-  const api = setup();
-  mountForm(api);
-  await screen.findByRole('option', { name: /SYNTHETIC-CERT/ });
-  fireEvent.change(screen.getByRole('combobox'), { target: { value: id } });
-  fireEvent.click(screen.getByRole('checkbox'));
-  expect((screen.getByRole('button', { name: 'Xác nhận' }) as HTMLButtonElement).disabled).toBe(
-    false,
-  );
-  vi.mocked(api.certificates).mockResolvedValue([{ ...certificate, locked: true }]);
-  fireEvent.click(screen.getByRole('button', { name: 'Tải lại chứng thư' }));
-  await screen.findByText(/Chưa có chứng thư dùng được/);
-  expect((screen.getByRole('checkbox') as HTMLInputElement).checked).toBe(false);
-  expect((screen.getByRole('button', { name: 'Xác nhận' }) as HTMLButtonElement).disabled).toBe(
-    true,
-  );
+  for (const methods of [undefined, ['VIETTEL_MYSIGN', 'UPLOAD_PROOF'], ['OWNER_SESSION', 'OTP']]) {
+    expect(
+      contractActions(contract, null, 'Owner', id, methods).some((a) => a.operation === 'signing'),
+    ).toBe(false);
+  }
+  expect(api).not.toHaveProperty('certificates');
+  expect(api).not.toHaveProperty('declareCertificate');
+  expect(api).not.toHaveProperty('lockCertificate');
   expect(api.mutate).not.toHaveBeenCalled();
 });
-it('keeps certificate configuration out of the signing action', async () => {
+it('requires consent and does not report a successful signature after a failed request; retries with the same key', async () => {
   const api = setup();
-  mountForm(api);
-  await screen.findByRole('option', { name: /SYNTHETIC-CERT/ });
-  expect(
-    screen.queryByRole('button', { name: /Khai báo|Khóa chứng thư|Tra cứu và lưu/ }),
-  ).toBeNull();
-  expect(api.declareCertificate).not.toHaveBeenCalled();
-  expect(api.lockCertificate).not.toHaveBeenCalled();
+  const success = mountForm(api);
+  const submit = screen.getByRole('button', { name: 'Xác nhận' });
+  expect((submit as HTMLButtonElement).disabled).toBe(true);
+  fireEvent.click(screen.getByRole('checkbox'));
+  fireEvent.click(submit);
+  await screen.findByText(/Dịch vụ ký hoặc thành phần xử lý chưa sẵn sàng/);
+  expect(success).not.toHaveBeenCalled();
+  expect(api.mutate).toHaveBeenCalledOnce();
+  vi.mocked(api.mutate).mockResolvedValue({ id });
+  fireEvent.click(screen.getByRole('button', { name: 'Xác nhận' }));
+  await waitFor(() => expect(success).toHaveBeenCalledOnce());
+  expect(api.mutate).toHaveBeenCalledTimes(2);
+  expect(vi.mocked(api.mutate).mock.calls[0]).toEqual(vi.mocked(api.mutate).mock.calls[1]);
 });
-
 it('requires Tenant consent for a released demo and confirms only the server result without duplicate submissions', async () => {
   const api = setup();
-  const released = {
-    ...contract,
-    status: 'PendingSigning',
-    onboardingDraft: false,
-    isDevelopmentDemo: true,
-  };
-  const signing = contractActions(released, null, 'Tenant', 'tenant').find(
-    (a) => a.operation === 'signing',
-  )!;
   let complete!: (value: { id: string }) => void;
   vi.mocked(api.mutate).mockImplementation(
     () =>
@@ -234,25 +180,15 @@ it('requires Tenant consent for a released demo and confirms only the server res
         complete = resolve as typeof complete;
       }),
   );
-  const success = vi.fn();
-  render(
-    <ContractActionForm
-      api={api}
-      action={signing}
-      contract={released}
-      keys={mutationKeys(() => id)}
-      evidenceIds={[]}
-      onCancel={vi.fn()}
-      onSuccess={success}
-    />,
-  );
-  expect(screen.queryByText(/SIMULATED SIGNING: chỉ thử nghiệm/)).toBeNull();
+  const success = mountForm(api, 'Tenant');
+  expect(
+    screen.queryByRole('button', { name: /Khai báo|Khóa chứng thư|Tra cứu và lưu/ }),
+  ).toBeNull();
   fireEvent.click(screen.getByRole('button', { name: 'Xác nhận' }));
   expect(api.mutate).not.toHaveBeenCalled();
   fireEvent.click(screen.getByRole('checkbox'));
   fireEvent.click(screen.getByRole('button', { name: 'Xác nhận' }));
   fireEvent.click(screen.getByRole('button', { name: 'Đang xử lý…' }));
-  expect(api.certificates).not.toHaveBeenCalled();
   expect(api.mutate).toHaveBeenCalledTimes(1);
   expect(api.mutate).toHaveBeenCalledWith(
     id,

@@ -247,8 +247,11 @@ async function scenario(id, run) {
         .click();
       await page.getByLabel('Mô tả').fill('Synthetic browser room type updated');
       await page.getByLabel(/Lý do/).fill('Browser E2E update');
-      await apiAction(page, 'PUT', `/api/v1/locations/${locationId}/room-defaults/${roomTypeId}`, () =>
-        page.getByRole('button', { name: 'Lưu' }).click(),
+      await apiAction(
+        page,
+        'PUT',
+        `/api/v1/locations/${locationId}/room-defaults/${roomTypeId}`,
+        () => page.getByRole('button', { name: 'Lưu' }).click(),
       );
       await page.reload();
       await page.getByText(names.roomType).waitFor();

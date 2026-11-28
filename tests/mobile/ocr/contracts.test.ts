@@ -112,7 +112,11 @@ describe('contract role and state actions', () => {
     );
   });
   it('only a matching signer may sign, while Tenant never sees deposit/activation decisions', () => {
-    expect(operations(draft, null, 'Tenant', tenant)).toEqual(['signing']);
+    expect(operations(draft, null, 'Tenant', tenant)).toEqual([]);
+    const demo = { ...draft, isDevelopmentDemo: true };
+    expect(operations(demo, null, 'Tenant', tenant)).toEqual(['signing']);
+    expect(operations(demo, null, 'Tenant', id)).toEqual([]);
+    expect(operations(demo, null, 'Staff', tenant)).toEqual([]);
     expect(operations(draft, null, 'Tenant', id)).toEqual([]);
     expect(operations({ ...draft, status: 'Active' }, null, 'Tenant', id)).toEqual([]);
     expect(operations(draft, null, 'Owner', id)).not.toContain('signing');

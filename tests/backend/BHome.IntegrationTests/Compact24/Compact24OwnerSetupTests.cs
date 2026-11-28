@@ -571,7 +571,11 @@ public sealed partial class Compact24OwnerSetupTests(Compact24Fixture fixture) :
     [CompactPostgresFact]
     public async Task HoldingNeedsBothSignaturesAndFullDepositAndProtectsTheWholeRoomBeforeDispatch()
     {
-        var w = await Seed(); using var host = Host().WithWebHostBuilder(b => b.ConfigureServices(s => { s.RemoveAll<IContractSigningProvider>(); s.AddSingleton<IContractSigningProvider, BHome.IntegrationTests.Contracts.TestOnlySigningProvider>(); }));
+        var w = await Seed(); using var host = Host().WithWebHostBuilder(b =>
+        {
+            b.ConfigureAppConfiguration((_, c) => c.AddInMemoryCollection(new Dictionary<string, string?> { ["ContractSigning:Methods:Otp"] = "true", ["ContractWorkflow:SimulatedSigningEnabled"] = "false" }));
+            b.ConfigureServices(s => { s.RemoveAll<IContractSigningProvider>(); s.AddSingleton<IContractSigningProvider, BHome.IntegrationTests.Contracts.TestOnlySigningProvider>(); });
+        });
         using var owner = await Client(w.Owner, host); using var tenant = await Client(w.Tenant, host); Guid resident;
         await using (var scope = host.Services.CreateAsyncScope())
         {
@@ -588,11 +592,11 @@ public sealed partial class Compact24OwnerSetupTests(Compact24Fixture fixture) :
         var a = (await Read<ContractId>(await Post(owner, "/api/v1/contracts/holdings", input))).Id;
         var b = (await Read<ContractId>(await Post(owner, "/api/v1/contracts/holdings", input))).Id;
         foreach (var id in new[] { a, b }) await Read<ContractView>(await Post(owner, $"/api/v1/contracts/{id}/holding-approval", new HoldingDecisionInput("Synthetic Owner approval")));
-        await Read<SignatureView>(await Post(owner, $"/api/v1/contracts/{a}/signing", new SigningInput(Guid.NewGuid())));
-        Assert.Equal(HttpStatusCode.Conflict, (await Post(owner, $"/api/v1/contracts/{b}/signing", new SigningInput(Guid.NewGuid()))).StatusCode);
+        await Read<SignatureView>(await Post(owner, $"/api/v1/contracts/{a}/signing", new SigningInput(Guid.NewGuid(), Method: SigningMethods.Otp)));
+        Assert.Equal(HttpStatusCode.Conflict, (await Post(owner, $"/api/v1/contracts/{b}/signing", new SigningInput(Guid.NewGuid(), Method: SigningMethods.Otp))).StatusCode);
         await Read<ContractId>(await Post(owner, $"/api/v1/contracts/{a}/deposit-verifications", new DepositInput("SYN-PART-" + a, 1000000, "Synthetic bank confirmation")));
         await Read<ContractView>(await Post(owner, $"/api/v1/contracts/{a}/signing/sync"));
-        await Read<SignatureView>(await Post(tenant, $"/api/v1/contracts/{a}/signing", new SigningInput(Guid.NewGuid())));
+        await Read<SignatureView>(await Post(tenant, $"/api/v1/contracts/{a}/signing", new SigningInput(Guid.NewGuid(), Method: SigningMethods.Otp)));
         await Read<ContractView>(await Post(tenant, $"/api/v1/contracts/{a}/signing/sync"));
         Assert.Null((await owner.GetFromJsonAsync<ContractView>($"/api/v1/contracts/{a}"))!.PriceLockedAt);
         Assert.Equal(RoomStatus.Available, (await owner.GetFromJsonAsync<RoomDto>($"/api/v1/rooms/{w.Room}"))!.Status);

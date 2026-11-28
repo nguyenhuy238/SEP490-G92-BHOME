@@ -65,43 +65,27 @@ public sealed class AnonymousSigningTests(Compact24Fixture fixture) : IClassFixt
         Assert.True(response.IsSuccessStatusCode, $"{response.StatusCode}: {await response.Content.ReadAsStringAsync()} {string.Join("\n", Diagnostic.Errors.TakeLast(1))}");
         return (await response.Content.ReadFromJsonAsync<T>())!;
     }
-    private static async Task SignOwnerWithOtp(HttpClient owner, HttpClient staff, string path, Delivery delivery, IServiceProvider? externalSigner = null, bool ownerSession = false)
+    private static async Task SignOwnerWithOtp(HttpClient owner, HttpClient staff, string path, Delivery delivery, bool retiredUpload = false, bool ownerSession = false)
     {
         var before = await owner.GetFromJsonAsync<ContractView>(path);
         Assert.Equal("PendingSigning", before!.Status);
         var tenantPdf = await owner.GetByteArrayAsync(path + "/document");
         Assert.Equal(HttpStatusCode.Forbidden, (await Post(staff, path + "/signing", new SigningInput(Guid.Empty, Method: SigningMethods.Otp))).StatusCode);
-        if (externalSigner is not null)
+        if (retiredUpload)
         {
-            await Result<SignatureView>(await Post(owner, path + "/signing", new SigningInput(Guid.Empty, Method: SigningMethods.UploadProof)));
-            var source = await owner.GetByteArrayAsync(path + "/signing/upload-source");
-            Assert.Equal(tenantPdf, source);
-            async Task<HttpResponseMessage> Upload(byte[] content, Guid key)
-            {
-                using var request = new HttpRequestMessage(HttpMethod.Put, path + "/signing/upload") { Content = new ByteArrayContent(content) };
-                request.Content.Headers.ContentType = new("application/pdf");
-                request.Headers.Add("Idempotency-Key", key.ToString());
-                return await owner.SendAsync(request);
-            }
-            Assert.Equal(HttpStatusCode.BadRequest, (await Upload(source, Guid.NewGuid())).StatusCode);
-            using var rsa = RSA.Create(2048);
-            using var cert = new System.Security.Cryptography.X509Certificates.CertificateRequest("CN=Synthetic Owner, O=Viettel-CA Test", rsa, HashAlgorithmName.SHA256, RSASignaturePadding.Pkcs1)
-                .CreateSelfSigned(DateTimeOffset.UtcNow.AddDays(-1), DateTimeOffset.UtcNow.AddDays(7));
-            var pdfSigner = externalSigner.GetRequiredService<BHome.DigitalSigning.Application.IPdfSigner>();
-            System.Security.Cryptography.X509Certificates.X509Certificate2[] chain = [cert];
-            var prepared = pdfSigner.Prepare(source, chain, DateTimeOffset.UtcNow, null);
-            var pdfBytes = pdfSigner.Complete(prepared.PreparedPdf, prepared.FieldName, prepared.DocumentDigest, chain,
-                rsa.SignHash(prepared.DataToSignDigest, HashAlgorithmName.SHA256, RSASignaturePadding.Pkcs1));
-            var uploadKey = Guid.NewGuid();
-            var done = await Result<ContractView>(await Upload(pdfBytes, uploadKey));
-            Assert.Equal("PendingActivation", done.Status); Assert.Null(done.ActivatedAt);
-            (await Upload(pdfBytes, uploadKey)).EnsureSuccessStatusCode();
-            var final = await owner.GetByteArrayAsync(path + "/document");
-            Assert.Equal(pdfBytes, final);
-            using var signedPdf = new PdfDocument(new PdfReader(new MemoryStream(final)));
-            var signatures = new SignatureUtil(signedPdf);
-            Assert.True(signatures.ReadSignatureData(Assert.Single(signatures.GetSignatureNames())).VerifySignatureIntegrityAndAuthenticity());
-            return;
+            var rejected = await Post(owner, path + "/signing", new SigningInput(Guid.Empty, Method: SigningMethods.UploadProof));
+            Assert.Equal(HttpStatusCode.BadRequest, rejected.StatusCode);
+            Assert.Contains("signing_method_invalid", await rejected.Content.ReadAsStringAsync());
+            Assert.Equal(HttpStatusCode.NotFound, (await owner.GetAsync(path + "/signing/upload-source")).StatusCode);
+            using var request = new HttpRequestMessage(HttpMethod.Put, path + "/signing/upload") { Content = new ByteArrayContent(tenantPdf) };
+            request.Content.Headers.ContentType = new("application/pdf");
+            request.Headers.Add("Idempotency-Key", Guid.NewGuid().ToString());
+            Assert.Equal(HttpStatusCode.NotFound, (await owner.SendAsync(request)).StatusCode);
+            var unchanged = (await owner.GetFromJsonAsync<ContractView>(path))!;
+            Assert.Equal(before.Status, unchanged.Status);
+            Assert.Equal(before.Signatures.Count, unchanged.Signatures.Count);
+            Assert.Equal(tenantPdf, await owner.GetByteArrayAsync(path + "/document"));
+            ownerSession = true;
         }
         var requestKey = Guid.NewGuid();
         if (ownerSession)
@@ -110,7 +94,8 @@ public sealed class AnonymousSigningTests(Compact24Fixture fixture) : IClassFixt
             Assert.Equal(HttpStatusCode.Forbidden, (await Post(staff, path + "/signing", input)).StatusCode);
             Assert.Equal(HttpStatusCode.BadRequest, (await Post(owner, path + "/signing", input with { Consent = false })).StatusCode);
             // Exercise conversion of a legacy OTP prompt without touching the accepted representative PDF.
-            await Result<SignatureView>(await Post(owner, path + "/signing", new SigningInput(Guid.Empty, Method: SigningMethods.Otp)));
+            if (!retiredUpload)
+                await Result<SignatureView>(await Post(owner, path + "/signing", new SigningInput(Guid.Empty, Method: SigningMethods.Otp)));
             var otpCount = delivery.Messages.Count(m => m.EventType == "CONTRACT_SIGNING_OTP");
             var immediate = await Result<SignatureView>(await Post(owner, path + "/signing", input, requestKey));
             Assert.Equal("Signed", immediate.Status);
@@ -541,8 +526,7 @@ public sealed class AnonymousSigningTests(Compact24Fixture fixture) : IClassFixt
                 ["IdentityProtection:EncryptionKeys:test"] = IdentityTestKey,
                 ["AnonymousSigning:OtpHmacKey"] = Convert.ToBase64String(RandomNumberGenerator.GetBytes(32)),
                 ["ContractPdf:TemplateId"] = "main-contract-development-v1",
-                ["ContractSigning:Methods:Otp"] = "true",
-                ["ContractSigning:Methods:UploadProof"] = "true"
+                ["ContractSigning:Methods:Otp"] = "true"
             }));
             b.ConfigureTestServices(s =>
             {
@@ -678,10 +662,9 @@ public sealed class AnonymousSigningTests(Compact24Fixture fixture) : IClassFixt
         (await Post(owner, root + "/holding-approval", new HoldingDecisionInput("Synthetic Owner review"))).EnsureSuccessStatusCode();
         async Task Sign(string path)
         {
-            if (!externalOwner)
-                (await owner.PostAsJsonAsync("/api/v1/digital-signing/signature-image/drawn",
-                    new BHome.Infrastructure.Contracts.DrawnSignatureInput(300, 100, [[[10, 70], [80, 20], [145, 65], [220, 50], [270, 30]]])))
-                    .EnsureSuccessStatusCode();
+            (await owner.PostAsJsonAsync("/api/v1/digital-signing/signature-image/drawn",
+                new BHome.Infrastructure.Contracts.DrawnSignatureInput(300, 100, [[[10, 70], [80, 20], [145, 65], [220, 50], [270, 30]]])))
+                .EnsureSuccessStatusCode();
             var view = await owner.GetFromJsonAsync<ContractView>(path);
             var invitationInput = new SigningInvitationInput(DateTimeOffset.UtcNow.AddHours(1), view!.SnapshotHash, deferredContacts && path == root ? deliveryEmail : null);
             var invite = await Result<SigningInvitationResult>(await Post(owner, path + "/signing-invitations", invitationInput));
@@ -740,12 +723,12 @@ public sealed class AnonymousSigningTests(Compact24Fixture fixture) : IClassFixt
             }
             (await Post(guest, "/api/v1/contract-signing/accept", new AnonymousAcceptanceInput(inviteToken, access.Session, access.DocumentHash, access.ConsentVersion, true, [[new(.1, .2), new(.7, .6)]]))).EnsureSuccessStatusCode();
             if (!ownerFirst)
-                await SignOwnerWithOtp(owner, assignedStaff, path, delivery, externalOwner ? host.Services : null, ownerSession);
+                await SignOwnerWithOtp(owner, assignedStaff, path, delivery, retiredUpload: externalOwner, ownerSession: ownerSession);
 
             var finalPdf = await owner.GetByteArrayAsync(path + "/document");
             if (ownerPdfBeforeTenant is not null)
                 Assert.True(finalPdf.AsSpan().StartsWith(ownerPdfBeforeTenant));
-            AssertBothSignatures(finalPdf, path == root ? HoldingDepositRenderer.TemplateId : MainTemplateSignatureSlots.TemplateId, externalOwner, ownerFirst);
+            AssertBothSignatures(finalPdf, path == root ? HoldingDepositRenderer.TemplateId : MainTemplateSignatureSlots.TemplateId, ownerFirst);
         }
         // Payment before signing must not mark the room held or create a login.
         const decimal holdingDeposit = 3000000;
@@ -960,7 +943,7 @@ public sealed class AnonymousSigningTests(Compact24Fixture fixture) : IClassFixt
         Assert.Equal(BHome.Domain.PropertyManagement.RoomStatus.Occupied, (await context.Set<BHome.Domain.PropertyManagement.Room>().SingleAsync(r => r.Id == active.RoomId)).Status);
     }
 
-    private static void AssertBothSignatures(byte[] bytes, string template, bool externalOwner, bool ownerFirst)
+    private static void AssertBothSignatures(byte[] bytes, string template, bool ownerFirst)
     {
         using var document = new PdfDocument(new PdfReader(new MemoryStream(bytes)));
         Assert.Equal(template, document.GetDocumentInfo().GetMoreInfo(MainTemplateSignatureSlots.SourceTemplate));
@@ -977,16 +960,13 @@ public sealed class AnonymousSigningTests(Compact24Fixture fixture) : IClassFixt
         var field = Assert.Single(signatures.GetSignatureNames());
         Assert.True(signatures.ReadSignatureData(field).VerifySignatureIntegrityAndAuthenticity());
         Assert.Equal(!ownerFirst, signatures.SignatureCoversWholeDocument(field));
-        if (!externalOwner)
-        {
-            var owner = Assert.IsType<SignaturePlacementInput>(ContractSignatureSlots.Read(document, owner: true));
-            var widget = Assert.Single(iText.Forms.PdfAcroForm.GetAcroForm(document, false).GetField(field).GetWidgets());
-            Assert.Contains(document.GetPage(owner.Page).GetAnnotations(), a => a.GetPdfObject().Equals(widget.GetPdfObject()));
-            Assert.True(widget.GetRectangle().ToRectangle().GetWidth() > 0);
-            Assert.NotNull(widget.GetNormalAppearanceObject());
-        }
+        var owner = Assert.IsType<SignaturePlacementInput>(ContractSignatureSlots.Read(document, owner: true));
+        var widget = Assert.Single(iText.Forms.PdfAcroForm.GetAcroForm(document, false).GetField(field).GetWidgets());
+        Assert.Contains(document.GetPage(owner.Page).GetAnnotations(), a => a.GetPdfObject().Equals(widget.GetPdfObject()));
+        Assert.True(widget.GetRectangle().ToRectangle().GetWidth() > 0);
+        Assert.NotNull(widget.GetNormalAppearanceObject());
         var qa = Environment.GetEnvironmentVariable("BHOME_CONTRACT_QA_DIR");
-        if (!string.IsNullOrWhiteSpace(qa) && !externalOwner)
+        if (!string.IsNullOrWhiteSpace(qa))
         {
             Directory.CreateDirectory(qa);
             File.WriteAllBytes(Path.Combine(qa, $"{template}-{(ownerFirst ? "owner-first" : "tenant-first")}.png"),

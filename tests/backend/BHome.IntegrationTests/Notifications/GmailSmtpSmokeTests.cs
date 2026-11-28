@@ -30,7 +30,7 @@ public sealed class GmailSmokeFactAttribute : FactAttribute
 public sealed class GmailSmtpSmokeTests(Compact24Fixture fixture, ITestOutputHelper output) : IClassFixture<Compact24Fixture>
 {
     [GmailSmokeFact]
-    public async Task OneOfflineTestMessageIsAcceptedAndOptionallyFoundInTestInbox()
+    public async Task OneDevelopmentOwnerTestMessageIsAcceptedAndOptionallyFoundInTestInbox()
     {
         var secrets = new ConfigurationBuilder().AddUserSecrets("bhome-api-development").Build();
         var settings = new Dictionary<string, string?>

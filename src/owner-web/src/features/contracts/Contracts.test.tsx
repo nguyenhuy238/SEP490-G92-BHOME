@@ -480,21 +480,9 @@ it('keeps settlement pending with visible history and does not offer room releas
   expect(screen.queryByRole('button', { name: 'Hoàn tất trả phòng' })).not.toBeInTheDocument();
   expect(screen.queryByRole('button', { name: 'Lưu biên bản trả phòng' })).not.toBeInTheDocument();
 });
-it('shows provider unavailability and never marks signing successful from a failed request', async () => {
-  const c = { ...draft, status: 'Draft', signatures: [] };
+it('shows signing service unavailability and never marks demo signing successful from a failed request', async () => {
+  const c = { ...draft, status: 'Draft', signatures: [], isDevelopmentDemo: true };
   const { api } = setup(c);
-  api.certificates = vi.fn().mockResolvedValue([
-    {
-      id,
-      provider: 'MySign',
-      serialNumber: 'SYNTHETIC',
-      providerUserIdHint: '***001',
-      validFrom: '2020-01-01T00:00:00Z',
-      validTo: '2099-01-01T00:00:00Z',
-      locked: false,
-      usable: true,
-    },
-  ]);
   const action = contractActions(c, null, 'Owner', owner).find((a) => a.operation === 'signing')!,
     success = vi.fn();
   mount(
@@ -508,11 +496,7 @@ it('shows provider unavailability and never marks signing successful from a fail
       onSuccess={success}
     />,
   );
-  await waitFor(() =>
-    expect(screen.getByRole('combobox')).not.toHaveAttribute('aria-disabled', 'true'),
-  );
-  fireEvent.mouseDown(screen.getByRole('combobox'), { button: 0 });
-  fireEvent.click(await screen.findByRole('option', { name: /MySign/ }));
+  expect(screen.queryByRole('combobox')).not.toBeInTheDocument();
   fireEvent.click(screen.getByRole('button', { name: 'Xác nhận' }));
   expect(
     await screen.findByText(/Dịch vụ ký hoặc thành phần xử lý chưa sẵn sàng/),

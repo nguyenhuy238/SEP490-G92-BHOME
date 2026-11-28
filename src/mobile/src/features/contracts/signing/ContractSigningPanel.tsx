@@ -17,7 +17,7 @@ import {
 } from '../../../../../../packages/client-core/src/signing';
 import { formatInstant } from '../../../../../../packages/client-core/src/localization';
 import type { contractClient } from '../../../../../../packages/client-core/src/contracts';
-import { Action, Box, Heading, Pill, ui } from '../../../components/WorkspaceKit';
+import { Action, Box, Heading, ui } from '../../../components/WorkspaceKit';
 import { ChoiceField } from '../../../components/WorkflowControls';
 import { randomUUID } from '../../../lib/randomUUID';
 import { SignaturePad } from './SignaturePad';

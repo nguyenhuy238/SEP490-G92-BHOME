@@ -1140,7 +1140,7 @@ public sealed class ContractServiceTests
         Assert.Null(signature.SignedAt); Assert.Null(signature.SignedObjectKey); Assert.Null(signature.ProviderReference);
         var replay = await r.Service.RequestSigningAsync(c.Id, input, key, default);
         Assert.Equal(signature.Id, replay.Id); Assert.Equal("ManualReview", replay.Status);
-        await r.Signing.Received(1).PrepareAsync(Arg.Any<ContractDocument>(), input.CertificateId, null, Arg.Any<CancellationToken>());
+        await r.Signing.Received(1).PrepareAsync(Arg.Any<ContractDocument>(), input.CertificateId, null, Arg.Is<SigningAppearance>(a => a.Method == SigningMethods.Otp), Arg.Any<CancellationToken>());
         await r.Signing.Received(1).RequestAsync(Arg.Any<ContractSigning>(), Arg.Any<CancellationToken>());
         Assert.Equal(ContractStatus.PendingSigning, c.Status); Assert.Equal(RoomStatus.Available, r.Room.Status);
     }

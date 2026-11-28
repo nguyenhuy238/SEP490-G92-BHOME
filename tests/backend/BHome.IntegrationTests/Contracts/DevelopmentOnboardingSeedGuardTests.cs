@@ -13,7 +13,7 @@ public sealed class DevelopmentOnboardingSeedGuardTests
     private const string Local = "Host=127.0.0.1;Database=bhome_compact24_dev_synthetic;Username=test;Password=not-a-secret";
 
     [Fact]
-    public void DevelopmentEnvironmentFileIgnoresRetiredSeedSettingsAndUnrelatedKeys()
+    public void DevelopmentEnvironmentFileLoadsSeedSettingsWithoutAcceptingUnrelatedKeys()
     {
         var file = Path.Combine(Path.GetTempPath(), "bhome-seed-config-" + Guid.NewGuid().ToString("N"));
         try

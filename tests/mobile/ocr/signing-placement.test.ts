@@ -71,6 +71,9 @@ describe('visible signature placement', () => {
     await signing.pageBytes(id, 2, 800.7);
     expect(request.mock.lastCall?.[0]).toBe(`/api/v1/contracts/${id}/signing/pages/2?width=800`);
     await signing.start(id, 'OWNER_SESSION', id);
-    expect(JSON.parse(request.mock.lastCall?.[1].body)).toMatchObject({ method: 'OWNER_SESSION', consent: true });
+    expect(JSON.parse(request.mock.lastCall?.[1].body)).toMatchObject({
+      method: 'OWNER_SESSION',
+      consent: true,
+    });
   });
 });

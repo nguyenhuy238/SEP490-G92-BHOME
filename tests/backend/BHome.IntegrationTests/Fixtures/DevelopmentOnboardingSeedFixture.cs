@@ -92,7 +92,7 @@ public sealed class DevelopmentOnboardingSeedService(
             // payment ledger, location advisory and room locks used by contract creation.
             if (room.Status != RoomStatus.Available || room.Capacity < 1 || room.RoomType is { IsActive: false } ||
                 await db.Set<BHome.Domain.TenantContracts.Contract>().AnyAsync(c => c.RoomId == room.Id &&
-                    (c.Kind == BHome.Domain.TenantContracts.ContractKind.Main || c.Kind == BHome.Domain.TenantContracts.ContractKind.Renewal || c.Kind == BHome.Domain.TenantContracts.ContractKind.Holding || c.Kind == BHome.Domain.TenantContracts.ContractKind.Addendum) &&
+                    (c.ContractType == BHome.Domain.TenantContracts.ContractKind.Main || c.ContractType == BHome.Domain.TenantContracts.ContractKind.Renewal || c.ContractType == BHome.Domain.TenantContracts.ContractKind.Holding || c.ContractType == BHome.Domain.TenantContracts.ContractKind.Addendum) &&
                     (c.Status == ContractStatus.Active || c.Status == ContractStatus.Expired ||
                      (c.Status == ContractStatus.Draft || c.Status == ContractStatus.PendingSigning ||
                       c.Status == ContractStatus.PendingActivation) && c.StartDate <= endDate && c.EndDate >= today), t))

@@ -1697,7 +1697,8 @@ export function contractActions(
     waiting = ['Draft', 'PendingSigning', 'PendingActivation'].includes(c.status);
   const mine = c.signatures.filter((s) => s.signerUserId === actorId);
   const open = c.signatures.some((s) => !['Signed', 'Simulated', 'Failed'].includes(s.status));
-  const certificateSigning = c.isDevelopmentDemo && (!signingMethods || signingMethods.includes('SIMULATED'));
+  const certificateSigning =
+    c.isDevelopmentDemo && (!signingMethods || signingMethods.includes('SIMULATED'));
   // Polling and reference recovery only exist for remote (certificate) signing.
   const remote = mine.filter(
     (s) => !s.method || ['VIETTEL_MYSIGN', 'SIMULATED'].includes(s.method),
@@ -1711,14 +1712,7 @@ export function contractActions(
     !open &&
     certificateSigning
   )
-    result.push(
-      action(
-        'signing',
-        'Mô phỏng ký',
-        [],
-        '',
-      ),
-    );
+    result.push(action('signing', 'Mô phỏng ký', [], ''));
   if (signer && remote.some((s) => s.status === 'Pending'))
     result.push(action('signing/sync', 'Kiểm tra kết quả ký'));
   if (signer && remote.some((s) => ['Dispatching', 'ManualReview'].includes(s.status)))

@@ -33,7 +33,7 @@ const pending: ContractView = {
   holdingContractId: null,
   appliedHoldingDeposit: '0',
 };
-const methods = { methods: ['UPLOAD_PROOF', 'OTP'], default: 'UPLOAD_PROOF' };
+const methods = { methods: ['OWNER_SESSION', 'OTP'], default: 'OWNER_SESSION' };
 const problem = (code: string) =>
   Object.assign(new Error(code), { name: 'ApiError', status: 422, problem: { code } });
 
@@ -105,72 +105,59 @@ it.each(['Holding', 'Main'])(
   },
 );
 
-it('starts UPLOAD_PROOF signing with an idempotency key and no certificate', async () => {
-  const transport = vi.fn().mockResolvedValue({ id: signatureId });
-  const onChanged = renderPanel(pending, transport);
-  expect(screen.getByRole('button', { name: /Tải về & ký số bên ngoài/ })).toBeTruthy();
-  fireEvent.click(screen.getByRole('button', { name: 'Bắt đầu ký' }));
-  await waitFor(() => expect(onChanged).toHaveBeenCalled());
-  const [path, init] = transport.mock.calls[0];
-  expect(path).toBe(`/api/v1/contracts/${id}/signing`);
-  expect(init.method).toBe('POST');
-  expect(init.headers['Idempotency-Key']).toBeTruthy();
-  expect(JSON.parse(init.body)).toMatchObject({ method: 'UPLOAD_PROOF' });
-});
-
-it('uploads the signed PDF and marks the failed check when BHOME refuses it', async () => {
-  const contract = {
-    ...pending,
-    signatures: [
-      {
-        id: signatureId,
-        signerUserId: owner,
-        status: 'Requested',
-        signedAt: null,
-        method: 'UPLOAD_PROOF',
-        expiresAt: '2026-11-12T09:00:00Z',
-      },
-    ],
-  } as ContractView;
-  const transport = vi
-    .fn()
-    .mockRejectedValueOnce(problem('signed_pdf_certificate_issuer_not_allowed'));
-  const onChanged = renderPanel(contract, transport);
-  expect(screen.getByRole('button', { name: 'Gửi bản đã ký' })).toHaveProperty('disabled', true);
-  const pdf = new File(['%PDF-1.7'], 'hop-dong-da-ky.pdf', { type: 'application/pdf' });
-  fireEvent.change(screen.getByTestId('signed-pdf-input'), { target: { files: [pdf] } });
-  await screen.findByText(/hop-dong-da-ky\.pdf/);
-  fireEvent.click(screen.getByRole('button', { name: 'Gửi bản đã ký' }));
-  await screen.findByText('Chứng thư không do Viettel-CA cấp.');
-  expect(screen.getByText(/✕ Tên bên cấp chứng thư khớp cấu hình/)).toBeTruthy();
-  expect(screen.getByText(/✓ Đúng bản hợp đồng đã phát/)).toBeTruthy();
-  const [path, init] = transport.mock.calls[0];
-  expect(path).toBe(`/api/v1/contracts/${id}/signing/upload`);
-  expect(init.method).toBe('PUT');
-  expect(init.headers['Content-Type']).toBe('application/pdf');
-  expect(init.body).toBe(pdf);
-  expect(onChanged).not.toHaveBeenCalled();
-});
-
-it('rejects a non-PDF file before sending anything', async () => {
-  const contract = {
-    ...pending,
-    signatures: [
-      {
-        id: signatureId,
-        signerUserId: owner,
-        status: 'Requested',
-        signedAt: null,
-        method: 'UPLOAD_PROOF',
-      },
-    ],
-  } as ContractView;
+it('does not expose remote or PDF upload signing even when a stale server advertises them', () => {
   const transport = vi.fn();
-  renderPanel(contract, transport);
-  const png = new File(['x'], 'anh.png', { type: 'image/png' });
-  fireEvent.change(screen.getByTestId('signed-pdf-input'), { target: { files: [png] } });
-  await screen.findByText('Chỉ nhận file PDF.');
+  renderPanel(pending, transport, {
+    methods: ['UPLOAD_PROOF', 'VIETTEL_MYSIGN'],
+    default: 'UPLOAD_PROOF',
+  });
+  expect(screen.queryByRole('button', { name: /Bắt đầu ký|Gửi bản đã ký|Ký hợp đồng/ })).toBeNull();
+  expect(screen.queryByTestId('signed-pdf-input')).toBeNull();
   expect(transport).not.toHaveBeenCalled();
+});
+
+it('does not reopen an old pending upload signature or send a new request', () => {
+  const transport = vi.fn();
+  const contract = {
+    ...pending,
+    signatures: [
+      {
+        id: signatureId,
+        signerUserId: owner,
+        status: 'Requested',
+        signedAt: null,
+        method: 'UPLOAD_PROOF',
+      },
+    ],
+  } as ContractView;
+  renderPanel(contract, transport);
+  expect(screen.queryByRole('button', { name: /Gửi bản đã ký|Ký hợp đồng/ })).toBeNull();
+  expect(screen.queryByTestId('signed-pdf-input')).toBeNull();
+  expect(transport).not.toHaveBeenCalled();
+});
+
+it('keeps signing incomplete after a failed session request and preserves the retry key', async () => {
+  const transport = vi.fn().mockImplementation((path: string) => {
+    if (path.endsWith('/signing')) return Promise.reject(problem('owner_session_signing_failed'));
+    return Promise.resolve({});
+  });
+  const changed = renderPanel(pending, transport);
+  const button = screen.getByRole('button', { name: 'Ký hợp đồng' });
+  fireEvent.click(screen.getByRole('checkbox'));
+  fireEvent.change(screen.getByLabelText('Ảnh chữ ký cho hợp đồng'), {
+    target: { files: [new File(['synthetic'], 'signature.png', { type: 'image/png' })] },
+  });
+  fireEvent.click(button);
+  await screen.findByText('Chưa ký được PDF. Hãy tải lại hợp đồng rồi thử lại.');
+  expect(changed).not.toHaveBeenCalled();
+  fireEvent.click(button);
+  await waitFor(() =>
+    expect(transport.mock.calls.filter(([path]) => path.endsWith('/signing'))).toHaveLength(2),
+  );
+  const starts = transport.mock.calls.filter(([path]) => path.endsWith('/signing'));
+  expect(starts[0][1].headers['Idempotency-Key']).toBeTruthy();
+  expect(starts[0][1].headers['Idempotency-Key']).toBe(starts[1][1].headers['Idempotency-Key']);
+  expect(changed).not.toHaveBeenCalled();
 });
 
 it('shows nothing for the tenant, a signed owner, or a demo contract', () => {
@@ -194,16 +181,28 @@ it('shows nothing for the tenant, a signed owner, or a demo contract', () => {
         methods={methods}
         onChanged={vi.fn()}
       />
+      <OwnerSigningPanel
+        api={contractClient(transport)}
+        contract={{ ...pending, isDevelopmentDemo: true }}
+        actorId={owner}
+        methods={methods}
+        onChanged={vi.fn()}
+      />
     </QueryClientProvider>,
   );
   expect(container.textContent).toBe('');
+  expect(transport).not.toHaveBeenCalled();
 });
 
-it('offers the remote MySign action only when the server still offers VIETTEL_MYSIGN', () => {
-  const draft = { ...pending, status: 'PendingSigning' };
+it('only offers the generic signing action for demo, never remote MySign', () => {
   const remote = (m?: string[]) =>
-    contractActions(draft, null, 'Owner', owner, m).some((a) => a.operation === 'signing');
+    contractActions(pending, null, 'Owner', owner, m).some((a) => a.operation === 'signing');
   expect(remote(['UPLOAD_PROOF', 'OTP'])).toBe(false);
-  expect(remote(undefined)).toBe(true);
-  expect(remote(['UPLOAD_PROOF', 'VIETTEL_MYSIGN'])).toBe(true);
+  expect(remote(undefined)).toBe(false);
+  expect(remote(['UPLOAD_PROOF', 'VIETTEL_MYSIGN'])).toBe(false);
+  expect(
+    contractActions({ ...pending, isDevelopmentDemo: true }, null, 'Owner', owner, [
+      'SIMULATED',
+    ]).some((a) => a.operation === 'signing'),
+  ).toBe(true);
 });

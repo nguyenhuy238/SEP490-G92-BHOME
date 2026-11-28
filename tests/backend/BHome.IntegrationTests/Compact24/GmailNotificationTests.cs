@@ -283,14 +283,15 @@ public sealed partial class Compact24NotificationMvpTests
     }
 
     [CompactPostgresFact]
-    public async Task RetiredGmailTestRouteDoesNotSendForAnyRole()
+    public async Task GmailDevelopmentTestRequiresOwnerUsesConfiguredRecipientAndRateLimits()
     {
         var w = await Seed(); var probe = new SmtpProbe(); using var host = EmailHost(probe, "Development", true);
         using var anonymous = host.CreateClient();
         using var staff = await Client(w.Staff, host);
         using var tenant = await Client(w.Tenants[0], host);
         using var owner = await Client(w.Owner, host);
-        foreach (var client in new[] { anonymous, staff, tenant, owner })
+        Assert.Equal(HttpStatusCode.Unauthorized, (await anonymous.PostAsync("/api/v1/notifications/email-test", null)).StatusCode);
+        foreach (var client in new[] { staff, tenant, owner })
             Assert.Equal(HttpStatusCode.NotFound, (await client.PostAsync("/api/v1/notifications/email-test", null)).StatusCode);
         Assert.Empty(probe.Messages);
     }

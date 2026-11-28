@@ -187,6 +187,33 @@ public sealed class PropertyServiceTests
         repository.Received(1).Add(Arg.Is<Room>(room => room.RoomTypeId == roomType.Id));
     }
 
+    // Retain duplicate-number coverage through the supported configured-room workflow.
+    [Fact]
+    public async Task BulkRoomCreationRejectsDuplicateNumbersBeforeAddingRows()
+    {
+        var (properties, repository) = Create(Roles.Owner, BeforeVietnamMidnight);
+        var location = new Location("Synthetic") { Address = "Synthetic Address", IsActive = true };
+        repository.FindAsync<Location>(location.Id, default).Returns(location);
+        var shared = Substitute.For<ISharedConfigurationStore>();
+        shared.TransactionAsync(Arg.Any<Guid[]>(), Arg.Any<Func<Task<BulkRoomResult>>>(), default, false)
+            .Returns(call => call.Arg<Func<Task<BulkRoomResult>>>()());
+        var actor = Substitute.For<ICurrentUser>();
+        actor.UserId.Returns(Guid.NewGuid());
+        actor.IsInRole(Roles.Owner).Returns(true);
+        var service = new LocationSetupService(shared, Substitute.For<ISetupWorkspaceStore>(), null!, null!,
+            properties, null!, null!, actor, new FixedClock(BeforeVietnamMidnight));
+        var defaultsId = Guid.NewGuid();
+        var input = new ConfiguredRoomsInput([new("A-01", "1", defaultsId, 1, 2500000),
+            new(" a-01 ", "1", defaultsId, 1, 2500000)], new DateOnly(2026, 10, 29));
+
+        var error = await Assert.ThrowsAsync<PropertyException>(() =>
+            service.CreateConfiguredRoomsAsync(location.Id, input, Guid.NewGuid(), default));
+
+        Assert.Equal("duplicate_room_number", error.Code);
+        repository.DidNotReceive().Add(Arg.Any<Room>());
+        await shared.DidNotReceive().SaveOperationAsync(Arg.Any<SharedOperation>(), default);
+    }
+
     [Theory]
     [InlineData(0, 20)]
     [InlineData(1, 101)]

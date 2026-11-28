@@ -85,12 +85,7 @@ export function ContractActionDialog({
     }
   }
   return (
-    <Dialog
-      open
-      fullWidth
-      maxWidth="sm"
-      onClose={() => !busy && onClose()}
-    >
+    <Dialog open fullWidth maxWidth="sm" onClose={() => !busy && onClose()}>
       <DialogTitle>{action.label}</DialogTitle>
       <DialogContent>
         <Stack spacing={2} sx={{ pt: 1 }}>
@@ -188,11 +183,7 @@ export function ContractActionDialog({
         <Button disabled={busy} onClick={onClose}>
           Đóng và tải lại
         </Button>
-        <Button
-          variant="contained"
-          disabled={busy || conflicted}
-          onClick={() => void submit()}
-        >
+        <Button variant="contained" disabled={busy || conflicted} onClick={() => void submit()}>
           {busy ? 'Đang xử lý…' : 'Xác nhận'}
         </Button>
       </DialogActions>

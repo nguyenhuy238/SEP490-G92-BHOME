@@ -476,9 +476,22 @@ export function InitialLocationSetupWizard({
     try {
       const [sourceTypes, sourceRooms, sourceTemplates, sourcePolicies, billingPage] =
         await Promise.all([
-          setupApi.request<{ id: string; status: string; data: { name: string; description?: string; defaults: { capacity: number; area: number; amenities: string[]; referenceRent?: number | string } } }[]>(
-            '/api/v1/locations/' + encodeURIComponent(sourceLocationId) + '/room-defaults',
-          ),
+          setupApi.request<
+            {
+              id: string;
+              status: string;
+              data: {
+                name: string;
+                description?: string;
+                defaults: {
+                  capacity: number;
+                  area: number;
+                  amenities: string[];
+                  referenceRent?: number | string;
+                };
+              };
+            }[]
+          >('/api/v1/locations/' + encodeURIComponent(sourceLocationId) + '/room-defaults'),
           (async () => {
             const first = await setupApi.rooms(sourceLocationId, 1);
             const items = [...first.items];

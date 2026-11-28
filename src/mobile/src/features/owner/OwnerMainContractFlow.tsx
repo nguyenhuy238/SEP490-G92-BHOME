@@ -113,17 +113,16 @@ export function OwnerMainContractFlow({
                     ? 'Phương thức ký chưa được hỗ trợ'
                     : contract.isDevelopmentDemo
                       ? 'Ký mô phỏng Development'
-                      : 'Chữ ký số MySign'
+                      : 'Phương thức ký cũ đã ngừng hỗ trợ'
               }
             />
             <Text>Hồ sơ đã được chuyển sang chờ ký; chưa đồng nghĩa hai bên đã ký.</Text>
             <Text>Owner: {ownerSigned ? 'Đã xác minh' : 'Chờ xác nhận ký'}</Text>
             <Text>Người đại diện: {tenantSigned ? 'Đã xác minh' : 'Chờ xác nhận ký'}</Text>
             {!!consent.error && <Text style={ui.red}>{consent.error}</Text>}
-            {!internal && mySign && (
+            {!internal && mySign && !contract.isDevelopmentDemo && (
               <Text>
-                Gửi yêu cầu → xác nhận trên MySign → kiểm tra kết quả ký. Chỉ kết quả đã xác minh
-                mới được ghi nhận.
+                Không thể gửi yêu cầu ký mới bằng MySign. Chỉ kết quả đã xác minh mới được ghi nhận.
               </Text>
             )}
           </Box>

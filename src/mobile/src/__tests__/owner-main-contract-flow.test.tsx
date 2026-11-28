@@ -141,14 +141,15 @@ it('renders an internal signing API error inside Text', () => {
   expect(screen.getByText(state.error)).toBeTruthy();
   expect(errors).not.toHaveBeenCalled();
 });
-it('separates requesting MySign from a verified signature and refreshes after the action', () => {
+it('keeps historical MySign status visible without offering a new remote signing request', () => {
   mount();
-  expect(screen.getByText(/Chữ ký số MySign/)).toBeTruthy();
+  expect(screen.getByText(/Phương thức ký cũ đã ngừng hỗ trợ/)).toBeTruthy();
   expect(screen.queryByText('Chấp thuận nội bộ')).toBeNull();
   expect(screen.queryByText('Chứng thư của Owner hiện tại')).toBeNull();
-  fireEvent.click(screen.getByText('Yêu cầu ký MySign'));
-  fireEvent.click(screen.getByText('Thực hiện signing'));
-  expect(state.changed).toHaveBeenCalledOnce();
+  expect(screen.queryByText('Yêu cầu ký MySign')).toBeNull();
+  expect(screen.queryByText('Thực hiện signing')).toBeNull();
+  expect(state.changed).not.toHaveBeenCalled();
+  expect(state.request).not.toHaveBeenCalled();
   expect(screen.getByText('Owner: Chờ xác nhận ký')).toBeTruthy();
 });
 it('refreshes parent evidence after internal actions and does not fall back from an unknown signing mode', () => {

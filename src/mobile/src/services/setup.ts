@@ -23,8 +23,8 @@ export const setupWritePath = (resource: string) =>
   resource === 'assignments'
     ? '/api/v1/staff-location-assignments'
     : resource === 'locations' || resource === 'rooms'
-    ? `/api/v1/${resource}`
-    : `/api/v1/capture/${resource}`;
+      ? `/api/v1/${resource}`
+      : `/api/v1/capture/${resource}`;
 
 export function roomSetupInput(locationId: string, roomNumber: string, capacity: string) {
   const count = Number(capacity);

@@ -49,6 +49,8 @@ COPY --from=schema /out/ /
 
 FROM source AS seed-build
 
+# Offline persistence is needed by the local seed tool only, not the API image.
+COPY tools/BHome.LegacyPersistence/ tools/BHome.LegacyPersistence/
 RUN dotnet publish tools/BHome.LocalDevelopment/BHome.LocalDevelopment.csproj -c Release -o /seed
 
 FROM mcr.microsoft.com/dotnet/aspnet:8.0-bookworm-slim AS runtime-base

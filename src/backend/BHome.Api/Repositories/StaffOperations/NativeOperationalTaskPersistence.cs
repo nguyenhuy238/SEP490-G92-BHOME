@@ -100,10 +100,10 @@ internal static class NativeOperationalTaskPersistence
                 AND (CAST({query.HasResponsibility} AS boolean) IS NULL OR (a.staff_id IS NOT NULL)=CAST({query.HasResponsibility} AS boolean))
                 AND (CAST({status} AS text) IS NULL OR o.status=CAST({status} AS text))
                 AND (CAST({priority} AS text) IS NULL OR o.priority=CAST({priority} AS text))
-                AND (CAST({query.DueFrom} AS timestamptz) IS NULL OR o.due_at>=CAST({query.DueFrom} AS timestamptz))
-                AND (CAST({query.DueTo} AS timestamptz) IS NULL OR o.due_at<=CAST({query.DueTo} AS timestamptz))
+                AND (CAST({query.DueFrom?.ToUniversalTime()} AS timestamptz) IS NULL OR o.due_at>=CAST({query.DueFrom?.ToUniversalTime()} AS timestamptz))
+                AND (CAST({query.DueTo?.ToUniversalTime()} AS timestamptz) IS NULL OR o.due_at<=CAST({query.DueTo?.ToUniversalTime()} AS timestamptz))
                 AND (CAST({query.IsOverdue} AS boolean) IS NULL OR
-                    (COALESCE(o.due_at<{now},false) AND o.status NOT IN ('2','3'))=CAST({query.IsOverdue} AS boolean))
+                    (COALESCE(o.due_at<{now.ToUniversalTime()},false) AND o.status NOT IN ('2','3'))=CAST({query.IsOverdue} AS boolean))
                 AND (NOT {query.LatestActionable} OR (o.status IN ('0','1') AND (k.kind<>2 OR o.contract_id IS NULL)))
             """);
         var count = await rows.CountAsync(t);

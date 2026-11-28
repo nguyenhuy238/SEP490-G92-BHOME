@@ -116,8 +116,13 @@ internal sealed class PropertySetup(PlanSessions sessions)
 
     public static object RoomDefaultsWrite(string name, string description, int expectedVersion = 0, int capacity = 3) => new
     {
-        name, description, defaults = new { capacity, area = 20.5m, amenities = new[] { "Balcony" }, referenceRent = 2500000m },
-        assetTemplateId = (string?)null, expectedVersion, reason = "BF-01 regression", status = "Recorded"
+        name,
+        description,
+        defaults = new { capacity, area = 20.5m, amenities = new[] { "Balcony" }, referenceRent = 2500000m },
+        assetTemplateId = (string?)null,
+        expectedVersion,
+        reason = "BF-01 regression",
+        status = "Recorded"
     };
     public async Task<HttpResponseMessage> PostRoomTypeAsync(string locationId, string name)
         => await Api.PostAsync($"api/v1/locations/{locationId}/room-defaults", RoomDefaultsWrite(name, "Synthetic room defaults"), await OwnerAsync());

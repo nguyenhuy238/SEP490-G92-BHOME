@@ -954,17 +954,30 @@ request('GET calendar đang lưu', 'GET', '/api/v1/billing-schedules/{{locationI
   saves: { billingScheduleVersion: 'version' },
   emptyDefaults: { billingScheduleVersion: 0 },
 });
-request('Read automation history before calendar save', 'GET', '/api/v1/billing-automation/{{locationId}}/history', {
-  ...array, saves: { automationVersion: '0.version' }, emptyDefaults: { automationVersion: 0 },
-});
+request(
+  'Read automation history before calendar save',
+  'GET',
+  '/api/v1/billing-automation/{{locationId}}/history',
+  {
+    ...array,
+    saves: { automationVersion: '0.version' },
+    emptyDefaults: { automationVersion: 0 },
+  },
+);
 const calendar = {
   locationId: v('locationId'),
   effectiveFrom: v('billingPeriod'),
   enabled: false,
   authorizeAutomaticFinalization: false,
-  meterDay: 1, meterDueDay: 1, meterDueMonthOffset: 0,
+  meterDay: 1,
+  meterDueDay: 1,
+  meterDueMonthOffset: 0,
   timeZone: 'Asia/Ho_Chi_Minh',
-  initialSchedule: { rateDate: n('rateDateRule'), partialMonth: n('partialMonthRule'), rounding: n('roundingRule') },
+  initialSchedule: {
+    rateDate: n('rateDateRule'),
+    partialMonth: n('partialMonthRule'),
+    rounding: n('roundingRule'),
+  },
   draftDay: n('draftDay'),
   draftMonthOffset: n('draftMonthOffset'),
   finalDay: n('finalDay'),
@@ -1563,13 +1576,24 @@ request('Save plan với calendar version Owner chọn', 'PUT', '/api/v1/billing
     timeZone: v('timeZone'),
     expectedVersion: n('automationVersion'),
     expectedBillingScheduleVersion: n('billingScheduleVersion'),
-    draftDay: n('draftDay'), draftMonthOffset: n('draftMonthOffset'),
-    finalDay: n('finalDay'), finalMonthOffset: n('finalMonthOffset'),
-    dueDay: n('dueDay'), dueMonthOffset: n('dueMonthOffset'),
-    initialSchedule: { rateDate: n('rateDateRule'), partialMonth: n('partialMonthRule'), rounding: n('roundingRule') },
+    draftDay: n('draftDay'),
+    draftMonthOffset: n('draftMonthOffset'),
+    finalDay: n('finalDay'),
+    finalMonthOffset: n('finalMonthOffset'),
+    dueDay: n('dueDay'),
+    dueMonthOffset: n('dueMonthOffset'),
+    initialSchedule: {
+      rateDate: n('rateDateRule'),
+      partialMonth: n('partialMonthRule'),
+      rounding: n('roundingRule'),
+    },
   },
   fields: ['id', 'version', 'billingScheduleVersion'],
-  saves: { automationPlanId: 'id', automationVersion: 'version', billingScheduleVersion: 'billingScheduleVersion' },
+  saves: {
+    automationPlanId: 'id',
+    automationVersion: 'version',
+    billingScheduleVersion: 'billingScheduleVersion',
+  },
 });
 request(
   'Preview thực tế - ngày VN và runtime flags',

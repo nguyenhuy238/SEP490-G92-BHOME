@@ -268,13 +268,23 @@ public sealed class MeterInvoiceTests(PlanSessions sessions)
         var period = new DateOnly(today.Year, today.Month, 1).AddMonths(1);
         object Schedule(int draftDay, int finalDay, int dueDay, int? offset = null) => new
         {
-            locationId, effectiveFrom = PlanData.Iso(period), enabled = false, authorizeAutomaticFinalization = false,
-            meterDay = 1, meterDueDay = 1, meterDueMonthOffset = 0, timeZone = "Asia/Ho_Chi_Minh",
-            expectedVersion = version, expectedBillingScheduleVersion = Value("version", 0),
+            locationId,
+            effectiveFrom = PlanData.Iso(period),
+            enabled = false,
+            authorizeAutomaticFinalization = false,
+            meterDay = 1,
+            meterDueDay = 1,
+            meterDueMonthOffset = 0,
+            timeZone = "Asia/Ho_Chi_Minh",
+            expectedVersion = version,
+            expectedBillingScheduleVersion = Value("version", 0),
             initialSchedule = new { rateDate = Value("rateDate", 0), partialMonth = Value("partialMonth", 0), rounding = Value("rounding", 0) },
-            draftDay, draftMonthOffset = offset ?? Value("draftMonthOffset", 1),
-            finalDay, finalMonthOffset = offset ?? Value("finalMonthOffset", 1),
-            dueDay, dueMonthOffset = offset ?? Value("dueMonthOffset", 1)
+            draftDay,
+            draftMonthOffset = offset ?? Value("draftMonthOffset", 1),
+            finalDay,
+            finalMonthOffset = offset ?? Value("finalMonthOffset", 1),
+            dueDay,
+            dueMonthOffset = offset ?? Value("dueMonthOffset", 1)
         };
         var valid = Schedule(Value("draftDay", 1), Value("finalDay", 3), Value("dueDay", 10));
         const string route = "api/v1/billing-automation";

@@ -61,12 +61,12 @@ export function ContractActionForm({
     let body;
     try {
       body = actionPayload(
-            action,
-            action.operation === 'holding-cancellation'
-              ? { ...values, humanConfirmed: String(checked) }
-              : values,
-            contract,
-          );
+        action,
+        action.operation === 'holding-cancellation'
+          ? { ...values, humanConfirmed: String(checked) }
+          : values,
+        contract,
+      );
     } catch (e) {
       const message = (e as Error).message;
       setError(earlyTermination ? message.replace('dd/MM/yyyy', 'dd-MM-yyyy') : message);
@@ -168,10 +168,7 @@ export function ContractActionForm({
         onPress={() => setChecked((v) => !v)}
       />
       {!!error && <ContractNotice message={error} />}
-      <Action
-        disabled={busy || !checked || !!dateError}
-        onPress={() => void submit()}
-      >
+      <Action disabled={busy || !checked || !!dateError} onPress={() => void submit()}>
         {busy
           ? 'Đang xử lý…'
           : action.operation === 'termination-requests'
