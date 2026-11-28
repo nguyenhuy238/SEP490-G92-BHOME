@@ -5,6 +5,7 @@ using BHome.Application.PropertyManagement;
 using BHome.Infrastructure.IdentityAccess;
 using BHome.Infrastructure.Persistence;
 using Microsoft.EntityFrameworkCore;
+using Native = BHome.Domain.Entities;
 
 namespace BHome.Infrastructure.Finance;
 
@@ -124,7 +125,7 @@ internal sealed class TenantRefundPetitionRepository(BHomePersistenceContext db)
             ["recordType"] = Kind,
             ["state"] = JsonSerializer.SerializeToNode(row.State, Json)
         });
-        var history = entries.ToJsonString();
+        var history = JsonSerializer.SerializeToElement(entries);
         if (create)
         {
             // Compact24 does not silently upgrade a populated Development database.
@@ -136,33 +137,18 @@ internal sealed class TenantRefundPetitionRepository(BHomePersistenceContext db)
                     AND conname='ck_refund_source_or_tenant_petition') AS "Value"
                 """).SingleAsync(token);
             if (!ready) throw new FinanceException(409, "tenant_refund_schema_upgrade_required");
-            await db.Database.ExecuteSqlInterpolatedAsync($"""
-                INSERT INTO refund_requests(id,source_payment_id,source_deposit_contract_id,
-                  beneficiary_resident_id,beneficiary_kind,requested_by_user_id,requested_at,
-                  requested_amount,reason,status,operation_key,version,history)
-                VALUES({row.Id},NULL,NULL,{row.BeneficiaryResidentId},'RESIDENT',{actor},
-                  {row.CreatedAt},{row.Amount},{row.Reason},{row.Status},{row.OperationKey},{row.Version},
-                  {history}::jsonb)
-                """, token);
+            db.Add(new Native.RefundRequest
+            {
+                Id = row.Id, BeneficiaryResidentId = row.BeneficiaryResidentId, BeneficiaryKind = "RESIDENT",
+                RequestedByUserId = actor, RequestedAt = row.CreatedAt, RequestedAmount = row.Amount,
+                Reason = row.Reason, Status = row.Status, OperationKey = row.OperationKey,
+                Version = row.Version, History = history
+            });
         }
         else
-            await db.Database.ExecuteSqlInterpolatedAsync($"""
-                UPDATE refund_requests SET status={row.Status},version={row.Version},
-                  decided_by_user_id={row.DecidedBy},decided_at={row.DecidedAt},
-                  decision_reason={row.DecisionReason},executed_at={row.ExecutedAt},
-                  external_refund_reference={row.ExternalReference},
-                  execution_evidence_key={row.EvidenceKey},history={history}::jsonb
-                WHERE id={row.Id}
-                """, token);
-        db.SecurityAudit.Add(new SecurityAuditRecord
-        {
-            UserId = actor,
-            TargetId = row.Id,
-            TargetType = "Refund",
-            Event = action,
-            Succeeded = true,
-            OccurredAt = now
-        });
+            await RefundRequestWrites.UpdateAsync(db, row.Id, row.Status, row.Version, row.DecidedBy, row.DecidedAt,
+                row.DecisionReason, row.ExecutedAt, row.ExternalReference, row.EvidenceKey, history, token);
         await db.SaveChangesAsync(token);
+        await SecurityAuditWrites.AppendAsync(db, new(Guid.NewGuid(), actor, null, null, action, true, now, "Refund", row.Id), token);
     }
 }

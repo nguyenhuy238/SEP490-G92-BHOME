@@ -3,11 +3,11 @@ using System.Text.Json.Nodes;
 using BHome.Application.Finance;
 using BHome.Application.PaymentsDebt;
 using BHome.Domain.Billing;
-using BHome.Domain.PaymentsDebt;
 using BHome.Domain.TenantContracts;
 using BHome.Infrastructure.IdentityAccess;
 using BHome.Infrastructure.Persistence;
 using Microsoft.EntityFrameworkCore;
+using Native = BHome.Domain.Entities;
 
 namespace BHome.Infrastructure.Finance;
 
@@ -72,14 +72,21 @@ internal sealed partial class RefundRepository(BHomePersistenceContext db, BHome
     {
         if (!await db.Database.SqlQuery<bool>($"SELECT EXISTS(SELECT 1 FROM payments WHERE id={id} AND status='VERIFIED') AS \"Value\"").SingleAsync(t))
             throw new FinanceException(404, "bank_transfer_not_found");
-        var payment = await db.Set<PaymentTransfer>().AsNoTracking().SingleOrDefaultAsync(p => p.Id == id, t)
-            ?? throw new FinanceException(404, "bank_transfer_not_found");
-        var allocation = await db.Set<PaymentAllocation>().AsNoTracking().SingleOrDefaultAsync(a => a.TransferId == id, t);
+        var payment = await db.Database.SqlQuery<RefundReceiptBasis>($"""
+            SELECT id AS "Id",amount AS "Amount",currency AS "Currency",received_at AS "OccurredAt",remittance_info AS "TransferDescription",
+                COALESCE(verification_data->'compactState'->>'normalizedReference','') AS "NormalizedReference",
+                COALESCE(verification_data->'compactState'->>'statementReference','') AS "StatementReference",
+                COALESCE(verified_by_user_id,'00000000-0000-0000-0000-000000000000'::uuid) AS "VerifiedByUserId",
+                verified_at AS "VerifiedAt",COALESCE((verification_data->'compactState'->>'isDevelopmentDemo')::boolean,false) AS "IsDevelopmentDemo"
+            FROM payments WHERE id={id} AND verification_data ? 'compactState'
+            """).SingleOrDefaultAsync(t) ?? throw new FinanceException(404, "bank_transfer_not_found");
+        var allocation = await db.Set<Native.PaymentAllocation>().AsNoTracking().SingleOrDefaultAsync(a => a.SourcePaymentId == id &&
+            (a.TargetInvoiceId != null || a.TargetDepositContractId != null || a.TargetSettlementContractId != null || a.TargetInitialContractId != null), t);
         var whole = allocation is null ? await BHome.Infrastructure.PaymentsDebt.ReceiptExcessRecords.ReadAsync(db, id, t) : null;
         var external = await BHome.Infrastructure.PaymentsDebt.ExternalPaymentPayerRecords.ReadAsync(db, id, t);
-        if (external is not null && (external.TransferFingerprint != ReceiptExcessRules.TransferFingerprint(payment) || allocation?.PaidByUserId is not null ||
+        if (external is not null && (external.TransferFingerprint != payment.Fingerprint() || allocation?.PaidByUserId is not null ||
             whole is not null && whole.ExternalPayerAttestationId != external.Id)) throw new FinanceException(409, "refund_source_requires_manual_review");
-        if (whole is not null && (whole.TransferFingerprint != BHome.Application.PaymentsDebt.ReceiptExcessRules.TransferFingerprint(payment) || whole.Amount != payment.Amount))
+        if (whole is not null && (whole.TransferFingerprint != payment.Fingerprint() || whole.Amount != payment.Amount))
             throw new FinanceException(409, "refund_source_requires_manual_review");
         var excess = whole?.Amount ?? payment.Amount - (allocation?.Amount ?? payment.Amount);
         var allReserved = await db.Database.SqlQuery<decimal>($"""
@@ -98,11 +105,11 @@ internal sealed partial class RefundRepository(BHomePersistenceContext db, BHome
             upload.ObjectKey != r.EvidenceKey || upload.ExternalReference != r.ExternalReference || !System.Text.RegularExpressions.Regex.IsMatch(upload.Sha256, "^[A-F0-9]{64}$") || !r.State.Events.Any(e => e.Action == "Completed"))))
             throw new FinanceException(409, "refund_source_requires_manual_review");
         var people = allocation?.PaidByUserId is not { } payer ? [] : await (
-            from person in db.Set<Resident>().AsNoTracking()
-            from invoice in db.Set<Invoice>().AsNoTracking()
-            where invoice.Id == allocation.InvoiceId && person.TenantUserId == payer &&
-                person.VerificationStatus == IdentityVerificationStatus.Verified && invoice.Recipients.Any(r => r.TenantUserId == payer) &&
-                db.Set<ContractResident>().Any(cr => cr.ResidentId == person.Id && db.Set<Contract>().Any(c => c.Id == cr.ContractId && c.RoomId == invoice.RoomId))
+            from person in db.Set<Native.Resident>().AsNoTracking()
+            from invoice in db.Set<Native.Invoice>().AsNoTracking()
+            where invoice.Id == allocation.TargetInvoiceId && person.UserId == payer &&
+                person.VerificationStatus == (short)IdentityVerificationStatus.Verified && invoice.RecipientUserIds.Contains(payer) &&
+                db.Set<Native.ContractResident>().Any(cr => cr.ResidentId == person.Id && db.Set<Native.Contract>().Any(c => c.Id == cr.ContractId && (c.ContractType == "MAIN" || c.ContractType == "RENEWAL" || c.ContractType == "HOLDING" || c.ContractType == "ADDENDUM") && c.RoomId == invoice.RoomId))
             orderby person.Id
             select new RefundPerson(person.Id, person.DisplayLabel)).ToArrayAsync(t);
         if (allocation is { PaidByUserId: { } chargePayer, TargetSettlementContractId: { } contractId, SettlementReceivableId: { } chargeId })
@@ -110,8 +117,8 @@ internal sealed partial class RefundRepository(BHomePersistenceContext db, BHome
             var charge = (await BHome.Infrastructure.Contracts.SettlementChargeRecords.ReadAsync<BHome.Application.Contracts.SettlementReceivable>(db,
                 contractId, BHome.Infrastructure.Contracts.SettlementChargeRecords.ChargeKind, t)).SingleOrDefault(c => c.Id == chargeId);
             if (charge is null || !charge.RecipientUserIds.Contains(chargePayer)) throw new FinanceException(409, "refund_source_requires_manual_review");
-            people = await db.Set<Resident>().AsNoTracking().Where(person => person.TenantUserId == chargePayer && person.VerificationStatus == IdentityVerificationStatus.Verified &&
-                db.Set<ContractResident>().Any(cr => cr.ResidentId == person.Id && db.Set<Contract>().Any(c => c.Id == cr.ContractId && c.RoomId == charge.RoomId)))
+            people = await db.Set<Native.Resident>().AsNoTracking().Where(person => person.UserId == chargePayer && person.VerificationStatus == (short)IdentityVerificationStatus.Verified &&
+                db.Set<Native.ContractResident>().Any(cr => cr.ResidentId == person.Id && db.Set<Native.Contract>().Any(c => c.Id == cr.ContractId && (c.ContractType == "MAIN" || c.ContractType == "RENEWAL" || c.ContractType == "HOLDING" || c.ContractType == "ADDENDUM") && c.RoomId == charge.RoomId)))
                 .OrderBy(person => person.Id).Select(person => new RefundPerson(person.Id, person.DisplayLabel)).ToArrayAsync(t);
         }
         if (allocation?.TargetDepositContractId is { } depositContract)
@@ -119,23 +126,23 @@ internal sealed partial class RefundRepository(BHomePersistenceContext db, BHome
             var deposit = await BHome.Infrastructure.PaymentsDebt.DepositReceiptRecords.ReadAsync(db, id, t);
             if (deposit is not null)
             {
-                if (deposit.TransferFingerprint != ReceiptExcessRules.TransferFingerprint(payment) || deposit.AllocationId != allocation.Id ||
+                if (deposit.TransferFingerprint != payment.Fingerprint() || deposit.AllocationId != allocation.Id ||
                     deposit.ContractId != depositContract || deposit.AllocatedAmount != allocation.Amount.ToString("0", System.Globalization.CultureInfo.InvariantCulture) ||
                     deposit.PayerUserId != allocation.PaidByUserId || deposit.ExternalPayerAttestationId != external?.Id)
                     throw new FinanceException(409, "refund_source_requires_manual_review");
-                people = await db.Set<Resident>().AsNoTracking().Where(person => person.Id == deposit.PayerResidentId &&
-                    person.VerificationStatus == IdentityVerificationStatus.Verified && (deposit.PayerUserId == null || person.TenantUserId == deposit.PayerUserId) &&
-                    db.Set<ContractResident>().Any(cr => cr.ContractId == depositContract && cr.ResidentId == person.Id))
+                people = await db.Set<Native.Resident>().AsNoTracking().Where(person => person.Id == deposit.PayerResidentId &&
+                    person.VerificationStatus == (short)IdentityVerificationStatus.Verified && (deposit.PayerUserId == null || person.UserId == deposit.PayerUserId) &&
+                    db.Set<Native.ContractResident>().Any(cr => cr.ContractId == depositContract && cr.ResidentId == person.Id))
                     .Select(person => new RefundPerson(person.Id, person.DisplayLabel)).ToArrayAsync(t);
             }
             else if (allocation.PaidByUserId is { } depositUser)
-                people = await db.Set<Resident>().AsNoTracking().Where(person => person.TenantUserId == depositUser && person.VerificationStatus == IdentityVerificationStatus.Verified &&
-                    db.Set<ContractResident>().Any(cr => cr.ContractId == depositContract && cr.ResidentId == person.Id))
+                people = await db.Set<Native.Resident>().AsNoTracking().Where(person => person.UserId == depositUser && person.VerificationStatus == (short)IdentityVerificationStatus.Verified &&
+                    db.Set<Native.ContractResident>().Any(cr => cr.ContractId == depositContract && cr.ResidentId == person.Id))
                     .Select(person => new RefundPerson(person.Id, person.DisplayLabel)).ToArrayAsync(t);
         }
         if (whole is not null)
-            people = await db.Set<Resident>().AsNoTracking().Where(person => person.Id == whole.PayerResidentId && person.VerificationStatus == IdentityVerificationStatus.Verified &&
-                (whole.PayerUserId == null || person.TenantUserId == whole.PayerUserId)).Select(person => new RefundPerson(person.Id, person.DisplayLabel)).ToArrayAsync(t);
+            people = await db.Set<Native.Resident>().AsNoTracking().Where(person => person.Id == whole.PayerResidentId && person.VerificationStatus == (short)IdentityVerificationStatus.Verified &&
+                (whole.PayerUserId == null || person.UserId == whole.PayerUserId)).Select(person => new RefundPerson(person.Id, person.DisplayLabel)).ToArrayAsync(t);
         return new(Math.Max(0, excess), payment.IsDevelopmentDemo, external is null ? people : [], requests, ReceiptExcessDispositionId: whole?.Id,
             ExternalBeneficiary: external is null ? null : new(external.Id, external.PayerLabel));
     }
@@ -150,46 +157,93 @@ internal sealed partial class RefundRepository(BHomePersistenceContext db, BHome
     {
         var history = JsonNode.Parse(row.HistoryJson) as JsonArray ?? throw new FinanceException(409, "refund_history_invalid");
         history.Add(new JsonObject { ["recordType"] = row.State.Classification, ["state"] = JsonSerializer.SerializeToNode(row.State, Json) });
-        var json = history.ToJsonString();
+        var json = JsonSerializer.SerializeToElement(history);
         if (create)
-            await db.Database.ExecuteSqlInterpolatedAsync($"""
-                INSERT INTO refund_requests(id,source_payment_id,source_deposit_contract_id,beneficiary_resident_id,beneficiary_kind,external_payer_attestation_id,requested_by_user_id,
-                  requested_at,requested_amount,reason,status,operation_key,version,history)
-                VALUES({row.Id},{row.SourcePaymentId},{row.SourceDepositContractId},{row.BeneficiaryResidentId},{row.BeneficiaryKind},{row.ExternalPayerAttestationId},{row.RequestedBy},{row.RequestedAt},
-                  {row.Amount},{row.Reason},{row.Status},{row.OperationKey},{row.Version},{json}::jsonb)
-                """, t);
+            db.Add(new Native.RefundRequest
+            {
+                Id = row.Id, SourcePaymentId = row.SourcePaymentId, SourceDepositContractId = row.SourceDepositContractId,
+                BeneficiaryResidentId = row.BeneficiaryResidentId, BeneficiaryKind = row.BeneficiaryKind,
+                ExternalPayerAttestationId = row.ExternalPayerAttestationId, RequestedByUserId = row.RequestedBy,
+                RequestedAt = row.RequestedAt, RequestedAmount = row.Amount, Reason = row.Reason, Status = row.Status,
+                OperationKey = row.OperationKey, Version = row.Version, History = json
+            });
         else
-            await db.Database.ExecuteSqlInterpolatedAsync($"""
-                UPDATE refund_requests SET status={row.Status},version={row.Version},decided_by_user_id={row.DecidedBy},
-                  decided_at={row.DecidedAt},decision_reason={row.DecisionReason},executed_at={row.ExecutedAt},
-                  external_refund_reference={row.ExternalReference},execution_evidence_key={row.EvidenceKey},history={json}::jsonb
-                WHERE id={row.Id}
-                """, t);
-        db.SecurityAudit.Add(new SecurityAuditRecord
-        {
-            UserId = actor,
-            TargetId = row.Id,
-            TargetType = "Refund",
-            Event = action,
-            Succeeded = true,
-            OccurredAt = now
-        });
+            await RefundRequestWrites.UpdateAsync(db, row.Id, row.Status, row.Version, row.DecidedBy, row.DecidedAt,
+                row.DecisionReason, row.ExecutedAt, row.ExternalReference, row.EvidenceKey, json, t);
+        // The native write and the historical audit/reconciliation remain atomic
+        // under the same payment-ledger transaction; never mix tracked models.
+        await db.SaveChangesAsync(t);
+        await SecurityAuditWrites.AppendAsync(db, new(Guid.NewGuid(), actor, null, null, action, true, now, "Refund", row.Id), t);
         if (!create && row.Status == "COMPLETED" && row.SourcePaymentId is { } receipt && row.State.ReceiptExcessDispositionId is { } dispositionId)
         {
             var disposition = await BHome.Infrastructure.PaymentsDebt.ReceiptExcessRecords.ReadAsync(db, receipt, t);
             if (disposition?.Id != dispositionId) throw new FinanceException(409, "refund_source_changed");
             var returned = await db.Database.SqlQuery<decimal>($"SELECT COALESCE(sum(requested_amount),0) AS \"Value\" FROM refund_requests WHERE source_payment_id={receipt} AND status='COMPLETED'").SingleAsync(t);
-            db.Add(new PaymentReconciliation
-            {
-                TransferId = receipt,
-                InvoiceId = disposition.Target.InvoiceId,
-                DepositContractId = disposition.Target.HoldingContractId ?? disposition.Target.DepositContractId,
-                Decision = returned == disposition.Amount ? "ExcessRefundCompleted" : "ExcessRefundPending",
-                Reason = returned == disposition.Amount ? "verified_whole_excess_returned" : "verified_partial_excess_returned",
-                ActorId = actor,
-                OccurredAt = now
-            });
+            await AppendReconciliationAsync(receipt, disposition.Target.InvoiceId,
+                disposition.Target.HoldingContractId ?? disposition.Target.DepositContractId,
+                returned == disposition.Amount ? "ExcessRefundCompleted" : "ExcessRefundPending",
+                returned == disposition.Amount ? "verified_whole_excess_returned" : "verified_partial_excess_returned",
+                actor, now, t);
         }
-        await db.SaveChangesAsync(t);
+    }
+
+    private async Task AppendReconciliationAsync(Guid receipt, Guid? invoice, Guid? deposit, string decision,
+        string reason, Guid actor, DateTimeOffset occurredAt, CancellationToken token)
+    {
+        // Same global sequence lock, parent-row lock and append-only envelope
+        // as the original ledger writer; no independent transaction or status change.
+        var at = DateTimeOffset.UtcNow;
+        await db.Database.ExecuteSqlRawAsync("SELECT pg_advisory_xact_lock(hashtextextended('compact24-sequence:PaymentReconciliation',0))", token);
+        await db.Database.ExecuteSqlInterpolatedAsync($"SELECT id FROM payments WHERE id={receipt} FOR UPDATE", token);
+        var sequence = await db.Database.SqlQuery<long>($"""
+            SELECT COALESCE(max((h->'state'->>'sequence')::bigint),0)+1 AS "Value"
+            FROM payments p CROSS JOIN LATERAL jsonb_array_elements(p.history) h
+            WHERE h->>'recordType'='PaymentReconciliation'
+            """).SingleAsync(token);
+        var id = Guid.NewGuid();
+        var envelope = JsonSerializer.Serialize(new
+        {
+            schemaVersion = 1, recordType = "PaymentReconciliation", recordKey = id.ToString(), deleted = false,
+            state = new { id, sequence, transferId = receipt, invoiceId = invoice, depositContractId = deposit,
+                decision, reason, actorId = actor, occurredAt, createdAt = at, updatedAt = at }
+        }, Json);
+        var changed = await db.Database.ExecuteSqlInterpolatedAsync($"UPDATE payments SET history=history||jsonb_build_array({envelope}::jsonb) WHERE id={receipt}", token);
+        if (changed != 1) throw new DbUpdateConcurrencyException("Compact24 containing record is unavailable.");
+    }
+}
+
+internal sealed class RefundReceiptBasis
+{
+    public Guid Id { get; set; }
+    public decimal Amount { get; set; }
+    public string Currency { get; set; } = "";
+    public DateTimeOffset OccurredAt { get; set; }
+    public string TransferDescription { get; set; } = "";
+    public string NormalizedReference { get; set; } = "";
+    public string StatementReference { get; set; } = "";
+    public Guid VerifiedByUserId { get; set; }
+    public DateTimeOffset VerifiedAt { get; set; }
+    public bool IsDevelopmentDemo { get; set; }
+    internal string Fingerprint() => ReceiptExcessRules.TransferFingerprint(Id, NormalizedReference, Amount, Currency,
+        OccurredAt, TransferDescription, StatementReference, VerifiedByUserId, VerifiedAt, IsDevelopmentDemo);
+}
+
+internal static class RefundRequestWrites
+{
+    internal static async Task UpdateAsync(BHomePersistenceContext db, Guid id, string status, int version,
+        Guid? decidedBy, DateTimeOffset? decidedAt, string? decisionReason, DateTimeOffset? executedAt,
+        string? externalReference, string? evidenceKey, JsonElement history, CancellationToken token)
+    {
+        var entity = await db.Set<Native.RefundRequest>().AsNoTracking().SingleAsync(r => r.Id == id, token);
+        db.Attach(entity);
+        entity.Status = status;
+        entity.Version = version;
+        entity.DecidedByUserId = decidedBy;
+        entity.DecidedAt = decidedAt;
+        entity.DecisionReason = decisionReason;
+        entity.ExecutedAt = executedAt;
+        entity.ExternalRefundReference = externalReference;
+        entity.ExecutionEvidenceKey = evidenceKey;
+        entity.History = history;
     }
 }

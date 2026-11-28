@@ -59,8 +59,7 @@ internal sealed class ExpenseEvidenceRepository(BHomePersistenceContext db) : IE
         if (file.Status != "Uploaded")
         {
             file = file with { Status = "Uploaded" }; nodes[index]!["state"] = JsonSerializer.SerializeToNode(file, Json); await WriteAsync(id, nodes, t);
-            db.SecurityAudit.Add(new SecurityAuditRecord { UserId = actor, TargetId = id, TargetType = "Expense", Event = "ExpenseEvidenceUploaded", Succeeded = true, OccurredAt = now });
-            await db.SaveChangesAsync(t);
+            await SecurityAuditWrites.AppendAsync(db, new(Guid.NewGuid(), actor, null, null, "ExpenseEvidenceUploaded", true, now, "Expense", id), t);
         }
         await transaction.CommitAsync(t); return file;
     }

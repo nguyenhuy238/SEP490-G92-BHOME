@@ -3,6 +3,7 @@ using BHome.Application.Finance;
 using BHome.Domain.TenantContracts;
 using BHome.Domain.PropertyManagement;
 using Microsoft.EntityFrameworkCore;
+using Native = BHome.Domain.Entities;
 
 namespace BHome.Infrastructure.Finance;
 
@@ -10,13 +11,20 @@ internal sealed partial class RefundRepository
 {
     public async Task<RefundSourceData> DepositSourceAsync(Guid contractId, CancellationToken t)
     {
-        var contract = await db.Set<Contract>().AsNoTracking().SingleOrDefaultAsync(c => c.Id == contractId, t)
-            ?? throw new FinanceException(404, "contract_not_found");
-        if (contract.Kind == ContractKind.Holding) return await HoldingRefundSourceAsync(contract, t);
+        var contract = await db.Database.SqlQuery<RefundContractBasis>($"""
+            SELECT c.id AS "Id",c.contract_type AS "ContractType",c.status AS "Status",
+                COALESCE(s.data->>'paymentMode',CASE WHEN COALESCE((s.data->>'isDevelopmentDemo')::boolean,false)
+                    THEN 'Test' ELSE 'Live' END) AS "PaymentMode"
+            FROM contracts c LEFT JOIN LATERAL (
+                SELECT h->'state' AS data FROM jsonb_array_elements(c.history) WITH ORDINALITY e(h,n)
+                WHERE h->>'recordType'='Contract' ORDER BY n DESC LIMIT 1) s ON true
+            WHERE c.id={contractId} AND c.contract_type IN ('MAIN','RENEWAL','HOLDING','ADDENDUM')
+            """).SingleOrDefaultAsync(t) ?? throw new FinanceException(404, "contract_not_found");
+        if (contract.ContractType == "HOLDING") return await HoldingRefundSourceAsync(contract, t);
         if (ledger is not IContractSettlementDetails details) throw new FinanceException(503, "settlement_summary_unavailable");
         var summary = await details.SummaryAsync(contractId, t);
         var blockers = summary.UnresolvedItems.Where(b => b != "deposit_deduction_refund_policy_required").ToList();
-        if (contract.Status is not (ContractStatus.Active or ContractStatus.Terminated)) blockers.Add("deposit_contract_not_active");
+        if ((ContractStatus)contract.Status is not (ContractStatus.Active or ContractStatus.Terminated)) blockers.Add("deposit_contract_not_active");
         if (summary.VerifiedSecurityDeposit <= 0 || summary.Calculation?.DepositPositionConsistent != true ||
             summary.Calculation.DepositAllocated != summary.ApprovedDepositOffsets) blockers.Add("deposit_source_requires_review");
         if (summary.DepositDeductions is { } plan)
@@ -49,14 +57,22 @@ internal sealed partial class RefundRepository
             """).SingleAsync(t);
         if (allReserved != requests.Where(r => r.Status is "REQUESTED" or "APPROVED" or "COMPLETED").Sum(r => r.Amount))
             blockers.Add("refund_source_requires_manual_review");
-        var people = await db.Set<Resident>().AsNoTracking().Where(r =>
-            r.TenantUserId != null && r.VerificationStatus == IdentityVerificationStatus.Verified &&
-            db.Set<ContractResident>().Any(cr => cr.ContractId == contractId && cr.ResidentId == r.Id))
+        var people = await db.Set<Native.Resident>().AsNoTracking().Where(r =>
+            r.UserId != null && r.VerificationStatus == (short)IdentityVerificationStatus.Verified &&
+            db.Set<Native.ContractResident>().Any(cr => cr.ContractId == contractId && cr.ResidentId == r.Id))
             .OrderBy(r => r.Id).Select(r => new RefundPerson(r.Id, r.DisplayLabel)).ToArrayAsync(t);
         // BR-30: the Owner confirms the recipient under the Contract agreement. These choices
         // are eligible Residents, not an inference about who originally paid the deposit.
-        return new(summary.VerifiedSecurityDeposit - (summary.DepositDeductions?.Total ?? 0) - summary.MaintenanceDeductions - summary.ApprovedDepositOffsets, BHome.Application.Contracts.ContractPaymentModes.IsTest(contract), people, requests,
+        return new(summary.VerifiedSecurityDeposit - (summary.DepositDeductions?.Total ?? 0) - summary.MaintenanceDeductions - summary.ApprovedDepositOffsets, contract.PaymentMode == "Test", people, requests,
             summary.DepositContractId, summary.FinancialReference, blockers.Distinct().Order().ToArray(), summary.Calculation?.AvailableSecurityDeposit,
             summary.VerifiedSecurityDeposit, summary.DepositDeductions, summary.ApprovedDepositOffsets, MaintenanceDeductions: summary.MaintenanceDeductions);
     }
+}
+
+internal sealed class RefundContractBasis
+{
+    public Guid Id { get; set; }
+    public string ContractType { get; set; } = "";
+    public short Status { get; set; }
+    public string PaymentMode { get; set; } = "";
 }
