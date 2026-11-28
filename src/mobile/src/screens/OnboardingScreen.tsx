@@ -42,7 +42,12 @@ export function OnboardingScreen() {
     representativeResidentId?: string;
   }>();
   return residentId ? (
-    <ResidentProfile key={residentId} residentId={residentId} locationId={locationId} representativeResidentId={representativeResidentId} />
+    <ResidentProfile
+      key={residentId}
+      residentId={residentId}
+      locationId={locationId}
+      representativeResidentId={representativeResidentId}
+    />
   ) : (
     <NewResidentOnboarding />
   );
@@ -314,9 +319,7 @@ function NewResidentOnboarding() {
         accessibilityElementsHidden={contractOpen}
         importantForAccessibility={contractOpen ? 'no-hide-descendants' : 'auto'}
       >
-        <Heading
-          title={step === 2 ? 'Thông tin khách thuê' : 'Tiếp nhận khách thuê'}
-        />
+        <Heading title={step === 2 ? 'Thông tin khách thuê' : 'Tiếp nhận khách thuê'} />
         <MainContractProgress current={step} compact={step === 2} />
         {step === 0 && (
           <Box style={styles.panel}>
@@ -485,7 +488,11 @@ function NewResidentOnboarding() {
             onManual={(person) => void openIdentity(person, 'verify')}
           />
         )}
-        <View style={styles.hidden} accessibilityElementsHidden importantForAccessibility="no-hide-descendants">
+        <View
+          style={styles.hidden}
+          accessibilityElementsHidden
+          importantForAccessibility="no-hide-descendants"
+        >
           {busy && <ActivityIndicator accessibilityLabel="Đang tạo hồ sơ người ở" />}
           {people
             .filter((p) => !!p.residentId)
@@ -580,14 +587,18 @@ function NewResidentOnboarding() {
                 ? 'Chọn phòng còn chỗ trước khi tiếp tục.'
                 : !peopleValid
                   ? 'Kiểm tra danh sách người ở theo sức chứa của phòng.'
-                : allConfirmed
-                  ? `Đã xác nhận ${completedCount}/${people.length} người ở. Sẵn sàng tiếp tục.`
-                  : created && !preview
-                    ? `Xác minh CCCD của ${personLabel(pendingPerson)} để tiếp tục. Nhấn để kiểm tra hồ sơ đã lưu.`
-                    : `Xác minh CCCD của ${personLabel(pendingPerson)} để tiếp tục.`}
+                  : allConfirmed
+                    ? `Đã xác nhận ${completedCount}/${people.length} người ở. Sẵn sàng tiếp tục.`
+                    : created && !preview
+                      ? `Xác minh CCCD của ${personLabel(pendingPerson)} để tiếp tục. Nhấn để kiểm tra hồ sơ đã lưu.`
+                      : `Xác minh CCCD của ${personLabel(pendingPerson)} để tiếp tục.`}
             </Text>
             {created && !allConfirmed && !preview && (
-              <Button compact disabled={busy || recognizing} onPress={() => void checkSavedIdentities()}>
+              <Button
+                compact
+                disabled={busy || recognizing}
+                onPress={() => void checkSavedIdentities()}
+              >
                 Kiểm tra trạng thái đã lưu
               </Button>
             )}

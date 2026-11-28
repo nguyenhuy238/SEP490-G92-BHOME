@@ -85,12 +85,12 @@ export function ResidentProfile({
             );
             householdData = {
               ...result,
-              representative: result.representative
-                ? { ...result.representative }
-                : null,
+              representative: result.representative ? { ...result.representative } : null,
               members: result.members.map((member) => ({
                 ...member,
-                citizenNumber: member.citizenNumber ? maskCitizenNumber(member.citizenNumber) : null,
+                citizenNumber: member.citizenNumber
+                  ? maskCitizenNumber(member.citizenNumber)
+                  : null,
               })),
             };
           } catch {
@@ -254,9 +254,13 @@ export function ResidentProfile({
       <View style={styles.group}>
         <Text style={styles.groupTitle}>Thông tin cá nhân</Text>
         <ProfileLine label="Họ và tên" value={residentName} />
-        {!!householdProfile?.phone && <ProfileLine label="Điện thoại" value={householdProfile.phone} />}
+        {!!householdProfile?.phone && (
+          <ProfileLine label="Điện thoại" value={householdProfile.phone} />
+        )}
         {!!data.resident.email && <ProfileLine label="Email" value={data.resident.email} />}
-        {!!householdProfile?.dateOfBirth && <ProfileLine label="Ngày sinh" value={householdProfile.dateOfBirth} />}
+        {!!householdProfile?.dateOfBirth && (
+          <ProfileLine label="Ngày sinh" value={householdProfile.dateOfBirth} />
+        )}
         {!!maskedCitizenNumber && <ProfileLine label="CCCD" value={maskedCitizenNumber} />}
       </View>
       <View style={styles.group}>
@@ -359,7 +363,13 @@ const styles = StyleSheet.create({
   name: { color: c.ink, fontWeight: '700' },
   muted: { color: c.muted, fontSize: 12 },
   status: { flexDirection: 'row', alignItems: 'center', gap: 5 },
-  group: { padding: 12, borderRadius: 12, borderWidth: 1, borderColor: c.border, backgroundColor: c.white },
+  group: {
+    padding: 12,
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: c.border,
+    backgroundColor: c.white,
+  },
   groupTitle: { color: c.ink, fontWeight: '700', marginBottom: 4 },
   row: {
     flexDirection: 'row',

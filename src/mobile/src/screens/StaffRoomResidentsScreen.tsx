@@ -16,7 +16,10 @@ import { useCaptureScope } from '../features/onboarding/useCaptureScope';
 import { residentStatus } from '../features/onboarding/residentPresentation';
 import { colors as c, staffColors as s } from '../theme/theme';
 import type { Resident } from '../lib/api';
-import { householdClient, type HouseholdView } from '../../../../packages/client-core/src/households';
+import {
+  householdClient,
+  type HouseholdView,
+} from '../../../../packages/client-core/src/households';
 
 const PAGE_SIZE = 12;
 type RoomFilter = 'pending' | 'all';
@@ -178,16 +181,31 @@ function RoomDirectory() {
           />
         </View>
         <View style={styles.quickActions}>
-          <Button compact icon="file-document-outline" style={styles.quickAction}
-            contentStyle={styles.quickActionContent} onPress={() => go('signing')}>
+          <Button
+            compact
+            icon="file-document-outline"
+            style={styles.quickAction}
+            contentStyle={styles.quickActionContent}
+            onPress={() => go('signing')}
+          >
             Hợp đồng
           </Button>
-          <Button compact icon="plus" style={styles.quickAction}
-            contentStyle={styles.quickActionContent} onPress={() => go('prepare-contract')}>
+          <Button
+            compact
+            icon="plus"
+            style={styles.quickAction}
+            contentStyle={styles.quickActionContent}
+            onPress={() => go('prepare-contract')}
+          >
             Tạo hợp đồng
           </Button>
-          <Button compact icon="bookmark-outline" style={styles.quickAction}
-            contentStyle={styles.quickActionContent} onPress={() => go('prepare-contract', { kind: 'Holding' })}>
+          <Button
+            compact
+            icon="bookmark-outline"
+            style={styles.quickAction}
+            contentStyle={styles.quickActionContent}
+            onPress={() => go('prepare-contract', { kind: 'Holding' })}
+          >
             Giữ chỗ
           </Button>
         </View>
@@ -196,7 +214,10 @@ function RoomDirectory() {
             label="Cơ sở"
             value={scope.location}
             options={scope.locations}
-            onChange={(id) => { scope.selectLocation(id); changePage(1); }}
+            onChange={(id) => {
+              scope.selectLocation(id);
+              changePage(1);
+            }}
             placeholder="Chọn cơ sở được phân công"
           />
         ) : preview || scope.location !== staffLocationId || !staffLocationId ? (
@@ -307,22 +328,29 @@ function RoomDirectory() {
             >
               <View style={styles.roomCardContent}>
                 <View style={styles.roomCardTop}>
-                  <Text numberOfLines={1} style={styles.roomCardTitle}>Phòng {room.label}</Text>
+                  <Text numberOfLines={1} style={styles.roomCardTitle}>
+                    Phòng {room.label}
+                  </Text>
                   <Icon source="chevron-right" size={21} color={c.muted} />
                 </View>
                 <View style={styles.badgeRow}>
                   <View style={[styles.statusBadge, { backgroundColor: status.background }]}>
                     <View style={[styles.statusDot, { backgroundColor: status.color }]} />
-                    <Text style={{ color: status.color, fontSize: 11, fontWeight: '600' }}>{status.label}</Text>
+                    <Text style={{ color: status.color, fontSize: 11, fontWeight: '600' }}>
+                      {status.label}
+                    </Text>
                   </View>
                   {room.pending > 0 && (
                     <View style={[styles.statusBadge, { backgroundColor: s.orangeSoft }]}>
-                      <Text style={{ color: s.orange, fontSize: 11, fontWeight: '600' }}>{room.pending} chờ xác minh</Text>
+                      <Text style={{ color: s.orange, fontSize: 11, fontWeight: '600' }}>
+                        {room.pending} chờ xác minh
+                      </Text>
                     </View>
                   )}
                 </View>
                 <Text style={styles.muted}>
-                  {room.residents.length} cư dân{room.capacity != null ? ` · Sức chứa ${room.capacity}` : ''}
+                  {room.residents.length} cư dân
+                  {room.capacity != null ? ` · Sức chứa ${room.capacity}` : ''}
                 </Text>
               </View>
             </TouchableRipple>
@@ -374,7 +402,10 @@ function RoomResidents({ roomId, locationId }: { roomId: string; locationId?: st
   const ready = !scope.loading && !scope.error;
   const [expandedResident, setExpandedResident] = useState('');
   const [household, setHousehold] = useState<HouseholdView | null>(null);
-  const [householdRequest, setHouseholdRequest] = useState<{ key: string; error: string }>({ key: '', error: '' });
+  const [householdRequest, setHouseholdRequest] = useState<{ key: string; error: string }>({
+    key: '',
+    error: '',
+  });
   const roomLocation = scope.locations.find((item) => item.id === locationId);
   const roomState = roomStatus(room?.status);
   const verifiedCount = residents.filter((item) => item.verificationStatus === 1).length;
@@ -386,13 +417,18 @@ function RoomResidents({ roomId, locationId }: { roomId: string; locationId?: st
     );
     if (!api || !representative) return;
     const controller = new AbortController();
-    void householdClient((path, init) => api.request(path, init)).get(representative.id, controller.signal)
+    void householdClient((path, init) => api.request(path, init))
+      .get(representative.id, controller.signal)
       .then((result) => {
         if (!controller.signal.aborted)
           setHousehold({
             ...result,
             representative: result.representative
-              ? { ...result.representative, phone: result.representative.phone ?? null, maskedCitizenNumber: null }
+              ? {
+                  ...result.representative,
+                  phone: result.representative.phone ?? null,
+                  maskedCitizenNumber: null,
+                }
               : null,
             members: result.members.map((member) => ({
               ...member,
@@ -402,19 +438,25 @@ function RoomResidents({ roomId, locationId }: { roomId: string; locationId?: st
       })
       .catch(() => {
         if (!controller.signal.aborted)
-          setHouseholdRequest({ key: representative.id, error: 'Ch�a t?i ��?c th�ng tin c� d�n m? r?ng.' });
+          setHouseholdRequest({
+            key: representative.id,
+            error: 'Ch�a t?i ��?c th�ng tin c� d�n m? r?ng.',
+          });
       });
     return () => controller.abort();
   }, [api, residents]);
   const householdRepresentativeId = residents.find(
     (item) => item.residentType === 0 && item.verificationStatus === 1,
   )?.id;
-  const householdLoading = !!householdRepresentativeId &&
+  const householdLoading =
+    !!householdRepresentativeId &&
     household?.representativeResidentId !== householdRepresentativeId &&
     householdRequest.key !== householdRepresentativeId;
-  const householdError = householdRequest.key === householdRepresentativeId ? householdRequest.error : '';
+  const householdError =
+    householdRequest.key === householdRepresentativeId ? householdRequest.error : '';
   const tenantDetails = (resident: Resident) => {
-    if (resident.id === household?.representativeResidentId) return household.representative ?? undefined;
+    if (resident.id === household?.representativeResidentId)
+      return household.representative ?? undefined;
     return household?.members.find((item) => item.residentId === resident.id);
   };
 
@@ -434,7 +476,9 @@ function RoomResidents({ roomId, locationId }: { roomId: string; locationId?: st
             <Text variant="titleLarge" style={styles.title}>
               {room ? `Phòng ${room.label}` : 'Chi tiết phòng'}
             </Text>
-            <Text style={styles.muted}>{roomLocation?.label ?? 'Phạm vi cơ sở được phân công'}</Text>
+            <Text style={styles.muted}>
+              {roomLocation?.label ?? 'Phạm vi cơ sở được phân công'}
+            </Text>
           </View>
           <IconButton
             icon="refresh"
@@ -450,30 +494,38 @@ function RoomResidents({ roomId, locationId }: { roomId: string; locationId?: st
         keyExtractor={(resident) => resident.id}
         initialNumToRender={12}
         contentContainerStyle={styles.list}
-        ListHeaderComponent={room && ready ? (
-          <View style={styles.detailSummary}>
-            <View style={styles.summaryTop}>
-              <View style={[styles.statusBadge, { backgroundColor: roomState.background }]}>
-                <View style={[styles.statusDot, { backgroundColor: roomState.color }]} />
-                <Text style={{ color: roomState.color, fontWeight: '600' }}>{roomState.label}</Text>
+        ListHeaderComponent={
+          room && ready ? (
+            <View style={styles.detailSummary}>
+              <View style={styles.summaryTop}>
+                <View style={[styles.statusBadge, { backgroundColor: roomState.background }]}>
+                  <View style={[styles.statusDot, { backgroundColor: roomState.color }]} />
+                  <Text style={{ color: roomState.color, fontWeight: '600' }}>
+                    {roomState.label}
+                  </Text>
+                </View>
+                <Text style={styles.summaryCount}>
+                  {room.capacity != null
+                    ? `${residents.length}/${room.capacity} người`
+                    : `${residents.length} người`}
+                </Text>
               </View>
-              <Text style={styles.summaryCount}>
-                {room.capacity != null ? `${residents.length}/${room.capacity} người` : `${residents.length} người`}
-              </Text>
+              <View style={styles.detailCounts}>
+                <View style={styles.detailCountItem}>
+                  <Text style={styles.detailCountValue}>{verifiedCount}</Text>
+                  <Text style={styles.metricLabel}>Đã xác minh</Text>
+                </View>
+                <View style={styles.detailCountItem}>
+                  <Text style={[styles.detailCountValue, pendingCount > 0 && { color: s.orange }]}>
+                    {pendingCount}
+                  </Text>
+                  <Text style={styles.metricLabel}>Chờ xác minh</Text>
+                </View>
+              </View>
+              <Text style={styles.sectionLabel}>Cư dân trong phòng</Text>
             </View>
-            <View style={styles.detailCounts}>
-              <View style={styles.detailCountItem}>
-                <Text style={styles.detailCountValue}>{verifiedCount}</Text>
-                <Text style={styles.metricLabel}>Đã xác minh</Text>
-              </View>
-              <View style={styles.detailCountItem}>
-                <Text style={[styles.detailCountValue, pendingCount > 0 && { color: s.orange }]}>{pendingCount}</Text>
-                <Text style={styles.metricLabel}>Chờ xác minh</Text>
-              </View>
-            </View>
-            <Text style={styles.sectionLabel}>Cư dân trong phòng</Text>
-          </View>
-        ) : undefined}
+          ) : undefined
+        }
         ListEmptyComponent={
           <StateMessage
             loading={scope.loading}
@@ -487,7 +539,7 @@ function RoomResidents({ roomId, locationId }: { roomId: string; locationId?: st
         renderItem={({ item: resident }) => {
           const status = residentStatus(resident.verificationStatus);
           const detail = tenantDetails(resident);
-                const expanded = activeExpandedResident === resident.id;
+          const expanded = activeExpandedResident === resident.id;
           const displayName = detail?.fullName || resident.displayLabel;
           const initials = residentInitials(displayName);
           const familyResidentRole =
@@ -510,28 +562,53 @@ function RoomResidents({ roomId, locationId }: { roomId: string; locationId?: st
                     <Text style={[styles.initials, { color: status.color }]}>{initials}</Text>
                   </View>
                   <View style={styles.flex}>
-                    <Text numberOfLines={1} style={styles.roomName}>{displayName}</Text>
+                    <Text numberOfLines={1} style={styles.roomName}>
+                      {displayName}
+                    </Text>
                     {!!familyResidentRole && <Text style={styles.muted}>{familyResidentRole}</Text>}
                     <Text style={{ color: status.color, fontSize: 12 }}>{status.label}</Text>
-                </View>
-                  <Icon source={expanded ? 'chevron-up' : 'chevron-down'} size={22} color={c.muted} />
+                  </View>
+                  <Icon
+                    source={expanded ? 'chevron-up' : 'chevron-down'}
+                    size={22}
+                    color={c.muted}
+                  />
                 </>
               </TouchableRipple>
               {expanded && (
                 <View style={styles.residentExpanded}>
                   {!!detail?.phone && <DetailLine label="Điện thoại" value={detail.phone} />}
                   {!!resident.email && <DetailLine label="Email" value={resident.email} />}
-                  {!!resident.confirmedAt && <DetailLine label="Xác minh lúc" value={new Date(resident.confirmedAt).toLocaleDateString('vi-VN')} />}
-                  {!!familyResidentRole && <DetailLine label="Vai trò" value={familyResidentRole} />}
-                  {householdLoading && resident.residentType === 0 && <Text style={styles.muted}>Đang tải thông tin…</Text>}
-                  {!!householdError && resident.residentType === 0 && <Text style={styles.muted}>{householdError}</Text>}
-                  <Button compact icon="account-box-outline" contentStyle={styles.profileButton}
-                    onPress={() => go('onboarding', {
-                      residentId: resident.id,
-                      locationId: scope.location,
-                      roomId,
-                      ...(household?.representativeResidentId ? { representativeResidentId: household.representativeResidentId } : {}),
-                    })}>
+                  {!!resident.confirmedAt && (
+                    <DetailLine
+                      label="Xác minh lúc"
+                      value={new Date(resident.confirmedAt).toLocaleDateString('vi-VN')}
+                    />
+                  )}
+                  {!!familyResidentRole && (
+                    <DetailLine label="Vai trò" value={familyResidentRole} />
+                  )}
+                  {householdLoading && resident.residentType === 0 && (
+                    <Text style={styles.muted}>Đang tải thông tin…</Text>
+                  )}
+                  {!!householdError && resident.residentType === 0 && (
+                    <Text style={styles.muted}>{householdError}</Text>
+                  )}
+                  <Button
+                    compact
+                    icon="account-box-outline"
+                    contentStyle={styles.profileButton}
+                    onPress={() =>
+                      go('onboarding', {
+                        residentId: resident.id,
+                        locationId: scope.location,
+                        roomId,
+                        ...(household?.representativeResidentId
+                          ? { representativeResidentId: household.representativeResidentId }
+                          : {}),
+                      })
+                    }
+                  >
                     Xem hồ sơ cư dân
                   </Button>
                 </View>
@@ -624,12 +701,26 @@ const styles = StyleSheet.create({
     minHeight: 68,
   },
   pendingRow: { backgroundColor: s.orangeSoft, borderLeftWidth: 3, borderLeftColor: s.orange },
-  roomCard: { backgroundColor: c.white, borderWidth: 1, borderColor: c.border, borderRadius: 14, marginBottom: 8 },
+  roomCard: {
+    backgroundColor: c.white,
+    borderWidth: 1,
+    borderColor: c.border,
+    borderRadius: 14,
+    marginBottom: 8,
+  },
   roomCardContent: { minHeight: 112, padding: 10, gap: 8, justifyContent: 'center' },
   roomCardTop: { flexDirection: 'row', alignItems: 'center', gap: 4 },
   roomCardTitle: { flex: 1, minWidth: 0, color: c.ink, fontSize: 15, fontWeight: '700' },
   badgeRow: { flexDirection: 'row', flexWrap: 'wrap', gap: 5 },
-  statusBadge: { alignSelf: 'flex-start', borderRadius: 8, paddingHorizontal: 7, paddingVertical: 4, flexDirection: 'row', alignItems: 'center', gap: 4 },
+  statusBadge: {
+    alignSelf: 'flex-start',
+    borderRadius: 8,
+    paddingHorizontal: 7,
+    paddingVertical: 4,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+  },
   statusDot: { width: 6, height: 6, borderRadius: 3 },
   rowInner: {
     flexDirection: 'row',
@@ -651,19 +742,72 @@ const styles = StyleSheet.create({
   },
   state: { alignItems: 'center', padding: 24, gap: 12 },
   stateTitle: { fontWeight: '600', textAlign: 'center', color: c.ink },
-  detailSummary: { padding: 12, gap: 12, backgroundColor: c.white, borderRadius: 14, borderWidth: 1, borderColor: c.border, marginBottom: 8 },
-  summaryTop: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 8 },
+  detailSummary: {
+    padding: 12,
+    gap: 12,
+    backgroundColor: c.white,
+    borderRadius: 14,
+    borderWidth: 1,
+    borderColor: c.border,
+    marginBottom: 8,
+  },
+  summaryTop: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    gap: 8,
+  },
   summaryCount: { color: c.ink, fontWeight: '600' },
   detailCounts: { flexDirection: 'row', gap: 10 },
-  detailCountItem: { flex: 1, padding: 8, borderRadius: 10, backgroundColor: c.background, alignItems: 'center', gap: 2 },
+  detailCountItem: {
+    flex: 1,
+    padding: 8,
+    borderRadius: 10,
+    backgroundColor: c.background,
+    alignItems: 'center',
+    gap: 2,
+  },
   detailCountValue: { color: c.ink, fontSize: 18, fontWeight: '700' },
   sectionLabel: { color: c.ink, fontWeight: '700', marginTop: 2 },
-  residentCard: { backgroundColor: c.white, borderRadius: 14, borderWidth: 1, borderColor: c.border, marginBottom: 8, overflow: 'hidden' },
-  residentHeader: { minHeight: 68, paddingHorizontal: 12, paddingVertical: 10, flexDirection: 'row', alignItems: 'center', gap: 10 },
-  avatar: { width: 42, height: 42, borderRadius: 21, alignItems: 'center', justifyContent: 'center' },
+  residentCard: {
+    backgroundColor: c.white,
+    borderRadius: 14,
+    borderWidth: 1,
+    borderColor: c.border,
+    marginBottom: 8,
+    overflow: 'hidden',
+  },
+  residentHeader: {
+    minHeight: 68,
+    paddingHorizontal: 12,
+    paddingVertical: 10,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+  },
+  avatar: {
+    width: 42,
+    height: 42,
+    borderRadius: 21,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
   initials: { fontSize: 14, fontWeight: '700' },
-  residentExpanded: { paddingHorizontal: 12, paddingTop: 8, paddingBottom: 8, borderTopWidth: 1, borderTopColor: c.border, gap: 2 },
-  detailLine: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 10, minHeight: 34 },
+  residentExpanded: {
+    paddingHorizontal: 12,
+    paddingTop: 8,
+    paddingBottom: 8,
+    borderTopWidth: 1,
+    borderTopColor: c.border,
+    gap: 2,
+  },
+  detailLine: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    gap: 10,
+    minHeight: 34,
+  },
   detailValue: { flex: 1, textAlign: 'right', color: c.ink, fontSize: 13 },
   profileButton: { minHeight: 44, alignSelf: 'flex-start' },
   pagination: {

@@ -56,12 +56,27 @@ vi.mock('../features/workspace/WorkspaceProvider', () => ({
 }));
 vi.mock('../lib/SessionProvider', () => ({ useSession: () => ({ api: null }) }));
 vi.mock('../components/WorkflowControls', () => ({
-  ChoiceField: ({ label, value, options, onChange }: {
-    label: string; value: string; options: { id: string; label: string }[]; onChange: (id: string) => void;
+  ChoiceField: ({
+    label,
+    value,
+    options,
+    onChange,
+  }: {
+    label: string;
+    value: string;
+    options: { id: string; label: string }[];
+    onChange: (id: string) => void;
   }) => (
-    <label>{label}<select aria-label={label} value={value} onChange={(event) => onChange(event.target.value)}>
-      {options.map((option) => <option key={option.id} value={option.id}>{option.label}</option>)}
-    </select></label>
+    <label>
+      {label}
+      <select aria-label={label} value={value} onChange={(event) => onChange(event.target.value)}>
+        {options.map((option) => (
+          <option key={option.id} value={option.id}>
+            {option.label}
+          </option>
+        ))}
+      </select>
+    </label>
   ),
 }));
 
@@ -240,7 +255,9 @@ describe('Staff resident directory', () => {
     render(<RoomOverview />);
     expect(screen.getByText('Quản lý phòng')).toBeTruthy();
     expect(screen.getByText('cư dân chờ xác minh')).toBeTruthy();
-    expect(screen.getByLabelText('Phòng 101, Đang thuê, 2 cư dân trên sức chứa 3, 1 chờ xác minh')).toBeTruthy();
+    expect(
+      screen.getByLabelText('Phòng 101, Đang thuê, 2 cư dân trên sức chứa 3, 1 chờ xác minh'),
+    ).toBeTruthy();
     expect(screen.queryByText('Nguyễn Văn An')).toBeNull();
     expect(screen.queryByText('Trần Thị Bình')).toBeNull();
     expect(screen.getByText('Đang thuê')).toBeTruthy();
@@ -272,7 +289,9 @@ describe('Staff resident directory', () => {
     const view = render(<RoomOverview />);
     fireEvent.change(screen.getByLabelText('Tìm phòng hoặc cư dân'), { target: { value: '101' } });
     fireEvent.click(screen.getByLabelText('Cần xử lý'));
-    fireEvent.click(screen.getByLabelText('Phòng 101, Đang thuê, 2 cư dân trên sức chứa 3, 1 chờ xác minh'));
+    fireEvent.click(
+      screen.getByLabelText('Phòng 101, Đang thuê, 2 cư dân trên sức chứa 3, 1 chờ xác minh'),
+    );
     expect(mockWorkspace.go).toHaveBeenCalledWith('rooms', {
       roomId: 'room-1',
       locationId: 'loc-1',
@@ -349,7 +368,9 @@ describe('Staff resident directory', () => {
     expect(screen.getAllByText('Đã xác minh').length).toBeGreaterThan(0);
     expect(screen.getAllByText('Chờ xác minh').length).toBeGreaterThan(0);
     expect(screen.queryByText('Tiếp nhận cư dân')).toBeNull();
-    fireEvent.click(screen.getByLabelText('Mở cư dân Trần Thị Bình, Thành viên cùng ở, Chờ xác minh'));
+    fireEvent.click(
+      screen.getByLabelText('Mở cư dân Trần Thị Bình, Thành viên cùng ở, Chờ xác minh'),
+    );
     fireEvent.click(screen.getByText('Xem hồ sơ cư dân'));
     expect(mockWorkspace.go).toHaveBeenCalledWith('onboarding', {
       residentId: 'res-2',
