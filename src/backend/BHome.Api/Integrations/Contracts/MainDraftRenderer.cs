@@ -15,7 +15,7 @@ internal sealed class MainDraftRenderer(IConfiguration configuration, TimeProvid
     // Live documents use the supplied template without an environment/hash approval gate.
     public bool IsProductionSigningTemplate(BHome.Domain.TenantContracts.Contract contract) =>
         !contract.IsDevelopmentDemo && !ContractPaymentModes.IsTest(contract);
-    public int DocumentVersion => 4;
+    public int DocumentVersion => 5;
     public string TemplateHash
     {
         get { using var stream = typeof(MainDraftRenderer).Assembly.GetManifestResourceStream("BHome.Contracts.main-tenancy-original.docx") ?? throw new ContractException(503, "contract_template_not_found"); return Convert.ToHexString(System.Security.Cryptography.SHA256.HashData(stream)); }
@@ -99,6 +99,12 @@ internal sealed class MainDraftRenderer(IConfiguration configuration, TimeProvid
                     var notice = new XElement(p);
                     Text(notice, data.SigningReview ? "TÀI LIỆU KIỂM THỬ – MẪU CHƯA ĐƯỢC DUYỆT CHO PRODUCTION" : $"BẢN NHÁP – {data.Contract.Id}");
                     p.AddAfterSelf(notice);
+                }
+                if (original == "HỢP ĐỒNG THUÊ PHÒNG TRỌ")
+                {
+                    var number = new XElement(p);
+                    Text(number, $"Mã hợp đồng: {data.Contract.Id:D}");
+                    p.AddAfterSelf(number);
                 }
             }
             if (mapped != 16) throw new ContractException(503, "contract_template_slots_changed");

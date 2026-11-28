@@ -6,11 +6,9 @@ import { router } from 'expo-router';
 import { Image, KeyboardAvoidingView, Platform, StyleSheet, View } from 'react-native';
 import { Button, Icon, Text, TextInput } from 'react-native-paper';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { Action, Box, Row, ui } from '../components/WorkspaceKit';
+import { Box, Row, ui } from '../components/WorkspaceKit';
 import { useSession } from '../lib/SessionProvider';
 import { checkApiConnection, errorMessage } from '../lib/api';
-import { useWorkspace } from '../features/workspace/WorkspaceProvider';
-import { roleLabel, type MobileRole } from '../features/workspace/navigation';
 import { colors as c } from '../theme/theme';
 import {
   loginIdentifierError,
@@ -23,7 +21,6 @@ const bhomeLogo = require('../../assets/bhome-logo.png');
 
 export function LoginScreen() {
   const { baseUrl, login, restoreError } = useSession();
-  const { startPreview, unavailable } = useWorkspace();
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [baseOverride, setBase] = useState<string | null>(null);
@@ -69,7 +66,7 @@ export function LoginScreen() {
         behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
       >
         <KeyboardFormScrollView
-          contentContainerStyle={[ui.page, { paddingTop: 40, paddingBottom: 32, flexGrow: 1 }]}
+          contentContainerStyle={[ui.page, styles.content]}
           keyboardShouldPersistTaps="handled"
         >
           <View style={styles.brand}>
@@ -83,13 +80,13 @@ export function LoginScreen() {
               Quản lý nhà trọ thông minh
             </Text>
           </View>
-          <View style={{ gap: 8 }}>
+          <View style={styles.welcome}>
             <Text variant="headlineMedium">Chào mừng trở lại</Text>
             <Text variant="bodyLarge" style={ui.muted}>
               Đăng nhập để tiếp tục sử dụng BHome
             </Text>
           </View>
-          <Box style={{ padding: 20, gap: 18 }}>
+          <Box style={styles.form}>
             <Text variant="titleMedium">Email hoặc số điện thoại</Text>
             <TextInput
               ref={(target: unknown) => {
@@ -183,49 +180,20 @@ export function LoginScreen() {
             >
               Đăng nhập
             </Button>
-            <Button disabled={busy} onPress={() => router.push('/contract-signing')}>
-              Mở lời mời ký hợp đồng
-            </Button>
-            <Button disabled={busy} onPress={() => router.push('/accept-invitation')}>
-              Thiết lập tài khoản từ lời mời
-            </Button>
           </Box>
-          {__DEV__ && (
-            <Box style={{ backgroundColor: c.soft, borderWidth: 0 }}>
-              <Row spread>
-                <Text variant="titleSmall" style={ui.muted}>
-                  XEM GIAO DIỆN MẪU
-                </Text>
-                <Text variant="labelSmall" style={ui.muted}>
-                  Không cần tài khoản
-                </Text>
-              </Row>
-              <View style={ui.wrap}>
-                {(['Staff', 'Tenant'] as MobileRole[]).map((role) => (
-                  <View key={role} style={{ flex: 1, minWidth: 85 }}>
-                    <Button
-                      mode="elevated"
-                      disabled={busy}
-                      onPress={() => {
-                        setPassword('');
-                        startPreview(role);
-                      }}
-                      buttonColor={c.white}
-                      textColor={role === 'Tenant' ? c.green : role === 'Staff' ? c.blue : c.navy}
-                      style={{ borderRadius: 10 }}
-                      labelStyle={{ fontSize: 12 }}
-                    >
-                      {roleLabel[role]}
-                    </Button>
-                  </View>
-                ))}
-              </View>
-              <Text variant="labelSmall" style={ui.muted}>
-                Dữ liệu minh họa tách biệt với hệ thống thật. Không thay đổi quyền tài khoản.
-              </Text>
-            </Box>
-          )}
-          <Button icon="cog-outline" onPress={() => setSettings(!settings)}>
+          <View style={styles.footer}>
+            <Icon source="shield-check-outline" size={22} color={c.green} />
+            <Text variant="bodySmall" style={ui.muted}>
+              Kết nối HTTPS • Phiên lưu trong kho bảo mật
+            </Text>
+          </View>
+          <Button
+            compact
+            icon="cog-outline"
+            disabled={busy || checking}
+            onPress={() => setSettings(!settings)}
+            textColor={c.muted}
+          >
             Cấu hình kết nối API
           </Button>
           {settings && (
@@ -268,15 +236,6 @@ export function LoginScreen() {
               {!!connection && <Text accessibilityRole="alert">{connection}</Text>}
             </Box>
           )}
-          <View style={styles.footer}>
-            <Icon source="shield-check-outline" size={22} color={c.green} />
-            <Text variant="bodySmall" style={ui.muted}>
-              Kết nối HTTPS • Phiên lưu trong kho bảo mật
-            </Text>
-          </View>
-          <Action secondary icon="headset" onPress={() => unavailable('Hỗ trợ kỹ thuật')}>
-            Hỗ trợ kỹ thuật BHome
-          </Action>
           <Text variant="labelSmall" style={{ textAlign: 'center', color: c.muted }}>
             BHome • Smart Boarding House Management
           </Text>
@@ -286,10 +245,19 @@ export function LoginScreen() {
   );
 }
 const styles = StyleSheet.create({
-  brand: { alignItems: 'center', gap: 6, marginBottom: 16 },
+  content: {
+    flexGrow: 1,
+    justifyContent: 'center',
+    gap: 12,
+    paddingTop: 12,
+    paddingBottom: 12,
+  },
+  brand: { alignItems: 'center', gap: 6 },
+  welcome: { gap: 4 },
+  form: { padding: 16, gap: 10 },
   logo: {
-    width: 144,
-    height: 144,
+    width: 64,
+    height: 64,
   },
   field: {
     backgroundColor: c.soft,
@@ -302,6 +270,6 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     gap: 8,
-    paddingVertical: 12,
+    paddingVertical: 4,
   },
 });

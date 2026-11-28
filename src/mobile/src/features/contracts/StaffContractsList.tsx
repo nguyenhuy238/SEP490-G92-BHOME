@@ -321,7 +321,7 @@ export function StaffContractsList({
                 key={contract.id}
                 testID="staff-contract-card"
                 accessibilityRole="button"
-                accessibilityLabel={`Mở hợp đồng ${staffContractKindLabel(contract.kind)} phòng ${contract.roomNumber}, ${text(contract.status)}`}
+                accessibilityLabel={`Mở hợp đồng ${staffContractKindLabel(contract.kind)} phòng ${contract.roomNumber}${contract.status === 'Converted' ? '' : `, ${text(contract.status)}`}`}
                 onPress={() => onOpen(contract)}
                 style={styles.card}
               >
@@ -358,7 +358,9 @@ export function StaffContractsList({
                     </Text>
                   </View>
                   <View style={styles.cardTrailing}>
-                    <Pill tone={staffContractTone(contract.status)}>{text(contract.status)}</Pill>
+                    {contract.status !== 'Converted' && (
+                      <Pill tone={staffContractTone(contract.status)}>{text(contract.status)}</Pill>
+                    )}
                     <Icon source="chevron-right" size={24} color={c.primary} />
                   </View>
                 </View>

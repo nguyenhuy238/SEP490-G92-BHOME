@@ -207,7 +207,7 @@ export function MainInitialPaymentCard({
             }
             onPress={() => void generate()}
           >
-            {currentQr ? 'Tải lại QR chuyển khoản' : 'Tạo QR thanh toán tổng'}
+            {currentQr ? 'Tải lại QR chuyển khoản' : 'Tạo QR thanh toán'}
           </Button>
         </HoldingSectionCard>
       )}

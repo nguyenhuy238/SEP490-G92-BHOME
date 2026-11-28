@@ -48,13 +48,19 @@ public sealed class Compact24ResidenceQueryTests(Compact24Fixture fixture) : ICl
         };
         foreach (var member in contract.Residents) member.ContractId = contract.Id;
         db.AddRange(chain, location, room, adult, child, contract); await db.SaveChangesAsync();
+        var staffId = (await staff.GetFromJsonAsync<SessionIdentity>("/api/v1/auth/me"))!.UserId;
+        db.Add(new StaffLocationAssignment(location.Id, staffId, ownerId, from, from.AddMonths(12))); await db.SaveChangesAsync();
         var childRoute = $"/api/v1/residence-tasks/{contract.Id}/{child.Id}";
         var adultRoute = $"/api/v1/residence-tasks/{contract.Id}/{adult.Id}";
+        foreach (var route in new[] { adultRoute, childRoute })
+            (await tenant.PutAsJsonAsync(route, new ResidenceUpdate(from, "Pending", null, "Synthetic pending registration"))).EnsureSuccessStatusCode();
+        Assert.Equal(2, (await staff.GetFromJsonAsync<ResidenceTrackingPage>("/api/v1/residence-tasks/tracking?filter=Pending"))!.TotalCount);
         var expires = from.AddMonths(6);
         var update = await tenant.PutAsJsonAsync(childRoute, new ResidenceUpdate(from, "InProgress", null, "Synthetic representative update", RegistrationExpiresOn: expires));
         Assert.True(update.IsSuccessStatusCode, await update.Content.ReadAsStringAsync());
         Assert.Equal(expires, (await update.Content.ReadFromJsonAsync<ResidenceTaskView>())!.RegistrationExpiresOn);
         (await tenant.PutAsJsonAsync(adultRoute, new ResidenceUpdate(from, "InProgress", null, "Synthetic update"))).EnsureSuccessStatusCode();
+        Assert.Equal(0, (await staff.GetFromJsonAsync<ResidenceTrackingPage>("/api/v1/residence-tasks/tracking?filter=Pending"))!.TotalCount);
         var list = (await tenant.GetFromJsonAsync<OperationsPage<ResidenceTaskView>>("/api/v1/residence-tasks"))!;
         Assert.Contains(list.Items, r => r.ResidentId == child.Id);
         Assert.False(list.Items.Single(r => r.ResidentId == adult.Id).HouseholdCompleted);
@@ -74,6 +80,7 @@ public sealed class Compact24ResidenceQueryTests(Compact24Fixture fixture) : ICl
         foreach (var route in new[] { adultRoute, childRoute })
         {
             (await tenant.PutAsJsonAsync(route, new ResidenceUpdate(from, "Completed", DateTimeOffset.UtcNow.AddMinutes(-1), "Synthetic result"))).EnsureSuccessStatusCode();
+            Assert.Equal(1, (await staff.GetFromJsonAsync<ResidenceTrackingPage>("/api/v1/residence-tasks/tracking?filter=AwaitingReview"))!.TotalCount);
             (await owner.PostAsJsonAsync(route + "/owner-confirmation", new ResidenceOwnerConfirmation("Synthetic reviewed result"))).EnsureSuccessStatusCode();
         }
         var completed = (await tenant.GetFromJsonAsync<ResidenceTaskView>(childRoute))!;
@@ -96,15 +103,23 @@ public sealed class Compact24ResidenceQueryTests(Compact24Fixture fixture) : ICl
         Assert.Contains(contracts.Items, c => c.Id == contract.Id);
         Assert.All(contracts.Items, c => Assert.Equal("Main", c.Kind));
         Assert.Equal(HttpStatusCode.BadRequest, (await owner.GetAsync("/api/v1/contracts?kind=UnknownKind")).StatusCode);
-        var staffId = (await staff.GetFromJsonAsync<SessionIdentity>("/api/v1/auth/me"))!.UserId;
-        db.Add(new StaffLocationAssignment(location.Id, staffId, ownerId, from, from.AddMonths(12))); await db.SaveChangesAsync();
         var tracking = await staff.GetAsync("/api/v1/residence-tasks/tracking");
         Assert.True(tracking.IsSuccessStatusCode, await tracking.Content.ReadAsStringAsync());
-        Assert.Contains((await tracking.Content.ReadFromJsonAsync<OperationsPage<ResidenceTrackingSummary>>())!.Items, r => r.ResidentId == child.Id);
+        var trackingPage = (await tracking.Content.ReadFromJsonAsync<ResidenceTrackingPage>())!;
+        Assert.Contains(trackingPage.Items, r => r.ResidentId == child.Id);
+        Assert.Equal(2, trackingPage.Stats.TotalResidents);
+        Assert.Equal(2, trackingPage.LoadedCount);
+        Assert.All(trackingPage.Items, row => Assert.True(row.ActualResidenceFrom.HasValue));
         Assert.DoesNotContain("hasEvidence", await tracking.Content.ReadAsStringAsync());
         Assert.DoesNotContain("history", await tracking.Content.ReadAsStringAsync());
+        Assert.DoesNotContain("ownerConfirmedBy", await tracking.Content.ReadAsStringAsync());
+        Assert.DoesNotContain("phone", await tracking.Content.ReadAsStringAsync(), StringComparison.OrdinalIgnoreCase);
+        Assert.DoesNotContain("registrationEvidence", await tracking.Content.ReadAsStringAsync(), StringComparison.OrdinalIgnoreCase);
+        Assert.Equal(2, (await staff.GetFromJsonAsync<ResidenceTrackingPage>($"/api/v1/residence-tasks/tracking?search={Uri.EscapeDataString("FAMILY-SYN")}&filter=Completed"))!.Items.Count);
+        Assert.Equal(0, (await staff.GetFromJsonAsync<ResidenceTrackingPage>("/api/v1/residence-tasks/tracking?filter=Pending"))!.TotalCount);
+        Assert.Equal(0, (await staff.GetFromJsonAsync<ResidenceTrackingPage>("/api/v1/residence-tasks/tracking?filter=AwaitingReview"))!.TotalCount);
         using var unassigned = await User(Roles.Staff);
-        Assert.Empty((await unassigned.GetFromJsonAsync<OperationsPage<ResidenceTrackingSummary>>("/api/v1/residence-tasks/tracking"))!.Items);
+        Assert.Empty((await unassigned.GetFromJsonAsync<ResidenceTrackingPage>("/api/v1/residence-tasks/tracking"))!.Items);
         // An arrival in a later month reuses the already active Room obligation;
         // it must not collect another rent/deposit or person fee.
         var arrivalUser = (await outsider.GetFromJsonAsync<SessionIdentity>("/api/v1/auth/me"))!.UserId;

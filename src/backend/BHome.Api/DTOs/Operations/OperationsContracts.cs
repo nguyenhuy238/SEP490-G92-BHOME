@@ -109,7 +109,23 @@ public sealed record ResidenceTrackingSettings(bool RegistrationRequired, DateOn
     [Required] string ExpectedReference, [Required, StringLength(1000)] string Reason);
 public sealed record ResidenceEvidenceTarget(Guid ResidentId, string ExpectedReference);
 public sealed record ResidenceTrackingSummary(Guid ContractId, Guid ResidentId, Guid LocationId, string RoomNumber,
-    string ResidentLabel, string Status, bool RegistrationRequired, DateOnly? RegistrationDeadline, DateOnly? RegistrationExpiresOn);
+    string ResidentLabel, string ResidentRole, DateOnly? ActualResidenceFrom, string Status, bool RegistrationRequired,
+    DateOnly? RegistrationDeadline, DateOnly? RegistrationExpiresOn, DateTimeOffset? ResultAt,
+    bool OwnerConfirmed, DateTimeOffset? OwnerConfirmedAt);
+
+public sealed record ResidenceTrackingStats(int TotalResidents, int NotStarted, int Completed, int Overdue);
+public sealed record ResidenceTrackingPage(IReadOnlyList<ResidenceTrackingSummary> Items, int Page, int PageSize,
+    int TotalCount, ResidenceTrackingStats Stats, int LoadedCount = 0);
+
+public sealed class ResidenceTrackingQuery
+{
+    [Range(1, int.MaxValue)] public int Page { get; set; } = 1;
+    [Range(1, 100)] public int PageSize { get; set; } = 20;
+    public Guid? LocationId { get; set; }
+    [StringLength(100)] public string? Search { get; set; }
+    [RegularExpression("^(All|Pending|AwaitingReview|Completed|Overdue)$")]
+    public string Filter { get; set; } = "All";
+}
 
 public sealed record ResidenceHistoryView(string Action, Guid ActorId, DateTimeOffset OccurredAt, string? Note);
 
@@ -239,7 +255,7 @@ public interface IOperationsRepository
         OperationsFile file, DateTimeOffset now, CancellationToken t);
     Task<ResidenceTaskView> ConfigureResidenceAsync(Guid actorId, Guid contractId, Guid residentId,
         ResidenceTrackingSettings input, DateTimeOffset now, CancellationToken t);
-    Task<OperationsPage<ResidenceTrackingSummary>> ResidenceTrackingAsync(Guid staffId, DateOnly today, ResidenceQuery query, CancellationToken t);
+    Task<ResidenceTrackingPage> ResidenceTrackingAsync(Guid staffId, DateOnly today, ResidenceTrackingQuery query, CancellationToken t);
     Task<IReadOnlyList<ResidenceTaskView>> AttachHouseholdEvidenceAsync(Guid actorId, Guid contractId,
         ResidenceEvidenceTarget[] targets, OperationsFile file, DateTimeOffset now, CancellationToken t);
     Task<OperationsFile?> ResidenceEvidenceAsync(Guid contractId, Guid residentId, Guid? tenantUserId, CancellationToken t);
