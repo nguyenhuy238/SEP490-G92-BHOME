@@ -97,3 +97,29 @@ class ReleaseManifestTests(unittest.TestCase):
             with self.assertRaisesRegex(ValueError, 'Invalid Staging'):
                 manifest.verify_download(path, checksum, dict(
                     env, GITHUB_RUN_ATTEMPT='3', STAGING_MANIFEST_ATTEMPT='2'))
+
+    def test_producer_attempt_supports_production_retry_without_relaxing_manifest_identity(self):
+        for production in (False, True):
+            with self.subTest(production=production), tempfile.TemporaryDirectory() as directory:
+                env = self.environment(production)
+                path = Path(directory) / 'release-manifest.json'
+                path.write_text(json.dumps(manifest.build(env)), encoding='utf-8')
+                checksum = hashlib.sha256(path.read_bytes()).hexdigest()
+                retry = dict(env, GITHUB_RUN_ATTEMPT='3', RELEASE_MANIFEST_ATTEMPT='2')
+                manifest.verify_download(path, checksum, retry)
+                for key, value in [('RELEASE_MANIFEST_ATTEMPT', ''), ('RELEASE_MANIFEST_ATTEMPT', '4'),
+                                   ('RELEASE_MANIFEST_ATTEMPT', '1'), ('RELEASE_MANIFEST_ATTEMPT', '02'),
+                                   ('GITHUB_RUN_ID', '124'), ('GITHUB_SHA', 'b' * 40),
+                                   ('GITHUB_REF', 'refs/heads/develop' if production else 'refs/heads/main'),
+                                   ('OWNER_DIGEST', 'sha256:' + '9' * 64), ('STAGING_MANIFEST_ATTEMPT', '2')]:
+                    with self.subTest(key=key, value=value), self.assertRaises(ValueError):
+                        manifest.verify_download(path, checksum, {**retry, key: value})
+                with self.assertRaisesRegex(ValueError, 'checksum'):
+                    manifest.verify_download(path, '0' * 64, retry)
+
+    def test_production_workflow_download_and_verifier_use_the_manifest_producer_output(self):
+        workflow = (Path(__file__).resolve().parents[2] / '.github/workflows/release.yml').read_text()
+        production = workflow.split('\n  production:\n', 1)[1]
+        self.assertIn('name: release-${{ github.sha }}-${{ needs.images.outputs.manifest-attempt }}', production)
+        self.assertIn('RELEASE_MANIFEST_ATTEMPT: ${{ needs.images.outputs.manifest-attempt }}', production)
+        self.assertNotIn('name: release-${{ github.sha }}-${{ github.run_attempt }}', production)

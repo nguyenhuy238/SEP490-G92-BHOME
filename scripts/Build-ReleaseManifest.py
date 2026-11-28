@@ -50,12 +50,17 @@ def verify_download(path, expected_sha256, env):
     target = 'Production' if ref == 'refs/heads/main' else 'Staging'
     expected = dict(env, TARGET=target, SUFFIX='-production' if target == 'Production' else '',
                     REGISTRY='ghcr.io/' + env['GITHUB_REPOSITORY_OWNER'].lower())
-    if 'STAGING_MANIFEST_ATTEMPT' in env:
-        attempt = env['STAGING_MANIFEST_ATTEMPT']
+    require(not ('RELEASE_MANIFEST_ATTEMPT' in env and 'STAGING_MANIFEST_ATTEMPT' in env),
+            'Conflicting manifest producer attempts')
+    attempt_key = 'RELEASE_MANIFEST_ATTEMPT' if 'RELEASE_MANIFEST_ATTEMPT' in env else 'STAGING_MANIFEST_ATTEMPT'
+    if attempt_key in env:
+        if attempt_key == 'STAGING_MANIFEST_ATTEMPT':
+            require(target == 'Staging', 'Invalid Staging manifest producer attempt')
+        attempt = env[attempt_key]
         current = env['GITHUB_RUN_ATTEMPT']
-        require(target == 'Staging' and re.fullmatch(r'[1-9][0-9]*', attempt) and
+        require(re.fullmatch(r'[1-9][0-9]*', attempt) and
                 re.fullmatch(r'[1-9][0-9]*', current) and int(attempt) <= int(current),
-                'Invalid Staging manifest producer attempt')
+                'Invalid release manifest producer attempt')
         expected['GITHUB_RUN_ATTEMPT'] = attempt
     run = env['GITHUB_RUN_ID'] + '-' + expected['GITHUB_RUN_ATTEMPT']
     for key in ('API', 'OWNER', 'PUBLIC'):

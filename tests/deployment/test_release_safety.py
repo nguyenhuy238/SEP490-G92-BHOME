@@ -219,6 +219,17 @@ class ReleaseSafetyTests(unittest.TestCase):
                     with self.assertRaises(ValueError):
                         safety.verify_image(image, sha, 'api', 'staging')
 
+    def test_runtime_approval_only_accepts_exact_production_release_and_fingerprints(self):
+        sha, before, after = 'a' * 40, 'b' * 64, 'c' * 64
+        approval = dict(target='production', sha=sha, beforeConfig=before, afterConfig=after, expiresAt=2000)
+        self.assertTrue(safety.runtime_transition_matches(approval, 'production', sha, before, after, 1000))
+        for field, value in [('target', 'staging'), ('sha', 'd' * 40), ('beforeConfig', 'e' * 64),
+                             ('afterConfig', 'f' * 64), ('expiresAt', 999), ('expiresAt', 100000), ('expiresAt', '2000')]:
+            with self.subTest(field=field, value=value):
+                self.assertFalse(safety.runtime_transition_matches(approval | {field: value}, 'production', sha, before, after, 1000))
+        self.assertFalse(safety.runtime_transition_matches(approval, 'staging', sha, before, after, 1000))
+        self.assertFalse(safety.runtime_transition_matches(approval, 'production', None, before, after, 1000))
+
     def test_forced_ssh_commands_reject_shell_injection(self):
         import re
         pattern = re.compile(r'^/opt/bhome-deploy/staging/run-staging-release\.sh ([0-9a-f]{40}) ([0-9]+-[0-9]+) (sha256:[0-9a-f]{64}) (sha256:[0-9a-f]{64}) (sha256:[0-9a-f]{64})$')

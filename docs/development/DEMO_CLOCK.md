@@ -51,13 +51,13 @@ The simulation is process-local and resets on API restart. All ordinary business
 
 ## API and safeguards
 
-`GET /api/v1/demo-clock` — authenticated Owner, Staff and Tenant read the same business date/time, real server time and version. `PUT /api/v1/demo-clock` — Owner only; send `businessDateTime` (ISO-8601 with +07:00) and `expectedVersion`. Legacy date-only requests remain supported. Send null for both date fields to restore real time. A stale version returns 409. API returns 404 when disabled. The host refuses explicitly enabled incompatible configuration; automatic discovery leaves the feature disabled when deployment anchors or payment/job guards do not match.
+`GET /api/v1/demo-clock` — authenticated Owner, Staff and Tenant read the same business date/time, real server time and version. `PUT /api/v1/demo-clock` — Owner only; send `businessDateTime` (ISO-8601 with +07:00) and `expectedVersion`. Legacy date-only requests remain supported. Send null for both date fields to restore real time. A stale version returns 409. API returns 404 when disabled. The host refuses explicitly enabled incompatible configuration; automatic discovery leaves the feature disabled when deployment/database/storage anchors do not match.
 
 Focused validation: `dotnet test tests/backend/BHome.Application.UnitTests --filter FullyQualifiedName~DemoBusinessClockTests`, `dotnet test tests/backend/BHome.Infrastructure.UnitTests --filter FullyQualifiedName~DemoClockGuardTests`, and `npm run test --workspace ./src/mobile -- demoClock.test.ts`.
 
 ## Use the existing Staging and Production deployments
 
-Release the API and Owner Web together through the normal reviewed develop/main CI/CD. No separate backend, database, Docker stack, tunnel, or extra build flag is required. The API automatically enables the capability on the matching BHOME deployment anchors: existing PostgreSQL database and private MinIO bucket, disabled general jobs, Staging SePay Test, and Production live banking disabled. Dedicated billing automation is permitted. This does not change provider configuration or activate a simulated date. Each environment has an independent in-memory clock which starts at the real date.
+Release the API and Owner Web together through the normal reviewed develop/main CI/CD. No separate backend, database, Docker stack, tunnel, or extra build flag is required. As approved for the academic demo on 28/11/2026, both deployments support SePay Test/Live, general jobs and dedicated billing with Demo Clock. Existing PostgreSQL/private MinIO anchors and disabled startup data writers remain required. Providers validate their own configuration. This does not change provider configuration or activate a simulated date. Each environment has an independent in-memory clock which starts at the real date.
 
 Optional private environment settings:
 
@@ -67,7 +67,7 @@ DemoClock__OwnerUserId=
 BillingAutomation__AutomaticJobsEnabled=true
 ```
 
-Blank OwnerUserId allows authenticated Owners to change dates; set an actual Owner UUID from GET /api/v1/session to restrict control to that account. Staff and Tenant can read but never change the clock. Explicit Enabled=false disables the feature. Older private environment files without DemoClock keys need no edit if they match the reviewed deployment configuration. Existing explicit false overrides automatic discovery. Production remains unavailable while real bank integrations are enabled; never switch SePay to Test in Production just to bypass this guard. The demo does not simulate bank callbacks, signing or email delivery.
+Blank OwnerUserId allows authenticated Owners to change dates; set an actual Owner UUID from GET /api/v1/session to restrict control to that account. Staff and Tenant can read but never change the clock. Explicit Enabled=false disables the feature. Older private environment files without DemoClock keys need no edit if they match the reviewed deployment configuration. Existing explicit false overrides automatic discovery. SePay Test/Live no longer disables the clock. Optional simulated signing requires explicit `DemoClock:Enabled=true` on an anchored academic deployment; real signing remains the release default. The clock itself does not simulate bank callbacks, signing or email delivery.
 
 - Staging Owner: https://owner-staging.103.146.23.157.sslip.io
 - Production Owner: https://owner.103.146.23.157.sslip.io

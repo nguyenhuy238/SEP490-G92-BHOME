@@ -116,7 +116,7 @@ rollback() {
       echo 'ROLLBACK_FAILED: operator intervention required.' >&2
     fi
   fi
-  python3 "$root/release-safety.py" unchanged "$target" "$run/protected.json" || code=1
+  python3 "$root/release-safety.py" unchanged "$target" "$run/protected.json" "${sha:-}" || code=1
   echo "Release exit=$code evidence=$run"
   exit "$code"
 }
@@ -133,7 +133,7 @@ connect_edge
 ready
 bash "$root/smoke-release.sh" "$target" "$sha"
 python3 "$root/release-safety.py" verify-running "$target" "$api" "$owner" "$public"
-python3 "$root/release-safety.py" unchanged "$target" "$run/protected.json"
+python3 "$root/release-safety.py" unchanged "$target" "$run/protected.json" "${sha:-}"
 python3 - "$sha" "$run_id" "$api" "$owner" "$public" "$run/manifest.json" <<'PY'
 import json,sys
 from datetime import datetime,timezone

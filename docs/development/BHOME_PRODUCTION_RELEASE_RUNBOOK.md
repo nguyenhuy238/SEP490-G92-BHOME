@@ -1,5 +1,10 @@
 ﻿# Phát hành Production BHOME
 
+Kế hoạch cập nhật demo ngày 28/11/2026, gồm migration đã diễn tập và cấu hình
+private chưa áp dụng: [Production demo release](PRODUCTION_DEMO_RELEASE_2026-11-28.md).
+Các cấu hình tắt và schema baseline trong hồ sơ 21/11 bên dưới là trạng thái lịch sử;
+không dùng chúng thay cho kiểm tra VPS khi triển khai release mới.
+
 Cập nhật sau go-live ngày 21/11/2026. Production đang chạy main
 `70406ecf8dceea6e84e4ddbaa3e325807af123f2`, triển khai lúc 14:48:52
 (Asia/Ho_Chi_Minh) bằng [Actions 44878730626, attempt 4](https://github.com/nguyenhuy238/SEP490-G92-BHOME/actions/runs/44878730626).

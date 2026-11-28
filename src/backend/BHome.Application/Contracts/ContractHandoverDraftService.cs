@@ -139,7 +139,7 @@ public sealed partial class ContractService
             // block Tenant OTP signing after a valid Owner signature.
             if (canonical is null)
                 missing.Add("move_in_inventory");
-            else if (inventory is not null && inventory.StateToken != canonical.SourceToken)
+            else if (inventory is not null && !inventory.MatchesMoveInSourceToken(canonical.SourceToken))
                 missing.Add("inventory_changed");
         }
         else

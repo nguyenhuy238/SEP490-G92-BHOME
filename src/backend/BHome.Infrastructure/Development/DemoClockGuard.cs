@@ -15,7 +15,7 @@ public static class DemoClockGuard
         {
             if (ValidDeployment(config, environment)) return true;
             if (explicitlyEnabled == true)
-                throw new InvalidOperationException("DemoClock deployment requires matching BHOME database/storage, disabled business workers and no live bank integration.");
+                throw new InvalidOperationException("DemoClock deployment requires matching BHOME database/storage and disabled startup data writers.");
             return false;
         }
         if (explicitlyEnabled != true) return false;
@@ -55,16 +55,16 @@ public static class DemoClockGuard
         var staging = environment == "Staging";
         if (config["Deployment:Environment"] != environment ||
             config.GetValue<bool>("BankIntegration:Enabled") ||
-            new[] { "DevelopmentDatabase:InitializeOnStartup", "Jobs:Enabled", "StaffAssignments:AutoReconcileEnabled",
-                "OwnerSetup:AssetSyncEnabled", "ContractWorkflow:SimulatedSigningEnabled" }
+            new[] { "DevelopmentDatabase:InitializeOnStartup", "StaffAssignments:AutoReconcileEnabled",
+                "OwnerSetup:AssetSyncEnabled" }
                 .Any(key => config.GetValue<bool>(key)))
             return false;
         var owner = config["DemoClock:OwnerUserId"];
         if (!string.IsNullOrWhiteSpace(owner) && (!Guid.TryParse(owner, out var id) || id == Guid.Empty)) return false;
-        if (staging && (!config.GetValue<bool>("SePay:Enabled") || config["SePay:Mode"] != "Test")) return false;
-        // Do not change the provider configuration to enable demo. Production's academic
-        // deployment currently has live payments disabled; refuse an active live integration.
-        if (!staging && (config.GetValue<bool>("SePay:Enabled") || config["SePay:Mode"] == "Test")) return false;
+        // The reviewed academic deployments support both receiving channels and signing
+        // modes. DemoBusinessClock.GetUtcNow stays real for providers, OTP, JWT and leases;
+        // only explicit BusinessTime calls follow the Owner's demonstration date.
+        // Provider/signing configuration is independently validated by its own options.
         try
         {
             var database = new NpgsqlConnectionStringBuilder(config.GetConnectionString("Database") ?? "");
