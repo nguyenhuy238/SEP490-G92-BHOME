@@ -82,7 +82,7 @@ public sealed class Compact24TableModelTests(Compact24Fixture fixture) : IClassF
         await Assert.ThrowsAsync<InvalidOperationException>(() => domain.SaveChangesAsync(default));
         domain.ChangeTracker.Clear();
         await using var transaction = await domain.Database.BeginTransactionAsync();
-        domain.Add(new Native.Location { Id = Guid.NewGuid() });
+        domain.Add(new Native.Contract { Id = Guid.NewGuid() });
         await Assert.ThrowsAsync<InvalidOperationException>(() => domain.SaveChangesAsync(default));
         domain.ChangeTracker.Clear();
         domain.Remove(new Native.StaffEmployment { Id = Guid.NewGuid() });

@@ -82,7 +82,7 @@ public sealed class PropertyServiceTests
         var snapshot = contract.AgreedPriceSnapshot;
         repository.FindAsync<Location>(location.Id, default).Returns(location);
         repository.FindAsync<BillingPolicy>(old.Id, default).Returns(old);
-        repository.AnyAsync<Room>(Arg.Any<System.Linq.Expressions.Expression<Func<Room, bool>>>(), default).Returns(true);
+        repository.RoomInLocationAsync(room.Id, location.Id, default).Returns(true);
         repository.HasBindingPriceContractAsync(room.Id, default).Returns(true);
         repository.BindingPriceContractsAsync(room.Id, default).Returns(new[] { contract });
         repository.BindingPriceContractsForLocationsAsync(Arg.Any<Guid[]>(), default)
@@ -175,7 +175,7 @@ public sealed class PropertyServiceTests
             IsActive = true
         };
         repository.FindAsync<Location>(location.Id, default).Returns(location);
-        repository.AnyAsync<RoomType>(Arg.Any<System.Linq.Expressions.Expression<Func<RoomType, bool>>>(), default)
+        repository.ActiveRoomTypeExistsAsync(location.Id, roomType.Id, default)
             .Returns(true);
         repository.WithLocationLockAsync(Arg.Any<Guid>(), Arg.Any<Func<Task<RoomDto>>>(), default)
             .Returns(call => call.Arg<Func<Task<RoomDto>>>()());
@@ -239,7 +239,7 @@ public sealed class PropertyServiceTests
         var location = new Location("Synthetic") { Address = "Synthetic Address", IsActive = true };
         var room = new Room { LocationId = location.Id };
         repository.FindAsync<Location>(location.Id, default).Returns(location);
-        repository.AnyAsync<Room>(Arg.Any<System.Linq.Expressions.Expression<Func<Room, bool>>>(), default).Returns(true);
+        repository.RoomInLocationAsync(room.Id, location.Id, default).Returns(true);
         repository.HasBindingPriceContractAsync(room.Id, default).Returns(locked);
         repository.WithLocationLockAsync(Arg.Any<Guid>(), Arg.Any<Func<Task<PolicyDto>>>(), default)
             .Returns(call => call.Arg<Func<Task<PolicyDto>>>()());

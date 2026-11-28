@@ -2,12 +2,63 @@ using System.Net;
 using System.Net.Http.Headers;
 using System.Net.Http.Json;
 using BHome.Application.PropertyManagement;
+using BHome.Domain.PropertyManagement;
+using BHome.Infrastructure.Persistence.Compact24;
+using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
 
 namespace BHome.IntegrationTests.Compact24;
 
 public sealed partial class Compact24OwnerSetupTests
 {
+    [CompactPostgresFact]
+    public async Task NativeAssetWritesPreserveHistoryAuditMetadataAndVersionGuard()
+    {
+        var w = await Seed();
+        using var owner = await Client(w.Owner);
+        var input = new AssetWrite(w.Location, w.Room, null, "NATIVE-ASSET", "Synthetic asset",
+            "Equipment", "Good", InitialTrackingMode: "BulkQuantity", InitialQuantity: 3);
+        var created = await Read<AssetDto>(await owner.PostAsJsonAsync("/api/v1/assets", input));
+        Assert.Equal(3, created.Quantity);
+        await using var scope = fixture.Factory!.Services.CreateAsyncScope();
+        var db = scope.ServiceProvider.GetRequiredService<Compact24DbContext>();
+        await db.Database.ExecuteSqlInterpolatedAsync($"""
+            UPDATE assets SET purchase_info=purchase_info||jsonb_build_object('legacyMarker',true)
+            WHERE id={created.Id}
+            """);
+        var route = $"/api/v1/assets/{created.Id}";
+        var update = new AssetConditionUpdate("Worn", created.Version, "Synthetic condition change");
+        var updated = await Read<AssetDto>(await owner.PatchAsJsonAsync(route + "/condition", update));
+        Assert.Equal(created.Version + 1, updated.Version);
+        Assert.Equal(3, updated.Quantity);
+        Assert.Equal(HttpStatusCode.Conflict, (await owner.PatchAsJsonAsync(route + "/condition", update)).StatusCode);
+        Assert.Equal(HttpStatusCode.Conflict, (await owner.PostAsJsonAsync("/api/v1/assets",
+            input with { Code = " native-asset " })).StatusCode);
+        var store = scope.ServiceProvider.GetRequiredService<ISetupWorkspaceStore>();
+        var detached = await store.AssetAsync(created.Id, default);
+        Assert.NotNull(detached);
+        detached.Condition = "Repaired";
+        detached.Version++;
+        await store.SaveAssetAsync(detached, w.Owner.Id, "Inventory correction", default);
+        var loaded = await owner.GetFromJsonAsync<AssetDto>(route);
+        Assert.Equal(detached.Version, loaded!.Version);
+        Assert.Equal("Repaired", loaded.Condition);
+        Assert.Equal(3, loaded.Quantity);
+        Assert.True(await db.Database.SqlQuery<bool>($"""
+            SELECT (jsonb_array_length(history)=3 AND history->0->>'recordType'='Asset'
+                AND history->0->>'recordKey'=id::text AND history->0->'state'->'purchaseInfo'='null'::jsonb
+                AND history->1->'state'->>'condition'='Worn'
+                AND history->2->'state'->>'condition'='Repaired'
+                AND purchase_info->>'legacyMarker'='true' AND purchase_info->>'quantity'='3'
+                AND (SELECT count(*) FROM notifications WHERE related_entity_id=a.id AND record_kind='AUDIT'
+                    AND event_data->>'recordType'='PropertyChange')=3
+                AND (SELECT count(*) FROM notifications WHERE related_entity_id=a.id AND record_kind='AUDIT'
+                    AND event_data->>'recordType'='SecurityAuditRecord')=2) AS "Value"
+            FROM assets a WHERE id={created.Id}
+            """).SingleAsync());
+        Assert.Empty(db.ChangeTracker.Entries<BHome.Domain.Entities.Asset>());
+    }
+
     private static AssetLifecyclePolicyWrite LifecyclePolicy() => new("Synthetic owner checklist", "FireSafetyEquipment", true,
         30, null, false, true, [new("position", "Check position", true)], "OwnerPolicy", "Synthetic test policy", null, null, Today);
 

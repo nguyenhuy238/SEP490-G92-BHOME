@@ -442,6 +442,23 @@ public sealed partial class Compact24OwnerSetupTests(Compact24Fixture fixture) :
         await Read<SetupDocument>(await owner.PostAsJsonAsync($"/api/v1/operating-policies/{policy.Id}/publish", new TemplatePublish(1)));
         owner.DefaultRequestHeaders.Add("Idempotency-Key", Guid.NewGuid().ToString());
         var amendment = (await Read<JsonElement>(await owner.PostAsJsonAsync($"/api/v1/contracts/{parentId}/operating-policy-amendments", new PolicyAmendmentInput(policy.Id, Today, "Synthetic approved change")))).GetProperty("contractId").GetGuid();
+        await using (var persisted = host.Services.CreateAsyncScope())
+        {
+            var db = persisted.ServiceProvider.GetRequiredService<Compact24DbContext>();
+            var row = await db.Set<BHome.Domain.Entities.Contract>().AsNoTracking().SingleAsync(c => c.Id == amendment);
+            Assert.Equal("ADDENDUM", row.ContractType);
+            Assert.Equal(parentId, row.ParentContractId);
+            Assert.Equal((short)ContractStatus.Draft, row.Status);
+            var entry = Assert.Single(row.History.EnumerateArray());
+            Assert.Equal("Contract", entry.GetProperty("recordType").GetString());
+            Assert.Equal(amendment.ToString(), entry.GetProperty("recordKey").GetString());
+            Assert.Contains(policy.Id.ToString(), entry.GetProperty("state").GetProperty("operatingPolicySnapshot").GetString()!);
+            var member = await db.Set<BHome.Domain.Entities.ContractResident>().AsNoTracking().SingleAsync(r => r.ContractId == amendment);
+            Assert.Equal(Today, member.ResidenceFrom);
+            Assert.Equal($"{amendment}/{member.ResidentId}", Assert.Single(member.History.EnumerateArray()).GetProperty("recordKey").GetString());
+            Assert.Equal(1, await db.Set<BHome.Domain.Entities.Notification>().AsNoTracking().CountAsync(n =>
+                n.RecordKind == "AUDIT" && n.RelatedEntityId == amendment && n.NotificationType == "OperatingPolicyAmendmentPrepared"));
+        }
         Assert.Equal("NotRecorded", (await tenant.GetFromJsonAsync<AgreedOperatingPolicy>($"/api/v1/contracts/{parentId}/agreed-operating-policy"))!.Status);
         owner.DefaultRequestHeaders.Remove("Idempotency-Key"); owner.DefaultRequestHeaders.Add("Idempotency-Key", Guid.NewGuid().ToString());
         Assert.Equal(HttpStatusCode.Conflict, (await owner.PostAsync($"/api/v1/contracts/{amendment}/activate", null)).StatusCode);

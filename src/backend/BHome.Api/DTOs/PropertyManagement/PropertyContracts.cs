@@ -124,10 +124,22 @@ public interface IPropertyRepository
 {
     Task<T?> FindAsync<T>(Guid id, CancellationToken token) where T : AuditableEntity;
     Task<bool> AnyAsync<T>(Expression<Func<T, bool>> predicate, CancellationToken token) where T : class;
+    Task<bool> RoomInLocationAsync(Guid roomId, Guid locationId, CancellationToken token);
+    Task<bool> LocationHasOperationalRoomsAsync(Guid locationId, CancellationToken token);
+    Task<bool> RoomNumberExistsAsync(Guid locationId, string number, CancellationToken token);
+    Task<bool> ActiveRoomTypeExistsAsync(Guid locationId, Guid roomTypeId, CancellationToken token);
+    Task<bool> RoomTypeNameExistsAsync(Guid locationId, Guid exceptId, string name, CancellationToken token);
+    Task<bool> RoomTypeInUseAsync(Guid locationId, Guid roomTypeId, CancellationToken token);
+    Task<bool> HasOpenAssetWorkAsync(Guid assetId, CancellationToken token);
     Task<bool> HasBindingPriceContractAsync(Guid roomId, CancellationToken token);
     Task<IReadOnlyList<Contract>> BindingPriceContractsAsync(Guid roomId, CancellationToken token);
     Task<IReadOnlyList<ScopedPriceContract>> BindingPriceContractsForLocationsAsync(Guid[] locationIds, CancellationToken token);
     Task<IReadOnlyDictionary<Guid, PolicyLineage>> PolicyLineagesAsync(Guid[] policyIds, CancellationToken token);
+    Task<bool> PolicyOverlapsAsync(PolicyWrite input, Guid? exceptId, CancellationToken token);
+    Task<PagedResult<LocationDto>> ListLocationsAsync(PropertyQuery query, Guid? staffId, DateOnly today, CancellationToken token);
+    Task<PagedResult<RoomDto>> ListRoomsAsync(PropertyQuery query, Guid? staffId, DateOnly today, CancellationToken token);
+    Task<PagedResult<AssetDto>> ListAssetsAsync(PropertyQuery query, Guid? staffId, DateOnly today, CancellationToken token);
+    Task<PagedResult<PolicyDto>> ListPoliciesAsync(PropertyQuery query, Guid? staffId, DateOnly today, CancellationToken token);
     Task<PagedResult<TDto>> ListAsync<T, TDto>(Expression<Func<T, bool>> predicate,
         Expression<Func<T, TDto>> projection, PropertyQuery query, Guid? staffId, DateOnly today,
         CancellationToken token) where T : AuditableEntity;

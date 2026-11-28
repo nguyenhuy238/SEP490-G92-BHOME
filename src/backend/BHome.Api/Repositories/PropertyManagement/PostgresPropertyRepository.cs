@@ -15,9 +15,19 @@ namespace BHome.Infrastructure.Modules.PropertyManagement.Persistence;
 
 internal sealed class PostgresPropertyRepository(BHomePersistenceContext db) : IPropertyRepository
 {
+    private sealed record PropertyMutation(AuditableEntity Entity, int? ExpectedVersion, PropertyChange Change, AssetMetadata? Metadata = null);
+    private readonly Dictionary<(Type Type, Guid Id), (AuditableEntity Entity, int? ExpectedVersion)> nativeProperties = new();
+    private readonly List<PropertyMutation> propertyMutations = [];
+
     public async Task SaveInitialAssetMetadataAsync(Guid assetId, AssetMetadata metadata, CancellationToken token)
     {
         if (db is not Compact24DbContext) throw new PropertyException(400, "asset_metadata_requires_compact24");
+        var index = propertyMutations.FindIndex(m => m.Entity is Asset && m.Entity.Id == assetId && m.ExpectedVersion is null);
+        if (index >= 0)
+        {
+            propertyMutations[index] = propertyMutations[index] with { Metadata = metadata };
+            return;
+        }
         await db.SaveChangesAsync(token);
         var json = System.Text.Json.JsonSerializer.Serialize(metadata, new System.Text.Json.JsonSerializerOptions(System.Text.Json.JsonSerializerDefaults.Web));
         await db.Database.ExecuteSqlInterpolatedAsync($"UPDATE assets SET purchase_info=purchase_info||{json}::jsonb WHERE id={assetId}", token);
@@ -86,6 +96,38 @@ internal sealed class PostgresPropertyRepository(BHomePersistenceContext db) : I
     public async Task<T?> FindAsync<T>(Guid id, CancellationToken token) where T : AuditableEntity
     {
         RequireSupportedCatalog<T>();
+        if (db is Compact24DbContext compact && typeof(T) == typeof(Asset))
+        {
+            var row = await compact.Set<Native.Asset>().AsNoTracking().SingleOrDefaultAsync(a => a.Id == id, token);
+            if (row is null) return null;
+            var asset = NativeAssetPersistence.Read(row);
+            nativeProperties[(typeof(Asset), id)] = (asset, asset.Version);
+            return (T)(AuditableEntity)asset;
+        }
+        if (db is Compact24DbContext locationContext && typeof(T) == typeof(Location))
+        {
+            var row = await locationContext.Set<Native.Location>().AsNoTracking().SingleOrDefaultAsync(l => l.Id == id, token);
+            if (row is null) return null;
+            var location = NativeRoomLocationPersistence.Read(row);
+            nativeProperties[(typeof(Location), id)] = (location, location.Version);
+            return (T)(AuditableEntity)location;
+        }
+        if (db is Compact24DbContext roomContext && typeof(T) == typeof(Room))
+        {
+            var row = await roomContext.Set<Native.Room>().AsNoTracking().SingleOrDefaultAsync(r => r.Id == id, token);
+            if (row is null) return null;
+            var room = NativeRoomLocationPersistence.Read(row);
+            nativeProperties[(typeof(Room), id)] = (room, room.Version);
+            return (T)(AuditableEntity)room;
+        }
+        if (db is Compact24DbContext policyContext && typeof(T) == typeof(BillingPolicy))
+        {
+            var row = await policyContext.Set<Native.BillingPolicy>().AsNoTracking().SingleOrDefaultAsync(p => p.Id == id, token);
+            if (row is null) return null;
+            var policy = NativePolicyPersistence.Read(row);
+            nativeProperties[(typeof(BillingPolicy), id)] = (policy, policy.Version);
+            return (T)(AuditableEntity)policy;
+        }
         var tracked = db.ChangeTracker.Entries<T>().SingleOrDefault(x => x.Entity.Id == id);
         if (tracked is not null)
         {
@@ -96,6 +138,61 @@ internal sealed class PostgresPropertyRepository(BHomePersistenceContext db) : I
     }
     public Task<bool> AnyAsync<T>(Expression<Func<T, bool>> predicate, CancellationToken token) where T : class =>
         db.Set<T>().AsNoTracking().AnyAsync(predicate, token);
+
+    public Task<bool> RoomInLocationAsync(Guid roomId, Guid locationId, CancellationToken token) =>
+        db is Compact24DbContext compact
+            ? compact.Set<Native.Room>().AsNoTracking().AnyAsync(r => r.Id == roomId && r.LocationId == locationId, token)
+            : AnyAsync<Room>(r => r.Id == roomId && r.LocationId == locationId, token);
+
+    public Task<bool> LocationHasOperationalRoomsAsync(Guid locationId, CancellationToken token) =>
+        db is Compact24DbContext compact
+            ? compact.Set<Native.Room>().AsNoTracking().AnyAsync(r => r.LocationId == locationId && r.Status != (short)RoomStatus.Unavailable, token)
+            : AnyAsync<Room>(r => r.LocationId == locationId && r.Status != RoomStatus.Unavailable, token);
+
+    public Task<bool> RoomNumberExistsAsync(Guid locationId, string number, CancellationToken token) =>
+        db is Compact24DbContext compact
+            ? compact.Set<Native.Room>().AsNoTracking().AnyAsync(r => r.LocationId == locationId && r.RoomNumber.ToUpper() == number.ToUpper(), token)
+            : AnyAsync<Room>(r => r.LocationId == locationId && r.RoomNumber.ToUpper() == number.ToUpper(), token);
+
+    public Task<bool> ActiveRoomTypeExistsAsync(Guid locationId, Guid roomTypeId, CancellationToken token) =>
+        db is Compact24DbContext compact
+            ? compact.Database.SqlQuery<bool>($"""
+                SELECT EXISTS(SELECT 1 FROM locations l
+                    CROSS JOIN LATERAL jsonb_array_elements(COALESCE(l.operating_settings->'legacyRoomTypes','[]'::jsonb)) rt
+                    WHERE (rt->>'id')::uuid={roomTypeId} AND (rt->>'locationId')::uuid={locationId}
+                      AND COALESCE((rt->>'isActive')::bool,false)) AS "Value"
+                """).SingleAsync(token)
+            : AnyAsync<RoomType>(r => r.Id == roomTypeId && r.LocationId == locationId && r.IsActive, token);
+
+    public Task<bool> RoomTypeNameExistsAsync(Guid locationId, Guid exceptId, string name, CancellationToken token) =>
+        db is Compact24DbContext compact
+            ? compact.Database.SqlQuery<bool>($"""
+                SELECT EXISTS(SELECT 1 FROM locations l
+                    CROSS JOIN LATERAL jsonb_array_elements(COALESCE(l.operating_settings->'legacyRoomTypes','[]'::jsonb)) rt
+                    WHERE (rt->>'locationId')::uuid={locationId} AND (rt->>'id')::uuid<>{exceptId}
+                      AND upper(COALESCE(rt->>'name',''))={name.ToUpper()}) AS "Value"
+                """).SingleAsync(token)
+            : AnyAsync<RoomType>(r => r.LocationId == locationId && r.Id != exceptId && r.Name.ToUpper() == name.ToUpper(), token);
+
+    public Task<bool> RoomTypeInUseAsync(Guid locationId, Guid roomTypeId, CancellationToken token) =>
+        db is Compact24DbContext compact
+            ? compact.Database.SqlQuery<bool>($"""
+                SELECT EXISTS(SELECT 1 FROM rooms r
+                    LEFT JOIN LATERAL (
+                        SELECT h.value->'state' AS data FROM jsonb_array_elements(r.history) WITH ORDINALITY h(value,n)
+                        WHERE h.value->>'recordType'='Room' ORDER BY h.n DESC LIMIT 1
+                    ) s ON TRUE
+                    WHERE r.location_id={locationId} AND (s.data->>'roomTypeId')::uuid={roomTypeId}) AS "Value"
+                """).SingleAsync(token)
+            : AnyAsync<Room>(r => r.LocationId == locationId && r.RoomTypeId == roomTypeId, token);
+
+    public Task<bool> HasOpenAssetWorkAsync(Guid assetId, CancellationToken token) =>
+        db is Compact24DbContext compact
+            ? compact.Set<Native.OperationalTask>().AsNoTracking().AnyAsync(w => w.TaskType == "WORK_ORDER" &&
+                w.AssetId == assetId && w.Status != "Verified" && w.Status != "Cancelled", token)
+            : AnyAsync<BHome.Domain.IncidentMaintenance.MaintenanceWorkOrder>(w => w.AssetId == assetId &&
+                w.Status != BHome.Domain.IncidentMaintenance.WorkOrderStatus.Verified &&
+                w.Status != BHome.Domain.IncidentMaintenance.WorkOrderStatus.Cancelled, token);
 
     private IQueryable<Contract> BindingPriceContracts()
     {
@@ -109,13 +206,52 @@ internal sealed class PostgresPropertyRepository(BHomePersistenceContext db) : I
             : contracts.Where(c => c.Status == ContractStatus.Active || c.Status == ContractStatus.PendingSigning ||
                 c.Status == ContractStatus.PendingActivation);
     }
-    public Task<bool> HasBindingPriceContractAsync(Guid roomId, CancellationToken token) => BindingPriceContracts().AnyAsync(c => c.RoomId == roomId, token);
+    private static IQueryable<Native.Contract> NativeBindingPriceContracts(Compact24DbContext db) =>
+        db.Set<Native.Contract>().FromSqlRaw("""
+            SELECT c.* FROM contracts c LEFT JOIN LATERAL (
+                SELECT h.value->'state' AS data FROM jsonb_array_elements(c.history) WITH ORDINALITY h(value,n)
+                WHERE h.value->>'recordType'='Contract' ORDER BY h.n DESC LIMIT 1
+            ) s ON TRUE WHERE c.contract_type IN ('MAIN','RENEWAL','HOLDING') AND
+                (c.status IN (1,2,3) OR c.contract_type='HOLDING' AND c.status=0 AND s.data->>'approvedAt' IS NOT NULL)
+            """).AsNoTracking();
+
+    private static async Task<Contract[]> ReadBindingsAsync(Compact24DbContext compact,
+        IQueryable<Native.Contract> query, CancellationToken token)
+    {
+        var rows = await query.ToArrayAsync(token);
+        var ids = rows.Select(c => c.Id).ToArray();
+        var members = (await compact.Set<Native.ContractResident>().AsNoTracking().Where(r => ids.Contains(r.ContractId))
+            .ToArrayAsync(token)).ToLookup(r => r.ContractId);
+        return rows.Select(row =>
+        {
+            var c = NativeContractSnapshot.Read(row);
+            c.Residents = members[row.Id].Select(NativeContractSnapshot.Read).ToList();
+            return c;
+        }).ToArray();
+    }
+
+    public Task<bool> HasBindingPriceContractAsync(Guid roomId, CancellationToken token) =>
+        db is Compact24DbContext compact
+            ? NativeBindingPriceContracts(compact).AnyAsync(c => c.RoomId == roomId, token)
+            : BindingPriceContracts().AnyAsync(c => c.RoomId == roomId, token);
     public async Task<IReadOnlyList<Contract>> BindingPriceContractsAsync(Guid roomId, CancellationToken token) =>
-        await BindingPriceContracts().Where(c => c.RoomId == roomId).Include(c => c.Residents).ToArrayAsync(token);
+        db is Compact24DbContext compact
+            ? await ReadBindingsAsync(compact, NativeBindingPriceContracts(compact).Where(c => c.RoomId == roomId), token)
+            : await BindingPriceContracts().Where(c => c.RoomId == roomId).Include(c => c.Residents).ToArrayAsync(token);
 
     public async Task<IReadOnlyList<ScopedPriceContract>> BindingPriceContractsForLocationsAsync(Guid[] locationIds, CancellationToken token)
     {
         if (locationIds.Length == 0) return [];
+        if (db is Compact24DbContext compact)
+        {
+            var nativeRooms = (await compact.Set<Native.Room>().AsNoTracking().Where(r => locationIds.Contains(r.LocationId))
+                .ToArrayAsync(token)).Select(NativeRoomLocationPersistence.Read).ToDictionary(r => r.Id);
+            var nativeIds = nativeRooms.Keys.ToArray();
+            var nativeContracts = await ReadBindingsAsync(compact,
+                NativeBindingPriceContracts(compact).Where(c => nativeIds.Contains(c.RoomId)), token);
+            return nativeContracts.Select(c => new ScopedPriceContract(nativeRooms[c.RoomId].LocationId,
+                nativeRooms[c.RoomId].RoomTypeId, c)).ToArray();
+        }
         var rooms = await db.Set<Room>().AsNoTracking().Where(r => locationIds.Contains(r.LocationId))
             .Select(r => new { r.Id, r.LocationId, r.RoomTypeId }).ToDictionaryAsync(r => r.Id, token);
         var roomIds = rooms.Keys.ToArray();
@@ -127,9 +263,17 @@ internal sealed class PostgresPropertyRepository(BHomePersistenceContext db) : I
     public async Task<IReadOnlyDictionary<Guid, PolicyLineage>> PolicyLineagesAsync(Guid[] policyIds, CancellationToken token)
     {
         if (policyIds.Length == 0) return new Dictionary<Guid, PolicyLineage>();
-        var created = await db.Set<PropertyChange>().AsNoTracking()
-            .Where(c => policyIds.Contains(c.TargetId) && c.TargetType == nameof(BillingPolicy) && c.Action == "Created")
-            .Select(c => new { c.TargetId, c.After }).ToArrayAsync(token);
+        var created = db is Compact24DbContext compact
+            ? await compact.Database.SqlQuery<PolicyCreationAudit>($"""
+                SELECT COALESCE((event_data->'state'->>'targetId')::uuid,'00000000-0000-0000-0000-000000000000'::uuid) AS "TargetId",
+                    COALESCE(event_data->'state'->>'after','') AS "After"
+                FROM notifications WHERE record_kind='AUDIT' AND event_data->>'recordType'='PropertyChange'
+                    AND event_data->'state'->>'targetType'='BillingPolicy' AND event_data->'state'->>'action'='Created'
+                    AND (event_data->'state'->>'targetId')::uuid=ANY({policyIds})
+                """).ToArrayAsync(token)
+            : await db.Set<PropertyChange>().AsNoTracking()
+                .Where(c => policyIds.Contains(c.TargetId) && c.TargetType == nameof(BillingPolicy) && c.Action == "Created")
+                .Select(c => new PolicyCreationAudit { TargetId = c.TargetId, After = c.After }).ToArrayAsync(token);
         var lineages = new Dictionary<Guid, PolicyLineage>();
         foreach (var change in created)
         {
@@ -145,6 +289,71 @@ internal sealed class PostgresPropertyRepository(BHomePersistenceContext db) : I
             lineages.Add(change.TargetId, new(familyId, number, predecessor));
         }
         return lineages;
+    }
+    private sealed class PolicyCreationAudit
+    {
+        public Guid TargetId { get; init; }
+        public string After { get; init; } = "";
+    }
+
+    public async Task<bool> PolicyOverlapsAsync(PolicyWrite input, Guid? exceptId, CancellationToken token)
+    {
+        var code = PropertyRules.Normalize(input.ChargeCode);
+        if (db is Compact24DbContext compact)
+        {
+            return await compact.Database.SqlQuery<bool>($"""
+                SELECT EXISTS (SELECT 1 FROM billing_policies p LEFT JOIN LATERAL (
+                    SELECT h.value->'state' AS data FROM jsonb_array_elements(p.history) WITH ORDINALITY h(value,n)
+                    WHERE h.value->>'recordType'='BillingPolicy' ORDER BY h.n DESC LIMIT 1
+                ) s ON TRUE
+                WHERE p.id IS DISTINCT FROM {exceptId} AND p.location_id={input.LocationId}
+                    AND p.room_id IS NOT DISTINCT FROM {input.RoomId}
+                    AND (s.data->>'roomTypeId')::uuid IS NOT DISTINCT FROM {input.RoomTypeId}
+                    AND p.charge_code={code} AND (p.effective_to IS NULL OR p.effective_to>={input.EffectiveFrom})
+                    AND (CAST({input.EffectiveTo} AS date) IS NULL OR p.effective_from<={input.EffectiveTo})) AS "Value"
+                """).SingleAsync(token);
+        }
+        return await AnyAsync<BillingPolicy>(p => p.Id != exceptId && p.LocationId == input.LocationId &&
+            p.RoomId == input.RoomId && p.RoomTypeId == input.RoomTypeId && p.ChargeCode == code &&
+            (p.EffectiveTo == null || p.EffectiveTo >= input.EffectiveFrom) &&
+            (input.EffectiveTo == null || p.EffectiveFrom <= input.EffectiveTo), token);
+    }
+
+    public Task<PagedResult<LocationDto>> ListLocationsAsync(PropertyQuery q, Guid? staffId, DateOnly today, CancellationToken token) =>
+        db is Compact24DbContext compact
+            ? NativePropertyPageQueries.LocationsAsync(compact, q, staffId, today, token)
+            : ListAsync<Location, LocationDto>(x => (!q.IsActive.HasValue || x.IsActive == q.IsActive) &&
+                (q.Search == null || x.Name.Contains(q.Search) || x.Address.Contains(q.Search)),
+                x => new(x.Id, x.Name, x.Address, x.IsActive, x.Version), q, staffId, today, token);
+    public Task<PagedResult<RoomDto>> ListRoomsAsync(PropertyQuery q, Guid? staffId, DateOnly today, CancellationToken token) =>
+        db is Compact24DbContext compact
+            ? NativePropertyPageQueries.RoomsAsync(compact, q, staffId, today, token)
+            : ListAsync<Room, RoomDto>(x => (!q.LocationId.HasValue || x.LocationId == q.LocationId) &&
+                (!q.RoomId.HasValue || x.Id == q.RoomId) &&
+                (!q.RoomStatus.HasValue || x.Status == q.RoomStatus) && (q.Search == null || x.RoomNumber.Contains(q.Search)),
+                x => new(x.Id, x.LocationId, x.RoomNumber, x.Floor, x.Capacity, x.Status, x.Version, x.RoomTypeId), q, staffId, today, token);
+    public Task<PagedResult<AssetDto>> ListAssetsAsync(PropertyQuery q, Guid? staffId, DateOnly today, CancellationToken token) =>
+        db is Compact24DbContext compact
+            ? NativePropertyPageQueries.AssetsAsync(compact, q, staffId, today, token)
+            : ListAsync<Asset, AssetDto>(x => (!q.LocationId.HasValue || x.LocationId == q.LocationId) &&
+                (!q.CommonAreaOnly || x.RoomId == null && x.CommonArea != null) &&
+                (!q.RoomAssetsOnly || x.RoomId != null) &&
+                (!q.RoomId.HasValue || x.RoomId == q.RoomId) && (!q.AssetStatus.HasValue || x.Status == q.AssetStatus) &&
+                (q.Search == null || x.Name.Contains(q.Search) || x.Code != null && x.Code.Contains(q.Search)),
+                x => new(x.Id, x.LocationId, x.RoomId, x.CommonArea, x.Code, x.Name, x.Category, x.Condition, x.Status, x.Version, "Serialized", 1, null),
+                q, staffId, today, token);
+
+    public async Task<PagedResult<PolicyDto>> ListPoliciesAsync(PropertyQuery q, Guid? staffId, DateOnly today, CancellationToken token)
+    {
+        if (db is Compact24DbContext compact)
+            return await NativePolicyQueries.ListAsync(compact, q, staffId, today, token);
+        return await ListAsync<BillingPolicy, PolicyDto>(x => (!q.LocationId.HasValue || x.LocationId == q.LocationId) &&
+            (!q.RoomId.HasValue || x.RoomId == q.RoomId) &&
+            (!q.ChargeCategory.HasValue || x.Category == q.ChargeCategory) &&
+            (!q.EffectiveOn.HasValue || x.EffectiveFrom <= q.EffectiveOn && (x.EffectiveTo == null || x.EffectiveTo >= q.EffectiveOn)) &&
+            (q.Search == null || x.ChargeCode.Contains(q.Search) || x.Name.Contains(q.Search)),
+            x => new(x.Id, x.LocationId, x.RoomId, x.Category, x.ChargeCode, x.Name, x.Method,
+                x.Rate, x.EffectiveFrom, x.EffectiveTo, x.Version, x.FirstUsedAt, x.RoomTypeId, null), q, staffId, today, token);
     }
 
     public async Task<PagedResult<TDto>> ListAsync<T, TDto>(Expression<Func<T, bool>> predicate,
@@ -165,11 +374,26 @@ internal sealed class PostgresPropertyRepository(BHomePersistenceContext db) : I
             .Skip(checked((query.Page - 1) * query.PageSize)).Take(query.PageSize).Select(projection).ToArrayAsync(token);
         return new(items, query.Page, query.PageSize, count);
     }
-    public async Task<IReadOnlyList<BillingPolicy>> ApplicablePoliciesAsync(Room room, DateOnly date, CancellationToken token) =>
-        await db.Set<BillingPolicy>().AsNoTracking().Where(x => x.LocationId == room.LocationId &&
+    public async Task<IReadOnlyList<BillingPolicy>> ApplicablePoliciesAsync(Room room, DateOnly date, CancellationToken token)
+    {
+        if (db is Compact24DbContext compact)
+        {
+            var rows = await compact.Set<Native.BillingPolicy>().FromSqlInterpolated($"""
+                SELECT p.* FROM billing_policies p LEFT JOIN LATERAL (
+                    SELECT h.value->'state' AS data FROM jsonb_array_elements(p.history) WITH ORDINALITY h(value,n)
+                    WHERE h.value->>'recordType'='BillingPolicy' ORDER BY h.n DESC LIMIT 1
+                ) s ON TRUE
+                WHERE p.location_id={room.LocationId} AND (p.room_id={room.Id} OR p.room_id IS NULL AND
+                    ((s.data->>'roomTypeId')::uuid IS NULL OR (s.data->>'roomTypeId')::uuid={room.RoomTypeId}))
+                    AND p.effective_from<={date} AND (p.effective_to IS NULL OR p.effective_to>={date})
+                """).AsNoTracking().ToArrayAsync(token);
+            return rows.Select(NativePolicyPersistence.Read).ToArray();
+        }
+        return await db.Set<BillingPolicy>().AsNoTracking().Where(x => x.LocationId == room.LocationId &&
             (x.RoomId == room.Id || x.RoomId == null &&
                 (x.RoomTypeId == null || x.RoomTypeId == room.RoomTypeId)) &&
             x.EffectiveFrom <= date && (x.EffectiveTo == null || x.EffectiveTo >= date)).ToArrayAsync(token);
+    }
 
     public async Task<T> WithLocationLockAsync<T>(Guid locationId, Func<Task<T>> operation, CancellationToken token)
     {
@@ -181,6 +405,41 @@ internal sealed class PostgresPropertyRepository(BHomePersistenceContext db) : I
         {
             var result = await operation();
             await db.SaveChangesAsync(token);
+            if (db is Compact24DbContext compact && propertyMutations.Count != 0)
+            {
+                var now = DateTimeOffset.UtcNow;
+                foreach (var mutation in propertyMutations)
+                {
+                    switch (mutation.Entity)
+                    {
+                        case Asset asset:
+                            await NativeAssetPersistence.StageAsync(compact, asset, mutation.ExpectedVersion, null, now, token);
+                            break;
+                        case Location location:
+                            await NativeRoomLocationPersistence.StageAsync(compact, location, mutation.ExpectedVersion, now, token);
+                            break;
+                        case Room room:
+                            await NativeRoomLocationPersistence.StageAsync(compact, room, mutation.ExpectedVersion, now, token);
+                            break;
+                        case BillingPolicy policy:
+                            await NativePolicyPersistence.StageAsync(compact, policy, mutation.ExpectedVersion, now, token);
+                            break;
+                        default:
+                            throw new InvalidOperationException("Unsupported native property mutation.");
+                    }
+                    NativeAssetPersistence.StageAudit(compact, mutation.Change);
+                    NativeAssetPersistence.StageSecurityAudit(compact, SecurityAudit(mutation.Change));
+                }
+                await db.SaveChangesAsync(token);
+                foreach (var mutation in propertyMutations.Where(m => m.Metadata is not null))
+                {
+                    // PropertyService historically writes initial metadata after the
+                    // creation history entry. Preserve that exact history snapshot.
+                    var json = System.Text.Json.JsonSerializer.Serialize(mutation.Metadata,
+                        new System.Text.Json.JsonSerializerOptions(System.Text.Json.JsonSerializerDefaults.Web));
+                    await db.Database.ExecuteSqlInterpolatedAsync($"UPDATE assets SET purchase_info=purchase_info||{json}::jsonb WHERE id={mutation.Entity.Id}", token);
+                }
+            }
             if (tx is not null) await tx.CommitAsync(token);
             return result;
         }
@@ -191,6 +450,11 @@ internal sealed class PostgresPropertyRepository(BHomePersistenceContext db) : I
         { throw new PropertyException(409, "duplicate_or_overlapping_configuration"); }
         catch (DbUpdateException e) when (e.InnerException is PostgresException { SqlState: "23503" or "23514" })
         { throw new PropertyException(409, "configuration_dependency_conflict"); }
+        finally
+        {
+            nativeProperties.Clear();
+            propertyMutations.Clear();
+        }
     }
     internal static IQueryable<Resident> UnresolvedResidents(BHomePersistenceContext context) => context.Set<Resident>().Where(r =>
         !context.Set<Contract>().Any(c => c.RoomId == r.RoomId && c.Residents.Any(cr => cr.ResidentId == r.Id)) ||
@@ -217,12 +481,27 @@ internal sealed class PostgresPropertyRepository(BHomePersistenceContext db) : I
     public void Add<T>(T entity) where T : class
     {
         RequireSupportedCatalog<T>();
+        if (db is Compact24DbContext && entity is AuditableEntity property &&
+            property is Asset or Location or Room or BillingPolicy)
+        {
+            nativeProperties.Add((property.GetType(), property.Id), (property, null));
+            return;
+        }
         db.Set<T>().Add(entity);
     }
     public void Audit(PropertyChange change)
     {
+        if (db is Compact24DbContext && nativeProperties.Values.FirstOrDefault(p =>
+            p.Entity.GetType().Name == change.TargetType && p.Entity.Id == change.TargetId) is { Entity: not null } property)
+        {
+            propertyMutations.Add(new(property.Entity, property.ExpectedVersion, change));
+            return;
+        }
         db.Set<PropertyChange>().Add(change);
-        db.SecurityAudit.Add(new SecurityAuditRecord
+        db.SecurityAudit.Add(SecurityAudit(change));
+    }
+    private static SecurityAuditRecord SecurityAudit(PropertyChange change) =>
+        new()
         {
             UserId = change.ActorId,
             Event = "Property" + change.Action,
@@ -230,6 +509,5 @@ internal sealed class PostgresPropertyRepository(BHomePersistenceContext db) : I
             TargetId = change.TargetId,
             Succeeded = true,
             OccurredAt = change.OccurredAt
-        });
-    }
+        };
 }

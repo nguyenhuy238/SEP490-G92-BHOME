@@ -12,9 +12,12 @@ internal static class Compact24NativeModel
     internal static void Configure(ModelBuilder model)
     {
         model.Entity<Native.StaffEmployment>().ToTable("staff_employments", "public", t => t.ExcludeFromMigrations());
-        model.Entity<Native.Location>().ToTable("locations", "public", t => t.ExcludeFromMigrations());
-        model.Entity<Native.Room>().ToTable("rooms", "public", t => t.ExcludeFromMigrations());
-        model.Entity<Native.Asset>().ToTable("assets", "public", t => t.ExcludeFromMigrations());
+        model.Entity<Native.Location>().ToTable("locations", "public", t => t.ExcludeFromMigrations())
+            .Property(x => x.Version).IsConcurrencyToken();
+        model.Entity<Native.Room>().ToTable("rooms", "public", t => t.ExcludeFromMigrations())
+            .Property(x => x.Version).IsConcurrencyToken();
+        model.Entity<Native.Asset>().ToTable("assets", "public", t => t.ExcludeFromMigrations())
+            .Property(x => x.Version).IsConcurrencyToken();
         model.Entity<Native.Resident>().ToTable("residents", "public", t => t.ExcludeFromMigrations());
         model.Entity<Native.Contract>().ToTable("contracts", "public", t => t.ExcludeFromMigrations());
         model.Entity<Native.ContractSigning>().ToTable("contract_signings", "public", t => t.ExcludeFromMigrations());
@@ -24,7 +27,8 @@ internal static class Compact24NativeModel
         model.Entity<Native.OperationalTask>().ToTable("operational_tasks", "public", t => t.ExcludeFromMigrations());
         model.Entity<Native.Meter>().ToTable("meters", "public", t => t.ExcludeFromMigrations());
         model.Entity<Native.MeterReading>().ToTable("meter_readings", "public", t => t.ExcludeFromMigrations());
-        model.Entity<Native.BillingPolicy>().ToTable("billing_policies", "public", t => t.ExcludeFromMigrations());
+        model.Entity<Native.BillingPolicy>().ToTable("billing_policies", "public", t => t.ExcludeFromMigrations())
+            .Property(x => x.Version).IsConcurrencyToken();
         model.Entity<Native.Invoice>().ToTable("invoices", "public", t => t.ExcludeFromMigrations());
         model.Entity<Native.InvoiceItem>().ToTable("invoice_items", "public", t => t.ExcludeFromMigrations());
         model.Entity<Native.InvoiceAdjustment>().ToTable("invoice_adjustments", "public", t => t.ExcludeFromMigrations());

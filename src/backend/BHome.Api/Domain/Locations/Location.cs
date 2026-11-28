@@ -7,6 +7,9 @@ public sealed class Location : AuditableEntity
 {
     private Location() { }
 
+    internal static Location Rehydrate(Guid id, DateTimeOffset createdAt, DateTimeOffset updatedAt) =>
+        new() { Id = id, CreatedAt = createdAt, UpdatedAt = updatedAt };
+
     public Location(string name)
     {
         Name = name;

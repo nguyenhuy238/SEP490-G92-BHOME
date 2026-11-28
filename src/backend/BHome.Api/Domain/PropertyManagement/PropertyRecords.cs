@@ -9,6 +9,9 @@ public sealed class Chain : AuditableEntity
 }
 public sealed class Room : AuditableEntity
 {
+    internal static Room Rehydrate(Guid id, DateTimeOffset createdAt, DateTimeOffset updatedAt) =>
+        new() { Id = id, CreatedAt = createdAt, UpdatedAt = updatedAt };
+
     public Guid LocationId { get; set; }
     public BHome.Domain.Locations.Location Location { get; set; } = null!;
     public string RoomNumber { get; set; } = "";

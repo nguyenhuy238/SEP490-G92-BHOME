@@ -22,6 +22,10 @@ public sealed class RoomType : AuditableEntity
 
 public sealed class Asset : AuditableEntity
 {
+    // Detached business value reconstructed from the physical asset row.
+    internal static Asset Rehydrate(Guid id, DateTimeOffset createdAt, DateTimeOffset updatedAt) =>
+        new() { Id = id, CreatedAt = createdAt, UpdatedAt = updatedAt };
+
     public Guid LocationId { get; set; }
     public Guid? RoomId { get; set; }
     public string? CommonArea { get; set; }
@@ -35,6 +39,10 @@ public sealed class Asset : AuditableEntity
 
 public sealed class BillingPolicy : AuditableEntity
 {
+    internal static BillingPolicy Rehydrate(Guid id, DateTimeOffset createdAt, DateTimeOffset updatedAt,
+        DateTimeOffset? firstUsedAt) =>
+        new() { Id = id, CreatedAt = createdAt, UpdatedAt = updatedAt, FirstUsedAt = firstUsedAt };
+
     public Guid LocationId { get; set; }
     public Guid? RoomTypeId { get; set; }
     public Guid? RoomId { get; set; }

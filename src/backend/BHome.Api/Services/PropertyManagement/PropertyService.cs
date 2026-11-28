@@ -96,16 +96,17 @@ public sealed class PropertyService(IPropertyRepository repository, ICurrentUser
         return repository.ListAsync(predicate, projection, q, user.IsInRole(Roles.Owner) ? null : Actor, Today, t);
     }
 
-    public Task<PagedResult<LocationDto>> LocationsAsync(LocationQuery q, CancellationToken t) =>
-        List<Location, LocationDto>(x => (!q.IsActive.HasValue || x.IsActive == q.IsActive) &&
-            (q.Search == null || x.Name.Contains(q.Search) || x.Address.Contains(q.Search)),
-            x => new(x.Id, x.Name, x.Address, x.IsActive, x.Version),
-            new PropertyQuery { Page = q.Page, PageSize = q.PageSize, Search = q.Search, IsActive = q.IsActive }, t);
-    public Task<PagedResult<RoomDto>> RoomsAsync(PropertyQuery q, CancellationToken t) =>
-        List<Room, RoomDto>(x => (!q.LocationId.HasValue || x.LocationId == q.LocationId) &&
-            (!q.RoomId.HasValue || x.Id == q.RoomId) &&
-            (!q.RoomStatus.HasValue || x.Status == q.RoomStatus) && (q.Search == null || x.RoomNumber.Contains(q.Search)),
-            x => new(x.Id, x.LocationId, x.RoomNumber, x.Floor, x.Capacity, x.Status, x.Version, x.RoomTypeId), q, t);
+    public Task<PagedResult<LocationDto>> LocationsAsync(LocationQuery q, CancellationToken t)
+    {
+        var query = new PropertyQuery { Page = q.Page, PageSize = q.PageSize, Search = q.Search, IsActive = q.IsActive };
+        ValidateQuery(query);
+        return repository.ListLocationsAsync(query, user.IsInRole(Roles.Owner) ? null : Actor, Today, t);
+    }
+    public Task<PagedResult<RoomDto>> RoomsAsync(PropertyQuery q, CancellationToken t)
+    {
+        ValidateQuery(q);
+        return repository.ListRoomsAsync(q, user.IsInRole(Roles.Owner) ? null : Actor, Today, t);
+    }
     public Task<PagedResult<RoomTypeDto>> RoomTypesAsync(PropertyQuery q, CancellationToken t) =>
         List<RoomType, RoomTypeDto>(x => (!q.LocationId.HasValue || x.LocationId == q.LocationId) &&
             (!q.IsActive.HasValue || x.IsActive == q.IsActive) &&
@@ -114,12 +115,8 @@ public sealed class PropertyService(IPropertyRepository repository, ICurrentUser
                 x.Amenities, x.IsActive, x.Version), q, t);
     public async Task<PagedResult<AssetDto>> AssetsAsync(PropertyQuery q, CancellationToken t)
     {
-        var page = await List<Asset, AssetDto>(x => (!q.LocationId.HasValue || x.LocationId == q.LocationId) &&
-            (!q.CommonAreaOnly || x.RoomId == null && x.CommonArea != null) &&
-            (!q.RoomAssetsOnly || x.RoomId != null) &&
-            (!q.RoomId.HasValue || x.RoomId == q.RoomId) && (!q.AssetStatus.HasValue || x.Status == q.AssetStatus) &&
-            (q.Search == null || x.Name.Contains(q.Search) || x.Code != null && x.Code.Contains(q.Search)),
-            x => new(x.Id, x.LocationId, x.RoomId, x.CommonArea, x.Code, x.Name, x.Category, x.Condition, x.Status, x.Version, "Serialized", 1, null), q, t);
+        ValidateQuery(q);
+        var page = await repository.ListAssetsAsync(q, user.IsInRole(Roles.Owner) ? null : Actor, Today, t);
         if (setup is null || page.Items.Count == 0) return page;
         var metadata = await setup.AssetMetadataAsync(page.Items.Select(asset => asset.Id).ToArray(), t);
         return page with { Items = page.Items.Select(asset => WithMetadata(asset, metadata.GetValueOrDefault(asset.Id))).ToArray() };
@@ -130,13 +127,8 @@ public sealed class PropertyService(IPropertyRepository repository, ICurrentUser
         WithMetadata(Map(asset), setup is null ? null : (await setup.AssetMetadataAsync([asset.Id], t)).GetValueOrDefault(asset.Id));
     public async Task<PagedResult<PolicyDto>> PoliciesAsync(PropertyQuery q, CancellationToken t)
     {
-        var page = await List<BillingPolicy, PolicyDto>(x => (!q.LocationId.HasValue || x.LocationId == q.LocationId) &&
-            (!q.RoomId.HasValue || x.RoomId == q.RoomId) &&
-            (!q.ChargeCategory.HasValue || x.Category == q.ChargeCategory) &&
-            (!q.EffectiveOn.HasValue || x.EffectiveFrom <= q.EffectiveOn && (x.EffectiveTo == null || x.EffectiveTo >= q.EffectiveOn)) &&
-            (q.Search == null || x.ChargeCode.Contains(q.Search) || x.Name.Contains(q.Search)),
-            x => new(x.Id, x.LocationId, x.RoomId, x.Category, x.ChargeCode, x.Name, x.Method,
-                x.Rate, x.EffectiveFrom, x.EffectiveTo, x.Version, x.FirstUsedAt, x.RoomTypeId, null), q, t);
+        ValidateQuery(q);
+        var page = await repository.ListPoliciesAsync(q, user.IsInRole(Roles.Owner) ? null : Actor, Today, t);
         if (page.Items.Count == 0) return page;
         return page with { Items = await DescribePoliciesAsync(page.Items, t) };
     }
@@ -191,7 +183,7 @@ public sealed class PropertyService(IPropertyRepository repository, ICurrentUser
                 CheckVersion(x.Version, input.Version);
                 if (x.IsActive && !input.IsActive && lifecycle is not null && !(await lifecycle.ClosureAsync(x.Id, t)).CanClose)
                     throw Error(409, "location_closure_blocked");
-                if (x.IsActive && !input.IsActive && (await repository.AnyAsync<Room>(r => r.LocationId == x.Id && r.Status != RoomStatus.Unavailable, t) ||
+                if (x.IsActive && !input.IsActive && (await repository.LocationHasOperationalRoomsAsync(x.Id, t) ||
                     (await repository.ObligationsAsync(x.Id, null, Today, t)).PreventsConfigurationChange))
                     throw Error(409, "location_has_operational_rooms");
                 x.Version++;
@@ -212,8 +204,7 @@ public sealed class PropertyService(IPropertyRepository repository, ICurrentUser
             if (Text(l.Address).Length == 0) throw Error(409, "location_requires_configuration");
             var x = id.HasValue ? await repository.FindAsync<Room>(id.Value, t) ?? throw Error(404, "resource_not_found") : new Room { LocationId = l.Id, Status = RoomStatus.Available };
             if (x.LocationId != l.Id) throw Error(409, "location_immutable");
-            if (input.RoomTypeId is { } roomTypeId && !await repository.AnyAsync<RoomType>(type =>
-                    type.Id == roomTypeId && type.LocationId == l.Id && type.IsActive, t))
+            if (input.RoomTypeId is { } roomTypeId && !await repository.ActiveRoomTypeExistsAsync(l.Id, roomTypeId, t))
                 throw Error(400, "room_type_scope_invalid");
             var residents = await repository.HasResidentsAsync(x.Id, t);
             if (id.HasValue) CheckVersion(x.Version, input.Version);
@@ -247,15 +238,13 @@ public sealed class PropertyService(IPropertyRepository repository, ICurrentUser
                 ? await repository.FindAsync<RoomType>(id.Value, t) ?? throw Error(404, "resource_not_found")
                 : new RoomType { LocationId = location.Id };
             if (x.LocationId != location.Id) throw Error(409, "location_immutable");
-            if (await repository.AnyAsync<RoomType>(candidate => candidate.LocationId == location.Id &&
-                    candidate.Id != x.Id && candidate.Name.ToUpper() == Text(input.Name).ToUpper(), t))
+            if (await repository.RoomTypeNameExistsAsync(location.Id, x.Id, Text(input.Name), t))
                 throw Error(409, "room_type_name_exists");
             var before = id.HasValue ? Snapshot(x) : null;
             if (id.HasValue)
             {
                 CheckVersion(x.Version, input.Version);
-                if (x.IsActive && !input.IsActive && await repository.AnyAsync<Room>(room =>
-                        room.LocationId == location.Id && room.RoomTypeId == x.Id, t))
+                if (x.IsActive && !input.IsActive && await repository.RoomTypeInUseAsync(location.Id, x.Id, t))
                     throw Error(409, "room_type_in_use");
                 x.Version++;
             }
@@ -283,11 +272,9 @@ public sealed class PropertyService(IPropertyRepository repository, ICurrentUser
             foreach (var item in input.Rooms)
             {
                 Validate(item);
-                if (!await repository.AnyAsync<RoomType>(type => type.Id == item.RoomTypeId &&
-                        type.LocationId == location.Id && type.IsActive, t))
+                if (!await repository.ActiveRoomTypeExistsAsync(location.Id, item.RoomTypeId, t))
                     throw Error(400, "room_type_scope_invalid");
-                if (await repository.AnyAsync<Room>(room => room.LocationId == location.Id &&
-                        room.RoomNumber.ToUpper() == Text(item.RoomNumber).ToUpper(), t))
+                if (await repository.RoomNumberExistsAsync(location.Id, Text(item.RoomNumber), t))
                     throw Error(409, "duplicate_room_number");
             }
             var created = new List<RoomDto>(input.Rooms.Length);
@@ -326,7 +313,7 @@ public sealed class PropertyService(IPropertyRepository repository, ICurrentUser
             var l = await LocationAsync(input.LocationId, true, t);
             var x = id.HasValue ? await repository.FindAsync<Asset>(id.Value, t) ?? throw Error(404, "resource_not_found") : new Asset { LocationId = l.Id };
             if (x.LocationId != l.Id) throw Error(409, "location_immutable");
-            if (input.RoomId is { } roomId && !await repository.AnyAsync<Room>(r => r.Id == roomId && r.LocationId == l.Id, t))
+            if (input.RoomId is { } roomId && !await repository.RoomInLocationAsync(roomId, l.Id, t))
                 throw Error(400, "asset_room_scope_invalid");
             if (!l.IsActive && input.Status != AssetStatus.Retired) throw Error(409, "location_inactive");
             var before = id.HasValue ? Snapshot(x) : null;
@@ -338,9 +325,7 @@ public sealed class PropertyService(IPropertyRepository repository, ICurrentUser
                     x.Status == AssetStatus.Retired && input.Status != AssetStatus.Retired)
                     throw Error(409, "asset_workflow_controlled");
                 if ((x.Condition != Text(input.Condition) || x.Status != input.Status) &&
-                    await repository.AnyAsync<BHome.Domain.IncidentMaintenance.MaintenanceWorkOrder>(w =>
-                        w.AssetId == x.Id && w.Status != BHome.Domain.IncidentMaintenance.WorkOrderStatus.Verified &&
-                        w.Status != BHome.Domain.IncidentMaintenance.WorkOrderStatus.Cancelled, t))
+                    await repository.HasOpenAssetWorkAsync(x.Id, t))
                     throw Error(409, "asset_workflow_controlled");
                 x.Version++;
             }
@@ -370,9 +355,7 @@ public sealed class PropertyService(IPropertyRepository repository, ICurrentUser
         {
             var asset = await repository.FindAsync<Asset>(id, t) ?? throw Error(404, "resource_not_found");
             CheckVersion(asset.Version, input.Version);
-            if (asset.Status == AssetStatus.Retired || await repository.AnyAsync<BHome.Domain.IncidentMaintenance.MaintenanceWorkOrder>(w =>
-                    w.AssetId == asset.Id && w.Status != BHome.Domain.IncidentMaintenance.WorkOrderStatus.Verified &&
-                    w.Status != BHome.Domain.IncidentMaintenance.WorkOrderStatus.Cancelled, t))
+            if (asset.Status == AssetStatus.Retired || await repository.HasOpenAssetWorkAsync(asset.Id, t))
                 throw Error(409, "asset_workflow_controlled");
             var before = Snapshot(asset); asset.Condition = Text(input.Condition); asset.Version++;
             Audit(asset.LocationId, asset, "ConditionUpdated", input.Reason, before); return await AssetWithMetadataAsync(asset, t);
@@ -393,20 +376,15 @@ public sealed class PropertyService(IPropertyRepository repository, ICurrentUser
         if (Text(location.Address).Length == 0) throw Error(409, "location_requires_configuration");
         if (!location.IsActive) throw Error(409, "location_inactive");
         if (input.RoomId.HasValue && input.RoomTypeId.HasValue) throw Error(400, "policy_scope_invalid");
-        if (input.RoomId is { } room && !await repository.AnyAsync<Room>(x => x.Id == room && x.LocationId == location.Id, t))
+        if (input.RoomId is { } room && !await repository.RoomInLocationAsync(room, location.Id, t))
             throw Error(400, "policy_scope_invalid");
-        if (input.RoomTypeId is { } roomType && !await repository.AnyAsync<RoomType>(x =>
-                x.Id == roomType && x.LocationId == location.Id && x.IsActive, t))
+        if (input.RoomTypeId is { } roomType && !await repository.ActiveRoomTypeExistsAsync(location.Id, roomType, t))
             throw Error(400, "policy_scope_invalid");
         if (checkRoomLock) await RoomPricingLock.EnsureUnlockedAsync(repository, input.RoomId, t);
     }
     private async Task EnsureNonOverlappingPolicyAsync(PolicyWrite input, Guid? exceptId, CancellationToken t)
     {
-        var code = PropertyRules.Normalize(input.ChargeCode);
-        if (await repository.AnyAsync<BillingPolicy>(p => p.Id != exceptId && p.LocationId == input.LocationId &&
-            p.RoomId == input.RoomId && p.RoomTypeId == input.RoomTypeId && p.ChargeCode == code &&
-            (p.EffectiveTo == null || p.EffectiveTo >= input.EffectiveFrom) &&
-            (input.EffectiveTo == null || p.EffectiveFrom <= input.EffectiveTo), t))
+        if (await repository.PolicyOverlapsAsync(input, exceptId, t))
             throw Error(409, "billing_policy_overlap");
     }
     private static bool PolicyScopeChanged(BillingPolicy policy, PolicyWrite input) =>
