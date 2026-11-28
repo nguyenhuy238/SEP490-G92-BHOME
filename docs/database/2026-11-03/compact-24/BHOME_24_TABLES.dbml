@@ -1,6 +1,6 @@
 // BHOME compact target: exactly 24 tables. SQL is authoritative for triggers and partial indexes.
-// JSON companion: BHOME_Database_Design.json, synchronized to the same 386 columns and 83 FK relations.
-// Native Compact24 runtime adapters implemented; schema version compact24-2026-11-04.
+// JSON companion: BHOME_Database_Design.json, synchronized to the same 390 columns and 85 FK relations.
+// Native Compact24 runtime adapters implemented; schema reference at commit 4c3ec09dc.
 // Initialize an empty target offline; use the separate tool for 70-to-24 data conversion.
 Project BHOME_24 {
   database_type: 'PostgreSQL'
@@ -330,12 +330,16 @@ Table payment_allocations {
   source_deposit_contract_id "uuid"
   target_invoice_id "uuid"
   target_deposit_contract_id "uuid"
+  target_initial_contract_id "uuid"
+  target_settlement_contract_id "uuid"
+  settlement_receivable_id "uuid"
+  deposit_offset_approval_id "uuid" // Conditional unique when non-null
   amount "numeric(18,0)" [not null]
   reversal_of_allocation_id "uuid"
   operation_key "uuid" [not null]
   line_number "smallint" [not null]
   paid_by_user_id "uuid"
-  created_by_user_id "uuid" [not null]
+  created_by_user_id "uuid"
   allocated_at "timestamp with time zone" [not null]
   reason "text" [not null]
 }
@@ -380,7 +384,9 @@ Table refund_requests {
   id "uuid" [pk, not null]
   source_payment_id "uuid"
   source_deposit_contract_id "uuid"
-  beneficiary_resident_id "uuid" [not null]
+  beneficiary_resident_id "uuid"
+  beneficiary_kind "character varying(12)" [not null, default: 'RESIDENT']
+  external_payer_attestation_id "uuid"
   requested_by_user_id "uuid" [not null]
   requested_at "timestamp with time zone" [not null]
   requested_amount "numeric(18,0)" [not null]
@@ -400,6 +406,7 @@ Table refund_requests {
 Table residents {
   id "uuid" [pk, not null]
   user_id "uuid"
+  contact_email "character varying(256)" // Conditional unique: lower(btrim(contact_email)) when non-null
   current_room_id "uuid"
   identity_owner_scope_id "uuid" [not null]
   display_label "character varying(150)" [not null]
@@ -535,6 +542,8 @@ Ref: payment_allocations.source_deposit_contract_id > contracts.id
 Ref: payment_allocations.source_payment_id > payments.id
 Ref: payment_allocations.target_deposit_contract_id > contracts.id
 Ref: payment_allocations.target_invoice_id > invoices.id
+Ref: payment_allocations.target_initial_contract_id > contracts.id
+Ref: payment_allocations.target_settlement_contract_id > contracts.id
 Ref: payments.beneficiary_resident_id > residents.id
 Ref: payments.verified_by_user_id > users.id
 Ref: refresh_tokens.replaced_by_token_id > refresh_tokens.id

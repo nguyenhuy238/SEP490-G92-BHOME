@@ -175,6 +175,6 @@ public sealed class LocationAssetHandoverPdfTests
             ], OwnerDisplayName: "Nguyễn Văn Quản Lý",
             StaffDisplayName: "Trần Văn Kiểm Kê",
             AssignmentStart: new DateOnly(2026, 11, 1),
-            AssignmentEnd: new DateOnly(2026, 11, 30));
+            AssignmentEnd: new DateOnly(2026, 11, 30), LayoutVersion: 1);
     }
 }

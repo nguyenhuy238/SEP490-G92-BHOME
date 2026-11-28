@@ -433,6 +433,37 @@ it('opens a proactive work order and permits Staff actions without an Incident r
   ).toBe(true);
   expect(s.request.mock.calls.some(([path]) => path.includes('/incidents/null'))).toBe(false);
 });
+it('shows the saved proposal of a verified WorkOrder in its own tab without mutation controls', async () => {
+  s.params = { workOrderId: wid };
+  work = {
+    ...work,
+    status: 'Verified',
+    description: 'Kiểm tra bóng đèn',
+    inspectionResult: 'Đèn hỏng',
+    proposedSolution: 'Thay bóng mới',
+    estimatedMinutes: 60,
+    estimatedCost: 50000,
+    proposalVersion: 1,
+    planApproved: true,
+    approvedAt: '2026-11-26T14:05:00Z',
+    result: 'Đã thay bóng',
+    actualCost: 100000,
+    verifiedAt: '2026-11-26T14:12:00Z',
+  };
+  render(<MaintenanceDetailScreen />);
+  await screen.findByText('Thông tin công việc');
+  expect(screen.getByText('Đã thay bóng')).toBeTruthy();
+  expect(screen.queryByText('Thay bóng mới')).toBeNull();
+  expect(screen.queryByText(/Chưa ở bước bắt đầu/)).toBeNull();
+  fireEvent.click(screen.getByRole('tab', { name: 'Phương án' }));
+  expect(await screen.findByText('Thay bóng mới')).toBeTruthy();
+  expect(screen.getByText('Đèn hỏng')).toBeTruthy();
+  expect(screen.getByText('60 phút')).toBeTruthy();
+  expect(screen.getByText('Đã được duyệt')).toBeTruthy();
+  expect(screen.queryByText('Đã thay bóng')).toBeNull();
+  expect(screen.queryByRole('button', { name: 'Gửi phương án sửa chữa' })).toBeNull();
+  expect(mutations()).toHaveLength(0);
+});
 it('shows each WorkOrder as a separate item in the embedded Staff work list', async () => {
   const secondWorkId = '88888888-8888-4888-8888-888888888888';
   s.request.mockImplementation(async (path, init) =>
@@ -451,6 +482,11 @@ it('shows each WorkOrder as a separate item in the embedded Staff work list', as
   );
   render(<MaintenanceListScreen embedded />);
   await screen.findByText('Bảo trì máy bơm');
+  expect(screen.queryByText('Công việc sửa chữa & bảo trì')).toBeNull();
+  expect(
+    screen.queryByText('Các việc được giao từ báo cáo sự cố hoặc kế hoạch bảo trì chủ động'),
+  ).toBeNull();
+  expect(screen.queryByText('Tải lại', { exact: true })).toBeNull();
   expect(screen.getAllByText('Xem chi tiết công việc')).toHaveLength(2);
   expect(screen.getByText('Bảo trì chủ động')).toBeTruthy();
   fireEvent.click(screen.getAllByText('Xem chi tiết công việc')[0]!);
@@ -458,6 +494,31 @@ it('shows each WorkOrder as a separate item in the embedded Staff work list', as
     workOrderId: wid,
     returnTo: 'work-orders',
   });
+});
+it('retains the controlled maintenance queue page and resets it on filter change', async () => {
+  const setPage = vi.fn();
+  const setStatus = vi.fn();
+  render(
+    <MaintenanceListScreen
+      embedded
+      queueState={{ page: 2, status: 'Assigned', setPage, setStatus }}
+    />,
+  );
+  await waitFor(() =>
+    expect(
+      s.request.mock.calls.some(
+        ([path]) =>
+          path.startsWith('/api/v1/work-orders?') &&
+          path.includes('page=2') &&
+          path.includes('workOrderStatus=Assigned'),
+      ),
+    ).toBe(true),
+  );
+  fireEvent.change(screen.getByLabelText('Trạng thái sửa chữa / bảo trì'), {
+    target: { value: 'Verified' },
+  });
+  expect(setStatus).toHaveBeenCalledWith('Verified');
+  expect(setPage).toHaveBeenCalledWith(1);
 });
 it('loads authenticated WorkOrder thumbnails only after Staff opens the photos tab', async () => {
   s.params = { workOrderId: wid };
@@ -833,7 +894,7 @@ it('returns from an embedded WorkOrder to the Staff work list', async () => {
   render(<MaintenanceDetailScreen />);
   await screen.findByText(/Kết quả yêu cầu/);
   fireEvent.click(screen.getByText('Về danh sách công việc'));
-  expect(s.go).toHaveBeenCalledWith('work-orders');
+  expect(s.go).toHaveBeenCalledWith('work-orders', { tab: 'maintenance' });
 });
 it('shows Tenant report photos only even if an unexpected internal evidence kind is returned', async () => {
   s.role = 'Tenant';

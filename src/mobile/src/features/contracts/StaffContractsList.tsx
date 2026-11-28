@@ -144,11 +144,8 @@ export function StaffContractsList({
     <View style={styles.screen}>
       <View style={styles.summary}>
         <View style={ui.grow}>
-          <Text variant="headlineSmall" style={styles.title}>
+          <Text variant="titleMedium" style={styles.title}>
             {loading || error ? '—' : contracts.length} hợp đồng
-          </Text>
-          <Text variant="bodySmall" style={ui.muted}>
-            Hợp đồng giữ chỗ và thuê chính thức
           </Text>
         </View>
         {!headerRefreshAvailable && (
@@ -333,9 +330,6 @@ export function StaffContractsList({
                     <Text variant="titleMedium" numberOfLines={2} style={styles.room}>
                       Phòng {contract.roomNumber}
                     </Text>
-                    <Text variant="labelSmall" numberOfLines={1} style={ui.muted}>
-                      {contract.locationName}
-                    </Text>
                     {contract.kind === 'Holding' && (
                       <View style={{ gap: 3 }}>
                         <Text variant="bodyMedium">
@@ -347,11 +341,9 @@ export function StaffContractsList({
                         </Text>
                       </View>
                     )}
-                    <View style={{ alignSelf: 'flex-start' }}>
-                      <Pill tone={contract.kind === 'Holding' ? 'blue' : 'neutral'}>
-                        {staffContractKindLabel(contract.kind)}
-                      </Pill>
-                    </View>
+                    <Text variant="labelSmall" style={ui.muted}>
+                      {staffContractKindLabel(contract.kind)}
+                    </Text>
                     <Text variant="labelSmall" style={ui.muted}>
                       {contract.kind === 'Holding'
                         ? `Hạn giữ chỗ: ${contract.holdingExpiresAt ? formatInstant(contract.holdingExpiresAt) : 'Chưa có thông tin'}`
@@ -422,7 +414,7 @@ export function StaffContractsList({
 }
 
 const styles = StyleSheet.create({
-  screen: { gap: 12 },
+  screen: { gap: 8 },
   summary: { flexDirection: 'row', alignItems: 'center', gap: 8 },
   title: { color: c.primary, fontWeight: '700' },
   schedule: {
@@ -432,10 +424,10 @@ const styles = StyleSheet.create({
     borderRadius: 12,
     overflow: 'hidden',
   },
-  scheduleRow: { flexDirection: 'row', alignItems: 'center', gap: 10, padding: 12, minHeight: 52 },
+  scheduleRow: { flexDirection: 'row', alignItems: 'center', gap: 8, padding: 12, minHeight: 48 },
   scheduleDetails: { gap: 8 },
   statusTabs: { gap: 8, paddingVertical: 2 },
-  statusTab: { borderRadius: 22 },
+  statusTab: { borderRadius: 10 },
   searchRow: { flexDirection: 'row', alignItems: 'center', gap: 8 },
   search: { flex: 1, minWidth: 0, backgroundColor: c.white, fontSize: 13 },
   sortButton: {
@@ -446,12 +438,12 @@ const styles = StyleSheet.create({
     width: 48,
     backgroundColor: c.white,
   },
-  cards: { gap: 10 },
+  cards: { gap: 8 },
   card: {
     backgroundColor: c.white,
     borderWidth: 1,
     borderColor: c.border,
-    borderRadius: 14,
+    borderRadius: 12,
     overflow: 'hidden',
   },
   cardBody: {
@@ -459,16 +451,16 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
     gap: 10,
     padding: 12,
-    minHeight: 124,
+    minHeight: 88,
   },
-  cardInfo: { flex: 1, minWidth: 0, gap: 5 },
+  cardInfo: { flex: 1, minWidth: 0, gap: 4 },
   room: { color: c.primary, fontWeight: '700' },
   rent: { color: c.primary, marginTop: 3 },
   cardTrailing: {
     alignItems: 'flex-end',
     justifyContent: 'space-between',
     maxWidth: '40%',
-    gap: 12,
+    gap: 8,
   },
   state: { paddingVertical: 24, gap: 10, alignItems: 'center' },
   pagination: { alignItems: 'center', gap: 2, paddingTop: 4, paddingBottom: 12 },
