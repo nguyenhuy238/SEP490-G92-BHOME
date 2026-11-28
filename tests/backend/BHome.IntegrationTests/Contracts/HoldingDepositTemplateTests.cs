@@ -65,6 +65,14 @@ public sealed class HoldingDepositTemplateTests
         }
         var bytes = await new HoldingDepositRenderer(config).PdfAsync(contract, Owner, Tenant, "0911111111", default);
         using var pdf = new PdfDocument(new PdfReader(new MemoryStream(bytes)));
+        var accepted = new InternalAcceptanceRenderer().Accept(bytes, [[new(.1, .1), new(.8, .8)]],
+            Guid.NewGuid(), DateTimeOffset.UtcNow, "synthetic");
+        using (var acceptedPdf = new PdfDocument(new PdfReader(new MemoryStream(accepted.Pdf))))
+        {
+            Assert.Equal(pdf.GetNumberOfPages(), acceptedPdf.GetNumberOfPages());
+            Assert.DoesNotContain("INTERNAL ELECTRONIC ACCEPTANCE", ContractPdfRendererTests.Text(acceptedPdf));
+            Assert.DoesNotContain("Reviewed source SHA-256", ContractPdfRendererTests.Text(acceptedPdf));
+        }
         var qa = Environment.GetEnvironmentVariable("BHOME_CONTRACT_QA_DIR");
         if (!string.IsNullOrWhiteSpace(qa))
         {

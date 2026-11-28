@@ -71,6 +71,13 @@ public sealed class MainDocxTemplateTests
         Assert.Equal("signature_placement_overlaps_other_party", conflict.Code);
         ContractSignatureSlots.RequireSeparatePartyBoxes(bytes, owner, true, null);
         var accepted = new InternalAcceptanceRenderer().Accept(bytes, [[new(.1, .1), new(.8, .8)]], c.RepresentativeResidentId, DateTimeOffset.UtcNow, "synthetic", true);
+        using (var acceptedPdf = new PdfDocument(new PdfReader(new MemoryStream(accepted.Pdf))))
+        {
+            Assert.Equal(pdf.GetNumberOfPages(), acceptedPdf.GetNumberOfPages());
+            var acceptedText = ContractPdfRendererTests.Text(acceptedPdf);
+            Assert.DoesNotContain("INTERNAL ELECTRONIC ACCEPTANCE", acceptedText);
+            Assert.DoesNotContain("Reviewed source SHA-256", acceptedText);
+        }
         var qa = Environment.GetEnvironmentVariable("BHOME_CONTRACT_QA_DIR");
         if (!string.IsNullOrWhiteSpace(qa))
         {
