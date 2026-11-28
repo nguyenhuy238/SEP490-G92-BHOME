@@ -199,3 +199,22 @@ thay đổi Room.Version. Cập nhật assertion để kiểm cả token bản n
 và token task bằng MoveInStateToken canonical từ inventory thật; giữ nguyên kiểm
 tra tài sản, số lượng, Tenant, meter, idempotency và quyền. Thêm ca này vào regression
 gate bắt buộc. Không sửa service, dữ liệu ứng dụng hoặc bỏ assertion để cho test qua.
+
+### Production retry sau #194
+
+Job Production `140908287906`, run `46118527560` attempt 2, dừng ở download artifact:
+workflow tìm `release-28d007634dee14f4964a46d34f5091cce48586d8-2`, trong khi manifest
+được tạo bởi job images ở attempt 1. Chưa chạy SSH hoặc deploy trong lượt lỗi này.
+
+Production download và verify nay cùng dùng `needs.images.outputs.manifest-attempt`.
+Verifier nhận `RELEASE_MANIFEST_ATTEMPT` do workflow truyền từ output producer;
+giữ checksum, SHA, run ID, environment, repository và cả ba digest chính xác. Từ chối
+producer attempt rỗng/sai định dạng/tương lai, manifest khác attempt, digest/ref/run
+khác và hai cờ producer xung đột. Kiểm tra build provenance vẫn yêu cầu ba images
+được tạo từ cùng commit/attempt/environment; không ghép các build khác nhau.
+Cờ Staging cũ vẫn chỉ dùng cho Staging.
+
+Đã chạy lại đủ 105 Python deployment tests trên Linux/Docker: PASS, gồm regression
+Production retry và đối chiếu trực tiếp tên artifact/cờ verify trong workflow.
+Prettier workflow và git diff --check PASS. Rerun workflow cũ của #194 không nhận
+source fix này; cần release main mới sau khi tích hợp #193 và hoàn tất migration/config.
