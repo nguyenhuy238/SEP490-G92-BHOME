@@ -4,18 +4,28 @@ using BHome.Application.IdentityAccess;
 using BHome.Application.PropertyManagement;
 using BHome.Domain.Billing;
 using BHome.Domain.IdentityAccess;
+using BHome.Infrastructure.Persistence.Compact24;
 using Microsoft.EntityFrameworkCore;
 namespace BHome.Infrastructure.Modules.Billing;
 internal sealed partial class BillingAutomationEngine
 {
     private async Task<int> FinalizeDraft(BillingAutomationPlan p, DateOnly period, Guid room, List<object> errors, CancellationToken t)
     {
-        db.ChangeTracker.Clear(); var invoice = await db.PeriodicInvoices().AsNoTracking().SingleOrDefaultAsync(i => i.RoomId == room && i.BillingPeriod == period, t);
+        db.ChangeTracker.Clear(); var invoice = await invoiceRepository.ForPeriodAsync(room, period, t);
         if (invoice is null) { errors.Add(new { roomId = room, code = "draft_invoice_required" }); return 0; }
         if (invoice.Status == InvoiceStatus.Final) return 1;
         try
         {
-            if (await db.Set<OperationalTask>().AnyAsync(task => task.BillingRoomId == room && task.BillingPeriod == period && db.Set<Meter>().Any(m => m.RoomId == room && m.UtilityType == task.BillingUtilityType && m.Id != task.MeterId && m.InstalledOn >= period && m.InstalledOn <= period.AddMonths(1).AddDays(-1)), t)) throw new InvoiceException(409, "meter_replacement_review_required");
+            var replacement = db is Compact24DbContext compact
+                ? await compact.Database.SqlQuery<bool>($"""
+                    SELECT EXISTS(SELECT 1 FROM operational_tasks task
+                      JOIN meters m ON m.room_id={room} AND m.utility_type=(task.task_data->'state'->>'billingUtilityType')::smallint
+                        AND m.id<>task.meter_id AND m.installed_on>={period} AND m.installed_on<={period.AddMonths(1).AddDays(-1)}
+                      WHERE task.task_type='METER_READ' AND task.task_data->'state'->>'billingRoomId'={room.ToString()}
+                        AND task.billing_period={period}) AS "Value"
+                    """).SingleAsync(t)
+                : await db.Set<OperationalTask>().AnyAsync(task => task.BillingRoomId == room && task.BillingPeriod == period && db.Set<Meter>().Any(m => m.RoomId == room && m.UtilityType == task.BillingUtilityType && m.Id != task.MeterId && m.InstalledOn >= period && m.InstalledOn <= period.AddMonths(1).AddDays(-1)), t);
+            if (replacement) throw new InvoiceException(409, "meter_replacement_review_required");
             var service = Invoices(p); var draft = await service.GetAsync(invoice.Id, t);
             if (await invoiceRepository.HasPendingAdjustmentsAsync(invoice.Id, t)) throw new InvoiceException(409, "invoice_adjustment_pending");
             draft = await service.RefreshAsync(invoice.Id, draft.Version, t, p.Id);
@@ -33,7 +43,7 @@ internal sealed partial class BillingAutomationEngine
     }
     private async Task<int> GenerateDraft(BillingAutomationPlan p, DateOnly period, Guid room, List<object> errors, CancellationToken t)
     {
-        db.ChangeTracker.Clear(); var existing = await db.PeriodicInvoices().AsNoTracking().SingleOrDefaultAsync(i => i.RoomId == room && i.BillingPeriod == period, t);
+        db.ChangeTracker.Clear(); var existing = await invoiceRepository.ForPeriodAsync(room, period, t);
         try
         {
             InvoiceView invoice;

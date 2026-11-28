@@ -3,7 +3,9 @@ using BHome.Domain.Billing;
 using BHome.Domain.PropertyManagement;
 using BHome.Domain.TenantContracts;
 using BHome.Infrastructure.Persistence;
+using BHome.Infrastructure.Persistence.Compact24;
 using Microsoft.EntityFrameworkCore;
+using Native = BHome.Domain.Entities;
 
 namespace BHome.Infrastructure.Billing;
 
@@ -38,6 +40,28 @@ internal sealed class TenantMeterReadingsRepository(BHomePersistenceContext db) 
         select new ReadingRow { Reading = reading, Task = task, Meter = meter, Room = room, Evidence = evidence };
     public async Task<TenantMeterReadingPage> ListAsync(Guid actor, int page, int size, Guid? room, DateOnly? period, CancellationToken t)
     {
+        if (db is Compact24DbContext compact)
+        {
+            var nativeQuery = from reading in NativeBillingMeterQueries.TenantVisible(compact, actor)
+                              join task in compact.Set<Native.OperationalTask>().AsNoTracking() on reading.OperationalTaskId equals task.Id
+                              join meter in compact.Set<Native.Meter>().AsNoTracking() on reading.MeterId equals meter.Id
+                              join nativeRoom in compact.Set<Native.Room>().AsNoTracking() on meter.RoomId equals nativeRoom.Id
+                              join location in compact.Set<Native.Location>().AsNoTracking() on nativeRoom.LocationId equals location.Id
+                              where (room == null || nativeRoom.Id == room) && (period == null || task.BillingPeriod == period)
+                              select new { reading, task, meter, nativeRoom, location.Name };
+            var nativeTotal = await nativeQuery.CountAsync(t);
+            var rows = await nativeQuery.OrderByDescending(r => r.reading.ReadingAt).ThenByDescending(r => r.reading.ConfirmedAt)
+                .ThenBy(r => r.reading.Id).Skip((page - 1) * size).Take(size).ToArrayAsync(t);
+            var nativeItems = rows.Select(r =>
+            {
+                var value = NativeBillingMeterQueries.Read(r.reading, r.task);
+                return new TenantMeterReading(value.Reading.Id, r.nativeRoom.Id, r.nativeRoom.RoomNumber, r.Name,
+                    r.meter.MeterCode, ((UtilityType)r.meter.UtilityType).ToString(), value.Task.Purpose.ToString(),
+                    value.Task.ReadingDate, value.Task.BillingPeriod, value.Reading.PreviousValue, value.Reading.ConfirmedValue,
+                    value.Reading.Consumption, value.Reading.ConfirmedAt, value.Reading.Status.ToString());
+            }).ToArray();
+            return new(nativeItems, page, size, nativeTotal);
+        }
         var query = Visible(actor);
         if (room is { } roomId) query = query.Where(r => r.Room.Id == roomId);
         if (period is { } billingPeriod) query = query.Where(r => r.Task.BillingPeriod == billingPeriod);
@@ -48,7 +72,21 @@ internal sealed class TenantMeterReadingsRepository(BHomePersistenceContext db) 
                 r.Reading.PreviousValue, r.Reading.ConfirmedValue, r.Reading.Consumption, r.Reading.ConfirmedAt, r.Reading.Status.ToString())).ToArrayAsync(t);
         return new(items, page, size, total);
     }
-    public Task<bool> CanViewAsync(Guid actor, Guid id, CancellationToken t) => Visible(actor).AnyAsync(r => r.Reading.Id == id, t);
-    public Task<TenantReadingEvidence?> EvidenceAsync(Guid actor, Guid id, CancellationToken t) => Visible(actor).Where(r => r.Reading.Id == id)
-        .Select(r => new TenantReadingEvidence(r.Evidence.ObjectKey, r.Evidence.ContentType)).SingleOrDefaultAsync(t);
+    public Task<bool> CanViewAsync(Guid actor, Guid id, CancellationToken t) => db is Compact24DbContext compact
+        ? NativeBillingMeterQueries.TenantVisible(compact, actor).AnyAsync(r => r.Id == id, t)
+        : Visible(actor).AnyAsync(r => r.Reading.Id == id, t);
+    public async Task<TenantReadingEvidence?> EvidenceAsync(Guid actor, Guid id, CancellationToken t)
+    {
+        if (db is Compact24DbContext compact)
+        {
+            var row = await (from reading in NativeBillingMeterQueries.TenantVisible(compact, actor)
+                             join task in compact.Set<Native.OperationalTask>().AsNoTracking() on reading.OperationalTaskId equals task.Id
+                             where reading.Id == id select new { reading, task }).SingleOrDefaultAsync(t);
+            if (row is null) return null;
+            var evidence = NativeBillingMeterQueries.Read(row.reading, row.task).Evidence;
+            return new(evidence.ObjectKey, evidence.ContentType);
+        }
+        return await Visible(actor).Where(r => r.Reading.Id == id)
+            .Select(r => new TenantReadingEvidence(r.Evidence.ObjectKey, r.Evidence.ContentType)).SingleOrDefaultAsync(t);
+    }
 }

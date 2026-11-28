@@ -4,6 +4,8 @@ namespace BHome.Domain.Billing;
 
 public sealed class InvoiceAdjustmentRequest : AuditableEntity
 {
+    internal static InvoiceAdjustmentRequest RestoreIdentity(Guid id, DateTimeOffset createdAt, DateTimeOffset updatedAt) =>
+        new() { Id = id, CreatedAt = createdAt, UpdatedAt = updatedAt };
     public Guid InvoiceId { get; set; }
     public Invoice Invoice { get; set; } = null!;
     public Guid RequesterId { get; set; }
@@ -22,6 +24,8 @@ public sealed class InvoiceAdjustmentRequest : AuditableEntity
 }
 public sealed class InvoiceAdjustmentDecision : AuditableEntity
 {
+    internal static InvoiceAdjustmentDecision RestoreIdentity(Guid id, DateTimeOffset createdAt, DateTimeOffset updatedAt) =>
+        new() { Id = id, CreatedAt = createdAt, UpdatedAt = updatedAt };
     public long Sequence { get; set; }
     public Guid RequestId { get; set; }
     public Guid InvoiceId { get; set; }

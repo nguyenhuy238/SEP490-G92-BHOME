@@ -9,6 +9,7 @@ using BHome.Infrastructure.Contracts;
 using BHome.Infrastructure.Persistence;
 using BHome.Infrastructure.Persistence.Compact24;
 using Microsoft.EntityFrameworkCore;
+using Native = BHome.Domain.Entities;
 
 namespace BHome.Infrastructure.Billing;
 
@@ -17,17 +18,26 @@ internal sealed class FixedChargeCoverageRepository(BHomePersistenceContext db) 
     public async Task<IReadOnlyList<FixedChargeCoverage>> ReadAsync(Guid roomId, DateOnly period, string code, CancellationToken token)
     {
         var result = new List<FixedChargeCoverage>();
-        if (db is not Compact24DbContext) return result;
-        var lines = await (from line in db.Set<InvoiceLine>().AsNoTracking()
-                           join invoice in db.Set<Invoice>() on line.InvoiceId equals invoice.Id
-                           join contract in db.Set<Contract>() on invoice.RepresentativeContractId equals contract.Id
+        if (db is not Compact24DbContext compact) return result;
+        var nativeLines = await (from line in compact.Set<Native.InvoiceItem>().AsNoTracking()
+                           join invoice in compact.Set<Native.Invoice>().AsNoTracking() on line.InvoiceId equals invoice.Id
+                           join contract in compact.Set<Native.Contract>().AsNoTracking() on invoice.ContractId equals contract.Id
                            where invoice.RoomId == roomId && (invoice.BillingPeriod == period ||
                                code == "RENT" && invoice.BillingPeriod == period.AddMonths(-1)) &&
-                               invoice.Status == InvoiceStatus.Final && line.ChargeCode == code
-                           select new { line, invoice.BillingPeriod, invoice.ScheduleSnapshot, contract.SnapshotHash }).ToArrayAsync(token);
+                               invoice.Status == (short)InvoiceStatus.Final && line.ChargeCode == code
+                           select new { line, invoice.BillingPeriod, invoice.BillingSnapshot, contract.SnapshotHash }).ToArrayAsync(token);
+        var lines = nativeLines.Select(r => new
+        {
+            line = NativeInvoicePersistence.ReadLine(r.line), r.BillingPeriod, SnapshotHash = r.SnapshotHash ?? "",
+            ScheduleSnapshot = r.BillingSnapshot.TryGetProperty("compactState", out var state) &&
+                state.TryGetProperty("scheduleSnapshot", out var snapshot) ? snapshot.GetString() ?? "" : ""
+        }).ToArray();
         var invoiceIds = lines.Select(r => r.line.InvoiceId).Distinct().ToArray();
-        var adjustments = await db.Set<InvoiceAdjustmentDecision>().AsNoTracking().Where(d => invoiceIds.Contains(d.InvoiceId) && d.ChargeCode == code &&
-            d.InvoiceStatus == InvoiceStatus.Final && d.Outcome == "Approved").Select(d => new { d.Id, d.InvoiceId, d.Delta }).Take(501).ToArrayAsync(token);
+        var adjustmentRows = await compact.Set<Native.InvoiceAdjustment>().FromSqlInterpolated($"""
+            SELECT * FROM invoice_adjustments WHERE decision_snapshot->>'chargeCode'={code}
+                AND COALESCE((decision_snapshot->>'invoiceStatus')::integer,0)=1 AND decision_snapshot->>'outcome'='Approved'
+            """).AsNoTracking().Where(d => invoiceIds.Contains(d.InvoiceId)).Take(501).ToArrayAsync(token);
+        var adjustments = adjustmentRows.Select(r => NativeAdjustmentPersistence.ReadDecision(r)!).ToArray();
         if (adjustments.Length > 500) throw ContractException.Conflict("fixed_charge_history_review_required");
         foreach (var row in lines)
         {

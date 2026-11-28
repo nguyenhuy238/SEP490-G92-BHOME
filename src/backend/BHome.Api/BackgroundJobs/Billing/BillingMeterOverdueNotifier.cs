@@ -1,11 +1,11 @@
 using BHome.Application.Common;
-using BHome.Domain.Billing;
 using BHome.Domain.IdentityAccess;
-using BHome.Domain.StaffOperations;
+using BHome.Infrastructure.Billing;
 using BHome.Infrastructure.Modules.Notifications;
 using BHome.Infrastructure.Persistence;
 using BHome.Infrastructure.Persistence.Compact24;
 using Microsoft.EntityFrameworkCore;
+using Native = BHome.Domain.Entities;
 
 namespace BHome.Infrastructure.Modules.Billing;
 
@@ -13,27 +13,26 @@ internal sealed class BillingMeterOverdueNotifier(BHomePersistenceContext db, Ti
 {
     internal async Task NotifyAsync(CancellationToken t)
     {
-        if (sql is null) return; // Legacy source-schema fixture does not use Compact24 notifications.
+        if (sql is null || db is not Compact24DbContext compact) return;
         var now = clock.BusinessUtcNow();
         var today = clock.BusinessToday();
-        var owners = await (from u in db.Users
-                            join grant in db.UserRoles on u.Id equals grant.UserId
-                            join role in db.Roles on grant.RoleId equals role.Id
-                            where u.IsActive && role.Name == Roles.Owner
-                            select u.Id).Distinct().ToArrayAsync(t);
-        var eligibleStaff = db is Compact24DbContext compact ? StaffEmploymentEligibility.EligibleIds(compact, today) :
-            (from u in db.Users join grant in db.UserRoles on u.Id equals grant.UserId join role in db.Roles on grant.RoleId equals role.Id where u.IsActive && role.Name == Roles.Staff select u.Id);
-        var tasks = await db.Set<OperationalTask>().AsNoTracking()
-            .Where(x => x.Kind == OperationalTaskKind.MeterReading && x.Purpose == ReadingPurpose.Periodic && x.BillingPeriod != null &&
-                x.Location.IsActive && x.DueAt < now && x.Status != MeterTaskStatus.Completed && x.Status != MeterTaskStatus.Cancelled)
-            .Select(x => new { x.Id, x.LocationId, x.Location.Name, x.Meter.RoomId, x.Meter.Room.RoomNumber, x.BillingPeriod, x.DueAt })
-            .ToArrayAsync(t);
+        var owners = await db.Users.AsNoTracking().Where(u => u.IsActive && EF.Property<string[]>(u, "roles").Contains(Roles.Owner))
+            .Select(u => u.Id).Distinct().ToArrayAsync(t);
+        var periodic = compact.Set<Native.OperationalTask>().FromSqlRaw("""
+            SELECT * FROM operational_tasks WHERE task_type='METER_READ'
+                AND task_data->'state'->>'purpose'='1' AND status NOT IN ('2','3')
+            """).AsNoTracking();
+        var tasks = await (from task in periodic
+                           join location in compact.Set<Native.Location>().AsNoTracking() on task.LocationId equals location.Id
+                           join meter in compact.Set<Native.Meter>().AsNoTracking() on task.MeterId equals meter.Id
+                           join room in compact.Set<Native.Room>().AsNoTracking() on meter.RoomId equals room.Id
+                           where location.IsActive && task.BillingPeriod != null && task.DueAt < now
+                           select new { task.Id, LocationId = location.Id, location.Name, meter.RoomId, room.RoomNumber, task.BillingPeriod, task.DueAt }).ToArrayAsync(t);
         foreach (var group in tasks.GroupBy(task => new { task.LocationId, task.Name, task.BillingPeriod }))
         {
             var location = group.Key.LocationId;
-            var staff = await db.StaffLocationAssignments.AsNoTracking()
-                .Where(a => a.LocationId == location && a.StartDate <= today && a.EndDate >= today && eligibleStaff.Contains(a.StaffUserId))
-                .Select(a => (Guid?)a.StaffUserId).SingleOrDefaultAsync(t);
+            var staff = (await NativeBillingJobPersistence.AssignmentsAsync(compact, location, today, t))
+                .Select(a => (Guid?)a.StaffUserId).SingleOrDefault();
             var period = group.Key.BillingPeriod!.Value;
             var rooms = group.GroupBy(task => task.RoomId).Select(room => room.First().RoomNumber).OrderBy(name => name).ToArray();
             var deadline = group.Min(task => task.DueAt)!.Value.ToOffset(TimeSpan.FromHours(7));
@@ -51,8 +50,8 @@ internal sealed class BillingMeterOverdueNotifier(BHomePersistenceContext db, Ti
             }
             foreach (var owner in owners)
                 await sql.Emit(owner, Roles.Owner, location, key, "PERIODIC_METER_OVERDUE", "Task", title, $"Nhân viên: {staffName}. {body}", "MeterTask", taskId, t, channels: ["IN_APP"]);
-            if (staff is { } recipient && await db.StaffLocationAssignments.AnyAsync(a =>
-                    a.LocationId == location && a.StaffUserId == recipient && a.StartDate <= today && a.EndDate >= today && eligibleStaff.Contains(a.StaffUserId), t))
+            if (staff is { } recipient && (await NativeBillingJobPersistence.AssignmentsAsync(compact, location, today, t))
+                .Any(a => a.StaffUserId == recipient))
                 await sql.Emit(recipient, Roles.Staff, location, key, "PERIODIC_METER_OVERDUE", "Task", title, body, "MeterTask", taskId, t, channels: ["IN_APP", "EMAIL"]);
         }
     }

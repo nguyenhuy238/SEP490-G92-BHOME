@@ -2,10 +2,12 @@ using BHome.Application.Billing;
 using BHome.Application.Storage;
 using BHome.Domain.Billing;
 using BHome.Infrastructure.Persistence;
+using BHome.Infrastructure.Persistence.Compact24;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
+using Native = BHome.Domain.Entities;
 
 namespace BHome.Infrastructure.Billing;
 
@@ -22,14 +24,34 @@ internal sealed class AdjustmentEvidenceFiles(BHomePersistenceContext context, I
             Length = content.Length,
             CleanupAfter = clock.GetUtcNow().AddDays(1)
         };
-        var invoice = await db.Set<Invoice>().AsNoTracking().SingleAsync(i => i.Id == invoiceId, t);
-        file.ObjectKey = PrivateImageKeys.Evidence(invoice.LocationId, invoice.RoomId, "invoice-adjustments", invoiceId, file.Id);
-        db.Add(file); await db.SaveChangesAsync(t); // Durable orphan intent before the upload.
+        if (db is Compact24DbContext compact)
+        {
+            var invoice = await compact.Set<Native.Invoice>().AsNoTracking().Where(i => i.Id == invoiceId)
+                .Select(i => new { i.LocationId, i.RoomId }).SingleAsync(t);
+            file.ObjectKey = PrivateImageKeys.Evidence(invoice.LocationId, invoice.RoomId, "invoice-adjustments", invoiceId, file.Id);
+            await SaveNativeAsync(compact, file, t); // Durable orphan intent before the upload.
+        }
+        else
+        {
+            var invoice = await db.Set<Invoice>().AsNoTracking().SingleAsync(i => i.Id == invoiceId, t);
+            file.ObjectKey = PrivateImageKeys.Evidence(invoice.LocationId, invoice.RoomId, "invoice-adjustments", invoiceId, file.Id);
+            db.Add(file); await db.SaveChangesAsync(t);
+        }
         using var deadline = CancellationTokenSource.CreateLinkedTokenSource(t); deadline.CancelAfter(TimeSpan.FromSeconds(30));
         using var data = new MemoryStream(content);
         await storage.PutAsync(file.ObjectKey, data, content.Length, contentType, deadline.Token);
-        file.Uploaded = true; await db.SaveChangesAsync(t);
+        file.Uploaded = true;
+        if (db is Compact24DbContext native) await SaveNativeAsync(native, file, t);
+        else await db.SaveChangesAsync(t);
         return new(file.Id, file.ContentType, file.Length);
+    }
+    private static async Task SaveNativeAsync(Compact24DbContext db, InvoiceAdjustmentEvidence file, CancellationToken t)
+    {
+        await using var tx = await db.Database.BeginTransactionAsync(t);
+        await db.Database.ExecuteSqlRawAsync("SELECT pg_advisory_xact_lock(hashtextextended('bhome-payment-ledger-v1', 0))", t);
+        if (await NativeAdjustmentPersistence.SaveEvidenceAsync(db, file, false, t) != 1)
+            throw new DbUpdateConcurrencyException("Adjustment evidence unavailable.");
+        await tx.CommitAsync(t);
     }
     public Task CopyAsync(string key, Stream destination, CancellationToken t) => storage.CopyToAsync(key, destination, t);
 }
@@ -50,6 +72,24 @@ public sealed class AdjustmentEvidenceCleanup(IServiceScopeFactory scopes, TimeP
     }
     public static async Task CleanupAsync(BHomePersistenceContext db, IObjectStorage storage, DateTimeOffset now, CancellationToken t)
     {
+        if (db is Compact24DbContext compact)
+        {
+            var candidates = NativeAdjustmentPersistence.ExpiredEvidenceRows(compact, now);
+            var candidateIds = await candidates.Select(e => e.Id).Take(100).ToArrayAsync(t);
+            foreach (var id in candidateIds)
+            {
+                await using var tx = await db.Database.BeginTransactionAsync(t);
+                await db.Database.ExecuteSqlRawAsync("SELECT pg_advisory_xact_lock(hashtextextended('bhome-payment-ledger-v1', 0))", t);
+                var row = await candidates.SingleOrDefaultAsync(e => e.Id == id, t);
+                if (row is null) continue;
+                var file = NativeAdjustmentPersistence.ReadEvidence(row);
+                await storage.DeleteAsync(file.ObjectKey, t);
+                if (await NativeAdjustmentPersistence.SaveEvidenceAsync(compact, file, true, t) != 1)
+                    throw new DbUpdateConcurrencyException("Adjustment evidence unavailable.");
+                await tx.CommitAsync(t);
+            }
+            return;
+        }
         var ids = await db.Set<InvoiceAdjustmentEvidence>().AsNoTracking().Where(e => e.RequestId == null && e.CleanupAfter < now).Select(e => e.Id).Take(100).ToArrayAsync(t);
         foreach (var id in ids)
         {

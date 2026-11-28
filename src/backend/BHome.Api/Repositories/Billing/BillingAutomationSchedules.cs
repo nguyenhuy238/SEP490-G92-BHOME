@@ -5,51 +5,91 @@ using BHome.Domain.Billing;
 using BHome.Domain.IdentityAccess;
 using BHome.Domain.PropertyManagement;
 using BHome.Domain.TenantContracts;
+using BHome.Infrastructure.IdentityAccess;
 using BHome.Infrastructure.Persistence;
+using BHome.Infrastructure.Persistence.Compact24;
 using Microsoft.EntityFrameworkCore;
+using Native = BHome.Domain.Entities;
 namespace BHome.Infrastructure.Modules.Billing.Persistence;
 
 internal sealed class BillingAutomationSchedules(BHomePersistenceContext db) : IBillingAutomationSchedules
 {
     public async Task<bool> AuthorizedAsync(BillingAutomationPlan plan, Guid actor, DateOnly period, bool finalization, CancellationToken t) =>
         plan.Enabled && plan.AuthorizedByUserId == actor && (!finalization || plan.AuthorizeAutomaticFinalization) && (await ForPeriodAsync(plan.LocationId, period, t))?.Id == plan.Id &&
-        await (from u in db.Users join grant in db.UserRoles on u.Id equals grant.UserId join r in db.Roles on grant.RoleId equals r.Id where u.Id == actor && u.IsActive && r.Name == Roles.Owner select u.Id).AnyAsync(t);
-    public Task<BillingRepresentativeSelection?> RepresentativeAsync(Guid room, DateOnly period, CancellationToken t) => db.Set<BillingRepresentativeSelection>().AsNoTracking().Where(r => r.RoomId == room && r.BillingPeriod == period).OrderByDescending(r => r.Version).FirstOrDefaultAsync(t);
+        await (db is Compact24DbContext compact
+            ? NativeBillingAutomationPersistence.ActiveRoleAsync(compact, actor, Roles.Owner, t)
+            : (from u in db.Users join grant in db.UserRoles on u.Id equals grant.UserId join r in db.Roles on grant.RoleId equals r.Id where u.Id == actor && u.IsActive && r.Name == Roles.Owner select u.Id).AnyAsync(t));
+    public Task<BillingRepresentativeSelection?> RepresentativeAsync(Guid room, DateOnly period, CancellationToken t) => db is Compact24DbContext compact
+        ? NativeBillingAutomationPersistence.RepresentativeAsync(compact, room, period, t)
+        : db.Set<BillingRepresentativeSelection>().AsNoTracking().Where(r => r.RoomId == room && r.BillingPeriod == period).OrderByDescending(r => r.Version).FirstOrDefaultAsync(t);
     public async Task<BillingRepresentativeSelection> SelectRepresentativeAsync(BillingRepresentativeInput x, Guid actor, DateTimeOffset now, CancellationToken t)
     {
-        await using var tx = await db.Database.BeginTransactionAsync(t); var location = await db.Set<Room>().Where(r => r.Id == x.RoomId).Select(r => (Guid?)r.LocationId).SingleOrDefaultAsync(t) ?? throw new InvoiceException(404, "room_not_found");
+        await using var tx = await db.Database.BeginTransactionAsync(t);
+        var native = db as Compact24DbContext;
+        var location = (native is not null
+            ? await native.Set<Native.Room>().AsNoTracking().Where(r => r.Id == x.RoomId).Select(r => (Guid?)r.LocationId).SingleOrDefaultAsync(t)
+            : await db.Set<Room>().Where(r => r.Id == x.RoomId).Select(r => (Guid?)r.LocationId).SingleOrDefaultAsync(t))
+            ?? throw new InvoiceException(404, "room_not_found");
         await db.Database.ExecuteSqlInterpolatedAsync($"SELECT pg_advisory_xact_lock(hashtextextended({location.ToString()},0))", t);
-        await db.Locked<Room>(x.RoomId).SingleAsync(t);
-        if (await db.PeriodicInvoices().AnyAsync(i => i.RoomId == x.RoomId && i.BillingPeriod == x.BillingPeriod, t)) throw new InvoiceException(409, "invoice_period_already_exists");
+        if (native is not null) await native.Set<Native.Room>().FromSqlInterpolated($"SELECT * FROM rooms WHERE id={x.RoomId} FOR UPDATE").AsNoTracking().SingleAsync(t);
+        else await db.Locked<Room>(x.RoomId).SingleAsync(t);
+        if (native is not null
+            ? await native.Set<Native.Invoice>().AnyAsync(i => i.InvoiceType == "PERIODIC" && i.RoomId == x.RoomId && i.BillingPeriod == x.BillingPeriod, t)
+            : await db.PeriodicInvoices().AnyAsync(i => i.RoomId == x.RoomId && i.BillingPeriod == x.BillingPeriod, t)) throw new InvoiceException(409, "invoice_period_already_exists");
         var old = await RepresentativeAsync(x.RoomId, x.BillingPeriod, t); if ((old?.Version ?? 0) != x.ExpectedVersion) throw new InvoiceException(409, "billing_representative_changed");
         var end = x.BillingPeriod.AddMonths(1).AddDays(-1);
-        if (!await db.Set<Contract>().AnyAsync(c => c.Id == x.ContractId && c.RoomId == x.RoomId && c.ActivatedAt != null && (c.Status == ContractStatus.Active || c.Status == ContractStatus.Terminated || c.Status == ContractStatus.Superseded) && c.StartDate <= end && (c.ActualEndDate ?? c.EndDate) >= x.BillingPeriod, t)) throw new InvoiceException(400, "representative_contract_not_eligible");
-        var row = new BillingRepresentativeSelection { RoomId = x.RoomId, BillingPeriod = x.BillingPeriod, ContractId = x.ContractId, Version = x.ExpectedVersion + 1, SelectedByUserId = actor, SelectedAt = now }; db.Add(row);
-        db.SecurityAudit.Add(new() { UserId = actor, Event = "BillingRepresentativeSelected", TargetType = "BillingAutomation", TargetId = row.Id, Succeeded = true, OccurredAt = now }); await db.SaveChangesAsync(t); await tx.CommitAsync(t); return row;
+        var eligible = native is not null
+            ? await native.Set<Native.Contract>().AnyAsync(c => c.Id == x.ContractId && c.RoomId == x.RoomId && c.ActivatedAt != null &&
+                (c.ContractType == "MAIN" || c.ContractType == "RENEWAL" || c.ContractType == "HOLDING" || c.ContractType == "ADDENDUM") &&
+                (c.Status == (short)ContractStatus.Active || c.Status == (short)ContractStatus.Terminated || c.Status == (short)ContractStatus.Superseded) &&
+                c.StartDate <= end && (c.ActualEndDate ?? c.EndDate) >= x.BillingPeriod, t)
+            : await db.Set<Contract>().AnyAsync(c => c.Id == x.ContractId && c.RoomId == x.RoomId && c.ActivatedAt != null && (c.Status == ContractStatus.Active || c.Status == ContractStatus.Terminated || c.Status == ContractStatus.Superseded) && c.StartDate <= end && (c.ActualEndDate ?? c.EndDate) >= x.BillingPeriod, t);
+        if (!eligible) throw new InvoiceException(400, "representative_contract_not_eligible");
+        var row = new BillingRepresentativeSelection { RoomId = x.RoomId, BillingPeriod = x.BillingPeriod, ContractId = x.ContractId, Version = x.ExpectedVersion + 1, SelectedByUserId = actor, SelectedAt = now };
+        if (native is not null) await NativeBillingAutomationPersistence.SaveRepresentativeAsync(native, row, t);
+        else db.Add(row);
+        await AuditAsync(actor, "BillingRepresentativeSelected", "BillingAutomation", row.Id, now, t);
+        if (native is null) await db.SaveChangesAsync(t);
+        await tx.CommitAsync(t); return row;
     }
-    public Task<BillingAutomationPlan?> ForPeriodAsync(Guid locationId, DateOnly period, CancellationToken t) => db.Set<BillingAutomationPlan>().AsNoTracking()
-        .Where(p => p.LocationId == locationId && p.EffectiveFrom <= period).OrderByDescending(p => p.EffectiveFrom).ThenByDescending(p => p.Version).FirstOrDefaultAsync(t);
-    private static Task<BillingAutomationPlan?> LatestAsync(BHomePersistenceContext context, Guid locationId, CancellationToken t) =>
-        context.Set<BillingAutomationPlan>().AsNoTracking().Where(p => p.LocationId == locationId)
-            .OrderByDescending(p => p.Version).FirstOrDefaultAsync(t);
+    public Task<BillingAutomationPlan?> ForPeriodAsync(Guid locationId, DateOnly period, CancellationToken t) =>
+        ForPeriodAsync(db, locationId, period, t);
+    private static async Task<BillingAutomationPlan?> ForPeriodAsync(BHomePersistenceContext context, Guid locationId, DateOnly period, CancellationToken t) =>
+        context is Compact24DbContext compact
+            ? (await NativeBillingAutomationPersistence.PlansAsync(compact, locationId, t)).Where(p => p.EffectiveFrom <= period).OrderByDescending(p => p.EffectiveFrom).ThenByDescending(p => p.Version).FirstOrDefault()
+            : await context.Set<BillingAutomationPlan>().AsNoTracking().Where(p => p.LocationId == locationId && p.EffectiveFrom <= period).OrderByDescending(p => p.EffectiveFrom).ThenByDescending(p => p.Version).FirstOrDefaultAsync(t);
+    private static async Task<BillingAutomationPlan?> LatestAsync(BHomePersistenceContext context, Guid locationId, CancellationToken t) =>
+        context is Compact24DbContext compact
+            ? (await NativeBillingAutomationPersistence.PlansAsync(compact, locationId, t)).OrderByDescending(p => p.Version).FirstOrDefault()
+            : await context.Set<BillingAutomationPlan>().AsNoTracking().Where(p => p.LocationId == locationId).OrderByDescending(p => p.Version).FirstOrDefaultAsync(t);
     internal static async Task<BillingSchedule?> ResolveCalendarAsync(BHomePersistenceContext context, Guid locationId, DateOnly period, CancellationToken t)
     {
-        var plan = await context.Set<BillingAutomationPlan>().AsNoTracking()
-            .Where(p => p.LocationId == locationId && p.EffectiveFrom <= period)
-            .OrderByDescending(p => p.EffectiveFrom).ThenByDescending(p => p.Version).FirstOrDefaultAsync(t);
+        var plan = await ForPeriodAsync(context, locationId, period, t);
         if (plan is not null) return BillingAutomationService.Calendar(plan);
-        var fallback = await context.Set<BillingSchedule>().AsNoTracking().SingleOrDefaultAsync(s => s.LocationId == locationId, t);
+        var fallback = context is Compact24DbContext compact
+            ? await NativeBillingAutomationPersistence.ScheduleAsync(compact, locationId, t)
+            : await context.Set<BillingSchedule>().AsNoTracking().SingleOrDefaultAsync(s => s.LocationId == locationId, t);
         return fallback is null ? null : BillingAutomationService.FallbackCalendar(fallback, await LatestAsync(context, locationId, t));
     }
-    public async Task<IReadOnlyList<BillingAutomationPlan>> HistoryAsync(Guid locationId, CancellationToken t) => await db.Set<BillingAutomationPlan>().AsNoTracking().Where(p => p.LocationId == locationId).OrderByDescending(p => p.Version).Take(100).ToArrayAsync(t);
+    public async Task<IReadOnlyList<BillingAutomationPlan>> HistoryAsync(Guid locationId, CancellationToken t) => db is Compact24DbContext compact
+        ? (await NativeBillingAutomationPersistence.PlansAsync(compact, locationId, t)).OrderByDescending(p => p.Version).Take(100).ToArray()
+        : await db.Set<BillingAutomationPlan>().AsNoTracking().Where(p => p.LocationId == locationId).OrderByDescending(p => p.Version).Take(100).ToArrayAsync(t);
+    private async Task AuditAsync(Guid actor, string action, string type, Guid id, DateTimeOffset now, CancellationToken t)
+    {
+        var audit = new SecurityAuditRecord { UserId = actor, Event = action, TargetType = type, TargetId = id, Succeeded = true, OccurredAt = now };
+        if (db is Compact24DbContext compact) await NativeAdjustmentPersistence.WriteAuditAsync(compact, audit, t);
+        else db.SecurityAudit.Add(audit);
+    }
     public async Task<BillingAutomationPlan> SaveAsync(BillingAutomationWrite x, Guid actor, DateTimeOffset now, CancellationToken t)
     {
         await using var tx = await db.Database.BeginTransactionAsync(t);
         await db.Database.ExecuteSqlInterpolatedAsync($"SELECT pg_advisory_xact_lock(hashtextextended({x.LocationId.ToString()},0))", t);
-        if (!await db.Locations.AnyAsync(l => l.Id == x.LocationId && l.IsActive, t)) throw new InvoiceException(404, "billing_location_not_found");
+        var native = db as Compact24DbContext;
+        if (!(native is not null ? await native.Set<Native.Location>().AnyAsync(l => l.Id == x.LocationId && l.IsActive, t) : await db.Locations.AnyAsync(l => l.Id == x.LocationId && l.IsActive, t))) throw new InvoiceException(404, "billing_location_not_found");
         var latest = await LatestAsync(db, x.LocationId, t);
         var version = latest?.Version ?? 0;
-        var schedule = await db.Set<BillingSchedule>().SingleOrDefaultAsync(s => s.LocationId == x.LocationId, t);
+        var schedule = native is not null ? await NativeBillingAutomationPersistence.ScheduleAsync(native, x.LocationId, t) : await db.Set<BillingSchedule>().SingleOrDefaultAsync(s => s.LocationId == x.LocationId, t);
+        var originalVersion = schedule?.Version;
         var creatingSchedule = schedule is null;
         if (version != x.ExpectedVersion || (schedule?.Version ?? 0) != x.ExpectedBillingScheduleVersion)
             throw new InvoiceException(409, "billing_automation_changed");
@@ -72,8 +112,8 @@ internal sealed class BillingAutomationSchedules(BHomePersistenceContext db) : I
                 DueDay = x.DueDay.Value,
                 DueMonthOffset = x.DueMonthOffset.Value
             };
-            db.Add(schedule);
-            db.SecurityAudit.Add(new() { UserId = actor, Event = "BillingScheduleConfigured", TargetType = "BillingSchedule", TargetId = schedule.Id, Succeeded = true, OccurredAt = now });
+            if (native is null) db.Add(schedule);
+            await AuditAsync(actor, "BillingScheduleConfigured", "BillingSchedule", schedule.Id, now, t);
         }
         // Detach the preserved value: the tracked legacy schedule may be mutated
         // below and must never also rewrite the baseline captured in this plan.
@@ -136,7 +176,7 @@ internal sealed class BillingAutomationSchedules(BHomePersistenceContext db) : I
             schedule.PartialMonth = desired.PartialMonth;
             schedule.Rounding = desired.Rounding;
             schedule.Version++;
-            db.SecurityAudit.Add(new() { UserId = actor, Event = "BillingScheduleConfigured", TargetType = "BillingSchedule", TargetId = schedule.Id, Succeeded = true, OccurredAt = now });
+            await AuditAsync(actor, "BillingScheduleConfigured", "BillingSchedule", schedule.Id, now, t);
         }
         // The legacy version is a write concurrency token. A meter-only change
         // must not rewrite the effective calendar version of an earlier plan.
@@ -158,7 +198,14 @@ internal sealed class BillingAutomationSchedules(BHomePersistenceContext db) : I
             AuthorizedByUserId = actor,
             RecordedAt = now
         };
-        db.Add(plan); db.SecurityAudit.Add(new() { UserId = actor, Event = "BillingAutomationConfigured", TargetType = "BillingAutomation", TargetId = plan.Id, Succeeded = true, OccurredAt = now });
-        await db.SaveChangesAsync(t); await tx.CommitAsync(t); return plan;
+        if (native is not null)
+        {
+            if (originalVersion != schedule.Version) await NativeBillingAutomationPersistence.SaveScheduleAsync(native, schedule, originalVersion, t);
+            await NativeBillingAutomationPersistence.SavePlanAsync(native, plan, t);
+        }
+        else db.Add(plan);
+        await AuditAsync(actor, "BillingAutomationConfigured", "BillingAutomation", plan.Id, now, t);
+        if (native is null) await db.SaveChangesAsync(t);
+        await tx.CommitAsync(t); return plan;
     }
 }

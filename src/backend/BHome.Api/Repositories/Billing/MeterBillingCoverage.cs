@@ -6,6 +6,7 @@ using BHome.Infrastructure.Contracts;
 using BHome.Infrastructure.Persistence;
 using BHome.Infrastructure.Persistence.Compact24;
 using Microsoft.EntityFrameworkCore;
+using Native = BHome.Domain.Entities;
 
 namespace BHome.Infrastructure.Billing;
 
@@ -37,15 +38,28 @@ internal static class MeterBillingCoverage
     public static async Task<MeterCoveragePosition> ReadAsync(BHomePersistenceContext db, Guid roomId, Guid meterId,
         DateOnly period, BillableMeterPoint target, DateTimeOffset confirmedAt, CancellationToken token)
     {
-        var utilityType = await db.Set<Meter>().AsNoTracking().Where(m => m.Id == meterId).Select(m => m.UtilityType).SingleAsync(token);
-        if (await (from line in db.Set<InvoiceLine>()
+        var compact = db as Compact24DbContext;
+        var utilityType = compact is not null
+            ? (UtilityType)await compact.Set<Native.Meter>().AsNoTracking().Where(m => m.Id == meterId).Select(m => m.UtilityType).SingleAsync(token)
+            : await db.Set<Meter>().AsNoTracking().Where(m => m.Id == meterId).Select(m => m.UtilityType).SingleAsync(token);
+        var category = utilityType == UtilityType.Electricity ? ChargeCategory.Electricity : ChargeCategory.Water;
+        var replacement = compact is not null
+            ? await compact.Database.SqlQuery<bool>($"""
+                SELECT EXISTS(SELECT 1 FROM invoice_items li JOIN invoices i ON i.id=li.invoice_id
+                    JOIN meter_readings r ON r.id=li.meter_reading_id JOIN meters m ON m.id=r.meter_id
+                    WHERE i.room_id={roomId} AND i.status={(short)InvoiceStatus.Final} AND i.billing_period={period}
+                      AND m.utility_type={(short)utilityType} AND m.id<>{meterId} AND li.quantity>0
+                      AND COALESCE((li.calculation_snapshot->'compactState'->>'category')::integer,0)={(int)category}) AS "Value"
+                """).SingleAsync(token)
+            : await (from line in db.Set<InvoiceLine>()
                    join invoice in db.Set<Invoice>() on line.InvoiceId equals invoice.Id
                    join reading in db.Set<MeterReading>() on line.MeterReadingId equals reading.Id
                    join meter in db.Set<Meter>() on reading.MeterId equals meter.Id
                    where invoice.RoomId == roomId && invoice.Status == InvoiceStatus.Final && invoice.BillingPeriod == period &&
                      meter.UtilityType == utilityType && meter.Id != meterId && line.Quantity > 0 &&
                      (utilityType == UtilityType.Electricity && line.Category == ChargeCategory.Electricity || utilityType == UtilityType.Water && line.Category == ChargeCategory.Water)
-                   select line.Id).AnyAsync(token))
+                   select line.Id).AnyAsync(token);
+        if (replacement)
             return new(null, 0, null, false, ["meter_replacement_allocation_required"]);
         if (db is Compact24DbContext && await db.Database.SqlQuery<bool>($"""
             SELECT EXISTS(SELECT 1 FROM contracts c CROSS JOIN LATERAL jsonb_array_elements(c.history) h
@@ -55,7 +69,33 @@ internal static class MeterBillingCoverage
                 AND (h->'state'->'utility'->>'quantity')::numeric>0
                 AND h->'state'->'utility'->>'meterId'<>{meterId.ToString()}) AS "Value"
             """).SingleAsync(token)) return new(null, 0, null, false, ["meter_replacement_allocation_required"]);
-        var rows = await (from line in db.Set<InvoiceLine>().AsNoTracking()
+        InvoicePoint[] rows;
+        if (compact is not null)
+        {
+            var items = compact.Set<Native.InvoiceItem>().FromSqlInterpolated($"""
+                SELECT * FROM invoice_items WHERE COALESCE((calculation_snapshot->'compactState'->>'category')::integer,0)={(int)category}
+                """).AsNoTracking();
+            var nativeRows = await (from line in items
+                                    join invoice in compact.Set<Native.Invoice>().AsNoTracking() on line.InvoiceId equals invoice.Id
+                                    join reading in NativeBillingMeterQueries.Confirmed(compact) on line.MeterReadingId equals reading.Id
+                                    join task in compact.Set<Native.OperationalTask>().AsNoTracking() on reading.OperationalTaskId equals task.Id
+                                    where invoice.RoomId == roomId && invoice.Status == (short)InvoiceStatus.Final &&
+                                      invoice.BillingPeriod <= period && reading.MeterId == meterId
+                                    select new { line, invoice, reading, task }).Take(501).ToArrayAsync(token);
+            rows = nativeRows.Select(r =>
+            {
+                var line = NativeInvoicePersistence.ReadLine(r.line);
+                var point = NativeBillingMeterQueries.Read(r.reading, r.task);
+                var schedule = r.invoice.BillingSnapshot.TryGetProperty("compactState", out var state) &&
+                    state.TryGetProperty("scheduleSnapshot", out var snapshot) ? snapshot.GetString() ?? "" : "";
+                return new InvoicePoint { Id = line.Id, ReadingId = point.Reading.Id, EvidenceId = point.Evidence.Id,
+                    Period = r.invoice.BillingPeriod, Date = point.Task.ReadingDate, NativeValue = point.Reading.ConfirmedValue,
+                    From = line.PreviousReading, To = line.ConfirmedReading, Quantity = line.Quantity,
+                    ImageHash = point.Evidence.ImageHash, Length = point.Evidence.Length, Pricing = line.UtilityCalculationSnapshot,
+                    PolicyId = line.PolicyId, PolicyVersion = line.PolicyVersion, Rate = line.Rate, Schedule = schedule };
+            }).ToArray();
+        }
+        else rows = await (from line in db.Set<InvoiceLine>().AsNoTracking()
                           join invoice in db.Set<Invoice>() on line.InvoiceId equals invoice.Id
                           join reading in db.Set<MeterReading>() on line.MeterReadingId equals reading.Id
                           join meter in db.Set<Meter>() on reading.MeterId equals meter.Id
@@ -125,6 +165,28 @@ internal static class MeterBillingCoverage
                     utility.Baseline.Value, utility.Quantity, utility.CumulativePricingSnapshot));
             }
         }
+        BillableMeterPoint? initialPoint;
+        if (compact is not null)
+        {
+            var initialTasks = compact.Set<Native.OperationalTask>().FromSqlInterpolated($"""
+                SELECT * FROM operational_tasks WHERE task_type='METER_READ' AND task_data->'state'->>'purpose'='0'
+                    AND (task_data->'state'->>'readingDate')::date<={target.Date}
+                """).AsNoTracking();
+            var row = await (from reading in NativeBillingMeterQueries.Confirmed(compact)
+                             join task in initialTasks on reading.OperationalTaskId equals task.Id
+                             where reading.MeterId == meterId && reading.ConfirmedAt <= confirmedAt
+                             orderby reading.ReadingAt descending, reading.ConfirmedAt descending
+                             select new { reading, task }).FirstOrDefaultAsync(token);
+            if (row is null) initialPoint = null;
+            else
+            {
+                var point = NativeBillingMeterQueries.Read(row.reading, row.task);
+                initialPoint = new(point.Reading.Id, point.Evidence.Id, point.Task.ReadingDate,
+                    point.Reading.ConfirmedValue, point.Evidence.ImageHash, point.Evidence.Length, "ConfirmedInitial", point.Reading.Id);
+            }
+        }
+        else
+        {
         var initial = await (from reading in db.Set<MeterReading>().AsNoTracking()
                              join task in db.Set<OperationalTask>() on reading.TaskId equals task.Id
                              join proof in db.Set<MeterEvidence>() on reading.EvidenceId equals proof.Id
@@ -132,8 +194,9 @@ internal static class MeterBillingCoverage
                                task.ReadingDate <= target.Date && reading.ConfirmedAt <= confirmedAt && proof.IsLinked && proof.IsUploaded
                              orderby task.ReadingDate descending, reading.ConfirmedAt descending
                              select new { reading.Id, proofId = proof.Id, task.ReadingDate, reading.ConfirmedValue, proof.ImageHash, proof.Length }).FirstOrDefaultAsync(token);
-        BillableMeterPoint? initialPoint = initial is null ? null : new(initial.Id, initial.proofId, initial.ReadingDate, initial.ConfirmedValue,
+        initialPoint = initial is null ? null : new(initial.Id, initial.proofId, initial.ReadingDate, initial.ConfirmedValue,
             initial.ImageHash, initial.Length, "ConfirmedInitial", initial.Id);
+        }
         var prior = ranges.Where(r => r.Period < period && r.End.Date <= target.Date).OrderByDescending(r => r.End.Date).ThenByDescending(r => r.End.Value).FirstOrDefault();
         var current = ranges.Where(r => r.Period == period).OrderBy(r => r.From).ThenBy(r => r.End.Value).ToArray();
         if (prior is not null && prior.Period < period.AddMonths(-1)) missing.Add("utility_prior_period_billing_required");
