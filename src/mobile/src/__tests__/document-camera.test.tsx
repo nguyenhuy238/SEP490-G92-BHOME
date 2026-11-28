@@ -27,6 +27,7 @@ const native = vi.hoisted(() => ({
   props: {} as NativeCameraProps,
   focusExtension: false,
   lenses: vi.fn(),
+  sizes: vi.fn(),
   allowMeterDemo: false,
   openSettings: vi.fn(),
 }));
@@ -133,7 +134,11 @@ vi.mock('expo-camera', () => ({
     const { onCameraReady } = props;
     useImperativeHandle(
       ref,
-      () => ({ takePictureAsync: native.take, getAvailableLensesAsync: native.lenses }),
+      () => ({
+        takePictureAsync: native.take,
+        getAvailableLensesAsync: native.lenses,
+        getAvailablePictureSizesAsync: native.sizes,
+      }),
       [],
     );
     useEffect(() => {
@@ -183,6 +188,7 @@ beforeEach(() => {
   native.allowMeterDemo = false;
   native.mounts = 0;
   native.lenses.mockResolvedValue([]);
+  native.sizes.mockResolvedValue([]);
   native.files.clear();
   native.listeners.clear();
   native.bytes = new Uint8Array([1, 2, 3]);
@@ -502,7 +508,7 @@ it('uses the same capture pipeline for the back side and reports a real preview'
   await screen.findByTestId('native-camera');
   const shutter = screen.getByRole('button', { name: 'Chụp ảnh mặt sau' });
   await waitFor(() => expect((shutter as HTMLButtonElement).disabled).toBe(false));
-  expect(screen.getByText('Đảm bảo phần Ngày cấp rõ nét và đủ sáng')).toBeTruthy();
+  expect(screen.getByText(/phần Ngày cấp và dòng mã cuối thẻ rõ nét/)).toBeTruthy();
   expect(captured).not.toHaveBeenCalled();
   fireEvent.click(shutter);
   await screen.findByAltText('Ảnh CCCD vừa chụp');
@@ -717,6 +723,32 @@ it.each(['document', 'meter', 'inline'] as const)(
     expect(screen.getByRole('button', { name: 'Phóng thêm' })).toBeTruthy();
   },
 );
+it('uses near-12 MP detail and offers manual light only for identity photos', async () => {
+  native.sizes.mockResolvedValue(['1920x1080', '4032x3024']);
+  const capture = vi.fn();
+  render(
+    <CameraCapture
+      label="CCCD"
+      presentation="document"
+      disabled={false}
+      onCapture={capture}
+      reviewBeforeSubmit
+    />,
+  );
+  await waitFor(() => expect(native.props.pictureSize).toBe('4032x3024'));
+  await readyShutter();
+  expect(native.props.enableTorch).toBe(false);
+  fireEvent.click(screen.getByRole('button', { name: 'Bật đèn' }));
+  expect(native.props.enableTorch).toBe(true);
+  expect(screen.getByText(/Tắt đèn nếu thấy ánh sáng phản chiếu/)).toBeTruthy();
+  await readyShutter();
+  fireEvent.click(screen.getByRole('button', { name: 'Tắt đèn' }));
+  expect(native.props.enableTorch).toBe(false);
+  fireEvent.click(await readyShutter());
+  await screen.findByRole('button', { name: 'Sử dụng ảnh' });
+  expect(native.take).toHaveBeenCalledWith({ pictureRef: true, quality: 1 });
+  expect(capture).not.toHaveBeenCalled();
+});
 it('changes iOS lenses and zoom in place, resets zoom on lens selection and guards rapid switches', async () => {
   native.platform = 'ios';
   const lenses = [

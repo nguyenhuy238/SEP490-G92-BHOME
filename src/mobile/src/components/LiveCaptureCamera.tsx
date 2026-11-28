@@ -50,6 +50,7 @@ export function LiveCaptureCamera({
   const [lens, setLens] = useState('');
   const [lenses, setLenses] = useState<ReturnType<typeof captureLensOptions>>([]);
   const [zoom, setZoom] = useState(0);
+  const [torch, setTorch] = useState(false);
   const [settling, setSettling] = useState(true);
   const [focus, setFocus] = useState<CameraFocusEvent | null>(null);
   const [nativeFocus] = useState(supportsNativeCameraFocus);
@@ -171,6 +172,7 @@ export function LiveCaptureCamera({
           }
           // SDK 58 maps off to continuousAutoFocus on iOS. Android uses CameraX AF.
           autofocus="off"
+          enableTorch={preserveIdentityDetail ? torch : undefined}
           bhomeFocusEnabled={nativeFocus ? !disabled && !settling : undefined}
           onBhomeFocusChanged={
             nativeFocus
@@ -248,6 +250,7 @@ export function LiveCaptureCamera({
                     if (lensPreferenceRef) lensPreferenceRef.current = option.id;
                     settle();
                     setZoom(0);
+                    setTorch(false);
                     setLens(option.id);
                   }}
                 >
@@ -280,10 +283,28 @@ export function LiveCaptureCamera({
               Phóng thêm
             </Button>
             <Text style={{ color: textColor }}>Zoom {Math.round(zoom * 100)}%</Text>
+            {preserveIdentityDetail && Platform.OS !== 'web' && (
+              <Button
+                textColor={textColor}
+                disabled={blocked}
+                contentStyle={{ minHeight: 48 }}
+                onPress={() => {
+                  settle();
+                  setTorch((value) => !value);
+                }}
+              >
+                {torch ? 'Tắt đèn' : 'Bật đèn'}
+              </Button>
+            )}
           </View>
           <Text style={{ color: textColor }}>
             Nếu mờ, lùi máy, giữ yên và chờ chữ rõ rồi chụp. Cần đủ sáng, tránh lóa.
           </Text>
+          {preserveIdentityDetail && torch && (
+            <Text style={{ color: textColor }}>
+              Tắt đèn nếu thấy ánh sáng phản chiếu che chữ trên CCCD.
+            </Text>
+          )}
           {zoom > 0 && (
             <Text style={{ color: textColor }}>
               Zoom theo thang thiết bị, có thể giảm chi tiết. Chụp gần tùy khả năng lấy nét của máy.

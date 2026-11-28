@@ -12,7 +12,12 @@ import { CameraCapture } from '../../components/CameraCapture';
 import { IdentityDateField } from '../../components/IdentityDateField';
 import { Action, Box, Heading, Pill, Row, ui } from '../../components/WorkspaceKit';
 import { useSession } from '../../lib/SessionProvider';
-import { errorMessage, MobileApiError, type Proposal } from '../../lib/api';
+import {
+  errorMessage,
+  identityOcrRequestTimeoutMilliseconds,
+  MobileApiError,
+  type Proposal,
+} from '../../lib/api';
 import { captureService } from '../../services/captureService';
 import {
   confirmedIdentity,
@@ -234,10 +239,23 @@ export function IdentityWizard({
       'no_text',
       'unsupported_or_unreadable_layout',
     ].find((code) => proposal.warnings.includes(code));
+    const qualityWarnings = proposal.warnings.filter((code) =>
+      [
+        'identity_small_card',
+        'identity_card_not_found',
+        'identity_low_light',
+        'blur_or_low_detail',
+        'possible_glare',
+        'orientation_uncertain',
+      ].includes(code),
+    );
     sideWarnings.current[face] =
       resultStatus === 'failed'
         ? [
             `${faceLabel}: ${failureCode ? diagnosticWarning(failureCode, false) : 'Chưa đọc được thông tin. Hãy quét lại mặt này hoặc nhập thủ công.'}`,
+            ...new Set(
+              qualityWarnings.map((code) => `${faceLabel}: ${diagnosticWarning(code, false)}`),
+            ),
           ]
         : [
             ...new Set(
@@ -336,25 +354,40 @@ export function IdentityWizard({
     const face = side;
     const controller = new AbortController();
     abort.current = controller;
-    const timeout = setTimeout(() => controller.abort(), 20000);
+    let timedOut = false;
+    // Also bound authentication refresh/retry, independently of the HTTP timeout.
+    const timeout = setTimeout(() => {
+      timedOut = true;
+      controller.abort();
+    }, identityOcrRequestTimeoutMilliseconds + 5000);
     try {
       const proposal = await api.image<Proposal>(
         `/api/v1/ocr/identity/${residentId}/${face}`,
         bytes,
         controller.signal,
       );
+      if (controller.signal.aborted) throw new Error('Identity OCR request aborted.');
       if (epoch === generation.current) acceptProposal(proposal, face);
     } catch (e) {
       workflowFailure('identity', e);
       if (epoch === generation.current) {
         reportProgress(face, 'failed');
-        setError(errorMessage(e));
-        setNotice('OCR chưa thành công; nhập thủ công vẫn khả dụng.');
+        setError(
+          timedOut || (e instanceof MobileApiError && e.code === 'request_timeout')
+            ? 'Gửi ảnh hoặc nhận kết quả OCR quá thời gian chờ. Kiểm tra kết nối rồi quét lại.'
+            : controller.signal.aborted
+              ? 'Đã hủy yêu cầu OCR.'
+              : errorMessage(e),
+        );
+        setNotice(
+          'Thông tin đã đọc hoặc nhập trước đó được giữ lại. Bạn có thể quét lại hoặc nhập thủ công.',
+        );
         setStep('verify');
         resetScroll();
       }
     } finally {
       clearTimeout(timeout);
+      if (abort.current === controller) abort.current = null;
       if (epoch === generation.current) {
         lock.current = false;
         setBusy(false);
@@ -597,8 +630,12 @@ export function IdentityWizard({
     <>
       {!modal && (
         <Heading
-          title={step === 'capture' ? 'Chụp mặt trước CCCD' : 'Kiểm tra & Xác nhận OCR'}
-          detail="Chụp mặt trước hoặc nhập thủ công, sau đó đối chiếu và xác nhận thông tin."
+          title={
+            step === 'capture'
+              ? `Chụp mặt ${side === 'front' ? 'trước' : 'sau'} CCCD`
+              : 'Kiểm tra & Xác nhận OCR'
+          }
+          detail="Chụp CCCD hoặc nhập thủ công, sau đó đối chiếu và xác nhận thông tin."
         />
       )}
       {!modal && (
@@ -631,7 +668,7 @@ export function IdentityWizard({
             }}
           >
             <Icon source="card-account-details-outline" size={64} color={c.primary} />
-            <Text variant="titleMedium">MẶT TRƯỚC CCCD</Text>
+            <Text variant="titleMedium">MẶT {side === 'front' ? 'TRƯỚC' : 'SAU'} CCCD</Text>
             <Text variant="bodySmall" style={ui.muted}>
               Đặt đủ 4 góc trong khung, đủ sáng, không lóa. Giữ khoảng cách để chữ rõ.
             </Text>
@@ -675,9 +712,10 @@ export function IdentityWizard({
           ) : (
             active && (
               <CameraCapture
+                key={side}
                 lensPreferenceRef={cameraLensPreferenceRef}
-                label={`${scanned ? 'Chụp lại' : 'Chụp ảnh'} mặt trước`}
-                documentSide="front"
+                label={`${scanned ? 'Chụp lại' : 'Chụp ảnh'} mặt ${side === 'front' ? 'trước' : 'sau'}`}
+                documentSide={side}
                 disabled={busy}
                 reviewBeforeSubmit
                 onCapture={scan}

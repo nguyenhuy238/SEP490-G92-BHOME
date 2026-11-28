@@ -1,4 +1,5 @@
 using System.Security.Cryptography;
+using System.Runtime.InteropServices;
 using System.Diagnostics;
 using System.Text;
 using BHome.Application.Ocr;
@@ -12,7 +13,7 @@ namespace BHome.Infrastructure.Ocr;
 // One detector + recognizer per process. No network, file writes or image logging.
 public sealed class OnnxOcrEngine : IOcrEngine, IOcrAnalysisEngine, IExperimentalMeterAnalysisEngine, IDisposable
 {
-    public const string Version = "ocrdoc-ppocrv6-vi-run6-9b534643-yolo2-cache1-category2-identity-regions7";
+    public const string Version = "ocrdoc-ppocrv6-vi-run6-9b534643-yolo2-cache1-category2-identity-budget8";
     private readonly OcrOptions options;
     private readonly IImagePreprocessor preprocessor;
     private readonly InferenceSession detector;
@@ -316,14 +317,25 @@ public sealed class OnnxOcrEngine : IOcrEngine, IOcrAnalysisEngine, IExperimenta
                 catch (OnnxRuntimeException) when (probeTimeout.IsCancellationRequested && !token.IsCancellationRequested)
                 { /* The normal pass still owns the remaining request budget. */ }
             }
+            // The expected chip-card QR is inexpensive to probe before the
+            // long OCR pass. Keep it as independent evidence for reconciliation,
+            // never as proof that the card was verified.
+            IReadOnlyList<IdentityFieldObservation> earlyIdentity = [];
+            if (kind == OcrDocumentKind.IdentityFront && clock.ElapsedMilliseconds < options.TimeoutMilliseconds / 3)
+            {
+                try { earlyIdentity = IdentityQrReader.Read(source, token, cornerOnly: true); }
+                catch (OpenCVException) { /* Text recognition remains available. */ }
+            }
             var text = ReadPage(source, regions, kind, run, token,
                 recognizedLines: identityLines,
                 identityClock: kind is OcrDocumentKind.IdentityFront or OcrDocumentKind.IdentityBack ? clock : null);
+            if (earlyIdentity.Count > 0)
+                text = text with { IdentityObservations = earlyIdentity, Warnings = [.. text.Warnings, "identity_qr_read"] };
             var proposal = OcrFieldParser.Parse(text, kind);
             // Try the opposite direction only when the first result is missing data, leaving
             // budget for the request deadline. Detect again in the upright image: DBNet's
             // shrunken regions are not invariant under a 180-degree flip.
-            if (!orientationKnown && !text.Warnings.Contains("conflicting_reading") && !text.Warnings.Contains("ocr_partial") &&
+            if (!orientationKnown && earlyIdentity.Count == 0 && !text.Warnings.Contains("conflicting_reading") && !text.Warnings.Contains("ocr_partial") &&
                 (kind is OcrDocumentKind.IdentityFront or OcrDocumentKind.IdentityBack ||
                     !proposal.Warnings.Any(warning => warning is "multiple_reading_regions" or "text_region_limit")) &&
                 (proposal.IsFallback || proposal.MissingFields.Count > 0) && regions.Count > 0 &&
@@ -340,7 +352,8 @@ public sealed class OnnxOcrEngine : IOcrEngine, IOcrAnalysisEngine, IExperimenta
                 {
                     Cv2.Rotate(source, reversed, RotateFlags.Rotate180);
                     var flipped = Detect(reversed, retryRun, retry.Token);
-                    var alternative = ReadPage(reversed, flipped, kind, retryRun, retry.Token);
+                var alternative = ReadPage(reversed, flipped, kind, retryRun, retry.Token,
+                    identityClock: kind is OcrDocumentKind.IdentityFront or OcrDocumentKind.IdentityBack ? clock : null);
                     var alternativeProposal = OcrFieldParser.Parse(alternative, kind);
                     var conflicting = proposal.ProposedFields.Any(field => alternativeProposal.ProposedFields.TryGetValue(field.Key, out var value) && value != field.Value);
                     if (!conflicting && alternativeProposal.ProposedFields.Count > proposal.ProposedFields.Count)
@@ -372,13 +385,13 @@ public sealed class OnnxOcrEngine : IOcrEngine, IOcrAnalysisEngine, IExperimenta
 
     private OcrText RecoverIdentityFields(Mat source, List<RotatedRect> regions, OcrText text, OcrDocumentKind kind, Stopwatch clock, CancellationToken token)
     {
-        var observations = new List<IdentityFieldObservation>();
+        var observations = text.IdentityObservations.ToList();
         var warnings = text.Warnings.ToList();
-        if (kind == OcrDocumentKind.IdentityFront && clock.ElapsedMilliseconds < options.TimeoutMilliseconds - 2000)
+        if (kind == OcrDocumentKind.IdentityFront && observations.Count == 0 && clock.ElapsedMilliseconds < options.TimeoutMilliseconds - 3000)
         {
             try
             {
-                observations.AddRange(IdentityQrReader.Read(source));
+                observations.AddRange(IdentityQrReader.Read(source, token));
                 if (observations.Count > 0) warnings.Add("identity_qr_read");
             }
             catch (OpenCVException) { warnings.Add("identity_qr_unavailable"); }
@@ -386,7 +399,7 @@ public sealed class OnnxOcrEngine : IOcrEngine, IOcrAnalysisEngine, IExperimenta
         text = text with { IdentityObservations = observations };
         var proposal = OcrFieldParser.Parse(text, kind);
         foreach (var target in IdentityFieldRegions.MissingOrUncertain(proposal, source.Size(), kind)
-            .Where(target => !proposal.IsFallback || target.Field == "citizenIdentityNumber").Take(3))
+            .Where(target => !proposal.IsFallback || target.Field is "citizenIdentityNumber" or "fullName" or "dateOfIssue").Take(4))
         {
             token.ThrowIfCancellationRequested();
             var remaining = options.TimeoutMilliseconds - clock.ElapsedMilliseconds - 1200;
@@ -513,7 +526,10 @@ public sealed class OnnxOcrEngine : IOcrEngine, IOcrAnalysisEngine, IExperimenta
             {
                 lines.Add(line with { Bounds = OcrImageGeometry.LayoutBounds(region, pageAngle) });
                 lineRegions.Add(region);
-                if (identityClock is not null && IdentityFieldRegions.Complete(kind!.Value, source.Size(), regions, lines)) break;
+                // A complete front requires eight distinct fields. Avoid repeatedly
+                // parsing an obviously incomplete page, including its spatial label searches.
+                if (identityClock is not null && lines.Count >= (kind == OcrDocumentKind.IdentityFront ? 8 : 2) &&
+                    IdentityFieldRegions.Complete(kind!.Value, source.Size(), regions, lines)) break;
             }
         }
         if (meter)
@@ -549,7 +565,7 @@ public sealed class OnnxOcrEngine : IOcrEngine, IOcrAnalysisEngine, IExperimenta
         var height = Math.Max(32, (int)Math.Round(image.Height * ratio / 32) * 32);
         using var resized = new Mat();
         Cv2.Resize(image, resized, new Size(width, height));
-        var input = Tensor(resized, width, height, detection: true);
+        var input = Tensor(resized, width, height, detection: true, token);
         using var output = detector.Run([NamedOnnxValue.CreateFromTensor(detector.InputNames[0], input)], detector.OutputNames, run);
         var map = output.First().AsTensor<float>();
         if (map.Rank != 4 || map.Dimensions[0] != 1 || map.Dimensions[1] != 1)
@@ -557,11 +573,18 @@ public sealed class OnnxOcrEngine : IOcrEngine, IOcrAnalysisEngine, IExperimenta
         var mh = map.Dimensions[2]; var mw = map.Dimensions[3];
         var probabilities = map.ToDenseTensor().Buffer.Span;
         using var mask = new Mat(mh, mw, MatType.CV_8UC1);
-        for (var y = 0; y < mh; y++)
+        // One native copy per row instead of a native call for each pixel.
+        var maskRow = new byte[mw];
+        try
         {
-            token.ThrowIfCancellationRequested();
-            for (var x = 0; x < mw; x++) mask.Set(y, x, probabilities[y * mw + x] > .3f ? (byte)255 : (byte)0);
+            for (var y = 0; y < mh; y++)
+            {
+                token.ThrowIfCancellationRequested();
+                for (var x = 0; x < mw; x++) maskRow[x] = probabilities[y * mw + x] > .3f ? (byte)255 : (byte)0;
+                Marshal.Copy(maskRow, 0, mask.Ptr(y), mw);
+            }
         }
+        finally { CryptographicOperations.ZeroMemory(maskRow); }
         Cv2.FindContours(mask, out Point[][] contours, out _, RetrievalModes.List, ContourApproximationModes.ApproxSimple);
         var boxes = new List<RotatedRect>();
         foreach (var contour in contours.OrderByDescending(c => Math.Abs(Cv2.ContourArea(c))).Take(256))
@@ -572,7 +595,7 @@ public sealed class OnnxOcrEngine : IOcrEngine, IOcrAnalysisEngine, IExperimenta
             var sum = 0d; var count = 0;
             for (var y = rect.Top; y < rect.Bottom; y++)
                 for (var x = rect.Left; x < rect.Right; x++)
-                    if (mask.At<byte>(y, x) != 0) { sum += probabilities[y * mw + x]; count++; }
+                    if (probabilities[y * mw + x] > .3f) { sum += probabilities[y * mw + x]; count++; }
             if (count == 0 || sum / count < .5) continue;
             var box = Cv2.MinAreaRect(contour.Select(p => new Point2f((float)p.X * image.Width / mw, (float)p.Y * image.Height / mh)));
             boxes.Add(OcrImageGeometry.Expand(box));
@@ -674,23 +697,33 @@ public sealed class OnnxOcrEngine : IOcrEngine, IOcrAnalysisEngine, IExperimenta
         return new(text.ToString().Trim(), count == 0 ? 0 : Math.Clamp(confidence / count, 0, 1));
     }
 
-    internal static DenseTensor<float> Tensor(Mat image, int width, int height, bool detection)
+    internal static DenseTensor<float> Tensor(Mat image, int width, int height, bool detection, CancellationToken token = default)
     {
         var data = new DenseTensor<float>(new[] { 1, 3, height, width });
         var values = data.Buffer.Span;
         var planeSize = width * height;
         float[] means = [.485f, .456f, .406f]; float[] std = [.229f, .224f, .225f];
-        for (var y = 0; y < height; y++)
-            for (var x = 0; x < width; x++)
+        // Ptr(y) also handles non-contiguous ROI matrices. Keep the exact
+        // normalization and channel order; only eliminate per-pixel interop.
+        var row = new byte[checked(width * 3)];
+        try
+        {
+            for (var y = 0; y < height; y++)
             {
-                var pixel = image.At<Vec3b>(y, x);
-                for (var c = 0; c < 3; c++)
+                token.ThrowIfCancellationRequested();
+                Marshal.Copy(image.Ptr(y), row, 0, row.Length);
+                for (var x = 0; x < width; x++)
                 {
-                    // Detector uses RGB/ImageNet; recognizer uses Paddle's BGR [-1,1].
-                    var value = pixel[detection ? 2 - c : c] / 255f;
-                    values[c * planeSize + y * width + x] = detection ? (value - means[c]) / std[c] : (value - .5f) / .5f;
+                    for (var c = 0; c < 3; c++)
+                    {
+                        // Detector uses RGB/ImageNet; recognizer uses Paddle's BGR [-1,1].
+                        var value = row[x * 3 + (detection ? 2 - c : c)] / 255f;
+                        values[c * planeSize + y * width + x] = detection ? (value - means[c]) / std[c] : (value - .5f) / .5f;
+                    }
                 }
             }
+        }
+        finally { CryptographicOperations.ZeroMemory(row); }
         return data;
     }
 

@@ -724,7 +724,9 @@ it('allows manual confirmation after OCR failure and completes only after the se
 
   await openIdentity();
   fireEvent.click(screen.getByRole('button', { name: 'Chụp ảnh mặt trước' }));
-  await screen.findByText('OCR chưa thành công; nhập thủ công vẫn khả dụng.');
+  await screen.findByText(
+    'Thông tin đã đọc hoặc nhập trước đó được giữ lại. Bạn có thể quét lại hoặc nhập thủ công.',
+  );
   expect(state.image.mock.calls[0][0]).toBe('/api/v1/ocr/identity/resident-1/front');
   manualIdentity();
   expect(
@@ -1209,6 +1211,56 @@ it.each([
   closeIdentity();
   expect(screen.getAllByText('Đọc được một phần')).toHaveLength(1);
   expect(screen.getByText('Chưa đọc được')).toBeTruthy();
+});
+it('keeps usable fields and shows quality hints separately from a layout failure', async () => {
+  state.image
+    .mockResolvedValueOnce({
+      proposedFields: { fullName: 'NGƯỜI MẪU' },
+      warnings: ['unsupported_or_unreadable_layout', 'ocr_timeout', 'identity_small_card'],
+      missingFields: [],
+      confidence: {},
+      isFallback: false,
+    })
+    .mockResolvedValueOnce({
+      proposedFields: {},
+      warnings: ['no_text', 'identity_low_light', 'possible_glare'],
+      missingFields: [],
+      confidence: {},
+      isFallback: true,
+    });
+  render(<OnboardingScreen />);
+  selectRoom();
+  await openIdentity();
+  fireEvent.click(screen.getByRole('button', { name: 'Chụp ảnh mặt trước' }));
+  fireEvent.click(await screen.findByRole('button', { name: 'Chụp ảnh mặt sau' }));
+  expect(await screen.findByDisplayValue('NGƯỜI MẪU')).toBeTruthy();
+  expect(screen.getByText(/Đã đọc được một phần/)).toBeTruthy();
+  expect(screen.getByText(/Thẻ còn nhỏ trong ảnh/)).toBeTruthy();
+  expect(screen.getByText(/Vùng chữ thiếu sáng/)).toBeTruthy();
+  expect(screen.getByText(/Ảnh có thể bị lóa/)).toBeTruthy();
+  expect(screen.queryByText(/Chưa trích xuất được thông tin từ bố cục/)).toBeNull();
+  expect(screen.getByRole('checkbox').getAttribute('aria-checked')).toBe('false');
+  expect(state.json).toHaveBeenCalledTimes(1);
+});
+it('explains a transport timeout and retains unconfirmed values for manual review', async () => {
+  state.image
+    .mockResolvedValueOnce({
+      proposedFields: { fullName: 'NGƯỜI MẪU' },
+      warnings: [],
+      missingFields: [],
+      confidence: {},
+      isFallback: false,
+    })
+    .mockRejectedValueOnce(new MobileApiError(0, 'request_timeout'));
+  render(<OnboardingScreen />);
+  selectRoom();
+  await openIdentity();
+  fireEvent.click(screen.getByRole('button', { name: 'Chụp ảnh mặt trước' }));
+  fireEvent.click(await screen.findByRole('button', { name: 'Chụp ảnh mặt sau' }));
+  expect(await screen.findByDisplayValue('NGƯỜI MẪU')).toBeTruthy();
+  expect(screen.getByText(/Gửi ảnh hoặc nhận kết quả OCR quá thời gian chờ/)).toBeTruthy();
+  expect(screen.getByRole('checkbox').getAttribute('aria-checked')).toBe('false');
+  expect(state.json).toHaveBeenCalledTimes(1);
 });
 it('does not mark a person confirmed when the response lacks a verified status', async () => {
   render(<OnboardingScreen />);
