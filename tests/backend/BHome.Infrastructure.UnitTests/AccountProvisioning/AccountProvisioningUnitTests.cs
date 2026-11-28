@@ -1,3 +1,4 @@
+using BHome.Application.Common;
 using BHome.Application.IdentityAccess;
 using BHome.Application.Operations;
 using BHome.Domain.IdentityAccess;
@@ -223,14 +224,16 @@ public sealed class AccountProvisioningUnitTests(PostgresContainerFixture postgr
         Assert.True(await world.ScalarAsync<bool>("select is_active from users where id = @id", ("id", staffSample)));
     }
 
-    [Fact(DisplayName = "UTC09 - UpdateStaffAsync: Reason chi co khoang trang -> 400 reason_required, khong cap nhat")]
+    [Fact(DisplayName = "UTC09 - UpdateStaffAsync: Reason chi co khoang trang -> validation_error, khong cap nhat")]
     public async Task UTC09_UpdateStaffAsync_BlankReason_Rejected()
     {
         var staff1 = await AddStaffAsync("staff1@gmail.com", "Nguyen Van B");
         var before = (await Operations.StaffAsync(staff1, default)).FullName;
         var update = await UpdateOf(staff1, "staff1@gmail.com", "Nguyen Van C", isActive: true, " ");
 
-        await AssertRejected(() => Operations.UpdateStaffAsync(staff1, update, default), 400, "reason_required");
+        var error = await Assert.ThrowsAsync<InputValidationException>(() => Operations.UpdateStaffAsync(staff1, update, default));
+        Assert.Equal("validation_error", error.Message);
+        Assert.Contains("reason", error.Errors.Keys);
 
         Assert.Equal(before, (await Operations.StaffAsync(staff1, default)).FullName);
     }
@@ -376,8 +379,8 @@ public sealed class AccountProvisioningUnitTests(PostgresContainerFixture postgr
 
     // ===================== InviteAsync(Guid residentId, TenantInvitationRequest request) =====================
 
-    [Fact(DisplayName = "UTC12 - InviteAsync: nguoi o cung Nguyen Thi Mai trong hop dong Active, chua co tai khoan -> tao Tenant Inactive va gui moi")]
-    public async Task UTC12_InviteAsync_CoOccupantWithoutAccount_CreatesInactiveTenantAndInvites()
+    [Fact(DisplayName = "UTC12 - InviteAsync: nguoi o cung Nguyen Thi Mai trong hop dong Active, chua co tai khoan -> tao Tenant chua xac minh email va gui moi")]
+    public async Task UTC12_InviteAsync_CoOccupantWithoutAccount_CreatesUnconfirmedTenantAndInvites()
     {
         await AddTenantSampleTenancyAsync(emailConfirmed: true);
         var maiId = Guid.NewGuid();
@@ -389,7 +392,8 @@ public sealed class AccountProvisioningUnitTests(PostgresContainerFixture postgr
         var result = await Invitations.InviteAsync(maiId, new TenantInvitationRequest("mainguyen@bhome.test"), default);
 
         Assert.Equal("AcceptedByProvider", result.DeliveryState);
-        Assert.False(await world.ScalarAsync<bool>("select is_active from users where normalized_email = upper(@e)", ("e", "mainguyen@bhome.test")));
+        Assert.True(await world.ScalarAsync<bool>("select is_active from users where normalized_email = upper(@e)", ("e", "mainguyen@bhome.test")));
+        Assert.False(await world.ScalarAsync<bool>("select email_confirmed from users where id = @id", ("id", result.UserId)));
         Assert.True(await world.ScalarAsync<bool>("select 'Tenant' = any(roles) from users where id = @id", ("id", result.UserId)));
         Assert.Single(world.Email.Sent, s => s.Destination == "mainguyen@bhome.test");
         Assert.Equal(1, await world.AuditCountAsync("AccountInvitationCreated"));

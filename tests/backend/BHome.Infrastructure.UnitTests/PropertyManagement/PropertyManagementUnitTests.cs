@@ -454,17 +454,17 @@ public sealed class PropertyManagementUnitTests(PostgresContainerFixture postgre
         Assert.Equal("Draft", stored.Status); // Only Published policies are selectable.
     }
 
-    [Fact(DisplayName = "UTC12 - SaveAsync: Electricity 3800 tu 2026-12-01 trung ky v1 -> tu choi, v1 khong doi")]
+    [Fact(DisplayName = "UTC12 - SaveAsync publish: Electricity 3800 tu 2026-12-01 trung ky v1 -> tu choi, v1 khong doi")]
     [Trait("Function", "SharedConfigurationService.SaveAsync")]
     public async Task UTC12()
     {
         await StartAsync();
         await AddLocationAsync(Sample1Id, "BHOME SAMPLE 1");
         var v1 = await AddElectricityV1Async();
-        // The sheet gives no name for the new version; a different name is used so the overlap rule (not the duplicate-name rule) is tested.
+        // Drafts do not reserve effective periods. Publish immediately to exercise the overlap rule.
 
         await Assert.ThrowsAnyAsync<PropertyException>(() => Shared.SaveAsync(BillingPolicyResource, null,
-            new SharedWrite("Electricity 2026-12", "", BillingPolicyData("Electricity", 3800m, new(2026, 12, 1), null)), default));
+            new SharedWrite("Electricity 2026-12", "", BillingPolicyData("Electricity", 3800m, new(2026, 12, 1), null), PublishImmediately: true), default));
 
         var stored = await Shared.GetAsync(BillingPolicyResource, v1.Id, default);
         Assert.Equal(3500m, stored.Data.GetProperty("referenceRate").GetDecimal());
