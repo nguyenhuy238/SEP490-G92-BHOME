@@ -2,6 +2,7 @@ using System.Text.Json;
 using BHome.Application.Finance;
 using BHome.Infrastructure.Persistence;
 using Microsoft.EntityFrameworkCore;
+using Native = BHome.Domain.Entities;
 
 namespace BHome.Infrastructure.Finance;
 
@@ -48,8 +49,7 @@ public sealed class ExpensePaymentRepository(BHomePersistenceContext db) : IExpe
         if (input.Amount == 0 && previous.Events.Count != 0 || input.Amount > previous.Amount - (previous.PaidAmount ?? 0))
             throw new FinanceException(409, "expense_payment_exceeds_balance");
         var payment = new ExpensePaymentEvent(key, actor, now, input.Amount, input.PaidOn, input.Note);
-        var history = JsonSerializer.Serialize(new[] { new { schemaVersion = 1, recordType = "ExpensePaymentV1", state = payment } }, Json);
-        await db.Database.ExecuteSqlInterpolatedAsync($"UPDATE expenses SET history=history||{history}::jsonb WHERE id={id}", token);
+        await AppendAsync(id, "ExpensePaymentV1", payment, token);
         var result = (await ReadAsync(id, token))!;
         await transaction.CommitAsync(token);
         return result;
@@ -68,15 +68,24 @@ public sealed class ExpensePaymentRepository(BHomePersistenceContext db) : IExpe
             return previous;
         }
         if (previous.Version != input.ExpectedVersion) throw new FinanceException(409, "expense_version_changed");
-        var occurred = await db.Database.SqlQuery<DateOnly>($"SELECT occurred_on AS \"Value\" FROM expenses WHERE id={id}").SingleAsync(token);
+        var occurred = await db.Set<Native.Expense>().AsNoTracking().Where(e => e.Id == id).Select(e => e.OccurredOn).SingleAsync(token);
         if (input.DueOn is { } due && due < occurred)
             throw new FinanceException(400, "invalid_expense_due_date");
         var revision = new ExpenseDueDateEvent(key, actor, now, input);
-        var history = JsonSerializer.Serialize(new[] { new { schemaVersion = 1, recordType = "ExpenseDueDateV1", state = revision } }, Json);
-        await db.Database.ExecuteSqlInterpolatedAsync($"UPDATE expenses SET history=history||{history}::jsonb WHERE id={id}", token);
+        await AppendAsync(id, "ExpenseDueDateV1", revision, token);
         var result = (await ReadAsync(id, token))!;
         await transaction.CommitAsync(token);
         return result;
+    }
+
+    private async Task AppendAsync(Guid id, string type, object state, CancellationToken token)
+    {
+        var expense = await db.Set<Native.Expense>().AsNoTracking().SingleAsync(e => e.Id == id, token);
+        var entry = JsonSerializer.SerializeToElement(new { schemaVersion = 1, recordType = type, state }, Json);
+        var history = JsonSerializer.SerializeToElement(expense.History.EnumerateArray().Append(entry));
+        db.Attach(expense);
+        expense.History = history;
+        await db.SaveChangesAsync(token);
     }
 }
 

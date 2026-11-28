@@ -2,11 +2,11 @@ using System.Data;
 using BHome.Application.Finance;
 using BHome.Application.PropertyManagement;
 using BHome.Domain.Billing;
-using BHome.Domain.Locations;
 using BHome.Domain.PropertyManagement;
 using BHome.Infrastructure.Billing;
 using BHome.Infrastructure.Persistence;
 using Microsoft.EntityFrameworkCore;
+using Native = BHome.Domain.Entities;
 
 namespace BHome.Infrastructure.Finance;
 
@@ -36,17 +36,17 @@ public sealed partial class FinancialReportRepository(BHomePersistenceContext db
 
     private async Task<ReportBasis> ReadCoreAsync(ReportFilter filter, CancellationToken token)
     {
-        var rooms = db.Set<Room>().AsNoTracking().AsQueryable();
+        var rooms = db.Set<Native.Room>().AsNoTracking().AsQueryable();
         if (filter.LocationId is { } location) rooms = rooms.Where(r => r.LocationId == location);
         if (filter.RoomId is { } room) rooms = rooms.Where(r => r.Id == room);
         if (filter.RoomId is not null && !await rooms.AnyAsync(token)) throw new FinanceException(404, "finance_scope_not_found");
-        var locations = db.Set<Location>().AsNoTracking().AsQueryable();
+        var locations = db.Set<Native.Location>().AsNoTracking().AsQueryable();
         if (filter.LocationId is { } locationId) locations = locations.Where(l => l.Id == locationId);
         if (filter.RoomId is not null) locations = locations.Where(l => rooms.Any(r => r.LocationId == l.Id));
         var names = await locations.Select(l => new { l.Id, l.Name }).ToArrayAsync(token);
         if (filter.LocationId is not null && names.Length == 0) throw new FinanceException(404, "finance_scope_not_found");
-        var counts = await rooms.GroupBy(r => r.LocationId).Select(g => new { Id = g.Key, Total = g.Count(), Occupied = g.Count(r => r.Status == RoomStatus.Occupied) }).ToDictionaryAsync(r => r.Id, token);
-        var invoices = db.Set<Invoice>().AsNoTracking().Where(i => i.Status == InvoiceStatus.Final && i.BillingPeriod >= filter.From && i.BillingPeriod <= filter.To);
+        var counts = await rooms.GroupBy(r => r.LocationId).Select(g => new { Id = g.Key, Total = g.Count(), Occupied = g.Count(r => r.Status == (short)RoomStatus.Occupied) }).ToDictionaryAsync(r => r.Id, token);
+        var invoices = db.Set<Native.Invoice>().AsNoTracking().Where(i => i.Status == (short)InvoiceStatus.Final && i.BillingPeriod >= filter.From && i.BillingPeriod <= filter.To);
         if (filter.LocationId is { } invoiceLocation) invoices = invoices.Where(i => i.LocationId == invoiceLocation);
         if (filter.RoomId is { } invoiceRoom) invoices = invoices.Where(i => i.RoomId == invoiceRoom);
         var issued = await db.Financials(invoices).GroupBy(i => i.LocationId).Select(g => new
@@ -58,7 +58,7 @@ public sealed partial class FinancialReportRepository(BHomePersistenceContext db
         }).ToDictionaryAsync(i => i.Id, token);
         var today = DateOnly.FromDateTime(TimeZoneInfo.ConvertTimeBySystemTimeZoneId(
             clock.GetUtcNow(), "Asia/Ho_Chi_Minh").DateTime);
-        var allInvoices = db.Set<Invoice>().AsNoTracking().Where(i => i.Status == InvoiceStatus.Final);
+        var allInvoices = db.Set<Native.Invoice>().AsNoTracking().Where(i => i.Status == (short)InvoiceStatus.Final);
         if (filter.LocationId is { } debtLocation) allInvoices = allInvoices.Where(i => i.LocationId == debtLocation);
         if (filter.RoomId is { } debtRoom) allInvoices = allInvoices.Where(i => i.RoomId == debtRoom);
         var debt = await db.Financials(allInvoices).GroupBy(i => i.LocationId).Select(g => new

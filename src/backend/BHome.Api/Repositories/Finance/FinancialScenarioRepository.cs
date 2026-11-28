@@ -3,8 +3,10 @@ using BHome.Application.Finance;
 using BHome.Domain.Billing;
 using BHome.Domain.PropertyManagement;
 using BHome.Infrastructure.Persistence;
+using BHome.Infrastructure.Billing;
 using BHome.Infrastructure.Persistence.Compact24;
 using Microsoft.EntityFrameworkCore;
+using Native = BHome.Domain.Entities;
 using FinancialScenario = BHome.Domain.Entities.FinancialScenario;
 
 namespace BHome.Infrastructure.Finance;
@@ -69,15 +71,15 @@ public sealed class FinancialScenarioRepository(BHomePersistenceContext db) : IF
         // Match original invoice lines and approved adjustments by their actual
         // charge codes. Unclassifiable adjustments or incomplete snapshots are
         // not silently treated as zero service revenue.
-        var invoices = db.Set<Invoice>().AsNoTracking().Where(i =>
-            i.Status == InvoiceStatus.Final && i.BillingPeriod >= baseline.From && i.BillingPeriod <= baseline.To &&
+        var invoices = db.Set<Native.Invoice>().AsNoTracking().Where(i =>
+            i.Status == (short)InvoiceStatus.Final && i.BillingPeriod >= baseline.From && i.BillingPeriod <= baseline.To &&
             (locationId == null || i.LocationId == locationId));
-        var invoiceTotals = await invoices.Select(i => new { i.Id, i.Total }).ToArrayAsync(token);
-        var lines = await db.Set<InvoiceLine>().AsNoTracking().Where(l => invoices.Any(i => i.Id == l.InvoiceId))
+        var invoiceTotals = await invoices.Select(i => new { i.Id, Total = i.BaseTotalAmount }).ToArrayAsync(token);
+        var lines = await db.FinancialItems().Where(l => invoices.Any(i => i.Id == l.InvoiceId))
             .GroupBy(l => new { l.InvoiceId, l.ChargeCode, l.Category })
             .Select(g => new { g.Key.InvoiceId, g.Key.ChargeCode, g.Key.Category, Amount = g.Sum(l => l.Amount) }).ToArrayAsync(token);
-        var adjustments = await db.Set<InvoiceAdjustmentDecision>().AsNoTracking()
-            .Where(d => d.InvoiceStatus == InvoiceStatus.Final && d.Outcome == "Approved" && invoices.Any(i => i.Id == d.InvoiceId))
+        var adjustments = await db.FinalApprovedDecisions()
+            .Where(d => invoices.Any(i => i.Id == d.InvoiceId))
             .Select(d => new { d.InvoiceId, d.ChargeCode, d.Delta }).ToArrayAsync(token);
         var byInvoice = lines.ToLookup(l => l.InvoiceId);
         var byAdjustment = adjustments.ToLookup(d => d.InvoiceId);
@@ -86,7 +88,7 @@ public sealed class FinancialScenarioRepository(BHomePersistenceContext db) : IF
         {
             var items = byInvoice[invoice.Id].ToArray();
             if (items.Length == 0 || items.Sum(l => l.Amount) != invoice.Total ||
-                items.Any(l => !Enum.IsDefined(l.Category)))
+                items.Any(l => !Enum.IsDefined((ChargeCategory)l.Category)))
             {
                 nonRent = null;
                 break;
@@ -98,8 +100,8 @@ public sealed class FinancialScenarioRepository(BHomePersistenceContext db) : IF
                 nonRent = null;
                 break;
             }
-            var amount = items.Where(l => l.Category != ChargeCategory.Rent).Sum(l => l.Amount) +
-                deltas.Where(d => codes[d.ChargeCode!].First().Category != ChargeCategory.Rent).Sum(d => d.Delta);
+            var amount = items.Where(l => l.Category != (int)ChargeCategory.Rent).Sum(l => l.Amount) +
+                deltas.Where(d => codes[d.ChargeCode!].First().Category != (int)ChargeCategory.Rent).Sum(d => d.Delta);
             if (amount < 0)
             {
                 nonRent = null;

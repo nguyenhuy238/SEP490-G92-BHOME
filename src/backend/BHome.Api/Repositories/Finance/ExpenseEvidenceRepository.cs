@@ -4,6 +4,7 @@ using BHome.Application.Finance;
 using BHome.Infrastructure.IdentityAccess;
 using BHome.Infrastructure.Persistence;
 using Microsoft.EntityFrameworkCore;
+using Native = BHome.Domain.Entities;
 
 namespace BHome.Infrastructure.Finance;
 
@@ -12,19 +13,22 @@ internal sealed class ExpenseEvidenceRepository(BHomePersistenceContext db) : IE
     private static readonly JsonSerializerOptions Json = new(JsonSerializerDefaults.Web);
     private async Task<JsonArray> ReadAsync(Guid id, CancellationToken t)
     {
-        var value = await db.Database.SqlQuery<string>($"SELECT evidence::text AS \"Value\" FROM expenses WHERE id={id}").SingleOrDefaultAsync(t)
+        var value = await db.Set<Native.Expense>().AsNoTracking().Where(e => e.Id == id).Select(e => (JsonElement?)e.Evidence).SingleOrDefaultAsync(t)
             ?? throw new FinanceException(404, "expense_not_found");
-        return JsonNode.Parse(value) as JsonArray ?? throw new FinanceException(409, "expense_evidence_metadata_invalid");
+        return JsonNode.Parse(value.GetRawText()) as JsonArray ?? throw new FinanceException(409, "expense_evidence_metadata_invalid");
     }
     private static ExpenseEvidenceFile? File(JsonNode? node) => node is JsonObject entry && entry["recordType"]?.GetValue<string>() == "ExpenseEvidence"
         ? entry["state"]?.Deserialize<ExpenseEvidenceFile>(Json) : null;
     public async Task<IReadOnlyList<ExpenseEvidenceFile>> ListAsync(Guid id, CancellationToken t) =>
         (await ReadAsync(id, t)).Select(File).OfType<ExpenseEvidenceFile>().ToArray();
     private Task LockAsync(Guid id, CancellationToken t) => db.Database.ExecuteSqlInterpolatedAsync($"SELECT id FROM expenses WHERE id={id} FOR UPDATE", t);
-    private Task WriteAsync(Guid id, JsonArray files, CancellationToken t)
+    private async Task WriteAsync(Guid id, JsonArray files, CancellationToken t)
     {
-        var json = files.ToJsonString();
-        return db.Database.ExecuteSqlInterpolatedAsync($"UPDATE expenses SET evidence={json}::jsonb WHERE id={id}", t);
+        var expense = await db.Set<Native.Expense>().AsNoTracking().SingleAsync(e => e.Id == id, t);
+        var evidence = JsonSerializer.SerializeToElement(files);
+        db.Attach(expense);
+        expense.Evidence = evidence;
+        await db.SaveChangesAsync(t);
     }
     public async Task<ExpenseEvidenceFile> BeginAsync(Guid id, Guid key, Guid actor, string type, long length, string hash, DateTimeOffset now, CancellationToken t)
     {
@@ -39,9 +43,9 @@ internal sealed class ExpenseEvidenceRepository(BHomePersistenceContext db) : IE
         // Bounded image evidence, matching the existing 5 MB private image pipeline.
         if (nodes.Count >= 20) throw new FinanceException(409, "expense_evidence_limit");
         var fileId = Guid.NewGuid();
-        var location = await db.Database.SqlQuery<Guid>($"SELECT location_id AS \"Value\" FROM expenses WHERE id={id}").SingleAsync(t);
-        var room = await db.Database.SqlQuery<Guid?>($"SELECT room_id AS \"Value\" FROM expenses WHERE id={id}").SingleAsync(t);
-        var objectKey = BHome.Application.Storage.PrivateImageKeys.Evidence(location, room, "expenses", id, fileId);
+        var scope = await db.Set<Native.Expense>().AsNoTracking().Where(e => e.Id == id)
+            .Select(e => new { e.LocationId, e.RoomId }).SingleAsync(t);
+        var objectKey = BHome.Application.Storage.PrivateImageKeys.Evidence(scope.LocationId, scope.RoomId, "expenses", id, fileId);
         var file = new ExpenseEvidenceFile(fileId, key, objectKey, type, length, hash, "PendingUpload", actor, now);
         nodes.Add(new JsonObject { ["schemaVersion"] = 1, ["recordType"] = "ExpenseEvidence", ["state"] = JsonSerializer.SerializeToNode(file, Json) });
         await WriteAsync(id, nodes, t); await transaction.CommitAsync(t); return file;

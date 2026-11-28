@@ -3,6 +3,7 @@ using BHome.Application.Finance;
 using BHome.Domain.IncidentMaintenance;
 using BHome.Infrastructure.Persistence;
 using Microsoft.EntityFrameworkCore;
+using Native = BHome.Domain.Entities;
 
 namespace BHome.Infrastructure.Finance;
 
@@ -129,8 +130,7 @@ public sealed class DepreciationRepository(BHomePersistenceContext db) : IDeprec
         var today = DateOnly.FromDateTime(TimeZoneInfo.ConvertTimeBySystemTimeZoneId(now, "Asia/Ho_Chi_Minh").DateTime);
         var effective = DepreciationMath.Validate(lot, input, today);
         var revision = new DepreciationRevision(key, actor, now, input, effective);
-        var history = JsonSerializer.Serialize(new[] { new { schemaVersion = 1, recordType = "DepreciationPlanV1", state = revision } }, Json);
-        await db.Database.ExecuteSqlInterpolatedAsync($"UPDATE expenses SET history=history||{history}::jsonb WHERE id={id}", token);
+        await AppendAsync(id, "DepreciationPlanV1", revision, token);
         var result = (await ReadAsync(id, token))!;
         await transaction.CommitAsync(token);
         return result;
@@ -202,10 +202,14 @@ public sealed class DepreciationRepository(BHomePersistenceContext db) : IDeprec
         return result;
     }
 
-    private Task AppendAsync(Guid id, string type, object state, CancellationToken token)
+    private async Task AppendAsync(Guid id, string type, object state, CancellationToken token)
     {
-        var history = JsonSerializer.Serialize(new[] { new { schemaVersion = 1, recordType = type, state } }, Json);
-        return db.Database.ExecuteSqlInterpolatedAsync($"UPDATE expenses SET history=history||{history}::jsonb WHERE id={id}", token);
+        var expense = await db.Set<Native.Expense>().AsNoTracking().SingleAsync(e => e.Id == id, token);
+        var entry = JsonSerializer.SerializeToElement(new { schemaVersion = 1, recordType = type, state }, Json);
+        var history = JsonSerializer.SerializeToElement(expense.History.EnumerateArray().Append(entry));
+        db.Attach(expense);
+        expense.History = history;
+        await db.SaveChangesAsync(token);
     }
 }
 
