@@ -11,7 +11,7 @@ namespace BHome.Infrastructure.Contracts;
 internal sealed class HoldingDepositRenderer(IConfiguration configuration)
 {
     internal const string TemplateId = "holding-deposit-v1";
-    internal const int DocumentVersion = 2;
+    internal const int DocumentVersion = 3;
     private const string OwnerHeading = "BÊN NHẬN TIỀN ĐẶT CỌC (BÊN A)";
     private const string TenantHeading = "BÊN GIAO TIỀN ĐẶT CỌC (BÊN B)";
     private static readonly XNamespace W = "http://schemas.openxmlformats.org/wordprocessingml/2006/main";
@@ -50,7 +50,7 @@ internal sealed class HoldingDepositRenderer(IConfiguration configuration)
                 throw new ContractException(503, "contract_template_slots_changed");
             var fields = new Dictionary<int, string>
             {
-                [7] = "",
+                [7] = $"Mã hợp đồng: {contract.Id:D}",
                 [8] = $"Hợp đồng lập ngày {Date(created)} tại địa chỉ: {Provided(address)}.",
                 [12] = $"Ông/bà: {owner.FullName}. Năm sinh: {owner.DateOfBirth.Year}.",
                 [13] = $"CCCD số: {owner.CitizenNumber}. Ngày cấp: {Date(owner.DateOfIssue)}. Nơi cấp: {Provided(owner.PlaceOfIssue)}.",

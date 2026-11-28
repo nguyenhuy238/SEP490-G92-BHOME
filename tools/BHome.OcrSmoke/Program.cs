@@ -5,6 +5,25 @@ using BHome.Infrastructure.Ocr;
 using Microsoft.Extensions.Logging.Abstractions;
 using Microsoft.ML.OnnxRuntime;
 
+if (args.Length == 3 && args[0] == "--generate-identity-chip-corpus")
+    return IdentityChipCameraFixtures.GenerateCorpus(args[1], args[2]);
+
+if (args.Length == 4 && args[0] == "--identity-private-review")
+{
+    try { return await IdentityPrivateReview.Run(args[1], args[2], args[3]); }
+    catch (Exception) { Console.Error.WriteLine("Private review unavailable. Input details omitted."); return 2; }
+}
+
+if (args.Length is 4 or 5 && args[0] == "--identity-private-evaluate")
+{
+    try { return await IdentityPrivateEvaluation.Run(args[1], args[2], args[3], args.Length == 5 ? args[4] : null); }
+    catch (Exception)
+    { Console.Error.WriteLine("Private evaluation unavailable. Input details omitted."); return 2; }
+}
+
+if (args.Length == 3 && args[0] == "--generate-identity-chip-camera")
+    return IdentityChipCameraFixtures.Generate(args[1], args[2]);
+
 if (args.Length == 3 && args[0] == "--generate-identity-desk")
     return IdentityDeskFixtures.Generate(args[1], args[2]);
 if (args.Length == 3 && args[0] == "--generate-identity-desk-dense")

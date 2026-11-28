@@ -28,8 +28,10 @@ internal sealed class ContractSigningDocumentSource(BHomePersistenceContext db, 
         if (contract.DraftMetadata == "{}")
         {
             if (contract.Kind != ContractKind.Main) return null;
+            var currentMainDocumentVersion = mainRenderer?.DocumentVersion;
             var existing = (await ContractDocumentPersistence.ListAsync(db, contract.Id, t)).Any(f =>
-                f.Kind == ContractFileKind.Preview && f.SnapshotHash == contract.SnapshotHashOrEmpty && f.TemplateId == "main-tenancy-docx-v1");
+                f.Kind == ContractFileKind.Preview && f.SnapshotHash == contract.SnapshotHashOrEmpty && f.TemplateId == "main-tenancy-docx-v1" &&
+                (currentMainDocumentVersion == null || f.TemplateVersion == currentMainDocumentVersion));
             if (!existing)
             {
                 // Reviewed Main drafts already persist their source; only Holding conversions need it generated here.
@@ -44,7 +46,8 @@ internal sealed class ContractSigningDocumentSource(BHomePersistenceContext db, 
         if (contract.DraftMetadata != "{}" && contract.Status == ContractStatus.Draft || contract.SnapshotHashOrEmpty != document.SnapshotHash || ContractDocumentSnapshot.Hash(document) != document.SnapshotHash)
             throw ContractException.Conflict("signed_terms_changed");
         var file = (await ContractDocumentPersistence.ListAsync(db, contract.Id, t)).SingleOrDefault(f =>
-            f.Kind == ContractFileKind.Preview && f.SnapshotHash == document.SnapshotHash && f.TemplateId == "main-tenancy-docx-v1")
+            f.Kind == ContractFileKind.Preview && f.SnapshotHash == document.SnapshotHash && f.TemplateId == "main-tenancy-docx-v1" &&
+            (mainRenderer == null || f.TemplateVersion == mainRenderer.DocumentVersion))
             ?? throw ContractException.Conflict("signing_source_document_required");
         return await ReadFileAsync(file, t);
     }
@@ -55,7 +58,8 @@ internal sealed class ContractSigningDocumentSource(BHomePersistenceContext db, 
             throw ContractException.Conflict("signed_terms_changed");
         async Task<ContractDocumentFile?> FindAsync() =>
             (await ContractDocumentPersistence.ListAsync(db, contract.Id, t)).SingleOrDefault(f => f.Kind == ContractFileKind.Preview &&
-                f.SnapshotHash == document.SnapshotHash && f.TemplateId == HoldingDepositRenderer.TemplateId);
+                f.SnapshotHash == document.SnapshotHash && f.TemplateId == HoldingDepositRenderer.TemplateId &&
+                f.TemplateVersion == HoldingDepositRenderer.DocumentVersion);
         var existing = await FindAsync();
         if (existing is not null) return await ReadFileAsync(existing, t);
 
@@ -160,7 +164,8 @@ internal sealed class ContractSigningDocumentSource(BHomePersistenceContext db, 
         await using var ownTransaction = db.Database.CurrentTransaction is null ? await db.Database.BeginTransactionAsync(t) : null;
         await db.Database.ExecuteSqlInterpolatedAsync($"SELECT pg_advisory_xact_lock(hashtextextended({"main-docx-source:" + c.Id},0))", t);
         if (!(await ContractDocumentPersistence.ListAsync(db, c.Id, t)).Any(f => f.Kind == ContractFileKind.Preview &&
-            f.SnapshotHash == c.SnapshotHashOrEmpty && f.TemplateId == "main-tenancy-docx-v1"))
+            f.SnapshotHash == c.SnapshotHashOrEmpty && f.TemplateId == "main-tenancy-docx-v1" &&
+            f.TemplateVersion == mainRenderer.DocumentVersion))
         {
             var settings = await mainData.SettingsAsync(c.OwnerSignerId, c.StartDate, t)
                 ?? throw ContractException.Conflict("owner_contract_settings_required");

@@ -179,17 +179,6 @@ export function HoldingNewTenant({
             }}
             onManual={() => void enter('verify')}
           />
-          {(confirmed || initialConfirmed) && (
-            <Button
-              mode="text"
-              icon="file-document-outline"
-              disabled={disabled}
-              contentStyle={styles.secondaryContent}
-              onPress={() => void enter('verify')}
-            >
-              Xem thông tin CCCD
-            </Button>
-          )}
         </>
       ) : role === 'Staff' ? (
         <>

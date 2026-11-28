@@ -1,13 +1,14 @@
 ﻿import React, { useEffect, useRef, useState } from 'react';
 import { StyleSheet, View } from 'react-native';
 import { router } from 'expo-router';
-import { residentRole, residentStatus } from './residentPresentation';
+import { residentStatus } from './residentPresentation';
 import { ActivityIndicator, Button, Icon, Text } from 'react-native-paper';
 import {
   contractClient,
   type ContractSummary,
 } from '../../../../../packages/client-core/src/contracts';
 import { householdClient } from '../../../../../packages/client-core/src/households';
+import type { HouseholdView } from '../../../../../packages/client-core/src/households';
 import { formatInstant } from '../../../../../packages/client-core/src/localization';
 import { Action, Box, Heading, ui } from '../../components/WorkspaceKit';
 import { useSession } from '../../lib/SessionProvider';
@@ -25,13 +26,19 @@ function getInitials(name: string): string {
   return (parts[0].charAt(0) + parts[parts.length - 1].charAt(0)).toUpperCase();
 }
 
+function maskCitizenNumber(value: string): string {
+  return value.startsWith('*') ? value : `********${value.slice(-4)}`;
+}
+
 // Resolve status from the scoped summary API, never from a navigation flag or decrypted identity.
 export function ResidentProfile({
   residentId,
   locationId,
+  representativeResidentId,
 }: {
   residentId: string;
   locationId?: string;
+  representativeResidentId?: string;
 }) {
   const { api } = useSession();
   const { go, requestNavigation } = useWorkspace();
@@ -41,6 +48,7 @@ export function ResidentProfile({
     room: string;
     locationId: string;
   } | null>(null);
+  const [household, setHousehold] = useState<HouseholdView | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const [revision, setRevision] = useState(0);
@@ -65,13 +73,39 @@ export function ResidentProfile({
         const resident = residents.find((item) => item.id === residentId);
         if (!resident) continue;
         const rooms = await service.rooms(location.id, controller.signal);
-        if (!controller.signal.aborted)
+        let householdData: HouseholdView | null = null;
+        const householdRepresentative =
+          representativeResidentId ||
+          (resident.residentType === 0 && resident.verificationStatus === 1 ? resident.id : '');
+        if (householdRepresentative) {
+          try {
+            const result = await householdClient((path, init) => api.request(path, init)).get(
+              householdRepresentative,
+              controller.signal,
+            );
+            householdData = {
+              ...result,
+              representative: result.representative ? { ...result.representative } : null,
+              members: result.members.map((member) => ({
+                ...member,
+                citizenNumber: member.citizenNumber
+                  ? maskCitizenNumber(member.citizenNumber)
+                  : null,
+              })),
+            };
+          } catch {
+            // Basic resident details remain available if the optional household summary is unavailable.
+          }
+        }
+        if (!controller.signal.aborted) {
+          setHousehold(householdData);
           setData({
             resident,
             location: location.label,
             locationId: location.id,
             room: rooms.find((room) => room.id === resident.roomId)?.label ?? '—',
           });
+        }
         return;
       }
       if (!controller.signal.aborted)
@@ -85,7 +119,7 @@ export function ResidentProfile({
         if (!controller.signal.aborted) setLoading(false);
       });
     return () => controller.abort();
-  }, [api, residentId, locationId, revision]);
+  }, [api, residentId, locationId, representativeResidentId, revision]);
 
   async function continueContract() {
     if (!api || !data || contractCheck.current) return;
@@ -177,40 +211,69 @@ export function ResidentProfile({
   const status = residentStatus(data.resident.verificationStatus);
   const pending = data.resident.verificationStatus === 0;
   const verified = data.resident.verificationStatus === 1;
+  const householdProfile =
+    data.resident.id === household?.representativeResidentId
+      ? household.representative
+      : household?.members.find((item) => item.residentId === data.resident.id);
+  const residentName = householdProfile?.fullName || data.resident.displayLabel;
+  const familyRole =
+    data.resident.residentType === 1
+      ? householdProfile && 'residentId' in householdProfile
+        ? householdProfile.relationship || 'Thành viên cùng ở'
+        : 'Thành viên cùng ở'
+      : household?.members.length
+        ? 'Người đại diện'
+        : '';
+  const maskedCitizenNumber = householdProfile
+    ? 'residentId' in householdProfile
+      ? householdProfile.citizenNumber
+        ? maskCitizenNumber(householdProfile.citizenNumber)
+        : null
+      : householdProfile.maskedCitizenNumber
+    : null;
   return (
     <View style={styles.screen}>
-      <Heading title="Chi tiết cư dân" />
+      <Heading title="Hồ sơ cư dân" />
       <View style={styles.header}>
         <View style={[styles.avatar, { backgroundColor: status.background }]}>
           <Text style={[styles.initials, { color: status.color }]}>
-            {getInitials(data.resident.displayLabel)}
+            {getInitials(residentName)}
           </Text>
         </View>
         <View style={styles.person}>
           <Text variant="titleLarge" style={styles.name}>
-            {data.resident.displayLabel}
+            {residentName}
           </Text>
-          <Text style={styles.muted}>{residentRole(data.resident.residentType)}</Text>
+          {!!familyRole && <Text style={styles.muted}>{familyRole}</Text>}
           <View style={styles.status}>
             <Icon source={status.icon} size={17} color={status.color} />
             <Text style={{ color: status.color }}>{status.label}</Text>
           </View>
         </View>
       </View>
-      <View style={styles.details}>
-        <View style={styles.row}>
-          <Text style={styles.muted}>Phòng</Text>
-          <Text style={styles.value}>Phòng: {data.room}</Text>
-        </View>
-        <View style={styles.row}>
-          <Text style={styles.muted}>Cơ sở</Text>
-          <Text style={styles.value}>{data.location}</Text>
-        </View>
+      <View style={styles.group}>
+        <Text style={styles.groupTitle}>Thông tin cá nhân</Text>
+        <ProfileLine label="Họ và tên" value={residentName} />
+        {!!householdProfile?.phone && (
+          <ProfileLine label="Điện thoại" value={householdProfile.phone} />
+        )}
+        {!!data.resident.email && <ProfileLine label="Email" value={data.resident.email} />}
+        {!!householdProfile?.dateOfBirth && (
+          <ProfileLine label="Ngày sinh" value={householdProfile.dateOfBirth} />
+        )}
+        {!!maskedCitizenNumber && <ProfileLine label="CCCD" value={maskedCitizenNumber} />}
+      </View>
+      <View style={styles.group}>
+        <Text style={styles.groupTitle}>Thông tin lưu trú</Text>
+        <ProfileLine label="Phòng" value={data.room} />
+        <ProfileLine label="Cơ sở" value={data.location} />
+        {!!familyRole && <ProfileLine label="Vai trò" value={familyRole} />}
+      </View>
+      <View style={styles.group}>
+        <Text style={styles.groupTitle}>Thông tin xác minh</Text>
+        <ProfileLine label="Trạng thái" value={status.label} />
         {verified && !!data.resident.confirmedAt && (
-          <View style={styles.row}>
-            <Text style={styles.muted}>Xác minh lúc</Text>
-            <Text style={styles.value}>{formatInstant(data.resident.confirmedAt)}</Text>
-          </View>
+          <ProfileLine label="Xác minh lúc" value={formatInstant(data.resident.confirmedAt)} />
         )}
       </View>
       {pending && (
@@ -276,6 +339,15 @@ export function ResidentProfile({
   );
 }
 
+function ProfileLine({ label, value }: { label: string; value: string }) {
+  return (
+    <View style={styles.row}>
+      <Text style={styles.muted}>{label}</Text>
+      <Text style={styles.value}>{value}</Text>
+    </View>
+  );
+}
+
 const styles = StyleSheet.create({
   screen: { gap: 14 },
   header: { flexDirection: 'row', alignItems: 'center', gap: 12 },
@@ -291,7 +363,14 @@ const styles = StyleSheet.create({
   name: { color: c.ink, fontWeight: '700' },
   muted: { color: c.muted, fontSize: 12 },
   status: { flexDirection: 'row', alignItems: 'center', gap: 5 },
-  details: { borderTopWidth: 1, borderColor: c.border },
+  group: {
+    padding: 12,
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: c.border,
+    backgroundColor: c.white,
+  },
+  groupTitle: { color: c.ink, fontWeight: '700', marginBottom: 4 },
   row: {
     flexDirection: 'row',
     alignItems: 'center',

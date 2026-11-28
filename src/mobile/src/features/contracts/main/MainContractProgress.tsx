@@ -13,7 +13,13 @@ export const mainContractSteps = [
   { key: 'activate', label: 'Kích hoạt hợp đồng' },
 ] as const;
 
-export function MainContractProgress({ current }: { current: number }) {
+export function MainContractProgress({
+  current,
+  compact = false,
+}: {
+  current: number;
+  compact?: boolean;
+}) {
   const step = Math.max(0, Math.min(current > 0 ? current - 1 : 0, mainContractSteps.length - 1));
   return (
     <View style={{ gap: 8 }} accessibilityLabel={`Bước ${step + 1}/${mainContractSteps.length}`}>
@@ -32,11 +38,13 @@ export function MainContractProgress({ current }: { current: number }) {
           }}
         />
       </View>
-      <Text style={{ color: c.muted }}>
-        {step < mainContractSteps.length - 1
-          ? `Tiếp theo: ${mainContractSteps[step + 1].label}`
-          : 'Hoàn tất theo trạng thái xác nhận từ máy chủ'}
-      </Text>
+      {!compact && (
+        <Text style={{ color: c.muted }}>
+          {step < mainContractSteps.length - 1
+            ? `Tiếp theo: ${mainContractSteps[step + 1].label}`
+            : 'Hoàn tất theo trạng thái xác nhận từ máy chủ'}
+        </Text>
+      )}
     </View>
   );
 }

@@ -3,8 +3,6 @@ using iText.IO.Image;
 using iText.Kernel.Geom;
 using iText.Kernel.Pdf;
 using iText.Kernel.Pdf.Canvas;
-using iText.Layout;
-using iText.Layout.Element;
 using SkiaSharp;
 
 namespace BHome.Infrastructure.Contracts;
@@ -27,19 +25,18 @@ internal sealed class InternalAcceptanceRenderer : IInternalAcceptanceRenderer
         }
         using var image = SKImage.FromBitmap(bitmap); using var encoded = image.Encode(SKEncodedImageFormat.Png, 100);
         var png = encoded.ToArray();
-        return new(png, Append(source, $"Resident: {residentId:D}", acceptedAt, sourceHash, png, preserveSignatures));
+        return new(png, Append(source, png, preserveSignatures));
     }
     public byte[] ConfirmOwner(byte[] tenantAcceptedPdf, Guid ownerId, DateTimeOffset acceptedAt, string sourceHash) =>
-        Append(tenantAcceptedPdf, $"Owner confirmation: {ownerId:D}", acceptedAt, sourceHash, null);
+        Append(tenantAcceptedPdf, null);
     public byte[] AppendTenant(byte[] ownerSignedPdf, byte[] signaturePng, Guid residentId, DateTimeOffset acceptedAt, string sourceHash) =>
-        Append(ownerSignedPdf, $"Resident: {residentId:D}", acceptedAt, sourceHash, signaturePng, preserveSignatures: true);
-    private static byte[] Append(byte[] source, string party, DateTimeOffset at, string hash, byte[]? image, bool preserveSignatures = false)
+        Append(ownerSignedPdf, signaturePng, preserveSignatures: true);
+    private static byte[] Append(byte[] source, byte[]? image, bool preserveSignatures = false)
     {
         using var output = new MemoryStream();
         using (var pdf = new PdfDocument(new PdfReader(new MemoryStream(source)), new PdfWriter(output),
             preserveSignatures ? new StampingProperties().UseAppendMode() : new StampingProperties()))
         {
-            var placed = false;
             if (image is not null && ContractSignatureSlots.Read(pdf, owner: false) is { } slot)
             {
                 var target = pdf.GetPage(slot.Page);
@@ -55,18 +52,11 @@ internal sealed class InternalAcceptanceRenderer : IInternalAcceptanceRenderer
                     var signature = new PdfCanvas(target.NewContentStreamAfter(), target.GetResources(), pdf);
                     signature.SaveState().AddImageFittedIntoRectangle(data, box, false);
                     signature.RestoreState();
-                    placed = true;
                 }
             }
-            var page = pdf.AddNewPage(PageSize.A4);
-            using var canvas = new Canvas(page, new Rectangle(40, 40, 515, 750));
-            canvas.Add(new Paragraph("BHOME - INTERNAL ELECTRONIC ACCEPTANCE").SetFontSize(16));
-            canvas.Add(new Paragraph("Mode: INTERNAL_OTP_DRAWN. Not a CA digital signature."));
-            canvas.Add(new Paragraph(party));
-            canvas.Add(new Paragraph($"Accepted (UTC): {at:O}"));
-            canvas.Add(new Paragraph($"Reviewed source SHA-256: {hash}").SetFontSize(9));
-            canvas.Add(new Paragraph("Consent: internal-acceptance-v1. The reviewed contract terms are preserved."));
-            if (image is not null && !placed) canvas.Add(new Image(ImageDataFactory.Create(image)).ScaleToFit(460, 160));
+            // Keep the signed/accepted PDF identical in page count to the reviewed contract.
+            // Internal acceptance metadata is stored separately in Contract.InternalAcceptance.
+            // If the source has no signature slot, preserve its content without adding an appendix.
         }
         return output.ToArray();
     }

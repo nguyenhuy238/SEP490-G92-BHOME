@@ -1,0 +1,2743 @@
+{
+  "generatedDate": "2026-11-29",
+  "scope": "legacy Vietnamese chip CCCD layout; local development measurements",
+  "acceptanceAchieved": false,
+  "physicalAndroidAndIphone": "NOT RUN; user explicitly deferred until later",
+  "remoteCiCd": "NOT RUN for these uncommitted changes",
+  "softwareChecks": {
+    "backendFullCi": {
+      "passed": 2829,
+      "failed": 0,
+      "skipped": 32,
+      "inventoryVerified": true,
+      "requiredRegressionGroupsPassed": 26,
+      "assemblies": {
+        "BHome.Application.UnitTests": {
+          "passed": 796,
+          "skipped": 0
+        },
+        "BHome.Domain.UnitTests": {
+          "passed": 115,
+          "skipped": 0
+        },
+        "BHome.IntegrationTests": {
+          "passed": 1610,
+          "skipped": 32
+        },
+        "BHome.Infrastructure.UnitTests": {
+          "passed": 267,
+          "skipped": 0
+        },
+        "BHome.DigitalSigning.UnitTests": {
+          "passed": 41,
+          "skipped": 0
+        }
+      },
+      "note": "Full CI-equivalent run used the regions6 build. The final regions7 lower-address early-stop guard and added regression were verified separately in the complete OCR integration subset."
+    },
+    "finalOcrIntegration": {
+      "engineSuffix": "identity-regions7",
+      "passed": 206,
+      "failed": 0,
+      "skipped": 31
+    },
+    "persistedMeterWorkflow": {
+      "passed": 8,
+      "failed": 0,
+      "total": 8
+    },
+    "captureWorkflow": {
+      "passed": 12,
+      "failed": 0,
+      "total": 12
+    },
+    "finalSolutionBuild": {
+      "configuration": "Release",
+      "warnings": 0,
+      "errors": 0
+    },
+    "mobileFull": {
+      "passed": 1861,
+      "failed": 0,
+      "skipped": 0,
+      "junitVerified": true
+    },
+    "mobileAfterFinalGuards": {
+      "passed": 55,
+      "failed": 0,
+      "skipped": 0
+    },
+    "typecheck": "PASS",
+    "lint": "PASS",
+    "dotnetFormat": "PASS",
+    "mobileWebExport": "PASS",
+    "nativeBundleGeneration": "PASS, does not establish physical-device behavior"
+  },
+  "changedFiles": [
+    "docs/testing/IDENTITY_OCR_CHIP_CAMERA_2026-11-28.md",
+    "docs/testing/IDENTITY_OCR_REAL_FLOW_2026-11-29.md",
+    "docs/testing/identity-ocr-chip-camera-2026-11-28.json",
+    "docs/testing/identity-ocr-real-flow-2026-11-29.json",
+    "scripts/New-IdentityChipCameraLayout.ps1",
+    "src/backend/BHome.Application/Ocr/IdentityOcrEvidence.cs",
+    "src/backend/BHome.Application/Ocr/IdentityOcrLayout.cs",
+    "src/backend/BHome.Application/Ocr/OcrContracts.cs",
+    "src/backend/BHome.Application/Ocr/OcrFieldParser.cs",
+    "src/backend/BHome.Infrastructure/BHome.Infrastructure.csproj",
+    "src/backend/BHome.Infrastructure/Ocr/IdentityCardCropper.cs",
+    "src/backend/BHome.Infrastructure/Ocr/IdentityFieldRegions.cs",
+    "src/backend/BHome.Infrastructure/Ocr/IdentityQrReader.cs",
+    "src/backend/BHome.Infrastructure/Ocr/IdentityTextRegionOrder.cs",
+    "src/backend/BHome.Infrastructure/Ocr/ImagePreprocessor.cs",
+    "src/backend/BHome.Infrastructure/Ocr/OnnxOcrEngine.cs",
+    "src/mobile/src/__tests__/document-camera.test.tsx",
+    "src/mobile/src/__tests__/identity-merge-evidence.test.ts",
+    "src/mobile/src/__tests__/identity-picture-size.test.ts",
+    "src/mobile/src/__tests__/onboarding-ui.test.tsx",
+    "src/mobile/src/__tests__/prepare-capture.test.ts",
+    "src/mobile/src/components/CameraCapture.tsx",
+    "src/mobile/src/components/DocumentCameraView.tsx",
+    "src/mobile/src/components/LiveCaptureCamera.tsx",
+    "src/mobile/src/features/onboarding/IdentityWizard.tsx",
+    "src/mobile/src/lib/identity.ts",
+    "src/mobile/src/lib/identityPictureSize.ts",
+    "src/mobile/src/lib/ocrDiagnostics.ts",
+    "src/mobile/src/lib/prepareCapture.ts",
+    "tests/backend/BHome.Application.UnitTests/Ocr/IdentityEvidenceTests.cs",
+    "tests/backend/BHome.Application.UnitTests/Ocr/OcrParserTests.cs",
+    "tests/backend/BHome.IntegrationTests/Ocr/IdentityCardCropperTests.cs",
+    "tests/backend/BHome.IntegrationTests/Ocr/IdentityRegionRecoveryTests.cs",
+    "tests/fixtures/ocr/README.md",
+    "tools/BHome.OcrSmoke/IdentityChipCameraFixtures.cs",
+    "tools/BHome.OcrSmoke/IdentityPrivateEvaluation.cs",
+    "tools/BHome.OcrSmoke/IdentityPrivateReview.cs",
+    "tools/BHome.OcrSmoke/Program.cs"
+  ],
+  "humanReviewedEarlierVersion": {
+    "dataset": "private-local-human-review",
+    "engineVersion": "ocrdoc-ppocrv6-vi-run6-9b534643-yolo2-cache1-category2-identity-regions1",
+    "humanReviewed": true,
+    "imageCount": 4,
+    "independentCardCountNotEstablished": true,
+    "p95Milliseconds": 4545,
+    "groups": {
+      "normal": {
+        "images": 4,
+        "exactImages": 4,
+        "correctFields": 18,
+        "incorrectFields": 0,
+        "unreadableFields": 0
+      }
+    },
+    "results": [
+      {
+        "imageIndex": 0,
+        "profile": "IdentityBack",
+        "condition": "normal",
+        "elapsedMilliseconds": 2198,
+        "fields": {
+          "dateOfIssue": "correct"
+        },
+        "warnings": ["identity_small_card"]
+      },
+      {
+        "imageIndex": 1,
+        "profile": "IdentityBack",
+        "condition": "normal",
+        "elapsedMilliseconds": 4545,
+        "fields": {
+          "dateOfIssue": "correct"
+        },
+        "warnings": ["identity_card_not_found", "mrz_checked"]
+      },
+      {
+        "imageIndex": 2,
+        "profile": "IdentityFront",
+        "condition": "normal",
+        "elapsedMilliseconds": 3330,
+        "fields": {
+          "citizenIdentityNumber": "correct",
+          "fullName": "correct",
+          "dateOfBirth": "correct",
+          "gender": "correct",
+          "nationality": "correct",
+          "placeOfOrigin": "correct",
+          "residentialAddress": "correct",
+          "dateOfExpiry": "correct"
+        },
+        "warnings": ["identity_small_card"]
+      },
+      {
+        "imageIndex": 3,
+        "profile": "IdentityFront",
+        "condition": "normal",
+        "elapsedMilliseconds": 3421,
+        "fields": {
+          "citizenIdentityNumber": "correct",
+          "fullName": "correct",
+          "dateOfBirth": "correct",
+          "gender": "correct",
+          "nationality": "correct",
+          "placeOfOrigin": "correct",
+          "residentialAddress": "correct",
+          "dateOfExpiry": "correct"
+        },
+        "warnings": []
+      }
+    ]
+  },
+  "finalVersionPrivatePresenceOnly": {
+    "dataset": "private-local",
+    "engineVersion": "ocrdoc-ppocrv6-vi-run6-9b534643-yolo2-cache1-category2-identity-regions7",
+    "imageCount": 4,
+    "accuracyMeasured": false,
+    "sideAware": true,
+    "note": "Field presence is not correctness. Reviewed side selection does not transfer previous accuracy labels to this engine version. Device verification remains required.",
+    "p95Milliseconds": 3739,
+    "results": [
+      {
+        "imageIndex": 0,
+        "profile": "IdentityBack",
+        "elapsedMilliseconds": 3739,
+        "fields": ["dateOfIssue"],
+        "confidence": {
+          "dateOfIssue": 0.94760627
+        },
+        "missingFields": [],
+        "warnings": ["identity_small_card"],
+        "isFallback": false,
+        "requiresConfirmation": true
+      },
+      {
+        "imageIndex": 1,
+        "profile": "IdentityBack",
+        "elapsedMilliseconds": 3009,
+        "fields": [
+          "dateOfIssue",
+          "gender",
+          "citizenIdentityNumber",
+          "dateOfBirth",
+          "nationality",
+          "fullName"
+        ],
+        "confidence": {
+          "dateOfIssue": 0.96733046,
+          "gender": 0.9,
+          "citizenIdentityNumber": 0.9,
+          "dateOfBirth": 0.9,
+          "nationality": 0.9,
+          "fullName": 0.65
+        },
+        "missingFields": [],
+        "warnings": [
+          "identity_card_not_found",
+          "mrz_checked",
+          "mrz_name_unaccented",
+          "low_confidence"
+        ],
+        "isFallback": false,
+        "requiresConfirmation": true
+      },
+      {
+        "imageIndex": 2,
+        "profile": "IdentityFront",
+        "elapsedMilliseconds": 3516,
+        "fields": [
+          "citizenIdentityNumber",
+          "fullName",
+          "dateOfBirth",
+          "gender",
+          "nationality",
+          "placeOfOrigin",
+          "residentialAddress",
+          "dateOfExpiry"
+        ],
+        "confidence": {
+          "citizenIdentityNumber": 0.9999991,
+          "fullName": 0.98719865,
+          "dateOfBirth": 0.99020916,
+          "gender": 0.9561078,
+          "nationality": 0.9561078,
+          "placeOfOrigin": 0.9577752,
+          "residentialAddress": 0.9691089,
+          "dateOfExpiry": 0.9903631
+        },
+        "missingFields": [],
+        "warnings": ["identity_small_card"],
+        "isFallback": false,
+        "requiresConfirmation": true
+      },
+      {
+        "imageIndex": 3,
+        "profile": "IdentityFront",
+        "elapsedMilliseconds": 3304,
+        "fields": [
+          "citizenIdentityNumber",
+          "fullName",
+          "dateOfBirth",
+          "gender",
+          "nationality",
+          "placeOfOrigin",
+          "residentialAddress",
+          "dateOfExpiry",
+          "dateOfIssue"
+        ],
+        "confidence": {
+          "citizenIdentityNumber": 0.99999887,
+          "fullName": 0.9876087,
+          "dateOfBirth": 0.9820015,
+          "gender": 0.964919,
+          "nationality": 0.964919,
+          "placeOfOrigin": 0.98773414,
+          "residentialAddress": 0.5,
+          "dateOfExpiry": 0.9971114,
+          "dateOfIssue": 0.95
+        },
+        "missingFields": [],
+        "warnings": ["identity_qr_read", "conflicting_residentialAddress", "low_confidence"],
+        "isFallback": false,
+        "requiresConfirmation": true
+      }
+    ]
+  },
+  "liveBackendSyntheticHttp": {
+    "realHttp": true,
+    "data": "synthetic-only",
+    "outcomes": [
+      {
+        "label": "anonymous_rejected",
+        "passed": true,
+        "status": 401,
+        "milliseconds": 57
+      },
+      {
+        "label": "tenant_rejected",
+        "passed": true,
+        "status": 403,
+        "milliseconds": 91
+      },
+      {
+        "label": "unknown_resident_rejected",
+        "passed": true,
+        "status": 404,
+        "milliseconds": 87
+      },
+      {
+        "label": "invalid_side_rejected",
+        "passed": true,
+        "status": 400,
+        "milliseconds": 18
+      },
+      {
+        "label": "corrupt_image_rejected",
+        "passed": true,
+        "status": 400,
+        "milliseconds": 51
+      },
+      {
+        "label": "synthetic_front_proposal",
+        "passed": true,
+        "status": 200,
+        "milliseconds": 4515,
+        "engineVersion": "ocrdoc-ppocrv6-vi-run6-9b534643-yolo2-cache1-category2-identity-regions7",
+        "expectedFieldCount": 8,
+        "expectedFieldsExact": true,
+        "fields": [
+          "citizenIdentityNumber",
+          "fullName",
+          "dateOfBirth",
+          "gender",
+          "nationality",
+          "placeOfOrigin",
+          "residentialAddress",
+          "dateOfExpiry"
+        ],
+        "warnings": [],
+        "requiresConfirmation": true,
+        "noStore": true
+      },
+      {
+        "label": "synthetic_back_proposal",
+        "passed": true,
+        "status": 200,
+        "milliseconds": 2322,
+        "engineVersion": "ocrdoc-ppocrv6-vi-run6-9b534643-yolo2-cache1-category2-identity-regions7",
+        "expectedFieldCount": 1,
+        "expectedFieldsExact": true,
+        "fields": ["dateOfIssue"],
+        "warnings": [],
+        "requiresConfirmation": true,
+        "noStore": true
+      }
+    ]
+  },
+  "syntheticNineFieldPairs": {
+    "pairCount": 18,
+    "exactNineFields": 14,
+    "conditions": {
+      "straight": {
+        "pairs": 6,
+        "exactNineFields": 5,
+        "correctFields": 53,
+        "fields": 54,
+        "p95SumOfTwoCallsMilliseconds": 8520
+      },
+      "dim": {
+        "pairs": 6,
+        "exactNineFields": 5,
+        "correctFields": 53,
+        "fields": 54,
+        "p95SumOfTwoCallsMilliseconds": 9429
+      },
+      "combined": {
+        "pairs": 6,
+        "exactNineFields": 4,
+        "correctFields": 52,
+        "fields": 54,
+        "p95SumOfTwoCallsMilliseconds": 7842
+      }
+    },
+    "note": "Pairs share six synthetic content sets and three distortions. Per-face OCR p95 and sum of two calls are different metrics. No mobile camera/network time is included."
+  },
+  "synthetic": {
+    "corpus-release": {
+      "dataset": "synthetic",
+      "engineVersions": [
+        "ocrdoc-ppocrv6-vi-run6-9b534643-yolo2-cache1-category2-identity-regions7"
+      ],
+      "sourceCount": 18,
+      "total": 54,
+      "exactMatches": 50,
+      "expectedRejections": 18,
+      "falseProposals": 0,
+      "incorrectExpectedFields": 4,
+      "missingExpectedFields": 0,
+      "fallbacks": 18,
+      "meterProposalMetrics": {
+        "positiveCases": 0,
+        "exactReadings": 0,
+        "emittedReadings": 0,
+        "falseReadings": 0,
+        "exactReadingAccuracyPercent": null,
+        "falseReadingRatePercent": null
+      },
+      "proposalOrFallbackWithin10Seconds": 54,
+      "maxMilliseconds": 7147,
+      "profiles": {
+        "IdentityFront": {
+          "total": 36,
+          "exactMatches": 32,
+          "expectedRejections": 18,
+          "sourceCount": 12,
+          "p95Milliseconds": 6756
+        },
+        "IdentityBack": {
+          "total": 18,
+          "exactMatches": 18,
+          "expectedRejections": 0,
+          "sourceCount": 6,
+          "p95Milliseconds": 4288
+        }
+      },
+      "fieldAccuracy": {
+        "dateOfExpiry": {
+          "correct": 18,
+          "total": 18,
+          "percent": 100
+        },
+        "fullName": {
+          "correct": 14,
+          "total": 18,
+          "percent": 77.78
+        },
+        "placeOfOrigin": {
+          "correct": 18,
+          "total": 18,
+          "percent": 100
+        },
+        "residentialAddress": {
+          "correct": 18,
+          "total": 18,
+          "percent": 100
+        },
+        "dateOfBirth": {
+          "correct": 18,
+          "total": 18,
+          "percent": 100
+        },
+        "nationality": {
+          "correct": 18,
+          "total": 18,
+          "percent": 100
+        },
+        "citizenIdentityNumber": {
+          "correct": 18,
+          "total": 18,
+          "percent": 100
+        },
+        "gender": {
+          "correct": 18,
+          "total": 18,
+          "percent": 100
+        },
+        "dateOfIssue": {
+          "correct": 18,
+          "total": 18,
+          "percent": 100
+        }
+      },
+      "p50Milliseconds": 2877,
+      "p95Milliseconds": 4497,
+      "results": [
+        {
+          "index": 0,
+          "profile": "IdentityFront",
+          "passed": true,
+          "fields": {
+            "dateOfExpiry": true,
+            "fullName": true,
+            "placeOfOrigin": true,
+            "residentialAddress": true,
+            "dateOfBirth": true,
+            "nationality": true,
+            "citizenIdentityNumber": true,
+            "gender": true
+          },
+          "elapsedMilliseconds": 3322,
+          "isFallback": false,
+          "warnings": ["identity_small_card"],
+          "expectedRejection": false
+        },
+        {
+          "index": 1,
+          "profile": "IdentityFront",
+          "passed": true,
+          "fields": {
+            "dateOfExpiry": true,
+            "fullName": true,
+            "placeOfOrigin": true,
+            "residentialAddress": true,
+            "dateOfBirth": true,
+            "nationality": true,
+            "citizenIdentityNumber": true,
+            "gender": true
+          },
+          "elapsedMilliseconds": 2877,
+          "isFallback": false,
+          "warnings": [],
+          "expectedRejection": false
+        },
+        {
+          "index": 2,
+          "profile": "IdentityFront",
+          "passed": true,
+          "fields": {
+            "dateOfExpiry": true,
+            "fullName": true,
+            "placeOfOrigin": true,
+            "residentialAddress": true,
+            "dateOfBirth": true,
+            "nationality": true,
+            "citizenIdentityNumber": true,
+            "gender": true
+          },
+          "elapsedMilliseconds": 3473,
+          "isFallback": false,
+          "warnings": ["identity_small_card", "blur_or_low_detail", "identity_region_retry"],
+          "expectedRejection": false
+        },
+        {
+          "index": 3,
+          "profile": "IdentityBack",
+          "passed": true,
+          "fields": {
+            "dateOfIssue": true
+          },
+          "elapsedMilliseconds": 1419,
+          "isFallback": false,
+          "warnings": ["identity_small_card"],
+          "expectedRejection": false
+        },
+        {
+          "index": 4,
+          "profile": "IdentityBack",
+          "passed": true,
+          "fields": {
+            "dateOfIssue": true
+          },
+          "elapsedMilliseconds": 1543,
+          "isFallback": false,
+          "warnings": [],
+          "expectedRejection": false
+        },
+        {
+          "index": 5,
+          "profile": "IdentityBack",
+          "passed": true,
+          "fields": {
+            "dateOfIssue": true
+          },
+          "elapsedMilliseconds": 1494,
+          "isFallback": false,
+          "warnings": ["identity_small_card"],
+          "expectedRejection": false
+        },
+        {
+          "index": 6,
+          "profile": "IdentityFront",
+          "passed": true,
+          "fields": {},
+          "elapsedMilliseconds": 2789,
+          "isFallback": true,
+          "warnings": [
+            "identity_small_card",
+            "identity_region_retry",
+            "unsupported_or_unreadable_layout"
+          ],
+          "expectedRejection": true
+        },
+        {
+          "index": 7,
+          "profile": "IdentityFront",
+          "passed": true,
+          "fields": {},
+          "elapsedMilliseconds": 2846,
+          "isFallback": true,
+          "warnings": ["identity_region_retry", "unsupported_or_unreadable_layout"],
+          "expectedRejection": true
+        },
+        {
+          "index": 8,
+          "profile": "IdentityFront",
+          "passed": true,
+          "fields": {},
+          "elapsedMilliseconds": 2774,
+          "isFallback": true,
+          "warnings": [
+            "identity_small_card",
+            "blur_or_low_detail",
+            "identity_region_retry",
+            "unsupported_or_unreadable_layout"
+          ],
+          "expectedRejection": true
+        },
+        {
+          "index": 9,
+          "profile": "IdentityFront",
+          "passed": true,
+          "fields": {
+            "dateOfExpiry": true,
+            "fullName": true,
+            "placeOfOrigin": true,
+            "residentialAddress": true,
+            "dateOfBirth": true,
+            "nationality": true,
+            "citizenIdentityNumber": true,
+            "gender": true
+          },
+          "elapsedMilliseconds": 3557,
+          "isFallback": false,
+          "warnings": ["identity_small_card", "identity_region_retry"],
+          "expectedRejection": false
+        },
+        {
+          "index": 10,
+          "profile": "IdentityFront",
+          "passed": true,
+          "fields": {
+            "dateOfExpiry": true,
+            "fullName": true,
+            "placeOfOrigin": true,
+            "residentialAddress": true,
+            "dateOfBirth": true,
+            "nationality": true,
+            "citizenIdentityNumber": true,
+            "gender": true
+          },
+          "elapsedMilliseconds": 2980,
+          "isFallback": false,
+          "warnings": [],
+          "expectedRejection": false
+        },
+        {
+          "index": 11,
+          "profile": "IdentityFront",
+          "passed": false,
+          "fields": {
+            "dateOfExpiry": true,
+            "fullName": false,
+            "placeOfOrigin": true,
+            "residentialAddress": true,
+            "dateOfBirth": true,
+            "nationality": true,
+            "citizenIdentityNumber": true,
+            "gender": true
+          },
+          "elapsedMilliseconds": 3315,
+          "isFallback": false,
+          "warnings": [
+            "identity_small_card",
+            "blur_or_low_detail",
+            "identity_region_retry",
+            "conflicting_fullName",
+            "low_confidence"
+          ],
+          "expectedRejection": false
+        },
+        {
+          "index": 12,
+          "profile": "IdentityBack",
+          "passed": true,
+          "fields": {
+            "dateOfIssue": true
+          },
+          "elapsedMilliseconds": 1484,
+          "isFallback": false,
+          "warnings": ["identity_small_card"],
+          "expectedRejection": false
+        },
+        {
+          "index": 13,
+          "profile": "IdentityBack",
+          "passed": true,
+          "fields": {
+            "dateOfIssue": true
+          },
+          "elapsedMilliseconds": 1448,
+          "isFallback": false,
+          "warnings": [],
+          "expectedRejection": false
+        },
+        {
+          "index": 14,
+          "profile": "IdentityBack",
+          "passed": true,
+          "fields": {
+            "dateOfIssue": true
+          },
+          "elapsedMilliseconds": 2262,
+          "isFallback": false,
+          "warnings": ["identity_small_card"],
+          "expectedRejection": false
+        },
+        {
+          "index": 15,
+          "profile": "IdentityFront",
+          "passed": true,
+          "fields": {},
+          "elapsedMilliseconds": 2600,
+          "isFallback": true,
+          "warnings": [
+            "identity_small_card",
+            "identity_region_retry",
+            "unsupported_or_unreadable_layout"
+          ],
+          "expectedRejection": true
+        },
+        {
+          "index": 16,
+          "profile": "IdentityFront",
+          "passed": true,
+          "fields": {},
+          "elapsedMilliseconds": 2847,
+          "isFallback": true,
+          "warnings": ["identity_region_retry", "unsupported_or_unreadable_layout"],
+          "expectedRejection": true
+        },
+        {
+          "index": 17,
+          "profile": "IdentityFront",
+          "passed": true,
+          "fields": {},
+          "elapsedMilliseconds": 2596,
+          "isFallback": true,
+          "warnings": [
+            "identity_small_card",
+            "blur_or_low_detail",
+            "identity_region_retry",
+            "unsupported_or_unreadable_layout"
+          ],
+          "expectedRejection": true
+        },
+        {
+          "index": 18,
+          "profile": "IdentityFront",
+          "passed": false,
+          "fields": {
+            "dateOfExpiry": true,
+            "fullName": false,
+            "placeOfOrigin": true,
+            "residentialAddress": true,
+            "dateOfBirth": true,
+            "nationality": true,
+            "citizenIdentityNumber": true,
+            "gender": true
+          },
+          "elapsedMilliseconds": 3230,
+          "isFallback": false,
+          "warnings": ["identity_small_card", "identity_region_retry"],
+          "expectedRejection": false
+        },
+        {
+          "index": 19,
+          "profile": "IdentityFront",
+          "passed": false,
+          "fields": {
+            "dateOfExpiry": true,
+            "fullName": false,
+            "placeOfOrigin": true,
+            "residentialAddress": true,
+            "dateOfBirth": true,
+            "nationality": true,
+            "citizenIdentityNumber": true,
+            "gender": true
+          },
+          "elapsedMilliseconds": 3561,
+          "isFallback": false,
+          "warnings": ["identity_region_retry"],
+          "expectedRejection": false
+        },
+        {
+          "index": 20,
+          "profile": "IdentityFront",
+          "passed": false,
+          "fields": {
+            "dateOfExpiry": true,
+            "fullName": false,
+            "placeOfOrigin": true,
+            "residentialAddress": true,
+            "dateOfBirth": true,
+            "nationality": true,
+            "citizenIdentityNumber": true,
+            "gender": true
+          },
+          "elapsedMilliseconds": 3646,
+          "isFallback": false,
+          "warnings": ["identity_small_card", "blur_or_low_detail", "identity_region_retry"],
+          "expectedRejection": false
+        },
+        {
+          "index": 21,
+          "profile": "IdentityBack",
+          "passed": true,
+          "fields": {
+            "dateOfIssue": true
+          },
+          "elapsedMilliseconds": 1569,
+          "isFallback": false,
+          "warnings": ["identity_small_card"],
+          "expectedRejection": false
+        },
+        {
+          "index": 22,
+          "profile": "IdentityBack",
+          "passed": true,
+          "fields": {
+            "dateOfIssue": true
+          },
+          "elapsedMilliseconds": 1707,
+          "isFallback": false,
+          "warnings": [],
+          "expectedRejection": false
+        },
+        {
+          "index": 23,
+          "profile": "IdentityBack",
+          "passed": true,
+          "fields": {
+            "dateOfIssue": true
+          },
+          "elapsedMilliseconds": 1455,
+          "isFallback": false,
+          "warnings": ["identity_small_card"],
+          "expectedRejection": false
+        },
+        {
+          "index": 24,
+          "profile": "IdentityFront",
+          "passed": true,
+          "fields": {},
+          "elapsedMilliseconds": 2540,
+          "isFallback": true,
+          "warnings": [
+            "identity_small_card",
+            "identity_region_retry",
+            "unsupported_or_unreadable_layout"
+          ],
+          "expectedRejection": true
+        },
+        {
+          "index": 25,
+          "profile": "IdentityFront",
+          "passed": true,
+          "fields": {},
+          "elapsedMilliseconds": 2793,
+          "isFallback": true,
+          "warnings": ["identity_region_retry", "unsupported_or_unreadable_layout"],
+          "expectedRejection": true
+        },
+        {
+          "index": 26,
+          "profile": "IdentityFront",
+          "passed": true,
+          "fields": {},
+          "elapsedMilliseconds": 2544,
+          "isFallback": true,
+          "warnings": [
+            "identity_small_card",
+            "blur_or_low_detail",
+            "identity_region_retry",
+            "unsupported_or_unreadable_layout"
+          ],
+          "expectedRejection": true
+        },
+        {
+          "index": 27,
+          "profile": "IdentityFront",
+          "passed": true,
+          "fields": {
+            "dateOfExpiry": true,
+            "fullName": true,
+            "placeOfOrigin": true,
+            "residentialAddress": true,
+            "dateOfBirth": true,
+            "nationality": true,
+            "citizenIdentityNumber": true,
+            "gender": true
+          },
+          "elapsedMilliseconds": 2741,
+          "isFallback": false,
+          "warnings": ["identity_small_card"],
+          "expectedRejection": false
+        },
+        {
+          "index": 28,
+          "profile": "IdentityFront",
+          "passed": true,
+          "fields": {
+            "dateOfExpiry": true,
+            "fullName": true,
+            "placeOfOrigin": true,
+            "residentialAddress": true,
+            "dateOfBirth": true,
+            "nationality": true,
+            "citizenIdentityNumber": true,
+            "gender": true
+          },
+          "elapsedMilliseconds": 4151,
+          "isFallback": false,
+          "warnings": ["identity_region_retry"],
+          "expectedRejection": false
+        },
+        {
+          "index": 29,
+          "profile": "IdentityFront",
+          "passed": true,
+          "fields": {
+            "dateOfExpiry": true,
+            "fullName": true,
+            "placeOfOrigin": true,
+            "residentialAddress": true,
+            "dateOfBirth": true,
+            "nationality": true,
+            "citizenIdentityNumber": true,
+            "gender": true
+          },
+          "elapsedMilliseconds": 3283,
+          "isFallback": false,
+          "warnings": ["identity_small_card", "blur_or_low_detail"],
+          "expectedRejection": false
+        },
+        {
+          "index": 30,
+          "profile": "IdentityBack",
+          "passed": true,
+          "fields": {
+            "dateOfIssue": true
+          },
+          "elapsedMilliseconds": 1763,
+          "isFallback": false,
+          "warnings": ["identity_small_card"],
+          "expectedRejection": false
+        },
+        {
+          "index": 31,
+          "profile": "IdentityBack",
+          "passed": true,
+          "fields": {
+            "dateOfIssue": true
+          },
+          "elapsedMilliseconds": 1584,
+          "isFallback": false,
+          "warnings": [],
+          "expectedRejection": false
+        },
+        {
+          "index": 32,
+          "profile": "IdentityBack",
+          "passed": true,
+          "fields": {
+            "dateOfIssue": true
+          },
+          "elapsedMilliseconds": 2613,
+          "isFallback": false,
+          "warnings": ["identity_small_card"],
+          "expectedRejection": false
+        },
+        {
+          "index": 33,
+          "profile": "IdentityFront",
+          "passed": true,
+          "fields": {},
+          "elapsedMilliseconds": 2889,
+          "isFallback": true,
+          "warnings": [
+            "identity_small_card",
+            "identity_region_retry",
+            "unsupported_or_unreadable_layout"
+          ],
+          "expectedRejection": true
+        },
+        {
+          "index": 34,
+          "profile": "IdentityFront",
+          "passed": true,
+          "fields": {},
+          "elapsedMilliseconds": 2920,
+          "isFallback": true,
+          "warnings": ["identity_region_retry", "unsupported_or_unreadable_layout"],
+          "expectedRejection": true
+        },
+        {
+          "index": 35,
+          "profile": "IdentityFront",
+          "passed": true,
+          "fields": {},
+          "elapsedMilliseconds": 3656,
+          "isFallback": true,
+          "warnings": [
+            "identity_small_card",
+            "blur_or_low_detail",
+            "identity_region_retry",
+            "unsupported_or_unreadable_layout"
+          ],
+          "expectedRejection": true
+        },
+        {
+          "index": 36,
+          "profile": "IdentityFront",
+          "passed": true,
+          "fields": {
+            "dateOfExpiry": true,
+            "fullName": true,
+            "placeOfOrigin": true,
+            "residentialAddress": true,
+            "dateOfBirth": true,
+            "nationality": true,
+            "citizenIdentityNumber": true,
+            "gender": true
+          },
+          "elapsedMilliseconds": 6756,
+          "isFallback": false,
+          "warnings": ["identity_small_card", "ocr_partial"],
+          "expectedRejection": false
+        },
+        {
+          "index": 37,
+          "profile": "IdentityFront",
+          "passed": true,
+          "fields": {
+            "dateOfExpiry": true,
+            "fullName": true,
+            "placeOfOrigin": true,
+            "residentialAddress": true,
+            "dateOfBirth": true,
+            "nationality": true,
+            "citizenIdentityNumber": true,
+            "gender": true
+          },
+          "elapsedMilliseconds": 7147,
+          "isFallback": false,
+          "warnings": ["identity_region_retry"],
+          "expectedRejection": false
+        },
+        {
+          "index": 38,
+          "profile": "IdentityFront",
+          "passed": true,
+          "fields": {
+            "dateOfExpiry": true,
+            "fullName": true,
+            "placeOfOrigin": true,
+            "residentialAddress": true,
+            "dateOfBirth": true,
+            "nationality": true,
+            "citizenIdentityNumber": true,
+            "gender": true
+          },
+          "elapsedMilliseconds": 3872,
+          "isFallback": false,
+          "warnings": ["identity_small_card", "blur_or_low_detail", "identity_region_retry"],
+          "expectedRejection": false
+        },
+        {
+          "index": 39,
+          "profile": "IdentityBack",
+          "passed": true,
+          "fields": {
+            "dateOfIssue": true
+          },
+          "elapsedMilliseconds": 1764,
+          "isFallback": false,
+          "warnings": ["identity_small_card"],
+          "expectedRejection": false
+        },
+        {
+          "index": 40,
+          "profile": "IdentityBack",
+          "passed": true,
+          "fields": {
+            "dateOfIssue": true
+          },
+          "elapsedMilliseconds": 2282,
+          "isFallback": false,
+          "warnings": [],
+          "expectedRejection": false
+        },
+        {
+          "index": 41,
+          "profile": "IdentityBack",
+          "passed": true,
+          "fields": {
+            "dateOfIssue": true
+          },
+          "elapsedMilliseconds": 1574,
+          "isFallback": false,
+          "warnings": ["identity_small_card"],
+          "expectedRejection": false
+        },
+        {
+          "index": 42,
+          "profile": "IdentityFront",
+          "passed": true,
+          "fields": {},
+          "elapsedMilliseconds": 4497,
+          "isFallback": true,
+          "warnings": [
+            "identity_small_card",
+            "identity_region_retry",
+            "unsupported_or_unreadable_layout"
+          ],
+          "expectedRejection": true
+        },
+        {
+          "index": 43,
+          "profile": "IdentityFront",
+          "passed": true,
+          "fields": {},
+          "elapsedMilliseconds": 4294,
+          "isFallback": true,
+          "warnings": ["identity_region_retry", "unsupported_or_unreadable_layout"],
+          "expectedRejection": true
+        },
+        {
+          "index": 44,
+          "profile": "IdentityFront",
+          "passed": true,
+          "fields": {},
+          "elapsedMilliseconds": 3993,
+          "isFallback": true,
+          "warnings": [
+            "identity_small_card",
+            "blur_or_low_detail",
+            "identity_region_retry",
+            "unsupported_or_unreadable_layout"
+          ],
+          "expectedRejection": true
+        },
+        {
+          "index": 45,
+          "profile": "IdentityFront",
+          "passed": true,
+          "fields": {
+            "dateOfExpiry": true,
+            "fullName": true,
+            "placeOfOrigin": true,
+            "residentialAddress": true,
+            "dateOfBirth": true,
+            "nationality": true,
+            "citizenIdentityNumber": true,
+            "gender": true
+          },
+          "elapsedMilliseconds": 3839,
+          "isFallback": false,
+          "warnings": ["identity_small_card"],
+          "expectedRejection": false
+        },
+        {
+          "index": 46,
+          "profile": "IdentityFront",
+          "passed": true,
+          "fields": {
+            "dateOfExpiry": true,
+            "fullName": true,
+            "placeOfOrigin": true,
+            "residentialAddress": true,
+            "dateOfBirth": true,
+            "nationality": true,
+            "citizenIdentityNumber": true,
+            "gender": true
+          },
+          "elapsedMilliseconds": 3945,
+          "isFallback": false,
+          "warnings": ["identity_region_retry"],
+          "expectedRejection": false
+        },
+        {
+          "index": 47,
+          "profile": "IdentityFront",
+          "passed": true,
+          "fields": {
+            "dateOfExpiry": true,
+            "fullName": true,
+            "placeOfOrigin": true,
+            "residentialAddress": true,
+            "dateOfBirth": true,
+            "nationality": true,
+            "citizenIdentityNumber": true,
+            "gender": true
+          },
+          "elapsedMilliseconds": 3554,
+          "isFallback": false,
+          "warnings": ["identity_small_card", "blur_or_low_detail"],
+          "expectedRejection": false
+        },
+        {
+          "index": 48,
+          "profile": "IdentityBack",
+          "passed": true,
+          "fields": {
+            "dateOfIssue": true
+          },
+          "elapsedMilliseconds": 2221,
+          "isFallback": false,
+          "warnings": ["identity_small_card"],
+          "expectedRejection": false
+        },
+        {
+          "index": 49,
+          "profile": "IdentityBack",
+          "passed": true,
+          "fields": {
+            "dateOfIssue": true
+          },
+          "elapsedMilliseconds": 3351,
+          "isFallback": false,
+          "warnings": [],
+          "expectedRejection": false
+        },
+        {
+          "index": 50,
+          "profile": "IdentityBack",
+          "passed": true,
+          "fields": {
+            "dateOfIssue": true
+          },
+          "elapsedMilliseconds": 4288,
+          "isFallback": false,
+          "warnings": ["identity_small_card", "mrz_unreadable"],
+          "expectedRejection": false
+        },
+        {
+          "index": 51,
+          "profile": "IdentityFront",
+          "passed": true,
+          "fields": {},
+          "elapsedMilliseconds": 3613,
+          "isFallback": true,
+          "warnings": [
+            "identity_small_card",
+            "identity_region_retry",
+            "unsupported_or_unreadable_layout"
+          ],
+          "expectedRejection": true
+        },
+        {
+          "index": 52,
+          "profile": "IdentityFront",
+          "passed": true,
+          "fields": {},
+          "elapsedMilliseconds": 4303,
+          "isFallback": true,
+          "warnings": ["identity_region_retry", "unsupported_or_unreadable_layout"],
+          "expectedRejection": true
+        },
+        {
+          "index": 53,
+          "profile": "IdentityFront",
+          "passed": true,
+          "fields": {},
+          "elapsedMilliseconds": 3320,
+          "isFallback": true,
+          "warnings": [
+            "identity_small_card",
+            "blur_or_low_detail",
+            "identity_region_retry",
+            "unsupported_or_unreadable_layout"
+          ],
+          "expectedRejection": true
+        }
+      ]
+    },
+    "chip-camera-release": {
+      "dataset": "synthetic",
+      "engineVersions": [
+        "ocrdoc-ppocrv6-vi-run6-9b534643-yolo2-cache1-category2-identity-regions7"
+      ],
+      "sourceCount": 3,
+      "total": 21,
+      "exactMatches": 21,
+      "expectedRejections": 7,
+      "falseProposals": 0,
+      "incorrectExpectedFields": 0,
+      "missingExpectedFields": 0,
+      "fallbacks": 7,
+      "meterProposalMetrics": {
+        "positiveCases": 0,
+        "exactReadings": 0,
+        "emittedReadings": 0,
+        "falseReadings": 0,
+        "exactReadingAccuracyPercent": null,
+        "falseReadingRatePercent": null
+      },
+      "proposalOrFallbackWithin10Seconds": 21,
+      "maxMilliseconds": 3939,
+      "profiles": {
+        "IdentityFront": {
+          "total": 14,
+          "exactMatches": 14,
+          "expectedRejections": 7,
+          "sourceCount": 2,
+          "p95Milliseconds": 3939
+        },
+        "IdentityBack": {
+          "total": 7,
+          "exactMatches": 7,
+          "expectedRejections": 0,
+          "sourceCount": 1,
+          "p95Milliseconds": 1598
+        }
+      },
+      "fieldAccuracy": {
+        "citizenIdentityNumber": {
+          "correct": 7,
+          "total": 7,
+          "percent": 100
+        },
+        "fullName": {
+          "correct": 7,
+          "total": 7,
+          "percent": 100
+        },
+        "dateOfBirth": {
+          "correct": 7,
+          "total": 7,
+          "percent": 100
+        },
+        "gender": {
+          "correct": 7,
+          "total": 7,
+          "percent": 100
+        },
+        "nationality": {
+          "correct": 7,
+          "total": 7,
+          "percent": 100
+        },
+        "placeOfOrigin": {
+          "correct": 7,
+          "total": 7,
+          "percent": 100
+        },
+        "residentialAddress": {
+          "correct": 7,
+          "total": 7,
+          "percent": 100
+        },
+        "dateOfExpiry": {
+          "correct": 7,
+          "total": 7,
+          "percent": 100
+        },
+        "dateOfIssue": {
+          "correct": 7,
+          "total": 7,
+          "percent": 100
+        }
+      },
+      "p50Milliseconds": 2634,
+      "p95Milliseconds": 3753,
+      "results": [
+        {
+          "index": 0,
+          "profile": "IdentityFront",
+          "passed": true,
+          "fields": {
+            "citizenIdentityNumber": true,
+            "fullName": true,
+            "dateOfBirth": true,
+            "gender": true,
+            "nationality": true,
+            "placeOfOrigin": true,
+            "residentialAddress": true,
+            "dateOfExpiry": true
+          },
+          "elapsedMilliseconds": 3753,
+          "isFallback": false,
+          "warnings": ["identity_small_card"],
+          "expectedRejection": false
+        },
+        {
+          "index": 1,
+          "profile": "IdentityFront",
+          "passed": true,
+          "fields": {
+            "citizenIdentityNumber": true,
+            "fullName": true,
+            "dateOfBirth": true,
+            "gender": true,
+            "nationality": true,
+            "placeOfOrigin": true,
+            "residentialAddress": true,
+            "dateOfExpiry": true
+          },
+          "elapsedMilliseconds": 3251,
+          "isFallback": false,
+          "warnings": ["identity_small_card", "identity_region_retry"],
+          "expectedRejection": false
+        },
+        {
+          "index": 2,
+          "profile": "IdentityFront",
+          "passed": true,
+          "fields": {
+            "citizenIdentityNumber": true,
+            "fullName": true,
+            "dateOfBirth": true,
+            "gender": true,
+            "nationality": true,
+            "placeOfOrigin": true,
+            "residentialAddress": true,
+            "dateOfExpiry": true
+          },
+          "elapsedMilliseconds": 3002,
+          "isFallback": false,
+          "warnings": ["identity_small_card"],
+          "expectedRejection": false
+        },
+        {
+          "index": 3,
+          "profile": "IdentityFront",
+          "passed": true,
+          "fields": {
+            "citizenIdentityNumber": true,
+            "fullName": true,
+            "dateOfBirth": true,
+            "gender": true,
+            "nationality": true,
+            "placeOfOrigin": true,
+            "residentialAddress": true,
+            "dateOfExpiry": true
+          },
+          "elapsedMilliseconds": 2841,
+          "isFallback": false,
+          "warnings": ["identity_small_card"],
+          "expectedRejection": false
+        },
+        {
+          "index": 4,
+          "profile": "IdentityFront",
+          "passed": true,
+          "fields": {
+            "citizenIdentityNumber": true,
+            "fullName": true,
+            "dateOfBirth": true,
+            "gender": true,
+            "nationality": true,
+            "placeOfOrigin": true,
+            "residentialAddress": true,
+            "dateOfExpiry": true
+          },
+          "elapsedMilliseconds": 3232,
+          "isFallback": false,
+          "warnings": [],
+          "expectedRejection": false
+        },
+        {
+          "index": 5,
+          "profile": "IdentityFront",
+          "passed": true,
+          "fields": {
+            "citizenIdentityNumber": true,
+            "fullName": true,
+            "dateOfBirth": true,
+            "gender": true,
+            "nationality": true,
+            "placeOfOrigin": true,
+            "residentialAddress": true,
+            "dateOfExpiry": true
+          },
+          "elapsedMilliseconds": 3537,
+          "isFallback": false,
+          "warnings": ["identity_small_card"],
+          "expectedRejection": false
+        },
+        {
+          "index": 6,
+          "profile": "IdentityFront",
+          "passed": true,
+          "fields": {
+            "citizenIdentityNumber": true,
+            "fullName": true,
+            "dateOfBirth": true,
+            "gender": true,
+            "nationality": true,
+            "placeOfOrigin": true,
+            "residentialAddress": true,
+            "dateOfExpiry": true
+          },
+          "elapsedMilliseconds": 3939,
+          "isFallback": false,
+          "warnings": ["identity_small_card", "blur_or_low_detail", "identity_region_retry"],
+          "expectedRejection": false
+        },
+        {
+          "index": 7,
+          "profile": "IdentityBack",
+          "passed": true,
+          "fields": {
+            "dateOfIssue": true
+          },
+          "elapsedMilliseconds": 1547,
+          "isFallback": false,
+          "warnings": ["identity_small_card"],
+          "expectedRejection": false
+        },
+        {
+          "index": 8,
+          "profile": "IdentityBack",
+          "passed": true,
+          "fields": {
+            "dateOfIssue": true
+          },
+          "elapsedMilliseconds": 1297,
+          "isFallback": false,
+          "warnings": ["identity_small_card"],
+          "expectedRejection": false
+        },
+        {
+          "index": 9,
+          "profile": "IdentityBack",
+          "passed": true,
+          "fields": {
+            "dateOfIssue": true
+          },
+          "elapsedMilliseconds": 1284,
+          "isFallback": false,
+          "warnings": ["identity_small_card"],
+          "expectedRejection": false
+        },
+        {
+          "index": 10,
+          "profile": "IdentityBack",
+          "passed": true,
+          "fields": {
+            "dateOfIssue": true
+          },
+          "elapsedMilliseconds": 1498,
+          "isFallback": false,
+          "warnings": ["identity_small_card"],
+          "expectedRejection": false
+        },
+        {
+          "index": 11,
+          "profile": "IdentityBack",
+          "passed": true,
+          "fields": {
+            "dateOfIssue": true
+          },
+          "elapsedMilliseconds": 1598,
+          "isFallback": false,
+          "warnings": [],
+          "expectedRejection": false
+        },
+        {
+          "index": 12,
+          "profile": "IdentityBack",
+          "passed": true,
+          "fields": {
+            "dateOfIssue": true
+          },
+          "elapsedMilliseconds": 1291,
+          "isFallback": false,
+          "warnings": ["identity_small_card"],
+          "expectedRejection": false
+        },
+        {
+          "index": 13,
+          "profile": "IdentityBack",
+          "passed": true,
+          "fields": {
+            "dateOfIssue": true
+          },
+          "elapsedMilliseconds": 1370,
+          "isFallback": false,
+          "warnings": ["identity_small_card"],
+          "expectedRejection": false
+        },
+        {
+          "index": 14,
+          "profile": "IdentityFront",
+          "passed": true,
+          "fields": {},
+          "elapsedMilliseconds": 2515,
+          "isFallback": true,
+          "warnings": [
+            "identity_small_card",
+            "identity_region_retry",
+            "unsupported_or_unreadable_layout"
+          ],
+          "expectedRejection": true
+        },
+        {
+          "index": 15,
+          "profile": "IdentityFront",
+          "passed": true,
+          "fields": {},
+          "elapsedMilliseconds": 2623,
+          "isFallback": true,
+          "warnings": [
+            "identity_small_card",
+            "identity_region_retry",
+            "unsupported_or_unreadable_layout"
+          ],
+          "expectedRejection": true
+        },
+        {
+          "index": 16,
+          "profile": "IdentityFront",
+          "passed": true,
+          "fields": {},
+          "elapsedMilliseconds": 2552,
+          "isFallback": true,
+          "warnings": [
+            "identity_small_card",
+            "identity_region_retry",
+            "unsupported_or_unreadable_layout"
+          ],
+          "expectedRejection": true
+        },
+        {
+          "index": 17,
+          "profile": "IdentityFront",
+          "passed": true,
+          "fields": {},
+          "elapsedMilliseconds": 2634,
+          "isFallback": true,
+          "warnings": [
+            "identity_small_card",
+            "identity_region_retry",
+            "unsupported_or_unreadable_layout"
+          ],
+          "expectedRejection": true
+        },
+        {
+          "index": 18,
+          "profile": "IdentityFront",
+          "passed": true,
+          "fields": {},
+          "elapsedMilliseconds": 2687,
+          "isFallback": true,
+          "warnings": ["identity_region_retry", "unsupported_or_unreadable_layout"],
+          "expectedRejection": true
+        },
+        {
+          "index": 19,
+          "profile": "IdentityFront",
+          "passed": true,
+          "fields": {},
+          "elapsedMilliseconds": 2695,
+          "isFallback": true,
+          "warnings": [
+            "identity_small_card",
+            "identity_region_retry",
+            "unsupported_or_unreadable_layout"
+          ],
+          "expectedRejection": true
+        },
+        {
+          "index": 20,
+          "profile": "IdentityFront",
+          "passed": true,
+          "fields": {},
+          "elapsedMilliseconds": 2654,
+          "isFallback": true,
+          "warnings": [
+            "identity_small_card",
+            "blur_or_low_detail",
+            "identity_region_retry",
+            "unsupported_or_unreadable_layout"
+          ],
+          "expectedRejection": true
+        }
+      ]
+    },
+    "challenges-release": {
+      "dataset": "synthetic",
+      "engineVersions": [
+        "ocrdoc-ppocrv6-vi-run6-9b534643-yolo2-cache1-category2-identity-regions7"
+      ],
+      "sourceCount": 3,
+      "total": 31,
+      "exactMatches": 29,
+      "expectedRejections": 1,
+      "falseProposals": 0,
+      "incorrectExpectedFields": 2,
+      "missingExpectedFields": 0,
+      "fallbacks": 1,
+      "meterProposalMetrics": {
+        "positiveCases": 0,
+        "exactReadings": 0,
+        "emittedReadings": 0,
+        "falseReadings": 0,
+        "exactReadingAccuracyPercent": null,
+        "falseReadingRatePercent": null
+      },
+      "proposalOrFallbackWithin10Seconds": 31,
+      "maxMilliseconds": 4750,
+      "profiles": {
+        "IdentityFront": {
+          "total": 16,
+          "exactMatches": 14,
+          "expectedRejections": 1,
+          "sourceCount": 2,
+          "p95Milliseconds": 4750
+        },
+        "IdentityBack": {
+          "total": 15,
+          "exactMatches": 15,
+          "expectedRejections": 0,
+          "sourceCount": 1,
+          "p95Milliseconds": 3108
+        }
+      },
+      "fieldAccuracy": {
+        "citizenIdentityNumber": {
+          "correct": 15,
+          "total": 15,
+          "percent": 100
+        },
+        "fullName": {
+          "correct": 13,
+          "total": 15,
+          "percent": 86.67
+        },
+        "dateOfBirth": {
+          "correct": 15,
+          "total": 15,
+          "percent": 100
+        },
+        "dateOfIssue": {
+          "correct": 15,
+          "total": 15,
+          "percent": 100
+        }
+      },
+      "p50Milliseconds": 3057,
+      "p95Milliseconds": 4447,
+      "results": [
+        {
+          "index": 0,
+          "profile": "IdentityFront",
+          "passed": true,
+          "fields": {
+            "citizenIdentityNumber": true,
+            "fullName": true,
+            "dateOfBirth": true
+          },
+          "elapsedMilliseconds": 4750,
+          "isFallback": false,
+          "warnings": ["identity_region_retry"],
+          "expectedRejection": false
+        },
+        {
+          "index": 1,
+          "profile": "IdentityFront",
+          "passed": true,
+          "fields": {
+            "citizenIdentityNumber": true,
+            "fullName": true,
+            "dateOfBirth": true
+          },
+          "elapsedMilliseconds": 4307,
+          "isFallback": false,
+          "warnings": ["identity_region_retry"],
+          "expectedRejection": false
+        },
+        {
+          "index": 2,
+          "profile": "IdentityFront",
+          "passed": true,
+          "fields": {
+            "citizenIdentityNumber": true,
+            "fullName": true,
+            "dateOfBirth": true
+          },
+          "elapsedMilliseconds": 3165,
+          "isFallback": false,
+          "warnings": ["identity_region_retry"],
+          "expectedRejection": false
+        },
+        {
+          "index": 3,
+          "profile": "IdentityFront",
+          "passed": true,
+          "fields": {
+            "citizenIdentityNumber": true,
+            "fullName": true,
+            "dateOfBirth": true
+          },
+          "elapsedMilliseconds": 3792,
+          "isFallback": false,
+          "warnings": ["identity_region_retry"],
+          "expectedRejection": false
+        },
+        {
+          "index": 4,
+          "profile": "IdentityFront",
+          "passed": true,
+          "fields": {
+            "citizenIdentityNumber": true,
+            "fullName": true,
+            "dateOfBirth": true
+          },
+          "elapsedMilliseconds": 3554,
+          "isFallback": false,
+          "warnings": ["identity_region_retry"],
+          "expectedRejection": false
+        },
+        {
+          "index": 5,
+          "profile": "IdentityFront",
+          "passed": true,
+          "fields": {
+            "citizenIdentityNumber": true,
+            "fullName": true,
+            "dateOfBirth": true
+          },
+          "elapsedMilliseconds": 4246,
+          "isFallback": false,
+          "warnings": ["identity_region_retry", "orientation_corrected"],
+          "expectedRejection": false
+        },
+        {
+          "index": 6,
+          "profile": "IdentityFront",
+          "passed": true,
+          "fields": {
+            "citizenIdentityNumber": true,
+            "fullName": true,
+            "dateOfBirth": true
+          },
+          "elapsedMilliseconds": 4447,
+          "isFallback": false,
+          "warnings": ["identity_region_retry", "orientation_corrected"],
+          "expectedRejection": false
+        },
+        {
+          "index": 7,
+          "profile": "IdentityFront",
+          "passed": true,
+          "fields": {
+            "citizenIdentityNumber": true,
+            "fullName": true,
+            "dateOfBirth": true
+          },
+          "elapsedMilliseconds": 4269,
+          "isFallback": false,
+          "warnings": ["identity_region_retry"],
+          "expectedRejection": false
+        },
+        {
+          "index": 8,
+          "profile": "IdentityFront",
+          "passed": true,
+          "fields": {
+            "citizenIdentityNumber": true,
+            "fullName": true,
+            "dateOfBirth": true
+          },
+          "elapsedMilliseconds": 3318,
+          "isFallback": false,
+          "warnings": ["blur_or_low_detail", "identity_region_retry"],
+          "expectedRejection": false
+        },
+        {
+          "index": 9,
+          "profile": "IdentityFront",
+          "passed": false,
+          "fields": {
+            "citizenIdentityNumber": true,
+            "fullName": false,
+            "dateOfBirth": true
+          },
+          "elapsedMilliseconds": 3860,
+          "isFallback": false,
+          "warnings": ["blur_or_low_detail", "identity_region_retry"],
+          "expectedRejection": false
+        },
+        {
+          "index": 10,
+          "profile": "IdentityFront",
+          "passed": true,
+          "fields": {
+            "citizenIdentityNumber": true,
+            "fullName": true,
+            "dateOfBirth": true
+          },
+          "elapsedMilliseconds": 3653,
+          "isFallback": false,
+          "warnings": ["identity_region_retry"],
+          "expectedRejection": false
+        },
+        {
+          "index": 11,
+          "profile": "IdentityFront",
+          "passed": true,
+          "fields": {
+            "citizenIdentityNumber": true,
+            "fullName": true,
+            "dateOfBirth": true
+          },
+          "elapsedMilliseconds": 3559,
+          "isFallback": false,
+          "warnings": ["identity_region_retry"],
+          "expectedRejection": false
+        },
+        {
+          "index": 12,
+          "profile": "IdentityFront",
+          "passed": false,
+          "fields": {
+            "citizenIdentityNumber": true,
+            "fullName": false,
+            "dateOfBirth": true
+          },
+          "elapsedMilliseconds": 3859,
+          "isFallback": false,
+          "warnings": ["identity_region_retry"],
+          "expectedRejection": false
+        },
+        {
+          "index": 13,
+          "profile": "IdentityFront",
+          "passed": true,
+          "fields": {
+            "citizenIdentityNumber": true,
+            "fullName": true,
+            "dateOfBirth": true
+          },
+          "elapsedMilliseconds": 3044,
+          "isFallback": false,
+          "warnings": ["identity_region_retry"],
+          "expectedRejection": false
+        },
+        {
+          "index": 14,
+          "profile": "IdentityFront",
+          "passed": true,
+          "fields": {
+            "citizenIdentityNumber": true,
+            "fullName": true,
+            "dateOfBirth": true
+          },
+          "elapsedMilliseconds": 3647,
+          "isFallback": false,
+          "warnings": ["identity_region_retry"],
+          "expectedRejection": false
+        },
+        {
+          "index": 15,
+          "profile": "IdentityBack",
+          "passed": true,
+          "fields": {
+            "dateOfIssue": true
+          },
+          "elapsedMilliseconds": 2132,
+          "isFallback": false,
+          "warnings": [],
+          "expectedRejection": false
+        },
+        {
+          "index": 16,
+          "profile": "IdentityBack",
+          "passed": true,
+          "fields": {
+            "dateOfIssue": true
+          },
+          "elapsedMilliseconds": 2139,
+          "isFallback": false,
+          "warnings": [],
+          "expectedRejection": false
+        },
+        {
+          "index": 17,
+          "profile": "IdentityBack",
+          "passed": true,
+          "fields": {
+            "dateOfIssue": true
+          },
+          "elapsedMilliseconds": 2038,
+          "isFallback": false,
+          "warnings": [],
+          "expectedRejection": false
+        },
+        {
+          "index": 18,
+          "profile": "IdentityBack",
+          "passed": true,
+          "fields": {
+            "dateOfIssue": true
+          },
+          "elapsedMilliseconds": 2179,
+          "isFallback": false,
+          "warnings": [],
+          "expectedRejection": false
+        },
+        {
+          "index": 19,
+          "profile": "IdentityBack",
+          "passed": true,
+          "fields": {
+            "dateOfIssue": true
+          },
+          "elapsedMilliseconds": 2221,
+          "isFallback": false,
+          "warnings": [],
+          "expectedRejection": false
+        },
+        {
+          "index": 20,
+          "profile": "IdentityBack",
+          "passed": true,
+          "fields": {
+            "dateOfIssue": true
+          },
+          "elapsedMilliseconds": 3057,
+          "isFallback": false,
+          "warnings": ["orientation_corrected"],
+          "expectedRejection": false
+        },
+        {
+          "index": 21,
+          "profile": "IdentityBack",
+          "passed": true,
+          "fields": {
+            "dateOfIssue": true
+          },
+          "elapsedMilliseconds": 3108,
+          "isFallback": false,
+          "warnings": ["orientation_corrected"],
+          "expectedRejection": false
+        },
+        {
+          "index": 22,
+          "profile": "IdentityBack",
+          "passed": true,
+          "fields": {
+            "dateOfIssue": true
+          },
+          "elapsedMilliseconds": 1941,
+          "isFallback": false,
+          "warnings": [],
+          "expectedRejection": false
+        },
+        {
+          "index": 23,
+          "profile": "IdentityBack",
+          "passed": true,
+          "fields": {
+            "dateOfIssue": true
+          },
+          "elapsedMilliseconds": 2351,
+          "isFallback": false,
+          "warnings": [],
+          "expectedRejection": false
+        },
+        {
+          "index": 24,
+          "profile": "IdentityBack",
+          "passed": true,
+          "fields": {
+            "dateOfIssue": true
+          },
+          "elapsedMilliseconds": 2310,
+          "isFallback": false,
+          "warnings": ["blur_or_low_detail"],
+          "expectedRejection": false
+        },
+        {
+          "index": 25,
+          "profile": "IdentityBack",
+          "passed": true,
+          "fields": {
+            "dateOfIssue": true
+          },
+          "elapsedMilliseconds": 1866,
+          "isFallback": false,
+          "warnings": [],
+          "expectedRejection": false
+        },
+        {
+          "index": 26,
+          "profile": "IdentityBack",
+          "passed": true,
+          "fields": {
+            "dateOfIssue": true
+          },
+          "elapsedMilliseconds": 2032,
+          "isFallback": false,
+          "warnings": [],
+          "expectedRejection": false
+        },
+        {
+          "index": 27,
+          "profile": "IdentityBack",
+          "passed": true,
+          "fields": {
+            "dateOfIssue": true
+          },
+          "elapsedMilliseconds": 2234,
+          "isFallback": false,
+          "warnings": [],
+          "expectedRejection": false
+        },
+        {
+          "index": 28,
+          "profile": "IdentityBack",
+          "passed": true,
+          "fields": {
+            "dateOfIssue": true
+          },
+          "elapsedMilliseconds": 2446,
+          "isFallback": false,
+          "warnings": [],
+          "expectedRejection": false
+        },
+        {
+          "index": 29,
+          "profile": "IdentityBack",
+          "passed": true,
+          "fields": {
+            "dateOfIssue": true
+          },
+          "elapsedMilliseconds": 2406,
+          "isFallback": false,
+          "warnings": [],
+          "expectedRejection": false
+        },
+        {
+          "index": 30,
+          "profile": "IdentityFront",
+          "passed": true,
+          "fields": {},
+          "elapsedMilliseconds": 2456,
+          "isFallback": true,
+          "warnings": ["identity_region_retry", "unsupported_or_unreadable_layout"],
+          "expectedRejection": true
+        }
+      ]
+    },
+    "desk-release": {
+      "dataset": "synthetic",
+      "engineVersions": [
+        "ocrdoc-ppocrv6-vi-run6-9b534643-yolo2-cache1-category2-identity-regions7"
+      ],
+      "sourceCount": 3,
+      "total": 17,
+      "exactMatches": 13,
+      "expectedRejections": 1,
+      "falseProposals": 0,
+      "incorrectExpectedFields": 4,
+      "missingExpectedFields": 0,
+      "fallbacks": 1,
+      "meterProposalMetrics": {
+        "positiveCases": 0,
+        "exactReadings": 0,
+        "emittedReadings": 0,
+        "falseReadings": 0,
+        "exactReadingAccuracyPercent": null,
+        "falseReadingRatePercent": null
+      },
+      "proposalOrFallbackWithin10Seconds": 17,
+      "maxMilliseconds": 4263,
+      "profiles": {
+        "IdentityFront": {
+          "total": 9,
+          "exactMatches": 5,
+          "expectedRejections": 1,
+          "sourceCount": 2,
+          "p95Milliseconds": 4263
+        },
+        "IdentityBack": {
+          "total": 8,
+          "exactMatches": 8,
+          "expectedRejections": 0,
+          "sourceCount": 1,
+          "p95Milliseconds": 2307
+        }
+      },
+      "fieldAccuracy": {
+        "citizenIdentityNumber": {
+          "correct": 8,
+          "total": 8,
+          "percent": 100
+        },
+        "fullName": {
+          "correct": 4,
+          "total": 8,
+          "percent": 50
+        },
+        "dateOfBirth": {
+          "correct": 8,
+          "total": 8,
+          "percent": 100
+        },
+        "dateOfIssue": {
+          "correct": 8,
+          "total": 8,
+          "percent": 100
+        }
+      },
+      "p50Milliseconds": 2307,
+      "p95Milliseconds": 4263,
+      "results": [
+        {
+          "index": 0,
+          "profile": "IdentityFront",
+          "passed": false,
+          "fields": {
+            "citizenIdentityNumber": true,
+            "fullName": false,
+            "dateOfBirth": true
+          },
+          "elapsedMilliseconds": 4263,
+          "isFallback": false,
+          "warnings": ["identity_small_card", "identity_region_retry"],
+          "expectedRejection": false
+        },
+        {
+          "index": 1,
+          "profile": "IdentityFront",
+          "passed": true,
+          "fields": {
+            "citizenIdentityNumber": true,
+            "fullName": true,
+            "dateOfBirth": true
+          },
+          "elapsedMilliseconds": 3605,
+          "isFallback": false,
+          "warnings": ["identity_small_card", "identity_region_retry"],
+          "expectedRejection": false
+        },
+        {
+          "index": 2,
+          "profile": "IdentityFront",
+          "passed": false,
+          "fields": {
+            "citizenIdentityNumber": true,
+            "fullName": false,
+            "dateOfBirth": true
+          },
+          "elapsedMilliseconds": 2966,
+          "isFallback": false,
+          "warnings": ["identity_small_card", "identity_region_retry"],
+          "expectedRejection": false
+        },
+        {
+          "index": 3,
+          "profile": "IdentityFront",
+          "passed": false,
+          "fields": {
+            "citizenIdentityNumber": true,
+            "fullName": false,
+            "dateOfBirth": true
+          },
+          "elapsedMilliseconds": 3422,
+          "isFallback": false,
+          "warnings": ["identity_small_card", "identity_region_retry"],
+          "expectedRejection": false
+        },
+        {
+          "index": 4,
+          "profile": "IdentityFront",
+          "passed": true,
+          "fields": {
+            "citizenIdentityNumber": true,
+            "fullName": true,
+            "dateOfBirth": true
+          },
+          "elapsedMilliseconds": 3028,
+          "isFallback": false,
+          "warnings": ["identity_region_retry"],
+          "expectedRejection": false
+        },
+        {
+          "index": 5,
+          "profile": "IdentityFront",
+          "passed": true,
+          "fields": {
+            "citizenIdentityNumber": true,
+            "fullName": true,
+            "dateOfBirth": true
+          },
+          "elapsedMilliseconds": 2844,
+          "isFallback": false,
+          "warnings": ["identity_region_retry"],
+          "expectedRejection": false
+        },
+        {
+          "index": 6,
+          "profile": "IdentityFront",
+          "passed": false,
+          "fields": {
+            "citizenIdentityNumber": true,
+            "fullName": false,
+            "dateOfBirth": true
+          },
+          "elapsedMilliseconds": 3281,
+          "isFallback": false,
+          "warnings": ["identity_region_retry"],
+          "expectedRejection": false
+        },
+        {
+          "index": 7,
+          "profile": "IdentityFront",
+          "passed": true,
+          "fields": {
+            "citizenIdentityNumber": true,
+            "fullName": true,
+            "dateOfBirth": true
+          },
+          "elapsedMilliseconds": 3426,
+          "isFallback": false,
+          "warnings": ["identity_region_retry"],
+          "expectedRejection": false
+        },
+        {
+          "index": 8,
+          "profile": "IdentityBack",
+          "passed": true,
+          "fields": {
+            "dateOfIssue": true
+          },
+          "elapsedMilliseconds": 1854,
+          "isFallback": false,
+          "warnings": ["identity_small_card"],
+          "expectedRejection": false
+        },
+        {
+          "index": 9,
+          "profile": "IdentityBack",
+          "passed": true,
+          "fields": {
+            "dateOfIssue": true
+          },
+          "elapsedMilliseconds": 1875,
+          "isFallback": false,
+          "warnings": ["identity_small_card"],
+          "expectedRejection": false
+        },
+        {
+          "index": 10,
+          "profile": "IdentityBack",
+          "passed": true,
+          "fields": {
+            "dateOfIssue": true
+          },
+          "elapsedMilliseconds": 1765,
+          "isFallback": false,
+          "warnings": ["identity_small_card"],
+          "expectedRejection": false
+        },
+        {
+          "index": 11,
+          "profile": "IdentityBack",
+          "passed": true,
+          "fields": {
+            "dateOfIssue": true
+          },
+          "elapsedMilliseconds": 1449,
+          "isFallback": false,
+          "warnings": ["identity_small_card", "mrz_unreadable"],
+          "expectedRejection": false
+        },
+        {
+          "index": 12,
+          "profile": "IdentityBack",
+          "passed": true,
+          "fields": {
+            "dateOfIssue": true
+          },
+          "elapsedMilliseconds": 2307,
+          "isFallback": false,
+          "warnings": [],
+          "expectedRejection": false
+        },
+        {
+          "index": 13,
+          "profile": "IdentityBack",
+          "passed": true,
+          "fields": {
+            "dateOfIssue": true
+          },
+          "elapsedMilliseconds": 2082,
+          "isFallback": false,
+          "warnings": [],
+          "expectedRejection": false
+        },
+        {
+          "index": 14,
+          "profile": "IdentityBack",
+          "passed": true,
+          "fields": {
+            "dateOfIssue": true
+          },
+          "elapsedMilliseconds": 2073,
+          "isFallback": false,
+          "warnings": [],
+          "expectedRejection": false
+        },
+        {
+          "index": 15,
+          "profile": "IdentityBack",
+          "passed": true,
+          "fields": {
+            "dateOfIssue": true
+          },
+          "elapsedMilliseconds": 2070,
+          "isFallback": false,
+          "warnings": [],
+          "expectedRejection": false
+        },
+        {
+          "index": 16,
+          "profile": "IdentityFront",
+          "passed": true,
+          "fields": {},
+          "elapsedMilliseconds": 2161,
+          "isFallback": true,
+          "warnings": [
+            "identity_small_card",
+            "identity_region_retry",
+            "unsupported_or_unreadable_layout"
+          ],
+          "expectedRejection": true
+        }
+      ]
+    },
+    "dense-release": {
+      "dataset": "synthetic",
+      "engineVersions": [
+        "ocrdoc-ppocrv6-vi-run6-9b534643-yolo2-cache1-category2-identity-regions7"
+      ],
+      "sourceCount": 3,
+      "total": 17,
+      "exactMatches": 16,
+      "expectedRejections": 1,
+      "falseProposals": 0,
+      "incorrectExpectedFields": 1,
+      "missingExpectedFields": 0,
+      "fallbacks": 1,
+      "meterProposalMetrics": {
+        "positiveCases": 0,
+        "exactReadings": 0,
+        "emittedReadings": 0,
+        "falseReadings": 0,
+        "exactReadingAccuracyPercent": null,
+        "falseReadingRatePercent": null
+      },
+      "proposalOrFallbackWithin10Seconds": 17,
+      "maxMilliseconds": 4781,
+      "profiles": {
+        "IdentityFront": {
+          "total": 9,
+          "exactMatches": 8,
+          "expectedRejections": 1,
+          "sourceCount": 2,
+          "p95Milliseconds": 4781
+        },
+        "IdentityBack": {
+          "total": 8,
+          "exactMatches": 8,
+          "expectedRejections": 0,
+          "sourceCount": 1,
+          "p95Milliseconds": 2470
+        }
+      },
+      "fieldAccuracy": {
+        "citizenIdentityNumber": {
+          "correct": 8,
+          "total": 8,
+          "percent": 100
+        },
+        "fullName": {
+          "correct": 7,
+          "total": 8,
+          "percent": 87.5
+        },
+        "dateOfBirth": {
+          "correct": 8,
+          "total": 8,
+          "percent": 100
+        },
+        "dateOfIssue": {
+          "correct": 8,
+          "total": 8,
+          "percent": 100
+        }
+      },
+      "p50Milliseconds": 2615,
+      "p95Milliseconds": 4781,
+      "results": [
+        {
+          "index": 0,
+          "profile": "IdentityFront",
+          "passed": true,
+          "fields": {
+            "citizenIdentityNumber": true,
+            "fullName": true,
+            "dateOfBirth": true
+          },
+          "elapsedMilliseconds": 4781,
+          "isFallback": false,
+          "warnings": ["identity_small_card", "identity_region_retry"],
+          "expectedRejection": false
+        },
+        {
+          "index": 1,
+          "profile": "IdentityFront",
+          "passed": true,
+          "fields": {
+            "citizenIdentityNumber": true,
+            "fullName": true,
+            "dateOfBirth": true
+          },
+          "elapsedMilliseconds": 3322,
+          "isFallback": false,
+          "warnings": ["identity_small_card", "identity_region_retry"],
+          "expectedRejection": false
+        },
+        {
+          "index": 2,
+          "profile": "IdentityFront",
+          "passed": false,
+          "fields": {
+            "citizenIdentityNumber": true,
+            "fullName": false,
+            "dateOfBirth": true
+          },
+          "elapsedMilliseconds": 4016,
+          "isFallback": false,
+          "warnings": ["identity_small_card", "identity_region_retry"],
+          "expectedRejection": false
+        },
+        {
+          "index": 3,
+          "profile": "IdentityFront",
+          "passed": true,
+          "fields": {
+            "citizenIdentityNumber": true,
+            "fullName": true,
+            "dateOfBirth": true
+          },
+          "elapsedMilliseconds": 3712,
+          "isFallback": false,
+          "warnings": [
+            "identity_small_card",
+            "identity_region_retry",
+            "conflicting_fullName",
+            "low_confidence"
+          ],
+          "expectedRejection": false
+        },
+        {
+          "index": 4,
+          "profile": "IdentityFront",
+          "passed": true,
+          "fields": {
+            "citizenIdentityNumber": true,
+            "fullName": true,
+            "dateOfBirth": true
+          },
+          "elapsedMilliseconds": 3905,
+          "isFallback": false,
+          "warnings": ["identity_region_retry"],
+          "expectedRejection": false
+        },
+        {
+          "index": 5,
+          "profile": "IdentityFront",
+          "passed": true,
+          "fields": {
+            "citizenIdentityNumber": true,
+            "fullName": true,
+            "dateOfBirth": true
+          },
+          "elapsedMilliseconds": 3420,
+          "isFallback": false,
+          "warnings": ["identity_region_retry"],
+          "expectedRejection": false
+        },
+        {
+          "index": 6,
+          "profile": "IdentityFront",
+          "passed": true,
+          "fields": {
+            "citizenIdentityNumber": true,
+            "fullName": true,
+            "dateOfBirth": true
+          },
+          "elapsedMilliseconds": 4408,
+          "isFallback": false,
+          "warnings": ["identity_region_retry"],
+          "expectedRejection": false
+        },
+        {
+          "index": 7,
+          "profile": "IdentityFront",
+          "passed": true,
+          "fields": {
+            "citizenIdentityNumber": true,
+            "fullName": true,
+            "dateOfBirth": true
+          },
+          "elapsedMilliseconds": 4116,
+          "isFallback": false,
+          "warnings": ["identity_region_retry"],
+          "expectedRejection": false
+        },
+        {
+          "index": 8,
+          "profile": "IdentityBack",
+          "passed": true,
+          "fields": {
+            "dateOfIssue": true
+          },
+          "elapsedMilliseconds": 2070,
+          "isFallback": false,
+          "warnings": ["identity_small_card"],
+          "expectedRejection": false
+        },
+        {
+          "index": 9,
+          "profile": "IdentityBack",
+          "passed": true,
+          "fields": {
+            "dateOfIssue": true
+          },
+          "elapsedMilliseconds": 2054,
+          "isFallback": false,
+          "warnings": ["identity_small_card"],
+          "expectedRejection": false
+        },
+        {
+          "index": 10,
+          "profile": "IdentityBack",
+          "passed": true,
+          "fields": {
+            "dateOfIssue": true
+          },
+          "elapsedMilliseconds": 2023,
+          "isFallback": false,
+          "warnings": ["identity_small_card"],
+          "expectedRejection": false
+        },
+        {
+          "index": 11,
+          "profile": "IdentityBack",
+          "passed": true,
+          "fields": {
+            "dateOfIssue": true
+          },
+          "elapsedMilliseconds": 2279,
+          "isFallback": false,
+          "warnings": ["identity_small_card"],
+          "expectedRejection": false
+        },
+        {
+          "index": 12,
+          "profile": "IdentityBack",
+          "passed": true,
+          "fields": {
+            "dateOfIssue": true
+          },
+          "elapsedMilliseconds": 2311,
+          "isFallback": false,
+          "warnings": [],
+          "expectedRejection": false
+        },
+        {
+          "index": 13,
+          "profile": "IdentityBack",
+          "passed": true,
+          "fields": {
+            "dateOfIssue": true
+          },
+          "elapsedMilliseconds": 2261,
+          "isFallback": false,
+          "warnings": [],
+          "expectedRejection": false
+        },
+        {
+          "index": 14,
+          "profile": "IdentityBack",
+          "passed": true,
+          "fields": {
+            "dateOfIssue": true
+          },
+          "elapsedMilliseconds": 2470,
+          "isFallback": false,
+          "warnings": [],
+          "expectedRejection": false
+        },
+        {
+          "index": 15,
+          "profile": "IdentityBack",
+          "passed": true,
+          "fields": {
+            "dateOfIssue": true
+          },
+          "elapsedMilliseconds": 1879,
+          "isFallback": false,
+          "warnings": [],
+          "expectedRejection": false
+        },
+        {
+          "index": 16,
+          "profile": "IdentityFront",
+          "passed": true,
+          "fields": {},
+          "elapsedMilliseconds": 2615,
+          "isFallback": true,
+          "warnings": [
+            "identity_small_card",
+            "identity_region_retry",
+            "unsupported_or_unreadable_layout"
+          ],
+          "expectedRejection": true
+        }
+      ]
+    }
+  }
+}

@@ -5,7 +5,7 @@ import { CameraView, useCameraPermissions } from 'expo-camera';
 import { File, Paths } from 'expo-file-system';
 import { Button, Text } from 'react-native-paper';
 import { styles } from './Controls';
-import { prepareCapture } from '../lib/prepareCapture';
+import { IdentityCaptureTooLargeError, prepareCapture } from '../lib/prepareCapture';
 import { LiveCaptureCamera } from './LiveCaptureCamera';
 import { DocumentCameraGuide, DocumentCameraView } from './DocumentCameraView';
 import { MeterCameraView } from './MeterCameraView';
@@ -215,7 +215,11 @@ export function CameraCapture({
     let saved = '';
     try {
       // Native image reference avoids saving an original full-resolution identity photo to disk.
-      const picture = await camera.current.takePictureAsync({ pictureRef: true });
+      const picture = await camera.current.takePictureAsync(
+        presentation === 'document' || documentSide
+          ? { pictureRef: true, quality: 1 }
+          : { pictureRef: true },
+      );
       try {
         saved = await prepareCapture(
           picture,
@@ -248,12 +252,14 @@ export function CameraCapture({
       } finally {
         bytes.fill(0);
       }
-    } catch {
+    } catch (failure) {
       if (alive.current && epoch === generation.current)
         setError(
-          presentation === 'meter' || presentation === 'evidence'
-            ? 'Không xử lý được ảnh. Hãy chụp lại.'
-            : 'Không xử lý được ảnh. Bạn có thể chụp lại hoặc nhập thủ công.',
+          failure instanceof IdentityCaptureTooLargeError
+            ? 'Ảnh vượt giới hạn 5 MB. Hãy chụp để thẻ chiếm phần lớn khung, hoặc nhập thủ công; ảnh không được tự giảm chất lượng để gửi.'
+            : presentation === 'meter' || presentation === 'evidence'
+              ? 'Không xử lý được ảnh. Hãy chụp lại.'
+              : 'Không xử lý được ảnh. Bạn có thể chụp lại hoặc nhập thủ công.',
         );
     } finally {
       if (
@@ -328,6 +334,7 @@ export function CameraCapture({
         dark={presentation === 'document'}
         showControls={presentation !== 'evidence'}
         previewHeight={presentation === 'meter' ? (meterCompact ? 300 : 460) : undefined}
+        preserveIdentityDetail={presentation === 'document' || !!documentSide}
         lensPreferenceRef={lensPreferenceRef ?? localLensPreferenceRef}
         onReady={(value) => {
           if (!alive.current || generation.current !== session) return;

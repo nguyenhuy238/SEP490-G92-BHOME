@@ -7,8 +7,8 @@ vi.mock('../features/contracts/ContractLoading', () => ({
     </div>
   ),
 }));
-import { afterEach, expect, it, vi } from 'vitest';
-import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { afterEach, beforeEach, expect, it, vi } from 'vitest';
+import { act, cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import {
   contractClient,
   type ContractRequest,
@@ -96,7 +96,22 @@ vi.mock('../features/contracts/signing/SigningSetup', () => ({
   SignaturePlacementField: () => <span>PDF preview</span>,
 }));
 vi.mock('../features/contracts/ContractEvidence', () => ({ ContractEvidence: () => null }));
-afterEach(cleanup);
+beforeEach(() => {
+  vi.spyOn(globalThis, 'setInterval');
+});
+afterEach(() => {
+  cleanup();
+  vi.restoreAllMocks();
+});
+async function pollSigningStatus() {
+  const poll = vi
+    .mocked(globalThis.setInterval)
+    .mock.calls.findLast(([, delay]) => delay === 5000)?.[0];
+  expect(poll).toBeTypeOf('function');
+  await act(async () => {
+    (poll as () => void)();
+  });
+}
 
 it('Staff invites Tenant before Owner signs without approval and retains the Staff-entered email', async () => {
   const c = {
@@ -288,7 +303,7 @@ it.each([
     const statusCalls = request.mock.calls.filter(([path]) =>
       path.endsWith('/internal-signing'),
     ).length;
-    fireEvent.click(screen.getByRole('button', { name: 'Làm mới trạng thái ký' }));
+    await pollSigningStatus();
     await waitFor(() =>
       expect(
         request.mock.calls.filter(([path]) => path.endsWith('/internal-signing')).length,
@@ -307,7 +322,14 @@ it.each([
     expect(screen.queryByRole('alert')).toBeNull();
   },
 );
-it.each(['sent', 'timeout', 'rejected', 'missing-pdf', 'unapproved-main-template'] as const)(
+it.each([
+  'sent',
+  'timeout',
+  'timeout-accepted',
+  'rejected',
+  'missing-pdf',
+  'unapproved-main-template',
+] as const)(
   'Signing email %s: distinguishes sending, delivery confirmation and actual failure',
   async (outcome) => {
     const main = outcome === 'unapproved-main-template';
@@ -315,18 +337,21 @@ it.each(['sent', 'timeout', 'rejected', 'missing-pdf', 'unapproved-main-template
     let finish!: (value: unknown) => void;
     let fail!: (error: unknown) => void;
     let submitted = false;
+    let statusUnavailable = false;
     const result = new Promise((resolve, reject) => {
       finish = resolve;
       fail = reject;
     });
     const request = vi.fn(async (path: string) => {
-      if (path.endsWith('/internal-signing'))
+      if (path.endsWith('/internal-signing')) {
+        if (statusUnavailable) throw { status: 0 };
         return {
           invitations: submitted
             ? [{ id: 'invite', status: 'InvitationAcceptedByProvider', expiresAt: '2099-01-01' }]
             : [],
           canContinue: false,
         };
+      }
       if (path.endsWith('/signing-invitations')) return result;
       if (path === `/api/v1/contracts/${id}`) return c;
       throw new Error(path);
@@ -349,7 +374,7 @@ it.each(['sent', 'timeout', 'rejected', 'missing-pdf', 'unapproved-main-template
     );
     expect(screen.queryByText('Bước 6 · Ký hợp đồng')).toBeNull();
     expect(screen.queryByText(/OTP và chữ ký vẽ/)).toBeNull();
-    expect(screen.getByText('Làm mới trạng thái ký')).toBeTruthy();
+    expect(screen.queryByText('Làm mới trạng thái ký')).toBeNull();
     expect(screen.queryByText('Chi tiết ký')).toBeNull();
     expect(screen.queryByText('Tiếp tục thanh toán')).toBeNull();
     fireEvent.click(screen.getByRole('button', { name: 'Gửi lời mời ký qua email' }));
@@ -373,7 +398,7 @@ it.each(['sent', 'timeout', 'rejected', 'missing-pdf', 'unapproved-main-template
       expect(screen.queryByRole('alert')).toBeNull();
       expect(screen.queryByText('must-not-display')).toBeNull();
       expect(screen.queryByText('Đang gửi lời mời…')).toBeNull();
-    } else if (outcome === 'timeout') {
+    } else if (outcome === 'timeout' || outcome === 'timeout-accepted') {
       fail({ status: 0 });
       await screen.findByText(/Chưa xác định được kết quả gửi/);
       expect(screen.queryByRole('alert')).toBeNull();
@@ -381,6 +406,25 @@ it.each(['sent', 'timeout', 'rejected', 'missing-pdf', 'unapproved-main-template
         (screen.getByRole('button', { name: 'Gửi lời mời ký qua email' }) as HTMLButtonElement)
           .disabled,
       ).toBe(true);
+      statusUnavailable = true;
+      await pollSigningStatus();
+      expect(screen.getByText(/Chưa xác định được kết quả gửi/)).toBeTruthy();
+      expect(screen.getByRole('button', { name: 'Gửi lời mời ký qua email' })).toHaveProperty(
+        'disabled',
+        true,
+      );
+      statusUnavailable = false;
+      submitted = outcome === 'timeout-accepted';
+      await pollSigningStatus();
+      await waitFor(() => expect(screen.queryByText(/Chưa xác định được kết quả gửi/)).toBeNull());
+      expect(
+        screen.getByRole('button', {
+          name: submitted ? 'Gửi lại email' : 'Gửi lời mời ký qua email',
+        }),
+      ).toHaveProperty('disabled', false);
+      expect(
+        request.mock.calls.filter(([path]) => path.endsWith('/signing-invitations')),
+      ).toHaveLength(1);
     } else {
       fail(
         outcome === 'missing-pdf'
@@ -401,6 +445,64 @@ it.each(['sent', 'timeout', 'rejected', 'missing-pdf', 'unapproved-main-template
     }
   },
 );
+it('ignores a delayed status read started during an invitation that later times out', async () => {
+  const c = contract('Holding', true);
+  const emptyStatus = { invitations: [], canContinue: false };
+  let delayStatus = false;
+  let finishStatus!: (value: typeof emptyStatus) => void;
+  let failInvitation!: (error: unknown) => void;
+  const pendingStatus = new Promise((resolve) => {
+    finishStatus = resolve;
+  });
+  const pendingInvitation = new Promise((_resolve, reject) => {
+    failInvitation = reject;
+  });
+  const request = vi.fn(async (path: string) => {
+    if (path.endsWith('/internal-signing')) return delayStatus ? pendingStatus : emptyStatus;
+    if (path.endsWith('/signing-invitations')) return pendingInvitation;
+    if (path === `/api/v1/contracts/${id}`) return c;
+    throw new Error(path);
+  });
+  render(
+    <ContractSigningStep
+      api={contractClient(request as ContractRequest)}
+      contract={c}
+      role="Staff"
+      actorId="staff"
+      onChanged={vi.fn()}
+    />,
+  );
+  fireEvent.change(await screen.findByLabelText('Email người giữ chỗ'), {
+    target: { value: 'synthetic@example.invalid' },
+  });
+  fireEvent.click(screen.getByRole('button', { name: 'Gửi lời mời ký qua email' }));
+  await waitFor(() =>
+    expect(request.mock.calls.some(([path]) => path.endsWith('/signing-invitations'))).toBe(true),
+  );
+  delayStatus = true;
+  await pollSigningStatus();
+  failInvitation({ status: 0 });
+  await screen.findByText(/Chưa xác định được kết quả gửi/);
+  await act(async () => {
+    finishStatus(emptyStatus);
+  });
+  expect(screen.getByText(/Chưa xác định được kết quả gửi/)).toBeTruthy();
+  expect(screen.getByRole('button', { name: 'Gửi lời mời ký qua email' })).toHaveProperty(
+    'disabled',
+    true,
+  );
+  delayStatus = false;
+  await pollSigningStatus();
+  await waitFor(() => expect(screen.queryByText(/Chưa xác định được kết quả gửi/)).toBeNull());
+  expect(screen.getByRole('button', { name: 'Gửi lời mời ký qua email' })).toHaveProperty(
+    'disabled',
+    false,
+  );
+  expect(request.mock.calls.filter(([path]) => path.endsWith('/signing-invitations'))).toHaveLength(
+    1,
+  );
+});
+
 it.each([false, true])(
   'lets Staff send to the saved address without retyping it (Holding source: %s)',
   async (usesHoldingEmail) => {
@@ -550,7 +652,7 @@ it.each([
       expect(screen.getByText('Tiếp tục thanh toán')).toBeTruthy();
     } else {
       expect(screen.getAllByText('Chờ ký')).toHaveLength(waiting);
-      expect(screen.getByText('Làm mới trạng thái ký')).toBeTruthy();
+      expect(screen.queryByText('Làm mới trạng thái ký')).toBeNull();
     }
   },
 );
@@ -591,14 +693,14 @@ it.each([
     );
     await waitFor(() => expect(request).toHaveBeenCalled());
     if (kind === 'Holding') {
-      await screen.findByText('Làm mới trạng thái ký');
+      await waitFor(() => expect(screen.queryByRole('progressbar')).toBeNull());
       expect(screen.queryByText('Chi tiết ký')).toBeNull();
       expect(screen.queryByText('Tiếp tục thanh toán')).toBeNull();
     } else
       expect((screen.getByText('Tiếp tục thanh toán') as HTMLButtonElement).disabled).toBe(true);
     latest = contract(kind, internal, true);
     complete = true;
-    fireEvent.click(screen.getByText('Làm mới trạng thái ký'));
+    await pollSigningStatus();
     await waitFor(() =>
       expect((screen.getByText('Tiếp tục thanh toán') as HTMLButtonElement).disabled).toBe(false),
     );

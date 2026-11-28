@@ -4,12 +4,13 @@ namespace BHome.Application.Operations;
 
 public sealed partial class OperationsService
 {
-    public Task<OperationsPage<ResidenceTrackingSummary>> ResidenceTrackingAsync(ResidenceQuery query, CancellationToken t)
+    public Task<ResidenceTrackingPage> ResidenceTrackingAsync(ResidenceTrackingQuery query, CancellationToken t)
     {
         if (!user.IsInRole(Roles.Staff)) throw OperationsException.Forbidden();
         Validate(query); Page(query.Page, query.PageSize);
-        if (query.LocationId == Guid.Empty || query.Status is not (null or "Pending" or "InProgress" or "Completed"))
+        if (query.LocationId == Guid.Empty || query.Filter is not ("All" or "Pending" or "AwaitingReview" or "Completed" or "Overdue"))
             throw OperationsException.Invalid("invalid_residence_filter");
+        query.Search = string.IsNullOrWhiteSpace(query.Search) ? null : query.Search.Trim();
         return repository.ResidenceTrackingAsync(Actor, Today, query, t);
     }
 

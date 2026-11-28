@@ -12,6 +12,7 @@ export function IdentityPersonCard({
   disabled,
   onScan,
   onManual,
+  embedded = false,
 }: {
   person: OnboardingPerson;
   label: string;
@@ -19,6 +20,7 @@ export function IdentityPersonCard({
   disabled: boolean;
   onScan: (side?: IdentitySide) => void;
   onManual: () => void;
+  embedded?: boolean;
 }) {
   const progress = person.captureProgress ?? emptyCaptureProgress();
   const both = progress.front === 'recognized' && progress.back === 'recognized';
@@ -40,27 +42,31 @@ export function IdentityPersonCard({
             ? 'Kiểm tra thông tin'
             : 'Bắt đầu quét CCCD';
   return (
-    <View style={styles.card}>
-      <View style={styles.header}>
-        <View style={styles.avatar}>
-          <Icon source="account-outline" size={24} color={s.navy} />
+    <View style={[styles.card, embedded && styles.embeddedCard]}>
+      {!embedded && (
+        <View style={styles.header}>
+          <View style={styles.avatar}>
+            <Icon source="account-outline" size={24} color={s.navy} />
+          </View>
+          <View style={styles.identity}>
+            <Text style={styles.name}>{label}</Text>
+            <Text style={styles.role}>{role}</Text>
+          </View>
         </View>
-        <View style={styles.identity}>
-          <Text style={styles.name}>{label}</Text>
-          <Text style={styles.role}>{role}</Text>
-        </View>
-      </View>
-      <Pill
-        tone={
-          person.status === 'confirmed'
-            ? 'green'
-            : person.status === 'unscanned'
-              ? 'neutral'
-              : 'amber'
-        }
-      >
-        {status}
-      </Pill>
+      )}
+      {!embedded && (
+        <Pill
+          tone={
+            person.status === 'confirmed'
+              ? 'green'
+              : person.status === 'unscanned'
+                ? 'neutral'
+                : 'amber'
+          }
+        >
+          {status}
+        </Pill>
+      )}
       {!!person.verificationError && (
         <Text accessibilityRole="alert" style={{ color: s.red }}>
           {person.verificationError}
@@ -92,11 +98,11 @@ export function IdentityPersonCard({
                 }
               </Text>
               <Button
-                mode="text"
+                mode="outlined"
                 compact
                 accessibilityLabel={`${progress[face] === 'unscanned' ? 'Quét' : 'Quét lại'} mặt ${face === 'front' ? 'trước' : 'sau'}`}
                 disabled={disabled}
-                contentStyle={styles.touch}
+                contentStyle={styles.faceTouch}
                 onPress={() => onScan(face)}
               >
                 {progress[face] === 'unscanned' ? 'Quét' : 'Quét lại'}
@@ -137,6 +143,7 @@ const styles = StyleSheet.create({
     padding: 16,
     gap: 12,
   },
+  embeddedCard: { borderWidth: 0, padding: 0, gap: 10, backgroundColor: 'transparent' },
   header: { flexDirection: 'row', alignItems: 'center', gap: 12 },
   avatar: {
     width: 44,
@@ -149,16 +156,17 @@ const styles = StyleSheet.create({
   identity: { flex: 1, minWidth: 0, gap: 4 },
   name: { fontSize: 16, lineHeight: 24, fontWeight: '700', color: s.navy },
   role: { fontSize: 13, lineHeight: 18, color: '#475569' },
-  progress: { flexDirection: 'row', flexWrap: 'wrap', gap: 12 },
+  progress: { flexDirection: 'row', flexWrap: 'nowrap', gap: 8 },
   face: {
     flex: 1,
-    minWidth: 110,
-    padding: 12,
-    borderRadius: 12,
+    minWidth: 0,
+    padding: 8,
+    borderRadius: 10,
     backgroundColor: '#F8FAFC',
     gap: 4,
   },
-  faceName: { fontSize: 14, lineHeight: 20, fontWeight: '600', color: s.navy },
-  faceStatus: { fontSize: 12, lineHeight: 18, color: '#475569' },
+  faceName: { fontSize: 13, lineHeight: 18, fontWeight: '600', color: s.navy },
+  faceStatus: { fontSize: 11, lineHeight: 16, color: '#475569' },
   touch: { minHeight: 48 },
+  faceTouch: { minHeight: 40 },
 });

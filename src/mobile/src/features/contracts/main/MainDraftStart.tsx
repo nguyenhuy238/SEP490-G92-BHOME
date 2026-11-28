@@ -13,6 +13,7 @@ import { MainDraftScreen } from './MainDraftScreen';
 import { router } from 'expo-router';
 import { HoldingMainStart } from '../holding/HoldingMainStart';
 import { RoomCapacityFilter } from './RoomCapacityFilter';
+import { HoldingRoomPicker } from '../holding/HoldingRoomPicker';
 
 // Standalone entry for already-onboarded Residents. The onboarding handoff supplies these IDs directly.
 export function MainDraftStart({
@@ -112,7 +113,7 @@ export function MainDraftStart({
     )
     .map((item) => {
       const size = capacity?.values.get(item.id);
-      return { ...item, label: size ? `${item.label} · ${size} người` : item.label };
+      return { ...item, capacity: size };
     });
   function chooseRoom(value: string) {
     setRoom(value);
@@ -147,11 +148,14 @@ export function MainDraftStart({
       {!!Number(minimumCapacity) && !roomOptions.length && (
         <Text>Không có phòng phù hợp sức chứa đã nhập.</Text>
       )}
-      <ChoiceField
-        label="Phòng"
+      <HoldingRoomPicker
+        key={location}
+        fieldLabel="Phòng"
+        title="Chọn phòng thuê"
+        rooms={roomOptions}
         value={room}
-        options={roomOptions}
         disabled={loading || !!draftId || !location}
+        loading={loading}
         onChange={chooseRoom}
       />
     </>

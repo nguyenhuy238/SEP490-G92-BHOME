@@ -25,6 +25,9 @@ export default function AnonymousSigningPage() {
   const [token] = useState(
     () => new URLSearchParams(window.location.hash.slice(1)).get('token') ?? '',
   );
+  const sessionKey = `bhome:contract-signing:${Array.from(token)
+    .reduce((hash, char) => Math.imul(hash ^ char.charCodeAt(0), 16777619) >>> 0, 2166136261)
+    .toString(16)}`;
   const [otp, setOtp] = useState(''),
     [info, setInfo] = useState(''),
     [otpRequested, setOtpRequested] = useState(false),
@@ -43,12 +46,42 @@ export default function AnonymousSigningPage() {
   useEffect(() => {
     window.history.replaceState(null, '', window.location.pathname);
     let active = true;
+    const restoreSession = async () => {
+      try {
+        const raw = localStorage.getItem(sessionKey);
+        if (!raw) return;
+        const stored = JSON.parse(raw) as { token?: string; access?: SigningAccess };
+        if (stored.token !== token) return;
+        const saved = stored.access;
+        if (!saved) {
+          localStorage.removeItem(sessionKey);
+          return;
+        }
+        if (typeof saved.session !== 'string' || typeof saved.documentHash !== 'string') {
+          localStorage.removeItem(sessionKey);
+          return;
+        }
+        const bytes = await api.document(token, saved.session);
+        if (!active) return;
+        objectUrl.current = URL.createObjectURL(
+          new Blob([new Uint8Array(bytes)], { type: 'application/pdf' }),
+        );
+        setUrl(objectUrl.current);
+        setAccess(saved);
+        setOtpRequested(true);
+        bytes.fill(0);
+      } catch {
+        localStorage.removeItem(sessionKey);
+      }
+    };
     void api
       .info(token)
       .then((i) => {
         if (active) {
           setInfo('Email nhận OTP: ' + i.maskedEmail);
           setDone(i.accepted);
+          if (i.accepted) localStorage.removeItem(sessionKey);
+          else void restoreSession();
         }
       })
       .catch((e) => {
@@ -59,7 +92,7 @@ export default function AnonymousSigningPage() {
       if (objectUrl.current) URL.revokeObjectURL(objectUrl.current);
       strokes.current = [];
     };
-  }, [api, token]);
+  }, [api, token, sessionKey]);
   async function run(work: () => Promise<void>) {
     if (lock.current) return;
     lock.current = true;
@@ -151,6 +184,7 @@ export default function AnonymousSigningPage() {
                     onClick={() =>
                       void run(async () => {
                         const next = await api.verify(token, otp);
+                        localStorage.setItem(sessionKey, JSON.stringify({ token, access: next }));
                         const bytes = await api.document(token, next.session);
                         objectUrl.current = URL.createObjectURL(
                           new Blob([new Uint8Array(bytes)], { type: 'application/pdf' }),
@@ -250,6 +284,7 @@ export default function AnonymousSigningPage() {
                           strokes.current.filter((s) => s.length >= 2),
                         );
                         setDone(true);
+                        localStorage.removeItem(sessionKey);
                         strokes.current = [];
                         URL.revokeObjectURL(objectUrl.current);
                       })

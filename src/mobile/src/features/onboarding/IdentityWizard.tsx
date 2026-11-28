@@ -12,13 +12,19 @@ import { CameraCapture } from '../../components/CameraCapture';
 import { IdentityDateField } from '../../components/IdentityDateField';
 import { Action, Box, Heading, Pill, Row, ui } from '../../components/WorkspaceKit';
 import { useSession } from '../../lib/SessionProvider';
-import { errorMessage, MobileApiError, type Proposal } from '../../lib/api';
+import {
+  errorMessage,
+  identityOcrRequestTimeoutMilliseconds,
+  MobileApiError,
+  type Proposal,
+} from '../../lib/api';
 import { captureService } from '../../services/captureService';
 import {
   confirmedIdentity,
   emptyIdentity,
   identityFields,
   mergeIdentity,
+  foldIdentityName,
   type IdentityFields,
 } from '../../lib/identity';
 import { diagnosticWarning } from '../../lib/ocrDiagnostics';
@@ -113,8 +119,9 @@ export function IdentityWizard({
   };
   const [fields, setFields] = useState(emptyIdentity);
   const [sources, setSources] = useState<Partial<Record<keyof IdentityFields, string>>>({});
+  const [uncertain, setUncertain] = useState<Partial<Record<keyof IdentityFields, string>>>({});
   const current = useRef(fields);
-  const fieldOrigin = useRef<Partial<Record<keyof IdentityFields, IdentitySide | 'manual'>>>({});
+  const unaccentedName = useRef(false);
   const [checked, setChecked] = useState(false);
   const [busy, setBusy] = useState(false);
   const [alreadyConfirmed, setAlreadyConfirmed] = useState(false);
@@ -196,31 +203,34 @@ export function IdentityWizard({
     };
   }, [modal, setNotice]);
   const acceptProposal = (proposal: Proposal, face: IdentitySide = side) => {
-    // A rescan replaces only suggestions it actually reads from the same side.
+    // A retake fills gaps. An observed disagreement must not erase a successful
+    // earlier read or a Staff edit; keep that value and ask for comparison.
     const before = { ...current.current };
-    for (const [key] of identityFields) {
-      if (fieldOrigin.current[key] === face && proposal.proposedFields[key]?.trim())
-        before[key] = '';
-    }
-    const merged = mergeIdentity(before, proposal);
-    for (const [key] of identityFields) {
-      if (!before[key] && proposal.proposedFields[key]) fieldOrigin.current[key] = face;
-    }
+    const merged = mergeIdentity(before, proposal, { unaccentedName: unaccentedName.current });
+    const nameUpgraded = !!before.fullName && before.fullName !== merged.fields.fullName;
+    const mrzNameAgrees =
+      proposal.warnings.includes('mrz_name_unaccented') &&
+      !!before.fullName &&
+      foldIdentityName(before.fullName) ===
+        foldIdentityName(proposal.proposedFields.fullName ?? '');
+    if (!before.fullName && proposal.proposedFields.fullName)
+      unaccentedName.current = proposal.warnings.includes('mrz_name_unaccented');
+    else if (nameUpgraded) unaccentedName.current = false;
     statusCallback.current?.('pending');
     const hasFields =
       identityFields.some(([key]) => proposal.proposedFields[key]?.trim()) ||
       !!proposal.proposedFields.placeOfIssue?.trim();
     const complete =
-      face === 'back' ||
-      ['citizenIdentityNumber', 'fullName', 'dateOfBirth'].every((key) =>
-        proposal.proposedFields[key]?.trim(),
-      );
-    const resultStatus =
-      !hasFields || proposal.isFallback
-        ? 'failed'
-        : !complete || proposal.warnings.includes('ocr_partial')
-          ? 'partial'
-          : 'recognized';
+      face === 'back'
+        ? !!proposal.proposedFields.dateOfIssue?.trim()
+        : identityFields
+            .filter(([key]) => key !== 'dateOfIssue')
+            .every(([key]) => proposal.proposedFields[key]?.trim());
+    const resultStatus = !hasFields
+      ? 'failed'
+      : !complete || proposal.warnings.includes('ocr_partial')
+        ? 'partial'
+        : 'recognized';
     const faceLabel = `Mặt ${face === 'front' ? 'trước' : 'sau'}`;
     const failureCode = [
       'ocr_unavailable',
@@ -229,21 +239,30 @@ export function IdentityWizard({
       'no_text',
       'unsupported_or_unreadable_layout',
     ].find((code) => proposal.warnings.includes(code));
+    const qualityWarnings = proposal.warnings.filter((code) =>
+      [
+        'identity_small_card',
+        'identity_card_not_found',
+        'identity_low_light',
+        'blur_or_low_detail',
+        'possible_glare',
+        'orientation_uncertain',
+      ].includes(code),
+    );
     sideWarnings.current[face] =
       resultStatus === 'failed'
         ? [
             `${faceLabel}: ${failureCode ? diagnosticWarning(failureCode, false) : 'Chưa đọc được thông tin. Hãy quét lại mặt này hoặc nhập thủ công.'}`,
+            ...new Set(
+              qualityWarnings.map((code) => `${faceLabel}: ${diagnosticWarning(code, false)}`),
+            ),
           ]
         : [
             ...new Set(
               proposal.warnings
                 .filter(
                   (code) =>
-                    ![
-                      'unsupported_or_unreadable_layout',
-                      'possible_glare',
-                      'orientation_corrected',
-                    ].includes(code),
+                    !['unsupported_or_unreadable_layout', 'orientation_corrected'].includes(code),
                 )
                 .map((code) => `${faceLabel}: ${diagnosticWarning(code, false)}`),
             ),
@@ -266,17 +285,44 @@ export function IdentityWizard({
         return `${label[0]!.toUpperCase()}${label.slice(1)}: ${message}`;
       }),
     );
-    if (proposal.proposedFields.placeOfIssue) setPlaceOfIssue(proposal.proposedFields.placeOfIssue);
+    if (proposal.proposedFields.placeOfIssue && !merged.conflicts.includes('citizenIdentityNumber'))
+      setPlaceOfIssue((previous) => previous || proposal.proposedFields.placeOfIssue!);
     current.current = merged.fields;
     setFields(merged.fields);
+    setUncertain((previous) => {
+      const next = { ...previous };
+      for (const [key] of identityFields) {
+        if (
+          key === 'fullName' &&
+          nameUpgraded &&
+          !proposal.warnings.includes('conflicting_fullName')
+        )
+          delete next.fullName;
+        if (merged.conflicts.includes(key) || proposal.warnings.includes(`conflicting_${key}`))
+          next[key] = 'Các lần đọc không khớp. Đang giữ dữ liệu trước; hãy đối chiếu CCCD.';
+        else if (
+          !(key === 'fullName' && mrzNameAgrees) &&
+          proposal.proposedFields[key] &&
+          Number.isFinite(proposal.confidence[key]) &&
+          proposal.confidence[key]! < 0.9
+        )
+          next[key] = 'OCR chưa chắc chắn. Hãy đối chiếu trực tiếp trên CCCD.';
+      }
+      return next;
+    });
     setChecked(false);
-    setSources((before) => ({
+    setSources((previous) => ({
+      ...previous,
       ...Object.fromEntries(
         identityFields
-          .filter(([key]) => proposal.proposedFields[key])
+          .filter(
+            ([key]) =>
+              proposal.proposedFields[key] &&
+              merged.fields[key] &&
+              (!before[key] || (key === 'fullName' && nameUpgraded)),
+          )
           .map(([key]) => [key, `Đề xuất OCR mặt ${face === 'front' ? 'trước' : 'sau'}`]),
       ),
-      ...before,
     }));
     setScanned(true);
     setAttempted(false);
@@ -308,25 +354,40 @@ export function IdentityWizard({
     const face = side;
     const controller = new AbortController();
     abort.current = controller;
-    const timeout = setTimeout(() => controller.abort(), 20000);
+    let timedOut = false;
+    // Also bound authentication refresh/retry, independently of the HTTP timeout.
+    const timeout = setTimeout(() => {
+      timedOut = true;
+      controller.abort();
+    }, identityOcrRequestTimeoutMilliseconds + 5000);
     try {
       const proposal = await api.image<Proposal>(
         `/api/v1/ocr/identity/${residentId}/${face}`,
         bytes,
         controller.signal,
       );
+      if (controller.signal.aborted) throw new Error('Identity OCR request aborted.');
       if (epoch === generation.current) acceptProposal(proposal, face);
     } catch (e) {
       workflowFailure('identity', e);
       if (epoch === generation.current) {
         reportProgress(face, 'failed');
-        setError(errorMessage(e));
-        setNotice('OCR chưa thành công; nhập thủ công vẫn khả dụng.');
+        setError(
+          timedOut || (e instanceof MobileApiError && e.code === 'request_timeout')
+            ? 'Gửi ảnh hoặc nhận kết quả OCR quá thời gian chờ. Kiểm tra kết nối rồi quét lại.'
+            : controller.signal.aborted
+              ? 'Đã hủy yêu cầu OCR.'
+              : errorMessage(e),
+        );
+        setNotice(
+          'Thông tin đã đọc hoặc nhập trước đó được giữ lại. Bạn có thể quét lại hoặc nhập thủ công.',
+        );
         setStep('verify');
         resetScroll();
       }
     } finally {
       clearTimeout(timeout);
+      if (abort.current === controller) abort.current = null;
       if (epoch === generation.current) {
         lock.current = false;
         setBusy(false);
@@ -569,8 +630,12 @@ export function IdentityWizard({
     <>
       {!modal && (
         <Heading
-          title={step === 'capture' ? 'Chụp mặt trước CCCD' : 'Kiểm tra & Xác nhận OCR'}
-          detail="Chụp mặt trước hoặc nhập thủ công, sau đó đối chiếu và xác nhận thông tin."
+          title={
+            step === 'capture'
+              ? `Chụp mặt ${side === 'front' ? 'trước' : 'sau'} CCCD`
+              : 'Kiểm tra & Xác nhận OCR'
+          }
+          detail="Chụp CCCD hoặc nhập thủ công, sau đó đối chiếu và xác nhận thông tin."
         />
       )}
       {!modal && (
@@ -603,7 +668,7 @@ export function IdentityWizard({
             }}
           >
             <Icon source="card-account-details-outline" size={64} color={c.primary} />
-            <Text variant="titleMedium">MẶT TRƯỚC CCCD</Text>
+            <Text variant="titleMedium">MẶT {side === 'front' ? 'TRƯỚC' : 'SAU'} CCCD</Text>
             <Text variant="bodySmall" style={ui.muted}>
               Đặt đủ 4 góc trong khung, đủ sáng, không lóa. Giữ khoảng cách để chữ rõ.
             </Text>
@@ -647,9 +712,10 @@ export function IdentityWizard({
           ) : (
             active && (
               <CameraCapture
+                key={side}
                 lensPreferenceRef={cameraLensPreferenceRef}
-                label={`${scanned ? 'Chụp lại' : 'Chụp ảnh'} mặt trước`}
-                documentSide="front"
+                label={`${scanned ? 'Chụp lại' : 'Chụp ảnh'} mặt ${side === 'front' ? 'trước' : 'sau'}`}
+                documentSide={side}
                 disabled={busy}
                 reviewBeforeSubmit
                 onCapture={scan}
@@ -695,7 +761,6 @@ export function IdentityWizard({
                 for (const [key] of identityFields) {
                   if (next[key].trim()) continue;
                   next[key] = samples[key];
-                  fieldOrigin.current[key] = 'manual';
                   nextSources[key] = 'Dữ liệu mẫu kiểm thử';
                 }
                 current.current = next;
@@ -722,10 +787,11 @@ export function IdentityWizard({
             const onChange = (value: string) => {
               const next = { ...current.current, [key]: value };
               current.current = next;
-              fieldOrigin.current[key] = 'manual';
               setFields(next);
+              if (key === 'fullName') unaccentedName.current = false;
               statusCallback.current?.('pending');
               setChecked(false);
+              setUncertain((previous) => ({ ...previous, [key]: undefined }));
               setSources((before) => ({ ...before, [key]: 'Staff nhập / chỉnh sửa' }));
             };
             const onBlur = () => setTouched((before) => ({ ...before, [key]: true }));
@@ -758,12 +824,15 @@ export function IdentityWizard({
                     error={error}
                     onBlur={onBlur}
                     keyboardType={key === 'citizenIdentityNumber' ? 'number-pad' : 'default'}
+                    multiline={key === 'placeOfOrigin' || key === 'residentialAddress'}
                     onChangeText={onChange}
                   />
                 )}
                 <Text
                   accessibilityRole={
-                    fieldErrors[key] && (scanned || attempted || touched[key]) ? 'alert' : undefined
+                    uncertain[key] || (fieldErrors[key] && (scanned || attempted || touched[key]))
+                      ? 'alert'
+                      : undefined
                   }
                   variant="labelSmall"
                   style={
@@ -772,9 +841,11 @@ export function IdentityWizard({
                 >
                   {fieldErrors[key] && (scanned || attempted || touched[key])
                     ? fieldErrors[key]
-                    : key === 'dateOfIssue' && !fields.dateOfIssue
-                      ? 'Chưa đọc được Ngày cấp. Vui lòng nhập theo giấy tờ.'
-                      : (sources[key] ?? 'Chưa có dữ liệu • Có thể nhập thủ công')}
+                    : uncertain[key]
+                      ? `Cần đối chiếu: ${uncertain[key]}`
+                      : key === 'dateOfIssue' && !fields.dateOfIssue
+                        ? 'Chưa đọc được Ngày cấp. Vui lòng nhập theo giấy tờ.'
+                        : (sources[key] ?? 'Chưa có dữ liệu • Có thể nhập thủ công')}
                 </Text>
               </View>
             );

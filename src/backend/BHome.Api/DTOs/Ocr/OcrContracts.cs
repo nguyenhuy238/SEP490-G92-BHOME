@@ -14,7 +14,16 @@ public sealed record OcrLine(string Text, float Confidence)
 
 public sealed record OcrBounds(float X, float Y, float Width, float Height);
 
-public sealed record OcrText(IReadOnlyList<OcrLine> Lines, string EngineVersion, IReadOnlyList<string> Warnings);
+public sealed record OcrText(IReadOnlyList<OcrLine> Lines, string EngineVersion, IReadOnlyList<string> Warnings)
+{
+    // Internal observations from the same temporary image, never a public payload.
+    public IReadOnlyList<IdentityFieldObservation> IdentityObservations { get; init; } = [];
+}
+
+public sealed record IdentityFieldObservation(string Field, string Value, float Confidence, string Source)
+{
+    public override string ToString() => "Identity observation (sensitive value omitted)";
+}
 
 // Internal capability only. Authorization belongs to the enclosing business use case.
 public interface IOcrEngine

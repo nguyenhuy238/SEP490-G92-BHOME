@@ -16,4 +16,8 @@ BHOME supports rental-property management for owners, staff and tenants. Staff M
 
 Staff can reach routine actions from Home, scan lists without repetitive prose, complete forms without covered fields or lost drafts, and read truthful loading, error, empty and workflow states. The four existing tabs, Staff permissions, API contracts, evidence and navigation guards remain authoritative.
 
-Platform: adaptive React Native / Expo (iOS, Android, web preview); Vietnamese UI.
+## Platform
+
+adaptive
+
+React Native / Expo (iOS, Android, web preview); Vietnamese UI.

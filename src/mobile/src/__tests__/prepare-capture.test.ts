@@ -132,10 +132,13 @@ it.each([
   'bounds identity uploads while preserving detail for localization for %s x %s',
   async (width, height) => {
     await prepareCapture(picture(width, height), () => true, 'identity');
-    const resized = native.resize.mock.calls[0][0];
-    expect(Math.max(resized.width, resized.height)).toBe(identityCaptureMaxDimension);
+    const resized = native.resize.mock.calls[0]?.[0] ?? { width, height };
+    expect(Math.max(resized.width, resized.height)).toBeLessThanOrEqual(
+      identityCaptureMaxDimension,
+    );
+    expect(resized.width * resized.height).toBeLessThanOrEqual(captureMaxPixels);
     expect(Math.abs(resized.width / resized.height - width / height)).toBeLessThan(0.001);
-    expect(native.save).toHaveBeenCalledExactlyOnceWith({ format: 'jpeg', compress: 0.95 });
+    expect(native.save).toHaveBeenCalledExactlyOnceWith({ format: 'jpeg', compress: 1 });
     expect(native.releaseImage).toHaveBeenCalledOnce();
     expect(native.releaseContext).toHaveBeenCalledOnce();
   },
@@ -143,4 +146,18 @@ it.each([
 it('does not upscale a smaller identity photo', async () => {
   await prepareCapture(picture(1000, 600), () => true, 'identity');
   expect(native.resize).not.toHaveBeenCalled();
+});
+
+it('keeps a wide native photo that is already within the API pixel limit', async () => {
+  await prepareCapture(picture(4608, 2592), () => true, 'identity');
+  expect(native.resize).not.toHaveBeenCalled();
+  expect(native.save).toHaveBeenCalledWith({ format: 'jpeg', compress: 1 });
+});
+
+it('never degrades an oversized identity encoding to force an upload', async () => {
+  native.sizes = [captureMaxBytes + 1];
+  await expect(prepareCapture(picture(), () => true, 'identity')).rejects.toThrow('upload limits');
+  expect(native.save).toHaveBeenCalledExactlyOnceWith({ format: 'jpeg', compress: 1 });
+  expect(native.resize).not.toHaveBeenCalled();
+  expect(native.files.size).toBe(0);
 });

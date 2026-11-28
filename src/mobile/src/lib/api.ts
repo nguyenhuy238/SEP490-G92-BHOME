@@ -78,6 +78,7 @@ export function invalidResponse(): never {
 }
 
 const stagingOrigin = 'https://api-staging.103.146.23.157.sslip.io';
+const productOrigin = 'https://api.103.146.23.157.sslip.io';
 
 export async function mobileResponse<T>(
   base: string,
@@ -157,9 +158,9 @@ export async function checkApiConnection(input: string, transport: typeof fetch 
       if (!Array.isArray(locations)) throw new MobileApiError(502, 'invalid_response', path);
     });
   };
-  // Staging intentionally blocks /health/* at its public edge. Browsers can
+  // Deployed environments block /health/* at their public edge. Browsers can
   // hide that 404 as a network error because the edge does not emit CORS headers.
-  if (base === stagingOrigin) return checkPublic();
+  if (base === stagingOrigin || base === productOrigin) return checkPublic();
   try {
     await mobileResponse(base, '/health/ready', {}, transport, async (response) => {
       if ((await response.text()).trim() !== 'Healthy')
@@ -310,7 +311,14 @@ function locationAssetHandoverDocumentTimeout(path: string): boolean {
     )
   );
 }
+// Identity OCR has a bounded server-side processing budget, but the client
+// also needs time to upload a full-detail (up to 5 MB) photo on mobile data.
+export const identityOcrRequestTimeoutMilliseconds = 45000;
+function identityOcrRequest(path: string): boolean {
+  return /^\/api\/v1\/ocr\/identity\/[a-f0-9-]{36}\/(?:front|back)$/i.test(path);
+}
 function requestTimeout(path: string): number {
+  if (identityOcrRequest(path)) return identityOcrRequestTimeoutMilliseconds;
   if (locationAssetHandoverDocumentTimeout(path)) return 60000;
   if (/^\/api\/v1\/contracts\/[a-f0-9-]{36}\/move-out\/inspection$/i.test(path)) return 60000;
   return contractDocumentTimeout(path);

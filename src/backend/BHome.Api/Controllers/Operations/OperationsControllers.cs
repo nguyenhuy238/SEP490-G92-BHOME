@@ -44,7 +44,7 @@ public sealed class StaffAdministrationController(OperationsService service) : C
 public sealed class ResidenceTasksController(OperationsService service) : ControllerBase
 {
     [HttpGet("tracking"), Authorize(Roles = Roles.Staff)]
-    public Task<OperationsPage<ResidenceTrackingSummary>> Tracking([FromQuery] ResidenceQuery input, CancellationToken t) => service.ResidenceTrackingAsync(input, t);
+    public Task<ResidenceTrackingPage> Tracking([FromQuery] ResidenceTrackingQuery input, CancellationToken t) => service.ResidenceTrackingAsync(input, t);
     [HttpGet] public Task<OperationsPage<ResidenceTaskView>> List([FromQuery] ResidenceQuery input, CancellationToken t) => service.ResidenceAsync(input, t);
     [HttpGet("{contractId:guid}/{residentId:guid}")] public Task<ResidenceTaskView> Get(Guid contractId, Guid residentId, CancellationToken t) => service.ResidenceAsync(contractId, residentId, t);
     [HttpPut("{contractId:guid}/{residentId:guid}")] public Task<ResidenceTaskView> Update(Guid contractId, Guid residentId, ResidenceUpdate input, CancellationToken t) => service.UpdateResidenceAsync(contractId, residentId, input, t);

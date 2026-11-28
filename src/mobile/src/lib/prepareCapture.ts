@@ -8,7 +8,9 @@ import { ownCapture } from './captureFiles';
 export const captureMaxBytes = 5 * 1024 * 1024;
 export const captureMaxPixels = 12_000_000;
 // Preserve small card text until server-side card localization, while bounding upload size.
-export const identityCaptureMaxDimension = 2400;
+export const identityCaptureMaxDimension = 16000;
+
+export class IdentityCaptureTooLargeError extends Error {}
 
 export async function prepareCapture(
   picture: PictureRef,
@@ -21,15 +23,20 @@ export async function prepareCapture(
   const context = ImageManipulator.manipulate(picture);
   const evidence = purpose === 'evidence';
   // Keep enough detail to localize the card before the server resizes its crop.
-  // Full-resolution phone photos would consume the OCR deadline while uploading.
+  // Identity keeps all pixels allowed by the API; oversized encodings are
+  // rejected rather than silently degrading text to force a successful upload.
   let scale = evidence
     ? Math.min(1, 1600 / Math.max(width, height))
     : purpose === 'identity'
-      ? Math.min(1, identityCaptureMaxDimension / Math.max(width, height))
+      ? Math.min(
+          1,
+          identityCaptureMaxDimension / Math.max(width, height),
+          Math.sqrt(captureMaxPixels / (width * height)),
+        )
       : Math.min(1, Math.sqrt(captureMaxPixels / (width * height)));
   try {
     // Bounded retries re-encode from the native source, never from a compressed JPEG.
-    for (let attempt = 0; attempt < 3; attempt++) {
+    for (let attempt = 0; attempt < (purpose === 'identity' ? 1 : 3); attempt++) {
       if (!current()) throw new Error('Capture session ended.');
       context.reset();
       if (scale < 1)
@@ -42,7 +49,7 @@ export async function prepareCapture(
       try {
         const output = await image.saveAsync({
           format: SaveFormat.JPEG,
-          compress: evidence ? 0.85 : 0.95,
+          compress: evidence ? 0.85 : purpose === 'identity' ? 1 : 0.95,
         });
         uri = output.uri;
         const file = new File(uri);
@@ -63,6 +70,8 @@ export async function prepareCapture(
         }
       }
     }
+    if (purpose === 'identity')
+      throw new IdentityCaptureTooLargeError('Identity capture exceeds upload limits.');
     throw new Error('Capture exceeds upload limits.');
   } finally {
     context.release();
