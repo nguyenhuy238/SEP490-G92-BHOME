@@ -9,6 +9,9 @@ REQUIRED = {
     'BHome.Infrastructure.UnitTests.HoldingTestScopeTests.': 7,
     'BHome.Infrastructure.UnitTests.BillingAutomationRuntimeTests.': 9,
     'BHome.Infrastructure.UnitTests.PaymentRuntimeModeTests.': 8,
+    'BHome.Infrastructure.UnitTests.DemoClockGuardTests.': 40,
+    'BHome.Infrastructure.UnitTests.ContractWorkflowDemoDeploymentTests.': 7,
+    'BHome.Application.UnitTests.PropertyManagement.RoomInventoryReviewServiceTests.': 1,
     'BHome.IntegrationTests.Compact24.SePayIntegrationTests.InvoiceInstructionsUseRegisteredBhMemoAndFailClosedWhenSePayAccountDrifts': 3,
     'BHome.IntegrationTests.Compact24.SePayIntegrationTests.MainInitialQrUsesOneReceiptForDepositAndRentFeesAndRejectsPartialOrDuplicateEffects': 2,
     'BHome.IntegrationTests.Compact24.SePayIntegrationTests.ModeSwitchPreservesOldQrAndAccountsAndReconcilesBothModes': 1,
@@ -25,6 +28,7 @@ REQUIRED = {
     'BHome.IntegrationTests.Compact24.SePayIntegrationTests.AmbiguousLegacyObligationCannotReceiveAutomaticCreditFromEitherMode': 1,
     'BHome.IntegrationTests.Compact24.Compact24OwnerSetupTests.TenantSessionSignatureCompletesOwnerSignedMoveInWithoutOtpAndCannotBeReplayedOrSpoofed': 2,
     'BHome.IntegrationTests.Compact24.Compact24OwnerSetupTests.StaffSubmitOwnerSignedPdfAndTenantOtpProduceVerifiedTwoSignatureHandover': 2,
+    'BHome.IntegrationTests.Compact24.Compact24OwnerSetupTests.StaffCanSubmitFourCompletedSectionsWithRoomIssueAndMissingInventoryWithoutDraftAssets': 1,
     'BHome.IntegrationTests.Compact24.Compact24BillingManualActionsTests.': 2,
     'BHome.IntegrationTests.Compact24.MainDraftDocumentRegressionTests.DemoTemplateIsAvailableWithRealPersistence': 3,
 }

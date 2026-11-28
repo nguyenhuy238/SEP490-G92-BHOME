@@ -125,13 +125,9 @@ public sealed class DemoClockGuardTests
     [InlineData("ConnectionStrings:Database", "Host=other;Database=bhome_compact24_dev_f723d9c0ff6acd3c4cce870df1e72989")]
     [InlineData("ObjectStorage:Bucket", "bhome-private")]
     [InlineData("ObjectStorage:Endpoint", "minio:9000")]
-    [InlineData("SePay:Mode", "Live")]
-    [InlineData("SePay:Enabled", "false")]
-    [InlineData("Jobs:Enabled", "true")]
     [InlineData("DevelopmentDatabase:InitializeOnStartup", "true")]
     [InlineData("StaffAssignments:AutoReconcileEnabled", "true")]
     [InlineData("OwnerSetup:AssetSyncEnabled", "true")]
-    [InlineData("ContractWorkflow:SimulatedSigningEnabled", "true")]
     public void RefusesUnsafeStagingConfiguration(string key, string value)
     {
         var settings = Staging();
@@ -172,14 +168,10 @@ public sealed class DemoClockGuardTests
     [InlineData("ConnectionStrings:Database", "Host=remote;Database=bhome")]
     [InlineData("ObjectStorage:Endpoint", "stage-minio:9000")]
     [InlineData("ObjectStorage:Bucket", "bhome-staging-private")]
-    [InlineData("Jobs:Enabled", "true")]
     [InlineData("StaffAssignments:AutoReconcileEnabled", "true")]
     [InlineData("OwnerSetup:AssetSyncEnabled", "true")]
     [InlineData("DevelopmentDatabase:InitializeOnStartup", "true")]
-    [InlineData("ContractWorkflow:SimulatedSigningEnabled", "true")]
-    [InlineData("SePay:Enabled", "true")]
     [InlineData("BankIntegration:Enabled", "true")]
-    [InlineData("SePay:Mode", "Test")]
     [InlineData("DemoClock:OwnerUserId", "invalid")]
     public void UnsafeProductionDefaultsToNoClockAndRejectsExplicitEnablement(string key, string value)
     {
@@ -188,5 +180,28 @@ public sealed class DemoClockGuardTests
         Assert.False(DemoClockGuard.Enabled(new ConfigurationBuilder().AddInMemoryCollection(settings).Build(), "Production"));
         settings["DemoClock:Enabled"] = "true";
         Assert.Throws<InvalidOperationException>(() => DemoClockGuard.Enabled(new ConfigurationBuilder().AddInMemoryCollection(settings).Build(), "Production"));
+    }
+
+    [Theory]
+    [InlineData("Staging", "Test", false)]
+    [InlineData("Staging", "Live", true)]
+    [InlineData("Production", "Test", true)]
+    [InlineData("Production", "Live", false)]
+    public void AcademicClockSupportsPaymentsSigningAndWorkersWithoutShiftingSecurityTime(string environment, string mode, bool simulated)
+    {
+        var settings = environment == "Staging" ? Staging() : Production();
+        settings["DemoClock:Enabled"] = "true";
+        settings["SePay:Enabled"] = "true";
+        settings["SePay:Mode"] = mode;
+        settings["Jobs:Enabled"] = "true";
+        settings["BillingAutomation:AutomaticJobsEnabled"] = "true";
+        settings["ContractWorkflow:SimulatedSigningEnabled"] = simulated.ToString();
+        var config = new ConfigurationBuilder().AddInMemoryCollection(settings).Build();
+        Assert.True(DemoClockGuard.Enabled(config, environment));
+        var before = DateTimeOffset.UtcNow;
+        var clock = new BHome.Application.Common.DemoBusinessClock(TimeProvider.System);
+        clock.Change(new DateOnly(2030, 6, 1), 0);
+        Assert.InRange(clock.GetUtcNow(), before, DateTimeOffset.UtcNow);
+        Assert.Equal(new DateOnly(2030, 6, 1), clock.Read().BusinessDate);
     }
 }

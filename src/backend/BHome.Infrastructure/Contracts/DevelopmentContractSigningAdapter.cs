@@ -4,6 +4,7 @@ using BHome.Domain.TenantContracts;
 using iText.Kernel.Pdf;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Options;
+using Microsoft.Extensions.Configuration;
 
 namespace BHome.Infrastructure.Contracts;
 
@@ -12,11 +13,13 @@ internal sealed class ContractWorkflowOptions
     public bool SimulatedSigningEnabled { get; set; }
 }
 
-internal sealed class ContractWorkflowOptionsValidator(IHostEnvironment? environment = null) : IValidateOptions<ContractWorkflowOptions>
+internal sealed class ContractWorkflowOptionsValidator(IHostEnvironment? environment = null, IConfiguration? configuration = null) : IValidateOptions<ContractWorkflowOptions>
 {
     public ValidateOptionsResult Validate(string? name, ContractWorkflowOptions options) =>
-        !options.SimulatedSigningEnabled || environment is not null && (environment.IsDevelopment() || environment.IsEnvironment("Testing"))
-            ? ValidateOptionsResult.Success : ValidateOptionsResult.Fail("Simulated signing is restricted to Development/Testing.");
+        !options.SimulatedSigningEnabled || environment is not null && (environment.IsDevelopment() || environment.IsEnvironment("Testing") ||
+            (environment.IsStaging() || environment.IsProduction()) && configuration is not null && configuration.GetValue<bool>("DemoClock:Enabled") &&
+            BHome.Infrastructure.Development.DemoClockGuard.Enabled(configuration, environment.EnvironmentName))
+            ? ValidateOptionsResult.Success : ValidateOptionsResult.Fail("Simulated signing requires Development/Testing or an explicitly enabled academic demo deployment.");
 }
 
 internal sealed class ContractWorkflowMode(IOptions<ContractWorkflowOptions> options) : IContractWorkflowMode
