@@ -265,7 +265,7 @@ internal sealed class SetupWorkspaceStore(Compact24DbContext db, CompactNotifica
         await using var tx = db.Database.CurrentTransaction is null ? await db.Database.BeginTransactionAsync(t) : null;
         await db.Database.ExecuteSqlInterpolatedAsync($"SELECT pg_advisory_xact_lock(hashtextextended({locationId.ToString()},0))", t);
         var codes = assets.Select(x => x.Asset.Code!.Trim().ToUpper()).ToArray();
-        if (await db.Set<BHome.Domain.PropertyManagement.Asset>().AsNoTracking().AnyAsync(a => a.LocationId == locationId && a.Code != null && codes.Contains(a.Code.Trim().ToUpper()), t))
+        if (await db.Set<BHome.Domain.PropertyManagement.Asset>().AsNoTracking().AnyAsync(a => a.LocationId == locationId && a.AssetCode != null && codes.Contains(a.AssetCode.Trim().ToUpper()), t))
             throw new PropertyException(409, "duplicate_asset_code");
         // Previous SaveChanges also flushed pending caller changes. Flush before
         // staging native rows so no mixed native/projection batch is submitted.
@@ -303,7 +303,7 @@ internal sealed class SetupWorkspaceStore(Compact24DbContext db, CompactNotifica
              c.Status == ContractStatus.PendingActivation || c.Status == ContractStatus.Active), t))
             return "room_configuration_locked_by_contract";
         if (room.Status is RoomStatus.Occupied or RoomStatus.OnHold ||
-            await PostgresPropertyRepository.NativeUnresolvedResidents(db).AnyAsync(r => r.RoomId == roomId, t))
+            await PostgresPropertyRepository.NativeUnresolvedResidents(db).AnyAsync(r => r.CurrentRoomId == roomId, t))
             return "room_has_obligations";
         return null;
     }
@@ -405,7 +405,7 @@ internal sealed class SetupWorkspaceStore(Compact24DbContext db, CompactNotifica
     {
         await using var tx = db.Database.CurrentTransaction is null ? await db.Database.BeginTransactionAsync(t) : null;
         await db.Database.ExecuteSqlInterpolatedAsync($"SELECT pg_advisory_xact_lock(hashtextextended({asset.LocationId.ToString()},0))", t);
-        if (!string.IsNullOrWhiteSpace(asset.Code) && await db.Set<BHome.Domain.PropertyManagement.Asset>().AsNoTracking().AnyAsync(a => a.LocationId == asset.LocationId && a.Id != asset.Id && a.Code != null && a.Code.Trim().ToUpper() == asset.Code.Trim().ToUpper(), t))
+        if (!string.IsNullOrWhiteSpace(asset.Code) && await db.Set<BHome.Domain.PropertyManagement.Asset>().AsNoTracking().AnyAsync(a => a.LocationId == asset.LocationId && a.Id != asset.Id && a.AssetCode != null && a.AssetCode.Trim().ToUpper() == asset.Code.Trim().ToUpper(), t))
             throw new PropertyException(409, "duplicate_asset_code");
         if (asset.Status == AssetStatus.Retired && await HasOpenAssetWorkAsync(asset.Id, t))
             throw new PropertyException(409, "asset_workflow_controlled");
@@ -445,7 +445,7 @@ internal sealed class SetupWorkspaceStore(Compact24DbContext db, CompactNotifica
         var recipients = await (from c in db.Set<BHome.Domain.TenantContracts.Contract>().AsNoTracking()
                                 join r in db.Set<BHome.Domain.PropertyManagement.Room>().AsNoTracking() on c.RoomId equals r.Id
                                 where r.LocationId == locationId && c.Status == ContractStatus.Active &&
-                                    (c.Kind == BHome.Domain.TenantContracts.ContractKind.Main || c.Kind == BHome.Domain.TenantContracts.ContractKind.Renewal || c.Kind == BHome.Domain.TenantContracts.ContractKind.Addendum) &&
+                                    (c.ContractType == BHome.Domain.TenantContracts.ContractKind.Main || c.ContractType == BHome.Domain.TenantContracts.ContractKind.Renewal || c.ContractType == BHome.Domain.TenantContracts.ContractKind.Addendum) &&
                                     c.TenantUserId != null
                                 select new { c.Id, c.TenantUserId }).ToArrayAsync(t);
         foreach (var recipient in recipients)

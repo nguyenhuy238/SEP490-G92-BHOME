@@ -22,7 +22,7 @@ internal sealed class PropertyLifecycleChecks(Compact24DbContext db) : IProperty
         Add("operational_rooms", await rooms.CountAsync(r =>
             r.Status == RoomStatus.Occupied || r.Status == RoomStatus.OnHold, t));
         Add("unresolved_residents", await PostgresPropertyRepository.NativeUnresolvedResidents(db)
-            .CountAsync(r => r.RoomId != null && roomIds.Contains(r.RoomId.Value), t));
+            .CountAsync(r => r.CurrentRoomId != null && roomIds.Contains(r.CurrentRoomId.Value), t));
         Add("active_or_pending_contracts", await db.Set<BHome.Domain.TenantContracts.Contract>().AsNoTracking().CountAsync(c => roomIds.Contains(c.RoomId) &&
             (c.Status == ContractStatus.Active || c.Status == ContractStatus.PendingSigning || c.Status == ContractStatus.PendingActivation), t));
         Add("open_incidents", await db.Set<IncidentReport>().AsNoTracking().CountAsync(i => i.LocationId == locationId &&

@@ -426,7 +426,7 @@ internal static class LocationAssetInventoryTaskFactory
         // occupant's signed handover must never automatically confirm the new Staff's checklist.
         var roomIds = rooms.Select(r => r.Id).ToArray();
         var contracts = await db.Set<BHome.Domain.TenantContracts.Contract>().AsNoTracking().Where(c => roomIds.Contains(c.RoomId) &&
-                (c.Kind == BHome.Domain.TenantContracts.ContractKind.Main || c.Kind == BHome.Domain.TenantContracts.ContractKind.Renewal))
+                (c.ContractType == BHome.Domain.TenantContracts.ContractKind.Main || c.ContractType == BHome.Domain.TenantContracts.ContractKind.Renewal))
             .Select(c => new
             {
                 c.Id,

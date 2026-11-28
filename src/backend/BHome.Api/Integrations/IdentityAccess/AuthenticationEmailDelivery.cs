@@ -170,7 +170,7 @@ internal sealed class AuthenticationEmailDelivery(Compact24DbContext db, Compact
         if (tenantInvitation)
         {
             var row = await db.Set<BHome.Domain.TenantContracts.Contract>().AsNoTracking()
-                .Where(c => c.TenantUserId == recipient && c.Kind == BHome.Domain.TenantContracts.ContractKind.Main &&
+                .Where(c => c.TenantUserId == recipient && c.ContractType == BHome.Domain.TenantContracts.ContractKind.Main &&
                     c.Status == BHome.Domain.TenantContracts.ContractStatus.Active)
                 .OrderByDescending(c => c.ActivatedAt)
                 .FirstOrDefaultAsync(t);

@@ -24,7 +24,7 @@ internal sealed class MainContractActivationScheduling(BHomePersistenceContext d
     public async Task EnqueueDueAsync(CancellationToken t)
     {
         if (db is not Compact24DbContext) return;
-        var ids = await db.Set<BHome.Domain.TenantContracts.Contract>().AsNoTracking().Where(c => (c.Kind == BHome.Domain.TenantContracts.ContractKind.Main || c.Kind == BHome.Domain.TenantContracts.ContractKind.Holding) &&
+        var ids = await db.Set<BHome.Domain.TenantContracts.Contract>().AsNoTracking().Where(c => (c.ContractType == BHome.Domain.TenantContracts.ContractKind.Main || c.ContractType == BHome.Domain.TenantContracts.ContractKind.Holding) &&
             c.Status == ContractStatus.PendingActivation && c.PreviousContractId == null)
             .OrderBy(c => c.Id).Select(c => c.Id).ToArrayAsync(t);
         foreach (var id in ids)

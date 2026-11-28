@@ -48,7 +48,7 @@ internal sealed class IdentityRetentionRepository(Compact24DbContext db, IContra
         if (holds.Length > 0) blockers.Add("identity_retention_hold_active");
         var contracts = await db.Set<BHome.Domain.TenantContracts.Contract>().AsNoTracking()
             .Where(c => db.Set<BHome.Domain.TenantContracts.ContractResident>().Any(r => r.ContractId == c.Id && r.ResidentId == id))
-            .OrderBy(c => c.Id).Select(c => new { c.Id, c.Status, c.Kind, c.TenantUserId }).ToArrayAsync(token);
+            .OrderBy(c => c.Id).Select(c => new { c.Id, c.Status, Kind = c.ContractType, c.TenantUserId }).ToArrayAsync(token);
         foreach (var contract in contracts)
         {
             var kind = contract.Kind;

@@ -128,17 +128,17 @@ internal sealed class ContractRepository(BHomePersistenceContext db, ILogger<Con
             """);
         var kind = scope.Kind;
         var contracts = db.Set<BHome.Domain.TenantContracts.Contract>().AsNoTracking().Where(c =>
-            c.Kind == BHome.Domain.TenantContracts.ContractKind.Main || c.Kind == BHome.Domain.TenantContracts.ContractKind.Renewal || c.Kind == BHome.Domain.TenantContracts.ContractKind.Holding || c.Kind == BHome.Domain.TenantContracts.ContractKind.Addendum);
+            c.ContractType == BHome.Domain.TenantContracts.ContractKind.Main || c.ContractType == BHome.Domain.TenantContracts.ContractKind.Renewal || c.ContractType == BHome.Domain.TenantContracts.ContractKind.Holding || c.ContractType == BHome.Domain.TenantContracts.ContractKind.Addendum);
         var query = from c in contracts
                     join r in db.Set<BHome.Domain.PropertyManagement.Room>().AsNoTracking() on c.RoomId equals r.Id
                     join l in db.Set<BHome.Domain.Locations.Location>().AsNoTracking() on r.LocationId equals l.Id
                     where (locationId == null || l.Id == locationId) && (status == null || c.Status == status.Value) &&
-                        (kind == null || c.Kind == kind) &&
+                        (kind == null || c.ContractType == kind) &&
                         (scope.Owner || scope.Tenant && (c.TenantUserId == scope.ActorId || c.Status == ContractStatus.Active &&
-                            (c.Kind == BHome.Domain.TenantContracts.ContractKind.Main || c.Kind == BHome.Domain.TenantContracts.ContractKind.Renewal) &&
+                            (c.ContractType == BHome.Domain.TenantContracts.ContractKind.Main || c.ContractType == BHome.Domain.TenantContracts.ContractKind.Renewal) &&
                             db.Set<BHome.Domain.TenantContracts.ContractResident>().Any(m => m.ContractId == c.Id && m.ResidenceFrom <= scope.Today &&
                                 (m.ResidenceTo == null || m.ResidenceTo >= scope.Today) && db.Set<BHome.Domain.TenantContracts.Resident>().Any(person =>
-                                    person.Id == m.ResidentId && person.RoomId == c.RoomId && person.TenantUserId == scope.ActorId))) ||
+                                    person.Id == m.ResidentId && person.CurrentRoomId == c.RoomId && person.UserId == scope.ActorId))) ||
                          scope.Staff && db.EligibleStaffIds(scope.Today).Contains(scope.ActorId) && assigned.Contains(l.Id))
                     select new { Contract = c, LocationId = l.Id, LocationName = l.Name, r.RoomNumber };
         var total = await query.CountAsync(t);
@@ -235,7 +235,7 @@ internal sealed class ContractRepository(BHomePersistenceContext db, ILogger<Con
         if (db is Compact24DbContext)
         {
             var ids = await NativeContracts().Where(c => c.RoomId == roomId && c.Status == ContractStatus.Active &&
-                (c.Kind == BHome.Domain.TenantContracts.ContractKind.Main || c.Kind == BHome.Domain.TenantContracts.ContractKind.Renewal)).OrderBy(c => c.Id).Select(c => c.Id).ToArrayAsync(t);
+                (c.ContractType == BHome.Domain.TenantContracts.ContractKind.Main || c.ContractType == BHome.Domain.TenantContracts.ContractKind.Renewal)).OrderBy(c => c.Id).Select(c => c.Id).ToArrayAsync(t);
             var values = new List<Contract>(ids.Length);
             foreach (var id in ids) values.Add(await FindAsync(id, t) ?? throw ContractException.Missing());
             return values;
@@ -478,7 +478,7 @@ internal sealed class ContractRepository(BHomePersistenceContext db, ILogger<Con
     public async Task<IReadOnlyList<Resident>> ResidentsAsync(Guid roomId, Guid[] ids, CancellationToken t)
         => mutation is not null ? await mutation.ResidentsAsync(roomId, ids, t)
         : db is Compact24DbContext
-            ? (await db.Set<BHome.Domain.TenantContracts.Resident>().AsNoTracking().Where(r => r.RoomId == roomId && ids.Contains(r.Id)).ToArrayAsync(t)).Select(NativeResidentPersistence.Read).ToArray()
+            ? (await db.Set<BHome.Domain.TenantContracts.Resident>().AsNoTracking().Where(r => r.CurrentRoomId == roomId && ids.Contains(r.Id)).ToArrayAsync(t)).Select(NativeResidentPersistence.Read).ToArray()
             : await db.Set<Resident>().Where(r => r.RoomId == roomId && ids.Contains(r.Id)).ToArrayAsync(t);
     public Task<bool> ActiveUserInRoleAsync(Guid id, string role, CancellationToken t) =>
         db is Compact24DbContext
@@ -502,7 +502,7 @@ internal sealed class ContractRepository(BHomePersistenceContext db, ILogger<Con
             : await db.Set<Room>().Where(r => r.Id == roomId).Select(r => r.Capacity).SingleAsync(t);
         var others = db is Compact24DbContext
             ? await NativeContractsWithMembersAsync(NativeContracts().Where(c => c.RoomId == roomId && c.Id != exceptId &&
-                c.Kind != BHome.Domain.TenantContracts.ContractKind.Holding && c.Status == ContractStatus.Active && c.StartDate <= to && c.EndDate >= from), t)
+                c.ContractType != BHome.Domain.TenantContracts.ContractKind.Holding && c.Status == ContractStatus.Active && c.StartDate <= to && c.EndDate >= from), t)
             : await db.Set<Contract>().AsNoTracking().Include(c => c.Residents).Where(c => c.RoomId == roomId && c.Id != exceptId &&
                 c.Kind != ContractKind.Holding && c.Status == ContractStatus.Active && c.StartDate <= to && c.EndDate >= from).ToArrayAsync(t);
         if (others.Any(c => c.Residents.Any(r => residentIds.Contains(r.ResidentId)))) return true;
@@ -514,7 +514,7 @@ internal sealed class ContractRepository(BHomePersistenceContext db, ILogger<Con
         if (db is Compact24DbContext)
         {
             var nativePending = (await NativeContracts().Where(c => roomIds.Contains(c.RoomId) && c.Id != exceptContractId &&
-                c.Kind == BHome.Domain.TenantContracts.ContractKind.Main && c.Status == ContractStatus.PendingSigning).ToArrayAsync(t))
+                c.ContractType == BHome.Domain.TenantContracts.ContractKind.Main && c.Status == ContractStatus.PendingSigning).ToArrayAsync(t))
                 .Select(NativeContractSnapshot.Read).ToArray();
             var ids = nativePending.Select(c => c.Id).ToArray();
             var signatures = (await db.Set<BHome.Domain.TenantContracts.ContractSigning>().AsNoTracking().Where(s => ids.Contains(s.ContractId)).ToArrayAsync(t))
@@ -529,7 +529,7 @@ internal sealed class ContractRepository(BHomePersistenceContext db, ILogger<Con
     }
     public Task<bool> HasOtherActiveContractsAsync(Guid roomId, Guid exceptId, CancellationToken t) =>
         db is Compact24DbContext
-        ? NativeContracts().AnyAsync(c => c.RoomId == roomId && c.Id != exceptId && c.Kind == BHome.Domain.TenantContracts.ContractKind.Main &&
+        ? NativeContracts().AnyAsync(c => c.RoomId == roomId && c.Id != exceptId && c.ContractType == BHome.Domain.TenantContracts.ContractKind.Main &&
             (c.Status == ContractStatus.Active || c.Status == ContractStatus.Expired), t)
         : db.Set<Contract>().AnyAsync(c => c.RoomId == roomId && c.Id != exceptId && c.Kind == ContractKind.Main &&
             (c.Status == ContractStatus.Active || c.Status == ContractStatus.Expired), t);
@@ -544,7 +544,7 @@ internal sealed class ContractRepository(BHomePersistenceContext db, ILogger<Con
         : await db.Set<Contract>().AsNoTracking().Where(c => c.RoomId == roomId && c.TenantUserId == tenantId).OrderBy(c => c.StartDate).Take(501).ToArrayAsync(t);
 
     private IQueryable<BHome.Domain.TenantContracts.Contract> NativeContracts() => db.Set<BHome.Domain.TenantContracts.Contract>().AsNoTracking()
-        .Where(c => c.Kind == BHome.Domain.TenantContracts.ContractKind.Main || c.Kind == BHome.Domain.TenantContracts.ContractKind.Renewal || c.Kind == BHome.Domain.TenantContracts.ContractKind.Holding || c.Kind == BHome.Domain.TenantContracts.ContractKind.Addendum);
+        .Where(c => c.ContractType == BHome.Domain.TenantContracts.ContractKind.Main || c.ContractType == BHome.Domain.TenantContracts.ContractKind.Renewal || c.ContractType == BHome.Domain.TenantContracts.ContractKind.Holding || c.ContractType == BHome.Domain.TenantContracts.ContractKind.Addendum);
 
     private async Task<Contract[]> NativeContractsWithMembersAsync(IQueryable<BHome.Domain.TenantContracts.Contract> query, CancellationToken t)
     {
@@ -608,9 +608,9 @@ internal sealed class ContractRepository(BHomePersistenceContext db, ILogger<Con
         if (db is Compact24DbContext)
         {
             var native = await NativeContractsWithMembersAsync(NativeContracts().Where(c => c.RoomId == roomId && c.Id != exceptId &&
-                c.Kind != BHome.Domain.TenantContracts.ContractKind.Addendum && c.StartDate <= to && (c.ActualEndDate ?? c.EndDate) >= from &&
+                c.ContractType != BHome.Domain.TenantContracts.ContractKind.Addendum && c.StartDate <= to && (c.ActualEndDate ?? c.EndDate) >= from &&
                 (c.Status == ContractStatus.Active || c.Status == ContractStatus.PendingSigning ||
-                 c.Status == ContractStatus.PendingActivation || c.Kind == BHome.Domain.TenantContracts.ContractKind.Holding && c.Status == ContractStatus.Draft)), t);
+                 c.Status == ContractStatus.PendingActivation || c.ContractType == BHome.Domain.TenantContracts.ContractKind.Holding && c.Status == ContractStatus.Draft)), t);
             return native.Where(c => c.Status != ContractStatus.Draft || c.ApprovedAt != null).ToArray();
         }
         var contracts = db.Set<Contract>().AsNoTracking().Include(c => c.Residents)
@@ -624,9 +624,9 @@ internal sealed class ContractRepository(BHomePersistenceContext db, ILogger<Con
     {
         if (db is Compact24DbContext)
             return NativeContracts().AnyAsync(c => c.RoomId == roomId && c.Id != exceptId && c.StartDate <= to && c.EndDate >= from &&
-                (c.Status == ContractStatus.Active || c.Kind != BHome.Domain.TenantContracts.ContractKind.Addendum &&
+                (c.Status == ContractStatus.Active || c.ContractType != BHome.Domain.TenantContracts.ContractKind.Addendum &&
                 (c.Status == ContractStatus.PendingSigning || c.Status == ContractStatus.PendingActivation || c.Status == ContractStatus.Draft) &&
-                (db.Set<BHome.Domain.TenantContracts.ContractSigning>().Any(s => s.ContractId == c.Id && s.Status != SignatureStatus.Failed) ||
+                (db.Set<BHome.Domain.TenantContracts.ContractSigning>().Any(s => s.ContractId == c.Id && s.SigningStatus != SignatureStatus.Failed) ||
                  db.Set<BHome.Domain.PaymentsDebt.PaymentAllocation>().Any(a => a.TargetDepositContractId == c.Id && a.Amount > 0))), t);
         var candidates = db.Set<Contract>().AsNoTracking().Where(c => c.RoomId == roomId && c.Id != exceptId && c.StartDate <= to && c.EndDate >= from);
         return candidates.AnyAsync(c => c.Status == ContractStatus.Active ||
@@ -638,7 +638,7 @@ internal sealed class ContractRepository(BHomePersistenceContext db, ILogger<Con
     {
         if (db is Compact24DbContext)
         {
-            var id = await NativeContracts().Where(c => c.HoldingContractId == holdingId).Select(c => (Guid?)c.Id).SingleOrDefaultAsync(t);
+            var id = await NativeContracts().Where(c => c.SourceHoldingContractId == holdingId).Select(c => (Guid?)c.Id).SingleOrDefaultAsync(t);
             return id is { } value ? await FindAsync(value, t) : null;
         }
         return await db.Set<Contract>()
@@ -718,7 +718,7 @@ internal sealed class ContractRepository(BHomePersistenceContext db, ILogger<Con
             var rows = await (from cr in db.Set<BHome.Domain.TenantContracts.ContractResident>().AsNoTracking()
                               join resident in db.Set<BHome.Domain.TenantContracts.Resident>().AsNoTracking() on cr.ResidentId equals resident.Id
                               where cr.ContractId == contractId
-                              select new { Resident = resident, cr.Role }).ToArrayAsync(t);
+                              select new { Resident = resident, Role = cr.ResidentRole }).ToArrayAsync(t);
             return rows.Select(o => new ContractOccupantView(o.Resident.Id,
                 ContractResidentDisplay.Read(NativeResidentPersistence.Read(o.Resident), identityProtection).Name,
                 o.Role == ResidentType.Representative)).ToArray();
@@ -737,7 +737,7 @@ internal sealed class ContractRepository(BHomePersistenceContext db, ILogger<Con
             var row = await (from cr in db.Set<BHome.Domain.TenantContracts.ContractResident>().AsNoTracking()
                              join r in db.Set<BHome.Domain.TenantContracts.Resident>().AsNoTracking() on cr.ResidentId equals r.Id
                              where cr.ContractId == contractId && cr.ResidentId == residentId &&
-                               cr.Role == ResidentType.Representative && r.VerificationStatus == IdentityVerificationStatus.Verified
+                               cr.ResidentRole == ResidentType.Representative && r.VerificationStatus == IdentityVerificationStatus.Verified
                              select r).SingleOrDefaultAsync(t);
             return row is null ? null : ReadHoldingCustomer(NativeResidentPersistence.Read(row));
         }
@@ -773,7 +773,7 @@ internal sealed class ContractRepository(BHomePersistenceContext db, ILogger<Con
         var ids = contract.Residents.Select(r => r.ResidentId).ToArray();
         var retained = await db.Set<BHome.Domain.TenantContracts.ContractResident>().AsNoTracking().Where(cr => ids.Contains(cr.ResidentId) && cr.ContractId != contract.Id &&
             (cr.ResidenceTo == null || cr.ResidenceTo >= actualEndDate) && NativeContracts().Any(c => c.Id == cr.ContractId &&
-                c.Status == ContractStatus.Active && c.Kind != BHome.Domain.TenantContracts.ContractKind.Holding && c.StartDate <= actualEndDate &&
+                c.Status == ContractStatus.Active && c.ContractType != BHome.Domain.TenantContracts.ContractKind.Holding && c.StartDate <= actualEndDate &&
                 (c.ActualEndDate ?? c.EndDate) >= actualEndDate)).Select(cr => cr.ResidentId).Distinct().ToArrayAsync(t);
         foreach (var resident in await ResidentsAsync(contract.RoomId, ids.Except(retained).ToArray(), t))
             resident.RoomId = null;

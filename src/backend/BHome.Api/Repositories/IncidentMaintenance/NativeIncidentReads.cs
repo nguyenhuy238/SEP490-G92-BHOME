@@ -30,7 +30,7 @@ internal sealed class NativeIncidentReads(Compact24DbContext db)
             c.StartDate <= date && c.EndDate >= date && (c.ActualEndDate == null || c.ActualEndDate >= date) &&
             (c.TenantUserId == actor || db.Set<BHome.Domain.TenantContracts.ContractResident>().Any(cr =>
                 cr.ContractId == c.Id && cr.ResidenceFrom <= date && (cr.ResidenceTo == null || cr.ResidenceTo >= date) &&
-                db.Set<BHome.Domain.TenantContracts.Resident>().Any(r => r.Id == cr.ResidentId && r.TenantUserId == actor))) &&
+                db.Set<BHome.Domain.TenantContracts.Resident>().Any(r => r.Id == cr.ResidentId && r.UserId == actor))) &&
             db.Set<BHome.Domain.TenantContracts.ContractResident>().Any(cr => cr.ContractId == c.Id && cr.ResidentId == c.RepresentativeResidentId &&
                 cr.ResidenceFrom <= date && (cr.ResidenceTo == null || cr.ResidenceTo >= date)));
     internal Task<IncidentTenancy?> TenancyAsync(Guid actor, Guid location, Guid? room, DateOnly date, CancellationToken t) =>

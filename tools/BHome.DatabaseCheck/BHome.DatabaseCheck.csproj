@@ -8,5 +8,6 @@
   </PropertyGroup>
   <ItemGroup>
     <ProjectReference Include="../../src/backend/BHome.Api/BHome.Api.csproj" />
+    <ProjectReference Include="../BHome.LegacyPersistence/BHome.LegacyPersistence.csproj" />
   </ItemGroup>
 </Project>

@@ -67,7 +67,7 @@ internal sealed class NativeContractMutation(Compact24DbContext db)
         {
             // Contact/account changes are serialized with the same resident row lock.
             await db.Database.SqlQuery<Guid>($"SELECT id AS \"Value\" FROM residents WHERE id=ANY({missing}) AND current_room_id={roomId} ORDER BY id FOR UPDATE").ToArrayAsync(t);
-            var rows = await db.Set<BHome.Domain.TenantContracts.Resident>().AsNoTracking().Where(r => r.RoomId == roomId && missing.Contains(r.Id)).ToArrayAsync(t);
+            var rows = await db.Set<BHome.Domain.TenantContracts.Resident>().AsNoTracking().Where(r => r.CurrentRoomId == roomId && missing.Contains(r.Id)).ToArrayAsync(t);
             foreach (var row in rows)
             {
                 var value = NativeResidentPersistence.Read(row);

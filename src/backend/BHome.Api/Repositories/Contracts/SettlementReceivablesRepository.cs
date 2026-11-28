@@ -48,7 +48,7 @@ internal sealed partial class SettlementReceivablesRepository(BHomePersistenceCo
     public async Task<bool> CanReadAsync(Guid id, Guid userId, bool owner, CancellationToken token)
     {
         if (db is Compact24DbContext && await db.Set<BHome.Domain.TenantContracts.Contract>().AnyAsync(c => c.Id == id && (owner || c.TenantUserId == userId ||
-            db.Set<BHome.Domain.TenantContracts.ContractResident>().Any(cr => cr.ContractId == id && db.Set<BHome.Domain.TenantContracts.Resident>().Any(r => r.Id == cr.ResidentId && r.TenantUserId == userId))), token)) return true;
+            db.Set<BHome.Domain.TenantContracts.ContractResident>().Any(cr => cr.ContractId == id && db.Set<BHome.Domain.TenantContracts.Resident>().Any(r => r.Id == cr.ResidentId && r.UserId == userId))), token)) return true;
         if (db is not Compact24DbContext && await db.Set<Contract>().AnyAsync(c => c.Id == id && (owner || c.TenantUserId == userId ||
             db.Set<ContractResident>().Any(cr => cr.ContractId == id && db.Set<Resident>().Any(r => r.Id == cr.ResidentId && r.TenantUserId == userId))), token)) return true;
         return db is Compact24DbContext && await db.Database.SqlQuery<bool>($"""
@@ -125,12 +125,12 @@ internal sealed partial class SettlementReceivablesRepository(BHomePersistenceCo
                                     tenancy.StartDate <= incurred && (tenancy.ActualEndDate ?? tenancy.EndDate) >= incurred &&
                                     (tenancy.Status == ContractStatus.Active || tenancy.Id == id ||
                                         tenancy.Status == ContractStatus.Terminated && tenancy.ActualEndDate >= incurred || tenancy.Status == ContractStatus.Superseded) &&
-                                    cr.ResidenceFrom <= incurred && (cr.ResidenceTo == null || cr.ResidenceTo >= incurred) && r.TenantUserId != null
-                                select r.TenantUserId!.Value).Distinct().ToArrayAsync(token);
+                                    cr.ResidenceFrom <= incurred && (cr.ResidenceTo == null || cr.ResidenceTo >= incurred) && r.UserId != null
+                                select r.UserId!.Value).Distinct().ToArrayAsync(token);
         var legacy = await DepositDeductionRecords.LatestAsync(db, id, token);
         var payerIds = charges.SelectMany(c => c.RecipientUserIds).Distinct().ToArray();
-        var payerRows = await db.Set<BHome.Domain.TenantContracts.Resident>().AsNoTracking().Where(r => r.TenantUserId != null && payerIds.Contains(r.TenantUserId.Value))
-            .OrderBy(r => r.Id).Select(r => new { Id = r.TenantUserId!.Value, r.DisplayLabel }).ToArrayAsync(token);
+        var payerRows = await db.Set<BHome.Domain.TenantContracts.Resident>().AsNoTracking().Where(r => r.UserId != null && payerIds.Contains(r.UserId.Value))
+            .OrderBy(r => r.Id).Select(r => new { Id = r.UserId!.Value, r.DisplayLabel }).ToArrayAsync(token);
         var payers = payerRows.DistinctBy(r => r.Id).Select(r => new BHome.Application.PaymentsDebt.PayerChoice(r.Id, r.DisplayLabel)).ToArray();
         var invoiceRows = await db.Financials(OffsetInvoices(chain, incurred))
             .OrderBy(i => i.BillingPeriod).ThenBy(i => i.Id).Take(251).ToArrayAsync(token);

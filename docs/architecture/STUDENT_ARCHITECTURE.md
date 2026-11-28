@@ -4,7 +4,7 @@ Mục tiêu: mỗi thành viên tự tìm được code xử lý một nghiệp 
 
 ## 1. Backend — một project, các tầng trách nhiệm rõ ràng
 
-Giữ Modular Monolith .NET 8 + PostgreSQL. Bốn project backend trước đây được hợp nhất thành `src/backend/BHome.Api/BHome.Api.csproj`; namespace CLR cũ vẫn giữ để không đổi hợp đồng kiểu. DigitalSigning vẫn là subsystem riêng. Không tạo thêm project, microservice, framework hoặc tầng điều phối chỉ để chuyển tiếp.
+Giữ Modular Monolith .NET 8 + PostgreSQL. Bốn project backend trước đây được hợp nhất thành `src/backend/BHome.Api/BHome.Api.csproj`; namespace CLR cũ vẫn giữ để không đổi hợp đồng kiểu. DigitalSigning vẫn là subsystem riêng. Thư viện `tools/BHome.LegacyPersistence` chỉ phục vụ import/fixture offline, không phải project runtime nghiệp vụ và không được API tham chiếu.
 
 | Tầng                                                   | Đọc và sửa ở đây                                                                  | Không đặt ở đây                      |
 | ------------------------------------------------------ | --------------------------------------------------------------------------------- | ------------------------------------ |
@@ -20,7 +20,7 @@ Giữ Modular Monolith .NET 8 + PostgreSQL. Bốn project backend trước đây
 
 ### Entity và Database Compact24
 
-Mô hình vật lý gồm đúng 24 Entity được cấu hình trong một `Compact24DbContext` runtime, không có EF `ToSqlQuery`. Repository và service dùng chung entity chuẩn, đọc/ghi trực tiếp bảng và snapshot có kiểu. Không còn thư mục Domain hoặc 17 lớp entity lưu trữ trùng với entity nghiệp vụ; giữ namespace CLR cũ vì migration và serializer. Projection/writer cũ nằm trong `Data/Compact24/Legacy/` và chỉ dành cho import/fixture offline qua `Compact24ArchiveContext`, không đăng ký trong DI API. Không xóa công cụ kiểm tra migration lịch sử chỉ để giảm số file. Xem [bản đồ Entity và phạm vi chuyển đổi](COMPACT24_ENTITY_MAPPING.md), không suy luận mọi model nghiệp vụ là một bảng.
+Mô hình vật lý gồm đúng 24 Entity được cấu hình trong một `Compact24DbContext` runtime, không có EF `ToSqlQuery`. Repository và service dùng chung entity chuẩn, đọc/ghi trực tiếp bảng và snapshot có kiểu. Không còn thư mục Domain hoặc 17 lớp entity lưu trữ trùng với entity nghiệp vụ; giữ namespace CLR cũ vì migration và serializer. `BHomeDbContext` cũ, lịch sử migration của schema cũ và `Compact24ArchiveContext` nằm trong `tools/BHome.LegacyPersistence` để phục vụ import/fixture offline, không đăng ký trong DI API. Không xóa công cụ kiểm tra migration lịch sử chỉ để giảm số file. Xem [bản đồ Entity và phạm vi chuyển đổi](COMPACT24_ENTITY_MAPPING.md), không suy luận mọi model nghiệp vụ là một bảng.
 
 ### Quy ước tổ chức
 

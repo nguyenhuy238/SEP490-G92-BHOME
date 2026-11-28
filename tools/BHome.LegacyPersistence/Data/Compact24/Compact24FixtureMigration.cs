@@ -12,8 +12,6 @@ namespace BHome.Infrastructure.Persistence.Compact24;
 public sealed record Compact24TableInspection(string Source, string Target, long Rows, bool SupportedByIdentityFixtureCopy);
 public sealed record Compact24MigrationInspection(IReadOnlyList<Compact24TableInspection> Tables, IReadOnlyList<string> Blockers);
 public sealed record Compact24IdentityCopyResult(int Users, int Sessions, int Tokens, int ResetGrants, int AuditEvents, bool Reconciled);
-public sealed class Compact24MigrationException(string code) : InvalidOperationException("Compact fixture migration rejected.")
-{ public string Code { get; } = code; }
 
 // Deliberately limited to synthetic/authorized loopback fixture DBs. Not a production cutover tool.
 // All 70 tables are inspected; any nonempty unsupported table prevents ALL target writes.

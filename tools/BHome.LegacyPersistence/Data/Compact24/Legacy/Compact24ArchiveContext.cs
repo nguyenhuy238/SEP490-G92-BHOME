@@ -11,6 +11,8 @@ public sealed partial class Compact24ArchiveContext(DbContextOptions<Compact24Db
     Compact24Compatibility? compatibility = null, TimeProvider? clock = null)
     : Compact24DbContext(options, compatibility, clock)
 {
+    internal override bool UsesArchiveProjection => true;
+
     protected override void OnModelCreating(ModelBuilder model)
     {
         Compact24DomainModel.Configure(model);

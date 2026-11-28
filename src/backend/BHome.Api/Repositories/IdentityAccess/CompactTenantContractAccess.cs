@@ -24,10 +24,10 @@ internal sealed class CompactTenantContractAccess(BHomePersistenceContext db) : 
                 join representative in residents on representativeMember.ResidentId equals representative.Id
                 join contract in db.Set<BHome.Domain.TenantContracts.Contract>().AsNoTracking() on currentMember.ContractId equals contract.Id
                 join room in db.Set<BHome.Domain.PropertyManagement.Room>().AsNoTracking() on contract.RoomId equals room.Id
-                where currentResident.TenantUserId == tenantUserId
-                    && representative.TenantUserId == representativeUserId
+                where currentResident.UserId == tenantUserId
+                    && representative.UserId == representativeUserId
                     && room.LocationId == locationId
-                    && (contract.Kind == BHome.Domain.TenantContracts.ContractKind.Main || contract.Kind == BHome.Domain.TenantContracts.ContractKind.Renewal || contract.Kind == BHome.Domain.TenantContracts.ContractKind.Addendum)
+                    && (contract.ContractType == BHome.Domain.TenantContracts.ContractKind.Main || contract.ContractType == BHome.Domain.TenantContracts.ContractKind.Renewal || contract.ContractType == BHome.Domain.TenantContracts.ContractKind.Addendum)
                     && currentMember.ResidentId != representativeMember.ResidentId
                 select currentMember.ContractId;
 

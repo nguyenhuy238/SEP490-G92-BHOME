@@ -40,7 +40,7 @@ internal sealed class BillingAutomationSchedules(BHomePersistenceContext db) : I
         var end = x.BillingPeriod.AddMonths(1).AddDays(-1);
         var eligible = native is not null
             ? await native.Set<BHome.Domain.TenantContracts.Contract>().AnyAsync(c => c.Id == x.ContractId && c.RoomId == x.RoomId && c.ActivatedAt != null &&
-                (c.Kind == BHome.Domain.TenantContracts.ContractKind.Main || c.Kind == BHome.Domain.TenantContracts.ContractKind.Renewal || c.Kind == BHome.Domain.TenantContracts.ContractKind.Holding || c.Kind == BHome.Domain.TenantContracts.ContractKind.Addendum) &&
+                (c.ContractType == BHome.Domain.TenantContracts.ContractKind.Main || c.ContractType == BHome.Domain.TenantContracts.ContractKind.Renewal || c.ContractType == BHome.Domain.TenantContracts.ContractKind.Holding || c.ContractType == BHome.Domain.TenantContracts.ContractKind.Addendum) &&
                 (c.Status == ContractStatus.Active || c.Status == ContractStatus.Terminated || c.Status == ContractStatus.Superseded) &&
                 c.StartDate <= end && (c.ActualEndDate ?? c.EndDate) >= x.BillingPeriod, t)
             : await db.Set<Contract>().AnyAsync(c => c.Id == x.ContractId && c.RoomId == x.RoomId && c.ActivatedAt != null && (c.Status == ContractStatus.Active || c.Status == ContractStatus.Terminated || c.Status == ContractStatus.Superseded) && c.StartDate <= end && (c.ActualEndDate ?? c.EndDate) >= x.BillingPeriod, t);

@@ -79,7 +79,7 @@ internal sealed partial class BillingAutomationEngine(BHomePersistenceContext db
                 var rooms = native is not null ? await native.Set<BHome.Domain.PropertyManagement.Room>().AsNoTracking().Where(r => r.LocationId == p.LocationId && (after == null || r.Id.CompareTo(after.Value) > 0) &&
                     (phase == "Meter" || native.Set<BHome.Domain.Billing.Invoice>().Any(i => i.InvoiceType == "PERIODIC" && i.RoomId == r.Id && i.BillingPeriod == x.BillingPeriod) ||
                         native.Set<BHome.Domain.TenantContracts.Contract>().Any(c => c.RoomId == r.Id && c.ActivatedAt != null &&
-                        (c.Kind == BHome.Domain.TenantContracts.ContractKind.Main || c.Kind == BHome.Domain.TenantContracts.ContractKind.Renewal) &&
+                        (c.ContractType == BHome.Domain.TenantContracts.ContractKind.Main || c.ContractType == BHome.Domain.TenantContracts.ContractKind.Renewal) &&
                         (c.Status == ContractStatus.Active || c.Status == ContractStatus.Superseded || c.Status == ContractStatus.Terminated || c.Status == ContractStatus.Expired) &&
                         c.StartDate <= end && (c.ActualEndDate ?? c.EndDate) > end)))
                     .OrderBy(r => r.Id).Select(r => r.Id).Take(100).ToArrayAsync(t)

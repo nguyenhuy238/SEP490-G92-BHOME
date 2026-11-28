@@ -39,6 +39,8 @@ Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "BHome.DigitalSigning.Applic
 EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "BHome.DigitalSigning.Domain", "..\digital-signing\BHome.DigitalSigning.Domain\BHome.DigitalSigning.Domain.csproj", "{4C914272-9D07-471B-96F5-9DFDDACAC356}"
 EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "BHome.LegacyPersistence", "..\..\tools\BHome.LegacyPersistence\BHome.LegacyPersistence.csproj", "{48BF8681-A657-429B-AB1E-3CF2FF87CB5B}"
+EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
 		Debug|Any CPU = Debug|Any CPU
@@ -105,6 +107,10 @@ Global
 		{4C914272-9D07-471B-96F5-9DFDDACAC356}.Debug|Any CPU.Build.0 = Debug|Any CPU
 		{4C914272-9D07-471B-96F5-9DFDDACAC356}.Release|Any CPU.ActiveCfg = Release|Any CPU
 		{4C914272-9D07-471B-96F5-9DFDDACAC356}.Release|Any CPU.Build.0 = Release|Any CPU
+		{48BF8681-A657-429B-AB1E-3CF2FF87CB5B}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{48BF8681-A657-429B-AB1E-3CF2FF87CB5B}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{48BF8681-A657-429B-AB1E-3CF2FF87CB5B}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{48BF8681-A657-429B-AB1E-3CF2FF87CB5B}.Release|Any CPU.Build.0 = Release|Any CPU
 	EndGlobalSection
 	GlobalSection(SolutionProperties) = preSolution
 		HideSolutionNode = FALSE
@@ -127,5 +133,6 @@ Global
 		{95D492CF-F331-43FB-B765-53C652693899} = {5FDE5147-F662-454B-8576-7994ADD6805B}
 		{B6782E54-B2A2-4E98-955F-A8DEC2D9C36D} = {E171F917-4E71-4CE3-A48D-E42536E3A4CA}
 		{4C914272-9D07-471B-96F5-9DFDDACAC356} = {E171F917-4E71-4CE3-A48D-E42536E3A4CA}
+		{48BF8681-A657-429B-AB1E-3CF2FF87CB5B} = {5FDE5147-F662-454B-8576-7994ADD6805B}
 	EndGlobalSection
 EndGlobal

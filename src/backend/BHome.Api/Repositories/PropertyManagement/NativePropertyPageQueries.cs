@@ -91,7 +91,7 @@ internal static class NativePropertyPageQueries
             (!q.CommonAreaOnly || x.RoomId == null && x.CommonArea != null) &&
             (!q.RoomAssetsOnly || x.RoomId != null) &&
             (!q.RoomId.HasValue || x.RoomId == q.RoomId) && (!status.HasValue || x.Status == status) &&
-            (q.Search == null || x.Name.Contains(q.Search) || x.Code != null && x.Code.Contains(q.Search)));
+            (q.Search == null || x.Name.Contains(q.Search) || x.AssetCode != null && x.AssetCode.Contains(q.Search)));
         if (staffId is { } staff)
         {
             var locations = StaffLocations(db, staff, today);

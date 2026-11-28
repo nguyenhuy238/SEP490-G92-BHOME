@@ -21,6 +21,9 @@ public partial class Compact24DbContext(DbContextOptions<Compact24DbContext> opt
     protected TimeProvider PersistenceClock => clock ?? TimeProvider.System;
     protected DbContextOptions<Compact24DbContext> ContextOptions => options;
     protected Compact24Compatibility? Compatibility => compatibility;
+    // Offline fixture adapters can expose the historical EF projection model.
+    // Runtime DI always resolves this native context, never the offline adapter.
+    internal virtual bool UsesArchiveProjection => false;
 
     internal NpgsqlCommand CreateSqlCommand(string sql) => new(sql, (NpgsqlConnection)Database.GetDbConnection(),
         (NpgsqlTransaction?)Database.CurrentTransaction?.GetDbTransaction());

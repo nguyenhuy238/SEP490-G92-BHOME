@@ -10,8 +10,8 @@ namespace BHome.Infrastructure.PaymentsDebt;
 internal static class PaymentObligationQueries
 {
     internal static IQueryable<BHome.Domain.TenantContracts.Contract> Contracts(BHomePersistenceContext db) =>
-        db.Set<BHome.Domain.TenantContracts.Contract>().AsNoTracking().Where(c => c.Kind == BHome.Domain.TenantContracts.ContractKind.Main || c.Kind == BHome.Domain.TenantContracts.ContractKind.Renewal ||
-            c.Kind == BHome.Domain.TenantContracts.ContractKind.Holding || c.Kind == BHome.Domain.TenantContracts.ContractKind.Addendum);
+        db.Set<BHome.Domain.TenantContracts.Contract>().AsNoTracking().Where(c => c.ContractType == BHome.Domain.TenantContracts.ContractKind.Main || c.ContractType == BHome.Domain.TenantContracts.ContractKind.Renewal ||
+            c.ContractType == BHome.Domain.TenantContracts.ContractKind.Holding || c.ContractType == BHome.Domain.TenantContracts.ContractKind.Addendum);
 
     // Payment mode is frozen on the historical contract, not the current owner setting.
     internal static IQueryable<ContractPaymentModeRow> ContractModes(BHomePersistenceContext db) =>

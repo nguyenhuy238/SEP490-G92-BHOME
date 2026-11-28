@@ -9,6 +9,10 @@ public sealed class Compact24EntityNamingTests
     [Fact]
     public void PhysicalEntityNamesFollowDatabaseDesign()
     {
+        var runtimeAssembly = typeof(Compact24DbContext).Assembly;
+        Assert.Null(runtimeAssembly.GetType("BHome.Infrastructure.Persistence.BHomeDbContext"));
+        Assert.Null(runtimeAssembly.GetType("BHome.Infrastructure.Persistence.Compact24.Compact24ArchiveContext"));
+        Assert.DoesNotContain(runtimeAssembly.GetReferencedAssemblies(), reference => reference.Name == "BHome.LegacyPersistence");
         using var db = new Compact24DbContext(new DbContextOptionsBuilder<Compact24DbContext>()
             .UseNpgsql("Host=127.0.0.1;Database=offline_native_model;Username=unconfigured").Options);
         var expected = new Dictionary<string, string>(StringComparer.Ordinal)

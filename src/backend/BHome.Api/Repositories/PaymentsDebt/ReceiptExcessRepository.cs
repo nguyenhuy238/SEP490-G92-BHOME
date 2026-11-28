@@ -151,9 +151,9 @@ internal sealed class ReceiptExcessRepository(BHomePersistenceContext db, IContr
         }
         if (outstanding != 0) problems.Add("receipt_target_not_settled");
         var people = await db.Set<BHome.Domain.TenantContracts.Resident>().AsNoTracking().Where(r => r.VerificationStatus == IdentityVerificationStatus.Verified &&
-            (residents.Contains(r.Id) || r.TenantUserId != null && users.Contains(r.TenantUserId.Value) &&
+            (residents.Contains(r.Id) || r.UserId != null && users.Contains(r.UserId.Value) &&
                 db.Set<BHome.Domain.TenantContracts.ContractResident>().Any(cr => cr.ResidentId == r.Id && PaymentObligationQueries.Contracts(db).Any(c => c.Id == cr.ContractId && c.RoomId == room))))
-            .OrderBy(r => r.Id).Select(r => new ReceiptExcessPayer(r.Id, r.TenantUserId, r.DisplayLabel)).ToArrayAsync(token);
+            .OrderBy(r => r.Id).Select(r => new ReceiptExcessPayer(r.Id, r.UserId, r.DisplayLabel)).ToArrayAsync(token);
         var existing = await GetAsync(id, token);
         var verified = await db.Database.SqlQuery<bool>($"SELECT EXISTS(SELECT 1 FROM payments WHERE id={id} AND status='VERIFIED') AS \"Value\"").SingleAsync(token);
         if (!verified || transfer.Currency != "VND" || !PaymentRules.ValidMoney(transfer.Amount)) problems.Add("verified_bank_receipt_required");

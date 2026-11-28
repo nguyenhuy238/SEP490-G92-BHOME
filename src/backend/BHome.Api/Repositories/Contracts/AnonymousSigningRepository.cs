@@ -42,10 +42,10 @@ internal sealed class AnonymousSigningRepository(BHomePersistenceContext db) : I
             if (await (from c in db.Set<BHome.Domain.TenantContracts.Contract>().AsNoTracking()
                        join cr in db.Set<BHome.Domain.TenantContracts.ContractResident>().AsNoTracking() on c.Id equals cr.ContractId
                        join r in db.Set<BHome.Domain.TenantContracts.Resident>().AsNoTracking() on cr.ResidentId equals r.Id
-                       where c.Kind == BHome.Domain.TenantContracts.ContractKind.Main && (c.Id != contractId && c.Status == ContractStatus.Active || r.Id != residentId) &&
+                       where c.ContractType == BHome.Domain.TenantContracts.ContractKind.Main && (c.Id != contractId && c.Status == ContractStatus.Active || r.Id != residentId) &&
                          (r.ContactEmail != null && r.ContactEmail.Trim().ToLower() == email ||
                           db.Users.Any(u => u.Email != null && u.Email.Trim().ToLower() == email &&
-                              (u.Id == r.TenantUserId || r.Id == c.RepresentativeResidentId && u.Id == c.TenantUserId)))
+                              (u.Id == r.UserId || r.Id == c.RepresentativeResidentId && u.Id == c.TenantUserId)))
                        select c.Id).AnyAsync(t)) return true;
             return await NativeInvitationPersistence.AcceptedEmailInUseAsync(native, contractId, residentId, email, t);
         }

@@ -109,10 +109,3 @@ internal sealed class IdentityPasswordService(IIdentityPersistence db, IdentityS
 
     private static bool ValidPasswordInput(string password) => !string.IsNullOrWhiteSpace(password) && password.Length <= LoginService.MaxPasswordLength;
 }
-
-internal sealed class UnconfiguredPasswordResetDelivery : IPasswordResetDelivery
-{
-    public bool IsAvailable => false;
-    public Task SendAsync(Guid userId, string destination, string token, CancellationToken cancellationToken) =>
-        throw new IntegrationUnavailableException("Password reset delivery is not configured.");
-}

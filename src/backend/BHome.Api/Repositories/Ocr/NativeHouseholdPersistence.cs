@@ -53,7 +53,7 @@ internal static class NativeHouseholdPersistence
     internal static Task<int> OccupancyAsync(Compact24DbContext db, Guid room, CancellationToken t) =>
         (from c in db.Set<BHome.Domain.TenantContracts.Contract>()
          join r in db.Set<BHome.Domain.TenantContracts.ContractResident>() on c.Id equals r.ContractId
-         where c.RoomId == room && c.Status == ContractStatus.Active && c.Kind != BHome.Domain.TenantContracts.ContractKind.Holding
+         where c.RoomId == room && c.Status == ContractStatus.Active && c.ContractType != BHome.Domain.TenantContracts.ContractKind.Holding
          select r.ResidentId).Distinct().CountAsync(t);
 
     internal static async Task<Contract[]> BoundContractsAsync(Compact24DbContext db, Guid resident, CancellationToken t)

@@ -65,7 +65,7 @@ internal sealed class MainInitialPayments(BHomePersistenceContext db, ContractSe
             {
                 var period = new DateOnly(c.StartDate.Year, c.StartDate.Month, 1);
                 var candidates = (await PaymentObligationQueries.Contracts(db)
-                    .Where(other => other.RoomId == c.RoomId && other.Id != id && other.Kind == BHome.Domain.TenantContracts.ContractKind.Main &&
+                    .Where(other => other.RoomId == c.RoomId && other.Id != id && other.ContractType == BHome.Domain.TenantContracts.ContractKind.Main &&
                         (other.Status == ContractStatus.Active || other.Status == ContractStatus.PendingActivation || other.Status == ContractStatus.Expired ||
                          other.Status == ContractStatus.Terminated && other.StartDate >= period && other.StartDate < period.AddMonths(1)))
                     .OrderBy(other => other.StartDate).ThenBy(other => other.Id).ToArrayAsync(token)).Select(NativeContractSnapshot.Read).ToArray();

@@ -53,7 +53,7 @@ internal static class InvoiceFinancialQueries
 
     public static IQueryable<InvoiceFinancialRow> Financials(this BHomePersistenceContext db, IQueryable<Invoice> invoices)
     {
-        if (db is not Compact24DbContext || db is Compact24ArchiveContext) return LegacyFinancials(db, invoices);
+        if (db is not Compact24DbContext { UsesArchiveProjection: false }) return LegacyFinancials(db, invoices);
         var decisions = db.FinalApprovedDecisions();
         var allocations = db.Set<BHome.Domain.PaymentsDebt.PaymentAllocation>().AsNoTracking();
         return invoices.AsNoTracking().Select(i => new InvoiceFinancialRow

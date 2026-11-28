@@ -142,7 +142,7 @@ internal sealed class PostgresRoomInsightsRepository(BHomePersistenceContext db)
         var residents = compact.Set<BHome.Domain.TenantContracts.Resident>().AsNoTracking();
         var currentOccupants = await (from c in contracts
                                       join cr in members on c.Id equals cr.ContractId
-                                      where c.RoomId == roomId && c.Kind != BHome.Domain.TenantContracts.ContractKind.Holding &&
+                                      where c.RoomId == roomId && c.ContractType != BHome.Domain.TenantContracts.ContractKind.Holding &&
                                             c.Status == ContractStatus.Active && cr.ResidenceFrom <= effectiveOn &&
                                             (cr.ResidenceTo == null || cr.ResidenceTo >= effectiveOn)
                                       select cr.ResidentId).Distinct().CountAsync(token);
@@ -157,7 +157,7 @@ internal sealed class PostgresRoomInsightsRepository(BHomePersistenceContext db)
             var residentIds = await contractMembers.Select(r => r.ResidentId).ToArrayAsync(token);
             var verifiedMembers = from member in contractMembers
                                   join person in residents on member.ResidentId equals person.Id
-                                  where person.RoomId == roomId && person.VerificationStatus == IdentityVerificationStatus.Verified
+                                  where person.CurrentRoomId == roomId && person.VerificationStatus == IdentityVerificationStatus.Verified
                                   select member;
             var verified = await verifiedMembers.CountAsync(token);
             var representativeVerified = await verifiedMembers.AnyAsync(r => r.ResidentId == found.RepresentativeResidentId &&
@@ -281,7 +281,7 @@ internal sealed class PostgresRoomInsightsRepository(BHomePersistenceContext db)
             ? await (from c in native.Set<BHome.Domain.TenantContracts.Contract>().AsNoTracking()
                      join cr in native.Set<BHome.Domain.TenantContracts.ContractResident>().AsNoTracking() on c.Id equals cr.ContractId
                      join resident in native.Set<BHome.Domain.TenantContracts.Resident>().AsNoTracking() on cr.ResidentId equals resident.Id
-                     where roomIds.Contains(c.RoomId) && c.Kind != BHome.Domain.TenantContracts.ContractKind.Holding &&
+                     where roomIds.Contains(c.RoomId) && c.ContractType != BHome.Domain.TenantContracts.ContractKind.Holding &&
                            c.Status == ContractStatus.Active && cr.ResidenceFrom <= today &&
                            (cr.ResidenceTo == null || cr.ResidenceTo >= today) &&
                            resident.VerificationStatus == IdentityVerificationStatus.Verified
@@ -295,7 +295,7 @@ internal sealed class PostgresRoomInsightsRepository(BHomePersistenceContext db)
                      select c.RoomId).Distinct().CountAsync(token);
         var activeRooms = db is Compact24DbContext nativeContracts
             ? await nativeContracts.Set<BHome.Domain.TenantContracts.Contract>().AsNoTracking().Where(x => roomIds.Contains(x.RoomId) &&
-                x.Kind != BHome.Domain.TenantContracts.ContractKind.Holding && x.Status == ContractStatus.Active).Select(x => x.RoomId).Distinct().CountAsync(token)
+                x.ContractType != BHome.Domain.TenantContracts.ContractKind.Holding && x.Status == ContractStatus.Active).Select(x => x.RoomId).Distinct().CountAsync(token)
             : await db.Set<Contract>().AsNoTracking().Where(x => roomIds.Contains(x.RoomId) &&
             x.Kind != ContractKind.Holding && x.Status == ContractStatus.Active).Select(x => x.RoomId).Distinct().CountAsync(token);
         var snapshot = new OccupancySnapshot(rooms.Length,
@@ -318,7 +318,7 @@ internal sealed class PostgresRoomInsightsRepository(BHomePersistenceContext db)
         var intervals = db is Compact24DbContext nativeIntervals
             ? await (from c in nativeIntervals.Set<BHome.Domain.TenantContracts.Contract>().AsNoTracking()
                      join cr in nativeIntervals.Set<BHome.Domain.TenantContracts.ContractResident>().AsNoTracking() on c.Id equals cr.ContractId
-                     where roomIds.Contains(c.RoomId) && c.Kind != BHome.Domain.TenantContracts.ContractKind.Holding && c.ActivatedAt != null &&
+                     where roomIds.Contains(c.RoomId) && c.ContractType != BHome.Domain.TenantContracts.ContractKind.Holding && c.ActivatedAt != null &&
                            c.Status != ContractStatus.Draft && c.Status != ContractStatus.PendingSigning &&
                            c.Status != ContractStatus.PendingActivation && c.Status != ContractStatus.Cancelled
                      select new OccupancyInterval(c.RoomId,

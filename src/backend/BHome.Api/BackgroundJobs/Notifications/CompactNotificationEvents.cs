@@ -317,11 +317,11 @@ internal sealed partial class CompactNotificationEvents(Compact24DbContext db, C
         return await (from cr in db.Set<BHome.Domain.TenantContracts.ContractResident>().AsNoTracking()
                       join c in db.Set<BHome.Domain.TenantContracts.Contract>() on cr.ContractId equals c.Id
                       join r in db.Set<BHome.Domain.TenantContracts.Resident>() on cr.ResidentId equals r.Id
-                      where c.RoomId == room && c.ActivatedAt != null && c.Kind != BHome.Domain.TenantContracts.ContractKind.Holding &&
+                      where c.RoomId == room && c.ActivatedAt != null && c.ContractType != BHome.Domain.TenantContracts.ContractKind.Holding &&
                         (c.Status == ContractStatus.Active || c.Status == ContractStatus.Terminated || c.Status == ContractStatus.Superseded) &&
                         c.StartDate <= periodEnd && (c.ActualEndDate ?? c.EndDate) >= periodStart &&
-                        cr.ResidenceFrom <= periodEnd && (cr.ResidenceTo == null || cr.ResidenceTo >= periodStart) && r.TenantUserId != null
-                      select r.TenantUserId!.Value).Distinct().ToArrayAsync(t);
+                        cr.ResidenceFrom <= periodEnd && (cr.ResidenceTo == null || cr.ResidenceTo >= periodStart) && r.UserId != null
+                      select r.UserId!.Value).Distinct().ToArrayAsync(t);
     }
     private async Task<int> Unmatched(CancellationToken t)
     {
@@ -360,7 +360,7 @@ internal sealed partial class CompactNotificationEvents(Compact24DbContext db, C
             await Mark(key, t);
         }
         var until = Today.AddDays(30);
-        var contracts = await db.Set<BHome.Domain.TenantContracts.Contract>().AsNoTracking().Where(c => c.Status == ContractStatus.Active && c.Kind != BHome.Domain.TenantContracts.ContractKind.Holding && c.EndDate <= until).Select(c => c.Id).ToArrayAsync(t);
+        var contracts = await db.Set<BHome.Domain.TenantContracts.Contract>().AsNoTracking().Where(c => c.Status == ContractStatus.Active && c.ContractType != BHome.Domain.TenantContracts.ContractKind.Holding && c.EndDate <= until).Select(c => c.Id).ToArrayAsync(t);
         foreach (var id in contracts)
         {
             var contract = await NativeContractSnapshot.LoadAsync(db, id, t);

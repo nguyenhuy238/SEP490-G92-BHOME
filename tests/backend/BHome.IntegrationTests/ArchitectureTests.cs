@@ -47,6 +47,23 @@ public sealed class ArchitectureTests
         var parameters = typeof(Program).Assembly.GetTypes().Where(t => t.IsSubclassOf(typeof(ControllerBase)))
             .SelectMany(t => t.GetConstructors()).SelectMany(c => c.GetParameters());
         Assert.DoesNotContain(parameters, parameter => typeof(DbContext).IsAssignableFrom(parameter.ParameterType));
-        Assert.Same(typeof(Program).Assembly, typeof(BHomeDbContext).Assembly);
+        Assert.Equal("BHome.LegacyPersistence", typeof(BHomeDbContext).Assembly.GetName().Name);
+        Assert.DoesNotContain(typeof(Program).Assembly.GetReferencedAssemblies(), reference => reference.Name == "BHome.LegacyPersistence");
+    }
+
+    [Fact]
+    public void ControllersAreGroupedAndOfflineAdaptersStayOutOfApi()
+    {
+        DirectoryInfo? root = new(AppContext.BaseDirectory);
+        while (root is not null && !File.Exists(Path.Combine(root.FullName, "src", "backend", "BHome.Api", "BHome.Api.csproj")))
+            root = root.Parent;
+        Assert.NotNull(root);
+        var controllers = Path.Combine(root!.FullName, "src", "backend", "BHome.Api", "Controllers");
+        Assert.Empty(Directory.EnumerateFiles(controllers, "*.cs", SearchOption.TopDirectoryOnly));
+
+        var assembly = typeof(Program).Assembly;
+        Assert.DoesNotContain(assembly.GetTypes(), type => type.Name is
+            "NotificationRepository" or "NotificationDeliveryStore" or "UnconfiguredPasswordResetDelivery" or
+            "UnconfiguredContractHoldingLedger" or "MeterWindowCrop");
     }
 }

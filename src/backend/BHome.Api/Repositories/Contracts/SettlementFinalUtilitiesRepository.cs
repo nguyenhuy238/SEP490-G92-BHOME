@@ -49,14 +49,14 @@ internal sealed partial class SettlementReceivablesRepository
             var roster = await (from member in db.Set<BHome.Domain.TenantContracts.ContractResident>().AsNoTracking()
                                 join tenancy in db.Set<BHome.Domain.TenantContracts.Contract>() on member.ContractId equals tenancy.Id
                                 join resident in db.Set<BHome.Domain.TenantContracts.Resident>() on member.ResidentId equals resident.Id
-                                join account in db.Users on resident.TenantUserId equals (Guid?)account.Id into accounts
+                                join account in db.Users on resident.UserId equals (Guid?)account.Id into accounts
                                 from account in accounts.DefaultIfEmpty()
                                 where tenancy.RoomId == context.View.RoomId && tenancy.ActivatedAt != null && tenancy.ActivatedAt <= inspection.InspectedAt &&
                                   tenancy.StartDate <= liabilityEnd.Date && (tenancy.ActualEndDate ?? tenancy.EndDate) >= liabilityStart.Date &&
                                   (tenancy.Status == ContractStatus.Active || tenancy.Id == id || tenancy.Status == ContractStatus.Superseded ||
                                     tenancy.Status == ContractStatus.Terminated && tenancy.ActualEndDate >= liabilityStart.Date) &&
                                   member.ResidenceFrom <= liabilityEnd.Date && (member.ResidenceTo == null || member.ResidenceTo >= liabilityStart.Date)
-                                select new { ContractId = tenancy.Id, TenantUserId = resident.TenantUserId, Email = account == null ? null : account.Email }).ToArrayAsync(token);
+                                select new { ContractId = tenancy.Id, TenantUserId = resident.UserId, Email = account == null ? null : account.Email }).ToArrayAsync(token);
             liabilityContracts = roster.Select(r => r.ContractId).Append(id).Distinct().ToArray();
             if (roster.Length == 0 || roster.Any(r => r.TenantUserId is null || string.IsNullOrWhiteSpace(r.Email) ||
                 !new System.ComponentModel.DataAnnotations.EmailAddressAttribute().IsValid(r.Email))) missing.Add("occupant_account_email_required");

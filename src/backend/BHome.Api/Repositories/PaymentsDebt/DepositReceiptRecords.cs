@@ -31,8 +31,8 @@ internal sealed partial class PaymentRepository
         ? await db.Set<BHome.Domain.TenantContracts.Resident>().AsNoTracking()
             .Where(r => r.VerificationStatus == IdentityVerificationStatus.Verified &&
                 db.Set<BHome.Domain.TenantContracts.ContractResident>().Any(cr => cr.ContractId == contractId && cr.ResidentId == r.Id) &&
-                (r.TenantUserId == null || db.Users.Any(u => u.Id == r.TenantUserId && u.IsActive && EF.Property<string[]>(u, "roles").Contains("Tenant"))))
-            .OrderBy(r => r.Id).Select(r => new DepositPayerChoice(r.Id, r.TenantUserId, r.DisplayLabel)).ToArrayAsync(token)
+                (r.UserId == null || db.Users.Any(u => u.Id == r.UserId && u.IsActive && EF.Property<string[]>(u, "roles").Contains("Tenant"))))
+            .OrderBy(r => r.Id).Select(r => new DepositPayerChoice(r.Id, r.UserId, r.DisplayLabel)).ToArrayAsync(token)
         : await db.Set<Resident>().AsNoTracking()
         .Where(r => r.VerificationStatus == IdentityVerificationStatus.Verified && db.Set<ContractResident>().Any(cr => cr.ContractId == contractId && cr.ResidentId == r.Id) &&
             (r.TenantUserId == null || db.Users.Any(u => u.Id == r.TenantUserId && u.IsActive) &&

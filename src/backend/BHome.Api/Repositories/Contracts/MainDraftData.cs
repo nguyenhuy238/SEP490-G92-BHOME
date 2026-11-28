@@ -108,7 +108,7 @@ internal sealed class MainDraftData(BHomePersistenceContext db, IIdentityProtect
     public Task<bool> DuplicateAsync(Guid roomId, Guid except, Guid[] people, DateOnly from, DateOnly to, CancellationToken t) =>
         db is Compact24DbContext
         ? db.Set<BHome.Domain.TenantContracts.Contract>().AsNoTracking().AnyAsync(c => c.RoomId == roomId && c.Id != except &&
-            (c.Kind == BHome.Domain.TenantContracts.ContractKind.Main || c.Kind == BHome.Domain.TenantContracts.ContractKind.Renewal || c.Kind == BHome.Domain.TenantContracts.ContractKind.Holding || c.Kind == BHome.Domain.TenantContracts.ContractKind.Addendum) &&
+            (c.ContractType == BHome.Domain.TenantContracts.ContractKind.Main || c.ContractType == BHome.Domain.TenantContracts.ContractKind.Renewal || c.ContractType == BHome.Domain.TenantContracts.ContractKind.Holding || c.ContractType == BHome.Domain.TenantContracts.ContractKind.Addendum) &&
             (c.Status == ContractStatus.Draft || c.Status == ContractStatus.PendingSigning ||
              c.Status == ContractStatus.PendingActivation || c.Status == ContractStatus.Active) &&
             c.StartDate <= to && c.EndDate >= from && db.Set<BHome.Domain.TenantContracts.ContractResident>().Any(r => r.ContractId == c.Id && people.Contains(r.ResidentId)), t)
@@ -117,8 +117,8 @@ internal sealed class MainDraftData(BHomePersistenceContext db, IIdentityProtect
     public Task<string?> PhoneAsync(Guid roomId, Guid residentId, CancellationToken t) =>
         db is Compact24DbContext
         ? (from r in db.Set<BHome.Domain.TenantContracts.Resident>().AsNoTracking()
-           join account in db.Users.AsNoTracking() on r.TenantUserId equals (Guid?)account.Id
-           where r.RoomId == roomId && r.Id == residentId && r.VerificationStatus == IdentityVerificationStatus.Verified
+           join account in db.Users.AsNoTracking() on r.UserId equals (Guid?)account.Id
+           where r.CurrentRoomId == roomId && r.Id == residentId && r.VerificationStatus == IdentityVerificationStatus.Verified
            select account.PhoneNumber).SingleOrDefaultAsync(t)
         : (from r in db.Set<Resident>().AsNoTracking()
            join account in db.Users.AsNoTracking() on r.TenantUserId equals (Guid?)account.Id
@@ -134,8 +134,8 @@ internal sealed class MainDraftData(BHomePersistenceContext db, IIdentityProtect
     public Task<string?> EmailAsync(Guid roomId, Guid residentId, CancellationToken t) =>
         db is Compact24DbContext
         ? (from r in db.Set<BHome.Domain.TenantContracts.Resident>().AsNoTracking()
-           join account in db.Users.AsNoTracking() on r.TenantUserId equals (Guid?)account.Id
-           where r.RoomId == roomId && r.Id == residentId && r.VerificationStatus == IdentityVerificationStatus.Verified
+           join account in db.Users.AsNoTracking() on r.UserId equals (Guid?)account.Id
+           where r.CurrentRoomId == roomId && r.Id == residentId && r.VerificationStatus == IdentityVerificationStatus.Verified
            select account.Email).SingleOrDefaultAsync(t)
         : (from r in db.Set<Resident>().AsNoTracking()
            join account in db.Users.AsNoTracking() on r.TenantUserId equals (Guid?)account.Id
@@ -145,7 +145,7 @@ internal sealed class MainDraftData(BHomePersistenceContext db, IIdentityProtect
     {
         if (db is not Compact24DbContext)
             return await db.Set<Resident>().AsNoTracking().SingleOrDefaultAsync(r => r.Id == residentId && r.RoomId == roomId, t);
-        var row = await db.Set<BHome.Domain.TenantContracts.Resident>().AsNoTracking().SingleOrDefaultAsync(r => r.Id == residentId && r.RoomId == roomId, t);
+        var row = await db.Set<BHome.Domain.TenantContracts.Resident>().AsNoTracking().SingleOrDefaultAsync(r => r.Id == residentId && r.CurrentRoomId == roomId, t);
         return row is null ? null : NativeResidentPersistence.Read(row);
     }
     public MainDraftState Unprotect(Contract c) => Decode<MainDraftState>(JsonSerializer.Deserialize<EncryptedIdentity>(c.DraftMetadata)!, new(c.OwnerSignerId, c.Id));

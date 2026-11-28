@@ -9,7 +9,6 @@ using SessionOptions = BHome.Infrastructure.IdentityAccess.SessionOptions;
 using BHome.Infrastructure.Integrations;
 using BHome.Infrastructure.Jobs;
 using BHome.Application.Locations;
-using BHome.Infrastructure.Locations;
 using BHome.Infrastructure.Persistence;
 using BHome.Infrastructure.Persistence.Compact24;
 using BHome.Infrastructure.Storage;

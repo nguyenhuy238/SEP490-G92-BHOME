@@ -44,7 +44,7 @@ internal sealed class InvoiceRepository(BHomePersistenceContext db) : IInvoiceRe
                           join r in compact.Set<BHome.Domain.PropertyManagement.Room>().AsNoTracking() on c.RoomId equals r.Id
                           join l in compact.Set<BHome.Domain.Locations.Location>().AsNoTracking() on r.LocationId equals l.Id
                           where c.TenantUserId == tenantId && c.Status == ContractStatus.Active &&
-                              (c.Kind == BHome.Domain.TenantContracts.ContractKind.Main || c.Kind == BHome.Domain.TenantContracts.ContractKind.Renewal) && c.ActivatedAt != null && l.IsActive
+                              (c.ContractType == BHome.Domain.TenantContracts.ContractKind.Main || c.ContractType == BHome.Domain.TenantContracts.ContractKind.Renewal) && c.ActivatedAt != null && l.IsActive
                           select r.LocationId).Distinct().ToArrayAsync(t);
         }
         return await db.Set<Contract>().AsNoTracking().Where(c => c.TenantUserId == tenantId && c.Status == ContractStatus.Active &&
@@ -178,7 +178,7 @@ internal sealed class InvoiceRepository(BHomePersistenceContext db) : IInvoiceRe
         if (db is Compact24DbContext compact)
         {
             var rows = await compact.Set<BHome.Domain.TenantContracts.Contract>().AsNoTracking().Where(c => c.RoomId == roomId &&
-                (c.Kind == BHome.Domain.TenantContracts.ContractKind.Main || c.Kind == BHome.Domain.TenantContracts.ContractKind.Renewal) &&
+                (c.ContractType == BHome.Domain.TenantContracts.ContractKind.Main || c.ContractType == BHome.Domain.TenantContracts.ContractKind.Renewal) &&
                 (c.Status == ContractStatus.Active || c.Status == ContractStatus.Terminated ||
                     c.Status == ContractStatus.Superseded || c.Status == ContractStatus.Expired) &&
                 c.ActivatedAt != null && c.StartDate <= to && (c.ActualEndDate ?? c.EndDate) >= from).Take(501).ToArrayAsync(t);
@@ -200,8 +200,8 @@ internal sealed class InvoiceRepository(BHomePersistenceContext db) : IInvoiceRe
         if (contracts.Length > 500) throw new InvoiceException(409, "billing_occupancy_review_required");
         var residentIds = contracts.SelectMany(c => c.Residents.Where(r => r.ResidenceFrom <= to && (r.ResidenceTo == null || r.ResidenceTo >= from)).Select(r => r.ResidentId)).Distinct().ToArray();
         var links = db is Compact24DbContext native
-            ? await native.Set<BHome.Domain.TenantContracts.Resident>().AsNoTracking().Where(r => residentIds.Contains(r.Id) && r.TenantUserId != null)
-                .ToDictionaryAsync(r => r.Id, r => r.TenantUserId!.Value, t)
+            ? await native.Set<BHome.Domain.TenantContracts.Resident>().AsNoTracking().Where(r => residentIds.Contains(r.Id) && r.UserId != null)
+                .ToDictionaryAsync(r => r.Id, r => r.UserId!.Value, t)
             : await db.Set<Resident>().AsNoTracking().Where(r => residentIds.Contains(r.Id) && r.TenantUserId != null).ToDictionaryAsync(r => r.Id, r => r.TenantUserId!.Value, t);
         var linkedUsers = links.Values.Concat(contracts.Where(c => c.TenantUserId != null).Select(c => c.TenantUserId!.Value)).Distinct().ToArray();
         var emails = await db.Users.AsNoTracking().Where(u => linkedUsers.Contains(u.Id)).Select(u => new { u.Id, u.Email }).ToArrayAsync(t);

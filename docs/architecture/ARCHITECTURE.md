@@ -129,11 +129,11 @@ contract has no insecure persistence fallback. Keychain/Keystore integration rem
 
 ## Data storage
 
-`Infrastructure/Persistence/BHomeDbContext` is an Identity EF context with Npgsql. The migration
-baseline contains Identity and jobs; the auth migration adds sessions, refresh hashes, reset grants,
-append-only security audit and active-account status. `BHomeDbContextFactory` supports EF tooling
-without starting HTTP, jobs, or integrations. Use reviewed EF migrations; no `EnsureCreated` or
-automatic startup migration is used. Apply migrations explicitly during development/release.
+`BHome.Api/Data/Compact24/Compact24DbContext` is the runtime EF context with Npgsql and the reviewed
+24-table physical schema. The old `BHomeDbContext`, its design-time factory and historical migrations
+are isolated in `tools/BHome.LegacyPersistence` for explicit import and test fixtures, not API DI or
+deployment. Keep the current Compact24 migration IDs and SQL resources in BHome.Api. Follow the
+reviewed Compact24 schema verification and upgrade tooling; see [Compact24 entity mapping](COMPACT24_ENTITY_MAPPING.md).
 
 Use module-specific Fluent API configurations discovered through `ApplyConfigurationsFromAssembly`.
 Add explicit foreign keys, lengths, nullability, useful indexes and unique constraints. Use database

@@ -12,10 +12,13 @@ public partial class Compact24DbContext
     protected async Task ValidatePropertyConfigurationAsync(Guid[] locations, CancellationToken token)
     {
         if (locations.Length == 0) return;
+        var assets = Set<BHome.Domain.PropertyManagement.Asset>().AsNoTracking().Where(a => locations.Contains(a.LocationId));
+        var assetKeys = UsesArchiveProjection
+            ? assets.Where(a => a.Code != null).Select(a => new { a.LocationId, Code = a.Code!.Trim().ToUpper() })
+            : assets.Where(a => a.AssetCode != null).Select(a => new { a.LocationId, Code = a.AssetCode!.Trim().ToUpper() });
         if (await Set<BHome.Domain.PropertyManagement.Room>().AsNoTracking().Where(r => locations.Contains(r.LocationId))
             .GroupBy(r => new { r.LocationId, Number = r.RoomNumber.Trim().ToUpper() }).AnyAsync(g => g.Count() > 1, token) ||
-            await Set<BHome.Domain.PropertyManagement.Asset>().AsNoTracking().Where(a => locations.Contains(a.LocationId) && a.Code != null)
-            .GroupBy(a => new { a.LocationId, Code = a.Code!.Trim().ToUpper() }).AnyAsync(g => g.Count() > 1, token))
+            await assetKeys.GroupBy(a => new { a.LocationId, a.Code }).AnyAsync(g => g.Count() > 1, token))
             throw new PostgresException("Duplicate normalized property key.", "ERROR", "ERROR", "23505");
         var policies = Set<BHome.Domain.PropertyManagement.BillingPolicy>().AsNoTracking().Where(p => locations.Contains(p.LocationId));
         if (await policies.AnyAsync(a => policies.Any(b => b.Id != a.Id && b.LocationId == a.LocationId && b.RoomId == a.RoomId &&
@@ -44,7 +47,7 @@ public partial class Compact24DbContext
         var oldHistory = (System.Text.Json.JsonElement)entry.Property(nameof(BHome.Domain.PropertyManagement.BillingPolicy.History)).OriginalValue!;
         bool HistoryChanged(string field) => HistoricalField(oldHistory, field) != HistoricalField(policy.History, field);
         bool Changed(string name) => !Equals(entry.Property(name).OriginalValue, entry.Property(name).CurrentValue);
-        var invalid = new[] { "LocationId", "RoomId", "ChargeCode", "Category", "Method" }.Any(Changed) ||
+        var invalid = new[] { "LocationId", "RoomId", "ChargeCode", "Category", "CalculationMethod" }.Any(Changed) ||
             HistoryChanged("roomTypeId") || oldUsed is not null && Changed("FirstUsedAt");
         if (oldUsed is null && policy.FirstUsedAt is not null)
             invalid |= HistoryChanged("name") || entry.Properties.Any(p => p.IsModified && p.Metadata.Name is not ("FirstUsedAt" or "Version" or "History"));

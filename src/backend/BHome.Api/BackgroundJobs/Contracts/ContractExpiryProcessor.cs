@@ -193,8 +193,8 @@ internal sealed class ContractExpiryProcessor(BHomePersistenceContext db, TimePr
         {
             var now = clock.BusinessUtcNow();
             var batch = await compact.Set<BHome.Domain.TenantContracts.Contract>().AsNoTracking()
-                .Where(c => (c.Kind == BHome.Domain.TenantContracts.ContractKind.Main || c.Kind == BHome.Domain.TenantContracts.ContractKind.Renewal || c.Kind == BHome.Domain.TenantContracts.ContractKind.Holding || c.Kind == BHome.Domain.TenantContracts.ContractKind.Addendum)
-                    && (c.Kind == BHome.Domain.TenantContracts.ContractKind.Holding
+                .Where(c => (c.ContractType == BHome.Domain.TenantContracts.ContractKind.Main || c.ContractType == BHome.Domain.TenantContracts.ContractKind.Renewal || c.ContractType == BHome.Domain.TenantContracts.ContractKind.Holding || c.ContractType == BHome.Domain.TenantContracts.ContractKind.Addendum)
+                    && (c.ContractType == BHome.Domain.TenantContracts.ContractKind.Holding
                         ? (c.Status == ContractStatus.Draft || c.Status == ContractStatus.PendingSigning ||
                             c.Status == ContractStatus.PendingActivation || c.Status == ContractStatus.Active) && c.HoldingExpiryAt <= now
                         : c.Status == ContractStatus.Active && c.EndDate <= through)
@@ -225,7 +225,7 @@ internal sealed class ContractExpiryProcessor(BHomePersistenceContext db, TimePr
                             });
                         var otherBinding = await compact.Set<BHome.Domain.TenantContracts.Contract>().AnyAsync(x => x.RoomId == c.RoomId && x.Id != c.Id &&
                             x.Status == ContractStatus.Active &&
-                            (x.Kind == BHome.Domain.TenantContracts.ContractKind.Main || x.Kind == BHome.Domain.TenantContracts.ContractKind.Renewal || x.Kind == BHome.Domain.TenantContracts.ContractKind.Holding || x.Kind == BHome.Domain.TenantContracts.ContractKind.Addendum), t);
+                            (x.ContractType == BHome.Domain.TenantContracts.ContractKind.Main || x.ContractType == BHome.Domain.TenantContracts.ContractKind.Renewal || x.ContractType == BHome.Domain.TenantContracts.ContractKind.Holding || x.ContractType == BHome.Domain.TenantContracts.ContractKind.Addendum), t);
                         if (room.Status == RoomStatus.OnHold && !otherBinding)
                         {
                             var before = JsonSerializer.Serialize(new { room.Status, room.Version, ContractId = c.Id });

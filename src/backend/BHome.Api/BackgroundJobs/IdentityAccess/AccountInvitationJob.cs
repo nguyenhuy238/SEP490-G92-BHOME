@@ -21,12 +21,12 @@ internal sealed class AccountInvitationJob(Compact24DbContext db, AccountInvitat
         var email = await db.Set<BHome.Domain.TenantContracts.Resident>().Where(r => r.Id == input.ResidentId &&
             db.Set<BHome.Domain.TenantContracts.Contract>().Any(c => c.Id == input.ContractId &&
                 c.OwnerSignerId == input.OwnerId && c.Status == BHome.Domain.TenantContracts.ContractStatus.Active &&
-                c.Kind != BHome.Domain.TenantContracts.ContractKind.Holding &&
+                c.ContractType != BHome.Domain.TenantContracts.ContractKind.Holding &&
                 db.Set<BHome.Domain.TenantContracts.ContractResident>().Any(cr => cr.ContractId == c.Id && cr.ResidentId == r.Id)))
             .Select(r => r.ContactEmail).SingleOrDefaultAsync(t);
         if (email is null) throw new InvalidOperationException("Active tenancy invitation requires Owner review.");
         if (await db.Set<BHome.Domain.TenantContracts.Resident>().AnyAsync(r => r.Id == input.ResidentId &&
-            db.Users.Any(u => u.Id == r.TenantUserId && u.EmailConfirmed), t)) return;
+            db.Users.Any(u => u.Id == r.UserId && u.EmailConfirmed), t)) return;
         await invitations.InviteApprovedAsync(input.OwnerId, input.ResidentId, new(email), t, job.Id);
     }
 }

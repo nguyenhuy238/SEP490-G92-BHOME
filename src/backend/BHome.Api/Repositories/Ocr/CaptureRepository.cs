@@ -94,14 +94,14 @@ internal sealed class CaptureRepository(BHomePersistenceContext db, CaptureScope
         var ids = rooms.Select(r => r.Id).ToArray();
         var waitingForOwner = await contracts.RoomsAwaitingMainOwnerSignatureAsync(ids, Guid.Empty, t);
         var today = scope.Today;
-        var active = compact.Set<BHome.Domain.TenantContracts.Contract>().AsNoTracking().Where(c => ids.Contains(c.RoomId) && c.Kind != BHome.Domain.TenantContracts.ContractKind.Holding &&
+        var active = compact.Set<BHome.Domain.TenantContracts.Contract>().AsNoTracking().Where(c => ids.Contains(c.RoomId) && c.ContractType != BHome.Domain.TenantContracts.ContractKind.Holding &&
             c.Status == ContractStatus.Active && c.StartDate <= today && c.EndDate >= today);
         var occupants = await (from c in active
                                join p in compact.Set<BHome.Domain.TenantContracts.ContractResident>() on c.Id equals p.ContractId
                                select new { c.RoomId, p.ResidentId }).Distinct().ToArrayAsync(t);
         var current = await (from c in active
                              join r in compact.Set<BHome.Domain.TenantContracts.Resident>() on c.RepresentativeResidentId equals r.Id
-                             select new { c.RoomId, r.Id, r.OwnerUserId, r.IdentityData }).Distinct().ToArrayAsync(t);
+                             select new { c.RoomId, r.Id, OwnerUserId = r.IdentityOwnerScopeId, r.IdentityData }).Distinct().ToArrayAsync(t);
         var labels = current.ToLookup(r => r.RoomId, r => CurrentTenantName(r.Id, r.OwnerUserId, r.IdentityData));
         return rooms.Select(r => new NamedResource(r.Id, r.RoomNumber, r.LocationId, ((RoomStatus)r.Status).ToString(), r.Capacity,
             Math.Max(0, r.Capacity - occupants.Count(p => p.RoomId == r.Id)))
@@ -221,7 +221,7 @@ internal sealed class CaptureRepository(BHomePersistenceContext db, CaptureScope
                 SELECT r.* FROM residents r JOIN rooms room ON room.id=r.current_room_id WHERE room.location_id={locationId}
                 ORDER BY (SELECT (h->'state'->>'createdAt')::timestamptz FROM jsonb_array_elements(r.history) WITH ORDINALITY a(h,n)
                     WHERE h->>'recordType'='Resident' ORDER BY n DESC LIMIT 1) DESC NULLS LAST LIMIT 100
-                """).AsNoTracking().Where(r => scope.NativeRooms.Any(room => room.Id == r.RoomId)).ToArrayAsync(t);
+                """).AsNoTracking().Where(r => scope.NativeRooms.Any(room => room.Id == r.CurrentRoomId)).ToArrayAsync(t);
             return rows.Select(NativeResidentPersistence.Read).Select(r => new ResidentSummary(r.Id, r.RoomId!.Value, r.DisplayLabel,
                 r.ResidentType, r.VerificationStatus, r.ConfirmedAt, r.ContactEmail)).ToArray();
         }
@@ -237,7 +237,7 @@ internal sealed class CaptureRepository(BHomePersistenceContext db, CaptureScope
             throw new CaptureValidationException("invalid_confirmed_identity");
         await using var tx = await db.Database.BeginTransactionAsync(t);
         if (!(db is Compact24DbContext physicalDb
-            ? await physicalDb.Set<BHome.Domain.TenantContracts.Resident>().AnyAsync(r => r.Id == id && scope.NativeRooms.Any(room => room.Id == r.RoomId), t)
+            ? await physicalDb.Set<BHome.Domain.TenantContracts.Resident>().AnyAsync(r => r.Id == id && scope.NativeRooms.Any(room => room.Id == r.CurrentRoomId), t)
             : await db.Set<Resident>().AnyAsync(r => r.Id == id && scope.VisibleRooms.Any(room => room.Id == r.RoomId), t))) throw new OcrAccessException();
         var identityOwner = await IdentityOwnerAsync(t);
         // One authoritative chain lock serializes all creators, including legacy Staff-scoped records.
@@ -370,7 +370,7 @@ internal sealed class CaptureRepository(BHomePersistenceContext db, CaptureScope
         return new(task.Id);
     }
     private Task<bool> InitialContractActiveAsync(Guid? contractId, Guid roomId, DateOnly date, CancellationToken t) => db is Compact24DbContext compact
-        ? compact.Set<BHome.Domain.TenantContracts.Contract>().AnyAsync(c => c.Id == contractId && c.RoomId == roomId && c.Kind == BHome.Domain.TenantContracts.ContractKind.Main &&
+        ? compact.Set<BHome.Domain.TenantContracts.Contract>().AnyAsync(c => c.Id == contractId && c.RoomId == roomId && c.ContractType == BHome.Domain.TenantContracts.ContractKind.Main &&
             c.PreviousContractId == null && c.Status == ContractStatus.Active && c.StartDate <= date, t)
         : db.Set<Contract>().AnyAsync(c => c.Id == contractId && c.RoomId == roomId && c.Kind == ContractKind.Main &&
             c.PreviousContractId == null && c.Status == ContractStatus.Active && c.StartDate <= date, t);

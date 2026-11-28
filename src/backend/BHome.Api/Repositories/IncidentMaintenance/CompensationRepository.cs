@@ -47,7 +47,7 @@ internal sealed class CompensationRepository(BHomePersistenceContext db, IIncide
     {
         if (native is not null)
             return (await db.Set<BHome.Domain.TenantContracts.Contract>().AsNoTracking().Where(c => c.RoomId == room && c.ActivatedAt != null &&
-                c.Kind != BHome.Domain.TenantContracts.ContractKind.Holding && (c.Status == ContractStatus.Active || c.Status == ContractStatus.Terminated ||
+                c.ContractType != BHome.Domain.TenantContracts.ContractKind.Holding && (c.Status == ContractStatus.Active || c.Status == ContractStatus.Terminated ||
                 c.Status == ContractStatus.Superseded)).OrderByDescending(c => c.StartDate).Take(100)
                 .Select(c => new { c.Id, c.Status, c.StartDate, End = c.ActualEndDate ?? c.EndDate }).ToArrayAsync(t))
                 .Select(c => new CompensationContract(c.Id, ((ContractStatus)c.Status).ToString(), c.StartDate, c.End)).ToArray();
@@ -150,8 +150,8 @@ internal sealed class CompensationRepository(BHomePersistenceContext db, IIncide
         var available = position is null || position.UnclassifiedRefunds > 0 ? 0 :
             position.Received - position.Allocated - position.Refunded - position.Reserved - reserved - (legacyPlan?.Total ?? 0);
         var residents = contract.Residents.Select(r => r.ResidentId).ToArray();
-        var people = await compact.Set<BHome.Domain.TenantContracts.Resident>().AsNoTracking().Where(r => residents.Contains(r.Id) && r.TenantUserId != null)
-            .Select(r => r.TenantUserId!.Value).ToArrayAsync(t);
+        var people = await compact.Set<BHome.Domain.TenantContracts.Resident>().AsNoTracking().Where(r => residents.Contains(r.Id) && r.UserId != null)
+            .Select(r => r.UserId!.Value).ToArrayAsync(t);
         var recipients = contract.TenantUserId is { } tenant ? people.Prepend(tenant).Distinct().ToArray() : [];
         var ready = contract.Status == ContractStatus.Active && await compact.Database.SqlQuery<bool>($"""
             SELECT EXISTS(SELECT 1 FROM contracts c WHERE (c.move_out->'current'->>'contractId')::uuid={contractId}

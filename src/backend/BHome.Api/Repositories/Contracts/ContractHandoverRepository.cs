@@ -274,7 +274,7 @@ internal sealed class ContractHandoverRepository(BHomePersistenceContext db, IOp
     private async Task<bool> PrepareRoomMoveInAsync(Contract c, Guid actor, DateTimeOffset now, CancellationToken t)
     {
         var contracts = await db.Set<BHome.Domain.TenantContracts.Contract>().AsNoTracking().Where(x => x.RoomId == c.RoomId &&
-            (x.Kind == BHome.Domain.TenantContracts.ContractKind.Main || x.Kind == BHome.Domain.TenantContracts.ContractKind.Renewal))
+            (x.ContractType == BHome.Domain.TenantContracts.ContractKind.Main || x.ContractType == BHome.Domain.TenantContracts.ContractKind.Renewal))
             .Select(x => new { x.Id, x.PreviousContractId, Status = (ContractStatus)x.Status, x.StartDate, x.EndDate }).ToArrayAsync(t);
         var byId = contracts.ToDictionary(x => x.Id);
         Guid Root(Guid id)
@@ -702,7 +702,7 @@ internal sealed class ContractHandoverRepository(BHomePersistenceContext db, IOp
     }
     public async Task<IReadOnlyList<AssetChangeParty>> ActivePartiesAsync(Guid roomId, CancellationToken t) =>
         db is Compact24DbContext compact
-        ? await compact.Set<BHome.Domain.TenantContracts.Contract>().AsNoTracking().Where(c => c.RoomId == roomId && (c.Kind == BHome.Domain.TenantContracts.ContractKind.Main || c.Kind == BHome.Domain.TenantContracts.ContractKind.Renewal) && c.Status == ContractStatus.Active)
+        ? await compact.Set<BHome.Domain.TenantContracts.Contract>().AsNoTracking().Where(c => c.RoomId == roomId && (c.ContractType == BHome.Domain.TenantContracts.ContractKind.Main || c.ContractType == BHome.Domain.TenantContracts.ContractKind.Renewal) && c.Status == ContractStatus.Active)
             .Select(c => new AssetChangeParty(c.Id, c.TenantUserId)).ToArrayAsync(t)
         : await db.Set<Contract>().AsNoTracking().Where(c => c.RoomId == roomId && (c.Kind == ContractKind.Main || c.Kind == ContractKind.Renewal) && c.Status == ContractStatus.Active)
             .Select(c => new AssetChangeParty(c.Id, c.TenantUserId)).ToArrayAsync(t);

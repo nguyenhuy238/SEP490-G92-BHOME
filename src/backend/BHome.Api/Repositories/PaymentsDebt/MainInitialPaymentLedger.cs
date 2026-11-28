@@ -97,7 +97,7 @@ internal sealed class MainInitialPaymentLedger(BHomePersistenceContext db, IPaym
             var period = new DateOnly(c.StartDate.Year, c.StartDate.Month, 1);
             var otherMain = db is Compact24DbContext
                 ? (await PaymentObligationQueries.Contracts(db).Where(other => other.RoomId == c.RoomId && other.Id != id &&
-                    other.Kind == BHome.Domain.TenantContracts.ContractKind.Main && (other.Status == ContractStatus.Active || other.Status == ContractStatus.PendingActivation ||
+                    other.ContractType == BHome.Domain.TenantContracts.ContractKind.Main && (other.Status == ContractStatus.Active || other.Status == ContractStatus.PendingActivation ||
                     other.Status == ContractStatus.Expired || other.Status == ContractStatus.Terminated &&
                     other.StartDate >= period && other.StartDate < period.AddMonths(1))).ToArrayAsync(token)).Select(NativeContractSnapshot.Read).ToArray()
                 : await db.Set<Contract>().AsNoTracking().Where(other => other.RoomId == c.RoomId && other.Id != id &&

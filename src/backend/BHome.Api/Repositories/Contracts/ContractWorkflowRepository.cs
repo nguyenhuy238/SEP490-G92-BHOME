@@ -62,7 +62,7 @@ internal sealed class ContractWorkflowRepository(BHomePersistenceContext db, IId
             locations.Any(l => l.Id == r.LocationId)).OrderBy(r => r.RoomNumber).Take(100).ToArrayAsync(t);
         var rooms = roomRows.Select(r => new ContractRoomChoice(r.Id, r.RoomNumber, r.LocationId, ((RoomStatus)r.Status).ToString())).ToArray();
         var ids = rooms.Select(r => r.Id).ToArray();
-        var people = await db.Set<BHome.Domain.TenantContracts.Resident>().AsNoTracking().Where(r => r.RoomId != null && ids.Contains(r.RoomId.Value))
+        var people = await db.Set<BHome.Domain.TenantContracts.Resident>().AsNoTracking().Where(r => r.CurrentRoomId != null && ids.Contains(r.CurrentRoomId.Value))
             .OrderBy(r => r.DisplayLabel).Take(500).ToArrayAsync(t);
         var residents = people.Select(NativeResidentPersistence.Read).Select(r =>
         {
@@ -129,7 +129,7 @@ internal sealed class ContractWorkflowRepository(BHomePersistenceContext db, IId
     private async Task NativeLinkTenantAsync(Compact24DbContext native, Guid residentId, Guid tenantId, Guid actor, DateTimeOffset at, CancellationToken t)
     {
         await using var tx = await db.Database.BeginTransactionAsync(t);
-        var roomId = await db.Set<BHome.Domain.TenantContracts.Resident>().Where(r => r.Id == residentId).Select(r => r.RoomId).SingleOrDefaultAsync(t)
+        var roomId = await db.Set<BHome.Domain.TenantContracts.Resident>().Where(r => r.Id == residentId).Select(r => r.CurrentRoomId).SingleOrDefaultAsync(t)
             ?? throw ContractException.Missing();
         await db.Database.SqlQuery<Guid>($"SELECT id AS \"Value\" FROM rooms WHERE id={roomId} FOR UPDATE").SingleAsync(t);
         var row = await db.Set<BHome.Domain.TenantContracts.Resident>().FromSqlInterpolated($"SELECT * FROM residents WHERE id={residentId} FOR UPDATE")
@@ -139,7 +139,7 @@ internal sealed class ContractWorkflowRepository(BHomePersistenceContext db, IId
         if (!valid || row.VerificationStatus != IdentityVerificationStatus.Verified) throw ContractException.Invalid("verified_tenant_account_required");
         if (row.TenantUserId is not null && row.TenantUserId != tenantId || await db.Set<BHome.Domain.TenantContracts.Contract>().AnyAsync(c =>
             c.RepresentativeResidentId == residentId && c.TenantUserId != tenantId &&
-            (c.Kind == BHome.Domain.TenantContracts.ContractKind.Main || c.Kind == BHome.Domain.TenantContracts.ContractKind.Renewal || c.Kind == BHome.Domain.TenantContracts.ContractKind.Holding || c.Kind == BHome.Domain.TenantContracts.ContractKind.Addendum), t))
+            (c.ContractType == BHome.Domain.TenantContracts.ContractKind.Main || c.ContractType == BHome.Domain.TenantContracts.ContractKind.Renewal || c.ContractType == BHome.Domain.TenantContracts.ContractKind.Holding || c.ContractType == BHome.Domain.TenantContracts.ContractKind.Addendum), t))
             throw ContractException.Conflict("resident_account_already_linked");
         if (row.TenantUserId is null)
         {

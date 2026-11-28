@@ -69,14 +69,14 @@ internal sealed partial class NotificationEventPublisher
         if (db is Compact24DbContext compact)
         {
             var contracts = compact.Set<BHome.Domain.TenantContracts.Contract>().AsNoTracking().Where(c => c.RoomId == room && c.ActivatedAt != null &&
-                (c.Kind == BHome.Domain.TenantContracts.ContractKind.Main || c.Kind == BHome.Domain.TenantContracts.ContractKind.Renewal) &&
+                (c.ContractType == BHome.Domain.TenantContracts.ContractKind.Main || c.ContractType == BHome.Domain.TenantContracts.ContractKind.Renewal) &&
                 (c.Status == ContractStatus.Active || c.Status == ContractStatus.Terminated || c.Status == ContractStatus.Superseded) &&
                 c.StartDate <= end && (c.ActualEndDate ?? c.EndDate) >= start);
             var occupants = from cr in compact.Set<BHome.Domain.TenantContracts.ContractResident>()
                             join c in contracts on cr.ContractId equals c.Id
                             join r in compact.Set<BHome.Domain.TenantContracts.Resident>() on cr.ResidentId equals r.Id
-                            where cr.ResidenceFrom <= end && (cr.ResidenceTo == null || cr.ResidenceTo >= start) && r.TenantUserId != null
-                            select r.TenantUserId!.Value;
+                            where cr.ResidenceFrom <= end && (cr.ResidenceTo == null || cr.ResidenceTo >= start) && r.UserId != null
+                            select r.UserId!.Value;
             return await occupants.Union(contracts.Where(c => c.TenantUserId != null).Select(c => c.TenantUserId!.Value)).ToArrayAsync(t);
         }
         var legacy = await db.Set<Contract>().AsNoTracking().Include(c => c.Residents).Where(c => c.RoomId == room && c.ActivatedAt != null &&
