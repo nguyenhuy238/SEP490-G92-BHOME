@@ -1,5 +1,4 @@
 using BHome.Domain.IdentityAccess;
-using BHome.Domain.Notifications;
 using BHome.Infrastructure.Persistence;
 using Microsoft.EntityFrameworkCore;
 
@@ -32,7 +31,8 @@ internal sealed partial class NotificationEventPublisher
 
     private async Task<int> PublishDepositRefundsAsync(CancellationToken token)
     {
-        var pending = await DepositRefundNotices(db).Where(n => !db.Set<NotificationPublication>().Any(p => p.EventKey == n.EventKey))
+        var publicationKeys = NotificationPublications.Keys(db);
+        var pending = await DepositRefundNotices(db).Where(n => !publicationKeys.Contains(n.EventKey))
             .OrderBy(n => n.EventKey).Take(25).ToArrayAsync(token);
         var count = 0;
         foreach (var notice in pending)

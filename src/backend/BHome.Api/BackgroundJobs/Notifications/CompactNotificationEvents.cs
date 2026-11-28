@@ -13,9 +13,8 @@ namespace BHome.Infrastructure.Modules.Notifications;
 internal sealed partial class CompactNotificationEvents(Compact24DbContext db, CompactNotificationWriter sql)
 {
     private DateOnly Today => BillingAutomationDates.BusinessDate(sql.Now);
-    private Task<bool> Done(string key, CancellationToken t) => db.Set<NotificationPublication>().AnyAsync(p => p.EventKey == key, t);
-    private async Task Mark(string key, CancellationToken t)
-    { db.Add(new NotificationPublication { EventKey = key, PublishedAt = sql.Now }); await db.SaveChangesAsync(t); }
+    private Task<bool> Done(string key, CancellationToken t) => NotificationPublications.Keys(db).ContainsAsync(key, t);
+    private Task Mark(string key, CancellationToken t) => NotificationPublications.SaveAsync(db, key, sql.Now, 0, t);
     internal async Task<int> PublishAsync(CancellationToken t)
     {
         db.ChangeTracker.Clear(); await using var tx = await db.Database.BeginTransactionAsync(t);
@@ -246,7 +245,8 @@ internal sealed partial class CompactNotificationEvents(Compact24DbContext db, C
     }
     private async Task<int> Incidents(CancellationToken t)
     {
-        var rows = await db.Set<IncidentNotification>().AsNoTracking().Where(n => !db.Set<NotificationPublication>().Any(p => p.EventKey == "incident:" + n.Id.ToString()))
+        var publicationKeys = NotificationPublications.Keys(db);
+        var rows = await db.Set<IncidentNotification>().AsNoTracking().Where(n => !publicationKeys.Contains("incident:" + n.Id.ToString()))
             .OrderBy(n => n.CreatedAt).Take(50).ToArrayAsync(t); var count = 0;
         foreach (var n in rows)
         {
@@ -269,11 +269,12 @@ internal sealed partial class CompactNotificationEvents(Compact24DbContext db, C
     }
     private async Task<int> MeterReadings(CancellationToken t)
     {
+        var publicationKeys = NotificationPublications.Keys(db);
         var rows = await db.Set<MeterReading>().AsNoTracking().Where(r => r.ConfirmedAt != default &&
             (r.Status == MeterReadingStatus.Confirmed || r.Status == MeterReadingStatus.Corrected) &&
             db.Set<OperationalTask>().Any(x => x.Id == r.TaskId && x.MeterId == r.MeterId && x.Status == MeterTaskStatus.Completed) &&
             db.Set<MeterEvidence>().Any(e => e.Id == r.EvidenceId && e.TaskId == r.TaskId && e.IsUploaded && e.IsLinked) &&
-            !db.Set<NotificationPublication>().Any(p => p.EventKey == "meter-confirmed:" + r.Id.ToString()))
+            !publicationKeys.Contains("meter-confirmed:" + r.Id.ToString()))
             .OrderBy(r => r.ConfirmedAt).Take(25).ToArrayAsync(t); var count = 0;
         foreach (var reading in rows)
         {
@@ -301,8 +302,9 @@ internal sealed partial class CompactNotificationEvents(Compact24DbContext db, C
     }
     private async Task<int> Unmatched(CancellationToken t)
     {
+        var publicationKeys = NotificationPublications.Keys(db);
         var rows = await db.Set<BHome.Domain.PaymentsDebt.PaymentTransfer>().AsNoTracking()
-            .Where(x => !db.Set<BHome.Domain.PaymentsDebt.PaymentAllocation>().Any(a => a.TransferId == x.Id) && !db.Set<NotificationPublication>().Any(p => p.EventKey == "unmatched:" + x.Id.ToString()))
+            .Where(x => !db.Set<BHome.Domain.PaymentsDebt.PaymentAllocation>().Any(a => a.TransferId == x.Id) && !publicationKeys.Contains("unmatched:" + x.Id.ToString()))
             .OrderBy(x => x.Id).Take(25).ToArrayAsync(t); var count = 0;
         foreach (var transfer in rows)
         {
@@ -315,11 +317,12 @@ internal sealed partial class CompactNotificationEvents(Compact24DbContext db, C
     private async Task<int> OperationalAlerts(CancellationToken t)
     {
         var count = 0;
+        var publicationKeys = NotificationPublications.Keys(db);
         var tasks = await db.Set<OperationalTask>().AsNoTracking().Where(x => x.Status != MeterTaskStatus.Completed && x.Status != MeterTaskStatus.Cancelled &&
             (x.Kind == BHome.Domain.StaffOperations.OperationalTaskKind.MeterReading && x.Purpose == ReadingPurpose.Periodic
                 ? !db.StaffLocationAssignments.Any(a => a.LocationId == x.LocationId && a.StartDate <= Today && a.EndDate >= Today && StaffEmploymentEligibility.EligibleIds(db, Today).Contains(a.StaffUserId))
                 : x.AssignedStaffUserId == null || !db.StaffLocationAssignments.Any(a => a.LocationId == x.LocationId && a.StaffUserId == x.AssignedStaffUserId && a.StartDate <= Today && a.EndDate >= Today)) &&
-            !db.Set<NotificationPublication>().Any(p => p.EventKey == "task-unassigned:" + x.Id.ToString() + ":" + x.Version.ToString())).OrderBy(x => x.Id).Take(25).ToArrayAsync(t);
+            !publicationKeys.Contains("task-unassigned:" + x.Id.ToString() + ":" + x.Version.ToString())).OrderBy(x => x.Id).Take(25).ToArrayAsync(t);
         foreach (var task in tasks)
         {
             var key = $"task-unassigned:{task.Id}:{task.Version}";

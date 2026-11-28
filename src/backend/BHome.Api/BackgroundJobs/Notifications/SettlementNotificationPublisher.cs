@@ -1,7 +1,6 @@
 using BHome.Domain.IdentityAccess;
 using BHome.Application.Contracts;
 using System.Text.Json;
-using BHome.Domain.Notifications;
 using BHome.Domain.TenantContracts;
 using BHome.Infrastructure.Persistence.Compact24;
 using Microsoft.EntityFrameworkCore;
@@ -77,9 +76,10 @@ internal sealed partial class NotificationEventPublisher
     private async Task<int> PublishSettlementAsync(CancellationToken token)
     {
         var count = 0;
+        var publicationKeys = NotificationPublications.Keys(db);
         var supportedActions = SettlementTitles.Keys.ToArray();
         var changes = await db.Set<ContractMoveOutHistory>().AsNoTracking()
-            .Where(h => supportedActions.Contains(h.Action) && !db.Set<NotificationPublication>().Any(p => p.EventKey == "move-out:" + h.Id.ToString()))
+            .Where(h => supportedActions.Contains(h.Action) && !publicationKeys.Contains("move-out:" + h.Id.ToString()))
             .OrderBy(h => h.OccurredAt).ThenBy(h => h.Id).Take(25).ToArrayAsync(token);
         foreach (var change in changes)
             count += await Publish("move-out:" + change.Id, () => MoveOutAudience(change, token), token);
@@ -95,7 +95,7 @@ internal sealed partial class NotificationEventPublisher
             FROM contracts c CROSS JOIN LATERAL jsonb_array_elements(COALESCE(c.settlement->'reviews','[]'::jsonb)) review
             WHERE c.contract_type='HOLDING' AND c.status={(short)ContractStatus.Cancelled} AND review->>'recordType'='ContractSettlementReview'
               AND review->>'decision' IN ('HoldingDepositForfeited','HoldingRefundRequired')
-            """).Where(n => !db.Set<NotificationPublication>().Any(p => p.EventKey == n.EventKey))
+            """).Where(n => !publicationKeys.Contains(n.EventKey))
             .OrderBy(n => n.EventKey).Take(25).ToArrayAsync(token);
         foreach (var notice in notices)
         {

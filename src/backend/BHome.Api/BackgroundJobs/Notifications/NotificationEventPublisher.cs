@@ -29,7 +29,7 @@ internal sealed partial class NotificationEventPublisher(BHomePersistenceContext
         db.ChangeTracker.Clear(); await using var tx = await db.Database.BeginTransactionAsync(t);
         await db.Database.ExecuteSqlRawAsync("SELECT pg_advisory_xact_lock(hashtextextended('bhome-notification-publication-v2',0))", t);
         await db.Database.ExecuteSqlInterpolatedAsync($"SELECT pg_advisory_xact_lock(hashtextextended({"notification:" + key},0))", t);
-        if (await db.Set<NotificationPublication>().AnyAsync(p => p.EventKey == key, t)) return 0;
+        if (await NotificationPublications.Keys(db).ContainsAsync(key, t)) return 0;
         var count = 0; var recipients = 0;
         foreach (var sourceIntent in (await resolve()).DistinctBy(i => i.Recipient))
         {
@@ -37,8 +37,8 @@ internal sealed partial class NotificationEventPublisher(BHomePersistenceContext
             if (sms?.Value.Enabled == true && SmsNotificationPolicy.Template(i.EventType.Length > 0 ? i.EventType : EventType(key), i.Role) is { } template && sms.Value.EnabledTemplates.Contains(template))
                 i = i with { Channels = (i.Channels ?? ["IN_APP", "PUSH"]).Append("SMS").Distinct().ToArray() };
             if (!await ActiveRole(i.Recipient, i.Role, t)) continue; recipients++;
-            if (await db.Set<UserNotification>().AnyAsync(n => n.RecipientUserId == i.Recipient && n.EventKey == key, t)) continue;
-            db.Add(new UserNotification
+            if (await NotificationInboxWrites.ExistsAsync(db, i.Recipient, key, t)) continue;
+            NotificationInboxWrites.Add(db, new NotificationInboxState
             {
                 Id = Guid.NewGuid(),
                 RecipientUserId = i.Recipient,
@@ -60,7 +60,7 @@ internal sealed partial class NotificationEventPublisher(BHomePersistenceContext
             });
             count++;
         }
-        db.Add(new NotificationPublication { EventKey = key, PublishedAt = clock.GetUtcNow(), RecipientCount = recipients }); await db.SaveChangesAsync(t); await tx.CommitAsync(t); return count;
+        await NotificationPublications.SaveAsync(db, key, clock.GetUtcNow(), recipients, t); await tx.CommitAsync(t); return count;
     }
     private static string EventType(string key) => key.Split(':')[0] switch
     {
@@ -111,7 +111,7 @@ internal sealed partial class NotificationEventPublisher(BHomePersistenceContext
             foreach (var roomId in MissingDraftRooms(execution.ExceptionsJson))
             {
                 var key = $"invoice-finalization-no-draft:{roomId:D}:{execution.BillingPeriod:yyyyMM}";
-                if (await db.Set<NotificationPublication>().AnyAsync(p => p.EventKey == key, t)) continue;
+                if (await NotificationPublications.Keys(db).ContainsAsync(key, t)) continue;
                 if (await db.PeriodicInvoices().AnyAsync(i => i.RoomId == roomId && i.BillingPeriod == execution.BillingPeriod, t)) continue;
                 count += await Publish(key, async () =>
                 {
@@ -141,7 +141,8 @@ internal sealed partial class NotificationEventPublisher(BHomePersistenceContext
     private async Task<int> PublishPendingAsync(CancellationToken t, bool billingOnly)
     {
         var count = 0;
-        var invoices = await db.Set<InvoiceIssuedEvent>().AsNoTracking().Where(e => !db.Set<NotificationPublication>().Any(p => p.EventKey == "invoice:" + e.InvoiceId.ToString())).OrderBy(e => e.OccurredAt).Take(25).ToArrayAsync(t);
+        var publicationKeys = NotificationPublications.Keys(db);
+        var invoices = await db.Set<InvoiceIssuedEvent>().AsNoTracking().Where(e => !publicationKeys.Contains("invoice:" + e.InvoiceId.ToString())).OrderBy(e => e.OccurredAt).Take(25).ToArrayAsync(t);
         foreach (var e in invoices) count += await Publish("invoice:" + e.InvoiceId, async () =>
         {
             var i = await db.Set<Invoice>().AsNoTracking().SingleAsync(i => i.Id == e.InvoiceId, t);
@@ -155,7 +156,7 @@ internal sealed partial class NotificationEventPublisher(BHomePersistenceContext
         var held = await db.Set<InvoiceAdjustmentRequest>().AsNoTracking()
             .Where(r => r.Decision == null && r.Invoice.Status == InvoiceStatus.Draft &&
                 r.Invoice.ScheduledFinalDate <= today &&
-                !db.Set<NotificationPublication>().Any(p => p.EventKey == "invoice-finalization-held:" + r.InvoiceId.ToString()))
+                !publicationKeys.Contains("invoice-finalization-held:" + r.InvoiceId.ToString()))
             .OrderBy(r => r.SubmittedAt).ThenBy(r => r.Id).Take(50).Select(r => new { r.Id, r.InvoiceId }).ToArrayAsync(t);
         foreach (var request in held.DistinctBy(r => r.InvoiceId))
             count += await Publish("invoice-finalization-held:" + request.InvoiceId, async () =>
@@ -193,7 +194,7 @@ internal sealed partial class NotificationEventPublisher(BHomePersistenceContext
                 var blockedDrafts = await db.Set<Invoice>().AsNoTracking().Where(i => invoiceIds.Contains(i.Id) &&
                     i.LocationId == execution.LocationId && i.BillingPeriod == execution.BillingPeriod && i.Status == InvoiceStatus.Draft &&
                     i.ScheduledFinalDate <= today && !db.Set<InvoiceAdjustmentRequest>().Any(r => r.InvoiceId == i.Id && r.Decision == null) &&
-                    !db.Set<NotificationPublication>().Any(p => p.EventKey == "invoice-finalization-inputs:" + i.Id.ToString()))
+                    !publicationKeys.Contains("invoice-finalization-inputs:" + i.Id.ToString()))
                     .OrderBy(i => i.ScheduledFinalDate).ThenBy(i => i.Id).Select(i => i.Id).ToArrayAsync(t);
                 foreach (var blockedId in blockedDrafts)
                     count += await Publish("invoice-finalization-inputs:" + blockedId, async () =>
@@ -208,7 +209,7 @@ internal sealed partial class NotificationEventPublisher(BHomePersistenceContext
                     }, t);
             }
         count += await PublishMissingDrafts(finalExecutions, t);
-        var payments = await db.Set<PaymentConfirmedEvent>().AsNoTracking().Where(e => !db.Set<NotificationPublication>().Any(p => p.EventKey == "payment:" + e.AllocationId.ToString())).OrderBy(e => e.OccurredAt).Take(25).ToArrayAsync(t);
+        var payments = await db.Set<PaymentConfirmedEvent>().AsNoTracking().Where(e => !publicationKeys.Contains("payment:" + e.AllocationId.ToString())).OrderBy(e => e.OccurredAt).Take(25).ToArrayAsync(t);
         foreach (var e in payments) count += await Publish("payment:" + e.AllocationId, async () =>
         {
             var allocation = await db.Set<PaymentAllocation>().AsNoTracking().SingleAsync(a => a.Id == e.AllocationId && a.InvoiceId == e.InvoiceId, t);
@@ -218,12 +219,12 @@ internal sealed partial class NotificationEventPublisher(BHomePersistenceContext
             var outstanding = e.OutstandingAmount ?? balance.OutstandingAmount;
             var paid = e.PaidAmount ?? balance.AllocatedPayments;
             var full = outstanding == 0;
-            if (full && await db.Set<UserNotification>().AnyAsync(n => n.RelatedObjectId == i.Id && n.EventType == "INVOICE_FULLY_PAID", t)) return [];
+            if (full && await NotificationInboxWrites.HasEventAsync(db, i.Id, "INVOICE_FULLY_PAID", t)) return [];
             var notices = await InvoiceAudience(i, "Payment", full ? "Hóa đơn đã thanh toán đủ" : "Đã xác nhận thanh toán một phần",
                 $"Hóa đơn phòng {i.RoomNumber} kỳ {i.BillingPeriod:MM/yyyy}: vừa ghi nhận {allocation.Amount:N0} VND; tổng đã thanh toán {paid:N0} VND; còn phải trả {outstanding:N0} VND.", t, allocation.VerifiedByUserId);
             return notices.Select(n => n with { EventType = full ? "INVOICE_FULLY_PAID" : "PAYMENT_PARTIALLY_CONFIRMED", Channels = ["IN_APP", "PUSH", "EMAIL"] }).ToArray();
         }, t);
-        var adjustments = await db.Set<InvoiceAdjustmentEvent>().AsNoTracking().Where(e => !db.Set<NotificationPublication>().Any(p => p.EventKey == "adjustment:" + e.RequestId.ToString() + ":" + e.Name)).OrderBy(e => e.OccurredAt).Take(25).ToArrayAsync(t);
+        var adjustments = await db.Set<InvoiceAdjustmentEvent>().AsNoTracking().Where(e => !publicationKeys.Contains("adjustment:" + e.RequestId.ToString() + ":" + e.Name)).OrderBy(e => e.OccurredAt).Take(25).ToArrayAsync(t);
         foreach (var e in adjustments) count += await Publish("adjustment:" + e.RequestId + ":" + e.Name, async () =>
         {
             var i = await db.Set<Invoice>().AsNoTracking().SingleAsync(i => i.Id == e.InvoiceId, t); var list = new List<Intent>();
@@ -241,14 +242,14 @@ internal sealed partial class NotificationEventPublisher(BHomePersistenceContext
             }
             return list;
         }, t);
-        var expiries = billingOnly || extended is not null ? [] : await db.Set<ContractExpiryNotice>().AsNoTracking().Where(e => !db.Set<NotificationPublication>().Any(p => p.EventKey == "contract-expiry:" + e.Id.ToString())).OrderBy(e => e.CreatedAt).Take(25).ToArrayAsync(t);
+        var expiries = billingOnly || extended is not null ? [] : await db.Set<ContractExpiryNotice>().AsNoTracking().Where(e => !publicationKeys.Contains("contract-expiry:" + e.Id.ToString())).OrderBy(e => e.CreatedAt).Take(25).ToArrayAsync(t);
         foreach (var e in expiries) count += await Publish("contract-expiry:" + e.Id, async () =>
         {
             var c = await db.Set<Contract>().AsNoTracking().Include(c => c.Room).SingleAsync(c => c.Id == e.ContractId, t); var expiryToday = BillingAutomationDates.BusinessDate(clock.GetUtcNow());
             if (c.Status != ContractStatus.Active || c.EndDate != e.EndDate || e.Stage != (c.EndDate < expiryToday ? "Expired" : "Upcoming30")) return [];
             return [new Intent(e.RecipientId, e.RecipientId == c.OwnerSignerId ? Roles.Owner : Roles.Tenant, c.Room.LocationId, "Contract", e.Stage == "Expired" ? "Hợp đồng đã đến hạn xử lý" : "Hợp đồng sắp hết hạn", "Vui lòng xem hợp đồng để thực hiện gia hạn hoặc trả phòng.", "Contract", c.Id)];
         }, t);
-        var tasks = await db.Set<OperationalTaskNotification>().AsNoTracking().Where(e => !db.Set<NotificationPublication>().Any(p => p.EventKey == "task:" + e.Id.ToString()) &&
+        var tasks = await db.Set<OperationalTaskNotification>().AsNoTracking().Where(e => !publicationKeys.Contains("task:" + e.Id.ToString()) &&
             (!billingOnly || db.Set<OperationalTask>().Any(task => task.Id == e.TaskId && task.Kind == OperationalTaskKind.MeterReading && task.BillingPeriod != null)))
             .OrderBy(e => e.CreatedAt).Take(25).ToArrayAsync(t);
         foreach (var e in tasks)
@@ -278,7 +279,7 @@ internal sealed partial class NotificationEventPublisher(BHomePersistenceContext
                 return [new Intent(e.RecipientUserId, role, task.LocationId, "Task", task.Kind == OperationalTaskKind.MeterReading ? "Công việc ghi chỉ số định kỳ" : "Công việc có cập nhật", "Mở công việc để xem yêu cầu và thời hạn trong phạm vi được phân công.", task.Kind == OperationalTaskKind.MeterReading ? "MeterTask" : "OperationalTask", task.Id, e.Id, e.ReadAt, EventType: e.Event switch { "assigned" or "assign" or "created" or "scheduled_meter_created" or "scheduled_meter_assigned" or "responsibility_changed" => "TASK_ASSIGNED", "submit" or "submitted" => "TASK_COMPLETION_SUBMITTED", "rework" => "TASK_REWORK_REQUIRED", _ => "TASK_UPDATED" })];
             }, t);
         }
-        var issues = await db.Set<BillingAutomationExecution>().AsNoTracking().Where(e => e.Phase != "Final" && e.Status == "PendingInputs" && !db.Set<NotificationPublication>().Any(p => p.EventKey == "billing-exception:" + e.Id.ToString())).OrderBy(e => e.LastStartedAt).Take(25).ToArrayAsync(t);
+        var issues = await db.Set<BillingAutomationExecution>().AsNoTracking().Where(e => e.Phase != "Final" && e.Status == "PendingInputs" && !publicationKeys.Contains("billing-exception:" + e.Id.ToString())).OrderBy(e => e.LastStartedAt).Take(25).ToArrayAsync(t);
         foreach (var e in issues) count += await Publish("billing-exception:" + e.Id, async () =>
         {
             var plan = await db.Set<BillingAutomationPlan>().AsNoTracking().SingleAsync(p => p.Id == e.PlanId, t);

@@ -23,6 +23,13 @@ public sealed partial class Compact24DbContext
                 Native.FinancialScenario => entry.State == EntityState.Added,
                 Native.StaffEmployment => entry.State is EntityState.Added or EntityState.Modified,
                 Native.Expense => entry.State is EntityState.Added or EntityState.Modified,
+                Native.Notification notification => entry.State == EntityState.Added &&
+                    notification.EventData.ValueKind == System.Text.Json.JsonValueKind.Object &&
+                    notification.EventData.TryGetProperty("recordType", out var recordType) &&
+                    recordType.ValueKind == System.Text.Json.JsonValueKind.String &&
+                    (notification.RecordKind == "OUTBOX" && notification.NotificationType == "NotificationPublication" &&
+                        notification.RecipientUserId is null && recordType.GetString() == "NotificationPublication" ||
+                     notification.RecordKind == "INBOX" && notification.RecipientUserId is not null && recordType.GetString() == "UserNotification"),
                 _ => false
             };
             if (!allowed)

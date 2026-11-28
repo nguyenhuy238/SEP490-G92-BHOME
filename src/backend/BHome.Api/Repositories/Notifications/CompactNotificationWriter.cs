@@ -1,7 +1,6 @@
 using System.Text.Json;
 using BHome.Application.Common;
 using BHome.Application.Notifications;
-using BHome.Domain.Notifications;
 using BHome.Infrastructure.Persistence.Compact24;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Storage;
@@ -34,7 +33,7 @@ internal sealed class CompactNotificationWriter(Compact24DbContext db, TimeProvi
         string title, string body, string type, Guid target, CancellationToken t, string priority = "P1", string[]? channels = null, string source = "System", Guid? taskSource = null)
     {
         var id = Guid.NewGuid(); var now = Now;
-        var state = new UserNotification
+        var state = new NotificationInboxState
         {
             Id = id,
             RecipientUserId = user,
