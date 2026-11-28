@@ -186,8 +186,10 @@ public sealed partial class Compact24OwnerSetupTests
         {
             var db = scope.ServiceProvider.GetRequiredService<Compact24DbContext>();
             var room = await db.Set<Room>().SingleAsync(r => r.Id == w.Room);
+            await using var transaction = await db.Database.BeginTransactionAsync();
             room.Version++;
             await db.SaveChangesAsync();
+            await transaction.CommitAsync();
         }
 
         var beforeSubmit = (await staff.GetFromJsonAsync<HandoverDraftView>(

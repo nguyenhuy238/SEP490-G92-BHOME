@@ -1006,9 +1006,9 @@ public sealed class LocationAssetInventoryAssignmentTests(Compact24Fixture fixtu
             var db = scope.ServiceProvider.GetRequiredService<Compact24ArchiveContext>();
             db.AddRange(validRoom, changedRoom, removedRoom, archivedRoom, malformedRoom);
             db.AddRange(assets);
-            db.Entry(assets[0]).Property<string>("PurchaseInfo").CurrentValue = JsonSerializer.Serialize(
+            db.Entry(assets[0]).Property<string>("ArchivePurchaseInfo").CurrentValue = JsonSerializer.Serialize(
                 new AssetMetadata("BulkQuantity", 3, null, null, null, "cái"), Json);
-            db.Entry(assets[4]).Property<string>("PurchaseInfo").CurrentValue =
+            db.Entry(assets[4]).Property<string>("ArchivePurchaseInfo").CurrentValue =
                 "{\"trackingMode\":\"BulkQuantity\",\"quantity\":\"three\",\"unit\":\"cái\"}";
             await db.SaveChangesAsync();
 

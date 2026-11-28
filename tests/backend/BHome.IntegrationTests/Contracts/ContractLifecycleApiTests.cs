@@ -1768,41 +1768,52 @@ public sealed partial class ContractLifecycleApiTests(ContractFixture fixture) :
     {
         var w = await Setup(); var id = await Draft(w);
         var email = new CapturedEmail();
-        WebApplicationFactory<Program> Host(bool production) => fixture.Factory.WithWebHostBuilder(b =>
+        using var key = System.Security.Cryptography.RSA.Create(2048);
+        var certificateRequest = new System.Security.Cryptography.X509Certificates.CertificateRequest(
+            "CN=BHOME CI Test Seal", key, System.Security.Cryptography.HashAlgorithmName.SHA256, System.Security.Cryptography.RSASignaturePadding.Pkcs1);
+        using var certificate = certificateRequest.CreateSelfSigned(DateTimeOffset.UtcNow.AddDays(-1), DateTimeOffset.UtcNow.AddDays(1));
+        var sealPath = System.IO.Path.GetTempFileName();
+        try
         {
-            if (production) b.UseTestEnvironment("Production");
-            b.ConfigureAppConfiguration((_, c) => c.AddInMemoryCollection(new Dictionary<string, string?>
+            await File.WriteAllBytesAsync(sealPath, certificate.Export(System.Security.Cryptography.X509Certificates.X509ContentType.Pkcs12));
+            WebApplicationFactory<Program> Host(bool production) => fixture.Factory.WithWebHostBuilder(b =>
             {
-                ["ContractPdf:TemplateId"] = ContractPdfRendererTests.TemplateId,
-                ["ContractSigning:Methods:Otp"] = "true"
-            }));
-            b.ConfigureTestServices(s =>
-            {
-                s.RemoveAll<IContractSigningProvider>();
-                s.AddScoped(typeof(IContractSigningProvider), fixture.ProductionSigningProviderType);
-                s.RemoveAll<INotificationChannelProvider>();
-                s.AddSingleton<INotificationChannelProvider>(email);
+                if (production) b.UseTestEnvironment("Production");
+                b.ConfigureAppConfiguration((_, c) => c.AddInMemoryCollection(new Dictionary<string, string?>
+                {
+                    ["ContractPdf:TemplateId"] = ContractPdfRendererTests.TemplateId,
+                    ["ContractSigning:Methods:Otp"] = "true",
+                    ["ContractSigning:Seal:PfxPath"] = sealPath
+                }));
+                b.ConfigureTestServices(s =>
+                {
+                    s.RemoveAll<IContractSigningProvider>();
+                    s.AddScoped(typeof(IContractSigningProvider), fixture.ProductionSigningProviderType);
+                    s.RemoveAll<INotificationChannelProvider>();
+                    s.AddSingleton<INotificationChannelProvider>(email);
+                });
             });
-        });
-        await using var testingHost = Host(false);
-        await using var productionHost = Host(true);
-        var owner = new Actor(testingHost.CreateClient(), w.Owner.Id);
-        owner.Client.DefaultRequestHeaders.Authorization = w.Owner.Client.DefaultRequestHeaders.Authorization;
-        Assert.Equal("Signed", (await Success<SignatureView>(await Post(owner, Path(id, "signing"),
-            new SigningInput(Guid.Empty, Method: SigningMethods.OwnerSession, Consent: true)))).Status);
-        var productionTenant = new Actor(productionHost.CreateClient(), w.Tenant.Id);
-        productionTenant.Client.DefaultRequestHeaders.Authorization = w.Tenant.Client.DefaultRequestHeaders.Authorization;
-        var retired = await Post(productionTenant, Path(id, "signing"), new SigningInput(Guid.NewGuid(), Method: SigningMethods.ViettelMySign));
-        Assert.Equal(HttpStatusCode.BadRequest, retired.StatusCode);
-        Assert.Equal("Pending", (await Success<SignatureView>(await Post(productionTenant, Path(id, "signing"),
-            new SigningInput(Guid.Empty, Method: SigningMethods.Otp)))).Status);
-        Assert.Single(email.Sent, m => m.EventType == "CONTRACT_SIGNING_OTP");
-        var contract = (await w.Owner.Client.GetFromJsonAsync<ContractView>(Path(id)))!;
-        Assert.Equal("PendingSigning", contract.Status);
-        Assert.Equal(2, contract.Signatures.Count);
-        Assert.Contains(contract.Signatures, signature => signature.SignerUserId == w.Owner.Id && signature.Status == "Signed");
-        Assert.Contains(contract.Signatures, signature => signature.SignerUserId == w.Tenant.Id && signature.Status == "Pending");
-        Assert.Equal(HttpStatusCode.Conflict, (await Post(w.Owner, Path(id, "activate"))).StatusCode);
+            await using var testingHost = Host(false);
+            await using var productionHost = Host(true);
+            var owner = new Actor(testingHost.CreateClient(), w.Owner.Id);
+            owner.Client.DefaultRequestHeaders.Authorization = w.Owner.Client.DefaultRequestHeaders.Authorization;
+            Assert.Equal("Signed", (await Success<SignatureView>(await Post(owner, Path(id, "signing"),
+                new SigningInput(Guid.Empty, Method: SigningMethods.OwnerSession, Consent: true)))).Status);
+            var productionTenant = new Actor(productionHost.CreateClient(), w.Tenant.Id);
+            productionTenant.Client.DefaultRequestHeaders.Authorization = w.Tenant.Client.DefaultRequestHeaders.Authorization;
+            var retired = await Post(productionTenant, Path(id, "signing"), new SigningInput(Guid.NewGuid(), Method: SigningMethods.ViettelMySign));
+            Assert.Equal(HttpStatusCode.BadRequest, retired.StatusCode);
+            Assert.Equal("Pending", (await Success<SignatureView>(await Post(productionTenant, Path(id, "signing"),
+                new SigningInput(Guid.Empty, Method: SigningMethods.Otp)))).Status);
+            Assert.Single(email.Sent, m => m.EventType == "CONTRACT_SIGNING_OTP");
+            var contract = (await w.Owner.Client.GetFromJsonAsync<ContractView>(Path(id)))!;
+            Assert.Equal("PendingSigning", contract.Status);
+            Assert.Equal(2, contract.Signatures.Count);
+            Assert.Contains(contract.Signatures, signature => signature.SignerUserId == w.Owner.Id && signature.Status == "Signed");
+            Assert.Contains(contract.Signatures, signature => signature.SignerUserId == w.Tenant.Id && signature.Status == "Pending");
+            Assert.Equal(HttpStatusCode.Conflict, (await Post(w.Owner, Path(id, "activate"))).StatusCode);
+        }
+        finally { File.Delete(sealPath); }
     }
 
     [Fact]

@@ -281,7 +281,7 @@ public sealed partial class Compact24OwnerSetupTests
         Assert.Equal("Confirmed", (await Read<HandoverView>(await HandoverPost(staff, id, "handover/staff-confirmation", decision, key))).Status);
         await Read<HandoverView>(await HandoverPost(staff, id, "handover/staff-confirmation", decision, key));
         var document = Assert.Single((await tenant.GetFromJsonAsync<ContractDocumentView[]>(route + "/documents"))!);
-        Assert.Equal(HttpStatusCode.NotFound, (await HandoverPost(owner, id, "handover/documents/retry", new { })).StatusCode);
+        Assert.Equal(HttpStatusCode.MethodNotAllowed, (await HandoverPost(owner, id, "handover/documents/retry", new { })).StatusCode);
         Assert.Equal(document.Id, Assert.Single((await tenant.GetFromJsonAsync<ContractDocumentView[]>(route + "/documents"))!).Id);
         await using var check = host.Services.CreateAsyncScope(); var db = check.ServiceProvider.GetRequiredService<Compact24ArchiveContext>();
         var stored = await db.Set<ContractDocumentFile>().SingleAsync(f => f.Id == document.Id);

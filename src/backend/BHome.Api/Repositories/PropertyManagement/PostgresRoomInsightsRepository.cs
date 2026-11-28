@@ -161,7 +161,7 @@ internal sealed class PostgresRoomInsightsRepository(BHomePersistenceContext db)
                                   select member;
             var verified = await verifiedMembers.CountAsync(token);
             var representativeVerified = await verifiedMembers.AnyAsync(r => r.ResidentId == found.RepresentativeResidentId &&
-                r.Role == ResidentType.Representative, token);
+                r.ResidentRole == ResidentType.Representative, token);
             var otherMembers = from c in contracts
                                join member in members on c.Id equals member.ContractId
                                where c.RoomId == roomId && c.Id != contractId && c.Id != found.PreviousContractId &&

@@ -292,7 +292,7 @@ public sealed partial class Compact24NotificationMvpTests
         using var owner = await Client(w.Owner, host);
         Assert.Equal(HttpStatusCode.Unauthorized, (await anonymous.PostAsync("/api/v1/notifications/email-test", null)).StatusCode);
         foreach (var client in new[] { staff, tenant, owner })
-            Assert.Equal(HttpStatusCode.NotFound, (await client.PostAsync("/api/v1/notifications/email-test", null)).StatusCode);
+            Assert.Equal(HttpStatusCode.MethodNotAllowed, (await client.PostAsync("/api/v1/notifications/email-test", null)).StatusCode);
         Assert.Empty(probe.Messages);
     }
 
@@ -300,6 +300,6 @@ public sealed partial class Compact24NotificationMvpTests
     public async Task GmailTestIsDisabledOutsideDevelopmentEvenWithFlagEnabled()
     {
         var w = await Seed(); var probe = new SmtpProbe(); using var host = EmailHost(probe, "Production", true);
-        using var owner = await Client(w.Owner, host); Assert.Equal(HttpStatusCode.NotFound, (await owner.PostAsync("/api/v1/notifications/email-test", null)).StatusCode); Assert.Empty(probe.Messages);
+        using var owner = await Client(w.Owner, host); Assert.Equal(HttpStatusCode.MethodNotAllowed, (await owner.PostAsync("/api/v1/notifications/email-test", null)).StatusCode); Assert.Empty(probe.Messages);
     }
 }
