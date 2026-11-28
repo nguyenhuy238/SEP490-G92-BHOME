@@ -376,9 +376,17 @@ vi.mock('../features/contracts/holding/HoldingRoomPicker', () => ({
     onChange: (id: string) => void;
     fieldLabel: string;
   }) => (
-    <select aria-label={fieldLabel} value={value} onChange={(event) => onChange(event.target.value)}>
+    <select
+      aria-label={fieldLabel}
+      value={value}
+      onChange={(event) => onChange(event.target.value)}
+    >
       <option value="" />
-      {rooms.map((room) => <option key={room.id} value={room.id}>{room.label}</option>)}
+      {rooms.map((room) => (
+        <option key={room.id} value={room.id}>
+          {room.label}
+        </option>
+      ))}
     </select>
   ),
 }));
@@ -424,9 +432,9 @@ beforeEach(() => {
   state.serial = 0;
   state.uuidSerial = 0;
   state.platform = 'android';
-  state.request.mockResolvedValue([]);
-  state.image.mockRejectedValue(new Error('OCR tạm thời không khả dụng'));
-  state.json.mockImplementation(async (path: string) => {
+  state.request.mockReset().mockResolvedValue([]);
+  state.image.mockReset().mockRejectedValue(new Error('OCR tạm thời không khả dụng'));
+  state.json.mockReset().mockImplementation(async (path: string) => {
     if (path.endsWith('/confirm')) {
       if (state.failConfirm) throw new Error('Lưu hồ sơ thất bại');
       return { id: path.split('/').at(-2), verificationStatus: 1 };
@@ -463,7 +471,7 @@ it('guards navigation only after CCCD data is entered and releases the guard aft
   expect(state.preventRemove).toHaveBeenLastCalledWith(true);
   fireEvent.click(screen.getByRole('checkbox'));
   fireEvent.click(screen.getByRole('button', { name: 'Xác nhận thông tin' }));
-  await screen.findByText('Đã xác nhận 1/1 người ở');
+  await screen.findByText('Đã xác minh CCCD');
   expect(state.preventRemove).toHaveBeenLastCalledWith(false);
 });
 
@@ -493,6 +501,8 @@ function addFamilyMember() {
   fireEvent.click(screen.getByRole('button', { name: 'Thêm người ở' }));
 }
 async function openMemberEditor() {
+  const member = screen.queryByRole('button', { name: 'Xác minh Người ở 2' });
+  if (member) fireEvent.click(member);
   const actions = screen.getAllByRole('button', { name: 'Nhập thủ công' });
   fireEvent.click(actions[actions.length - 1]);
   await screen.findByRole('dialog');
@@ -651,7 +661,9 @@ it('connects people 1, 2 and 3 to the exact same existing information screen', a
   fireEvent.click(screen.getByRole('button', { name: 'Thêm người ở' }));
   let originalFields: string[] = [];
   for (let index = 0; index < 3; index++) {
-    fireEvent.click(screen.getAllByRole('button', { name: 'Nhập thủ công' })[index]);
+    const person = screen.queryByRole('button', { name: `Xác minh Người ở ${index + 1}` });
+    if (person) fireEvent.click(person);
+    fireEvent.click(screen.getByRole('button', { name: 'Nhập thủ công' }));
     const dialog = await screen.findByRole('dialog');
     expect(within(dialog).getByText('Kiểm tra thông tin')).toBeTruthy();
     expect(within(dialog).getByText(`Người ở ${index + 1}`)).toBeTruthy();
@@ -729,7 +741,7 @@ it('allows manual confirmation after OCR failure and completes only after the se
   ).toBe(true);
   state.failConfirm = false;
   fireEvent.click(screen.getByRole('button', { name: 'Xác nhận thông tin' }));
-  await screen.findByText('Đã xác nhận 1/1 người ở');
+  await screen.findByText('Đã xác minh CCCD');
   expect(screen.queryByRole('button', { name: 'Hoàn tất tiếp nhận' })).toBeNull();
   expect(screen.queryByRole('dialog')).toBeNull();
   fireEvent.click(screen.getByRole('button', { name: 'Tiếp tục tạo hợp đồng' }));
@@ -738,7 +750,7 @@ it('allows manual confirmation after OCR failure and completes only after the se
   expect(state.go).not.toHaveBeenCalledWith('prepare-contract', expect.anything());
   fireEvent.click(screen.getByText('Previous identity step'));
   expect(screen.queryByRole('dialog', { name: 'Contract preparation' })).toBeNull();
-  expect(screen.getByText('Đã xác nhận 1/1 người ở')).toBeTruthy();
+  expect(screen.getByText('Đã xác minh CCCD')).toBeTruthy();
 });
 it('does not blindly create another Resident after a timeout with an unknown save result', async () => {
   render(<OnboardingScreen />);
@@ -761,7 +773,7 @@ it.each(['Web released contract', 'Contract list'])(
     manualIdentity();
     fireEvent.click(screen.getByRole('checkbox'));
     fireEvent.click(screen.getByRole('button', { name: 'Xác nhận thông tin' }));
-    await screen.findByText('Đã xác nhận 1/1 người ở');
+    await screen.findByText('Đã xác minh CCCD');
     fireEvent.click(screen.getByRole('button', { name: 'Tiếp tục tạo hợp đồng' }));
     fireEvent.click(screen.getByRole('button', { name: action }));
     expect(state.replace).toHaveBeenCalledWith({
@@ -800,7 +812,7 @@ it('recovers identity_already_confirmed only after explicit use of the same serv
     { id: 'resident-1', roomId: 'room', verificationStatus: 1 },
   ]);
   fireEvent.click(screen.getByRole('button', { name: 'Dùng hồ sơ đã xác nhận' }));
-  await screen.findByText('Đã xác nhận 1/1 người ở');
+  await screen.findByText('Đã xác minh CCCD');
   expect(screen.queryByRole('dialog')).toBeNull();
   expect(state.json).toHaveBeenCalledTimes(2); // Create + rejected confirm, no overwrite/replay.
   act(() => state.listeners.forEach((listener) => listener('background')));
@@ -814,7 +826,7 @@ it('recovers identity_already_confirmed only after explicit use of the same serv
   expect(state.go).not.toHaveBeenCalledWith('prepare-contract', expect.anything());
   fireEvent.click(screen.getByText('Previous identity step'));
   expect(screen.queryByRole('dialog', { name: 'Contract preparation' })).toBeNull();
-  expect(screen.getByText('Đã xác nhận 1/1 người ở')).toBeTruthy();
+  expect(screen.getByText('Đã xác minh CCCD')).toBeTruthy();
 });
 it.each(['wrong-id', 'wrong-room', 'pending', 'rejected', 'forbidden'])(
   'keeps identity recovery blocked when the scoped lookup is unsuitable (%s)',
@@ -836,7 +848,7 @@ it.each(['wrong-id', 'wrong-room', 'pending', 'rejected', 'forbidden'])(
         false,
       ),
     );
-    expect(screen.getByText('Đã xác nhận 0/1 người ở')).toBeTruthy();
+    expect(screen.getByText('Chờ xác nhận')).toBeTruthy();
     expect(state.go).not.toHaveBeenCalled();
     expect(state.json).toHaveBeenCalledTimes(2);
     expect(screen.getByRole('button', { name: 'Tiếp tục tạo hợp đồng' })).toHaveProperty(
@@ -853,9 +865,9 @@ it('keeps a rejected confirmation error visible after closing the form and can r
     { id: 'resident-1', roomId: 'room', verificationStatus: 1 },
   ]);
   fireEvent.click(screen.getByRole('button', { name: 'Kiểm tra trạng thái đã lưu' }));
-  await screen.findByText('Đã xác nhận 1/1 người ở');
+  await screen.findByText('Đã xác minh CCCD');
   act(() => state.listeners.forEach((listener) => listener('background')));
-  expect(screen.getByText('Đã xác nhận 1/1 người ở')).toBeTruthy();
+  expect(screen.getByText('Đã xác minh CCCD')).toBeTruthy();
   expect(screen.queryByRole('alert')).toBeNull();
   expect(state.json).toHaveBeenCalledTimes(2);
 });
@@ -876,12 +888,12 @@ it('recovers a committed confirmation after the app backgrounds before its respo
   fireEvent.click(screen.getByRole('button', { name: 'Xác nhận thông tin' }));
   act(() => state.listeners.forEach((listener) => listener('background')));
   await act(async () => complete({ id: 'resident-1', verificationStatus: 1 }));
-  expect(screen.getByText('Đã xác nhận 0/1 người ở')).toBeTruthy();
+  expect(screen.getByText('Chờ xác nhận')).toBeTruthy();
   state.request.mockResolvedValueOnce([
     { id: 'resident-1', roomId: 'room', verificationStatus: 1 },
   ]);
   fireEvent.click(screen.getByRole('button', { name: 'Kiểm tra trạng thái đã lưu' }));
-  await screen.findByText('Đã xác nhận 1/1 người ở');
+  await screen.findByText('Đã xác minh CCCD');
   expect(state.json).toHaveBeenCalledTimes(2);
   expect(screen.getByRole('button', { name: 'Tiếp tục tạo hợp đồng' })).toHaveProperty(
     'disabled',
@@ -907,7 +919,8 @@ it.each(['pending', 'wrong-id', 'wrong-room', 'forbidden'])(
       ]);
     fireEvent.click(screen.getByRole('button', { name: 'Kiểm tra trạng thái đã lưu' }));
     await screen.findByRole('alert');
-    expect(screen.getByText('Đã xác nhận 0/1 người ở')).toBeTruthy();
+    expect(screen.getAllByText('Chưa quét').length).toBeGreaterThan(0);
+    expect(screen.queryByText('Đã xác minh CCCD')).toBeNull();
     expect(screen.getByRole('button', { name: 'Tiếp tục tạo hợp đồng' })).toHaveProperty(
       'disabled',
       true,
@@ -1077,7 +1090,7 @@ it('scans both existing endpoints and uses the back-side issue date in confirmat
   });
   fireEvent.click(screen.getByRole('checkbox'));
   fireEvent.click(screen.getByRole('button', { name: 'Xác nhận thông tin' }));
-  await screen.findByText('Đã xác nhận 1/1 người ở');
+  await screen.findByText('Đã xác minh CCCD');
   expect(state.image).toHaveBeenCalledTimes(2);
   expect(state.image.mock.calls[0][0]).toBe('/api/v1/ocr/identity/resident-1/front');
   expect(state.image.mock.calls[1][0]).toBe('/api/v1/ocr/identity/resident-1/back');
@@ -1209,7 +1222,7 @@ it('does not mark a person confirmed when the response lacks a verified status',
   await within(screen.getByRole('dialog')).findByText(
     'Không thể hoàn thành. Kiểm tra kết nối và địa chỉ HTTPS.',
   );
-  expect(screen.getByText('Đã xác nhận 0/1 người ở')).toBeTruthy();
+  expect(screen.getByText('Chờ xác nhận')).toBeTruthy();
   expect(
     (screen.getByRole('button', { name: 'Tiếp tục tạo hợp đồng' }) as HTMLButtonElement).disabled,
   ).toBe(true);
@@ -1230,7 +1243,7 @@ it('requires the server to confirm every selected identity before opening the co
     );
     fireEvent.click(screen.getByRole('checkbox'));
     fireEvent.click(screen.getByRole('button', { name: 'Xác nhận thông tin' }));
-    await screen.findByText(`Đã xác nhận ${index + 1}/2 người ở`);
+    await screen.findByText(`Đã xác nhận ${index + 1}/2`);
   }
   expect(screen.getByRole('button', { name: 'Tiếp tục tạo hợp đồng' })).toHaveProperty(
     'disabled',
@@ -1259,17 +1272,17 @@ it('keeps a failed member confirmation pending and reuses its identity when retr
   state.failConfirm = true;
   fireEvent.click(screen.getByRole('button', { name: 'Xác nhận thông tin' }));
   await within(screen.getByRole('dialog')).findByRole('alert');
-  expect(screen.getByText('Đã xác nhận 0/2 người ở')).toBeTruthy();
+  expect(screen.getByText('Đã xác nhận 0/2')).toBeTruthy();
   expect(screen.getByRole('button', { name: 'Tiếp tục tạo hợp đồng' })).toHaveProperty(
     'disabled',
     true,
   );
   state.failConfirm = false;
   fireEvent.click(screen.getByRole('button', { name: 'Xác nhận thông tin' }));
-  await screen.findByText('Đã xác nhận 1/2 người ở');
+  await screen.findByText('Đã xác nhận 1/2');
   fireEvent.click(screen.getByRole('button', { name: 'Quay lại' }));
   fireEvent.click(screen.getByRole('button', { name: 'Tiếp tục' }));
-  expect(screen.getByText('Đã xác nhận 1/2 người ở')).toBeTruthy();
+  expect(screen.getByText('Đã xác nhận 1/2')).toBeTruthy();
   expect(
     state.json.mock.calls.filter(([path]) => path === '/api/v1/capture/residents'),
   ).toHaveLength(1);

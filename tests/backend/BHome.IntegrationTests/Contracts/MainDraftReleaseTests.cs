@@ -260,7 +260,9 @@ public sealed partial class MainDraftApiTests
         var response = await staff.PostAsync($"{Root}/{draft.Id}/signing-review", null); await Success(response);
         var review = (await response.Content.ReadFromJsonAsync<ContractDocumentView>())!;
         Assert.Equal(!live, review.DevelopmentOnly);
-        Assert.NotEqual(oldReview.Id, review.Id); Assert.Equal(4, review.TemplateVersion);
+        using var rendererScope = host.Services.CreateScope();
+        var currentVersion = rendererScope.ServiceProvider.GetRequiredService<IMainDraftRenderer>().DocumentVersion;
+        Assert.NotEqual(oldReview.Id, review.Id); Assert.Equal(currentVersion, review.TemplateVersion);
         Assert.Equal(oldBytes, await owner.GetByteArrayAsync($"{Root}/{draft.Id}/documents/{oldReview.Id}"));
         var staleInput = new MainDraftReleaseInput(tenantUserId, draft.Version, oldReview.Id, true, EmailSigning: tenantUserId is not null);
         var staleResponse = await Release(owner, draft.Id, staleInput, Guid.NewGuid());
@@ -274,7 +276,7 @@ public sealed partial class MainDraftApiTests
             {
                 s.RemoveAll<IMainDraftRenderer>();
                 s.AddScoped<IMainDraftRenderer>(p => new LegacyVersionMainDraftRenderer(
-                    p.GetRequiredService<IConfiguration>(), p.GetRequiredService<TimeProvider>(), 4, true));
+                    p.GetRequiredService<IConfiguration>(), p.GetRequiredService<TimeProvider>(), currentVersion, true));
             }));
             using var historicalStaff = InHost(historical, w.Staff);
             var historicalResponse = await historicalStaff.PostAsync($"{Root}/{draft.Id}/signing-review", null);

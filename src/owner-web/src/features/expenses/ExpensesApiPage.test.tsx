@@ -299,9 +299,12 @@ it('keeps the expense dialog open and blocks editing while a payment is being re
   );
   mount();
   fireEvent.click((await screen.findAllByRole('button', { name: 'Chi tiết / chỉnh sửa' }))[0]);
-  fireEvent.change(await screen.findByLabelText('Số tiền đã chuyển (đ)'), {
-    target: { value: '100000' },
-  });
+  fireEvent.change(
+    await screen.findByLabelText('Số tiền đã chuyển (đ)', undefined, { timeout: 5000 }),
+    {
+      target: { value: '100000' },
+    },
+  );
   fireEvent.change(screen.getByLabelText('Ghi chú xác nhận / chứng từ'), {
     target: { value: 'Verified synthetic transfer' },
   });

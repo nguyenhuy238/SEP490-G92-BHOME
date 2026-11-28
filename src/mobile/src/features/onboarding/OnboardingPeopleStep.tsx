@@ -2,7 +2,12 @@ import React from 'react';
 import { StyleSheet, View } from 'react-native';
 import { Button, Icon, IconButton, Text, TouchableRipple } from 'react-native-paper';
 import { colors as c, staffColors as s } from '../../theme/theme';
-import { identityStatusLabels, type HouseholdMode, type IdentitySide, type OnboardingPerson } from './onboarding';
+import {
+  identityStatusLabels,
+  type HouseholdMode,
+  type IdentitySide,
+  type OnboardingPerson,
+} from './onboarding';
 import { IdentityPersonCard } from './IdentityPersonCard';
 
 interface Props {
@@ -41,10 +46,12 @@ export function OnboardingPeopleStep(props: Props) {
         <>
           <Text style={styles.modeLabel}>Hình thức thuê</Text>
           <View style={styles.modeCards}>
-            {([
-              ['family', 'Hộ gia đình', 'account-group-outline'],
-              ['individual', 'Cá nhân', 'account-outline'],
-            ] as const).map(([value, label, icon]) => {
+            {(
+              [
+                ['family', 'Hộ gia đình', 'account-group-outline'],
+                ['individual', 'Cá nhân', 'account-outline'],
+              ] as const
+            ).map(([value, label, icon]) => {
               const selected = props.mode === value;
               return (
                 <TouchableRipple
@@ -74,11 +81,15 @@ export function OnboardingPeopleStep(props: Props) {
         {!individual && (
           <View style={styles.sectionHeader}>
             <Text style={styles.sectionTitle}>Danh sách người ở</Text>
-            <Text style={styles.count}>{props.people.length}/{props.maxPeople} người</Text>
+            <Text style={styles.count}>
+              {props.people.length}/{props.maxPeople} người
+            </Text>
           </View>
         )}
         {!individual && (
-          <Text style={styles.count}>Đã xác nhận {props.completedCount}/{props.people.length}</Text>
+          <Text style={styles.count}>
+            Đã xác nhận {props.completedCount}/{props.people.length}
+          </Text>
         )}
 
         <View style={styles.list}>
@@ -108,14 +119,20 @@ export function OnboardingPeopleStep(props: Props) {
                     style={styles.personSummary}
                   >
                     <View style={styles.identity}>
-                      <Text style={styles.personName} numberOfLines={1}>{displayName}</Text>
+                      <Text style={styles.personName} numberOfLines={1}>
+                        {displayName}
+                      </Text>
                       {!individual && (
                         <Text style={styles.role}>
                           {representative ? 'Người đại diện' : 'Thành viên cùng ở'}
                         </Text>
                       )}
-                      <Text style={item.status === 'confirmed' ? styles.confirmed : styles.statusText}>
-                        {item.status === 'confirmed' ? 'Đã xác minh CCCD' : identityStatusLabels[item.status]}
+                      <Text
+                        style={item.status === 'confirmed' ? styles.confirmed : styles.statusText}
+                      >
+                        {item.status === 'confirmed'
+                          ? 'Đã xác minh CCCD'
+                          : identityStatusLabels[item.status]}
                       </Text>
                     </View>
                   </TouchableRipple>
@@ -148,7 +165,13 @@ export function OnboardingPeopleStep(props: Props) {
                       embedded
                       person={item}
                       label={props.personLabel(item)}
-                      role={individual ? 'Người thuê' : representative ? 'Người đại diện' : 'Thành viên cùng ở'}
+                      role={
+                        individual
+                          ? 'Người thuê'
+                          : representative
+                            ? 'Người đại diện'
+                            : 'Thành viên cùng ở'
+                      }
                       disabled={props.disabledFor(item)}
                       onScan={(side) => props.onScan(item, side)}
                       onManual={() => props.onManual(item)}
@@ -206,12 +229,25 @@ export function OnboardingPeopleStep(props: Props) {
 
       {!props.inline && (
         <View style={styles.actions}>
-          <Button mode="outlined" icon="arrow-left" textColor={s.navy} style={styles.actionButton}
-            contentStyle={styles.touch} disabled={props.backDisabled} onPress={props.onBack}>
+          <Button
+            mode="outlined"
+            icon="arrow-left"
+            textColor={s.navy}
+            style={styles.actionButton}
+            contentStyle={styles.touch}
+            disabled={props.backDisabled}
+            onPress={props.onBack}
+          >
             Quay lại
           </Button>
-          <Button mode="contained" buttonColor={s.blue} style={styles.actionButton}
-            contentStyle={styles.touch} disabled={!props.canContinue} onPress={props.onContinue}>
+          <Button
+            mode="contained"
+            buttonColor={s.blue}
+            style={styles.actionButton}
+            contentStyle={styles.touch}
+            disabled={!props.canContinue}
+            onPress={props.onContinue}
+          >
             Tiếp tục
           </Button>
         </View>
@@ -226,19 +262,50 @@ const styles = StyleSheet.create({
   modeLabel: { color: s.navy, fontSize: 15, lineHeight: 22, fontWeight: '700' },
   modeCards: { flexDirection: 'row', gap: 10 },
   modeCard: {
-    flex: 1, minWidth: 0, minHeight: 58, borderRadius: 14, borderWidth: 1,
-    borderColor: '#CBD5E1', backgroundColor: c.white, overflow: 'hidden',
+    flex: 1,
+    minWidth: 0,
+    minHeight: 58,
+    borderRadius: 14,
+    borderWidth: 1,
+    borderColor: '#CBD5E1',
+    backgroundColor: c.white,
+    overflow: 'hidden',
   },
   modeCardSelected: { borderColor: s.blue, backgroundColor: s.blueSoft },
-  modeCardContent: { minHeight: 56, paddingHorizontal: 10, gap: 8, flexDirection: 'row', alignItems: 'center' },
-  modeCardLabel: { flex: 1, minWidth: 0, color: s.navy, fontSize: 14, lineHeight: 19, fontWeight: '600' },
+  modeCardContent: {
+    minHeight: 56,
+    paddingHorizontal: 10,
+    gap: 8,
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  modeCardLabel: {
+    flex: 1,
+    minWidth: 0,
+    color: s.navy,
+    fontSize: 14,
+    lineHeight: 19,
+    fontWeight: '600',
+  },
   modeCardLabelSelected: { color: s.blue },
-  sectionHeader: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 12 },
+  sectionHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    gap: 12,
+  },
   sectionTitle: { color: s.navy, fontSize: 17, lineHeight: 24, fontWeight: '700', flexShrink: 1 },
   description: { color: '#475569', fontSize: 13, lineHeight: 19 },
   count: { color: '#475569', fontSize: 13, lineHeight: 20 },
   list: { gap: 10 },
-  person: { padding: 10, gap: 8, borderRadius: 16, borderWidth: 1, borderColor: c.border, backgroundColor: c.white },
+  person: {
+    padding: 10,
+    gap: 8,
+    borderRadius: 16,
+    borderWidth: 1,
+    borderColor: c.border,
+    backgroundColor: c.white,
+  },
   personExpanded: { borderColor: '#C9D9EC' },
   personHeader: { flexDirection: 'row', alignItems: 'center', gap: 8 },
   personSummary: { flex: 1, minWidth: 0, borderRadius: 10, overflow: 'hidden' },
@@ -254,6 +321,13 @@ const styles = StyleSheet.create({
   secondaryTouch: { minHeight: 44 },
   addButton: { borderRadius: 12, borderColor: '#CBD5E1', backgroundColor: c.white },
   touch: { minHeight: 48 },
-  actions: { flexDirection: 'row', gap: 12, paddingTop: 16, paddingBottom: 8, borderTopWidth: 1, borderTopColor: c.border },
+  actions: {
+    flexDirection: 'row',
+    gap: 12,
+    paddingTop: 16,
+    paddingBottom: 8,
+    borderTopWidth: 1,
+    borderTopColor: c.border,
+  },
   actionButton: { flex: 1, borderRadius: 12 },
 });

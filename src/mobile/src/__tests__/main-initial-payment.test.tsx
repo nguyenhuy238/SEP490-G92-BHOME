@@ -103,12 +103,12 @@ it('does not offer transfer instructions when SePay is disabled', async () => {
   await screen.findByText(/SePay đang tắt/);
   expect(screen.queryByText('Nội dung chuyển khoản')).toBeNull();
   expect(
-    (screen.getByRole('button', { name: 'Tạo QR thanh toán tổng' }) as HTMLButtonElement).disabled,
+    (screen.getByRole('button', { name: 'Tạo QR thanh toán' }) as HTMLButtonElement).disabled,
   ).toBe(true);
 });
 it('shows only deposit and first month rent from backend and generates one total QR', async () => {
   render(<MainInitialPaymentCard api={api} contractId="main" onPaid={paid} />);
-  const button = await screen.findByRole('button', { name: 'Tạo QR thanh toán tổng' });
+  const button = await screen.findByRole('button', { name: 'Tạo QR thanh toán' });
   expect(screen.getByText('Trong đó có tiền giữ chỗ đã chuyển thành tiền cọc')).toBeTruthy();
   expect(screen.getAllByText(/3.000.000/).length).toBeGreaterThan(0);
   expect(screen.queryByText('Internet')).toBeNull();
@@ -133,7 +133,7 @@ it('only reports paid after the backend returns paid true', async () => {
   render(<MainInitialPaymentCard api={api} contractId="main" onPaid={paid} />);
   await screen.findByText('Thanh toán đã được xác nhận. Tiếp tục bước kích hoạt hợp đồng.');
   expect(paid).toHaveBeenCalledOnce();
-  expect(screen.queryByRole('button', { name: 'Tạo QR thanh toán tổng' })).toBeNull();
+  expect(screen.queryByRole('button', { name: 'Tạo QR thanh toán' })).toBeNull();
 });
 it('keeps QR disabled when the receiving account is unavailable and preserves API errors', async () => {
   const original = request.getMockImplementation()!;
@@ -144,8 +144,7 @@ it('keeps QR disabled when the receiving account is unavailable and preserves AP
   render(<MainInitialPaymentCard api={api} contractId="main" onPaid={paid} />);
   await waitFor(() =>
     expect(
-      (screen.getByRole('button', { name: 'Tạo QR thanh toán tổng' }) as HTMLButtonElement)
-        .disabled,
+      (screen.getByRole('button', { name: 'Tạo QR thanh toán' }) as HTMLButtonElement).disabled,
     ).toBe(true),
   );
   expect(paid).not.toHaveBeenCalled();

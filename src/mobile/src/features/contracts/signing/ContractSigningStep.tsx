@@ -116,6 +116,7 @@ export function ContractSigningStep({
         ]);
         if (active && !lock.current && requestRevision === invitationRevision.current) {
           setData({ contract: latest, status, methods });
+          setUncertainInvitation(false);
           setError('');
         }
       } catch (e) {
@@ -205,6 +206,7 @@ export function ContractSigningStep({
     lock.current = true;
     setBusy(true);
     setSendingInvitation(true);
+    invitationRevision.current++;
     setError('');
     setInvitationFailure(null);
     let dispatched = false;
@@ -268,6 +270,9 @@ export function ContractSigningStep({
         if (responseStatus === 429) setResendAfter(Date.now() + 60000);
       }
     } finally {
+      // Ignore status reads started while sending: only a later successful poll
+      // may resolve an uncertain delivery result.
+      invitationRevision.current++;
       lock.current = false;
       setBusy(false);
       setSendingInvitation(false);
@@ -392,7 +397,8 @@ export function ContractSigningStep({
               )}
             {uncertainInvitation && !busy && (
               <Text style={ui.muted}>
-                Chưa xác định được kết quả gửi. Hãy làm mới trạng thái trước khi gửi lại.
+                Chưa xác định được kết quả gửi. Đang tự cập nhật trạng thái trước khi cho phép gửi
+                lại.
               </Text>
             )}
             {staffMain && !!displayedError && <ContractNotice message={displayedError} />}

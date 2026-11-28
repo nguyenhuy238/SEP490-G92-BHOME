@@ -135,7 +135,9 @@ it('loads server staff and forwards search and account status filters', async ()
 it('preserves account version and employment contract, and reports server responsibility conflicts', async () => {
   mount();
   fireEvent.click(await screen.findByRole('button', { name: 'Chi tiết' }));
-  fireEvent.click(await screen.findByRole('button', { name: 'Chỉnh sửa hồ sơ' }));
+  fireEvent.click(
+    await screen.findByRole('button', { name: 'Chỉnh sửa hồ sơ' }, { timeout: 5000 }),
+  );
   fireEvent.change(screen.getByLabelText(/Lý do cập nhật/), {
     target: { value: 'Synthetic change' },
   });

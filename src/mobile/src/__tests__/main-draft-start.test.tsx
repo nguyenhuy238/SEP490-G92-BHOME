@@ -81,6 +81,38 @@ vi.mock('../components/WorkflowControls', () => ({
     </select>
   ),
 }));
+// Native room-picker interactions have their own tests; keep this suite focused
+// on preparation, eligibility and opening the correct draft.
+vi.mock('../features/contracts/holding/HoldingRoomPicker', () => ({
+  HoldingRoomPicker: ({
+    rooms,
+    value,
+    disabled,
+    onChange,
+    fieldLabel,
+  }: {
+    rooms: { id: string; label: string; capacity?: number }[];
+    value: string;
+    disabled: boolean;
+    onChange: (id: string) => void;
+    fieldLabel: string;
+  }) => (
+    <select
+      aria-label={fieldLabel}
+      value={value}
+      disabled={disabled}
+      onChange={(event) => onChange(event.target.value)}
+    >
+      <option value="" />
+      {rooms.map((room) => (
+        <option key={room.id} value={room.id}>
+          {room.label}
+          {room.capacity == null ? '' : ` · ${room.capacity} người`}
+        </option>
+      ))}
+    </select>
+  ),
+}));
 vi.mock('../features/contracts/main/MainDraftScreen', () => ({
   MainDraftScreen: (props: { onSaved?: (id: string) => void; onCancel: () => void }) => {
     state.opened(props);

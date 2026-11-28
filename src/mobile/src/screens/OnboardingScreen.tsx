@@ -480,7 +480,8 @@ function NewResidentOnboarding() {
                 }));
               const progress = person.captureProgress;
               const both = progress?.front === 'recognized' && progress?.back === 'recognized';
-              const started = progress && (progress.front !== 'unscanned' || progress.back !== 'unscanned');
+              const started =
+                progress && (progress.front !== 'unscanned' || progress.back !== 'unscanned');
               if (person.status === 'confirmed') return;
               void openIdentity(
                 person,

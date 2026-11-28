@@ -54,17 +54,19 @@ export function IdentityPersonCard({
           </View>
         </View>
       )}
-      {!embedded && <Pill
-        tone={
-          person.status === 'confirmed'
-            ? 'green'
-            : person.status === 'unscanned'
-              ? 'neutral'
-              : 'amber'
-        }
-      >
-        {status}
-      </Pill>}
+      {!embedded && (
+        <Pill
+          tone={
+            person.status === 'confirmed'
+              ? 'green'
+              : person.status === 'unscanned'
+                ? 'neutral'
+                : 'amber'
+          }
+        >
+          {status}
+        </Pill>
+      )}
       {!!person.verificationError && (
         <Text accessibilityRole="alert" style={{ color: s.red }}>
           {person.verificationError}

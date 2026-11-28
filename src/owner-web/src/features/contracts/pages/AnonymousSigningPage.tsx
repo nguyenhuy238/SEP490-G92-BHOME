@@ -25,10 +25,9 @@ export default function AnonymousSigningPage() {
   const [token] = useState(
     () => new URLSearchParams(window.location.hash.slice(1)).get('token') ?? '',
   );
-  const sessionKey = `bhome:contract-signing:${Array.from(token).reduce(
-    (hash, char) => Math.imul(hash ^ char.charCodeAt(0), 16777619) >>> 0,
-    2166136261,
-  ).toString(16)}`;
+  const sessionKey = `bhome:contract-signing:${Array.from(token)
+    .reduce((hash, char) => Math.imul(hash ^ char.charCodeAt(0), 16777619) >>> 0, 2166136261)
+    .toString(16)}`;
   const [otp, setOtp] = useState(''),
     [info, setInfo] = useState(''),
     [otpRequested, setOtpRequested] = useState(false),

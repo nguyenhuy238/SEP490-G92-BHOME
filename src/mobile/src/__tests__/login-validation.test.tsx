@@ -111,7 +111,11 @@ it('shows the production login controls without demo or invitation shortcuts', (
   ])
     expect(screen.queryByText(label)).toBeNull();
   expect(screen.getByRole('img', { name: 'Logo BHome' })).toBeTruthy();
-  expect(screen.getByLabelText('Email ho\u1eb7c s\u1ed1 \u0111i\u1ec7n tho\u1ea1i \u0111\u0103ng nh\u1eadp')).toBeTruthy();
+  expect(
+    screen.getByLabelText(
+      'Email ho\u1eb7c s\u1ed1 \u0111i\u1ec7n tho\u1ea1i \u0111\u0103ng nh\u1eadp',
+    ),
+  ).toBeTruthy();
   expect(screen.getByLabelText('M\u1eadt kh\u1ea9u \u0111\u0103ng nh\u1eadp')).toBeTruthy();
   expect(screen.getByText('Qu\u00ean m\u1eadt kh\u1ea9u?')).toBeTruthy();
   expect(screen.getByText('\u0110\u0103ng nh\u1eadp')).toBeTruthy();

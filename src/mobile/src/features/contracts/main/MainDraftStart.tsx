@@ -150,6 +150,8 @@ export function MainDraftStart({
       )}
       <HoldingRoomPicker
         key={location}
+        fieldLabel="Phòng"
+        title="Chọn phòng thuê"
         rooms={roomOptions}
         value={room}
         disabled={loading || !!draftId || !location}
