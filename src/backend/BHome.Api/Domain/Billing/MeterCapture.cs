@@ -13,6 +13,7 @@ public enum MeterReadingStatus { Confirmed, Corrected }
 
 public sealed class Meter : AuditableEntity
 {
+    internal static Meter Rehydrate(Guid id) => new() { Id = id };
     public Guid RoomId { get; set; }
     public Room Room { get; set; } = null!;
     public string Code { get; set; } = "";
@@ -100,6 +101,7 @@ public sealed class OperationalTask : AuditableEntity
 }
 public sealed class MeterEvidence : AuditableEntity
 {
+    internal static MeterEvidence Rehydrate(Guid id) => new() { Id = id };
     public Guid TaskId { get; set; }
     public Guid UploadedByUserId { get; set; }
     public string ObjectKey { get; set; } = "";
@@ -112,6 +114,7 @@ public sealed class MeterEvidence : AuditableEntity
 }
 public sealed class MeterReading : AuditableEntity
 {
+    internal static MeterReading Rehydrate(Guid id) => new() { Id = id };
     public Guid TaskId { get; set; }
     public Guid MeterId { get; set; }
     public Guid EvidenceId { get; set; }

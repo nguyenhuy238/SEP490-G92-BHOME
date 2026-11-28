@@ -9,6 +9,7 @@ using BHome.Domain.StaffOperations;
 using BHome.Infrastructure.Persistence;
 using BHome.Infrastructure.Persistence.Compact24;
 using Microsoft.EntityFrameworkCore;
+using Native = BHome.Domain.Entities;
 
 namespace BHome.Infrastructure.Ocr;
 
@@ -28,9 +29,82 @@ internal sealed class CaptureScope(BHomePersistenceContext db, ICurrentUser user
     public IQueryable<OperationalTask> VisibleTasks => db.Set<OperationalTask>()
         .Where(t => t.Kind == BHome.Domain.StaffOperations.OperationalTaskKind.MeterReading && VisibleRooms.Any(r => r.Id == t.Meter.RoomId) &&
             (t.Purpose == ReadingPurpose.Periodic || t.AutomationPlanId == null || user.IsInRole(Roles.Owner) || t.AssignedStaffUserId == UserId));
+    internal IQueryable<Native.Location> NativeLocations
+    {
+        get
+        {
+            var compact = (Compact24DbContext)db;
+            var owner = user.IsInRole(Roles.Owner);
+            var staff = user.IsInRole(Roles.Staff);
+            var assignments = db.Database.SqlQuery<Guid>($"""
+                SELECT l.id AS "Value" FROM locations l CROSS JOIN LATERAL jsonb_array_elements(l.staff_assignments) a
+                WHERE (a->>'staffUserId')::uuid={UserId} AND (a->>'startDate')::date<={Today} AND (a->>'endDate')::date>={Today}
+                """);
+            return compact.Set<Native.Location>().AsNoTracking().Where(l => l.IsActive &&
+                (owner || staff && EligibleStaff.Contains(UserId) && assignments.Contains(l.Id)));
+        }
+    }
+    internal IQueryable<Native.Room> NativeRooms => ((Compact24DbContext)db).Set<Native.Room>().AsNoTracking()
+        .Where(r => NativeLocations.Any(l => l.Id == r.LocationId));
+    internal IQueryable<Native.OperationalTask> NativeTasks
+    {
+        get
+        {
+            var owner = user.IsInRole(Roles.Owner);
+            var compact = (Compact24DbContext)db;
+            return compact.Set<Native.OperationalTask>().FromSqlInterpolated($"""
+                SELECT * FROM operational_tasks WHERE task_type='METER_READ' AND
+                ((task_data->'state'->>'purpose')::int=1 OR task_data->'state'->>'automationPlanId' IS NULL OR {owner} OR assigned_user_id={UserId})
+                """).AsNoTracking().Where(t => compact.Set<Native.Meter>().Any(m => m.Id == t.MeterId && NativeRooms.Any(r => r.Id == m.RoomId)));
+        }
+    }
+    internal Task<bool> RoomVisibleAsync(Guid? id, CancellationToken t) => db is Compact24DbContext
+        ? NativeRooms.AnyAsync(r => r.Id == id, t) : VisibleRooms.AnyAsync(r => r.Id == id, t);
+    internal Task<bool> LocationVisibleAsync(Guid id, CancellationToken t) => db is Compact24DbContext
+        ? NativeLocations.AnyAsync(l => l.Id == id, t) : VisibleLocations.AnyAsync(l => l.Id == id, t);
+    internal Task<Guid?> TaskLocationAsync(Guid id, CancellationToken t) => db is Compact24DbContext
+        ? NativeTasks.Where(x => x.Id == id).Select(x => x.LocationId).SingleOrDefaultAsync(t)
+        : VisibleTasks.Where(x => x.Id == id).Select(x => (Guid?)x.LocationId).SingleOrDefaultAsync(t);
+    internal Task<Guid?> TaskMeterAsync(Guid id, CancellationToken t) => db is Compact24DbContext
+        ? NativeTasks.Where(x => x.Id == id).Select(x => x.MeterId).SingleOrDefaultAsync(t)
+        : VisibleTasks.Where(x => x.Id == id).Select(x => x.MeterId).SingleOrDefaultAsync(t);
+    internal async Task<OperationalTask?> ReadTaskAsync(Guid id, CancellationToken t)
+    {
+        if (db is not Compact24DbContext) return await VisibleTasks.AsNoTracking().SingleOrDefaultAsync(x => x.Id == id, t);
+        var row = await NativeTasks.SingleOrDefaultAsync(x => x.Id == id, t);
+        return row is null ? null : NativeCaptureReads.Task(row);
+    }
+    internal async Task<OperationalTask?> LockTaskAsync(Guid id, CancellationToken t)
+    {
+        if (db is not Compact24DbContext compact) return await db.Locked<OperationalTask>(id).SingleOrDefaultAsync(t);
+        var row = await compact.Set<Native.OperationalTask>().FromSqlInterpolated($"SELECT * FROM operational_tasks WHERE id={id} AND task_type='METER_READ' FOR UPDATE")
+            .AsNoTracking().SingleOrDefaultAsync(t);
+        return row is null ? null : NativeCaptureReads.Task(row);
+    }
+    internal async Task<Meter> MeterAsync(Guid? id, CancellationToken t, bool locked = false)
+    {
+        if (db is not Compact24DbContext compact) return locked ? await db.Locked<Meter>(id!.Value).SingleAsync(t) : await db.Set<Meter>().AsNoTracking().SingleAsync(m => m.Id == id, t);
+        var query = locked ? compact.Set<Native.Meter>().FromSqlInterpolated($"SELECT * FROM meters WHERE id={id} FOR UPDATE") : compact.Set<Native.Meter>();
+        return NativeCaptureReads.Meter(await query.AsNoTracking().SingleAsync(m => m.Id == id, t));
+    }
+    internal async Task<MeterReading?> TaskReadingAsync(Guid id, CancellationToken t)
+    {
+        if (db is not Compact24DbContext compact) return await db.Set<MeterReading>().SingleOrDefaultAsync(r => r.TaskId == id, t);
+        var row = await compact.Set<Native.MeterReading>().AsNoTracking().SingleOrDefaultAsync(r => r.OperationalTaskId == id, t);
+        return row is null ? null : NativeCaptureReads.Reading(row);
+    }
+    internal async Task<MeterReading?> LatestReadingAsync(Guid id, CancellationToken t)
+    {
+        if (db is not Compact24DbContext compact) return await db.Set<MeterReading>().Where(r => r.MeterId == id).OrderByDescending(r => r.ConfirmedAt).FirstOrDefaultAsync(t);
+        var row = await compact.Set<Native.MeterReading>().AsNoTracking().Where(r => r.MeterId == id).OrderByDescending(r => r.ConfirmedAt).FirstOrDefaultAsync(t);
+        return row is null ? null : NativeCaptureReads.Reading(row);
+    }
+    internal Task<MeterEvidence?> LockEvidenceAsync(Guid id, CancellationToken t) => db is Compact24DbContext compact
+        ? NativeCaptureReads.LockedEvidenceAsync(compact, id, t) : db.Locked<MeterEvidence>(id).SingleOrDefaultAsync(t);
     internal async Task<bool> CanCorrectAsync(OperationalTask task, Meter meter, MeterReading reading, CancellationToken t)
     {
         if (!IsStaff || !meter.IsActive || task.Status != MeterTaskStatus.Completed || task.ReadingDate > Today) return false;
+        if (db is Compact24DbContext compact) return await CanCorrectNativeAsync(compact, task, meter, reading, t);
         // Changing a reading already used as a subsequent physical baseline would
         // invalidate that reading's previous value and its audit evidence.
         if (await db.Set<MeterReading>().AnyAsync(r => r.MeterId == meter.Id && r.Id != reading.Id &&
@@ -68,6 +142,46 @@ internal sealed class CaptureScope(BHomePersistenceContext db, ICurrentUser user
         if (task.Purpose == ReadingPurpose.Final && task.ContractId is { } finalContract &&
             !await db.Set<ContractMoveOut>().AnyAsync(m => m.ContractId == finalContract && m.Status == MoveOutStatus.Approved &&
                 m.InspectedAt == null && (m.InspectionStaffId == null || m.InspectionStaffId == UserId), t)) return false;
+        return true;
+    }
+
+    private async Task<bool> CanCorrectNativeAsync(Compact24DbContext compact, OperationalTask task, Meter meter, MeterReading reading, CancellationToken t)
+    {
+        if (await compact.Set<Native.MeterReading>().AnyAsync(r => r.MeterId == meter.Id && r.Id != reading.Id && r.ConfirmedAt >= reading.ConfirmedAt, t)) return false;
+        if (task.BillingPeriod != null && await compact.Set<Native.Invoice>().AnyAsync(i => i.Status == (short)InvoiceStatus.Final &&
+            i.RoomId == meter.RoomId && i.BillingPeriod == task.BillingPeriod, t)) return false;
+        if (await (from line in compact.Set<Native.InvoiceItem>() join invoice in compact.Set<Native.Invoice>() on line.InvoiceId equals invoice.Id
+            where invoice.Status == (short)InvoiceStatus.Final && line.MeterReadingId == reading.Id select line.Id).AnyAsync(t)) return false;
+        var id = reading.Id.ToString();
+        if (await db.Database.SqlQuery<bool>($"""
+            SELECT EXISTS(SELECT 1 FROM contracts WHERE
+                ((handover->'current'->>'status')::int=2 AND (handover->'current'->>'electricityReadingId'={id} OR handover->'current'->>'waterReadingId'={id})) OR
+                (move_out->'current'->>'inspectedAt' IS NOT NULL AND (move_out->'current'->>'electricityReadingId'={id} OR move_out->'current'->>'waterReadingId'={id}))) AS "Value"
+            """).SingleAsync(t)) return false;
+        if (await db.Database.SqlQuery<bool>($"""
+            SELECT EXISTS(SELECT 1 FROM contracts c CROSS JOIN LATERAL jsonb_array_elements(c.history) h
+                WHERE c.room_id={meter.RoomId} AND h->>'recordType'='SettlementReceivableV1'
+                  AND (h->'state'->'utility'->'baseline'->>'readingId'={id} OR h->'state'->'utility'->'final'->>'readingId'={id})) AS "Value"
+            """).SingleAsync(t)) return false;
+        if (task.Purpose == ReadingPurpose.Initial && task.ContractId is { } initialContract)
+        {
+            if (!await compact.Set<Native.Contract>().AnyAsync(c => c.Id == initialContract && c.Status == (short)ContractStatus.Active, t)) return false;
+            if (await db.Database.SqlQuery<bool>($"""
+                SELECT EXISTS(SELECT 1 FROM operational_tasks WHERE contract_id={initialContract} AND task_type='GENERAL'
+                    AND COALESCE((task_data->'state'->>'kind')::int,1)=1 AND title LIKE 'Bàn giao vào phòng%'
+                    AND (status<>'1' OR assigned_user_id IS DISTINCT FROM {UserId})) AS "Value"
+                """).SingleAsync(t)) return false;
+            if (await db.Database.SqlQuery<bool>($"""
+                SELECT EXISTS(SELECT 1 FROM contracts WHERE id={initialContract} AND ((handover->'current'->>'status')::int=2
+                    OR handover->'preparation'->>'ownerSignature' IS NOT NULL OR handover->'preparation'->>'ownerReadyAt' IS NOT NULL
+                    OR handover->'preparation'->>'staffSubmittedAt' IS NOT NULL)) AS "Value"
+                """).SingleAsync(t)) return false;
+        }
+        if (task.Purpose == ReadingPurpose.Final && task.ContractId is { } finalContract && !await db.Database.SqlQuery<bool>($"""
+            SELECT EXISTS(SELECT 1 FROM contracts WHERE id={finalContract} AND (move_out->'current'->>'status')::int=1
+                AND move_out->'current'->>'inspectedAt' IS NULL AND (move_out->'current'->>'inspectionStaffId' IS NULL
+                    OR (move_out->'current'->>'inspectionStaffId')::uuid={UserId})) AS "Value"
+            """).SingleAsync(t)) return false;
         return true;
     }
 }

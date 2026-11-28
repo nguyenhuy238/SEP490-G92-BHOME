@@ -8,6 +8,8 @@ public enum IdentityVerificationStatus { Pending, Verified, Rejected }
 
 public sealed class Resident : AuditableEntity
 {
+    internal static Resident Rehydrate(Guid id, DateTimeOffset createdAt, DateTimeOffset updatedAt) =>
+        new() { Id = id, CreatedAt = createdAt, UpdatedAt = updatedAt };
     public Guid? RoomId { get; set; }
     public Room Room { get; set; } = null!;
     // Non-sensitive workspace label. Actual name/DOB/address live only in the encrypted envelope.

@@ -1,6 +1,7 @@
 using BHome.Application.Storage;
 using BHome.Domain.Billing;
 using BHome.Infrastructure.Persistence;
+using BHome.Infrastructure.Persistence.Compact24;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
@@ -32,6 +33,24 @@ public sealed class MeterEvidenceCleanup(IServiceScopeFactory scopes, ILogger<Me
     {
         await using var tx = await db.Database.BeginTransactionAsync(token);
         var now = DateTimeOffset.UtcNow;
+        if (db is Compact24DbContext compact)
+        {
+            var candidates = await db.Database.SqlQuery<Guid>($"""
+                SELECT (e->>'id')::uuid AS "Value" FROM operational_tasks t CROSS JOIN LATERAL jsonb_array_elements(t.evidence) e
+                WHERE t.task_type='METER_READ' AND e->>'recordType'='MeterEvidence' AND NOT (e->>'isLinked')::boolean
+                    AND (e->>'cleanupAfter')::timestamptz<{now} ORDER BY (e->>'cleanupAfter')::timestamptz LIMIT 10
+                """).ToArrayAsync(token);
+            foreach (var id in candidates)
+            {
+                var row = await NativeCaptureReads.LockedEvidenceAsync(compact, id, token, skipLocked: true);
+                if (row is null || row.IsLinked || row.CleanupAfter >= now) continue;
+                using var deadline = CancellationTokenSource.CreateLinkedTokenSource(token); deadline.CancelAfter(TimeSpan.FromSeconds(30));
+                await storage.DeleteAsync(row.ObjectKey, deadline.Token);
+                await NativeCaptureWrites.EvidenceAsync(compact, row, false, token, deleted: true);
+            }
+            await tx.CommitAsync(token);
+            return;
+        }
         var abandoned = await db.Set<MeterEvidence>().AsNoTracking().Where(e => !e.IsLinked && e.CleanupAfter < now)
             .OrderBy(e => e.CleanupAfter).Take(10).Select(e => e.Id).ToArrayAsync(token);
         foreach (var id in abandoned)
