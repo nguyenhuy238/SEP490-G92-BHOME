@@ -1,4 +1,5 @@
 using System.Net.Http.Json;
+using System.Text.Json;
 using BHome.Application.Finance;
 using BHome.Application.IdentityAccess;
 using BHome.Domain.PaymentsDebt;
@@ -111,7 +112,67 @@ public sealed class Compact24FinanceLedgerTests
             var replayedLegacy = (await legacyResponse.Content.ReadFromJsonAsync<ScenarioView>())!;
             Assert.Equal(legacy.CalculationVersion, replayedLegacy.CalculationVersion);
             Assert.Equal(legacy.Result, replayedLegacy.Result);
+            await NativeScenarioPersistenceParityAsync(fixture, key, legacyKey, first);
         }
         finally { await fixture.DisposeAsync(); }
+    }
+
+    private static async Task NativeScenarioPersistenceParityAsync(Compact24WorkflowFixture fixture, Guid key, Guid legacyKey, ScenarioView saved)
+    {
+        await using var scope = fixture.Capture.Factory.Services.CreateAsyncScope();
+        var db = scope.ServiceProvider.GetRequiredService<Compact24DbContext>();
+        var repository = scope.ServiceProvider.GetRequiredService<IFinancialScenarioRepository>();
+        var actor = await db.Database.SqlQuery<Guid>($"SELECT created_by_user_id AS \"Value\" FROM financial_scenarios WHERE id={key}").SingleAsync();
+        // Independently compare every persisted column against the original SQL/serializer contract.
+        var input = saved.Input;
+        var assumptions = JsonSerializer.Serialize(input);
+        var baseline = JsonSerializer.Serialize(saved.Baseline);
+        var result = JsonSerializer.Serialize(saved.Result);
+        Assert.True(await db.Database.SqlQuery<bool>($"""
+            SELECT (location_id IS NOT DISTINCT FROM {input.Baseline.LocationId}::uuid
+                AND name={input.Name} AND baseline_from={input.Baseline.From} AND baseline_to={input.Baseline.To}
+                AND forecast_months={(short)input.ForecastMonths} AND assumptions={assumptions}::jsonb
+                AND baseline_snapshot={baseline}::jsonb AND result_snapshot={result}::jsonb
+                AND calculation_version={saved.CalculationVersion} AND created_by_user_id={actor}
+                AND calculated_at={saved.Baseline.SnapshotAt}) AS "Value"
+            FROM financial_scenarios WHERE id={key}
+            """).SingleAsync());
+
+        var otherActor = Guid.NewGuid();
+        Assert.Null(await repository.GetAsync(key, otherActor, default));
+        Assert.Empty(await repository.ListAsync(otherActor, 1, 10, default));
+        var conflict = await Assert.ThrowsAsync<FinanceException>(() => repository.SaveAsync(key, otherActor, saved, default));
+        Assert.Equal(409, conflict.Status);
+        Assert.Equal("scenario_idempotency_conflict", conflict.Code);
+        Assert.Null(db.Database.CurrentTransaction);
+
+        // Even if recalculation now differs, replay returns the original immutable snapshot.
+        var recalculated = saved with
+        {
+            Baseline = saved.Baseline with { SnapshotAt = saved.Baseline.SnapshotAt.AddDays(1) },
+            Result = saved.Result with { MonthlyProfit = "0" }
+        };
+        Assert.Equal(JsonSerializer.Serialize(saved), JsonSerializer.Serialize(await repository.SaveAsync(key, actor, recalculated, default)));
+        Assert.Null(db.Database.CurrentTransaction);
+
+        // A failed native insert must release the transaction and leave the key reusable.
+        var retryKey = Guid.NewGuid();
+        var failure = await Assert.ThrowsAsync<DbUpdateException>(() => repository.SaveAsync(retryKey, otherActor, saved, default));
+        Assert.Equal(Npgsql.PostgresErrorCodes.ForeignKeyViolation, Assert.IsType<Npgsql.PostgresException>(failure.InnerException).SqlState);
+        Assert.Null(db.Database.CurrentTransaction);
+        Assert.False(await db.Database.SqlQuery<bool>($"SELECT EXISTS(SELECT 1 FROM financial_scenarios WHERE id={retryKey}) AS \"Value\"").SingleAsync());
+        var retried = await repository.SaveAsync(retryKey, actor, saved, default);
+        Assert.Equal(JsonSerializer.Serialize(saved with { Id = retryKey }), JsonSerializer.Serialize(retried));
+        Assert.Null(db.Database.CurrentTransaction);
+
+        // All three rows have the same stored timestamp; preserve PostgreSQL UUID tie-break and pagination.
+        var expected = await db.Database.SqlQuery<Guid>($"""
+            SELECT id AS "Value" FROM financial_scenarios WHERE created_by_user_id={actor}
+            ORDER BY calculated_at DESC,id
+            """).ToArrayAsync();
+        Assert.Equal(3, expected.Length);
+        Assert.Contains(legacyKey, expected);
+        Assert.Equal(expected, (await repository.ListAsync(actor, 1, 10, default)).Select(row => row.Id).ToArray());
+        Assert.Equal(expected[1], Assert.Single(await repository.ListAsync(actor, 2, 1, default)).Id);
     }
 }
