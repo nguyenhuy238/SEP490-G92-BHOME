@@ -11,6 +11,12 @@ test('backend CI uses a solution filter without externally targeted plan integra
   const selected = slnf.solution.projects.map((project) => project.replaceAll('\\', '/'));
   assert.equal(slnf.solution.path, 'BHome.sln');
   assert.equal(new Set(selected).size, selected.length);
+  assert.ok(fs.existsSync(path.join(root, 'src/backend/BHome.Api/BHome.Api.csproj')));
+  assert.ok(
+    !selected.some((project) =>
+      /(?:^|\/)BHome\.(?:Domain|Application|Infrastructure)\.csproj$/.test(project),
+    ),
+  );
   for (const project of selected) {
     assert.ok(fs.existsSync(path.resolve(root, 'src/backend', project)), `Missing ${project}`);
   }
