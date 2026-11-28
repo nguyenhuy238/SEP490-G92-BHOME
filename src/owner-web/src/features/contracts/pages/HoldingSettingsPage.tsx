@@ -8,32 +8,29 @@ import {
   DialogActions,
   DialogContent,
   DialogTitle,
-  MenuItem,
   Paper,
   Stack,
   TextField,
   Typography,
 } from '@mui/material';
+import { History, Save } from 'lucide-react';
 import { useAuth } from '../../../../../../packages/client-core/src/auth';
 import { createApiClient } from '../../../../../../packages/client-core/src/api';
 import {
   holdingSettingsClient,
   type HoldingSettings,
-  type HoldingPreparation,
 } from '../../../../../../packages/client-core/src/holdingSettings';
-import {
-  contractClient,
-  contractError,
-  formatContractMoney,
-} from '../../../../../../packages/client-core/src/contracts';
+import { contractError } from '../../../../../../packages/client-core/src/contracts';
 import { apiBaseUrl, isMockMode } from '../../../services/config';
 import { PageHeader } from '../../../components/common/PortalUI';
+
+const panelSx = { borderColor: '#E2E8F0', borderRadius: '12px', p: { xs: 2, md: 3 } };
 
 export default function HoldingSettingsPage() {
   return isMockMode ? (
     <Stack spacing={3}>
-      <PageHeader title="Cấu hình hợp đồng giữ chỗ" />
-      <Alert severity="info">Cấu hình giữ chỗ theo cơ sở chỉ hoạt động ở chế độ API.</Alert>
+      <PageHeader title="Chính sách hợp đồng giữ chỗ" />
+      <Alert severity="info">Chính sách giữ chỗ chỉ hoạt động ở chế độ API.</Alert>
     </Stack>
   ) : (
     <LiveHoldingSettingsPage />
@@ -48,62 +45,28 @@ function LiveHoldingSettingsPage() {
     [client],
   );
   const api = useMemo(() => holdingSettingsClient(request), [request]);
-  const contracts = useMemo(() => contractClient(request), [request]);
-  const [locations, setLocations] = useState<{ id: string; label: string }[]>([]);
-  const [location, setLocation] = useState('');
-  const [rooms, setRooms] = useState<{ id: string; label: string }[]>([]);
-  const [room, setRoom] = useState('');
   const [settings, setSettings] = useState<HoldingSettings | null>(null);
-  const [months, setMonths] = useState('');
-  const [factor, setFactor] = useState('1');
   const [terms, setTerms] = useState('');
-  const [loading, setLoading] = useState(false),
-    [saving, setSaving] = useState(false);
-  const [error, setError] = useState(''),
-    [success, setSuccess] = useState('');
-  const [preview, setPreview] = useState<HoldingPreparation | null>(null);
-  const [historyOpen, setHistoryOpen] = useState(false);
+  const [baseline, setBaseline] = useState('');
   const [history, setHistory] = useState<HoldingSettings[] | null>(null);
-  const [historyError, setHistoryError] = useState('');
+  const [loading, setLoading] = useState(true);
+  const [saving, setSaving] = useState(false);
+  const [historyOpen, setHistoryOpen] = useState(false);
+  const [confirmOpen, setConfirmOpen] = useState(false);
+  const [error, setError] = useState('');
+  const [success, setSuccess] = useState('');
   const lock = useRef(false);
+  const dirty = terms !== baseline;
+
   useEffect(() => {
     const abort = new AbortController();
-    void contracts
-      .locations(abort.signal)
-      .then(setLocations)
-      .catch((e) => {
-        if (!abort.signal.aborted) setError(contractError(e));
-      });
-    return () => abort.abort();
-  }, [contracts]);
-  function changeLocation(next: string) {
-    setSettings(null);
-    setMonths('');
-    setFactor('1');
-    setTerms('');
-    setRooms([]);
-    setRoom('');
-    setPreview(null);
-    setSuccess('');
-    setError('');
-    setHistoryOpen(false);
-    setHistory(null);
-    setLoading(!!next);
-    setLocation(next);
-  }
-  useEffect(() => {
-    if (!location) return;
-    const abort = new AbortController();
-    void Promise.all([api.get(location, abort.signal), contracts.rooms(location, abort.signal)])
-      .then(([value, items]) => {
+    void api
+      .get(abort.signal)
+      .then((value) => {
         if (abort.signal.aborted) return;
         setSettings(value);
-        setRooms(items);
-        if (value) {
-          setMonths(String(value.holdingMonths));
-          setFactor(value.depositRentMonths);
-          setTerms(value.terms);
-        }
+        setTerms(value?.terms ?? '');
+        setBaseline(value?.terms ?? '');
       })
       .catch((e) => {
         if (!abort.signal.aborted) setError(contractError(e));
@@ -112,67 +75,33 @@ function LiveHoldingSettingsPage() {
         if (!abort.signal.aborted) setLoading(false);
       });
     return () => abort.abort();
-  }, [api, contracts, location]);
+  }, [api]);
+
   useEffect(() => {
-    if (!room || !settings) return;
+    if (!historyOpen) return;
     const abort = new AbortController();
     void api
-      .prepare(room, abort.signal)
-      .then((value) => {
-        if (!abort.signal.aborted) setPreview(value);
-      })
+      .versions(abort.signal)
+      .then(setHistory)
       .catch((e) => {
         if (!abort.signal.aborted) setError(contractError(e));
       });
     return () => abort.abort();
-  }, [api, room, settings]);
-  useEffect(() => {
-    if (!historyOpen || !location) return;
-    const abort = new AbortController();
-    void api
-      .versions(location, abort.signal)
-      .then((value) => {
-        if (!abort.signal.aborted) setHistory(value);
-      })
-      .catch((e) => {
-        if (!abort.signal.aborted) setHistoryError(contractError(e));
-      });
-    return () => abort.abort();
-  }, [api, historyOpen, location, settings?.version]);
+  }, [api, historyOpen, settings?.version]);
+
   async function save() {
-    if (lock.current || !location) return;
-    const count = Number(months),
-      multiplier = Number(factor);
-    if (
-      !Number.isInteger(count) ||
-      count < 1 ||
-      count > 120 ||
-      !/^\d+(\.\d{1,2})?$/.test(factor) ||
-      multiplier <= 0 ||
-      multiplier > 120 ||
-      !terms.trim()
-    ) {
-      setError(
-        'Nhập 1–120 tháng giữ chỗ, hệ số cọc lớn hơn 0 (tối đa 120, hai số thập phân) và điều khoản giữ chỗ.',
-      );
-      return;
-    }
+    if (lock.current || !terms.trim()) return;
     lock.current = true;
     setSaving(true);
     setError('');
-    setSuccess('');
-    setPreview(null);
     try {
-      await api.save(location, {
-        holdingMonths: count,
-        depositRentMonths: factor,
-        terms: terms.trim(),
-        expectedVersion: settings?.version ?? 0,
-      });
-      setSettings(await api.get(location));
-      setSuccess(
-        'Đã lưu cấu hình giữ chỗ cho cơ sở đang chọn. Các hợp đồng đã tạo được giữ nguyên.',
-      );
+      await api.save({ terms: terms.trim(), expectedVersion: settings?.version ?? 0 });
+      const persisted = await api.get();
+      setSettings(persisted);
+      setTerms(persisted?.terms ?? '');
+      setBaseline(persisted?.terms ?? '');
+      setSuccess('Đã lưu chính sách giữ chỗ toàn hệ thống.');
+      setConfirmOpen(false);
     } catch (e) {
       setError(contractError(e));
     } finally {
@@ -180,158 +109,165 @@ function LiveHoldingSettingsPage() {
       setSaving(false);
     }
   }
+
   return (
-    <Stack spacing={3}>
-      <Box>
-        <PageHeader title="Cấu hình hợp đồng giữ chỗ" />
-        <Typography color="text.secondary">
-          Thiết lập riêng cho từng cơ sở. Tiền giữ chỗ được tính từ giá thuê hiện hành của từng
-          phòng.
-        </Typography>
+    <Stack spacing={2.5} sx={{ maxWidth: 1120, mx: 'auto', minWidth: 0 }}>
+      <PageHeader title="Chính sách hợp đồng giữ chỗ" />
+      <Alert severity="info" sx={{ borderRadius: 2 }}>
+        Áp dụng thống nhất cho tất cả cơ sở hiện tại và cơ sở tạo mới thuộc Owner này.
+      </Alert>
+      <Box sx={{ display: 'grid', gridTemplateColumns: { xs: '1fr', sm: '1fr 1fr' }, gap: 2 }}>
+        <Paper variant="outlined" sx={panelSx}>
+          <Typography variant="body2" color="text.secondary">
+            Thời hạn giữ chỗ
+          </Typography>
+          <Typography variant="h6" sx={{ mt: 0.5, fontWeight: 700 }}>
+            1 tháng dương lịch
+          </Typography>
+        </Paper>
+        <Paper variant="outlined" sx={panelSx}>
+          <Typography variant="body2" color="text.secondary">
+            Tiền giữ chỗ
+          </Typography>
+          <Typography variant="h6" sx={{ mt: 0.5, fontWeight: 700 }}>
+            Bằng 1 tháng tiền thuê
+          </Typography>
+          <Typography variant="caption" color="text.secondary">
+            Tính theo giá thuê hiệu lực của từng phòng.
+          </Typography>
+        </Paper>
       </Box>
-      <Paper sx={{ p: 3 }}>
-        <Stack spacing={3}>
+      <Paper
+        variant="outlined"
+        component="form"
+        onSubmit={(e) => {
+          e.preventDefault();
+          setConfirmOpen(true);
+        }}
+        sx={panelSx}
+      >
+        <Stack spacing={2}>
+          <Box>
+            <Typography component="h2" variant="h6" sx={{ fontWeight: 700 }}>
+              Điều khoản giữ chỗ
+            </Typography>
+            <Typography variant="body2" color="text.secondary">
+              Chỉnh sửa nội dung áp dụng cho các hợp đồng giữ chỗ tạo sau khi lưu.
+            </Typography>
+          </Box>
+          {loading && <CircularProgress size={22} aria-label="Đang tải chính sách" />}
+          {error && <Alert severity="error">{error}</Alert>}
+          {success && !dirty && <Alert severity="success">{success}</Alert>}
+          {!loading && !settings && !terms && (
+            <Alert severity="warning">
+              Chưa có chính sách toàn cục. Nhập điều khoản và lưu để bật tạo hợp đồng giữ chỗ.
+            </Alert>
+          )}
           <TextField
-            select
-            label="Cơ sở áp dụng"
-            value={location}
-            disabled={saving}
-            onChange={(e) => changeLocation(e.target.value)}
+            label="Điều khoản giữ chỗ"
+            multiline
+            minRows={7}
+            maxRows={18}
+            required
+            value={terms}
+            disabled={loading || saving}
+            onChange={(e) => setTerms(e.target.value)}
+            helperText="Thời hạn và tiền giữ chỗ được cố định theo chính sách toàn cục."
+          />
+          <Stack
+            direction={{ xs: 'column', sm: 'row' }}
+            spacing={1.25}
+            sx={{ justifyContent: 'space-between', alignItems: { xs: 'stretch', sm: 'center' } }}
           >
-            <MenuItem value="">Chọn cơ sở</MenuItem>
-            {locations.map((item) => (
-              <MenuItem key={item.id} value={item.id}>
-                {item.label}
-              </MenuItem>
-            ))}
-          </TextField>
-          {loading && <CircularProgress size={24} />}
-          {!!error && <Alert severity="error">{error}</Alert>}
-          {!!success && <Alert severity="success">{success}</Alert>}
-          {location && !loading && (
-            <>
-              <Alert severity="info">
-                Chỉ áp dụng cho {locations.find((item) => item.id === location)?.label}. Chưa có giá
-                thuê phòng thì hệ thống sẽ chặn tạo hợp đồng, không tự đặt tiền cọc.
-              </Alert>
-              {!settings && (
-                <Alert severity="warning">
-                  Cơ sở này chưa có cấu hình giữ chỗ. Nhập và lưu trước khi Staff tạo hợp đồng.
-                </Alert>
-              )}
-              <TextField
-                label="Số tháng giữ chỗ"
-                type="number"
-                value={months}
-                disabled={saving}
-                onChange={(e) => setMonths(e.target.value)}
-                helperText="Hạn giữ chỗ = ngày bắt đầu + số tháng lịch đã cấu hình."
-              />
-              <TextField
-                label="Tiền giữ chỗ bằng bao nhiêu tháng tiền phòng?"
-                type="number"
-                value={factor}
-                disabled={saving}
-                onChange={(e) => setFactor(e.target.value)}
-                helperText="Mặc định 1: bằng một tháng tiền thuê của phòng. Owner có thể đổi, ví dụ 0,5 hoặc 2. Thời hạn giữ chỗ độc lập với hệ số tiền cọc."
-              />
-              <TextField
-                label="Điều khoản giữ chỗ"
-                multiline
-                minRows={4}
-                value={terms}
-                disabled={saving}
-                onChange={(e) => setTerms(e.target.value)}
-                helperText="Điều khoản này được chuyển vào hợp đồng giữ chỗ, không dùng điều khoản cọc thuê chính thức."
-              />
-              <Button variant="contained" disabled={saving} onClick={() => void save()}>
-                {saving ? 'Đang lưu…' : 'Lưu cấu hình cho cơ sở này'}
+            <Button
+              startIcon={<History size={17} />}
+              onClick={() => {
+                setHistory(null);
+                setHistoryOpen(true);
+              }}
+              disabled={loading}
+            >
+              Lịch sử phiên bản
+            </Button>
+            <Stack direction="row" spacing={1} sx={{ justifyContent: 'flex-end' }}>
+              <Button
+                disabled={!dirty || saving}
+                onClick={() => {
+                  setTerms(baseline);
+                  setError('');
+                  setSuccess('');
+                }}
+              >
+                Hủy thay đổi
               </Button>
-              {settings && (
-                <>
-                  <Stack
-                    direction="row"
-                    sx={{
-                      alignItems: 'center',
-                      justifyContent: 'space-between',
-                      flexWrap: 'wrap',
-                      gap: 1,
-                    }}
-                  >
-                    <Typography variant="body2" color="text.secondary">
-                      Phiên bản hiện tại: {settings.version}
-                    </Typography>
-                    <Button
-                      size="small"
-                      onClick={() => {
-                        setHistory(null);
-                        setHistoryError('');
-                        setHistoryOpen(true);
-                      }}
-                    >
-                      Lịch sử phiên bản
-                    </Button>
-                  </Stack>
-                  <TextField
-                    select
-                    label="Xem mức cọc theo phòng (cấu hình đã lưu)"
-                    value={room}
-                    onChange={(e) => {
-                      setPreview(null);
-                      setRoom(e.target.value);
-                    }}
-                  >
-                    <MenuItem value="">Chọn phòng</MenuItem>
-                    {rooms.map((item) => (
-                      <MenuItem key={item.id} value={item.id}>
-                        {item.label}
-                      </MenuItem>
-                    ))}
-                  </TextField>
-                  {preview && (
-                    <Alert severity="success">
-                      Phòng {preview.roomNumber}: giá thuê{' '}
-                      {formatContractMoney(preview.monthlyRent)}/tháng · Tiền giữ chỗ{' '}
-                      {formatContractMoney(preview.holdingDeposit)} · Giữ chỗ{' '}
-                      {preview.holdingMonths} tháng.
-                    </Alert>
-                  )}
-                </>
-              )}
-            </>
+              <Button
+                variant="contained"
+                type="submit"
+                disabled={loading || saving || !dirty || !terms.trim()}
+                startIcon={
+                  saving ? <CircularProgress size={16} color="inherit" /> : <Save size={17} />
+                }
+              >
+                {saving ? 'Đang lưu…' : 'Lưu chính sách'}
+              </Button>
+            </Stack>
+          </Stack>
+          {settings && (
+            <Typography variant="caption" color="text.secondary">
+              Phiên bản {settings.version} · Cập nhật{' '}
+              {new Date(settings.updatedAt).toLocaleString('vi-VN')}
+            </Typography>
           )}
         </Stack>
       </Paper>
-      <Dialog open={historyOpen} onClose={() => setHistoryOpen(false)} fullWidth maxWidth="sm">
-        <DialogTitle>Lịch sử cấu hình giữ chỗ</DialogTitle>
+      <Dialog open={confirmOpen} onClose={() => !saving && setConfirmOpen(false)}>
+        <DialogTitle>Xác nhận cập nhật chính sách?</DialogTitle>
         <DialogContent>
-          {historyError ? (
-            <Alert severity="error">{historyError}</Alert>
-          ) : history === null ? (
-            <CircularProgress size={24} />
+          Chính sách mới áp dụng cho hợp đồng giữ chỗ được tạo sau khi lưu. Hợp đồng và cấu hình
+          lịch sử hiện có được giữ nguyên.
+        </DialogContent>
+        <DialogActions>
+          <Button disabled={saving} onClick={() => setConfirmOpen(false)}>
+            Quay lại
+          </Button>
+          <Button
+            variant="contained"
+            disabled={saving || !terms.trim()}
+            onClick={() => void save()}
+          >
+            Xác nhận lưu
+          </Button>
+        </DialogActions>
+      </Dialog>
+      <Dialog open={historyOpen} onClose={() => setHistoryOpen(false)} fullWidth maxWidth="sm">
+        <DialogTitle>Lịch sử chính sách giữ chỗ</DialogTitle>
+        <DialogContent>
+          {history === null ? (
+            <CircularProgress size={22} />
+          ) : history.length === 0 ? (
+            <Typography color="text.secondary">Chưa có lịch sử chính sách.</Typography>
           ) : (
             <Stack spacing={2}>
-              {history.length === 0 && (
-                <Typography color="text.secondary">Chưa có lịch sử.</Typography>
-              )}
               {history.map((revision) => (
-                <Stack
+                <Box
                   key={revision.version}
-                  spacing={0.5}
                   sx={{ borderBottom: '1px solid', borderColor: 'divider', pb: 1.5 }}
                 >
-                  <Typography sx={{ fontWeight: 700 }}>Phiên bản {revision.version}</Typography>
-                  <Typography variant="body2">
-                    {revision.holdingMonths} tháng · Tiền giữ chỗ bằng {revision.depositRentMonths}{' '}
-                    tháng tiền thuê
+                  <Typography sx={{ fontWeight: 700 }}>
+                    Phiên bản {revision.version}
+                    {revision.version === settings?.version ? ' · Hiện tại' : ''}
+                  </Typography>
+                  <Typography variant="caption" color="text.secondary">
+                    {new Date(revision.updatedAt).toLocaleString('vi-VN')} · Thời hạn 1 tháng · Tiền
+                    giữ chỗ bằng 1 tháng tiền thuê
                   </Typography>
                   <Typography
                     variant="body2"
-                    sx={{ whiteSpace: 'pre-wrap', overflowWrap: 'anywhere' }}
+                    sx={{ mt: 1, whiteSpace: 'pre-wrap', overflowWrap: 'anywhere' }}
                   >
                     {revision.terms}
                   </Typography>
-                </Stack>
+                </Box>
               ))}
             </Stack>
           )}

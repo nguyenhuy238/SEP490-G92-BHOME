@@ -4,6 +4,8 @@ using System.Text.Json;
 using System.Security.Cryptography;
 using BHome.Infrastructure.IdentityAccess;
 using BHome.Application.Operations;
+using BHome.Application.Ocr;
+using BHome.Infrastructure.Contracts;
 using BHome.Application.IdentityAccess;
 using BHome.Domain.IdentityAccess;
 using BHome.Infrastructure.Persistence;
@@ -16,8 +18,8 @@ using NpgsqlTypes;
 
 namespace BHome.Infrastructure.Modules.Operations;
 
-internal sealed class CompactOperationsRepository(Compact24DbContext db, UserManager<ApplicationUser> users,
-    SignInManager<ApplicationUser> signIn)
+internal sealed partial class CompactOperationsRepository(Compact24DbContext db, UserManager<ApplicationUser> users,
+    SignInManager<ApplicationUser> signIn, IIdentityProtection? identityProtection = null)
     : IOperationsRepository
 {
     private static readonly JsonSerializerOptions Json = new(JsonSerializerDefaults.Web);
@@ -90,7 +92,7 @@ internal sealed class CompactOperationsRepository(Compact24DbContext db, UserMan
         await using var command = Command("""
             SELECT u.id,COALESCE(u.full_name,''),u.phone,u.email,u.is_active,u.concurrency_stamp,
                    e.id,e.contract_number,e.start_date,e.end_date,e.salary_type,e.base_rate,e.status,
-                   COALESCE(e.reward_penalty_policy->>'employmentType','')
+                   NULLIF(e.reward_penalty_policy->>'employmentType','')
             FROM users u LEFT JOIN LATERAL (
                 SELECT * FROM staff_employments x WHERE x.staff_user_id=u.id ORDER BY x.start_date DESC,x.id LIMIT 1
             ) e ON TRUE WHERE 
@@ -106,7 +108,7 @@ internal sealed class CompactOperationsRepository(Compact24DbContext db, UserMan
         await Open(t); await using var command = Command("""
             SELECT u.id,COALESCE(u.full_name,''),u.phone,u.email,u.is_active,u.concurrency_stamp,
                    e.id,e.contract_number,e.start_date,e.end_date,e.salary_type,e.base_rate,e.status,
-                   COALESCE(e.reward_penalty_policy->>'employmentType','')
+                   NULLIF(e.reward_penalty_policy->>'employmentType','')
             FROM users u LEFT JOIN LATERAL (
                 SELECT * FROM staff_employments x WHERE x.staff_user_id=u.id ORDER BY x.start_date DESC,x.id LIMIT 1
             ) e ON TRUE WHERE u.id=@id AND 'Staff'=ANY(u.roles)
@@ -116,6 +118,8 @@ internal sealed class CompactOperationsRepository(Compact24DbContext db, UserMan
 
     public async Task<StaffView> CreateStaffAsync(Guid actorId, StaffCreate input, DateTimeOffset now, CancellationToken t)
     {
+        if (input.Employment.Status != "Active")
+            throw OperationsException.Invalid("new_employment_must_be_active");
         await using var tx = await db.Database.BeginTransactionAsync(t);
         await Open(t); await EnsurePhoneAvailable(Guid.Empty, input.Phone, t);
         var user = new ApplicationUser
@@ -183,6 +187,8 @@ internal sealed class CompactOperationsRepository(Compact24DbContext db, UserMan
         }
         Guid? employmentId; await using (var select = Command("SELECT id FROM staff_employments WHERE staff_user_id=@id ORDER BY start_date DESC,id LIMIT 1"))
         { select.Parameters.AddWithValue("id", userId); var value = await select.ExecuteScalarAsync(t); employmentId = value is Guid id ? id : null; }
+        if (employmentId is null && input.Employment.Status != "Active")
+            throw OperationsException.Invalid("new_employment_must_be_active");
         await EnsureEmploymentPeriodAvailable(userId, employmentId, input.Employment.StartDate, t);
         await SaveEmployment(userId, employmentId, input.Employment, actorId, now, input.Reason, t);
         await Audit(actorId, "StaffUpdated", "User", userId, now, t); await tx.CommitAsync(t);
@@ -194,7 +200,7 @@ internal sealed class CompactOperationsRepository(Compact24DbContext db, UserMan
         await Open(t);
         await EnsureStaffExists(userId, t);
         await using var command = Command("""
-            SELECT id,contract_number,COALESCE(reward_penalty_policy->>'employmentType',''),
+            SELECT id,contract_number,NULLIF(reward_penalty_policy->>'employmentType',''),
                    start_date,end_date,salary_type,base_rate,status,history::text
             FROM staff_employments WHERE staff_user_id=@staff ORDER BY start_date DESC,id
             """);
@@ -204,7 +210,7 @@ internal sealed class CompactOperationsRepository(Compact24DbContext db, UserMan
         while (await reader.ReadAsync(t))
         {
             result.Add(new(reader.GetGuid(0), reader.IsDBNull(1) ? null : reader.GetString(1),
-                reader.GetString(2), reader.GetFieldValue<DateOnly>(3),
+                reader.IsDBNull(2) ? null : reader.GetString(2), reader.GetFieldValue<DateOnly>(3),
                 reader.IsDBNull(4) ? null : reader.GetFieldValue<DateOnly>(4),
                 reader.IsDBNull(5) ? null : reader.GetString(5), reader.IsDBNull(6) ? null : reader.GetDecimal(6),
                 reader.GetString(7), JsonSerializer.Deserialize<List<EmploymentHistoryEntry>>(reader.GetString(8), Json) ?? []));
@@ -223,6 +229,13 @@ internal sealed class CompactOperationsRepository(Compact24DbContext db, UserMan
             var version = await locked.ExecuteScalarAsync(t);
             if (version is null) throw OperationsException.Missing();
             if (!Equals(version, input.AccountVersion)) throw OperationsException.Conflict("stale_staff_version");
+        }
+        await using (var existingEmployment = Command("SELECT EXISTS(SELECT 1 FROM staff_employments WHERE staff_user_id=@id)"))
+        {
+            existingEmployment.Parameters.AddWithValue("id", userId);
+            var hasHistory = (bool)(await existingEmployment.ExecuteScalarAsync(t))!;
+            if (!hasHistory && input.Employment.Status != "Active")
+                throw OperationsException.Invalid("new_employment_must_be_active");
         }
         await EnsureEmploymentPeriodAvailable(userId, null, input.Employment.StartDate, t);
         await SaveEmployment(userId, null, input.Employment, actorId, now, input.Reason, t);
@@ -295,9 +308,13 @@ internal sealed class CompactOperationsRepository(Compact24DbContext db, UserMan
 
     public async Task<ResidenceTaskView?> ResidenceAsync(Guid contractId, Guid residentId, Guid? tenantUserId, CancellationToken t)
     {
-        await Open(t); await using var command = Command(ResidenceSelect + " WHERE cr.contract_id=@contract AND cr.resident_id=@resident AND (@tenant IS NULL OR r.user_id=@tenant)");
+        await Open(t); await using var command = Command(ResidenceSelect + " WHERE cr.contract_id=@contract AND cr.resident_id=@resident AND (@tenant IS NULL OR r.user_id=@tenant OR c.tenant_user_id=@tenant)");
         command.Parameters.AddWithValue("contract", contractId); command.Parameters.AddWithValue("resident", residentId); AddNullableUuid(command, "tenant", tenantUserId);
-        await using var reader = await command.ExecuteReaderAsync(t); return await reader.ReadAsync(t) ? Residence(reader) : null;
+        ResidenceTaskView? result;
+        await using (var reader = await command.ExecuteReaderAsync(t)) result = await reader.ReadAsync(t) ? Residence(reader) : null;
+        if (result is null) return null;
+        var person = await db.Set<BHome.Domain.TenantContracts.Resident>().AsNoTracking().SingleAsync(r => r.Id == residentId, t);
+        return result with { ResidentLabel = ContractResidentDisplay.Read(person, identityProtection).Name };
     }
 
     public Task<ResidenceTaskView> UpdateResidenceAsync(Guid actorId, Guid contractId, Guid residentId,
@@ -307,15 +324,16 @@ internal sealed class CompactOperationsRepository(Compact24DbContext db, UserMan
             UPDATE contract_residents cr SET actual_residence_from=@actual,registration_status=@status,
                 registration_result_at=@result,owner_confirmed_by_user_id=NULL,owner_confirmed_at=NULL,
                 history=cr.history||jsonb_build_array(jsonb_build_object('action','TenantStatusUpdated','actorId',@actor,
-                    'occurredAt',@now,'status',@status,'note',@note))
+                    'occurredAt',@now,'status',@status,'note',@note) || jsonb_strip_nulls(jsonb_build_object('registrationExpiresOn',@expires)))
             FROM residents r,contracts c WHERE cr.contract_id=@contract AND cr.resident_id=@resident
-              AND r.id=cr.resident_id AND r.user_id=@actor AND c.id=cr.contract_id AND c.status=3
+              AND r.id=cr.resident_id AND (r.user_id=@actor OR c.tenant_user_id=@actor) AND c.id=cr.contract_id AND c.status=3
               AND @actual>=cr.residence_from
               AND (@reference::text IS NULL OR md5(cr.history::text)=@reference)
               AND (COALESCE(cr.registration_status,'Pending')<>'Completed' OR @status='Completed')
               AND (@status<>'Completed' OR (cr.registration_evidence_key IS NOT NULL AND @result IS NOT NULL))
             """);
         command.Parameters.AddWithValue("actual", input.ActualResidenceFrom); command.Parameters.AddWithValue("status", input.Status);
+        command.Parameters.AddWithValue("expires", NpgsqlDbType.Date, (object?)input.RegistrationExpiresOn ?? DBNull.Value);
         command.Parameters.AddWithValue("reference", NpgsqlDbType.Text, (object?)input.ExpectedReference ?? DBNull.Value);
         command.Parameters.AddWithValue("result", NpgsqlDbType.TimestampTz, (object?)input.ResultAt ?? DBNull.Value); command.Parameters.AddWithValue("actor", actorId);
         command.Parameters.AddWithValue("now", now); command.Parameters.AddWithValue("note", NpgsqlDbType.Text, (object?)input.Note ?? DBNull.Value);
@@ -369,7 +387,7 @@ internal sealed class CompactOperationsRepository(Compact24DbContext db, UserMan
                 history=cr.history||jsonb_build_array(jsonb_build_object('action','EvidenceUploaded','actorId',@actor,
                   'occurredAt',@now,'contentType',@type,'length',@length,'objectKey',@key))
             FROM residents r,contracts c WHERE cr.contract_id=@contract AND cr.resident_id=@resident
-              AND r.id=cr.resident_id AND r.user_id=@actor AND c.id=cr.contract_id AND c.status=3
+              AND r.id=cr.resident_id AND (r.user_id=@actor OR c.tenant_user_id=@actor) AND c.id=cr.contract_id AND c.status=3
               AND (@reference::text IS NULL OR md5(cr.history::text)=@reference)
             """);
         command.Parameters.AddWithValue("key", file.ObjectKey); command.Parameters.AddWithValue("actor", actorId); command.Parameters.AddWithValue("now", now);
@@ -385,9 +403,9 @@ internal sealed class CompactOperationsRepository(Compact24DbContext db, UserMan
             SELECT cr.registration_evidence_key,
               COALESCE((SELECT h->>'contentType' FROM jsonb_array_elements(cr.history) h WHERE h->>'action'='EvidenceUploaded' ORDER BY (h->>'occurredAt')::timestamptz DESC LIMIT 1),'image/jpeg'),
               COALESCE((SELECT (h->>'length')::bigint FROM jsonb_array_elements(cr.history) h WHERE h->>'action'='EvidenceUploaded' ORDER BY (h->>'occurredAt')::timestamptz DESC LIMIT 1),0)
-            FROM contract_residents cr JOIN residents r ON r.id=cr.resident_id
+            FROM contract_residents cr JOIN residents r ON r.id=cr.resident_id JOIN contracts c ON c.id=cr.contract_id
             WHERE cr.contract_id=@contract AND cr.resident_id=@resident AND cr.registration_evidence_key IS NOT NULL
-              AND (@tenant IS NULL OR r.user_id=@tenant)
+              AND (@tenant IS NULL OR r.user_id=@tenant OR c.tenant_user_id=@tenant)
             """); command.Parameters.AddWithValue("contract", contractId); command.Parameters.AddWithValue("resident", residentId); AddNullableUuid(command, "tenant", tenantUserId);
         await using var reader = await command.ExecuteReaderAsync(t); return await reader.ReadAsync(t) ? new(reader.GetString(0), reader.GetString(1), reader.GetInt64(2)) : null;
     }
@@ -448,7 +466,7 @@ internal sealed class CompactOperationsRepository(Compact24DbContext db, UserMan
     public async Task<IReadOnlyList<LocationPublicContent>> PublishedLocationsAsync(CancellationToken t)
     {
         await Open(t); await using var command = Command("""
-            SELECT id,name,address,public_profile::text,published_at FROM locations
+            SELECT id,name,address,COALESCE(public_profile->'published',public_profile)::text,published_at,public_profile ? 'published' FROM locations
             WHERE is_active AND published_at IS NOT NULL ORDER BY name,id
             """); var result = new List<LocationPublicContent>(); await using var reader = await command.ExecuteReaderAsync(t);
         while (await reader.ReadAsync(t)) result.Add(LocationContent(reader)); return result;
@@ -457,27 +475,27 @@ internal sealed class CompactOperationsRepository(Compact24DbContext db, UserMan
     public async Task<IReadOnlyList<RoomPublicContent>> PublishedRoomsAsync(Guid locationId, CancellationToken t)
     {
         await Open(t); await using var command = Command("""
-            SELECT r.id,r.location_id,r.room_number,r.floor,r.capacity,r.status,r.public_profile::text,r.published_at
+            SELECT r.id,r.location_id,r.room_number,r.floor,r.capacity,r.status,COALESCE(r.public_profile->'published',r.public_profile)::text,r.published_at,r.public_profile ? 'published',r.version
             FROM rooms r JOIN locations l ON l.id=r.location_id
             WHERE r.location_id=@location AND l.is_active AND l.published_at IS NOT NULL AND r.published_at IS NOT NULL
             ORDER BY r.room_number,r.id
             """);
         command.Parameters.AddWithValue("location", locationId); var result = new List<RoomPublicContent>();
         await using var reader = await command.ExecuteReaderAsync(t);
-        while (await reader.ReadAsync(t)) result.Add(RoomContent(reader)); return result;
+        while (await reader.ReadAsync(t)) result.Add(RoomContent(reader) with { Version = 0 }); return result;
     }
 
     public Task<LocationPublicContent> UpdateLocationContentAsync(Guid actorId, Guid locationId,
         LocationPublicContentWrite input, DateTimeOffset now, CancellationToken t) => PublicLocationMutation(actorId, locationId, now, t, async profile =>
     {
-        var next = new LocationProfile(input.Summary, input.Amenities, input.ContactPhone, input.ContactEmail, profile.Photos ?? []);
+        var next = profile with { Summary = input.Summary, Amenities = input.Amenities, ContactPhone = input.ContactPhone, ContactEmail = input.ContactEmail, Photos = OrderPhotos(profile.Photos, input.PhotoOrder) };
         await UpdatePublicProfile("locations", locationId, next, actorId, now, "PublicContentUpdated", t);
     });
 
     public Task<RoomPublicContent> UpdateRoomContentAsync(Guid actorId, Guid roomId,
         RoomPublicContentWrite input, DateTimeOffset now, CancellationToken t) => PublicRoomMutation(actorId, roomId, now, t, async profile =>
     {
-        var next = new RoomProfile(input.Description, input.Amenities, input.IndicativePrice, profile.Photos ?? []);
+        var next = profile with { Description = input.Description, Amenities = input.Amenities, IndicativePrice = input.IndicativePrice, Photos = OrderPhotos(profile.Photos, input.PhotoOrder) };
         await UpdatePublicProfile("rooms", roomId, next, actorId, now, "PublicContentUpdated", t);
     });
 
@@ -486,11 +504,17 @@ internal sealed class CompactOperationsRepository(Compact24DbContext db, UserMan
     {
         if (publish && (string.IsNullOrWhiteSpace(profile.Summary) || string.IsNullOrWhiteSpace(profile.ContactPhone) && string.IsNullOrWhiteSpace(profile.ContactEmail)))
             throw OperationsException.Conflict("public_location_incomplete");
+        if (publish)
+        {
+            await using var active = Command("SELECT is_active FROM locations WHERE id=@id");
+            active.Parameters.AddWithValue("id", locationId);
+            if (!(bool)(await active.ExecuteScalarAsync(t))!) throw OperationsException.Conflict("public_location_inactive");
+        }
         await Publish("locations", locationId, actorId, publish, now, t);
         if (!publish)
         {
-            await using var children = Command("UPDATE rooms SET published_at=NULL,published_by_user_id=NULL WHERE location_id=@id");
-            children.Parameters.AddWithValue("id", locationId); await children.ExecuteNonQueryAsync(t);
+            await using var children = Command("UPDATE rooms SET published_at=NULL,published_by_user_id=NULL,version=version+1,history=history||jsonb_build_array(jsonb_build_object('action','ParentUnpublished','actorId',@actor,'occurredAt',@now)) WHERE location_id=@id AND published_at IS NOT NULL");
+            children.Parameters.AddWithValue("id", locationId); children.Parameters.AddWithValue("actor", actorId); children.Parameters.AddWithValue("now", now); await children.ExecuteNonQueryAsync(t);
         }
     });
 
@@ -510,14 +534,14 @@ internal sealed class CompactOperationsRepository(Compact24DbContext db, UserMan
         OperationsFile file, DateTimeOffset now, CancellationToken t) => PublicLocationMutation(actorId, locationId, now, t, async profile =>
     {
         if ((profile.Photos?.Count ?? 0) >= 20) throw OperationsException.Conflict("public_photo_limit");
-        await UpdatePublicProfile("locations", locationId, profile with { Photos = [.. profile.Photos ?? [], new(file.ObjectKey, file.ContentType, file.Length)] }, actorId, now, "PublicPhotoAdded", t);
+        await UpdatePublicProfile("locations", locationId, profile with { Photos = [.. StablePhotos(profile.Photos), new(file.ObjectKey, file.ContentType, file.Length, NextPhotoIndex(profile.Photos, profile.NextPhotoIndex))], NextPhotoIndex = NextPhotoIndex(profile.Photos, profile.NextPhotoIndex) + 1 }, actorId, now, "PublicPhotoAdded", t);
     });
 
     public Task<RoomPublicContent> AttachRoomPhotoAsync(Guid actorId, Guid roomId,
         OperationsFile file, DateTimeOffset now, CancellationToken t) => PublicRoomMutation(actorId, roomId, now, t, async profile =>
     {
         if ((profile.Photos?.Count ?? 0) >= 20) throw OperationsException.Conflict("public_photo_limit");
-        await UpdatePublicProfile("rooms", roomId, profile with { Photos = [.. profile.Photos ?? [], new(file.ObjectKey, file.ContentType, file.Length)] }, actorId, now, "PublicPhotoAdded", t);
+        await UpdatePublicProfile("rooms", roomId, profile with { Photos = [.. StablePhotos(profile.Photos), new(file.ObjectKey, file.ContentType, file.Length, NextPhotoIndex(profile.Photos, profile.NextPhotoIndex))], NextPhotoIndex = NextPhotoIndex(profile.Photos, profile.NextPhotoIndex) + 1 }, actorId, now, "PublicPhotoAdded", t);
     });
 
     public Task<OperationsFile?> RemoveLocationPhotoAsync(Guid actorId, Guid locationId, int index,
@@ -532,18 +556,22 @@ internal sealed class CompactOperationsRepository(Compact24DbContext db, UserMan
         if (table == "locations")
         {
             var profile = await LockedProfile<LocationProfile>(table, id, t) ?? throw OperationsException.Missing();
-            var photos = (profile.Photos ?? []).ToList(); if (index >= photos.Count) return null;
-            var removed = photos[index]; photos.RemoveAt(index);
-            await UpdatePublicProfile(table, id, profile with { Photos = photos }, actor, now, "PublicPhotoRemoved", t);
+            var photos = StablePhotos(profile.Photos).ToList();
+            var removed = photos.FirstOrDefault(p => p.Index == index); if (removed is null) return null;
+            photos.Remove(removed);
+            await RevokePublishedPhoto(table, id, removed.ObjectKey, t);
+            await UpdatePublicProfile(table, id, profile with { Photos = photos, NextPhotoIndex = NextPhotoIndex(profile.Photos, profile.NextPhotoIndex) }, actor, now, "PublicPhotoRemoved", t);
             await Audit(actor, "PublicPhotoRemoved", "Location", id, now, t); await tx.CommitAsync(t);
             return new(removed.ObjectKey, removed.ContentType, removed.Length);
         }
         else
         {
             var profile = await LockedProfile<RoomProfile>(table, id, t) ?? throw OperationsException.Missing();
-            var photos = (profile.Photos ?? []).ToList(); if (index >= photos.Count) return null;
-            var removed = photos[index]; photos.RemoveAt(index);
-            await UpdatePublicProfile(table, id, profile with { Photos = photos }, actor, now, "PublicPhotoRemoved", t);
+            var photos = StablePhotos(profile.Photos).ToList();
+            var removed = photos.FirstOrDefault(p => p.Index == index); if (removed is null) return null;
+            photos.Remove(removed);
+            await RevokePublishedPhoto(table, id, removed.ObjectKey, t);
+            await UpdatePublicProfile(table, id, profile with { Photos = photos, NextPhotoIndex = NextPhotoIndex(profile.Photos, profile.NextPhotoIndex) }, actor, now, "PublicPhotoRemoved", t);
             await Audit(actor, "PublicPhotoRemoved", "Room", id, now, t); await tx.CommitAsync(t);
             return new(removed.ObjectKey, removed.ContentType, removed.Length);
         }
@@ -553,10 +581,10 @@ internal sealed class CompactOperationsRepository(Compact24DbContext db, UserMan
     {
         if (targetType == "location")
         {
-            var value = await LocationContent(id, publishedOnly, t); if (value is null || index >= value.Photos.Count) return null;
+            var value = await LocationContent(id, publishedOnly, t); if (value is null || !value.Photos.Any(p => p.Index == index)) return null;
             return await PublicPhotoFile("locations", id, index, publishedOnly, t);
         }
-        var room = await RoomContent(id, publishedOnly, t); if (room is null || index >= room.Photos.Count) return null;
+        var room = await RoomContent(id, publishedOnly, t); if (room is null || !room.Photos.Any(p => p.Index == index)) return null;
         return await PublicPhotoFile("rooms", id, index, publishedOnly, t);
     }
 
@@ -619,12 +647,16 @@ internal sealed class CompactOperationsRepository(Compact24DbContext db, UserMan
 
     private async Task<OperationsPage<ResidenceTaskView>> ResidencePage(ResidenceQuery query, Guid? tenant, CancellationToken t)
     {
-        await Open(t); var where = "(@location IS NULL OR l.id=@location) AND (@status IS NULL OR COALESCE(cr.registration_status,'Pending')=@status) AND (@tenant IS NULL OR r.user_id=@tenant)";
+        await Open(t); var where = "c.status=3 AND COALESCE(cr.actual_residence_from,cr.residence_from)<=(CURRENT_TIMESTAMP AT TIME ZONE 'Asia/Ho_Chi_Minh')::date AND cr.actual_move_out_date IS NULL AND (@location IS NULL OR l.id=@location) AND (@status IS NULL OR COALESCE(cr.registration_status,'Pending')=@status) AND (@tenant IS NULL OR r.user_id=@tenant OR c.tenant_user_id=@tenant)";
         await using var count = Command("SELECT count(*) FROM contract_residents cr JOIN contracts c ON c.id=cr.contract_id JOIN rooms rm ON rm.id=c.room_id JOIN locations l ON l.id=rm.location_id JOIN residents r ON r.id=cr.resident_id WHERE " + where);
         ResidenceParameters(count, query, tenant); var total = Convert.ToInt32(await count.ExecuteScalarAsync(t), CultureInfo.InvariantCulture);
         await using var command = Command(ResidenceSelect + " WHERE " + where + " ORDER BY cr.residence_from DESC,cr.contract_id,cr.resident_id OFFSET @skip LIMIT @take");
         ResidenceParameters(command, query, tenant); command.Parameters.AddWithValue("skip", checked((query.Page - 1) * query.PageSize)); command.Parameters.AddWithValue("take", query.PageSize);
-        var items = new List<ResidenceTaskView>(); await using var reader = await command.ExecuteReaderAsync(t); while (await reader.ReadAsync(t)) items.Add(Residence(reader));
+        var items = new List<ResidenceTaskView>();
+        await using (var reader = await command.ExecuteReaderAsync(t)) while (await reader.ReadAsync(t)) items.Add(Residence(reader));
+        var ids = items.Select(r => r.ResidentId).Distinct().ToArray();
+        var people = await db.Set<BHome.Domain.TenantContracts.Resident>().AsNoTracking().Where(r => ids.Contains(r.Id)).ToDictionaryAsync(r => r.Id, t);
+        items = items.Select(r => r with { ResidentLabel = ContractResidentDisplay.Read(people[r.ResidentId], identityProtection).Name }).ToList();
         return new(items, query.Page, query.PageSize, total);
     }
 
@@ -651,6 +683,8 @@ internal sealed class CompactOperationsRepository(Compact24DbContext db, UserMan
         Func<RoomProfile, Task> mutation)
     {
         await using var tx = await db.Database.BeginTransactionAsync(t); await Open(t);
+        await using (var parent = Command("SELECT l.id FROM locations l JOIN rooms r ON r.location_id=l.id WHERE r.id=@id FOR UPDATE OF l"))
+        { parent.Parameters.AddWithValue("id", id); await parent.ExecuteScalarAsync(t); }
         var profile = await LockedProfile<RoomProfile>("rooms", id, t) ?? throw OperationsException.Missing();
         await mutation(profile); await Audit(actor, "PublicContentChanged", "Room", id, now, t); await tx.CommitAsync(t);
         return (await RoomContent(id, false, t))!;
@@ -659,12 +693,17 @@ internal sealed class CompactOperationsRepository(Compact24DbContext db, UserMan
     private async Task<T?> LockedProfile<T>(string table, Guid id, CancellationToken t) where T : class
     {
         await using var command = Command($"SELECT public_profile::text FROM {table} WHERE id=@id FOR UPDATE"); command.Parameters.AddWithValue("id", id);
-        var value = await command.ExecuteScalarAsync(t) as string; return value is null ? null : JsonSerializer.Deserialize<T>(value, Json) ?? throw new InvalidOperationException("Invalid public profile.");
+        var value = await command.ExecuteScalarAsync(t) as string;
+        if (value is null) return null;
+        // Freeze pre-upgrade publications under the same row lock before any draft change.
+        await using var snapshot = Command($"UPDATE {table} SET public_profile=jsonb_set(public_profile,'{{published}}',public_profile) WHERE id=@id AND published_at IS NOT NULL AND NOT public_profile ? 'published'");
+        snapshot.Parameters.AddWithValue("id", id); await snapshot.ExecuteNonQueryAsync(t);
+        return JsonSerializer.Deserialize<T>(value, Json) ?? throw new InvalidOperationException("Invalid public profile.");
     }
 
     private async Task UpdatePublicProfile<T>(string table, Guid id, T profile, Guid actor, DateTimeOffset now, string action, CancellationToken t)
     {
-        await using var command = Command($"UPDATE {table} SET public_profile=CAST(@profile AS jsonb),version=version+1,history=history||jsonb_build_array(jsonb_build_object('action',@action,'actorId',@actor,'occurredAt',@now)) WHERE id=@id");
+        await using var command = Command($"UPDATE {table} SET public_profile=CAST(@profile AS jsonb) || CASE WHEN public_profile ? 'published' THEN jsonb_build_object('published',public_profile->'published') ELSE '{{}}'::jsonb END,version=version+1,history=history||jsonb_build_array(jsonb_build_object('action',@action,'actorId',@actor,'occurredAt',@now)) WHERE id=@id");
         command.Parameters.AddWithValue("profile", JsonSerializer.Serialize(profile, Json)); command.Parameters.AddWithValue("action", action);
         command.Parameters.AddWithValue("actor", actor); command.Parameters.AddWithValue("now", now); command.Parameters.AddWithValue("id", id);
         if (await command.ExecuteNonQueryAsync(t) != 1) throw OperationsException.Missing();
@@ -672,7 +711,7 @@ internal sealed class CompactOperationsRepository(Compact24DbContext db, UserMan
 
     private async Task Publish(string table, Guid id, Guid actor, bool publish, DateTimeOffset now, CancellationToken t)
     {
-        await using var command = Command($"UPDATE {table} SET published_at=@published,published_by_user_id=@publisher,version=version+1,history=history||jsonb_build_array(jsonb_build_object('action',@action,'actorId',@actor,'occurredAt',@now)) WHERE id=@id");
+        await using var command = Command($"UPDATE {table} SET public_profile=CASE WHEN @publisher IS NOT NULL THEN jsonb_set(public_profile,'{{published}}',public_profile - 'published') ELSE public_profile END,published_at=@published,published_by_user_id=@publisher,version=version+1,history=history||jsonb_build_array(jsonb_build_object('action',@action,'actorId',@actor,'occurredAt',@now)) WHERE id=@id");
         command.Parameters.Add(new NpgsqlParameter("published", NpgsqlDbType.TimestampTz) { Value = publish ? now : DBNull.Value });
         command.Parameters.Add(new NpgsqlParameter("publisher", NpgsqlDbType.Uuid) { Value = publish ? actor : DBNull.Value });
         command.Parameters.AddWithValue("action", publish ? "Published" : "Unpublished"); command.Parameters.AddWithValue("actor", actor);
@@ -681,7 +720,7 @@ internal sealed class CompactOperationsRepository(Compact24DbContext db, UserMan
 
     private async Task<LocationPublicContent?> LocationContent(Guid id, bool publishedOnly, CancellationToken t)
     {
-        await Open(t); await using var command = Command("SELECT id,name,address,public_profile::text,published_at FROM locations WHERE id=@id AND (NOT @published OR (is_active AND published_at IS NOT NULL))");
+        await Open(t); await using var command = Command("SELECT id,name,address,(CASE WHEN @published THEN COALESCE(public_profile->'published',public_profile) ELSE public_profile END)::text,published_at,public_profile ? 'published' FROM locations WHERE id=@id AND (NOT @published OR (is_active AND published_at IS NOT NULL))");
         command.Parameters.AddWithValue("id", id); command.Parameters.AddWithValue("published", publishedOnly);
         await using var reader = await command.ExecuteReaderAsync(t); return await reader.ReadAsync(t) ? LocationContent(reader) : null;
     }
@@ -689,35 +728,67 @@ internal sealed class CompactOperationsRepository(Compact24DbContext db, UserMan
     private async Task<RoomPublicContent?> RoomContent(Guid id, bool publishedOnly, CancellationToken t)
     {
         await Open(t); await using var command = Command("""
-            SELECT r.id,r.location_id,r.room_number,r.floor,r.capacity,r.status,r.public_profile::text,r.published_at
+            SELECT r.id,r.location_id,r.room_number,r.floor,r.capacity,r.status,(CASE WHEN @published THEN COALESCE(r.public_profile->'published',r.public_profile) ELSE r.public_profile END)::text,r.published_at,r.public_profile ? 'published',r.version
             FROM rooms r JOIN locations l ON l.id=r.location_id WHERE r.id=@id
               AND (NOT @published OR (l.is_active AND l.published_at IS NOT NULL AND r.published_at IS NOT NULL))
             """); command.Parameters.AddWithValue("id", id); command.Parameters.AddWithValue("published", publishedOnly);
-        await using var reader = await command.ExecuteReaderAsync(t); return await reader.ReadAsync(t) ? RoomContent(reader) : null;
+        await using var reader = await command.ExecuteReaderAsync(t);
+        if (!await reader.ReadAsync(t)) return null;
+        var room = RoomContent(reader);
+        return publishedOnly ? room with { Version = 0 } : room;
     }
 
     private static LocationPublicContent LocationContent(NpgsqlDataReader reader)
     {
-        var profile = JsonSerializer.Deserialize<LocationProfile>(reader.GetString(3), Json) ?? new();
+        var profile = JsonSerializer.Deserialize<LocationProfile>(reader.IsDBNull(3) ? "{}" : reader.GetString(3), Json) ?? new();
         return new(reader.GetGuid(0), reader.GetString(1), reader.GetString(2), profile.Summary, profile.Amenities ?? [],
             profile.ContactPhone, profile.ContactEmail, Photos("location", reader.GetGuid(0), profile.Photos),
-            !reader.IsDBNull(4), reader.IsDBNull(4) ? null : reader.GetFieldValue<DateTimeOffset>(4));
+            !reader.IsDBNull(4), reader.IsDBNull(4) ? null : reader.GetFieldValue<DateTimeOffset>(4), !reader.IsDBNull(4) ? "Published" : reader.GetBoolean(5) ? "Hidden" : "Draft");
     }
 
     private static RoomPublicContent RoomContent(NpgsqlDataReader reader)
     {
-        var profile = JsonSerializer.Deserialize<RoomProfile>(reader.GetString(6), Json) ?? new();
+        var profile = JsonSerializer.Deserialize<RoomProfile>(reader.IsDBNull(6) ? "{}" : reader.GetString(6), Json) ?? new();
         return new(reader.GetGuid(0), reader.GetGuid(1), reader.GetString(2), reader.IsDBNull(3) ? null : reader.GetString(3),
             reader.GetInt16(4), profile.Description, profile.Amenities ?? [], profile.IndicativePrice, Vacancy(reader.GetInt16(5)),
-            Photos("room", reader.GetGuid(0), profile.Photos), !reader.IsDBNull(7), reader.IsDBNull(7) ? null : reader.GetFieldValue<DateTimeOffset>(7));
+            Photos("room", reader.GetGuid(0), profile.Photos), !reader.IsDBNull(7), reader.IsDBNull(7) ? null : reader.GetFieldValue<DateTimeOffset>(7), !reader.IsDBNull(7) ? "Published" : reader.GetBoolean(8) ? "Hidden" : "Draft", reader.GetInt32(9));
+    }
+
+    private static IReadOnlyList<StoredPhoto> StablePhotos(IReadOnlyList<StoredPhoto>? photos) =>
+        (photos ?? []).Select((p, i) => p with { Index = p.Index ?? i }).ToArray();
+
+    private static int NextPhotoIndex(IReadOnlyList<StoredPhoto>? photos, int next) =>
+        Math.Max(next, StablePhotos(photos).Select(p => p.Index!.Value + 1).DefaultIfEmpty(0).Max());
+
+    private static IReadOnlyList<StoredPhoto> OrderPhotos(IReadOnlyList<StoredPhoto>? photos, int[]? order)
+    {
+        var stable = StablePhotos(photos);
+        if (order is null) return stable;
+        if (order.Length != stable.Count || order.Distinct().Count() != order.Length ||
+            order.Any(i => !stable.Any(p => p.Index == i))) throw OperationsException.Invalid("invalid_public_photo_order");
+        return order.Select(i => stable.Single(p => p.Index == i)).ToArray();
+    }
+
+    private async Task RevokePublishedPhoto(string table, Guid id, string key, CancellationToken t)
+    {
+        await using var command = Command($$"""
+            UPDATE {{table}} SET public_profile=jsonb_set(public_profile,'{published,photos}',
+              COALESCE((SELECT jsonb_agg(p - 'ordinal' ORDER BY n) FROM
+                (SELECT p || jsonb_build_object('index',COALESCE((p->>'index')::int,(n-1)::int)) AS p,n
+                 FROM jsonb_array_elements(public_profile->'published'->'photos') WITH ORDINALITY x(p,n)) stable
+                WHERE p->>'objectKey'<>@key),'[]'::jsonb))
+            WHERE id=@id AND public_profile ? 'published'
+            """);
+        command.Parameters.AddWithValue("id", id); command.Parameters.AddWithValue("key", key);
+        await command.ExecuteNonQueryAsync(t);
     }
 
     private async Task<OperationsFile?> PublicPhotoFile(string table, Guid id, int index, bool publishedOnly, CancellationToken t)
     {
         await Open(t); var join = table == "rooms" ? "JOIN locations l ON l.id=t.location_id" : "";
         var published = table == "rooms" ? "t.published_at IS NOT NULL AND l.published_at IS NOT NULL AND l.is_active" : "t.published_at IS NOT NULL AND t.is_active";
-        await using var command = Command($"SELECT p->>'objectKey',p->>'contentType',(p->>'length')::bigint FROM {table} t {join} CROSS JOIN LATERAL jsonb_array_elements(t.public_profile->'photos') WITH ORDINALITY x(p,n) WHERE t.id=@id AND n=@ordinal AND (NOT @published OR ({published}))");
-        command.Parameters.AddWithValue("id", id); command.Parameters.AddWithValue("ordinal", index + 1L); command.Parameters.AddWithValue("published", publishedOnly);
+        await using var command = Command($"SELECT p->>'objectKey',p->>'contentType',(p->>'length')::bigint FROM {table} t {join} CROSS JOIN LATERAL jsonb_array_elements((CASE WHEN @published THEN COALESCE(t.public_profile->'published',t.public_profile) ELSE t.public_profile END)->'photos') WITH ORDINALITY x(p,n) WHERE t.id=@id AND COALESCE((p->>'index')::bigint,n-1)=@index AND (NOT @published OR ({published}))");
+        command.Parameters.AddWithValue("id", id); command.Parameters.AddWithValue("index", index); command.Parameters.AddWithValue("published", publishedOnly);
         await using var reader = await command.ExecuteReaderAsync(t); return await reader.ReadAsync(t) ? new(reader.GetString(0), reader.GetString(1), reader.GetInt64(2)) : null;
     }
 
@@ -827,7 +898,9 @@ internal sealed class CompactOperationsRepository(Compact24DbContext db, UserMan
     private async Task SaveEmployment(Guid staffId, Guid? employmentId, EmploymentWrite input, Guid actor,
         DateTimeOffset now, string? reason, CancellationToken t)
     {
-        var metadata = JsonSerializer.Serialize(new { employmentType = input.EmploymentType }, Json);
+        var metadata = input.EmploymentType is null
+            ? "{}"
+            : JsonSerializer.Serialize(new { employmentType = input.EmploymentType }, Json);
         var snapshot = JsonSerializer.Serialize(input, Json);
         if (employmentId is null)
         {
@@ -919,7 +992,7 @@ internal sealed class CompactOperationsRepository(Compact24DbContext db, UserMan
         r.IsDBNull(3) ? null : r.GetString(3), r.GetFieldValue<string[]>(4), r.GetBoolean(5), r.GetString(6));
     private static StaffView Staff(NpgsqlDataReader r) => new(r.GetGuid(0), r.GetString(1), r.IsDBNull(2) ? null : r.GetString(2),
         r.IsDBNull(3) ? "" : r.GetString(3), r.GetBoolean(4), r.GetString(5), r.IsDBNull(6) ? null : new(r.GetGuid(6),
-            r.IsDBNull(7) ? null : r.GetString(7), r.GetString(13), r.GetFieldValue<DateOnly>(8), r.IsDBNull(9) ? null : r.GetFieldValue<DateOnly>(9),
+            r.IsDBNull(7) ? null : r.GetString(7), r.IsDBNull(13) ? null : r.GetString(13), r.GetFieldValue<DateOnly>(8), r.IsDBNull(9) ? null : r.GetFieldValue<DateOnly>(9),
             r.IsDBNull(10) ? null : r.GetString(10), r.IsDBNull(11) ? null : r.GetDecimal(11), r.GetString(12)));
 
     private static ResidenceTaskView Residence(NpgsqlDataReader r) => new(r.GetGuid(0), r.GetGuid(1), r.GetGuid(2), r.GetGuid(3),
@@ -927,7 +1000,8 @@ internal sealed class CompactOperationsRepository(Compact24DbContext db, UserMan
         r.GetFieldValue<DateOnly>(8), r.IsDBNull(9) ? null : r.GetFieldValue<DateOnly>(9), r.GetString(10), r.GetBoolean(11),
         r.IsDBNull(12) ? null : r.GetFieldValue<DateTimeOffset>(12), !r.IsDBNull(13), r.IsDBNull(14) ? null : r.GetFieldValue<DateTimeOffset>(14),
         ParseResidenceHistory(r.GetString(15)), r.GetString(16), r.GetBoolean(17),
-        r.IsDBNull(18) ? null : r.GetFieldValue<DateOnly>(18), r.GetBoolean(19));
+        r.IsDBNull(18) ? null : r.GetFieldValue<DateOnly>(18), r.GetBoolean(19),
+        r.IsDBNull(20) ? null : r.GetFieldValue<DateOnly>(20), r.GetBoolean(21), r.GetBoolean(22));
 
     private static IReadOnlyList<ResidenceHistoryView> ParseResidenceHistory(string json)
     {
@@ -944,9 +1018,9 @@ internal sealed class CompactOperationsRepository(Compact24DbContext db, UserMan
 
     private static IReadOnlyList<OccupantSummary> Occupants(string json) => JsonSerializer.Deserialize<OccupantSummary[]>(json, Json) ?? [];
     private static string RoomStatus(short value) => value switch { 0 => "Available", 1 => "OnHold", 2 => "Occupied", 3 => "Unavailable", _ => "Unknown" };
-    private static string Vacancy(short value) => value == 0 ? "Available" : "Unavailable";
+    private static string Vacancy(short value) => RoomStatus(value);
     private static string ContractStatus(short value) => value switch { 0 => "Draft", 1 => "PendingSigning", 2 => "PendingActivation", 3 => "Active", 4 => "Terminated", 5 => "Superseded", 6 => "Cancelled", _ => "Unknown" };
-    private static IReadOnlyList<PublicPhotoView> Photos(string target, Guid id, IReadOnlyList<StoredPhoto>? photos) => (photos ?? []).Select((p, i) => new PublicPhotoView(i, p.ContentType, p.Length, $"/api/v1/public/{target}s/{id}/photos/{i}")).ToArray();
+    private static IReadOnlyList<PublicPhotoView> Photos(string target, Guid id, IReadOnlyList<StoredPhoto>? photos) => (photos ?? []).Select((p, i) => new PublicPhotoView(p.Index ?? i, p.ContentType, p.Length, $"/api/v1/public/{target}s/{id}/photos/{p.Index ?? i}")).ToArray();
     private static IReadOnlyList<RecurringTaskTemplateView> ParseTemplates(string json, Guid location) =>
         (JsonSerializer.Deserialize<RecurringTaskTemplateView[]>(json, Json) ?? []).Select(x => x with { LocationId = location }).OrderBy(x => x.NextRunAt).ThenBy(x => x.Id).ToArray();
 
@@ -981,11 +1055,11 @@ internal sealed class CompactOperationsRepository(Compact24DbContext db, UserMan
     private async Task Open(CancellationToken t) { if (db.Database.GetDbConnection().State != ConnectionState.Open) await db.Database.OpenConnectionAsync(t); }
     private NpgsqlCommand Command(string sql) => new(sql, (NpgsqlConnection)db.Database.GetDbConnection(), (NpgsqlTransaction?)db.Database.CurrentTransaction?.GetDbTransaction());
 
-    private sealed record StoredPhoto(string ObjectKey, string ContentType, long Length);
+    private sealed record StoredPhoto(string ObjectKey, string ContentType, long Length, int? Index = null);
     private sealed record LocationProfile(string Summary = "", IReadOnlyList<string>? Amenities = null,
-        string? ContactPhone = null, string? ContactEmail = null, IReadOnlyList<StoredPhoto>? Photos = null);
+        string? ContactPhone = null, string? ContactEmail = null, IReadOnlyList<StoredPhoto>? Photos = null, int NextPhotoIndex = 0);
     private sealed record RoomProfile(string Description = "", IReadOnlyList<string>? Amenities = null,
-        decimal? IndicativePrice = null, IReadOnlyList<StoredPhoto>? Photos = null);
+        decimal? IndicativePrice = null, IReadOnlyList<StoredPhoto>? Photos = null, int NextPhotoIndex = 0);
 
     private const string ResidenceSelect = """
         SELECT cr.contract_id,cr.resident_id,l.id,rm.id,rm.room_number,r.display_label,cr.resident_role,r.user_id,
@@ -995,7 +1069,18 @@ internal sealed class CompactOperationsRepository(Compact24DbContext db, UserMan
               WHERE h->>'action'='AccommodationConfirmed' AND h->>'actualResidenceFrom'=cr.actual_residence_from::text),
           (SELECT (h.value->>'registrationDeadline')::date FROM jsonb_array_elements(cr.history) WITH ORDINALITY h(value,seq)
               WHERE h.value->>'action'='AccommodationConfirmed' AND h.value->>'actualResidenceFrom'=cr.actual_residence_from::text ORDER BY h.seq DESC LIMIT 1),
-          c.status=3 AND cr.actual_residence_from IS NOT NULL AND cr.actual_move_out_date IS NULL
+          c.status=3 AND cr.actual_residence_from IS NOT NULL AND cr.actual_move_out_date IS NULL,
+          (SELECT (h.value->>'registrationExpiresOn')::date FROM jsonb_array_elements(cr.history) WITH ORDINALITY h(value,seq)
+            WHERE h.value ? 'registrationExpiresOn' ORDER BY h.seq DESC LIMIT 1),
+          COALESCE((SELECT (h.value->>'registrationRequired')::boolean FROM jsonb_array_elements(cr.history) WITH ORDINALITY h(value,seq)
+            WHERE h.value->>'action'='TrackingConfigured' ORDER BY h.seq DESC LIMIT 1),true),
+          c.status=3 AND EXISTS(SELECT 1 FROM contract_residents started WHERE started.contract_id=c.id
+            AND started.actual_residence_from<=CURRENT_TIMESTAMP AT TIME ZONE 'Asia/Ho_Chi_Minh' AND started.actual_move_out_date IS NULL)
+          AND NOT EXISTS(SELECT 1 FROM contract_residents member WHERE member.contract_id=c.id
+            AND member.actual_residence_from IS NOT NULL AND member.actual_move_out_date IS NULL
+            AND COALESCE((SELECT (h.value->>'registrationRequired')::boolean FROM jsonb_array_elements(member.history) WITH ORDINALITY h(value,seq)
+              WHERE h.value->>'action'='TrackingConfigured' ORDER BY h.seq DESC LIMIT 1),true)
+            AND (COALESCE(member.registration_status,'Pending')<>'Completed' OR member.owner_confirmed_at IS NULL))
         FROM contract_residents cr JOIN contracts c ON c.id=cr.contract_id JOIN rooms rm ON rm.id=c.room_id
         JOIN locations l ON l.id=rm.location_id JOIN residents r ON r.id=cr.resident_id
         """;

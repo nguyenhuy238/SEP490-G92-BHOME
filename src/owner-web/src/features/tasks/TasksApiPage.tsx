@@ -1,3 +1,4 @@
+import { TextField } from '../../components/common/ValidatedForm';
 import { useState } from 'react';
 import { useSearchParams } from 'react-router';
 import {
@@ -19,7 +20,6 @@ import {
   TableContainer,
   TableHead,
   TableRow,
-  TextField,
   Typography,
   useMediaQuery,
 } from '@mui/material';

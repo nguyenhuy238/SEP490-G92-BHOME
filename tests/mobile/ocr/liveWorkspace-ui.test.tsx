@@ -5,16 +5,19 @@ vi.mock('../../../src/mobile/src/components/IncidentEvidencePicker', () => ({
 vi.mock('../../../src/mobile/src/components/ContextPortal', () => ({
   ContextPortal: ({ children }: { children: unknown }) => children,
 }));
+vi.mock('../../../src/mobile/src/components/ToastHost', () => ({ ToastHost: () => null }));
 // @vitest-environment jsdom
 import React, { useEffect } from 'react';
 import { act, cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import { afterEach, beforeEach, expect, it, vi } from 'vitest';
 import { MobileApi, MobileApiError } from '../../../src/mobile/src/lib/api';
 import { getToastSnapshot } from '../../../src/mobile/src/lib/toast';
+import * as demoCapture from '../../../src/mobile/src/lib/meterDemoCapture';
 import type { OperationalTask } from '../../../src/mobile/src/services/operationalTasks';
 
 const mocks = vi.hoisted(() => ({
   role: 'Staff',
+  platform: 'ios',
   actor: 'staff',
   api: null as MobileApi | null,
   go: vi.fn(),
@@ -58,7 +61,11 @@ vi.mock('expo-crypto', () => ({ randomUUID: () => crypto.randomUUID() }));
 vi.mock('expo-clipboard', () => ({ setStringAsync: (...args: unknown[]) => mocks.copy(...args) }));
 vi.mock('react-native', () => ({
   StyleSheet: { create: (s: unknown) => s },
-  Platform: { OS: 'ios' },
+  Platform: {
+    get OS() {
+      return mocks.platform;
+    },
+  },
   View: ({ children }: Children) => <div>{children}</div>,
   KeyboardAvoidingView: ({ children }: Children) => <div>{children}</div>,
   ScrollView: ({ children }: Children) => <div>{children}</div>,
@@ -88,7 +95,13 @@ vi.mock('react-native', () => ({
   ),
   Modal: ({ visible, children }: Children & { visible: boolean }) =>
     visible ? <div role="dialog">{children}</div> : null,
-  Image: () => <img alt="Ảnh kết quả" />,
+  Image: ({
+    source,
+    accessibilityLabel,
+  }: {
+    source?: { uri: string };
+    accessibilityLabel?: string;
+  }) => <img src={source?.uri} alt={accessibilityLabel ?? 'Ảnh kết quả'} />,
   AppState: {
     addEventListener: (_event: string, listener: (state: string) => void) => {
       mocks.onStateChange = listener;
@@ -97,7 +110,9 @@ vi.mock('react-native', () => ({
   },
 }));
 vi.mock('react-native-paper', () => ({
-  Portal: ({ children }: Children) => <>{children}</>,
+  Portal: Object.assign(({ children }: Children) => <>{children}</>, {
+    Host: ({ children }: Children) => <>{children}</>,
+  }),
   Dialog: Object.assign(
     ({ visible, children }: Children & { visible: boolean }) =>
       visible ? <div role="dialog">{children}</div> : null,
@@ -114,10 +129,18 @@ vi.mock('react-native-paper', () => ({
   IconButton: ({
     onPress,
     accessibilityLabel,
+    disabled,
+    icon,
   }: {
     onPress: () => void;
     accessibilityLabel: string;
-  }) => <button onClick={onPress} aria-label={accessibilityLabel} />,
+    disabled?: boolean;
+    icon?: string | (() => React.ReactNode);
+  }) => (
+    <button onClick={onPress} aria-label={accessibilityLabel} disabled={disabled}>
+      {typeof icon === 'function' ? icon() : null}
+    </button>
+  ),
   ProgressBar: () => null,
   Menu: Object.assign(
     ({ anchor, visible, children }: Children & { anchor: React.ReactNode; visible: boolean }) => (
@@ -344,7 +367,12 @@ vi.mock('../../../src/mobile/src/components/CameraCapture', () => ({
     disabled: boolean;
     onCapture: (bytes: Uint8Array<ArrayBuffer>) => Promise<void>;
   }) =>
-    ['Chụp ảnh bằng chứng điều chỉnh', 'Thêm ảnh minh chứng'].includes(label) ? (
+    [
+      'Chụp ảnh',
+      'Thêm ảnh minh chứng',
+      'Chụp ảnh bằng chứng điều chỉnh',
+      'Chụp ảnh minh chứng',
+    ].includes(label) ? (
       <button disabled={disabled} onClick={() => void onCapture(new Uint8Array([137, 80, 78, 71]))}>
         {label}
       </button>
@@ -383,6 +411,7 @@ import {
 } from '../../../src/mobile/src/screens/LiveWorkspaceScreens';
 import { NotificationsScreen } from '../../../src/mobile/src/screens/NotificationsScreen';
 import { TenantDashboard } from '../../../src/mobile/src/screens/TenantDashboard';
+import { TenantCurrentRentalContext } from '../../../src/mobile/src/features/tenant/TenantCurrentRentalContext';
 import { TenantFeaturesScreen } from '../../../src/mobile/src/screens/TenantFeaturesScreen';
 import {
   TenantFeatureDirectory,
@@ -407,6 +436,7 @@ import {
 } from '../../../src/mobile/src/features/tenant/paymentPresentation';
 import { TenantAdjustmentPanel } from '../../../src/mobile/src/screens/TenantAdjustmentPanel';
 import type { Invoice } from '../../../packages/client-core/src/invoices';
+import { businessToday } from '../../../packages/client-core/src/contracts';
 
 const id = '00000000-0000-0000-0000-000000000001';
 const fileId = '00000000-0000-0000-0000-000000000002';
@@ -436,6 +466,7 @@ const task: OperationalTask = {
 const json = (body: unknown, status = 200) => new Response(JSON.stringify(body), { status });
 beforeEach(() => {
   mocks.role = 'Staff';
+  mocks.platform = 'ios';
   mocks.actor = 'staff';
   mocks.taskId = id;
   mocks.invoiceId = undefined;
@@ -517,34 +548,25 @@ it('keeps a notification readable without opening a revoked target', async () =>
   expect(mocks.go).not.toHaveBeenCalled();
   expect(fetcher.mock.calls.some(([, init]) => init?.method === 'POST')).toBe(true);
 });
-it('sends room scope and due-date filters before paging but keeps status filtering on room groups', async () => {
+it('requests periodic tasks scoped to the selected header location without legacy filters', async () => {
   const fetcher = vi
     .fn<typeof fetch>()
     .mockImplementation(async (url) =>
-      json(String(url).includes('/meter-tasks') ? [] : [{ id, label: 'Cơ sở tổng hợp' }]),
+      json(String(url).includes('/meter-tasks') ? [] : { items: [], totalCount: 0 }),
     );
   setApi(fetcher);
   render(<MeterTasksScreen />);
-  await screen.findByText('Cơ sở: Cơ sở tổng hợp');
+  await screen.findByText('Chưa có tác vụ ghi chỉ số được giao');
   expect(screen.queryByLabelText('Cơ sở')).toBeNull();
-  fireEvent.click(screen.getByRole('button', { name: 'Bộ lọc' }));
-  fireEvent.change(screen.getByLabelText('Hạn ghi số (yyyy-MM-dd)'), {
-    target: { value: '2026-11-10' },
-  });
-  fireEvent.change(screen.getByLabelText('Trạng thái tác vụ'), { target: { value: '2' } });
-  await waitFor(() =>
-    expect(
-      fetcher.mock.calls.some(
-        ([url]) =>
-          String(url).includes(`locationId=${id}`) &&
-          String(url).includes('dueDate=2026-11-10') &&
-          !String(url).includes('status='),
-      ),
-    ).toBe(true),
-  );
+  expect(screen.queryByRole('button', { name: 'Bộ lọc' })).toBeNull();
+  expect(
+    fetcher.mock.calls.some(([url]) =>
+      String(url).includes(`/api/v1/capture/meter-tasks?page=1&locationId=${id}`),
+    ),
+  ).toBe(true);
 });
 
-it('collects all pages before grouping rooms and filtering billing periods', async () => {
+it('collects all pages before selecting the latest period and can switch to an earlier one', async () => {
   const sample = {
     meterId: id,
     roomId: id,
@@ -555,6 +577,7 @@ it('collects all pages before grouping rooms and filtering billing periods', asy
     utilityType: 0,
     decimalPlaces: 2,
     purpose: 1,
+    automationPlanId: id,
     readingDate: '2026-11-03',
     billingPeriod: '2026-10-01',
     status: 0,
@@ -562,46 +585,30 @@ it('collects all pages before grouping rooms and filtering billing periods', asy
   };
   const fetcher = vi.fn<typeof fetch>().mockImplementation(async (url) => {
     const path = String(url);
-    if (!path.includes('/meter-tasks')) return json([{ id, label: 'Cơ sở tổng hợp' }]);
+    if (!path.includes('/meter-tasks')) return json({ items: [], totalCount: 0 });
     if (path.includes('page=2'))
       return json([
         {
           ...sample,
           id: 'water-next-page',
+          room: '201',
           utilityType: 1,
-          meterCode: 'W101',
+          meterCode: 'W201',
           billingPeriod: '2026-11-01',
         },
       ]);
-    return json(
-      Array.from({ length: 100 }, (_, index) => ({ ...sample, id: `electric-${index}` })),
-    );
+    return json(Array.from({ length: 100 }, () => ({ ...sample, id: 'electric' })));
   });
   setApi(fetcher);
   render(<MeterTasksScreen />);
-  await screen.findByText('Phòng được phân công (2)');
-  fireEvent.click(screen.getByRole('button', { name: 'Bộ lọc' }));
-  fireEvent.change(screen.getByLabelText('Kỳ ghi chỉ số'), { target: { value: '2026-11-01' } });
-  await screen.findByText('Phòng được phân công (1)');
-  expect(screen.getByText('Nước')).toBeTruthy();
-  expect(screen.queryByText('Điện')).toBeNull();
-  expect(screen.getAllByRole('button', { name: 'Ghi chỉ số' })).toHaveLength(1);
-});
-it('shows an actionable empty state and never invents meter tasks', async () => {
-  setApi(
-    vi
-      .fn<typeof fetch>()
-      .mockImplementation(async (url) =>
-        json(String(url).includes('/meter-tasks') ? [] : [{ id, label: 'Cơ sở tổng hợp' }]),
-      ),
-  );
-  render(<MeterTasksScreen />);
-  await screen.findByText('Chưa có tác vụ ghi chỉ số được giao');
-  expect(screen.getByText(/Các tác vụ ghi chỉ số điện nước tại cơ sở của bạn/)).toBeTruthy();
-  expect(screen.queryByRole('button', { name: 'Ghi chỉ số' })).toBeNull();
+  await screen.findByText('Phòng 201');
+  expect(screen.queryByText('Phòng 101')).toBeNull();
+  fireEvent.change(screen.getByLabelText('Kỳ ghi chỉ số'), { target: { value: '2026-10-01' } });
+  expect(screen.getByText('Phòng 101')).toBeTruthy();
+  expect(screen.queryByText('Phòng 201')).toBeNull();
 });
 
-it('shows a pending and a completed utility under one room even when filtering pending work', async () => {
+it('shows one compact room tile even with mixed utility statuses and hides initial and final tasks', async () => {
   const task = {
     id: 'electric',
     meterId: 'meter-electric',
@@ -613,6 +620,7 @@ it('shows a pending and a completed utility under one room even when filtering p
     utilityType: 0,
     decimalPlaces: 2,
     purpose: 1,
+    automationPlanId: id,
     readingDate: '2026-11-04',
     billingPeriod: '2026-11-01',
     status: 0,
@@ -627,26 +635,25 @@ it('shows a pending and a completed utility under one room even when filtering p
               {
                 ...task,
                 id: 'water',
-                meterId: 'meter-water',
-                meterCode: 'W101',
                 utilityType: 1,
                 status: 2,
                 confirmedReadingId: 'reading-water',
               },
+              { ...task, id: 'initial', purpose: 0, room: '102' },
+              { ...task, id: 'final', purpose: 2, room: '103' },
             ]
-          : [{ id, label: 'Cơ sở tổng hợp' }],
+          : { items: [], totalCount: 0 },
       ),
     ),
   );
   render(<MeterTasksScreen />);
-  await screen.findByText('Phòng được phân công (1)');
-  expect(screen.getByText('1/2 đã ghi')).toBeTruthy();
-  fireEvent.click(screen.getByRole('button', { name: 'Bộ lọc' }));
-  fireEvent.change(screen.getByLabelText('Trạng thái tác vụ'), { target: { value: '0' } });
-  expect(screen.getByText('Điện')).toBeTruthy();
-  expect(screen.getByText('Nước')).toBeTruthy();
-  expect(screen.getAllByText('Đã ghi').length).toBeGreaterThanOrEqual(1);
-  expect(screen.getAllByRole('button', { name: 'Ghi chỉ số' })).toHaveLength(1);
+  await screen.findByText('Phòng 101');
+  expect(screen.getAllByRole('button', { name: /^Phòng / })).toHaveLength(1);
+  expect(screen.getByRole('button', { name: 'Phòng 101, Chưa ghi' })).toBeTruthy();
+  expect(screen.queryByText('Điện')).toBeNull();
+  expect(screen.queryByText('Nước')).toBeNull();
+  expect(screen.queryByText('Phòng 102')).toBeNull();
+  expect(screen.queryByText('Phòng 103')).toBeNull();
 });
 
 it('shows real transfer instructions, copies exact amount and removes QR when the shared invoice becomes Paid', async () => {
@@ -697,7 +704,9 @@ it('shows real transfer instructions, copies exact amount and removes QR when th
   );
   setApi(fetcher);
   const { rerender } = render(<TenantPaymentPanel invoiceId={id} />);
-  await screen.findByText('QR thử nghiệm – Không chuyển tiền thật.');
+  await screen.findByLabelText('Sao chép số tiền');
+  expect(screen.queryByText('SePay Test')).toBeNull();
+  expect(screen.queryByText('QR thử nghiệm – Không chuyển tiền thật.')).toBeNull();
   fireEvent.click(screen.getByLabelText('Sao chép số tiền'));
   await screen.findByText('Đã sao chép.');
   expect(mocks.copy).toHaveBeenCalledWith('100000', { android: { isSensitive: true } });
@@ -781,6 +790,7 @@ it('Tenant reads persisted invoice consumption and amount without a fake payment
   });
   setApi(fetcher);
   const view = render(<TenantInvoicesScreen />);
+  // The dedicated invoice list displays historical invoices directly.
   fireEvent.click(
     await screen.findByRole('button', { name: 'Xem hóa đơn phòng P101, kỳ 2026-10' }),
   );
@@ -791,8 +801,11 @@ it('Tenant reads persisted invoice consumption and amount without a fake payment
   expect(screen.queryByText('Chỉ số cũ')).toBeNull();
   fireEvent.click(screen.getByRole('button', { name: 'Điện tổng hợp, xem chi tiết' }));
   expect(screen.getByText('25,5 kWh')).toBeTruthy();
-  expect(screen.getByText('100')).toBeTruthy();
-  expect(screen.queryByText(/Đã thanh toán|Paid|Thanh toán thành công/)).toBeNull();
+  expect(screen.getByText('100 kWh')).toBeTruthy();
+  // The server's zero paidAmount may be displayed, but must not imply Paid.
+  expect(await screen.findByText('Còn phải thanh toán')).toBeTruthy();
+  expect(screen.queryByText(/^Đã thanh toán$/)).toBeNull();
+  expect(screen.queryByText('Thanh toán thành công')).toBeNull();
   expect(fetcher.mock.calls.some((call) => String(call[0]).endsWith('/api/v1/invoices/bill'))).toBe(
     true,
   );
@@ -856,66 +869,146 @@ const adjustmentInvoice: Invoice = {
   representativeTenantUserId: 'tenant',
   lines: [],
 };
-it('Tenant uploads private evidence and retries the same adjustment command without inventing success', async () => {
+it.each([false, true])(
+  'Tenant uploads private evidence and retries the same adjustment command without inventing success (compact=%s)',
+  async (compact) => {
+    mocks.role = 'Tenant';
+    mocks.actor = 'tenant';
+    let attempts = 0;
+    const request = {
+      id: 'request',
+      invoiceId: 'bill',
+      status: 'Pending',
+      chargeCode: null,
+      submittedAt: '2026-11-01T00:00:00Z',
+      reason: 'Sai khoản thuê',
+      currentAmount: '100000',
+      proposedAmount: '90000',
+      decision: null,
+      evidence: [],
+      financials: null,
+    };
+    const fetcher = vi.fn<typeof fetch>().mockImplementation(async (url, init) => {
+      const route = String(url);
+      if (init?.method === 'PUT') return json({ id: fileId, contentType: 'image/jpeg', length: 4 });
+      if (init?.method === 'POST') {
+        attempts++;
+        return attempts === 1 ? json({}, 503) : json(request);
+      }
+      if (route.endsWith('/invoice-adjustments/request')) return json(request);
+      if (route.includes('/invoice-adjustments?') && attempts === 2) return json(page([request]));
+      return json(page([]));
+    });
+    setApi(fetcher);
+    render(<TenantAdjustmentPanel invoice={adjustmentInvoice} compact={compact} />);
+    fireEvent.click(screen.getByText('Gửi yêu cầu điều chỉnh'));
+    if (compact) expect(screen.getByRole('dialog')).toBeTruthy();
+    expect((screen.getByText('Gửi yêu cầu cho Owner') as HTMLButtonElement).disabled).toBe(true);
+    fireEvent.change(screen.getByLabelText('Lý do yêu cầu điều chỉnh'), {
+      target: { value: 'Sai khoản thuê' },
+    });
+    fireEvent.change(screen.getByLabelText('Giá trị đề xuất (VND, tùy chọn)'), {
+      target: { value: '90000' },
+    });
+    fireEvent.click(screen.getByLabelText('Tôi đã kiểm tra ảnh bằng chứng'));
+    fireEvent.click(screen.getByText('Chụp ảnh'));
+    await screen.findByText('Đã tải 1/5 ảnh.');
+    expect(screen.getByAltText('Ảnh bằng chứng 1')).toBeTruthy();
+    fireEvent.click(screen.getByText('Gửi yêu cầu cho Owner'));
+    fireEvent.click(screen.getByText('Gửi yêu cầu cho Owner'));
+    await screen.findByText('Chưa xác nhận thành công. Hãy tải lại và thử lại.');
+    expect(attempts).toBe(1);
+    expect(screen.queryByText('Kết quả yêu cầu')).toBeNull();
+    fireEvent.click(screen.getByText('Gửi yêu cầu cho Owner'));
+    if (compact) {
+      await screen.findByText('1 yêu cầu');
+      expect(screen.queryByRole('dialog')).toBeNull();
+      expect(mocks.go).not.toHaveBeenCalled();
+      fireEvent.click(screen.getByRole('button', { name: 'Xem yêu cầu' }));
+      fireEvent.click(await screen.findByText('Xem yêu cầu của tôi'));
+    }
+    await screen.findByText('Kết quả yêu cầu');
+    await screen.findByText('Lý do: Sai khoản thuê');
+    expect(screen.getAllByText('Chờ Owner xem xét').length).toBeGreaterThanOrEqual(2);
+    const posts = fetcher.mock.calls.filter(([, init]) => init?.method === 'POST');
+    expect(posts).toHaveLength(2);
+    expect(new Headers(posts[0]![1]!.headers).get('Idempotency-Key')).toBe(
+      new Headers(posts[1]![1]!.headers).get('Idempotency-Key'),
+    );
+    expect(JSON.parse(posts[1]![1]!.body as string)).toEqual({
+      invoiceLineId: null,
+      proposedAmount: '90000',
+      reason: 'Sai khoản thuê',
+      evidenceIds: [fileId],
+      expectedInvoiceVersion: 2,
+    });
+  },
+);
+it('previews floating DEV samples and excludes deleted photos from the submitted request', async () => {
   mocks.role = 'Tenant';
   mocks.actor = 'tenant';
-  let attempts = 0;
-  const request = {
-    id: 'request',
-    invoiceId: 'bill',
-    status: 'Pending',
-    chargeCode: null,
-    submittedAt: '2026-11-01T00:00:00Z',
-    reason: 'Sai khoản thuê',
-    currentAmount: '100000',
-    proposedAmount: '90000',
-    decision: null,
-    evidence: [],
-    financials: null,
-  };
-  const fetcher = vi.fn<typeof fetch>().mockImplementation(async (url, init) => {
-    const route = String(url);
-    if (init?.method === 'PUT') return json({ id: fileId, contentType: 'image/jpeg', length: 4 });
-    if (init?.method === 'POST') {
-      attempts++;
-      return attempts === 1 ? json({}, 503) : json(request);
-    }
-    if (route.endsWith('/invoice-adjustments/request')) return json(request);
-    return json(page([]));
-  });
-  setApi(fetcher);
-  render(<TenantAdjustmentPanel invoice={adjustmentInvoice} />);
-  fireEvent.click(screen.getByText('Gửi yêu cầu điều chỉnh'));
-  expect((screen.getByText('Gửi yêu cầu cho Owner') as HTMLButtonElement).disabled).toBe(true);
-  fireEvent.change(screen.getByLabelText('Lý do yêu cầu điều chỉnh'), {
-    target: { value: 'Sai khoản thuê' },
-  });
-  fireEvent.change(screen.getByLabelText('Giá trị đề xuất (VND, tùy chọn)'), {
-    target: { value: '90000' },
-  });
-  fireEvent.click(screen.getByLabelText('Tôi đã kiểm tra ảnh bằng chứng'));
-  fireEvent.click(screen.getByText('Chụp ảnh bằng chứng điều chỉnh'));
-  await screen.findByText('Đã tải 1/5 ảnh.');
-  fireEvent.click(screen.getByText('Gửi yêu cầu cho Owner'));
-  fireEvent.click(screen.getByText('Gửi yêu cầu cho Owner'));
-  await screen.findByText('Chưa xác nhận thành công. Hãy tải lại và thử lại.');
-  expect(attempts).toBe(1);
-  expect(screen.queryByText('Kết quả yêu cầu')).toBeNull();
-  fireEvent.click(screen.getByText('Gửi yêu cầu cho Owner'));
-  await screen.findByText('Kết quả yêu cầu');
-  await screen.findByText('Chờ Owner xem xét');
-  const posts = fetcher.mock.calls.filter(([, init]) => init?.method === 'POST');
-  expect(posts).toHaveLength(2);
-  expect(new Headers(posts[0]![1]!.headers).get('Idempotency-Key')).toBe(
-    new Headers(posts[1]![1]!.headers).get('Idempotency-Key'),
-  );
-  expect(JSON.parse(posts[1]![1]!.body as string)).toEqual({
-    invoiceLineId: null,
-    proposedAmount: '90000',
-    reason: 'Sai khoản thuê',
-    evidenceIds: [fileId],
-    expectedInvoiceVersion: 2,
-  });
+  mocks.platform = 'web';
+  const allowDemo = vi.spyOn(demoCapture, 'canUseLocalMeterDemo').mockReturnValue(true);
+  const fillText = vi.fn();
+  const canvas = vi.spyOn(HTMLCanvasElement.prototype, 'getContext').mockReturnValue({
+    fillRect: vi.fn(),
+    fillText,
+  } as unknown as CanvasRenderingContext2D);
+  const jpeg = vi
+    .spyOn(HTMLCanvasElement.prototype, 'toDataURL')
+    .mockReturnValue('data:image/jpeg;base64,' + btoa(String.fromCharCode(255, 216, 255, 217)));
+  try {
+    const remainingId = '00000000-0000-0000-0000-000000000003';
+    let uploads = 0;
+    const fetcher = vi.fn<typeof fetch>().mockImplementation(async (_url, init) =>
+      init?.method === 'PUT'
+        ? json({
+            id: ++uploads === 1 ? fileId : remainingId,
+            contentType: 'image/jpeg',
+            length: 4,
+          })
+        : init?.method === 'POST'
+          ? json({ id: 'request' })
+          : json(page([])),
+    );
+    setApi(fetcher);
+    render(<TenantAdjustmentPanel invoice={adjustmentInvoice} compact />);
+    fireEvent.click(screen.getByText('Gửi yêu cầu điều chỉnh'));
+    expect(screen.queryByText(/Ảnh bằng chứng liên quan khoản tranh chấp/)).toBeNull();
+    expect(screen.queryByLabelText('Chọn ảnh bằng chứng điều chỉnh')).toBeNull();
+    expect(screen.getByText('Chụp ảnh')).toBeTruthy();
+    const floating = screen.getByRole('group', { name: 'Công cụ ảnh mẫu DEV' });
+    expect(within(floating).getByText('Ảnh mẫu DEV')).toHaveProperty('disabled', true);
+    fireEvent.click(screen.getByLabelText('Ẩn công cụ ảnh mẫu DEV'));
+    fireEvent.click(within(floating).getByText('DEV'));
+    fireEvent.click(screen.getByLabelText('Tôi đã kiểm tra ảnh bằng chứng'));
+    fireEvent.click(within(floating).getByText('Ảnh mẫu DEV'));
+    await screen.findByText('Đã tải 1/5 ảnh.');
+    expect(fillText).toHaveBeenCalledWith('BHOME - ẢNH MẪU DEV', 36, 160);
+    expect(fetcher.mock.calls.filter(([, init]) => init?.method === 'PUT')).toHaveLength(1);
+    expect(fetcher.mock.calls.some(([, init]) => init?.method === 'POST')).toBe(false);
+    expect(screen.getByAltText('Ảnh bằng chứng 1').getAttribute('src')).toBe(
+      'data:image/jpeg;base64,' + btoa(String.fromCharCode(255, 216, 255, 217)),
+    );
+    fireEvent.click(within(floating).getByText('Ảnh mẫu DEV'));
+    await screen.findByText('Đã tải 2/5 ảnh.');
+    expect(screen.getByAltText('Ảnh bằng chứng 2')).toBeTruthy();
+    fireEvent.click(screen.getByLabelText('Xóa ảnh bằng chứng 1'));
+    expect(screen.queryByAltText('Ảnh bằng chứng 2')).toBeNull();
+    expect(screen.getByText('Đã tải 1/5 ảnh.')).toBeTruthy();
+    fireEvent.change(screen.getByLabelText('Lý do yêu cầu điều chỉnh'), {
+      target: { value: 'Sai khoản thuê' },
+    });
+    fireEvent.click(screen.getByText('Gửi yêu cầu cho Owner'));
+    await waitFor(() => expect(screen.queryByRole('dialog')).toBeNull());
+    const post = fetcher.mock.calls.find(([, init]) => init?.method === 'POST');
+    expect(JSON.parse(post![1]!.body as string).evidenceIds).toEqual([remainingId]);
+    expect(screen.queryByRole('group', { name: 'Công cụ ảnh mẫu DEV' })).toBeNull();
+  } finally {
+    allowDemo.mockRestore();
+    canvas.mockRestore();
+    jpeg.mockRestore();
+  }
 });
 it('Tenant sees the Owner rejection and no approval control', async () => {
   mocks.role = 'Tenant';
@@ -992,6 +1085,7 @@ it('uses server list, pagination and role navigation instead of preview work ord
   const fetcher = vi.fn<typeof fetch>().mockImplementation(async (url) => {
     if (String(url).endsWith('/locations/assigned-to-me'))
       return json([{ id, name: 'Cơ sở kiểm thử' }]);
+    if (String(url).includes('/work-orders?')) return json(page([]));
     return json(
       page([{ ...task, title: String(url).includes('page=2') ? 'Trang hai' : task.title }], 21),
     );
@@ -1016,6 +1110,8 @@ it('does not show stale records after a forbidden reload or failed filter', asyn
   const fetcher = vi.fn<typeof fetch>().mockImplementation(async (url) => {
     if (String(url).endsWith('/locations/assigned-to-me'))
       return json([{ id, name: 'Cơ sở kiểm thử' }]);
+    if (String(url).includes('/work-orders?')) return json(page([]));
+    if (!String(url).includes('/operational-tasks?')) return json({});
     listRequests += 1;
     return listRequests === 1 ? json(page([task])) : json({}, 403);
   });
@@ -1027,27 +1123,36 @@ it('does not show stale records after a forbidden reload or failed filter', asyn
   expect(listRequests).toBe(2);
   expect(screen.queryByRole('button', { name: `Xem chi tiết: ${task.title}` })).toBeNull();
 });
-it('shows compact previews, optional result/evidence and the server overdue flag in Vietnam time', async () => {
+it('keeps the Staff list compact and shows evidence and the server overdue flag in Vietnam time', async () => {
   const result = 'Đã kiểm tra, chờ Owner đối chiếu';
   const fetcher = vi
     .fn<typeof fetch>()
-    .mockResolvedValue(
-      json(page([{ ...task, isOverdue: true, dueAt: '2026-11-03T09:21:00Z', result }])),
+    .mockImplementation(async (url) =>
+      String(url).includes('/work-orders?')
+        ? json(page([]))
+        : json(page([{ ...task, isOverdue: true, dueAt: '2026-11-03T09:21:00Z', result }])),
     );
   setApi(fetcher);
   render(<OperationalTasksScreen />);
   await screen.findByText(task.title);
-  expect(screen.getByText(task.requirements).getAttribute('data-lines')).toBe('2');
-  expect(screen.getByText(/Kết quả gần nhất:/).parentElement?.getAttribute('data-lines')).toBe('1');
+  expect(screen.queryByText(task.requirements)).toBeNull();
+  expect(screen.queryByText(result)).toBeNull();
+  expect(screen.queryByText(/Kết quả gần nhất:/)).toBeNull();
   expect(screen.getByText(/Quá hạn · 16:21.*03\/11\/2026/)).toBeTruthy();
   expect(screen.getByText('Cần ảnh minh chứng')).toBeTruthy();
-  expect(screen.getByText('1 quá hạn')).toBeTruthy();
+  expect(screen.queryByText('1 quá hạn')).toBeNull();
   expect(screen.queryByText(/currentResponsibleStaffUserId|version|AdHoc/)).toBeNull();
+  fireEvent.click(screen.getByRole('button', { name: `Xem chi tiết: ${task.title}` }));
+  expect(mocks.go).toHaveBeenCalledWith('task-detail', { taskId: id });
 });
 it('hides absent result and optional evidence metadata and routes meter tasks without a mutation', async () => {
   const fetcher = vi
     .fn<typeof fetch>()
-    .mockResolvedValue(json(page([{ ...task, kind: 'MeterReading', evidenceRequired: false }])));
+    .mockImplementation(async (url) =>
+      String(url).includes('/work-orders?')
+        ? json(page([]))
+        : json(page([{ ...task, kind: 'MeterReading', evidenceRequired: false }])),
+    );
   setApi(fetcher);
   render(<OperationalTasksScreen />);
   await screen.findByText(task.title);
@@ -1060,11 +1165,12 @@ it('hides absent result and optional evidence metadata and routes meter tasks wi
 it('shows loading then an empty list without fabricating summary counts', async () => {
   let finish!: (response: Response) => void;
   setApi(
-    vi.fn<typeof fetch>().mockImplementation(
-      () =>
-        new Promise((resolve) => {
-          finish = resolve;
-        }),
+    vi.fn<typeof fetch>().mockImplementation((url) =>
+      String(url).includes('/work-orders?')
+        ? Promise.resolve(json(page([])))
+        : new Promise((resolve) => {
+            finish = resolve;
+          }),
     ),
   );
   render(<OperationalTasksScreen />);
@@ -1073,12 +1179,13 @@ it('shows loading then an empty list without fabricating summary counts', async 
   await waitFor(() => expect(finish).toBeTypeOf('function'));
   finish(json(page([])));
   await screen.findByText('Chưa có công việc được giao');
-  expect(screen.getByText('0 công việc')).toBeTruthy();
+  expect(screen.queryByText('0 công việc')).toBeNull();
 });
 it('filters on the server, resets pagination and clears the filter from an empty state', async () => {
   const fetcher = vi.fn<typeof fetch>().mockImplementation(async (url) => {
     if (String(url).endsWith('/locations/assigned-to-me'))
       return json([{ id, name: 'Cơ sở kiểm thử' }]);
+    if (String(url).includes('/work-orders?')) return json(page([]));
     return json(String(url).includes('status=Assigned') ? page([]) : page([task], 21));
   });
   const listCalls = () =>
@@ -1092,7 +1199,7 @@ it('filters on the server, resets pagination and clears the filter from an empty
   await screen.findByText('Không có công việc phù hợp');
   expect(listCalls()).toHaveLength(3);
   expect(String(listCalls()[2]![0])).toContain(
-    `page=1&pageSize=20&locationId=${id}&status=Assigned`,
+    `page=1&pageSize=20&locationId=${id}&category=Operational&status=Assigned`,
   );
   expect(screen.queryByText(task.title)).toBeNull();
   expect(screen.getByRole('tab', { name: 'Cần làm' }).getAttribute('aria-selected')).toBe('true');
@@ -1106,6 +1213,8 @@ it('keeps loaded tasks during refresh, reports a transient failure and permits r
   const fetcher = vi.fn<typeof fetch>().mockImplementation((url) => {
     if (String(url).endsWith('/locations/assigned-to-me'))
       return Promise.resolve(json([{ id, name: 'Cơ sở kiểm thử' }]));
+    if (String(url).includes('/work-orders?')) return Promise.resolve(json(page([])));
+    if (!String(url).includes('/operational-tasks?')) return Promise.resolve(json({}));
     listRequests += 1;
     if (listRequests === 1) return Promise.resolve(json(page([task])));
     if (listRequests === 2)
@@ -1119,7 +1228,9 @@ it('keeps loaded tasks during refresh, reports a transient failure and permits r
   await screen.findByText(task.title);
   fireEvent.click(screen.getByRole('button', { name: 'Tải lại công việc' }));
   expect(screen.getByText(task.title)).toBeTruthy();
-  expect(screen.getByText('Đang cập nhật…')).toBeTruthy();
+  const refresh = screen.getByRole('button', { name: 'Tải lại công việc' });
+  expect(refresh).toHaveProperty('disabled', true);
+  expect(within(refresh).getByText('Đang tải dữ liệu')).toBeTruthy();
   await waitFor(() => expect(finish).toBeTypeOf('function'));
   finish(json({}, 503));
   await screen.findByText('Chưa cập nhật được danh sách');
@@ -1175,7 +1286,7 @@ it('requires result and evidence before Staff submits, blocks duplicates, and us
   await screen.findByText('Kết quả đã gửi');
   expect(getToastSnapshot().toast?.message).toBe('Đã gửi kết quả. Chờ Owner kiểm tra.');
   expect(screen.queryByRole('button', { name: 'Cập nhật công việc' })).toBeNull();
-  expect(screen.queryByRole('button', { name: 'Thêm ảnh minh chứng' })).toBeNull();
+  expect(screen.queryByRole('button', { name: 'Chụp ảnh minh chứng' })).toBeNull();
 });
 it('retains the idempotency key after an uncertain mutation response and never claims success', async () => {
   const fetcher = vi.fn<typeof fetch>().mockImplementation(async (url, init) => {
@@ -1223,7 +1334,7 @@ it('starts an Assigned Staff task using the returned TaskView and hides upload u
   setApi(fetcher);
   render(<OperationalTaskDetail />);
   await screen.findByText(task.title);
-  expect(screen.queryByRole('button', { name: 'Thêm ảnh minh chứng' })).toBeNull();
+  expect(screen.queryByRole('button', { name: 'Chụp ảnh minh chứng' })).toBeNull();
   fireEvent.click(screen.getByRole('button', { name: 'Bắt đầu công việc' }));
   fireEvent.change(screen.getByLabelText('Ghi chú (không bắt buộc)'), {
     target: { value: 'Bắt đầu kiểm tra' },
@@ -1233,7 +1344,9 @@ it('starts an Assigned Staff task using the returned TaskView and hides upload u
   );
   await screen.findByText('Đang thực hiện');
   expect(screen.getByRole('button', { name: 'Cập nhật công việc' })).toBeTruthy();
-  expect(screen.getByRole('button', { name: 'Thêm ảnh minh chứng' })).toBeTruthy();
+  fireEvent.click(screen.getByRole('tab', { name: 'Minh chứng' }));
+  expect(screen.getByRole('button', { name: 'Chụp ảnh minh chứng' })).toBeTruthy();
+  expect(screen.getByRole('button', { name: 'Chọn ảnh từ thư viện' })).toBeTruthy();
   const post = fetcher.mock.calls.find(([, init]) => init?.method === 'POST')!;
   expect(String(post[0])).toContain('/start');
   expect(JSON.parse(post[1]!.body as string)).toEqual({
@@ -1271,8 +1384,10 @@ it.each([
     fireEvent.click(screen.getByRole('button', { name: label }));
     fireEvent.change(screen.getByLabelText(field), { target: { value: note } });
     fireEvent.click(screen.getByRole('button', { name: button }));
+    fireEvent.click(screen.getByRole('tab', { name: 'Lịch sử' }));
     await screen.findByText(note);
     expect(screen.getByText('Đang thực hiện')).toBeTruthy();
+    fireEvent.click(screen.getByRole('tab', { name: 'Tổng quan' }));
     expect(screen.getByText('Kết quả trước đó')).toBeTruthy();
     const post = fetcher.mock.calls.find(([, init]) => init?.method === 'POST')!;
     expect(String(post[0])).toContain('/' + action);
@@ -1356,17 +1471,19 @@ it('uploads raw bytes, reads the incremented version and attaches the returned I
   setApi(fetcher);
   render(<OperationalTaskDetail />);
   await screen.findByText(task.title);
-  fireEvent.click(screen.getByRole('button', { name: 'Thêm ảnh minh chứng' }));
+  fireEvent.click(screen.getByRole('tab', { name: 'Minh chứng' }));
+  fireEvent.click(screen.getByRole('button', { name: 'Chụp ảnh minh chứng' }));
   await waitFor(() => expect(getToastSnapshot().toast?.message).toBe('Đã tải ảnh minh chứng.'));
   const put = fetcher.mock.calls.find(([, init]) => init?.method === 'PUT')!;
   expect(put[1]!.body).toBeInstanceOf(Uint8Array);
-  expect(new Headers(put[1]!.headers).get('Content-Type')).toBe('image/jpeg');
+  expect(new Headers(put[1]!.headers).get('Content-Type')).toBe('image/png');
   fireEvent.click(screen.getByRole('button', { name: 'Cập nhật công việc' }));
   fireEvent.click(screen.getByRole('button', { name: 'Gửi kết quả' }));
   fireEvent.change(screen.getByLabelText('Kết quả thực hiện'), {
     target: { value: 'Đã hoàn thành' },
   });
   fireEvent.click(screen.getByRole('button', { name: 'Gửi Owner kiểm tra' }));
+  fireEvent.click(screen.getByRole('tab', { name: 'Tổng quan' }));
   await screen.findByText('Đã gửi kết quả. Đang chờ Chủ trọ xác nhận.');
   const post = fetcher.mock.calls.find(([, init]) => init?.method === 'POST')!;
   expect(JSON.parse(post[1]!.body as string)).toEqual({
@@ -1396,7 +1513,8 @@ it('does not upload twice when refreshing TaskView fails after upload success', 
   setApi(fetcher);
   render(<OperationalTaskDetail />);
   await screen.findByText(task.title);
-  fireEvent.click(screen.getByRole('button', { name: 'Thêm ảnh minh chứng' }));
+  fireEvent.click(screen.getByRole('tab', { name: 'Minh chứng' }));
+  fireEvent.click(screen.getByRole('button', { name: 'Chụp ảnh minh chứng' }));
   await screen.findByRole('button', { name: 'Thử lại tải ảnh' });
   expect(screen.queryByRole('button', { name: 'Cập nhật công việc' })).toBeNull();
   fireEvent.click(screen.getByRole('button', { name: 'Thử lại tải ảnh' }));
@@ -1423,7 +1541,7 @@ it.each(['PendingVerification', 'Completed', 'Cancelled', 'FutureStatus'])(
     await screen.findByText(task.title);
     expect(screen.queryByRole('button', { name: 'Bắt đầu công việc' })).toBeNull();
     expect(screen.queryByRole('button', { name: 'Cập nhật công việc' })).toBeNull();
-    expect(screen.queryByRole('button', { name: 'Thêm ảnh minh chứng' })).toBeNull();
+    expect(screen.queryByRole('button', { name: 'Chụp ảnh minh chứng' })).toBeNull();
     expect(screen.queryByText('FutureStatus')).toBeNull();
     if (status === 'PendingVerification') expect(screen.queryByText(/Quá hạn ·/)).toBeNull();
   },
@@ -1447,7 +1565,7 @@ it.each([{ responsibilityAvailable: false }, { currentResponsibleStaffUserId: 'o
     render(<OperationalTaskDetail />);
     await screen.findByText(task.title);
     expect(screen.queryByRole('button', { name: 'Cập nhật công việc' })).toBeNull();
-    expect(screen.queryByRole('button', { name: 'Thêm ảnh minh chứng' })).toBeNull();
+    expect(screen.queryByRole('button', { name: 'Chụp ảnh minh chứng' })).toBeNull();
   },
 );
 it('retries an uncertain upload with the original bytes and idempotency key', async () => {
@@ -1472,7 +1590,8 @@ it('retries an uncertain upload with the original bytes and idempotency key', as
   setApi(fetcher);
   render(<OperationalTaskDetail />);
   await screen.findByText(task.title);
-  fireEvent.click(screen.getByRole('button', { name: 'Thêm ảnh minh chứng' }));
+  fireEvent.click(screen.getByRole('tab', { name: 'Minh chứng' }));
+  fireEvent.click(screen.getByRole('button', { name: 'Chụp ảnh minh chứng' }));
   await screen.findByRole('button', { name: 'Thử lại tải ảnh' });
   fireEvent.click(screen.getByRole('button', { name: 'Thử lại tải ảnh' }));
   await waitFor(() => expect(getToastSnapshot().toast?.message).toBe('Đã tải ảnh minh chứng.'));
@@ -1557,37 +1676,49 @@ it('renders Tenant contracts from the scoped endpoint without fetching Owner or 
               roomNumber: 'T.101',
               locationName: 'Cơ sở kiểm thử',
               status: 'Active',
-              kind: 'MainTenancy',
+              kind: 'Main',
               startDate: '2026-11-01',
               endDate: '2027-10-31',
               monthlyRent: '3000000',
+              roomId: id,
             },
           ])
         : page([]),
     ),
   );
   setApi(fetcher);
-  render(<TenantHomeScreen />);
+  render(
+    <TenantCurrentRentalContext.Provider
+      value={{ ...tenantContract, locationName: 'Cơ sở kiểm thử' }}
+    >
+      <TenantHomeScreen />
+    </TenantCurrentRentalContext.Provider>,
+  );
   await screen.findByText('Phòng T.101');
   expect(screen.getByText('Cơ sở kiểm thử')).toBeTruthy();
-  fireEvent.click(screen.getByRole('button', { name: 'Xem hợp đồng phòng này' }));
-  expect(mocks.go).toHaveBeenCalledWith('contract', { contractId: id });
-  expect(fetcher.mock.calls.map(([url]) => url)).toEqual(
-    expect.arrayContaining([
-      'https://api.example.invalid/api/v1/contracts?page=1&pageSize=20&status=Active',
-      'https://api.example.invalid/api/v1/invoices?page=1&pageSize=20',
-    ]),
+  fireEvent.click(screen.getByRole('button', { name: 'Xem phòng và hợp đồng' }));
+  expect(mocks.go).toHaveBeenCalledWith('tenant-room');
+  await waitFor(() =>
+    expect(fetcher.mock.calls.map(([url]) => url)).toEqual(
+      expect.arrayContaining([
+        'https://api.example.invalid/api/v1/contracts?page=1&pageSize=100&status=Active',
+        `https://api.example.invalid/api/v1/invoices?page=1&pageSize=20&billingPeriod=${businessToday().slice(0, 7)}-01&roomId=${id}`,
+        `https://api.example.invalid/api/v1/tenant/meter-readings?page=1&pageSize=20&roomId=${id}`,
+      ]),
+    ),
   );
   expect(
     fetcher.mock.calls.every(
       ([url]) => !String(url).includes('/capture/') && !String(url).includes('/operational-tasks'),
     ),
   ).toBe(true);
-  fireEvent.click(screen.getByRole('button', { name: 'Xem tất cả chức năng' }));
-  expect(mocks.go).toHaveBeenLastCalledWith('tenant-features', { contractId: id });
+  fireEvent.click(screen.getByRole('button', { name: 'Bàn giao / Trả phòng' }));
+  expect(mocks.go).toHaveBeenLastCalledWith('tenant-handovers');
   expect(screen.queryByRole('button', { name: 'Thanh toán' })).toBeNull();
   cleanup();
   render(<TenantFeaturesScreen />);
+  fireEvent.click(screen.getByRole('button', { name: 'Hợp đồng' }));
+  expect(mocks.go).toHaveBeenLastCalledWith('contract');
   fireEvent.click(screen.getByRole('button', { name: 'Thanh toán' }));
   expect(mocks.go).toHaveBeenLastCalledWith('invoice', { focus: 'payment' });
   fireEvent.click(screen.getByRole('button', { name: 'Tạm trú VNeID' }));
@@ -1602,17 +1733,16 @@ it('shows an empty Tenant dashboard without preview contract or payment values',
   const fetcher = vi.fn<typeof fetch>().mockImplementation(async () => json(page([])));
   setApi(fetcher);
   render(<TenantHomeScreen />);
-  await screen.findByText('Chưa có hợp đồng đang hiệu lực.');
+  await screen.findByText('Chưa có hợp đồng đang hiệu lực');
   expect(screen.queryByText(/5.420.000|Hoàng Tuấn Anh|Phòng 301/)).toBeNull();
-  fireEvent.click(screen.getByRole('button', { name: 'Báo sự cố' }));
-  expect(mocks.go).toHaveBeenLastCalledWith('incidents');
+  expect(screen.queryByRole('button', { name: 'Báo cáo sự cố' })).toBeNull();
+  expect(screen.queryByRole('button', { name: 'Bàn giao / Trả phòng' })).toBeNull();
+  expect(mocks.go).not.toHaveBeenCalled();
 });
 it('shows current invoice, backend payment status and confirmed utility quantities without initiating payment', async () => {
   mocks.role = 'Tenant';
   mocks.actor = 'tenant';
-  const month = new Date()
-    .toLocaleDateString('en-CA', { timeZone: 'Asia/Ho_Chi_Minh' })
-    .slice(0, 7);
+  const month = businessToday().slice(0, 7);
   const fetcher = vi.fn<typeof fetch>().mockImplementation(async (url) => {
     const path = String(url);
     if (path.endsWith('/payment')) return json({ paymentStatus: 'Paid', outstandingAmount: '0' });
@@ -1621,6 +1751,7 @@ it('shows current invoice, backend payment status and confirmed utility quantiti
         page([
           {
             id,
+            roomId: id,
             billingPeriod: month + '-01',
             status: 'Final',
             total: '4000000',
@@ -1637,6 +1768,22 @@ it('shows current invoice, backend payment status and confirmed utility quantiti
           { id, title: 'Thông báo kiểm thử', summary: 'Không đưa nội dung dài lên dashboard' },
         ]),
       );
+    if (path.includes('/contracts?'))
+      return json(
+        page([
+          {
+            id,
+            roomId: id,
+            roomNumber: 'T.101',
+            locationName: 'Cơ sở kiểm thử',
+            status: 'Active',
+            kind: 'Main',
+            startDate: '2026-11-01',
+            endDate: '2027-10-31',
+            monthlyRent: '3000000',
+          },
+        ]),
+      );
     return json(page([]));
   });
   setApi(fetcher);
@@ -1644,44 +1791,57 @@ it('shows current invoice, backend payment status and confirmed utility quantiti
   await screen.findByText('Đã thanh toán');
   expect(screen.getByText((_, node) => node?.textContent === '42,5 kWh')).toBeTruthy();
   expect(screen.getByText((_, node) => node?.textContent === '3 m³')).toBeTruthy();
-  expect(screen.getByText('Thông báo kiểm thử')).toBeTruthy();
+  expect(screen.queryByText('Thông báo kiểm thử')).toBeNull();
   expect(
     fetcher.mock.calls.some(
       ([url]) => String(url).includes('/notifications?') && String(url).includes('unread=true'),
     ),
-  ).toBe(true);
+  ).toBe(false);
   expect(screen.queryByText('Không đưa nội dung dài lên dashboard')).toBeNull();
-  expect(screen.queryByText('4.000.000 ₫')).toBeNull();
-  fireEvent.click(screen.getByRole('button', { name: 'Xem hóa đơn' }));
+  expect(screen.getByText((_, node) => node?.textContent === '4.000.000 ₫')).toBeTruthy();
+  fireEvent.click(screen.getByRole('button', { name: 'Xem chi tiết hóa đơn' }));
   expect(mocks.go).toHaveBeenLastCalledWith('invoice', { invoiceId: id });
   expect(fetcher.mock.calls.every(([, init]) => !init?.method || init.method === 'GET')).toBe(true);
 });
 it('does not show an old invoice as this month or fabricate consumption', async () => {
   mocks.role = 'Tenant';
-  const fetcher = vi
-    .fn<typeof fetch>()
-    .mockImplementation(async (url) =>
-      json(
-        page(
-          String(url).includes('/invoices?')
-            ? [{ id, billingPeriod: '2024-10-01', total: '5420000', status: 'Final', lines: [] }]
+  const fetcher = vi.fn<typeof fetch>().mockImplementation(async (url) =>
+    json(
+      page(
+        String(url).includes('/invoices?')
+          ? [
+              {
+                id,
+                roomId: id,
+                billingPeriod: '2024-10-01',
+                total: '5420000',
+                status: 'Final',
+                lines: [],
+              },
+            ]
+          : String(url).includes('/contracts?')
+            ? [tenantContract]
             : [],
-        ),
       ),
-    );
+    ),
+  );
   setApi(fetcher);
   render(<TenantHomeScreen />);
-  await screen.findByText('Chưa có hóa đơn tháng này.');
+  await waitFor(() =>
+    expect(fetcher.mock.calls.some(([url]) => String(url).includes('/invoices?'))).toBe(true),
+  );
+  expect(await screen.findByText('Chưa có hóa đơn kỳ này')).toBeTruthy();
   expect(screen.queryByText(/5.420.000/)).toBeNull();
   expect(screen.queryByText('— kWh')).toBeNull();
   expect(screen.queryByText('— m³')).toBeNull();
-  expect(screen.getAllByText('Chưa có chỉ số')).toHaveLength(2);
+  expect(screen.getAllByText('Chưa ghi số')).toHaveLength(2);
 });
 it('keeps Tenant preview free of fixture finance and preserves all feature destinations', () => {
   mocks.role = 'Tenant';
   render(<TenantDashboard />);
-  fireEvent.click(screen.getByRole('button', { name: 'Xem tất cả chức năng' }));
-  expect(mocks.go).toHaveBeenLastCalledWith('tenant-features');
+  expect(screen.queryByRole('button', { name: 'Tất cả tiện ích' })).toBeNull();
+  expect(screen.queryByRole('button', { name: 'Lịch sử hóa đơn' })).toBeNull();
+  expect(mocks.go).not.toHaveBeenCalled();
   cleanup();
   render(<TenantFeaturesScreen />);
   const destinations = [
@@ -1839,6 +1999,7 @@ it('clears password fields in the background and logs out only after a successfu
 
 const tenantContract = {
   id,
+  roomId: id,
   roomNumber: 'T.101',
   locationName: 'Cơ sở của tôi',
   status: 'Active',
@@ -1874,10 +2035,14 @@ it('loads My Room through authorized contracts and handover without requesting S
   });
   setApi(fetcher);
   render(<TenantRoomScreen />);
+  await screen.findByText('Phòng T.101');
+  expect(screen.queryByText('Điều hòa: Hoạt động')).toBeNull();
+  fireEvent.click(screen.getByRole('button', { name: 'Người ở trong hợp đồng' }));
+  fireEvent.click(screen.getByRole('button', { name: 'Thông tin bàn giao' }));
   await screen.findByText('Điều hòa: Hoạt động');
   expect(screen.getByText('Người cùng ở được cấp quyền')).toBeTruthy();
   expect(screen.queryByText('PRIVATE-ID-MUST-NOT-RENDER')).toBeNull();
-  fireEvent.click(screen.getByText('Xem biên bản bàn giao'));
+  fireEvent.click(screen.getByRole('button', { name: 'Xem biên bản bàn giao và bằng chứng' }));
   expect(mocks.go).toHaveBeenLastCalledWith('checklist', { contractId: id, section: 'handover' });
   expect(fetcher.mock.calls.every(([url]) => !String(url).includes('/capture/'))).toBe(true);
 });
@@ -1895,17 +2060,23 @@ it('renders the complete compact room summary without a selector or pagination f
       ),
   );
   render(<TenantRoomScreen />);
+  await screen.findByText('Phòng T.101');
+  expect(screen.queryByText('125.5 kWh')).toBeNull();
+  expect(screen.queryByText('Hai chìa khóa')).toBeNull();
+  fireEvent.click(screen.getByRole('button', { name: 'Thông tin bàn giao' }));
   await screen.findByText('125.5 kWh');
   expect(screen.getByText('32 m³')).toBeTruthy();
   expect(screen.getByText(/^3\.000\.000\s₫$/)).toBeTruthy();
   expect(screen.getByText(/^6\.000\.000\s₫$/)).toBeTruthy();
   expect(screen.getAllByText('01/11/2026').length).toBeGreaterThan(0);
   expect(screen.getByText('Hai chìa khóa')).toBeTruthy();
+  expect(screen.queryByText('Chưa có thông tin người ở trong hợp đồng này.')).toBeNull();
+  fireEvent.click(screen.getByRole('button', { name: 'Người ở trong hợp đồng' }));
   expect(screen.getByText('Chưa có thông tin người ở trong hợp đồng này.')).toBeTruthy();
   expect(screen.queryByRole('combobox')).toBeNull();
   expect(screen.queryByText('Tải lại dữ liệu')).toBeNull();
   expect(screen.queryByLabelText('Trang hợp đồng sau')).toBeNull();
-  fireEvent.click(screen.getByText('Xem chi tiết hợp đồng'));
+  fireEvent.click(screen.getByRole('button', { name: 'Xem hợp đồng và quyền lợi' }));
   expect(mocks.go).toHaveBeenLastCalledWith('contract', { contractId: id, section: 'overview' });
 });
 it('turns only a handover 404 into absence after the selected contract was successfully loaded', async () => {
@@ -1924,6 +2095,8 @@ it('turns only a handover 404 into absence after the selected contract was succe
   await waitFor(() => expect(resolveDetail).toBeDefined());
   expect(fetcher.mock.calls.some(([url]) => String(url).endsWith('/handover'))).toBe(false);
   await act(async () => resolveDetail(json(tenantRoomDetail)));
+  await screen.findByRole('button', { name: 'Thông tin bàn giao' });
+  fireEvent.click(screen.getByRole('button', { name: 'Thông tin bàn giao' }));
   await screen.findByText('Chưa có biên bản bàn giao');
   expect(screen.getByText('Biên bản sẽ hiển thị khi được tạo cho hợp đồng này.')).toBeTruthy();
   expect(screen.queryByRole('alert')).toBeNull();
@@ -1974,24 +2147,34 @@ it('requires an explicit choice for multiple contracts and never silently switch
   expect(fetcher.mock.calls.every(([url]) => String(url).includes('/contracts?'))).toBe(true);
   expect(screen.getByRole('option', { name: /01\/10\/2026/ })).toBeTruthy();
   fireEvent.change(selector, { target: { value: secondId } });
+  await screen.findByText('Phòng T.101');
+  fireEvent.click(screen.getByRole('button', { name: 'Người ở trong hợp đồng' }));
   await screen.findByText('Người hợp đồng B');
-  fireEvent.click(screen.getByText('Xem chi tiết hợp đồng'));
+  fireEvent.click(screen.getByRole('button', { name: 'Xem hợp đồng và quyền lợi' }));
   expect(mocks.go).toHaveBeenLastCalledWith('contract', {
     contractId: secondId,
     section: 'overview',
   });
   fireEvent.change(selector, { target: { value: id } });
   expect(screen.queryByText('Người hợp đồng B')).toBeNull();
+  await waitFor(() =>
+    expect(
+      screen.getByRole('button', { name: 'Người ở trong hợp đồng' }).getAttribute('aria-expanded'),
+    ).toBe('false'),
+  );
+  fireEvent.click(screen.getByRole('button', { name: 'Người ở trong hợp đồng' }));
   await screen.findByText('Người hợp đồng A');
   items = [second];
   await waitFor(() => expect(screen.queryByText('Đang tải bàn giao…')).toBeNull());
   fireEvent.click(screen.getByLabelText('Tải lại phòng của tôi'));
   await screen.findByText(/Hợp đồng đã chọn không còn trên trang này/);
   expect(screen.queryByText('Người hợp đồng B')).toBeNull();
-  expect(screen.queryByText('Xem chi tiết hợp đồng')).toBeNull();
+  expect(screen.queryByRole('button', { name: 'Xem hợp đồng và quyền lợi' })).toBeNull();
   fireEvent.change(screen.getByLabelText('Chọn hợp đồng đang thuê'), {
     target: { value: secondId },
   });
+  await screen.findByRole('button', { name: 'Người ở trong hợp đồng' });
+  fireEvent.click(screen.getByRole('button', { name: 'Người ở trong hợp đồng' }));
   await screen.findByText('Người hợp đồng B');
 });
 it.each([null, {}, { items: null }, page([{ ...tenantContract, id: '../invalid' }])])(
@@ -2039,6 +2222,8 @@ it('shows a retry for handover server errors and recovers without inventing data
       ),
   );
   render(<TenantRoomScreen />);
+  await screen.findByRole('button', { name: 'Thông tin bàn giao' });
+  fireEvent.click(screen.getByRole('button', { name: 'Thông tin bàn giao' }));
   await screen.findByRole('alert');
   expect(screen.queryByText('Chưa có biên bản bàn giao')).toBeNull();
   failed = false;
@@ -2064,9 +2249,12 @@ it('limits the asset preview and renders nullable occupants without inventing pe
       ),
   );
   render(<TenantRoomScreen />);
+  await screen.findByRole('button', { name: 'Thông tin bàn giao' });
+  fireEvent.click(screen.getByRole('button', { name: 'Thông tin bàn giao' }));
   await screen.findByText('Tài sản 2: Tốt');
   expect(screen.queryByText('Tài sản 3: Tốt')).toBeNull();
   expect(screen.getByText('Xem thêm 5 tài sản trong biên bản.')).toBeTruthy();
+  fireEvent.click(screen.getByRole('button', { name: 'Người ở trong hợp đồng' }));
   expect(screen.getByText('Chưa có thông tin người ở trong hợp đồng này.')).toBeTruthy();
 });
 it('does not load private room details when no active rental contract exists', async () => {
@@ -2101,6 +2289,8 @@ it.each([403, 500])('does not convert a handover error %s into absence', async (
       ),
   );
   render(<TenantRoomScreen />);
+  await screen.findByRole('button', { name: 'Thông tin bàn giao' });
+  fireEvent.click(screen.getByRole('button', { name: 'Thông tin bàn giao' }));
   await screen.findByRole('alert');
   expect(screen.queryByText('Chưa có biên bản bàn giao')).toBeNull();
 });
@@ -2118,6 +2308,8 @@ it('handles a malformed handover as an invalid response instead of crashing or m
       ),
   );
   render(<TenantRoomScreen />);
+  await screen.findByRole('button', { name: 'Thông tin bàn giao' });
+  fireEvent.click(screen.getByRole('button', { name: 'Thông tin bàn giao' }));
   await screen.findByRole('alert');
   expect(screen.queryByText('RAW_UNKNOWN')).toBeNull();
   expect(screen.queryByText('Chưa có biên bản bàn giao')).toBeNull();
@@ -2139,6 +2331,8 @@ it('shows a compact network error and reloads all room queries from the header',
   expect(screen.queryByText('SYNTHETIC-NETWORK-DETAIL')).toBeNull();
   offline = false;
   fireEvent.click(screen.getByLabelText('Tải lại phòng của tôi'));
+  await screen.findByRole('button', { name: 'Thông tin bàn giao' });
+  fireEvent.click(screen.getByRole('button', { name: 'Thông tin bàn giao' }));
   await screen.findByText('125.5 kWh');
   expect(screen.queryByRole('alert')).toBeNull();
 });
@@ -2162,6 +2356,8 @@ it('uses compact pagination for larger results and keeps selection explicit on t
   fireEvent.change(await screen.findByLabelText('Chọn hợp đồng đang thuê'), {
     target: { value: id },
   });
+  await screen.findByRole('button', { name: 'Thông tin bàn giao' });
+  fireEvent.click(screen.getByRole('button', { name: 'Thông tin bàn giao' }));
   await screen.findByText('125.5 kWh');
   fireEvent.click(screen.getByLabelText('Trang hợp đồng sau'));
   await screen.findByText(/Hợp đồng đã chọn không còn trên trang này/);
@@ -2182,29 +2378,31 @@ it('shows room authorization errors without exposing rejected private data', asy
   await screen.findAllByText(/Tài khoản không được phép/);
   expect(screen.queryByText('OTHER-TENANT-SECRET')).toBeNull();
 });
-it('shows backend-confirmed readings before an invoice exists and never requests OCR proposals', async () => {
+it('shows confirmed readings and requests evidence only through Tenant-authorized private bytes', async () => {
   mocks.role = 'Tenant';
-  const fetcher = vi.fn<typeof fetch>().mockImplementation(async () =>
-    json(
-      page([
-        {
-          id,
-          roomId: id,
-          roomNumber: 'T.101',
-          locationName: 'Cơ sở của tôi',
-          billingPeriod: '2026-11-01',
-          status: 'Confirmed',
-          utilityType: 'Electricity',
-          purpose: 'Periodic',
-          meterCode: 'SYNTHETIC-METER',
-          readingDate: '2026-11-01',
-          previousValue: '100',
-          confirmedValue: '125.5',
-          consumption: '25.5',
-          confirmedAt: '2026-11-01T03:00:00Z',
-        },
-      ]),
-    ),
+  const fetcher = vi.fn<typeof fetch>().mockImplementation(async (url) =>
+    String(url).endsWith(`/tenant/meter-readings/${id}/evidence`)
+      ? json({ privatePhotoUrl: 'MUST-NOT-LEAK' }, 403)
+      : json(
+          page([
+            {
+              id,
+              roomId: id,
+              roomNumber: 'T.101',
+              locationName: 'Cơ sở của tôi',
+              billingPeriod: '2026-11-01',
+              status: 'Confirmed',
+              utilityType: 'Electricity',
+              purpose: 'Periodic',
+              meterCode: 'SYNTHETIC-METER',
+              readingDate: '2026-11-01',
+              previousValue: '100',
+              confirmedValue: '125.5',
+              consumption: '25.5',
+              confirmedAt: '2026-11-01T03:00:00Z',
+            },
+          ]),
+        ),
   );
   setApi(fetcher);
   render(<TenantMeterHistoryScreen />);
@@ -2214,6 +2412,14 @@ it('shows backend-confirmed readings before an invoice exists and never requests
   expect(fetcher.mock.calls.every(([url]) => String(url).includes('/tenant/meter-readings?'))).toBe(
     true,
   );
+  fireEvent.click(screen.getByRole('button', { name: 'Xem ảnh bằng chứng' }));
+  await screen.findByRole('alert');
+  expect(fetcher.mock.calls.map(([url]) => String(url))).toContain(
+    `https://api.example.invalid/api/v1/tenant/meter-readings/${id}/evidence`,
+  );
+  expect(fetcher.mock.calls.every(([url]) => !String(url).includes('/capture/'))).toBe(true);
+  expect(screen.queryByRole('img')).toBeNull();
+  expect(screen.queryByText('MUST-NOT-LEAK')).toBeNull();
 });
 it('uses reporting lookups and submits the actual Tenant incident API', async () => {
   mocks.role = 'Tenant';
@@ -2254,7 +2460,7 @@ it('loads real incident requests and preserves the adjustment destination', asyn
   const fetcher = vi.fn<typeof fetch>().mockResolvedValue(json(page([])));
   setApi(fetcher);
   render(<TenantRequestsScreen />);
-  await screen.findByText('Không có báo cáo trong phạm vi và bộ lọc này.');
+  await screen.findByText('Không có báo cáo phù hợp');
   fireEvent.click(screen.getByText('Yêu cầu điều chỉnh hóa đơn'));
   expect(mocks.go).toHaveBeenLastCalledWith('invoice', { focus: 'adjustment' });
   expect(fetcher.mock.calls.some(([url]) => String(url).includes('/api/v1/incidents?'))).toBe(true);
@@ -2394,6 +2600,47 @@ it('suppresses stale transfer instructions when the outstanding amount has chang
   expect(screen.getByText(/Thông tin chuyển khoản đang thay đổi/)).toBeTruthy();
   expect(screen.queryByText('Sao chép số tiền')).toBeNull();
 });
+it('automatically replaces a stale QR with the current outstanding amount', async () => {
+  mocks.role = 'Tenant';
+  let instructionsRequests = 0;
+  const fetcher = vi.fn<typeof fetch>().mockImplementation(async (url) =>
+    json(
+      String(url).endsWith('/payment')
+        ? {
+            invoiceId: id,
+            paymentStatus: 'Unpaid',
+            payableAmount: '100000',
+            outstandingAmount: '50000',
+            paidAmount: '50000',
+            dueDate: '2026-11-05',
+            overdueDays: 0,
+            history: [],
+          }
+        : {
+            invoiceId: id,
+            outstandingAmount: ++instructionsRequests === 1 ? '100000' : '50000',
+            accountNumber: '123456789',
+            accountHolder: 'Synthetic',
+            bankIdentifier: 'TEST',
+            transferDescription: 'BH12345678',
+            availability: 'Available',
+            qrImageDataUri:
+              instructionsRequests === 1
+                ? 'data:image/png;base64,old'
+                : 'data:image/png;base64,new',
+          },
+    ),
+  );
+  setApi(fetcher);
+  render(<TenantPaymentPanel invoiceId={id} />);
+  const qr = await screen.findByAltText('QR chuyển khoản hóa đơn');
+  expect(qr.getAttribute('src')).toBe('data:image/png;base64,new');
+  expect(instructionsRequests).toBe(2);
+  fireEvent.click(screen.getByLabelText('Sao chép số tiền'));
+  await waitFor(() =>
+    expect(mocks.copy).toHaveBeenCalledWith('50000', { android: { isSensitive: true } }),
+  );
+});
 it('checks image content and size locally and preserves large monetary amounts exactly', () => {
   expect(validateTenantEvidence(new Uint8Array([1, 2, 3]))).toMatch(/JPEG hoặc PNG/);
   expect(validateTenantEvidence(new Uint8Array(5 * 1024 * 1024 + 1))).toMatch(/5 MB/);
@@ -2418,6 +2665,8 @@ it('clears earlier tenancy details immediately when the authenticated API change
   );
   setApi(first);
   const view = render(<TenantRoomScreen />);
+  await screen.findByRole('button', { name: 'Người ở trong hợp đồng' });
+  fireEvent.click(screen.getByRole('button', { name: 'Người ở trong hợp đồng' }));
   await screen.findByText('Earlier account occupant');
   mocks.actor = 'new-tenant';
   setApi(vi.fn<typeof fetch>(() => new Promise(() => {})));
@@ -2425,7 +2674,7 @@ it('clears earlier tenancy details immediately when the authenticated API change
   expect(screen.queryByText('Earlier account occupant')).toBeNull();
   expect(screen.queryByText('Phòng T.101')).toBeNull();
 });
-it('prioritizes an older outstanding invoice using server debt data instead of hiding it behind this month', async () => {
+it('keeps this month honest and routes older obligations to the dedicated invoice list', async () => {
   mocks.role = 'Tenant';
   const fetcher = vi.fn<typeof fetch>().mockImplementation(async (url) => {
     const path = String(url);
@@ -2452,13 +2701,22 @@ it('prioritizes an older outstanding invoice using server debt data instead of h
     return json(page([]));
   });
   setApi(fetcher);
-  render(<TenantHomeScreen />);
-  await screen.findByText('Đã thanh toán một phần');
-  expect(screen.getByText('Hóa đơn tháng 10/2026')).toBeTruthy();
-  expect(screen.getAllByText('Kỳ 10/2026')).toHaveLength(1);
-  expect(screen.getAllByText('Quá hạn 4 ngày')).toHaveLength(1);
-  fireEvent.click(screen.getByRole('button', { name: 'Thanh toán ngay' }));
-  expect(mocks.go).toHaveBeenLastCalledWith('invoice', { invoiceId: id });
+  render(
+    <TenantCurrentRentalContext.Provider value={tenantContract}>
+      <TenantHomeScreen />
+    </TenantCurrentRentalContext.Provider>,
+  );
+  await waitFor(() =>
+    expect(fetcher.mock.calls.some(([url]) => String(url).includes('/invoices?'))).toBe(true),
+  );
+  expect(await screen.findByText('Chưa có hóa đơn kỳ này')).toBeTruthy();
+  expect(screen.queryByText('Còn hóa đơn kỳ khác cần thanh toán')).toBeNull();
+  expect(fetcher.mock.calls.some(([url]) => String(url).includes('/debts?'))).toBe(false);
+  // The October debt must not masquerade as the current month's invoice or payment.
+  expect(screen.queryByText('Hóa đơn tháng 10/2026')).toBeNull();
+  expect(screen.queryByText('Đã thanh toán một phần')).toBeNull();
+  fireEvent.click(screen.getByRole('button', { name: 'Lịch sử hóa đơn' }));
+  expect(mocks.go).toHaveBeenLastCalledWith('invoice', { view: 'history' });
 });
 it('does not send a Tenant notification into a Staff-only operational task screen', async () => {
   mocks.role = 'Tenant';
@@ -2497,15 +2755,25 @@ it('does not send a Tenant notification into a Staff-only operational task scree
 });
 it('opens the existing invoice selector for adjustment instead of a duplicate draft form', async () => {
   mocks.role = 'Tenant';
-  const fetcher = vi.fn<typeof fetch>().mockImplementation(async () => json(page([])));
+  const fetcher = vi.fn<typeof fetch>().mockImplementation(async (url) =>
+    String(url).endsWith('/invoices/current-period')
+      ? json({
+          billingPeriod: businessToday().slice(0, 7) + '-01',
+          businessDate: businessToday(),
+          hasInvoice: false,
+          draftDates: [],
+        })
+      : json(page([])),
+  );
   setApi(fetcher);
   render(<TenantInvoicesScreen intent="adjustment" />);
-  await screen.findByText('Bạn chưa có hóa đơn.');
+  await screen.findByText('Chưa có hóa đơn kỳ này');
   expect(screen.getByText(/Chọn hóa đơn cần kiểm tra/)).toBeTruthy();
   expect(
     fetcher.mock.calls.every(
       ([url, init]) =>
-        String(url).includes('/invoices?') && (!init?.method || init.method === 'GET'),
+        (String(url).includes('/invoices?') || String(url).endsWith('/invoices/current-period')) &&
+        (!init?.method || init.method === 'GET'),
     ),
   ).toBe(true);
 });
@@ -2520,7 +2788,7 @@ it('updates invoice selection when another authorized deep link is opened in the
         id: path.endsWith(fileId) ? fileId : id,
         roomNumber: path.endsWith(fileId) ? 'ROOM-B' : 'ROOM-A',
         locationName: 'Cơ sở kiểm thử',
-        billingPeriod: '2026-11-01',
+        billingPeriod: path.endsWith(fileId) ? '2026-12-01' : '2026-11-01',
         status: 'Draft',
         version: 1,
         total: '100000',
@@ -2532,11 +2800,13 @@ it('updates invoice selection when another authorized deep link is opened in the
   });
   setApi(fetcher);
   const view = render(<TenantInvoicesScreen />);
-  await screen.findByText(/Phòng ROOM-A/);
+  await screen.findByText('Hóa đơn tháng 11/2026');
+  expect(screen.queryByText(/Phòng ROOM-A/)).toBeNull();
   mocks.invoiceId = fileId;
   view.rerender(<TenantInvoicesScreen />);
-  expect(screen.queryByText(/Phòng ROOM-A/)).toBeNull();
-  await screen.findByText(/Phòng ROOM-B/);
+  expect(screen.queryByText('Hóa đơn tháng 11/2026')).toBeNull();
+  await screen.findByText('Hóa đơn tháng 12/2026');
+  expect(screen.queryByText(/Phòng ROOM-B/)).toBeNull();
 });
 
 it('keeps Draft charges exact, distinguishes utility fields and flags a contradictory free label', async () => {
@@ -2596,7 +2866,9 @@ it('keeps Draft charges exact, distinguishes utility fields and flags a contradi
   await screen.findByText('Bản nháp');
   expect(screen.getAllByText('9.007.199.254.740.993 ₫', { exact: false })).toHaveLength(2);
   fireEvent.click(screen.getByRole('button', { name: 'Thuê phòng theo hợp đồng, xem chi tiết' }));
-  expect(screen.getByText('15/30 ngày')).toBeTruthy();
+  expect(screen.queryByText('15/30 ngày')).toBeNull();
+  expect(screen.queryByText('Ngày tính tiền')).toBeNull();
+  expect(screen.queryByText('Áp dụng từ')).toBeNull();
   expect(screen.queryByText('Chỉ số cũ')).toBeNull();
   fireEvent.click(screen.getByRole('button', { name: 'Điện sinh hoạt, xem chi tiết' }));
   expect(screen.getByText('12,5 kWh')).toBeTruthy();
@@ -2647,7 +2919,7 @@ it('separates Final issuance from payment obligations, lazily loads QR and appro
     return json(page([]));
   });
   setApi(fetcher);
-  const { rerender } = render(<TenantInvoicesScreen />);
+  render(<TenantInvoicesScreen />);
   await screen.findByText('Đã thanh toán một phần');
   expect(screen.getByText('Đã phát hành')).toBeTruthy();
   expect(screen.getByText('70.000 ₫', { exact: false })).toBeTruthy();
@@ -2663,8 +2935,8 @@ it('separates Final issuance from payment obligations, lazily loads QR and appro
   fireEvent.click(screen.getByText('Chi tiết thanh toán'));
   expect(screen.getByText('Tiền hóa đơn gốc')).toBeTruthy();
   fireEvent.click(screen.getByRole('button', { name: 'Xem yêu cầu' }));
-  expect(mocks.go).toHaveBeenCalledWith('adjustment', { invoiceId: id });
-  rerender(<TenantInvoicesScreen intent="adjustment" />);
+  expect(mocks.go).not.toHaveBeenCalled();
+  expect(screen.getByRole('dialog')).toBeTruthy();
   fireEvent.click(screen.getByRole('tab', { name: 'Đã duyệt' }));
   await screen.findByText('Điều chỉnh sau phát hành');
   expect(screen.queryByRole('button', { name: 'Trang sau' })).toBeNull();
@@ -2925,24 +3197,30 @@ it('uses one financial heading, compact invoice cards and lazy destinations with
   expect(
     fetcher.mock.calls.filter(([url]) => String(url).includes('payment-invoices?')).length,
   ).toBeGreaterThan(1);
-  fireEvent.click(screen.getByRole('tab', { name: 'Công nợ' }));
-  expect(mocks.go).toHaveBeenLastCalledWith('billing-history', { historyTab: 'outstanding' });
-  fireEvent.click(screen.getByRole('tab', { name: 'Lịch sử' }));
-  expect(mocks.go).toHaveBeenLastCalledWith('billing-history', { historyTab: 'verified' });
+  expect(screen.queryByRole('tab', { name: 'Công nợ' })).toBeNull();
+  expect(screen.queryByRole('tab', { name: 'Lịch sử' })).toBeNull();
 });
-it('keeps Final as issued and labels invoice totals when payment data is unavailable', async () => {
+it('keeps the issued invoice total visible but does not infer payment status when payment data is unavailable', async () => {
   mocks.role = 'Tenant';
   setApi(
-    vi
-      .fn<typeof fetch>()
-      .mockImplementation(async (url) =>
-        String(url).includes('payment-invoices?') ? json({}, 403) : json(page([adjustmentInvoice])),
-      ),
+    vi.fn<typeof fetch>().mockImplementation(async (url) => {
+      const path = String(url);
+      if (path.includes('payment-invoices?')) return json({}, 403);
+      if (path.endsWith('/invoices/current-period'))
+        return json({
+          billingPeriod: businessToday().slice(0, 7) + '-01',
+          businessDate: businessToday(),
+          hasInvoice: false,
+          draftDates: [],
+        });
+      return json(page([adjustmentInvoice]));
+    }),
   );
   render(<TenantInvoicesScreen />);
-  await screen.findByText('Đã phát hành');
-  await screen.findByRole('alert');
-  expect(screen.getByText('Tổng hóa đơn')).toBeTruthy();
+  await screen.findByText('Chưa xác định thanh toán');
+  await screen.findByText('Tài khoản không được phép thực hiện thao tác này.');
+  const card = screen.getByRole('button', { name: /Xem hóa đơn phòng P101/ });
+  expect(card.textContent).toContain('100.000');
   expect(screen.queryByText('Đã thanh toán')).toBeNull();
   expect(screen.queryByText('Còn phải thanh toán')).toBeNull();
 });
@@ -3152,19 +3430,34 @@ it('does not display forbidden response contents or send ledger calls for Staff'
   expect(fetcher).not.toHaveBeenCalled();
 });
 
-it('keeps Home compact with four shortcuts and navigates to the catalog without replacing its data', () => {
+it('keeps Home focused on monthly billing and the four verified-rental shortcuts', () => {
   mocks.role = 'Tenant';
-  render(<TenantDashboard contracts={[tenantContract]} />);
-  for (const label of ['Phòng của tôi', 'Hóa đơn', 'Báo sự cố', 'Yêu cầu của tôi'])
+  render(<TenantDashboard contracts={[tenantContract]} activeRental={tenantContract} />);
+  for (const label of [
+    'Xem phòng và hợp đồng',
+    'Lịch sử hóa đơn',
+    'Báo cáo sự cố',
+    'Yêu cầu hoàn tiền',
+    'Bàn giao / Trả phòng',
+  ])
     expect(screen.getByRole('button', { name: label })).toBeTruthy();
   expect(screen.queryByRole('button', { name: 'Hợp đồng' })).toBeNull();
+  expect(screen.queryByRole('button', { name: 'Tất cả tiện ích' })).toBeNull();
+  expect(screen.queryByRole('button', { name: 'Yêu cầu của tôi' })).toBeNull();
   expect(screen.queryByRole('button', { name: 'Làm mới tổng quan' })).toBeNull();
-  const room = screen.getByRole('button', { name: 'Xem hợp đồng phòng này' });
-  const utilities = screen.getByText('Điện & nước');
-  fireEvent.click(screen.getByRole('button', { name: 'Xem tất cả chức năng' }));
-  expect(mocks.go).toHaveBeenLastCalledWith('tenant-features', { contractId: tenantContract.id });
-  expect(screen.getByRole('button', { name: 'Xem hợp đồng phòng này' })).toBe(room);
-  expect(screen.getByText('Điện & nước')).toBe(utilities);
+  const room = screen.getByRole('button', { name: 'Xem phòng và hợp đồng' });
+  const month = businessToday().slice(0, 7);
+  const utilities = screen.getByText(`Điện & nước tháng ${month.slice(5, 7)}/${month.slice(0, 4)}`);
+  fireEvent.click(screen.getByRole('button', { name: 'Lịch sử hóa đơn' }));
+  expect(mocks.go).toHaveBeenLastCalledWith('invoice', { view: 'history' });
+  fireEvent.click(screen.getByRole('button', { name: 'Báo cáo sự cố' }));
+  expect(mocks.go).toHaveBeenLastCalledWith('incidents');
+  fireEvent.click(screen.getByRole('button', { name: 'Yêu cầu hoàn tiền' }));
+  expect(mocks.go).toHaveBeenLastCalledWith('refund-requests');
+  fireEvent.click(screen.getByRole('button', { name: 'Bàn giao / Trả phòng' }));
+  expect(mocks.go).toHaveBeenLastCalledWith('tenant-handovers');
+  expect(screen.getByRole('button', { name: 'Xem phòng và hợp đồng' })).toBe(room);
+  expect(screen.getByText(utilities.textContent!)).toBe(utilities);
   expect(screen.queryByText('Chưa hỗ trợ gửi')).toBeNull();
   expect(screen.queryByText('Chưa có dữ liệu máy chủ')).toBeNull();
 });
@@ -3188,7 +3481,7 @@ it('reuses the feature registry and exact contract intent on the dedicated catal
     screen.queryByText(/Chưa hỗ trợ gửi|Chưa lưu được kết quả|Chưa có dữ liệu máy chủ/),
   ).toBeNull();
 });
-it('avoids duplicate billing alerts while preserving actionable contract and adjustment notices', () => {
+it('keeps a single billing status and confirmed utility values without the removed Home alerts', () => {
   mocks.role = 'Tenant';
   const invoice = {
     ...adjustmentInvoice,
@@ -3214,45 +3507,15 @@ it('avoids duplicate billing alerts while preserving actionable contract and adj
         pendingReview: false,
         history: [],
       }}
-      debt={{ ...ledgerDebt, invoiceId: id, overdueDays: 5 }}
-      notices={
-        [
-          {
-            id: 'billing',
-            category: 'Invoice',
-            title: 'Duplicate billing notice',
-            relatedObjectId: id,
-          },
-          {
-            id: 'adjustment',
-            category: 'Adjustment',
-            title: 'Có kết quả điều chỉnh',
-            relatedObjectId: id,
-          },
-        ] as never
-      }
-      expiryNotices={[
-        {
-          id: 'expiry',
-          contractId: tenantContract.id,
-          roomNumber: 'P1',
-          locationName: 'Test',
-          endDate: '2026-12-01',
-          stage: 'Upcoming',
-          createdAt: '2026-11-01T00:00:00Z',
-        },
-      ]}
     />,
   );
   expect(screen.queryByText('Duplicate billing notice')).toBeNull();
   expect(screen.getAllByText('Quá hạn 5 ngày')).toHaveLength(1);
   expect(screen.getByText((_, node) => node?.textContent === '0 kWh')).toBeTruthy();
-  expect(screen.getByText('Chưa có chỉ số')).toBeTruthy();
-  fireEvent.click(screen.getByRole('button', { name: 'Có kết quả điều chỉnh' }));
-  expect(mocks.go).toHaveBeenLastCalledWith('notifications');
-  fireEvent.click(screen.getByRole('button', { name: 'Cần xem hạn hợp đồng' }));
-  expect(mocks.go).toHaveBeenLastCalledWith('contract', { contractId: tenantContract.id });
-  fireEvent.click(screen.getByRole('button', { name: 'Thanh toán ngay' }));
+  expect(screen.getByText('Chưa ghi số')).toBeTruthy();
+  expect(screen.queryByText('Có kết quả điều chỉnh')).toBeNull();
+  expect(screen.queryByText(/Cần xem hạn hợp đồng/)).toBeNull();
+  fireEvent.click(screen.getByRole('button', { name: 'Thanh toán hóa đơn' }));
   expect(mocks.go).toHaveBeenLastCalledWith('invoice', { invoiceId: id });
 });
 it('retains Draft and error states without fabricating payment or reintroducing overview refresh', () => {
@@ -3264,14 +3527,14 @@ it('retains Draft and error states without fabricating payment or reintroducing 
       invoiceState={{ loading: false, error: 'offline', reload }}
     />,
   );
-  expect(screen.getByText('Chưa phát hành')).toBeTruthy();
-  expect(screen.queryByRole('button', { name: 'Thanh toán ngay' })).toBeNull();
+  expect(screen.getByText('Chưa phát hành, chưa cần thanh toán')).toBeTruthy();
+  expect(screen.queryByRole('button', { name: 'Thanh toán hóa đơn' })).toBeNull();
   expect(screen.queryByText('Thông tin cần chú ý')).toBeNull();
   fireEvent.click(screen.getByText('Thử lại'));
   expect(reload).toHaveBeenCalledOnce();
   expect(screen.queryByText('Làm mới tổng quan')).toBeNull();
 });
-it('mounts Tenant Home without redundant initial focus requests', async () => {
+it('does not fetch financial features when Tenant Home cannot find an active room rental', async () => {
   mocks.role = 'Tenant';
   const fetcher = vi
     .fn<typeof fetch>()
@@ -3280,9 +3543,16 @@ it('mounts Tenant Home without redundant initial focus requests', async () => {
     );
   setApi(fetcher);
   render(<TenantHomeScreen />);
-  await screen.findByText('Chưa có hóa đơn tháng này.');
-  expect(fetcher).toHaveBeenCalledTimes(5);
+  await screen.findByText('Chưa có hợp đồng đang hiệu lực');
+  // Even a direct Home mount must not request invoices, readings, debts or alerts
+  // without an eligible rental; the root navigation gate prevents the mount itself.
+  expect(fetcher).toHaveBeenCalledTimes(1);
   expect(fetcher.mock.calls.filter(([url]) => String(url).includes('/contracts?'))).toHaveLength(1);
-  fireEvent.click(screen.getByRole('button', { name: 'Xem tất cả chức năng' }));
-  expect(fetcher).toHaveBeenCalledTimes(5);
+  expect(fetcher.mock.calls.filter(([url]) => String(url).includes('/invoices?'))).toHaveLength(0);
+  expect(
+    fetcher.mock.calls.filter(([url]) => String(url).includes('/tenant/meter-readings?')),
+  ).toHaveLength(0);
+  expect(screen.queryByRole('button', { name: 'Lịch sử hóa đơn' })).toBeNull();
+  expect(screen.queryByRole('button', { name: 'Báo cáo sự cố' })).toBeNull();
+  expect(fetcher).toHaveBeenCalledTimes(1);
 });

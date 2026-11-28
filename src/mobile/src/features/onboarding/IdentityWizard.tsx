@@ -27,6 +27,7 @@ import {
   type CaptureProgress,
   type IdentitySide,
   type IdentityStatus,
+  type IdentityCaptureRequest,
 } from './onboarding';
 import { IdentityFlowFrame } from './IdentityFlowFrame';
 import { identityFieldErrors } from './identityFieldErrors';
@@ -51,7 +52,9 @@ interface Props {
   onSaveError?: (message: string) => void;
   onVerifiedSummary?: (summary: { fullName: string; dateOfBirth: string | null }) => void;
   onStatusChange?: (status: IdentityStatus) => void;
+  onUnsavedChanges?: (hasChanges: boolean) => void;
   onCaptureProgress?: (progress: CaptureProgress) => void;
+  captureRequest?: IdentityCaptureRequest;
   onCancel: () => void;
 }
 function IdentityScreenCaptureProtection({ residentId }: { residentId: string }) {
@@ -76,7 +79,9 @@ export function IdentityWizard({
   onSaveError,
   onVerifiedSummary,
   onStatusChange,
+  onUnsavedChanges,
   onCaptureProgress,
+  captureRequest,
 }: Props) {
   const { resetScroll } = useWorkspace();
   const { api, session } = useSession();
@@ -87,13 +92,22 @@ export function IdentityWizard({
     if (next !== 'done') onModeChange?.(next);
   };
   const [scanned, setScanned] = useState(false);
-  const [side, setSide] = useState<IdentitySide>('front');
+  const [side, setSide] = useState<IdentitySide>(captureRequest?.side ?? 'front');
+  const [lastCaptureRequest, setLastCaptureRequest] = useState(captureRequest);
+  // Apply an explicit selection before mounting its camera, without remounting
+  // the wizard or losing OCR suggestions and Staff edits.
+  if (captureRequest && captureRequest !== lastCaptureRequest) {
+    setLastCaptureRequest(captureRequest);
+    setSide(captureRequest.side);
+  }
   const captureProgress = useRef(emptyCaptureProgress());
+  const cameraLensPreferenceRef = useRef('');
   const progressCallback = useRef(onCaptureProgress);
   useEffect(() => {
     progressCallback.current = onCaptureProgress;
   }, [onCaptureProgress]);
   const reportProgress = (face: IdentitySide, status: CaptureProgress[IdentitySide]) => {
+    if (captureProgress.current[face] === 'recognized' && status === 'captured') return;
     captureProgress.current = { ...captureProgress.current, [face]: status };
     progressCallback.current?.(captureProgress.current);
   };
@@ -114,10 +128,20 @@ export function IdentityWizard({
   const fieldErrors = identityFieldErrors(fields);
   const confirmed = useRef(false);
   const statusCallback = useRef(onStatusChange);
+  const unsavedChangesCallback = useRef(onUnsavedChanges);
   const dismissCallback = useRef(onDismiss);
   useEffect(() => {
     statusCallback.current = onStatusChange;
   }, [onStatusChange]);
+  useEffect(() => {
+    unsavedChangesCallback.current = onUnsavedChanges;
+  }, [onUnsavedChanges]);
+  const hasUnsavedChanges =
+    step !== 'done' &&
+    (Object.values(fields).some((value) => value.trim()) || !!placeOfIssue.trim());
+  useEffect(() => {
+    unsavedChangesCallback.current?.(hasUnsavedChanges);
+  }, [hasUnsavedChanges]);
   useEffect(() => {
     dismissCallback.current = onDismiss;
   }, [onDismiss]);
@@ -172,26 +196,76 @@ export function IdentityWizard({
     };
   }, [modal, setNotice]);
   const acceptProposal = (proposal: Proposal, face: IdentitySide = side) => {
-    // Replace only this side's earlier OCR suggestions. Never overwrite Staff edits or the other side.
+    // A rescan replaces only suggestions it actually reads from the same side.
     const before = { ...current.current };
     for (const [key] of identityFields) {
-      if (fieldOrigin.current[key] === face) before[key] = '';
+      if (fieldOrigin.current[key] === face && proposal.proposedFields[key]?.trim())
+        before[key] = '';
     }
     const merged = mergeIdentity(before, proposal);
     for (const [key] of identityFields) {
       if (!before[key] && proposal.proposedFields[key]) fieldOrigin.current[key] = face;
     }
     statusCallback.current?.('pending');
-    sideWarnings.current[face] = [
-      ...proposal.warnings.map(diagnosticWarning),
-      ...proposal.missingFields.map((key) => {
-        const label = identityFields.find(([name]) => name === key)?.[1];
-        return label
-          ? `Chưa đọc được ${label.toLowerCase()}. Bạn có thể nhập bổ sung.`
-          : 'Một số thông tin chưa đọc được. Hãy đối chiếu giấy tờ.';
+    const hasFields =
+      identityFields.some(([key]) => proposal.proposedFields[key]?.trim()) ||
+      !!proposal.proposedFields.placeOfIssue?.trim();
+    const complete =
+      face === 'back' ||
+      ['citizenIdentityNumber', 'fullName', 'dateOfBirth'].every((key) =>
+        proposal.proposedFields[key]?.trim(),
+      );
+    const resultStatus =
+      !hasFields || proposal.isFallback
+        ? 'failed'
+        : !complete || proposal.warnings.includes('ocr_partial')
+          ? 'partial'
+          : 'recognized';
+    const faceLabel = `Mặt ${face === 'front' ? 'trước' : 'sau'}`;
+    const failureCode = [
+      'ocr_unavailable',
+      'ocr_busy',
+      'ocr_timeout',
+      'no_text',
+      'unsupported_or_unreadable_layout',
+    ].find((code) => proposal.warnings.includes(code));
+    sideWarnings.current[face] =
+      resultStatus === 'failed'
+        ? [
+            `${faceLabel}: ${failureCode ? diagnosticWarning(failureCode, false) : 'Chưa đọc được thông tin. Hãy quét lại mặt này hoặc nhập thủ công.'}`,
+          ]
+        : [
+            ...new Set(
+              proposal.warnings
+                .filter(
+                  (code) =>
+                    ![
+                      'unsupported_or_unreadable_layout',
+                      'possible_glare',
+                      'orientation_corrected',
+                    ].includes(code),
+                )
+                .map((code) => `${faceLabel}: ${diagnosticWarning(code, false)}`),
+            ),
+          ];
+    if (resultStatus === 'partial' && !proposal.warnings.includes('ocr_partial'))
+      sideWarnings.current[face].unshift(
+        `${faceLabel}: Đã đọc được một phần. Hãy bổ sung các ô còn thiếu hoặc quét lại mặt này.`,
+      );
+    const grouped = new Map<string, string[]>();
+    for (const face of ['front', 'back'] as const) {
+      const label = `Mặt ${face === 'front' ? 'trước' : 'sau'}`;
+      for (const warning of sideWarnings.current[face]) {
+        const message = warning.slice(label.length + 2);
+        grouped.set(message, [...(grouped.get(message) ?? []), label.toLowerCase()]);
+      }
+    }
+    setWarnings(
+      [...grouped].map(([message, faces]) => {
+        const label = faces.join(' và ');
+        return `${label[0]!.toUpperCase()}${label.slice(1)}: ${message}`;
       }),
-    ];
-    setWarnings([...new Set([...sideWarnings.current.front, ...sideWarnings.current.back])]);
+    );
     if (proposal.proposedFields.placeOfIssue) setPlaceOfIssue(proposal.proposedFields.placeOfIssue);
     current.current = merged.fields;
     setFields(merged.fields);
@@ -206,24 +280,22 @@ export function IdentityWizard({
     }));
     setScanned(true);
     setAttempted(false);
-    reportProgress(
-      face,
-      !proposal.isFallback && Object.values(proposal.proposedFields).some(Boolean)
-        ? 'recognized'
-        : 'captured',
-    );
-    if (face === 'front' && captureProgress.current.back === 'unscanned') {
+    reportProgress(face, resultStatus);
+    if (
+      face === 'front' &&
+      resultStatus !== 'failed' &&
+      captureProgress.current.back === 'unscanned'
+    ) {
       setSide('back');
       setStep('capture');
     } else setStep('verify');
     resetScroll();
     setNotice(
-      proposal.isFallback
-        ? 'OCR không đọc đủ dữ liệu. Chụp lại hoặc chuyển sang nhập thủ công.'
-        : `Đã nhận đề xuất, chưa xác minh. ${merged.conflicts.length ? 'Có thông tin khác với lần nhập trước; hãy đối chiếu lại giấy tờ.' : ''} ${proposal.warnings.length || proposal.missingFields.length ? 'Có cảnh báo hoặc thiếu trường. Hãy kiểm tra toàn bộ.' : ''}`,
+      merged.conflicts.length
+        ? 'Có thông tin khác với lần nhập trước. Dữ liệu bạn chỉnh sửa được giữ lại; hãy đối chiếu giấy tờ.'
+        : '',
     );
-    if (!preview && (proposal.isFallback || proposal.warnings.length > 0))
-      showWarning('OCR cần được kiểm tra lại. Bạn có thể sửa thông tin hoặc nhập thủ công.');
+    if (!preview && resultStatus === 'failed') showWarning(sideWarnings.current[face][0]!);
   };
   const scan = async (bytes: Uint8Array<ArrayBuffer>) => {
     if (!api || lock.current || preview) return;
@@ -233,19 +305,21 @@ export function IdentityWizard({
     setError('');
     setChecked(false);
     const epoch = generation.current;
+    const face = side;
     const controller = new AbortController();
     abort.current = controller;
     const timeout = setTimeout(() => controller.abort(), 20000);
     try {
       const proposal = await api.image<Proposal>(
-        `/api/v1/ocr/identity/${residentId}/${side}`,
+        `/api/v1/ocr/identity/${residentId}/${face}`,
         bytes,
         controller.signal,
       );
-      if (epoch === generation.current) acceptProposal(proposal);
+      if (epoch === generation.current) acceptProposal(proposal, face);
     } catch (e) {
       workflowFailure('identity', e);
       if (epoch === generation.current) {
+        reportProgress(face, 'failed');
         setError(errorMessage(e));
         setNotice('OCR chưa thành công; nhập thủ công vẫn khả dụng.');
         setStep('verify');
@@ -475,6 +549,7 @@ export function IdentityWizard({
       ) : visible && active ? (
         <CameraCapture
           key={side}
+          lensPreferenceRef={cameraLensPreferenceRef}
           label="Quét CCCD"
           presentation="document"
           documentSide={side}
@@ -572,6 +647,7 @@ export function IdentityWizard({
           ) : (
             active && (
               <CameraCapture
+                lensPreferenceRef={cameraLensPreferenceRef}
                 label={`${scanned ? 'Chụp lại' : 'Chụp ảnh'} mặt trước`}
                 documentSide="front"
                 disabled={busy}

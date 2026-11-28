@@ -3,6 +3,7 @@ import React, { useEffect } from 'react';
 import { afterEach, beforeEach, expect, it, vi } from 'vitest';
 import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import type { MoveInInventory } from '../services/moveInInventory';
+import { MobileApiError } from '../lib/api';
 
 const taskId = '11111111-1111-4111-8111-111111111111';
 const itemId = '22222222-2222-4222-8222-222222222222';
@@ -179,18 +180,23 @@ vi.mock('../components/InventoryPhotoCapture', () => ({
     savedIds,
     photos,
     error,
+    disabled,
+    required = true,
     onChange,
     onRemoveSaved,
   }: {
     savedIds: string[];
     photos: { id: string; bytes: Uint8Array; contentType: string }[];
     error?: string;
+    disabled: boolean;
+    required?: boolean;
     onChange: (photos: unknown[]) => void;
     onRemoveSaved: (id: string) => void;
   }) => (
     <section>
-      <span>Ảnh minh chứng:</span>
+      <span>{required ? 'Ảnh minh chứng:' : 'Ảnh minh chứng (không bắt buộc)'}</span>
       <button
+        disabled={disabled}
         onClick={() =>
           onChange([
             ...photos,
@@ -259,14 +265,12 @@ beforeEach(() => {
 });
 afterEach(cleanup);
 
-it('starts a server-assigned inventory task before allowing edits', async () => {
-  const view = render(<StaffMoveInInventoryScreen />);
+it('starts a server-assigned inventory task automatically when an item opens', async () => {
+  render(<StaffMoveInInventoryScreen />);
   expect(screen.queryByText('Tải lại kiểm kê')).toBeNull();
   expect(screen.queryByLabelText('Số lượng thực tế – Giường đơn')).toBeNull();
   fireEvent.click(screen.getByText('Kiểm tra'));
-  expect(screen.getByLabelText('Số lượng thực tế – Giường đơn')).toHaveProperty('disabled', true);
-  fireEvent.click(screen.getByText('Về danh sách tài sản'));
-  fireEvent.click(screen.getByText('Bắt đầu kiểm kê'));
+  expect(screen.queryByText('Bắt đầu kiểm kê')).toBeNull();
   await waitFor(() =>
     expect(
       state.request.mock.calls.some(
@@ -275,10 +279,26 @@ it('starts a server-assigned inventory task before allowing edits', async () => 
       ),
     ).toBe(true),
   );
-  view.rerender(<StaffMoveInInventoryScreen />);
-  fireEvent.click(screen.getByText('Kiểm tra'));
-  expect(screen.getByLabelText('Số lượng thực tế – Giường đơn')).toHaveProperty('disabled', false);
+  await waitFor(() =>
+    expect(screen.getByLabelText('Số lượng thực tế – Giường đơn')).toHaveProperty(
+      'disabled',
+      false,
+    ),
+  );
+  expect(state.request.mock.calls.filter(([path]) => path.endsWith('/start'))).toHaveLength(1);
   expect(state.reload).toHaveBeenCalled();
+});
+
+it('opens an assigned embedded item and enables editing without a manual start button', async () => {
+  render(<StaffMoveInInventoryScreen embeddedTaskId={taskId} embeddedItemId={itemId} />);
+  expect(screen.queryByText('Bắt đầu kiểm kê')).toBeNull();
+  await waitFor(() =>
+    expect(screen.getByLabelText('Số lượng thực tế – Giường đơn')).toHaveProperty(
+      'disabled',
+      false,
+    ),
+  );
+  expect(state.request.mock.calls.filter(([path]) => path.endsWith('/start'))).toHaveLength(1);
 });
 
 it('shows only the selected asset on mobile, keeps unsaved input and resets the modal scroll', () => {
@@ -307,7 +327,7 @@ it('shows only the selected asset on mobile, keeps unsaved input and resets the 
   expect(paneChange).toHaveBeenCalledTimes(3);
 });
 
-it('saves a Good asset without any reason, photo upload or BF-07 report and returns to the list', async () => {
+it('saves a Good asset with a mandatory photo but without reason or BF-07 report and returns to the list', async () => {
   state.data = inventory('InProgress');
   const paneChange = vi.fn();
   const view = render(
@@ -318,9 +338,12 @@ it('saves a Good asset without any reason, photo upload or BF-07 report and retu
     target: { value: '2' },
   });
   fireEvent.click(screen.getByText('Đạt'));
-  expect(screen.queryByLabelText('Lý do / ghi chú – Giường đơn')).toBeNull();
-  expect(screen.queryByText('Chụp ảnh')).toBeNull();
+  expect(screen.getByLabelText('Ghi chú (không bắt buộc) – Giường đơn')).toBeTruthy();
+  expect(screen.getByText('Chụp ảnh')).toBeTruthy();
   expect(screen.queryByText('Báo cáo sự cố')).toBeNull();
+  fireEvent.click(screen.getByText('Lưu'));
+  expect(await screen.findByText(/Chụp ít nhất 1 ảnh minh chứng/)).toBeTruthy();
+  fireEvent.click(screen.getByText('Chụp ảnh'));
   fireEvent.click(screen.getByText('Lưu'));
   await waitFor(() =>
     expect(
@@ -336,10 +359,10 @@ it('saves a Good asset without any reason, photo upload or BF-07 report and retu
     condition: 'Good',
     actualQuantity: 2,
     notes: '',
-    evidenceIds: [],
+    evidenceIds: [evidenceId],
     incidentId: null,
   });
-  expect(state.request.mock.calls.some(([path]) => path.endsWith('/evidence'))).toBe(false);
+  expect(state.request.mock.calls.some(([path]) => path.endsWith('/evidence'))).toBe(true);
   await waitFor(() => expect(screen.queryByLabelText('Số lượng thực tế – Giường đơn')).toBeNull());
   view.rerender(<StaffMoveInInventoryScreen embeddedTaskId={taskId} onPaneChange={paneChange} />);
   expect(screen.getByText('Đạt')).toBeTruthy();
@@ -360,7 +383,7 @@ it('opens a compact one-asset screen, without expanding fields under the list', 
   expect(screen.queryByRole('combobox')).toBeNull();
   fireEvent.click(screen.getByRole('button', { name: 'Hư hỏng' }));
   expect(screen.getByRole('button', { name: 'Hư hỏng' }).getAttribute('aria-pressed')).toBe('true');
-  expect(screen.getByLabelText('Lý do / ghi chú – Giường đơn')).toBeTruthy();
+  expect(screen.getByLabelText('Ghi chú (không bắt buộc) – Giường đơn')).toBeTruthy();
   expect(screen.getByText('Chụp ảnh')).toBeTruthy();
   expect(state.request).not.toHaveBeenCalledWith(
     expect.stringContaining('/items/'),
@@ -381,7 +404,7 @@ it('saves missing count and captured evidence without asking Staff to file BF-07
     target: { value: '1' },
   });
   fireEvent.click(screen.getByRole('button', { name: 'Thiếu' }));
-  fireEvent.change(screen.getByLabelText('Lý do / ghi chú – Giường đơn'), {
+  fireEvent.change(screen.getByLabelText('Ghi chú (không bắt buộc) – Giường đơn'), {
     target: { value: 'Thiếu một giường' },
   });
   fireEvent.click(screen.getByText('Chụp ảnh'));
@@ -402,7 +425,7 @@ it('saves missing count and captured evidence without asking Staff to file BF-07
   });
 });
 
-it('requires a reason and a photo for Missing or Damaged, without sending an invalid write', async () => {
+it('requires a photo but not a reason for Missing or Damaged, without sending an invalid write', async () => {
   state.data = inventory('InProgress');
   render(<StaffMoveInInventoryScreen embeddedTaskId={taskId} />);
   fireEvent.click(screen.getByText('Kiểm tra'));
@@ -410,15 +433,15 @@ it('requires a reason and a photo for Missing or Damaged, without sending an inv
     target: { value: '1' },
   });
   fireEvent.click(screen.getByRole('button', { name: 'Thiếu' }));
-  expect(screen.getByLabelText('Lý do / ghi chú – Giường đơn')).toBeTruthy();
+  expect(screen.getByLabelText('Ghi chú (không bắt buộc) – Giường đơn')).toBeTruthy();
   expect(screen.getByText('Chụp ảnh')).toBeTruthy();
   fireEvent.click(screen.getByText('Lưu'));
-  expect(await screen.findByText(/Mô tả tình trạng thiếu hoặc hư hỏng/)).toBeTruthy();
-  expect(screen.getByLabelText('Lý do / ghi chú – Giường đơn').getAttribute('aria-invalid')).toBe(
-    'true',
-  );
+  expect(await screen.findByText(/Chụp ít nhất 1 ảnh minh chứng/)).toBeTruthy();
+  expect(
+    screen.getByLabelText('Ghi chú (không bắt buộc) – Giường đơn').getAttribute('aria-invalid'),
+  ).not.toBe('true');
   expect(state.request.mock.calls.some(([path]) => path.includes('/items/'))).toBe(false);
-  fireEvent.change(screen.getByLabelText('Lý do / ghi chú – Giường đơn'), {
+  fireEvent.change(screen.getByLabelText('Ghi chú (không bắt buộc) – Giường đơn'), {
     target: { value: 'Thiếu một giường' },
   });
   fireEvent.click(screen.getByText('Lưu'));
@@ -426,14 +449,43 @@ it('requires a reason and a photo for Missing or Damaged, without sending an inv
   await waitFor(() => expect(screen.getByText('Lưu')).toHaveProperty('disabled', false));
   expect(state.request.mock.calls.some(([path]) => path.includes('/items/'))).toBe(false);
   fireEvent.click(screen.getByRole('button', { name: 'Hư hỏng' }));
-  expect(screen.getByText(/Hư hỏng: mô tả vị trí/)).toBeTruthy();
   await waitFor(() => expect(screen.getByText('Lưu')).toHaveProperty('disabled', false));
   fireEvent.click(screen.getByText('Lưu'));
   expect(await screen.findByText(/Chụp ít nhất 1 ảnh minh chứng/)).toBeTruthy();
   expect(state.request.mock.calls.some(([path]) => path.includes('/items/'))).toBe(false);
 });
 
-it('changing an unsaved issue to Good does not upload the issue photo or submit its reason', async () => {
+it('opens the selected inventory item directly and saves zero quantity without a photo', async () => {
+  state.data = inventory('InProgress');
+  const onItemSaved = vi.fn();
+  render(
+    <StaffMoveInInventoryScreen
+      embeddedTaskId={taskId}
+      embeddedItemId={itemId}
+      onItemSaved={onItemSaved}
+    />,
+  );
+  expect(screen.queryByText('Về danh sách tài sản')).toBeNull();
+  expect(screen.getByRole('button', { name: 'Đủ' })).toBeTruthy();
+  expect(screen.getByRole('button', { name: 'Hỏng' })).toBeTruthy();
+  fireEvent.change(screen.getByLabelText('Số lượng thực tế – Giường đơn'), {
+    target: { value: '0' },
+  });
+  fireEvent.click(screen.getByRole('button', { name: 'Thiếu' }));
+  expect(screen.getByText('Ảnh minh chứng (không bắt buộc)')).toBeTruthy();
+  fireEvent.click(screen.getByText('Lưu tiến độ'));
+  await waitFor(() => expect(onItemSaved).toHaveBeenCalledTimes(1));
+  const saved = state.request.mock.calls.find(([path]) => path.includes('/items/'));
+  expect(JSON.parse(saved![1].body)).toMatchObject({
+    actualQuantity: 0,
+    condition: 'Missing',
+    evidenceIds: [],
+    notes: '',
+  });
+  expect(state.request.mock.calls.some(([path]) => path.endsWith('/complete'))).toBe(true);
+});
+
+it('changing an unsaved issue to Good keeps notes and photos available for Good', async () => {
   state.data = inventory('InProgress');
   render(<StaffMoveInInventoryScreen embeddedTaskId={taskId} />);
   fireEvent.click(screen.getByText('Kiểm tra'));
@@ -441,7 +493,7 @@ it('changing an unsaved issue to Good does not upload the issue photo or submit 
     target: { value: '1' },
   });
   fireEvent.click(screen.getByRole('button', { name: 'Thiếu' }));
-  fireEvent.change(screen.getByLabelText('Lý do / ghi chú – Giường đơn'), {
+  fireEvent.change(screen.getByLabelText('Ghi chú (không bắt buộc) – Giường đơn'), {
     target: { value: 'Thiếu một chiếc' },
   });
   fireEvent.click(screen.getByText('Chụp ảnh'));
@@ -449,8 +501,8 @@ it('changing an unsaved issue to Good does not upload the issue photo or submit 
   fireEvent.change(screen.getByLabelText('Số lượng thực tế – Giường đơn'), {
     target: { value: '2' },
   });
-  expect(screen.queryByLabelText('Lý do / ghi chú – Giường đơn')).toBeNull();
-  expect(screen.queryByText('Chụp ảnh')).toBeNull();
+  expect(screen.getByLabelText('Ghi chú (không bắt buộc) – Giường đơn')).toBeTruthy();
+  expect(screen.getByText('Chụp ảnh')).toBeTruthy();
   fireEvent.click(screen.getByText('Lưu'));
   await waitFor(() =>
     expect(state.request.mock.calls.some(([path]) => path.includes('/items/'))).toBe(true),
@@ -459,11 +511,11 @@ it('changing an unsaved issue to Good does not upload the issue photo or submit 
   expect(JSON.parse(saved![1].body)).toMatchObject({
     condition: 'Good',
     actualQuantity: 2,
-    notes: '',
-    evidenceIds: [],
+    notes: 'Thiếu một chiếc',
+    evidenceIds: [evidenceId],
     incidentId: null,
   });
-  expect(state.request.mock.calls.some(([path]) => path.endsWith('/evidence'))).toBe(false);
+  expect(state.request.mock.calls.some(([path]) => path.endsWith('/evidence'))).toBe(true);
 });
 
 it('highlights and focuses the missing quantity, then highlights condition without writing to server', async () => {
@@ -509,7 +561,7 @@ it('unlinks an existing saved image only when Save is confirmed', async () => {
 it('hides the three global completion controls and automatically finishes after saving the last item', async () => {
   state.data = inventory('InProgress');
   const view = render(<StaffMoveInInventoryScreen />);
-  expect(screen.queryByLabelText(/Thông tin hoàn thành gửi Owner/)).toBeNull();
+  expect(screen.queryByLabelText(/Thông tin hoàn thành gửi chủ trọ/)).toBeNull();
   expect(screen.queryByRole('button', { name: 'Lưu nháp tất cả' })).toBeNull();
   expect(screen.queryByRole('button', { name: 'Hoàn thành kiểm kê' })).toBeNull();
   fireEvent.click(screen.getByText('Kiểm tra'));
@@ -517,6 +569,7 @@ it('hides the three global completion controls and automatically finishes after 
     target: { value: '2' },
   });
   fireEvent.click(screen.getByRole('button', { name: 'Đạt' }));
+  fireEvent.click(screen.getByText('Chụp ảnh'));
   fireEvent.click(screen.getByText('Lưu'));
   await waitFor(() =>
     expect(
@@ -530,7 +583,7 @@ it('hides the three global completion controls and automatically finishes after 
   expect(completeIndex).toBeGreaterThan(saveIndex);
   expect(state.request.mock.calls.some(([path]) => path.endsWith('/verify'))).toBe(false);
   view.rerender(<StaffMoveInInventoryScreen />);
-  expect(screen.getByText('Đã hoàn thành, không chờ Owner duyệt')).toBeTruthy();
+  expect(screen.getByText('Đã hoàn thành, không chờ chủ trọ duyệt')).toBeTruthy();
 });
 
 it('does not mark the inventory complete until all separate assets have been saved', async () => {
@@ -548,6 +601,7 @@ it('does not mark the inventory complete until all separate assets have been sav
     target: { value: '2' },
   });
   fireEvent.click(screen.getByRole('button', { name: 'Đạt' }));
+  fireEvent.click(screen.getByText('Chụp ảnh'));
   fireEvent.click(screen.getByText('Lưu'));
   await waitFor(() =>
     expect(state.request.mock.calls.some(([path]) => path.includes('/items/'))).toBe(true),
@@ -557,6 +611,7 @@ it('does not mark the inventory complete until all separate assets have been sav
   fireEvent.click(screen.getByRole('button', { name: 'Kiểm tra' }));
   fireEvent.change(screen.getByLabelText('Số lượng thực tế – Bàn học'), { target: { value: '1' } });
   fireEvent.click(screen.getByRole('button', { name: 'Đạt' }));
+  fireEvent.click(screen.getByText('Chụp ảnh'));
   fireEvent.click(screen.getByText('Lưu'));
   await waitFor(() =>
     expect(state.request.mock.calls.some(([path]) => path.endsWith('/complete'))).toBe(true),
@@ -599,9 +654,10 @@ it('preserves a saved asset and offers only an error retry if automatic completi
     target: { value: '2' },
   });
   fireEvent.click(screen.getByRole('button', { name: 'Đạt' }));
+  fireEvent.click(screen.getByText('Chụp ảnh'));
   fireEvent.click(screen.getByText('Lưu'));
   expect(
-    await screen.findByText(/Đã lưu tài sản nhưng chưa đồng bộ hoàn tất kiểm kê/),
+    await screen.findByText(/Đã lưu tài sản, nhưng chưa xác nhận được hoàn tất kiểm kê/),
   ).toBeTruthy();
   expect(state.data!.items[0]!.condition).toBe('Good');
   expect(state.data!.status).toBe('InProgress');
@@ -610,4 +666,103 @@ it('preserves a saved asset and offers only an error retry if automatic completi
   view.rerender(<StaffMoveInInventoryScreen />);
   expect(screen.queryByRole('button', { name: 'Thử gửi lại kết quả đã lưu' })).toBeNull();
   expect(screen.queryByRole('button', { name: 'Hoàn thành kiểm kê' })).toBeNull();
+});
+
+it('requires a new photo when Owner-selected damaged inventory is saved as Good', async () => {
+  const previousPhoto = '77777777-7777-4777-8777-777777777777';
+  state.data = {
+    ...inventory('InProgress', 2, 'Damaged', [previousPhoto]),
+    reinspectionItemIds: [itemId],
+    reinspectionRequestedAt: '2026-11-21T04:00:00Z',
+  };
+  render(<StaffMoveInInventoryScreen embeddedTaskId={taskId} />);
+  expect(screen.getByText(/Chủ trọ yêu cầu kiểm tra lại 1 nhóm tài sản/)).toBeTruthy();
+  expect(screen.getByText(/Chủ trọ yêu cầu kiểm tra lại · Cần đối chiếu thực tế/)).toBeTruthy();
+  fireEvent.click(screen.getByText('Xem kiểm kê'));
+  expect(screen.getByText(/Chủ trọ yêu cầu kiểm tra lại tài sản này/)).toBeTruthy();
+  expect(screen.getByText(/Ảnh cũ không thay thế lần kiểm tra lại/)).toBeTruthy();
+  fireEvent.click(screen.getByRole('button', { name: 'Đạt' }));
+  expect(screen.getByText('Chụp ảnh')).toBeTruthy();
+  fireEvent.click(screen.getByText('Lưu'));
+  expect(await screen.findByText(/Kiểm tra lại tài sản đã sửa cần chụp ảnh mới/)).toBeTruthy();
+  expect(state.request.mock.calls.some(([path]) => path.endsWith('/complete'))).toBe(false);
+  fireEvent.click(screen.getByText('Chụp ảnh'));
+  fireEvent.click(screen.getByText('Lưu'));
+  await waitFor(() =>
+    expect(state.request.mock.calls.some(([path]) => path.endsWith('/complete'))).toBe(true),
+  );
+  const submitted = state.request.mock.calls.find(
+    ([path, init]) => path.endsWith(`/items/${itemId}`) && init.method === 'PUT',
+  );
+  expect(JSON.parse(submitted![1].body).evidenceIds).toContain(evidenceId);
+});
+
+it('hides historical Owner reinspection warnings once the server has completed the inventory', () => {
+  state.data = {
+    ...inventory('Completed', 2, 'Good', [evidenceId]),
+    completedAt: '2026-11-21T05:00:00Z',
+    readyForHandover: true,
+    reinspectionItemIds: [itemId],
+    reinspectionRequestedAt: '2026-11-21T04:00:00Z',
+  };
+  render(<StaffMoveInInventoryScreen embeddedTaskId={taskId} />);
+  expect(screen.getByText('Hoàn thành')).toBeTruthy();
+  expect(screen.getByText('Đã hoàn thành kiểm kê lại theo yêu cầu của chủ trọ.')).toBeTruthy();
+  expect(screen.queryByText(/Chủ trọ yêu cầu kiểm tra lại/)).toBeNull();
+  fireEvent.click(screen.getByText('Xem kiểm kê'));
+  expect(screen.queryByText(/Chủ trọ yêu cầu kiểm tra lại/)).toBeNull();
+  expect(screen.queryByText(/cần ảnh mới cho lần kiểm tra lại/)).toBeNull();
+  expect(screen.getByLabelText('Ghi chú (không bắt buộc) – Giường đơn')).toHaveProperty(
+    'disabled',
+    true,
+  );
+  expect(screen.getByText('Chụp ảnh')).toHaveProperty('disabled', true);
+  expect(screen.queryByText('Lưu')).toBeNull();
+  expect(state.request).not.toHaveBeenCalled();
+});
+
+it('keeps the Owner-requested reinspection in progress while the asset is still damaged', async () => {
+  state.data = {
+    ...inventory('InProgress', 2, 'Damaged', [evidenceId]),
+    reinspectionItemIds: [itemId],
+    reinspectionRequestedAt: '2026-11-21T04:00:00Z',
+  };
+  render(<StaffMoveInInventoryScreen embeddedTaskId={taskId} />);
+  fireEvent.click(screen.getByText('Xem kiểm kê'));
+  fireEvent.change(screen.getByLabelText('Ghi chú (không bắt buộc) – Giường đơn'), {
+    target: { value: 'Khung giường chưa được sửa' },
+  });
+  fireEvent.click(screen.getByText('Lưu'));
+  await waitFor(() =>
+    expect(state.request.mock.calls.some(([path]) => path.includes('/items/'))).toBe(true),
+  );
+  expect(state.request.mock.calls.some(([path]) => path.endsWith('/complete'))).toBe(false);
+  expect(state.data!.status).toBe('InProgress');
+  expect(screen.queryByText('Thử gửi lại kết quả đã lưu')).toBeNull();
+});
+
+it('does not retry a 409 when a selected asset lacks a fresh reinspection photo', async () => {
+  state.data = {
+    ...inventory('InProgress', 2, 'Good', [evidenceId]),
+    reinspectionItemIds: [itemId],
+    reinspectionRequestedAt: '2026-11-21T04:00:00Z',
+  };
+  const originalRequest = state.request.getMockImplementation()!;
+  state.request.mockImplementation(
+    async (path: string, init?: { method: string; body: string }) => {
+      if (path.endsWith('/complete'))
+        throw new MobileApiError(409, 'move_in_inventory_reinspection_new_evidence_required', path);
+      return originalRequest(path, init);
+    },
+  );
+  render(<StaffMoveInInventoryScreen embeddedTaskId={taskId} />);
+  fireEvent.click(screen.getByText('Xem kiểm kê'));
+  fireEvent.click(screen.getByRole('button', { name: 'Hư hỏng' }));
+  fireEvent.click(screen.getByRole('button', { name: 'Đạt' }));
+  fireEvent.click(screen.getByText('Lưu'));
+  expect(
+    await screen.findByText(/Chưa có ảnh mới sau yêu cầu kiểm tra lại của chủ trọ/),
+  ).toBeTruthy();
+  expect(screen.queryByText('Thử gửi lại kết quả đã lưu')).toBeNull();
+  expect(state.data!.status).toBe('InProgress');
 });

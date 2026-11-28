@@ -1,3 +1,4 @@
+import { ContractNotice } from './ContractNotice';
 import { RentalContractFlow } from './RentalContractFlow';
 import { HoldingContractFlow } from './HoldingContractFlow';
 import { conciseMessage, showError } from '../../lib/toast';
@@ -24,7 +25,7 @@ import { useSession } from '../../lib/SessionProvider';
 import { useWorkspace } from '../workspace/WorkspaceProvider';
 import { Action, Box, Heading, Pill, Row, ui } from '../../components/WorkspaceKit';
 import { ChoiceField } from '../../components/WorkflowControls';
-import { ContractActionForm, SigningCertificates } from './ContractActionForm';
+import { ContractActionForm } from './ContractActionForm';
 import { ContractSigningPanel, signatureLine, useSigningMethods } from './ContractSigningPanel';
 import { ContractDraftForm } from './ContractDraftForm';
 import { MainDraftScreen } from './MainDraftScreen';
@@ -50,10 +51,18 @@ import { mobileContractActions } from './contractSections';
 import { OwnerMainContractFlow } from '../owner/OwnerMainContractFlow';
 import { OwnerWebNotice } from '../../components/OwnerWebNotice';
 import { ContractLoading } from './ContractLoading';
+import { useTenantCurrentRental } from '../tenant/TenantCurrentRentalContext';
 
-export function ContractScreen({ prepare = false }: { prepare?: boolean }) {
+export function ContractScreen({
+  prepare = false,
+  tenantHandoverOnly = false,
+}: {
+  prepare?: boolean;
+  tenantHandoverOnly?: boolean;
+}) {
   const { api: transport, session } = useSession();
-  const { role } = useWorkspace();
+  const { role, go } = useWorkspace();
+  const verifiedRental = useTenantCurrentRental();
   const [staffListView, setStaffListView] = useState({ ...defaultStaffContractListView });
   const params = useLocalSearchParams<{
     contractId?: string;
@@ -63,6 +72,7 @@ export function ContractScreen({ prepare = false }: { prepare?: boolean }) {
     representativeResidentId?: string;
     residentIds?: string;
     kind?: string;
+    origin?: string;
   }>();
   const [mainDraftId, setMainDraftId] = useState('');
   const [createHolding, setCreateHolding] = useState(params.kind === 'Holding');
@@ -82,7 +92,7 @@ export function ContractScreen({ prepare = false }: { prepare?: boolean }) {
     [transport],
   );
   useEffect(() => {
-    if (!client || role === 'Staff') return;
+    if (!client || role === 'Staff' || tenantHandoverOnly) return;
     const controller = new AbortController();
     async function load() {
       setListing({ data: null, error: '', loading: true });
@@ -99,7 +109,7 @@ export function ContractScreen({ prepare = false }: { prepare?: boolean }) {
     }
     void load();
     return () => controller.abort();
-  }, [client, page, filter, revision, role]);
+  }, [client, page, filter, revision, role, tenantHandoverOnly]);
   let deepId = '';
   if (params.contractId) {
     try {
@@ -109,6 +119,10 @@ export function ContractScreen({ prepare = false }: { prepare?: boolean }) {
     }
   }
   const id = deepId || (role === 'Owner' ? '' : selected);
+  const handoverOnly =
+    role === 'Staff' &&
+    !!deepId &&
+    (params.origin === 'staff-handovers' || params.section === 'handover');
   const draftReference = params.mainDraftId || (role !== 'Owner' && !deepId ? mainDraftId : '');
   let invalidOwnerRoute = role === 'Owner' && !!params.contractId && !deepId;
   if (role === 'Owner' && params.mainDraftId) {
@@ -141,21 +155,26 @@ export function ContractScreen({ prepare = false }: { prepare?: boolean }) {
   }
   const previousContracts = useRef<string[]>([]);
   const returnToList = useCallback(() => {
+    if (role === 'Staff' && params.origin === 'staff-handovers') {
+      go('staff-handovers', { tab: 'MoveIn' });
+      return;
+    }
     previousContracts.current = [];
     setSelected('');
     setMainDraftId('');
     router.setParams({ contractId: '', mainDraftId: '' });
     setRevision((v) => v + 1);
-  }, []);
+  }, [go, params.origin, role]);
   const backFromContract = useCallback(() => {
     const previous = previousContracts.current.pop();
     if (previous) {
       router.setParams({ contractId: previous, mainDraftId: '', roomId: '' });
       return setSelected(previous === deepId ? '' : previous);
     }
+    if (role === 'Staff' && params.origin === 'staff-handovers') return returnToList();
     if (deepId && !selected && router.canGoBack()) return router.back();
     returnToList();
-  }, [deepId, selected, returnToList]);
+  }, [deepId, selected, returnToList, role, params.origin]);
   function released(next: string) {
     setCreateHolding(false);
     setCreate(false);
@@ -165,6 +184,24 @@ export function ContractScreen({ prepare = false }: { prepare?: boolean }) {
     router.setParams({ mainDraftId: '', roomId: '', contractId: next, kind: '' });
   }
   if (!client || !session || !role) return <Text>Cần đăng nhập để xem hợp đồng.</Text>;
+  if (tenantHandoverOnly) {
+    if (role !== 'Tenant' || !verifiedRental) return <Text>Chưa có hợp đồng thuê hiện tại.</Text>;
+    const back = () => (router.canGoBack() ? router.back() : go('tenant-home'));
+    return (
+      <LiveContractDetail
+        key={`tenant-handovers:${verifiedRental.id}`}
+        api={client}
+        id={verifiedRental.id}
+        role={role}
+        actorId={session.userId}
+        tenantHandoverOnly
+        initialSection="handover"
+        onNext={() => undefined}
+        onBack={back}
+        onList={back}
+      />
+    );
+  }
   if (invalidOwnerRoute)
     return <Text>Tham chiếu hợp đồng không hợp lệ. Hãy mở lại từ danh sách hợp đồng.</Text>;
   if (
@@ -178,6 +215,7 @@ export function ContractScreen({ prepare = false }: { prepare?: boolean }) {
         api={client}
         initialRoomId={params.roomId}
         onCancel={() => {
+          if (role === 'Staff') return go('staff-home');
           setCreateHolding(false);
           setCreate(false);
           router.setParams({ kind: '' });
@@ -231,6 +269,7 @@ export function ContractScreen({ prepare = false }: { prepare?: boolean }) {
         {...references}
         onReleased={released}
         onCancel={() => {
+          if (role === 'Staff') return go('staff-home');
           setCreate(false);
           setMainDraftId('');
           router.setParams({
@@ -265,6 +304,7 @@ export function ContractScreen({ prepare = false }: { prepare?: boolean }) {
         onReleased={released}
         api={client}
         onCancel={() => {
+          if (role === 'Staff') return go('staff-home');
           setCreate(false);
           if (role === 'Owner') {
             setMainDraftId('');
@@ -285,16 +325,19 @@ export function ContractScreen({ prepare = false }: { prepare?: boolean }) {
   if (id)
     return (
       <LiveContractDetail
-        key={id}
+        key={handoverOnly ? `handover:${id}` : id}
         api={client}
         id={id}
         role={role}
         actorId={session.userId}
+        handoverOnly={handoverOnly}
         initialSection={
-          ['Tenant', 'Owner', 'Staff'].includes(role) &&
-          contractSections.some((item) => item.id === params.section)
-            ? (params.section as ContractSection)
-            : 'overview'
+          handoverOnly
+            ? 'handover'
+            : ['Tenant', 'Owner', 'Staff'].includes(role) &&
+                contractSections.some((item) => item.id === params.section)
+              ? (params.section as ContractSection)
+              : 'overview'
         }
         onNext={(next) => {
           if (next && next !== id) previousContracts.current.push(id);
@@ -307,6 +350,7 @@ export function ContractScreen({ prepare = false }: { prepare?: boolean }) {
         }}
         onBack={backFromContract}
         onList={returnToList}
+        onComplete={role === 'Staff' ? () => go('staff-home') : undefined}
       />
     );
   if (role === 'Staff')
@@ -315,9 +359,8 @@ export function ContractScreen({ prepare = false }: { prepare?: boolean }) {
         api={client}
         viewState={staffListView}
         onViewStateChange={setStaffListView}
-        onCreateHolding={() => setCreateHolding(true)}
         onOpen={(contract) => setSelected(contract.id)}
-        onInspection={setSelected}
+        onInspection={() => go('staff-handovers')}
       />
     );
   return (
@@ -347,7 +390,7 @@ export function ContractScreen({ prepare = false }: { prepare?: boolean }) {
         </Button>
       </Row>
       {listing.loading && <ActivityIndicator accessibilityLabel="Đang tải hợp đồng" />}
-      {!!listing.error && <Text style={ui.red}>{conciseMessage(listing.error)}</Text>}
+      {!!listing.error && <ContractNotice message={listing.error} />}
       {!listing.loading && !listing.error && !listing.data?.items.length && (
         <Box>
           <Text>Chưa có hợp đồng phù hợp trong phạm vi tài khoản.</Text>
@@ -398,6 +441,9 @@ function LiveContractDetail({
   onNext,
   onList,
   onBack,
+  handoverOnly = false,
+  tenantHandoverOnly = false,
+  onComplete,
   initialSection = 'overview',
 }: {
   api: ReturnType<typeof contractClient>;
@@ -407,16 +453,39 @@ function LiveContractDetail({
   onNext: (id: string) => void;
   onList: () => void;
   onBack: () => void;
+  handoverOnly?: boolean;
+  tenantHandoverOnly?: boolean;
+  onComplete?: () => void;
   initialSection?: ContractSection;
 }) {
-  const detail = useContractDetail(api, id, role, 5000);
-  useWorkspaceHeaderRefresh(detail.reload, detail.loading, {
-    onBack,
-    title: detail.data?.contract.kind === 'Holding' ? 'Hợp đồng giữ chỗ' : 'Hợp đồng',
-  });
-  const signingMethods = useSigningMethods(api);
-  const [selectedAction, setSelectedAction] = useState('');
   const [section, setSection] = useState<ContractSection>(initialSection);
+  // Move-in inspection does not depend on a move-out request. A contract
+  // without one correctly returns 404, so do not fetch it for this section.
+  const detail = useContractDetail(api, id, role, 5000, section !== 'handover');
+  const currentContract = detail.data?.contract;
+  const staffDraft =
+    role === 'Staff' && !!currentContract && isMainOnboardingDraft(currentContract);
+  const completedFlow =
+    currentContract?.status === 'Active' &&
+    ['Main', 'Holding'].includes(currentContract.kind) &&
+    ['overview', 'signing'].includes(section);
+  useWorkspaceHeaderRefresh(detail.reload, detail.loading, {
+    onBack: (staffDraft || completedFlow) && onComplete ? onComplete : onBack,
+    title: tenantHandoverOnly
+      ? 'Bàn giao / Trả phòng'
+      : handoverOnly
+        ? 'Bàn giao phòng'
+        : detail.data?.contract.kind === 'Holding'
+          ? 'Hợp đồng giữ chỗ'
+          : 'Hợp đồng',
+  });
+  // Staff can prepare contracts but the signing-methods endpoint is scoped to
+  // Owner/Tenant. Do not call it from Staff's handover or contract screens.
+  const signingMethods = useSigningMethods(api, role === 'Owner' || role === 'Tenant');
+  const [selectedAction, setSelectedAction] = useState('');
+  const [terminationRequested, setTerminationRequested] = useState(false);
+  const [consenting, setConsenting] = useState(false);
+  const consentLock = useRef(false);
   const [keys] = useState(() => mutationKeys(randomUUID));
   const [evidence, setEvidence] = useState<string[]>([]);
   const [evidenceText, setEvidenceText] = useState(''),
@@ -424,16 +493,87 @@ function LiveContractDetail({
     [uploadChecked, setUploadChecked] = useState(false);
   const uploadLock = useRef(false);
   const [notice, setNotice] = useFeedbackState('success');
-  if (detail.loading) return <ContractLoading label="Đang tải chi tiết hợp đồng…" />;
+  if (detail.loading)
+    return (
+      <ContractLoading
+        label={handoverOnly ? 'Đang tải nhiệm vụ bàn giao…' : 'Đang tải chi tiết hợp đồng…'}
+      />
+    );
   if (detail.error)
     return (
       <Box>
-        <Text style={ui.red}>{conciseMessage(detail.error)}</Text>
-        <Action onPress={detail.reload}>Tải lại hợp đồng</Action>
+        <ContractNotice message={detail.error} />
+        <Action onPress={detail.reload}>
+          {handoverOnly ? 'Tải lại nhiệm vụ' : 'Tải lại hợp đồng'}
+        </Action>
       </Box>
     );
   if (!detail.data) return null;
   const { contract: c, moveOut: m, readiness: r, history } = detail.data;
+  // Task entry points render only the inspection workspace, never the
+  // contract navigation or unrelated contract actions.
+  if (handoverOnly) {
+    if (
+      c.kind !== 'Main' ||
+      ![
+        'Draft',
+        'PendingSigning',
+        'PendingActivation',
+        'Active',
+        'Terminated',
+        'Superseded',
+      ].includes(c.status)
+    )
+      return (
+        <Box>
+          <ContractNotice message="Hợp đồng này không có nhiệm vụ bàn giao hợp lệ." />
+        </Box>
+      );
+    return (
+      <>
+        {!!detail.refreshError && <ContractNotice message={conciseMessage(detail.refreshError)} />}
+        <MoveInDraftHandoverPanel
+          api={api}
+          contract={c}
+          role={role}
+          onUpdated={detail.reload}
+          legacyFallback={
+            ['Active', 'Terminated', 'Superseded'].includes(c.status) ? (
+              <ContractHandoverPanel api={api} contract={c} role={role} />
+            ) : undefined
+          }
+        />
+      </>
+    );
+  }
+  const tenantAwaitingMoveOutApproval =
+    role === 'Tenant' &&
+    !!m &&
+    (['Requested', 'AwaitingConsent', 'Rejected'].includes(m.status) || !!m.isForced);
+  async function submitConsent(confirmed: boolean) {
+    if (
+      !m ||
+      !(confirmed ? m.canConfirm : m.canReject) ||
+      m.version === undefined ||
+      consentLock.current
+    )
+      return;
+    consentLock.current = true;
+    setConsenting(true);
+    const body = { confirmed, expectedVersion: m.version };
+    const scope = id + '/move-out/consent';
+    try {
+      await api.mutate(id, 'move-out/consent', body, keys.get(scope, body));
+      keys.confirmed(scope, body);
+      detail.reload();
+    } catch (error) {
+      showError(contractError(error));
+      detail.reload();
+    } finally {
+      consentLock.current = false;
+      setConsenting(false);
+    }
+  }
   if (isMainOnboardingDraft(c) && ['Owner', 'Staff'].includes(role))
     return (
       <MainDraftScreen
@@ -449,6 +589,7 @@ function LiveContractDetail({
         representativeResidentId={c.representativeResidentId}
         residentIds={c.residentIds}
         onCancel={() => {
+          if (staffDraft && onComplete) return onComplete();
           router.setParams({ contractId: '', mainDraftId: '' });
           onNext('');
         }}
@@ -466,6 +607,11 @@ function LiveContractDetail({
     c.kind === 'Holding' &&
     ['Owner', 'Staff'].includes(role) &&
     ['Draft', 'PendingSigning', 'PendingActivation', 'Active'].includes(c.status);
+  const hideSectionTabs =
+    rental &&
+    role === 'Staff' &&
+    c.initialPaymentRequired &&
+    ['overview', 'signing'].includes(section);
   const availableEvidence = [...new Set([...(m?.evidenceIds ?? []), ...evidence])];
   const actions = mobileContractActions(c, m, role, actorId, signingMethods?.methods).filter(
     (item) =>
@@ -483,9 +629,13 @@ function LiveContractDetail({
         (!!c.approvedAt && !!r && !r.blockers.includes('verified_signature_evidence_required'))),
   );
   const action = actions.find((a) => a.operation === selectedAction);
-  const signer =
-    (role === 'Tenant' && c.tenantUserId === actorId) ||
-    (c.kind === 'Holding' && role === 'Owner' && c.ownerSignerId === actorId);
+  const terminationAction = actions.find((a) => a.operation === 'termination-requests');
+  const sectionActions = actions.filter(
+    (a) =>
+      a !== terminationAction &&
+      contractActionSection(a.operation) === section &&
+      (!tenantHandoverOnly || !['renewals', 'renewal-cancellation'].includes(a.operation)),
+  );
   const ownerMain =
     role === 'Owner' &&
     c.kind === 'Main' &&
@@ -494,7 +644,7 @@ function LiveContractDetail({
     ['overview', 'signing'].includes(section);
   return (
     <>
-      {!rental && !holding && !ownerMain && (
+      {!tenantHandoverOnly && !rental && !holding && !ownerMain && (
         <Heading
           title={`Phòng ${c.roomNumber || c.roomId}`}
           detail={`${text(c.kind)} · ${c.locationName ?? ''}`}
@@ -503,32 +653,32 @@ function LiveContractDetail({
       {!rental && c.isDevelopmentDemo && (
         <Text style={ui.red}>HỢP ĐỒNG DEMO · Dữ liệu minh họa, không dùng làm hợp đồng thật.</Text>
       )}
-      {!holding && <Pill tone={c.status === 'Active' ? 'green' : 'amber'}>{text(c.status)}</Pill>}
-      {!!detail.refreshError && (
-        <Text accessibilityRole="alert" style={ui.red}>
-          Chưa cập nhật được trạng thái mới. Nội dung trước đó vẫn được giữ lại.{' '}
-          {detail.refreshError}
-        </Text>
+      {!tenantHandoverOnly && !holding && !(role === 'Staff' && rental) && (
+        <Pill tone={c.status === 'Active' ? 'green' : 'amber'}>{text(c.status)}</Pill>
       )}
-      {c.kind === 'Holding' ? (
+      {!!detail.refreshError && (
+        <ContractNotice
+          message={`Chưa cập nhật được trạng thái mới. Nội dung trước đó vẫn được giữ lại. ${conciseMessage(detail.refreshError)}`}
+        />
+      )}
+      {tenantHandoverOnly ? (
         <View style={holdingTabs.styles.container}>
           {(
             [
-              ['overview', 'Tổng quan'],
-              ['signing', 'Ký hợp đồng'],
-              ['history', 'Lịch sử'],
+              ['handover', 'Bàn giao'],
+              ['lifecycle', 'Trả phòng'],
             ] as const
           ).map(([key, label]) => (
             <Button
               key={key}
               compact
+              mode="text"
               style={[holdingTabs.styles.tab, section === key && holdingTabs.styles.activeTab]}
               labelStyle={[
                 holdingTabs.styles.label,
                 section === key && holdingTabs.styles.activeLabel,
               ]}
               contentStyle={{ minHeight: 42 }}
-              mode="text"
               accessibilityState={{ selected: section === key }}
               onPress={() => {
                 setSection(key);
@@ -540,29 +690,63 @@ function LiveContractDetail({
           ))}
         </View>
       ) : (
-        <ScrollView
-          horizontal
-          showsHorizontalScrollIndicator={false}
-          contentContainerStyle={{ gap: 8 }}
-        >
-          {contractSections
-            .filter((item) => c.kind !== 'Holding' || !['handover', 'lifecycle'].includes(item.id))
-            .map((item) => (
+        !hideSectionTabs &&
+        (c.kind === 'Holding' ? (
+          <View style={holdingTabs.styles.container}>
+            {(
+              [
+                ['overview', 'Tổng quan'],
+                ['signing', 'Ký hợp đồng'],
+                ['history', 'Lịch sử'],
+              ] as const
+            ).map(([key, label]) => (
               <Button
-                key={item.id}
-                mode={section === item.id ? 'contained' : 'outlined'}
-                contentStyle={{ minHeight: 44 }}
-                disabled={uploading}
-                accessibilityState={{ selected: section === item.id }}
+                key={key}
+                compact
+                style={[holdingTabs.styles.tab, section === key && holdingTabs.styles.activeTab]}
+                labelStyle={[
+                  holdingTabs.styles.label,
+                  section === key && holdingTabs.styles.activeLabel,
+                ]}
+                contentStyle={{ minHeight: 42 }}
+                mode="text"
+                accessibilityState={{ selected: section === key }}
                 onPress={() => {
-                  setSection(item.id);
+                  setSection(key);
                   setSelectedAction('');
                 }}
               >
-                {item.label}
+                {label}
               </Button>
             ))}
-        </ScrollView>
+          </View>
+        ) : (
+          <ScrollView
+            horizontal
+            showsHorizontalScrollIndicator={false}
+            contentContainerStyle={{ gap: 8 }}
+          >
+            {contractSections
+              .filter(
+                (item) => c.kind !== 'Holding' || !['handover', 'lifecycle'].includes(item.id),
+              )
+              .map((item) => (
+                <Button
+                  key={item.id}
+                  mode={section === item.id ? 'contained' : 'outlined'}
+                  contentStyle={{ minHeight: 44 }}
+                  disabled={uploading}
+                  accessibilityState={{ selected: section === item.id }}
+                  onPress={() => {
+                    setSection(item.id);
+                    setSelectedAction('');
+                  }}
+                >
+                  {item.label}
+                </Button>
+              ))}
+          </ScrollView>
+        ))
       )}
       {rental && (section === 'overview' || section === 'signing') && (
         <RentalContractFlow
@@ -574,6 +758,7 @@ function LiveContractDetail({
           actorId={actorId}
           onChanged={detail.reload}
           onList={onList}
+          onComplete={onComplete}
         />
       )}
       {ownerMain && (
@@ -595,6 +780,7 @@ function LiveContractDetail({
           actorId={actorId}
           onChanged={detail.reload}
           onList={onList}
+          onComplete={onComplete}
         />
       )}
       {section === 'overview' && !rental && !holding && !ownerMain && c.kind !== 'Holding' && (
@@ -658,8 +844,8 @@ function LiveContractDetail({
         <Box>
           <Heading title="Chữ ký và bằng chứng" />
           {[
-            { id: c.ownerSignerId, label: 'Owner' },
-            { id: c.tenantUserId, label: 'Tenant' },
+            { id: c.ownerSignerId, label: 'Chủ trọ' },
+            { id: c.tenantUserId, label: 'Khách thuê' },
           ].map((s) => (
             <View key={s.id} style={ui.soft}>
               <Text variant="titleSmall">
@@ -678,13 +864,7 @@ function LiveContractDetail({
           ))}
           {['Owner', 'Tenant'].includes(role) &&
             c.signatures.some((s) => ['Signed', 'Simulated'].includes(s.status)) && (
-              <ContractEvidence api={api} contractId={id} pdf />
-            )}
-          {signer &&
-            !c.isDevelopmentDemo &&
-            !(role === 'Owner' && c.signingMode === 'INTERNAL_OTP_DRAWN') &&
-            (!signingMethods || signingMethods.methods.includes('VIETTEL_MYSIGN')) && (
-              <SigningCertificates api={api} />
+              <ContractEvidence api={api} contractId={id} contractKind={c.kind} pdf />
             )}
         </Box>
       )}
@@ -726,7 +906,7 @@ function LiveContractDetail({
             <ContractHandoverPanel api={api} contract={c} role={role} />
           ) : (
             <Box>
-              <Text>Owner kiểm tra và duyệt biên bản bàn giao nháp tại Web Chủ cơ sở.</Text>
+              <Text>Chủ trọ kiểm tra và duyệt biên bản bàn giao nháp tại Web Chủ cơ sở.</Text>
             </Box>
           )
         ) : (
@@ -742,7 +922,11 @@ function LiveContractDetail({
             }
           />
         ))}
+      {section === 'handover' && tenantHandoverOnly && c.kind === 'Renewal' && (
+        <ContractHandoverPanel api={api} contract={c} role={role} />
+      )}
       {section === 'handover' &&
+        !(tenantHandoverOnly && c.kind === 'Renewal') &&
         (c.kind !== 'Main' ||
           ![
             'Draft',
@@ -759,8 +943,8 @@ function LiveContractDetail({
         )}
       {section === 'signing' && !rental && !holding && role === 'Staff' && (
         <Text style={ui.muted}>
-          Staff chuẩn bị và theo dõi hồ sơ. Owner/Tenant thực hiện ký; Owner xác minh cọc và kích
-          hoạt.
+          Nhân viên chuẩn bị và theo dõi hồ sơ. Chủ trọ/khách thuê thực hiện ký; chủ trọ xác minh
+          cọc và kích hoạt.
         </Text>
       )}
       {section === 'signing' && !rental && !holding && !ownerMain && r && (
@@ -769,7 +953,7 @@ function LiveContractDetail({
           <Text>Cọc đã xác minh: {formatContractMoney(r.verifiedDeposit)}</Text>
           <Text>Cọc còn thiếu: {formatContractMoney(r.remainingDeposit)}</Text>
           {r.ready ? (
-            <Pill tone="green">Đủ điều kiện để Owner kích hoạt</Pill>
+            <Pill tone="green">Đủ điều kiện để chủ trọ kích hoạt</Pill>
           ) : (
             r.blockers.map((b) => (
               <Text key={b} style={ui.red}>
@@ -779,9 +963,28 @@ function LiveContractDetail({
           )}
         </Box>
       )}
-      {section === 'lifecycle' && !m && (
+      {section === 'lifecycle' && terminationAction && !terminationRequested && (
+        <ContractActionForm
+          key={terminationAction.operation}
+          api={api}
+          action={terminationAction}
+          contract={c}
+          keys={keys}
+          onSuccess={() => {
+            setTerminationRequested(true);
+            detail.reload();
+          }}
+        />
+      )}
+      {section === 'lifecycle' && !m && terminationRequested && (
         <Box>
-          <Heading title="Gia hạn & trả phòng" />
+          <Heading title="Đã gửi yêu cầu chấm dứt trước hạn" />
+          <Text>Yêu cầu cần đủ đồng thuận của các thành viên trước khi chủ trọ duyệt.</Text>
+        </Box>
+      )}
+      {section === 'lifecycle' && !m && !terminationAction && !terminationRequested && (
+        <Box>
+          <Heading title={tenantHandoverOnly ? 'Trả phòng' : 'Gia hạn & trả phòng'} />
           <Text>
             Chưa có yêu cầu trả phòng. Các thao tác khả dụng hiển thị theo trạng thái và quyền tài
             khoản.
@@ -790,22 +993,52 @@ function LiveContractDetail({
       )}
       {section === 'lifecycle' && m && (
         <Box>
-          <Heading title="Trả phòng" detail={text(m.status)} />
+          <Heading
+            title={m.isForced ? 'Trả phòng bắt buộc' : 'Trả phòng'}
+            detail={text(m.status)}
+          />
           <Text>Ngày đề nghị: {displayContractDate(m.proposedDate)}</Text>
-          <Text>Lý do: {m.reason}</Text>
-          {m.inspectionScheduledAt && (
+          {!!m.reason?.trim() && <Text>Lý do: {m.reason}</Text>}
+          {m.requiredConsents !== undefined && m.requiredConsents !== null && (
+            <Text>
+              Đã đồng thuận: {m.receivedConsents ?? 0}/{m.requiredConsents} thành viên
+            </Text>
+          )}
+          {role === 'Tenant' && m.canConfirm && (
+            <Action disabled={consenting} onPress={() => void submitConsent(true)}>
+              Đồng ý trả phòng
+            </Action>
+          )}
+          {role === 'Tenant' && m.canReject && (
+            <Button disabled={consenting} onPress={() => void submitConsent(false)}>
+              Hủy đồng thuận trả phòng
+            </Button>
+          )}
+          {m.isForced && (
+            <Text>Hồ sơ kiểm tra hiện trạng, không xác nhận quyết toán hoặc thanh toán.</Text>
+          )}
+          {role !== 'Tenant' && m.inspectionScheduledAt && (
             <Text>Lịch kiểm tra: {formatInstant(m.inspectionScheduledAt)} (giờ Việt Nam)</Text>
           )}
-          {!!m.pendingReason && <Text style={ui.red}>{text(m.pendingReason)}</Text>}
-          {m.inspectionNotes && <Text>Biên bản: {m.inspectionNotes}</Text>}
-          {m.inspectedAt && <Text>Lập lúc: {formatInstant(m.inspectedAt)}</Text>}
-          {m.electricityReadingId && (
+          {role !== 'Tenant' && !!m.pendingReason && (
+            <Text style={ui.red}>{text(m.pendingReason)}</Text>
+          )}
+          {role !== 'Tenant' && !!m.inspectionNotes && (
+            <Text>Kết quả kiểm tra: {m.inspectionNotes}</Text>
+          )}
+          {role !== 'Tenant' && m.inspectedAt && (
+            <Text>Ghi nhận lúc: {formatInstant(m.inspectedAt)}</Text>
+          )}
+          {role !== 'Tenant' && m.electricityReadingId && (
             <Text selectable>Mã chỉ số điện: {m.electricityReadingId}</Text>
           )}
-          {m.waterReadingId && <Text selectable>Mã chỉ số nước: {m.waterReadingId}</Text>}
-          {(m.evidenceIds ?? []).map((e, i) => (
-            <ContractEvidence key={e} api={api} contractId={id} evidenceId={e} number={i + 1} />
-          ))}
+          {role !== 'Tenant' && m.waterReadingId && (
+            <Text selectable>Mã chỉ số nước: {m.waterReadingId}</Text>
+          )}
+          {role !== 'Tenant' &&
+            (m.evidenceIds ?? []).map((e, i) => (
+              <ContractEvidence key={e} api={api} contractId={id} evidenceId={e} number={i + 1} />
+            ))}
         </Box>
       )}
       {section === 'lifecycle' && role === 'Staff' && m?.status === 'Approved' && (
@@ -862,12 +1095,12 @@ function LiveContractDetail({
             Mở tác vụ điện / nước để ghi chỉ số chốt
           </Button>
           <Text variant="bodySmall">
-            Owner tạo tác vụ Final đúng hợp đồng. Sau khi xác nhận chỉ số, sao chép mã reading vào
+            Chủ trọ tạo tác vụ Final đúng hợp đồng. Sau khi xác nhận chỉ số, sao chép mã reading vào
             biên bản.
           </Text>
         </Box>
       )}
-      {section === 'lifecycle' && !!history.length && (
+      {section === 'lifecycle' && !tenantAwaitingMoveOutApproval && !!history.length && (
         <Box>
           <Heading title="Lịch sử xem xét quyết toán" />
           {history.map((h) => (
@@ -880,44 +1113,38 @@ function LiveContractDetail({
           ))}
         </Box>
       )}
-      {section === 'lifecycle' && m && (
+      {section === 'lifecycle' && m && !tenantAwaitingMoveOutApproval && (
         <ContractLifecyclePanel
           api={api}
           id={id}
           role={role}
           moveOut={m}
-          evidenceIds={availableEvidence}
           onChanged={() => {
             setEvidence([]);
             detail.reload();
           }}
         />
       )}
-      {!ownerMain &&
-        !(rental && section === 'signing') &&
-        actions.some((a) => contractActionSection(a.operation) === section) && (
-          <Box>
-            <Heading title="Thao tác theo trạng thái" />
-            {actions
-              .filter((a) => contractActionSection(a.operation) === section)
-              .map((a) => (
-                <Action
-                  key={a.operation}
-                  disabled={
-                    uploading ||
-                    (['activate', 'holding-activation'].includes(a.operation) && !r?.ready)
-                  }
-                  secondary={!['activate', 'holding-activation'].includes(a.operation)}
-                  onPress={() => {
-                    setSelectedAction(a.operation);
-                    setNotice('');
-                  }}
-                >
-                  {a.label}
-                </Action>
-              ))}
-          </Box>
-        )}
+      {!ownerMain && !(rental && section === 'signing') && sectionActions.length > 0 && (
+        <Box>
+          <Heading title="Thao tác theo trạng thái" />
+          {sectionActions.map((a) => (
+            <Action
+              key={a.operation}
+              disabled={
+                uploading || (['activate', 'holding-activation'].includes(a.operation) && !r?.ready)
+              }
+              secondary={!['activate', 'holding-activation'].includes(a.operation)}
+              onPress={() => {
+                setSelectedAction(a.operation);
+                setNotice('');
+              }}
+            >
+              {a.label}
+            </Action>
+          ))}
+        </Box>
+      )}
       {action && (
         <ContractActionForm
           key={action.operation}
@@ -925,7 +1152,6 @@ function LiveContractDetail({
           action={action}
           contract={c}
           keys={keys}
-          evidenceIds={availableEvidence}
           onCancel={() => {
             setSelectedAction('');
             detail.reload();

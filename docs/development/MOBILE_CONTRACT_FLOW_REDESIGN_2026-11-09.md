@@ -16,6 +16,8 @@ Yêu cầu UI/UX đính kèm ngày 09/11/2026: đồng bộ với danh sách h�
 
 ## Thành phần và tính nhất quán
 
+- Điều hướng Staff (24/11/2026): khi backend trả trạng thái hoàn tất, nút xác nhận ở luồng Main và nút hoàn tất ở luồng Holding trở về Trang chủ. Hộp xác nhận rời quy trình chỉ xuất hiện trong lúc màn nhập CCCD đang mở và có dữ liệu chưa lưu của người đang chỉnh sửa. Đóng màn nhập CCCD gỡ cảnh báo kể cả khi bản nháp vẫn còn trong phiên. Khi hồ sơ tiếp nhận chuyển sang ký, màn ký thay thế màn tiếp nhận trong lịch sử điều hướng.
+
 - Tái sử dụng `OnboardingStepper`, `Box`, `Heading`, `Pill`, `Action`, `ContractDateField`, `ChoiceField`, `ContractPdfPreview`, `ContractActionForm`, `SigningCertificates` và `ContractEvidence`.
 - Mới: `RentalContractStepper`, `rentalContractState`, `RentalContractFlow`, `MainDraftSigningReview`.
 - Cập nhật: `MainDraftScreen`, `MainDraftStart`, `ContractScreen`, `ContractProgress`, `ContractPreviewSummary`, `ContractWorkflowPanel`.

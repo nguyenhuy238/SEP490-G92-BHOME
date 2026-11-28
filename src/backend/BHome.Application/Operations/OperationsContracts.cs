@@ -1,5 +1,6 @@
 using System.ComponentModel.DataAnnotations;
 using System.Text.Json.Serialization;
+using BHome.Application.IdentityAccess;
 
 namespace BHome.Application.Operations;
 
@@ -21,18 +22,20 @@ public sealed record ProfileView(Guid UserId, string FullName, string? Phone, st
 [JsonUnmappedMemberHandling(JsonUnmappedMemberHandling.Disallow)]
 public sealed record ProfileUpdate(
     [Required, StringLength(150, MinimumLength = 2)] string FullName,
-    [StringLength(30)] string? Phone,
+    [StringLength(30), ContactPhoneNumber] string? Phone,
     [Required, EmailAddress, StringLength(256)] string Email,
     [Required, StringLength(256)] string Version,
     [StringLength(1024)] string? CurrentPassword = null);
 
-public sealed record EmploymentView(Guid Id, string? ContractNumber, string EmploymentType,
+public sealed record EmploymentView(Guid Id, string? ContractNumber,
+    [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] string? EmploymentType,
     DateOnly StartDate, DateOnly? EndDate, string? SalaryType, decimal? BaseRate, string Status);
 
 public sealed record EmploymentHistoryEntry(string Action, Guid ActorId, DateTimeOffset OccurredAt,
     string? Reason, EmploymentWrite? Before, EmploymentWrite? After);
 
-public sealed record EmploymentPeriodView(Guid Id, string? ContractNumber, string EmploymentType,
+public sealed record EmploymentPeriodView(Guid Id, string? ContractNumber,
+    [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] string? EmploymentType,
     DateOnly StartDate, DateOnly? EndDate, string? SalaryType, decimal? BaseRate, string Status,
     IReadOnlyList<EmploymentHistoryEntry> History);
 
@@ -59,7 +62,9 @@ public sealed record StaffView(Guid UserId, string FullName, string? Phone, stri
 [JsonUnmappedMemberHandling(JsonUnmappedMemberHandling.Disallow)]
 public sealed record EmploymentWrite(
     [StringLength(100)] string? ContractNumber,
-    [Required, StringLength(30)] string EmploymentType,
+    // Legacy persisted metadata; new Staff forms no longer collect this value.
+    [StringLength(30)]
+    [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] string? EmploymentType,
     DateOnly StartDate,
     DateOnly? EndDate,
     [StringLength(20)] string? SalaryType,
@@ -70,7 +75,7 @@ public sealed record EmploymentWrite(
 public sealed record StaffCreate(
     [Required, EmailAddress, StringLength(256)] string Email,
     [Required, StringLength(150, MinimumLength = 2)] string FullName,
-    [StringLength(30)] string? Phone,
+    [StringLength(30), ContactPhoneNumber] string? Phone,
     [StringLength(256)] string? InitialPassword,
     EmploymentWrite Employment);
 
@@ -79,7 +84,7 @@ public sealed record StaffUpdate(
     [Required, StringLength(256)] string AccountVersion,
     [Required, EmailAddress, StringLength(256)] string Email,
     [Required, StringLength(150, MinimumLength = 2)] string FullName,
-    [StringLength(30)] string? Phone,
+    [StringLength(30), ContactPhoneNumber] string? Phone,
     bool IsActive,
     EmploymentWrite Employment,
     [Required, StringLength(500)] string Reason);
@@ -97,7 +102,14 @@ public sealed record ResidenceTaskView(Guid ContractId, Guid ResidentId, Guid Lo
     DateOnly ResidenceFrom, DateOnly? ActualResidenceFrom, string Status, bool HasEvidence,
     DateTimeOffset? ResultAt, bool OwnerConfirmed, DateTimeOffset? OwnerConfirmedAt,
     IReadOnlyList<ResidenceHistoryView> History, string? Reference = null, bool AccommodationConfirmed = false,
-    DateOnly? RegistrationDeadline = null, bool TrackingActive = false);
+    DateOnly? RegistrationDeadline = null, bool TrackingActive = false,
+    DateOnly? RegistrationExpiresOn = null, bool RegistrationRequired = true, bool HouseholdCompleted = false);
+
+public sealed record ResidenceTrackingSettings(bool RegistrationRequired, DateOnly? RegistrationExpiresOn,
+    [Required] string ExpectedReference, [Required, StringLength(1000)] string Reason);
+public sealed record ResidenceEvidenceTarget(Guid ResidentId, string ExpectedReference);
+public sealed record ResidenceTrackingSummary(Guid ContractId, Guid ResidentId, Guid LocationId, string RoomNumber,
+    string ResidentLabel, string Status, bool RegistrationRequired, DateOnly? RegistrationDeadline, DateOnly? RegistrationExpiresOn);
 
 public sealed record ResidenceHistoryView(string Action, Guid ActorId, DateTimeOffset OccurredAt, string? Note);
 
@@ -114,7 +126,7 @@ public sealed record ResidenceUpdate(
     DateOnly ActualResidenceFrom,
     [Required, RegularExpression("Pending|InProgress|Completed")] string Status,
     DateTimeOffset? ResultAt,
-    [StringLength(1000)] string? Note, string? ExpectedReference = null);
+    [StringLength(1000)] string? Note, string? ExpectedReference = null, DateOnly? RegistrationExpiresOn = null);
 
 [JsonUnmappedMemberHandling(JsonUnmappedMemberHandling.Disallow)]
 public sealed record ResidenceOwnerConfirmation([Required, StringLength(1000)] string Note);
@@ -140,23 +152,45 @@ public sealed class OccupancyQuery
 public sealed record PublicPhotoView(int Index, string ContentType, long Length, string Url);
 public sealed record LocationPublicContent(Guid LocationId, string Name, string Address, string Summary,
     IReadOnlyList<string> Amenities, string? ContactPhone, string? ContactEmail,
-    IReadOnlyList<PublicPhotoView> Photos, bool Published, DateTimeOffset? PublishedAt);
+    IReadOnlyList<PublicPhotoView> Photos, bool Published, DateTimeOffset? PublishedAt,
+    string PublicationStatus = "Draft");
 public sealed record RoomPublicContent(Guid RoomId, Guid LocationId, string RoomNumber, string? Floor,
     int Capacity, string Description, IReadOnlyList<string> Amenities, decimal? IndicativePrice,
-    string Vacancy, IReadOnlyList<PublicPhotoView> Photos, bool Published, DateTimeOffset? PublishedAt);
+    string Vacancy, IReadOnlyList<PublicPhotoView> Photos, bool Published, DateTimeOffset? PublishedAt,
+    string PublicationStatus = "Draft",
+    [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingDefault)] int Version = 0);
+
+public sealed record PublicRoomBulkTarget(Guid RoomId, [Range(1, int.MaxValue)] int ExpectedVersion);
+[JsonUnmappedMemberHandling(JsonUnmappedMemberHandling.Disallow)]
+public sealed record PublicRoomBulkRequest(
+    [MinLength(1), MaxLength(100)] PublicRoomBulkTarget[] Targets,
+    [Required, RegularExpression("^(RoomDefaults|Room|Manual|Publish|Unpublish)$")] string Mode,
+    Guid? SourceId, int? SourceVersion,
+    [MaxLength(3)] string[] Fields, bool FillEmptyOnly = true,
+    [StringLength(2000)] string? Description = null,
+    [MaxLength(50)] string[]? Amenities = null,
+    [Range(typeof(decimal), "0", "999999999999999999")] decimal? IndicativePrice = null,
+    string? PreviewHash = null);
+public sealed record PublicRoomFieldChange(string Field, string OldValue, string NewValue, bool Conflict);
+public sealed record PublicRoomBulkRow(Guid RoomId, string RoomNumber, int CurrentVersion,
+    string Status, IReadOnlyList<PublicRoomFieldChange> Changes, string? Issue = null);
+public sealed record PublicRoomBulkPreview(string PreviewHash, IReadOnlyList<PublicRoomBulkRow> Rooms);
+public sealed record PublicRoomBulkResult(IReadOnlyList<PublicRoomBulkRow> Rooms);
 
 [JsonUnmappedMemberHandling(JsonUnmappedMemberHandling.Disallow)]
 public sealed record LocationPublicContentWrite(
-    [StringLength(2000)] string Summary,
+    [Required(AllowEmptyStrings = true), StringLength(2000)] string Summary,
     [MaxLength(50)] string[] Amenities,
     [Phone, StringLength(30)] string? ContactPhone,
-    [EmailAddress, StringLength(256)] string? ContactEmail);
+    [EmailAddress, StringLength(256)] string? ContactEmail,
+    [MaxLength(20)] int[]? PhotoOrder = null);
 
 [JsonUnmappedMemberHandling(JsonUnmappedMemberHandling.Disallow)]
 public sealed record RoomPublicContentWrite(
-    [StringLength(2000)] string Description,
+    [Required(AllowEmptyStrings = true), StringLength(2000)] string Description,
     [MaxLength(50)] string[] Amenities,
-    [Range(typeof(decimal), "0", "999999999999999999")] decimal? IndicativePrice);
+    [Range(typeof(decimal), "0", "999999999999999999")] decimal? IndicativePrice,
+    [MaxLength(20)] int[]? PhotoOrder = null);
 
 public sealed record RecurringTaskTemplateView(Guid Id, Guid LocationId, string Title, string Requirements,
     string Priority, bool EvidenceRequired, int IntervalDays, DateTimeOffset NextRunAt,
@@ -203,12 +237,21 @@ public interface IOperationsRepository
         ResidenceAccommodationConfirmation input, DateTimeOffset now, CancellationToken t);
     Task<ResidenceTaskView> AttachResidenceEvidenceAsync(Guid actorId, Guid contractId, Guid residentId,
         OperationsFile file, DateTimeOffset now, CancellationToken t);
+    Task<ResidenceTaskView> ConfigureResidenceAsync(Guid actorId, Guid contractId, Guid residentId,
+        ResidenceTrackingSettings input, DateTimeOffset now, CancellationToken t);
+    Task<OperationsPage<ResidenceTrackingSummary>> ResidenceTrackingAsync(Guid staffId, DateOnly today, ResidenceQuery query, CancellationToken t);
+    Task<IReadOnlyList<ResidenceTaskView>> AttachHouseholdEvidenceAsync(Guid actorId, Guid contractId,
+        ResidenceEvidenceTarget[] targets, OperationsFile file, DateTimeOffset now, CancellationToken t);
     Task<OperationsFile?> ResidenceEvidenceAsync(Guid contractId, Guid residentId, Guid? tenantUserId, CancellationToken t);
     Task<OperationsPage<RoomOccupancyView>> OccupancyAsync(OccupancyQuery query, Guid? staffUserId,
         DateOnly today, CancellationToken t);
     Task<RoomOccupancyHistory?> OccupancyHistoryAsync(Guid roomId, Guid? staffUserId, DateOnly today, CancellationToken t);
     Task<LocationPublicContent?> LocationContentAsync(Guid locationId, bool publishedOnly, CancellationToken t);
     Task<RoomPublicContent?> RoomContentAsync(Guid roomId, bool publishedOnly, CancellationToken t);
+    Task<IReadOnlyList<RoomPublicContent>> ManagedRoomsAsync(Guid locationId, CancellationToken t);
+    Task<PublicRoomBulkPreview> PreviewPublicRoomBulkAsync(Guid locationId, PublicRoomBulkRequest input, CancellationToken t);
+    Task<PublicRoomBulkResult> ApplyPublicRoomBulkAsync(Guid actorId, Guid locationId, PublicRoomBulkRequest input,
+        DateTimeOffset now, CancellationToken t);
     Task<IReadOnlyList<LocationPublicContent>> PublishedLocationsAsync(CancellationToken t);
     Task<IReadOnlyList<RoomPublicContent>> PublishedRoomsAsync(Guid locationId, CancellationToken t);
     Task<LocationPublicContent> UpdateLocationContentAsync(Guid actorId, Guid locationId,

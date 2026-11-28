@@ -5,6 +5,20 @@ public static class ContractPaymentModes
     public static string Of(BHome.Domain.TenantContracts.Contract contract) =>
         contract.PaymentMode ?? (contract.IsDevelopmentDemo ? "Test" : "Live");
     public static bool IsTest(BHome.Domain.TenantContracts.Contract contract) => Of(contract) == "Test";
+    public static async Task<string?> ConfiguredAsync(BHome.Application.PaymentsDebt.SePay.SePayOptions? options,
+        BHome.Application.PaymentsDebt.IPaymentRepository? accounts, Guid locationId, Guid ownerId, CancellationToken token,
+        BHome.Application.PaymentsDebt.SePay.ISePayOwnerConnections? connections = null)
+    {
+        if (connections is not null) await connections.ApplyOwnerAsync(ownerId, token);
+        if (accounts is not null && await accounts.OwnerPaymentModeAsync(ownerId, token) is { } selected) return selected;
+        if (options?.Enabled != true) return null;
+        var mode = accounts is null ? options.Mode : await accounts.OwnerPaymentModeAsync(ownerId, token) ?? options.Mode;
+        var provider = options.For(mode);
+        // Freeze the selected mode even before a new Location has a receiving binding.
+        // Instructions/activation still require the configured bank; missing setup must never turn Test into Live.
+        if (options.DualMode) return mode;
+        return provider.Enabled && provider.Bound(locationId, ownerId) ? mode : null;
+    }
 }
 
 // The ways a contract party can sign. OTP is the in-app electronic signature (drawn or uploaded picture, a one-time
@@ -16,6 +30,9 @@ public static class SigningMethods
     public const string Otp = "OTP";
     // Explicit Owner consent authenticated by the current account session, with the BHOME system seal.
     public const string OwnerSession = "OWNER_SESSION";
+    // Handover-only: Tenant signs the Owner-issued report with hand-drawn ink
+    // while authenticated as the contract's Tenant, without an email OTP.
+    public const string TenantSession = "TENANT_SESSION";
     public const string ViettelMySign = "VIETTEL_MYSIGN";
     public const string Simulated = "SIMULATED";
     // The Owner signs the issued PDF outside BHOME with their own certificate (e.g. Viettel MySign registered through
@@ -24,6 +41,7 @@ public static class SigningMethods
 
     public static bool IsOtp(string? method) => string.Equals(method?.Trim(), Otp, StringComparison.OrdinalIgnoreCase);
     public static bool IsOwnerSession(string? method) => string.Equals(method?.Trim(), OwnerSession, StringComparison.OrdinalIgnoreCase);
+    public static bool IsTenantSession(string? method) => string.Equals(method?.Trim(), TenantSession, StringComparison.OrdinalIgnoreCase);
     public static bool IsUploadProof(string? method) => string.Equals(method?.Trim(), UploadProof, StringComparison.OrdinalIgnoreCase);
 }
 

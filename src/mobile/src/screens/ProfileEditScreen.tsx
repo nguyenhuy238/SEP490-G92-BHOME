@@ -18,6 +18,7 @@ import {
   type ProfileFields,
 } from '../services/accountProfile';
 import { MobileApiError } from '../lib/api';
+import { getFieldErrors } from '../../../../packages/client-core/src/api';
 import { useSession } from '../lib/SessionProvider';
 import { useWorkspace } from '../features/workspace/WorkspaceProvider';
 import { useWorkspaceHeaderRefresh } from '../components/WorkspaceHeaderContext';
@@ -55,6 +56,15 @@ function ProfileEditForm({
   const [validation, setValidation] = useState<
     Partial<Record<keyof ProfileFields | 'currentPassword', string>>
   >({});
+  const inputs = useRef<Partial<Record<keyof ProfileFields | 'currentPassword', unknown>>>({});
+  useEffect(() => {
+    const first = (['fullName', 'phone', 'email', 'currentPassword'] as const).find(
+      (name) => validation[name],
+    );
+    const input = first ? inputs.current[first] : null;
+    if (input && typeof input === 'object' && 'focus' in input && typeof input.focus === 'function')
+      input.focus();
+  }, [validation]);
   const [currentPassword, setCurrentPassword] = useState('');
   const [error, setError] = useState('');
   const [stale, setStale] = useState(false);
@@ -118,6 +128,8 @@ function ProfileEditForm({
       showSuccess('Đã cập nhật hồ sơ. Phiên đăng nhập được giữ.');
     } catch (e) {
       if (!alive.current) return;
+      const fields = getFieldErrors(e);
+      setValidation((previous) => ({ ...previous, ...fields }));
       const message = profileError(e);
       if (e instanceof MobileApiError && e.code === 'current_password_invalid') {
         setCurrentPassword('');
@@ -133,8 +145,8 @@ function ProfileEditForm({
           /* Keep the original safe error; API client handles a genuinely revoked session. */
         }
       }
-      setError(message);
-      showError(message);
+      setError(Object.keys(fields).length ? '' : message);
+      if (!Object.keys(fields).length) showError(message);
       if (e instanceof MobileApiError && e.code === 'stale_profile_version') setStale(true);
     } finally {
       lock.current = false;
@@ -212,6 +224,9 @@ function ProfileEditForm({
       <View style={styles.card}>
         <TextInput
           label="Họ và tên"
+          ref={(input: unknown) => {
+            if (input) inputs.current.fullName = input;
+          }}
           accessibilityLabel="Họ và tên"
           value={fields.fullName}
           onChangeText={(value) => change('fullName', value)}
@@ -233,6 +248,9 @@ function ProfileEditForm({
             baseline.roles.includes('Tenant') ? 'Số điện thoại' : 'Số điện thoại (không bắt buộc)'
           }
           accessibilityLabel="Số điện thoại"
+          ref={(input: unknown) => {
+            if (input) inputs.current.phone = input;
+          }}
           value={fields.phone}
           onChangeText={(value) => change('phone', value)}
           mode="outlined"
@@ -249,6 +267,9 @@ function ProfileEditForm({
         )}
         <TextInput
           label="Email"
+          ref={(input: unknown) => {
+            if (input) inputs.current.email = input;
+          }}
           accessibilityLabel="Email"
           value={fields.email}
           onChangeText={(value) => change('email', value)}
@@ -271,6 +292,9 @@ function ProfileEditForm({
         {sensitiveChanged && (
           <TextInput
             label="Mật khẩu hiện tại để xác nhận"
+            ref={(input: unknown) => {
+              if (input) inputs.current.currentPassword = input;
+            }}
             accessibilityLabel="Mật khẩu hiện tại để xác nhận"
             value={currentPassword}
             onChangeText={(value) => {

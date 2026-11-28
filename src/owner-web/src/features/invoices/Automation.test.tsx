@@ -32,11 +32,7 @@ function mount(page: React.ReactNode = <LiveAutomationPage />) {
 it('renders the actual live automation route when API mode is enabled', async () => {
   respond(false);
   mount(<AutomationPage />);
-  expect(
-    screen.getByText(
-      'Chọn cơ sở để cấu hình lịch. Kỳ kiểm thử dùng riêng cho các thao tác thủ công.',
-    ),
-  ).toBeInTheDocument();
+  expect(screen.getByText('Chọn cơ sở để xem lịch.')).toBeInTheDocument();
   await choose();
   expect(await screen.findByText('missing_water_meter')).toBeInTheDocument();
   expect(mocks.request).toHaveBeenCalledWith(
@@ -56,10 +52,6 @@ async function chooseRoom() {
 async function chooseMeter() {
   fireEvent.mouseDown(await screen.findByLabelText('Đồng hồ điện hoặc nước'));
   fireEvent.click(await screen.findByRole('option', { name: 'A101 · D01' }));
-}
-async function openSchedule() {
-  fireEvent.click(await screen.findByRole('button', { name: /Thiết lập lịch|Chỉnh sửa lịch/ }));
-  await screen.findByLabelText(/Kỳ bắt đầu áp dụng cấu hình/);
 }
 function respond(developerActionsEnabled = true) {
   mocks.schedule.mockResolvedValue({
@@ -117,244 +109,25 @@ function respond(developerActionsEnabled = true) {
     return [];
   });
 }
-it('keeps both manual actions and independent effective month visible; saves automation disabled', async () => {
+it('keeps manual test actions separate and links schedule edits to Location Settings', async () => {
   respond();
   mount();
   await choose();
   expect(await screen.findByText('missing_water_meter')).toBeInTheDocument();
   expect(screen.getByRole('heading', { name: 'Cấu hình lịch' })).toBeInTheDocument();
+  expect(screen.getByRole('link', { name: 'Thiết lập lịch tại cơ sở' })).toHaveAttribute(
+    'href',
+    '/locations/loc/settings',
+  );
   expect(screen.getByRole('heading', { name: 'Chạy thử thủ công' })).toBeInTheDocument();
   expect(screen.getByRole('button', { name: 'Giao nhiệm vụ khởi tạo' })).toBeInTheDocument();
   expect(screen.getByRole('button', { name: 'Giao nhiệm vụ vận hành' })).toBeInTheDocument();
   expect(screen.getByRole('button', { name: 'Tạo hóa đơn nháp' })).toBeInTheDocument();
-  expect(screen.getByRole('button', { name: 'Kiểm tra và phát hành' })).toBeDisabled();
-  expect(
-    screen.queryByRole('button', { name: 'Chạy ngay: Phát hành hóa đơn' }),
-  ).not.toBeInTheDocument();
-  fireEvent.click(screen.getByRole('button', { name: /Lịch chạy & giám sát/ }));
-  expect(screen.queryByRole('button', { name: /Chạy ngay:/ })).not.toBeInTheDocument();
-  await openSchedule();
-  fireEvent.change(await screen.findByLabelText(/Kỳ bắt đầu áp dụng cấu hình/), {
-    target: { value: '2027-02' },
-  });
-  fireEvent.change(screen.getByLabelText(/Ngày giao việc ghi chỉ số/), { target: { value: '2' } });
-  fireEvent.change(screen.getByLabelText(/Ngày hết hạn ghi chỉ số/), { target: { value: '4' } });
-  expect(screen.queryByLabelText('Bật tự động cho cơ sở')).not.toBeInTheDocument();
-  fireEvent.click(screen.getByRole('button', { name: 'Lưu lịch (không kích hoạt tự động)' }));
-  await waitFor(() =>
-    expect(mocks.request).toHaveBeenCalledWith(
-      '/api/v1/billing-automation',
-      expect.objectContaining({ method: 'PUT' }),
-    ),
-  );
-  const call = mocks.request.mock.calls.find((c) => c[0] === '/api/v1/billing-automation')!;
-  expect(JSON.parse(call[1].body)).toMatchObject({
-    expectedVersion: 0,
-    expectedBillingScheduleVersion: 3,
-    enabled: false,
-    authorizeAutomaticFinalization: false,
-    meterDay: 2,
-    meterDueDay: 4,
-    meterDueMonthOffset: 0,
-    draftDay: 7,
-    draftMonthOffset: 0,
-    finalDay: 20,
-    finalMonthOffset: 0,
-    timeZone: 'Asia/Ho_Chi_Minh',
-    effectiveFrom: '2027-02-01',
-  });
-  expect(JSON.parse(call[1].body)).toMatchObject({ dueDay: 25, dueMonthOffset: 0 });
-  expect(screen.getByLabelText('Kỳ kiểm thử')).toHaveValue('2026-11');
+  expect(screen.queryByLabelText(/Kỳ bắt đầu áp dụng cấu hình/)).not.toBeInTheDocument();
+  expect(screen.queryByLabelText(/Mốc tham chiếu kỳ/)).not.toBeInTheDocument();
+  expect(mocks.request.mock.calls.filter(([, init]) => init?.method === 'PUT')).toEqual([]);
 });
-it('creates the first billing schedule and automation together without requiring Pricing', async () => {
-  respond();
-  mocks.schedule.mockResolvedValue(undefined);
-  mount();
-  await choose();
-  await openSchedule();
-  fireEvent.change(screen.getByLabelText(/Ngày giao việc ghi chỉ số/), { target: { value: '12' } });
-  fireEvent.change(screen.getByLabelText(/Ngày hết hạn ghi chỉ số/), { target: { value: '13' } });
-  fireEvent.change(screen.getByLabelText(/Ngày tạo hóa đơn nháp/), { target: { value: '13' } });
-  fireEvent.change(screen.getByLabelText(/Ngày phát hành chính thức/), { target: { value: '13' } });
-  fireEvent.change(screen.getByLabelText(/Ngày hạn thanh toán/), { target: { value: '20' } });
-  for (const [label, value] of [
-    ['Mốc tham chiếu kỳ', '1'],
-    ['Phí cố định khi ở không đủ tháng', '1'],
-    ['Làm tròn từng khoản VND', '0'],
-  ] as const) {
-    fireEvent.mouseDown(screen.getByLabelText(new RegExp(label)));
-    fireEvent.click(
-      screen.getByRole('option', {
-        name:
-          value === '1'
-            ? label === 'Mốc tham chiếu kỳ'
-              ? 'Ngày cuối tháng'
-              : 'Theo số ngày ở'
-            : '0,5 làm tròn lên',
-      }),
-    );
-  }
-  fireEvent.click(screen.getByRole('button', { name: 'Tạo lịch (không kích hoạt tự động)' }));
-  await waitFor(() =>
-    expect(mocks.request).toHaveBeenCalledWith(
-      '/api/v1/billing-automation',
-      expect.objectContaining({ method: 'PUT' }),
-    ),
-  );
-  const call = mocks.request.mock.calls.find(([path]) => path === '/api/v1/billing-automation')!;
-  expect(JSON.parse(call[1].body)).toMatchObject({
-    expectedBillingScheduleVersion: 0,
-    enabled: false,
-    authorizeAutomaticFinalization: false,
-    meterDay: 12,
-    meterDueDay: 13,
-    draftDay: 13,
-    finalDay: 13,
-    dueDay: 20,
-    initialSchedule: { rateDate: 1, partialMonth: 1, rounding: 0 },
-  });
-});
-it('keeps calculation rules and completion/payment dates editable after a saved schedule exists', async () => {
-  respond();
-  mount();
-  await choose();
-  await openSchedule();
-  expect(screen.getByRole('combobox', { name: 'Mốc tham chiếu kỳ' })).toHaveTextContent(
-    'Ngày đầu tháng',
-  );
-  expect(
-    screen.getByRole('combobox', { name: 'Phí cố định khi ở không đủ tháng' }),
-  ).toHaveTextContent('Thu cả tháng');
-  expect(screen.getByRole('combobox', { name: 'Làm tròn từng khoản VND' })).toHaveTextContent(
-    '0,5 làm tròn lên',
-  );
-  expect(screen.getByLabelText(/Ngày hạn thanh toán/)).toHaveValue(25);
-  fireEvent.mouseDown(screen.getByRole('combobox', { name: 'Mốc tham chiếu kỳ' }));
-  fireEvent.click(screen.getByRole('option', { name: 'Ngày cuối tháng' }));
-  fireEvent.mouseDown(screen.getByRole('combobox', { name: 'Phí cố định khi ở không đủ tháng' }));
-  fireEvent.click(screen.getByRole('option', { name: 'Theo số ngày ở' }));
-  fireEvent.mouseDown(screen.getByRole('combobox', { name: 'Làm tròn từng khoản VND' }));
-  fireEvent.click(screen.getByRole('option', { name: '0,5 làm tròn về số chẵn' }));
-  fireEvent.change(screen.getByLabelText(/Ngày hết hạn ghi chỉ số/), { target: { value: '5' } });
-  fireEvent.change(screen.getByLabelText(/Ngày phát hành chính thức/), { target: { value: '21' } });
-  fireEvent.change(screen.getByLabelText(/Ngày hạn thanh toán/), { target: { value: '26' } });
-  fireEvent.change(screen.getByLabelText(/Ngày giao việc ghi chỉ số/), { target: { value: '3' } });
-  fireEvent.click(screen.getByRole('button', { name: 'Lưu lịch (không kích hoạt tự động)' }));
-  await waitFor(() =>
-    expect(mocks.request).toHaveBeenCalledWith(
-      '/api/v1/billing-automation',
-      expect.objectContaining({ method: 'PUT' }),
-    ),
-  );
-  const call = mocks.request.mock.calls.find(([path]) => path === '/api/v1/billing-automation')!;
-  expect(JSON.parse(call[1].body)).toMatchObject({
-    expectedBillingScheduleVersion: 3,
-    initialSchedule: { rateDate: 1, partialMonth: 1, rounding: 1 },
-    meterDay: 3,
-    meterDueDay: 5,
-    finalDay: 21,
-    dueDay: 26,
-    enabled: false,
-    authorizeAutomaticFinalization: false,
-  });
-});
-it('shows month-based choices and previews actual dates while keeping numeric offsets in the API', async () => {
-  respond();
-  mount();
-  await choose();
-  await openSchedule();
-  fireEvent.change(screen.getByLabelText(/Kỳ bắt đầu áp dụng cấu hình/), {
-    target: { value: '2026-11' },
-  });
-  fireEvent.change(screen.getByLabelText(/Ngày giao việc ghi chỉ số/), { target: { value: '28' } });
-  fireEvent.change(screen.getByLabelText(/Ngày hết hạn ghi chỉ số/), { target: { value: '30' } });
-  fireEvent.mouseDown(screen.getByRole('combobox', { name: 'Tạo nháp vào tháng' }));
-  fireEvent.click(screen.getByRole('option', { name: 'Tháng sau' }));
-  fireEvent.change(screen.getByLabelText(/Ngày tạo hóa đơn nháp/), { target: { value: '2' } });
-  fireEvent.mouseDown(screen.getByRole('combobox', { name: 'Phát hành vào tháng' }));
-  fireEvent.click(screen.getByRole('option', { name: 'Tháng sau' }));
-  fireEvent.change(screen.getByLabelText(/Ngày phát hành chính thức/), { target: { value: '5' } });
-  const preview = screen.getByLabelText('Xem trước lịch thực hiện');
-  expect(preview).toHaveTextContent('28/11/2026');
-  expect(preview).toHaveTextContent('30/11/2026');
-  expect(preview).toHaveTextContent('02/12/2026');
-  expect(preview).toHaveTextContent('05/12/2026');
-  // Existing payment due date is November 25, so a December Final is rejected.
-  expect(screen.getByRole('button', { name: 'Lưu lịch (không kích hoạt tự động)' })).toBeDisabled();
-  fireEvent.mouseDown(screen.getByRole('combobox', { name: 'Tạo nháp vào tháng' }));
-  fireEvent.click(screen.getByRole('option', { name: 'Tháng này' }));
-  fireEvent.mouseDown(screen.getByRole('combobox', { name: 'Phát hành vào tháng' }));
-  fireEvent.click(screen.getByRole('option', { name: 'Tháng này' }));
-  fireEvent.change(screen.getByLabelText(/Ngày tạo hóa đơn nháp/), { target: { value: '7' } });
-  fireEvent.change(screen.getByLabelText(/Ngày phát hành chính thức/), { target: { value: '20' } });
-  fireEvent.click(screen.getByRole('button', { name: 'Lưu lịch (không kích hoạt tự động)' }));
-  await waitFor(() =>
-    expect(mocks.request).toHaveBeenCalledWith(
-      '/api/v1/billing-automation',
-      expect.objectContaining({ method: 'PUT' }),
-    ),
-  );
-  const call = mocks.request.mock.calls.find(([url]) => url === '/api/v1/billing-automation')!;
-  expect(JSON.parse(call[1].body)).toMatchObject({
-    draftMonthOffset: 0,
-    finalMonthOffset: 0,
-    enabled: false,
-  });
-});
-it('warns about a previously enabled plan yet saves a new version with both automatic flags disabled', async () => {
-  respond();
-  const original = mocks.request.getMockImplementation()!;
-  mocks.request.mockImplementation(async (path: string, init?: RequestInit) => {
-    if (path === '/api/v1/billing-automation/loc/history')
-      return [
-        {
-          id: 'prior-enabled-plan',
-          locationId: 'loc',
-          version: 8,
-          effectiveFrom: '2026-10-01',
-          enabled: true,
-          authorizeAutomaticFinalization: true,
-          meterDay: 2,
-          meterDueDay: 4,
-          meterDueMonthOffset: 0,
-          billingScheduleVersion: 3,
-          timeZone: 'Asia/Ho_Chi_Minh',
-          recordedAt: '2026-10-01T00:00:00Z',
-          billingSnapshot: JSON.stringify({
-            DraftDay: 7,
-            DraftMonthOffset: 0,
-            FinalDay: 20,
-            FinalMonthOffset: 0,
-            DueDay: 25,
-            DueMonthOffset: 0,
-          }),
-        },
-      ];
-    return original(path, init);
-  });
-  mount();
-  await choose();
-  expect(await screen.findByText(/Có phiên bản cũ được bật tự động/)).toBeInTheDocument();
-  await openSchedule();
-  const effective = await screen.findByLabelText(/Kỳ bắt đầu áp dụng cấu hình/);
-  fireEvent.change(effective, { target: { value: '2027-02' } });
-  fireEvent.click(screen.getByRole('button', { name: 'Lưu lịch (không kích hoạt tự động)' }));
-  await waitFor(() =>
-    expect(mocks.request).toHaveBeenCalledWith(
-      '/api/v1/billing-automation',
-      expect.objectContaining({ method: 'PUT' }),
-    ),
-  );
-  const put = mocks.request.mock.calls.find(
-    ([path, init]) => path === '/api/v1/billing-automation' && init?.method === 'PUT',
-  )!;
-  expect(JSON.parse(put[1].body)).toMatchObject({
-    expectedVersion: 8,
-    enabled: false,
-    authorizeAutomaticFinalization: false,
-    effectiveFrom: '2027-02-01',
-  });
-});
+
 it('hides developer actions outside the permitted runtime', async () => {
   respond(false);
   mount();
@@ -368,8 +141,7 @@ it('does not send any mutation merely by opening configuration or changing test 
   respond(true);
   mount(<AutomationPage />);
   await choose();
-  await openSchedule();
-  await screen.findByLabelText(/Kỳ bắt đầu áp dụng cấu hình/);
+  await screen.findByRole('link', { name: 'Thiết lập lịch tại cơ sở' });
   fireEvent.change(screen.getByLabelText('Kỳ kiểm thử'), { target: { value: '2026-12' } });
   await screen.findByRole('heading', { name: 'Chạy thử thủ công' });
   expect(
@@ -451,12 +223,12 @@ it('creates a draft for only selected room and billing period and delegates cont
     ),
   ).toBe(false);
 });
-it('explains the backend ambiguous representative conflict without selecting any contract in UI', async () => {
+it('explains a skipped room without an eligible reference contract', async () => {
   respond();
   const original = mocks.request.getMockImplementation()!;
   mocks.request.mockImplementation(async (path: string, init?: RequestInit) => {
     if (path === '/api/v1/invoices/drafts' && init?.method === 'POST') {
-      throw { status: 409, problem: { code: 'representative_selection_required' } };
+      throw { status: 409, problem: { code: 'no_reference_contract_for_period' } };
     }
     return original(path, init);
   });
@@ -466,7 +238,9 @@ it('explains the backend ambiguous representative conflict without selecting any
   const button = screen.getByRole('button', { name: 'Tạo hóa đơn nháp' });
   await waitFor(() => expect(button).toBeEnabled());
   fireEvent.click(button);
-  expect((await screen.findAllByText(/Có nhiều hợp đồng trong kỳ/)).length).toBeGreaterThan(0);
+  expect(
+    (await screen.findAllByText(/Phòng không có hợp đồng đối chiếu đủ điều kiện/)).length,
+  ).toBeGreaterThan(0);
   expect(screen.queryByLabelText(/Hợp đồng đại diện khi lập nháp/)).not.toBeInTheDocument();
   const writes = mocks.request.mock.calls.filter(([, init]) => init?.method === 'POST');
   expect(writes.map(([path]) => path)).toEqual(['/api/v1/invoices/drafts']);
@@ -539,6 +313,101 @@ it('gates both manual meter actions until the configured assignment date is reac
   expect(screen.getByRole('button', { name: 'Giao nhiệm vụ khởi tạo' })).toBeDisabled();
   expect(screen.getByRole('button', { name: 'Giao nhiệm vụ vận hành' })).toBeDisabled();
   expect(mocks.request.mock.calls.filter(([, init]) => init?.method === 'POST')).toEqual([]);
+});
+it('blocks a scheduled reading before the meter installation date and explains the exact dates', async () => {
+  respond();
+  const original = mocks.request.getMockImplementation()!;
+  mocks.request.mockImplementation(async (path: string, init?: RequestInit) => {
+    if (path === '/api/v1/capture/locations/loc/meters')
+      return [
+        {
+          id: 'meter-a',
+          label: 'A101 · D01',
+          parentId: 'room',
+          installedOn: '2026-11-20',
+          isActive: true,
+        },
+      ];
+    if (path.includes('/preview?'))
+      return { ...(await original(path, init)), businessDate: '2026-11-24' };
+    return original(path, init);
+  });
+  mount();
+  await choose();
+  await chooseRoom();
+  await chooseMeter();
+  await waitFor(() =>
+    expect(
+      screen.getAllByText(
+        /Ngày ghi số theo lịch \(2026-11-01\) trước ngày lắp đồng hồ \(2026-11-20\)/,
+      ),
+    ).toHaveLength(2),
+  );
+  expect(screen.getByRole('button', { name: 'Giao nhiệm vụ khởi tạo' })).toBeDisabled();
+  expect(screen.getByRole('button', { name: 'Giao nhiệm vụ vận hành' })).toBeDisabled();
+  expect(mocks.request.mock.calls.filter(([, init]) => init?.method === 'POST')).toEqual([]);
+});
+
+it('explains the already confirmed move-out readings even with the older meter list response', async () => {
+  respond();
+  const original = mocks.request.getMockImplementation()!;
+  mocks.request.mockImplementation(async (path: string, init?: RequestInit) => {
+    if (path === '/api/v1/capture/locations/loc/rooms')
+      return [{ id: 'room', label: 'A101', status: 'Available' }];
+    if (path.startsWith('/api/v1/capture/meter-tasks?'))
+      return [
+        {
+          id: 'initial',
+          meterId: 'meter-a',
+          purpose: 0,
+          status: 2,
+          readingDate: '2026-11-20',
+          confirmedReadingId: 'initial-reading',
+        },
+        {
+          id: 'final',
+          meterId: 'meter-a',
+          purpose: 2,
+          status: 2,
+          readingDate: '2026-11-22',
+          confirmedReadingId: 'final-reading',
+        },
+      ];
+    if (path.includes('/preview?'))
+      return { ...(await original(path, init)), businessDate: '2026-11-24' };
+    return original(path, init);
+  });
+  mount();
+  await choose();
+  await chooseRoom();
+  await chooseMeter();
+  expect(
+    await screen.findByText(/trước chỉ số ban đầu đã xác nhận \(2026-11-20\)/),
+  ).toBeInTheDocument();
+  expect(screen.getByRole('button', { name: 'Giao nhiệm vụ vận hành' })).toBeDisabled();
+  expect(screen.getByRole('link', { name: 'Xem trả phòng' })).toHaveAttribute('href', '/handovers');
+  expect(mocks.request.mock.calls.filter(([, init]) => init?.method === 'POST')).toEqual([]);
+});
+
+it('displays the real capture validation error instead of a pricing error', async () => {
+  respond();
+  const original = mocks.request.getMockImplementation()!;
+  mocks.request.mockImplementation(async (path: string, init?: RequestInit) => {
+    if (path === '/api/v1/billing-automation/manual-meter-tasks' && init?.method === 'POST')
+      throw { status: 400, problem: { code: 'reading_before_installation' } };
+    return original(path, init);
+  });
+  mount();
+  await choose();
+  await chooseRoom();
+  await chooseMeter();
+  const button = screen.getByRole('button', { name: 'Giao nhiệm vụ vận hành' });
+  await waitFor(() => expect(button).toBeEnabled());
+  fireEvent.click(button);
+  expect(
+    await screen.findByText(/Ngày ghi chỉ số theo lịch trước ngày lắp đồng hồ/),
+  ).toBeInTheDocument();
+  expect(screen.queryByText(/Kiểm tra phạm vi, đơn giá và ngày hiệu lực/)).not.toBeInTheDocument();
 });
 it('delegates reading dates to backend schedule for a historical test period', async () => {
   respond(true);
@@ -615,23 +484,6 @@ it('checks older capture pages before allowing an initial task for the selected 
   expect(screen.getByRole('button', { name: 'Giao nhiệm vụ khởi tạo' })).toBeDisabled();
   expect(mocks.request.mock.calls.filter(([, init]) => init?.method === 'POST')).toEqual([]);
 });
-it('prevents scheduling Final later than the inherited payment due date', async () => {
-  respond();
-  mount();
-  await choose();
-  await openSchedule();
-  await screen.findByLabelText(/Kỳ bắt đầu áp dụng cấu hình/);
-  fireEvent.change(screen.getByLabelText(/Ngày giao việc ghi chỉ số/), { target: { value: '2' } });
-  fireEvent.change(screen.getByLabelText(/Ngày hết hạn ghi chỉ số/), { target: { value: '4' } });
-  fireEvent.change(screen.getByLabelText(/Ngày phát hành chính thức/), { target: { value: '26' } });
-  expect(screen.getByRole('button', { name: 'Lưu lịch (không kích hoạt tự động)' })).toBeDisabled();
-  expect(
-    screen.getByText(/thứ tự giao việc\/hạn ghi số\/nháp\/phát hành\/hạn thanh toán/),
-  ).toBeInTheDocument();
-  fireEvent.change(screen.getByLabelText(/Ngày phát hành chính thức/), { target: { value: '25' } });
-  expect(screen.getByRole('button', { name: 'Lưu lịch (không kích hoạt tự động)' })).toBeEnabled();
-  expect(mocks.request.mock.calls.filter(([, init]) => init?.method === 'PUT')).toEqual([]);
-});
 it('only finalizes the exact selected draft after explicit review and a fresh server read', async () => {
   respond(true);
   const original = mocks.request.getMockImplementation()!;
@@ -673,6 +525,48 @@ it('only finalizes the exact selected draft after explicit review and a fresh se
     }),
   );
   expect(mocks.request).toHaveBeenCalledWith('/api/v1/invoices/invoice-1', expect.anything());
+});
+it('recalculates the selected periodic draft with its version instead of creating a duplicate or publishing', async () => {
+  respond();
+  const original = mocks.request.getMockImplementation()!;
+  let draft = {
+    id: 'periodic-draft',
+    type: 'PERIODIC',
+    roomId: 'room',
+    billingPeriod: '2026-11-01',
+    roomNumber: 'A101',
+    status: 'Draft',
+    version: 1,
+    total: '3000000',
+    missingInputs: ['confirmed_reading_Electricity'],
+    dueDate: '2026-11-25',
+  };
+  mocks.request.mockImplementation(async (path: string, init?: RequestInit) => {
+    if (path.startsWith('/api/v1/invoices?') && path.includes('roomId=room'))
+      return {
+        items: [{ ...draft, id: 'unrelated-final', type: 'FINAL', status: 'Final' }, draft],
+        totalCount: 2,
+        pageSize: 20,
+      };
+    if (path === '/api/v1/invoices/periodic-draft/refresh') {
+      draft = { ...draft, version: 2, total: '3100000', missingInputs: [] };
+      return draft;
+    }
+    return original(path, init);
+  });
+  mount();
+  await choose();
+  await chooseRoom();
+  const button = await screen.findByRole('button', { name: 'Tính lại hóa đơn nháp' });
+  expect(screen.getByRole('button', { name: 'Kiểm tra và phát hành' })).toBeDisabled();
+  fireEvent.click(button);
+  await waitFor(() =>
+    expect(screen.getByRole('button', { name: 'Kiểm tra và phát hành' })).toBeEnabled(),
+  );
+  expect(screen.getByText(/Đã tính lại bản nháp\. Kiểm tra số tiền/)).toBeInTheDocument();
+  expect(mocks.request.mock.calls.filter(([, init]) => init?.method === 'POST')).toEqual([
+    ['/api/v1/invoices/periodic-draft/refresh', { method: 'POST', body: '{"expectedVersion":1}' }],
+  ]);
 });
 it('demo offers four local sample actions without contacting backend', async () => {
   mount(<DemoAutomationPage />);

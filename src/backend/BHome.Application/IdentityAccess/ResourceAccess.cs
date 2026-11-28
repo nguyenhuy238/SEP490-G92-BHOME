@@ -10,7 +10,14 @@ public interface IStaffLocationAccess
     Task<bool> IsAssignedAsync(Guid staffId, Guid locationId, CancellationToken cancellationToken);
 }
 
-public sealed class ResourceAccess(ICurrentUser user, IStaffLocationAccess staffLocations)
+public interface ITenantContractAccess
+{
+    Task<bool> SharesContractAsync(Guid tenantUserId, Guid representativeUserId, Guid locationId,
+        CancellationToken cancellationToken);
+}
+
+public sealed class ResourceAccess(ICurrentUser user, IStaffLocationAccess staffLocations,
+    ITenantContractAccess? tenantContracts = null)
 {
     public async Task<bool> CanAccessAsync(ResourceScope scope, IReadOnlyCollection<string> allowedRoles,
         CancellationToken cancellationToken = default)
@@ -20,8 +27,12 @@ public sealed class ResourceAccess(ICurrentUser user, IStaffLocationAccess staff
         // Scope must be satisfied through a role permitted for THIS use case, even for multi-role users.
         bool HasRole(string role) => allowedRoles.Contains(role) && user.IsInRole(role);
         if (HasRole(Roles.Owner)) return true;
-        if (HasRole(Roles.Tenant) && scope.TenantUserId is { } tenantId && tenantId != Guid.Empty && tenantId == id)
-            return true;
+        if (HasRole(Roles.Tenant) && scope.TenantUserId is { } tenantId && tenantId != Guid.Empty)
+        {
+            if (tenantId == id) return true;
+            if (scope.LocationId is { } tenantLocationId && tenantLocationId != Guid.Empty && tenantContracts is not null &&
+                await tenantContracts.SharesContractAsync(id, tenantId, tenantLocationId, cancellationToken)) return true;
+        }
         return HasRole(Roles.Staff) && scope.LocationId is { } locationId && locationId != Guid.Empty &&
             await staffLocations.IsAssignedAsync(id, locationId, cancellationToken);
     }

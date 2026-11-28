@@ -18,32 +18,30 @@ public sealed class EmailOptions
     public int TimeoutSeconds { get; set; } = 30;
     public bool TestEnabled { get; set; }
     public string TestRecipient { get; set; } = "";
+    // Legacy configuration keys are ignored in every environment. Existing private
+    // profiles must not restrict recipients or prevent startup after pulling updates.
     public string[] AllowedRecipients { get; set; } = [];
-    // Explicit opt-in for local Development only; Testing and Staging retain an allowlist.
+    public bool AllowAnyDevelopmentSigningRecipient { get; set; }
     public bool AllowAnyRecipientInDevelopment { get; set; }
 
     public bool LocalCapture => DeliveryMode == "Capture" && Host is "localhost" or "127.0.0.1" or "::1";
     public bool CaptureAllowed(string environment) => !Enabled || DeliveryMode != "Capture" ||
         LocalCapture && environment is "Development" or "Testing";
 
-    public bool RecipientsConfigured(string environment) => !Enabled || DeliveryMode != "Smtp" ||
-        environment is not ("Development" or "Testing" or "Staging") || AllowedRecipients.Length > 0 ||
-        environment == "Development" && AllowAnyRecipientInDevelopment;
+    // Retained for compatibility with existing consumers; no recipient policy remains.
+    public bool RecipientsConfigured(string environment) => true;
 
-    public bool AnyRecipientOverrideAllowed(string environment) => !AllowAnyRecipientInDevelopment ||
-        environment == "Development" && DeliveryMode == "Smtp";
+    public bool AnyRecipientOverrideAllowed(string environment) => true;
 
-    public bool ValidForEnvironment(string environment) => Valid() && CaptureAllowed(environment) &&
-        AnyRecipientOverrideAllowed(environment) && RecipientsConfigured(environment);
+    public bool ValidForEnvironment(string environment) => Valid(environment) && CaptureAllowed(environment);
 
     public bool RecipientAllowed(string destination, string environment = "Production") =>
-        environment == "Development" && AllowAnyRecipientInDevelopment || AllowedRecipients.Length == 0 ||
-        AllowedRecipients.Contains(destination, StringComparer.OrdinalIgnoreCase);
+        ValidAddress(destination);
 
-    public bool Valid() => !Enabled || (!string.IsNullOrWhiteSpace(Host) && Port is >= 1 and <= 65535 &&
+    public bool Valid(string environment = "Production") => !Enabled || (!string.IsNullOrWhiteSpace(Host) && Port is >= 1 and <= 65535 &&
         ValidAddress(FromEmail) &&
         (LocalCapture || DeliveryMode == "Smtp" && ValidAddress(Username) && !string.IsNullOrWhiteSpace(AppPassword) && UseStartTls) &&
-        AllowedRecipients.All(ValidAddress) && TimeoutSeconds is >= 1 and <= 45 && !FromName.Contains('\r') && !FromName.Contains('\n') &&
+        TimeoutSeconds is >= 1 and <= 45 && !FromName.Contains('\r') && !FromName.Contains('\n') &&
         (!TestEnabled || ValidAddress(TestRecipient)));
 
     public static bool ValidAddress(string? value) => !string.IsNullOrWhiteSpace(value) && value.Length <= 254 &&

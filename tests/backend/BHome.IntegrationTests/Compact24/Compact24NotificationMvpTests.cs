@@ -46,6 +46,7 @@ public sealed partial class Compact24NotificationMvpTests(Compact24Fixture fixtu
         var room = new Room { LocationId = location.Id, RoomNumber = "NOT-101", Capacity = 4, Status = RoomStatus.Occupied }; db.Add(room);
         db.Add(new StaffLocationAssignment(location.Id, staff.Id, owner.Id, Today.AddYears(-1), Today.AddYears(1)));
         var contracts = new List<Guid>(); var residents = new List<Guid>();
+        var signingInvitations = new List<ContractSigningInvitation>();
         foreach (var user in tenants)
         {
             var resident = new Resident { RoomId = room.Id, OwnerUserId = owner.Id, TenantUserId = user.Id, DisplayLabel = "Synthetic occupant", VerificationStatus = IdentityVerificationStatus.Verified }; db.Add(resident);
@@ -70,12 +71,30 @@ public sealed partial class Compact24NotificationMvpTests(Compact24Fixture fixtu
             using var bytes = new MemoryStream(signed);
             await confirmationStorage.PutAsync(key, bytes, bytes.Length, "application/pdf", default);
             c.SigningMode = BHome.Application.Contracts.ContractSigningModes.Internal;
-            c.InternalAcceptance = JsonSerializer.Serialize(new BHome.Application.Contracts.InternalAcceptanceEvidence(Guid.NewGuid(), resident.Id,
+            var invitation = new ContractSigningInvitation
+            {
+                ContractId = c.Id,
+                ResidentId = resident.Id,
+                ApprovedByUserId = owner.Id,
+                TokenHash = Guid.NewGuid().ToString("N"),
+                SnapshotHash = c.SnapshotHash,
+                RecipientEmail = user.Email!,
+                ExpiresAt = DateTimeOffset.UtcNow.AddHours(1),
+                AcceptedAt = DateTimeOffset.UtcNow,
+                DeliveryStatus = "Accepted",
+                DocumentObjectKey = key,
+                DocumentHash = hash
+            };
+            signingInvitations.Add(invitation);
+            c.InternalAcceptance = JsonSerializer.Serialize(new BHome.Application.Contracts.InternalAcceptanceEvidence(invitation.Id, resident.Id,
                 c.SnapshotHash, "synthetic-source", "synthetic-stroke", key, hash, DateTimeOffset.UtcNow,
                 owner.Id, DateTimeOffset.UtcNow, key, hash));
             db.Add(c); contracts.Add(c.Id); residents.Add(resident.Id);
         }
-        await db.SaveChangesAsync(); return new(owner, staff, tenants, location.Id, room.Id, contracts.ToArray(), residents.ToArray());
+        await db.SaveChangesAsync();
+        db.AddRange(signingInvitations);
+        await db.SaveChangesAsync();
+        return new(owner, staff, tenants, location.Id, room.Id, contracts.ToArray(), residents.ToArray());
     }
     private async Task<HttpClient> Client(ApplicationUser user, WebApplicationFactory<Program>? host = null)
     {
@@ -332,7 +351,9 @@ public sealed partial class Compact24NotificationMvpTests(Compact24Fixture fixtu
             var db = s.ServiceProvider.GetRequiredService<Compact24DbContext>(); var person = new Resident { RoomId = w.Room, OwnerUserId = w.Owner.Id, DisplayLabel = "Synthetic co-occupant" }; resident = person.Id;
             db.Add(person); db.Add(new ContractResident { ContractId = w.Contracts[0], ResidentId = resident, ResidenceFrom = Today.AddDays(-1), Role = ResidentType.CoOccupant }); await db.SaveChangesAsync();
             var repository = s.ServiceProvider.GetRequiredService<BHome.Application.Billing.IInvoiceRepository>();
-            Assert.Contains(await repository.OccupanciesAsync(w.Room, Today, Today.AddDays(1), default), o => !o.ContactsComplete);
+            // A co-occupant without an account must not block billing through the representative.
+            Assert.True(Assert.Single(await repository.OccupanciesAsync(w.Room, Today, Today.AddDays(1), default),
+                o => o.Contract.Id == w.Contracts[0]).ContactsComplete);
         }
         using var owner = await Client(w.Owner, host); using var staff = await Client(w.Staff, host); var email = Guid.NewGuid().ToString("N") + "@example.invalid";
         Assert.Equal(HttpStatusCode.Forbidden, (await staff.PostAsJsonAsync($"/api/v1/residents/{resident}/invitation", new TenantInvitationRequest(email))).StatusCode);

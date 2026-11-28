@@ -1,8 +1,11 @@
 using System.Collections.Concurrent;
 using System.Net;
 using System.Net.Http.Json;
+using System.Security.Cryptography;
+using System.Text.Json;
 using BHome.Application.Contracts;
 using BHome.Application.Notifications;
+using BHome.Application.Ocr;
 using BHome.Infrastructure.Contracts;
 using iText.Kernel.Pdf;
 using iText.Signatures;
@@ -34,14 +37,14 @@ public sealed partial class ContractLifecycleApiTests
         finally { await native.DisposeAsync(); }
         return true;
     }
-    private async Task PrepareHoldingSigningRate(Guid room, Guid location)
+    private async Task PrepareHoldingSigningData(Workspace workspace)
     {
         await using var scope = fixture.Factory.Services.CreateAsyncScope();
         var db = scope.ServiceProvider.GetRequiredService<BHomePersistenceContext>();
         db.Add(new BillingPolicy
         {
-            LocationId = location,
-            RoomId = room,
+            LocationId = workspace.Location,
+            RoomId = workspace.Room,
             Category = ChargeCategory.Rent,
             ChargeCode = "RENT",
             Name = "Synthetic signing test rate",
@@ -49,7 +52,24 @@ public sealed partial class ContractLifecycleApiTests
             Rate = 3000000,
             EffectiveFrom = Today
         });
+        // The canonical Holding PDF uses the effective lessor profile and confirmed
+        // representative identity, just like a real reviewed signing document.
+        var resident = await db.Set<BHome.Domain.TenantContracts.Resident>().FindAsync(workspace.Resident);
+        var identity = new IdentityConfirmation(true, "000000000123", "SYNTHETIC TENANT", new(2000, 1, 2),
+            "Synthetic tenant address", null, null, null, new(2021, 6, 15), null);
+        var bytes = JsonSerializer.SerializeToUtf8Bytes(identity);
+        try
+        {
+            resident!.IdentityData = JsonSerializer.Serialize(scope.ServiceProvider.GetRequiredService<IIdentityProtection>()
+                .Encrypt(bytes, new(workspace.Owner.Id, workspace.Resident)));
+        }
+        finally { CryptographicOperations.ZeroMemory(bytes); }
         await db.SaveChangesAsync();
+        await BHome.IntegrationTests.Fixtures.MainDraftTestSettings.ResetOwnerPolicyAsync(db, workspace.Owner.Id);
+        await scope.ServiceProvider.GetRequiredService<IMainDraftData>().SetSettingsAsync(workspace.Location,
+            new(workspace.Owner.Id, Today.AddDays(-1), null, "Synthetic bank transfer terms", "",
+                new("SYNTHETIC OWNER", new(1980, 1, 1), "000000000456", new(2020, 1, 1),
+                    "Synthetic issuing authority", "Synthetic owner address", "0900000000"), 0), workspace.Owner.Id, default);
     }
     private sealed class CapturedEmail : INotificationChannelProvider
     {
@@ -75,9 +95,10 @@ public sealed partial class ContractLifecycleApiTests
     {
         if (await RunHoldingSigningOnNativeSchemaAsync(holding, tests => tests.SignOwnerThenTenant(true, ownerSession))) return;
         var w = await Setup();
-        if (holding) await PrepareHoldingSigningRate(w.Room, w.Location);
+        if (holding) await PrepareHoldingSigningData(w);
+        var holdingQuote = holding ? await ConfigureHoldingPolicyAsync(w, "Synthetic Holding signing terms") : null;
         var id = holding
-            ? (await Success<ContractId>(await Post(w.Staff, "/api/v1/contracts/holdings", new HoldingDraftInput(w.Room, w.Owner.Id, w.Tenant.Id, w.Resident, [w.Resident], Today, Today.AddYears(1), DateTimeOffset.UtcNow.AddDays(2), 1000000, "Synthetic Holding signing terms", 1)))).Id
+            ? (await Success<ContractId>(await Post(w.Staff, "/api/v1/contracts/holdings", new HoldingDraftInput(w.Room, w.Owner.Id, w.Tenant.Id, w.Resident, [w.Resident], holdingQuote!.StartDate, holdingQuote.EndDate, holdingQuote.ExpiresAt, holdingQuote.HoldingDeposit, holdingQuote.Terms, 1, holdingQuote.SettingsVersion)))).Id
             : (await Success<ContractId>(await Post(w.Staff, "/api/v1/contracts", Input(w)))).Id;
         if (holding) await Success<ContractView>(await Post(w.Owner, Path(id, "holding-approval"), new HoldingDecisionInput("Owner reviewed")));
         var email = new CapturedEmail();
@@ -86,6 +107,7 @@ public sealed partial class ContractLifecycleApiTests
             b.ConfigureAppConfiguration((_, c) => c.AddInMemoryCollection(new Dictionary<string, string?>
             {
                 ["ContractPdf:TemplateId"] = ContractPdfRendererTests.TemplateId,
+                ["MainDraft:LibreOfficeContainerImage"] = "bhome/contract-converter:local",
                 ["ContractSigning:Methods:Otp"] = "true",
                 ["ContractSigning:InvitationLink:PublicOpenUrl"] = "https://bhome.example/open/sign-contract"
             }));
@@ -134,7 +156,8 @@ public sealed partial class ContractLifecycleApiTests
                 Assert.Equal("PendingSigning", (await owner.Client.GetFromJsonAsync<ContractView>(Path(id)))!.Status);
                 await using (var scope = host.Services.CreateAsyncScope())
                     Assert.False(await scope.ServiceProvider.GetRequiredService<ContractService>().AutomaticActivationReadyAsync(id, default));
-                await Deposit(w, id, holding ? 1000000 : 3000000);
+                var pendingContract = (await owner.Client.GetFromJsonAsync<ContractView>(Path(id)))!;
+                await Deposit(w, id, pendingContract.RequiredDeposit);
                 await using (var scope = host.Services.CreateAsyncScope())
                 {
                     var service = scope.ServiceProvider.GetRequiredService<ContractService>();
@@ -186,12 +209,14 @@ public sealed partial class ContractLifecycleApiTests
         {
             await using (var scope = host.Services.CreateAsyncScope())
                 Assert.False(await scope.ServiceProvider.GetRequiredService<ContractService>().AutomaticActivationReadyAsync(id, default));
-            await Deposit(w, id, holding ? 1000000 : 3000000);
+            await Deposit(w, id, contract.RequiredDeposit);
         }
         await using (var scope = host.Services.CreateAsyncScope())
         {
             var service = scope.ServiceProvider.GetRequiredService<ContractService>();
-            Assert.True(await service.AutomaticActivationReadyAsync(id, default));
+            var readiness = await owner.Client.GetFromJsonAsync<ActivationReadiness>(Path(id, "activation-readiness"));
+            Assert.True(await service.AutomaticActivationReadyAsync(id, default),
+                $"Automatic activation blockers: {string.Join(",", readiness?.Blockers ?? [])}");
             await service.AutoActivatePaidMainAsync(id, default);
             await service.AutoActivatePaidMainAsync(id, default);
         }

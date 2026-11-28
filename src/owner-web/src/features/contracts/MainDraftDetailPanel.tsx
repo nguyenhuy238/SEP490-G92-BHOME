@@ -1,6 +1,7 @@
+import { TextField } from '../../components/common/ValidatedForm';
 import { useEffect, useRef, useState } from 'react';
 import { contactPhoneError } from '../../../../../packages/client-core/src/contactPhone';
-import { Alert, Button, Stack, TextField, Typography } from '@mui/material';
+import { Alert, Button, Stack, Typography } from '@mui/material';
 import { useMainDraftApi } from './useContractsApi';
 import { contractError, mutationKeys } from '../../../../../packages/client-core/src/contracts';
 import {
@@ -10,6 +11,9 @@ import {
   type MainDraftView,
 } from '../../../../../packages/client-core/src/mainDrafts';
 import { MainDraftReleasePanel } from './MainDraftReleasePanel';
+import { ContractDocumentViewer } from './ContractDocumentViewer';
+import { useObjectUrl } from './useObjectUrl';
+import { contractPdfName } from '../../../../../packages/client-core/src/contractPdfName';
 
 export function MainDraftDetailPanel({
   id,
@@ -28,6 +32,11 @@ export function MainDraftDetailPanel({
   const lock = useRef(false),
     [keys] = useState(() => mutationKeys(() => crypto.randomUUID()));
   const [dirty, setDirty] = useState(false);
+  const [previewFile, setPreviewFile] = useState<{ id: string; blob: Blob } | null>(null);
+  const previewUrl = useObjectUrl(
+    `${id}/${files?.pdf?.id ?? ''}`,
+    previewFile && previewFile.id === files?.pdf?.id ? async () => previewFile.blob : null,
+  );
   useEffect(() => {
     const c = new AbortController();
     api
@@ -53,6 +62,7 @@ export function MainDraftDetailPanel({
     setBusy(true);
     setError('');
     setFiles(null);
+    setPreviewFile(null);
     try {
       const input = { ...draft.input, expectedVersion: draft.version };
       const updated = await api.save(id, input, keys.get('main-draft', input));
@@ -77,6 +87,10 @@ export function MainDraftDetailPanel({
     try {
       const bytes = await api.file(id, file.id);
       try {
+        if (pdf) {
+          setPreviewFile({ id: file.id, blob: new Blob([bytes], { type: 'application/pdf' }) });
+          return;
+        }
         const url = URL.createObjectURL(
           new Blob([bytes], {
             type: pdf
@@ -175,6 +189,13 @@ export function MainDraftDetailPanel({
             <Button disabled={busy} onClick={() => void download(true)}>
               Mở hoặc tải PDF
             </Button>
+          )}
+          {previewUrl && (
+            <ContractDocumentViewer
+              url={previewUrl}
+              title="PDF hợp đồng nháp"
+              filename={contractPdfName('Main', id)}
+            />
           )}
           {files?.docx && (
             <Button disabled={busy} onClick={() => void download(false)}>

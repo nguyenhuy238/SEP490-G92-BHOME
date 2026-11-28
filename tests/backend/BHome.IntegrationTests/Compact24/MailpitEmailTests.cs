@@ -101,11 +101,13 @@ public sealed partial class Compact24NotificationMvpTests
     }
 
     private static int MailpitPort(string key) => int.Parse(Environment.GetEnvironmentVariable(key)!, System.Globalization.CultureInfo.InvariantCulture);
-    private WebApplicationFactory<Program> MailpitHost() => AuthenticationHost(new SmtpProbe()).WithWebHostBuilder(builder =>
+    private WebApplicationFactory<Program> MailpitHost(string environment = "Testing") => AuthenticationHost(new SmtpProbe(), environment).WithWebHostBuilder(builder =>
     {
         builder.ConfigureAppConfiguration((_, config) => config.AddInMemoryCollection(new Dictionary<string, string?>
         {
             ["Email:DeliveryMode"] = "Capture",
+            // Capture fixtures never inherit the workstation's SMTP-only Development override.
+            ["Email:AllowAnyRecipientInDevelopment"] = "false",
             ["Email:Host"] = "127.0.0.1",
             ["Email:Port"] = MailpitPort("BHOME_MAILPIT_SMTP_PORT").ToString(System.Globalization.CultureInfo.InvariantCulture),
             ["Email:TimeoutSeconds"] = "5",
@@ -135,6 +137,46 @@ public sealed partial class Compact24NotificationMvpTests
             messages.Add(await MimeMessage.LoadAsync(raw));
         }
         return messages.ToArray();
+    }
+
+    [MailpitPostgresFact]
+    public async Task DevelopmentWorkerSendsInvitationsCredentialsVerificationAndNotificationsOutsideStaleAllowlist()
+    {
+        var w = await Seed(); using var host = MailpitHost("Development");
+        var settings = host.Services.GetRequiredService<IOptions<EmailOptions>>().Value;
+        settings.AllowedRecipients = ["old-allowlist@example.invalid"];
+        settings.AllowAnyRecipientInDevelopment = false;
+        settings.AllowAnyDevelopmentSigningRecipient = false;
+        using var owner = await Client(w.Owner, host);
+        var address = $"dev-invitation-{Guid.NewGuid():N}@example.invalid";
+        await using var scope = host.Services.CreateAsyncScope();
+        var staff = await WorkflowTestUsers.CreateAsync(scope.ServiceProvider,
+            new BHome.Infrastructure.Persistence.ApplicationUser { Id = Guid.NewGuid(), UserName = address, Email = address, EmailConfirmed = false }, "Staff", "Synthetic!LegacySetup937");
+        (await owner.PostAsync($"/api/v1/staff/{staff.Id}/invitation", null)).EnsureSuccessStatusCode();
+        var invitation = await AuthenticationDelivery(host, staff.Id);
+        await SendEmail(host, invitation); await SendEmail(host, invitation);
+        using var invitationMail = Assert.Single(await ReceivedEmailsAsync(address));
+        Assert.Contains("accept-invitation", invitationMail.TextBody);
+
+        (await owner.PostAsync($"/api/v1/staff/{w.Staff.Id}/issue-password", null)).EnsureSuccessStatusCode();
+        var credentials = await AuthenticationDelivery(host, w.Staff.Id);
+        await Task.WhenAll(SendEmail(host, credentials), SendEmail(host, credentials));
+        using var credentialMail = Assert.Single(await ReceivedEmailsAsync(w.Staff.Email!));
+        Assert.NotNull(credentialMail.Subject);
+
+        var (_, noticeDelivery) = await EmailNotice(w, host);
+        await SendEmail(host, noticeDelivery); await SendEmail(host, noticeDelivery);
+        using var notice = Assert.Single(await ReceivedEmailsAsync(w.Tenants[0].Email!));
+
+        var db = scope.ServiceProvider.GetRequiredService<Compact24DbContext>();
+        await db.Users.Where(u => u.Id == w.Tenants[0].Id).ExecuteUpdateAsync(s => s.SetProperty(u => u.EmailConfirmed, false));
+        using var anonymous = host.CreateClient();
+        (await anonymous.PostAsJsonAsync("/api/v1/auth/request-email-verification", new { userName = w.Tenants[0].Email })).EnsureSuccessStatusCode();
+        await SendEmail(host, await AuthenticationDelivery(host, w.Tenants[0].Id));
+        var tenantMail = await ReceivedEmailsAsync(w.Tenants[0].Email!);
+        Assert.Equal(2, tenantMail.Length);
+        Assert.Contains(tenantMail, message => message.TextBody?.Contains("confirm-email", StringComparison.Ordinal) == true);
+        foreach (var message in tenantMail) message.Dispose();
     }
 
     [MailpitPostgresFact]

@@ -6,11 +6,41 @@ Unconfigured. Cọc đã xác minh để activation không đồng nghĩa đã c
 
 ## Main Draft → tài liệu xem xét → ký (05/11/2026)
 
-UC-15 / GBR-04 / DBR-03. Bổ sung vào controller Main Draft hiện hữu:
+**Cập nhật 19/11/2026.** Bước 5 cho phép Owner signer hoặc Staff đang được phân công tại cơ sở kiểm tra PDF và gọi `POST .../{id}/release` để đưa hồ sơ sang `PendingSigning`. Với Staff, `tenantUserId: null` yêu cầu máy chủ dùng liên kết đã xác minh của đại diện thuê. Nếu chưa liên kết tài khoản, hợp đồng dùng OTP. Owner và Tenant có thể ký theo bất kỳ thứ tự nào. Sandbox cũng cho mô phỏng theo cả hai thứ tự và chỉ mở bước thanh toán khi đã ghi nhận đủ hai bên.
 
-- `POST /api/v1/contracts/main-drafts/{id}/signing-review`: Owner hoặc Staff đang được phân công Location, trả `ContractDocumentView` với `kind=SigningReview`. Tái sử dụng file của snapshot hiện tại. PDF được chuyển đổi từ mẫu DOCX hiện hữu và lưu private, có hash/length. Mẫu hiện tại chỉ được phép Development/Testing và có nhãn tài liệu kiểm thử; Production trả 503 `main_draft_signing_template_not_approved`.
+Trong luồng tạo hợp đồng chính thức trên Staff Mobile, kỳ thuê mặc định là 6 tháng và có thể chọn 1 năm, tính từ ngày hiện tại theo giờ Việt Nam. Giá, cọc và điều khoản lấy từ cấu hình. Số điện thoại dùng dữ liệu đã lưu nếu có. Bước 4 gọi `signing-review` một lần để tạo PDF dùng để ký và phát hành chính tệp này với `emailSigning: true` khi chuyển tiếp. Bước 5 gửi lời mời OTP kèm liên kết xem bản PDF của hợp đồng và ghi sự kiện `MainSigningSubmitted` cho thông báo trên web và mobile của Owner. Bước 6 và 7 dùng luồng thanh toán và kích hoạt hiện có.
+
+Khi gửi lại lời mời ký còn hiệu lực, backend áp dụng khoảng chờ 1 phút theo địa chỉ nhận trên cùng hợp đồng. Nội dung email mới thay thế link và OTP cũ, đồng thời giữ thời hạn của lời mời.
+
+Email đã gắn với hồ sơ cư dân khác, kể cả hồ sơ chưa có hợp đồng, bị từ chối với HTTP 409 `signing_email_already_in_use` khi gửi lời mời hoặc chấp thuận ký.
+
+UC-15 / UC-21 / GBR-10. Lệnh thanh toán ban đầu mới (calculation v2) thu cọc còn thiếu và tiền thuê tháng đầu; phí cố định và điện/nước được xử lý trong hóa đơn định kỳ. API trả khoản thuê, cọc và số dư sau các phân bổ đã xác minh. Tiền giữ chỗ đã cấn nằm trong tổng cọc đã ghi nhận. Lệnh v1 đã phát mã giữ nguyên mã, số tiền và các khoản phí đã chốt; API tiếp tục trả chi tiết phí và đơn giá điện/nước đã ký của lệnh lịch sử, không tính lại theo v2. Báo giá legacy chưa phát mã và chưa được phân bổ có thể tạo lệnh v2 theo nghĩa vụ chung của phòng, đồng thời giữ nguyên bản ghi báo giá cũ. Nội dung này mô tả triển khai `MainInitialPaymentNoFees` và khả năng tương thích lịch sử; không sửa chứng từ hoặc nghĩa vụ đã phát hành.
+
+Khi SePay tắt, thanh toán ban đầu vẫn trả số dư và các khoản thu. Trạng thái `PaymentProviderDisabled` cho biết chưa thể cấp mã đối soát hoặc QR. Mobile chỉ hiển thị hướng dẫn chuyển khoản khi đã có mã đối soát.
+
+Sau kích hoạt hợp đồng thuê ký OTP có thanh toán ban đầu, hàng đợi xác nhận gửi hợp đồng đã ký và biên nhận giao dịch đã xác minh đến email khớp lời mời đã chấp thuận. Email thiết lập tài khoản đi theo luồng riêng. Biên nhận lấy số tiền phân bổ từ PostgreSQL và ghi riêng khoản giữ chỗ cấn vào cọc. Hóa đơn định kỳ được phát hành theo UC-21.
+
+UC-14. Sự kiện tạo bản nháp giữ chỗ phát một thông báo trong ứng dụng cho Owner được chỉ định ký, dùng khóa theo hợp đồng để tránh thông báo lặp. Trong luồng ký điện tử trên Owner Web, người ký vẽ hoặc chọn ảnh chữ ký cho hợp đồng đang mở trước khi xác nhận ký.
+
+Email xác nhận giữ chỗ được gửi đến địa chỉ trong lời mời đã chấp thuận sau khi giữ chỗ có hiệu lực và cọc đã xác minh. Trong Development, tùy chọn cho phép gửi lời mời ký ngoài danh sách thử cũng áp dụng cho email xác nhận giữ chỗ theo luồng này.
+
+UC-13 / UC-15. Danh sách phòng tiếp nhận khách thuê trả thêm `currentTenantLabels` cho phòng thuộc phạm vi được phân công. Mỗi mục hiển thị họ tên đã xác minh của người đại diện trên hợp đồng thuê đang có hiệu lực trong ngày, hoặc trạng thái chưa có tên xác minh. Staff xem thông tin này khi chọn phòng. Hồ sơ người thuê mới được nhập ở bước CCCD.
+
+Phòng có hợp đồng thuê chính thức chờ chữ ký Owner được đánh dấu `waitingForOwnerSignature` và ẩn khỏi danh sách chọn phòng tiếp nhận. Backend kiểm tra lại khi lưu hoặc phát hành bản nháp khác cho phòng đó.
+
+### Quyết định nghiệp vụ về cọc dùng chung
+
+UC-15 / UC-19 / UC-22 / GBR-10 / GBR-18. Cọc thuộc chu kỳ thuê của phòng. Khi một Tenant kết thúc hợp đồng và vẫn còn Tenant ở lại, chu kỳ và khoản cọc tiếp tục tồn tại. BHOME không quyết toán riêng khoản cọc giữa các Tenant. Hết hạn hợp đồng chưa hoàn tất bàn giao không kết thúc chu kỳ.
+
+Khi người thuê cuối cùng hoàn tất trả phòng, BHOME tính số dư cọc để Owner quyết định hoàn trả cho người đó. Việc chuyển tiền do Owner thực hiện bên ngoài BHOME. Chứng từ thu cọc ban đầu vẫn được lưu để đối soát. Quy tắc tự đối soát chỉ chấp nhận khoản chuyển đúng số tiền cần thu.
+
+Trạng thái triển khai: đây là quyết định cho thay đổi sắp tới. Ledger hiện tại vẫn gắn cọc với hợp đồng nguồn.
+
+UC-15 / GBR-04 / DBR-03. Các thay đổi trong controller Main Draft hiện hữu gồm các endpoint sau.
+
+- `POST /api/v1/contracts/main-drafts/{id}/signing-review`: Owner hoặc Staff đang được phân công Location, trả `ContractDocumentView` với `kind=SigningReview`. Tái sử dụng file của snapshot và rendering revision hiện tại. PDF được chuyển đổi từ mẫu DOCX hiện hữu và lưu private, có hash/length. Theo yêu cầu demo ngày 24/11/2026, mẫu được phép tạo và đọc lại ở tất cả môi trường, kể cả Staging/Production. Theo yêu cầu tiếp theo cùng ngày, UI và tài liệu mới không hiện cảnh báo môi trường/mẫu thử; metadata `developmentOnly` giữ nguyên. Main renderer revision 2 tạo review mới thay vì tái sử dụng review unsigned revision cũ; không thay tài liệu đã phát hành/đã ký. Kiểm tra quyền, snapshot/hash, xác nhận xem xét, ký, thanh toán và Owner kích hoạt giữ nguyên.
 - `GET .../{id}/documents/{fileId}`: dùng endpoint download hiện hữu, kiểm quyền/snapshot/hash trước khi trả bytes. Tài liệu phiên bản cũ trả 409.
-- `POST .../{id}/release`: chỉ Owner signer; bắt buộc `Idempotency-Key` UUID. Body `{ tenantUserId, expectedVersion, reviewedFileId, humanReviewed: true }`; trả `{ id }`. Kiểm tra bản nháp, cấu hình/giá hiện hành, tài khoản Tenant hoạt động, liên kết Resident, room conflict và đúng file đã xem xét. Không đổi signing mode đã ghi lúc tạo Draft. Lặp cùng key/payload trả cùng kết quả; khác payload trả 409.
+- `POST .../{id}/release`: Owner signer hoặc Staff được phân công tại cơ sở. Bắt buộc `Idempotency-Key` UUID. Body `{ tenantUserId, expectedVersion, reviewedFileId, humanReviewed: true }`; trả `{ id }`. Máy chủ kiểm tra bản nháp, cấu hình/giá hiện hành, liên kết Resident, tài khoản Tenant hoạt động, xung đột phòng và PDF đã xem xét. Phương thức ký dựa trên liên kết đã xác minh. Lặp cùng key/payload trả cùng kết quả; khác payload trả 409.
 
 Release ghi `PendingSigning`, liên kết Tenant đại diện và seal snapshot; giữ encrypted draft metadata và evidence cũ. Tạo Preview bất biến bằng đúng bytes/hash PDF đã xem xét, với object key riêng. `onboardingDraft` trong list/detail chỉ true khi vẫn là Draft; Owner Web chuyển sang workflow ký hiện hữu. Tenant dùng preview/private-download/signing/sync hiện hữu; cả adapter simulation và MySign lấy canonical PDF này thay vì dựng lại mẫu khác. Chưa ký/chưa cọc thì không tự Active hoặc Occupied.
 
@@ -128,21 +158,62 @@ Ngày date-only giữ nguyên ISO trên wire; giờ lịch nhập ở Việt Nam
 
 Tái sử dụng `/api/v1/contracts/{id}` renewal/signing/activation, termination-requests,
 expiry-move-out, move-out/approve/schedule/inspection/settlement/complete hiện có.
+
+Sau khi Tenant gửi yêu cầu kết thúc trước hạn (UC-19), hệ thống phát thông báo trong ứng dụng cho
+Owner đang hoạt động và Staff đủ điều kiện đang được phân công tại cơ sở của phòng. Bộ phát thông
+báo đọc audit đã lưu, chống gửi trùng theo hợp đồng và người nhận, và chỉ phát khi yêu cầu còn chờ
+duyệt. Nội dung thông báo không chứa lý do trả phòng. Owner vẫn thực hiện bước phê duyệt theo
+luồng hiện có.
+
+Owner Web mở riêng trang **Yêu cầu kết thúc hợp đồng** từ thông báo hoặc chi tiết hợp đồng.
+`GET /api/v1/contracts/{id}/move-out/review` chỉ dành cho Owner, trả thông tin đề nghị và
+kết quả xét duyệt. Owner chấp nhận bằng endpoint `move-out/approve` hiện có hoặc từ chối
+bằng `POST /api/v1/contracts/{id}/move-out/reject` với `{ "reason": "..." }` và
+`Idempotency-Key`. Từ chối chỉ áp dụng cho hồ sơ `Requested` của hợp đồng `Active`,
+lưu `Rejected` cùng lý do, người xử lý và thời điểm trong lịch sử. Gửi lại cùng khóa
+không ghi thêm quyết định. Quyết định mới trên hồ sơ đã xử lý trả HTTP 409.
+Owner Web gửi phiên bản đã xem qua `expectedVersion` (query của approve, body của reject);
+phiên bản cũ trả HTTP 409. Một yêu cầu bị từ chối vẫn được lưu trong lịch sử khi Owner lập
+hồ sơ trả phòng lúc hết hạn về sau. Trạng thái và lý do dùng dữ liệu hiện có, không cần migration.
+
 Mutation JSON cần Idempotency-Key GUID. Auth ở service, object scope lấy từ DB.
 
 - GET `{id}/versions`: Owner/Tenant sở hữu, Staff assigned; cùng chain previous/next;
   Staff chỉ dates/status, không rent/terms. Renewal chỉ Active khi ngày hiệu lực và đủ ký/cọc.
+- POST `{id}/termination-requests`: Tenant đề nghị trả phòng sớm (`proposedDate` từ hôm nay đến trước ngày hết hạn), tạo `Requested`.
+  Chỉ sau POST `{id}/move-out/approve` bởi Owner, hồ sơ mới chuyển `Approved` và xuất hiện trong danh sách công việc Staff tại cơ sở.
+- POST `{id}/expiry-move-out`: Owner chủ động lập yêu cầu trả phòng cho hợp đồng Active, với
+  `proposedDate >= hôm nay`, có thể trước, đúng hoặc sau ngày hết hạn. API giữ tên cũ để tương thích,
+  tạo trực tiếp trạng thái `Approved` (ghi nhận Owner và lịch sử), mở việc ngay tại cơ sở.
+  Không đổi trạng thái hợp đồng hoặc phòng khi lập yêu cầu. Một hợp đồng chỉ có một hồ sơ trả phòng;
+  lặp cùng Idempotency-Key + payload trả về cùng hồ sơ, khóa khác khi đã mở trả 409.
 - POST `{id}/move-out/schedule`: Owner hoặc Staff assigned, `{scheduledAt UTC,staffUserId?,
 expectedVersion?}`. Staff không chỉ định người ngoài assignment Location. Owner để trống
-  assignee sẽ hiển thị chưa phân công; không tự chọn một người. Không đóng Contract.
-- GET `move-out-assignments`: Staff, tối đa 100 lịch được giao trong Locations hiện có quyền.
+  assignee sẽ giữ công việc chung cho cơ sở; nếu chỉ định Staff thì chỉ Staff đó thực hiện.
+  Lịch hẹn tùy chọn để điều phối, không bắt buộc trước khi Staff kiểm tra. Không đóng Contract.
+- GET `move-out-assignments`: Staff, tối đa 100 hồ sơ đã `Approved` và chưa `Completed`
+  của các Location hiện được phân công. Hồ sơ chưa gán người xuất hiện cho mọi Staff đủ điều kiện
+  tại cơ sở; hồ sơ gán đích danh chỉ xuất hiện cho người được gán. Có thể `scheduledAt=null`.
+  `Requested` chờ duyệt không hiển thị. Trạng thái và quyền được kiểm tra từ dữ liệu hiện tại.
+- POST `{id}/move-out/inspection`: Staff tại Location ghi kiểm tra khi `proposedDate <= hôm nay`,
+  kể cả không có lịch hẹn. Vẫn bắt buộc confirmed Final readings, snapshot/bằng chứng và
+  `expectedVersion` nếu gửi; không tự hoàn tất Contract hoặc quyết toán tài chính.
 - GET `{id}/move-out/history`: Owner/Tenant của Contract hoặc Staff assigned; append-only.
   MoveOut response bổ sung inspectionStaffId/version. Version 1 request, tăng khi approve/schedule.
   Không thêm reject/cancel termination. Không dùng tenancy của người khác để mở evidence.
 
 GET `{id}/move-out/inspection-preparation`: Owner/Staff lấy confirmed handover snapshot của
 Contract hoặc ancestor renewal và danh sách confirmed Final readings hôm nay đúng Contract.
-InspectionInput thêm assets `{id,condition}[]`, roomCondition, keysAndAccess, expectedVersion.
+InspectionInput và PATCH `{id}/move-out/inspection-draft` (Staff thực hiện nhiệm vụ đã bắt đầu)
+ghi nhận kiểm tra thực tế theo bốn nhóm giống bàn giao vào phòng (UC-17/UC-19):
+chỉ số điện/nước đã xác nhận, hiện trạng, tài sản và chìa khóa. Hiện trạng chung cần nội dung
+và ảnh riêng; mỗi mã checklist hiện trạng chọn `Passed`, `Issue` hoặc `NotApplicable`, có ảnh
+trừ `NotApplicable`. Tài sản chọn `Good`, `Missing` hoặc `Damaged` (có tương thích mã cũ),
+số lượng không vượt số dự kiến khi có dữ liệu; `Good` phải đủ, `Missing` phải ít hơn số dự kiến.
+Mỗi tài sản đã kiểm tra có ảnh riêng, trừ số lượng thực tế bằng 0. Chìa khóa cần số lượng
+và ảnh riêng kể cả khi nhận 0. Ghi chú của từng mục tùy chọn. Gửi kết quả kiểm tra cần đủ các mục;
+lưu draft theo từng mục không tự hoàn thành công việc. Ảnh vẫn phải thuộc đúng hợp đồng,
+nhân viên tải lên, chưa gắn vào kết quả khác và không được dùng chung giữa các mục.
 Snapshot baseline không lấy Asset condition hiện tại. Legacy inspection thiếu baseline giữ
 blocker; không thể resolve production settlement. Final reading là observation của Contract,
 không reset baseline hoặc tự tạo phí cho cả phòng khi co-Tenants vẫn ở.
@@ -200,3 +271,24 @@ available null và blocker `deposit_ledger_reconciliation_required`.
 không khấu trừ có thể xác nhận 0 deduction sau khi trả đủ. Mọi thay đổi position đổi reference;
 `financialReference` riêng giữ source obligations khi reservation/return thay đổi. Reader legacy
 offline trả unknown, không truy cập database khác.
+
+### Mức tiền giữ chỗ và tiền cọc với bản nháp mới
+
+Theo quyết định nghiệp vụ cho BF-03A/BF-03B, UC-13–16, mức tiền giữ chỗ và tiền cọc thuê chính thức khi tạo mới đều bằng một tháng tiền thuê ghi trong bản nháp. Khi chuyển đổi hồ sơ cũ, BHOME giữ nguyên dữ liệu hợp đồng giữ chỗ và kế thừa đúng khoản đã xác minh. Hợp đồng chính ghi mức cọc ít nhất bằng một tháng tiền thuê đã chốt và giữ đủ khoản đã nộp nếu mức cọc cũ cao hơn. Phần chưa đủ được thể hiện trong số dư cọc và chặn kích hoạt cho đến khi được xác minh. Các trường cấu hình cọc cũ vẫn tồn tại trong API để tương thích.
+
+Theo BF-06, giao dịch SePay chỉ được tự động phân bổ khi số tiền nhận khớp toàn bộ số dư của nghĩa vụ. Giao dịch lệch số tiền vẫn được lưu làm bằng chứng và chuyển sang đối soát, với số dư nghĩa vụ giữ nguyên.
+
+### Thanh toán và hoàn cọc khi phòng có nhiều hợp đồng thuê
+
+Khi lập nghĩa vụ ban đầu, backend khóa phòng và liên kết khoản cọc với nghĩa vụ của chu kỳ còn mở. Tiền thuê dùng kỳ tháng bắt đầu hợp đồng. Nếu đã có nghĩa vụ tiền thuê ban đầu hoặc hóa đơn phòng đã chốt cho kỳ đó, backend tái sử dụng nghĩa vụ có sẵn và mã chuyển khoản của nó. Các phí theo người vẫn được tính theo từng hợp đồng. Khi số dư phải trả bằng 0, API không phát hành QR.
+
+Trong Sandbox đã được cấp phạm vi, hợp đồng chưa lưu chế độ thanh toán có thể đối chiếu khoản chung Sandbox của cùng phòng. Hợp đồng đã ghi rõ Live vẫn đối chiếu theo Live.
+
+Khi một Tenant kết thúc trước, khoản cọc chung được giữ cho hồ sơ bàn giao cuối của chu kỳ. Owner xác nhận người nhận đã được xác minh từ hồ sơ của Tenant bàn giao cuối. Nguồn tiền hoàn vẫn tham chiếu đúng khoản cọc gốc và quy trình đối soát, bằng chứng chuyển tiền vẫn được áp dụng.
+
+# Cập nhật danh sách và hồ sơ — 26/11/2026
+
+- `GET /api/v1/contracts` bổ sung query `kind` (Main/Renewal/Holding/Addendum); lọc sau quyền truy cập và trước count/pagination. `pageSize` vẫn theo API hiện có, Owner Web chọn 10; các client khác giữ mặc định 20.
+- Mỗi summary bổ sung `representativeName` từ hồ sơ đã xác nhận. Các occupant trong chi tiết cũng dùng đúng tên hồ sơ/hồ sơ rút gọn; không dùng tên phòng làm tên người.
+- `GET /contracts/preparation` trả label người ở từ hồ sơ xác nhận. Owner có số định danh đầy đủ trong picker theo yêu cầu; Staff chỉ thấy số đã che (4 số cuối), không nhận CCCD đầy đủ. Không thay quyền của `/residents` hoặc thêm ảnh CCCD.
+- DOCX renderer version 4 sửa căn chữ nội quy nhiều dòng và ghi rõ phí theo người tính theo sức chứa phòng. PDF đã đưa đi ký/đã ký tiếp tục dùng file snapshot bất biến.

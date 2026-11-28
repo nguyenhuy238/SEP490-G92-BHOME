@@ -5,7 +5,7 @@ import { formatMeterReading } from '../../../../packages/client-core/src/localiz
 import type { ConfirmedReading, MeterTask } from '../../../../packages/client-core/src/meter';
 import { Box, Heading, Pill, Row, ui } from '../components/WorkspaceKit';
 import { WorkspaceShell } from '../components/WorkspaceShell';
-import { meterRoundLabel } from '../features/workspace/roomMeterTasks';
+import { isOverduePeriodicMeterTask, meterRoundLabel } from '../features/workspace/roomMeterTasks';
 import { colors as c } from '../theme/theme';
 
 export function MeterRoomOverview({
@@ -28,9 +28,9 @@ export function MeterRoomOverview({
   const first = tasks[0];
   const required = tasks.filter((task) => task.status !== 3);
   const count = required.filter((task) => task.status === 2 && !!readings[task.id]).length;
+  const overdue = required.some(isOverduePeriodicMeterTask);
   return (
     <WorkspaceShell screen="meter-reading" onBack={onBack} contentRevision={loading ? 0 : 1}>
-      <Heading title="Ghi chỉ số điện nước" detail="Quản lý ghi chỉ số theo phòng" />
       {loading ? (
         <ActivityIndicator accessibilityLabel="Đang tải đồng hồ của phòng" />
       ) : error ? (
@@ -42,17 +42,15 @@ export function MeterRoomOverview({
         </Box>
       ) : first ? (
         <>
-          <Box style={{ padding: 14, gap: 8 }}>
+          <Box style={{ padding: 12, gap: 8 }}>
             <Row spread>
               <View style={{ flex: 1, minWidth: 0, gap: 2 }}>
                 <Heading title={`Phòng ${first.room}`} detail={meterRoundLabel(first)} />
-                <Text variant="labelMedium" style={{ color: c.primary }}>
-                  Cơ sở: {first.location}
-                </Text>
               </View>
               {!!required.length && count === required.length && (
                 <Pill tone="green">Phòng đã hoàn tất</Pill>
               )}
+              {overdue && <Pill tone="red">Phòng quá hạn</Pill>}
             </Row>
             {!!required.length && (
               <View style={{ gap: 6, paddingTop: 2 }}>
@@ -63,32 +61,24 @@ export function MeterRoomOverview({
                 </Row>
                 <ProgressBar
                   progress={count / required.length}
-                  color={count === required.length ? c.green : c.blue}
+                  color={count === required.length ? c.green : overdue ? c.red : c.blue}
                   style={{ height: 4, borderRadius: 4 }}
                 />
               </View>
             )}
           </Box>
-          {!!required.length && count === required.length && (
+          {first.purpose === 0 && !!required.length && count === required.length && (
             <Box style={{ padding: 14, gap: 6 }}>
               <Row spread>
                 <Text variant="titleSmall" style={{ color: c.primary, fontWeight: '700' }}>
-                  {first.purpose === 0
-                    ? first.contractId
-                      ? 'Đã lưu chỉ số khởi tạo hợp đồng'
-                      : 'Đã lưu chỉ số ban đầu'
-                    : 'Đã lưu chỉ số định kỳ'}
+                  {first.contractId ? 'Đã lưu chỉ số đầu kỳ hợp đồng' : 'Đã lưu chỉ số ban đầu'}
                 </Text>
-                <Pill tone="blue">
-                  {first.purpose === 0 ? 'Mốc khởi tạo' : 'Chờ tổng hợp hóa đơn'}
-                </Pill>
+                <Pill tone="blue">Chỉ số đầu kỳ</Pill>
               </Row>
               <Text variant="bodySmall" style={ui.muted}>
-                {first.purpose === 0
-                  ? first.contractId
-                    ? 'Chỉ số điện và nước đã được chụp, xác nhận riêng cho hợp đồng nhận phòng này. Mốc khởi tạo không tính lượng tiêu thụ từ người thuê trước.'
-                    : 'Chỉ số điện và nước đã được lưu làm mốc chỉ số ban đầu của phòng. Hệ thống không tính tiêu thụ định kỳ hay phát sinh hóa đơn cho lần ghi ban đầu.'
-                  : 'Chỉ số và mức tiêu thụ đã lưu vào hệ thống. Hóa đơn tạm tính và hóa đơn phát hành sẽ được tạo theo lịch chốt sổ của cơ sở.'}
+                {first.contractId
+                  ? 'Chỉ số điện và nước đã được chụp, xác nhận riêng cho hợp đồng nhận phòng này. Chỉ số đầu kỳ không tính lượng tiêu thụ của người thuê trước.'
+                  : 'Chỉ số điện và nước đã được lưu làm mốc chỉ số ban đầu của phòng. Hệ thống không tính tiêu thụ định kỳ hay phát sinh hóa đơn cho lần ghi ban đầu.'}
               </Text>
             </Box>
           )}
@@ -105,19 +95,45 @@ export function MeterRoomOverview({
                 const previous = saved?.previousValue ?? task.previousValue;
                 const isInitial = task.purpose === 0;
                 return (
-                  <Box key={task.id} style={{ padding: 14, gap: 10 }}>
+                  <Box key={task.id} style={{ padding: 12, gap: 8 }}>
                     <Row spread>
-                      <Row>
+                      <View
+                        style={{
+                          flexDirection: 'row',
+                          flex: 1,
+                          minWidth: 0,
+                          alignItems: 'center',
+                          gap: 8,
+                        }}
+                      >
                         <Icon source={icon} size={22} color={utility === 0 ? c.amber : c.blue} />
-                        <Text variant="titleMedium">{title}</Text>
-                      </Row>
-                      <Pill tone={done ? 'green' : task.status === 3 ? 'neutral' : 'amber'}>
-                        {done ? 'Đã ghi' : task.status === 3 ? 'Đã hủy' : 'Chưa ghi'}
+                        <View style={{ flex: 1, minWidth: 0, gap: 2 }}>
+                          <Text variant="titleMedium">{title}</Text>
+                          <Text variant="labelSmall" style={ui.muted}>
+                            {task.meterCode}
+                          </Text>
+                        </View>
+                      </View>
+                      <Pill
+                        tone={
+                          done
+                            ? 'green'
+                            : task.status === 3
+                              ? 'neutral'
+                              : isOverduePeriodicMeterTask(task)
+                                ? 'red'
+                                : 'amber'
+                        }
+                      >
+                        {done
+                          ? 'Đã ghi'
+                          : task.status === 3
+                            ? 'Đã hủy'
+                            : isOverduePeriodicMeterTask(task)
+                              ? 'Quá hạn'
+                              : 'Chưa ghi'}
                       </Pill>
                     </Row>
-                    <Text variant="labelSmall" style={ui.muted}>
-                      {task.meterCode}
-                    </Text>
                     <Text style={ui.muted}>
                       Chỉ số trước:{' '}
                       {previous === null ? 'Chưa có' : formatMeterReading(previous, unit)}
@@ -125,7 +141,7 @@ export function MeterRoomOverview({
                     {isInitial && (
                       <Text variant="bodySmall" style={ui.muted}>
                         {task.contractId
-                          ? 'Mốc khởi tạo của hợp đồng — không tính tiêu thụ từ người thuê trước'
+                          ? 'Chỉ số đầu kỳ hợp đồng — không tính tiêu thụ của người thuê trước'
                           : 'Mốc chỉ số ban đầu — không tính tiêu thụ kỳ'}
                       </Text>
                     )}

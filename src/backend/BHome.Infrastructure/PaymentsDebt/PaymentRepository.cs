@@ -6,6 +6,9 @@ using BHome.Infrastructure.IdentityAccess;
 using BHome.Infrastructure.Persistence;
 using BHome.Infrastructure.Persistence.Compact24;
 using BHome.Infrastructure.Billing;
+using BHome.Domain.IdentityAccess;
+using BHome.Domain.TenantContracts;
+using System.Text.Json;
 using Microsoft.EntityFrameworkCore;
 using Npgsql;
 
@@ -144,7 +147,95 @@ internal sealed partial class PaymentRepository(BHomePersistenceContext db) : IP
          r.Decision == "Allocated" && r.Reason == "verified_excess_payment_pending_review"), t);
     }
     public Task<PaymentCommand?> CommandAsync(Guid actor, Guid key, string operation, CancellationToken t) => db.Set<PaymentCommand>().AsNoTracking().SingleOrDefaultAsync(c => c.ActorId == actor && c.Key == key && c.Operation == operation, t);
-    public Task<ReceivingBankAccount?> ReceivingAccountAsync(Guid locationId, CancellationToken t) => db.Set<ReceivingBankAccount>().AsNoTracking().Where(a => a.LocationId == locationId).OrderByDescending(a => a.Version).FirstOrDefaultAsync(t);
+    public async Task<Guid?> ReceivingOwnerAsync(Guid locationId, CancellationToken t)
+    {
+        if (locationId == Guid.Empty || !await db.Locations.AnyAsync(l => l.Id == locationId, t)) return null;
+        // Every payable contract has an immutable Owner signer. A location shared
+        // by different owners is ambiguous: never choose one of their bank accounts.
+        var owners = await db.Set<Contract>().AsNoTracking().Where(c => c.Room.LocationId == locationId)
+            .Select(c => c.OwnerSignerId).Distinct().Take(2).ToArrayAsync(t);
+        if (owners.Length == 1) return owners[0];
+        if (owners.Length > 1 || db is not Compact24DbContext) return null;
+        // A brand-new location has no contracts. Only the single-Owner Compact24
+        // deployment may use its one known Owner. Multiple Owners fail closed.
+        var registered = await db.Users.AsNoTracking().Where(u => u.IsActive &&
+            EF.Property<string[]>(u, "roles").Contains(Roles.Owner))
+            .Select(u => u.Id).Take(2).ToArrayAsync(t);
+        return registered.Length == 1 ? registered[0] : null;
+    }
+    public async Task<string?> OwnerPaymentModeAsync(Guid ownerId, CancellationToken t)
+    {
+        if (db is not Compact24DbContext) return null;
+        return await db.Database.SqlQuery<string>($"""
+            SELECT business_profile->>'sepayPaymentMode' AS "Value" FROM users WHERE id={ownerId} AND 'Owner'=ANY(roles)
+            """).SingleOrDefaultAsync(t);
+    }
+    public async Task SetOwnerPaymentModeAsync(Guid ownerId, string mode, string? expectedMode, CancellationToken t)
+    {
+        if (mode is not ("Test" or "Live")) throw new PaymentException(400, "invalid_payment_mode");
+        var changed = await db.Database.ExecuteSqlInterpolatedAsync($"""
+            UPDATE users SET business_profile=jsonb_set(COALESCE(business_profile,jsonb_build_object()),
+                ARRAY['sepayPaymentMode'],to_jsonb(CAST({mode} AS text)),true)
+            WHERE id={ownerId} AND 'Owner'=ANY(roles) AND business_profile->>'sepayPaymentMode' IS NOT DISTINCT FROM {expectedMode}
+            """, t);
+        if (changed != 1) throw new PaymentException(409, "payment_mode_changed");
+    }
+    public async Task<ReceivingBankAccount?> OwnerReceivingAccountAsync(Guid ownerId, CancellationToken t) =>
+        await ReadOwnerAccount(ownerId, await OwnerPaymentModeAsync(ownerId, t), t);
+    public Task<ReceivingBankAccount?> OwnerReceivingAccountForModeAsync(Guid ownerId, string mode, CancellationToken t) => ReadOwnerAccount(ownerId, mode, t);
+    private async Task<ReceivingBankAccount?> ReadOwnerAccount(Guid ownerId, string? mode, CancellationToken t)
+    {
+        if (db is not Compact24DbContext || ownerId == Guid.Empty) return null;
+        var json = await db.Database.SqlQuery<string>($"""
+            SELECT COALESCE((SELECT a.value FROM jsonb_array_elements(COALESCE(u.business_profile->'receivingBankAccounts','[]'::jsonb))
+                WITH ORDINALITY a(value,pos) WHERE CAST({mode} AS text) IS NULL OR
+                COALESCE((a.value->>'isDevelopmentDemo')::bool,false)=({mode}='Test') ORDER BY a.pos DESC LIMIT 1),'null'::jsonb)::text AS "Value"
+            FROM users u WHERE id={ownerId} AND 'Owner'=ANY(roles)
+            """).SingleOrDefaultAsync(t);
+        if (json is null) return null;
+        var account = JsonSerializer.Deserialize<ReceivingBankAccount>(json, new JsonSerializerOptions(JsonSerializerDefaults.Web));
+        return account?.OwnerUserId == ownerId && account.LocationId == Guid.Empty ? account : null;
+    }
+    public async Task<ReceivingBankAccount?> ReceivingAccountForModeAsync(Guid locationId, string mode, CancellationToken t)
+    {
+        if (db is Compact24DbContext)
+        {
+            var owner = await ReceivingOwnerAsync(locationId, t);
+            if (owner is null) return null;
+            if (await OwnerReceivingAccountForModeAsync(owner.Value, mode, t) is { } shared) return shared;
+        }
+        return await db.Set<ReceivingBankAccount>().AsNoTracking().Where(a => a.LocationId == locationId && a.IsDevelopmentDemo == (mode == "Test"))
+            .OrderByDescending(a => a.Version).FirstOrDefaultAsync(t);
+    }
+    public async Task SaveOwnerReceivingAccountAsync(Guid ownerId, ReceivingBankAccount account, int expectedVersion, CancellationToken t)
+    {
+        if (db is not Compact24DbContext || account.OwnerUserId != ownerId || account.LocationId != Guid.Empty)
+            throw new PaymentException(503, "owner_receiving_account_unavailable");
+        var payload = JsonSerializer.Serialize(account, new JsonSerializerOptions(JsonSerializerDefaults.Web));
+        var changed = await db.Database.ExecuteSqlInterpolatedAsync($"""
+            UPDATE users SET business_profile=jsonb_set(
+                COALESCE(business_profile, jsonb_build_object()), ARRAY['receivingBankAccounts'],
+                COALESCE(business_profile->'receivingBankAccounts', '[]'::jsonb) ||
+                    jsonb_build_array(CAST({payload} AS jsonb)), true)
+            WHERE id={ownerId} AND 'Owner'=ANY(roles)
+              AND COALESCE((SELECT (a.value->>'version')::int FROM jsonb_array_elements(COALESCE(business_profile->'receivingBankAccounts','[]'::jsonb))
+                WITH ORDINALITY a(value,pos) WHERE COALESCE((a.value->>'isDevelopmentDemo')::bool,false)={account.IsDevelopmentDemo}
+                ORDER BY a.pos DESC LIMIT 1),0)={expectedVersion}
+            """, t);
+        if (changed != 1) throw new PaymentException(409, "receiving_account_version_changed");
+    }
+    public async Task<ReceivingBankAccount?> ReceivingAccountAsync(Guid locationId, CancellationToken t)
+    {
+        if (db is Compact24DbContext)
+        {
+            var owner = await ReceivingOwnerAsync(locationId, t);
+            if (owner is null) return null;
+            if (await OwnerReceivingAccountAsync(owner.Value, t) is { } shared) return shared;
+        }
+        var legacy = await db.Set<ReceivingBankAccount>().AsNoTracking()
+            .Where(a => a.LocationId == locationId).OrderByDescending(a => a.Version).FirstOrDefaultAsync(t);
+        return legacy;
+    }
     public Task<bool> ActiveLocationAsync(Guid locationId, CancellationToken t) => db.Locations.AnyAsync(l => l.Id == locationId && l.IsActive, t);
     public async Task<IReadOnlyList<PayerChoice>> PayersAsync(Guid invoiceId, CancellationToken t) => await db.Set<InvoiceRecipient>().AsNoTracking().Where(r => r.InvoiceId == invoiceId)
         .OrderBy(r => r.TenantUserId).Select(r => new PayerChoice(r.TenantUserId,
@@ -235,11 +326,20 @@ internal sealed partial class PaymentRepository(BHomePersistenceContext db) : IP
             g.Sum(i => Math.Max(0, i.Original + i.Adjustments - i.Paid)),
             g.Sum(i => i.DueDate < scope.Today ? Math.Max(0, i.Original + i.Adjustments - i.Paid) : 0m),
             g.Count(), g.Count(i => i.DueDate < scope.Today))).SingleOrDefaultAsync(t) ?? new(0m, 0m, 0, 0);
+    private sealed record DebtPaymentMode(Guid InvoiceId, string Mode);
     public async Task<PagedResult<DebtInvoiceView>> DebtAsync(PaymentScope scope, PaymentQuery query, CancellationToken t)
     {
         var filtered = FilteredDebt(scope, query);
         var count = await filtered.CountAsync(t);
         var rows = await filtered.OrderBy(i => i.DueDate).ThenBy(i => i.Id).Skip((query.Page - 1) * query.PageSize).Take(query.PageSize).ToArrayAsync(t);
+        var ids = rows.Select(i => i.Id.ToString()).ToArray();
+        var modes = db is not Compact24DbContext ? new Dictionary<Guid, string>() :
+            await db.Database.SqlQuery<DebtPaymentMode>($"""
+                SELECT (task_data->'state'->>'obligationId')::uuid AS "InvoiceId", min(task_data->'state'->>'mode') AS "Mode"
+                FROM operational_tasks WHERE task_data->>'recordType' IN ('PaymentCodeV1','PaymentObligationV1') AND task_data->'state'->>'kind'='Invoice'
+                  AND task_data->'state'->>'obligationId'=ANY({ids})
+                GROUP BY task_data->'state'->>'obligationId' HAVING count(DISTINCT task_data->'state'->>'mode')=1
+                """).ToDictionaryAsync(i => i.InvoiceId, i => i.Mode, t);
         var entitled = scope.Staff && scope.Tenant && !scope.Owner
             ? await db.Set<InvoiceRecipient>().Where(r => rows.Select(i => i.Id).Contains(r.InvoiceId) && r.TenantUserId == scope.ActorId).Select(r => r.InvoiceId).ToArrayAsync(t)
             : [];
@@ -250,7 +350,8 @@ internal sealed partial class PaymentRepository(BHomePersistenceContext db) : IP
             return new DebtInvoiceView(i.Id, i.LocationId, i.RoomId, i.LocationName, i.RoomNumber, i.BillingPeriod, i.DueDate,
                 limited ? null : v.EffectivePayableAmount, limited ? null : v.AllocatedPayments, v.OutstandingAmount,
                 v.OutstandingAmount <= 0 ? "Paid" : "Unpaid", PaymentRules.OverdueDays(i.DueDate, scope.Today, v.OutstandingAmount),
-                limited ? null : v.OriginalIssuedAmount, limited ? null : v.ApprovedAdjustmentTotal, limited ? null : v.PotentialExcessAmount);
+                limited ? null : v.OriginalIssuedAmount, limited ? null : v.ApprovedAdjustmentTotal, limited ? null : v.PotentialExcessAmount,
+                modes.GetValueOrDefault(i.Id));
         }).ToArray();
         return new(items, query.Page, query.PageSize, count);
     }

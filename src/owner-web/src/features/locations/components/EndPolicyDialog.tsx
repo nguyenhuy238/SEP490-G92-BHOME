@@ -1,3 +1,4 @@
+import { TextField, ValidatedForm } from '../../../components/common/ValidatedForm';
 import { useRef, useState } from 'react';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import {
@@ -8,7 +9,6 @@ import {
   DialogContent,
   DialogTitle,
   Stack,
-  TextField,
 } from '@mui/material';
 import { invoiceError, type Policy } from '../../../../../../packages/client-core/src/invoices';
 import { useInvoiceApi } from '../../invoices/useInvoiceApi';
@@ -33,7 +33,7 @@ export function EndPolicyDialog({ policy, close }: { policy: Policy; close: () =
   });
   return (
     <Dialog open fullWidth maxWidth="sm" onClose={() => !action.isPending && close()}>
-      <form
+      <ValidatedForm
         onSubmit={(e) => {
           e.preventDefault();
           if (lock.current) return;
@@ -78,7 +78,7 @@ export function EndPolicyDialog({ policy, close }: { policy: Policy; close: () =
             Xác nhận kết thúc áp dụng
           </Button>
         </DialogActions>
-      </form>
+      </ValidatedForm>
     </Dialog>
   );
 }

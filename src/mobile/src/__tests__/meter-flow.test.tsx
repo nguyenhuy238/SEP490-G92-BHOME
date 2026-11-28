@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 import React, { useEffect, useState } from 'react';
-import { act, cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { act, cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import { afterEach, beforeEach, expect, it, vi } from 'vitest';
 const state = vi.hoisted(() => ({
   role: 'Staff',
@@ -11,10 +11,11 @@ const state = vi.hoisted(() => ({
   replace: vi.fn(),
   back: vi.fn(),
   hardwareBack: null as (() => boolean) | null,
+  platform: 'android' as 'android' | 'web',
 }));
 const api = { request: state.request, image: state.image, json: state.json };
 vi.mock('../lib/SessionProvider', () => ({
-  useSession: () => ({ api, session: { roles: [state.role] } }),
+  useSession: () => ({ api, session: { userId: 'staff-1', roles: [state.role] } }),
 }));
 vi.mock('../features/workspace/WorkspaceProvider', () => ({
   useWorkspace: () => ({ staffLocationId: 'location-a' }),
@@ -26,10 +27,53 @@ vi.mock('expo-router', () => ({
   router: { replace: state.replace, back: state.back, canGoBack: () => true },
 }));
 vi.mock('react-native', () => ({
-  View: ({ children, style }: { children?: React.ReactNode; style?: React.CSSProperties }) => (
-    <div style={style}>{children}</div>
+  Platform: {
+    get OS() {
+      return state.platform;
+    },
+  },
+  View: ({
+    children,
+    style,
+    testID,
+  }: {
+    children?: React.ReactNode;
+    style?: React.CSSProperties;
+    testID?: string;
+  }) => (
+    <div style={style} data-testid={testID}>
+      {children}
+    </div>
   ),
+  Image: ({
+    source,
+    accessibilityLabel,
+  }: {
+    source: { uri: string };
+    accessibilityLabel: string;
+  }) => <img src={source.uri} alt={accessibilityLabel} />,
   StyleSheet: { create: (s: unknown) => s },
+  Modal: ({
+    children,
+    visible,
+    onRequestClose,
+  }: {
+    children: React.ReactNode;
+    visible: boolean;
+    onRequestClose: () => void;
+  }) =>
+    visible ? (
+      <div
+        role="dialog"
+        onKeyDown={(event) => {
+          if (event.key === 'Escape') onRequestClose();
+        }}
+      >
+        {children}
+      </div>
+    ) : null,
+  KeyboardAvoidingView: ({ children }: { children: React.ReactNode }) => <div>{children}</div>,
+  ScrollView: ({ children }: { children: React.ReactNode }) => <div>{children}</div>,
   AppState: { addEventListener: () => ({ remove: vi.fn() }) },
   BackHandler: {
     addEventListener: (_: string, callback: () => boolean) => {
@@ -142,6 +186,7 @@ vi.mock('../components/CameraCapture', () => ({
     retainPreview,
     label,
     meterStep,
+    meterRetryResets,
   }: {
     onCapture: (b: Uint8Array<ArrayBuffer>) => Promise<void>;
     onPhotoCleared: () => void;
@@ -150,6 +195,7 @@ vi.mock('../components/CameraCapture', () => ({
     retainPreview: boolean;
     label: string;
     meterStep: number;
+    meterRetryResets?: boolean;
   }) => {
     const [photo, setPhoto] = useState(false);
     return (
@@ -171,6 +217,11 @@ vi.mock('../components/CameraCapture', () => ({
               <button
                 disabled={disabled}
                 onClick={() => {
+                  if (meterStep === 2 && meterRetryResets) {
+                    setPhoto(false);
+                    onPhotoCleared();
+                    return;
+                  }
                   void onCapture(new Uint8Array([1]));
                   if (!retainPreview) setPhoto(false);
                 }}
@@ -193,7 +244,7 @@ vi.mock('../components/CameraCapture', () => ({
     );
   },
 }));
-import MeterScreen from '../app/meter';
+import MeterScreen, { MeterTaskScreen } from '../app/meter';
 import type { MeterTask } from '../lib/api';
 import type { ConfirmedReading } from '../../../../packages/client-core/src/meter';
 const electric: MeterTask = {
@@ -233,6 +284,8 @@ beforeEach(() => {
   vi.clearAllMocks();
   state.role = 'Staff';
   state.taskId = 'task-a';
+  state.platform = 'android';
+  state.hardwareBack = null;
   serverTasks = [{ ...electric }, { ...water }];
   serverReadings = {};
   state.request.mockImplementation(async (path: string) => {
@@ -369,7 +422,27 @@ it('allows manual correction after OCR failure when evidence was uploaded', asyn
   await save();
   expect(screen.getByText('121 kWh')).toBeTruthy();
 });
-it.each(['', '-2', 'abc', '120.123', '99'])(
+it('shows only the concise OCR failure notice for a fallback proposal', async () => {
+  state.image.mockImplementation(async (path: string) =>
+    path.includes('/ocr/')
+      ? {
+          ...proposal,
+          isFallback: true,
+          proposedFields: { reading: '' },
+          warnings: ['ocr_unavailable'],
+        }
+      : { id: 'evidence-electric' },
+  );
+  await overview();
+  await capture();
+  expect(screen.getByText(/Không nhận diện được chỉ số/)).toBeTruthy();
+  expect(screen.queryByText(/OCR chưa đọc được/)).toBeNull();
+  expect(screen.queryByText(/Hãy kiểm tra đúng phòng, mã đồng hồ/)).toBeNull();
+  fireEvent.change(screen.getByLabelText('Chỉ số xác nhận (kWh)'), { target: { value: '121' } });
+  await save();
+  expect(screen.getByText('121 kWh')).toBeTruthy();
+});
+it.each(['', '-2', 'abc', '120.123', '120.5', '120,5', '120 5', '99'])(
   'blocks invalid or decreased reading %s',
   async (value) => {
     await overview();
@@ -396,6 +469,23 @@ it('does not allow confirmation when evidence upload fails', async () => {
   ).toBe(true);
   expect(state.json).not.toHaveBeenCalled();
 });
+it('shows recognition progress until the meter OCR response arrives', async () => {
+  let release!: () => void;
+  const recognize = state.image.getMockImplementation()!;
+  state.image.mockImplementationOnce(async (...args: unknown[]) => {
+    await new Promise<void>((resolve) => {
+      release = resolve;
+    });
+    return recognize(...args);
+  });
+  await overview();
+  const capturing = capture();
+  expect(await screen.findByTestId('periodic-meter-processing-overlay')).toBeTruthy();
+  await act(async () => release());
+  await capturing;
+  expect(screen.queryByTestId('periodic-meter-processing-overlay')).toBeNull();
+});
+
 it('keeps correction and photo on save failure, locks double taps, and retries the same payload', async () => {
   let reject!: (error: Error) => void;
   state.json.mockImplementationOnce(
@@ -412,6 +502,8 @@ it('keeps correction and photo on save failure, locks double taps, and retries t
   fireEvent.click(confirm);
   fireEvent.click(confirm);
   await waitFor(() => expect(state.json).toHaveBeenCalledTimes(1));
+  expect(screen.getByRole('button', { name: 'Đang lưu chỉ số…' })).toHaveProperty('disabled', true);
+  expect(screen.queryByText('Đang nhận dạng chỉ số…')).toBeNull();
   await act(async () => reject(Error('offline')));
   expect((screen.getByLabelText('Chỉ số xác nhận (kWh)') as HTMLInputElement).value).toBe('122');
   expect(screen.getByAltText('Ảnh công tơ')).toBeTruthy();
@@ -444,17 +536,171 @@ it('returns to overview on Android back without capturing or confirming the othe
   await screen.findByText('0/2 đồng hồ đã ghi');
   expect(state.json).not.toHaveBeenCalled();
 });
+it('does not register an unsupported hardware BackHandler on Web', async () => {
+  state.platform = 'web';
+  await overview();
+  await capture();
+  expect(state.hardwareBack).toBeNull();
+  expect(state.json).not.toHaveBeenCalled();
+});
 it('shows persisted completed details as read-only and returns to the same overview', async () => {
+  const original = state.request.getMockImplementation()!;
+  state.request.mockImplementation(async (...args: unknown[]) =>
+    String(args[0]).endsWith('/evidence')
+      ? new Uint8Array([137, 80, 78, 71, 13, 10, 26, 10])
+      : original(...args),
+  );
   await overview();
   await capture();
   await save();
   fireEvent.click(screen.getByRole('button', { name: 'Xem chi tiết đồng hồ điện' }));
-  await screen.findByText('Đã lưu chỉ số');
-  expect(screen.queryByRole('button', { name: 'Xác nhận chỉ số' })).toBeNull();
-  expect(screen.queryByRole('button', { name: 'Chụp công tơ điện' })).toBeNull();
-  fireEvent.click(screen.getByRole('button', { name: 'Về tổng quan phòng' }));
+  const dialog = await screen.findByRole('dialog');
+  expect(await within(dialog).findByText('Chỉ số đã xác nhận')).toBeTruthy();
+  expect(within(dialog).getByText('120 kWh')).toBeTruthy();
+  expect(await within(dialog).findByRole('img', { name: 'Ảnh minh chứng điện' })).toBeTruthy();
+  expect(within(dialog).queryByText(/Chỉ số trước:/)).toBeNull();
+  expect(within(dialog).queryByRole('button', { name: 'Xác nhận chỉ số' })).toBeNull();
+  expect(within(dialog).queryByRole('button', { name: 'Chụp công tơ điện' })).toBeNull();
+  expect(within(dialog).queryByRole('button', { name: 'Sửa chỉ số' })).toBeNull();
+  fireEvent.click(within(dialog).getByRole('button', { name: 'Đóng' }));
   await screen.findByText('1/2 đồng hồ đã ghi');
   expect(state.json).toHaveBeenCalledTimes(1);
+});
+it.each([electric, water])(
+  'allows correcting a confirmed $meterCode in the periodic detail modal using fresh task permissions',
+  async (meter) => {
+    const readingId = meter.id + '-reading';
+    serverTasks = [electric, water].map((task) =>
+      task.id === meter.id
+        ? { ...task, status: 2, confirmedReadingId: readingId, canCorrect: false, version: 3 }
+        : { ...task },
+    );
+    serverReadings[readingId] = {
+      id: readingId,
+      taskId: meter.id,
+      confirmedValue: '125',
+      previousValue: meter.previousValue,
+      consumption: '25',
+      status: 1,
+      confirmedAt: '2026-11-04T01:00:00Z',
+    };
+    const original = state.request.getMockImplementation()!;
+    state.request.mockImplementation(async (...args: unknown[]) => {
+      const path = String(args[0]);
+      if (path.endsWith('/evidence')) return new Uint8Array([137, 80, 78, 71, 13, 10, 26, 10]);
+      if (path.endsWith('/meter-tasks/' + meter.id))
+        return {
+          ...serverTasks.find((task) => task.id === meter.id),
+          canCorrect: true,
+          version: 4,
+        };
+      return original(...args);
+    });
+    render(<MeterScreen />);
+    const name = meter.utilityType === 0 ? 'điện' : 'nước';
+    fireEvent.click(await screen.findByRole('button', { name: 'Xem chi tiết đồng hồ ' + name }));
+    const dialog = await screen.findByRole('dialog');
+    fireEvent.click(await within(dialog).findByRole('button', { name: 'Sửa chỉ số' }));
+    const cameraLabel = meter.utilityType === 0 ? 'Chụp công tơ điện' : 'Chụp đồng hồ nước';
+    expect(await within(dialog).findByRole('button', { name: cameraLabel })).toBeTruthy();
+    fireEvent.click(within(dialog).getByRole('button', { name: 'Hủy sửa' }));
+    expect(
+      await within(dialog).findByText(meter.utilityType === 0 ? '125 kWh' : '125 m³'),
+    ).toBeTruthy();
+    expect(state.json).not.toHaveBeenCalled();
+    fireEvent.click(within(dialog).getByRole('button', { name: 'Sửa chỉ số' }));
+    fireEvent.click(await within(dialog).findByRole('button', { name: cameraLabel }));
+    fireEvent.click(within(dialog).getByRole('button', { name: 'Dùng ảnh này' }));
+    fireEvent.change(
+      await within(dialog).findByLabelText(
+        `Chỉ số xác nhận (${meter.utilityType === 0 ? 'kWh' : 'm³'})`,
+      ),
+      { target: { value: '130' } },
+    );
+    fireEvent.click(within(dialog).getByRole('checkbox'));
+    fireEvent.click(within(dialog).getByRole('button', { name: 'Lưu chỉ số đã sửa' }));
+    await waitFor(() =>
+      expect(state.json).toHaveBeenCalledWith(
+        '/api/v1/capture/meter-tasks/' + meter.id + '/confirm',
+        {
+          humanConfirmed: true,
+          confirmedValue: '130',
+          evidenceId: meter.utilityType === 0 ? 'evidence-electric' : 'evidence-water',
+          expectedVersion: 4,
+        },
+        expect.any(AbortSignal),
+      ),
+    );
+    await waitFor(() => expect(screen.queryByRole('dialog')).toBeNull());
+    expect(await screen.findByText(meter.utilityType === 0 ? '130 kWh' : '130 m³')).toBeTruthy();
+    expect(state.image).toHaveBeenCalledTimes(2);
+  },
+);
+it.each([
+  [electric, '22.0000', '22 kWh', 'Ảnh minh chứng điện'],
+  [water, '15.2500', '15,25 m³', 'Ảnh minh chứng nước'],
+] as const)(
+  'shows the captured evidence for a confirmed embedded utility',
+  async (meter, value, display, label) => {
+    const readingId = 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa';
+    serverTasks = [{ ...meter, status: 2, confirmedReadingId: readingId }];
+    serverReadings[readingId] = {
+      id: readingId,
+      taskId: meter.id,
+      confirmedValue: value,
+      previousValue: meter.previousValue,
+      consumption: null,
+      status: 1,
+      confirmedAt: '2026-11-04T01:00:00Z',
+    };
+    const original = state.request.getMockImplementation()!;
+    state.request.mockImplementation(async (...args: unknown[]) => {
+      if (String(args[0]).endsWith('/evidence'))
+        return new Uint8Array([137, 80, 78, 71, 13, 10, 26, 10]);
+      return original(...args);
+    });
+    render(<MeterTaskScreen embedded taskId={meter.id} onReturn={vi.fn()} />);
+    await screen.findByText(`Đã chốt: ${display}`);
+    const photo = await screen.findByRole('img', { name: label });
+    expect(photo.getAttribute('src')).toBe('data:image/png;base64,iVBORw0KGgo=');
+    expect(state.request).toHaveBeenCalledWith(
+      `/api/v1/capture/readings/${readingId}/evidence`,
+      expect.objectContaining({ signal: expect.any(AbortSignal) }),
+      'bytes',
+    );
+    expect(state.image).not.toHaveBeenCalled();
+    expect(state.json).not.toHaveBeenCalled();
+  },
+);
+it('preserves the confirmed reading on evidence access failure and retries only the photo', async () => {
+  const readingId = 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa';
+  serverTasks = [{ ...electric, status: 2, confirmedReadingId: readingId }];
+  serverReadings[readingId] = {
+    id: readingId,
+    taskId: electric.id,
+    confirmedValue: '22.0000',
+    previousValue: null,
+    consumption: null,
+    status: 1,
+    confirmedAt: '2026-11-04T01:00:00Z',
+  };
+  const original = state.request.getMockImplementation()!;
+  const photoRequest = vi
+    .fn()
+    .mockRejectedValueOnce(Object.assign(Error('forbidden'), { status: 403 }))
+    .mockResolvedValueOnce(new Uint8Array([255, 216, 255]));
+  state.request.mockImplementation(async (...args: unknown[]) =>
+    String(args[0]).endsWith('/evidence') ? photoRequest() : original(...args),
+  );
+  render(<MeterTaskScreen embedded taskId={electric.id} onReturn={vi.fn()} />);
+  await screen.findByText('Đã chốt: 22 kWh');
+  const retry = await screen.findByRole('button', { name: 'Thử tải lại ảnh' });
+  expect(screen.queryByRole('img', { name: 'Ảnh minh chứng điện' })).toBeNull();
+  fireEvent.click(retry);
+  const photo = await screen.findByRole('img', { name: 'Ảnh minh chứng điện' });
+  expect(photo.getAttribute('src')).toBe('data:image/jpeg;base64,/9j/');
+  expect(photoRequest).toHaveBeenCalledTimes(2);
+  expect(state.json).not.toHaveBeenCalled();
 });
 it('does not show a completed room or enable capture when a persisted reading cannot be loaded', async () => {
   const task = serverTasks[0]!;
@@ -518,6 +764,47 @@ it('shows initial baseline reading without calculating monthly consumption', asy
 it('does not fetch Staff meter data for a Tenant', async () => {
   state.role = 'Tenant';
   render(<MeterScreen />);
-  await screen.findByText(/Chỉ Staff/);
+  await screen.findByText(/Chỉ nhân viên được phân công/);
   expect(state.request).not.toHaveBeenCalled();
+});
+
+it('shows only loading above the periodic meter modal until OCR finishes', async () => {
+  let finishOcr!: (value: typeof proposal) => void;
+  state.image.mockImplementationOnce(
+    () =>
+      new Promise<typeof proposal>((resolve) => {
+        finishOcr = resolve;
+      }),
+  );
+  await overview();
+  fireEvent.click(screen.getByRole('button', { name: 'Chụp ảnh đồng hồ điện' }));
+  fireEvent.click(await screen.findByRole('button', { name: 'Chụp công tơ điện' }));
+  fireEvent.click(screen.getByRole('button', { name: 'Dùng ảnh này' }));
+  const overlay = await screen.findByTestId('periodic-meter-processing-overlay');
+  const card = screen.getByTestId('periodic-meter-modal-card');
+  expect(card.contains(overlay)).toBe(false);
+  expect(within(card).queryByText('Đang xử lý…')).toBeNull();
+  expect(within(overlay).getByText('Đang xử lý…')).toBeTruthy();
+  expect(within(overlay).queryByRole('button')).toBeNull();
+  expect(screen.queryByRole('button', { name: 'Hủy yêu cầu' })).toBeNull();
+  await act(async () => finishOcr(proposal));
+  await waitFor(() => expect(screen.queryByTestId('periodic-meter-processing-overlay')).toBeNull());
+  expect(screen.getByTestId('periodic-meter-modal-card')).toBeTruthy();
+});
+
+it('returns to the capture choice when retrying periodic OCR, clearing the old photo and confirmation', async () => {
+  await overview();
+  await capture();
+  fireEvent.change(screen.getByLabelText('Chỉ số xác nhận (kWh)'), { target: { value: '125' } });
+  consent();
+  const previousCalls = state.image.mock.calls.length;
+  fireEvent.click(screen.getByRole('button', { name: 'Thử lại OCR' }));
+  expect(screen.getByRole('button', { name: 'Chụp công tơ điện' })).toBeTruthy();
+  expect(screen.queryByAltText('Ảnh công tơ')).toBeNull();
+  expect(screen.queryByLabelText('Chỉ số xác nhận (kWh)')).toBeNull();
+  expect(screen.queryByRole('checkbox')).toBeNull();
+  expect(screen.queryByTestId('periodic-meter-processing-overlay')).toBeNull();
+  expect(state.image).toHaveBeenCalledTimes(previousCalls);
+  expect(state.json).not.toHaveBeenCalled();
+  expect(screen.getByTestId('periodic-meter-modal-card')).toBeTruthy();
 });

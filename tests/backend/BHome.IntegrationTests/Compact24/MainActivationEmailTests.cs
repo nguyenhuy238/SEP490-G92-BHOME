@@ -76,8 +76,11 @@ public sealed partial class Compact24NotificationMvpTests
         var w = await Seed(); var probe = new SmtpProbe(); using var host = EmailHost(probe);
         await using var scope = host.Services.CreateAsyncScope();
         var content = scope.ServiceProvider.GetRequiredService<NotificationEmailContent>();
-        var error = await Assert.ThrowsAsync<ChannelDeliveryException>(() => content.MainAttachmentsAsync(w.Contracts[0], w.Tenants[1].Id, default));
+        var error = await Assert.ThrowsAsync<ChannelDeliveryException>(() => content.MainAttachmentsAsync(w.Contracts[0], w.Tenants[1].Id, w.Tenants[1].Email!, default));
         Assert.Equal("main_confirmation_document_invalid", error.Code);
+        var wrongAddress = await Assert.ThrowsAsync<ChannelDeliveryException>(() =>
+            content.MainAttachmentsAsync(w.Contracts[0], w.Tenants[0].Id, "other@example.invalid", default));
+        Assert.Equal("main_confirmation_recipient_mismatch", wrongAddress.Code);
         Assert.Empty(probe.Messages);
     }
 }

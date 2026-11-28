@@ -31,7 +31,12 @@ internal sealed partial class RefundRepository
         }
         else if (summary.Receivables is { Count: > 0 })
         {
-            if (summary.ChargeReview is null || summary.Receivables.Any(r => r.Outstanding > 0)) blockers.Add("settlement_charge_sources_incomplete");
+            // Unpaid receivables already produce the separate
+            // settlement_receivable_outstanding blocker in SummaryAsync.
+            // Duplicating that as a missing source review would incorrectly
+            // reject an Owner final-close that leaves TenantDamage overage on
+            // the SAME receivable after exhausting the verified deposit.
+            if (summary.ChargeReview is null) blockers.Add("settlement_charge_sources_incomplete");
             if (chargeEvidence is null) throw new FinanceException(503, "settlement_evidence_unavailable");
             foreach (var charge in summary.Receivables) await chargeEvidence.VerifyAsync(charge.Charge, t);
         }
@@ -50,7 +55,7 @@ internal sealed partial class RefundRepository
             .OrderBy(r => r.Id).Select(r => new RefundPerson(r.Id, r.DisplayLabel)).ToArrayAsync(t);
         // BR-30: the Owner confirms the recipient under the Contract agreement. These choices
         // are eligible Residents, not an inference about who originally paid the deposit.
-        return new(summary.VerifiedSecurityDeposit - (summary.DepositDeductions?.Total ?? 0) - summary.MaintenanceDeductions - summary.ApprovedDepositOffsets, contract.IsDevelopmentDemo, people, requests,
+        return new(summary.VerifiedSecurityDeposit - (summary.DepositDeductions?.Total ?? 0) - summary.MaintenanceDeductions - summary.ApprovedDepositOffsets, BHome.Application.Contracts.ContractPaymentModes.IsTest(contract), people, requests,
             summary.DepositContractId, summary.FinancialReference, blockers.Distinct().Order().ToArray(), summary.Calculation?.AvailableSecurityDeposit,
             summary.VerifiedSecurityDeposit, summary.DepositDeductions, summary.ApprovedDepositOffsets, MaintenanceDeductions: summary.MaintenanceDeductions);
     }

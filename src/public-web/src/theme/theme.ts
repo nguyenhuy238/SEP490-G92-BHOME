@@ -20,4 +20,13 @@ export const theme = createTheme({
   shape: {
     borderRadius: 10,
   },
+  components: {
+    MuiCssBaseline: {
+      styleOverrides: {
+        a: { color: '#1565c0', textUnderlineOffset: '0.2em' },
+        ':focus-visible': { outline: '3px solid #1565c0', outlineOffset: '3px' },
+        '::selection': { backgroundColor: '#bbdefb', color: '#102a43' },
+      },
+    },
+  },
 });

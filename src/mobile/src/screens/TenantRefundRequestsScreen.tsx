@@ -1,7 +1,7 @@
 import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { Image, View } from 'react-native';
-import { useFocusEffect } from 'expo-router';
-import { Button, Checkbox, Text, TextInput } from 'react-native-paper';
+import { router, useFocusEffect, useLocalSearchParams } from 'expo-router';
+import { Button, Checkbox, IconButton, Text, TextInput } from 'react-native-paper';
 import { formatContractMoney } from '../../../../packages/client-core/src/contracts';
 import { formatInstant } from '../../../../packages/client-core/src/localization';
 import { MoneyTextInput } from '../components/MoneyTextInput';
@@ -9,6 +9,8 @@ import { ChoiceField } from '../components/WorkflowControls';
 import { Action, Box, Heading, Pill, Row, ui } from '../components/WorkspaceKit';
 import { Pagination, QueryState } from '../components/WorkspaceQueryState';
 import { useWorkspaceHeaderRefresh } from '../components/WorkspaceHeaderContext';
+import { useWorkspace } from '../features/workspace/WorkspaceProvider';
+import { reportUi } from '../features/incidents/TenantIncidentStyle';
 import { useWorkspaceQuery } from '../features/workspace/useWorkspaceQuery';
 import { useSession } from '../lib/SessionProvider';
 import { errorMessage } from '../lib/api';
@@ -42,10 +44,16 @@ export function TenantRefundRequestsScreen() {
 
 function TenantRefundRequests() {
   const { api } = useSession();
-  const [page, setPage] = useState(1);
-  const [formOpen, setFormOpen] = useState(false);
+  const { go, requestNavigation } = useWorkspace();
+  const route = useLocalSearchParams<{
+    sourceContractId?: string;
+    amount?: string;
+    reason?: string;
+    moveOutProposalId?: string;
+  }>();
   const [paymentId, setPaymentId] = useState('');
   const [contractId, setContractId] = useState('');
+  const [moveOutProposalId, setMoveOutProposalId] = useState('');
   const [amount, setAmount] = useState('');
   const [reason, setReason] = useState('');
   const [confirmed, setConfirmed] = useState(false);
@@ -54,26 +62,49 @@ function TenantRefundRequests() {
   const [success, setSuccess] = useState('');
   const inFlight = useRef(false);
   const key = useRef(randomUUID());
-  const requests = useWorkspaceQuery<Page<TenantRefundRequest>>(tenantRefundRequestPath(page), {
-    load: loadTenantRefundRequests,
-    notifyError: false,
-  });
-  const sources = useWorkspaceQuery(formOpen ? `${tenantRefundRequestRoot}/sources` : null, {
+  const loadedPrefill = useRef('');
+  useEffect(() => {
+    const marker = route.moveOutProposalId;
+    const nextContractId = route.sourceContractId;
+    const nextAmount = route.amount;
+    if (
+      !marker ||
+      !nextContractId ||
+      !nextAmount ||
+      !/^[a-f0-9]{8}-(?:[a-f0-9]{4}-){3}[a-f0-9]{12}$/i.test(marker) ||
+      !/^[a-f0-9]{8}-(?:[a-f0-9]{4}-){3}[a-f0-9]{12}$/i.test(nextContractId) ||
+      !/^[1-9]\d*$/.test(nextAmount) ||
+      loadedPrefill.current === marker
+    )
+      return;
+    loadedPrefill.current = marker;
+    setContractId(nextContractId);
+    setMoveOutProposalId(marker);
+    setAmount(nextAmount);
+    setPaymentId('');
+    setReason(
+      route.reason?.trim().slice(0, 2000) ||
+        'Đề nghị hoàn cọc sau khi xác nhận quyết toán trả phòng.',
+    );
+    setConfirmed(false);
+    setError('');
+    setSuccess('');
+    key.current = randomUUID();
+  }, [route.amount, route.moveOutProposalId, route.reason, route.sourceContractId]);
+  const sources = useWorkspaceQuery(`${tenantRefundRequestRoot}/sources`, {
     load: loadTenantRefundRequestSources,
     notifyError: false,
   });
-  const reloadRequests = requests.reload;
   const reloadSources = sources.reload;
   const refresh = useCallback(() => {
-    reloadRequests();
     reloadSources();
-  }, [reloadRequests, reloadSources]);
+  }, [reloadSources]);
   useFocusEffect(
     useCallback(() => {
       refresh();
     }, [refresh]),
   );
-  useWorkspaceHeaderRefresh(refresh, requests.loading || sources.loading, {
+  useWorkspaceHeaderRefresh(refresh, sources.loading, {
     title: 'Yêu cầu hoàn tiền',
   });
 
@@ -100,6 +131,7 @@ function TenantRefundRequests() {
       reason,
       sourcePaymentId: paymentId || null,
       sourceContractId: contractId || null,
+      ...(moveOutProposalId ? { moveOutProposalId } : {}),
     };
     const validation = refundRequestFormError(input);
     if (validation) {
@@ -114,14 +146,13 @@ function TenantRefundRequests() {
       setSuccess(
         `Đã gửi yêu cầu ${created.id.slice(0, 8).toUpperCase()}. Owner sẽ xem xét và phản hồi.`,
       );
-      setFormOpen(false);
       setAmount('');
       setReason('');
       setPaymentId('');
       setContractId('');
+      setMoveOutProposalId('');
       setConfirmed(false);
       key.current = randomUUID();
-      setPage(1);
       refresh();
     } catch (cause) {
       setError(
@@ -135,143 +166,174 @@ function TenantRefundRequests() {
 
   return (
     <View style={{ gap: 14 }}>
-      <Box>
-        <Heading
-          title="Yêu cầu hoàn tiền"
-          detail="Gửi trực tiếp tới Owner và theo dõi quyết định"
+      <View style={reportUi.header}>
+        <IconButton
+          icon="arrow-left"
+          accessibilityLabel="Quay lại"
+          disabled={busy}
+          onPress={() => {
+            const leave = () => (router.canGoBack() ? router.back() : go('tenant-home'));
+            if (requestNavigation) requestNavigation(leave);
+            else leave();
+          }}
         />
-        <Text style={ui.muted}>
-          Có thể đề nghị hoàn tiền độc lập, hoặc liên kết một giao dịch hay hợp đồng của bạn để
-          Owner dễ kiểm tra. Yêu cầu chỉ được ghi nhận sau khi máy chủ xác nhận.
+        <Text accessibilityRole="header" style={[reportUi.pageTitle, reportUi.grow]}>
+          Yêu cầu hoàn tiền
         </Text>
-        <Action
-          icon={formOpen ? 'chevron-up' : 'cash-refund'}
-          onPress={() => setFormOpen(!formOpen)}
-        >
-          {formOpen ? 'Đóng biểu mẫu' : 'Tạo yêu cầu hoàn tiền'}
-        </Action>
-      </Box>
+        <Button compact icon="history" disabled={busy} onPress={() => go('refund-history')}>
+          Đã gửi
+        </Button>
+      </View>
       {!!success && (
         <Box>
           <Pill tone="green">Đã gửi thành công</Pill>
           <Text accessibilityRole="alert">{success}</Text>
         </Box>
       )}
-      {formOpen && (
-        <Box>
-          <Heading
-            title="Thông tin yêu cầu"
-            detail="Số tiền tính bằng VND, không nhập số thập phân"
-          />
-          <MoneyTextInput
-            mode="outlined"
-            label="Số tiền yêu cầu hoàn (VND) *"
-            accessibilityLabel="Số tiền yêu cầu hoàn (VND)"
-            value={amount}
-            disabled={busy}
-            onChangeText={(value) => {
-              setAmount(value);
-              update();
-            }}
-          />
-          <TextInput
-            mode="outlined"
-            label="Lý do yêu cầu *"
-            accessibilityLabel="Lý do yêu cầu"
-            value={reason}
-            onChangeText={(value) => {
-              setReason(value);
-              update();
-            }}
-            maxLength={2000}
-            multiline
-            disabled={busy}
-            style={ui.input}
-          />
-          <Text style={ui.muted}>
-            Hai liên kết dưới đây đều không bắt buộc. Bạn có thể chọn cả hai hoặc để trống.
-          </Text>
-          <QueryState {...sources} />
-          <ChoiceField
-            label="Giao dịch liên quan (tùy chọn)"
-            value={paymentId}
-            options={[
-              { id: '', label: 'Không liên kết giao dịch' },
-              ...(sources.data?.payments ?? []),
-            ]}
-            searchable
-            disabled={busy || sources.loading}
-            onChange={(value) => {
-              setPaymentId(value);
-              update();
-            }}
-          />
-          <ChoiceField
-            label="Hợp đồng liên quan (tùy chọn)"
-            value={contractId}
-            options={[
-              { id: '', label: 'Không liên kết hợp đồng' },
-              ...(sources.data?.contracts ?? []),
-            ]}
-            searchable
-            disabled={busy || sources.loading}
-            onChange={(value) => {
-              setContractId(value);
-              update();
-            }}
-          />
-          <Checkbox.Item
-            label="Tôi xác nhận số tiền và lý do đề nghị Owner xem xét"
-            status={confirmed ? 'checked' : 'unchecked'}
-            disabled={busy}
-            onPress={() => {
-              setConfirmed(!confirmed);
-              setError('');
-            }}
-          />
-          {!!error && (
-            <Text accessibilityRole="alert" style={ui.red}>
-              {error}
-            </Text>
-          )}
-          <Button
-            mode="contained"
-            icon="send-outline"
-            loading={busy}
-            disabled={busy}
-            onPress={() => void submit()}
-          >
-            Gửi yêu cầu đến Owner
-          </Button>
-          <Text style={ui.muted}>
-            Owner có thể chấp thuận và gửi chứng từ chuyển khoản, hoặc từ chối kèm lý do.
-          </Text>
-        </Box>
-      )}
       <Box>
-        <Row spread>
-          <Heading title="Lịch sử yêu cầu" />
-          <Button compact icon="refresh" disabled={requests.loading} onPress={refresh}>
-            Tải lại
-          </Button>
-        </Row>
-        <QueryState {...requests} />
-        {requests.data?.items.length === 0 && (
-          <Text style={ui.muted}>Bạn chưa gửi yêu cầu hoàn tiền nào.</Text>
+        <Heading
+          title="Thông tin yêu cầu"
+          detail="Số tiền tính bằng VND, không nhập số thập phân"
+        />
+        <MoneyTextInput
+          mode="outlined"
+          label="Số tiền yêu cầu hoàn (VND) *"
+          accessibilityLabel="Số tiền yêu cầu hoàn (VND)"
+          value={amount}
+          disabled={busy || !!moveOutProposalId}
+          onChangeText={(value) => {
+            setAmount(value);
+            update();
+          }}
+        />
+        <TextInput
+          mode="outlined"
+          label="Lý do yêu cầu *"
+          accessibilityLabel="Lý do yêu cầu"
+          value={reason}
+          onChangeText={(value) => {
+            setReason(value);
+            update();
+          }}
+          maxLength={2000}
+          multiline
+          disabled={busy}
+          style={ui.input}
+        />
+        <Text style={ui.muted}>
+          Hai liên kết dưới đây đều không bắt buộc. Bạn có thể chọn cả hai hoặc để trống.
+        </Text>
+        {!!moveOutProposalId && (
+          <Text style={ui.muted}>
+            Thông tin được điền từ đề xuất quyết toán trả phòng. Vui lòng kiểm tra và gửi Owner xác
+            nhận hoàn tiền.
+          </Text>
         )}
-        {requests.data?.items.map((item) => (
-          <RefundRequestCard key={item.id} request={item} />
-        ))}
-        {requests.data && (
-          <Pagination
-            page={requests.data.page}
-            total={requests.data.totalCount}
-            loading={requests.loading}
-            onChange={setPage}
-          />
+        <QueryState {...sources} />
+        <ChoiceField
+          label="Giao dịch liên quan (tùy chọn)"
+          value={paymentId}
+          options={[
+            { id: '', label: 'Không liên kết giao dịch' },
+            ...(sources.data?.payments ?? []),
+          ]}
+          searchable
+          disabled={busy || sources.loading || !!moveOutProposalId}
+          onChange={(value) => {
+            setPaymentId(value);
+            update();
+          }}
+        />
+        <ChoiceField
+          label="Hợp đồng liên quan (tùy chọn)"
+          value={contractId}
+          options={[
+            { id: '', label: 'Không liên kết hợp đồng' },
+            ...(sources.data?.contracts ?? []),
+          ]}
+          searchable
+          disabled={busy || sources.loading || !!moveOutProposalId}
+          onChange={(value) => {
+            setContractId(value);
+            update();
+          }}
+        />
+        <Checkbox.Item
+          label="Tôi xác nhận số tiền và lý do đề nghị Owner xem xét"
+          status={confirmed ? 'checked' : 'unchecked'}
+          disabled={busy}
+          onPress={() => {
+            setConfirmed(!confirmed);
+            setError('');
+          }}
+        />
+        {!!error && (
+          <Text accessibilityRole="alert" style={ui.red}>
+            {error}
+          </Text>
         )}
+        <Button
+          mode="contained"
+          icon="send-outline"
+          loading={busy}
+          disabled={busy}
+          onPress={() => void submit()}
+        >
+          Gửi yêu cầu đến Owner
+        </Button>
+        <Text style={ui.muted}>
+          {moveOutProposalId
+            ? 'Owner sẽ xét duyệt yêu cầu. Tiền hoàn cọc được chi trả và xác minh qua quyết toán cọc của hợp đồng.'
+            : 'Owner có thể chấp thuận và gửi chứng từ chuyển khoản, hoặc từ chối kèm lý do.'}
+        </Text>
       </Box>
     </View>
+  );
+}
+
+export function TenantRefundHistoryScreen() {
+  const { session } = useSession();
+  if (!session?.roles.includes('Tenant'))
+    return <Text>Tài khoản không có quyền xem yêu cầu hoàn tiền Tenant.</Text>;
+  return <TenantRefundHistory key={session.userId} />;
+}
+
+function TenantRefundHistory() {
+  const [page, setPage] = useState(1);
+  const requests = useWorkspaceQuery<Page<TenantRefundRequest>>(tenantRefundRequestPath(page), {
+    load: loadTenantRefundRequests,
+    notifyError: false,
+  });
+  const refresh = requests.reload;
+  useFocusEffect(
+    useCallback(() => {
+      refresh();
+    }, [refresh]),
+  );
+  return (
+    <Box>
+      <Row spread>
+        <Heading title="Yêu cầu hoàn tiền đã gửi" />
+        <Button compact icon="refresh" disabled={requests.loading} onPress={refresh}>
+          Tải lại
+        </Button>
+      </Row>
+      <QueryState {...requests} />
+      {requests.data?.items.length === 0 && (
+        <Text style={ui.muted}>Bạn chưa gửi yêu cầu hoàn tiền nào.</Text>
+      )}
+      {requests.data?.items.map((item) => (
+        <RefundRequestCard key={item.id} request={item} />
+      ))}
+      {requests.data && (
+        <Pagination
+          page={requests.data.page}
+          total={requests.data.totalCount}
+          loading={requests.loading}
+          onChange={setPage}
+        />
+      )}
+    </Box>
   );
 }
 
@@ -297,6 +359,15 @@ function RefundRequestCard({ request }: { request: TenantRefundRequest }) {
       </Row>
       <Text>{request.reason}</Text>
       <Text style={ui.muted}>Gửi lúc {formatInstant(request.createdAt)}</Text>
+      {!!request.moveOutProposalId && (
+        <View style={{ gap: 5 }}>
+          <Pill tone="neutral">Liên kết đề xuất trả phòng</Pill>
+          <Text style={ui.muted}>
+            Trạng thái yêu cầu phản ánh việc Owner xem xét. Tiền hoàn thực tế sẽ được đối chiếu qua
+            quyết toán cọc.
+          </Text>
+        </View>
+      )}
       {request.sourcePaymentId || request.sourceContractId ? (
         <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 6 }}>
           {request.sourcePaymentId && <Pill tone="neutral">Có liên kết giao dịch</Pill>}

@@ -180,7 +180,12 @@ public sealed partial class Compact24ExpenseTests
                 return rows.ToArray();
             }
 
-            await job.ExecuteAsync(execution, default);
+            await using var concurrentScope = fixture.Factory.Services.CreateAsyncScope();
+            var concurrentJob = concurrentScope.ServiceProvider.GetServices<IBackgroundJobHandler>()
+                .Single(handler => handler.Name == "finance-recurring-expenses");
+            using var timeout = new CancellationTokenSource(TimeSpan.FromSeconds(30));
+            await Task.WhenAll(job.ExecuteAsync(execution, timeout.Token),
+                concurrentJob.ExecuteAsync(execution with { Id = Guid.NewGuid() }, timeout.Token));
             var first = await LedgerAsync();
             Assert.Equal(4, first.Length); // Starting month + the next three months.
             Assert.Equal(Enumerable.Range(0, 4).Select(starts.AddMonths), first.Select(row => row.Due));
@@ -195,6 +200,12 @@ public sealed partial class Compact24ExpenseTests
             await job.ExecuteAsync(execution with { Id = Guid.NewGuid() }, default);
             var replay = await LedgerAsync();
             Assert.Equal(first, replay);
+            var payment = await owner.GetFromJsonAsync<ExpensePaymentView>(
+                $"/api/v1/expenses/{first[0].Id}/payments");
+            Assert.NotNull(payment);
+            Assert.Equal(first[0].Due, payment.DueOn);
+            Assert.Equal("Unknown", payment.Status);
+            Assert.Null(payment.PaidAmount);
         }
     }
 
@@ -270,6 +281,17 @@ public sealed partial class Compact24OwnerSetupTests
         Assert.Equal(asset.Id, row.Id);
         Assert.Equal(3, row.Quantity);
         Assert.Null(row.TotalCost);
+        var report = (await owner.GetFromJsonAsync<FinancialReport>(
+            $"/api/v1/financial-reports?locationId={location}&from={Today.AddDays(-1):yyyy-MM-dd}&to={Today:yyyy-MM-dd}"))!;
+        var management = report.Total.Management!;
+        Assert.Equal("0", management.OperatingCashFlow);
+        Assert.Null(management.NetCashAfterInvestment);
+        Assert.Equal("investment_basis_required", management.CashCapital!.UnavailableReason);
+        Assert.Null(management.CashCapital.RemainingCapital);
+        Assert.Null(management.CashCapital.RecoveryPercent);
+        Assert.Null(management.CashCapital.EstimatedRemainingMonths);
+        Assert.Equal(management.CashCapital,
+            Assert.Single(report.Locations).Totals.Management!.CashCapital);
     }
 
     [CompactPostgresFact]

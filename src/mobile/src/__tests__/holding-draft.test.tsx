@@ -18,11 +18,6 @@ import { ContractDraftForm } from '../features/contracts/ContractDraftForm';
 import { type MainDraftPreparation } from '../../../../packages/client-core/src/mainDrafts';
 
 const ids = Array.from({ length: 5 }, (_, i) => `00000000-0000-4000-8000-00000000000${i + 1}`);
-vi.mock('../features/contracts/HoldingProgress', () => ({
-  HoldingProgress: ({ current }: { current: number }) => (
-    <span>Bước {current > 1 ? current : 1}/7</span>
-  ),
-}));
 const state = vi.hoisted(() => ({
   role: 'Staff',
   verified: false,
@@ -65,7 +60,7 @@ vi.mock('../features/contracts/HoldingNewTenant', () => ({
         <button
           disabled={disabled}
           onClick={() => {
-            onCreated(ids[2], 'Người đăng ký mới', 'applicant@example.test');
+            onCreated('', 'Người đăng ký mới', 'applicant@example.test');
             onContinue();
           }}
         >
@@ -92,6 +87,45 @@ vi.mock('expo-router', () => ({
   useFocusEffect: (callback: () => void | (() => void)) => React.useEffect(callback, [callback]),
 }));
 vi.mock('react-native', () => ({
+  Animated: {
+    Value: class {
+      setValue() {}
+    },
+    View: ({ children }: React.PropsWithChildren) => <div>{children}</div>,
+  },
+  Keyboard: { dismiss: vi.fn() },
+  KeyboardAvoidingView: ({ children }: React.PropsWithChildren) => <div>{children}</div>,
+  Modal: ({ children }: React.PropsWithChildren) => <div role="dialog">{children}</div>,
+  PanResponder: { create: () => ({ panHandlers: {} }) },
+  Platform: { OS: 'web' },
+  Pressable: ({
+    children,
+    accessibilityRole,
+    accessibilityLabel,
+    accessibilityState,
+    onPress,
+    disabled,
+  }: React.PropsWithChildren<{
+    accessibilityRole?: string;
+    accessibilityLabel?: string;
+    accessibilityState?: { expanded?: boolean; selected?: boolean };
+    onPress: () => void;
+    disabled?: boolean;
+  }>) =>
+    accessibilityRole === 'button' ? (
+      <button
+        aria-label={accessibilityLabel}
+        aria-expanded={accessibilityState?.expanded}
+        aria-pressed={accessibilityState?.selected}
+        onClick={onPress}
+        disabled={disabled}
+      >
+        {children}
+      </button>
+    ) : (
+      <div />
+    ),
+  useWindowDimensions: () => ({ width: 390, fontScale: 1 }),
   AppState: {
     addEventListener: (_event: string, callback: (value: string) => void) => {
       state.foreground = callback;
@@ -100,20 +134,66 @@ vi.mock('react-native', () => ({
   },
   StyleSheet: { create: (styles: unknown) => styles },
   View: ({ children }: { children: React.ReactNode }) => <div>{children}</div>,
+  ScrollView: ({ children }: { children: React.ReactNode }) => <div>{children}</div>,
+}));
+vi.mock('react-native-safe-area-context', () => ({
+  useSafeAreaInsets: () => ({ top: 0, left: 0, right: 0, bottom: 0 }),
 }));
 vi.mock('react-native-paper', () => ({
+  Searchbar: ({
+    accessibilityLabel,
+    value,
+    onChangeText,
+  }: {
+    accessibilityLabel: string;
+    value: string;
+    onChangeText: (value: string) => void;
+  }) => (
+    <input
+      aria-label={accessibilityLabel}
+      value={value}
+      onChange={(event) => onChangeText(event.target.value)}
+    />
+  ),
+  Portal: ({ children }: React.PropsWithChildren) => children,
+  Dialog: Object.assign(
+    ({ children }: React.PropsWithChildren) => <div role="dialog">{children}</div>,
+    {
+      Title: ({ children }: React.PropsWithChildren) => <h2>{children}</h2>,
+      ScrollArea: ({ children }: React.PropsWithChildren) => <div>{children}</div>,
+      Actions: ({ children }: React.PropsWithChildren) => <div>{children}</div>,
+    },
+  ),
+  TextInput: ({
+    accessibilityLabel,
+    value,
+    onChangeText,
+  }: {
+    accessibilityLabel: string;
+    value: string;
+    onChangeText: (value: string) => void;
+  }) => (
+    <input
+      aria-label={accessibilityLabel}
+      value={value}
+      onChange={(event) => onChangeText(event.target.value)}
+    />
+  ),
   Icon: () => null,
   ActivityIndicator: () => <span>Đang tải</span>,
+  ProgressBar: () => null,
   Button: ({
     children,
     onPress,
     disabled,
+    accessibilityLabel,
   }: {
     children: React.ReactNode;
     onPress: () => void;
     disabled?: boolean;
+    accessibilityLabel?: string;
   }) => (
-    <button disabled={disabled} onClick={onPress}>
+    <button aria-label={accessibilityLabel} disabled={disabled} onClick={onPress}>
       {children}
     </button>
   ),
@@ -221,7 +301,7 @@ function makeApi(mutate = vi.fn().mockResolvedValue({ id: ids[0] })) {
     tenantAccounts: vi.fn(),
     linkTenant: vi.fn(),
     configuration: vi.fn().mockResolvedValue({
-      template: { available: true, title: 'Mẫu kỹ thuật không hiển thị', fields: [] },
+      template: { available: false, title: 'Mẫu kỹ thuật không hiển thị', fields: [] },
     }),
     preparation: vi.fn().mockImplementation(async () => ({
       locations: [{ id: ids[0], label: 'Cơ sở A' }],
@@ -271,12 +351,23 @@ function mount(
   return { api, created, prepare };
 }
 const continueButton = () => screen.getByRole('button', { name: 'Tiếp tục' });
+async function roomPickerButton() {
+  return waitFor(() => {
+    const button = screen.getByRole<HTMLButtonElement>('button', { name: 'Phòng giữ chỗ *' });
+    expect(button.disabled).toBe(false);
+    return button;
+  });
+}
 async function chooseRoom() {
-  await screen.findByText('P101 · Cơ sở A');
-  fireEvent.change(screen.getByLabelText('Phòng giữ chỗ *'), { target: { value: ids[1] } });
+  fireEvent.click(await roomPickerButton());
+  fireEvent.click(screen.getByRole('button', { name: 'Chưa phân tầng · 1 phòng' }));
+  fireEvent.click(screen.getByRole('button', { name: 'P101' }));
+  fireEvent.click(screen.getByRole('button', { name: 'Xác nhận chọn phòng' }));
   await waitFor(() => expect((continueButton() as HTMLButtonElement).disabled).toBe(false));
   fireEvent.click(continueButton());
   expect(screen.getByText(/2\/7/)).toBeTruthy();
+  expect(screen.queryByText('Thông tin người giữ chỗ')).toBeNull();
+  expect(screen.getByText('CCCD của người giữ chỗ')).toBeTruthy();
 }
 async function confirmApplicant() {
   await chooseRoom();
@@ -288,14 +379,124 @@ async function confirmApplicant() {
   expect(screen.getByText(/3\/7/)).toBeTruthy();
 }
 const submit = () => screen.getByRole('button', { name: 'Tạo bản nháp và tiếp tục' });
+it('skips applicant details in both directions between room selection and CCCD', async () => {
+  const { api } = mount();
+  await chooseRoom();
+  expect(screen.queryByText('Thông tin người giữ chỗ')).toBeNull();
+  fireEvent.click(screen.getByRole('button', { name: 'Quay lại' }));
+  expect(screen.getByText(/1\/7/)).toBeTruthy();
+  fireEvent.click(continueButton());
+  expect(screen.getByText(/2\/7/)).toBeTruthy();
+  expect(screen.getByText('CCCD của người giữ chỗ')).toBeTruthy();
+  expect(screen.queryByText('Thông tin người giữ chỗ')).toBeNull();
+  expect(api.mutate).not.toHaveBeenCalled();
+});
+it('discards an unconfirmed room when the sheet closes', async () => {
+  mount();
+  fireEvent.click(await roomPickerButton());
+  const confirm = () =>
+    screen.getByRole<HTMLButtonElement>('button', { name: 'Xác nhận chọn phòng' });
+  expect(confirm().disabled).toBe(true);
+  fireEvent.click(screen.getByRole('button', { name: 'Chưa phân tầng · 1 phòng' }));
+  fireEvent.click(screen.getByRole('button', { name: 'P101' }));
+  expect(confirm().disabled).toBe(false);
+  expect(screen.getByText('Đã chọn: P101')).toBeTruthy();
+  fireEvent.click(screen.getByRole('button', { name: 'Đóng' }));
+  expect(continueButton()).toHaveProperty('disabled', true);
+  fireEvent.click(await roomPickerButton());
+  expect(confirm().disabled).toBe(true);
+});
 it('starts at room selection without a duplicate header, refresh icon or location selector', async () => {
   const { api } = mount();
-  await screen.findByText('P101 · Cơ sở A');
+  await roomPickerButton();
   expect(screen.getByText(/1\/7/)).toBeTruthy();
   expect(screen.queryByRole('button', { name: 'Quay lại' })).toBeNull();
   expect(screen.queryByRole('button', { name: 'Tải lại lựa chọn' })).toBeNull();
   expect(screen.queryByLabelText('Cơ sở')).toBeNull();
   expect(api.preparation).not.toHaveBeenCalled();
+});
+it('switches between assigned locations and filters rooms by minimum capacity', async () => {
+  const api = makeApi();
+  vi.mocked(api.locations).mockResolvedValue([
+    { id: ids[0], label: 'Cơ sở A' },
+    { id: ids[3], label: 'Cơ sở B' },
+  ]);
+  vi.mocked(api.holdingRooms).mockResolvedValue({
+    items: [
+      {
+        id: ids[1],
+        locationId: ids[0],
+        roomNumber: 'P101',
+        status: 0,
+        capacity: 2,
+        floor: '1',
+        version: 1,
+      },
+      {
+        id: ids[2],
+        locationId: ids[3],
+        roomNumber: 'P201',
+        status: 0,
+        capacity: 4,
+        floor: '2',
+        version: 1,
+      },
+      {
+        id: 'room-a2',
+        locationId: ids[0],
+        roomNumber: 'P202',
+        status: 0,
+        capacity: 4,
+        floor: '2',
+        version: 1,
+      },
+      {
+        id: ids[4],
+        locationId: 'unassigned',
+        roomNumber: 'P301',
+        status: 0,
+        capacity: 5,
+        floor: null,
+        version: 1,
+      },
+    ],
+    totalCount: 4,
+    page: 1,
+    pageSize: 100,
+  });
+  mount(api);
+  expect(screen.queryByLabelText('Sức chứa tối thiểu')).toBeNull();
+  fireEvent.click(await roomPickerButton());
+  expect(screen.getByRole('button', { name: 'Tầng 1 · 1 phòng' })).toBeTruthy();
+  expect(screen.getByRole('button', { name: 'Tầng 2 · 1 phòng' })).toBeTruthy();
+  expect(screen.queryByRole('button', { name: 'P101 · 2 người' })).toBeNull();
+  fireEvent.click(screen.getByRole('button', { name: 'Tầng 1 · 1 phòng' }));
+  expect(screen.getByRole('button', { name: 'P101 · 2 người' })).toBeTruthy();
+  fireEvent.click(screen.getByRole('button', { name: '3+ người' }));
+  expect(screen.queryByRole('button', { name: 'Tầng 1 · 1 phòng' })).toBeNull();
+  fireEvent.click(screen.getByRole('button', { name: 'Tầng 2 · 1 phòng' }));
+  expect(screen.getByRole('button', { name: 'P202 · 4 người' })).toBeTruthy();
+  expect(screen.queryByRole('button', { name: 'P201 · 4 người' })).toBeNull();
+  fireEvent.click(screen.getByRole('button', { name: 'Tùy chỉnh' }));
+  fireEvent.change(screen.getByLabelText('Sức chứa tối thiểu'), { target: { value: '9' } });
+  expect(screen.getByText('Không tìm thấy phòng phù hợp')).toBeTruthy();
+  fireEvent.click(screen.getByRole('button', { name: 'Đặt lại bộ lọc' }));
+  fireEvent.click(screen.getByRole('button', { name: 'Đóng' }));
+  fireEvent.change(screen.getByLabelText('Cơ sở được phân công *'), { target: { value: ids[3] } });
+  fireEvent.click(await roomPickerButton());
+  fireEvent.change(screen.getByLabelText('Tìm theo mã phòng'), { target: { value: 'p201' } });
+  expect(
+    screen.getByRole('button', { name: 'Tầng 2 · 1 phòng' }).getAttribute('aria-expanded'),
+  ).toBe('true');
+  expect(screen.queryByText(/P301/)).toBeNull();
+  fireEvent.click(screen.getByRole('button', { name: 'P201 · 4 người' }));
+  expect(screen.getByText('Đã chọn: P201')).toBeTruthy();
+  expect(api.preparation).not.toHaveBeenCalled();
+  fireEvent.click(screen.getByRole('button', { name: 'Xác nhận chọn phòng' }));
+  expect(await screen.findByText('Sức chứa: 4 người')).toBeTruthy();
+  await waitFor(() =>
+    expect(api.preparation).toHaveBeenCalledWith(ids[3], expect.any(AbortSignal)),
+  );
 });
 it('loads preparation and readiness for the selected room/location, without any Tenant selection', async () => {
   const { api } = mount();
@@ -356,6 +557,17 @@ it('keeps identity actions available while the selected profile is refreshing', 
   expect(api.holdingRooms).toHaveBeenCalledOnce();
   resolvePreparation(await loadPreparation(ids[0]));
   await waitFor(() => expect(continueButton()).toHaveProperty('disabled', false));
+});
+
+it('opens the identity step after readiness even while location preparation is pending', async () => {
+  const api = makeApi();
+  vi.mocked(api.preparation).mockImplementationOnce(() => new Promise(() => {}));
+  mount(api);
+  await chooseRoom();
+  expect(screen.getByText('CCCD của người giữ chỗ')).toBeTruthy();
+  expect(screen.getByText('Open identity')).toBeTruthy();
+  expect(screen.getByRole('button', { name: 'Đang cập nhật…' })).toHaveProperty('disabled', true);
+  expect(api.preparation).toHaveBeenCalledOnce();
 });
 it('reviews verified applicant data and keeps confirmation entirely read-only', async () => {
   const { api, prepare } = mount();
@@ -490,7 +702,7 @@ it('recovers a room query error using an inline retry rather than a header refre
   mount(api);
   await screen.findByRole('button', { name: 'Thử lại' });
   fireEvent.click(screen.getByRole('button', { name: 'Thử lại' }));
-  await screen.findByText('P101 · Cơ sở A');
+  await roomPickerButton();
 });
 it('permits null Tenant only for Holding while preserving existing Main draft validation', () => {
   const input = {

@@ -20,8 +20,6 @@ public static class HandoverChecklist
                 i.GoodQuantity + i.WornQuantity + i.DamagedQuantity != i.ObservedQuantity || i.HandedOverQuantity > i.ObservedQuantity ||
                 i.MissingQuantity != (baselineKnown ? Math.Max(0, (s.ConfiguredQuantity ?? s.HandedOverQuantity ?? s.PhysicalAssets?.Sum(p => p.Quantity) ?? 0) - i.ObservedQuantity!.Value) : 0)))
                 throw ContractException.Invalid("invalid_handover_quantities");
-            if (hasQuantities && i.HandedOverQuantity < i.ObservedQuantity && string.IsNullOrWhiteSpace(i.Notes))
-                throw ContractException.Invalid("withheld_asset_reason_required");
             var observed = s with
             {
                 ObservedCondition = i.Condition.Trim(),
@@ -36,7 +34,8 @@ public static class HandoverChecklist
                 EvidenceIds = i.EvidenceIds ?? [],
                 PhysicalObservations = i.PhysicalObservations
             };
-            if (Problem(observed) && observed.EvidenceIds.Length == 0) throw ContractException.Invalid("asset_group_evidence_required");
+            // Evidence and observations are optional even for a recorded
+            // defect. An absent photo is never treated as proof of Tenant damage.
             if (i.PhysicalObservations is { } physical)
             {
                 var expected = s.PhysicalAssets ?? [];
@@ -54,6 +53,36 @@ public static class HandoverChecklist
 
     public static bool Problem(HandoverAsset a) => a.MissingQuantity > 0 || a.DamagedQuantity > 0 ||
         a.ObservedQuantity != null && (a.ObservedQuantity != (a.PhysicalAssets?.Sum(p => p.Quantity) ?? 0) || a.HandedOverQuantity < a.ObservedQuantity);
+    // Financial liability must be demonstrably new relative to the signed
+    // move-in baseline. A pre-existing damaged or missing unit is not a new
+    // tenant charge, and missing baselines cannot be silently inferred.
+    private static bool VerifiedGoodCondition(string? value) =>
+        value?.Trim() is "Tốt" or "Good" or "Passed";
+
+    private static bool NewPhysicalIssueAgainstBaseline(HandoverAsset observed, HandoverAsset baseline) =>
+        (observed.PhysicalObservations ?? []).Any(item =>
+        {
+            var opening = baseline.PhysicalObservations?.FirstOrDefault(p => p.Id == item.Id)?.Condition
+                ?? baseline.PhysicalAssets?.FirstOrDefault(p => p.Id == item.Id)?.Condition;
+            return VerifiedGoodCondition(opening) &&
+                !string.IsNullOrWhiteSpace(item.Condition) && !VerifiedGoodCondition(item.Condition);
+        });
+
+    public static bool NewDamageAgainstBaseline(HandoverAsset observed, HandoverAsset? baseline) =>
+        // Inspection without a confirmed opening quantity is still valid, but
+        // it cannot be proof of NEW tenant-caused loss/damage for settlement.
+        observed.Checked && baseline is { HandedOverQuantity: not null } &&
+        (observed.MissingQuantity is { } missing && missing > baseline.MissingQuantity.GetValueOrDefault() ||
+         observed.DamagedQuantity is { } damaged && baseline.DamagedQuantity is { } initiallyDamaged && damaged > initiallyDamaged ||
+         observed.HandedOverQuantity is { } returned &&
+         baseline.HandedOverQuantity is { } given && returned < given ||
+         // Move-Out now records the observed condition without fabricating a
+         // good/worn/damaged quantity split. A change from verified "Good" to
+         // "Issue" must remain reviewable, including per-physical-item changes.
+         VerifiedGoodCondition(baseline.ObservedCondition) &&
+         !string.IsNullOrWhiteSpace(observed.ObservedCondition) &&
+         !VerifiedGoodCondition(observed.ObservedCondition) ||
+         NewPhysicalIssueAgainstBaseline(observed, baseline));
     public static bool RequiresOwner(HandoverSnapshot s) => !s.NoAssetsConfirmed && (s.Assets.Length == 0 ||
         s.Assets.Any(a => !a.OwnerChecked || Problem(a)));
 

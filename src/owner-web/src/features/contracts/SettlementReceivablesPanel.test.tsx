@@ -24,11 +24,15 @@ const view = {
     },
   ],
 } as unknown as SettlementReceivables;
-function mount() {
+function mount(
+  observed: Partial<FinalInspection['observed']> = {},
+  server: SettlementReceivables = view,
+  baseline?: Partial<FinalInspection['observed']>,
+) {
   const request = vi.fn<ContractRequest>(
     async <T,>(_path: string, init?: RequestInit): Promise<T> => {
       if (init?.method === 'POST') throw { status: 503 };
-      return view as T;
+      return server as T;
     },
   );
   const api = contractClient(
@@ -45,7 +49,8 @@ function mount() {
           {
             id: 'inspection',
             version: 2,
-            observed: { assets: [], evidenceIds: ['proof'] },
+            baseline,
+            observed: { assets: [], evidenceIds: ['proof'], ...observed },
           } as unknown as FinalInspection
         }
         summary={
@@ -129,6 +134,187 @@ it('requires a separate source-specific confirmation for a deposit offset', asyn
     invoiceId: null,
     expectedReference: view.reference,
     humanConfirmed: true,
+  });
+});
+
+it('shows unpaid damage as one existing Tenant receivable instead of a second invoice liability', async () => {
+  mount(
+    {},
+    {
+      ...view,
+      receivables: [
+        {
+          charge: {
+            id: 'damage-1',
+            kind: 'TenantDamage',
+            description: 'Giường hỏng',
+            amount: '600000',
+          },
+          allocated: '250000',
+          outstanding: '350000',
+          status: 'PartiallyPaid',
+        },
+      ] as SettlementReceivables['receivables'],
+    },
+  );
+  expect(await screen.findByText(/Bồi thường còn phải thu sau các khoản/)).toBeInTheDocument();
+  expect(screen.getAllByText(/350.000/).length).toBeGreaterThanOrEqual(2);
+  expect(screen.getByText(/không lập thêm khoản nợ thứ hai/)).toBeInTheDocument();
+});
+
+it('prices only damaged assets or failed room checks, with independent source and matching proof', async () => {
+  const request = mount(
+    {
+      assets: [
+        {
+          id: 'good-chair',
+          name: 'Ghế tốt',
+          observedCondition: 'Good',
+          missingQuantity: 0,
+          damagedQuantity: 0,
+        },
+        {
+          id: 'damaged-bed',
+          name: 'Giường hỏng',
+          observedCondition: 'Damaged',
+          checked: true,
+          missingQuantity: 0,
+          damagedQuantity: 1,
+          evidenceIds: ['bed-photo'],
+        },
+      ] as FinalInspection['observed']['assets'],
+      roomChecks: [
+        {
+          code: 'walls_ceiling_floor',
+          status: 'Issue',
+          notes: 'Tường bong tróc',
+          evidenceIds: ['wall-photo'],
+        },
+        { code: 'cleanliness', status: 'Passed', notes: '', evidenceIds: [] },
+      ],
+    },
+    { ...view, roomCheckChargesSupported: true, receivables: [] },
+    {
+      assets: [
+        {
+          id: 'good-chair',
+          checked: true,
+          missingQuantity: 0,
+          damagedQuantity: 0,
+          handedOverQuantity: 1,
+        },
+        {
+          id: 'damaged-bed',
+          checked: true,
+          missingQuantity: 0,
+          damagedQuantity: 0,
+          handedOverQuantity: 1,
+        },
+      ] as FinalInspection['observed']['assets'],
+    },
+  );
+  await screen.findByText('Tường bong tróc');
+  fireEvent.mouseDown(screen.getByLabelText('Nguồn thiệt hại'));
+  expect(await screen.findByRole('option', { name: /Giường hỏng/ })).toBeInTheDocument();
+  expect(screen.queryByRole('option', { name: /Ghế tốt/ })).not.toBeInTheDocument();
+  fireEvent.click(screen.getByRole('option', { name: /Tường, trần và sàn/ }));
+  expect(screen.getByLabelText('Dùng ảnh biên bản 1')).toBeInTheDocument();
+  fireEvent.change(screen.getByLabelText('Số tiền phải thu thiệt hại (VND)'), {
+    target: { value: '150000' },
+  });
+  fireEvent.change(screen.getByLabelText('Mô tả và căn cứ chi phí'), {
+    target: { value: 'Tường hỏng, sửa chữa 150000đ' },
+  });
+  fireEvent.click(screen.getByLabelText('Dùng ảnh biên bản 1'));
+  fireEvent.click(screen.getByLabelText(/Tôi xác nhận thiệt hại/));
+  fireEvent.click(screen.getByRole('button', { name: 'Duyệt khoản phải thu thiệt hại' }));
+  await confirmPendingAction();
+  await waitFor(() =>
+    expect(
+      request.mock.calls.some(
+        ([path, init]) => path.endsWith('/receivables/damage') && init?.method === 'POST',
+      ),
+    ).toBe(true),
+  );
+  const post = request.mock.calls.find(
+    ([path, init]) => path.endsWith('/receivables/damage') && init?.method === 'POST',
+  )!;
+  expect(JSON.parse(post[1]?.body as string)).toMatchObject({
+    assetId: null,
+    roomCheckCode: 'walls_ceiling_floor',
+    evidenceIds: ['wall-photo'],
+    amount: '150000',
+  });
+});
+
+it('recognizes an already priced room-check charge by the backend canonical roomCheckCode', async () => {
+  mount(
+    {
+      roomChecks: [
+        {
+          code: 'walls_ceiling_floor',
+          status: 'Issue',
+          notes: 'Tường bong tróc',
+          evidenceIds: ['wall-photo'],
+        },
+      ],
+    },
+    {
+      ...view,
+      roomCheckChargesSupported: true,
+      receivables: [
+        {
+          charge: {
+            id: 'wall-charge',
+            kind: 'TenantDamage',
+            assetId: null,
+            roomCheckCode: 'walls_ceiling_floor',
+            sourceKey: 'damage:contract:walls_ceiling_floor',
+            description: 'Tường bong tróc',
+            amount: '150000',
+          },
+          allocated: '0',
+          outstanding: '150000',
+          status: 'Unpaid',
+        },
+      ] as SettlementReceivables['receivables'],
+    },
+  );
+  expect(await screen.findByText(/Đã duyệt 150.000/)).toBeInTheDocument();
+  expect(screen.queryByRole('button', { name: 'Nhập giá' })).not.toBeInTheDocument();
+});
+
+it('allows Owner to price missing returned room keys using key-specific photo and access_room_key source', async () => {
+  const request = mount(
+    {
+      accessItems: [{ type: 'RoomKey', quantity: 4, notes: 'Thiếu một chìa khóa' }],
+      keyEvidenceIds: ['keys-photo'],
+      roomChecks: [{ code: 'walls_ceiling_floor', status: 'Passed', notes: '', evidenceIds: [] }],
+    },
+    { ...view, roomCheckChargesSupported: true, receivables: [] },
+    { accessItems: [{ type: 'RoomKey', quantity: 5, notes: 'Nhận đủ 5 chìa' }] },
+  );
+  expect(await screen.findByText('Chìa khóa trả thiếu')).toBeInTheDocument();
+  fireEvent.click(screen.getByRole('button', { name: 'Nhập giá' }));
+  expect(screen.getByLabelText('Mô tả và căn cứ chi phí')).toHaveValue(
+    'Bồi thường 1 chìa khóa chưa trả',
+  );
+  fireEvent.change(screen.getByLabelText('Số tiền phải thu thiệt hại (VND)'), {
+    target: { value: '50000' },
+  });
+  fireEvent.click(screen.getByLabelText('Dùng ảnh biên bản 1'));
+  fireEvent.click(screen.getByLabelText(/Tôi xác nhận thiệt hại/));
+  fireEvent.click(screen.getByRole('button', { name: 'Duyệt khoản phải thu thiệt hại' }));
+  await confirmPendingAction();
+  const post = request.mock.calls.find(
+    ([path, init]) => path.endsWith('/receivables/damage') && init?.method === 'POST',
+  );
+  expect(post).toBeDefined();
+  expect(JSON.parse(post![1]?.body as string)).toMatchObject({
+    assetId: null,
+    roomCheckCode: 'access_room_key',
+    evidenceIds: ['keys-photo'],
+    amount: '50000',
   });
 });
 

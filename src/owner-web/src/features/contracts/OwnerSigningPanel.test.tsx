@@ -90,9 +90,15 @@ it.each(['Holding', 'Main'])(
     expect(button).toBeDisabled();
     expect(screen.queryByLabelText('Mã xác nhận')).toBeNull();
     fireEvent.click(screen.getByRole('checkbox'));
+    expect(button).toBeDisabled();
+    expect(transport).not.toHaveBeenCalled();
+    fireEvent.change(screen.getByLabelText('Ảnh chữ ký cho hợp đồng'), {
+      target: { files: [new File(['synthetic'], 'signature.png', { type: 'image/png' })] },
+    });
+    await waitFor(() => expect(button).toBeEnabled());
     fireEvent.click(button);
     await waitFor(() => expect(changed).toHaveBeenCalledOnce());
-    const [path, init] = transport.mock.calls[0];
+    const [path, init] = transport.mock.calls.at(-1)!;
     expect(path).toBe(`/api/v1/contracts/${id}/signing`);
     expect(JSON.parse(init.body)).toMatchObject({ method: 'OWNER_SESSION', consent: true });
     expect(transport.mock.calls.some(([url]) => url.includes('/otp'))).toBe(false);

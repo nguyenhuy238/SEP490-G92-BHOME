@@ -1,4 +1,5 @@
 import { useFeedbackState } from '../../lib/useFeedbackState';
+import { ContractNotice } from './ContractNotice';
 import React, { useEffect, useState } from 'react';
 import { Button, Checkbox, Text } from 'react-native-paper';
 import {
@@ -11,6 +12,7 @@ import { ChoiceField } from '../../components/WorkflowControls';
 import { MainDraftScreen } from './MainDraftScreen';
 import { router } from 'expo-router';
 import { HoldingMainStart } from './HoldingMainStart';
+import { RoomCapacityFilter } from './RoomCapacityFilter';
 
 // Standalone entry for already-onboarded Residents. The onboarding handoff supplies these IDs directly.
 export function MainDraftStart({
@@ -36,8 +38,32 @@ export function MainDraftStart({
   const [draftId, setDraftId] = useState('');
   const [mode, setMode] = useState<'individual' | 'family'>('individual');
   const [data, setData] = useState<Preparation | null>(null),
-    [error, setError] = useFeedbackState(),
+    [error, setError] = useFeedbackState('warning', false),
     [loading, setLoading] = useState(true);
+  const [minimumCapacity, setMinimumCapacity] = useState('');
+  const [capacityResult, setCapacityResult] = useState<{
+    location: string;
+    values: Map<string, number>;
+    failed?: boolean;
+  }>();
+  useEffect(() => {
+    if (!location) return;
+    const controller = new AbortController();
+    void api.rooms(location, controller.signal).then(
+      (rooms) => {
+        if (!controller.signal.aborted)
+          setCapacityResult({
+            location,
+            values: new Map(rooms.map((item) => [item.id, item.capacity ?? 0])),
+          });
+      },
+      () => {
+        if (!controller.signal.aborted)
+          setCapacityResult({ location, values: new Map(), failed: true });
+      },
+    );
+    return () => controller.abort();
+  }, [api, location]);
   useEffect(() => {
     const controller = new AbortController();
     async function load() {
@@ -78,21 +104,63 @@ export function MainDraftStart({
       />
     );
   const residents = data?.residents.filter((r) => r.roomId === room && r.verified) ?? [];
+  const capacity = capacityResult?.location === location ? capacityResult : undefined;
+  const roomOptions = (data?.rooms ?? [])
+    .filter(
+      (item) =>
+        !Number(minimumCapacity) || (capacity?.values.get(item.id) ?? 0) >= Number(minimumCapacity),
+    )
+    .map((item) => {
+      const size = capacity?.values.get(item.id);
+      return { ...item, label: size ? `${item.label} · ${size} người` : item.label };
+    });
+  function chooseRoom(value: string) {
+    setRoom(value);
+    setPeople([]);
+    setRepresentative('');
+  }
+  const capacityFilter = (
+    <RoomCapacityFilter
+      value={minimumCapacity}
+      disabled={loading || !!draftId || !capacity || !!capacity.failed}
+      onChange={(value) => {
+        setMinimumCapacity(value);
+        if (room && Number(value) > (capacity?.values.get(room) ?? 0)) chooseRoom('');
+      }}
+    />
+  );
+  const roomFields = (
+    <>
+      <ChoiceField
+        label="Cơ sở được phân công"
+        value={location}
+        options={data?.locations ?? []}
+        disabled={loading || !!draftId}
+        onChange={(value) => {
+          setLocation(value);
+          setMinimumCapacity('');
+          chooseRoom('');
+        }}
+      />
+      {capacityFilter}
+      {capacity?.failed && <Text>Chưa tải được sức chứa. Bạn vẫn có thể chọn phòng.</Text>}
+      {!!Number(minimumCapacity) && !roomOptions.length && (
+        <Text>Không có phòng phù hợp sức chứa đã nhập.</Text>
+      )}
+      <ChoiceField
+        label="Phòng"
+        value={room}
+        options={roomOptions}
+        disabled={loading || !!draftId || !location}
+        onChange={chooseRoom}
+      />
+    </>
+  );
   if (data?.rooms.find((r) => r.id === room)?.status === 'OnHold')
     return (
       <Box>
         <Heading title="Tạo hợp đồng từ phòng đang giữ chỗ" />
-        <ChoiceField
-          label="Phòng"
-          value={room}
-          options={data.rooms}
-          disabled={loading}
-          onChange={(value) => {
-            setRoom(value);
-            setPeople([]);
-            setRepresentative('');
-          }}
-        />
+        {roomFields}
         <HoldingMainStart
           api={api}
           locationId={location}
@@ -108,30 +176,8 @@ export function MainDraftStart({
         title="Tạo hợp đồng thuê"
         detail="Chọn hồ sơ đã hoàn tất tiếp nhận. Không cần tài khoản Tenant để lưu nháp."
       />
-      {!!error && <Text accessibilityRole="alert">{error}</Text>}
-      <ChoiceField
-        label="Cơ sở được phân công"
-        value={location}
-        options={data?.locations ?? []}
-        disabled={loading || !!draftId}
-        onChange={(value) => {
-          setLocation(value);
-          setRoom('');
-          setPeople([]);
-          setRepresentative('');
-        }}
-      />
-      <ChoiceField
-        label="Phòng"
-        value={room}
-        options={data?.rooms ?? []}
-        disabled={loading || !!draftId || !location}
-        onChange={(value) => {
-          setRoom(value);
-          setPeople([]);
-          setRepresentative('');
-        }}
-      />
+      {!!error && <ContractNotice message={error} />}
+      {roomFields}
       {!!room && !residents.length && (
         <Text>Phòng chưa có hồ sơ đã xác minh. Hoàn tất tiếp nhận trước khi lập hợp đồng.</Text>
       )}

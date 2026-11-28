@@ -1,4 +1,4 @@
-import type { WorkspaceScreen } from './navigation';
+﻿import type { WorkspaceScreen } from './navigation';
 
 export interface StaffFeature {
   title: string;
@@ -12,142 +12,90 @@ export interface StaffFeature {
 
 export const staffFeatureGroups: { title: string; items: StaffFeature[] }[] = [
   {
-    title: 'TIẾP NHẬN & HỢP ĐỒNG',
+    title: 'Theo dõi tạm trú',
     items: [
       {
-        title: 'Tiếp nhận người thuê',
-        detail: 'CCCD & người cùng ở',
-        icon: 'account-plus-outline',
-        screen: 'onboarding',
-      },
-      {
-        title: 'Tạo hợp đồng giữ chỗ',
-        detail: 'Chọn phòng, đại diện & tiền cọc',
-        icon: 'file-document-plus-outline',
-        screen: 'prepare-contract',
-        params: { kind: 'Holding' },
-      },
-      {
-        title: 'Hợp đồng',
-        detail: 'Nháp, trạng thái & gia hạn',
-        icon: 'file-document-edit-outline',
-        screen: 'signing',
-        partial: true,
-      },
-      {
-        title: 'Phòng trọ',
-        detail: 'Cơ sở, phòng & người ở',
-        icon: 'door-open',
-        screen: 'rooms',
-        partial: true,
+        title: 'Theo dõi tạm trú',
+        detail: 'Trạng thái và thời hạn trong phạm vi phân công',
+        icon: 'shield-home-outline',
+        screen: 'residence',
       },
     ],
   },
   {
-    title: 'CÔNG VIỆC & LỊCH LÀM',
+    title: 'Công việc của tôi',
     items: [
       {
-        title: 'Công việc của tôi',
-        detail: 'Tiến độ & bằng chứng',
+        title: 'Công việc',
+        detail: 'Việc được giao và lịch làm',
         icon: 'clipboard-check-outline',
         screen: 'work-orders',
       },
+    ],
+  },
+  {
+    title: 'Phòng được phân công',
+    items: [
       {
-        title: 'Lịch làm việc',
-        detail: 'Ca được phân công',
-        icon: 'calendar-month-outline',
-        screen: 'shifts',
-        pending: true,
+        title: 'Phòng được phân công',
+        detail: 'Phòng và người ở',
+        icon: 'door-open',
+        screen: 'rooms',
       },
     ],
   },
   {
-    title: 'ĐIỆN NƯỚC & BÀN GIAO',
+    title: 'Ghi điện nước',
     items: [
       {
         title: 'Ghi điện nước',
-        detail: 'Chụp, OCR & xác nhận',
+        detail: 'Chụp và xác nhận chỉ số',
         icon: 'gauge',
         screen: 'meter-reading',
       },
+    ],
+  },
+  {
+    title: 'Bàn giao / Trả phòng',
+    items: [
       {
         title: 'Bàn giao / Trả phòng',
-        detail: 'Kiểm tra & xác nhận',
+        detail: 'Kiểm tra và xác nhận',
         icon: 'key-outline',
-        screen: 'move-in',
-      },
-      {
-        title: 'Kiểm kê trước nhận phòng',
-        detail: 'Danh sách và tình trạng tài sản',
-        icon: 'clipboard-check-outline',
-        screen: 'move-in-inventory',
-      },
-      {
-        title: 'Tài sản',
-        detail: 'Thiết bị & hiện trạng',
-        icon: 'package-variant-closed',
-        screen: 'staff-assets',
-        pending: true,
+        screen: 'staff-handovers',
       },
     ],
   },
   {
-    title: 'SỰ CỐ & BẢO TRÌ',
+    title: 'Sự cố & bảo trì',
     items: [
-      {
-        title: 'Báo cáo sự cố',
-        detail: 'Ghi nhận sự cố tại cơ sở',
-        icon: 'alert-outline',
-        screen: 'report-incident',
-      },
       {
         title: 'Xử lý sự cố',
-        detail: 'Theo dõi và xử lý sửa chữa',
+        detail: 'Báo cáo và theo dõi xử lý',
         icon: 'tools',
-        screen: 'staff-maintenance',
-      },
-      {
-        title: 'Sự cố khẩn cấp',
-        detail: 'Tiếp nhận và xử lý khẩn cấp',
-        icon: 'alert-circle-outline',
-        screen: 'staff-emergencies',
+        screen: 'staff-incidents',
       },
     ],
   },
   {
-    title: 'HÓA ĐƠN & CÔNG NỢ',
+    title: 'Hợp đồng thuê',
     items: [
       {
-        title: 'Hóa đơn',
-        detail: 'Trạng thái theo phòng',
-        icon: 'receipt-text-outline',
-        screen: 'staff-invoices',
-        pending: true,
-      },
-      {
-        title: 'Công nợ',
-        detail: 'Theo dõi & nhắc thanh toán',
-        icon: 'wallet-outline',
-        screen: 'debt-follow-up',
-        pending: true,
-      },
-    ],
-  },
-  {
-    title: 'THÔNG BÁO',
-    items: [
-      {
-        title: 'Gửi thông báo',
-        detail: 'Thông tin vận hành cơ sở',
-        icon: 'bullhorn-outline',
-        screen: 'send-notification',
-        pending: true,
+        title: 'Hợp đồng thuê',
+        detail: 'Tạo và theo dõi hợp đồng',
+        icon: 'file-document-outline',
+        screen: 'signing',
       },
     ],
   },
 ];
 
 const allFeatures = staffFeatureGroups.flatMap((group) => group.items);
-export const frequentStaffFeatures = ['work-orders', 'meter-reading', 'onboarding', 'move-in']
+export const frequentStaffFeatures = [
+  'work-orders',
+  'meter-reading',
+  'staff-handovers',
+  'staff-incidents',
+]
   .map((screen) => allFeatures.find((feature) => feature.screen === screen))
   .filter((feature): feature is StaffFeature => !!feature);

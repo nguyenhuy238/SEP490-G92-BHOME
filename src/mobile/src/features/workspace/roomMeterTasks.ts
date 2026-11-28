@@ -5,12 +5,17 @@ export function meterRoundLabel(task: MeterTask) {
   if (task.purpose === 0)
     return `${task.contractId ? 'Khởi tạo cho hợp đồng' : 'Chỉ số ban đầu'} · ${displayContractDate(task.readingDate)}`;
   if (task.purpose === 2) return `Chốt trả phòng · ${displayContractDate(task.readingDate)}`;
-  return `Kỳ ${displayContractDate(task.billingPeriod ?? task.readingDate)}`;
+  const period = task.billingPeriod ?? task.readingDate;
+  return `Kỳ ${period.slice(5, 7)}/${period.slice(0, 4)}`;
 }
 
 function roundKey(task: MeterTask) {
   // Never group rooms by their display names, even on older API payloads.
   if (!task.roomId || !task.locationId) return task.id;
+  // Periodic readings belong to the room and billing period, regardless of
+  // generation source (legacy/demo records may lack an automation plan ID).
+  if (task.purpose === 1 && task.billingPeriod && !task.contractId)
+    return JSON.stringify([task.locationId, task.roomId, 'periodic', task.billingPeriod]);
   return JSON.stringify([
     task.locationId,
     task.roomId,
@@ -30,6 +35,24 @@ export function groupRoomMeterTasks(tasks: MeterTask[]) {
     groups.set(key, group);
   }
   return [...groups.values()];
+}
+
+export function isOverduePeriodicMeterTask(task: MeterTask): boolean {
+  return (
+    task.purpose === 1 &&
+    !!task.billingPeriod &&
+    task.status !== 2 &&
+    task.status !== 3 &&
+    task.isOverdue === true
+  );
+}
+
+export function countOverdueMeterRooms(tasks: MeterTask[]): number {
+  return new Set(
+    tasks
+      .filter((task) => isOverduePeriodicMeterTask(task) && task.roomId && task.locationId)
+      .map((task) => JSON.stringify([task.locationId, task.roomId])),
+  ).size;
 }
 
 export function roomMeterTasks(selected: MeterTask, candidates: MeterTask[]) {

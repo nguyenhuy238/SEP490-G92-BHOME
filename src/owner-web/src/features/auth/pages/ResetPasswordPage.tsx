@@ -1,20 +1,20 @@
+import { TextField, ValidatedForm } from '../../../components/common/ValidatedForm';
 import { useEffect, useState, type FormEvent } from 'react';
 import {
   Alert,
   Box,
   Button,
-  Chip,
   CircularProgress,
   IconButton,
   InputAdornment,
   Link,
   Paper,
   Stack,
-  TextField,
   Typography,
 } from '@mui/material';
-import { Apartment, LockOutlined, Visibility, VisibilityOff } from '@mui/icons-material';
+import { LockOutlined, Visibility, VisibilityOff } from '@mui/icons-material';
 import { PasswordField } from '../components/PasswordField';
+import { AuthBrand } from '../components/AuthBrand';
 import { Link as RouterLink, useLocation, useNavigate } from 'react-router';
 import { readAuthenticationFragment } from '../../../../../../packages/client-core/src/authLinks';
 import { useAuth } from '../../../../../../packages/client-core/src/auth';
@@ -91,36 +91,7 @@ export default function ResetPasswordPage() {
       }}
     >
       <Box sx={{ width: '100%', maxWidth: 440 }}>
-        <Stack component="header" sx={{ alignItems: 'center', textAlign: 'center', mb: 4 }}>
-          <Box
-            sx={{
-              width: 48,
-              height: 48,
-              display: 'grid',
-              placeItems: 'center',
-              color: 'white',
-              bgcolor: '#2563eb',
-              borderRadius: 1,
-              mb: 2,
-              boxShadow: '0 1px 2px #131b2e20',
-            }}
-          >
-            <Apartment sx={{ fontSize: 28 }} />
-          </Box>
-          <Stack direction="row" spacing={1} sx={{ alignItems: 'center', mb: 0.75 }}>
-            <Typography sx={{ fontSize: 20, fontWeight: 600, letterSpacing: '-0.015em' }}>
-              BHOME
-            </Typography>
-            <Chip
-              label="Owner Portal"
-              size="small"
-              sx={{ height: 22, bgcolor: '#eaedff', color: 'primary.main', fontSize: 12 }}
-            />
-          </Stack>
-          <Typography variant="body2" color="text.secondary" sx={{ maxWidth: 320 }}>
-            Nền tảng quản lý &amp; vận hành chuỗi nhà trọ thông minh
-          </Typography>
-        </Stack>
+        <AuthBrand />
 
         <Paper sx={{ p: { xs: 3, sm: 4 }, boxShadow: '0 1px 2px #131b2e0d' }}>
           <Typography component="h1" variant="h1">
@@ -134,7 +105,7 @@ export default function ResetPasswordPage() {
             Dùng liên kết hoặc mã một lần được gửi đến email của bạn
           </Typography>
 
-          <Box component="form" onSubmit={(event) => void submit(event)} aria-busy={busy}>
+          <Box component={ValidatedForm} onSubmit={(event) => void submit(event)} aria-busy={busy}>
             <Stack spacing={2.5}>
               {error && <Alert severity="error">{error}</Alert>}
               <TextField

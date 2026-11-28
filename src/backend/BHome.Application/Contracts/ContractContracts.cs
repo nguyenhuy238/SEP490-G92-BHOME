@@ -53,9 +53,9 @@ public sealed record ContractSummary(Guid Id, Guid RoomId, Guid LocationId, stri
     string Kind, string Status, DateOnly StartDate, DateOnly EndDate,
     [property: JsonNumberHandling(JsonNumberHandling.WriteAsString | JsonNumberHandling.AllowReadingFromString)] decimal MonthlyRent, bool OnboardingDraft = false,
     [property: JsonNumberHandling(JsonNumberHandling.WriteAsString | JsonNumberHandling.AllowReadingFromString)] decimal RequiredDeposit = 0,
-    DateTimeOffset? HoldingExpiresAt = null);
+    DateTimeOffset? HoldingExpiresAt = null, HoldingCustomerView? HoldingCustomer = null, string? RepresentativeName = null);
 public sealed record ContractPage(IReadOnlyList<ContractSummary> Items, int Page, int PageSize, int TotalCount);
-public sealed record ContractListScope(Guid ActorId, bool Owner, bool Staff, bool Tenant, DateOnly Today);
+public sealed record ContractListScope(Guid ActorId, bool Owner, bool Staff, bool Tenant, DateOnly Today, ContractKind? Kind = null);
 // Placement null puts the signature in the signer's own box of the contract's signature block. UsePicture null/true
 // shows the signer's saved signature picture (when there is one) above "Ký bởi / Ngày ký"; false shows the text only.
 // Method: OTP (in-app electronic signature) or null for the certificate-based provider of the deployment.
@@ -67,7 +67,10 @@ public sealed record SignaturePlacementInput(int Page, double X, double Y, doubl
     [System.Text.Json.Serialization.JsonIgnore]
     public bool IsValid => Page is >= 1 and <= 500 && X is >= 0 and < 1 && Y is >= 0 and < 1 && Width is >= 0.08 and <= 0.6 && X + Width <= 1.0001;
 }
-public sealed record SigningAppearance(SignaturePlacementInput? Placement, bool UsePicture, string? Method = null);
+public sealed record SigningAppearance(SignaturePlacementInput? Placement, bool UsePicture, string? Method = null,
+    // Only trusted server-rendered PNG bytes from Owner's own strokes for
+    // the one handover PDF being signed. Never falls back to a profile image.
+    byte[]? HandwrittenInkPng = null);
 // What a signer sees before choosing where to sign: the pages of the PDF they will sign, and their suggested box.
 public sealed record SigningPageSize(double Width, double Height);
 public sealed record SigningLayout(int PageCount, IReadOnlyList<SigningPageSize> Pages, SignaturePlacementInput? Suggested,
@@ -80,14 +83,28 @@ public interface IContractSigningPages
 public sealed record SigningLayoutInfo(IReadOnlyList<SigningPageSize> Pages, SignaturePlacementInput? Suggested);
 public sealed record DepositInput([Required, StringLength(150, MinimumLength = 1)] string BankTransactionReference,
     [property: JsonNumberHandling(JsonNumberHandling.AllowReadingFromString | JsonNumberHandling.WriteAsString)] decimal Amount, [Required, StringLength(2000, MinimumLength = 1)] string VerificationReason);
+public sealed record TerminationRejection([Required, StringLength(2000)] string Reason, int? ExpectedVersion = null);
+public sealed record TerminationReview(string Status, int Version, string LocationName, string RoomNumber, string? TenantName,
+    DateOnly StartDate, DateOnly EndDate, DateOnly ProposedDate, string Reason,
+    DateTimeOffset? DecidedAt, string? DecidedBy, string? RejectionReason);
 public sealed record TerminationInput(DateOnly ProposedDate,
     [Required, StringLength(2000, MinimumLength = 1)] string Reason);
+public sealed record MoveOutConsentInput(bool Confirmed, int ExpectedVersion);
 public sealed record InspectionScheduleInput(DateTimeOffset ScheduledAt, Guid? StaffUserId = null, int? ExpectedVersion = null);
+// Move-Out-only evidence for an individually tracked physical asset.
+// Separate from Move-In physical observations and its signed snapshot format.
+public sealed record MoveOutPhysicalItemEvidence(Guid AssetId, Guid PhysicalAssetId,
+    string? Notes, Guid[] EvidenceIds);
 public sealed record InspectionInput(Guid ElectricityReadingId, Guid WaterReadingId,
-    [Required, StringLength(4000, MinimumLength = 1)] string Notes,
-    [Required, MinLength(1), MaxLength(10)] Guid[] EvidenceIds,
+    [StringLength(4000)] string? Notes = null,
+    [MaxLength(10)] Guid[]? EvidenceIds = null,
     HandoverAssetInput[]? Assets = null, string? RoomCondition = null, string? KeysAndAccess = null, int? ExpectedVersion = null,
-    string? InventoryToken = null, string? ProposedCompensation = null);
+    string? InventoryToken = null, string? ProposedCompensation = null,
+    HandoverRoomCheck[]? RoomChecks = null, HandoverAccessItem[]? AccessItems = null,
+    Guid[]? KeyEvidenceIds = null, MoveOutPhysicalItemEvidence[]? PhysicalItemEvidence = null);
+// Owner reviews observations with a versioned decision, never a signature.
+// Legacy TenantException fields are ignored for compatibility with older clients;
+// no Tenant/Owner signer or Move-Out report is required.
 public sealed record InspectionReviewInput(int Version, bool Confirmed, string Reason, bool NoAdditionalCharges = false,
     bool TenantException = false, string? TenantExceptionReason = null);
 public sealed record FinalInspectionView(Guid Id, int Version, Guid BaselineContractId, int BaselineVersion, HandoverSnapshot? Baseline,
@@ -103,6 +120,7 @@ public sealed record SigningRecoveryInput([Required, StringLength(200, MinimumLe
 public sealed record SignatureView(Guid Id, Guid SignerUserId, string Status, DateTimeOffset? SignedAt, string Method = "",
     DateTimeOffset? ExpiresAt = null, string? CertificateSubject = null, string? CertificateIssuer = null);
 public sealed record ContractOccupantView(Guid Id, string Label, bool Representative);
+public sealed record HoldingCustomerView(string FullName, string MaskedCitizenNumber);
 public sealed record ContractView(Guid Id, Guid RoomId, string Kind, string Status, DateOnly StartDate, DateOnly EndDate,
     [property: JsonNumberHandling(JsonNumberHandling.AllowReadingFromString | JsonNumberHandling.WriteAsString)] decimal MonthlyRent, [property: JsonNumberHandling(JsonNumberHandling.AllowReadingFromString | JsonNumberHandling.WriteAsString)] decimal RequiredDeposit, string Terms, Guid? PreviousContractId,
     IReadOnlyList<Guid> ResidentIds, IReadOnlyList<SignatureView> Signatures, DateTimeOffset? ActivatedAt,
@@ -112,7 +130,7 @@ public sealed record ContractView(Guid Id, Guid RoomId, string Kind, string Stat
     DateTimeOffset? HoldingExpiresAt = null, short? ReservedCapacity = null, DateTimeOffset? ApprovedAt = null,
     DateTimeOffset? PriceLockedAt = null, string? PriceLockTrigger = null, Guid? ConvertedMainContractId = null,
     string SigningMode = "", string SnapshotHash = "", IReadOnlyList<HoldingPriceCharge>? AgreedCharges = null, bool InitialPaymentRequired = false,
-    bool OwnerOnlySandboxConfirmed = false, bool SandboxTenantSimulated = false, string? PaymentMode = null);
+    bool OwnerOnlySandboxConfirmed = false, bool SandboxTenantSimulated = false, string? PaymentMode = null, HoldingCustomerView? HoldingCustomer = null);
 public sealed record ActivationReadiness(bool Ready, [property: JsonNumberHandling(JsonNumberHandling.AllowReadingFromString | JsonNumberHandling.WriteAsString)] decimal VerifiedDeposit, [property: JsonNumberHandling(JsonNumberHandling.AllowReadingFromString | JsonNumberHandling.WriteAsString)] decimal RemainingDeposit,
     IReadOnlyList<string> Blockers);
 public interface IAdministrativeContractReadiness
@@ -123,9 +141,15 @@ public sealed record MoveOutView(Guid Id, string Status, DateOnly ProposedDate, 
     DateTimeOffset? InspectionScheduledAt, string PendingReason, string? InspectionNotes = null,
     DateTimeOffset? InspectedAt = null, Guid? ElectricityReadingId = null, Guid? WaterReadingId = null,
     IReadOnlyList<Guid>? EvidenceIds = null, Guid? InspectionStaffId = null, int Version = 1,
-    bool OwnerConfirmedInspection = false, string FinancialReviewStatus = "PendingReview");
+    bool OwnerConfirmedInspection = false, string FinancialReviewStatus = "PendingReview",
+    bool IsForced = false, int? RequiredConsents = null, int? ReceivedConsents = null,
+    bool CanConfirm = false, bool IsGroupPrimary = true, bool CanReject = false);
 public sealed record MoveOutHistoryView(int Version, string Action, Guid ActorId, DateTimeOffset OccurredAt, string Snapshot);
-public sealed record MoveOutAssignment(Guid ContractId, Guid RoomId, string RoomNumber, string LocationName, string Status, DateOnly ProposedDate, DateTimeOffset ScheduledAt, int Version);
+public sealed record MoveOutAssignment(Guid ContractId, Guid RoomId, string RoomNumber, string LocationName, string Status, DateOnly ProposedDate, DateTimeOffset? ScheduledAt, int Version);
+public sealed record OwnerMoveOutInboxItem(Guid ContractId, string RoomNumber, Guid LocationId, string LocationName,
+    string Status, DateOnly ProposedDate, DateTimeOffset? InspectedAt, bool OwnerConfirmedInspection,
+    string? ProposalStatus = null, string? ProposalSettlementStatus = null);
+public sealed record OwnerMoveOutInboxPage(IReadOnlyList<OwnerMoveOutInboxItem> Items, int Page, int PageSize, int TotalCount);
 public sealed record SettlementReviewView(Guid Id, string Decision, bool Settled, Guid ReviewedByUserId, DateTimeOffset ReviewedAt, string FinancialSnapshot = "{}");
 
 public sealed class ContractException(int status, string code) : Exception(code)
@@ -236,13 +260,19 @@ public interface IContractRepository
     Task<bool> ActiveUserInRoleAsync(Guid id, string role, CancellationToken t);
     Task<bool> StaffAssignedAsync(Guid staffId, Guid locationId, DateOnly today, CancellationToken t);
     Task<bool> ConflictsAsync(Guid roomId, Guid exceptId, DateOnly from, DateOnly to, Guid[] residentIds, CancellationToken t);
+    Task<IReadOnlySet<Guid>> RoomsAwaitingMainOwnerSignatureAsync(Guid[] roomIds, Guid exceptContractId, CancellationToken t);
     Task<bool> HasOtherActiveContractsAsync(Guid roomId, Guid exceptId, CancellationToken t);
+    Task<IReadOnlyList<Contract>> RoomActiveContractsAsync(Guid roomId, CancellationToken t);
     Task<bool> OpenRenewalAsync(Guid contractId, CancellationToken t);
     Task<IReadOnlyList<Contract>> VersionsAsync(Guid roomId, Guid tenantId, CancellationToken t);
     Task<IReadOnlyList<ContractMoveOutHistory>> MoveOutHistoryAsync(Guid contractId, CancellationToken t);
+    Task<string?> DecisionActorNameAsync(Guid userId, CancellationToken t);
     Task<IReadOnlyList<ContractFinalInspection>> FinalInspectionsAsync(Guid contractId, CancellationToken t);
     Task<IReadOnlyList<HandoverReading>> FinalReadingsAsync(Guid contractId, Guid roomId, DateOnly today, CancellationToken t);
+    Task<HandoverReading?> ConfirmedFinalInspectionReadingAsync(Guid contractId, Guid roomId, Guid readingId, CancellationToken t);
     Task<IReadOnlyList<MoveOutAssignment>> AssignmentsAsync(Guid staffId, DateOnly today, CancellationToken t);
+    Task<OwnerMoveOutInboxPage> OwnerMoveOutInboxAsync(int page, int pageSize,
+        Guid? locationId, MoveOutStatus? status, string? room, CancellationToken t);
     Task<decimal> DepositTotalAsync(Guid contractId, CancellationToken t);
     Task<DepositVerification?> BankReferenceAsync(string reference, CancellationToken t);
     Task<ResolvedPrices> ResolvePricesAsync(Guid roomId, DateOnly effectiveOn, CancellationToken t);
@@ -260,4 +290,5 @@ public interface IContractRepository
     void AuditAnonymous(string action, Guid targetId, DateTimeOffset at);
     Task CloseResidenceAsync(Contract contract, DateOnly actualEndDate, Guid actorId, DateTimeOffset at, CancellationToken t);
     Task<IReadOnlyList<ContractOccupantView>> OccupantsAsync(Guid contractId, CancellationToken t);
+    Task<HoldingCustomerView?> HoldingCustomerAsync(Guid contractId, Guid residentId, CancellationToken t) => Task.FromResult<HoldingCustomerView?>(null);
 }

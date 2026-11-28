@@ -1,21 +1,13 @@
+import { TextField, ValidatedForm } from '../../../components/common/ValidatedForm';
 import { useState } from 'react';
+import { LocationBillingSchedule } from '../../invoices/LocationBillingSchedule';
 import { LocationLegalRecords } from '../components/LocationLegalRecords';
 import {
   contactPhoneError,
   normalizeContactPhone,
 } from '../../../../../../packages/client-core/src/contactPhone';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import {
-  Alert,
-  Box,
-  Button,
-  Divider,
-  MenuItem,
-  Paper,
-  Stack,
-  TextField,
-  Typography,
-} from '@mui/material';
+import { Alert, Box, Button, Divider, MenuItem, Paper, Stack, Typography } from '@mui/material';
 import type { LocationConfiguration } from '../../../../../../packages/client-core/src/propertySetup';
 import { useAuth } from '../../../../../../packages/client-core/src/auth';
 import { usePropertySetupApi } from '../../property/usePropertySetupApi';
@@ -175,7 +167,7 @@ export function LocationWorkspaceSettings({ location }: { location: LocationConf
       }}
     >
       <Paper variant="outlined" sx={{ p: { xs: 2, md: 3 } }}>
-        <form
+        <ValidatedForm
           onSubmit={(event) => {
             event.preventDefault();
             if (!canSave) return;
@@ -306,7 +298,7 @@ export function LocationWorkspaceSettings({ location }: { location: LocationConf
               </Button>
             </Stack>
           </Stack>
-        </form>
+        </ValidatedForm>
         <ConfirmDialog
           open={confirm && closureReady}
           title="Ngừng hoạt động cơ sở?"
@@ -451,6 +443,15 @@ export function LocationWorkspaceSettings({ location }: { location: LocationConf
       {canManage && (
         <Box sx={{ mt: 3 }}>
           <LocationLegalRecords locationId={location.id} />
+        </Box>
+      )}
+      {canManage && (
+        <Box sx={{ gridColumn: '1 / -1', width: '100%', maxWidth: 960 }}>
+          <LocationBillingSchedule
+            key={location.id}
+            location={location.id}
+            disabled={!location.isActive}
+          />
         </Box>
       )}
     </Box>

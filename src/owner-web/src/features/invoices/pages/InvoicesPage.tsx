@@ -1,3 +1,4 @@
+import { TextField } from '../../../components/common/ValidatedForm';
 import { useRef, useState } from 'react';
 import { Link, useSearchParams } from 'react-router';
 import {
@@ -20,7 +21,6 @@ import {
   TableContainer,
   TableHead,
   TableRow,
-  TextField,
   Typography,
 } from '@mui/material';
 import CloseRoundedIcon from '@mui/icons-material/CloseRounded';
@@ -573,8 +573,7 @@ export function LiveInvoicesPage() {
   const [page, setPage] = useState(1),
     [selected, setSelected] = useState(deepParams.get('invoiceId') ?? '');
   const [roomId, setRoomId] = useState(''),
-    [period, setPeriod] = useState(''),
-    [contractId, setContractId] = useState('');
+    [period, setPeriod] = useState('');
   const [locationId, setLocationId] = useState('');
   const [filterRoom, setFilterRoom] = useState('');
   const [filterLocation, setFilterLocation] = useState(''),
@@ -598,20 +597,6 @@ export function LiveInvoicesPage() {
         `/api/v1/capture/locations/${locationId}/rooms`,
         { signal },
       ),
-  });
-  const contracts = useQuery({
-    queryKey: ['invoice-contracts', actor, roomId],
-    enabled: creating && !!roomId,
-    queryFn: ({ signal }) =>
-      api.request<{
-        periods: {
-          contractId: string;
-          contractStatus: string;
-          from: string;
-          to: string;
-          occupants: { displayLabel: string }[];
-        }[];
-      }>(`/api/v1/rooms/${roomId}/occupancy-history`, { signal }),
   });
   const filterRooms = useQuery({
     queryKey: ['invoice-filter-rooms', actor, filterLocation],
@@ -785,8 +770,8 @@ export function LiveInvoicesPage() {
             <Stack spacing={2}>
               {!!error && <Alert severity="error">{error}</Alert>}
               <Typography variant="body2" color="text.secondary">
-                Chọn cơ sở, phòng và kỳ cần lập nháp, sau đó chọn hợp đồng phù hợp. Bạn có thể kiểm
-                tra các khoản thu trước khi phát hành.
+                Chọn cơ sở, phòng và kỳ kiểm thử. Máy chủ tự chọn hợp đồng đối chiếu đủ điều kiện,
+                tính điện, nước, dịch vụ của kỳ và tiền thuê tháng kế tiếp.
               </Typography>
               <Stack spacing={2} sx={{ pt: 1 }}>
                 <TextField
@@ -796,7 +781,6 @@ export function LiveInvoicesPage() {
                   onChange={(e) => {
                     setLocationId(e.target.value);
                     setRoomId('');
-                    setContractId('');
                   }}
                 >
                   <MenuItem value="">Chọn cơ sở</MenuItem>
@@ -814,7 +798,6 @@ export function LiveInvoicesPage() {
                   helperText={!locationId ? 'Chọn cơ sở trước khi chọn phòng' : undefined}
                   onChange={(e) => {
                     setRoomId(e.target.value);
-                    setContractId('');
                   }}
                 >
                   <MenuItem value="">Chọn phòng</MenuItem>
@@ -830,48 +813,14 @@ export function LiveInvoicesPage() {
                   value={period}
                   onChange={(e) => {
                     setPeriod(e.target.value);
-                    setContractId('');
                   }}
                   slotProps={{ inputLabel: { shrink: true } }}
                 />
-                <TextField
-                  select
-                  label="Hợp đồng đại diện phòng trong kỳ"
-                  value={contractId}
-                  onChange={(e) => setContractId(e.target.value)}
-                  disabled={!roomId || !/^\d{4}-\d{2}$/.test(period) || contracts.isFetching}
-                  helperText={!roomId ? 'Chọn phòng để tải hợp đồng' : undefined}
-                >
-                  <MenuItem value="">Chọn hợp đồng</MenuItem>
-                  {contracts.data?.periods
-                    .filter((c) =>
-                      ['Active', 'Terminated', 'Superseded'].includes(c.contractStatus),
-                    )
-                    .map((c) => (
-                      <MenuItem value={c.contractId} key={c.contractId}>
-                        {c.from.split('-').reverse().join('/')} –{' '}
-                        {c.to.split('-').reverse().join('/')} ·{' '}
-                        {c.occupants.map((o) => o.displayLabel).join(', ')}
-                      </MenuItem>
-                    ))}
-                </TextField>
-                {contracts.data?.periods.filter((c) =>
-                  ['Active', 'Terminated', 'Superseded'].includes(c.contractStatus),
-                ).length === 0 && (
-                  <Alert severity="warning">
-                    Không tìm thấy hợp đồng phù hợp. Kiểm tra lịch sử hợp đồng phòng trước khi lập
-                    nháp.
-                  </Alert>
-                )}
               </Stack>
-              {(locations.error || rooms.error || contracts.error) && (
-                <Alert severity="error">
-                  {invoiceError(locations.error || rooms.error || contracts.error)}
-                </Alert>
+              {(locations.error || rooms.error) && (
+                <Alert severity="error">{invoiceError(locations.error || rooms.error)}</Alert>
               )}
-              {(locations.isPending ||
-                (!!locationId && rooms.isPending) ||
-                (!!roomId && contracts.isPending)) && <LinearProgress />}
+              {(locations.isPending || (!!locationId && rooms.isPending)) && <LinearProgress />}
             </Stack>
           </DialogContent>
           <DialogActions sx={{ flexWrap: 'wrap' }}>
@@ -880,13 +829,8 @@ export function LiveInvoicesPage() {
             </Button>
             <Button
               variant="contained"
-              disabled={
-                busy ||
-                !roomId ||
-                !/^\d{4}-\d{2}$/.test(period) ||
-                !/^[\da-f]{8}-(?:[\da-f]{4}-){3}[\da-f]{12}$/i.test(contractId)
-              }
-              onClick={() => void mutate(() => api.draft(roomId, period + '-01', contractId))}
+              disabled={busy || !roomId || !/^\d{4}-\d{2}$/.test(period)}
+              onClick={() => void mutate(() => api.draft(roomId, period + '-01'))}
             >
               Tạo / mở bản nháp
             </Button>
@@ -1182,7 +1126,7 @@ export function LiveInvoicesPage() {
                           <TableCell>
                             {line.name}
                             <Typography variant="caption" sx={{ display: 'block' }}>
-                              Giá ngày {line.rateDate} · {line.occupiedDays}/{line.periodDays} ngày
+                              Giá theo hợp đồng đã thỏa thuận
                             </Typography>
                           </TableCell>
                           <TableCell>

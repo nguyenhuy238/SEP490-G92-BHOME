@@ -10,8 +10,16 @@ namespace BHome.IntegrationTests.Notifications;
 
 public sealed class EmailCaptureTests
 {
-    [Fact]
-    public async Task LocalSmtpCaptureReceivesGeneratedEmailWithoutExternalNetworkOrCredentials()
+    [Theory]
+    [InlineData("Testing", "TEST", false)]
+    [InlineData("Development", "HOLDING_CONFIRMED", true)]
+    [InlineData("Development", "ACCOUNT_INVITATION", false)]
+    [InlineData("Development", "PASSWORD_RESET_REQUESTED", false)]
+    [InlineData("Development", "EMAIL_CONFIRMATION_REQUESTED", false)]
+    [InlineData("Development", "InternalContractSigning", false)]
+    [InlineData("Development", "ANNOUNCEMENT", false)]
+    [InlineData("Development", "TENANT_SETUP_AFTER_ACTIVATION", true)]
+    public async Task LocalSmtpCaptureReceivesGeneratedEmailWithoutExternalNetworkOrCredentials(string environment, string eventType, bool allowSigningRecipient)
     {
         using var listener = new TcpListener(IPAddress.Loopback, 0);
         listener.Start();
@@ -44,11 +52,14 @@ public sealed class EmailCaptureTests
             DeliveryMode = "Capture",
             Host = "127.0.0.1",
             Port = ((IPEndPoint)listener.LocalEndpoint).Port,
-            FromEmail = "sender@example.invalid"
+            FromEmail = "sender@example.invalid",
+            AllowedRecipients = environment == "Development" ? ["allowed@example.invalid"] : [],
+            AllowAnyRecipientInDevelopment = environment == "Development",
+            AllowAnyDevelopmentSigningRecipient = allowSigningRecipient
         };
         var sender = new MailKitEmailSender(Options.Create(options), NullLogger<MailKitEmailSender>.Instance,
-            new HostingEnvironment { EnvironmentName = "Testing" });
-        var result = await sender.SendAsync(new("synthetic-capture", "EMAIL", "recipient@example.invalid", "TEST",
+            new HostingEnvironment { EnvironmentName = environment });
+        var result = await sender.SendAsync(new("synthetic-capture", "EMAIL", "recipient@example.invalid", eventType,
             "Synthetic invitation", "Open the local page", "https://localhost:5176/contract-signing#token=SYNTHETIC"), timeout.Token);
         await server;
         Assert.StartsWith("smtp-accepted:", result);
@@ -58,8 +69,11 @@ public sealed class EmailCaptureTests
         Assert.Contains("recipient@example.invalid", mime.To.ToString());
     }
 
-    [Fact]
-    public async Task StagingRecipientOutsideAllowlistIsRejectedBeforeNetwork()
+    [Theory]
+    [InlineData("Staging")]
+    [InlineData("Production")]
+    [InlineData("Testing")]
+    public async Task InvalidRecipientIsRejectedBeforeNetworkRegardlessOfLegacyAllowlist(string environment)
     {
         var options = new EmailOptions
         {
@@ -68,12 +82,56 @@ public sealed class EmailCaptureTests
             Username = "sender@example.invalid",
             FromEmail = "sender@example.invalid",
             AppPassword = "synthetic",
-            AllowedRecipients = ["allowed@example.invalid"]
+            AllowedRecipients = ["allowed@example.invalid"],
+            AllowAnyDevelopmentSigningRecipient = true
         };
         var sender = new MailKitEmailSender(Options.Create(options), NullLogger<MailKitEmailSender>.Instance,
-            new HostingEnvironment { EnvironmentName = "Staging" });
+            new HostingEnvironment { EnvironmentName = environment });
         var error = await Assert.ThrowsAsync<ChannelDeliveryException>(() => sender.SendAsync(
-            new("synthetic", "EMAIL", "blocked@example.invalid", "TEST", "Test", "Test"), default));
-        Assert.Equal("email_recipient_not_allowed", error.Code);
+            new("synthetic", "EMAIL", "invalid\r\nBcc: attacker@example.invalid", "HOLDING_CONFIRMED", "Test", "Test"), default));
+        Assert.Equal("email_recipient_invalid", error.Code);
     }
+    [Theory]
+    [InlineData("Development", "outside@example.invalid", "email_connection_failed")]
+    [InlineData("Development", "invalid", "email_recipient_invalid")]
+    [InlineData("Testing", "outside@example.invalid", "email_connection_failed")]
+    [InlineData("Testing", "invalid", "email_recipient_invalid")]
+    [InlineData("Staging", "outside@example.invalid", "email_connection_failed")]
+    [InlineData("Staging", "invalid", "email_recipient_invalid")]
+    [InlineData("Staging", "allowed@example.invalid", "email_connection_failed")]
+    [InlineData("Production", "outside@example.invalid", "email_connection_failed")]
+    [InlineData("Production", "invalid", "email_recipient_invalid")]
+    [InlineData("Production", "allowed@example.invalid", "email_connection_failed")]
+    public async Task DirectSmtpUsesSharedPolicyBeforeOpeningConnection(string environment, string destination, string expected)
+    {
+        using var listener = new TcpListener(IPAddress.Loopback, 0);
+        listener.Start(); var port = ((IPEndPoint)listener.LocalEndpoint).Port; listener.Stop();
+        var options = new EmailOptions
+        {
+            Enabled = true,
+            Host = "127.0.0.1",
+            Port = port,
+            Username = "sender@example.invalid",
+            FromEmail = "sender@example.invalid",
+            AppPassword = "synthetic",
+            AllowedRecipients = ["allowed@example.invalid"],
+            TestEnabled = true,
+            TestRecipient = "diagnostic@example.invalid"
+        };
+        var sender = new MailKitEmailSender(Options.Create(options), NullLogger<MailKitEmailSender>.Instance,
+            new HostingEnvironment { EnvironmentName = environment });
+        var error = await Assert.ThrowsAsync<ChannelDeliveryException>(() => sender.SendAsync(
+            new("synthetic", "EMAIL", destination, "TEST", "Test", "Test"), default));
+        Assert.Equal(expected, error.Code);
+        // This proves recipient acceptance, not successful SMTP authentication/delivery.
+        if (expected == "email_connection_failed") Assert.True(error.Retryable);
+        if (environment == "Development")
+        {
+            options.AppPassword = "";
+            error = await Assert.ThrowsAsync<ChannelDeliveryException>(() => sender.SendAsync(
+                new("synthetic", "EMAIL", destination, "TEST", "Test", "Test"), default));
+            Assert.Equal("email_configuration_invalid", error.Code);
+        }
+    }
+
 }

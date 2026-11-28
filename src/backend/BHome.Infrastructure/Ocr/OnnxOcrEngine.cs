@@ -11,7 +11,7 @@ namespace BHome.Infrastructure.Ocr;
 // One detector + recognizer per process. No network, file writes or image logging.
 public sealed class OnnxOcrEngine : IOcrEngine, IOcrAnalysisEngine, IExperimentalMeterAnalysisEngine, IDisposable
 {
-    public const string Version = "ocrdoc-ppocrv6-vi-run6-9b534643-yolo2-cache1-category2";
+    public const string Version = "ocrdoc-ppocrv6-vi-run6-9b534643-yolo2-cache1-category2-identity-desk1";
     private readonly OcrOptions options;
     private readonly IImagePreprocessor preprocessor;
     private readonly InferenceSession detector;
@@ -38,11 +38,15 @@ public sealed class OnnxOcrEngine : IOcrEngine, IOcrAnalysisEngine, IExperimenta
         dictionary = ["", .. File.ReadAllLines(Path.Combine(options.ModelDirectory, "charset.txt"), Encoding.UTF8), " "];
         using var sessionOptions = new SessionOptions
         {
-            IntraOpNumThreads = options.InferenceThreads,
+            IntraOpNumThreads = Math.Min(options.InferenceThreads, Environment.ProcessorCount),
             InterOpNumThreads = 1,
             GraphOptimizationLevel = GraphOptimizationLevel.ORT_ENABLE_ALL,
             LogSeverityLevel = OrtLoggingLevel.ORT_LOGGING_LEVEL_FATAL
         };
+        // Detector and recognizer run sequentially. Idle session workers must not
+        // consume the CPU budget needed by the active model in a shared container.
+        sessionOptions.AddSessionConfigEntry("session.intra_op.allow_spinning", "0");
+        sessionOptions.AddSessionConfigEntry("session.inter_op.allow_spinning", "0");
         detector = new InferenceSession(Path.Combine(options.ModelDirectory, "detection.onnx"), sessionOptions);
         try
         {
@@ -227,10 +231,12 @@ public sealed class OnnxOcrEngine : IOcrEngine, IOcrAnalysisEngine, IExperimenta
     private OcrText Recognize(ReadOnlyMemory<byte> image, OcrDocumentKind kind, CancellationToken token)
     {
         token.ThrowIfCancellationRequested();
+        // Preprocessing consumes the same request deadline as recognition. Do
+        // not let a late decorative line discard identity fields already read.
+        var clock = Stopwatch.StartNew();
         using var prepared = preprocessor.Prepare(image, kind);
         using var run = new RunOptions { LogSeverityLevel = OrtLoggingLevel.ORT_LOGGING_LEVEL_FATAL };
         using var registration = token.Register(() => run.Terminate = true);
-        var clock = Stopwatch.StartNew();
         try
         {
             using var upright = new Mat();
@@ -271,26 +277,79 @@ public sealed class OnnxOcrEngine : IOcrEngine, IOcrAnalysisEngine, IExperimenta
                 source = upright;
                 regions = Detect(source, run, token);
             }
-            var text = ReadPage(source, regions, kind, run, token);
+            var orientationCorrected = axisCorrected;
+            var orientationKnown = false;
+            Dictionary<RotatedRect, OcrLine>? identityLines = null;
+            if (kind is OcrDocumentKind.IdentityFront or OcrDocumentKind.IdentityBack &&
+                IdentityOrientation.Probe(regions) is { } probe && clock.ElapsedMilliseconds < options.TimeoutMilliseconds / 3)
+            {
+                // Probe one alphabetic line before spending the page budget on
+                // upside-down text. Reuse an upright probe in the normal pass.
+                using var probeTimeout = CancellationTokenSource.CreateLinkedTokenSource(token);
+                probeTimeout.CancelAfter(options.TimeoutMilliseconds / 4);
+                using var probeRun = new RunOptions { LogSeverityLevel = OrtLoggingLevel.ORT_LOGGING_LEVEL_FATAL };
+                using var probeRegistration = probeTimeout.Token.Register(() => probeRun.Terminate = true);
+                try
+                {
+                    using var crop = Crop(source, probe);
+                    var direct = ReadLine(crop, probeRun, wideLine: true);
+                    identityLines = new() { [probe] = direct };
+                    orientationKnown = IdentityOrientation.Reliable(direct);
+                    if (!orientationKnown)
+                    {
+                        using var opposite = new Mat();
+                        Cv2.Rotate(crop, opposite, RotateFlags.Rotate180);
+                        var alternative = ReadLine(opposite, probeRun, wideLine: true);
+                        if (IdentityOrientation.PreferReversed(direct, alternative))
+                        {
+                            Cv2.Rotate(source, reversed, RotateFlags.Rotate180);
+                            source = reversed;
+                            regions = Detect(source, run, token);
+                            // Redetection can change the crop's interpolation.
+                            // Reread values in the corrected image to preserve accents.
+                            identityLines = null;
+                            orientationKnown = orientationCorrected = true;
+                        }
+                    }
+                }
+                catch (OnnxRuntimeException) when (probeTimeout.IsCancellationRequested && !token.IsCancellationRequested)
+                { /* The normal pass still owns the remaining request budget. */ }
+            }
+            var text = ReadPage(source, regions, kind, run, token,
+                recognizedLines: identityLines,
+                identityClock: kind is OcrDocumentKind.IdentityFront or OcrDocumentKind.IdentityBack ? clock : null);
             var proposal = OcrFieldParser.Parse(text, kind);
             // Try the opposite direction only when the first result is missing data, leaving
             // budget for the request deadline. Detect again in the upright image: DBNet's
             // shrunken regions are not invariant under a 180-degree flip.
-            if (!text.Warnings.Contains("conflicting_reading") &&
+            if (!orientationKnown && !text.Warnings.Contains("conflicting_reading") && !text.Warnings.Contains("ocr_partial") &&
                 (kind is OcrDocumentKind.IdentityFront or OcrDocumentKind.IdentityBack ||
                     !proposal.Warnings.Any(warning => warning is "multiple_reading_regions" or "text_region_limit")) &&
                 (proposal.IsFallback || proposal.MissingFields.Count > 0) && regions.Count > 0 &&
                 clock.ElapsedMilliseconds < options.TimeoutMilliseconds / 2)
             {
-                Cv2.Rotate(source, reversed, RotateFlags.Rotate180);
-                var flipped = Detect(reversed, run, token);
-                var alternative = ReadPage(reversed, flipped, kind, run, token);
-                var alternativeProposal = OcrFieldParser.Parse(alternative, kind);
-                var conflicting = proposal.ProposedFields.Any(field => alternativeProposal.ProposedFields.TryGetValue(field.Key, out var value) && value != field.Value);
-                if (!conflicting && alternativeProposal.ProposedFields.Count > proposal.ProposedFields.Count)
-                    text = alternative with { Warnings = [.. alternative.Warnings, "orientation_corrected"] };
-                else if (conflicting && !alternativeProposal.IsFallback)
-                    text = text with { Warnings = [.. text.Warnings, "orientation_uncertain"] };
+                using var retry = CancellationTokenSource.CreateLinkedTokenSource(token);
+                // An optional identity rotation must not discard fields already read
+                // by consuming the entire request deadline. Meter conflict checks remain strict.
+                if (kind is OcrDocumentKind.IdentityFront or OcrDocumentKind.IdentityBack)
+                    retry.CancelAfter(options.TimeoutMilliseconds / 4);
+                using var retryRun = new RunOptions { LogSeverityLevel = OrtLoggingLevel.ORT_LOGGING_LEVEL_FATAL };
+                using var retryRegistration = retry.Token.Register(() => retryRun.Terminate = true);
+                try
+                {
+                    Cv2.Rotate(source, reversed, RotateFlags.Rotate180);
+                    var flipped = Detect(reversed, retryRun, retry.Token);
+                    var alternative = ReadPage(reversed, flipped, kind, retryRun, retry.Token);
+                    var alternativeProposal = OcrFieldParser.Parse(alternative, kind);
+                    var conflicting = proposal.ProposedFields.Any(field => alternativeProposal.ProposedFields.TryGetValue(field.Key, out var value) && value != field.Value);
+                    if (!conflicting && alternativeProposal.ProposedFields.Count > proposal.ProposedFields.Count)
+                        text = alternative with { Warnings = [.. alternative.Warnings, "orientation_corrected"] };
+                    else if (conflicting && !alternativeProposal.IsFallback)
+                        text = text with { Warnings = [.. text.Warnings, "orientation_uncertain"] };
+                }
+                catch (Exception exception) when (exception is OperationCanceledException or OnnxRuntimeException &&
+                    retry.IsCancellationRequested && !token.IsCancellationRequested)
+                { text = text with { Warnings = [.. text.Warnings, "orientation_uncertain"] }; }
             }
             token.ThrowIfCancellationRequested();
             return text with
@@ -298,14 +357,14 @@ public sealed class OnnxOcrEngine : IOcrEngine, IOcrAnalysisEngine, IExperimenta
                 Warnings = [.. prepared.Warnings, .. localizationWarnings, .. text.Warnings,
                 .. kind is OcrDocumentKind.DigitalElectricity or OcrDocumentKind.DigitalWater
                     ? new[] { "billing_register_unverified" } : Array.Empty<string>(),
-                .. axisCorrected ? new[] { "orientation_corrected" } : Array.Empty<string>()]
+                .. orientationCorrected ? new[] { "orientation_corrected" } : Array.Empty<string>()]
             };
         }
         catch (OnnxRuntimeException) when (token.IsCancellationRequested) { throw new OperationCanceledException(token); }
     }
 
     private OcrText ReadPage(Mat source, List<RotatedRect> regions, OcrDocumentKind? kind, RunOptions run, CancellationToken token,
-        Dictionary<RotatedRect, OcrLine>? recognizedLines = null)
+        Dictionary<RotatedRect, OcrLine>? recognizedLines = null, Stopwatch? identityClock = null)
     {
         var lines = new List<OcrLine>();
         var warnings = new List<string>();
@@ -315,17 +374,45 @@ public sealed class OnnxOcrEngine : IOcrEngine, IOcrAnalysisEngine, IExperimenta
         var meter = kind is OcrDocumentKind.MechanicalElectricity or OcrDocumentKind.DigitalElectricity or
             OcrDocumentKind.MechanicalWater or OcrDocumentKind.DigitalWater;
         var profile = kind.GetValueOrDefault(); // used only inside a known-meter branch
+        // Native inference termination is cooperative. Leave room for it to
+        // finish and for parsing before the outer service's hard deadline.
+        var identityReturnReserve = Math.Min(1000, options.TimeoutMilliseconds / 4);
+        if (identityClock is not null) regions = IdentityTextRegionOrder.Prioritize(regions, source.Size(), kind);
         if (regions.Count > options.MaxTextRegions) warnings.Add("text_region_limit");
         foreach (var region in regions.Take(options.MaxTextRegions))
         {
             token.ThrowIfCancellationRequested();
             using var crop = Crop(source, region);
+            var narrow = Math.Ceiling(48d * crop.Width / crop.Height) <= 320;
+            // Leave time to parse/return completed identity lines. Give the next
+            // line its own cancellable run instead of guessing its cost from a
+            // slower bilingual label and prematurely discarding names/dates.
+            // Meter passes must still inspect all candidate readings for conflicts.
+            if (identityClock is not null && identityClock.ElapsedMilliseconds >=
+                options.TimeoutMilliseconds - identityReturnReserve - Math.Min(100, options.TimeoutMilliseconds / 10))
+            { warnings.Add("ocr_partial"); break; }
             // Neutral and meter passes have identical recognizer input for the 320 bucket.
             // Wider neutral text may use 640 or word splitting, so it must be reread.
             // Meter-specific numeric splitting/refinement/conflict checks still run below.
-            var line = recognizedLines is not null && recognizedLines.TryGetValue(region, out var cached) &&
-                Math.Ceiling(48d * crop.Width / crop.Height) <= 320
-                ? cached : ReadLine(crop, run, wideLine: !meter);
+            OcrLine line;
+            if (identityClock is not null)
+            {
+                if (recognizedLines is not null && recognizedLines.TryGetValue(region, out var identityCached))
+                    line = identityCached;
+                else
+                {
+                    using var lineTimeout = CancellationTokenSource.CreateLinkedTokenSource(token);
+                    lineTimeout.CancelAfter((int)Math.Max(1, options.TimeoutMilliseconds - identityClock.ElapsedMilliseconds - identityReturnReserve));
+                    using var lineRun = new RunOptions { LogSeverityLevel = OrtLoggingLevel.ORT_LOGGING_LEVEL_FATAL };
+                    using var lineRegistration = lineTimeout.Token.Register(() => lineRun.Terminate = true);
+                    try { line = ReadLine(crop, lineRun, wideLine: true); }
+                    catch (OnnxRuntimeException) when (lineTimeout.IsCancellationRequested && !token.IsCancellationRequested)
+                    { warnings.Add("ocr_partial"); break; }
+                }
+            }
+            else
+                line = recognizedLines is not null && recognizedLines.TryGetValue(region, out var cached) && narrow
+                    ? cached : ReadLine(crop, run, wideLine: !meter);
             recognizedLines?.TryAdd(region, line);
             // Read the number and its unit separately when a display's whitespace gives a
             // clear boundary. Identity-tuned CTC can otherwise swallow m³ into the digits.
@@ -390,11 +477,12 @@ public sealed class OnnxOcrEngine : IOcrEngine, IOcrAnalysisEngine, IExperimenta
         if (map.Rank != 4 || map.Dimensions[0] != 1 || map.Dimensions[1] != 1)
             throw new InvalidDataException("Unsupported detector output.");
         var mh = map.Dimensions[2]; var mw = map.Dimensions[3];
+        var probabilities = map.ToDenseTensor().Buffer.Span;
         using var mask = new Mat(mh, mw, MatType.CV_8UC1);
         for (var y = 0; y < mh; y++)
         {
             token.ThrowIfCancellationRequested();
-            for (var x = 0; x < mw; x++) mask.Set(y, x, map[0, 0, y, x] > .3f ? (byte)255 : (byte)0);
+            for (var x = 0; x < mw; x++) mask.Set(y, x, probabilities[y * mw + x] > .3f ? (byte)255 : (byte)0);
         }
         Cv2.FindContours(mask, out Point[][] contours, out _, RetrievalModes.List, ContourApproximationModes.ApproxSimple);
         var boxes = new List<RotatedRect>();
@@ -406,7 +494,7 @@ public sealed class OnnxOcrEngine : IOcrEngine, IOcrAnalysisEngine, IExperimenta
             var sum = 0d; var count = 0;
             for (var y = rect.Top; y < rect.Bottom; y++)
                 for (var x = rect.Left; x < rect.Right; x++)
-                    if (mask.At<byte>(y, x) != 0) { sum += map[0, 0, y, x]; count++; }
+                    if (mask.At<byte>(y, x) != 0) { sum += probabilities[y * mw + x]; count++; }
             if (count == 0 || sum / count < .5) continue;
             var box = Cv2.MinAreaRect(contour.Select(p => new Point2f((float)p.X * image.Width / mw, (float)p.Y * image.Height / mh)));
             boxes.Add(OcrImageGeometry.Expand(box));
@@ -494,21 +582,25 @@ public sealed class OnnxOcrEngine : IOcrEngine, IOcrAnalysisEngine, IExperimenta
         var scores = output.First().AsTensor<float>();
         if (scores.Rank != 3 || scores.Dimensions[0] != 1 || scores.Dimensions[2] != dictionary.Length)
             throw new InvalidDataException("Recognizer dictionary contract mismatch.");
+        var probabilities = scores.ToDenseTensor().Buffer.Span;
         var text = new StringBuilder(); var confidence = 0f; var count = 0; var last = 0;
         for (var step = 0; step < scores.Dimensions[1]; step++)
         {
             var best = 0;
-            for (var c = 1; c < dictionary.Length; c++) if (scores[0, step, c] > scores[0, step, best]) best = c;
+            var offset = step * dictionary.Length;
+            for (var c = 1; c < dictionary.Length; c++) if (probabilities[offset + c] > probabilities[offset + best]) best = c;
             if (best != 0 && best != last)
-            { text.Append(dictionary[best]); confidence += scores[0, step, best]; count++; }
+            { text.Append(dictionary[best]); confidence += probabilities[offset + best]; count++; }
             last = best;
         }
         return new(text.ToString().Trim(), count == 0 ? 0 : Math.Clamp(confidence / count, 0, 1));
     }
 
-    private static DenseTensor<float> Tensor(Mat image, int width, int height, bool detection)
+    internal static DenseTensor<float> Tensor(Mat image, int width, int height, bool detection)
     {
         var data = new DenseTensor<float>(new[] { 1, 3, height, width });
+        var values = data.Buffer.Span;
+        var planeSize = width * height;
         float[] means = [.485f, .456f, .406f]; float[] std = [.229f, .224f, .225f];
         for (var y = 0; y < height; y++)
             for (var x = 0; x < width; x++)
@@ -518,7 +610,7 @@ public sealed class OnnxOcrEngine : IOcrEngine, IOcrAnalysisEngine, IExperimenta
                 {
                     // Detector uses RGB/ImageNet; recognizer uses Paddle's BGR [-1,1].
                     var value = pixel[detection ? 2 - c : c] / 255f;
-                    data[0, c, y, x] = detection ? (value - means[c]) / std[c] : (value - .5f) / .5f;
+                    values[c * planeSize + y * width + x] = detection ? (value - means[c]) / std[c] : (value - .5f) / .5f;
                 }
             }
         return data;

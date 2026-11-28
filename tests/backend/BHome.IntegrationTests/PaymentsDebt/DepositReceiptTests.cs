@@ -1,4 +1,5 @@
 using System.Net;
+using System.Net.Http.Json;
 using BHome.Application.Contracts;
 using BHome.Application.Finance;
 using BHome.Application.PaymentsDebt;
@@ -30,6 +31,14 @@ public sealed partial class PaymentLedgerTests
         var history = Assert.Single(await workflow.DepositsAsync(w.Contract, default)); Assert.Equal(80000, history.Amount); Assert.Equal(transfer.BankReference, history.BankTransactionReference);
         var summary = await RefundValue<ContractSettlementSummary>(await owner.GetAsync($"/api/v1/contracts/{w.Contract}/move-out/settlement-summary"));
         Assert.Equal(80000, summary.VerifiedSecurityDeposit); Assert.Equal(80000, summary.Calculation!.AvailableSecurityDeposit); Assert.True(summary.Calculation.DepositPositionConsistent);
+        var receiptDay = DateOnly.FromDateTime(TimeZoneInfo.ConvertTimeBySystemTimeZoneId(
+            DateTimeOffset.UtcNow, "Asia/Ho_Chi_Minh").DateTime);
+        var finance = (await owner.GetFromJsonAsync<FinancialReport>(
+            $"/api/v1/financial-reports?from={receiptDay:yyyy-MM-dd}&to={receiptDay:yyyy-MM-dd}&locationId={w.Location}"))!;
+        Assert.Equal("80000", finance.Total.Management!.DepositReceipts);
+        Assert.Equal("200000", finance.Total.Management.ActualBusinessCollections);
+        Assert.Equal("200000", Assert.Single(finance.Trend!).ActualBusinessCollections);
+        Assert.False(finance.Trend![0].IsComplete);
     }
     internal async Task DepositReceiptPreservesPartialFundsAndReturnsExcessToActualPayer(bool holding, bool external)
     {

@@ -20,6 +20,7 @@ export function useContractDetail(
   id: string,
   role: string,
   refreshIntervalMs = 0,
+  includeMoveOut = true,
 ) {
   const [state, setState] = useState<{
     id: string;
@@ -58,11 +59,12 @@ export function useContractDetail(
       }
       try {
         const contract = await client.get(id, signal);
-        pollingEligible =
+        const shouldPoll =
           (contract.kind === 'Holding' || contract.kind === 'Main') &&
           ['Draft', 'PendingSigning', 'PendingActivation'].includes(contract.status);
         if (contract.kind === 'Main' && contract.onboardingDraft) {
           if (!signal.aborted) {
+            pollingEligible = shouldPoll;
             const data = { contract, moveOut: null, readiness: null, history: [] };
             cached.current = { client, id, role, data };
             setState({
@@ -77,7 +79,7 @@ export function useContractDetail(
           return;
         }
         const moveOut =
-          contract.kind === 'Holding'
+          !includeMoveOut || contract.kind === 'Holding'
             ? null
             : await client.moveOut(id, signal).catch((e: unknown) => {
                 if ((e as { status?: number })?.status === 404) return null;
@@ -101,6 +103,11 @@ export function useContractDetail(
             : Promise.resolve([]),
         ]);
         if (!signal.aborted) {
+          pollingEligible =
+            shouldPoll ||
+            (role === 'Tenant' &&
+              !!moveOut &&
+              ['AwaitingConsent', 'Requested'].includes(moveOut.status));
           setRefreshError('');
           const data = { contract, moveOut, readiness, history, historyError };
           cached.current = { client, id, role, data };
@@ -139,7 +146,7 @@ export function useContractDetail(
       controller.abort();
       if (timer !== null) clearInterval(timer);
     };
-  }, [client, id, role, revision, refreshIntervalMs]);
+  }, [client, id, role, revision, refreshIntervalMs, includeMoveOut]);
   const currentScope = state.id === id && state.client === client && state.role === role;
   return {
     data: currentScope ? state.data : null,

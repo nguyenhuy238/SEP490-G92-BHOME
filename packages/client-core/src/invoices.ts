@@ -1,4 +1,4 @@
-import { ApiError } from './api';
+import { ApiError, catalogError } from './api';
 import { groupVietnameseIntegerDigits } from './localization';
 
 // Keep decimal strings exact, including amounts beyond Number.MAX_SAFE_INTEGER.
@@ -182,8 +182,8 @@ export function invoiceClient(request: <T>(path: string, init?: RequestInit) => 
     },
     get: (id: string, signal?: AbortSignal) =>
       request<Invoice>(`/api/v1/invoices/${encodeURIComponent(id)}`, { signal }),
-    draft: (roomId: string, billingPeriod: string, representativeContractId: string) =>
-      json<Invoice>('/api/v1/invoices/drafts', { roomId, billingPeriod, representativeContractId }),
+    draft: (roomId: string, billingPeriod: string) =>
+      json<Invoice>('/api/v1/invoices/drafts', { roomId, billingPeriod }),
     refresh: (id: string, expectedVersion: number) =>
       json<Invoice>(`/api/v1/invoices/${encodeURIComponent(id)}/refresh`, { expectedVersion }),
     finalize: (id: string, expectedVersion: number) =>
@@ -228,6 +228,16 @@ const messages: Record<string, string> = {
     'Ngày Nháp phải trước hoặc bằng ngày Phát hành, ngày Hạn trả phải sau hoặc bằng ngày Phát hành.',
   invalid_billing_schedule: 'Chọn đầy đủ quy tắc, ngày 1–31 và tháng cộng thêm 0–2.',
   draft_date_not_reached: 'Chưa đến ngày lập nháp đã cấu hình.',
+  reading_before_installation:
+    'Ngày ghi chỉ số theo lịch trước ngày lắp đồng hồ. Kiểm tra ngày lắp và chọn kỳ/lịch ghi số phù hợp.',
+  meter_assignment_date_not_reached: 'Chưa đến ngày giao nhiệm vụ ghi số theo lịch đã cấu hình.',
+  meter_reading_date_not_reached:
+    'Chưa đến ngày ghi chỉ số; không thể tạo nhiệm vụ trước ngày này.',
+  periodic_reading_date_must_match_schedule: 'Ngày ghi số vận hành phải khớp lịch áp dụng của kỳ.',
+  initial_reading_after_periodic_date:
+    'Ngày ghi chỉ số ban đầu không được sau ngày ghi số định kỳ đã cấu hình.',
+  invalid_reading_period: 'Ngày ghi chỉ số không thuộc kỳ vận hành đã chọn.',
+  meter_not_found: 'Đồng hồ không còn hoạt động hoặc không thuộc phạm vi được quản lý.',
   finalization_date_not_reached: 'Chưa đến ngày phát hành đã cấu hình.',
   invoice_adjustment_pending:
     'Hóa đơn đang có yêu cầu điều chỉnh chờ Owner xác nhận. Hãy duyệt hoặc từ chối yêu cầu trước khi phát hành.',
@@ -236,9 +246,10 @@ const messages: Record<string, string> = {
   draft_refresh_and_review_required:
     'Đầu vào đã thay đổi. Cập nhật và xem lại bản nháp trước khi phát hành.',
   invoice_changed_or_final: 'Hóa đơn đã thay đổi hoặc đã phát hành. Hãy tải lại.',
-  representative_contract_not_eligible:
-    'Chọn hợp đồng của phòng có hiệu lực trong kỳ cần lập hóa đơn.',
-  invoice_period_already_exists: 'Phòng đã có hóa đơn kỳ này với hợp đồng đại diện khác.',
+  representative_contract_not_eligible: 'Hợp đồng đối chiếu không đủ điều kiện trong kỳ.',
+  no_reference_contract_for_period:
+    'Phòng không có hợp đồng đối chiếu đủ điều kiện trong kỳ này. Không lập hóa đơn định kỳ.',
+  invoice_period_already_exists: 'Phòng đã có hóa đơn kỳ này.',
   room_pricing_locked_by_contract:
     'Phòng đang có hợp đồng ràng buộc giá. Không thể sửa trực tiếp giá này khi hợp đồng còn ràng buộc.',
   utility_tariff_locked_by_contract:
@@ -272,6 +283,7 @@ export function invoiceError(error: unknown): string {
     error instanceof ApiError ? error.problem?.code : (value?.code ?? value?.problem?.code);
   return (
     (code && messages[code]) ||
+    catalogError(error) ||
     (value?.status === 409
       ? 'Cấu hình đã thay đổi hoặc bị xung đột. Tải lại và kiểm tra trước khi lưu.'
       : value?.status === 400

@@ -1,6 +1,13 @@
 // D011/D012 REST contract. Amounts remain decimal strings throughout the clients.
-import { ApiError, infrastructureError, requestDiagnostic } from './api';
+import {
+  ApiError,
+  UserFeedbackError,
+  infrastructureError,
+  requestDiagnostic,
+  catalogError,
+} from './api';
 import { groupVietnameseIntegerDigits } from './localization';
+import { demoBusinessDate, demoBusinessNow } from './demoClock';
 import type { RoomConfiguration } from './propertySetup';
 import type { Page } from './invoices';
 import type { HoldingPreparation } from './holdingSettings';
@@ -16,7 +23,13 @@ export const contractStates = [
   'Converted',
   'Applied',
 ] as const;
+export interface HoldingCustomerView {
+  fullName: string;
+  maskedCitizenNumber: string;
+}
 export interface ContractSummary {
+  representativeName?: string | null;
+  holdingCustomer?: HoldingCustomerView | null;
   onboardingDraft?: boolean;
   id: string;
   roomId: string;
@@ -49,6 +62,7 @@ export interface Signature {
   certificateIssuer?: string | null;
 }
 export interface ContractView {
+  holdingCustomer?: HoldingCustomerView | null;
   onboardingDraft?: boolean;
   id: string;
   roomId: string;
@@ -252,6 +266,26 @@ export interface HandoverSnapshot {
   electricity: HandoverReading;
   water: HandoverReading;
   evidenceIds: string[];
+  /** Seven canonical room checks recorded by Staff during the handover. */
+  roomChecks?:
+    | {
+        code: string;
+        status: 'Passed' | 'Issue' | 'NotApplicable';
+        notes: string | null;
+        evidenceIds: string[];
+      }[]
+    | null;
+  accessItems?: { type: string; quantity: number; notes: string }[] | null;
+  keyEvidenceIds?: string[] | null;
+  /** Item-specific private evidence for Move-Out observations (not used in signed Move-In). */
+  physicalItemEvidence?:
+    | {
+        assetId: string;
+        physicalAssetId: string;
+        notes: string | null;
+        evidenceIds: string[];
+      }[]
+    | null;
   inventoryToken?: string | null;
   inventoryState?: string | null;
   noAssetsConfirmed?: boolean;
@@ -292,6 +326,21 @@ export interface HandoverChoices {
   inventoryState?: string | null;
   noAssetsConfirmed?: boolean;
 }
+export interface TerminationReview {
+  status: 'Requested' | 'Approved' | 'Rejected' | 'AwaitingConsent';
+  version: number;
+  locationName: string;
+  roomNumber: string;
+  tenantName: string | null;
+  startDate: string;
+  endDate: string;
+  proposedDate: string;
+  reason: string;
+  decidedAt: string | null;
+  decidedBy: string | null;
+  rejectionReason: string | null;
+}
+
 export interface MoveOut {
   id: string;
   status: string;
@@ -307,6 +356,12 @@ export interface MoveOut {
   inspectionStaffId?: string | null;
   version?: number;
   ownerConfirmedInspection?: boolean;
+  isForced?: boolean;
+  requiredConsents?: number;
+  receivedConsents?: number;
+  canConfirm?: boolean;
+  canReject?: boolean;
+  isGroupPrimary?: boolean;
   financialReviewStatus?: 'PendingReview' | 'OwnerReviewed';
 }
 export interface ContractExpiryNotice {
@@ -452,6 +507,7 @@ export interface SettlementReceivable {
   inspectionId: string;
   inspectionVersion: number;
   assetId: string | null;
+  roomCheckCode?: string | null;
   amount: string;
   description: string;
   calculationPolicy: string;
@@ -519,12 +575,17 @@ export interface SettlementReceivables {
   availableDeposit: string;
   receivables: SettlementReceivableBalance[];
   offsets: DepositOffsetApproval[];
+  /** Explicitly set by the API when independent room-check charges are supported. */
+  roomCheckChargesSupported?: boolean;
+  /** Explicit Owner inspection confirmation that no extra damage is chargeable. */
+  noAdditionalCharges?: boolean;
 }
 export interface DamageChargeInput {
   expectedReference: string;
   inspectionId: string;
   inspectionVersion: number;
   assetId: string | null;
+  roomCheckCode?: string | null;
   amount: string;
   description: string;
   evidenceIds: string[];
@@ -547,6 +608,94 @@ export interface SettlementTransferInstructions {
   transferReference: string;
   qrImageDataUri: string | null;
   isDevelopmentDemo: boolean;
+}
+
+export interface MoveOutProposalCharge {
+  kind: 'Asset' | 'RoomCheck' | 'Access';
+  assetId?: string | null;
+  roomCheckCode?: string | null;
+  accessType?: string | null;
+  label?: string | null;
+  amount: string;
+  reason: string;
+}
+export interface MoveOutProposalDisputedItem {
+  kind: MoveOutProposalCharge['kind'];
+  assetId: string | null;
+  roomCheckCode: string | null;
+  accessType: string | null;
+  reason: string;
+}
+export interface MoveOutProposalFeedbackInput {
+  proposalId: string;
+  expectedReference: string;
+  confirmed: boolean;
+  reason: string;
+  disputedItems?: MoveOutProposalDisputedItem[];
+}
+export interface MoveOutProposalReconcileInput {
+  proposalId: string;
+}
+export interface MoveOutAutomaticCharge {
+  kind: 'FinalUtility' | 'FinalFixed';
+  code: string;
+  name: string;
+  amount: string | null;
+  reference: string;
+  missingInputs: string[];
+  existingReceivableId?: string | null;
+  quantity?: string | null;
+  previousReading?: string | null;
+  confirmedReading?: string | null;
+}
+export interface MoveOutProposalSettlement {
+  status: 'Payable' | 'RefundEligible' | 'Settled' | 'PendingOwnerReview';
+  payableAmount: string;
+  refundAmount: string;
+  payableReceivableId: string | null;
+  payableReceivables?: { id: string; amount: string; name: string }[] | null;
+  createdReceivableIds: string[];
+  depositOffsetIds: string[];
+  reason?: string | null;
+}
+export interface MoveOutProposalFeedback {
+  proposalId: string;
+  confirmed: boolean;
+  reason: string;
+  disputedItems?: MoveOutProposalDisputedItem[] | null;
+  settlement?: MoveOutProposalSettlement | null;
+}
+export interface MoveOutProposalPreview {
+  contractId: string;
+  reference: string;
+  verifiedDeposit: string;
+  availableDeposit: string;
+  existingOutstanding: string;
+  automaticCharges?: MoveOutAutomaticCharge[] | null;
+  forced?: boolean;
+  status: 'None' | 'PendingTenant' | 'Accepted' | 'Disputed' | 'Outdated';
+  latestProposal: {
+    id: string;
+    items: MoveOutProposalCharge[];
+    automaticCharges?: MoveOutAutomaticCharge[] | null;
+    verifiedDeposit: string;
+    availableDeposit: string;
+    existingOutstanding: string;
+    totalCharges: string;
+    signedBalance: string;
+    note: string | null;
+    tenantFeedback?: MoveOutProposalFeedback | null;
+  } | null;
+  items: {
+    kind: string;
+    assetId?: string | null;
+    roomCheckCode?: string | null;
+    accessType?: string | null;
+    label: string;
+    baseline?: string | null;
+    observed?: string | null;
+    evidenceIds?: string[];
+  }[];
 }
 export interface BillableMeterPoint {
   readingId: string;
@@ -698,6 +847,22 @@ export function contractClient(request: ContractRequest) {
       request<SettlementSummary>(`${root}/${id}/move-out/settlement-summary`, { signal }),
     settlementReceivables: (id: string, signal?: AbortSignal) =>
       request<SettlementReceivables>(`${root}/${id}/move-out/receivables`, { signal }),
+    moveOutProposal: (id: string, signal?: AbortSignal) =>
+      request<MoveOutProposalPreview>(`${root}/${id}/move-out/receivables/proposal`, { signal }),
+    respondMoveOutProposal: (id: string, body: MoveOutProposalFeedbackInput, key: string) =>
+      request<MoveOutProposalFeedback>(
+        `${root}/${id}/move-out/receivables/proposal/tenant-feedback`,
+        {
+          method: 'POST',
+          headers: { 'Idempotency-Key': key },
+          body: JSON.stringify(body),
+        },
+      ),
+    reconcileMoveOutProposal: (id: string, body: MoveOutProposalReconcileInput) =>
+      request<MoveOutProposalFeedback>(`${root}/${id}/move-out/receivables/proposal/reconcile`, {
+        method: 'POST',
+        body: JSON.stringify(body),
+      }),
     settlementChargeReview: (id: string, signal?: AbortSignal) =>
       request<SettlementChargeReviewPreview>(`${root}/${id}/move-out/receivables/charge-review`, {
         signal,
@@ -810,10 +975,13 @@ export function contractClient(request: ContractRequest) {
       request<
         {
           contractId: string;
+          roomId: string;
           roomNumber: string;
           locationName: string;
-          scheduledAt: string;
+          proposedDate: string;
+          scheduledAt: string | null;
           status: string;
+          version: number;
         }[]
       >(`${root}/move-out-assignments`, { signal }),
     inspectionStaff: async (locationId: string, signal?: AbortSignal) => {
@@ -844,9 +1012,16 @@ export function contractClient(request: ContractRequest) {
           terms: string;
         }[]
       >(`${root}/${id}/versions`, { signal }),
-    list: async (page = 1, status = '', locationId = '', signal?: AbortSignal) => {
+    list: async (
+      page = 1,
+      status = '',
+      locationId = '',
+      signal?: AbortSignal,
+      kind = '',
+      pageSize = 20,
+    ) => {
       const result = await request<ContractPage>(
-        `${root}?${new URLSearchParams({ page: String(page), pageSize: '20', ...(status ? { status } : {}), ...(locationId ? { locationId } : {}) })}`,
+        `${root}?${new URLSearchParams({ page: String(page), pageSize: String(pageSize), ...(status ? { status } : {}), ...(locationId ? { locationId } : {}), ...(kind ? { kind } : {}) })}`,
         { signal },
       );
       if (
@@ -855,7 +1030,7 @@ export function contractClient(request: ContractRequest) {
         !Number.isSafeInteger(result.totalCount) ||
         result.totalCount < result.items.length ||
         result.page !== page ||
-        result.pageSize !== 20 ||
+        result.pageSize !== pageSize ||
         result.items.some(
           (item) =>
             !item ||
@@ -918,6 +1093,19 @@ export function contractClient(request: ContractRequest) {
       request<Uint8Array>(root + '/' + id + '/handover/evidence/' + fileId, { signal }, 'bytes'),
     handoverMeterEvidence: (id: string, readingId: string, signal?: AbortSignal) =>
       request<Blob>(root + '/' + id + '/handover/meter-evidence/' + readingId, { signal }, 'blob'),
+    /** Final reading evidence is authorized against this contract, including Tenant access. */
+    moveOutMeterEvidence: (id: string, readingId: string, signal?: AbortSignal) =>
+      request<Blob>(
+        `${root}/${encodeURIComponent(id)}/move-out/meter-evidence/${encodeURIComponent(readingId)}`,
+        { signal },
+        'blob',
+      ),
+    moveOutMeterEvidenceBytes: (id: string, readingId: string, signal?: AbortSignal) =>
+      request<Uint8Array>(
+        `${root}/${encodeURIComponent(id)}/move-out/meter-evidence/${encodeURIComponent(readingId)}`,
+        { signal },
+        'bytes',
+      ),
     readingEvidence: (readingId: string, signal?: AbortSignal) =>
       request<Blob>(
         `/api/v1/capture/readings/${encodeURIComponent(readingId)}/evidence`,
@@ -971,6 +1159,8 @@ export function contractClient(request: ContractRequest) {
       request<Readiness>(`${root}/${id}/activation-readiness`, { signal }),
     moveOut: (id: string, signal?: AbortSignal) =>
       request<MoveOut>(`${root}/${id}/move-out`, { signal }),
+    terminationReview: (id: string, signal?: AbortSignal) =>
+      request<TerminationReview>(`${root}/${guid(id)}/move-out/review`, { signal }),
     history: (id: string, signal?: AbortSignal) =>
       request<SettlementReview[]>(`${root}/${id}/move-out/settlement-history`, { signal }),
     certificates: (signal?: AbortSignal) => request<Certificate[]>(certificates, { signal }),
@@ -987,7 +1177,10 @@ export function contractClient(request: ContractRequest) {
     locations: (signal?: AbortSignal) =>
       request<NamedOption[]>('/api/v1/capture/locations', { signal }),
     rooms: (locationId: string, signal?: AbortSignal) =>
-      request<NamedOption[]>(`/api/v1/capture/locations/${locationId}/rooms`, { signal }),
+      request<(NamedOption & { capacity?: number | null })[]>(
+        `/api/v1/capture/locations/${locationId}/rooms`,
+        { signal },
+      ),
     residents: (locationId: string, signal?: AbortSignal) =>
       request<ResidentOption[]>(`/api/v1/capture/locations/${locationId}/residents`, { signal }),
     meters: (locationId: string, signal?: AbortSignal) =>
@@ -1060,6 +1253,8 @@ export const labels: Record<string, string> = {
     'Giá phòng hoặc cấu hình giữ chỗ đã thay đổi. Hãy tải lại trước khi tạo hợp đồng.',
   invalid_holding_configuration: 'Kiểm tra số tháng giữ chỗ, hệ số tiền cọc và điều khoản.',
   Main: 'Hợp đồng thuê',
+  Holding: 'Giữ chỗ',
+  Addendum: 'Phụ lục',
   Renewal: 'Gia hạn',
   Draft: 'Bản nháp',
   PendingSigning: 'Chờ ký',
@@ -1090,7 +1285,7 @@ export const labels: Record<string, string> = {
   Dispatching: 'Đang gửi yêu cầu ký',
   Pending: 'Chờ nhà cung cấp xác nhận',
   Signed: 'Đã xác minh chữ ký',
-  Simulated: 'SIMULATED SIGNING — không có giá trị pháp lý',
+  Simulated: 'Ký mô phỏng',
   Confirmed: 'Đã xác nhận bàn giao',
   Disputed: 'Cần sửa nội dung bàn giao',
   Recorded: 'Ghi nhận phiên bản bàn giao',
@@ -1111,9 +1306,10 @@ export const labels: Record<string, string> = {
   ContractSigningFailed: 'Nhà cung cấp báo ký thất bại',
   ContractSigningReferenceRecovered: 'Khôi phục tham chiếu yêu cầu ký',
   ContractMoveOutRequested: 'Gửi yêu cầu trả phòng',
+  ContractOwnerMoveOutOpened: 'Owner mở nhiệm vụ trả phòng',
   ContractMoveOutApproved: 'Owner duyệt yêu cầu trả phòng',
   ContractInspectionScheduled: 'Đặt lịch kiểm tra trả phòng',
-  ContractMoveOutInspected: 'Lưu biên bản kiểm tra trả phòng',
+  ContractMoveOutInspected: 'Lưu kết quả kiểm tra trả phòng',
   ContractSettlementReviewed: 'Owner ghi nhận xem xét quyết toán',
   ContractTerminationCompleted: 'Hoàn tất chấm dứt hợp đồng',
   ContractInspectionEvidenceAdded: 'Tải ảnh kiểm tra trả phòng',
@@ -1124,7 +1320,7 @@ export const labels: Record<string, string> = {
   ContractHandoverEvidenceAdded: 'Tải ảnh nhận phòng',
   MoveInReport: 'Biên bản nhận phòng',
   AssetChangeReport: 'Biên bản thay đổi tài sản',
-  MoveOutReport: 'Biên bản trả phòng',
+  MoveOutReport: 'Tài liệu trả phòng lưu trữ (cũ)',
   NotChecked: 'Chưa kiểm kê',
   PartiallyChecked: 'Kiểm kê chưa đủ',
   Matched: 'Đã kiểm kê đủ',
@@ -1188,6 +1384,21 @@ export const labels: Record<string, string> = {
   Failed: 'Ký thất bại',
   ManualReview: 'Cần kiểm tra tại nhà cung cấp',
   Requested: 'Chờ Owner duyệt',
+  AwaitingConsent: 'Chờ các thành viên đồng thuận',
+  move_out_waiting_members: 'Chờ tất cả thành viên đồng thuận',
+  move_out_member_rejected: 'Có thành viên từ chối yêu cầu trả phòng',
+  forced_move_out_inspection: 'Chờ kiểm tra trả phòng bắt buộc',
+  forced_move_out_inspected: 'Đã lưu kết quả kiểm tra trả phòng bắt buộc',
+  move_out_member_account_required: 'Mỗi thành viên cần có tài khoản khách thuê riêng để xác nhận.',
+  move_out_residence_not_started:
+    'Ngày nghiệp vụ hiện tại chưa tới ngày bắt đầu cư trú. Hãy kiểm tra ngày trên Demo Clock hoặc liên hệ chủ trọ.',
+  move_out_roster_unavailable:
+    'Không tìm thấy đầy đủ thành viên đang cư trú theo ngày nghiệp vụ. Hãy kiểm tra ngày và hồ sơ cư trú.',
+  move_out_already_requested: 'Phòng đã có yêu cầu trả phòng đang xử lý.',
+  invalid_move_out_date:
+    'Ngày dự kiến trả phòng phải không trước ngày nghiệp vụ và nằm trong thời hạn của các hợp đồng liên quan.',
+  move_out_members_changed: 'Danh sách thành viên đã thay đổi. Cần tạo lại yêu cầu.',
+  move_out_consent_required: 'Chưa đủ đồng thuận của các thành viên.',
   Approved: 'Đã duyệt trả phòng',
   Inspected: 'Đã kiểm tra',
   PendingSettlement: 'Chờ quyết toán',
@@ -1199,6 +1410,11 @@ export const labels: Record<string, string> = {
   signed_terms_changed: 'Nội dung hợp đồng không khớp bản đã đưa đi ký.',
   contract_template_not_configured:
     'Chưa có mẫu PDF hợp đồng được phê duyệt. Liên hệ Owner để hoàn tất cấu hình trước khi ký.',
+  contract_template_not_approved: 'Mẫu PDF hợp đồng chưa được phê duyệt cho môi trường này.',
+  contract_pdf_converter_unavailable: 'Máy chủ chưa cấu hình bộ chuyển hợp đồng sang PDF.',
+  holding_contract_document_source_unavailable: 'Máy chủ chưa có nguồn PDF hợp đồng giữ chỗ.',
+  owner_contract_settings_required:
+    'Cơ sở chưa có thông tin bên cho thuê có hiệu lực cho hợp đồng này.',
   signing_certificate_not_valid:
     'Chứng thư đã bị khóa hoặc không còn hiệu lực. Tải lại chứng thư trước khi ký.',
   signing_certificate_no_longer_available:
@@ -1216,10 +1432,23 @@ export const labels: Record<string, string> = {
     'Cần xác minh hồ sơ và email riêng hợp lệ cho tất cả người ở.',
   internal_signing_flow_required: 'Hợp đồng này dùng lời mời ký nội bộ qua OTP.',
   signing_otp_key_not_configured: 'Dịch vụ xác nhận OTP chưa được cấu hình.',
+  handover_owner_ink_required: 'Owner cần vẽ chữ ký tay trong khung trước khi ký biên bản.',
+  handover_owner_signature_consent_required:
+    'Chưa xác nhận đồng ý ký biên bản bằng phiên đăng nhập Owner.',
+  handover_items_not_passed:
+    'Biên bản còn hạng mục chưa đạt. Cần Staff kiểm tra lại và hoàn tất trước khi Owner ký.',
+  handover_draft_version_changed:
+    'Phiên bản biên bản đã thay đổi. Hãy tải lại và kiểm tra nội dung trước khi ký.',
+  handover_owner_signing_failed:
+    'Máy chủ chưa xác nhận được chữ ký Owner. Hãy kiểm tra trạng thái biên bản trước khi thử lại.',
+  signing_seal_not_configured:
+    'Máy chủ chưa cấu hình chứng thư/dấu ký điện tử BHOME. Cần quản trị viên cấu hình để ký biên bản.',
+  contract_owner_signer_required: 'Tài khoản hiện tại không phải Owner được phép ký hợp đồng này.',
   verified_residents_required: 'Cần xác minh tất cả người ở và người đại diện.',
   invalid_contract_signers: 'Tài khoản bên ký chưa hợp lệ.',
   security_deposit_insufficient: 'Tiền cọc đã xác minh chưa đủ.',
   room_contract_conflict: 'Phòng đã đủ chỗ hoặc có hợp đồng đang xung đột.',
+  room_waiting_for_owner_signature: 'Phòng có hợp đồng đang chờ Owner ký.',
   household_version_changed:
     'Thông tin hộ gia đình đã được cập nhật ở phiên khác. Tải lại hồ sơ trước khi lưu tiếp.',
   household_member_mismatch: 'Thành viên không khớp hộ gia đình đang nhập. Hãy tải lại hồ sơ.',
@@ -1244,7 +1473,7 @@ export const labels: Record<string, string> = {
   confirmed_final_readings_required:
     'Cần chỉ số điện và nước chốt đã xác nhận, đúng hợp đồng và ngày kiểm tra.',
   move_out_not_ready_for_inspection:
-    'Cần duyệt yêu cầu, đặt lịch và đến ngày trả phòng trước khi lập biên bản.',
+    'Cần có yêu cầu trả phòng đã duyệt, đến ngày trả dự kiến và nhiệm vụ Staff đang thực hiện để lưu kết quả kiểm tra.',
   settlement_unresolved: 'Nghĩa vụ quyết toán chưa hoàn tất hoặc đã thay đổi.',
   deposit_deduction_review_changed:
     'Số liệu hoặc phiên bản quyết định đã đổi. Tải lại và xem xét trước khi duyệt.',
@@ -1256,7 +1485,7 @@ export const labels: Record<string, string> = {
   deposit_deduction_exceeds_available:
     'Tổng khấu trừ vượt cọc còn khả dụng. Cần xử lý phần nghĩa vụ còn thiếu.',
   invalid_deposit_deduction_item:
-    'Kiểm tra loại thiệt hại, số tiền nguyên và ảnh đúng biên bản/phạm vi.',
+    'Kiểm tra loại thiệt hại, số tiền nguyên và ảnh đúng hạng mục kiểm tra.',
   duplicate_deposit_deduction: 'Mỗi phòng hoặc tài sản chỉ được ghi một khoản trong quyết định.',
   deposit_deduction_idempotency_conflict:
     'Mã quyết định đã dùng với nội dung khác. Hãy tải lại để kiểm tra.',
@@ -1271,7 +1500,7 @@ export const labels: Record<string, string> = {
   settlement_idempotency_conflict:
     'Mã thao tác đã được dùng với nội dung khác. Kiểm tra kết quả trước khi tạo quyết định mới.',
   settlement_charge_not_ready:
-    'Cần biên bản đã được Owner duyệt và nhóm người thuê đủ điều kiện trước khi ghi nhận khoản phải thu.',
+    'Cần kết quả kiểm tra đã được xác minh và nhóm người thuê đủ điều kiện trước khi ghi nhận khoản phải thu.',
   settlement_evidence_integrity_failed:
     'Ảnh nguồn không còn khớp với bản đã duyệt. Cần đối chiếu lại trước khi ghi giảm nợ.',
   deposit_offset_not_available:
@@ -1280,17 +1509,38 @@ export const labels: Record<string, string> = {
     'Khoản đích hoặc số tiền cấn trừ không còn hợp lệ. Tải lại số dư nghĩa vụ.',
   payer_not_settlement_recipient:
     'Tài khoản người trả chưa thuộc nhóm người thuê của khoản phải thu. Kiểm tra lại người thực chuyển tiền.',
-  move_out_version_changed: 'Lịch / biên bản đã thay đổi. Tải lại trước khi thực hiện.',
+  move_out_version_changed: 'Lịch hoặc kết quả kiểm tra đã thay đổi. Tải lại trước khi thực hiện.',
   inspection_changed_or_reviewed:
-    'Biên bản đã thay đổi hoặc đã được xem xét. Tải lại phiên bản hiện tại.',
-  move_out_not_settled: 'Chưa thể đóng hợp đồng: kiểm tra quyết toán và ngày biên bản.',
-  move_out_handover_required: 'Cần biên bản đã kiểm tra và ngày bàn giao thực tế hợp lệ.',
+    'Kết quả kiểm tra đã thay đổi hoặc đã được xem xét. Tải lại phiên bản hiện tại.',
+  move_out_not_settled: 'Chưa thể đóng hợp đồng: kiểm tra quyết toán và ngày kết thúc thực tế.',
+  move_out_handover_required: 'Cần kết quả kiểm tra trả phòng và ngày kết thúc thực tế hợp lệ.',
+  move_out_financial_close_confirmation_required:
+    'Cần Owner xác nhận danh sách hạng mục, miễn thu, người nhận hoàn và lý do chốt quyết toán.',
+  settlement_financial_close_not_ready:
+    'Chưa thể chốt: điện nước, phí cuối kỳ, các khoản phải thu hoặc nguồn cọc còn cần đối chiếu.',
+  settlement_financial_already_closed:
+    'Quyết toán đã được Owner chốt. Hãy tải lại kết quả, không lập yêu cầu chốt mới.',
+  move_out_issues_require_price_or_waiver:
+    'Có mục hư hỏng/chìa khóa thiếu chưa được định giá hoặc chưa xác nhận miễn thu riêng.',
+  settlement_charge_review_required:
+    'Owner cần xác nhận toàn bộ khoản thu cuối kỳ theo phiên bản mới nhất trước khi chốt.',
+  refund_beneficiary_owner_confirmation_required:
+    'Owner cần chọn và xác minh đúng người nhận cọc theo thỏa thuận trước khi lập yêu cầu hoàn.',
+  deposit_refund_already_requested:
+    'Đã có yêu cầu hoàn cọc đang xử lý. Không thể tạo thêm yêu cầu cho cùng nguồn cọc.',
+  deposit_refund_not_ready:
+    'Còn nghĩa vụ chưa được giải quyết hoặc số dư chưa được xác minh. Chưa thể tạo yêu cầu hoàn.',
+  settlement_other_obligations_unpaid:
+    'Còn khoản thuê, điện, nước hoặc phí cuối kỳ chưa được giải quyết; cần đối soát trước khi chốt.',
+  settlement_deposit_allocation_incomplete:
+    'Cọc khả dụng chưa được cấn trừ hết cho khoản bồi thường đủ điều kiện. Hãy tải lại số dư.',
   owner_confirmed_inspection_required:
-    'Owner cần duyệt biên bản kiểm tra và chỉ số chốt trước khi bàn giao.',
-  inspection_snapshot_invalid: 'Biên bản hoặc chỉ số chốt đã thay đổi; cần kiểm tra lại.',
+    'Owner cần xác minh kết quả kiểm tra và chỉ số chốt trước khi hoàn tất trả phòng.',
+  inspection_snapshot_invalid: 'Kết quả kiểm tra hoặc chỉ số chốt đã thay đổi; cần kiểm tra lại.',
   signer_already_requested: 'Đã có yêu cầu ký. Hãy kiểm tra trạng thái trước khi thử lại.',
   previous_signature_pending: 'Bên ký trước chưa hoàn tất. Hãy chờ xác minh.',
-  inspection_evidence_not_available: 'Ảnh không thuộc người lập biên bản hoặc đã được sử dụng.',
+  inspection_evidence_not_available:
+    'Ảnh không thuộc người ghi nhận kết quả kiểm tra hoặc đã được sử dụng.',
   inspection_upload_not_allowed: 'Chưa được tải ảnh hoặc đã đủ 5 ảnh.',
   invalid_contract_period_or_residents: 'Kiểm tra kỳ thuê, người đại diện và danh sách người ở.',
   contract_price_snapshot_missing:
@@ -1302,9 +1552,19 @@ export const labels: Record<string, string> = {
   room_contract_price_conflict:
     'Các hợp đồng cùng phòng có biểu phí không đồng nhất trong kỳ thuê. Cần đối chiếu trước khi tiếp tục.',
 };
+Object.assign(labels, {
+  room_summary_evidence_required: 'Chụp ít nhất một ảnh hiện trạng chung.',
+  room_check_evidence_required: 'Hạng mục Đạt hoặc Có vấn đề cần ít nhất một ảnh.',
+  key_evidence_required: 'Chụp ít nhất một ảnh chìa khóa.',
+  asset_evidence_required: 'Chụp ít nhất một ảnh cho mỗi tài sản đã kiểm tra.',
+  room_summary_evidence: 'Thiếu ảnh hiện trạng chung',
+  room_check_evidence: 'Thiếu ảnh hạng mục hiện trạng',
+  key_evidence: 'Thiếu ảnh chìa khóa',
+});
 export const text = (value: string) =>
   labels[value] ?? 'Trạng thái hoặc điều kiện cần kiểm tra với Owner';
 export function contractError(error: unknown): string {
+  if (error instanceof UserFeedbackError) return error.message;
   if (error instanceof Error && error.name === 'AbortError')
     return 'Đã dừng chờ phản hồi. Hãy tải lại trước khi thử lại.';
   const e = error as {
@@ -1330,6 +1590,8 @@ export function contractError(error: unknown): string {
       diagnostic
     );
   if (code && labels[code]) return labels[code] + diagnostic;
+  const shared = catalogError(error);
+  if (shared) return shared + diagnostic;
   return (
     ((
       {
@@ -1360,11 +1622,13 @@ export function dateOnly(value: string): string {
     !Number.isFinite(Date.parse(iso)) ||
     new Date(iso + 'T00:00:00Z').toISOString().slice(0, 10) !== iso
   )
-    throw new Error('Ngày không hợp lệ. Nhập dd/MM/yyyy.');
+    throw new UserFeedbackError('Ngày không hợp lệ. Nhập dd/MM/yyyy.');
   return iso;
 }
 export const displayContractDate = (value: string) => value.split('-').reverse().join('/');
 export function businessToday() {
+  const simulated = demoBusinessDate();
+  if (simulated) return simulated;
   const parts = new Intl.DateTimeFormat('en', {
     timeZone: 'Asia/Ho_Chi_Minh',
     year: 'numeric',
@@ -1377,17 +1641,18 @@ export function businessToday() {
 }
 export function localSchedule(value: string) {
   if (!/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}$/.test(value))
-    throw new Error('Nhập lịch theo yyyy-MM-ddTHH:mm, giờ Việt Nam.');
+    throw new UserFeedbackError('Nhập lịch theo yyyy-MM-ddTHH:mm, giờ Việt Nam.');
   dateOnly(value.slice(0, 10));
   if (Number(value.slice(11, 13)) > 23 || Number(value.slice(14)) > 59)
-    throw new Error('Giờ không hợp lệ.');
+    throw new UserFeedbackError('Giờ không hợp lệ.');
   const instant = new Date(value + ':00+07:00');
-  if (instant.getTime() < Date.now()) throw new Error('Lịch kiểm tra không được trong quá khứ.');
+  if (instant.getTime() < demoBusinessNow())
+    throw new UserFeedbackError('Lịch kiểm tra không được trong quá khứ.');
   return instant.toISOString();
 }
 export function vnd(value: string, positive = false) {
   if (!/^(0|[1-9]\d{0,17})$/.test(value) || (positive && value === '0'))
-    throw new Error('Nhập số nguyên VND hợp lệ, tối đa 18 chữ số.');
+    throw new UserFeedbackError('Nhập số nguyên VND hợp lệ, tối đa 18 chữ số.');
   return value;
 }
 export function guid(value: string) {
@@ -1395,12 +1660,12 @@ export function guid(value: string) {
     !/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(value) ||
     /^0{8}-0{4}-0{4}-0{4}-0{12}$/.test(value)
   )
-    throw new Error('Mã định danh phải là UUID hợp lệ.');
+    throw new UserFeedbackError('Mã định danh phải là UUID hợp lệ.');
   return value;
 }
 export function required(value: string, max: number) {
   if (!value.trim() || value.trim().length > max)
-    throw new Error(`Nội dung bắt buộc, tối đa ${max} ký tự.`);
+    throw new UserFeedbackError(`Nội dung bắt buộc, tối đa ${max} ký tự.`);
   return value.trim();
 }
 export interface ActionField {
@@ -1464,12 +1729,12 @@ export function contractActions(
     result.push(
       action(
         'signing',
-        c.isDevelopmentDemo ? 'Mô phỏng ký (Development)' : 'Yêu cầu ký MySign',
+        c.isDevelopmentDemo ? 'Mô phỏng ký' : 'Yêu cầu ký MySign',
         c.isDevelopmentDemo
           ? []
           : [{ name: 'certificateId', label: 'Chứng thư của bạn', type: 'certificate' }],
         c.isDevelopmentDemo
-          ? 'SIMULATED SIGNING: chỉ thử nghiệm, không phải chữ ký điện tử có giá trị pháp lý.'
+          ? ''
           : 'Hãy đọc kỹ điều khoản. Xác nhận ký trên ứng dụng của nhà cung cấp. Gửi yêu cầu chưa đồng nghĩa đã ký hoặc kích hoạt.',
       ),
     );
@@ -1523,7 +1788,7 @@ export function contractActions(
       ),
     );
   if (c.kind === 'Holding') {
-    const expired = !!c.holdingExpiresAt && Date.parse(c.holdingExpiresAt) <= Date.now();
+    const expired = !!c.holdingExpiresAt && Date.parse(c.holdingExpiresAt) <= demoBusinessNow();
     if (owner && c.status === 'Draft' && !c.approvedAt && !expired)
       result.push(
         action(
@@ -1575,44 +1840,51 @@ export function contractActions(
         'Hủy bản gia hạn đang chờ; giữ nguyên hợp đồng gốc và lịch sử.',
       ),
     );
-  if (active && !m && tenant)
+  if (active && (!m || m.status === 'Rejected') && tenant)
     result.push(
       action(
         'termination-requests',
         'Yêu cầu chấm dứt trước hạn',
         proposedFields,
-        'Owner cần duyệt yêu cầu. Gửi yêu cầu chưa kết thúc hợp đồng hoặc giải phóng phòng.',
+        'Tất cả thành viên phải đồng thuận trước khi gửi chủ trọ duyệt. Chưa kết thúc hợp đồng hoặc giải phóng phòng.',
       ),
     );
-  if (active && !m && owner && c.kind !== 'Holding')
-    result.push(action('expiry-move-out', 'Lập yêu cầu trả phòng khi hết hạn', proposedFields));
-  if (owner && m?.status === 'Requested')
+  if (active && (!m || m.status === 'Rejected') && staff && c.kind !== 'Holding')
+    result.push(
+      action(
+        'forced-move-out',
+        'Trả phòng bắt buộc',
+        proposedFields,
+        'Chỉ sử dụng khi xác minh tất cả khách thuê đã bỏ phòng. Chọn ngày hiện tại và ghi rõ lý do. Chỉ lưu kết quả kiểm tra, không tự quyết toán hoặc hoàn cọc.',
+      ),
+    );
+  if (owner && m?.status === 'Requested' && m.isGroupPrimary !== false) {
     result.push(action('move-out/approve', 'Duyệt yêu cầu trả phòng'));
+    result.push(
+      action(
+        'move-out/reject',
+        'Từ chối yêu cầu',
+        [{ name: 'reason', label: 'Lý do từ chối', type: 'multiline', max: 2000 }],
+        'Nêu rõ lý do để người thuê có thể điều chỉnh và gửi yêu cầu mới. Hợp đồng vẫn có hiệu lực.',
+      ),
+    );
+  }
   if ((owner || staff) && m?.status === 'Approved')
     result.push(
       action('move-out/schedule', 'Đặt lịch kiểm tra', [
         { name: 'scheduledAt', label: 'Lịch kiểm tra (giờ Việt Nam)', type: 'schedule' },
       ]),
     );
-  if (staff && m?.status === 'Approved' && m.inspectionScheduledAt)
-    result.push(
-      action(
-        'move-out/inspection',
-        'Lưu biên bản trả phòng',
-        [
-          { name: 'electricityReadingId', label: 'Mã chỉ số điện chốt đã xác nhận' },
-          { name: 'waterReadingId', label: 'Mã chỉ số nước chốt đã xác nhận' },
-          {
-            name: 'notes',
-            label: 'Hiện trạng phòng, tài sản, chìa khóa',
-            type: 'multiline',
-            max: 4000,
-          },
-        ],
-        'Cần đến ngày trả phòng, đủ ảnh hiện trạng và chỉ số chốt đúng hợp đồng/ngày kiểm tra.',
-      ),
-    );
-  if (owner && m && ['Inspected', 'PendingSettlement', 'Settled', 'Completed'].includes(m.status))
+  // Staff records move-out observations through its started /work-orders task:
+  // four independently persisted sections, private images, confirmed Final
+  // meter readings and explicit submission. Do not offer the obsolete generic
+  // contract form that bypasses the optimized checklist.
+  if (
+    owner &&
+    m &&
+    !m.isForced &&
+    ['Inspected', 'PendingSettlement', 'Settled', 'Completed'].includes(m.status)
+  )
     result.push(
       action(
         'move-out/settlement',
@@ -1632,6 +1904,7 @@ export function contractActions(
     owner &&
     active &&
     m &&
+    !m.isForced &&
     ['Inspected', 'PendingSettlement', 'Settled'].includes(m.status) &&
     (m.ownerConfirmedInspection || m.status === 'Settled')
   )
@@ -1640,16 +1913,29 @@ export function contractActions(
         'move-out/complete',
         'Hoàn tất trả phòng',
         [{ name: 'actualEndDate', label: 'Ngày kết thúc thực tế', type: 'date' }],
-        'Xác nhận hoàn tất bàn giao vật lý theo biên bản Owner đã duyệt. Nợ, cọc và hoàn tiền tiếp tục được theo dõi riêng. Ngày phải trùng ngày lập biên bản.',
+        'Hoàn tất trả phòng dựa trên kết quả kiểm tra thực tế đã xác minh. Nợ, cọc và hoàn tiền tiếp tục được theo dõi riêng. Ngày kết thúc phải trùng ngày kiểm tra.',
       ),
     );
   return result;
 }
+export function earlyTerminationDate(
+  value: string,
+  contract: Pick<ContractView, 'startDate' | 'endDate'>,
+): string {
+  const date = dateOnly(/^\d{2}-\d{2}-\d{4}$/.test(value) ? value.replaceAll('-', '/') : value);
+  if (date < businessToday())
+    throw new UserFeedbackError('Ngày trả phòng không được trong quá khứ.');
+  if (date < contract.startDate)
+    throw new UserFeedbackError('Ngày trả phòng phải từ ngày bắt đầu hợp đồng.');
+  if (date >= contract.endDate)
+    throw new UserFeedbackError('Yêu cầu trước hạn cần ngày trả phòng trước ngày hết hạn.');
+  return date;
+}
+
 export function actionPayload(
   a: ContractAction,
   values: Record<string, string>,
   c: ContractView,
-  evidenceIds: string[] = [],
 ): Record<string, unknown> | undefined {
   if (a.operation === 'signing' && c.isDevelopmentDemo)
     return { certificateId: '00000000-0000-0000-0000-000000000000' };
@@ -1659,7 +1945,9 @@ export function actionPayload(
     const value = values[f.name] ?? '';
     body[f.name] =
       f.type === 'date'
-        ? dateOnly(value)
+        ? a.operation === 'termination-requests' && f.name === 'proposedDate'
+          ? earlyTerminationDate(value, c)
+          : dateOnly(value)
         : f.type === 'money'
           ? vnd(value, true)
           : f.type === 'schedule'
@@ -1669,25 +1957,18 @@ export function actionPayload(
               : required(value, f.max ?? 200);
   }
   if (a.operation === 'renewals' && String(body.endDate) <= c.endDate)
-    throw new Error('Ngày hết hạn mới phải sau ngày hết hạn hiện tại.');
+    throw new UserFeedbackError('Ngày hết hạn mới phải sau ngày hết hạn hiện tại.');
   if (a.operation === 'holding-cancellation') {
     if (!['0', '1'].includes(values.cause) || values.humanConfirmed !== 'true')
-      throw new Error('Chọn nguyên nhân hủy và xác nhận đã đối chiếu trách nhiệm về cọc.');
+      throw new UserFeedbackError(
+        'Chọn nguyên nhân hủy và xác nhận đã đối chiếu trách nhiệm về cọc.',
+      );
     body.cause = Number(values.cause);
     body.humanConfirmed = true;
   }
-  if (a.operation === 'termination-requests' || a.operation === 'expiry-move-out') {
+  if (a.operation === 'expiry-move-out') {
     if (String(body.proposedDate) < businessToday())
-      throw new Error('Ngày trả phòng không được trong quá khứ.');
-    if (a.operation === 'termination-requests' && String(body.proposedDate) >= c.endDate)
-      throw new Error('Yêu cầu trước hạn cần ngày trả phòng trước ngày hết hạn.');
-    if (a.operation === 'expiry-move-out' && String(body.proposedDate) < c.endDate)
-      throw new Error('Trả phòng hết hạn cần ngày từ ngày hết hạn trở đi.');
-  }
-  if (a.operation === 'move-out/inspection') {
-    if (!evidenceIds.length || evidenceIds.length > 5)
-      throw new Error('Cần từ 1 đến 5 ảnh hiện trạng đã tải lên.');
-    body.evidenceIds = evidenceIds.map(guid);
+      throw new UserFeedbackError('Ngày trả phòng không được trong quá khứ.');
   }
   return body;
 }
@@ -1698,13 +1979,13 @@ function draftCore(
 ) {
   const startDate = dateOnly(values.startDate ?? ''),
     endDate = dateOnly(values.endDate ?? '');
-  if (endDate <= startDate) throw new Error('Ngày hết hạn phải sau ngày bắt đầu.');
+  if (endDate <= startDate) throw new UserFeedbackError('Ngày hết hạn phải sau ngày bắt đầu.');
   if (
     !residentIds.length ||
     residentIds.length > 50 ||
     !residentIds.includes(values.representativeResidentId)
   )
-    throw new Error('Chọn người ở và một người đại diện trong danh sách.');
+    throw new UserFeedbackError('Chọn người ở và một người đại diện trong danh sách.');
   return {
     roomId: guid(values.roomId ?? ''),
     ownerSignerId: guid(values.ownerSignerId ?? ''),
@@ -1733,7 +2014,7 @@ export function holdingDraftPayload(values: Record<string, string>, residentIds:
     capacity > 32767 ||
     !Number.isFinite(expires.getTime())
   )
-    throw new Error('Kiểm tra số người giữ chỗ và thời điểm hết hạn.');
+    throw new UserFeedbackError('Kiểm tra số người giữ chỗ và thời điểm hết hạn.');
   return {
     ...draftCore(values, residentIds, values.tenantUserId ? guid(values.tenantUserId) : null),
     holdingDeposit: vnd(values.requiredDeposit ?? ''),

@@ -23,7 +23,7 @@ public sealed class SePayHoldingPreviewController(IPaymentRepository repository,
 {
     private bool Available()
     {
-        if (!options.TestingAvailable(environment.EnvironmentName) || !options.Valid(environment.EnvironmentName)) return false;
+        if (environment.EnvironmentName is not ("Development" or "Testing" or "Staging") || !options.TestingAvailable(environment.EnvironmentName) || !options.Valid(environment.EnvironmentName)) return false;
         var target = new NpgsqlConnectionStringBuilder(configuration.GetConnectionString("Database") ?? "");
         var pattern = environment.IsEnvironment("Testing") ? "^bhome_compact24_(?:dev_)?[a-f0-9]{32}$" : "^bhome_compact24_dev_[a-f0-9]{32}$";
         return (target.Host is "localhost" or "127.0.0.1" or "::1" && Regex.IsMatch(target.Database ?? "", pattern)) ||
@@ -37,7 +37,7 @@ public sealed class SePayHoldingPreviewController(IPaymentRepository repository,
         if (c is null || c.Kind != ContractKind.Holding || !c.IsDevelopmentDemo && !allowRealQrPreview) throw new PaymentException(404, "contract_not_found");
         var target = new NpgsqlConnectionStringBuilder(configuration.GetConnectionString("Database") ?? "");
         if (target.Host is not ("localhost" or "127.0.0.1" or "::1") && testScope?.Allows(c.Room.LocationId) != true &&
-            !(allowRealQrPreview && options.ReceivingAccounts.Any(a => a.LocationId == c.Room.LocationId)))
+            !(allowRealQrPreview && options.Bound(c.Room.LocationId, c.OwnerSignerId)))
             throw new PaymentException(404, "contract_not_found");
         return c;
     }
@@ -167,15 +167,14 @@ public sealed class SePayHoldingPreviewController(IPaymentRepository repository,
             throw new PaymentException(409, "holding_not_payable");
         if (contract.IsDevelopmentDemo && actor.IsInRole(Roles.Staff) && !(await State(contract, token)).CanShowQr)
             throw new PaymentException(409, "sandbox_simulated_signatures_required");
-        var binding = options.ReceivingAccounts.SingleOrDefault(x => x.LocationId == contract.Room.LocationId);
-        var account = await repository.ReceivingAccountAsync(contract.Room.LocationId, token);
-        if (binding is null || account is null || !account.Enabled || !account.IsDevelopmentDemo ||
-            account.BankIdentifier != binding.BankIdentifier || account.AccountNumber != binding.AccountNumber)
+        var account = await codes.AccountAsync("Deposit", id, contract.Room.LocationId, token) ?? await repository.ReceivingAccountForModeAsync(contract.Room.LocationId, "Test", token);
+        if (account is null || !options.Matches(contract.Room.LocationId, account) ||
+            !account.Enabled || !account.IsDevelopmentDemo)
             throw new PaymentException(409, "sandbox_receiving_account_unavailable");
         var received = await contractRepository.DepositTotalAsync(id, token);
         var code = await codes.IssueAsync("Deposit", id, contract.Room.LocationId, token);
         var position = new { TransferReference = code ?? "", Remaining = Math.Max(0, contract.RequiredDeposit - received).ToString("0", System.Globalization.CultureInfo.InvariantCulture) };
-        if (!Regex.IsMatch(position.TransferReference, "^BH[0-9]{8}$"))
+        if (!Regex.IsMatch(position.TransferReference, "^BH(?:[0-9]{8}|[A-Z0-9]{4}[TL][A-F0-9]{16})$"))
             throw new PaymentException(409, "sandbox_payment_code_required");
         var remaining = decimal.Parse(position.Remaining, System.Globalization.CultureInfo.InvariantCulture);
         var rendered = remaining > 0 ? qr.Generate(account.BankIdentifier, account.AccountNumber, remaining, position.TransferReference) : null;

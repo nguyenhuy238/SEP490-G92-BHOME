@@ -171,7 +171,8 @@ beforeEach(() => {
       contractId: 'contract-8',
       roomNumber: 'CT208',
       locationName: 'BHOME TEST',
-      scheduledAt: '2026-11-07T03:00:00Z',
+      scheduledAt: null,
+      proposedDate: '2026-11-23',
       status: 'Approved',
     },
   ]);
@@ -188,23 +189,27 @@ async function openList() {
   );
   await screen.findByText('Hiển thị 1–5 / 14');
 }
-it('opens holding creation from its own staff action', async () => {
+it('opens an existing Holding contract without duplicate creation actions', async () => {
+  all = all.map((contract) => ({ ...contract, kind: 'Holding' }));
   await openList();
-  fireEvent.click(screen.getByText('Tạo hợp đồng giữ chỗ'));
-  expect(state.create).toHaveBeenCalledWith('Holding');
+  expect(screen.queryByText('Tạo hợp đồng giữ chỗ')).toBeNull();
+  fireEvent.click(screen.getByRole('button', { name: /CT201,/ }));
+  expect(state.open).toHaveBeenCalledWith(all[0]);
+  expect(state.create).not.toHaveBeenCalled();
 });
-it('provides location-scoped entry points for both pending and Active Main handovers', async () => {
+it('opens pending and Active Main contracts for their detail workflow', async () => {
   await openList();
-  fireEvent.click(screen.getByRole('button', { name: 'Mở bàn giao phòng CT204' }));
-  expect(state.go).toHaveBeenCalledWith('move-in', {
-    contractId: 'contract-4',
-    section: 'handover',
+  fireEvent.change(screen.getByRole('textbox', { name: 'Tìm hợp đồng' }), {
+    target: { value: 'CT204' },
   });
-  fireEvent.click(screen.getByRole('button', { name: 'Xem bàn giao phòng CT205' }));
-  expect(state.go).toHaveBeenCalledWith('move-in', {
-    contractId: 'contract-5',
-    section: 'handover',
+  fireEvent.click(screen.getByRole('button', { name: /Mở hợp đồng.*phòng CT204,/ }));
+  expect(state.open).toHaveBeenLastCalledWith(all[3]);
+  fireEvent.change(screen.getByRole('textbox', { name: 'Tìm hợp đồng' }), {
+    target: { value: 'CT205' },
   });
+  fireEvent.click(screen.getByRole('button', { name: /Mở hợp đồng.*phòng CT205,/ }));
+  expect(state.open).toHaveBeenLastCalledWith(all[4]);
+  expect(state.go).not.toHaveBeenCalled();
 });
 it('keeps Holding kind independent from Draft/Signing/Active states and counts every matching record', async () => {
   all = [
@@ -327,10 +332,11 @@ it('opens the selected detail without exposing the removed creation action', asy
   expect(screen.queryByText('Tạo mới')).toBeNull();
   expect(state.create).not.toHaveBeenCalled();
 });
-it('keeps inspection details collapsed and opens the existing assigned contract when expanded', async () => {
+it('shows an instantly opened Location move-out task with no scheduled time', async () => {
   await openList();
   expect(screen.queryByRole('button', { name: 'Mở kiểm tra phòng CT208' })).toBeNull();
-  fireEvent.click(screen.getByRole('button', { name: 'Lịch kiểm tra trả phòng, 1 lịch' }));
+  fireEvent.click(screen.getByRole('button', { name: 'Nhiệm vụ trả phòng, 1 nhiệm vụ' }));
+  expect(screen.getByText('Ngày trả dự kiến: 23/11/2026')).toBeTruthy();
   fireEvent.click(screen.getByRole('button', { name: 'Mở kiểm tra phòng CT208' }));
   expect(state.inspect).toHaveBeenCalledWith('contract-8');
 });
@@ -356,8 +362,8 @@ it('does not turn a failed request into an empty result and retries through the 
 it('keeps contracts usable when only the inspection schedule fails', async () => {
   state.schedules.mockRejectedValue(Error('offline'));
   await openList();
-  fireEvent.click(screen.getByRole('button', { name: 'Lịch kiểm tra trả phòng, chưa tải được' }));
-  expect(screen.getByRole('button', { name: 'Thử lại lịch kiểm tra' })).toBeTruthy();
+  fireEvent.click(screen.getByRole('button', { name: 'Nhiệm vụ trả phòng, chưa tải được' }));
+  expect(screen.getByRole('button', { name: 'Thử lại nhiệm vụ trả phòng' })).toBeTruthy();
   expect(screen.getAllByTestId('staff-contract-card')).toHaveLength(5);
 });
 it('clamps the page after refreshing a smaller backend result', async () => {

@@ -1,3 +1,4 @@
+import { ContractNotice } from './ContractNotice';
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { Image, View, type GestureResponderEvent, type LayoutChangeEvent } from 'react-native';
 import { Button, Checkbox, Text } from 'react-native-paper';
@@ -12,7 +13,7 @@ import {
 } from '../../../../../packages/client-core/src/signing';
 import { ocrPreview } from '../../lib/automaticOcr';
 import { Action, Box, ui } from '../../components/WorkspaceKit';
-import { ChoiceField, Input } from '../../components/WorkflowControls';
+import { ChoiceField } from '../../components/WorkflowControls';
 
 export interface PlacementChoice {
   placement: SignaturePlacement | null;
@@ -242,8 +243,8 @@ export function SignaturePlacementField({
   );
 }
 
-// "Ảnh chữ ký": shown above "Ký bởi / Ngày ký" in the signer's box. On mobile it is generated from the signer's
-// name; a scanned PNG can be uploaded from the Owner portal.
+// "Ảnh chữ ký": shown above "Ký bởi / Ngày ký" in the signer's box.
+// Users may upload a real PNG; generating a facsimile from a typed name is not offered.
 export function SignatureImageSection({
   signing,
   onChanged,
@@ -259,8 +260,7 @@ export function SignatureImageSection({
     'picture-content:' + (view.value?.present ? view.value.version : ''),
     view.value?.present ? async (signal) => ocrPreview(await signing.imageBytes(signal)) : null,
   );
-  const [name, setName] = useState(''),
-    [busy, setBusy] = useState(false),
+  const [busy, setBusy] = useState(false),
     [error, setError] = useState(''),
     [notice, setNotice] = useState('');
   async function run(work: () => Promise<unknown>, message: string) {
@@ -287,7 +287,7 @@ export function SignatureImageSection({
         chứng thư số CA.
       </Text>
       {view.loading && <Text>Đang tải ảnh chữ ký…</Text>}
-      {!!view.error && <Text style={ui.red}>{view.error}</Text>}
+      {!!view.error && <ContractNotice message={view.error} />}
       {view.value && !view.value.present && <Text>Bạn chưa có ảnh chữ ký.</Text>}
       {view.value?.present && !!uri.value && (
         <Image
@@ -301,7 +301,6 @@ export function SignatureImageSection({
           resizeMode="contain"
         />
       )}
-      <Input label="Họ tên để tạo ảnh chữ ký" value={name} onChange={setName} disabled={busy} />
       <Action
         disabled={busy}
         onPress={() =>
@@ -323,12 +322,6 @@ export function SignatureImageSection({
       >
         Tải ảnh chữ ký PNG
       </Action>
-      <Action
-        disabled={busy || name.trim().length < 2 || name.trim().length > 60}
-        onPress={() => void run(() => signing.generateImage(name), 'Đã tạo ảnh chữ ký từ họ tên.')}
-      >
-        Tạo ảnh từ họ tên
-      </Action>
       {view.value?.present && (
         <Button
           disabled={busy}
@@ -337,7 +330,7 @@ export function SignatureImageSection({
           Xóa ảnh chữ ký
         </Button>
       )}
-      {!!error && <Text style={ui.red}>{error}</Text>}
+      {!!error && <ContractNotice message={error} />}
       {!!notice && <Text>{notice}</Text>}
     </Box>
   );

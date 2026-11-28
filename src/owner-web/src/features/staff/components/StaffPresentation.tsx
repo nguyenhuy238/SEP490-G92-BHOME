@@ -21,6 +21,8 @@ import { useOwnerQuery } from '../../../hooks/useOwnerWorkspace';
 import { formatInstant } from '../../../../../../packages/client-core/src/localization';
 import {
   todayVietnam,
+  salaryRateUnit,
+  salaryTypeLabel,
   type Staff,
   type EmploymentPeriod,
   type StaffResponsibilities,
@@ -330,7 +332,6 @@ export function StaffDetailDrawer({
               {employment ? (
                 <>
                   <Field label="Mã hợp đồng">{employment.contractNumber || 'Chưa cập nhật'}</Field>
-                  <Field label="Loại công việc">{employment.employmentType}</Field>
                   <Field label="Trạng thái hợp đồng">
                     <EmploymentBadge {...employment} />
                   </Field>
@@ -353,10 +354,10 @@ export function StaffDetailDrawer({
               <Typography variant="h6" sx={{ fontSize: 16, mb: 1 }}>
                 Chính sách lương
               </Typography>
-              <Field label="Hình thức lương">{employment?.salaryType || 'Chưa thiết lập'}</Field>
-              <Field label="Mức lương">
+              <Field label="Hình thức lương">{salaryTypeLabel(employment?.salaryType)}</Field>
+              <Field label={`Mức lương (${salaryRateUnit(employment?.salaryType)})`}>
                 {employment?.baseRate != null
-                  ? `${employment.baseRate.toLocaleString('vi-VN', { maximumFractionDigits: 0 })} VND`
+                  ? `${employment.baseRate.toLocaleString('vi-VN', { maximumFractionDigits: 0 })} ${salaryRateUnit(employment.salaryType)}`
                   : 'Chưa thiết lập'}
               </Field>
               <EmploymentHistory
@@ -569,7 +570,7 @@ function EmploymentHistory({
               <AccordionSummary expandIcon={<ChevronDown size={18} />}>
                 <Box sx={{ minWidth: 0 }}>
                   <Typography variant="body2" sx={{ fontWeight: 600 }}>
-                    {period.contractNumber || period.employmentType}
+                    {period.contractNumber || 'Kỳ hợp đồng'}
                   </Typography>
                   <Typography variant="caption" color="text.secondary">
                     {staffDate(period.startDate)} – {staffDate(period.endDate)}
@@ -580,10 +581,9 @@ function EmploymentHistory({
                 <Stack spacing={1}>
                   <EmploymentBadge {...period} />
                   <Typography variant="body2">
-                    {period.employmentType} ·{' '}
-                    {period.salaryType || 'Chưa thiết lập hình thức lương'}
+                    {salaryTypeLabel(period.salaryType)}
                     {period.baseRate != null
-                      ? ` · ${period.baseRate.toLocaleString('vi-VN')} VND`
+                      ? ` · ${period.baseRate.toLocaleString('vi-VN')} ${salaryRateUnit(period.salaryType)}`
                       : ''}
                   </Typography>
                   {period.history.map((entry, index) => (

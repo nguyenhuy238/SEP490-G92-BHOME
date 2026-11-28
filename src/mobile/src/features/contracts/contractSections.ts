@@ -6,7 +6,7 @@ import {
 export function mobileContractActions(...args: Parameters<typeof contractActions>) {
   return contractActions(...args).filter(
     (action) =>
-      !['move-out/inspection', 'move-out/settlement'].includes(action.operation) &&
+      action.operation !== 'move-out/settlement' &&
       !(
         args[2] === 'Owner' &&
         ['renewals', 'holding-conversion', 'deposit-verifications'].includes(action.operation)
@@ -48,9 +48,13 @@ export function groupContracts(items: ContractSummary[]) {
 
 export function contractActionSection(operation: string): ContractSection {
   if (
-    ['renewals', 'renewal-cancellation', 'termination-requests', 'expiry-move-out'].includes(
-      operation,
-    ) ||
+    [
+      'renewals',
+      'renewal-cancellation',
+      'termination-requests',
+      'expiry-move-out',
+      'forced-move-out',
+    ].includes(operation) ||
     operation.startsWith('move-out/')
   )
     return 'lifecycle';

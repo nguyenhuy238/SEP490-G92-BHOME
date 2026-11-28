@@ -6,6 +6,69 @@ namespace BHome.Application.UnitTests.Ocr;
 
 public sealed class OcrParserTests
 {
+    [Fact]
+    public void ADateMayFollowABilingualLabelAcrossPrintedWhitespaceButNotAcrossAnotherField()
+    {
+        OcrLine label = new("Ngày, tháng, năm / Date, month, year:", .99f) { Bounds = new(55, 235, 367, 28) };
+        OcrLine value = new("01/07/2024", .97f) { Bounds = new(567, 230, 167, 34) };
+        var result = OcrFieldParser.Parse(new([label, value], "synthetic", []), OcrDocumentKind.IdentityBack);
+        Assert.Equal("2024-07-01", result.ProposedFields["dateOfIssue"]);
+        OcrLine otherLabel = new("Có giá trị đến:", .99f) { Bounds = new(435, 233, 120, 28) };
+        result = OcrFieldParser.Parse(new([label, otherLabel, value], "synthetic", []), OcrDocumentKind.IdentityBack);
+        Assert.False(result.ProposedFields.ContainsKey("dateOfIssue"));
+        Assert.Equal("2024-07-01", result.ProposedFields["dateOfExpiry"]);
+    }
+
+    [Theory]
+    [InlineData("Ngày sinh / Date of birth: 01 / 02 / 2000", OcrDocumentKind.IdentityFront, "dateOfBirth", "2000-02-01")]
+    [InlineData("Ngày, tháng, năm / Date, month, year: 01 . 07 . 2024", OcrDocumentKind.IdentityBack, "dateOfIssue", "2024-07-01")]
+    public void ObservedSpacesAroundDateSeparatorsAreAccepted(string text, OcrDocumentKind kind, string key, string expected)
+    {
+        var result = Parse(kind, text);
+        Assert.Equal(expected, result.ProposedFields[key]);
+        Assert.True(result.RequiresConfirmation);
+    }
+
+    [Fact]
+    public void IssueDateUsesNearbyGeometryEvenWhenOtherColumnsInterruptReadingOrder()
+    {
+        OcrLine[] lines = [
+            new("Ngày, tháng, năm / Date, month, year", .99f) { Bounds = new(30, 100, 450, 24) },
+            new("Left index finger", .99f) { Bounds = new(800, 100, 200, 24) },
+            new("Right index finger", .99f) { Bounds = new(1100, 100, 200, 24) },
+            new("CO QUAN GIA LAP", .99f) { Bounds = new(30, 220, 400, 24) },
+            new("01/07/2024", .95f) { Bounds = new(490, 100, 180, 30) }
+        ];
+        var result = OcrFieldParser.Parse(new(lines, "synthetic", []), OcrDocumentKind.IdentityBack);
+        Assert.Equal("2024-07-01", result.ProposedFields["dateOfIssue"]);
+        Assert.Equal(.95f, result.Confidence["dateOfIssue"]);
+        lines[4] = lines[4] with { Bounds = new(1100, 500, 180, 30) };
+        Assert.False(OcrFieldParser.Parse(new(lines, "synthetic", []), OcrDocumentKind.IdentityBack)
+            .ProposedFields.ContainsKey("dateOfIssue"));
+    }
+
+    [Fact]
+    public void PartialTextWithoutIdentityFieldsDoesNotClaimPartialIdentityData()
+    {
+        var result = OcrFieldParser.Parse(new([new("BACKGROUND TEST TEXT", .99f)], "synthetic", ["ocr_partial"]), OcrDocumentKind.IdentityFront);
+        Assert.True(result.IsFallback);
+        Assert.Empty(result.ProposedFields);
+        Assert.DoesNotContain("ocr_partial", result.Warnings);
+        Assert.Contains("unsupported_or_unreadable_layout", result.Warnings);
+    }
+
+    [Fact]
+    public void PartialIdentityKeepsOnlyObservedFieldsAndRequiresConfirmation()
+    {
+        var result = OcrFieldParser.Parse(new([new("Số: 000000000000", .99f)], "synthetic", ["ocr_partial"]), OcrDocumentKind.IdentityFront);
+        Assert.False(result.IsFallback);
+        Assert.Equal("000000000000", result.ProposedFields["citizenIdentityNumber"]);
+        Assert.Contains("ocr_partial", result.Warnings);
+        Assert.Contains("fullName", result.MissingFields);
+        Assert.Contains("dateOfBirth", result.MissingFields);
+        Assert.True(result.RequiresConfirmation);
+    }
+
     [Theory]
     [InlineData("m³/h")]
     [InlineData("m3/min")]

@@ -1,5 +1,5 @@
-import React, { useCallback, useState } from 'react';
-import { Image, StyleSheet, View } from 'react-native';
+import React, { useCallback, useEffect, useRef, useState } from 'react';
+import { Image, Modal, ScrollView, StyleSheet, View } from 'react-native';
 import { Button, Icon, IconButton, Text, TouchableRipple } from 'react-native-paper';
 import * as Clipboard from 'expo-clipboard';
 import { formatContractMoney } from '../../../../packages/client-core/src/contracts';
@@ -7,6 +7,7 @@ import { formatInstant } from '../../../../packages/client-core/src/localization
 import { signedVnd } from '../../../../packages/client-core/src/adjustments';
 import {
   paymentText,
+  isSePayPaymentCode,
   type InvoicePayment,
   type TransferInstructions,
 } from '../../../../packages/client-core/src/payments';
@@ -23,6 +24,7 @@ import {
 } from '../features/tenant/paymentPresentation';
 import { loadInvoiceTransfer } from '../services/tenantInvoices';
 import { queryPolicies } from '../lib/queryPolicies';
+import { ToastHost } from '../components/ToastHost';
 
 export function TenantPaymentDetails({ state }: { state: InvoicePayment }) {
   const [expanded, setExpanded] = useState(false);
@@ -42,6 +44,9 @@ export function TenantPaymentDetails({ state }: { state: InvoicePayment }) {
       </TouchableRipple>
       {expanded && (
         <View style={invoiceUi.detail}>
+          {state.paymentMode === 'Test' && (
+            <Text style={styles.warning}>Kênh nhận tiền: SePay Test</Text>
+          )}
           {state.originalIssuedAmount !== undefined && (
             <InvoiceMoneyRow label="Tiền hóa đơn gốc" value={state.originalIssuedAmount} />
           )}
@@ -89,9 +94,44 @@ export function TenantPaymentDetails({ state }: { state: InvoicePayment }) {
   );
 }
 
-// Dedicated invoice payment view: only the server supplies bank details, transfer references and QR.
-export function TenantPaymentPanel({ invoiceId }: { invoiceId: string }) {
-  const payment = useTenantInvoicePayment(invoiceId);
+export function TenantPaymentModal({
+  invoiceId,
+  onClose,
+}: {
+  invoiceId: string;
+  onClose: () => void;
+}) {
+  return (
+    <Modal transparent visible animationType="fade" onRequestClose={onClose}>
+      <View style={styles.modalBackdrop}>
+        <View style={styles.modalCard} accessibilityViewIsModal>
+          <View style={styles.modalHeader}>
+            <Text style={[invoiceUi.heading, { flex: 1 }]}>Thanh toán hóa đơn</Text>
+            <IconButton icon="close" accessibilityLabel="Đóng mã QR thanh toán" onPress={onClose} />
+          </View>
+          <ScrollView
+            style={styles.modalScroll}
+            contentContainerStyle={styles.modalContent}
+            showsVerticalScrollIndicator={false}
+          >
+            <TenantPaymentPanel invoiceId={invoiceId} embedded />
+          </ScrollView>
+        </View>
+        <ToastHost modal />
+      </View>
+    </Modal>
+  );
+}
+
+// Only the server supplies bank details, transfer references and QR.
+export function TenantPaymentPanel({
+  invoiceId,
+  embedded = false,
+}: {
+  invoiceId: string;
+  embedded?: boolean;
+}) {
+  const payment = useTenantInvoicePayment(invoiceId, true);
   const state = payment.data;
   const canRequestTransfer =
     state?.paymentStatus === 'Unpaid' && positiveAmount(state.outstandingAmount);
@@ -119,10 +159,35 @@ export function TenantPaymentPanel({ invoiceId }: { invoiceId: string }) {
   const transfer = instructions.data;
   const matches =
     state && transfer && sameAmount(state.outstandingAmount, transfer.outstandingAmount);
+  // Keep the old QR hidden until the server returns a QR for the new balance.
+  // Retry once for each distinct observed balance; avoid a tight request loop
+  // if an instructions response is stale or the provider is unavailable.
+  const attemptedBalance = useRef('');
+  useEffect(() => {
+    if (!canRequestTransfer || matches) {
+      attemptedBalance.current = '';
+      return;
+    }
+    if (!state || !transfer || payment.error || instructions.error || instructions.fetching) return;
+    const balance = invoiceId + ':' + state.outstandingAmount;
+    if (attemptedBalance.current === balance) return;
+    attemptedBalance.current = balance;
+    reloadInstructions();
+  }, [
+    canRequestTransfer,
+    matches,
+    state,
+    transfer,
+    payment.error,
+    instructions.error,
+    instructions.fetching,
+    invoiceId,
+    reloadInstructions,
+  ]);
   // A SePay Test QR with a legacy invoice reference cannot be reconciled via
   // webhook. Do not offer it to the tenant as a payable QR.
   const unregisteredDemoMemo = Boolean(
-    transfer?.isDevelopmentDemo && !/^BH\d{8}$/.test(transfer.transferDescription ?? ''),
+    transfer?.isDevelopmentDemo && !isSePayPaymentCode(transfer.transferDescription ?? ''),
   );
   const usable =
     !payment.fetching &&
@@ -135,12 +200,22 @@ export function TenantPaymentPanel({ invoiceId }: { invoiceId: string }) {
     ['Available', 'InstructionsOnly'].includes(transfer.availability) &&
     transfer.accountNumber;
   return (
-    <View style={invoiceUi.card}>
+    <View style={embedded ? styles.modalBody : invoiceUi.card}>
+      {!embedded && <Text style={invoiceUi.heading}>Thanh toán hóa đơn</Text>}
       <InvoiceFeedback {...payment} />
       {state && (
-        <Pill tone={state.paymentStatus === 'Paid' ? 'green' : 'blue'}>
-          {tenantPaymentLabel(state)}
-        </Pill>
+        <>
+          <Pill tone={state.paymentStatus === 'Paid' ? 'green' : 'blue'}>
+            {tenantPaymentLabel(state)}
+          </Pill>
+          <Text style={invoiceUi.secondary}>Số còn phải thanh toán</Text>
+          <Text style={invoiceUi.hero}>{formatContractMoney(state.outstandingAmount)}</Text>
+          {positiveAmount(state.paidAmount) && (
+            <Text style={invoiceUi.secondary}>
+              Đã thanh toán: {formatContractMoney(state.paidAmount)}
+            </Text>
+          )}
+        </>
       )}
       {state && !canRequestTransfer && (
         <Text style={invoiceUi.secondary}>
@@ -157,7 +232,7 @@ export function TenantPaymentPanel({ invoiceId }: { invoiceId: string }) {
           )}
           {transfer?.isDevelopmentDemo && (
             <Text accessibilityRole="alert" style={styles.warning}>
-              QR thử nghiệm – Không chuyển tiền thật.
+              Kênh nhận tiền: SePay Test. Thông tin tài khoản của QR đã phát hành được giữ nguyên.
             </Text>
           )}
           {unregisteredDemoMemo && (
@@ -192,10 +267,7 @@ export function TenantPaymentPanel({ invoiceId }: { invoiceId: string }) {
                   Chưa có ảnh QR. Bạn có thể sử dụng thông tin chuyển khoản bên dưới.
                 </Text>
               )}
-              <CopyRow
-                label="Ngân hàng (BIN)"
-                value={transfer.bankIdentifier ?? 'Chưa có thông tin'}
-              />
+              <CopyRow label="Ngân hàng" value={displayBankName(transfer.bankIdentifier)} />
               {transfer.accountHolder && (
                 <CopyRow label="Chủ tài khoản" value={transfer.accountHolder} />
               )}
@@ -243,6 +315,62 @@ export function TenantPaymentPanel({ invoiceId }: { invoiceId: string }) {
   );
 }
 
+// Display names only; keep the original BIN in the server's transfer instructions.
+// Reference: https://developers.momo.vn/v3/docs/payment/api/result-handling/bankcode/
+const bankNames: Readonly<Record<string, string>> = {
+  '970400': 'SaigonBank',
+  '970403': 'Sacombank',
+  '970405': 'Agribank',
+  '970406': 'Vikki Bank',
+  '970407': 'Techcombank',
+  '970408': 'GPBank',
+  '970409': 'Bac A Bank',
+  '970410': 'Standard Chartered',
+  '970412': 'PVcomBank',
+  '970414': 'MBV',
+  '970415': 'VietinBank',
+  '970416': 'ACB',
+  '970418': 'BIDV',
+  '970421': 'VRB',
+  '970422': 'MBBank',
+  '970423': 'TPBank',
+  '970424': 'Shinhan Bank',
+  '970425': 'ABBank',
+  '970426': 'MSB',
+  '970427': 'VietABank',
+  '970428': 'Nam A Bank',
+  '970429': 'SCB',
+  '970430': 'PGBank',
+  '970431': 'Eximbank',
+  '970432': 'VPBank',
+  '970433': 'VietBank',
+  '970434': 'Indovina Bank',
+  '970436': 'Vietcombank',
+  '970437': 'HDBank',
+  '970438': 'BaoViet Bank',
+  '970439': 'Public Bank',
+  '970440': 'SeABank',
+  '970441': 'VIB',
+  '970442': 'Hong Leong Bank',
+  '970443': 'SHB',
+  '970446': 'Co-opBank',
+  '970448': 'OCB',
+  '970449': 'LPBank',
+  '970452': 'KienlongBank',
+  '970457': 'Woori Bank',
+  '970458': 'UOB',
+  '422589': 'CIMB',
+  '458761': 'HSBC',
+  '546034': 'CAKE',
+  '546035': 'Ubank',
+};
+
+function displayBankName(identifier?: string | null): string {
+  const value = identifier?.trim();
+  if (!value) return 'Chưa có thông tin';
+  return /^\d{6}$/.test(value) ? (bankNames[value] ?? `Mã ngân hàng ${value}`) : value;
+}
+
 function CopyRow({ label, value, copy }: { label: string; value: string; copy?: () => void }) {
   return (
     <View style={styles.copyRow}>
@@ -264,6 +392,39 @@ function CopyRow({ label, value, copy }: { label: string; value: string; copy?: 
   );
 }
 const styles = StyleSheet.create({
+  modalBackdrop: {
+    flex: 1,
+    backgroundColor: 'rgba(0,22,55,0.48)',
+    justifyContent: 'center',
+    alignItems: 'center',
+    padding: 16,
+  },
+  modalCard: {
+    width: '100%',
+    maxWidth: 480,
+    maxHeight: '92%',
+    backgroundColor: c.white,
+    borderRadius: 16,
+    overflow: 'hidden',
+  },
+  modalHeader: {
+    width: '100%',
+    flexShrink: 0,
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingLeft: 16,
+    borderBottomWidth: 1,
+    borderBottomColor: c.border,
+  },
+  modalScroll: {
+    width: '100%',
+    minHeight: 0,
+    flexGrow: 0,
+    flexShrink: 1,
+    backgroundColor: c.white,
+  },
+  modalContent: { padding: 16 },
+  modalBody: { gap: 10 },
   disclosure: {
     flexDirection: 'row',
     alignItems: 'center',

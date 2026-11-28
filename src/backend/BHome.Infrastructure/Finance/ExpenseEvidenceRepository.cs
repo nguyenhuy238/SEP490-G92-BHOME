@@ -39,7 +39,10 @@ internal sealed class ExpenseEvidenceRepository(BHomePersistenceContext db) : IE
         // Bounded image evidence, matching the existing 5 MB private image pipeline.
         if (nodes.Count >= 20) throw new FinanceException(409, "expense_evidence_limit");
         var fileId = Guid.NewGuid();
-        var file = new ExpenseEvidenceFile(fileId, key, $"expenses/{id:N}/{fileId:N}", type, length, hash, "PendingUpload", actor, now);
+        var location = await db.Database.SqlQuery<Guid>($"SELECT location_id AS \"Value\" FROM expenses WHERE id={id}").SingleAsync(t);
+        var room = await db.Database.SqlQuery<Guid?>($"SELECT room_id AS \"Value\" FROM expenses WHERE id={id}").SingleAsync(t);
+        var objectKey = BHome.Application.Storage.PrivateImageKeys.Evidence(location, room, "expenses", id, fileId);
+        var file = new ExpenseEvidenceFile(fileId, key, objectKey, type, length, hash, "PendingUpload", actor, now);
         nodes.Add(new JsonObject { ["schemaVersion"] = 1, ["recordType"] = "ExpenseEvidence", ["state"] = JsonSerializer.SerializeToNode(file, Json) });
         await WriteAsync(id, nodes, t); await transaction.CommitAsync(t); return file;
     }

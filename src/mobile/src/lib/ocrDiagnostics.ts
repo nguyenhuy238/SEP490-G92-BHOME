@@ -22,6 +22,8 @@ const warnings: Record<string, string> = {
   ocr_unavailable: 'Engine/model OCR chưa sẵn sàng trên máy chủ.',
   ocr_timeout: 'Xử lý OCR vượt thời gian cho phép.',
   ocr_busy: 'Engine đang xử lý ảnh khác. Hãy thử lại.',
+  ocr_partial:
+    'OCR đã đọc được một phần thông tin. Hãy đối chiếu và nhập bổ sung các trường còn thiếu.',
   no_text: 'Không phát hiện được chữ trong ảnh.',
   possible_glare: 'Ảnh có thể bị lóa hoặc có nhiều vùng quá sáng.',
   blur_or_low_detail: 'Ảnh mờ hoặc thiếu chi tiết. Hãy giữ máy ổn định và chụp gần hơn.',
@@ -52,11 +54,19 @@ export function diagnosticEndpoint(profile: string, decimalPlaces = 'auto') {
   if (!/^[0-4]$/.test(decimalPlaces)) throw new Error('Invalid meter precision');
   return `${base}?decimalPlaces=${decimalPlaces}`;
 }
-export function diagnosticWarning(code: string) {
+export function diagnosticWarning(code: string, includeCode = true) {
+  if (!includeCode && code === 'ocr_unavailable')
+    return 'Dịch vụ đọc ảnh tạm thời chưa sẵn sàng. Hãy thử lại hoặc nhập thủ công.';
+  if (!includeCode && code === 'ocr_busy') return 'Máy chủ đang xử lý ảnh khác. Hãy thử lại.';
+  const suffix = includeCode ? ` (${code})` : '';
   const fieldWarning = /^(invalid|conflicting)_(.+)$/.exec(code);
   if (fieldWarning && diagnosticFields[fieldWarning[2]!])
-    return `${diagnosticFields[fieldWarning[2]!]!}: ${fieldWarning[1] === 'invalid' ? 'chưa đọc được giá trị hợp lệ' : 'có các giá trị không khớp'}. Hãy kiểm tra hoặc nhập thủ công. (${code})`;
-  return warnings[code] ? `${warnings[code]} (${code})` : code;
+    return `${diagnosticFields[fieldWarning[2]!]!}: ${fieldWarning[1] === 'invalid' ? 'chưa đọc được giá trị hợp lệ' : 'có các giá trị không khớp'}. Hãy kiểm tra hoặc nhập thủ công.${suffix}`;
+  return warnings[code]
+    ? `${warnings[code]}${suffix}`
+    : includeCode
+      ? code
+      : 'Hãy đối chiếu thông tin đọc được với giấy tờ.';
 }
 export const diagnosticFields: Record<string, string> = {
   citizenIdentityNumber: 'Số CCCD',

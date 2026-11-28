@@ -1,3 +1,4 @@
+import { TextField, ValidatedForm } from '../../../components/common/ValidatedForm';
 import { useState } from 'react';
 import {
   Alert,
@@ -8,12 +9,15 @@ import {
   DialogContent,
   DialogTitle,
   FormControlLabel,
+  IconButton,
+  Menu,
   MenuItem,
   Checkbox,
+  Paper,
   Stack,
-  TextField,
   Typography,
 } from '@mui/material';
+import { MoreHorizontal, Plus, RefreshCw } from 'lucide-react';
 import { OwnerFeedback, OwnerTable } from '../../../components/common/OwnerWorkspace';
 import { OwnerLocationPicker } from '../../../components/common/OwnerSelectors';
 import { useOwnerQuery } from '../../../hooks/useOwnerWorkspace';
@@ -39,7 +43,6 @@ const scheduleLabel = (item: RecurringTemplate) =>
 export function RecurringTasks({
   location,
   change,
-  locationName,
   notify,
 }: {
   location: string;
@@ -54,66 +57,113 @@ export function RecurringTasks({
   );
   const [editor, setEditor] = useState<RecurringTemplate | null | undefined>();
   const [command, setCommand] = useState<{ item: RecurringTemplate; mode: 'toggle' | 'delete' }>();
+  const [rowMenu, setRowMenu] = useState<{ anchor: HTMLElement; item: RecurringTemplate }>();
   return (
-    <Stack spacing={2}>
+    <Stack spacing={1.5}>
       <Stack
         direction={{ xs: 'column', sm: 'row' }}
-        spacing={2}
-        sx={{ justifyContent: 'space-between' }}
+        spacing={1}
+        sx={{ alignItems: { sm: 'center' }, justifyContent: 'space-between' }}
       >
-        <Box>
-          <Typography sx={{ fontSize: 18, fontWeight: 600 }}>Lịch công việc định kỳ</Typography>
+        <Box sx={{ width: { xs: '100%', sm: 260 } }}>
+          <OwnerLocationPicker simple value={location} change={change} />
         </Box>
-        <Button variant="contained" disabled={!location} onClick={() => setEditor(null)}>
-          Tạo lịch định kỳ
-        </Button>
+        <Stack
+          direction="row"
+          spacing={1}
+          sx={{ alignItems: 'center', justifyContent: 'flex-end' }}
+        >
+          <Button
+            size="small"
+            startIcon={<RefreshCw size={16} />}
+            disabled={!location}
+            onClick={() => void list.refetch()}
+          >
+            Làm mới
+          </Button>
+          <Button
+            variant="contained"
+            startIcon={<Plus size={18} />}
+            disabled={!location}
+            onClick={() => setEditor(null)}
+          >
+            Tạo lịch định kỳ
+          </Button>
+        </Stack>
       </Stack>
-      <OwnerLocationPicker simple value={location} change={change} />
       {!location ? (
         <Typography>Chọn cơ sở để xem và tạo lịch định kỳ.</Typography>
       ) : (
         <>
           <OwnerFeedback busy={list.isFetching} error={list.error} />
-          <Button onClick={() => void list.refetch()}>Làm mới lịch</Button>
-          <OwnerTable
-            rows={list.data ?? []}
-            loading={list.isPending}
-            error={list.error}
-            retry={() => void list.refetch()}
-            id={(item) => item.id}
-            columns={[
-              {
-                label: 'Tên công việc',
-                render: (item) => (
-                  <Typography sx={{ fontSize: 14, fontWeight: 600 }}>{item.title}</Typography>
-                ),
-              },
-              { label: 'Cơ sở', render: () => locationName(location) },
-              {
-                label: 'Chu kỳ',
-                render: scheduleLabel,
-              },
-              { label: 'Lần tạo tiếp theo', render: (item) => formatInstant(item.nextRunAt) },
-              { label: 'Hạn hoàn thành', render: (item) => `${item.dueAfterHours} giờ` },
-              { label: 'Trạng thái', render: (item) => (item.isActive ? 'Đang bật' : 'Đã tắt') },
-              {
-                label: 'Thao tác',
-                render: (item) => (
-                  <Stack direction="row" useFlexGap sx={{ flexWrap: 'wrap', gap: 0.5 }}>
-                    <Button onClick={() => setEditor(item)}>Chỉnh sửa</Button>
-                    <Button onClick={() => setCommand({ item, mode: 'toggle' })}>
-                      {item.isActive ? 'Tắt lịch' : 'Bật lịch'}
-                    </Button>
-                    <Button color="error" onClick={() => setCommand({ item, mode: 'delete' })}>
-                      Xóa
-                    </Button>
-                  </Stack>
-                ),
-              },
-            ]}
-          />
+          <Paper variant="outlined" sx={{ overflow: 'hidden' }}>
+            <OwnerTable
+              rows={list.data ?? []}
+              loading={list.isPending}
+              error={list.error}
+              retry={() => void list.refetch()}
+              id={(item) => item.id}
+              label="Lịch công việc định kỳ"
+              select={(item) => setEditor(item)}
+              selectLabel="Chỉnh sửa lịch"
+              compactAction
+              columns={[
+                {
+                  label: 'Tên công việc',
+                  render: (item) => (
+                    <Typography sx={{ fontSize: 14, fontWeight: 600 }}>{item.title}</Typography>
+                  ),
+                },
+                {
+                  label: 'Chu kỳ',
+                  render: scheduleLabel,
+                },
+                { label: 'Lần tạo tiếp theo', render: (item) => formatInstant(item.nextRunAt) },
+                { label: 'Hoàn thành trong', render: (item) => `${item.dueAfterHours} giờ` },
+                { label: 'Trạng thái', render: (item) => (item.isActive ? 'Đang bật' : 'Đã tắt') },
+                {
+                  label: 'Khác',
+                  render: (item) => (
+                    <IconButton
+                      size="small"
+                      aria-label={`Thao tác lịch ${item.title}`}
+                      onClick={(event) => {
+                        event.stopPropagation();
+                        setRowMenu({ anchor: event.currentTarget, item });
+                      }}
+                    >
+                      <MoreHorizontal size={18} />
+                    </IconButton>
+                  ),
+                },
+              ]}
+            />
+          </Paper>
         </>
       )}
+      <Menu anchorEl={rowMenu?.anchor} open={!!rowMenu} onClose={() => setRowMenu(undefined)}>
+        {rowMenu && [
+          <MenuItem
+            key="toggle"
+            onClick={() => {
+              setCommand({ item: rowMenu.item, mode: 'toggle' });
+              setRowMenu(undefined);
+            }}
+          >
+            {rowMenu.item.isActive ? 'Tắt lịch' : 'Bật lịch'}
+          </MenuItem>,
+          <MenuItem
+            key="delete"
+            sx={{ color: 'error.main' }}
+            onClick={() => {
+              setCommand({ item: rowMenu.item, mode: 'delete' });
+              setRowMenu(undefined);
+            }}
+          >
+            Xóa
+          </MenuItem>,
+        ]}
+      </Menu>
       {editor !== undefined && (
         <RecurringEditor
           key={editor?.id ?? 'new'}
@@ -292,9 +342,9 @@ function RecurringEditor({
       <DialogTitle>{template ? 'Chỉnh sửa lịch định kỳ' : 'Tạo lịch định kỳ'}</DialogTitle>
       <DialogContent>
         <Stack
-          component="form"
+          component={ValidatedForm}
           id="recurring-editor"
-          spacing={2}
+          spacing={1.5}
           sx={{ pt: 1 }}
           onSubmit={(event) => {
             event.preventDefault();
@@ -334,77 +384,88 @@ function RecurringEditor({
         >
           <OwnerFeedback error={action.error} busy={action.busy} />
           <TaskWorkFields work={work} change={setWork} includeDue={false} errors={action.fields} />
-          <Typography sx={{ fontSize: 16, fontWeight: 600 }}>Cấu hình định kỳ</Typography>
-          <TextField
-            select
-            label="Chu kỳ"
-            value={scheduleType}
-            onChange={(e) =>
-              setScheduleType(e.target.value as NonNullable<RecurringTemplate['scheduleType']>)
-            }
+          <Stack
+            direction={{ xs: 'column', sm: 'row' }}
+            spacing={1.5}
+            sx={{ '& > *': { flex: 1, minWidth: 0 } }}
           >
-            <MenuItem value="Daily">Hằng ngày</MenuItem>
-            <MenuItem value="Weekly">Hằng tuần</MenuItem>
-            <MenuItem value="Monthly">Hằng tháng</MenuItem>
-            <MenuItem value="IntervalDays">Mỗi N ngày</MenuItem>
-          </TextField>
-          {scheduleType === 'Weekly' && (
             <TextField
               select
-              label="Ngày trong tuần"
-              value={dayOfWeek}
-              onChange={(e) => setDayOfWeek(Number(e.target.value))}
+              label="Chu kỳ"
+              value={scheduleType}
+              onChange={(e) =>
+                setScheduleType(e.target.value as NonNullable<RecurringTemplate['scheduleType']>)
+              }
             >
-              {weekDays.map((day, index) => (
-                <MenuItem key={day} value={index + 1}>
-                  {day}
-                </MenuItem>
-              ))}
+              <MenuItem value="Daily">Hằng ngày</MenuItem>
+              <MenuItem value="Weekly">Hằng tuần</MenuItem>
+              <MenuItem value="Monthly">Hằng tháng</MenuItem>
+              <MenuItem value="IntervalDays">Mỗi N ngày</MenuItem>
             </TextField>
-          )}
-          {scheduleType === 'Monthly' && (
+            {scheduleType === 'Weekly' && (
+              <TextField
+                select
+                label="Ngày trong tuần"
+                value={dayOfWeek}
+                onChange={(e) => setDayOfWeek(Number(e.target.value))}
+              >
+                {weekDays.map((day, index) => (
+                  <MenuItem key={day} value={index + 1}>
+                    {day}
+                  </MenuItem>
+                ))}
+              </TextField>
+            )}
+            {scheduleType === 'Monthly' && (
+              <TextField
+                required
+                type="number"
+                label="Ngày trong tháng"
+                value={dayOfMonth}
+                onChange={(e) => setDayOfMonth(Number(e.target.value))}
+                slotProps={{ htmlInput: { min: 1, max: 31 } }}
+                helperText="Tháng không có ngày đã chọn sẽ được bỏ qua."
+              />
+            )}
+            {scheduleType === 'IntervalDays' && (
+              <TextField
+                required
+                type="number"
+                label="Mỗi bao nhiêu ngày"
+                value={days}
+                onChange={(e) => setDays(Number(e.target.value))}
+                slotProps={{ htmlInput: { min: 1, max: 365 } }}
+              />
+            )}
+          </Stack>
+          <Stack
+            direction={{ xs: 'column', sm: 'row' }}
+            spacing={1.5}
+            sx={{ '& > *': { flex: 1, minWidth: 0 } }}
+          >
+            <TextField
+              required
+              type="datetime-local"
+              label="Thời điểm sinh việc tiếp theo (giờ Việt Nam)"
+              value={next}
+              onChange={(e) => setNext(e.target.value)}
+              slotProps={{ inputLabel: { shrink: true } }}
+              error={calendarMismatch}
+              helperText={
+                calendarMismatch
+                  ? 'Thời điểm đầu tiên phải đúng ngày trong chu kỳ đã chọn.'
+                  : undefined
+              }
+            />
             <TextField
               required
               type="number"
-              label="Ngày trong tháng"
-              value={dayOfMonth}
-              onChange={(e) => setDayOfMonth(Number(e.target.value))}
-              slotProps={{ htmlInput: { min: 1, max: 31 } }}
-              helperText="Tháng không có ngày đã chọn sẽ được bỏ qua."
+              label="Thời gian hoàn thành (giờ)"
+              value={hours}
+              onChange={(e) => setHours(Number(e.target.value))}
+              slotProps={{ htmlInput: { min: 1, max: 720 } }}
             />
-          )}
-          {scheduleType === 'IntervalDays' && (
-            <TextField
-              required
-              type="number"
-              label="Mỗi bao nhiêu ngày"
-              value={days}
-              onChange={(e) => setDays(Number(e.target.value))}
-              slotProps={{ htmlInput: { min: 1, max: 365 } }}
-            />
-          )}
-          <TextField
-            required
-            type="datetime-local"
-            label="Thời điểm sinh việc tiếp theo (giờ Việt Nam)"
-            value={next}
-            onChange={(e) => setNext(e.target.value)}
-            slotProps={{ inputLabel: { shrink: true } }}
-            error={calendarMismatch}
-            helperText={
-              calendarMismatch
-                ? 'Thời điểm đầu tiên phải đúng ngày trong chu kỳ đã chọn.'
-                : undefined
-            }
-          />
-          <TextField
-            required
-            type="number"
-            label="Thời gian hoàn thành (giờ)"
-            value={hours}
-            onChange={(e) => setHours(Number(e.target.value))}
-            slotProps={{ htmlInput: { min: 1, max: 720 } }}
-          />
+          </Stack>
           <FormControlLabel
             label="Lịch đang bật"
             control={<Checkbox checked={active} onChange={(_, v) => setActive(v)} />}

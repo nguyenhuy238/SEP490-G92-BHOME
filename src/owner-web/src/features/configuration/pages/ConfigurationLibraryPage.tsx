@@ -1,3 +1,4 @@
+import { TextField } from '../../../components/common/ValidatedForm';
 import { MoneyField } from '../../../components/common/MoneyField';
 import { useState } from 'react';
 import { isMockMode } from '../../../services/config';
@@ -19,27 +20,22 @@ import {
   InputAdornment,
   MenuItem,
   Paper,
-  Tab,
-  Tabs,
-  TextField,
   Typography,
   Stack,
 } from '@mui/material';
-import { Copy, Eye, FilePlus2, Library, Pencil, Plus, Search, Send, X } from 'lucide-react';
+import { Copy, Eye, Library, Pencil, Plus, Search, Send, X } from 'lucide-react';
 import { PageHeader } from '../../../components/common/PortalUI';
 import { usePortalData } from '../../../hooks/usePortalData';
 import {
   useSharedConfiguration,
   type AssetCatalogEntry,
-  type AssetTemplate,
   type FeeTemplate,
   type PolicyTemplate,
   type RoomTemplate,
 } from '../SharedConfigurationContext';
 
 export type LibraryKind = 'room' | 'asset' | 'fee' | 'policy';
-type AssetTemplateItem = AssetTemplate['items'][number];
-type LibraryItem = RoomTemplate | AssetCatalogEntry | AssetTemplate | FeeTemplate | PolicyTemplate;
+type LibraryItem = RoomTemplate | AssetCatalogEntry | FeeTemplate | PolicyTemplate;
 
 const meta = {
   room: {
@@ -50,7 +46,7 @@ const meta = {
   asset: {
     title: 'Danh mục tài sản',
     subtitle:
-      'Quản lý định nghĩa tài sản dùng chung và các gói trang thiết bị tiêu chuẩn. Mục danh mục không phải là tài sản thực tế trong phòng.',
+      'Quản lý tài sản mẫu theo phòng hoặc dùng chung tại cơ sở. Danh mục không phải tài sản thực tế trong phòng.',
     action: 'Thêm loại tài sản',
   },
   fee: {
@@ -86,7 +82,6 @@ function MockConfigurationLibraryPage({ kind }: { kind: LibraryKind }) {
   const shared = useSharedConfiguration();
   const query = usePortalData();
   const [search, setSearch] = useState('');
-  const [assetTab, setAssetTab] = useState(0);
   const [editor, setEditor] = useState<{ open: boolean; id?: string }>({ open: false });
   const [preview, setPreview] = useState<string | null>(null);
   const [applyId, setApplyId] = useState<string | null>(null);
@@ -100,9 +95,7 @@ function MockConfigurationLibraryPage({ kind }: { kind: LibraryKind }) {
         ? shared.feeTemplates
         : kind === 'policy'
           ? shared.policyTemplates
-          : assetTab === 0
-            ? shared.assetCatalog
-            : shared.assetTemplates;
+          : shared.assetCatalog;
   const list = isMockMode ? configuredList : [];
   const visible = list.filter((item) => item.name.toLowerCase().includes(search.toLowerCase()));
   const activeItem = list.find((item) => item.id === preview || item.id === editor.id);
@@ -110,22 +103,14 @@ function MockConfigurationLibraryPage({ kind }: { kind: LibraryKind }) {
   const openCreate = () => setEditor({ open: true });
   const openEdit = (itemId: string) => setEditor({ open: true, id: itemId });
   const duplicate = (itemId: string) => {
-    if (kind === 'asset') {
-      const item = shared.assetTemplates.find((entry) => entry.id === itemId);
-      if (item)
-        shared.addAssetTemplate({
-          name: `${item.name} - Bản sao`,
-          roomType: item.roomType,
-          description: item.description,
-          items: [...item.items],
-        });
-    } else shared.duplicateTemplate(kind, itemId);
+    if (kind === 'asset') return;
+    shared.duplicateTemplate(kind, itemId);
     setNotice('Đã thêm một bản sao nháp vào thư viện.');
   };
 
   const apply = () => {
-    if (!applyId || !destination) return;
-    shared.applyTemplate(kind === 'asset' ? 'asset' : kind, applyId, destination);
+    if (!applyId || !destination || kind === 'asset') return;
+    shared.applyTemplate(kind, applyId, destination);
     setNotice('Đã áp dụng mẫu dùng chung thành một cấu hình độc lập tại cơ sở.');
     setApplyId(null);
     setDestination('');
@@ -164,12 +149,6 @@ function MockConfigurationLibraryPage({ kind }: { kind: LibraryKind }) {
           {notice}
         </Alert>
       )}
-      {kind === 'asset' && (
-        <Tabs value={assetTab} onChange={(_, value) => setAssetTab(value)} sx={{ mb: 2 }}>
-          <Tab label={`Danh mục tài sản (${shared.assetCatalog.length})`} />
-          <Tab label={`Mẫu tài sản (${shared.assetTemplates.length})`} />
-        </Tabs>
-      )}
       <Paper sx={{ p: 2, mb: 2.5, border: '1px solid', borderColor: 'divider' }}>
         <TextField
           size="small"
@@ -205,7 +184,6 @@ function MockConfigurationLibraryPage({ kind }: { kind: LibraryKind }) {
               <TemplateCard
                 kind={kind}
                 item={item}
-                catalog={shared.assetCatalog}
                 onPreview={() => setPreview(item.id)}
                 onEdit={() => openEdit(item.id)}
                 onDuplicate={() => duplicate(item.id)}
@@ -213,15 +191,7 @@ function MockConfigurationLibraryPage({ kind }: { kind: LibraryKind }) {
                   setApplyId(item.id);
                   setDestination('');
                 }}
-                onCatalogAdd={() => {
-                  const target = shared.assetTemplates[0];
-                  if (target && !target.items.some((entry) => entry.assetId === item.id))
-                    shared.updateTemplate('assetTemplate', target.id, {
-                      items: [...target.items, { assetId: item.id, quantity: 1, required: false }],
-                    });
-                  setNotice(`Đã thêm ${item.name} vào ${target?.name ?? 'một mẫu tài sản mới'}.`);
-                }}
-                catalogMode={kind === 'asset' && assetTab === 0}
+                catalogMode={kind === 'asset'}
               />
             </Grid>
           ))}
@@ -231,7 +201,6 @@ function MockConfigurationLibraryPage({ kind }: { kind: LibraryKind }) {
       <TemplateEditor
         key={`${editor.open}-${editor.id ?? 'new'}`}
         kind={kind}
-        assetPackageMode={kind === 'asset' && assetTab === 1}
         open={editor.open}
         item={activeItem}
         onClose={() => setEditor({ open: false })}
@@ -261,7 +230,7 @@ function MockConfigurationLibraryPage({ kind }: { kind: LibraryKind }) {
           </Button>
         </Stack>
         <Divider sx={{ my: 2 }} />
-        <PreviewContent kind={kind} item={activeItem} catalog={shared.assetCatalog} />
+        <PreviewContent kind={kind} item={activeItem} />
         <Alert severity="info" sx={{ mt: 3 }}>
           Áp dụng mẫu sẽ tạo một bản sao độc lập tại cơ sở. Các chỉnh sửa sau này tại cơ sở không
           làm thay đổi mẫu dùng chung.
@@ -277,7 +246,7 @@ function MockConfigurationLibraryPage({ kind }: { kind: LibraryKind }) {
           >
             Chỉnh sửa mẫu
           </Button>
-          {!(kind === 'asset' && assetTab === 0) && (
+          {kind !== 'asset' && (
             <Button
               variant="contained"
               startIcon={<Send size={15} />}
@@ -326,22 +295,18 @@ function MockConfigurationLibraryPage({ kind }: { kind: LibraryKind }) {
 function TemplateCard({
   kind,
   item,
-  catalog,
   onPreview,
   onEdit,
   onDuplicate,
   onApply,
-  onCatalogAdd,
   catalogMode,
 }: {
   kind: LibraryKind;
   item: LibraryItem;
-  catalog: { id: string; name: string }[];
   onPreview: () => void;
   onEdit: () => void;
   onDuplicate: () => void;
   onApply: () => void;
-  onCatalogAdd: () => void;
   catalogMode: boolean;
 }) {
   return (
@@ -375,7 +340,7 @@ function TemplateCard({
           )}
         </Stack>
         <Box sx={{ minHeight: 100, mt: 1.5 }}>
-          <PreviewContent kind={kind} item={item} catalog={catalog} compact />
+          <PreviewContent kind={kind} item={item} compact />
         </Box>
         {!catalogMode && 'locationsUsing' in item && (
           <Typography variant="caption" color="text.secondary">
@@ -395,11 +360,7 @@ function TemplateCard({
               Nhân bản
             </Button>
           )}
-          {catalogMode ? (
-            <Button size="small" startIcon={<FilePlus2 size={14} />} onClick={onCatalogAdd}>
-              Thêm vào mẫu tài sản
-            </Button>
-          ) : (
+          {!catalogMode && (
             <Button size="small" startIcon={<Send size={14} />} onClick={onApply}>
               {kind === 'room' ? 'Dùng cho cơ sở' : 'Áp dụng cho cơ sở'}
             </Button>
@@ -413,12 +374,10 @@ function TemplateCard({
 function PreviewContent({
   kind,
   item,
-  catalog,
   compact = false,
 }: {
   kind: LibraryKind;
   item: LibraryItem | undefined;
-  catalog: { id: string; name: string }[];
   compact?: boolean;
 }) {
   if (!item) return null;
@@ -442,24 +401,6 @@ function PreviewContent({
         <Typography>
           <b>{asset.category}</b> · {money.format(asset.referencePrice)} VND/{asset.unit}
         </Typography>
-      </Stack>
-    );
-  }
-  if (kind === 'asset') {
-    const assetTemplate = item as AssetTemplate;
-    return (
-      <Stack spacing={0.6}>
-        <Typography color="text.secondary">{assetTemplate.description}</Typography>
-        <Typography>
-          <b>{assetTemplate.roomType}</b> · {assetTemplate.items.length} loại tài sản
-        </Typography>
-        {!compact &&
-          assetTemplate.items.map((entry: AssetTemplateItem) => (
-            <Typography key={entry.assetId} variant="body2">
-              {catalog.find((asset) => asset.id === entry.assetId)?.name ?? entry.assetId} ×{' '}
-              {entry.quantity} · {entry.required ? 'Bắt buộc' : 'Tùy chọn'}
-            </Typography>
-          ))}
       </Stack>
     );
   }
@@ -492,14 +433,12 @@ function PreviewContent({
 
 function TemplateEditor({
   kind,
-  assetPackageMode,
   open,
   item,
   onClose,
   onSaved,
 }: {
   kind: LibraryKind;
-  assetPackageMode: boolean;
   open: boolean;
   item: LibraryItem | undefined;
   onClose: () => void;
@@ -535,12 +474,7 @@ function TemplateEditor({
           description: finalDescription,
           area: Number(value) || (item as RoomTemplate).area,
         });
-      if (kind === 'asset' && assetPackageMode)
-        shared.updateTemplate('assetTemplate', item.id, {
-          name: finalName,
-          description: finalDescription,
-        });
-      if (kind === 'asset' && !assetPackageMode)
+      if (kind === 'asset')
         shared.updateTemplate('asset', item.id, {
           name: finalName,
           category,
@@ -573,16 +507,7 @@ function TemplateEditor({
         description: finalDescription,
         facilities: ['Phòng tắm riêng', 'Điều hòa'],
       });
-    if (kind === 'asset' && assetPackageMode)
-      shared.addAssetTemplate({
-        name: finalName,
-        roomType: 'Studio tiêu chuẩn',
-        description: finalDescription,
-        items: shared.assetCatalog
-          .slice(0, 4)
-          .map((asset) => ({ assetId: asset.id, quantity: 1, required: true })),
-      });
-    if (kind === 'asset' && !assetPackageMode)
+    if (kind === 'asset')
       shared.addAsset({
         name: finalName,
         category,
@@ -643,7 +568,7 @@ function TemplateEditor({
               onChange={(event) => setCategory(event.target.value)}
             />
           )}
-          {kind !== 'policy' && !assetPackageMode && kind !== 'room' && (
+          {kind !== 'policy' && kind !== 'room' && (
             <MoneyField
               allowDecimal
               label={kind === 'fee' ? 'Đơn giá tham khảo (VND)' : 'Giá tham khảo (VND)'}
@@ -651,19 +576,13 @@ function TemplateEditor({
               onValueChange={setValue}
             />
           )}
-          {kind === 'room' && !assetPackageMode && (
+          {kind === 'room' && (
             <TextField
               type="number"
               label="Diện tích tiêu chuẩn (m²)"
               value={value}
               onChange={(event) => setValue(event.target.value)}
             />
-          )}
-          {assetPackageMode && (
-            <Alert severity="success">
-              Gói khởi tạo gồm bốn mục đang hoạt động đầu tiên trong danh mục. Bạn có thể tùy chỉnh
-              gói sau khi tạo.
-            </Alert>
           )}
         </Stack>
       </DialogContent>

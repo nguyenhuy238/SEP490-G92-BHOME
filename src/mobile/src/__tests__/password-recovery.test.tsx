@@ -3,6 +3,8 @@ import React from 'react';
 import { afterEach, beforeEach, expect, it, vi } from 'vitest';
 import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import PasswordRecoveryScreen from '../screens/PasswordRecoveryScreen';
+import ForgotPasswordRoute from '../app/forgot-password';
+import ForgotPasswordEmailRoute from '../app/forgot-password-email';
 import AcceptInvitationScreen from '../screens/AcceptInvitationScreen';
 import ConfirmEmailScreen from '../screens/ConfirmEmailScreen';
 
@@ -111,7 +113,9 @@ it('opens a native invitation and submits its token only after password setup co
     target: { value: 'Synthetic!Invited-725' },
   });
   fireEvent.click(screen.getByText('Thiết lập mật khẩu'));
-  await waitFor(() => expect(state.replace).toHaveBeenCalledWith('/'));
+  expect(await screen.findByText('Kích hoạt tài khoản thành công.')).toBeTruthy();
+  expect(state.replace).not.toHaveBeenCalled();
+  expect(screen.queryByText('Quay lại đăng nhập')).toBeNull();
   expect(JSON.parse(fetch.mock.calls[1][1].body)).toEqual({
     token: 'synthetic-invitation-link',
     newPassword: 'Synthetic!Invited-725',
@@ -173,16 +177,23 @@ it('keeps an expired verification link on screen and allows a controlled resend'
   expect(JSON.parse(fetch.mock.calls[1][1].body)).toEqual({ userName: 'tenant@example.invalid' });
 });
 
-it('requests recovery through the existing API and displays a generic response', async () => {
-  const fetch = vi.fn().mockResolvedValue(new Response('{}', { status: 202 }));
-  vi.stubGlobal('fetch', fetch);
-  render(<PasswordRecoveryScreen />);
-  fireEvent.change(screen.getByLabelText('Email'), { target: { value: 'tenant@example.invalid' } });
-  fireEvent.click(screen.getByText('Gửi hướng dẫn'));
-  await screen.findByText(/Nếu tài khoản đủ điều kiện/);
-  expect(fetch.mock.calls[0][0]).toBe('https://api.example.invalid/api/v1/auth/forgot-password');
-  expect(JSON.parse(fetch.mock.calls[0][1].body)).toEqual({ userName: 'tenant@example.invalid' });
-});
+it.each([ForgotPasswordRoute, ForgotPasswordEmailRoute])(
+  'recovers through email from both recovery routes without SMS',
+  async (RecoveryRoute) => {
+    const fetch = vi.fn().mockResolvedValue(new Response('{}', { status: 202 }));
+    vi.stubGlobal('fetch', fetch);
+    render(<RecoveryRoute />);
+    expect(screen.queryByText(/SMS/)).toBeNull();
+    fireEvent.change(screen.getByLabelText('Email'), {
+      target: { value: 'tenant@example.invalid' },
+    });
+    fireEvent.click(screen.getByText('Gửi hướng dẫn'));
+    await screen.findByText(/Nếu tài khoản đủ điều kiện/);
+    expect(fetch.mock.calls[0][0]).toBe('https://api.example.invalid/api/v1/auth/forgot-password');
+    expect(JSON.parse(fetch.mock.calls[0][1].body)).toEqual({ userName: 'tenant@example.invalid' });
+    expect(fetch).toHaveBeenCalledTimes(1);
+  },
+);
 
 it('uses the native reset link and returns to login only after backend success', async () => {
   state.params = { userName: 'tenant@example.invalid', token: 'synthetic-token' };

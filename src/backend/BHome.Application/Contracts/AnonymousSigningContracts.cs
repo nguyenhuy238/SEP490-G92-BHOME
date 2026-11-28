@@ -39,7 +39,8 @@ public sealed record InternalAcceptanceEvidence(Guid InvitationId, Guid Resident
     Guid? OwnerId = null, DateTimeOffset? OwnerAcceptedAt = null, string? FinalDocumentKey = null, string? FinalDocumentHash = null);
 public sealed record InternalSigningStatus(string Mode, string State, string? DocumentHash, DateTimeOffset? TenantAcceptedAt,
     DateTimeOffset? OwnerAcceptedAt, IReadOnlyList<SigningInvitationResult> Invitations,
-    string? MaskedEmail = null, bool TenantSimulated = false, bool CanContinue = false, bool SandboxAvailable = false);
+    string? MaskedEmail = null, bool TenantSimulated = false, bool CanContinue = false, bool SandboxAvailable = false,
+    bool UsesHoldingEmail = false);
 // Test acceptance is kept separate from legal signing evidence. Legacy OwnerAt is never trusted.
 public sealed record SandboxSignatures(bool SandboxOnly, string SnapshotHash, DateTimeOffset? OwnerAt, DateTimeOffset? TenantAt,
     Guid? OwnerConfirmedBy = null, DateTimeOffset? OwnerConfirmedAt = null)
@@ -60,6 +61,7 @@ public sealed record SandboxSignatures(bool SandboxOnly, string SnapshotHash, Da
 public sealed record InternalAcceptedDocument(byte[] SignaturePng, byte[] Pdf);
 public interface IAnonymousSigningRepository
 {
+    Task<bool> MatchesAccountEmailAsync(Guid userId, string email, CancellationToken t);
     Task<ContractSigningInvitation?> FindByTokenHashAsync(string hash, CancellationToken t);
     Task<ContractSigningInvitation?> FindAsync(Guid id, CancellationToken t);
     Task<IReadOnlyList<ContractSigningInvitation>> ListAsync(Guid contractId, CancellationToken t);

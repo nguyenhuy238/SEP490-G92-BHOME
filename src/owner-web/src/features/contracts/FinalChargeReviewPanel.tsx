@@ -1,14 +1,7 @@
+import { TextField } from '../../components/common/ValidatedForm';
 import { ConfirmActionButton } from '../../components/common/ConfirmActionButton';
 import { useRef, useState } from 'react';
-import {
-  Alert,
-  Button,
-  Checkbox,
-  FormControlLabel,
-  Stack,
-  TextField,
-  Typography,
-} from '@mui/material';
+import { Alert, Button, Checkbox, FormControlLabel, Stack, Typography } from '@mui/material';
 import { useQuery } from '@tanstack/react-query';
 import {
   contractError,
@@ -130,11 +123,11 @@ export function FinalChargeReviewPanel({
                   onChange={(_, checked) => setConfirmation(checked ? validData.reference : '')}
                 />
               }
-              label="Tôi đã đối chiếu biên bản và xác nhận danh sách khoản thu đầy đủ"
+              label="Tôi đã đối chiếu kết quả kiểm tra và xác nhận danh sách khoản thu đầy đủ"
             />
             <ConfirmActionButton
               title="Xác nhận đủ khoản thu"
-              description="Xác nhận đã rà soát toàn bộ chi phí cuối kỳ theo biên bản. Thao tác không xóa nợ và không ghi nhận đã nhận tiền."
+              description="Xác nhận đã rà soát toàn bộ chi phí cuối kỳ theo kết quả kiểm tra. Thao tác không xóa nợ và không ghi nhận đã nhận tiền."
               confirmationKey={`${validData.reference}:${reason}:${confirmation}`}
               disabled={
                 busy ||

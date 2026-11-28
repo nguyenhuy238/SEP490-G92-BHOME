@@ -1,12 +1,17 @@
 import { describe, expect, it } from 'vitest';
 import type { MoveOut, SettlementSummary } from '../../../../../packages/client-core/src/contracts';
 import { financialState, historyNote, moveOutProgress, offsetAmountError } from './termination';
+import { moveOutActionLabel } from '../../../../../packages/client-core/src/useContractLifecycle';
 
 describe('move-out status and settlement remain independent', () => {
+  it('shows the Owner-created location task clearly in move-out history', () => {
+    expect(moveOutActionLabel('OwnerMoveOutOpened')).toBe('Owner lập yêu cầu trả phòng');
+  });
   const completed = { status: 'Completed', financialReviewStatus: 'PendingReview' } as MoveOut;
   it('does not claim that physical closure paid the debt', () => {
     const progress = moveOutProgress(completed, true, false);
     expect(progress.find((step) => step.label === 'Trả phòng')?.done).toBe(true);
+    expect(progress.find((step) => step.label === 'Mở nhiệm vụ trả phòng')?.done).toBe(true);
     expect(progress.find((step) => step.label === 'Quyết toán')?.done).toBe(false);
     expect(financialState(null, completed)).toBe('Chưa đối chiếu được');
     expect(financialState({ resolved: false } as SettlementSummary, completed)).toBe(
@@ -18,11 +23,7 @@ describe('move-out status and settlement remain independent', () => {
   });
   it('requires resolved sources and an Owner review before financial completion', () => {
     const reviewed = { ...completed, financialReviewStatus: 'OwnerReviewed' } as MoveOut;
-    expect(
-      moveOutProgress(reviewed, true, true).every(
-        (step) => step.done || step.label === 'Lịch kiểm tra',
-      ),
-    ).toBe(true);
+    expect(moveOutProgress(reviewed, true, true).every((step) => step.done)).toBe(true);
     expect(financialState({ resolved: true } as SettlementSummary, reviewed)).toBe('Đã hoàn tất');
   });
 });

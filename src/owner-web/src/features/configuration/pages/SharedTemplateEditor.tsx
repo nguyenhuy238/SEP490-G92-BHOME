@@ -1,3 +1,4 @@
+import { TextField, ValidatedForm } from '../../../components/common/ValidatedForm';
 import { Fragment, useId, useState } from 'react';
 import { lifecycleCategories } from '../../../../../../packages/client-core/src/assetLifecycle';
 import {
@@ -13,15 +14,18 @@ import {
   FormControlLabel,
   MenuItem,
   Stack,
-  TextField,
   Typography,
 } from '@mui/material';
 import { useQuery } from '@tanstack/react-query';
 import { useAuth } from '../../../../../../packages/client-core/src/auth';
 import { ASSET_UNITS } from '../../../../../../packages/client-core/src/assetUnits';
-import { assetCatalogSupportsScope } from '../../../../../../packages/client-core/src/sharedConfiguration';
+import {
+  assetCatalogSupportsScope,
+  sharedFeeServiceName,
+} from '../../../../../../packages/client-core/src/sharedConfiguration';
 import type {
   AssetCatalogData,
+  FeeTemplateData,
   RoomTemplateData,
   SharedAssetItem,
   SharedDocument,
@@ -39,10 +43,11 @@ import {
   configurationFormGridSx,
 } from '../SharedConfigurationLayout';
 
-const resourceNames: Record<SharedResource, string> = {
+type EditableSharedResource = Exclude<SharedResource, 'asset-templates'>;
+
+const resourceNames: Record<EditableSharedResource, string> = {
   'room-type-templates': 'loại phòng mẫu',
   'asset-catalog': 'loại tài sản',
-  'asset-templates': 'mẫu tài sản',
   'fee-templates': 'mẫu giá & biểu phí',
   'policy-templates': 'mẫu chính sách',
 };
@@ -54,6 +59,28 @@ const feeDefaults: Record<string, { chargeCode: string; method: string; unit: st
   ServiceFee: { chargeCode: '', method: 'FixedPerRoomPerMonth', unit: 'VND/month' },
 };
 const personMethod = 'FixedPerPersonPerMonth';
+const suggestedServiceTypes = [
+  { name: 'Internet', chargeCode: 'DV_I' },
+  { name: 'Wifi', chargeCode: 'DV_W' },
+  { name: 'Vệ sinh', chargeCode: 'DV_VS' },
+  { name: 'Gửi xe', chargeCode: 'DV_GX' },
+  { name: 'Quản lý tòa nhà', chargeCode: 'DV_QLTN' },
+];
+const serviceNameKey = (value: string) =>
+  value.normalize('NFC').trim().replace(/\s+/g, ' ').toLocaleLowerCase('vi');
+const suggestedServiceChargeCode = (name: string) => {
+  const ascii = name
+    .replace(/[đĐ]/g, (letter) => (letter === 'Đ' ? 'D' : 'd'))
+    .normalize('NFD')
+    .replace(/\p{M}/gu, '');
+  const initials = ascii
+    .split(/[^A-Za-z0-9]+/)
+    .filter(Boolean)
+    .map((word) => word[0])
+    .join('')
+    .toUpperCase();
+  return `DV_${initials || 'CUSTOM'}`;
+};
 const feeUnit = (category: string, method: string) =>
   category === 'ServiceFee' && method === personMethod
     ? 'VND/person/month'
@@ -69,7 +96,7 @@ export function SharedTemplateEditor({
   setupCreation = false,
   assetScope = 'Room',
 }: {
-  resource: SharedResource;
+  resource: EditableSharedResource;
   document: SharedDocument | null;
   busy: boolean;
   error: string;
@@ -99,6 +126,11 @@ export function SharedTemplateEditor({
     if (document)
       for (const [key, value] of Object.entries(document.data))
         result[key] = Array.isArray(value) ? value.join('\n') : value == null ? '' : String(value);
+    if (resource === 'fee-templates' && result.category === 'ServiceFee' && !result.serviceName)
+      result.serviceName = sharedFeeServiceName(
+        { chargeCode: result.chargeCode ?? '', serviceName: result.serviceName ?? null },
+        document?.name ?? '',
+      );
     if (resource === 'asset-catalog' && !result.scope) result.scope = 'Both';
     if (resource === 'fee-templates' && feeDefaults[result.category]) {
       const defaults = feeDefaults[result.category];
@@ -112,13 +144,18 @@ export function SharedTemplateEditor({
     return result;
   });
   const [items, setItems] = useState<SharedAssetItem[]>(
-    document && 'items' in document.data
-      ? document.data.items
-      : resource === 'room-type-templates'
-        ? ((document?.data as RoomTemplateData | undefined)?.assetItems ?? [])
-        : [],
+    resource === 'room-type-templates'
+      ? ((document?.data as RoomTemplateData | undefined)?.assetItems ?? []).map((item) => ({
+          ...item,
+          required: true,
+        }))
+      : [],
   );
-  const [catalogId, setCatalogId] = useState('');
+  const [catalogSearch, setCatalogSearch] = useState('');
+  const [serviceTypeChoice, setServiceTypeChoice] = useState(() => {
+    if (resource !== 'fee-templates' || !document || !('referenceRate' in document.data)) return '';
+    return document.data.category === 'ServiceFee' ? document.data.chargeCode : '';
+  });
   const [validationError, setValidationError] = useState('');
   const [submittedName, setSubmittedName] = useState('');
   const normalizedName = name.normalize('NFC').trim().replace(/\s+/g, ' ');
@@ -130,6 +167,7 @@ export function SharedTemplateEditor({
         return {
           ...next,
           ...(feeDefaults[next.category] ?? { chargeCode: '', method: '', unit: '' }),
+          serviceName: '',
           referenceRate: '',
         };
       }
@@ -144,11 +182,106 @@ export function SharedTemplateEditor({
     });
     setValidationError('');
   };
+  const setEditorFields: typeof setValues = (update) => {
+    const next = typeof update === 'function' ? update(values) : update;
+    if (next.category !== values.category) setServiceTypeChoice('');
+    updateFields(next);
+  };
   const catalog = useQuery({
     queryKey: ['property-setup', 'shared-catalog-picker', session?.userId],
     queryFn: ({ signal }) => api.publishedCatalog(signal),
-    enabled: resource === 'asset-templates' || resource === 'room-type-templates',
+    enabled: resource === 'room-type-templates',
   });
+  const savedServiceTypes = useQuery({
+    queryKey: ['property-setup', 'saved-service-types', session?.userId],
+    queryFn: async ({ signal }) => {
+      const documents: SharedDocument[] = [];
+      for (let page = 1; ; page++) {
+        // Service identity survives Draft/Published/Archived transitions and old editions;
+        // load every edition so the preview uses the same existing code as the server.
+        const result = await api.list('fee-templates', '', '', page, 100, signal, false);
+        documents.push(...result.items);
+        if (documents.length >= result.total) return documents;
+        if (!result.items.length)
+          throw new Error('Danh mục dịch vụ đã thay đổi. Vui lòng tải lại.');
+      }
+    },
+    enabled: resource === 'fee-templates',
+  });
+  const currentServiceType =
+    document && 'referenceRate' in document.data && document.data.category === 'ServiceFee'
+      ? [
+          {
+            name: sharedFeeServiceName(document.data, document.name),
+            chargeCode: document.data.chargeCode,
+          },
+        ]
+      : [];
+  const existingServiceCode = currentServiceType[0]?.chargeCode;
+  const serviceTypeOptions = [
+    ...currentServiceType,
+    ...(savedServiceTypes.data ?? [])
+      .slice()
+      .sort((left, right) => right.updatedAt.localeCompare(left.updatedAt))
+      .flatMap((item) => {
+        if (!('referenceRate' in item.data) || item.data.category !== 'ServiceFee') return [];
+        const data = item.data as FeeTemplateData;
+        return [
+          {
+            name: sharedFeeServiceName(data, item.name),
+            chargeCode: data.chargeCode,
+          },
+        ];
+      }),
+    ...suggestedServiceTypes,
+  ].filter(
+    (option, index, options) =>
+      options.findIndex(
+        (candidate) => serviceNameKey(candidate.name) === serviceNameKey(option.name),
+      ) === index,
+  );
+  const roomCatalogItems = (catalog.data ?? []).filter((item) =>
+    assetCatalogSupportsScope(item.data as AssetCatalogData, 'Room'),
+  );
+  const filteredRoomCatalogItems = roomCatalogItems.filter((item) =>
+    item.name.toLocaleLowerCase('vi').includes(catalogSearch.trim().toLocaleLowerCase('vi')),
+  );
+  const toggleRoomAsset = (catalogItemId: string, checked: boolean) => {
+    const selected = roomCatalogItems.find((item) => item.id === catalogItemId);
+    if (!selected) return;
+    if (!checked) {
+      setItems((old) =>
+        old.filter(
+          (item) => item.catalogId !== selected.id && item.catalog?.familyId !== selected.familyId,
+        ),
+      );
+      return;
+    }
+    setItems((old) => {
+      if (
+        old.some(
+          (item) => item.catalogId === selected.id || item.catalog?.familyId === selected.familyId,
+        )
+      )
+        return old;
+      return [
+        ...old,
+        {
+          catalogId: selected.id,
+          catalogVersion: selected.version,
+          quantity: 1,
+          required: true,
+          trackingMode: 'BulkQuantity',
+          catalog: {
+            ...(selected.data as AssetCatalogData),
+            familyId: selected.familyId,
+            edition: selected.edition,
+            name: selected.name,
+          },
+        },
+      ];
+    });
+  };
   const fields: UtilityFieldDefinition[] =
     resource === 'room-type-templates'
       ? [
@@ -211,8 +344,8 @@ export function SharedTemplateEditor({
               },
               {
                 name: 'chargeCode',
-                label: 'Mã khoản thu',
-                disabled: values.category !== 'ServiceFee',
+                label: 'Mã khoản thu (tự sinh)',
+                disabled: true,
               },
               {
                 name: 'method',
@@ -245,15 +378,22 @@ export function SharedTemplateEditor({
     if (resource === 'fee-templates') {
       const defaults = feeDefaults[values.category];
       const code = (values.chargeCode ?? '').trim().toUpperCase();
+      const serviceName = (values.serviceName ?? '').trim();
       if (
         !defaults ||
         (values.method !== defaults.method &&
           !(values.category === 'ServiceFee' && values.method === personMethod)) ||
         (values.category === 'ServiceFee'
-          ? !/^[A-Z0-9_-]{1,80}$/.test(code) || ['RENT', 'ELECTRICITY', 'WATER'].includes(code)
+          ? !serviceName ||
+            !/^[A-Z0-9_-]{1,80}$/.test(code) ||
+            ['RENT', 'ELECTRICITY', 'WATER'].includes(code)
           : code !== defaults.chargeCode)
       ) {
-        setValidationError('Mã khoản thu hoặc cách tính không phù hợp với nhóm phí.');
+        setValidationError(
+          values.category === 'ServiceFee' && !serviceName
+            ? 'Vui lòng nhập tên loại dịch vụ.'
+            : 'Mã khoản thu hoặc cách tính không phù hợp với nhóm phí.',
+        );
         return;
       }
       if (
@@ -275,7 +415,7 @@ export function SharedTemplateEditor({
               .map((x) => x.trim())
               .filter(Boolean),
             referenceRent: values.referenceRent || null,
-            ...(items.length ? { assetItems: items } : {}),
+            assetItems: items.map((item) => ({ ...item, required: true })),
           }
         : resource === 'asset-catalog'
           ? {
@@ -284,20 +424,21 @@ export function SharedTemplateEditor({
               referencePrice: values.referencePrice ?? '',
               scope: values.scope as AssetCatalogData['scope'],
             }
-          : resource === 'asset-templates'
-            ? { items }
-            : resource === 'fee-templates'
-              ? {
-                  category: values.category,
-                  chargeCode: values.chargeCode.trim().toUpperCase(),
-                  method: values.method,
-                  referenceRate: values.referenceRate ?? '',
-                  unit: feeUnit(values.category, values.method),
-                  scope: values.scope as 'Location' | 'Room',
-                  effectiveFrom: values.effectiveFrom ?? '',
-                  effectiveTo: values.effectiveTo || null,
-                }
-              : { content: values.content ?? '', effectiveFrom: values.effectiveFrom ?? '' };
+          : resource === 'fee-templates'
+            ? {
+                category: values.category,
+                chargeCode: values.chargeCode.trim().toUpperCase(),
+                ...(values.category === 'ServiceFee'
+                  ? { serviceName: values.serviceName.trim() }
+                  : {}),
+                method: values.method,
+                referenceRate: values.referenceRate ?? '',
+                unit: feeUnit(values.category, values.method),
+                scope: values.scope as 'Location' | 'Room',
+                effectiveFrom: values.effectiveFrom ?? '',
+                effectiveTo: values.effectiveTo || null,
+              }
+            : { content: values.content ?? '', effectiveFrom: values.effectiveFrom ?? '' };
     setSubmittedName(normalizedName);
     save({ name: normalizedName, description, data, expectedVersion: document?.version ?? 0 });
   }
@@ -339,7 +480,7 @@ export function SharedTemplateEditor({
         </Stack>
       </DialogTitle>
       <Box
-        component="form"
+        component={ValidatedForm}
         sx={{ display: 'flex', flexDirection: 'column', minHeight: 0, flex: '1 1 auto' }}
         onSubmit={(event) => {
           event.preventDefault();
@@ -398,44 +539,98 @@ export function SharedTemplateEditor({
                 </Typography>
                 {fields.map((field) => (
                   <Fragment key={field.name}>
-                    {resource === 'fee-templates' &&
-                      field.name === 'chargeCode' &&
-                      values.category === 'ServiceFee' && (
-                        <TextField
-                          select
-                          disabled={busy}
-                          label="Loại dịch vụ gợi ý"
-                          value={
-                            ['INTERNET', 'CLEANING', 'PARKING', 'MANAGEMENT'].includes(
-                              values.chargeCode,
-                            )
-                              ? values.chargeCode
-                              : ''
-                          }
-                          onChange={(e) =>
-                            updateFields((old) => ({ ...old, chargeCode: e.target.value }))
-                          }
-                        >
-                          <MenuItem value="">Dịch vụ khác / nhập mã riêng</MenuItem>
-                          <MenuItem value="INTERNET">Internet</MenuItem>
-                          <MenuItem value="CLEANING">Vệ sinh</MenuItem>
-                          <MenuItem value="PARKING">Gửi xe</MenuItem>
-                          <MenuItem value="MANAGEMENT">Quản lý tòa nhà</MenuItem>
-                        </TextField>
-                      )}
                     <Box
                       sx={{
                         minWidth: 0,
                         gridColumn:
                           ['referenceRent', 'referencePrice', 'referenceRate'].includes(
                             field.name,
-                          ) ||
-                          (field.name === 'chargeCode' && values.category !== 'ServiceFee')
+                          ) || field.name === 'chargeCode'
                             ? '1 / -1'
                             : undefined,
                       }}
                     >
-                      {['referenceRent', 'referencePrice', 'referenceRate'].includes(field.name) ? (
+                      {resource === 'fee-templates' &&
+                      field.name === 'chargeCode' &&
+                      values.category === 'ServiceFee' ? (
+                        <Stack spacing={1.25}>
+                          <TextField
+                            select
+                            disabled={busy || savedServiceTypes.isFetching}
+                            label="Loại dịch vụ gợi ý"
+                            value={serviceTypeChoice || values.chargeCode || ''}
+                            onChange={(event) => {
+                              const choice = event.target.value;
+                              if (choice === '__custom__') {
+                                setServiceTypeChoice('__custom__');
+                                updateFields((old) => ({
+                                  ...old,
+                                  serviceName: '',
+                                  chargeCode: existingServiceCode ?? '',
+                                }));
+                                return;
+                              }
+                              const selected = serviceTypeOptions.find(
+                                (option) => option.chargeCode === choice,
+                              );
+                              setServiceTypeChoice(choice);
+                              updateFields((old) => ({
+                                ...old,
+                                serviceName: selected?.name ?? '',
+                                chargeCode: existingServiceCode ?? selected?.chargeCode ?? '',
+                              }));
+                            }}
+                          >
+                            <MenuItem value="">Chọn loại dịch vụ</MenuItem>
+                            {serviceTypeOptions.map((option) => (
+                              <MenuItem key={option.chargeCode} value={option.chargeCode}>
+                                {option.name}
+                              </MenuItem>
+                            ))}
+                            <MenuItem value="__custom__">Khác – thêm loại dịch vụ mới</MenuItem>
+                          </TextField>
+                          {serviceTypeChoice === '__custom__' && (
+                            <TextField
+                              required
+                              disabled={busy}
+                              label="Tên dịch vụ mới"
+                              value={values.serviceName ?? ''}
+                              onChange={(event) => {
+                                const enteredName = event.target.value;
+                                const existing = serviceTypeOptions.find(
+                                  (option) =>
+                                    serviceNameKey(option.name) === serviceNameKey(enteredName),
+                                );
+                                updateFields((old) => ({
+                                  ...old,
+                                  serviceName: enteredName,
+                                  chargeCode:
+                                    existingServiceCode ??
+                                    existing?.chargeCode ??
+                                    suggestedServiceChargeCode(enteredName),
+                                }));
+                              }}
+                              slotProps={{ htmlInput: { maxLength: 80 } }}
+                              helperText="Tên này được lưu để dùng lại trong các mẫu biểu phí sau."
+                            />
+                          )}
+                          <TextField
+                            disabled={busy}
+                            label="Mã khoản thu (tự sinh)"
+                            value={values.chargeCode ?? ''}
+                            slotProps={{ input: { readOnly: true } }}
+                            helperText="Mã được tạo từ chữ cái đầu; máy chủ tự thêm hậu tố nếu bị trùng."
+                          />
+                          {savedServiceTypes.isError && (
+                            <Alert severity="warning">
+                              Chưa tải được các loại dịch vụ đã lưu. Bạn vẫn có thể chọn loại gợi ý
+                              có sẵn.
+                            </Alert>
+                          )}
+                        </Stack>
+                      ) : ['referenceRent', 'referencePrice', 'referenceRate'].includes(
+                          field.name,
+                        ) ? (
                         <MoneyField
                           label={field.label}
                           disabled={busy}
@@ -450,7 +645,7 @@ export function SharedTemplateEditor({
                         <UtilityField
                           field={{ ...field, disabled: busy || field.disabled }}
                           values={values}
-                          setValues={updateFields}
+                          setValues={setEditorFields}
                         />
                       )}
                     </Box>
@@ -488,7 +683,7 @@ export function SharedTemplateEditor({
                 onChange={(e) => setValues((old) => ({ ...old, content: e.target.value }))}
               />
             )}
-            {(resource === 'asset-templates' || resource === 'room-type-templates') && (
+            {resource === 'room-type-templates' && (
               <>
                 <Typography
                   variant="h2"
@@ -501,72 +696,73 @@ export function SharedTemplateEditor({
                 {catalog.isError && (
                   <ErrorState error={catalog.error} retry={() => void catalog.refetch()} />
                 )}
-                <Stack
-                  direction={{ xs: 'column', sm: 'row' }}
-                  spacing={1}
-                  sx={{ alignItems: { sm: 'center' } }}
+                <TextField
+                  disabled={busy || catalog.isPending || catalog.isError}
+                  label="Tìm tài sản trong danh mục"
+                  value={catalogSearch}
+                  onChange={(e) => setCatalogSearch(e.target.value)}
+                  size="small"
+                />
+                <Box
+                  role="group"
+                  aria-label="Danh mục tài sản theo phòng"
+                  sx={{
+                    border: '1px solid',
+                    borderColor: 'divider',
+                    borderRadius: 1.5,
+                    px: 1.5,
+                    py: 0.75,
+                    maxHeight: 240,
+                    overflowY: 'auto',
+                  }}
                 >
-                  <TextField
-                    select
-                    disabled={busy || catalog.isPending || catalog.isError}
-                    label="Tài sản trong danh mục"
-                    value={catalogId}
-                    onChange={(e) => setCatalogId(e.target.value)}
-                  >
-                    <MenuItem value="">Chọn</MenuItem>
-                    {catalog.data
-                      ?.filter(
-                        (item) =>
-                          assetCatalogSupportsScope(item.data as AssetCatalogData, 'Room') &&
-                          !items.some(
-                            (selected) =>
-                              selected.catalogId === item.id ||
-                              selected.catalog?.familyId === item.familyId,
-                          ),
-                      )
-                      .map((item) => (
-                        <MenuItem key={item.id} value={item.id}>
-                          {item.name}
-                        </MenuItem>
-                      ))}
-                  </TextField>
-                  <Button
-                    variant="outlined"
-                    sx={{ whiteSpace: 'nowrap', flexShrink: 0 }}
-                    disabled={!catalogId || busy}
-                    onClick={() => {
-                      const selected = catalog.data?.find((d) => d.id === catalogId);
-                      if (
-                        !selected ||
-                        items.some(
-                          (item) =>
-                            item.catalogId === selected.id ||
-                            item.catalog?.familyId === selected.familyId,
-                        )
-                      )
-                        return;
-                      setItems((old) => [
-                        ...old,
-                        {
-                          catalogId: selected.id,
-                          catalogVersion: selected.version,
-                          quantity: 1,
-                          required: true,
-                          trackingMode: 'BulkQuantity',
-                          catalog: {
-                            ...(selected.data as AssetCatalogData),
-                            familyId: selected.familyId,
-                            edition: selected.edition,
-                            name: selected.name,
-                          },
-                        },
-                      ]);
-                      setCatalogId('');
-                    }}
-                  >
-                    Thêm vào mẫu
-                  </Button>
-                </Stack>
+                  {filteredRoomCatalogItems.length ? (
+                    <Stack
+                      divider={<Box sx={{ borderBottom: '1px solid', borderColor: 'divider' }} />}
+                    >
+                      {filteredRoomCatalogItems.map((item) => {
+                        const selected = items.some(
+                          (value) =>
+                            value.catalogId === item.id ||
+                            value.catalog?.familyId === item.familyId,
+                        );
+                        const data = item.data as AssetCatalogData;
+                        return (
+                          <FormControlLabel
+                            key={item.id}
+                            disabled={busy}
+                            sx={{ m: 0, py: 0.5, alignItems: 'center' }}
+                            control={
+                              <Checkbox
+                                checked={selected}
+                                onChange={(event) => toggleRoomAsset(item.id, event.target.checked)}
+                              />
+                            }
+                            label={
+                              <Box sx={{ minWidth: 0 }}>
+                                <Typography variant="body2" sx={{ fontWeight: 600 }}>
+                                  {item.name}
+                                </Typography>
+                                <Typography variant="caption" color="text.secondary">
+                                  {data.unit} ·{' '}
+                                  {data.referencePrice
+                                    ? `${data.referencePrice} đ/${data.unit}`
+                                    : 'Chưa có giá tham khảo'}
+                                </Typography>
+                              </Box>
+                            }
+                          />
+                        );
+                      })}
+                    </Stack>
+                  ) : (
+                    <Typography variant="body2" color="text.secondary" sx={{ py: 1 }}>
+                      {roomCatalogItems.length
+                        ? 'Không tìm thấy tài sản phù hợp.'
+                        : 'Chưa có tài sản mẫu theo phòng được công bố.'}
+                    </Typography>
+                  )}
+                </Box>
                 {!items.length && (
                   <Typography variant="body2" color="text.secondary">
                     Chọn tài sản có thể áp dụng để thêm vào mẫu.
@@ -588,7 +784,7 @@ export function SharedTemplateEditor({
                         required
                         disabled={busy}
                         type="number"
-                        label={`Số lượng mục ${index + 1}`}
+                        label={`Số lượng ${item.catalog?.name ?? `mục ${index + 1}`}`}
                         value={item.quantity}
                         slotProps={{ htmlInput: { min: 1, max: 10000, step: 1 } }}
                         onChange={(e) =>
@@ -605,31 +801,7 @@ export function SharedTemplateEditor({
                         slotProps={{ input: { readOnly: true } }}
                       />
                     </Box>
-                    <Stack
-                      direction="row"
-                      spacing={1}
-                      sx={{
-                        alignItems: 'center',
-                        justifyContent: 'space-between',
-                        flexWrap: 'wrap',
-                      }}
-                    >
-                      <FormControlLabel
-                        label="Bắt buộc"
-                        control={
-                          <Checkbox
-                            disabled={busy}
-                            checked={item.required}
-                            onChange={(e) =>
-                              setItems((old) =>
-                                old.map((v, i) =>
-                                  i === index ? { ...v, required: e.target.checked } : v,
-                                ),
-                              )
-                            }
-                          />
-                        }
-                      />
+                    <Stack direction="row" sx={{ justifyContent: 'flex-end' }}>
                       <Button
                         disabled={busy}
                         onClick={() => setItems((old) => old.filter((_, i) => i !== index))}
@@ -647,13 +819,7 @@ export function SharedTemplateEditor({
           <Button disabled={busy} onClick={close}>
             Hủy
           </Button>
-          <Button
-            disabled={
-              busy || (resource === 'asset-templates' && (catalog.isError || !items.length))
-            }
-            type="submit"
-            variant="contained"
-          >
+          <Button disabled={busy} type="submit" variant="contained">
             Lưu mẫu
           </Button>
         </DialogActions>

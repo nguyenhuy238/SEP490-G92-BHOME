@@ -3,6 +3,8 @@ import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { beforeEach, expect, it, vi } from 'vitest';
 import { ExpensesApiPage } from './ExpensesApiPage';
 import { MemoryRouter, Route, Routes } from 'react-router';
+import type { ExpenseReferences } from '../../../../../packages/client-core/src/finance';
+import { todayVietnam } from '../staff/staffContracts';
 
 const mock = vi.hoisted(() => ({
   locations: vi.fn(),
@@ -13,6 +15,8 @@ const mock = vi.hoisted(() => ({
   updateExpense: vi.fn(),
   expenseEvidence: vi.fn(),
   expenseReferences: vi.fn(),
+  expensePayments: vi.fn(),
+  recordExpensePayment: vi.fn(),
 }));
 vi.mock('./useFinanceApi', () => ({ useFinanceApi: () => mock }));
 vi.mock('../../../../../packages/client-core/src/auth', () => ({
@@ -39,6 +43,15 @@ beforeEach(() => {
   });
   mock.expense.mockResolvedValue(expense);
   mock.expenseEvidence.mockResolvedValue([]);
+  mock.expensePayments.mockResolvedValue({
+    expenseId: expense.id,
+    version: 1,
+    amount: expense.amount,
+    paidAmount: '0',
+    remainingAmount: expense.amount,
+    status: 'Unpaid',
+    events: [],
+  });
   mock.expenseReferences.mockResolvedValue({
     rooms: [],
     assets: [],
@@ -46,6 +59,10 @@ beforeEach(() => {
     truncated: false,
   });
 });
+function openTools() {
+  const toggle = screen.getByRole('button', { name: 'Lương, chi phí định kỳ & vốn' });
+  if (toggle.getAttribute('aria-expanded') === 'false') fireEvent.click(toggle);
+}
 function mount() {
   render(
     <QueryClientProvider
@@ -55,6 +72,76 @@ function mount() {
     </QueryClientProvider>,
   );
 }
+it('keeps specialist tools collapsed when Owner opens the expense list', async () => {
+  mount();
+  await screen.findAllByText('Bảo trì');
+  expect(screen.getByRole('button', { name: 'Ghi khoản chi' })).toBeVisible();
+  expect(
+    screen.queryByRole('button', { name: 'Phân bổ chi phí nhân viên' }),
+  ).not.toBeInTheDocument();
+  expect(screen.getByRole('button', { name: 'Lương, chi phí định kỳ & vốn' })).toHaveAttribute(
+    'aria-expanded',
+    'false',
+  );
+});
+it('offers category shortcuts and today without inventing an amount or confirming a payment', async () => {
+  mount();
+  await screen.findAllByText('Bảo trì');
+  fireEvent.click(screen.getByRole('button', { name: 'Ghi khoản chi' }));
+  expect(screen.getByLabelText(/Ngày phát sinh/)).toHaveValue(todayVietnam());
+  expect(screen.getByLabelText(/Số tiền/)).toHaveValue('');
+  fireEvent.mouseDown(screen.getByRole('combobox', { name: /Danh mục khoản chi/ }));
+  fireEvent.click(screen.getByRole('option', { name: /^Internet$/ }));
+  expect(screen.getByLabelText(/Danh mục khoản chi/)).toHaveValue('Internet');
+  fireEvent.change(screen.getByLabelText(/Danh mục khoản chi/), {
+    target: { value: 'Dịch vụ tùy chọn' },
+  });
+  expect(screen.getByLabelText(/Danh mục khoản chi/)).toHaveValue('Dịch vụ tùy chọn');
+  expect(screen.getByText(/Lưu chi phí trước/)).toBeVisible();
+  expect(mock.createExpense).not.toHaveBeenCalled();
+  expect(mock.recordExpensePayment).not.toHaveBeenCalled();
+});
+
+it('lets Owner choose a location before opening its recurring cost setup', async () => {
+  render(
+    <QueryClientProvider
+      client={new QueryClient({ defaultOptions: { queries: { retry: false } } })}
+    >
+      <MemoryRouter>
+        <ExpensesApiPage />
+      </MemoryRouter>
+    </QueryClientProvider>,
+  );
+  await screen.findAllByText('Bảo trì');
+  openTools();
+  fireEvent.click(screen.getByRole('button', { name: 'Chi phí định kỳ' }));
+  expect(screen.getByRole('dialog')).toHaveTextContent(
+    'Hệ thống tạo chi phí theo lịch; bạn xác nhận thực chi riêng.',
+  );
+  expect(screen.getByRole('link', { name: 'Cơ sở tổng hợp' })).toHaveAttribute(
+    'href',
+    '/locations/location/investment?tab=recurring',
+  );
+  expect(mock.createExpense).not.toHaveBeenCalled();
+});
+
+it('keeps the selected location in the recurring cost shortcut', async () => {
+  render(
+    <QueryClientProvider
+      client={new QueryClient({ defaultOptions: { queries: { retry: false } } })}
+    >
+      <MemoryRouter initialEntries={['/expenses?locationId=location']}>
+        <ExpensesApiPage />
+      </MemoryRouter>
+    </QueryClientProvider>,
+  );
+  await screen.findAllByText('Bảo trì');
+  openTools();
+  expect(screen.getByRole('link', { name: 'Chi phí định kỳ' })).toHaveAttribute(
+    'href',
+    '/locations/location/investment?tab=recurring',
+  );
+});
 it('keeps the Location Workspace scope when loading and creating expenses', async () => {
   render(
     <QueryClientProvider
@@ -70,6 +157,7 @@ it('keeps the Location Workspace scope when loading and creating expenses', asyn
   await screen.findAllByText('Bảo trì');
   expect(screen.getAllByText('500.000 ₫').length).toBeGreaterThan(0);
   expect(mock.report).not.toHaveBeenCalled();
+  openTools();
   fireEvent.click(screen.getByRole('button', { name: 'Xem tổng hợp vốn và chi phí' }));
   expect(await screen.findByText('15.000.000 ₫')).toBeInTheDocument();
   expect(screen.getByText('1.200.000 ₫')).toBeInTheDocument();
@@ -201,17 +289,58 @@ it('loads detail and submits the server revision and correction reason', async (
   expect(mock.updateExpense).toHaveBeenCalledWith('expense', expense, 1, 'Đối chiếu lại');
 });
 
+it('keeps the expense dialog open and blocks editing while a payment is being recorded', async () => {
+  let finish!: () => void;
+  mock.recordExpensePayment.mockImplementation(
+    () =>
+      new Promise<void>((resolve) => {
+        finish = resolve;
+      }),
+  );
+  mount();
+  fireEvent.click((await screen.findAllByRole('button', { name: 'Chi tiết / chỉnh sửa' }))[0]);
+  fireEvent.change(await screen.findByLabelText('Số tiền đã chuyển (đ)'), {
+    target: { value: '100000' },
+  });
+  fireEvent.change(screen.getByLabelText('Ghi chú xác nhận / chứng từ'), {
+    target: { value: 'Verified synthetic transfer' },
+  });
+  fireEvent.click(
+    screen.getByRole('checkbox', {
+      name: 'Tôi xác nhận thông tin thanh toán đúng thực tế.',
+    }),
+  );
+  fireEvent.click(screen.getByRole('button', { name: 'Ghi nhận thực chi' }));
+  await waitFor(() => expect(mock.recordExpensePayment).toHaveBeenCalledTimes(1));
+  expect(screen.getByRole('button', { name: 'Đóng' })).toBeDisabled();
+  expect(screen.getByRole('button', { name: 'Đang lưu…' })).toBeDisabled();
+  expect(screen.getByRole('combobox', { name: /Danh mục khoản chi/ })).toBeDisabled();
+  fireEvent.keyDown(screen.getByRole('dialog'), { key: 'Escape' });
+  expect(screen.getByRole('dialog')).toBeInTheDocument();
+  fireEvent.submit(document.getElementById('expense-editor')!);
+  expect(mock.updateExpense).not.toHaveBeenCalled();
+  await act(async () => finish());
+  await waitFor(() => expect(screen.queryByRole('dialog')).not.toBeInTheDocument());
+  expect(screen.getByText('Đã cập nhật thông tin tài chính.')).toBeInTheDocument();
+});
+
 it('selects real Room/Asset/Work Order references and submits the exact source IDs', async () => {
-  mock.expenseReferences.mockImplementation(async (_location, roomId) => ({
-    rooms: [{ id: 'room', label: 'R-01', roomId: 'room', assetId: null }],
-    assets: roomId
-      ? [{ id: 'asset', label: 'Bàn tổng hợp', roomId: 'room', assetId: 'asset' }]
-      : [],
-    workOrders: roomId
-      ? [{ id: 'work-order', label: 'Sửa bàn tổng hợp', roomId: 'room', assetId: 'asset' }]
-      : [],
-    truncated: false,
-  }));
+  let resolveInitialReferences!: (references: ExpenseReferences) => void;
+  const initialReferences = new Promise<ExpenseReferences>((resolve) => {
+    resolveInitialReferences = resolve;
+  });
+  mock.expenseReferences.mockImplementation((_location, roomId) =>
+    roomId
+      ? Promise.resolve({
+          rooms: [{ id: 'room', label: 'R-01', roomId: 'room', assetId: null }],
+          assets: [{ id: 'asset', label: 'Bàn tổng hợp', roomId: 'room', assetId: 'asset' }],
+          workOrders: [
+            { id: 'work-order', label: 'Sửa bàn tổng hợp', roomId: 'room', assetId: 'asset' },
+          ],
+          truncated: false,
+        })
+      : initialReferences,
+  );
   mock.createExpense.mockResolvedValue(expense);
   mount();
   await waitFor(() =>
@@ -219,6 +348,21 @@ it('selects real Room/Asset/Work Order references and submits the exact source I
   );
   fireEvent.click(screen.getByRole('button', { name: 'Ghi khoản chi' }));
   fireEvent.click(screen.getByRole('button', { name: /Liên kết bổ sung/ }));
+  await waitFor(() =>
+    expect(mock.expenseReferences).toHaveBeenCalledWith('location', null, expect.any(AbortSignal)),
+  );
+  expect(screen.getByRole('combobox', { name: 'Phòng ghi nhận' })).toHaveAttribute(
+    'aria-disabled',
+    'true',
+  );
+  await act(async () => {
+    resolveInitialReferences({
+      rooms: [{ id: 'room', label: 'R-01', roomId: 'room', assetId: null }],
+      assets: [],
+      workOrders: [],
+      truncated: false,
+    });
+  });
   await waitFor(() =>
     expect(screen.getByRole('combobox', { name: 'Phòng ghi nhận' })).not.toHaveAttribute(
       'aria-disabled',
@@ -228,11 +372,26 @@ it('selects real Room/Asset/Work Order references and submits the exact source I
   fireEvent.mouseDown(screen.getByRole('combobox', { name: 'Phòng ghi nhận' }));
   fireEvent.click(await screen.findByRole('option', { name: 'R-01' }));
   await waitFor(() =>
+    expect(mock.expenseReferences).toHaveBeenCalledWith(
+      'location',
+      'room',
+      expect.any(AbortSignal),
+    ),
+  );
+  await waitFor(() =>
+    expect(screen.getByRole('combobox', { name: 'Tài sản liên quan' })).not.toHaveAttribute(
+      'aria-disabled',
+      'true',
+    ),
+  );
+  await waitFor(() =>
     expect(screen.getByRole('combobox', { name: 'Work Order liên quan' })).not.toHaveAttribute(
       'aria-disabled',
       'true',
     ),
   );
+  fireEvent.mouseDown(screen.getByRole('combobox', { name: 'Tài sản liên quan' }));
+  fireEvent.click(await screen.findByRole('option', { name: 'Bàn tổng hợp' }));
   fireEvent.mouseDown(screen.getByRole('combobox', { name: 'Work Order liên quan' }));
   fireEvent.click(await screen.findByRole('option', { name: 'Sửa bàn tổng hợp' }));
   expect(screen.getByRole('combobox', { name: 'Tài sản liên quan' })).toHaveTextContent(
@@ -264,6 +423,14 @@ it('shows API failure without demo rows or false success and preserves the retry
   expect(screen.queryByText('Bảo trì')).not.toBeInTheDocument();
   fireEvent.click(screen.getByRole('button', { name: 'Ghi khoản chi' }));
   mock.createExpense.mockRejectedValue({ status: 503 });
+  fireEvent.change(screen.getByLabelText(/Số tiền/), { target: { value: '200000' } });
+  fireEvent.change(screen.getByLabelText(/Ngày phát sinh/), { target: { value: '2026-11-02' } });
+  fireEvent.change(screen.getByLabelText(/Danh mục khoản chi/), {
+    target: { value: 'Chi tổng hợp' },
+  });
+  fireEvent.change(screen.getByLabelText(/Nội dung \/ tham chiếu chứng từ/), {
+    target: { value: 'Chứng từ tổng hợp' },
+  });
   fireEvent.submit(document.getElementById('expense-editor')!);
   await waitFor(() => expect(mock.createExpense).toHaveBeenCalledTimes(1));
   await waitFor(() =>

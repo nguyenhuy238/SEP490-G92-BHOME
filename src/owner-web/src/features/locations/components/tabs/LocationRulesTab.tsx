@@ -1,3 +1,4 @@
+import { TextField } from '../../../../components/common/ValidatedForm';
 import { useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import {
@@ -14,7 +15,6 @@ import {
   MenuItem,
   Paper,
   Stack,
-  TextField,
   Typography,
 } from '@mui/material';
 import { Clock, Edit2, History, Plus, Sparkles } from 'lucide-react';

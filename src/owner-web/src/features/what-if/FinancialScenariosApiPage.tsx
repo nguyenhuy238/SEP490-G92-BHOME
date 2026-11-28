@@ -1,4 +1,5 @@
-import { Fragment, useEffect, useRef, useState } from 'react';
+import { TextField, ValidatedForm } from '../../components/common/ValidatedForm';
+import { useEffect, useRef, useState } from 'react';
 import {
   Accordion,
   AccordionDetails,
@@ -9,7 +10,6 @@ import {
   LinearProgress,
   Paper,
   Stack,
-  TextField,
   Typography,
 } from '@mui/material';
 import { ChevronDown } from 'lucide-react';
@@ -30,6 +30,8 @@ import { useFinanceApi } from '../expenses/useFinanceApi';
 import { OwnerTable } from '../../components/common/OwnerWorkspace';
 import { downloadFinance } from '../../services/financeExport';
 import { financeMonthPeriod } from '../finance/monthPeriods';
+import { useFinanceSearch } from '../finance/financeScope';
+import { managementMoney } from '../finance/managementMoney';
 
 const initial: ScenarioInput = {
   name: '',
@@ -43,6 +45,11 @@ const initial: ScenarioInput = {
     monthlyStaffCost: '',
     monthlyMaintenanceCost: '',
     monthlyOtherCost: '',
+    monthlyServiceRevenue: '',
+    additionalInvestment: '0',
+    monthlyDepreciation: null,
+    operatingPaymentPercent: '',
+    costIncreasePercent: '0',
   },
 };
 export function FinancialScenariosApiPage() {
@@ -50,9 +57,14 @@ export function FinancialScenariosApiPage() {
     cache = useQueryClient();
   const { session } = useAuth();
   const actor = session?.userId;
-  const [input, setInput] = useState(initial),
+  const initialLocation = useFinanceSearch().get('locationId');
+  const [input, setInput] = useState<ScenarioInput>(() => ({
+      ...initial,
+      baseline: { ...financeMonthPeriod(-1), locationId: initialLocation || undefined },
+    })),
     [page, setPage] = useState(1);
   const [baselineOpen, setBaselineOpen] = useState(false);
+  const [additionalOpen, setAdditionalOpen] = useState(false);
   const [view, setView] = useState<ScenarioView | null>(null),
     [comparison, setComparison] = useState<ScenarioView | null>(null);
   const [busy, setBusy] = useState(false),
@@ -74,6 +86,52 @@ export function FinancialScenariosApiPage() {
     queryKey: ['financial-scenarios', actor, page],
     queryFn: ({ signal }) => api.scenarios(page, signal),
   });
+  const defaults = useQuery({
+    queryKey: ['scenario-defaults', actor, input.baseline],
+    queryFn: ({ signal }) => api.scenarioDefaults(input.baseline, signal),
+    enabled: false,
+  });
+  async function restoreDefaults() {
+    if (lock.current) return;
+    lock.current = true;
+    setBusy(true);
+    setError('');
+    try {
+      const result = await defaults.refetch();
+      if (result.isError || !result.data) throw result.error;
+      const { baseline } = result.data;
+      const values = {
+        monthlyRent: result.data.monthlyRent,
+        occupancyPercent: result.data.occupancyPercent,
+        collectionPercent: result.data.collectionPercent,
+        monthlyUtilityServiceCost: result.data.monthlyUtilityServiceCost,
+        monthlyStaffCost: result.data.monthlyStaffCost,
+        monthlyMaintenanceCost: result.data.monthlyMaintenanceCost,
+        monthlyOtherCost: result.data.monthlyOtherCost,
+        monthlyDepreciation: result.data.monthlyDepreciation,
+        monthlyServiceRevenue: result.data.monthlyServiceRevenue,
+        operatingPaymentPercent: result.data.operatingPaymentPercent,
+      };
+      change({
+        ...input,
+        baseline,
+        assumptions: {
+          ...initial.assumptions,
+          ...Object.fromEntries(
+            Object.entries(values).map(([field, value]) => [
+              field,
+              value ?? (field === 'monthlyDepreciation' ? null : ''),
+            ]),
+          ),
+        },
+      });
+    } catch (e) {
+      setError(financeError(e));
+    } finally {
+      lock.current = false;
+      setBusy(false);
+    }
+  }
   function change(value: ScenarioInput) {
     setInput(value);
     setView(null);
@@ -82,6 +140,19 @@ export function FinancialScenariosApiPage() {
   }
   async function run(action: 'analyze' | 'save') {
     if (lock.current) return;
+    const invalidFields = fields.filter(
+      ([field]) =>
+        field !== 'monthlyDepreciation' && !/^\d+([.]\d+)?$/.test(input.assumptions[field] ?? ''),
+    );
+    if (invalidFields.length) {
+      setAdditionalOpen(true);
+      setError(
+        'Kiểm tra các khoản chưa đủ dữ liệu: ' +
+          invalidFields.map(([, label]) => label).join(', ') +
+          '. Nhập 0 nếu không phát sinh.',
+      );
+      return;
+    }
     lock.current = true;
     setBusy(true);
     setError('');
@@ -89,8 +160,23 @@ export function FinancialScenariosApiPage() {
     try {
       const result =
         action === 'analyze'
-          ? await api.analyzeScenario(input)
-          : await api.saveScenario(input, key.current);
+          ? await api.analyzeScenario({
+              ...input,
+              assumptions: {
+                ...input.assumptions,
+                monthlyDepreciation: input.assumptions.monthlyDepreciation || null,
+              },
+            })
+          : await api.saveScenario(
+              {
+                ...input,
+                assumptions: {
+                  ...input.assumptions,
+                  monthlyDepreciation: input.assumptions.monthlyDepreciation || null,
+                },
+              },
+              key.current,
+            );
       setView(result);
       if (action === 'save') {
         await cache.invalidateQueries({ queryKey: ['financial-scenarios', actor] });
@@ -128,16 +214,51 @@ export function FinancialScenariosApiPage() {
     ['monthlyRent', 'Giá thuê giả định / phòng / tháng (VND)'],
     ['occupancyPercent', 'Tỷ lệ lấp đầy (%)'],
     ['collectionPercent', 'Tỷ lệ thu tiền dự kiến (%)'],
+    ['monthlyServiceRevenue', 'Doanh thu dịch vụ mỗi tháng (VND)'],
     ['monthlyUtilityServiceCost', 'Điện nước / dịch vụ mỗi tháng (VND)'],
-    ['monthlyStaffCost', 'Chi phí Staff mỗi tháng (VND)'],
+    ['monthlyStaffCost', 'Chi phí nhân viên mỗi tháng (VND)'],
     ['monthlyMaintenanceCost', 'Bảo trì mỗi tháng (VND)'],
     ['monthlyOtherCost', 'Chi phí khác mỗi tháng (VND)'],
+    ['additionalInvestment', 'Đầu tư bổ sung một lần (VND)'],
+    ['monthlyDepreciation', 'Khấu hao mỗi tháng (VND, nếu biết)'],
+    ['operatingPaymentPercent', 'Tỷ lệ thực chi dự kiến (%)'],
+    ['costIncreasePercent', 'Tỷ lệ tăng chi phí (%)'],
   ] as const;
+  const mainFields = new Set(['monthlyRent', 'occupancyPercent', 'monthlyStaffCost']);
+  function assumptionField([field, label]: (typeof fields)[number]) {
+    return !field.endsWith('Percent') ? (
+      <MoneyField
+        key={field}
+        required={field !== 'monthlyDepreciation'}
+        label={label}
+        disabled={busy}
+        value={input.assumptions[field] ?? ''}
+        maxRawLength={24}
+        onValueChange={(raw) =>
+          change({ ...input, assumptions: { ...input.assumptions, [field]: raw } })
+        }
+      />
+    ) : (
+      <TextField
+        key={field}
+        required
+        label={label}
+        disabled={busy}
+        value={input.assumptions[field] ?? ''}
+        slotProps={{
+          htmlInput: { inputMode: 'decimal', pattern: '[0-9]+([.][0-9]+)?', maxLength: 24 },
+        }}
+        onChange={(e) =>
+          change({ ...input, assumptions: { ...input.assumptions, [field]: e.target.value } })
+        }
+      />
+    );
+  }
   return (
     <>
       <PageHeader
         title="Thử kịch bản tài chính"
-        subtitle="Thử các giả định và so sánh dự báo mà không thay đổi sổ tài chính thực tế."
+        subtitle="Thử thay đổi giá thuê, số phòng có khách hoặc chi phí để xem lợi nhuận dự kiến."
       />
       {(busy || locations.isPending || saved.isPending) && <LinearProgress />}
       {(error || locations.error || saved.error) && (
@@ -161,28 +282,21 @@ export function FinancialScenariosApiPage() {
       )}
       {success && <Alert severity="success">{success}</Alert>}
       <Paper variant="outlined" sx={{ p: 1.5, my: 1.5, minWidth: 0 }}>
-        <form
+        <ValidatedForm
           onSubmit={(e) => {
             e.preventDefault();
             void run('analyze');
           }}
         >
           <Stack spacing={1.5}>
-            <Typography variant="h6" component="h2" sx={{ fontWeight: 750 }}>
-              Giả định & kỳ dữ liệu nền
-            </Typography>
             <Typography variant="body2" color="text.secondary">
-              Kỳ dữ liệu nền dùng số liệu thực tế để đối chiếu; số tháng dự báo xác định khoảng thời
-              gian ước tính. Các số tiền và tỷ lệ bên dưới là giả định bạn nhập.
+              Lấy số liệu thực tế, sửa khoản muốn thử rồi nhấn Phân tích. Dữ liệu thật không thay
+              đổi.
             </Typography>
             <Box
               sx={{
                 display: 'grid',
-                gridTemplateColumns: {
-                  xs: 'minmax(0,1fr)',
-                  sm: 'repeat(2,minmax(0,1fr))',
-                  lg: 'repeat(3,minmax(0,1fr))',
-                },
+                gridTemplateColumns: { xs: '1fr', md: 'repeat(3,minmax(0,1fr))' },
                 gap: 1.5,
               }}
             >
@@ -203,10 +317,7 @@ export function FinancialScenariosApiPage() {
                 error={!!locations.error}
                 emptyLabel="Toàn chuỗi"
                 change={(id) =>
-                  change({
-                    ...input,
-                    baseline: { ...input.baseline, locationId: id || undefined },
-                  })
+                  change({ ...input, baseline: { ...input.baseline, locationId: id || undefined } })
                 }
               />
               <TextField
@@ -276,71 +387,106 @@ export function FinancialScenariosApiPage() {
                 </Stack>
               </AccordionDetails>
             </Accordion>
+            <Button
+              variant="outlined"
+              disabled={busy}
+              onClick={() => void restoreDefaults()}
+              sx={{ alignSelf: 'flex-start' }}
+            >
+              Lấy số liệu thực tế
+            </Button>
+            {defaults.data &&
+              defaults.data.baseline.from === input.baseline.from &&
+              defaults.data.baseline.to === input.baseline.to &&
+              (defaults.data.baseline.locationId ?? null) ===
+                (input.baseline.locationId ?? null) && (
+                <Box>
+                  {!!defaults.data.limitations.length && (
+                    <Alert severity="warning" sx={{ mb: 1 }}>
+                      {defaults.data.limitations.map((item) => (
+                        <Typography key={item} variant="body2">
+                          {item}
+                        </Typography>
+                      ))}
+                    </Alert>
+                  )}
+                  <Accordion variant="outlined" disableGutters>
+                    <AccordionSummary expandIcon={<ChevronDown size={18} />}>
+                      Nguồn số liệu đang dùng
+                    </AccordionSummary>
+                    <AccordionDetails>
+                      <Typography variant="body2">
+                        Dữ liệu nền tải lúc {formatInstant(defaults.data.snapshotAt)}.
+                      </Typography>
+                      {defaults.data.obligations && (
+                        <Typography variant="body2">
+                          Nghĩa vụ từ {displayContractDate(defaults.data.obligations.from)} đến{' '}
+                          {displayContractDate(defaults.data.obligations.to)}: định kỳ{' '}
+                          {managementMoney(defaults.data.obligations.recurringDue)} (
+                          {defaults.data.obligations.recurringCount} khoản); lương hợp đồng{' '}
+                          {managementMoney(defaults.data.obligations.contractualSalary)} (
+                          {defaults.data.obligations.staffCount} nhân viên).
+                          {defaults.data.obligations.unresolvedStaffCount > 0 &&
+                            ' Cần xác nhận thêm ' +
+                              defaults.data.obligations.unresolvedStaffCount +
+                              ' nhân viên.'}
+                        </Typography>
+                      )}
+                      {defaults.data.obligations?.rentCoverage && (
+                        <Typography variant="body2">
+                          Phòng có hợp đồng trong tháng dự báo:{' '}
+                          {defaults.data.obligations.rentCoverage.contractedRooms}/
+                          {defaults.data.obligations.rentCoverage.rooms}; ngày phòng có hợp đồng:{' '}
+                          {defaults.data.obligations.rentCoverage.occupiedRoomDays}/
+                          {defaults.data.obligations.rentCoverage.possibleRoomDays}.
+                          {defaults.data.obligations.rentCoverage.unresolvedRooms > 0 &&
+                            ' Cần xác nhận giá thuê của ' +
+                              defaults.data.obligations.rentCoverage.unresolvedRooms +
+                              ' phòng.'}
+                        </Typography>
+                      )}
+                    </AccordionDetails>
+                  </Accordion>
+                </Box>
+              )}
+            <Typography variant="subtitle1" sx={{ fontWeight: 700 }}>
+              Bạn muốn thay đổi gì?
+            </Typography>
             <Box
               sx={{
                 display: 'grid',
-                gridTemplateColumns: {
-                  xs: 'minmax(0,1fr)',
-                  sm: 'repeat(2,minmax(0,1fr))',
-                  lg: 'repeat(3,minmax(0,1fr))',
-                },
+                gridTemplateColumns: { xs: '1fr', md: 'repeat(3,minmax(0,1fr))' },
                 gap: 1.5,
               }}
             >
-              {fields.map(([field, label], index) => (
-                <Fragment key={field}>
-                  {index === 0 && (
-                    <Box sx={{ gridColumn: '1 / -1' }}>
-                      <Typography variant="subtitle1" sx={{ fontWeight: 750 }}>
-                        Doanh thu và tỷ lệ thu tiền
-                      </Typography>
-                    </Box>
-                  )}
-                  {index === 3 && (
-                    <Box sx={{ gridColumn: '1 / -1', pt: 1 }}>
-                      <Typography variant="subtitle1" sx={{ fontWeight: 750 }}>
-                        Chi phí dự kiến
-                      </Typography>
-                    </Box>
-                  )}
-                  {!field.endsWith('Percent') ? (
-                    <MoneyField
-                      required
-                      label={label}
-                      disabled={busy}
-                      value={input.assumptions[field]}
-                      maxRawLength={24}
-                      onValueChange={(raw) =>
-                        change({
-                          ...input,
-                          assumptions: { ...input.assumptions, [field]: raw },
-                        })
-                      }
-                    />
-                  ) : (
-                    <TextField
-                      required
-                      label={label}
-                      disabled={busy}
-                      value={input.assumptions[field]}
-                      slotProps={{
-                        htmlInput: {
-                          inputMode: 'decimal',
-                          pattern: field.endsWith('Percent') ? '[0-9]+([.][0-9]+)?' : '[0-9]+',
-                          maxLength: 24,
-                        },
-                      }}
-                      onChange={(e) =>
-                        change({
-                          ...input,
-                          assumptions: { ...input.assumptions, [field]: e.target.value },
-                        })
-                      }
-                    />
-                  )}
-                </Fragment>
-              ))}
+              {fields.filter(([field]) => mainFields.has(field)).map(assumptionField)}
             </Box>
+            <Accordion
+              variant="outlined"
+              disableGutters
+              expanded={additionalOpen}
+              onChange={(_, open) => setAdditionalOpen(open)}
+              slotProps={{ transition: { unmountOnExit: true } }}
+            >
+              <AccordionSummary expandIcon={<ChevronDown size={18} />}>
+                <Typography variant="subtitle2">Các khoản thu, chi khác</Typography>
+              </AccordionSummary>
+              <AccordionDetails>
+                <Typography variant="body2" color="text.secondary" sx={{ mb: 1.5 }}>
+                  Chi phí là tổng mỗi tháng cho phạm vi đã chọn. Mặc định không đầu tư thêm; sửa bên
+                  dưới nếu cần.
+                </Typography>
+                <Box
+                  sx={{
+                    display: 'grid',
+                    gridTemplateColumns: { xs: '1fr', sm: 'repeat(2,minmax(0,1fr))' },
+                    gap: 1.5,
+                  }}
+                >
+                  {fields.filter(([field]) => !mainFields.has(field)).map(assumptionField)}
+                </Box>
+              </AccordionDetails>
+            </Accordion>
             <Stack direction={{ xs: 'column', sm: 'row' }} spacing={1}>
               <Button type="submit" variant="contained" disabled={busy}>
                 Phân tích
@@ -361,7 +507,7 @@ export function FinancialScenariosApiPage() {
                   : 'Kết quả phân tích hiện chưa được lưu. Nhấn Lưu kịch bản để giữ lại giả định và ảnh chụp dữ liệu nền.'}
             </Typography>
           </Stack>
-        </form>
+        </ValidatedForm>
       </Paper>
       {view && (
         <Box ref={resultRef} tabIndex={-1} sx={{ mt: 3, scrollMarginTop: 90, outline: 'none' }}>
@@ -510,6 +656,16 @@ export function FinancialScenariosApiPage() {
 }
 function Result({ title, value }: { title: string; value: ScenarioView }) {
   const r = value.result;
+  const warnings: Record<string, string> = {
+    outstanding_debt: 'Còn công nợ tại thời điểm lập kịch bản; không mặc định sẽ thu đủ.',
+    incomplete_cash_history:
+      'Dữ liệu thực thu hoặc thực chi chưa đủ để xác định dòng tiền lịch sử.',
+    missing_depreciation: 'Chưa xác định khấu hao dự kiến; lợi nhuận sau khấu hao chưa xác định.',
+    higher_operating_cost: 'Chi phí vận hành dự kiến cao hơn bình quân kỳ nền.',
+    lower_operating_profit: 'Lợi nhuận vận hành dự kiến thấp hơn bình quân kỳ nền.',
+    cash_shortfall_risk:
+      'Dòng tiền vận hành không dương hoặc dòng tiền sau đầu tư âm; cần xem lại khả năng tài trợ.',
+  };
   const mainFigures = [
     ['Tiền thu dự kiến / tháng', r.monthlyCollections],
     ['Lợi nhuận / tháng', r.monthlyProfit],
@@ -521,6 +677,9 @@ function Result({ title, value }: { title: string; value: ScenarioView }) {
     ['Dòng tiền cả kỳ dự báo', r.forecastNetCashFlow],
     ['Vốn chưa thu hồi cuối dự báo', r.remainingCapitalAtEnd],
     ['Chênh lệch lợi nhuận tháng so với nền', r.monthlyProfitDifference],
+    ['Lợi nhuận sau khấu hao / tháng', r.monthlyProfitAfterDepreciation],
+    ['Thực chi vận hành dự kiến / tháng', r.monthlyOperatingPayments],
+    ['Dòng tiền dự báo sau đầu tư', r.forecastCashAfterInvestment],
   ] as const;
   return (
     <Paper variant="outlined" sx={{ p: 1.5, my: 2, minWidth: 0, overflowWrap: 'anywhere' }}>
@@ -546,8 +705,19 @@ function Result({ title, value }: { title: string; value: ScenarioView }) {
       </Box>
       {r.unavailableReason && (
         <Alert severity="info">
-          Chưa đủ căn cứ để ước tính hoàn vốn; xem báo cáo dữ liệu nền về vốn, dòng tiền và khoản
-          hoàn tiền.
+          {r.unavailableReason === 'investment_basis_required'
+            ? 'Chưa đủ nguyên giá tài sản để dự báo vốn còn lại và thời gian hoàn vốn. Bổ sung giá mua trong dữ liệu thực tế rồi lập lại kịch bản.'
+            : 'Chưa đủ căn cứ để ước tính hoàn vốn; xem báo cáo dữ liệu nền về vốn, dòng tiền và khoản hoàn tiền.'}
+        </Alert>
+      )}
+      {!!r.warnings?.length && (
+        <Alert severity="warning" sx={{ mt: 1 }}>
+          <Typography variant="subtitle2">Các rủi ro cần xem xét</Typography>
+          {Array.from(new Set(r.warnings)).map((code) => (
+            <Typography key={code} variant="body2">
+              {warnings[code] ?? 'Có cảnh báo từ máy chủ: ' + code}
+            </Typography>
+          ))}
         </Alert>
       )}
       <Accordion variant="outlined" disableGutters sx={{ mt: 1.5 }}>
@@ -567,8 +737,12 @@ function Result({ title, value }: { title: string; value: ScenarioView }) {
                 Phát hành kỳ nền: {formatFinanceMoney(value.baseline.total.issued)}
               </Typography>
               <Typography>
-                Thu đã xác minh kỳ nền:{' '}
-                {formatFinanceMoney(value.baseline.total.verifiedCollections)}
+                {value.baseline.total.management
+                  ? 'Thực thu kinh doanh kỳ nền: '
+                  : 'Tiền phân bổ xác minh kỳ nền (dữ liệu cũ): '}
+                {value.baseline.total.management
+                  ? managementMoney(value.baseline.total.management.actualBusinessCollections)
+                  : formatFinanceMoney(value.baseline.total.verifiedCollections)}
               </Typography>
               <Typography>
                 Lợi nhuận kỳ nền: {formatFinanceMoney(value.baseline.total.operatingProfit)}
@@ -578,9 +752,13 @@ function Result({ title, value }: { title: string; value: ScenarioView }) {
           <Stack spacing={0.75}>
             {otherFigures.map(([label, amount]) => (
               <Typography key={label} sx={{ fontVariantNumeric: 'tabular-nums' }}>
-                {label}: {amount === null ? 'Chưa xác định' : formatFinanceMoney(amount)}
+                {label}: {managementMoney(amount)}
               </Typography>
             ))}
+            <Typography>
+              Biên lợi nhuận:{' '}
+              {r.monthlyMarginPercent == null ? 'Chưa xác định' : r.monthlyMarginPercent + '%'}
+            </Typography>
             <Typography>
               Ước tính số tháng hoàn vốn còn lại: {r.estimatedRemainingMonths ?? 'Chưa xác định'}
             </Typography>

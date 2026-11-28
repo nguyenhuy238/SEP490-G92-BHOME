@@ -37,7 +37,8 @@ export type LocationOverviewSummary = {
 
 const number = (value?: number) => (value == null ? '—' : value.toLocaleString('vi-VN'));
 const dateLabel = (date: string) => date.split('-').reverse().join('/');
-const money = (value?: string) => (typeof value === 'string' ? formatFinanceMoney(value) : '—');
+const money = (value?: string | null) =>
+  typeof value === 'string' ? formatFinanceMoney(value) : '—';
 
 type Finance = {
   data?: FinancialReport;
@@ -66,14 +67,14 @@ export function LocationWorkspaceOverview({
   const roomPath = `/locations/${id}/rooms`;
   const metrics = [
     {
-      label: 'Đã thu (đã xác minh)',
-      value: money(finance?.data?.total.verifiedCollections),
+      label: 'Thực thu kinh doanh',
+      value: money(finance?.data?.total.management?.actualBusinessCollections),
       icon: Wallet,
     },
     {
       label: 'Công nợ hiện tại',
-      value: money(finance?.data?.total.outstandingNow),
-      detail: 'Hóa đơn thuộc kỳ báo cáo',
+      value: money(finance?.data?.total.management?.currentOutstanding),
+      detail: 'Số dư tất cả kỳ tại thời điểm tải',
       icon: Receipt,
     },
     {

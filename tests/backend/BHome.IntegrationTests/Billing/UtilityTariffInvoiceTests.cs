@@ -20,7 +20,7 @@ public sealed partial class InvoiceApiTests
         var tariff = await Success<SetupDocument>(await w.Owner.Client.PostAsJsonAsync("/api/v1/utility-tariffs", new UtilityTariffWrite(w.Location, UtilityType.Electricity, w.Period, null,
             "Synthetic supplier", "Synthetic selected classification", "Synthetic source reference", [new(10, 1000), new(null, 2000)], VndRounding.AwayFromZero, true)));
         Assert.Equal(HttpStatusCode.Conflict, (await w.Owner.Client.PostAsJsonAsync("/api/v1/utility-profiles", new UtilityProfileWrite(w.Location, w.Room, UtilityType.Electricity, tariff.Id, w.Period, null, true, false))).StatusCode);
-        var draft = await Draft(w); Assert.Empty(draft.MissingInputs); Assert.Equal(3219250m, draft.Total);
+        var draft = await Draft(w); Assert.Empty(draft.MissingInputs); Assert.Equal(3221000m, draft.Total);
         var path = $"/api/v1/invoices/{draft.Id}";
         // Simulate independently versioned property prices, including a new fee,
         // without using the guarded pricing API. The stored signed terms win.

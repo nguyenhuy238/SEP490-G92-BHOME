@@ -119,21 +119,31 @@ export class QueryCache {
       Date.now() - entry.state.updatedAt >= entry.policy.staleTime
     );
   }
-  fetch(entry: CachedQuery, force = false): Promise<void> {
+  fetch(entry: CachedQuery, force = false, background = false): Promise<void> {
     if (this.closed || entry.retired || !this.foreground) return Promise.resolve();
-    if (entry.pending) return entry.pending;
+    if (entry.pending) {
+      // An explicit refresh must still show its loading state, even when it
+      // joins an in-flight background check.
+      if (force && !background && !entry.state.fetching)
+        this.publish(entry, { fetching: true, error: null });
+      return entry.pending;
+    }
     if (!force && !this.isStale(entry)) return Promise.resolve();
     const request = new AbortController(),
       version = ++entry.version;
     entry.request = request;
-    this.publish(entry, { fetching: true, error: null });
+    if (!background || !entry.state.hasData) this.publish(entry, { fetching: true, error: null });
     const valid = () =>
       !this.closed && !entry.retired && !request.signal.aborted && entry.version === version;
     const pending = Promise.resolve()
       .then(() => (valid() ? entry.load(request.signal) : undefined))
       .then(
         (data) => {
-          if (valid())
+          if (valid()) {
+            // Subscribers may immediately request newer data in response to
+            // this snapshot. Do not coalesce those reads into a completed one.
+            entry.pending = undefined;
+            entry.request = undefined;
             this.publish(entry, {
               data,
               hasData: true,
@@ -142,9 +152,12 @@ export class QueryCache {
               fetching: false,
               invalidated: false,
             });
+          }
         },
         (error) => {
           if (!valid()) return;
+          entry.pending = undefined;
+          entry.request = undefined;
           const status = error && typeof error === 'object' && 'status' in error ? error.status : 0;
           // Authorization/resource failures must never leave private cached content visible.
           const denied = status === 401 || status === 403 || status === 404;

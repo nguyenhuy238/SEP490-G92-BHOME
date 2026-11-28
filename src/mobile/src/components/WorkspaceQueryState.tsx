@@ -7,14 +7,24 @@ export function QueryState({
   loading,
   error,
   reload,
+  loadingLabel,
 }: {
   loading: boolean;
   error: string;
   reload: () => void;
+  loadingLabel?: string;
 }) {
   return (
     <>
-      {loading && <ActivityIndicator accessibilityLabel="Đang tải dữ liệu" />}
+      {loading &&
+        (loadingLabel ? (
+          <Row>
+            <ActivityIndicator size="small" accessibilityLabel={loadingLabel} />
+            <Text style={ui.muted}>{loadingLabel}</Text>
+          </Row>
+        ) : (
+          <ActivityIndicator accessibilityLabel="Đang tải dữ liệu" />
+        ))}
       {!!error && (
         <Box>
           <Text accessibilityRole="alert" style={ui.red}>

@@ -7,8 +7,12 @@ namespace BHome.Infrastructure.Persistence.Compact24;
 
 public static class Compact24Schema
 {
-    public const string Version = "compact24-2026-11-12-sepay";
+    public const string Version = "compact24-2026-11-26-sepay-modes";
     private static readonly string Script = ReadScript();
+    private static readonly string SettlementSePayCodesScript = ReadScript("BHome.Compact24.SettlementSePayCodes.sql");
+    private static readonly string MainInitialPaymentNoFeesScript = ReadScript("BHome.Compact24.MainInitialPaymentNoFees.sql");
+    private static readonly string SePayPaymentModesScript = ReadScript("BHome.Compact24.SePayPaymentModes.sql");
+    private static readonly string SePayOwnerConnectionsScript = ReadScript("BHome.Compact24.SePayOwnerConnections.sql");
     public static string ScriptSha256 { get; } = Convert.ToHexString(System.Security.Cryptography.SHA256.HashData(System.Text.Encoding.UTF8.GetBytes(Script)));
     private static readonly string[] Tables = Regex.Matches(Script, @"(?m)^CREATE TABLE ([a-z_]+)").Select(m => m.Groups[1].Value).Order(StringComparer.Ordinal).ToArray();
 
@@ -89,8 +93,21 @@ public static class Compact24Schema
             while (await reader.ReadAsync(token)) foreignKeys.Add($"{reader.GetString(0)}({reader.GetString(1)})->{reader.GetString(2)}({reader.GetString(3)})");
         }
         if (!foreignKeys.Order(StringComparer.Ordinal).SequenceEqual(ExpectedForeignKeys(reference).Order(StringComparer.Ordinal))) return false;
+        var functionReference = reference;
+        if (!propertyRefresh && ReferenceEquals(reference, Script))
+        {
+            var applied = (await db.Database.GetAppliedMigrationsAsync(token)).ToHashSet(StringComparer.Ordinal);
+            if (applied.Contains("20261122000100_SettlementSePayCodes"))
+                functionReference += "\n" + SettlementSePayCodesScript;
+            if (applied.Contains("20261126000200_MainInitialPaymentNoFees"))
+                functionReference += "\n" + MainInitialPaymentNoFeesScript;
+            if (applied.Contains("20261126000200_SePayPaymentModes"))
+                functionReference += "\n" + SePayPaymentModesScript;
+            if (applied.Contains("20261126000300_SePayOwnerConnections"))
+                functionReference += "\n" + SePayOwnerConnectionsScript;
+        }
         // Verify the original append-only/invoice/payment/refresh protections, including their bodies.
-        var functions = Regex.Matches(reference, @"CREATE(?: OR REPLACE)? FUNCTION ([a-z0-9_]+)\([^$]+?AS \$fn\$([\s\S]*?)\$fn\$;")
+        var functions = Regex.Matches(functionReference, @"CREATE(?: OR REPLACE)? FUNCTION ([a-z0-9_]+)\([^$]+?AS \$fn\$([\s\S]*?)\$fn\$;")
             .Cast<Match>().Where(f => !propertyRefresh || f.Groups[1].Value != "bhome24_work_order_guard")
             .GroupBy(f => f.Groups[1].Value, StringComparer.Ordinal).Select(g => g.Last()).ToArray();
         var actualFunctions = new Dictionary<string, string>(StringComparer.Ordinal);
@@ -114,7 +131,7 @@ public static class Compact24Schema
             while (await reader.ReadAsync(token)) requiredTriggers.Remove(reader.GetString(0));
         }
         if (requiredTriggers.Count != 0) return false;
-        var requiredIndexes = Regex.Matches(reference, @"(?m)^CREATE (?:UNIQUE )?INDEX ([a-z0-9_]+)").Select(m => m.Groups[1].Value).ToHashSet(StringComparer.Ordinal);
+        var requiredIndexes = Regex.Matches(reference, @"(?m)^CREATE (?:UNIQUE )?INDEX (?:IF NOT EXISTS )?([a-z0-9_]+)").Select(m => m.Groups[1].Value).ToHashSet(StringComparer.Ordinal);
         await using (var query = new NpgsqlCommand("SELECT indexname FROM pg_indexes WHERE schemaname='public'", connection, transaction))
         {
             await using var reader = await query.ExecuteReaderAsync(token);

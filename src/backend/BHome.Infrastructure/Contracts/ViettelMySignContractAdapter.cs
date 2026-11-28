@@ -65,10 +65,13 @@ internal sealed class ViettelMySignContractAdapter(BHomePersistenceContext db, I
     private async Task<VisibleSignature?> VisibleAsync(ContractDocument document, byte[] source, X509Certificate2 signer,
         DateTimeOffset now, SigningAppearance appearance, CancellationToken t)
     {
-        var placement = appearance.Placement ?? ContractSignatureSlots.Read(source, document.OwnerSignerId == user.UserId);
+        var owner = document.OwnerSignerId == user.UserId;
+        var placement = appearance.Placement ?? ContractSignatureSlots.Read(source, owner);
         if (placement is null) return null;
         var text = $"Ký bởi: {CommonName(signer.Subject)}\nNgày ký: {now.ToOffset(VietnamOffset):dd/MM/yyyy HH:mm:ss}";
         var picture = appearance.UsePicture && pictures is not null && user.UserId is { } id ? await pictures.FindAsync(id, t) : null;
+        ContractSignatureSlots.RequireSeparatePartyBoxes(source, placement, owner,
+            picture is null ? null : (double)picture.Height / picture.Width);
         return new VisibleSignature(placement.Page, placement.X, placement.Y, placement.Width, text, picture?.Content, CaptionUnderImage: true);
     }
 

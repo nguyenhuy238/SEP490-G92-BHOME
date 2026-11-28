@@ -18,9 +18,9 @@ public sealed record LessorProfile(string FullName, DateOnly DateOfBirth, string
     DateOnly DateOfIssue, string PlaceOfIssue, string Address, string Phone)
 { public override string ToString() => "Lessor profile (redacted)"; }
 public sealed record MainContractSettingsInput(Guid OwnerSignerId, DateOnly EffectiveFrom, DateOnly? EffectiveTo,
-    [property: System.Text.Json.Serialization.JsonNumberHandling(System.Text.Json.Serialization.JsonNumberHandling.AllowReadingFromString | System.Text.Json.Serialization.JsonNumberHandling.WriteAsString)] decimal SecurityDeposit, string PaymentTerms, string AdditionalTerms, LessorProfile Owner, int ExpectedVersion);
+    string PaymentTerms, string AdditionalTerms, LessorProfile Owner, int ExpectedVersion);
 public sealed record MainContractSettings(Guid OwnerSignerId, DateOnly EffectiveFrom, DateOnly? EffectiveTo,
-    [property: System.Text.Json.Serialization.JsonNumberHandling(System.Text.Json.Serialization.JsonNumberHandling.AllowReadingFromString | System.Text.Json.Serialization.JsonNumberHandling.WriteAsString)] decimal SecurityDeposit, string PaymentTerms, string AdditionalTerms, LessorProfile Owner, int Version);
+    string PaymentTerms, string AdditionalTerms, LessorProfile Owner, int Version);
 public sealed record DraftTenantSummary(Guid Id, string FullName, string MaskedCitizenNumber, DateOnly? DateOfIssue, bool Representative, string? Phone = null, string? Email = null,
     DateOnly? DateOfBirth = null, string? Relationship = null);
 public sealed record MainDraftPreparation(Guid RoomId, Guid LocationId, string LocationName, string RoomNumber,
@@ -32,14 +32,16 @@ public sealed record MainDraftState(MainDraftInput Input, IReadOnlyList<PolicyDt
 public sealed record MainDraftView(Guid Id, string Status, int Version, MainDraftInput Input, MainDraftPreparation Preparation);
 public sealed record MainDraftFiles(ContractDocumentView Docx, ContractDocumentView? Pdf, string? PreviewError);
 public sealed record MainDraftReleaseInput(Guid? TenantUserId, int ExpectedVersion, Guid ReviewedFileId,
-    [property: System.Text.Json.Serialization.JsonRequired] bool HumanReviewed);
+    [property: System.Text.Json.Serialization.JsonRequired] bool HumanReviewed, bool EmailSigning = false);
 public sealed record MainDraftRenderData(Contract Contract, MainDraftState State, MainContractSettings Settings,
     IdentityConfirmation Tenant, string LocationName, string RoomNumber, string Address, string[]? Occupants = null, bool SigningReview = false);
 public interface IMainDraftData
 {
-    Task<MainContractSettings?> SettingsAsync(Guid locationId, DateOnly on, CancellationToken t);
+    Task<MainContractSettings?> SettingsAsync(Guid ownerId, DateOnly on, CancellationToken t);
     Task<MainContractSettings?> OwnerSettingsAsync(Guid locationId, CancellationToken t);
+    Task<MainContractSettings?> OwnerWideSettingsAsync(Guid ownerId, CancellationToken t);
     Task SetSettingsAsync(Guid locationId, MainContractSettingsInput input, Guid actor, CancellationToken t);
+    Task SetOwnerSettingsAsync(Guid ownerId, MainContractSettingsInput input, Guid actor, CancellationToken t);
     Task<IdentityConfirmation> IdentityAsync(Guid roomId, Guid residentId, CancellationToken t);
     Task<string?> PhoneAsync(Guid roomId, Guid residentId, CancellationToken t);
     Task<HouseholdMemberInput?> HouseholdMemberAsync(Guid roomId, Guid residentId, CancellationToken t) => Task.FromResult<HouseholdMemberInput?>(null);
@@ -49,12 +51,15 @@ public interface IMainDraftData
     MainDraftState Unprotect(Contract contract);
     Task<ContractDocumentFile?> FileAsync(Guid contractId, Guid fileId, CancellationToken t);
     Task<IReadOnlyList<ContractDocumentFile>> FilesAsync(Guid contractId, string hash, CancellationToken t);
-    Task LockConfigurationAsync(Guid locationId, CancellationToken t);
+    Task LockConfigurationAsync(Guid ownerId, CancellationToken t);
 }
 public interface IMainDraftRenderer
 {
     string TemplateHash { get; }
     bool SigningReviewAvailable => false;
+    bool CanUseSigningReview(Contract contract) => SigningReviewAvailable;
+    bool IsProductionSigningTemplate(Contract contract) => false;
+    int DocumentVersion => 1;
     Task<byte[]> DocxAsync(MainDraftRenderData data, CancellationToken t);
     Task<byte[]> PdfAsync(byte[] docx, CancellationToken t);
 }

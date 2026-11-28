@@ -1,3 +1,4 @@
+using BHome.Application.Common;
 using System.ComponentModel.DataAnnotations;
 using BHome.Application.IdentityAccess;
 using BHome.Application.Locations;
@@ -50,9 +51,7 @@ public sealed class LocationsController(ICurrentUser currentUser, ILocationAssig
 
     private Guid UserId => currentUser.UserId ?? throw new InvalidOperationException("Authenticated user is unavailable.");
 
-    private DateOnly VietnamToday() => DateOnly.FromDateTime(
-        TimeZoneInfo.ConvertTime(clock.GetUtcNow(),
-            TimeZoneInfo.FindSystemTimeZoneById("Asia/Ho_Chi_Minh")).DateTime);
+    private DateOnly VietnamToday() => clock.BusinessToday();
 }
 
 [ApiController]
@@ -66,11 +65,11 @@ public sealed class StaffLocationAssignmentsController(ICurrentUser currentUser,
         CancellationToken cancellationToken)
     {
         if (request.LocationId == Guid.Empty)
-            ModelState.AddModelError("locationId", "Location ID is required.");
+            ModelState.AddModelError("locationId", "Vui lòng chọn cơ sở.");
         if (request.StaffUserId == Guid.Empty)
-            ModelState.AddModelError("staffUserId", "Staff user ID is required.");
+            ModelState.AddModelError("staffUserId", "Vui lòng chọn nhân viên.");
         if (request.StartDate > request.EndDate)
-            ModelState.AddModelError("endDate", "End date must be on or after start date.");
+            ModelState.AddModelError("endDate", "Ngày kết thúc không được trước ngày bắt đầu.");
         if (!ModelState.IsValid) return ValidationProblem(ModelState);
         var result = await locations.CreateAssignmentAsync(UserId, request.LocationId, request.StaffUserId,
             request.StartDate, request.EndDate, cancellationToken);
@@ -81,11 +80,11 @@ public sealed class StaffLocationAssignmentsController(ICurrentUser currentUser,
             CreateAssignmentStatus.InvalidDateRange => ValidationProblem(),
             CreateAssignmentStatus.LocationNotFound => NotFound(),
             CreateAssignmentStatus.StaffUnavailable => Problem(statusCode: 400,
-                title: "Staff is unavailable."),
+                title: "Nhân viên không còn đủ điều kiện phân công. Kiểm tra trạng thái tài khoản và thời gian làm việc."),
             CreateAssignmentStatus.DateRangeOverlaps => Conflict(new ProblemDetails
             {
                 Status = StatusCodes.Status409Conflict,
-                Title = "The Location already has a Staff assignment during this date range."
+                Title = "Cơ sở đã có phân công trong khoảng thời gian này. Kiểm tra lịch phân công trước khi lưu."
             }),
             _ => throw new InvalidOperationException("Unsupported assignment result.")
         };
@@ -98,7 +97,7 @@ public sealed class StaffLocationAssignmentsController(ICurrentUser currentUser,
     {
         if (locationId == Guid.Empty)
         {
-            ModelState.AddModelError("locationId", "Location ID is required.");
+            ModelState.AddModelError("locationId", "Vui lòng chọn cơ sở.");
             return ValidationProblem(ModelState);
         }
         var assignments = await locations.ListAssignmentsAsync(locationId, cancellationToken);
@@ -112,7 +111,7 @@ public sealed class StaffLocationAssignmentsController(ICurrentUser currentUser,
     {
         if (staffUserId == Guid.Empty)
         {
-            ModelState.AddModelError("staffUserId", "Staff user ID is required.");
+            ModelState.AddModelError("staffUserId", "Vui lòng chọn nhân viên.");
             return ValidationProblem(ModelState);
         }
         return Ok(await locations.ListStaffAssignmentsAsync(staffUserId, cancellationToken));
@@ -142,11 +141,11 @@ public sealed class StaffLocationAssignmentsController(ICurrentUser currentUser,
         result.Status switch
         {
             UpdateAssignmentPeriodStatus.Changed => Ok(result),
-            UpdateAssignmentPeriodStatus.Invalid => Problem(statusCode: 400, title: "Invalid assignment period."),
+            UpdateAssignmentPeriodStatus.Invalid => Problem(statusCode: 400, title: "Khoảng thời gian phân công không hợp lệ. Kiểm tra ngày bắt đầu và ngày kết thúc."),
             UpdateAssignmentPeriodStatus.AssignmentNotFound => NotFound(),
-            UpdateAssignmentPeriodStatus.StaleVersion => Conflict(new ProblemDetails { Status = 409, Title = "Location version is stale." }),
-            UpdateAssignmentPeriodStatus.DateRangeOverlaps => Conflict(new ProblemDetails { Status = 409, Title = "The Location already has a Staff assignment during this date range." }),
-            UpdateAssignmentPeriodStatus.StaffUnavailable => Problem(statusCode: 400, title: "Staff is unavailable."),
+            UpdateAssignmentPeriodStatus.StaleVersion => Conflict(new ProblemDetails { Status = 409, Title = "Dữ liệu cơ sở đã thay đổi. Tải lại trước khi phân công." }),
+            UpdateAssignmentPeriodStatus.DateRangeOverlaps => Conflict(new ProblemDetails { Status = 409, Title = "Cơ sở đã có phân công trong khoảng thời gian này. Kiểm tra lịch phân công trước khi lưu." }),
+            UpdateAssignmentPeriodStatus.StaffUnavailable => Problem(statusCode: 400, title: "Nhân viên không còn đủ điều kiện phân công. Kiểm tra trạng thái tài khoản và thời gian làm việc."),
             _ => throw new InvalidOperationException("Unsupported assignment period result.")
         };
 
@@ -159,11 +158,11 @@ public sealed class StaffLocationAssignmentsController(ICurrentUser currentUser,
     private ActionResult<ChangeAssignmentResult> Result(ChangeAssignmentResult result) => result.Status switch
     {
         ChangeAssignmentStatus.Changed => Ok(result),
-        ChangeAssignmentStatus.Invalid => Problem(statusCode: 400, title: "Invalid assignment change."),
+        ChangeAssignmentStatus.Invalid => Problem(statusCode: 400, title: "Thông tin thay đổi phân công chưa hợp lệ. Kiểm tra nhân viên, thời gian và lý do."),
         ChangeAssignmentStatus.LocationNotFound => NotFound(),
-        ChangeAssignmentStatus.StaffUnavailable => Problem(statusCode: 400, title: "Staff is unavailable."),
-        ChangeAssignmentStatus.StaleVersion => Conflict(new ProblemDetails { Status = 409, Title = "Location version is stale." }),
-        ChangeAssignmentStatus.NoCurrentAssignment => Conflict(new ProblemDetails { Status = 409, Title = "Location has no current Staff assignment." }),
+        ChangeAssignmentStatus.StaffUnavailable => Problem(statusCode: 400, title: "Nhân viên không còn đủ điều kiện phân công. Kiểm tra trạng thái tài khoản và thời gian làm việc."),
+        ChangeAssignmentStatus.StaleVersion => Conflict(new ProblemDetails { Status = 409, Title = "Dữ liệu cơ sở đã thay đổi. Tải lại trước khi phân công." }),
+        ChangeAssignmentStatus.NoCurrentAssignment => Conflict(new ProblemDetails { Status = 409, Title = "Cơ sở chưa có phân công hiện tại. Tải lại và tạo phân công trước." }),
         _ => throw new InvalidOperationException("Unsupported assignment change result.")
     };
 

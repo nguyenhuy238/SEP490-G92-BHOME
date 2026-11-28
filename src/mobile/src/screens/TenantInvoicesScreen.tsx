@@ -1,20 +1,19 @@
-import React, { useCallback, useRef, useState } from 'react';
+import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { View } from 'react-native';
 import { router, useFocusEffect, useLocalSearchParams } from 'expo-router';
-import { Button, Icon, IconButton, Text, TouchableRipple } from 'react-native-paper';
-import {
-  displayContractDate,
-  formatContractMoney,
-} from '../../../../packages/client-core/src/contracts';
+import { Icon, IconButton, Text, TouchableRipple } from 'react-native-paper';
+import { businessToday, formatContractMoney } from '../../../../packages/client-core/src/contracts';
 import type { Invoice, Page } from '../../../../packages/client-core/src/invoices';
 import { Box, Heading, Pill, ui } from '../components/WorkspaceKit';
-import { TenantBillingTabs } from '../components/TenantBillingTabs';
 import { colors } from '../theme/theme';
 import { tenantPaymentLabel } from '../features/tenant/paymentPresentation';
 import { InvoiceFeedback, InvoicePager, invoiceUi } from '../components/InvoiceDetailUi';
 import { useWorkspaceHeaderRefresh } from '../components/WorkspaceHeaderContext';
 import {
   loadInvoiceList,
+  loadTenantInvoicePeriod,
+  tenantInvoiceScheduleMessage,
+  type TenantInvoicePeriod,
   loadTenantInvoice,
   loadInvoicePaymentStates,
 } from '../services/tenantInvoices';
@@ -22,15 +21,28 @@ import { TenantInvoiceSummary, TenantInvoiceCharges } from './TenantInvoiceCharg
 import { useWorkspaceQuery } from '../features/workspace/useWorkspaceQuery';
 import { useSession } from '../lib/SessionProvider';
 import { useWorkspace } from '../features/workspace/WorkspaceProvider';
-import { TenantPaymentPanel, TenantPaymentDetails } from './TenantPaymentPanel';
+import { TenantPaymentPanel, TenantPaymentDetails, TenantPaymentModal } from './TenantPaymentPanel';
 import { useTenantInvoicePayment } from '../features/tenant/useTenantInvoicePayment';
 import { TenantAdjustmentPanel } from './TenantAdjustmentPanel';
-import { TenantSettlementReceivables } from './TenantSettlementReceivables';
+import { TenantSettlementReceivableDetail } from './TenantSettlementReceivableDetail';
 import { paymentText, type DebtInvoice } from '../../../../packages/client-core/src/payments';
 
 export function TenantInvoicesScreen({ intent }: { intent?: 'adjustment' } = {}) {
   const { session } = useSession();
-  const { invoiceId } = useLocalSearchParams<{ invoiceId?: string }>();
+  const { invoiceId, view, settlementContractId, settlementChargeId } = useLocalSearchParams<{
+    invoiceId?: string;
+    view?: string;
+    settlementContractId?: string;
+    settlementChargeId?: string;
+  }>();
+  if (view === 'settlement')
+    return (
+      <TenantSettlementReceivableDetail
+        key={`${session?.userId}:${settlementContractId ?? ''}:${settlementChargeId ?? ''}`}
+        contractId={settlementContractId ?? ''}
+        chargeId={settlementChargeId ?? ''}
+      />
+    );
   // Remount account-specific selection when the principal changes.
   return <TenantInvoiceList key={`${session?.userId}:${invoiceId ?? ''}`} intent={intent} />;
 }
@@ -47,10 +59,18 @@ function TenantInvoiceList({ intent }: { intent?: 'adjustment' }) {
   const { go } = useWorkspace();
   const { session } = useSession();
   const allowed = session?.roles.includes('Tenant');
-  const [page, setPage] = useState(1),
-    [selected, setSelected] = useState(invoiceId ?? ''),
-    [statusFilter, setStatusFilter] = useState<'all' | 'unpaid' | 'paid'>('all');
+  const businessDate = businessToday();
+  const previousBusinessDate = useRef(businessDate);
+
+  const [page, setPage] = useState(1);
+  const [selected, setSelected] = useState(invoiceId ?? '');
+  const [paymentModal, setPaymentModal] = useState(false);
   const visited = useRef(false);
+  // The server owns the business date (including Demo Clock) and configured calendar.
+  const period = useWorkspaceQuery<TenantInvoicePeriod>(
+    allowed && !selected ? '/api/v1/invoices/current-period' : null,
+    { load: loadTenantInvoicePeriod, notifyError: false },
+  );
   const list = useWorkspaceQuery<Page<Invoice>>(
     allowed && !selected ? `/api/v1/invoices?page=${page}&pageSize=20` : null,
     { load: loadInvoiceList, notifyError: false },
@@ -62,16 +82,19 @@ function TenantInvoiceList({ intent }: { intent?: 'adjustment' }) {
   const paymentView = view === 'payment';
   const adjustmentView = purpose === 'adjustment';
   const payment = useTenantInvoicePayment(
-    allowed && selected && detail.data?.status === 'Final' && !paymentView && !adjustmentView
-      ? selected
-      : null,
+    allowed && selected && detail.data?.status === 'Final' && !paymentView ? selected : null,
   );
-  const finalIds =
-    (!selected ? list.data?.items : undefined)
-      ?.filter((i) => i.status === 'Final')
-      .map((i) => 'invoiceIds=' + encodeURIComponent(i.id)) ?? [];
+  const canSubmitAdjustment =
+    detail.data?.status === 'Draft' || (!payment.error && payment.data?.paymentStatus === 'Unpaid');
+  const finalIds = !selected
+    ? [
+        ...new Set((list.data?.items ?? []).filter((i) => i.status === 'Final').map((i) => i.id)),
+      ].map((id) => 'invoiceIds=' + encodeURIComponent(id))
+    : [];
   const states = useWorkspaceQuery<Page<DebtInvoice>>(
-    finalIds.length ? '/api/v1/payment-invoices?pageSize=100&' + finalIds.join('&') : null,
+    allowed && finalIds.length
+      ? '/api/v1/payment-invoices?pageSize=100&' + finalIds.join('&')
+      : null,
     { load: loadInvoicePaymentStates, notifyError: false },
   );
   const backToList = useCallback(() => {
@@ -90,11 +113,18 @@ function TenantInvoiceList({ intent }: { intent?: 'adjustment' }) {
     } else setSelected('');
   }, [paymentView, adjustmentView, selected, returnTo, historyTab, invoiceId, go]);
   const reloadList = list.reload,
+    reloadMonth = period.reload,
     reloadStates = states.reload;
   const refreshList = useCallback(() => {
     reloadList();
+    reloadMonth();
     reloadStates();
-  }, [reloadList, reloadStates]);
+  }, [reloadList, reloadMonth, reloadStates]);
+  useEffect(() => {
+    if (previousBusinessDate.current === businessDate) return;
+    previousBusinessDate.current = businessDate;
+    if (allowed && !selected) refreshList();
+  }, [allowed, businessDate, refreshList, selected]);
   const reloadDetail = detail.reload,
     reloadPayment = payment.reload;
   const refreshDetail = useCallback(() => {
@@ -108,16 +138,20 @@ function TenantInvoiceList({ intent }: { intent?: 'adjustment' }) {
       visited.current = true;
     }, [refresh]),
   );
-  const header = useWorkspaceHeaderRefresh(refresh, selected ? detail.loading : list.loading, {
-    title: selected
-      ? paymentView
-        ? 'Thanh toán hóa đơn'
-        : adjustmentView
-          ? 'Điều chỉnh hóa đơn'
-          : 'Chi tiết hóa đơn'
-      : 'Hóa đơn & thanh toán',
-    onBack: selected ? backToList : undefined,
-  });
+  const header = useWorkspaceHeaderRefresh(
+    refresh,
+    selected ? detail.loading : period.loading || list.loading,
+    {
+      title: selected
+        ? paymentView
+          ? 'Thanh toán hóa đơn'
+          : adjustmentView
+            ? 'Điều chỉnh hóa đơn'
+            : 'Chi tiết hóa đơn'
+        : 'Hóa đơn & thanh toán',
+      onBack: selected ? backToList : undefined,
+    },
+  );
   if (!allowed)
     return (
       <Box>
@@ -167,13 +201,13 @@ function TenantInvoiceList({ intent }: { intent?: 'adjustment' }) {
             ) : adjustmentView ? (
               <View style={invoiceUi.card}>
                 <Text style={invoiceUi.secondary}>
-                  Phòng {detail.data.roomNumber} · Kỳ{' '}
-                  {detail.data.billingPeriod.slice(0, 7).split('-').reverse().join('/')}
+                  Kỳ {detail.data.billingPeriod.slice(0, 7).split('-').reverse().join('/')}
                 </Text>
                 <TenantAdjustmentPanel
                   key={detail.data.id + ':' + detail.data.version}
                   invoice={detail.data}
                   initialOpen={newRequest === 'true'}
+                  canSubmit={canSubmitAdjustment}
                 />
               </View>
             ) : (
@@ -181,7 +215,7 @@ function TenantInvoiceList({ intent }: { intent?: 'adjustment' }) {
                 <TenantInvoiceSummary
                   invoice={detail.data}
                   payment={payment.error ? null : payment.data}
-                  onPay={() => go('invoice', { invoiceId: detail.data!.id, view: 'payment' })}
+                  onPay={() => setPaymentModal(true)}
                 />
                 {detail.data.status === 'Final' && <InvoiceFeedback {...payment} />}
                 <TenantInvoiceCharges invoice={detail.data} />
@@ -192,7 +226,15 @@ function TenantInvoiceList({ intent }: { intent?: 'adjustment' }) {
                   key={detail.data.id + ':' + detail.data.version}
                   invoice={detail.data}
                   compact
+                  canSubmit={canSubmitAdjustment}
                 />
+                {paymentModal && (
+                  <TenantPaymentModal
+                    key={'payment-modal:' + detail.data.id}
+                    invoiceId={detail.data.id}
+                    onClose={() => setPaymentModal(false)}
+                  />
+                )}
               </>
             )}
           </View>
@@ -203,25 +245,10 @@ function TenantInvoiceList({ intent }: { intent?: 'adjustment' }) {
   const paymentByInvoiceId = new Map(
     (states.data?.items ?? []).map((item) => [item.invoiceId, item]),
   );
-  const filteredItems = items.filter((invoice) => {
-    if (statusFilter === 'all') return true;
-    const payment = paymentByInvoiceId.get(invoice.id);
-    const isPaid = invoice.status === 'Final' && payment?.paymentStatus === 'Paid';
-    return statusFilter === 'paid' ? isPaid : !isPaid;
-  });
-  const canSummarizeUnpaid =
-    !!list.data &&
-    list.data.items.length > 1 &&
-    list.data.totalCount <= list.data.pageSize &&
-    !states.error &&
-    (finalIds.length === 0 || !!states.data);
-  const unpaidFinalItems = canSummarizeUnpaid
-    ? (states.data?.items ?? []).filter((item) => item.paymentStatus !== 'Paid')
-    : [];
-  const totalOutstanding = unpaidFinalItems.reduce(
-    (sum, item) => sum + BigInt(item.outstandingAmount),
-    0n,
-  );
+  const hasCurrentInvoice =
+    period.data?.hasInvoice ||
+    items.some((item) => item.billingPeriod === period.data?.billingPeriod);
+
   return (
     <>
       {!header && (
@@ -233,43 +260,6 @@ function TenantInvoiceList({ intent }: { intent?: 'adjustment' }) {
             disabled={list.loading}
             onPress={refreshList}
           />
-        </View>
-      )}
-      <TenantBillingTabs active="invoices" />
-      {purpose !== 'adjustment' && <TenantSettlementReceivables />}
-      <Text style={invoiceUi.secondary}>
-        Theo dõi hóa đơn và thanh toán · Hóa đơn chung của phòng trong những kỳ bạn đã ở.
-      </Text>
-      {canSummarizeUnpaid && unpaidFinalItems.length > 0 && (
-        <Box>
-          <Text style={invoiceUi.title}>
-            {unpaidFinalItems.length} hóa đơn cần thanh toán ·{' '}
-            {formatContractMoney(String(totalOutstanding))}
-          </Text>
-        </Box>
-      )}
-      {items.length > 1 && !states.error && (
-        <View style={invoiceUi.tabBar}>
-          {(
-            [
-              ['all', 'Tất cả'],
-              ['unpaid', 'Chưa thanh toán'],
-              ['paid', 'Đã thanh toán'],
-            ] as const
-          ).map(([key, label]) => (
-            <Button
-              key={key}
-              compact
-              mode={statusFilter === key ? 'contained-tonal' : 'outlined'}
-              style={invoiceUi.tab}
-              accessibilityRole="tab"
-              accessibilityLabel={`Lọc hóa đơn: ${label}`}
-              accessibilityState={{ selected: statusFilter === key }}
-              onPress={() => setStatusFilter(key)}
-            >
-              {label}
-            </Button>
-          ))}
         </View>
       )}
       {purpose === 'adjustment' && (
@@ -287,34 +277,37 @@ function TenantInvoiceList({ intent }: { intent?: 'adjustment' }) {
           </Text>
         </Box>
       )}
-      <InvoiceFeedback {...list} reload={refreshList} />
-      {!!states.error && <InvoiceFeedback {...states} />}
-      {list.data?.items.length === 0 && (
+      <InvoiceFeedback {...period} reload={refreshList} />
+      {period.data && !hasCurrentInvoice && (
         <Box>
-          <Text>Bạn chưa có hóa đơn.</Text>
+          <Heading title="Chưa có hóa đơn kỳ này" />
+          <Text style={invoiceUi.secondary}>{tenantInvoiceScheduleMessage(period.data)}</Text>
         </Box>
       )}
-      {items.length > 0 && filteredItems.length === 0 && (
-        <Box>
-          <Text>Không có hóa đơn phù hợp với bộ lọc đã chọn.</Text>
-        </Box>
-      )}
-      {filteredItems.map((invoice) => (
-        <InvoiceSummaryCard
-          key={invoice.id}
-          invoice={invoice}
-          payment={paymentByInvoiceId.get(invoice.id)}
-          open={() => go('invoice', { invoiceId: invoice.id })}
-        />
-      ))}
-      {list.data && (
-        <InvoicePager
-          page={page}
-          total={list.data.totalCount}
-          loading={list.loading}
-          onChange={setPage}
-        />
-      )}
+      <View style={invoiceUi.card}>
+        <Heading title="Danh sách hóa đơn" />
+        <InvoiceFeedback {...list} />
+        {!!states.error && <InvoiceFeedback {...states} />}
+        {list.data && items.length === 0 && (
+          <Text style={invoiceUi.secondary}>Chưa có hóa đơn.</Text>
+        )}
+        {items.map((invoice) => (
+          <InvoiceSummaryCard
+            key={invoice.id}
+            invoice={invoice}
+            payment={paymentByInvoiceId.get(invoice.id)}
+            open={() => go('invoice', { invoiceId: invoice.id })}
+          />
+        ))}
+        {list.data && (
+          <InvoicePager
+            page={page}
+            total={list.data.totalCount}
+            loading={list.loading}
+            onChange={setPage}
+          />
+        )}
+      </View>
     </>
   );
 }
@@ -334,8 +327,7 @@ function InvoiceSummaryCard({
         ? payment.paidAmount === null
           ? paymentText(payment.paymentStatus)
           : tenantPaymentLabel({ ...payment, paidAmount: payment.paidAmount })
-        : 'Đã phát hành';
-  const overdue = payment && payment.paymentStatus !== 'Paid' && payment.overdueDays > 0;
+        : 'Chưa xác định thanh toán';
   return (
     <TouchableRipple
       style={invoiceUi.listCard}
@@ -343,42 +335,21 @@ function InvoiceSummaryCard({
       accessibilityLabel={`Xem hóa đơn phòng ${invoice.roomNumber}, kỳ ${invoice.billingPeriod.slice(0, 7)}`}
       onPress={open}
     >
-      <View style={invoiceUi.listContent}>
-        <View style={invoiceUi.row}>
+      <View style={[invoiceUi.listContent, { flexDirection: 'row', alignItems: 'center', gap: 8 }]}>
+        <View style={{ flex: 1, minWidth: 0, gap: 6 }}>
           <Text style={invoiceUi.cardTitle}>
-            Kỳ {invoice.billingPeriod.slice(0, 7).split('-').reverse().join('/')}
+            Hóa đơn tháng {invoice.billingPeriod.slice(0, 7).split('-').reverse().join('/')}
           </Text>
-          <Pill tone={overdue ? 'red' : payment?.paymentStatus === 'Paid' ? 'green' : 'blue'}>
-            {overdue ? 'Quá hạn' : label}
+          <Pill
+            tone={
+              invoice.status === 'Final' && payment?.paymentStatus === 'Paid' ? 'green' : 'neutral'
+            }
+          >
+            {label}
           </Pill>
         </View>
-        <Text style={invoiceUi.secondary}>
-          Phòng {invoice.roomNumber} · {invoice.locationName}
-        </Text>
-        <View style={invoiceUi.row}>
-          <View style={ui.grow}>
-            <Text style={invoiceUi.secondary}>
-              {payment ? 'Còn phải thanh toán' : 'Tổng hóa đơn'}
-            </Text>
-            <Text style={invoiceUi.listAmount}>
-              {formatContractMoney(payment?.outstandingAmount ?? invoice.total)}
-            </Text>
-            {payment && payment.outstandingAmount !== invoice.total && (
-              <Text style={invoiceUi.secondary}>
-                Tổng hóa đơn: {formatContractMoney(invoice.total)}
-              </Text>
-            )}
-          </View>
-          <Icon source="chevron-right" size={20} color={colors.muted} />
-        </View>
-        {!!invoice.dueDate && (
-          <Text style={invoiceUi.secondary}>
-            Hạn thanh toán: {displayContractDate(invoice.dueDate)}
-          </Text>
-        )}
-        {!!invoice.missingInputs.length && (
-          <Text style={invoiceUi.secondary}>Chưa đủ dữ liệu tính tiền chính thức.</Text>
-        )}
+        <Text style={invoiceUi.chargeAmount}>{formatContractMoney(invoice.total)}</Text>
+        <Icon source="chevron-right" size={18} color={colors.muted} />
       </View>
     </TouchableRipple>
   );

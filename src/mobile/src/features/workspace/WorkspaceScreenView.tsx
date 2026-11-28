@@ -13,7 +13,10 @@ import { Redirect } from 'expo-router';
 import { TenantInvoicesScreen } from '../../screens/TenantInvoicesScreen';
 import { NotificationsScreen } from '../../screens/NotificationsScreen';
 import { TenantPaymentHistoryScreen } from '../../screens/TenantPaymentHistoryScreen';
-import { TenantRefundRequestsScreen } from '../../screens/TenantRefundRequestsScreen';
+import {
+  TenantRefundRequestsScreen,
+  TenantRefundHistoryScreen,
+} from '../../screens/TenantRefundRequestsScreen';
 import { TenantFeaturesScreen } from '../../screens/TenantFeaturesScreen';
 import { Text } from 'react-native-paper';
 import { Action, Box, Heading } from '../../components/WorkspaceKit';
@@ -30,10 +33,14 @@ import { OwnerWebNotice } from '../../components/OwnerWebNotice';
 import { OwnerHome, ApprovalCenter, Operations } from '../../screens/OwnerScreens';
 import { OwnerOverviewScreen } from '../../screens/OwnerOverviewScreen';
 import { OwnerResidenceScreen } from '../../screens/OwnerResidenceScreen';
+import { StaffResidenceScreen } from '../../screens/StaffResidenceScreen';
 import { StaffHome, WorkOrders, MeterReading } from '../../screens/StaffScreens';
 import { StaffNotificationScreen } from '../../screens/StaffNotificationScreen';
 import { StaffScheduleScreen } from '../../screens/StaffScheduleScreen';
 import { StaffMoveInInventoryScreen } from '../../screens/StaffMoveInInventoryScreen';
+import { StaffMoveOutInspectionScreen } from '../../screens/StaffMoveOutInspectionScreen';
+import { StaffHandoverArchiveScreen } from '../../screens/StaffHandoverArchiveScreen';
+import { StaffHandoverListScreen } from '../../screens/StaffTaskListScreen';
 import {
   StaffIncidentReportScreen,
   StaffMaintenanceScreen,
@@ -116,12 +123,17 @@ const screens = {
   'owner-maintenance': MaintenanceListScreen,
   'owner-emergencies': EmergencyIncidents,
   'tenant-room': TenantRoomScreen,
+  'tenant-handovers': () => <ContractScreen tenantHandoverOnly />,
   'tenant-features': TenantFeaturesScreen,
   'tenant-requests': TenantRequestsScreen,
   'refund-requests': TenantRefundRequestsScreen,
+  'refund-history': TenantRefundHistoryScreen,
+  'incident-history': () => <IncidentListScreen sentOnly />,
   'tenant-meters': TenantMeterHistoryScreen,
   'staff-assets': StaffAssets,
   'staff-maintenance': StaffMaintenanceScreen,
+  'staff-handover-archive': StaffHandoverArchiveScreen,
+  'staff-handovers': StaffHandoverListScreen,
   'staff-emergencies': StaffEmergencyScreen,
   'staff-invoices': StaffInvoices,
   onboarding: OnboardingScreen,
@@ -164,7 +176,15 @@ const screens = {
   security: SecuritySettings,
   preferences: () => <UnavailableWorkspaceScreen screen="preferences" />,
 };
-export function WorkspaceScreenView({ screen }: { screen: string }) {
+export function WorkspaceScreenView({
+  screen,
+  meterLocationId,
+  meterBillingPeriod,
+}: {
+  screen: string;
+  meterLocationId?: string;
+  meterBillingPeriod?: string;
+}) {
   const { role, preview, go, staffLocationId } = useWorkspace();
   const { session } = useSession();
   if (!role) return <Redirect href="/" />;
@@ -216,7 +236,6 @@ export function WorkspaceScreenView({ screen }: { screen: string }) {
         'contract',
         'contract-request',
         'prepare-contract',
-        'move-out',
         'move-in',
         'checklist',
       ].includes(screen)
@@ -234,9 +253,10 @@ export function WorkspaceScreenView({ screen }: { screen: string }) {
           content = <TenantIncidentScreen />;
           break;
         case 'residence':
-          content = <TenantResidenceScreen />;
+          content = role === 'Staff' ? <StaffResidenceScreen /> : <TenantResidenceScreen />;
           break;
         case 'tenant-room':
+        case 'tenant-handovers':
         case 'tenant-features':
         case 'tenant-requests':
         case 'tenant-meters':
@@ -247,6 +267,10 @@ export function WorkspaceScreenView({ screen }: { screen: string }) {
           break;
         case 'refund-requests':
           content = <TenantRefundRequestsScreen />;
+          break;
+        case 'refund-history':
+        case 'incident-history':
+          content = <Screen />;
           break;
         case 'owner-home':
           content = <OwnerOverviewScreen />;
@@ -270,7 +294,15 @@ export function WorkspaceScreenView({ screen }: { screen: string }) {
           content = <OperationalTaskDetail />;
           break;
         case 'meter-reading':
-          content = <MeterTasksScreen />;
+          content = (
+            <MeterTasksScreen
+              initialLocationId={meterLocationId}
+              initialBillingPeriod={meterBillingPeriod}
+            />
+          );
+          break;
+        case 'move-out':
+          content = <StaffMoveOutInspectionScreen />;
           break;
         case 'notifications':
           content = <NotificationsScreen />;
@@ -308,6 +340,8 @@ export function WorkspaceScreenView({ screen }: { screen: string }) {
         case 'report-incident':
         case 'move-in-inventory':
         case 'staff-maintenance':
+        case 'staff-handover-archive':
+        case 'staff-handovers':
         case 'staff-emergencies':
         case 'rooms':
         case 'send-notification':
@@ -319,7 +353,7 @@ export function WorkspaceScreenView({ screen }: { screen: string }) {
     return (
       <WorkspaceShell screen={screen}>
         <React.Fragment
-          key={`${session?.userId}:${role}:${screen}:${role === 'Staff' ? staffLocationId : ''}`}
+          key={`${session?.userId}:${role}:${screen}:${role === 'Staff' && screen !== 'staff-handovers' ? staffLocationId : ''}`}
         >
           {content}
         </React.Fragment>

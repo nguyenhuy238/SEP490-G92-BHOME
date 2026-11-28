@@ -1,4 +1,5 @@
-import { conciseMessage } from '../../lib/toast';
+import { UserFeedbackError } from '../../../../../packages/client-core/src/api';
+import { ContractNotice } from './ContractNotice';
 import { useFeedbackState } from '../../lib/useFeedbackState';
 import React, { useRef, useState } from 'react';
 import { Checkbox, Text } from 'react-native-paper';
@@ -44,7 +45,7 @@ export function ContractHandoverPanel({
     [values, setValues] = useState<Record<string, string>>({}),
     [selected, setSelected] = useState<string[]>([]);
   const [busy, setBusy] = useState(false),
-    [error, setError] = useFeedbackState(),
+    [error, setError] = useFeedbackState('warning', false),
     [notice, setNotice] = useFeedbackState('success'),
     [safePhoto, setSafePhoto] = useState(false);
   const query = useContractHandover(api, contract.id, staff, !editing && !busy ? autoRefreshMs : 0),
@@ -84,9 +85,7 @@ export function ContractHandoverPanel({
       await work();
       query.reload();
     } catch (e) {
-      setError(
-        e instanceof Error && !(e as { status?: number }).status ? e.message : contractError(e),
-      );
+      setError(contractError(e));
     } finally {
       lock.current = false;
       setBusy(false);
@@ -145,12 +144,12 @@ export function ContractHandoverPanel({
       />
       {staff && <ContractInitialMeterTasks contract={contract} />}
       {query.loading && <Text>Đang tải bàn giao…</Text>}
-      {!!query.error && <Text style={ui.red}>{conciseMessage(query.error)}</Text>}
+      {!!query.error && <ContractNotice message={query.error} />}
       {!query.loading && !query.error && !h && <Text>Chưa có biên bản nhận phòng.</Text>}
       {h && !editing && (
         <>
           <Text>
-            Phiên bản {h.version} · {text(h.status)} · {displayContractDate(h.snapshot.date)}
+            {text(h.status)} · {displayContractDate(h.snapshot.date)}
           </Text>
           <Text>
             Phòng {h.snapshot.roomNumber}: {h.snapshot.roomCondition}
@@ -278,7 +277,7 @@ export function ContractHandoverPanel({
             />
           ))}
           <Text>
-            Chọn nhiệm vụ khởi tạo điện và nước của hợp đồng ở trên để chụp và xác nhận chỉ số.
+            Chụp và xác nhận chỉ số điện, nước đầu kỳ của hợp đồng ngay trong bước bàn giao ở trên.
           </Text>
           <Text>
             Ảnh toàn cảnh phòng; tối đa 10 ảnh được chọn, mỗi ảnh tối đa 5 MB. Ảnh riêng của nhóm
@@ -298,7 +297,8 @@ export function ContractHandoverPanel({
             disabled={busy || !safePhoto}
             onCapture={(bytes) =>
               run(async () => {
-                if (bytes.byteLength > 5 * 1024 * 1024) throw new Error('Ảnh vượt quá 5 MB.');
+                if (bytes.byteLength > 5 * 1024 * 1024)
+                  throw new UserFeedbackError('Ảnh vượt quá 5 MB.');
                 const file = await api.uploadHandover(contract.id, bytes, 'image/jpeg');
                 setSelected((ids) => (ids.length < 10 ? [...ids, file.id] : ids));
                 setSafePhoto(false);
@@ -376,7 +376,7 @@ export function ContractHandoverPanel({
               disabled={busy}
             />
             <Checkbox.Item
-              label={`Tôi đã kiểm tra nội dung phiên bản ${h.version}`}
+              label="Tôi đã kiểm tra nội dung biên bản"
               status={checked ? 'checked' : 'unchecked'}
               onPress={() => setChecked(!checked)}
               disabled={busy}
@@ -430,7 +430,7 @@ export function ContractHandoverPanel({
       {h?.status === 'Confirmed' && (
         <ContractAssetChangesPanel api={api} contract={contract} role={role} />
       )}
-      {!!error && <Text style={ui.red}>{error}</Text>}
+      {!!error && <ContractNotice message={error} />}
       {!!notice && <Text style={ui.green}>{notice}</Text>}
     </Box>
   );

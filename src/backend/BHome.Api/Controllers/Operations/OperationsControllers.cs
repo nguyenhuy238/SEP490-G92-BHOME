@@ -1,4 +1,5 @@
 using BHome.Application.Operations;
+using BHome.Domain.IdentityAccess;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.RateLimiting;
@@ -42,14 +43,20 @@ public sealed class StaffAdministrationController(OperationsService service) : C
 [ResponseCache(NoStore = true, Location = ResponseCacheLocation.None)]
 public sealed class ResidenceTasksController(OperationsService service) : ControllerBase
 {
+    [HttpGet("tracking"), Authorize(Roles = Roles.Staff)]
+    public Task<OperationsPage<ResidenceTrackingSummary>> Tracking([FromQuery] ResidenceQuery input, CancellationToken t) => service.ResidenceTrackingAsync(input, t);
     [HttpGet] public Task<OperationsPage<ResidenceTaskView>> List([FromQuery] ResidenceQuery input, CancellationToken t) => service.ResidenceAsync(input, t);
     [HttpGet("{contractId:guid}/{residentId:guid}")] public Task<ResidenceTaskView> Get(Guid contractId, Guid residentId, CancellationToken t) => service.ResidenceAsync(contractId, residentId, t);
     [HttpPut("{contractId:guid}/{residentId:guid}")] public Task<ResidenceTaskView> Update(Guid contractId, Guid residentId, ResidenceUpdate input, CancellationToken t) => service.UpdateResidenceAsync(contractId, residentId, input, t);
     [HttpPost("{contractId:guid}/{residentId:guid}/owner-confirmation")] public Task<ResidenceTaskView> Confirm(Guid contractId, Guid residentId, ResidenceOwnerConfirmation input, CancellationToken t) => service.ConfirmResidenceAsync(contractId, residentId, input, t);
+    [HttpPut("{contractId:guid}/{residentId:guid}/tracking-settings")]
+    public Task<ResidenceTaskView> Configure(Guid contractId, Guid residentId, ResidenceTrackingSettings input, CancellationToken t) => service.ConfigureResidenceAsync(contractId, residentId, input, t);
     [HttpPost("{contractId:guid}/{residentId:guid}/accommodation-confirmation")]
     public Task<ResidenceTaskView> Accommodation(Guid contractId, Guid residentId, ResidenceAccommodationConfirmation input, CancellationToken t) => service.ConfirmAccommodationAsync(contractId, residentId, input, t);
     [HttpPut("{contractId:guid}/{residentId:guid}/evidence"), Consumes("image/png", "image/jpeg"), RequestSizeLimit(5 * 1024 * 1024)]
-    public Task<ResidenceTaskView> Upload(Guid contractId, Guid residentId, CancellationToken t) => service.UploadResidenceEvidenceAsync(contractId, residentId, Request.Body, t);
+    public Task<ResidenceTaskView> Upload(Guid contractId, Guid residentId, CancellationToken t, [FromQuery] Guid[]? residentIds = null) => residentIds is { Length: > 0 }
+        ? service.UploadHouseholdResidenceEvidenceAsync(contractId, residentId, residentIds, Request.Body, t)
+        : service.UploadResidenceEvidenceAsync(contractId, residentId, Request.Body, t);
     [HttpGet("{contractId:guid}/{residentId:guid}/evidence")]
     public async Task<IActionResult> Download(Guid contractId, Guid residentId, CancellationToken t)
     {
@@ -107,6 +114,12 @@ public sealed class PublicContentAdministrationController(OperationsService serv
     { await service.RemovePublicPhotoAsync("location", id, index, t); return NoContent(); }
 
     [HttpGet("rooms/{id:guid}")] public Task<RoomPublicContent> Room(Guid id, CancellationToken t) => service.RoomContentAsync(id, t);
+    [HttpGet("locations/{id:guid}/rooms")]
+    public Task<IReadOnlyList<RoomPublicContent>> ManagedRooms(Guid id, CancellationToken t) => service.ManagedRoomsAsync(id, t);
+    [HttpPost("locations/{id:guid}/rooms/bulk/preview")]
+    public Task<PublicRoomBulkPreview> PreviewRooms(Guid id, PublicRoomBulkRequest input, CancellationToken t) => service.PreviewPublicRoomBulkAsync(id, input, t);
+    [HttpPost("locations/{id:guid}/rooms/bulk/apply")]
+    public Task<PublicRoomBulkResult> ApplyRooms(Guid id, PublicRoomBulkRequest input, CancellationToken t) => service.ApplyPublicRoomBulkAsync(id, input, t);
     [HttpPut("rooms/{id:guid}")] public Task<RoomPublicContent> UpdateRoom(Guid id, RoomPublicContentWrite input, CancellationToken t) => service.UpdateRoomContentAsync(id, input, t);
     [HttpPost("rooms/{id:guid}/publish")] public Task<RoomPublicContent> PublishRoom(Guid id, CancellationToken t) => service.PublishRoomAsync(id, true, t);
     [HttpPost("rooms/{id:guid}/unpublish")] public Task<RoomPublicContent> UnpublishRoom(Guid id, CancellationToken t) => service.PublishRoomAsync(id, false, t);
@@ -118,7 +131,7 @@ public sealed class PublicContentAdministrationController(OperationsService serv
 }
 
 [ApiController, Route("api/v1/public"), AllowAnonymous]
-[ResponseCache(Duration = 60, Location = ResponseCacheLocation.Any)]
+[ResponseCache(NoStore = true, Location = ResponseCacheLocation.None)]
 public sealed class PublicInformationController(OperationsService service) : ControllerBase
 {
     [HttpGet("locations")] public Task<IReadOnlyList<LocationPublicContent>> Locations(CancellationToken t) => service.PublishedLocationsAsync(t);

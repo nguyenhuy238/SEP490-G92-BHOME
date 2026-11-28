@@ -93,6 +93,21 @@ Nếu đang dùng PostgreSQL native, không khởi động thêm service `postgr
 Vào `http://localhost:9001`, dùng credential **của chính máy**, tạo bucket private `bhome-private`.
 Không dùng `docker compose down -v`, không chạy script seed/reset trong quá trình onboarding cấu hình.
 
+Nếu API vẫn chạy nhưng tải ảnh báo dịch vụ gián đoạn, kiểm tra Docker Desktop và MinIO.
+Khôi phục riêng MinIO local đã được thiết lập (giữ volume, không khởi động PostgreSQL):
+
+```powershell
+npm.cmd run storage:dev
+powershell -NoProfile -ExecutionPolicy Bypass -File scripts/Start-LocalStorage.ps1 -CheckOnly
+```
+
+Lệnh dùng profile `.env` Development, chỉ chấp nhận MinIO HTTP loopback đúng cổng
+Compose; không quản lý storage remote. Máy mới chưa có image vẫn cần bước build
+ở trên và tạo bucket private. `-CheckOnly` chỉ xác nhận HTTP health, không xác nhận
+credential, bucket hoặc khả năng lưu ảnh. Nếu API dùng user-secrets/process để ghi
+đè storage, cần kiểm tra cấu hình hiệu lực theo thứ tự ưu tiên ở mục 6.
+Xem [kiểm chứng lỗi ảnh FE-09](FE09_PHOTO_STORAGE_FIX_2026-11-23.md).
+
 ## 6. Chạy Backend
 
 ```powershell
@@ -173,66 +188,56 @@ Các luồng mời Staff/Tenant, xác nhận email, reset và thư ký vẫn dù
 `NotificationChannels__Enabled=true` và `AutomationEnabled=true` cho phép worker xử lý thư.
 Thực hiện luồng trên giao diện bằng tài khoản tổng hợp local rồi kiểm tra action link trong Mailpit.
 
-Muốn thử SMTP thật trong Development hoặc Staging: chọn `DeliveryMode=Smtp`, điền user/sender,
-App Password riêng qua secrets và `Email__AllowedRecipients__0`, `__1`, ... là từng mailbox được phép.
-Không cấu hình wildcard. Người nhận ngoài allowlist bị từ chối **trước khi mở kết nối SMTP**;
-không tự chuyển hướng thư chứa token của người khác vào mailbox test.
-`Email__TestRecipient` chỉ thuộc endpoint thử thư, không thay thế allowlist của mọi email.
+Mọi môi trường cho phép địa chỉ email hợp lệ, không yêu cầu `AllowedRecipients`,
+`AllowAnyRecipientInDevelopment` hay người nhận trùng `TestRecipient`. Allowlist cũ trong
+User Secrets được giữ nguyên nhưng không giới hạn người nhận ở bất kỳ môi trường nào. Chính sách nằm
+trong source được Git quản lý: sau khi tích hợp/pull thay đổi, rebuild và restart Backend.
+Không cần lệnh mở khóa hoặc migration cấu hình trên từng máy.
 
-**Máy Development muốn gửi ra Gmail thật (tùy chọn, không thay đổi mặc định của nhóm):**
-chạy `powershell -NoProfile -ExecutionPolicy Bypass -File scripts/Configure-LocalGmail.ps1`.
-Nhập địa chỉ Gmail gửi, các địa chỉ nhận được phê duyệt (cách nhau bằng dấu phẩy),
-và **Gmail App Password** tại dấu nhắc ẩn. Không nhập mật khẩu Gmail thường và
-không gửi App Password qua chat, commit, `.env` hay tham số command line. Script
-chỉ cập nhật `.NET User Secrets` Development, giữ nguyên `.env`/database, bật
-STARTTLS và giới hạn email ra ngoài theo allowlist; không tự gửi thư.
-Sau đó dừng Backend đang chạy, khởi động lại bằng `scripts/Start-Api.ps1`, chạy
-`scripts/Configure-LocalGmail.ps1 -CheckOnly`, đăng nhập tài khoản Owner và
-thử endpoint `POST /api/v1/notifications/email-test` để gửi một email tổng hợp
-đến người nhận đầu tiên trong allowlist. Phản hồi `SmtpAccepted` chỉ xác nhận
-máy chủ SMTP đã nhận, **không chứng minh email đã vào Inbox**; kiểm tra cả Spam.
-Địa chỉ của Staff/Tenant cần thực sự nhận email cũng phải có trong allowlist;
-chỉ bật cho địa chỉ đã được phê duyệt. Chạy lại công cụ cần giữ nguyên allowlist
-đã duyệt; khi muốn đổi danh sách, chủ động rà soát User Secrets trước.
+Staging/Testing cũng bỏ qua danh sách cũ khi dùng SMTP; người nhận chỉ cần email hợp lệ
+trước kết nối SMTP. Production cũng không áp dụng danh sách giới hạn. Không chuyển hướng thư chứa token
+của người khác sang mailbox test. `Email__TestRecipient` chỉ chọn hộp thư của endpoint thử email.
 
-**Chủ động gửi mọi địa chỉ email hợp lệ trong Development:** nếu Owner thực sự
-cần gửi trực tiếp từ BHOME tới email Staff/Tenant ngoài danh sách thử nghiệm,
-chạy `scripts/Configure-LocalGmail.ps1 -AllowAnyRecipient`. Không phải nhập
-`Approved test recipients`, nhưng phải nhập Gmail sender và App Password mới
-qua dấu nhắc ẩn. Tùy chọn này lưu `Email:AllowAnyRecipientInDevelopment=true`
-vào User Secrets, ưu tiên hơn allowlist cũ **chỉ trong Development SMTP**;
-Testing/Staging vẫn bắt buộc allowlist. Kiểm tra với
-`scripts/Configure-LocalGmail.ps1 -AllowAnyRecipient -CheckOnly`.
-Các email được tạo từ dữ liệu thực sẽ đi ra Internet; kiểm tra người nhận,
-trạng thái thông báo và tránh dùng dữ liệu nhạy cảm chưa được phép trước khi
-gửi. Thư đã được ghi nhận `Sent` trong Mailpit không tự gửi lại khi đổi SMTP:
-cần tạo lời mời mới. Không đưa tùy chọn này vào cấu hình chung/version control.
-
-**Khi chạy Mobile:** `Prepare-OcrMobile.ps1`/`Start-OcrMobileApp.ps1`
-không đồng bộ các khóa `Email:*` từ `.env` vào .NET User Secrets nữa.
-Điều này tránh vô tình ghi đè Gmail SMTP bằng Mailpit `Capture` của `.env` chung.
-`Start-OcrMobile.ps1` cũng không nhập `Email__*` từ `.env` thành process
-environment (mức ưu tiên cao hơn User Secrets). Hai bước phải cùng tránh ghi đè.
-Sau khi thay đổi SMTP, xác minh bằng `Configure-LocalGmail.ps1 -CheckOnly`
-(thêm `-AllowAnyRecipient` nếu cần gửi mọi địa chỉ), rồi khởi động lại API.
-
-Nếu máy đã cấu hình Gmail trước khi pull bản chuẩn hóa, API có thể dừng vì thiếu
-`Email:AllowedRecipients:0`; Web nhận 502 và Mobile báo ECONNREFUSED vì API chưa mở cổng.
-Với mailbox thử nghiệm đã được xác định trong `Email:TestRecipient`, chủ động chuyển đổi bằng:
+**Máy Development muốn gửi Gmail thật (tùy chọn):** chạy:
 
 ```powershell
-powershell -NoProfile -ExecutionPolicy Bypass -File scripts/Initialize-LocalEmail.ps1 -UseConfiguredTestRecipient
+powershell -NoProfile -ExecutionPolicy Bypass -File scripts/Configure-LocalGmail.ps1
 ```
 
-Script chỉ thêm mailbox test có sẵn vào Development user-secrets khi chưa có allowlist;
-giữ nguyên allowlist đã có, mật khẩu/credential và `.env`. Không gửi thư, không suy ra người nhận
-từ địa chỉ SMTP sender, không tự chuyển sang SMTP nếu profile đang chọn Mailpit Capture.
-Thiếu mailbox test hợp lệ thì script dừng. Không dùng script này để cấu hình Staging/Production.
-Profile local riêng có thể chọn bằng `-EnvironmentFile .env.local`.
+Nhập địa chỉ Gmail gửi và **Gmail App Password** tại dấu nhắc ẩn. Script chỉ cập nhật
+API User Secrets Development, chọn rõ `DeliveryMode=Smtp`, bật STARTTLS và worker,
+không tạo allowlist, không gửi thư. Không commit App Password hay `.env` thật.
+Mỗi member quản lý credential riêng; pull Git không cấp SMTP credential.
+Mailpit Capture vẫn là mặc định nhóm và chỉ thu thư local.
 
-Sau khi chuyển đổi: **Shift+F5 rồi F5 trong Visual Studio**, chờ API mở cổng 7240,
-reload Owner Web rồi chạy lại `npm.cmd run mobile`. Đừng mở thêm một API khi Visual Studio đang chạy.
-Nếu không còn cookie hợp lệ thì đăng nhập lại; HTTP 401 khi thử refresh không có cookie là bình thường.
+Máy đã có SMTP hợp lệ chỉ cần pull, rebuild và restart Backend. Nếu cần chọn lại SMTP
+bằng credential hiện có, dùng lệnh tùy chọn sau (không bắt buộc để mở quyền người nhận):
+
+```powershell
+powershell -NoProfile -ExecutionPolicy Bypass -File scripts/Configure-LocalGmail.ps1 -UseExistingCredentials
+powershell -NoProfile -ExecutionPolicy Bypass -File scripts/Configure-LocalGmail.ps1 -CheckOnly -Recipient 'synthetic@example.invalid'
+```
+
+`-CheckOnly` không gửi thư hoặc thay đổi cấu hình; `-Recipient` kiểm tra định dạng.
+Script dừng nếu SMTP chưa cấu hình hợp lệ, không khẳng định email đã vào Inbox.
+Các tham số cũ `-AllowAnyRecipient`, `-AllowedRecipients` được nhận để tương thích nhưng
+không tạo giới hạn Development. `Initialize-LocalEmail.ps1` cũng chỉ là lệnh tương thích,
+không ghi lại allowlist và không cần `TestRecipient`.
+
+Endpoint `POST /api/v1/notifications/email-test` vẫn chỉ cho Owner trong Development,
+cần bật riêng `Email:TestEnabled=true` và `TestRecipient` hợp lệ; script để endpoint tắt.
+`TestRecipient` không giới hạn email nghiệp vụ và không chuyển hướng email của người khác.
+`SmtpAccepted` chỉ chứng minh SMTP đã nhận, không chứng minh thư vào Inbox; kiểm tra cả Spam.
+
+**Khi chạy Mobile:** `Prepare-OcrMobile.ps1`/`Start-OcrMobileApp.ps1` không ghi đè
+`Email:*` trong API User Secrets; `Start-OcrMobile.ps1` không nhập `Email__*` từ `.env`
+thành process environment. `Start-Api.ps1` dùng loader Development, giữ thứ tự ưu tiên
+process/CLI > User Secrets > dotenv fallback. Các launcher không cần ghi cờ mở allowlist.
+
+Sau khi pull/rebuild: **Shift+F5 rồi F5 trong Visual Studio**, chờ API mở cổng 7240,
+reload Owner Web rồi chạy lại `npm.cmd run mobile`. Không mở thêm API khi debugger đang chạy.
+Thư đã `Sent` hoặc `PermanentlyFailed` không tự gửi lại sau cập nhật; dùng thao tác gửi lại
+được nghiệp vụ cho phép. Không chỉnh trực tiếp trạng thái queue/database.
 
 Production dùng Gmail SMTP theo credential hiện có. Không thay mật khẩu/key đang sử dụng.
 Test tự động mặc định dùng địa chỉ `.invalid`/capture/fake provider, không gửi thư thật.
@@ -335,7 +340,7 @@ Danh sách thiết kế ban đầu cần người vận hành review khi dựng 
 
 1. Thêm các khóa `Deployment__*` vào cấu hình riêng theo đúng project; giữ nguyên credential/DB.
 2. Production: `SePay__Enabled=false`, `SePay__Mode=Live`; không bật Live.
-3. Staging: chuyển host environment sang `Staging`, giữ SePay Sandbox và thêm allowlist email.
+3. Staging: chuyển host environment sang `Staging`, giữ SePay Sandbox và cấu hình SMTP riêng; không cần danh sách người nhận.
 4. Bổ sung Owner frontend Staging. Caddy trên hostname staging chuyển `/api/*`, `/open/*`
    sang API Staging, các page route sang frontend Staging; API webhook không đổi đường dẫn/đích.
 5. Tham khảo `deploy/vps/Caddyfile.example`; các alias `bhome-stage-api`,
@@ -390,17 +395,17 @@ không chỉ đổi link email của backend local sang hostname VPS.
 
 ## 15. Lỗi thường gặp và chuyển từ Cloudflare/ngrok
 
-| Hiện tượng                      | Cách xử lý                                                                                      |
-| ------------------------------- | ----------------------------------------------------------------------------------------------- |
-| Docker/API chưa chạy            | Chạy dịch vụ theo mục 5/6, chạy doctor lại. Không xóa volume                                    |
-| HTTPS proxy báo certificate     | `dotnet dev-certs https --trust`, chạy onboarding để export cert; không tắt TLS verification    |
-| Cert dev đã đổi nhưng PEM cũ    | Đổi tên hai file trong `.tools/team-tls` để giữ bản cũ, chạy onboarding export lại              |
-| Cổng 5173/5176/7240 bị chiếm    | Dùng `Get-NetTCPConnection -State Listen`; dừng đúng tiến trình hoặc đồng bộ URL/cổng           |
-| SMTP local không nhận           | Kiểm tra Mailpit 1025/8025, DeliveryMode=Capture và notification worker                         |
-| Staging email không gửi         | Thêm chính mailbox tổng hợp vào `Email__AllowedRecipients__N`, kiểm tra App Password/STARTTLS   |
-| Token invalid/not found         | Xác nhận trang Web/app gọi đúng API và database đã phát hành; tạo lời mời mới đúng môi trường   |
-| Startup báo Deployment mismatch | Kiểm tra Deployment origins, host environment, URL override cũ, Compose và user-secrets         |
-| Build còn chọn API local        | Set VITE_API_BASE_URL bằng origin deploy ở terminal build; không dùng chung terminal có biến cũ |
+| Hiện tượng                      | Cách xử lý                                                                                                |
+| ------------------------------- | --------------------------------------------------------------------------------------------------------- |
+| Docker/API chưa chạy            | Chạy dịch vụ theo mục 5/6, chạy doctor lại. Không xóa volume                                              |
+| HTTPS proxy báo certificate     | `dotnet dev-certs https --trust`, chạy onboarding để export cert; không tắt TLS verification              |
+| Cert dev đã đổi nhưng PEM cũ    | Đổi tên hai file trong `.tools/team-tls` để giữ bản cũ, chạy onboarding export lại                        |
+| Cổng 5173/5176/7240 bị chiếm    | Dùng `Get-NetTCPConnection -State Listen`; dừng đúng tiến trình hoặc đồng bộ URL/cổng                     |
+| SMTP local không nhận           | Kiểm tra Mailpit 1025/8025, DeliveryMode=Capture và notification worker                                   |
+| Staging email không gửi         | Kiểm tra phiên bản API, Email/NotificationChannels enabled và App Password/STARTTLS; không thêm allowlist |
+| Token invalid/not found         | Xác nhận trang Web/app gọi đúng API và database đã phát hành; tạo lời mời mới đúng môi trường             |
+| Startup báo Deployment mismatch | Kiểm tra Deployment origins, host environment, URL override cũ, Compose và user-secrets                   |
+| Build còn chọn API local        | Set VITE_API_BASE_URL bằng origin deploy ở terminal build; không dùng chung terminal có biến cũ           |
 
 Chuyển cấu hình cũ: dừng tunnel của chính mình khi không còn dùng; giữ nguyên file private;
 chạy preview rồi áp dụng migration URL có kiểm soát:

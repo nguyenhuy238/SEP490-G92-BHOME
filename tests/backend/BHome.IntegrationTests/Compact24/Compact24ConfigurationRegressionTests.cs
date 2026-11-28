@@ -73,10 +73,35 @@ public sealed partial class Compact24OwnerSetupTests
         var input = new SharedApply(w.Location, doc.Version); var plan = await Read<ConfigurationPlan>(await owner.PostAsJsonAsync(route + "/apply-preview", input));
         await owner.PostAsJsonAsync(route + "/archive", new SharedVersion(doc.Version));
         Assert.Equal(HttpStatusCode.Conflict, (await Keyed(owner, route + "/apply", input with { TargetState = plan.TargetState }, Guid.NewGuid())).StatusCode);
-        var first = await Published(owner, "fee-templates"); var firstRoute = $"/api/v1/shared-configuration/fee-templates/{first.Id}"; input = new(w.Location, first.Version);
+        var effective = Today.AddYears(20);
+        SharedWrite Fee(string method, string unit) => SharedInput("fee-templates") with
+        {
+            Data = System.Text.Json.JsonSerializer.SerializeToElement(new
+            {
+                category = "ServiceFee",
+                serviceName = "Internet",
+                chargeCode = "INTERNET",
+                method,
+                referenceRate = "1000",
+                unit,
+                scope = "Location",
+                effectiveFrom = effective.ToString("yyyy-MM-dd"),
+                effectiveTo = effective.ToString("yyyy-MM-dd")
+            })
+        };
+        async Task<SharedDocument> PublishFee(string method, string unit)
+        {
+            var draft = await Read<SharedDocument>(await owner.PostAsJsonAsync("/api/v1/shared-configuration/fee-templates", Fee(method, unit)));
+            return await Read<SharedDocument>(await owner.PostAsJsonAsync($"/api/v1/shared-configuration/fee-templates/{draft.Id}/publish", new SharedVersion(draft.Version)));
+        }
+        var first = await PublishFee("FixedPerRoomPerMonth", "VND/month");
+        var firstRoute = $"/api/v1/shared-configuration/fee-templates/{first.Id}"; input = new(w.Location, first.Version);
         plan = await Read<ConfigurationPlan>(await owner.PostAsJsonAsync(firstRoute + "/apply-preview", input));
         await Read<SharedOperation>(await Keyed(owner, firstRoute + "/apply", input with { TargetState = plan.TargetState }, Guid.NewGuid()));
-        var second = await Published(owner, "fee-templates"); plan = await Read<ConfigurationPlan>(await owner.PostAsJsonAsync($"/api/v1/shared-configuration/fee-templates/{second.Id}/apply-preview", new SharedApply(w.Location, second.Version)));
+        // Different methods may be published as separate shared policies, but the same
+        // charge code and overlapping effective period cannot both be applied to one Location.
+        var second = await PublishFee("FixedPerPersonPerMonth", "VND/person/month");
+        plan = await Read<ConfigurationPlan>(await owner.PostAsJsonAsync($"/api/v1/shared-configuration/fee-templates/{second.Id}/apply-preview", new SharedApply(w.Location, second.Version)));
         Assert.False(plan.CanProceed); Assert.NotEmpty(plan.Conflicts);
     }
     [CompactPostgresFact]

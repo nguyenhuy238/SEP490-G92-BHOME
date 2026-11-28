@@ -28,6 +28,7 @@ const native = vi.hoisted(() => ({
   focusExtension: false,
   lenses: vi.fn(),
   allowMeterDemo: false,
+  openSettings: vi.fn(),
 }));
 vi.mock('../lib/cameraFocus', async (original) => ({
   ...(await original<typeof import('../lib/cameraFocus')>()),
@@ -48,6 +49,7 @@ vi.mock('react-native', () => ({
       return { remove: () => native.listeners.delete(cb) };
     },
   },
+  Linking: { openSettings: native.openSettings },
   StyleSheet: { create: (s: unknown) => s },
   Modal: ({
     visible,
@@ -185,6 +187,7 @@ beforeEach(() => {
   native.listeners.clear();
   native.bytes = new Uint8Array([1, 2, 3]);
   native.request.mockResolvedValue({ granted: false });
+  native.openSettings.mockResolvedValue(undefined);
   native.take.mockResolvedValue({ width: 2000, height: 1200, release: native.release });
   native.render.mockResolvedValue({ saveAsync: native.save, release: native.release });
   native.save.mockImplementation(async () => {
@@ -256,7 +259,7 @@ it('uses a synthetic JPEG without camera permission only in local web meter test
       onCapture={capture}
     />,
   );
-  const demo = screen.getByRole('button', { name: 'Dùng ảnh mẫu để test' });
+  const demo = screen.getByRole('button', { name: 'Dùng ảnh mẫu (test)' });
   expect(demo).toBeTruthy();
   fireEvent.click(demo);
   await waitFor(() => expect(capture).toHaveBeenCalledOnce());
@@ -290,12 +293,12 @@ it('hides local meter demo on ordinary mobile capture and disables it while busy
       onCapture={vi.fn()}
     />,
   );
-  expect(screen.queryByRole('button', { name: 'Dùng ảnh mẫu để test' })).toBeNull();
+  expect(screen.queryByRole('button', { name: 'Dùng ảnh mẫu (test)' })).toBeNull();
   native.allowMeterDemo = true;
   view.rerender(
     <CameraCapture label="Chụp công tơ" disabled presentation="meter" onCapture={vi.fn()} />,
   );
-  expect(screen.getByRole('button', { name: 'Dùng ảnh mẫu để test' })).toHaveProperty(
+  expect(screen.getByRole('button', { name: 'Dùng ảnh mẫu (test)' })).toHaveProperty(
     'disabled',
     true,
   );
@@ -738,6 +741,9 @@ it('changes iOS lenses and zoom in place, resets zoom on lens selection and guar
   fireEvent.click(screen.getByRole('button', { name: 'Tele' }));
   expect(native.props.selectedLens).toBe('AVCaptureDeviceTypeBuiltInUltraWideCamera');
   expect(native.props.zoom).toBe(0);
+  act(() => native.props.onAvailableLensesChanged?.({ lenses: [] }));
+  await readyShutter();
+  expect(native.props.selectedLens).toBe('AVCaptureDeviceTypeBuiltInUltraWideCamera');
   act(() =>
     native.props.onAvailableLensesChanged?.({
       lenses: lenses.map((lens) => ({ ...lens, localizedName: 'Synthetic lens' })),
@@ -759,6 +765,74 @@ it('falls back to the default iOS camera when discovery fails', async () => {
   await readyShutter();
   expect(native.props.selectedLens).toBeUndefined();
   expect(screen.queryByRole('button', { name: 'Siêu rộng' })).toBeNull();
+});
+it('keeps the selected iOS lens for a retake in Expo Go without a focus extension', async () => {
+  native.platform = 'ios';
+  native.lenses.mockResolvedValue([{ deviceType: 'AVCaptureDeviceTypeBuiltInUltraWideCamera' }]);
+  render(
+    <CameraCapture
+      label="CCCD"
+      presentation="document"
+      disabled={false}
+      reviewBeforeSubmit
+      onCapture={vi.fn()}
+    />,
+  );
+  await readyShutter();
+  fireEvent.click(screen.getByRole('button', { name: 'Siêu rộng' }));
+  await readyShutter();
+  fireEvent.click(screen.getByRole('button', { name: 'Chụp ảnh mặt trước' }));
+  await screen.findByRole('button', { name: 'Chụp lại' });
+  fireEvent.click(screen.getByRole('button', { name: 'Chụp lại' }));
+  await readyShutter();
+  expect(native.props.selectedLens).toBe('AVCaptureDeviceTypeBuiltInUltraWideCamera');
+  expect(native.props.zoom).toBe(0);
+  expect(native.props.bhomeFocusEnabled).toBeUndefined();
+});
+
+it('restores a shared front/back lens choice only when the new camera reports it', async () => {
+  native.platform = 'ios';
+  const preference = { current: 'AVCaptureDeviceTypeBuiltInUltraWideCamera' };
+  native.lenses.mockResolvedValue([{ deviceType: preference.current }]);
+  const view = render(
+    <CameraCapture
+      key="front"
+      label="CCCD"
+      presentation="document"
+      disabled={false}
+      lensPreferenceRef={preference}
+      onCapture={vi.fn()}
+    />,
+  );
+  await readyShutter();
+  expect(native.props.selectedLens).toBe(preference.current);
+  view.rerender(
+    <CameraCapture
+      key="back"
+      label="CCCD"
+      presentation="document"
+      documentSide="back"
+      disabled={false}
+      lensPreferenceRef={preference}
+      onCapture={vi.fn()}
+    />,
+  );
+  await readyShutter('Chụp ảnh mặt sau');
+  expect(native.props.selectedLens).toBe('AVCaptureDeviceTypeBuiltInUltraWideCamera');
+  native.lenses.mockResolvedValue([{ deviceType: 'AVCaptureDeviceTypeBuiltInWideAngleCamera' }]);
+  view.rerender(
+    <CameraCapture
+      key="another"
+      label="CCCD"
+      presentation="document"
+      disabled={false}
+      lensPreferenceRef={preference}
+      onCapture={vi.fn()}
+    />,
+  );
+  await readyShutter();
+  expect(native.props.selectedLens).toBeUndefined();
+  expect(preference.current).toBe('');
 });
 it('retries a mount failure and ignores ready callbacks from the closed camera', async () => {
   native.autoReady = false;
@@ -816,6 +890,16 @@ it('allows a native permission prompt to return through inactive and active stat
   expect(screen.queryByTestId('native-camera')).toBeNull();
   act(() => native.listeners.forEach((listener) => listener('active')));
   await readyShutter();
+});
+it('offers device settings after a permanently denied camera permission', async () => {
+  native.granted = false;
+  native.request.mockResolvedValueOnce({ granted: false, canAskAgain: false });
+  render(
+    <CameraCapture label="CCCD" presentation="document" disabled={false} onCapture={vi.fn()} />,
+  );
+  await screen.findByRole('button', { name: 'Mở Cài đặt' });
+  fireEvent.click(screen.getByRole('button', { name: 'Mở Cài đặt' }));
+  expect(native.openSettings).toHaveBeenCalledOnce();
 });
 it('uploads the exact reviewed JPEG bytes once and zeroes the buffer after processing', async () => {
   let uploaded: number[] = [];
@@ -989,14 +1073,24 @@ it('ignores old focus results after a later tap, zoom, background and unmount', 
   view.unmount();
   expect(native.listeners.size).toBe(0);
 });
-it('shows a standard-camera fallback in an Expo Go or older binary', async () => {
+it('keeps the standard camera usable without an unsupported-focus notice covering the preview', async () => {
   render(
-    <CameraCapture label="CCCD" presentation="document" disabled={false} onCapture={vi.fn()} />,
+    <CameraCapture
+      label="CCCD"
+      presentation="document"
+      disabled={false}
+      reviewBeforeSubmit
+      onCapture={vi.fn()}
+    />,
   );
-  await readyShutter();
+  const shutter = await readyShutter();
   expect(native.props.bhomeFocusEnabled).toBeUndefined();
   expect(native.props.onBhomeFocusChanged).toBeUndefined();
-  expect(screen.getByText(/Chạm lấy nét cần bản ứng dụng hỗ trợ/)).toBeTruthy();
+  expect(screen.queryByText(/Chạm lấy nét cần bản ứng dụng hỗ trợ/)).toBeNull();
+  expect(screen.queryByText('Đang mở camera…')).toBeNull();
+  expect(shutter).toHaveProperty('disabled', false);
+  fireEvent.click(shutter);
+  expect(await screen.findByAltText('Ảnh CCCD vừa chụp')).toBeTruthy();
 });
 it.each([
   ['CCCD mặt sau', 'document', 'back'],
@@ -1038,3 +1132,44 @@ it.each([
     expect(capture).not.toHaveBeenCalled();
   },
 );
+
+it('clears the retained meter photo and returns to capture choices on periodic OCR retry', async () => {
+  const capture = vi.fn().mockResolvedValue(undefined);
+  const clear = vi.fn();
+  const props = {
+    label: 'Chụp đồng hồ nước',
+    disabled: false,
+    presentation: 'meter' as const,
+    meterRetryResets: true,
+    retainPreview: true,
+    reviewBeforeSubmit: true,
+    onCapture: capture,
+    onPhotoCleared: clear,
+  };
+  const view = render(<CameraCapture {...props} meterStep={1} />);
+  fireEvent.click(screen.getByRole('button', { name: 'Chụp đồng hồ nước' }));
+  await screen.findByTestId('native-camera');
+  await waitFor(() =>
+    expect((screen.getByRole('button', { name: 'Chụp ảnh' }) as HTMLButtonElement).disabled).toBe(
+      false,
+    ),
+  );
+  fireEvent.click(screen.getByRole('button', { name: 'Chụp ảnh' }));
+  await screen.findByAltText('Ảnh công tơ đã chụp');
+  fireEvent.click(screen.getByRole('button', { name: 'Dùng ảnh này' }));
+  await waitFor(() => expect(capture).toHaveBeenCalledOnce());
+  view.rerender(<CameraCapture {...props} meterStep={2} />);
+  await waitFor(() =>
+    expect(
+      (screen.getByRole('button', { name: 'Thử lại OCR' }) as HTMLButtonElement).disabled,
+    ).toBe(false),
+  );
+  clear.mockClear();
+  fireEvent.click(screen.getByRole('button', { name: 'Thử lại OCR' }));
+  expect(clear).toHaveBeenCalledOnce();
+  expect(native.files.size).toBe(0);
+  expect(screen.getByText('Chưa có ảnh công tơ')).toBeTruthy();
+  expect(screen.getByRole('button', { name: 'Chụp đồng hồ nước' })).toBeTruthy();
+  expect(screen.queryByTestId('native-camera')).toBeNull();
+  expect(capture).toHaveBeenCalledOnce();
+});

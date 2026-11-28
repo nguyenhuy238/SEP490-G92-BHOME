@@ -12,8 +12,8 @@ public sealed record BillingScheduleWrite([property: JsonRequired] Guid Location
     [property: JsonRequired] VndRounding Rounding, [property: JsonRequired] int DraftDay, [property: JsonRequired] int DraftMonthOffset,
     [property: JsonRequired] int FinalDay, [property: JsonRequired] int FinalMonthOffset,
     [property: JsonRequired] int DueDay, [property: JsonRequired] int DueMonthOffset, [property: JsonRequired] int ExpectedVersion);
-// Owner may omit the representative: the service resolves an existing explicit selection,
-// or the only eligible contract for the room and period, under the room billing lock.
+// Legacy client argument retained for compatibility; the reference contract is always
+// selected by the server under the room billing lock.
 public sealed record DraftInvoiceInput(Guid RoomId, DateOnly BillingPeriod, Guid? RepresentativeContractId = null);
 public sealed record InvoiceFinalizeInput([Range(1, int.MaxValue)] int ExpectedVersion);
 public sealed record InvoiceLineView(Guid Id, string Category, string ChargeCode, string Name, Guid? PolicyId, int? PolicyVersion,
@@ -31,6 +31,7 @@ public sealed record InvoiceView(Guid Id, Guid RoomId, Guid LocationId, string R
     [property: JsonNumberHandling(JsonNumberHandling.WriteAsString | JsonNumberHandling.AllowReadingFromString)] decimal Total,
     IReadOnlyList<string> MissingInputs, DateOnly ScheduledFinalDate, DateOnly DueDate, DateTimeOffset? FinalizedAt,
     Guid RepresentativeTenantUserId, IReadOnlyList<InvoiceLineView> Lines, string Type = "PERIODIC");
+public sealed record TenantInvoicePeriodView(DateOnly BillingPeriod, DateOnly BusinessDate, bool HasInvoice, IReadOnlyList<DateOnly> DraftDates);
 public sealed record InvoiceScope(Guid Actor, bool Owner, bool Tenant);
 public sealed record InvoiceListFilter(Guid? LocationId = null, DateOnly? BillingPeriod = null, InvoiceStatus? Status = null);
 public sealed record BillingOccupancy(Contract Contract, IReadOnlyList<Guid> TenantIds, bool ContactsComplete = true);
@@ -46,6 +47,7 @@ public interface IInvoiceRepository
 {
     Task<BillingSchedule?> ScheduleAsync(Guid locationId, CancellationToken t);
     Task<BillingSchedule?> ScheduleForPeriodAsync(Guid locationId, DateOnly period, CancellationToken t);
+    Task<IReadOnlyList<Guid>> TenantBillingLocationIdsAsync(Guid tenantId, CancellationToken t);
     Task<T> WithRoomLockAsync<T>(Guid roomId, Func<Task<T>> action, CancellationToken t);
     Task<T> WithLocationLockAsync<T>(Guid locationId, Func<Task<T>> action, CancellationToken t);
     Task<Room?> RoomAsync(Guid roomId, CancellationToken t);

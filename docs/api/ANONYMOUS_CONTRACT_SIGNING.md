@@ -1,5 +1,9 @@
 # Ký trước tài khoản và cấp tài khoản sau Main Active
 
+## Email khi chuyển Holding sang Main
+
+Trong luồng BF-03/BF-04, UC-13–15, màn gửi lời mời Main hiển thị email đã che từ lời mời Holding được chấp nhận của cùng người đại diện. Khi `GET /internal-signing` trả `usesHoldingEmail: true`, `maskedEmail` là địa chỉ từ Holding. Người thao tác bấm gửi để backend dùng địa chỉ đầy đủ từ bằng chứng ký Holding. Email nhập rõ trong yêu cầu và địa chỉ của lời mời Main đang gửi lại vẫn được ưu tiên. Khi thiếu bằng chứng Holding phù hợp, luồng dùng email hồ sơ như hiện hành. Các kiểm tra quyền và trùng email vẫn áp dụng.
+
 Nguồn: quyết định được duyệt BR-01–07/09/11, BF-03/04, UC-13/14/15; thay thế yêu cầu tài khoản Tenant trước khi ký. SRS/Report 4 về nhà cung cấp vẫn áp dụng cho nhánh MySign. Nhánh nội bộ không đưa ra tuyên bố pháp lý hoặc chứng thư CA.
 
 ## Luồng và UI
@@ -39,7 +43,7 @@ strokes là mảng nét; mỗi nét gồm {x,y} hữu hạn trong [0,1]. Backend
 
 - Token và session 256-bit ngẫu nhiên, chỉ lưu SHA-256. OTP 6 số dùng HMAC-SHA256 với khóa riêng >=32 bytes, purpose + invitation + token hash; không lưu/log OTP.
 - Chính sách an ninh kỹ thuật hiện tại: lời mời tối đa 24 giờ, OTP 5 phút, 5 lần đoán/challenge, ít nhất 60 giây giữa lần gửi, tối đa 5 lần gửi/lời mời, session 15 phút. Đây không phải giới hạn thời gian Holding hay chính sách tiền cọc.
-- Failed OTP attempt được commit trước response lỗi. OTP dùng xong xóa hash. Reissue/revoke làm session cũ mất hiệu lực. API còn dùng Auth rate limiter theo IP.
+- Failed OTP attempt được commit trước response lỗi. OTP dùng xong xóa hash. Reissue/revoke làm session cũ mất hiệu lực. Từ 26/11/2026, API public dùng các ngân sách rate limit theo IP riêng cho đọc tài liệu/thông tin (`SigningRead`), gửi mã (`SigningOtp`) và xác minh/chấp thuận (`SigningVerify`). Polling Owner và API đăng nhập không tiêu hao ngân sách mở lời mời. Giới hạn OTP theo từng lời mời nêu trên vẫn giữ nguyên.
 - contracts.history giữ ContractSigningInvitation; contract state giữ mode INTERNAL_OTP_DRAWN và InternalAcceptanceEvidence. Bằng chứng có Resident, invitation, snapshot/source hashes, consent version cố định theo nhánh, thời gian, PNG nét ký, PDF chấp thuận và Owner confirmation. Audit Tenant anonymous có actor null; subject là Resident trong evidence, không giả danh Owner/User.
 - PDF source giữ nguyên; trang bằng chứng chấp thuận được thêm riêng. Source/accepted/final hashes kiểm tra lại khi đọc/kích hoạt. Tất cả file private; orphan cleanup nhận diện reference mới và giữ bằng chứng đã liên kết.
 - Signed subject nội bộ là Resident. User ID provision sau Active không thay signed snapshot. Chế độ MySign/simulator hiện có không được dùng để xác nhận nhánh nội bộ.

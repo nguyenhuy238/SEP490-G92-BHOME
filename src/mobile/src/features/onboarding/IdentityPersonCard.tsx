@@ -2,7 +2,7 @@ import React from 'react';
 import { StyleSheet, View } from 'react-native';
 import { Button, Icon, Text } from 'react-native-paper';
 import { Pill } from '../../components/WorkspaceKit';
-import { emptyCaptureProgress, type OnboardingPerson } from './onboarding';
+import { emptyCaptureProgress, type IdentitySide, type OnboardingPerson } from './onboarding';
 import { staffColors as s } from '../../theme/theme';
 
 export function IdentityPersonCard({
@@ -17,7 +17,7 @@ export function IdentityPersonCard({
   label: string;
   role: string;
   disabled: boolean;
-  onScan: () => void;
+  onScan: (side?: IdentitySide) => void;
   onManual: () => void;
 }) {
   const progress = person.captureProgress ?? emptyCaptureProgress();
@@ -82,11 +82,25 @@ export function IdentityPersonCard({
               <Text style={styles.faceName}>Mặt {face === 'front' ? 'trước' : 'sau'}</Text>
               <Text style={styles.faceStatus}>
                 {
-                  { unscanned: 'Chưa quét', captured: 'Đã chụp', recognized: 'Đã nhận diện' }[
-                    progress[face]
-                  ]
+                  {
+                    unscanned: 'Chưa quét',
+                    captured: 'Đã chụp',
+                    partial: 'Đọc được một phần',
+                    recognized: 'Đã nhận diện',
+                    failed: 'Chưa đọc được',
+                  }[progress[face]]
                 }
               </Text>
+              <Button
+                mode="text"
+                compact
+                accessibilityLabel={`${progress[face] === 'unscanned' ? 'Quét' : 'Quét lại'} mặt ${face === 'front' ? 'trước' : 'sau'}`}
+                disabled={disabled}
+                contentStyle={styles.touch}
+                onPress={() => onScan(face)}
+              >
+                {progress[face] === 'unscanned' ? 'Quét' : 'Quét lại'}
+              </Button>
             </View>
           ))}
         </View>
@@ -96,23 +110,21 @@ export function IdentityPersonCard({
           mode="outlined"
           textColor={s.blue}
           contentStyle={styles.touch}
-          onPress={onScan}
+          onPress={() => onScan()}
           disabled={disabled}
         >
           {action}
         </Button>
       )}
-      {person.status !== 'confirmed' && (
-        <Button
-          mode="text"
-          icon="pencil-outline"
-          contentStyle={styles.touch}
-          onPress={onManual}
-          disabled={disabled}
-        >
-          Nhập thủ công
-        </Button>
-      )}
+      <Button
+        mode="text"
+        icon={person.status === 'confirmed' ? 'file-document-edit-outline' : 'pencil-outline'}
+        contentStyle={styles.touch}
+        onPress={onManual}
+        disabled={disabled}
+      >
+        {person.status === 'confirmed' ? 'Xem / sửa thông tin' : 'Nhập thủ công'}
+      </Button>
     </View>
   );
 }

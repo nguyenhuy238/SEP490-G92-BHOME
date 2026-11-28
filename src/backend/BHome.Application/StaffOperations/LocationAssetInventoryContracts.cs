@@ -3,16 +3,29 @@ using System.Text.Json.Serialization;
 
 namespace BHome.Application.StaffOperations;
 
-// One immutable assignment baseline. Only Checked/Note/IncidentId can change while Staff inspects.
+// One immutable Location baseline. AssignmentId identifies the current responsible Staff;
+// item observations and their provenance survive responsibility changes on the same task.
 public sealed record LocationAssetInventoryItem(Guid Id, Guid? RoomId, string? RoomNumber,
     Guid? AssetId, string Name, int Quantity, string? CommonArea,
     bool Checked = false, bool Inherited = false, Guid? SourceHandoverContractId = null,
     string? Note = null, Guid? IncidentId = null)
 {
+    // Condition is a Staff observation, not an Owner asset-status mutation. The default keeps
+    // snapshots created before this field existed readable without inventing an observation.
+    public string Condition { get; init; } = "Unassessed";
+    // Unit comes from the Owner-confirmed room/common-area configuration. Old snapshots
+    // without a unit remain readable and render as an explicit dash in the PDF.
+    public string? Unit { get; init; }
+    // Distinguishes an intentionally empty unit from a pre-unit legacy snapshot so
+    // an existing Staff checklist can be safely enriched once from Owner data.
+    public bool UnitCaptured { get; init; }
     // Audit provenance when a successor continues matching checks from a superseded task.
     // This does not make a prior Staff's signature the successor's signature.
     public Guid? PriorStaffTaskId { get; init; }
     public Guid? PriorStaffUserId { get; init; }
+    // An Owner rework decision can challenge an otherwise valid Tenant baseline.
+    // Keep the exact challenged source so automatic refresh cannot silently re-inherit it.
+    public Guid? RecheckOfHandoverContractId { get; init; }
 }
 
 public sealed record LocationAssetInventorySnapshot(Guid AssignmentId, DateOnly EffectiveFrom,
@@ -37,4 +50,9 @@ public sealed record LocationAssetInventoryReconcileCommand(int Version, [proper
 
 [JsonUnmappedMemberHandling(JsonUnmappedMemberHandling.Disallow)]
 public sealed record LocationAssetInventoryItemWrite(int Version, [property: JsonRequired] bool Checked,
-    [StringLength(2000)] string? Note = null, Guid? IncidentId = null);
+    [StringLength(2000)] string? Note = null, Guid? IncidentId = null)
+{
+    // Older Mobile clients did not send Condition. Preserve their checked=true semantics as an
+    // intact observation; checked=false is normalized to Unassessed by the service.
+    public string Condition { get; init; } = "Intact";
+}

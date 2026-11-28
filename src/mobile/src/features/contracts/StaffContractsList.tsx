@@ -1,3 +1,4 @@
+import { ContractNotice } from './ContractNotice';
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { ScrollView, StyleSheet, View } from 'react-native';
 import { useFocusEffect } from 'expo-router';
@@ -38,7 +39,9 @@ import {
   type StaffContractListView,
 } from './staffContractList';
 
-type Schedule = Awaited<ReturnType<ContractClient['moveOutAssignments']>>[number];
+type Schedule = Awaited<ReturnType<ContractClient['moveOutAssignments']>>[number] & {
+  proposedDate?: string;
+};
 type Snapshot = {
   api: ContractClient;
   revision: number;
@@ -51,7 +54,6 @@ type Snapshot = {
 
 export function StaffContractsList({
   api,
-  onCreateHolding,
   onOpen,
   onInspection,
   viewState,
@@ -64,7 +66,7 @@ export function StaffContractsList({
   viewState?: StaffContractListView;
   onViewStateChange?: (view: StaffContractListView) => void;
 }) {
-  const { go, resetScroll, staffLocationId } = useWorkspace();
+  const { resetScroll, staffLocationId } = useWorkspace();
   const [snapshot, setSnapshot] = useState<Snapshot | null>(null);
   const [revision, setRevision] = useState(0);
   const [localView, setLocalView] = useState({ ...defaultStaffContractListView });
@@ -106,7 +108,7 @@ export function StaffContractsList({
         error: contracts.status === 'rejected' ? contractError(contracts.reason) : '',
         scheduleError:
           contracts.status === 'rejected'
-            ? 'Chưa xác định được cơ sở của lịch kiểm tra. Hãy tải lại danh sách hợp đồng.'
+            ? 'Chưa xác định được cơ sở của nhiệm vụ trả phòng. Hãy tải lại danh sách hợp đồng.'
             : schedules.status === 'rejected'
               ? contractError(schedules.reason)
               : '',
@@ -120,17 +122,6 @@ export function StaffContractsList({
     snapshot.revision !== revision ||
     snapshot.locationId !== staffLocationId;
   const contracts = useMemo(() => (loading ? [] : snapshot.contracts), [loading, snapshot]);
-  // Main move-in inspection may still be open after activation. The contract
-  // list does not expose handover status, so this is a neutral entry point,
-  // not a claim that every Active contract is unfinished.
-  const handoverQueue = contracts
-    .filter(
-      (contract) =>
-        contract.kind === 'Main' &&
-        !contract.onboardingDraft &&
-        ['PendingSigning', 'PendingActivation', 'Active'].includes(contract.status),
-    )
-    .sort((a, b) => Number(a.status === 'Active') - Number(b.status === 'Active'));
   const error = !loading ? snapshot.error : '';
   const schedules = !loading ? snapshot.schedules : [];
   const scheduleError = !loading ? snapshot.scheduleError : '';
@@ -153,11 +144,8 @@ export function StaffContractsList({
     <View style={styles.screen}>
       <View style={styles.summary}>
         <View style={ui.grow}>
-          <Text variant="headlineSmall" style={styles.title}>
+          <Text variant="titleMedium" style={styles.title}>
             {loading || error ? '—' : contracts.length} hợp đồng
-          </Text>
-          <Text variant="bodySmall" style={ui.muted}>
-            Hợp đồng giữ chỗ và thuê chính thức
           </Text>
         </View>
         {!headerRefreshAvailable && (
@@ -169,53 +157,18 @@ export function StaffContractsList({
           />
         )}
       </View>
-      {!loading && !error && handoverQueue.length > 0 && (
-        <View style={styles.scheduleDetails}>
-          <Text variant="titleMedium">Công việc bàn giao phòng ({handoverQueue.length})</Text>
-          <Text style={ui.muted}>
-            Mở từng phòng để bắt đầu hoặc xem tiến độ. Công việc gồm điện nước, hiện trạng và tài
-            sản.
-          </Text>
-          {handoverQueue.slice(0, 5).map((contract) => (
-            <Button
-              key={contract.id}
-              mode="outlined"
-              icon="clipboard-text-outline"
-              onPress={() => go('move-in', { contractId: contract.id, section: 'handover' })}
-            >
-              {contract.status === 'Active' ? 'Xem bàn giao' : 'Mở bàn giao'} phòng{' '}
-              {contract.roomNumber}
-            </Button>
-          ))}
-          {handoverQueue.length > 5 && (
-            <Text style={ui.muted}>
-              Còn {handoverQueue.length - 5} hồ sơ; xem tiếp trong danh sách hợp đồng.
-            </Text>
-          )}
-        </View>
-      )}
-      {onCreateHolding && (
-        <Button
-          mode="outlined"
-          icon="file-document-plus-outline"
-          contentStyle={{ minHeight: 48 }}
-          onPress={onCreateHolding}
-        >
-          Tạo hợp đồng giữ chỗ
-        </Button>
-      )}
       <TouchableRipple
         accessibilityRole="button"
-        accessibilityLabel={`Lịch kiểm tra trả phòng, ${loading || scheduleError ? 'chưa tải được' : schedules.length + ' lịch'}`}
+        accessibilityLabel={`Nhiệm vụ trả phòng, ${loading || scheduleError ? 'chưa tải được' : schedules.length + ' nhiệm vụ'}`}
         accessibilityState={{ expanded: scheduleOpen }}
         disabled={loading}
         onPress={() => setScheduleOpen((value) => !value)}
         style={styles.schedule}
       >
         <View style={styles.scheduleRow}>
-          <Icon source="calendar-check-outline" size={22} color={c.primary} />
+          <Icon source="clipboard-check-outline" size={22} color={c.primary} />
           <Text variant="labelLarge" style={ui.grow}>
-            Lịch kiểm tra trả phòng
+            Nhiệm vụ trả phòng
           </Text>
           <Pill tone="blue">{loading || scheduleError ? '—' : schedules.length}</Pill>
           <Icon source={scheduleOpen ? 'chevron-up' : 'chevron-right'} size={20} color={c.muted} />
@@ -225,14 +178,12 @@ export function StaffContractsList({
         <View style={styles.scheduleDetails}>
           {!!scheduleError && (
             <>
-              <Text accessibilityRole="alert" style={ui.red}>
-                {scheduleError}
-              </Text>
-              <Button onPress={refresh}>Thử lại lịch kiểm tra</Button>
+              <ContractNotice message={scheduleError} />
+              <Button onPress={refresh}>Thử lại nhiệm vụ trả phòng</Button>
             </>
           )}
           {!scheduleError && !schedules.length && (
-            <Text style={ui.muted}>Chưa có lịch kiểm tra được giao.</Text>
+            <Text style={ui.muted}>Chưa có nhiệm vụ trả phòng tại cơ sở này.</Text>
           )}
           {schedules.map((schedule) => (
             <TouchableRipple
@@ -246,7 +197,11 @@ export function StaffContractsList({
                 <View style={ui.grow}>
                   <Text variant="titleSmall">Phòng {schedule.roomNumber}</Text>
                   <Text variant="bodySmall" style={ui.muted}>
-                    {formatInstant(schedule.scheduledAt)}
+                    {schedule.proposedDate
+                      ? `Ngày trả dự kiến: ${displayContractDate(schedule.proposedDate)}`
+                      : schedule.scheduledAt
+                        ? `Lịch kiểm tra: ${formatInstant(schedule.scheduledAt)}`
+                        : 'Nhiệm vụ đã mở'}
                   </Text>
                   <Text variant="bodySmall" style={ui.muted} numberOfLines={1}>
                     {schedule.locationName}
@@ -299,7 +254,7 @@ export function StaffContractsList({
         <TextInput
           mode="outlined"
           dense
-          placeholder="Tìm theo mã phòng, hợp đồng..."
+          placeholder="Tìm phòng, tên khách, 4 số cuối CCCD"
           accessibilityLabel="Tìm hợp đồng"
           value={search}
           onChangeText={(value) => {
@@ -355,9 +310,7 @@ export function StaffContractsList({
         </View>
       ) : error ? (
         <View style={styles.state}>
-          <Text accessibilityRole="alert" style={ui.red}>
-            {error}
-          </Text>
+          <ContractNotice message={error} />
           <Button onPress={refresh}>Thử tải lại hợp đồng</Button>
         </View>
       ) : (
@@ -377,14 +330,20 @@ export function StaffContractsList({
                     <Text variant="titleMedium" numberOfLines={2} style={styles.room}>
                       Phòng {contract.roomNumber}
                     </Text>
-                    <Text variant="labelSmall" numberOfLines={1} style={ui.muted}>
-                      {contract.locationName}
+                    {contract.kind === 'Holding' && (
+                      <View style={{ gap: 3 }}>
+                        <Text variant="bodyMedium">
+                          {contract.holdingCustomer?.fullName || 'Chưa có thông tin khách hàng'}
+                        </Text>
+                        <Text variant="labelSmall" style={ui.muted}>
+                          CCCD:{' '}
+                          {contract.holdingCustomer?.maskedCitizenNumber || 'Chưa có thông tin'}
+                        </Text>
+                      </View>
+                    )}
+                    <Text variant="labelSmall" style={ui.muted}>
+                      {staffContractKindLabel(contract.kind)}
                     </Text>
-                    <View style={{ alignSelf: 'flex-start' }}>
-                      <Pill tone={contract.kind === 'Holding' ? 'blue' : 'neutral'}>
-                        {staffContractKindLabel(contract.kind)}
-                      </Pill>
-                    </View>
                     <Text variant="labelSmall" style={ui.muted}>
                       {contract.kind === 'Holding'
                         ? `Hạn giữ chỗ: ${contract.holdingExpiresAt ? formatInstant(contract.holdingExpiresAt) : 'Chưa có thông tin'}`
@@ -455,7 +414,7 @@ export function StaffContractsList({
 }
 
 const styles = StyleSheet.create({
-  screen: { gap: 12 },
+  screen: { gap: 8 },
   summary: { flexDirection: 'row', alignItems: 'center', gap: 8 },
   title: { color: c.primary, fontWeight: '700' },
   schedule: {
@@ -465,10 +424,10 @@ const styles = StyleSheet.create({
     borderRadius: 12,
     overflow: 'hidden',
   },
-  scheduleRow: { flexDirection: 'row', alignItems: 'center', gap: 10, padding: 12, minHeight: 52 },
+  scheduleRow: { flexDirection: 'row', alignItems: 'center', gap: 8, padding: 12, minHeight: 48 },
   scheduleDetails: { gap: 8 },
   statusTabs: { gap: 8, paddingVertical: 2 },
-  statusTab: { borderRadius: 22 },
+  statusTab: { borderRadius: 10 },
   searchRow: { flexDirection: 'row', alignItems: 'center', gap: 8 },
   search: { flex: 1, minWidth: 0, backgroundColor: c.white, fontSize: 13 },
   sortButton: {
@@ -479,12 +438,12 @@ const styles = StyleSheet.create({
     width: 48,
     backgroundColor: c.white,
   },
-  cards: { gap: 10 },
+  cards: { gap: 8 },
   card: {
     backgroundColor: c.white,
     borderWidth: 1,
     borderColor: c.border,
-    borderRadius: 14,
+    borderRadius: 12,
     overflow: 'hidden',
   },
   cardBody: {
@@ -492,16 +451,16 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
     gap: 10,
     padding: 12,
-    minHeight: 124,
+    minHeight: 88,
   },
-  cardInfo: { flex: 1, minWidth: 0, gap: 5 },
+  cardInfo: { flex: 1, minWidth: 0, gap: 4 },
   room: { color: c.primary, fontWeight: '700' },
   rent: { color: c.primary, marginTop: 3 },
   cardTrailing: {
     alignItems: 'flex-end',
     justifyContent: 'space-between',
     maxWidth: '40%',
-    gap: 12,
+    gap: 8,
   },
   state: { paddingVertical: 24, gap: 10, alignItems: 'center' },
   pagination: { alignItems: 'center', gap: 2, paddingTop: 4, paddingBottom: 12 },

@@ -10,6 +10,8 @@ export interface LocationAssetInventoryItem {
   quantity: number;
   commonArea: string | null;
   checked: boolean;
+  /** Staff's factual observation; Unassessed is retained for legacy snapshots. */
+  condition?: 'Unassessed' | 'Intact' | 'Missing' | 'Damaged' | 'NotAccessible';
   inherited: boolean;
   sourceHandoverContractId: string | null;
   note: string | null;
@@ -43,7 +45,14 @@ export function inventoryReady(view: LocationAssetInventory | null): boolean {
     Array.isArray(view.items) &&
     view.items.length === view.totalCount &&
     view.checkedCount === view.totalCount &&
-    view.items.every((item) => item.checked)
+    view.items.every((item) => {
+      if (!item.checked) return false;
+      const condition = item.condition ?? 'Unassessed';
+      if (condition === 'Missing' || condition === 'Damaged')
+        return !!item.note?.trim() && !!item.incidentId;
+      if (condition === 'NotAccessible') return !!item.note?.trim();
+      return true;
+    })
   );
 }
 
@@ -78,7 +87,13 @@ export function locationAssetInventoryClient(api: MobileApi) {
     updateItem: (
       taskId: string,
       itemId: string,
-      input: { version: number; checked: boolean; note: string | null; incidentId: string | null },
+      input: {
+        version: number;
+        checked: boolean;
+        condition: NonNullable<LocationAssetInventoryItem['condition']>;
+        note: string | null;
+        incidentId: string | null;
+      },
       key: string,
     ) =>
       api.request<LocationAssetInventory>(`${path(taskId)}/items/${guid(itemId)}`, {

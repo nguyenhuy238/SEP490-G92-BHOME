@@ -17,6 +17,8 @@ vi.mock('expo-router', () => ({
   useFocusEffect: (callback: () => void) => useEffect(callback, [callback]),
 }));
 vi.mock('react-native', () => ({
+  Platform: { OS: 'android' },
+  StyleSheet: { create: (s: unknown) => s },
   View: ({ children }: { children?: React.ReactNode }) => <div>{children}</div>,
   BackHandler: { addEventListener: () => ({ remove: vi.fn() }) },
   AppState: {
@@ -27,6 +29,7 @@ vi.mock('react-native', () => ({
   },
 }));
 type Children = { children?: React.ReactNode };
+vi.mock('../../../src/mobile/src/theme/theme', () => ({ colors: {} }));
 vi.mock('react-native-paper', () => ({
   ActivityIndicator: () => <span>Đang tải</span>,
   Text: ({ children }: Children) => <span>{children}</span>,
@@ -183,9 +186,7 @@ it('shows the server meter-type mismatch and never fills or confirms an electric
     .mockResolvedValueOnce({ id: 'evidence' });
   render(<MeterScreen />);
   await capture();
-  expect(
-    await screen.findByText(/Loại đồng hồ hoặc đơn vị trong ảnh không khớp tác vụ/),
-  ).toBeTruthy();
+  expect(await screen.findByText(/Ảnh không đúng loại công tơ/)).toBeTruthy();
   expect(screen.getByLabelText(valueLabel)).toHaveValue('');
   expect(screen.getByText(saveLabel)).toBeDisabled();
   expect(mocks.json).not.toHaveBeenCalled();
@@ -201,7 +202,8 @@ it('keeps unknown images editable with explicit review and no automatic confirma
     .mockResolvedValueOnce({ id: 'evidence' });
   render(<MeterScreen />);
   await capture();
-  expect(await screen.findByText(/OCR chưa đọc được/)).toBeTruthy();
+  expect(await screen.findByText(/Không nhận diện được chỉ số/)).toBeTruthy();
+  expect(screen.queryByText(/OCR chưa đọc được/)).toBeNull();
   expect(screen.getByLabelText(valueLabel)).toHaveValue('');
   expect(screen.getByLabelText(confirmLabel)).not.toBeChecked();
   expect(screen.getByText(saveLabel)).toBeDisabled();
@@ -228,26 +230,33 @@ it('shows OCR progress, warnings, explicit correction and only one pending confi
   );
   render(<MeterScreen />);
   await capture();
-  expect(screen.getByText('Đang xử lý…')).toBeTruthy();
+  expect(screen.getByText('Đang nhận dạng chỉ số…')).toBeTruthy();
   await act(async () => finishOcr(proposal));
   await waitFor(() => expect(screen.getByLabelText(valueLabel)).toHaveValue('00123.4'));
   expect(screen.getByText(/Ảnh có thể mờ hoặc lóa/)).toBeTruthy();
   fireEvent.change(screen.getByLabelText(valueLabel), { target: { value: '123.5' } });
   fireEvent.click(screen.getByLabelText(confirmLabel));
-  fireEvent.click(screen.getByText(saveLabel));
-  fireEvent.click(screen.getByText(saveLabel));
+  expect(screen.getByText(saveLabel)).toBeDisabled();
+  expect(mocks.json).not.toHaveBeenCalled();
+  fireEvent.change(screen.getByLabelText(valueLabel), { target: { value: '124' } });
+  if (!(screen.getByLabelText(confirmLabel) as HTMLInputElement).checked)
+    fireEvent.click(screen.getByLabelText(confirmLabel));
+  const save = screen.getByRole('button', { name: saveLabel });
+  fireEvent.click(save);
+  fireEvent.click(save);
+  expect(screen.getByRole('button', { name: 'Đang lưu chỉ số…' })).toBeDisabled();
   await waitFor(() => expect(mocks.json).toHaveBeenCalledTimes(1));
   expect(mocks.json.mock.calls[0][1]).toEqual({
     humanConfirmed: true,
-    confirmedValue: '123.5',
+    confirmedValue: '124',
     evidenceId: 'evidence',
   });
   await act(async () =>
     finishSave({
       id: 'reading',
-      confirmedValue: '123.5',
+      confirmedValue: '124',
       previousValue: '100',
-      consumption: '23.5',
+      consumption: '24',
     }),
   );
   await waitFor(() => expect(mocks.success).toHaveBeenCalledWith('Đã lưu chỉ số.'));
@@ -266,7 +275,7 @@ it('clears the old proposal on retake and keeps manual entry when OCR fails', as
   await waitFor(() => expect(screen.getByText('Chụp ảnh thử')).not.toBeDisabled());
   fireEvent.click(screen.getByLabelText(confirmLabel));
   await capture();
-  await screen.findByText('Không nhận diện được chỉ số. Hãy thử lại hoặc nhập tay.');
+  await screen.findByText('Không nhận diện được chỉ số. Hãy nhập thủ công hoặc thử lại OCR.');
   expect(screen.getByLabelText(valueLabel)).toHaveValue('');
   expect(screen.getByLabelText(confirmLabel)).not.toBeChecked();
   fireEvent.change(screen.getByLabelText(valueLabel), { target: { value: '125' } });

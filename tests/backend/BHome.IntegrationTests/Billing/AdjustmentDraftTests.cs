@@ -31,12 +31,12 @@ public sealed partial class InvoiceApiTests
         Assert.Equal(HttpStatusCode.Forbidden, (await AdjustmentPost(w.Staff.Client, path + "/approve", input)).StatusCode);
         Assert.Equal(HttpStatusCode.Conflict, (await AdjustmentPost(w.Owner.Client, path + "/approve", input with { ExpectedInvoiceVersion = 1 })).StatusCode);
         var approved = await Success<AdjustmentView>(await AdjustmentPost(w.Owner.Client, path + "/approve", input, key)); Assert.Equal("Approved", approved.Status);
-        Assert.Equal(-10000, approved.Decision!.Delta); Assert.Equal(3109250, approved.CurrentInvoice!.Total);
+        Assert.Equal(-10000, approved.Decision!.Delta); Assert.Equal(3111000, approved.CurrentInvoice!.Total);
         Assert.Equal(approved.Id, (await Success<AdjustmentView>(await AdjustmentPost(w.Owner.Client, path + "/approve", input, key))).Id);
         var refresh = await Success<InvoiceView>(await w.Owner.Client.PostAsJsonAsync($"/api/v1/invoices/{draft.Id}/refresh", new InvoiceFinalizeInput(approved.CurrentInvoice.Version)));
         Assert.Empty(refresh.MissingInputs); var rent = refresh.Lines.Single(l => l.ChargeCode == "RENT"); Assert.Equal(3000000, rent.CalculatedAmount); Assert.Equal(2990000, rent.Amount); Assert.Equal(request.Id, rent.CorrectionRequestId);
         var final = await Success<InvoiceView>(await w.Owner.Client.PostAsJsonAsync($"/api/v1/invoices/{draft.Id}/finalize", new InvoiceFinalizeInput(refresh.Version)));
-        Assert.Equal("Final", final.Status); Assert.Equal(3109250, final.Total);
+        Assert.Equal("Final", final.Status); Assert.Equal(3111000, final.Total);
     }
     [Fact]
     public async Task RoomPolicyChangeDoesNotInvalidateApprovedDraftCorrection()
@@ -65,7 +65,7 @@ public sealed partial class InvoiceApiTests
         Assert.Single(replies, r => r.StatusCode == HttpStatusCode.OK); Assert.Single(replies, r => r.StatusCode == HttpStatusCode.Conflict);
         var decision = await w.Owner.Client.GetFromJsonAsync<AdjustmentView>($"/api/v1/invoice-adjustments/{request.Id}");
         var invoice = await w.Tenant.Client.GetFromJsonAsync<InvoiceView>($"/api/v1/invoices/{draft.Id}");
-        Assert.Equal(decision!.Status == "Approved" ? 3109250 : 3119250, invoice!.Total);
+        Assert.Equal(decision!.Status == "Approved" ? 3111000 : 3121000, invoice!.Total);
         await using var scope = fixture.Factory.Services.CreateAsyncScope(); var db = scope.ServiceProvider.GetRequiredService<BHomePersistenceContext>();
         Assert.Equal(1, await db.Set<InvoiceAdjustmentDecision>().CountAsync(d => d.RequestId == request.Id));
     }

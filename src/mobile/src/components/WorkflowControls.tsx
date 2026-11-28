@@ -1,7 +1,16 @@
 import { useFeedbackState } from '../lib/useFeedbackState';
-import React, { useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import { ScrollView, View } from 'react-native';
-import { Button, Dialog, Icon, Portal, RadioButton, Text, TextInput } from 'react-native-paper';
+import {
+  Button,
+  Dialog,
+  HelperText,
+  Icon,
+  Portal,
+  RadioButton,
+  Text,
+  TextInput,
+} from 'react-native-paper';
 import { useWorkspace } from '../features/workspace/WorkspaceProvider';
 import { CameraCapture } from './CameraCapture';
 import { MoneyTextInput } from './MoneyTextInput';
@@ -21,6 +30,7 @@ export function ChoiceField({
   searchable = false,
   placeholder = 'Chọn…',
   icon,
+  error,
 }: {
   label: string;
   value: string;
@@ -30,6 +40,7 @@ export function ChoiceField({
   searchable?: boolean;
   placeholder?: string;
   icon?: string;
+  error?: string;
 }) {
   const [open, setOpen] = useState(false);
   const [search, setSearch] = useState('');
@@ -47,6 +58,7 @@ export function ChoiceField({
         mode="outlined"
         icon={icon ?? 'chevron-down'}
         accessibilityLabel={label}
+        accessibilityHint={error}
         disabled={disabled}
         onPress={() => {
           setSearch('');
@@ -57,10 +69,15 @@ export function ChoiceField({
           justifyContent: 'space-between',
           minHeight: 48,
         }}
-        style={{ borderRadius: 10, borderColor: c.border }}
+        style={{ borderRadius: 10, borderColor: error ? c.red : c.border }}
       >
         {options.find((item) => item.id === value)?.label ?? placeholder}
       </Button>
+      {!!error && (
+        <HelperText type="error" accessibilityRole="alert">
+          {error}
+        </HelperText>
+      )}
       <Portal>
         {open && (
           <Dialog visible={open} onDismiss={() => setOpen(false)} style={{ maxHeight: '80%' }}>
@@ -114,6 +131,9 @@ export function Input({
   multiline = false,
   disabled = false,
   email = false,
+  placeholder,
+  error,
+  focusOnError = false,
 }: {
   label: string;
   value: string;
@@ -123,33 +143,64 @@ export function Input({
   multiline?: boolean;
   disabled?: boolean;
   email?: boolean;
+  placeholder?: string;
+  error?: string;
+  focusOnError?: boolean;
 }) {
+  const input = useRef<unknown>(null);
+  useEffect(() => {
+    const target = input.current as { focus?: () => void } | null;
+    if (error && focusOnError && !disabled && typeof target?.focus === 'function') target.focus();
+  }, [error, focusOnError, disabled]);
   if (money)
     return (
-      <MoneyTextInput
-        mode="outlined"
-        label={label}
-        accessibilityLabel={label}
-        value={value}
-        onChangeText={onChange}
-        disabled={disabled}
-        autoCapitalize="none"
-        style={{ backgroundColor: c.white }}
-      />
+      <View>
+        <MoneyTextInput
+          ref={(target: unknown) => {
+            input.current = target;
+          }}
+          mode="outlined"
+          label={label}
+          accessibilityLabel={label}
+          value={value}
+          error={!!error}
+          onChangeText={onChange}
+          disabled={disabled}
+          autoCapitalize="none"
+          style={{ backgroundColor: c.white }}
+        />
+        {!!error && (
+          <HelperText type="error" accessibilityRole="alert">
+            {error}
+          </HelperText>
+        )}
+      </View>
     );
   return (
-    <TextInput
-      mode="outlined"
-      label={label}
-      accessibilityLabel={label}
-      value={value}
-      onChangeText={onChange}
-      keyboardType={email ? 'email-address' : numeric ? 'decimal-pad' : 'default'}
-      multiline={multiline}
-      disabled={disabled}
-      autoCapitalize={numeric || email ? 'none' : 'sentences'}
-      style={{ backgroundColor: c.white }}
-    />
+    <View>
+      <TextInput
+        ref={(target: unknown) => {
+          input.current = target;
+        }}
+        mode="outlined"
+        label={placeholder ? undefined : label}
+        accessibilityLabel={label}
+        placeholder={placeholder}
+        value={value}
+        error={!!error}
+        onChangeText={onChange}
+        keyboardType={email ? 'email-address' : numeric ? 'decimal-pad' : 'default'}
+        multiline={multiline}
+        disabled={disabled}
+        autoCapitalize={numeric || email ? 'none' : 'sentences'}
+        style={{ backgroundColor: c.white }}
+      />
+      {!!error && (
+        <HelperText type="error" accessibilityRole="alert">
+          {error}
+        </HelperText>
+      )}
+    </View>
   );
 }
 export function EvidenceInput({

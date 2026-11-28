@@ -1,4 +1,5 @@
 import React, { useEffect, useMemo, useState } from 'react';
+import { ContractNotice } from './ContractNotice';
 import {
   AppState,
   FlatList,
@@ -303,9 +304,7 @@ export function ContractPdfPreview({
         )}
         {!!error && (
           <View style={styles.message}>
-            <Text accessibilityRole="alert" style={{ color: c.red }}>
-              {error}
-            </Text>
+            <ContractNotice message={error} />
             <Button
               mode="outlined"
               icon="reload"
@@ -415,7 +414,18 @@ export function ContractPdfPreview({
                   disabled={zoom >= 3}
                   onPress={() => setZoom((value) => Math.min(3, value + 0.5))}
                 />
+                <IconButton
+                  icon="fit-to-page-outline"
+                  accessibilityLabel="Vừa chiều rộng trang"
+                  disabled={zoom === 1}
+                  onPress={() => setZoom(1)}
+                />
               </View>
+              {onDownloadPdf && (
+                <Button icon="download" disabled={busy} onPress={onDownloadPdf}>
+                  Tải PDF
+                </Button>
+              )}
               <FlatList
                 style={styles.grow}
                 data={info.pages}

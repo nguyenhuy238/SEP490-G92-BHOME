@@ -2,15 +2,25 @@
 import React from 'react';
 import { afterEach, beforeEach, expect, it, vi } from 'vitest';
 import { cleanup, fireEvent, render, screen, within } from '@testing-library/react';
-const state = vi.hoisted(() => ({ preview: false, go: vi.fn() }));
+const state = vi.hoisted(() => ({
+  preview: false,
+  go: vi.fn(),
+  inspections: [] as Array<{
+    contractId: string;
+    roomNumber: string;
+    locationName: string;
+    proposedDate: string;
+    status: string;
+    scheduledAt: string | null;
+  }>,
+}));
 vi.mock('expo-router', () => ({ router: { push: vi.fn() } }));
 vi.mock('../../../src/mobile/src/features/workspace/useStaffDashboard', () => ({
   useStaffDashboard: () => ({
     locations: { data: null },
     tasks: { data: null },
-    overdue: { data: null },
-    inspections: { data: null },
-    meters: { data: null },
+    priorities: { data: null },
+    inspections: { data: state.inspections.length ? state.inspections : null },
     reload: vi.fn(),
   }),
 }));
@@ -70,38 +80,24 @@ import { StaffNotificationScreen } from '../../../src/mobile/src/screens/StaffNo
 beforeEach(() => {
   state.preview = false;
   state.go.mockClear();
+  state.inspections = [];
 });
 afterEach(cleanup);
 
 it.each([
-  ['Tiếp nhận người thuê', 'onboarding'],
-  ['Hợp đồng', 'signing'],
   ['Ghi điện nước', 'meter-reading'],
-  ['Báo cáo sự cố', 'report-incident'],
-  ['Công việc của tôi', 'work-orders'],
-  ['Lịch làm việc', 'shifts'],
-  ['Xử lý sự cố', 'staff-maintenance'],
-  ['Công nợ', 'debt-follow-up'],
-  ['Gửi thông báo', 'send-notification'],
-  ['Phòng trọ', 'rooms'],
-  ['Tài sản', 'staff-assets'],
-  ['Hóa đơn', 'staff-invoices'],
-  ['Sự cố khẩn cấp', 'staff-emergencies'],
+  ['Công việc', 'work-orders'],
+  ['Xử lý sự cố', 'staff-incidents'],
 ])('opens %s from the authenticated dashboard', (label, destination) => {
   render(<StaffDashboard />);
-  fireEvent.click(screen.getByText('Xem tất cả chức năng (16)'));
   fireEvent.click(screen.getAllByRole('button', { name: label }).at(-1)!);
   expect(state.go).toHaveBeenCalledWith(destination);
 });
-it.each([
-  ['Bàn giao nhận phòng', 'move-in'],
-  ['Kiểm tra trả phòng', 'move-out'],
-])('lets Staff choose %s', (label, destination) => {
+it('opens the dedicated handover and move-out task workspace directly', () => {
   render(<StaffDashboard />);
   expect(screen.queryByRole('dialog')).toBeNull();
   fireEvent.click(screen.getByRole('button', { name: 'Bàn giao / Trả phòng' }));
-  fireEvent.click(within(screen.getByRole('dialog')).getByRole('button', { name: label }));
-  expect(state.go).toHaveBeenCalledWith(destination);
+  expect(state.go).toHaveBeenCalledWith('staff-handovers');
   expect(screen.queryByRole('dialog')).toBeNull();
 });
 it('does not present sample identity, shift or counts to a signed-in account', () => {
@@ -110,38 +106,41 @@ it('does not present sample identity, shift or counts to a signed-in account', (
   expect(screen.queryByText('Đang trực')).toBeNull();
   expect(screen.queryByText('4/6')).toBeNull();
   expect(screen.getAllByText('—')).toHaveLength(3);
-  expect(screen.getByText('Chưa có dữ liệu ca làm')).toBeTruthy();
+  expect(screen.queryByText('Chưa có dữ liệu ca làm')).toBeNull();
 });
 
-it('shows the complete function catalogue including rooms, assets and Staff invoices', () => {
+it('keeps the move-out count linked to the work list without filling the priority preview', () => {
+  state.inspections = [
+    {
+      contractId: 'contract-101',
+      roomNumber: 'R.101',
+      locationName: 'Cơ sở A',
+      proposedDate: '2099-11-18',
+      status: 'Approved',
+      scheduledAt: null,
+    },
+  ];
   render(<StaffDashboard />);
-  fireEvent.click(screen.getByText('Xem tất cả chức năng (16)'));
-  for (const title of [
-    'Tiếp nhận người thuê',
-    'Tạo hợp đồng giữ chỗ',
-    'Hợp đồng',
-    'Công việc của tôi',
-    'Lịch làm việc',
-    'Ghi điện nước',
-    'Bàn giao / Trả phòng',
-    'Kiểm kê trước nhận phòng',
-    'Báo cáo sự cố',
-    'Xử lý sự cố',
-    'Công nợ',
-    'Gửi thông báo',
-    'Phòng trọ',
-    'Tài sản',
-    'Hóa đơn',
-    'Sự cố khẩn cấp',
-  ])
-    expect(screen.getAllByRole('button', { name: title }).length).toBeGreaterThan(0);
-});
-it('allows closing handover selection without navigating', () => {
-  render(<StaffDashboard />);
-  fireEvent.click(screen.getByRole('button', { name: 'Bàn giao / Trả phòng' }));
-  fireEvent.click(screen.getByRole('button', { name: 'Đóng' }));
-  expect(screen.queryByRole('dialog')).toBeNull();
+  const metric = screen.getByRole('button', { name: 'Kiểm tra trả phòng' });
+  expect(within(metric).getByText('1')).toBeTruthy();
+  expect(screen.getByText('Chưa có việc ưu tiên cần xử lý.')).toBeTruthy();
   expect(state.go).not.toHaveBeenCalled();
+  fireEvent.click(metric);
+  expect(state.go).toHaveBeenCalledWith('staff-handovers', { tab: 'MoveOut' });
+});
+
+it('shows four quick actions and hides management shortcuts', () => {
+  render(<StaffDashboard />);
+  for (const title of ['Công việc', 'Ghi điện nước', 'Bàn giao / Trả phòng', 'Xử lý sự cố'])
+    expect(screen.getAllByRole('button', { name: title }).length).toBeGreaterThan(0);
+  for (const title of ['Hóa đơn', 'Công nợ', 'Gửi thông báo'])
+    expect(screen.queryByRole('button', { name: title })).toBeNull();
+});
+it('opens the move-out queue directly from the dashboard metric', () => {
+  render(<StaffDashboard />);
+  fireEvent.click(screen.getByRole('button', { name: 'Kiểm tra trả phòng' }));
+  expect(screen.queryByRole('dialog')).toBeNull();
+  expect(state.go).toHaveBeenCalledWith('staff-handovers', { tab: 'MoveOut' });
 });
 
 it('states that sending is unavailable and only offers the existing inbox', () => {

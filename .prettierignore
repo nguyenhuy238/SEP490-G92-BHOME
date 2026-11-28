@@ -4,6 +4,7 @@
 **/obj
 .worktrees/**
 .tools
+.artifacts
 .tmp
 # Vendored Impeccable development tool; preserve upstream files.
 .codex/skills/impeccable/**

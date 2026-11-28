@@ -1,19 +1,22 @@
+import { TextField } from '../../../components/common/ValidatedForm';
 import { ResourcePage } from '../../../components/common/ResourcePage';
 import { useEffect, useMemo, useState } from 'react';
 import {
   Alert,
   Button,
+  Checkbox,
+  FormControlLabel,
   LinearProgress,
   MenuItem,
   Pagination,
   Paper,
   Stack,
-  TextField,
   Typography,
 } from '@mui/material';
 import { useAuth } from '../../../../../../packages/client-core/src/auth';
 import {
   residenceAction,
+  residenceAlert,
   residenceClient,
   residenceError,
   residenceImageUri,
@@ -244,6 +247,24 @@ export function OwnerResidenceRecord({
                 : ''}
             </Typography>
             {task.resultAt && <Typography>Có kết quả: {formatInstant(task.resultAt)}</Typography>}
+            {task.registrationExpiresOn && (
+              <Typography>
+                Hết hạn tạm trú: {displayContractDate(task.registrationExpiresOn)}
+              </Typography>
+            )}
+            {!!residenceAlert(task) && <Alert severity="warning">{residenceAlert(task)}</Alert>}
+            <Typography>
+              {task.householdCompleted
+                ? 'Tất cả thành viên thuộc diện đăng ký đã được Owner xác nhận.'
+                : 'Còn thành viên thuộc diện đăng ký chưa hoàn thành.'}
+            </Typography>
+            <ResidenceSettings
+              key={task.reference}
+              task={task}
+              api={api}
+              disabled={record.busy || record.review || record.loading}
+              mutate={record.mutate}
+            />
             <Typography>
               {task.ownerConfirmed
                 ? 'Owner đã xác nhận'
@@ -337,6 +358,68 @@ export function OwnerResidenceRecord({
         )}
       </Stack>
     </Paper>
+  );
+}
+
+function ResidenceSettings({
+  task,
+  api,
+  disabled,
+  mutate,
+}: {
+  task: ResidenceTask;
+  api: ResidenceClient;
+  disabled: boolean;
+  mutate: (write: () => Promise<ResidenceTask>, message: string) => Promise<boolean>;
+}) {
+  const [required, setRequired] = useState(task.registrationRequired !== false);
+  const [expires, setExpires] = useState(task.registrationExpiresOn ?? '');
+  const [reason, setReason] = useState('');
+  return (
+    <Stack spacing={1} component="details">
+      <Typography component="summary" sx={{ cursor: 'pointer', py: 1 }}>
+        Cập nhật diện đăng ký và thời hạn
+      </Typography>
+      <FormControlLabel
+        label="Thành viên thuộc diện phải đăng ký"
+        control={
+          <Checkbox
+            checked={required}
+            disabled={disabled}
+            onChange={(_, value) => setRequired(value)}
+          />
+        }
+      />
+      <TextField
+        type="date"
+        label="Ngày hết hạn tạm trú"
+        value={expires}
+        onChange={(e) => setExpires(e.target.value)}
+        disabled={disabled}
+        slotProps={{ inputLabel: { shrink: true } }}
+      />
+      <Typography variant="caption">
+        Cảnh báo từ 15 ngày trước ngày hết hạn. Owner ghi nhận diện đăng ký theo hồ sơ thực tế.
+      </Typography>
+      <TextField
+        label="Lý do cập nhật"
+        value={reason}
+        onChange={(e) => setReason(e.target.value)}
+        disabled={disabled}
+        slotProps={{ htmlInput: { maxLength: 1000 } }}
+      />
+      <Button
+        disabled={disabled || !reason.trim()}
+        onClick={() =>
+          void mutate(
+            () => api.configure(task, required, expires || null, reason),
+            'Đã cập nhật theo dõi tạm trú.',
+          )
+        }
+      >
+        Lưu theo dõi
+      </Button>
+    </Stack>
   );
 }
 

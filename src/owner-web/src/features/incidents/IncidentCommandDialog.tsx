@@ -1,5 +1,6 @@
-import { useState } from 'react';
-import { Alert, MenuItem, Stack, TextField } from '@mui/material';
+import { TextField } from '../../components/common/ValidatedForm';
+import { useState, type ReactNode } from 'react';
+import { MenuItem, Stack } from '@mui/material';
 import { ConfirmDialog } from '../../components/common/PortalUI';
 import { MoneyField } from '../../components/common/MoneyField';
 import { useOwnerAction } from '../../hooks/useOwnerWorkspace';
@@ -9,8 +10,9 @@ import { IncidentReferenceField, type IncidentReferenceScope } from './IncidentR
 export interface CommandField {
   name: string;
   label: string;
-  type?: 'text' | 'money' | 'guid' | 'instant' | 'asset' | 'incident';
+  type?: 'text' | 'money' | 'guid' | 'instant' | 'asset' | 'incident' | 'staff';
   incidentScope?: IncidentReferenceScope;
+  options?: Array<{ id: string; label: string }>;
   optional?: boolean;
 }
 export interface IncidentCommand {
@@ -19,6 +21,9 @@ export interface IncidentCommand {
   version: number;
   fields: CommandField[];
   extra?: Record<string, unknown>;
+  initialValues?: Record<string, string>;
+  source?: ReactNode;
+  onSaved?: () => void;
 }
 export function IncidentCommandDialog({
   command: c,
@@ -27,7 +32,10 @@ export function IncidentCommandDialog({
   command: IncidentCommand;
   close: () => void;
 }) {
-  const [values, setValues] = useState<Record<string, string>>({ assetStatus: '0' });
+  const [values, setValues] = useState<Record<string, string>>(() => ({
+    assetStatus: '0',
+    ...(c.initialValues ?? {}),
+  }));
   const [validation, setValidation] = useState('');
   const action = useOwnerAction();
   async function save() {
@@ -38,7 +46,7 @@ export function IncidentCommandDialog({
         if (!value && !f.optional) throw new Error(`Nhập ${f.label.toLocaleLowerCase('vi-VN')}.`);
         body[f.name] = !value
           ? null
-          : f.type === 'guid' || f.type === 'incident'
+          : f.type === 'guid' || f.type === 'incident' || f.type === 'staff'
             ? guid(value)
             : f.type === 'money'
               ? vnd(value)
@@ -49,7 +57,10 @@ export function IncidentCommandDialog({
                   : value;
       }
       setValidation('');
-      if (await action.run(() => action.command(c.path, 'POST', body))) close();
+      if (await action.run(() => action.command(c.path, 'POST', body))) {
+        close();
+        c.onSaved?.();
+      }
     } catch (e) {
       setValidation((e as Error).message);
     }
@@ -63,11 +74,8 @@ export function IncidentCommandDialog({
       onClose={close}
       onConfirm={() => void save()}
     >
-      <Stack spacing={2} sx={{ pt: 1 }}>
-        <Alert severity="info">
-          Quyết định trên phiên bản {c.version}. Máy chủ kiểm tra quyền, bằng chứng, chi phí và
-          trạng thái trước khi lưu.
-        </Alert>
+      <Stack spacing={1.5} sx={{ pt: 1 }}>
+        {c.source}
         {c.fields.map((f) =>
           f.type === 'incident' && f.incidentScope ? (
             <IncidentReferenceField
@@ -93,7 +101,7 @@ export function IncidentCommandDialog({
               label={f.label}
               value={values[f.name] ?? ''}
               disabled={action.busy}
-              select={f.type === 'asset'}
+              select={f.type === 'asset' || f.type === 'staff'}
               type={f.type === 'instant' ? 'datetime-local' : 'text'}
               slotProps={{
                 inputLabel: { shrink: true },
@@ -112,6 +120,12 @@ export function IncidentCommandDialog({
                   Ngừng sử dụng
                 </MenuItem>,
               ]}
+              {f.type === 'staff' &&
+                (f.options ?? []).map((option) => (
+                  <MenuItem key={option.id} value={option.id}>
+                    {option.label}
+                  </MenuItem>
+                ))}
             </TextField>
           ),
         )}

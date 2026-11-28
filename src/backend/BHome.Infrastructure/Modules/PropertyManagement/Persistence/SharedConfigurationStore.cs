@@ -1,4 +1,5 @@
 using System.Text.Json;
+using System.Text;
 using BHome.Application.PropertyManagement;
 using BHome.Infrastructure.Modules.Notifications;
 using BHome.Infrastructure.Persistence.Compact24;
@@ -43,7 +44,27 @@ internal sealed partial class SharedConfigurationStore(Compact24DbContext db, Co
         await using var cmd = await sql.Command(query, t, args); await using var reader = await cmd.ExecuteReaderAsync(t); var items = new List<SharedDocument>();
         while (await reader.ReadAsync(t)) items.Add(JsonSerializer.Deserialize<SharedDocument>(reader.GetString(0), Json)!); return items;
     }
-    public Task<bool> NameExistsAsync(string resource, string name, Guid family, CancellationToken t, bool includeArchived = true) => sql.Scalar<bool>("SELECT EXISTS(SELECT 1 FROM operational_tasks WHERE task_type='COMMAND' AND task_data->>'recordType'='SharedConfiguration' AND task_data->'document'->>'resource'=@resource AND (@includeArchived OR status<>'Archived') AND lower(trim(regexp_replace(normalize(task_data->'document'->>'name', NFC), '[[:space:]]+', ' ', 'g')))=lower(trim(regexp_replace(normalize(@name, NFC), '[[:space:]]+', ' ', 'g'))) AND task_data->'document'->>'familyId'<>@family)", t, ("resource", resource), ("name", name), ("family", family.ToString()), ("includeArchived", includeArchived));
+    public async Task<bool> NameExistsAsync(string resource, string name, Guid family, CancellationToken t, bool includeArchived = true)
+    {
+        // PostgreSQL lower() under the C locale does not case-fold Vietnamese letters.
+        // Match the application name policy independently of the database collation.
+        // The caller holds the existing shared-configuration transaction lock.
+        static string NormalizeName(string value) => string.Join(' ', value.Normalize(NormalizationForm.FormC)
+            .Split((char[]?)null, StringSplitOptions.RemoveEmptyEntries));
+        var candidate = NormalizeName(name);
+        await using var cmd = await sql.Command("""
+            SELECT task_data->'document'->>'name' FROM operational_tasks
+            WHERE task_type='COMMAND' AND task_data->>'recordType'='SharedConfiguration'
+              AND task_data->'document'->>'resource'=@resource
+              AND (@includeArchived OR status<>'Archived')
+              AND task_data->'document'->>'familyId'<>@family
+            """, t, ("resource", resource), ("family", family.ToString()), ("includeArchived", includeArchived));
+        await using var reader = await cmd.ExecuteReaderAsync(t);
+        while (await reader.ReadAsync(t))
+            if (!reader.IsDBNull(0) && string.Equals(NormalizeName(reader.GetString(0)), candidate, StringComparison.OrdinalIgnoreCase))
+                return true;
+        return false;
+    }
     public Task<bool> IsUsedAsync(Guid id, string resource, CancellationToken t) => sql.Scalar<bool>("""
         SELECT EXISTS(SELECT 1 FROM operational_tasks WHERE (
           (task_type='COMMAND' AND task_data->>'recordType'='SharedConfigurationOperation' AND (

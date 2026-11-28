@@ -1,3 +1,4 @@
+using BHome.Application.Common;
 using BHome.Application.Contracts;
 using BHome.Application.PropertyManagement;
 using BHome.Domain.Billing;
@@ -8,12 +9,15 @@ using BHome.Infrastructure.Persistence;
 using BHome.Infrastructure.Persistence.Compact24;
 using Microsoft.EntityFrameworkCore;
 using Npgsql;
+using Microsoft.Extensions.Logging;
 using System.Text.Json;
+using System.Security.Cryptography;
+using BHome.Application.Ocr;
 
 namespace BHome.Infrastructure.Contracts;
 
-internal sealed class ContractRepository(BHomePersistenceContext db, ISetupWorkspaceStore? setup = null,
-    IContractHandoverRepository? handoverTasks = null) : IContractRepository
+internal sealed class ContractRepository(BHomePersistenceContext db, ILogger<ContractRepository> logger,
+    ISetupWorkspaceStore? setup = null, IContractHandoverRepository? handoverTasks = null, TimeProvider? clock = null, IIdentityProtection? identityProtection = null) : IContractRepository
 {
     // Sidecar Draft initialization is deliberately attached to persistence, not to
     // any particular contract-creation API (direct draft, Holding conversion, etc.).
@@ -25,12 +29,16 @@ internal sealed class ContractRepository(BHomePersistenceContext db, ISetupWorks
     public async Task<ContractPage> ListAsync(ContractListScope scope, int page, int pageSize, Guid? locationId, ContractStatus? status, CancellationToken t)
     {
         var query = db.Set<Contract>().AsNoTracking().Where(c => scope.Owner ||
-            (scope.Tenant && c.TenantUserId == scope.ActorId) ||
+            (scope.Tenant && (c.TenantUserId == scope.ActorId ||
+                (c.Status == ContractStatus.Active && (c.Kind == ContractKind.Main || c.Kind == ContractKind.Renewal) &&
+                 c.Residents.Any(m => m.ResidenceFrom <= scope.Today && (m.ResidenceTo == null || m.ResidenceTo >= scope.Today) &&
+                     db.Set<Resident>().Any(r => r.Id == m.ResidentId && r.RoomId == c.RoomId && r.TenantUserId == scope.ActorId))))) ||
             (scope.Staff && EligibleStaff(scope.Today).Contains(scope.ActorId) &&
                 db.StaffLocationAssignments.Any(a => a.StaffUserId == scope.ActorId &&
                 a.LocationId == c.Room.LocationId && a.StartDate <= scope.Today && a.EndDate >= scope.Today)));
         if (locationId is { } location) query = query.Where(c => c.Room.LocationId == location);
         if (status is { } state) query = query.Where(c => c.Status == state);
+        if (scope.Kind is { } kind) query = query.Where(c => c.Kind == kind);
         var total = await query.CountAsync(t);
         var items = await query.OrderByDescending(c => c.StartDate).ThenBy(c => c.Id)
             .Skip((page - 1) * pageSize).Take(pageSize)
@@ -39,15 +47,26 @@ internal sealed class ContractRepository(BHomePersistenceContext db, ISetupWorks
                 Summary = new ContractSummary(c.Id, c.RoomId, c.Room.LocationId, c.Room.Location.Name, c.Room.RoomNumber,
                 c.Kind.ToString(), c.Status.ToString(), c.StartDate, c.EndDate, c.MonthlyRent,
                 c.Kind == ContractKind.Main && c.DraftMetadata != "{}" && c.Status == ContractStatus.Draft,
-                c.RequiredDeposit, c.HoldingExpiryAt),
-                c.AgreedPriceSnapshot
+                c.RequiredDeposit, c.HoldingExpiryAt, null, null),
+                c.AgreedPriceSnapshot,
+                c.RepresentativeResidentId
             }).ToArrayAsync(t);
+        var representativeIds = items.Select(row => row.RepresentativeResidentId).Distinct().ToArray();
+        var customers = identityProtection is not null && representativeIds.Length > 0
+            ? await db.Set<Resident>().AsNoTracking().Where(r => representativeIds.Contains(r.Id) && r.VerificationStatus == IdentityVerificationStatus.Verified).ToDictionaryAsync(r => r.Id, t)
+            : new Dictionary<Guid, Resident>();
         return new(items.Select(row =>
         {
-            if (row.Summary.Kind != "Holding" || row.Summary.HoldingExpiresAt is not null) return row.Summary;
+            var summary = row.Summary;
+            if (customers.TryGetValue(row.RepresentativeResidentId, out var primary))
+                summary = summary with { RepresentativeName = ContractResidentDisplay.Read(primary, identityProtection).Name };
+            if (summary.Kind != "Holding") return summary;
+            if (customers.TryGetValue(row.RepresentativeResidentId, out var resident))
+                summary = summary with { HoldingCustomer = ReadHoldingCustomer(resident) };
+            if (summary.HoldingExpiresAt is not null) return summary;
             // Legacy contracts retain the original expiry in their immutable price snapshot.
-            try { return row.Summary with { HoldingExpiresAt = JsonSerializer.Deserialize<HoldingPriceSnapshot>(row.AgreedPriceSnapshot)?.HoldingExpiresAt }; }
-            catch (JsonException) { return row.Summary; }
+            try { return summary with { HoldingExpiresAt = JsonSerializer.Deserialize<HoldingPriceSnapshot>(row.AgreedPriceSnapshot)?.HoldingExpiresAt }; }
+            catch (JsonException) { return summary; }
         }).ToArray(), page, pageSize, total);
     }
     public Task FlushAsync(CancellationToken t) => db.SaveChangesAsync(t);
@@ -59,18 +78,124 @@ internal sealed class ContractRepository(BHomePersistenceContext db, ISetupWorks
          join e in db.Set<MeterEvidence>() on r.EvidenceId equals e.Id
          where task.ContractId == contractId && meter.RoomId == roomId && meter.IsActive && task.Purpose == ReadingPurpose.Final && task.ReadingDate == today && task.Status == MeterTaskStatus.Completed && e.IsUploaded && e.IsLinked
          select new HandoverReading(r.Id, meter.Code, (int)meter.UtilityType, task.ReadingDate, r.ConfirmedValue, e.Id, e.ObjectKey, e.ImageHash)).ToArrayAsync(t);
+    public Task<HandoverReading?> ConfirmedFinalInspectionReadingAsync(Guid contractId, Guid roomId, Guid readingId, CancellationToken t) =>
+        (from reading in db.Set<MeterReading>().AsNoTracking()
+         join task in db.Set<OperationalTask>().AsNoTracking() on reading.TaskId equals task.Id
+         join meter in db.Set<Meter>().AsNoTracking() on reading.MeterId equals meter.Id
+         join evidence in db.Set<MeterEvidence>().AsNoTracking() on reading.EvidenceId equals evidence.Id
+         where reading.Id == readingId && task.ContractId == contractId && meter.RoomId == roomId &&
+               task.Purpose == ReadingPurpose.Final && task.Status == MeterTaskStatus.Completed &&
+               task.MeterId == reading.MeterId && evidence.TaskId == task.Id &&
+               evidence.IsUploaded && evidence.IsLinked
+         select new HandoverReading(reading.Id, meter.Code, (int)meter.UtilityType, task.ReadingDate,
+             reading.ConfirmedValue, evidence.Id, evidence.ObjectKey, evidence.ImageHash)).SingleOrDefaultAsync(t);
     public Task<bool> StaffAssignedAsync(Guid staffId, Guid locationId, DateOnly today, CancellationToken t) =>
         db.StaffLocationAssignments.AnyAsync(a => a.StaffUserId == staffId && a.LocationId == locationId &&
             a.StartDate <= today && a.EndDate >= today && EligibleStaff(today).Contains(staffId), t);
+    public async Task<IReadOnlyList<Contract>> RoomActiveContractsAsync(Guid roomId, CancellationToken t) =>
+        await db.Set<Contract>().Include(c => c.Room).ThenInclude(r => r.Location)
+            .Include(c => c.Room).ThenInclude(r => r.RoomType).Include(c => c.Residents)
+            .Where(c => c.RoomId == roomId && c.Status == ContractStatus.Active &&
+                (c.Kind == ContractKind.Main || c.Kind == ContractKind.Renewal))
+            .OrderBy(c => c.Id).AsSplitQuery().ToArrayAsync(t);
     public async Task<IReadOnlyList<ContractMoveOutHistory>> MoveOutHistoryAsync(Guid contractId, CancellationToken t) => await db.Set<ContractMoveOutHistory>().AsNoTracking().Where(h => h.ContractId == contractId).OrderByDescending(h => h.Version).Take(100).ToArrayAsync(t);
     public async Task<IReadOnlyList<MoveOutAssignment>> AssignmentsAsync(Guid staffId, DateOnly today, CancellationToken t) => await
         (from m in db.Set<ContractMoveOut>().AsNoTracking()
          join c in db.Set<Contract>() on m.ContractId equals c.Id
-         where m.InspectionStaffId == staffId && m.Status != MoveOutStatus.Completed && m.InspectionScheduledAt != null && c.Room.Location.IsActive &&
+         where (m.InspectionStaffId == null || m.InspectionStaffId == staffId) &&
+           m.Status != MoveOutStatus.Requested && m.Status != MoveOutStatus.AwaitingConsent &&
+           m.Status != MoveOutStatus.Completed && m.Status != MoveOutStatus.Rejected &&
+           c.Status == ContractStatus.Active && c.Room.Location.IsActive &&
            EligibleStaff(today).Contains(staffId) &&
            db.StaffLocationAssignments.Any(a => a.StaffUserId == staffId && a.LocationId == c.Room.LocationId && a.StartDate <= today && a.EndDate >= today)
-         orderby m.InspectionScheduledAt
-         select new MoveOutAssignment(c.Id, c.RoomId, c.Room.RoomNumber, c.Room.Location.Name, m.Status.ToString(), m.ProposedDate, m.InspectionScheduledAt!.Value, m.Version)).Take(100).ToArrayAsync(t);
+         orderby m.ProposedDate, m.ContractId
+         select new MoveOutAssignment(c.Id, c.RoomId, c.Room.RoomNumber, c.Room.Location.Name, m.Status.ToString(), m.ProposedDate, m.InspectionScheduledAt, m.Version)).Take(100).ToArrayAsync(t);
+    public async Task<OwnerMoveOutInboxPage> OwnerMoveOutInboxAsync(int page, int pageSize,
+        Guid? locationId, MoveOutStatus? status, string? room, CancellationToken t)
+    {
+        var moves = db.Set<ContractMoveOut>().AsNoTracking().Where(move => move.Status != MoveOutStatus.AwaitingConsent);
+        if (status is { } state) moves = moves.Where(move => move.Status == state);
+        var contracts = db.Set<Contract>().AsNoTracking().AsQueryable();
+        if (locationId is { } location) contracts = contracts.Where(c => c.Room.LocationId == location);
+        if (!string.IsNullOrWhiteSpace(room)) contracts = contracts.Where(c => EF.Functions.ILike(c.Room.RoomNumber, "%" + room + "%"));
+        var query = from move in moves
+                    join contract in contracts on move.ContractId equals contract.Id
+                    select new
+                    {
+                        ContractId = contract.Id,
+                        contract.Room.RoomNumber,
+                        LocationId = contract.Room.LocationId,
+                        LocationName = contract.Room.Location.Name,
+                        move.Status,
+                        move.ProposedDate,
+                        InspectedAt = db.Set<ContractFinalInspection>().Where(i => i.ContractId == contract.Id)
+                            .OrderByDescending(i => i.Version).Select(i => (DateTimeOffset?)i.InspectedAt).FirstOrDefault(),
+                        OwnerDecision = db.Set<ContractFinalInspection>().Where(i => i.ContractId == contract.Id)
+                            .OrderByDescending(i => i.Version).Select(i => i.OwnerDecision).FirstOrDefault()
+                    };
+        var total = await query.CountAsync(t);
+        var rows = await query.OrderByDescending(m => m.ProposedDate).ThenBy(m => m.ContractId)
+            .Skip((page - 1) * pageSize).Take(pageSize).ToArrayAsync(t);
+        // MoveOut.Status tracks the physical Staff workflow, while tenant fee
+        // agreement and automatic settlement are immutable events in contract
+        // history. Fetch those events for this page in ONE scoped query so the
+        // inbox never regresses to "Staff result received" after Tenant accepts.
+        var proposalProgress = new Dictionary<Guid, (string? ProposalStatus, string? SettlementStatus)>();
+        if (db is Compact24DbContext && rows.Length > 0)
+        {
+            var contractIds = rows.Select(row => row.ContractId).ToArray();
+            var snapshots = await db.Database.SqlQuery<string>($"""
+                SELECT jsonb_build_object(
+                    'contractId', c.id,
+                    'proposalId', proposal.value->'state'->>'id',
+                    'confirmed', feedback.value->'state'->>'confirmed',
+                    'settlementStatus', COALESCE(
+                        resolution.value->'state'->'settlement'->>'status',
+                        feedback.value->'state'->'settlement'->>'status'
+                    )
+                )::text AS "Value"
+                FROM contracts c
+                LEFT JOIN LATERAL (
+                    SELECT entry.value FROM jsonb_array_elements(c.history) WITH ORDINALITY entry(value, position)
+                    WHERE entry.value->>'recordType'='MoveOutChargeProposalV1'
+                    ORDER BY entry.position DESC LIMIT 1
+                ) proposal ON true
+                LEFT JOIN LATERAL (
+                    SELECT entry.value FROM jsonb_array_elements(c.history) WITH ORDINALITY entry(value, position)
+                    WHERE entry.value->>'recordType'='MoveOutChargeProposalFeedbackV1'
+                      AND entry.value->'state'->>'proposalId'=proposal.value->'state'->>'id'
+                    ORDER BY entry.position DESC LIMIT 1
+                ) feedback ON true
+                LEFT JOIN LATERAL (
+                    SELECT entry.value FROM jsonb_array_elements(c.history) WITH ORDINALITY entry(value, position)
+                    WHERE entry.value->>'recordType'='MoveOutChargeProposalSettlementV1'
+                      AND entry.value->'state'->>'proposalId'=proposal.value->'state'->>'id'
+                      AND entry.value->'state'->>'feedbackId'=feedback.value->'state'->>'id'
+                    ORDER BY entry.position DESC LIMIT 1
+                ) resolution ON true
+                WHERE c.id=ANY({contractIds})
+                """).ToArrayAsync(t);
+            foreach (var json in snapshots)
+            {
+                using var document = JsonDocument.Parse(json);
+                var row = document.RootElement;
+                var contractId = row.GetProperty("contractId").GetGuid();
+                var proposalId = row.GetProperty("proposalId");
+                if (proposalId.ValueKind == JsonValueKind.Null) continue;
+                var confirmed = row.GetProperty("confirmed");
+                var proposalStatus = confirmed.ValueKind == JsonValueKind.Null ? "PendingTenant" :
+                    confirmed.GetString() == "true" ? "Accepted" : "Disputed";
+                var settlement = row.GetProperty("settlementStatus");
+                proposalProgress[contractId] = (proposalStatus,
+                    settlement.ValueKind == JsonValueKind.String ? settlement.GetString() : null);
+            }
+        }
+        return new(rows.Select(row => new OwnerMoveOutInboxItem(row.ContractId, row.RoomNumber,
+            row.LocationId, row.LocationName, row.Status.ToString(), row.ProposedDate, row.InspectedAt,
+            row.OwnerDecision == "Confirmed",
+            proposalProgress.GetValueOrDefault(row.ContractId).ProposalStatus,
+            proposalProgress.GetValueOrDefault(row.ContractId).SettlementStatus)).ToArray(), page, pageSize, total);
+    }
     public async Task<T> InTransactionAsync<T>(Guid roomId, Func<Task<T>> work, CancellationToken t)
     {
         // Order: payment ledger -> Location advisory -> Room row. Property and Invoice start at
@@ -92,24 +217,14 @@ internal sealed class ContractRepository(BHomePersistenceContext db, ISetupWorks
             if (db is BHome.Infrastructure.Persistence.Compact24.Compact24DbContext)
                 foreach (var c in handoverDraftCandidates.Values)
                 {
-                    var json = JsonSerializer.Serialize(HandoverDraftState.Create(c, DateTimeOffset.UtcNow),
-                        new JsonSerializerOptions(JsonSerializerDefaults.Web));
-                    // Never replace the immutable confirmed `current` baseline or an
-                    // existing draft when a caller retries a contract creation.
-                    await db.Database.ExecuteSqlInterpolatedAsync($"""
-                        UPDATE contracts SET handover=jsonb_set(COALESCE(handover,jsonb_build_object()),
-                          ARRAY['preparation'],{json}::jsonb,true)
-                        WHERE id={c.Id} AND handover->'preparation' IS NULL
-                        """, t);
-                    // The move-in and contract-specific initial meter tasks are
-                    // generated by the existing, deterministic task service.
-                    // Activation invokes the same method safely again, so direct
-                    // creation and Holding conversion remain idempotent.
+                    // Creation and activation use the same room-cycle decision
+                    // under this transaction's Location/Room locks. The service
+                    // initializes preparation only for the canonical physical job.
                     if (handoverTasks is not null)
                     {
                         var loaded = await FindAsync(c.Id, t) ?? throw ContractException.Missing();
                         await handoverTasks.EnsureMoveInTaskAsync(loaded, c.OwnerSignerId,
-                            DateTimeOffset.UtcNow, t);
+                            (clock ?? TimeProvider.System).BusinessUtcNow(), t);
                     }
                 }
             if (handoverDraftCandidates.Count != 0) await db.SaveChangesAsync(t);
@@ -118,7 +233,13 @@ internal sealed class ContractRepository(BHomePersistenceContext db, ISetupWorks
         catch (DbUpdateConcurrencyException)
         { throw ContractException.Conflict("contract_concurrent_operation_retry"); }
         catch (DbUpdateException e) when (e.InnerException is PostgresException { SqlState: "23505" or "23P01" or "23514" })
-        { throw ContractException.Conflict("contract_concurrent_or_duplicate_operation"); }
+        {
+            var postgres = (PostgresException)e.InnerException!;
+            logger.LogWarning("Contract database conflict with SQL state {SqlState} and constraint {Constraint}", postgres.SqlState, postgres.ConstraintName);
+            if (postgres.SqlState == "23505" && postgres.ConstraintName == "ux_resident_contact_email")
+                throw ContractException.Conflict("signing_email_already_in_use");
+            throw ContractException.Conflict("contract_concurrent_or_duplicate_operation");
+        }
         catch (PostgresException e) when (e.SqlState is "40001" or "40P01" or "23514" or "23505" or "23P01")
         { throw ContractException.Conflict("contract_concurrent_operation_retry"); }
     }
@@ -134,6 +255,13 @@ internal sealed class ContractRepository(BHomePersistenceContext db, ISetupWorks
          join r in db.Roles on ur.RoleId equals r.Id
          where u.Id == id && u.IsActive && r.Name == role
          select u.Id).AnyAsync(t);
+    public Task<string?> DecisionActorNameAsync(Guid userId, CancellationToken t)
+    {
+        var users = db.Users.AsNoTracking().Where(u => u.Id == userId);
+        return db.Model.FindEntityType(typeof(ApplicationUser))?.FindProperty("full_name") is not null
+            ? users.Select(u => EF.Property<string?>(u, "full_name") ?? u.UserName).SingleOrDefaultAsync(t)
+            : users.Select(u => u.UserName).SingleOrDefaultAsync(t);
+    }
     public async Task<bool> ConflictsAsync(Guid roomId, Guid exceptId, DateOnly from, DateOnly to, Guid[] residentIds, CancellationToken t)
     {
         var capacity = await db.Set<Room>().Where(r => r.Id == roomId).Select(r => r.Capacity).SingleAsync(t);
@@ -143,8 +271,16 @@ internal sealed class ContractRepository(BHomePersistenceContext db, ISetupWorks
         var dates = others.Select(c => c.StartDate < from ? from : c.StartDate).Append(from).Distinct();
         return dates.Any(date => residentIds.Length + others.Where(c => c.StartDate <= date && c.EndDate >= date).SelectMany(c => c.Residents).Select(r => r.ResidentId).Distinct().Count() > capacity);
     }
+    public async Task<IReadOnlySet<Guid>> RoomsAwaitingMainOwnerSignatureAsync(Guid[] roomIds, Guid exceptContractId, CancellationToken t)
+    {
+        var pending = await db.Set<Contract>().AsNoTracking().Include(c => c.Signatures)
+            .Where(c => roomIds.Contains(c.RoomId) && c.Id != exceptContractId &&
+                c.Kind == ContractKind.Main && c.Status == ContractStatus.PendingSigning).ToArrayAsync(t);
+        return pending.Where(AnonymousContractSigningService.MainAwaitsOwnerSignature).Select(c => c.RoomId).ToHashSet();
+    }
     public Task<bool> HasOtherActiveContractsAsync(Guid roomId, Guid exceptId, CancellationToken t) =>
-        db.Set<Contract>().AnyAsync(c => c.RoomId == roomId && c.Id != exceptId && c.Status == ContractStatus.Active, t);
+        db.Set<Contract>().AnyAsync(c => c.RoomId == roomId && c.Id != exceptId && c.Kind == ContractKind.Main &&
+            (c.Status == ContractStatus.Active || c.Status == ContractStatus.Expired), t);
     public Task<bool> OpenRenewalAsync(Guid contractId, CancellationToken t) => db.Set<Contract>().AnyAsync(c => c.PreviousContractId == contractId &&
         (c.Status == ContractStatus.Draft || c.Status == ContractStatus.PendingSigning || c.Status == ContractStatus.PendingActivation), t);
     public async Task<IReadOnlyList<Contract>> VersionsAsync(Guid roomId, Guid tenantId, CancellationToken t) =>
@@ -243,11 +379,41 @@ internal sealed class ContractRepository(BHomePersistenceContext db, ISetupWorks
         if (entity is Contract { Kind: ContractKind.Main, PreviousContractId: null } c)
             handoverDraftCandidates[c.Id] = c;
     }
-    public async Task<IReadOnlyList<ContractOccupantView>> OccupantsAsync(Guid contractId, CancellationToken t) =>
-        await (from cr in db.Set<ContractResident>().AsNoTracking()
-               join resident in db.Set<Resident>() on cr.ResidentId equals resident.Id
-               where cr.ContractId == contractId
-               select new ContractOccupantView(resident.Id, resident.DisplayLabel, cr.Role == ResidentType.Representative)).ToArrayAsync(t);
+    public async Task<IReadOnlyList<ContractOccupantView>> OccupantsAsync(Guid contractId, CancellationToken t)
+    {
+        var occupants = await (from cr in db.Set<ContractResident>().AsNoTracking()
+                               join resident in db.Set<Resident>() on cr.ResidentId equals resident.Id
+                               where cr.ContractId == contractId
+                               select new { Resident = resident, cr.Role }).ToArrayAsync(t);
+        return occupants.Select(o => new ContractOccupantView(o.Resident.Id,
+            ContractResidentDisplay.Read(o.Resident, identityProtection).Name, o.Role == ResidentType.Representative)).ToArray();
+    }
+    public async Task<HoldingCustomerView?> HoldingCustomerAsync(Guid contractId, Guid residentId, CancellationToken t)
+    {
+        var resident = await (from cr in db.Set<ContractResident>().AsNoTracking()
+                              join r in db.Set<Resident>().AsNoTracking() on cr.ResidentId equals r.Id
+                              where cr.ContractId == contractId && cr.ResidentId == residentId && cr.Role == ResidentType.Representative && r.VerificationStatus == IdentityVerificationStatus.Verified
+                              select r).SingleOrDefaultAsync(t);
+        return resident is null ? null : ReadHoldingCustomer(resident);
+    }
+    private HoldingCustomerView? ReadHoldingCustomer(Resident resident)
+    {
+        if (identityProtection is null || string.IsNullOrWhiteSpace(resident.IdentityData) || resident.IdentityData == "{}") return null;
+        byte[]? bytes = null;
+        try
+        {
+            var envelope = JsonSerializer.Deserialize<EncryptedIdentity>(resident.IdentityData);
+            if (envelope is null) return null;
+            bytes = identityProtection.Decrypt(envelope, new(resident.OwnerUserId, resident.Id));
+            var identity = JsonSerializer.Deserialize<IdentityConfirmation>(bytes);
+            if (identity is null || !identity.HumanConfirmed || string.IsNullOrWhiteSpace(identity.FullName)) return null;
+            var number = identity.CitizenIdentityNumber;
+            return new(identity.FullName, number?.Length == 12 ? "********" + number[^4..] : "");
+        }
+        catch (Exception e) when (e is JsonException or CryptographicException or ArgumentException or InvalidOperationException)
+        { return null; }
+        finally { if (bytes is not null) CryptographicOperations.ZeroMemory(bytes); }
+    }
     public async Task CloseResidenceAsync(Contract contract, DateOnly actualEndDate, Guid actorId, DateTimeOffset at, CancellationToken t)
     {
         // Only Compact24 is a deployed runtime. The offline legacy regression schema has a

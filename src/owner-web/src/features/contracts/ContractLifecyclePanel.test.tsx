@@ -248,7 +248,7 @@ it('keeps financial review available after physical move-out completion', async 
       />
     </QueryClientProvider>,
   );
-  expect(await screen.findByText(/Đã hoàn tất bàn giao vật lý/)).toBeVisible();
+  expect(await screen.findByText(/Đã hoàn tất kiểm tra và trả phòng/)).toBeVisible();
   fireEvent.change(await screen.findByLabelText('Lý do / căn cứ của Owner'), {
     target: { value: 'Tiếp tục đối chiếu khoản nợ sau bàn giao' },
   });
@@ -324,6 +324,97 @@ it('opens baseline evidence through its original handover and final-meter eviden
   await waitFor(() =>
     expect(final).toHaveBeenCalledWith('final-electric', expect.any(AbortSignal)),
   );
+});
+
+it('shows all four structured Staff move-out modules and the exact failed room-check evidence to Owner', async () => {
+  const { api } = setup();
+  const electricity = { id: 'final-electric', value: '101', date: '2026-11-30' };
+  const baseline = {
+    roomCondition: 'Đạt',
+    keysAndAccess: '5 chìa khóa',
+    roomChecks: [{ code: 'walls_ceiling_floor', status: 'Passed', notes: '', evidenceIds: [] }],
+    assets: [],
+    electricity,
+    water: { ...electricity, id: 'final-water' },
+    evidenceIds: [],
+  };
+  vi.spyOn(api, 'inspections').mockResolvedValue([
+    {
+      id: 'inspection',
+      version: 2,
+      baselineContractId: id,
+      baselineVersion: 1,
+      baseline,
+      observed: {
+        ...baseline,
+        roomCondition: 'Cần sửa tường',
+        keysAndAccess: 'Đã thu đủ',
+        roomChecks: [
+          {
+            code: 'walls_ceiling_floor',
+            status: 'Issue',
+            notes: 'Tường bong tróc',
+            evidenceIds: ['wall-proof'],
+          },
+        ],
+        accessItems: [{ type: 'RoomKey', quantity: 5, notes: 'Đủ chìa khóa' }],
+        keyEvidenceIds: ['key-proof'],
+      },
+      inspectedAt: '2026-11-30T04:00:00Z',
+      ownerDecision: null,
+    },
+  ] as unknown as FinalInspection[]);
+  render(
+    <QueryClientProvider
+      client={new QueryClient({ defaultOptions: { queries: { retry: false } } })}
+    >
+      <ContractLifecyclePanel api={api} contract={contract} moveOut={moveOut} onChanged={vi.fn()} />
+    </QueryClientProvider>,
+  );
+  expect(await screen.findByText('Hiện trạng phòng và 7 hạng mục kiểm tra')).toBeInTheDocument();
+  expect(screen.getByText('Chìa khóa và vật dụng ra vào')).toBeInTheDocument();
+  expect(screen.getByText('Kiểm kê tài sản so với lúc nhận phòng')).toBeInTheDocument();
+  expect(screen.getByText('Chỉ số điện và nước chốt trả phòng')).toBeInTheDocument();
+  expect(screen.getByText('Tường bong tróc')).toBeInTheDocument();
+  expect(screen.getByText('RoomKey: 5')).toBeInTheDocument();
+  expect(
+    screen.getByRole('button', { name: 'Xem Tường, trần và sàn · ảnh 1' }),
+  ).toBeInTheDocument();
+  expect(screen.getByRole('button', { name: 'Xem ảnh chìa khóa trả phòng 1' })).toBeInTheDocument();
+});
+
+it('explains that an approved move-out task reaches Location Staff without assigning a person or time', async () => {
+  const { api } = setup();
+  vi.spyOn(api, 'inspectionStaff').mockResolvedValue([{ id: 'staff-1', label: 'Nhân viên A' }]);
+  render(
+    <QueryClientProvider
+      client={new QueryClient({ defaultOptions: { queries: { retry: false } } })}
+    >
+      <ContractLifecyclePanel
+        api={api}
+        contract={contract}
+        moveOut={{
+          ...moveOut,
+          status: 'Approved',
+          inspectionScheduledAt: null,
+          inspectionStaffId: null,
+        }}
+        onChanged={vi.fn()}
+      />
+    </QueryClientProvider>,
+  );
+  expect(
+    await screen.findByText(/Nhiệm vụ kiểm tra trả phòng đã mở cho Staff thuộc cơ sở/),
+  ).toBeInTheDocument();
+  expect(
+    screen.getByText(/Chưa đặt lịch riêng; Staff tại cơ sở đã thấy nhiệm vụ/),
+  ).toBeInTheDocument();
+  const assign = screen.getByRole('button', { name: 'Lưu lịch & phân công tùy chọn' });
+  expect(assign).toBeDisabled();
+  fireEvent.change(screen.getByLabelText('Lịch kiểm tra (giờ Việt Nam)'), {
+    target: { value: '2026-12-01T09:00' },
+  });
+  expect(assign).toBeDisabled();
 });
 
 async function confirmPendingAction() {

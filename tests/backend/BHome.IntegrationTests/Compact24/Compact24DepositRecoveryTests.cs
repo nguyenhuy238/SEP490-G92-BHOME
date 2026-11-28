@@ -14,7 +14,7 @@ public sealed class Compact24DepositRecoveryTests
             await inner.PutAsync(key, data, length, type, token);
             // Fail only the refund execution under test. Preparation now also
             // uploads authentic synthetic meter photos for physical handover.
-            if (key.StartsWith("refunds/", StringComparison.Ordinal) && Interlocked.Increment(ref puts) == 1)
+            if (key.StartsWith("images/refunds/", StringComparison.Ordinal) && Interlocked.Increment(ref puts) == 1)
                 throw new IOException("Synthetic connection lost after durable Put");
         }
         public Task CopyToAsync(string key, Stream target, CancellationToken token) => inner.CopyToAsync(key, target, token);

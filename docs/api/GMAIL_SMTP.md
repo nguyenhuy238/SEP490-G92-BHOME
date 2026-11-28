@@ -4,6 +4,24 @@ EMAIL sử dụng MailKit, `smtp.gmail.com:587`, STARTTLS bắt buộc và Googl
 Sender hiện tại: BHOME / `bhome.notification@gmail.com`. Mật khẩu tài khoản Google không dùng
 cho SMTP. Không commit App Password vào appsettings, `.env.example`, test hoặc tài liệu.
 
+Lỗi gửi tài khoản Staff trên cả ba môi trường ngày 21/11/2026 là do cấu hình:
+localhost có allowlist cũ; Staging/Production tắt `Email.Enabled` và
+`NotificationChannels.Enabled`. Xem [nguyên nhân, cấu hình đã áp dụng và kiểm thử](../development/BHOME_EMAIL_REPAIR_2026-11-21.md).
+
+## Chính sách người nhận cho mọi môi trường (23/11/2026)
+
+Development, Testing, Staging và Production đều cho phép mọi địa chỉ email hợp lệ khi
+SMTP và credential đã cấu hình. Không cần `AllowedRecipients`,
+`AllowAnyRecipientInDevelopment` hoặc người nhận trùng `TestRecipient`.
+Các khóa danh sách/cờ cũ được bỏ qua hoàn toàn, kể cả danh sách chứa giá trị lỗi thời;
+thành viên không cần xóa User Secrets hay `.env` cũ sau khi pull.
+Capture vẫn chỉ kết nối loopback trong Development/Testing, không forward ra Gmail.
+
+Mọi lời mời, credential, reset/confirmation, OTP/ký và notification qua sender chung
+dùng chính sách này. `TestRecipient` chỉ phục vụ endpoint thử email. Sau khi tích hợp/pull
+commit, rebuild/restart Backend; từng máy vẫn cần credential riêng nếu muốn SMTP thật.
+Xem [quyết định và kết quả sửa Staging](../development/BHOME_EMAIL_NO_ALLOWLIST_2026-11-23.md).
+
 ## Cấu hình
 
 Các giá trị không bí mật đã có tại `BHome.Api/appsettings.json`. Mặc định repository tắt EMAIL.
@@ -55,10 +73,32 @@ Không dùng Sandbox để xác nhận gửi thật.
 Cấu hình cũ Mode=Smtp + SmtpHost/SmtpPort/SmtpUser/SmtpPassword/FromAddress còn được map
 khi Email.Enabled=false; cần bỏ cấu hình cũ nếu muốn tắt SMTP bằng Email.Enabled.
 
-Nếu `Jobs.Enabled=false`, bật AutomationEnabled để worker notification riêng hoạt động.
+Nếu `Jobs.Enabled=false`, bật AutomationEnabled để publisher thông báo nghiệp vụ riêng hoạt động.
 Nếu Jobs.Enabled=true, queue/scheduler hiện có xử lý JOB-04, worker riêng nhường lại.
-Không cần bật financial jobs chỉ để gửi email. File `.env` local hiện đã tắt AutomationEnabled;
-task giữ lựa chọn đó để không chạy gửi backlog tới Tenant khi smoke.
+Không cần bật financial jobs chỉ để gửi email. Kiểm tra backlog và lựa chọn riêng
+AutomationEnabled trước khi bật publisher; không bật nó chỉ để smoke credential Staff.
+
+Luồng cấp mật khẩu Staff chỉ cần `Email.Enabled=true`, SMTP hợp lệ và
+`NotificationChannels.Enabled=true`. Với `Jobs.Enabled=false`, worker xác thực riêng
+vẫn xử lý protected outbox khi `NotificationChannels.AutomationEnabled=false`.
+Giữ AutomationEnabled=false khi chỉ bật email tài khoản và chưa duyệt phát thông báo
+nghiệp vụ cũ. Bật AutomationEnabled=true là lựa chọn riêng cho publisher thông báo
+nghiệp vụ, không phải điều kiện bắt buộc để gửi credential Staff.
+
+Kiểm tra **cấu hình hiệu lực của container**, sau tất cả Compose overlays, bằng công cụ
+chỉ đọc (Python 3 standard library, Docker CLI):
+
+```sh
+python3 deploy/vps/check-email.py staging --smtp
+python3 deploy/vps/check-email.py production --smtp
+```
+
+`--smtp` kiểm tra certificate STARTTLS và đăng nhập SMTP, không gửi thư. Có thể thêm
+`--recipient` để kiểm tra cú pháp một mailbox; không dùng danh sách giới hạn người nhận.
+Tránh đưa email cá nhân vào command/log dùng chung.
+Công cụ chỉ hỗ trợ hai container VPS hiện có và không thay thế validation của Backend.
+Nếu dùng bản cài tại VPS hiện tại, đường dẫn là `/opt/bhome-config/check-email.py`.
+Không in `docker inspect` đầy đủ hoặc `docker compose config` vì chúng có thể chứa secrets.
 
 ## Sự kiện và nội dung
 

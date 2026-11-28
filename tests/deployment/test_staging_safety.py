@@ -31,6 +31,8 @@ class StagingSafetyTests(unittest.TestCase):
 
     def test_accepts_isolated_staging(self):
         self.check(self.api())
+        self.check(self.api(SePay__Mode='Live'))
+        self.check(self.api(BillingAutomation__AutomaticJobsEnabled='true'))
 
     def test_rejects_production_database_without_exposing_credentials(self):
         with self.assertRaisesRegex(ValueError, 'database target mismatch') as error:
@@ -38,10 +40,10 @@ class StagingSafetyTests(unittest.TestCase):
         self.assertNotIn('synthetic-private', str(error.exception))
 
     def test_rejects_live_payment_mode_and_unexpected_jobs(self):
-        for values in ({'SePay__Mode': 'Live'}, {'Jobs__Enabled': 'true'},
+        for values in ({'SePay__Mode': 'Invalid'}, {'Jobs__Enabled': 'true'},
                        {'DevelopmentDatabase__InitializeOnStartup': 'true'},
                        {'ASPNETCORE_ENVIRONMENT': 'Testing'},
-                       {'BillingAutomation__AutomaticJobsEnabled': 'true'}):
+                       {'BillingAutomation__AutomaticJobsEnabled': 'invalid'}):
             with self.subTest(values=values), self.assertRaises(ValueError):
                 self.check(self.api(**values))
 

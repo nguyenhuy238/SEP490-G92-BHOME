@@ -5,12 +5,15 @@ using BHome.Domain.IdentityAccess;
 using BHome.Domain.IncidentMaintenance;
 using BHome.Domain.PropertyManagement;
 using BHome.Domain.StaffOperations;
+using BHome.Domain.TenantContracts;
 using BHome.Infrastructure.IdentityAccess;
 using BHome.Infrastructure.Persistence;
 using BHome.Infrastructure.Persistence.Compact24;
 using BHome.Infrastructure.Modules.Notifications;
 using Microsoft.EntityFrameworkCore;
 using Npgsql;
+using System.Security.Cryptography;
+using System.Text;
 
 namespace BHome.Infrastructure.Modules.StaffOperations.Persistence;
 
@@ -71,8 +74,19 @@ internal sealed class PostgresOperationalTaskRepository(BHomePersistenceContext 
     public Task<LocationAssetInventorySnapshot> OwnerConfirmedInventoryAsync(OperationalTask task, CancellationToken t)
     {
         if (db is not Compact24DbContext compact) throw OperationalTaskException.Conflict("owner_inventory_compact_required");
-        return LocationAssetInventoryTaskFactory.BuildConfirmedSnapshotAsync(compact, workspace,
+        return BuildOwnerConfirmedInventoryAsync(compact, task, t);
+    }
+    public Task<bool> HasLocationHandoverApprovalAsync(Guid taskId, int version, CancellationToken t) =>
+        db.Set<OperationalTaskHistory>().AsNoTracking().AnyAsync(h => h.TaskId == taskId &&
+            h.Action == "location_asset_handover_approved" && h.TaskVersion == version, t);
+    private async Task<LocationAssetInventorySnapshot> BuildOwnerConfirmedInventoryAsync(
+        Compact24DbContext compact, OperationalTask task, CancellationToken t)
+    {
+        var confirmed = await LocationAssetInventoryTaskFactory.BuildConfirmedSnapshotAsync(compact, workspace,
             task.LocationId, task.AssignmentId ?? Guid.Empty, task.ReadingDate, DateTimeOffset.UtcNow, t);
+        return task.Kind == OperationalTaskKind.LocationAssetHandover
+            ? LocationAssetInventoryTaskFactory.PreserveExistingItemIds(confirmed, task.LocationAssetInventoryJson)
+            : confirmed;
     }
     public async Task<IReadOnlyList<TaskIncidentTarget>> IncidentTargetsAsync(Guid[] ids, CancellationToken t) =>
         await db.Set<IncidentReport>().AsNoTracking().Where(x => ids.Contains(x.Id))
@@ -102,6 +116,83 @@ internal sealed class PostgresOperationalTaskRepository(BHomePersistenceContext 
              db.UserRoles.Any(ur => ur.UserId == staff.Id && db.Roles.Any(role => role.Id == ur.RoleId && role.Name == Roles.Staff)) &&
              EligibleStaff(date).Contains(staff.Id)
          select new TaskResponsibility(assignment.Id, staff.Id)).SingleOrDefaultAsync(t);
+
+    public Task<TaskResponsibility?> StaffAtLocationAsync(Guid locationId, Guid staffId, DateOnly date, CancellationToken t) =>
+        (from assignment in db.StaffLocationAssignments.AsNoTracking()
+         join staff in db.Users on assignment.StaffUserId equals staff.Id
+         where assignment.LocationId == locationId && staff.Id == staffId && staff.IsActive &&
+             assignment.StartDate <= date && assignment.EndDate >= date &&
+             EligibleStaff(date).Contains(staff.Id) &&
+             db.UserRoles.Any(ur => ur.UserId == staff.Id &&
+                 db.Roles.Any(role => role.Id == ur.RoleId && role.Name == Roles.Staff))
+         select new TaskResponsibility(assignment.Id, staff.Id)).FirstOrDefaultAsync(t);
+
+    public Task<Guid?> MoveOutInspectionStaffAsync(Guid contractId, CancellationToken t) =>
+        db.Set<ContractMoveOut>().AsNoTracking().Where(move => move.ContractId == contractId)
+            .Select(move => move.InspectionStaffId).SingleOrDefaultAsync(t);
+
+    public async Task<Guid[]> EnsureMoveOutFinalMeterTasksAsync(OperationalTask inspectionTask,
+        Guid staffId, DateOnly date, CancellationToken t)
+    {
+        if (db is not Compact24DbContext || inspectionTask.ContractId is not { } contractId ||
+            inspectionTask.TargetRoomId is not { } roomId ||
+            inspectionTask.Status != MeterTaskStatus.InProgress ||
+            inspectionTask.AssignedStaffUserId != staffId)
+            throw OperationalTaskException.Conflict("move_out_task_not_started");
+
+        var approved = await db.Set<Contract>().AsNoTracking().AnyAsync(contract =>
+            contract.Id == contractId && contract.RoomId == roomId &&
+            contract.Room.LocationId == inspectionTask.LocationId &&
+            contract.Status == ContractStatus.Active &&
+            db.Set<ContractMoveOut>().Any(move => move.ContractId == contractId &&
+                move.Status == MoveOutStatus.Approved && move.ProposedDate <= date), t);
+        if (!approved) throw OperationalTaskException.Conflict("approved_contract_move_out_required");
+
+        var meters = await db.Set<Meter>().AsNoTracking()
+            .Where(m => m.RoomId == roomId && m.IsActive && m.InstalledOn <= date)
+            .OrderBy(m => m.UtilityType).ThenBy(m => m.Id).ToArrayAsync(t);
+        var existing = await db.Set<OperationalTask>().AsNoTracking()
+            .Where(task => task.ContractId == contractId && task.Purpose == ReadingPurpose.Final &&
+                task.ReadingDate == date && task.MeterId != null)
+            .Select(task => new { task.Id, task.MeterId, task.Status }).ToArrayAsync(t);
+
+        var result = new List<Guid>(meters.Length);
+        foreach (var meter in meters)
+        {
+            var matches = existing.Where(task => task.MeterId == meter.Id).ToArray();
+            if (matches.Length > 1) throw OperationalTaskException.Conflict("duplicate_final_meter_task");
+            if (matches.Length == 1)
+            {
+                if (matches[0].Status == MeterTaskStatus.Cancelled)
+                    throw OperationalTaskException.Conflict("final_meter_task_cancelled");
+                result.Add(matches[0].Id);
+                continue;
+            }
+
+            // Stable per contract/meter/local-day ID plus the enclosing Location
+            // transaction lock make repeated opens and concurrent retries safe.
+            var identity = $"contract-meter-final:{contractId:N}:{meter.Id:N}:{date:yyyy-MM-dd}";
+            var id = new Guid(SHA256.HashData(Encoding.UTF8.GetBytes(identity)).AsSpan(0, 16));
+            db.Add(new OperationalTask(id)
+            {
+                Kind = OperationalTaskKind.MeterReading,
+                LocationId = inspectionTask.LocationId,
+                MeterId = meter.Id,
+                ContractId = contractId,
+                Title = $"Chụp chỉ số {(meter.UtilityType == UtilityType.Electricity ? "điện" : "nước")} chốt trả phòng",
+                Requirements = "Chụp ảnh thực tế, đối chiếu OCR và xác nhận chỉ số Final khi kiểm tra trả phòng.",
+                Purpose = ReadingPurpose.Final,
+                ReadingDate = date,
+                AssignedStaffUserId = staffId,
+                AssignmentId = inspectionTask.AssignmentId,
+                AssignedAt = DateTimeOffset.UtcNow,
+                EvidenceRequired = true,
+                Status = MeterTaskStatus.Assigned
+            });
+            result.Add(id);
+        }
+        return result.ToArray();
+    }
 
     private IQueryable<Guid> EligibleStaff(DateOnly date) => db is Compact24DbContext compact
         ? StaffEmploymentEligibility.EligibleIds(compact, date)
@@ -137,6 +228,24 @@ internal sealed class PostgresOperationalTaskRepository(BHomePersistenceContext 
             rows = rows.Where(x => x.Kind != OperationalTaskKind.LocationAssetHandover ||
                 db.StaffLocationAssignments.Any(a => a.Id == x.AssignmentId && a.StaffUserId == staffId.Value && a.StartDate <= date && a.EndDate >= date));
         if (query.LocationId is { } location) rows = rows.Where(x => x.LocationId == location);
+        if (query.RoomId is { } room) rows = rows.Where(x => x.TargetRoomId == room);
+        if (query.ActionableOnly)
+            rows = rows.Where(x => x.Status == MeterTaskStatus.Assigned || x.Status == MeterTaskStatus.InProgress);
+        if (query.Category == TaskCategory.MoveIn)
+            rows = rows.Where(x => x.Kind == OperationalTaskKind.AdHoc && x.ContractId != null && x.Title.StartsWith("Bàn giao vào phòng"));
+        else if (query.Category == TaskCategory.MoveOut)
+            rows = rows.Where(x => x.Kind == OperationalTaskKind.AdHoc && x.ContractId != null && x.Title.StartsWith("Kiểm tra trả phòng"));
+        else if (query.Category == TaskCategory.Operational)
+            rows = rows.Where(x => !(x.ContractId != null &&
+                (x.Kind == OperationalTaskKind.MoveInInventory ||
+                 (x.Kind == OperationalTaskKind.AdHoc &&
+                  (x.Title.StartsWith("Bàn giao vào phòng") || x.Title.StartsWith("Kiểm tra trả phòng"))))));
+        if (!string.IsNullOrWhiteSpace(query.Search))
+        {
+            var search = query.Search.Trim().ToLower();
+            rows = rows.Where(x => x.Title.ToLower().Contains(search) ||
+                (x.TargetLabel != null && x.TargetLabel.ToLower().Contains(search)));
+        }
         if (query.RecordedStaffUserId is { } recorded) rows = rows.Where(x => x.AssignedStaffUserId == recorded);
         if (query.HasResponsibility is { } available) rows = rows.Where(task =>
             (task.Location.IsActive && db.StaffLocationAssignments.Any(a => a.LocationId == task.LocationId && a.StartDate <= date && a.EndDate >= date &&
@@ -146,12 +255,24 @@ internal sealed class PostgresOperationalTaskRepository(BHomePersistenceContext 
         if (query.DueFrom is { } from) rows = rows.Where(x => x.DueAt >= from);
         if (query.DueTo is { } to) rows = rows.Where(x => x.DueAt <= to);
         if (query.IsOverdue is { } overdue) rows = rows.Where(x => (x.DueAt < now && x.Status != MeterTaskStatus.Completed && x.Status != MeterTaskStatus.Cancelled) == overdue);
+        if (query.LatestActionable)
+            rows = rows.Where(x =>
+                (x.Status == MeterTaskStatus.Assigned || x.Status == MeterTaskStatus.InProgress) &&
+                (x.Kind != OperationalTaskKind.MoveInInventory || x.ContractId == null));
         var count = await rows.CountAsync(t);
-        var items = await rows.OrderBy(x => x.DueAt).ThenBy(x => x.Id).Skip((query.Page - 1) * query.PageSize).Take(query.PageSize)
+        var ordered = query.LatestActionable ? rows.OrderByDescending(x => x.CreatedAt)
+            : query.ActionableOnly ? rows.OrderBy(x => x.Status == MeterTaskStatus.InProgress ? 0 : 1).ThenBy(x => x.CreatedAt)
+            : rows.OrderBy(x => x.DueAt);
+        var items = await ordered.ThenBy(x => x.Id).Skip((query.Page - 1) * query.PageSize).Take(query.PageSize)
             .Select(task => new
             {
                 Task = task,
-                Responsible = db.StaffLocationAssignments.Where(a => task.Location.IsActive && a.LocationId == task.LocationId && a.StartDate <= date && a.EndDate >= date &&
+                Responsible = task.Kind == OperationalTaskKind.AdHoc && task.ContractId != null && task.Title.StartsWith("Kiểm tra trả phòng")
+                    ? (task.Status == MeterTaskStatus.Assigned
+                        ? (staffId != null && !db.Set<ContractMoveOut>().Any(move => move.ContractId == task.ContractId && move.InspectionStaffId != null && move.InspectionStaffId != staffId)
+                            ? staffId : (Guid?)null)
+                        : task.AssignedStaffUserId)
+                    : db.StaffLocationAssignments.Where(a => task.Location.IsActive && a.LocationId == task.LocationId && a.StartDate <= date && a.EndDate >= date &&
                     db.Users.Any(u => u.Id == a.StaffUserId && u.IsActive && EligibleStaff(date).Contains(u.Id) && db.UserRoles.Any(ur => ur.UserId == u.Id && db.Roles.Any(r => r.Id == ur.RoleId && r.Name == Roles.Staff))))
                     .Select(a => (Guid?)a.StaffUserId).SingleOrDefault()
             }).ToArrayAsync(t);

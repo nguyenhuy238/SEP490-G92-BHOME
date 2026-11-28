@@ -91,7 +91,7 @@ public sealed class MainDraftReleaseBeforeAccountsTests
             db.Add(person); await db.SaveChangesAsync(); resident = person.Id;
         }
         var root = "/api/v1/contracts/main-drafts";
-        var settings = new MainContractSettingsInput(ownerId, today, null, 3000000, "Synthetic monthly payment terms", "Synthetic terms", new("SYNTHETIC OWNER", new(1980, 1, 1), "000000000456", new(2020, 1, 1), "Synthetic issuer", "Synthetic address", "0900000000"), 0);
+        var settings = new MainContractSettingsInput(ownerId, today, null, "Synthetic monthly payment terms", "Synthetic terms", new("SYNTHETIC OWNER", new(1980, 1, 1), "000000000456", new(2020, 1, 1), "Synthetic issuer", "Synthetic address", "0900000000"), 0);
         (await owner.PutAsJsonAsync(root + "/settings/" + location, settings)).EnsureSuccessStatusCode();
         async Task<HttpResponseMessage> Post(HttpClient c, string path, object body, Guid key)
         {
@@ -112,7 +112,7 @@ public sealed class MainDraftReleaseBeforeAccountsTests
             return (await result.Content.ReadFromJsonAsync<BHome.Application.Ocr.HouseholdView>())!;
         }
         if (household) { family = await SaveFamily("SYNTHETIC CHILD"); people = [resident, family.Members.Single().ResidentId]; }
-        var created = await Post(staff, root, new MainDraftInput(room, resident, people, today, today.AddMonths(6), "Synthetic notes", "0900000001", "Synthetic issuer"), Guid.NewGuid());
+        var created = await Post(staff, root, new MainDraftInput(room, resident, people, today, today.AddMonths(6), "", null, ""), Guid.NewGuid());
         Assert.True(created.IsSuccessStatusCode, await created.Content.ReadAsStringAsync()); var draft = (await created.Content.ReadFromJsonAsync<MainDraftView>())!;
         if (household)
         {
@@ -129,10 +129,9 @@ public sealed class MainDraftReleaseBeforeAccountsTests
             Assert.Equal(2, draft.Input.ResidentIds.Length);
         }
         var response = await staff.PostAsync($"{root}/{draft.Id}/signing-review", null); response.EnsureSuccessStatusCode(); var review = (await response.Content.ReadFromJsonAsync<ContractDocumentView>())!;
-        var input = new MainDraftReleaseInput(null, draft.Version, review.Id, true); var key = Guid.NewGuid();
-        Assert.Equal(HttpStatusCode.Forbidden, (await Post(staff, $"{root}/{draft.Id}/release", input, key)).StatusCode);
-        (await Post(owner, $"{root}/{draft.Id}/release", input, key)).EnsureSuccessStatusCode();
-        (await Post(owner, $"{root}/{draft.Id}/release", input, key)).EnsureSuccessStatusCode();
+        var input = new MainDraftReleaseInput(null, draft.Version, review.Id, true, EmailSigning: true); var key = Guid.NewGuid();
+        (await Post(staff, $"{root}/{draft.Id}/release", input, key)).EnsureSuccessStatusCode();
+        (await Post(staff, $"{root}/{draft.Id}/release", input, key)).EnsureSuccessStatusCode();
         await using var check = host.Services.CreateAsyncScope(); var savedDb = check.ServiceProvider.GetRequiredService<Compact24DbContext>();
         var c = await savedDb.Set<Contract>().Include(c => c.Residents).SingleAsync(c => c.Id == draft.Id);
         Assert.Equal(ContractStatus.PendingSigning, c.Status); Assert.Null(c.TenantUserId); Assert.Equal(ContractSigningModes.Internal, c.SigningMode);
@@ -157,6 +156,8 @@ public sealed class MainDraftReleaseBeforeAccountsTests
         Assert.Equal(HttpStatusCode.Forbidden, (await owner.PostAsJsonAsync(signingRoot + "/owner-simulation", confirmation)).StatusCode);
         var pendingInvite = new ContractSigningInvitation { ContractId = c.Id, ResidentId = resident, ApprovedByUserId = ownerId, TokenHash = new string('A', 64), SnapshotHash = c.SnapshotHash, DocumentObjectKey = "synthetic-review.pdf", DocumentHash = "synthetic-hash", RecipientEmail = "synthetic@example.invalid", ExpiresAt = DateTimeOffset.UtcNow.AddDays(1), OtpHash = "synthetic-otp", SessionHash = "synthetic-session" };
         savedDb.Add(pendingInvite); await savedDb.SaveChangesAsync();
+        var pendingStatus = (await staff.GetFromJsonAsync<InternalSigningStatus>(signingRoot))!;
+        Assert.Equal(pendingInvite.Id, Assert.Single(pendingStatus.Invitations).Id);
         var canonical = await savedDb.Set<ContractDocumentFile>().SingleAsync(f => f.ContractId == c.Id && f.Kind == ContractFileKind.Preview && f.TemplateId == "main-tenancy-docx-v1");
         var objectStorage = check.ServiceProvider.GetRequiredService<IObjectStorage>();
         await objectStorage.DeleteAsync(canonical.ObjectKey, default);
@@ -168,14 +169,22 @@ public sealed class MainDraftReleaseBeforeAccountsTests
         Assert.Equal(pdf, await check.ServiceProvider.GetRequiredService<IContractSigningDocumentSource>().ReadAsync(document with { SnapshotHash = c.SnapshotHash }, default));
         await objectStorage.DeleteAsync(pendingInvite.DocumentObjectKey, default);
         Assert.True((await staff.GetFromJsonAsync<InternalSigningStatus>(signingRoot))!.SandboxAvailable);
+        if (staffSimulation)
+        {
+            (await staff.PostAsJsonAsync(signingRoot + "/tenant-simulation", new { })).EnsureSuccessStatusCode();
+            status = (await owner.GetFromJsonAsync<InternalSigningStatus>(signingRoot))!;
+            Assert.True(status.TenantSimulated); Assert.Null(status.OwnerAcceptedAt); Assert.False(status.CanContinue);
+            Assert.Equal(HttpStatusCode.Conflict, (await owner.GetAsync($"/api/v1/contracts/{draft.Id}/initial-payment")).StatusCode);
+        }
         if (!staffSimulation) (await owner.PostAsJsonAsync(signingRoot + "/owner-confirmation", confirmation)).EnsureSuccessStatusCode();
         else (await staff.PostAsJsonAsync(signingRoot + "/owner-simulation", confirmation)).EnsureSuccessStatusCode();
         (await staff.PostAsJsonAsync(signingRoot + "/owner-simulation", confirmation)).EnsureSuccessStatusCode();
         (await owner.PostAsJsonAsync(signingRoot + "/owner-confirmation", confirmation)).EnsureSuccessStatusCode();
         status = (await owner.GetFromJsonAsync<InternalSigningStatus>(signingRoot))!;
-        Assert.False(status.CanContinue); Assert.False(status.TenantSimulated); Assert.Null(status.TenantAcceptedAt);
+        Assert.Equal(staffSimulation, status.CanContinue); Assert.Equal(staffSimulation, status.TenantSimulated); Assert.Null(status.TenantAcceptedAt);
         Assert.NotNull(status.OwnerAcceptedAt);
-        Assert.Equal(HttpStatusCode.Conflict, (await owner.GetAsync($"/api/v1/contracts/{draft.Id}/initial-payment")).StatusCode);
+        if (!staffSimulation)
+            Assert.Equal(HttpStatusCode.Conflict, (await owner.GetAsync($"/api/v1/contracts/{draft.Id}/initial-payment")).StatusCode);
         Assert.Equal(HttpStatusCode.Forbidden, (await owner.PostAsJsonAsync(signingRoot + "/tenant-simulation", new { })).StatusCode);
         (await staff.PostAsJsonAsync(signingRoot + "/tenant-simulation", new { })).EnsureSuccessStatusCode();
         (await staff.PostAsJsonAsync(signingRoot + "/tenant-simulation", new { })).EnsureSuccessStatusCode();

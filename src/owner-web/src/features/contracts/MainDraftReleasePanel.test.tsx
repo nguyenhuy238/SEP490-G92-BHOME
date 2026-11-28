@@ -53,6 +53,7 @@ async function review() {
   await waitFor(() => expect(mock.transport).toHaveBeenCalled());
   fireEvent.click(screen.getByRole('button', { name: 'Tạo và xem PDF đưa đi ký' }));
   await screen.findByTitle('PDF được chọn để đưa đi ký');
+  expect(screen.queryByText(/mẫu chưa được duyệt cho production/)).toBeNull();
   fireEvent.click(screen.getByRole('checkbox'));
 }
 it('requires the saved PDF and human review, submits its exact version and blocks duplicate releases', async () => {
@@ -68,7 +69,7 @@ it('requires the saved PDF and human review, submits its exact version and block
   expect(screen.getByRole('button', { name: 'Xác nhận chuyển sang ký' })).toBeDisabled();
   await review();
   expect(mock.file).toHaveBeenCalledWith('draft', 'review');
-  expect(screen.getByText(/Tài liệu kiểm thử; mẫu chưa được duyệt/)).toBeInTheDocument();
+  expect(screen.queryByText(/Tài liệu kiểm thử; mẫu chưa được duyệt/)).toBeNull();
   fireEvent.click(screen.getByRole('button', { name: 'Xác nhận chuyển sang ký' }));
   fireEvent.click(screen.getByRole('button', { name: 'Xác nhận chuyển sang ký' }));
   expect(mock.release).toHaveBeenCalledTimes(1);

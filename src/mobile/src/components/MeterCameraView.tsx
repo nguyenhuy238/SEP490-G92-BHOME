@@ -8,6 +8,7 @@ export function MeterCameraView({
   camera,
   preview,
   step,
+  compact = false,
   label,
   disabled,
   working,
@@ -19,11 +20,13 @@ export function MeterCameraView({
   onClose,
   onUse,
   onRetake,
+  onRetry,
   onUseDemo,
 }: {
   camera: React.ReactNode;
   preview: string;
   step: number;
+  compact?: boolean;
   label: string;
   disabled: boolean;
   working: boolean;
@@ -35,15 +38,21 @@ export function MeterCameraView({
   onClose: () => void;
   onUse: () => void;
   onRetake: () => void;
+  onRetry?: () => void;
   onUseDemo?: () => void;
 }) {
   const blocked = disabled || working || requestingPermission;
   return (
-    <View style={{ gap: 12 }}>
+    <View style={{ gap: compact ? 8 : 12 }}>
       {camera ? (
         <>
           <View
-            style={{ height: 460, borderRadius: 12, overflow: 'hidden', backgroundColor: c.ink }}
+            style={{
+              height: compact ? 300 : 460,
+              borderRadius: 12,
+              overflow: 'hidden',
+              backgroundColor: c.ink,
+            }}
           >
             {camera}
           </View>
@@ -67,7 +76,7 @@ export function MeterCameraView({
             resizeMode="contain"
             style={{
               width: '100%',
-              height: step === 1 ? 260 : 150,
+              height: step === 1 ? (compact ? 210 : 260) : compact ? 126 : 150,
               borderRadius: 12,
               backgroundColor: c.soft,
             }}
@@ -93,7 +102,7 @@ export function MeterCameraView({
             </>
           )}
           {step === 2 && (
-            <Button disabled={blocked} onPress={onUse}>
+            <Button disabled={blocked} onPress={onRetry ?? onUse}>
               Thử lại OCR
             </Button>
           )}
@@ -102,7 +111,7 @@ export function MeterCameraView({
         <>
           <View
             style={{
-              minHeight: 150,
+              minHeight: compact ? 104 : 150,
               borderRadius: 12,
               backgroundColor: c.soft,
               alignItems: 'center',
@@ -110,8 +119,10 @@ export function MeterCameraView({
               gap: 8,
             }}
           >
-            <Icon source="camera-outline" size={36} color={c.muted} />
-            <Text style={{ color: c.muted }}>Chưa có ảnh công tơ</Text>
+            <Icon source="camera-outline" size={compact ? 28 : 36} color={c.muted} />
+            <Text variant={compact ? 'bodySmall' : 'bodyMedium'} style={{ color: c.muted }}>
+              Chưa có ảnh công tơ
+            </Text>
           </View>
           <Button
             mode="contained"
@@ -126,13 +137,18 @@ export function MeterCameraView({
         </>
       )}
       {onUseDemo && !preview && (
-        <View style={{ gap: 4 }}>
-          <Button mode="outlined" disabled={disabled || working} onPress={onUseDemo}>
-            Dùng ảnh mẫu để test
+        <View style={{ gap: 2 }}>
+          <Button
+            mode="outlined"
+            contentStyle={{ minHeight: 44 }}
+            disabled={blocked}
+            onPress={onUseDemo}
+          >
+            Dùng ảnh mẫu (test)
           </Button>
           <Text variant="bodySmall" style={{ color: c.muted }}>
-            Chỉ dành cho Web local. Ảnh giả sẽ gửi tới Backend; phải kiểm tra và xác nhận chỉ số thủ
-            công, không dùng cho dữ liệu thực tế.
+            Chỉ dùng trên web local. Ảnh mẫu không phải bằng chứng thật; phải kiểm tra chỉ số trước
+            khi xác nhận.
           </Text>
         </View>
       )}

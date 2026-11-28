@@ -37,6 +37,9 @@ internal static class LegacyPersistenceRegistration
                     options.JsonSerializerOptions.Converters.RemoveAt(i);
         });
         services.RemoveAll<Compact24DbContext>(); services.RemoveAll<DbContextOptions<Compact24DbContext>>();
+        services.Replace(ServiceDescriptor.Scoped<BHome.Application.Contracts.IMainDraftData, LegacyMainDraftData>());
+        // ITenantContractAccess remains registered in both schema compositions and
+        // resolves through BHomePersistenceContext, which is replaced below for this host.
         // The archived source-schema regression host intentionally has no Compact24
         // context: its per-assignment asset handover/signature service is Compact24-only.
         services.RemoveAll<BHome.Infrastructure.StaffOperations.LocationAssetHandoverService>();
@@ -134,6 +137,10 @@ internal static class LegacyPersistenceRegistration
         services.RemoveAll<IOperationsRepository>(); services.RemoveAll<OperationsService>();
         services.RemoveAll<IResidentAdministrationRepository>(); services.RemoveAll<ResidentAdministrationService>();
         services.RemoveAll<RecurringOperationsJob>();
+        // Operational work aggregates incidents, maintenance orders and tasks from
+        // Compact24 tables. It is not part of the archived source-schema host.
+        services.RemoveAll<IOperationalWorkRepository>();
+        services.RemoveAll<OperationalWorkService>();
         services.AddDbContext<BHomeDbContext>((p, o) => o.UseNpgsql(p.GetRequiredService<IOptions<DatabaseOptions>>().Value.Database));
         services.Replace(ServiceDescriptor.Scoped<BHomePersistenceContext>(p => p.GetRequiredService<BHomeDbContext>()));
         services.RemoveAll<IUserStore<ApplicationUser>>(); services.RemoveAll<IRoleStore<IdentityRole<Guid>>>();

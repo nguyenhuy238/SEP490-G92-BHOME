@@ -130,10 +130,42 @@ public sealed partial class PaymentLedgerTests
     public async Task LateConfirmedReadingsMakePendingDraftEligibleWithoutEstimatedUsage()
     {
         var (w, p, draft) = await FinalWorkspace(false, true); Assert.Equal("PendingInputs", (await RunPhase(w, "Final"))!.Status); await RunMeter(w);
+        await PumpNotifications(); await PumpNotifications();
+        foreach (var id in w.Tenants)
+        {
+            using var recipient = await Client(id);
+            var notices = (await recipient.GetFromJsonAsync<PagedResult<NotificationView>>("/api/v1/notifications?category=Invoice"))!.Items;
+            Assert.Single(notices, n => n.RelatedObjectId == draft.Id && n.EventType == "INVOICE_FINALIZATION_BLOCKED");
+        }
         using var owner = await Client(w.Owner); using var staff = await Client(w.Staff);
         foreach (var task in (await staff.GetFromJsonAsync<MeterTaskSummary[]>("/api/v1/capture/meter-tasks"))!.Where(t => t.AutomationPlanId == p.Id))
         { var initial = await owner.PostAsJsonAsync("/api/v1/capture/meter-tasks", new MeterTaskInput(task.MeterId, ReadingPurpose.Initial, CurrentPeriod().AddDays(-1), null)); initial.EnsureSuccessStatusCode(); await ConfirmSyntheticTask(w, (await initial.Content.ReadFromJsonAsync<IdResult>())!.Id, 100); await ConfirmSyntheticTask(w, task.Id, 110); }
         Assert.Equal("Completed", (await RunPhase(w, "Final"))!.Status); var final = (await owner.GetFromJsonAsync<InvoiceView>($"/api/v1/invoices/{draft.Id}"))!; Assert.Equal("Final", final.Status); Assert.Empty(final.MissingInputs); Assert.Equal(100050, final.Total);
+    }
+    [Fact]
+    public async Task LateReadingsRefreshDraftWithoutDiscardingApprovedCorrection()
+    {
+        var (w, p, draft) = await FinalWorkspace(false, true);
+        using var owner = await Client(w.Owner); using var tenant = await Client(w.Tenants[0]);
+        var submitted = await Post(tenant, $"/api/v1/invoices/{draft.Id}/adjustment-requests",
+            new AdjustmentSubmit(draft.Lines.Single(l => l.ChargeCode == "RENT").Id, 90000, "Synthetic rent correction", [], draft.Version));
+        submitted.EnsureSuccessStatusCode();
+        var request = (await submitted.Content.ReadFromJsonAsync<AdjustmentView>())!;
+        (await Post(owner, $"/api/v1/invoice-adjustments/{request.Id}/approve",
+            new AdjustmentDecisionInput(1, draft.Version, 0, 90000, "RENT", "Approved rent correction", true))).EnsureSuccessStatusCode();
+        Assert.Equal("PendingInputs", (await RunPhase(w, "Final"))!.Status);
+        await RunMeter(w); using var staff = await Client(w.Staff);
+        foreach (var task in (await staff.GetFromJsonAsync<MeterTaskSummary[]>("/api/v1/capture/meter-tasks"))!.Where(t => t.AutomationPlanId == p.Id))
+        {
+            var initial = await owner.PostAsJsonAsync("/api/v1/capture/meter-tasks", new MeterTaskInput(task.MeterId, ReadingPurpose.Initial, CurrentPeriod().AddDays(-1), null));
+            initial.EnsureSuccessStatusCode();
+            await ConfirmSyntheticTask(w, (await initial.Content.ReadFromJsonAsync<IdResult>())!.Id, 100);
+            await ConfirmSyntheticTask(w, task.Id, 110);
+        }
+        Assert.Equal("Completed", (await RunPhase(w, "Final"))!.Status);
+        var final = (await tenant.GetFromJsonAsync<InvoiceView>($"/api/v1/invoices/{draft.Id}"))!;
+        Assert.Equal("Final", final.Status); Assert.Empty(final.MissingInputs); Assert.Equal(90050, final.Total);
+        Assert.Equal(request.Id, final.Lines.Single(l => l.ChargeCode == "RENT").CorrectionRequestId);
     }
     [Fact]
     public async Task RevokedOwnerAuthorizationPreventsQueuedFinalization()

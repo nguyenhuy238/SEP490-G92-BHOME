@@ -1,4 +1,4 @@
-﻿import React, { useState } from 'react';
+import React, { useState } from 'react';
 import { View } from 'react-native';
 import { Button, Icon, Text, TouchableRipple } from 'react-native-paper';
 import {
@@ -20,6 +20,7 @@ import { InvoiceDetailRow, InvoiceMoneyRow, invoiceUi } from '../components/Invo
 import { positiveAmount, tenantPaymentLabel } from '../features/tenant/paymentPresentation';
 import type { InvoicePayment } from '../../../../packages/client-core/src/payments';
 import { colors } from '../theme/theme';
+import { TenantMeterReadingEvidence } from '../components/TenantMeterReadingEvidence';
 
 export function TenantInvoiceSummary({
   invoice,
@@ -42,12 +43,10 @@ export function TenantInvoiceSummary({
     positiveAmount(state.outstandingAmount) &&
     state.overdueDays > 0;
   const canPay = state?.paymentStatus === 'Unpaid' && positiveAmount(state.outstandingAmount);
+  const settled = state?.paymentStatus === 'Paid' && /^0+(?:\.0+)?$/.test(state.outstandingAmount);
   return (
     <View style={invoiceUi.card}>
-      <Text style={invoiceUi.heading}>Phòng {invoice.roomNumber}</Text>
-      <Text style={invoiceUi.secondary}>
-        Tháng {period} · {invoice.locationName}
-      </Text>
+      <Text style={invoiceUi.heading}>Hóa đơn tháng {period}</Text>
       <View style={invoiceUi.row}>
         <Pill tone="neutral">{invoice.status === 'Final' ? 'Đã phát hành' : 'Bản nháp'}</Pill>
         {state && (
@@ -59,24 +58,36 @@ export function TenantInvoiceSummary({
       <View>
         <Text style={invoiceUi.secondary}>
           {state
-            ? 'Còn phải thanh toán'
+            ? settled
+              ? 'Số tiền đã thanh toán'
+              : 'Còn phải thanh toán'
             : invoice.status === 'Draft'
               ? 'Tổng tạm tính'
               : 'Tổng hóa đơn'}
         </Text>
         <Text style={invoiceUi.hero}>
-          {formatContractMoney(state?.outstandingAmount ?? invoice.total)}
+          {formatContractMoney(
+            settled ? state.paidAmount : (state?.outstandingAmount ?? invoice.total),
+          )}
         </Text>
       </View>
+      {state && (
+        <View style={invoiceUi.row}>
+          {!settled && (
+            <Text style={invoiceUi.secondary}>
+              Đã thanh toán: {formatContractMoney(state.paidAmount)}
+            </Text>
+          )}
+          <Text style={invoiceUi.secondary}>
+            Tổng phải thu: {formatContractMoney(state.payableAmount)}
+          </Text>
+        </View>
+      )}
       <Text style={invoiceUi.secondary}>
         Hạn thanh toán: {displayContractDate(state?.dueDate ?? invoice.dueDate)}
       </Text>
       {overdue && <Text style={{ color: colors.red }}>Quá hạn {state.overdueDays} ngày</Text>}
-      {state?.pendingReview && (
-        <Text style={{ color: colors.amber }}>
-          Đang chờ đối soát. Trạng thái sẽ cập nhật sau khi xác minh.
-        </Text>
-      )}
+      {state?.pendingReview && <Text style={{ color: colors.amber }}>Đang chờ đối soát</Text>}
       {canPay && onPay && (
         <Button mode="contained" icon="qrcode" contentStyle={{ minHeight: 44 }} onPress={onPay}>
           Xem mã QR thanh toán
@@ -84,26 +95,12 @@ export function TenantInvoiceSummary({
       )}
       {invoice.status === 'Draft' && (
         <Text style={invoiceUi.secondary}>
-          Hóa đơn tạm tính — đang chờ phát hành. Dự kiến chốt{' '}
-          {displayContractDate(invoice.scheduledFinalDate)}. Chưa thể thanh toán.
-        </Text>
-      )}
-      {!!invoice.missingInputs.length && (
-        <Text accessibilityRole="alert" style={invoiceUi.secondary}>
-          Còn thiếu: {invoice.missingInputs.map(missingBillingInput).join(', ')}. Tổng hiện tại là
-          tạm tính.
+          Dự kiến phát hành: {displayContractDate(invoice.scheduledFinalDate)}
         </Text>
       )}
     </View>
   );
 }
-const categoryIcon: Record<string, string> = {
-  Rent: 'home-outline',
-  Electricity: 'lightning-bolt-outline',
-  Water: 'water-outline',
-  ServiceFee: 'receipt-text-outline',
-  Other: 'cash-multiple',
-};
 const categoryLabel: Record<string, string> = {
   Rent: 'Tiền phòng',
   Electricity: 'Tiền điện',
@@ -112,9 +109,18 @@ const categoryLabel: Record<string, string> = {
   Other: 'Khoản thu khác',
 };
 
-export function InvoiceChargeRow({ line, first }: { line: InvoiceLine; first: boolean }) {
+export function InvoiceChargeRow({
+  line,
+  first,
+  missingMessage,
+}: {
+  line: InvoiceLine;
+  first: boolean;
+  missingMessage?: string;
+}) {
   const [expanded, setExpanded] = useState(false);
   const utility = line.category === 'Electricity' || line.category === 'Water';
+  const covered = utility && hasSettlementUsageCoverage(line);
   const name = line.name || categoryLabel[line.category];
   return (
     <View style={!first && invoiceUi.chargeBorder}>
@@ -125,17 +131,25 @@ export function InvoiceChargeRow({ line, first }: { line: InvoiceLine; first: bo
         onPress={() => setExpanded(!expanded)}
       >
         <View style={invoiceUi.charge}>
-          {utility && (
-            <Icon
-              source={categoryIcon[line.category] ?? 'receipt-text-outline'}
-              size={18}
-              color={colors.muted}
-            />
-          )}
           <View style={invoiceUi.chargeText}>
-            <Text style={invoiceUi.title} numberOfLines={1}>
-              {name}
-            </Text>
+            <Text style={invoiceUi.title}>{name}</Text>
+            {utility && !missingMessage && (
+              <Text style={invoiceUi.secondary}>
+                {covered
+                  ? 'Đã tính trong quyết toán trả phòng'
+                  : line.quantity == null
+                    ? 'Chưa có số tiêu thụ'
+                    : `Đã dùng ${formatBillingDecimal(line.quantity)} ${line.category === 'Electricity' ? 'kWh' : 'm³'}`}
+              </Text>
+            )}
+            {missingMessage && (
+              <Text
+                accessibilityRole="alert"
+                style={[invoiceUi.secondary, { color: colors.amber }]}
+              >
+                {missingMessage}
+              </Text>
+            )}
           </View>
           <Text style={invoiceUi.chargeAmount}>{formatContractMoney(line.amount)}</Text>
           <Icon source={expanded ? 'chevron-up' : 'chevron-right'} size={16} color={colors.muted} />
@@ -149,14 +163,14 @@ function InvoiceChargeDetails({ line }: { line: InvoiceLine }) {
   const utility = line.category === 'Electricity' || line.category === 'Water';
   const people = invoicePersonMonths(line);
   const unit = line.category === 'Electricity' ? 'kWh' : 'm³';
-  const reading = (v: string | null) => (v == null ? 'Chưa có' : formatBillingDecimal(v));
+  const reading = (v: string | null) =>
+    v == null ? 'Chưa có' : `${formatBillingDecimal(v)} ${unit}`;
   const discrepancy =
     /(?:miễn phí|không thu tiền|\bfree\b)/i.test(line.name) &&
     !/(?:không miễn phí|not free)/i.test(line.name) &&
     positiveAmount(line.amount);
   return (
     <View style={invoiceUi.chargeDetails}>
-      <InvoiceDetailRow label="Tên khoản thu" value={line.name} />
       {hasSettlementFixedCoverage(line) && (
         <Text style={invoiceUi.secondary}>
           Số tiền trên dòng này đã loại phần tiền thuê/phí ghi nhận trong khoản phải thu trả phòng.
@@ -180,15 +194,11 @@ function InvoiceChargeDetails({ line }: { line: InvoiceLine }) {
                 : `${formatBillingDecimal(line.quantity)} ${unit}`
             }
           />
+          {!!line.meterReadingId && (
+            <TenantMeterReadingEvidence id={line.meterReadingId} label="Ảnh công tơ đã xác nhận" />
+          )}
         </>
-      ) : line.category === 'Rent' ? (
-        <InvoiceDetailRow
-          label="Ngày tính tiền"
-          value={
-            line.periodDays > 0 ? `${line.occupiedDays}/${line.periodDays} ngày` : 'Chưa có dữ liệu'
-          }
-        />
-      ) : people ? (
+      ) : line.category === 'Rent' ? null : people ? (
         <>
           <InvoiceDetailRow label="Số người tính phí" value={`${people.residentCount} người`} />
           {people.prorated && (
@@ -212,10 +222,6 @@ function InvoiceChargeDetails({ line }: { line: InvoiceLine }) {
       {line.calculatedAmount != null && (
         <InvoiceMoneyRow label="Trước điều chỉnh" value={line.calculatedAmount} />
       )}
-      <InvoiceDetailRow label="Áp dụng từ" value={displayContractDate(line.rateDate)} />
-      {line.policyVersion != null && (
-        <InvoiceDetailRow label="Phiên bản đơn giá" value={String(line.policyVersion)} />
-      )}
       {line.correctionRequestId && (
         <Text style={invoiceUi.secondary}>Có yêu cầu điều chỉnh liên quan.</Text>
       )}
@@ -230,14 +236,94 @@ function InvoiceChargeDetails({ line }: { line: InvoiceLine }) {
 }
 export function TenantInvoiceCharges({ invoice }: { invoice: Invoice }) {
   const [info, setInfo] = useState(false);
+  const utilityLines = invoice.lines.filter(
+    (line) => line.category === 'Electricity' || line.category === 'Water',
+  );
+  const otherLines = invoice.lines.filter(
+    (line) => line.category !== 'Electricity' && line.category !== 'Water',
+  );
+  const missingUtilities = (['Electricity', 'Water'] as const).flatMap((category) => {
+    const codes = invoice.missingInputs.filter((code) =>
+      [`confirmed_reading_${category}`, `baseline_${category}`, `rate_${category}`].includes(code),
+    );
+    if (!codes.length) return [];
+    const details = [
+      codes.includes(`confirmed_reading_${category}`) && 'Chưa có chỉ số đã xác nhận',
+      codes.includes(`baseline_${category}`) && 'Chưa có chỉ số trước',
+      codes.includes(`rate_${category}`) && 'Chưa có đơn giá',
+    ].filter(Boolean);
+    return [{ category, codes, message: details.join(' · ') }];
+  });
+  const otherMissing = [
+    ...new Set(
+      invoice.missingInputs.filter(
+        (code) => !missingUtilities.some((item) => item.codes.includes(code)),
+      ),
+    ),
+  ];
+  const missingRows = missingUtilities.filter(
+    (item) => !utilityLines.some((line) => line.category === item.category),
+  );
   return (
     <View style={invoiceUi.card}>
-      <Text style={invoiceUi.heading}>Các khoản thu</Text>
+      <Text style={invoiceUi.heading}>Điện, nước và các khoản phí</Text>
       <View>
-        {invoice.lines.map((line, index) => (
-          <InvoiceChargeRow key={line.id} line={line} first={index === 0} />
+        {(!!utilityLines.length || !!missingUtilities.length) && (
+          <>
+            {utilityLines.map((line, index) => (
+              <InvoiceChargeRow
+                key={line.id}
+                line={line}
+                first={index === 0}
+                missingMessage={
+                  missingUtilities.find((item) => item.category === line.category)?.message
+                }
+              />
+            ))}
+            {missingRows.map(({ category, message }, index) => (
+              <View
+                key={category}
+                style={(utilityLines.length > 0 || index > 0) && invoiceUi.chargeBorder}
+              >
+                <View style={invoiceUi.charge}>
+                  <View style={invoiceUi.chargeText}>
+                    <Text style={invoiceUi.title}>{categoryLabel[category]}</Text>
+                    <Text
+                      accessibilityRole="alert"
+                      style={[invoiceUi.secondary, { color: colors.amber }]}
+                    >
+                      {message}
+                    </Text>
+                  </View>
+                  <Text style={invoiceUi.secondary}>Chưa tính</Text>
+                </View>
+              </View>
+            ))}
+          </>
+        )}
+        {!!otherLines.length && (
+          <>
+            {otherLines.map((line, index) => (
+              <InvoiceChargeRow
+                key={line.id}
+                line={line}
+                first={index === 0 && !utilityLines.length && !missingUtilities.length}
+              />
+            ))}
+          </>
+        )}
+        {!invoice.lines.length && !missingUtilities.length && (
+          <Text style={invoiceUi.secondary}>Chưa có khoản thu.</Text>
+        )}
+        {otherMissing.map((code) => (
+          <Text
+            key={code}
+            accessibilityRole="alert"
+            style={[invoiceUi.secondary, { color: colors.amber }]}
+          >
+            {missingBillingInput(code)}
+          </Text>
         ))}
-        {!invoice.lines.length && <Text style={invoiceUi.secondary}>Chưa có khoản thu.</Text>}
         <View style={invoiceUi.total}>
           <Text style={[invoiceUi.title, { flex: 1 }]}>
             {invoice.status === 'Final' ? 'Tổng hóa đơn' : 'Tổng tạm tính'}

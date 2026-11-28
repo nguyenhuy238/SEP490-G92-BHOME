@@ -3,6 +3,7 @@ import {
   Alert,
   Box,
   Button,
+  IconButton,
   LinearProgress,
   Stack,
   Table,
@@ -14,6 +15,7 @@ import {
   Typography,
   useMediaQuery,
 } from '@mui/material';
+import { ChevronRight } from 'lucide-react';
 import { EmptyState, ErrorState, LoadingState } from './PortalUI';
 import { ownerError } from '../../hooks/useOwnerWorkspace';
 
@@ -46,6 +48,7 @@ export function OwnerTable<T>({
   retry,
   label = 'Danh sách bản ghi',
   selectLabel = 'Xem chi tiết',
+  compactAction = false,
 }: {
   rows: T[];
   columns: { label: string; render: (row: T) => ReactNode }[];
@@ -56,8 +59,27 @@ export function OwnerTable<T>({
   retry?: () => void;
   label?: string;
   selectLabel?: string;
+  compactAction?: boolean;
 }) {
   const compact = useMediaQuery('(max-width:599px)');
+  const action = (row: T) =>
+    compactAction ? (
+      <IconButton
+        aria-label={selectLabel}
+        title={selectLabel}
+        onClick={(event) => {
+          event.stopPropagation();
+          select?.(row);
+        }}
+        size="small"
+      >
+        <ChevronRight size={20} />
+      </IconButton>
+    ) : (
+      <Button onClick={() => select?.(row)} sx={{ whiteSpace: 'nowrap' }}>
+        {selectLabel}
+      </Button>
+    );
   if (error)
     return retry ? (
       <ErrorState error={new Error(ownerError(error))} retry={retry} />
@@ -76,15 +98,25 @@ export function OwnerTable<T>({
             <TableRow>
               <TableCell scope="col">{columns[0].label}</TableCell>
               {select && (
-                <TableCell scope="col" align="right" sx={{ width: 112 }}>
-                  Thao tác
+                <TableCell
+                  scope="col"
+                  align="right"
+                  sx={{ width: compactAction ? 44 : 112 }}
+                  aria-label="Thao tác"
+                >
+                  {!compactAction && 'Thao tác'}
                 </TableCell>
               )}
             </TableRow>
           </TableHead>
           <TableBody>
             {rows.map((row) => (
-              <TableRow key={id(row)} hover>
+              <TableRow
+                key={id(row)}
+                hover
+                onClick={compactAction && select ? () => select(row) : undefined}
+                sx={compactAction && select ? { cursor: 'pointer' } : undefined}
+              >
                 <TableCell
                   component="th"
                   scope="row"
@@ -109,17 +141,21 @@ export function OwnerTable<T>({
                 </TableCell>
                 {select && (
                   <TableCell align="right" sx={{ verticalAlign: 'top', px: 1, py: 1.25 }}>
-                    <Button
-                      onClick={() => select(row)}
-                      sx={{
-                        maxWidth: '100%',
-                        minHeight: 44,
-                        lineHeight: 1.4,
-                        whiteSpace: 'normal',
-                      }}
-                    >
-                      {selectLabel}
-                    </Button>
+                    {compactAction ? (
+                      action(row)
+                    ) : (
+                      <Button
+                        onClick={() => select(row)}
+                        sx={{
+                          maxWidth: '100%',
+                          minHeight: 44,
+                          lineHeight: 1.4,
+                          whiteSpace: 'normal',
+                        }}
+                      >
+                        {selectLabel}
+                      </Button>
+                    )}
                   </TableCell>
                 )}
               </TableRow>
@@ -140,27 +176,31 @@ export function OwnerTable<T>({
               </TableCell>
             ))}
             {select && (
-              <TableCell scope="col" align="right">
-                Thao tác
+              <TableCell
+                scope="col"
+                align="right"
+                sx={compactAction ? { width: 48 } : undefined}
+                aria-label="Thao tác"
+              >
+                {!compactAction && 'Thao tác'}
               </TableCell>
             )}
           </TableRow>
         </TableHead>
         <TableBody>
           {rows.map((row) => (
-            <TableRow key={id(row)} hover>
+            <TableRow
+              key={id(row)}
+              hover
+              onClick={compactAction && select ? () => select(row) : undefined}
+              sx={compactAction && select ? { cursor: 'pointer' } : undefined}
+            >
               {columns.map((c) => (
                 <TableCell key={c.label} sx={{ overflowWrap: 'anywhere' }}>
                   {c.render(row)}
                 </TableCell>
               ))}
-              {select && (
-                <TableCell align="right">
-                  <Button onClick={() => select(row)} sx={{ whiteSpace: 'nowrap' }}>
-                    {selectLabel}
-                  </Button>
-                </TableCell>
-              )}
+              {select && <TableCell align="right">{action(row)}</TableCell>}
             </TableRow>
           ))}
         </TableBody>

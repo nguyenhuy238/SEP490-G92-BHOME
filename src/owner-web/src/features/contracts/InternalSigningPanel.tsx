@@ -26,6 +26,7 @@ export function InternalSigningPanel({
 }) {
   const service = internalSigningClient(api.transport);
   const status = useQuery({
+    enabled: contract.isDevelopmentDemo,
     queryKey: [
       'internal-signing',
       contract.id,
@@ -56,6 +57,7 @@ export function InternalSigningPanel({
   const liveInvitation = status.data?.invitations.find(
     (i) => !['Accepted', 'Revoked', 'Expired'].includes(i.status),
   );
+  const signerLabel = contract.kind === 'Holding' ? 'người giữ chỗ' : 'người đại diện thuê';
   async function run(work: () => Promise<void>) {
     if (lock.current) return;
     lock.current = true;
@@ -74,15 +76,10 @@ export function InternalSigningPanel({
   }
   if (!contract.isDevelopmentDemo)
     return <RealInternalSigning api={api} contract={contract} onChanged={onChanged} />;
-  if (contract.kind === 'Main' && status.data?.sandboxAvailable)
+  if (contract.kind === 'Main' && status.data?.sandboxAvailable && !liveInvitation)
     return (
       <Stack spacing={2}>
         <Typography variant="h6">Xác nhận ký hợp đồng · Sandbox</Typography>
-        <Alert severity="warning">
-          Chỉ dùng cho kiểm thử: Owner xác nhận trên Web, Staff mô phỏng Tenant ký trên Mobile.
-          Người thuê chưa ký OTP; thao tác này không phải chữ ký số hoặc bằng chứng ký thật của
-          Tenant.
-        </Alert>
         {(error || status.error) && (
           <Alert severity="error">{error || signingMessage(status.error)}</Alert>
         )}
@@ -128,9 +125,6 @@ export function InternalSigningPanel({
       {contract.kind === 'Holding' && status.data?.sandboxAvailable && (
         <Stack spacing={1.5} sx={{ p: 2, bgcolor: '#F5F7FB', borderRadius: 2 }}>
           <Typography variant="h6">Giả lập chữ ký Owner · Sandbox</Typography>
-          <Alert severity="warning">
-            Chỉ dùng cho kiểm thử, không phải chữ ký số và không có giá trị pháp lý.
-          </Alert>
           {status.data.ownerAcceptedAt ? (
             <Alert severity="success">
               Owner đã xác nhận: {new Date(status.data.ownerAcceptedAt).toLocaleString('vi-VN')}
@@ -200,12 +194,12 @@ export function InternalSigningPanel({
           severity={liveInvitation.status === 'InvitationPendingManualDelivery' ? 'error' : 'info'}
         >
           {liveInvitation.status === 'InvitationAcceptedByProvider'
-            ? 'Dịch vụ email đã tiếp nhận lời mời. Chờ người giữ chỗ mở email và ký.'
+            ? `Dịch vụ email đã tiếp nhận lời mời. Chờ ${signerLabel} mở email và ký.`
             : liveInvitation.status === 'OtpVerified'
-              ? 'Đã xác minh OTP, người giữ chỗ chưa hoàn tất ký.'
+              ? `Đã xác minh OTP, ${signerLabel} chưa hoàn tất ký.`
               : liveInvitation.status === 'InvitationPendingManualDelivery'
                 ? 'Gửi email thất bại. Kiểm tra cấu hình, thu hồi lời mời rồi gửi lại.'
-                : 'Đã tạo lời mời. Chưa xác nhận gửi email hoặc đang chờ người giữ chỗ ký.'}
+                : `Đã tạo lời mời. Chưa xác nhận gửi email hoặc đang chờ ${signerLabel} ký.`}
         </Alert>
       )}
       {status.data?.invitations
@@ -223,12 +217,6 @@ export function InternalSigningPanel({
             Thu hồi lời mời chưa ký
           </Button>
         ))}
-      {status.data?.tenantSimulated && (
-        <Alert severity="warning">
-          Tenant đã xác nhận mô phỏng trên Sandbox. Owner xác nhận bằng tài khoản của mình; đây
-          không phải chữ ký Tenant thật.
-        </Alert>
-      )}
       {(status.data?.tenantAcceptedAt || status.data?.tenantSimulated) &&
         !(status.data.sandboxAvailable && !status.data.tenantAcceptedAt) &&
         !status.data.ownerAcceptedAt && (
@@ -303,18 +291,13 @@ function RealInternalSigning({
   return (
     <Stack spacing={2}>
       <Typography variant="h6">Ký hợp đồng · Owner và đại diện người thuê</Typography>
-      <Alert severity="info">
-        {['Holding', 'Main'].includes(c.kind)
-          ? 'Xem PDF và ký phần Chủ nhà. Staff gửi lời mời ký cho người thuê trên Mobile; hai bên có thể ký theo bất kỳ thứ tự nào.'
-          : 'Người thuê xác minh OTP và ký qua lời mời trước. Owner ký tiếp trên PDF đó.'}{' '}
-        OTP và dấu BHOME không phải chữ ký số cá nhân được CA chứng thực.
-      </Alert>
-      <Typography>
-        Người thuê: {status?.tenantAcceptedAt ? `Đã ký · ${status.tenantAcceptedAt}` : 'Chờ ký'}
+      <Typography variant="body2" color="text.secondary">
+        Xem PDF, kiểm tra người đại diện rồi ký phần Chủ nhà.
       </Typography>
-      <Typography>
-        Owner: {status?.ownerAcceptedAt ? `Đã ký · ${status.ownerAcceptedAt}` : 'Chờ ký'}
-      </Typography>
+      <Stack direction={{ xs: 'column', sm: 'row' }} spacing={2}>
+        <Typography>Người thuê: {status?.tenantAcceptedAt ? 'Đã ký' : 'Chờ ký'}</Typography>
+        <Typography>Chủ nhà: {status?.ownerAcceptedAt ? 'Đã ký' : 'Chờ ký'}</Typography>
+      </Stack>
       {(error || query.error) && (
         <Alert severity="error">{error || signingMessage(query.error)}</Alert>
       )}

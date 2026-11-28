@@ -9,8 +9,9 @@ public sealed partial class FinancialReportRepository
     // A classified principal return never changes the invoice/OPEX reporting basis.
     // Unknown refunds retain the existing chain-wide guard. Read-only metadata, no file downloads
     // per report row; the execution workflow verified storage bytes before durable completion.
-    private Task<RefundAccounting> RefundAccountingAsync(ReportFilter filter, DateTimeOffset start,
-        DateTimeOffset end, CancellationToken token) => db.Database.SqlQuery<RefundAccounting>($"""
+    private IQueryable<ClassifiedRefundData> ClassifiedRefundRows(ReportFilter filter, DateTimeOffset start,
+        DateTimeOffset end) => db.Database.SqlQuery<ClassifiedRefundData>($"""
+        SELECT * FROM (
         WITH completed AS (
           SELECT r.*,latest.state FROM refund_requests r
           LEFT JOIN LATERAL (SELECT h->'state' state FROM jsonb_array_elements(r.history) WITH ORDINALITY e(h,n)
@@ -98,18 +99,62 @@ public sealed partial class FinancialReportRepository
               THEN 'DepositPrincipal' END END category
           FROM completed r
         )
-        SELECT EXISTS(SELECT 1 FROM classified WHERE category IS NULL) AS "HasUnclassified",
-          COALESCE((SELECT sum(r.requested_amount) FROM classified r
-            JOIN contracts c ON c.id=r.source_deposit_contract_id JOIN rooms room ON room.id=c.room_id
-            WHERE r.category='DepositPrincipal' AND r.executed_at>={start}
-              AND COALESCE(r.state->>'isDevelopmentDemo','false')<>'true'
+        SELECT r.id AS "Id",r.source_payment_id AS "PaymentId",r.executed_at AS "ExecutedAt",
+          r.requested_amount AS "Amount",r.external_refund_reference AS "Reference",r.category AS "Category",
+          COALESCE(r.category='DepositPrincipal' AND r.executed_at>={start}
+              AND (COALESCE(r.state->>'isDevelopmentDemo','false')<>'true' OR bhome24_contract_payment_mode(c.id)='Test')
+              AND NOT bhome24_contract_is_simulation(c.id)
+              AND room.id IS NOT NULL
               AND ({filter.LocationId}::uuid IS NULL OR room.location_id={filter.LocationId})
-              AND ({filter.RoomId}::uuid IS NULL OR room.id={filter.RoomId})),0) AS "DepositReturned"
-        """).SingleAsync(token);
+              AND ({filter.RoomId}::uuid IS NULL OR room.id={filter.RoomId}),false) AS "DepositInPeriod",
+          COALESCE(r.category='ReceiptExcess' AND r.executed_at>={start} AND p.id IS NOT NULL
+              AND (COALESCE(p.verification_data->'compactState'->>'isDevelopmentDemo','false')<>'true' OR p.provider_code='SEPAY:TEST'),false) AS "ExcessInPeriod"
+        FROM classified r LEFT JOIN contracts c ON c.id=r.source_deposit_contract_id
+          LEFT JOIN rooms room ON room.id=c.room_id LEFT JOIN payments p ON p.id=r.source_payment_id
+        ) classified_results
+        """);
+
+    private async Task<RefundAccounting> RefundAccountingAsync(ReportFilter filter, DateTimeOffset start,
+        DateTimeOffset end, CancellationToken token) =>
+        await ClassifiedRefundRows(filter, start, end).GroupBy(r => 1).Select(g => new RefundAccounting
+        {
+            HasUnclassified = g.Any(r => r.Category == null),
+            DepositReturned = g.Sum(r => r.DepositInPeriod ? r.Amount : 0),
+            ExcessReturned = g.Sum(r => r.ExcessInPeriod ? r.Amount : 0)
+        }).SingleOrDefaultAsync(token) ?? new();
+
+    public async Task<BankRefundSourcePage> BankRefundSourcesAsync(ReportFilter filter, int page, int pageSize, CancellationToken token)
+    {
+        await using var snapshot = await db.Database.BeginTransactionAsync(System.Data.IsolationLevel.RepeatableRead, token);
+        var start = new DateTimeOffset(filter.From.ToDateTime(TimeOnly.MinValue), TimeSpan.FromHours(7)).ToUniversalTime();
+        var end = new DateTimeOffset(filter.To.AddDays(1).ToDateTime(TimeOnly.MinValue), TimeSpan.FromHours(7)).ToUniversalTime();
+        var query = ClassifiedRefundRows(filter, start, end).Where(r => r.ExcessInPeriod);
+        var count = await query.LongCountAsync(token);
+        var amount = await query.SumAsync(r => r.Amount, token);
+        var rows = await query.OrderByDescending(r => r.ExecutedAt).ThenBy(r => r.Id)
+            .Skip(checked((page - 1) * pageSize)).Take(pageSize).ToArrayAsync(token);
+        await snapshot.CommitAsync(token);
+        static string Money(decimal value) => value.ToString("0.############################", System.Globalization.CultureInfo.InvariantCulture);
+        return new(rows.Select(r => new BankRefundSource(r.Id, r.PaymentId!.Value, r.ExecutedAt!.Value,
+            Money(r.Amount), r.Reference)).ToArray(), count, page, pageSize, Money(amount), clock.GetUtcNow());
+    }
+}
+
+public sealed class ClassifiedRefundData
+{
+    public Guid Id { get; set; }
+    public Guid? PaymentId { get; set; }
+    public DateTimeOffset? ExecutedAt { get; set; }
+    public decimal Amount { get; set; }
+    public string? Reference { get; set; }
+    public string? Category { get; set; }
+    public bool DepositInPeriod { get; set; }
+    public bool ExcessInPeriod { get; set; }
 }
 
 public sealed class RefundAccounting
 {
     public bool HasUnclassified { get; set; }
     public decimal DepositReturned { get; set; }
+    public decimal ExcessReturned { get; set; }
 }

@@ -9,6 +9,7 @@ const mock = vi.hoisted(() => ({
   scenario: vi.fn(),
   analyzeScenario: vi.fn(),
   saveScenario: vi.fn(),
+  scenarioDefaults: vi.fn(),
 }));
 vi.mock('../expenses/useFinanceApi', () => ({ useFinanceApi: () => mock }));
 vi.mock('../../../../../packages/client-core/src/auth', () => ({
@@ -26,6 +27,11 @@ const input = {
     monthlyStaffCost: '0',
     monthlyMaintenanceCost: '0',
     monthlyOtherCost: '0',
+    monthlyServiceRevenue: '0',
+    additionalInvestment: '0',
+    monthlyDepreciation: null,
+    operatingPaymentPercent: '100',
+    costIncreasePercent: '0',
   },
 };
 const result = {
@@ -71,7 +77,12 @@ function mount() {
     </QueryClientProvider>,
   );
 }
+function openOtherAssumptions() {
+  const toggle = screen.getByRole('button', { name: 'Các khoản thu, chi khác' });
+  if (toggle.getAttribute('aria-expanded') === 'false') fireEvent.click(toggle);
+}
 function fill() {
+  openOtherAssumptions();
   fireEvent.change(screen.getByLabelText(/Tên kịch bản/), { target: { value: input.name } });
   fireEvent.click(screen.getByRole('button', { name: /Kỳ dữ liệu nền/ }));
   fireEvent.change(screen.getByLabelText(/Dữ liệu nền từ/), {
@@ -85,15 +96,69 @@ function fill() {
     /Tỷ lệ lấp đầy/,
     /Tỷ lệ thu tiền/,
     /Điện nước/,
-    /Chi phí Staff/,
+    /Chi phí nhân viên/,
     /Bảo trì/,
     /Chi phí khác/,
   ];
-  Object.values(input.assumptions).forEach((value, index) =>
-    fireEvent.change(screen.getByLabelText(labels[index]), { target: { value } }),
-  );
+  Object.values(input.assumptions)
+    .slice(0, 7)
+    .forEach((value, index) =>
+      fireEvent.change(screen.getByLabelText(labels[index]), { target: { value } }),
+    );
+  fireEvent.change(screen.getByLabelText(/Doanh thu dịch vụ mỗi tháng/), {
+    target: { value: '0' },
+  });
+  fireEvent.change(screen.getByLabelText(/Đầu tư bổ sung một lần/), { target: { value: '0' } });
+  fireEvent.change(screen.getByLabelText(/Tỷ lệ thực chi dự kiến/), { target: { value: '100' } });
   fireEvent.submit(screen.getByRole('button', { name: 'Phân tích' }).closest('form')!);
 }
+it('starts with three common assumptions and keeps secondary amounts out of the form', () => {
+  mount();
+  for (const label of [/Giá thuê giả định/, /Tỷ lệ lấp đầy/, /Chi phí nhân viên/])
+    expect(screen.getByLabelText(label)).toBeVisible();
+  expect(screen.queryByLabelText(/Tỷ lệ thu tiền/)).not.toBeInTheDocument();
+  expect(screen.queryByLabelText(/Điện nước/)).not.toBeInTheDocument();
+  expect(screen.getByRole('button', { name: 'Các khoản thu, chi khác' })).toHaveAttribute(
+    'aria-expanded',
+    'false',
+  );
+  expect(mock.analyzeScenario).not.toHaveBeenCalled();
+});
+
+it('reveals missing secondary inputs rather than submitting guessed zero costs', async () => {
+  mount();
+  fireEvent.change(screen.getByLabelText(/Tên kịch bản/), {
+    target: { value: 'Kịch bản kiểm tra' },
+  });
+  fireEvent.change(screen.getByLabelText(/Giá thuê giả định/), { target: { value: '3000000' } });
+  fireEvent.change(screen.getByLabelText(/Tỷ lệ lấp đầy/), { target: { value: '80' } });
+  fireEvent.change(screen.getByLabelText(/Chi phí nhân viên/), { target: { value: '1000000' } });
+  fireEvent.submit(screen.getByRole('button', { name: 'Phân tích' }).closest('form')!);
+  expect(await screen.findByText(/Kiểm tra các khoản chưa đủ dữ liệu/)).toBeVisible();
+  expect(screen.getByLabelText(/Điện nước/)).toHaveValue('');
+  expect(screen.getByRole('button', { name: 'Các khoản thu, chi khác' })).toHaveAttribute(
+    'aria-expanded',
+    'true',
+  );
+  expect(mock.analyzeScenario).not.toHaveBeenCalled();
+});
+
+it('analyzes server defaults while secondary inputs stay collapsed', async () => {
+  const baseline = financeMonthPeriod(-1);
+  mock.scenarioDefaults.mockResolvedValue({
+    baseline,
+    snapshotAt: '2026-11-26T00:00:00Z',
+    ...input.assumptions,
+    limitations: [],
+  });
+  mount();
+  fireEvent.change(screen.getByLabelText(/Tên kịch bản/), { target: { value: input.name } });
+  fireEvent.click(screen.getByRole('button', { name: 'Lấy số liệu thực tế' }));
+  await waitFor(() => expect(screen.getByLabelText(/Giá thuê giả định/)).toHaveValue('3.000.000'));
+  expect(screen.queryByLabelText(/Điện nước/)).not.toBeInTheDocument();
+  fireEvent.submit(screen.getByRole('button', { name: 'Phân tích' }).closest('form')!);
+  await waitFor(() => expect(mock.analyzeScenario).toHaveBeenCalledWith({ ...input, baseline }));
+});
 it('analyzes explicit assumptions and preserves a save key across uncertain errors', async () => {
   mock.saveScenario.mockRejectedValue({ status: 503 });
   mount();
@@ -171,5 +236,47 @@ it('teaches the Analyze then Save flow and hides outdated results when assumptio
   fireEvent.change(screen.getByLabelText(/Giá thuê giả định/), { target: { value: '3500000' } });
   expect(screen.queryByText(/Kết quả phân tích hiện chưa được lưu/)).not.toBeInTheDocument();
   expect(screen.getByRole('button', { name: 'Lưu kịch bản' })).toBeDisabled();
+  expect(mock.saveScenario).not.toHaveBeenCalled();
+});
+
+it('restores server defaults with future obligations without inventing an unresolved salary', async () => {
+  const period = financeMonthPeriod(-1);
+  mock.scenarioDefaults.mockResolvedValue({
+    baseline: period,
+    snapshotAt: '2026-11-25T00:00:00Z',
+    monthlyRent: '3000000',
+    occupancyPercent: '80',
+    collectionPercent: '90',
+    monthlyUtilityServiceCost: '100000',
+    monthlyStaffCost: null,
+    monthlyMaintenanceCost: '200000',
+    monthlyOtherCost: '300000',
+    monthlyDepreciation: null,
+    monthlyServiceRevenue: '250000',
+    operatingPaymentPercent: '93.33',
+    limitations: ['Chưa xác định phân bổ lương'],
+    obligations: {
+      from: '2026-12-01',
+      to: '2026-12-31',
+      recurringDue: '300000',
+      contractualSalary: null,
+      recurringCount: 1,
+      staffCount: 1,
+      unresolvedStaffCount: 1,
+    },
+  });
+  mount();
+  fireEvent.click(screen.getByRole('button', { name: 'Lấy số liệu thực tế' }));
+  expect(await screen.findByText(/Cần xác nhận thêm 1 nhân viên/)).toBeInTheDocument();
+  expect(screen.getByLabelText(/Chi phí nhân viên/)).toHaveValue('');
+  openOtherAssumptions();
+  expect(screen.getByLabelText(/Chi phí khác/)).toHaveValue('300.000');
+  expect(screen.getByLabelText(/Doanh thu dịch vụ mỗi tháng/)).toHaveValue('250.000');
+  expect(screen.getByLabelText(/Tỷ lệ thực chi dự kiến/)).toHaveValue('93.33');
+  expect(mock.scenarioDefaults).toHaveBeenCalledWith(
+    { ...period, locationId: undefined },
+    expect.any(AbortSignal),
+  );
+  expect(mock.analyzeScenario).not.toHaveBeenCalled();
   expect(mock.saveScenario).not.toHaveBeenCalled();
 });

@@ -69,6 +69,17 @@ beforeEach(() => {
       operatingExpenses: '5000000',
       verifiedCollections: '11000000',
       outstandingNow: '1000000',
+      management: {
+        actualBusinessCollections: '10000000',
+        currentOutstanding: '1000000',
+        depreciation: null,
+        cashCapital: {
+          unavailableReason: 'full_month_baseline_required',
+          remainingCapital: null,
+          recoveryPercent: null,
+          estimatedRemainingMonths: null,
+        },
+      },
     },
     capital: {
       unavailableReason: 'full_month_baseline_required',
@@ -82,11 +93,11 @@ beforeEach(() => {
 });
 afterEach(cleanup);
 
-function mount() {
+function mount(search = '') {
   const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
   return render(
     <QueryClientProvider client={client}>
-      <MemoryRouter initialEntries={['/locations/location-123/investment']}>
+      <MemoryRouter initialEntries={['/locations/location-123/investment' + search]}>
         <Routes>
           <Route path="/locations/:locationId/investment" element={<LocationFinanceWorkspace />} />
         </Routes>
@@ -95,12 +106,33 @@ function mount() {
   );
 }
 
+it('opens recurring cost setup for the linked location without creating expenses', async () => {
+  mount('?tab=recurring');
+  expect(screen.getByRole('tab', { name: 'Chi phí định kỳ' })).toHaveAttribute(
+    'aria-selected',
+    'true',
+  );
+  await waitFor(() =>
+    expect(state.request).toHaveBeenCalledWith(
+      '/api/v1/recurring-expenses?locationId=location-123',
+      expect.objectContaining({ signal: expect.anything() }),
+    ),
+  );
+  expect(state.createExpense).not.toHaveBeenCalled();
+  expect(state.request.mock.calls.every(([, init]) => !init?.method)).toBe(true);
+});
+
+it('falls back to the overview for an unknown finance tab', () => {
+  mount('?tab=unknown');
+  expect(screen.getByRole('tab', { name: 'Tổng quan' })).toHaveAttribute('aria-selected', 'true');
+});
+
 it('shows real API finance totals and warns when recovery is unavailable', async () => {
   mount();
   expect(await screen.findByText('150.000.000 ₫')).toBeInTheDocument();
   expect(
     screen.getByText(
-      'Chưa đủ dữ liệu tin cậy để xác định thời gian hoàn vốn. Kiểm tra vốn ban đầu, công nợ, hoàn tiền và các kỳ báo cáo đầy đủ.',
+      'Chưa đủ dữ liệu tin cậy để xác định thời gian hoàn vốn. Kiểm tra vốn ban đầu, công nợ, hoàn tiền và các kỳ báo cáo đã kết thúc.',
     ),
   ).toBeInTheDocument();
   expect(state.report).toHaveBeenCalledWith(

@@ -35,13 +35,13 @@ it('offers four authorized Staff tabs and maps nested screens to the correct tab
   expect(tabs.Staff.map((tab) => tab.screen)).toEqual([
     'staff-home',
     'work-orders',
-    'notifications',
+    'rooms',
     'profile',
   ]);
   for (const tab of tabs.Staff) expect(canOpenScreen('Staff', tab.screen)).toBe(true);
   expect(activeWorkspaceTab('Staff', 'onboarding')).toBe('staff-home');
   expect(activeWorkspaceTab('Staff', 'task-detail')).toBe('work-orders');
-  expect(activeWorkspaceTab('Staff', 'send-notification')).toBe('notifications');
+  expect(activeWorkspaceTab('Staff', 'send-notification')).toBe('staff-home');
   expect(activeWorkspaceTab('Staff', 'security')).toBe('profile');
   expect(activeWorkspaceTab('Owner', 'task-detail')).toBe('operations');
   expect(activeWorkspaceTab('Tenant', 'contract')).toBe('tenant-home');

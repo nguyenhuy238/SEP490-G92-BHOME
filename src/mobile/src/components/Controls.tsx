@@ -30,12 +30,14 @@ export function Field({
   onChange,
   secure = false,
   numeric = false,
+  integer = false,
 }: {
   label: string;
   value: string;
   onChange: (v: string) => void;
   secure?: boolean;
   numeric?: boolean;
+  integer?: boolean;
 }) {
   return (
     <TextInput
@@ -46,7 +48,7 @@ export function Field({
       secureTextEntry={secure}
       autoCapitalize="none"
       autoCorrect={false}
-      keyboardType={numeric ? 'decimal-pad' : 'default'}
+      keyboardType={integer ? 'number-pad' : numeric ? 'decimal-pad' : 'default'}
     />
   );
 }

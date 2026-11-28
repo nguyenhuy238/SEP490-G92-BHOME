@@ -3,10 +3,13 @@
 [CmdletBinding()]
 param(
     [string]$Sender,
+    # Legacy parameters accepted for existing callers; Development has no recipient allowlist.
     [string[]]$AllowedRecipients,
     [switch]$AllowAnyRecipient,
+    [switch]$UseExistingCredentials,
     [Security.SecureString]$AppPassword,
     [switch]$CheckOnly,
+    [string]$Recipient,
     [string]$EnvironmentFile = '.env',
     [string]$UserSecretsId
 )
@@ -67,8 +70,6 @@ if ($CheckOnly) {
     foreach ($key in $secrets.Keys) { $effective[$key] = $secrets[$key] }
     $processOverrides = @(Get-ChildItem Env:Email__* -ErrorAction SilentlyContinue)
     if ($processOverrides.Count) { throw 'Process Email__* overrides are present; check effective API settings before sending.' }
-    $allowed = @($effective.Keys | Where-Object { $_ -match '^Email:AllowedRecipients:[0-9]+$' })
-    $allowAnyConfigured = [string]$effective['Email:AllowAnyRecipientInDevelopment'] -eq 'true'
     $ready = $effective['Email:Enabled'] -eq 'true' -and
         $effective['Email:DeliveryMode'] -eq 'Smtp' -and
         $effective['Email:Host'] -eq 'smtp.gmail.com' -and
@@ -78,13 +79,10 @@ if ($CheckOnly) {
         $effective['NotificationChannels:AutomationEnabled'] -eq 'true' -and
         (Valid-Email ([string]$effective['Email:Username'])) -and
         $effective['Email:Username'] -eq $effective['Email:FromEmail'] -and
-        ![string]::IsNullOrWhiteSpace([string]$effective['Email:AppPassword']) -and
-        ($allowed.Count -gt 0 -or $allowAnyConfigured) -and
-        @($allowed | Where-Object { !(Valid-Email ([string]$effective[$_])) }).Count -eq 0
-    if ($AllowAnyRecipient) { $ready = $ready -and $allowAnyConfigured }
+        ![string]::IsNullOrWhiteSpace([string]$effective['Email:AppPassword'])
     if (!$ready) { throw 'Local Gmail SMTP is NOT configured. Current local email may be captured by Mailpit. Run Configure-LocalGmail.ps1 to opt in.' }
-    $scope = if ($allowAnyConfigured) { 'all valid recipients (Development opt-in)' } else { 'approved recipients only' }
-    Write-Output ('PASS: Local Gmail SMTP configuration is present; destination scope: ' + $scope + '. Credentials withheld; SMTP acceptance/inbox delivery not tested.')
+    if ($Recipient -and !(Valid-Email $Recipient)) { throw 'Recipient must be one valid email address.' }
+    Write-Output 'PASS: Local Gmail SMTP configuration is present; all valid recipients are allowed in Development. Credentials withheld; SMTP acceptance/inbox delivery not tested.'
     return
 }
 
@@ -92,37 +90,22 @@ if ($CheckOnly) {
 if (@(Get-ChildItem Env:Email__* -ErrorAction SilentlyContinue).Count) {
     throw 'Process Email__* overrides are set. Remove them before configuring local Gmail SMTP.'
 }
+if ($Recipient) { throw '-Recipient is supported only with -CheckOnly. No configuration changed.' }
+if ($UseExistingCredentials) {
+    if ($Sender -or $AppPassword) { throw '-UseExistingCredentials cannot be combined with -Sender or -AppPassword.' }
+    if (![string]::IsNullOrWhiteSpace([string]$secrets['Email:AppPassword']) -and
+        (Valid-Email ([string]$secrets['Email:Username'])) -and
+        $secrets['Email:Username'] -eq $secrets['Email:FromEmail']) {
+        $Sender = [string]$secrets['Email:Username']
+        $AppPassword = ConvertTo-SecureString ([string]$secrets['Email:AppPassword']) -AsPlainText -Force
+    } else {
+        throw 'Existing SMTP credentials are missing or inconsistent in API User Secrets. Run without -UseExistingCredentials to enter them securely. No configuration changed.'
+    }
+}
 if (!$Sender) { $Sender = Read-Host 'Gmail sender address' }
 $Sender = $Sender.Trim()
 if (!(Valid-Email $Sender) -or !$Sender.EndsWith('@gmail.com', [StringComparison]::OrdinalIgnoreCase)) {
     throw 'Sender must be a valid Gmail address. No configuration changed.'
-}
-if (!$AllowAnyRecipient -and (!$AllowedRecipients -or !$AllowedRecipients.Count)) {
-    $raw = Read-Host 'Approved test recipients (comma-separated email addresses)'
-    $AllowedRecipients = @($raw.Split(','))
-}
-$recipients = @($AllowedRecipients | Where-Object { $null -ne $_ } | ForEach-Object { $_.Trim() } | Where-Object { $_ })
-if ((!$AllowAnyRecipient -and !$recipients.Count) -or $recipients.Count -gt 10 -or
-    @($recipients | Where-Object { !(Valid-Email $_) }).Count -gt 0 -or
-    @($recipients | Sort-Object -Unique).Count -ne $recipients.Count) {
-    throw 'Provide 1-10 distinct valid approved recipient addresses. No configuration changed.'
-}
-# Preserve previously granted recipient permissions instead of silently broadening or narrowing them.
-$existing = @($secrets.Keys | Where-Object { $_ -match '^Email:AllowedRecipients:[0-9]+$' })
-$inFile = @(
-    Get-Content -Encoding UTF8 -LiteralPath $file |
-        Where-Object { $_ -match '^Email__AllowedRecipients__[0-9]+=' } |
-        ForEach-Object { ($_ -split '=', 2)[1].Trim() }
-)
-if (!$AllowAnyRecipient -and @($inFile | Where-Object { $recipients -notcontains $_ }).Count -gt 0) {
-    throw 'The selected .env contains other approved recipients. Review those entries before enabling real mail.'
-}
-if ($existing.Count -and !$AllowAnyRecipient) {
-    $prior = @($existing | ForEach-Object { [string]$secrets[$_] })
-    if ($prior.Count -ne $recipients.Count -or
-        @($prior | Where-Object { $recipients -notcontains $_ }).Count -gt 0) {
-        throw 'An existing SMTP allowlist differs. Review it manually before changing approved recipients.'
-    }
 }
 if (!$AppPassword) { $AppPassword = Read-Host 'Gmail App Password (hidden)' -AsSecureString }
 if (!$AppPassword -or $AppPassword.Length -lt 8) { throw 'App Password is missing or too short. No configuration changed.' }
@@ -146,16 +129,11 @@ try {
         'Email:FromName' = 'BHOME'
         'Email:TimeoutSeconds' = '30'
         'Email:AppPassword' = $privatePassword
-        'Email:AllowAnyRecipientInDevelopment' = [string][bool]$AllowAnyRecipient
-        'Email:TestEnabled' = [string][bool](!$AllowAnyRecipient)
+        'Email:TestEnabled' = 'false'
         'NotificationChannels:Enabled' = 'true'
         'NotificationChannels:Mode' = 'Unconfigured'
         'NotificationChannels:AutomationEnabled' = 'true'
         'NotificationChannels:TimeoutSeconds' = '30'
-    }
-    if (!$AllowAnyRecipient) { $options['Email:TestRecipient'] = $recipients[0] }
-    for ($i = 0; $i -lt $recipients.Count; $i++) {
-        $options["Email:AllowedRecipients:$i"] = $recipients[$i]
     }
     $options | ConvertTo-Json -Compress -Depth 3 | dotnet user-secrets set --id $UserSecretsId | Out-Null
     if ($LASTEXITCODE -ne 0) { throw 'Could not update local API user-secrets. No email was sent.' }
@@ -166,7 +144,4 @@ try {
     $privatePassword = $null
 }
 Write-Output 'Configured Development Gmail SMTP in API User Secrets (credentials withheld). No .env/database/deployment change and no email sent.'
-if ($AllowAnyRecipient) {
-    Write-Warning 'All valid Staff/Tenant recipient addresses can receive REAL external email from this Development instance. Existing recipient allowlist is bypassed only in Development.'
-}
-Write-Output 'Restart the API and run Configure-LocalGmail.ps1 -CheckOnly before testing with the approved mailbox.'
+Write-Output 'Development allows all valid recipients without an allowlist. Restart the API and run Configure-LocalGmail.ps1 -CheckOnly. No email was sent.'

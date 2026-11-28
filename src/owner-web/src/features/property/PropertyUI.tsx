@@ -1,3 +1,5 @@
+import { getUserFriendlyMessage } from '../../../../../packages/client-core/src/api';
+import { TextField, ValidatedForm } from '../../components/common/ValidatedForm';
 import { useState, type ReactNode } from 'react';
 import {
   Alert,
@@ -16,7 +18,6 @@ import {
   TableHead,
   TablePagination,
   TableRow,
-  TextField,
   Typography,
 } from '@mui/material';
 import { X } from 'lucide-react';
@@ -245,7 +246,7 @@ export function EditDrawer({
       await onSave(values);
       onClose();
     } catch (e) {
-      setError(e instanceof Error ? e.message : 'Không thể lưu.');
+      setError(getUserFriendlyMessage(e));
       setConfirm(false);
     } finally {
       setBusy(false);
@@ -272,7 +273,7 @@ export function EditDrawer({
         </Alert>
       )}
       <Box
-        component="form"
+        component={ValidatedForm}
         onSubmit={(e) => {
           e.preventDefault();
           setConfirm(true);

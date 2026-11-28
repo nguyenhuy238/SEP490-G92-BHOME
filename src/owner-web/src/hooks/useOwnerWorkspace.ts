@@ -1,7 +1,12 @@
 import { useRef, useState } from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { useAuth } from '../../../../packages/client-core/src/auth';
-import { ApiError, infrastructureError } from '../../../../packages/client-core/src/api';
+import {
+  ApiError,
+  UserFeedbackError,
+  infrastructureError,
+  getUserFriendlyMessage,
+} from '../../../../packages/client-core/src/api';
 import { invoiceError } from '../../../../packages/client-core/src/invoices';
 import { useMeterApi } from '../features/meters/useMeterApi';
 
@@ -29,15 +34,13 @@ export function ownerQuery(values: Record<string, unknown>) {
   return result.toString();
 }
 export function ownerError(error: unknown) {
+  if (error instanceof UserFeedbackError) return getUserFriendlyMessage(error);
   const infrastructure = infrastructureError(error);
   if (infrastructure) return infrastructure;
   if (error instanceof ApiError) {
-    const fields = Object.values(error.problem?.errors ?? {})
-      .flat()
-      .join(' ');
     const codes: Record<string, string> = {
-      email_recipient_not_allowed:
-        'Địa chỉ nhận chưa được cho phép trong môi trường thử nghiệm. Liên hệ người quản trị môi trường trước khi gửi lại.',
+      email_recipient_invalid:
+        'Địa chỉ email nhận không hợp lệ. Kiểm tra email của nhân viên trước khi gửi lại.',
       staff_account_requires_invitation:
         'Phiên bản Backend cũ yêu cầu kích hoạt tài khoản. Hãy cập nhật Backend rồi thử gửi lại thông tin đăng nhập.',
       staff_password_update_failed:
@@ -80,7 +83,7 @@ export function ownerError(error: unknown) {
       compensation_deposit_insufficient:
         'Cọc còn lại không đủ toàn bộ mức bồi thường hoặc đã được sử dụng. Chưa thể chọn hoặc thực hiện khấu trừ.',
       compensation_move_out_required:
-        'Chỉ khấu trừ sau khi Owner duyệt trả phòng và xác nhận biên bản kiểm tra.',
+        'Chỉ khấu trừ sau khi Owner xem xét và xác nhận kết quả kiểm tra trả phòng.',
       compensation_collected_or_invoice_adjustment_required:
         'Quyết định đã phát hành hóa đơn hoặc đã khấu trừ. Quy trình sửa hoặc đảo khoản đã thu chưa được phê duyệt. Lịch sử giao dịch được giữ nguyên.',
       invalid_compensation_amount:
@@ -97,10 +100,13 @@ export function ownerError(error: unknown) {
         'Cần giới thiệu cơ sở và ít nhất một số điện thoại hoặc email liên hệ.',
       public_room_incomplete: 'Cần mô tả phòng trước khi xuất bản.',
       public_location_not_published: 'Cần xuất bản cơ sở trước khi xuất bản phòng.',
+      public_location_inactive: 'Cơ sở đã ngừng hoạt động. Chỉ xuất bản cơ sở đang hoạt động.',
+      invalid_public_photo_order:
+        'Danh sách ảnh đã thay đổi. Tải lại danh sách ảnh rồi sắp xếp lại.',
       announcement_idempotency_conflict:
         'Mã tạo nháp đã dùng cho nội dung khác. Mở lại nháp đã lưu để kiểm tra.',
     };
-    return fields || codes[error.problem?.code ?? ''] || invoiceError(error);
+    return codes[error.problem?.code ?? ''] || getUserFriendlyMessage(error);
   }
   return invoiceError(error);
 }

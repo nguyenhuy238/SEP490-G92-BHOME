@@ -49,7 +49,9 @@ public static class DependencyInjection
             options.Lockout.DefaultLockoutTimeSpan = TimeSpan.FromMinutes(15);
         }).AddRoles<IdentityRole<Guid>>().AddUserStore<CompactUserStore>().AddRoleStore<CompactRoleStore>().AddSignInManager().AddDefaultTokenProviders();
         services.AddScoped<IUserClaimsPrincipalFactory<ApplicationUser>, CompactClaimsPrincipalFactory>();
-        services.AddSingleton(TimeProvider.System);
+        services.AddSingleton<TimeProvider>(p => BHome.Infrastructure.Development.DemoClockGuard.Enabled(
+            p.GetRequiredService<IConfiguration>(), p.GetService<IHostEnvironment>()?.EnvironmentName)
+            ? new BHome.Application.Common.DemoBusinessClock(TimeProvider.System) : TimeProvider.System);
         services.AddOptions<SessionOptions>().Bind(configuration.GetSection("Sessions"))
             .Validate(o => o.RefreshTokenDays is >= 1 and <= SessionOptions.MaximumLifetimeDays &&
                 o.AbsoluteLifetimeDays is >= 1 and <= SessionOptions.MaximumLifetimeDays &&
@@ -151,14 +153,10 @@ public static class DependencyInjection
                     o.FromEmail = legacy.FromAddress ?? ""; o.UseStartTls = legacy.SmtpUseTls;
                 }
             })
-            .Validate(o => o.Valid(),
-                "Email configuration invalid: check Email:Host/Port/FromEmail, Email:AppPassword and STARTTLS for SMTP, or the syntax of Email:AllowedRecipients.")
+            .Validate<IHostEnvironment>((o, env) => o.Valid(env.EnvironmentName),
+                "Email configuration invalid: check Email:Host/Port/FromEmail, Email:AppPassword and STARTTLS for SMTP.")
             .Validate<IHostEnvironment>((o, env) => o.CaptureAllowed(env.EnvironmentName),
                 "Email:DeliveryMode=Capture requires a loopback Email:Host and Development/Testing; deployed SMTP must use STARTTLS.")
-            .Validate<IHostEnvironment>((o, env) => o.AnyRecipientOverrideAllowed(env.EnvironmentName),
-                "Email:AllowAnyRecipientInDevelopment can only be enabled with SMTP in Development.")
-            .Validate<IHostEnvironment>((o, env) => o.RecipientsConfigured(env.EnvironmentName),
-                "SMTP requires Email:AllowedRecipients:0 (and optional :1, :2, ...) in Development/Testing/Staging. Development can explicitly opt in with Email:AllowAnyRecipientInDevelopment=true. For an existing local test mailbox, run scripts/Initialize-LocalEmail.ps1 -UseConfiguredTestRecipient, then restart the API. Email:TestRecipient alone is not an allowlist.")
             .ValidateOnStart();
         services.AddScoped<BHome.Infrastructure.Modules.Notifications.MailKitEmailSender>();
         services.AddOptions<BHome.Infrastructure.Modules.Notifications.ExpoPushOptions>()
@@ -177,6 +175,7 @@ public static class DependencyInjection
         services.AddScoped<CompactLocationAssignments>();
         services.AddScoped<ILocationAssignments>(provider => provider.GetRequiredService<CompactLocationAssignments>());
         services.AddScoped<IStaffLocationAccess>(provider => provider.GetRequiredService<CompactLocationAssignments>());
+        services.AddScoped<ITenantContractAccess, CompactTenantContractAccess>();
         services.AddScoped<AssignmentReconciliationJob>();
         services.AddScoped<IBackgroundJobHandler>(provider => provider.GetRequiredService<AssignmentReconciliationJob>());
         services.AddScoped<IJobScheduleContributor>(provider => provider.GetRequiredService<AssignmentReconciliationJob>());
@@ -242,6 +241,8 @@ public static class DependencyInjection
         services.AddScoped<BHome.Application.Operations.PersonalDataRequestService>();
         services.AddScoped<BHome.Application.Operations.ILifecycleAttentionRepository, BHome.Infrastructure.Modules.Operations.LifecycleAttentionRepository>();
         services.AddScoped<BHome.Application.Operations.LifecycleAttentionService>();
+        services.AddScoped<BHome.Application.Operations.IOperationalWorkRepository, BHome.Infrastructure.Modules.Operations.OperationalWorkRepository>();
+        services.AddScoped<BHome.Application.Operations.OperationalWorkService>();
         services.AddScoped<BHome.Infrastructure.Modules.PropertyManagement.EquipmentInspectionJob>();
         services.AddScoped<IBackgroundJobHandler>(p => p.GetRequiredService<BHome.Infrastructure.Modules.PropertyManagement.EquipmentInspectionJob>());
         services.AddScoped<IJobScheduleContributor>(p => p.GetRequiredService<BHome.Infrastructure.Modules.PropertyManagement.EquipmentInspectionJob>());
@@ -276,21 +277,31 @@ public static class DependencyInjection
             .Validate<IHostEnvironment>((options, host) => options.Valid(host.EnvironmentName),
                 "SePay requires isolated Test/Live configuration, a strong webhook secret and receiving accounts.")
             .ValidateOnStart();
-        services.AddSingleton(p => p.GetRequiredService<IOptions<BHome.Application.PaymentsDebt.SePay.SePayOptions>>().Value);
-        services.AddSingleton<BHome.Application.PaymentsDebt.SePay.SePayWebhookSecurity>();
+        services.AddScoped(p =>
+        {
+            var options = p.GetRequiredService<IOptions<BHome.Application.PaymentsDebt.SePay.SePayOptions>>().Value.Copy();
+            if (options.DualMode) options.Select(options.Mode);
+            return options;
+        });
+        services.AddScoped<BHome.Application.PaymentsDebt.SePay.SePayWebhookSecurity>();
         services.AddScoped<BHome.Application.PaymentsDebt.SePay.ISePayRepository, BHome.Infrastructure.PaymentsDebt.SePayRepository>();
         services.AddScoped<BHome.Application.PaymentsDebt.SePay.IPaymentCodeRegistry, BHome.Infrastructure.PaymentsDebt.PaymentCodeRegistry>();
         services.AddScoped<BHome.Application.PaymentsDebt.SePay.SePayService>();
+        services.AddScoped<BHome.Application.PaymentsDebt.SePay.ISePayOwnerConnections, BHome.Infrastructure.PaymentsDebt.SePayOwnerConnections>();
         services.AddHttpClient<BHome.Infrastructure.PaymentsDebt.SePayApiClient>((p, client) =>
         {
-            var settings = p.GetRequiredService<BHome.Application.PaymentsDebt.SePay.SePayOptions>();
+            var settings = p.GetRequiredService<IOptions<BHome.Application.PaymentsDebt.SePay.SePayOptions>>().Value;
             if (!settings.Enabled) return;
             client.BaseAddress = new Uri(settings.ApiBaseUrl.TrimEnd('/') + "/");
-            client.Timeout = TimeSpan.FromSeconds(settings.RequestTimeoutSeconds);
+            client.Timeout = TimeSpan.FromSeconds(30); // The adapter applies the selected profile's timeout to the entire request.
         }).ConfigurePrimaryHttpMessageHandler(() => new HttpClientHandler { AllowAutoRedirect = false });
         services.AddScoped<BHome.Application.PaymentsDebt.SePay.ISePayTransactionClient>(p => p.GetRequiredService<BHome.Infrastructure.PaymentsDebt.SePayApiClient>());
-        services.AddScoped<IBackgroundJobHandler, BHome.Infrastructure.PaymentsDebt.SePayReconciliationJob>();
-        services.AddScoped<IBackgroundJobHandler, BHome.Infrastructure.PaymentsDebt.SePayPollingJob>();
+        foreach (var mode in new[] { "Test", "Live" })
+        {
+            foreach (var polling in new[] { false, true })
+                services.AddScoped<IBackgroundJobHandler>(p => new BHome.Infrastructure.PaymentsDebt.SePayModeJob(
+                    p.GetRequiredService<IServiceScopeFactory>(), p.GetRequiredService<BHome.Application.PaymentsDebt.SePay.SePayOptions>(), mode, polling));
+        }
         services.AddScoped<BHome.Infrastructure.PaymentsDebt.SePayScheduling>();
         services.AddScoped<IJobScheduleContributor>(p => p.GetRequiredService<BHome.Infrastructure.PaymentsDebt.SePayScheduling>());
         services.AddHostedService<BHome.Infrastructure.PaymentsDebt.SePayAutomationWorker>();
@@ -316,6 +327,12 @@ public static class DependencyInjection
         services.AddScoped<BHome.Application.Contracts.IHoldingSettingsData, BHome.Infrastructure.Contracts.HoldingSettingsData>();
         services.AddScoped<BHome.Application.Finance.IExpenseRepository, BHome.Infrastructure.Finance.ExpenseRepository>();
         services.AddScoped<BHome.Application.Finance.ExpenseService>();
+        services.AddScoped<BHome.Application.Finance.IExpensePaymentRepository, BHome.Infrastructure.Finance.ExpensePaymentRepository>();
+        services.AddScoped<BHome.Application.Finance.ExpensePaymentService>();
+        services.AddScoped<BHome.Application.Finance.IDepreciationRepository, BHome.Infrastructure.Finance.DepreciationRepository>();
+        services.AddScoped<BHome.Application.Finance.DepreciationService>();
+        services.AddScoped<BHome.Application.Finance.IStaffCostRepository, BHome.Infrastructure.Finance.StaffCostRepository>();
+        services.AddScoped<BHome.Application.Finance.StaffCostService>();
         services.AddScoped<BHome.Application.Finance.ICapitalAssetRepository, BHome.Infrastructure.Finance.CapitalAssetRepository>();
         services.AddScoped<BHome.Application.Finance.CapitalAssetService>();
         services.AddScoped<BHome.Application.Finance.RecurringExpenseService>();
@@ -343,6 +360,7 @@ public static class DependencyInjection
         services.AddSingleton<BHome.Application.Contracts.IContractWorkflowMode, BHome.Infrastructure.Contracts.ContractWorkflowMode>();
         services.AddScoped<BHome.Infrastructure.Contracts.ViettelMySignContractAdapter>();
         services.AddScoped<BHome.Application.Contracts.IContractSigningDocumentSource, BHome.Infrastructure.Contracts.ContractSigningDocumentSource>();
+        services.AddScoped<BHome.Infrastructure.Contracts.HoldingDepositRenderer>();
         services.AddScoped<BHome.Infrastructure.Contracts.DevelopmentContractSigningAdapter>();
         // Signing methods (OTP email / Viettel MySign / Development simulation) are chosen per signature by the router.
         services.AddOptions<BHome.Application.Contracts.ContractSigningOptions>().Bind(configuration.GetSection(BHome.Application.Contracts.ContractSigningOptions.Section))
@@ -381,6 +399,8 @@ public static class DependencyInjection
         services.AddScoped<BHome.DigitalSigning.Application.ISignatureImageStore, BHome.Infrastructure.Contracts.CompactSignatureImageStore>();
         BHome.DigitalSigning.Infrastructure.DependencyInjection.AddContractSigningAccounts(services, configuration);
         services.AddSingleton<BHome.Infrastructure.Contracts.SignaturePictureGenerator>();
+        services.AddSingleton<BHome.Application.Contracts.IHandoverSignatureInkRenderer>(
+            provider => provider.GetRequiredService<BHome.Infrastructure.Contracts.SignaturePictureGenerator>());
         services.AddSingleton<BHome.Application.Contracts.IContractSigningPages, BHome.Infrastructure.Contracts.ContractSigningPages>();
         BHome.DigitalSigning.MySign.MySignRegistration.AddMySignClient(services);
         services.AddScoped<BHome.DigitalSigning.Application.ISigningCertificateStore, BHome.Infrastructure.Contracts.ContractSigningCertificateStore>();
@@ -422,14 +442,27 @@ public static class DependencyInjection
         services.AddScoped<BHome.Application.Billing.IBillingAutomationEngine, BHome.Infrastructure.Modules.Billing.BillingAutomationEngine>();
         services.AddScoped<BHome.Application.Billing.BillingAutomationOperations>();
         // Jobs:Enabled alone never authorizes automatic meter tasks or invoice issuance.
-        // Billing automation is independently opted in only after an explicit rollout.
-        services.AddSingleton(p => new BHome.Application.Billing.BillingAutomationRuntime(
-            p.GetRequiredService<Microsoft.Extensions.Hosting.IHostEnvironment>().EnvironmentName is "Development" or "Testing",
-            configuration.GetValue<bool>("Jobs:Enabled") && configuration.GetValue<bool>("BillingAutomation:AutomaticJobsEnabled")));
+        // Billing automation has its own deployment switch and isolated worker.
+        services.AddSingleton(p =>
+        {
+            var host = p.GetRequiredService<IHostEnvironment>().EnvironmentName;
+            var config = p.GetRequiredService<IConfiguration>();
+            var deployedDemo = (host is "Staging" or "Production") && p.GetRequiredService<TimeProvider>() is BHome.Application.Common.DemoBusinessClock;
+            Guid? demoOwner = deployedDemo &&
+                Guid.TryParse(config["DemoClock:OwnerUserId"], out var ownerId) ? ownerId : null;
+            return new BHome.Application.Billing.BillingAutomationRuntime(host is "Development" or "Testing",
+                config.GetValue<bool>("BillingAutomation:AutomaticJobsEnabled"), demoOwner, deployedDemo)
+            {
+                ManualActionsEnabled = host == "Staging" && config.GetValue<bool>("BillingAutomation:ManualActionsEnabled")
+            };
+        });
         services.AddScoped<IBackgroundJobHandler>(p => new BHome.Application.Billing.BillingAutomationJobHandler("billing-meter", "Meter", p.GetRequiredService<BHome.Application.Billing.IBillingAutomationEngine>(), p.GetRequiredService<BHome.Application.Billing.BillingAutomationRuntime>().WorkerEnabled));
         services.AddScoped<IBackgroundJobHandler>(p => new BHome.Application.Billing.BillingAutomationJobHandler("billing-draft", "Draft", p.GetRequiredService<BHome.Application.Billing.IBillingAutomationEngine>(), p.GetRequiredService<BHome.Application.Billing.BillingAutomationRuntime>().WorkerEnabled));
         services.AddScoped<IBackgroundJobHandler>(p => new BHome.Application.Billing.BillingAutomationJobHandler("billing-final", "Final", p.GetRequiredService<BHome.Application.Billing.IBillingAutomationEngine>(), p.GetRequiredService<BHome.Application.Billing.BillingAutomationRuntime>().WorkerEnabled));
-        services.AddScoped<IJobScheduleContributor, BHome.Infrastructure.Modules.Billing.BillingAutomationScheduling>();
+        services.AddScoped<BHome.Infrastructure.Modules.Billing.BillingAutomationScheduling>();
+        services.AddScoped<BHome.Infrastructure.Modules.Billing.BillingMeterOverdueNotifier>();
+        services.AddScoped<IJobScheduleContributor>(p => p.GetRequiredService<BHome.Infrastructure.Modules.Billing.BillingAutomationScheduling>());
+        services.AddHostedService<BHome.Infrastructure.Modules.Billing.BillingAutomationWorker>();
         services.AddScoped<BHome.Application.Notifications.INotificationRepository, CompactNotificationRepository>();
         services.AddScoped<BHome.Application.Notifications.NotificationService>();
         services.AddScoped<BHome.Infrastructure.Modules.Notifications.NotificationEventPublisher>();
@@ -446,8 +479,13 @@ public static class DependencyInjection
         services.AddScoped<IJobScheduleContributor>(p => p.GetRequiredService<BHome.Application.Notifications.NotificationDeliveryService>());
         services.AddScoped<BHome.Application.PaymentsDebt.IPaymentRepository, BHome.Infrastructure.PaymentsDebt.PaymentRepository>();
         services.AddScoped<BHome.Application.PaymentsDebt.PaymentService>();
-        services.AddSingleton(provider => new BHome.Application.PaymentsDebt.PaymentRuntimeMode(
-            provider.GetRequiredService<Microsoft.Extensions.Hosting.IHostEnvironment>().EnvironmentName is "Development" or "Testing"));
+        services.AddScoped(provider =>
+        {
+            var environment = provider.GetRequiredService<IHostEnvironment>().EnvironmentName;
+            return new BHome.Application.PaymentsDebt.PaymentRuntimeMode(
+                environment is "Development" or "Testing",
+                true); // Test is a receiving channel on every host, independent of signing simulations.
+        });
         services.AddSingleton<BHome.Application.PaymentsDebt.ITransferQrGenerator, BHome.Infrastructure.PaymentsDebt.VietQrGenerator>();
         services.AddScoped<BHome.Application.PaymentsDebt.TransferInstructionsService>();
         services.AddScoped<BHome.Application.PaymentsDebt.IMainInitialPaymentLedger, BHome.Infrastructure.PaymentsDebt.MainInitialPaymentLedger>();
@@ -455,13 +493,13 @@ public static class DependencyInjection
         services.AddScoped<BHome.Infrastructure.PaymentsDebt.MainContractActivationScheduling>();
         services.AddScoped<IJobScheduleContributor>(p => p.GetRequiredService<BHome.Infrastructure.PaymentsDebt.MainContractActivationScheduling>());
         services.AddScoped<BHome.Application.PaymentsDebt.IMainInitialPayments, BHome.Infrastructure.PaymentsDebt.MainInitialPayments>();
-        services.AddSingleton<BHome.Application.Contracts.IHoldingTestScope, BHome.Infrastructure.Contracts.HoldingTestScope>();
+        services.AddScoped<BHome.Application.Contracts.IHoldingTestScope, BHome.Infrastructure.Contracts.HoldingTestScope>();
         services.AddHostedService<MeterEvidenceCleanup>();
         services.AddOptions<IdentityProtectionOptions>().Bind(configuration.GetSection("IdentityProtection"));
         services.AddSingleton<IIdentityProtection, IdentityProtection>();
         services.AddScoped<IHouseholdProfiles, HouseholdProfiles>();
         services.AddOptions<ObjectStorageOptions>().Bind(configuration.GetSection(ObjectStorageOptions.Section));
-        services.AddScoped<IObjectStorage, MinioObjectStorage>();
+        services.AddSingleton<IObjectStorage, MinioObjectStorage>();
         services.AddOptions<JobWorkerOptions>().Bind(configuration.GetSection("Jobs"))
             .Validate(o => o.PollSeconds is >= 1 and <= 300, "Job polling must be 1-300 seconds.").ValidateOnStart();
         services.AddScoped<CompactJobPersistence>();

@@ -152,24 +152,27 @@ public sealed class ContractServiceTests
             Assert.Equal("signing_contacts_required", mismatched.Code);
             resendInput = resendInput with { RecipientEmail = "corrected@example.invalid" };
             var resent = await service.InviteAsync(id.Id, resendInput, default);
-            Assert.Equal("corrected@example.invalid", rows.Single().RecipientEmail);
+            Assert.Equal("corrected@example.invalid", rows.Single(row => row.RevokedAt is null).RecipientEmail);
             Assert.Equal(originalEmail, representative.ContactEmail);
             input = input with { RecipientEmail = "corrected@example.invalid" };
-            Assert.Equal(submitted.Id, resent.Id); Assert.Single(rows); Assert.Null(resent.Token);
-            Assert.NotEqual(tokenHash, rows.Single().TokenHash); Assert.Null(rows.Single().SessionHash);
-            Assert.Equal(originalHash, rows.Single().DocumentHash);
-            Assert.Equal(input.ExpiresAt, rows.Single().ExpiresAt);
-            Assert.Equal(2, rows.Single().OtpSendCount);
+            Assert.NotEqual(submitted.Id, resent.Id); Assert.Null(resent.Token);
+            Assert.Equal(2, rows.Count);
+            var revoked = rows.Single(row => row.Id == submitted.Id);
+            Assert.NotNull(revoked.RevokedAt); Assert.Null(revoked.OtpHash); Assert.Null(revoked.SessionHash);
+            Assert.NotEqual(tokenHash, rows.Single(row => row.RevokedAt is null).TokenHash); Assert.Null(rows.Single(row => row.RevokedAt is null).SessionHash);
+            Assert.Equal(originalHash, rows.Single(row => row.RevokedAt is null).DocumentHash);
+            Assert.Equal(input.ExpiresAt, rows.Single(row => row.RevokedAt is null).ExpiresAt);
+            Assert.Equal(1, rows.Single(row => row.RevokedAt is null).OtpSendCount);
             await Assert.ThrowsAsync<ContractException>(() => service.InfoAsync(originalToken, default));
-            tokenHash = rows.Single().TokenHash;
+            tokenHash = rows.Single(row => row.RevokedAt is null).TokenHash;
             await service.InviteAsync(id.Id, input, default);
-            Assert.Equal(tokenHash, rows.Single().TokenHash);
-            var count = rows.Single().OtpSendCount;
-            rows.Single().OtpSendCount = 5;
+            Assert.Equal(tokenHash, rows.Single(row => row.RevokedAt is null).TokenHash);
+            var count = rows.Single(row => row.RevokedAt is null).OtpSendCount;
+            rows.Single(row => row.RevokedAt is null).OtpSendCount = 5;
             invitationClock.Now = invitationClock.Now.AddSeconds(61);
             var limited = await Assert.ThrowsAsync<ContractException>(() => service.InviteAsync(id.Id, resendInput, default));
             Assert.Equal(429, limited.Status);
-            rows.Single().OtpSendCount = count;
+            rows.Single(row => row.RevokedAt is null).OtpSendCount = count;
             await security.Received(1).SendAsync("corrected@example.invalid", Arg.Any<string>(), Arg.Any<string>(), Arg.Any<string>(), default, Arg.Any<string>());
             r.Repo.Received(1).Audit(staff, kind == ContractKind.Holding ? "HoldingSigningSubmitted" : "MainSigningSubmitted", id.Id, Arg.Any<DateTimeOffset>());
         }
@@ -181,10 +184,10 @@ public sealed class ContractServiceTests
             await r.Service.CopyDocumentAsync(id.Id, reviewedOwnerPdf, default);
             Assert.Equal(ownerPdf, reviewedOwnerPdf.ToArray());
             await service.DispatchHoldingInvitationAsync(id.Id, default);
-            Assert.Equal(tokenHash, rows.Single().TokenHash);
-            Assert.Equal(resend ? 2 : 1, rows.Single().OtpSendCount);
+            Assert.Equal(tokenHash, rows.Single(row => row.RevokedAt is null).TokenHash);
+            Assert.Equal(1, rows.Single(row => row.RevokedAt is null).OtpSendCount);
         }
-        var invite = rows.Single(); var token = System.Text.RegularExpressions.Regex.Match(emailAction, "[A-F0-9]{64}").Value;
+        var invite = rows.Single(row => row.RevokedAt is null); var token = System.Text.RegularExpressions.Regex.Match(emailAction, "[A-F0-9]{64}").Value;
         Assert.DoesNotContain(token, emailBody);
         Assert.Equal(64, token.Length);
         var deliveredOtp = System.Text.RegularExpressions.Regex.Match(emailBody, @"Mã OTP của bạn: (\d{6})").Groups[1].Value;
@@ -205,7 +208,9 @@ public sealed class ContractServiceTests
             await FinishOwner();
         }
         await security.Received(1).SendAsync("staff-entered@example.invalid", Arg.Any<string>(), Arg.Any<string>(), Arg.Any<string>(), default, Arg.Any<string>());
-        Assert.Single(rows); Assert.Equal(tokenHash, invite.TokenHash);
+        Assert.Equal(resend ? 2 : 1, rows.Count);
+        Assert.Single(rows, row => row.RevokedAt is null);
+        Assert.Equal(tokenHash, invite.TokenHash);
         Assert.Equal(ContractStatus.PendingActivation, c.Status);
         Assert.True(AnonymousContractSigningService.Complete(c));
         Assert.Equal(snapshot, c.SnapshotHash); Assert.Null(c.ApprovedAt); Assert.Null(c.ApprovedByUserId);
@@ -301,22 +306,37 @@ public sealed class ContractServiceTests
     }
 
     [Fact]
-    public async Task HoldingPreparationUsesLocationMonthsAndRentMultiplierWithVietnamMidnightExpiry()
+    public async Task HoldingPreparationUsesOneMonthOfRentAndLocationTermWithVietnamMidnightExpiry()
     {
         var rig = new Rig();
-        rig.Settings.GetAsync(rig.Room.LocationId, default).ReturnsForAnyArgs(new HoldingSettings(rig.Room.LocationId, 2, 1.5m, "Owner configured terms", 3));
+        rig.Settings.GetForLocationAsync(rig.Room.LocationId, default).ReturnsForAnyArgs(new HoldingSettings(Guid.NewGuid(), 1, 1m, "Owner configured terms", 3, DateTimeOffset.UtcNow, Guid.NewGuid()));
         var result = await rig.Service.HoldingPreparationAsync(rig.Room.Id, default);
-        Assert.Equal(Today, result.StartDate); Assert.Equal(Today.AddMonths(2), result.EndDate);
-        Assert.Equal(new DateTimeOffset(2026, 12, 28, 17, 0, 0, TimeSpan.Zero), result.ExpiresAt);
-        Assert.Equal(4500000, result.HoldingDeposit); Assert.Equal(3000000, result.MonthlyRent);
+        Assert.Equal(Today, result.StartDate); Assert.Equal(Today.AddMonths(1), result.EndDate);
+        Assert.Equal(new DateTimeOffset(Today.AddMonths(1).ToDateTime(TimeOnly.MinValue), TimeSpan.FromHours(7)).ToUniversalTime(), result.ExpiresAt);
+        Assert.Equal(3000000, result.HoldingDeposit); Assert.Equal(3000000, result.MonthlyRent);
+        Assert.Equal(1, result.HoldingMonths);
         Assert.Equal(3, result.SettingsVersion);
     }
     [Fact]
     public async Task HoldingPreparationDoesNotInventMissingLocationConfiguration()
     {
         var rig = new Rig();
+        rig.Settings.GetForLocationAsync(rig.Room.LocationId, default).ReturnsForAnyArgs((HoldingSettings?)null);
         var error = await Assert.ThrowsAsync<ContractException>(() => rig.Service.HoldingPreparationAsync(rig.Room.Id, default));
         Assert.Equal("holding_settings_required", error.Code);
+    }
+    [Fact]
+    public async Task HoldingCreationCannotBypassMissingOrStaleGlobalPolicy()
+    {
+        var rig = new Rig();
+        rig.Settings.GetForLocationAsync(rig.Room.LocationId, default).ReturnsForAnyArgs((HoldingSettings?)null);
+        var missing = await Assert.ThrowsAsync<ContractException>(() => rig.Service.CreateHoldingAsync(rig.HoldingDraft, Guid.NewGuid(), default));
+        Assert.Equal("holding_settings_required", missing.Code);
+        rig.Settings.GetForLocationAsync(rig.Room.LocationId, default).ReturnsForAnyArgs(
+            new HoldingSettings(Guid.NewGuid(), 1, 1m, "Synthetic Holding terms", 3, DateTimeOffset.UtcNow, Guid.NewGuid()));
+        var stale = await Assert.ThrowsAsync<ContractException>(() => rig.Service.CreateHoldingAsync(rig.HoldingDraft with { SettingsVersion = null }, Guid.NewGuid(), default));
+        Assert.Equal("holding_configuration_changed_reload", stale.Code);
+        Assert.Empty(rig.Contracts);
     }
     [Fact]
     public async Task HoldingMetadataDoesNotTurnItsDetailIntoMainOnboarding()
@@ -328,7 +348,7 @@ public sealed class ContractServiceTests
         var detail = await rig.Service.GetAsync(id.Id, default);
         Assert.Equal("Holding", detail.Kind);
         Assert.False(detail.OnboardingDraft);
-        Assert.Equal(rig.HoldingDraft.HoldingDeposit, detail.RequiredDeposit);
+        Assert.Equal(3000000, detail.RequiredDeposit);
     }
     [Fact]
     public async Task HoldingReadinessRequiresSignaturesInsteadOfSeparateApprovalOrMainRules()
@@ -365,6 +385,7 @@ public sealed class ContractServiceTests
         public readonly IHoldingSettingsData Settings = Substitute.For<IHoldingSettingsData>();
         public readonly List<Contract> Contracts = [];
         public readonly List<ContractMoveOut> Moves = [];
+        public readonly List<ContractMoveOutHistory> MoveHistory = [];
         public readonly List<ContractOperation> Operations = [];
         public readonly List<DepositVerification> Deposits = [];
         public readonly Resident Resident = new() { VerificationStatus = IdentityVerificationStatus.Verified };
@@ -372,7 +393,7 @@ public sealed class ContractServiceTests
         public Guid Owner => Contracts[0].OwnerSignerId;
         public Guid Tenant { get; } = Guid.NewGuid();
         public ContractService Service { get; }
-        public Rig(bool withInitialPayments = true, IAnonymousSigningRepository? signingInvitations = null, IInternalAcceptanceRenderer? acceptanceRenderer = null, IContractWorkflowRepository? workflowRepository = null)
+        public Rig(bool withInitialPayments = true, IAnonymousSigningRepository? signingInvitations = null, IInternalAcceptanceRenderer? acceptanceRenderer = null, IContractWorkflowRepository? workflowRepository = null, IHandoverInventory? inventory = null, TimeProvider? clock = null)
         {
             Room.LocationId = Room.Location.Id; Resident.RoomId = Room.Id;
             Repo.RoomAsync(Room.Id, default).ReturnsForAnyArgs(Room);
@@ -380,6 +401,8 @@ public sealed class ContractServiceTests
             Repo.ActiveUserInRoleAsync(default, default!, default).ReturnsForAnyArgs(true);
             Repo.FindAsync(default, default).ReturnsForAnyArgs(c => Contracts.SingleOrDefault(x => x.Id == c.Arg<Guid>()));
             Repo.MoveOutAsync(default, default).ReturnsForAnyArgs(c => Moves.SingleOrDefault(x => x.ContractId == c.Arg<Guid>()));
+            Repo.RoomActiveContractsAsync(default, default).ReturnsForAnyArgs(c => Contracts.Where(x => x.RoomId == c.Arg<Guid>() && x.Status == ContractStatus.Active && x.Kind is ContractKind.Main or ContractKind.Renewal).ToArray());
+            Repo.MoveOutHistoryAsync(default, default).ReturnsForAnyArgs(c => MoveHistory.Where(x => x.ContractId == c.Arg<Guid>()).OrderByDescending(x => x.Version).ToArray());
             Repo.DepositTotalAsync(default, default).ReturnsForAnyArgs(c => Deposits.Where(d => d.ContractId == c.Arg<Guid>()).Sum(d => d.Amount));
             Repo.BankReferenceAsync(default!, default).ReturnsForAnyArgs(c => Deposits.SingleOrDefault(d => d.BankTransactionReference == c.Arg<string>()));
             Repo.ResolvePricesAsync(default, default, default).ReturnsForAnyArgs(new ResolvedPrices(Room.Id, Today,
@@ -391,6 +414,8 @@ public sealed class ContractServiceTests
                     ChargingMethod.Metered, 15000, Today.AddMonths(-1), null, 1),
                  new PolicyDto(Guid.NewGuid(), Room.LocationId, Room.Id, ChargeCategory.ServiceFee, "INTERNET", "Internet",
                     ChargingMethod.FixedPerRoomPerMonth, 100000, Today.AddMonths(-1), null, 1)], []));
+            Settings.GetForLocationAsync(Room.LocationId, default).ReturnsForAnyArgs(
+                new HoldingSettings(Guid.NewGuid(), 1, 1m, "Synthetic Holding terms", 3, DateTimeOffset.UtcNow, Guid.NewGuid()));
             Repo.BindingContractsAsync(default, default, default, default, default).ReturnsForAnyArgs(Array.Empty<Contract>());
             Repo.MainForHoldingAsync(default, default).ReturnsForAnyArgs(c => Contracts.SingleOrDefault(x => x.HoldingContractId == c.Arg<Guid>()));
             Repo.OperationAsync(default, default, default!, default).ReturnsForAnyArgs(c => Operations.SingleOrDefault(o => o.ActorId == c.ArgAt<Guid>(0) && o.Key == c.ArgAt<Guid>(1) && o.Operation == c.Arg<string>()));
@@ -405,6 +430,7 @@ public sealed class ContractServiceTests
                 {
                     case Contract x: x.Room = Room; Contracts.Add(x); break;
                     case ContractMoveOut x: Moves.Add(x); break;
+                    case ContractMoveOutHistory x: MoveHistory.Add(x); break;
                     case ContractOperation x: Operations.Add(x); break;
                     case DepositVerification x: Deposits.Add(x); break;
                     case ContractSignature x: Contracts.Single(a => a.Id == x.ContractId).Signatures.Add(x); break;
@@ -412,12 +438,12 @@ public sealed class ContractServiceTests
             });
             Holdings.ApplyAsync(default, default, default, default, default, default).ReturnsForAnyArgs(Task.FromException<HoldingDepositApplication>(new IntegrationUnavailableException("holding ledger")));
             Positions.ReadAsync(default!, default, default!).ReturnsForAnyArgs(call => (DepositLedgerPosition?)new(Deposits.Where(d => call.Arg<Guid[]>().Contains(d.ContractId)).Sum(d => d.Amount), 0, 0, 0));
-            Service = new(Repo, User, new ResourceAccess(User, Staff), Signing, Storage, Files, Images, Ledger, Holdings, new Clock(), workflowRepository: workflowRepository, handoverRepository: Handovers, depositPositions: Positions, holdingSettings: Settings, initialPayments: withInitialPayments ? InitialPayments : null, signingInvitations: signingInvitations, acceptanceRenderer: acceptanceRenderer);
+            Service = new(Repo, User, new ResourceAccess(User, Staff), Signing, Storage, Files, Images, Ledger, Holdings, clock ?? new Clock(), workflowRepository: workflowRepository, handoverRepository: Handovers, handoverInventory: inventory, depositPositions: Positions, holdingSettings: Settings, initialPayments: withInitialPayments ? InitialPayments : null, signingInvitations: signingInvitations, acceptanceRenderer: acceptanceRenderer);
         }
         public ContractDraftInput Draft => new(Room.Id, User.UserId!.Value, Tenant, Resident.Id, [Resident.Id], Today.AddDays(-10), Today.AddDays(30), 3000000, 3000000, "Synthetic approved terms");
         public HoldingDraftInput HoldingDraft => new(Room.Id, User.UserId!.Value, Tenant, Resident.Id, [Resident.Id],
-            Today.AddDays(1), Today.AddMonths(12), new DateTimeOffset(2026, 10, 31, 8, 0, 0, TimeSpan.Zero),
-            2000000, "Synthetic Holding terms", 1);
+            Today, Today.AddMonths(1), new DateTimeOffset(Today.AddMonths(1).ToDateTime(TimeOnly.MinValue), TimeSpan.FromHours(7)).ToUniversalTime(),
+            3000000, "Synthetic Holding terms", 1, 3);
         public async Task<Contract> Create()
         { var id = await Service.CreateAsync(Draft, Guid.NewGuid(), default); return Contracts.Single(c => c.Id == id.Id); }
         public async Task<Contract> Ready()
@@ -596,10 +622,10 @@ public sealed class ContractServiceTests
         r.Repo.ResolvePricesAsync(default, default, default).ReturnsForAnyArgs(new ResolvedPrices(r.Room.Id, Today,
             [new PolicyDto(Guid.NewGuid(), r.Room.LocationId, r.Room.Id, ChargeCategory.Rent, "RENT", "Changed",
                 ChargingMethod.FixedPerRoomPerMonth, 9000000, Today, null, 2)], []));
-        await r.Service.VerifyDepositAsync(id.Id, new("HOLD-TWO", 1000000, "Verified bank statement"), Guid.NewGuid(), default);
+        await r.Service.VerifyDepositAsync(id.Id, new("HOLD-TWO", 2000000, "Verified bank statement"), Guid.NewGuid(), default);
         Assert.Equal("SigningAndDepositCompleted", holding.PriceLockTrigger); Assert.NotNull(holding.PriceLockedAt);
         var locked = holding.AgreedPriceSnapshot; var lockedAt = holding.PriceLockedAt;
-        await r.Service.VerifyDepositAsync(id.Id, new("HOLD-TWO", 1000000, "Verified bank statement"), Guid.NewGuid(), default);
+        await r.Service.VerifyDepositAsync(id.Id, new("HOLD-TWO", 2000000, "Verified bank statement"), Guid.NewGuid(), default);
         Assert.Equal(lockedAt, holding.PriceLockedAt); Assert.Equal(locked, holding.AgreedPriceSnapshot);
     }
 
@@ -622,7 +648,7 @@ public sealed class ContractServiceTests
             SignedAt = new Clock().GetUtcNow()
         });
         r.Storage.CopyToAsync(default!, default!, default).ReturnsForAnyArgs(async x => await x.Arg<Stream>().WriteAsync(bytes));
-        await r.Service.VerifyDepositAsync(id.Id, new("HOLD-FULL", 2000000, "Verified bank statement"), Guid.NewGuid(), default);
+        await r.Service.VerifyDepositAsync(id.Id, new("HOLD-FULL", holding.RequiredDeposit, "Verified bank statement"), Guid.NewGuid(), default);
         await r.Service.ActivateHoldingAsync(id.Id, Guid.NewGuid(), default);
         Assert.Equal(ContractStatus.Active, holding.Status); Assert.Equal(RoomStatus.OnHold, r.Room.Status); Assert.Equal(2, r.Room.Version);
         await r.Service.CancelHoldingAsync(id.Id, new("Synthetic Tenant voluntarily cancelled", HoldingCancellationCause.TenantVoluntary, true), Guid.NewGuid(), default);
@@ -638,6 +664,7 @@ public sealed class ContractServiceTests
         var r = new Rig(); var id = await r.Service.CreateHoldingAsync(r.HoldingDraft, Guid.NewGuid(), default);
         await r.Service.ApproveHoldingAsync(id.Id, new("Owner approved terms"), Guid.NewGuid(), default);
         var holding = r.Contracts.Single(); holding.Status = ContractStatus.Active;
+        holding.RequiredDeposit = 2000000; // Historical signed Holding, created before the one-month rule.
         holding.PriceLockedAt = new Clock().GetUtcNow(); r.Room.Status = RoomStatus.OnHold;
         var charges = ContractChargeSnapshot.Read(holding).Charges;
         r.Repo.ClearReceivedCalls();
@@ -646,8 +673,10 @@ public sealed class ContractServiceTests
         var mainId = await r.Service.ConvertHoldingAsync(holding.Id, new(clientDeposit), Guid.NewGuid(), default);
         var main = r.Contracts.Single(c => c.Id == mainId.Id);
         Assert.Equal(holding.Id, main.HoldingContractId); Assert.Equal(2000000, main.AppliedHoldingDeposit);
-        Assert.Equal(holding.RequiredDeposit, main.RequiredDeposit);
-        await r.Holdings.Received(1).ApplyAsync(holding.Id, main.Id, main.RoomId, main.TenantUserId, holding.RequiredDeposit, default);
+        Assert.Equal(3000000, main.RequiredDeposit);
+        Assert.Equal(1000000, main.RequiredDeposit - main.AppliedHoldingDeposit);
+        Assert.Equal(2000000, holding.RequiredDeposit);
+        await r.Holdings.Received(1).ApplyAsync(holding.Id, main.Id, main.RoomId, main.TenantUserId, main.RequiredDeposit, default);
         Assert.Equal(ContractStatus.Active, holding.Status); Assert.Null(holding.ConvertedMainContractId);
         Assert.Equal(charges, ContractChargeSnapshot.Read(main).Charges);
         Assert.True(ContractChargeSnapshot.IsIntact(main));
@@ -768,7 +797,7 @@ public sealed class ContractServiceTests
         var one = await r.Service.CreateAsync(input, key, default); var two = await r.Service.CreateAsync(input, key, default);
         Assert.Equal(one, two);
         var ready = await r.Service.ReadinessAsync(one.Id, default);
-        Assert.Equal(1000000, ready.VerifiedDeposit); Assert.Equal(1000000, ready.RemainingDeposit);
+        Assert.Equal(1000000, ready.VerifiedDeposit); Assert.Equal(2000000, ready.RemainingDeposit);
         await r.Holdings.Received(1).ApplyAsync(holdingId, one.Id, r.Room.Id, r.Tenant, holding.RequiredDeposit, default);
     }
     [Fact]
@@ -846,6 +875,195 @@ public sealed class ContractServiceTests
         r.User.Role = Roles.Staff; await Assert.ThrowsAsync<ContractException>(() => r.Service.ApproveTerminationAsync(c.Id, Guid.NewGuid(), default));
         r.User.Role = Roles.Owner; r.User.UserId = c.OwnerSignerId;
         await r.Service.ApproveTerminationAsync(c.Id, Guid.NewGuid(), default); Assert.Equal(MoveOutStatus.Approved, r.Moves.Single().Status);
+    }
+
+    [Theory]
+    [InlineData("Good", 2, true, null)]
+    [InlineData("Good", 1, true, "invalid_move_out_asset_quantities")]
+    [InlineData("Good", 2, false, "asset_evidence_required")]
+    [InlineData("Missing", 2, true, "invalid_move_out_asset_quantities")]
+    [InlineData("Missing", 0, false, null)]
+    [InlineData("Missing", 1, false, "asset_evidence_required")]
+    [InlineData("Damaged", 2, true, null)]
+    [InlineData("Damaged", 3, true, "invalid_move_out_asset_quantities")]
+    [InlineData("Unrecognized", 2, true, "invalid_move_out_asset")]
+    public async Task MoveOutDraftInventoryMatchesMoveInQuantityAndPhotoRequirements(string condition,
+        int actual, bool withPhoto, string? expectedError)
+    {
+        var inventory = Substitute.For<IHandoverInventory>();
+        var r = new Rig(inventory: inventory);
+        var c = await r.Ready();
+        c.Status = ContractStatus.Active;
+        r.User.Role = Roles.Staff;
+        r.User.UserId = Guid.NewGuid();
+        r.Staff.IsAssignedAsync(default, default, default).ReturnsForAnyArgs(true);
+        r.Moves.Add(new() { ContractId = c.Id, Status = MoveOutStatus.Approved, ProposedDate = Today });
+        var group = new HandoverAsset(Guid.NewGuid(), "Synthetic chairs", "Good", "",
+            ConfiguredQuantity: 2, PhysicalAssets: [new(Guid.NewGuid(), 1, 2, "Good", "Active")]);
+        inventory.PrepareAsync(c.RoomId, default).Returns(new HandoverInventory("test-token", "Ready", false, [group]));
+        r.Repo.FinalReadingsAsync(c.Id, c.RoomId, Today, default).Returns(Array.Empty<HandoverReading>());
+        var photo = new ContractInspectionEvidence { ContractId = c.Id, UploadedByUserId = r.User.UserId.Value };
+        r.Repo.InspectionEvidenceAsync(c.Id, default).Returns(new[] { photo });
+        r.Repo.InTransactionAsync(default, default(Func<Task<MoveOutInspectionDraftView>>)!, default)
+            .ReturnsForAnyArgs(call => call.Arg<Func<Task<MoveOutInspectionDraftView>>>()());
+        r.Handovers.ReplaceMoveOutInspectionDraftAsync(default, default, default!, default)
+            .ReturnsForAnyArgs(true);
+        var input = new MoveOutInspectionDraftWrite(0,
+            Assets: [new(group.Id, condition, actual, EvidenceIds: withPhoto ? [photo.Id] : [])],
+            InventoryToken: "test-token");
+        if (expectedError is not null)
+        {
+            var error = await Assert.ThrowsAsync<ContractException>(() =>
+                r.Service.SaveMoveOutInspectionDraftAsync(c.Id, input, Guid.NewGuid(), default));
+            Assert.Equal(expectedError, error.Code);
+            await r.Handovers.DidNotReceiveWithAnyArgs().ReplaceMoveOutInspectionDraftAsync(default, default, default!, default);
+        }
+        else
+        {
+            var saved = await r.Service.SaveMoveOutInspectionDraftAsync(c.Id, input, Guid.NewGuid(), default);
+            Assert.Equal(1, saved.Version);
+            Assert.Equal(condition, Assert.Single(saved.Assets).Condition);
+            Assert.Equal(actual, saved.Assets[0].ObservedQuantity);
+        }
+    }
+    [Theory]
+    [InlineData(0)]
+    [InlineData(30)]
+    [InlineData(45)]
+    public async Task OwnerCannotInitiateOrdinaryMoveOutAtAnyFutureLeaseDate(int daysFromToday)
+    {
+        var r = new Rig(); var c = await r.Ready(); c.Status = ContractStatus.Active;
+        var date = Today.AddDays(daysFromToday); var input = new TerminationInput(date, "Synthetic owner move-out");
+        var key = Guid.NewGuid();
+        await Assert.ThrowsAsync<ContractException>(() => r.Service.RequestTerminationAsync(c.Id, input, key, true, default));
+        Assert.Equal(ContractStatus.Active, c.Status);
+        Assert.Empty(r.Moves);
+    }
+    [Fact]
+    public async Task RoomMoveOutUsesDemoBusinessDateForResidencyAndProposedDate()
+    {
+        var real = new Clock(); var demo = new DemoBusinessClock(real);
+        var r = new Rig(clock: demo); var c = await r.Ready(); c.Status = ContractStatus.Active;
+        var start = new DateOnly(2027, 2, 27);
+        c.StartDate = start; c.EndDate = start.AddYears(1);
+        Assert.Single(c.Residents).ResidenceFrom = start;
+        r.User.Role = Roles.Tenant; r.User.UserId = c.TenantUserId;
+        r.Repo.ResidentsAsync(default, default!, default).ReturnsForAnyArgs(call => new[] { r.Resident }
+            .Where(x => call.Arg<Guid[]>().Contains(x.Id)).ToArray());
+        var input = new TerminationInput(start.AddDays(4), "Room move-out");
+        var error = await Assert.ThrowsAsync<ContractException>(() => r.Service.RequestTerminationAsync(c.Id, input, Guid.NewGuid(), false, default));
+        Assert.Equal("move_out_residence_not_started", error.Code);
+        Assert.Empty(r.Moves);
+        Assert.NotNull(demo.Change(start.AddDays(1), 0));
+        var past = await Assert.ThrowsAsync<ContractException>(() => r.Service.RequestTerminationAsync(c.Id, input with { ProposedDate = start }, Guid.NewGuid(), false, default));
+        Assert.Equal("invalid_move_out_date", past.Code);
+        var move = await r.Service.RequestTerminationAsync(c.Id, input, Guid.NewGuid(), false, default);
+        Assert.Equal("Requested", move.Status);
+        Assert.Equal(1, move.RequiredConsents); Assert.Equal(1, move.ReceivedConsents);
+        Assert.Equal(real.Now, demo.GetUtcNow());
+        r.User.Role = Roles.Owner; r.User.UserId = c.OwnerSignerId;
+        Assert.Equal("Approved", (await r.Service.ApproveTerminationAsync(c.Id, Guid.NewGuid(), default)).Status);
+    }
+    [Fact]
+    public async Task RoomMoveOutRequiresEveryTenantBeforeOwnerApproval()
+    {
+        var r = new Rig(); var c = await r.Ready(); c.Status = ContractStatus.Active;
+        var member = new Resident { RoomId = c.RoomId, TenantUserId = Guid.NewGuid(), VerificationStatus = IdentityVerificationStatus.Verified };
+        var second = new Contract
+        {
+            RoomId = c.RoomId,
+            Room = c.Room,
+            Kind = ContractKind.Main,
+            Status = ContractStatus.Active,
+            OwnerSignerId = c.OwnerSignerId,
+            TenantUserId = member.TenantUserId,
+            RepresentativeResidentId = member.Id,
+            StartDate = c.StartDate,
+            EndDate = c.EndDate,
+            Residents = [new() { ResidentId = member.Id, ResidenceFrom = c.StartDate }]
+        };
+        r.Contracts.Add(second);
+        r.Repo.ResidentsAsync(default, default!, default).ReturnsForAnyArgs(call => new[] { r.Resident, member }
+            .Where(x => call.Arg<Guid[]>().Contains(x.Id)).ToArray());
+        r.User.Role = Roles.Tenant; r.User.UserId = c.TenantUserId;
+        var first = await r.Service.RequestTerminationAsync(c.Id, new(Today, "Room move-out"), Guid.NewGuid(), false, default);
+        Assert.Equal("AwaitingConsent", first.Status);
+        Assert.Equal(2, first.RequiredConsents); Assert.Equal(1, first.ReceivedConsents);
+        r.User.Role = Roles.Owner; r.User.UserId = c.OwnerSignerId;
+        await Assert.ThrowsAsync<ContractException>(() => r.Service.ApproveTerminationAsync(c.Id, Guid.NewGuid(), default));
+        await r.Handovers.DidNotReceiveWithAnyArgs().EnsureMoveOutTaskAsync(default!, default!, default, default, default);
+        r.User.Role = Roles.Tenant; r.User.UserId = second.TenantUserId;
+        var pending = await r.Service.GetMoveOutAsync(second.Id, default);
+        Assert.True(pending.CanConfirm);
+        var agreed = await r.Service.ConfirmRoomTerminationAsync(second.Id, new(true, pending.Version), Guid.NewGuid(), default);
+        Assert.Equal("Requested", agreed.Status); Assert.Equal(2, agreed.ReceivedConsents);
+        r.User.Role = Roles.Owner; r.User.UserId = c.OwnerSignerId;
+        var approved = await r.Service.ApproveTerminationAsync(c.Id, Guid.NewGuid(), default);
+        Assert.Equal("Approved", approved.Status);
+        Assert.All(r.Moves, x => Assert.Equal(MoveOutStatus.Approved, x.Status));
+    }
+    [Fact]
+    public async Task TenantCanReopenRejectedRequestAndOwnerCanApprove()
+    {
+        var r = new Rig(); var c = await r.Ready(); c.Status = ContractStatus.Active;
+        r.User.Role = Roles.Tenant; r.User.UserId = c.TenantUserId;
+        await r.Service.RequestTerminationAsync(c.Id, new(Today.AddDays(1), "Synthetic tenant request"), Guid.NewGuid(), false, default);
+        r.User.Role = Roles.Owner; r.User.UserId = c.OwnerSignerId;
+        await r.Service.RejectTerminationAsync(c.Id, new("Synthetic rejection"), Guid.NewGuid(), default);
+        var rejected = Assert.Single(r.Moves);
+        var rejectedVersion = rejected.Version;
+        Assert.Equal(MoveOutStatus.Rejected, rejected.Status);
+
+        await Assert.ThrowsAsync<ContractException>(() => r.Service.RequestTerminationAsync(c.Id,
+            new(Today.AddDays(2), "Synthetic owner reopening"), Guid.NewGuid(), true, default));
+        r.User.Role = Roles.Tenant; r.User.UserId = c.TenantUserId;
+        var opened = await r.Service.RequestTerminationAsync(c.Id,
+            new(Today.AddDays(2), "Synthetic tenant reopening"), Guid.NewGuid(), false, default);
+        Assert.Equal("Requested", opened.Status);
+        Assert.Equal(rejectedVersion + 1, rejected.Version);
+        r.User.Role = Roles.Owner; r.User.UserId = c.OwnerSignerId;
+        await r.Service.ApproveTerminationAsync(c.Id, Guid.NewGuid(), default);
+        Assert.Same(rejected, Assert.Single(r.Moves));
+        Assert.Equal(c.OwnerSignerId, rejected.ApprovedByUserId);
+        Assert.Null(rejected.InspectionStaffId);
+        Assert.Null(rejected.InspectionScheduledAt);
+        await r.Handovers.Received(1).EnsureMoveOutTaskAsync(c, rejected, c.OwnerSignerId,
+            Arg.Any<DateTimeOffset>(), Arg.Any<CancellationToken>());
+    }
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task RejectedMoveOutCanBeResubmittedByTenantOrReplacedByOwnerExpiryWithoutLosingVersion(bool expiry)
+    {
+        var r = new Rig(); var c = await r.Ready(); c.Status = ContractStatus.Active;
+        var move = new ContractMoveOut
+        {
+            ContractId = c.Id,
+            Status = MoveOutStatus.Rejected,
+            ProposedDate = Today,
+            Reason = "Original request",
+            PendingReason = "Original rejection",
+            Version = 2
+        };
+        r.Moves.Add(move);
+        r.User.Role = expiry ? Roles.Owner : Roles.Tenant;
+        r.User.UserId = expiry ? c.OwnerSignerId : c.TenantUserId;
+        if (expiry) c.EndDate = Today;
+        var date = Today;
+        var updated = await r.Service.RequestTerminationAsync(c.Id, new(date, "Revised request"), Guid.NewGuid(), expiry, default);
+
+        Assert.Single(r.Moves);
+        Assert.Equal(move.Id, updated.Id);
+        Assert.Equal(expiry ? "Approved" : "Requested", updated.Status);
+        Assert.Equal(3, updated.Version);
+        Assert.Equal("Revised request", move.Reason);
+        Assert.Equal("inspection_and_financial_dependencies", move.PendingReason);
+        Assert.Equal(expiry, move.IsExpiry);
+        Assert.Equal(expiry ? c.OwnerSignerId : null, move.ApprovedByUserId);
+        Assert.Equal(ContractStatus.Active, c.Status);
+        var error = await Assert.ThrowsAsync<ContractException>(() =>
+            r.Service.RequestTerminationAsync(c.Id, new(date, "Duplicate request"), Guid.NewGuid(), expiry, default));
+        Assert.Equal("move_out_already_requested", error.Code);
     }
     [Theory]
     [InlineData(MoveOutStatus.Approved)]

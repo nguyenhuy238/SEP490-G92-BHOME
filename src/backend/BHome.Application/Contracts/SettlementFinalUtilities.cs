@@ -35,15 +35,16 @@ public interface ISettlementChargeEvidence
 
 public sealed partial class SettlementReceivablesService
 {
-    private async Task<FinalUtilityPreview> UtilityPreviewAsync(Guid id, UtilityType type, CancellationToken token)
+    private async Task<FinalUtilityPreview> UtilityPreviewAsync(Guid id, UtilityType type, CancellationToken token,
+        bool staffProposal = false)
     {
         var source = await repository.FinalUtilityAsync(id, type, token);
         var missing = source.MissingInputs.ToList(); decimal? amount = null, quantity = null; string calculation = "";
         Guid? pricePolicyId = null; int? pricePolicyVersion = null;
-        if (!source.Context.InspectionConfirmed) missing.Add("owner_confirmed_inspection_required");
+        if (!staffProposal && !source.Context.InspectionConfirmed) missing.Add("owner_confirmed_inspection_required");
         if (source.Context.HasLegacyDeductions) missing.Add("legacy_deduction_requires_migration_review");
         if (source.Schedule is null && !source.FullyCovered) missing.Add("billing_schedule_required");
-        if (source.Context.IsDevelopmentDemo && mode?.AllowDevelopmentDemo != true) throw ContractException.Conflict("development_payment_unavailable");
+        if (source.Context.IsDevelopmentDemo && mode?.AllowDevelopmentDemo != true && mode?.AllowSandboxReceivingAccounts != true) throw ContractException.Conflict("development_payment_unavailable");
         if (source.Baseline is { } baseline && source.Final is { } final)
         {
             quantity = final.Value - baseline.Value;
@@ -96,34 +97,48 @@ public sealed partial class SettlementReceivablesService
             var previous = await repository.ChargeOperationAsync(Actor, key, token);
             if (previous is not null)
             {
-                if (previous.IsDevelopmentDemo && mode?.AllowDevelopmentDemo != true) throw ContractException.Conflict("development_payment_unavailable");
+                if (previous.IsDevelopmentDemo && mode?.AllowDevelopmentDemo != true && mode?.AllowSandboxReceivingAccounts != true) throw ContractException.Conflict("development_payment_unavailable");
                 if (previous.ContractId != id || previous.Kind != "FinalUtility" || previous.Fingerprint != fingerprint) throw ContractException.Conflict("settlement_idempotency_conflict");
                 return previous;
             }
             await AuthorizeAsync(id, true, token);
+            if (await repository.LatestFinancialCloseAsync(id, token) is not null)
+                throw ContractException.Conflict("settlement_financial_already_closed");
             var preview = await UtilityPreviewAsync(id, input.UtilityType, token);
             if (preview.Reference != input.ExpectedReference) throw ContractException.Conflict("settlement_review_changed");
             if (preview.ExistingReceivableId is not null) throw ContractException.Conflict("settlement_source_already_charged");
             if (preview.MissingInputs.Count != 0 || preview.Amount is null || preview.Quantity is null) throw ContractException.Conflict("final_utility_inputs_required");
-            if (chargeEvidence is null) throw new ContractException(503, "settlement_evidence_unavailable");
-            var source = await repository.FinalUtilityAsync(id, input.UtilityType, token);
-            var calculation = new SettlementUtilitySource(source.MeterId, preview.UtilityType, preview.BillingPeriod, preview.Baseline!, preview.Final!,
-                preview.AlreadyBilledQuantity, preview.Quantity.Value, source.FullyCovered ? source.PreviousPricingSnapshot ?? "" : preview.CalculationSnapshot,
-                preview.PricePolicyId, preview.PricePolicyVersion);
-            var proofs = await chargeEvidence.CaptureUtilityAsync(id, calculation, token);
-            var charge = new SettlementReceivable(Guid.NewGuid(), id, source.Context.View.RoomId, "FinalUtility",
-                $"utility:{source.MeterId:N}:{preview.Final!.ReadingId:N}", source.Context.InspectionId, source.Context.InspectionVersion, null,
-                preview.Amount.Value, input.UtilityType == UtilityType.Electricity ? "Điện chốt khi trả phòng" : "Nước chốt khi trả phòng",
-                preview.CalculationSnapshot, proofs, source.Context.RecipientUserIds.Order().ToArray(), Actor, clock.GetUtcNow(), key, fingerprint,
-                source.Context.IsDevelopmentDemo, calculation);
+            var channel = await NewPaymentModeAsync(id, token);
+            var charge = await BuildFinalUtilityChargeAsync(id, input.UtilityType, preview, Actor, key, fingerprint, channel, token);
             await repository.SaveChargeAsync(charge, token); return charge;
         }, token);
+    }
+    private async Task<SettlementReceivable> BuildFinalUtilityChargeAsync(Guid id, UtilityType type,
+        FinalUtilityPreview preview, Guid owner, Guid key, string fingerprint, string? channel, CancellationToken token)
+    {
+        if (preview.MissingInputs.Count != 0 || preview.Amount is null || preview.Quantity is null ||
+            preview.Baseline is null || preview.Final is null || preview.ExistingReceivableId is not null)
+            throw ContractException.Conflict("final_utility_inputs_required");
+        if (chargeEvidence is null) throw new ContractException(503, "settlement_evidence_unavailable");
+        var source = await repository.FinalUtilityAsync(id, type, token);
+        var calculation = new SettlementUtilitySource(source.MeterId, preview.UtilityType, preview.BillingPeriod, preview.Baseline, preview.Final,
+            preview.AlreadyBilledQuantity, preview.Quantity.Value, source.FullyCovered ? source.PreviousPricingSnapshot ?? "" : preview.CalculationSnapshot,
+            preview.PricePolicyId, preview.PricePolicyVersion);
+        var proofs = await chargeEvidence.CaptureUtilityAsync(id, calculation, token);
+        return new SettlementReceivable(Guid.NewGuid(), id, source.Context.View.RoomId, "FinalUtility",
+            $"utility:{source.MeterId:N}:{preview.Final.ReadingId:N}", source.Context.InspectionId, source.Context.InspectionVersion, null,
+            preview.Amount.Value, type == UtilityType.Electricity ? "Điện chốt khi trả phòng" : "Nước chốt khi trả phòng",
+            preview.CalculationSnapshot, proofs, source.Context.RecipientUserIds.Order().ToArray(), owner, clock.GetUtcNow(), key, fingerprint,
+            channel is null ? source.Context.IsDevelopmentDemo : channel == "Test", calculation, PaymentMode: channel);
     }
     private async Task VerifyChargeAsync(SettlementReceivable charge, CancellationToken token)
     {
         if (chargeEvidence is not null) { await chargeEvidence.VerifyAsync(charge, token); return; }
         if (charge.Utility is not null) throw new ContractException(503, "settlement_evidence_unavailable");
-        var current = await evidence.CaptureAsync(charge.ContractId, charge.Evidence.Select(e => e.Id).Order().ToArray(), token);
+        var ids = charge.Evidence.Select(e => e.Id).Order().ToArray();
+        var current = charge.Kind == "FinalFixed"
+            ? await SettlementInspectionEvidence.CaptureAsync(evidence, charge.ContractId, ids, token)
+            : await evidence.CaptureAsync(charge.ContractId, ids, token);
         if (!current.OrderBy(e => e.Id).SequenceEqual(charge.Evidence.OrderBy(e => e.Id))) throw ContractException.Conflict("settlement_evidence_integrity_failed");
     }
 }

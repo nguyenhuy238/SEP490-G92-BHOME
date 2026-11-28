@@ -66,12 +66,12 @@ export interface MainDraftReleaseInput {
   expectedVersion: number;
   reviewedFileId: string;
   humanReviewed: boolean;
+  emailSigning?: boolean;
 }
 export interface MainContractSettings {
   ownerSignerId: string;
   effectiveFrom: string;
   effectiveTo: string | null;
-  securityDeposit: string;
   paymentTerms: string;
   additionalTerms: string;
   version: number;
@@ -136,13 +136,10 @@ export function mainDraftClient(request: MainDraftRequest) {
         { signal },
         'bytes',
       ),
-    settings: (id: string, signal?: AbortSignal) =>
-      request<MainContractSettings | null>(`${base}/settings/${id}`, { signal }),
-    setSettings: (
-      id: string,
-      input: Omit<MainContractSettings, 'version'> & { expectedVersion: number },
-    ) =>
-      request<void>(`${base}/settings/${id}`, {
+    settings: (signal?: AbortSignal) =>
+      request<MainContractSettings | null>(`${base}/settings`, { signal }),
+    setSettings: (input: Omit<MainContractSettings, 'version'> & { expectedVersion: number }) =>
+      request<void>(`${base}/settings`, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(input),
@@ -195,7 +192,7 @@ export const mainDraftMessages: Record<string, string> = {
   draft_configuration_changed_save_again:
     'Cấu hình đã thay đổi. Tải lại giá và lưu nháp trước khi tạo tài liệu.',
   contract_pdf_converter_unavailable:
-    'Máy chủ chưa cấu hình LibreOffice để tạo PDF. Bản nháp và DOCX đã được giữ lại.',
+    'Máy chủ chưa cấu hình LibreOffice để tạo PDF. Bản nháp đã được giữ lại.',
   contract_pdf_conversion_failed:
     'Chuyển DOCX sang PDF chưa thành công. Bản nháp vẫn được giữ lại.',
   contract_pdf_conversion_timeout: 'Tạo PDF quá thời gian chờ. Bản nháp vẫn được giữ lại.',

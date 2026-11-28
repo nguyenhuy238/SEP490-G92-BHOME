@@ -34,7 +34,11 @@ public sealed record HandoverSnapshot(DateOnly Date, string RoomNumber, string R
     string? MissingBaselineReason = null, bool OtherTenantsRemain = false,
     IReadOnlyDictionary<Guid, string>? EvidenceHashes = null, string? ProposedCompensation = null,
     HandoverRoomCheck[]? RoomChecks = null, HandoverAccessItem[]? AccessItems = null,
-    HandoverOutstandingIssue[]? OutstandingIssues = null, Guid[]? KeyEvidenceIds = null);
+    HandoverOutstandingIssue[]? OutstandingIssues = null, Guid[]? KeyEvidenceIds = null,
+    // MoveOut-only extension; omit null when serializing signed historical
+    // MoveIn snapshots so their schema/hash remains byte-compatible.
+    [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    MoveOutPhysicalItemEvidence[]? PhysicalItemEvidence = null);
 public sealed record HandoverView(int Version, string Status, HandoverSnapshot Snapshot, int? TenantConfirmedVersion,
     DateTimeOffset? TenantConfirmedAt, DateTimeOffset? StaffConfirmedAt, Guid? SourceContractId = null);
 public sealed record HandoverHistoryView(int Version, string Action, Guid ActorId, DateTimeOffset OccurredAt, string Note, HandoverSnapshot Snapshot);
@@ -50,6 +54,10 @@ public interface IHandoverInventory
     Task<HandoverInventory> PrepareForContractAsync(Guid roomId, Guid? tenantUserId, CancellationToken t);
     Task MarkForReviewAsync(Guid roomId, Guid contractId, int version, Guid actor, CancellationToken t);
     Task SynchronizeAsync(Guid roomId, Guid contractId, int version, HandoverSnapshot snapshot, Guid actor, CancellationToken t);
+    // Only for the internal SePay-verified, Owner-approved and Tenant-accepted
+    // move-out completion path. Never expose these as a public Owner bypass.
+    Task MarkForReviewAfterVerifiedSettlementAsync(Guid roomId, Guid contractId, int version, Guid actor, CancellationToken t);
+    Task SynchronizeAfterVerifiedSettlementAsync(Guid roomId, Guid contractId, int version, HandoverSnapshot snapshot, Guid actor, CancellationToken t);
 }
 
 public interface IContractHandoverRepository
@@ -62,11 +70,28 @@ public interface IContractHandoverRepository
     Task<bool> HistoryContainsEvidenceAsync(Guid contractId, Guid evidenceId, CancellationToken t);
     Task<string?> HistoryForReadingAsync(Guid contractId, Guid readingId, CancellationToken t);
     Task EnsureMoveInTaskAsync(Contract contract, Guid actor, DateTimeOffset now, CancellationToken t);
+    Task<Guid[]> EnsureMoveInMeterBaselinesAsync(Guid contractId, Guid actor, DateTimeOffset now, CancellationToken t);
+    Task EnsureMoveOutTaskAsync(Contract contract, ContractMoveOut moveOut, Guid actor, DateTimeOffset now, CancellationToken t);
+    Task RequireMoveOutTaskStartedAsync(Guid contractId, Guid staffId, CancellationToken t);
+    Task EnsureMoveOutTaskAssigneeAsync(Guid contractId, Guid? staffId, CancellationToken t);
+    Task<MoveOutInspectionDraftState?> MoveOutInspectionDraftAsync(Guid contractId, CancellationToken t);
+    Task<bool> ReplaceMoveOutInspectionDraftAsync(Guid contractId, int version,
+        MoveOutInspectionDraftState next, CancellationToken t);
+    Task ResetMoveOutInspectionDraftAsync(Guid contractId, Guid staffId, string snapshotHash,
+        DateTimeOffset now, CancellationToken t);
+    Task SubmitMoveOutTaskAsync(Guid contractId, Guid staffId, DateTimeOffset now, CancellationToken t);
+    Task SubmitForcedMoveOutTaskAsync(Guid contractId, Guid staffId, DateTimeOffset now, CancellationToken t);
+    Task ReviewMoveOutTaskAsync(Guid contractId, Guid ownerId, bool confirmed, DateTimeOffset now, CancellationToken t);
     Task<HandoverMoveInTask?> MoveInTaskAsync(Guid contractId, Guid roomId, Guid? staffUserId,
         bool includeOwnerInventory, CancellationToken t);
+    Task SubmitMoveInTaskAsync(Guid contractId, Guid actor, DateTimeOffset now, CancellationToken t);
+    Task ReopenMoveInTaskAsync(Guid contractId, Guid actor, DateTimeOffset now, CancellationToken t);
     Task CompleteMoveInTaskAsync(Guid contractId, Guid actor, DateTimeOffset now, CancellationToken t);
     Task<bool> InventoryReadyAsync(Guid contractId, CancellationToken t);
     Task<bool> InventoryHasIssuesAsync(Guid contractId, CancellationToken t);
+    Task<HandoverCompletedInventory?> CompletedInventoryAsync(Guid contractId, CancellationToken t);
+    Task ReopenMoveInInventoryAsync(Guid contractId, Guid actor, DateTimeOffset now,
+        Guid[] selectedAssetIds, CancellationToken t);
     Task NotifyAsync(Contract contract, string action, Guid actor, int version, CancellationToken t);
     Task<IReadOnlyList<AssetChangeParty>> ActivePartiesAsync(Guid roomId, CancellationToken t);
     Task<IReadOnlyList<AssetChangeSource>> ChangeSourcesAsync(Guid roomId, CancellationToken t);

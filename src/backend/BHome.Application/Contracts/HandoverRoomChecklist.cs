@@ -22,25 +22,27 @@ public static class HandoverRoomChecklist
 
     public static HandoverRoomCheck[] Merge(HandoverRoomCheck[]? prior, HandoverRoomCheck[]? input)
     {
-        if (input is null) return prior ?? [];
+        // Notes and photos document the actual observation, including a passed
+        // check. Never erase a previous observation while saving another item.
+        var previous = prior ?? [];
+        if (input is null) return previous;
         if (input.Length > RequiredCodes.Length || input.Any(item => item is null) ||
             input.Select(item => item.Code).Distinct(StringComparer.Ordinal).Count() != input.Length)
             throw ContractException.Invalid("invalid_handover_room_checks");
         var normalized = input.Select(Validate).ToArray();
-        return (prior ?? []).Where(item => !normalized.Any(next => next.Code == item.Code))
+        return previous.Where(item => !normalized.Any(next => next.Code == item.Code))
             .Concat(normalized).OrderBy(item => Array.IndexOf(RequiredCodes, item.Code)).ToArray();
     }
 
     private static HandoverRoomCheck Validate(HandoverRoomCheck item)
     {
         if (!RequiredCodes.Contains(item.Code) || item.Status is not ("Passed" or "Issue" or "NotApplicable") ||
-            item.Notes is null || item.Notes.Length > 2000 ||
-            item.Status != "Passed" && string.IsNullOrWhiteSpace(item.Notes) ||
+            item.Notes?.Length > 2000 ||
             item.EvidenceIds is null or { Length: > 5 } ||
             item.EvidenceIds.Contains(Guid.Empty) ||
             item.EvidenceIds.Distinct().Count() != item.EvidenceIds.Length)
             throw ContractException.Invalid("invalid_handover_room_checks");
-        return item with { Notes = item.Notes.Trim() };
+        return item with { Notes = item.Notes?.Trim() };
     }
 
     public static HandoverAccessItem[] NormalizeAccess(HandoverAccessItem[]? items)
@@ -53,10 +55,9 @@ public static class HandoverRoomChecklist
         return items.Select(item =>
         {
             if (item.Type != "RoomKey" ||
-                item.Quantity is < 0 or > 100 || item.Notes is null || item.Notes.Length > 500 ||
-                item.Quantity == 0 && string.IsNullOrWhiteSpace(item.Notes))
+                item.Quantity is < 0 or > 100 || item.Notes?.Length > 500)
                 throw ContractException.Invalid("invalid_handover_access_items");
-            return item with { Notes = item.Notes.Trim() };
+            return item with { Notes = item.Notes?.Trim() ?? "" };
         }).ToArray();
     }
 
@@ -87,11 +88,9 @@ public static class HandoverRoomChecklist
         var all = checks ?? [];
         if (all.Length != RequiredCodes.Length || RequiredCodes.Any(code => all.Count(item => item.Code == code) != 1))
             result.Add("room_checklist");
-        if (all.Any(item => item.Status == "Issue" && item.EvidenceIds.Length == 0))
-            result.Add("room_issue_evidence");
         if (access is not { Length: 1 } || access[0].Type != "RoomKey") result.Add("access_inventory");
-        // An Issue requires a factual observation and photograph only. The
-        // Owner decides whether/how to repair it at the separate Ready step.
+        // A checked category and status are required; photos and notes are
+        // optional supporting evidence for every status, including Issue.
         return result.ToArray();
     }
 }

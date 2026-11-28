@@ -14,6 +14,49 @@ public sealed partial class PaymentLedgerTests
     private static DateOnly CurrentPeriod() { var local = TimeZoneInfo.ConvertTimeBySystemTimeZoneId(DateTimeOffset.UtcNow, "Asia/Ho_Chi_Minh"); return new(local.Year, local.Month, 1); }
     private static BillingAutomationWrite Plan(Workspace w) => new(w.Location, CurrentPeriod(), true, false, 5, 10, 0, "Asia/Ho_Chi_Minh", 0, 1);
     [Fact]
+    public async Task LocationRecurringScheduleSavesFiveMilestonesWithServerDefaultsAndVersions()
+    {
+        var w = await Setup(); using var owner = await Client(w.Owner); using var staff = await Client(w.Staff);
+        var url = $"/api/v1/billing-automation/{w.Location}/schedule";
+        var input = new LocationBillingScheduleWrite(24, 26, 0, 27, 0, 28, 0, 5, 1, 0, 0);
+        Assert.Equal(HttpStatusCode.Forbidden, (await staff.PutAsJsonAsync(url, input)).StatusCode);
+        Assert.Equal(HttpStatusCode.BadRequest, (await owner.PutAsJsonAsync(url, input with { DraftDay = 25 })).StatusCode);
+        Assert.Equal(HttpStatusCode.BadRequest, (await owner.PutAsJsonAsync(url, input with { DueMonthOffset = 2 })).StatusCode);
+        var response = await owner.PutAsJsonAsync(url, input);
+        response.EnsureSuccessStatusCode();
+        var plan = (await response.Content.ReadFromJsonAsync<BillingAutomationPlan>())!;
+        Assert.Equal(CurrentPeriod(), plan.EffectiveFrom);
+        Assert.True(plan.Enabled);
+        Assert.True(plan.AuthorizeAutomaticFinalization);
+        Assert.Equal(24, plan.MeterDay);
+        Assert.Equal(26, plan.MeterDueDay);
+        var schedule = BillingAutomationService.Calendar(plan);
+        Assert.Equal(27, schedule.DraftDay);
+        Assert.Equal(28, schedule.FinalDay);
+        Assert.Equal(5, schedule.DueDay);
+        Assert.Equal(1, schedule.DueMonthOffset);
+        Assert.Equal(BillingRateDate.PeriodStart, schedule.RateDate);
+        Assert.Equal(PartialMonthRule.FullMonth, schedule.PartialMonth);
+        Assert.Equal(VndRounding.AwayFromZero, schedule.Rounding);
+        Assert.Equal(BillingRentSource.RepresentativeContract, schedule.RentSource);
+        Assert.Equal(HttpStatusCode.Conflict, (await owner.PutAsJsonAsync(url, input)).StatusCode);
+
+        var nextInput = input with { MeterDay = 23, ExpectedVersion = plan.Version, ExpectedBillingScheduleVersion = plan.BillingScheduleVersion };
+        var edited = await owner.PutAsJsonAsync(url, nextInput);
+        edited.EnsureSuccessStatusCode();
+        var next = (await edited.Content.ReadFromJsonAsync<BillingAutomationPlan>())!;
+        Assert.Equal(CurrentPeriod().AddMonths(1), next.EffectiveFrom);
+        var current = (await owner.GetFromJsonAsync<BillingAutomationPlan>($"/api/v1/billing-automation/{w.Location}?period={CurrentPeriod():yyyy-MM-dd}"))!;
+        Assert.Equal(plan.Id, current.Id);
+        Assert.Equal(24, current.MeterDay);
+        var editedAgain = await owner.PutAsJsonAsync(url, nextInput with { MeterDay = 22, ExpectedVersion = next.Version, ExpectedBillingScheduleVersion = next.BillingScheduleVersion });
+        editedAgain.EnsureSuccessStatusCode();
+        var nextAgain = (await editedAgain.Content.ReadFromJsonAsync<BillingAutomationPlan>())!;
+        Assert.Equal(next.EffectiveFrom, nextAgain.EffectiveFrom);
+        Assert.Equal(22, nextAgain.MeterDay);
+        Assert.Equal(plan.Id, (await owner.GetFromJsonAsync<BillingAutomationPlan>($"/api/v1/billing-automation/{w.Location}?period={CurrentPeriod():yyyy-MM-dd}"))!.Id);
+    }
+    [Fact]
     public async Task FirstAutomationSaveCreatesBillingScheduleAtomicallyWithoutPricingPage()
     {
         var w = await Setup(); using var owner = await Client(w.Owner);

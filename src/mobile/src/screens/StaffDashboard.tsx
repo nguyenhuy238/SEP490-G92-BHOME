@@ -1,18 +1,18 @@
 import React, { useState } from 'react';
 import { ScrollView, StyleSheet, View } from 'react-native';
-import { Button, Dialog, Portal, Text, TouchableRipple } from 'react-native-paper';
-import { router } from 'expo-router';
-import { DashboardHeading, DashboardStatus, dashboardStyles } from '../components/DashboardKit';
+import { Button, Dialog, Icon, Portal, Text, TouchableRipple } from 'react-native-paper';
 import { StaffFeatureDirectory } from '../components/StaffFeatureDirectory';
 import { useWorkspace } from '../features/workspace/WorkspaceProvider';
 import { useStaffDashboard } from '../features/workspace/useStaffDashboard';
 import { type WorkspaceScreen } from '../features/workspace/navigation';
 import { colors as c, staffColors as s } from '../theme/theme';
-import { typography } from '../theme/typography';
+import { fontStyle, typography } from '../theme/typography';
+import { staffHomePalette as h, staffUi } from '../theme/staffLayout';
 import {
   isEmbeddedInitialMeterTask,
   isEmbeddedMoveInInventory,
   isMainMoveInWork,
+  isMainMoveOutWork,
 } from '../services/operationalTasks';
 
 export function StaffDashboard() {
@@ -24,10 +24,9 @@ export function StaffDashboard() {
     staffLocationsLoading,
     staffLocationsError,
     selectStaffLocation,
-    reloadStaffLocations,
   } = useWorkspace();
   const data = useStaffDashboard();
-  const [handover, setHandover] = useState(false);
+  const [contracts, setContracts] = useState(false);
   const [locationPickerOpen, setLocationPickerOpen] = useState(false);
   const availableLocations = staffLocations ?? data.locations.data ?? [];
   const activeLocation = availableLocations.find(
@@ -47,57 +46,38 @@ export function StaffDashboard() {
           open: () => go('meter-reading'),
         },
       ]
-    : [
-        ...(data.overdue.data?.items ?? [])
-          .filter(
-            (task) =>
-              ['Assigned', 'InProgress'].includes(task.status) &&
-              !isEmbeddedMoveInInventory(task) &&
-              !isEmbeddedInitialMeterTask(task) &&
-              !!scopedLocationId &&
-              task.locationId === scopedLocationId,
-          )
-          .map((task) => ({
-            id: task.id,
-            title: task.title,
-            detail:
-              data.locations.data?.find((location) => location.id === task.locationId)?.label ??
-              'Cơ sở được phân công',
-            status: 'Quá hạn',
-            open: () =>
-              isMainMoveInWork(task)
-                ? go('move-in', { contractId: task.target!.contractId!, section: 'handover' })
+    : (data.priorities.data?.items ?? [])
+        .filter(
+          (task) =>
+            ['Assigned', 'InProgress'].includes(task.status) &&
+            !isEmbeddedMoveInInventory(task) &&
+            !isEmbeddedInitialMeterTask(task) &&
+            !!scopedLocationId &&
+            task.locationId === scopedLocationId,
+        )
+        .slice(0, 2)
+        .map((task) => ({
+          id: task.id,
+          title: task.title,
+          detail:
+            data.locations.data?.find((location) => location.id === task.locationId)?.label ??
+            'Cơ sở được phân công',
+          target: task.target?.label,
+          status: task.isOverdue
+            ? 'Quá hạn'
+            : task.status === 'InProgress'
+              ? 'Đang xử lý'
+              : 'Cần làm',
+          open: () =>
+            isMainMoveInWork(task)
+              ? go('move-in', { contractId: task.target!.contractId!, section: 'handover' })
+              : isMainMoveOutWork(task)
+                ? go('move-out', { contractId: task.target!.contractId!, taskId: task.id })
                 : go(task.kind === 'MoveInInventory' ? 'move-in-inventory' : 'task-detail', {
                     taskId: task.id,
                   }),
-          })),
-        ...selectedInspections
-          .filter((item) => item.status === 'Approved')
-          .slice(0, 2)
-          .map((item) => ({
-            id: item.contractId,
-            title: 'Kiểm tra trả phòng',
-            detail: `Phòng ${item.roomNumber} · ${item.locationName}`,
-            status: 'Được phân công',
-            open: () => go('move-out', { contractId: item.contractId }),
-          })),
-        ...(data.meters.data ?? [])
-          .filter(
-            (item) =>
-              item.status === 0 && !!scopedLocationId && item.locationId === scopedLocationId,
-          )
-          .slice(0, 2)
-          .map((item) => ({
-            id: item.id,
-            title: `Ghi chỉ số ${item.utilityType === 0 ? 'điện' : 'nước'}`,
-            detail: `Phòng ${item.room} · ${item.location}`,
-            status: 'Cần ghi số',
-            open: () => router.push({ pathname: '/meter', params: { taskId: item.id } }),
-          })),
-      ];
-  const priorityError = [data.overdue, data.inspections, data.meters].some(
-    (query) => !!query.error,
-  );
+        }));
+  const priorityError = !!data.priorities.error;
   const locationLabel = preview
     ? 'BHOME Đống Đa - Tòa B · Mẫu'
     : (staffLocationsLoading ?? data.locations.loading)
@@ -113,58 +93,31 @@ export function StaffDashboard() {
     ? selectedInspections.filter((item) => item.status === 'Approved')
     : null;
   function open(screen: WorkspaceScreen, params?: Record<string, string>) {
-    if (screen === 'move-in') setHandover(true);
-    else if (params) go(screen, params);
+    if (params) go(screen, params);
     else go(screen);
   }
   return (
     <>
       <View style={styles.summary}>
-        <View style={styles.greetingRow}>
-          <View style={styles.greeting}>
-            <Text variant="headlineSmall" style={[styles.title, typography.screenTitle]}>
-              {preview ? 'Xin chào, Long!' : 'Chào bạn, bắt đầu ngày mới!'}
-            </Text>
-            <Text variant="bodySmall" style={[styles.muted, typography.secondary]}>
-              {locationLabel}
-            </Text>
-          </View>
-          <Button
-            compact
-            icon="refresh"
-            onPress={() => {
-              data.reload();
-              reloadStaffLocations?.();
-            }}
-            accessibilityLabel="Làm mới tổng quan"
-          >
-            Làm mới
-          </Button>
-        </View>
-        {!preview && availableLocations.length > 1 && (
-          <Button
-            mode="outlined"
-            icon="map-marker-multiple-outline"
+        {!preview && availableLocations.length > 1 ? (
+          <TouchableRipple
             onPress={() => setLocationPickerOpen(true)}
+            accessibilityRole="button"
             accessibilityLabel="Chuyển cơ sở"
+            style={styles.locationAction}
           >
-            Cơ sở hiện tại: {activeLocation?.label ?? 'Chọn cơ sở'} · Đổi cơ sở
-          </Button>
-        )}
-        <TouchableRipple
-          onPress={() => go('shifts')}
-          accessibilityRole="button"
-          accessibilityLabel="Xem lịch ca"
-        >
-          <View style={styles.shift}>
-            <DashboardStatus tone="neutral">
-              {preview ? 'Ca sáng · 07:30–16:30 · Mẫu' : 'Chưa có dữ liệu ca làm'}
-            </DashboardStatus>
-            <Text variant="labelSmall" style={[styles.muted, typography.status]}>
-              Xem lịch ca ›
-            </Text>
+            <View style={styles.locationRow}>
+              <Icon source="map-marker-outline" size={23} color={h.ink} />
+              <Text style={styles.locationLabel}>{locationLabel}</Text>
+              <Icon source="chevron-down" size={22} color={h.ink} />
+            </View>
+          </TouchableRipple>
+        ) : (
+          <View style={styles.locationRow}>
+            <Icon source="map-marker-outline" size={23} color={h.ink} />
+            <Text style={styles.locationLabel}>{locationLabel}</Text>
           </View>
-        </TouchableRipple>
+        )}
         <View style={styles.metrics}>
           {[
             { label: 'Hạn hôm nay', value: taskValue, screen: 'work-orders' as const },
@@ -184,13 +137,17 @@ export function StaffDashboard() {
                 : pendingInspections
                   ? `${data.inspections.data!.length >= 100 ? '≥' : ''}${pendingInspections.length}`
                   : '—',
-              screen: 'move-out' as const,
+              screen: 'staff-handovers' as const,
             },
           ].map((metric, index) => (
             <TouchableRipple
               key={metric.label}
               style={[styles.metric, index > 0 && styles.divider]}
-              onPress={() => go(metric.screen)}
+              onPress={() =>
+                metric.screen === 'staff-handovers'
+                  ? go(metric.screen, { tab: 'MoveOut' })
+                  : go(metric.screen)
+              }
               accessibilityRole="button"
               accessibilityLabel={metric.label}
             >
@@ -203,55 +160,127 @@ export function StaffDashboard() {
             </TouchableRipple>
           ))}
         </View>
-        {!preview && (
-          <Text variant="labelSmall" style={[styles.muted, typography.status]}>
-            Bàn giao nhận phòng chưa hoàn tất được theo dõi trong Công việc của tôi. Mở tác vụ để
-            kiểm tra và lấy xác nhận của Tenant.
-          </Text>
-        )}
         {!preview && !!data.incidents?.error && (
-          <Text style={styles.muted}>Chưa tải đủ số sự cố mở. Chạm Làm mới để thử lại.</Text>
+          <Text style={styles.muted}>Chưa tải đủ số sự cố mở. Kéo xuống để thử lại.</Text>
         )}
         {!preview && !!data.tasks.error && (
-          <Text style={styles.muted}>
-            Chưa tải được công việc hôm nay. Chạm Làm mới để thử lại.
-          </Text>
+          <Text style={styles.muted}>Chưa tải được công việc hôm nay. Kéo xuống để thử lại.</Text>
         )}
       </View>
       {priorities.length > 0 && (
-        <View style={styles.section}>
-          <DashboardHeading title="Cần xử lý" detail="Các tác vụ ưu tiên trong phạm vi được giao" />
-          <View style={styles.priorityList}>
-            {priorities.slice(0, 5).map((item) => (
+        <View style={styles.prioritySection}>
+          <View style={styles.sectionHeading}>
+            <View style={styles.headingLabel}>
+              <View style={styles.headingAccent} />
+              <Text style={styles.headingTitle}>Cần xử lý</Text>
+            </View>
+            <Button
+              compact
+              textColor={s.blue}
+              onPress={() => go('work-orders')}
+              icon="chevron-right"
+              contentStyle={styles.seeAllContent}
+            >
+              Xem tất cả
+            </Button>
+          </View>
+          <View style={styles.priorityRows}>
+            {priorities.map((item) => (
               <TouchableRipple
                 key={item.id}
                 onPress={item.open}
                 accessibilityRole="button"
                 accessibilityLabel={`${item.title}, ${item.detail}`}
+                style={styles.priorityCard}
               >
                 <View style={styles.priority}>
-                  <View style={styles.greeting}>
+                  <View style={styles.priorityIcon}>
+                    <Icon source="clipboard-check-outline" size={24} color={s.blue} />
+                  </View>
+                  <View style={styles.priorityText}>
                     <Text variant="titleSmall" style={[styles.title, typography.cardTitle]}>
                       {item.title}
                     </Text>
-                    <Text variant="labelSmall" style={[styles.muted, typography.secondary]}>
-                      {item.detail}
+                    {'target' in item && !!item.target && (
+                      <Text style={staffUi.secondary}>{item.target}</Text>
+                    )}
+                    {preview && <Text style={staffUi.secondary}>{item.detail}</Text>}
+                  </View>
+                  <View
+                    style={[
+                      styles.statusPill,
+                      item.status === 'Quá hạn' && { backgroundColor: s.redSoft },
+                      item.status === 'Cần làm' && { backgroundColor: s.blueSoft },
+                    ]}
+                  >
+                    <Text
+                      variant="labelSmall"
+                      style={[
+                        styles.priorityStatus,
+                        item.status === 'Quá hạn' && { color: c.red },
+                        item.status === 'Cần làm' && { color: s.blue },
+                      ]}
+                    >
+                      {item.status}
                     </Text>
                   </View>
-                  <Text variant="labelSmall" style={styles.priorityStatus}>
-                    {item.status} ›
-                  </Text>
+                  <Icon source="chevron-right" size={18} color={h.ink} />
                 </View>
               </TouchableRipple>
             ))}
           </View>
         </View>
       )}
+      {!preview && priorities.length === 0 && !priorityError && (
+        <View style={styles.prioritySection}>
+          <View style={styles.headingLabel}>
+            <View style={styles.headingAccent} />
+            <Text style={styles.headingTitle}>Cần xử lý</Text>
+          </View>
+          <Text style={[styles.muted, styles.emptyPriority]}>
+            {data.priorities.loading ? 'Đang tải việc ưu tiên…' : 'Chưa có việc ưu tiên cần xử lý.'}
+          </Text>
+        </View>
+      )}
       {!preview && priorityError && (
         <Button onPress={data.reload}>Chưa tải đủ tác vụ ưu tiên · Thử lại</Button>
       )}
-      <StaffFeatureDirectory onOpen={open} />
+      <StaffFeatureDirectory
+        onOpen={open}
+        onContracts={() => setContracts(true)}
+        overdueMeterRooms={preview ? null : data.overdueMeterRooms}
+      />
       <Portal>
+        <Dialog visible={contracts} onDismiss={() => setContracts(false)}>
+          <Dialog.Title>Hợp đồng</Dialog.Title>
+          <Dialog.Actions style={styles.dialogActions}>
+            <Button
+              onPress={() => {
+                setContracts(false);
+                go('onboarding');
+              }}
+            >
+              Tạo hợp đồng thuê
+            </Button>
+            <Button
+              onPress={() => {
+                setContracts(false);
+                go('prepare-contract', { kind: 'Holding' });
+              }}
+            >
+              Tạo hợp đồng giữ chỗ
+            </Button>
+            <Button
+              onPress={() => {
+                setContracts(false);
+                go('signing');
+              }}
+            >
+              Xem hợp đồng
+            </Button>
+            <Button onPress={() => setContracts(false)}>Đóng</Button>
+          </Dialog.Actions>
+        </Dialog>
         <Dialog visible={locationPickerOpen} onDismiss={() => setLocationPickerOpen(false)}>
           <Dialog.Title>Chuyển cơ sở</Dialog.Title>
           <Dialog.ScrollArea>
@@ -274,57 +303,93 @@ export function StaffDashboard() {
             <Button onPress={() => setLocationPickerOpen(false)}>Đóng</Button>
           </Dialog.Actions>
         </Dialog>
-        <Dialog visible={handover} onDismiss={() => setHandover(false)}>
-          <Dialog.Title>Bàn giao / Trả phòng</Dialog.Title>
-          <Dialog.Content>
-            <Text style={typography.body}>Chọn nghiệp vụ cần thực hiện theo hồ sơ hợp đồng.</Text>
-          </Dialog.Content>
-          <Dialog.Actions style={styles.dialogActions}>
-            <Button
-              onPress={() => {
-                setHandover(false);
-                go('move-in');
-              }}
-            >
-              Bàn giao nhận phòng
-            </Button>
-            <Button
-              onPress={() => {
-                setHandover(false);
-                go('move-out');
-              }}
-            >
-              Kiểm tra trả phòng
-            </Button>
-            <Button onPress={() => setHandover(false)}>Đóng</Button>
-          </Dialog.Actions>
-        </Dialog>
       </Portal>
     </>
   );
 }
 const styles = StyleSheet.create({
-  summary: { ...dashboardStyles.summary, borderRadius: 18, gap: 12 },
-  greetingRow: { flexDirection: 'row', alignItems: 'center', gap: 8, flexWrap: 'wrap' },
-  greeting: { flex: 1, minWidth: 100, gap: 4 },
-  title: { color: s.navy },
-  muted: { ...typography.body, color: c.muted },
-  shift: { flexDirection: 'row', alignItems: 'center', flexWrap: 'wrap', gap: 8 },
-  metrics: { flexDirection: 'row' },
-  metric: { flex: 1 },
-  metricContent: { alignItems: 'center', paddingHorizontal: 4, paddingVertical: 8, gap: 5 },
-  metricLabel: { ...typography.status, textAlign: 'center', color: c.muted },
-  divider: { borderLeftWidth: 1, borderLeftColor: c.border },
-  section: dashboardStyles.section,
-  priorityList: { backgroundColor: c.white, borderRadius: 16, overflow: 'hidden' },
+  summary: { gap: 8 },
+  locationAction: { alignSelf: 'stretch', borderRadius: 10 },
+  locationRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 9,
+    minHeight: 48,
+    paddingHorizontal: 6,
+  },
+  locationLabel: { ...fontStyle('bold', 18, 25), color: h.ink, flexShrink: 1 },
+  title: { color: h.ink },
+  muted: { ...typography.body, color: h.muted },
+  metrics: {
+    flexDirection: 'row',
+    alignItems: 'stretch',
+    backgroundColor: c.white,
+    borderRadius: 16,
+    borderWidth: 1,
+    borderColor: h.border,
+    paddingVertical: 8,
+    boxShadow: '0 4px 14px rgba(16, 43, 73, 0.06)',
+  },
+  metric: { flex: 1, minWidth: 0, borderRadius: 8 },
+  metricContent: {
+    flex: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingHorizontal: 4,
+    paddingVertical: 4,
+    gap: 4,
+    minHeight: 64,
+  },
+  metricLabel: { ...fontStyle('medium', 12, 17), textAlign: 'center', color: h.muted },
+  divider: {
+    borderLeftWidth: StyleSheet.hairlineWidth,
+    borderLeftColor: '#C9D8EA',
+    borderRadius: 0,
+  },
+  prioritySection: { gap: 6 },
+  headingLabel: { flexDirection: 'row', alignItems: 'center', gap: 9, flexShrink: 1 },
+  headingAccent: { width: 4, height: 18, borderRadius: 2, backgroundColor: s.blue },
+  headingTitle: { ...fontStyle('bold', 18, 25), color: h.ink },
+  sectionHeading: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    gap: 8,
+    paddingHorizontal: 3,
+  },
+  seeAllContent: { minHeight: 44, flexDirection: 'row-reverse' },
+  priorityRows: { gap: 8 },
+  priorityCard: {
+    ...staffUi.surface,
+    borderRadius: 16,
+    borderColor: h.border,
+    overflow: 'hidden',
+  },
+  emptyPriority: { ...staffUi.surface, borderRadius: 16, borderColor: h.border, padding: 14 },
   priority: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 8,
-    padding: 12,
-    borderBottomWidth: StyleSheet.hairlineWidth,
-    borderBottomColor: c.border,
+    paddingHorizontal: 12,
+    paddingVertical: 10,
+    minHeight: 72,
   },
-  priorityStatus: { ...typography.status, color: s.orange, flexShrink: 1 },
+  priorityIcon: {
+    width: 38,
+    height: 38,
+    borderRadius: 12,
+    backgroundColor: h.iconSurface,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  priorityText: { flex: 1, minWidth: 0, gap: 3 },
+  statusPill: {
+    borderRadius: 14,
+    paddingHorizontal: 7,
+    paddingVertical: 4,
+    backgroundColor: c.amberSoft,
+    maxWidth: '29%',
+  },
+  priorityStatus: { ...typography.status, color: c.amber, textAlign: 'center' },
   dialogActions: { flexDirection: 'column', alignItems: 'stretch' },
 });

@@ -31,6 +31,7 @@ internal static class Compact24SliceRegistration
         services.AddScoped<CompactLocationAssignments>();
         services.Replace(ServiceDescriptor.Scoped<ILocationAssignments>(p => p.GetRequiredService<CompactLocationAssignments>()));
         services.Replace(ServiceDescriptor.Scoped<IStaffLocationAccess>(p => p.GetRequiredService<CompactLocationAssignments>()));
+        services.AddScoped<ITenantContractAccess, CompactTenantContractAccess>();
         services.Replace(ServiceDescriptor.Scoped<INotificationRepository, CompactNotificationRepository>());
         return services;
     }

@@ -1,7 +1,14 @@
 export type HouseholdMode = 'family' | 'individual';
 export type IdentityStatus = 'unscanned' | 'recognizing' | 'pending' | 'confirmed';
 export type IdentitySide = 'front' | 'back';
-export type CaptureProgress = Record<IdentitySide, 'unscanned' | 'captured' | 'recognized'>;
+export type CaptureProgress = Record<
+  IdentitySide,
+  'unscanned' | 'captured' | 'partial' | 'recognized' | 'failed'
+>;
+export interface IdentityCaptureRequest {
+  side: IdentitySide;
+  id: number;
+}
 export const emptyCaptureProgress = (): CaptureProgress => ({
   front: 'unscanned',
   back: 'unscanned',
@@ -19,6 +26,7 @@ export interface OnboardingPerson {
   email?: string;
   residentId?: string;
   status: IdentityStatus;
+  hasUnsavedIdentity?: boolean;
   captureProgress?: CaptureProgress;
   creationUncertain?: boolean;
   verificationError?: string;

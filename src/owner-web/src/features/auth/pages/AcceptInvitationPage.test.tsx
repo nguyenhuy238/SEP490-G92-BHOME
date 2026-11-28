@@ -53,7 +53,10 @@ it('validates the token automatically, uses only the server email, and scrubs cr
   expect(JSON.parse(fetch.mock.calls[0][1]!.body as string)).toEqual({ token: 'synthetic-link' });
   await fill();
   fireEvent.click(screen.getByRole('button', { name: 'Thiết lập mật khẩu' }));
-  await screen.findByText('Login destination');
+  await screen.findByText('Kích hoạt tài khoản thành công.');
+  expect(screen.getByTestId('location')).toHaveTextContent('/accept-invitation');
+  expect(screen.queryByText('Login destination')).toBeNull();
+  expect(screen.queryByRole('link', { name: 'Đến đăng nhập' })).toBeNull();
   expect(JSON.parse(fetch.mock.calls[1][1]!.body as string)).toEqual({
     token: 'synthetic-link',
     newPassword: 'Synthetic!NewPassword493',
@@ -145,5 +148,5 @@ it('prevents duplicate submit while awaiting acceptance', async () => {
   expect(fetch).toHaveBeenCalledTimes(2);
   expect(button).toBeDisabled();
   finish(new Response(null, { status: 204 }));
-  await screen.findByText('Login destination');
+  await screen.findByText('Kích hoạt tài khoản thành công.');
 });

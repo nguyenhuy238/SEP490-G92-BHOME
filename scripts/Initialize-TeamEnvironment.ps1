@@ -64,7 +64,7 @@ foreach ($file in @('.env', 'src/owner-web/.env', 'src/owner-web/.env.local', 's
     }
 }
 if ($settings.Email__DeliveryMode -ne 'Capture' -or $settings.Email__Host -notin @('localhost','127.0.0.1','::1')) {
-    Write-Warning 'Local email is not the Mailpit default. Real SMTP requires STARTTLS and an explicit Email__AllowedRecipients allowlist.'
+    Write-Warning 'Local email is not the Mailpit default. Real SMTP requires explicit DeliveryMode=Smtp, valid credentials and STARTTLS. Development accepts all valid recipients without an allowlist.'
 }
 if ($settings.AuthenticationEmail__WebResetUrl -ne ($settings.AuthenticationEmail__TrustedOrigins__0 + '/reset-password')) {
     Problem 'Authentication email URL/trusted origin differ; compare the local template and review user-secrets overrides.'

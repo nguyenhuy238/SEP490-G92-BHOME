@@ -10,6 +10,113 @@ namespace BHome.IntegrationTests.PaymentsDebt;
 
 public sealed partial class PaymentLedgerTests
 {
+    internal async Task OwnerPricesEachActualRoomIssueWithItsOwnPhotoAndTenantSeesTheCharge()
+    {
+        var (w, _, photo) = await DamageFixture();
+        var issuePhotos = new List<Guid>();
+        await using (var scope = fixture.Factory.Services.CreateAsyncScope())
+        {
+            var db = scope.ServiceProvider.GetRequiredService<BHomePersistenceContext>();
+            var storage = scope.ServiceProvider.GetRequiredService<BHome.Application.Storage.IObjectStorage>();
+            foreach (var _ in Enumerable.Range(0, 3))
+            {
+                var file = new BHome.Domain.TenantContracts.ContractInspectionEvidence
+                {
+                    ContractId = w.Contract,
+                    UploadedByUserId = w.Staff,
+                    ObjectKey = "synthetic/move-out-room-check/" + Guid.NewGuid(),
+                    ContentType = "image/png",
+                    IsLinked = true
+                };
+                db.Add(file);
+                await db.SaveChangesAsync();
+                using var bytes = new MemoryStream(photo);
+                await storage.PutAsync(file.ObjectKey, bytes, photo.Length, "image/png", default);
+                issuePhotos.Add(file.Id);
+            }
+            var inspection = await db.Set<BHome.Domain.TenantContracts.ContractFinalInspection>()
+                .SingleAsync(i => i.ContractId == w.Contract);
+            var snapshot = System.Text.Json.JsonSerializer.Deserialize<HandoverSnapshot>(inspection.ObservedSnapshot)!;
+            var baseline = System.Text.Json.JsonSerializer.Deserialize<HandoverSnapshot>(inspection.BaselineSnapshot) ?? snapshot;
+            var checks = HandoverRoomChecklist.RequiredCodes.Select(code =>
+                new HandoverRoomCheck(code,
+                    code is "walls_ceiling_floor" or "bathroom_toilet" ? "Issue" : "Passed",
+                    "Synthetic observed condition",
+                    code == "walls_ceiling_floor" ? [issuePhotos[0]] :
+                    code == "bathroom_toilet" ? [issuePhotos[1]] : [])).ToArray();
+            var hashes = new Dictionary<Guid, string>(snapshot.EvidenceHashes ?? new Dictionary<Guid, string>());
+            foreach (var id in issuePhotos)
+                hashes[id] = Convert.ToHexString(System.Security.Cryptography.SHA256.HashData(photo));
+            inspection.ObservedSnapshot = System.Text.Json.JsonSerializer.Serialize(snapshot with
+            {
+                RoomChecks = checks,
+                AccessItems = [new HandoverAccessItem("RoomKey", 1, "Đã thu lại một trong hai chìa khóa")],
+                KeyEvidenceIds = [issuePhotos[2]],
+                EvidenceHashes = hashes
+            });
+            inspection.BaselineSnapshot = System.Text.Json.JsonSerializer.Serialize(baseline with
+            {
+                AccessItems = [new HandoverAccessItem("RoomKey", 2, "Đã giao hai chìa")]
+            });
+            await db.SaveChangesAsync();
+        }
+
+        using var owner = await Client(w.Owner);
+        using var tenant = await Client(w.Tenants[0]);
+        var route = $"/api/v1/contracts/{w.Contract}/move-out/receivables";
+        var initial = await RefundValue<SettlementReceivablesView>(await owner.GetAsync(route));
+        Assert.True(initial.RoomCheckChargesSupported);
+        Assert.False((await RefundValue<SettlementReceivablesView>(await tenant.GetAsync(route))).RoomCheckChargesSupported);
+        Guid inspectionId; int inspectionVersion;
+        await using (var scope = fixture.Factory.Services.CreateAsyncScope())
+        {
+            var db = scope.ServiceProvider.GetRequiredService<BHomePersistenceContext>();
+            var inspection = await db.Set<BHome.Domain.TenantContracts.ContractFinalInspection>()
+                .SingleAsync(i => i.ContractId == w.Contract);
+            inspectionId = inspection.Id; inspectionVersion = inspection.Version;
+        }
+        var walls = new DamageChargeInput(initial.Reference, inspectionId, inspectionVersion,
+            null, 100000, "Phí xử lý tường sau kiểm tra", [issuePhotos[0]], true,
+            RoomCheckCode: "walls_ceiling_floor");
+        Assert.Equal(HttpStatusCode.BadRequest, (await Post(owner, route + "/damage",
+            walls with { RoomCheckCode = "unknown_check" })).StatusCode);
+        Assert.Equal(HttpStatusCode.Conflict, (await Post(owner, route + "/damage",
+            walls with { RoomCheckCode = "doors_windows_locks" })).StatusCode);
+        Assert.Equal(HttpStatusCode.Conflict, (await Post(owner, route + "/damage",
+            walls with { EvidenceIds = [issuePhotos[1]] })).StatusCode);
+        Assert.Equal(HttpStatusCode.Conflict, (await Post(owner, route + "/damage",
+            walls with { AssetId = Guid.NewGuid(), RoomCheckCode = null })).StatusCode);
+        var first = await RefundValue<SettlementReceivable>(await Post(owner, route + "/damage", walls));
+        Assert.Equal("walls_ceiling_floor", first.RoomCheckCode);
+        Assert.Equal($"damage:{w.Contract:N}:walls_ceiling_floor", first.SourceKey);
+
+        var next = await RefundValue<SettlementReceivablesView>(await owner.GetAsync(route));
+        var bathroom = new DamageChargeInput(next.Reference, inspectionId, inspectionVersion,
+            null, 150000, "Thiết bị vệ sinh bị hỏng", [issuePhotos[1]], true,
+            RoomCheckCode: "bathroom_toilet");
+        var second = await RefundValue<SettlementReceivable>(await Post(owner, route + "/damage", bathroom));
+        Assert.NotEqual(first.SourceKey, second.SourceKey);
+        var latest = await RefundValue<SettlementReceivablesView>(await tenant.GetAsync(route));
+        Assert.Equal(2, latest.Receivables.Count);
+        Assert.Equal(250000, latest.Receivables.Sum(r => r.Outstanding));
+        Assert.Contains(latest.Receivables, r => r.Charge.RoomCheckCode == "bathroom_toilet");
+        var keyCharge = new DamageChargeInput(latest.Reference, inspectionId, inspectionVersion,
+            null, 20000, "Thay chìa khóa chưa trả", [issuePhotos[2]], true,
+            RoomCheckCode: "access_room_key");
+        Assert.Equal(HttpStatusCode.Conflict, (await Post(owner, route + "/damage",
+            keyCharge with { EvidenceIds = [issuePhotos[0]] })).StatusCode);
+        var third = await RefundValue<SettlementReceivable>(await Post(owner, route + "/damage", keyCharge));
+        Assert.Equal($"damage:{w.Contract:N}:access_room_key", third.SourceKey);
+        Assert.Equal("access_room_key", third.RoomCheckCode);
+        latest = await RefundValue<SettlementReceivablesView>(await tenant.GetAsync(route));
+        Assert.Equal(3, latest.Receivables.Count);
+        Assert.Equal(270000, latest.Receivables.Sum(r => r.Outstanding));
+        Assert.Equal(HttpStatusCode.Conflict, (await Post(owner, route + "/damage",
+            walls with { ExpectedReference = latest.Reference })).StatusCode);
+        Assert.Equal(HttpStatusCode.Conflict, (await Post(owner, route + "/damage",
+            walls with { ExpectedReference = latest.Reference, RoomCheckCode = null })).StatusCode);
+    }
+
     internal async Task DamageAboveDepositRemainsRoomDebtWithSeparateCanonicalOffsets()
     {
         var (w, proof, _) = await DamageFixture(true);
@@ -136,7 +243,7 @@ public sealed partial class PaymentLedgerTests
     }
     internal async Task DepositOffsetsVerifyDamageEvidenceAndFinalInvoiceBalance()
     {
-        var (w, proof, photo) = await DamageFixture(); using var owner = await Client(w.Owner); using var tenant = await Client(w.Tenants[0]);
+        var (w, proof, photo) = await DamageFixture(pendingInvoiceAdjustment: true); using var owner = await Client(w.Owner);
         var route = $"/api/v1/contracts/{w.Contract}/move-out/receivables";
         var view = await RefundValue<SettlementReceivablesView>(await owner.GetAsync(route));
         await using var scope = fixture.Factory.Services.CreateAsyncScope(); var db = scope.ServiceProvider.GetRequiredService<BHomePersistenceContext>();
@@ -152,7 +259,7 @@ public sealed partial class PaymentLedgerTests
         Assert.Equal(HttpStatusCode.Conflict, (await Post(owner, route + "/deposit-offsets", new DepositOffsetInput(view.Reference, charge.Id, null, 1, "Tampered proof", true))).StatusCode);
         using (var content = new MemoryStream(photo)) await storage.PutAsync(evidence.ObjectKey, content, photo.Length, "image/png", default);
         // An approved post-finalization adjustment creates a real remaining invoice balance.
-        var adjustment = await AdjustRequest(tenant, w.Invoice, 1, 150000);
+        var adjustment = await db.Set<BHome.Domain.Billing.InvoiceAdjustmentRequest>().SingleAsync(r => r.InvoiceId == w.Invoice);
         (await Post(owner, $"/api/v1/invoice-adjustments/{adjustment.Id}/approve",
             new BHome.Application.Billing.AdjustmentDecisionInput(1, 1, 0, 150000, null, "Synthetic additional approved rent", true))).EnsureSuccessStatusCode();
         view = await RefundValue<SettlementReceivablesView>(await owner.GetAsync(route));

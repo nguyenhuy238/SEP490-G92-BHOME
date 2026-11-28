@@ -4,6 +4,8 @@ import { LoginRoute, ProtectedRoute } from './routeGuards';
 import { AppShell } from '../components/layout/AppShell';
 import { LoadingState } from '../components/common/PortalUI';
 import { SharedConfigurationProvider } from '../features/configuration/SharedConfigurationContext';
+import { LegacyWorkRedirect } from '../features/tasks/LegacyWorkRedirect';
+import { isMockMode } from '../services/config';
 const NotificationsPage = lazy(() => import('../features/notifications/pages/NotificationsPage'));
 const LocationsPage = lazy(() => import('../features/locations/pages/LocationsPage'));
 const RoomsPage = lazy(() => import('../features/rooms/pages/RoomsPage'));
@@ -24,7 +26,12 @@ const StaffAssignmentsPage = lazy(() => import('../features/staff/pages/StaffAss
 const TasksPage = lazy(() => import('../features/tasks/pages/TasksPage'));
 const TenantsPage = lazy(() => import('../features/tenants/pages/TenantsPage'));
 const ContractsPage = lazy(() => import('../features/contracts/pages/ContractsPage'));
-const DigitalSigningPage = lazy(() => import('../features/contracts/pages/DigitalSigningPage'));
+const MainContractSettingsPage = lazy(
+  () => import('../features/contracts/pages/MainContractSettingsPage'),
+);
+const TerminationReviewPage = lazy(
+  () => import('../features/contracts/pages/TerminationReviewPage'),
+);
 const HandoversPage = lazy(() => import('../features/handovers/pages/HandoversPage'));
 const TemporaryResidencePage = lazy(
   () => import('../features/temporary-residence/pages/TemporaryResidencePage'),
@@ -79,7 +86,6 @@ const PolicyTemplatesPage = lazy(() =>
 );
 const ResetPasswordPage = lazy(() => import('../features/auth/pages/ResetPasswordPage'));
 const HoldingSettingsPage = lazy(() => import('../features/contracts/pages/HoldingSettingsPage'));
-const SmsRecoveryPage = lazy(() => import('../features/auth/pages/SmsRecoveryPage'));
 const DemoSmsInboxPage =
   import.meta.env.DEV && import.meta.env.VITE_SMS_DEMO_ENABLED === 'true'
     ? lazy(() => import('../features/notifications/pages/DemoSmsInboxPage'))
@@ -95,7 +101,10 @@ export function AppRouter() {
         <Routes>
           <Route path="/login" element={<LoginRoute />} />
           <Route path="/reset-password" element={<ResetPasswordPage />} />
-          <Route path="/forgot-password" element={<SmsRecoveryPage />} />
+          <Route
+            path="/forgot-password"
+            element={<Navigate to="/login" state={{ emailRecovery: true }} replace />}
+          />
           <Route path="/confirm-email" element={<ConfirmEmailPage />} />
           <Route path="/accept-invitation" element={<AcceptInvitationPage />} />
           <Route path="/contract-signing" element={<AnonymousSigningPage />} />
@@ -135,10 +144,15 @@ export function AppRouter() {
               <Route path="/staff" element={<StaffPage />} />
               <Route path="/staff-assignments" element={<StaffAssignmentsPage />} />
               <Route path="/operational-tasks" element={<TasksPage />} />
-              <Route path="/tasks" element={<Navigate to="/operational-tasks" replace />} />
+              <Route path="/tasks" element={<LegacyWorkRedirect source="tasks" />} />
               <Route path="/tenants" element={<TenantsPage />} />
               <Route path="/contracts" element={<ContractsPage />} />
-              <Route path="/digital-signing" element={<DigitalSigningPage />} />
+              <Route path="/contracts/settings" element={<MainContractSettingsPage />} />
+              <Route
+                path="/contracts/:contractId/termination-review"
+                element={<TerminationReviewPage />}
+              />
+              <Route path="/digital-signing" element={<Navigate to="/contracts" replace />} />
               <Route path="/handovers" element={<HandoversPage />} />
               <Route path="/temporary-residence" element={<TemporaryResidencePage />} />
               <Route path="/meters" element={<MetersPage />} />
@@ -149,8 +163,16 @@ export function AppRouter() {
               <Route path="/payments" element={<PaymentsPage />} />
               <Route path="/tenant-refund-requests" element={<TenantRefundRequestsPage />} />
               <Route path="/debts" element={<DebtsPage />} />
-              <Route path="/incidents" element={<IncidentsPage />} />
-              <Route path="/maintenance" element={<MaintenancePage />} />
+              <Route
+                path="/incidents"
+                element={isMockMode ? <IncidentsPage /> : <LegacyWorkRedirect source="incidents" />}
+              />
+              <Route
+                path="/maintenance"
+                element={
+                  isMockMode ? <MaintenancePage /> : <LegacyWorkRedirect source="maintenance" />
+                }
+              />
               <Route path="/expenses" element={<ExpensesPage />} />
               <Route path="/finance/tax-records" element={<TaxTrackingPage />} />
               <Route path="/dashboard" element={<DashboardPage />} />

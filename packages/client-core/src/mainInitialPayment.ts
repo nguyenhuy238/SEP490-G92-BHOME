@@ -4,11 +4,15 @@ export interface MainInitialPayment {
   availability: string;
   signingComplete: boolean;
   charges: { code: string; name: string; amount: string }[];
+  firstMonthRent: string;
   requiredDeposit: string;
   holdingCredit: string;
   verifiedDeposit: string;
   verifiedRentAndFees: string;
   outstandingAmount: string;
+  outstandingDeposit?: string;
+  outstandingRentAndFees?: string;
+  meteredRates?: { code: string; name: string; unit: string; rate: string }[];
   paid: boolean;
   transferReference: string | null;
   bankIdentifier: string | null;

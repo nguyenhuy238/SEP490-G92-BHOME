@@ -24,6 +24,11 @@ export interface Incident {
   staffAvailable: boolean | null;
   escalationEnabled: boolean;
   createdAt: string;
+  locationName?: string | null;
+  roomNumber?: string | null;
+  assetName?: string | null;
+  openWorkOrderStatus?: string | null;
+  assignedStaffName?: string | null;
 }
 export interface WorkOrder {
   id: string;
@@ -39,6 +44,10 @@ export interface WorkOrder {
   proposedAssetName?: string | null;
   proposedAssetCategory?: string | null;
   proposedAssetCondition?: string | null;
+  locationName?: string | null;
+  roomNumber?: string | null;
+  assetName?: string | null;
+  assignedStaffName?: string | null;
   locationId: string;
   roomId: string | null;
   assetId: string | null;
@@ -70,6 +79,16 @@ export interface IncidentEvidence {
   activityId: string | null;
   contentType?: string;
   length: number;
+}
+export interface IncidentNotification {
+  id: string;
+  incidentId: string | null;
+  workOrderId: string | null;
+  event: string;
+  highPriority: boolean;
+  createdAt: string;
+  readAt: string | null;
+  deliveryState: string;
 }
 export const incidentStatuses: Record<string, string> = {
   Submitted: 'Mới báo cáo',

@@ -1,21 +1,22 @@
+import { TextField } from '../../../components/common/ValidatedForm';
 import { useState } from 'react';
 import { useSearchParams } from 'react-router';
 import { useQuery } from '@tanstack/react-query';
 import {
   Alert,
+  Accordion,
+  AccordionSummary,
+  AccordionDetails,
   Box,
   Button,
   Drawer,
-  Dialog,
-  DialogTitle,
-  DialogContent,
-  DialogActions,
   LinearProgress,
   MenuItem,
   Pagination,
   Paper,
   Stack,
-  TextField,
+  Tab,
+  Tabs,
   Typography,
 } from '@mui/material';
 import { useAuth } from '../../../../../../packages/client-core/src/auth';
@@ -40,8 +41,6 @@ import { isMockMode } from '../../../services/config';
 import { useContractsApi } from '../useContractsApi';
 import { ContractDraftDialog } from '../ContractDraftDialog';
 import { ContractDetailPanel } from '../ContractDetailPanel';
-import { ContractConfigurationPanel } from '../ContractWorkflowPanel';
-import { MainDraftSettingsPanel } from '../MainDraftSettingsPanel';
 import { MainDraftDetailPanel } from '../MainDraftDetailPanel';
 
 export default function ContractsPage() {
@@ -61,6 +60,7 @@ function LiveContractsPage() {
   const api = useContractsApi();
   const { session } = useAuth();
   const actorId = session?.userId ?? '';
+  const [kind, setKind] = useState('');
   const [page, setPage] = useState(1),
     [status, setStatus] = useState(''),
     [location, setLocation] = useState(deepParams.get('locationId') ?? '');
@@ -79,7 +79,6 @@ function LiveContractsPage() {
   }
   const [mainDraft, setMainDraft] = useState(false);
   const [holding, setHolding] = useState(false);
-  const [settings, setSettings] = useState(false);
   const [draft, setDraft] = useState(false),
     [lookup, setLookup] = useState(''),
     [lookupError, setLookupError] = useState('');
@@ -88,8 +87,8 @@ function LiveContractsPage() {
     queryFn: ({ signal }) => api.locations(signal),
   });
   const list = useQuery({
-    queryKey: ['contracts', actorId, page, status, location],
-    queryFn: ({ signal }) => api.list(page, status, location, signal),
+    queryKey: ['contracts', actorId, page, status, location, kind],
+    queryFn: ({ signal }) => api.list(page, status, location, signal, kind, 10),
   });
   const reminders = useQuery({
     queryKey: ['contract-expiry-reminders', actorId],
@@ -101,7 +100,6 @@ function LiveContractsPage() {
         title="Hợp đồng thuê"
         actions={
           <>
-            <Button onClick={() => setSettings(true)}>Cấu hình hợp đồng</Button>
             <Button
               variant="contained"
               onClick={() => {
@@ -124,68 +122,90 @@ function LiveContractsPage() {
         }
       />
       <Stack spacing={2}>
-        <Paper variant="outlined" sx={{ p: 1.5 }}>
-          <Stack
-            direction="row"
-            useFlexGap
-            spacing={1}
-            sx={{ alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap' }}
-          >
-            <Typography variant="h2" component="h2">
-              Nhắc gia hạn / trả phòng
-            </Typography>
-            <Button onClick={() => void reminders.refetch()} disabled={reminders.isFetching}>
-              Tải lại nhắc hết hạn
-            </Button>
-          </Stack>
-          {reminders.isPending ? (
-            <LinearProgress aria-label="Đang tải nhắc hết hạn" />
-          ) : reminders.error ? (
-            <Alert severity="error">{contractError(reminders.error)}</Alert>
-          ) : reminders.data?.length ? (
-            <Stack spacing={0.75} sx={{ mt: 1 }}>
-              {reminders.data.map((n) => (
-                <Stack
-                  key={n.id}
-                  direction={{ xs: 'column', sm: 'row' }}
-                  useFlexGap
-                  spacing={1}
-                  sx={{
-                    alignItems: { sm: 'center' },
-                    justifyContent: 'space-between',
-                    borderTop: '1px solid',
-                    borderColor: 'divider',
-                    pt: 0.75,
-                  }}
-                >
-                  <Box sx={{ minWidth: 0 }}>
-                    <Typography variant="body2" sx={{ fontWeight: 650, overflowWrap: 'anywhere' }}>
-                      Phòng {n.roomNumber} · {n.locationName}
-                    </Typography>
-                    <Typography variant="caption" color="text.secondary">
-                      {n.stage === 'Expired' ? 'Đã hết hạn' : 'Sắp hết hạn'}{' '}
-                      {displayContractDate(n.endDate)} · Cần gia hạn hoặc xử lý trả phòng.
-                    </Typography>
-                  </Box>
-                  <Button
-                    onClick={() => {
-                      setSelected(n.contractId);
-                      setMainDraft(false);
-                      setSelectedLocation('');
-                    }}
-                    sx={{ flexShrink: 0 }}
-                  >
-                    Mở hợp đồng
-                  </Button>
-                </Stack>
-              ))}
+        <Accordion variant="outlined" disableGutters>
+          <AccordionSummary>
+            <Typography>Nhắc gia hạn / trả phòng ({reminders.data?.length ?? '…'})</Typography>
+          </AccordionSummary>
+          <AccordionDetails>
+            <Stack
+              direction="row"
+              useFlexGap
+              spacing={1}
+              sx={{ alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap' }}
+            >
+              <Typography variant="h2" component="h2">
+                Nhắc gia hạn / trả phòng
+              </Typography>
+              <Button onClick={() => void reminders.refetch()} disabled={reminders.isFetching}>
+                Tải lại nhắc hết hạn
+              </Button>
             </Stack>
-          ) : (
-            <Typography variant="body2" color="text.secondary">
-              Chưa có nhắc hết hạn đã được xử lý.
-            </Typography>
-          )}
-        </Paper>
+            {reminders.isPending ? (
+              <LinearProgress aria-label="Đang tải nhắc hết hạn" />
+            ) : reminders.error ? (
+              <Alert severity="error">{contractError(reminders.error)}</Alert>
+            ) : reminders.data?.length ? (
+              <Stack spacing={0.75} sx={{ mt: 1 }}>
+                {reminders.data.map((n) => (
+                  <Stack
+                    key={n.id}
+                    direction={{ xs: 'column', sm: 'row' }}
+                    useFlexGap
+                    spacing={1}
+                    sx={{
+                      alignItems: { sm: 'center' },
+                      justifyContent: 'space-between',
+                      borderTop: '1px solid',
+                      borderColor: 'divider',
+                      pt: 0.75,
+                    }}
+                  >
+                    <Box sx={{ minWidth: 0 }}>
+                      <Typography
+                        variant="body2"
+                        sx={{ fontWeight: 650, overflowWrap: 'anywhere' }}
+                      >
+                        Phòng {n.roomNumber} · {n.locationName}
+                      </Typography>
+                      <Typography variant="caption" color="text.secondary">
+                        {n.stage === 'Expired' ? 'Đã hết hạn' : 'Sắp hết hạn'}{' '}
+                        {displayContractDate(n.endDate)} · Cần gia hạn hoặc xử lý trả phòng.
+                      </Typography>
+                    </Box>
+                    <Button
+                      onClick={() => {
+                        setSelected(n.contractId);
+                        setMainDraft(false);
+                        setSelectedLocation('');
+                      }}
+                      sx={{ flexShrink: 0 }}
+                    >
+                      Mở hợp đồng
+                    </Button>
+                  </Stack>
+                ))}
+              </Stack>
+            ) : (
+              <Typography variant="body2" color="text.secondary">
+                Chưa có nhắc hết hạn đã được xử lý.
+              </Typography>
+            )}
+          </AccordionDetails>
+        </Accordion>
+        <Tabs
+          value={kind}
+          onChange={(_, value: string) => {
+            setKind(value);
+            setPage(1);
+          }}
+          aria-label="Loại hợp đồng"
+          variant="scrollable"
+        >
+          <Tab value="" label="Tất cả" />
+          <Tab value="Holding" label="Giữ chỗ" />
+          <Tab value="Main" label="Thuê chính thức" />
+          <Tab value="Addendum" label="Phụ lục" />
+        </Tabs>
         <FilterToolbar>
           <TextField
             select
@@ -254,6 +274,21 @@ function LiveContractsPage() {
                 }}
                 columns={[
                   {
+                    label: 'Hợp đồng / Đại diện',
+                    render: (c) => (
+                      <>
+                        <Typography sx={{ fontWeight: 650 }}>
+                          {c.representativeName ||
+                            c.holdingCustomer?.fullName ||
+                            'Chưa có tên đại diện'}
+                        </Typography>
+                        <Typography variant="caption" color="text.secondary">
+                          {text(c.kind)} · {c.id.slice(0, 8).toUpperCase()}
+                        </Typography>
+                      </>
+                    ),
+                  },
+                  {
                     label: 'Phòng / Cơ sở',
                     render: (c) => (
                       <>
@@ -265,10 +300,9 @@ function LiveContractsPage() {
                     ),
                   },
                   {
-                    label: 'Loại / Trạng thái',
+                    label: 'Trạng thái',
                     render: (c) => (
                       <Stack spacing={0.5} sx={{ alignItems: 'flex-start' }}>
-                        <Typography variant="caption">{text(c.kind)}</Typography>
                         <StatusChip label={text(c.status)} />
                       </Stack>
                     ),
@@ -301,59 +335,46 @@ function LiveContractsPage() {
               {list.data.totalCount} hợp đồng trong phạm vi truy cập
             </Typography>
             <Pagination
-              count={Math.max(1, Math.ceil(list.data.totalCount / 20))}
+              count={Math.max(1, Math.ceil(list.data.totalCount / (list.data.pageSize || 10)))}
               page={page}
               disabled={list.isFetching}
               onChange={(_, p) => setPage(p)}
             />
           </Stack>
         )}
-        <Stack direction={{ xs: 'column', sm: 'row' }} spacing={1}>
-          <TextField
-            label="Mở bằng UUID hợp đồng"
-            value={lookup}
-            onChange={(e) => setLookup(e.target.value.trim())}
-            size="small"
-            sx={{ maxWidth: { sm: 360 }, minWidth: 0 }}
-          />
-          <Button
-            onClick={() => {
-              try {
-                guid(lookup);
-                setLookupError('');
-                setSelected(lookup);
-                setMainDraft(false);
-                setSelectedLocation('');
-              } catch (e) {
-                setLookupError((e as Error).message);
-              }
-            }}
-          >
-            Mở hợp đồng
-          </Button>
-        </Stack>
+        <Accordion variant="outlined" disableGutters>
+          <AccordionSummary>
+            <Typography>Mở theo mã hợp đồng</Typography>
+          </AccordionSummary>
+          <AccordionDetails>
+            <Stack direction={{ xs: 'column', sm: 'row' }} spacing={1}>
+              <TextField
+                label="Mở bằng UUID hợp đồng"
+                value={lookup}
+                onChange={(e) => setLookup(e.target.value.trim())}
+                size="small"
+                sx={{ maxWidth: { sm: 360 }, minWidth: 0 }}
+              />
+              <Button
+                onClick={() => {
+                  try {
+                    guid(lookup);
+                    setLookupError('');
+                    setSelected(lookup);
+                    setMainDraft(false);
+                    setSelectedLocation('');
+                  } catch (e) {
+                    setLookupError((e as Error).message);
+                  }
+                }}
+              >
+                Mở hợp đồng
+              </Button>
+            </Stack>
+          </AccordionDetails>
+        </Accordion>
         {!!lookupError && <Alert severity="error">{lookupError}</Alert>}
       </Stack>
-      <Dialog
-        open={settings}
-        onClose={() => setSettings(false)}
-        maxWidth="md"
-        fullWidth
-        aria-labelledby="contract-settings-title"
-      >
-        <DialogTitle id="contract-settings-title">Cấu hình mẫu và quy trình hợp đồng</DialogTitle>
-        <DialogContent>
-          {settings && (
-            <Stack spacing={2}>
-              <MainDraftSettingsPanel api={api} />
-              <ContractConfigurationPanel api={api} />
-            </Stack>
-          )}
-        </DialogContent>
-        <DialogActions>
-          <Button onClick={() => setSettings(false)}>Đóng cấu hình</Button>
-        </DialogActions>
-      </Dialog>
       <Drawer
         anchor="right"
         open={!!selected}
@@ -361,32 +382,40 @@ function LiveContractsPage() {
           setSelected('');
           setMainDraft(false);
         }}
-        slotProps={{ paper: { sx: { width: { xs: '100%', md: 760 }, maxWidth: '100%' } } }}
+        slotProps={{
+          paper: {
+            sx: {
+              width: { xs: '100%', md: 760 },
+              maxWidth: '100%',
+              display: 'flex',
+              flexDirection: 'column',
+              overflow: 'hidden',
+            },
+          },
+        }}
       >
-        <Box sx={{ p: { xs: 1.5, sm: 2 }, minWidth: 0, overflowWrap: 'anywhere' }}>
-          <Stack direction="row" sx={{ justifyContent: 'space-between', mb: 2 }}>
-            <Typography component="h2" variant="h5">
-              Chi tiết hợp đồng
-            </Typography>
-            <Button
-              onClick={() => {
-                setSelected('');
-                setMainDraft(false);
-              }}
-            >
-              Đóng
-            </Button>
-          </Stack>
+        <Box
+          sx={{
+            display: 'flex',
+            flex: 1,
+            minHeight: 0,
+            minWidth: 0,
+            overflow: 'hidden',
+            overflowWrap: 'anywhere',
+          }}
+        >
           {selected && mainDraft ? (
-            <MainDraftDetailPanel
-              key={selected}
-              id={selected}
-              onChanged={() => void list.refetch()}
-              onReleased={() => {
-                setMainDraft(false);
-                void list.refetch();
-              }}
-            />
+            <Box sx={{ p: { xs: 1.5, sm: 2 }, overflowY: 'auto', flex: 1 }}>
+              <MainDraftDetailPanel
+                key={selected}
+                id={selected}
+                onChanged={() => void list.refetch()}
+                onReleased={() => {
+                  setMainDraft(false);
+                  void list.refetch();
+                }}
+              />
+            </Box>
           ) : (
             selected && (
               <ContractDetailPanel
@@ -395,6 +424,10 @@ function LiveContractsPage() {
                 id={selected}
                 actorId={actorId}
                 locationId={selectedLocation}
+                onClose={() => {
+                  setSelected('');
+                  setMainDraft(false);
+                }}
                 onChanged={(next) => {
                   void list.refetch();
                   if (next) {

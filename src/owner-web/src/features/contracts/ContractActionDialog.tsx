@@ -1,3 +1,4 @@
+import { TextField } from '../../components/common/ValidatedForm';
 import { useRef, useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import {
@@ -11,7 +12,6 @@ import {
   DialogTitle,
   MenuItem,
   Stack,
-  TextField,
   Typography,
 } from '@mui/material';
 import {
@@ -124,7 +124,7 @@ export function ContractActionDialog({
           <Typography variant="caption" sx={{ overflowWrap: 'anywhere' }}>
             Hồ sơ phòng {contract.roomNumber || 'đang xem'}
           </Typography>
-          <Alert severity="warning">{action.warning}</Alert>
+          {!!action.warning && <Alert severity="warning">{action.warning}</Alert>}
           {action.fields.map((field) =>
             field.type === 'certificate' ? (
               <TextField
@@ -230,9 +230,7 @@ export function ContractActionDialog({
             !certs.isFetching &&
             !certs.error &&
             !certs.data?.some(canUseCertificate) && (
-              <Alert severity="info">
-                Chưa có chứng thư dùng được. Đóng hộp thoại và khai báo chứng thư MySign của bạn.
-              </Alert>
+              <Alert severity="info">Chưa có chứng thư dùng được cho yêu cầu ký này.</Alert>
             )}
           {certs.error && (
             <Alert severity="error">

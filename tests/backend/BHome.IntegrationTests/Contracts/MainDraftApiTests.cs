@@ -59,10 +59,11 @@ public sealed partial class MainDraftApiTests(ContractFixture fixture) : IClassF
         db.AddRange(location, room, resident, new StaffLocationAssignment(location.Id, staff.Id, owner.Id, Today.AddDays(-5), Today.AddDays(500)));
         if (prices) foreach (var (code, category, rate) in new[] { ("RENT", ChargeCategory.Rent, 3100000m), ("ELECTRICITY", ChargeCategory.Electricity, 3500m), ("WATER", ChargeCategory.Water, 18000m) }) db.Add(new BillingPolicy { LocationId = location.Id, Category = category, ChargeCode = code, Name = code, Rate = rate, Method = category == ChargeCategory.Rent ? ChargingMethod.FixedPerRoomPerMonth : ChargingMethod.Metered, EffectiveFrom = Today.AddDays(-1) });
         await db.SaveChangesAsync();
+        await BHome.IntegrationTests.Fixtures.MainDraftTestSettings.ResetOwnerPolicyAsync(db, owner.Id);
         if (settings)
         {
-            var config = new MainContractSettingsInput(owner.Id, Today.AddDays(-1), null, 6200000, "Chuyển khoản theo cấu hình kiểm thử", "Điều khoản kiểm thử tổng hợp", new("OWNER KIỂM THỬ", new(1980, 1, 1), "000000000456", new(2020, 1, 1), "Nơi cấp kiểm thử", "Địa chỉ Owner kiểm thử", "0900000000"), 0);
-            var response = await owner.Client.PutAsJsonAsync($"{Root}/settings/{location.Id}", config); await Success(response);
+            var config = new MainContractSettingsInput(owner.Id, Today.AddDays(-1), null, "Chuyển khoản theo cấu hình kiểm thử", "Điều khoản kiểm thử tổng hợp", new("OWNER KIỂM THỬ", new(1980, 1, 1), "000000000456", new(2020, 1, 1), "Nơi cấp kiểm thử", "Địa chỉ Owner kiểm thử", "0900000000"), 0);
+            var response = await owner.Client.PutAsJsonAsync($"{Root}/settings", config); await Success(response);
         }
         return new(owner.Client, staff.Client, outside.Client, owner.Id, room.Id, location.Id, resident.Id);
     }
@@ -83,7 +84,7 @@ public sealed partial class MainDraftApiTests(ContractFixture fixture) : IClassF
         var key = Guid.NewGuid(); var draft = await Save(w, key: key); var replay = await Save(w, key: key);
         Assert.Equal(draft.Id, replay.Id); Assert.Equal("Draft", draft.Status);
         Assert.Equal(3100000, draft.Preparation.Charges.Single(p => p.ChargeCode == "RENT").Rate);
-        Assert.Equal(6200000, draft.Preparation.SecurityDeposit); Assert.Equal(new DateOnly(2021, 6, 15), draft.Preparation.Residents.Single().DateOfIssue);
+        Assert.Equal(draft.Preparation.Charges.Single(p => p.ChargeCode == "RENT").Rate, draft.Preparation.SecurityDeposit); Assert.Equal(new DateOnly(2021, 6, 15), draft.Preparation.Residents.Single().DateOfIssue);
         Assert.Equal("********0123", draft.Preparation.Residents.Single().MaskedCitizenNumber);
         var contract = await db.Set<Contract>().AsNoTracking().SingleAsync(c => c.Id == draft.Id);
         Assert.Null(contract.TenantUserId); Assert.Equal(ContractStatus.Draft, contract.Status); Assert.Null(contract.ActivatedAt); Assert.Equal(0, contract.AppliedHoldingDeposit);
@@ -225,10 +226,10 @@ public sealed partial class MainDraftApiTests(ContractFixture fixture) : IClassF
     {
         var w = await Setup(); var draft = await Save(w);
         await Success(await w.Owner.PostAsync($"{Root}/{draft.Id}/documents", null));
-        var current = (await w.Owner.GetFromJsonAsync<MainContractSettings>($"{Root}/settings/{w.Location}"))!;
-        await Success(await w.Owner.PutAsJsonAsync($"{Root}/settings/{w.Location}", new MainContractSettingsInput(
-            w.OwnerId, current.EffectiveFrom, current.EffectiveTo, current.SecurityDeposit + 100000,
-            current.PaymentTerms, current.AdditionalTerms, current.Owner, current.Version)));
+        var current = (await w.Owner.GetFromJsonAsync<MainContractSettings>($"{Root}/settings"))!;
+        await Success(await w.Owner.PutAsJsonAsync($"{Root}/settings", new MainContractSettingsInput(
+            w.OwnerId, current.EffectiveFrom, current.EffectiveTo,
+            current.PaymentTerms, current.AdditionalTerms + " revised", current.Owner, current.Version)));
         foreach (var action in new[] { "documents", "signing-review" })
         {
             var blocked = await w.Owner.PostAsync($"{Root}/{draft.Id}/{action}", null);
@@ -239,7 +240,7 @@ public sealed partial class MainDraftApiTests(ContractFixture fixture) : IClassF
         Assert.Equal(draft.Version, unchanged.Version);
         Assert.Equal(draft.Preparation.SecurityDeposit, unchanged.Preparation.SecurityDeposit);
         var saved = await Save(w, Input(w) with { ExpectedVersion = draft.Version }, id: draft.Id);
-        Assert.Equal(current.SecurityDeposit + 100000, saved.Preparation.SecurityDeposit);
+        Assert.Equal(draft.Preparation.SecurityDeposit, saved.Preparation.SecurityDeposit);
         await Success(await w.Owner.PostAsync($"{Root}/{draft.Id}/documents", null));
     }
     [Theory]
@@ -305,7 +306,7 @@ public sealed partial class MainDraftApiTests(ContractFixture fixture) : IClassF
             duplicate.Headers.Add("Idempotency-Key", Guid.NewGuid().ToString()); Assert.Equal(HttpStatusCode.Conflict, (await w.Staff.SendAsync(duplicate)).StatusCode);
         }
         Assert.Equal(HttpStatusCode.NotFound, (await w.Outside.GetAsync($"{Root}/{draft.Id}")).StatusCode);
-        Assert.Equal(HttpStatusCode.Forbidden, (await w.Staff.GetAsync($"{Root}/settings/{w.Location}")).StatusCode);
+        Assert.Equal(HttpStatusCode.Forbidden, (await w.Staff.GetAsync($"{Root}/settings")).StatusCode);
         using (var invalid = new HttpRequestMessage(HttpMethod.Post, Root) { Content = JsonContent.Create(Input(w) with { EndDate = Today }) })
         {
             invalid.Headers.Add("Idempotency-Key", Guid.NewGuid().ToString()); Assert.Equal(HttpStatusCode.BadRequest, (await w.Staff.SendAsync(invalid)).StatusCode);
@@ -321,10 +322,10 @@ public sealed partial class MainDraftApiTests(ContractFixture fixture) : IClassF
     public async Task EffectiveDateUsesRevisedSettingsAndFutureRentalRateWithoutRevivingOldSettings()
     {
         var w = await Setup();
-        var current = (await w.Owner.GetFromJsonAsync<MainContractSettings>($"{Root}/settings/{w.Location}"))!;
+        var current = (await w.Owner.GetFromJsonAsync<MainContractSettings>($"{Root}/settings"))!;
         var end = Today.AddDays(5);
-        await Success(await w.Owner.PutAsJsonAsync($"{Root}/settings/{w.Location}", new MainContractSettingsInput(w.OwnerId, current.EffectiveFrom, end, current.SecurityDeposit, current.PaymentTerms, current.AdditionalTerms, current.Owner, 1)));
-        await Success(await w.Owner.PutAsJsonAsync($"{Root}/settings/{w.Location}", new MainContractSettingsInput(w.OwnerId, end.AddDays(1), null, 7000000, current.PaymentTerms, current.AdditionalTerms, current.Owner, 2)));
+        await Success(await w.Owner.PutAsJsonAsync($"{Root}/settings", new MainContractSettingsInput(w.OwnerId, current.EffectiveFrom, end, current.PaymentTerms, current.AdditionalTerms, current.Owner, 1)));
+        await Success(await w.Owner.PutAsJsonAsync($"{Root}/settings", new MainContractSettingsInput(w.OwnerId, end.AddDays(1), null, current.PaymentTerms, current.AdditionalTerms, current.Owner, 2)));
         await using (var scope = fixture.Factory.Services.CreateAsyncScope())
         {
             var db = scope.ServiceProvider.GetRequiredService<BHomePersistenceContext>();
@@ -333,7 +334,7 @@ public sealed partial class MainDraftApiTests(ContractFixture fixture) : IClassF
             await db.SaveChangesAsync();
         }
         var result = await w.Staff.GetFromJsonAsync<MainDraftPreparation>($"{Root}/preparation?roomId={w.Room}&representativeResidentId={w.Resident}&residentIds={w.Resident}&effectiveOn={end.AddDays(2):yyyy-MM-dd}");
-        Assert.Empty(result!.Blockers); Assert.Equal(7000000, result.SecurityDeposit); Assert.Equal(3400000, result.Charges.Single(p => p.ChargeCode == "RENT").Rate);
+        Assert.Empty(result!.Blockers); Assert.Equal(3400000, result.SecurityDeposit); Assert.Equal(3400000, result.Charges.Single(p => p.ChargeCode == "RENT").Rate);
     }
     [Fact]
     public async Task RejectsUnavailableRoomAndConcurrentCreationReplaysOneDraft()

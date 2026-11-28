@@ -11,6 +11,17 @@ public sealed class SettlementReceivablesController(SettlementReceivablesService
 {
     private Guid Key() => Guid.TryParse(Request.Headers["Idempotency-Key"], out var key) ? key : Guid.Empty;
     [HttpGet] public Task<SettlementReceivablesView> Get(Guid id, CancellationToken token) => service.GetAsync(id, token);
+    [HttpGet("proposal")]
+    public Task<MoveOutChargeProposalPreview> Proposal(Guid id, CancellationToken token) => service.GetProposalAsync(id, token);
+    [HttpPost("proposal"), Authorize(Roles = Roles.Owner)]
+    public Task<MoveOutChargeProposal> SendProposal(Guid id, MoveOutChargeProposalInput input, CancellationToken token) =>
+        service.SendProposalAsync(id, input, Key(), token);
+    [HttpPost("proposal/tenant-feedback"), Authorize(Roles = Roles.Tenant)]
+    public Task<MoveOutChargeProposalFeedback> RespondToProposal(Guid id, MoveOutChargeProposalFeedbackInput input, CancellationToken token) =>
+        service.RespondToProposalAsync(id, input, Key(), token);
+    [HttpPost("proposal/reconcile"), Authorize(Roles = Roles.Tenant)]
+    public Task<MoveOutChargeProposalFeedback> ReconcileProposal(Guid id, MoveOutChargeProposalReconcileInput input, CancellationToken token) =>
+        service.ReconcileAcceptedProposalAsync(id, input, token);
     [HttpGet("charge-review"), Authorize(Roles = Roles.Owner)]
     public Task<SettlementChargeReviewPreview> Review(Guid id, CancellationToken token) => service.PreviewChargeReviewAsync(id, token);
     [HttpPost("charge-review"), Authorize(Roles = Roles.Owner)]
@@ -27,6 +38,9 @@ public sealed class SettlementReceivablesController(SettlementReceivablesService
     public Task<SettlementReceivable> Damage(Guid id, DamageChargeInput input, CancellationToken token) => service.ApproveDamageAsync(id, input, Key(), token);
     [HttpPost("deposit-offsets"), Authorize(Roles = Roles.Owner)]
     public Task<DepositOffsetApproval> Offset(Guid id, DepositOffsetInput input, CancellationToken token) => service.ApproveOffsetAsync(id, input, Key(), token);
+    [HttpPost("final-close"), Authorize(Roles = Roles.Owner)]
+    public Task<SettlementFinancialClose> FinalClose(Guid id, SettlementFinancialCloseInput input, CancellationToken token) =>
+        service.FinalCloseAsync(id, input, Key(), token);
     [HttpPost("{chargeId:guid}/bank-allocations"), Authorize(Roles = Roles.Owner)]
     public Task<SettlementBankAllocationResult> Allocate(Guid id, Guid chargeId, SettlementBankAllocationInput input, CancellationToken token) => service.AllocateBankAsync(id, chargeId, input, Key(), token);
     [HttpGet("{chargeId:guid}/transfer-instructions")]

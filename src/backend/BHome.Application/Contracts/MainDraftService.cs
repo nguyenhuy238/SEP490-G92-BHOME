@@ -14,7 +14,8 @@ public sealed class MainDraftService(IContractRepository repository, IMainDraftD
     ResourceAccess access, PropertyService prices, IMainDraftRenderer renderer, IContractFileStore files,
     IObjectStorage storage, TimeProvider clock, IMainDraftPreviewRenderer preview, IContractWorkflowMode? workflowMode = null,
     IOperatingPolicyWorkflow? operatingPolicies = null, BHome.Application.PaymentsDebt.SePay.SePayOptions? paymentOptions = null,
-    IHoldingTestScope? paymentScope = null)
+    IHoldingTestScope? paymentScope = null, BHome.Application.PaymentsDebt.IPaymentRepository? paymentAccounts = null,
+    BHome.Application.PaymentsDebt.SePay.ISePayOwnerConnections? paymentConnections = null)
 {
     private Guid Actor => user.UserId is { } id && id != Guid.Empty ? id : throw new ContractException(401, "authentication_required");
     private void Role() { _ = Actor; if (!user.IsInRole(Roles.Staff) && !user.IsInRole(Roles.Owner)) throw new ContractException(403, "contract_role_forbidden"); }
@@ -48,12 +49,12 @@ public sealed class MainDraftService(IContractRepository repository, IMainDraftD
         if (c.DraftMetadata == "{}") throw ContractException.Conflict("not_onboarding_draft");
         return c;
     }
-    public async Task<MainContractSettings?> OwnerSettingsAsync(Guid locationId, CancellationToken t)
+    public async Task<MainContractSettings?> OwnerSettingsAsync(CancellationToken t)
     {
         if (!user.IsInRole(Roles.Owner)) throw new ContractException(403, "contract_role_forbidden");
-        _ = Actor; return await data.OwnerSettingsAsync(locationId, t);
+        return await data.OwnerWideSettingsAsync(Actor, t);
     }
-    public Task SetSettingsAsync(Guid locationId, MainContractSettingsInput input, CancellationToken t)
+    public Task SetSettingsAsync(MainContractSettingsInput input, CancellationToken t)
     {
         if (!user.IsInRole(Roles.Owner)) throw new ContractException(403, "contract_role_forbidden");
         if (input.OwnerSignerId != Actor) throw new ContractException(403, "owner_profile_must_be_own");
@@ -63,11 +64,17 @@ public sealed class MainDraftService(IContractRepository repository, IMainDraftD
            p.DateOfBirth == default || p.DateOfIssue == default || p.DateOfBirth > input.EffectiveFrom || p.DateOfIssue > input.EffectiveFrom ||
            string.IsNullOrWhiteSpace(p.Address) || p.Address.Length > 1000 || string.IsNullOrWhiteSpace(p.PlaceOfIssue) || p.PlaceOfIssue.Length > 200 ||
            ContactPhone.Normalize(p.Phone) is null || input.EffectiveFrom == default || input.EffectiveTo < input.EffectiveFrom ||
-           input.SecurityDeposit < 0 || input.SecurityDeposit >= 1_000_000_000_000_000_000m || decimal.Truncate(input.SecurityDeposit) != input.SecurityDeposit ||
            string.IsNullOrWhiteSpace(input.PaymentTerms) || input.PaymentTerms.Length > 1000 || input.AdditionalTerms is null || input.AdditionalTerms.Length > 4000)
             throw ContractException.Invalid("invalid_contract_settings");
-        return data.SetSettingsAsync(locationId, input with { Owner = p with { Phone = ContactPhone.Normalize(p.Phone)! } }, Actor, t);
+        return data.SetOwnerSettingsAsync(Actor, input with { Owner = p with { Phone = ContactPhone.Normalize(p.Phone)! } }, Actor, t);
     }
+    // Compatibility for the former Location-scoped route. The persisted configuration is Owner-wide.
+    public async Task<MainContractSettings?> OwnerSettingsAsync(Guid locationId, CancellationToken t)
+    {
+        if (!user.IsInRole(Roles.Owner)) throw new ContractException(403, "contract_role_forbidden");
+        return await data.OwnerWideSettingsAsync(Actor, t);
+    }
+    public Task SetSettingsAsync(Guid locationId, MainContractSettingsInput input, CancellationToken t) => SetSettingsAsync(input, t);
     public async Task<MainDraftPreparation> PrepareAsync(Guid roomId, Guid representative, Guid[] ids, DateOnly on, CancellationToken t)
     {
         var room = await Room(roomId, t);
@@ -75,7 +82,7 @@ public sealed class MainDraftService(IContractRepository repository, IMainDraftD
         if (ids.Length > room.Capacity) throw ContractException.Conflict("room_capacity_exceeded");
         var residents = await repository.ResidentsAsync(roomId, ids, t);
         if (residents.Count != ids.Length || residents.Any(r => !BHome.Application.Ocr.ContractResidentEligibility.Ready(r, representative))) throw ContractException.Invalid("verified_residents_required");
-        var settings = await data.SettingsAsync(room.LocationId, on, t);
+        var settings = await data.SettingsAsync(residents.Single(r => r.Id == representative).OwnerUserId, on, t);
         var pricing = await prices.ResolvePricesAsync(roomId, on, t);
         var blockers = new List<string>();
         if (residents.Single(r => r.Id == representative).ResidentType != ResidentType.Representative || residents.Any(r => r.Id != representative && r.ResidentType == ResidentType.Representative)) blockers.Add("individual_representatives_require_separate_contracts");
@@ -97,12 +104,13 @@ public sealed class MainDraftService(IContractRepository repository, IMainDraftD
                 member?.Phone ?? await data.PhoneAsync(roomId, r.Id, t), r.Id == representative ? await data.EmailAsync(roomId, r.Id, t) : null, identity.DateOfBirth, member?.Relationship));
         }
         return new(roomId, room.LocationId, room.Location.Name, room.RoomNumber, room.Location.Address, on, summaries, pricing.Charges,
-            settings?.SecurityDeposit, settings?.PaymentTerms, settings?.Owner.FullName, blockers.Distinct().ToArray());
+            pricing.Charges.SingleOrDefault(p => p.ChargeCode == "RENT")?.Rate,
+            settings?.PaymentTerms, settings?.Owner.FullName, blockers.Distinct().ToArray());
     }
     private static void Validate(MainDraftInput x)
     {
         if (x.StartDate == default || x.EndDate <= x.StartDate || x.Notes is null || x.Notes.Length > 4000 ||
-           string.IsNullOrWhiteSpace(x.TenantPhone) || x.TenantPhone.Length > 30 || x.TenantPlaceOfIssue is null || x.TenantPlaceOfIssue.Length > 200 ||
+           x.TenantPhone?.Length > 30 || x.TenantPlaceOfIssue is null || x.TenantPlaceOfIssue.Length > 200 ||
            x.TenantEmail is { } email && (string.IsNullOrWhiteSpace(email) || email.Length > 256 || !new System.ComponentModel.DataAnnotations.EmailAddressAttribute().IsValid(email)))
             throw ContractException.Invalid("invalid_main_draft_input");
     }
@@ -112,6 +120,7 @@ public sealed class MainDraftService(IContractRepository repository, IMainDraftD
         await Room(x.RoomId, t);
         var existingPhone = await data.PhoneAsync(x.RoomId, x.RepresentativeResidentId, t);
         if (!string.IsNullOrWhiteSpace(existingPhone)) x = x with { TenantPhone = existingPhone };
+        else if (!user.IsInRole(Roles.Owner) && string.IsNullOrWhiteSpace(x.TenantPhone)) x = x with { TenantPhone = "" };
         else if (ContactPhone.Normalize(x.TenantPhone) is { } phone) x = x with { TenantPhone = phone };
         else throw ContractException.Invalid("invalid_phone_number");
         // Collect delivery email only when sending the signing invitation, never while saving a draft.
@@ -119,7 +128,9 @@ public sealed class MainDraftService(IContractRepository repository, IMainDraftD
         Validate(x);
         return await repository.InTransactionAsync(x.RoomId, async () =>
         {
-            var room = await Room(x.RoomId, t); await data.LockConfigurationAsync(room.LocationId, t);
+            var room = await Room(x.RoomId, t);
+            var representativeRecord = (await repository.ResidentsAsync(x.RoomId, [x.RepresentativeResidentId], t)).Single();
+            await data.LockConfigurationAsync(representativeRecord.OwnerUserId, t);
             var fingerprint = Hash(new { id, input = x });
             var operation = await repository.OperationAsync(Actor, key, "main-draft", t);
             if (operation is not null)
@@ -129,7 +140,7 @@ public sealed class MainDraftService(IContractRepository repository, IMainDraftD
             }
             var preparation = await PrepareAsync(x.RoomId, x.RepresentativeResidentId, x.ResidentIds, x.StartDate, t);
             if (preparation.Blockers.Count > 0) throw ContractException.Conflict(preparation.Blockers[0]);
-            var settings = (await data.SettingsAsync(room.LocationId, x.StartDate, t))!;
+            var settings = (await data.SettingsAsync(representativeRecord.OwnerUserId, x.StartDate, t))!;
             if (!await repository.ActiveUserInRoleAsync(settings.OwnerSignerId, Roles.Owner, t)) throw ContractException.Conflict("owner_contract_settings_required");
             Contract c;
             if (id is { } existing)
@@ -141,6 +152,7 @@ public sealed class MainDraftService(IContractRepository repository, IMainDraftD
             }
             else
             {
+                _ = paymentScope; // Retain constructor compatibility; payment selection does not grant simulated signing authority.
                 c = new Contract
                 {
                     RoomId = x.RoomId,
@@ -149,20 +161,21 @@ public sealed class MainDraftService(IContractRepository repository, IMainDraftD
                     Status = ContractStatus.Draft,
                     InitialPaymentRequired = true,
                     IsDevelopmentDemo = workflowMode?.SimulatedSigningEnabled == true,
-                    PaymentMode = paymentOptions?.Enabled == true && paymentOptions.ReceivingAccounts.Any(a => a.LocationId == room.LocationId) &&
-                        (paymentOptions.Mode == "Live" || paymentScope?.Allows(room.LocationId) == true || paymentScope?.AllowsExternalDatabase == true) ? paymentOptions.Mode : null
+                    PaymentMode = await ContractPaymentModes.ConfiguredAsync(paymentOptions, paymentAccounts, room.LocationId, settings.OwnerSignerId, t, paymentConnections)
                 };
                 var representative = (await repository.ResidentsAsync(x.RoomId, [x.RepresentativeResidentId], t)).Single();
                 c.TenantUserId = representative.TenantUserId;
                 c.Residents = x.ResidentIds.Select(r => new ContractResident { ContractId = c.Id, ResidentId = r, Role = r == x.RepresentativeResidentId ? ResidentType.Representative : ResidentType.CoOccupant, ResidenceFrom = x.StartDate }).ToList();
                 repository.Add(c);
             }
+            if ((await repository.RoomsAwaitingMainOwnerSignatureAsync([x.RoomId], c.Id, t)).Count != 0)
+                throw ContractException.Conflict("room_waiting_for_owner_signature");
             if (await data.DuplicateAsync(x.RoomId, c.Id, x.ResidentIds, x.StartDate, x.EndDate, t) || await repository.ConflictsAsync(x.RoomId, c.Id, x.StartDate, x.EndDate, x.ResidentIds, t)) throw ContractException.Conflict("room_contract_conflict");
             c.StartDate = x.StartDate; c.EndDate = x.EndDate; c.OwnerSignerId = settings.OwnerSignerId;
             foreach (var resident in c.Residents) resident.ResidenceFrom = x.StartDate;
             c.MonthlyRent = preparation.Charges.Single(p => p.ChargeCode == "RENT").Rate;
             if (c.MonthlyRent <= 0 || decimal.Truncate(c.MonthlyRent) != c.MonthlyRent) throw ContractException.Invalid("invalid_vnd_amount");
-            c.RequiredDeposit = settings.SecurityDeposit; c.Terms = settings.AdditionalTerms + "\n" + x.Notes.Trim();
+            c.RequiredDeposit = c.MonthlyRent; c.Terms = settings.AdditionalTerms + "\n" + x.Notes.Trim();
             await ContractChargeSnapshot.RejectUtilityProfileAsync(repository, c, t);
             ContractChargeSnapshot.Store(c, ContractChargeSnapshot.FromPolicies(c, preparation.Charges), "MainDraft", clock.GetUtcNow());
             c.OperatingPolicySnapshot = "";
@@ -188,7 +201,7 @@ public sealed class MainDraftService(IContractRepository repository, IMainDraftD
         {
             var c = await Load(id, t);
             if (c.Status != ContractStatus.Draft || c.Signatures.Count > 0) throw ContractException.Conflict("draft_version_or_status_changed");
-            var state = data.Unprotect(c); var settings = await data.SettingsAsync(c.Room.LocationId, c.StartDate, t) ?? throw ContractException.Conflict("owner_contract_settings_required");
+            var state = data.Unprotect(c); var settings = await data.SettingsAsync(c.OwnerSignerId, c.StartDate, t) ?? throw ContractException.Conflict("owner_contract_settings_required");
             if (c.SnapshotHash != Snapshot(c, state)) throw ContractException.Conflict("signed_terms_changed");
             if (state.TemplateHash != renderer.TemplateHash) throw ContractException.Conflict("draft_template_changed_save_again");
             if (Hash(settings) != state.SettingsHash) throw ContractException.Conflict("draft_configuration_changed_save_again");
@@ -196,8 +209,8 @@ public sealed class MainDraftService(IContractRepository repository, IMainDraftD
             if (prep.Blockers.Count > 0) throw ContractException.Conflict(prep.Blockers[0]);
             if (!prep.Charges.Select(p => (p.Id, p.Version, p.Rate)).SequenceEqual(state.Charges.Select(p => (p.Id, p.Version, p.Rate)))) throw ContractException.Conflict("draft_configuration_changed_save_again");
             var existing = await data.FilesAsync(id, c.SnapshotHash, t);
-            var docx = existing.FirstOrDefault(f => f.Kind == ContractFileKind.DraftDocx);
-            var pdf = existing.FirstOrDefault(f => f.Kind == ContractFileKind.DraftPdf);
+            var docx = existing.FirstOrDefault(f => f.Kind == ContractFileKind.DraftDocx && f.TemplateVersion == renderer.DocumentVersion);
+            var pdf = existing.FirstOrDefault(f => f.Kind == ContractFileKind.DraftPdf && f.TemplateVersion == renderer.DocumentVersion);
             // Existing database metadata is not proof that storage accepted a prior upload.
             // Only this explicit Draft-generation operation may replace an unavailable file;
             // retain every old record and never change an approved/signed document in place.
@@ -251,7 +264,7 @@ public sealed class MainDraftService(IContractRepository repository, IMainDraftD
             Kind = kind,
             SnapshotHash = c.SnapshotHash,
             TemplateId = "main-tenancy-docx-v1",
-            TemplateVersion = 1,
+            TemplateVersion = renderer.DocumentVersion,
             ContentType = contentType,
             Length = bytes.Length,
             FileHash = Convert.ToHexString(SHA256.HashData(bytes)),
@@ -304,12 +317,11 @@ public sealed class MainDraftService(IContractRepository repository, IMainDraftD
 
     private async Task<(MainDraftState State, MainContractSettings Settings, MainDraftPreparation Preparation)> ReviewInputs(Contract c, CancellationToken t)
     {
-        if (!renderer.SigningReviewAvailable) throw new ContractException(503, "main_draft_signing_template_not_approved");
         if (c.Status != ContractStatus.Draft || c.Signatures.Count > 0) throw ContractException.Conflict("draft_version_or_status_changed");
-        await data.LockConfigurationAsync(c.Room.LocationId, t);
+        await data.LockConfigurationAsync(c.OwnerSignerId, t);
         var state = data.Unprotect(c);
         if (c.SnapshotHash != Snapshot(c, state)) throw ContractException.Conflict("signed_terms_changed");
-        var settings = await data.SettingsAsync(c.Room.LocationId, c.StartDate, t) ?? throw ContractException.Conflict("owner_contract_settings_required");
+        var settings = await data.SettingsAsync(c.OwnerSignerId, c.StartDate, t) ?? throw ContractException.Conflict("owner_contract_settings_required");
         if (state.TemplateHash != renderer.TemplateHash || Hash(settings) != state.SettingsHash) throw ContractException.Conflict("draft_configuration_changed_save_again");
         var prep = await PrepareAsync(c.RoomId, c.RepresentativeResidentId, c.Residents.Select(r => r.ResidentId).ToArray(), c.StartDate, t);
         if (prep.Blockers.Count > 0) throw ContractException.Conflict(prep.Blockers[0]);
@@ -323,7 +335,9 @@ public sealed class MainDraftService(IContractRepository repository, IMainDraftD
         return await repository.InTransactionAsync(before.RoomId, async () =>
         {
             var c = await Load(id, t); var (state, settings, prep) = await ReviewInputs(c, t);
-            var existing = (await data.FilesAsync(id, c.SnapshotHash, t)).FirstOrDefault(f => f.Kind == ContractFileKind.SigningReview);
+            var developmentOnly = !renderer.IsProductionSigningTemplate(c);
+            var existing = (await data.FilesAsync(id, c.SnapshotHash, t)).FirstOrDefault(f =>
+                f.Kind == ContractFileKind.SigningReview && f.DevelopmentOnly == developmentOnly && f.TemplateVersion == renderer.DocumentVersion);
             if (existing is not null)
             {
                 var stored = await ReusableDraftFile(existing, t);
@@ -332,42 +346,50 @@ public sealed class MainDraftService(IContractRepository repository, IMainDraftD
             var docx = await renderer.DocxAsync(new(c, state, settings, await data.IdentityAsync(c.RoomId, c.RepresentativeResidentId, t),
                 c.Room.Location.Name, c.Room.RoomNumber, c.Room.Location.Address, prep.Residents.Where(r => !r.Representative).Select(r => r.FullName).ToArray(), SigningReview: true), t);
             var file = await Store(c, await renderer.PdfAsync(docx, t), "application/pdf", ContractFileKind.SigningReview, "pdf", t);
-            file.DevelopmentOnly = true;
+            file.DevelopmentOnly = developmentOnly;
             repository.Audit(Actor, "MainDraftSigningReviewGenerated", id, clock.GetUtcNow()); return FileView(file);
         }, t);
     }
     public async Task<ContractId> ReleaseAsync(Guid id, MainDraftReleaseInput input, Guid key, CancellationToken t)
     {
-        if (!user.IsInRole(Roles.Owner)) throw new ContractException(403, "contract_role_forbidden");
+        Role();
         if (key == Guid.Empty || input.TenantUserId == Guid.Empty || input.ReviewedFileId == Guid.Empty || !input.HumanReviewed)
             throw ContractException.Invalid("main_draft_release_confirmation_required");
         var before = await Load(id, t);
         return await repository.InTransactionAsync(before.RoomId, async () =>
         {
-            var c = await Load(id, t); var fingerprint = Hash(new { id, input });
+            var c = await Load(id, t);
+            var fingerprint = input.EmailSigning
+                ? Hash(new { id, input })
+                : Hash(new { id, input = new { input.TenantUserId, input.ExpectedVersion, input.ReviewedFileId, input.HumanReviewed } });
             var prior = await repository.OperationAsync(Actor, key, "main-draft-release", t);
             if (prior is not null)
             {
                 if (prior.Fingerprint != fingerprint) throw ContractException.Conflict("idempotency_key_reused");
                 return new ContractId(c.Id);
             }
-            if (c.OwnerSignerId != Actor) throw new ContractException(403, "contract_signer_required");
+            var owner = user.IsInRole(Roles.Owner);
+            if (owner && c.OwnerSignerId != Actor) throw new ContractException(403, "contract_signer_required");
             if (c.IsDevelopmentDemo != (workflowMode?.SimulatedSigningEnabled == true)) throw ContractException.Conflict("signing_mode_mismatch");
             if (c.DraftVersion != input.ExpectedVersion) throw ContractException.Conflict("draft_version_or_status_changed");
             var (state, settings, _) = await ReviewInputs(c, t);
-            if (input.TenantUserId is { } tenant && !await repository.ActiveUserInRoleAsync(tenant, Roles.Tenant, t)) throw ContractException.Invalid("verified_tenant_account_required");
             var representative = (await repository.ResidentsAsync(c.RoomId, [c.RepresentativeResidentId], t)).Single();
-            // Account linkage is established by verified onboarding, never by the release form.
-            if (representative.TenantUserId != input.TenantUserId || c.TenantUserId is { } signer && signer != input.TenantUserId)
+            // Staff does not read Owner-only resident account details. Resolve the existing link on the server.
+            var tenantUserId = representative.TenantUserId;
+            if (((owner || input.TenantUserId.HasValue) && input.TenantUserId != tenantUserId) ||
+                c.TenantUserId is { } signer && signer != tenantUserId)
                 throw ContractException.Conflict("resident_account_already_linked");
+            if (tenantUserId is { } tenant && !await repository.ActiveUserInRoleAsync(tenant, Roles.Tenant, t)) throw ContractException.Invalid("verified_tenant_account_required");
+            if ((await repository.RoomsAwaitingMainOwnerSignatureAsync([c.RoomId], c.Id, t)).Count != 0)
+                throw ContractException.Conflict("room_waiting_for_owner_signature");
             if (await repository.ConflictsAsync(c.RoomId, c.Id, c.StartDate, c.EndDate, c.Residents.Select(r => r.ResidentId).ToArray(), t))
                 throw ContractException.Conflict("room_contract_conflict");
             var review = await data.FileAsync(id, input.ReviewedFileId, t) ?? throw ContractException.Missing();
-            if (review.Kind != ContractFileKind.SigningReview || review.SnapshotHash != c.SnapshotHash) throw ContractException.Conflict("draft_document_outdated");
+            if (review.Kind != ContractFileKind.SigningReview || review.SnapshotHash != c.SnapshotHash || review.TemplateVersion != renderer.DocumentVersion) throw ContractException.Conflict("draft_document_outdated");
             using var bytes = new MemoryStream(); await CopyFileAsync(id, review.Id, bytes, t);
             if (bytes.Length != review.Length || FileHash(bytes.ToArray()) != review.FileHash) throw ContractException.Conflict("contract_document_integrity_failed");
-            representative.TenantUserId = input.TenantUserId; c.TenantUserId = input.TenantUserId;
-            c.SigningMode = input.TenantUserId is null ? ContractSigningModes.Internal : "";
+            c.TenantUserId = tenantUserId;
+            c.SigningMode = input.EmailSigning || tenantUserId is null ? ContractSigningModes.Internal : "";
             c.Terms = string.Join("\n", new[] { settings.PaymentTerms, c.Terms }.Where(term => !string.IsNullOrWhiteSpace(term)));
             // The reviewed draft is the authoritative source. Legacy unsigned drafts
             // are upgraded from the reviewed encrypted state, never live prices.
@@ -382,7 +404,7 @@ public sealed class MainDraftService(IContractRepository repository, IMainDraftD
                 SnapshotHash = c.SnapshotHash,
                 TemplateId = review.TemplateId,
                 TemplateVersion = review.TemplateVersion,
-                DevelopmentOnly = true,
+                DevelopmentOnly = review.DevelopmentOnly,
                 FileHash = review.FileHash,
                 ContentType = review.ContentType,
                 Length = review.Length,

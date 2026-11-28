@@ -2,6 +2,7 @@ FROM mcr.microsoft.com/dotnet/sdk:8.0 AS build
 WORKDIR /source
 COPY global.json Directory.Build.targets ./
 COPY src/backend/ src/backend/
+COPY packages/client-core/src/errorMessages.json packages/client-core/src/errorMessages.json
 COPY src/digital-signing/ src/digital-signing/
 COPY docs/database/ docs/database/
 COPY docs/mau-hop-dong-thue-nha-tro-ngan-gon.docx docs/

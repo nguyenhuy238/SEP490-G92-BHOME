@@ -6,7 +6,7 @@ namespace BHome.Domain.TenantContracts;
 public enum ContractKind { Main, Renewal, Holding, Addendum }
 public enum ContractStatus { Draft, PendingSigning, PendingActivation, Active, Terminated, Superseded, Cancelled, Expired, Converted, Applied }
 public enum SignatureStatus { Prepared, Dispatching, Pending, Signed, Failed, ManualReview, Simulated }
-public enum MoveOutStatus { Requested, Approved, Inspected, PendingSettlement, Settled, Completed }
+public enum MoveOutStatus { Requested, Approved, Inspected, PendingSettlement, Settled, Completed, Rejected, AwaitingConsent }
 
 // Signed versions are never edited. A renewal is a new version of the same tenancy.
 public sealed class Contract : AuditableEntity
@@ -69,6 +69,14 @@ public sealed class ContractResident
 
 public sealed class ContractSignature : AuditableEntity
 {
+    // A handover keeps its OTP signing attempt in the versioned handover
+    // preparation, not in the already-signed tenancy's signature collection.
+    // Restore that stable attempt ID when invoking the existing OTP provider.
+    public static ContractSignature RestoreDetachedAttempt(Guid id)
+    {
+        if (id == Guid.Empty) throw new ArgumentException("Signature ID is required", nameof(id));
+        return new ContractSignature { Id = id };
+    }
     public Guid ContractId { get; set; }
     public Guid SignerUserId { get; set; }
     public Guid CertificateId { get; set; }

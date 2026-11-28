@@ -16,6 +16,10 @@ internal sealed class InvoiceRepository(BHomePersistenceContext db) : IInvoiceRe
     public Task<BillingSchedule?> ScheduleAsync(Guid locationId, CancellationToken t) => db.Set<BillingSchedule>().SingleOrDefaultAsync(s => s.LocationId == locationId, t);
     public Task<BillingSchedule?> ScheduleForPeriodAsync(Guid locationId, DateOnly period, CancellationToken t) =>
         BillingAutomationSchedules.ResolveCalendarAsync(db, locationId, period, t);
+    public async Task<IReadOnlyList<Guid>> TenantBillingLocationIdsAsync(Guid tenantId, CancellationToken t) =>
+        await db.Set<Contract>().AsNoTracking().Where(c => c.TenantUserId == tenantId && c.Status == ContractStatus.Active &&
+            (c.Kind == ContractKind.Main || c.Kind == ContractKind.Renewal) && c.ActivatedAt != null && c.Room.Location.IsActive)
+            .Select(c => c.Room.LocationId).Distinct().ToArrayAsync(t);
     public Task<Room?> RoomAsync(Guid roomId, CancellationToken t) => db.Set<Room>().Include(r => r.Location).SingleOrDefaultAsync(r => r.Id == roomId, t);
     public async Task<T> WithRoomLockAsync<T>(Guid roomId, Func<Task<T>> action, CancellationToken t)
     {
@@ -62,7 +66,8 @@ internal sealed class InvoiceRepository(BHomePersistenceContext db) : IInvoiceRe
     public async Task<IReadOnlyList<BillingOccupancy>> OccupanciesAsync(Guid roomId, DateOnly from, DateOnly to, CancellationToken t)
     {
         var contracts = await db.Set<Contract>().AsNoTracking().Include(c => c.Residents).Where(c => c.RoomId == roomId &&
-            (c.Status == ContractStatus.Active || c.Status == ContractStatus.Terminated || c.Status == ContractStatus.Superseded) &&
+            (c.Kind == ContractKind.Main || c.Kind == ContractKind.Renewal) &&
+            (c.Status == ContractStatus.Active || c.Status == ContractStatus.Terminated || c.Status == ContractStatus.Superseded || c.Status == ContractStatus.Expired) &&
             c.ActivatedAt != null && c.StartDate <= to && (c.ActualEndDate ?? c.EndDate) >= from).Take(501).ToArrayAsync(t);
         if (contracts.Length > 500) throw new InvoiceException(409, "billing_occupancy_review_required");
         var residentIds = contracts.SelectMany(c => c.Residents.Where(r => r.ResidenceFrom <= to && (r.ResidenceTo == null || r.ResidenceTo >= from)).Select(r => r.ResidentId)).Distinct().ToArray();
@@ -72,6 +77,7 @@ internal sealed class InvoiceRepository(BHomePersistenceContext db) : IInvoiceRe
         var validEmails = emails.Where(u => !string.IsNullOrWhiteSpace(u.Email) && new System.ComponentModel.DataAnnotations.EmailAddressAttribute().IsValid(u.Email)).Select(u => u.Id).ToHashSet();
         return contracts.Select(c => new BillingOccupancy(c, c.Residents.Where(r => r.ResidenceFrom <= to && (r.ResidenceTo == null || r.ResidenceTo >= from) && links.ContainsKey(r.ResidentId))
             .Select(r => links[r.ResidentId]).Append(c.TenantUserId ?? throw new InvoiceException(409, "active_tenant_account_required")).Distinct().ToArray(), c.Residents.Where(r => r.ResidenceFrom <= to && (r.ResidenceTo == null || r.ResidenceTo >= from))
+                .Where(r => r.Role == ResidentType.Representative)
                 .All(r => links.TryGetValue(r.ResidentId, out var user) && validEmails.Contains(user)) && c.TenantUserId is { } representative && validEmails.Contains(representative))).ToArray();
     }
     public async Task<BillingReading?> ReadingAsync(Guid roomId, UtilityType type, DateOnly period, CancellationToken t)

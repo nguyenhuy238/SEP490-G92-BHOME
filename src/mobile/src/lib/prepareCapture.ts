@@ -7,20 +7,26 @@ import { ownCapture } from './captureFiles';
 // and CaptureRepository.SaveEvidenceAsync use these bounds in the current API.
 export const captureMaxBytes = 5 * 1024 * 1024;
 export const captureMaxPixels = 12_000_000;
+// Preserve small card text until server-side card localization, while bounding upload size.
+export const identityCaptureMaxDimension = 2400;
 
 export async function prepareCapture(
   picture: PictureRef,
   current: () => boolean,
-  evidence = false,
+  purpose: 'ocr' | 'identity' | 'evidence' = 'ocr',
 ): Promise<string> {
   const { width, height } = picture;
   if (!Number.isFinite(width * height) || width <= 0 || height <= 0)
     throw new Error('Invalid capture dimensions.');
   const context = ImageManipulator.manipulate(picture);
-  // Preserve the task-evidence presentation's existing encoding policy.
+  const evidence = purpose === 'evidence';
+  // Keep enough detail to localize the card before the server resizes its crop.
+  // Full-resolution phone photos would consume the OCR deadline while uploading.
   let scale = evidence
     ? Math.min(1, 1600 / Math.max(width, height))
-    : Math.min(1, Math.sqrt(captureMaxPixels / (width * height)));
+    : purpose === 'identity'
+      ? Math.min(1, identityCaptureMaxDimension / Math.max(width, height))
+      : Math.min(1, Math.sqrt(captureMaxPixels / (width * height)));
   try {
     // Bounded retries re-encode from the native source, never from a compressed JPEG.
     for (let attempt = 0; attempt < 3; attempt++) {

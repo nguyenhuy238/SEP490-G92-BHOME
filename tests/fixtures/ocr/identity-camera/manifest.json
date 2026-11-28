@@ -1,0 +1,28 @@
+{
+  "dataset": "synthetic",
+  "cases": [
+    {
+      "file": "front-background.jpg",
+      "kind": "IdentityFront",
+      "expectedFields": {
+        "citizenIdentityNumber": "000000000000",
+        "fullName": "NGƯỜI KIỂM THỬ",
+        "dateOfBirth": "2000-01-01"
+      }
+    },
+    {
+      "file": "front-tilted.jpg",
+      "kind": "IdentityFront",
+      "expectedFields": {
+        "citizenIdentityNumber": "000000000000",
+        "fullName": "NGƯỜI KIỂM THỬ",
+        "dateOfBirth": "2000-01-01"
+      }
+    },
+    {
+      "file": "back-background.jpg",
+      "kind": "IdentityBack",
+      "expectedFields": { "dateOfIssue": "2024-07-01" }
+    }
+  ]
+}

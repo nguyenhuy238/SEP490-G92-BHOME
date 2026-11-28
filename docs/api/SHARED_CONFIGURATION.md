@@ -39,6 +39,14 @@ and nested dependencies. Older editions remain archived. Archive retains data an
 references. A stale or unpublished nested catalog reference prevents publication
 or restoration; existing copied configuration is unaffected.
 
+Fee templates reject overlapping effective periods against another Published family
+with the same category, method, charge code and scope when published, including
+`SaveAsync` with `publishImmediately=true` (409 `overlapping_shared_fee_period`).
+Legacy Draft saves may overlap because Drafts are not selectable and do not reserve
+an effective period. PropertyManagement UTC12 exercises Owner Web's save-and-publish
+command and verifies rejection leaves the existing Published version unchanged.
+This shared-library check is separate from target Location validation when applying a fee.
+
 Room defaults: capacity 1–32767, positive area, distinct amenities, optional referenceRent.
 Catalog: category, unit, non-negative referencePrice. These are reference data.
 Asset templates: items with published catalogId/catalogVersion, quantity, required,

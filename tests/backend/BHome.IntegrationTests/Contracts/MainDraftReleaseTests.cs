@@ -59,16 +59,17 @@ public sealed partial class MainDraftApiTests
         Assert.True(review.DevelopmentOnly); Assert.Equal("SigningReview", review.Kind);
         var reviewedBytes = await owner.GetByteArrayAsync($"{Root}/{draft.Id}/documents/{review.Id}");
         using (var pdf = new iText.Kernel.Pdf.PdfDocument(new iText.Kernel.Pdf.PdfReader(new MemoryStream(reviewedBytes))))
-        { var text = ContractPdfRendererTests.Text(pdf); Assert.Contains("TÀI LIỆU KIỂM THỬ", text); Assert.DoesNotContain("BẢN NHÁP", text); }
+        { var text = ContractPdfRendererTests.Text(pdf); Assert.DoesNotContain("TÀI LIỆU KIỂM THỬ", text); Assert.DoesNotContain("BẢN NHÁP", text); }
         var input = new MainDraftReleaseInput(tenant.Id, draft.Version, review.Id, true); var key = Guid.NewGuid();
-        Assert.Equal(HttpStatusCode.Forbidden, (await Release(staff, draft.Id, input, key)).StatusCode);
+        Assert.Equal(HttpStatusCode.Forbidden, (await Release(stranger, draft.Id, input, key)).StatusCode);
         Assert.Equal(HttpStatusCode.BadRequest, (await Release(owner, draft.Id, input with { HumanReviewed = false }, key)).StatusCode);
         Assert.Equal(HttpStatusCode.Conflict, (await Release(owner, draft.Id, input with { ExpectedVersion = 0 }, key)).StatusCode);
         Assert.Equal(HttpStatusCode.Conflict, (await Release(owner, draft.Id, input with { TenantUserId = outside.Id }, Guid.NewGuid())).StatusCode);
         Assert.Equal(HttpStatusCode.Conflict, (await Release(owner, draft.Id, input with { TenantUserId = null }, Guid.NewGuid())).StatusCode);
-        var releases = await Task.WhenAll(Release(owner, draft.Id, input, key), Release(owner, draft.Id, input, key));
+        var staffInput = input with { TenantUserId = null };
+        var releases = await Task.WhenAll(Release(staff, draft.Id, staffInput, key), Release(staff, draft.Id, staffInput, key));
         foreach (var response in releases) await Success(response);
-        Assert.Equal(HttpStatusCode.Conflict, (await Release(owner, draft.Id, input with { TenantUserId = outside.Id }, key)).StatusCode);
+        Assert.Equal(HttpStatusCode.Conflict, (await Release(staff, draft.Id, input with { TenantUserId = outside.Id }, key)).StatusCode);
         var contract = (await owner.GetFromJsonAsync<ContractView>($"/api/v1/contracts/{draft.Id}"))!;
         Assert.False(contract.OnboardingDraft); Assert.Equal("PendingSigning", contract.Status); Assert.Equal(tenant.Id, contract.TenantUserId);
         Assert.NotNull(contract.PriceLockedAt);
@@ -86,7 +87,8 @@ public sealed partial class MainDraftApiTests
             using var message = new HttpRequestMessage(HttpMethod.Post, $"/api/v1/contracts/{draft.Id}/signing") { Content = JsonContent.Create(new SigningInput(Guid.Empty)) }; message.Headers.Add("Idempotency-Key", Guid.NewGuid().ToString());
             await Success(await party.SendAsync(message)); await Success(await party.PostAsJsonAsync($"/api/v1/contracts/{draft.Id}/signing/sync", new { }));
         }
-        using (var deposit = new HttpRequestMessage(HttpMethod.Post, $"/api/v1/contracts/{draft.Id}/deposit-verifications") { Content = JsonContent.Create(new DepositInput("SYNTHETIC-RELEASE-" + Guid.NewGuid(), 6200000, "Synthetic bank statement confirmed")) })
+        var depositAmount = draft.Preparation.Charges.Single(p => p.ChargeCode == "RENT").Rate;
+        using (var deposit = new HttpRequestMessage(HttpMethod.Post, $"/api/v1/contracts/{draft.Id}/deposit-verifications") { Content = JsonContent.Create(new DepositInput("SYNTHETIC-RELEASE-" + Guid.NewGuid(), depositAmount, "Synthetic bank statement confirmed")) })
         { deposit.Headers.Add("Idempotency-Key", Guid.NewGuid().ToString()); await Success(await owner.SendAsync(deposit)); }
         // The Compact24 checkout must settle initial rent as well as the security deposit.
         await using (var paymentScope = host.Services.CreateAsyncScope())
@@ -151,7 +153,7 @@ public sealed partial class MainDraftApiTests
         Assert.Equal(tenant.Id, (await db.Set<Resident>().SingleAsync(r => r.Id == w.Resident)).TenantUserId);
     }
     [Fact]
-    public async Task ReleaseRejectsStaleReviewTamperingAndProductionSampleTemplate()
+    public async Task ReleaseRejectsStaleReviewAndTampering()
     {
         var w = await Setup(); var tenant = await User("Tenant");
         await using var host = ReleaseHost(w.Location); using var owner = InHost(host, w.Owner); using var staff = InHost(host, w.Staff);
@@ -166,11 +168,160 @@ public sealed partial class MainDraftApiTests
         var rejected = await Release(owner, draft.Id, new(null, draft.Version, review.Id, true), Guid.NewGuid()); Assert.Equal(HttpStatusCode.Conflict, rejected.StatusCode); Assert.Contains("contract_document_integrity_failed", await rejected.Content.ReadAsStringAsync());
         var updated = await Save(w, Input(w) with { Notes = "Changed saved terms", ExpectedVersion = draft.Version }, id: draft.Id);
         Assert.Equal(HttpStatusCode.Conflict, (await Release(owner, draft.Id, new(null, updated.Version, review.Id, true), Guid.NewGuid())).StatusCode);
-        await using var production = fixture.Factory.WithWebHostBuilder(b => b.UseTestEnvironment("Production")); using var productionOwner = InHost(production, w.Owner);
-        var blocked = await productionOwner.PostAsync($"{Root}/{draft.Id}/signing-review", null); Assert.Equal(HttpStatusCode.ServiceUnavailable, blocked.StatusCode); Assert.Contains("main_draft_signing_template_not_approved", await blocked.Content.ReadAsStringAsync());
         await using var verify = fixture.Factory.Services.CreateAsyncScope(); var db = verify.ServiceProvider.GetRequiredService<BHomePersistenceContext>();
         Assert.Null((await db.Set<Resident>().SingleAsync(r => r.Id == w.Resident)).TenantUserId); Assert.Equal(ContractStatus.Draft, (await db.Set<Contract>().SingleAsync(c => c.Id == draft.Id)).Status);
     }
+    [Theory]
+    [InlineData("Staging", false)]
+    [InlineData("Staging", true)]
+    [InlineData("Production", true)]
+    public async Task DemoTemplateCanBeReviewedReleasedAndReadInEveryEnvironment(string environment, bool live)
+    {
+        // Exercise both persisted payment modes on the deployed Compact24 schema.
+        if (environment == "Staging" && fixture.Factory.Services.GetService<BHome.Infrastructure.Persistence.Compact24.Compact24DbContext>() is null)
+        {
+            var native = new BHome.IntegrationTests.Compact24.PropertyContractDockerFixture();
+            try
+            {
+                await native.InitializeAsync();
+                await new MainDraftApiTests(native.Contracts).DemoTemplateCanBeReviewedReleasedAndReadInEveryEnvironment(environment, live);
+            }
+            finally { await native.DisposeAsync(); }
+            return;
+        }
+        var w = await Setup();
+        Guid? tenantUserId = null;
+        await using (var seed = fixture.Factory.Services.CreateAsyncScope())
+        {
+            var seedDb = seed.ServiceProvider.GetRequiredService<BHomePersistenceContext>();
+            // The historical offline schema requires a linked Tenant on release.
+            // Keep exercising account-free internal release on deployed Compact24.
+            if (seedDb is not BHome.Infrastructure.Persistence.Compact24.Compact24DbContext)
+            {
+                var tenant = await User("Tenant");
+                using var tenantClient = tenant.Client;
+                tenantUserId = tenant.Id;
+                (await seedDb.Set<Resident>().SingleAsync(r => r.Id == w.Resident)).TenantUserId = tenantUserId;
+                await seedDb.SaveChangesAsync();
+            }
+        }
+        await using var host = fixture.Factory.WithWebHostBuilder(b =>
+        {
+            b.UseTestEnvironment(environment);
+            b.ConfigureAppConfiguration((_, config) =>
+            {
+                var settings = new Dictionary<string, string?>
+                {
+                    ["MainDraft:LibreOfficeContainerImage"] = "bhome/contract-converter:local",
+                    ["MainDraft:ApprovedProductionTemplateSha256"] = "",
+                    ["MainDraft:AllowStagingSigningReview"] = "false",
+                    ["ContractWorkflow:SimulatedSigningEnabled"] = "false",
+                    ["SePay:Enabled"] = !live ? "true" : "false",
+                    ["SePay:Mode"] = !live ? "Test" : "Live"
+                };
+                if (environment == "Staging")
+                {
+                    settings["SePay:WebhookSecret"] = "synthetic-staging-template-review-secret";
+                    settings["SePay:ReceivingAccounts:0:LocationId"] = w.Location.ToString();
+                    settings["SePay:ReceivingAccounts:0:BankIdentifier"] = "970416";
+                    settings["SePay:ReceivingAccounts:0:Gateway"] = "ACB";
+                    settings["SePay:ReceivingAccounts:0:AccountNumber"] = "0000000001";
+                }
+                config.AddInMemoryCollection(settings);
+            });
+            if (environment == "Staging")
+            {
+                b.ConfigureTestServices(services =>
+                {
+                    services.RemoveAll<IHoldingTestScope>();
+                    services.AddSingleton<IHoldingTestScope>(new SigningTestScope(live ? Guid.NewGuid() : w.Location));
+                });
+            }
+        });
+        using var owner = InHost(host, w.Owner); using var staff = InHost(host, w.Staff); using var outside = InHost(host, w.Outside);
+        var draft = await Save(w with { Staff = staff });
+        Assert.Equal(HttpStatusCode.NotFound, (await outside.PostAsync($"{Root}/{draft.Id}/signing-review", null)).StatusCode);
+        // An unsigned preview from the previous rendering revision must be replaced,
+        // while its original bytes remain available as history. Generate it through
+        // a version-1 test renderer; the database evidence is append-only.
+        ContractDocumentView oldReview;
+        await using (var legacy = host.WithWebHostBuilder(b => b.ConfigureTestServices(s =>
+        {
+            s.RemoveAll<IMainDraftRenderer>();
+            s.AddScoped<IMainDraftRenderer, LegacyVersionMainDraftRenderer>();
+        })))
+        {
+            using var legacyStaff = InHost(legacy, w.Staff);
+            var legacyResponse = await legacyStaff.PostAsync($"{Root}/{draft.Id}/signing-review", null); await Success(legacyResponse);
+            oldReview = (await legacyResponse.Content.ReadFromJsonAsync<ContractDocumentView>())!;
+        }
+        Assert.Equal(!live, oldReview.DevelopmentOnly); Assert.Equal(1, oldReview.TemplateVersion);
+        var oldBytes = await owner.GetByteArrayAsync($"{Root}/{draft.Id}/documents/{oldReview.Id}");
+        var response = await staff.PostAsync($"{Root}/{draft.Id}/signing-review", null); await Success(response);
+        var review = (await response.Content.ReadFromJsonAsync<ContractDocumentView>())!;
+        Assert.Equal(!live, review.DevelopmentOnly);
+        Assert.NotEqual(oldReview.Id, review.Id); Assert.Equal(4, review.TemplateVersion);
+        Assert.Equal(oldBytes, await owner.GetByteArrayAsync($"{Root}/{draft.Id}/documents/{oldReview.Id}"));
+        var staleInput = new MainDraftReleaseInput(tenantUserId, draft.Version, oldReview.Id, true, EmailSigning: tenantUserId is not null);
+        var staleResponse = await Release(owner, draft.Id, staleInput, Guid.NewGuid());
+        Assert.Equal(HttpStatusCode.Conflict, staleResponse.StatusCode);
+        Assert.Contains("draft_document_outdated", await staleResponse.Content.ReadAsStringAsync());
+        if (live)
+        {
+            // Reproduce an older renderer's label through an appended document;
+            // immutable document evidence must never be edited in place.
+            await using var historical = host.WithWebHostBuilder(b => b.ConfigureTestServices(s =>
+            {
+                s.RemoveAll<IMainDraftRenderer>();
+                s.AddScoped<IMainDraftRenderer>(p => new LegacyVersionMainDraftRenderer(
+                    p.GetRequiredService<IConfiguration>(), p.GetRequiredService<TimeProvider>(), 4, true));
+            }));
+            using var historicalStaff = InHost(historical, w.Staff);
+            var historicalResponse = await historicalStaff.PostAsync($"{Root}/{draft.Id}/signing-review", null);
+            await Success(historicalResponse);
+            review = (await historicalResponse.Content.ReadFromJsonAsync<ContractDocumentView>())!;
+            Assert.True(review.DevelopmentOnly);
+        }
+        var bytes = await owner.GetByteArrayAsync($"{Root}/{draft.Id}/documents/{review.Id}");
+        using (var pdf = new iText.Kernel.Pdf.PdfDocument(new iText.Kernel.Pdf.PdfReader(new MemoryStream(bytes))))
+            Assert.DoesNotContain("TÀI LIỆU KIỂM THỬ", ContractPdfRendererTests.Text(pdf));
+        var key = Guid.NewGuid(); var input = staleInput with { ReviewedFileId = review.Id };
+        await Success(await Release(owner, draft.Id, input, key));
+        await Success(await Release(owner, draft.Id, input, key));
+        await using var scope = host.Services.CreateAsyncScope();
+        var db = scope.ServiceProvider.GetRequiredService<BHomePersistenceContext>();
+        var contract = await db.Set<Contract>().Include(c => c.Residents).Include(c => c.Signatures).SingleAsync(c => c.Id == draft.Id);
+        Assert.Equal(ContractStatus.PendingSigning, contract.Status);
+        Assert.Equal(tenantUserId, contract.TenantUserId);
+        Assert.Empty(contract.Signatures); Assert.Null(contract.ActivatedAt);
+        var document = new ContractDocument(contract.Id, contract.RoomId, contract.OwnerSignerId, Guid.Empty,
+            contract.RepresentativeResidentId, contract.Residents.Select(r => r.ResidentId).Order().ToArray(),
+            contract.StartDate, contract.EndDate, contract.MonthlyRent, contract.RequiredDeposit,
+            contract.HoldingContractId, contract.AppliedHoldingDeposit, contract.Terms, contract.SnapshotHash)
+        { IsInternalResidentAcceptance = true, AgreedCharges = ContractChargeSnapshot.Read(contract).Charges };
+        Assert.Equal(bytes, await scope.ServiceProvider.GetRequiredService<IContractSigningDocumentSource>().ReadAsync(document, default));
+        Assert.Single(await db.Set<ContractDocumentFile>().Where(f => f.ContractId == draft.Id && f.Kind == ContractFileKind.Preview).ToArrayAsync());
+    }
+
+    private sealed class LegacyVersionMainDraftRenderer(IConfiguration configuration, TimeProvider clock,
+        int version = 1, bool developmentOnly = false) : IMainDraftRenderer
+    {
+        private readonly MainDraftRenderer renderer = new(configuration, clock);
+        public string TemplateHash => renderer.TemplateHash;
+        public bool SigningReviewAvailable => renderer.SigningReviewAvailable;
+        public bool CanUseSigningReview(Contract contract) => renderer.CanUseSigningReview(contract);
+        public bool IsProductionSigningTemplate(Contract contract) => !developmentOnly && renderer.IsProductionSigningTemplate(contract);
+        public int DocumentVersion => version;
+        public Task<byte[]> DocxAsync(MainDraftRenderData data, CancellationToken t) => renderer.DocxAsync(data, t);
+        public Task<byte[]> PdfAsync(byte[] docx, CancellationToken t) => renderer.PdfAsync(docx, t);
+    }
+
+    private sealed class SigningTestScope(Guid locationId) : IHoldingTestScope
+    {
+        public bool AllowsExternalDatabase => false;
+        public bool Allows(Guid candidate) => candidate == locationId;
+    }
+
     [Theory]
     [InlineData(false)]
     public async Task ReleaseCannotAssignAnUnrelatedAccountToAnUnlinkedVerifiedResident(bool verifyInternalRelease)

@@ -34,6 +34,9 @@ public sealed class EnvironmentStartupTests
         Assert.Equal("https://stage.example.invalid/reset-password", config["AuthenticationEmail:WebResetUrl"]);
         Assert.Equal("https://stage.example.invalid/contract-signing", config["AnonymousSigning:PublicSigningUrl"]);
         Assert.Equal("https://api-stage.example.invalid/open/sign-contract", config["ContractSigning:InvitationLink:PublicOpenUrl"]);
+        Assert.True(config.GetValue<bool>("NotificationChannels:ContractAndInvoiceEmailEnabled"));
+        Assert.False(config.GetValue<bool>("NotificationChannels:AutomationEnabled"));
+        Assert.False(config.GetValue<bool>("Jobs:Enabled"));
     }
 
     [Theory]

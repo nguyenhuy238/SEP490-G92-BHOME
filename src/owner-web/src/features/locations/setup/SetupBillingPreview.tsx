@@ -1,5 +1,6 @@
+import { TextField } from '../../../components/common/ValidatedForm';
 import { useState } from 'react';
-import { Box, Divider, MenuItem, Paper, Stack, TextField, Typography } from '@mui/material';
+import { Box, Divider, MenuItem, Paper, Stack, Typography } from '@mui/material';
 
 import {
   amountLabel,

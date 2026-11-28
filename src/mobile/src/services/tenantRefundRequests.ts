@@ -32,6 +32,11 @@ export function refundRequestFormError(value: TenantRefundRequestInput): string 
     return 'Nhập lý do yêu cầu, tối đa 2.000 ký tự.';
   if (!optionalId(value.sourcePaymentId ?? null) || !optionalId(value.sourceContractId ?? null))
     return 'Mã giao dịch hoặc hợp đồng chưa đúng định dạng.';
+  if (
+    !optionalId(value.moveOutProposalId ?? null) ||
+    (value.moveOutProposalId && (!value.sourceContractId || value.sourcePaymentId))
+  )
+    return 'Yêu cầu hoàn cọc trả phòng phải gắn với đề xuất và đúng hợp đồng.';
   return '';
 }
 
@@ -77,6 +82,7 @@ export function parseTenantRefundRequest(value: unknown): TenantRefundRequest {
     !['REQUESTED', 'APPROVED', 'REJECTED', 'COMPLETED'].includes(value.status as string) ||
     !optionalId(value.sourcePaymentId) ||
     !optionalId(value.sourceContractId) ||
+    (value.moveOutProposalId !== undefined && !optionalId(value.moveOutProposalId)) ||
     !instant(value.createdAt) ||
     !optionalInstant(value.decidedAt) ||
     !optionalInstant(value.executedAt) ||
@@ -96,6 +102,7 @@ export function parseTenantRefundRequest(value: unknown): TenantRefundRequest {
     status: value.status as TenantRefundRequest['status'],
     sourcePaymentId: value.sourcePaymentId as string | null,
     sourceContractId: value.sourceContractId as string | null,
+    moveOutProposalId: (value.moveOutProposalId ?? null) as string | null,
     createdAt: value.createdAt as string,
     decidedAt: value.decidedAt as string | null,
     decisionReason: value.decisionReason as string | null,

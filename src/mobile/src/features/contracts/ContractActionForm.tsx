@@ -1,40 +1,31 @@
-import { conciseMessage } from '../../lib/toast';
+import { ContractNotice } from './ContractNotice';
+import { getFieldErrors } from '../../../../../packages/client-core/src/api';
 import { useFeedbackState } from '../../lib/useFeedbackState';
-import React, { useEffect, useMemo, useRef, useState } from 'react';
-import { Button, Checkbox, Text } from 'react-native-paper';
+import React, { useMemo, useRef, useState } from 'react';
+import { Button, Checkbox, HelperText, Text } from 'react-native-paper';
 import {
   actionPayload,
   businessToday,
   canUseCertificate,
-  certificateStatus,
   contractError,
+  earlyTerminationDate,
   type ContractAction,
   type ContractClient,
   type ContractView,
-  type FinalMeterTask,
   type mutationKeys,
 } from '../../../../../packages/client-core/src/contracts';
 import { useSigningCertificates } from '../../../../../packages/client-core/src/useSigningCertificates';
-import { formatInstant } from '../../../../../packages/client-core/src/localization';
-import { Action, Box, Heading, ui } from '../../components/WorkspaceKit';
+import { Action, Box, Heading } from '../../components/WorkspaceKit';
+import { IdentityDateField } from '../../components/IdentityDateField';
 import { ChoiceField, Input } from '../../components/WorkflowControls';
-import {
-  signingClient,
-  signingError,
-  signingPayload,
-} from '../../../../../packages/client-core/src/signing';
-import {
-  SignatureImageSection,
-  SignaturePlacementField,
-  type PlacementChoice,
-} from './SigningSetup';
+import { signingClient, signingPayload } from '../../../../../packages/client-core/src/signing';
+import { SignaturePlacementField, type PlacementChoice } from './SigningSetup';
 
 export function ContractActionForm({
   api,
   action,
   contract,
   keys,
-  evidenceIds,
   onCancel,
   onSuccess,
 }: {
@@ -42,12 +33,18 @@ export function ContractActionForm({
   action: ContractAction;
   contract: ContractView;
   keys: ReturnType<typeof mutationKeys>;
-  evidenceIds: string[];
-  onCancel: () => void;
+  onCancel?: () => void;
   onSuccess: (id?: string) => void;
 }) {
   const [values, setValues] = useState<Record<string, string>>({});
-  const [error, setError] = useFeedbackState(),
+  const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({});
+  const firstInvalidField = action.fields.find((field) => fieldErrors[field.name])?.name;
+  const update = (name: string, value: string) => {
+    setValues((before) => ({ ...before, [name]: value }));
+    setFieldErrors((before) => ({ ...before, [name]: '' }));
+    setChecked(false);
+  };
+  const [error, setError] = useFeedbackState('warning', false),
     [busy, setBusy] = useState(false),
     [checked, setChecked] = useState(false);
   const directory = useSigningCertificates(
@@ -62,36 +59,24 @@ export function ContractActionForm({
       !!directory.error ||
       !selectedCertificate ||
       !canUseCertificate(selectedCertificate));
+  const earlyTermination = action.operation === 'termination-requests';
+  const [dateTouched, setDateTouched] = useState(false);
+  const proposedDate = values.proposedDate ?? '';
+  let dateError = '';
+  if (earlyTermination) {
+    try {
+      earlyTerminationDate(proposedDate, contract);
+    } catch (e) {
+      dateError = (e as Error).message.replace('dd/MM/yyyy', 'dd-MM-yyyy');
+    }
+  }
+  const showDateError = !!dateError && (dateTouched || proposedDate.length === 10);
   const remoteSigning = action.operation === 'signing' && !contract.isDevelopmentDemo;
   const signing = useMemo(() => signingClient(api.transport), [api]);
   const [choice, setChoice] = useState<PlacementChoice>({ placement: null, usePicture: true });
-  const [readings, setReadings] = useState<FinalMeterTask[]>([]);
   const lock = useRef(false);
-  useEffect(() => {
-    if (action.operation !== 'move-out/inspection') return;
-    const c = new AbortController();
-    void api
-      .meterTasks(c.signal)
-      .then((tasks) => {
-        if (!c.signal.aborted)
-          setReadings(
-            tasks.filter(
-              (t) =>
-                t.contractId === contract.id &&
-                t.purpose === 2 &&
-                t.status === 2 &&
-                t.readingDate === businessToday() &&
-                t.confirmedReadingId,
-            ),
-          );
-      })
-      .catch((e) => {
-        if (!c.signal.aborted) setError(contractError(e));
-      });
-    return () => c.abort();
-  }, [api, action.operation, contract.id, setError]);
   async function submit() {
-    if (lock.current || !checked || signingBlocked) return;
+    if (lock.current || !checked || signingBlocked || dateError) return;
     if (
       action.operation === 'signing' &&
       !contract.isDevelopmentDemo &&
@@ -108,13 +93,14 @@ export function ContractActionForm({
               ? { ...values, humanConfirmed: String(checked) }
               : values,
             contract,
-            evidenceIds,
           );
     } catch (e) {
-      setError((e as Error).message);
+      const message = (e as Error).message;
+      setError(earlyTermination ? message.replace('dd/MM/yyyy', 'dd-MM-yyyy') : message);
       return;
     }
     lock.current = true;
+    setFieldErrors({});
     setBusy(true);
     setError('');
     const scope = contract.id + '/' + action.operation;
@@ -130,6 +116,7 @@ export function ContractActionForm({
         ['renewals', 'holding-conversion'].includes(action.operation) ? result.id : undefined,
       );
     } catch (e) {
+      setFieldErrors(getFieldErrors(e));
       setError(contractError(e));
     } finally {
       lock.current = false;
@@ -139,19 +126,19 @@ export function ContractActionForm({
   return (
     <Box>
       <Heading title={action.label} />
-      <Text>{action.warning}</Text>
+      {!!action.warning && <Text>{action.warning}</Text>}
       {action.operation === 'holding-cancellation' && (
         <ChoiceField
           label="Nguyên nhân hủy giữ chỗ"
           value={values.cause ?? ''}
+          error={fieldErrors.cause}
           options={[
             { id: '0', label: 'Người thuê tự nguyện hủy' },
             { id: '1', label: 'Owner không cung cấp được phòng' },
           ]}
           disabled={busy}
           onChange={(cause) => {
-            setValues((before) => ({ ...before, cause }));
-            setChecked(false);
+            update('cause', cause);
           }}
         />
       )}
@@ -161,36 +148,43 @@ export function ContractActionForm({
             key={f.name}
             label={f.label}
             value={values[f.name] ?? ''}
+            error={fieldErrors[f.name]}
             disabled={busy || directory.loading}
             options={directory.certificates.filter(canUseCertificate).map((c) => ({
               id: c.id,
               label: `${c.provider} · ${c.serialNumber} · ${c.providerUserIdHint}`,
             }))}
             onChange={(v) => {
-              setValues((before) => ({ ...before, [f.name]: v }));
-              setChecked(false);
+              update(f.name, v);
             }}
           />
-        ) : f.name === 'electricityReadingId' || f.name === 'waterReadingId' ? (
-          <ChoiceField
-            key={f.name}
-            label={f.label}
-            value={values[f.name] ?? ''}
-            disabled={busy}
-            options={readings
-              .filter((r) => r.utilityType === (f.name === 'electricityReadingId' ? 0 : 1))
-              .map((r) => ({
-                id: r.confirmedReadingId!,
-                label: `${r.meterCode} · ${r.readingDate} · ${r.confirmedReadingId}`,
-              }))}
-            onChange={(v) => {
-              setValues((before) => ({ ...before, [f.name]: v }));
-              setChecked(false);
-            }}
-          />
+        ) : earlyTermination && f.name === 'proposedDate' ? (
+          <React.Fragment key={f.name}>
+            <IdentityDateField
+              label={f.label}
+              accessibilityLabel={f.label}
+              value={values[f.name] ?? ''}
+              disabled={busy}
+              hyphenated
+              compactCalendar
+              calendarDate={businessToday()}
+              error={showDateError || !!fieldErrors[f.name]}
+              onBlur={() => setDateTouched(true)}
+              onChange={(v) => {
+                update(f.name, v);
+              }}
+            />
+            {(showDateError || !!fieldErrors[f.name]) && (
+              <HelperText type="error" accessibilityRole="alert">
+                {showDateError ? dateError : fieldErrors[f.name]}
+              </HelperText>
+            )}
+          </React.Fragment>
         ) : (
           <Input
             key={f.name}
+            error={fieldErrors[f.name]}
+            focusOnError={firstInvalidField === f.name}
             label={
               f.label +
               (f.type === 'date'
@@ -204,8 +198,7 @@ export function ContractActionForm({
             multiline={f.type === 'multiline'}
             disabled={busy}
             onChange={(v) => {
-              setValues((before) => ({ ...before, [f.name]: v }));
-              setChecked(false);
+              update(f.name, v);
             }}
           />
         ),
@@ -213,18 +206,13 @@ export function ContractActionForm({
       {action.operation === 'signing' && !contract.isDevelopmentDemo && (
         <>
           {directory.loading && <Text>Đang tải chứng thư…</Text>}
-          {!!directory.error && <Text style={ui.red}>{conciseMessage(directory.error)}</Text>}
+          {!!directory.error && <ContractNotice message={directory.error} />}
           {!directory.loading &&
             !directory.error &&
             !directory.certificates.some(canUseCertificate) && (
-              <Text>
-                Chưa có chứng thư dùng được. Khai báo hoặc mở khóa chứng thư của bạn ở phần chữ ký.
-              </Text>
+              <Text>Chưa có chứng thư dùng được cho yêu cầu ký này.</Text>
             )}
-          <Text variant="bodySmall">
-            Chỉ dùng chứng thư của bạn, còn hiệu lực và không khóa. Nếu chưa có, khai báo MySign ở
-            phần chữ ký.
-          </Text>
+          <Text variant="bodySmall">Chỉ dùng chứng thư của bạn, còn hiệu lực và không khóa.</Text>
           <Button
             disabled={busy || directory.loading}
             onPress={() => {
@@ -248,142 +236,28 @@ export function ContractActionForm({
           />
         </>
       )}
-      {action.operation === 'move-out/inspection' && (
-        <>
-          <Text>{evidenceIds.length} ảnh đã tải sẽ được gắn với biên bản.</Text>
-          <Text>
-            Chọn chỉ số chốt đúng hợp đồng, đã được xác nhận trong ngày kiểm tra. Nếu chưa có, hoàn
-            tất tác vụ điện/nước rồi mở lại biên bản.
-          </Text>
-        </>
-      )}
       <Checkbox.Item
         label="Tôi đã kiểm tra nội dung và xác nhận thao tác"
         disabled={busy}
         status={checked ? 'checked' : 'unchecked'}
         onPress={() => setChecked((v) => !v)}
       />
-      {!!error && <Text style={ui.red}>{error}</Text>}
-      <Action disabled={busy || !checked || signingBlocked} onPress={() => void submit()}>
-        {busy ? 'Đang xử lý…' : 'Xác nhận'}
-      </Action>
-      <Action secondary disabled={busy} onPress={onCancel}>
-        Đóng và tải lại
-      </Action>
-    </Box>
-  );
-}
-export function SigningCertificates({ api }: { api: ContractClient }) {
-  const [open, setOpen] = useState(false),
-    [subscriber, setSubscriber] = useState(''),
-    [serial, setSerial] = useState(''),
-    [busy, setBusy] = useState(false),
-    [error, setError] = useFeedbackState(),
-    [notice, setNotice] = useFeedbackState('success');
-  const lock = useRef(false);
-  const directory = useSigningCertificates(api, open);
-  const signing = useMemo(() => signingClient(api.transport), [api]);
-  async function run(work: () => Promise<unknown>, message: string) {
-    if (lock.current) return;
-    lock.current = true;
-    setBusy(true);
-    setError('');
-    setNotice('');
-    try {
-      await work();
-      setSubscriber('');
-      setSerial('');
-      setNotice(message);
-      directory.reload();
-    } catch (e) {
-      setError(signingError(e));
-      directory.reload();
-    } finally {
-      lock.current = false;
-      setBusy(false);
-    }
-  }
-  return (
-    <>
-      <Button
-        disabled={busy}
-        onPress={() => {
-          setOpen((v) => !v);
-          directory.reload();
-        }}
+      {!!error && <ContractNotice message={error} />}
+      <Action
+        disabled={busy || !checked || signingBlocked || !!dateError}
+        onPress={() => void submit()}
       >
-        {open ? 'Đóng quản lý chứng thư' : 'Khai báo chứng thư MySign của bạn'}
-      </Button>
-      {open && (
-        <>
-          <Text variant="titleSmall">Chứng thư MySign của bạn</Text>
-          <Text>
-            Khai báo chứng thư không đồng nghĩa đã ký hợp đồng. Xác nhận ký trên ứng dụng MySign khi
-            có yêu cầu.
-          </Text>
-          {directory.loading && <Text>Đang tải chứng thư…</Text>}
-          {!!directory.error && <Text style={ui.red}>{conciseMessage(directory.error)}</Text>}
-          {!directory.loading && !directory.error && !directory.certificates.length && (
-            <Text>Bạn chưa khai báo chứng thư MySign.</Text>
-          )}
-          {directory.certificates.map((c) => (
-            <Box key={c.id}>
-              <Text>
-                {c.provider} · {c.serialNumber}
-              </Text>
-              <Text>
-                Thuê bao: {c.providerUserIdHint} · {certificateStatus(c)}
-              </Text>
-              <Text>Hết hạn: {formatInstant(c.validTo)}</Text>
-              <Button
-                disabled={busy || directory.loading}
-                onPress={() =>
-                  void run(
-                    () => api.lockCertificate(c.id, !c.locked),
-                    c.locked
-                      ? 'Đã mở khóa chứng thư. Máy chủ vẫn kiểm tra hiệu lực khi ký.'
-                      : 'Đã khóa chứng thư cho các yêu cầu ký mới.',
-                  )
-                }
-              >
-                {c.locked ? 'Mở khóa chứng thư' : 'Khóa chứng thư'}
-              </Button>
-              <Button
-                disabled={busy || directory.loading}
-                onPress={() =>
-                  void run(() => signing.removeCertificate(c.id), 'Đã gỡ chứng thư khỏi BHOME.')
-                }
-              >
-                Gỡ chứng thư
-              </Button>
-            </Box>
-          ))}
-          <Button disabled={busy || directory.loading} onPress={directory.reload}>
-            Tải lại chứng thư
-          </Button>
-          <Input
-            label="Mã thuê bao MySign của bạn"
-            value={subscriber}
-            onChange={setSubscriber}
-            disabled={busy}
-          />
-          <Input label="Số serial (tùy chọn)" value={serial} onChange={setSerial} disabled={busy} />
-          {!!error && <Text style={ui.red}>{error}</Text>}
-          {!!notice && <Text>{notice}</Text>}
-          <Action
-            disabled={busy || !subscriber.trim() || subscriber.length > 100 || serial.length > 100}
-            onPress={() =>
-              void run(
-                () => api.declareCertificate(subscriber.trim(), serial.trim()),
-                'Đã truy vấn và lưu chứng thư từ nhà cung cấp.',
-              )
-            }
-          >
-            Tra cứu và lưu chứng thư
-          </Action>
-          <SignatureImageSection signing={signing} />
-        </>
+        {busy
+          ? 'Đang xử lý…'
+          : action.operation === 'termination-requests'
+            ? 'Gửi yêu cầu'
+            : 'Xác nhận'}
+      </Action>
+      {onCancel && (
+        <Action secondary disabled={busy} onPress={onCancel}>
+          Đóng và tải lại
+        </Action>
       )}
-    </>
+    </Box>
   );
 }

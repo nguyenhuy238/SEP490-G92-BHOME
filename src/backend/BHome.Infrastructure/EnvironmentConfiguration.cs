@@ -66,7 +66,11 @@ public static class EnvironmentConfiguration
                 (originOnly && uri.AbsolutePath != "/") ||
                 ((https || !development) && uri.Scheme != "https") ||
                 (deployed && uri.IsLoopback) ||
-                ((deployed || environment == "Development") && TemporaryHost(uri.Host)))
+                ((deployed || environment == "Development") && TemporaryHost(uri.Host) &&
+                    !(environment == "Development" && key == "AnonymousSigning:PublicSigningUrl" &&
+                      uri.Host.EndsWith(".trycloudflare.com", StringComparison.OrdinalIgnoreCase) &&
+                      uri.IsDefaultPort && uri.AbsolutePath == "/contract-signing" &&
+                      string.Equals(uri.GetLeftPart(UriPartial.Authority), config["AnonymousSigning:DevelopmentTunnelOrigin"], StringComparison.OrdinalIgnoreCase))))
             {
                 errors.Add($"{key} must be a trusted absolute {(https || !development ? "HTTPS" : "HTTP(S)")} URL without credentials, query or fragment; temporary tunnels are not supported. Migrate old local URL settings with scripts/Initialize-LocalUrls.ps1 -Apply; deployed URLs cannot use loopback.");
                 return false;
@@ -165,9 +169,7 @@ public static class EnvironmentConfiguration
             catch (ArgumentException) { errors.Add("ConnectionStrings:Database is invalid; connection details were withheld."); }
         }
         var sepay = config.GetSection("SePay").Get<SePayOptions>() ?? new();
-        if (!sepay.Valid(environment)) errors.Add("SePay environment, mode, API or credentials are invalid; Production cannot use Test mode.");
-        if (environment == "Production" && config["SePay:Mode"] == "Test")
-            errors.Add("SePay:Mode must be Live in Production, even while disabled; enabling Live requires separate authorization and credentials.");
+        if (!sepay.Valid(environment)) errors.Add("SePay mode, profile API, credentials or receiving bindings are invalid.");
         return errors;
     }
 

@@ -1,142 +1,144 @@
-# Phát hành Production BHOME
+﻿# Phát hành Production BHOME
 
-Checkpoint 21/11/2026: [preflight thực tế và các phê duyệt còn thiếu](BHOME_PRODUCTION_PREFLIGHT_2026-11-21.md).
-Các kết quả commissioning/candidate ngày 20/11 bên dưới là lịch sử, không phải bằng chứng go-live mới.
+Cập nhật sau go-live ngày 21/11/2026. Production đang chạy main
+`70406ecf8dceea6e84e4ddbaa3e325807af123f2`, triển khai lúc 14:48:52
+(Asia/Ho_Chi_Minh) bằng [Actions 44878730626, attempt 4](https://github.com/nguyenhuy238/SEP490-G92-BHOME/actions/runs/44878730626).
+Ba application containers healthy. Xem [biên bản nghiệm thu hiện tại](BHOME_PRODUCTION_CD_ACCEPTANCE_2026-11-21.md)
+và [backup/monitoring/khôi phục](BHOME_PRODUCTION_OPERATIONS_2026-11-21.md).
 
-Migration Staging mới: [biên bản hostname](BHOME_STAGING_HOSTNAME_MIGRATION_2026-11-20.md).
-Staging canonical hiện là owner-staging/public-staging/api-staging; các hostname
-sepay-test cũ chỉ giữ compatibility. Không thay bất kỳ hostname/image Production nào
-trong migration. Secrets Staging đã có; secrets/commissioning Production vẫn riêng.
+Các biên bản [20/11](BHOME_CICD_ACCEPTANCE_2026-11-20.md) và
+[preflight 21/11](BHOME_PRODUCTION_PREFLIGHT_2026-11-21.md) là lịch sử trước go-live;
+các câu “chưa deploy”, “chưa có secrets” trong đó không còn là trạng thái hiện tại.
 
-Cập nhật 20/11/2026. **Chưa deploy Production trong nhiệm vụ này.** Workflow đã chuẩn
-bị; chưa có lượt GitHub approval/deployment thật cho source mới.
-Xem [biên bản nghiệm thu](BHOME_CICD_ACCEPTANCE_2026-11-20.md).
+## Môi trường và source
 
-## Source và ranh giới phát hành
+| Thành phần      | Production                                                           |
+| --------------- | -------------------------------------------------------------------- |
+| Owner           | https://owner.103.146.23.157.sslip.io                                |
+| Public          | https://www.103.146.23.157.sslip.io                                  |
+| API             | https://api.103.146.23.157.sslip.io                                  |
+| Compose project | `bhome-vps`                                                          |
+| Applications    | `bhome-vps-api-1`, `bhome-vps-owner-web-1`, `bhome-vps-public-web-1` |
+| Database        | `bhome-vps-postgres-1`, database `bhome`                             |
+| Storage         | `bhome-vps-minio-1`, private bucket `bhome-private`                  |
 
-PR được review vào main → backend/frontend CI → ba image từ chính main SHA → GHCR
-manifest/digests → kiểm protection → job environment production chờ duyệt → SSH
-secret Production → deploy application → smoke/rollback. Không lấy develop SHA hay
-frontend Staging để phát hành Production. `production-plan.yml` chỉ lập kế hoạch từ
-main có CI success, không SSH/deploy.
+Source cá nhân → PR vào develop → CI và Staging → PR develop vào main → CI main →
+GHCR → production-policy → environment approval → SSH giới hạn → shared release
+scripts → backup/preflight → deploy → smoke hoặc rollback. Không push trực tiếp
+main/develop. `production-plan.yml` chỉ lập kế hoạch, không SSH/deploy.
 
-Main xác minh 21/11 là `52f7a186a9ef3d598b729d72481102e75322783d`, **chỉ có README.md**.
-[PR release #149](https://github.com/nguyenhuy238/SEP490-G92-BHOME/pull/149) chuẩn bị
-source từ develop; phụ thuộc bản sửa backup #148, CI và review từ người khác.
-Chỉ merge qua PR sau khi các yêu cầu review/protection được đáp ứng; không push trực tiếp main.
+Main chứa đầy đủ application source và workflows sau merge #149. Staging giữ
+`473d77e4`; không dùng image/bundle Staging cho Production. Owner compile API origin
+là Owner Production (Caddy proxy `/api/*`), Public compile origin là API Production.
+`VITE_DEPLOYMENT_ENVIRONMENT=Production`, `VITE_API_MODE=api`, revision bằng main SHA.
+Thay env Nginx không thay được origin đã compile vào Vite bundle.
 
-| Thành phần   | Giá trị                                                              |
-| ------------ | -------------------------------------------------------------------- |
-| Owner        | `https://owner.103.146.23.157.sslip.io`                              |
-| Public       | `https://www.103.146.23.157.sslip.io`                                |
-| API          | `https://api.103.146.23.157.sslip.io`                                |
-| Project      | `bhome-vps`                                                          |
-| Applications | `bhome-vps-api-1`, `bhome-vps-owner-web-1`, `bhome-vps-public-web-1` |
-| PostgreSQL   | `bhome-vps-postgres-1`, database `bhome`                             |
-| Storage      | `bhome-vps-minio-1`, bucket private `bhome-private`                  |
+## Gate và credentials đã vận hành
 
-Owner build origin là Owner Production, vì Caddy /api/* proxy API Production;
-Public build origin là API Production. `VITE_DEPLOYMENT_ENVIRONMENT=Production`,
-`VITE_API_MODE=api`, `BHOME_REVISION=<MAIN_SHA>`. Frontend nhận origin tuyệt đối;
-không mặc định relative API base hợp lệ. Thay env Nginx không đổi Vite bundle.
+Main protection bắt buộc backend/frontend GitHub Actions checks và cập nhật branch,
+1 approval, enforce admins, giải quyết thảo luận; cấm force-push/delete. Commissioning
+được chủ dự án duyệt ngày 21/11 không yêu cầu review bổ sung; giữ approval đã có,
+`dismiss_stale_reviews=false`, `require_last_push_approval=false`.
 
-Images trong ghcr.io/nguyenhuy238: `bhome-api:sha-<MAIN_SHA>`,
-`bhome-owner-web-production:sha-<MAIN_SHA>`, `bhome-public-web-production:sha-<MAIN_SHA>`.
-Pin tag@sha256:digest, ghi OCI revision/source và đối chiếu image thực tế với manifest.
-/bhome-release.json chỉ chứa metadata public, không chứa secret.
+Environment `production`: chỉ main, required reviewer `nguyenhuy238`,
+`can_admins_bypass=false`. `Verify-ProductionGate.cjs` kiểm trước và sau approval.
+Đã quan sát job thật chờ environment approval trước SSH; các lần retry đều qua gate.
+Lượt này chủ dự án ủy quyền áp dụng/triển khai; không tắt gate để chạy release.
 
-## GitHub Environment
+| Cấu hình                                              | Trạng thái              |
+| ----------------------------------------------------- | ----------------------- |
+| Repository variable `BHOME_PRODUCTION_CD_ENABLED`     | `true`                  |
+| Repository variable `BHOME_PRODUCTION_SSH_HOST`       | VPS Production          |
+| Environment secret `BHOME_PRODUCTION_SSH_PRIVATE_KEY` | Đã thiết lập key riêng  |
+| Environment secret `BHOME_PRODUCTION_SSH_KNOWN_HOSTS` | Đã pin trusted host key |
 
-Environment production **đã cấu hình và GET đọc lại xác minh**: required reviewer
-`nguyenhuy238`, chỉ branch main, `can_admins_bypass=false`. Reviewer có thể duyệt run
-do chính họ kích hoạt; code PR vẫn cần người khác review theo quy tắc team.
+Key riêng dùng forced command `/opt/bhome-deploy/production/production-ci-ssh-entry.sh`;
+lệnh shell và lệnh release Staging bị từ chối. Root password/operator key không được
+đưa vào Actions. Marker `/opt/bhome-deploy/production/ENABLED_AFTER_REVIEW` đã tạo
+sau commissioning. Không in resolved Compose, env secrets hoặc private backup.
 
-`Verify-ProductionGate.cjs` từ chối environment thiếu reviewer, còn admin bypass hoặc
-branch/tag policy khác main. Kiểm trước khi xếp job và kiểm lại sau duyệt. GitHub
-phải duyệt job trước khi cấp environment secrets. REST configuration/unit test
-không thay bằng chứng workflow thật dừng chờ duyệt rồi mới SSH.
-[GitHub environment protection](https://docs.github.com/en/actions/how-tos/deploy/configure-and-manage-deployments/manage-environments).
+## Release kế tiếp
 
-| Settings                      | Cần thiết                                                            |
-| ----------------------------- | -------------------------------------------------------------------- |
-| Repository variable           | `BHOME_PRODUCTION_CD_ENABLED=true`, chỉ bật sau commissioning/review |
-| Production environment secret | `BHOME_PRODUCTION_SSH_PRIVATE_KEY`                                   |
-| Production environment secret | `BHOME_PRODUCTION_SSH_KNOWN_HOSTS`                                   |
-| Optional repository variable  | `BHOME_PRODUCTION_SSH_HOST`                                          |
+1. Tích hợp qua PR đúng quy tắc nhóm; kiểm CI candidate, Staging và main. Xác nhận
+   không có thay đổi schema hoặc provider cần kế hoạch riêng.
+2. Đối chiếu ba images GHCR `bhome-api`, `bhome-owner-web-production`,
+   `bhome-public-web-production`, tag `sha-<MAIN_SHA>` và immutable digests từ image job
+   của chính run. Kiểm OCI revision/source, bundle origins và release metadata.
+3. Xem Production job chờ duyệt: SHA, digests, backup/schema và dự kiến gián đoạn.
+   Người có quyền approve environment cho đúng release. Không dùng artifact của run khác.
+4. Theo dõi `release / production`: SSH → worker tmux → flock → backup/restore,
+   schema guard, disk reserve → pull → `up -d --no-deps --no-build --pull never`
+   đúng ba apps → readiness/HTTPS/isolation/provenance smoke.
+5. Đối chiếu `/opt/bhome-deploy/production/current.json`, `/bhome-release.json`,
+   container image refs/health và evidence path từ job. Chạy authenticated/browser
+   smoke bằng tài khoản tổng hợp được phép; giữ giới hạn kiểm chứng trong báo cáo.
 
-SSH key Production phải riêng, forced command `production-ci-ssh-entry.sh`; không dùng
-key Staging/operator. Không nhập root password vào GitHub. Hiện secrets chưa thiết
-lập, CD tắt, chưa cài Production CI key và chưa tạo ENABLED_AFTER_REVIEW trên VPS.
+`run-production-release.sh` gọi shared `run-release.sh` / `deploy-release.sh`.
+Compose ghép `/opt/bhome/docker-compose.yml`, private `compose.vps.yml`,
+`compose.integrations.yml`, `compose.production-environment.yml` và
+`compose.production-release.yml`; env file `/opt/bhome-config/stack.env`.
+Validate `config --quiet`. Template healthchecks nằm trong
+`deploy/vps/compose.production-environment.example.yml`; private overlay giữ credentials
+và các integration switches được duyệt. Không chép nguyên template đè cấu hình riêng.
 
-## Commissioning lần đầu — cần phê duyệt riêng
+Release chỉ recreate ứng dụng; giữ PostgreSQL/MinIO/Caddy và Staging. Một VPS có thể
+có gián đoạn ngắn khi recreate; chưa chứng minh zero downtime. Nếu disk dưới 4 GiB,
+dừng để xử lý nguyên nhân. Không system-prune hoặc xóa rollback images/volumes.
 
-1. Review main SHA, CI, ba registry digests, origins/bundle, schema compatibility,
-   backup và rollback. Workspace candidate chưa commit không đủ điều kiện main release.
-2. Chụp lại container/image IDs, StartedAt, env fingerprint, volumes/networks, disk,
-   dependency health. Backup DB/config/storage và restore DB kiểm chứng mới. Baseline
-   trong biên bản là lịch sử, phải kiểm lại trước mỗi release.
-3. Chuẩn bị root-only `/opt/bhome-config/compose.production-environment.yml` từ
-   `deploy/vps/compose.production-environment.example.yml`. Nó thêm Deployment anchors
-   cho backend mới; không thay credentials. API hiện còn thiếu anchors trong env.
-4. Chuẩn bị `/opt/bhome-config/compose.production-release.yml` bằng image IDs hiện
-   đang chạy của API/Owner/Public để có rollback ban đầu; không dùng image Staging.
-5. Kiểm schema read-only với đúng candidate. Ngày 20/11 cả hai DB có 24 bảng/390 cột/
-   85 FK; column/type/null/default signature khớp sau khi sort theo tên cột. Counts
-   không thay candidate-specific verifier hoặc constraint/index compatibility.
-   Không nới guard DB tool Development để chạy Production.
-6. Sau schema review, ghi checksum SQL chuẩn vào
-   `/opt/bhome-deploy/production/schema-baseline.sha256`. Source SQL đổi sẽ dừng CD;
-   thay baseline cần review migration riêng, không tự cập nhật để ép release qua.
-7. Image Production cũ thiếu Deployment anchors. Ghi chính image ID đã kiểm tra vào
-   `/opt/bhome-deploy/production/legacy-image-id` để cho phép chỉ image cũ đó ở
-   preflight commissioning. Candidate mới vẫn bắt buộc đầy đủ anchors/origins.
-8. Cài scripts root-owned từ source đã review, đối chiếu hash. Source đã được chuẩn
-   bị ở `/opt/bhome-deploy/production/`, nhưng chưa bật. Chỉ sau duyệt commissioning
-   mới tạo `ENABLED_AFTER_REVIEW`, cài key riêng/forced command, nhập hai secrets và
-   bật repository variable CD.
-9. Xác minh workflow main thật dừng ở environment approval, chưa SSH trước duyệt.
-   Chủ dự án approve đúng SHA/digests trong cửa sổ release. Chưa có lượt này nên
-   chưa được đánh dấu Production CD hoàn tất.
+Schema SQL baseline hiện là
+`f97676af7340779d142a15fd3a358eda150eb75bc0263e1eb3c3f63ca40283dd`.
+Thay SQL phải dừng và có migration plan riêng; không cập nhật baseline để ép guard qua.
+Không auto migration, EnsureCreated hoặc seed Production trong release.
 
-## Deploy và rollback
+SePay, email/push/SMS, notification automation, general jobs/billing automation và
+initializer đang tắt. Không bật giao dịch/email/ký thật để chạy smoke. Source vẫn có
+OwnerSession signing và activation worker riêng; không suy ra mọi worker đều tắt
+chỉ từ `Jobs__Enabled=false`.
 
-Project bhome-vps; --env-file `/opt/bhome-config/stack.env`; ghép root
-`/opt/bhome/docker-compose.yml`, `compose.vps.yml`, `compose.integrations.yml`,
-`compose.production-environment.yml`, `compose.production-release.yml` cuối cùng.
-Validate `config --quiet`; không in resolved config chứa secrets.
+## Sự cố và rollback
 
-`run-production-release.sh` → worker tmux run-release.sh, flock riêng. Chỉ nhận main
-HEAD hiện tại, run ID tăng và đúng ba digest do image job truyền. Update đúng ba app:
-`up -d --no-deps --no-build --pull never api owner-web public-web`. Không restart
-PostgreSQL/MinIO/Caddy để đổi app. Một VPS có thể gián đoạn ngắn khi recreate;
-chưa có bằng chứng zero downtime.
+Smoke sau thay image lỗi → script khôi phục release override trước → recreate ba
+apps bằng image cũ → readiness/smoke/protected snapshot → `ROLLBACK_PASS` hoặc
+`ROLLBACK_FAILED`. Không tự restore đè DB. Đã diễn tập hàm rollback nguyên bản trên
+ba containers thật trong stack riêng; chưa tiêm lỗi vào traffic Production.
 
-Backup gồm config archive riêng root, custom dump/list/restore DB mới, storage
-mirror/diff trên VPS. Mirror không phải snapshot nguyên tử xuyên DB/storage khi có
-ghi đồng thời; release schema/data cần kế hoạch consistency/migration riêng.
+Nếu rollback lỗi, giữ evidence và dữ liệu, validate Compose, khôi phục chính override
+đã backup rồi chạy shared smoke. Không down volumes, seed, xóa images hoặc đổi schema
+baseline. Hướng dẫn logs, backup 02:15 hàng ngày, retention, khôi phục VPS và rotation
+nằm trong [tài liệu vận hành](BHOME_PRODUCTION_OPERATIONS_2026-11-21.md).
 
-Kiểm readiness nội bộ, HTTPS, auth/public APIs, CORS từ chối Staging, unsigned webhook,
-image ref/ID/OCI/metadata, protected containers và env fingerprint. Authenticated
-login/refresh/logout Production cần tài khoản smoke tổng hợp được cho phép; chưa có
-nên chưa chạy. Kiểm email/signing callback đúng anchors, không gửi/ký thử cho người
-thật. Giữ SePay disabled/trạng thái thực tế, không bật Live hay đổi payment credentials.
+Alert hiện ghi journal qua systemd OnFailure; chưa có thông báo chủ động tới người trực.
+Backup ngoài VPS hiện là checkpoint có mã hóa, chưa có replication định kỳ đến storage
+độc lập. Các giới hạn này được ghi trong biên bản nghiệm thu.
 
-Smoke lỗi → restore release override trước → recreate app --no-deps → health/smoke →
-ghi ROLLBACK_PASS/ROLLBACK_FAILED. Không restore đè DB, delete volume/image cũ,
-down/prune/EnsureCreated/auto migration/seed. Schema khác baseline phải dừng trước
-thay image. DB kiểm chứng được giữ lại.
+## Cấu hình ký nội bộ trên Production
 
-## Candidate đã chuẩn bị
+Sau khi image có hỗ trợ email nghiệp vụ, cấu hình
+`NotificationChannels__ContractAndInvoiceEmailEnabled=true` trong môi trường API
+Production để gửi PDF sau kích hoạt và sau thanh toán. Chạy kiểm tra SMTP,
+hàng đợi và tài khoản nhận đã xác minh theo quy trình phát hành. Cờ này hoạt động
+khi `Jobs__Enabled=false` và không yêu cầu bật thông báo tự động diện rộng.
 
-VPS `/opt/bhome-deploy/candidates/90f4e3acfcefe933/`: Owner/Public Production Docker
-build và artifact isolation checks đã pass. Source archive SHA256:
-`90f4e3acfcefe9331a4feb029c91fe620e6cff23476bcf1a67f0eb9632a73bbc`.
-Baseline `a370789c6008d9a31f909ff4ef920cce43c37400`, có workspace changes chưa commit.
-OCI label ghi thêm archive hash/uncommitted=true; **không mạo nhận artifact từ main**.
-GHCR publish bị từ chối vì credential thiếu scope; mới có local image IDs, chưa có
-registry digests. Phải build lại từ main SHA hợp lệ sau review/merge.
+Theo quyết định chủ dự án ngày 27/11/2026, ký hợp đồng thuê UC-15 dùng mẫu DOCX
+nhúng trong image, không yêu cầu phê duyệt mẫu hoặc cấu hình
+`MainDraft__ApprovedProductionTemplateSha256`. Giá trị khóa cũ không chặn xem PDF
+hay gửi ký hợp đồng Live. Backend tiếp tục kiểm tra phiên bản/snapshot và hash
+nội dung tài liệu mà người dùng đã xem. Chi tiết:
+[MAIN_CONTRACT_TEMPLATE_2026-11-27.md](MAIN_CONTRACT_TEMPLATE_2026-11-27.md).
 
-Production hiện anonymous refresh gọi đúng Production trên desktop/mobile. Bản live
-còn script debug localhost8400 và Public locations chưa thực hiện. Candidate đã bỏ
-debug overlay và có Public pages; chỉ thay Production sau approval. Không nới CORS
-để che lỗi; Staging edge đã được tách alias nhằm tránh Docker DNS phân giải chéo.
+Ghép `environment` và `volumes` của service `api` trong
+`deploy/vps/compose.contract-signing.example.yml` vào
+`/opt/bhome-config/compose.production-environment.yml`. Đặt các giá trị sau trong
+`/opt/bhome-config/stack.env` trên VPS.
+
+- `BHOME_ANON_HMAC_BASE64` là khóa OTP riêng của Production, Base64 giải mã ra
+  ít nhất 32 byte. Giữ khóa Production hiện có nếu đã cấp lời mời còn hiệu lực.
+- `BHOME_SIGNING_PUBLIC_URL` là URL HTTPS trang `/contract-signing` trên Owner Web Production.
+- `BHOME_SIGNING_SEAL_PFX_FILE` là đường dẫn tuyệt đối đến chứng thư PFX riêng
+  của BHOME trên Production, có khóa riêng RSA. Cấp quyền đọc cho UID chạy API.
+  `BHOME_SIGNING_SEAL_PFX_PASSWORD` là mật khẩu mở PFX. Mount chỉ đọc và giữ
+  bản sao lưu chứng thư theo quy trình quản lý bí mật của Production.
+
+Kiểm tra `docker compose config --quiet` với chuỗi overlay Production. Áp dụng
+qua quy trình release ở trên, kiểm tra readiness nội bộ và dùng hợp đồng thử
+để xác minh Owner ký PDF, Staff có quyền gửi lời mời và người nhận xác minh OTP.

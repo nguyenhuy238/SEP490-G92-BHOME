@@ -28,6 +28,7 @@ export function useWorkspaceQuery<T>(
         stale: false,
         updatedAt: 0,
         revalidate: uncached.reload,
+        poll: uncached.reload,
       };
 }
 function useUncachedWorkspaceQuery<T>(

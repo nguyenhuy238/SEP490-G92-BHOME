@@ -85,7 +85,8 @@ public sealed record RefundSource(Guid? SourcePaymentId,
     DepositDeductionPlan? DepositDeductions = null,
     [property: JsonNumberHandling(JsonNumberHandling.AllowReadingFromString | JsonNumberHandling.WriteAsString)] decimal ApprovedDepositOffsets = 0,
     RefundExternalBeneficiary? ExternalBeneficiary = null,
-    [property: JsonNumberHandling(JsonNumberHandling.AllowReadingFromString | JsonNumberHandling.WriteAsString)] decimal MaintenanceDeductions = 0);
+    [property: JsonNumberHandling(JsonNumberHandling.AllowReadingFromString | JsonNumberHandling.WriteAsString)] decimal MaintenanceDeductions = 0,
+    [property: JsonNumberHandling(JsonNumberHandling.AllowReadingFromString | JsonNumberHandling.WriteAsString)] decimal? EligibleReceiptRefundAmount = null);
 public sealed record RefundSourceData(decimal Excess, bool IsDevelopmentDemo, IReadOnlyList<RefundPerson> Beneficiaries,
     IReadOnlyList<RefundRecord> Requests, Guid? DepositContractId = null, string? FinancialReference = null,
     IReadOnlyList<string>? Blockers = null, decimal? AvailableDeposit = null, decimal? VerifiedDeposit = null,
@@ -120,7 +121,7 @@ public sealed class RefundService(IRefundRepository repository, IObjectStorage s
         return actor;
     }
     private DateTimeOffset Now => clock.GetUtcNow();
-    private void ValidateMode(bool demo) { if (demo && mode?.AllowDevelopmentDemo != true) throw new FinanceException(409, "development_payment_unavailable"); }
+    private void ValidateMode(bool demo) { if (demo && mode?.AllowDevelopmentDemo != true && mode?.AllowSandboxReceivingAccounts != true) throw new FinanceException(409, "development_payment_unavailable"); }
     private static string Reason(string value) => string.IsNullOrWhiteSpace(value) || value.Length > 2000
         ? throw new FinanceException(400, "invalid_refund_reason") : value.Trim();
     private static void Key(Guid key) { if (key == Guid.Empty) throw new FinanceException(400, "idempotency_key_required"); }
@@ -143,11 +144,16 @@ public sealed class RefundService(IRefundRepository repository, IObjectStorage s
             var source = deposit ? await repository.DepositSourceAsync(id, t) : await repository.SourceAsync(id, t);
             var paid = source.Requests.Where(r => r.Status == "COMPLETED").Sum(r => r.Amount);
             var held = Reserved(source) - paid;
+            var available = Math.Max(0, source.Excess - paid - held);
+            var eligible = !deposit && (!source.IsDevelopmentDemo || mode?.AllowDevelopmentDemo == true || mode?.AllowSandboxReceivingAccounts == true) &&
+                !(source.Blockers?.Count > 0) && source.Requests.Count < 100 &&
+                (source.Beneficiaries.Count > 0 || source.ExternalBeneficiary is not null);
             return new RefundSource(deposit ? null : id, deposit ? 0 : source.Excess, paid, held,
-                deposit ? source.AvailableDeposit : Math.Max(0, source.Excess - paid - held),
+                deposit ? source.AvailableDeposit : available,
                 source.IsDevelopmentDemo, source.Beneficiaries, source.Requests.Select(View).ToArray(),
                 source.DepositContractId, source.FinancialReference, source.Blockers,
-                deposit ? source.VerifiedDeposit ?? source.Excess : null, source.DepositDeductions, source.ApprovedDepositOffsets, source.ExternalBeneficiary, source.MaintenanceDeductions);
+                deposit ? source.VerifiedDeposit ?? source.Excess : null, source.DepositDeductions, source.ApprovedDepositOffsets, source.ExternalBeneficiary, source.MaintenanceDeductions,
+                eligible ? available : null);
         }, t);
     }
     public Task<RefundView> CreateAsync(Guid sourceId, RefundInput input, Guid key, CancellationToken t)
@@ -321,7 +327,7 @@ public sealed class RefundService(IRefundRepository repository, IObjectStorage s
                 if (await repository.ReferenceUsedAsync(x.ExternalReference, id, t)) throw new FinanceException(409, "refund_reference_used");
                 if (current.State.Upload is null)
                 {
-                    current.State.Upload = new(key, fingerprint, $"refunds/{id:N}/{key:N}", type, bytes.Length, hash,
+                    current.State.Upload = new(key, fingerprint, PrivateImageKeys.Entity("refunds", id, key), type, bytes.Length, hash,
                         x.ExecutedAt, x.ExternalReference, x.Reason);
                     await repository.SaveAsync(current, false, actor, AuditPrefix(current) + "ExecutionPending", Now, t);
                 }

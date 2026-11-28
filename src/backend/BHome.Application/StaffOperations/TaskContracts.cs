@@ -25,17 +25,23 @@ public sealed record TaskUpdate(int Version, TaskWrite Work, [Required, StringLe
 [JsonUnmappedMemberHandling(JsonUnmappedMemberHandling.Disallow)]
 public sealed record TaskAction(int Version, [StringLength(8000)] string? Note = null, [MaxLength(50)] Guid[]? EvidenceIds = null);
 public sealed record TaskPage<T>(IReadOnlyList<T> Items, int Page, int PageSize, int TotalCount);
+public enum TaskCategory { Operational, MoveIn, MoveOut }
 public sealed class TaskQuery
 {
     [Range(1, 1000000)] public int Page { get; set; } = 1;
     [Range(1, 100)] public int PageSize { get; set; } = 20;
     public Guid? LocationId { get; set; }
+    public Guid? RoomId { get; set; }
+    public bool ActionableOnly { get; set; }
+    public TaskCategory? Category { get; set; }
+    [StringLength(100)] public string? Search { get; set; }
     public Guid? StaffUserId { get; set; }
     public Guid? RecordedStaffUserId { get; set; }
     public bool? HasResponsibility { get; set; }
     public MeterTaskStatus? Status { get; set; }
     public OperationalTaskPriority? Priority { get; set; }
     public bool? IsOverdue { get; set; }
+    public bool LatestActionable { get; set; }
     public DateTimeOffset? DueFrom { get; set; }
     public DateTimeOffset? DueTo { get; set; }
 }
@@ -89,10 +95,14 @@ public interface IOperationalTaskRepository
     Task<OperationalTask?> FindAsync(Guid id, CancellationToken t);
     Task<MeterTaskStatus?> MoveInMainTaskStatusAsync(Guid contractId, CancellationToken t);
     Task<LocationAssetInventorySnapshot> OwnerConfirmedInventoryAsync(OperationalTask task, CancellationToken t);
+    Task<bool> HasLocationHandoverApprovalAsync(Guid taskId, int version, CancellationToken t);
     Task<IReadOnlyList<TaskIncidentTarget>> IncidentTargetsAsync(Guid[] incidentIds, CancellationToken t);
     Task<bool> IncidentsResolvedAsync(Guid[] incidentIds, CancellationToken t);
     Task NotifyMoveInInventoryCompletedAsync(OperationalTask task, Guid actor, CancellationToken t);
     Task<TaskResponsibility?> ResponsibilityAsync(Guid locationId, DateOnly date, CancellationToken t);
+    Task<TaskResponsibility?> StaffAtLocationAsync(Guid locationId, Guid staffId, DateOnly date, CancellationToken t);
+    Task<Guid?> MoveOutInspectionStaffAsync(Guid contractId, CancellationToken t);
+    Task<Guid[]> EnsureMoveOutFinalMeterTasksAsync(OperationalTask inspectionTask, Guid staffId, DateOnly date, CancellationToken t);
     Task<TaskPage<TaskView>> ListAsync(TaskQuery query, Guid? staffId, DateOnly date, DateTimeOffset now, CancellationToken t);
     Task<TaskPage<TaskHistoryView>> HistoryAsync(Guid taskId, int page, int size, CancellationToken t);
     Task<IReadOnlyList<TaskActorView>> ActorsAsync(Guid taskId, CancellationToken t);

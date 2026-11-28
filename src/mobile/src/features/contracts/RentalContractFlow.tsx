@@ -15,7 +15,7 @@ import {
 import { Action, Box, Heading, Pill, ui } from '../../components/WorkspaceKit';
 import { colors as c } from '../../theme/theme';
 import { randomUUID } from '../../lib/randomUUID';
-import { ContractActionForm, SigningCertificates } from './ContractActionForm';
+import { ContractActionForm } from './ContractActionForm';
 import { ContractSigningPanel, useSigningMethods } from './ContractSigningPanel';
 import { ContractEvidence } from './ContractEvidence';
 import { ContractWorkflowPanel } from './ContractWorkflowPanel';
@@ -33,6 +33,7 @@ export function RentalContractFlow({
   actorId,
   onChanged,
   onList,
+  onComplete,
   initialStep,
 }: {
   api: ContractClient;
@@ -42,12 +43,18 @@ export function RentalContractFlow({
   actorId: string;
   onChanged: () => void;
   onList: () => void;
+  onComplete?: () => void;
   initialStep?: number;
 }) {
   const state = rentalContractState(contract, readiness);
   const [selectedStep, setStep] = useState(initialStep ?? state.current);
   const awaitingTenant = !!contract.ownerOnlySandboxConfirmed && !contract.sandboxTenantSimulated;
   const step = awaitingTenant ? 1 : selectedStep;
+  const staffEmailSigning =
+    role === 'Staff' &&
+    contract.signingMode === 'INTERNAL_OTP_DRAWN' &&
+    !contract.ownerOnlySandboxConfirmed &&
+    !contract.sandboxTenantSimulated;
   const [simulating, setSimulating] = useState(false);
   const [simulationError, setSimulationError] = useState('');
   const simulationLock = useRef(false);
@@ -59,6 +66,7 @@ export function RentalContractFlow({
       role === 'Staff' &&
       contract.kind === 'Main' &&
       contract.signingMode === 'INTERNAL_OTP_DRAWN' &&
+      !staffEmailSigning &&
       !state.active
     ) {
       const refresh = () =>
@@ -76,13 +84,24 @@ export function RentalContractFlow({
       active = false;
       if (timer) clearInterval(timer);
     };
-  }, [api, contract.id, contract.kind, contract.signingMode, role, state.active]);
+  }, [
+    api,
+    contract.id,
+    contract.kind,
+    contract.signingMode,
+    role,
+    staffEmailSigning,
+    state.active,
+  ]);
 
   const [selected, setSelected] = useState('');
   const [details, setDetails] = useState(false);
   const [initialPaidFor, setInitialPaidFor] = useState<string | null>(null);
   const initialPaid = initialPaidFor === contract.id;
   const markInitialPaid = useCallback(() => setInitialPaidFor(contract.id), [contract.id]);
+  useEffect(() => {
+    if (initialPaid && !state.active) onChanged();
+  }, [initialPaid, state.active, onChanged]);
   const [keys] = useState(() => mutationKeys(randomUUID));
   const signingMethods = useSigningMethods(
     api,
@@ -131,9 +150,9 @@ export function RentalContractFlow({
           ? ['activate']
           : [];
   return (
-    <View style={styles.flow}>
+    <View style={[styles.flow, role === 'Staff' && styles.staffFlow]}>
       <RentalContractStepper current={state.active ? 3 : step} completed={state.completed} />
-      <Box>
+      <Box style={role === 'Staff' && styles.staffSummary}>
         <View style={styles.row}>
           <Text style={styles.title}>
             {state.active ? 'Hợp đồng đã được kích hoạt' : `Phòng ${contract.roomNumber ?? '—'}`}
@@ -176,37 +195,29 @@ export function RentalContractFlow({
           <Action secondary onPress={() => setDetails((value) => !value)}>
             Xem chi tiết hợp đồng
           </Action>
-          <Action onPress={onList}>Quay về danh sách hợp đồng</Action>
+          <Action onPress={onComplete ?? onList}>
+            {onComplete ? 'Xác nhận · Về Trang chủ' : 'Quay về danh sách hợp đồng'}
+          </Action>
         </>
       ) : (
         <>
           {step === 0 && (
-            <>
-              <Box>
-                <Heading title="Nội dung hợp đồng" />
-                <Text>{contract.terms}</Text>
-              </Box>
-              <ContractWorkflowPanel
-                api={api}
-                contract={contract}
-                role={role}
-                section="documents"
-                showDeposits={false}
-              />
-            </>
+            <ContractWorkflowPanel
+              api={api}
+              contract={contract}
+              role={role}
+              section="documents"
+              showDeposits={false}
+            />
           )}
           {step === 1 &&
             contract.isDevelopmentDemo &&
+            !staffEmailSigning &&
             role === 'Staff' &&
             (sandboxFor === contract.id || contract.isDevelopmentDemo) &&
             contract.signingMode === 'INTERNAL_OTP_DRAWN' && (
               <Box>
                 <Heading title="Xác nhận ký hợp đồng · Sandbox" />
-                <Text>
-                  {
-                    'Ch\u1ec9 d\u00f9ng cho ki\u1ec3m th\u1eed; kh\u00f4ng ph\u1ea3i ch\u1eef k\u00fd Tenant th\u1eadt.'
-                  }
-                </Text>
                 <Button
                   mode="outlined"
                   disabled={
@@ -236,7 +247,7 @@ export function RentalContractFlow({
                   mode="contained"
                   disabled={
                     simulating ||
-                    !contract.ownerOnlySandboxConfirmed ||
+                    !(sandboxFor === contract.id || contract.ownerOnlySandboxConfirmed) ||
                     !!contract.sandboxTenantSimulated
                   }
                   onPress={() => {
@@ -260,7 +271,7 @@ export function RentalContractFlow({
                 </Button>
               </Box>
             )}
-          {step === 1 && !contract.isDevelopmentDemo && (
+          {step === 1 && (!contract.isDevelopmentDemo || staffEmailSigning) && (
             <ContractSigningStep
               key={`${contract.id}:${contract.snapshotHash}`}
               api={api}
@@ -271,7 +282,7 @@ export function RentalContractFlow({
               onContinue={() => navigate(2)}
             />
           )}
-          {step === 1 && contract.isDevelopmentDemo && (
+          {step === 1 && contract.isDevelopmentDemo && !staffEmailSigning && (
             <>
               <Box>
                 <Heading
@@ -291,9 +302,11 @@ export function RentalContractFlow({
                   <View key={person.key} style={styles.signer}>
                     <Text style={styles.signerLabel}>{person.label}</Text>
                     <Pill tone={person.value === 'signed' ? 'green' : 'amber'}>
-                      {contract.ownerOnlySandboxConfirmed
+                      {contract.ownerOnlySandboxConfirmed || contract.sandboxTenantSimulated
                         ? person.key === contract.ownerSignerId
-                          ? 'Owner x\u00e1c nh\u1eadn test'
+                          ? contract.ownerOnlySandboxConfirmed
+                            ? 'Owner x\u00e1c nh\u1eadn test'
+                            : 'Chờ mô phỏng Owner'
                           : contract.sandboxTenantSimulated
                             ? 'M\u00f4 ph\u1ecfng Sandbox'
                             : 'Ch\u1edd m\u00f4 ph\u1ecfng Tenant'
@@ -317,10 +330,12 @@ export function RentalContractFlow({
                     ? contract.ownerOnlySandboxConfirmed
                       ? contract.sandboxTenantSimulated
                         ? 'Owner x\u00e1c nh\u1eadn test, Staff m\u00f4 ph\u1ecfng Tenant. Backend cho ph\u00e9p ti\u1ebfp t\u1ee5c QR.'
-                        : 'Owner x\u00e1c nh\u1eadn test; ch\u1edd Staff m\u00f4 ph\u1ecfng Tenant k\u00fd.'
-                      : signingFinished
-                        ? 'Hai bên đã mô phỏng ký. Tiếp tục kiểm tra điều kiện thử nghiệm.'
-                        : 'Ký mô phỏng trong môi trường Development.'
+                        : 'Owner đã xác nhận test. Đang chờ mô phỏng Tenant ký.'
+                      : contract.sandboxTenantSimulated
+                        ? 'Đã mô phỏng Tenant ký. Đang chờ Owner ký.'
+                        : signingFinished
+                          ? 'Hai bên đã mô phỏng ký. Tiếp tục kiểm tra điều kiện thử nghiệm.'
+                          : 'Ký mô phỏng trong môi trường Development.'
                     : state.signed
                       ? 'Hai bên đã ký. Tiếp tục kiểm tra tiền cọc.'
                       : state.owner === 'signed' || state.tenant === 'signed'
@@ -334,13 +349,17 @@ export function RentalContractFlow({
                       : 'Staff theo dõi hồ sơ; Chủ cơ sở và Người thuê thực hiện ký.'}
                   </Text>
                 )}
-                {signer && !contract.isDevelopmentDemo && !otpSigning && (
-                  <SigningCertificates api={api} />
-                )}
                 {signer &&
                   contract.signatures.some((signature) =>
                     ['Signed', 'Simulated'].includes(signature.status),
-                  ) && <ContractEvidence api={api} contractId={contract.id} pdf />}
+                  ) && (
+                    <ContractEvidence
+                      api={api}
+                      contractId={contract.id}
+                      contractKind={contract.kind}
+                      pdf
+                    />
+                  )}
               </Box>
               {otpSigning && (
                 <ContractSigningPanel
@@ -450,7 +469,6 @@ export function RentalContractFlow({
               action={action}
               contract={contract}
               keys={keys}
-              evidenceIds={[]}
               onCancel={() => {
                 setSelected('');
               }}
@@ -466,7 +484,7 @@ export function RentalContractFlow({
                 Quay lại
               </Button>
             )}
-            {step < 3 && (step !== 1 || contract.isDevelopmentDemo) && (
+            {step < 3 && (step !== 1 || (contract.isDevelopmentDemo && !staffEmailSigning)) && (
               <Button
                 style={ui.grow}
                 mode="contained"
@@ -515,6 +533,8 @@ function Check({ label, done, fallback }: { label: string; done: boolean; fallba
 }
 const styles = StyleSheet.create({
   flow: { gap: 12 },
+  staffFlow: { gap: 8 },
+  staffSummary: { padding: 12, gap: 8 },
   row: { flexDirection: 'row', alignItems: 'center', flexWrap: 'wrap', gap: 8 },
   title: { color: c.navy, fontSize: 16, lineHeight: 23, fontWeight: '600', flexShrink: 1 },
   valueRow: { flexDirection: 'row', gap: 12, alignItems: 'flex-start' },

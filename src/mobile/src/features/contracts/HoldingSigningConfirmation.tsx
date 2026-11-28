@@ -1,3 +1,4 @@
+import { ContractNotice } from './ContractNotice';
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { Button, Text } from 'react-native-paper';
 import type {
@@ -190,8 +191,6 @@ export function HoldingSigningConfirmation({
       )}
       {simulation && !tenantSigned && (
         <>
-          <HoldingStatusBadge label="Chỉ dùng kiểm thử Sandbox" tone="warning" />
-          <Text style={ui.muted}>Mô phỏng chỉ để kiểm thử, không tạo chữ ký thật.</Text>
           <Button
             mode="outlined"
             contentStyle={{ minHeight: 44 }}
@@ -220,11 +219,7 @@ export function HoldingSigningConfirmation({
         </Button>
       )}
       {!!success && <Text style={ui.green}>{success}</Text>}
-      {!!error && (
-        <Text accessibilityRole="alert" style={ui.red}>
-          {error}
-        </Text>
-      )}
+      {!!error && <ContractNotice message={error} />}
     </HoldingSectionCard>
   );
 }

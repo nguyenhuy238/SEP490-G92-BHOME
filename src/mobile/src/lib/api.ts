@@ -1,8 +1,16 @@
-import { requestDiagnostic } from '../../../../packages/client-core/src/api';
+import {
+  requestDiagnostic,
+  normalizeApiProblem,
+  getUserFriendlyMessage,
+  type ApiProblem,
+  UserFeedbackError,
+} from '../../../../packages/client-core/src/api';
 import { invalidCredentialsMessage } from '../../../../packages/client-core/src/loginValidation';
 import { QueryCache } from './queryCache';
 import { mutationTags } from './queryPolicies';
 import type { TokenSession } from '../../../../packages/client-core/src/jwtSession';
+import { mobileRequestUrl } from './mobileRequestUrl';
+export { mobileRequestUrl };
 
 export interface Session extends TokenSession {
   refreshToken: string;
@@ -23,6 +31,8 @@ export interface Named {
   status?: string | null;
   capacity?: number | null;
   remainingCapacity?: number | null;
+  currentTenantLabels?: string[] | null;
+  waitingForOwnerSignature?: boolean | null;
 }
 export interface Resident {
   id: string;
@@ -41,10 +51,14 @@ export class MobileApiError extends Error {
     public requestPath?: string,
     public correlationId?: string,
     public method = 'GET',
+    public problem?: ApiProblem,
   ) {
-    super('Yêu cầu không thành công.');
+    super(getUserFriendlyMessage({ status, code, problem }));
+    this.name = 'MobileApiError';
   }
 }
+
+const stagingOrigin = 'https://api-staging.103.146.23.157.sslip.io';
 
 export async function mobileResponse<T>(
   base: string,
@@ -65,17 +79,18 @@ export async function mobileResponse<T>(
     controller.abort();
   }, timeoutMilliseconds);
   try {
-    const response = await transport(base + path, {
+    const response = await transport(mobileRequestUrl(base, path), {
       ...init,
       signal: controller.signal,
       credentials: 'omit',
       cache: 'no-store',
     });
     if (!response.ok) {
-      const problem = (await response.json().catch(() => ({}))) as {
-        code?: unknown;
-        correlationId?: unknown;
-      } | null;
+      const problem = normalizeApiProblem(
+        await response.json().catch(() => undefined),
+        response.status,
+        response.headers.get('X-Correlation-ID'),
+      );
       throw new MobileApiError(
         response.status,
         typeof problem?.code === 'string' ? problem.code : undefined,
@@ -83,6 +98,7 @@ export async function mobileResponse<T>(
         response.headers.get('X-Correlation-ID') ??
           (typeof problem?.correlationId === 'string' ? problem.correlationId : undefined),
         init.method ?? 'GET',
+        problem,
       );
     }
     try {
@@ -114,10 +130,27 @@ export async function mobileResponse<T>(
 }
 
 export async function checkApiConnection(input: string, transport: typeof fetch = fetch) {
-  return mobileResponse(apiBaseUrl(input), '/health/ready', {}, transport, async (response) => {
-    if ((await response.text()).trim() !== 'Healthy')
-      throw new MobileApiError(502, 'invalid_response', '/health/ready');
-  });
+  const base = apiBaseUrl(input);
+  const checkPublic = async () => {
+    const path = '/api/v1/public/locations';
+    await mobileResponse(base, path, {}, transport, async (response) => {
+      const locations: unknown = await response.json().catch(() => null);
+      if (!Array.isArray(locations)) throw new MobileApiError(502, 'invalid_response', path);
+    });
+  };
+  // Staging intentionally blocks /health/* at its public edge. Browsers can
+  // hide that 404 as a network error because the edge does not emit CORS headers.
+  if (base === stagingOrigin) return checkPublic();
+  try {
+    await mobileResponse(base, '/health/ready', {}, transport, async (response) => {
+      if ((await response.text()).trim() !== 'Healthy')
+        throw new MobileApiError(502, 'invalid_response', '/health/ready');
+    });
+  } catch (error) {
+    if (!(error instanceof MobileApiError) || error.status !== 404) throw error;
+    // Deployed gateways deliberately keep readiness private. Use the anonymous API there.
+    await checkPublic();
+  }
 }
 export function apiBaseUrl(input: string): string {
   let url: URL;
@@ -138,15 +171,24 @@ export function apiBaseUrl(input: string): string {
   return url.origin;
 }
 export function errorMessage(error: unknown): string {
+  if (error instanceof UserFeedbackError) return error.message;
   if (error instanceof Error && error.name === 'AbortError')
     return 'Đã dừng chờ phản hồi. Hãy tải lại để kiểm tra dữ liệu đã được lưu hay chưa.';
   if (error instanceof Error && error.message === 'Cần địa chỉ gốc HTTPS của BHOME API.')
     return error.message;
   if (!(error instanceof MobileApiError))
     return 'Không thể hoàn thành. Kiểm tra kết nối và địa chỉ HTTPS.';
-  if (error.code === 'request_timeout' && contractDocumentTimeout(error.requestPath ?? '') > 15000)
+  if (error.code === 'invalid_credentials')
+    return invalidCredentialsMessage + requestDiagnostic(error);
+  if (error.problem && !['request_timeout', 'invalid_response'].includes(error.code ?? ''))
+    return getUserFriendlyMessage(error) + requestDiagnostic(error);
+  if (
+    error.code === 'request_timeout' &&
+    (contractDocumentTimeout(error.requestPath ?? '') > 15000 ||
+      locationAssetHandoverDocumentTimeout(error.requestPath ?? ''))
+  )
     return (
-      'Tạo hoặc hiển thị PDF mất quá nhiều thời gian. Bản nháp đã lưu vẫn được giữ; hãy thử tải lại bản xem trước.' +
+      'Tạo hoặc hiển thị tài liệu PDF mất quá nhiều thời gian. Dữ liệu đã lưu không bị thay đổi; hãy thử tải lại bản xem trước.' +
       requestDiagnostic(error)
     );
   const messages: Record<string, string> = {
@@ -171,19 +213,35 @@ export function errorMessage(error: unknown): string {
       'Dữ liệu bị trùng hoặc đã thay đổi. Hãy tải lại danh sách; hệ thống không tự gộp hồ sơ.',
     identity_already_confirmed:
       'Hồ sơ đã được xác nhận trước đó. Dữ liệu vừa nhập không được ghi đè. Dùng hồ sơ đã xác nhận để tiếp tục; liên hệ Owner nếu cần sửa hồ sơ.',
-    confirmed_baseline_required: 'Cần xác nhận chỉ số ban đầu của đồng hồ trước.',
+    confirmed_baseline_required: 'Chưa có chỉ số đầu kỳ. Hãy xác nhận chỉ số đầu kỳ trước.',
     meter_reset_or_rollover_requires_review:
-      'Chỉ số giảm. Cần Owner xử lý thay/reset hoặc quay vòng đồng hồ theo quy trình riêng.',
-    reading_period_out_of_order: 'Kỳ ghi chỉ số không nối tiếp dữ liệu đã xác nhận.',
-    evidence_not_available: 'Ảnh đã hết thời gian chờ hoặc không thuộc tác vụ. Hãy chụp lại.',
-    task_already_confirmed: 'Tác vụ đã được xác nhận với nội dung khác. Hãy tải lại.',
-    reading_date_or_precision: 'Kiểm tra ngày ghi và số chữ số thập phân của đồng hồ.',
+      'Chỉ số thấp hơn lần ghi trước. Nếu đã thay công tơ, hãy báo chủ trọ.',
+    reading_period_out_of_order: 'Ngày ghi không hợp lệ so với lần ghi trước. Hãy kiểm tra lại.',
+    evidence_not_available: 'Ảnh minh chứng không còn hợp lệ. Hãy chụp lại.',
+    task_already_confirmed: 'Chỉ số đã được xác nhận. Hãy tải lại để xem kết quả.',
+    reading_correction_not_allowed: 'Chỉ số đã được sử dụng hoặc đã chốt, không thể sửa trực tiếp.',
+    task_version_changed: 'Chỉ số đã thay đổi. Hãy tải lại trước khi sửa.',
+    reading_date_or_precision: 'Ngày ghi hoặc chỉ số không hợp lệ. Hãy kiểm tra lại.',
+    reading_integer_required: 'Chỉ số phải là số nguyên không âm.',
+    invalid_reading_value: 'Chỉ số hoặc xác nhận đối chiếu ảnh không hợp lệ.',
+    reading_date_in_future: 'Chưa đến ngày ghi chỉ số theo lịch.',
+    task_closed: 'Nhiệm vụ đã kết thúc. Hãy tải lại danh sách.',
+    active_contract_initial_required: 'Hợp đồng chưa đủ điều kiện ghi chỉ số đầu kỳ.',
+    baseline_already_confirmed: 'Chỉ số đầu kỳ đã được xác nhận. Hãy tải lại.',
     staff_not_currently_assigned: 'Staff chưa được phân công Location có hiệu lực.',
     invalid_citizen_number: 'Số CCCD cần đúng 12 chữ số.',
     invalid_confirmed_identity:
       'Kiểm tra họ tên, ngày sinh và ngày cấp CCCD. Ngày sinh và ngày cấp không được ở tương lai.',
     invalid_input: 'Kiểm tra các ô bắt buộc và độ dài thông tin đã nhập.',
     stale_version: 'Công việc đã thay đổi. Hãy tải lại và kiểm tra trước khi gửi tiếp.',
+    move_in_inventory_reinspection_not_passed:
+      'Tài sản Owner yêu cầu kiểm tra lại chưa đạt hoặc thiếu số lượng. Hãy kiểm tra thực tế và lưu kết quả mới.',
+    move_in_inventory_reinspection_new_evidence_required:
+      'Chưa có ảnh mới sau yêu cầu kiểm tra lại của chủ trọ. Hãy chụp ảnh mới cho tài sản được chọn, kể cả khi đã Đạt.',
+    move_in_inventory_checklist_incomplete:
+      'Phiếu kiểm kê chưa đủ tình trạng, số lượng, ghi chú hoặc ảnh minh chứng bắt buộc.',
+    move_in_inventory_evidence_missing:
+      'Không tìm thấy một số ảnh kiểm kê đã liên kết. Hãy mở tài sản để kiểm tra và bổ sung ảnh.',
     no_responsible_staff:
       'Cơ sở chưa có nhân viên phụ trách có hiệu lực. Owner cần cập nhật phân công.',
     completion_evidence_required: 'Cần chọn ảnh kết quả trước khi gửi Owner kiểm tra.',
@@ -214,13 +272,29 @@ export function errorMessage(error: unknown): string {
   );
 }
 // DOCX→PDF and PDF→PNG each have a 45-second server conversion deadline.
-// Ordinary requests keep their short timeout; mutations are never automatically replayed.
+// Final Move-Out inspection verifies private evidence files and can require
+// more time than an ordinary read. Mutations are never automatically replayed.
 function contractDocumentTimeout(path: string): number {
   return /^\/api\/v1\/contracts\/main-drafts\/[a-f0-9-]{36}\/(?:signing-review|documents(?:\/[a-f0-9-]{36}\/pages\/[1-9][0-9]*)?)$/i.test(
     path,
   )
     ? 60000
     : 15000;
+}
+function locationAssetHandoverDocumentTimeout(path: string): boolean {
+  return (
+    /^\/api\/v1\/operational-tasks\/[a-f0-9-]{36}\/location-asset-handover\/document(?:\/preview|\/pages\/[1-9][0-9]*)?$/i.test(
+      path,
+    ) ||
+    /^\/api\/v1\/location-asset-handovers\/archive\/[a-f0-9-]{36}\/revisions\/[1-9][0-9]*\/document$/i.test(
+      path,
+    )
+  );
+}
+function requestTimeout(path: string): number {
+  if (locationAssetHandoverDocumentTimeout(path)) return 60000;
+  if (/^\/api\/v1\/contracts\/[a-f0-9-]{36}\/move-out\/inspection$/i.test(path)) return 60000;
+  return contractDocumentTimeout(path);
 }
 export class MobileApi {
   readonly queryCache = new QueryCache();
@@ -290,7 +364,7 @@ export class MobileApi {
             ? (response.blob() as Promise<T>)
             : (response.json() as Promise<T>);
         },
-        contractDocumentTimeout(path),
+        requestTimeout(path),
       );
     const send = async () => {
       try {

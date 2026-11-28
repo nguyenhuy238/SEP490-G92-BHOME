@@ -19,6 +19,9 @@ services:
       Cors__AllowedOrigins__1: https://public-staging.103.146.23.157.sslip.io
       Cors__AllowedOrigins__2: https://owner-sepay-test.103.146.23.157.sslip.io
       Cors__AllowedOrigins__3: https://public-sepay-test.103.146.23.157.sslip.io
+      # Mobile Web local development uses bearer tokens, not Owner Web cookies.
+      Cors__AllowedOrigins__4: http://localhost:8081
+      Cors__AllowedOrigins__5: http://127.0.0.1:8081
       AuthWeb__AllowedOrigins__0: https://owner-staging.103.146.23.157.sslip.io
       AuthWeb__AllowedOrigins__1: https://owner-sepay-test.103.146.23.157.sslip.io
       Jwt__Issuer: BHome.Staging

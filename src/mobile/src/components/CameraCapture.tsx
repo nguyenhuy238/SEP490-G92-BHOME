@@ -1,6 +1,6 @@
 import { useFeedbackState } from '../lib/useFeedbackState';
 import React, { useCallback, useEffect, useRef, useState } from 'react';
-import { AppState, Image, Platform, View } from 'react-native';
+import { AppState, Image, Linking, Platform, View } from 'react-native';
 import { CameraView, useCameraPermissions } from 'expo-camera';
 import { File, Paths } from 'expo-file-system';
 import { Button, Text } from 'react-native-paper';
@@ -39,10 +39,13 @@ export function CameraCapture({
   onPhotoCaptured,
   onPhotoCleared,
   meterStep = 1,
+  meterCompact = false,
+  meterRetryResets = false,
   autoOpen = false,
   captureInstruction,
   retryOnly = false,
   uploadError = '',
+  lensPreferenceRef,
 }: {
   label: string;
   buttonMode?: 'outlined' | 'contained';
@@ -56,7 +59,10 @@ export function CameraCapture({
   presentation?: 'inline' | 'document' | 'meter' | 'evidence';
   retryOnly?: boolean;
   uploadError?: string;
+  lensPreferenceRef?: { current: string };
   meterStep?: number;
+  meterCompact?: boolean;
+  meterRetryResets?: boolean;
   autoOpen?: boolean;
   captureInstruction?: string;
   onManual?: () => void;
@@ -65,6 +71,7 @@ export function CameraCapture({
 }) {
   const [permission, requestPermission] = useCameraPermissions();
   const camera = useRef<CameraView>(null);
+  const localLensPreferenceRef = useRef('');
   const [open, setOpen] = useState(false);
   const [session, setSession] = useState(0);
   const [evidenceVisible, setEvidenceVisible] = useState(false);
@@ -72,6 +79,7 @@ export function CameraCapture({
   const [working, setWorking] = useState(false);
   const [preview, setPreview] = useState('');
   const [error, setError] = useFeedbackState();
+  const [cameraPermissionBlocked, setCameraPermissionBlocked] = useState(false);
   const files = useRef(new Set<string>());
   const pending = useRef('');
   const alive = useRef(true);
@@ -125,15 +133,20 @@ export function CameraCapture({
     clearFiles();
     setPreview('');
     setError('');
+    setCameraPermissionBlocked(false);
     readyAccess.current = false;
     setReady(false);
     if (presentation === 'evidence') setEvidenceVisible(true);
     setRequestingPermission(true);
     try {
       const access = permissionAccess.current;
-      const allowed = access.permission?.granted || (await access.requestPermission()).granted;
+      const result = access.permission?.granted
+        ? access.permission
+        : await access.requestPermission();
+      const allowed = result.granted;
       if (!alive.current || epoch !== generation.current) return;
       if (!allowed) {
+        setCameraPermissionBlocked(result.canAskAgain === false);
         setError(
           presentation === 'meter' || presentation === 'evidence'
             ? 'Cần cấp quyền camera trong Cài đặt để chụp ảnh.'
@@ -209,7 +222,11 @@ export function CameraCapture({
         saved = await prepareCapture(
           picture,
           () => alive.current && epoch === generation.current,
-          presentation === 'evidence',
+          presentation === 'evidence'
+            ? 'evidence'
+            : presentation === 'document' || documentSide
+              ? 'identity'
+              : 'ocr',
         );
         files.current.add(saved);
       } finally {
@@ -312,6 +329,7 @@ export function CameraCapture({
         disabled={disabled || working}
         dark={presentation === 'document'}
         showControls={presentation !== 'evidence'}
+        lensPreferenceRef={lensPreferenceRef ?? localLensPreferenceRef}
         onReady={(value) => {
           if (!alive.current || generation.current !== session) return;
           readyAccess.current = value;
@@ -333,12 +351,15 @@ export function CameraCapture({
     setReady(false);
     setOpen(false);
   };
-  const retake = () => {
+  const resetCapture = () => {
     closeCamera();
-    setSession(generation.current);
     clearFiles();
     setPreview('');
     setError('');
+  };
+  const retake = () => {
+    resetCapture();
+    setSession(generation.current);
     setOpen(true);
   };
   const selectDemoMeterPhoto = async () => {
@@ -408,6 +429,7 @@ export function CameraCapture({
         camera={liveCamera}
         label={label}
         step={meterStep}
+        compact={meterCompact}
         preview={preview}
         disabled={disabled}
         working={working}
@@ -419,6 +441,7 @@ export function CameraCapture({
         onClose={closeCamera}
         onUse={() => void submitPending()}
         onRetake={retake}
+        onRetry={meterRetryResets ? resetCapture : undefined}
         onUseDemo={localMeterDemo && !preview ? () => void selectDemoMeterPhoto() : undefined}
       />
     );
@@ -437,6 +460,12 @@ export function CameraCapture({
         onUse={() => void submitPending()}
         onRetake={retake}
         onRequestPermission={() => void openCamera()}
+        showSettings={cameraPermissionBlocked}
+        onOpenSettings={() => {
+          void Linking.openSettings().catch(() =>
+            setError('Không mở được Cài đặt. Hãy cấp quyền Camera cho BHOME rồi thử lại.'),
+          );
+        }}
         onManual={() => {
           closeCamera();
           clearFiles();

@@ -1,3 +1,4 @@
+using BHome.Application.Common;
 using System.ComponentModel.DataAnnotations;
 using System.Globalization;
 using System.Security.Cryptography;
@@ -20,7 +21,7 @@ public sealed partial class PaymentService(IPaymentRepository repository, ICurre
 {
     private Guid Actor => user.UserId is { } id && id != Guid.Empty ? id : throw new PaymentException(401, "authentication_required");
     private DateTimeOffset Now => PaymentRules.Timestamp(clock.GetUtcNow());
-    private DateOnly Today => DateOnly.FromDateTime(TimeZoneInfo.ConvertTimeBySystemTimeZoneId(Now, "Asia/Ho_Chi_Minh").DateTime);
+    private DateOnly Today => clock.BusinessToday();
     private PaymentScope Scope => new(Actor, user.IsInRole(Roles.Owner), user.IsInRole(Roles.Tenant), user.IsInRole(Roles.Staff), Today);
     private void Owner() { _ = Actor; if (!user.IsInRole(Roles.Owner)) throw new PaymentException(403, "payment_owner_required"); }
     private static void Validate(object? value)
@@ -120,7 +121,7 @@ public sealed partial class PaymentService(IPaymentRepository repository, ICurre
                 // MinIO work happens BEFORE the global payment-ledger advisory lock.
                 // Unique attempt keys prevent another concurrent retry from losing its proof
                 // if this attempt fails and compensates the remote upload.
-                uploadedKey = $"payments/manual-statements/{Actor:N}/{Guid.NewGuid():N}/{evidence.Sha256}";
+                uploadedKey = PrivateImageKeys.Entity("payment-statements", Actor, Guid.NewGuid());
                 try { await PrivateImageEvidence.PutVerifiedAsync(storage!, uploadedKey, evidence, t); }
                 catch (PrivateImageIntegrityException) { throw new PaymentException(409, "bank_statement_image_integrity_failed"); }
             }
@@ -241,7 +242,7 @@ public sealed partial class PaymentService(IPaymentRepository repository, ICurre
                 (transfer.StatementEvidenceSha256 is null || transfer.StatementEvidenceObjectKey is null))
                 throw new PaymentException(409, "bank_statement_image_missing");
             if (x.PaidByUserId is not null && await repository.ExternalPayerRecordedAsync(transferId, t)) throw new PaymentException(409, "receipt_payer_already_external");
-            if (transfer.IsDevelopmentDemo && mode?.AllowDevelopmentDemo != true)
+            if (transfer.IsDevelopmentDemo && mode?.AllowDevelopmentDemo != true && transfer.VerificationSource != "SePayTest")
                 throw new PaymentException(409, "development_payment_unavailable");
             var allocated = await repository.AllocationAsync(transferId, t);
             if (allocated is not null)
@@ -251,12 +252,6 @@ public sealed partial class PaymentService(IPaymentRepository repository, ICurre
             }
             var invoice = await Invoice(x.InvoiceId, t);
             if (invoice.Status != InvoiceStatus.Final) throw new PaymentException(409, "final_invoice_required");
-            if (transfer.VerificationSource is "SePayTest" or "SePayLive")
-            {
-                var paymentContract = await repository.HoldingAsync(invoice.RepresentativeContractId, t);
-                if (paymentContract is null || BHome.Application.Contracts.ContractPaymentModes.IsTest(paymentContract) != transfer.IsDevelopmentDemo)
-                    throw new PaymentException(409, "sepay_environment_mismatch");
-            }
             var latest = await repository.LatestReviewAsync(transferId, t);
             if (latest?.Decision is "ExcessRefundPending" or "ExcessRefundCompleted") throw new PaymentException(409, "receipt_excess_already_confirmed");
             if (latest?.Decision == "Rejected") throw new PaymentException(409, "bank_transfer_rejected");
@@ -373,7 +368,7 @@ public sealed partial class PaymentService(IPaymentRepository repository, ICurre
                 entry.ExternalPayerVerified ? "Người trả bên ngoài (đã xác minh)" : entry.Allocation.PaidByUserId == Actor ? "Bạn" : entry.Allocation.PaidByUserId is not null ?
                     scope.Owner ? payers.FirstOrDefault(p => p.UserId == entry.Allocation.PaidByUserId)?.DisplayLabel ?? "Khách thuê đã liên kết" : "Khách thuê khác trong hóa đơn" : "Chưa xác định người trả",
                 scope.Owner ? entry.Allocation.PaidByUserId : null, entry.Transfer.VerificationSource, entry.Allocation.AllocatedAt)).ToArray(),
-            financial.OriginalIssuedAmount, financial.ApprovedAdjustmentTotal, financial.PotentialExcessAmount, financial.FinancialVersion, financial.ReviewStatus);
+            financial.OriginalIssuedAmount, financial.ApprovedAdjustmentTotal, financial.PotentialExcessAmount, financial.FinancialVersion, financial.ReviewStatus, codes is null ? null : await codes.PersistedModeAsync("Invoice", invoice.Id, t));
     }
     public async Task<IReadOnlyList<PayerChoice>> PayersAsync(Guid id, CancellationToken t)
     { Owner(); _ = await Invoice(id, t); return await repository.PayersAsync(id, t); }

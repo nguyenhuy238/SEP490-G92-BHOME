@@ -1,3 +1,4 @@
+import { TextField } from '../common/ValidatedForm';
 import { useState } from 'react';
 import {
   Avatar,
@@ -15,7 +16,6 @@ import {
   Paper,
   Popover,
   Stack,
-  TextField,
   Tooltip,
   Typography,
 } from '@mui/material';
@@ -26,7 +26,6 @@ import {
   ClipboardList,
   DoorOpen,
   FileText,
-  FilePenLine,
   Globe,
   KeyRound,
   LayoutDashboard,
@@ -56,6 +55,7 @@ import { ConfirmDialog } from '../common/PortalUI';
 import type { ResourceKind } from '../../types/portal';
 import { NotificationBell } from '../../features/notifications/NotificationBell';
 import { FinanceWorkflowStrip } from '../../features/finance/FinanceWorkflowStrip';
+import { DemoClockWorkspace } from '../../features/demo/DemoClockPanel';
 
 const iconMap: Record<string, typeof Building2> = {
   dashboard: LayoutDashboard,
@@ -72,7 +72,7 @@ const iconMap: Record<string, typeof Building2> = {
   'operational-tasks': ClipboardList,
   tenants: Contact,
   contracts: FileText,
-  'digital-signing': FilePenLine,
+  'contract-settings': FileText,
   handovers: KeyRound,
   'temporary-residence': ShieldCheck,
   finance: ChartNoAxesCombined,
@@ -104,13 +104,14 @@ const navGroups = [
   ['Nhân sự & Vận hành', ['staff', 'staff-assignments', 'operational-tasks']],
   [
     'Khách thuê & Hợp đồng',
-    ['tenants', 'contracts', 'digital-signing', 'handovers', 'temporary-residence'],
+    ['tenants', 'contracts', 'contract-settings', 'handovers', 'temporary-residence'],
   ],
   ['Tài chính & Hóa đơn', ['finance', 'invoices', 'payments', 'reports']],
   ['Sự cố & Bảo trì', ['incidents', 'maintenance']],
   ['Thông báo', ['notifications']],
   ['Hệ thống', ['public-content']],
 ] as const;
+const visibleNavGroups = navGroups.filter(([group]) => isMockMode || group !== 'Sự cố & Bảo trì');
 const navLabels: Record<string, string> = {
   dashboard: 'Tổng quan',
   account: 'Tài khoản',
@@ -132,8 +133,8 @@ const navLabels: Record<string, string> = {
   'operational-tasks': 'Công việc vận hành',
   tenants: 'Khách thuê',
   contracts: 'Hợp đồng',
-  'digital-signing': 'Ký số (MySign)',
-  handovers: 'Bàn giao phòng',
+  'contract-settings': 'Cấu hình hợp đồng',
+  handovers: 'Bàn giao & trả phòng',
   'temporary-residence': 'Đăng ký tạm trú',
   meters: 'Chỉ số điện nước',
   finance: 'Tổng quan',
@@ -175,7 +176,12 @@ export function AppShell() {
   const location = useLocation();
   const workspaceParts = location.pathname.split('/');
   const current = workspaceParts[1] || 'dashboard';
-  const currentKey = current === 'configuration' ? workspaceParts.slice(1, 3).join('/') : current;
+  const currentKey =
+    current === 'configuration'
+      ? workspaceParts.slice(1, 3).join('/')
+      : current === 'contracts' && workspaceParts[2] === 'settings'
+        ? 'contract-settings'
+        : current;
   const selectedNavKey = financeWorkspaceByRoute[current] ?? currentKey;
   const inLocationWorkspace = workspaceParts[1] === 'locations' && Boolean(workspaceParts[2]);
   const locations = data?.records.locations ?? [];
@@ -200,15 +206,16 @@ export function AppShell() {
           borderColor: 'divider',
         }}
       >
-        <Avatar
-          variant="rounded"
-          sx={{ bgcolor: 'primary.main', width: 36, height: 36, fontSize: 21 }}
-        >
-          B
-        </Avatar>
+        <Box
+          component="img"
+          src="/bhome-mark.png"
+          alt=""
+          aria-hidden="true"
+          sx={{ width: 38, height: 38, objectFit: 'contain', flexShrink: 0 }}
+        />
         {!compact && (
           <Box>
-            <Typography sx={{ fontWeight: 850, fontSize: 17 }}>BHOME</Typography>
+            <Typography sx={{ fontWeight: 850, fontSize: 17 }}>BHome</Typography>
             <Typography sx={{ fontSize: 12, color: 'text.secondary' }}>Owner Portal</Typography>
           </Box>
         )}
@@ -218,7 +225,7 @@ export function AppShell() {
         aria-label="Điều hướng chính"
         sx={{ overflowY: 'auto', overflowX: 'hidden', minHeight: 0, flex: 1, py: 1 }}
       >
-        {navGroups.map(([group, items]) => (
+        {visibleNavGroups.map(([group, items]) => (
           <Box key={group} sx={{ mb: compact ? 0.5 : 0.75 }}>
             {compact ? (
               <Divider sx={{ mx: 2, my: 1 }} />
@@ -252,7 +259,7 @@ export function AppShell() {
                   >
                     <ListItemButton
                       component={NavLink}
-                      to={`/${key}`}
+                      to={key === 'contract-settings' ? '/contracts/settings' : `/${key}`}
                       aria-label={accessibleLabel}
                       aria-description={
                         selectedNavKey === key &&
@@ -331,7 +338,7 @@ export function AppShell() {
       )}
       {!compact && (
         <Typography variant="caption" sx={{ px: 2, py: 1, color: 'text.secondary' }}>
-          BHOME • Owner Workspace
+          Owner Workspace
         </Typography>
       )}
     </Box>
@@ -405,7 +412,7 @@ export function AppShell() {
               ? 'Cơ sở'
               : navLabels[currentKey] ||
                 featureDefinitions.find((f) => f.kind === (current as ResourceKind))?.title ||
-                'BHOME Portal'}
+                'BHome Portal'}
           </Typography>
           {isMockMode && !inLocationWorkspace && (
             <TextField
@@ -584,8 +591,22 @@ export function AppShell() {
             boxSizing: 'border-box',
           }}
         >
-          <FinanceWorkflowStrip pathname={location.pathname} />
-          <Outlet />
+          {((import.meta.env.DEV && import.meta.env.MODE !== 'test') ||
+            (import.meta.env.DEV && import.meta.env.VITE_DEMO_CLOCK_ENABLED === 'true') ||
+            ['Staging', 'Production'].includes(
+              import.meta.env.VITE_DEPLOYMENT_ENVIRONMENT ?? '',
+            )) &&
+          !isMockMode ? (
+            <DemoClockWorkspace>
+              <FinanceWorkflowStrip pathname={location.pathname} />
+              <Outlet />
+            </DemoClockWorkspace>
+          ) : (
+            <>
+              <FinanceWorkflowStrip pathname={location.pathname} />
+              <Outlet />
+            </>
+          )}
         </Box>
       </Box>
       <ConfirmDialog

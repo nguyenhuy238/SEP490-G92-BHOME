@@ -1,9 +1,9 @@
 import { KeyboardFormScrollView } from '../components/KeyboardFormScrollView';
 import { useFeedbackState } from '../lib/useFeedbackState';
 import { conciseMessage } from '../lib/toast';
-import React, { useState } from 'react';
+import React, { useRef, useState } from 'react';
 import { router } from 'expo-router';
-import { KeyboardAvoidingView, Platform, StyleSheet, View } from 'react-native';
+import { Image, KeyboardAvoidingView, Platform, StyleSheet, View } from 'react-native';
 import { Button, Icon, Text, TextInput } from 'react-native-paper';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Action, Box, Row, ui } from '../components/WorkspaceKit';
@@ -16,6 +16,11 @@ import {
   loginIdentifierError,
   loginPasswordError,
 } from '../../../../packages/client-core/src/loginValidation';
+
+// Metro requires a literal asset path for bundled React Native images.
+// eslint-disable-next-line @typescript-eslint/no-require-imports
+const bhomeLogo = require('../../assets/bhome-logo.png');
+
 export function LoginScreen() {
   const { baseUrl, login, restoreError } = useSession();
   const { startPreview, unavailable } = useWorkspace();
@@ -28,6 +33,8 @@ export function LoginScreen() {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useFeedbackState();
   const [validation, setValidation] = useState({ identifier: '', password: '' });
+  const identifierInput = useRef<unknown>(null);
+  const passwordInput = useRef<unknown>(null);
   const [connection, setConnection] = useState('');
   const [checking, setChecking] = useState(false);
   const submit = async () => {
@@ -37,7 +44,13 @@ export function LoginScreen() {
       password: loginPasswordError(password),
     };
     setValidation(errors);
-    if (errors.identifier || errors.password) return;
+    if (errors.identifier || errors.password) {
+      const target = (errors.identifier ? identifierInput.current : passwordInput.current) as {
+        focus?: () => void;
+      } | null;
+      if (typeof target?.focus === 'function') target.focus();
+      return;
+    }
     setBusy(true);
     setError('');
     try {
@@ -60,10 +73,12 @@ export function LoginScreen() {
           keyboardShouldPersistTaps="handled"
         >
           <View style={styles.brand}>
-            <View style={styles.logo}>
-              <Icon source="home-city-outline" size={40} color={c.primary} />
-            </View>
-            <Text style={styles.wordmark}>BHOME</Text>
+            <Image
+              source={bhomeLogo}
+              accessibilityLabel="Logo BHome"
+              style={styles.logo}
+              resizeMode="contain"
+            />
             <Text variant="bodyLarge" style={ui.muted}>
               Quản lý nhà trọ thông minh
             </Text>
@@ -71,12 +86,15 @@ export function LoginScreen() {
           <View style={{ gap: 8 }}>
             <Text variant="headlineMedium">Chào mừng trở lại</Text>
             <Text variant="bodyLarge" style={ui.muted}>
-              Đăng nhập để tiếp tục sử dụng BHOME
+              Đăng nhập để tiếp tục sử dụng BHome
             </Text>
           </View>
           <Box style={{ padding: 20, gap: 18 }}>
             <Text variant="titleMedium">Email hoặc số điện thoại</Text>
             <TextInput
+              ref={(target: unknown) => {
+                identifierInput.current = target;
+              }}
               accessibilityLabel="Email hoặc số điện thoại đăng nhập"
               mode="flat"
               placeholder="Nhập email hoặc số điện thoại"
@@ -104,6 +122,9 @@ export function LoginScreen() {
             )}
             <Text variant="titleMedium">Mật khẩu</Text>
             <TextInput
+              ref={(target: unknown) => {
+                passwordInput.current = target;
+              }}
               accessibilityLabel="Mật khẩu đăng nhập"
               mode="flat"
               placeholder="Nhập mật khẩu"
@@ -254,10 +275,10 @@ export function LoginScreen() {
             </Text>
           </View>
           <Action secondary icon="headset" onPress={() => unavailable('Hỗ trợ kỹ thuật')}>
-            Hỗ trợ kỹ thuật BHOME
+            Hỗ trợ kỹ thuật BHome
           </Action>
           <Text variant="labelSmall" style={{ textAlign: 'center', color: c.muted }}>
-            BHOME • Smart Boarding House Management
+            BHome • Smart Boarding House Management
           </Text>
         </KeyboardFormScrollView>
       </KeyboardAvoidingView>
@@ -265,18 +286,11 @@ export function LoginScreen() {
   );
 }
 const styles = StyleSheet.create({
-  brand: { alignItems: 'center', gap: 12, marginBottom: 16 },
+  brand: { alignItems: 'center', gap: 6, marginBottom: 16 },
   logo: {
-    width: 72,
-    height: 72,
-    borderRadius: 18,
-    alignItems: 'center',
-    justifyContent: 'center',
-    backgroundColor: c.white,
-    borderWidth: 1,
-    borderColor: c.border,
+    width: 144,
+    height: 144,
   },
-  wordmark: { fontFamily: 'Inter-Bold', fontSize: 30, letterSpacing: -1, color: c.navy },
   field: {
     backgroundColor: c.soft,
     borderTopLeftRadius: 10,

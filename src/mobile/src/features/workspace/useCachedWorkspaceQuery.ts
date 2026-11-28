@@ -50,6 +50,9 @@ export function useCachedWorkspaceQuery<T>(
   const revalidate = useCallback(() => {
     if (entry && api) void api.queryCache.fetch(entry);
   }, [api, entry]);
+  const poll = useCallback(() => {
+    if (entry && api) void api.queryCache.fetch(entry, true, true);
+  }, [api, entry]);
   const refresh = useCallback(async () => {
     if (!entry || !api) return null;
     await api.queryCache.fetch(entry, true);
@@ -79,6 +82,7 @@ export function useCachedWorkspaceQuery<T>(
     updatedAt: state.updatedAt,
     reload,
     revalidate,
+    poll,
     refresh,
     setData,
     updateData,

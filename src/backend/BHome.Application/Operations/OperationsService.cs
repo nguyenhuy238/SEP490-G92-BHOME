@@ -1,11 +1,12 @@
 using System.ComponentModel.DataAnnotations;
 using System.Reflection;
+using BHome.Application.Common;
 using BHome.Application.IdentityAccess;
 using BHome.Domain.IdentityAccess;
 
 namespace BHome.Application.Operations;
 
-public sealed class OperationsService(IOperationsRepository repository, IOperationsFiles files,
+public sealed partial class OperationsService(IOperationsRepository repository, IOperationsFiles files,
     ICurrentUser user, PermissionAccess permissions, TimeProvider clock)
 {
     private Guid Actor => user.UserId is { } id && id != Guid.Empty ? id : throw new OperationsException(401, "authentication_required");
@@ -74,8 +75,9 @@ public sealed class OperationsService(IOperationsRepository repository, IOperati
 
     public async Task<StaffView> CreateStaffAsync(StaffCreate input, CancellationToken t)
     {
-        Require(Permissions.StaffAccounts.Manage); Validate(input); Validate(input.Employment);
-        ValidateEmployment(input.Employment);
+        Require(Permissions.StaffAccounts.Manage); StaffInputValidation.Validate(input, input.Employment, input.Phone);
+        RequireActiveNewEmployment(input.Employment);
+        ValidateSalaryType(input.Employment);
         return await repository.CreateStaffAsync(Actor, input with
         {
             Email = input.Email.Trim(),
@@ -87,15 +89,24 @@ public sealed class OperationsService(IOperationsRepository repository, IOperati
 
     public async Task<StaffView> UpdateStaffAsync(Guid id, StaffUpdate input, CancellationToken t)
     {
-        Require(Permissions.StaffAccounts.Manage); Validate(input); Validate(input.Employment);
-        ValidateEmployment(input.Employment);
+        Require(Permissions.StaffAccounts.Manage); StaffInputValidation.Validate(input, input.Employment, input.Phone);
+        var current = await repository.StaffAsync(id, t) ?? throw OperationsException.Missing();
+        if (current.Employment is null) RequireActiveNewEmployment(input.Employment);
+        ValidateSalaryType(input.Employment, current.Employment?.SalaryType);
         if (string.IsNullOrWhiteSpace(input.Reason)) throw OperationsException.Invalid("reason_required");
+        Validate(input); Validate(input.Employment);
+        ValidateEmployment(input.Employment);
         return await repository.UpdateStaffAsync(Actor, id, input with
         {
             Email = input.Email.Trim(),
             FullName = input.FullName.Trim(),
             Phone = Phone(input.Phone),
-            Employment = Normalize(input.Employment),
+            // Older employment rows may still carry this metadata. Preserve it on an
+            // ordinary edit without exposing it as a new Staff input field.
+            Employment = Normalize(input.Employment with
+            {
+                EmploymentType = Clean(input.Employment.EmploymentType) ?? current.Employment?.EmploymentType
+            }),
             Reason = input.Reason.Trim()
         }, Now, t);
     }
@@ -111,8 +122,11 @@ public sealed class OperationsService(IOperationsRepository repository, IOperati
         Require(Permissions.StaffAccounts.Manage); Validate(input);
         if (input.Employment is null) throw OperationsException.Invalid("invalid_employment");
         Validate(input.Employment);
-        ValidateEmployment(input.Employment);
         if (string.IsNullOrWhiteSpace(input.Reason)) throw OperationsException.Invalid("reason_required");
+        var current = await repository.StaffAsync(id, t) ?? throw OperationsException.Missing();
+        if (current.Employment is null) RequireActiveNewEmployment(input.Employment);
+        ValidateSalaryType(input.Employment);
+        ValidateEmployment(input.Employment);
         return await repository.CreateEmploymentPeriodAsync(Actor, id, input with
         {
             Employment = Normalize(input.Employment),
@@ -148,7 +162,7 @@ public sealed class OperationsService(IOperationsRepository repository, IOperati
         if (!user.IsInRole(Roles.Tenant)) throw OperationsException.Forbidden();
         Validate(input);
         if (input.ActualResidenceFrom == default || input.ActualResidenceFrom > Today || input.ResultAt is { } result && result > Now.AddMinutes(5) ||
-            input.Status == "Completed" && input.ResultAt is null)
+            input.Status == "Completed" && input.ResultAt is null || input.RegistrationExpiresOn < input.ActualResidenceFrom)
             throw OperationsException.Invalid("invalid_residence_state");
         _ = await repository.ResidenceAsync(contractId, residentId, Actor, t) ?? throw OperationsException.Missing();
         return await repository.UpdateResidenceAsync(Actor, contractId, residentId,
@@ -183,7 +197,8 @@ public sealed class OperationsService(IOperationsRepository repository, IOperati
         var current = await repository.ResidenceAsync(contractId, residentId, Actor, t) ?? throw OperationsException.Missing();
         var content = await ReadImageAsync(input, t);
         var type = files.ValidateImage(content);
-        var key = $"residence/{contractId:N}/{residentId:N}/{Guid.NewGuid():N}";
+        var key = BHome.Application.Storage.PrivateImageKeys.Evidence(current.LocationId, current.RoomId,
+            "residence", contractId, Guid.NewGuid());
         await files.PutAsync(key, content, type, t);
         try
         {
@@ -230,6 +245,45 @@ public sealed class OperationsService(IOperationsRepository repository, IOperati
     {
         Require(Permissions.PublicContent.Publish);
         return await repository.RoomContentAsync(id, false, t) ?? throw OperationsException.Missing();
+    }
+
+    public async Task<IReadOnlyList<RoomPublicContent>> ManagedRoomsAsync(Guid locationId, CancellationToken t)
+    {
+        Require(Permissions.PublicContent.Publish);
+        if (locationId == Guid.Empty) throw OperationsException.Missing();
+        return await repository.ManagedRoomsAsync(locationId, t);
+    }
+
+    private static void ValidateBulkPublicRooms(PublicRoomBulkRequest input)
+    {
+        Validate(input);
+        if (input.Targets is null || input.Targets.Length is < 1 or > 100 ||
+            input.Targets.Any(x => x.RoomId == Guid.Empty || x.ExpectedVersion <= 0) ||
+            input.Targets.Select(x => x.RoomId).Distinct().Count() != input.Targets.Length ||
+            input.Fields is null || input.Fields.Distinct().Count() != input.Fields.Length ||
+            input.Fields.Any(x => x is not ("description" or "amenities" or "indicativePrice")) ||
+            input.Mode is not ("Room" or "RoomDefaults" or "Manual" or "Publish" or "Unpublish") ||
+            (input.Mode is "Room" or "RoomDefaults" && (!input.SourceId.HasValue || input.SourceId.Value == Guid.Empty || input.SourceVersion < 1)) ||
+            (input.Mode is "Manual" && input.SourceId is not null) ||
+            (input.Mode is "Publish" or "Unpublish" && (input.Fields.Length != 0 || input.SourceId is not null)) ||
+            (input.Mode is "Room" or "RoomDefaults" or "Manual" && input.Fields.Length == 0))
+            throw OperationsException.Invalid("invalid_public_room_bulk");
+        if (input.Amenities is { } amenities) ValidateAmenities(amenities);
+    }
+
+    public async Task<PublicRoomBulkPreview> PreviewPublicRoomBulkAsync(Guid locationId, PublicRoomBulkRequest input, CancellationToken t)
+    {
+        Require(Permissions.PublicContent.Publish);
+        ValidateBulkPublicRooms(input);
+        return await repository.PreviewPublicRoomBulkAsync(locationId, input, t);
+    }
+
+    public async Task<PublicRoomBulkResult> ApplyPublicRoomBulkAsync(Guid locationId, PublicRoomBulkRequest input, CancellationToken t)
+    {
+        Require(Permissions.PublicContent.Publish);
+        ValidateBulkPublicRooms(input);
+        if (string.IsNullOrWhiteSpace(input.PreviewHash)) throw OperationsException.Invalid("public_bulk_preview_required");
+        return await repository.ApplyPublicRoomBulkAsync(Actor, locationId, input, Now, t);
     }
 
     public async Task<LocationPublicContent> UpdateLocationContentAsync(Guid id, LocationPublicContentWrite input, CancellationToken t)
@@ -292,7 +346,10 @@ public sealed class OperationsService(IOperationsRepository repository, IOperati
         Func<OperationsFile, CancellationToken, Task<T>> attach, CancellationToken t)
     {
         var content = await ReadImageAsync(input, t); var type = files.ValidateImage(content);
-        var key = $"public/{target}/{id:N}/{Guid.NewGuid():N}";
+        var location = target == "location" ? id :
+            (await repository.RoomContentAsync(id, false, t) ?? throw OperationsException.Missing()).LocationId;
+        var key = BHome.Application.Storage.PrivateImageKeys.Evidence(location, target == "room" ? id : null,
+            "public-photos", id, Guid.NewGuid());
         await files.PutAsync(key, content, type, t);
         try { return await attach(new(key, type, content.LongLength), t); }
         catch { await files.DeleteAsync(key, CancellationToken.None); throw; }
@@ -355,6 +412,24 @@ public sealed class OperationsService(IOperationsRepository repository, IOperati
     }
 
     private static string? Clean(string? value) => string.IsNullOrWhiteSpace(value) ? null : value.Trim();
+    private static void RequireActiveNewEmployment(EmploymentWrite input)
+    {
+        if (input.Status != "Active")
+            throw new InputValidationException(new Dictionary<string, string[]>
+            {
+                ["employment.status"] = ["Hợp đồng mới phải có trạng thái Đang làm việc."]
+            });
+    }
+    private static void ValidateSalaryType(EmploymentWrite input, string? preservedLegacyType = null)
+    {
+        var salaryType = Clean(input.SalaryType);
+        if (salaryType is not null && salaryType != "Monthly" &&
+            !string.Equals(salaryType, Clean(preservedLegacyType), StringComparison.Ordinal))
+            throw new InputValidationException(new Dictionary<string, string[]>
+            {
+                ["employment.salaryType"] = ["Chỉ hỗ trợ hình thức lương theo tháng."]
+            });
+    }
     private static string? Phone(string? value)
     {
         if (string.IsNullOrWhiteSpace(value)) return null;
@@ -363,13 +438,13 @@ public sealed class OperationsService(IOperationsRepository repository, IOperati
     private static EmploymentWrite Normalize(EmploymentWrite input) => input with
     {
         ContractNumber = Clean(input.ContractNumber),
-        EmploymentType = input.EmploymentType.Trim(),
+        EmploymentType = Clean(input.EmploymentType),
         SalaryType = Clean(input.SalaryType),
         Status = input.Status.Trim()
     };
     private static void ValidateEmployment(EmploymentWrite input)
     {
-        if (input.StartDate == default || input.EndDate < input.StartDate || string.IsNullOrWhiteSpace(input.EmploymentType) ||
+        if (input.StartDate == default || input.EndDate < input.StartDate ||
             input.Status == "Ended" && input.EndDate is null ||
             input.BaseRate is { } rate && decimal.Truncate(rate) != rate)
             throw OperationsException.Invalid("invalid_employment");
@@ -378,7 +453,7 @@ public sealed class OperationsService(IOperationsRepository repository, IOperati
         .Where(x => x.Length > 0).Distinct(StringComparer.OrdinalIgnoreCase).Order(StringComparer.OrdinalIgnoreCase).ToArray();
     private static void ValidateAmenities(string[]? values)
     {
-        if (values is null || values.Length > 50 || values.Any(x => x.Length > 100))
+        if (values is null || values.Length > 50 || values.Any(x => x is null || x.Length > 100))
             throw OperationsException.Invalid("invalid_public_amenities");
     }
     private static async Task<byte[]> ReadImageAsync(Stream input, CancellationToken t)

@@ -37,7 +37,7 @@ public sealed partial class SettlementReceivablesService
         var source = await repository.ChargeReviewAsync(id, token); var missing = new List<string>();
         if (!source.Context.InspectionConfirmed) missing.Add("owner_confirmed_inspection_required");
         if (source.Context.HasLegacyDeductions) missing.Add("legacy_deduction_requires_migration_review");
-        if (source.Context.IsDevelopmentDemo && mode?.AllowDevelopmentDemo != true) throw ContractException.Conflict("development_payment_unavailable");
+        if (source.Context.IsDevelopmentDemo && mode?.AllowDevelopmentDemo != true && mode?.AllowSandboxReceivingAccounts != true) throw ContractException.Conflict("development_payment_unavailable");
         foreach (var utility in await PreviewFinalUtilitiesAsync(id, token))
         {
             missing.AddRange(utility.MissingInputs);
@@ -64,10 +64,12 @@ public sealed partial class SettlementReceivablesService
             if (previous is not null)
             {
                 if (previous.ContractId != id || previous.Fingerprint != fingerprint) throw ContractException.Conflict("settlement_idempotency_conflict");
-                if (previous.IsDevelopmentDemo && mode?.AllowDevelopmentDemo != true) throw ContractException.Conflict("development_payment_unavailable");
+                if (previous.IsDevelopmentDemo && mode?.AllowDevelopmentDemo != true && mode?.AllowSandboxReceivingAccounts != true) throw ContractException.Conflict("development_payment_unavailable");
                 return previous;
             }
             await AuthorizeAsync(id, true, token); var preview = await ChargeReviewPreviewAsync(id, token);
+            if (await repository.LatestFinancialCloseAsync(id, token) is not null)
+                throw ContractException.Conflict("settlement_financial_already_closed");
             if (preview.Reference != input.ExpectedReference) throw ContractException.Conflict("settlement_review_changed");
             if (preview.MissingInputs.Count > 0) throw ContractException.Conflict("settlement_charge_sources_incomplete");
             var source = await repository.ChargeReviewAsync(id, token);

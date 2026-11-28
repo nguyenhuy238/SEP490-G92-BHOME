@@ -1,3 +1,4 @@
+import { TextField } from './ValidatedForm';
 import { MoneyField } from './MoneyField';
 import { workflowTransitions } from '../../services/workflowTransitions';
 import { useState } from 'react';
@@ -12,7 +13,6 @@ import {
   MenuItem,
   Paper,
   Stack,
-  TextField,
   Typography,
 } from '@mui/material';
 import { ExternalLink, Pencil, Trash2, X } from 'lucide-react';

@@ -19,6 +19,28 @@ internal sealed class CompactNotificationRepository(Compact24DbContext db, BHome
              SELECT 1 FROM jsonb_array_elements(l.staff_assignments) a WHERE (a->>'staffUserId')::uuid=@actor
              AND (a->>'startDate')::date<=@today AND (a->>'endDate')::date>=@today))))))
         """;
+    // Project old per-meter assignment notices and new period notices into a
+    // single inbox item without deleting or rewriting immutable event history.
+    private const string GroupedRows = $"""
+        WITH visible_rows AS (
+          SELECT n.*, {EffectiveRead} AS effective_read,
+            CASE WHEN n.event_data->>'audienceRole'='Staff' AND n.event_data->'state'->>'eventType'='TASK_ASSIGNED'
+              THEN t.billing_period END AS meter_period
+          FROM notifications n LEFT JOIN operational_tasks t ON n.related_entity_type='MeterTask'
+            AND t.id=n.related_entity_id AND t.task_type='METER_READ'
+            AND t.task_data->'state'->>'purpose'='1' AND t.location_id=n.location_id
+          WHERE {Visible}
+        ), keyed_rows AS (
+          SELECT v.*, CASE WHEN meter_period IS NOT NULL
+            THEN 'meter:'||location_id::text||':'||meter_period::text ELSE id::text END AS group_key
+          FROM visible_rows v
+        ), grouped_rows AS (
+          SELECT k.*, row_number() OVER (PARTITION BY group_key ORDER BY event_at DESC,id) AS group_rank,
+            CASE WHEN bool_or(effective_read IS NULL) OVER (PARTITION BY group_key) THEN NULL
+              ELSE max(effective_read) OVER (PARTITION BY group_key) END AS group_read
+          FROM keyed_rows k
+        )
+        """;
     private async Task<NpgsqlCommand> Query(string sql, NotificationScope scope, CancellationToken token)
     {
         await db.Database.OpenConnectionAsync(token);
@@ -30,19 +52,23 @@ internal sealed class CompactNotificationRepository(Compact24DbContext db, BHome
     }
     public async Task<int> UnreadAsync(NotificationScope scope, CancellationToken token)
     {
-        await using var command = await Query($"SELECT count(*) FROM notifications n WHERE {Visible} AND {EffectiveRead} IS NULL", scope, token);
+        await using var command = await Query($"{GroupedRows} SELECT count(*) FROM grouped_rows WHERE group_rank=1 AND group_read IS NULL", scope, token);
         return checked((int)(long)(await command.ExecuteScalarAsync(token))!);
     }
     public async Task<PagedResult<NotificationView>> ListAsync(NotificationScope scope, NotificationQuery query, CancellationToken token)
     {
-        var filter = Visible + $" AND (@category IS NULL OR n.event_data->>'category'=@category) AND (@unread IS NULL OR ({EffectiveRead} IS NULL)=@unread)";
-        await using var command = await Query($"SELECT count(*) FROM notifications n WHERE {filter}", scope, token);
+        const string filter = "group_rank=1 AND (@category IS NULL OR n.event_data->>'category'=@category) AND (@unread IS NULL OR (group_read IS NULL)=@unread)";
+        await using var command = await Query($"{GroupedRows} SELECT count(*) FROM grouped_rows n WHERE {filter}", scope, token);
         command.Parameters.AddWithValue("category", NpgsqlDbType.Text, (object?)query.Category ?? DBNull.Value);
         command.Parameters.AddWithValue("unread", NpgsqlDbType.Boolean, (object?)query.Unread ?? DBNull.Value);
         var count = checked((int)(long)(await command.ExecuteScalarAsync(token))!);
         command.CommandText = $"""
-            SELECT n.id,n.event_data->>'category',n.title,n.message,n.related_entity_type,n.related_entity_id,n.event_at,{EffectiveRead},n.delivery_status,COALESCE(n.event_data->'state'->>'eventType',''),COALESCE(n.event_data->'state'->>'priority','P1'),COALESCE(n.event_data->'state'->>'source','System')
-            FROM notifications n WHERE {filter} ORDER BY n.event_at DESC,n.id OFFSET @skip LIMIT @take
+            {GroupedRows}
+            SELECT n.id,n.event_data->>'category',
+              CASE WHEN meter_period IS NOT NULL THEN 'Có nhiệm vụ ghi chỉ số kỳ '||to_char(meter_period,'MM/YYYY') ELSE n.title END,
+              CASE WHEN meter_period IS NOT NULL THEN 'Mở danh sách phòng được phân công để ghi chỉ số điện nước.' ELSE n.message END,
+              n.related_entity_type,n.related_entity_id,n.event_at,group_read,n.delivery_status,COALESCE(n.event_data->'state'->>'eventType',''),COALESCE(n.event_data->'state'->>'priority','P1'),COALESCE(n.event_data->'state'->>'source','System')
+            FROM grouped_rows n WHERE {filter} ORDER BY n.event_at DESC,n.id OFFSET @skip LIMIT @take
             """;
         command.Parameters.AddWithValue("skip", checked((query.Page - 1) * query.PageSize)); command.Parameters.AddWithValue("take", query.PageSize);
         var items = new List<NotificationView>();
@@ -69,14 +95,16 @@ internal sealed class CompactNotificationRepository(Compact24DbContext db, BHome
     public async Task ReadAsync(NotificationScope scope, Guid? id, DateTimeOffset now, CancellationToken token)
     {
         await using var own = db.Database.CurrentTransaction is null ? await db.Database.BeginTransactionAsync(token) : null;
-        await using var command = await Query($"UPDATE notifications n SET read_at=COALESCE({EffectiveRead},@now) WHERE {Visible} AND (@id IS NULL OR n.id=@id)", scope, token);
+        const string selected = "SELECT id FROM keyed_rows WHERE @id IS NULL OR group_key=(SELECT group_key FROM keyed_rows WHERE id=@id)";
+        await using var command = await Query($"{GroupedRows} UPDATE notifications n SET read_at=COALESCE({EffectiveRead},@now) WHERE n.id IN ({selected})", scope, token);
         command.Parameters.AddWithValue("now", now); command.Parameters.AddWithValue("id", NpgsqlDbType.Uuid, (object?)id ?? DBNull.Value);
         var updated = await command.ExecuteNonQueryAsync(token);
         if (id is not null && updated == 0) throw new NotificationException(404, "notification_not_found");
         command.CommandText = $"""
+            {GroupedRows}
             UPDATE notifications old SET read_at=COALESCE(old.read_at,@now) WHERE old.record_kind='OUTBOX'
               AND COALESCE(old.event_data->'state'->>'recipientUserId',old.event_data->'state'->>'recipientId')=@actor::text AND EXISTS(
-              SELECT 1 FROM notifications n WHERE {Visible} AND (@id IS NULL OR n.id=@id)
+              SELECT 1 FROM notifications n WHERE n.id IN ({selected})
                 AND old.id=(n.event_data->'state'->>'sourceTaskNotificationId')::uuid)
             """;
         await command.ExecuteNonQueryAsync(token);
@@ -84,15 +112,41 @@ internal sealed class CompactNotificationRepository(Compact24DbContext db, BHome
     }
     public async Task<NotificationTarget?> TargetAsync(NotificationScope scope, Guid id, CancellationToken token)
     {
-        string type; Guid related; Guid? location;
-        await using var command = await Query($"SELECT n.related_entity_type,n.related_entity_id,n.location_id FROM notifications n WHERE {Visible} AND n.id=@id", scope, token);
+        string type; Guid related; Guid? location; string? eventType;
+        await using var command = await Query($"SELECT n.related_entity_type,n.related_entity_id,n.location_id,n.event_data->'state'->>'eventType' FROM notifications n WHERE {Visible} AND n.id=@id", scope, token);
         command.Parameters.AddWithValue("id", id);
         await using (var reader = await command.ExecuteReaderAsync(token))
         {
             if (!await reader.ReadAsync(token) || reader.IsDBNull(0) || reader.IsDBNull(1)) return null;
             type = reader.GetString(0); related = reader.GetGuid(1); location = reader.IsDBNull(2) ? null : reader.GetGuid(2);
+            eventType = reader.IsDBNull(3) ? null : reader.GetString(3);
         }
         command.Parameters.AddWithValue("target", related);
+        if (type == "MeterTask" && (eventType is "TASK_ASSIGNED" or "PERIODIC_METER_OVERDUE") && scope.Staff && location is { } meterLocation)
+        {
+            command.Parameters.AddWithValue("location", meterLocation);
+            command.CommandText = """
+                SELECT billing_period FROM operational_tasks WHERE id=@target AND location_id=@location
+                  AND task_type='METER_READ' AND task_data->'state'->>'purpose'='1'
+                """;
+            DateOnly? sourcePeriod;
+            await using (var periodReader = await command.ExecuteReaderAsync(token))
+                sourcePeriod = await periodReader.ReadAsync(token) && !periodReader.IsDBNull(0)
+                    ? periodReader.GetFieldValue<DateOnly>(0) : null;
+            if (sourcePeriod is { } meterPeriod)
+            {
+                if (!await StaffEmploymentEligibility.IsEligibleAsync(db, scope.Actor, scope.Today, token)) return null;
+                command.Parameters.AddWithValue("period", meterPeriod);
+                command.CommandText = """
+                    SELECT EXISTS(SELECT 1 FROM operational_tasks WHERE location_id=@location AND billing_period=@period
+                      AND task_type='METER_READ' AND task_data->'state'->>'purpose'='1'
+                      AND status<>'3' AND assigned_user_id=@actor)
+                    """;
+                return (bool)(await command.ExecuteScalarAsync(token))!
+                    ? new("MeterPeriod", meterLocation, meterLocation, meterPeriod)
+                    : null;
+            }
+        }
         if (type == "MeterReading")
             return scope.Tenant && await readings.CanViewAsync(scope.Actor, related, token) ? new(type, related, location) : null;
         if (type == "Refund")

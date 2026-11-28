@@ -1,3 +1,4 @@
+using BHome.Application.Common;
 using System.Text.Json;
 using System.Text.Json.Serialization;
 using BHome.Application.IdentityAccess;
@@ -12,6 +13,7 @@ using BHome.Domain.TenantContracts;
 using BHome.Domain.StaffOperations;
 using BHome.Domain.Locations;
 using BHome.Application.PropertyManagement;
+using BHome.Application.StaffOperations;
 using BHome.Infrastructure.Modules.Notifications;
 
 namespace BHome.Infrastructure.Persistence.Compact24;
@@ -56,7 +58,7 @@ internal sealed class CompactLocationAssignments(Compact24DbContext db, TimeProv
         await db.Database.ExecuteSqlInterpolatedAsync($"""
             UPDATE locations SET staff_assignments=staff_assignments||CAST({json} AS jsonb),version=version+1,history=history||CAST({history} AS jsonb) WHERE id={locationId}
             """, token);
-        var today = DateOnly.FromDateTime(TimeZoneInfo.ConvertTimeBySystemTimeZoneId(clock.GetUtcNow(), "Asia/Ho_Chi_Minh").DateTime);
+        var today = clock.BusinessToday();
         if (start <= today && end >= today)
             await ReconcileLocationAsync(locationId, entry, actor, entry.RecordedAt, "Location responsibility assigned", token);
         await NotifyAssignmentAsync(locationId, entry, "STAFF_ASSIGNMENT_CREATED", token);
@@ -138,7 +140,7 @@ internal sealed class CompactLocationAssignments(Compact24DbContext db, TimeProv
         var index = assignments.FindIndex(a => a.Id == assignmentId);
         if (index < 0) return new(UpdateAssignmentPeriodStatus.AssignmentNotFound);
         var old = assignments[index];
-        var today = DateOnly.FromDateTime(TimeZoneInfo.ConvertTime(clock.GetUtcNow(), TimeZoneInfo.FindSystemTimeZoneById("Asia/Ho_Chi_Minh")).DateTime);
+        var today = clock.BusinessToday();
         var current = old.StartDate <= today && today <= old.EndDate;
         var cancelling = start is null;
         Assignment changed;
@@ -191,8 +193,7 @@ internal sealed class CompactLocationAssignments(Compact24DbContext db, TimeProv
             stored = reader.GetString(0); version = reader.GetInt32(1); active = reader.GetBoolean(2);
         }
         if (version != expectedVersion) return new(ChangeAssignmentStatus.StaleVersion, LocationVersion: version);
-        var today = DateOnly.FromDateTime(TimeZoneInfo.ConvertTime(clock.GetUtcNow(),
-            TimeZoneInfo.FindSystemTimeZoneById("Asia/Ho_Chi_Minh")).DateTime);
+        var today = clock.BusinessToday();
         if (effectiveFrom != today) return new(ChangeAssignmentStatus.Invalid);
         if (!await db.Users.AnyAsync(u => u.Id == actor && u.IsActive && EF.Property<string[]>(u, "roles").Contains(Roles.Owner), token))
             throw new UnauthorizedAccessException("Owner authorization is required.");
@@ -284,7 +285,7 @@ internal sealed class CompactLocationAssignments(Compact24DbContext db, TimeProv
             active = reader.GetBoolean(1);
         }
         var now = clock.GetUtcNow();
-        var today = DateOnly.FromDateTime(TimeZoneInfo.ConvertTimeBySystemTimeZoneId(now, "Asia/Ho_Chi_Minh").DateTime);
+        var today = clock.BusinessToday();
         var next = active ? assignments.SingleOrDefault(a => a.StartDate <= today && today <= a.EndDate) : null;
         if (next is not null)
         {
@@ -307,64 +308,133 @@ internal sealed class CompactLocationAssignments(Compact24DbContext db, TimeProv
     {
         var tasks = await db.Set<OperationalTask>().Where(task => task.LocationId == locationId &&
             task.Status != MeterTaskStatus.Completed && task.Status != MeterTaskStatus.Cancelled)
-            .Select(task => new { task.Id, task.Kind, task.AssignedStaffUserId, task.AssignmentId, task.AssignedAt, task.DueAt, task.Version }).ToArrayAsync(token);
+            .Select(task => new
+            {
+                task.Id,
+                task.Kind,
+                task.Purpose,
+                task.AssignedStaffUserId,
+                task.AssignmentId,
+                task.AssignedAt,
+                task.DueAt,
+                task.Version,
+                task.Status,
+                task.Result,
+                task.LocationAssetInventoryJson
+            }).ToArrayAsync(token);
         var orders = await db.Set<MaintenanceWorkOrder>().Where(w => w.LocationId == locationId &&
             w.Status != WorkOrderStatus.Verified && w.Status != WorkOrderStatus.Cancelled).ToArrayAsync(token);
         var inspections = await db.Set<ContractMoveOut>().Where(m => m.InspectionStaffId != null &&
             m.Status != MoveOutStatus.Completed && m.InspectedAt == null &&
             db.Set<Contract>().Any(c => c.Id == m.ContractId && c.Room.LocationId == locationId)).ToArrayAsync(token);
-        // Manual removal retains the existing explicit Owner resolution requirement.
-        // A calendar expiry cannot be rejected: keep specialist records intact, alert Owner,
-        // and transfer them when a new eligible responsibility becomes effective.
+        // Manual removal still requires Owner resolution for unfinished AdHoc/meter work.
+        // The automatically-created Location handover is different: it remains open and
+        // Location-owned during a responsibility gap, ready for the next eligible Staff.
         if (next is null && blockSpecialists && (orders.Length > 0 || inspections.Length > 0))
             throw new BHome.Application.PropertyManagement.PropertyException(409, "staff_specialist_work_unresolved");
+        if (next is null && blockSpecialists && tasks.Any(task => task.Kind != OperationalTaskKind.LocationAssetHandover &&
+            !(task.Kind == OperationalTaskKind.MeterReading && task.Purpose == ReadingPurpose.Periodic)))
+            throw new BHome.Application.PropertyManagement.PropertyException(409, "staff_operational_tasks_unresolved");
 
         var nextStaff = next?.StaffUserId;
         var nextAssignment = next?.Id;
         foreach (var task in tasks)
         {
-            // An unfinished handover belongs to its original assignment. Close it with an
-            // explicit supersession audit, preserving the frozen inventory and evidence;
-            // a successor receives a newly snapshotted task, never the old checklist.
+            // A Location handover is Location-owned work, not an assignment-owned task.
+            // With no current Staff, leave it open but inaccessible to Staff. When a new
+            // responsibility becomes effective, transfer this same task and preserve its
+            // checklist/evidence/history rather than cancelling it and creating another.
+            if (task.Kind == OperationalTaskKind.LocationAssetHandover && nextAssignment is null)
+                continue;
+            if (task.AssignedStaffUserId == nextStaff && task.AssignmentId == nextAssignment) continue;
+
             if (task.Kind == OperationalTaskKind.LocationAssetHandover)
             {
-                // No eligible Staff yet is a temporary responsibility gap, not a
-                // replacement: retain unfinished work for possible renewal of the
-                // SAME assignment. Staff ACL already rejects the ineligible user.
-                // Supersede only after a different assignment becomes effective.
-                if (nextAssignment is null) continue;
-                if (task.AssignmentId == nextAssignment) continue;
-                var closed = await db.Database.ExecuteSqlInterpolatedAsync($"""
-                    UPDATE operational_tasks SET status='3',version=version+1,
-                      task_data=jsonb_set(task_data,ARRAY['state'],COALESCE(task_data->'state',jsonb_build_object())||
-                        jsonb_build_object('status',3,'updatedAt',{now},'version',version+1),true)
+                LocationAssetInventorySnapshot snapshot;
+                try
+                {
+                    snapshot = JsonSerializer.Deserialize<LocationAssetInventorySnapshot>(task.LocationAssetInventoryJson, Json)
+                        ?? throw new JsonException("Missing inventory snapshot.");
+                }
+                catch (JsonException)
+                {
+                    throw new InvalidOperationException("Cannot transfer a Location task with an invalid inventory snapshot.");
+                }
+                if (snapshot.AssignmentId != task.AssignmentId || snapshot.Items is null ||
+                    snapshot.Items.Select(item => item.Id).Distinct().Count() != snapshot.Items.Length)
+                    throw new InvalidOperationException("Cannot transfer a Location task with an inconsistent inventory snapshot.");
+
+                var previousStaffForHandover = task.AssignedStaffUserId;
+                var transferredItems = snapshot.Items.Select(item =>
+                    item.Checked && !item.Inherited
+                        ? item with
+                        {
+                            // Keep the original checker through repeated Staff replacements.
+                            PriorStaffTaskId = item.PriorStaffTaskId ?? task.Id,
+                            PriorStaffUserId = item.PriorStaffUserId ?? previousStaffForHandover
+                        }
+                        : item).ToArray();
+                var transferredSnapshot = snapshot with
+                {
+                    AssignmentId = nextAssignment!.Value,
+                    EffectiveFrom = next!.StartDate,
+                    Items = transferredItems
+                };
+                // OperationalTaskService reads this embedded snapshot with default JSON
+                // options; keep the same PascalCase wire shape as task creation/update.
+                var snapshotJson = JsonSerializer.Serialize(transferredSnapshot);
+                // A submitted result or an Owner-approved preview is bound to the old
+                // assignment. Return it to InProgress so the successor explicitly reviews
+                // and resubmits; the old submission/approval remains in append-only history.
+                var nextStatus = task.Status == MeterTaskStatus.PendingVerification
+                    ? MeterTaskStatus.InProgress : task.Status;
+                var nextResult = task.Status == MeterTaskStatus.PendingVerification ? null : task.Result;
+                var statusText = ((int)nextStatus).ToString(System.Globalization.CultureInfo.InvariantCulture);
+                var handoverUpdateCount = await db.Database.ExecuteSqlInterpolatedAsync($"""
+                    UPDATE operational_tasks SET assigned_user_id={nextStaff}, assigned_at={now},
+                        status={statusText}, version=version+1,
+                        task_data=jsonb_set(task_data,ARRAY['state'],
+                            COALESCE(task_data->'state',jsonb_build_object())||
+                            jsonb_build_object('assignedStaffUserId',{nextStaff}::uuid,'assignmentId',{nextAssignment}::uuid,
+                                'assignedAt',{now},'updatedAt',{now},'version',version+1,
+                                'locationAssetInventoryJson',{snapshotJson},'status',{(int)nextStatus},'result',CAST({nextResult} AS text)),true)
                     WHERE id={task.Id} AND version={task.Version} AND status NOT IN ('2','3')
                     """, token);
-                if (closed != 1) throw new DbUpdateConcurrencyException("Handover changed during responsibility supersession.");
-                db.Add(new OperationalTaskHistory
+                if (handoverUpdateCount != 1) throw new DbUpdateConcurrencyException("Location handover changed during responsibility transfer.");
+                var handoverHistory = new OperationalTaskHistory
                 {
                     TaskId = task.Id,
                     ActorId = actor,
-                    Action = "responsibility_superseded",
+                    Action = "responsibility_changed",
                     Note = reason,
                     OccurredAt = now,
                     WasOverdue = task.DueAt < now,
-                    ResponsibleStaffUserId = task.AssignedStaffUserId,
+                    ResponsibleStaffUserId = nextStaff,
                     TaskVersion = task.Version + 1,
                     ChangesJson = JsonSerializer.Serialize(new
                     {
-                        previousStaffUserId = task.AssignedStaffUserId,
+                        previousStaffUserId = previousStaffForHandover,
                         previousAssignmentId = task.AssignmentId,
                         newStaffUserId = nextStaff,
                         newAssignmentId = nextAssignment,
-                        previousStatus = "open",
-                        status = "Cancelled",
+                        previousStatus = task.Status.ToString(),
+                        status = nextStatus.ToString(),
+                        preservedTaskId = task.Id,
+                        checkedItems = transferredItems.Count(item => item.Checked),
                         reason
                     }, Json)
+                };
+                db.Add(handoverHistory);
+                db.Add(new OperationalTaskNotification
+                {
+                    TaskId = task.Id,
+                    RecipientUserId = nextStaff!.Value,
+                    EventId = handoverHistory.Id,
+                    Event = "responsibility_changed"
                 });
                 continue;
             }
-            if (task.AssignedStaffUserId == nextStaff && task.AssignmentId == nextAssignment) continue;
+
             // Compact24 maps both the scalar columns and the state JSON to this row.
             // Mutate once, then append one typed history record (no second root write).
             var count = await db.Database.ExecuteSqlInterpolatedAsync($"""
@@ -535,7 +605,7 @@ internal sealed class CompactLocationAssignments(Compact24DbContext db, TimeProv
 
     public async Task<bool> IsAssignedAsync(Guid staffId, Guid locationId, CancellationToken token)
     {
-        var today = DateOnly.FromDateTime(TimeZoneInfo.ConvertTime(clock.GetUtcNow(), TimeZoneInfo.FindSystemTimeZoneById("Asia/Ho_Chi_Minh")).DateTime);
+        var today = clock.BusinessToday();
         if (!await StaffAvailableAsync(staffId, today, token)) return false;
         await db.Database.OpenConnectionAsync(token);
         await using var query = Command("""

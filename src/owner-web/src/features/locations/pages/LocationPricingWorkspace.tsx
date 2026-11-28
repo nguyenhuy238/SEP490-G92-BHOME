@@ -1,3 +1,4 @@
+import { TextField } from '../../../components/common/ValidatedForm';
 import { useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { Link } from 'react-router';
@@ -14,7 +15,6 @@ import {
   Tab,
   Tabs,
   TablePagination,
-  TextField,
   Typography,
 } from '@mui/material';
 import { useAuth } from '../../../../../../packages/client-core/src/auth';
@@ -201,11 +201,8 @@ export function LocationPricingWorkspace({
       </Tabs>
       {owner && (
         <Stack direction="row" sx={{ justifyContent: 'flex-end' }}>
-          <Button
-            component={Link}
-            to={`/billing-automation?locationId=${encodeURIComponent(locationId)}`}
-          >
-            Lịch tự động & quy tắc hóa đơn
+          <Button component={Link} to={`/locations/${encodeURIComponent(locationId)}/settings`}>
+            Cấu hình lịch điện nước & hóa đơn
           </Button>
         </Stack>
       )}

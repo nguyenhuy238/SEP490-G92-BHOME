@@ -1,3 +1,4 @@
+import { TextField } from './ValidatedForm';
 import { ScheduleBoard } from './ScheduleBoard';
 import { useState, type ReactNode } from 'react';
 import {
@@ -15,7 +16,6 @@ import {
   Stack,
   Tab,
   Tabs,
-  TextField,
   ToggleButton,
   ToggleButtonGroup,
   Typography,

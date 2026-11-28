@@ -1,3 +1,4 @@
+import { ContractNotice } from './ContractNotice';
 import React, { useEffect, useRef, useState } from 'react';
 import { Text } from 'react-native-paper';
 import {
@@ -5,7 +6,7 @@ import {
   type NamedOption,
   contractError,
 } from '../../../../../packages/client-core/src/contracts';
-import { Action, ui } from '../../components/WorkspaceKit';
+import { Action } from '../../components/WorkspaceKit';
 import { ChoiceField } from '../../components/WorkflowControls';
 
 export function HoldingTenantLink({
@@ -71,7 +72,7 @@ export function HoldingTenantLink({
       {!loading && !accounts.length && !error && (
         <Text>Chưa có tài khoản Tenant phù hợp để liên kết.</Text>
       )}
-      {!!error && <Text style={ui.red}>{error}</Text>}
+      {!!error && <ContractNotice message={error} />}
       <Action secondary disabled={loading || busy || !tenant} onPress={() => void link()}>
         {busy ? 'Đang liên kết…' : 'Liên kết tài khoản Tenant'}
       </Action>

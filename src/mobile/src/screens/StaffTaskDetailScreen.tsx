@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useMemo, useState } from 'react';
+import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { EquipmentInspectionPanel } from '../features/workspace/EquipmentInspectionPanel';
 import {
   AppState,
@@ -23,17 +23,33 @@ import { useFocusEffect } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { formatInstant } from '../../../../packages/client-core/src/localization';
 import { CameraCapture } from '../components/CameraCapture';
+import {
+  readPickedIncidentPhoto,
+  type TenantIncidentPhoto,
+} from '../components/TenantIncidentPhotos';
 import { KeyboardFormScrollView } from '../components/KeyboardFormScrollView';
+import { StaffWorkflowTabs } from '../components/StaffWorkflowTabs';
 import { useWorkspaceHeaderRefresh } from '../components/WorkspaceHeaderContext';
 import { useStaffTaskDetail, taskDetailError } from '../features/workspace/useStaffTaskDetail';
 import { useWorkspace } from '../features/workspace/WorkspaceProvider';
 import { useWorkspaceQuery } from '../features/workspace/useWorkspaceQuery';
+import { useCachedWorkspaceQuery } from '../features/workspace/useCachedWorkspaceQuery';
+import { useSession } from '../lib/SessionProvider';
 import type { Named } from '../lib/api';
 import { queryPolicies } from '../lib/queryPolicies';
-import { taskActionLabels, type TaskEvidence } from '../services/operationalTasks';
-import { LocationAssetInventoryChecklist } from './LocationAssetInventoryChecklist';
+import {
+  isMainMoveInWork,
+  isMainMoveOutWork,
+  taskActionLabels,
+  type TaskEvidence,
+} from '../services/operationalTasks';
+import {
+  LocationAssetInventoryChecklist,
+  LocationAssetInventoryProgressSummary,
+} from './LocationAssetInventoryChecklist';
 import { LocationAssetHandoverSigning } from './LocationAssetHandoverSigning';
 import { colors as c } from '../theme/theme';
+import type { LocationAssetInventory } from '../services/locationAssetInventory';
 
 type DetailModel = ReturnType<typeof useStaffTaskDetail>;
 const statusLabels: Record<string, string> = {
@@ -61,7 +77,16 @@ const forms = {
 export function StaffTaskDetailScreen({ id }: { id: string }) {
   const model = useStaffTaskDetail(id);
   const { go, role, staffLocationId } = useWorkspace();
+  const { session } = useSession();
   const { task, detail, busy, allowed, setSheet } = model;
+  const isHandover = task?.kind === 'LocationAssetHandover';
+  const currentStaff =
+    role === 'Staff' &&
+    !!task &&
+    !!session?.userId &&
+    task.responsibilityAvailable &&
+    task.currentResponsibleStaffUserId === session.userId;
+  const canReadHandover = role !== 'Staff' || currentStaff;
   const inSelectedLocation =
     role !== 'Staff' || (!!staffLocationId && (!task || task.locationId === staffLocationId));
   const assignedLocations = useWorkspaceQuery<Named[]>(
@@ -73,8 +98,22 @@ export function StaffTaskDetailScreen({ id }: { id: string }) {
     ?.label.trim();
   const [expanded, setExpanded] = useState(false);
   const [historyExpanded, setHistoryExpanded] = useState(false);
-  const [inventoryReady, setInventoryReady] = useState(false);
+  const [selectedTab, setSelectedTab] = useState('overview');
+  const inventory = useCachedWorkspaceQuery<LocationAssetInventory>(
+    isHandover &&
+      currentStaff &&
+      inSelectedLocation &&
+      (selectedTab === 'overview' || selectedTab === 'inventory')
+      ? `/api/v1/operational-tasks/${id}/location-asset-inventory`
+      : null,
+    queryPolicies.tasks,
+  );
   const refresh = model.reload;
+  const reloadInventory = inventory.reload;
+  const refreshHeader = useCallback(() => {
+    refresh();
+    reloadInventory();
+  }, [refresh, reloadInventory]);
   useFocusEffect(
     useCallback(() => {
       refresh();
@@ -84,42 +123,50 @@ export function StaffTaskDetailScreen({ id }: { id: string }) {
       return () => clearInterval(timer);
     }, [refresh]),
   );
-  const footer = useMemo(() => {
-    if (!task || !inSelectedLocation || (!allowed.length && !model.pendingAction)) return null;
+  const footer = (() => {
+    if (!task || !inSelectedLocation) return null;
+    let action: (typeof model.allowed)[number] | 'choose' | null = null;
+    if (model.pendingAction) action = model.pendingAction.action;
+    else if (task.kind === 'LocationAssetHandover') {
+      if (task.status === 'Assigned' && allowed.includes('start')) action = 'start';
+    } else if (allowed.length) {
+      action = task.status === 'Assigned' ? 'start' : 'choose';
+    }
+    if (!action) return null;
     return (
       <View style={styles.actionBar}>
         <Button
           mode="contained"
           disabled={!!busy || !model.syncedVersion || model.uploadPending}
-          onPress={() =>
-            setSheet(
-              model.pendingAction?.action ?? (task.status === 'Assigned' ? 'start' : 'choose'),
-            )
-          }
+          onPress={() => {
+            if (isHandover && action === 'submit' && !model.notes.submit.trim())
+              model.setNote(
+                'submit',
+                'Đã hoàn tất checklist kiểm kê tài sản cơ sở. Vui lòng đối soát và lập biên bản bàn giao.',
+              );
+            setSheet(action!);
+          }}
           contentStyle={{ minHeight: 46 }}
         >
           {model.pendingAction
             ? 'Tiếp tục thao tác chưa xác nhận'
-            : task.status === 'Assigned'
-              ? 'Bắt đầu công việc'
-              : 'Cập nhật công việc'}
+            : task.kind === 'LocationAssetHandover'
+              ? 'Bắt đầu kiểm kê'
+              : task.status === 'Assigned'
+                ? 'Bắt đầu công việc'
+                : 'Cập nhật công việc'}
         </Button>
       </View>
     );
-  }, [
-    task,
-    inSelectedLocation,
-    allowed.length,
-    busy,
-    model.syncedVersion,
-    model.uploadPending,
-    model.pendingAction,
-    setSheet,
-  ]);
-  const inShell = useWorkspaceHeaderRefresh(refresh, !!busy || detail.fetching, {
-    title: 'Chi tiết công việc',
-    footer,
-  });
+  })();
+  const inShell = useWorkspaceHeaderRefresh(
+    refreshHeader,
+    !!busy || detail.fetching || inventory.fetching,
+    {
+      title: 'Chi tiết công việc',
+      footer,
+    },
+  );
   if (!inSelectedLocation)
     return (
       <View style={styles.section}>
@@ -151,134 +198,185 @@ export function StaffTaskDetailScreen({ id }: { id: string }) {
   const due =
     task.dueAt && Number.isFinite(Date.parse(task.dueAt)) ? formatInstant(task.dueAt) : null;
   const entries = model.history.data?.items ?? [];
+  const evidenceCount = model.evidence.data?.length ?? 0;
+  const tabs = currentStaff
+    ? isHandover
+      ? [
+          { id: 'overview', label: 'Tổng quan' },
+          { id: 'inventory', label: 'Kiểm kê' },
+          { id: 'handover', label: 'Biên bản' },
+          { id: 'evidence', label: 'Minh chứng' },
+          { id: 'history', label: 'Lịch sử' },
+        ]
+      : [
+          { id: 'overview', label: 'Tổng quan' },
+          { id: 'evidence', label: 'Minh chứng' },
+          { id: 'history', label: 'Lịch sử' },
+        ]
+    : [{ id: 'overview', label: 'Tổng quan' }];
+  const activeTab = tabs.some((tab) => tab.id === selectedTab) ? selectedTab : 'overview';
   return (
     <>
       {!inShell && <Text variant="titleLarge">Chi tiết công việc</Text>}
       {!!detail.rawError && <ReadFailure error={detail.rawError} retry={refresh} />}
-      <EquipmentInspectionPanel
-        taskId={id}
-        evidence={model.evidence.data ?? []}
-        onSaved={refresh}
-      />
-      <View style={styles.section}>
-        <Text variant="titleLarge" numberOfLines={3} style={styles.title}>
-          {task.title || 'Công việc vận hành'}
-        </Text>
-        {task.kind === 'LocationAssetHandover' && (
-          <View style={{ gap: 8 }}>
-            <Text variant="titleMedium" style={styles.title}>
-              Cơ sở phân công:{' '}
-              {locationName ||
-                (assignedLocations.loading
-                  ? 'Đang tải tên cơ sở…'
-                  : 'Chưa xác định được tên cơ sở')}
+      {currentStaff && isHandover && (
+        <StaffWorkflowTabs
+          accessibilityLabel="Các phần chi tiết công việc"
+          selected={activeTab}
+          onChange={setSelectedTab}
+          tabs={tabs}
+        />
+      )}
+      {(!isHandover || activeTab === 'overview') && (
+        <View style={styles.section}>
+          <Text variant="titleMedium" numberOfLines={3} style={styles.title}>
+            {task.title || 'Công việc vận hành'}
+          </Text>
+          {!isHandover && !!task.target?.label && (
+            <Text variant="bodyMedium" style={styles.title}>
+              Vị trí / thiết bị: {task.target.label}
             </Text>
-            {!locationName && !assignedLocations.loading && (
-              <Text variant="bodySmall" style={styles.muted}>
-                {assignedLocations.error || 'Tên cơ sở chưa có trong danh sách được phân công.'}
+          )}
+          {task.kind === 'LocationAssetHandover' && (!inShell || !locationName) && (
+            <View style={{ gap: 4 }}>
+              <Text variant="bodyMedium" style={styles.title}>
+                Cơ sở phân công:{' '}
+                {locationName ||
+                  (assignedLocations.loading
+                    ? 'Đang tải tên cơ sở…'
+                    : 'Chưa xác định được tên cơ sở')}
+              </Text>
+              {!locationName && !assignedLocations.loading && (
+                <Text variant="bodySmall" style={styles.muted}>
+                  {assignedLocations.error || 'Tên cơ sở chưa có trong danh sách được phân công.'}
+                </Text>
+              )}
+            </View>
+          )}
+          {task.target?.contractId && (isMainMoveInWork(task) || isMainMoveOutWork(task)) && (
+            <Button
+              mode="contained"
+              onPress={() =>
+                isMainMoveOutWork(task)
+                  ? go('move-out', { contractId: task.target!.contractId!, taskId: task.id })
+                  : go('move-in', { contractId: task.target!.contractId!, section: 'handover' })
+              }
+            >
+              {isMainMoveOutWork(task) ? 'Mở kiểm tra trả phòng' : 'Mở bàn giao nhận phòng'}
+            </Button>
+          )}
+          <View style={styles.row}>
+            <View style={[styles.badge, pending && { backgroundColor: c.amberSoft }]}>
+              <Text variant="labelMedium" style={{ color: pending ? c.amber : c.primary }}>
+                {statusLabels[task.status] ?? 'Đang cập nhật trạng thái'}
+              </Text>
+            </View>
+            {task.priority === 'High' && (
+              <Text variant="labelMedium" style={{ color: c.amber }}>
+                Ưu tiên cao
               </Text>
             )}
+          </View>
+          {due && (
+            <View style={styles.row}>
+              <Icon
+                source="clock-outline"
+                size={16}
+                color={task.isOverdue && !pending ? c.red : c.muted}
+              />
+              <Text
+                variant="bodySmall"
+                style={task.isOverdue && !pending ? styles.error : styles.muted}
+              >
+                {task.isOverdue && !pending ? 'Quá hạn · ' : 'Hạn · '}
+                {due}
+              </Text>
+            </View>
+          )}
+          {!currentStaff && (
             <Text variant="bodySmall" style={styles.muted}>
-              Kiểm kê tất cả phòng và tài sản khu vực chung theo phân công hiện tại. Cập nhật tiến
-              độ hoặc báo vướng mắc trong công việc này để Owner theo dõi.
-            </Text>
-            <Button
-              mode="outlined"
-              icon="alert-circle-outline"
-              onPress={() => go('report-incident')}
-            >
-              Báo cáo sự cố tài sản
-            </Button>
-          </View>
-        )}
-        {task.target?.contractId && (
-          <Button
-            mode="contained"
-            onPress={() =>
-              go('move-in', { contractId: task.target!.contractId!, section: 'handover' })
-            }
-          >
-            Mở bàn giao nhận phòng
-          </Button>
-        )}
-        <View style={styles.row}>
-          <View style={[styles.badge, pending && { backgroundColor: c.amberSoft }]}>
-            <Text variant="labelMedium" style={{ color: pending ? c.amber : c.primary }}>
-              {statusLabels[task.status] ?? 'Đang cập nhật trạng thái'}
-            </Text>
-          </View>
-          {task.priority === 'High' && (
-            <Text variant="labelMedium" style={{ color: c.amber }}>
-              Ưu tiên cao
+              {task.responsibilityAvailable
+                ? 'Công việc này không được phân công cho tài khoản hiện tại. Bạn chỉ có thể xem thông tin chung.'
+                : 'Chưa có nhân viên phụ trách có hiệu lực. Liên hệ Owner để cập nhật phân công.'}
             </Text>
           )}
         </View>
-        {due && (
-          <View style={styles.row}>
-            <Icon
-              source="clock-outline"
-              size={16}
-              color={task.isOverdue && !pending ? c.red : c.muted}
-            />
-            <Text
-              variant="bodySmall"
-              style={task.isOverdue && !pending ? styles.error : styles.muted}
-            >
-              {task.isOverdue && !pending ? 'Quá hạn · ' : 'Hạn · '}
-              {due}
-            </Text>
-          </View>
-        )}
-        {!task.responsibilityAvailable && (
-          <Text variant="bodySmall" style={styles.muted}>
-            Chưa có nhân viên phụ trách có hiệu lực. Liên hệ Owner để cập nhật phân công.
-          </Text>
-        )}
-        {!allowed.length && task.status === 'InProgress' && !detail.rawError && (
-          <Text variant="bodySmall" style={styles.muted}>
-            Bạn chỉ có quyền xem công việc này.
-          </Text>
-        )}
-      </View>
-      <View style={styles.section}>
-        <Text variant="titleMedium" style={styles.title}>
-          Yêu cầu công việc
-        </Text>
-        <Text
-          variant="bodyMedium"
-          numberOfLines={
-            !expanded &&
-            (task.requirements.length > 220 || task.requirements.split('\n').length > 5)
-              ? 5
-              : undefined
-          }
-          style={styles.body}
-        >
-          {task.requirements || 'Chưa có yêu cầu bổ sung.'}
-        </Text>
-        {(task.requirements.length > 220 || task.requirements.split('\n').length > 5) && (
-          <Button compact style={styles.inlineButton} onPress={() => setExpanded(!expanded)}>
-            {expanded ? 'Thu gọn' : 'Xem thêm'}
-          </Button>
-        )}
-      </View>
-      {task.kind === 'LocationAssetHandover' && (
-        <>
-          <LocationAssetInventoryChecklist
-            key={task.id}
-            taskId={task.id}
-            locationName={locationName}
-            onTaskRefresh={refresh}
-            onReadinessChange={setInventoryReady}
-          />
-          <LocationAssetHandoverSigning
-            taskId={task.id}
-            taskStatus={task.status}
-            onTaskRefresh={refresh}
-          />
-        </>
       )}
-      {!!task.result && (
+      {currentStaff && !isHandover && (
+        <StaffWorkflowTabs
+          accessibilityLabel="Các phần chi tiết công việc"
+          selected={activeTab}
+          onChange={setSelectedTab}
+          tabs={tabs}
+        />
+      )}
+      {activeTab === 'overview' && task.kind === 'AdHoc' && (
+        <EquipmentInspectionPanel
+          taskId={id}
+          evidence={model.evidence.data ?? []}
+          onSaved={refresh}
+        />
+      )}
+      {activeTab === 'overview' && !isHandover && (
+        <View style={styles.section}>
+          <Text variant="titleMedium" style={styles.title}>
+            Yêu cầu công việc
+          </Text>
+          <Text
+            variant="bodyMedium"
+            numberOfLines={
+              !expanded &&
+              (task.requirements.length > 220 || task.requirements.split('\n').length > 5)
+                ? 5
+                : undefined
+            }
+            style={styles.body}
+          >
+            {task.requirements || 'Chưa có yêu cầu bổ sung.'}
+          </Text>
+          {(task.requirements.length > 220 || task.requirements.split('\n').length > 5) && (
+            <Button compact style={styles.inlineButton} onPress={() => setExpanded(!expanded)}>
+              {expanded ? 'Thu gọn' : 'Xem thêm'}
+            </Button>
+          )}
+        </View>
+      )}
+      {activeTab === 'overview' && isHandover && currentStaff && (
+        <LocationAssetInventoryProgressSummary
+          taskId={task.id}
+          taskStatus={task.status}
+          onOpenInventory={() => setSelectedTab('inventory')}
+        />
+      )}
+      {activeTab === 'inventory' && isHandover && canReadHandover && (
+        <LocationAssetInventoryChecklist
+          key={task.id}
+          taskId={task.id}
+          taskStatus={task.status}
+          editable={currentStaff && task.status === 'InProgress' && allowed.includes('progress')}
+          onTaskRefresh={refresh}
+          hideReload={inShell}
+        />
+      )}
+      {activeTab === 'handover' && isHandover && canReadHandover && (
+        <LocationAssetHandoverSigning
+          taskId={task.id}
+          taskStatus={task.status}
+          onTaskRefresh={refresh}
+        />
+      )}
+      {activeTab === 'overview' && isHandover && !canReadHandover && (
+        <View style={styles.section}>
+          <Text variant="titleMedium" style={styles.title}>
+            Chưa thể mở checklist và biên bản
+          </Text>
+          <Text variant="bodySmall" style={styles.muted}>
+            Chỉ nhân viên đang phụ trách hợp lệ mới được xem và cập nhật phạm vi kiểm kê, biên bản
+            bàn giao.
+          </Text>
+        </View>
+      )}
+      {activeTab === 'overview' && !isHandover && !!task.result && (
         <View style={styles.section}>
           <Text variant="titleMedium" style={styles.title}>
             Kết quả đã gửi
@@ -298,131 +396,227 @@ export function StaffTaskDetailScreen({ id }: { id: string }) {
           )}
         </View>
       )}
-      {task.kind === 'MeterReading' && (
+      {activeTab === 'overview' && task.kind === 'MeterReading' && (
         <Button onPress={() => go('meter-reading')}>Mở tác vụ ghi chỉ số</Button>
       )}
-      <View style={styles.section}>
-        <View style={styles.between}>
-          <Text variant="titleMedium" style={styles.title}>
-            Hình ảnh minh chứng
-          </Text>
-          {model.evidence.data && (
+      {activeTab === 'evidence' && (
+        <View style={styles.section}>
+          <View style={styles.between}>
+            <Text variant="titleMedium" style={styles.title}>
+              {isHandover ? 'Ảnh minh chứng (không bắt buộc)' : 'Hình ảnh minh chứng'}
+            </Text>
+            {evidenceCount > 0 && (
+              <Text variant="bodySmall" style={styles.muted}>
+                {evidenceCount} ảnh
+              </Text>
+            )}
+          </View>
+          {task.evidenceRequired && model.canUpload && (
             <Text variant="bodySmall" style={styles.muted}>
-              {model.evidence.data.length} ảnh
+              Cần ảnh minh chứng trước khi gửi kết quả.
             </Text>
           )}
-        </View>
-        {task.evidenceRequired && model.canUpload && (
-          <Text variant="bodySmall" style={styles.muted}>
-            Cần ảnh minh chứng trước khi gửi kết quả.
-          </Text>
-        )}
-        {model.evidence.loading && <ActivityIndicator size="small" />}
-        {!!model.evidence.rawError && (
-          <ReadFailure error={model.evidence.rawError} retry={model.evidence.reload} />
-        )}
-        {model.evidence.data?.length === 0 && (
-          <Text variant="bodySmall" style={styles.muted}>
-            Chưa có ảnh minh chứng.
-          </Text>
-        )}
-        <TaskEvidenceGrid model={model} />
-        {model.canUpload && (
-          <CameraCapture
-            label="Thêm ảnh minh chứng"
-            presentation="evidence"
-            disabled={busy === 'action' || !!model.pendingAction}
-            retryOnly={model.uploadPending}
-            uploadError={model.uploadError}
-            reviewBeforeSubmit
-            onCapture={model.uploadPhoto}
-          />
-        )}
-        {busy === 'upload' && (
-          <View style={styles.row}>
-            <ActivityIndicator size="small" />
+          {model.evidence.loading && <ActivityIndicator size="small" />}
+          {!!model.evidence.rawError && (
+            <ReadFailure error={model.evidence.rawError} retry={model.evidence.reload} />
+          )}
+          {model.evidence.data?.length === 0 && (
             <Text variant="bodySmall" style={styles.muted}>
-              Đang tải ảnh và cập nhật công việc…
+              Chưa có ảnh minh chứng.
             </Text>
-          </View>
-        )}
-        {!!model.uploadError && (
-          <Text accessibilityRole="alert" style={styles.error}>
-            {model.uploadError}
-          </Text>
-        )}
-        {model.uploadPending && !busy && (
-          <Button onPress={() => void model.uploadPhoto()}>Thử lại tải ảnh</Button>
-        )}
-        {!model.syncedVersion && !model.uploadPending && (
-          <Button disabled={!!busy} onPress={() => void model.synchronize()}>
-            Tải trạng thái mới trước khi tiếp tục
-          </Button>
-        )}
-      </View>
-      <View style={styles.section}>
-        <Text variant="titleMedium" style={styles.title}>
-          Lịch sử hoạt động
-        </Text>
-        {model.history.loading && <ActivityIndicator size="small" />}
-        {!!model.history.rawError && (
-          <ReadFailure error={model.history.rawError} retry={model.history.reload} />
-        )}
-        {model.history.data?.items.length === 0 && (
-          <Text variant="bodySmall" style={styles.muted}>
-            Chưa có hoạt động.
-          </Text>
-        )}
-        {(historyExpanded ? entries : entries.slice(0, 3)).map((entry) => (
-          <View key={entry.id} style={styles.timelineRow}>
-            <View style={styles.timelineDot} />
-            <View style={{ flex: 1, gap: 4 }}>
-              <Text variant="labelLarge" style={styles.title}>
-                {taskActionLabels[entry.action] ?? 'Hoạt động công việc'}
+          )}
+          {evidenceCount > 0 && <TaskEvidenceGrid model={model} />}
+          {model.canUpload && <TaskEvidenceCapture model={model} />}
+          {busy === 'upload' && (
+            <View style={styles.row}>
+              <ActivityIndicator size="small" />
+              <Text variant="bodySmall" style={styles.muted}>
+                Đang tải ảnh và cập nhật công việc…
               </Text>
-              <Text variant="labelSmall" style={styles.muted}>
-                {formatInstant(entry.occurredAt)}
-              </Text>
-              {!!entry.note && <HistoryNote note={entry.note} />}
             </View>
-          </View>
-        ))}
-        {entries.length > 3 && (
-          <Button compact onPress={() => setHistoryExpanded(!historyExpanded)}>
-            {historyExpanded ? 'Thu gọn lịch sử' : 'Xem thêm hoạt động'}
-          </Button>
-        )}
-        {model.history.data && model.history.data.totalCount > model.history.data.pageSize && (
-          <View style={styles.between}>
-            <IconButton
-              icon="chevron-left"
-              accessibilityLabel="Trang lịch sử trước"
-              disabled={model.history.fetching || model.historyPage === 1}
-              onPress={() => {
-                model.setHistoryPage(model.historyPage - 1);
-                setHistoryExpanded(true);
-              }}
-            />
-            <Text variant="bodySmall" style={styles.muted}>
-              Trang {model.historyPage}
+          )}
+          {!!model.uploadError && (
+            <Text accessibilityRole="alert" style={styles.error}>
+              {model.uploadError}
             </Text>
-            <IconButton
-              icon="chevron-right"
-              accessibilityLabel="Trang lịch sử sau"
-              disabled={
-                model.history.fetching ||
-                model.historyPage * model.history.data.pageSize >= model.history.data.totalCount
-              }
-              onPress={() => {
-                model.setHistoryPage(model.historyPage + 1);
-                setHistoryExpanded(true);
-              }}
-            />
-          </View>
-        )}
-      </View>
+          )}
+          {model.uploadPending && !busy && (
+            <Button onPress={() => void model.uploadPhoto()}>Thử lại tải ảnh</Button>
+          )}
+          {!model.syncedVersion && !model.uploadPending && (
+            <Button disabled={!!busy} onPress={() => void model.synchronize()}>
+              Tải trạng thái mới trước khi tiếp tục
+            </Button>
+          )}
+        </View>
+      )}
+      {activeTab === 'history' && (
+        <View style={styles.section}>
+          <Text variant="titleMedium" style={styles.title}>
+            Lịch sử hoạt động
+          </Text>
+          {model.history.loading && <ActivityIndicator size="small" />}
+          {!!model.history.rawError && (
+            <ReadFailure error={model.history.rawError} retry={model.history.reload} />
+          )}
+          {model.history.data?.items.length === 0 && (
+            <Text variant="bodySmall" style={styles.muted}>
+              Chưa có hoạt động.
+            </Text>
+          )}
+          {(isHandover || historyExpanded ? entries : entries.slice(0, 3)).map((entry) => (
+            <View key={entry.id} style={styles.timelineRow}>
+              <View style={styles.timelineDot} />
+              <View style={{ flex: 1, gap: 4 }}>
+                <Text variant="labelLarge" style={styles.title}>
+                  {taskActionLabels[entry.action] ?? 'Hoạt động công việc'}
+                </Text>
+                <Text variant="labelSmall" style={styles.muted}>
+                  {formatInstant(entry.occurredAt)}
+                </Text>
+                {!!entry.note && <HistoryNote note={entry.note} />}
+              </View>
+            </View>
+          ))}
+          {!isHandover && entries.length > 3 && (
+            <Button compact onPress={() => setHistoryExpanded(!historyExpanded)}>
+              {historyExpanded ? 'Thu gọn lịch sử' : 'Xem thêm hoạt động'}
+            </Button>
+          )}
+          {model.history.data && model.history.data.totalCount > model.history.data.pageSize && (
+            <View style={styles.between}>
+              <IconButton
+                icon="chevron-left"
+                accessibilityLabel="Trang lịch sử trước"
+                disabled={model.history.fetching || model.historyPage === 1}
+                onPress={() => model.setHistoryPage(model.historyPage - 1)}
+              />
+              <Text variant="bodySmall" style={styles.muted}>
+                Trang {model.historyPage}
+              </Text>
+              <IconButton
+                icon="chevron-right"
+                accessibilityLabel="Trang lịch sử sau"
+                disabled={
+                  model.history.fetching ||
+                  model.historyPage * model.history.data.pageSize >= model.history.data.totalCount
+                }
+                onPress={() => model.setHistoryPage(model.historyPage + 1)}
+              />
+            </View>
+          )}
+        </View>
+      )}
       {!inShell && footer}
-      <TaskActionSheet model={model} inventoryReady={inventoryReady} />
+      <TaskActionSheet model={model} />
+    </>
+  );
+}
+
+function TaskEvidenceCapture({ model }: { model: DetailModel }) {
+  const [picking, setPicking] = useState(false);
+  const [photo, setPhoto] = useState<TenantIncidentPhoto | null>(null);
+  const [error, setError] = useState('');
+  const lock = useRef(false);
+  const alive = useRef(true);
+  const blocked = !!model.busy || !!model.pendingAction || model.uploadPending;
+  const blockedRef = useRef(blocked);
+  useEffect(() => {
+    blockedRef.current = blocked;
+  }, [blocked]);
+  useEffect(() => {
+    alive.current = true;
+    return () => {
+      alive.current = false;
+    };
+  }, []);
+
+  async function choose() {
+    if (blockedRef.current || lock.current) return;
+    lock.current = true;
+    setPicking(true);
+    setError('');
+    try {
+      const picker = await import('expo-image-picker');
+      const result = await picker.launchImageLibraryAsync({
+        mediaTypes: ['images'],
+        allowsMultipleSelection: false,
+        quality: 1,
+        exif: false,
+        base64: false,
+      });
+      if (result.canceled || !alive.current || blockedRef.current) return;
+      const selected = await readPickedIncidentPhoto(result.assets[0]);
+      if (alive.current && !blockedRef.current) setPhoto(selected);
+    } catch (cause) {
+      if (alive.current)
+        setError(
+          cause instanceof Error && /^(Chỉ nhận|Ảnh |Không đọc được)/.test(cause.message)
+            ? cause.message
+            : 'Không mở hoặc đọc được ảnh từ thư viện. Vui lòng thử lại.',
+        );
+    } finally {
+      lock.current = false;
+      if (alive.current) setPicking(false);
+    }
+  }
+
+  async function confirm() {
+    if (!photo || blockedRef.current || lock.current) return;
+    lock.current = true;
+    try {
+      // The task model owns the upload bytes and idempotent retry after confirmation.
+      const upload = model.uploadPhoto(photo.bytes);
+      setPhoto(null);
+      await upload;
+    } finally {
+      lock.current = false;
+    }
+  }
+
+  return (
+    <>
+      <CameraCapture
+        label="Chụp ảnh minh chứng"
+        presentation="evidence"
+        disabled={model.busy === 'action' || !!model.pendingAction || picking || !!photo}
+        retryOnly={model.uploadPending}
+        uploadError={model.uploadError}
+        reviewBeforeSubmit
+        onCapture={model.uploadPhoto}
+      />
+      {!photo && (
+        <Button
+          mode="outlined"
+          icon="image-outline"
+          disabled={blocked || picking}
+          loading={picking}
+          onPress={() => void choose()}
+        >
+          Chọn ảnh từ thư viện
+        </Button>
+      )}
+      {photo && (
+        <View style={styles.section}>
+          <Image
+            source={{ uri: photo.previewUri }}
+            accessibilityLabel="Ảnh minh chứng đã chọn"
+            resizeMode="contain"
+            style={{ width: '100%', height: 200 }}
+          />
+          <Button mode="contained" disabled={blocked} onPress={() => void confirm()}>
+            Dùng ảnh
+          </Button>
+          <Button disabled={blocked} onPress={() => setPhoto(null)}>
+            Hủy ảnh
+          </Button>
+        </View>
+      )}
+      {!!error && (
+        <Text accessibilityRole="alert" style={styles.error}>
+          {error}
+        </Text>
+      )}
     </>
   );
 }
@@ -474,24 +668,18 @@ function TaskDetailSkeleton() {
   );
 }
 
-function TaskActionSheet({
-  model,
-  inventoryReady,
-}: {
-  model: DetailModel;
-  inventoryReady: boolean;
-}) {
+function TaskActionSheet({ model }: { model: DetailModel }) {
   const { sheet, setSheet, task, busy, notes, pendingAction } = model;
   const close = () => {
     if (!busy) setSheet(null);
   };
   const action = sheet && sheet !== 'choose' ? sheet : null;
   const form = action ? forms[action] : null;
-  const canSend =
-    action &&
-    (pendingAction ||
-      (model.allowed.includes(action) &&
-        !(action === 'submit' && task?.kind === 'LocationAssetHandover' && !inventoryReady)));
+  const isHandover = task?.kind === 'LocationAssetHandover';
+  const handoverStart = isHandover && action === 'start';
+  const formTitle = handoverStart ? 'Bắt đầu kiểm kê' : (form?.title ?? 'Cập nhật công việc');
+  const formSubmit = handoverStart ? 'Bắt đầu kiểm kê' : form?.submit;
+  const canSend = action && (pendingAction || model.allowed.includes(action));
   const selected = model.selected.filter((id) =>
     model.evidence.data?.some((file) => file.id === id),
   );
@@ -505,7 +693,7 @@ function TaskActionSheet({
         <SafeAreaView edges={['bottom']} style={styles.sheet}>
           <View style={styles.between}>
             <Text variant="titleLarge" style={styles.sheetHeading}>
-              {form?.title ?? 'Cập nhật công việc'}
+              {formTitle}
             </Text>
             <IconButton
               icon="close"
@@ -525,11 +713,6 @@ function TaskActionSheet({
                   <Button
                     key={value}
                     mode={value === 'submit' ? 'contained' : 'outlined'}
-                    disabled={
-                      value === 'submit' &&
-                      task?.kind === 'LocationAssetHandover' &&
-                      !inventoryReady
-                    }
                     onPress={() => {
                       model.clearError();
                       setSheet(value);
@@ -539,24 +722,26 @@ function TaskActionSheet({
                     {value === 'submit' ? 'Gửi kết quả' : forms[value].title}
                   </Button>
                 ))}
-            {sheet === 'choose' && task?.kind === 'LocationAssetHandover' && !inventoryReady && (
-              <Text variant="bodySmall" style={styles.muted}>
-                Chỉ gửi kết quả sau khi xác nhận đủ các mục kiểm kê toàn cơ sở.
-              </Text>
-            )}
             {action && form && (
               <>
-                <TextInput
-                  mode="outlined"
-                  label={form.field}
-                  accessibilityLabel={form.field}
-                  multiline
-                  maxLength={8000}
-                  value={notes[action]}
-                  onChangeText={(note) => model.setNote(action, note)}
-                  disabled={!!busy || !!pendingAction}
-                  style={styles.input}
-                />
+                {handoverStart && (
+                  <Text variant="bodyMedium" style={styles.body}>
+                    Bắt đầu kiểm tra các tài sản Owner đã xác nhận tại từng phòng và khu vực chung.
+                  </Text>
+                )}
+                {!handoverStart && (
+                  <TextInput
+                    mode="outlined"
+                    label={form.field}
+                    accessibilityLabel={form.field}
+                    multiline
+                    maxLength={8000}
+                    value={notes[action]}
+                    onChangeText={(note) => model.setNote(action, note)}
+                    disabled={!!busy || !!pendingAction}
+                    style={styles.input}
+                  />
+                )}
                 {action !== 'start' && !!model.evidence.data?.length && (
                   <>
                     <Text variant="labelLarge">
@@ -620,7 +805,7 @@ function TaskActionSheet({
                     ? 'Thử lại thao tác'
                     : model.conflict
                       ? 'Xác nhận gửi lại'
-                      : form.submit}
+                      : formSubmit}
                 </Button>
               </>
             )}
@@ -757,7 +942,7 @@ const styles = StyleSheet.create({
     borderColor: c.border,
     borderRadius: 12,
     padding: 12,
-    gap: 8,
+    gap: 6,
   },
   title: { color: c.primary },
   body: { color: c.ink, lineHeight: 21 },
@@ -765,7 +950,7 @@ const styles = StyleSheet.create({
   error: { color: c.red },
   row: { flexDirection: 'row', alignItems: 'center', gap: 8, flexWrap: 'wrap' },
   between: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', gap: 8 },
-  badge: { backgroundColor: c.soft, paddingVertical: 5, paddingHorizontal: 8, borderRadius: 5 },
+  badge: { backgroundColor: c.soft, paddingVertical: 4, paddingHorizontal: 8, borderRadius: 5 },
   inlineButton: { alignSelf: 'flex-start', marginLeft: -8 },
   actionBar: {
     backgroundColor: c.white,

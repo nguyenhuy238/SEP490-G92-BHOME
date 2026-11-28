@@ -1,4 +1,4 @@
-﻿// @vitest-environment jsdom
+// @vitest-environment jsdom
 import React from 'react';
 import { afterEach, beforeEach, expect, it, vi } from 'vitest';
 import { cleanup, fireEvent, render, screen, within } from '@testing-library/react';
@@ -11,8 +11,15 @@ const state = vi.hoisted(() => ({
   selectedId: 'loc',
   locations: [{ id: 'loc', label: 'Cơ sở kiểm thử' }],
   tasks: null as null | { totalCount: number },
-  overdue: [] as { id: string; title: string; locationId: string; status: string; kind?: string }[],
+  priorities: [] as {
+    id: string;
+    title: string;
+    locationId: string;
+    status: string;
+    kind?: string;
+  }[],
   failed: false,
+  overdueMeterRooms: null as number | null,
 }));
 vi.mock('expo-router', () => ({ router: { push: state.push } }));
 vi.mock('../features/workspace/WorkspaceProvider', () => ({
@@ -31,14 +38,17 @@ vi.mock('../features/workspace/useStaffDashboard', () => ({
   useStaffDashboard: () => ({
     locations: { data: [{ id: 'loc', label: 'Cơ sở kiểm thử' }], loading: false, error: '' },
     tasks: { data: state.tasks, error: state.failed ? 'Lỗi tải' : '' },
-    overdue: { data: { items: state.overdue }, error: state.failed ? 'Lỗi tải' : '' },
+    priorities: { data: { items: state.priorities }, error: state.failed ? 'Lỗi tải' : '' },
     inspections: { data: [], error: '' },
     meters: { data: [], error: '' },
+    overdueMeterRooms: state.overdueMeterRooms,
     reload: state.reload,
   }),
 }));
 vi.mock('react-native', () => ({
-  View: ({ children }: { children?: React.ReactNode }) => <div>{children}</div>,
+  View: ({ children, testID }: { children?: React.ReactNode; testID?: string }) => (
+    <div data-testid={testID}>{children}</div>
+  ),
   ScrollView: ({ children }: { children?: React.ReactNode }) => <div>{children}</div>,
   StyleSheet: { create: (s: unknown) => s, hairlineWidth: 1 },
 }));
@@ -61,6 +71,7 @@ vi.mock('react-native-paper', () => {
     MD3LightTheme: { colors: {} },
     configureFonts: () => ({}),
     Text: Content,
+    Icon: () => null,
     Button,
     TouchableRipple: Button,
     Portal: Content,
@@ -94,16 +105,25 @@ vi.mock('../components/StaffFeatureCard', () => ({
 }));
 import { StaffDashboard } from '../screens/StaffDashboard';
 import { staffFeatureGroups } from '../features/workspace/staffFeatures';
-import { activeWorkspaceTab, canOpenScreen } from '../features/workspace/navigation';
+import { activeWorkspaceTab, canOpenScreen, tabs } from '../features/workspace/navigation';
 afterEach(cleanup);
 beforeEach(() => {
   vi.clearAllMocks();
   state.preview = false;
   state.tasks = null;
-  state.overdue = [];
+  state.priorities = [];
   state.failed = false;
+  state.overdueMeterRooms = null;
   state.selectedId = 'loc';
   state.locations = [{ id: 'loc', label: 'Cơ sở kiểm thử' }];
+});
+it('shows the distinct overdue-room count on the meter workspace tile and opens the workspace', () => {
+  state.overdueMeterRooms = 3;
+  render(<StaffDashboard />);
+  const tile = screen.getByRole('button', { name: /Ghi điện nước/ });
+  expect(within(tile).getByText('3 phòng quá hạn')).toBeTruthy();
+  fireEvent.click(tile);
+  expect(state.go).toHaveBeenCalledWith('meter-reading');
 });
 it('lets Staff choose between two assigned Locations directly on Home', () => {
   state.locations = [
@@ -122,8 +142,10 @@ it('does not show a sample name, shift status or manufactured counts in authenti
   render(<StaffDashboard />);
   expect(screen.queryByText('Xin chào, Long!')).toBeNull();
   expect(screen.queryByText('Đang trực')).toBeNull();
-  expect(screen.getByText('Chưa có dữ liệu ca làm')).toBeTruthy();
-  expect(screen.queryByText('Cần xử lý')).toBeNull();
+  expect(screen.queryByRole('button', { name: 'Làm mới tổng quan' })).toBeNull();
+  expect(screen.queryByText('Làm mới')).toBeNull();
+  expect(screen.queryByText('Chưa có dữ liệu ca làm')).toBeNull();
+  expect(screen.getByText('Chưa có việc ưu tiên cần xử lý.')).toBeTruthy();
   expect(screen.getByText('Cơ sở kiểm thử')).toBeTruthy();
   expect(screen.getAllByText('—')).toHaveLength(2);
 });
@@ -133,9 +155,11 @@ it('distinguishes a real zero from unavailable counts', () => {
   expect(screen.getAllByText('0')).toHaveLength(2);
   expect(screen.getAllByText('—')).toHaveLength(1);
 });
-it('opens the actual overdue task and offers retry on partial failure', () => {
+it('opens the actual priority task and offers retry on partial failure', () => {
   state.failed = true;
-  state.overdue = [{ id: 'task-id', title: 'Kiểm tra bơm', locationId: 'loc', status: 'Assigned' }];
+  state.priorities = [
+    { id: 'task-id', title: 'Kiểm tra bơm', locationId: 'loc', status: 'Assigned' },
+  ];
   render(<StaffDashboard />);
   expect(screen.getByText('Cần xử lý')).toBeTruthy();
   fireEvent.click(screen.getByRole('button', { name: 'Kiểm tra bơm, Cơ sở kiểm thử' }));
@@ -143,31 +167,23 @@ it('opens the actual overdue task and offers retry on partial failure', () => {
   fireEvent.click(screen.getByText('Chưa tải đủ tác vụ ưu tiên · Thử lại'));
   expect(state.reload).toHaveBeenCalledOnce();
 });
-it('exposes all 16 Staff functions including inventory and keeps maintenance separate from operational tasks', () => {
+it('shows at most two priority tasks and opens a task only after a tap', () => {
+  state.priorities = ['Newest', 'Next', 'Older'].map((title) => ({
+    id: title,
+    title,
+    locationId: 'loc',
+    status: 'Assigned',
+  }));
   render(<StaffDashboard />);
-  expect(screen.queryByText('TIẾP NHẬN & HỢP ĐỒNG')).toBeNull();
-  fireEvent.click(screen.getByText('Xem tất cả chức năng (16)'));
-  expect(staffFeatureGroups.reduce((total, group) => total + group.items.length, 0)).toBe(16);
-  for (const group of staffFeatureGroups) {
-    expect(screen.getByText(group.title)).toBeTruthy();
-    for (const item of group.items) {
-      expect(canOpenScreen('Staff', item.screen)).toBe(true);
-      expect(screen.getAllByText(item.title).length).toBeGreaterThan(0);
-    }
-  }
-  fireEvent.click(screen.getByText('Xử lý sự cố'));
-  expect(state.go).toHaveBeenLastCalledWith('staff-maintenance');
-  fireEvent.click(screen.getByText('Kiểm kê trước nhận phòng'));
-  expect(state.go).toHaveBeenLastCalledWith('move-in-inventory');
-  fireEvent.click(screen.getByText('Hóa đơn'));
-  expect(state.go).toHaveBeenLastCalledWith('staff-invoices');
-  fireEvent.click(screen.getByText('Tạo hợp đồng giữ chỗ'));
-  expect(state.go).toHaveBeenLastCalledWith('prepare-contract', { kind: 'Holding' });
-  fireEvent.click(screen.getByText('Thu gọn chức năng'));
-  expect(screen.queryByText('SỰ CỐ & BẢO TRÌ')).toBeNull();
+  expect(screen.getByText('Newest')).toBeTruthy();
+  expect(screen.getByText('Next')).toBeTruthy();
+  expect(screen.queryByText('Older')).toBeNull();
+  expect(state.go).not.toHaveBeenCalled();
+  fireEvent.click(screen.getByRole('button', { name: /^Next,/ }));
+  expect(state.go).toHaveBeenCalledExactlyOnceWith('task-detail', { taskId: 'Next' });
 });
-it('opens overdue inventory task directly in the Staff checklist', () => {
-  state.overdue = [
+it('opens an assigned move-in inventory task from priorities', () => {
+  state.priorities = [
     {
       id: 'inventory-task',
       title: 'Kiểm kê trước nhận phòng',
@@ -178,28 +194,82 @@ it('opens overdue inventory task directly in the Staff checklist', () => {
   ];
   render(<StaffDashboard />);
   fireEvent.click(screen.getByRole('button', { name: 'Kiểm kê trước nhận phòng, Cơ sở kiểm thử' }));
-  expect(state.go).toHaveBeenLastCalledWith('move-in-inventory', { taskId: 'inventory-task' });
+  expect(state.go).toHaveBeenCalledWith('move-in-inventory', { taskId: 'inventory-task' });
 });
-it('offers both move-in and move-out from the handover action', () => {
+it('shows six quick actions in three rows of two and keeps seven work areas available', () => {
+  render(<StaffDashboard />);
+  expect(staffFeatureGroups).toHaveLength(7);
+  expect(staffFeatureGroups.flatMap((group) => group.items)).toContainEqual(
+    expect.objectContaining({ screen: 'residence' }),
+  );
+  expect(screen.queryByText('Sự cố khẩn cấp')).toBeNull();
+  for (const group of staffFeatureGroups) {
+    for (const item of group.items) {
+      expect(canOpenScreen('Staff', item.screen)).toBe(true);
+    }
+  }
+  expect(screen.getByText('Truy cập nhanh')).toBeTruthy();
+  const rows = screen.getAllByTestId('staff-shortcut-row');
+  expect(rows).toHaveLength(3);
+  expect(
+    rows.map((row) =>
+      within(row)
+        .getAllByRole('button')
+        .map((button) => button.textContent),
+    ),
+  ).toEqual([
+    ['Công việc', 'Ghi điện nước'],
+    ['Bàn giao / Trả phòng', 'Xử lý sự cố'],
+    ['Hợp đồng', 'Tạm trú'],
+  ]);
+  expect(screen.getByText('Công việc')).toBeTruthy();
+  expect(screen.getByText('Ghi điện nước')).toBeTruthy();
+  expect(screen.getByText('Bàn giao / Trả phòng')).toBeTruthy();
+  expect(screen.getByText('Hợp đồng')).toBeTruthy();
+  fireEvent.click(screen.getByText('Tạm trú'));
+  expect(state.go).toHaveBeenLastCalledWith('residence');
+  fireEvent.click(screen.getByText('Xử lý sự cố'));
+  expect(state.go).toHaveBeenLastCalledWith('staff-incidents');
+  expect(screen.queryByText('Hóa đơn')).toBeNull();
+  expect(screen.queryByText('Công nợ')).toBeNull();
+  expect(screen.queryByText('Gửi thông báo')).toBeNull();
+});
+it('opens the dedicated two-tab handover list from the dashboard', () => {
   render(<StaffDashboard />);
   fireEvent.click(screen.getByText('Bàn giao / Trả phòng'));
-  fireEvent.click(screen.getByText('Bàn giao nhận phòng'));
-  expect(state.go).toHaveBeenLastCalledWith('move-in');
-  fireEvent.click(screen.getByText('Bàn giao / Trả phòng'));
-  fireEvent.click(within(screen.getByRole('dialog')).getByText('Kiểm tra trả phòng'));
-  expect(state.go).toHaveBeenLastCalledWith('move-out');
+  expect(state.go).toHaveBeenLastCalledWith('staff-handovers');
+});
+it('opens both contract creation flows and the contract list from the dashboard', () => {
+  render(<StaffDashboard />);
+  fireEvent.click(screen.getByText('Hợp đồng'));
+  fireEvent.click(within(screen.getByRole('dialog')).getByText('Tạo hợp đồng thuê'));
+  expect(state.go).toHaveBeenLastCalledWith('onboarding');
+  fireEvent.click(screen.getByText('Hợp đồng'));
+  fireEvent.click(within(screen.getByRole('dialog')).getByText('Tạo hợp đồng giữ chỗ'));
+  expect(state.go).toHaveBeenLastCalledWith('prepare-contract', { kind: 'Holding' });
+  fireEvent.click(screen.getByText('Hợp đồng'));
+  fireEvent.click(within(screen.getByRole('dialog')).getByText('Xem hợp đồng'));
+  expect(state.go).toHaveBeenLastCalledWith('signing');
 });
 it('denies other roles the new Staff screens and preserves the correct active tab', () => {
+  expect(tabs.Staff.map((tab) => tab.title)).toEqual([
+    'Trang chủ',
+    'Công việc',
+    'Phòng',
+    'Cá nhân',
+  ]);
+  expect(canOpenScreen('Staff', 'notifications')).toBe(true);
   for (const route of [
     'staff-assets',
     'staff-invoices',
     'staff-maintenance',
     'staff-emergencies',
+    'staff-handovers',
   ] as const) {
     expect(canOpenScreen('Owner', route)).toBe(false);
     expect(canOpenScreen('Tenant', route)).toBe(false);
   }
   expect(activeWorkspaceTab('Staff', 'staff-maintenance')).toBe('work-orders');
   expect(activeWorkspaceTab('Staff', 'staff-emergencies')).toBe('work-orders');
-  expect(activeWorkspaceTab('Staff', 'send-notification')).toBe('notifications');
+  expect(activeWorkspaceTab('Staff', 'rooms')).toBe('rooms');
 });

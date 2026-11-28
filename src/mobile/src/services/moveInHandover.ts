@@ -4,8 +4,15 @@ import {
   type HandoverAsset,
   type HandoverReading,
 } from '../../../../packages/client-core/src/contracts';
+import { NO_CERTIFICATE, type SigningOtpView } from '../../../../packages/client-core/src/signing';
 
-export type MoveInDraftStatus = 'Draft' | 'Ready' | 'ChangesRequested' | 'Confirmed';
+export type MoveInDraftStatus =
+  | 'Draft'
+  | 'PendingOwnerReview'
+  | 'ReinspectionRequested'
+  | 'Ready'
+  | 'ChangesRequested'
+  | 'Confirmed';
 
 export const roomHandoverChecks = [
   { code: 'walls_ceiling_floor', label: 'Tường, trần và sàn' },
@@ -34,7 +41,7 @@ export type MoveInAccessType = (typeof moveInAccessKinds)[number]['type'];
 export interface MoveInRoomCheck {
   code: string;
   status: MoveInRoomCheckStatus;
-  notes: string;
+  notes: string | null;
   evidenceIds: string[];
 }
 
@@ -69,6 +76,22 @@ export interface MoveInChangeRequest {
   decisionReason?: string | null;
 }
 
+export interface MoveInReinspectionItem {
+  kind: string;
+  code?: string | null;
+  assetId?: string | null;
+  rechecked?: boolean;
+  readingId?: string | null;
+}
+
+export interface MoveInReinspectionRecord {
+  version: number;
+  reason: string;
+  ownerId: string;
+  requestedAt: string;
+  items: MoveInReinspectionItem[];
+}
+
 export interface MoveInDraft {
   version: number;
   status: MoveInDraftStatus;
@@ -84,6 +107,16 @@ export interface MoveInDraft {
   electricity: HandoverReading | null;
   water: HandoverReading | null;
   assets: HandoverAsset[];
+  inspectedAssets?:
+    | {
+        id: string;
+        name: string;
+        expectedQuantity: number;
+        actualQuantity: number;
+        condition: string;
+        notes?: string | null;
+      }[]
+    | null;
   roomCondition: string;
   keysAndAccess: string;
   notes: string;
@@ -96,6 +129,14 @@ export interface MoveInDraft {
   inventoryToken?: string | null;
   noAssetsConfirmed: boolean;
   ownerReadyAt?: string | null;
+  staffSubmittedAt?: string | null;
+  ownerSignedAt?: string | null;
+  ownerDocumentId?: string | null;
+  ownerDocumentHash?: string | null;
+  tenantSignedAt?: string | null;
+  reinspectionItems?: MoveInReinspectionItem[];
+  reinspectionHistory?: MoveInReinspectionRecord[];
+  tenantSigningPending?: boolean;
   tenantConfirmedAt?: string | null;
   requests: MoveInChangeRequest[];
   missing: string[];
@@ -158,6 +199,38 @@ export function moveInHandover(api: ContractClient) {
         headers: { 'Idempotency-Key': guid(key) },
         body: JSON.stringify({ version: task.version }),
       }),
+    submit: (id: string, version: number, key: string) => mutate(id, '/submit', { version }, key),
+    resubmit: (id: string, version: number, key: string) =>
+      mutate(id, '/resubmit', { version }, key),
+    startTenantSigning: (id: string, version: number, key: string) =>
+      mutate(
+        id,
+        '/tenant-sign',
+        {
+          version,
+          signature: { certificateId: NO_CERTIFICATE, method: 'OTP', usePicture: true },
+        },
+        key,
+      ),
+    signTenantInSession: (
+      id: string,
+      version: number,
+      ink: { width: number; height: number; strokes: number[][][] },
+      note: string,
+      key: string,
+    ) =>
+      mutate(id, '/tenant-sign/session', { version, consent: true, ink, note: note.trim() }, key),
+    tenantSigningOtp: (id: string, signal?: AbortSignal) =>
+      request<SigningOtpView>(`${endpoint(id)}/tenant-sign/otp`, { signal }),
+    resendTenantSigningOtp: (id: string) =>
+      request<SigningOtpView>(`${endpoint(id)}/tenant-sign/otp/resend`, { method: 'POST' }),
+    confirmTenantSigning: (id: string, version: number, code: string, note: string, key: string) =>
+      mutate(
+        id,
+        '/tenant-sign/otp/confirm',
+        { version, code: code.trim(), note: note.trim() },
+        key,
+      ),
     requestCorrection: (id: string, version: number, reason: string, key: string) =>
       mutate(id, '/requests', { version, reason: reason.trim() }, key),
     confirm: (id: string, version: number, note: string, key: string) =>
@@ -171,15 +244,28 @@ export function canTenantRespondToMoveIn(draft: MoveInDraft | null): boolean {
 
 export function canStaffEditMoveIn(draft: MoveInDraft | null): boolean {
   return (
-    draft?.status === 'Draft' &&
+    (draft?.status === 'Draft' || draft?.status === 'ReinspectionRequested') &&
     draft.moveInTask?.status === 'InProgress' &&
     draft.moveInTask.canInspect === true
   );
 }
 
+export function moveInReinspectionLabel(item: MoveInReinspectionItem, draft: MoveInDraft): string {
+  if (item.kind === 'RoomCheck')
+    return (
+      roomHandoverChecks.find((check) => check.code === item.code)?.label ?? 'Hiện trạng phòng'
+    );
+  if (item.kind === 'Asset')
+    return draft.assets.find((asset) => asset.id === item.assetId)?.name ?? 'Tài sản bàn giao';
+  if (item.kind === 'Meter') return item.code === 'Water' ? 'Công tơ nước' : 'Công tơ điện';
+  if (item.kind === 'Access') return 'Chìa khóa bàn giao';
+  if (item.kind === 'Room') return 'Hiện trạng tổng quan';
+  return 'Nội dung bàn giao';
+}
+
 const missingMessages: Record<string, string> = {
   contract_active: 'Hợp đồng chưa được kích hoạt.',
-  tenant_account: 'Chưa có tài khoản Tenant cho hợp đồng.',
+  tenant_account: 'Chưa có tài khoản khách thuê cho hợp đồng.',
   electricity: 'Chưa có chỉ số điện khởi tạo đã xác nhận.',
   water: 'Chưa có chỉ số nước khởi tạo đã xác nhận.',
   meter_readings_same_day: 'Chỉ số điện và nước phải được xác nhận cùng ngày bàn giao.',
@@ -188,20 +274,24 @@ const missingMessages: Record<string, string> = {
   room_evidence: 'Chưa có ảnh bằng chứng hiện trạng phòng.',
   assets: 'Chưa kiểm kê đầy đủ các nhóm tài sản.',
   asset_quantities_or_evidence:
-    'Số lượng, tình trạng hoặc ảnh bằng chứng tài sản chưa hợp lệ; Staff cần kiểm tra lại.',
+    'Số lượng, tình trạng hoặc ảnh bằng chứng tài sản chưa hợp lệ; nhân viên cần kiểm tra lại.',
   inventory_changed: 'Danh sách tài sản đã thay đổi; cần tải lại và kiểm kê theo danh sách mới.',
-  staff_inspection: 'Staff chưa lưu kết quả kiểm tra bàn giao.',
+  staff_inspection: 'Nhân viên chưa lưu kết quả kiểm tra bàn giao.',
   room_checklist: 'Chưa hoàn thành đủ 7 nhóm kiểm tra hiện trạng phòng.',
-  room_issue_evidence: 'Mục có vấn đề cần ghi chú và gắn ảnh bằng chứng trực tiếp.',
+  room_summary_evidence: 'Hiện trạng chung cần ảnh minh chứng.',
+  room_check_evidence: 'Hạng mục Đạt hoặc Có vấn đề cần ảnh minh chứng.',
+  key_evidence: 'Chưa có ảnh chìa khóa.',
+  room_issue_evidence: 'Mục có vấn đề cần ảnh bằng chứng trực tiếp.',
   access_inventory: 'Chưa ghi nhận số lượng chìa khóa bàn giao.',
-  outstanding_issues: 'Vấn đề tồn đọng cần Owner xem xét và quyết định phương án xử lý.',
+  outstanding_issues: 'Vấn đề tồn đọng cần chủ trọ xem xét và quyết định phương án xử lý.',
   handover_task_not_started: 'Bấm Bắt đầu công việc trước khi kiểm kê và ghi nhận hiện trạng.',
-  handover_task: 'Nhiệm vụ bàn giao chưa sẵn sàng. Hãy nhờ Owner kiểm tra.',
+  handover_task: 'Nhiệm vụ bàn giao chưa sẵn sàng. Hãy nhờ chủ trọ kiểm tra.',
   contract_changed: 'Thông tin hợp đồng đã thay đổi; cần cập nhật biên bản.',
 };
 
 export function moveInMissingMessage(code: string): string {
   return (
-    missingMessages[code] ?? 'Còn điều kiện bàn giao chưa đạt; vui lòng tải lại hoặc liên hệ Owner.'
+    missingMessages[code] ??
+    'Còn điều kiện bàn giao chưa đạt; vui lòng tải lại hoặc liên hệ chủ trọ.'
   );
 }

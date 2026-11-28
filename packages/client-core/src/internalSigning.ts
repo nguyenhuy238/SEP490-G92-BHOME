@@ -8,6 +8,7 @@ export type InternalSigningStatus = {
   ownerAcceptedAt: string | null;
   invitations: { id: string; status: string; expiresAt: string }[];
   maskedEmail?: string | null;
+  usesHoldingEmail?: boolean;
   tenantSimulated?: boolean;
   canContinue?: boolean;
   sandboxAvailable?: boolean;
@@ -121,13 +122,41 @@ export function internalSigningClient(request: ReturnType<typeof createApiClient
       }),
   };
 }
+const invitationPreDeliveryErrors: Readonly<Record<string, string>> = {
+  signing_otp_key_not_configured:
+    'Chưa cấu hình khóa xác minh OTP. Vui lòng liên hệ quản trị viên trước khi tạo lời mời ký.',
+  signing_email_not_configured:
+    'Chưa cấu hình dịch vụ gửi email ký hợp đồng. Vui lòng liên hệ quản trị viên.',
+  contract_template_not_configured: 'Máy chủ chưa có mẫu PDF hợp đồng để gửi lời mời ký.',
+  contract_template_not_approved: 'Mẫu PDF hợp đồng chưa được phê duyệt cho môi trường này.',
+  main_draft_signing_template_not_approved:
+    'Mẫu PDF hợp đồng thuê chưa được phê duyệt để gửi ký trên môi trường này.',
+  contract_template_not_found: 'Máy chủ không tìm thấy mẫu hợp đồng để tạo PDF.',
+  contract_pdf_converter_unavailable: 'Máy chủ chưa cấu hình bộ chuyển hợp đồng sang PDF.',
+  contract_pdf_conversion_failed: 'Máy chủ không chuyển được mẫu hợp đồng sang PDF.',
+  contract_pdf_conversion_timeout: 'Máy chủ tạo PDF quá thời gian chờ.',
+  holding_contract_document_source_unavailable: 'Máy chủ chưa có nguồn PDF hợp đồng giữ chỗ.',
+  owner_contract_settings_required:
+    'Cơ sở chưa có thông tin bên cho thuê có hiệu lực cho hợp đồng này.',
+};
+
+export function invitationPreDeliveryError(error: unknown): string | undefined {
+  const value = error as { code?: string; problem?: { code?: string } } | null;
+  const code = value?.code ?? value?.problem?.code;
+  return code && Object.hasOwn(invitationPreDeliveryErrors, code)
+    ? invitationPreDeliveryErrors[code]
+    : undefined;
+}
+
 export function signingMessage(error: unknown) {
+  const preDelivery = invitationPreDeliveryError(error);
+  if (preDelivery) return preDelivery;
   const value = error as { code?: string; problem?: { code?: string } };
   const code = value?.code ?? value?.problem?.code;
   if (code === 'signing_invitation_already_active')
     return 'Hợp đồng đang có lời mời ký còn hiệu lực. Làm mới trạng thái, rồi dùng Gửi lại email để đổi địa chỉ nhận.';
   if (code === 'signing_otp_retry_later')
-    return 'Vui lòng chờ ít nhất 1 phút giữa các lần gửi. Mỗi lời mời được gửi tối đa 5 lần.';
+    return 'Chưa thể gửi lại mã qua email. Vui lòng thử lại sau.';
   if (code === 'signing_invitation_not_active')
     return 'Lời mời đã hết hạn, bị thu hồi hoặc đã ký. Hãy làm mới trạng thái trước khi gửi tiếp.';
   if (code === 'holding_owner_signature_required')
@@ -136,16 +165,14 @@ export function signingMessage(error: unknown) {
     return 'Email này đã được sử dụng trong hồ sơ/hợp đồng chính thức hoặc tài khoản nhân viên. Vui lòng nhập email khác.';
   if (code === 'signing_contacts_required')
     return 'Nhập email hợp lệ của người đại diện thuê trước khi gửi lời mời ký.';
+  if (code === 'resident_account_email_mismatch')
+    return 'Nhập đúng email của tài khoản đã liên kết với người đại diện thuê.';
   if (code === 'signing_contacts_invalid')
     return 'Danh sách email không khớp người ở trong hợp đồng. Hãy tải lại và kiểm tra.';
   if (code === 'holding_owner_approval_required')
     return 'Owner chưa phê duyệt hợp đồng giữ chỗ. Hãy phê duyệt trên Web trước khi ký.';
   if (code === 'exact_document_consent_required')
     return 'Xác nhận ký không khớp phiên bản tài liệu hiện tại. Tải lại hợp đồng và xác nhận lại.';
-  if (code === 'signing_otp_key_not_configured')
-    return 'Chưa cấu hình khóa xác minh OTP. Vui lòng liên hệ quản trị viên trước khi tạo lời mời ký.';
-  if (code === 'signing_email_not_configured')
-    return 'Chưa cấu hình dịch vụ gửi email ký hợp đồng. Vui lòng liên hệ quản trị viên.';
   const status = (error as { status?: number }).status;
   if (status === 503) return 'Chưa cấu hình dịch vụ gửi mã hoặc tài liệu. Vui lòng liên hệ Owner.';
   if (status === 429) return 'Bạn đã thử quá nhiều lần. Vui lòng chờ rồi thử lại.';

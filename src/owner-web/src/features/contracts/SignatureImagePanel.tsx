@@ -1,11 +1,12 @@
+import { ValidatedInput } from '../../components/common/ValidatedForm';
 import { useRef, useState } from 'react';
 import { useObjectUrl } from './useObjectUrl';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
-import { Alert, Box, Button, LinearProgress, Stack, TextField, Typography } from '@mui/material';
+import { Alert, Box, Button, LinearProgress, Stack, Typography } from '@mui/material';
 import { signingError, type SigningClient } from '../../../../../packages/client-core/src/signing';
 
-// "Ảnh chữ ký": the picture shown in the signer's signature box above "Ký bởi / Ngày ký". A transparent PNG
-// (40–4000 px each side, at most 1 MB), or one generated from the signer's name.
+// "Ảnh chữ ký": the picture shown in the signer's signature box above "Ký bởi / Ngày ký".
+// Real PNG upload remains available; typed-name facsimile generation is not offered.
 export function SignatureImagePanel({ signing }: { signing: SigningClient }) {
   const queries = useQueryClient();
   const view = useQuery({
@@ -13,7 +14,6 @@ export function SignatureImagePanel({ signing }: { signing: SigningClient }) {
     queryKey: ['signature-image'],
     queryFn: ({ signal }) => signing.image(signal),
   });
-  const [name, setName] = useState('');
   const [busy, setBusy] = useState(false),
     [error, setError] = useState(''),
     [notice, setNotice] = useState('');
@@ -80,22 +80,6 @@ export function SignatureImagePanel({ signing }: { signing: SigningClient }) {
         </Box>
       )}
       <Stack direction="row" spacing={1} sx={{ flexWrap: 'wrap', alignItems: 'center' }}>
-        <TextField
-          size="small"
-          label="Họ tên để tạo ảnh"
-          value={name}
-          disabled={busy}
-          slotProps={{ htmlInput: { maxLength: 60 } }}
-          onChange={(e) => setName(e.target.value)}
-        />
-        <Button
-          disabled={busy || name.trim().length < 2}
-          onClick={() =>
-            void run(() => signing.generateImage(name), 'Đã tạo ảnh chữ ký từ họ tên.')
-          }
-        >
-          Tạo từ họ tên
-        </Button>
         <Button disabled={busy} onClick={() => file.current?.click()}>
           Tải ảnh PNG lên
         </Button>
@@ -108,7 +92,7 @@ export function SignatureImagePanel({ signing }: { signing: SigningClient }) {
             Xóa ảnh
           </Button>
         )}
-        <input
+        <ValidatedInput
           ref={file}
           hidden
           type="file"

@@ -2,6 +2,7 @@ using System.Security.Cryptography;
 using System.Text;
 using BHome.Application.PaymentsDebt;
 using BHome.Application.PaymentsDebt.SePay;
+using BHome.Domain.PaymentsDebt;
 
 namespace BHome.Application.UnitTests.PaymentsDebt;
 
@@ -13,6 +14,33 @@ public sealed class SePaySecurityTests
     private sealed class Clock : TimeProvider { public override DateTimeOffset GetUtcNow() => Now; }
     private static string Signature(string body, string timestamp) => "sha256=" + Convert.ToHexString(HMACSHA256.HashData(Encoding.UTF8.GetBytes(Secret), Encoding.UTF8.GetBytes(timestamp + "." + body)));
     private static SePayWebhookSecurity Security() => new(new SePayOptions { Enabled = true, WebhookSecret = Secret }, new Clock());
+
+    [Theory]
+    [InlineData("Development")]
+    [InlineData("Testing")]
+    [InlineData("Staging")]
+    [InlineData("Production")]
+    public void DualProfilesAreIndependentOfHostEnvironmentAndRequestSelection(string environment)
+    {
+        var bindings = new List<SePayReceivingAccount> { new() { OwnerUserId = Guid.NewGuid(), BankIdentifier = "970416", Gateway = "ACB", AccountNumber = "0000001234" } };
+        var options = new SePayOptions
+        {
+            Enabled = true,
+            InstanceCode = "CI01",
+            Test = new() { Enabled = true, WebhookSecret = Secret, ReceivingAccounts = bindings },
+            Live = new() { Enabled = true, WebhookSecret = Secret + "-live", ApiBaseUrl = "https://userapi.sepay.vn/v2", ReceivingAccounts = bindings }
+        };
+        Assert.True(options.Valid(environment));
+        var request = options.Copy(); request.Select("Live");
+        Assert.Equal("Live", request.Mode); Assert.Equal(Secret + "-live", request.WebhookSecret);
+        Assert.Equal("Test", options.Mode); Assert.Null(options.WebhookSecret);
+        Assert.True(request.For("Test").Enabled);
+        var timestamp = Now.ToUnixTimeSeconds().ToString(System.Globalization.CultureInfo.InvariantCulture);
+        Assert.Equal(401, Assert.Throws<PaymentException>(() => new SePayWebhookSecurity(request, new Clock())
+            .Authenticate(Encoding.UTF8.GetBytes(Body), timestamp, Signature(Body, timestamp))).Status);
+        options.Live.WebhookSecret = Secret;
+        Assert.False(options.Valid(environment));
+    }
 
     [Fact]
     public void ValidSignaturePreservesUnknownPayerAndConvertsVietnamTime()
@@ -48,11 +76,53 @@ public sealed class SePaySecurityTests
     public void ConfigurationSeparatesEnvironmentAndCredentials()
     {
         var options = new SePayOptions { Enabled = true, WebhookSecret = Secret, ReceivingAccounts = [new() { LocationId = Guid.NewGuid(), BankIdentifier = "970416", Gateway = "ACB", AccountNumber = "0000001234" }] };
-        Assert.True(options.Valid("Testing")); Assert.True(options.Valid("Staging")); Assert.False(options.Valid("Production"));
+        Assert.True(options.Valid("Testing")); Assert.True(options.Valid("Staging")); Assert.True(options.Valid("Production"));
         options.ApiBaseUrl = "https://userapi.sepay.vn/v2"; Assert.False(options.Valid("Testing"));
         options.Mode = "Live";
-        Assert.False(options.Valid("Staging")); Assert.True(options.Valid("Production"));
+        Assert.True(options.Valid("Staging")); Assert.True(options.Valid("Production"));
         options.Enabled = false; Assert.True(options.Valid("Production"));
+    }
+
+    [Fact]
+    public void OwnerReceivingBindingCoversAllLocationsForOneOwnerButNeverAnotherOwner()
+    {
+        var owner = Guid.NewGuid();
+        var locationA = Guid.NewGuid(); var locationB = Guid.NewGuid();
+        var options = new SePayOptions
+        {
+            Enabled = true,
+            WebhookSecret = Secret,
+            ReceivingAccounts = [new()
+            {
+                OwnerUserId = owner, BankIdentifier = "970416", Gateway = "ACB", AccountNumber = "0000001234"
+            }]
+        };
+        var bank = new ReceivingBankAccount
+        {
+            OwnerUserId = owner,
+            BankIdentifier = "970416",
+            AccountNumber = "0000001234"
+        };
+        Assert.True(options.Valid("Testing"));
+        Assert.True(options.Matches(locationA, bank));
+        Assert.True(options.Matches(locationB, bank));
+        Assert.False(options.Matches(locationA, WithOwner(Guid.NewGuid())));
+        Assert.False(options.Matches(locationA, new ReceivingBankAccount
+        {
+            OwnerUserId = owner,
+            BankIdentifier = bank.BankIdentifier,
+            AccountNumber = "0000009876"
+        }));
+        options.ReceivingAccounts.Add(new SePayReceivingAccount
+        {
+            OwnerUserId = owner,
+            BankIdentifier = "970416",
+            Gateway = "ACB",
+            AccountNumber = "0000001234"
+        });
+        Assert.False(options.Valid("Testing"));
+
+        ReceivingBankAccount WithOwner(Guid id) => new() { OwnerUserId = id, BankIdentifier = bank.BankIdentifier, AccountNumber = bank.AccountNumber };
     }
 
     [Theory]
@@ -60,7 +130,7 @@ public sealed class SePaySecurityTests
     [InlineData(true, "Test", "Testing", true)]
     [InlineData(false, "Test", "Development", false)]
     [InlineData(true, "Live", "Development", false)]
-    [InlineData(true, "Test", "Production", false)]
+    [InlineData(true, "Test", "Production", true)]
     [InlineData(true, "Live", "Production", false)]
     [InlineData(true, "Test", "Staging", true)]
     public void TestingWorkspaceRequiresEnabledSandboxAndPermittedEnvironment(bool enabled, string mode, string environment, bool expected) =>

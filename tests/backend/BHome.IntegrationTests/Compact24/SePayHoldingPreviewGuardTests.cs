@@ -65,6 +65,98 @@ public sealed class SePayHoldingPreviewGuardTests
         Assert.Equal(expected, scope.AllowsExternalDatabase); Assert.Equal(expected, scope.Allows(location)); Assert.False(scope.Allows(Guid.NewGuid()));
     }
 
+    [Theory]
+    [InlineData("Staging", true, "stage-db", "stage-test", true)]
+    [InlineData("Staging", false, "stage-db", "stage-test", false)]
+    [InlineData("Staging", true, "other-db", "stage-test", false)]
+    [InlineData("Staging", true, "stage-db", "other-db", false)]
+    [InlineData("Production", true, "stage-db", "stage-test", false)]
+    public void DockerStagingScopeRequiresExplicitDatabaseAndSandboxReceivingLocation(
+        string environment, bool enabled, string host, string database, bool expected)
+    {
+        var location = Guid.NewGuid();
+        var withoutAccount = Guid.NewGuid();
+        var configuration = new ConfigurationBuilder().AddInMemoryCollection(new Dictionary<string, string?>
+        {
+            ["ConnectionStrings:Database"] = $"Host={host};Database={database}",
+            ["HoldingTesting:Enabled"] = enabled.ToString(),
+            ["HoldingTesting:DatabaseHost"] = "stage-db",
+            ["HoldingTesting:DatabaseName"] = "stage-test",
+            ["HoldingTesting:LocationIds:0"] = location.ToString(),
+            ["HoldingTesting:LocationIds:1"] = withoutAccount.ToString()
+        }).Build();
+        var options = new SePayOptions
+        {
+            Enabled = true,
+            WebhookSecret = "SYNTHETIC-TEST-SECRET-AT-LEAST-32-CHARACTERS",
+            ReceivingAccounts = [new() { LocationId = location, BankIdentifier = "970422", Gateway = "MBBank", AccountNumber = "0000000001" }]
+        };
+        var scope = new BHome.Infrastructure.Contracts.HoldingTestScope(configuration,
+            new PreviewEnvironment { EnvironmentName = environment }, options);
+
+        Assert.Equal(expected, scope.Allows(location));
+        Assert.False(scope.Allows(withoutAccount));
+        Assert.False(scope.Allows(Guid.NewGuid()));
+        Assert.False(scope.AllowsExternalDatabase);
+    }
+
+    [Theory]
+    [InlineData("Staging", true, "Test", true, true)]
+    [InlineData("Staging", false, "Test", true, true)]
+    [InlineData("Staging", false, "Live", false, true)]
+    [InlineData("Staging", true, "Live", true, true)]
+    [InlineData("Staging", true, "Test", false, true)]
+    [InlineData("Production", true, "Test", true, true)]
+    [InlineData("Development", false, "Live", false, true)]
+    public void MainSigningReviewDoesNotRequireTemplateApprovalOrSandboxScope(
+        string environment, bool enabled, string paymentMode, bool inScope, bool expected)
+    {
+        var location = Guid.NewGuid();
+        var configuration = new ConfigurationBuilder().AddInMemoryCollection(new Dictionary<string, string?>
+        {
+            ["MainDraft:AllowStagingSigningReview"] = enabled.ToString(),
+            ["Deployment:Environment"] = environment,
+            ["HoldingTesting:LocationIds:0"] = (inScope ? location : Guid.NewGuid()).ToString()
+        }).Build();
+        var renderer = new BHome.Infrastructure.Contracts.MainDraftRenderer(configuration, TimeProvider.System);
+        var contract = new BHome.Domain.TenantContracts.Contract
+        {
+            PaymentMode = paymentMode,
+            Room = new BHome.Domain.PropertyManagement.Room { LocationId = location }
+        };
+
+        Assert.Equal(expected, renderer.CanUseSigningReview(contract));
+    }
+
+    [Theory]
+    [InlineData("Production", "Live", false, "matching", true)]
+    [InlineData("Production", "Live", false, "missing", true)]
+    [InlineData("Production", "Live", false, "different", true)]
+    [InlineData("Production", "Test", false, "matching", false)]
+    [InlineData("Production", "Live", true, "matching", false)]
+    [InlineData("Staging", "Live", false, "matching", true)]
+    [InlineData("Staging", "Live", false, "missing", true)]
+    [InlineData("Staging", "Live", false, "different", true)]
+    [InlineData("Staging", "Test", false, "matching", false)]
+    [InlineData("Staging", "Live", true, "matching", false)]
+    public void LiveDocumentClassificationDoesNotDependOnTemplateApproval(
+        string environment, string mode, bool demo, string approval, bool expected)
+    {
+        var configuration = new ConfigurationBuilder().AddInMemoryCollection().Build();
+        configuration["Deployment:Environment"] = environment;
+        var renderer = new BHome.Infrastructure.Contracts.MainDraftRenderer(configuration, TimeProvider.System);
+        configuration["MainDraft:ApprovedProductionTemplateSha256"] = approval switch
+        {
+            "matching" => renderer.TemplateHash.ToLowerInvariant(),
+            "different" => new string('0', 64),
+            _ => null
+        };
+        var contract = new BHome.Domain.TenantContracts.Contract { PaymentMode = mode, IsDevelopmentDemo = demo };
+
+        Assert.Equal(expected, renderer.IsProductionSigningTemplate(contract));
+        Assert.True(renderer.CanUseSigningReview(contract));
+    }
+
     private sealed class PreviewEnvironment : IHostEnvironment
     {
         public string EnvironmentName { get; set; } = "Development";

@@ -52,6 +52,15 @@ export function isMainMoveInWork(task: OperationalTask): boolean {
     task.title.startsWith('Bàn giao vào phòng')
   );
 }
+
+/** A contract's move-out inspection is entered through the shared Staff work queue. */
+export function isMainMoveOutWork(task: OperationalTask): boolean {
+  return (
+    task.kind === 'AdHoc' &&
+    !!task.target?.contractId &&
+    task.title.startsWith('Kiểm tra trả phòng')
+  );
+}
 export interface TaskHistory {
   id: string;
   action: string;
@@ -94,7 +103,7 @@ const root = '/api/v1/operational-tasks';
 export const taskStatusLabels = {
   Assigned: 'Cần làm',
   InProgress: 'Đang xử lý',
-  PendingVerification: 'Chờ Owner kiểm tra',
+  PendingVerification: 'Chờ chủ trọ kiểm tra',
   Completed: 'Hoàn thành',
   Cancelled: 'Đã hủy',
 };
@@ -128,6 +137,7 @@ export function availableTaskActions(
   if (task.kind === 'LocationAssetHandover') {
     if (role !== 'Staff' || task.currentResponsibleStaffUserId !== actorId) return [];
     if (task.status === 'Assigned') return ['start'];
+    // Explicit submission is retained only as a compatibility action for ready legacy inventory.
     if (task.status === 'InProgress') return ['progress', 'blockers', 'submit'];
     return [];
   }

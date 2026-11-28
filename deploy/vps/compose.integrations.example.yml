@@ -9,6 +9,7 @@ services:
       Cors__AllowedOrigins__0: 'https://${OWNER_HOST}'
       # Gmail SMTP
       Email__Enabled: 'true'
+      Email__DeliveryMode: Smtp
       Email__Host: smtp.gmail.com
       Email__Port: '587'
       Email__Username: '${BHOME_EMAIL_USERNAME:?}'
@@ -16,12 +17,16 @@ services:
       Email__FromEmail: '${BHOME_EMAIL_USERNAME:?}'
       Email__FromName: BHOME
       Email__UseStartTls: 'true'
+      Email__TimeoutSeconds: '30'
       Email__TestEnabled: 'false'
+      # All environments accept valid recipient addresses; no recipient allowlist is used.
+      # Check the final environment overlay: a later false value overrides this file.
 
       # Notification email
       NotificationChannels__Enabled: 'true'
       NotificationChannels__AutomationEnabled: 'true'
       NotificationChannels__Mode: Unconfigured
+      NotificationChannels__TimeoutSeconds: '30'
 
       # Account invitation and recovery
       AuthenticationEmail__WebResetUrl: 'https://${OWNER_HOST}/reset-password'

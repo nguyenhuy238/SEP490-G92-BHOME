@@ -3,6 +3,12 @@ namespace BHome.IntegrationTests.Compact24;
 public sealed class FinalFixedChargeRegressionTests
 {
     [CompactPostgresFact]
+    public async Task SettlementSharedInvoiceLookupRequiresRecipientRoomAndTenancyPeriod()
+    { var fixture = new Compact24WorkflowFixture(); await fixture.InitializeAsync(); try { await new InvoiceApiTests(fixture.Capture).SettlementSharedInvoiceLookupRequiresRecipientRoomAndTenancyPeriod(); } finally { await fixture.DisposeAsync(); } }
+    [CompactPostgresFact]
+    public async Task MonthlyDraftUsesAdvanceRentAndFullRoomCapacityDespiteLegacyDailySetting()
+    { var fixture = new Compact24WorkflowFixture(); await fixture.InitializeAsync(); try { await new InvoiceApiTests(fixture.Capture).MonthlyDraftUsesAdvanceRentAndFullRoomCapacityDespiteLegacyDailySetting(); } finally { await fixture.DisposeAsync(); } }
+    [CompactPostgresFact]
     public async Task PersonMonthlySettlementThenInvoiceDoesNotDoubleCharge()
     { var fixture = new Compact24WorkflowFixture(); await fixture.InitializeAsync(); try { await new InvoiceApiTests(fixture.Capture).FinalFixedChargesFollowOwnerPolicyWithoutDuplicateBilling(personFee: true); } finally { await fixture.DisposeAsync(); } }
     [CompactPostgresFact]

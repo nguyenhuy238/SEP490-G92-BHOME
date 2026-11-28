@@ -1,3 +1,4 @@
+import { TextField } from '../../components/common/ValidatedForm';
 import { MoneyField } from '../../components/common/MoneyField';
 import { useRef, useState } from 'react';
 import {
@@ -14,7 +15,6 @@ import {
   Step,
   StepLabel,
   Stepper,
-  TextField,
   Typography,
 } from '@mui/material';
 import {
@@ -41,6 +41,7 @@ export function ContractDraftDialog({
   kind?: 'Main' | 'Holding';
 }) {
   const [values, setValues] = useState<Record<string, string>>({ ownerSignerId: ownerId });
+  const [personSearch, setPersonSearch] = useState('');
   const [location, setLocation] = useState(''),
     [residents, setResidents] = useState<string[]>([]);
   const [step, setStep] = useState(0),
@@ -140,14 +141,11 @@ export function ContractDraftDialog({
                   {template.title} · v{template.version}
                 </MenuItem>
               </TextField>
-              <Alert severity={template.developmentOnly ? 'warning' : 'info'}>
-                {template.notice}
-              </Alert>
               <Typography>Trường ánh xạ: {template.fields.join(', ')}</Typography>
               <Typography>
                 Ký:{' '}
                 {query.data?.configuration.signingMode === 'Simulated'
-                  ? 'SIMULATED SIGNING — không có giá trị pháp lý'
+                  ? 'Ký mô phỏng'
                   : 'Nhà cung cấp điện tử'}
               </Typography>
               {!template.available && (
@@ -197,24 +195,35 @@ export function ContractDraftDialog({
                 ))}
               </TextField>
               <Typography>Người ở đã xác minh</Typography>
-              {eligible.map((r) => (
-                <FormControlLabel
-                  key={r.id}
-                  label={r.label}
-                  control={
-                    <Checkbox
-                      checked={residents.includes(r.id)}
-                      disabled={busy}
-                      onChange={(_, checked) => {
-                        setResidents((ids) =>
-                          checked ? [...ids, r.id] : ids.filter((id) => id !== r.id),
-                        );
-                        if (!checked && representative?.id === r.id) chooseRepresentative('');
-                      }}
-                    />
-                  }
-                />
-              ))}
+              <TextField
+                label="Tìm theo họ tên hoặc số CCCD"
+                value={personSearch}
+                onChange={(e) => setPersonSearch(e.target.value)}
+              />
+              {eligible
+                .filter((r) =>
+                  r.label
+                    .toLocaleLowerCase('vi')
+                    .includes(personSearch.trim().toLocaleLowerCase('vi')),
+                )
+                .map((r) => (
+                  <FormControlLabel
+                    key={r.id}
+                    label={r.label}
+                    control={
+                      <Checkbox
+                        checked={residents.includes(r.id)}
+                        disabled={busy}
+                        onChange={(_, checked) => {
+                          setResidents((ids) =>
+                            checked ? [...ids, r.id] : ids.filter((id) => id !== r.id),
+                          );
+                          if (!checked && representative?.id === r.id) chooseRepresentative('');
+                        }}
+                      />
+                    }
+                  />
+                ))}
               {!!values.roomId && !eligible.length && (
                 <Alert severity="warning">
                   Chưa có người ở đã xác minh tại phòng này. Hoàn tất tiếp nhận trên Mobile.
@@ -228,7 +237,7 @@ export function ContractDraftDialog({
                 disabled={busy}
               >
                 {eligible
-                  .filter((r) => residents.includes(r.id))
+                  .filter((r) => residents.includes(r.id) && r.residentType !== 'CoOccupant')
                   .map((r) => (
                     <MenuItem key={r.id} value={r.id}>
                       {r.label}

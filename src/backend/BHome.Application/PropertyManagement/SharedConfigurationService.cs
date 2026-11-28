@@ -3,6 +3,7 @@ using System.Text;
 using System.Globalization;
 using BHome.Application.IdentityAccess;
 using BHome.Domain.IdentityAccess;
+using BHome.Domain.PropertyManagement;
 
 namespace BHome.Application.PropertyManagement;
 
@@ -38,6 +39,117 @@ public sealed class SharedConfigurationService(ISharedConfigurationStore store, 
             _ => stored.GetRawText() == validated.GetRawText()
         };
     }
+    private async Task EnsureNoOverlappingFeePeriodAsync(string resource, Guid? exceptFamilyId, JsonElement data, CancellationToken t)
+    {
+        if (resource != "fee-templates") return;
+        var candidate = SharedDataValidator.Read<SharedFeeData>(data);
+        var candidateEnd = candidate.EffectiveTo ?? DateOnly.MaxValue;
+        for (var page = 1; ; page++)
+        {
+            var existingPage = await store.ListAsync(resource, "", "", page, 100, t);
+            foreach (var document in existingPage.Items)
+            {
+                // Drafts are not selectable and must not reserve an effective period.
+                // Older editions in the same family are revisions of this policy, not
+                // competing policies; only another Published family can overlap it.
+                if (document.Status != "Published" || document.FamilyId == exceptFamilyId) continue;
+                var existing = SharedDataValidator.Read<SharedFeeData>(document.Data);
+                var samePolicy = existing.Category == candidate.Category && existing.Method == candidate.Method &&
+                    string.Equals(existing.ChargeCode, candidate.ChargeCode, StringComparison.OrdinalIgnoreCase) &&
+                    string.Equals(existing.Scope, candidate.Scope, StringComparison.Ordinal);
+                if (samePolicy && candidate.EffectiveFrom <= (existing.EffectiveTo ?? DateOnly.MaxValue) &&
+                    existing.EffectiveFrom <= candidateEnd)
+                    throw new PropertyException(409, "overlapping_shared_fee_period");
+            }
+            if ((long)page * existingPage.PageSize >= existingPage.Total) break;
+        }
+    }
+    private static string ServiceNameKey(string? value) => Name(value).ToUpperInvariant();
+    private static string LegacyServiceName(SharedFeeData fee, SharedDocument document) =>
+        !string.IsNullOrWhiteSpace(fee.ServiceName)
+            ? fee.ServiceName
+            : fee.ChargeCode.ToUpperInvariant() switch
+            {
+                "INTERNET" or "DV_I" => "Internet",
+                "WIFI" or "DV_W" => "Wifi",
+                "CLEANING" or "DV_VS" => "Vệ sinh",
+                "PARKING" or "DV_GX" => "Gửi xe",
+                "MANAGEMENT" or "DV_QLTN" => "Quản lý tòa nhà",
+                _ => document.Name
+            };
+    private static string SuggestedServiceChargeCode(string serviceName)
+    {
+        var ascii = serviceName.Replace("đ", "d", StringComparison.OrdinalIgnoreCase)
+            .Normalize(NormalizationForm.FormD);
+        var unaccented = string.Concat(ascii.Where(character =>
+            CharUnicodeInfo.GetUnicodeCategory(character) != UnicodeCategory.NonSpacingMark));
+        var initials = new StringBuilder();
+        var wordStart = true;
+        foreach (var character in unaccented)
+        {
+            if (!char.IsAsciiLetterOrDigit(character))
+            {
+                wordStart = true;
+                continue;
+            }
+            if (wordStart) initials.Append(char.ToUpperInvariant(character));
+            wordStart = false;
+        }
+        return "DV_" + (initials.Length == 0 ? "CUSTOM" : initials.ToString());
+    }
+    private async Task<JsonElement> PrepareServiceFeeDataAsync(string resource, Guid family, JsonElement data, SharedDocument? before, CancellationToken t)
+    {
+        if (resource != "fee-templates") return data;
+        var fee = SharedDataValidator.Read<SharedFeeData>(data);
+        if (fee.Category != ChargeCategory.ServiceFee) return data;
+
+        var previous = before is null ? null : SharedDataValidator.Read<SharedFeeData>(before.Data);
+        if (string.IsNullOrWhiteSpace(fee.ServiceName) && previous?.Category != ChargeCategory.ServiceFee)
+            throw new PropertyException(400, "invalid_shared_fee");
+
+        var serviceName = Name(string.IsNullOrWhiteSpace(fee.ServiceName)
+            ? LegacyServiceName(previous!, before!)
+            : fee.ServiceName);
+        var serviceKey = ServiceNameKey(serviceName);
+        var usedCodes = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        var matchingCodes = new List<(string Code, DateTimeOffset UpdatedAt)>();
+        string? sameFamilyCode = null;
+        if (previous is not null && before is not null)
+        {
+            if (previous.Category == ChargeCategory.ServiceFee)
+                sameFamilyCode = previous.ChargeCode.Trim().ToUpperInvariant();
+        }
+        for (var page = 1; ; page++)
+        {
+            // Scan every edition and lifecycle state so archived or historical codes are never reused.
+            var existingPage = await store.ListAsync(resource, "", "", page, 100, t);
+            foreach (var document in existingPage.Items)
+            {
+                var existing = SharedDataValidator.Read<SharedFeeData>(document.Data);
+                if (existing.Category != ChargeCategory.ServiceFee) continue;
+                var existingCode = existing.ChargeCode.Trim().ToUpperInvariant();
+                usedCodes.Add(existingCode);
+                if (document.FamilyId == family) continue;
+                if (ServiceNameKey(LegacyServiceName(existing, document)) == serviceKey)
+                    matchingCodes.Add((existingCode, document.UpdatedAt));
+            }
+            if ((long)page * existingPage.PageSize >= existingPage.Total || existingPage.Items.Count == 0) break;
+        }
+
+        var code = sameFamilyCode ?? matchingCodes.OrderByDescending(item => item.UpdatedAt).Select(item => item.Code).FirstOrDefault();
+        if (code is null)
+        {
+            var baseCode = SuggestedServiceChargeCode(serviceName);
+            if (baseCode.Length > 80) baseCode = baseCode[..80];
+            code = baseCode;
+            for (var suffix = 2; usedCodes.Contains(code); suffix++)
+            {
+                var suffixText = "_" + suffix.ToString("D2", CultureInfo.InvariantCulture);
+                code = baseCode[..Math.Min(baseCode.Length, 80 - suffixText.Length)] + suffixText;
+            }
+        }
+        return JsonSerializer.SerializeToElement(fee with { ServiceName = serviceName, ChargeCode = code }, SharedDataValidator.Json);
+    }
     public async Task<SharedDocument> GetAsync(string resource, Guid id, CancellationToken t)
     { Resource(resource); return await store.GetAsync(id, resource, t) ?? throw new PropertyException(404, "shared_document_not_found"); }
     public Task<SharedPage> ListAsync(string resource, string search, string status, int page, int pageSize, CancellationToken t, bool latestOnly = false)
@@ -60,7 +172,11 @@ public sealed class SharedConfigurationService(ISharedConfigurationStore store, 
             // to be repaired without making an already archived duplicate active again.
             var newName = before is null || !string.Equals(Name(before.Name), name, StringComparison.OrdinalIgnoreCase);
             if (await store.NameExistsAsync(resource, name, family, t, includeArchived: newName)) throw new PropertyException(409, "duplicate_shared_name");
-            var data = await validator.ValidateAsync(resource, input.Data, t); var now = clock.GetUtcNow();
+            var prepared = await PrepareServiceFeeDataAsync(resource, family, input.Data, before, t);
+            var data = await validator.ValidateAsync(resource, prepared, t);
+            if (input.PublishImmediately)
+                await EnsureNoOverlappingFeePeriodAsync(resource, family, data, t);
+            var now = clock.GetUtcNow();
             if (input.PublishImmediately)
             {
                 IReadOnlyList<SharedDocument> versions = before is null ? [] : await store.FamilyAsync(family, resource, t);
@@ -111,7 +227,8 @@ public sealed class SharedConfigurationService(ISharedConfigurationStore store, 
             if (!archive)
             {
                 if (await store.NameExistsAsync(resource, before.Name, before.FamilyId, t, includeArchived: false)) throw new PropertyException(409, "duplicate_shared_name");
-                _ = await validator.ValidateAsync(resource, before.Data, t);
+                var validated = await validator.ValidateAsync(resource, before.Data, t);
+                await EnsureNoOverlappingFeePeriodAsync(resource, before.FamilyId, validated, t);
             }
             var document = before with { Status = archive ? "Archived" : "Published", Version = before.Version + 1, UpdatedBy = actor, UpdatedAt = clock.GetUtcNow() };
             await store.SaveAsync(document, before.Version, t); return document;
@@ -131,7 +248,8 @@ public sealed class SharedConfigurationService(ISharedConfigurationStore store, 
                     throw new PropertyException(409, "stale_or_non_archived_shared_version");
                 if (await store.NameExistsAsync(resource, before.Name, before.FamilyId, t, includeArchived: false))
                     throw new PropertyException(409, "duplicate_shared_name");
-                _ = await validator.ValidateAsync(resource, before.Data, t);
+                var validated = await validator.ValidateAsync(resource, before.Data, t);
+                await EnsureNoOverlappingFeePeriodAsync(resource, before.FamilyId, validated, t);
                 var restored = before with { Status = "Published", Version = before.Version + 1, UpdatedBy = actor, UpdatedAt = clock.GetUtcNow() };
                 await store.SaveAsync(restored, before.Version, t); return restored;
             }
@@ -166,6 +284,8 @@ public sealed class SharedConfigurationService(ISharedConfigurationStore store, 
                 UpdatedBy = actor,
                 UpdatedAt = now
             };
+            if (document.Status == "Published")
+                await EnsureNoOverlappingFeePeriodAsync(resource, document.FamilyId, document.Data, t);
             await store.SaveAsync(document, 0, t); return document;
         }, t);
     }

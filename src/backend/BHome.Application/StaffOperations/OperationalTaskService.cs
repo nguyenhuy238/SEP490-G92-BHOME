@@ -1,3 +1,4 @@
+using BHome.Application.Common;
 using System.ComponentModel.DataAnnotations;
 using System.Security.Cryptography;
 using System.Text;
@@ -6,18 +7,26 @@ using BHome.Application.IdentityAccess;
 using BHome.Domain.Billing;
 using BHome.Domain.IdentityAccess;
 using BHome.Domain.StaffOperations;
+using BHome.Application.Contracts;
 
 namespace BHome.Application.StaffOperations;
 
 public sealed partial class OperationalTaskService(IOperationalTaskRepository repository, ICurrentUser user,
     PermissionAccess permissions, ITaskEvidenceFiles files, TaskEvidenceLimits limits, TimeProvider clock,
-    BHome.Application.PropertyManagement.ISetupWorkspaceStore? inspectionRecords = null)
+    BHome.Application.PropertyManagement.ISetupWorkspaceStore? inspectionRecords = null,
+    IContractHandoverRepository? handovers = null)
 {
     private Guid Actor => user.UserId is { } id && id != Guid.Empty ? id : throw new OperationalTaskException(401, "authentication_required");
-    private DateTimeOffset Now => clock.GetUtcNow();
+    private DateTimeOffset Now => clock.BusinessUtcNow();
     private DateOnly Today => DateOnly.FromDateTime(TimeZoneInfo.ConvertTime(Now, TimeZoneInfo.FindSystemTimeZoneById("Asia/Ho_Chi_Minh")).DateTime);
     private bool Owner => user.IsInRole(Roles.Owner);
     private Guid? StaffFilter => Owner ? null : Actor;
+    private static bool IsMoveOutTask(OperationalTask task) =>
+        task.Kind == OperationalTaskKind.AdHoc && task.ContractId is { } contract &&
+        task.Id == new Guid(SHA256.HashData(Encoding.UTF8.GetBytes($"contract-move-out:{contract:N}")).AsSpan(0, 16));
+    private static bool IsMoveInTask(OperationalTask task) =>
+        task.Kind == OperationalTaskKind.AdHoc && task.ContractId is { } contract &&
+        task.Id == new Guid(SHA256.HashData(Encoding.UTF8.GetBytes($"contract-move-in:{contract:N}")).AsSpan(0, 16));
     private void Permit(string permission)
     {
         _ = Actor;
@@ -40,6 +49,24 @@ public sealed partial class OperationalTaskService(IOperationalTaskRepository re
     private async Task<TaskResponsibility?> AccessAsync(OperationalTask task, CancellationToken t, bool requireAssigned = false)
     {
         var location = await repository.LocationAsync(task.LocationId, t) ?? throw OperationalTaskException.Missing();
+        if (IsMoveOutTask(task))
+        {
+            if (Owner) return null;
+            var assigned = location.IsActive ? await repository.StaffAtLocationAsync(task.LocationId, Actor, Today, t) : null;
+            if (assigned is null) throw OperationalTaskException.Missing();
+            if (task.Status == MeterTaskStatus.Assigned)
+            {
+                var scheduled = await repository.MoveOutInspectionStaffAsync(task.ContractId!.Value, t);
+                if (scheduled is { } staff && staff != Actor)
+                {
+                    if (requireAssigned) throw OperationalTaskException.Missing();
+                    return null;
+                }
+                return assigned;
+            }
+            if (requireAssigned && task.AssignedStaffUserId != Actor) throw OperationalTaskException.Missing();
+            return task.AssignedStaffUserId == Actor ? assigned : null;
+        }
         var responsible = location.IsActive ? await repository.ResponsibilityAsync(task.LocationId, Today, t) : null;
         if ((!Owner || requireAssigned) && (responsible is null || responsible.StaffUserId != Actor)) throw OperationalTaskException.Missing();
         // Successors may audit a closed predecessor checklist at the same Location,
@@ -62,18 +89,24 @@ public sealed partial class OperationalTaskService(IOperationalTaskRepository re
     }
     private static TaskView View(OperationalTask task, TaskResponsibility? responsible) => new(task.Id, task.LocationId,
         task.Kind.ToString(), task.Title, task.Requirements, task.Priority.ToString(), task.DueAt, task.EvidenceRequired,
-        task.Status.ToString(), false, responsible?.StaffUserId, task.AssignedStaffUserId, responsible is not null,
+        task.Status.ToString(), false, IsMoveOutTask(task) && task.Status != MeterTaskStatus.Assigned
+            ? task.AssignedStaffUserId : responsible?.StaffUserId,
+        task.AssignedStaffUserId, responsible is not null,
         task.Result, task.Version, task.VerifiedByUserId, task.VerifiedAt, task.CreatedAt, task.UpdatedAt,
         TargetView(task));
-    public static TaskTargetView? TargetView(OperationalTask task) => task.TargetLabel is null ? null :
-        new(task.TargetRoomId, task.TargetAssetId, task.TargetCommonArea, task.TargetLabel, task.ContractId);
+    public static TaskTargetView? TargetView(OperationalTask task) => task.TargetLabel is null
+        ? task.Kind == OperationalTaskKind.LocationAssetHandover
+            ? new(null, null, null, "Toàn bộ cơ sở · phòng và khu vực chung", task.ContractId)
+            : null
+        : new(task.TargetRoomId, task.TargetAssetId, task.TargetCommonArea, task.TargetLabel, task.ContractId);
     private TaskView CurrentView(OperationalTask task, TaskResponsibility? responsible) => View(task, responsible) with { IsOverdue = task.IsOverdue(Now) };
 
     public async Task<TaskPage<TaskView>> ListAsync(TaskQuery query, CancellationToken t)
     {
         Permit(Permissions.OperationalTasks.View); Page(query.Page, query.PageSize);
         if (query.Status is { } s && !Enum.IsDefined(s) || query.Priority is { } p && !Enum.IsDefined(p) ||
-            query.LocationId == Guid.Empty || query.StaffUserId == Guid.Empty ||
+            query.Category is { } category && !Enum.IsDefined(category) || query.Search?.Length > 100 ||
+            query.LocationId == Guid.Empty || query.RoomId == Guid.Empty || query.StaffUserId == Guid.Empty ||
             query.RecordedStaffUserId == Guid.Empty || query.DueFrom > query.DueTo)
             throw OperationalTaskException.Invalid("invalid_task_filter");
         // The recorded assignee and unresolved responsibility filters are Owner management views.
@@ -180,6 +213,7 @@ public sealed partial class OperationalTaskService(IOperationalTaskRepository re
         if (string.IsNullOrWhiteSpace(input.Reason)) throw OperationalTaskException.Invalid("reason_required");
         return MutateAsync(id, input.Version, key, "update", input, async (task, responsible) =>
         {
+            if (IsMoveOutTask(task)) throw OperationalTaskException.Conflict("contract_handover_workflow_required");
             if (task.Status is not (MeterTaskStatus.Assigned or MeterTaskStatus.InProgress)) throw OperationalTaskException.Conflict("task_not_editable");
             var before = new { task.Title, task.Requirements, task.Priority, task.DueAt, task.EvidenceRequired, Target = TargetView(task) };
             var wasOverdue = task.IsOverdue(Now);
@@ -209,8 +243,11 @@ public sealed partial class OperationalTaskService(IOperationalTaskRepository re
                 if (inspection is not null && inspection.Status != expected) throw OperationalTaskException.Conflict("equipment_inspection_workflow_required");
             }
             if (task.Kind == OperationalTaskKind.LocationAssetHandover && action == "submit")
+            {
                 await ValidateLocationAssetInventorySubmissionAsync(task, t);
-            if (task.ContractId is not null && action is "submit" or "verify" or "cancel")
+            }
+            if (IsMoveOutTask(task) && action is not ("start" or "progress" or "blockers" or "coordinate") ||
+                task.ContractId is not null && action is "submit" or "verify" or "cancel")
                 throw OperationalTaskException.Conflict("contract_handover_workflow_required");
             if (action == "assign")
             {
@@ -252,6 +289,40 @@ public sealed partial class OperationalTaskService(IOperationalTaskRepository re
             await RecordAsync(task, action, input.Note?.Trim() ?? "", new { EvidenceIds = ids, task.Status }, recipients, t, wasOverdue);
         }, t);
     }
+    public async Task<Guid[]> EnsureMoveOutFinalMeterTasksAsync(Guid taskId, Guid key, CancellationToken t)
+    {
+        Permit(Permissions.OperationalTasks.Execute);
+        var initial = await repository.FindAsync(taskId, t) ?? throw OperationalTaskException.Missing();
+        if (!IsMoveOutTask(initial)) throw OperationalTaskException.Missing();
+        await AccessAsync(initial, t, true);
+        return await CommandAsync(initial.LocationId, key, "move-out-final-meter-tasks:" + taskId,
+            new { taskId, Date = Today }, async () =>
+            {
+                var task = await repository.FindAsync(taskId, t) ?? throw OperationalTaskException.Missing();
+                await AccessAsync(task, t, true);
+                if (!IsMoveOutTask(task) || task.Status != MeterTaskStatus.InProgress ||
+                    task.AssignedStaffUserId != Actor)
+                    throw OperationalTaskException.Conflict("move_out_task_not_started");
+                return await repository.EnsureMoveOutFinalMeterTasksAsync(task, Actor, Today, t);
+            }, ids => taskId, t);
+    }
+    public async Task<Guid[]> EnsureMoveInInitialMeterTasksAsync(Guid taskId, Guid key, CancellationToken t)
+    {
+        Permit(Permissions.OperationalTasks.Execute);
+        var initial = await repository.FindAsync(taskId, t) ?? throw OperationalTaskException.Missing();
+        if (!IsMoveInTask(initial)) throw OperationalTaskException.Missing();
+        await AccessAsync(initial, t, true);
+        return await CommandAsync(initial.LocationId, key, "move-in-initial-meter-tasks:" + taskId,
+            new { taskId }, async () =>
+            {
+                var task = await repository.FindAsync(taskId, t) ?? throw OperationalTaskException.Missing();
+                await AccessAsync(task, t, true);
+                if (!IsMoveInTask(task) || task.Status != MeterTaskStatus.InProgress)
+                    throw OperationalTaskException.Conflict("move_in_task_not_started");
+                return await (handovers ?? throw OperationalTaskException.Conflict("handover_service_unavailable"))
+                    .EnsureMoveInMeterBaselinesAsync(task.ContractId!.Value, Actor, Now, t);
+            }, _ => taskId, t);
+    }
     private static Guid[] Recipients(TaskResponsibility? responsible) => responsible is null ? [] : [responsible.StaffUserId];
     private async Task<TaskView> MutateAsync(Guid id, int version, Guid key, string action, object input,
         Func<OperationalTask, TaskResponsibility?, Task> change, CancellationToken t)
@@ -272,9 +343,38 @@ public sealed partial class OperationalTaskService(IOperationalTaskRepository re
             if (task.Kind is not (OperationalTaskKind.AdHoc or OperationalTaskKind.MoveInInventory or OperationalTaskKind.LocationAssetHandover))
                 throw OperationalTaskException.Conflict("meter_workflow_required");
             if (task.Version != version) throw OperationalTaskException.Conflict("stale_version");
+            if (task.Kind == OperationalTaskKind.LocationAssetHandover && action == "submit" &&
+                task.Status == MeterTaskStatus.PendingVerification && task.Result == LocationAssetInventorySync.Result)
+            {
+                await ValidateLocationAssetInventorySubmissionAsync(task, t);
+                if (input is TaskAction legacy && legacy.EvidenceIds is { Length: > 0 } ids)
+                {
+                    if (await repository.HasLocationHandoverApprovalAsync(task.Id, task.Version, t))
+                        throw OperationalTaskException.Conflict("location_handover_already_approved");
+                    var evidence = await repository.EvidenceAsync(id, t);
+                    if (ids.Distinct().Count() != ids.Length || ids.Any(e => evidence.All(x => x.Id != e)))
+                        throw OperationalTaskException.Invalid("invalid_task_evidence");
+                    foreach (var image in evidence.Where(x => ids.Contains(x.Id)))
+                    {
+                        await files.CopyAsync(image.ObjectKey, Stream.Null, t);
+                        image.SubmissionId = key;
+                    }
+                    repository.Track(task);
+                    await RecordAsync(task, "location_asset_inventory_evidence_selected", legacy.Note!.Trim(),
+                        new { EvidenceIds = ids }, [], t);
+                    task.Version++;
+                }
+                return CurrentView(task, responsible);
+            }
             repository.Track(task);
-            var routingChanged = await SynchronizeResponsibilityAsync(task, responsible, t);
+            var routingChanged = IsMoveOutTask(task) && action != "start"
+                ? false : await SynchronizeResponsibilityAsync(task, responsible, t);
             await change(task, responsible);
+            if (task.Kind == OperationalTaskKind.LocationAssetHandover && action == "start")
+                await SynchronizeLocationInventoryAsync(task, t);
+            if (action == "start" && IsMoveInTask(task))
+                await (handovers ?? throw OperationalTaskException.Conflict("handover_service_unavailable"))
+                    .EnsureMoveInMeterBaselinesAsync(task.ContractId!.Value, Actor, Now, t);
             if (action != "assign" || routingChanged) task.Version++;
             await repository.FlushAsync(t);
             return CurrentView(task, responsible);
@@ -367,7 +467,11 @@ public sealed partial class OperationalTaskService(IOperationalTaskRepository re
                     var responsible = await AccessAsync(task, t, true);
                     if (task.Kind is not (OperationalTaskKind.AdHoc or OperationalTaskKind.MoveInInventory or OperationalTaskKind.LocationAssetHandover))
                         throw OperationalTaskException.Conflict("meter_workflow_required");
-                    if (task.Status != MeterTaskStatus.InProgress) throw OperationalTaskException.Conflict("task_not_in_progress");
+                    var autoSubmittedDraft = task.Kind == OperationalTaskKind.LocationAssetHandover &&
+                        task.Status == MeterTaskStatus.PendingVerification && task.Result == LocationAssetInventorySync.Result &&
+                        !await repository.HasLocationHandoverApprovalAsync(task.Id, task.Version, t);
+                    if (task.Status != MeterTaskStatus.InProgress && !autoSubmittedDraft)
+                        throw OperationalTaskException.Conflict("task_not_in_progress");
                     // Every inventory group may attach up to five photos. The general
                     // task limit (often 10) is too small for rooms with many assets.
                     var inventoryLimit = task.Kind switch
@@ -387,7 +491,7 @@ public sealed partial class OperationalTaskService(IOperationalTaskRepository re
                         ContentType = type,
                         Length = length,
                         Sha256 = hash,
-                        ObjectKey = "task-evidence/" + id.ToString("N") + "/" + Guid.NewGuid().ToString("N")
+                        ObjectKey = BHome.Application.Storage.PrivateImageKeys.Evidence(task.LocationId, task.TargetRoomId, "tasks", id, Guid.NewGuid())
                     };
                     await files.PutAsync(id, evidence.ObjectKey, content, type, t);
                     repository.Add(evidence);

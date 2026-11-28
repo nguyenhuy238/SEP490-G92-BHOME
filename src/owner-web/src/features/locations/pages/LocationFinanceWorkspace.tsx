@@ -1,3 +1,4 @@
+import { TextField } from '../../../components/common/ValidatedForm';
 import { useMemo, useRef, useState, type ReactNode } from 'react';
 import {
   Accordion,
@@ -24,7 +25,6 @@ import {
   TablePagination,
   TableRow,
   Tabs,
-  TextField,
   Typography,
 } from '@mui/material';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
@@ -42,6 +42,9 @@ import { MoneyField } from '../../../components/common/MoneyField';
 import { todayVietnam } from '../../staff/staffContracts';
 import { useFinanceApi } from '../../expenses/useFinanceApi';
 import { usePropertySetupApi } from '../../property/usePropertySetupApi';
+import { scopedFinancePath, useFinanceSearch } from '../../finance/financeScope';
+import { invalidateFinance } from '../../finance/invalidateFinance';
+import { DepreciationSourceDetails } from '../../reports/DepreciationSourceDetails';
 
 type FinanceSection = 'overview' | 'assets' | 'initial' | 'expenses' | 'recurring';
 type EntryMode = 'total' | 'detail';
@@ -211,7 +214,10 @@ export function LocationFinanceWorkspace() {
   const api = useFinanceApi();
   const propertyApi = usePropertySetupApi();
   const client = useQueryClient();
-  const [section, setSection] = useState<FinanceSection>('overview');
+  const initialSection = useFinanceSearch().get('tab');
+  const [section, setSection] = useState<FinanceSection>(
+    () => sections.find((item) => item.id === initialSection)?.id ?? 'overview',
+  );
   const [entryMode, setEntryMode] = useState<EntryMode>('total');
   const [dialog, setDialog] = useState<'initial' | 'expenses' | null>(null);
   const [inspect, setInspect] = useState<Expense | null>(null);
@@ -360,17 +366,7 @@ export function LocationFinanceWorkspace() {
           body: JSON.stringify(body),
         },
       );
-      await Promise.all([
-        client.invalidateQueries({
-          queryKey: ['location-finance', 'recurring', session?.userId, locationId],
-        }),
-        client.invalidateQueries({
-          queryKey: ['location-finance', 'expenses', session?.userId, locationId],
-        }),
-        client.invalidateQueries({
-          queryKey: ['location-finance', 'report', session?.userId, locationId],
-        }),
-      ]);
+      await invalidateFinance(client, session?.userId, locationId);
       setRecurringForm(null);
       setNotice('Đã lưu quy tắc chi phí định kỳ.');
     } catch (e) {
@@ -439,11 +435,7 @@ export function LocationFinanceWorkspace() {
           }),
         });
       }
-      await Promise.all([
-        client.invalidateQueries({ queryKey: ['location-finance'] }),
-        client.invalidateQueries({ queryKey: ['expenses', session?.userId] }),
-        client.invalidateQueries({ queryKey: ['financial-report', session?.userId] }),
-      ]);
+      await invalidateFinance(client, session?.userId, locationId);
       setDialog(null);
       setNotice('Đã ghi nhận khoản chi thành công.');
     } catch (e) {
@@ -460,7 +452,29 @@ export function LocationFinanceWorkspace() {
 
   return (
     <Stack spacing={2}>
-      <Typography variant="h2">Vốn & Chi phí</Typography>
+      <Stack
+        direction={{ xs: 'column', sm: 'row' }}
+        spacing={1}
+        sx={{ alignItems: { sm: 'center' }, justifyContent: 'space-between' }}
+      >
+        <Typography variant="h2">Vốn & Chi phí</Typography>
+        <Stack direction="row" spacing={1} useFlexGap sx={{ flexWrap: 'wrap' }}>
+          <Button
+            component={Link}
+            to={scopedFinancePath('/reports', locationId)}
+            variant="outlined"
+          >
+            Báo cáo cơ sở
+          </Button>
+          <Button
+            component={Link}
+            to={scopedFinancePath('/what-if', locationId)}
+            variant="outlined"
+          >
+            Kịch bản What-if
+          </Button>
+        </Stack>
+      </Stack>
       <Tabs
         value={section}
         onChange={(_, id: FinanceSection) => {
@@ -518,9 +532,16 @@ export function LocationFinanceWorkspace() {
                 />
                 <Metric
                   title="Đã thu xác minh tháng này"
-                  value={report.data.total.verifiedCollections}
+                  value={report.data.total.management?.actualBusinessCollections}
                 />
-                <Metric title="Công nợ hiện tại" value={report.data.total.outstandingNow} />
+                <Metric
+                  title="Công nợ hiện tại"
+                  value={report.data.total.management?.currentOutstanding}
+                />
+                <Metric
+                  title="Khấu hao tháng này"
+                  value={report.data.total.management?.depreciation}
+                />
               </Stack>
               <Paper variant="outlined" sx={{ p: 2 }}>
                 <Typography variant="subtitle1" sx={{ fontWeight: 700 }}>
@@ -537,33 +558,43 @@ export function LocationFinanceWorkspace() {
                     Chưa tải được dữ liệu hoàn vốn.
                   </Alert>
                 )}
-                {capitalReport.data?.capital.unavailableReason ? (
-                  <Alert severity="info" sx={{ mt: 1 }}>
-                    Chưa đủ dữ liệu tin cậy để xác định thời gian hoàn vốn. Kiểm tra vốn ban đầu,
-                    công nợ, hoàn tiền và các kỳ báo cáo đầy đủ.
-                  </Alert>
-                ) : capitalReport.data ? (
+                {capitalReport.data && (
                   <Stack direction="row" spacing={3} sx={{ mt: 1, flexWrap: 'wrap' }}>
                     <Box>
                       <Typography variant="caption">Vốn còn thu hồi</Typography>
                       <Typography sx={{ fontWeight: 700 }}>
-                        <Amount value={capitalReport.data.capital.remainingCapital} />
+                        <Amount
+                          value={capitalReport.data.total.management?.cashCapital?.remainingCapital}
+                        />
                       </Typography>
                     </Box>
                     <Box>
                       <Typography variant="caption">Tiến độ thu hồi</Typography>
                       <Typography sx={{ fontWeight: 700 }}>
-                        {capitalReport.data.capital.recoveryPercent}%
+                        {capitalReport.data.total.management?.cashCapital?.recoveryPercent == null
+                          ? 'Chưa xác định'
+                          : `${capitalReport.data.total.management.cashCapital.recoveryPercent}%`}
                       </Typography>
                     </Box>
                     <Box>
                       <Typography variant="caption">Dự kiến còn lại</Typography>
                       <Typography sx={{ fontWeight: 700 }}>
-                        {capitalReport.data.capital.estimatedRemainingMonths} tháng
+                        {capitalReport.data.total.management?.cashCapital
+                          ?.estimatedRemainingMonths == null
+                          ? 'Chưa xác định'
+                          : `${capitalReport.data.total.management.cashCapital.estimatedRemainingMonths} tháng`}
                       </Typography>
                     </Box>
                   </Stack>
-                ) : null}
+                )}
+                {capitalReport.data?.total.management?.cashCapital?.unavailableReason && (
+                  <Alert severity="info" sx={{ mt: 1 }}>
+                    {capitalReport.data.total.management.cashCapital.unavailableReason ===
+                    'investment_basis_required'
+                      ? 'Chưa đủ nguyên giá tài sản để tính vốn còn lại và tiến độ thu hồi. Bổ sung giá mua tại cơ sở.'
+                      : 'Chưa đủ dữ liệu tin cậy để xác định thời gian hoàn vốn. Kiểm tra vốn ban đầu, công nợ, hoàn tiền và các kỳ báo cáo đã kết thúc.'}
+                  </Alert>
+                )}
                 <Typography variant="caption" color="text.secondary">
                   Dự báo dựa trên 6 tháng hoàn chỉnh gần nhất ({baseline.from} đến {baseline.to}),
                   không phải cam kết hoàn vốn.
@@ -600,6 +631,24 @@ export function LocationFinanceWorkspace() {
         </>
       )}
 
+      {(section === 'overview' || section === 'assets') && report.data?.total.management && (
+        <Accordion
+          variant="outlined"
+          disableGutters
+          slotProps={{ transition: { unmountOnExit: true } }}
+        >
+          <AccordionSummary expandIcon={<ChevronDown size={18} />}>
+            Xem nguồn khấu hao tháng này
+          </AccordionSummary>
+          <AccordionDetails>
+            <DepreciationSourceDetails
+              key={locationId + firstOfMonth + today}
+              filter={{ locationId, from: firstOfMonth, to: today }}
+              expected={report.data.total.management.depreciation}
+            />
+          </AccordionDetails>
+        </Accordion>
+      )}
       {section === 'assets' && (
         <Stack spacing={2}>
           <Stack direction="row" sx={{ alignItems: 'center', justifyContent: 'space-between' }}>
@@ -760,6 +809,15 @@ export function LocationFinanceWorkspace() {
             <Typography variant="h6">
               {section === 'initial' ? 'Đầu tư ban đầu & bổ sung khác' : 'Chi phí phát sinh'}
             </Typography>
+            <Button
+              component={Link}
+              to={scopedFinancePath('/expenses', locationId, {
+                expenseType: section === 'initial' ? 'INITIAL_INVESTMENT' : 'OPERATING',
+              })}
+              variant="outlined"
+            >
+              Lọc và quản lý khoản chi
+            </Button>
             <Button
               variant="contained"
               startIcon={<Plus size={17} />}
@@ -1041,6 +1099,17 @@ export function LocationFinanceWorkspace() {
           )}
         </DialogContent>
         <DialogActions>
+          {inspect && (
+            <Button
+              component={Link}
+              to={scopedFinancePath('/expenses', locationId, {
+                expenseId: inspect.id,
+                expenseType: inspect.expenseType,
+              })}
+            >
+              {inspect.canEdit ? 'Chỉnh sửa và chứng từ' : 'Xem nguồn và chứng từ'}
+            </Button>
+          )}
           <Button onClick={() => setInspect(null)}>Đóng</Button>
         </DialogActions>
       </Dialog>

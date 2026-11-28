@@ -1,3 +1,5 @@
+import { getUserFriendlyMessage } from '../../../../../packages/client-core/src/api';
+import { TextField } from '../../components/common/ValidatedForm';
 import { useState } from 'react';
 import {
   Alert,
@@ -13,7 +15,6 @@ import {
   Stack,
   Tab,
   Tabs,
-  TextField,
   Typography,
 } from '@mui/material';
 import { ArrowRight, Grid2X2, List, Plus, Users, X } from 'lucide-react';
@@ -750,7 +751,7 @@ function RoomWizard({ db }: { db: DemoDatabase }) {
             void save({ kind: 'createRooms', locationId: location, typeId: type, codes })
               .then(() => setDone(true))
               .catch((e) => {
-                setError(e.message);
+                setError(getUserFriendlyMessage(e));
                 setConfirm(false);
               })
               .finally(() => setBusy(false));

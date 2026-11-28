@@ -1,3 +1,6 @@
+import { businessToday } from '../../../../../../../packages/client-core/src/contracts';
+import { addDemoDays } from '../../../../../../../packages/client-core/src/demoClock';
+import { TextField } from '../../../../components/common/ValidatedForm';
 import { MoneyField } from '../../../../components/common/MoneyField';
 import { useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
@@ -25,7 +28,6 @@ import {
   TableHead,
   TableRow,
   Tabs,
-  TextField,
   Typography,
   Switch,
 } from '@mui/material';
@@ -42,11 +44,7 @@ import {
   type BillingPolicyWrite,
 } from '../../api/locationConfigurationApi';
 
-const currentBusinessDate = (days = 0) => {
-  const date = new Date();
-  date.setUTCDate(date.getUTCDate() + days);
-  return new Intl.DateTimeFormat('en-CA', { timeZone: 'Asia/Ho_Chi_Minh' }).format(date);
-};
+const currentBusinessDate = (days = 0) => addDemoDays(businessToday(), days);
 
 interface LocationPricingTabProps {
   db: DemoDatabase;

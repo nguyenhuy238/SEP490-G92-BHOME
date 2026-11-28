@@ -1,7 +1,9 @@
+import { demoBusinessNow } from '../../../../../packages/client-core/src/demoClock';
+import { ContractNotice } from './ContractNotice';
 import React, { useEffect, useRef, useState } from 'react';
 import { Button, Text } from 'react-native-paper';
 import { ChoiceField } from '../../components/WorkflowControls';
-import { Box, ui } from '../../components/WorkspaceKit';
+import { Box } from '../../components/WorkspaceKit';
 import {
   contractError,
   formatContractMoney,
@@ -56,7 +58,7 @@ export function HoldingMainStart({
             (c) =>
               c.kind === 'Holding' &&
               c.roomId === roomId &&
-              Date.parse(c.holdingExpiresAt ?? '') > Date.now(),
+              Date.parse(c.holdingExpiresAt ?? '') > demoBusinessNow(),
           );
           const details = await Promise.all(candidates.map((c) => api.get(c.id)));
           rows.push(...details.filter((c) => !c.convertedMainContractId));
@@ -173,11 +175,7 @@ export function HoldingMainStart({
           <Text>Áp dụng từ tiền giữ chỗ của hợp đồng đã chọn.</Text>
         </>
       )}
-      {!!displayedError && (
-        <Text style={ui.red} accessibilityRole="alert">
-          {displayedError}
-        </Text>
-      )}
+      {!!displayedError && <ContractNotice message={displayedError} />}
       {!!displayedError && (
         <Button
           disabled={busy}

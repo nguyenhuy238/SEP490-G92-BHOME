@@ -1,10 +1,11 @@
-import { conciseMessage } from '../../lib/toast';
+import { ContractNotice } from './ContractNotice';
 import { useFeedbackState } from '../../lib/useFeedbackState';
 import React, { useEffect, useRef, useState } from 'react';
 import { Text } from 'react-native-paper';
 import { randomUUID } from '../../lib/randomUUID';
 import {
   contractError,
+  displayContractDate,
   formatContractMoney,
   mutationKeys,
   text,
@@ -16,11 +17,42 @@ import {
   type HoldingDepositStatus,
 } from '../../../../../packages/client-core/src/contracts';
 import { formatInstant } from '../../../../../packages/client-core/src/localization';
-import { Action, Box, Heading, ui } from '../../components/WorkspaceKit';
+import { Action, Box, Heading } from '../../components/WorkspaceKit';
 import { ContractEvidence } from './ContractEvidence';
 import { useWorkspaceQuery } from '../workspace/useWorkspaceQuery';
 import { OwnerWebNotice } from '../../components/OwnerWebNotice';
 import type { Readiness } from '../../../../../packages/client-core/src/contracts';
+
+const historyMilestones: Readonly<Partial<Record<string, string>>> = {
+  HoldingDraftCreated: 'Lập bản nháp giữ chỗ',
+  MainDraftCreated: 'Lập bản nháp hợp đồng',
+  ContractDraftCreated: 'Lập bản nháp hợp đồng',
+  HoldingApproved: 'Duyệt giữ chỗ',
+  HoldingSigningSubmitted: 'Gửi lời mời ký',
+  MainSigningSubmitted: 'Gửi lời mời ký',
+  ContractSigningRequested: 'Gửi yêu cầu ký',
+  InternalTenantAcceptanceRecorded: 'Người thuê đã ký',
+  InternalOwnerAcceptanceConfirmed: 'Chủ cơ sở đã ký',
+  ContractSignatureVerified: 'Xác minh chữ ký',
+  ContractDepositVerified: 'Xác minh tiền cọc',
+  HoldingActivated: 'Kích hoạt giữ chỗ',
+  'Automatic:HoldingActivated': 'Kích hoạt giữ chỗ',
+  ContractActivated: 'Kích hoạt hợp đồng',
+  'Automatic:ContractActivated': 'Kích hoạt hợp đồng',
+  HoldingCancelled: 'Hủy giữ chỗ',
+  HoldingExpired: 'Hết hạn giữ chỗ',
+  ContractCancelled: 'Hủy hợp đồng',
+  HoldingConversionPrepared: 'Chuẩn bị hợp đồng thuê',
+  ContractRenewalPrepared: 'Lập bản gia hạn',
+  ContractRenewalCancelled: 'Hủy bản gia hạn',
+  ContractHandoverCompleted: 'Hoàn tất nhận phòng',
+  ContractMoveOutRequested: 'Gửi yêu cầu trả phòng',
+  ContractMoveOutApproved: 'Duyệt yêu cầu trả phòng',
+  ContractInspectionScheduled: 'Đặt lịch kiểm tra trả phòng',
+  ContractMoveOutInspected: 'Lưu biên bản trả phòng',
+  ContractSettlementReviewed: 'Xem xét quyết toán',
+  ContractTerminationCompleted: 'Hoàn tất trả phòng',
+};
 
 export function ContractWorkflowPanel({
   api,
@@ -43,12 +75,13 @@ export function ContractWorkflowPanel({
     deposits: DepositVerification[];
     audit: ContractAudit[];
   } | null>(null);
-  const [error, setError] = useFeedbackState(),
+  const [error, setError] = useFeedbackState('warning', false),
     [loading, setLoading] = useState(true),
     [busy, setBusy] = useState(false),
     [revision, setRevision] = useState(0);
   const [keys] = useState(() => mutationKeys(randomUUID)),
     lock = useRef(false);
+  const [expanded, setExpanded] = useState(false);
   const privileged = ['Owner', 'Tenant'].includes(role);
   const canPreview =
     privileged ||
@@ -61,13 +94,18 @@ export function ContractWorkflowPanel({
     contract.kind === 'Holding' ? `/api/v1/contracts/${contract.id}/holding-deposit` : null,
   );
   const room = useWorkspaceQuery<{ status: number }>(
-    contract.kind === 'Holding' && ['Owner', 'Staff'].includes(role)
+    documents && contract.kind === 'Holding' && ['Owner', 'Staff'].includes(role)
       ? `/api/v1/rooms/${contract.roomId}`
       : null,
   );
   const versions = useWorkspaceQuery<Awaited<ReturnType<ContractClient['versions']>>>(
     history ? `/api/v1/contracts/${contract.id}/versions` : null,
   );
+  const milestones = (data?.audit ?? []).flatMap((event) => {
+    const label = Object.hasOwn(historyMilestones, event.action) && historyMilestones[event.action];
+    return label ? [{ label, at: event.occurredAt }] : [];
+  });
+  const versionRows = versions.data ?? [];
   useEffect(() => {
     const c = new AbortController();
     async function load() {
@@ -109,11 +147,11 @@ export function ContractWorkflowPanel({
   }
   return (
     <>
-      {contract.kind === 'Holding' && (
+      {contract.kind === 'Holding' && (documents || !!holding.data || !!holding.error) && (
         <Box>
           <Heading title="Tình trạng cọc giữ chỗ" />
-          <Text>Cọc yêu cầu: {formatContractMoney(contract.requiredDeposit)}</Text>
-          {!contract.approvedAt && contract.status === 'Draft' && (
+          {documents && <Text>Cọc yêu cầu: {formatContractMoney(contract.requiredDeposit)}</Text>}
+          {documents && !contract.approvedAt && contract.status === 'Draft' && (
             <Text>Chờ Owner phê duyệt. Bản nháp chưa giữ phòng.</Text>
           )}
           {room.data && (
@@ -123,23 +161,27 @@ export function ContractWorkflowPanel({
                 'Chưa xác định'}
             </Text>
           )}
-          {!!room.error && <Text style={ui.red}>{conciseMessage(room.error)}</Text>}
-          {!!holding.error && <Text style={ui.red}>{conciseMessage(holding.error)}</Text>}
+          {!!room.error && <ContractNotice message={room.error} />}
+          {!!holding.error && <ContractNotice message={holding.error} />}
           {holding.data?.disposition && (
             <>
-              <Text>
-                {holding.data.disposition.cause === 'TenantVoluntary'
-                  ? 'Tenant tự nguyện hủy — cọc không hoàn'
-                  : 'Owner không cung cấp được phòng — phải hoàn cọc'}
-              </Text>
-              <Text>
-                Cọc không hoàn: {formatContractMoney(holding.data.disposition.forfeitedAmount)} ·
-                Phải hoàn: {formatContractMoney(holding.data.disposition.refundRequired)}
-              </Text>
-              <Text>
-                Đã hoàn: {formatContractMoney(holding.data.disposition.refunded)} · Đang giữ cho yêu
-                cầu hoàn: {formatContractMoney(holding.data.disposition.reserved)}
-              </Text>
+              {documents && (
+                <>
+                  <Text>
+                    {holding.data.disposition.cause === 'TenantVoluntary'
+                      ? 'Tenant tự nguyện hủy — cọc không hoàn'
+                      : 'Owner không cung cấp được phòng — phải hoàn cọc'}
+                  </Text>
+                  <Text>
+                    Cọc không hoàn: {formatContractMoney(holding.data.disposition.forfeitedAmount)}{' '}
+                    · Phải hoàn: {formatContractMoney(holding.data.disposition.refundRequired)}
+                  </Text>
+                  <Text>
+                    Đã hoàn: {formatContractMoney(holding.data.disposition.refunded)} · Đang giữ cho
+                    yêu cầu hoàn: {formatContractMoney(holding.data.disposition.reserved)}
+                  </Text>
+                </>
+              )}
               <Text>
                 {(
                   {
@@ -170,29 +212,28 @@ export function ContractWorkflowPanel({
             ['Draft', 'PendingSigning', 'PendingActivation'].includes(contract.status) && (
               <OwnerWebNotice task="Phân bổ giao dịch và đối soát cọc giữ chỗ" />
             )}
-          <Action secondary onPress={holding.reload}>
-            Tải lại cọc giữ chỗ
-          </Action>
+          {documents && (
+            <Action secondary onPress={holding.reload}>
+              Tải lại cọc giữ chỗ
+            </Action>
+          )}
         </Box>
       )}
-      {history && (
+      {history && (versionRows.length > 1 || !!versions.error) && (
         <Box>
           <Heading title="Các phiên bản hợp đồng" />
-          {!!versions.error && <Text style={ui.red}>{conciseMessage(versions.error)}</Text>}
-          {versions.data?.map((v) => (
+          {!!versions.error && <ContractNotice message={versions.error} />}
+          {(expanded ? versionRows : versionRows.slice(0, 3)).map((v) => (
             <Text key={v.id}>
-              {text(v.kind)} · {text(v.status)} · {v.startDate} → {v.endDate}
-              {v.monthlyRent !== null ? ' · ' + formatContractMoney(v.monthlyRent) : ''}
-              {v.terms ? '\n' + v.terms : ''}
+              {text(v.status)}
+              {v.id === contract.id ? ' (đang xem)' : ''} · {displayContractDate(v.startDate)} →{' '}
+              {displayContractDate(v.endDate)}
             </Text>
           ))}
-          <Action secondary onPress={versions.reload}>
-            Tải lại phiên bản
-          </Action>
         </Box>
       )}
-      {loading && <Text>Đang tải tài liệu và lịch sử…</Text>}
-      {!!error && <Text style={ui.red}>{error}</Text>}
+      {loading && <Text>{documents ? 'Đang tải tài liệu…' : 'Đang tải lịch sử…'}</Text>}
+      {!!error && <ContractNotice message={error} />}
       {documents && canPreview && (
         <Box>
           <Heading title="Xem trước hợp đồng" detail="Bản PDF theo nội dung hợp đồng đã lưu" />
@@ -207,12 +248,13 @@ export function ContractWorkflowPanel({
           {data?.previews.map((f) => (
             <Box key={f.id}>
               <Text>Bản xem trước · {formatInstant(f.recordedAt)}</Text>
-              {f.developmentOnly && (
-                <Text variant="bodySmall" style={ui.muted}>
-                  Tài liệu Development · Chưa duyệt cho production
-                </Text>
-              )}
-              <ContractEvidence api={api} contractId={contract.id} previewId={f.id} pdf />
+              <ContractEvidence
+                api={api}
+                contractId={contract.id}
+                contractKind={contract.kind}
+                previewId={f.id}
+                pdf
+              />
             </Box>
           ))}
         </Box>
@@ -235,16 +277,27 @@ export function ContractWorkflowPanel({
       {history && (
         <Box>
           <Heading title="Lịch sử hợp đồng" />
-          {data?.audit.map((a, i) => (
+          {(expanded ? milestones : milestones.slice(0, 5)).map((event, i) => (
             <Text key={i}>
-              {formatInstant(a.occurredAt)} ·{' '}
-              {a.action === 'ContractOverviewFixtureCreated'
-                ? 'Tạo dữ liệu minh họa để kiểm tra giao diện'
-                : text(a.action)}
+              {event.label} · {formatInstant(event.at)}
             </Text>
           ))}
-          <Action secondary disabled={loading || busy} onPress={() => setRevision((v) => v + 1)}>
-            Tải lại tài liệu và lịch sử
+          {!loading && !error && !milestones.length && <Text>Chưa có mốc lịch sử.</Text>}
+          {(milestones.length > 5 || versionRows.length > 3) && (
+            <Action secondary onPress={() => setExpanded((value) => !value)}>
+              {expanded ? 'Thu gọn' : 'Xem thêm lịch sử'}
+            </Action>
+          )}
+          <Action
+            secondary
+            disabled={loading || busy}
+            onPress={() => {
+              versions.reload();
+              if (contract.kind === 'Holding') holding.reload();
+              setRevision((v) => v + 1);
+            }}
+          >
+            Tải lại lịch sử
           </Action>
         </Box>
       )}

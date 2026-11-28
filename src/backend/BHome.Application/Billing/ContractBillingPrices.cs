@@ -38,7 +38,7 @@ public static class ContractBillingPrices
             {
                 if (c.PolicyId == Guid.Empty ? c.Version != 0 : c.Version < 1)
                 { missing.Add("contract_price_snapshot_invalid"); return []; }
-                charges.Add(new(Guid.Empty, locationId, contract.RoomId, category, "RENT", "Tiền thuê theo hợp đồng đại diện",
+                charges.Add(new(Guid.Empty, locationId, contract.RoomId, category, "RENT", "Tiền thuê theo hợp đồng đối chiếu",
                     ChargingMethod.FixedPerRoomPerMonth, snapshot.AgreedRent, contract.StartDate, contract.EndDate, 0));
                 continue;
             }

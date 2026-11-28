@@ -7,6 +7,22 @@ namespace BHome.Application.UnitTests.Contracts;
 
 public sealed class FixedChargeCalculationTests
 {
+    [Fact]
+    public void CapacityBasedFeeIsUnchangedWhenANewOccupantJoinsAndNeverRecollected()
+    {
+        var fee = Rent with { Category = ChargeCategory.ServiceFee, ChargeCode = "CLEANING", Method = ChargingMethod.FixedPerPersonPerMonth, Rate = 100000 };
+        var schedule = new BillingSchedule { PartialMonth = PartialMonthRule.FullMonth };
+        var twoOccupants = PersonMonthOccupancy.ForRoomCapacity(3, 30);
+        var initial = FixedChargeCalculation.Calculate(Period, fee, schedule, "hash", 30, [], twoOccupants);
+        Assert.Equal(300000, initial.Amount); Assert.Equal(3, initial.Source.RoomCapacity);
+        var threeOccupants = PersonMonthOccupancy.ForRoomCapacity(3, 30);
+        var afterJoin = FixedChargeCalculation.Calculate(Period, fee, schedule, "hash", 30, [new(Guid.NewGuid(), initial.Source)], threeOccupants);
+        Assert.Equal(0, afterJoin.Amount); Assert.Empty(afterJoin.MissingInputs);
+        var legacy = initial.Source with { RoomCapacity = null, ResidentCount = 2, PersonDays = 60, CumulativePricedAmount = 200000 };
+        var review = FixedChargeCalculation.Calculate(Period, fee, schedule, "hash", 30, [new(Guid.NewGuid(), legacy)], threeOccupants);
+        Assert.Null(review.Amount); Assert.Contains("fixed_charge_policy_changed", review.MissingInputs);
+    }
+
     private static readonly DateOnly Period = new(2026, 11, 1);
     private static readonly PolicyDto Rent = new(Guid.NewGuid(), Guid.NewGuid(), null, ChargeCategory.Rent, "RENT", "Synthetic rent",
         ChargingMethod.FixedPerRoomPerMonth, 3000000, Period, null, 1);

@@ -26,9 +26,10 @@ public sealed partial class ContractLifecycleApiTests
     {
         if (await RunHoldingSigningOnNativeSchemaAsync(holding, tests => tests.OwnerUploadsAMySignSignedPdfThenTenantSignsWithOtpAndBothSignaturesStayValid(true))) return;
         var w = await Setup();
-        if (holding) await PrepareHoldingSigningRate(w.Room, w.Location);
+        if (holding) await PrepareHoldingSigningData(w);
+        var holdingQuote = holding ? await ConfigureHoldingPolicyAsync(w, "Synthetic Holding signing terms") : null;
         var id = holding
-            ? (await Success<ContractId>(await Post(w.Staff, "/api/v1/contracts/holdings", new HoldingDraftInput(w.Room, w.Owner.Id, w.Tenant.Id, w.Resident, [w.Resident], Today, Today.AddYears(1), DateTimeOffset.UtcNow.AddDays(2), 1000000, "Synthetic Holding signing terms", 1)))).Id
+            ? (await Success<ContractId>(await Post(w.Staff, "/api/v1/contracts/holdings", new HoldingDraftInput(w.Room, w.Owner.Id, w.Tenant.Id, w.Resident, [w.Resident], holdingQuote!.StartDate, holdingQuote.EndDate, holdingQuote.ExpiresAt, holdingQuote.HoldingDeposit, holdingQuote.Terms, 1, holdingQuote.SettingsVersion)))).Id
             : (await Success<ContractId>(await Post(w.Staff, "/api/v1/contracts", Input(w)))).Id;
         if (holding) await Success<ContractView>(await Post(w.Owner, Path(id, "holding-approval"), new HoldingDecisionInput("Owner reviewed")));
         var email = new CapturedEmail();
@@ -37,6 +38,7 @@ public sealed partial class ContractLifecycleApiTests
             b.ConfigureAppConfiguration((_, c) => c.AddInMemoryCollection(new Dictionary<string, string?>
             {
                 ["ContractPdf:TemplateId"] = ContractPdfRendererTests.TemplateId,
+                ["MainDraft:LibreOfficeContainerImage"] = "bhome/contract-converter:local",
                 ["ContractSigning:Methods:Otp"] = "true",
                 ["ContractSigning:Methods:UploadProof"] = "true"
             }));

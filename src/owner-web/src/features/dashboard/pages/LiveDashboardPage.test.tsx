@@ -1,5 +1,5 @@
 import '@testing-library/jest-dom/vitest';
-import { cleanup, render, screen, within } from '@testing-library/react';
+import { cleanup, fireEvent, render, screen, within } from '@testing-library/react';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { MemoryRouter } from 'react-router';
 import { afterEach, beforeEach, expect, it, vi } from 'vitest';
@@ -20,9 +20,10 @@ const response = (path: string) =>
     ? {
         total: {
           issued: '5000000',
-          verifiedCollections: '3000000',
+          verifiedCollections: '4000000',
           outstandingNow: '2000000',
           operatingExpenses: '125000',
+          management: { actualBusinessCollections: '3000000', currentOutstanding: '2000000' },
         },
       }
     : {
@@ -38,7 +39,16 @@ const response = (path: string) =>
       };
 beforeEach(() => {
   request.mockReset();
-  request.mockImplementation(async (path: string) => response(path));
+  request.mockImplementation(async (path: string) =>
+    path.includes('owner-attention')
+      ? {
+          unsafeEquipment: 2,
+          expiredLegalRecords: 0,
+          overdueTaxPeriods: 1,
+          pendingPersonalDataRequests: 3,
+        }
+      : response(path),
+  );
 });
 afterEach(cleanup);
 
@@ -72,6 +82,52 @@ it('loads full server-side counts rather than counting a truncated page', async 
   expect(await screen.findByText('3.000.000 ₫')).toBeInTheDocument();
   expect(screen.getByRole('link', { name: 'Quản lý cơ sở' })).toHaveAttribute('href', '/locations');
   expect(screen.queryByText(/DỮ LIỆU MÔ PHỎNG/)).not.toBeInTheDocument();
+});
+
+it('keeps lifecycle follow-up after business metrics with links and server counts', async () => {
+  mount();
+  const attention = screen.getByRole('region', { name: 'Hồ sơ và thiết bị cần chú ý' });
+  expect(
+    screen.getByRole('region', { name: 'Tình hình kinh doanh' }).compareDocumentPosition(attention),
+  ).toBe(Node.DOCUMENT_POSITION_FOLLOWING);
+  const links = within(attention);
+  expect(await links.findByRole('link', { name: 'Thiết bị không được sử dụng 2' })).toHaveAttribute(
+    'href',
+    '/assets',
+  );
+  expect(links.getByRole('link', { name: 'Hồ sơ quá ngày hết hạn ghi nhận 0' })).toHaveAttribute(
+    'href',
+    '/locations',
+  );
+  expect(links.getByRole('link', { name: 'Kỳ thuế quá hạn theo dõi 1' })).toHaveAttribute(
+    'href',
+    '/finance/tax-records',
+  );
+  expect(links.getByRole('link', { name: 'Yêu cầu dữ liệu chờ xử lý 3' })).toHaveAttribute(
+    'href',
+    '/account/profile',
+  );
+});
+
+it('retries lifecycle failures and preserves missing counts as unknown', async () => {
+  let failAttention = true;
+  request.mockImplementation(async (path: string) => {
+    if (path.includes('owner-attention')) {
+      if (failAttention) throw new Error('Synthetic attention unavailable');
+      return { unsafeEquipment: 0 };
+    }
+    return response(path);
+  });
+  mount();
+  const attention = within(screen.getByRole('region', { name: 'Hồ sơ và thiết bị cần chú ý' }));
+  expect(await attention.findByRole('alert')).toHaveTextContent('Chưa tải được dữ liệu cần chú ý.');
+  expect(attention.queryByRole('link')).not.toBeInTheDocument();
+  failAttention = false;
+  fireEvent.click(attention.getByRole('button', { name: 'Thử lại' }));
+  expect(
+    await attention.findByRole('link', { name: 'Thiết bị không được sử dụng 0' }),
+  ).toBeInTheDocument();
+  expect(attention.getAllByText('—')).toHaveLength(3);
 });
 
 it('keeps unknown finance and inconsistent room counts distinct from zero', async () => {

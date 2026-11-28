@@ -117,6 +117,8 @@ public sealed class AnonymousSigningSecurityTests
             Invites.FindAsync(Invite.Id, default).Returns(Invite);
             Contracts.FindAsync(Contract.Id, default).Returns(Contract);
             Contracts.InTransactionAsync(Arg.Any<Guid>(), Arg.Any<Func<Task<byte[]>>>(), default).Returns(c => c.Arg<Func<Task<byte[]>>>()());
+            Contracts.InTransactionAsync(Arg.Any<Guid>(), Arg.Any<Func<Task<(byte[] Bytes, string FileName)>>>(), default)
+                .Returns(c => c.Arg<Func<Task<(byte[] Bytes, string FileName)>>>()());
             Contracts.InTransactionAsync(Arg.Any<Guid>(), Arg.Any<Func<Task<bool>>>(), default).Returns(c => c.Arg<Func<Task<bool>>>()());
             Contracts.InTransactionAsync(Arg.Any<Guid>(), Arg.Any<Func<Task<AnonymousSigningInfo>>>(), default).Returns(c => c.Arg<Func<Task<AnonymousSigningInfo>>>()());
             Contracts.InTransactionAsync(Arg.Any<Guid>(), Arg.Any<Func<Task<AnonymousSigningAccess?>>>(), default).Returns(c => c.Arg<Func<Task<AnonymousSigningAccess?>>>()());

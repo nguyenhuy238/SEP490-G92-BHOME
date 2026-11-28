@@ -1,4 +1,5 @@
-import { TextField, type TextFieldProps } from '@mui/material';
+import { TextField } from './ValidatedForm';
+import { type TextFieldProps } from '@mui/material';
 import { useLayoutEffect, useRef, useState } from 'react';
 import {
   formatMoneyInput,

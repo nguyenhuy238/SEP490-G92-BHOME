@@ -6,6 +6,9 @@ using BHome.Infrastructure.Persistence.Compact24;
 var builder = WebApplication.CreateBuilder(args);
 builder.Logging.ClearProviders();
 builder.Logging.AddJsonConsole(options => options.IncludeScopes = true);
+// The handler below emits a safe classification and trace. Suppress the framework's
+// duplicate exception serialization, which may include SQL values or provider secrets.
+builder.Logging.AddFilter("Microsoft.AspNetCore.Diagnostics.ExceptionHandlerMiddleware", LogLevel.None);
 builder.Services.AddInfrastructure(builder.Configuration);
 builder.Services.AddApiFoundation(builder.Configuration);
 
@@ -13,6 +16,7 @@ var app = builder.Build();
 if (app.Environment.IsDevelopment() && app.Configuration.GetValue("Api:ReadDevelopmentEnvironmentFile", true))
     DevelopmentEnvironmentFile.Load(builder.Configuration, app.Environment.ContentRootPath);
 EnvironmentConfiguration.ApplyDeploymentDefaults(builder.Configuration);
+_ = BHome.Infrastructure.Development.DemoClockGuard.Enabled(app.Configuration, app.Environment.EnvironmentName);
 var environmentErrors = EnvironmentConfiguration.Errors(app.Configuration, app.Environment.EnvironmentName);
 if (environmentErrors.Count > 0)
     throw new Microsoft.Extensions.Options.OptionsValidationException("Environment", typeof(EnvironmentConfiguration), environmentErrors);
@@ -27,7 +31,9 @@ if (app.Environment.IsDevelopment() && app.Configuration.GetValue<bool>("Develop
 }
 app.UseMiddleware<CorrelationMiddleware>();
 app.UseExceptionHandler();
-app.UseStatusCodePages();
+app.UseStatusCodePages(context => ApiProblems.WriteAsync(context.HttpContext,
+    new Microsoft.AspNetCore.Mvc.ProblemDetails { Status = context.HttpContext.Response.StatusCode },
+    context.HttpContext.RequestAborted));
 if (!app.Environment.IsDevelopment()) app.UseHsts();
 if (app.Configuration.GetValue("Api:UseHttpsRedirection", true))
     app.UseWhen(context => !(app.Environment.IsDevelopment() && app.Configuration.GetValue<bool>("MobileDevelopment:Enabled") &&
@@ -55,6 +61,7 @@ app.Use(async (context, next) =>
     }
 });
 app.UseAuthentication();
+app.UseMiddleware<SePayOwnerConfigurationMiddleware>();
 app.UseRateLimiter();
 app.UseAuthorization();
 app.MapControllers();

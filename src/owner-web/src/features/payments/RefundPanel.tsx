@@ -1,3 +1,5 @@
+import { ValidatedInput } from '../../components/common/ValidatedForm';
+import { TextField } from '../../components/common/ValidatedForm';
 import { ConfirmActionButton } from '../../components/common/ConfirmActionButton';
 import { MoneyField } from '../../components/common/MoneyField';
 import { useRef, useState } from 'react';
@@ -10,7 +12,6 @@ import {
   MenuItem,
   Paper,
   Stack,
-  TextField,
   Typography,
 } from '@mui/material';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
@@ -82,9 +83,12 @@ function RefundPanelContent({ sourceId, sourceKind = 'Receipt', onChanged }: Ref
   };
   async function reload() {
     await Promise.all(
-      [['refund-source'], ['invoice-payment'], ['financial-report']].map((queryKey) =>
-        cache.invalidateQueries({ queryKey }),
-      ),
+      [
+        ['refund-source'],
+        ['invoice-payment'],
+        ['financial-report'],
+        ['finance-ledger-sources'],
+      ].map((queryKey) => cache.invalidateQueries({ queryKey })),
     );
     onChanged?.();
   }
@@ -529,7 +533,7 @@ function RefundItem({
                   Chứng từ PNG/JPEG tối đa 5 MB. Không tải giấy tờ tùy thân hoặc thông tin đăng
                   nhập.
                 </Typography>
-                <input
+                <ValidatedInput
                   type="file"
                   accept="image/png,image/jpeg"
                   aria-label="Chứng từ giao dịch hoàn"

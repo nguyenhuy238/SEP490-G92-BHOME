@@ -1,5 +1,6 @@
 using BHome.Application.Contracts;
 using BHome.Domain.IdentityAccess;
+using BHome.Domain.TenantContracts;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 
@@ -17,6 +18,10 @@ public sealed class MainDraftsController(MainDraftService service) : ControllerB
     public Task<MainContractSettings?> Settings(Guid locationId, CancellationToken t) => service.OwnerSettingsAsync(locationId, t);
     [HttpPut("settings/{locationId:guid}"), Authorize(Roles = Roles.Owner)]
     public async Task<IActionResult> Settings(Guid locationId, MainContractSettingsInput input, CancellationToken t) { await service.SetSettingsAsync(locationId, input, t); return NoContent(); }
+    [HttpGet("settings"), Authorize(Roles = Roles.Owner)]
+    public Task<MainContractSettings?> GlobalSettings(CancellationToken t) => service.OwnerSettingsAsync(t);
+    [HttpPut("settings"), Authorize(Roles = Roles.Owner)]
+    public async Task<IActionResult> GlobalSettings(MainContractSettingsInput input, CancellationToken t) { await service.SetSettingsAsync(input, t); return NoContent(); }
     [HttpPost]
     public Task<MainDraftView> Create(MainDraftInput input, CancellationToken t) => service.SaveAsync(null, input, Key(), t);
     [HttpGet("{id:guid}")]
@@ -27,13 +32,13 @@ public sealed class MainDraftsController(MainDraftService service) : ControllerB
     public Task<MainDraftFiles> Generate(Guid id, CancellationToken t) => service.GenerateAsync(id, t);
     [HttpPost("{id:guid}/signing-review")]
     public Task<ContractDocumentView> SigningReview(Guid id, CancellationToken t) => service.CreateSigningReviewAsync(id, t);
-    [HttpPost("{id:guid}/release"), Authorize(Roles = Roles.Owner)]
+    [HttpPost("{id:guid}/release")]
     public Task<ContractId> Release(Guid id, MainDraftReleaseInput input, CancellationToken t) => service.ReleaseAsync(id, input, Key(), t);
     [HttpGet("{id:guid}/documents/{fileId:guid}")]
     public async Task<IActionResult> Download(Guid id, Guid fileId, CancellationToken t)
     {
         var buffer = new MemoryStream();
-        try { var type = await service.CopyFileAsync(id, fileId, buffer, t); buffer.Position = 0; return File(buffer, type, type == "application/pdf" ? "hop-dong-nhap.pdf" : "hop-dong-nhap.docx"); }
+        try { var type = await service.CopyFileAsync(id, fileId, buffer, t); buffer.Position = 0; return File(buffer, type, ContractDownloadName.For(ContractKind.Main, id, docx: type != "application/pdf")); }
         catch { await buffer.DisposeAsync(); throw; }
     }
     [HttpGet("{id:guid}/documents/{fileId:guid}/preview")]

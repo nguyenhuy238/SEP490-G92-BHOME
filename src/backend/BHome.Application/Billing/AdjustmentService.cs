@@ -64,6 +64,8 @@ public sealed partial class AdjustmentService(IAdjustmentRepository repository, 
             var line = x.InvoiceLineId is { } lineId ? invoice.Lines.SingleOrDefault(l => l.Id == lineId)
                 ?? throw new AdjustmentException(400, "adjustment_charge_not_found") : null;
             var financial = await repository.FinancialsAsync(invoiceId, t);
+            if (invoice.Status == InvoiceStatus.Final && financial.OutstandingAmount <= 0)
+                throw new AdjustmentException(409, "adjustment_invoice_paid");
             var evidence = await repository.EvidenceAsync(x.EvidenceIds, t);
             if (evidence.Length != x.EvidenceIds.Length || evidence.Any(e => e.InvoiceId != invoiceId || e.UploaderId != Actor || e.RequestId != null || !e.Uploaded || e.CleanupAfter <= Now))
                 throw new AdjustmentException(400, "adjustment_evidence_invalid");

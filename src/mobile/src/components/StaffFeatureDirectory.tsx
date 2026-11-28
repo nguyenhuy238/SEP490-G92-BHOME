@@ -1,81 +1,86 @@
-import React, { useState } from 'react';
+﻿import React from 'react';
 import { StyleSheet, View } from 'react-native';
-import { Button } from 'react-native-paper';
-import { DashboardHeading, dashboardStyles } from './DashboardKit';
+import { Text } from 'react-native-paper';
 import { StaffFeatureCard } from './StaffFeatureCard';
-import {
-  frequentStaffFeatures,
-  staffFeatureGroups,
-  type StaffFeature,
-} from '../features/workspace/staffFeatures';
+import { frequentStaffFeatures } from '../features/workspace/staffFeatures';
 import type { WorkspaceScreen } from '../features/workspace/navigation';
 import { staffColors } from '../theme/theme';
+import { staffHomePalette } from '../theme/staffLayout';
+import { fontStyle } from '../theme/typography';
 
-function StaffFeatureGrid({
-  items,
+export function StaffFeatureDirectory({
   onOpen,
+  onContracts,
+  overdueMeterRooms = null,
 }: {
-  items: StaffFeature[];
   onOpen: (screen: WorkspaceScreen, params?: Record<string, string>) => void;
+  onContracts: () => void;
+  overdueMeterRooms?: number | null;
 }) {
+  const features = [
+    ...frequentStaffFeatures,
+    {
+      title: 'Hợp đồng',
+      detail: 'Tạo và theo dõi hợp đồng',
+      icon: 'file-document-outline',
+      screen: 'signing' as const,
+    },
+    {
+      title: 'Tạm trú',
+      detail: 'Theo dõi tạm trú trong phạm vi phân công',
+      icon: 'shield-home-outline',
+      screen: 'residence' as const,
+    },
+  ];
   return (
-    <View style={styles.grid}>
-      {items.map((item) => (
-        <View key={item.screen} style={styles.cell}>
-          <StaffFeatureCard
-            title={item.title}
-            description={item.detail}
-            icon={item.icon}
-            color={item.screen === 'staff-emergencies' ? staffColors.red : staffColors.blue}
-            background={
-              item.screen === 'staff-emergencies' ? staffColors.redSoft : staffColors.blueSoft
-            }
-            onPress={() => (item.params ? onOpen(item.screen, item.params) : onOpen(item.screen))}
-            compact
-            incident={['report-incident', 'staff-maintenance', 'staff-emergencies'].includes(
-              item.screen,
-            )}
-            status={item.pending ? 'Chưa khả dụng' : item.partial ? 'Đã có một phần' : undefined}
-          />
-        </View>
-      ))}
+    <View style={styles.section}>
+      <View style={styles.heading}>
+        <View style={styles.headingAccent} />
+        <Text style={styles.headingTitle}>Truy cập nhanh</Text>
+      </View>
+      <View style={styles.grid}>
+        {[0, 2, 4].map((start) => (
+          <View key={start} testID="staff-shortcut-row" style={styles.row}>
+            {features.slice(start, start + 2).map((item) => (
+              <View key={item.screen} style={styles.cell}>
+                <StaffFeatureCard
+                  title={item.title}
+                  description={item.detail}
+                  icon={item.icon}
+                  color={
+                    item.screen === 'meter-reading' && !!overdueMeterRooms
+                      ? staffColors.red
+                      : staffColors.blue
+                  }
+                  background={
+                    item.screen === 'meter-reading' && !!overdueMeterRooms
+                      ? staffColors.redSoft
+                      : staffColors.blueSoft
+                  }
+                  status={
+                    item.screen === 'meter-reading' && overdueMeterRooms
+                      ? `${overdueMeterRooms} phòng quá hạn`
+                      : undefined
+                  }
+                  danger={item.screen === 'meter-reading' && !!overdueMeterRooms}
+                  onPress={() => (item.screen === 'signing' ? onContracts() : onOpen(item.screen))}
+                  shortcut
+                />
+              </View>
+            ))}
+          </View>
+        ))}
+      </View>
     </View>
   );
 }
 
-export function StaffFeatureDirectory({
-  onOpen,
-}: {
-  onOpen: (screen: WorkspaceScreen, params?: Record<string, string>) => void;
-}) {
-  const [expanded, setExpanded] = useState(false);
-  const count = staffFeatureGroups.reduce((total, group) => total + group.items.length, 0);
-  return (
-    <>
-      <View style={dashboardStyles.section}>
-        <DashboardHeading title="Thao tác thường dùng" />
-        <StaffFeatureGrid items={frequentStaffFeatures} onOpen={onOpen} />
-        <Button
-          mode="outlined"
-          icon={expanded ? 'chevron-up' : 'view-grid-outline'}
-          onPress={() => setExpanded(!expanded)}
-          accessibilityState={{ expanded }}
-        >
-          {expanded ? 'Thu gọn chức năng' : `Xem tất cả chức năng (${count})`}
-        </Button>
-      </View>
-      {expanded &&
-        staffFeatureGroups.map((group) => (
-          <View key={group.title} style={dashboardStyles.section}>
-            <DashboardHeading title={group.title} />
-            <StaffFeatureGrid items={group.items} onOpen={onOpen} />
-          </View>
-        ))}
-    </>
-  );
-}
-
 const styles = StyleSheet.create({
-  grid: { flexDirection: 'row', flexWrap: 'wrap', gap: 12, alignItems: 'stretch' },
-  cell: { flexBasis: '45%', flexGrow: 1, maxWidth: '48%' },
+  section: { gap: 8 },
+  heading: { flexDirection: 'row', alignItems: 'center', gap: 9, paddingHorizontal: 3 },
+  headingAccent: { width: 4, height: 18, borderRadius: 2, backgroundColor: staffColors.blue },
+  headingTitle: { ...fontStyle('bold', 18, 25), color: staffHomePalette.ink },
+  grid: { gap: 8 },
+  row: { flexDirection: 'row', gap: 10, alignItems: 'stretch' },
+  cell: { flex: 1, minWidth: 0 },
 });

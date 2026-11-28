@@ -1,6 +1,7 @@
+import { TextField } from '../../components/common/ValidatedForm';
 import { useState } from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
-import { Alert, Button, Chip, LinearProgress, Stack, TextField, Typography } from '@mui/material';
+import { Alert, Button, Chip, LinearProgress, Stack, Typography } from '@mui/material';
 import {
   signingError,
   type SettingSource,

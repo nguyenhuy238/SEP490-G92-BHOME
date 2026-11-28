@@ -38,7 +38,12 @@ vi.mock('expo-image-manipulator', () => ({
     }),
   },
 }));
-import { captureMaxBytes, captureMaxPixels, prepareCapture } from '../lib/prepareCapture';
+import {
+  captureMaxBytes,
+  captureMaxPixels,
+  identityCaptureMaxDimension,
+  prepareCapture,
+} from '../lib/prepareCapture';
 
 const picture = (width = 4000, height = 3000) => ({ width, height }) as PictureRef;
 beforeEach(() => {
@@ -115,7 +120,27 @@ it('releases native references when rendering or encoding fails', async () => {
   expect(native.releaseContext).toHaveBeenCalledOnce();
 });
 it('preserves the existing task-evidence encoding policy', async () => {
-  await prepareCapture(picture(2000, 1200), () => true, true);
+  await prepareCapture(picture(2000, 1200), () => true, 'evidence');
   expect(native.resize).toHaveBeenCalledWith({ width: 1600, height: 960 });
   expect(native.save).toHaveBeenCalledWith({ format: 'jpeg', compress: 0.85 });
+});
+it.each([
+  [4000, 3000],
+  [3000, 4000],
+  [8000, 6000],
+])(
+  'bounds identity uploads while preserving detail for localization for %s x %s',
+  async (width, height) => {
+    await prepareCapture(picture(width, height), () => true, 'identity');
+    const resized = native.resize.mock.calls[0][0];
+    expect(Math.max(resized.width, resized.height)).toBe(identityCaptureMaxDimension);
+    expect(Math.abs(resized.width / resized.height - width / height)).toBeLessThan(0.001);
+    expect(native.save).toHaveBeenCalledExactlyOnceWith({ format: 'jpeg', compress: 0.95 });
+    expect(native.releaseImage).toHaveBeenCalledOnce();
+    expect(native.releaseContext).toHaveBeenCalledOnce();
+  },
+);
+it('does not upscale a smaller identity photo', async () => {
+  await prepareCapture(picture(1000, 600), () => true, 'identity');
+  expect(native.resize).not.toHaveBeenCalled();
 });

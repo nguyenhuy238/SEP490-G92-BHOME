@@ -1,3 +1,5 @@
+import { getUserFriendlyMessage } from '../../../../../../packages/client-core/src/api';
+import { TextField } from '../../../components/common/ValidatedForm';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import {
   Alert,
@@ -29,7 +31,6 @@ import {
   TableContainer,
   TableHead,
   TableRow,
-  TextField,
   Typography,
   useMediaQuery,
   useTheme,
@@ -85,7 +86,6 @@ import {
   formatBillingDecimal,
   invoiceError,
 } from '../../../../../../packages/client-core/src/invoices';
-import { ApiError } from '../../../../../../packages/client-core/src/api';
 import { suggestedLocationCode } from './locationCode';
 
 const steps = [
@@ -676,7 +676,7 @@ export function LocationSetupWizard({
   const [editingFeeKey, setEditingFeeKey] = useState('');
   const [editingRuleKey, setEditingRuleKey] = useState('');
   const [libraryEditor, setLibraryEditor] = useState<{
-    resource: SharedResource;
+    resource: Exclude<SharedResource, 'asset-templates'>;
     document: SharedDocument | null;
   } | null>(null);
   const [librarySaving, setLibrarySaving] = useState(false);
@@ -752,7 +752,10 @@ export function LocationSetupWizard({
     (library.data?.items[doc.resource] ?? []).some(
       (item) => item.id === id && item.familyId === doc.familyId,
     );
-  const librarySection: { resource: SharedResource; label: string } | null =
+  const librarySection: {
+    resource: Exclude<SharedResource, 'asset-templates'>;
+    label: string;
+  } | null =
     draft.step === 1
       ? { resource: 'room-type-templates', label: 'Thêm loại phòng mẫu' }
       : draft.step === 3
@@ -762,7 +765,10 @@ export function LocationSetupWizard({
           : draft.step === 5
             ? { resource: 'policy-templates', label: 'Thêm mẫu nội quy' }
             : null;
-  const openLibraryEditor = (resource: SharedResource, document: SharedDocument | null = null) => {
+  const openLibraryEditor = (
+    resource: Exclude<SharedResource, 'asset-templates'>,
+    document: SharedDocument | null = null,
+  ) => {
     setLibraryError('');
     setLibraryEditor({ resource, document });
   };
@@ -829,7 +835,10 @@ export function LocationSetupWizard({
       {!library.isFetching &&
         latestDocuments(library.data?.items[librarySection.resource] ?? [], 'Draft')
           .filter(
-            (doc) =>
+            (
+              doc,
+            ): doc is SharedDocument & { resource: Exclude<SharedResource, 'asset-templates'> } =>
+              doc.resource !== 'asset-templates' &&
               doc.status === 'Draft' &&
               (doc.resource !== 'asset-catalog' ||
                 assetCatalogSupportsScope(doc.data as AssetCatalogData, assetScope)) &&
@@ -1008,6 +1017,16 @@ export function LocationSetupWizard({
       draft.commonAssets.some((asset) => matchesCommonCatalog(asset, doc, sameFamily)),
     )
     .map((doc) => doc.id);
+  const floorRoomCounts = useMemo(() => {
+    const counts = Array.from({ length: draft.location.floors }, () => 0);
+    for (const room of draft.rooms) {
+      const index = Number(room.floor) - 1;
+      if (Number.isInteger(index) && index >= 0 && index < counts.length) counts[index]++;
+    }
+    return counts
+      .map((count, index) => ({ floor: index + 1, count, previousCount: counts[index - 1] ?? 0 }))
+      .filter((item) => item.floor > 1 && item.count > item.previousCount);
+  }, [draft.location.floors, draft.rooms]);
   const addCommonAsset = (id: string) => {
     const doc = commonCatalog.find((item) => item.id === id);
     if (!doc) return;
@@ -1144,7 +1163,7 @@ export function LocationSetupWizard({
           return {
             id: doc.id,
             name: doc.data.name,
-            detail: `${doc.data.defaults.capacity} người · ${doc.data.defaults.area ?? 'Chưa khai báo'} m² · ${linked ? `${linked.data.items.length} loại tài sản đi kèm` : 'Chưa gắn mẫu tài sản'}`,
+            detail: `${doc.data.defaults.capacity} người · ${doc.data.defaults.area ?? 'Chưa khai báo'} m² · ${linked ? `${linked.data.items.length} loại tài sản đi kèm` : 'Chưa có cấu hình tài sản đi kèm'}`,
           };
         }),
     },
@@ -1226,7 +1245,7 @@ export function LocationSetupWizard({
     );
     if (missingLinkedTemplate) {
       setError(
-        `Loại phòng ${missingLinkedTemplate.data.name} đang tham chiếu đến mẫu tài sản đã ngừng áp dụng. Hãy cập nhật cấu hình nguồn trước khi sao chép.`,
+        `Loại phòng ${missingLinkedTemplate.data.name} đang tham chiếu đến cấu hình tài sản cũ đã ngừng áp dụng. Hãy cập nhật cấu hình nguồn trước khi sao chép.`,
       );
       return;
     }
@@ -1385,13 +1404,7 @@ export function LocationSetupWizard({
       committed.current = true;
       sessionStorage.removeItem(storageKey);
     } catch (e) {
-      setError(
-        e instanceof ApiError
-          ? invoiceError(e)
-          : e instanceof Error
-            ? e.message
-            : 'Không thể hoàn tất thiết lập. Dữ liệu nháp được giữ để thử lại.',
-      );
+      setError(getUserFriendlyMessage(e));
     } finally {
       lock.current = false;
       setBusy(false);
@@ -1569,7 +1582,7 @@ export function LocationSetupWizard({
                       ({
                         'room-type-templates': 'mẫu phòng',
                         'asset-catalog': 'danh mục tài sản',
-                        'asset-templates': 'gói tài sản',
+                        'asset-templates': 'cấu hình tài sản theo loại phòng cũ',
                         'fee-templates': 'biểu phí',
                         'policy-templates': 'nội quy',
                       })[kind],
@@ -1867,24 +1880,6 @@ export function LocationSetupWizard({
             )}
             {draft.step === 1 && (
               <>
-                <Stack
-                  direction="row"
-                  sx={{
-                    justifyContent: 'space-between',
-                    alignItems: 'center',
-                    flexWrap: 'wrap',
-                    gap: 1,
-                  }}
-                >
-                  <Button
-                    sx={{ ml: 'auto' }}
-                    variant="contained"
-                    startIcon={<Plus size={16} />}
-                    onClick={() => setEditingType(newType())}
-                  >
-                    Thêm loại phòng
-                  </Button>
-                </Stack>
                 <Grid container spacing={2}>
                   <Grid size={{ xs: 12, md: 5 }}>
                     <SetupTemplatePicker
@@ -2065,6 +2060,22 @@ export function LocationSetupWizard({
                   onChange={(e) => patch({ rentEffectiveFrom: e.target.value })}
                   slotProps={{ inputLabel: { shrink: true }, htmlInput: { min: today() } }}
                 />{' '}
+                {!!floorRoomCounts.length && (
+                  <Alert severity="warning" variant="outlined">
+                    <Typography variant="subtitle2" sx={{ fontWeight: 700, mb: 0.25 }}>
+                      Cảnh báo phân bổ phòng theo tầng
+                    </Typography>
+                    {floorRoomCounts.map((item) => (
+                      <Typography key={item.floor} variant="body2">
+                        Tầng {item.floor} có {item.count} phòng, nhiều hơn tầng {item.floor - 1} (
+                        {item.previousCount} phòng).
+                      </Typography>
+                    ))}
+                    <Typography variant="caption" color="text.secondary">
+                      Đây chỉ là cảnh báo để kiểm tra lại sơ đồ thực tế; bạn vẫn có thể tiếp tục.
+                    </Typography>
+                  </Alert>
+                )}
                 <Stack
                   direction="row"
                   sx={{
@@ -2265,7 +2276,7 @@ export function LocationSetupWizard({
                             </Stack>
                             {assetType?.assetTemplateSourceName && (
                               <Alert severity="info" variant="outlined">
-                                Tài sản được sao chép cùng loại phòng từ mẫu{' '}
+                                Tài sản được sao chép cùng loại phòng từ cấu hình nguồn{' '}
                                 <strong>{assetType.assetTemplateSourceName}</strong>
                                 {assetType.assetTemplateSourceVersion
                                   ? ` · phiên bản ${assetType.assetTemplateSourceVersion}`

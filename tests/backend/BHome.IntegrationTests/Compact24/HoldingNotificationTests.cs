@@ -39,8 +39,10 @@ public sealed partial class Compact24NotificationMvpTests
             OccurredAt = DateTimeOffset.UtcNow
         });
         await db.SaveChangesAsync();
-        var publisher = scope.ServiceProvider.GetRequiredService<INotificationEventPublisher>();
-        await publisher.PublishPendingAsync(default); await publisher.PublishPendingAsync(default);
+        var events = scope.ServiceProvider.GetRequiredService<CompactNotificationEvents>();
+        await events.PublishOwnerSigningRequestsAsync(default);
+        await events.PublishOwnerSigningRequestsAsync(default);
+        await scope.ServiceProvider.GetRequiredService<INotificationEventPublisher>().PublishPendingAsync(default);
         var notice = Assert.Single(await db.Set<BHome.Domain.Notifications.UserNotification>().AsNoTracking()
             .Where(n => n.RelatedObjectId == contract.Id && n.EventType == eventType).ToArrayAsync());
         Assert.Equal(w.Owner.Id, notice.RecipientUserId); Assert.Equal("Owner", notice.AudienceRole);
@@ -57,7 +59,16 @@ public sealed partial class Compact24NotificationMvpTests
     [InlineData(true, false, false)]
     [InlineData(false, true, false)]
     [InlineData(false, false, true)]
-    public async Task HoldingActivationQueuesOneConfirmationToAcceptedInvitationEmailAndSmtpFailureDoesNotUndoHolding(bool smtpUnknown, bool corruptDocument, bool missingDocument)
+    public Task HoldingActivationQueuesOneConfirmationToAcceptedInvitationEmailAndSmtpFailureDoesNotUndoHolding(
+        bool smtpUnknown, bool corruptDocument, bool missingDocument) =>
+        HoldingConfirmationScenario(smtpUnknown, corruptDocument, missingDocument, false);
+
+    [CompactPostgresFact]
+    public Task ConvertedHoldingStillQueuesOneConfirmationThroughDedicatedDeliveryPass() =>
+        HoldingConfirmationScenario(false, false, false, true);
+
+    private async Task HoldingConfirmationScenario(
+        bool smtpUnknown, bool corruptDocument, bool missingDocument, bool converted)
     {
         var w = await Seed(); var probe = new SmtpProbe
         {
@@ -97,15 +108,31 @@ public sealed partial class Compact24NotificationMvpTests
                 Succeeded = true,
                 OccurredAt = now
             });
+            if (converted) c.Status = ContractStatus.Converted;
             await db.SaveChangesAsync();
-            var publisher = scope.ServiceProvider.GetRequiredService<INotificationEventPublisher>();
-            await publisher.PublishPendingAsync(default); await publisher.PublishPendingAsync(default);
+            if (!converted)
+            {
+                var publisher = scope.ServiceProvider.GetRequiredService<INotificationEventPublisher>();
+                await publisher.PublishPendingAsync(default);
+                await publisher.PublishPendingAsync(default);
+            }
+            else
+            {
+                // A converted Holding must still send with only the dedicated delivery pass.
+                var channels = scope.ServiceProvider.GetRequiredService<NotificationChannelWorker>();
+                var events = scope.ServiceProvider.GetRequiredService<CompactNotificationEvents>();
+                await channels.ProcessHoldingConfirmationsAsync(events, default);
+                await channels.ProcessHoldingConfirmationsAsync(events, default);
+            }
             delivery = Assert.Single(await db.Database.SqlQuery<Guid>($"SELECT id AS \"Value\" FROM notifications WHERE record_kind='OUTBOX' AND event_key={"holding-confirmed:" + id.ToString("N")}").ToArrayAsync());
-            var notice = Assert.Single(await db.Set<BHome.Domain.Notifications.UserNotification>().AsNoTracking()
-                .Where(n => n.RelatedObjectId == id && n.EventType == "HOLDING_ACTIVATED").ToArrayAsync());
-            Assert.Equal(w.Owner.Id, notice.RecipientUserId); Assert.Null(notice.ReadAt);
-            var target = await scope.ServiceProvider.GetRequiredService<INotificationRepository>().TargetAsync(new(w.Owner.Id, true, false, false, Today), notice.Id, default);
-            Assert.Equal(id, target!.ObjectId);
+            if (!converted)
+            {
+                var notice = Assert.Single(await db.Set<BHome.Domain.Notifications.UserNotification>().AsNoTracking()
+                    .Where(n => n.RelatedObjectId == id && n.EventType == "HOLDING_ACTIVATED").ToArrayAsync());
+                Assert.Equal(w.Owner.Id, notice.RecipientUserId); Assert.Null(notice.ReadAt);
+                var target = await scope.ServiceProvider.GetRequiredService<INotificationRepository>().TargetAsync(new(w.Owner.Id, true, false, false, Today), notice.Id, default);
+                Assert.Equal(id, target!.ObjectId);
+            }
         }
         await SendEmail(host, delivery); await SendEmail(host, delivery);
         if (!corruptDocument && !missingDocument)
@@ -116,6 +143,7 @@ public sealed partial class Compact24NotificationMvpTests
             Assert.Equal("BHOME – Xác nhận giữ chỗ thành công", email.Title);
             Assert.Contains("1.000.000", email.Body); Assert.Contains(id.ToString("D"), email.Body);
             Assert.Equal(2, email.Attachments!.Count);
+            if (converted) Assert.Contains("Đã chuyển sang hợp đồng thuê", email.Body);
             Assert.Equal("%PDF-1.7 SYNTHETIC BOTH SIGNED"u8.ToArray(), email.Attachments[0].Content);
             Assert.All(email.Attachments, a => Assert.Equal("application/pdf", a.ContentType));
             using var receipt = new iText.Kernel.Pdf.PdfDocument(new iText.Kernel.Pdf.PdfReader(new MemoryStream(email.Attachments[1].Content)));
@@ -136,7 +164,8 @@ public sealed partial class Compact24NotificationMvpTests
         var state = await data.Database.SqlQuery<string>($"SELECT delivery_status AS \"Value\" FROM notifications WHERE id={delivery}").SingleAsync();
         Assert.Equal(corruptDocument ? "PermanentlyFailed" : missingDocument ? "Pending" : smtpUnknown ? "PendingReview" : "Sent", state);
         var held = await data.Set<Contract>().Include(c => c.Room).SingleAsync(c => c.Id == id);
-        Assert.Equal(ContractStatus.Active, held.Status); Assert.Equal(RoomStatus.OnHold, held.Room.Status);
+        Assert.Equal(converted ? ContractStatus.Converted : ContractStatus.Active, held.Status);
+        Assert.Equal(RoomStatus.OnHold, held.Room.Status);
     }
 
     private static async Task<Contract> AddSyntheticHolding(Compact24DbContext db, Workspace w, bool active, IObjectStorage? storage = null)

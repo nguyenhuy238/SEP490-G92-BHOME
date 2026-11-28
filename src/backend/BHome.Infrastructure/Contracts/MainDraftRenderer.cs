@@ -3,14 +3,19 @@ using System.IO.Compression;
 using System.Xml.Linq;
 using BHome.Application.Contracts;
 using Microsoft.Extensions.Configuration;
-using Microsoft.Extensions.Hosting;
 
 namespace BHome.Infrastructure.Contracts;
 
 // Edit paragraph slots in the supplied OOXML package. All untouched clauses, styles and relationships survive.
-internal sealed class MainDraftRenderer(IConfiguration configuration, TimeProvider clock, IHostEnvironment? environment = null) : IMainDraftRenderer
+internal sealed class MainDraftRenderer(IConfiguration configuration, TimeProvider clock) : IMainDraftRenderer
 {
-    public bool SigningReviewAvailable => environment is not null && (environment.IsDevelopment() || environment.IsEnvironment("Testing"));
+    public bool SigningReviewAvailable => true;
+    public bool CanUseSigningReview(BHome.Domain.TenantContracts.Contract contract) => true;
+
+    // Live documents use the supplied template without an environment/hash approval gate.
+    public bool IsProductionSigningTemplate(BHome.Domain.TenantContracts.Contract contract) =>
+        !contract.IsDevelopmentDemo && !ContractPaymentModes.IsTest(contract);
+    public int DocumentVersion => 4;
     public string TemplateHash
     {
         get { using var stream = typeof(MainDraftRenderer).Assembly.GetManifestResourceStream("BHome.Contracts.main-tenancy-original.docx") ?? throw new ContractException(503, "contract_template_not_found"); return Convert.ToHexString(System.Security.Cryptography.SHA256.HashData(stream)); }
@@ -18,7 +23,7 @@ internal sealed class MainDraftRenderer(IConfiguration configuration, TimeProvid
     private static readonly XNamespace W = "http://schemas.openxmlformats.org/wordprocessingml/2006/main";
     private static string Date(DateOnly d) => d.ToString("dd/MM/yyyy", CultureInfo.InvariantCulture);
     private static string Money(decimal value) => value.ToString("#,0.####", CultureInfo.GetCultureInfo("vi-VN"));
-    private static void Text(XElement p, string value)
+    internal static void Text(XElement p, string value)
     {
         var properties = p.Element(W + "pPr"); var runProperties = p.Elements(W + "r").Select(r => r.Element(W + "rPr")).FirstOrDefault(r => r is not null);
         p.Elements().Where(e => e != properties).Remove();
@@ -48,13 +53,7 @@ internal sealed class MainDraftRenderer(IConfiguration configuration, TimeProvid
                 string? replacement = null;
                 if (original.StartsWith("ĐẠI DIỆN BÊN B") && original.Contains("ĐẠI DIỆN BÊN A"))
                 {
-                    var signatureFont = p.Elements(W + "r").Select(r => r.Element(W + "rPr")).FirstOrDefault(r => r is not null);
-                    XElement Cell(string title) => new(W + "tc", new XElement(W + "tcPr", new XElement(W + "tcW", new XAttribute(W + "w", "2500"), new XAttribute(W + "type", "pct"))),
-                        new XElement(W + "p", new XElement(W + "pPr", new XElement(W + "jc", new XAttribute(W + "val", "center")), new XElement(W + "keepNext")),
-                            new XElement(W + "r", signatureFont is null ? new XElement(W + "rPr", new XElement(W + "rFonts", new XAttribute(W + "ascii", "Times New Roman"), new XAttribute(W + "hAnsi", "Times New Roman"))) : new XElement(signatureFont), new XElement(W + "t", title))));
-                    var table = new XElement(W + "tbl", new XElement(W + "tblPr", new XElement(W + "tblW", new XAttribute(W + "w", "5000"), new XAttribute(W + "type", "pct"))),
-                        new XElement(W + "tr", new XElement(W + "trPr", new XElement(W + "cantSplit")), Cell("ĐẠI DIỆN BÊN B"), Cell("ĐẠI DIỆN BÊN A")),
-                        new XElement(W + "tr", new XElement(W + "trPr", new XElement(W + "cantSplit"), new XElement(W + "trHeight", new XAttribute(W + "val", "2800"), new XAttribute(W + "hRule", "atLeast"))), Cell(""), Cell("")));
+                    var table = ContractDocxLayout.SignatureTable("ĐẠI DIỆN BÊN B", "ĐẠI DIỆN BÊN A");
                     p.ReplaceWith(table);
                     table.ElementsAfterSelf().TakeWhile(e => e.Name == W + "p" && !e.Descendants(W + "sectPr").Any() &&
                         string.IsNullOrWhiteSpace(string.Concat(e.Descendants(W + "t").Select(n => n.Value)))).ToArray().Remove();
@@ -79,7 +78,7 @@ internal sealed class MainDraftRenderer(IConfiguration configuration, TimeProvid
                 else if (original.Contains('…') || original.Contains("....") || original.Contains("{{")) throw new ContractException(503, "contract_template_slots_changed");
                 if (original == "TRÁCH NHIỆM CỦA CÁC BÊN")
                 {
-                    var extra = charges.Where(c => c.ChargeCode is not ("RENT" or "ELECTRICITY" or "WATER")).Select(c => $"{c.Name}: {Money(c.Rate)} đ/{(c.Method == BHome.Domain.PropertyManagement.ChargingMethod.FixedPerPersonPerMonth ? "người" : "phòng")}/tháng.");
+                    var extra = charges.Where(c => c.ChargeCode is not ("RENT" or "ELECTRICITY" or "WATER")).Select(c => $"{c.Name}: {Money(c.Rate)} đ/{(c.Method == BHome.Domain.PropertyManagement.ChargingMethod.FixedPerPersonPerMonth ? "người/tháng (tính theo sức chứa phòng)" : "phòng/tháng")}.");
                     var occupants = data.Occupants is { Length: > 0 } ? "Thành viên cùng ở: " + string.Join(", ", data.Occupants) : "";
                     var terms = System.Text.RegularExpressions.Regex.Replace(data.Contract.Terms,
                         @"(?m)^NỘI QUY ĐƯỢC THỎA THUẬN [0-9a-fA-F-]{36} / phiên bản [0-9]+ / SHA256 [a-fA-F0-9]{64}\r?\n", "");
@@ -94,7 +93,8 @@ internal sealed class MainDraftRenderer(IConfiguration configuration, TimeProvid
                         p.AddBeforeSelf(extraParagraph);
                     }
                 }
-                if (original == "HỢP ĐỒNG THUÊ PHÒNG TRỌ" && (!data.SigningReview || data.Contract.IsDevelopmentDemo))
+                if (original == "HỢP ĐỒNG THUÊ PHÒNG TRỌ" &&
+                    !data.SigningReview)
                 {
                     var notice = new XElement(p);
                     Text(notice, data.SigningReview ? "TÀI LIỆU KIỂM THỬ – MẪU CHƯA ĐƯỢC DUYỆT CHO PRODUCTION" : $"BẢN NHÁP – {data.Contract.Id}");
@@ -102,16 +102,20 @@ internal sealed class MainDraftRenderer(IConfiguration configuration, TimeProvid
                 }
             }
             if (mapped != 16) throw new ContractException(503, "contract_template_slots_changed");
+            ContractDocxLayout.Apply(xml);
             using var stream = entry.Open(); stream.SetLength(0); xml.Save(stream, SaveOptions.DisableFormatting);
         }
         return Task.FromResult(output.ToArray());
     }
     public async Task<byte[]> PdfAsync(byte[] docx, CancellationToken t)
+        => MainTemplateSignatureSlots.Add(await ConvertPdfAsync(configuration, docx, t));
+
+    internal static async Task<byte[]> ConvertPdfAsync(IConfiguration configuration, byte[] docx, CancellationToken t)
     {
         var bytes = await PrivateContractConversion.RunAsync(configuration, docx, "draft.docx", "draft.pdf",
             configuration["MainDraft:LibreOfficePath"], null,
             ["-env:UserInstallation={profile}", "--headless", "--convert-to", "pdf", "--outdir", "{work}", "{work}/draft.docx"], t);
         if (!bytes.AsSpan(0, 5).SequenceEqual("%PDF-"u8)) throw new ContractException(503, "contract_pdf_conversion_failed");
-        return MainTemplateSignatureSlots.Add(bytes);
+        return bytes;
     }
 }

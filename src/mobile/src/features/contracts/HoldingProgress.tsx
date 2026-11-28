@@ -4,8 +4,12 @@ import { Button, ProgressBar, Text } from 'react-native-paper';
 import { holdingSteps as allHoldingSteps } from './holdingSteps';
 
 export function HoldingProgress({ current: sourceStep }: { current: number }) {
-  const holdingSteps = allHoldingSteps.filter((step) => step.key !== 'applicant');
-  const current = sourceStep > 1 ? sourceStep - 1 : sourceStep;
+  const holdingSteps = allHoldingSteps;
+  // Flow stages retain their existing IDs; the separate applicant-details stage is skipped.
+  const current = Math.max(
+    0,
+    Math.min(sourceStep > 0 ? sourceStep - 1 : 0, holdingSteps.length - 1),
+  );
   const [expanded, setExpanded] = useState(false);
   const step = holdingSteps[current];
   return (

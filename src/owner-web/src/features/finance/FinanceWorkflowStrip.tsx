@@ -1,6 +1,7 @@
 import { Box, Button, Stack, Tab, Tabs, Typography } from '@mui/material';
 import { ArrowRight, Info } from 'lucide-react';
 import { Link as RouterLink } from 'react-router';
+import { scopedFinancePath, useFinanceSearch } from './financeScope';
 
 const financeWorkspaces = [
   {
@@ -26,7 +27,7 @@ const financeWorkspaces = [
     tabs: [
       { path: '/reports', label: 'Báo cáo' },
       { path: '/expenses', label: 'Chi phí & đầu tư' },
-      { path: '/what-if', label: 'Kịch bản What-if' },
+      { path: '/what-if', label: 'Kịch bản' },
     ],
   },
 ] as const;
@@ -82,30 +83,13 @@ const guidance: Record<string, { purpose: string; next: string; nextPath: string
       next: 'Đối soát giao dịch',
       nextPath: '/payments',
     },
-    '/expenses': {
-      purpose: 'Ghi nhận, quản lý khoản đầu tư và chi phí thực tế theo phạm vi.',
-      note: 'Ghi chi phí khác với xác nhận khoản tiền khách thuê đã thanh toán.',
-      next: 'Xem báo cáo kinh doanh',
-      nextPath: '/reports',
-    },
-    '/reports': {
-      purpose: 'Chọn cơ sở và kỳ, sau đó bấm Xem báo cáo để tải kết quả kinh doanh.',
-      note: 'Số liệu đang hiển thị thuộc bộ lọc đã tải, không tự đổi khi đang sửa bộ lọc.',
-      next: 'Thử kịch bản What-if',
-      nextPath: '/what-if',
-    },
-    '/what-if': {
-      purpose: 'Thử các giả định về giá, lấp đầy và chi phí để so sánh kết quả.',
-      note: 'Phân tích tạo kết quả thử; Lưu kịch bản để xem lại. Không thay đổi sổ tài chính thực tế.',
-      next: 'Về báo cáo thực tế',
-      nextPath: '/reports',
-    },
   };
 
 const matchesPath = (pathname: string, path: string) =>
   pathname === path || pathname.startsWith(`${path}/`);
 
 export function FinanceWorkflowStrip({ pathname }: { pathname: string }) {
+  const locationId = useFinanceSearch().get('locationId');
   const workspace = financeWorkspaces.find(({ tabs }) =>
     tabs.some((tab) => matchesPath(pathname, tab.path)),
   );
@@ -172,7 +156,11 @@ export function FinanceWorkflowStrip({ pathname }: { pathname: string }) {
             <Tab
               key={tab.path}
               component={RouterLink}
-              to={tab.path}
+              to={
+                workspace.label === 'Chi phí & báo cáo'
+                  ? scopedFinancePath(tab.path, locationId)
+                  : tab.path
+              }
               value={tab.path}
               label={tab.label}
               aria-current={activeTab?.path === tab.path ? 'page' : undefined}

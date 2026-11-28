@@ -43,6 +43,7 @@ const mockScope = vi.hoisted(() => ({
 const mockWorkspace = vi.hoisted(() => ({
   go: vi.fn(),
   preview: false,
+  staffLocationId: 'loc-1',
   requestNavigation: (action: () => void) => action(),
 }));
 
@@ -174,6 +175,7 @@ describe('Staff resident directory', () => {
   beforeEach(() => {
     vi.clearAllMocks();
     route.params = {};
+    mockWorkspace.staffLocationId = 'loc-1';
     mockScope.loading = false;
     mockScope.error = '';
     mockScope.location = 'loc-1';
@@ -209,9 +211,19 @@ describe('Staff resident directory', () => {
   });
   afterEach(cleanup);
 
+  it('opens contract actions from the assigned rooms screen', () => {
+    render(<RoomOverview />);
+    fireEvent.click(screen.getByText('Hợp đồng thuê'));
+    expect(mockWorkspace.go).toHaveBeenLastCalledWith('signing');
+    fireEvent.click(screen.getByText('Tạo hợp đồng thuê'));
+    expect(mockWorkspace.go).toHaveBeenLastCalledWith('onboarding');
+    fireEvent.click(screen.getByText('Tạo hợp đồng giữ chỗ'));
+    expect(mockWorkspace.go).toHaveBeenLastCalledWith('prepare-contract', { kind: 'Holding' });
+  });
+
   it('shows counts with units and compact rooms without individual residents', () => {
     render(<RoomOverview />);
-    expect(screen.getByText('Phòng & Cư dân')).toBeTruthy();
+    expect(screen.getByText('Phòng được phân công')).toBeTruthy();
     expect(screen.getByText('cư dân chờ xác minh')).toBeTruthy();
     expect(screen.getByLabelText('Phòng 101, 2 cư dân, 1 chờ xác minh')).toBeTruthy();
     expect(screen.queryByText('Nguyễn Văn An')).toBeNull();
@@ -284,6 +296,13 @@ describe('Staff resident directory', () => {
     expect(mockWorkspace.go).toHaveBeenCalledWith('onboarding', { locationId: 'loc-1' });
     fireEvent.click(screen.getByLabelText('Cơ sở Cơ sở 2'));
     expect(mockScope.selectLocation).toHaveBeenCalledWith('loc-2');
+  });
+  it('hides the duplicate location only when it matches the workspace header', () => {
+    const view = render(<RoomOverview />);
+    expect(screen.queryByText('BHOME SAMPLE 1')).toBeNull();
+    mockWorkspace.staffLocationId = '';
+    view.rerender(<RoomOverview />);
+    expect(screen.getByText('BHOME SAMPLE 1')).toBeTruthy();
   });
   it('hides data on loading or API failure and provides retry', () => {
     mockScope.loading = true;

@@ -3,7 +3,7 @@ using BHome.Application.Storage;
 using BHome.Infrastructure.Storage;
 using DotNet.Testcontainers.Builders;
 using DotNet.Testcontainers.Containers;
-using Microsoft.Extensions.Logging.Abstractions;
+using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
 using Minio;
 using Minio.DataModel.Args;
@@ -16,6 +16,7 @@ public sealed class MinioStorageRegressionTests : IAsyncLifetime
     private readonly string password = Convert.ToBase64String(System.Security.Cryptography.RandomNumberGenerator.GetBytes(32));
     private IContainer container = null!;
     private MinioObjectStorage storage = null!;
+    private readonly StorageLog logger = new();
     public async Task InitializeAsync()
     {
         container = new ContainerBuilder("bhome/minio-local:2025-10-15")
@@ -27,9 +28,13 @@ public sealed class MinioStorageRegressionTests : IAsyncLifetime
         using var client = new MinioClient().WithEndpoint(endpoint).WithCredentials("synthetic-test", password).Build();
         await client.MakeBucketAsync(new MakeBucketArgs().WithBucket("storage-regression"));
         storage = new(Options.Create(new ObjectStorageOptions
-        { Endpoint = endpoint, AccessKey = "synthetic-test", SecretKey = password, Bucket = "storage-regression", UseSsl = false }), NullLogger<MinioObjectStorage>.Instance);
+        { Endpoint = endpoint, AccessKey = "synthetic-test", SecretKey = password, Bucket = "storage-regression", UseSsl = false }), logger);
     }
-    public Task DisposeAsync() => container.DisposeAsync().AsTask();
+    public async Task DisposeAsync()
+    {
+        storage?.Dispose();
+        await container.DisposeAsync();
+    }
 
     [Fact]
     public async Task PrivateBytesRoundTripAndMissingObjectIsExplicit()
@@ -46,6 +51,23 @@ public sealed class MinioStorageRegressionTests : IAsyncLifetime
     }
 
     [Fact]
+    public async Task SharedClientSupportsConcurrentPrivateReads()
+    {
+        var bytes = System.Security.Cryptography.RandomNumberGenerator.GetBytes(128 * 1024);
+        using var input = new MemoryStream(bytes);
+        await storage.PutAsync("concurrent-private.jpg", input, bytes.Length, "image/jpeg", default);
+
+        var downloads = await Task.WhenAll(Enumerable.Range(0, 8).Select(async _ =>
+        {
+            using var output = new MemoryStream();
+            await storage.CopyToAsync("concurrent-private.jpg", output, default);
+            return output.ToArray();
+        }));
+
+        Assert.All(downloads, downloaded => Assert.Equal(bytes, downloaded));
+    }
+
+    [Fact]
     public async Task OfflineStorageCannotReportSuccessfulUploadOrEmptyDownload()
     {
         await container.StopAsync();
@@ -54,5 +76,24 @@ public sealed class MinioStorageRegressionTests : IAsyncLifetime
         await Assert.ThrowsAsync<IntegrationUnavailableException>(() => storage.PutAsync("offline.pdf", input, input.Length, "application/pdf", default));
         await Assert.ThrowsAsync<IntegrationUnavailableException>(() => storage.CopyToAsync("offline.pdf", output, default));
         Assert.Equal(0, output.Length);
+        Assert.Contains(logger.Messages, message => message.StartsWith("Object storage upload", StringComparison.Ordinal));
+        Assert.All(logger.Messages, message =>
+        {
+            Assert.DoesNotContain(password, message);
+            Assert.DoesNotContain("offline.pdf", message);
+            Assert.DoesNotContain("synthetic-test", message);
+        });
+    }
+
+    private sealed class StorageLog : ILogger<MinioObjectStorage>
+    {
+        public List<string> Messages { get; } = [];
+        public IDisposable? BeginScope<TState>(TState state) where TState : notnull => null;
+        public bool IsEnabled(LogLevel logLevel) => true;
+        public void Log<TState>(LogLevel level, EventId id, TState state, Exception? exception, Func<TState, Exception?, string> formatter)
+        {
+            Assert.Null(exception);
+            Messages.Add(formatter(state, exception));
+        }
     }
 }

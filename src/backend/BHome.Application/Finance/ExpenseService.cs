@@ -21,12 +21,12 @@ public sealed record BulkInvestmentItem(string Category,
 public sealed record BulkInvestmentInput(Guid LocationId, DateOnly OccurredOn, BulkInvestmentItem[] Items);
 public sealed record ExpenseFilter(Guid? LocationId = null, DateOnly? From = null, DateOnly? To = null,
     string? ExpenseType = null, string? Category = null, int Page = 1, int PageSize = 25,
-    bool OnlyOtherInvestments = false);
+    bool OnlyOtherInvestments = false, Guid? RoomId = null, bool IncludeTotalAmount = false);
 public sealed record ExpenseView(Guid Id, Guid LocationId, Guid? RoomId, string ExpenseType, string Category,
     [property: JsonNumberHandling(JsonNumberHandling.AllowReadingFromString | JsonNumberHandling.WriteAsString)] decimal Amount,
     DateOnly OccurredOn, string Note, int Version, bool CanEdit, Guid? AssetId = null, Guid? TaskId = null,
     string? AssetName = null, string? TaskTitle = null);
-public sealed record ExpensePage(IReadOnlyList<ExpenseView> Items, long Total, int Page, int PageSize);
+public sealed record ExpensePage(IReadOnlyList<ExpenseView> Items, long Total, int Page, int PageSize, string? TotalAmount = null);
 public sealed record ExpenseReference(Guid Id, string Label, Guid? RoomId = null, Guid? AssetId = null);
 public sealed record ExpenseReferences(IReadOnlyList<ExpenseReference> Rooms, IReadOnlyList<ExpenseReference> Assets,
     IReadOnlyList<ExpenseReference> WorkOrders, bool Truncated);
@@ -63,7 +63,7 @@ public sealed class ExpenseService(IExpenseRepository repository, ICurrentUser u
     {
         _ = Owner();
         if (filter.Page < 1 || filter.PageSize is < 1 or > 100 || (long)(filter.Page - 1) * filter.PageSize > int.MaxValue || filter.From > filter.To || filter.LocationId == Guid.Empty ||
-            filter.ExpenseType is not (null or "INITIAL_INVESTMENT" or "OPERATING") || filter.Category?.Length > 60)
+            filter.RoomId == Guid.Empty || filter.ExpenseType is not (null or "INITIAL_INVESTMENT" or "OPERATING") || filter.Category?.Length > 60)
             throw new FinanceException(400, "invalid_finance_filter");
         return repository.ListAsync(filter, token);
     }

@@ -108,13 +108,34 @@ public sealed partial class Compact24NotificationMvpTests
             Assert.Equal(3, tenantNotices.Length); Assert.Equal(3, tenantNotices.Select(n => n.RecipientUserId).Distinct().Count());
             Assert.All(tenantNotices, n => Assert.Contains("EMAIL", n.Channels));
         }
-        await scope.ServiceProvider.GetRequiredService<NotificationChannelWorker>().EnqueueDueAsync(default);
+        var worker = scope.ServiceProvider.GetRequiredService<NotificationChannelWorker>();
+        await worker.ProcessPendingAsync(default, businessEmailOnly: true);
+        Assert.Equal(3, probe.Messages.Count);
+        Assert.All(probe.Messages, message => Assert.Equal("INVOICE_FULLY_PAID", message.EventType));
+        await worker.EnqueueDueAsync(default);
         foreach (var notice in notices.Where(n => n.AudienceRole == "Tenant" && n.EventType != "INVOICE_OVERDUE"))
         {
             var delivery = await data.Database.SqlQuery<Guid>($"SELECT id AS \"Value\" FROM notifications WHERE event_key={"channel:" + notice.Id + ":EMAIL"}").SingleAsync();
             await SendEmail(host, delivery);
         }
         Assert.Equal(9, probe.Messages.Count);
+        var partialEmails = probe.Messages.Where(m => m.EventType == "PAYMENT_PARTIALLY_CONFIRMED").ToArray();
+        Assert.Equal(3, partialEmails.Length);
+        Assert.All(partialEmails, message =>
+        {
+            Assert.Contains(20000m.ToString("N0"), message.Body);
+            Assert.Contains(80000m.ToString("N0"), message.Body);
+        });
+        var paidEmails = probe.Messages.Where(message => message.EventType == "INVOICE_FULLY_PAID").ToArray();
+        Assert.Equal(3, paidEmails.Length);
+        Assert.All(paidEmails, message =>
+        {
+            var attachment = Assert.Single(message.Attachments!);
+            Assert.Equal("application/pdf", attachment.ContentType);
+            Assert.StartsWith("Hoa-don-", attachment.FileName);
+        });
+        Assert.Empty(await scope.ServiceProvider.GetRequiredService<NotificationEmailContent>()
+            .PaidInvoiceAttachmentsAsync(invoice.Id, other.Tenants[0].Id, default));
         Assert.All(probe.Messages, message =>
         {
             Assert.Contains("Phòng: NOT-101", message.Body); Assert.Contains("Cơ sở: Synthetic notification location", message.Body);
@@ -145,12 +166,16 @@ public sealed partial class Compact24NotificationMvpTests
     {
         public ChannelDeliveryException? Failure;
         public bool Available = true;
-        public List<ChannelMessage> Messages { get; } = [];
+        private readonly List<ChannelMessage> messages = [];
+        public IReadOnlyList<ChannelMessage> Messages
+        {
+            get { lock (messages) return messages.ToArray(); }
+        }
         public bool IsConfigured(string channel) => Available && channel == "EMAIL";
         public bool SupportsIdempotency(string channel) => false;
         public Task<string> SendAsync(ChannelMessage message, CancellationToken t)
         {
-            lock (Messages) Messages.Add(message);
+            lock (messages) messages.Add(message);
             return Failure is null ? Task.FromResult("smtp-accepted:synthetic") : Task.FromException<string>(Failure);
         }
     }
@@ -169,8 +194,8 @@ public sealed partial class Compact24NotificationMvpTests
             ["Email:AppPassword"] = "SYNTHETIC_TEST_SECRET",
             ["Email:AllowedRecipients:0"] = "configured@example.invalid",
             ["Deployment:Environment"] = environment,
-            ["Deployment:OwnerOrigin"] = environment == "Production" ? "https://owner.example.invalid" : null,
-            ["Deployment:ApiOrigin"] = environment == "Production" ? "https://api.example.invalid" : null,
+            ["Deployment:OwnerOrigin"] = environment is "Staging" or "Production" ? "https://owner.example.invalid" : null,
+            ["Deployment:ApiOrigin"] = environment is "Staging" or "Production" ? "https://api.example.invalid" : null,
             ["AllowedHosts"] = "localhost;owner.example.invalid;api.example.invalid",
             ["SePay:Mode"] = environment == "Production" ? "Live" : "Test",
             ["Email:TestRecipient"] = "configured@example.invalid"

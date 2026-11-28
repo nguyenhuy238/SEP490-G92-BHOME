@@ -153,6 +153,7 @@ export function adjustmentError(error: unknown) {
       ? { status: error.status, code: error.problem?.code }
       : (error as { status?: number; code?: string });
   const labels: Record<string, string> = {
+    adjustment_invoice_paid: 'Hóa đơn đã thanh toán đủ, không thể gửi yêu cầu điều chỉnh mới.',
     adjustment_invoice_changed:
       'Hóa đơn hoặc số dư đã thay đổi. Tải lại, kiểm tra và xác nhận lại.',
     adjustment_already_decided: 'Yêu cầu đã được xử lý. Tải lại để xem kết quả.',

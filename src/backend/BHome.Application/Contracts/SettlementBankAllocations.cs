@@ -17,13 +17,60 @@ public sealed partial class SettlementReceivablesService
     public async Task<SettlementTransferInstructions> TransferInstructionsAsync(Guid id, Guid chargeId, CancellationToken token)
     {
         var view = await GetAsync(id, token);
+        var locationId = await repository.LocationAsync(id, token);
+        if (paymentConnections is not null) await paymentConnections.ApplyLocationAsync(locationId, token);
         var balance = view.Receivables.SingleOrDefault(r => r.Charge.Id == chargeId) ?? throw ContractException.Missing();
         if (payments is null) throw new ContractException(503, "settlement_bank_allocation_unavailable");
-        var account = await payments.ReceivingAccountAsync(await repository.LocationAsync(id, token), token);
+        // A fully settled obligation must never display a new payable QR,
+        // including after a verified SePay webhook or an Owner bank allocation.
+        if (balance.Outstanding <= 0)
+            return new(id, chargeId, "Settled", null, null, null, 0, "", null,
+                balance.Charge.IsDevelopmentDemo);
+        var proposal = await repository.LatestProposalAsync(id, token);
+        MoveOutProposalSettlement? accepted = null;
+        if (proposal is not null)
+        {
+            var answer = await repository.ProposalFeedbackAsync(id, proposal.Id, token);
+            if (answer?.Confirmed != true)
+                return new(id, chargeId, "TenantConfirmationRequired", null, null, null,
+                    balance.Outstanding, "", null, balance.Charge.IsDevelopmentDemo);
+            accepted = answer.Settlement;
+            if (accepted is null || !MoveOutProposalSettlementRules.IsQuotedPayable(accepted, chargeId) ||
+                !MatchesAcceptedPhysical(proposal, answer, await repository.ProposalSourceAsync(id, token)))
+                return new(id, chargeId, "OwnerFinancialReviewRequired", null, null, null,
+                    balance.Outstanding, "", null, balance.Charge.IsDevelopmentDemo);
+        }
+        // Deposits must be applied before exposing a payable amount; otherwise
+        // a bank transfer would collect money that the verified deposit covers.
+        var context = await repository.ContextAsync(id, token);
+        if (proposal is not null && (context.View.AvailableDeposit > 0 ||
+            context.View.Receivables.Any(r => r.Outstanding > 0 &&
+                (accepted is null || !MoveOutProposalSettlementRules.IsQuotedPayable(accepted, r.Charge.Id))) ||
+            context.View.Invoices?.Any(i => i.Outstanding > 0) == true))
+            return new(id, chargeId, "DepositAllocationRequired", null, null, null,
+                balance.Outstanding, "", null, balance.Charge.IsDevelopmentDemo);
+        // Never present a generic VietQR as an automatically reconciled SePay
+        // payment for a Tenant-accepted move-out settlement if the provider or
+        // immutable scoped payment-code registry is disabled.
+        if (proposal is not null && (sepay?.Enabled != true || paymentCodes is null))
+            return new(id, chargeId, "AutomaticPaymentUnavailable", null, null, null,
+                balance.Outstanding, "", null, balance.Charge.IsDevelopmentDemo);
+        var payableMode = balance.Charge.IsDevelopmentDemo ? "Test" : "Live";
+        var account = paymentCodes is null ? await payments.ReceivingAccountForModeAsync(locationId, payableMode, token) :
+            await paymentCodes.AccountAsync("Settlement", chargeId, locationId, token) ?? await payments.ReceivingAccountForModeAsync(locationId, payableMode, token);
         var reference = PaymentRules.InvoiceReference(chargeId);
         var available = balance.Outstanding <= 0 ? "Settled" : account is null || !account.Enabled ||
-            account.IsDevelopmentDemo != balance.Charge.IsDevelopmentDemo || account.IsDevelopmentDemo && mode?.AllowDevelopmentDemo != true ? "ReceivingAccountUnavailable" : "Available";
+            account.IsDevelopmentDemo != balance.Charge.IsDevelopmentDemo || account.IsDevelopmentDemo && mode?.AllowDevelopmentDemo != true && mode?.AllowSandboxReceivingAccounts != true ? "ReceivingAccountUnavailable" : "Available";
         if (available != "Available") return new(id, chargeId, available, null, null, null, balance.Outstanding, reference, null, false);
+        if (sepay?.Enabled == true && paymentCodes is not null)
+        {
+            if (!sepay.For(payableMode).Enabled ||
+                !sepay.For(payableMode).Matches(locationId, account!))
+                return new(id, chargeId, "ReceivingAccountUnavailable", null, null, null,
+                    balance.Outstanding, "", null, balance.Charge.IsDevelopmentDemo);
+            reference = await paymentCodes.IssueAsync("Settlement", chargeId, locationId, token)
+                ?? throw new ContractException(503, "payment_code_generation_unavailable");
+        }
         var image = qr?.Generate(account!.BankIdentifier, account.AccountNumber, balance.Outstanding, reference)?.PngDataUri;
         return new(id, chargeId, image is null ? "InstructionsOnly" : "Available", account!.BankIdentifier, account.AccountNumber, account.AccountHolder,
             balance.Outstanding, reference, image, account.IsDevelopmentDemo);
@@ -40,7 +87,7 @@ public sealed partial class SettlementReceivablesService
             var previous = await repository.BankOperationAsync(Actor, key, token);
             if (previous is not null)
             {
-                if (previous.IsDevelopmentDemo && mode?.AllowDevelopmentDemo != true) throw ContractException.Conflict("development_payment_unavailable");
+                if (previous.IsDevelopmentDemo && mode?.AllowDevelopmentDemo != true && mode?.AllowSandboxReceivingAccounts != true) throw ContractException.Conflict("development_payment_unavailable");
                 if (previous.ContractId != id || previous.Fingerprint != fingerprint) throw ContractException.Conflict("settlement_idempotency_conflict");
                 return previous;
             }
@@ -49,7 +96,7 @@ public sealed partial class SettlementReceivablesService
             var balance = context.View.Receivables.SingleOrDefault(r => r.Charge.Id == chargeId) ?? throw ContractException.Missing();
             var transfer = await payments.TransferAsync(input.TransferId, token) ?? throw ContractException.Missing();
             if (input.PaidByUserId is not null && await payments.ExternalPayerRecordedAsync(transfer.Id, token)) throw ContractException.Conflict("receipt_payer_already_external");
-            if ((context.IsDevelopmentDemo || transfer.IsDevelopmentDemo) && mode?.AllowDevelopmentDemo != true || transfer.IsDevelopmentDemo && !context.IsDevelopmentDemo)
+            if (transfer.IsDevelopmentDemo && transfer.VerificationSource != "SePayTest" && mode?.AllowDevelopmentDemo != true)
                 throw ContractException.Conflict("development_payment_unavailable");
             if (input.PaidByUserId is { } payer && !balance.Charge.RecipientUserIds.Contains(payer)) throw ContractException.Invalid("payer_not_settlement_recipient");
             var allocated = await payments.AllocationAsync(input.TransferId, token);
@@ -66,9 +113,11 @@ public sealed partial class SettlementReceivablesService
             var latest = await payments.LatestReviewAsync(transfer.Id, token);
             if (latest?.Decision is "ExcessRefundPending" or "ExcessRefundCompleted") throw ContractException.Conflict("receipt_excess_already_confirmed");
             if (latest?.Decision == "Rejected") throw ContractException.Conflict("bank_transfer_rejected");
+            var validTransferReference = string.Equals(transfer.TransferDescription.Trim(), PaymentRules.InvoiceReference(chargeId), StringComparison.OrdinalIgnoreCase) ||
+                paymentCodes is not null && await paymentCodes.MatchesAsync("Settlement", chargeId, transfer.TransferDescription, token);
             var reason = await payments.ReferenceClaimedAsync(transfer.NormalizedReference, token) ? "bank_reference_already_credited" :
                 balance.Outstanding <= 0 ? "settlement_already_paid" :
-                !string.Equals(transfer.TransferDescription.Trim(), PaymentRules.InvoiceReference(chargeId), StringComparison.OrdinalIgnoreCase) ? "settlement_transfer_reference_mismatch" : null;
+                !validTransferReference ? "settlement_transfer_reference_mismatch" : null;
             PaymentAllocation? allocation = null;
             if (reason is null)
             {

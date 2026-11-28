@@ -1,0 +1,5 @@
+[Unit]
+Description=Record BHOME operations failure for operator alerting
+[Service]
+Type=oneshot
+ExecStart=/usr/bin/logger -p daemon.err -t bhome-alert "BHOME health or backup failed. Inspect systemctl status bhome-health.service bhome-backup.service and journalctl -u bhome-health.service -u bhome-backup.service."

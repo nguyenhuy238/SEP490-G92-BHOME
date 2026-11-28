@@ -22,13 +22,14 @@ public sealed class ImagePreprocessor(OcrOptions options) : IImagePreprocessor
     public PreparedImage Prepare(ReadOnlyMemory<byte> bytes, OcrDocumentKind kind)
     {
         if (!Enum.IsDefined(kind)) throw new OcrInputException("unsupported_profile");
-        return Prepare(bytes, options.Profiles[kind]);
+        return Prepare(bytes, options.Profiles[kind], kind);
     }
 
     public PreparedImage PrepareUnclassified(ReadOnlyMemory<byte> bytes) => Prepare(bytes, options.AutomaticProfile);
 
-    private PreparedImage Prepare(ReadOnlyMemory<byte> bytes, ImageProfile profile)
+    private PreparedImage Prepare(ReadOnlyMemory<byte> bytes, ImageProfile profile, OcrDocumentKind? kind = null)
     {
+        var identity = kind is OcrDocumentKind.IdentityFront or OcrDocumentKind.IdentityBack;
         ValidateHeader(bytes.Span, options.MaxImageBytes, options.MaxPixels);
         using var source = Cv2.ImDecode(bytes.Span, ImreadModes.Color);
         if (source.Empty()) throw new OcrInputException("corrupted_image");
@@ -43,9 +44,24 @@ public sealed class ImagePreprocessor(OcrOptions options) : IImagePreprocessor
                 2 => RotateFlags.Rotate180,
                 _ => RotateFlags.Rotate90Counterclockwise
             });
+            // Locate the card before downscaling so background text cannot consume
+            // the identity recognition budget and small card text keeps its detail.
+            if (identity)
+            {
+                using var card = new Mat();
+                if (IdentityCardCropper.TryCrop(result, card)) card.CopyTo(result);
+            }
             var ratio = Math.Min(1d, (double)options.MaxDimension / Math.Max(result.Width, result.Height));
             if (ratio < 1) Cv2.Resize(result, result, new Size(Math.Max(1, (int)(result.Width * ratio)),
                 Math.Max(1, (int)(result.Height * ratio))), 0, 0, InterpolationFlags.Area);
+            // Short bilingual labels in a distant phone photo can be only a few
+            // pixels tall. Put a localized card into a consistent detector scale;
+            // this resamples observed pixels and does not reconstruct missing text.
+            // Back-side layouts retain their scale: enlarging MRZ/decorative text
+            // did not improve issue-date extraction within the container deadline.
+            var identityWidth = Math.Min(1200, options.MaxDimension);
+            if (kind == OcrDocumentKind.IdentityFront && result.Width / (double)result.Height is >= 1.35 and <= 1.9 && result.Width < identityWidth)
+                Cv2.Resize(result, result, new Size(identityWidth, (int)Math.Round(result.Height * (double)identityWidth / result.Width)), 0, 0, InterpolationFlags.Cubic);
             using var gray = new Mat();
             Cv2.CvtColor(result, gray, ColorConversionCodes.BGR2GRAY);
             using var laplacian = new Mat();

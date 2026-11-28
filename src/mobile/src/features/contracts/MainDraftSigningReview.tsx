@@ -1,3 +1,4 @@
+import { ContractNotice } from './ContractNotice';
 import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { Checkbox, Text } from 'react-native-paper';
 import {
@@ -10,7 +11,7 @@ import {
   type mainDraftClient,
   type MainDraftView,
 } from '../../../../../packages/client-core/src/mainDrafts';
-import { Action, Box, Heading, Pill, ui } from '../../components/WorkspaceKit';
+import { Action, Box, Heading, Pill } from '../../components/WorkspaceKit';
 import { verifiedDraftSigner, type MainDraftSigner } from '../owner/mainDraftSigner';
 import { useSession } from '../../lib/SessionProvider';
 import { randomUUID } from '../../lib/randomUUID';
@@ -62,6 +63,7 @@ export function MainDraftSigningReview({
     (person) => person.id === draft.input?.representativeResidentId,
   );
   const loading = owner && !current;
+  const canReview = owner && !!signer;
   const feedback = error || current?.error;
   const [keys] = useState(() => mutationKeys(randomUUID));
   const lock = useRef(false),
@@ -107,12 +109,7 @@ export function MainDraftSigningReview({
     return () => controller.abort();
   }, [owner, api, revision, draft]);
   async function run(release: boolean) {
-    if (
-      lock.current ||
-      !owner ||
-      !signer ||
-      (release && (!file || readyFile !== file.id || !reviewed))
-    )
+    if (lock.current || !canReview || (release && (!file || readyFile !== file.id || !reviewed)))
       return;
     lock.current = true;
     setBusy(true);
@@ -134,23 +131,25 @@ export function MainDraftSigningReview({
         onDraftChanged?.(latest);
         throw { code: 'draft_version_or_status_changed' };
       }
-      const resolved = verifiedDraftSigner(
-        latest,
-        await api!.request<MainDraftSigner>(
-          `/api/v1/residents/${latest.input.representativeResidentId}`,
-        ),
-      );
-      if (!alive.current) return;
-      if (resolved.tenantUserId !== tenant || resolved.contactEmail !== signer.contactEmail) {
-        setFile(null);
-        setReadyFile('');
-        setReviewed(false);
-        setRevision((value) => value + 1);
-        throw { code: 'verified_contract_signer_required' };
+      if (owner && signer) {
+        const resolved = verifiedDraftSigner(
+          latest,
+          await api!.request<MainDraftSigner>(
+            `/api/v1/residents/${latest.input.representativeResidentId}`,
+          ),
+        );
+        if (!alive.current) return;
+        if (resolved.tenantUserId !== tenant || resolved.contactEmail !== signer.contactEmail) {
+          setFile(null);
+          setReadyFile('');
+          setReviewed(false);
+          setRevision((value) => value + 1);
+          throw { code: 'verified_contract_signer_required' };
+        }
       }
       if (release) {
         const input = {
-          tenantUserId: resolved.tenantUserId,
+          tenantUserId: tenant ?? null,
           expectedVersion: draft.version,
           reviewedFileId: file!.id,
           humanReviewed: true,
@@ -185,52 +184,37 @@ export function MainDraftSigningReview({
       }
     }
   }
-  if (!owner)
-    return (
-      <Box>
-        <Heading title="Chờ Chủ cơ sở duyệt để ký" />
-        <Pill tone="amber">Bản nháp đã lưu</Pill>
-        <Text>
-          Chủ cơ sở xem PDF, phê duyệt và chuyển hợp đồng sang ký. Staff tiếp tục theo dõi trong
-          danh sách hợp đồng.
-        </Text>
-      </Box>
-    );
+  if (!owner) return null;
   return (
     <>
       <Box>
         <Heading title="Thông tin bên thuê" />
         <Text>{representative?.fullName ?? 'Chưa tải được hồ sơ bên thuê'}</Text>
-        <Text>{representative?.maskedCitizenNumber}</Text>
+        {owner && <Text>{representative?.maskedCitizenNumber}</Text>}
         {signer && <Pill tone="green">Đã xác minh</Pill>}
-        {draft.preparation?.residents
-          .filter((person) => !person.representative)
-          .map((person) => (
-            <Text key={person.id}>Cùng ở: {person.fullName}</Text>
-          ))}
+        {owner &&
+          draft.preparation?.residents
+            .filter((person) => !person.representative)
+            .map((person) => <Text key={person.id}>Cùng ở: {person.fullName}</Text>)}
         <Text>Email được nhập khi gửi lời mời ký, chưa gắn vào tài khoản trước khi kích hoạt.</Text>
-        <Heading title="Phương thức ký" />
         {signer && (
-          <Text>
-            {tenant ? 'Viettel MySign · Tài khoản đã liên kết' : 'Email OTP · Chấp thuận nội bộ'}
-          </Text>
+          <>
+            <Heading title="Phương thức ký" />
+            <Text>
+              {tenant ? 'Viettel MySign · Tài khoản đã liên kết' : 'Email OTP · Chấp thuận nội bộ'}
+            </Text>
+          </>
         )}
+        <Text>Chủ cơ sở và người thuê có thể ký theo bất kỳ thứ tự nào.</Text>
         {loading && <Text>Đang kiểm tra bên thuê…</Text>}
-        {!!feedback && !documentBlocker && (
-          <Text accessibilityRole="alert" style={ui.red}>
-            {feedback}
-          </Text>
-        )}
-        <Action secondary disabled={busy || loading || !signer} onPress={() => void run(false)}>
-          {busy ? 'Đang xử lý…' : 'Tạo bản PDF để duyệt'}
+        {!!feedback && !documentBlocker && <ContractNotice message={feedback} />}
+        <Action secondary disabled={busy || loading || !canReview} onPress={() => void run(false)}>
+          {busy ? 'Đang xử lý…' : 'Tạo bản PDF để kiểm tra'}
         </Action>
-        {!loading && !signer && (
+        {owner && !loading && !signer && (
           <Action secondary disabled={busy} onPress={() => setRevision((v) => v + 1)}>
             Tải lại hồ sơ bên thuê
           </Action>
-        )}
-        {file?.developmentOnly && (
-          <Pill tone="amber">Tài liệu Development · Chưa duyệt cho production</Pill>
         )}
       </Box>
       {(file || documentBlocker) && (
@@ -257,14 +241,14 @@ export function MainDraftSigningReview({
         <Checkbox.Item
           label="Tôi đã kiểm tra đúng thông tin và nội dung hợp đồng"
           status={reviewed ? 'checked' : 'unchecked'}
-          disabled={!file || readyFile !== file.id || !signer || busy}
+          disabled={!file || readyFile !== file.id || !canReview || busy}
           onPress={() => setReviewed((v) => !v)}
         />
         <Action
-          disabled={!file || readyFile !== file.id || !signer || !reviewed || busy || loading}
+          disabled={!file || readyFile !== file.id || !canReview || !reviewed || busy || loading}
           onPress={() => void run(true)}
         >
-          Duyệt và chuyển sang chờ ký
+          Chuyển sang chờ ký
         </Action>
       </Box>
     </>

@@ -1,3 +1,4 @@
+using BHome.Application.Common;
 using System.Text.Json;
 using BHome.Application.Billing;
 using BHome.Application.IdentityAccess;
@@ -7,13 +8,16 @@ using BHome.Domain.IdentityAccess;
 using BHome.Domain.PropertyManagement;
 using BHome.Domain.StaffOperations;
 using BHome.Domain.TenantContracts;
+using BHome.Infrastructure.Billing;
 using BHome.Infrastructure.Persistence;
+using BHome.Infrastructure.Persistence.Compact24;
 using Microsoft.EntityFrameworkCore;
 namespace BHome.Infrastructure.Modules.Billing;
 
-internal sealed partial class BillingAutomationEngine(BHomePersistenceContext db, IBillingAutomationSchedules schedules, TimeProvider clock, IInvoiceRepository invoiceRepository, IFixedChargeCoverage fixedCoverage) : IBillingAutomationEngine
+internal sealed partial class BillingAutomationEngine(BHomePersistenceContext db, IBillingAutomationSchedules schedules, TimeProvider clock, IInvoiceRepository invoiceRepository, IFixedChargeCoverage fixedCoverage,
+    BHome.Application.PaymentsDebt.SePay.IPaymentCodeRegistry paymentCodes, BHome.Application.PaymentsDebt.SePay.SePayOptions sepay) : IBillingAutomationEngine
 {
-    private DateOnly Today => BillingAutomationDates.BusinessDate(clock.GetUtcNow());
+    private DateOnly Today => clock.BusinessToday();
     public Task<IReadOnlyList<BillingQueueView>> QueueAsync(Guid location, DateOnly period, CancellationToken t) => db.BillingQueueAsync(location, period, t);
     public async Task<IReadOnlyList<BillingAutomationAttempt>> AttemptsAsync(Guid location, DateOnly period, CancellationToken t) => await (from a in db.Set<BillingAutomationAttempt>().AsNoTracking() join e in db.Set<BillingAutomationExecution>() on a.ExecutionId equals e.Id where e.LocationId == location && e.BillingPeriod == period orderby a.StartedAt descending select a).Take(100).ToArrayAsync(t);
     internal static DateTimeOffset DueAt(DateOnly date) => new(TimeZoneInfo.ConvertTimeToUtc(date.ToDateTime(new TimeOnly(23, 59, 59)), TimeZoneInfo.FindSystemTimeZoneById("Asia/Ho_Chi_Minh")), TimeSpan.Zero);
@@ -48,8 +52,11 @@ internal sealed partial class BillingAutomationEngine(BHomePersistenceContext db
             Guid? after = null; var from = phase == "Meter" ? InvoiceMath.CalendarDate(x.BillingPeriod, p.MeterDay, 0) : x.BillingPeriod; var end = phase == "Meter" ? from : x.BillingPeriod.AddMonths(1).AddDays(-1);
             while (true)
             {
-                var rooms = await db.Set<Room>().AsNoTracking().Where(r => r.LocationId == p.LocationId && r.Status == RoomStatus.Occupied && (after == null || r.Id.CompareTo(after.Value) > 0) &&
-                    db.Set<Contract>().Any(c => c.RoomId == r.Id && c.ActivatedAt != null && (c.Status == ContractStatus.Active || c.Status == ContractStatus.Superseded || c.Status == ContractStatus.Terminated) && c.StartDate <= end && (c.ActualEndDate ?? c.EndDate) >= from))
+                var rooms = await db.Set<Room>().AsNoTracking().Where(r => r.LocationId == p.LocationId && (after == null || r.Id.CompareTo(after.Value) > 0) &&
+                    (phase == "Meter" || db.PeriodicInvoices().Any(i => i.RoomId == r.Id && i.BillingPeriod == x.BillingPeriod) || db.Set<Contract>().Any(c => c.RoomId == r.Id && c.ActivatedAt != null &&
+                        (c.Kind == ContractKind.Main || c.Kind == ContractKind.Renewal) &&
+                        (c.Status == ContractStatus.Active || c.Status == ContractStatus.Superseded || c.Status == ContractStatus.Terminated || c.Status == ContractStatus.Expired) &&
+                        c.StartDate <= end && (c.ActualEndDate ?? c.EndDate) > end)))
                     .OrderBy(r => r.Id).Select(r => r.Id).Take(100).ToArrayAsync(t);
                 if (rooms.Length == 0) break;
                 foreach (var room in rooms)
@@ -59,7 +66,7 @@ internal sealed partial class BillingAutomationEngine(BHomePersistenceContext db
                     db.ChangeTracker.Clear(); await using var tx = await db.Database.BeginTransactionAsync(t);
                     await db.Database.ExecuteSqlInterpolatedAsync($"SELECT pg_advisory_xact_lock(hashtextextended({p.LocationId.ToString()},0))", t);
                     var lockedRoom = await db.Locked<Room>(room).SingleAsync(t);
-                    if (lockedRoom.Status != RoomStatus.Occupied) { await tx.CommitAsync(t); continue; }
+                    if (lockedRoom.LocationId != p.LocationId) { await tx.CommitAsync(t); continue; }
                     if (!await Eligible(p, x.BillingPeriod, phase, t)) { errors.Add(new { roomId = room, code = "automation_authorization_changed" }); await tx.CommitAsync(t); break; }
                     existing += await GenerateMeterTasks(p, x.BillingPeriod, room, errors, t);
                     await db.SaveChangesAsync(t); await tx.CommitAsync(t);
@@ -86,8 +93,11 @@ internal sealed partial class BillingAutomationEngine(BHomePersistenceContext db
     private async Task<int> GenerateMeterTasks(BillingAutomationPlan plan, DateOnly period, Guid room, List<object> errors, CancellationToken t)
     {
         var readingDate = InvoiceMath.CalendarDate(period, plan.MeterDay, 0); var due = DueAt(InvoiceMath.CalendarDate(period, plan.MeterDueDay, plan.MeterDueMonthOffset)); var existing = 0;
-        var assignments = await db.StaffLocationAssignments.AsNoTracking().Where(a => a.LocationId == plan.LocationId && a.StartDate <= Today && a.EndDate >= Today).Take(2).ToArrayAsync(t);
-        var assignment = assignments.Length == 1 && await ActiveRole(assignments[0].StaffUserId, Roles.Staff, t) ? assignments[0] : null;
+        var eligibleStaff = db is Compact24DbContext compact ? StaffEmploymentEligibility.EligibleIds(compact, Today) :
+            (from u in db.Users join grant in db.UserRoles on u.Id equals grant.UserId join role in db.Roles on grant.RoleId equals role.Id where u.IsActive && role.Name == Roles.Staff select u.Id);
+        var assignments = await db.StaffLocationAssignments.AsNoTracking().Where(a => a.LocationId == plan.LocationId && a.StartDate <= Today && a.EndDate >= Today && eligibleStaff.Contains(a.StaffUserId)).ToArrayAsync(t);
+        var assignees = assignments.Select(a => a.StaffUserId).Distinct().ToArray();
+        var assignment = assignees.Length == 1 ? assignments.OrderByDescending(a => a.StartDate).ThenBy(a => a.Id).First() : null;
         foreach (var type in new[] { UtilityType.Electricity, UtilityType.Water })
         {
             var meters = await db.Set<Meter>().AsNoTracking().Where(m => m.RoomId == room && m.UtilityType == type && m.IsActive && m.InstalledOn <= readingDate).Take(2).ToArrayAsync(t);
@@ -97,8 +107,23 @@ internal sealed partial class BillingAutomationEngine(BHomePersistenceContext db
                 existing++;
                 if (previous.Status == MeterTaskStatus.Cancelled) errors.Add(new { roomId = room, utilityType = type, code = "cancelled_period_requires_review" });
                 if (meters.Length != 1 || previous.MeterId != meters[0].Id) errors.Add(new { roomId = room, utilityType = type, code = "meter_replacement_review_required" });
-                if (previous.AutomationPlanId is not null && previous.Status is not (MeterTaskStatus.Completed or MeterTaskStatus.Cancelled) &&
-                    (previous.AssignedStaffUserId is not { } assignee || !await db.StaffLocationAssignments.AnyAsync(a => a.LocationId == plan.LocationId && a.StaffUserId == assignee && a.StartDate <= Today && a.EndDate >= Today, t) || !await ActiveRole(assignee, Roles.Staff, t))) errors.Add(new { roomId = room, utilityType = type, code = "staff_assignment_required", taskId = previous.Id });
+                if (previous.AutomationPlanId is not null && previous.Status is not (MeterTaskStatus.Completed or MeterTaskStatus.Cancelled))
+                {
+                    // The recorded Staff is a routing snapshot, not an access grant.
+                    // Refresh it from the effective Location responsibility on retries.
+                    if (assignment is not null && (previous.AssignedStaffUserId != assignment.StaffUserId || previous.AssignmentId != assignment.Id))
+                    {
+                        previous.AssignedStaffUserId = assignment.StaffUserId;
+                        previous.AssignmentId = assignment.Id;
+                        previous.AssignedAt = clock.GetUtcNow();
+                        previous.Version++;
+                        var assigned = new OperationalTaskHistory { TaskId = previous.Id, ActorId = plan.AuthorizedByUserId, Action = "scheduled_meter_assigned", TaskVersion = previous.Version, ResponsibleStaffUserId = assignment.StaffUserId, OccurredAt = clock.GetUtcNow() };
+                        db.Add(assigned);
+                        db.Add(new OperationalTaskNotification { TaskId = previous.Id, RecipientUserId = assignment.StaffUserId, EventId = assigned.Id, Event = "scheduled_meter_assigned" });
+                    }
+                    else if (assignment is null)
+                        errors.Add(new { roomId = room, utilityType = type, code = "staff_assignment_required", taskId = previous.Id });
+                }
                 continue;
             }
             if (meters.Length != 1) { errors.Add(new { roomId = room, utilityType = type, code = "active_meter_configuration_required" }); continue; }
@@ -133,7 +158,7 @@ internal sealed partial class BillingAutomationEngine(BHomePersistenceContext db
         var task = await db.Locked<OperationalTask>(taskId).SingleOrDefaultAsync(t) ?? throw new InvoiceException(404, "meter_task_not_found");
         if (task.AutomationPlanId == null || task.Version != x.ExpectedVersion || task.Status is MeterTaskStatus.Completed or MeterTaskStatus.Cancelled) throw new InvoiceException(409, "meter_task_changed_or_closed");
         var assignment = await db.StaffLocationAssignments.SingleOrDefaultAsync(a => a.LocationId == task.LocationId && a.StaffUserId == x.StaffUserId && a.StartDate <= Today && a.EndDate >= Today, t);
-        if (assignment is null || !await ActiveRole(x.StaffUserId, Roles.Staff, t)) throw new InvoiceException(400, "staff_assignment_required");
+        if (assignment is null || !await ActiveRole(x.StaffUserId, Roles.Staff, t) || db is Compact24DbContext compact && !await StaffEmploymentEligibility.IsEligibleAsync(compact, x.StaffUserId, Today, t)) throw new InvoiceException(400, "staff_assignment_required");
         task.AssignedStaffUserId = x.StaffUserId; task.AssignmentId = assignment.Id; task.AssignedAt = clock.GetUtcNow(); task.Version++;
         var history = new OperationalTaskHistory { TaskId = task.Id, ActorId = actor, Action = "scheduled_meter_assigned", TaskVersion = task.Version, ResponsibleStaffUserId = x.StaffUserId, OccurredAt = clock.GetUtcNow() }; db.Add(history);
         db.Add(new OperationalTaskNotification { TaskId = task.Id, RecipientUserId = x.StaffUserId, EventId = history.Id, Event = "scheduled_meter_assigned" });

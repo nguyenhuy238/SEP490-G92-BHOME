@@ -225,7 +225,7 @@ public sealed class CaptureWorkflowTests : IClassFixture<CaptureFixture>
         using var evidenceBytes = new ByteArrayContent(bytes); evidenceBytes.Headers.ContentType = new("image/jpeg");
         var upload = await client.PutAsync($"/api/v1/capture/meter-tasks/{task}/evidence", evidenceBytes); upload.EnsureSuccessStatusCode();
         var evidence = (await upload.Content.ReadFromJsonAsync<IdResult>())!.Id;
-        var confirmation = new MeterConfirmation(true, 4314.70m, evidence);
+        var confirmation = new MeterConfirmation(true, 4315m, evidence);
         var confirmed = await client.PostAsJsonAsync($"/api/v1/capture/meter-tasks/{task}/confirm", confirmation); confirmed.EnsureSuccessStatusCode();
         var result = (await confirmed.Content.ReadFromJsonAsync<ConfirmedReading>())!;
         var replay = await client.PostAsJsonAsync($"/api/v1/capture/meter-tasks/{task}/confirm", confirmation); replay.EnsureSuccessStatusCode();
@@ -235,7 +235,7 @@ public sealed class CaptureWorkflowTests : IClassFixture<CaptureFixture>
         var stored = await storedDb.Set<MeterReading>().SingleAsync(r => r.TaskId == task);
         Assert.Equal(MeterReadingStatus.Corrected, stored.Status);
         Assert.Equal(4314.69m, stored.OcrProposedValue);
-        Assert.Equal(4314.70m, stored.ConfirmedValue);
+        Assert.Equal(4315m, stored.ConfirmedValue);
         Assert.Null(stored.Consumption);
         var storedEvidence = await storedDb.Set<MeterEvidence>().SingleAsync(e => e.Id == evidence);
         Assert.True(storedEvidence.IsLinked);
@@ -311,7 +311,7 @@ public sealed class CaptureWorkflowTests : IClassFixture<CaptureFixture>
         Assert.True(proposal.RequiresConfirmation);
         var lowerEvidence = await Evidence(w.Staff, task);
         var lowerConfirmation = await w.Staff.PostAsJsonAsync($"/api/v1/capture/meter-tasks/{task}/confirm",
-            new MeterConfirmation(true, 123.45m, lowerEvidence));
+            new MeterConfirmation(true, 123m, lowerEvidence));
         Assert.Equal(HttpStatusCode.Conflict, lowerConfirmation.StatusCode);
         Assert.Contains("meter_reset_or_rollover_requires_review", await lowerConfirmation.Content.ReadAsStringAsync());
         await using var scope = fixture.Factory.Services.CreateAsyncScope();
@@ -411,11 +411,11 @@ public sealed class CaptureWorkflowTests : IClassFixture<CaptureFixture>
         }
         Assert.Equal(HttpStatusCode.NotFound, (await w.Staff.PostAsJsonAsync(path, Identity())).StatusCode);
     }
-    private static byte[] Image()
-    { using var image = new Mat(120, 300, MatType.CV_8UC3, Scalar.White); Cv2.PutText(image, "123.45", new(15, 70), HersheyFonts.HersheySimplex, 1.2, Scalar.Black, 2); return image.ImEncode(".png"); }
-    private static async Task<Guid> Evidence(HttpClient client, Guid task)
+    private static byte[] Image(string value = "123.45")
+    { using var image = new Mat(120, 300, MatType.CV_8UC3, Scalar.White); Cv2.PutText(image, value, new(15, 70), HersheyFonts.HersheySimplex, 1.2, Scalar.Black, 2); return image.ImEncode(".png"); }
+    private static async Task<Guid> Evidence(HttpClient client, Guid task, byte[]? bytes = null)
     {
-        using var content = new ByteArrayContent(Image()); content.Headers.ContentType = new("image/png");
+        using var content = new ByteArrayContent(bytes ?? Image()); content.Headers.ContentType = new("image/png");
         var response = await client.PutAsync($"/api/v1/capture/meter-tasks/{task}/evidence", content);
         Assert.True(response.IsSuccessStatusCode, await response.Content.ReadAsStringAsync());
         return (await response.Content.ReadFromJsonAsync<IdResult>())!.Id;
@@ -435,10 +435,10 @@ public sealed class CaptureWorkflowTests : IClassFixture<CaptureFixture>
         var period = new DateOnly(Today.Year, Today.Month, 1);
         var periodic = await Create(w.Owner, "meter-tasks", new MeterTaskInput(w.Meter, ReadingPurpose.Periodic, Today, period));
         var evidence = await Evidence(w.Staff, periodic);
-        var data = new MeterConfirmation(true, 125.5m, evidence);
+        var data = new MeterConfirmation(true, 126m, evidence);
         var replies = await Task.WhenAll(Enumerable.Range(0, 3).Select(_ => w.Staff.PostAsJsonAsync($"/api/v1/capture/meter-tasks/{periodic}/confirm", data)));
         Assert.All(replies, r => Assert.Equal(HttpStatusCode.OK, r.StatusCode));
-        var reading = await replies[0].Content.ReadFromJsonAsync<ConfirmedReading>(); Assert.Equal(25.5m, reading!.Consumption);
+        var reading = await replies[0].Content.ReadFromJsonAsync<ConfirmedReading>(); Assert.Equal(26m, reading!.Consumption);
         var saved = await w.Owner.GetFromJsonAsync<ConfirmedReading>($"/api/v1/capture/readings/{reading.Id}");
         Assert.Equal(reading, saved);
         var completed = await w.Staff.GetFromJsonAsync<MeterTaskSummary>($"/api/v1/capture/meter-tasks/{periodic}");
@@ -452,7 +452,7 @@ public sealed class CaptureWorkflowTests : IClassFixture<CaptureFixture>
         Assert.Equal(HttpStatusCode.NotFound, (await outsider.Client.GetAsync($"/api/v1/capture/meter-tasks/{periodic}")).StatusCode);
         var tenant = await User(Roles.Tenant);
         Assert.Equal(HttpStatusCode.Forbidden, (await tenant.Client.GetAsync($"/api/v1/capture/readings/{reading.Id}")).StatusCode);
-        Assert.Equal(HttpStatusCode.Conflict, (await w.Staff.PostAsJsonAsync($"/api/v1/capture/meter-tasks/{periodic}/confirm", data with { ConfirmedValue = 126 })).StatusCode);
+        Assert.Equal(HttpStatusCode.Conflict, (await w.Staff.PostAsJsonAsync($"/api/v1/capture/meter-tasks/{periodic}/confirm", data with { ConfirmedValue = 127 })).StatusCode);
         var file = await w.Staff.GetAsync($"/api/v1/capture/readings/{reading.Id}/evidence"); Assert.Equal(Image(), await file.Content.ReadAsByteArrayAsync());
         // Every Owner has chain-wide access, including private evidence through the authorized API.
         var otherOwner = await User(Roles.Owner); Assert.Equal(HttpStatusCode.OK, (await otherOwner.Client.GetAsync($"/api/v1/capture/readings/{reading.Id}/evidence")).StatusCode);
@@ -466,6 +466,60 @@ public sealed class CaptureWorkflowTests : IClassFixture<CaptureFixture>
             var privateObject = await unauthenticated.GetAsync(fixture.StorageUrl + "/capture-tests/" + stored.ObjectKey); Assert.Equal(HttpStatusCode.Forbidden, privateObject.StatusCode);
         }
     }
+    [Fact]
+    public async Task ConfirmedReadingCorrectionRequiresCurrentVersionAndRetainsEvidence()
+    {
+        var w = await Workspace();
+        var initial = await Create(w.Owner, "meter-tasks", new MeterTaskInput(w.Meter, ReadingPurpose.Initial, Today.AddDays(-10), null));
+        var initialEvidence = await Evidence(w.Staff, initial);
+        (await w.Staff.PostAsJsonAsync($"/api/v1/capture/meter-tasks/{initial}/confirm", new MeterConfirmation(true, 100, initialEvidence))).EnsureSuccessStatusCode();
+        var period = new DateOnly(Today.Year, Today.Month, 1);
+        var periodic = await Create(w.Owner, "meter-tasks", new MeterTaskInput(w.Meter, ReadingPurpose.Periodic, Today, period));
+        var proof = await Evidence(w.Staff, periodic);
+        var route = $"/api/v1/capture/meter-tasks/{periodic}";
+        var confirmed = await w.Staff.PostAsJsonAsync(route + "/confirm", new MeterConfirmation(true, 125m, proof));
+        confirmed.EnsureSuccessStatusCode();
+        var original = (await confirmed.Content.ReadFromJsonAsync<ConfirmedReading>())!;
+        var task = (await w.Staff.GetFromJsonAsync<MeterTaskSummary>(route))!;
+        Assert.True(task.CanCorrect);
+        var replacement = Image("128");
+        using var ocr = new ByteArrayContent(replacement);
+        ocr.Headers.ContentType = new("image/png");
+        // CI does not provision the optional real OCR models. Exercise the
+        // authorized retake endpoint with the same deterministic engine as
+        // the other OCR workflow tests instead of depending on local models.
+        using var host = fixture.Factory.WithWebHostBuilder(builder => builder.ConfigureTestServices(services =>
+            services.AddSingleton<IOcrService>(_ => new LocalOcrService(new OcrOptions { Enabled = true },
+                new Lazy<IOcrEngine>(() => new DigitsEngine()), NullLogger<LocalOcrService>.Instance))));
+        using var ocrClient = host.CreateClient();
+        ocrClient.DefaultRequestHeaders.Authorization = w.Staff.DefaultRequestHeaders.Authorization;
+        var recognized = await ocrClient.PostAsync($"/api/v1/ocr/meter-tasks/{periodic}", ocr);
+        Assert.True(recognized.IsSuccessStatusCode, await recognized.Content.ReadAsStringAsync());
+        Assert.True((await recognized.Content.ReadFromJsonAsync<OcrProposal>())!.RequiresConfirmation);
+        var newProof = await Evidence(w.Staff, periodic, replacement);
+        // Abandoning a retake leaves the original reading and image untouched.
+        Assert.Equal(original, await w.Staff.GetFromJsonAsync<ConfirmedReading>($"/api/v1/capture/readings/{original.Id}"));
+        Assert.Equal(Image(), await (await w.Staff.GetAsync($"/api/v1/capture/readings/{original.Id}/evidence")).Content.ReadAsByteArrayAsync());
+        var request = new MeterConfirmation(true, 128m, newProof, task.Version);
+        Assert.Equal(HttpStatusCode.Conflict, (await w.Staff.PostAsJsonAsync(route + "/confirm", request with { EvidenceId = proof })).StatusCode);
+        var fractional = await w.Staff.PostAsJsonAsync(route + "/confirm", request with { ConfirmedValue = 128.5m });
+        Assert.Equal(HttpStatusCode.BadRequest, fractional.StatusCode);
+        Assert.Contains("reading_integer_required", await fractional.Content.ReadAsStringAsync());
+        var correction = await w.Staff.PostAsJsonAsync(route + "/confirm", request);
+        correction.EnsureSuccessStatusCode();
+        var result = (await correction.Content.ReadFromJsonAsync<ConfirmedReading>())!;
+        Assert.Equal(original.Id, result.Id);
+        Assert.Equal(28m, result.Consumption);
+        Assert.Equal(MeterReadingStatus.Corrected, result.Status);
+        Assert.Equal(HttpStatusCode.OK, (await w.Staff.PostAsJsonAsync(route + "/confirm", request)).StatusCode);
+        Assert.Equal(HttpStatusCode.Conflict, (await w.Staff.PostAsJsonAsync(route + "/confirm", request with { ConfirmedValue = 129m })).StatusCode);
+        var after = (await w.Staff.GetFromJsonAsync<MeterTaskSummary>(route))!;
+        Assert.Equal(task.Version + 1, after.Version);
+        Assert.False((await w.Staff.GetFromJsonAsync<MeterTaskSummary>($"/api/v1/capture/meter-tasks/{initial}"))!.CanCorrect);
+        var image = await w.Staff.GetAsync($"/api/v1/capture/readings/{original.Id}/evidence");
+        Assert.Equal(replacement, await image.Content.ReadAsByteArrayAsync());
+    }
+
     [Fact]
     public async Task PeriodicReadingOnBaselineDateUsesConfirmedInitialValueWithoutAllowingMeterDecrease()
     {
@@ -489,19 +543,39 @@ public sealed class CaptureWorkflowTests : IClassFixture<CaptureFixture>
         Assert.Equal(HttpStatusCode.Conflict, decreased.StatusCode);
         Assert.Contains("meter_reset_or_rollover_requires_review", await decreased.Content.ReadAsStringAsync());
 
-        var confirmed = await w.Staff.PostAsJsonAsync(route, new MeterConfirmation(true, 125.5m, evidence));
+        var confirmed = await w.Staff.PostAsJsonAsync(route, new MeterConfirmation(true, 126m, evidence));
         confirmed.EnsureSuccessStatusCode();
         var saved = (await confirmed.Content.ReadFromJsonAsync<ConfirmedReading>())!;
         Assert.Equal(100m, saved.PreviousValue);
-        Assert.Equal(125.5m, saved.ConfirmedValue);
-        Assert.Equal(25.5m, saved.Consumption);
-        var replay = await w.Staff.PostAsJsonAsync(route, new MeterConfirmation(true, 125.5m, evidence));
+        Assert.Equal(126m, saved.ConfirmedValue);
+        Assert.Equal(26m, saved.Consumption);
+        var replay = await w.Staff.PostAsJsonAsync(route, new MeterConfirmation(true, 126m, evidence));
         replay.EnsureSuccessStatusCode();
         Assert.Equal(saved.Id, (await replay.Content.ReadFromJsonAsync<ConfirmedReading>())!.Id);
         await using var scope = fixture.Factory.Services.CreateAsyncScope();
         var db = scope.ServiceProvider.GetRequiredService<BHomePersistenceContext>();
         Assert.Equal(1, await db.Set<MeterReading>().CountAsync(r => r.TaskId == periodic));
         Assert.Equal(MeterTaskStatus.Completed, (await db.Set<OperationalTask>().SingleAsync(t => t.Id == periodic)).Status);
+    }
+    [Fact]
+    public async Task MeterConfirmationSeparatesFutureDateAndFractionalValueAndAcceptsZero()
+    {
+        var w = await Workspace();
+        var future = await Create(w.Owner, "meter-tasks", new MeterTaskInput(w.Meter, ReadingPurpose.Initial, Today.AddDays(1), null));
+        var futureProof = await Evidence(w.Staff, future);
+        var futureResponse = await w.Staff.PostAsJsonAsync($"/api/v1/capture/meter-tasks/{future}/confirm", new MeterConfirmation(true, 14m, futureProof));
+        Assert.Equal(HttpStatusCode.BadRequest, futureResponse.StatusCode);
+        Assert.Contains("reading_date_in_future", await futureResponse.Content.ReadAsStringAsync());
+        w = await Workspace();
+        var current = await Create(w.Owner, "meter-tasks", new MeterTaskInput(w.Meter, ReadingPurpose.Initial, Today, null));
+        var proof = await Evidence(w.Staff, current);
+        var route = $"/api/v1/capture/meter-tasks/{current}/confirm";
+        var fractional = await w.Staff.PostAsJsonAsync(route, new MeterConfirmation(true, 14.5m, proof));
+        Assert.Equal(HttpStatusCode.BadRequest, fractional.StatusCode);
+        Assert.Contains("reading_integer_required", await fractional.Content.ReadAsStringAsync());
+        var response = await w.Staff.PostAsJsonAsync(route, new MeterConfirmation(true, 0m, proof));
+        response.EnsureSuccessStatusCode();
+        Assert.Equal(0m, (await response.Content.ReadFromJsonAsync<ConfirmedReading>())!.ConfirmedValue);
     }
     [Fact]
     public async Task MissingBaselineWrongEvidenceAndUnconfirmedOrNegativeReadingCannotCompleteTask()
@@ -561,6 +635,10 @@ public sealed class CaptureFixture : IAsyncLifetime
     internal CaptureFixture(WebApplicationFactory<Program> supplied, string storageUrl)
     { Factory = supplied; StorageUrl = storageUrl; externallyManaged = true; }
     private readonly string storagePassword = Convert.ToBase64String(RandomNumberGenerator.GetBytes(32));
+    // Child WebApplicationFactory hosts share this fixture's encrypted records.
+    // Generate keys once per fixture, not each time configuration is rebuilt.
+    private readonly string encryptionKey = Convert.ToBase64String(RandomNumberGenerator.GetBytes(32));
+    private readonly string hmacKey = Convert.ToBase64String(RandomNumberGenerator.GetBytes(32));
     private IContainer? minio;
     private ApiFactory? root;
     public WebApplicationFactory<Program> Factory { get; private set; } = null!;
@@ -581,8 +659,8 @@ public sealed class CaptureFixture : IAsyncLifetime
         {
             ["IdentityProtection:ActiveEncryptionVersion"] = "test",
             ["IdentityProtection:ActiveHmacVersion"] = "test",
-            ["IdentityProtection:EncryptionKeys:test"] = Convert.ToBase64String(RandomNumberGenerator.GetBytes(32)),
-            ["IdentityProtection:HmacKeys:test"] = Convert.ToBase64String(RandomNumberGenerator.GetBytes(32)),
+            ["IdentityProtection:EncryptionKeys:test"] = encryptionKey,
+            ["IdentityProtection:HmacKeys:test"] = hmacKey,
             ["ObjectStorage:Endpoint"] = endpoint,
             ["ObjectStorage:UseSsl"] = "false",
             ["ObjectStorage:Bucket"] = "capture-tests",

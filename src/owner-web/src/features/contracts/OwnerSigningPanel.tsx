@@ -1,3 +1,5 @@
+import { ValidatedInput } from '../../components/common/ValidatedForm';
+import { TextField } from '../../components/common/ValidatedForm';
 import { useEffect, useRef, useState, type DragEvent } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import {
@@ -8,7 +10,6 @@ import {
   FormControlLabel,
   Paper,
   Stack,
-  TextField,
   ToggleButton,
   ToggleButtonGroup,
   Typography,
@@ -116,6 +117,7 @@ export function OwnerSigningPanel({
           <UploadStart signing={signing} contractId={c.id} onStarted={onChanged} />
         ) : (
           <OtpStart
+            key={c.id}
             signing={signing}
             contractId={c.id}
             onStarted={onChanged}
@@ -307,7 +309,7 @@ function UploadStep({
           <Typography variant="caption" color="text.secondary">
             {file ? 'Bấm để đổi file' : 'hoặc bấm để chọn file · PDF, tối đa 10 MB'}
           </Typography>
-          <input
+          <ValidatedInput
             ref={input}
             hidden
             type="file"
@@ -369,22 +371,23 @@ function OtpStart({
     [busy, setBusy] = useState(false),
     [error, setError] = useState('');
   const [key] = useState(() => crypto.randomUUID());
-  const [revision, setRevision] = useState(0);
+  const [imageFile, setImageFile] = useState<File | null>(null);
   async function sign() {
-    if (busy || !agreed) return;
+    if (busy || !agreed || (!drawing && !imageFile)) return;
     setBusy(true);
     setError('');
     try {
       if (drawing) {
         await signing.drawImage(drawing);
-        setRevision((r) => r + 1);
+      } else if (imageFile) {
+        await signing.uploadImage(imageFile);
       }
       await signing.start(
         contractId,
         session ? 'OWNER_SESSION' : 'OTP',
         key,
         choice.placement,
-        choice.usePicture,
+        true,
       );
       onStarted();
     } catch (e) {
@@ -395,41 +398,40 @@ function OtpStart({
   }
   return (
     <Stack spacing={1.5}>
-      <SignaturePlacementPicker
-        key={revision}
-        signing={signing}
-        contractId={contractId}
-        value={choice}
-        onChange={setChoice}
-        disabled={busy}
-      />
+      <Box component="details">
+        <Typography component="summary" sx={{ cursor: 'pointer', py: 1 }}>
+          Điều chỉnh vị trí chữ ký (nếu cần)
+        </Typography>
+        <SignaturePlacementPicker
+          signing={signing}
+          contractId={contractId}
+          value={choice}
+          onChange={setChoice}
+          disabled={busy}
+          showSignatureImage={false}
+        />
+      </Box>
       <Typography variant="subtitle2">Chữ ký của bạn</Typography>
       <DrawPad onChange={setDrawing} disabled={busy} />
       <Button component="label" disabled={busy}>
         Tải ảnh chữ ký PNG
-        <input
+        <ValidatedInput
           hidden
           type="file"
+          aria-label="Ảnh chữ ký cho hợp đồng"
           accept="image/png"
           onChange={(e) => {
             const file = e.target.files?.[0];
             e.target.value = '';
             if (!file) return;
-            setBusy(true);
             setError('');
-            void signing
-              .uploadImage(file)
-              .then(() => {
-                setDrawing(null);
-                setRevision((r) => r + 1);
-              })
-              .catch((e) => setError(signingError(e)))
-              .finally(() => setBusy(false));
+            setDrawing(null);
+            setImageFile(file);
           }}
         />
       </Button>
       <Typography variant="caption" color="text.secondary">
-        Bỏ trống nếu muốn dùng ảnh chữ ký đã lưu.
+        {imageFile ? 'Đã chọn ảnh cho hợp đồng này.' : 'Vẽ chữ ký hoặc tải ảnh cho hợp đồng này.'}
       </Typography>
       <FormControlLabel
         control={
@@ -439,11 +441,15 @@ function OtpStart({
             onChange={(e) => setAgreed(e.target.checked)}
           />
         }
-        label="Tôi đã đọc toàn bộ hợp đồng và đồng ý ký điện tử. Tôi hiểu chữ ký này có giá trị như cam kết của tôi đối với hợp đồng."
+        label="Tôi đã đọc hợp đồng và đồng ý ký điện tử."
       />
       {!!error && <Alert severity="error">{error}</Alert>}
       <Box>
-        <Button variant="contained" disabled={busy || !agreed} onClick={() => void sign()}>
+        <Button
+          variant="contained"
+          disabled={busy || !agreed || (!drawing && !imageFile)}
+          onClick={() => void sign()}
+        >
           {busy ? (session ? 'Đang ký…' : 'Đang gửi mã…') : 'Ký hợp đồng'}
         </Button>
       </Box>

@@ -1,21 +1,30 @@
+import { TextField } from '../../../components/common/ValidatedForm';
 import { useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { useAuth } from '../../../../../../packages/client-core/src/auth';
 import { ApiError } from '../../../../../../packages/client-core/src/api';
 import {
+  Accordion,
+  AccordionDetails,
+  AccordionSummary,
   Alert,
   Box,
   Button,
   Checkbox,
+  Chip,
   FormControlLabel,
+  Paper,
   Stack,
-  TextField,
   Typography,
 } from '@mui/material';
+import { ChevronDown } from 'lucide-react';
 import { formatInstant } from '../../../../../../packages/client-core/src/localization';
+import type { DrawnSignature } from '../../../../../../packages/client-core/src/signing';
 import { OwnerFeedback } from '../../../components/common/OwnerWorkspace';
+import { PrivateEvidenceViewer } from '../../../components/common/PrivateEvidenceViewer';
 import { useOwnerAction } from '../../../hooks/useOwnerWorkspace';
 import { useMeterApi } from '../../meters/useMeterApi';
+import { DrawPad } from '../../contracts/OwnerSigningPanel';
 import type { OwnerTask } from '../taskContracts';
 import { taskRoot } from '../useOperationalTasksApi';
 
@@ -63,10 +72,8 @@ export function LocationAssetHandoverPanel({
   const action = useOwnerAction();
   const [decision, setDecision] = useState('');
   const [reviewedVersion, setReviewedVersion] = useState<number | null>(null);
-  const [confirmedKey, setConfirmedKey] = useState<string | null>(null);
   const [reworkNote, setReworkNote] = useState('');
-  const [downloadBusy, setDownloadBusy] = useState(false);
-  const [downloadError, setDownloadError] = useState('');
+  const [reworkExpanded, setReworkExpanded] = useState(false);
   const report = useQuery({
     queryKey: ['owner-workspace', session?.userId, 'location-asset-handover', task.id],
     enabled: !!session?.roles.includes('Owner'),
@@ -84,11 +91,44 @@ export function LocationAssetHandoverPanel({
   const needsApproval =
     task.status === 'PendingVerification' && (!data || data.status === 'Superseded');
   const reviewed = reviewedVersion === task.version;
-  const signatureKey = data ? `${data.revision}:${data.snapshotSha256}:${data.status}` : '';
-  const confirmed = !!signatureKey && confirmedKey === signatureKey;
+  // The persisted submitted inventory is the draft. Approval below freezes it
+  // into an immutable document; it does not ask Owner to re-confirm each asset.
+  const draft = useQuery({
+    queryKey: ['owner-workspace', session?.userId, 'task-location-asset-inventory', task.id],
+    enabled:
+      !!session?.roles.includes('Owner') && needsApproval && !report.isPending && !report.error,
+    queryFn: ({ signal }) =>
+      request<{
+        version: number;
+        status: string;
+        totalCount: number;
+        checkedCount: number;
+        pendingOwnerRooms?: string[];
+        pendingOwnerCommonAssets?: boolean;
+        items: {
+          checked: boolean;
+          inherited: boolean;
+          condition?: string;
+          note: string | null;
+          incidentId: string | null;
+        }[];
+      }>(`${taskRoot}/${task.id}/location-asset-inventory`, { signal }),
+  });
+  const draftReady =
+    !!draft.data &&
+    !draft.isFetching &&
+    !draft.error &&
+    draft.data.version === task.version &&
+    draft.data.status === 'PendingVerification' &&
+    Array.isArray(draft.data.items) &&
+    draft.data.items.length === draft.data.totalCount &&
+    draft.data.items.every((item) => item.checked) &&
+    draft.data.checkedCount === draft.data.totalCount &&
+    !draft.data.pendingOwnerRooms?.length &&
+    !draft.data.pendingOwnerCommonAssets;
 
   async function approve() {
-    if (!reviewed || !needsApproval || action.busy) return;
+    if (!reviewed || !needsApproval || !draftReady || action.busy) return;
     const ok = await action.run(
       () =>
         action.command(path + '/approve', 'POST', {
@@ -104,19 +144,19 @@ export function LocationAssetHandoverPanel({
     }
   }
 
-  async function sign() {
-    if (!data || data.status !== 'PendingOwnerSignature' || !confirmed || action.busy) return;
+  async function sign(ink: DrawnSignature) {
+    if (!data || data.status !== 'PendingOwnerSignature' || action.busy) return;
     const ok = await action.run(
       () =>
         action.command(path + '/sign', 'POST', {
           revision: data.revision,
           snapshotSha256: data.snapshotSha256,
           confirmed: true,
+          ink,
         }),
-      'Đã ký xác nhận điện tử biên bản.',
+      'Đã ký trực tiếp biên bản bàn giao.',
     );
     if (ok) {
-      setConfirmedKey(null);
       await report.refetch();
       notify('Owner đã ký. Đang chờ Staff xác nhận cùng phiên bản.');
     }
@@ -143,56 +183,75 @@ export function LocationAssetHandoverPanel({
     );
     if (ok) {
       setReworkNote('');
+      setReworkExpanded(false);
       setReviewedVersion(null);
-      setConfirmedKey(null);
       await report.refetch();
       onReworked?.();
       notify('Đã chuyển công việc về đang thực hiện. Staff cần kiểm tra lại các mục được chọn.');
     }
   }
-
-  async function document() {
-    if (!data || downloadBusy) return;
-    setDownloadError('');
-    setDownloadBusy(true);
-    let url = '';
-    try {
-      const blob = await request<Blob>(path + '/document', {}, 'blob');
-      url = URL.createObjectURL(blob);
-      const link = window.document.createElement('a');
-      link.href = url;
-      link.download = `bien-ban-tai-san-${task.id}.pdf`;
-      window.document.body.appendChild(link);
-      link.click();
-      link.remove();
-    } catch {
-      setDownloadError('Không mở được PDF. Hãy tải lại biên bản và thử lại.');
-    } finally {
-      if (url) setTimeout(() => URL.revokeObjectURL(url), 1000);
-      setDownloadBusy(false);
-    }
-  }
+  const reportState =
+    data?.status === 'Completed'
+      ? 'Đã hoàn tất'
+      : data?.status === 'PendingOwnerSignature'
+        ? 'Chờ Owner ký'
+        : data?.status === 'PendingStaffSignature'
+          ? 'Chờ Staff ký'
+          : data?.status === 'Superseded'
+            ? 'Đã thay thế'
+            : null;
 
   return (
     <Stack spacing={1.5}>
-      <Typography variant="h6" sx={{ fontSize: 16 }}>
-        Duyệt và ký biên bản bàn giao tài sản
-      </Typography>
-      <Button
-        onClick={() => void report.refetch()}
-        sx={{ alignSelf: 'flex-start' }}
-        disabled={report.isFetching || action.busy}
+      <Stack
+        direction="row"
+        spacing={1}
+        sx={{ alignItems: 'center', justifyContent: 'space-between' }}
       >
-        Tải lại biên bản
-      </Button>
+        <Stack direction="row" spacing={1} sx={{ alignItems: 'center', minWidth: 0 }}>
+          <Typography variant="h6" sx={{ fontSize: 17, fontWeight: 700 }}>
+            {needsApproval
+              ? 'Duyệt kiểm kê và lập biên bản'
+              : data
+                ? `Biên bản phiên bản ${data.revision}`
+                : 'Biên bản bàn giao tài sản'}
+          </Typography>
+          {reportState && (
+            <Chip
+              size="small"
+              variant="outlined"
+              color={
+                data?.status === 'Completed'
+                  ? 'success'
+                  : data?.status === 'Superseded'
+                    ? 'warning'
+                    : 'primary'
+              }
+              label={reportState}
+            />
+          )}
+        </Stack>
+        <Button
+          size="small"
+          onClick={() => void report.refetch()}
+          disabled={report.isFetching || action.busy}
+        >
+          Làm mới
+        </Button>
+      </Stack>
       <OwnerFeedback busy={report.isFetching || action.busy} error={report.error || action.error} />
-      {report.error && <Button onClick={() => void report.refetch()}>Tải lại biên bản</Button>}
       {!report.isPending && !report.error && needsApproval && (
         <Stack spacing={1.5}>
-          <Typography sx={{ fontSize: 14 }}>
-            Staff đã nộp kết quả kiểm kê. Kiểm tra checklist và lịch sử báo cáo ở trên trước khi
-            duyệt.
-          </Typography>
+          <OwnerFeedback busy={draft.isFetching} error={draft.error} />
+          {!draftReady && !draft.isFetching && (
+            <Alert
+              severity="warning"
+              variant="outlined"
+              action={<Button onClick={() => void draft.refetch()}>Tải lại</Button>}
+            >
+              Chưa xác minh được phạm vi và phiên bản kiểm kê hiện tại. Hãy tải lại trước khi duyệt.
+            </Alert>
+          )}
           <TextField
             multiline
             minRows={2}
@@ -204,7 +263,7 @@ export function LocationAssetHandoverPanel({
             helperText="Cần ghi quyết định nếu có sự cố chưa xử lý xong hoặc danh sách kiểm kê trống."
           />
           <FormControlLabel
-            label="Tôi đã đối chiếu đầy đủ tài sản, hồ sơ Tenant và các vướng mắc"
+            label="Tôi đã xem kết quả kiểm kê và đồng ý lập biên bản"
             control={
               <Checkbox
                 checked={reviewed}
@@ -214,7 +273,7 @@ export function LocationAssetHandoverPanel({
           />
           <Button
             variant="contained"
-            disabled={!reviewed || action.busy}
+            disabled={!reviewed || !draftReady || action.busy}
             onClick={() => void approve()}
           >
             Duyệt và lập biên bản
@@ -223,118 +282,181 @@ export function LocationAssetHandoverPanel({
       )}
       {!report.isPending && !report.error && !data && !needsApproval && (
         <Typography sx={{ fontSize: 14, color: 'text.secondary' }}>
-          Biên bản được lập sau khi Staff kiểm kê và gửi kết quả cho Owner.
+          Chưa có biên bản được duyệt. Theo dõi kiểm kê tại tab Kiểm kê tài sản.
         </Typography>
       )}
-      {task.status === 'PendingVerification' && (
-        <Stack spacing={1.5} sx={{ borderTop: 1, borderColor: 'divider', pt: 1.5 }}>
-          <Typography sx={{ fontSize: 14, fontWeight: 600 }}>Yêu cầu kiểm tra lại</Typography>
-          <Typography sx={{ fontSize: 13, color: 'text.secondary' }}>
-            Đã chọn {reworkItemIds.length} tài sản từ danh sách kiểm kê phía trên.
-          </Typography>
-          <TextField
-            label="Nội dung cần Staff kiểm tra lại"
-            multiline
-            minRows={2}
-            value={reworkNote}
-            onChange={(event) => setReworkNote(event.target.value)}
-            slotProps={{ htmlInput: { maxLength: 2000 } }}
-            helperText="Mô tả rõ vướng mắc hoặc mục cần đối chiếu lại (ít nhất 10 ký tự)."
-            disabled={action.busy}
-          />
+      {task.status === 'PendingVerification' && !data?.staffSignature && (
+        <Stack spacing={1} sx={{ borderTop: 1, borderColor: 'divider', pt: 1.5 }}>
           <Button
             variant="outlined"
             color="warning"
-            disabled={
-              action.busy ||
-              !reworkItemIds.length ||
-              reworkNote.trim().length < 10 ||
-              !!data?.staffSignature
-            }
-            onClick={() => void requestRework()}
+            size="small"
+            disabled={action.busy}
+            aria-expanded={reworkExpanded}
+            onClick={() => setReworkExpanded((value) => !value)}
+            sx={{ alignSelf: 'flex-start' }}
           >
-            Gửi yêu cầu kiểm tra lại
+            {reworkExpanded
+              ? 'Đóng yêu cầu kiểm tra lại'
+              : `Yêu cầu kiểm tra lại (${reworkItemIds.length} mục đã chọn)`}
           </Button>
-        </Stack>
-      )}
-      {data && (
-        <Stack spacing={1.5}>
-          <Stack direction="row" spacing={1} useFlexGap sx={{ flexWrap: 'wrap' }}>
-            <Typography sx={{ fontSize: 14 }}>Phiên bản biên bản: {data.revision}</Typography>
-            <Typography sx={{ fontSize: 14 }}>
-              Tài sản: {data.totalItems} mục (tự kiểm tra {data.directItems}; kế thừa{' '}
-              {data.inheritedItems})
-            </Typography>
-          </Stack>
-          <Typography sx={{ fontSize: 13, color: 'text.secondary' }}>
-            Chủ cơ sở duyệt: {formatInstant(data.approvedAt)}
-          </Typography>
-          <Box sx={{ overflowWrap: 'anywhere' }}>
-            <Typography sx={{ fontSize: 13, fontWeight: 600 }}>
-              Mã đối chiếu nội dung SHA-256
-            </Typography>
-            <Typography sx={{ fontSize: 12, fontFamily: 'monospace' }}>
-              {data.snapshotSha256}
-            </Typography>
-          </Box>
-          {data.exceptionDecision && (
-            <Alert severity="info">Quyết định ngoại lệ: {data.exceptionDecision}</Alert>
-          )}
-          <Button variant="outlined" disabled={downloadBusy} onClick={() => void document()}>
-            {downloadBusy ? 'Đang tải PDF…' : 'Xem / lưu biên bản PDF'}
-          </Button>
-          {!!downloadError && <Alert severity="error">{downloadError}</Alert>}
-          {data.status === 'Superseded' && (
-            <Alert severity="warning">
-              Phân công hoặc dữ liệu đã đổi sau khi lập biên bản. Tải lại công việc và kiểm tra
-              phiên bản mới.
-            </Alert>
-          )}
-          {data.status === 'PendingOwnerSignature' && (
+          {reworkExpanded && (
             <Stack spacing={1}>
-              <Typography sx={{ fontSize: 14 }}>
-                Mở PDF và đối chiếu mã nội dung trước khi ký xác nhận.
+              <Typography variant="caption" color="text.secondary">
+                Đã chọn {reworkItemIds.length} tài sản trong tab Kiểm kê tài sản.
               </Typography>
-              <FormControlLabel
-                label="Tôi đã xem biên bản phiên bản này và đồng ý ký xác nhận bằng tài khoản Owner đang đăng nhập"
-                control={
-                  <Checkbox
-                    checked={confirmed}
-                    onChange={(_, value) => setConfirmedKey(value ? signatureKey : null)}
-                  />
-                }
+              <TextField
+                label="Nội dung cần Staff kiểm tra lại"
+                multiline
+                minRows={2}
+                value={reworkNote}
+                onChange={(event) => setReworkNote(event.target.value)}
+                slotProps={{ htmlInput: { maxLength: 2000 } }}
+                helperText="Ghi lý do kiểm tra lại, ít nhất 10 ký tự."
+                disabled={action.busy}
               />
               <Button
-                variant="contained"
-                disabled={!confirmed || action.busy}
-                onClick={() => void sign()}
+                variant="outlined"
+                color="warning"
+                disabled={
+                  action.busy ||
+                  !reworkItemIds.length ||
+                  reworkNote.trim().length < 10 ||
+                  !!data?.staffSignature
+                }
+                onClick={() => void requestRework()}
+                sx={{ alignSelf: 'flex-start' }}
               >
-                Owner ký xác nhận
+                Gửi yêu cầu kiểm tra lại
               </Button>
             </Stack>
           )}
-          {data.ownerSignature && (
-            <Typography sx={{ fontSize: 13 }}>
-              Owner đã ký: {formatInstant(data.ownerSignature.signedAt)}
-            </Typography>
-          )}
-          {data.status === 'PendingStaffSignature' && (
-            <Alert severity="info">
-              Owner đã ký. Staff cần đọc và ký xác nhận đúng phiên bản này để hoàn tất bàn giao.
-            </Alert>
-          )}
-          {data.staffSignature && (
-            <Typography sx={{ fontSize: 13 }}>
-              Staff đã ký: {formatInstant(data.staffSignature.signedAt)}
-            </Typography>
-          )}
-          {data.status === 'Completed' && (
-            <Alert severity="success">
-              Hai bên đã xác nhận bàn giao. PDF cuối cùng đã sẵn sàng lưu trữ.
-            </Alert>
-          )}
         </Stack>
       )}
+      {data && (
+        <Paper variant="outlined" sx={{ p: { xs: 1.5, sm: 2 }, borderRadius: 2 }}>
+          <Stack spacing={1.5}>
+            <Typography variant="body2" color="text.secondary">
+              PDF · {data.totalItems} mục tài sản · Owner duyệt {formatInstant(data.approvedAt)}
+            </Typography>
+            <PrivateEvidenceViewer
+              key={`${data.revision}:${data.snapshotSha256}:${data.status}`}
+              label={`biên bản bàn giao tài sản phiên bản ${data.revision}`}
+              filename={`bien-ban-tai-san-${task.id}-v${data.revision}.pdf`}
+              contentType="application/pdf"
+              fetchBlob={(signal) => request<Blob>(path + '/document', { signal }, 'blob')}
+              disabled={action.busy}
+              compactActions
+            />
+            <Stack direction={{ xs: 'column', sm: 'row' }} spacing={{ xs: 0.5, sm: 3 }} useFlexGap>
+              <Typography
+                variant="body2"
+                sx={{ color: data.ownerSignature ? 'success.dark' : 'text.secondary' }}
+              >
+                Owner:{' '}
+                {data.ownerSignature
+                  ? `Đã ký ${formatInstant(data.ownerSignature.signedAt)}`
+                  : 'Chưa ký'}
+              </Typography>
+              <Typography
+                variant="body2"
+                sx={{ color: data.staffSignature ? 'success.dark' : 'text.secondary' }}
+              >
+                Staff:{' '}
+                {data.staffSignature
+                  ? `Đã ký ${formatInstant(data.staffSignature.signedAt)}`
+                  : 'Chưa ký'}
+              </Typography>
+            </Stack>
+            <Accordion variant="outlined" disableGutters sx={{ '&:before': { display: 'none' } }}>
+              <AccordionSummary expandIcon={<ChevronDown size={18} />}>
+                <Typography sx={{ fontSize: 13, fontWeight: 600 }}>Thông tin xác thực</Typography>
+              </AccordionSummary>
+              <AccordionDetails sx={{ pt: 0 }}>
+                <Stack spacing={1}>
+                  <Typography sx={{ fontSize: 12, color: 'text.secondary' }}>
+                    Phiên bản biên bản: {data.revision} · Phiên bản công việc: {data.taskVersion}
+                  </Typography>
+                  <Typography sx={{ fontSize: 12, color: 'text.secondary' }}>
+                    Người phê duyệt: {data.approvedBy}
+                  </Typography>
+                  <Box sx={{ overflowWrap: 'anywhere' }}>
+                    <Typography sx={{ fontSize: 12, color: 'text.secondary', fontWeight: 600 }}>
+                      SHA-256 nội dung kiểm kê
+                    </Typography>
+                    <Typography sx={{ fontSize: 12, fontFamily: 'monospace' }}>
+                      {data.snapshotSha256}
+                    </Typography>
+                  </Box>
+                  <Box sx={{ overflowWrap: 'anywhere' }}>
+                    <Typography sx={{ fontSize: 12, color: 'text.secondary', fontWeight: 600 }}>
+                      SHA-256 tài liệu PDF
+                    </Typography>
+                    <Typography sx={{ fontSize: 12, fontFamily: 'monospace' }}>
+                      {data.pdfSha256}
+                    </Typography>
+                  </Box>
+                </Stack>
+              </AccordionDetails>
+            </Accordion>
+            {data.exceptionDecision && (
+              <Alert severity="info">Quyết định ngoại lệ: {data.exceptionDecision}</Alert>
+            )}
+            {data.status === 'Superseded' && (
+              <Alert severity="warning">
+                Phân công hoặc dữ liệu đã đổi sau khi lập biên bản. Tải lại công việc và kiểm tra
+                phiên bản mới.
+              </Alert>
+            )}
+            {data.status === 'PendingOwnerSignature' && (
+              <OwnerHandoverSignature
+                key={`${task.version}:${data.revision}:${data.snapshotSha256}`}
+                busy={action.busy}
+                onSign={(ink) => void sign(ink)}
+              />
+            )}
+          </Stack>
+        </Paper>
+      )}
+    </Stack>
+  );
+}
+
+function OwnerHandoverSignature({
+  busy,
+  onSign,
+}: {
+  busy: boolean;
+  onSign: (ink: DrawnSignature) => void;
+}) {
+  const [ink, setInk] = useState<DrawnSignature | null>(null);
+  const [confirmed, setConfirmed] = useState(false);
+
+  return (
+    <Stack spacing={1.5} sx={{ border: 1, borderColor: 'divider', borderRadius: 2, p: 2 }}>
+      <Typography sx={{ fontSize: 15, fontWeight: 700 }}>Owner ký bàn giao</Typography>
+      <Typography sx={{ fontSize: 13, color: 'text.secondary' }}>
+        Đọc và đối chiếu PDF ở trên, sau đó dùng chuột hoặc cảm ứng để ký trong ô bên dưới.
+      </Typography>
+      <DrawPad onChange={setInk} disabled={busy} />
+      <FormControlLabel
+        label="Tôi đã xem biên bản phiên bản này và đồng ý ký xác nhận bằng chữ ký tay của mình"
+        control={
+          <Checkbox
+            checked={confirmed}
+            disabled={busy}
+            onChange={(_, value) => setConfirmed(value)}
+          />
+        }
+      />
+      <Button
+        variant="contained"
+        disabled={!confirmed || !ink || busy}
+        onClick={() => ink && confirmed && onSign(ink)}
+        sx={{ alignSelf: { xs: 'stretch', sm: 'flex-end' } }}
+      >
+        Owner ký xác nhận
+      </Button>
     </Stack>
   );
 }

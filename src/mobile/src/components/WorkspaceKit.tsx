@@ -134,6 +134,7 @@ export function Action({
   icon,
   secondary = false,
   disabled = false,
+  loading = false,
   minHeight = 44,
 }: {
   children: React.ReactNode;
@@ -141,6 +142,7 @@ export function Action({
   icon?: string;
   secondary?: boolean;
   disabled?: boolean;
+  loading?: boolean;
   minHeight?: number;
 }) {
   return (
@@ -148,7 +150,8 @@ export function Action({
       mode={secondary ? 'contained-tonal' : 'contained'}
       icon={icon}
       onPress={onPress}
-      disabled={disabled}
+      disabled={disabled || loading}
+      loading={loading}
       style={{ borderRadius: 8 }}
       contentStyle={{ minHeight }}
       labelStyle={{ fontSize: 12 }}

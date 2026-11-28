@@ -1,3 +1,4 @@
+import { TextField, ValidatedForm } from '../../../components/common/ValidatedForm';
 import { useState, type FormEvent } from 'react';
 import {
   Alert,
@@ -12,12 +13,12 @@ import {
   Link,
   Paper,
   Stack,
-  TextField,
   Typography,
 } from '@mui/material';
-import { Apartment, LockOutlined, PhoneOutlined, VerifiedUserOutlined } from '@mui/icons-material';
+import { LockOutlined, PhoneOutlined, VerifiedUserOutlined } from '@mui/icons-material';
 import { Link as RouterLink, useLocation } from 'react-router';
 import { LoginForm } from '../components/LoginForm';
+import { AuthBrand } from '../components/AuthBrand';
 import { useOwnerLogin } from '../hooks/useOwnerLogin';
 
 export function LoginPage() {
@@ -65,36 +66,7 @@ export function LoginPage() {
       }}
     >
       <Box sx={{ width: '100%', maxWidth: 440 }}>
-        <Stack component="header" sx={{ alignItems: 'center', textAlign: 'center', mb: 4 }}>
-          <Box
-            sx={{
-              width: 48,
-              height: 48,
-              display: 'grid',
-              placeItems: 'center',
-              color: 'white',
-              bgcolor: '#2563eb',
-              borderRadius: 1,
-              mb: 2,
-              boxShadow: '0 1px 2px #131b2e20',
-            }}
-          >
-            <Apartment sx={{ fontSize: 28 }} />
-          </Box>
-          <Stack direction="row" spacing={1} sx={{ alignItems: 'center', mb: 0.75 }}>
-            <Typography sx={{ fontSize: 20, fontWeight: 600, letterSpacing: '-0.015em' }}>
-              BHOME
-            </Typography>
-            <Chip
-              label="Owner Portal"
-              size="small"
-              sx={{ height: 22, bgcolor: '#eaedff', color: 'primary.main', fontSize: 12 }}
-            />
-          </Stack>
-          <Typography variant="body2" color="text.secondary" sx={{ maxWidth: 320 }}>
-            Nền tảng quản lý &amp; vận hành chuỗi nhà trọ thông minh
-          </Typography>
-        </Stack>
+        <AuthBrand />
 
         <Paper sx={{ p: { xs: 3, sm: 4 }, boxShadow: '0 1px 2px #131b2e0d' }}>
           <Typography component="h1" variant="h1">
@@ -112,7 +84,7 @@ export function LoginPage() {
               {auth.error && <Alert severity="error">{auth.error}</Alert>}
               <Alert severity="success">Đăng nhập thành công. Phiên Owner đã được xác thực.</Alert>
               <Typography variant="body2" color="text.secondary">
-                Phiên đã sẵn sàng để truy cập không gian quản lý BHOME.
+                Phiên đã sẵn sàng để truy cập không gian quản lý BHome.
               </Typography>
               <Button disabled={auth.busy} variant="outlined" onClick={() => void auth.logout()}>
                 Đăng xuất
@@ -122,7 +94,7 @@ export function LoginPage() {
             <Stack spacing={2}>
               {invitationAccepted && (
                 <Alert severity="success">
-                  Đã thiết lập tài khoản. Bạn có thể đăng nhập BHOME bằng mật khẩu mới.
+                  Đã thiết lập tài khoản. Bạn có thể đăng nhập BHome bằng mật khẩu mới.
                 </Alert>
               )}
               {passwordChanged && (
@@ -147,9 +119,6 @@ export function LoginPage() {
                   setResetOpen(true);
                 }}
               />
-              <Button component={RouterLink} to="/forgot-password">
-                Quên mật khẩu qua SMS
-              </Button>
             </Stack>
           )}
 
@@ -213,7 +182,7 @@ export function LoginPage() {
             )}
           </Stack>
           <Typography variant="caption" color="text.secondary" sx={{ pt: 1 }}>
-            © 2025 BHOME Technology JSC. Bảo lưu mọi quyền.
+            © BHome
           </Typography>
         </Stack>
       </Box>
@@ -226,7 +195,7 @@ export function LoginPage() {
         fullWidth
         maxWidth="xs"
       >
-        <Box component="form" onSubmit={submitReset}>
+        <Box component={ValidatedForm} onSubmit={submitReset}>
           <DialogTitle>Quên mật khẩu?</DialogTitle>
           <DialogContent>
             <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>

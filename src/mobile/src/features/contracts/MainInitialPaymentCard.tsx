@@ -1,3 +1,4 @@
+import { ContractNotice } from './ContractNotice';
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { Image, StyleSheet, View } from 'react-native';
 import { Button, Text } from 'react-native-paper';
@@ -13,6 +14,7 @@ import {
 import { ui } from '../../components/WorkspaceKit';
 import { ContractLoading } from './ContractLoading';
 import { HoldingInfoRow, HoldingSectionCard, HoldingStatusBadge } from './HoldingUi';
+import { PaymentStatusCountdown, PAYMENT_STATUS_REFRESH_MS } from './PaymentStatusCountdown';
 
 export function MainInitialPaymentCard({
   api,
@@ -31,7 +33,7 @@ export function MainInitialPaymentCard({
   const [qr, setQr] = useState<MainInitialPayment | null>(null);
   const [error, setError] = useState('');
   const [busy, setBusy] = useState(false);
-  const [showDetails, setShowDetails] = useState(false);
+  const [checkedAt, setCheckedAt] = useState(Date.now);
   const lock = useRef(false);
   useEffect(() => {
     const controller = new AbortController();
@@ -39,6 +41,7 @@ export function MainInitialPaymentCard({
     async function load() {
       if (loading) return;
       loading = true;
+      setCheckedAt(Date.now());
       try {
         const result = await service.status(controller.signal);
         if (!controller.signal.aborted) {
@@ -53,7 +56,7 @@ export function MainInitialPaymentCard({
       }
     }
     void load();
-    const timer = setInterval(() => void load(), 5000);
+    const timer = setInterval(() => void load(), PAYMENT_STATUS_REFRESH_MS);
     return () => {
       controller.abort();
       clearInterval(timer);
@@ -77,7 +80,13 @@ export function MainInitialPaymentCard({
       setBusy(false);
     }
   }
-  const currentQr = qr && data && qr.outstandingAmount === data.outstandingAmount ? qr : null;
+  const currentQr =
+    qr?.transferReference &&
+    data &&
+    data.transferReference === qr.transferReference &&
+    qr.outstandingAmount === data.outstandingAmount
+      ? qr
+      : null;
   if (!data && !error) return <ContractLoading compact label="Đang tải thông tin thanh toán…" />;
   return (
     <>
@@ -88,79 +97,53 @@ export function MainInitialPaymentCard({
               label={data.paid ? 'Đã thanh toán đủ' : 'Chờ thanh toán'}
               tone={data.paid ? 'success' : 'warning'}
             />
+            {!data.paid &&
+              data.availability !== 'PaymentProviderDisabled' &&
+              data.transferReference && <PaymentStatusCountdown checkedAt={checkedAt} />}
             <View style={styles.amountBlock}>
-              <Text style={styles.note}>Còn phải trả</Text>
+              <HoldingInfoRow
+                label="Tiền cọc yêu cầu"
+                value={formatContractMoney(data.requiredDeposit)}
+              />
+              <HoldingInfoRow
+                label="Tiền cọc đã thanh toán"
+                value={formatContractMoney(data.verifiedDeposit)}
+              />
+              <HoldingInfoRow
+                label="Tiền cọc còn thiếu"
+                value={formatContractMoney(data.outstandingDeposit ?? '0')}
+              />
+              <HoldingInfoRow
+                label="Tiền thuê tháng đầu tiên"
+                value={formatContractMoney(data.firstMonthRent)}
+              />
+              <Text style={styles.note}>Tổng số tiền cần thanh toán</Text>
               <Text selectable style={styles.amount}>
                 {formatContractMoney(data.outstandingAmount)}
               </Text>
             </View>
             {Number(data.holdingCredit) > 0 && (
               <HoldingInfoRow
-                label="Tiền giữ chỗ đã áp dụng"
+                label="Trong đó có tiền giữ chỗ đã chuyển thành tiền cọc"
                 value={formatContractMoney(data.holdingCredit)}
               />
-            )}
-            <Button
-              mode="text"
-              icon={showDetails ? 'chevron-up' : 'chevron-down'}
-              accessibilityState={{ expanded: showDetails }}
-              contentStyle={styles.buttonContent}
-              style={styles.detailsButton}
-              onPress={() => setShowDetails((shown) => !shown)}
-            >
-              {showDetails ? 'Thu gọn chi tiết' : 'Xem chi tiết khoản thu'}
-            </Button>
-            {showDetails && (
-              <View style={styles.details}>
-                <HoldingInfoRow
-                  label="Cọc đảm bảo"
-                  value={formatContractMoney(data.requiredDeposit)}
-                />
-                {data.charges.map((line) => (
-                  <HoldingInfoRow
-                    key={line.code}
-                    label={line.name}
-                    value={formatContractMoney(line.amount)}
-                  />
-                ))}
-                <HoldingInfoRow
-                  label="Đã xác minh cọc"
-                  value={formatContractMoney(data.verifiedDeposit)}
-                />
-                <HoldingInfoRow
-                  label="Đã xác minh tiền thuê/phí"
-                  value={formatContractMoney(data.verifiedRentAndFees)}
-                />
-              </View>
             )}
             {data.paid ? (
               <Text style={ui.green}>
                 Thanh toán đã được xác nhận. Tiếp tục bước kích hoạt hợp đồng.
               </Text>
-            ) : (
-              <Text style={styles.note}>
-                Số tiền đã trừ các khoản được xác minh. Trạng thái tự cập nhật khi nhận thanh toán.
-              </Text>
-            )}
+            ) : null}
           </>
         )}
-        {!!error && (
-          <Text accessibilityRole="alert" style={ui.red}>
-            {error}
-          </Text>
-        )}
+        {!!error && <ContractNotice message={error} />}
       </HoldingSectionCard>
       {data && !data.paid && (
         <HoldingSectionCard title="Thông tin chuyển khoản">
           <HoldingStatusBadge
-            label={data.isDevelopmentDemo ? 'SePay Test · QR sandbox' : 'Chuyển khoản ngân hàng'}
+            label={data.isDevelopmentDemo ? 'SePay Test' : 'Chuyển khoản ngân hàng'}
             tone={data.isDevelopmentDemo ? 'warning' : 'neutral'}
           />
-          {data.isDevelopmentDemo && (
-            <Text style={styles.note}>
-              Chỉ dùng kiểm thử. Không chuyển tiền thật vào tài khoản Test.
-            </Text>
-          )}
+          {data.isDevelopmentDemo && <Text style={styles.note}>Không chuyển tiền thật.</Text>}
           {currentQr && (
             <>
               {currentQr.qrImageDataUri ? (
@@ -190,7 +173,7 @@ export function MainInitialPaymentCard({
               <View style={styles.transferReference}>
                 <Text style={styles.note}>Nội dung chuyển khoản</Text>
                 <Text selectable style={styles.referenceValue}>
-                  {currentQr.transferReference || '—'}
+                  {currentQr.transferReference}
                 </Text>
               </View>
               <Text style={styles.note}>
@@ -202,17 +185,25 @@ export function MainInitialPaymentCard({
             <Text style={styles.note}>Cần đủ chữ ký hai bên trước khi tạo QR thanh toán.</Text>
           )}
           {data.availability === 'ReceivingAccountUnavailable' && (
-            <Text accessibilityRole="alert" style={ui.red}>
-              Chưa có tài khoản nhận tiền tại cơ sở. Owner cần kiểm tra cấu hình.
-            </Text>
+            <ContractNotice message="Tài khoản nhận tiền chưa sẵn sàng. Owner cần kiểm tra tài khoản và kết nối SePay." />
           )}
+          {data.availability === 'PaymentProviderDisabled' && (
+            <ContractNotice message="SePay đang tắt trong môi trường này. Hệ thống chưa thể cấp mã thanh toán hoặc QR." />
+          )}
+          {qr?.availability === 'PaymentCodeUnavailable' &&
+            data.availability === 'PaymentCodeUnavailable' && (
+              <ContractNotice message="Chưa cấp được mã đối soát. Hãy thử tạo QR lại trước khi chuyển khoản." />
+            )}
           <Button
             mode={currentQr ? 'outlined' : 'contained'}
             loading={busy}
             contentStyle={styles.buttonContent}
             style={styles.button}
             disabled={
-              busy || !data.signingComplete || data.availability === 'ReceivingAccountUnavailable'
+              busy ||
+              !data.signingComplete ||
+              data.availability === 'ReceivingAccountUnavailable' ||
+              data.availability === 'PaymentProviderDisabled'
             }
             onPress={() => void generate()}
           >
@@ -228,8 +219,6 @@ const styles = StyleSheet.create({
   amountBlock: { gap: 4, paddingVertical: 6 },
   amount: { fontSize: 28, lineHeight: 36, fontWeight: '700', color: '#193653' },
   note: { fontSize: 12, lineHeight: 18, color: '#526581' },
-  details: { gap: 8, borderTopWidth: 1, borderColor: '#E2E8F0', paddingTop: 12 },
-  detailsButton: { alignSelf: 'flex-start', marginLeft: -8 },
   button: { borderRadius: 10 },
   buttonContent: { minHeight: 44 },
   qrFrame: {

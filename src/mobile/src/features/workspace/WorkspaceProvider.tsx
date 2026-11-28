@@ -1,10 +1,11 @@
-import React, { createContext, useCallback, useContext, useRef, useState } from 'react';
+import React, { createContext, useCallback, useContext, useEffect, useRef, useState } from 'react';
 import { router, useSegments } from 'expo-router';
 import { Dialog, Portal, Button, Text } from 'react-native-paper';
 import { useSession } from '../../lib/SessionProvider';
 import { StaffLocationProvider } from './StaffLocationProvider';
 import { useStaffLocation } from './StaffLocationProvider';
 import type { Named } from '../../lib/api';
+import { showInfo } from '../../lib/toast';
 import {
   homeScreen,
   sessionRole,
@@ -20,9 +21,14 @@ interface WorkspaceContext {
   staffLocationsLoading: boolean;
   staffLocationsError: string;
   selectStaffLocation: (id: string) => void;
+  navigateInStaffLocation: (id: string, action: () => void) => void;
   reloadStaffLocations: () => void;
-  registerExitGuard: (guard: () => boolean, onLeave: () => void) => () => void;
-  requestNavigation: (action: () => void) => void;
+  registerExitGuard: (
+    guard: () => boolean,
+    onLeave: () => void,
+    exitToHome?: boolean,
+  ) => () => void;
+  requestNavigation: (action: () => void, keepDestination?: boolean) => void;
   scrollRevision: number;
   resetScroll: () => void;
   requests: { id: string; kind: string; role: MobileRole; summary: string }[];
@@ -31,7 +37,7 @@ interface WorkspaceContext {
   preview: boolean;
   startPreview: (role: MobileRole) => void;
   leavePreview: () => void;
-  go: (screen: WorkspaceScreen, params?: Record<string, string>) => void;
+  go: (screen: WorkspaceScreen, params?: Record<string, string>, keepDestination?: boolean) => void;
   unavailable: (action?: string) => void;
 }
 const Context = createContext<WorkspaceContext | null>(null);
@@ -50,20 +56,39 @@ function WorkspaceSessionProvider({ children }: { children: React.ReactNode }) {
   const segments = useSegments();
   const [previewRole, setPreviewRole] = useState<MobileRole | null>(null);
   const [message, setMessage] = useState('');
-  const [confirmExit, setConfirmExit] = useState(false);
-  const exitGuard = useRef<{ shouldBlock: () => boolean; onLeave: () => void } | null>(null);
-  const pendingNavigation = useRef<(() => void) | null>(null);
-  const registerExitGuard = useCallback((guard: () => boolean, onLeave: () => void) => {
-    const entry = { shouldBlock: guard, onLeave };
-    exitGuard.current = entry;
-    return () => {
-      if (exitGuard.current === entry) exitGuard.current = null;
-    };
+  const [confirmExit, setConfirmExit] = useState<{ exitToHome: boolean } | null>(null);
+  const exitGuard = useRef<{
+    shouldBlock: () => boolean;
+    onLeave: () => void;
+    exitToHome: boolean;
+  } | null>(null);
+  const pendingNavigation = useRef<{
+    action: () => void;
+    guard: NonNullable<typeof exitGuard.current>;
+    exitToHome: boolean;
+  } | null>(null);
+  const cancelExit = useCallback(() => {
+    pendingNavigation.current = null;
+    setConfirmExit(null);
   }, []);
-  const requestNavigation = useCallback((action: () => void) => {
-    if (exitGuard.current?.shouldBlock()) {
-      pendingNavigation.current = action;
-      setConfirmExit(true);
+  const registerExitGuard = useCallback(
+    (guard: () => boolean, onLeave: () => void, exitToHome = false) => {
+      const entry = { shouldBlock: guard, onLeave, exitToHome };
+      exitGuard.current = entry;
+      return () => {
+        if (exitGuard.current === entry) exitGuard.current = null;
+        if (pendingNavigation.current?.guard === entry) cancelExit();
+      };
+    },
+    [cancelExit],
+  );
+  const requestNavigation = useCallback((action: () => void, keepDestination = false) => {
+    const guard = exitGuard.current;
+    if (guard?.shouldBlock()) {
+      if (pendingNavigation.current) return;
+      const exitToHome = guard.exitToHome && !keepDestination;
+      pendingNavigation.current = { action, guard, exitToHome };
+      setConfirmExit({ exitToHome });
     } else action();
   }, []);
   const [scrollRevision, setScrollRevision] = useState(0);
@@ -71,7 +96,42 @@ function WorkspaceSessionProvider({ children }: { children: React.ReactNode }) {
   const requestId = React.useRef(0);
   const preview = __DEV__ && !session && previewRole !== null;
   const role = session ? sessionRole(session.roles) : previewRole;
-  const go = (screen: WorkspaceScreen, params?: Record<string, string>) =>
+  const locationNavigation = useRef<{
+    id: string;
+    action: () => void;
+  } | null>(null);
+  const [locationNavigationRevision, setLocationNavigationRevision] = useState(0);
+  const navigateInStaffLocation = (id: string, action: () => void) =>
+    requestNavigation(() => {
+      if (role !== 'Staff' || preview) return;
+      locationNavigation.current = { id, action };
+      setLocationNavigationRevision((revision) => revision + 1);
+      // A newly assigned location may not yet be in the shared catalogue.
+      if (!staffLocation.loading && !staffLocation.locations.some((item) => item.id === id))
+        staffLocation.reload();
+    });
+  useEffect(() => {
+    const pending = locationNavigation.current;
+    if (!pending || staffLocation.loading) return;
+    if (
+      role !== 'Staff' ||
+      preview ||
+      !staffLocation.locations.some((item) => item.id === pending.id)
+    ) {
+      locationNavigation.current = null;
+      showInfo('Cơ sở không còn khả dụng hoặc bạn không còn quyền truy cập.');
+      return;
+    }
+    if (staffLocation.selectedLocationId !== pending.id) {
+      staffLocation.selectLocation(pending.id);
+      return;
+    }
+    // Wait until the shared selection has committed before mounting a scoped
+    // destination. This also survives the inbox remount when its location changes.
+    locationNavigation.current = null;
+    pending.action();
+  }, [locationNavigationRevision, staffLocation, role, preview]);
+  const go = (screen: WorkspaceScreen, params?: Record<string, string>, keepDestination = false) =>
     requestNavigation(() => {
       if (role && isWorkspaceTabDestination(role, screen, params)) {
         const href = workspaceTabHref(screen);
@@ -80,7 +140,7 @@ function WorkspaceSessionProvider({ children }: { children: React.ReactNode }) {
         if (segments.includes('(tabs)')) router.navigate(href);
         else router.dismissTo(href);
       } else router.push({ pathname: '/workspace/[screen]', params: { ...params, screen } });
-    });
+    }, keepDestination);
   return (
     <Context.Provider
       value={{
@@ -92,6 +152,7 @@ function WorkspaceSessionProvider({ children }: { children: React.ReactNode }) {
           requestNavigation(() => {
             staffLocation.selectLocation(id);
           }),
+        navigateInStaffLocation,
         reloadStaffLocations: staffLocation.reload,
         role,
         registerExitGuard,
@@ -127,34 +188,26 @@ function WorkspaceSessionProvider({ children }: { children: React.ReactNode }) {
     >
       {children}
       <Portal>
-        <Dialog
-          visible={confirmExit}
-          onDismiss={() => {
-            setConfirmExit(false);
-            pendingNavigation.current = null;
-          }}
-        >
-          <Dialog.Title>Rời quy trình tiếp nhận?</Dialog.Title>
+        <Dialog visible={!!confirmExit} onDismiss={cancelExit}>
+          <Dialog.Title>
+            {confirmExit?.exitToHome ? 'Rời bước nhập CCCD?' : 'Rời quy trình tiếp nhận?'}
+          </Dialog.Title>
           <Dialog.Content>
             <Text>Thông tin chưa xác nhận có thể bị mất. Hồ sơ đã lưu vẫn được giữ lại.</Text>
+            {confirmExit?.exitToHome && <Text>Bạn sẽ trở về Trang chủ.</Text>}
           </Dialog.Content>
           <Dialog.Actions>
+            <Button onPress={cancelExit}>Tiếp tục nhập</Button>
             <Button
               onPress={() => {
-                setConfirmExit(false);
-                pendingNavigation.current = null;
-              }}
-            >
-              Tiếp tục nhập
-            </Button>
-            <Button
-              onPress={() => {
-                const action = pendingNavigation.current;
-                pendingNavigation.current = null;
-                exitGuard.current?.onLeave();
+                const pending = pendingNavigation.current;
+                cancelExit();
+                if (!pending || pending.guard !== exitGuard.current) return;
                 exitGuard.current = null;
-                setConfirmExit(false);
-                action?.();
+                pending.guard.onLeave();
+                if (pending.exitToHome && role)
+                  router.dismissTo(workspaceTabHref(homeScreen[role]));
+                else pending.action();
               }}
             >
               Rời quy trình

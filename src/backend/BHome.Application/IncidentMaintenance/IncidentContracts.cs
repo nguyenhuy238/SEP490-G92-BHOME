@@ -55,7 +55,9 @@ public sealed record EmergencyCostDecision(int Version, [Required] bool? Approve
 public sealed record IncidentView(Guid Id, string Code, Guid LocationId, Guid? RoomId, string? CommonArea,
     Guid? AssetId, string Description, string Severity, string Status, string? Type, string? Category,
     DateTimeOffset? AcknowledgedAt, string? ResolutionNote, int Version, DateTimeOffset CreatedAt,
-    bool? StaffAvailable, bool EscalationEnabled = false);
+    bool? StaffAvailable, bool EscalationEnabled = false, string? LocationName = null,
+    string? RoomNumber = null, string? AssetName = null,
+    string? OpenWorkOrderStatus = null, string? AssignedStaffName = null);
 public sealed record WorkOrderView(Guid Id, Guid? IncidentId, Guid LocationId, Guid? RoomId, Guid? AssetId,
     Guid AssignedStaffId, string ExpectedOutcome, DateTimeOffset TargetCompletionAt, bool IsOverdue,
     string Status, string? InspectionResult, string? ProposedSolution, int? EstimatedMinutes, decimal? EstimatedCost,
@@ -64,9 +66,14 @@ public sealed record WorkOrderView(Guid Id, Guid? IncidentId, Guid LocationId, G
     string Source = "Incident", string Description = "", string? CommonArea = null,
     bool UsesMaterials = false, int? FastRepairPolicyVersion = null, string? FastRepairCategory = null,
     bool AssetProposalPending = false, Guid? ProposedAssetId = null, string? ProposedAssetName = null,
-    string? ProposedAssetCategory = null, string? ProposedAssetCondition = null);
+    string? ProposedAssetCategory = null, string? ProposedAssetCondition = null,
+    string? LocationName = null, string? RoomNumber = null, string? AssetName = null,
+    string? AssignedStaffName = null);
 public sealed record IncidentActivityView(Guid Id, Guid? WorkOrderId, string Action, string Note,
     DateTimeOffset OccurredAt, Guid? ActorId, string? DataJson);
+// Deliberately excludes WorkOrder IDs, Staff identities, internal notes, costs, vendors and evidence.
+public sealed record TenantIncidentProgressEvent(string Message, DateTimeOffset OccurredAt);
+public sealed record TenantIncidentProgressView(string CurrentStep, IReadOnlyList<TenantIncidentProgressEvent> Events);
 public sealed record IncidentEvidenceView(Guid Id, Guid? WorkOrderId, Guid? ActivityId, string Kind,
     string ContentType, long Length);
 public sealed record IncidentNotificationView(Guid Id, Guid? IncidentId, string Event, bool HighPriority,
@@ -132,6 +139,10 @@ public interface IIncidentRepository
     Task<FastRepairPolicy?> FastRepairPolicyAsync(CancellationToken t);
     Task<IReadOnlyList<Guid>> RecipientsAsync(Guid location, DateOnly today, bool includeStaff, CancellationToken t);
     Task<IncidentRoom?> RoomAsync(Guid id, CancellationToken t);
+    Task<string?> LocationNameAsync(Guid id, CancellationToken t);
+    Task<string?> RoomNumberAsync(Guid id, CancellationToken t);
+    Task<string?> AssetNameAsync(Guid id, CancellationToken t);
+    Task<string?> StaffNameAsync(Guid id, CancellationToken t);
     Task<IncidentTenancy?> TenancyAsync(Guid actor, Guid location, Guid? room, DateOnly date, CancellationToken t);
     Task<Guid?> ContractRoomAsync(Guid contract, CancellationToken t);
     Task<Asset?> AssetAsync(Guid id, CancellationToken t);

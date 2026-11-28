@@ -14,7 +14,10 @@ internal sealed class PropertyLifecycleChecks(Compact24DbContext db) : IProperty
         if (!await db.Locations.AnyAsync(l => l.Id == locationId, t)) throw new PropertyException(404, "resource_not_found");
         var result = new List<LifecycleBlocker>();
         void Add(string code, int count) { if (count > 0) result.Add(new(code, count)); }
-        Add("operational_rooms", await db.Set<Room>().CountAsync(r => r.LocationId == locationId && r.Status != RoomStatus.Unavailable, t));
+        // Available rooms may remain configured when a Location is deactivated; only rooms
+        // that are still occupied or held represent an active operational obligation.
+        Add("operational_rooms", await db.Set<Room>().CountAsync(r => r.LocationId == locationId &&
+            (r.Status == RoomStatus.Occupied || r.Status == RoomStatus.OnHold), t));
         Add("unresolved_residents", await PostgresPropertyRepository.UnresolvedResidents(db).CountAsync(r => r.Room.LocationId == locationId, t));
         Add("active_or_pending_contracts", await db.Set<Contract>().CountAsync(c => c.Room.LocationId == locationId &&
             (c.Status == ContractStatus.Active || c.Status == ContractStatus.PendingSigning || c.Status == ContractStatus.PendingActivation), t));
@@ -47,13 +50,18 @@ internal sealed class PropertyLifecycleChecks(Compact24DbContext db) : IProperty
             """).SingleAsync(t));
         return new(locationId, result.Count == 0, result);
     }
-    public async Task<IReadOnlyList<string>> RoomBlockersAsync(Guid roomId, CancellationToken t)
+    public async Task<IReadOnlyList<string>> RoomBlockersAsync(Guid roomId, CancellationToken t,
+        Guid? exceptContractId = null, bool includeActiveContracts = true)
     {
         var location = await db.Set<Room>().Where(r => r.Id == roomId).Select(r => r.LocationId).SingleAsync(t);
         var codes = new List<string>();
         if (await db.Set<IncidentReport>().AnyAsync(i => i.LocationId == location && (i.RoomId == roomId || i.RoomId == null) &&
             i.Severity == IncidentSeverity.Emergency && (i.Status == IncidentStatus.Submitted || i.Status == IncidentStatus.InProgress), t))
             codes.Add("unresolved_emergency");
+        if (includeActiveContracts && await db.Set<Contract>().AnyAsync(c => c.RoomId == roomId && c.Id != exceptContractId &&
+            (c.Status == ContractStatus.Active || c.Status == ContractStatus.PendingSigning ||
+             c.Status == ContractStatus.PendingActivation), t))
+            codes.Add("active_or_pending_contracts");
         if (await db.Set<Asset>().AnyAsync(a => a.RoomId == roomId && (a.Status == AssetStatus.NeedsRepair || a.Status == AssetStatus.UnderRepair), t))
             codes.Add("asset_maintenance_required");
         return codes;

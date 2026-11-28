@@ -53,6 +53,50 @@ it('still bounds conversion requests to 60 seconds and never replays a timed-out
   expect(await result).toMatchObject({ code: 'request_timeout' });
   expect(transport).toHaveBeenCalledTimes(1);
 });
+it('keeps authenticated handover signing at 15 seconds without automatically resending a potentially committed signature', async () => {
+  vi.useFakeTimers();
+  const { api, transport } = setup(20000);
+  const result = api
+    .request(`/api/v1/contracts/${id}/handover/draft/tenant-sign/session`, {
+      method: 'POST',
+    })
+    .catch((error) => error);
+  await vi.advanceTimersByTimeAsync(15000);
+  expect(await result).toMatchObject({ code: 'request_timeout' });
+  expect(transport).toHaveBeenCalledTimes(1);
+});
+it.each([
+  `/api/v1/operational-tasks/${id}/location-asset-handover/document`,
+  `/api/v1/operational-tasks/${id}/location-asset-handover/document/preview`,
+  `/api/v1/operational-tasks/${id}/location-asset-handover/document/pages/1`,
+  `/api/v1/location-asset-handovers/archive/${id}/revisions/1/document`,
+])(
+  'allows slow location-asset handover PDF reads without aborting at 15 seconds: %s',
+  async (path) => {
+    vi.useFakeTimers();
+    const { api, transport } = setup(20000);
+    const responseType = path.endsWith('/preview') ? 'json' : 'bytes';
+    const result = api.request(path, {}, responseType);
+    await vi.advanceTimersByTimeAsync(20000);
+    if (responseType === 'json') await expect(result).resolves.toEqual({});
+    else await expect(result).resolves.toBeInstanceOf(Uint8Array);
+    expect(transport).toHaveBeenCalledTimes(1);
+  },
+);
+it('bounds location-asset handover PDF conversion at 60 seconds without retrying the read', async () => {
+  vi.useFakeTimers();
+  const { api, transport } = setup(65000);
+  const result = api
+    .request(
+      `/api/v1/operational-tasks/${id}/location-asset-handover/document/pages/1`,
+      {},
+      'bytes',
+    )
+    .catch((error) => error);
+  await vi.advanceTimersByTimeAsync(60000);
+  expect(await result).toMatchObject({ code: 'request_timeout' });
+  expect(transport).toHaveBeenCalledTimes(1);
+});
 it('keeps ordinary API requests bounded to 15 seconds', async () => {
   vi.useFakeTimers();
   const { api } = setup(20000);

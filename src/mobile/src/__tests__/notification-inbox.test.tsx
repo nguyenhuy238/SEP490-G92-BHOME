@@ -14,6 +14,7 @@ const s = vi.hoisted(() => ({
   signedIn: true,
   api: null as MobileApi | null,
   go: vi.fn(),
+  navigateInStaffLocation: vi.fn(),
   back: vi.fn(),
   push: vi.fn(),
   expired: vi.fn(),
@@ -35,6 +36,7 @@ vi.mock('../features/workspace/WorkspaceProvider', () => ({
   useWorkspace: () => ({
     role: s.role,
     go: s.go,
+    navigateInStaffLocation: s.navigateInStaffLocation,
     requestNavigation: (action: () => void) => action(),
   }),
 }));
@@ -237,6 +239,7 @@ beforeEach(() => {
   s.role = 'Tenant';
   s.userId = 'synthetic-a';
   s.signedIn = true;
+  s.navigateInStaffLocation.mockImplementation((_id: string, action: () => void) => action());
   s.pushRegister.mockResolvedValue({ registered: true, message: 'Đã đăng ký thông báo' });
   s.pushUnregister.mockResolvedValue({ removed: true, message: 'Đã tắt thông báo' });
 });
@@ -290,6 +293,89 @@ it.each(['Owner', 'Staff', 'Tenant'])(
       order.findIndex((path) => path.endsWith('/target')),
     );
     await screen.findByText('Chưa đọc (0)');
+  },
+);
+it('opens the authorized meter period list in the correct location', async () => {
+  s.role = 'Staff';
+  server(
+    [item(1, { category: 'Task', title: 'Có nhiệm vụ ghi chỉ số kỳ 12/2026' })],
+    async (url) =>
+      url.pathname.endsWith('/target')
+        ? json({
+            objectType: 'MeterPeriod',
+            objectId: targetId,
+            locationId: targetId,
+            billingPeriod: '2026-12-01',
+          })
+        : undefined,
+  );
+  render(<NotificationsScreen />);
+  fireEvent.click(await screen.findByRole('button', { name: 'Có nhiệm vụ ghi chỉ số kỳ 12/2026' }));
+  await waitFor(() =>
+    expect(s.go).toHaveBeenCalledWith('meter-reading', {
+      locationId: targetId,
+      billingPeriod: '2026-12-01',
+    }),
+  );
+  expect(s.navigateInStaffLocation).toHaveBeenCalledWith(targetId, expect.any(Function));
+  expect(s.push).not.toHaveBeenCalled();
+});
+it.each(['MeterPeriod', 'MeterOverduePeriod'])(
+  'opens the full meter period list from overdue notices (%s)',
+  async (objectType) => {
+    s.role = 'Staff';
+    server([item(1, { category: 'Task', title: 'Ghi chỉ số định kỳ quá hạn' })], async (url) =>
+      url.pathname.endsWith('/target')
+        ? json({
+            objectType,
+            objectId: targetId,
+            locationId: targetId,
+            billingPeriod: '2026-12-01',
+          })
+        : undefined,
+    );
+    render(<NotificationsScreen />);
+    fireEvent.click(await screen.findByRole('button', { name: 'Ghi chỉ số định kỳ quá hạn' }));
+    await waitFor(() =>
+      expect(s.go).toHaveBeenCalledWith('meter-reading', {
+        locationId: targetId,
+        billingPeriod: '2026-12-01',
+      }),
+    );
+    expect(s.navigateInStaffLocation).toHaveBeenCalledWith(targetId, expect.any(Function));
+    expect(s.push).not.toHaveBeenCalled();
+  },
+);
+it.each([
+  ['MeterTask', '/meter'],
+  ['OperationalTask', 'task-detail'],
+  ['Incident', 'incident-detail'],
+  ['WorkOrder', 'maintenance-detail'],
+])(
+  'switches to the authorized notification location before opening %s',
+  async (objectType, route) => {
+    s.role = 'Staff';
+    const location = uuid(200);
+    let navigate!: () => void;
+    s.navigateInStaffLocation.mockImplementation((_id: string, action: () => void) => {
+      navigate = action;
+    });
+    server([item(1)], async (url) =>
+      url.pathname.endsWith('/target')
+        ? json({ objectType, objectId: targetId, locationId: location })
+        : undefined,
+    );
+    render(<NotificationsScreen />);
+    fireEvent.click(await screen.findByRole('button', { name: 'Thông báo 1' }));
+    await waitFor(() =>
+      expect(s.navigateInStaffLocation).toHaveBeenCalledWith(location, expect.any(Function)),
+    );
+    expect(s.go).not.toHaveBeenCalled();
+    expect(s.push).not.toHaveBeenCalled();
+    act(() => navigate());
+    if (route === '/meter')
+      expect(s.push).toHaveBeenCalledWith({ pathname: '/meter', params: { taskId: targetId } });
+    else expect(s.go).toHaveBeenCalledWith(route, expect.any(Object));
   },
 );
 it('deduplicates the unread count with the bell and synchronizes both after a read', async () => {

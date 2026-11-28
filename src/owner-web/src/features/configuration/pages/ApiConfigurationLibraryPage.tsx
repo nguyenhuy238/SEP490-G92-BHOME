@@ -1,4 +1,5 @@
-import { useId, useState, type ReactNode } from 'react';
+import { TextField, ValidatedForm } from '../../../components/common/ValidatedForm';
+import { useId, useState } from 'react';
 import {
   Alert,
   Box,
@@ -14,7 +15,6 @@ import {
   MenuItem,
   Paper,
   Stack,
-  Tab,
   Table,
   TableBody,
   TableCell,
@@ -22,8 +22,6 @@ import {
   TableHead,
   TablePagination,
   TableRow,
-  Tabs,
-  TextField,
   Typography,
   useMediaQuery,
   useTheme,
@@ -31,7 +29,10 @@ import {
 import { useQuery } from '@tanstack/react-query';
 import { MoreHorizontal, Plus, Search } from 'lucide-react';
 import { useAuth } from '../../../../../../packages/client-core/src/auth';
-import { assetCatalogSupportsScope } from '../../../../../../packages/client-core/src/sharedConfiguration';
+import {
+  assetCatalogSupportsScope,
+  sharedFeeServiceName,
+} from '../../../../../../packages/client-core/src/sharedConfiguration';
 import type {
   SharedDocument,
   SharedResource,
@@ -52,7 +53,7 @@ import { SharedTemplateEditor } from './SharedTemplateEditor';
 import { formatBillingDecimal } from '../../../../../../packages/client-core/src/invoices';
 
 const libraryMeta: Record<
-  SharedResource,
+  Exclude<SharedResource, 'asset-templates'>,
   { title: string; subtitle: string; action: string; search: string }
 > = {
   'room-type-templates': {
@@ -66,12 +67,6 @@ const libraryMeta: Record<
     subtitle: 'Mẫu tài sản theo phòng hoặc dùng chung tại cơ sở.',
     action: 'Thêm loại tài sản',
     search: 'Tìm kiếm danh mục tài sản...',
-  },
-  'asset-templates': {
-    title: 'Gói tài sản theo phòng',
-    subtitle: 'Nhóm tài sản để chọn cho loại phòng.',
-    action: 'Tạo mẫu',
-    search: 'Tìm kiếm mẫu tài sản...',
   },
   'fee-templates': {
     title: 'Mẫu giá & biểu phí',
@@ -90,7 +85,10 @@ const libraryMeta: Record<
 const statusLabel = (status: SharedDocument['status']) =>
   status === 'Draft' ? 'Bản nháp' : status === 'Published' ? 'Có thể áp dụng' : 'Ngừng áp dụng';
 
-const resourceColumns: Record<SharedResource, { label: string; numeric?: boolean }[]> = {
+const resourceColumns: Record<
+  Exclude<SharedResource, 'asset-templates'>,
+  { label: string; numeric?: boolean }[]
+> = {
   'room-type-templates': [
     { label: 'Diện tích', numeric: true },
     { label: 'Sức chứa', numeric: true },
@@ -101,7 +99,6 @@ const resourceColumns: Record<SharedResource, { label: string; numeric?: boolean
     { label: 'Phạm vi' },
     { label: 'Giá tham khảo', numeric: true },
   ],
-  'asset-templates': [{ label: 'Loại tài sản', numeric: true }],
   'fee-templates': [
     { label: 'Loại phí' },
     { label: 'Phạm vi' },
@@ -151,7 +148,9 @@ function documentValues(document: SharedDocument): string[] {
           ? 'người/tháng'
           : data.unit;
     return [
-      feeCategoryLabels[data.category] ?? data.category,
+      data.category === 'ServiceFee'
+        ? `${feeCategoryLabels[data.category] ?? data.category} · ${sharedFeeServiceName(data, '')}`
+        : (feeCategoryLabels[data.category] ?? data.category),
       data.scope === 'Room' ? 'Phòng' : 'Cơ sở',
       feeMethodLabels[data.method] ?? data.method,
       `${formatBillingDecimal(data.referenceRate)} đ/${unit}`,
@@ -160,14 +159,15 @@ function documentValues(document: SharedDocument): string[] {
   return [data.effectiveFrom.split('-').reverse().join('/')];
 }
 
-function compactDocumentSummary(resource: SharedResource, values: string[]): string[] {
+function compactDocumentSummary(
+  resource: Exclude<SharedResource, 'asset-templates'>,
+  values: string[],
+): string[] {
   switch (resource) {
     case 'room-type-templates':
       return [`${values[0]} · ${values[1]}`, `Giá thuê tham khảo: ${values[2]}`];
     case 'asset-catalog':
       return [`${values[0]} · ${values[1]}`, `Giá tham khảo: ${values[2]}`];
-    case 'asset-templates':
-      return [`${values[0]} loại tài sản`];
     case 'fee-templates':
       return [
         `${values[0]} · Phạm vi: ${values[1]}`,
@@ -180,47 +180,18 @@ function compactDocumentSummary(resource: SharedResource, values: string[]): str
 }
 
 export function ApiConfigurationLibraryPage({ kind }: { kind: LibraryKind }) {
-  const [assetTab, setAssetTab] = useState(0);
-  const resource: SharedResource =
+  const resource: Exclude<SharedResource, 'asset-templates'> =
     kind === 'room'
       ? 'room-type-templates'
       : kind === 'asset'
-        ? assetTab === 0
-          ? 'asset-catalog'
-          : 'asset-templates'
+        ? 'asset-catalog'
         : kind === 'fee'
           ? 'fee-templates'
           : 'policy-templates';
-  return (
-    <SharedLibrary
-      key={resource}
-      resource={resource}
-      assetTabs={
-        kind === 'asset' ? (
-          <Tabs
-            value={assetTab}
-            onChange={(_, value: number) => setAssetTab(value)}
-            sx={{
-              minHeight: { xs: 44, sm: 36 },
-              '& .MuiTab-root': { minHeight: { xs: 44, sm: 36 } },
-            }}
-          >
-            <Tab label="Tài sản mẫu" />
-            <Tab label="Gói tài sản theo phòng" />
-          </Tabs>
-        ) : null
-      }
-    />
-  );
+  return <SharedLibrary key={resource} resource={resource} />;
 }
 
-function SharedLibrary({
-  resource,
-  assetTabs,
-}: {
-  resource: SharedResource;
-  assetTabs: ReactNode;
-}) {
+function SharedLibrary({ resource }: { resource: Exclude<SharedResource, 'asset-templates'> }) {
   const { session } = useAuth();
   const api = useSharedConfigurationApi();
   const action = useSetupAction();
@@ -308,7 +279,6 @@ function SharedLibrary({
           </Button>
         }
       />
-      {assetTabs}
       <SetupActionFeedback error={editor ? '' : action.error} notice={action.notice} />
       <Paper variant="outlined" sx={{ minWidth: 0 }}>
         <Stack
@@ -662,7 +632,7 @@ function SharedLibrary({
         }}
       >
         <DialogTitle>Nhân bản thành mẫu độc lập</DialogTitle>
-        <form
+        <ValidatedForm
           onSubmit={(event) => {
             event.preventDefault();
             if (duplicate)
@@ -691,7 +661,7 @@ function SharedLibrary({
               Nhân bản
             </Button>
           </DialogActions>
-        </form>
+        </ValidatedForm>
       </Dialog>
     </Stack>
   );

@@ -6,19 +6,26 @@ import { QueryCache } from '../lib/queryCache';
 const state = vi.hoisted(() => ({
   role: 'Staff',
   preview: false,
+  reloadStaffLocations: vi.fn(),
   api: { request: vi.fn(), queryCache: null as QueryCache | null },
 }));
 vi.mock('expo-router', () => ({
   useFocusEffect: (callback: () => void) => useEffect(callback, [callback]),
 }));
 vi.mock('../features/workspace/WorkspaceProvider', () => ({
-  useWorkspace: () => ({ role: state.role, preview: state.preview, staffLocationId: 'loc-1' }),
+  useWorkspace: () => ({
+    role: state.role,
+    preview: state.preview,
+    staffLocationId: 'loc-1',
+    reloadStaffLocations: state.reloadStaffLocations,
+  }),
 }));
 vi.mock('../lib/SessionProvider', () => ({ useSession: () => ({ api: state.api }) }));
 import { useStaffDashboard } from '../features/workspace/useStaffDashboard';
 beforeEach(() => {
   state.role = 'Staff';
   state.preview = false;
+  state.reloadStaffLocations.mockClear();
   state.api = {
     queryCache: new QueryCache(),
     request: vi.fn(async (path: string) =>
@@ -78,32 +85,37 @@ it('clears earlier account data while the replacement account is loading', async
   expect(view.result.current.locations.data).toBeNull();
   expect(view.result.current.locations.loading).toBe(true);
 });
-it('keeps actionable overdue work visible and ordered across Assigned and InProgress pages', async () => {
-  state.api.request.mockImplementation(async (path: string) => {
-    if (path.includes('isOverdue=true&status=Assigned'))
-      return {
-        items: [{ id: 'assigned', dueAt: '2026-11-04T10:00:00Z', status: 'Assigned' }],
-        totalCount: 1,
-      };
-    if (path.includes('isOverdue=true&status=InProgress'))
-      return {
-        items: [{ id: 'progress', dueAt: '2026-11-04T09:00:00Z', status: 'InProgress' }],
-        totalCount: 1,
-      };
-    return path.includes('operational-tasks') ? { items: [], totalCount: 0 } : [];
-  });
+it('requests only two latest actionable tasks for the selected Location', async () => {
   const view = renderHook(useStaffDashboard);
   await act(async () => {
     await Promise.resolve();
   });
-  expect(view.result.current.overdue.data?.items.map((item) => item.id)).toEqual([
-    'progress',
-    'assigned',
+  const paths = state.api.request.mock.calls.map(([path]) => path);
+  expect(paths.filter((path) => path.includes('latestActionable=true'))).toEqual([
+    '/api/v1/operational-tasks?page=1&pageSize=2&locationId=loc-1&latestActionable=true',
   ]);
-  const paths = state.api.request.mock.calls.map((call) => call[0]);
+  expect(paths.some((path) => path.includes('isOverdue=true'))).toBe(false);
+  expect(paths.filter((path) => path.includes('/meter-tasks'))).toEqual([
+    '/api/v1/capture/meter-tasks?locationId=loc-1&page=1',
+  ]);
+  expect(view.result.current.overdueMeterRooms).toBe(0);
+  expect(view.result.current.priorities.data?.items).toEqual([]);
+});
+
+it('refreshes the authorized facility directory and scoped dashboard data', async () => {
+  const view = renderHook(useStaffDashboard);
+  await act(async () => {
+    await Promise.resolve();
+  });
+  state.api.request.mockClear();
+  await act(async () => {
+    view.result.current.reload();
+    await Promise.resolve();
+  });
+  expect(state.reloadStaffLocations).toHaveBeenCalledOnce();
   expect(
-    paths
-      .filter((path) => path.includes('isOverdue=true'))
-      .every((path) => path.includes('&status=')),
+    state.api.request.mock.calls.some(
+      ([path]) => path.includes('latestActionable=true') && path.includes('locationId=loc-1'),
+    ),
   ).toBe(true);
 });

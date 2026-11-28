@@ -1,3 +1,5 @@
+import { ValidatedInput } from '../../../components/common/ValidatedForm';
+import { TextField } from '../../../components/common/ValidatedForm';
 import { useRef, useState, type ReactNode } from 'react';
 import {
   Alert,
@@ -11,7 +13,6 @@ import {
   LinearProgress,
   Paper,
   Stack,
-  TextField,
   Typography,
 } from '@mui/material';
 import { ArrowRight, RefreshCw, WalletCards, X } from 'lucide-react';
@@ -302,7 +303,10 @@ function TenantRefundRequestDetails({
   const requestKey = useRef(intent?.key ?? crypto.randomUUID());
   const state = statusOf(row.status);
   const decision = state === 'REQUESTED';
-  const execution = state === 'APPROVED';
+  // Move-out petitions are contextual approvals. Their payout must be recorded
+  // ONLY by the separately verified deposit refund ledger, not as a second
+  // independent bank transfer from this generic petition screen.
+  const execution = state === 'APPROVED' && !row.moveOutProposalId;
 
   function updateFields() {
     if (!intent) requestKey.current = crypto.randomUUID();
@@ -475,6 +479,14 @@ function TenantRefundRequestDetails({
           </Typography>
         </Stack>
         <Divider />
+        {row.moveOutProposalId && (
+          <Alert severity="info">
+            Đây là yêu cầu hoàn tiền cọc từ đề xuất quyết toán trả phòng đã được Tenant chấp thuận.
+            Owner có thể duyệt hoặc từ chối tại đây, nhưng việc chuyển khoản hoàn cọc và lưu chứng
+            từ phải được xử lý trong luồng hoàn cọc của hợp đồng để tránh trả trùng.
+            {state === 'APPROVED' && ' Đơn đã duyệt; vui lòng mở hợp đồng để xử lý hoàn cọc.'}
+          </Alert>
+        )}
         <Stack spacing={1}>
           <Typography variant="subtitle2" sx={{ fontWeight: 700 }}>
             Giao dịch và hợp đồng liên quan
@@ -623,7 +635,7 @@ function TenantRefundRequestDetails({
                     <Typography variant="caption" color="text.secondary">
                       PNG/JPEG tối đa 5 MB. Tránh tải giấy tờ tùy thân hoặc thông tin đăng nhập.
                     </Typography>
-                    <input
+                    <ValidatedInput
                       type="file"
                       accept="image/png,image/jpeg"
                       aria-label="Ảnh chứng từ chuyển khoản"

@@ -25,6 +25,7 @@ const row = {
   status: 'REJECTED',
   sourcePaymentId: null,
   sourceContractId: null,
+  moveOutProposalId: null,
   createdAt: '2026-11-15T03:00:00Z',
   decidedAt: '2026-11-15T04:00:00Z',
   decisionReason: 'Cần bổ sung chứng cứ',
@@ -34,19 +35,26 @@ const row = {
   version: 1,
 };
 const state = vi.hoisted(() => ({
+  route: {} as Record<string, string>,
   role: 'Tenant',
   error: '',
   empty: false,
   proof: false,
   status: 'REJECTED',
   linked: false,
+  moveOutLinked: false,
   waiting: false,
+  go: vi.fn(),
   requests: vi.fn(),
   reload: vi.fn(),
   send: vi.fn(),
   notify: vi.fn(),
 }));
 
+vi.mock('../features/workspace/WorkspaceProvider', () => ({
+  useWorkspace: () => ({ go: state.go }),
+}));
+vi.mock('../features/incidents/TenantIncidentStyle', () => ({ reportUi: {} }));
 vi.mock('../lib/SessionProvider', () => ({
   useSession: () => ({
     session: { userId: 'tenant-user', roles: [state.role] },
@@ -54,7 +62,10 @@ vi.mock('../lib/SessionProvider', () => ({
   }),
 }));
 vi.mock('../lib/randomUUID', () => ({ randomUUID: () => 'dddd0000-0000-4000-8000-000000000004' }));
-vi.mock('expo-router', () => ({ useFocusEffect: () => undefined }));
+vi.mock('expo-router', () => ({
+  useFocusEffect: () => undefined,
+  useLocalSearchParams: () => state.route,
+}));
 vi.mock('../components/WorkspaceHeaderContext', () => ({
   useWorkspaceHeaderRefresh: () => false,
 }));
@@ -84,6 +95,9 @@ vi.mock('../features/workspace/useWorkspaceQuery', () => ({
                       status: state.status,
                       sourcePaymentId: state.linked ? paymentId : null,
                       sourceContractId: state.linked ? contractId : null,
+                      moveOutProposalId: state.moveOutLinked
+                        ? '22220000-0000-4000-8000-000000000009'
+                        : null,
                     },
               ],
               page: 1,
@@ -104,6 +118,13 @@ vi.mock('react-native', () => ({
 }));
 vi.mock('react-native-paper', () => ({
   Text: ({ children }: { children: React.ReactNode }) => <span>{children}</span>,
+  IconButton: ({
+    accessibilityLabel,
+    onPress,
+  }: {
+    accessibilityLabel: string;
+    onPress: () => void;
+  }) => <button aria-label={accessibilityLabel} onClick={onPress} />,
   Button: ({
     children,
     onPress,
@@ -206,10 +227,14 @@ vi.mock('../components/WorkspaceQueryState', () => ({
   Pagination: () => null,
 }));
 
-import { TenantRefundRequestsScreen } from '../screens/TenantRefundRequestsScreen';
+import {
+  TenantRefundRequestsScreen,
+  TenantRefundHistoryScreen,
+} from '../screens/TenantRefundRequestsScreen';
 
 beforeEach(() => {
   vi.clearAllMocks();
+  state.route = {};
   Object.assign(state, {
     role: 'Tenant',
     error: '',
@@ -217,6 +242,7 @@ beforeEach(() => {
     proof: false,
     status: 'REJECTED',
     linked: false,
+    moveOutLinked: false,
     waiting: false,
   });
   state.send.mockResolvedValue(row);
@@ -252,6 +278,14 @@ it('validates money, reason, IDs and allows two optional source associations', (
       sourceContractId: contractId,
     }),
   ).toBe('');
+  expect(
+    refundRequestFormError({
+      amount: '120000',
+      reason: 'Hoàn cọc trả phòng',
+      moveOutProposalId: 'not-a-guid',
+      sourceContractId: contractId,
+    }),
+  ).toMatch(/đề xuất/);
 });
 
 it('MoneyTextInput normalizes displayed VND grouping into accepted integer digits', () => {
@@ -270,16 +304,31 @@ it('MoneyTextInput normalizes displayed VND grouping into accepted integer digit
   expect(tryParseMoneyInput('-500')).toBeNull();
 });
 
+it('shows only history including rejection reason on the sent route', () => {
+  render(<TenantRefundHistoryScreen />);
+  expect(screen.getByText(/Cần bổ sung chứng cứ/)).toBeTruthy();
+  expect(screen.queryByRole('textbox', { name: 'Số tiền yêu cầu hoàn (VND)' })).toBeNull();
+  expect(state.requests).not.toHaveBeenCalledWith('/api/v1/tenant/refund-requests/sources');
+});
+
 it('displays payment and contract associations together when both exist', () => {
   state.linked = true;
-  render(<TenantRefundRequestsScreen />);
+  render(<TenantRefundHistoryScreen />);
   expect(screen.getByText('Có liên kết giao dịch')).toBeTruthy();
   expect(screen.getByText('Có liên kết hợp đồng')).toBeTruthy();
   expect(screen.queryByText('Yêu cầu độc lập')).toBeNull();
 });
 
+it('identifies an Owner-reviewed move-out refund request separately from verified money transfer', () => {
+  state.linked = true;
+  state.moveOutLinked = true;
+  render(<TenantRefundHistoryScreen />);
+  expect(screen.getByText('Liên kết đề xuất trả phòng')).toBeTruthy();
+  expect(screen.getByText(/Tiền hoàn thực tế sẽ được đối chiếu qua quyết toán cọc/)).toBeTruthy();
+});
+
 it('shows an independent request label when neither source exists', () => {
-  render(<TenantRefundRequestsScreen />);
+  render(<TenantRefundHistoryScreen />);
   expect(screen.getByText('Yêu cầu độc lập')).toBeTruthy();
   expect(screen.queryByText('Có liên kết giao dịch')).toBeNull();
   expect(screen.queryByText('Có liên kết hợp đồng')).toBeNull();
@@ -345,10 +394,12 @@ it.each([
   ).rejects.toMatchObject({ status: 502 });
 });
 
-it('shows rejection reason and opens form for an independent request', async () => {
+it('opens the form directly without history and sends an independent request', async () => {
   render(<TenantRefundRequestsScreen />);
-  expect(screen.getByText(/Cần bổ sung chứng cứ/)).toBeTruthy();
-  fireEvent.click(screen.getByRole('button', { name: 'Tạo yêu cầu hoàn tiền' }));
+  expect(screen.queryByText(/Cần bổ sung chứng cứ/)).toBeNull();
+  expect(screen.queryByRole('button', { name: 'Tạo yêu cầu hoàn tiền' })).toBeNull();
+  fireEvent.click(screen.getByRole('button', { name: 'Đã gửi' }));
+  expect(state.go).toHaveBeenCalledWith('refund-history');
   fireEvent.change(screen.getByRole('textbox', { name: 'Số tiền yêu cầu hoàn (VND)' }), {
     target: { value: '70000' },
   });
@@ -368,9 +419,35 @@ it('shows rejection reason and opens form for an independent request', async () 
   expect(screen.getByText(/Đã gửi yêu cầu/)).toBeTruthy();
 });
 
+it('opens a prefilled move-out refund request and links it to the Tenant contract', async () => {
+  state.route = {
+    moveOutProposalId: '22220000-0000-4000-8000-000000000009',
+    sourceContractId: contractId,
+    amount: '120000',
+    reason: 'Hoàn cọc sau xác nhận trả phòng.',
+  };
+  render(<TenantRefundRequestsScreen />);
+  expect(await screen.findByDisplayValue('120000')).toBeTruthy();
+  expect(screen.getByDisplayValue('Hoàn cọc sau xác nhận trả phòng.')).toBeTruthy();
+  expect(
+    (screen.getByRole('combobox', { name: 'Hợp đồng liên quan (tùy chọn)' }) as HTMLSelectElement)
+      .value,
+  ).toBe(contractId);
+  fireEvent.click(screen.getByRole('button', { name: /Tôi xác nhận số tiền/ }));
+  fireEvent.click(screen.getByRole('button', { name: 'Gửi yêu cầu đến Owner' }));
+  await waitFor(() => expect(state.send).toHaveBeenCalledOnce());
+  const body = JSON.parse(state.send.mock.calls[0][1].body);
+  expect(body).toMatchObject({
+    amount: '120000',
+    reason: 'Hoàn cọc sau xác nhận trả phòng.',
+    sourceContractId: contractId,
+    sourcePaymentId: null,
+    moveOutProposalId: '22220000-0000-4000-8000-000000000009',
+  });
+});
+
 it('links payment and contract from Tenant-authorized choices', async () => {
   render(<TenantRefundRequestsScreen />);
-  fireEvent.click(screen.getByRole('button', { name: 'Tạo yêu cầu hoàn tiền' }));
   fireEvent.change(screen.getByRole('textbox', { name: 'Số tiền yêu cầu hoàn (VND)' }), {
     target: { value: '70000' },
   });
@@ -394,7 +471,6 @@ it('links payment and contract from Tenant-authorized choices', async () => {
 
 it('requires confirmation and rejects empty form before hitting the server', () => {
   render(<TenantRefundRequestsScreen />);
-  fireEvent.click(screen.getByRole('button', { name: 'Tạo yêu cầu hoàn tiền' }));
   fireEvent.click(screen.getByRole('button', { name: 'Gửi yêu cầu đến Owner' }));
   expect(screen.getByText(/Xác nhận số tiền và lý do/)).toBeTruthy();
   fireEvent.click(screen.getByRole('button', { name: /Tôi xác nhận số tiền/ }));
@@ -412,7 +488,6 @@ it('locks the submit button against double creation until the response arrives',
       }),
   );
   render(<TenantRefundRequestsScreen />);
-  fireEvent.click(screen.getByRole('button', { name: 'Tạo yêu cầu hoàn tiền' }));
   fireEvent.change(screen.getByRole('textbox', { name: 'Số tiền yêu cầu hoàn (VND)' }), {
     target: { value: '50000' },
   });
@@ -439,7 +514,7 @@ it('does not fetch requests or show the form for Staff and Owner', () => {
 it('only loads a Completed proof through an authenticated request', async () => {
   state.proof = true;
   state.send.mockResolvedValue(Uint8Array.from([137, 80, 78, 71, 4, 2, 1, 0]));
-  render(<TenantRefundRequestsScreen />);
+  render(<TenantRefundHistoryScreen />);
   fireEvent.click(screen.getByRole('button', { name: 'Xem chứng từ chuyển khoản' }));
   await waitFor(() =>
     expect(state.send).toHaveBeenCalledWith(
@@ -453,7 +528,7 @@ it('only loads a Completed proof through an authenticated request', async () => 
 
 it('does not show proof before Owner execution is completed', () => {
   state.status = 'APPROVED';
-  render(<TenantRefundRequestsScreen />);
+  render(<TenantRefundHistoryScreen />);
   expect(screen.getByText('Đã duyệt · chờ chuyển khoản')).toBeTruthy();
   expect(screen.queryByRole('button', { name: 'Xem chứng từ chuyển khoản' })).toBeNull();
   expect(state.send).not.toHaveBeenCalled();

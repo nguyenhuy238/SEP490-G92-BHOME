@@ -11,6 +11,7 @@ internal sealed class InvoiceFinancialRow
     public Guid Id { get; init; }
     public Guid LocationId { get; init; }
     public Guid RoomId { get; init; }
+    public Guid ContractId { get; init; }
     public string LocationName { get; init; } = "";
     public string RoomNumber { get; init; } = "";
     public DateOnly BillingPeriod { get; init; }
@@ -33,6 +34,7 @@ internal static class InvoiceFinancialQueries
         Id = i.Id,
         LocationId = i.LocationId,
         RoomId = i.RoomId,
+        ContractId = i.RepresentativeContractId,
         LocationName = i.LocationName,
         RoomNumber = i.RoomNumber,
         BillingPeriod = i.BillingPeriod,

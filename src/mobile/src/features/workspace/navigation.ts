@@ -15,12 +15,14 @@ export const screenRoles = {
   'report-incident': ['Staff'],
   'move-in-inventory': ['Staff'],
   'move-in': ['Staff'],
-  residence: ['Tenant'],
+  residence: ['Tenant', 'Staff'],
   adjustment: ['Tenant'],
   'contract-request': ['Tenant'],
   signing: ['Owner', 'Staff', 'Tenant'],
   'billing-history': ['Tenant'],
   'refund-requests': ['Tenant'],
+  'refund-history': ['Tenant'],
+  'incident-history': ['Tenant'],
   shifts: ['Staff'],
   rooms: ['Staff'],
   'debt-follow-up': ['Staff'],
@@ -44,6 +46,7 @@ export const screenRoles = {
   'tenant-home': ['Tenant'],
   'tenant-features': ['Tenant'],
   'tenant-room': ['Tenant'],
+  'tenant-handovers': ['Tenant'],
   'tenant-requests': ['Tenant'],
   'tenant-meters': ['Tenant'],
   invoice: ['Tenant'],
@@ -56,6 +59,8 @@ export const screenRoles = {
   'send-notification': ['Staff'],
   'staff-assets': ['Staff'],
   'staff-maintenance': ['Staff'],
+  'staff-handover-archive': ['Staff'],
+  'staff-handovers': ['Staff'],
   'staff-emergencies': ['Staff'],
   'staff-invoices': ['Staff'],
   security: ['Owner', 'Staff', 'Tenant'],
@@ -107,7 +112,7 @@ export const tabs: Record<MobileRole, { screen: WorkspaceScreen; title: string; 
     Staff: [
       { screen: 'staff-home', title: 'Trang chủ', icon: 'home-outline' },
       { screen: 'work-orders', title: 'Công việc', icon: 'clipboard-check-outline' },
-      { screen: 'notifications', title: 'Thông báo', icon: 'bell-outline' },
+      { screen: 'rooms', title: 'Phòng', icon: 'door-open' },
       { screen: 'profile', title: 'Cá nhân', icon: 'account' },
     ],
     Tenant: [
@@ -132,6 +137,8 @@ export function activeWorkspaceTab(role: MobileRole, screen: WorkspaceScreen): W
         'incident-detail',
         'incident-inbox',
         'refund-requests',
+        'refund-history',
+        'incident-history',
       ].includes(screen)
     )
       return 'tenant-requests';
@@ -143,10 +150,14 @@ export function activeWorkspaceTab(role: MobileRole, screen: WorkspaceScreen): W
       [
         'work-orders',
         'task-detail',
+        'move-out',
+        'staff-handovers',
+        'move-in',
         'shifts',
         'report-incident',
         'move-in-inventory',
         'staff-maintenance',
+        'staff-handover-archive',
         'staff-emergencies',
         'staff-incidents',
         'incident-detail',
@@ -155,7 +166,7 @@ export function activeWorkspaceTab(role: MobileRole, screen: WorkspaceScreen): W
       ].includes(screen)
     )
       return 'work-orders';
-    if (['notifications', 'send-notification'].includes(screen)) return 'notifications';
+    if (screen === 'rooms') return 'rooms';
     return 'staff-home';
   }
   if (
