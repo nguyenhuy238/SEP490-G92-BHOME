@@ -474,7 +474,7 @@ public static class DependencyInjection
         services.AddScoped<BHome.Application.Notifications.NotificationAutomationService>();
         services.AddOptions<BHome.Application.Notifications.NotificationDeliveryOptions>().Bind(configuration.GetSection("NotificationDelivery")).Validate(o => o.Valid(), "Invalid notification delivery retry policy.").ValidateOnStart();
         services.AddSingleton(p => p.GetRequiredService<IOptions<BHome.Application.Notifications.NotificationDeliveryOptions>>().Value);
-        services.AddScoped<BHome.Application.Notifications.INotificationDeliveryStore, BHome.Infrastructure.Modules.Notifications.NotificationDeliveryStore>();
+        services.AddScoped<BHome.Application.Notifications.INotificationDeliveryStore, BHome.Infrastructure.Modules.Notifications.CompactNotificationDeliveryStore>();
         services.AddScoped<BHome.Application.Notifications.NotificationDeliveryService>();
         services.AddScoped<BHome.Application.Notifications.NotificationDeliveryAdministration>();
         services.AddScoped<IBackgroundJobHandler>(p => p.GetRequiredService<BHome.Application.Notifications.NotificationDeliveryService>());

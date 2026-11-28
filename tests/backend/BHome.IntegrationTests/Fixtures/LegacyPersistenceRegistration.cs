@@ -154,6 +154,7 @@ internal static class LegacyPersistenceRegistration
         services.Replace(ServiceDescriptor.Scoped<ILocationAssignments>(p => p.GetRequiredService<PostgresLocationAssignments>()));
         services.Replace(ServiceDescriptor.Scoped<IStaffLocationAccess>(p => p.GetRequiredService<PostgresLocationAssignments>()));
         services.Replace(ServiceDescriptor.Scoped<INotificationRepository, BHome.Infrastructure.Modules.Notifications.NotificationRepository>());
+        services.Replace(ServiceDescriptor.Scoped<INotificationDeliveryStore, BHome.Infrastructure.Modules.Notifications.NotificationDeliveryStore>());
         return services;
     }
 

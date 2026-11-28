@@ -21,12 +21,12 @@ internal sealed class NotificationInboxState
     public Guid? SourceTaskNotificationId { get; init; }
     public DateTimeOffset CreatedAt { get; init; }
     public DateTimeOffset? ReadAt { get; init; }
-    public string DeliveryState { get; init; } = "Unconfigured";
-    public int DeliveryAttempts { get; init; }
-    public DateTimeOffset? NextDeliveryAt { get; init; }
-    public DateTimeOffset? DeliveryLockedUntil { get; init; }
-    public Guid? DeliveryLeaseToken { get; init; }
-    public DateTimeOffset? DeliveryLastAttemptAt { get; init; }
-    public string? DeliveryLastErrorCode { get; init; }
-    public string? DeliveryProviderReference { get; init; }
+    public string DeliveryState { get; set; } = "Unconfigured";
+    public int DeliveryAttempts { get; set; }
+    public DateTimeOffset? NextDeliveryAt { get; set; }
+    public DateTimeOffset? DeliveryLockedUntil { get; set; }
+    public Guid? DeliveryLeaseToken { get; set; }
+    public DateTimeOffset? DeliveryLastAttemptAt { get; set; }
+    public string? DeliveryLastErrorCode { get; set; }
+    public string? DeliveryProviderReference { get; set; }
 }
