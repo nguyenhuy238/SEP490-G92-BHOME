@@ -18,4 +18,6 @@ Staff can reach routine actions from Home, scan lists without repetitive prose, 
 
 ## Platform
 
-Adaptive React Native / Expo (iOS, Android, web preview); Vietnamese UI.
+adaptive
+
+React Native / Expo (iOS, Android, web preview); Vietnamese UI.

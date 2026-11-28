@@ -100,11 +100,20 @@ public sealed class Compact24ResidenceQueryTests(Compact24Fixture fixture) : ICl
         db.Add(new StaffLocationAssignment(location.Id, staffId, ownerId, from, from.AddMonths(12))); await db.SaveChangesAsync();
         var tracking = await staff.GetAsync("/api/v1/residence-tasks/tracking");
         Assert.True(tracking.IsSuccessStatusCode, await tracking.Content.ReadAsStringAsync());
-        Assert.Contains((await tracking.Content.ReadFromJsonAsync<OperationsPage<ResidenceTrackingSummary>>())!.Items, r => r.ResidentId == child.Id);
+        var trackingPage = (await tracking.Content.ReadFromJsonAsync<ResidenceTrackingPage>())!;
+        Assert.Contains(trackingPage.Items, r => r.ResidentId == child.Id);
+        Assert.Equal(2, trackingPage.Stats.TotalResidents);
+        Assert.Equal(2, trackingPage.LoadedCount);
+        Assert.All(trackingPage.Items, row => Assert.True(row.ActualResidenceFrom.HasValue));
         Assert.DoesNotContain("hasEvidence", await tracking.Content.ReadAsStringAsync());
         Assert.DoesNotContain("history", await tracking.Content.ReadAsStringAsync());
+        Assert.DoesNotContain("ownerConfirmedBy", await tracking.Content.ReadAsStringAsync());
+        Assert.DoesNotContain("phone", await tracking.Content.ReadAsStringAsync(), StringComparison.OrdinalIgnoreCase);
+        Assert.DoesNotContain("registrationEvidence", await tracking.Content.ReadAsStringAsync(), StringComparison.OrdinalIgnoreCase);
+        Assert.Single((await staff.GetFromJsonAsync<ResidenceTrackingPage>($"/api/v1/residence-tasks/tracking?search={Uri.EscapeDataString("FAMILY-SYN")}&filter=Pending"))!.Items);
+        Assert.Equal(2, (await staff.GetFromJsonAsync<ResidenceTrackingPage>("/api/v1/residence-tasks/tracking?filter=Pending"))!.TotalCount);
         using var unassigned = await User(Roles.Staff);
-        Assert.Empty((await unassigned.GetFromJsonAsync<OperationsPage<ResidenceTrackingSummary>>("/api/v1/residence-tasks/tracking"))!.Items);
+        Assert.Empty((await unassigned.GetFromJsonAsync<ResidenceTrackingPage>("/api/v1/residence-tasks/tracking"))!.Items);
         // An arrival in a later month reuses the already active Room obligation;
         // it must not collect another rent/deposit or person fee.
         var arrivalUser = (await outsider.GetFromJsonAsync<SessionIdentity>("/api/v1/auth/me"))!.UserId;
