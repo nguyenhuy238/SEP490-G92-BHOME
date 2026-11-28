@@ -19,7 +19,7 @@ public sealed partial class PaymentLedgerTests
         var (w, proof, photo) = await DamageFixture(true); using var owner = await Client(w.Owner); using var tenant = await Client(w.Tenants[2]);
         var route = $"/api/v1/contracts/{w.Contract}/move-out/receivables";
         var view = await RefundValue<SettlementReceivablesView>(await owner.GetAsync(route));
-        await using var scope = fixture.Factory.Services.CreateAsyncScope(); var db = scope.ServiceProvider.GetRequiredService<BHomePersistenceContext>();
+        await using var scope = fixture.Factory.Services.CreateAsyncScope(); var db = scope.ServiceProvider.GetFixturePersistence();
         var inspection = await db.Set<ContractFinalInspection>().SingleAsync(i => i.ContractId == w.Contract);
         var charge = await RefundValue<SettlementReceivable>(await Post(owner, route + "/damage",
             new DamageChargeInput(view.Reference, inspection.Id, inspection.Version, null, 600000, "Synthetic repair", [proof], true)));

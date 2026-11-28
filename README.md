@@ -2,16 +2,22 @@
 
 BHOME - Nền tảng quản lý và vận hành chuỗi nhà trọ thông minh.
 
+**Dành cho thành viên đọc code và chuẩn bị bảo vệ:** bắt đầu tại
+[Bản đồ nghiệp vụ và mã nguồn](docs/business-flows/README.md). Tài liệu này chỉ đường từ
+màn hình đến API, service, repository và dữ liệu, đồng thời phân biệt tài liệu hiện hành với hồ sơ lịch sử.
+
 **Thiết lập môi trường cho team:** dùng [BHOME_TEAM_ENVIRONMENT_SETUP](docs/development/BHOME_TEAM_ENVIRONMENT_SETUP.md)
 cho Local / Staging / Production. Local chạy độc lập, không cần Cloudflare/ngrok;
 luồng email/ký từ Internet và SePay Sandbox dùng VPS Staging riêng.
 
-Project hiện có nền tảng backend ASP.NET Core 8, ba ứng dụng React/TypeScript và API đăng nhập
-Identity/JWT cho tài khoản đã tồn tại, phiên phía server, refresh xoay vòng, đăng xuất và đổi mật khẩu.
-Owner Web/Mobile có màn hình đăng nhập. Các luồng nghiệp vụ, tạo/kích hoạt tài khoản và tích hợp
-nhà cung cấp bên ngoài chưa hoàn thiện. Migration không tạo tài khoản demo.
+Project dùng backend ASP.NET Core 8, Owner Web React/MUI/Vite, Mobile Expo/React Native
+và Public Web React/Vite. Các module nghiệp vụ đang có trong mã nguồn được dẫn đường tại
+[bản đồ Backend](docs/business-flows/BACKEND.md) và [Frontend](docs/business-flows/FRONTEND.md).
+Sự hiện diện của API hoặc màn hình không đồng nghĩa với việc đã nghiệm thu toàn bộ SRS.
 
-Database phát triển hiện dùng **Compact24: 24 bảng, 383 cột, 83 FK**. Sau khi cấu hình `.env`
+Database phát triển dùng **Compact24**. Số bảng/cột/FK trong tài liệu thiết kế cũ là snapshot;
+kiểm tra schema hiện hành theo [quy trình migration](docs/database/DATABASE_MIGRATION_WORKFLOW.md).
+Sau khi cấu hình `.env`
 và bật PostgreSQL local, chạy API ở Development sẽ tự tạo database `bhome` nếu thiếu và dựng schema
 nếu trống. Những lần chạy sau giữ nguyên dữ liệu. Có thể dùng PostgreSQL 16 qua Docker hoặc native
 PostgreSQL qua pgAdmin. Xem [hướng dẫn database](docs/database/2026-11-03/README.md).
@@ -288,11 +294,18 @@ cho background jobs, OCR và tích hợp bên ngoài.
 ```text
 src/backend/
   BHome.sln
-  BHome.Api/             HTTP, phân quyền, health, OpenAPI
-  BHome.Application/     Use case và hợp đồng ứng dụng
-  BHome.Domain/          Định nghĩa domain
-  BHome.Infrastructure/  EF/Identity/JWT, storage, jobs, integration adapters
-src/owner-web/           React + Vite + Ant Design
+  BHome.Api/             Một project ASP.NET Core 8 (BHome.Api.csproj)
+    Controllers/         HTTP, phân quyền, health, OpenAPI
+    Services/            Use case, kiểm tra nghiệp vụ
+    DTOs/                Request/response và contract types
+    Interfaces/          Interface của các dependency
+    Domain/              Entity, enum, quy tắc thuần
+    Repositories/        Đọc/ghi, khóa và transaction
+    Data/                EF, Compact24, migrations
+    Integrations/        OCR, storage và tích hợp
+    BackgroundJobs/      Worker và lịch nền
+    Configuration/       DI và cấu hình
+src/owner-web/           React + Vite + Material UI
 src/mobile/              Expo + React Native
 src/public-web/          React + Vite
 packages/client-core/    API/auth/localization dùng chung

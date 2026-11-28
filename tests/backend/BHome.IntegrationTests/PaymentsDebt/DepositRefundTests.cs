@@ -54,7 +54,7 @@ public sealed partial class PaymentLedgerTests
         Assert.Null(row.SourcePaymentId); Assert.Equal(w.Contract, row.SourceDepositContractId);
         await using (var savedScope = fixture.Factory.Services.CreateAsyncScope())
         {
-            var saved = savedScope.ServiceProvider.GetRequiredService<BHomePersistenceContext>();
+            var saved = savedScope.ServiceProvider.GetFixturePersistence();
             Assert.Equal("CONTRACT_AGREEMENT_OWNER_CONFIRMED", await saved.Database.SqlQuery<string>($"""
                 SELECT h->'state'->>'beneficiaryBasis' AS "Value" FROM refund_requests r
                 CROSS JOIN LATERAL jsonb_array_elements(r.history) WITH ORDINALITY e(h,n)
@@ -108,7 +108,7 @@ public sealed partial class PaymentLedgerTests
         Assert.Equal(summary.FinancialReference, final.FinancialReference); Assert.NotEqual(summary.Reference, final.Reference);
         await RefundValue<MoveOutView>(await Post(owner, contract + "/move-out/settlement", new SettlementInput("Synthetic final bank statement checked", final.Reference)));
         await RefundValue<ContractView>(await Post(owner, contract + "/move-out/complete", new CompletionInput(today, "Available"), completionKey));
-        await using var scope = fixture.Factory.Services.CreateAsyncScope(); var db = scope.ServiceProvider.GetRequiredService<BHomePersistenceContext>();
+        await using var scope = fixture.Factory.Services.CreateAsyncScope(); var db = scope.ServiceProvider.GetFixturePersistence();
         Assert.Equal(1, await db.Database.SqlQuery<int>($"SELECT count(*)::integer AS \"Value\" FROM refund_requests WHERE source_deposit_contract_id={w.Contract} AND status='COMPLETED'").SingleAsync());
         Assert.Equal(1, await db.SecurityAudit.CountAsync(a => a.TargetId == row.Id && a.Event == "DepositRefundCompleted"));
         var afterReturn = await RefundValue<FinancialReport>(await owner.GetAsync("/api/v1/financial-reports?from=2000-01-01&to=2100-12-31"));
@@ -155,7 +155,7 @@ public sealed partial class PaymentLedgerTests
         var w = await Setup(); await ReadySettlementFixture(w, true, agreedDeposit: 20000); using var owner = await Client(w.Owner);
         var contract = $"/api/v1/contracts/{w.Contract}";
         await RefundValue<ContractId>(await Post(owner, contract + "/deposit-verifications", new DepositInput("SYN-IMPORT-" + Guid.NewGuid(), 20000, "Synthetic")));
-        await using var scope = fixture.Factory.Services.CreateAsyncScope(); var db = scope.ServiceProvider.GetRequiredService<BHomePersistenceContext>();
+        await using var scope = fixture.Factory.Services.CreateAsyncScope(); var db = scope.ServiceProvider.GetFixturePersistence();
         var person = (await db.Set<Contract>().SingleAsync(c => c.Id == w.Contract)).RepresentativeResidentId;
         await db.Database.ExecuteSqlInterpolatedAsync($"""
             INSERT INTO refund_requests(id,source_deposit_contract_id,beneficiary_resident_id,requested_by_user_id,requested_at,requested_amount,

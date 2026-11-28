@@ -1,7 +1,7 @@
 import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { expect, it, vi } from 'vitest';
 import type { ContractClient } from '../../../../../packages/client-core/src/contracts';
-import { OwnerHandoverDraftPanel } from './OwnerHandoverDraftPanel';
+import { OwnerHandoverDraftPanel } from './components/handover/OwnerHandoverDraftPanel';
 
 vi.mock('../../components/common/PrivateEvidenceViewer', () => ({
   PrivateEvidenceViewer: ({
@@ -37,7 +37,7 @@ const handInk = {
     ],
   ],
 };
-vi.mock('./OwnerSigningPanel', () => ({
+vi.mock('./components/signing/OwnerSigningPanel', () => ({
   DrawPad: ({
     onChange,
     disabled,
@@ -51,7 +51,7 @@ vi.mock('./OwnerSigningPanel', () => ({
   ),
 }));
 
-vi.mock('./InlineHandoverEvidence', () => ({
+vi.mock('./components/handover/InlineHandoverEvidence', () => ({
   InlineHandoverEvidence: ({
     label,
     fetchBlob,

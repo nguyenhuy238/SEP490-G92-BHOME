@@ -410,31 +410,31 @@ import {
   MeterTasksScreen,
 } from '../../../src/mobile/src/screens/LiveWorkspaceScreens';
 import { NotificationsScreen } from '../../../src/mobile/src/screens/NotificationsScreen';
-import { TenantDashboard } from '../../../src/mobile/src/screens/TenantDashboard';
-import { TenantCurrentRentalContext } from '../../../src/mobile/src/features/tenant/TenantCurrentRentalContext';
-import { TenantFeaturesScreen } from '../../../src/mobile/src/screens/TenantFeaturesScreen';
+import { TenantDashboard } from '../../../src/mobile/src/features/tenant/dashboard/TenantDashboard';
+import { TenantCurrentRentalContext } from '../../../src/mobile/src/features/tenant/room/TenantCurrentRentalContext';
+import { TenantFeaturesScreen } from '../../../src/mobile/src/features/tenant/dashboard/TenantFeaturesScreen';
 import {
   TenantFeatureDirectory,
   tenantFeatureGroups,
 } from '../../../src/mobile/src/components/TenantFeatureDirectory';
 import { AccountSecurityScreen } from '../../../src/mobile/src/screens/AccountSecurityScreen';
-import { TenantInvoicesScreen } from '../../../src/mobile/src/screens/TenantInvoicesScreen';
-import { TenantPaymentPanel } from '../../../src/mobile/src/screens/TenantPaymentPanel';
-import { TenantPaymentHistoryScreen } from '../../../src/mobile/src/screens/TenantPaymentHistoryScreen';
-import { TenantRoomScreen } from '../../../src/mobile/src/screens/TenantRoomScreen';
-import { TenantMeterHistoryScreen } from '../../../src/mobile/src/screens/TenantMeterHistoryScreen';
+import { TenantInvoicesScreen } from '../../../src/mobile/src/features/tenant/billing/TenantInvoicesScreen';
+import { TenantPaymentPanel } from '../../../src/mobile/src/features/tenant/billing/TenantPaymentPanel';
+import { TenantPaymentHistoryScreen } from '../../../src/mobile/src/features/tenant/billing/TenantPaymentHistoryScreen';
+import { TenantRoomScreen } from '../../../src/mobile/src/features/tenant/room/TenantRoomScreen';
+import { TenantMeterHistoryScreen } from '../../../src/mobile/src/features/tenant/room/TenantMeterHistoryScreen';
 import {
   TenantIncidentScreen,
   TenantRequestsScreen,
   TenantResidenceScreen,
-} from '../../../src/mobile/src/screens/TenantServiceScreens';
-import { TenantProfileScreen } from '../../../src/mobile/src/screens/TenantProfileScreen';
-import { validateTenantEvidence } from '../../../src/mobile/src/components/TenantEvidenceDraft';
+} from '../../../src/mobile/src/features/tenant/TenantServiceScreens';
+import { ProfileScreen } from '../../../src/mobile/src/screens/ProfileScreen';
+import { validateIncidentPhoto } from '../../../src/mobile/src/services/incidents';
 import {
   positiveAmount,
   sameAmount,
-} from '../../../src/mobile/src/features/tenant/paymentPresentation';
-import { TenantAdjustmentPanel } from '../../../src/mobile/src/screens/TenantAdjustmentPanel';
+} from '../../../src/mobile/src/features/tenant/billing/paymentPresentation';
+import { TenantAdjustmentPanel } from '../../../src/mobile/src/features/tenant/billing/TenantAdjustmentPanel';
 import type { Invoice } from '../../../packages/client-core/src/invoices';
 import { businessToday } from '../../../packages/client-core/src/contracts';
 
@@ -1123,7 +1123,7 @@ it('does not show stale records after a forbidden reload or failed filter', asyn
   expect(listRequests).toBe(2);
   expect(screen.queryByRole('button', { name: `Xem chi tiết: ${task.title}` })).toBeNull();
 });
-it('shows compact previews, optional result/evidence and the server overdue flag in Vietnam time', async () => {
+it('keeps the Staff list compact and shows evidence and the server overdue flag in Vietnam time', async () => {
   const result = 'Đã kiểm tra, chờ Owner đối chiếu';
   const fetcher = vi
     .fn<typeof fetch>()
@@ -1135,12 +1135,15 @@ it('shows compact previews, optional result/evidence and the server overdue flag
   setApi(fetcher);
   render(<OperationalTasksScreen />);
   await screen.findByText(task.title);
-  expect(screen.getByText(task.requirements).getAttribute('data-lines')).toBe('2');
-  expect(screen.getByText(/Kết quả gần nhất:/).parentElement?.getAttribute('data-lines')).toBe('1');
+  expect(screen.queryByText(task.requirements)).toBeNull();
+  expect(screen.queryByText(result)).toBeNull();
+  expect(screen.queryByText(/Kết quả gần nhất:/)).toBeNull();
   expect(screen.getByText(/Quá hạn · 16:21.*03\/11\/2026/)).toBeTruthy();
   expect(screen.getByText('Cần ảnh minh chứng')).toBeTruthy();
   expect(screen.queryByText('1 quá hạn')).toBeNull();
   expect(screen.queryByText(/currentResponsibleStaffUserId|version|AdHoc/)).toBeNull();
+  fireEvent.click(screen.getByRole('button', { name: `Xem chi tiết: ${task.title}` }));
+  expect(mocks.go).toHaveBeenCalledWith('task-detail', { taskId: id });
 });
 it('hides absent result and optional evidence metadata and routes meter tasks without a mutation', async () => {
   const fetcher = vi
@@ -2492,7 +2495,7 @@ it('uses the account profile endpoint without exposing identifiers and confirms 
     });
   });
   setApi(fetcher);
-  render(<TenantProfileScreen />);
+  render(<ProfileScreen />);
   await screen.findByText('Tài khoản đang hoạt động');
   expect(fetcher.mock.calls[0][0]).toBe('https://api.example.invalid/api/v1/account/profile');
   expect(screen.queryByText(/PRIVATE-USER|PRIVATE-SESSION|PRIVATE-VERSION/)).toBeNull();
@@ -2639,9 +2642,11 @@ it('automatically replaces a stale QR with the current outstanding amount', asyn
   );
 });
 it('checks image content and size locally and preserves large monetary amounts exactly', () => {
-  expect(validateTenantEvidence(new Uint8Array([1, 2, 3]))).toMatch(/JPEG hoặc PNG/);
-  expect(validateTenantEvidence(new Uint8Array(5 * 1024 * 1024 + 1))).toMatch(/5 MB/);
-  expect(validateTenantEvidence(new Uint8Array([137, 80, 78, 71, 13, 10, 26, 10]))).toBe('');
+  expect(validateIncidentPhoto(new Uint8Array([1, 2, 3]))).toMatch(/PNG hoặc JPEG/);
+  expect(validateIncidentPhoto(new Uint8Array(5_000_001))).toMatch(/5\.000\.000/);
+  expect(validateIncidentPhoto(new Uint8Array([137, 80, 78, 71, 13, 10, 26, 10]))).toBe('');
+  expect(validateIncidentPhoto(new Uint8Array([255, 216, 255]))).toBe('');
+  expect(validateIncidentPhoto(new Uint8Array())).not.toBe('');
   expect(positiveAmount('0.00')).toBe(false);
   expect(sameAmount('9007199254740993.00', '9007199254740993')).toBe(true);
   expect(sameAmount('9007199254740993', '9007199254740992')).toBe(false);

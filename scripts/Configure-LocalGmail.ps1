@@ -129,7 +129,6 @@ try {
         'Email:FromName' = 'BHOME'
         'Email:TimeoutSeconds' = '30'
         'Email:AppPassword' = $privatePassword
-        'Email:TestEnabled' = 'false'
         'NotificationChannels:Enabled' = 'true'
         'NotificationChannels:Mode' = 'Unconfigured'
         'NotificationChannels:AutomationEnabled' = 'true'

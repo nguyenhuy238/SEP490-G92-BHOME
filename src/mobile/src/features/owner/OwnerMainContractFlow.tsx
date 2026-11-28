@@ -15,9 +15,9 @@ import { Action, Box, Heading, Pill, ui } from '../../components/WorkspaceKit';
 import { useWorkspaceQuery } from '../workspace/useWorkspaceQuery';
 import { ownerQueuePolicy } from './ownerQueryPolicy';
 import { OwnerHoldingSigning } from './OwnerHoldingSigning';
-import { ContractSigningStep } from '../contracts/ContractSigningStep';
-import { RentalContractStepper } from '../contracts/RentalContractStepper';
-import { rentalContractState } from '../contracts/rentalContractState';
+import { ContractSigningStep } from '../contracts/signing/ContractSigningStep';
+import { RentalContractStepper } from '../contracts/main/RentalContractStepper';
+import { rentalContractState } from '../contracts/main/rentalContractState';
 import { ContractActionForm } from '../contracts/ContractActionForm';
 import { ContractWorkflowPanel } from '../contracts/ContractWorkflowPanel';
 import { randomUUID } from '../../lib/randomUUID';
@@ -113,17 +113,16 @@ export function OwnerMainContractFlow({
                     ? 'Phương thức ký chưa được hỗ trợ'
                     : contract.isDevelopmentDemo
                       ? 'Ký mô phỏng Development'
-                      : 'Chữ ký số MySign'
+                      : 'Phương thức ký cũ đã ngừng hỗ trợ'
               }
             />
             <Text>Hồ sơ đã được chuyển sang chờ ký; chưa đồng nghĩa hai bên đã ký.</Text>
             <Text>Owner: {ownerSigned ? 'Đã xác minh' : 'Chờ xác nhận ký'}</Text>
             <Text>Người đại diện: {tenantSigned ? 'Đã xác minh' : 'Chờ xác nhận ký'}</Text>
             {!!consent.error && <Text style={ui.red}>{consent.error}</Text>}
-            {!internal && mySign && (
+            {!internal && mySign && !contract.isDevelopmentDemo && (
               <Text>
-                Gửi yêu cầu → xác nhận trên MySign → kiểm tra kết quả ký. Chỉ kết quả đã xác minh
-                mới được ghi nhận.
+                Không thể gửi yêu cầu ký mới bằng MySign. Chỉ kết quả đã xác minh mới được ghi nhận.
               </Text>
             )}
           </Box>

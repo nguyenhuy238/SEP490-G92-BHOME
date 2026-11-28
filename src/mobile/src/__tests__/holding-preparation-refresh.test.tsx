@@ -20,7 +20,7 @@ vi.mock('expo-router', () => ({
   useFocusEffect: (callback: () => void | (() => void)) =>
     React.useEffect(callback, [callback, events.focusEpoch]),
 }));
-import { useHoldingPreparation } from '../features/contracts/useHoldingPreparation';
+import { useHoldingPreparation } from '../features/contracts/holding/useHoldingPreparation';
 let ready = false;
 const rooms = vi.fn(async () => ({
   items: [{ id: 'room', locationId: 'location', roomNumber: 'J09-102', status: 0 }],

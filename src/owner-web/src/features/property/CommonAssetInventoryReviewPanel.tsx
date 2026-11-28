@@ -35,6 +35,7 @@ import { ErrorState, LoadingState } from '../../components/common/PortalUI';
 import { ConflictReload } from '../locations/components/ConflictReload';
 import { usePropertySetupApi } from './usePropertySetupApi';
 import { MoneyField } from '../../components/common/MoneyField';
+import { defaultUnitCost, validUnitCost, unitCostHint } from './inventoryUnitCost';
 
 type Evidence = RoomInventoryReviewEvidence & { fileName?: string };
 type DraftItem = Omit<CommonAssetInventoryItem, 'evidence'> & {
@@ -43,21 +44,6 @@ type DraftItem = Omit<CommonAssetInventoryItem, 'evidence'> & {
   uploading: boolean;
   error: string;
 };
-const defaultUnitCost = (item: CommonAssetInventoryItem): string => {
-  const value = item.acquisitionUnitCost ?? item.referenceUnitCost;
-  const raw = value == null ? '' : String(value);
-  return /^\d{1,14}$/.test(raw) ? raw : '';
-};
-const validUnitCost = (value: string) =>
-  value === '' || (/^\d{1,14}$/.test(value) && Number(value) <= 99_999_999_999_999);
-const unitCostHint = (item: CommonAssetInventoryItem): string =>
-  item.acquisitionUnitCost != null
-    ? 'Đã chốt giá vốn'
-    : item.referenceUnitCost != null && defaultUnitCost(item) === ''
-      ? 'Giá mẫu không phải số nguyên VND; vui lòng nhập đơn giá mua.'
-      : item.referenceUnitCost != null
-        ? 'Gợi ý từ mẫu'
-        : 'Chưa có giá tham khảo';
 type ReviewDialog = {
   requestId: string;
   mode: 'review' | 'bulk';

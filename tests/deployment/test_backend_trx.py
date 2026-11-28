@@ -135,6 +135,23 @@ class BackendTrxTests(unittest.TestCase):
             guard.require_inventory('project', {'count': 1, 'cases': {key: ['id-a']}},
                                     {key: ['id-z']})
 
+    def test_reviewed_assembly_relocation_requires_exact_successor_in_same_identity(self):
+        key = guard.identity_key('Class', 'Theory', 'Class.Theory(kind: Main)')
+        other = guard.identity_key('Class', 'Theory', 'Class.Theory(kind: Holding)')
+        expected = {'count': 2, 'cases': {key: ['old-id'], other: ['unchanged-id']},
+                    'reviewedIdTransitions': {'old-id': 'new-id'}}
+        guard.require_inventory('project', expected, {key: ['new-id'], other: ['unchanged-id']})
+        for actual in ({key: ['wrong-id'], other: ['unchanged-id']},
+                       {key: ['old-id'], other: ['unchanged-id']},
+                       {key: ['unchanged-id'], other: ['new-id']}):
+            with self.assertRaisesRegex(ValueError, 'changed test ID'):
+                guard.require_inventory('project', expected, actual)
+        for invalid in ({'missing-id': 'new-id'}, {'old-id': 'unchanged-id'},
+                        {'old-id': 'new-id', 'unchanged-id': 'new-id'}):
+            with self.assertRaisesRegex(ValueError, 'invalid reviewed test ID transitions'):
+                guard.require_inventory('project', dict(expected, reviewedIdTransitions=invalid),
+                                        {key: ['new-id'], other: ['unchanged-id']})
+
     def test_explicit_shard_aggregation_rejects_missing_empty_and_duplicate_results(self):
         with tempfile.TemporaryDirectory() as directory:
             self.complete(directory)

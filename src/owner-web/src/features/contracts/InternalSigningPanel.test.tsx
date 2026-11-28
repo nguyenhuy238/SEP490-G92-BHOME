@@ -6,8 +6,8 @@ import {
   type ContractRequest,
   type ContractView,
 } from '../../../../../packages/client-core/src/contracts';
-import { InternalSigningPanel } from './InternalSigningPanel';
-vi.mock('./SignaturePlacementPicker', () => ({
+import { InternalSigningPanel } from './components/signing/InternalSigningPanel';
+vi.mock('./components/signing/SignaturePlacementPicker', () => ({
   SignaturePlacementPicker: () => <div>PDF thực từ API ký</div>,
 }));
 afterEach(cleanup);

@@ -17,7 +17,7 @@ public sealed partial class PaymentLedgerTests
         var w = await Setup(sharedContract: true);
         using var owner = await Client(w.Owner);
         using var tenant = await Client(w.Tenants[0]);
-        (await owner.PutAsJsonAsync("/api/v1/billing-schedules", Calendar(w))).EnsureSuccessStatusCode();
+        (await owner.PutAsJsonAsync("/test-probe/billing-schedules", Calendar(w))).EnsureSuccessStatusCode();
         var input = new DraftInvoiceInput(w.Room, CurrentPeriod());
         Assert.Equal(HttpStatusCode.Forbidden, (await tenant.PostAsJsonAsync("/api/v1/invoices/drafts", input)).StatusCode);
         var first = await owner.PostAsJsonAsync("/api/v1/invoices/drafts", input); first.EnsureSuccessStatusCode();
@@ -26,7 +26,7 @@ public sealed partial class PaymentLedgerTests
         var repeated = await owner.PostAsJsonAsync("/api/v1/invoices/drafts", input); repeated.EnsureSuccessStatusCode();
         Assert.Equal(draft.Id, (await repeated.Content.ReadFromJsonAsync<InvoiceView>())!.Id);
         await using var scope = fixture.Factory.Services.CreateAsyncScope();
-        var db = scope.ServiceProvider.GetRequiredService<BHomePersistenceContext>();
+        var db = scope.ServiceProvider.GetFixturePersistence();
         var persisted = await db.Set<Invoice>().SingleAsync(i => i.Id == draft.Id);
         Assert.Equal(w.Contract, persisted.RepresentativeContractId);
         Assert.Equal(1, await db.Set<Invoice>().CountAsync(i => i.RoomId == w.Room && i.BillingPeriod == CurrentPeriod()));
@@ -36,12 +36,12 @@ public sealed partial class PaymentLedgerTests
     public async Task ManualDraftRequiresExplicitSavedSelectionForMultipleEligibleContracts()
     {
         var w = await Setup(); using var owner = await Client(w.Owner);
-        (await owner.PutAsJsonAsync("/api/v1/billing-schedules", Calendar(w))).EnsureSuccessStatusCode();
+        (await owner.PutAsJsonAsync("/test-probe/billing-schedules", Calendar(w))).EnsureSuccessStatusCode();
         var input = new DraftInvoiceInput(w.Room, CurrentPeriod());
         var created = await owner.PostAsJsonAsync("/api/v1/invoices/drafts", input); created.EnsureSuccessStatusCode();
         var invoice = (await created.Content.ReadFromJsonAsync<InvoiceView>())!;
         await using var scope = fixture.Factory.Services.CreateAsyncScope();
-        var db = scope.ServiceProvider.GetRequiredService<BHomePersistenceContext>();
+        var db = scope.ServiceProvider.GetFixturePersistence();
         var candidates = await db.Set<BHome.Domain.TenantContracts.Contract>().Where(c => c.RoomId == w.Room).ToArrayAsync();
         var expected = candidates.OrderBy(c => c.CreatedAt).ThenBy(c => c.Id).First().Id;
         Assert.Equal(expected, (await db.Set<Invoice>().SingleAsync(i => i.Id == invoice.Id)).RepresentativeContractId);
@@ -112,7 +112,7 @@ public sealed partial class PaymentLedgerTests
         var installed = CurrentPeriod().AddDays(1);
         await using (var scope = fixture.Factory.Services.CreateAsyncScope())
         {
-            var db = scope.ServiceProvider.GetRequiredService<BHomePersistenceContext>();
+            var db = scope.ServiceProvider.GetFixturePersistence();
             (await db.Set<Meter>().SingleAsync(m => m.Id == meters[0])).InstalledOn = installed;
             await db.SaveChangesAsync();
         }

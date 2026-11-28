@@ -39,6 +39,7 @@ import {
 } from './IncidentUi';
 import { IncidentActionPanel } from './IncidentActions';
 import { colors as c } from '../../theme/theme';
+import { staffUi } from '../../theme/staffLayout';
 
 const idPattern = /^[\da-f]{8}-(?:[\da-f]{4}-){3}[\da-f]{12}$/i;
 function Action(props: React.ComponentProps<typeof SharedAction>) {
@@ -808,14 +809,48 @@ function WorkCard({
 }) {
   const { go, role } = useWorkspace();
   const proactive = work.source === 'Proactive' || work.incidentId === null;
+  const open = () =>
+    go('maintenance-detail', {
+      workOrderId: work.id,
+      returnTo,
+      ...(returnIncidentId ? { incidentId: returnIncidentId } : {}),
+    });
+  if (role === 'Staff')
+    return (
+      <Box style={{ padding: 12, gap: 8 }}>
+        <View style={{ flexDirection: 'row', alignItems: 'flex-start', gap: 8 }}>
+          <View style={{ flex: 1, minWidth: 0, gap: 4 }}>
+            <Text variant="titleMedium" style={{ color: c.primary }}>
+              {work.description || 'Lệnh sửa chữa'}
+            </Text>
+            <Text variant="labelSmall" style={ui.muted}>
+              {proactive ? 'Bảo trì chủ động' : 'Từ báo cáo sự cố'}
+            </Text>
+          </View>
+          <Pill tone={work.isOverdue ? 'red' : 'neutral'}>{incidentText(work.status)}</Pill>
+        </View>
+        <Text variant="bodySmall" style={ui.muted}>
+          {work.locationName} ·{' '}
+          {work.roomNumber ? `Phòng ${work.roomNumber}` : work.commonArea || 'Khu vực chung'}
+        </Text>
+        <Info label="Tài sản" value={work.assetName} />
+        <Info
+          label="Nhân viên phụ trách"
+          value={work.assignedStaffName || 'Nhân viên được phân công'}
+        />
+        <Text>{work.expectedOutcome}</Text>
+        <Text variant="bodySmall" style={work.isOverdue ? ui.red : ui.muted}>
+          Hạn: {incidentDate(work.targetCompletionAt)}
+          {work.isOverdue ? ' · Quá hạn' : ''}
+        </Text>
+        <Action secondary onPress={open}>
+          {returnTo === 'work-orders' ? 'Xem chi tiết công việc' : 'Xem chi tiết lệnh sửa chữa'}
+        </Action>
+      </Box>
+    );
   return (
     <Box>
       <Heading title={work.description || 'Lệnh sửa chữa'} detail={incidentText(work.status)} />
-      {role === 'Staff' && (
-        <Pill tone={proactive ? 'blue' : 'neutral'}>
-          {proactive ? 'Bảo trì chủ động' : 'Từ báo cáo sự cố'}
-        </Pill>
-      )}
       <Info label="Cơ sở" value={work.locationName} />
       <Info
         label="Vị trí"
@@ -831,27 +866,36 @@ function WorkCard({
         Hạn: {incidentDate(work.targetCompletionAt)}
         {work.isOverdue ? ' · Quá hạn' : ''}
       </Text>
-      <Action
-        onPress={() =>
-          go('maintenance-detail', {
-            workOrderId: work.id,
-            returnTo,
-            ...(returnIncidentId ? { incidentId: returnIncidentId } : {}),
-          })
-        }
-      >
-        {role === 'Staff' && returnTo === 'work-orders'
-          ? 'Xem chi tiết công việc'
-          : 'Xem chi tiết lệnh sửa chữa'}
-      </Action>
+      <Action onPress={open}>Xem chi tiết lệnh sửa chữa</Action>
     </Box>
   );
 }
-export function MaintenanceListScreen({ embedded = false }: { embedded?: boolean } = {}) {
+function EmbeddedMaintenanceHeader({ reload, loading }: { reload: () => void; loading: boolean }) {
+  useWorkspaceHeaderRefresh(reload, loading, { title: 'Công việc' });
+  return null;
+}
+
+export function MaintenanceListScreen({
+  embedded = false,
+  queueState,
+}: {
+  embedded?: boolean;
+  queueState?: {
+    page: number;
+    status: string;
+    setPage: (n: number) => void;
+    setStatus: (s: string) => void;
+  };
+} = {}) {
   const { role, preview, go, staffLocationId } = useWorkspace();
   const { session } = useSession();
-  const [page, setPage] = useState(1),
-    [status, setStatus] = useState('');
+  const [localPage, setLocalPage] = useState(1),
+    [localStatus, setLocalStatus] = useState('');
+  const controlled = embedded && role === 'Staff' ? queueState : undefined;
+  const page = controlled?.page ?? localPage;
+  const status = controlled?.status ?? localStatus;
+  const setPage = controlled?.setPage ?? setLocalPage;
+  const setStatus = controlled?.setStatus ?? setLocalStatus;
   const enabled =
     !preview && !!session && (role === 'Staff' || role === 'Owner') && session.roles.includes(role);
   const active = enabled && (role !== 'Staff' || !!staffLocationId);
@@ -862,16 +906,14 @@ export function MaintenanceListScreen({ embedded = false }: { embedded?: boolean
   );
   return (
     <>
-      <Heading
-        title={embedded ? 'Công việc sửa chữa & bảo trì' : 'Xử lý sự cố & Bảo trì'}
-        detail={
-          embedded
-            ? 'Các việc được giao từ báo cáo sự cố hoặc kế hoạch bảo trì chủ động'
-            : 'Lệnh sửa chữa theo phân công và quyền truy cập'
-        }
-        action={embedded ? 'Tải lại' : undefined}
-        onPress={embedded ? query.reload : undefined}
-      />
+      {embedded ? (
+        <EmbeddedMaintenanceHeader reload={query.reload} loading={query.loading} />
+      ) : (
+        <Heading
+          title="Xử lý sự cố & Bảo trì"
+          detail="Lệnh sửa chữa theo phân công và quyền truy cập"
+        />
+      )}
       {!enabled && <Text>Đăng nhập Staff hoặc Owner để xem lệnh sửa chữa.</Text>}
       {enabled && role === 'Staff' && !staffLocationId && (
         <Text accessibilityRole="alert">Chưa có cơ sở được phân công để xem bảo trì.</Text>
@@ -954,6 +996,161 @@ export function MaintenanceDetailScreen() {
     <Text>Không có mã lệnh sửa chữa hợp lệ.</Text>
   );
 }
+function WorkFacts({ title, children }: { title: string; children: React.ReactNode }) {
+  return (
+    <View style={workDetailStyles.section}>
+      <Text style={staffUi.sectionTitle}>{title}</Text>
+      <View style={workDetailStyles.facts}>{children}</View>
+    </View>
+  );
+}
+
+function WorkFact({ label, value }: { label: string; value: string | number | null | undefined }) {
+  if (value == null || value === '') return null;
+  return (
+    <View style={workDetailStyles.fact}>
+      <Text style={staffUi.secondary}>{label}</Text>
+      <Text selectable style={workDetailStyles.value}>
+        {value}
+      </Text>
+    </View>
+  );
+}
+
+function StaffWorkOverview({ work, actor }: { work: WorkOrder; actor?: string }) {
+  const hasResult = !!work.result || work.actualCost != null || !!work.verifiedAt;
+  return (
+    <>
+      <View style={workDetailStyles.section}>
+        <View style={workDetailStyles.statusRow}>
+          <Pill
+            tone={
+              work.status === 'Verified'
+                ? 'green'
+                : work.status === 'Cancelled'
+                  ? 'neutral'
+                  : 'blue'
+            }
+          >
+            {incidentText(work.status)}
+          </Pill>
+          {work.isOverdue && <Pill tone="red">Quá hạn hoàn thành</Pill>}
+        </View>
+        <Text style={staffUi.title}>{work.description || 'Lệnh sửa chữa'}</Text>
+        <Text style={staffUi.secondary}>
+          {work.source === 'Proactive' || !work.incidentId
+            ? 'Bảo trì chủ động'
+            : 'Từ báo cáo sự cố'}
+        </Text>
+      </View>
+      <WorkFacts title="Thông tin công việc">
+        <WorkFact label="Cơ sở" value={work.locationName} />
+        <WorkFact label="Phòng" value={work.roomNumber} />
+        <WorkFact label="Khu vực chung" value={work.commonArea} />
+        <WorkFact label="Tài sản" value={work.assetName} />
+        <WorkFact
+          label="Người phụ trách"
+          value={
+            work.assignedStaffId === actor
+              ? 'Bạn'
+              : work.assignedStaffName || 'Nhân viên được phân công'
+          }
+        />
+        <WorkFact label="Hạn hoàn thành" value={incidentDate(work.targetCompletionAt)} />
+        <WorkFact label="Kết quả yêu cầu" value={work.expectedOutcome} />
+      </WorkFacts>
+      {hasResult && (
+        <WorkFacts title="Kết quả sửa chữa">
+          <WorkFact label="Kết quả" value={work.result} />
+          <WorkFact
+            label="Chi phí thực tế"
+            value={work.actualCost != null ? incidentMoney(work.actualCost) : null}
+          />
+          <WorkFact
+            label="Nghiệm thu lúc"
+            value={work.verifiedAt ? incidentDate(work.verifiedAt) : null}
+          />
+        </WorkFacts>
+      )}
+    </>
+  );
+}
+
+function StaffWorkProposal({ work }: { work: WorkOrder }) {
+  const submitted =
+    work.proposalVersion > 0 ||
+    !!work.proposedSolution ||
+    !!work.inspectionResult ||
+    !!work.fastRepairPolicyVersion;
+  return (
+    <View style={workDetailStyles.section}>
+      <View style={workDetailStyles.statusRow}>
+        <Text style={[staffUi.sectionTitle, workDetailStyles.grow]}>Phương án sửa chữa</Text>
+        {submitted && (
+          <Pill
+            tone={work.planApproved ? 'green' : work.fastRepairPolicyVersion ? 'blue' : 'neutral'}
+          >
+            {work.planApproved
+              ? 'Đã được duyệt'
+              : work.fastRepairPolicyVersion
+                ? 'Sửa nhanh'
+                : work.status === 'PendingApproval'
+                  ? 'Chờ duyệt'
+                  : 'Chưa được duyệt'}
+          </Pill>
+        )}
+      </View>
+      {submitted ? (
+        <View style={workDetailStyles.facts}>
+          <WorkFact label="Kết quả kiểm tra" value={work.inspectionResult} />
+          <WorkFact label="Phương án đã gửi" value={work.proposedSolution} />
+          <WorkFact
+            label="Thời gian dự kiến"
+            value={work.estimatedMinutes != null ? `${work.estimatedMinutes} phút` : null}
+          />
+          <WorkFact
+            label="Chi phí dự kiến"
+            value={work.estimatedCost != null ? incidentMoney(work.estimatedCost) : null}
+          />
+          <WorkFact
+            label="Sử dụng vật tư"
+            value={work.usesMaterials == null ? null : work.usesMaterials ? 'Có' : 'Không'}
+          />
+          <WorkFact label="Đơn vị sửa chữa" value={work.vendor} />
+          <WorkFact
+            label="Duyệt lúc"
+            value={work.approvedAt ? incidentDate(work.approvedAt) : null}
+          />
+          {Boolean(work.fastRepairPolicyVersion) && (
+            <Text style={staffUi.secondary}>
+              Sửa nhanh 0 VND, không sử dụng vật tư, theo chính sách {work.fastRepairCategory}.
+            </Text>
+          )}
+        </View>
+      ) : (
+        <Text style={staffUi.secondary}>Chưa có phương án được ghi nhận.</Text>
+      )}
+    </View>
+  );
+}
+
+const workDetailStyles = StyleSheet.create({
+  section: { ...staffUi.surface, padding: 12, gap: 10 },
+  facts: { gap: 0 },
+  fact: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    justifyContent: 'space-between',
+    gap: 12,
+    paddingVertical: 8,
+    borderTopWidth: StyleSheet.hairlineWidth,
+    borderTopColor: c.border,
+  },
+  value: { ...staffUi.body, fontWeight: '600', flex: 1, minWidth: 0, textAlign: 'right' },
+  statusRow: { flexDirection: 'row', alignItems: 'center', gap: 8, flexWrap: 'wrap' },
+  grow: { flex: 1, minWidth: 0 },
+});
+
 function WorkDetail({
   id,
   returnTo,
@@ -1007,31 +1204,32 @@ function WorkDetail({
     reloadEvidence();
     reloadMaintenance();
   }, [reloadWork, reloadIncident, reloadHistory, reloadEvidence, reloadMaintenance]);
-  useWorkspaceHeaderRefresh(
+  const goBack = useCallback(() => {
+    if (returnTo === 'incident-detail' && returnIncidentId && idPattern.test(returnIncidentId))
+      go('incident-detail', { incidentId: returnIncidentId });
+    else if (returnTo === 'work-orders' && role === 'Staff')
+      go('work-orders', { tab: 'maintenance' });
+    else go(role === 'Owner' ? 'owner-maintenance' : 'staff-maintenance');
+  }, [go, returnTo, returnIncidentId, role]);
+  const inHeader = useWorkspaceHeaderRefresh(
     refresh,
     query.fetching ||
       incident.fetching ||
       history.fetching ||
       evidence.fetching ||
       maintenance.fetching,
+    {
+      title: role === 'Staff' ? 'Chi tiết công việc' : undefined,
+      onBack: role === 'Staff' ? goBack : undefined,
+    },
   );
   return (
     <>
-      <Action
-        secondary
-        onPress={() => {
-          if (
-            returnTo === 'incident-detail' &&
-            returnIncidentId &&
-            idPattern.test(returnIncidentId)
-          )
-            go('incident-detail', { incidentId: returnIncidentId });
-          else if (returnTo === 'work-orders' && role === 'Staff') go('work-orders');
-          else go(role === 'Owner' ? 'owner-maintenance' : 'staff-maintenance');
-        }}
-      >
-        {backLabel}
-      </Action>
+      {(role !== 'Staff' || !inHeader) && (
+        <Action secondary onPress={goBack}>
+          {backLabel}
+        </Action>
+      )}
       <QueryState {...query} />
       {role === 'Staff' && work && (
         <StaffWorkflowTabs
@@ -1053,7 +1251,10 @@ function WorkDetail({
       )}
       {work && (
         <>
-          {(role !== 'Staff' || staffTab === 'overview') && (
+          {role === 'Staff' && staffTab === 'overview' && (
+            <StaffWorkOverview work={work} actor={session?.userId} />
+          )}
+          {role !== 'Staff' && (
             <Box>
               <Heading title="Chi tiết lệnh sửa chữa" detail={incidentText(work.status)} />
               <Info
@@ -1116,7 +1317,7 @@ function WorkDetail({
               {incident.data && (
                 <>
                   <Heading title="Sự cố liên quan" detail={incident.data.description} />
-                  <IncidentPlace report={incident.data} />
+                  {role !== 'Staff' && <IncidentPlace report={incident.data} />}
                   <Action
                     secondary
                     onPress={() => go('incident-detail', { incidentId: work.incidentId! })}
@@ -1136,6 +1337,7 @@ function WorkDetail({
               )}
             </>
           )}
+          {role === 'Staff' && staffTab === 'proposal' && <StaffWorkProposal work={work} />}
           {role === 'Staff' &&
             staffTab === 'proposal' &&
             (work.assignedStaffId !== session?.userId ? (

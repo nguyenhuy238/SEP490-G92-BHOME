@@ -62,7 +62,7 @@ public sealed partial class PaymentLedgerTests
         var own = await RefundValue<PagedResult<TenantRefundView>>(await tenant.GetAsync("/api/v1/tenant/refunds"));
         Assert.Equal(!external, own.Items.Any(r => r.Id == refund.Id));
         Assert.False((await RefundValue<FinancialReport>(await owner.GetAsync("/api/v1/financial-reports?from=2000-01-01&to=2100-12-31"))).HasUnclassifiedRefunds);
-        await using var scope = fixture.Factory.Services.CreateAsyncScope(); var db = scope.ServiceProvider.GetRequiredService<BHomePersistenceContext>();
+        await using var scope = fixture.Factory.Services.CreateAsyncScope(); var db = scope.ServiceProvider.GetFixturePersistence();
         Assert.Equal(0, await db.Set<PaymentAllocation>().CountAsync(a => a.TransferId == extra.Id));
         Assert.Null((await db.Set<Resident>().SingleAsync(r => r.Id == payer.ResidentId)).RoomId);
         Assert.Equal(100000, await db.Database.SqlQuery<decimal>($"SELECT sum(amount) AS \"Value\" FROM payment_allocations WHERE target_deposit_contract_id={w.Contract}").SingleAsync());

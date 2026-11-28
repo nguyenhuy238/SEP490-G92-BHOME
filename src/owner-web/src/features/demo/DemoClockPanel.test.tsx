@@ -111,10 +111,11 @@ it('keeps the page mounted while expanding and minimizing the floating controls'
   expect(mocks.request).toHaveBeenCalledTimes(1);
 });
 
-it('does not expose test contract creation even for the designated Owner', async () => {
+it('does not expose the retired quick contract generator', async () => {
   mocks.request.mockResolvedValue({ ...clock, canChange: true });
   mount('Production');
-  await screen.findByText('Workspace content');
+  fireEvent.click(await screen.findByRole('button', { name: 'Mở Demo Clock' }));
+  expect(screen.getByRole('region', { name: 'Điều khiển Demo Clock' })).toBeInTheDocument();
   expect(screen.queryByRole('button', { name: 'Tạo HĐ test' })).not.toBeInTheDocument();
   expect(mocks.request).toHaveBeenCalledTimes(1);
 });

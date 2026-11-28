@@ -158,7 +158,7 @@ vi.mock('../components/WorkspaceKit', () => ({
   Pill: ({ children }: { children: React.ReactNode }) => <span>{children}</span>,
   Heading: ({ title }: { title: string }) => <h2>{title}</h2>,
 }));
-import { MainDraftScreen } from '../features/contracts/MainDraftScreen';
+import { MainDraftScreen } from '../features/contracts/main/MainDraftScreen';
 const preparation = {
   roomId: 'room',
   locationId: 'location',

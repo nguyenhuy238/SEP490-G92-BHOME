@@ -5,6 +5,19 @@ using BHome.Infrastructure.Ocr;
 using Microsoft.Extensions.Logging.Abstractions;
 using Microsoft.ML.OnnxRuntime;
 
+if (args.Length == 3 && args[0] == "--generate-identity-desk")
+    return IdentityDeskFixtures.Generate(args[1], args[2]);
+if (args.Length == 3 && args[0] == "--generate-identity-desk-dense")
+    return IdentityDeskFixtures.Generate(args[1], args[2], dense: true);
+
+if (args.Length == 3 && args[0] == "--generate-identity-challenges")
+    return IdentityChallengeFixtures.Generate(args[1], args[2]);
+if (args.Length == 3 && args[0] == "--generate-identity-validation")
+    return IdentityChallengeFixtures.Generate(args[1], args[2], validation: true);
+
+if (args.Length == 4 && args[0] == "--identity-camera-evaluate")
+    return await IdentityCameraEvaluation.Run(args[1], args[2], args[3]);
+
 if (args.Length == 6 && args[0] == "--experimental-meter-context")
     return await ExperimentalMeterContext.Run(args[1], args[2], args[3], args[4], args[5]);
 if (args.Length == 7 && args[0] == "--experimental-meter-context")

@@ -20,7 +20,7 @@ public sealed class MainDocxTemplateTests
         {
             ["MainDraft:LibreOfficeContainerImage"] = "bhome/contract-converter:local"
         }).Build();
-        var renderer = new MainDraftRenderer(configuration, TimeProvider.System, new TestEnvironment());
+        var renderer = new MainDraftRenderer(configuration, TimeProvider.System);
         Assert.True(renderer.SigningReviewAvailable);
         var c = new Contract
         {
@@ -29,7 +29,7 @@ public sealed class MainDocxTemplateTests
             RepresentativeResidentId = Guid.NewGuid(),
             StartDate = new(2026, 11, 18),
             EndDate = new(2027, 11, 18),
-            MonthlyRent = 2300000,
+            RentAmount = 2300000,
             RequiredDeposit = 2300000,
             Terms = "Nội quy kiểm thử\nThanh toán đúng hạn."
         };
@@ -81,11 +81,4 @@ public sealed class MainDocxTemplateTests
         }
     }
 
-    private sealed class TestEnvironment : Microsoft.Extensions.Hosting.IHostEnvironment
-    {
-        public string EnvironmentName { get; set; } = "Testing";
-        public string ApplicationName { get; set; } = "BHome.IntegrationTests";
-        public string ContentRootPath { get; set; } = "";
-        public Microsoft.Extensions.FileProviders.IFileProvider ContentRootFileProvider { get; set; } = new Microsoft.Extensions.FileProviders.NullFileProvider();
-    }
 }

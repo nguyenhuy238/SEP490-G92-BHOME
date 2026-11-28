@@ -28,6 +28,7 @@ import {
 import type { SetupDocument } from '../../../../../../packages/client-core/src/propertySetup';
 import { displayContractDate } from '../../../../../../packages/client-core/src/contracts';
 import { usePropertySetupApi } from '../../property/usePropertySetupApi';
+import { downloadBlob } from '../../../utils/downloadBlob';
 
 export function LocationLegalRecords({ locationId }: { locationId: string }) {
   const { request } = usePropertySetupApi();
@@ -52,12 +53,10 @@ export function LocationLegalRecords({ locationId }: { locationId: string }) {
         {},
         'blob',
       );
-      const url = URL.createObjectURL(blob);
-      const link = document.createElement('a');
-      link.href = url;
-      link.download = `${record.data.details.name}-v${record.version}.${record.data.contentType === 'application/pdf' ? 'pdf' : record.data.contentType === 'image/png' ? 'png' : 'jpg'}`;
-      link.click();
-      setTimeout(() => URL.revokeObjectURL(url), 1000);
+      downloadBlob(
+        blob,
+        `${record.data.details.name}-v${record.version}.${record.data.contentType === 'application/pdf' ? 'pdf' : record.data.contentType === 'image/png' ? 'png' : 'jpg'}`,
+      );
     },
   });
   return (

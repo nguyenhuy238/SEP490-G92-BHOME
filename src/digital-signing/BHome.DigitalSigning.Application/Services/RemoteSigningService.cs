@@ -1,6 +1,6 @@
 using System.Security.Cryptography;
 using System.Security.Cryptography.X509Certificates;
-using BHome.Application.IdentityAccess;
+using BHome.DigitalSigning.Application.Identity;
 using BHome.DigitalSigning.Application.Contracts;
 using BHome.DigitalSigning.Domain;
 
@@ -14,7 +14,7 @@ namespace BHome.DigitalSigning.Application.Services;
 // Phase 2 runs in the requester's own request, so nothing happens behind a closed browser; an attempt nobody comes back
 // for simply expires. The signature is PAdES-BASELINE-B without a timestamp: Viettel's async flow returns none.
 public sealed class RemoteSigningService(
-    ICurrentUser user, IDigitalSigningStore store, ISigningProvider provider, IPdfSigner pdf, DigitalSigningPolicy policy,
+    ISigningCurrentUser user, IDigitalSigningStore store, ISigningProvider provider, IPdfSigner pdf, DigitalSigningPolicy policy,
     ISignatureImageStore images, TimeProvider clock)
 {
     private static readonly TimeSpan VietnamOffset = TimeSpan.FromHours(7);

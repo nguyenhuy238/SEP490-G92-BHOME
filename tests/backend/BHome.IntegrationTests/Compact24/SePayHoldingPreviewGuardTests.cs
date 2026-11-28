@@ -102,21 +102,23 @@ public sealed class SePayHoldingPreviewGuardTests
 
     [Theory]
     [InlineData("Staging", true, "Test", true, true)]
-    [InlineData("Staging", false, "Test", true, false)]
-    [InlineData("Staging", true, "Live", true, false)]
-    [InlineData("Staging", true, "Test", false, false)]
-    [InlineData("Production", true, "Test", true, false)]
+    [InlineData("Staging", false, "Test", true, true)]
+    [InlineData("Staging", false, "Live", false, true)]
+    [InlineData("Staging", true, "Live", true, true)]
+    [InlineData("Staging", true, "Test", false, true)]
+    [InlineData("Production", true, "Test", true, true)]
     [InlineData("Development", false, "Live", false, true)]
-    public void MainSigningReviewRequiresExplicitStagingTestScope(
+    public void MainSigningReviewDoesNotRequireTemplateApprovalOrSandboxScope(
         string environment, bool enabled, string paymentMode, bool inScope, bool expected)
     {
         var location = Guid.NewGuid();
         var configuration = new ConfigurationBuilder().AddInMemoryCollection(new Dictionary<string, string?>
         {
-            ["MainDraft:AllowStagingSigningReview"] = enabled.ToString()
+            ["MainDraft:AllowStagingSigningReview"] = enabled.ToString(),
+            ["Deployment:Environment"] = environment,
+            ["HoldingTesting:LocationIds:0"] = (inScope ? location : Guid.NewGuid()).ToString()
         }).Build();
-        var renderer = new BHome.Infrastructure.Contracts.MainDraftRenderer(configuration, TimeProvider.System,
-            new PreviewEnvironment { EnvironmentName = environment }, new SigningScope(inScope ? location : Guid.NewGuid()));
+        var renderer = new BHome.Infrastructure.Contracts.MainDraftRenderer(configuration, TimeProvider.System);
         var contract = new BHome.Domain.TenantContracts.Contract
         {
             PaymentMode = paymentMode,
@@ -128,17 +130,21 @@ public sealed class SePayHoldingPreviewGuardTests
 
     [Theory]
     [InlineData("Production", "Live", false, "matching", true)]
-    [InlineData("Production", "Live", false, "missing", false)]
-    [InlineData("Production", "Live", false, "different", false)]
+    [InlineData("Production", "Live", false, "missing", true)]
+    [InlineData("Production", "Live", false, "different", true)]
     [InlineData("Production", "Test", false, "matching", false)]
     [InlineData("Production", "Live", true, "matching", false)]
-    [InlineData("Staging", "Live", false, "matching", false)]
-    public void ProductionSigningRequiresApprovedTemplateHashAndLiveContract(
+    [InlineData("Staging", "Live", false, "matching", true)]
+    [InlineData("Staging", "Live", false, "missing", true)]
+    [InlineData("Staging", "Live", false, "different", true)]
+    [InlineData("Staging", "Test", false, "matching", false)]
+    [InlineData("Staging", "Live", true, "matching", false)]
+    public void LiveDocumentClassificationDoesNotDependOnTemplateApproval(
         string environment, string mode, bool demo, string approval, bool expected)
     {
         var configuration = new ConfigurationBuilder().AddInMemoryCollection().Build();
-        var renderer = new BHome.Infrastructure.Contracts.MainDraftRenderer(configuration, TimeProvider.System,
-            new PreviewEnvironment { EnvironmentName = environment });
+        configuration["Deployment:Environment"] = environment;
+        var renderer = new BHome.Infrastructure.Contracts.MainDraftRenderer(configuration, TimeProvider.System);
         configuration["MainDraft:ApprovedProductionTemplateSha256"] = approval switch
         {
             "matching" => renderer.TemplateHash.ToLowerInvariant(),
@@ -148,13 +154,7 @@ public sealed class SePayHoldingPreviewGuardTests
         var contract = new BHome.Domain.TenantContracts.Contract { PaymentMode = mode, IsDevelopmentDemo = demo };
 
         Assert.Equal(expected, renderer.IsProductionSigningTemplate(contract));
-        Assert.Equal(expected, renderer.CanUseSigningReview(contract));
-    }
-
-    private sealed class SigningScope(Guid location) : BHome.Application.Contracts.IHoldingTestScope
-    {
-        public bool AllowsExternalDatabase => false;
-        public bool Allows(Guid locationId) => locationId == location;
+        Assert.True(renderer.CanUseSigningReview(contract));
     }
 
     private sealed class PreviewEnvironment : IHostEnvironment

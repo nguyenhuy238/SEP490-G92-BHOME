@@ -24,17 +24,17 @@ Không reset/import/drop dữ liệu business.
 
 ## Cấu trúc baseline
 
-Runtime có `ToSqlQuery` projections và typed writer. Scaffolder chỉ tạo hai bảng
-native Identity, nên dùng Up tự sinh sẽ thiếu phần lớn schema. Baseline dùng SQL
-**đóng băng** `Persistence/Compact24/Migrations/InitialCompact24.sql`, kiểm checksum
+Runtime map đúng 24 Entity vật lý, tất cả mapping được loại khỏi migration scaffolding.
+DDL được quản lý bằng migration SQL đã review, không dùng Up tự sinh thay schema.
+Projection/writer cũ chỉ được gọi tường minh qua archive context offline. Baseline dùng SQL
+**đóng băng** `Data/Compact24/Migrations/InitialCompact24.sql`, kiểm checksum
 khi đọc, cùng designer và `Compact24DbContextModelSnapshot` riêng. Chỉ bỏ outer
 BEGIN/COMMIT để EF sở hữu transaction gồm cả history INSERT; giữ DO/function bodies.
 
-Table-only check metadata trên projection không có bảng được bỏ khỏi model runtime
-để EF 8 không scaffold lỗi `ToTable(null, ...)`. Check PostgreSQL vẫn nằm trong DDL
-đã duyệt; không bỏ validation hay constraint vật lý. Snapshot/target model và DDL
-được kiểm thử trên PostgreSQL disposable. Auto-scaffold không thay thế review schema
-vật lý/JSON/projections/raw SQL.
+Check PostgreSQL vẫn nằm trong DDL đã duyệt; không bỏ validation hay constraint vật lý.
+Snapshot runtime có đúng 24 Entity, không có projection; các designer migration đã
+phát hành giữ nguyên. Snapshot/target model và DDL được kiểm thử trên PostgreSQL
+disposable. Auto-scaffold không thay thế review schema vật lý/JSON/raw SQL.
 
 `Down` của baseline từ chối rollback phá dữ liệu. Không sửa baseline đã deploy;
 thêm migration tiếp theo. `Compact24Schema` vẫn kiểm columns/FK/index/trigger/function.
@@ -47,18 +47,18 @@ hoạch review riêng, không chỉ INSERT history để bỏ qua kiểm chứng
 ## Thay đổi qua PR
 
 1. Map BF/UC/GBR/DBR và normal/negative/concurrency acceptance cases; chọn đúng context.
-2. Sửa domain/config/projections/writer cần thiết; không sửa model legacy rồi giả định
+2. Sửa domain/config/entity mapping và repository native cần thiết; không sửa model legacy rồi giả định
    runtime Compact24 đã đổi.
 3. Dùng DB local disposable `bhome_compact24_<32 hex>` và secret
    `BHOME_COMPACT24_DIRECT`. Factory từ chối pooled/production, local bhome có dữ liệu,
    và remote host khác verified development direct.
-4. Scaffold, review và bổ sung SQL cho phần schema không được model projections quản lý:
+4. Nếu thực sự thay đổi schema, scaffold, review và bổ sung SQL cho phần schema được quản lý bằng DDL:
 
 ```powershell
-dotnet ef migrations add <Name> --context Compact24DbContext --project src/backend/BHome.Infrastructure --startup-project src/backend/BHome.Api --output-dir Persistence/Compact24/Migrations
-dotnet ef migrations script --idempotent --context Compact24DbContext --project src/backend/BHome.Infrastructure --startup-project src/backend/BHome.Api --output .tools/compact24-review.sql
+dotnet ef migrations add <Name> --context Compact24DbContext --project src/backend/BHome.Api --startup-project src/backend/BHome.Api --output-dir Data/Compact24/Migrations
+dotnet ef migrations script --idempotent --context Compact24DbContext --project src/backend/BHome.Api --startup-project src/backend/BHome.Api --output .tools/compact24-review.sql
 dotnet build src/backend/BHome.sln -c Release
-dotnet test src/backend/BHome.sln -c Release --no-build
+dotnet test src/backend/BHome.CI.slnf -c Release --no-build --settings tests/backend/ci.runsettings
 ```
 
 5. Test DB trống và nâng từ version trước, bảo toàn dữ liệu/constraints; không tạo

@@ -1,7 +1,7 @@
 using BHome.DigitalSigning.Application;
 using BHome.DigitalSigning.Application.Contracts;
 using BHome.DigitalSigning.Application.Services;
-using BHome.Domain.IdentityAccess;
+using BHome.DigitalSigning.Application.Identity;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 
@@ -11,7 +11,7 @@ namespace BHome.DigitalSigning.Api.Controllers;
 // A saved change applies to the next call to Viettel.
 [ApiController]
 [Route("api/v1/digital-signing/settings/viettel")]
-[Authorize(Roles = Roles.Owner)]
+[Authorize(Roles = SigningRoles.Owner)]
 public sealed class SigningSettingsController(SigningAccountService accounts, ISigningProvider provider) : ControllerBase
 {
     // Viettel signs in per signer, so checking the account takes the user_id of one registered signer.

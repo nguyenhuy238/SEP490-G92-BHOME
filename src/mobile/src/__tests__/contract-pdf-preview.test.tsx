@@ -82,7 +82,7 @@ vi.mock('react-native-paper', () => ({
     onPress: () => void;
   }) => <button aria-label={accessibilityLabel} disabled={disabled} onClick={onPress} />,
 }));
-import { ContractPdfPreview } from '../features/contracts/ContractPdfPreview';
+import { ContractPdfPreview } from '../features/contracts/signing/ContractPdfPreview';
 import { mainDraftClient } from '../../../../packages/client-core/src/mainDrafts';
 const png = () => new Uint8Array([137, 80, 78, 71, 13, 10, 26, 10, 0]);
 const info = (id = 'pdf') => ({

@@ -15,7 +15,7 @@ public sealed partial class ContractLifecycleApiTests
     private async Task<RoomDto> ConfigureProperty(Workspace workspace)
     {
         await using var scope = fixture.Factory.Services.CreateAsyncScope();
-        var db = scope.ServiceProvider.GetRequiredService<BHomePersistenceContext>();
+        var db = scope.ServiceProvider.GetFixturePersistence();
         var room = await db.Set<Room>().Include(r => r.Location).SingleAsync(r => r.Id == workspace.Room);
         room.Location.Address = "Synthetic address";
         room.RoomTypeId = null; room.Capacity = 2;
@@ -58,7 +58,7 @@ public sealed partial class ContractLifecycleApiTests
         Assert.Equal(HttpStatusCode.Conflict, stale.StatusCode);
         Assert.Contains("stale_version", await stale.Content.ReadAsStringAsync());
         await using var verify = fixture.Factory.Services.CreateAsyncScope();
-        var actual = verify.ServiceProvider.GetRequiredService<BHomePersistenceContext>();
+        var actual = verify.ServiceProvider.GetFixturePersistence();
         var history = await actual.Set<PropertyChange>().Where(a => a.TargetId == w.Room).ToArrayAsync();
         var action = termination ? "ContractTermination" : "ContractActivation";
         var change = Assert.Single(history, a => a.Action == action);
@@ -117,7 +117,7 @@ public sealed partial class ContractLifecycleApiTests
         };
         await using (var seed = fixture.Factory.Services.CreateAsyncScope())
         {
-            var db = seed.ServiceProvider.GetRequiredService<BHomePersistenceContext>();
+            var db = seed.ServiceProvider.GetFixturePersistence();
             db.Add(resident); await db.SaveChangesAsync();
         }
         var second = await Active(w with { Tenant = tenant, Resident = resident.Id });
@@ -128,7 +128,7 @@ public sealed partial class ContractLifecycleApiTests
         var after = (await w.Owner.Client.GetFromJsonAsync<RoomDto>($"/api/v1/rooms/{w.Room}"))!;
         Assert.Equal(RoomStatus.Occupied, after.Status); Assert.Equal(before.Version, after.Version);
         await using var verify = fixture.Factory.Services.CreateAsyncScope();
-        var actual = verify.ServiceProvider.GetRequiredService<BHomePersistenceContext>();
+        var actual = verify.ServiceProvider.GetFixturePersistence();
         Assert.Equal(ContractStatus.Active, (await actual.Set<Contract>().SingleAsync(c => c.Id == second)).Status);
         Assert.False(await actual.Set<PropertyChange>().AnyAsync(c => c.TargetId == w.Room && c.Action == "ContractTermination"));
     }

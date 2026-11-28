@@ -432,7 +432,7 @@ it('unmounts the camera for an undistorted preview and deletes a rejected image 
   expect(screen.getByAltText('Ảnh CCCD vừa chụp').getAttribute('data-resize')).toBe('contain');
   expect(capture).not.toHaveBeenCalled();
   expect(native.files.size).toBe(1);
-  expect(native.resized).toHaveBeenCalledExactlyOnceWith({ width: 1600, height: 960 });
+  expect(native.resized).not.toHaveBeenCalled();
   expect(native.save).toHaveBeenCalledWith({ format: 'jpeg', compress: 0.95 });
   expect(native.release).toHaveBeenCalledTimes(3);
   fireEvent.click(screen.getByRole('button', { name: 'Chụp lại' }));
@@ -741,6 +741,9 @@ it('changes iOS lenses and zoom in place, resets zoom on lens selection and guar
   fireEvent.click(screen.getByRole('button', { name: 'Tele' }));
   expect(native.props.selectedLens).toBe('AVCaptureDeviceTypeBuiltInUltraWideCamera');
   expect(native.props.zoom).toBe(0);
+  act(() => native.props.onAvailableLensesChanged?.({ lenses: [] }));
+  await readyShutter();
+  expect(native.props.selectedLens).toBe('AVCaptureDeviceTypeBuiltInUltraWideCamera');
   act(() =>
     native.props.onAvailableLensesChanged?.({
       lenses: lenses.map((lens) => ({ ...lens, localizedName: 'Synthetic lens' })),
@@ -762,6 +765,74 @@ it('falls back to the default iOS camera when discovery fails', async () => {
   await readyShutter();
   expect(native.props.selectedLens).toBeUndefined();
   expect(screen.queryByRole('button', { name: 'Siêu rộng' })).toBeNull();
+});
+it('keeps the selected iOS lens for a retake in Expo Go without a focus extension', async () => {
+  native.platform = 'ios';
+  native.lenses.mockResolvedValue([{ deviceType: 'AVCaptureDeviceTypeBuiltInUltraWideCamera' }]);
+  render(
+    <CameraCapture
+      label="CCCD"
+      presentation="document"
+      disabled={false}
+      reviewBeforeSubmit
+      onCapture={vi.fn()}
+    />,
+  );
+  await readyShutter();
+  fireEvent.click(screen.getByRole('button', { name: 'Siêu rộng' }));
+  await readyShutter();
+  fireEvent.click(screen.getByRole('button', { name: 'Chụp ảnh mặt trước' }));
+  await screen.findByRole('button', { name: 'Chụp lại' });
+  fireEvent.click(screen.getByRole('button', { name: 'Chụp lại' }));
+  await readyShutter();
+  expect(native.props.selectedLens).toBe('AVCaptureDeviceTypeBuiltInUltraWideCamera');
+  expect(native.props.zoom).toBe(0);
+  expect(native.props.bhomeFocusEnabled).toBeUndefined();
+});
+
+it('restores a shared front/back lens choice only when the new camera reports it', async () => {
+  native.platform = 'ios';
+  const preference = { current: 'AVCaptureDeviceTypeBuiltInUltraWideCamera' };
+  native.lenses.mockResolvedValue([{ deviceType: preference.current }]);
+  const view = render(
+    <CameraCapture
+      key="front"
+      label="CCCD"
+      presentation="document"
+      disabled={false}
+      lensPreferenceRef={preference}
+      onCapture={vi.fn()}
+    />,
+  );
+  await readyShutter();
+  expect(native.props.selectedLens).toBe(preference.current);
+  view.rerender(
+    <CameraCapture
+      key="back"
+      label="CCCD"
+      presentation="document"
+      documentSide="back"
+      disabled={false}
+      lensPreferenceRef={preference}
+      onCapture={vi.fn()}
+    />,
+  );
+  await readyShutter('Chụp ảnh mặt sau');
+  expect(native.props.selectedLens).toBe('AVCaptureDeviceTypeBuiltInUltraWideCamera');
+  native.lenses.mockResolvedValue([{ deviceType: 'AVCaptureDeviceTypeBuiltInWideAngleCamera' }]);
+  view.rerender(
+    <CameraCapture
+      key="another"
+      label="CCCD"
+      presentation="document"
+      disabled={false}
+      lensPreferenceRef={preference}
+      onCapture={vi.fn()}
+    />,
+  );
+  await readyShutter();
+  expect(native.props.selectedLens).toBeUndefined();
+  expect(preference.current).toBe('');
 });
 it('retries a mount failure and ignores ready callbacks from the closed camera', async () => {
   native.autoReady = false;

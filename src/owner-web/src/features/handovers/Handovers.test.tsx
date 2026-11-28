@@ -11,14 +11,14 @@ const mocks = vi.hoisted(() => ({
   action: vi.fn(),
 }));
 
-vi.mock('../contracts/useContractsApi', () => ({
+vi.mock('../contracts/hooks/useContractsApi', () => ({
   useContractsApi: () => ({
     transport: mocks.transport,
     locations: mocks.locations,
     rooms: mocks.rooms,
   }),
 }));
-vi.mock('../contracts/OwnerHandoverDraftPanel', () => ({
+vi.mock('../contracts/components/handover/OwnerHandoverDraftPanel', () => ({
   OwnerHandoverDraftPanel: ({
     id,
     compact,

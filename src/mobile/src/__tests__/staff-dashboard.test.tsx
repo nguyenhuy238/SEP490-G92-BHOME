@@ -46,7 +46,9 @@ vi.mock('../features/workspace/useStaffDashboard', () => ({
   }),
 }));
 vi.mock('react-native', () => ({
-  View: ({ children }: { children?: React.ReactNode }) => <div>{children}</div>,
+  View: ({ children, testID }: { children?: React.ReactNode; testID?: string }) => (
+    <div data-testid={testID}>{children}</div>
+  ),
   ScrollView: ({ children }: { children?: React.ReactNode }) => <div>{children}</div>,
   StyleSheet: { create: (s: unknown) => s, hairlineWidth: 1 },
 }));
@@ -69,6 +71,7 @@ vi.mock('react-native-paper', () => {
     MD3LightTheme: { colors: {} },
     configureFonts: () => ({}),
     Text: Content,
+    Icon: () => null,
     Button,
     TouchableRipple: Button,
     Portal: Content,
@@ -135,6 +138,8 @@ it('does not show a sample name, shift status or manufactured counts in authenti
   render(<StaffDashboard />);
   expect(screen.queryByText('Xin chào, Long!')).toBeNull();
   expect(screen.queryByText('Đang trực')).toBeNull();
+  expect(screen.queryByRole('button', { name: 'Làm mới tổng quan' })).toBeNull();
+  expect(screen.queryByText('Làm mới')).toBeNull();
   expect(screen.queryByText('Chưa có dữ liệu ca làm')).toBeNull();
   expect(screen.getByText('Chưa có việc ưu tiên cần xử lý.')).toBeTruthy();
   expect(screen.getByText('Cơ sở kiểm thử')).toBeTruthy();
@@ -187,7 +192,7 @@ it('opens an assigned move-in inventory task from priorities', () => {
   fireEvent.click(screen.getByRole('button', { name: 'Kiểm kê trước nhận phòng, Cơ sở kiểm thử' }));
   expect(state.go).toHaveBeenCalledWith('move-in-inventory', { taskId: 'inventory-task' });
 });
-it('shows four quick actions and keeps seven work areas including residence tracking available', () => {
+it('shows six quick actions in three rows of two and keeps seven work areas available', () => {
   render(<StaffDashboard />);
   expect(staffFeatureGroups).toHaveLength(7);
   expect(staffFeatureGroups.flatMap((group) => group.items)).toContainEqual(
@@ -200,9 +205,25 @@ it('shows four quick actions and keeps seven work areas including residence trac
     }
   }
   expect(screen.getByText('Truy cập nhanh')).toBeTruthy();
+  const rows = screen.getAllByTestId('staff-shortcut-row');
+  expect(rows).toHaveLength(3);
+  expect(
+    rows.map((row) =>
+      within(row)
+        .getAllByRole('button')
+        .map((button) => button.textContent),
+    ),
+  ).toEqual([
+    ['Công việc', 'Ghi điện nước'],
+    ['Bàn giao / Trả phòng', 'Xử lý sự cố'],
+    ['Hợp đồng', 'Tạm trú'],
+  ]);
   expect(screen.getByText('Công việc')).toBeTruthy();
   expect(screen.getByText('Ghi điện nước')).toBeTruthy();
   expect(screen.getByText('Bàn giao / Trả phòng')).toBeTruthy();
+  expect(screen.getByText('Hợp đồng')).toBeTruthy();
+  fireEvent.click(screen.getByText('Tạm trú'));
+  expect(state.go).toHaveBeenLastCalledWith('residence');
   fireEvent.click(screen.getByText('Xử lý sự cố'));
   expect(state.go).toHaveBeenLastCalledWith('staff-incidents');
   expect(screen.queryByText('Hóa đơn')).toBeNull();

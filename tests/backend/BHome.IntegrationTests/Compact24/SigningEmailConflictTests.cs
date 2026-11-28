@@ -13,7 +13,7 @@ public sealed partial class Compact24NotificationMvpTests
     {
         var w = await Seed();
         await using var scope = fixture.Factory!.Services.CreateAsyncScope();
-        var db = scope.ServiceProvider.GetRequiredService<Compact24DbContext>();
+        var db = scope.ServiceProvider.GetRequiredService<Compact24ArchiveContext>();
         var target = await AddSyntheticHolding(db, w, active: false);
         target.Kind = ContractKind.Main;
         var own = await db.Set<Resident>().SingleAsync(r => r.Id == target.RepresentativeResidentId);
@@ -29,7 +29,7 @@ public sealed partial class Compact24NotificationMvpTests
             ContractId = other.Id,
             ResidentId = other.RepresentativeResidentId,
             ApprovedByUserId = w.Owner.Id,
-            SnapshotHash = other.SnapshotHash,
+            SnapshotHash = other.SnapshotHashOrEmpty,
             TokenHash = new string('D', 64),
             DocumentHash = new string('E', 64),
             RecipientEmail = "accepted-only@example.invalid",
@@ -47,7 +47,7 @@ public sealed partial class Compact24NotificationMvpTests
             ContractId = other.Id,
             ResidentId = other.RepresentativeResidentId,
             ApprovedByUserId = w.Owner.Id,
-            SnapshotHash = other.SnapshotHash,
+            SnapshotHash = other.SnapshotHashOrEmpty,
             TokenHash = new string('F', 64),
             DocumentHash = new string('E', 64),
             RecipientEmail = "pending-only@example.invalid",

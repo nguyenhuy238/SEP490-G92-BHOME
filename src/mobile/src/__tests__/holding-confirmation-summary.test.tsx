@@ -23,7 +23,7 @@ vi.mock('react-native-paper', () => {
     ),
   };
 });
-import { HoldingConfirmationSummary } from '../features/contracts/HoldingConfirmationSummary';
+import { HoldingConfirmationSummary } from '../features/contracts/holding/HoldingConfirmationSummary';
 afterEach(cleanup);
 it('renders actual values as text without editable fields or calendars', () => {
   const name = 'Người giữ chỗ có họ tên dài để kiểm tra xuống dòng';

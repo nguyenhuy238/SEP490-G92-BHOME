@@ -1,1 +1,1 @@
-export { MainDraftSettingsPanel as default } from '../MainDraftSettingsPanel';
+export { MainDraftSettingsPanel as default } from '../components/drafts/MainDraftSettingsPanel';

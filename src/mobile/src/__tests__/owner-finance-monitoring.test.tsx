@@ -47,7 +47,9 @@ vi.mock('../components/WorkspaceQueryState', () => ({
   QueryState: () => null,
   Pagination: () => null,
 }));
-vi.mock('./../screens/TenantAdjustmentPanel', () => ({ AdjustmentEvidenceImage: () => null }));
+vi.mock('../features/tenant/billing/TenantAdjustmentPanel', () => ({
+  AdjustmentEvidenceImage: () => null,
+}));
 vi.mock('../features/owner/OwnerFinancialActions', () => ({
   OwnerAdjustmentDecision: () => <div>Quyết định điều chỉnh</div>,
   OwnerPaymentDecision: () => <div>Đối chiếu và quyết định</div>,

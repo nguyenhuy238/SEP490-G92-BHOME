@@ -77,7 +77,7 @@ vi.mock('../components/WorkflowControls', () => ({
     </select>
   ),
 }));
-import { HoldingDepositAllocation } from '../features/contracts/HoldingDepositAllocation';
+import { HoldingDepositAllocation } from '../features/contracts/holding/HoldingDepositAllocation';
 const contract = { id: 'contract', kind: 'Holding' } as ContractView;
 const state = { problems: [] as string[], status: 'Allocated', fail: false };
 const request = vi.fn();

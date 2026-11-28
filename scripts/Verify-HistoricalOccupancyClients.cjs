@@ -18,16 +18,8 @@ module.exports = async function verify({ owner, room, today, page, settings }) {
     name: 'SYNTHETIC OCCUPANCY HISTORY',
     address: 'Synthetic address',
   });
-  const type = await create('room-types', {
-    locationId: location.id,
-    name: 'Synthetic history type',
-    defaultCapacity: 2,
-    areaM2: 20,
-    amenities: [],
-  });
   await create('rooms', {
     locationId: location.id,
-    roomTypeId: type.id,
     roomNumber: 'HISTORY-01',
     capacity: 2,
   });

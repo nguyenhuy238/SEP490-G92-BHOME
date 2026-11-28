@@ -6,7 +6,7 @@ import {
   type ContractRequest,
   type ContractView,
 } from '../../../../../packages/client-core/src/contracts';
-import { OwnerContractPreview } from './OwnerContractPreview';
+import { OwnerContractPreview } from './components/signing/OwnerContractPreview';
 
 afterEach(() => {
   cleanup();

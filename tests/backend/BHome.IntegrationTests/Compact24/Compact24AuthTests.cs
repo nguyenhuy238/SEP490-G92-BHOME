@@ -2,6 +2,7 @@ using System.Net;
 using System.Net.Http.Headers;
 using System.Net.Http.Json;
 using BHome.Application.IdentityAccess;
+using BHome.Infrastructure.IdentityAccess;
 using BHome.Infrastructure.Persistence;
 using BHome.Infrastructure.Persistence.Compact24;
 using Microsoft.AspNetCore.Hosting;
@@ -88,7 +89,11 @@ public sealed class Compact24AuthTests(Compact24Fixture fixture) : IClassFixture
         var db = scope.ServiceProvider.GetRequiredService<Compact24DbContext>();
         var persisted = await db.Users.AsNoTracking().SingleAsync(x => x.Id == user.Id);
         Assert.Equal(user.PasswordHash, persisted.PasswordHash);
-        Assert.Equal(new[] { "refresh_tokens", "users" }, db.Model.GetRelationalModel().Tables.Select(x => x.Name).Order().ToArray());
+        // One runtime context now maps all reviewed physical tables, not just Identity.
+        using var schema = typeof(Compact24DbContext).Assembly.GetManifestResourceStream("BHome.Compact24.Schema.sql")!;
+        using var reader = new StreamReader(schema);
+        var expected = Compact24Schema.ExpectedColumns(reader.ReadToEnd()).Select(c => c.Split('.')[0]).Distinct().Order(StringComparer.Ordinal);
+        Assert.Equal(expected, db.Model.GetRelationalModel().Tables.Select(x => x.Name).Order(StringComparer.Ordinal));
         await using var connection = new NpgsqlConnection(fixture.Connection);
         await connection.OpenAsync();
         await using var command = new NpgsqlCommand("SELECT count(*) FROM information_schema.tables WHERE table_schema='public' AND table_type='BASE TABLE'", connection);
@@ -202,7 +207,7 @@ public sealed class Compact24AuthTests(Compact24Fixture fixture) : IClassFixture
         var session = await Login(client, user.Email!);
         await using (var scope = fixture.Factory.Services.CreateAsyncScope())
         {
-            var users = scope.ServiceProvider.GetRequiredService<UserManager<ApplicationUser>>();
+            var users = scope.ServiceProvider.GetRequiredService<UserManager<User>>();
             var stored = (await users.FindByIdAsync(user.Id.ToString()))!;
             Assert.True((await users.AddToRoleAsync(stored, "Staff")).Succeeded);
             Assert.True((await users.RemoveFromRoleAsync(stored, "Staff")).Succeeded);
@@ -249,29 +254,72 @@ public sealed class Compact24AuthTests(Compact24Fixture fixture) : IClassFixture
     }
 
     [CompactPostgresFact]
+    public async Task ReadOnlyPendingSetupLookupCannotOverwriteAConsumedGrantWhenAuditing()
+    {
+        var user = await Seed();
+        var hash = IdentitySecurityStore.Hash(Guid.NewGuid().ToString("N"));
+        var now = DateTimeOffset.UtcNow;
+        var consumed = now.AddTicks(-(now.Ticks % 10));
+        await using var readScope = fixture.Factory!.Services.CreateAsyncScope();
+        await using var writeScope = fixture.Factory.Services.CreateAsyncScope();
+        var readDb = readScope.ServiceProvider.GetRequiredService<Compact24DbContext>();
+        var writeDb = writeScope.ServiceProvider.GetRequiredService<Compact24DbContext>();
+        await writeDb.Database.ExecuteSqlInterpolatedAsync($"""
+            UPDATE users SET reset_token_hash={hash},reset_expires_at={now.AddMinutes(10)},reset_consumed_at=NULL WHERE id={user.Id}
+            """);
+        var repository = readScope.ServiceProvider.GetRequiredService<IIdentityPersistence>();
+        Assert.IsType<NativeIdentityPersistence>(repository);
+        // The credential verifier can read a pending setup grant before taking
+        // a user lock. Another scope may consume it before the failure audit.
+        var before = await repository.ResetGrantAsync(user.Id, default);
+        Assert.NotNull(before); Assert.Null(before.ConsumedAt);
+        await writeDb.Database.ExecuteSqlInterpolatedAsync($"""
+            UPDATE users SET reset_consumed_at={consumed} WHERE id={user.Id}
+            """);
+        var audit = new SecurityAuditRecord
+        {
+            UserId = user.Id,
+            TargetUserId = user.Id,
+            Event = "LoginFailed",
+            Succeeded = false,
+            OccurredAt = now
+        };
+        repository.Audit(audit);
+        await repository.SaveChangesAsync(default);
+        var after = await repository.ResetGrantAsync(user.Id, default);
+        Assert.NotNull(after); Assert.Equal(consumed, after.ConsumedAt);
+        Assert.Equal(hash, after.TokenHash);
+        Assert.True(await readDb.Database.SqlQuery<bool>($"""
+            SELECT EXISTS(SELECT 1 FROM notifications WHERE id={audit.Id} AND record_kind='AUDIT'
+                AND recipient_user_id IS NULL AND event_key={"auth:" + audit.Id.ToString("N")}
+                AND notification_type='LoginFailed') AS "Value"
+            """).SingleAsync());
+    }
+
+    [CompactPostgresFact]
     public async Task OptimisticConcurrencyAndMissingRoleAreRejectedWithoutDefaultRole()
     {
         var user = await Seed();
         await using var left = fixture.Factory!.Services.CreateAsyncScope();
         await using var right = fixture.Factory.Services.CreateAsyncScope();
-        var manager1 = left.ServiceProvider.GetRequiredService<UserManager<ApplicationUser>>();
-        var manager2 = right.ServiceProvider.GetRequiredService<UserManager<ApplicationUser>>();
+        var manager1 = left.ServiceProvider.GetRequiredService<UserManager<User>>();
+        var manager2 = right.ServiceProvider.GetRequiredService<UserManager<User>>();
         var first = (await manager1.FindByIdAsync(user.Id.ToString()))!;
         var stale = (await manager2.FindByIdAsync(user.Id.ToString()))!;
         first.PhoneNumber = "SYNTHETIC"; Assert.True((await manager1.UpdateAsync(first)).Succeeded);
         stale.PhoneNumber = "STALE"; Assert.False((await manager2.UpdateAsync(stale)).Succeeded);
-        var blank = new ApplicationUser { Id = Guid.NewGuid(), UserName = Guid.NewGuid().ToString(), Email = $"{Guid.NewGuid():N}@example.invalid" };
+        var blank = new User { Id = Guid.NewGuid(), UserName = Guid.NewGuid().ToString(), Email = $"{Guid.NewGuid():N}@example.invalid" };
         var result = await manager1.CreateAsync(blank, Password);
         Assert.False(result.Succeeded);
         Assert.Contains(result.Errors, x => x.Code == "CompactRoleRequired");
     }
 
-    private async Task<ApplicationUser> Seed()
+    private async Task<User> Seed()
     {
         await using var scope = fixture.Factory!.Services.CreateAsyncScope();
         var db = scope.ServiceProvider.GetRequiredService<Compact24DbContext>();
         var id = Guid.NewGuid();
-        var user = new ApplicationUser
+        var user = new User
         {
             Id = id,
             UserName = id.ToString(),
@@ -283,7 +331,7 @@ public sealed class Compact24AuthTests(Compact24Fixture fixture) : IClassFixture
             ConcurrencyStamp = Guid.NewGuid().ToString(),
             LockoutEnabled = true
         };
-        user.PasswordHash = scope.ServiceProvider.GetRequiredService<IPasswordHasher<ApplicationUser>>().HashPassword(user, Password);
+        user.PasswordHash = scope.ServiceProvider.GetRequiredService<IPasswordHasher<User>>().HashPassword(user, Password);
         db.Users.Add(user); db.Entry(user).Property("roles").CurrentValue = new[] { "Tenant" };
         await db.SaveChangesAsync();
         return user;

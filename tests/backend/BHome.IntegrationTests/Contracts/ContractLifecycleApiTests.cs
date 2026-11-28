@@ -5,6 +5,7 @@ using System.Net.Http.Json;
 using System.Text;
 using BHome.Application.Common;
 using BHome.Application.Contracts;
+using BHome.Application.Notifications;
 using BHome.Application.PropertyManagement;
 using BHome.Application.IdentityAccess;
 using BHome.Application.Ocr;
@@ -44,10 +45,10 @@ public sealed partial class ContractLifecycleApiTests(ContractFixture fixture) :
         const string password = BHome.IntegrationTests.Compact24.WorkflowTestUsers.Password;
         await using (var scope = fixture.Factory.Services.CreateAsyncScope())
         {
-            var users = scope.ServiceProvider.GetRequiredService<UserManager<ApplicationUser>>();
+            var users = scope.ServiceProvider.GetRequiredService<UserManager<User>>();
             // These actors model established accounts that already completed setup.
             // Pending/unconfirmed onboarding is exercised separately by authentication tests.
-            var user = new ApplicationUser { Id = id, UserName = name, Email = name, EmailConfirmed = true, LockoutEnabled = true };
+            var user = new User { Id = id, UserName = name, Email = name, EmailConfirmed = true, LockoutEnabled = true };
             user = await BHome.IntegrationTests.Compact24.WorkflowTestUsers.CreateAsync(scope.ServiceProvider, user, role, password);
             id = user.Id; name = user.Email!;
         }
@@ -58,7 +59,7 @@ public sealed partial class ContractLifecycleApiTests(ContractFixture fixture) :
     private async Task<Workspace> Setup()
     {
         var owner = await User(Roles.Owner); var staff = await User(Roles.Staff); var tenant = await User(Roles.Tenant);
-        await using var scope = fixture.Factory.Services.CreateAsyncScope(); var db = scope.ServiceProvider.GetRequiredService<BHomePersistenceContext>();
+        await using var scope = fixture.Factory.Services.CreateAsyncScope(); var db = scope.ServiceProvider.GetFixturePersistence();
         var location = new Location("Synthetic Contract Location") { ChainId = db is BHome.Infrastructure.Persistence.Compact24.Compact24DbContext ? null : await db.Set<BHome.Domain.PropertyManagement.Chain>().Select(c => c.Id).SingleAsync(), Address = "Synthetic address" };
         var room = new Room { LocationId = location.Id, RoomNumber = "SYNTHETIC", Status = RoomStatus.Available };
         var resident = new Resident { RoomId = room.Id, OwnerUserId = owner.Id, DisplayLabel = "Synthetic Representative", VerificationStatus = IdentityVerificationStatus.Verified };
@@ -129,7 +130,7 @@ public sealed partial class ContractLifecycleApiTests(ContractFixture fixture) :
     {
         foreach (var actor in new[] { w.Owner, w.Tenant })
         {
-            await Success<SignatureView>(await Post(actor, Path(id, "signing"), new SigningInput(Guid.NewGuid())));
+            await Success<SignatureView>(await Post(actor, Path(id, "signing"), new SigningInput(Guid.NewGuid(), Method: SigningMethods.Otp)));
             await Success<ContractView>(await Post(actor, Path(id, "signing/sync")));
         }
     }
@@ -184,7 +185,7 @@ public sealed partial class ContractLifecycleApiTests(ContractFixture fixture) :
         Assert.Equal("Active", (await w.Owner.Client.GetFromJsonAsync<ContractView>(Path(id)))!.Status);
         await using (var scope = fixture.Factory.Services.CreateAsyncScope())
         {
-            var db = scope.ServiceProvider.GetRequiredService<BHomePersistenceContext>();
+            var db = scope.ServiceProvider.GetFixturePersistence();
             Assert.Equal(RoomStatus.Occupied, (await db.Set<Room>().SingleAsync(r => r.Id == w.Room)).Status);
             Assert.Single(await db.Set<ContractMoveOut>().Where(m => m.ContractId == id).ToArrayAsync());
         }
@@ -311,7 +312,7 @@ public sealed partial class ContractLifecycleApiTests(ContractFixture fixture) :
         Assert.Equal(third.Version + 1, resolved.Version);
         Assert.Contains(resolved.Notes, new[] { "Synthetic concurrent A", "Synthetic concurrent B" });
         await using var scope = fixture.Factory.Services.CreateAsyncScope();
-        var db = scope.ServiceProvider.GetRequiredService<BHomePersistenceContext>();
+        var db = scope.ServiceProvider.GetFixturePersistence();
         var persisted = await db.Database.SqlQuery<string>($"""
             SELECT move_out->'inspectionDraft'->>'roomCondition' AS "Value"
             FROM contracts WHERE id={id}
@@ -326,7 +327,7 @@ public sealed partial class ContractLifecycleApiTests(ContractFixture fixture) :
     private async Task<Meter[]> InstallHandoverMeters(Workspace w)
     {
         await using var scope = fixture.Factory.Services.CreateAsyncScope();
-        var db = scope.ServiceProvider.GetRequiredService<BHomePersistenceContext>();
+        var db = scope.ServiceProvider.GetFixturePersistence();
         var meters = new[] { UtilityType.Electricity, UtilityType.Water }.Select(type => new Meter
         {
             RoomId = w.Room,
@@ -360,7 +361,7 @@ public sealed partial class ContractLifecycleApiTests(ContractFixture fixture) :
     private async Task PrepareHistoricalHandoverFixture(Guid contractId)
     {
         await using var scope = fixture.Factory.Services.CreateAsyncScope();
-        var db = scope.ServiceProvider.GetRequiredService<BHomePersistenceContext>();
+        var db = scope.ServiceProvider.GetFixturePersistence();
         if (db is BHome.Infrastructure.Persistence.Compact24.Compact24DbContext)
             await db.Database.ExecuteSqlInterpolatedAsync($"UPDATE contracts SET handover=handover-'preparation' WHERE id={contractId}");
     }
@@ -418,7 +419,7 @@ public sealed partial class ContractLifecycleApiTests(ContractFixture fixture) :
         var meters = await InstallHandoverMeters(w);
         if (!assigned)
         {
-            await using var scope = fixture.Factory.Services.CreateAsyncScope(); var db = scope.ServiceProvider.GetRequiredService<BHomePersistenceContext>();
+            await using var scope = fixture.Factory.Services.CreateAsyncScope(); var db = scope.ServiceProvider.GetFixturePersistence();
             foreach (var assignment in await db.StaffLocationAssignments.Where(a => a.LocationId == w.Location).ToArrayAsync()) assignment.ChangePeriod(Today.AddYears(-1), Today.AddDays(-1));
             await db.SaveChangesAsync();
         }
@@ -429,7 +430,7 @@ public sealed partial class ContractLifecycleApiTests(ContractFixture fixture) :
         var key = Guid.NewGuid();
         await Success<ContractView>(await Post(w.Owner, Path(id, "activate"), null, key));
         await Success<ContractView>(await Post(w.Owner, Path(id, "activate"), null, key));
-        await using var check = fixture.Factory.Services.CreateAsyncScope(); var store = check.ServiceProvider.GetRequiredService<BHomePersistenceContext>();
+        await using var check = fixture.Factory.Services.CreateAsyncScope(); var store = check.ServiceProvider.GetFixturePersistence();
         var task = Assert.Single(await store.Set<OperationalTask>().Where(task => task.ContractId == id && task.Kind == BHome.Domain.StaffOperations.OperationalTaskKind.AdHoc).ToArrayAsync());
         Assert.Equal(w.Room, task.TargetRoomId); Assert.Equal(assigned ? w.Staff.Id : (Guid?)null, task.AssignedStaffUserId);
         var initialTasks = await store.Set<OperationalTask>().Where(task => task.ContractId == id && task.Kind == BHome.Domain.StaffOperations.OperationalTaskKind.MeterReading)
@@ -439,16 +440,16 @@ public sealed partial class ContractLifecycleApiTests(ContractFixture fixture) :
         Assert.All(initialTasks, meterTask =>
         {
             Assert.Equal(ReadingPurpose.Initial, meterTask.Purpose);
-            Assert.Equal(w.Location, meterTask.LocationId);
+            Assert.Equal(w.Location, meterTask.RequiredLocationId);
             Assert.Equal(assigned ? w.Staff.Id : (Guid?)null, meterTask.AssignedStaffUserId);
-            Assert.Equal(MeterTaskStatus.Assigned, meterTask.Status);
+            Assert.Equal(MeterTaskStatus.Assigned, meterTask.MeterStatus);
         });
         var inventory = Assert.Single(await store.Set<OperationalTask>().Where(task => task.ContractId == id &&
             task.Kind == BHome.Domain.StaffOperations.OperationalTaskKind.MoveInInventory).ToArrayAsync());
         Assert.Equal(w.Room, inventory.TargetRoomId);
         Assert.Equal(assigned ? w.Staff.Id : (Guid?)null, inventory.AssignedStaffUserId);
         Assert.NotNull(inventory.DueAt);
-        Assert.Equal(BHome.Domain.Billing.MeterTaskStatus.Assigned, inventory.Status);
+        Assert.Equal(BHome.Domain.Billing.MeterTaskStatus.Assigned, inventory.MeterStatus);
         var checklist = System.Text.Json.JsonSerializer.Deserialize<BHome.Application.StaffOperations.MoveInInventorySnapshot>(
             inventory.MoveInInventoryJson);
         Assert.NotNull(checklist);
@@ -460,7 +461,7 @@ public sealed partial class ContractLifecycleApiTests(ContractFixture fixture) :
         var w = await Setup();
         await using (var setup = fixture.Factory.Services.CreateAsyncScope())
         {
-            var db = setup.ServiceProvider.GetRequiredService<BHomePersistenceContext>();
+            var db = setup.ServiceProvider.GetFixturePersistence();
             var room = await db.Set<Room>().SingleAsync(room => room.Id == w.Room);
             room.Capacity = 2; // Two individual Tenants can have separate contracts in one Room.
             await db.SaveChangesAsync();
@@ -481,7 +482,7 @@ public sealed partial class ContractLifecycleApiTests(ContractFixture fixture) :
         Guid nextResident;
         await using (var setup = fixture.Factory.Services.CreateAsyncScope())
         {
-            var db = setup.ServiceProvider.GetRequiredService<BHomePersistenceContext>();
+            var db = setup.ServiceProvider.GetFixturePersistence();
             var resident = new Resident
             {
                 RoomId = w.Room,
@@ -614,7 +615,7 @@ public sealed partial class ContractLifecycleApiTests(ContractFixture fixture) :
             Assert.Equal(MeterTaskStatus.Completed, baselines.Single(task => task.Id == existingIds[0]).Status);
             Assert.Equal(MeterTaskStatus.Assigned, baselines.Single(task => task.Id == existingIds[1]).Status);
             await using var scope = fixture.Factory.Services.CreateAsyncScope();
-            var db = scope.ServiceProvider.GetRequiredService<BHomePersistenceContext>();
+            var db = scope.ServiceProvider.GetFixturePersistence();
             var reading = await db.Set<MeterReading>().SingleAsync(r => r.TaskId == existingIds[0]);
             Assert.Equal(confirmed!.Id, reading.Id);
             Assert.Equal(100m, reading.ConfirmedValue);
@@ -636,7 +637,7 @@ public sealed partial class ContractLifecycleApiTests(ContractFixture fixture) :
         string ownerEmail;
         await using (var setup = fixture.Factory.Services.CreateAsyncScope())
         {
-            var db = setup.ServiceProvider.GetRequiredService<BHomePersistenceContext>();
+            var db = setup.ServiceProvider.GetFixturePersistence();
             ownerEmail = (await db.Users.Where(user => user.Id == w.Owner.Id).Select(user => user.Email).SingleAsync())!;
             db.Add(new Asset
             {
@@ -690,15 +691,15 @@ public sealed partial class ContractLifecycleApiTests(ContractFixture fixture) :
         var owner = new Actor(ownerClient, w.Owner.Id);
         var key = Guid.NewGuid();
         var input = new DevelopmentOnboardingSeedInput(w.Location, w.Room);
-        Assert.Equal(HttpStatusCode.Forbidden, (await Post(staff, "/api/v1/development/onboarding-seed", input)).StatusCode);
+        Assert.Equal(HttpStatusCode.Forbidden, (await Post(staff, "/test-probe/onboarding-seed", input)).StatusCode);
         var created = await Success<DevelopmentOnboardingSeedResult>(await Post(owner,
-            "/api/v1/development/onboarding-seed", input, key));
+            "/test-probe/onboarding-seed", input, key));
         Assert.Equal(w.Room, created.RoomId);
         Assert.Equal(created.ContractId, (await Success<DevelopmentOnboardingSeedResult>(await Post(owner,
-            "/api/v1/development/onboarding-seed", input, key))).ContractId);
+            "/test-probe/onboarding-seed", input, key))).ContractId);
         await using (var before = development.Services.CreateAsyncScope())
         {
-            var store = before.ServiceProvider.GetRequiredService<BHomePersistenceContext>();
+            var store = before.ServiceProvider.GetFixturePersistence();
             Assert.Equal(2, await store.Set<Meter>().CountAsync(m => m.RoomId == created.RoomId && m.IsActive));
             Assert.Equal(2, await store.Set<OperationalTask>().CountAsync(task =>
                 task.ContractId == created.ContractId &&
@@ -736,7 +737,7 @@ public sealed partial class ContractLifecycleApiTests(ContractFixture fixture) :
         var w = await Setup();
         await using (var scope = fixture.Factory.Services.CreateAsyncScope())
         {
-            var db = scope.ServiceProvider.GetRequiredService<BHomePersistenceContext>();
+            var db = scope.ServiceProvider.GetFixturePersistence();
             var room = await db.Set<Room>().SingleAsync(r => r.Id == w.Room); room.Capacity = 2; await db.SaveChangesAsync();
         }
         var before = await w.Staff.Client.GetFromJsonAsync<BHome.Application.Ocr.NamedResource[]>($"/api/v1/capture/locations/{w.Location}/rooms");
@@ -755,7 +756,7 @@ public sealed partial class ContractLifecycleApiTests(ContractFixture fixture) :
         var id = await Draft(w);
         await using (var scope = fixture.Factory.Services.CreateAsyncScope())
         {
-            var db = scope.ServiceProvider.GetRequiredService<BHomePersistenceContext>();
+            var db = scope.ServiceProvider.GetFixturePersistence();
             (await db.Set<Room>().SingleAsync(r => r.Id == w.Room)).Capacity = 2;
             (await db.Set<Contract>().SingleAsync(c => c.Id == id)).Status = ContractStatus.PendingSigning;
             await db.SaveChangesAsync();
@@ -772,7 +773,7 @@ public sealed partial class ContractLifecycleApiTests(ContractFixture fixture) :
         var w = await Setup(); var outside = await Setup();
         await using (var setup = fixture.Factory.Services.CreateAsyncScope())
         {
-            var setupDb = setup.ServiceProvider.GetRequiredService<BHomePersistenceContext>();
+            var setupDb = setup.ServiceProvider.GetFixturePersistence();
         }
         await using var host = fixture.Factory.WithWebHostBuilder(b =>
         {
@@ -784,7 +785,7 @@ public sealed partial class ContractLifecycleApiTests(ContractFixture fixture) :
             b.ConfigureTestServices(s =>
             {
                 s.RemoveAll<IContractSigningProvider>();
-                s.AddScoped(typeof(IContractSigningProvider), typeof(ViettelMySignContractAdapter).Assembly
+                s.AddScoped(typeof(IContractSigningProvider), typeof(ContractSigningRouter).Assembly
                     .GetType("BHome.Infrastructure.Contracts.DevelopmentContractSigningAdapter", true)!);
             });
         });
@@ -828,13 +829,13 @@ public sealed partial class ContractLifecycleApiTests(ContractFixture fixture) :
         Assert.Single(await Success<DepositVerificationView[]>(await owner.Client.GetAsync(Path(id, "deposit-verifications"))));
         Assert.Contains(await Success<ContractHistoryView[]>(await tenant.Client.GetAsync(Path(id, "history"))), a => a.Action == "ContractSignatureSimulated");
         await using var scope = host.Services.CreateAsyncScope();
-        var db = scope.ServiceProvider.GetRequiredService<BHomePersistenceContext>();
+        var db = scope.ServiceProvider.GetFixturePersistence();
         Assert.Equal(RoomStatus.Occupied, (await db.Set<Room>().FindAsync(w.Room))!.Status);
         Assert.Single(await db.Set<ContractDocumentFile>().Where(f => f.ContractId == id).ToArrayAsync());
         await Assert.ThrowsAsync<PostgresException>(() => db.Database.ExecuteSqlInterpolatedAsync($"UPDATE \"Contracts\" SET \"IsDevelopmentDemo\" = false WHERE \"Id\" = {id}"));
         await Assert.ThrowsAsync<PostgresException>(() => db.Database.ExecuteSqlInterpolatedAsync($"UPDATE \"ContractDocumentFiles\" SET \"FileHash\" = 'tampered' WHERE \"ContractId\" = {id}"));
         var objectStorage = scope.ServiceProvider.GetRequiredService<IObjectStorage>();
-        await ContractFileCleanup.CleanupAsync(db, objectStorage, DateTimeOffset.UtcNow.AddDays(2), default);
+        await ContractFileCleanup.CleanupAsync(scope.ServiceProvider.GetRequiredService<BHomePersistenceContext>(), objectStorage, DateTimeOffset.UtcNow.AddDays(2), default);
         Assert.Equal(pdf, await tenant.Client.GetByteArrayAsync(Path(id, $"previews/{preview.Id}")));
         var documentFile = await db.Set<ContractDocumentFile>().SingleAsync(f => f.Id == preview.Id);
         using var tampered = new MemoryStream("SYNTHETIC TAMPERING"u8.ToArray());
@@ -893,7 +894,7 @@ public sealed partial class ContractLifecycleApiTests(ContractFixture fixture) :
             else
             {
                 await using var scope = fixture.Factory.Services.CreateAsyncScope();
-                var db = scope.ServiceProvider.GetRequiredService<BHomePersistenceContext>();
+                var db = scope.ServiceProvider.GetFixturePersistence();
                 var meter = await db.Set<Meter>().SingleAsync(m => m.RoomId == w.Room && m.UtilityType == type && m.IsActive);
                 taskDate = Today;
                 taskId = (await Success<IdResult>(await w.Owner.Client.PostAsJsonAsync("/api/v1/capture/meter-tasks",
@@ -917,7 +918,7 @@ public sealed partial class ContractLifecycleApiTests(ContractFixture fixture) :
         var first = await Success<HandoverView>(await Post(w.Staff, Path(id, "handover"), input)); Assert.Equal(1, first.Version);
         await using (var direct = fixture.Factory.Services.CreateAsyncScope())
         {
-            var store = direct.ServiceProvider.GetRequiredService<BHomePersistenceContext>();
+            var store = direct.ServiceProvider.GetFixturePersistence();
             var now = DateTimeOffset.UtcNow;
             if (store is BHome.Infrastructure.Persistence.Compact24.Compact24DbContext)
             {
@@ -944,12 +945,12 @@ public sealed partial class ContractLifecycleApiTests(ContractFixture fixture) :
         Assert.Equal(HttpStatusCode.NotFound, (await outside.Tenant.Client.GetAsync(Path(id, $"handover/meter-evidence/{readingIds[0]}"))).StatusCode);
         Assert.Equal(HttpStatusCode.NotFound, (await outside.Tenant.Client.GetAsync(Path(id, $"handover/evidence/{picture.Id}"))).StatusCode);
         var json = await w.Tenant.Client.GetStringAsync(Path(id, "handover")); Assert.DoesNotContain("objectKey", json, StringComparison.OrdinalIgnoreCase);
-        await using var verify = fixture.Factory.Services.CreateAsyncScope(); var stored = verify.ServiceProvider.GetRequiredService<BHomePersistenceContext>();
+        await using var verify = fixture.Factory.Services.CreateAsyncScope(); var stored = verify.ServiceProvider.GetFixturePersistence();
         if (stored is BHome.Infrastructure.Persistence.Compact24.Compact24DbContext)
         {
             var moveInTask = await stored.Set<OperationalTask>().SingleAsync(task =>
                 task.ContractId == id && task.Kind == BHome.Domain.StaffOperations.OperationalTaskKind.AdHoc);
-            Assert.Equal(MeterTaskStatus.Completed, moveInTask.Status);
+            Assert.Equal(MeterTaskStatus.Completed, moveInTask.MeterStatus);
             var transitions = await stored.Set<BHome.Domain.StaffOperations.OperationalTaskHistory>()
                 .Where(entry => entry.TaskId == moveInTask.Id &&
                     (entry.Action == "MoveInSubmitted" || entry.Action == "MoveInCompleted"))
@@ -992,7 +993,7 @@ public sealed partial class ContractLifecycleApiTests(ContractFixture fixture) :
         var w = await Setup(); var own = await Draft(w); var other = await Setup(); await Draft(other);
         await using (var scope = fixture.Factory.Services.CreateAsyncScope())
         {
-            var db = scope.ServiceProvider.GetRequiredService<BHomePersistenceContext>();
+            var db = scope.ServiceProvider.GetFixturePersistence();
             db.RemoveRange(await db.StaffLocationAssignments.Where(a => a.StaffUserId == w.Staff.Id || a.StaffUserId == other.Staff.Id).ToArrayAsync());
             await db.SaveChangesAsync();
             db.Add(new StaffLocationAssignment(w.Location, w.Staff.Id, w.Owner.Id, Today.AddDays(-10), Today.AddDays(-1)));
@@ -1003,7 +1004,7 @@ public sealed partial class ContractLifecycleApiTests(ContractFixture fixture) :
         Assert.Empty(hidden.Items); Assert.Equal(0, hidden.TotalCount);
         await using (var scope = fixture.Factory.Services.CreateAsyncScope())
         {
-            var db = scope.ServiceProvider.GetRequiredService<BHomePersistenceContext>();
+            var db = scope.ServiceProvider.GetFixturePersistence();
             db.Add(new StaffLocationAssignment(w.Location, w.Staff.Id, w.Owner.Id, Today, Today));
             await db.SaveChangesAsync();
         }
@@ -1020,10 +1021,10 @@ public sealed partial class ContractLifecycleApiTests(ContractFixture fixture) :
         Assert.All(replies, r => Assert.Equal(HttpStatusCode.OK, r.StatusCode));
         // Polling again is idempotent, including after activation; it cannot regress the contract.
         await Success<ContractView>(await Post(w.Tenant, Path(id, "signing/sync")));
-        await using var scope = fixture.Factory.Services.CreateAsyncScope(); var db = scope.ServiceProvider.GetRequiredService<BHomePersistenceContext>();
+        await using var scope = fixture.Factory.Services.CreateAsyncScope(); var db = scope.ServiceProvider.GetFixturePersistence();
         Assert.Equal(ContractStatus.Active, (await db.Set<Contract>().SingleAsync(c => c.Id == id)).Status);
         Assert.Equal(RoomStatus.Occupied, (await db.Set<Room>().SingleAsync(c => c.Id == w.Room)).Status);
-        Assert.Equal(2, await db.Set<ContractSignature>().CountAsync(s => s.ContractId == id));
+        Assert.Equal(2, await db.Set<ContractSigning>().CountAsync(s => s.ContractId == id));
         Assert.Equal(1, await db.SecurityAudit.CountAsync(a => a.TargetId == id && a.Event == "ContractActivated"));
         var file = await w.Tenant.Client.GetAsync(Path(id, "document")); Assert.Equal(HttpStatusCode.OK, file.StatusCode);
         Assert.Contains("TEST ONLY", Encoding.UTF8.GetString(await file.Content.ReadAsByteArrayAsync()));
@@ -1051,7 +1052,7 @@ public sealed partial class ContractLifecycleApiTests(ContractFixture fixture) :
         await Signed(w, one); await Signed(w, two); await Deposit(w, one); await Deposit(w, two);
         var replies = await Task.WhenAll(Post(w.Owner, Path(one, "activate")), Post(w.Owner, Path(two, "activate")));
         Assert.Single(replies, r => r.StatusCode == HttpStatusCode.OK); Assert.Single(replies, r => r.StatusCode == HttpStatusCode.Conflict);
-        await using var scope = fixture.Factory.Services.CreateAsyncScope(); var db = scope.ServiceProvider.GetRequiredService<BHomePersistenceContext>();
+        await using var scope = fixture.Factory.Services.CreateAsyncScope(); var db = scope.ServiceProvider.GetFixturePersistence();
         Assert.Equal(1, await db.Set<Contract>().CountAsync(c => c.RoomId == w.Room && c.Status == ContractStatus.Active));
         Assert.Equal(RoomStatus.Occupied, (await db.Set<Room>().SingleAsync(r => r.Id == w.Room)).Status);
     }
@@ -1062,7 +1063,7 @@ public sealed partial class ContractLifecycleApiTests(ContractFixture fixture) :
         var deposit = new DepositInput("SYNTHETIC-SHARED-" + Guid.NewGuid(), 500, "Synthetic owner statement verification");
         var replies = await Task.WhenAll(Post(a.Owner, Path(one, "deposit-verifications"), deposit), Post(b.Owner, Path(two, "deposit-verifications"), deposit));
         Assert.Single(replies, r => r.StatusCode == HttpStatusCode.OK); Assert.Single(replies, r => r.StatusCode == HttpStatusCode.Conflict);
-        await using var scope = fixture.Factory.Services.CreateAsyncScope(); var db = scope.ServiceProvider.GetRequiredService<BHomePersistenceContext>();
+        await using var scope = fixture.Factory.Services.CreateAsyncScope(); var db = scope.ServiceProvider.GetFixturePersistence();
         Assert.Equal(1, await db.Set<DepositVerification>().CountAsync(d => d.BankTransactionReference == deposit.BankTransactionReference));
     }
     [Fact]
@@ -1083,10 +1084,10 @@ public sealed partial class ContractLifecycleApiTests(ContractFixture fixture) :
         var advancedOwner = new Actor(advanced.CreateClient(), w.Owner.Id);
         advancedOwner.Client.DefaultRequestHeaders.Authorization = w.Owner.Client.DefaultRequestHeaders.Authorization;
         await Success<ContractView>(await Post(advancedOwner, Path(next, "activate")));
-        await using var scope = fixture.Factory.Services.CreateAsyncScope(); var db = scope.ServiceProvider.GetRequiredService<BHomePersistenceContext>();
+        await using var scope = fixture.Factory.Services.CreateAsyncScope(); var db = scope.ServiceProvider.GetFixturePersistence();
         var original = await db.Set<Contract>().SingleAsync(c => c.Id == id); var renewal = await db.Set<Contract>().SingleAsync(c => c.Id == next);
-        Assert.Equal(ContractStatus.Superseded, original.Status); Assert.Equal(3000000, original.MonthlyRent); Assert.Equal(ContractStatus.Active, renewal.Status);
-        Assert.Equal(4000000, renewal.MonthlyRent); Assert.Equal(2, await db.Set<ContractSignature>().CountAsync(s => s.ContractId == id));
+        Assert.Equal(ContractStatus.Superseded, original.Status); Assert.Equal(3000000, original.RentAmount); Assert.Equal(ContractStatus.Active, renewal.Status);
+        Assert.Equal(4000000, renewal.RentAmount); Assert.Equal(2, await db.Set<ContractSigning>().CountAsync(s => s.ContractId == id));
         var versions = (await w.Tenant.Client.GetFromJsonAsync<ContractVersionView[]>(Path(next, "versions")))!;
         Assert.Equal(2, versions.Length); Assert.Contains(versions, c => c.Id == id && c.Status == "Superseded" && c.MonthlyRent == 3000000);
         Assert.Contains(versions, c => c.Id == next && c.PreviousContractId == id && c.Terms == "NEW TEST TERMS");
@@ -1102,7 +1103,7 @@ public sealed partial class ContractLifecycleApiTests(ContractFixture fixture) :
         var compact24 = await UsesCompact24();
         await using (var scope = fixture.Factory.Services.CreateAsyncScope())
         {
-            var db = scope.ServiceProvider.GetRequiredService<BHomePersistenceContext>(); var m = await db.Set<Meter>().SingleOrDefaultAsync(m => m.RoomId == w.Room && m.UtilityType == type && m.IsActive);
+            var db = scope.ServiceProvider.GetFixturePersistence(); var m = await db.Set<Meter>().SingleOrDefaultAsync(m => m.RoomId == w.Room && m.UtilityType == type && m.IsActive);
             if (m is null) { m = new Meter { RoomId = w.Room, Code = "SYNTHETIC-" + type, UtilityType = type, InstalledOn = Today.AddDays(-10) }; db.Add(m); await db.SaveChangesAsync(); }
             meter = m.Id;
             initialTask = await db.Set<OperationalTask>().Where(task => task.MeterId == meter && task.ContractId == (compact24 ? contractId : null) && task.Purpose == ReadingPurpose.Initial)
@@ -1115,7 +1116,7 @@ public sealed partial class ContractLifecycleApiTests(ContractFixture fixture) :
         }
         await using (var scope = fixture.Factory.Services.CreateAsyncScope())
         {
-            var db = scope.ServiceProvider.GetRequiredService<BHomePersistenceContext>();
+            var db = scope.ServiceProvider.GetFixturePersistence();
             if (!await db.Set<MeterReading>().AnyAsync(reading => reading.TaskId == initialTask.Value))
                 await ConfirmInitialTask(w, initialTask.Value, 100);
         }
@@ -1140,7 +1141,7 @@ public sealed partial class ContractLifecycleApiTests(ContractFixture fixture) :
         var w = await Setup();
         var id = await Active(w);
         await using var scope = fixture.Factory.Services.CreateAsyncScope();
-        var db = scope.ServiceProvider.GetRequiredService<BHomePersistenceContext>();
+        var db = scope.ServiceProvider.GetFixturePersistence();
         var contract = await db.Set<Contract>().SingleAsync(c => c.Id == id);
         contract.Status = status;
         await db.SaveChangesAsync();
@@ -1276,7 +1277,7 @@ public sealed partial class ContractLifecycleApiTests(ContractFixture fixture) :
         // metadata and SHA-256 must still match the immutable inspection.
         await using (var meterEvidenceScope = fixture.Factory.Services.CreateAsyncScope())
         {
-            var meterEvidenceDb = meterEvidenceScope.ServiceProvider.GetRequiredService<BHomePersistenceContext>();
+            var meterEvidenceDb = meterEvidenceScope.ServiceProvider.GetFixturePersistence();
             var reading = await meterEvidenceDb.Set<MeterReading>().SingleAsync(r => r.Id == electricity);
             var proof = await meterEvidenceDb.Set<MeterEvidence>().SingleAsync(e => e.Id == reading.EvidenceId);
             var originalHash = proof.ImageHash;
@@ -1480,7 +1481,7 @@ public sealed partial class ContractLifecycleApiTests(ContractFixture fixture) :
         Assert.Equal("Completed", settledLater.Status);
         Assert.Equal("OwnerReviewed", settledLater.FinancialReviewStatus);
         Assert.Equal(2, (await w.Owner.Client.GetFromJsonAsync<SettlementReviewView[]>(Path(id, "move-out/settlement-history")))!.Length);
-        await using var scope = fixture.Factory.Services.CreateAsyncScope(); var db = scope.ServiceProvider.GetRequiredService<BHomePersistenceContext>();
+        await using var scope = fixture.Factory.Services.CreateAsyncScope(); var db = scope.ServiceProvider.GetFixturePersistence();
         Assert.Equal(ContractStatus.Terminated, (await db.Set<Contract>().SingleAsync(c => c.Id == id)).Status);
         Assert.Equal(RoomStatus.Available, (await db.Set<Room>().SingleAsync(r => r.Id == w.Room)).Status);
         Assert.Equal(2, await db.Set<MeterReading>().CountAsync(r => r.Id == electricity || r.Id == water));
@@ -1492,7 +1493,7 @@ public sealed partial class ContractLifecycleApiTests(ContractFixture fixture) :
         var w = await Setup(); var id = await Draft(w);
         await using var unavailable = fixture.Factory.WithWebHostBuilder(b => b.ConfigureTestServices(s => s.AddScoped<IContractSigningProvider, UnavailableSigning>()));
         using var client = unavailable.CreateClient(); client.DefaultRequestHeaders.Authorization = w.Owner.Client.DefaultRequestHeaders.Authorization;
-        var response = await Post(new(client, w.Owner.Id), Path(id, "signing"), new SigningInput(Guid.NewGuid()));
+        var response = await Post(new(client, w.Owner.Id), Path(id, "signing"), new SigningInput(Guid.NewGuid(), Method: SigningMethods.Otp));
         Assert.Equal(HttpStatusCode.ServiceUnavailable, response.StatusCode);
         Assert.Equal("PendingSigning", (await w.Owner.Client.GetFromJsonAsync<ContractView>(Path(id)))!.Status);
         Assert.Equal(HttpStatusCode.Conflict, (await Post(w.Owner, Path(id, "activate"))).StatusCode);
@@ -1500,17 +1501,17 @@ public sealed partial class ContractLifecycleApiTests(ContractFixture fixture) :
     private sealed class UnavailableSigning : IContractSigningProvider
     {
         public Task<SigningPreparation> PrepareAsync(ContractDocument d, Guid c, byte[]? p, CancellationToken t) => throw new IntegrationUnavailableException("TEST ONLY unavailable");
-        public Task<string> RequestAsync(ContractSignature s, CancellationToken t) => throw new IntegrationUnavailableException("TEST ONLY unavailable");
-        public Task<SigningOutcome> PollAsync(ContractSignature s, byte[] p, CancellationToken t) => throw new IntegrationUnavailableException("TEST ONLY unavailable");
+        public Task<string> RequestAsync(ContractSigning s, CancellationToken t) => throw new IntegrationUnavailableException("TEST ONLY unavailable");
+        public Task<SigningOutcome> PollAsync(ContractSigning s, byte[] p, CancellationToken t) => throw new IntegrationUnavailableException("TEST ONLY unavailable");
     }
 
     [Fact]
     public async Task SignedEvidenceTamperingRollsBackActivationAndDatabaseRejectsHistoryEdits()
     {
         var w = await Setup(); var id = await Draft(w); await Signed(w, id); await Deposit(w, id);
-        await using var scope = fixture.Factory.Services.CreateAsyncScope(); var db = scope.ServiceProvider.GetRequiredService<BHomePersistenceContext>();
+        await using var scope = fixture.Factory.Services.CreateAsyncScope(); var db = scope.ServiceProvider.GetFixturePersistence();
         var storage = scope.ServiceProvider.GetRequiredService<IObjectStorage>();
-        var signature = await db.Set<ContractSignature>().FirstAsync(s => s.ContractId == id);
+        var signature = await db.Set<ContractSigning>().FirstAsync(s => s.ContractId == id);
         using var altered = new MemoryStream("TEST ONLY altered private object"u8.ToArray());
         await storage.PutAsync(signature.SignedObjectKey!, altered, altered.Length, "application/pdf", default);
         Assert.Equal(HttpStatusCode.Conflict, (await Post(w.Owner, Path(id, "activate"))).StatusCode);
@@ -1527,7 +1528,7 @@ public sealed partial class ContractLifecycleApiTests(ContractFixture fixture) :
         await Success<ContractView>(await Post(w.Owner, Path(next, "renewal-cancellation")));
         Assert.Equal(HttpStatusCode.Forbidden, (await Post(w.Owner, Path(id, "expiry-move-out"), new TerminationInput(Today.AddDays(30), "SYNTHETIC end of term"))).StatusCode);
         Assert.Equal("Active", (await w.Tenant.Client.GetFromJsonAsync<ContractView>(Path(id)))!.Status);
-        await using var scope = fixture.Factory.Services.CreateAsyncScope(); var db = scope.ServiceProvider.GetRequiredService<BHomePersistenceContext>();
+        await using var scope = fixture.Factory.Services.CreateAsyncScope(); var db = scope.ServiceProvider.GetFixturePersistence();
         Assert.Equal(RoomStatus.Occupied, (await db.Set<Room>().SingleAsync(r => r.Id == w.Room)).Status);
         Assert.Equal(ContractStatus.Cancelled, (await db.Set<Contract>().SingleAsync(c => c.Id == next)).Status);
     }
@@ -1549,7 +1550,7 @@ public sealed partial class ContractLifecycleApiTests(ContractFixture fixture) :
         var w = await Setup();
         await using (var setup = fixture.Factory.Services.CreateAsyncScope())
         {
-            var setupDb = setup.ServiceProvider.GetRequiredService<BHomePersistenceContext>();
+            var setupDb = setup.ServiceProvider.GetFixturePersistence();
             var type = new RoomType { LocationId = w.Location, Name = "SYNTHETIC HOLDING TYPE", DefaultCapacity = 2 };
             setupDb.Add(type); (await setupDb.Set<Room>().SingleAsync(r => r.Id == w.Room)).RoomTypeId = type.Id;
             setupDb.Add(new BillingPolicy
@@ -1600,7 +1601,7 @@ public sealed partial class ContractLifecycleApiTests(ContractFixture fixture) :
         Assert.Equal(activeHolding.RequiredDeposit, inherited.RequiredDeposit);
         Assert.Equal(inherited.RequiredDeposit, inherited.AppliedHoldingDeposit);
         await Signed(w, main); await Success<ContractView>(await Post(w.Owner, Path(main, "activate")));
-        await using var scope = fixture.Factory.Services.CreateAsyncScope(); var db = scope.ServiceProvider.GetRequiredService<BHomePersistenceContext>();
+        await using var scope = fixture.Factory.Services.CreateAsyncScope(); var db = scope.ServiceProvider.GetFixturePersistence();
         Assert.Equal(1, await db.Set<Contract>().CountAsync(c => c.HoldingContractId == holding));
         Assert.Equal(1, await db.Set<BHome.Domain.PaymentsDebt.PaymentAllocation>().CountAsync(a => a.SourceDepositContractId == holding));
         Assert.Equal(ContractStatus.Converted, (await db.Set<Contract>().SingleAsync(c => c.Id == holding)).Status);
@@ -1613,7 +1614,7 @@ public sealed partial class ContractLifecycleApiTests(ContractFixture fixture) :
         var w = await Setup(); var id = await Draft(w); var boundary = new AmbiguousSigning();
         await using var host = fixture.Factory.WithWebHostBuilder(b => b.ConfigureTestServices(s => s.AddSingleton<IContractSigningProvider>(boundary)));
         var actor = new Actor(host.CreateClient(), w.Owner.Id); actor.Client.DefaultRequestHeaders.Authorization = w.Owner.Client.DefaultRequestHeaders.Authorization;
-        var key = Guid.NewGuid(); var input = new SigningInput(Guid.NewGuid());
+        var key = Guid.NewGuid(); var input = new SigningInput(Guid.NewGuid(), Method: SigningMethods.Otp);
         Assert.Equal(HttpStatusCode.ServiceUnavailable, (await Post(actor, Path(id, "signing"), input, key)).StatusCode);
         var replay = await Success<SignatureView>(await Post(actor, Path(id, "signing"), input, key)); Assert.Equal("ManualReview", replay.Status);
         Assert.Equal(1, boundary.Requests);
@@ -1626,8 +1627,8 @@ public sealed partial class ContractLifecycleApiTests(ContractFixture fixture) :
     {
         private readonly TestOnlySigningProvider inner = new(); public int Requests;
         public Task<SigningPreparation> PrepareAsync(ContractDocument d, Guid c, byte[]? p, CancellationToken t) => inner.PrepareAsync(d, c, p, t);
-        public Task<string> RequestAsync(ContractSignature s, CancellationToken t) { Interlocked.Increment(ref Requests); throw new IntegrationUnavailableException("TEST ONLY ambiguous response"); }
-        public Task<SigningOutcome> PollAsync(ContractSignature s, byte[] p, CancellationToken t) => inner.PollAsync(s, p, t);
+        public Task<string> RequestAsync(ContractSigning s, CancellationToken t) { Interlocked.Increment(ref Requests); throw new IntegrationUnavailableException("TEST ONLY ambiguous response"); }
+        public Task<SigningOutcome> PollAsync(ContractSigning s, byte[] p, CancellationToken t) => inner.PollAsync(s, p, t);
     }
 
     [Fact]
@@ -1636,41 +1637,42 @@ public sealed partial class ContractLifecycleApiTests(ContractFixture fixture) :
         var w = await Setup(); var id = await Draft(w);
         await using var host = fixture.Factory.WithWebHostBuilder(b => b.ConfigureTestServices(s => s.AddSingleton<IContractSigningProvider, RejectedSigning>()));
         var actor = new Actor(host.CreateClient(), w.Owner.Id); actor.Client.DefaultRequestHeaders.Authorization = w.Owner.Client.DefaultRequestHeaders.Authorization;
-        await Success<SignatureView>(await Post(actor, Path(id, "signing"), new SigningInput(Guid.NewGuid())));
+        await Success<SignatureView>(await Post(actor, Path(id, "signing"), new SigningInput(Guid.NewGuid(), Method: SigningMethods.Otp)));
         await Success<ContractView>(await Post(actor, Path(id, "signing/sync")));
-        await Success<SignatureView>(await Post(w.Owner, Path(id, "signing"), new SigningInput(Guid.NewGuid())));
+        await Success<SignatureView>(await Post(w.Owner, Path(id, "signing"), new SigningInput(Guid.NewGuid(), Method: SigningMethods.Otp)));
         await Success<ContractView>(await Post(w.Owner, Path(id, "signing/sync")));
-        await using var scope = fixture.Factory.Services.CreateAsyncScope(); var db = scope.ServiceProvider.GetRequiredService<BHomePersistenceContext>();
-        var attempts = await db.Set<ContractSignature>().Where(s => s.ContractId == id).ToArrayAsync();
+        await using var scope = fixture.Factory.Services.CreateAsyncScope(); var db = scope.ServiceProvider.GetFixturePersistence();
+        var attempts = await db.Set<ContractSigning>().Where(s => s.ContractId == id).ToArrayAsync();
         Assert.Single(attempts, s => s.Status == SignatureStatus.Failed); Assert.Single(attempts, s => s.Status == SignatureStatus.Signed);
     }
     private sealed class RejectedSigning : IContractSigningProvider
     {
         private readonly TestOnlySigningProvider inner = new();
         public Task<SigningPreparation> PrepareAsync(ContractDocument d, Guid c, byte[]? p, CancellationToken t) => inner.PrepareAsync(d, c, p, t);
-        public Task<string> RequestAsync(ContractSignature s, CancellationToken t) => inner.RequestAsync(s, t);
-        public Task<SigningOutcome> PollAsync(ContractSignature s, byte[] p, CancellationToken t) => Task.FromResult(new SigningOutcome("Failed"));
+        public Task<string> RequestAsync(ContractSigning s, CancellationToken t) => inner.RequestAsync(s, t);
+        public Task<SigningOutcome> PollAsync(ContractSigning s, byte[] p, CancellationToken t) => Task.FromResult(new SigningOutcome("Failed"));
     }
 
     [Fact]
     public async Task UploadFailureLeavesDurableCleanupIntentAndNoDanglingSignatureReference()
     {
         var w = await Setup(); var id = await Draft(w);
-        await using var scope = fixture.Factory.Services.CreateAsyncScope(); var db = scope.ServiceProvider.GetRequiredService<BHomePersistenceContext>();
+        await using var scope = fixture.Factory.Services.CreateAsyncScope(); var db = scope.ServiceProvider.GetFixturePersistence();
         var realStorage = scope.ServiceProvider.GetRequiredService<IObjectStorage>();
         await using var host = fixture.Factory.WithWebHostBuilder(b => b.ConfigureTestServices(s => s.AddScoped<IObjectStorage>(_ => new FailingStorage(realStorage))));
         var actor = new Actor(host.CreateClient(), w.Owner.Id); actor.Client.DefaultRequestHeaders.Authorization = w.Owner.Client.DefaultRequestHeaders.Authorization;
-        Assert.Equal(HttpStatusCode.InternalServerError, (await Post(actor, Path(id, "signing"), new SigningInput(Guid.NewGuid()))).StatusCode);
-        Assert.Empty(await db.Set<ContractSignature>().Where(s => s.ContractId == id).ToArrayAsync());
+        Assert.Equal(HttpStatusCode.InternalServerError, (await Post(actor, Path(id, "signing"), new SigningInput(Guid.NewGuid(), Method: SigningMethods.Otp))).StatusCode);
+        Assert.Empty(await db.Set<ContractSigning>().Where(s => s.ContractId == id).ToArrayAsync());
         var intent = await db.Set<ContractFileUpload>().SingleAsync(f => f.RoomId == w.Room);
         await realStorage.CopyToAsync(intent.ObjectKey, Stream.Null, default);
         // The production cleanup processes 100 intents per pass. Shared test
         // databases can contain older successful uploads ahead of this one.
         var cutoff = DateTimeOffset.UtcNow.AddDays(2);
         var due = await db.Set<ContractFileUpload>().CountAsync(f => f.CleanupAfter <= cutoff);
+        var runtime = scope.ServiceProvider.GetRequiredService<BHomePersistenceContext>();
         for (var pass = 0; pass < (due + 99) / 100 &&
             await db.Set<ContractFileUpload>().AnyAsync(f => f.ObjectKey == intent.ObjectKey); pass++)
-            await ContractFileCleanup.CleanupAsync(db, realStorage, cutoff, default);
+            await ContractFileCleanup.CleanupAsync(runtime, realStorage, cutoff, default);
         Assert.False(await db.Set<ContractFileUpload>().AnyAsync(f => f.RoomId == w.Room));
         await Assert.ThrowsAnyAsync<Exception>(() => realStorage.CopyToAsync(intent.ObjectKey, Stream.Null, default));
     }
@@ -1688,27 +1690,29 @@ public sealed partial class ContractLifecycleApiTests(ContractFixture fixture) :
         var w = await Setup();
         var id = (await Success<ContractId>(await Post(w.Staff, "/api/v1/contracts",
             Input(w) with { Terms = "Dữ liệu kiểm thử: Nguyễn Ánh; điều khoản từ bản chụp đã lưu." }))).Id;
-        using var remote = new SyntheticRemoteSigningProvider();
+        var email = new CapturedEmail();
         await using var host = fixture.Factory.WithWebHostBuilder(b =>
         {
             b.ConfigureAppConfiguration((_, c) => c.AddInMemoryCollection(new Dictionary<string, string?>
             {
-                ["ContractPdf:TemplateId"] = ContractPdfRendererTests.TemplateId
+                ["ContractPdf:TemplateId"] = ContractPdfRendererTests.TemplateId,
+                ["ContractSigning:Methods:Otp"] = "true"
             }));
             b.ConfigureTestServices(s =>
             {
                 s.RemoveAll<IContractSigningProvider>();
                 s.AddScoped(typeof(IContractSigningProvider), fixture.ProductionSigningProviderType);
-                s.RemoveAll<BHome.DigitalSigning.Application.ISigningProvider>();
-                s.AddSingleton<BHome.DigitalSigning.Application.ISigningProvider>(remote);
+                s.RemoveAll<INotificationChannelProvider>();
+                s.AddSingleton<INotificationChannelProvider>(email);
             });
         });
-        foreach (var (signer, subscriber) in new[] { (w.Owner, "SYNTHETIC-OWNER"), (w.Tenant, "SYNTHETIC-TENANT") })
+        foreach (var signer in new[] { w.Owner, w.Tenant })
         {
             var actor = new Actor(host.CreateClient(), signer.Id);
             actor.Client.DefaultRequestHeaders.Authorization = signer.Client.DefaultRequestHeaders.Authorization;
-            var certificate = await Success<BHome.DigitalSigning.Application.Contracts.CertificateView>(await Post(actor,
-                "/api/v1/digital-signing/certificates", new { providerUserId = subscriber, serialNumber = (string?)null }));
+            var retired = await Post(actor, Path(id, "signing"), new SigningInput(Guid.NewGuid(), Method: SigningMethods.ViettelMySign));
+            Assert.Equal(HttpStatusCode.BadRequest, retired.StatusCode);
+            Assert.Contains("signing_method_invalid", await retired.Content.ReadAsStringAsync());
             var key = Guid.NewGuid();
             // What the signing screen shows first: the pages of the PDF to sign and the signer's own box.
             var layout = (await actor.Client.GetFromJsonAsync<SigningLayout>(Path(id, "signing/layout")))!;
@@ -1720,24 +1724,27 @@ public sealed partial class ContractLifecycleApiTests(ContractFixture fixture) :
             Assert.Equal("image/png", page.Content.Headers.ContentType!.MediaType);
             Assert.Equal(HttpStatusCode.BadRequest, (await actor.Client.GetAsync(Path(id, $"signing/pages/{layout.PageCount + 1}"))).StatusCode);
             // The Owner signs in the suggested box; the Tenant moves the box and signs with text only.
-            var input = signer.Id == w.Owner.Id ? new SigningInput(certificate.Id)
-                : new SigningInput(certificate.Id, layout.Suggested with { Y = layout.Suggested.Y - 0.05 }, false);
+            var isOwner = signer.Id == w.Owner.Id;
+            var input = isOwner ? new SigningInput(Guid.Empty, Method: SigningMethods.OwnerSession, Consent: true)
+                : new SigningInput(Guid.Empty, layout.Suggested with { Y = layout.Suggested.Y - 0.05 }, false, Method: SigningMethods.Otp);
             Assert.Equal(HttpStatusCode.BadRequest, (await Post(actor, Path(id, "signing"),
-                new SigningInput(certificate.Id, new SignaturePlacementInput(1, 0.9, 0.1, 0.3)), Guid.NewGuid())).StatusCode);
+                input with { Placement = new SignaturePlacementInput(1, 0.9, 0.1, 0.3) }, Guid.NewGuid())).StatusCode);
             var requested = await Success<SignatureView>(await Post(actor, Path(id, "signing"), input, key));
-            if (requested.Status != "Pending")
-            {
-                await using var diagnosticScope = host.Services.CreateAsyncScope();
-                var diagnosticDb = diagnosticScope.ServiceProvider.GetRequiredService<BHomePersistenceContext>();
-                var stored = await diagnosticDb.Set<ContractSignature>().AsNoTracking().SingleAsync(s => s.Id == requested.Id);
-                throw new Xunit.Sdk.XunitException($"Expected Pending; response={requested.Status}; stored={stored.Status}; providerReferencePresent={stored.ProviderReference is not null}; {string.Join(Environment.NewLine, ApiFactory.Diagnostics.TakeLast(2))}");
-            }
+            Assert.Equal(isOwner ? "Signed" : "Pending", requested.Status);
             var replay = await Success<SignatureView>(await Post(actor, Path(id, "signing"), input, key));
             Assert.Equal(requested.Id, replay.Id);
-            var signed = await Success<ContractView>(await Post(actor, Path(id, "signing/sync")));
+            ContractView signed;
+            if (isOwner)
+                signed = (await actor.Client.GetFromJsonAsync<ContractView>(Path(id)))!;
+            else
+            {
+                var otpMail = Assert.Single(email.Sent, m => m.EventType == "CONTRACT_SIGNING_OTP");
+                var code = otpMail.Title[(otpMail.Title.LastIndexOf(' ') + 1)..];
+                signed = await Success<ContractView>(await Post(actor, Path(id, "signing/otp/confirm"), new SigningOtpConfirmation(code)));
+            }
             Assert.Equal("Signed", Assert.Single(signed.Signatures, x => x.SignerUserId == signer.Id).Status);
         }
-        Assert.Equal(2, remote.RequestCount);
+        Assert.Single(email.Sent, m => m.EventType == "CONTRACT_SIGNING_OTP");
         await Deposit(w, id);
         await Success<ContractView>(await Post(w.Owner, Path(id, "activate")));
         var response = await w.Tenant.Client.GetAsync(Path(id, "document"));
@@ -1762,43 +1769,56 @@ public sealed partial class ContractLifecycleApiTests(ContractFixture fixture) :
     public async Task ActualAdapterCanContinueADemoPdfInProductionWithoutActivatingTheContract()
     {
         var w = await Setup(); var id = await Draft(w);
-        using var remote = new SyntheticRemoteSigningProvider();
-        WebApplicationFactory<Program> Host(bool production) => fixture.Factory.WithWebHostBuilder(b =>
+        var email = new CapturedEmail();
+        using var key = System.Security.Cryptography.RSA.Create(2048);
+        var certificateRequest = new System.Security.Cryptography.X509Certificates.CertificateRequest(
+            "CN=BHOME CI Test Seal", key, System.Security.Cryptography.HashAlgorithmName.SHA256, System.Security.Cryptography.RSASignaturePadding.Pkcs1);
+        using var certificate = certificateRequest.CreateSelfSigned(DateTimeOffset.UtcNow.AddDays(-1), DateTimeOffset.UtcNow.AddDays(1));
+        // Production rejects the Testing process-key fallback; use a disposable key for these test hosts.
+        var otpSecret = Convert.ToHexString(System.Security.Cryptography.RandomNumberGenerator.GetBytes(32));
+        var sealPath = System.IO.Path.GetTempFileName();
+        try
         {
-            if (production) b.UseTestEnvironment("Production");
-            b.ConfigureAppConfiguration((_, c) => c.AddInMemoryCollection(new Dictionary<string, string?>
+            await File.WriteAllBytesAsync(sealPath, certificate.Export(System.Security.Cryptography.X509Certificates.X509ContentType.Pkcs12));
+            WebApplicationFactory<Program> Host(bool production) => fixture.Factory.WithWebHostBuilder(b =>
             {
-                ["ContractPdf:TemplateId"] = ContractPdfRendererTests.TemplateId
-            }));
-            b.ConfigureTestServices(s =>
-            {
-                s.RemoveAll<IContractSigningProvider>();
-                s.AddScoped(typeof(IContractSigningProvider), fixture.ProductionSigningProviderType);
-                s.RemoveAll<BHome.DigitalSigning.Application.ISigningProvider>();
-                s.AddSingleton<BHome.DigitalSigning.Application.ISigningProvider>(remote);
+                if (production) b.UseTestEnvironment("Production");
+                b.ConfigureAppConfiguration((_, c) => c.AddInMemoryCollection(new Dictionary<string, string?>
+                {
+                    ["ContractPdf:TemplateId"] = ContractPdfRendererTests.TemplateId,
+                    ["ContractSigning:Methods:Otp"] = "true",
+                    ["ContractSigning:Otp:Secret"] = otpSecret,
+                    ["ContractSigning:Seal:PfxPath"] = sealPath
+                }));
+                b.ConfigureTestServices(s =>
+                {
+                    s.RemoveAll<IContractSigningProvider>();
+                    s.AddScoped(typeof(IContractSigningProvider), fixture.ProductionSigningProviderType);
+                    s.RemoveAll<INotificationChannelProvider>();
+                    s.AddSingleton<INotificationChannelProvider>(email);
+                });
             });
-        });
-        await using var testingHost = Host(false);
-        await using var productionHost = Host(true);
-        var owner = new Actor(testingHost.CreateClient(), w.Owner.Id);
-        var tenant = new Actor(testingHost.CreateClient(), w.Tenant.Id);
-        owner.Client.DefaultRequestHeaders.Authorization = w.Owner.Client.DefaultRequestHeaders.Authorization;
-        tenant.Client.DefaultRequestHeaders.Authorization = w.Tenant.Client.DefaultRequestHeaders.Authorization;
-        var ownerCertificate = await Success<BHome.DigitalSigning.Application.Contracts.CertificateView>(await Post(owner,
-            "/api/v1/digital-signing/certificates", new { providerUserId = "SYNTHETIC-OWNER", serialNumber = (string?)null }));
-        var tenantCertificate = await Success<BHome.DigitalSigning.Application.Contracts.CertificateView>(await Post(tenant,
-            "/api/v1/digital-signing/certificates", new { providerUserId = "SYNTHETIC-TENANT", serialNumber = (string?)null }));
-        await Success<SignatureView>(await Post(owner, Path(id, "signing"), new SigningInput(ownerCertificate.Id)));
-        await Success<ContractView>(await Post(owner, Path(id, "signing/sync")));
-        var productionTenant = new Actor(productionHost.CreateClient(), w.Tenant.Id);
-        productionTenant.Client.DefaultRequestHeaders.Authorization = w.Tenant.Client.DefaultRequestHeaders.Authorization;
-        await Success<SignatureView>(await Post(productionTenant, Path(id, "signing"), new SigningInput(tenantCertificate.Id)));
-        Assert.Equal(2, remote.RequestCount);
-        var contract = (await w.Owner.Client.GetFromJsonAsync<ContractView>(Path(id)))!;
-        Assert.Equal("PendingSigning", contract.Status);
-        Assert.Equal(2, contract.Signatures.Count);
-        Assert.Contains(contract.Signatures, signature => signature.SignerUserId == w.Owner.Id && signature.Status == "Signed");
-        Assert.Equal(HttpStatusCode.Conflict, (await Post(w.Owner, Path(id, "activate"))).StatusCode);
+            await using var testingHost = Host(false);
+            await using var productionHost = Host(true);
+            var owner = new Actor(testingHost.CreateClient(), w.Owner.Id);
+            owner.Client.DefaultRequestHeaders.Authorization = w.Owner.Client.DefaultRequestHeaders.Authorization;
+            Assert.Equal("Signed", (await Success<SignatureView>(await Post(owner, Path(id, "signing"),
+                new SigningInput(Guid.Empty, Method: SigningMethods.OwnerSession, Consent: true)))).Status);
+            var productionTenant = new Actor(productionHost.CreateClient(), w.Tenant.Id);
+            productionTenant.Client.DefaultRequestHeaders.Authorization = w.Tenant.Client.DefaultRequestHeaders.Authorization;
+            var retired = await Post(productionTenant, Path(id, "signing"), new SigningInput(Guid.NewGuid(), Method: SigningMethods.ViettelMySign));
+            Assert.Equal(HttpStatusCode.BadRequest, retired.StatusCode);
+            Assert.Equal("Pending", (await Success<SignatureView>(await Post(productionTenant, Path(id, "signing"),
+                new SigningInput(Guid.Empty, Method: SigningMethods.Otp)))).Status);
+            Assert.Single(email.Sent, m => m.EventType == "CONTRACT_SIGNING_OTP");
+            var contract = (await w.Owner.Client.GetFromJsonAsync<ContractView>(Path(id)))!;
+            Assert.Equal("PendingSigning", contract.Status);
+            Assert.Equal(2, contract.Signatures.Count);
+            Assert.Contains(contract.Signatures, signature => signature.SignerUserId == w.Owner.Id && signature.Status == "Signed");
+            Assert.Contains(contract.Signatures, signature => signature.SignerUserId == w.Tenant.Id && signature.Status == "Pending");
+            Assert.Equal(HttpStatusCode.Conflict, (await Post(w.Owner, Path(id, "activate"))).StatusCode);
+        }
+        finally { File.Delete(sealPath); }
     }
 
     [Fact]
@@ -1807,7 +1827,7 @@ public sealed partial class ContractLifecycleApiTests(ContractFixture fixture) :
         var w = await Setup(); var id = await Draft(w); var ownerCert = Guid.NewGuid(); var tenantCert = Guid.NewGuid();
         await using (var scope = fixture.Factory.Services.CreateAsyncScope())
         {
-            var db = scope.ServiceProvider.GetRequiredService<BHomePersistenceContext>();
+            var db = scope.ServiceProvider.GetFixturePersistence();
             foreach (var (certId, actorId) in new[] { (ownerCert, w.Owner.Id), (tenantCert, w.Tenant.Id) }) db.Add(new BHome.DigitalSigning.Domain.SigningCertificate
             {
                 Id = certId,
@@ -1825,31 +1845,28 @@ public sealed partial class ContractLifecycleApiTests(ContractFixture fixture) :
             await db.SaveChangesAsync();
         }
         const string certificates = "/api/v1/digital-signing/certificates";
-        var mine = await w.Owner.Client.GetFromJsonAsync<BHome.DigitalSigning.Application.Contracts.CertificateView[]>(certificates);
-        Assert.Equal(ownerCert, Assert.Single(mine!).Id);
-        Assert.Equal(HttpStatusCode.Forbidden, (await w.Staff.Client.GetAsync(certificates)).StatusCode);
-        Assert.Equal(HttpStatusCode.Unauthorized, (await fixture.Factory.CreateClient().GetAsync(certificates)).StatusCode);
-        Assert.Equal(HttpStatusCode.Forbidden, (await Post(w.Staff, certificates + $"/{ownerCert}/lock", new { locked = true })).StatusCode);
-        Assert.Equal(HttpStatusCode.NotFound, (await Post(w.Owner, certificates + $"/{tenantCert}/lock", new { locked = true })).StatusCode);
-        Assert.Equal(HttpStatusCode.NoContent, (await Post(w.Tenant, certificates + $"/{tenantCert}/lock", new { locked = true })).StatusCode);
-        Assert.Equal(HttpStatusCode.ServiceUnavailable, (await Post(w.Owner, certificates, new { providerUserId = "SYNTHETIC-UNCONFIGURED", serialNumber = (string?)null })).StatusCode);
-        await using var host = fixture.Factory.WithWebHostBuilder(b => b.ConfigureTestServices(s => s.AddScoped(typeof(IContractSigningProvider), fixture.ProductionSigningProviderType)));
-        var actor = new Actor(host.CreateClient(), w.Owner.Id); actor.Client.DefaultRequestHeaders.Authorization = w.Owner.Client.DefaultRequestHeaders.Authorization;
-        Assert.Equal(HttpStatusCode.NotFound, (await Post(actor, Path(id, "signing"), new SigningInput(tenantCert))).StatusCode);
-        Assert.Equal(HttpStatusCode.NoContent, (await Post(w.Owner, certificates + $"/{ownerCert}/lock", new { locked = true })).StatusCode);
-        var locked = Assert.Single((await w.Owner.Client.GetFromJsonAsync<BHome.DigitalSigning.Application.Contracts.CertificateView[]>(certificates))!);
-        Assert.True(locked.Locked); Assert.False(locked.Usable);
-        Assert.Equal(HttpStatusCode.Conflict, (await Post(actor, Path(id, "signing"), new SigningInput(ownerCert))).StatusCode);
-        Assert.Equal(HttpStatusCode.NotFound, (await Post(w.Tenant, certificates + $"/{ownerCert}/lock", new { locked = false })).StatusCode);
-        Assert.Equal(HttpStatusCode.NoContent, (await Post(w.Owner, certificates + $"/{ownerCert}/lock", new { locked = false })).StatusCode);
-        Assert.True(Assert.Single((await w.Owner.Client.GetFromJsonAsync<BHome.DigitalSigning.Application.Contracts.CertificateView[]>(certificates))!).Usable);
-        Assert.Equal(HttpStatusCode.ServiceUnavailable, (await Post(actor, Path(id, "signing"), new SigningInput(ownerCert))).StatusCode);
-        Assert.Equal("PendingSigning", (await w.Owner.Client.GetFromJsonAsync<ContractView>(Path(id)))!.Status);
+        // The retired directory is inaccessible even to the historical certificate owner.
+        foreach (var actor in new[] { w.Owner, w.Tenant, w.Staff })
+        {
+            Assert.Equal(HttpStatusCode.NotFound, (await actor.Client.GetAsync(certificates)).StatusCode);
+            Assert.Equal(HttpStatusCode.NotFound, (await Post(actor, certificates + $"/{ownerCert}/lock", new { locked = true })).StatusCode);
+            Assert.Equal(HttpStatusCode.NotFound, (await Post(actor, certificates + $"/{tenantCert}/lock", new { locked = false })).StatusCode);
+            Assert.Equal(HttpStatusCode.NotFound, (await Post(actor, certificates, new { providerUserId = "SYNTHETIC-UNCONFIGURED", serialNumber = (string?)null })).StatusCode);
+        }
+        using var anonymous = fixture.Factory.CreateClient();
+        Assert.Equal(HttpStatusCode.Unauthorized, (await anonymous.GetAsync(certificates)).StatusCode);
+        foreach (var certificate in new[] { ownerCert, tenantCert })
+        {
+            var retired = await Post(w.Owner, Path(id, "signing"), new SigningInput(certificate, Method: SigningMethods.ViettelMySign));
+            Assert.Equal(HttpStatusCode.BadRequest, retired.StatusCode);
+            Assert.Contains("signing_method_invalid", await retired.Content.ReadAsStringAsync());
+        }
+        Assert.Equal("Draft", (await w.Owner.Client.GetFromJsonAsync<ContractView>(Path(id)))!.Status);
         await using var verification = fixture.Factory.Services.CreateAsyncScope();
-        var persisted = verification.ServiceProvider.GetRequiredService<BHomePersistenceContext>();
-        Assert.False(await persisted.Set<ContractSignature>().AnyAsync(s => s.ContractId == id));
-        Assert.Equal(1, await persisted.SecurityAudit.CountAsync(a => a.TargetId == ownerCert && a.UserId == w.Owner.Id && a.Event == "ContractCertificateLocked"));
-        Assert.Equal(1, await persisted.SecurityAudit.CountAsync(a => a.TargetId == ownerCert && a.UserId == w.Owner.Id && a.Event == "ContractCertificateUnlocked"));
+        var persisted = verification.ServiceProvider.GetFixturePersistence();
+        Assert.False(await persisted.Set<ContractSigning>().AnyAsync(s => s.ContractId == id));
+        Assert.Equal(2, await persisted.Set<BHome.DigitalSigning.Domain.SigningCertificate>().CountAsync(c => (c.Id == ownerCert || c.Id == tenantCert) && !c.Locked));
+        Assert.Equal(0, await persisted.SecurityAudit.CountAsync(a => a.TargetId == ownerCert && (a.Event == "ContractCertificateLocked" || a.Event == "ContractCertificateUnlocked")));
     }
 }
 
@@ -1867,10 +1884,10 @@ public sealed class ContractFixture : IAsyncLifetime
         var testSigningKey = Convert.ToBase64String(System.Security.Cryptography.RandomNumberGenerator.GetBytes(48));
         Factory = infrastructure.Factory.WithWebHostBuilder(b =>
         {
-            b.ConfigureAppConfiguration((_, c) => c.AddInMemoryCollection(new Dictionary<string, string?> { ["Jwt:SigningKey"] = testSigningKey }));
+            b.ConfigureAppConfiguration((_, c) => c.AddInMemoryCollection(new Dictionary<string, string?> { ["Jwt:SigningKey"] = testSigningKey, ["ContractSigning:Methods:Otp"] = "true", ["ContractWorkflow:SimulatedSigningEnabled"] = "false" }));
             b.ConfigureTestServices(s =>
         {
-            ProductionSigningProviderType = typeof(ViettelMySignContractAdapter);
+            ProductionSigningProviderType = typeof(ContractSigningRouter);
             s.RemoveAll<IContractSigningProvider>(); s.AddSingleton<IContractSigningProvider, TestOnlySigningProvider>();
             s.RemoveAll<IContractSettlementLedger>(); s.AddSingleton<IContractSettlementLedger>(Ledger);
         });
@@ -1887,8 +1904,8 @@ internal sealed class TestOnlySigningProvider : IContractSigningProvider
         var source = previous ?? Encoding.UTF8.GetBytes("TEST ONLY contract " + d.SnapshotHash);
         return Task.FromResult(new SigningPreparation(source, source.Concat(" TEST ONLY prepared"u8.ToArray()).ToArray(), "test-field", "test-digest", "test-hash", "test-chain", "test-subscriber", "test-credential"));
     }
-    public Task<string> RequestAsync(ContractSignature s, CancellationToken t) => Task.FromResult("TEST-ONLY-" + s.Id);
-    public Task<SigningOutcome> PollAsync(ContractSignature s, byte[] prepared, CancellationToken t)
+    public Task<string> RequestAsync(ContractSigning s, CancellationToken t) => Task.FromResult("TEST-ONLY-" + s.Id);
+    public Task<SigningOutcome> PollAsync(ContractSigning s, byte[] prepared, CancellationToken t)
         => Task.FromResult(new SigningOutcome("Signed", prepared.Concat(" TEST ONLY verified boundary"u8.ToArray()).ToArray()));
 }
 public sealed class TestSettlementLedger : IContractSettlementLedger

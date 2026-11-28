@@ -297,7 +297,7 @@ vi.mock('../components/CameraCapture', () => ({
     </button>
   ),
 }));
-vi.mock('../features/contracts/ContractInitialMeterTasks', () => ({
+vi.mock('../features/contracts/handover/ContractInitialMeterTasks', () => ({
   ContractInitialMeterTasks: ({
     integrated,
     refreshRevision,
@@ -373,7 +373,7 @@ vi.mock('../features/contracts/ContractEvidence', () => ({
     </span>
   ),
 }));
-vi.mock('../features/contracts/SignaturePad', () => ({
+vi.mock('../features/contracts/signing/SignaturePad', () => ({
   SignaturePad: ({ onChange }: { onChange: (drawing: object | null) => void }) => (
     <button
       onClick={() =>
@@ -396,10 +396,10 @@ vi.mock('../features/contracts/SignaturePad', () => ({
     </button>
   ),
 }));
-vi.mock('../features/contracts/SigningSetup', () => ({
+vi.mock('../features/contracts/signing/SigningSetup', () => ({
   SignatureImageSection: () => <span>Ảnh chữ ký đã lưu</span>,
 }));
-vi.mock('../features/contracts/HandoverAssetFields', () => ({
+vi.mock('../features/contracts/handover/HandoverAssetFields', () => ({
   HandoverAssetFields: ({
     asset,
     set,
@@ -418,7 +418,7 @@ vi.mock('../features/contracts/HandoverAssetFields', () => ({
   ),
 }));
 
-import { MoveInDraftHandoverPanel } from '../features/contracts/MoveInDraftHandoverPanel';
+import { MoveInDraftHandoverPanel } from '../features/contracts/handover/MoveInDraftHandoverPanel';
 
 const contract = {
   id: '00000000-0000-4000-8000-000000000001',

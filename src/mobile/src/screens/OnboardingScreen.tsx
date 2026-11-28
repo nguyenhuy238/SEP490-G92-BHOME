@@ -5,8 +5,8 @@ import { router, useFocusEffect, useLocalSearchParams, usePreventRemove } from '
 import { ActivityIndicator, Button, Icon, Text } from 'react-native-paper';
 import { Action, Box, Heading, ui } from '../components/WorkspaceKit';
 import { ChoiceField } from '../components/WorkflowControls';
-import { MainContractProgress } from '../features/contracts/MainContractProgress';
-import { MainDraftScreen } from '../features/contracts/MainDraftScreen';
+import { MainContractProgress } from '../features/contracts/main/MainContractProgress';
+import { MainDraftScreen } from '../features/contracts/main/MainDraftScreen';
 import { useWorkspace } from '../features/workspace/WorkspaceProvider';
 import { useSession } from '../lib/SessionProvider';
 import { captureService } from '../services/captureService';
@@ -17,7 +17,7 @@ import { WorkspaceFooter } from '../components/WorkspaceFooter';
 import { IdentityWizard } from '../features/onboarding/IdentityWizard';
 import { ResidentProfile } from '../features/onboarding/ResidentProfile';
 import { OnboardingPeopleStep } from '../features/onboarding/OnboardingPeopleStep';
-import { HoldingMainStart } from '../features/contracts/HoldingMainStart';
+import { HoldingMainStart } from '../features/contracts/holding/HoldingMainStart';
 import { contractClient } from '../../../../packages/client-core/src/contracts';
 import {
   allIdentitiesConfirmed,
@@ -25,6 +25,7 @@ import {
   residentType,
   type HouseholdMode,
   type IdentityStatus,
+  type IdentityCaptureRequest,
   type OnboardingPerson,
 } from '../features/onboarding/onboarding';
 import { staffColors as s } from '../theme/theme';
@@ -89,6 +90,9 @@ function NewResidentOnboarding() {
   const [identityKey, setIdentityKey] = useState('person-1');
   const [identityOpen, setIdentityOpen] = useState(false);
   const [identityMode, setIdentityMode] = useState<'capture' | 'verify'>('capture');
+  const [captureRequest, setCaptureRequest] = useState<
+    IdentityCaptureRequest & { personKey: string }
+  >();
   const [busy, setBusy] = useState(false);
   const [emailConflict, setEmailConflict] = useState<{
     personKey: string;
@@ -485,7 +489,13 @@ function NewResidentOnboarding() {
                   : 'Thành viên'
               }
               disabled={busy || recognizing || !!person.creationUncertain}
-              onScan={() => {
+              onScan={(side) => {
+                if (side)
+                  setCaptureRequest((before) => ({
+                    side,
+                    personKey: person.key,
+                    id: (before?.id ?? 0) + 1,
+                  }));
                 const progress = person.captureProgress;
                 const both = progress?.front === 'recognized' && progress?.back === 'recognized';
                 const started =
@@ -493,7 +503,11 @@ function NewResidentOnboarding() {
                 if (person.status === 'confirmed') return;
                 void openIdentity(
                   person,
-                  both || (!started && person.status === 'pending') ? 'verify' : 'capture',
+                  side
+                    ? 'capture'
+                    : both || (!started && person.status === 'pending')
+                      ? 'verify'
+                      : 'capture',
                 );
               }}
               onManual={() => {
@@ -516,6 +530,9 @@ function NewResidentOnboarding() {
                 visible={!contractOpen && identityOpen && identityKey === person.key && step === 2}
                 personLabel={personLabel(person)}
                 mode={identityMode}
+                captureRequest={
+                  captureRequest?.personKey === person.key ? captureRequest : undefined
+                }
                 onModeChange={setIdentityMode}
                 onDismiss={() => setIdentityOpen(false)}
                 onStatusChange={(status) => changeStatus(person.key, status)}

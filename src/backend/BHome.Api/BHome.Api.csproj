@@ -4,9 +4,56 @@
   </PropertyGroup>
   <ItemGroup>
     <EmbeddedResource Include="../../../packages/client-core/src/errorMessages.json" LogicalName="BHome.Api.ErrorMessages.json" />
-    <ProjectReference Include="../BHome.Application/BHome.Application.csproj" />
-    <ProjectReference Include="../BHome.Infrastructure/BHome.Infrastructure.csproj" />
     <PackageReference Include="Swashbuckle.AspNetCore" Version="6.9.0" />
     <PackageReference Include="Microsoft.EntityFrameworkCore.Design" Version="8.0.32" PrivateAssets="all" />
+  </ItemGroup>
+  <ItemGroup>
+    <EmbeddedResource Include="Data/Compact24/Migrations/SePayPaymentModes.sql" LogicalName="BHome.Compact24.SePayPaymentModes.sql" />
+    <EmbeddedResource Include="Data/Compact24/Migrations/SePayOwnerConnections.sql" LogicalName="BHome.Compact24.SePayOwnerConnections.sql" />
+    <EmbeddedResource Include="Data/Compact24/Migrations/TenantRefundPetitions.sql" LogicalName="BHome.Compact24.TenantRefundPetitions.sql" />
+    <EmbeddedResource Include="Data/Compact24/Migrations/ProactiveMaintenance.sql" LogicalName="BHome.Compact24.ProactiveMaintenance.sql" />
+    <EmbeddedResource Include="Data/Compact24/Migrations/MaintenanceCompensation.sql" LogicalName="BHome.Compact24.MaintenanceCompensation.sql" />
+    <EmbeddedResource Include="Data/Compact24/Migrations/SePayIntegration.sql" LogicalName="BHome.Compact24.SePayIntegration.sql" />
+    <EmbeddedResource Include="Data/Compact24/Migrations/MainInitialPayment.sql" LogicalName="BHome.Compact24.MainInitialPayment.sql" />
+    <EmbeddedResource Include="Data/Compact24/Migrations/SettlementSePayCodes.sql" LogicalName="BHome.Compact24.SettlementSePayCodes.sql" />
+    <EmbeddedResource Include="Data/Compact24/Migrations/SharedMainInitialPayment.sql" LogicalName="BHome.Compact24.SharedMainInitialPayment.sql" />
+    <EmbeddedResource Include="Data/Compact24/Migrations/MainInitialPaymentNoFees.sql" LogicalName="BHome.Compact24.MainInitialPaymentNoFees.sql" />
+    <EmbeddedResource Include="Data/Compact24/Migrations/SharedInvoiceDepositOffsets.sql" LogicalName="BHome.Compact24.SharedInvoiceDepositOffsets.sql" />
+    <EmbeddedResource Include="Data/Compact24/Migrations/LifecycleAlignment.sql" LogicalName="BHome.Compact24.LifecycleAlignment.sql" />
+    <EmbeddedResource Include="Data/Compact24/Migrations/PhysicalResidenceClosure.sql" LogicalName="BHome.Compact24.PhysicalResidenceClosure.sql" />
+    <EmbeddedResource Include="Data/Compact24/Migrations/SettlementReceivableLedger.sql" LogicalName="BHome.Compact24.SettlementReceivableLedger.sql" />
+    <EmbeddedResource Include="Data/Compact24/Migrations/SettlementBankAllocations.sql" LogicalName="BHome.Compact24.SettlementBankAllocations.sql" />
+    <EmbeddedResource Include="Data/Compact24/Migrations/ReceiptExcessDisposition.sql" LogicalName="BHome.Compact24.ReceiptExcessDisposition.sql" />
+    <EmbeddedResource Include="Data/Compact24/Migrations/ExternalPaymentPayer.sql" LogicalName="BHome.Compact24.ExternalPaymentPayer.sql" />
+    <EmbeddedResource Include="Data/Compact24/Migrations/DepositReceiptAllocation.sql" LogicalName="BHome.Compact24.DepositReceiptAllocation.sql" />
+    <EmbeddedResource Include="Data/Compact24/Migrations/PersonMonthlyServiceFees.sql" LogicalName="BHome.Compact24.PersonMonthlyServiceFees.sql" />
+    <EmbeddedResource Include="Data/Compact24/Compatibility/compact24-2026-11-04.schema-reference" LogicalName="BHome.Compact24.PreviousProperty.schema-reference" />
+    <EmbeddedResource Include="Data/Compact24/Migrations/InitialCompact24.sql" LogicalName="BHome.Compact24.InitialBaseline.sql" />
+    <EmbeddedResource Include="../../../docs/database/2026-11-03/compact-24/UPGRADE_LOCATION_ROOM.sql" LogicalName="BHome.Compact24.PropertyUpgrade.sql" />
+    <EmbeddedResource Include="../../../docs/database/2026-11-03/compact-24/BHOME_24_TABLES.sql" LogicalName="BHome.Compact24.Schema.sql" />
+    <EmbeddedResource Include="../../../docs/mau-hop-dong-thue-nha-tro-ngan-gon.docx" LogicalName="BHome.Contracts.main-tenancy-original.docx" />
+    <PackageReference Include="PDFtoImage" Version="5.4.0" />
+    <PackageReference Include="QRCoder" Version="1.8.1" />
+    <PackageReference Include="MailKit" Version="4.17.0" />
+    <ProjectReference Include="../../digital-signing/BHome.DigitalSigning.Infrastructure/BHome.DigitalSigning.Infrastructure.csproj" />
+    <PackageReference Include="Microsoft.AspNetCore.Authentication.JwtBearer" Version="8.0.32" />
+    <PackageReference Include="Microsoft.AspNetCore.Identity.EntityFrameworkCore" Version="8.0.32" />
+    <PackageReference Include="Npgsql.EntityFrameworkCore.PostgreSQL" Version="8.0.11" />
+    <PackageReference Include="Minio" Version="6.0.4" />
+    <PackageReference Include="Microsoft.ML.OnnxRuntime" Version="1.24.4" />
+    <!-- Its optional analyzer requires Roslyn 4.14; retain the repository's .NET 8 SDK. -->
+    <PackageReference Include="OpenCvSharp4" Version="4.13.0.20260627" ExcludeAssets="analyzers" />
+    <PackageReference Include="OpenCvSharp4.runtime.win" Version="4.13.0.20260627" />
+    <PackageReference Include="OpenCvSharp4.official.runtime.linux-x64.slim" Version="4.13.0.20260627" />
+  </ItemGroup>
+  <ItemGroup>
+    <EmbeddedResource Include="Integrations/Branding/bhome-mark.png" LogicalName="BHome.Branding.bhome-mark.png" />
+    <EmbeddedResource Include="Integrations/Contracts/Templates/main-contract-development-v1.json" LogicalName="BHome.Contracts.main-contract-development-v1.json" />
+    <EmbeddedResource Include="Integrations/Contracts/Templates/holding-deposit-v1.docx" LogicalName="BHome.Contracts.holding-deposit-v1.docx" />
+    <!-- Reuse the repository's OFL-licensed Vietnamese font; no dependency on OS fonts or absolute paths. -->
+    <EmbeddedResource Include="../../digital-signing/BHome.DigitalSigning.Infrastructure/Pdf/Fonts/Tinos-Regular.ttf" LogicalName="BHome.Contracts.Tinos-Regular.ttf" />
+  </ItemGroup>
+  <ItemGroup>
+    <Content Remove="Integrations/Contracts/Templates/*.json" />
   </ItemGroup>
 </Project>

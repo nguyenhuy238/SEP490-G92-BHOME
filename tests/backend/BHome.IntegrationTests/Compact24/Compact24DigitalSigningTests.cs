@@ -16,8 +16,8 @@ using Microsoft.Extensions.DependencyInjection.Extensions;
 
 namespace BHome.IntegrationTests.Compact24;
 
-// Signature picture and the Owner's Viettel MySign account through the real API on the 24-table database: no new
-// table, the picture in object storage, the client secret encrypted in users.business_profile.
+// Signature pictures remain available; the retired Viettel settings API cannot read or alter
+// historical account data. Offline encryption/secret masking is covered by SigningAccountTests.
 [Trait("Category", "CompactPostgres")]
 public sealed class Compact24DigitalSigningTests(Compact24Fixture fixture) : IClassFixture<Compact24Fixture>
 {
@@ -40,7 +40,7 @@ public sealed class Compact24DigitalSigningTests(Compact24Fixture fixture) : ICl
         var id = Guid.NewGuid(); var email = $"{id:N}@example.invalid";
         await using (var scope = host.Services.CreateAsyncScope())
             email = (await WorkflowTestUsers.CreateAsync(scope.ServiceProvider,
-                new ApplicationUser { Id = id, UserName = email, Email = email, IsActive = true }, role, password)).Email!;
+                new User { Id = id, UserName = email, Email = email, IsActive = true }, role, password)).Email!;
         var client = host.CreateClient();
         var login = await client.PostAsJsonAsync("/api/v1/auth/login", new { email, password }); login.EnsureSuccessStatusCode();
         client.DefaultRequestHeaders.Authorization = new("Bearer", (await login.Content.ReadFromJsonAsync<LoginResult>())!.AccessToken);
@@ -66,7 +66,7 @@ public sealed class Compact24DigitalSigningTests(Compact24Fixture fixture) : ICl
         var me = (await tenant.GetFromJsonAsync<SessionIdentity>("/api/v1/auth/me"))!;
         await using (var missingImageScope = host.Services.CreateAsyncScope())
         {
-            var context = missingImageScope.ServiceProvider.GetRequiredService<Compact24DbContext>();
+            var context = missingImageScope.ServiceProvider.GetRequiredService<Compact24ArchiveContext>();
             var objectKey = await context.Database.SqlQuery<string>(
                 $"SELECT business_profile->'signatureImage'->>'objectKey' AS \"Value\" FROM users WHERE id={me.UserId}").SingleAsync();
             await storage.DeleteAsync(objectKey, default);
@@ -87,7 +87,7 @@ public sealed class Compact24DigitalSigningTests(Compact24Fixture fixture) : ICl
         Assert.Equal(HttpStatusCode.NotFound, (await tenant.GetAsync(Image + "/content")).StatusCode);
 
         await using var scope = host.Services.CreateAsyncScope();
-        var db = scope.ServiceProvider.GetRequiredService<Compact24DbContext>();
+        var db = scope.ServiceProvider.GetRequiredService<Compact24ArchiveContext>();
         Assert.True(await db.IsSchemaReadyAsync());
     }
 
@@ -97,33 +97,30 @@ public sealed class Compact24DigitalSigningTests(Compact24Fixture fixture) : ICl
         await using var host = Host();
         var owner = await User(host, "Owner");
         var tenant = await User(host, "Tenant");
-        Assert.Equal(HttpStatusCode.Forbidden, (await tenant.GetAsync(Viettel)).StatusCode);
-
-        const string secret = "SYNTHETIC-client-secret-9f3a";
-        var saved = await owner.PutAsJsonAsync(Viettel, new SaveViettelSettings("https://remotesigning.viettel.vn",
-            "synthetic-client", null, secret, false));
-        Assert.True(saved.IsSuccessStatusCode, await saved.Content.ReadAsStringAsync());
-        var view = (await saved.Content.ReadFromJsonAsync<ViettelSettingsView>())!;
-        Assert.Equal("synthetic-client", view.ClientId);
-        Assert.Equal("DATABASE", view.SecretSource);
-        Assert.Equal("9f3a", view.SecretHint);
-        Assert.DoesNotContain(secret, await (await owner.GetAsync(Viettel)).Content.ReadAsStringAsync());
-
-        await using (var scope = host.Services.CreateAsyncScope())
+        var staff = await User(host, "Staff");
+        var ownerId = (await owner.GetFromJsonAsync<SessionIdentity>("/api/v1/auth/me"))!.UserId;
+        async Task<string> StoredAccount()
         {
-            var db = scope.ServiceProvider.GetRequiredService<BHomePersistenceContext>();
-            var stored = await db.Database.SqlQuery<string>(
-                $"SELECT (business_profile->'digitalSigning'->'viettel')::text AS \"Value\" FROM users WHERE 'Owner' = ANY(roles)").SingleAsync();
-            Assert.Contains("synthetic-client", stored);
-            Assert.DoesNotContain(secret, stored);
+            await using var scope = host.Services.CreateAsyncScope();
+            var db = scope.ServiceProvider.GetRequiredService<Compact24DbContext>();
+            return await db.Database.SqlQuery<string>(
+                $"SELECT COALESCE((business_profile->'digitalSigning'->'viettel')::text,'null') AS \"Value\" FROM users WHERE id={ownerId}").SingleAsync();
         }
-
-        // A blank secret keeps the stored one; reset goes back to the server configuration.
-        var kept = (await (await owner.PutAsJsonAsync(Viettel, new SaveViettelSettings(null, "synthetic-client-2", null, null, false)))
-            .Content.ReadFromJsonAsync<ViettelSettingsView>())!;
-        Assert.Equal("9f3a", kept.SecretHint);
-        var reset = (await (await owner.DeleteAsync(Viettel)).Content.ReadFromJsonAsync<ViettelSettingsView>())!;
-        Assert.NotEqual("DATABASE", reset.SecretSource);
-        Assert.NotEqual("DATABASE", reset.ClientIdSource);
+        var before = await StoredAccount();
+        var input = new SaveViettelSettings("https://remotesigning.viettel.vn",
+            "synthetic-client", null, "SYNTHETIC-client-secret-9f3a", false);
+        using var anonymous = host.CreateClient();
+        foreach (var actor in new[] { owner, tenant, staff, anonymous })
+        {
+            // The fallback authentication policy challenges anonymous calls even for retired routes.
+            var expected = actor == anonymous ? HttpStatusCode.Unauthorized : HttpStatusCode.NotFound;
+            var read = await actor.GetAsync(Viettel);
+            Assert.Equal(expected, read.StatusCode);
+            Assert.DoesNotContain("SYNTHETIC-client-secret-9f3a", await read.Content.ReadAsStringAsync());
+            Assert.Equal(expected, (await actor.PutAsJsonAsync(Viettel, input)).StatusCode);
+            Assert.Equal(expected, (await actor.PutAsJsonAsync(Viettel, input with { ClientSecret = null })).StatusCode);
+            Assert.Equal(expected, (await actor.DeleteAsync(Viettel)).StatusCode);
+        }
+        Assert.Equal(before, await StoredAccount());
     }
 }

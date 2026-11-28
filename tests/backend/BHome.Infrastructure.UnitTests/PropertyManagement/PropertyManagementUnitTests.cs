@@ -381,26 +381,25 @@ public sealed class PropertyManagementUnitTests(PostgresContainerFixture postgre
 
     #endregion
 
-    #region CaptureController.Room(...) [HttpPost("rooms"), Authorize(Roles = Owner)]
+    #region PropertyService.SaveRoomAsync(...) [HttpPost("rooms"), Authorize(Roles = Owner)]
 
-    // The action delegates to CaptureService.CreateRoomAsync (same input); that method is called here.
-    // RoomInput has no RoomTypeId field, so the sheet's RoomTypeId cannot be sent; the link is checked afterwards.
+    // The current room creation service does not infer historical room types.
 
-    [Fact(DisplayName = "UTC08 - CaptureController.Room: Owner tao phong 103 loai Standard suc chua 2 -> phong moi (Standard, 2)")]
-    [Trait("Function", "CaptureController.Room")]
+    [Fact(DisplayName = "UTC08 - PropertyService.SaveRoomAsync: Owner tao phong 103 loai Standard suc chua 2 -> phong moi (Standard, 2)")]
+    [Trait("Function", "PropertyService.SaveRoomAsync")]
     public async Task UTC08()
     {
         await StartAsync();
         await AddLocationAsync(Sample1Id, "BHOME SAMPLE 1");
-        var result = await Capture.CreateRoomAsync(new RoomInput(Sample1Id, "103", 2), default);
+        var result = await Properties.SaveRoomAsync(null, new RoomWrite(Sample1Id, "103", null, 2), default);
 
         Assert.Equal(2, await world.ScalarAsync<short>("select capacity from rooms where id = @id and room_number = '103'", ("id", result.Id)));
         var provenance = await SetupStore.GetAsync(RoomProvenanceKey(result.Id), "RoomProvenance", default);
-        Assert.Null(provenance); // OCR quick-create has no RoomTypeId input; it must not guess a type.
+        Assert.Null(provenance); // A room created without defaults must not guess historical provenance.
     }
 
-    [Fact(DisplayName = "UTC09 - CaptureController.Room: phong 101 da ton tai -> tu choi trung so phong, van mot phong 101")]
-    [Trait("Function", "CaptureController.Room")]
+    [Fact(DisplayName = "UTC09 - PropertyService.SaveRoomAsync: phong 101 da ton tai -> tu choi trung so phong, van mot phong 101")]
+    [Trait("Function", "PropertyService.SaveRoomAsync")]
     public async Task UTC09()
     {
         await StartAsync();
@@ -408,7 +407,7 @@ public sealed class PropertyManagementUnitTests(PostgresContainerFixture postgre
         await AddRoomTypeAsync(Sample1Id, "Standard", 2);
         await AddRoomAsync(Sample1Id, "101");
 
-        await Assert.ThrowsAnyAsync<Exception>(() => Capture.CreateRoomAsync(new RoomInput(Sample1Id, "101", 2), default));
+        await Assert.ThrowsAnyAsync<Exception>(() => Properties.SaveRoomAsync(null, new RoomWrite(Sample1Id, "101", null, 2), default));
 
         Assert.Equal(1, await world.ScalarAsync<long>("select count(*) from rooms where location_id = @l and room_number = '101'", ("l", Sample1Id)));
     }
@@ -454,7 +453,7 @@ public sealed class PropertyManagementUnitTests(PostgresContainerFixture postgre
         Assert.Equal("Draft", stored.Status); // Only Published policies are selectable.
     }
 
-    [Fact(DisplayName = "UTC12 - SaveAsync: Electricity 3800 tu 2026-12-01 trung ky v1 -> tu choi, v1 khong doi")]
+    [Fact(DisplayName = "UTC12 - SaveAsync publish: Electricity 3800 tu 2026-12-01 trung ky v1 -> tu choi, v1 khong doi")]
     [Trait("Function", "SharedConfigurationService.SaveAsync")]
     public async Task UTC12()
     {
@@ -462,13 +461,21 @@ public sealed class PropertyManagementUnitTests(PostgresContainerFixture postgre
         await AddLocationAsync(Sample1Id, "BHOME SAMPLE 1");
         var v1 = await AddElectricityV1Async();
         // The sheet gives no name for the new version; a different name is used so the overlap rule (not the duplicate-name rule) is tested.
+        // Match Owner Web's save-and-publish command; a legacy Draft does not reserve an effective period.
 
-        await Assert.ThrowsAnyAsync<PropertyException>(() => Shared.SaveAsync(BillingPolicyResource, null,
-            new SharedWrite("Electricity 2026-12", "", BillingPolicyData("Electricity", 3800m, new(2026, 12, 1), null)), default));
+        var error = await Assert.ThrowsAsync<PropertyException>(() => Shared.SaveAsync(BillingPolicyResource, null,
+            new SharedWrite("Electricity 2026-12", "", BillingPolicyData("Electricity", 3800m, new(2026, 12, 1), null),
+                PublishImmediately: true), default));
+        Assert.Equal(409, error.Status);
+        Assert.Equal("overlapping_shared_fee_period", error.Code);
 
         var stored = await Shared.GetAsync(BillingPolicyResource, v1.Id, default);
         Assert.Equal(3500m, stored.Data.GetProperty("referenceRate").GetDecimal());
         Assert.Equal(v1.Version, stored.Version);
+        Assert.Equal(v1.Status, stored.Status);
+        Assert.Equal(v1.UpdatedAt, stored.UpdatedAt);
+        Assert.Equal("2026-11-01", stored.Data.GetProperty("effectiveFrom").GetString());
+        Assert.Equal("2026-12-31", stored.Data.GetProperty("effectiveTo").GetString());
         Assert.Equal(1, await SharedCountAsync(BillingPolicyResource));
     }
 

@@ -214,8 +214,8 @@ export default function Setup() {
           void create('assignments', () => ({
             locationId: location,
             staffUserId: staffId,
-            effectiveFrom: inputDate(from),
-            effectiveTo: to ? inputDate(to) : null,
+            startDate: inputDate(from),
+            endDate: to ? inputDate(to) : '9999-12-31',
           }))
         }
       >

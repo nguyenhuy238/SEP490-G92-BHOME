@@ -1,6 +1,8 @@
 using BHome.Infrastructure.Persistence.Compact24;
 using BHome.Infrastructure.Persistence.Compact24.Migrations;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.EntityFrameworkCore.Infrastructure;
+using Microsoft.EntityFrameworkCore.Migrations;
 using Npgsql;
 using Testcontainers.PostgreSql;
 
@@ -14,6 +16,9 @@ public sealed class Compact24MigrationBaselineTests
         using var db = new Compact24DbContext(new DbContextOptionsBuilder<Compact24DbContext>()
             .UseNpgsql("Host=127.0.0.1;Database=offline_snapshot;Username=unconfigured").Options);
         Assert.False(db.Database.HasPendingModelChanges());
+        var snapshot = db.GetService<IMigrationsAssembly>().ModelSnapshot!.Model;
+        Assert.Equal(24, snapshot.GetEntityTypes().Count());
+        Assert.All(snapshot.GetEntityTypes(), entity => Assert.Null(entity.GetSqlQuery()));
         Assert.Equal([Compact24Baseline.Id, "20261110000100_LifecycleAlignment", "20261111000100_PhysicalResidenceClosure", "20261111035703_SettlementReceivableLedger", "20261111050000_SettlementBankAllocations", "20261111060000_ReceiptExcessDisposition", "20261111070000_ExternalPaymentPayer", "20261111080000_DepositReceiptAllocation", "20261112000100_SePayIntegration", "20261113000100_PersonMonthlyServiceFees", "20261114000100_MainInitialPayment", "20261114130731_OwnerTaskTargetProjection", "20261115000100_ProactiveMaintenance", "20261115000200_MaintenanceCompensation", "20261115000300_MaintenanceExecutionProjection", "20261115000400_TenantRefundPetitions", "20261115181024_AssetHandoverInventoryProjection", "20261120000100_SharedMainInitialPayment", "20261122000100_PublicContentSnapshots", "20261122000100_SettlementSePayCodes", "20261126000100_SharedInvoiceDepositOffsets", "20261126000200_MainInitialPaymentNoFees", "20261126000200_SePayPaymentModes", "20261126000300_SePayOwnerConnections"], db.Database.GetMigrations());
         Assert.Contains("CREATE TABLE users", Compact24Baseline.MigrationSql);
         Assert.DoesNotContain("\nCOMMIT;", Compact24Baseline.MigrationSql);

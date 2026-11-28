@@ -53,7 +53,7 @@ public static class DependencyInjection
         return services;
     }
 
-    // Expects ICurrentUser to be registered by the host (BHome.Api does) and ConnectionStrings:Database to be set.
+    // Expects ISigningCurrentUser to be registered by the host and ConnectionStrings:Database to be set.
     public static IServiceCollection AddDigitalSigning(this IServiceCollection services, IConfiguration configuration)
     {
         var options = configuration.GetSection(DigitalSigningOptions.Section).Get<DigitalSigningOptions>() ?? new();

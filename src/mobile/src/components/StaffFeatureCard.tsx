@@ -16,6 +16,7 @@ interface StaffFeatureCardProps {
   status?: string;
   incident?: boolean;
   danger?: boolean;
+  shortcut?: boolean;
 }
 
 export function StaffFeatureCard({
@@ -29,8 +30,39 @@ export function StaffFeatureCard({
   status,
   incident = false,
   danger = false,
+  shortcut = false,
 }: StaffFeatureCardProps) {
   const theme = useTheme();
+  if (shortcut) {
+    return (
+      <TouchableRipple
+        accessibilityRole="button"
+        accessibilityLabel={title}
+        accessibilityHint={[description, status].filter(Boolean).join('. ')}
+        onPress={onPress}
+        style={styles.shortcutRipple}
+      >
+        <View style={styles.shortcutContent}>
+          <View style={[styles.shortcutIcon, { backgroundColor: background }]}>
+            <Icon source={icon} size={26} color={color} />
+          </View>
+          <View style={styles.shortcutText}>
+            <Text variant="titleMedium" style={styles.shortcutTitle}>
+              {title}
+            </Text>
+            {!!status && (
+              <Text
+                variant="labelSmall"
+                style={[styles.status, styles.shortcutStatus, danger && { color: '#BA1A1A' }]}
+              >
+                {status}
+              </Text>
+            )}
+          </View>
+        </View>
+      </TouchableRipple>
+    );
+  }
   return (
     <View
       style={[
@@ -76,6 +108,32 @@ export function StaffFeatureCard({
 }
 
 const styles = StyleSheet.create({
+  shortcutRipple: {
+    borderRadius: 16,
+    flex: 1,
+    backgroundColor: '#FFFFFF',
+    borderWidth: 1,
+    borderColor: '#DCE6F2',
+  },
+  shortcutContent: {
+    alignItems: 'center',
+    flexDirection: 'row',
+    flex: 1,
+    paddingVertical: 10,
+    paddingHorizontal: 12,
+    gap: 10,
+    minHeight: 80,
+  },
+  shortcutIcon: {
+    width: 44,
+    height: 44,
+    borderRadius: 14,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  shortcutText: { flex: 1, minWidth: 0, gap: 3 },
+  shortcutTitle: { ...typography.cardTitle, color: '#102B49', textAlign: 'left' },
+  shortcutStatus: { textAlign: 'left' },
   incidentSurface: { borderRadius: 14, borderWidth: 1, borderColor: '#E2E8F0', boxShadow: 'none' },
   ...featureCardLayout,
   status: { ...typography.status, color: staffColors.orange, textAlign: 'center' },

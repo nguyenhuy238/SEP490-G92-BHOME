@@ -42,13 +42,14 @@ const inventoryStyles = {
   summaryRow: {
     paddingHorizontal: 0,
     paddingVertical: 10,
-    gap: 7,
+    gap: 4,
     borderWidth: 0,
     borderBottomWidth: 1,
     borderBottomColor: colors.border,
     borderRadius: 0,
     backgroundColor: 'transparent',
   },
+  standaloneRow: { padding: 12, gap: 4, borderRadius: 12 },
 };
 const conditions: { value: InventoryCondition; label: string }[] = [
   { value: 'Good', label: 'Đạt' },
@@ -614,9 +615,12 @@ function InventoryDetail({
                 ? inventoryStatusLabels[item.condition]
                 : 'Chưa kiểm kê';
             return (
-              <Box key={item.id} style={embedded ? inventoryStyles.summaryRow : undefined}>
+              <Box
+                key={item.id}
+                style={embedded ? inventoryStyles.summaryRow : inventoryStyles.standaloneRow}
+              >
                 <Row spread>
-                  <Text variant="titleMedium" style={inventoryStyles.itemTitle}>
+                  <Text variant="titleSmall" style={inventoryStyles.itemTitle}>
                     {item.name}
                   </Text>
                   <Pill

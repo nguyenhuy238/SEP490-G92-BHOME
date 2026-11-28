@@ -16,7 +16,7 @@ public sealed partial class PaymentLedgerTests
 {
     private async Task<HttpClient> Client(Guid actor, WebApplicationFactory<Program>? host = null)
     {
-        await using var scope = fixture.Factory.Services.CreateAsyncScope(); var db = scope.ServiceProvider.GetRequiredService<BHomePersistenceContext>();
+        await using var scope = fixture.Factory.Services.CreateAsyncScope(); var db = scope.ServiceProvider.GetFixturePersistence();
         var email = await db.Users.Where(u => u.Id == actor).Select(u => u.Email).SingleAsync();
         var client = (host ?? fixture.Factory).CreateClient(); var login = await client.PostAsJsonAsync("/api/v1/auth/login", new { email, password = BHome.IntegrationTests.Compact24.WorkflowTestUsers.Password });
         login.EnsureSuccessStatusCode(); var session = (await login.Content.ReadFromJsonAsync<LoginResult>())!;
@@ -86,7 +86,7 @@ public sealed partial class PaymentLedgerTests
         Assert.Equal(HttpStatusCode.Forbidden, (await b.GetAsync(path + "/eligible-payers")).StatusCode);
         await using (var scope = fixture.Factory.Services.CreateAsyncScope())
         {
-            var db = scope.ServiceProvider.GetRequiredService<BHomePersistenceContext>();
+            var db = scope.ServiceProvider.GetFixturePersistence();
             foreach (var contract in await db.Set<BHome.Domain.TenantContracts.Contract>().Where(c => c.RoomId == w.Room).ToArrayAsync()) contract.Status = BHome.Domain.TenantContracts.ContractStatus.Terminated;
             await db.SaveChangesAsync();
         }

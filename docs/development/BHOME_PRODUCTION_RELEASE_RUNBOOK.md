@@ -1,5 +1,10 @@
 ﻿# Phát hành Production BHOME
 
+Kế hoạch cập nhật demo ngày 28/11/2026, gồm migration đã diễn tập và cấu hình
+private chưa áp dụng: [Production demo release](PRODUCTION_DEMO_RELEASE_2026-11-28.md).
+Các cấu hình tắt và schema baseline trong hồ sơ 21/11 bên dưới là trạng thái lịch sử;
+không dùng chúng thay cho kiểm tra VPS khi triển khai release mới.
+
 Cập nhật sau go-live ngày 21/11/2026. Production đang chạy main
 `70406ecf8dceea6e84e4ddbaa3e325807af123f2`, triển khai lúc 14:48:52
 (Asia/Ho_Chi_Minh) bằng [Actions 44878730626, attempt 4](https://github.com/nguyenhuy238/SEP490-G92-BHOME/actions/runs/44878730626).
@@ -119,12 +124,12 @@ Production để gửi PDF sau kích hoạt và sau thanh toán. Chạy kiểm t
 hàng đợi và tài khoản nhận đã xác minh theo quy trình phát hành. Cờ này hoạt động
 khi `Jobs__Enabled=false` và không yêu cầu bật thông báo tự động diện rộng.
 
-Để phát hành ký hợp đồng thuê UC-15, cần phê duyệt đúng phiên bản DOCX được
-nhúng trong image. Ghi nhận quyết định duyệt mẫu và SHA-256 của chính file DOCX
-đó, rồi đặt `MainDraft__ApprovedProductionTemplateSha256` trong `services.api.environment`
-của `/opt/bhome-config/compose.production-environment.yml`. API chỉ mở bước duyệt
-và gửi ký hợp đồng Live khi hash trùng. Mỗi
-lần thay mẫu cần ghi nhận và cấu hình hash đã được duyệt của bản mới.
+Theo quyết định chủ dự án ngày 27/11/2026, ký hợp đồng thuê UC-15 dùng mẫu DOCX
+nhúng trong image, không yêu cầu phê duyệt mẫu hoặc cấu hình
+`MainDraft__ApprovedProductionTemplateSha256`. Giá trị khóa cũ không chặn xem PDF
+hay gửi ký hợp đồng Live. Backend tiếp tục kiểm tra phiên bản/snapshot và hash
+nội dung tài liệu mà người dùng đã xem. Chi tiết:
+[MAIN_CONTRACT_TEMPLATE_2026-11-27.md](MAIN_CONTRACT_TEMPLATE_2026-11-27.md).
 
 Ghép `environment` và `volumes` của service `api` trong
 `deploy/vps/compose.contract-signing.example.yml` vào

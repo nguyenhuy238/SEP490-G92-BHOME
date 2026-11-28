@@ -278,6 +278,8 @@ it('shows overdue when a periodic utility is overdue, and clears the warning for
   render(<MeterTasksScreen />);
   expect(await screen.findByRole('button', { name: 'Phòng 101, Quá hạn' })).toBeTruthy();
   expect(screen.getByRole('button', { name: 'Phòng 102, Đã ghi' })).toBeTruthy();
+  expect(screen.getByText('1/2 phòng đã ghi')).toBeTruthy();
+  expect(screen.getByText('1 phòng quá hạn')).toBeTruthy();
 });
 
 it('shows all assigned rooms in the notified period including completed and not-due rooms', async () => {

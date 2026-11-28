@@ -5,7 +5,12 @@ import {
   type TenantRefundPetitionInput,
   type TenantRefundPetitionSources,
 } from '../../../../packages/client-core/src/refunds';
-import { MobileApiError, type MobileApi } from '../lib/api';
+import {
+  isResponseRecord as object,
+  isResponseInstant as instant,
+  invalidResponse as invalid,
+  type MobileApi,
+} from '../lib/api';
 
 export const tenantRefundRequestRoot = '/api/v1/tenant/refund-requests';
 
@@ -14,17 +19,10 @@ export type TenantRefundRequestInput = TenantRefundPetitionInput;
 export type TenantRefundRequestSources = TenantRefundPetitionSources;
 
 const guidPattern = /^[a-f0-9]{8}-(?:[a-f0-9]{4}-){3}[a-f0-9]{12}$/i;
-const object = (value: unknown): value is Record<string, unknown> =>
-  !!value && typeof value === 'object' && !Array.isArray(value);
-const instant = (value: unknown) => typeof value === 'string' && Number.isFinite(Date.parse(value));
 const optionalInstant = (value: unknown) => value === null || instant(value);
 const optionalText = (value: unknown) => value === null || typeof value === 'string';
 const optionalId = (value: unknown) =>
   value === null || (typeof value === 'string' && guidPattern.test(value));
-
-function invalid(): never {
-  throw new MobileApiError(502, 'invalid_response');
-}
 
 export function refundRequestFormError(value: TenantRefundRequestInput): string {
   if (!/^[1-9]\d*$/.test(value.amount)) return 'Nhập số tiền hoàn lớn hơn 0, theo đơn vị VND.';

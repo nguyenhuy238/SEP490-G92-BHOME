@@ -145,7 +145,7 @@ vi.mock('../features/contracts/ContractEvidence', () => ({ ContractEvidence: () 
 vi.mock('../features/contracts/ContractWorkflowPanel', () => ({
   ContractWorkflowPanel: () => <span>Private documents</span>,
 }));
-vi.mock('../features/contracts/ContractPdfPreview', () => ({
+vi.mock('../features/contracts/signing/ContractPdfPreview', () => ({
   ContractPdfPreview: ({
     document,
     onReady,
@@ -177,13 +177,13 @@ vi.mock('../features/contracts/ContractPdfPreview', () => ({
     );
   },
 }));
-import { RentalContractFlow } from '../features/contracts/RentalContractFlow';
-import { MainDraftSigningReview } from '../features/contracts/MainDraftSigningReview';
+import { RentalContractFlow } from '../features/contracts/main/RentalContractFlow';
+import { MainDraftSigningReview } from '../features/contracts/main/MainDraftSigningReview';
 import {
   mainDraftClient,
   mainDraftMessages,
 } from '../../../../packages/client-core/src/mainDrafts';
-import { rentalContractState } from '../features/contracts/rentalContractState';
+import { rentalContractState } from '../features/contracts/main/rentalContractState';
 
 function reviewDraft(version = 4): MainDraftView {
   return {

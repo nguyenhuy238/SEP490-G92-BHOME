@@ -39,7 +39,7 @@ Không thay API, validation, xác thực, schema hoặc các luồng hợp đồ
   mẫu, phê duyệt, cảnh báo và hiệu suất cơ sở. Các màn khác giữ nguyên.
 - `src/screens/LiveWorkspaceScreens.tsx`: cập nhật TenantHomeScreen; giữ query
   hợp đồng, thông tin phòng, thời hạn, tiền thuê, trạng thái và contractId khi mở.
-- `src/screens/TenantScreens.tsx`: cập nhật TenantHome mẫu; giữ hóa đơn, tiện ích,
+- `src/features/tenant/TenantScreens.tsx`: cập nhật TenantHome mẫu; giữ hóa đơn, tiện ích,
   sự cố, điện nước, thông báo và các thao tác hiện có. Các màn khác giữ nguyên.
 - `src/theme/theme.ts`: làm rõ palette Staff là tham chiếu workspace chung;
   không thay theme toàn bộ app đăng nhập/onboarding.

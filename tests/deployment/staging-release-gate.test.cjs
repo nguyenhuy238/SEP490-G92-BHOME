@@ -17,7 +17,7 @@ test('release images depend on CI including the retained Staging regression gate
   assert.match(api, /io\.bhome\.staging-regressions=v1/);
 });
 
-test('Staging retry downloads the manifest from the successful images job', () => {
+test('Staging and Production retry download the manifest from the successful images job', () => {
   const images = release.split('\n  images:')[1].split('\n  production-policy:')[0];
   const staging = release.split('\n  staging:')[1].split('\n  production:')[0];
   const production = release.split('\n  production:')[1];
@@ -33,5 +33,14 @@ test('Staging retry downloads the manifest from the successful images job', () =
   assert.match(staging, /MANIFEST_SHA256: \$\{\{ needs\.images\.outputs\.manifest-sha256 \}\}/);
   assert.match(staging, /\$GITHUB_RUN_ID-\$GITHUB_RUN_ATTEMPT/);
   assert.doesNotMatch(production, /STAGING_MANIFEST_ATTEMPT/);
-  assert.match(production, /name: release-\$\{\{ github\.sha \}\}-\$\{\{ github\.run_attempt \}\}/);
+  assert.match(
+    production,
+    /name: release-\$\{\{ github\.sha \}\}-\$\{\{ needs\.images\.outputs\.manifest-attempt \}\}/,
+  );
+  assert.match(
+    production,
+    /RELEASE_MANIFEST_ATTEMPT: \$\{\{ needs\.images\.outputs\.manifest-attempt \}\}/,
+  );
+  assert.match(production, /MANIFEST_SHA256: \$\{\{ needs\.images\.outputs\.manifest-sha256 \}\}/);
+  assert.match(production, /\$GITHUB_RUN_ID-\$GITHUB_RUN_ATTEMPT/);
 });

@@ -7,8 +7,8 @@ import { ownCapture } from './captureFiles';
 // and CaptureRepository.SaveEvidenceAsync use these bounds in the current API.
 export const captureMaxBytes = 5 * 1024 * 1024;
 export const captureMaxPixels = 12_000_000;
-// Identity preprocessing on the server uses this same maximum edge.
-export const identityCaptureMaxDimension = 1600;
+// Preserve small card text until server-side card localization, while bounding upload size.
+export const identityCaptureMaxDimension = 2400;
 
 export async function prepareCapture(
   picture: PictureRef,
@@ -20,10 +20,11 @@ export async function prepareCapture(
     throw new Error('Invalid capture dimensions.');
   const context = ImageManipulator.manipulate(picture);
   const evidence = purpose === 'evidence';
-  // Avoid uploading a multi-megabyte identity photo that the server immediately
-  // downsizes. Upload time otherwise consumes the bounded OCR request deadline.
-  let scale =
-    evidence || purpose === 'identity'
+  // Keep enough detail to localize the card before the server resizes its crop.
+  // Full-resolution phone photos would consume the OCR deadline while uploading.
+  let scale = evidence
+    ? Math.min(1, 1600 / Math.max(width, height))
+    : purpose === 'identity'
       ? Math.min(1, identityCaptureMaxDimension / Math.max(width, height))
       : Math.min(1, Math.sqrt(captureMaxPixels / (width * height)));
   try {

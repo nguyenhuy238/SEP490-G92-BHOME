@@ -36,7 +36,7 @@ public static class LocalTestAccounts
         var db = scope.ServiceProvider.GetRequiredService<BHomePersistenceContext>();
         if (!await db.IsSchemaReadyAsync(cancellationToken))
             throw new LocalTestAccountException("Database còn migration chưa áp dụng. Hãy cập nhật database trước.");
-        var users = scope.ServiceProvider.GetRequiredService<UserManager<ApplicationUser>>();
+        var users = scope.ServiceProvider.GetRequiredService<UserManager<User>>();
         var roles = scope.ServiceProvider.GetRequiredService<RoleManager<IdentityRole<Guid>>>();
         var fixtures = new[] { ("owner.dev", Roles.Owner), ("staff.dev", Roles.Staff), ("tenant.dev", Roles.Tenant) };
         await using var transaction = await db.Database.BeginTransactionAsync(cancellationToken);
@@ -49,7 +49,7 @@ public static class LocalTestAccounts
         foreach (var (name, role) in fixtures)
         {
             cancellationToken.ThrowIfCancellationRequested();
-            var user = new ApplicationUser
+            var user = new User
             {
                 Id = Guid.NewGuid(),
                 UserName = name,

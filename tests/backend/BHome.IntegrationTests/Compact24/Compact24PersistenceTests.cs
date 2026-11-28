@@ -20,7 +20,7 @@ public sealed class Compact24PersistenceTests(Compact24Fixture fixture) : IClass
         await isolated.InitializeAsync();
         try
         {
-            var owner = new ApplicationUser
+            var owner = new User
             {
                 Id = Guid.NewGuid(),
                 UserName = "sequence-owner",
@@ -30,7 +30,7 @@ public sealed class Compact24PersistenceTests(Compact24Fixture fixture) : IClass
                 ConcurrencyStamp = Guid.NewGuid().ToString()
             };
             var now = DateTimeOffset.UtcNow;
-            var transfers = Enumerable.Range(1, 16).Select(i => new BHome.Domain.PaymentsDebt.PaymentTransfer
+            var transfers = Enumerable.Range(1, 16).Select(i => new BHome.Domain.PaymentsDebt.Payment
             {
                 ProviderIdentity = "SyntheticBank",
                 BankReference = "SEQ-" + i,
@@ -44,7 +44,7 @@ public sealed class Compact24PersistenceTests(Compact24Fixture fixture) : IClass
             }).ToArray();
             await using (var seed = isolated.Factory!.Services.CreateAsyncScope())
             {
-                var db = seed.ServiceProvider.GetRequiredService<Compact24DbContext>();
+                var db = seed.ServiceProvider.GetRequiredService<Compact24ArchiveContext>();
                 db.PrepareUserRole(owner, "Owner"); db.Users.Add(owner); await db.SaveChangesAsync();
                 db.AddRange(transfers); await db.SaveChangesAsync();
             }
@@ -52,7 +52,7 @@ public sealed class Compact24PersistenceTests(Compact24Fixture fixture) : IClass
             var writes = transfers.Select(async transfer =>
             {
                 await using var scope = isolated.Factory!.Services.CreateAsyncScope();
-                var db = scope.ServiceProvider.GetRequiredService<Compact24DbContext>();
+                var db = scope.ServiceProvider.GetRequiredService<Compact24ArchiveContext>();
                 await release.Task;
                 db.Add(new BHome.Domain.PaymentsDebt.PaymentReconciliation
                 { TransferId = transfer.Id, ActorId = owner.Id, OccurredAt = now, Decision = "PendingReview", Reason = "Synthetic review" });
@@ -60,7 +60,7 @@ public sealed class Compact24PersistenceTests(Compact24Fixture fixture) : IClass
             }).ToArray();
             release.SetResult(); await Task.WhenAll(writes);
             await using var verify = isolated.Factory!.Services.CreateAsyncScope();
-            var actual = await verify.ServiceProvider.GetRequiredService<Compact24DbContext>()
+            var actual = await verify.ServiceProvider.GetRequiredService<Compact24ArchiveContext>()
                 .Set<BHome.Domain.PaymentsDebt.PaymentReconciliation>().OrderBy(r => r.Sequence).Select(r => r.Sequence).ToArrayAsync();
             Assert.Equal(Enumerable.Range(1, 16).Select(i => (long)i), actual);
         }
@@ -71,9 +71,14 @@ public sealed class Compact24PersistenceTests(Compact24Fixture fixture) : IClass
     public async Task EveryDomainProjectionExecutesWithOnlyTwentyFourTables()
     {
         await using var scope = fixture.Factory!.Services.CreateAsyncScope();
-        var db = scope.ServiceProvider.GetRequiredService<Compact24DbContext>();
-        Assert.True(await db.IsSchemaReadyAsync());
-        Assert.Same(db, scope.ServiceProvider.GetRequiredService<BHomePersistenceContext>());
+        var runtime = scope.ServiceProvider.GetRequiredService<Compact24DbContext>();
+        var db = scope.ServiceProvider.GetRequiredService<Compact24ArchiveContext>();
+        Assert.True(await runtime.IsSchemaReadyAsync());
+        Assert.Same(runtime, scope.ServiceProvider.GetRequiredService<BHomePersistenceContext>());
+        Assert.NotSame(runtime, db);
+        Assert.Equal(24, runtime.Model.GetEntityTypes().Count());
+        Assert.All(runtime.Model.GetEntityTypes(), entity => Assert.Null(entity.GetSqlQuery()));
+        Assert.Contains(db.Model.GetEntityTypes(), entity => entity.GetSqlQuery() is not null);
         Assert.Null(scope.ServiceProvider.GetService<BHomeDbContext>());
         await using var connection = new NpgsqlConnection(fixture.Connection); await connection.OpenAsync();
         foreach (var entity in db.Model.GetEntityTypes())
@@ -88,7 +93,7 @@ public sealed class Compact24PersistenceTests(Compact24Fixture fixture) : IClass
     [CompactPostgresFact]
     public async Task PropertyAndEncryptedResidentRoundTripWithoutLegacyTables()
     {
-        var owner = new ApplicationUser
+        var owner = new User
         {
             Id = Guid.NewGuid(),
             UserName = "compact-owner",
@@ -97,7 +102,7 @@ public sealed class Compact24PersistenceTests(Compact24Fixture fixture) : IClass
             ConcurrencyStamp = Guid.NewGuid().ToString(),
             IsActive = true
         };
-        owner.PasswordHash = new PasswordHasher<ApplicationUser>().HashPassword(owner, "Synthetic!Password-493");
+        owner.PasswordHash = new PasswordHasher<User>().HashPassword(owner, "Synthetic!Password-493");
         var chain = new Chain { Name = "Synthetic chain" };
         var location = new Location("Synthetic location") { ChainId = chain.Id, Address = "Synthetic address", IsActive = true };
         var type = new RoomType { LocationId = location.Id, Name = "Synthetic catalog", DefaultCapacity = 2, Amenities = ["wifi"] };
@@ -111,13 +116,13 @@ public sealed class Compact24PersistenceTests(Compact24Fixture fixture) : IClass
         };
         await using (var scope = fixture.Factory!.Services.CreateAsyncScope())
         {
-            var db = scope.ServiceProvider.GetRequiredService<Compact24DbContext>();
+            var db = scope.ServiceProvider.GetRequiredService<Compact24ArchiveContext>();
             db.Entry(owner).Property<string[]>("roles").CurrentValue = ["Owner"]; db.Add(owner); await db.SaveChangesAsync();
             db.AddRange(chain, location, type, room, resident); await db.SaveChangesAsync();
         }
         await using (var scope = fixture.Factory!.Services.CreateAsyncScope())
         {
-            var db = scope.ServiceProvider.GetRequiredService<Compact24DbContext>();
+            var db = scope.ServiceProvider.GetRequiredService<Compact24ArchiveContext>();
             var actual = await db.Set<Resident>().Include(r => r.Room).ThenInclude(r => r.RoomType).SingleAsync(r => r.Id == resident.Id);
             Assert.True(System.Text.Json.Nodes.JsonNode.DeepEquals(System.Text.Json.Nodes.JsonNode.Parse(resident.IdentityData), System.Text.Json.Nodes.JsonNode.Parse(actual.IdentityData)));
             Assert.Equal(owner.Id, actual.OwnerUserId); Assert.Equal(type.Id, actual.Room.RoomType!.Id);

@@ -1,0 +1,282 @@
+using System.Text.Json;
+using BHome.Domain.Billing;
+using BHome.Domain.IdentityAccess;
+using BHome.Domain.StaffOperations;
+
+namespace BHome.Application.StaffOperations;
+
+public sealed partial class OperationalTaskService
+{
+    private static LocationAssetInventorySnapshot LocationInventory(OperationalTask task)
+    {
+        if (task.Kind != OperationalTaskKind.LocationAssetHandover || string.IsNullOrWhiteSpace(task.LocationAssetInventoryJson))
+            throw OperationalTaskException.Missing();
+        try
+        {
+            var snapshot = JsonSerializer.Deserialize<LocationAssetInventorySnapshot>(task.LocationAssetInventoryJson);
+            if (snapshot?.Items is null || snapshot.AssignmentId != task.AssignmentId ||
+                snapshot.Items.Select(item => item.Id).Distinct().Count() != snapshot.Items.Length)
+                throw OperationalTaskException.Conflict("location_asset_inventory_invalid_snapshot");
+            return snapshot;
+        }
+        catch (JsonException)
+        {
+            throw OperationalTaskException.Conflict("location_asset_inventory_invalid_snapshot");
+        }
+    }
+
+    private static LocationAssetInventoryView LocationInventoryView(OperationalTask task, LocationAssetInventorySnapshot snapshot) =>
+        new(task.Id, task.RequiredLocationId, snapshot.AssignmentId, task.MeterStatus.ToString(), task.Version,
+            snapshot.Items.Length, snapshot.Items.Count(item => item.Checked), snapshot.Items,
+            snapshot.PendingOwnerRooms, snapshot.PendingOwnerCommonAssets);
+
+    public async Task<LocationAssetInventoryView> LocationAssetInventoryAsync(Guid taskId, CancellationToken t)
+    {
+        Permit(Permissions.OperationalTasks.View);
+        var task = await repository.FindAsync(taskId, t) ?? throw OperationalTaskException.Missing();
+        await AccessAsync(task, t);
+        return LocationInventoryView(task, LocationInventory(task));
+    }
+
+    private static LocationAssetInventoryReconcilePreview PreviewReconciliation(OperationalTask task,
+        LocationAssetInventorySnapshot current, LocationAssetInventorySnapshot confirmed)
+    {
+        if (confirmed.AssignmentId != task.AssignmentId ||
+            confirmed.Items.Select(i => i.Id).Distinct().Count() != confirmed.Items.Length)
+            throw OperationalTaskException.Conflict("location_asset_inventory_invalid_owner_source");
+        var currentIds = current.Items.Select(item => item.Id).ToHashSet();
+        var confirmedIds = confirmed.Items.Select(item => item.Id).ToHashSet();
+        var removed = current.Items.Where(item => !confirmedIds.Contains(item.Id)).ToArray();
+        var conflict = !LocationAssetInventorySync.TryMerge(current, confirmed, out _);
+        var reason = task.MeterStatus is not (MeterTaskStatus.Assigned or MeterTaskStatus.InProgress)
+            ? "location_asset_inventory_reconciliation_locked"
+            : confirmed.Items.Length == 0 ? "location_asset_inventory_owner_confirmation_required"
+            : conflict ? "location_asset_inventory_staff_work_conflict" : null;
+        return new(task.Id, task.Version, current.Items.Length, confirmed.Items.Length,
+            removed.Length, confirmed.Items.Count(item => !currentIds.Contains(item.Id)),
+            current.Items.Count(item => item.Checked || item.IncidentId.HasValue || !string.IsNullOrWhiteSpace(item.Note)),
+            reason is null, reason);
+    }
+
+    private static bool ValidCondition(string? condition) => condition is
+        "Unassessed" or "Intact" or "Missing" or "Damaged" or "NotAccessible";
+
+    private async Task<bool> SynchronizeLocationInventoryAsync(OperationalTask task, CancellationToken t)
+    {
+        if (task.MeterStatus is not (MeterTaskStatus.Assigned or MeterTaskStatus.InProgress)) return false;
+        var current = LocationInventory(task);
+        var confirmed = await repository.OwnerConfirmedInventoryAsync(task, t);
+        if (!LocationAssetInventorySync.TryMerge(current, confirmed, out var merged)) return false;
+        var changed = LocationAssetInventorySync.Changed(current, merged);
+        var ready = LocationAssetInventorySync.Ready(task, merged);
+        if (!changed && !ready) return false;
+        repository.Track(task);
+        if (changed)
+        {
+            task.LocationAssetInventoryJson = JsonSerializer.Serialize(merged);
+            await RecordLocationInventorySyncAsync(task, current, merged, t);
+        }
+        await AutoSubmitLocationInventoryAsync(task, merged, t);
+        return true;
+    }
+
+    private Task RecordLocationInventorySyncAsync(OperationalTask task, LocationAssetInventorySnapshot current,
+        LocationAssetInventorySnapshot merged, CancellationToken t) =>
+        RecordAsync(task, "location_asset_inventory_owner_reconciled", "Đồng bộ phạm vi Owner đã xác nhận",
+            new { previousCount = current.Items.Length, ownerConfirmedCount = merged.Items.Length, Automatic = true },
+            task.AssignedStaffUserId is { } staff ? [staff] : [], t);
+
+    private async Task AutoSubmitLocationInventoryAsync(OperationalTask task, LocationAssetInventorySnapshot snapshot,
+        CancellationToken t)
+    {
+        if (!LocationAssetInventorySync.Ready(task, snapshot)) return;
+        task.Result = LocationAssetInventorySync.Result;
+        task.ApplyAction("submit", Now, Actor);
+        await RecordAsync(task, "submit", task.Result, new { Status = task.MeterStatus, Automatic = true },
+            await repository.OwnersAsync(t), t);
+    }
+
+    // Owner-facing read-only diff; never changes an in-progress or signed document by itself.
+    public async Task<LocationAssetInventoryReconcilePreview> PreviewLocationAssetInventoryReconciliationAsync(
+        Guid taskId, CancellationToken t)
+    {
+        Permit(Permissions.OperationalTasks.Manage);
+        if (!Owner) throw new OperationalTaskException(403, "owner_required");
+        var task = await repository.FindAsync(taskId, t) ?? throw OperationalTaskException.Missing();
+        await AccessAsync(task, t);
+        var current = LocationInventory(task);
+        var confirmed = await repository.OwnerConfirmedInventoryAsync(task, t);
+        return PreviewReconciliation(task, current, confirmed);
+    }
+
+    // Explicit Owner action only, serialized with Staff item updates via the Location lock.
+    public async Task<LocationAssetInventoryView> ReconcileLocationAssetInventoryAsync(Guid taskId,
+        LocationAssetInventoryReconcileCommand input, Guid key, CancellationToken t)
+    {
+        Permit(Permissions.OperationalTasks.Manage);
+        if (!Owner) throw new OperationalTaskException(403, "owner_required");
+        Validate(input);
+        if (!input.Confirmed || input.Version < 1) throw OperationalTaskException.Invalid("owner_confirmation_required");
+        var initial = await repository.FindAsync(taskId, t) ?? throw OperationalTaskException.Missing();
+        await AccessAsync(initial, t);
+        _ = LocationInventory(initial);
+        return await CommandAsync(initial.RequiredLocationId, key, $"location-asset-inventory-reconcile:{taskId}",
+            new { taskId, input }, async () =>
+            {
+                var task = await repository.FindAsync(taskId, t) ?? throw OperationalTaskException.Missing();
+                await AccessAsync(task, t);
+                if (task.Version != input.Version) throw OperationalTaskException.Conflict("stale_version");
+                var current = LocationInventory(task);
+                var confirmed = await repository.OwnerConfirmedInventoryAsync(task, t);
+                var preview = PreviewReconciliation(task, current, confirmed);
+                if (!preview.CanApply) throw OperationalTaskException.Conflict(preview.BlockedReason!);
+                if (!LocationAssetInventorySync.TryMerge(current, confirmed, out var merged))
+                    throw OperationalTaskException.Conflict("location_asset_inventory_staff_work_conflict");
+                // No-op refresh is idempotent and does not create a redundant history version.
+                var ready = LocationAssetInventorySync.Ready(task, merged) &&
+                    !merged.Items.Any(i => i.PriorStaffUserId is { } prior && prior != task.AssignedStaffUserId);
+                if (!LocationAssetInventorySync.Changed(current, merged) && !ready)
+                    return LocationInventoryView(task, current);
+                repository.Track(task);
+                task.LocationAssetInventoryJson = JsonSerializer.Serialize(merged);
+                await RecordAsync(task, "location_asset_inventory_owner_reconciled", "Owner xác nhận lại phạm vi kiểm kê",
+                    new
+                    {
+                        previousCount = preview.CurrentCount,
+                        ownerConfirmedCount = preview.OwnerConfirmedCount,
+                        removedCount = preview.RemovedCount,
+                        addedCount = preview.AddedCount,
+                        preservedChecks = preview.PreservedChecks,
+                        source = "OwnerConfirmedInventory"
+                    },
+                    task.AssignedStaffUserId is { } staff ? [staff] : [], t);
+                if (ready) await AutoSubmitLocationInventoryAsync(task, merged, t);
+                task.Version++;
+                return LocationInventoryView(task, LocationInventory(task));
+            }, view => view.TaskId, t);
+    }
+
+    public async Task<LocationAssetInventoryView> UpdateLocationAssetInventoryItemAsync(Guid taskId, Guid itemId,
+        LocationAssetInventoryItemWrite input, Guid key, CancellationToken t)
+    {
+        Permit(Permissions.OperationalTasks.Execute);
+        Validate(input);
+        if (itemId == Guid.Empty || input.IncidentId == Guid.Empty || input.Note?.Length > 2000 ||
+            !ValidCondition(input.Condition))
+            throw OperationalTaskException.Invalid("invalid_location_asset_inventory_item");
+        var initial = await repository.FindAsync(taskId, t) ?? throw OperationalTaskException.Missing();
+        await AccessAsync(initial, t, true);
+        if (initial.Kind != OperationalTaskKind.LocationAssetHandover) throw OperationalTaskException.Missing();
+        return await CommandAsync(initial.RequiredLocationId, key, $"location-asset-inventory-item:{taskId}:{itemId}",
+            new { taskId, itemId, input }, async () =>
+            {
+                var task = await repository.FindAsync(taskId, t) ?? throw OperationalTaskException.Missing();
+                await AccessAsync(task, t, true);
+                if (task.Kind != OperationalTaskKind.LocationAssetHandover) throw OperationalTaskException.Missing();
+                if (task.Version != input.Version) throw OperationalTaskException.Conflict("stale_version");
+                if (task.MeterStatus != MeterTaskStatus.InProgress)
+                    throw OperationalTaskException.Conflict("location_asset_inventory_not_in_progress");
+                var current = LocationInventory(task);
+                var confirmed = await repository.OwnerConfirmedInventoryAsync(task, t);
+                if (!LocationAssetInventorySync.TryMerge(current, confirmed, out var snapshot))
+                    throw OperationalTaskException.Conflict("location_asset_inventory_staff_work_conflict");
+                var index = Array.FindIndex(snapshot.Items, item => item.Id == itemId);
+                if (index < 0) throw OperationalTaskException.Missing();
+                var previous = snapshot.Items[index];
+                if (!previous.Inherited && input.Checked && input.Condition == "Unassessed")
+                    throw OperationalTaskException.Invalid("invalid_location_asset_inventory_item");
+                if (!previous.Inherited && input.Checked && input.Condition is "Missing" or "Damaged" or "NotAccessible" &&
+                    string.IsNullOrWhiteSpace(input.Note))
+                    throw OperationalTaskException.Invalid("invalid_location_asset_inventory_item");
+                // A Tenant-inherited row is an immutable Owner-confirmed baseline.
+                // Staff may attach a report about a later discrepancy, but may not
+                // rewrite its checked state, observation, note, or physical identity.
+                if (previous.Inherited &&
+                    (input.Checked != previous.Checked ||
+                     !string.Equals(input.Condition, previous.Condition, StringComparison.Ordinal) ||
+                     !string.Equals(input.Note?.Trim(), previous.Note?.Trim(), StringComparison.Ordinal) ||
+                     input.IncidentId is null ||
+                     previous.IncidentId is { } linkedIncident && linkedIncident != input.IncidentId))
+                    throw OperationalTaskException.Conflict("location_asset_inventory_inherited_item_immutable");
+                if (input.IncidentId is { } incidentId)
+                {
+                    var report = (await repository.IncidentTargetsAsync([incidentId], t)).SingleOrDefault();
+                    if (report is null || report.LocationId != task.RequiredLocationId || report.RoomId != previous.RoomId ||
+                        report.AssetId != previous.AssetId || !report.IsValidReport ||
+                        (previous.IncidentId != incidentId && report.ReporterId != Actor))
+                        throw OperationalTaskException.Invalid("invalid_location_asset_inventory_incident");
+                }
+                if (!previous.Inherited && input.IncidentId.HasValue && string.IsNullOrWhiteSpace(input.Note))
+                    throw OperationalTaskException.Invalid("location_asset_inventory_issue_note_required");
+                repository.Track(task);
+                if (LocationAssetInventorySync.Changed(current, snapshot))
+                    await RecordLocationInventorySyncAsync(task, current, snapshot, t);
+                snapshot.Items[index] = previous with
+                {
+                    Checked = previous.Inherited ? previous.Checked : input.Checked,
+                    Condition = previous.Inherited ? previous.Condition : input.Checked ? input.Condition : "Unassessed",
+                    Note = previous.Inherited ? previous.Note : input.Note?.Trim(),
+                    IncidentId = input.IncidentId,
+                    // A direct successor check supersedes previously inherited progress.
+                    PriorStaffTaskId = previous.Inherited ? previous.PriorStaffTaskId : null,
+                    PriorStaffUserId = previous.Inherited ? previous.PriorStaffUserId : null
+                };
+                task.LocationAssetInventoryJson = JsonSerializer.Serialize(snapshot);
+                var action = previous.Inherited
+                    ? "location_asset_inventory_inherited_incident_linked"
+                    : "location_asset_inventory_item_checked";
+                await RecordAsync(task, action, input.Note?.Trim() ?? "",
+                    new
+                    {
+                        ItemId = itemId,
+                        AssetId = previous.AssetId,
+                        Quantity = previous.Quantity,
+                        Before = new
+                        {
+                            previous.Checked,
+                            previous.Condition,
+                            previous.Note,
+                            previous.IncidentId
+                        },
+                        After = new
+                        {
+                            snapshot.Items[index].Checked,
+                            snapshot.Items[index].Condition,
+                            snapshot.Items[index].Note,
+                            snapshot.Items[index].IncidentId
+                        }
+                    }, [], t);
+                // The authoritative source was read under the same Location lock
+                // above. Reuse it rather than performing a second Location-wide scan.
+                await AutoSubmitLocationInventoryAsync(task, snapshot, t);
+                task.Version++;
+                return LocationInventoryView(task, LocationInventory(task));
+            }, view => view.TaskId, t);
+    }
+
+    // Staff submits via the ordinary task action. Owner approval/signatures own the final completion.
+    private async Task ValidateLocationAssetInventorySubmissionAsync(OperationalTask task, CancellationToken t)
+    {
+        var snapshot = LocationInventory(task);
+        if (snapshot.Items.Length == 0)
+            throw OperationalTaskException.Conflict("location_asset_inventory_owner_confirmation_required");
+        if (snapshot.Items.Any(item => !item.Checked))
+            throw OperationalTaskException.Conflict("location_asset_inventory_incomplete");
+        if (snapshot.Items.Any(item => item.Condition is "Missing" or "Damaged" &&
+                (string.IsNullOrWhiteSpace(item.Note) || item.IncidentId is null)))
+            throw OperationalTaskException.Conflict("location_asset_inventory_issue_requires_incident");
+        if (snapshot.Items.Any(item => item.Condition == "NotAccessible" &&
+                string.IsNullOrWhiteSpace(item.Note)))
+            throw OperationalTaskException.Conflict("location_asset_inventory_exception_note_required");
+        // A late Owner change (or a never-verified legacy task) must not reach signing.
+        var verified = await repository.OwnerConfirmedInventoryAsync(task, t);
+        if (snapshot.Items.Length != verified.Items.Length ||
+            !snapshot.Items.OrderBy(i => i.Id).Zip(verified.Items.OrderBy(i => i.Id))
+                .All(pair => LocationAssetInventorySync.SameOwnerItem(pair.First, pair.Second)) ||
+            !(snapshot.PendingOwnerRooms ?? []).Order().SequenceEqual((verified.PendingOwnerRooms ?? []).Order()) ||
+            snapshot.PendingOwnerCommonAssets != verified.PendingOwnerCommonAssets)
+            throw OperationalTaskException.Conflict("location_asset_inventory_owner_source_changed");
+        if ((snapshot.PendingOwnerRooms?.Length ?? 0) > 0 || snapshot.PendingOwnerCommonAssets)
+            throw OperationalTaskException.Conflict("location_asset_inventory_pending_owner_confirmation");
+    }
+}

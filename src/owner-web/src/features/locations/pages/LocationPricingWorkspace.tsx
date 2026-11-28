@@ -23,9 +23,9 @@ import {
   type Policy,
   type Page,
 } from '../../../../../../packages/client-core/src/invoices';
-import { useInvoiceApi } from '../../invoices/useInvoiceApi';
-import { PolicyForm } from '../../invoices/BillingConfigurationPage';
-import { canEditPolicyInPlace } from '../../invoices/policyVersions';
+import { useInvoiceApi } from '../../invoices/hooks/useInvoiceApi';
+import { PolicyForm } from '../../invoices/pages/BillingConfigurationPage';
+import { canEditPolicyInPlace } from '../../invoices/utils/policyVersions';
 import { ErrorState, LoadingState } from '../../../components/common/PortalUI';
 import { OwnerTable } from '../../../components/common/OwnerWorkspace';
 import { LocationEmpty } from '../components/LocationSection';

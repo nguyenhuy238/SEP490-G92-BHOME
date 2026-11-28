@@ -34,7 +34,7 @@ public sealed partial class InvoiceApiTests(CaptureFixture fixture) : IClassFixt
         await using (var scope = fixture.Factory.Services.CreateAsyncScope())
         {
             var account = await BHome.IntegrationTests.Compact24.WorkflowTestUsers.CreateAsync(scope.ServiceProvider,
-                new ApplicationUser { Id = id, UserName = email, Email = email }, role, password);
+                new User { Id = id, UserName = email, Email = email }, role, password);
             id = account.Id; email = account.Email!;
         }
         var client = fixture.Factory.CreateClient();
@@ -52,7 +52,7 @@ public sealed partial class InvoiceApiTests(CaptureFixture fixture) : IClassFixt
         var owner = await User(Roles.Owner); var staff = await User(Roles.Staff);
         var tenant = await User(Roles.Tenant); var other = await User(Roles.Tenant);
         var period = new DateOnly(Today.Year, Today.Month, 1).AddMonths(-1);
-        await using var scope = fixture.Factory.Services.CreateAsyncScope(); var db = scope.ServiceProvider.GetRequiredService<BHomePersistenceContext>();
+        await using var scope = fixture.Factory.Services.CreateAsyncScope(); var db = scope.ServiceProvider.GetFixturePersistence();
         var location = new Location("Synthetic Billing") { ChainId = db is BHome.Infrastructure.Persistence.Compact24.Compact24DbContext ? null : await db.Set<BHome.Domain.PropertyManagement.Chain>().Select(c => c.Id).SingleAsync(), Address = "Synthetic address" };
         var room = new Room { LocationId = location.Id, RoomNumber = "SYNTHETIC-BILL", Capacity = 2, Status = RoomStatus.Occupied };
         var resident = new Resident { RoomId = room.Id, TenantUserId = tenant.Id, OwnerUserId = owner.Id, DisplayLabel = "Synthetic Tenant", VerificationStatus = IdentityVerificationStatus.Verified };
@@ -66,7 +66,7 @@ public sealed partial class InvoiceApiTests(CaptureFixture fixture) : IClassFixt
             Status = ContractStatus.Active,
             StartDate = primary ? primaryStart ?? period.AddMonths(-1) : period.AddMonths(-1),
             EndDate = period.AddMonths(4),
-            MonthlyRent = 3000000,
+            RentAmount = 3000000,
             RequiredDeposit = primary ? primaryDeposit : 0,
             Terms = "SYNTHETIC TEST",
             ActivatedAt = activatedAt ?? DateTimeOffset.UtcNow,
@@ -97,7 +97,7 @@ public sealed partial class InvoiceApiTests(CaptureFixture fixture) : IClassFixt
         }
         foreach (var tenancy in new[] { contract, secondContract })
         {
-            tenancy.AgreedPriceSnapshot = JsonSerializer.Serialize(new HoldingPriceSnapshot(tenancy.MonthlyRent, tenancy.RequiredDeposit,
+            tenancy.AgreedPriceSnapshot = JsonSerializer.Serialize(new HoldingPriceSnapshot(tenancy.RentAmount, tenancy.RequiredDeposit,
                 tenancy.StartDate, tenancy.EndDate, default, "SyntheticSigned", DateTimeOffset.UtcNow,
                 policies.Select(p => new HoldingPriceCharge(p.Id, p.ChargeCode, (int)p.Category, (int)p.Method,
                     p.Rate, p.EffectiveFrom, p.EffectiveTo, p.Version)
@@ -111,16 +111,16 @@ public sealed partial class InvoiceApiTests(CaptureFixture fixture) : IClassFixt
     private static void SealFixture(Contract c)
     {
         var document = new ContractDocument(c.Id, c.RoomId, c.OwnerSignerId, c.TenantUserId!.Value, c.RepresentativeResidentId,
-            c.Residents.Select(r => r.ResidentId).Order().ToArray(), c.StartDate, c.EndDate, c.MonthlyRent, c.RequiredDeposit,
-            c.HoldingContractId, c.AppliedHoldingDeposit, c.Terms, c.SnapshotHash)
+            c.Residents.Select(r => r.ResidentId).Order().ToArray(), c.StartDate, c.EndDate, c.RentAmount, c.RequiredDeposit,
+            c.HoldingContractId, c.AppliedHoldingDeposit, c.Terms, c.SnapshotHashOrEmpty)
         { AgreedCharges = ContractChargeSnapshot.Read(c).Charges };
-        c.SnapshotHash = ContractDocumentSnapshot.Hash(document);
+        c.SnapshotHashOrEmpty = ContractDocumentSnapshot.Hash(document);
     }
     private static BillingScheduleWrite Schedule(Workspace w) => new(w.Location, BillingRateDate.PeriodStart, BillingRentSource.RoomPolicy,
         PartialMonthRule.FullMonth, VndRounding.AwayFromZero, 1, 0, 1, 1, 10, 1, 0);
     private async Task<InvoiceView> Draft(Workspace w)
     {
-        await Success<BillingSchedule>(await w.Owner.Client.PutAsJsonAsync("/api/v1/billing-schedules", Schedule(w)));
+        await Success<BillingSchedule>(await w.Owner.Client.PutAsJsonAsync("/test-probe/billing-schedules", Schedule(w)));
         return await Success<InvoiceView>(await w.Owner.Client.PostAsJsonAsync("/api/v1/invoices/drafts", new DraftInvoiceInput(w.Room, w.Period, w.Contract)));
     }
 
@@ -172,7 +172,7 @@ public sealed partial class InvoiceApiTests(CaptureFixture fixture) : IClassFixt
         var filtered = await Success<BHome.Application.PropertyManagement.PagedResult<InvoiceView>>(await w.Tenant.Client.GetAsync($"/api/v1/invoices?roomId={w.Room}&status=Final&billingPeriod={w.Period:yyyy-MM-dd}"));
         Assert.Equal(draft.Id, Assert.Single(filtered.Items).Id);
         Assert.Equal(HttpStatusCode.Conflict, (await w.Owner.Client.PostAsJsonAsync(path + "/refresh", new InvoiceFinalizeInput(ready.Version + 1))).StatusCode);
-        await using var scope = fixture.Factory.Services.CreateAsyncScope(); var db = scope.ServiceProvider.GetRequiredService<BHomePersistenceContext>();
+        await using var scope = fixture.Factory.Services.CreateAsyncScope(); var db = scope.ServiceProvider.GetFixturePersistence();
         Assert.Equal(1, await db.SecurityAudit.CountAsync(a => a.TargetId == draft.Id && a.Event == "InvoiceFinalized"));
         if (db is BHome.Infrastructure.Persistence.Compact24.Compact24DbContext)
         {
@@ -212,7 +212,7 @@ public sealed partial class InvoiceApiTests(CaptureFixture fixture) : IClassFixt
         Assert.Equal(HttpStatusCode.NotFound, (await outsider.Client.GetAsync($"/api/v1/invoices/{invoice.Id}")).StatusCode);
         Assert.Equal(HttpStatusCode.Forbidden, (await w.Staff.Client.GetAsync($"/api/v1/invoices/{invoice.Id}")).StatusCode);
         Assert.Equal(HttpStatusCode.Forbidden, (await w.Tenant.Client.PostAsJsonAsync("/api/v1/invoices/drafts", new DraftInvoiceInput(w.Room, w.Period, w.Contract))).StatusCode);
-        await using var scope = fixture.Factory.Services.CreateAsyncScope(); var db = scope.ServiceProvider.GetRequiredService<BHomePersistenceContext>();
+        await using var scope = fixture.Factory.Services.CreateAsyncScope(); var db = scope.ServiceProvider.GetFixturePersistence();
         Assert.Equal(1, await db.Set<Invoice>().CountAsync(i => i.RoomId == w.Room));
         Assert.Equal(2, await db.Set<InvoiceRecipient>().CountAsync(i => i.InvoiceId == invoice.Id));
         Assert.NotNull((await db.Set<BillingPolicy>().SingleAsync(p => p.LocationId == w.Location && p.Category == ChargeCategory.Electricity)).FirstUsedAt);
@@ -247,11 +247,12 @@ public sealed partial class InvoiceApiTests(CaptureFixture fixture) : IClassFixt
     {
         var w = await Setup();
         Assert.Equal(HttpStatusCode.Conflict, (await w.Owner.Client.PostAsJsonAsync("/api/v1/invoices/drafts", new DraftInvoiceInput(w.Room, w.Period, w.Contract))).StatusCode);
-        Assert.Equal(HttpStatusCode.BadRequest, (await w.Owner.Client.PutAsJsonAsync("/api/v1/billing-schedules", Schedule(w) with { FinalDay = 0 })).StatusCode);
-        Assert.Equal(HttpStatusCode.BadRequest, (await w.Owner.Client.PutAsJsonAsync("/api/v1/billing-schedules", Schedule(w) with { DueMonthOffset = 0 })).StatusCode);
-        Assert.Equal(HttpStatusCode.Forbidden, (await w.Tenant.Client.PutAsJsonAsync("/api/v1/billing-schedules", Schedule(w))).StatusCode);
-        await Success<BillingSchedule>(await w.Owner.Client.PutAsJsonAsync("/api/v1/billing-schedules", Schedule(w)));
-        Assert.Equal(HttpStatusCode.Conflict, (await w.Owner.Client.PutAsJsonAsync("/api/v1/billing-schedules", Schedule(w))).StatusCode);
+        Assert.Equal(HttpStatusCode.NotFound, (await w.Owner.Client.PutAsJsonAsync("/api/v1/billing-schedules", Schedule(w))).StatusCode);
+        Assert.Equal(HttpStatusCode.BadRequest, (await w.Owner.Client.PutAsJsonAsync("/test-probe/billing-schedules", Schedule(w) with { FinalDay = 0 })).StatusCode);
+        Assert.Equal(HttpStatusCode.BadRequest, (await w.Owner.Client.PutAsJsonAsync("/test-probe/billing-schedules", Schedule(w) with { DueMonthOffset = 0 })).StatusCode);
+        Assert.Equal(HttpStatusCode.Forbidden, (await w.Tenant.Client.PutAsJsonAsync("/test-probe/billing-schedules", Schedule(w))).StatusCode);
+        await Success<BillingSchedule>(await w.Owner.Client.PutAsJsonAsync("/test-probe/billing-schedules", Schedule(w)));
+        Assert.Equal(HttpStatusCode.Conflict, (await w.Owner.Client.PutAsJsonAsync("/test-probe/billing-schedules", Schedule(w))).StatusCode);
     }
 
     [Fact]
@@ -262,7 +263,7 @@ public sealed partial class InvoiceApiTests(CaptureFixture fixture) : IClassFixt
         var before = await Success<TenantInvoicePeriodView>(await w.Tenant.Client.GetAsync(path));
         Assert.False(before.HasInvoice);
         Assert.Empty(before.DraftDates);
-        await Success<BillingSchedule>(await w.Owner.Client.PutAsJsonAsync("/api/v1/billing-schedules",
+        await Success<BillingSchedule>(await w.Owner.Client.PutAsJsonAsync("/test-probe/billing-schedules",
             Schedule(w) with { DraftDay = 27, DraftMonthOffset = 1, FinalDay = 28, DueMonthOffset = 2 }));
         var result = await Success<TenantInvoicePeriodView>(await w.Tenant.Client.GetAsync(path));
         Assert.Equal(new DateOnly(result.BusinessDate.Year, result.BusinessDate.Month, 1), result.BillingPeriod);
@@ -282,7 +283,7 @@ public sealed partial class InvoiceApiTests(CaptureFixture fixture) : IClassFixt
     public async Task SharedTenancyDatabaseGuardRejectsOverCapacityAndDuplicateTenant()
     {
         var w = await Setup();
-        await using var scope = fixture.Factory.Services.CreateAsyncScope(); var db = scope.ServiceProvider.GetRequiredService<BHomePersistenceContext>();
+        await using var scope = fixture.Factory.Services.CreateAsyncScope(); var db = scope.ServiceProvider.GetFixturePersistence();
         var existing = await db.Set<Contract>().AsNoTracking().SingleAsync(c => c.Id == w.Contract);
         var duplicate = new Contract
         {
@@ -292,7 +293,7 @@ public sealed partial class InvoiceApiTests(CaptureFixture fixture) : IClassFixt
             RepresentativeResidentId = existing.RepresentativeResidentId,
             StartDate = existing.StartDate,
             EndDate = existing.EndDate,
-            MonthlyRent = existing.MonthlyRent,
+            RentAmount = existing.RentAmount,
             RequiredDeposit = 0,
             Status = ContractStatus.Active,
             ActivatedAt = DateTimeOffset.UtcNow,

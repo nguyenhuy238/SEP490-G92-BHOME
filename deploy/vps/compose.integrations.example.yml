@@ -18,7 +18,6 @@ services:
       Email__FromName: BHOME
       Email__UseStartTls: 'true'
       Email__TimeoutSeconds: '30'
-      Email__TestEnabled: 'false'
       # All environments accept valid recipient addresses; no recipient allowlist is used.
       # Check the final environment overlay: a later false value overrides this file.
 

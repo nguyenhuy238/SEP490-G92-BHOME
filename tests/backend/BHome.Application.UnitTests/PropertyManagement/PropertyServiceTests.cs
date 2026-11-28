@@ -60,12 +60,12 @@ public sealed class PropertyServiceTests
             Status = ContractStatus.Active,
             StartDate = new(2026, 1, 1),
             EndDate = new(2026, 12, 31),
-            MonthlyRent = 3000000,
+            RentAmount = 3000000,
             Terms = "Synthetic"
         };
         HoldingPriceCharge Charge(Guid id, ChargeCategory category, string code, ChargingMethod method, decimal rate) =>
             new(id, code, (int)category, (int)method, rate, contract.StartDate, null, 1) { Name = code };
-        HoldingPriceCharge[] defaults = [Charge(Guid.NewGuid(), ChargeCategory.Rent, "RENT", ChargingMethod.FixedPerRoomPerMonth, contract.MonthlyRent),
+        HoldingPriceCharge[] defaults = [Charge(Guid.NewGuid(), ChargeCategory.Rent, "RENT", ChargingMethod.FixedPerRoomPerMonth, contract.RentAmount),
             Charge(Guid.NewGuid(), ChargeCategory.Electricity, "ELECTRICITY", ChargingMethod.Metered, 3500),
             Charge(Guid.NewGuid(), ChargeCategory.Water, "WATER", ChargingMethod.Metered, 15000),
             Charge(Guid.NewGuid(), ChargeCategory.ServiceFee, "INTERNET", ChargingMethod.FixedPerRoomPerMonth, 100000)];
@@ -74,15 +74,15 @@ public sealed class PropertyServiceTests
             : c).ToArray();
         if (intact)
         {
-            contract.AgreedPriceSnapshot = System.Text.Json.JsonSerializer.Serialize(new HoldingPriceSnapshot(contract.MonthlyRent, 0, contract.StartDate, contract.EndDate, default, "Synthetic", BeforeVietnamMidnight, charges) { SnapshotVersion = 1 });
-            contract.SnapshotHash = ContractDocumentSnapshot.Hash(new ContractDocument(contract.Id, room.Id, contract.OwnerSignerId, contract.TenantUserId.Value,
-                contract.RepresentativeResidentId, [], contract.StartDate, contract.EndDate, contract.MonthlyRent, 0, null, 0, contract.Terms, "")
+            contract.AgreedPriceSnapshot = System.Text.Json.JsonSerializer.Serialize(new HoldingPriceSnapshot(contract.RentAmount, 0, contract.StartDate, contract.EndDate, default, "Synthetic", BeforeVietnamMidnight, charges) { SnapshotVersion = 1 });
+            contract.SnapshotHashOrEmpty = ContractDocumentSnapshot.Hash(new ContractDocument(contract.Id, room.Id, contract.OwnerSignerId, contract.TenantUserId.Value,
+                contract.RepresentativeResidentId, [], contract.StartDate, contract.EndDate, contract.RentAmount, 0, null, 0, contract.Terms, "")
             { AgreedCharges = charges });
         }
         var snapshot = contract.AgreedPriceSnapshot;
         repository.FindAsync<Location>(location.Id, default).Returns(location);
         repository.FindAsync<BillingPolicy>(old.Id, default).Returns(old);
-        repository.AnyAsync<Room>(Arg.Any<System.Linq.Expressions.Expression<Func<Room, bool>>>(), default).Returns(true);
+        repository.RoomInLocationAsync(room.Id, location.Id, default).Returns(true);
         repository.HasBindingPriceContractAsync(room.Id, default).Returns(true);
         repository.BindingPriceContractsAsync(room.Id, default).Returns(new[] { contract });
         repository.BindingPriceContractsForLocationsAsync(Arg.Any<Guid[]>(), default)
@@ -175,7 +175,7 @@ public sealed class PropertyServiceTests
             IsActive = true
         };
         repository.FindAsync<Location>(location.Id, default).Returns(location);
-        repository.AnyAsync<RoomType>(Arg.Any<System.Linq.Expressions.Expression<Func<RoomType, bool>>>(), default)
+        repository.ActiveRoomTypeExistsAsync(location.Id, roomType.Id, default)
             .Returns(true);
         repository.WithLocationLockAsync(Arg.Any<Guid>(), Arg.Any<Func<Task<RoomDto>>>(), default)
             .Returns(call => call.Arg<Func<Task<RoomDto>>>()());
@@ -187,24 +187,33 @@ public sealed class PropertyServiceTests
         repository.Received(1).Add(Arg.Is<Room>(room => room.RoomTypeId == roomType.Id));
     }
 
+    // Retain duplicate-number coverage through the supported configured-room workflow.
     [Fact]
     public async Task BulkRoomCreationRejectsDuplicateNumbersBeforeAddingRows()
     {
-        var (service, repository) = Create(Roles.Owner, BeforeVietnamMidnight);
-        repository.WithLocationLockAsync(Arg.Any<Guid>(), Arg.Any<Func<Task<BulkRoomResult>>>(), default)
-            .Returns(call => call.Arg<Func<Task<BulkRoomResult>>>()());
+        var (properties, repository) = Create(Roles.Owner, BeforeVietnamMidnight);
         var location = new Location("Synthetic") { Address = "Synthetic Address", IsActive = true };
-        var locationId = location.Id;
-        var typeId = Guid.NewGuid();
-        repository.FindAsync<Location>(locationId, default).Returns(location);
+        repository.FindAsync<Location>(location.Id, default).Returns(location);
+        var shared = Substitute.For<ISharedConfigurationStore>();
+        shared.TransactionAsync(Arg.Any<Guid[]>(), Arg.Any<Func<Task<BulkRoomResult>>>(), default, false)
+            .Returns(call => call.Arg<Func<Task<BulkRoomResult>>>()());
+        var actor = Substitute.For<ICurrentUser>();
+        actor.UserId.Returns(Guid.NewGuid());
+        actor.IsInRole(Roles.Owner).Returns(true);
+        var service = new LocationSetupService(shared, Substitute.For<ISetupWorkspaceStore>(), null!, null!,
+            properties, null!, null!, actor, new FixedClock(BeforeVietnamMidnight));
+        var defaultsId = Guid.NewGuid();
+        var input = new ConfiguredRoomsInput([new("A-01", "1", defaultsId, 1, 2500000),
+            new(" a-01 ", "1", defaultsId, 1, 2500000)], new DateOnly(2026, 10, 29));
 
-        var error = await Assert.ThrowsAsync<PropertyException>(() => service.BulkCreateRoomsAsync(
-            new BulkRoomWrite(locationId,
-            [new("A-01", "1", typeId), new(" a-01 ", "1", typeId)]), default));
+        var error = await Assert.ThrowsAsync<PropertyException>(() =>
+            service.CreateConfiguredRoomsAsync(location.Id, input, Guid.NewGuid(), default));
 
         Assert.Equal("duplicate_room_number", error.Code);
         repository.DidNotReceive().Add(Arg.Any<Room>());
+        await shared.DidNotReceive().SaveOperationAsync(Arg.Any<SharedOperation>(), default);
     }
+
     [Theory]
     [InlineData(0, 20)]
     [InlineData(1, 101)]
@@ -239,7 +248,7 @@ public sealed class PropertyServiceTests
         var location = new Location("Synthetic") { Address = "Synthetic Address", IsActive = true };
         var room = new Room { LocationId = location.Id };
         repository.FindAsync<Location>(location.Id, default).Returns(location);
-        repository.AnyAsync<Room>(Arg.Any<System.Linq.Expressions.Expression<Func<Room, bool>>>(), default).Returns(true);
+        repository.RoomInLocationAsync(room.Id, location.Id, default).Returns(true);
         repository.HasBindingPriceContractAsync(room.Id, default).Returns(locked);
         repository.WithLocationLockAsync(Arg.Any<Guid>(), Arg.Any<Func<Task<PolicyDto>>>(), default)
             .Returns(call => call.Arg<Func<Task<PolicyDto>>>()());

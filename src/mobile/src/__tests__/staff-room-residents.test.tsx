@@ -43,6 +43,7 @@ const mockScope = vi.hoisted(() => ({
 const mockWorkspace = vi.hoisted(() => ({
   go: vi.fn(),
   preview: false,
+  staffLocationId: 'loc-1',
   requestNavigation: (action: () => void) => action(),
 }));
 
@@ -174,6 +175,7 @@ describe('Staff resident directory', () => {
   beforeEach(() => {
     vi.clearAllMocks();
     route.params = {};
+    mockWorkspace.staffLocationId = 'loc-1';
     mockScope.loading = false;
     mockScope.error = '';
     mockScope.location = 'loc-1';
@@ -294,6 +296,13 @@ describe('Staff resident directory', () => {
     expect(mockWorkspace.go).toHaveBeenCalledWith('onboarding', { locationId: 'loc-1' });
     fireEvent.click(screen.getByLabelText('Cơ sở Cơ sở 2'));
     expect(mockScope.selectLocation).toHaveBeenCalledWith('loc-2');
+  });
+  it('hides the duplicate location only when it matches the workspace header', () => {
+    const view = render(<RoomOverview />);
+    expect(screen.queryByText('BHOME SAMPLE 1')).toBeNull();
+    mockWorkspace.staffLocationId = '';
+    view.rerender(<RoomOverview />);
+    expect(screen.getByText('BHOME SAMPLE 1')).toBeTruthy();
   });
   it('hides data on loading or API failure and provides retry', () => {
     mockScope.loading = true;

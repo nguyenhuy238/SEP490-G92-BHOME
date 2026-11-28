@@ -13,12 +13,14 @@ vi.mock('react-native-paper', () => ({
     children,
     onPress,
     disabled,
+    accessibilityLabel,
   }: {
     children: React.ReactNode;
     onPress: () => void;
     disabled?: boolean;
+    accessibilityLabel?: string;
   }) => (
-    <button onClick={onPress} disabled={disabled}>
+    <button onClick={onPress} disabled={disabled} aria-label={accessibilityLabel}>
       {children}
     </button>
   ),
@@ -73,6 +75,8 @@ vi.mock('../features/onboarding/IdentityWizard', () => ({
     onConfirmed,
     onDismiss,
     onVerifiedSummary,
+    captureRequest,
+    onCaptureProgress,
     visible = true,
   }: {
     residentId: string;
@@ -81,13 +85,30 @@ vi.mock('../features/onboarding/IdentityWizard', () => ({
     onDismiss: () => void;
     onVerifiedSummary?: (summary: { fullName: string; dateOfBirth: string | null }) => void;
     visible?: boolean;
+    captureRequest?: { side: 'front' | 'back'; id: number };
+    onCaptureProgress?: (progress: {
+      front: 'unscanned' | 'partial';
+      back: 'unscanned' | 'partial';
+    }) => void;
   }) =>
     visible ? (
       <div
         role="dialog"
         aria-label={mode === 'verify' ? 'Nhập thủ công CCCD' : 'Quét CCCD'}
         data-resident={residentId}
+        data-side={captureRequest?.side}
+        data-capture-request={captureRequest?.id}
       >
+        <button
+          onClick={() =>
+            onCaptureProgress?.({
+              front: captureRequest?.side === 'front' ? 'partial' : 'unscanned',
+              back: captureRequest?.side === 'back' ? 'partial' : 'unscanned',
+            })
+          }
+        >
+          Nhận kết quả OCR một phần
+        </button>
         <button
           onClick={() => {
             onVerifiedSummary?.({ fullName: 'Tên đã xác minh', dateOfBirth: '1995-05-20' });
@@ -100,8 +121,38 @@ vi.mock('../features/onboarding/IdentityWizard', () => ({
       </div>
     ) : null,
 }));
-import { HoldingNewTenant } from '../features/contracts/HoldingNewTenant';
+import { HoldingNewTenant } from '../features/contracts/holding/HoldingNewTenant';
 afterEach(cleanup);
+it('opens the selected holding-applicant side and keeps its progress after closing and retrying', async () => {
+  const create = vi.fn();
+  render(
+    <HoldingNewTenant
+      api={{ createHoldingResident: create } as unknown as ContractClient}
+      roomId="room"
+      role="Staff"
+      context="holding"
+      stage="identity"
+      initialResidentId="holding-applicant"
+      onCreated={vi.fn()}
+      onConfirmed={vi.fn()}
+    />,
+  );
+  fireEvent.click(screen.getByRole('button', { name: 'Quét mặt sau' }));
+  const dialog = await screen.findByRole('dialog');
+  expect(dialog.getAttribute('data-side')).toBe('back');
+  const request = dialog.getAttribute('data-capture-request');
+  fireEvent.click(screen.getByRole('button', { name: 'Nhận kết quả OCR một phần' }));
+  fireEvent.click(screen.getByRole('button', { name: 'Đóng nhập thông tin' }));
+  expect(screen.getByText('Đọc được một phần')).toBeTruthy();
+  expect(screen.getByText('Chưa quét')).toBeTruthy();
+  fireEvent.click(screen.getByRole('button', { name: 'Quét lại mặt sau' }));
+  expect((await screen.findByRole('dialog')).getAttribute('data-side')).toBe('back');
+  expect(screen.getByRole('dialog').getAttribute('data-capture-request')).not.toBe(request);
+  fireEvent.click(screen.getByRole('button', { name: 'Đóng nhập thông tin' }));
+  fireEvent.click(screen.getByRole('button', { name: 'Quét mặt trước' }));
+  expect((await screen.findByRole('dialog')).getAttribute('data-side')).toBe('front');
+  expect(create).not.toHaveBeenCalled();
+});
 it.each([
   ['Nhập thủ công', 'Nhập thủ công CCCD'],
   ['Bắt đầu quét CCCD', 'Quét CCCD'],

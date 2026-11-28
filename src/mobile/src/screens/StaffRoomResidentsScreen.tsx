@@ -93,7 +93,7 @@ function StateMessage({
 }
 
 function RoomDirectory() {
-  const { go } = useWorkspace();
+  const { go, staffLocationId, preview } = useWorkspace();
   const scope = useRoomScope();
   const [query, setQuery] = useState('');
   const [filter, setFilter] = useState<RoomFilter>('all');
@@ -157,17 +157,26 @@ function RoomDirectory() {
             size={22}
           />
         </View>
-        <View style={styles.heading}>
-          <Button compact icon="file-document-outline" onPress={() => go('signing')}>
+        <View style={styles.contractActions}>
+          <Button
+            compact
+            icon="file-document-outline"
+            onPress={() => go('signing')}
+            contentStyle={styles.touch}
+          >
             Hợp đồng thuê
           </Button>
-          <Button compact icon="plus" onPress={() => go('onboarding')}>
+          <Button compact icon="plus" onPress={() => go('onboarding')} contentStyle={styles.touch}>
             Tạo hợp đồng thuê
           </Button>
+          <Button
+            compact
+            onPress={() => go('prepare-contract', { kind: 'Holding' })}
+            contentStyle={styles.touch}
+          >
+            Tạo hợp đồng giữ chỗ
+          </Button>
         </View>
-        <Button compact onPress={() => go('prepare-contract', { kind: 'Holding' })}>
-          Tạo hợp đồng giữ chỗ
-        </Button>
         {scope.locations.length > 1 ? (
           <View style={styles.locations}>
             {scope.locations.map((location) => (
@@ -191,11 +200,11 @@ function RoomDirectory() {
               </TouchableRipple>
             ))}
           </View>
-        ) : (
+        ) : preview || scope.location !== staffLocationId || !staffLocationId ? (
           <Text numberOfLines={1} style={styles.muted}>
             {scope.locations.find((l) => l.id === scope.location)?.label ?? 'Cơ sở được phân công'}
           </Text>
-        )}
+        ) : null}
         <View style={styles.summary}>
           {[
             [ready ? rooms.length : '—', 'phòng'],
@@ -299,18 +308,20 @@ function RoomDirectory() {
             onPress={() => go('rooms', { roomId: room.id, locationId: scope.location })}
             accessibilityRole="button"
             accessibilityLabel={`Phòng ${room.label}, ${room.residents.length} cư dân, ${room.pending} chờ xác minh`}
-            style={[styles.roomRow, room.pending > 0 && styles.pendingRow]}
+            style={styles.roomRow}
           >
             <View style={styles.rowInner}>
-              <Text numberOfLines={1} style={[styles.roomName, styles.flex]}>
-                Phòng {room.label}
-              </Text>
-              <View style={styles.roomCounts}>
-                <Text style={styles.muted}>{room.residents.length} cư dân</Text>
-                <Text style={room.pending ? styles.pendingText : styles.muted}>
-                  {room.pending} chờ xác minh
+              <View style={styles.flex}>
+                <Text numberOfLines={1} style={styles.roomName}>
+                  Phòng {room.label}
                 </Text>
+                <Text style={styles.muted}>{room.residents.length} cư dân</Text>
               </View>
+              {room.pending > 0 && (
+                <View style={styles.pendingTag}>
+                  <Text style={styles.pendingText}>{room.pending} chờ xác minh</Text>
+                </View>
+              )}
               <Icon source="chevron-right" size={22} color={c.muted} />
             </View>
           </TouchableRipple>
@@ -443,20 +454,28 @@ function RoomResidents({ roomId, locationId }: { roomId: string; locationId?: st
 }
 
 const styles = StyleSheet.create({
-  screen: { flex: 1, backgroundColor: c.background },
+  screen: { flex: 1, backgroundColor: s.background },
   controls: {
     paddingHorizontal: 16,
     paddingTop: 8,
     paddingBottom: 12,
-    gap: 10,
-    backgroundColor: c.background,
+    gap: 8,
+    backgroundColor: s.background,
   },
   heading: { flexDirection: 'row', alignItems: 'center', gap: 6 },
-  title: { color: c.ink, fontWeight: '700', flexShrink: 1 },
+  contractActions: { flexDirection: 'row', flexWrap: 'wrap', alignItems: 'center', columnGap: 4 },
+  title: { color: s.navy, fontWeight: '700', flexShrink: 1 },
   iconButton: { margin: 0, minWidth: 44, minHeight: 44 },
   flex: { flex: 1, minWidth: 0, gap: 3 },
   muted: { color: c.muted, fontSize: 12 },
-  summary: { flexDirection: 'row', paddingVertical: 8, backgroundColor: c.white, borderRadius: 10 },
+  summary: {
+    flexDirection: 'row',
+    paddingVertical: 8,
+    backgroundColor: c.white,
+    borderRadius: 10,
+    borderWidth: 1,
+    borderColor: c.border,
+  },
   metric: { flex: 1, alignItems: 'center', paddingHorizontal: 4, gap: 2 },
   metricLabel: { fontSize: 11, color: c.muted, textAlign: 'center' },
   search: {
@@ -489,7 +508,7 @@ const styles = StyleSheet.create({
     borderColor: c.border,
     backgroundColor: c.white,
   },
-  filterSelected: { backgroundColor: c.primary, borderColor: c.primary },
+  filterSelected: { backgroundColor: s.navy, borderColor: s.navy },
   filterText: { fontSize: 13, fontWeight: '600', color: c.ink },
   selectedText: { color: c.white, fontWeight: '600' },
   locations: { flexDirection: 'row', flexWrap: 'wrap', gap: 6 },
@@ -502,27 +521,31 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: c.border,
   },
-  locationSelected: { backgroundColor: c.primary, borderColor: c.primary },
+  locationSelected: { backgroundColor: s.navy, borderColor: s.navy },
   touch: { minHeight: 44 },
   list: { paddingHorizontal: 16, paddingBottom: 16, flexGrow: 1 },
   roomRow: {
     backgroundColor: c.white,
     borderBottomWidth: 1,
     borderBottomColor: c.border,
-    minHeight: 68,
+    minHeight: 60,
   },
-  pendingRow: { backgroundColor: s.orangeSoft, borderLeftWidth: 3, borderLeftColor: s.orange },
   rowInner: {
     flexDirection: 'row',
     alignItems: 'center',
-    minHeight: 68,
+    minHeight: 60,
     paddingHorizontal: 12,
-    paddingVertical: 12,
-    gap: 10,
+    paddingVertical: 8,
+    gap: 8,
   },
   roomName: { color: c.ink, fontSize: 14, fontWeight: '600', flexShrink: 1 },
-  roomCounts: { alignItems: 'flex-end', gap: 3 },
-  pendingText: { color: s.orange, fontWeight: '600', fontSize: 12 },
+  pendingTag: {
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderRadius: 8,
+    backgroundColor: s.orangeSoft,
+  },
+  pendingText: { color: c.amber, fontWeight: '600', fontSize: 12 },
   statusIcon: {
     width: 40,
     height: 40,

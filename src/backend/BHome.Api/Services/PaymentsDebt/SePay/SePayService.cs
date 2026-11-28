@@ -1,0 +1,265 @@
+using System.Security.Cryptography;
+using System.Text;
+using System.Text.RegularExpressions;
+using BHome.Application.Contracts;
+using BHome.Domain.Billing;
+using BHome.Domain.PaymentsDebt;
+using BHome.Domain.TenantContracts;
+
+namespace BHome.Application.PaymentsDebt.SePay;
+
+public sealed class SePayService(ISePayRepository repository, IPaymentRepository payments, SePayOptions options,
+    ContractService contracts, TimeProvider clock, IMainInitialPaymentLedger? initialPayments = null,
+    ISettlementChargeEvidence? settlementEvidence = null, ISePayOwnerConnections? connections = null)
+{
+    public const string PaymentCodePattern = "(?<![A-Z0-9])BH(?:[0-9]{8}|[A-Z0-9]{4}[TL][A-F0-9]{16})(?![A-Z0-9])";
+    public async Task ReceiveAsync(SePayTransaction transaction, CancellationToken token, string? authenticatedWebhookSecret = null)
+    {
+        var original = options.Copy();
+        try { await ReceiveCoreAsync(transaction, token, authenticatedWebhookSecret); }
+        finally { options.Restore(original); }
+    }
+    private async Task ReceiveCoreAsync(SePayTransaction transaction, CancellationToken token, string? authenticatedWebhookSecret)
+    {
+        if (!options.Enabled) throw new PaymentException(503, "sepay_disabled");
+        transaction.Validate(clock.GetUtcNow());
+        Guid? routedOwner = null;
+        if (ResolveCode(transaction) is { } routedCode && await repository.ResolveAsync(routedCode, token) is { } routedTarget)
+            routedOwner = await payments.ReceivingOwnerAsync(routedTarget.LocationId, token);
+        else
+        {
+            var owners = new HashSet<Guid>();
+            foreach (var binding in options.ReceivingAccounts.Where(b => b.Gateway.Equals(transaction.Gateway, StringComparison.OrdinalIgnoreCase) && b.AccountNumber == transaction.AccountNumber))
+            {
+                var owner = binding.OwnerUserId != Guid.Empty ? binding.OwnerUserId : await payments.ReceivingOwnerAsync(binding.LocationId, token);
+                if (owner is { } boundOwner) owners.Add(boundOwner);
+            }
+            if (owners.Count == 1) routedOwner = owners.Single();
+        }
+        if (routedOwner is { } ownerId)
+        {
+            if (options.OwnerUserId is { } configuredOwner && configuredOwner != ownerId) return;
+            if (options.OwnerUserId is null && connections is not null)
+            {
+                var receivedMode = options.Mode;
+                await connections.ApplyOwnerAsync(ownerId, token); options.Select(receivedMode);
+            }
+        }
+        // A legacy callback URL must not keep accepting a key that the Owner replaced.
+        // Polling has already authenticated its HTTPS response and supplies no webhook key.
+        if (authenticatedWebhookSecret is not null)
+        {
+            if (!options.Enabled) throw new PaymentException(503, "sepay_disabled");
+            if (!CryptographicOperations.FixedTimeEquals(SHA256.HashData(Encoding.UTF8.GetBytes(authenticatedWebhookSecret)),
+                SHA256.HashData(Encoding.UTF8.GetBytes(options.WebhookSecret ?? ""))))
+                throw new PaymentException(401, "sepay_authentication_failed");
+        }
+        // Shared bank accounts may deliver the same callback to multiple deployments.
+        // Only the deployment namespace carried by the issued memo owns its financial effect.
+        var routingCodes = Regex.Matches(transaction.Content.ToUpperInvariant(), PaymentCodePattern).Select(m => m.Value).Distinct().ToArray();
+        if (options.DualMode && routingCodes.Length > 0 && routingCodes.All(c => c.Length == 23 && c.Substring(2, 4) != options.InstanceCode)) return;
+        var id = await repository.ReceiveAsync(transaction, token);
+        await ReconcileAsync(id, token);
+        // A completed, signed provider event may be replayed (including after a
+        // process upgrade). Completing the physical move-out is independently
+        // idempotent and must never happen for a pending/reviewed payment.
+        var received = await repository.EventAsync(id, token);
+        if (received.Status == "Completed" && received.Reason == "verified_full_payment" &&
+            received.TransferId is not null && ResolveCode(transaction) is { } reference &&
+            await repository.ResolveAsync(reference, token) is { Kind: "Settlement" } target &&
+            await repository.SettlementAsync(target.ObligationId, token) is { } settlement)
+            await contracts.TryCompleteAfterVerifiedSettlementAsync(settlement.ContractId,
+                target.ObligationId, token);
+    }
+    public async Task<int> RecoverPreviouslyVerifiedMoveOutsAsync(CancellationToken token)
+    {
+        if (!options.Enabled) return 0;
+        var completed = 0;
+        foreach (var candidate in await repository.VerifiedMoveOutCandidatesAsync(token))
+            if (await contracts.TryCompleteAfterVerifiedSettlementAsync(candidate.ContractId,
+                candidate.ReceivableId, token)) completed++;
+        return completed;
+    }
+    public Task ReconcileAsync(Guid id, CancellationToken token) => repository.TransactionAsync(async () =>
+    {
+        var received = await repository.EventAsync(id, token);
+        var retryEnvironment = received.Status == "ManualReview" && received.Reason is "sepay_environment_mismatch" or "legacy_payment_code_route_required";
+        if (received.Status != "Pending" && !retryEnvironment) return true;
+        if (!options.Enabled || received.Mode != options.Mode || received.OwnerId is not null && received.OwnerId != options.OwnerUserId) return true;
+        var tx = received.Transaction;
+        async Task<bool> Finish(string status, string reason, Guid? receipt = null)
+        { await repository.FinishAsync(received, status, reason, receipt, token); return true; }
+        if (tx.TransferType != "in") return await Finish("Ignored", "outgoing_transaction");
+        var bindings = options.ReceivingAccounts.Where(a => a.Gateway.Equals(tx.Gateway, StringComparison.OrdinalIgnoreCase) && a.AccountNumber == tx.AccountNumber).ToArray();
+        if (bindings.Length == 0 || !string.IsNullOrEmpty(tx.SubAccount)) return await Finish("ManualReview", "receiving_account_not_configured");
+        var reference = Reference(received.Mode, tx);
+        var prior = await payments.TransferReferenceAsync("SEPAY:" + received.Mode.ToUpperInvariant(), reference, token);
+        if (prior is not null)
+        {
+            if (prior.Amount != tx.TransferAmount || prior.OccurredAt != PaymentRules.Timestamp(tx.OccurredAt) || prior.TransferDescription != tx.Content)
+                throw new PaymentException(409, "sepay_transaction_identity_conflict");
+            if (!retryEnvironment || received.TransferId != prior.Id)
+                return await Finish("Duplicate", "bank_transaction_already_received", prior.Id);
+            if (await payments.AllocationAsync(prior.Id, token) is not null)
+                return await Finish("Duplicate", "bank_transaction_already_received", prior.Id);
+            if (prior.IsDevelopmentDemo != (received.Mode == "Test")) throw new PaymentException(409, "sepay_transaction_identity_conflict");
+        }
+        if (await payments.ManualReferenceReceivedAsync(PaymentRules.NormalizeReference(tx.ReferenceCode), token))
+            return await Finish("ManualReview", "legacy_bank_reference_requires_manual_review");
+        var code = ResolveCode(tx);
+        var target = code is null ? null : await repository.ResolveAsync(code, token);
+        if (options.DualMode && target is null) return await Finish("ManualReview", "unknown_or_ambiguous_payment_code");
+        if (target is not null && !options.Owns(target)) return await Finish("ManualReview", "legacy_payment_code_route_required");
+        var receipt = prior ?? new Payment
+        {
+            ProviderIdentity = "SEPAY:" + received.Mode.ToUpperInvariant(),
+            BankReference = reference,
+            NormalizedReference = reference,
+            Amount = tx.TransferAmount,
+            OccurredAt = PaymentRules.Timestamp(tx.OccurredAt),
+            TransferDescription = tx.Content,
+            StatementReference = "SePay/" + received.Mode + "/" + tx.Id + "/" + tx.ReferenceCode,
+            VerificationReason = "Authenticated SePay bank transaction",
+            VerificationSource = "SePay" + received.Mode,
+            VerifiedAt = PaymentRules.Timestamp(clock.GetUtcNow()),
+            IsDevelopmentDemo = received.Mode == "Test",
+            ProposedInvoiceId = target?.Kind == "Invoice" ? target.ObligationId : null,
+            ProposedDepositContractId = target?.Kind == "Deposit" ? target.ObligationId : null
+        };
+        if (prior is null) await repository.AddReceiptAsync(received, receipt, token);
+        async Task<bool> Review(string reason)
+        {
+            if (received.Reason != reason || received.TransferId != receipt.Id) await payments.AddAsync(new PaymentReconciliation
+            {
+                TransferId = receipt.Id,
+                InvoiceId = receipt.ProposedInvoiceId,
+                DepositContractId = receipt.ProposedDepositContractId,
+                Decision = "PendingReview",
+                Reason = reason,
+                OccurredAt = receipt.ReceiptVerifiedAt
+            }, token);
+            return await Finish("ManualReview", reason, receipt.Id);
+        }
+        if (target is null) return await Review("unknown_or_ambiguous_payment_code");
+        await repository.LockTargetAsync(target, token);
+        var account = target.AccountSnapshot;
+        if (account is null || !options.Matches(target.LocationId, account, tx.Gateway) || !account.Enabled ||
+            account.AccountNumber != tx.AccountNumber || account.IsDevelopmentDemo != receipt.IsDevelopmentDemo ||
+            !await payments.ActiveLocationAsync(target.LocationId, token)) return await Review("receiving_account_mismatch");
+        if (target.Kind == "MainInitial")
+        {
+            if (initialPayments is null) return await Review("initial_payment_workflow_unavailable");
+            if (await payments.ReferenceClaimedAsync(reference, token)) return await Review("bank_reference_already_credited");
+            try { await initialPayments.AllocateAsync(target.ObligationId, receipt, token); }
+            catch (PaymentException e) when (e.Status == 409) { return await Review(e.Code); }
+            await payments.AddAsync(new PaymentReconciliation { TransferId = receipt.Id, DepositContractId = target.ObligationId, Decision = "Allocated", Reason = "verified_main_initial_payment", OccurredAt = receipt.ReceiptVerifiedAt }, token);
+            return await Finish("Completed", "verified_main_initial_payment", receipt.Id);
+        }
+        decimal outstanding;
+        Invoice? invoice = null;
+        SePaySettlementTarget? settlement = null;
+        if (target.Kind == "Invoice")
+        {
+            invoice = await repository.InvoiceAsync(target.ObligationId, token);
+            if (invoice?.Status != InvoiceStatus.Final) return await Review("final_invoice_required");
+            if ((target.Mode == "Test") != receipt.IsDevelopmentDemo) return await Review("sepay_environment_mismatch");
+            outstanding = (await payments.FinancialsAsync(invoice.Id, token)).OutstandingAmount;
+        }
+        else if (target.Kind == "Settlement")
+        {
+            settlement = await repository.SettlementAsync(target.ObligationId, token);
+            if (settlement is null || settlement.LocationId != target.LocationId ||
+                settlement.Charge.RecipientUserIds.Length == 0)
+                return await Review("settlement_receivable_not_found");
+            if (!settlement.MayAllocate) return await Review(settlement.Blocker ?? "settlement_not_payable");
+            if (settlement.Charge.IsDevelopmentDemo != receipt.IsDevelopmentDemo)
+                return await Review("sepay_environment_mismatch");
+            if (settlementEvidence is null) return await Review("settlement_evidence_unavailable");
+            try { await settlementEvidence.VerifyAsync(settlement.Charge, token); }
+            catch (ContractException e) when (e.Status is 400 or 404 or 409)
+            { return await Review(e.Code); }
+            outstanding = settlement.OutstandingAmount;
+        }
+        else if (target.Kind == "Deposit")
+        {
+            var contract = await payments.HoldingAsync(target.ObligationId, token);
+            if (contract is null || contract.Kind is not (ContractKind.Main or ContractKind.Holding) || contract.PreviousContractId is not null ||
+                contract.Status is not (ContractStatus.Draft or ContractStatus.PendingSigning or ContractStatus.PendingActivation or ContractStatus.Active))
+                return await Review("deposit_not_payable");
+            if (ContractPaymentModes.IsTest(contract) != receipt.IsDevelopmentDemo) return await Review("sepay_environment_mismatch");
+            outstanding = Math.Max(0, contract.RequiredDeposit - await payments.DepositAllocatedAsync(contract.Id, token));
+            if (outstanding <= 0) return await Review("deposit_already_satisfied");
+            if (receipt.Amount != outstanding) return await Review("payment_amount_requires_review");
+            if (contract.Kind == ContractKind.Holding)
+            {
+                if ((contract.ApprovedAt is null && !BHome.Application.Contracts.AnonymousContractSigningService.HoldingOwnerHasSigned(contract)) || contract.HoldingExpiryAt is null || contract.HoldingExpiryAt <= clock.GetUtcNow())
+                    return await Review("holding_deposit_requires_manual_review");
+                // The native contract mutation flushes inside this ledger transaction.
+                // Reject a previously credited bank reference before locking the Holding price.
+                if (await payments.ReferenceClaimedAsync(reference, token)) return await Review("bank_reference_already_credited");
+                try
+                {
+                    if (!await contracts.ConfirmProviderHoldingDepositAsync(contract.Id, receipt.Amount, receipt.ReceiptVerifiedAt, token))
+                        return await Review("holding_room_commitment_requires_manual_review");
+                }
+                catch (ContractException error) when (error.Status == 409)
+                { return await Review(error.Code); }
+            }
+        }
+        else
+        {
+            return await Review("invalid_payment_obligation");
+        }
+        if (outstanding <= 0) return await Review(target.Kind == "Invoice" ? "invoice_already_settled" :
+            target.Kind == "Settlement" ? "settlement_already_paid" : "deposit_already_satisfied");
+        // Monthly invoices support verified installments; other obligations
+        // still require an exact payment. Excess receipts remain for review.
+        if (receipt.Amount > outstanding || (invoice is null && receipt.Amount != outstanding))
+            return await Review("payment_amount_requires_review");
+        if (await payments.ReferenceClaimedAsync(reference, token)) return await Review("bank_reference_already_credited");
+        var allocation = new PaymentAllocation
+        {
+            TransferId = receipt.Id,
+            InvoiceId = invoice?.Id,
+            TargetDepositContractId = invoice is null && settlement is null ? target.ObligationId : null,
+            TargetSettlementContractId = settlement?.ContractId,
+            SettlementReceivableId = settlement?.Charge.Id,
+            Amount = receipt.Amount,
+            AllocatedAt = receipt.ReceiptVerifiedAt
+        };
+        var priorFinancial = invoice is null ? null : await payments.FinancialsAsync(invoice.Id, token);
+        await payments.AddAsync(allocation, token);
+        var reason = receipt.Amount < outstanding ? "verified_partial_payment" : "verified_full_payment";
+        await payments.AddAsync(new PaymentReconciliation
+        {
+            TransferId = receipt.Id,
+            InvoiceId = invoice?.Id,
+            DepositContractId = allocation.TargetDepositContractId,
+            Decision = "Allocated",
+            Reason = reason,
+            OccurredAt = receipt.ReceiptVerifiedAt
+        }, token);
+        if (invoice is not null)
+        {
+            var financial = priorFinancial!;
+            await payments.AddAsync(new PaymentConfirmedEvent
+            {
+                AllocationId = allocation.Id,
+                InvoiceId = invoice.Id,
+                OccurredAt = receipt.ReceiptVerifiedAt,
+                PaidAmount = financial.AllocatedPayments + allocation.Amount,
+                OutstandingAmount = outstanding - allocation.Amount
+            }, token);
+        }
+        return await Finish("Completed", reason, receipt.Id);
+    }, token);
+
+    public static string Reference(string mode, SePayTransaction tx) => "SP:" + Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes(
+        System.Text.Json.JsonSerializer.Serialize(new[] { mode, tx.Gateway.ToUpperInvariant(), tx.AccountNumber, tx.ReferenceCode.Trim().ToUpperInvariant() }))));
+    private static string? ResolveCode(SePayTransaction tx)
+    {
+        var matches = Regex.Matches(tx.Content.ToUpperInvariant(), PaymentCodePattern).Select(m => m.Value).Distinct().ToArray();
+        if (matches.Length != 1 || !string.IsNullOrEmpty(tx.Code) && !string.Equals(tx.Code, matches[0], StringComparison.OrdinalIgnoreCase)) return null;
+        return matches[0];
+    }
+}
