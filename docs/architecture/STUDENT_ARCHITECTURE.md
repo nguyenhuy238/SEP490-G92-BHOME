@@ -20,7 +20,7 @@ Giữ Modular Monolith .NET 8 + PostgreSQL. Bốn project backend trước đây
 
 ### Entity và Database Compact24
 
-Mô hình 24 Entity vật lý trong `Domain/Entities/` được cấu hình trong một `Compact24DbContext` runtime. Kịch bản tài chính, chi phí/đầu tư và kỳ lao động đã đọc/ghi EF trực tiếp; một số truy vấn Property/Billing đã chuyển. Các projection/model nghiệp vụ cũ và writer chỉ giữ cho các luồng chưa chuyển. Xem [bản đồ Entity và phạm vi chuyển đổi](COMPACT24_ENTITY_MAPPING.md), không suy luận mọi Domain class là một bảng.
+Mô hình vật lý gồm đúng 24 Entity được cấu hình trong một `Compact24DbContext` runtime, không có EF `ToSqlQuery`. Repository đọc/ghi trực tiếp bảng và snapshot có kiểu, giữ các class nghiệp vụ thuần để thực thi quy tắc. Projection/writer cũ nằm trong `Data/Compact24/Legacy/` và chỉ dành cho import/fixture offline qua `Compact24ArchiveContext`, không đăng ký trong DI API. Xem [bản đồ Entity và phạm vi chuyển đổi](COMPACT24_ENTITY_MAPPING.md), không suy luận mọi Domain class là một bảng.
 
 ### Quy ước tổ chức
 
