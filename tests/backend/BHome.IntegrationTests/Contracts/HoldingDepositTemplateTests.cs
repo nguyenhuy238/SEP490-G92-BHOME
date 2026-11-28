@@ -6,6 +6,8 @@ using BHome.Domain.TenantContracts;
 using BHome.Infrastructure.Contracts;
 using iText.Kernel.Pdf;
 using Microsoft.Extensions.Configuration;
+using System.IO.Compression;
+using System.Xml.Linq;
 
 namespace BHome.IntegrationTests.Contracts;
 
@@ -52,13 +54,22 @@ public sealed class HoldingDepositTemplateTests
         {
             ["MainDraft:LibreOfficeContainerImage"] = "bhome/contract-converter:local"
         }).Build();
-        var bytes = await new HoldingDepositRenderer(config).PdfAsync(Draft(), Owner, Tenant, "0911111111", default);
+        var contract = Draft();
+        var docx = HoldingDepositRenderer.Docx(contract, Owner, Tenant, "0911111111");
+        using (var archive = new ZipArchive(new MemoryStream(docx)))
+        {
+            using var stream = archive.GetEntry("word/document.xml")!.Open();
+            XNamespace w = "http://schemas.openxmlformats.org/wordprocessingml/2006/main";
+            var content = string.Concat(XDocument.Load(stream).Descendants(w + "t").Select(node => node.Value));
+            Assert.Contains($"Mã hợp đồng: {contract.Id:D}", content);
+        }
+        var bytes = await new HoldingDepositRenderer(config).PdfAsync(contract, Owner, Tenant, "0911111111", default);
         using var pdf = new PdfDocument(new PdfReader(new MemoryStream(bytes)));
         var qa = Environment.GetEnvironmentVariable("BHOME_CONTRACT_QA_DIR");
         if (!string.IsNullOrWhiteSpace(qa))
         {
             Directory.CreateDirectory(qa);
-            await File.WriteAllBytesAsync(Path.Combine(qa, "holding-template.docx"), HoldingDepositRenderer.Docx(Draft(), Owner, Tenant, "0911111111"));
+            await File.WriteAllBytesAsync(Path.Combine(qa, "holding-template.docx"), docx);
             await File.WriteAllBytesAsync(Path.Combine(qa, "holding-template.pdf"), bytes);
             var pages = new ContractSigningPages();
             for (var page = 1; page <= pdf.GetNumberOfPages(); page++)
@@ -67,6 +78,7 @@ public sealed class HoldingDepositTemplateTests
         // Line wrapping in a formatted PDF may insert line breaks within a clause.
         var text = System.Text.RegularExpressions.Regex.Replace(ContractPdfRendererTests.Text(pdf), @"\s+", " ");
         Assert.Contains("HỢP ĐỒNG NHẬN TIỀN ĐẶT CỌC", text);
+        Assert.Contains($"Mã hợp đồng: {contract.Id:D}", text);
         Assert.Contains("000000000001", text);
         Assert.Contains("000000000002", text);
         Assert.Contains("P.102", text);

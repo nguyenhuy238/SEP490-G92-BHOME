@@ -347,7 +347,7 @@ export function ContractDraftForm({
         )}
         {!!room && (
           <View style={[styles.identityStage, step !== 2 && { display: 'none' }]}>
-            <Text style={styles.sectionTitle}>CCCD của người giữ chỗ</Text>
+            <Text style={styles.sectionTitle}>Thông tin người giữ chỗ</Text>
             <Text style={styles.description}>
               Quét CCCD hoặc nhập thủ công, sau đó xác nhận thông tin.
             </Text>

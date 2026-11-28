@@ -653,9 +653,10 @@ function LiveContractDetail({
       {!rental && c.isDevelopmentDemo && (
         <Text style={ui.red}>HỢP ĐỒNG DEMO · Dữ liệu minh họa, không dùng làm hợp đồng thật.</Text>
       )}
-      {!tenantHandoverOnly && !holding && !(role === 'Staff' && rental) && (
+      {!tenantHandoverOnly && !holding && !(role === 'Staff' && rental) &&
+        !(role === 'Staff' && c.status === 'Converted') && (
         <Pill tone={c.status === 'Active' ? 'green' : 'amber'}>{text(c.status)}</Pill>
-      )}
+        )}
       {!!detail.refreshError && (
         <ContractNotice
           message={`Chưa cập nhật được trạng thái mới. Nội dung trước đó vẫn được giữ lại. ${conciseMessage(detail.refreshError)}`}

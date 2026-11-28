@@ -22,6 +22,7 @@ public sealed class MainDocxTemplateTests
         }).Build();
         var renderer = new MainDraftRenderer(configuration, TimeProvider.System);
         Assert.True(renderer.SigningReviewAvailable);
+        Assert.Equal(5, renderer.DocumentVersion);
         var c = new Contract
         {
             RoomId = Guid.NewGuid(),
@@ -49,6 +50,7 @@ public sealed class MainDocxTemplateTests
             using var stream = archive.GetEntry("word/document.xml")!.Open(); var xml = XDocument.Load(stream);
             XNamespace w = "http://schemas.openxmlformats.org/wordprocessingml/2006/main";
             var text = string.Concat(xml.Descendants(w + "t").Select(n => n.Value));
+            Assert.Contains($"Mã hợp đồng: {c.Id:D}", text);
             Assert.Contains("CHỦ NHÀ KIỂM THỬ", text); Assert.Contains("NGƯỜI THUÊ KIỂM THỬ", text);
             Assert.Contains("TRÁCH NHIỆM CHUNG", text); Assert.Contains("2.300.000", text); Assert.DoesNotContain("9.900.000", text);
             Assert.Contains("ĐẠI DIỆN BÊN B", text); Assert.Contains("ĐẠI DIỆN BÊN A", text);
@@ -57,6 +59,7 @@ public sealed class MainDocxTemplateTests
         var bytes = await renderer.PdfAsync(docx, default);
         using var pdf = new PdfDocument(new PdfReader(new MemoryStream(bytes)));
         var all = ContractPdfRendererTests.Text(pdf);
+        Assert.Contains($"Mã hợp đồng: {c.Id:D}", all);
         Assert.Contains("HỢP ĐỒNG THUÊ PHÒNG TRỌ", all); Assert.Contains("TRÁCH NHIỆM CHUNG", all);
         Assert.DoesNotContain("TÀI LIỆU KIỂM THỬ", all);
         Assert.Contains("000000000001", all); Assert.Contains("000000000002", all); Assert.Contains("15/06/2021", all);

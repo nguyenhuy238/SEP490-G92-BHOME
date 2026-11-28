@@ -152,7 +152,7 @@ export function ContractSigningStep({
   const representativeLabel = c.kind === 'Holding' ? 'Người giữ chỗ' : 'Người đại diện thuê';
   const nextSignerMessage = !data
     ? error
-      ? 'Chưa tải được trạng thái ký. Bấm Làm mới trạng thái ký để thử lại.'
+      ? 'Chưa tải được trạng thái ký. Vui lòng tải lại màn hình để thử lại.'
       : 'Đang tải trạng thái ký…'
     : complete
       ? 'Hai bên đã ký xong. Bạn có thể tiếp tục thanh toán.'
@@ -533,11 +533,6 @@ export function ContractSigningStep({
             }}
           >
             Tiếp tục thanh toán
-          </Action>
-        )}
-        {!bothSigned && (
-          <Action secondary disabled={busy} onPress={() => setRevision((v) => v + 1)}>
-            Làm mới trạng thái ký
           </Action>
         )}
       </Box>
