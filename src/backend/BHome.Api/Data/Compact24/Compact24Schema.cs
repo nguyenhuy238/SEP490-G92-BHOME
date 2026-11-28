@@ -159,7 +159,7 @@ public static class Compact24Schema
         return columns.ToArray();
     }
 
-    private static string[] ExpectedForeignKeys(string reference)
+    internal static string[] ExpectedForeignKeys(string reference)
     {
         var keys = new List<string>();
         foreach (Match table in Regex.Matches(reference, @"(?m)^CREATE TABLE ([a-z_]+) \(([\s\S]*?)^\);"))
