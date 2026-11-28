@@ -34,8 +34,8 @@ import { formatInstant } from '../../../../../../packages/client-core/src/locali
 import { ResourcePage } from '../../../components/common/ResourcePage';
 import { PageHeader, FilterToolbar, StatusChip } from '../../../components/common/PortalUI';
 import { isMockMode } from '../../../services/config';
-import { useContractsApi } from '../../contracts/useContractsApi';
-import { OwnerHandoverDraftPanel } from '../../contracts/OwnerHandoverDraftPanel';
+import { useContractsApi } from '../../contracts/hooks/useContractsApi';
+import { OwnerHandoverDraftPanel } from '../../contracts/components/handover/OwnerHandoverDraftPanel';
 import { OwnerMoveOutInbox } from '../OwnerMoveOutInbox';
 
 interface HandoverInboxItem {

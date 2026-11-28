@@ -3,7 +3,7 @@ import React from 'react';
 import { afterEach, expect, it, vi } from 'vitest';
 import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import type { ContractClient, ContractView } from '../../../../packages/client-core/src/contracts';
-import { HoldingMainStart } from '../features/contracts/HoldingMainStart';
+import { HoldingMainStart } from '../features/contracts/holding/HoldingMainStart';
 vi.mock('../lib/randomUUID', () => ({ randomUUID: () => '11111111-1111-4111-8111-111111111111' }));
 vi.mock('react-native-paper', () => ({
   Text: ({ children }: { children: React.ReactNode }) => <span>{children}</span>,

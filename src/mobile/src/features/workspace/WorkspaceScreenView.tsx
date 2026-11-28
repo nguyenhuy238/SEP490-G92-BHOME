@@ -10,14 +10,14 @@ import { OwnerLocationRecordsScreen } from '../../screens/OwnerLocationRecordsSc
 import { OwnerTaxRecordsScreen } from '../../screens/OwnerTaxRecordsScreen';
 import { PersonalDataRequestsScreen } from '../../screens/PersonalDataRequestsScreen';
 import { Redirect } from 'expo-router';
-import { TenantInvoicesScreen } from '../../screens/TenantInvoicesScreen';
+import { TenantInvoicesScreen } from '../tenant/billing/TenantInvoicesScreen';
 import { NotificationsScreen } from '../../screens/NotificationsScreen';
-import { TenantPaymentHistoryScreen } from '../../screens/TenantPaymentHistoryScreen';
+import { TenantPaymentHistoryScreen } from '../tenant/billing/TenantPaymentHistoryScreen';
 import {
   TenantRefundRequestsScreen,
   TenantRefundHistoryScreen,
-} from '../../screens/TenantRefundRequestsScreen';
-import { TenantFeaturesScreen } from '../../screens/TenantFeaturesScreen';
+} from '../tenant/billing/TenantRefundRequestsScreen';
+import { TenantFeaturesScreen } from '../tenant/dashboard/TenantFeaturesScreen';
 import { Text } from 'react-native-paper';
 import { Action, Box, Heading } from '../../components/WorkspaceKit';
 import { RequestHistory } from '../../components/WorkflowControls';
@@ -38,7 +38,7 @@ import { StaffHome, WorkOrders, MeterReading } from '../../screens/StaffScreens'
 import { StaffNotificationScreen } from '../../screens/StaffNotificationScreen';
 import { StaffScheduleScreen } from '../../screens/StaffScheduleScreen';
 import { StaffMoveInInventoryScreen } from '../../screens/StaffMoveInInventoryScreen';
-import { StaffMoveOutInspectionScreen } from '../../screens/StaffMoveOutInspectionScreen';
+import { StaffMoveOutInspectionScreen } from '../contracts/moveOut/StaffMoveOutInspectionScreen';
 import { StaffHandoverArchiveScreen } from '../../screens/StaffHandoverArchiveScreen';
 import { StaffHandoverListScreen } from '../../screens/StaffTaskListScreen';
 import {
@@ -51,7 +51,7 @@ import {
   TenantInvoice,
   TenantContract,
   MoveInChecklist,
-} from '../../screens/TenantScreens';
+} from '../tenant/TenantScreens';
 import { Profile, Notifications, SecuritySettings } from '../../screens/SharedScreens';
 
 import { OnboardingScreen } from '../../screens/OnboardingScreen';
@@ -67,13 +67,13 @@ import {
   UnavailableWorkspaceScreen,
 } from '../../screens/LiveWorkspaceScreens';
 import { AccountSecurityScreen } from '../../screens/AccountSecurityScreen';
-import { TenantRoomScreen } from '../../screens/TenantRoomScreen';
-import { TenantMeterHistoryScreen } from '../../screens/TenantMeterHistoryScreen';
+import { TenantRoomScreen } from '../tenant/room/TenantRoomScreen';
+import { TenantMeterHistoryScreen } from '../tenant/room/TenantMeterHistoryScreen';
 import {
   TenantIncidentScreen,
   TenantRequestsScreen,
   TenantResidenceScreen,
-} from '../../screens/TenantServiceScreens';
+} from '../tenant/TenantServiceScreens';
 import { ProfileEditScreen } from '../../screens/ProfileEditScreen';
 import {
   OwnerAdjustmentListScreen,
@@ -98,7 +98,7 @@ import {
   ContractRequest,
   BillingHistory,
   SigningStatus,
-} from '../../screens/TenantWorkflowScreens';
+} from '../tenant/TenantWorkflowScreens';
 function MoveIn() {
   return <Inspection moveIn />;
 }

@@ -1,4 +1,4 @@
-﻿# BHOME - Refactor để nhóm sinh viên làm chủ mã nguồn
+# BHOME - Refactor để nhóm sinh viên làm chủ mã nguồn
 
 Nhánh: `refactor/bhome-develop`. Mốc gốc: `origin/develop` tại `f3be1bfe` (PR #189), đã đồng bộ các thay đổi Develop đến `76dcbbab` qua merge `93d309af`. Không lấy các commit riêng của member/THuy làm mốc. Không merge hay deploy khi chưa nghiệm thu.
 
@@ -8,15 +8,15 @@ Giữ nghiệp vụ, API, dữ liệu và các kiểm soát an toàn. Giảm cod
 
 ## Lộ trình
 
-| Giai đoạn       | Đầu ra                                                       | Trạng thái                                                                     |
-| --------------- | ------------------------------------------------------------ | ------------------------------------------------------------------------------ |
-| P0 - Baseline   | Build, typecheck, test và mốc đối chứng                      | Build BE và typecheck Owner/Mobile đã pass; chưa chạy full CI                  |
-| P1 - Audit      | Danh mục KEEP/DELETE/MERGE/SIMPLIFY/ARCHIVE/REVIEW có căn cứ | Đã quét tham chiếu và trùng lặp theo module; chưa chứng minh toàn bộ semantics |
-| P2 - Dọn dẹp    | Loại bỏ phần không sử dụng, giữ chức năng                    | Đã loại bỏ ứng viên có căn cứ, giữ phần còn test/API/legacy consumer           |
-| P3 - Backend    | Từng module có điểm xử lý và quy tắc rõ ràng                 | Đã gom logic ID, evidence, eligibility và tách điểm đọc ký/trả phòng           |
-| P4 - Frontend   | Component và API client dễ đọc                               | Đã bỏ màn hình cũ, scaffold, gom nhánh route và validation                     |
-| P5 - Tài liệu   | Sơ đồ, API, method, bảng và ngoại lệ theo code               | Có mục lục, bản đồ Backend/Frontend và đối chiếu 38 UC                         |
-| P6 - Nghiệm thu | Regression, CI và review nhóm                                | Chưa hoàn thành                                                                |
+| Giai đoạn       | Đầu ra                                                       | Trạng thái                                                                        |
+| --------------- | ------------------------------------------------------------ | --------------------------------------------------------------------------------- |
+| P0 - Baseline   | Build, typecheck, test và mốc đối chứng                      | Build BE và typecheck Owner/Mobile đã pass; chưa chạy full CI                     |
+| P1 - Audit      | Danh mục KEEP/DELETE/MERGE/SIMPLIFY/ARCHIVE/REVIEW có căn cứ | Đã quét tham chiếu và trùng lặp theo module; chưa chứng minh toàn bộ semantics    |
+| P2 - Dọn dẹp    | Loại bỏ phần không sử dụng, giữ chức năng                    | Đã loại bỏ ứng viên có căn cứ, giữ phần còn test/API/legacy consumer              |
+| P3 - Backend    | Từng module có điểm xử lý và quy tắc rõ ràng                 | Đã gom logic ID, evidence, eligibility và tách điểm đọc ký/trả phòng              |
+| P4 - Frontend   | Component và API client dễ đọc                               | Đã bỏ màn hình cũ, scaffold, gom nhánh route và validation                        |
+| P5 - Tài liệu   | Sơ đồ, API, method, bảng và ngoại lệ theo code               | Có mục lục, bản đồ Backend/Frontend và đối chiếu 38 UC                            |
+| P6 - Nghiệm thu | Regression, CI và review nhóm                                | CI #394 ở `9d057538` đã pass; đợt phân tầng tiếp theo cần chạy lại và nhóm review |
 
 ## Audit ban đầu
 
@@ -53,6 +53,13 @@ Git quản lý 3.300 file ở mốc gốc: Backend C# 681, Owner Web TS/TSX 450,
 - Mobile: bỏ `TenantEvidenceDraft.tsx`, `OwnerAttentionSummary.tsx` và wrapper `TenantProfileScreen.tsx` chỉ còn test gọi; chuyển kiểm thử sang trình xác thực ảnh sự cố, tổng quan Chủ trọ và hồ sơ đang chạy. Gom logic bản nháp bàn giao/trả phòng; giữ giới hạn, thứ tự, API và màn hình hiện hành.
 - Chi tiết các module, điểm vào và lý do giữ cấu trúc xem [Backend](../business-flows/BACKEND.md) và [Frontend](../business-flows/FRONTEND.md). Không chia file theo số dòng một cách máy móc.
 
+### Đợt chuẩn hóa phân tầng để nhóm review
+
+- Giữ bốn project backend; tách nguyên thân `InvoiceService.CalculateAsync` thành `InvoiceCalculator.CalculateAsync`, nhận repository, coverage và clock đã có. Bốn điểm gọi vẫn nằm trong khóa phòng của Service; không thêm DI, API, transaction hoặc thay đổi tiền. Tách `InvoiceMath` khỏi file entity. Tách `BillingAutomationService`/`BillingAutomationOperations` khỏi file contracts/jobs để tìm theo tên class. Đổi tên hai file nhỏ `ContractExpiryService.cs` và `NotificationService.cs` giữ nguyên nội dung.
+- Owner Web: nhóm 35 file contracts theo detail/drafts/handover/signing/settlement/hooks, sáu file invoices theo pages/components/hooks/utils. Mobile: nhóm 66 file contracts/tenant theo giữ chỗ, hợp đồng chính, ký, bàn giao, trả phòng và billing/room/dashboard; giữ route Expo và test path, cập nhật import/mock. Public Web đã có feature/pages/services; không di chuyển tùy ý.
+- Hai đợt kiểm tra tĩnh đối chiếu đường dẫn module đã di chuyển và nội dung code sau chuẩn hóa import; giữ UI và logic, không thêm lớp re-export. Giữ module nhỏ dạng phẳng, các ranh giới legacy/live/mock, worker và repository hiện có nếu tách thêm không giúp đọc code.
+- Xem [kiến trúc dành cho sinh viên](STUDENT_ARCHITECTURE.md) và bài thực hành đọc hóa đơn trong [Backend](../business-flows/BACKEND.md). Mục tiêu nghiệm thu vẫn là thành viên tự giải thích và thực hiện một thay đổi có test; CI của đợt này phải kiểm chứng riêng, không lấy kết quả #394 thay thế.
+
 ### Các ứng viên còn giữ có lý do
 
 | Nhóm                                                                                                                               | Lý do không xóa hoặc hợp nhất vội                                                |
@@ -81,7 +88,7 @@ Bắt đầu từ src/backend/BHome.Api/Controllers/ContractsController.cs (pref
 | Chủ trọ xác nhận sẵn sàng | POST /{id}/handover/draft/ready               | ReadyHandoverDraftAsync - ContractHandoverDraftService.cs                                                    |
 | Khách thuê ký             | POST /{id}/handover/draft/tenant-sign/session | SignTenantHandoverInSessionAsync - ContractHandoverSigningService.cs                                         |
 
-Khi theo dõi dữ liệu, mở Infrastructure/Contracts/ContractRepository.cs, ContractHandoverRepository.cs và HandoverDraftRepository.cs. Các đầu mối UI: Mobile features/contracts/HoldingContractFlow.tsx, MoveInDraftHandoverPanel.tsx; Owner Web features/handovers/pages/HandoversPage.tsx. Đây là chỉ mục điểm bắt đầu đọc, chưa phải đặc tả đầy đủ điều kiện, nhánh phụ hoặc các bảng dữ liệu.
+Khi theo dõi dữ liệu, mở Infrastructure/Contracts/ContractRepository.cs, ContractHandoverRepository.cs và HandoverDraftRepository.cs. Các đầu mối UI: Mobile features/contracts/holding/HoldingContractFlow.tsx, features/contracts/handover/MoveInDraftHandoverPanel.tsx; Owner Web features/handovers/pages/HandoversPage.tsx. Đây là chỉ mục điểm bắt đầu đọc, chưa phải đặc tả đầy đủ điều kiện, nhánh phụ hoặc các bảng dữ liệu.
 
 ## Thứ tự triển khai tiếp
 

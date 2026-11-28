@@ -410,31 +410,31 @@ import {
   MeterTasksScreen,
 } from '../../../src/mobile/src/screens/LiveWorkspaceScreens';
 import { NotificationsScreen } from '../../../src/mobile/src/screens/NotificationsScreen';
-import { TenantDashboard } from '../../../src/mobile/src/screens/TenantDashboard';
-import { TenantCurrentRentalContext } from '../../../src/mobile/src/features/tenant/TenantCurrentRentalContext';
-import { TenantFeaturesScreen } from '../../../src/mobile/src/screens/TenantFeaturesScreen';
+import { TenantDashboard } from '../../../src/mobile/src/features/tenant/dashboard/TenantDashboard';
+import { TenantCurrentRentalContext } from '../../../src/mobile/src/features/tenant/room/TenantCurrentRentalContext';
+import { TenantFeaturesScreen } from '../../../src/mobile/src/features/tenant/dashboard/TenantFeaturesScreen';
 import {
   TenantFeatureDirectory,
   tenantFeatureGroups,
 } from '../../../src/mobile/src/components/TenantFeatureDirectory';
 import { AccountSecurityScreen } from '../../../src/mobile/src/screens/AccountSecurityScreen';
-import { TenantInvoicesScreen } from '../../../src/mobile/src/screens/TenantInvoicesScreen';
-import { TenantPaymentPanel } from '../../../src/mobile/src/screens/TenantPaymentPanel';
-import { TenantPaymentHistoryScreen } from '../../../src/mobile/src/screens/TenantPaymentHistoryScreen';
-import { TenantRoomScreen } from '../../../src/mobile/src/screens/TenantRoomScreen';
-import { TenantMeterHistoryScreen } from '../../../src/mobile/src/screens/TenantMeterHistoryScreen';
+import { TenantInvoicesScreen } from '../../../src/mobile/src/features/tenant/billing/TenantInvoicesScreen';
+import { TenantPaymentPanel } from '../../../src/mobile/src/features/tenant/billing/TenantPaymentPanel';
+import { TenantPaymentHistoryScreen } from '../../../src/mobile/src/features/tenant/billing/TenantPaymentHistoryScreen';
+import { TenantRoomScreen } from '../../../src/mobile/src/features/tenant/room/TenantRoomScreen';
+import { TenantMeterHistoryScreen } from '../../../src/mobile/src/features/tenant/room/TenantMeterHistoryScreen';
 import {
   TenantIncidentScreen,
   TenantRequestsScreen,
   TenantResidenceScreen,
-} from '../../../src/mobile/src/screens/TenantServiceScreens';
+} from '../../../src/mobile/src/features/tenant/TenantServiceScreens';
 import { ProfileScreen } from '../../../src/mobile/src/screens/ProfileScreen';
 import { validateIncidentPhoto } from '../../../src/mobile/src/services/incidents';
 import {
   positiveAmount,
   sameAmount,
-} from '../../../src/mobile/src/features/tenant/paymentPresentation';
-import { TenantAdjustmentPanel } from '../../../src/mobile/src/screens/TenantAdjustmentPanel';
+} from '../../../src/mobile/src/features/tenant/billing/paymentPresentation';
+import { TenantAdjustmentPanel } from '../../../src/mobile/src/features/tenant/billing/TenantAdjustmentPanel';
 import type { Invoice } from '../../../packages/client-core/src/invoices';
 import { businessToday } from '../../../packages/client-core/src/contracts';
 

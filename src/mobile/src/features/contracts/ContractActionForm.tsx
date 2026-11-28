@@ -19,7 +19,7 @@ import { Action, Box, Heading } from '../../components/WorkspaceKit';
 import { IdentityDateField } from '../../components/IdentityDateField';
 import { ChoiceField, Input } from '../../components/WorkflowControls';
 import { signingClient, signingPayload } from '../../../../../packages/client-core/src/signing';
-import { SignaturePlacementField, type PlacementChoice } from './SigningSetup';
+import { SignaturePlacementField, type PlacementChoice } from './signing/SigningSetup';
 
 export function ContractActionForm({
   api,

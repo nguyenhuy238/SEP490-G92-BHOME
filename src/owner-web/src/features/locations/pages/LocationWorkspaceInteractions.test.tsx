@@ -16,7 +16,7 @@ const state = vi.hoisted(() => ({ request: vi.fn(), roles: ['Owner'] }));
 vi.mock('../../property/usePropertySetupApi', () => ({
   usePropertySetupApi: () => propertySetupClient(state.request),
 }));
-vi.mock('../../invoices/useInvoiceApi', () => ({
+vi.mock('../../invoices/hooks/useInvoiceApi', () => ({
   useInvoiceApi: () => ({ request: state.request, ...invoiceClient(state.request) }),
 }));
 vi.mock('../../../../../../packages/client-core/src/auth', () => ({

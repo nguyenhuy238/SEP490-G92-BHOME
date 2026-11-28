@@ -1,6 +1,6 @@
 # Bản đồ backend BHOME cho nhóm đồ án
 
-Tài liệu tra cứu mã nguồn tại nhánh refactor từ develop (`f3be1bfe`). Mở controller trước, tìm tên hàm service được gọi, rồi tìm implementation repository. Đây là mô tả code hiện hành, không thay thế SRS hay tự quyết định nghiệp vụ mới.
+Tài liệu tra cứu mã nguồn tại nhánh `refactor/bhome-develop` (Develop đã đồng bộ đến `76dcbbab`). Mở controller trước, tìm tên hàm service được gọi, rồi tìm implementation repository. Đây là mô tả code hiện hành, không thay thế SRS hay tự quyết định nghiệp vụ mới. Xem [quy ước phân tầng](../architecture/STUDENT_ARCHITECTURE.md).
 
 ## 1. Cách đọc backend
 
@@ -90,7 +90,19 @@ flowchart TD
 | Tenant xem hóa đơn                    | `GET /invoices/current-period` → `InvoiceService.CurrentTenantPeriodAsync`; `GET /tenant/meter-readings` → `TenantMeterReadings.cs`                                                                        | Chỉ phạm vi tenant được phép; repository `InvoiceRepository.cs`, `TenantMeterReadingsRepository.cs`.                                                                                                                                |
 | Tenant yêu cầu điều chỉnh/Owner duyệt | `POST /invoices/{invoiceId}/adjustment-requests`, `POST /invoice-adjustments/{id}/approve` hoặc `/reject` → `AdjustmentService`, `AdjustmentDecisions.cs`                                                  | `invoice_adjustments`; bảo toàn hóa đơn đã final, ghi điều chỉnh riêng.                                                                                                                                                             |
 
-Muốn hiểu công thức: đọc `Billing/ContractBillingPrices.cs`, `FixedChargeCalculation.cs`, `PersonMonthOccupancy.cs`, `Infrastructure/Billing/FixedChargeCoverage.cs`, `MeterBillingCoverage.cs`; không sửa giá hợp đồng đã chốt bằng cách đọc giá phòng mới một cách tùy tiện.
+Muốn hiểu cách tính hóa đơn tháng, bắt đầu tại `BHome.Application/Billing/InvoiceCalculator.cs` → `CalculateAsync`. Cả tạo nháp, hai nhánh refresh và kiểm tra trước chốt đều gọi phương thức này ngay trong khóa giao dịch phòng hiện có của `InvoiceService`. Nó đọc hợp đồng tham chiếu, snapshot biểu phí, sức chứa phòng, chỉ số công tơ đã xác nhận và phần đã tính trước, lập từng dòng, áp dụng điều chỉnh hợp lệ và cộng tổng. Nó không mở transaction mới và không tự phát hành hóa đơn.
+
+| Câu hỏi                                     | File / method nên đọc                                                                                                                                                             |
+| ------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Ai được tạo, refresh, chốt?                 | `Application/Billing/InvoiceService.cs` (`GenerateAsync`, `RefreshAsync`, `FinalizeAsync`)                                                                                        |
+| Từng khoản tiền và tổng lấy từ đâu?         | `Application/Billing/InvoiceCalculator.cs` (`CalculateAsync`)                                                                                                                     |
+| Đơn giá hợp đồng đã ký?                     | `Application/Billing/ContractBillingPrices.cs` (`Read`)                                                                                                                           |
+| Phí theo người, phí cố định và phần đã thu? | `Application/Billing/FixedChargeCalculation.cs`, `PersonMonthOccupancy.cs`, `Infrastructure/Billing/FixedChargeCoverage.cs`                                                       |
+| Điện nước được xác nhận và đã tính trước?   | `Infrastructure/Billing/InvoiceRepository.cs` (`ReadingAsync`), `MeterBillingCoverage.cs`                                                                                         |
+| Công thức số tiền và làm tròn?              | `Domain/Billing/InvoiceMath.cs` (`Amount`, `CalendarDate`)                                                                                                                        |
+| Cấu hình lịch và chạy thủ công?             | `Application/Billing/BillingAutomationService.cs`, `BillingAutomationOperations.cs`; DTO và interface trong `BillingAutomationContracts.cs`, job trong `BillingAutomationJobs.cs` |
+
+Không sửa giá hợp đồng đã chốt bằng cách đọc giá phòng mới một cách tùy tiện. Kiểm thử: `InvoiceMathTests`, `ContractBillingPricesTests`, `PersonMonthOccupancyTests`, `InvoiceApiTests`, `UtilityTariffInvoiceTests`, `BillingDraftAutomationTests`, `BillingFinalAutomationTests`.
 
 OCR CCCD tách biệt: `POST /ocr/identity/{residentId}/{side}` → `OcrWorkflowService.IdentityAsync`; `POST /capture/residents/{id}/confirm` → `CaptureService.ConfirmIdentityAsync`; `Infrastructure/Ocr/IdentityProtection.cs` bảo vệ dữ liệu xác nhận; `residents` chứa trạng thái xác minh. Không lưu ảnh CCCD như ảnh công tơ.
 

@@ -58,7 +58,7 @@ vi.mock('../features/workspace/useWorkspaceQuery', () => ({
     },
   }),
 }));
-import { TenantSettlementReceivables } from '../screens/TenantSettlementReceivables';
+import { TenantSettlementReceivables } from '../features/tenant/billing/TenantSettlementReceivables';
 it('shows historical Room debt and verified offsets without treating physical departure as payment', () => {
   render(<TenantSettlementReceivables />);
   expect(screen.getByText('Phòng SYN-01')).toBeTruthy();

@@ -14,13 +14,13 @@ import {
   type MoveOut,
 } from '../../../../../packages/client-core/src/contracts';
 import { theme } from '../../theme/theme';
-import { ContractDetailPanel } from './ContractDetailPanel';
-import { ContractActionDialog } from './ContractActionDialog';
+import { ContractDetailPanel } from './components/detail/ContractDetailPanel';
+import { ContractActionDialog } from './components/detail/ContractActionDialog';
 import { useContractDetail } from '../../../../../packages/client-core/src/useContractDetail';
-vi.mock('./DepositReceiptPanel', () => ({
+vi.mock('./components/settlement/DepositReceiptPanel', () => ({
   DepositReceiptPanel: () => <div>Deposit receipt workflow</div>,
 }));
-vi.mock('./HoldingDepositPanel', () => ({
+vi.mock('./components/settlement/HoldingDepositPanel', () => ({
   HoldingDepositPanel: () => <div>Holding deposit workflow</div>,
 }));
 

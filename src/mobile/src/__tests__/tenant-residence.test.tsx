@@ -3,7 +3,7 @@ import React, { useEffect } from 'react';
 import { cleanup, fireEvent, render, screen } from '@testing-library/react';
 import { afterEach, beforeEach, expect, it, vi } from 'vitest';
 import { MobileApi } from '../lib/api';
-import { TenantResidenceScreen } from '../screens/TenantResidenceScreen';
+import { TenantResidenceScreen } from '../features/tenant/TenantResidenceScreen';
 import {
   residencePayload,
   residenceClient,

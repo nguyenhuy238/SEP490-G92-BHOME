@@ -1,6 +1,6 @@
 # BHOME - Bắt đầu đọc mã nguồn
 
-Đây là mục lục dành cho cả nhóm, không phải báo cáo tiến độ hay bản thay thế Report 3. Mã nguồn và quyết định nghiệp vụ đã được duyệt là căn cứ khi có sai khác. Các đường dẫn bên dưới dùng code Develop tại `f3be1bfe` và các thay đổi bảo toàn hành vi trên nhánh refactor.
+Đây là mục lục dành cho cả nhóm, không phải báo cáo tiến độ hay bản thay thế Report 3. Mã nguồn và quyết định nghiệp vụ đã được duyệt là căn cứ khi có sai khác. Các đường dẫn dùng code nhánh `refactor/bhome-develop` (Develop đã đồng bộ đến `76dcbbab`). Xem [kiến trúc dành cho sinh viên](../architecture/STUDENT_ARCHITECTURE.md).
 
 ## 1. Đọc theo vai trò, không đọc theo số lượng file
 
@@ -35,7 +35,9 @@ flowchart TD
 
 ## 3. Thực hành đọc một nghiệp vụ
 
-Ví dụ Staff lưu kiểm tra bàn giao: mở `src/mobile/src/features/contracts/MoveInDraftHandoverPanel.tsx`, tìm lời gọi lưu bản nháp; truy vết API `POST /api/v1/contracts/{id}/handover/draft` trong `ContractsController`; đọc `ContractService.SaveHandoverDraftAsync` ở `ContractHandoverDraftService.cs`; sau đó đọc `HandoverDraftRepository.cs` và test `Compact24MoveInDraftTests.cs`. Phân biệt ghi bản nháp, gửi kiểm tra, ký và lưu bản xác nhận. Đừng xem một lần lưu thành hoàn tất bàn giao.
+Ví dụ Staff lưu kiểm tra bàn giao: mở `src/mobile/src/features/contracts/handover/MoveInDraftHandoverPanel.tsx`, tìm lời gọi lưu bản nháp; truy vết API `POST /api/v1/contracts/{id}/handover/draft` trong `ContractsController`; đọc `ContractService.SaveHandoverDraftAsync` ở `ContractHandoverDraftService.cs`; sau đó đọc `HandoverDraftRepository.cs` và test `Compact24MoveInDraftTests.cs`. Phân biệt ghi bản nháp, gửi kiểm tra, ký và lưu bản xác nhận. Đừng xem một lần lưu thành hoàn tất bàn giao.
+
+Ví dụ tính tiền hóa đơn tháng: mở `src/backend/BHome.Application/Billing/InvoiceCalculator.cs` (`CalculateAsync`), rồi theo `ContractBillingPrices`, `FixedChargeCalculation`, `InvoiceMath` và `InvoiceRepository`. Nếu muốn hiểu quyền tạo/chốt và giao dịch, đọc caller `InvoiceService.cs` trước; UI Chủ trọ nằm ở `src/owner-web/src/features/invoices/pages/`, UI Khách thuê ở `src/mobile/src/features/tenant/billing/`.
 
 Khi tự đọc bất kỳ chức năng nào, trả lời bằng code thật:
 

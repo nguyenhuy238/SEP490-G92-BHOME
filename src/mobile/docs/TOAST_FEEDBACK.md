@@ -84,9 +84,9 @@ Giữ footer và nội dung cuộn trong vùng có xử lý keyboard; không th�
 - `src/app/_layout.tsx`, `capture.tsx`, `meter.tsx`, `ocr-test.tsx`, `resident.tsx`, `setup.tsx`.
 - `src/components/Controls.tsx`, `WorkflowControls.tsx`, `WorkspaceShell.tsx`,
   `WorkspaceQueryState.tsx`, `CameraCapture.tsx`.
-- `src/features/contracts/ContractActionForm.tsx`, `ContractDraftForm.tsx`, `ContractEvidence.tsx`,
-  `ContractExpiryPanel.tsx`, `ContractHandoverPanel.tsx`, `ContractLifecyclePanel.tsx`,
-  `ContractScreen.tsx`, `ContractWorkflowPanel.tsx`, `MainDraftScreen.tsx`, `MainDraftStart.tsx`.
+- Trong `src/features/contracts/`: `ContractActionForm.tsx`, `holding/ContractDraftForm.tsx`, `ContractEvidence.tsx`,
+  `ContractExpiryPanel.tsx`, `handover/ContractHandoverPanel.tsx`, `ContractLifecyclePanel.tsx`,
+  `ContractScreen.tsx`, `ContractWorkflowPanel.tsx`, `main/MainDraftScreen.tsx`, `main/MainDraftStart.tsx`.
 - `src/features/onboarding/IdentityFlowFrame.tsx`, `IdentityWizard.tsx`, `useCaptureScope.ts`.
 - `src/features/workspace/useWorkspaceQuery.ts`, `src/lib/api.ts`.
 - `src/screens/AccountSecurityScreen.tsx`, `LiveWorkspaceScreens.tsx`, `LoginScreen.tsx`,

@@ -2,7 +2,7 @@ import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/re
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { afterEach, beforeEach, expect, it, vi } from 'vitest';
 import type { ContractView } from '../../../../../packages/client-core/src/contracts';
-import { DepositReceiptPanel } from './DepositReceiptPanel';
+import { DepositReceiptPanel } from './components/settlement/DepositReceiptPanel';
 const api = vi.hoisted(() => ({
   transfers: vi.fn(),
   transfer: vi.fn(),

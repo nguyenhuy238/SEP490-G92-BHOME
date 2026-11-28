@@ -1,6 +1,6 @@
 import { expect, it } from 'vitest';
 import type { ContractView } from '../../../../packages/client-core/src/contracts';
-import { holdingStage, holdingStageLabel } from '../features/contracts/holdingStage';
+import { holdingStage, holdingStageLabel } from '../features/contracts/holding/holdingStage';
 
 it.each([
   ['Draft', null, 5, 'Chờ Owner phê duyệt'],

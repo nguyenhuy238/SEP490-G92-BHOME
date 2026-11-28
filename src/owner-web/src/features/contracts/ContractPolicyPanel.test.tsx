@@ -4,7 +4,7 @@ import { ThemeProvider } from '@mui/material';
 import { afterEach, expect, it, vi } from 'vitest';
 import { contractClient } from '../../../../../packages/client-core/src/contracts';
 import { ApiError } from '../../../../../packages/client-core/src/api';
-import { ContractPolicyPanel } from './ContractPolicyPanel';
+import { ContractPolicyPanel } from './components/detail/ContractPolicyPanel';
 import { theme } from '../../theme/theme';
 
 afterEach(cleanup);

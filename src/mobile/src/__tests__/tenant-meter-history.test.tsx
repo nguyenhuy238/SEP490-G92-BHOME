@@ -109,7 +109,7 @@ vi.mock('../components/WorkspaceQueryState', () => ({
     error ? <div role="alert">{error}</div> : loading ? <div>Đang tải dữ liệu</div> : null,
   Pagination: () => null,
 }));
-import { TenantMeterHistoryScreen } from '../screens/TenantMeterHistoryScreen';
+import { TenantMeterHistoryScreen } from '../features/tenant/room/TenantMeterHistoryScreen';
 import { notificationDestination } from '../services/notificationInbox';
 const id = 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa';
 const data: TenantMeterReadingPage = {

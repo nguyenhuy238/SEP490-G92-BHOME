@@ -9,8 +9,8 @@ import {
   type ContractView,
 } from '../../../../../packages/client-core/src/contracts';
 import { useSigningCertificates } from '../../../../../packages/client-core/src/useSigningCertificates';
-import { SigningCertificates } from './SigningCertificates';
-import { ContractActionDialog } from './ContractActionDialog';
+import { SigningCertificates } from './components/signing/SigningCertificates';
+import { ContractActionDialog } from './components/detail/ContractActionDialog';
 
 const id = '00000000-0000-0000-0000-000000000003';
 const certificate: Certificate = {

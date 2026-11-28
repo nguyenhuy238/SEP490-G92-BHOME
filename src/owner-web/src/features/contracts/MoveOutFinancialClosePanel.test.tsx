@@ -5,7 +5,7 @@ import type {
   ContractClient,
   SettlementReceivables,
 } from '../../../../../packages/client-core/src/contracts';
-import { MoveOutFinancialClosePanel } from './MoveOutFinancialClosePanel';
+import { MoveOutFinancialClosePanel } from './components/settlement/MoveOutFinancialClosePanel';
 
 vi.mock('../../components/common/ConfirmActionButton', () => ({
   ConfirmActionButton: ({

@@ -6,7 +6,7 @@ import {
   type ContractRequest,
   type FinalFixedChargePreview,
 } from '../../../../../packages/client-core/src/contracts';
-import { FinalFixedChargesPanel } from './FinalFixedChargesPanel';
+import { FinalFixedChargesPanel } from './components/settlement/FinalFixedChargesPanel';
 
 const row: FinalFixedChargePreview = {
   chargeCode: 'RENT',

@@ -4,11 +4,14 @@ import { MemoryRouter, useLocation, useNavigate } from 'react-router';
 import { beforeEach, expect, it, vi } from 'vitest';
 import ContractsPage from './pages/ContractsPage';
 const mocks = vi.hoisted(() => ({ list: vi.fn(), locations: vi.fn(), expiryReminders: vi.fn() }));
-vi.mock('./useContractsApi', () => ({ useContractsApi: () => mocks, useSigningApi: () => ({}) }));
+vi.mock('./hooks/useContractsApi', () => ({
+  useContractsApi: () => mocks,
+  useSigningApi: () => ({}),
+}));
 vi.mock('../../../../../packages/client-core/src/auth', () => ({
   useAuth: () => ({ session: { userId: 'owner', roles: ['Owner'] } }),
 }));
-vi.mock('./ContractDetailPanel', () => ({
+vi.mock('./components/detail/ContractDetailPanel', () => ({
   ContractDetailPanel: ({ id, onClose }: { id: string; onClose: () => void }) => (
     <>
       <span>Reviewed {id}</span>

@@ -6,7 +6,7 @@ import {
   contractClient,
   type ContractView,
 } from '../../../../../packages/client-core/src/contracts';
-import { OwnerSigningPanel } from './OwnerSigningPanel';
+import { OwnerSigningPanel } from './components/signing/OwnerSigningPanel';
 
 const owner = '00000000-0000-0000-0000-000000000001',
   tenant = '00000000-0000-0000-0000-000000000002',
@@ -37,7 +37,7 @@ const methods = { methods: ['UPLOAD_PROOF', 'OTP'], default: 'UPLOAD_PROOF' };
 const problem = (code: string) =>
   Object.assign(new Error(code), { name: 'ApiError', status: 422, problem: { code } });
 
-vi.mock('./SignaturePlacementPicker', () => ({
+vi.mock('./components/signing/SignaturePlacementPicker', () => ({
   SignaturePlacementPicker: () => <div>Reviewed PDF</div>,
 }));
 

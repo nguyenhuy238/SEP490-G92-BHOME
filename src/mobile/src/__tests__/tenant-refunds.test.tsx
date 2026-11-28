@@ -84,7 +84,7 @@ vi.mock('../components/InvoiceDetailUi', () => ({
     </button>
   ),
 }));
-import { TenantRefundPanel } from '../screens/TenantRefundPanel';
+import { TenantRefundPanel } from '../features/tenant/billing/TenantRefundPanel';
 const row = {
   id: 'refund',
   amount: '50000',

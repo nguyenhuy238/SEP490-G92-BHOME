@@ -12,7 +12,7 @@ import {
 vi.mock('../../../../packages/client-core/src/useSigningCertificates', () => ({
   useSigningCertificates: () => ({ certificates: [], loading: false, reload: vi.fn() }),
 }));
-vi.mock('../features/contracts/SigningSetup', () => ({
+vi.mock('../features/contracts/signing/SigningSetup', () => ({
   SignatureImageSection: () => null,
   SignaturePlacementField: () => null,
 }));

@@ -3,7 +3,7 @@ import React from 'react';
 import { cleanup, fireEvent, render, screen } from '@testing-library/react';
 import { afterEach, expect, it, vi } from 'vitest';
 import type { ContractView, Readiness } from '../../../../packages/client-core/src/contracts';
-vi.mock('../features/contracts/ContractSigningStep', () => ({
+vi.mock('../features/contracts/signing/ContractSigningStep', () => ({
   ContractSigningStep: ({ onChanged }: { onChanged: () => void }) => (
     <>
       <span>Chấp thuận nội bộ</span>
@@ -62,7 +62,7 @@ vi.mock('../components/WorkspaceKit', async () => {
     ),
   };
 });
-vi.mock('../features/contracts/RentalContractStepper', () => ({
+vi.mock('../features/contracts/main/RentalContractStepper', () => ({
   RentalContractStepper: ({ completed }: { completed: string[] }) => (
     <output>{JSON.stringify(completed)}</output>
   ),

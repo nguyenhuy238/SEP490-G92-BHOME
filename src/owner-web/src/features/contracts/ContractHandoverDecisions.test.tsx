@@ -1,7 +1,7 @@
 import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { expect, it, vi } from 'vitest';
 import type { ContractClient } from '../../../../../packages/client-core/src/contracts';
-import { ContractHandoverPanel } from './ContractHandoverPanel';
+import { ContractHandoverPanel } from './components/handover/ContractHandoverPanel';
 
 const reload = vi.hoisted(() => vi.fn());
 vi.mock('../../../../../packages/client-core/src/useContractHandover', () => ({

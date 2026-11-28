@@ -6,7 +6,7 @@ import {
   type HouseholdView,
 } from '../../../../../packages/client-core/src/households';
 import { displayContractDate } from '../../../../../packages/client-core/src/contracts';
-import { useTenantTenancy } from '../tenant/useTenantTenancy';
+import { useTenantTenancy } from '../tenant/room/useTenantTenancy';
 import { useSession } from '../../lib/SessionProvider';
 import { profileStyles as styles } from './ProfileComponents';
 

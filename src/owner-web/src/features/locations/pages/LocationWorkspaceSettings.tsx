@@ -1,6 +1,6 @@
 import { TextField, ValidatedForm } from '../../../components/common/ValidatedForm';
 import { useState } from 'react';
-import { LocationBillingSchedule } from '../../invoices/LocationBillingSchedule';
+import { LocationBillingSchedule } from '../../invoices/components/LocationBillingSchedule';
 import { LocationLegalRecords } from '../components/LocationLegalRecords';
 import {
   contactPhoneError,

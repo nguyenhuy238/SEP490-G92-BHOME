@@ -19,8 +19,8 @@ import { OwnerWebNotice } from '../../components/OwnerWebNotice';
 import { OwnerMoveOutDecisions } from '../owner/OwnerMoveOutDecisions';
 import { handoverAssetSummary } from '../../../../../packages/client-core/src/handoverForm';
 import { ContractEvidence } from './ContractEvidence';
-import { TenantMoveOutProposalPanel } from './TenantMoveOutProposalPanel';
-import { TenantMoveOutInspectionSummary } from './TenantMoveOutInspectionSummary';
+import { TenantMoveOutProposalPanel } from './moveOut/TenantMoveOutProposalPanel';
+import { TenantMoveOutInspectionSummary } from './moveOut/TenantMoveOutInspectionSummary';
 
 export function ContractLifecyclePanel({
   api,

@@ -31,7 +31,7 @@ import { formatInstant } from '../../../../../../packages/client-core/src/locali
 import { displayContractDate } from '../../../../../../packages/client-core/src/contracts';
 import { isMockMode } from '../../../services/config';
 import { PageHeader, FilterToolbar } from '../../../components/common/PortalUI';
-import { useContractsApi } from '../../contracts/useContractsApi';
+import { useContractsApi } from '../../contracts/hooks/useContractsApi';
 import { OwnerLocationPicker } from '../../../components/common/OwnerSelectors';
 export default function TemporaryResidencePage() {
   return isMockMode ? (
