@@ -3,6 +3,7 @@ using BHome.Domain.Notifications;
 using BHome.Infrastructure.Modules.Notifications;
 using BHome.Infrastructure.Persistence.Compact24;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.EntityFrameworkCore.Storage;
 using Native = BHome.Domain.Entities;
 
 namespace BHome.IntegrationTests.Compact24;
@@ -24,23 +25,30 @@ public sealed class NativeNotificationPublicationTests(Compact24Fixture fixture)
             INSERT INTO users(id,username,normalized_username,password_hash,roles,security_stamp,concurrency_stamp)
             VALUES({recipient},{recipient.ToString("N")},{recipient.ToString("N").ToUpperInvariant()},'synthetic',ARRAY['Tenant'],'synthetic','synthetic')
             """);
-        db.Add(new UserNotification
+        // Seed the historical representation through the offline adapter, while
+        // the publication under test uses only the strict runtime model.
+        await using (var archive = new Compact24ArchiveContext(new DbContextOptionsBuilder<Compact24DbContext>()
+            .UseNpgsql(db.Database.GetDbConnection()).Options))
         {
-            Id = oldId,
-            RecipientUserId = recipient,
-            AudienceRole = "Tenant",
-            Category = "Payment",
-            EventType = "INVOICE_FULLY_PAID",
-            EventKey = oldKey,
-            Title = "Synthetic",
-            Summary = "Synthetic payment",
-            RelatedObjectType = "Invoice",
-            RelatedObjectId = target,
-            CreatedAt = at,
-            ReadAt = at,
-            Channels = ["IN_APP", "EMAIL"]
-        });
-        await db.SaveChangesAsync();
+            await archive.Database.UseTransactionAsync(transaction.GetDbTransaction());
+            archive.Add(new UserNotification
+            {
+                Id = oldId,
+                RecipientUserId = recipient,
+                AudienceRole = "Tenant",
+                Category = "Payment",
+                EventType = "INVOICE_FULLY_PAID",
+                EventKey = oldKey,
+                Title = "Synthetic",
+                Summary = "Synthetic payment",
+                RelatedObjectType = "Invoice",
+                RelatedObjectId = target,
+                CreatedAt = at,
+                ReadAt = at,
+                Channels = ["IN_APP", "EMAIL"]
+            });
+            await archive.SaveChangesAsync();
+        }
         NotificationInboxWrites.Add(db, new NotificationInboxState
         {
             Id = newId,
@@ -84,8 +92,13 @@ public sealed class NativeNotificationPublicationTests(Compact24Fixture fixture)
         var newKey = "synthetic:native:" + Guid.NewGuid();
         var at = DateTimeOffset.Parse("2026-11-28T07:00:00Z");
         await using var transaction = await db.Database.BeginTransactionAsync();
-        db.Add(new NotificationPublication { EventKey = oldKey, PublishedAt = at, RecipientCount = 2 });
-        await db.SaveChangesAsync();
+        await using (var archive = new Compact24ArchiveContext(new DbContextOptionsBuilder<Compact24DbContext>()
+            .UseNpgsql(db.Database.GetDbConnection()).Options))
+        {
+            await archive.Database.UseTransactionAsync(transaction.GetDbTransaction());
+            archive.Add(new NotificationPublication { EventKey = oldKey, PublishedAt = at, RecipientCount = 2 });
+            await archive.SaveChangesAsync();
+        }
         await NotificationPublications.SaveAsync(db, newKey, at, 2, default);
 
         var keys = NotificationPublications.Keys(db);
