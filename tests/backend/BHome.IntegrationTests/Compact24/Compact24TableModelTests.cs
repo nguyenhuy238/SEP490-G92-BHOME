@@ -73,4 +73,29 @@ public sealed class Compact24TableModelTests(Compact24Fixture fixture) : IClassF
         await using var after = await Compact24TableContext.OpenAsync(domain, default);
         Assert.False(await after.Set<Native.Location>().AnyAsync(x => x.Id == id));
     }
+
+    [CompactPostgresFact]
+    public async Task NativeWritesRejectMissingTransactionsUnconvertedTablesAndPhysicalDeletion()
+    {
+        await using var domain = new Compact24DbContext(new DbContextOptionsBuilder<Compact24DbContext>()
+            .UseNpgsql(fixture.Connection).Options);
+        await using (var tables = await Compact24TableContext.OpenAsync(domain, default))
+        {
+            tables.Add(new Native.FinancialScenario { Id = Guid.NewGuid() });
+            await Assert.ThrowsAsync<InvalidOperationException>(async () => await tables.SaveNativeAsync(default));
+        }
+        await using var transaction = await domain.Database.BeginTransactionAsync();
+        await using (var tables = await Compact24TableContext.OpenAsync(domain, default))
+        {
+            tables.Add(new Native.Location { Id = Guid.NewGuid() });
+            await Assert.ThrowsAsync<InvalidOperationException>(async () => await tables.SaveNativeAsync(default));
+            tables.ChangeTracker.Clear();
+            tables.Remove(new Native.StaffEmployment { Id = Guid.NewGuid() });
+            await Assert.ThrowsAsync<InvalidOperationException>(async () => await tables.SaveNativeAsync(default));
+            tables.ChangeTracker.Clear();
+            tables.Update(new Native.FinancialScenario { Id = Guid.NewGuid() });
+            await Assert.ThrowsAsync<InvalidOperationException>(async () => await tables.SaveNativeAsync(default));
+        }
+        await transaction.RollbackAsync();
+    }
 }

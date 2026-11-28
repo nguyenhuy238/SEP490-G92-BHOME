@@ -5,7 +5,8 @@ using Native = BHome.Domain.Entities;
 namespace BHome.Infrastructure.Persistence.Compact24;
 
 // Physical table model for incremental repository migration. It shares the existing
-// connection and transaction, but cannot write or own schema migrations.
+// connection and transaction. Only explicitly migrated repository workflows can write;
+// the transitional model never owns schema migrations.
 internal sealed class Compact24TableContext(DbContextOptions<Compact24TableContext> options) : DbContext(options)
 {
     internal static async Task<Compact24TableContext> OpenAsync(Compact24DbContext db, CancellationToken token)
@@ -149,6 +150,28 @@ internal sealed class Compact24TableContext(DbContextOptions<Compact24TableConte
         model.Entity<Native.Notification>().HasOne<Native.User>().WithMany().HasForeignKey(x => x.ActorUserId).OnDelete(DeleteBehavior.NoAction);
         model.Entity<Native.Notification>().HasOne<Native.Location>().WithMany().HasForeignKey(x => x.LocationId).OnDelete(DeleteBehavior.NoAction);
         model.Entity<Native.OperationalTask>().HasOne<Native.Meter>().WithMany().HasForeignKey(x => x.MeterId).OnDelete(DeleteBehavior.NoAction);
+    }
+
+    // Repositories call this only after their existing lock, authorization, history and
+    // idempotency checks. Reject all unconverted tables and every physical deletion.
+    internal Task<int> SaveNativeAsync(CancellationToken token)
+    {
+        if (Database.CurrentTransaction is null)
+            throw new InvalidOperationException("Native writes require the existing repository transaction.");
+        ChangeTracker.DetectChanges();
+        foreach (var entry in ChangeTracker.Entries().Where(e => e.State is EntityState.Added or EntityState.Modified or EntityState.Deleted))
+        {
+            var allowed = entry.Entity switch
+            {
+                Native.FinancialScenario => entry.State == EntityState.Added,
+                Native.StaffEmployment => entry.State is EntityState.Added or EntityState.Modified,
+                Native.Expense => entry.State is EntityState.Added or EntityState.Modified,
+                _ => false
+            };
+            if (!allowed)
+                throw new InvalidOperationException("Use the guarded Compact24 writer for unmigrated records or deletions.");
+        }
+        return base.SaveChangesAsync(true, token);
     }
 
     public override int SaveChanges(bool acceptAllChangesOnSuccess) =>
