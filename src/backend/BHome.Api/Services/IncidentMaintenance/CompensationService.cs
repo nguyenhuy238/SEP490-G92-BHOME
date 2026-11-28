@@ -34,6 +34,7 @@ public interface ICompensationRepository
     Task<IncidentCommand?> CommandAsync(Guid actor, Guid key, CancellationToken t);
     Task<IReadOnlyList<IncidentEvidence>> EvidenceAsync(Guid workOrder, CancellationToken t);
     Task<bool> InvoiceHasMoneyAsync(Guid invoice, CancellationToken t);
+    Task IssueInvoiceAsync(Invoice invoice, InvoiceIssuedEvent issued, CancellationToken t);
     Task FlushAsync(CancellationToken t);
     void Add(object entity);
     void Audit(Guid actor, string action, Guid target, DateTimeOffset now);
@@ -176,10 +177,8 @@ public sealed class CompensationService(ICompensationRepository repository, ICur
                     CalculatedAmount = row.Amount
                 });
                 foreach (var recipient in invoice.Recipients) recipient.InvoiceId = invoice.Id;
-                repository.Add(invoice); await repository.FlushAsync(t);
-                invoice.Status = InvoiceStatus.Final; invoice.Version++;
-                await repository.FlushAsync(t);
-                repository.Add(new InvoiceIssuedEvent { InvoiceId = invoice.Id, OwnerUserId = Actor, OccurredAt = Now });
+                await repository.IssueInvoiceAsync(invoice, new InvoiceIssuedEvent
+                    { InvoiceId = invoice.Id, OwnerUserId = Actor, OccurredAt = Now }, t);
                 row.InvoiceId = invoice.Id;
             }
             repository.Add(row); return row;

@@ -233,6 +233,17 @@ public sealed partial class IncidentApiTests(IncidentFixture fixture) : IClassFi
         Assert.Contains(maintenance.Items, h => h.WorkOrderId == work && h.Action == "verified" && h.ActualCost == 100000);
         Assert.Contains(maintenance.Items, h => h.WorkOrderId == other && h.Action == "work_order_cancelled");
         Assert.Single(await finalDb.SecurityAudit.Where(a => a.Event == "Incident_verified" && finalDb.Set<IncidentActivity>().Any(h => h.Id == a.TargetId && h.IncidentId == incident)).ToArrayAsync());
+        var physical = await finalDb.Set<BHome.Domain.Entities.IncidentReport>().AsNoTracking().SingleAsync(r => r.Id == incident);
+        Assert.Equal("Resolved", physical.Status);
+        var workRow = await finalDb.Set<BHome.Domain.Entities.OperationalTask>().AsNoTracking().SingleAsync(r => r.Id == work);
+        Assert.Equal("Verified", workRow.Status);
+        Assert.Equal("MaintenanceWorkOrder", workRow.TaskData.GetProperty("recordType").GetString());
+        Assert.Equal((int)WorkOrderStatus.Verified, workRow.TaskData.GetProperty("state").GetProperty("status").GetInt32());
+        Assert.Contains(physical.History.EnumerateArray(), h => h.GetProperty("recordType").GetString() == "MaintenanceHistory" &&
+            h.GetProperty("state").GetProperty("workOrderId").GetGuid() == work);
+        Assert.Contains(workRow.Evidence.EnumerateArray(), e => e.GetProperty("recordType").GetString() == "IncidentEvidence");
+        Assert.Single(await finalDb.Set<BHome.Domain.Entities.Expense>().AsNoTracking()
+            .Where(e => e.TaskId == work && e.SourceKey == "WorkOrder:" + work).ToArrayAsync());
     }
 
     [CompactPostgresFact]
@@ -382,6 +393,9 @@ public sealed partial class IncidentApiTests(IncidentFixture fixture) : IClassFi
         Assert.True(fixture.Storage.Objects.ContainsKey(upload.ObjectKey));
         await IncidentFileCleanup.CleanupAsync(db, fixture.Storage, DateTimeOffset.UtcNow.AddHours(2), default);
         Assert.False(fixture.Storage.Objects.ContainsKey(upload.ObjectKey));
+        var deletedIntent = await db.Set<BHome.Domain.Entities.OperationalTask>().AsNoTracking().SingleAsync(r => r.Id == upload.Id);
+        Assert.True(deletedIntent.TaskData.GetProperty("deleted").GetBoolean());
+        Assert.True(deletedIntent.History.EnumerateArray().Last().GetProperty("deleted").GetBoolean());
         var incident = await Create(w); var photo = await Upload(w.Tenant, incident, IncidentEvidenceKind.Report);
         await IncidentFileCleanup.CleanupAsync(db, fixture.Storage, DateTimeOffset.UtcNow.AddHours(2), default);
         Assert.Equal(HttpStatusCode.OK, (await w.Tenant.Client.GetAsync($"{Base}/{incident}/evidence/{photo}")).StatusCode);

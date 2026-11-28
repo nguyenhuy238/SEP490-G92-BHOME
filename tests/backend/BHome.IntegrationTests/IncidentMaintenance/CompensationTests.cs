@@ -82,6 +82,12 @@ public sealed partial class IncidentApiTests
         var context = verify.ServiceProvider.GetRequiredService<BHomePersistenceContext>();
         Assert.False(await context.Set<BHome.Domain.Billing.Invoice>().AnyAsync(i => i.RepresentativeContractId == w.Contract));
         Assert.Equal(50000, (await context.Set<MaintenanceCompensation>().SingleAsync(c => c.WorkOrderId == id)).Amount);
+        var task = await context.Set<BHome.Domain.Entities.OperationalTask>().AsNoTracking().SingleAsync(t => t.Id == id);
+        var decisions = task.History.EnumerateArray().Where(h => h.GetProperty("recordType").GetString() == "MaintenanceCompensation").ToArray();
+        Assert.Equal(2, decisions.Length);
+        Assert.All(decisions, h => Assert.Equal(row.Id.ToString(), h.GetProperty("recordKey").GetString()));
+        Assert.Equal("DepositPending", decisions[0].GetProperty("state").GetProperty("status").GetString());
+        Assert.Equal("Deducted", decisions[1].GetProperty("state").GetProperty("status").GetString());
         var finalSummary = await Ok<BHome.Application.Contracts.ContractSettlementSummary>(await w.Owner.Client.GetAsync($"/api/v1/contracts/{w.Contract}/move-out/settlement-summary"));
         Assert.Equal(50000, finalSummary.MaintenanceDeductions); Assert.Equal(50000, finalSummary.ApprovedDeductions);
         Assert.DoesNotContain("maintenance_compensation_pending", finalSummary.UnresolvedItems);
@@ -142,6 +148,16 @@ public sealed partial class IncidentApiTests
         var invoice = await db.Set<BHome.Domain.Billing.Invoice>().SingleAsync(i => i.Id == row.InvoiceId);
         Assert.Equal("AD_HOC", invoice.Type);
         Assert.Single(await db.Set<MaintenanceCompensation>().Where(c => c.WorkOrderId == id).ToArrayAsync());
+        var nativeInvoice = await db.Set<BHome.Domain.Entities.Invoice>().AsNoTracking().SingleAsync(i => i.Id == row.InvoiceId);
+        Assert.Equal("AD_HOC", nativeInvoice.InvoiceType);
+        Assert.Equal(1, nativeInvoice.Status);
+        Assert.Contains(w.Tenant.Id, nativeInvoice.RecipientUserIds);
+        var versions = nativeInvoice.History.EnumerateArray().Where(h => h.GetProperty("recordType").GetString() == "Invoice").ToArray();
+        Assert.Equal(2, versions.Length);
+        Assert.Equal(0, versions[0].GetProperty("state").GetProperty("status").GetInt32());
+        Assert.Equal(1, versions[1].GetProperty("state").GetProperty("status").GetInt32());
+        Assert.Single(await db.Set<BHome.Domain.Entities.Notification>().AsNoTracking()
+            .Where(n => n.RecordKind == "OUTBOX" && n.EventKey == "InvoiceIssuedEvent:" + row.InvoiceId).ToArrayAsync());
     }
 
     [CompactPostgresFact]

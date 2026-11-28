@@ -9,6 +9,9 @@ public enum IncidentEvidenceKind { Report, EmergencyAction, Inspection, Completi
 
 public sealed class IncidentReport : AuditableEntity
 {
+    internal static IncidentReport Rehydrate(Guid id, DateTimeOffset createdAt, DateTimeOffset updatedAt) =>
+        new() { Id = id, CreatedAt = createdAt, UpdatedAt = updatedAt };
+
     public Guid LocationId { get; set; }
     public Guid? RoomId { get; set; }
     public string? CommonArea { get; set; }
@@ -37,6 +40,9 @@ public sealed class IncidentReport : AuditableEntity
 
 public sealed class MaintenanceWorkOrder : AuditableEntity
 {
+    internal static MaintenanceWorkOrder Rehydrate(Guid id, DateTimeOffset createdAt, DateTimeOffset updatedAt) =>
+        new() { Id = id, CreatedAt = createdAt, UpdatedAt = updatedAt };
+
     public Guid? IncidentId { get; set; }
     public string Source { get; set; } = "Incident";
     public string Description { get; set; } = "";
@@ -131,6 +137,9 @@ public sealed class MaintenanceWorkOrder : AuditableEntity
 
 public sealed class FastRepairPolicy : AuditableEntity
 {
+    internal static FastRepairPolicy Rehydrate(Guid id, DateTimeOffset createdAt, DateTimeOffset updatedAt) =>
+        new() { Id = id, CreatedAt = createdAt, UpdatedAt = updatedAt };
+
     public static readonly Guid GlobalId = Guid.Parse("ba000000-0000-0000-0000-000000000071");
     public FastRepairPolicy() { Id = GlobalId; }
     public int Version { get; set; } = 1;
@@ -142,6 +151,9 @@ public sealed class FastRepairPolicy : AuditableEntity
 // Immutable event payload retains proposal/decision/assignment snapshots; public notes are separate.
 public sealed class IncidentActivity : AuditableEntity
 {
+    internal static IncidentActivity Rehydrate(Guid id, DateTimeOffset createdAt, DateTimeOffset updatedAt) =>
+        new() { Id = id, CreatedAt = createdAt, UpdatedAt = updatedAt };
+
     public Guid? IncidentId { get; set; }
     public Guid? WorkOrderId { get; set; }
     public Guid ActorId { get; set; }
@@ -154,6 +166,9 @@ public sealed class IncidentActivity : AuditableEntity
 
 public sealed class IncidentEvidence : AuditableEntity
 {
+    internal static IncidentEvidence Rehydrate(Guid id, DateTimeOffset createdAt, DateTimeOffset updatedAt) =>
+        new() { Id = id, CreatedAt = createdAt, UpdatedAt = updatedAt };
+
     public Guid? IncidentId { get; set; }
     public Guid? WorkOrderId { get; set; }
     public Guid? ActivityId { get; set; }
@@ -167,6 +182,9 @@ public sealed class IncidentEvidence : AuditableEntity
 
 public sealed class EmergencyAction : AuditableEntity
 {
+    internal static EmergencyAction Rehydrate(Guid id, DateTimeOffset createdAt, DateTimeOffset updatedAt) =>
+        new() { Id = id, CreatedAt = createdAt, UpdatedAt = updatedAt };
+
     public Guid IncidentId { get; set; }
     public Guid ActivityId { get; set; }
     public Guid ActorId { get; set; }
@@ -179,6 +197,9 @@ public sealed class EmergencyAction : AuditableEntity
 // SourceId is a WorkOrder ID, direct-completion Activity ID or EmergencyAction ID, never an aggregate total.
 public sealed class MaintenanceExpense : AuditableEntity
 {
+    internal static MaintenanceExpense Rehydrate(Guid id, DateTimeOffset createdAt, DateTimeOffset updatedAt) =>
+        new() { Id = id, CreatedAt = createdAt, UpdatedAt = updatedAt };
+
     public Guid? IncidentId { get; set; }
     public Guid LocationId { get; set; }
     public Guid? RoomId { get; set; }
@@ -196,6 +217,9 @@ public sealed class MaintenanceExpense : AuditableEntity
 
 public sealed class MaintenanceHistory : AuditableEntity
 {
+    internal static MaintenanceHistory Rehydrate(Guid id, DateTimeOffset createdAt, DateTimeOffset updatedAt) =>
+        new() { Id = id, CreatedAt = createdAt, UpdatedAt = updatedAt };
+
     public Guid? IncidentId { get; set; }
     public Guid? WorkOrderId { get; set; }
     public Guid ActivityId { get; set; }
@@ -213,6 +237,9 @@ public sealed class MaintenanceHistory : AuditableEntity
 
 public sealed class IncidentCommand : AuditableEntity
 {
+    internal static IncidentCommand Rehydrate(Guid id, DateTimeOffset createdAt, DateTimeOffset updatedAt) =>
+        new() { Id = id, CreatedAt = createdAt, UpdatedAt = updatedAt };
+
     public Guid ActorId { get; set; }
     public Guid Key { get; set; }
     public Guid? IncidentId { get; set; }
@@ -222,6 +249,9 @@ public sealed class IncidentCommand : AuditableEntity
 
 public sealed class IncidentNotification : AuditableEntity
 {
+    internal static IncidentNotification Rehydrate(Guid id, DateTimeOffset createdAt, DateTimeOffset updatedAt) =>
+        new() { Id = id, CreatedAt = createdAt, UpdatedAt = updatedAt };
+
     public string EventType => Event switch
     {
         "submitted" => HighPriority ? "INCIDENT_EMERGENCY_SUBMITTED" : "INCIDENT_NORMAL_SUBMITTED",
@@ -249,6 +279,9 @@ public sealed class IncidentNotification : AuditableEntity
 // No business FK: submission may roll back or never finish; cleanup still owns this object key.
 public sealed class IncidentFileUpload : AuditableEntity
 {
+    internal static IncidentFileUpload Rehydrate(Guid id, DateTimeOffset createdAt, DateTimeOffset updatedAt) =>
+        new() { Id = id, CreatedAt = createdAt, UpdatedAt = updatedAt };
+
     public Guid LocationId { get; set; }
     public string ObjectKey { get; set; } = "";
     public DateTimeOffset CleanupAfter { get; set; }

@@ -4,6 +4,9 @@ namespace BHome.Domain.IncidentMaintenance;
 
 public sealed class MaintenanceCompensation : AuditableEntity
 {
+    internal static MaintenanceCompensation Rehydrate(Guid id, DateTimeOffset createdAt, DateTimeOffset updatedAt) =>
+        new() { Id = id, CreatedAt = createdAt, UpdatedAt = updatedAt };
+
     public Guid WorkOrderId { get; set; }
     public Guid? IncidentId { get; set; }
     public Guid LocationId { get; set; }
