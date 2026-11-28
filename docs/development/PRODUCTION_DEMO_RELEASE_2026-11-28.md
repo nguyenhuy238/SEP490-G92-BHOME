@@ -165,3 +165,37 @@ Kiểm tra whitespace của project với file này đã PASS.
 Probe VPS sau merge xác nhận Production vẫn chạy main cũ `70406ecf` cùng hotfix
 email; chưa áp migration/config hoặc release mới. Sau khi #193 được tích hợp vào
 develop cần PR bổ sung develop → main; #194 đã merge không tự nhận các commit sau đó.
+
+### Đối chiếu inventory của các ca thay chính sách demo
+
+Rà soát tiếp phát hiện inventory giữ danh tính của các ca còn yêu cầu chặn những
+cờ demo vừa được cho phép. Giữ tên phương thức ManualStagingOptIn để bảo toàn
+10 ca hiện hữu; chỉ thay ca Production opt-in và các ca clock trái quyết định 28/11.
+
+| Ca cũ                                                                                 | Ca thay thế đã chạy PASS                                                                          |
+| ------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------- |
+| 4 ca Staging từ chối SePay Live, SePay disabled, general jobs hoặc signing simulation | 4 ca cho phép đúng environment/key/value tương ứng, giữ các ca từ chối sai DB/storage/initializer |
+| 4 ca Production từ chối SePay Test/enabled, general jobs hoặc signing simulation      | 4 ca cho phép đúng environment/key/value tương ứng                                                |
+| Production manual billing opt-in vẫn trả false                                        | Cùng phương thức cũ, opt-in trả true; thêm ca worker bật độc lập                                  |
+
+Inventory Infrastructure: giữ 243 danh tính cũ, thay 9 danh tính đã lỗi thời, thêm
+21 ca đã thực chạy PASS (8 tùy chọn, 4 tổ hợp clock/provider/signing/jobs, 7 cấu hình
+ký mô phỏng, 2 manual billing). Baseline từ 252 lên 264; bộ test thực tế có 267 ca.
+Bốn assembly khác giữ nguyên inventory. Verifier và skip allowlist giữ nguyên.
+
+Lệnh `dotnet test` Infrastructure với đúng `tests/backend/ci.runsettings`:
+267 PASS, 0 fail/skip. Verifier `require_inventory` nguyên bản chấp nhận đủ 264
+danh tính baseline trước 267 kết quả PASS thực tế. Audit từng tên/ID cũ và mới ở
+`.tools/production-demo-20261128/ci193-inventory-reconciliation.json`.
+
+Một lượt thử không truyền ci.runsettings đã đi vào suite QA ngoài merge gate và
+báo lỗi kỳ vọng AccountProvisioning; đã dừng rồi chạy lại với settings hiện có của
+CI. Không thay nghiệp vụ AccountProvisioning hoặc sửa bộ lọc CI để xử lý lượt thử này.
+
+Lượt GitHub `46118967476` sau sửa format đã xuất đủ TRX. Một ca tích hợp còn so
+sánh token bản nháp với token task trong Owner quick-create; giả định này không
+còn đúng sau hotfix #185 tách token inventory chung và token move-in ổn định trước
+thay đổi Room.Version. Cập nhật assertion để kiểm cả token bản nháp bằng StateToken
+và token task bằng MoveInStateToken canonical từ inventory thật; giữ nguyên kiểm
+tra tài sản, số lượng, Tenant, meter, idempotency và quyền. Thêm ca này vào regression
+gate bắt buộc. Không sửa service, dữ liệu ứng dụng hoặc bỏ assertion để cho test qua.

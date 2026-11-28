@@ -183,6 +183,22 @@ public sealed class DemoClockGuardTests
     }
 
     [Theory]
+    [InlineData("Staging", "SePay:Mode", "Live")]
+    [InlineData("Staging", "SePay:Enabled", "false")]
+    [InlineData("Staging", "Jobs:Enabled", "true")]
+    [InlineData("Staging", "ContractWorkflow:SimulatedSigningEnabled", "true")]
+    [InlineData("Production", "SePay:Mode", "Test")]
+    [InlineData("Production", "SePay:Enabled", "true")]
+    [InlineData("Production", "Jobs:Enabled", "true")]
+    [InlineData("Production", "ContractWorkflow:SimulatedSigningEnabled", "true")]
+    public void AcademicDeploymentAllowsPreviouslyRestrictedDemoOptions(string environment, string key, string value)
+    {
+        var settings = environment == "Staging" ? Staging() : Production();
+        settings[key] = value;
+        Assert.True(DemoClockGuard.Enabled(new ConfigurationBuilder().AddInMemoryCollection(settings).Build(), environment));
+    }
+
+    [Theory]
     [InlineData("Staging", "Test", false)]
     [InlineData("Staging", "Live", true)]
     [InlineData("Production", "Test", true)]
